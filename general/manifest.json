@@ -1,0 +1,15 @@
+{
+  "name": "MoonLight",
+  "version": "2025.03.30",
+  "home_assistant_domain": "esphome",
+  "funding_url": "https://esphome.io/guides/supporters.html",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        { "path": "./esp32-s3-devkitc-1-n16r8v.bin", "offset": 0 }
+      ]
+    }
+  ]
+}
