@@ -192,26 +192,29 @@ public:
                     }
 
                     Node *nodeClass = layerP.addNode(updatedItem.index[0], nodeState["name"], nodeState["controls"]);
-                    nodeClass->on = nodeState["on"];
-                    newNode = true;
 
-                    //wait until setup has been executed?
+                    if(nodeClass != nullptr) {
+                        nodeClass->on = nodeState["on"];
+                        newNode = true;
 
-                    //update state to UI
-                    update([&](ModuleState &state) {
-                        return StateUpdateResult::CHANGED; // notify StatefulService by returning CHANGED
-                    }, "server");
+                        //wait until setup has been executed?
 
-                    ESP_LOGD(TAG, "update due to new node %s done", updatedItem.value.as<String>().c_str());
+                        //update state to UI
+                        update([&](ModuleState &state) {
+                            return StateUpdateResult::CHANGED; // notify StatefulService by returning CHANGED
+                        }, "server");
 
-                    //make sure "p" is also updated
+                        ESP_LOGD(TAG, "update due to new node %s done", updatedItem.value.as<String>().c_str());
 
-                    //if node is a modifier, run the layout definition
-                    if (nodeClass->hasModifier) {
-                        for (Node *node : layerP.layerV[0]->nodes) {
-                            if (node->hasLayout) {
-                                ESP_LOGD(TAG, "Modifier created -> remap layout %s", node->name());
-                                node->requestMap = true; //request mapping
+                        //make sure "p" is also updated
+
+                        //if node is a modifier, run the layout definition
+                        if (nodeClass->hasModifier) {
+                            for (Node *node : layerP.layerV[0]->nodes) {
+                                if (node->hasLayout) {
+                                    ESP_LOGD(TAG, "Modifier created -> remap layout %s", node->name());
+                                    node->requestMap = true; //request mapping
+                                }
                             }
                         }
                     }
