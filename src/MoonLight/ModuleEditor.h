@@ -130,7 +130,8 @@ public:
             values.add(WaveEffect::name());
 
             values.add(HumanSizedCubeLayout::name());
-            values.add(MovingHeadLayout::name());
+            values.add(SingleLineLayout::name());
+            values.add(SingleRowLayout::name());
             values.add(PanelLayout::name());
             values.add(RingsLayout::name());
 

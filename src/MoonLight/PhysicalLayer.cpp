@@ -165,7 +165,8 @@ PhysicalLayer::PhysicalLayer() {
         else if (equal(name, SphereMoveEffect::name())) node = new SphereMoveEffect();
 
         else if (equal(name, HumanSizedCubeLayout::name())) node = new HumanSizedCubeLayout();
-        else if (equal(name, MovingHeadLayout::name())) node = new MovingHeadLayout();
+        else if (equal(name, SingleLineLayout::name())) node = new SingleLineLayout();
+        else if (equal(name, SingleRowLayout::name())) node = new SingleRowLayout();
         else if (equal(name, PanelLayout::name())) node = new PanelLayout();
         else if (equal(name, RingsLayout::name())) node = new RingsLayout();
 
