@@ -58,6 +58,24 @@ void VirtualLayer::loop() {
     if (node->on)
       node->loop();
   }
+
+  if (requestMapPhysical) {
+    ESP_LOGD(TAG, "mapLayout physical requested");
+    
+    layerP->pass = 1;
+    mapLayout();
+
+    requestMapPhysical = false;
+  }
+
+  if (requestMapVirtual) {
+    ESP_LOGD(TAG, "mapLayout virtual requested");
+
+    layerP->pass = 2;
+    mapLayout();
+    
+    requestMapVirtual = false;
+  }    
 };
 
 void VirtualLayer::resetMapping() {
@@ -197,6 +215,15 @@ void VirtualLayer::fill_rainbow(const uint8_t initialhue, const uint8_t deltahue
       hsv.hue += deltahue;
     }
   }
+}
+
+void VirtualLayer::mapLayout() {
+  layerP->addLayoutPre();
+  for (Node *node: nodes) {
+    if (node->on && node->hasLayout)
+      node->addLayout(); //calls also addLayout
+  }
+  layerP->addLayoutPost();
 }
 
 void VirtualLayer::addLayoutPre() {

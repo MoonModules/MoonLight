@@ -16,7 +16,7 @@
 class MirrorModifier: public Node {
   public:
 
-  static const char * name() {return "Mirror 💎 💡";}
+  static const char * name() {return "Mirror 💎💡";}
   static uint8_t dim() {return _3D;}
   static const char * tags() {return "";}
 
@@ -51,7 +51,7 @@ class MirrorModifier: public Node {
 class MultiplyModifier: public Node {
   public:
 
-  static const char * name() {return "Multiply 💎 💡";}
+  static const char * name() {return "Multiply 💎💡";}
   static uint8_t dim() {return _3D;}
   static const char * tags() {return "";}
 
@@ -59,9 +59,11 @@ class MultiplyModifier: public Node {
   bool    mirror = false;
   Coord3D originalSize;
 
-  void modifyLayout() override {
+  void setup() override {
     hasModifier = true;
+  }
 
+  void modifyLayout() override {
     layerV->size = (layerV->size + proMulti - Coord3D({1,1,1})) / proMulti; // Round up
     originalSize = layerV->size;
     ESP_LOGD(TAG, "multiply %d %d %d", layerV->size.x, layerV->size.y, layerV->size.z);
@@ -82,7 +84,7 @@ class MultiplyModifier: public Node {
 class PinwheelModifier: public Node {
   public:
 
-  static const char * name() {return "Pinwheel 💎 💡";}
+  static const char * name() {return "Pinwheel 💎💡";}
   static uint8_t dim() {return _2D;}
   static const char * tags() {return "";}
 

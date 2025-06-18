@@ -29,20 +29,18 @@ PhysicalLayer::PhysicalLayer() {
         layerV[0]->layerP = this;
     }
 
-    bool PhysicalLayer::setup() {
+    void PhysicalLayer::setup() {
         for (VirtualLayer * layer: layerV) {
             layer->setup();
         }
-        return true;
     }
 
     //run one loop of an effect
-    bool PhysicalLayer::loop() {
+    void PhysicalLayer::loop() {
         //runs the loop of all effects / nodes in the layer
         for (VirtualLayer * layer: layerV) {
             if (layer) layer->loop(); //if (layer) needed when deleting rows ...
         }
-        return true;
     }
     
     void PhysicalLayer::addLayoutPre() {
@@ -54,12 +52,12 @@ PhysicalLayer::PhysicalLayer() {
             lights.header.isPositions = 1; //in progress...
             delay(100); //wait to stop effects
             //dealloc pins
-        } else {
+            sortedPins.clear(); //clear the added pins for the next pass
+        } else if (pass == 2) {
             for (VirtualLayer * layer: layerV) {
                 //add the lights in the virtual layer
                 layer->addLayoutPre();
             }
-            sortedPins.clear(); //clear the added pins for the next pass
         }
     }
 
@@ -84,7 +82,7 @@ PhysicalLayer::PhysicalLayer() {
     }
 
     void PhysicalLayer::addPin(uint8_t pinNr) {
-        if (pass == 2) {
+        if (pass == 1) {
             ESP_LOGD(TAG, "addPin %d %d", pinNr, lights.header.nrOfLights);
 
             SortedPin previousPin;
@@ -119,12 +117,7 @@ PhysicalLayer::PhysicalLayer() {
             ESP_LOGD(TAG, "pass %d #:%d s:%d,%d,%d (%d=%d+%d)", pass, lights.header.nrOfLights, lights.header.size.x, lights.header.size.y, lights.header.size.z, sizeof(Lights), sizeof(LightsHeader), sizeof(lights.leds));
             //send the positions to the UI _socket_emit
             lights.header.isPositions = 10; //filled with positions, set back to ct_Leds in ModuleEditor
-        } else {
-            ESP_LOGD(TAG, "pass %d %d", pass, lights.header.nrOfLights);
-            for (VirtualLayer * layer: layerV) {
-                //add the position in the virtual layer
-                layer->addLayoutPost();
-            }
+
             // initLightsToBlend();
 
             // if pins defined
@@ -136,12 +129,16 @@ PhysicalLayer::PhysicalLayer() {
                 ledsDriver.init(lights, sortedPins); //init the driver with the sorted pins and lights
 
             } //pins defined
-
+        } else if (pass == 2) {
+            ESP_LOGD(TAG, "pass %d %d", pass, lights.header.nrOfLights);
+            for (VirtualLayer * layer: layerV) {
+                //add the position in the virtual layer
+                layer->addLayoutPost();
+            }
         }
     }
 
     // an effect is using a virtual layer: tell the effect in which layer to run...
-
 
     //run one loop of an effect
     Node* PhysicalLayer::addNode(const uint8_t index, const char * name, const JsonArray controls) {
@@ -150,6 +147,7 @@ PhysicalLayer::PhysicalLayer() {
         if (equal(name, SolidEffect::name())) node = new SolidEffect();
         //alphabetically from here
         else if (equal(name, BouncingBallsEffect::name())) node = new BouncingBallsEffect();
+        else if (equal(name, DistortionWavesEffect::name())) node = new DistortionWavesEffect();
         else if (equal(name, FreqMatrixEffect::name())) node = new FreqMatrixEffect();
         else if (equal(name, GEQEffect::name())) node = new GEQEffect();
         else if (equal(name, LinesEffect::name())) node = new LinesEffect();

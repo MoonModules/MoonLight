@@ -103,12 +103,6 @@
 					href: '/moonbase/module?module=instances',
 					feature: page.data.features.moonbase,
 				},
-				{
-					title: 'Demo',
-					icon: BulbIcon,
-					href: '/moonbase/module?module=demo',
-					feature: page.data.features.moonbase,
-				},
 			]
 		},
 		{

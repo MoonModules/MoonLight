@@ -31,9 +31,8 @@ public:
   JsonArray controls;
 
   bool hasLayout = false; //run map on monitor (pass1) and modifier new Node, on/off, control changed or layout setup, on/off or control changed (pass1 and 2) 
-  bool requestMap = false; //collect requests to map as it is requested by setup and updateControl and only need to be done once
-  bool hasModifier = false; //modifier new Node, on/off, control changed: run layout.requestMap. addLayoutPre: modifyLayout, addLight: modifyLight (todo XYZ: modifyXYZ)
-  // bool addedControl = false;
+  bool hasModifier = false; //modifier new Node, on/off, control changed: run layout.requestMapLayout. addLayoutPre: modifyLayout, addLight: modifyLight (todo XYZ: modifyXYZ)
+
   virtual bool isLiveScriptNode() const { return false; }
 
   bool on = false; //onUpdate will set it on
@@ -48,7 +47,8 @@ public:
   virtual void setup() {
     if (hasLayout) {
       layerV->layerP->lights.header.resetOffsets(); //reset offsets to default
-      requestMap = true;
+      layerV->requestMapPhysical = true;
+      layerV->requestMapVirtual = true;
     }
   };
 
@@ -109,30 +109,9 @@ public:
   virtual void updateControl(JsonObject control); // see Nodes.cpp for implementation
 
   //effect, layout and modifier (?)
-  virtual void loop() {
-    if (requestMap) { //not too early? otherwise change to loop1s
-      requestMap = false;
-      if (on) {
-        for (layerV->layerP->pass = 1; layerV->layerP->pass <= 2; layerV->layerP->pass++)
-          mapLayout(); //calls also addLayout
-      } else {
-        layerV->resetMapping();
-      }
-    }
-  }
+  virtual void loop() {}
 
   //layout
-
-  //calls addLayout functions, non virtual, only addLayout can be redefined in derived class
-  virtual void mapLayout() {
-    if (hasLayout) {
-      ESP_LOGD(TAG, "%s", name());
-      layerV->layerP->addLayoutPre();
-      addLayout();
-      layerV->layerP->addLayoutPost();
-    }
-  }
-
   virtual void addLayout() {} //the definition of the layout, called by mapLayout()
 
   void addLight(Coord3D position) {
@@ -174,10 +153,10 @@ class LiveScriptNode: public Node {
 
   void setup() override; //addExternal, compileAndRun
   
-  void loop() override; //call Node.loop to process requestMap. todo: sync with script...
+  void loop() override; //call Node.loop to process requestMapLayout. todo: sync with script...
 
   //layout
-  void mapLayout() override; // call map in LiveScript
+  void addLayout() override; // call map in LiveScript
   
   void destructor() override;
 

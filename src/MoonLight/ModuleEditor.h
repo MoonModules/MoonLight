@@ -88,13 +88,8 @@ public:
                 ESP_LOGD(TAG, "rest monitor triggered");
 
                 //trigger pass 1 mapping of layout
-                for (Node *node : layerP.layerV[0]->nodes) {
-                    if (node->hasLayout && node->on) {
-                        ESP_LOGD(TAG, "Monitor request -> layout map 1 %s", node->name());
-                        for (layerP.pass = 1; layerP.pass <=1; layerP.pass++) //only pass1: virtual mapping
-                            node->mapLayout();
-                    }
-                }
+                layerP.pass = 1; //(requestMapPhysical=1 physical rerun)
+                layerP.layerV[0]->mapLayout();
 
                 PsychicJsonResponse response = PsychicJsonResponse(request, false);
                 return response.send();
@@ -115,6 +110,7 @@ public:
             values.add(SolidEffect::name());
             //alphabetically from here
             values.add(BouncingBallsEffect::name());
+            values.add(DistortionWavesEffect::name());
             values.add(FreqMatrixEffect::name());
             values.add(GEQEffect::name());
             values.add(LinesEffect::name());
@@ -169,7 +165,6 @@ public:
         // handle nodes
         if (updatedItem.parent[0] == "nodes") { // onNodes
             JsonVariant nodeState = _state.data["nodes"][updatedItem.index[0]];
-            const char *nodeName = nodeState["nodeName"];
             // serializeJson(nodeState, Serial); Serial.println();
 
             if (updatedItem.name == "nodeName") { //onName
@@ -178,7 +173,7 @@ public:
                 bool newNode = false;
 
                 // remove or add Nodes (incl controls)
-                if (!nodeState["nodeName"].isNull()) { // if name changed // == updatedItem.value
+                if (!updatedItem.value.isNull()) { // if name changed // == updatedItem.value
 
                     //if old node exists then remove it's controls
                     if (updatedItem.oldValue != "null") {
@@ -192,7 +187,7 @@ public:
                         nodeState["controls"].to<JsonArray>(); //clear the controls
                     }
 
-                    Node *nodeClass = layerP.addNode(updatedItem.index[0], nodeState["nodeName"], nodeState["controls"]);
+                    Node *nodeClass = layerP.addNode(updatedItem.index[0], updatedItem.value, nodeState["controls"]);
 
                     if(nodeClass != nullptr) {
                         nodeClass->on = nodeState["on"];
@@ -211,14 +206,12 @@ public:
 
                         //if node is a modifier, run the layout definition
                         if (nodeClass->hasModifier) {
-                            for (Node *node : layerP.layerV[0]->nodes) {
-                                if (node->hasLayout) {
-                                    ESP_LOGD(TAG, "Modifier created -> remap layout %s", node->name());
-                                    node->requestMap = true; //request mapping
-                                }
-                            }
+                            ESP_LOGD(TAG, "Modifier created -> remap layout %s", nodeState["nodeName"].as<String>().c_str());
+                            layerP.layerV[0]->requestMapVirtual = true;
                         }
                     }
+                    else
+                        ESP_LOGW(TAG, "Nodeclass %d not found", updatedItem.value.as<String>().c_str());
                 }
 
                 //if a node existed and no new node in place, remove 
@@ -252,21 +245,19 @@ public:
                     Node *nodeClass = layerP.layerV[0]->nodes[updatedItem.index[0]];
                     if (nodeClass) {
                         nodeClass->on = updatedItem.value.as<bool>(); //set nodeclass on/off
+                        ESP_LOGD(TAG, "  nodeclass m:%d l:%d", nodeClass->hasModifier, nodeClass->hasLayout);
                         if (nodeClass->hasModifier) { //nodeClass->on && //if class has modifier, run the layout (if on) - which uses all the modifiers ...
-                            for (Node *node : layerP.layerV[0]->nodes) {
-                                if (node->hasLayout) {
-                                    ESP_LOGD(TAG, "Modifier on/off -> remap layout %s", node->name());
-                                    node->requestMap = true; //request mapping
-                                }
-                            }
+                            ESP_LOGD(TAG, "Modifier on/off -> remap layout %s", nodeState["nodeName"].as<String>().c_str());
+                            layerP.layerV[0]->requestMapVirtual = true;
                         }
                         if (nodeClass->hasLayout) {
-                            ESP_LOGD(TAG, "Layout on/off -> remap layout %s (on:%d)", nodeName, nodeClass->on);
-                            nodeClass->requestMap = true; // rerun setup (which checks for on)
-                            if (!nodeClass->on)
-                                nodeClass->loop(); // run the loop once to update the layout (off cancels the loop)
+                            ESP_LOGD(TAG, "Layout on/off -> remap layout %s (on:%d)", nodeState["nodeName"].as<String>().c_str(), nodeClass->on);
+                            layerP.layerV[0]->requestMapPhysical = true;
+                            layerP.layerV[0]->requestMapVirtual = true;
                         }
                     }
+                    else
+                        ESP_LOGW(TAG, "Nodeclass %d not found", nodeState["nodeName"].as<String>().c_str());
                 }
             }
 
@@ -283,12 +274,8 @@ public:
 
                         // ESP_LOGD(TAG, "nodeClass type %s", nodeClass->scriptType);
                         if (nodeClass->on && nodeClass->hasModifier) {
-                            for (Node *node : layerP.layerV[0]->nodes) {
-                                if (node->hasLayout) {
-                                    ESP_LOGD(TAG, "Modifier control changed -> remap layout %s", node->name());
-                                    node->requestMap = true; //request mapping
-                                }
-                            }
+                            ESP_LOGD(TAG, "Modifier control changed -> remap layout %s (on:%d)", nodeState["nodeName"].as<String>().c_str(), nodeClass->on);
+                            layerP.layerV[0]->requestMapVirtual = true;
                         }
                     }
                     else ESP_LOGW(TAG, "nodeClass not found %s", nodeState["nodeName"].as<String>().c_str());

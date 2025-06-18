@@ -21,7 +21,6 @@
 #if FT_ENABLED(FT_MOONBASE)
     #include "MoonBase/FilesService.h"
     #include "MoonBase/ModuleInstances.h"
-    #include "MoonBase/ModuleDemo.h"
 
     // 💫
     #if FT_ENABLED(FT_MOONLIGHT)
@@ -61,7 +60,6 @@ LightStateService lightStateService = LightStateService(&server,
 #if FT_ENABLED(FT_MOONBASE)
     FilesService filesService = FilesService(&server, &esp32sveltekit);
     ModuleInstances moduleInstances = ModuleInstances(&server, &esp32sveltekit, &filesService);
-    ModuleDemo moduleDemo = ModuleDemo(&server, &esp32sveltekit, &filesService);
 
     // 💫
     #if FT_ENABLED(FT_MOONLIGHT)
@@ -89,7 +87,6 @@ void setup()
     #if FT_ENABLED(FT_MOONBASE)
         filesService.begin();
         moduleInstances.begin();
-        moduleDemo.begin();
 
         #if FT_ENABLED(FT_MOONLIGHT)
             moduleLightsControl.begin();
@@ -171,7 +168,6 @@ void loop()
                         moduleLiveScripts.loop1s();
                     #endif
                 #endif
-                moduleDemo.loop1s();
 
                 //10s loop
                 static unsigned long lastTime10s = 0;

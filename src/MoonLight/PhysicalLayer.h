@@ -124,8 +124,8 @@ class PhysicalLayer {
 
     PhysicalLayer();
 
-    bool setup();
-    bool loop();
+    void setup();
+    void loop();
 
     uint8_t pass = 0; //'class global' so addLight/Pin functions know which pass it is in
     void addLayoutPre();

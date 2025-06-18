@@ -9,7 +9,6 @@
     @license   For non GPL-v3 usage, commercial licenses must be purchased. Contact moonmodules@icloud.com
 **/
 
-
 #if FT_MOONLIGHT
 #include "Nodes.h"
 
@@ -48,7 +47,8 @@ void Node::updateControl(JsonObject control) {
     //if changed run map
     if (hasLayout) {
       ESP_LOGD(TAG, "layout control changed -> remap layout %s", name());
-      requestMap = true;
+      layerV->requestMapPhysical = true;
+      layerV->requestMapVirtual = true;
     }
 };
 
@@ -61,9 +61,7 @@ Node *gNode = nullptr;
 
 static void _addControl(void * ptr, char *name, char* type, int defaul, int min = 0, int max = 255) {ESP_LOGD(TAG, "%p %s %s %d (%d-%d)", ptr,  name, type, defaul, min, max);gNode->addControl(ptr, name, type, defaul, min, max);}
 static void _addPin(uint8_t pinNr) {gNode->layerV->layerP->addPin(pinNr);}
-static void _addLayoutPre() {gNode->layerV->layerP->addLayoutPre();}
 static void _addLight(uint8_t x, uint8_t y, uint8_t z) {gNode->layerV->layerP->addLight({x, y, z});}
-static void _addLayoutPost() {gNode->layerV->layerP->addLayoutPost();}
 
 static void _modifyLayout() {gNode->modifyLayout();}
 // static void _modifyLight() {gNode->modifyLight();} //need &position parameter
@@ -154,9 +152,7 @@ void LiveScriptNode::setup() {
   //MoonLight functions
   addExternal(    "void addControl(void*,char*,char*,int, int, int)", (void *)_addControl);
   addExternal(    "void addPin(uint8_t)", (void *)_addPin);
-  addExternal(    "void addLayoutPre()", (void *)_addLayoutPre);
   addExternal(    "void addLight(uint8_t,uint8_t,uint8_t)", (void *)_addLight);
-  addExternal(    "void addLayoutPost()", (void *)_addLayoutPost);
   addExternal(    "void modifyLayout()", (void *)_modifyLayout);
 //   addExternal(    "void modifyLight(uint16_t,uint16_t,uint16_t)", (void *)_modifyLight);
 //   addExternal(    "void modifyXYZ(uint16_t,uint16_t,uint16_t)", (void *)_modifyXYZ);
@@ -188,19 +184,17 @@ void LiveScriptNode::setup() {
 
   compileAndRun();
 
-    //   Node::setup(); //call Node::setup to handle requestMap: no need to run as 
+    //   Node::setup(); //call Node::setup to handle requestMapLayout: no need to run as 
 }
 
 void LiveScriptNode::loop() {
-
-    Node::loop(); //call Node::loop to handle requestMap
     // Serial.print("l");
     xSemaphoreGive(WaitAnimationSync);
 }
 
-void LiveScriptNode::mapLayout() {
+void LiveScriptNode::addLayout() {
     if (hasLayout) {
-        scriptRuntime.execute(animation, "mapLayout"); 
+        scriptRuntime.execute(animation, "addLayout"); 
     }
 }
 
@@ -232,7 +226,6 @@ void LiveScriptNode::compileAndRun() {
           if (scScript.find("modifyLight(") != std::string::npos) hasModifier = true;
         //   if (scScript.find("modifyXYZ(") != std::string::npos) hasModifier = true;
 
-          if (hasLayout) scScript += "void mapLayout(){addLayoutPre();addLayout();addLayoutPost();}"; //add mapLayout() function
           //add main function
           scScript += "void main(){";
           if (hasSetup) scScript += "setup();";
@@ -271,14 +264,9 @@ void LiveScriptNode::compileAndRun() {
 void LiveScriptNode::execute() {
     ESP_LOGD(TAG, "%s", animation);
 
-    //similar to the requestMap in layout.setup.
+    //similar to the requestMapLayout in layout.setup.
     if (hasLayout) {
-      if (on) {
-        for (layerV->layerP->pass = 1; layerV->layerP->pass <= 2; layerV->layerP->pass++)
-          mapLayout(); //calls addLayout
-      } else {
-        layerV->resetMapping();
-      }
+        layerV->mapLayout(); //which calls also livescript addLayout
     }
 
     if (hasLoop) {

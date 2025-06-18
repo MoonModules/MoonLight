@@ -62,6 +62,9 @@ class VirtualLayer {
 
   uint8_t fadeMin;
 
+  uint8_t requestMapPhysical = false; //collect requests to map as it is requested by setup and updateControl and only need to be done once
+  uint8_t requestMapVirtual = false; //collect requests to map as it is requested by setup and updateControl and only need to be done once
+
   VirtualLayer() {
     ESP_LOGD(TAG, "constructor");
   }
@@ -182,10 +185,9 @@ class VirtualLayer {
   void fill_solid(const CRGB& color);
   void fill_rainbow(const uint8_t initialhue, const uint8_t deltahue);
 
+  void mapLayout();
   void addLayoutPre();
-
   void addLight(Coord3D position);
-
   void addLayoutPost();
 
   void drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, CRGB color, bool soft = false, uint8_t depth = UINT8_MAX) {

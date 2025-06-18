@@ -23,7 +23,6 @@ To create a new module:
 * Create a **class** which inherits from Module
 * Call the Module **constructor** with the name of the module.
     * This name will be used to set up http rest api and webserver sockets
-    * See [ModuleDemo.h](https://github.com/MoonModules/MoonLight/blob/main/src/MoonBase/ModuleDemo.h)
 
 ```cpp
 class ModuleDemo : public Module

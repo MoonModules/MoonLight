@@ -5,10 +5,11 @@
 ## Functional
 
 Controls:
+
 * On: lights on or off
 * Brightness: brightness of the LEDs when on
 * RGB Sliders: control each color seperately.
-* Palette: Global palette setting, used by all effects
+* Palette: Global palette setting. Effects with the palette icon 🎨 use this palette setting.
 * Presets: Control pad style, store or retrieve a set of nodes with their controls. WIP
 * Driver On: sends LED output to ESP32 gpio pins.
     * Switch off to see the effect framerate in System Status/Metrics
