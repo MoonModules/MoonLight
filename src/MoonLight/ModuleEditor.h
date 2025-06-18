@@ -124,6 +124,7 @@ public:
             values.add(SinusEffect::name());
             values.add(SphereMoveEffect::name());
             values.add(WaveEffect::name());
+            values.add(FixedRectangleEffect::name());
 
             values.add(HumanSizedCubeLayout::name());
             values.add(SingleLineLayout::name());
