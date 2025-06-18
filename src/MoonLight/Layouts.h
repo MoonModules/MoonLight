@@ -65,11 +65,12 @@ class HumanSizedCubeLayout: public Node {
   }
 };
 
-class MovingHeadLayout: public Node {
+class SingleLineLayout: public Node {
   public:
 
-  static const char * name() {return "MovingHead 🚥";}
+  static const char * name() {return "Single Line 🚥";}
 
+  uint8_t yposition;
   uint8_t width;
   uint8_t pin;
 
@@ -77,7 +78,8 @@ class MovingHeadLayout: public Node {
     hasLayout = true;
     Node::setup();
     
-    addControl(&width, "width", "range", 4, 1, 32); //default 4 moving heads
+    addControl(&width, "width", "range", 4, 1, 32); 
+    addControl(&yposition, "Y position", "number", 0, 0, 16); 
     addControl(&pin, "pin", "number", 16, 1, 48);
 
     layerV->layerP->lights.header.channelsPerLight = 24;
@@ -90,7 +92,41 @@ class MovingHeadLayout: public Node {
 
   void addLayout() override {
     for (uint8_t x = 0; x<width; x++) {
-      addLight({x, 0, 0});
+      addLight({x, yposition, 0});
+    }
+    addPin(pin); //needed to slow down the dmx stream ... wip
+  }
+
+};
+
+class SingleRowLayout: public Node {
+  public:
+
+  static const char * name() {return "Single Row 🚥";}
+
+  uint8_t xposition;
+  uint8_t height;
+  uint8_t pin;
+
+  void setup() override {
+    hasLayout = true;
+    Node::setup();
+    
+    addControl(&height, "height", "range", 4, 1, 32); 
+    addControl(&xposition, "X position", "number", 0, 0, 16); 
+    addControl(&pin, "pin", "number", 16, 1, 48);
+
+    layerV->layerP->lights.header.channelsPerLight = 24;
+    layerV->layerP->lights.header.offsetPan = 0;
+    layerV->layerP->lights.header.offsetTilt = 1;
+    layerV->layerP->lights.header.offsetBrightness = 3;
+    layerV->layerP->lights.header.offsetRGB = 4;
+    layerV->layerP->lights.header.offsetZoom = 17;
+  }
+
+  void addLayout() override {
+    for (uint8_t y = 0; y<height; y++) {
+      addLight({xposition, y, 0});
     }
     addPin(pin); //needed to slow down the dmx stream ... wip
   }
