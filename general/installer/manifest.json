@@ -1,0 +1,39 @@
+{
+  "name": "MoonLight",
+  "version": "0.5.6",
+  "home_assistant_domain": "esphome",
+  "funding_url": "https://esphome.io/guides/supporters.html",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [
+        { "path": "./esp32-bootloader.bin", "offset": 4096 },
+        { "path": "./esp32-partitions.bin", "offset": 32768 },
+        { "path": "./boot-app0.bin", "offset": 57344 },
+        { "path": "./MoonLight_esp32dev_0-5-6.bin", "offset": 65536 }
+      ]
+    },
+    {
+      "chipFamily": "ESP32-Wrover",
+      "parts": [
+        { "path": "./MoonLight_esp-wrover-kit_0-5-6.bin", "offset": 65536 }
+      ]
+    },
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        { "path": "./esp32-s3-bootloader.bin", "offset": 0 },
+        { "path": "./esp32-s3-partitions.bin", "offset": 32768 },
+        { "path": "./boot-app0.bin", "offset": 57344 },
+        { "path": "./MoonLight_esp32-s3-devkitc-1-n16r8v_0-5-6.bin", "offset": 65536 }
+      ]
+    },
+    {
+      "chipFamily": "ESP32-P4",
+      "parts": [
+        { "path": "./MoonLight_olimex-esp32-p4_0-5-6.bin", "offset": 65536 }
+      ]
+    }
+  ]
+}
