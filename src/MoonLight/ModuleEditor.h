@@ -125,6 +125,7 @@ public:
             values.add(SinusEffect::name());
             values.add(SphereMoveEffect::name());
             values.add(WaveEffect::name());
+            values.add(FixedRectangleEffect::name());
             values.add(MHTroy15Effect::name());
             values.add(MHTroy32Effect::name());
             values.add(MHWowiEffect::name());
@@ -133,6 +134,8 @@ public:
             values.add(PanelLayout::name());
             values.add(PanelsLayout::name());
             values.add(RingsLayout::name());
+            values.add(SingleLineLayout::name());
+            values.add(SingleRowLayout::name());
 
             //custom
             values.add(SE16Layout::name());

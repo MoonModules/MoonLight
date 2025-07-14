@@ -36,6 +36,46 @@ class SolidEffect: public Node {
   }
 };
 
+class FixedRectangleEffect: public Node {
+  public:
+
+  static const char * name() {return "Fixed Rectangle 🔥💡";}
+  static uint8_t dim() {return _2D;}
+  static const char * tags() {return "";}
+
+  uint8_t red = 255;
+  uint8_t green = 255;
+  uint8_t blue = 255;
+  uint8_t width = 1;
+  uint8_t x = 0;
+  uint8_t height = 1;
+  uint8_t y = 1;
+
+  void setup() override {
+    addControl(red, "red", "range", 50);
+    addControl(green, "green", "range", 50);
+    addControl(blue, "blue", "range", 50);
+    addControl(x, "X position", "range", 0);
+    addControl(y, "Y position", "range", 0);
+    addControl(width, "Rectangle width", "range", 1);
+    addControl(height, "Rectangle height", "range", 1);
+
+  }
+
+  void loop() override {
+    Coord3D pos = {0,0,0};
+    for (pos.x = 0; pos.x < layerV->size.x; pos.x++) {
+      for (pos.y = 0; pos.y < layerV->size.y; pos.y++) {
+        if (((pos.x >= x) && (pos.x < x + width)) && ((pos.y >= y) && (pos.y < y + height))) {
+          layerV->setRGB(pos, CRGB(red, green, blue));
+        } else {
+          layerV->setRGB(pos, CRGB(0, 0, 0));
+        }
+      }
+    }
+  }
+};
+
 //alphabetically from here, Custom Nodes at the end
 
 //BouncingBalls inspired by WLED

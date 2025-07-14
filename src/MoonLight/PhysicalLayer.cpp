@@ -174,6 +174,7 @@ PhysicalLayer::PhysicalLayer() {
         else if (equal(name, RGBWParEffect::name())) node = new RGBWParEffect();
         else if (equal(name, SinusEffect::name())) node = new SinusEffect();
         else if (equal(name, SphereMoveEffect::name())) node = new SphereMoveEffect();
+        else if (equal(name, FixedRectangleEffect::name())) node = new FixedRectangleEffect();
         else if (equal(name, WaveEffect::name())) node = new WaveEffect();
         else if (equal(name, MHTroy15Effect::name())) node = new MHTroy15Effect();
         else if (equal(name, MHTroy32Effect::name())) node = new MHTroy32Effect();
@@ -183,6 +184,8 @@ PhysicalLayer::PhysicalLayer() {
         else if (equal(name, PanelLayout::name())) node = new PanelLayout();
         else if (equal(name, PanelsLayout::name())) node = new PanelsLayout();
         else if (equal(name, RingsLayout::name())) node = new RingsLayout();
+        else if (equal(name, SingleLineLayout::name())) node = new SingleLineLayout();
+        else if (equal(name, SingleRowLayout::name())) node = new SingleRowLayout();
 
         //custom
         else if (equal(name, SE16Layout::name())) node = new SE16Layout();

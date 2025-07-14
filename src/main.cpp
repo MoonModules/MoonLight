@@ -30,6 +30,9 @@
         #endif
         #include "MoonLight/ModuleChannelView.h"
         #include "MoonLight/ModuleMoonLightInfo.h"
+        #ifdef STEPHANELEC_LED_DRIVER_V1
+            #include "MoonLight/ModuleStephanElecDriverInfo.h"
+        #endif
     #endif
 #endif
 
@@ -57,6 +60,9 @@ ESP32SvelteKit esp32sveltekit(&server, 160); //increase number of endpoints to 1
         #endif
         ModuleChannelView moduleChannelView = ModuleChannelView(&server, &esp32sveltekit);
         ModuleMoonLightInfo moduleMoonLightInfo = ModuleMoonLightInfo(&server, &esp32sveltekit);
+        #ifdef STEPHANELEC_LED_DRIVER_V1
+            ModuleStephanElecDriverInfo moduleStephanElecDriverInfo = ModuleStephanElecDriverInfo(&server, &esp32sveltekit);
+        #endif
     #endif
 #endif
     

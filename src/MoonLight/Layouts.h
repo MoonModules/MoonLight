@@ -101,6 +101,83 @@ class PanelLayout: public Node {
 
 };
 
+class SingleLineLayout: public Node {
+  public:
+
+  static const char * name() {return "Single Line 🚥";}
+  static uint8_t dim() {return _2D;}
+  static const char * tags() {return "";}
+
+  uint8_t start_x = 0;
+  uint8_t width = 1;
+  uint16_t yposition = 0;
+  uint8_t pin = 16;
+  bool reversed_order = false;
+
+  void setup() override {
+    hasLayout = true;
+
+    addControl(start_x, "starting X", "range", 0, 255);
+    addControl(width, "width", "range", 1, 255);
+    addControl(yposition, "Y position", "number", 0, 255); 
+    addControl(reversed_order, "reversed order", "checkbox");
+    addControl(pin, "pin", "pin", 1, 48);
+  }
+
+  void addLayout() override {
+    if (reversed_order){
+      for (int x = start_x+width-1; x>=start_x; x--) {
+        addLight({x, yposition, 0});
+      }
+    }
+    else {
+      for (uint8_t x = start_x; x<start_x+width; x++) {
+        addLight({x, yposition, 0});
+      }
+    }
+    addPin(pin);
+  }
+
+};
+
+class SingleRowLayout: public Node {
+  public:
+
+  static const char * name() {return "Single Row 🚥";}
+  static uint8_t dim() {return _2D;}
+  static const char * tags() {return "";}
+
+  uint8_t start_y = 0;
+  uint8_t height = 1;
+  uint16_t xposition = 0;
+  uint8_t pin = 16;
+  bool reversed_order = false;
+
+
+  void setup() override {
+    hasLayout = true;
+    addControl(start_y, "starting Y", "range", 0, 255);
+    addControl(height, "height", "range", 1, 255);
+    addControl(xposition, "X position", "number", 0, 255); 
+    addControl(reversed_order, "reversed order", "checkbox");
+    addControl(pin, "pin", "pin", 1, 48);
+  }
+
+  void addLayout() override {
+    if (reversed_order){
+      for (int y = start_y+height-1; y>=start_y; y--) {
+        addLight({xposition, y, 0});
+      }
+    }
+    else {
+      for (uint8_t y = start_y; y<start_y+height; y++) {
+        addLight({xposition, y, 0});
+      }
+    }
+    addPin(pin);
+  }
+};
+
 class PanelsLayout: public Node {
   public:
 
