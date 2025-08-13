@@ -132,7 +132,7 @@ esp_err_t PsychicRequest::loadBody()
 
     size_t remaining = this->_req->content_len;
     size_t actuallyReceived = 0;
-    char *buf = (char *)malloc(remaining + 1);
+    char *buf = (char *)heap_caps_malloc(remaining + 1, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (buf == NULL)
     {
         ESP_LOGE(PH_TAG, "Failed to allocate memory for body");

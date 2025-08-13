@@ -26,8 +26,8 @@ void PsychicResponse::addHeader(const char *field, const char *value)
 {
   //these get freed after send by the destructor
   HTTPHeader header;
-  header.field =(char *)malloc(strlen(field)+1);
-  header.value = (char *)malloc(strlen(value)+1);
+  header.field =(char *)heap_caps_malloc(strlen(field)+1, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  header.value = (char *)heap_caps_malloc(strlen(value)+1, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 
   strlcpy(header.field, field, strlen(field)+1);
   strlcpy(header.value, value, strlen(value)+1);

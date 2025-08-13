@@ -103,7 +103,7 @@ esp_err_t PsychicFileResponse::send()
   size_t size = getContentLength();
   if (size < FILE_CHUNK_SIZE)
   {
-    uint8_t *buffer = (uint8_t *)malloc(size);
+    uint8_t *buffer = (uint8_t *)heap_caps_malloc(size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (buffer == NULL)
     {
       /* Respond with 500 Internal Server Error */
@@ -121,7 +121,7 @@ esp_err_t PsychicFileResponse::send()
   else
   {
     /* Retrieve the pointer to scratch buffer for temporary storage */
-    char *chunk = (char *)malloc(FILE_CHUNK_SIZE);
+    char *chunk = (char *)heap_caps_malloc(FILE_CHUNK_SIZE, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (chunk == NULL)
     {
       /* Respond with 500 Internal Server Error */

@@ -112,7 +112,7 @@ String ArduinoJsonJWT::encode(const char *cstr, int inputLen)
     base64_init_encodestate(&_state);
     size_t encodedLength = base64_encode_expected_len(inputLen) + 1;
     // prepare buffer of correct length, returning an empty string on failure
-    char *buffer = (char *)malloc(encodedLength * sizeof(char));
+    char *buffer = (char *)heap_caps_malloc(encodedLength * sizeof(char), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (buffer == nullptr)
     {
         return "";

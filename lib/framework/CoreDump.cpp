@@ -49,8 +49,8 @@ esp_err_t CoreDump::coreDump(PsychicRequest *request)
     }
     size_t const chunk_len = 3 * 16; // must be multiple of 3
     size_t const b64_len = chunk_len / 3 * 4 + 4;
-    uint8_t *const chunk = (uint8_t *)malloc(chunk_len);
-    char *const b64 = (char *)malloc(b64_len);
+    uint8_t *const chunk = (uint8_t *)heap_caps_malloc(chunk_len, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    char *const b64 = (char *)heap_caps_malloc(b64_len, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     assert(chunk && b64);
 
     /*if (write_cfg->start) {

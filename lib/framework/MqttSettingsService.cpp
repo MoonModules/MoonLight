@@ -34,7 +34,7 @@ static char *retainCstr(const char *cstr, char **ptr)
     // dynamically allocate and copy cstr (if non null)
     if (cstr != nullptr)
     {
-        *ptr = (char *)malloc(strlen(cstr) + 1);
+        *ptr = (char *)heap_caps_malloc(strlen(cstr) + 1, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
         strcpy(*ptr, cstr);
     }
 

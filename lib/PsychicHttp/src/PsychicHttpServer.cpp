@@ -323,7 +323,7 @@ bool ON_AP_FILTER(PsychicRequest *request) {
 String urlDecode(const char* encoded)
 {
   size_t length = strlen(encoded);
-  char* decoded = (char*)malloc(length + 1);
+  char* decoded = (char*)heap_caps_malloc(length + 1, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
   if (!decoded) {
     return "";
   }

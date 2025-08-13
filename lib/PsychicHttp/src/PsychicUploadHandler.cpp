@@ -68,7 +68,7 @@ esp_err_t PsychicUploadHandler::_basicUploadHandler(PsychicRequest *request)
     String filename = request->getFilename();
 
     /* Retrieve the pointer to scratch buffer for temporary storage */
-    char *buf = (char *)malloc(FILE_CHUNK_SIZE);
+    char *buf = (char *)heap_caps_malloc(FILE_CHUNK_SIZE, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     int received;
     unsigned long index = 0;
 
@@ -135,7 +135,7 @@ esp_err_t PsychicUploadHandler::_multipartUploadHandler(PsychicRequest *request)
         return request->reply(400, "text/html", "No multipart boundary found.");
     }
 
-    char *buf = (char *)malloc(FILE_CHUNK_SIZE);
+    char *buf = (char *)heap_caps_malloc(FILE_CHUNK_SIZE, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     int received;
     unsigned long index = 0;
 
@@ -330,7 +330,7 @@ void PsychicUploadHandler::_parseMultipartPostByte(uint8_t data, bool last)
                 {
                     if (_itemBuffer)
                         free(_itemBuffer);
-                    _itemBuffer = (uint8_t *)malloc(FILE_CHUNK_SIZE);
+                    _itemBuffer = (uint8_t *)heap_caps_malloc(FILE_CHUNK_SIZE, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
                     if (_itemBuffer == NULL)
                     {
                         ESP_LOGE(PH_TAG, "Multipart: Failed to allocate buffer");

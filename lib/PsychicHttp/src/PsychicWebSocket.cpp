@@ -172,7 +172,7 @@ esp_err_t PsychicWebSocketHandler::handleRequest(PsychicRequest *request)
   //ESP_LOGD(PH_TAG, "frame len is %d", ws_pkt.len);
   if (ws_pkt.len) {
     /* ws_pkt.len + 1 is for NULL termination as we are expecting a string */
-    buf = (uint8_t*) calloc(1, ws_pkt.len + 1);
+    buf = (uint8_t*) heap_caps_calloc(1, ws_pkt.len + 1, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (buf == NULL) {
       ESP_LOGE(PH_TAG, "Failed to calloc memory for buf");
       return ESP_ERR_NO_MEM;

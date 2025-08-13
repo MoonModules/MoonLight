@@ -309,7 +309,7 @@ public:
     addControl(colorBars, "colorBars", "checkbox");
     addControl(smoothBars, "smoothBars", "checkbox");
 
-    previousBarHeight = (uint16_t*)malloc(layerV->size.x * sizeof(uint16_t));
+    previousBarHeight = (uint16_t*)heap_caps_malloc(layerV->size.x * sizeof(uint16_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (!previousBarHeight) {
       ESP_LOGE(TAG, "malloc failed for previousBarHeight");
       return;
