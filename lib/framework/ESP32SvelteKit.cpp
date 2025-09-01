@@ -54,6 +54,9 @@ ESP32SvelteKit::ESP32SvelteKit(PsychicHttpServer *server, unsigned int numberEnd
 #if FT_ENABLED(FT_BATTERY)
                                                                                           _batteryService(&_socket),
 #endif
+#if FT_ENABLED(FT_VIN_MONITOR) || FT_ENABLED(FT_IIN_MONITOR)
+                                                                                          _electricityInputService(&_socket),
+#endif
 #if FT_ENABLED(FT_ANALYTICS)
                                                                                           _analyticsService(&_socket),
 #endif
