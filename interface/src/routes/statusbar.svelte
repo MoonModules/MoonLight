@@ -12,7 +12,7 @@
 	import RssiIndicator from '$lib/components/RSSIIndicator.svelte';
 	import BatteryIndicator from '$lib/components/BatteryIndicator.svelte';
 	import UpdateIndicator from '$lib/components/UpdateIndicator.svelte';
-	import InputCurrentMonitoringIndicator from '$lib/components/InputVoltageMonitoringIndicator.svelte';
+	import InputCurrentMonitoringIndicator from '$lib/components/InputCurrentMonitoringIndicator.svelte';
 	import InputVoltageMonitoringIndicator from '$lib/components/InputVoltageMonitoringIndicator.svelte';
 
 	async function postSleep() {
