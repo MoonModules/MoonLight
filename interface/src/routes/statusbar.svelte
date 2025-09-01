@@ -12,6 +12,8 @@
 	import RssiIndicator from '$lib/components/RSSIIndicator.svelte';
 	import BatteryIndicator from '$lib/components/BatteryIndicator.svelte';
 	import UpdateIndicator from '$lib/components/UpdateIndicator.svelte';
+	import InputCurrentMonitoringIndicator from '$lib/components/InputVoltageMonitoringIndicator.svelte';
+	import InputVoltageMonitoringIndicator from '$lib/components/InputVoltageMonitoringIndicator.svelte';
 
 	async function postSleep() {
 		const response = await fetch('/rest/sleep', {
@@ -93,6 +95,22 @@
 		>
 		<span class="px-2 text-xl font-bold lg:text-2xl">{$telemetry.rssi.hostName}</span> <!-- 🌙 -->
 	</div>
+	{#if page.data.features.vin_monitor}
+		<div class="flex-none">
+			<InputVoltageMonitoringIndicator
+				vin={$telemetry.electricalinput.vin}
+				class="inline-block h-7 w-7"
+			/>
+		</div>
+	{/if}
+	{#if page.data.features.iin_monitor}
+		<div class="flex-none"> 
+			<InputCurrentMonitoringIndicator
+				iin={$telemetry.electricalinput.in}
+				class="inline-block h-7 w-7"
+			/>
+		</div>
+    {/if}
 	<div class="indicator flex-none">
 		<UpdateIndicator />
 	</div>

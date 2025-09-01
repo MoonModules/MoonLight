@@ -52,6 +52,16 @@
 #define FT_BATTERY 0
 #endif
 
+// Input voltage monitor
+#ifndef FT_VIN_MONITOR
+#define FT_VIN_MONITOR 0
+#endif
+
+// Input current monitor
+#ifndef FT_IIN_MONITOR
+#define FT_IIN_MONITOR 0
+#endif
+
 // ESP32 analytics on by default
 #ifndef FT_ANALYTICS
 #define FT_ANALYTICS 1

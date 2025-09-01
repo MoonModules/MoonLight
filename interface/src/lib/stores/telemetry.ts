@@ -2,6 +2,7 @@ import { writable } from 'svelte/store';
 import type { RSSI } from '../types/models';
 import type { Battery } from '../types/models';
 import type { DownloadOTA } from '../types/models';
+import type { ElectricalInput } from '../types/models';
 
 let telemetry_data = {
 	rssi: {
@@ -16,6 +17,10 @@ let telemetry_data = {
 	battery: {
 		soc: 100,
 		charging: false
+	},
+	electricalinput: {
+		vin : 32,
+		iin: 11
 	},
 	download_ota: {
 		status: 'none',
@@ -46,6 +51,12 @@ function createTelemetry() {
 			update((telemetry_data) => ({
 				...telemetry_data,
 				battery: { soc: data.soc, charging: data.charging }
+			}));
+		},
+		setElectricalinput: (data: ElectricalInput) => {
+			update((telemetry_data) => ({
+				...telemetry_data,
+				electricalinput: { vin: data.vin, iin: data.iin }
 			}));
 		},
 		setDownloadOTA: (data: DownloadOTA) => {
