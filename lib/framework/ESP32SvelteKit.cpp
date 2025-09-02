@@ -211,6 +211,10 @@ void ESP32SvelteKit::begin()
     _analyticsService.begin();
 #endif
 
+#if FT_ENABLED(FT_VIN_MONITOR) || FT_ENABLED(FT_IIN_MONITOR)
+    _electricityInputService.begin();
+#endif
+
     // Start the loop task
     ESP_LOGV(SVK_TAG, "Starting loop task");
     xTaskCreatePinnedToCore(
