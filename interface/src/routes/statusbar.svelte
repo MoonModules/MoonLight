@@ -106,7 +106,7 @@
 	{#if page.data.features.iin_monitor}
 		<div class="flex-none"> 
 			<InputCurrentMonitoringIndicator
-				iin={$telemetry.electricalinput.in}
+				iin={$telemetry.electricalinput.iin}
 				class="inline-block h-7 w-7"
 			/>
 		</div>
