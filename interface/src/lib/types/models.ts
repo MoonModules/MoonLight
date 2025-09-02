@@ -114,6 +114,11 @@ export type Battery = {
 	charging: boolean;
 };
 
+export type ElectricalInput = {
+	vin: number;
+	iin: number;
+};
+
 export type DownloadOTA = {
 	status: string;
 	progress: number;

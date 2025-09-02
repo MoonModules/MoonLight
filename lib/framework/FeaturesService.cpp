@@ -110,6 +110,16 @@ void FeaturesService::createJSON(JsonObject &root)
 #else
     root["battery"] = false;
 #endif
+#if FT_ENABLED(FT_VIN_MONITOR)
+    root["vin_monitor"] = true;
+#else
+    root["vin_monitor"] = false;
+#endif
+#if FT_ENABLED(FT_IIN_MONITOR)
+    root["iin_monitor"] = true;
+#else
+    root["iin_monitor"] = false;
+#endif
 #if FT_ENABLED(FT_ANALYTICS)
     root["analytics"] = true;
 #else
