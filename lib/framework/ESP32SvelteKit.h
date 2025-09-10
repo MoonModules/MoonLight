@@ -25,6 +25,7 @@
 #include <APStatus.h>
 #include <AuthenticationService.h>
 #include <BatteryService.h>
+#include <ElectricityInputService.h>
 #include <FactoryResetService.h>
 #include <DownloadFirmwareService.h>
 #include <EventSocket.h>
@@ -178,6 +179,13 @@ public:
     }
 #endif
 
+#if FT_ENABLED(FT_VIN_MONITOR) || FT_ENABLED(FT_IIN_MONITOR)
+    ElectricityInputService *getElectricityInputService()
+    {
+        return &_electricityInputService;
+    }
+#endif
+
     FeaturesService *getFeatureService()
     {
         return &_featureService;
@@ -249,6 +257,9 @@ private:
 #endif
 #if FT_ENABLED(FT_BATTERY)
     BatteryService _batteryService;
+#endif
+#if FT_ENABLED(FT_VIN_MONITOR) || FT_ENABLED(FT_IIN_MONITOR)
+    ElectricityInputService _electricityInputService;
 #endif
 #if FT_ENABLED(FT_ANALYTICS)
     AnalyticsService _analyticsService;
