@@ -25,21 +25,24 @@ extern const uint8_t rootca_crt_bundle_end[] asm("_binary_src_certs_x509_crt_bun
  *
  * Frees the pointer before allocation and leaves it as nullptr if cstr == nullptr.
  */
-static char *retainCstr(const char *cstr, char **ptr)
-{
-    // free up previously retained value if exists
-    free(*ptr);
-    *ptr = nullptr;
+static char* retainCstr(const char* cstr, char** ptr) {
+  heap_caps_free(*ptr);
+  *ptr = nullptr;
 
-    // dynamically allocate and copy cstr (if non null)
-    if (cstr != nullptr)
-    {
-        *ptr = (char *)malloc(strlen(cstr) + 1);
-        strcpy(*ptr, cstr);
+  if (cstr != nullptr) {
+
+    size_t size = strlen(cstr) + 1;
+    *ptr = (char*)heap_caps_malloc_prefer(size, 2,MALLOC_CAP_SPIRAM, MALLOC_CAP_INTERNAL);
+
+    if (*ptr) {
+      strcpy(*ptr, cstr);
     }
 
     // return reference to pointer for convenience
     return *ptr;
+  } else {
+    return nullptr;
+  }
 }
 
 MqttSettingsService::MqttSettingsService(PsychicHttpServer *server,

@@ -16,6 +16,39 @@
 
 #include <ESP32SvelteKit.h> // 🌙 safeMode
 
+#include "esp_heap_caps.h"
+#include "esp_dma_utils.h"
+
+ // This tells the C++ compiler that the functions we're wrapping are C-style.
+// This tells the C++ compiler that the function we're wrapping is C-style.
+extern "C" {
+  // Our WRAPPER function. It MUST keep the signature of the old function it's wrapping.
+  esp_err_t __real_esp_dma_capable_malloc(size_t size, const esp_dma_mem_info_t* dma_mem_info, void** out_ptr, size_t* actual_size);
+
+  // Our WRAPPER function. The linker will redirect all calls to the original function here.
+  esp_err_t __wrap_esp_dma_capable_malloc(size_t size, const esp_dma_mem_info_t* dma_mem_info, void** out_ptr, size_t* actual_size) {
+    
+    void* ptr = heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DMA | MALLOC_CAP_CACHE_ALIGNED | MALLOC_CAP_SPIRAM, MALLOC_CAP_DMA | MALLOC_CAP_CACHE_ALIGNED);
+
+    // 3. Handle the result to match the old function's return style.
+    if (!ptr) {
+      // Allocation failed
+      *out_ptr = NULL;
+      return ESP_ERR_NO_MEM;
+    }
+
+    // Allocation succeeded
+    *out_ptr = ptr;
+    if (actual_size) {
+      // The new function doesn't report the actual aligned size,
+      // so we just return the requested size. This is usually fine.
+      *actual_size = size;
+    }
+    
+    return ESP_OK;
+  }
+}
+
 WiFiSettingsService::WiFiSettingsService(PsychicHttpServer *server,
                                          FS *fs,
                                          SecurityManager *securityManager,
@@ -36,7 +69,7 @@ void WiFiSettingsService::initWiFi()
     WiFi.mode(WIFI_MODE_STA); // this is the default.
 
     // Disable WiFi config persistance and auto reconnect
-    WiFi.persistent(false);
+    WiFi.persistent(true);
     WiFi.setAutoReconnect(false);
 
     WiFi.onEvent(
@@ -84,8 +117,9 @@ void WiFiSettingsService::reconfigureWiFiConnection()
     ESP_LOGI(SVK_TAG, "Reconfiguring WiFi TxPower to: %d", _state.txPower); // 🌙
 
     // disconnect and de-configure wifi
-    if (WiFi.disconnect(true))
+    if (WiFi.isConnected() == true)
     {
+        WiFi.disconnect(true);
         _stopping = true;
     }
 }

@@ -68,17 +68,11 @@ void APSettingsService::loop()
 void APSettingsService::manageAP()
 {
     WiFiMode_t currentWiFiMode = WiFi.getMode();
-    if (_state.provisionMode == AP_MODE_ALWAYS ||
-        (_state.provisionMode == AP_MODE_DISCONNECTED && WiFi.status() != WL_CONNECTED) || _recoveryMode)
-    {
-        if (_reconfigureAp || currentWiFiMode == WIFI_OFF || currentWiFiMode == WIFI_STA)
-        {
+    if (_state.provisionMode == AP_MODE_ALWAYS || (_state.provisionMode == AP_MODE_DISCONNECTED && WiFi.status() != WL_CONNECTED) || _recoveryMode) {
+        if (_reconfigureAp || currentWiFiMode == WIFI_OFF || currentWiFiMode == WIFI_STA) {
             startAP();
         }
-    }
-    else if ((currentWiFiMode == WIFI_AP || currentWiFiMode == WIFI_AP_STA) &&
-             (_reconfigureAp || !WiFi.softAPgetStationNum()))
-    {
+    } else if ((currentWiFiMode == WIFI_MODE_AP || currentWiFiMode == WIFI_AP_STA) && (_reconfigureAp || !WiFi.softAPgetStationNum())) {
         stopAP();
     }
     _reconfigureAp = false;
@@ -89,10 +83,19 @@ void APSettingsService::startAP()
 #ifdef SERIAL_INFO
     Serial.printf("Starting software access point %s (%d %d %d) (%s %s %s)\n", _state.ssid.c_str(), _state.channel, _state.ssidHidden, _state.maxClients, _state.localIP.toString().c_str(), _state.gatewayIP.toString().c_str(), _state.subnetMask.toString().c_str()); // 🌙
 #endif
+    // if (WiFi.isConnected() == true) WiFi.disconnect(true);
+    // if (WiFi.STA.started() == true) WiFi.STA.end();
+    // if (WiFi.AP.started() == true) WiFi.AP.end();
+    // if (WiFi.getMode() != WIFI_OFF) WiFi.mode(WIFI_OFF);
+    // delay(100); // Allow time for the radio to shut down.
+
+    WiFi.mode(WIFI_MODE_AP);
+    delay(100); // Allow time for the radio to start up.
+
     WiFi.softAPConfig(_state.localIP, _state.gatewayIP, _state.subnetMask);
     WiFi.softAP(_state.ssid.c_str(), _state.password.c_str(), _state.channel, _state.ssidHidden, _state.maxClients);
     delay(100); // 🌙 give some time for the AP to start
-#if CONFIG_IDF_TARGET_ESP32C3 | LOLIN_WIFI_FIX // 🌙
+#if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(LOLIN_WIFI_FIX) // 🌙
     WiFi.setTxPower(WIFI_POWER_8_5dBm); // https://www.wemos.cc/en/latest/c3/c3_mini_1_0_0.html#about-wifi
 #endif
     if (!_dnsServer)

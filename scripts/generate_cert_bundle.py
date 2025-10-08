@@ -35,9 +35,7 @@ except ImportError:
 
 ca_bundle_bin_file = 'x509_crt_bundle.bin'
 mozilla_cacert_url = 'https://curl.se/ca/cacert.pem'
-# adafruit_cacert_url = 'https://raw.githubusercontent.com/adafruit/certificates/main/data/roots.pem'
-# adafruit_cacert_url = 'https://raw.githubusercontent.com/adafruit/certificates/main/data/roots-full.pem'
-adafruit_cacert_url = 'https://raw.githubusercontent.com/adafruit/certificates/main/data/roots-filtered.pem'
+adafruit_cacert_url = 'https://raw.githubusercontent.com/adafruit/certificates/refs/heads/main/data/roots-filtered.pem'
 certs_dir = Path("./ssl_certs")
 binary_dir = Path("./src/certs")
 

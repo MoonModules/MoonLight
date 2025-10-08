@@ -67,10 +67,10 @@ esp_err_t PsychicUploadHandler::_basicUploadHandler(PsychicRequest *request)
 
     String filename = request->getFilename();
 
-    /* Retrieve the pointer to scratch buffer for temporary storage */
-    char *buf = (char *)malloc(FILE_CHUNK_SIZE);
-    int received;
-    unsigned long index = 0;
+  /* Retrieve the pointer to scratch buffer for temporary storage */
+  char* buf = (char*)heap_caps_malloc_prefer(FILE_CHUNK_SIZE, 2, MALLOC_CAP_SPIRAM, MALLOC_CAP_INTERNAL);
+  int received;
+  unsigned long index = 0; 
 
     /* Content length of the request gives the size of the file being uploaded */
     int remaining = request->contentLength();
@@ -116,7 +116,10 @@ esp_err_t PsychicUploadHandler::_basicUploadHandler(PsychicRequest *request)
     // dont forget to free our buffer
     free(buf);
 
-    return err;
+  //dont forget to free our buffer
+  heap_caps_free(buf);
+
+  return err;
 }
 
 esp_err_t PsychicUploadHandler::_multipartUploadHandler(PsychicRequest *request)
@@ -135,9 +138,9 @@ esp_err_t PsychicUploadHandler::_multipartUploadHandler(PsychicRequest *request)
         return request->reply(400, "text/html", "No multipart boundary found.");
     }
 
-    char *buf = (char *)malloc(FILE_CHUNK_SIZE);
-    int received;
-    unsigned long index = 0;
+  char* buf = (char*)heap_caps_malloc_prefer(FILE_CHUNK_SIZE, 2, MALLOC_CAP_SPIRAM, MALLOC_CAP_INTERNAL);
+  int received;
+  unsigned long index = 0; 
 
     /* Content length of the request gives the size of the file being uploaded */
     int remaining = request->contentLength();
@@ -174,8 +177,8 @@ esp_err_t PsychicUploadHandler::_multipartUploadHandler(PsychicRequest *request)
         }
     }
 
-    // dont forget to free our buffer
-    free(buf);
+  //dont forget to free our buffer
+  heap_caps_free(buf);
 
     return err;
 }
@@ -212,14 +215,8 @@ void PsychicUploadHandler::_parseMultipartPostByte(uint8_t data, bool last)
 {
     if (_multiParseState == PARSE_ERROR)
     {
-        // not sure we can end up with an error during buffer fill, but jsut to be safe
-        if (_itemBuffer != NULL)
-        {
-            free(_itemBuffer);
-            _itemBuffer = NULL;
-        }
-
-        return;
+      heap_caps_free(_itemBuffer);
+      _itemBuffer = NULL;
     }
 
     if (!_parsedLength)
@@ -250,9 +247,19 @@ void PsychicUploadHandler::_parseMultipartPostByte(uint8_t data, bool last)
             _multiParseState = PARSE_ERROR;
             return;
         }
-        else if (_parsedLength - 2 < _boundary.length() && _boundary.c_str()[_parsedLength - 2] != data)
-        {
-            ESP_LOGE(PH_TAG, "Multipart: Multipart malformed");
+        _temp = String();
+      } else {
+        _multiParseState = WAIT_FOR_RETURN1;
+        //value starts from here
+        _itemSize = 0;
+        _itemStartIndex = _parsedLength;
+        _itemValue = String();
+        if(_itemIsFile){
+          if(_itemBuffer)
+            heap_caps_free(_itemBuffer);
+          _itemBuffer = (uint8_t*)heap_caps_malloc_prefer(FILE_CHUNK_SIZE, 2, MALLOC_CAP_SPIRAM, MALLOC_CAP_INTERNAL);
+          if(_itemBuffer == NULL){
+            ESP_LOGE(PH_TAG, "Multipart: Failed to allocate buffer");
             _multiParseState = PARSE_ERROR;
             return;
         }
@@ -379,11 +386,12 @@ void PsychicUploadHandler::_parseMultipartPostByte(uint8_t data, bool last)
             itemWriteByte('-');
             _parseMultipartPostByte(data, last);
         }
-        else
-        {
-            _multiParseState = BOUNDARY_OR_DATA;
-            _boundaryPosition = 0;
-        }
+        heap_caps_free(_itemBuffer);
+        _itemBuffer = NULL;
+      }
+
+    } else {
+      _boundaryPosition++;
     }
     else if (_multiParseState == BOUNDARY_OR_DATA)
     {

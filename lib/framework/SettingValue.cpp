@@ -47,13 +47,17 @@ namespace SettingValue
     /**
      * Uses the station's MAC address to create a unique id for each device.
      */
-    String getUniqueId()
-    {
-        uint8_t mac[6];
-        esp_read_mac(mac, ESP_MAC_WIFI_STA);
-        char macStr[13] = {0};
-        sprintf(macStr, "%02x%02x", mac[4], mac[5]); //🌙 only the last 2, easier to remember and pretty unique
-        return String(macStr);
+    String getUniqueId() {
+      uint8_t mac[6];
+      esp_err_t err = esp_base_mac_addr_get(mac);
+      if (err != ESP_OK) {
+        Serial.printf("getUniqueId() Failed to read base MAC: %s\n", esp_err_to_name(err));
+        return String("000000000000");
+      }
+
+      char macStr[13] = { 0 };
+      sprintf(macStr, "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+      return String(macStr);
     }
 
     String format(String value)
