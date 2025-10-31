@@ -142,6 +142,7 @@ class IRDriver : public Node {
     case 34:  // NEC normal frame
       if (nec_parse_frame(rmt_nec_symbols)) {
         MB_LOGI(IR_DRIVER_TAG, "Address=%04X, Command=%04X", s_nec_code_address, s_nec_code_command);
+        uint32_t combined_code = (((uint32_t)s_nec_code_address) << 16) | s_nec_code_command;
 
         // Here we should implement code address & command to action mapping
         controlModule->update(
@@ -161,13 +162,83 @@ class IRDriver : public Node {
               //  monitorOn
 
               UpdatedItem updatedItem;
-              if ((s_nec_code_address == 0xFF00) && (s_nec_code_command == 0xA35C)) {  // Brightness increase
+              if (combined_code == 0xFF00A35C) {  // Brightness increase
                 updatedItem.name = "brightness";
                 updatedItem.oldValue = state.data[updatedItem.name].as<String>();
                 state.data[updatedItem.name] = min(state.data[updatedItem.name].as<uint8_t>() + 10, 255);
                 changed = true;
-              } else if ((s_nec_code_address == 0xFF00) && (s_nec_code_command == 0xA25D)) {  // Brightness decrease
+              } else if (combined_code == 0xFF00A25D) {  // Brightness decrease
                 updatedItem.name = "brightness";
+                updatedItem.oldValue = state.data[updatedItem.name].as<String>();
+                state.data[updatedItem.name] = max(state.data[updatedItem.name].as<uint8_t>() - 10, 0);
+                changed = true;
+              } else if (combined_code == 0xFF00BF40) {  // Lights on/off
+                updatedItem.name = "lightsOn";
+                updatedItem.oldValue = state.data[updatedItem.name].as<String>();
+                state.data[updatedItem.name] = state.data[updatedItem.name].as<bool>()? false:true;
+                changed = true;
+              } else if (combined_code == 0xFF00BE41) {  // next button - go to next preset
+                updatedItem.name = "preset";
+                updatedItem.oldValue = state.data[updatedItem.name].as<String>();
+                state.data[updatedItem.name] = state.data[updatedItem.name].as<uint8_t>() == 63? 0:state.data[updatedItem.name].as<uint8_t>() + 1;
+                changed = true;
+              } else if (combined_code == 0xFF00F30C) {  // DIY1 button - enable preset #1
+                updatedItem.name = "preset";
+                updatedItem.oldValue = state.data[updatedItem.name].as<String>();
+                state.data[updatedItem.name] = 1;
+                changed = true;
+              } else if (combined_code == 0xFF00F20D) {  // DIY2 button - enable preset #2
+                updatedItem.name = "preset";
+                updatedItem.oldValue = state.data[updatedItem.name].as<String>();
+                state.data[updatedItem.name] = 2;
+                changed = true;
+              } else if (combined_code == 0xFF00F10E) {  // DIY3 button - enable preset #3
+                updatedItem.name = "preset";
+                updatedItem.oldValue = state.data[updatedItem.name].as<String>();
+                state.data[updatedItem.name] = 3;
+                changed = true;
+              } else if (combined_code == 0xFF00F708) {  // DIY4 button - enable preset #4
+                updatedItem.name = "preset";
+                updatedItem.oldValue = state.data[updatedItem.name].as<String>();
+                state.data[updatedItem.name] = 4;
+                changed = true;
+              } else if (combined_code == 0xFF00F609) {  // DIY5 button - enable preset #5
+                updatedItem.name = "preset";
+                updatedItem.oldValue = state.data[updatedItem.name].as<String>();
+                state.data[updatedItem.name] = 5;
+                changed = true;
+              } else if (combined_code == 0xFF00F50A) {  // DIY6 button - enable preset #6
+                updatedItem.name = "preset";
+                updatedItem.oldValue = state.data[updatedItem.name].as<String>();
+                state.data[updatedItem.name] = 6;
+                changed = true;
+              } else if (combined_code == 0xFF00EB14) {  // increase red
+                updatedItem.name = "red";
+                updatedItem.oldValue = state.data[updatedItem.name].as<String>();
+                state.data[updatedItem.name] = min(state.data[updatedItem.name].as<uint8_t>() + 10, 255);
+                changed = true;
+              } else if (combined_code == 0xFF00EF10) {  // decrease red
+                updatedItem.name = "red";
+                updatedItem.oldValue = state.data[updatedItem.name].as<String>();
+                state.data[updatedItem.name] = max(state.data[updatedItem.name].as<uint8_t>() - 10, 0);
+                changed = true;
+              } else if (combined_code == 0xFF00EA15) {  // increase green
+                updatedItem.name = "green";
+                updatedItem.oldValue = state.data[updatedItem.name].as<String>();
+                state.data[updatedItem.name] = min(state.data[updatedItem.name].as<uint8_t>() + 10, 255);
+                changed = true;
+              } else if (combined_code == 0xFF00EE11) {  // decrease green
+                updatedItem.name = "green";
+                updatedItem.oldValue = state.data[updatedItem.name].as<String>();
+                state.data[updatedItem.name] = max(state.data[updatedItem.name].as<uint8_t>() - 10, 0);
+                changed = true;
+              } else if (combined_code == 0xFF00E916) {  // increase blue
+                updatedItem.name = "blue";
+                updatedItem.oldValue = state.data[updatedItem.name].as<String>();
+                state.data[updatedItem.name] = min(state.data[updatedItem.name].as<uint8_t>() + 10, 255);
+                changed = true;
+              } else if (combined_code == 0xFF00ED12) {  // decrease blue
+                updatedItem.name = "blue";
                 updatedItem.oldValue = state.data[updatedItem.name].as<String>();
                 state.data[updatedItem.name] = max(state.data[updatedItem.name].as<uint8_t>() - 10, 0);
                 changed = true;
