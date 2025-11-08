@@ -16,6 +16,12 @@
 
 #include <ESP32SvelteKit.h> // 🌙 safeMode
 
+#ifdef CONFIG_IDF_TARGET_ESP32P4
+#include "esp_wifi.h"
+#include "esp_netif.h"
+#include "esp_event.h"
+#endif
+
 WiFiSettingsService::WiFiSettingsService(PsychicHttpServer *server,
                                          FS *fs,
                                          SecurityManager *securityManager,
@@ -36,15 +42,25 @@ WiFiSettingsService::WiFiSettingsService(PsychicHttpServer *server,
 
 void WiFiSettingsService::initWiFi()
 {
-    WiFi.mode(WIFI_MODE_STA); // this is the default.
-
-    // Disable WiFi config persistance and auto reconnect
-    #ifndef CONFIG_IDF_TARGET_ESP32P4
-        WiFi.persistent(false);
+    #ifdef CONFIG_IDF_TARGET_ESP32P4
+        // P4: Initialize ESP-IDF WiFi
+        ESP_ERROR_CHECK(esp_netif_init());
+        ESP_ERROR_CHECK(esp_event_loop_create_default());
+        esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
+        assert(sta_netif);
+        
+        wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+        ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+        ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
+        ESP_ERROR_CHECK(esp_wifi_start());
     #else
-        WiFi.persistent(true);
+        WiFi.mode(WIFI_MODE_STA); // this is the default.
+
+        // Disable WiFi config persistance and auto reconnect
+        WiFi.persistent(false);
+        WiFi.setAutoReconnect(false);
     #endif
-    WiFi.setAutoReconnect(false);
 
     WiFi.onEvent(
         std::bind(&WiFiSettingsService::onStationModeDisconnected, this, std::placeholders::_1, std::placeholders::_2),
@@ -107,84 +123,29 @@ void WiFiSettingsService::reconfigureWiFiConnection()
     ESP_LOGI(SVK_TAG, "Hostname: %s", _state.hostname.c_str()); // 🌙
 
     // disconnect and de-configure wifi
-    // 🌙 add different behavior for P4
-    #ifndef CONFIG_IDF_TARGET_ESP32P4
-        //default ESP32-Sveltekit
+    #ifdef CONFIG_IDF_TARGET_ESP32P4
+        // P4: Use ESP-IDF commands to disconnect
+        esp_err_t err = esp_wifi_disconnect();
+        if (err == ESP_OK)
+        {
+            _stopping = true;
+            ESP_LOGD(SVK_TAG, "Successfully disconnected WiFi for reconfiguration");
+        }
+        else if (err == ESP_ERR_WIFI_NOT_STARTED)
+        {
+            ESP_LOGD(SVK_TAG, "WiFi not started, nothing to disconnect");
+            _stopping = false;
+        }
+        else
+        {
+            ESP_LOGW(SVK_TAG, "Failed to disconnect WiFi: %s", esp_err_to_name(err));
+        }
+    #else
+        // Default ESP32-Sveltekit behavior
         if (WiFi.disconnect(true))
         {
             _stopping = true;
         }
-        //logging: 
-        // [0;32mI (5079) 🐼: Reconfiguring WiFi connection to: STRENGTH
-        // I (5079) 🐼: Reconfiguring WiFi TxPower to: 34
-        // [0;32mI (5079) 🐼: Hostname: ML-you35
-        // ...
-        // [0;32mI (16438) 🐼: 20 networks found.
-        // [0;32mI (16439) 🐼: Connecting to strongest network: ewtr, BSSID: 92:5a:9e:0e:cc:e4 
-        // D (16440) 🐼: Connecting to SSID: ewtr, Channel: 11, BSSID: 92:5a:9e:0e:cc:e4, Hostname: ML-you35
-        // [0;32mI (16451) 🐼: WiFi setTxPower to: 34
-        // [0;32mI (16612) 🐼: WiFi Connected.
-        // ...
-        // [0;32mI (18124) 🐼: WiFi Got IP. localIP=http://192.168.1.105, hostName=http://ML-you35.local
-
-    #else
-        //by @troyhacks, needed to make P4 networking work (AP and STA)
-        //no clue why? this only disconnects when WiFi is connected, the other always disconnects.
-        if (WiFi.isConnected() == true)
-        {
-            if (!WiFi.disconnect(true))
-                ESP_LOGW(SVK_TAG, "Failed to disconnect WiFi");
-            else
-                ESP_LOGD(SVK_TAG, "Successfully disconnect WiFi");
-            _stopping = true;
-        }
-        //logging
-        // Version on Host is NEWER than version on co-processor
-        // E (7253) system_api: 0 mac type is incorrect (not found)
-        // mI (7254) 🐼: Reconfiguring WiFi connection to: STRENGTH
-        // [0;32mI (7254) 🐼: Reconfiguring WiFi TxPower to: 0
-        // 32mI (7259) 🐼: Hostname: ML-P4
-        // ...
-        // [0;32mI (19737) 🐼: WiFi Connected.
-        // [0;32mI (20761) 🐼: WiFi Got IP. localIP=http://192.168.1.188, hostName=http://esp32p4-E1E3E7.local
-
-        // findings: 
-        // mac type is incorrect ??? No 20 networks found. ???, wrong hostname displayed (but the hostname ML-P4.local works!)
-        // deleting the Saved network: it still connects (still stored on the C5 chip???)
-        // erase flash: Wifi still connects!!
-
-        // other messages seen when changing the network settings (but gone after restart - using settings from the C5 chip again?):
-
-        // [0;31mE (53310) ARDUINO: Could not set mode! 0xffffffff: ESP_FAIL
-        // E (53310) ARDUINO: AP enable failed!
-        // E (53310) ARDUINO: Could not set mode! 0xffffffff: ESP_FAIL
-        // E (53315) ARDUINO: AP enable failed!
-        // [0;31mE (56840) ARDUINO: STA was enabled, but netif is NULL???[0m
-        // E (56840) ARDUINO: Could not set hostname! 0x102: ESP_ERR_INVALID_ARG
-        // E (56842) 🐼: WiFi scan failed.[0m
-        // [0;31mE (63310) ARDUINO: Could not set mode! 0xffffffff: ESP_FAIL
-        // E (63310) ARDUINO: AP enable failed!
-        // E (63310) ARDUINO: Could not set mode! 0xffffffff: ESP_FAIL
-        // E (63315) ARDUINO: AP enable failed!
-        // [0;31mE (66840) ARDUINO: STA was enabled, but netif is NULL???[0m
-        // E (66840) ARDUINO: Could not set hostname! 0x102: ESP_ERR_INVALID_ARG
-        // E (66842) 🐼: WiFi scan failed.
-
-        //Shutting down WiFi - AP is initiatalized 🎉
-
-        // [0;32mI (5317) 🐼: WiFi Disconnected. Reason code=201 (NO_AP_FOUND)
-        // [0;31mE (14628) 🐼: WiFi scan failed.
-        // [0;32mI (17504) 🐼: WiFi Disconnected. Reason code=201 (NO_AP_FOUND)
-        // [0;31mE (24628) 🐼: WiFi scan failed.
-        // [0;32mI (27504) 🐼: WiFi Disconnected. Reason code=201 (NO_AP_FOUND)
-        // [0;31mE (34636) 🐼: WiFi scan failed.
-        // [0;32mI (37513) 🐼: WiFi Disconnected. Reason code=201 (NO_AP_FOUND)
-        // [0;31mE (44645) 🐼: WiFi scan failed.
-        // [0;32mI (47522) 🐼: WiFi Disconnected. Reason code=201 (NO_AP_FOUND)
-        // [0;31mE (54644) 🐼: WiFi scan failed.
-        // [0;32mI (57521) 🐼: WiFi Disconnected. Reason code=201 (NO_AP_FOUND)
-        // [0;31mE (64653) 🐼: WiFi scan failed.
-
     #endif
 }
 
@@ -327,7 +288,36 @@ void WiFiSettingsService::connectToWiFi()
     }
 
     // scanning for available networks
-    int scanResult = WiFi.scanNetworks();
+    #ifdef CONFIG_IDF_TARGET_ESP32P4
+        // P4: Use ESP-IDF scan
+        wifi_scan_config_t scan_config = {
+            .ssid = NULL,
+            .bssid = NULL,
+            .channel = 0,
+            .show_hidden = false,
+            .scan_type = WIFI_SCAN_TYPE_ACTIVE,
+            .scan_time = {
+                .active = {
+                    .min = 100,
+                    .max = 300
+                }
+            }
+        };
+        
+        esp_err_t err = esp_wifi_scan_start(&scan_config, true);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(SVK_TAG, "WiFi scan failed: %s", esp_err_to_name(err));
+            return;
+        }
+        
+        uint16_t ap_count = 0;
+        esp_wifi_scan_get_ap_num(&ap_count);
+        int scanResult = ap_count;
+    #else
+        int scanResult = WiFi.scanNetworks();
+    #endif
+    
     if (scanResult == WIFI_SCAN_FAILED)
     {
         ESP_LOGE(SVK_TAG, "WiFi scan failed.");
@@ -344,40 +334,84 @@ void WiFiSettingsService::connectToWiFi()
         wifi_settings_t *bestNetwork = NULL;
         int bestNetworkDb = FACTORY_WIFI_RSSI_THRESHOLD;
 
-        for (int i = 0; i < scanResult; ++i)
-        {
-            String ssid_scan;
-            int32_t rssi_scan;
-            uint8_t sec_scan;
-            uint8_t *BSSID_scan;
-            int32_t chan_scan;
-
-            WiFi.getNetworkInfo(i, ssid_scan, sec_scan, rssi_scan, BSSID_scan, chan_scan);
-            ESP_LOGV(SVK_TAG, "SSID: %s, BSSID: " MACSTR ", RSSI: %d dbm, Channel: %d", ssid_scan.c_str(), MAC2STR(BSSID_scan), rssi_scan, chan_scan);
-
-            for (auto &network : _state.wifiSettings)
+        #ifdef CONFIG_IDF_TARGET_ESP32P4
+            // P4: Get scan results from ESP-IDF
+            wifi_ap_record_t *ap_records = (wifi_ap_record_t *)malloc(sizeof(wifi_ap_record_t) * scanResult);
+            if (ap_records)
             {
-                if (ssid_scan.equals(network.ssid))
-                { // SSID match
-                    if (rssi_scan > bestNetworkDb)
-                    { // best network
-                        bestNetworkDb = rssi_scan;
-                        ESP_LOGV(SVK_TAG, "--> New best network SSID: %s, BSSID: " MACSTR "", ssid_scan.c_str(), MAC2STR(BSSID_scan));
-                        network.available = true;
-                        network.channel = chan_scan;
-                        memcpy(network.bssid, BSSID_scan, 6);
-                        bestNetwork = &network;
+                uint16_t ap_count = scanResult;
+                esp_wifi_scan_get_ap_records(&ap_count, ap_records);
+                
+                for (int i = 0; i < scanResult; ++i)
+                {
+                    String ssid_scan = String((char *)ap_records[i].ssid);
+                    int32_t rssi_scan = ap_records[i].rssi;
+                    uint8_t *BSSID_scan = ap_records[i].bssid;
+                    int32_t chan_scan = ap_records[i].primary;
+                    
+                    ESP_LOGV(SVK_TAG, "SSID: %s, BSSID: " MACSTR ", RSSI: %d dbm, Channel: %d", ssid_scan.c_str(), MAC2STR(BSSID_scan), rssi_scan, chan_scan);
+
+                    for (auto &network : _state.wifiSettings)
+                    {
+                        if (ssid_scan.equals(network.ssid))
+                        { // SSID match
+                            if (rssi_scan > bestNetworkDb)
+                            { // best network
+                                bestNetworkDb = rssi_scan;
+                                ESP_LOGV(SVK_TAG, "--> New best network SSID: %s, BSSID: " MACSTR "", ssid_scan.c_str(), MAC2STR(BSSID_scan));
+                                network.available = true;
+                                network.channel = chan_scan;
+                                memcpy(network.bssid, BSSID_scan, 6);
+                                bestNetwork = &network;
+                            }
+                            else if (rssi_scan >= FACTORY_WIFI_RSSI_THRESHOLD && network.available == false)
+                            { // available network
+                                network.available = true;
+                                network.channel = chan_scan;
+                                memcpy(network.bssid, BSSID_scan, 6);
+                            }
+                            break;
+                        }
                     }
-                    else if (rssi_scan >= FACTORY_WIFI_RSSI_THRESHOLD && network.available == false)
-                    { // available network
-                        network.available = true;
-                        network.channel = chan_scan;
-                        memcpy(network.bssid, BSSID_scan, 6);
+                }
+                free(ap_records);
+            }
+        #else
+            for (int i = 0; i < scanResult; ++i)
+            {
+                String ssid_scan;
+                int32_t rssi_scan;
+                uint8_t sec_scan;
+                uint8_t *BSSID_scan;
+                int32_t chan_scan;
+
+                WiFi.getNetworkInfo(i, ssid_scan, sec_scan, rssi_scan, BSSID_scan, chan_scan);
+                ESP_LOGV(SVK_TAG, "SSID: %s, BSSID: " MACSTR ", RSSI: %d dbm, Channel: %d", ssid_scan.c_str(), MAC2STR(BSSID_scan), rssi_scan, chan_scan);
+
+                for (auto &network : _state.wifiSettings)
+                {
+                    if (ssid_scan.equals(network.ssid))
+                    { // SSID match
+                        if (rssi_scan > bestNetworkDb)
+                        { // best network
+                            bestNetworkDb = rssi_scan;
+                            ESP_LOGV(SVK_TAG, "--> New best network SSID: %s, BSSID: " MACSTR "", ssid_scan.c_str(), MAC2STR(BSSID_scan));
+                            network.available = true;
+                            network.channel = chan_scan;
+                            memcpy(network.bssid, BSSID_scan, 6);
+                            bestNetwork = &network;
+                        }
+                        else if (rssi_scan >= FACTORY_WIFI_RSSI_THRESHOLD && network.available == false)
+                        { // available network
+                            network.available = true;
+                            network.channel = chan_scan;
+                            memcpy(network.bssid, BSSID_scan, 6);
+                        }
+                        break;
                     }
-                    break;
                 }
             }
-        }
+        #endif
 
         // Connection mode PRIORITY: connect to the first available network
         if (_state.staConnectionMode == (u_int8_t)STAConnectionMode::PRIORITY)
@@ -417,56 +451,156 @@ void WiFiSettingsService::connectToWiFi()
         }
 
         // delete scan results
-        WiFi.scanDelete();
+        #ifdef CONFIG_IDF_TARGET_ESP32P4
+            esp_wifi_scan_stop();
+        #else
+            WiFi.scanDelete();
+        #endif
     }
 }
 
 void WiFiSettingsService::configureNetwork(wifi_settings_t &network)
 {
-    if (network.staticIPConfig)
-    {
-        // configure for static IP
-        WiFi.config(network.localIP, network.gatewayIP, network.subnetMask, network.dnsIP1, network.dnsIP2);
-    }
-    else
-    {
-        // configure for DHCP
-        WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
-    }
-
-    ESP_LOGD(SVK_TAG, "Connecting to SSID: %s, Channel: %d, BSSID: " MACSTR ", Hostname: %s", network.ssid.c_str(), network.channel, MAC2STR(network.bssid), _state.hostname.c_str());
-    WiFi.setHostname(_state.hostname.c_str());
-
-    // attempt to connect to the network
-    WiFi.begin(network.ssid.c_str(), network.password.c_str(), network.channel, network.bssid);
-    // WiFi.begin(network.ssid.c_str(), network.password.c_str());
-
-    // 🌙 AP will use the LOLIN_WIFI_FIX, WiFi can set the power which works best for the board
-    if (_state.txPower != 0 && _state.txPower != abs(WiFi.getTxPower())) { // abs to make 4 of -4 (WIFI_POWER_MINUS_1dBm)
-        switch (_state.txPower)
+    #ifdef CONFIG_IDF_TARGET_ESP32P4
+        // P4: Use ESP-IDF configuration
+        wifi_config_t wifi_config = {};
+        
+        // Set SSID
+        strncpy((char *)wifi_config.sta.ssid, network.ssid.c_str(), sizeof(wifi_config.sta.ssid) - 1);
+        
+        // Set password
+        strncpy((char *)wifi_config.sta.password, network.password.c_str(), sizeof(wifi_config.sta.password) - 1);
+        
+        // Set BSSID if available
+        if (network.channel > 0)
         {
-            case 84: WiFi.setTxPower(WIFI_POWER_21dBm); break;
-            case 82: WiFi.setTxPower(WIFI_POWER_20_5dBm); break;
-            case 80: WiFi.setTxPower(WIFI_POWER_20dBm); break;
-            case 78: WiFi.setTxPower(WIFI_POWER_19_5dBm); break;
-            case 76: WiFi.setTxPower(WIFI_POWER_19dBm); break;
-            case 74: WiFi.setTxPower(WIFI_POWER_18_5dBm); break;
-            case 68: WiFi.setTxPower(WIFI_POWER_17dBm); break;
-            case 60: WiFi.setTxPower(WIFI_POWER_15dBm); break;
-            case 52: WiFi.setTxPower(WIFI_POWER_13dBm); break;
-            case 44: WiFi.setTxPower(WIFI_POWER_11dBm); break;
-            case 34: WiFi.setTxPower(WIFI_POWER_8_5dBm); break;
-            case 28: WiFi.setTxPower(WIFI_POWER_7dBm); break;
-            case 20: WiFi.setTxPower(WIFI_POWER_5dBm); break;
-            case 8: WiFi.setTxPower(WIFI_POWER_2dBm); break;
-            case 4: WiFi.setTxPower(WIFI_POWER_MINUS_1dBm); break;
-            case 0: break; //default, do not set the power
-            default:
-                ESP_LOGE(SVK_TAG, "Invalid txPower value: %d", _state.txPower);
-                return;
+            memcpy(wifi_config.sta.bssid, network.bssid, 6);
+            wifi_config.sta.bssid_set = true;
+            wifi_config.sta.channel = network.channel;
         }
-        ESP_LOGI(SVK_TAG, "WiFi setTxPower to: %d", _state.txPower?_state.txPower:-1);
-    }
+        
+        ESP_LOGD(SVK_TAG, "Connecting to SSID: %s, Channel: %d, BSSID: " MACSTR ", Hostname: %s", network.ssid.c_str(), network.channel, MAC2STR(network.bssid), _state.hostname.c_str());
+        
+        // Set hostname
+        esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+        if (netif)
+        {
+            esp_netif_set_hostname(netif, _state.hostname.c_str());
+        }
+        
+        // Configure static IP if needed
+        if (network.staticIPConfig)
+        {
+            esp_netif_dhcpc_stop(netif);
+            
+            esp_netif_ip_info_t ip_info;
+            ip_info.ip.addr = static_cast<uint32_t>(network.localIP);
+            ip_info.gw.addr = static_cast<uint32_t>(network.gatewayIP);
+            ip_info.netmask.addr = static_cast<uint32_t>(network.subnetMask);
+            
+            esp_netif_set_ip_info(netif, &ip_info);
+            
+            // Set DNS servers
+            esp_netif_dns_info_t dns_info;
+            dns_info.ip.u_addr.ip4.addr = static_cast<uint32_t>(network.dnsIP1);
+            dns_info.ip.type = ESP_IPADDR_TYPE_V4;
+            esp_netif_set_dns_info(netif, ESP_NETIF_DNS_MAIN, &dns_info);
+            
+            if (network.dnsIP2 != IPAddress(0, 0, 0, 0))
+            {
+                dns_info.ip.u_addr.ip4.addr = static_cast<uint32_t>(network.dnsIP2);
+                esp_netif_set_dns_info(netif, ESP_NETIF_DNS_BACKUP, &dns_info);
+            }
+        }
+        else
+        {
+            esp_netif_dhcpc_start(netif);
+        }
+        
+        // Set WiFi config
+        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+        
+        // Set TX power
+        if (_state.txPower != 0)
+        {
+            int8_t power = 0;
+            switch (_state.txPower)
+            {
+                case 84: power = 84; break; // 21dBm
+                case 82: power = 82; break; // 20.5dBm
+                case 80: power = 80; break; // 20dBm
+                case 78: power = 78; break; // 19.5dBm
+                case 76: power = 76; break; // 19dBm
+                case 74: power = 74; break; // 18.5dBm
+                case 68: power = 68; break; // 17dBm
+                case 60: power = 60; break; // 15dBm
+                case 52: power = 52; break; // 13dBm
+                case 44: power = 44; break; // 11dBm
+                case 34: power = 34; break; // 8.5dBm
+                case 28: power = 28; break; // 7dBm
+                case 20: power = 20; break; // 5dBm
+                case 8: power = 8; break;   // 2dBm
+                case 4: power = -4; break;  // -1dBm
+                default:
+                    ESP_LOGE(SVK_TAG, "Invalid txPower value: %d", _state.txPower);
+                    break;
+            }
+            
+            if (power != 0)
+            {
+                esp_wifi_set_max_tx_power(power);
+                ESP_LOGI(SVK_TAG, "WiFi setTxPower to: %d", _state.txPower);
+            }
+        }
+        
+        // Connect
+        esp_wifi_connect();
+    #else
+        // Non-P4: Use Arduino WiFi library
+        if (network.staticIPConfig)
+        {
+            // configure for static IP
+            WiFi.config(network.localIP, network.gatewayIP, network.subnetMask, network.dnsIP1, network.dnsIP2);
+        }
+        else
+        {
+            // configure for DHCP
+            WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
+        }
+
+        ESP_LOGD(SVK_TAG, "Connecting to SSID: %s, Channel: %d, BSSID: " MACSTR ", Hostname: %s", network.ssid.c_str(), network.channel, MAC2STR(network.bssid), _state.hostname.c_str());
+        WiFi.setHostname(_state.hostname.c_str());
+
+        // attempt to connect to the network
+        WiFi.begin(network.ssid.c_str(), network.password.c_str(), network.channel, network.bssid);
+
+        // 🌙 AP will use the LOLIN_WIFI_FIX, WiFi can set the power which works best for the board
+        if (_state.txPower != 0 && _state.txPower != abs(WiFi.getTxPower())) { // abs to make 4 of -4 (WIFI_POWER_MINUS_1dBm)
+            switch (_state.txPower)
+            {
+                case 84: WiFi.setTxPower(WIFI_POWER_21dBm); break;
+                case 82: WiFi.setTxPower(WIFI_POWER_20_5dBm); break;
+                case 80: WiFi.setTxPower(WIFI_POWER_20dBm); break;
+                case 78: WiFi.setTxPower(WIFI_POWER_19_5dBm); break;
+                case 76: WiFi.setTxPower(WIFI_POWER_19dBm); break;
+                case 74: WiFi.setTxPower(WIFI_POWER_18_5dBm); break;
+                case 68: WiFi.setTxPower(WIFI_POWER_17dBm); break;
+                case 60: WiFi.setTxPower(WIFI_POWER_15dBm); break;
+                case 52: WiFi.setTxPower(WIFI_POWER_13dBm); break;
+                case 44: WiFi.setTxPower(WIFI_POWER_11dBm); break;
+                case 34: WiFi.setTxPower(WIFI_POWER_8_5dBm); break;
+                case 28: WiFi.setTxPower(WIFI_POWER_7dBm); break;
+                case 20: WiFi.setTxPower(WIFI_POWER_5dBm); break;
+                case 8: WiFi.setTxPower(WIFI_POWER_2dBm); break;
+                case 4: WiFi.setTxPower(WIFI_POWER_MINUS_1dBm); break;
+                case 0: break; //default, do not set the power
+                default:
+                    ESP_LOGE(SVK_TAG, "Invalid txPower value: %d", _state.txPower);
+                    return;
+            }
+            ESP_LOGI(SVK_TAG, "WiFi setTxPower to: %d", _state.txPower?_state.txPower:-1);
+        }
+    #endif
 }
 
 void WiFiSettingsService::updateRSSI()
@@ -486,7 +620,12 @@ void WiFiSettingsService::updateRSSI()
 
 void WiFiSettingsService::onStationModeDisconnected(WiFiEvent_t event, WiFiEventInfo_t info)
 {
-    WiFi.disconnect(true);
+    #ifdef CONFIG_IDF_TARGET_ESP32P4
+        // P4: Use ESP-IDF disconnect
+        esp_wifi_disconnect();
+    #else
+        WiFi.disconnect(true);
+    #endif
 }
 
 void WiFiSettingsService::onStationModeStop(WiFiEvent_t event, WiFiEventInfo_t info)
