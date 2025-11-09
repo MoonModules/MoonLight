@@ -22,7 +22,7 @@ class AudioDriver : public Node {
   uint8_t gain = 60;
   uint8_t agc = 1;
   uint8_t fftWindow = 0;
-  String statusMessage = "Okay";
+  char statusMessage[64] = "Okay";
 
   void setup() override {
     JsonObject property;
@@ -74,13 +74,13 @@ class AudioDriver : public Node {
         //...
         if (pins[0] == UINT8_MAX || pins[1] == UINT8_MAX || pins[2] == UINT8_MAX) {
           success = false;
-          statusMessage = "Pins not found";
+          strcpy(statusMessage, "Pins not found");
         }
         break;
       }
     }
     if (success)
-      statusMessage = "okay";
+      strcpy(statusMessage, "Wating on Franky 😁");
     // update the audio driver with pins etc...
   }
 
