@@ -53,6 +53,7 @@ class ModuleDrivers : public NodeManager {
     values.add(getNameAndTags<PhysicalDriver>());
     values.add(getNameAndTags<FastLEDDriver>());
     values.add(getNameAndTags<ArtNetDriver>());
+    values.add(getNameAndTags<AudioDriver>());
     values.add(getNameAndTags<AudioSyncDriver>());
     values.add(getNameAndTags<IRDriver>());
     values.add(getNameAndTags<VirtualDriver>());
@@ -92,6 +93,8 @@ class ModuleDrivers : public NodeManager {
       node = allocMBObject<FastLEDDriver>();
     else if (equalAZaz09(name, ArtNetDriver::name()))
       node = allocMBObject<ArtNetDriver>();
+    else if (equalAZaz09(name, AudioDriver::name()))
+      node = allocMBObject<AudioDriver>();
     else if (equalAZaz09(name, AudioSyncDriver::name()))
       node = allocMBObject<AudioSyncDriver>();
     else if (equalAZaz09(name, IRDriver::name()))

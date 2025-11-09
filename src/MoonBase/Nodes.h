@@ -305,6 +305,7 @@ static struct SharedData {
   // Drivers first as used by others
   #include "MoonLight/Nodes/Drivers/D_Artnet.h"
   #include "MoonLight/Nodes/Drivers/D_AudioSync.h"
+  #include "MoonLight/Nodes/Drivers/D_Audio.h"
   #include "MoonLight/Nodes/Drivers/D_FastLED.h"
   #include "MoonLight/Nodes/Drivers/D_Hub75.h"
   #include "MoonLight/Nodes/Drivers/D_Infrared.h"

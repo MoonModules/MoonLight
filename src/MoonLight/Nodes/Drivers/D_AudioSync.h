@@ -42,6 +42,4 @@ class AudioSyncDriver : public Node {
   }
 };
 
-static AudioSyncDriver* audioNode;
-
 #endif
