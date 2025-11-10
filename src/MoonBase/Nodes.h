@@ -306,6 +306,7 @@ static struct SharedData {
   #include "MoonLight/Nodes/Drivers/D_ArtnetOut.h"
   #include "MoonLight/Nodes/Drivers/D_ArtnetIn.h"
   #include "MoonLight/Nodes/Drivers/D_AudioSync.h"
+  #include "MoonLight/Nodes/Drivers/D_DMXIn.h"
   #include "MoonLight/Nodes/Drivers/D_FastLED.h"
   #include "MoonLight/Nodes/Drivers/D_Hub75.h"
   #include "MoonLight/Nodes/Drivers/D_Infrared.h"
