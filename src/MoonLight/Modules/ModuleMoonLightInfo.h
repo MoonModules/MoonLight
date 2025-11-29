@@ -65,11 +65,6 @@ class ModuleMoonLightInfo : public Module {
       property["type"] = "coord3D";
       property["ro"] = true;
       property = details.add<JsonObject>();
-      property["name"] = "mappingTable#";
-      property["type"] = "number";
-      property["max"] = 65536;
-      property["ro"] = true;
-      property = details.add<JsonObject>();
       property["name"] = "nrOfZeroLights";
       property["type"] = "number";
       property["max"] = 65536;
@@ -115,7 +110,7 @@ class ModuleMoonLightInfo : public Module {
         uint16_t nrOfZeroLights = 0;
         uint16_t nrOfOneLight = 0;
         uint16_t nrOfMoreLights = 0;
-        for (size_t i = 0; i < layer->mappingTableSizeUsed; i++) {
+        for (size_t i = 0; i < layer->nrOfLights; i++) {
           PhysMap& map = layer->mappingTable[i];
           switch (map.mapType) {
           case m_zeroLights:
@@ -136,7 +131,7 @@ class ModuleMoonLightInfo : public Module {
         data["layers"][index]["size"]["x"] = layer->size.x;
         data["layers"][index]["size"]["y"] = layer->size.y;
         data["layers"][index]["size"]["z"] = layer->size.z;
-        data["layers"][index]["mappingTable#"] = layer->mappingTable.size();
+        // data["layers"][index]["mappingTable#"] = layer->nrOfLights;
         data["layers"][index]["nrOfZeroLights"] = nrOfZeroLights;
         data["layers"][index]["nrOfOneLight"] = nrOfOneLight;
         data["layers"][index]["mappingTableIndexes#"] = layer->mappingTableIndexesSizeUsed;
