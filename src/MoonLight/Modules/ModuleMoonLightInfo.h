@@ -42,7 +42,7 @@ class ModuleMoonLightInfo : public Module {
       control = addControl(details, "nrOfOneLight", "number", 0, 65536, true);
       control = addControl(details, "mappingTableIndexes#", "number", 0, 65536, true);
       control = addControl(details, "nrOfMoreLights", "number", 0, 65536, true);
-      control = addControl(details, "bnodes#", "number", 0, 65536, true);
+      control = addControl(details, "nodes#", "number", 0, 65536, true);
     }
   }
 

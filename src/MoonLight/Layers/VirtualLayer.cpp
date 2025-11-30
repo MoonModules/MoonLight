@@ -39,7 +39,7 @@ VirtualLayer::~VirtualLayer() {
 }
 
 void VirtualLayer::setup() {
-  mappingTable = (PhysMap*)(layerP->lights.channels + layerP->lights.maxChannels);
+  mappingTable = (PhysMap*)(layerP->lights.mappings);
   // no node setup here as done in addNode !
 }
 
