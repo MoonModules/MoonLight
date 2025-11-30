@@ -38,18 +38,23 @@ PhysicalLayer::PhysicalLayer() {
 void PhysicalLayer::setup() {
   // allocate lights.channels
 
-  if (psramFound())
-    lights.maxChannels = MIN(ESP.getPsramSize() / 2, 61440 * 3);  // fill halve with channels, max 120 pins * 512 LEDs, still addressable with uint16_t
-  else
-    lights.maxChannels = 4096 * 3;  // esp32-d0: max 1024->2048->4096 Leds ATM
+  if (psramFound()) {
+    lights.maxChannels = MIN(ESP.getPsramSize() / 4, 61440 * 3);  // fill quarter with channels, max 120 pins * 512 LEDs, still addressable with uint16_t
+    lights.maxMappings = MIN(ESP.getPsramSize() / 4, 61440 * 2);  // fill quarter with mappings, max 120 pins * 512 LEDs, still addressable with uint16_t
+  } else {
+    lights.maxChannels = 4096 * 3;  // esp32-d0: max 1024->2048->4096 Leds ATM!
+    lights.maxMappings = 4096 * 2;  // esp32-d0: max 1024->2048->4096 Mappings ATM!
+  }
 
   lights.channels = allocMB<uint8_t>(lights.maxChannels);
+  lights.mappings = allocMB<uint8_t>(lights.maxMappings);
 
-  if (lights.channels) {
-    EXT_LOGD(ML_TAG, "allocated %d bytes in %s", lights.maxChannels, isInPSRAM(lights.channels) ? "PSRAM" : "RAM");
+  if (lights.channels && lights.mappings) {
+    EXT_LOGI(ML_TAG, "after create channels and mappings %zu free:%d largest:%d internal:%d", lights.maxChannels + lights.maxMappings, psramFound() ? heap_caps_get_free_size(MALLOC_CAP_SPIRAM) : heap_caps_get_free_size(MALLOC_CAP_DEFAULT), psramFound() ? heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM) : heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT), heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
   } else {
-    EXT_LOGE(ML_TAG, "failed to allocated %d bytes of RAM or PSRAM", lights.maxChannels);
     lights.maxChannels = 0;
+    lights.maxMappings = 0;
+    EXT_LOGE(ML_TAG, "after create channels and mappings %zu free:%d largest:%d internal:%d", lights.maxChannels + lights.maxMappings, psramFound() ? heap_caps_get_free_size(MALLOC_CAP_SPIRAM) : heap_caps_get_free_size(MALLOC_CAP_DEFAULT), psramFound() ? heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM) : heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT), heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
   }
 
   for (VirtualLayer* layer : layers) {

@@ -32,15 +32,14 @@ VirtualLayer::~VirtualLayer() {
   nodes.clear();
 
   // clear array of array of indexes
-  for (std::vector<uint16_t> mappingTableIndex : mappingTableIndexes) {
+  for (std::vector<uint16_t>& mappingTableIndex : mappingTableIndexes) {
     mappingTableIndex.clear();
   }
   mappingTableIndexes.clear();
-  // clear mapping table
-  mappingTable.clear();
 }
 
 void VirtualLayer::setup() {
+  mappingTable = (PhysMap*)(layerP->lights.mappings);
   // no node setup here as done in addNode !
 }
 
@@ -72,12 +71,12 @@ void VirtualLayer::loop20ms() {
 void VirtualLayer::addIndexP(PhysMap& physMap, uint16_t indexP) {
   // EXT_LOGV(ML_TAG, "i:%d t:%d s:%d i:%d", indexP, physMap.mapType, mappingTableIndexes.size(), physMap.indexes);
   switch (physMap.mapType) {
-  case m_zeroLights:
+  case m_zeroLights:  // zero -> one
     // case m_rgbColor:
     physMap.indexP = indexP;
     physMap.mapType = m_oneLight;
     break;
-  case m_oneLight: {
+  case m_oneLight: {  // one -> more
     uint16_t oldIndexP = physMap.indexP;
     // change to m_moreLights and add the old indexP and new indexP to the multiple indexP array
     mappingTableIndexesSizeUsed++;  // add a new slot in the mappingTableIndexes
@@ -90,7 +89,7 @@ void VirtualLayer::addIndexP(PhysMap& physMap, uint16_t indexP) {
     physMap.mapType = m_moreLights;
     break;
   }
-  case m_moreLights:
+  case m_moreLights:  // more -> more
     // mappingTableIndexes.reserve(physMap.indexes+1);
     mappingTableIndexes[physMap.indexes].push_back(indexP);
     // EXT_LOGV(ML_TAG, " more %d", mappingTableIndexes.size());
@@ -120,8 +119,8 @@ uint16_t VirtualLayer::XYZ(Coord3D& position) {
 // }
 
 void VirtualLayer::setLight(const uint16_t indexV, const uint8_t* channels, uint8_t offset, uint8_t length) {
-  if (indexV < mappingTableSizeUsed) {
-    // EXT_LOGV(ML_TAG, "setLightColor %d %d %d %d", indexV, color.r, color.g, color.b, mappingTableSizeUsed);
+  if (indexV < nrOfLights) {
+    // EXT_LOGV(ML_TAG, "setLightColor %d %d %d %d", indexV, color.r, color.g, color.b, nrOfLights);
     switch (mappingTable[indexV].mapType) {
     case m_zeroLights: {
       // only room for storing colors
@@ -152,7 +151,7 @@ void VirtualLayer::setLight(const uint16_t indexV, const uint8_t* channels, uint
 
 template <typename T>
 T VirtualLayer::getLight(const uint16_t indexV, uint8_t offset) const {
-  if (indexV < mappingTableSizeUsed) {
+  if (indexV < nrOfLights) {
     switch (mappingTable[indexV].mapType) {
     case m_oneLight: {
       T* result = (T*)&layerP->lights.channels[mappingTable[indexV].indexP * layerP->lights.header.channelsPerLight + offset];
@@ -279,18 +278,6 @@ void VirtualLayer::fill_rainbow(const uint8_t initialhue, const uint8_t deltahue
 }
 
 void VirtualLayer::onLayoutPre() {
-  // resetMapping
-
-  for (std::vector<uint16_t> mappingTableIndex : mappingTableIndexes) {
-    mappingTableIndex.clear();
-  }
-  mappingTableIndexesSizeUsed = 0;  // do not clear mappingTableIndexes, reuse it
-
-  for (size_t i = 0; i < mappingTable.size(); i++) {  // this cannot be removed ...
-    mappingTable[i] = PhysMap();
-  }
-  mappingTableSizeUsed = 0;
-
   nrOfLights = 0;
   size = layerP->lights.header.size;  // start with the physical size
   start = {0, 0, 0};
@@ -308,6 +295,15 @@ void VirtualLayer::onLayoutPre() {
   if (size.x > 1) layerDimension++;
   if (size.y > 1) layerDimension++;
   if (size.z > 1) layerDimension++;
+
+  // resetMapping
+
+  for (std::vector<uint16_t>& mappingTableIndex : mappingTableIndexes) {
+    mappingTableIndex.clear();
+  }
+  mappingTableIndexesSizeUsed = 0;  // do not clear mappingTableIndexes, reuse it
+
+  memset(mappingTable, 0, layerP->lights.maxMappings);  // reset mappingTable
 }
 
 void VirtualLayer::addLight(Coord3D position) {
@@ -319,12 +315,10 @@ void VirtualLayer::addLight(Coord3D position) {
 
   if (position.x != UINT16_MAX) {  // can be set to UINT16_MAX by modifier todo: check multiple modifiers
     uint16_t indexV = XYZUnModified(position);
-    if (indexV >= nrOfLights) {
-      mappingTable.resize(indexV + 1);  // make sure the index fits
+    if (mappingTable && indexV < layerP->lights.maxMappings / sizeof(PhysMap)) {
       nrOfLights = indexV + 1;
-      mappingTableSizeUsed = nrOfLights;
+      addIndexP(mappingTable[indexV], layerP->indexP);
     }
-    addIndexP(mappingTable[indexV], layerP->indexP);
   } else {
     // set unmapped lights to 0, e.g. needed by checkerboard modifier
     memset(&layerP->lights.channels[layerP->indexP * layerP->lights.header.channelsPerLight], 0, layerP->lights.header.channelsPerLight);
@@ -369,7 +363,7 @@ void VirtualLayer::drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, CRGB
     if (depth < 2) {
       x1 = x0;
       y1 = y0;
-    }       // single pixel
+    }  // single pixel
     else {  // shorten line
       x0 *= 2;
       y0 *= 2;                                                 // we do everything "*2" for better rounding
@@ -450,7 +444,7 @@ void VirtualLayer::drawLine3D(uint8_t x1, uint8_t y1, uint8_t z1, uint8_t x2, ui
       x2 = x1;
       y2 = y1;
       z2 = z1;
-    }       // single pixel
+    }  // single pixel
     else {  // shorten line
       x1 *= 2;
       y1 *= 2;

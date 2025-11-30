@@ -42,7 +42,7 @@ void EventSocket::onWSOpen(PsychicWebSocketClient *client)
 void EventSocket::onWSClose(PsychicWebSocketClient *client)
 {
     // 🌙 adding semaphore wait too long logging
-    if (xSemaphoreTake(clientSubscriptionsMutex, pdMS_TO_TICKS(100))==pdFALSE) {
+    if (xSemaphoreTake(clientSubscriptionsMutex, pdMS_TO_TICKS(200)) == pdFALSE) {
         ESP_LOGW(SVK_TAG, "clientSubscriptionsMutex wait too long");
         xSemaphoreTake(clientSubscriptionsMutex, portMAX_DELAY);
     }
@@ -141,9 +141,28 @@ void EventSocket::emitEvent(const JsonDocument &doc, const char *originId, bool 
             }
         };
 
-        static std::vector<uint8_t> outBuffer;   // reuse across calls
-        outBuffer.clear();                        // reset length but keep capacity
-        outBuffer.reserve(measureMsgPack(doc));// optional: pre-reserve based on measureMsgPack
+        static std::vector<uint8_t> outBuffer;
+        outBuffer.clear();
+        
+        // 🌙 Check available heap before reserving to prevent crash on ESP32-D0
+        size_t requiredSize = measureMsgPack(doc);
+        size_t largestBlock = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+        
+        // Only reserve if we have enough memory + safety margin
+        if (requiredSize > 0 && largestBlock > requiredSize + 4096) {
+            try {
+                outBuffer.reserve(requiredSize);
+            } catch (const std::bad_alloc& e) {
+                ESP_LOGW(SVK_TAG, "Failed to reserve %d bytes for MsgPack buffer (largest block: %d) %s %s", 
+                         requiredSize, largestBlock, doc["event"].as<const char *>(), originId);
+                // Continue anyway - vector will grow dynamically (slower but safer)
+            }
+        } else {
+            ESP_LOGW(SVK_TAG, "Insufficient heap for MsgPack buffer: need %d, available %d %s %s", 
+                     requiredSize, largestBlock, doc["event"].as<const char *>(), originId);
+            // Skip reserve, let vector grow naturally
+        }
+        
         VecWriter writer{outBuffer};
         serializeMsgPack(doc, writer);
 
@@ -157,13 +176,13 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
     // Only process valid events
     if (!isEventValid(event))
     {
-        ESP_LOGW(SVK_TAG, "Method tried to emit unregistered event: %s", event.c_str());
+        ESP_LOGW(SVK_TAG, "Method tried to emit unregistered event: %s (%d) from %s", event.c_str(), len, originId); // 🌙 
         return;
     }
 
     int originSubscriptionId = originId[0] ? atoi(originId) : -1;
     // 🌙 adding semaphore wait too long logging
-    if (xSemaphoreTake(clientSubscriptionsMutex, pdMS_TO_TICKS(100))==pdFALSE) {
+    if (xSemaphoreTake(clientSubscriptionsMutex, pdMS_TO_TICKS(100)) == pdFALSE) {
         ESP_LOGW(SVK_TAG, "clientSubscriptionsMutex wait too long");
         xSemaphoreTake(clientSubscriptionsMutex, portMAX_DELAY);
     }

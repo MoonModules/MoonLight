@@ -21,79 +21,28 @@ class ModuleMoonLightInfo : public Module {
 
   void setupDefinition(const JsonArray& root) override {
     EXT_LOGV(ML_TAG, "");
-    JsonObject property;  // state.data has one or more properties
-    JsonArray details;    // if a property is an array, this is the details of the array
-    // JsonArray values; // if a property is a select, this is the values of the select
+    JsonObject control;  // state.data has one or more properties
+    JsonArray details;    // if a control is an array, this is the details of the array
+    // JsonArray values; // if a control is a select, this is the values of the select
 
-    property = root.add<JsonObject>();
-    property["name"] = "nrOfLights";
-    property["type"] = "number";
-    property["max"] = 65536;
-    property["ro"] = true;
-    property = root.add<JsonObject>();
-    property["name"] = "channelsPerLight";
-    property["type"] = "number";
-    property["max"] = 65536;
-    property["ro"] = true;
-    property = root.add<JsonObject>();
-    property["name"] = "maxChannels";
-    property["type"] = "number";
-    property["max"] = 65538;
-    property["ro"] = true;
-    property = root.add<JsonObject>();
-    property["name"] = "size";
-    property["type"] = "coord3D";
-    property["ro"] = true;
-    property = root.add<JsonObject>();
-    property["name"] = "nodes#";
-    property["type"] = "number";
-    property["max"] = 65536;
-    property["ro"] = true;
+    control = addControl(root, "nrOfLights", "number", 0, 65536, true);
+    control = addControl(root, "channelsPerLight", "number", 0, 65536, true);
+    control = addControl(root, "maxChannels", "number", 0, 65536, true);
+    control = addControl(root, "maxMappings", "number", 0, 65536, true);
+    control = addControl(root, "size", "coord3D", 0, 65536, true);
+    control = addControl(root, "nodes#", "number", 0, 65536, true);
 
-    property = root.add<JsonObject>();
-    property["name"] = "layers";
-    property["type"] = "rows";
-    details = property["n"].to<JsonArray>();
+    control = addControl(root, "layers", "rows");
+
+    details = control["n"].to<JsonArray>();
     {
-      property = details.add<JsonObject>();
-      property["name"] = "nrOfLights";
-      property["type"] = "number";
-      property["max"] = 65536;
-      property["ro"] = true;
-      property = details.add<JsonObject>();
-      property["name"] = "size";
-      property["type"] = "coord3D";
-      property["ro"] = true;
-      property = details.add<JsonObject>();
-      property["name"] = "mappingTable#";
-      property["type"] = "number";
-      property["max"] = 65536;
-      property["ro"] = true;
-      property = details.add<JsonObject>();
-      property["name"] = "nrOfZeroLights";
-      property["type"] = "number";
-      property["max"] = 65536;
-      property["ro"] = true;
-      property = details.add<JsonObject>();
-      property["name"] = "nrOfOneLight";
-      property["type"] = "number";
-      property["max"] = 65536;
-      property["ro"] = true;
-      property = details.add<JsonObject>();
-      property["name"] = "mappingTableIndexes#";
-      property["type"] = "number";
-      property["max"] = 65536;
-      property["ro"] = true;
-      property = details.add<JsonObject>();
-      property["name"] = "nrOfMoreLights";
-      property["type"] = "number";
-      property["max"] = 65536;
-      property["ro"] = true;
-      property = details.add<JsonObject>();
-      property["name"] = "nodes#";
-      property["type"] = "number";
-      property["max"] = 65536;
-      property["ro"] = true;
+      control = addControl(details, "nrOfLights", "number", 0, 65536, true);
+      control = addControl(details, "size", "coord3D", 0, 65536, true);
+      control = addControl(details, "nrOfZeroLights", "number", 0, 65536, true);
+      control = addControl(details, "nrOfOneLight", "number", 0, 65536, true);
+      control = addControl(details, "mappingTableIndexes#", "number", 0, 65536, true);
+      control = addControl(details, "nrOfMoreLights", "number", 0, 65536, true);
+      control = addControl(details, "nodes#", "number", 0, 65536, true);
     }
   }
 
@@ -106,6 +55,7 @@ class ModuleMoonLightInfo : public Module {
       data["nrOfLights"] = layerP.lights.header.nrOfLights;
       data["channelsPerLight"] = layerP.lights.header.channelsPerLight;
       data["maxChannels"] = layerP.lights.maxChannels;
+      data["maxMappings"] = layerP.lights.maxMappings;
       data["size"]["x"] = layerP.lights.header.size.x;
       data["size"]["y"] = layerP.lights.header.size.y;
       data["size"]["z"] = layerP.lights.header.size.z;
@@ -115,7 +65,7 @@ class ModuleMoonLightInfo : public Module {
         uint16_t nrOfZeroLights = 0;
         uint16_t nrOfOneLight = 0;
         uint16_t nrOfMoreLights = 0;
-        for (size_t i = 0; i < layer->mappingTableSizeUsed; i++) {
+        for (size_t i = 0; i < layer->nrOfLights; i++) {
           PhysMap& map = layer->mappingTable[i];
           switch (map.mapType) {
           case m_zeroLights:
@@ -136,7 +86,6 @@ class ModuleMoonLightInfo : public Module {
         data["layers"][index]["size"]["x"] = layer->size.x;
         data["layers"][index]["size"]["y"] = layer->size.y;
         data["layers"][index]["size"]["z"] = layer->size.z;
-        data["layers"][index]["mappingTable#"] = layer->mappingTable.size();
         data["layers"][index]["nrOfZeroLights"] = nrOfZeroLights;
         data["layers"][index]["nrOfOneLight"] = nrOfOneLight;
         data["layers"][index]["mappingTableIndexes#"] = layer->mappingTableIndexesSizeUsed;
