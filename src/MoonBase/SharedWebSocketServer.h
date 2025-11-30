@@ -119,6 +119,7 @@ class SharedWebSocketServer {
     for (Module* module : modules) {
       if (path.endsWith(module->_moduleName.c_str())) return module;
     }
+    EXT_LOGE(MB_TAG, "%s not found", path.c_str());
     return nullptr;
   }
 };

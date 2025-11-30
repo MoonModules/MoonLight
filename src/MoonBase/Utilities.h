@@ -342,8 +342,9 @@ extern int totalAllocatedMB;
 // allocate, try PSRAM, else default, use calloc: zero-initialized (all bytes = 0)
 template <typename T>
 T* allocMB(size_t n, const char* name = nullptr) {
-  T* res = (T*)heap_caps_calloc_prefer(n, sizeof(T), 2, MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT);  // calloc is malloc + memset(0);
+  T* res = (T*)heap_caps_malloc_prefer(n * sizeof(T), 2, MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT);  // calloc is malloc + memset(0);
   if (res) {
+    memset(res, 0, n * sizeof(T)); //calloc not always save so do it explicit
     totalAllocatedMB += heap_caps_get_allocated_size(res);
     // EXT_LOGD(MB_TAG, "Allocated %s: %d x %d bytes in %s s:%d (tot:%d)", name?name:"", n, sizeof(T), isInPSRAM(res)?"PSRAM":"RAM", heap_caps_get_allocated_size(res), totalAllocatedMB);
   } else
@@ -357,7 +358,7 @@ T* reallocMB(T* p, size_t n, const char* name = nullptr) {
   if (res) {
     // EXT_LOGD(MB_TAG, "Re-Allocated %s: %d x %d bytes in %s s:%d", name?name:"", n, sizeof(T), isInPSRAM(res)?"PSRAM":"RAM", heap_caps_get_allocated_size(res));
   } else
-    EXT_LOGE(MB_TAG, "heap_caps_malloc of %d x %d not succeeded", n, sizeof(T));
+    EXT_LOGE(MB_TAG, "heap_caps_realloc of %d x %d not succeeded", n, sizeof(T));
   return res;
 }
 
@@ -398,10 +399,13 @@ struct JsonRAMAllocator : ArduinoJson::Allocator {
 // allocate object
 template <typename T, typename... Args>
 T* allocMBObject(Args&&... args) {
-  void* mem = allocMB<T>(1, "object");
-  if (mem) {
-    return new (mem) T(std::forward<Args>(args)...);
+  void* res = allocMB<T>(1, "object");
+  // T* res = (T*)heap_caps_malloc_prefer(sizeof(T), 2, MALLOC_CAP_SPIRAM, MALLOC_CAP_8BIT);  // MALLOC_CAP_8BIT General-purpose byte-addressable RAM (safe for objects)
+
+  if (res) {
+    return new (res) T(std::forward<Args>(args)...);
   } else {
+    EXT_LOGE(MB_TAG, "heap_caps_malloc of %d not succeeded", sizeof(T));
     return nullptr;
   }
 }
@@ -418,6 +422,6 @@ extern unsigned char moonmanpng[];
 extern unsigned int moonmanpng_len;
 #endif
 
-static inline uint32_t fastDiv255(uint32_t x) { //3–4 cycles
-    return (x * 0x8081u) >> 23;
+static inline uint32_t fastDiv255(uint32_t x) {  // 3–4 cycles
+  return (x * 0x8081u) >> 23;
 }

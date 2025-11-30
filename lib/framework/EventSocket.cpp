@@ -157,13 +157,13 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
     // Only process valid events
     if (!isEventValid(event))
     {
-        ESP_LOGW(SVK_TAG, "Method tried to emit unregistered event: %s", event.c_str());
+        ESP_LOGW(SVK_TAG, "Method tried to emit unregistered event: %s (%d) from %s", event.c_str(), len, originId); // 🌙 
         return;
     }
 
     int originSubscriptionId = originId[0] ? atoi(originId) : -1;
     // 🌙 adding semaphore wait too long logging
-    if (xSemaphoreTake(clientSubscriptionsMutex, pdMS_TO_TICKS(100))==pdFALSE) {
+    if (xSemaphoreTake(clientSubscriptionsMutex, pdMS_TO_TICKS(100)) == pdFALSE) {
         ESP_LOGW(SVK_TAG, "clientSubscriptionsMutex wait too long");
         xSemaphoreTake(clientSubscriptionsMutex, portMAX_DELAY);
     }
