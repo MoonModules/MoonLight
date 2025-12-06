@@ -12,6 +12,7 @@ For each board the following presets are defined:
 
 * Modded: if any change to the default preset is made.
 * Max Power: adjust the brightness to approach this max power, depending on the number of LEDs used.
+* Jumper1: If the board contains a jumper, it can define pin behaviour. Eg. select between Infrared and Ethernet.
 * Pins: This module is the central place to assign functionality to gpio pins. Other modules and nodes use the pin assignments made here.
 
 * Per pin:
@@ -44,7 +45,21 @@ For each board the following presets are defined:
 
 ## Naming convention
 
-- MCU: The ESP32 chip
-- MCU-Board: MCU on a PCB
-- Carrier Board: MCU-board + connectors...
-- Device: All of the above in a box
+- MicroController (MCU): The ESP32 chip
+- MCU-Board (MCB): MCU on a PCB
+- Carrier Board (CRB): board that the MCU-board plugs into (Or shield or controller board or interface board)
+- Device (DVC): All of the above in a box with connectors
+
+## Board details
+
+### QuinLed boards
+
+* esp32-d0 (4MB)
+* erase flash first as MoonLight uses a partition scheme with 3MB of flash and no ota.
+* Lolin Wifi fix no -> add as board preset
+* you might need to reset your router if you first run WLED on the same MCU
+* remove fuse then flash, Nice !!!
+
+### SE16 v1
+
+* Set jumper1 the same as you set it on the board: on: Infrared, off: Ethernet

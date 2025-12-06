@@ -135,8 +135,8 @@ void PhysicalLayer::onLayoutPre() {
     if (!monitorPass) {
       memset(ledsPerPin, 0xFF, sizeof(ledsPerPin));  // UINT16_MAX is 2 * 0xFF
       memset(ledPinsAssigned, 0, sizeof(ledPinsAssigned));
+      nrOfAssignedPins = 0;
     }
-    nrOfAssignedPins = 0;
   } else if (pass == 2) {
     indexP = 0;
     for (VirtualLayer* layer : layers) {
@@ -207,7 +207,7 @@ void PhysicalLayer::onLayoutPost() {
 
     // ledsDriver.init(lights, sortedPins); //init the driver with the sorted pins and lights
   } else if (pass == 2) {
-    EXT_LOGD(ML_TAG, "pass %d %d", pass, indexP);
+    EXT_LOGD(ML_TAG, "pass %d indexP: %d", pass, indexP);
     for (VirtualLayer* layer : layers) {
       // add the position in the virtual layer
       layer->onLayoutPost();

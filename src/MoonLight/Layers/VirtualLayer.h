@@ -67,9 +67,9 @@ class VirtualLayer {
   // mappingTableIndexes is used of the mapping of effects to lights.channel is not 1:1 but 1:M
 
   // they will be reused to avoid fragmentation
-  std::vector<PhysMap, VectorRAMAllocator<PhysMap>> mappingTable;
+  PhysMap* mappingTable = nullptr;
+  uint16_t mappingTableSize = 0;
   std::vector<std::vector<uint16_t>, VectorRAMAllocator<std::vector<uint16_t>>> mappingTableIndexes;
-  uint16_t mappingTableSizeUsed = 0;
   uint16_t mappingTableIndexesSizeUsed = 0;
 
   PhysicalLayer* layerP;  // physical LEDs the virtual LEDs are mapped to
@@ -82,7 +82,7 @@ class VirtualLayer {
 
   Coord3D prevSize;  // to calculate size change
 
-  VirtualLayer() { EXT_LOGV(ML_TAG, "constructor"); }
+  VirtualLayer();
 
   ~VirtualLayer();
 
@@ -209,7 +209,7 @@ class VirtualLayer {
   void addLight(Coord3D position);
 
   // checks if a virtual light is mapped to a physical light (use with XY() or XYZ() to get the indexV)
-  bool isMapped(int indexV) const { return indexV < mappingTableSizeUsed && (mappingTable[indexV].mapType == m_oneLight || mappingTable[indexV].mapType == m_moreLights); }
+  bool isMapped(int indexV) const { return indexV < mappingTableSize && (mappingTable[indexV].mapType == m_oneLight || mappingTable[indexV].mapType == m_moreLights); }
 
   void blur1d(fract8 blur_amount) {
     // todo: check updated in wled-MM

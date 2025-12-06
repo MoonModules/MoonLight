@@ -146,7 +146,7 @@ class ParallelLEDDriver : public DriverNode {
         return;
       }
 
-    #if CONFIG_IDF_TARGET_ESP32S3 || CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32
+    #if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32)
       int numPins = 0;
       PinConfig pinConfig[MAX_PINS];
 

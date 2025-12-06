@@ -81,7 +81,7 @@ void ESP32SvelteKit::begin()
     _wifiSettingsService.initWiFi();
 
     // SvelteKit uses a lot of handlers, so we need to increase the max_uri_handlers
-    // WWWData has 77 Endpoints, Framework has 27, and Lighstate Demo has 4
+    // WWWData has 77->27!! Endpoints, Framework has 27, and each module has 4 // 🌙 updated numbers
     _server->config.max_uri_handlers = _numberEndpoints;
     _server->listen(80);
 

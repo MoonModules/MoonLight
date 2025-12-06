@@ -392,7 +392,7 @@ class FastLEDDriver : public Node {
           break;
   #endif  // CONFIG_IDF_TARGET_ESP32S2
 
-  #if CONFIG_IDF_TARGET_ESP32S3
+  #ifdef CONFIG_IDF_TARGET_ESP32S3
         case 0:
           FastLED.addLeds<ML_CHIPSET, 0 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
           break;

@@ -83,17 +83,20 @@ void EthernetSettingsService::configureNetwork(ethernet_settings_t &network)
         ETH.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
     }
 // (re)start ethernet
-#if CONFIG_IDF_TARGET_ESP32
+// 🌙 compiler directives to variables
+#ifdef CONFIG_IDF_TARGET_ESP32S3 
+    if (v_ETH_SPI_SCK != UINT8_MAX) {
+        // For SPI based ethernet modules like W5500, ENC28J60 etc.
+        SPI.begin(v_ETH_SPI_SCK, v_ETH_SPI_MISO, v_ETH_SPI_MOSI);
+        ETH.begin(v_ETH_PHY_TYPE, v_ETH_PHY_ADDR, v_ETH_PHY_CS, v_ETH_PHY_IRQ, v_ETH_PHY_RST, SPI);
+    }
+    else 
+        ETH.begin();
+#elif defined(CONFIG_IDF_TARGET_ESP32P4)
+    ETH.begin(); // for the time being, todo: setup in P4
+#else // CONFIG_IDF_TARGET_ESP32, what about S2/C3 ...
     // ESP32 chips with built-in ethernet MAC/PHY
     ETH.begin();
-#elif CONFIG_IDF_TARGET_ESP32P4
-    // todo: setup in P4
-#else
-    #ifdef ETH_PHY_TYPE //only if defined
-        // For SPI based ethernet modules like W5500, ENC28J60 etc.
-        SPI.begin(ETH_SPI_SCK, ETH_SPI_MISO, ETH_SPI_MOSI);
-        ETH.begin(ETH_PHY_TYPE, ETH_PHY_ADDR, ETH_PHY_CS, ETH_PHY_IRQ, ETH_PHY_RST, SPI);
-    #endif
 #endif
     // set hostname (again) after (re)starting ethernet due to a bug in the ESP-IDF implementation
     ETH.setHostname(_state.hostname.c_str());

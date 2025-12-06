@@ -103,22 +103,22 @@ bool copyFile(const char* srcPath, const char* dstPath) {
 bool isInPSRAM(void* ptr) {
   if (!psramFound() || !ptr) return false;
   uintptr_t addr = (uintptr_t)ptr;
-#if CONFIG_IDF_TARGET_ESP32
+#if defined(CONFIG_IDF_TARGET_ESP32)
   return (addr >= 0x3F800000 && addr < 0x40000000);
-#elif CONFIG_IDF_TARGET_ESP32S2
+#elif defined(CONFIG_IDF_TARGET_ESP32S2)
   return (addr >= 0x3F500000 && addr < 0x3FF80000);
-#elif CONFIG_IDF_TARGET_ESP32S3
+#elif defined(CONFIG_IDF_TARGET_ESP32S3)
   return (addr >= 0x3C000000 && addr < 0x3E000000);
-#elif CONFIG_IDF_TARGET_ESP32C3
+#elif defined(CONFIG_IDF_TARGET_ESP32C3)
   return false;  // ESP32-C3 does not support external PSRAM
-#elif CONFIG_IDF_TARGET_ESP32C6
+#elif defined(CONFIG_IDF_TARGET_ESP32C6)
   return false;  // ESP32-C6 does not support external PSRAM
-#elif CONFIG_IDF_TARGET_ESP32H2
+#elif defined(CONFIG_IDF_TARGET_ESP32H2)
   return false;  // ESP32-H2 does not support external PSRAM
-#elif CONFIG_IDF_TARGET_ESP32P4
+#elif defined(CONFIG_IDF_TARGET_ESP32P4)
   // ESP32-P4 PSRAM mapping (when available)
   return (addr >= 0x80000000 && addr < 0x88000000);
-#elif CONFIG_IDF_TARGET_ESP32C4
+#elif defined(CONFIG_IDF_TARGET_ESP32C4)
   return false;  // ESP32-C4 does not support external PSRAM
 #endif
   EXT_LOGE(MB_TAG, "isInPSRAM not implemented for this target");

@@ -39,44 +39,46 @@ class IRDriver : public Node {
 
   void readPins() {
     moduleIO->read([&](ModuleState& state) {
+      pinInfrared = UINT8_MAX;
       for (JsonObject pinObject : state.data["pins"].as<JsonArray>()) {
         uint8_t usage = pinObject["usage"];
         if (usage == pin_Infrared) {
-          pinInfrared = pinObject["GPIO"].as<uint8_t>();
+          pinInfrared = pinObject["GPIO"];
           EXT_LOGD(ML_TAG, "pin_Infrared found %d", pinInfrared);
-
-          EXT_LOGI(IR_DRIVER_TAG, "Changing to pin #%d", pinInfrared);
-
-          if (rx_channel) {
-            EXT_LOGI(IR_DRIVER_TAG, "Removing callback");
-            ESP_ERROR_CHECK(rmt_rx_register_event_callbacks(rx_channel, &cbs_empty, receive_queue));
-            EXT_LOGI(IR_DRIVER_TAG, "Stopping RMT reception");
-            ESP_ERROR_CHECK(rmt_disable(rx_channel));
-            EXT_LOGI(IR_DRIVER_TAG, "Deleting old RX channel");
-            ESP_ERROR_CHECK(rmt_del_channel(rx_channel));
-            rx_channel = NULL;
-          }
-
-          if (receive_queue) {
-            vQueueDelete(receive_queue);
-            receive_queue = NULL;
-          }
-
-          rx_channel_cfg.gpio_num = (gpio_num_t)pinInfrared;
-          EXT_LOGI(IR_DRIVER_TAG, "create RMT RX channel");
-          ESP_ERROR_CHECK(rmt_new_rx_channel(&rx_channel_cfg, &rx_channel));
-
-          EXT_LOGI(IR_DRIVER_TAG, "Enable RMT RX channel");
-          ESP_ERROR_CHECK(rmt_enable(rx_channel));
-
-          EXT_LOGI(IR_DRIVER_TAG, "Register RX done callback");
-          receive_queue = xQueueCreate(1, sizeof(rmt_rx_done_event_data_t));
-          assert(receive_queue);
-          ESP_ERROR_CHECK(rmt_rx_register_event_callbacks(rx_channel, &cbs, receive_queue));
-
-          EXT_LOGI(IR_DRIVER_TAG, "Arm receive");
-          ESP_ERROR_CHECK(rmt_receive(rx_channel, raw_symbols, sizeof(raw_symbols), &receive_config));
         }
+      }
+      if (pinInfrared != UINT8_MAX) {
+        EXT_LOGI(IR_DRIVER_TAG, "Changing to pin #%d", pinInfrared);
+
+        if (rx_channel) {
+          EXT_LOGI(IR_DRIVER_TAG, "Removing callback");
+          ESP_ERROR_CHECK(rmt_rx_register_event_callbacks(rx_channel, &cbs_empty, receive_queue));
+          EXT_LOGI(IR_DRIVER_TAG, "Stopping RMT reception");
+          ESP_ERROR_CHECK(rmt_disable(rx_channel));
+          EXT_LOGI(IR_DRIVER_TAG, "Deleting old RX channel");
+          ESP_ERROR_CHECK(rmt_del_channel(rx_channel));
+          rx_channel = NULL;
+        }
+
+        if (receive_queue) {
+          vQueueDelete(receive_queue);
+          receive_queue = NULL;
+        }
+
+        rx_channel_cfg.gpio_num = (gpio_num_t)pinInfrared;
+        EXT_LOGI(IR_DRIVER_TAG, "create RMT RX channel");
+        ESP_ERROR_CHECK(rmt_new_rx_channel(&rx_channel_cfg, &rx_channel));
+
+        EXT_LOGI(IR_DRIVER_TAG, "Enable RMT RX channel");
+        ESP_ERROR_CHECK(rmt_enable(rx_channel));
+
+        EXT_LOGI(IR_DRIVER_TAG, "Register RX done callback");
+        receive_queue = xQueueCreate(1, sizeof(rmt_rx_done_event_data_t));
+        assert(receive_queue);
+        ESP_ERROR_CHECK(rmt_rx_register_event_callbacks(rx_channel, &cbs, receive_queue));
+
+        EXT_LOGI(IR_DRIVER_TAG, "Arm receive");
+        ESP_ERROR_CHECK(rmt_receive(rx_channel, raw_symbols, sizeof(raw_symbols), &receive_config));
       }
       // for (int i = 0; i < sizeof(pins); i++) EXT_LOGD(ML_TAG, "pin %d = %d", i, pins[i]);
     });
@@ -405,7 +407,7 @@ class IRDriver : public Node {
   void loop() override {
     if (receive_queue) {
       if (xQueueReceive(receive_queue, &rx_data, 0) == pdPASS) {
-        if (rx_data.num_symbols != 1) EXT_LOGD(IR_DRIVER_TAG, "Received symbols: #%d", rx_data.num_symbols); // will not be processed (only 34 and 2)
+        if (rx_data.num_symbols != 1) EXT_LOGD(IR_DRIVER_TAG, "Received symbols: #%d", rx_data.num_symbols);  // will not be processed (only 34 and 2)
         // parse the receive symbols and print the result
         parse_nec_frame(rx_data.received_symbols, rx_data.num_symbols);
         // start receive again

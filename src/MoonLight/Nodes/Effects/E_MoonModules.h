@@ -144,6 +144,8 @@ class GameOfLifeEffect : public Node {
     generation = 1;
     disablePause ? step = millis() : step = millis() + 1500;
 
+    if (!cells || !futureCells || !cellColors) return;
+
     // Setup Grid
     memset(cells, 0, dataSize);
     memset(cellColors, 0, layer->size.x * layer->size.y * layer->size.z);

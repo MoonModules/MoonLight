@@ -33,11 +33,11 @@ class ModuleDevices : public Module {
   void setupDefinition(const JsonArray& controls) override {
     EXT_LOGV(MB_TAG, "");
     JsonObject control;  // state.data has one or more properties
-    JsonArray rows;   // if a control is an array, this is the rows of the array
+    JsonArray rows;      // if a control is an array, this is the rows of the array
 
     control = addControl(controls, "devices", "rows");
     control["filter"] = "";
-    control["crud"] = "r";
+    control["crud"] = "rd";  // delete old devices
     rows = control["n"].to<JsonArray>();
     {
       addControl(rows, "name", "mdnsName", 0, 32, true);

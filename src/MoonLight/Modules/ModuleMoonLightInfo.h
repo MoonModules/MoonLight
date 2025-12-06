@@ -63,7 +63,7 @@ class ModuleMoonLightInfo : public Module {
         uint16_t nrOfZeroLights = 0;
         uint16_t nrOfOneLight = 0;
         uint16_t nrOfMoreLights = 0;
-        for (size_t i = 0; i < layer->mappingTableSizeUsed; i++) {
+        for (size_t i = 0; i < layer->mappingTableSize; i++) {
           PhysMap& map = layer->mappingTable[i];
           switch (map.mapType) {
           case m_zeroLights:
@@ -84,7 +84,7 @@ class ModuleMoonLightInfo : public Module {
         data["layers"][index]["size"]["x"] = layer->size.x;
         data["layers"][index]["size"]["y"] = layer->size.y;
         data["layers"][index]["size"]["z"] = layer->size.z;
-        data["layers"][index]["mappingTable#"] = layer->mappingTable.size();
+        data["layers"][index]["mappingTable#"] = layer->mappingTableSize;
         data["layers"][index]["nrOfZeroLights"] = nrOfZeroLights;
         data["layers"][index]["nrOfOneLight"] = nrOfOneLight;
         data["layers"][index]["mappingTableIndexes#"] = layer->mappingTableIndexesSizeUsed;
