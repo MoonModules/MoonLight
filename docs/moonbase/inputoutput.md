@@ -12,7 +12,7 @@ For each board the following presets are defined:
 
 * Modded: set when any pin differs from the selected board preset. Press off to return to the preset defaults.
 * Max Power in Watts: adjust the brightness to approach this max power, depending on the number of LEDs used. Default 10: 5V * 2A = 10W (so it runs fine on USB). Used by LED drivers, see [Drivers](../../moonlight/drivers/)
-* Jumper1: If the board contains a jumper, it can define pin behaviour. Eg. select between Infrared and Ethernet.
+* Switch1 and 2: If the board contains a jumper or pins have different functions, a custom switch can be set. Eg. select between Infrared and Ethernet. See boards below for details
 * Pins: Assign functionality to gpio pins. Other modules and nodes use the pin assignments made here.
     * GPIO = gpio_num;
     * Usage: See below
@@ -75,7 +75,12 @@ For each board the following presets are defined:
 * On new ESP32-P4 Nano boards, the WiFi coprocessor needs to be updated first to a recent version, currently ESP-Hosted v2.0.17, see the link in the [MoonLight Installer](../../gettingstarted/installer/)
 * After install, select the **MHC P4 Nano Shield** board preset to have the pins assigned correctly.
     * Assuming 100W LED power; change if needed.
-    * Jumper1: off (default): 16 LED pins. On: 8 LED pins, 4 RS-485 pins and 4 exposed pins (set also the switches on the board).
+    * Switch1: (set also the switches on the board)
+        * off (default): 16 LED pins. 
+        * On: 8 LED pins, 4 RS-485 pins and 4 exposed pins 
+    * Switch2: 
+        * off (default): Pins 10, 11, 12, 13 used for build-in Mic over I2S, pin 7 and 8: I2C SDA and SCL
+        * On: Pins 33, 25, 32, 36 used for Line in, pin 7 and 8: additional LED pins. 
 * Add the Parallel LED Driver, see [Drivers](../../moonlight/drivers/). It uses [@troyhacks](https://github.com/troyhacks) his parallel IO driver to drive all LED pins configured for the shield.
 
 
@@ -84,4 +89,4 @@ For each board the following presets are defined:
 ![SE-16p](../firmware/installer/images/esp32-s3-stephanelec-16p.jpg){: style="width:100px"}
 
 * Choose the esp32-s3-devkitc-1-n8r8v board in the [MoonLight Installer](../../gettingstarted/installer/) 
-* Set jumper1 the same as you set it on the board: on: Infrared, off: Ethernet
+* Set Switch1 the same as you set the jumper on the board: off / default: Ethernet. on: Infrared.
