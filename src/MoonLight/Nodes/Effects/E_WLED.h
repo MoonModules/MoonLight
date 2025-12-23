@@ -31,11 +31,11 @@ class BouncingBallsEffect : public Node {
   ~BouncingBallsEffect() override { freeMB(balls); }
 
   void onSizeChanged(const Coord3D& prevSize) override {
-    Ball(*newAlloc)[maxNumBalls] = reallocMB<Ball[maxNumBalls]>(balls, layer->size.y);
+    Ball(*newAlloc)[maxNumBalls] = reallocMB<Ball[maxNumBalls]>(balls, layer->size.x);
 
     if (newAlloc) {
       balls = newAlloc;
-      ballsSize = layer->size.y;
+      ballsSize = layer->size.x;
     } else {
       EXT_LOGE(ML_TAG, "(re)allocate balls failed");
     }
@@ -56,24 +56,24 @@ class BouncingBallsEffect : public Node {
     //    for (size_t i = 0; i < maxNumBalls; i++) balls[i].lastBounceTime = time;
     //  }
 
-    for (int y = 0; y < MIN(layer->size.y, ballsSize); y++) {
+    for (int x = 0; x < MIN(layer->size.x, ballsSize); x++) {
       for (size_t i = 0; i < MIN(numBalls, maxNumBalls); i++) {
-        float timeSinceLastBounce = (time - balls[y][i].lastBounceTime) / ((255 - grav) / 64 + 1);
+        float timeSinceLastBounce = (time - balls[x][i].lastBounceTime) / ((255 - grav) / 64 + 1);
         float timeSec = timeSinceLastBounce / 1000.0f;
-        balls[y][i].height = (0.5f * gravity * timeSec + balls[y][i].impactVelocity) * timeSec;  // avoid use pow(x, 2) - its extremely slow !
+        balls[x][i].height = (0.5f * gravity * timeSec + balls[x][i].impactVelocity) * timeSec;  // avoid use pow(x, 2) - its extremely slow !
 
-        if (balls[y][i].height <= 0.0f) {
-          balls[y][i].height = 0.0f;
+        if (balls[x][i].height <= 0.0f) {
+          balls[x][i].height = 0.0f;
           // damping for better effect using multiple balls
           float dampening = 0.9f - float(i) / float(numBalls * numBalls);  // avoid use pow(x, 2) - its extremely slow !
-          balls[y][i].impactVelocity = dampening * balls[y][i].impactVelocity;
-          balls[y][i].lastBounceTime = time;
+          balls[x][i].impactVelocity = dampening * balls[x][i].impactVelocity;
+          balls[x][i].lastBounceTime = time;
 
-          if (balls[y][i].impactVelocity < 0.015f) {
+          if (balls[x][i].impactVelocity < 0.015f) {
             float impactVelocityStart = sqrtf(-2.0f * gravity) * random8(5, 11) / 10.0f;  // randomize impact velocity
-            balls[y][i].impactVelocity = impactVelocityStart;
+            balls[x][i].impactVelocity = impactVelocityStart;
           }
-        } else if (balls[y][i].height > 1.0f) {
+        } else if (balls[x][i].height > 1.0f) {
           continue;  // do not draw OOB ball
         }
 
@@ -85,13 +85,11 @@ class BouncingBallsEffect : public Node {
         //   color = SEGCOLOR(i % NUM_COLORS);
         // }
 
-        uint8_t pos = roundf(balls[y][i].height * (layer->size.x - 1));
+        uint8_t pos = layer->size.y - 1 - roundf(balls[x][i].height * (layer->size.y - 1));  // balls go up
 
         CRGB color = ColorFromPalette(layerP.palette, i * (256 / max(numBalls, (uint8_t)8)));  // error: no matching function for call to 'max(uint8_t&, int)'
 
-        layer->setRGB(Coord3D(pos, y), color);
-        // if (layer->size.x<32) layer->setRGB(indexToVStrip(pos, stripNr), color); // encode virtual strip into index
-        // else           layer->setRGB(balls[i].height + (stripNr+1)*10.0f, color);
+        layer->setRGB(Coord3D(x, pos), color);
       }  // balls      layer->fill_solid(CRGB::White);
     }
   }
@@ -993,10 +991,10 @@ class TetrixEffect : public Node {
   uint16_t nrOfDrops = 0;
 
   void onSizeChanged(const Coord3D& prevSize) override {
-    Tetris* newAlloc = reallocMB<Tetris>(drops, layer->size.y);
+    Tetris* newAlloc = reallocMB<Tetris>(drops, layer->size.x);
     if (newAlloc) {
       drops = newAlloc;
-      nrOfDrops = layer->size.y;
+      nrOfDrops = layer->size.x;
     } else {
       EXT_LOGE(ML_TAG, "(re)allocate drops failed");  // keep old (if existed)
     }
@@ -1012,56 +1010,54 @@ class TetrixEffect : public Node {
   void loop() override {
     if (!drops) return;
 
-    uint16_t strips = layer->size.y;  // allow running on virtual strips (columns in 2D segment)
-
-    // if (SEGENV.call == 0) layer->fill(SEGCOLOR(1));  // will fill entire segment (1D or 2D), then use drops[y].step = 0 below
+    // if (SEGENV.call == 0) layer->fill(SEGCOLOR(1));  // will fill entire segment (1D or 2D), then use drops[x].step = 0 below
 
     const uint8_t FRAMETIME = 1000 / 40;
 
-    for (int y = 0; y < layer->size.y; y++) {
-      if (drops[y].step == 0) {  // init brick
+    for (int x = 0; x < nrOfDrops; x++) {
+      if (drops[x].step == 0) {  // init brick
         // speed calculation: a single brick should reach bottom of strip in X seconds
         // if the speed is set to 1 this should take 5s and at 255 it should take 0.25s
-        // as this is dependant on layer->size.x it should be taken into account and the fact that effect runs every FRAMETIME s
+        // as this is dependant on layer->size.y it should be taken into account and the fact that effect runs every FRAMETIME s
         int speed = speedControl ? speedControl : random8(1, 255);
-        speed = map(speed, 1, 255, 40000, 250);                                                    // time in ms taken for full (layer->size.x) drop
-        drops[y].speed = float(layer->size.x * FRAMETIME) / float(speed);                          // set speed
-        drops[y].pos = layer->size.x;                                                              // start at end of segment (no need to subtract 1)
-        if (!oneColor) drops[y].col = random8(0, 15) << 4;                                         // limit color choices so there is enough HUE gap
-        drops[y].step = 1;                                                                         // drop state (0 init, 1 forming, 2 falling)
-        drops[y].brick = (width ? (width >> 5) + 1 : random8(1, 5)) * (1 + (layer->size.x >> 6));  // size of brick
+        speed = map(speed, 1, 255, 40000, 250);                                                    // time in ms taken for full (layer->size.y) drop
+        drops[x].speed = float(layer->size.y * FRAMETIME) / float(speed);                          // set speed
+        drops[x].pos = layer->size.y;                                                              // start at end of segment (no need to subtract 1)
+        if (!oneColor) drops[x].col = random8(0, 15) << 4;                                         // limit color choices so there is enough HUE gap
+        drops[x].step = 1;                                                                         // drop state (0 init, 1 forming, 2 falling)
+        drops[x].brick = (width ? (width >> 5) + 1 : random8(1, 5)) * (1 + (layer->size.y >> 6));  // size of brick
       }
 
-      if (drops[y].step == 1) {  // forming
+      if (drops[x].step == 1) {  // forming
         if (random8() >> 6) {    // random drop
-          drops[y].step = 2;     // fall
+          drops[x].step = 2;     // fall
         }
       }
 
-      if (drops[y].step == 2) {               // falling
-        if (drops[y].pos > drops[y].stack) {  // fall until top of stack
-          drops[y].pos -= drops[y].speed;     // may add gravity as: speed += gravity
-          if (drops[y].pos < drops[y].stack) drops[y].pos = drops[y].stack;
-          for (int i = drops[y].pos; i < layer->size.x; i++) {
-            CRGB col = i < drops[y].pos + drops[y].brick ? ColorFromPalette(layerP.palette, drops[y].col) : CRGB::Black;
-            layer->setRGB(Coord3D(i, y), col);
+      if (drops[x].step == 2) {               // falling
+        if (drops[x].pos > drops[x].stack) {  // fall until top of stack
+          drops[x].pos -= drops[x].speed;     // may add gravity as: speed += gravity
+          if (drops[x].pos < drops[x].stack) drops[x].pos = drops[x].stack;
+          for (int i = drops[x].pos; i < layer->size.y; i++) {
+            CRGB col = i < drops[x].pos + drops[x].brick ? ColorFromPalette(layerP.palette, drops[x].col) : CRGB::Black;
+            layer->setRGB(Coord3D(x, layer->size.y - 1 - i), col);
           }
         } else {                                                                 // we hit bottom
-          drops[y].step = 0;                                                     // proceed with next brick, go back to init
-          drops[y].stack += drops[y].brick;                                      // increase the stack size
-          if (drops[y].stack >= layer->size.x) drops[y].step = millis() + 2000;  // fade out stack
+          drops[x].step = 0;                                                     // proceed with next brick, go back to init
+          drops[x].stack += drops[x].brick;                                      // increase the stack size
+          if (drops[x].stack >= layer->size.y) drops[x].step = millis() + 2000;  // fade out stack
         }
       }
 
-      if (drops[y].step > 2) {  // fade strip
-        drops[y].brick = 0;     // reset brick size (no more growing)
-        if (drops[y].step > millis()) {
+      if (drops[x].step > 2) {  // fade strip
+        drops[x].brick = 0;     // reset brick size (no more growing)
+        if (drops[x].step > millis()) {
           // allow fading of virtual strip
-          for (int i = 0; i < layer->size.x; i++) layer->blendColor(Coord3D(i, y), CRGB::Black, 25);  // 10% blend
+          for (int i = 0; i < layer->size.y; i++) layer->blendColor(Coord3D(x, i), CRGB::Black, 25);  // 10% blend
         } else {
-          drops[y].stack = 0;               // reset brick stack size
-          drops[y].step = 0;                // proceed with next brick
-          if (oneColor) drops[y].col += 8;  // gradually increase palette index
+          drops[x].stack = 0;               // reset brick stack size
+          drops[x].step = 0;                // proceed with next brick
+          if (oneColor) drops[x].col += 8;  // gradually increase palette index
         }
       }
     }
@@ -1642,12 +1638,12 @@ class FlowEffect : public Node {
       counter = counter >> 8;
     }
 
-    uint16_t maxZones = layer->size.x / 6;  // only looks good if each zone has at least 6 LEDs
+    uint16_t maxZones = layer->size.y / 6;  // only looks good if each zone has at least 6 LEDs
     uint16_t zones = (zonesControl * maxZones) >> 8;
     if (zones & 0x01) zones++;  // zones must be even
     if (zones < 2) zones = 2;
-    uint16_t zoneLen = layer->size.x / zones;
-    uint16_t offset = (layer->size.x - zones * zoneLen) >> 1;
+    uint16_t zoneLen = layer->size.y / zones;
+    uint16_t offset = (layer->size.y - zones * zoneLen) >> 1;
 
     layer->fill_solid(ColorFromPalette(layerP.palette, -counter));
 
@@ -1656,24 +1652,24 @@ class FlowEffect : public Node {
       for (int i = 0; i < zoneLen; i++) {
         uint8_t colorIndex = (i * 255 / zoneLen) - counter;
         uint16_t led = (z & 0x01) ? i : (zoneLen - 1) - i;
-        layer->setRGB(pos + led, ColorFromPalette(layerP.palette, colorIndex));
+        layer->setRGB(Coord3D(0, pos + led), ColorFromPalette(layerP.palette, colorIndex));
       }
     }
   }
 };
 
-static void mode_fireworks(VirtualLayer* layer, uint16_t aux0, uint16_t aux1, uint8_t speed, uint8_t intensity, bool useAudio = false) {
+static void mode_fireworks(VirtualLayer* layer, uint16_t x, uint16_t aux0, uint16_t aux1, uint8_t speed, uint8_t intensity, bool useAudio = false) {
   // fade_out(0);
   layer->fadeToBlackBy(10);
   // if (call == 0) {
   //   aux0 = UINT16_MAX;
   //   aux1 = UINT16_MAX;
   // }
-  bool valid1 = (aux0 < layer->size.x);
-  bool valid2 = (aux1 < layer->size.x);
+  bool valid1 = (aux0 < layer->size.y);
+  bool valid2 = (aux1 < layer->size.y);
   CRGB sv1 = 0, sv2 = 0;
-  if (valid1) sv1 = layer->getRGB(aux0);
-  if (valid2) sv2 = layer->getRGB(aux1);
+  if (valid1) sv1 = layer->getRGB(Coord3D(x, layer->size.y - 1 - aux0));
+  if (valid2) sv2 = layer->getRGB(Coord3D(x, layer->size.y - 1 - aux1));
 
   // WLEDSR
   uint8_t blurAmount = 255 - speed;
@@ -1702,18 +1698,18 @@ static void mode_fireworks(VirtualLayer* layer, uint16_t aux0, uint16_t aux1, ui
   // }
   // // WLEDSR end
 
-  layer->blur1d(blurAmount);
-  if (valid1) layer->setRGB(aux0, sv1);
-  if (valid2) layer->setRGB(aux1, sv2);
+  layer->blur1d(blurAmount, x);  // only blur x column. todo: check blurColumn ...
+  if (valid1) layer->setRGB(Coord3D(x, layer->size.y - 1 - aux0), sv1);
+  if (valid2) layer->setRGB(Coord3D(x, layer->size.y - 1 - aux1), sv2);
 
   if (addPixels) {  // WLEDSR
-    for (uint16_t i = 0; i < max(1, layer->size.x / 20); i++) {
+    for (uint16_t i = 0; i < max(1, layer->size.y / 20); i++) {
       if (random8(my_intensity) == 0) {
-        uint16_t index = random(layer->size.x);
+        uint16_t index = random(layer->size.y);
         if (soundColor < 0)
-          layer->setRGB(index, ColorFromPalette(layerP.palette, random8()));
+          layer->setRGB(Coord3D(x, layer->size.y - 1 - index), ColorFromPalette(layerP.palette, random8()));
         else
-          layer->setRGB(index, ColorFromPalette(layerP.palette, soundColor + random8(24)));  // WLEDSR
+          layer->setRGB(Coord3D(x, layer->size.y - 1 - index), ColorFromPalette(layerP.palette, soundColor + random8(24)));  // WLEDSR
         aux1 = aux0;
         aux0 = index;
       }
@@ -1725,7 +1721,7 @@ static void mode_fireworks(VirtualLayer* layer, uint16_t aux0, uint16_t aux1, ui
 class RainEffect : public Node {
  public:
   static const char* name() { return "Rain"; }
-  static uint8_t dim() { return _1D; }
+  static uint8_t dim() { return _2D; }
   static const char* tags() { return "🐙"; }
 
   uint8_t speed = 128;
@@ -1736,41 +1732,60 @@ class RainEffect : public Node {
     addControl(intensity, "intensity", "slider", 1, 128);
   }
 
-  uint16_t aux0;
-  uint16_t aux1;
-  uint16_t step;
+  Spark* drops = nullptr;
+  uint16_t nrOfDrops = 0;
+
+  ~RainEffect() override { freeMB(drops); }
+
+  void onSizeChanged(const Coord3D& prevSize) override {
+    Spark* newAlloc = reallocMB<Spark>(drops, layer->size.x);
+
+    if (newAlloc) {
+      drops = newAlloc;
+      nrOfDrops = layer->size.x;
+      for (int x = 0; x < layer->size.x; x++) {
+        drops[x].pos = 0;
+        drops[x].col = 0;
+        drops[x].vel = 0;
+      }
+    } else {
+      EXT_LOGE(ML_TAG, "(re)allocate drops failed");
+    }
+  }
 
   void loop() override {
     // if(call == 0) {
     // layer->fill(CRGB::Black);
     // }
-    step += 1000 / 40;                                           // FRAMETIME;
-    if (step > (5U + (50U * (255U - speed)) / layer->size.x)) {  // SPEED_FORMULA_L) {
-      step = 1;
-      // if (strip.isMatrix) {
-      //   //uint32_t ctemp[layer->size.x];
-      //   //for (int i = 0; i<layer->size.x; i++) ctemp[i] = layer->getRGB(i, layer->size.y-1);
-      //   layer->move(6, 1, true);  // move all pixels down
-      //   //for (int i = 0; i<layer->size.x; i++) layer->setRGB(Coord3D(i, 0), ctemp[i]); // wrap around
-      //   aux0 = (aux0 % layer->size.x) + (aux0 / layer->size.x + 1) * layer->size.x;
-      //   aux1 = (aux1 % layer->size.x) + (aux1 / layer->size.x + 1) * layer->size.x;
-      // } else
-      {
-        // shift all leds left
-        CRGB ctemp = layer->getRGB(0);
-        for (int i = 0; i < layer->size.x - 1; i++) {
-          layer->setRGB(i, layer->getRGB(i + 1));
+    for (int x = 0; x < nrOfDrops; x++) {
+      drops[x].vel += 1000 / 40;                                           // FRAMETIME;
+      if (drops[x].vel > (5U + (50U * (255U - speed)) / layer->size.y)) {  // SPEED_FORMULA_L) {
+        drops[x].vel = 1;
+        // if (strip.isMatrix) {
+        //   //uint32_t ctemp[layer->size.y];
+        //   //for (int i = 0; i<layer->size.y; i++) ctemp[i] = layer->getRGB(i, layer->size.x-1);
+        //   layer->move(6, 1, true);  // move all pixels down
+        //   //for (int i = 0; i<layer->size.y; i++) layer->setRGB(Coord3D(i, 0), ctemp[i]); // wrap around
+        //   drops[x].pos = (drops[x].pos % layer->size.y) + (drops[x].pos / layer->size.y + 1) * layer->size.y;
+        //   drops[x].col = (drops[x].col % layer->size.y) + (drops[x].col / layer->size.y + 1) * layer->size.y;
+        // } else
+        {
+          // shift all leds down
+          CRGB ctemp = layer->getRGB(Coord3D(x, 0));
+          for (int i = 0; i < layer->size.y - 1; i++) {
+            layer->setRGB(Coord3D(x, layer->size.y - 1 - i), layer->getRGB(Coord3D(x, layer->size.y - 1 - (i + 1))));
+          }
+          layer->setRGB(Coord3D(x, 0), ctemp);  // wrap around
+          drops[x].pos++;                       // increase spark index
+          drops[x].col++;
         }
-        layer->setRGB(layer->size.x - 1, ctemp);  // wrap around
-        aux0++;                                   // increase spark index
-        aux1++;
+        if (drops[x].pos <= 0) drops[x].pos = UINT16_MAX;     // reset previous spark position
+        if (drops[x].col <= 0) drops[x].pos = UINT16_MAX;     // reset previous spark position
+        if (drops[x].pos >= layer->size.y) drops[x].pos = 0;  // ignore
+        if (drops[x].col >= layer->size.y) drops[x].col = 0;
       }
-      if (aux0 == 0) aux0 = UINT16_MAX;                     // reset previous spark position
-      if (aux1 == 0) aux0 = UINT16_MAX;                     // reset previous spark position
-      if (aux0 >= layer->size.x * layer->size.y) aux0 = 0;  // ignore
-      if (aux1 >= layer->size.x * layer->size.y) aux1 = 0;
+      mode_fireworks(layer, x, drops[x].pos, drops[x].col, speed, intensity);
     }
-    mode_fireworks(layer, aux0, aux1, speed, intensity);
   }
 };  // RainEffect
 
@@ -1778,7 +1793,7 @@ class RainEffect : public Node {
 class DripEffect : public Node {
  public:
   static const char* name() { return "Drip"; }
-  static uint8_t dim() { return _1D; }
+  static uint8_t dim() { return _2D; }
   static const char* tags() { return "🐙💫"; }
 
   uint8_t gravityControl = 128;
@@ -1794,19 +1809,19 @@ class DripEffect : public Node {
   }
 
   Spark (*drops)[maxNumDrops] = nullptr;  //[maxColumns][maxNumBalls];
-  uint16_t dropsSize = 0;
+  uint16_t nrOfDrops = 0;
 
   ~DripEffect() override { freeMB(drops); }
 
   void onSizeChanged(const Coord3D& prevSize) override {
-    Spark(*newAlloc)[maxNumDrops] = reallocMB<Spark[maxNumDrops]>(drops, layer->size.y);
+    Spark(*newAlloc)[maxNumDrops] = reallocMB<Spark[maxNumDrops]>(drops, layer->size.x);
 
     if (newAlloc) {
       drops = newAlloc;
-      dropsSize = layer->size.y;
-      for (int y = 0; y < layer->size.y; y++) {
+      nrOfDrops = layer->size.x;
+      for (int x = 0; x < layer->size.x; x++) {
         for (int j = 0; j < maxNumDrops; j++) {
-          drops[y][j].colIndex = init;  // Set to init so loop() will initialize properly
+          drops[x][j].colIndex = init;  // Set to init so loop() will initialize properly
         }
       }
     } else {
@@ -1821,60 +1836,60 @@ class DripEffect : public Node {
 
     float gravity = -(gravityControl / 800000.0f);
 
-    gravity *= max(1, layer->size.x - 1);
+    gravity *= max(1, layer->size.y - 1);
     int sourcedrop = 12;
 
-    for (int y = 0; y < dropsSize; y++) {
+    for (int x = 0; x < nrOfDrops; x++) {
       for (int j = 0; j < drips; j++) {
-        if (drops[y][j].colIndex == init) {                      // init
-          drops[y][j].pos = layer->size.x - 1;                   // start at end
-          drops[y][j].vel = 0;                                   // speed
-          drops[y][j].col = sourcedrop;                          // brightness
-          drops[y][j].colIndex = forming;                        // drop state
+        if (drops[x][j].colIndex == init) {                      // init
+          drops[x][j].pos = layer->size.y - 1;                   // start at end
+          drops[x][j].vel = 0;                                   // speed
+          drops[x][j].col = sourcedrop;                          // brightness
+          drops[x][j].colIndex = forming;                        // drop state
           CRGB c = ColorFromPalette(layerP.palette, random8());  // random color by MoonModules, hacked into velX of type float
-          memcpy(&drops[y][j].velX, &c, sizeof(CRGB));
+          memcpy(&drops[x][j].velX, &c, sizeof(CRGB));
         }
         CRGB dropColor;
-        memcpy(&dropColor, &drops[y][j].velX, sizeof(CRGB));  // hacked back
+        memcpy(&dropColor, &drops[x][j].velX, sizeof(CRGB));  // hacked back
 
-        layer->setRGB(Coord3D(layer->size.x - 1, y), blend(CRGB::Black, dropColor, sourcedrop));  // water source
-        if (drops[y][j].colIndex == forming) {
-          if (drops[y][j].col > 255) drops[y][j].col = 255;
-          layer->setRGB(Coord3D(drops[y][j].pos, y), blend(CRGB::Black, dropColor, drops[y][j].col));
+        layer->setRGB(Coord3D(x, 0), blend(CRGB::Black, dropColor, sourcedrop));  // water source
+        if (drops[x][j].colIndex == forming) {
+          if (drops[x][j].col > 255) drops[x][j].col = 255;
+          layer->setRGB(Coord3D(x, layer->size.y - 1 - drops[x][j].pos), blend(CRGB::Black, dropColor, drops[x][j].col));
 
-          drops[y][j].col += swell;  // swelling
+          drops[x][j].col += swell;  // swelling
 
-          if (random16() <= drops[y][j].col * swell * swell / 10) {  // random drop
-            drops[y][j].colIndex = falling;
-            drops[y][j].col = 255;
+          if (random16() <= drops[x][j].col * swell * swell / 10) {  // random drop
+            drops[x][j].colIndex = falling;
+            drops[x][j].col = 255;
           }
         }
-        if (drops[y][j].colIndex > forming) {  // falling
-          if (drops[y][j].pos > 0) {           // fall until end of layer
-            drops[y][j].pos += drops[y][j].vel;
-            if (drops[y][j].pos < 0) drops[y][j].pos = 0;
-            drops[y][j].vel += gravity;  // gravity is negative
+        if (drops[x][j].colIndex > forming) {  // falling
+          if (drops[x][j].pos > 0) {           // fall until end of layer
+            drops[x][j].pos += drops[x][j].vel;
+            if (drops[x][j].pos < 0) drops[x][j].pos = 0;
+            drops[x][j].vel += gravity;  // gravity is negative
 
-            layer->setRGB(Coord3D(drops[y][j].pos, y), dropColor);  // needed for bouncing
+            layer->setRGB(Coord3D(x, layer->size.y - 1 - drops[x][j].pos), dropColor);  // needed for bouncing
 
-            for (int i = 1; i < 7 - drops[y][j].colIndex; i++) {                                   // some minor math so we don't expand bouncing droplets
-              uint16_t pos = constrain(drops[y][j].pos + i, 0, layer->size.x - 1);                 // this is BAD, returns a pos >= layer->size.x occasionally
-              layer->setRGB(Coord3D(pos, y), blend(CRGB::Black, dropColor, drops[y][j].col / i));  // spread pixel with fade while falling
+            for (int i = 1; i < 7 - drops[x][j].colIndex; i++) {                                                       // some minor math so we don't expand bouncing droplets
+              uint16_t pos = constrain(drops[x][j].pos + i, 0, layer->size.y - 1);                                     // this is BAD, returns a pos >= layer->size.y occasionally
+              layer->setRGB(Coord3D(x, layer->size.y - 1 - pos), blend(CRGB::Black, dropColor, drops[x][j].col / i));  // spread pixel with fade while falling
             }
 
-            if (drops[y][j].colIndex > falling) {  // during bounce, some water is on the floor
-              layer->setRGB(Coord3D(0, y), blend(dropColor, CRGB::Black, drops[y][j].col));
+            if (drops[x][j].colIndex > falling) {  // during bounce, some water is on the floor
+              layer->setRGB(Coord3D(x, layer->size.y - 1), blend(dropColor, CRGB::Black, drops[x][j].col));
             }
           } else {                                 // we hit bottom, pos <= 0
-            if (drops[y][j].colIndex > falling) {  // bouncing, already hit once, so back to forming
-              drops[y][j].colIndex = init;
+            if (drops[x][j].colIndex > falling) {  // bouncing, already hit once, so back to forming
+              drops[x][j].colIndex = init;
             } else {
-              if (drops[y][j].colIndex == falling) {                // init bounce
-                drops[y][j].vel = -drops[y][j].vel * bounce / 255;  // reverse velocity with damping
-                drops[y][j].pos += drops[y][j].vel;
+              if (drops[x][j].colIndex == falling) {                // init bounce
+                drops[x][j].vel = -drops[x][j].vel * bounce / 255;  // reverse velocity with damping
+                drops[x][j].pos += drops[x][j].vel;
               }
-              drops[y][j].col = sourcedrop * 2;
-              drops[y][j].colIndex = bouncing;
+              drops[x][j].col = sourcedrop * 2;
+              drops[x][j].colIndex = bouncing;
             }
           }
         }
@@ -1920,8 +1935,8 @@ class HeartBeatEffect : public Node {
       step = millis();
     }
 
-    for (int i = 0; i < layer->size.x; i++) {
-      layer->setRGB(i, ColorFromPalette(layerP.palette, ::map(i, 0, layer->size.x, 0, 255), 255 - (bri_lower >> 8)));
+    for (int i = 0; i < layer->size.y; i++) {
+      layer->setRGB(Coord3D(0, i), ColorFromPalette(layerP.palette, ::map(i, 0, layer->size.y, 0, 255), 255 - (bri_lower >> 8)));
     }
   }
 };  // HeartBeatEffect
@@ -1946,7 +1961,7 @@ class DJLightEffect : public Node {
   uint8_t aux0;
 
   void loop() override {
-    const int mid = layer->size.x / 2;
+    const int mid = layer->size.y / 2;
 
     uint8_t secondHand = (speed < 255) ? (micros() / (256 - speed) / 500 % 16) : 0;
     if ((speed > 254) || (aux0 != secondHand)) {  // WLEDMM allow run run at full speed
@@ -1986,10 +2001,10 @@ class DJLightEffect : public Node {
       // layer->setRGB(mid, color.fadeToBlackBy(map(sharedData.bands[4], 0, 255, 255, 4)));     // 0.13.x  fade -> 180hz-260hz
       uint8_t fadeVal = ::map(sharedData.bands[3], 0, 255, 255, 4);  // 0.14.x  fade -> 216hz-301hz
       if (candyFactory) fadeVal = constrain(fadeVal, 0, 176);        // "candy factory" mode - avoid complete fade-out
-      layer->setRGB(mid, color.fadeToBlackBy(fadeVal));
+      layer->setRGB(Coord3D(0, mid), color.fadeToBlackBy(fadeVal));
 
-      for (int i = layer->size.x - 1; i > mid; i--) layer->setRGB(i, layer->getRGB(i - 1));  // move to the left
-      for (int i = 0; i < mid; i++) layer->setRGB(i, layer->getRGB(i + 1));                  // move to the right
+      for (int i = layer->size.y - 1; i > mid; i--) layer->setRGB(Coord3D(0, i), layer->getRGB(Coord3D(0, i - 1)));  // move to the left
+      for (int i = 0; i < mid; i++) layer->setRGB(Coord3D(0, i), layer->getRGB(Coord3D(0, i + 1)));                  // move to the right
 
       layer->fadeToBlackBy(fade);
     }

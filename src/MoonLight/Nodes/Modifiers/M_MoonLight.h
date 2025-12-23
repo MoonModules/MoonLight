@@ -11,7 +11,7 @@
 
 #if FT_MOONLIGHT
 
-// Takes the x dimension from the layout (1D effect) and turn it into a circle in 2D or a sphere in 3D.
+// Takes the y dimension from the layout (1D effect) and turn it into a circle in 2D or a sphere in 3D.
 class CircleModifier : public Node {
  public:
   static const char* name() { return "Circle"; }
@@ -42,8 +42,8 @@ class CircleModifier : public Node {
     // Calculate the distance from the center
     float distance = sqrt(dx * dx + dy * dy + dz * dz);
 
-    position.x = distance;
-    position.y = 0;
+    position.x = 0;
+    position.y = distance;
     position.z = 0;
   }
 };
@@ -146,8 +146,8 @@ class PinwheelModifier : public Node {
       layer->size.x = petals;
       layer->size.z = 1;
     } else {
-      layer->size.x = petals;
-      layer->size.y = 1;
+      layer->size.x = 1;
+      layer->size.y = petals;
       layer->size.z = 1;
     }
     if (petals < 1) petals = 1;                                                                                        // Ensure at least one petal
@@ -233,12 +233,12 @@ class RippleYZModifier : public Node {
   }
 
   void loop() override {
-    // 1D->2D: each X is rippled through the y-axis
+    // 1D->2D: each Y is rippled through the X-axis
     if (towardsY) {
       if (layer->effectDimension == _1D && layer->layerDimension > _1D) {
-        for (int y = layer->size.y - 1; y >= 1; y--) {
-          for (int x = 0; x < layer->size.x; x++) {
-            layer->setRGB(Coord3D(x, y, 0), layer->getRGB(Coord3D(x, y - 1, 0)));
+        for (int x = layer->size.x - 1; x >= 1; x--) {
+          for (int y = 0; y < layer->size.y; y++) {
+            layer->setRGB(Coord3D(x, y, 0), layer->getRGB(Coord3D(x - 1, y, 0)));
           }
         }
       }
@@ -402,7 +402,7 @@ class TransposeModifier : public Node {
   bool inverseX = false;
   bool inverseY = false;
   bool inverseZ = false;
-  
+
   void setup() override {
     addControl(transposeXY, "XY", "checkbox");
     addControl(transposeXZ, "XZ", "checkbox");
@@ -452,7 +452,7 @@ class TransposeModifier : public Node {
       position.y = position.z;
       position.z = temp;
     }
-    
+
     if (inverseX) position.x = layer->size.x - position.x - 1;
     if (inverseY) position.y = layer->size.y - position.y - 1;
     if (inverseZ) position.z = layer->size.z - position.z - 1;

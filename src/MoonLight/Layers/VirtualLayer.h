@@ -211,19 +211,19 @@ class VirtualLayer {
   // checks if a virtual light is mapped to a physical light (use with XY() or XYZ() to get the indexV)
   bool isMapped(int indexV) const { return indexV < mappingTableSize && (mappingTable[indexV].mapType == m_oneLight || mappingTable[indexV].mapType == m_moreLights); }
 
-  void blur1d(fract8 blur_amount) {
+  void blur1d(fract8 blur_amount, uint16_t x = 0) {
     // todo: check updated in wled-MM
     const uint8_t keep = 255 - blur_amount;
     const uint8_t seep = blur_amount >> 1;
     CRGB carryover = CRGB::Black;
-    for (uint16_t i = 0; i < size.x; ++i) {
-      CRGB cur = getRGB(i);
+    for (uint16_t i = 0; i < size.y; ++i) {
+      CRGB cur = getRGB(Coord3D(x, i));
       CRGB part = cur;
       part.nscale8(seep);
       cur.nscale8(keep);
       cur += carryover;
-      if (i) addRGB(i - 1, part);
-      setRGB(i, cur);
+      if (i) addRGB(Coord3D(x, i - 1), part);
+      setRGB(Coord3D(x, i), cur);
       carryover = part;
     }
   }
