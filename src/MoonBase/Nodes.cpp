@@ -183,7 +183,7 @@ void LiveScriptNode::setup() {
   //   addExternal( "uint8_t dmaBuffer", &layerP.ledsDriver.dmaBuffer);
 
   addExternal("void fadeToBlackBy(uint8_t)", (void*)_fadeToBlackBy);
-  addExternal("CRGB* leds", (void*)(CRGB*)layerP.lights.channels);
+  addExternal("CRGB* leds", (void*)(CRGB*)layerP.lights.channelsE);
   addExternal("void setRGB(uint16_t,CRGB)", (void*)_setRGB);
   addExternal("void setRGBPal(uint16_t,uint8_t,uint8_t)", (void*)_setRGBPal);
   addExternal("void setPan(uint16_t,uint8_t)", (void*)_setPan);
@@ -370,7 +370,7 @@ void DriverNode::loop() {
 
   if (brightness != brightnessSaved || layerP.maxPower != maxPowerSaved) {
     // Use FastLED for setMaxPowerInMilliWatts stuff
-    uint8_t correctedBrightness = calculate_max_brightness_for_power_mW((CRGB*)&layerP.lights.channels, layerP.lights.header.nrOfLights, brightness, layerP.maxPower * 1000);
+    uint8_t correctedBrightness = calculate_max_brightness_for_power_mW((CRGB*)&layerP.lights.channelsD, layerP.lights.header.nrOfLights, brightness, layerP.maxPower * 1000);
     // EXT_LOGD(ML_TAG, "setBrightness b:%d + p:%d -> cb:%d", brightness, layerP.maxPower, correctedBrightness);
     ledsDriver.setBrightness(correctedBrightness);
     brightnessSaved = brightness;

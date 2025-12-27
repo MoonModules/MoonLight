@@ -60,7 +60,7 @@ class ParallelLEDDriver : public DriverNode {
       uint8_t nrOfPins = min(layerP.nrOfLedPins, layerP.nrOfAssignedPins);
       // LUTs are accessed directly within show_parlio via extern ledsDriver
       // No brightness parameter needed
-      show_parlio(pins, layerP.lights.header.nrOfLights, layerP.lights.channels, layerP.lights.header.channelsPerLight == 4, nrOfPins, layerP.ledsPerPin[0], layerP.lights.header.offsetRed, layerP.lights.header.offsetGreen, layerP.lights.header.offsetBlue);
+      show_parlio(pins, layerP.lights.header.nrOfLights, layerP.lights.channelsD, layerP.lights.header.channelsPerLight == 4, nrOfPins, layerP.ledsPerPin[0], layerP.lights.header.offsetRed, layerP.lights.header.offsetGreen, layerP.lights.header.offsetBlue);
     #endif
     }
   #else  // ESP32_LEDSDRIVER
@@ -122,7 +122,7 @@ class ParallelLEDDriver : public DriverNode {
         uint8_t savedBrightness = ledsDriver._brightness;  //(initLed sets it to 255 and thats not what we want)
 
         EXT_LOGD(ML_TAG, "init Parallel LED Driver %d %d %d %d", layerP.lights.header.channelsPerLight, layerP.lights.header.offsetRed, layerP.lights.header.offsetGreen, layerP.lights.header.offsetBlue);
-        ledsDriver.initled(layerP.lights.channels, pins, layerP.ledsPerPin, nrOfPins, layerP.lights.header.channelsPerLight, layerP.lights.header.offsetRed, layerP.lights.header.offsetGreen, layerP.lights.header.offsetBlue);
+        ledsDriver.initled(layerP.lights.channelsD, pins, layerP.ledsPerPin, nrOfPins, layerP.lights.header.channelsPerLight, layerP.lights.header.offsetRed, layerP.lights.header.offsetGreen, layerP.lights.header.offsetBlue);
 
         ledsDriver.setBrightness(savedBrightness);  //(initLed sets it to 255 and thats not what we want)
 
@@ -171,7 +171,7 @@ class ParallelLEDDriver : public DriverNode {
       }
 
       if (numPins > 0) {
-        ledsDriver.initLeds(layerP.lights.channels, pinConfig, numPins, layerP.lights.header.channelsPerLight, layerP.lights.header.offsetRed, layerP.lights.header.offsetGreen, layerP.lights.header.offsetBlue, layerP.lights.header.offsetWhite);  // 102 is GRB
+        ledsDriver.initLeds(layerP.lights.channelsD, pinConfig, numPins, layerP.lights.header.channelsPerLight, layerP.lights.header.offsetRed, layerP.lights.header.offsetGreen, layerP.lights.header.offsetBlue, layerP.lights.header.offsetWhite);  // 102 is GRB
 
       #if ML_LIVE_MAPPING
         driver.setMapLed(&mapLed);

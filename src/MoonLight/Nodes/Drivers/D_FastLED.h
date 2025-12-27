@@ -128,7 +128,7 @@ class FastLEDDriver : public Node {
 
         uint16_t nrOfLights = layerP.ledsPerPin[pinIndex];
 
-        CRGB* leds = (CRGB*)layerP.lights.channels;
+        CRGB* leds = (CRGB*)layerP.lights.channelsD;
 
         switch (pins[pinIndex]) {
   #if CONFIG_IDF_TARGET_ESP32

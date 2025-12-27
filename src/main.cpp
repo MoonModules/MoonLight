@@ -126,24 +126,29 @@ void effectTask(void* pvParameters) {
   layerP.setup();  // setup virtual layers (no node setup here as done in addNode)
   static unsigned long last20ms = 0;
 
-  for (;;) {
+  while (true) {
     if (layerP.lights.useDoubleBuffer) {
-      // effectTask always writes to channelsBack, reads previous channelsBack
-      layerP.lights.channels = layerP.lights.channelsBack;
-      layerP.loop();  // getRGB and setRGB both use channelsBack
-
-      if (millis() - last20ms >= 20) {
-        last20ms = millis();
-        layerP.loop20ms();
-      }
-
-      // Atomic swap channels
       xSemaphoreTake(swapMutex, portMAX_DELAY);
-      uint8_t* temp = layerP.lights.channelsBack;
-      layerP.lights.channelsBack = layerP.lights.channels;
-      layerP.lights.channels = temp;
-      newFrameReady = true;
+      bool canProduce = !newFrameReady;
       xSemaphoreGive(swapMutex);
+
+      if (canProduce) {
+        // effectTask always writes to channelsBack, reads previous channelsBack
+        layerP.loop();  // getRGB and setRGB both use channelsBack
+
+        if (millis() - last20ms >= 20) {
+          last20ms = millis();
+          layerP.loop20ms();
+        }
+
+        // Atomic swap channels
+        xSemaphoreTake(swapMutex, portMAX_DELAY);
+        uint8_t* temp = layerP.lights.channelsD;
+        layerP.lights.channelsD = layerP.lights.channelsE;
+        layerP.lights.channelsE = temp;
+        newFrameReady = true;
+        xSemaphoreGive(swapMutex);
+      }
 
     } else {
       // Single buffer mode
@@ -167,10 +172,10 @@ void driverTask(void* pvParameters) {
 
   // layerP.setup() done in effectTask
 
-  for (;;) {
-    xSemaphoreTake(swapMutex, portMAX_DELAY);
+  while (true) {
     esp32sveltekit.lps++;
-
+    
+    xSemaphoreTake(swapMutex, portMAX_DELAY);
     if (layerP.lights.useDoubleBuffer) {
       if (newFrameReady) {
         newFrameReady = false;

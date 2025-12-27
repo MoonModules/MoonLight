@@ -10,11 +10,11 @@ MoonLight uses a multi-core, multi-task architecture on ESP32 to achieve smooth 
 |------|------|----------|------------|-----------|---------|
 | **WiFi/BT** | 0 (PRO_CPU) | 23 | System | Event-driven | System networking stack |
 | **lwIP TCP/IP** | 0 (PRO_CPU) | 18 | System | Event-driven | TCP/IP protocol processing |
-| **Effect Task** | 0 (PRO_CPU) | 3 | 3-4KB | ~60 fps | Calculate LED colors and effects |
+| **Effect Task** | 0 (PRO_CPU) | 10 | 3-4KB | ~60 fps | Calculate LED colors and effects |
 | **ESP32SvelteKit** | 1 (APP_CPU) | 2 | System | 10ms | HTTP/WebSocket UI framework |
 | **Driver Task** | 1 (APP_CPU) | 3 | 3-4KB | ~60 fps | Output data to LEDs via DMA/I2S/LCD/PARLIO |
 
-Effect Task (Core 0, Priority 3)
+Effect Task (Core 0, Priority 10)
 
 - **Function**: Pure computation - calculates pixel colors based on effect algorithms
 - **Operations**: Reads/writes to `channels` array, performs mathematical calculations
@@ -161,19 +161,21 @@ Synchronization Flow
 
 void effectTask(void* param) {
   while (true) {
-    if (useDoubleBuffer) {
-      // Step 1: Copy front → back (NO LOCK)
-      memcpy(channelsBack, channels, nrOfChannels);
-      
-      // Step 2: Compute effects on back buffer (NO LOCK, 5-15ms)
-      uint8_t* temp = channels;
-      channels = channelsBack;
-      computeEffects();  // Reads and writes channelsBack
-      
-      // Step 3: BRIEF LOCK - Swap pointers (10µs)
+    if (layerP.lights.useDoubleBuffer) {
+
+      layerP.loop();  // getRGB and setRGB both use channelsBack
+
+      // Atomic swap channels
       xSemaphoreTake(swapMutex, portMAX_DELAY);
-      channelsBack = channels;
-      channels = temp;
+      uint8_t* temp = layerP.lights.channelsD;
+      layerP.lights.channelsD = layerP.lights.channelsE;
+      layerP.lights.channelsE = temp;
+      newFrameReady = true;
+      xSemaphoreGive(swapMutex);
+
+    } else {
+      xSemaphoreTake(swapMutex, portMAX_DELAY);
+      layerP.loop();
       xSemaphoreGive(swapMutex);
     }
     vTaskDelay(1);
@@ -182,14 +184,20 @@ void effectTask(void* param) {
 
 void driverTask(void* param) {
   while (true) {
-    if (useDoubleBuffer) {
-      // Step 4: BRIEF LOCK - Capture pointer (10µs)
-      xSemaphoreTake(swapMutex, portMAX_DELAY);
-      uint8_t* currentFrame = channels;
+    xSemaphoreTake(swapMutex, portMAX_DELAY);
+    esp32sveltekit.lps++;
+
+    if (layerP.lights.useDoubleBuffer) {
+      if (newFrameReady) {
+        newFrameReady = false;
+        xSemaphoreGive(swapMutex);
+        layerP.loopDrivers();  // ✅ No lock needed
+      } else {
+        xSemaphoreGive(swapMutex);
+      }
+    } else {
+      layerP.loopDrivers();  // ✅ Protected by lock
       xSemaphoreGive(swapMutex);
-      
-      // Step 5: Send to LEDs (NO LOCK, 1-5ms)
-      sendViaDMA(currentFrame);
     }
     vTaskDelay(1);
   }
@@ -357,11 +365,11 @@ Double buffering is **automatically enabled** when PSRAM is detected:
 // In PhysicalLayer::setup()
 if (psramFound()) {
   lights.useDoubleBuffer = true;
-  lights.channels = allocMB<uint8_t>(maxChannels);
-  lights.channelsBack = allocMB<uint8_t>(maxChannels);
+  lights.channelsE = allocMB<uint8_t>(maxChannels);
+  lights.channelsD = allocMB<uint8_t>(maxChannels);
 } else {
   lights.useDoubleBuffer = false;
-  lights.channels = allocMB<uint8_t>(maxChannels);
+  lights.channelsE = allocMB<uint8_t>(maxChannels);
 }
 ```
 
@@ -387,7 +395,7 @@ xTaskCreateUniversal(effectTask,
                      "AppEffectTask",
                      psramFound() ? 4 * 1024 : 3 * 1024,
                      NULL,
-                     3,  // Priority
+                     10,  // Priority
                      &effectTaskHandle,
                      0   // Core 0 (PRO_CPU)
 );

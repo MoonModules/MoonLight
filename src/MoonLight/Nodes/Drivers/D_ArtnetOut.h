@@ -137,14 +137,14 @@ class ArtNetOutDriver : public DriverNode {
     // send all the leds to artnet
     for (int indexP = 0; indexP < header->nrOfLights; indexP++) {
       // fill a package
-      memcpy(&packet_buffer[packetSize + 18], &layerP.lights.channels[indexP * header->channelsPerLight], header->channelsPerLight);  // set all the channels
+      memcpy(&packet_buffer[packetSize + 18], &layerP.lights.channelsD[indexP * header->channelsPerLight], header->channelsPerLight);  // set all the channels
 
       // correct the RGB channels for color order and brightness
-      reOrderAndDimRGBW(&packet_buffer[packetSize + 18 + header->offsetRGB], &layerP.lights.channels[indexP * header->channelsPerLight + header->offsetRGB]);
+      reOrderAndDimRGBW(&packet_buffer[packetSize + 18 + header->offsetRGB], &layerP.lights.channelsD[indexP * header->channelsPerLight + header->offsetRGB]);
 
-      if (header->offsetRGB1 != UINT8_MAX) reOrderAndDimRGBW(&packet_buffer[packetSize + 18 + header->offsetRGB1], &layerP.lights.channels[indexP * header->channelsPerLight + header->offsetRGB1]);
-      if (header->offsetRGB2 != UINT8_MAX) reOrderAndDimRGBW(&packet_buffer[packetSize + 18 + header->offsetRGB2], &layerP.lights.channels[indexP * header->channelsPerLight + header->offsetRGB2]);
-      if (header->offsetRGB3 != UINT8_MAX) reOrderAndDimRGBW(&packet_buffer[packetSize + 18 + header->offsetRGB3], &layerP.lights.channels[indexP * header->channelsPerLight + header->offsetRGB3]);
+      if (header->offsetRGB1 != UINT8_MAX) reOrderAndDimRGBW(&packet_buffer[packetSize + 18 + header->offsetRGB1], &layerP.lights.channelsD[indexP * header->channelsPerLight + header->offsetRGB1]);
+      if (header->offsetRGB2 != UINT8_MAX) reOrderAndDimRGBW(&packet_buffer[packetSize + 18 + header->offsetRGB2], &layerP.lights.channelsD[indexP * header->channelsPerLight + header->offsetRGB2]);
+      if (header->offsetRGB3 != UINT8_MAX) reOrderAndDimRGBW(&packet_buffer[packetSize + 18 + header->offsetRGB3], &layerP.lights.channelsD[indexP * header->channelsPerLight + header->offsetRGB3]);
 
       if (header->lightPreset == 9 && indexP < 72)  // RGBWYP this config assumes a mix of 4 channels and 6 channels per light !!!!
         packetSize += 4;

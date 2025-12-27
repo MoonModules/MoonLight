@@ -63,7 +63,7 @@ class VirtualLayer {
   // heap-optimization: request heap optimization review
   // on boards without PSRAM, heap is only 60 KB (30KB max alloc) available, need to find out how to increase the heap
   // for virtual mapping mappingTable and mappingTableIndexes is used
-  // mappingTable is per default same size as the number of LEDs/lights (stored in lights.channels), see Physical layer, goal is also here to support 12288 LEDs on non PSRAM boards at least for non PSRAM board
+  // mappingTable is per default same size as the number of LEDs/lights (stored in lights.channelsE/D), see Physical layer, goal is also here to support 12288 LEDs on non PSRAM boards at least for non PSRAM board
   // mappingTableIndexes is used of the mapping of effects to lights.channel is not 1:1 but 1:M
 
   // they will be reused to avoid fragmentation

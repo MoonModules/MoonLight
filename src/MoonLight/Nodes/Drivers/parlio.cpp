@@ -206,7 +206,7 @@ void create_transposed_led_output_optimized(const uint8_t* input_buffer, uint16_
 
       uint32_t transposed_slices[32];
 
-      // Select LUT based on INPUT component (which color we're reading from lights.channels)
+      // Select LUT based on INPUT component (which color we're reading from lights.channelsD)
       const uint8_t* brightness_cache;
       switch (input_component) {  // ← Change 1: Use input_component
       case 0:

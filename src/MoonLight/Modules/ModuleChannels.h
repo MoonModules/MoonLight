@@ -74,15 +74,15 @@ class ModuleChannels : public Module {
       // EXT_LOGD(ML_TAG, "%s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
       // copy the file to the hidden folder...
       if (updatedItem.oldValue != "" && !updatedItem.value["action"].isNull() && updatedItem.value["action"] != "") {
-        if (!layerP.lights.channels) return; // to avoid crash during init
+        if (!layerP.lights.channelsE) return; // to avoid crash during init
         EXT_LOGD(ML_TAG, "handle %s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
         uint16_t select = updatedItem.value["select"];
         uint8_t value = updatedItem.value["action"] == "mouseenter" ? 255 : 0;
         if (view == 0) {  // physical layer
           if (group)
-            for (uint8_t i = 0; i < layerP.lights.header.channelsPerLight; i++) layerP.lights.channels[select * layerP.lights.header.channelsPerLight + i] = value;
+            for (uint8_t i = 0; i < layerP.lights.header.channelsPerLight; i++) layerP.lights.channelsE[select * layerP.lights.header.channelsPerLight + i] = value;
           else
-            layerP.lights.channels[select] = value;
+            layerP.lights.channelsE[select] = value;
         } else {
           if (group)
             for (uint8_t i = 0; i < layerP.lights.header.channelsPerLight; i++) layerP.layers[view - 1]->setLight(select, &value, i, 1);

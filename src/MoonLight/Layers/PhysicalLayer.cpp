@@ -33,10 +33,10 @@ PhysicalLayer::PhysicalLayer() {
 
 // heap-optimization: request heap optimization review
 // on boards without PSRAM, heap is only 60 KB (30KB max alloc) available, need to find out how to increase the heap
-// goal is to have lights.channels as large as possible, preferable 12288 at least for boards without PSRAM
+// goal is to have lights.channelsE/D as large as possible, preferable 12288 at least for boards without PSRAM
 
 void PhysicalLayer::setup() {
-  // allocate lights.channels
+  // allocate lights.channelsE/D
 
   if (psramFound()) {
     lights.maxChannels = MIN(ESP.getPsramSize() / 4, 61440 * 3);  // fill halve with channels, max 120 pins * 512 LEDs, still addressable with uint16_t
@@ -46,17 +46,19 @@ void PhysicalLayer::setup() {
     lights.useDoubleBuffer = false;  // Single buffer mode
   }
 
-  lights.channels = allocMB<uint8_t>(lights.maxChannels);
+  lights.channelsE = allocMB<uint8_t>(lights.maxChannels);
 
-  if (lights.channels) {
-    EXT_LOGD(ML_TAG, "allocated %d bytes in %s", lights.maxChannels, isInPSRAM(lights.channels) ? "PSRAM" : "RAM");
+  if (lights.channelsE) {
+    EXT_LOGD(ML_TAG, "allocated %d bytes in %s", lights.maxChannels, isInPSRAM(lights.channelsE) ? "PSRAM" : "RAM");
     // Allocate back buffer only if PSRAM available
     if (lights.useDoubleBuffer) {
-      lights.channelsBack = allocMB<uint8_t>(lights.maxChannels);
-      if (!lights.channelsBack) {
+      lights.channelsD = allocMB<uint8_t>(lights.maxChannels);
+      if (!lights.channelsD) {
         EXT_LOGW(ML_TAG, "Failed to allocate back buffer, disabling double buffering");
         lights.useDoubleBuffer = false;
       }
+    } else {
+      lights.channelsD = lights.channelsE;  // share the same array
     }
   } else {
     EXT_LOGE(ML_TAG, "failed to allocated %d bytes of RAM or PSRAM", lights.maxChannels);
@@ -141,7 +143,7 @@ void PhysicalLayer::onLayoutPre() {
     lights.header.isPositions = 1;  // in progress...
     delay(100);                     // wait to stop effects
     // set all channels to 0 (e.g for multichannel to not activate unused channels, e.g. fancy modes on MHs)
-    memset(lights.channels, 0, lights.maxChannels);  // set all the channels to 0
+    memset(lights.channelsE, 0, lights.maxChannels);  // set all the channels to 0, positions in channelsE
     // dealloc pins
     if (!monitorPass) {
       memset(ledsPerPin, 0xFF, sizeof(ledsPerPin));  // UINT16_MAX is 2 * 0xFF
@@ -171,7 +173,7 @@ void PhysicalLayer::addLight(Coord3D position) {
   if (pass == 1) {
     // EXT_LOGD(ML_TAG, "%d,%d,%d", position.x, position.y, position.z);
     if (lights.header.nrOfLights < lights.maxChannels / 3) {
-      packCoord3DInto3Bytes(&lights.channels[lights.header.nrOfLights * 3], position);
+      packCoord3DInto3Bytes(&lights.channelsE[lights.header.nrOfLights * 3], position);  // positions in channelsE
     }
 
     lights.header.size = lights.header.size.maximum(position);

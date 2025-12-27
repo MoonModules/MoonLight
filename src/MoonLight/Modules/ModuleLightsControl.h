@@ -41,7 +41,7 @@ class ModuleLightsControl : public Module {
 
     EXT_LOGI(ML_TAG, "Lights:%d(Header:%d) L-H:%d Node:%d PL:%d(PL-L:%d) VL:%d PM:%d C3D:%d", sizeof(Lights), sizeof(LightsHeader), sizeof(Lights) - sizeof(LightsHeader), sizeof(Node), sizeof(PhysicalLayer), sizeof(PhysicalLayer) - sizeof(Lights), sizeof(VirtualLayer), sizeof(PhysMap), sizeof(Coord3D));
 
-    EXT_LOGI(ML_TAG, "isInPSRAM: mt:%d mti:%d ch:%d", isInPSRAM(layerP.layers[0]->mappingTable), isInPSRAM(layerP.layers[0]->mappingTableIndexes.data()), isInPSRAM(layerP.lights.channels));
+    EXT_LOGI(ML_TAG, "isInPSRAM: mt:%d mti:%d ch:%d", isInPSRAM(layerP.layers[0]->mappingTable), isInPSRAM(layerP.layers[0]->mappingTableIndexes.data()), isInPSRAM(layerP.lights.channelsE));
 
     setPresetsFromFolder();  // set the right values during boot
 
@@ -356,9 +356,9 @@ class ModuleLightsControl : public Module {
       read([&](ModuleState& _state) {
         if (_socket->getConnectedClients() && _state.data["monitorOn"]) {
           _socket->emitEvent("monitor", (char*)&layerP.lights.header, 37);                                                                    // sizeof(LightsHeader)); //sizeof(LightsHeader), nearest prime nr above 32 to avoid monitor data to be seen as header
-          _socket->emitEvent("monitor", (char*)layerP.lights.channels, MIN(layerP.lights.header.nrOfLights * 3, layerP.lights.maxChannels));  //*3 is for 3 bytes position
+          _socket->emitEvent("monitor", (char*)layerP.lights.channelsE, MIN(layerP.lights.header.nrOfLights * 3, layerP.lights.maxChannels));  //*3 is for 3 bytes position
         }
-        memset(layerP.lights.channels, 0, layerP.lights.maxChannels);  // set all the channels to 0 //cleaning the positions
+        memset(layerP.lights.channelsE, 0, layerP.lights.maxChannels);  // set all the channels to 0 //cleaning the positions
         EXT_LOGD(ML_TAG, "positions sent to monitor (2 -> 3, #L:%d maxC:%d)", layerP.lights.header.nrOfLights, layerP.lights.maxChannels);
         layerP.lights.header.isPositions = 3;
       });
@@ -367,10 +367,12 @@ class ModuleLightsControl : public Module {
         
         read([&](ModuleState& _state) {
           if (_socket->getConnectedClients() && _state.data["monitorOn"]) {
+
+            //protect emit by swapMutex, see main.cpp
             extern SemaphoreHandle_t swapMutex;
             
             xSemaphoreTake(swapMutex, portMAX_DELAY);
-            _socket->emitEvent("monitor", (char*)layerP.lights.channels, MIN(layerP.lights.header.nrOfChannels, layerP.lights.maxChannels));
+            _socket->emitEvent("monitor", (char*)layerP.lights.channelsE, MIN(layerP.lights.header.nrOfChannels, layerP.lights.maxChannels));
             xSemaphoreGive(swapMutex);
           }
         });

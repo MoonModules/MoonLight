@@ -130,7 +130,7 @@ class ArtNetInDriver : public Node {
             int ledIndex = startPixel + i;
             if (ledIndex < layerP.lights.header.nrOfLights) {
               if (layer == 0) {  // Physical layer
-                memcpy(&layerP.lights.channels[ledIndex * layerP.lights.header.channelsPerLight], &dmxData[i * layerP.lights.header.channelsPerLight], layerP.lights.header.channelsPerLight);
+                memcpy(&layerP.lights.channelsE[ledIndex * layerP.lights.header.channelsPerLight], &dmxData[i * layerP.lights.header.channelsPerLight], layerP.lights.header.channelsPerLight);
               } else {  // Virtual layer
                 layerP.layers[layer - 1]->setLight(ledIndex, &dmxData[i * layerP.lights.header.channelsPerLight], 0, layerP.lights.header.channelsPerLight);
               }
@@ -160,7 +160,7 @@ class ArtNetInDriver : public Node {
         int ledIndex = startPixel + i;
         if (ledIndex < layerP.lights.header.nrOfLights) {
           if (layer == 0) {  // Physical layer
-            memcpy(&layerP.lights.channels[ledIndex * layerP.lights.header.channelsPerLight], &pixelData[i * layerP.lights.header.channelsPerLight], layerP.lights.header.channelsPerLight);
+            memcpy(&layerP.lights.channelsE[ledIndex * layerP.lights.header.channelsPerLight], &pixelData[i * layerP.lights.header.channelsPerLight], layerP.lights.header.channelsPerLight);
           } else {  // Virtual layer
             layerP.layers[layer - 1]->setLight(ledIndex, &pixelData[i * layerP.lights.header.channelsPerLight], 0, layerP.lights.header.channelsPerLight);
           }

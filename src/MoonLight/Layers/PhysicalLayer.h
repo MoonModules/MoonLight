@@ -88,8 +88,8 @@ struct LightsHeader {
 
 struct Lights {
   LightsHeader header;
-  uint8_t* channels = nullptr;      // pka leds, created in constructor
-  uint8_t* channelsBack = nullptr;  // Back buffer (being written by effects)
+  uint8_t* channelsE = nullptr;  // channels used by effects and modifiers (double buffering)
+  uint8_t* channelsD = nullptr;  // channels used by drivers (double buffering)
   size_t maxChannels = 0;
   bool useDoubleBuffer = false;  // Only when PSRAM available
 
