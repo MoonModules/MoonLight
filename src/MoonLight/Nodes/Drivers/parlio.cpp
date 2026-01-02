@@ -11,6 +11,8 @@
 
 #include "parlio.h"  //so it is compiled before Parallel LED Driver use it
 
+#include "soc/soc_caps.h"  // for SOC_PARLIO_SUPPORTED
+
 #ifdef SOC_PARLIO_SUPPORTED
 
   #include "driver/parlio_tx.h"

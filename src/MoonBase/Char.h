@@ -11,8 +11,6 @@
 
 #pragma once
 
-#include <Arduino.h>
-
 #include "ArduinoJson.h"
 
 // See https://discord.com/channels/473448917040758787/718943978636050542/1357670679196991629

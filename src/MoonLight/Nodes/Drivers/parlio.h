@@ -10,7 +10,7 @@
 **/
 
 #pragma once
-#include <Arduino.h>
+#include <stdint.h>  // uint8...
 
 #if FT_MOONLIGHT
 
