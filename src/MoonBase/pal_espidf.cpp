@@ -36,7 +36,9 @@ void delay_ms(uint32_t ms) { vTaskDelay(pdMS_TO_TICKS(ms)); }
  * LED output (ESP-IDF backend placeholder)
  * ================================================= */
 
-static uint8_t s_led_brightness = 255;
+// below functions is poc code. Need to be verified when actually used
+
+static uint8_t s_led_brightness = 255;  // brightness control will be implemented when the actual LED driver is added.
 
 void led_submit(const rgb_t* buffer, size_t led_count) {
   /* To be implemented with:
@@ -102,6 +104,8 @@ class EspIdfUdpSocket : public UdpSocket {
 
   ~EspIdfUdpSocket() override { close(); }
 
+  // below functions is poc code. Need to be verified when actually used
+
   bool open(uint16_t local_port) override {
     sock_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
     if (sock_ < 0) {
@@ -134,7 +138,17 @@ class EspIdfUdpSocket : public UdpSocket {
                 char* src_ip,       // out
                 uint16_t* src_port  // out
   ) {
-    return -1;  // to do
+    sockaddr_in src_addr{};
+    socklen_t src_len = sizeof(src_addr);
+
+    int received = recvfrom(sock_, buffer, max_len, 0, reinterpret_cast<sockaddr*>(&src_addr), &src_len);
+
+    if (received >= 0 && src_ip && src_port) {
+      inet_ntoa_r(src_addr.sin_addr, src_ip, 16);
+      *src_port = ntohs(src_addr.sin_port);
+    }
+
+    return received;
   }
 
   void close() override {
