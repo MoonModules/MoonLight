@@ -129,13 +129,15 @@ class EspIdfUdpSocket : public UdpSocket {
     sockaddr_in dest{};
     dest.sin_family = AF_INET;
     dest.sin_port = htons(port);
-    inet_aton(ip, &dest.sin_addr);
+    if (inet_aton(ip, &dest.sin_addr) == 0) {
+      return -1;  // Invalid IP address
+    }
 
     return sendto(sock_, data, len, 0, reinterpret_cast<sockaddr*>(&dest), sizeof(dest));
   }
 
   int recv_from(uint8_t* buffer, size_t max_len,
-                char* src_ip,       // out
+                char* src_ip,       // out: must be at least 16 bytes (INET_ADDRSTRLEN)
                 uint16_t* src_port  // out
   ) {
     sockaddr_in src_addr{};
