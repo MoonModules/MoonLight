@@ -11,6 +11,8 @@
 
 #if FT_MOONLIGHT
 
+#include "moonbase/pal.h"
+
 class SolidEffect : public Node {
  public:
   static const char* name() { return "Solid"; }
@@ -167,7 +169,7 @@ class RipplesEffect : public Node {
 
   void loop() override {
     float ripple_interval = 1.3f * ((255.0f - interval) / 128.0f) * sqrtf(layer->size.y);
-    float time_interval = millis() / (100.0 - speed) / ((256.0f - 128.0f) / 20.0f);
+    float time_interval = pal::millis() / (100.0 - speed) / ((256.0f - 128.0f) / 20.0f);
 
     layer->fadeToBlackBy(255);
 
@@ -177,7 +179,7 @@ class RipplesEffect : public Node {
         float d = distance(layer->size.x / 2.0f, layer->size.z / 2.0f, 0.0f, (float)pos.x, (float)pos.z, 0.0f) / 9.899495f * layer->size.y;
         pos.y = floor(layer->size.y / 2.0f * (1 + sinf(d / ripple_interval + time_interval)));  // between 0 and layer->size.y
 
-        layer->setRGB(pos, (CRGB)CHSV(millis() / 50 + random8(64), 200, 255));
+        layer->setRGB(pos, (CRGB)CHSV(pal::millis() / 50 + random8(64), 200, 255));
       }
     }
   }
@@ -233,9 +235,9 @@ class ScrollingTextEffect : public Node {
       choice = preset;
     else {
       if (strlen(textIn) == 0)
-        choice = (millis() / 1000 % 8) + 2;
+        choice = (pal::millis() / 1000 % 8) + 2;
       else
-        choice = (millis() / 1000 % 9) + 1;
+        choice = (pal::millis() / 1000 % 9) + 1;
     }
 
     IPAddress activeIP = WiFi.isConnected() ? WiFi.localIP() : ETH.localIP();
@@ -256,20 +258,20 @@ class ScrollingTextEffect : public Node {
   #define MILLIS_PER_MINUTE (60 * 1000)
   #define MILLIS_PER_HOUR (MILLIS_PER_MINUTE * 60)
   #define MILLIS_PER_DAY (MILLIS_PER_HOUR * 24)
-      if (millis() < MILLIS_PER_MINUTE)                                                         // within 1 minute
-        text.format("%ds", millis() / 1000);                                                    // seconds
-      else if (millis() < MILLIS_PER_MINUTE * 10)                                               // within 10 min
-        text.format("%dm%d", millis() / MILLIS_PER_MINUTE, (millis() / 1000) % 60);             // minutes and seconds
-      else if (millis() < MILLIS_PER_HOUR)                                                      // within 1 hour
-        text.format("%dm", millis() / MILLIS_PER_MINUTE);                                       // minutes
-      else if (millis() < MILLIS_PER_HOUR * 10)                                                 // within 10 hours
-        text.format("%dh%d", millis() / MILLIS_PER_HOUR, (millis() / MILLIS_PER_MINUTE) % 60);  // hours and minutes
-      else if (millis() < MILLIS_PER_DAY)                                                       // within 1 day
-        text.format("%dh", millis() / MILLIS_PER_HOUR);                                         // hours
-      else if (millis() < MILLIS_PER_DAY * 10)                                                  // within 10 days
-        text.format("%dd%d", millis() / (MILLIS_PER_DAY), (millis() / MILLIS_PER_HOUR) % 24);   // days and hours
+      if (pal::millis() < MILLIS_PER_MINUTE)                                                         // within 1 minute
+        text.format("%ds", pal::millis() / 1000);                                                    // seconds
+      else if (pal::millis() < MILLIS_PER_MINUTE * 10)                                               // within 10 min
+        text.format("%dm%d", pal::millis() / MILLIS_PER_MINUTE, (pal::millis() / 1000) % 60);             // minutes and seconds
+      else if (pal::millis() < MILLIS_PER_HOUR)                                                      // within 1 hour
+        text.format("%dm", pal::millis() / MILLIS_PER_MINUTE);                                       // minutes
+      else if (pal::millis() < MILLIS_PER_HOUR * 10)                                                 // within 10 hours
+        text.format("%dh%d", pal::millis() / MILLIS_PER_HOUR, (pal::millis() / MILLIS_PER_MINUTE) % 60);  // hours and minutes
+      else if (pal::millis() < MILLIS_PER_DAY)                                                       // within 1 day
+        text.format("%dh", pal::millis() / MILLIS_PER_HOUR);                                         // hours
+      else if (pal::millis() < MILLIS_PER_DAY * 10)                                                  // within 10 days
+        text.format("%dd%d", pal::millis() / (MILLIS_PER_DAY), (pal::millis() / MILLIS_PER_HOUR) % 24);   // days and hours
       else                                                                                      // more than 10 days
-        text.format("%dh", millis() / (MILLIS_PER_DAY));                                        // days
+        text.format("%dh", pal::millis() / (MILLIS_PER_DAY));                                        // days
       break;
     case 6:
       text.format("%s", sharedData.connectionStatus == 0 ? "Off" : sharedData.connectionStatus == 1 ? "AP-" : sharedData.connectionStatus == 2 ? "AP+" : sharedData.connectionStatus == 3 ? "Sta-" : sharedData.connectionStatus == 4 ? "Sta+" : "mqqt");
@@ -290,7 +292,7 @@ class ScrollingTextEffect : public Node {
     //   Serial.printf(" %d:%s", choice-1, text.c_str());
 
     // if (text && strnlen(text.c_str(), 2) > 0) {
-    layer->drawText(text.c_str(), 0, 1, font, CRGB::Red, -(millis() / 25 * speed / 256));  // instead of call
+    layer->drawText(text.c_str(), 0, 1, font, CRGB::Red, -(pal::millis() / 25 * speed / 256));  // instead of call
     // }
 
   #if USE_M5UNIFIEDDisplay
@@ -316,7 +318,7 @@ class SinusEffect : public Node {
   void loop() override {
     layer->fadeToBlackBy(70);
 
-    uint8_t hueOffset = millis() / 10;
+    uint8_t hueOffset = pal::millis() / 10;
     static uint16_t phase = 0;  // Tracks the phase of the sine wave
     uint8_t brightness = 255;
 
@@ -347,7 +349,7 @@ class SphereMoveEffect : public Node {
   void loop() override {
     layer->fadeToBlackBy(255);
 
-    float time_interval = millis() / (100 - speed) / ((256.0f - 128.0f) / 20.0f);
+    float time_interval = pal::millis() / (100 - speed) / ((256.0f - 128.0f) / 20.0f);
 
     Coord3D origin;
     origin.x = layer->size.x / 2.0 * (1.0 + sinf(time_interval));
@@ -363,7 +365,7 @@ class SphereMoveEffect : public Node {
           float d = distance(pos.x, pos.y, pos.z, origin.x, origin.y, origin.z);
 
           if (d > diameter && d < diameter + 1.0) {
-            layer->setRGB(pos, (CRGB)CHSV(millis() / 50 + random8(64), 200, 255));
+            layer->setRGB(pos, (CRGB)CHSV(pal::millis() / 50 + random8(64), 200, 255));
           }
         }
       }
@@ -409,7 +411,7 @@ class StarFieldEffect : public Node {  // Inspired by Daniel Shiffman's Coding T
   Star stars[255];
 
   void loop() override {
-    if (!speed || millis() - step < 1000 / speed) return;  // Not enough time passed
+    if (!speed || pal::millis() - step < 1000 / speed) return;  // Not enough time passed
 
     layer->fadeToBlackBy(blur);
 
@@ -441,7 +443,7 @@ class StarFieldEffect : public Node {  // Inspired by Daniel Shiffman's Coding T
       }
     }
 
-    step = millis();
+    step = pal::millis();
   }
 };  // StarFieldEffect
 
@@ -480,7 +482,7 @@ class PraxisEffect : public Node {
     // uint16_t micro_mutator = beatsin8(microMutatorFreq, microMutatorMin, microMutatorMax); // beatsin16(2, 550, 900);
 
     Coord3D pos = {0, 0, 0};
-    uint8_t huebase = millis() / 40;  // 1 + ~huespeed
+    uint8_t huebase = pal::millis() / 40;  // 1 + ~huespeed
 
     for (pos.x = 0; pos.x < layer->size.x; pos.x++) {
       for (pos.y = 0; pos.y < layer->size.y; pos.y++) {
@@ -519,7 +521,7 @@ class WaveEffect : public Node {
   void loop() override {
     layer->fadeToBlackBy(fade);  // should only fade rgb ...
 
-    CRGB color = CHSV(millis() / 50, 255, 255);
+    CRGB color = CHSV(pal::millis() / 50, 255, 255);
 
     int prevPos = layer->size.x / 2;  // somewhere in the middle
 
@@ -546,7 +548,7 @@ class WaveEffect : public Node {
         pos = (bs8 + beatsin8(bpm * 0.65, 0, 255, y * 200) + beatsin8(bpm * 1.43, 0, 255, y * 300)) * layer->size.x / 256 / 3;
         break;
       case 5:
-        pos = inoise8(millis() * bpm / 256 + y * 1000) * layer->size.x / 256;
+        pos = inoise8(pal::millis() * bpm / 256 + y * 1000) * layer->size.x / 256;
         break;  // bpm not really bpm, more speed
       default:
         pos = 0;
@@ -594,7 +596,7 @@ class FreqSawsEffect : public Node {
     memset(lastBpm, 0, sizeof(lastBpm));
     memset(phaseOffset, 0, sizeof(phaseOffset));
 
-    lastTime = millis();
+    lastTime = pal::millis();
   }
 
   uint16_t bandSpeed[NUM_GEQ_CHANNELS];
@@ -606,7 +608,7 @@ class FreqSawsEffect : public Node {
   void loop() override {
     layer->fadeToBlackBy(fade);
     // Update timing for frame-rate independent phase
-    unsigned long currentTime = millis();
+    unsigned long currentTime = pal::millis();
     uint32_t deltaMs = currentTime - lastTime;
     lastTime = currentTime;
 
@@ -937,13 +939,13 @@ class RubiksCubeEffect : public Node {
   RotateFunc rotateFuncs[6] = {&Cube::rotateFront, &Cube::rotateBack, &Cube::rotateLeft, &Cube::rotateRight, &Cube::rotateTop, &Cube::rotateBottom};
 
   void loop() override {
-    if (doInit && millis() > step || step - 3100 > millis()) {  // step - 3100 > millis() temp fix for default on boot
-      step = millis() + 1000;
+    if (doInit && pal::millis() > step || step - 3100 > pal::millis()) {  // step - 3100 > pal::millis() temp fix for default on boot
+      step = pal::millis() + 1000;
       doInit = false;
       init();
     }
 
-    if (!turnsPerSecond || millis() - step < 1000 / turnsPerSecond || millis() < step) return;
+    if (!turnsPerSecond || pal::millis() - step < 1000 / turnsPerSecond || pal::millis() < step) return;
 
     Move move = randomTurning ? createRandomMoveStruct(cubeSize, prevFaceMoved) : unpackMove(moveList[moveIndex]);
 
@@ -952,12 +954,12 @@ class RubiksCubeEffect : public Node {
     cube.drawCube(layer);
 
     if (!randomTurning && moveIndex == 0) {
-      step = millis() + 3000;
+      step = pal::millis() + 3000;
       doInit = true;
       return;
     }
     if (!randomTurning) moveIndex--;
-    step = millis();
+    step = pal::millis();
   }
 };
 
@@ -1138,7 +1140,7 @@ class ParticlesEffect : public Node {
       layer->setRGB(initPos, particles[index].color);
     }
     EXT_LOGD(ML_TAG, "Particles Set Up\n");
-    step = millis();
+    step = pal::millis();
   }
 
   Particle particles[255];
@@ -1147,7 +1149,7 @@ class ParticlesEffect : public Node {
   float gravity[3];
 
   void loop() override {
-    if (!speed || millis() - step < 1000 / speed) return;  // Not enough time passed
+    if (!speed || pal::millis() - step < 1000 / speed) return;  // Not enough time passed
 
     float gravityX, gravityY, gravityZ;  // Gravity if using gyro or random gravity
 
@@ -1165,8 +1167,8 @@ class ParticlesEffect : public Node {
   #endif
 
     if (randomGravity) {
-      if (millis() - gravUpdate > gravityChangeInterval * 1000) {
-        gravUpdate = millis();
+      if (pal::millis() - gravUpdate > gravityChangeInterval * 1000) {
+        gravUpdate = pal::millis();
         float scale = 5.0f;
         // Generate Perlin noise values and scale them
         gravity[0] = (inoise8(step, 0, 0) / 128.0f - 1.0f) * scale;
@@ -1192,7 +1194,7 @@ class ParticlesEffect : public Node {
       particles[index].updatePositionandDraw(layer, index, debugPrint);
     }
 
-    step = millis();
+    step = pal::millis();
   }
 };
 
@@ -1283,7 +1285,7 @@ class SpiralFireEffect : public Node {
     layer->fadeToBlackBy(40);
 
     Coord3D pos;
-    uint16_t time = millis() >> 4;
+    uint16_t time = pal::millis() >> 4;
 
     // Calculate center of the cone
     float centerX = layer->size.x / 2.0f;
@@ -1506,7 +1508,7 @@ class PixelMapEffect : public Node {
   void loop() override {
     layer->fill_solid(CRGB::Black);
 
-    layer->setRGB(pos, CHSV(millis() / 50 + random8(64), 255, 255));  // ColorFromPalette(layerP.palette,call, bri);
+    layer->setRGB(pos, CHSV(pal::millis() / 50 + random8(64), 255, 255));  // ColorFromPalette(layerP.palette,call, bri);
   }
 };  // PixelMap
 

@@ -13,7 +13,6 @@
 
 #if FT_MOONLIGHT
 
-  #include <Arduino.h>
   #include <FastLED.h>
 
   #include <vector>
