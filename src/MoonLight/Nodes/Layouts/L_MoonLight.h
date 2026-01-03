@@ -248,23 +248,63 @@ class TorontoBarCubesLayout : public Node {
   static const char* tags() { return "🚥"; }
 
   // Coord3D size;
-  uint8_t nrOfLightsPerCube = 71;
+  uint8_t nrOfLightsPerCube = 61;  // 5*12+1;
+  uint8_t granularity = 0;
 
   void setup() override {
     // addControl(size.x, "width", "number", 1, 128);
     // addControl(size.y, "height", "number", 1, 128);
     // addControl(size.z, "depth", "number", 1, 128);
     addControl(nrOfLightsPerCube, "nrOfLightsPerCube", "slider", 1, 128);
+    addControl(granularity, "granularity", "select");
+    addControlValue("One Cube One Light");
+    addControlValue("One Side One Light");
+    addControlValue("One LED One Light");
   }
 
+  // One Cube One Light
   void addCube(Coord3D pos) {
     for (int i = 0; i < nrOfLightsPerCube; i++) addLight(Coord3D(pos.x, pos.y, pos.z));  // all cube lights on the same position for the time being
   }
 
+  //One Side One Light
+  void addCubeSides(Coord3D pos) {
+    const uint8_t cubeLength = 3;  // each side can be mapped in a 3 * 3 * 3 grid (27 leds), 5 sides + 1 middle LED
+    Coord3D sides[] = {Coord3D(1, 1, 0), Coord3D(2, 1, 1), Coord3D(1, 1, 2), Coord3D(0, 1, 1), Coord3D(1, 2, 1)};
+
+    for (Coord3D side : sides) {                                                                                                              // 5 sides
+      for (int i = 0; i < 12; i++) addLight(Coord3D(pos.x * cubeLength + side.x, pos.y * cubeLength + side.y, pos.z * cubeLength + side.z));  // each side has 12 leds, all mapped to the same virtual pixel
+    }
+
+    // + middleLED
+    Coord3D side = {1, 1, 1};
+    addLight(Coord3D(pos.x * cubeLength + side.x, pos.y * cubeLength + side.y, pos.z * cubeLength + side.z));  // middleLED
+  }
+
+  //One LED One Light
+  void addCubePixels(Coord3D pos) {
+    const uint8_t cubeLength = 7;
+    Coord3D pixels[] = {Coord3D(0, 0), Coord3D(1, 0), Coord3D(2, 0), Coord3D(3, 0), Coord3D(3, 1), Coord3D(3, 2), Coord3D(3, 3), Coord3D(2, 3), Coord3D(1, 3), Coord3D(0, 3), Coord3D(0, 2), Coord3D(0, 1)}; // 12 pixels each
+
+    // back and front: z constant, increasing x and y
+    for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * cubeLength + pixel.x, pos.y * cubeLength + pixel.y, pos.z * cubeLength));                   // front
+    for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * cubeLength + pixel.x, pos.y * cubeLength + pixel.y, pos.z * cubeLength + cubeLength - 1));  // back
+
+    // left and right: x constant, increasing y and z
+    for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * cubeLength, pos.y * cubeLength + pixel.x, pos.z * cubeLength + pixel.y));                   // left
+    for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * cubeLength + cubeLength - 1, pos.y * cubeLength + pixel.x, pos.z * cubeLength + pixel.y));  // right
+
+    // bottom : y constant: increasing x and z
+    for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * cubeLength + pixel.x, pos.y * cubeLength + cubeLength - 1, pos.z * cubeLength + pixel.y));  // right
+
+    // + middleLED
+    Coord3D side = {3, 3, 3};
+    addLight(Coord3D(pos.x * cubeLength + side.x, pos.y * cubeLength + side.y, pos.z * cubeLength + side.z));  // middleLED
+  }
+
   bool hasOnLayout() const override { return true; }
   void onLayout() override {
-
-    //modify to whatever cube order and nr of cubes in a 3D grid space
+    // modify to whatever cube order and nr of cubes in a 3D grid space
     Coord3D cubes[] = {
         //
         Coord3D(0, 0, 0),
@@ -282,7 +322,7 @@ class TorontoBarCubesLayout : public Node {
         Coord3D(2, 2, 0),
         Coord3D(3, 2, 0)  //
         ,
-        Coord3D(0, 0, 0),
+        Coord3D(0, 0, 1),
         Coord3D(1, 0, 1),
         Coord3D(2, 0, 1),
         Coord3D(3, 0, 1)  //
@@ -298,9 +338,17 @@ class TorontoBarCubesLayout : public Node {
         Coord3D(3, 2, 1)  //
     };
 
-    for (Coord3D cube : cubes) addCube(cube);
+    for (Coord3D cube : cubes) {
+      if (granularity == 0) {  // one cube one light
+        addCube(cube);
+      } else if (granularity == 1) {  // one side one light
+        addCubeSides(cube);
+      } else if (granularity == 2) {  // one LED one light
+        addCubePixels(cube);
+      }
+    }
 
-    nextPin(); // keep this for now ...
+    nextPin();  // keep this for now ...
   }
 };
 
