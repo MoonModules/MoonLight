@@ -613,7 +613,8 @@ class ModuleIO : public Module {
     EXT_LOGD(MB_TAG, "Try to configure ethernet");
     EthernetSettingsService* ess = _sveltekit->getEthernetSettingsService();
     #ifdef CONFIG_IDF_TARGET_ESP32S3
-    ess->v_ETH_SPI_SCK = -1; // type is not unsigned and uses -1, not UINT8_MAX
+    // Note: Ethernet pin types are signed (int8_t) and use -1, not UINT8_MAX, to indicate unset state
+    ess->v_ETH_SPI_SCK = -1;
     ess->v_ETH_SPI_MISO = -1;
     ess->v_ETH_SPI_MOSI = -1;
     ess->v_ETH_PHY_CS = -1;

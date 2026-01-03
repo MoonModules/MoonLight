@@ -61,8 +61,11 @@ struct PhysMap {
   PhysMap() {
     // EXT_LOGV(ML_TAG, "Constructor");
     mapType = m_zeroLights;  // the default until indexP is added
+  #ifdef BOARD_HAS_PSRAM
     memset(rgb, 0, 3);
-    sizeof(PhysMap);
+  #else
+    rgb = 0;
+  #endif
   }
 };
 

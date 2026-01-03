@@ -241,6 +241,69 @@ class CubeLayout : public Node {
   }
 };
 
+class TorontoBarCubesLayout : public Node {
+ public:
+  static const char* name() { return "Toronto Bar Cubes"; }
+  static uint8_t dim() { return _3D; }
+  static const char* tags() { return "🚥"; }
+
+  // Coord3D size;
+  uint8_t nrOfLightsPerCube = 71;
+
+  void setup() override {
+    // addControl(size.x, "width", "number", 1, 128);
+    // addControl(size.y, "height", "number", 1, 128);
+    // addControl(size.z, "depth", "number", 1, 128);
+    addControl(nrOfLightsPerCube, "nrOfLightsPerCube", "slider", 1, 128);
+  }
+
+  void addCube(Coord3D pos) {
+    for (int i = 0; i < nrOfLightsPerCube; i++) addLight(Coord3D(pos.x, pos.y, pos.z));  // all cube lights on the same position for the time being
+  }
+
+  bool hasOnLayout() const override { return true; }
+  void onLayout() override {
+
+    //modify to whatever cube order and nr of cubes in a 3D grid space
+    Coord3D cubes[] = {
+        //
+        Coord3D(0, 0, 0),
+        Coord3D(1, 0, 0),
+        Coord3D(2, 0, 0),
+        Coord3D(3, 0, 0)  //
+        ,
+        Coord3D(0, 1, 0),
+        Coord3D(1, 1, 0),
+        Coord3D(2, 1, 0),
+        Coord3D(3, 1, 0)  //
+        ,
+        Coord3D(0, 2, 0),
+        Coord3D(1, 2, 0),
+        Coord3D(2, 2, 0),
+        Coord3D(3, 2, 0)  //
+        ,
+        Coord3D(0, 0, 0),
+        Coord3D(1, 0, 1),
+        Coord3D(2, 0, 1),
+        Coord3D(3, 0, 1)  //
+        ,
+        Coord3D(0, 1, 1),
+        Coord3D(1, 1, 1),
+        Coord3D(2, 1, 1),
+        Coord3D(3, 1, 1)  //
+        ,
+        Coord3D(0, 2, 1),
+        Coord3D(1, 2, 1),
+        Coord3D(2, 2, 1),
+        Coord3D(3, 2, 1)  //
+    };
+
+    for (Coord3D cube : cubes) addCube(cube);
+
+    nextPin(); // keep this for now ...
+  }
+};
+
 class SingleLineLayout : public Node {
  public:
   static const char* name() { return "Single Line"; }

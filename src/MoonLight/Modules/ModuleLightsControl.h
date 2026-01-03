@@ -500,6 +500,7 @@ class ModuleLightsControl : public Module {
     if (isPositions == 2) {  // send to UI
       read([&](ModuleState& _state) {
         if (_socket->getConnectedClients() && _state.data["monitorOn"]) {
+          static_assert(sizeof(LightsHeader) > 41, "LightsHeader must be minimal 41 bytes for Monitor protocol");
           _socket->emitEvent("monitor", (char*)&layerP.lights.header, 41);                                                                     // sizeof(LightsHeader)); //sizeof(LightsHeader), nearest prime nr above 40 to avoid monitor data to be seen as header
           _socket->emitEvent("monitor", (char*)layerP.lights.channelsE, MIN(layerP.lights.header.nrOfLights * 3, layerP.lights.maxChannels));  //*3 is for 3 bytes position
         }

@@ -41,7 +41,7 @@ void PhysicalLayer::setup() {
   // allocate lights.channelsE/D
 
   if (psramFound()) {
-    lights.maxChannels = MIN(ESP.getPsramSize() / 4, 128 * 64 * 16 * 3);  // fill max 2 * 25% of PSRAM with channels, supporting 120 pins * 512 LEDs, max 16 Hub75 128x64 panels
+    lights.maxChannels = MIN(ESP.getPsramSize() / 4, 128 * 64 * 16 * 3);  // fill max 2 * 25% of PSRAM with channels, supporting Virtual driver which is 120 pins * 512..1024 LEDs, max 16 Hub75 128x64 panels
     lights.useDoubleBuffer = true;                                        // Enable double buffering
   } else {
     lights.maxChannels = 4096 * 3;   // esp32-d0: max 1024->2048->4096 Leds ATM
