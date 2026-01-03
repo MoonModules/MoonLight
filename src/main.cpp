@@ -331,7 +331,7 @@ void setup() {
                        NULL,                                // parameter
                        10,                                  // priority (between 5 and 10: ASYNC_WORKER_TASK_PRIORITY and Restart/Sleep), don't set it higher then 10...
                        &effectTaskHandle,                   // task handle
-                       0                                    // core
+                       1                                    // core
   );
 
   xTaskCreateUniversal(driverTask,                          // task function
@@ -340,7 +340,7 @@ void setup() {
                        NULL,                                // parameter
                        3,                                   // priority (between 5 and 10: ASYNC_WORKER_TASK_PRIORITY and Restart/Sleep), don't set it higher then 10...
                        &driverTaskHandle,                   // task handle
-                       1                                    // core
+                       0                                    // core
   );
   #endif
 

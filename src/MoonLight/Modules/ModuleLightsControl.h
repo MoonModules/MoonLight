@@ -500,7 +500,7 @@ class ModuleLightsControl : public Module {
     if (isPositions == 2) {  // send to UI
       read([&](ModuleState& _state) {
         if (_socket->getConnectedClients() && _state.data["monitorOn"]) {
-          _socket->emitEvent("monitor", (char*)&layerP.lights.header, 37);                                                                     // sizeof(LightsHeader)); //sizeof(LightsHeader), nearest prime nr above 32 to avoid monitor data to be seen as header
+          _socket->emitEvent("monitor", (char*)&layerP.lights.header, 41);                                                                     // sizeof(LightsHeader)); //sizeof(LightsHeader), nearest prime nr above 40 to avoid monitor data to be seen as header
           _socket->emitEvent("monitor", (char*)layerP.lights.channelsE, MIN(layerP.lights.header.nrOfLights * 3, layerP.lights.maxChannels));  //*3 is for 3 bytes position
         }
         memset(layerP.lights.channelsE, 0, layerP.lights.maxChannels);  // set all the channels to 0 //cleaning the positions
