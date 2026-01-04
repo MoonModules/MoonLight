@@ -20,10 +20,6 @@
 #include <SecurityManager.h>
 #include <StatefulService.h>
 
-// heap-optimization: request heap optimization review
-// on boards without PSRAM, heap is only 60 KB (30KB max alloc) available, need to find out how to increase the heap
-// This class is used for each module, about 15 times, 112 bytes for each class (allocated in main.cpp, in global memory area) + each class allocates it's own heap
-
 template <class T>
 class EventEndpoint
 {

@@ -67,7 +67,7 @@ struct LightsHeader {
   uint8_t offsetBrightness2 = UINT8_MAX;  // 38
   // =============
   // 39 bytes total
-  uint8_t fill[3];  // padding to align struct to 41 bytes total. lightsControl will send 41 bytes (prime number)!!! so Monitor.svelte can recognize this
+  uint8_t fill[3];  // padding to align struct to headerPrimeNumber bytes total
   // support for more channels, like white, pan, tilt etc.
 
   void resetOffsets() {
@@ -145,7 +145,7 @@ class PhysicalLayer {
   // from board presets
   uint8_t ledPins[MAXLEDPINS];
   uint8_t ledPinsAssigned[MAXLEDPINS];
-  uint16_t ledsPerPin[MAXLEDPINS];
+  uint16_t ledsPerPin[MAXLEDPINS];  // uint16_t is more then enough as more then 65K leds per pin will never happen
   uint8_t nrOfLedPins = 0;
   uint8_t nrOfAssignedPins = 0;
   uint16_t maxPower = 0;

@@ -301,10 +301,6 @@ StateUpdateResult ModuleState::update(JsonObject& newData, ModuleState& state, c
   }
 }
 
-// heap-optimization: request heap optimization review
-// on boards without PSRAM, heap is only 60 KB (30KB max alloc) available, need to find out how to increase the heap
-// For each Module (about 15 in total, a number of endpoints and websocketserver is created)
-
 Module::Module(const String& moduleName, PsychicHttpServer* server, ESP32SvelteKit* sveltekit)
     : _socket(sveltekit->getSocket()),
       _fsPersistence(ModuleState::read, ModuleState::update, this, sveltekit->getFS(), String("/.config/" + moduleName + ".json").c_str(), true)  // 🌙 true: delayedWrites
@@ -344,10 +340,6 @@ void Module::begin() {
     return response.send();
   });
 }
-
-// heap-optimization: request heap optimization review
-// on boards without PSRAM, heap is only 60 KB (30KB max alloc) available, need to find out how to increase the heap
-// setupDefinition defines for each module, the json info of all fields
 
 void Module::setupDefinition(const JsonArray& controls) {  // virtual so it can be overriden in derived classes
   EXT_LOGW(MB_TAG, "not implemented");

@@ -38,7 +38,8 @@
 	};
 
 	const handleMonitor = (data: Uint8Array) => {
-		if (data.length == 41)
+		const headerPrimeNumber = 41;
+		if (data.length == headerPrimeNumber)
 			//see ModuleLightsControl.h:243
 			handleHeader(data);
 		else {

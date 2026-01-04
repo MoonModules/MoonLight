@@ -33,10 +33,6 @@ PhysicalLayer::PhysicalLayer() {
   layers[0]->layerP = this;
 }
 
-// heap-optimization: request heap optimization review
-// on boards without PSRAM, heap is only 60 KB (30KB max alloc) available, need to find out how to increase the heap
-// goal is to have lights.channelsE/D as large as possible, preferable 12288 at least for boards without PSRAM
-
 void PhysicalLayer::setup() {
   // allocate lights.channelsE/D
 

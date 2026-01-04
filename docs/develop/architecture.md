@@ -293,6 +293,7 @@ if (psramFound()) {
 } else {
   lights.useDoubleBuffer = false;
   lights.channelsE = allocMB<uint8_t>(maxChannels);
+  lights.channelsD = lights.channelsE;
 }
 ```
 
@@ -313,25 +314,23 @@ Or in code before including framework:
 Task Creation
 
 ```cpp
-// Effect Task on Core 0
-xTaskCreateUniversal(effectTask,
-                     "AppEffectTask",
-                     psramFound() ? 4 * 1024 : 3 * 1024,
-                     NULL,
-                     10,  // Priority
-                     &effectTaskHandle,
-                     0   // Core 0 (PRO_CPU)
-);
+    xTaskCreateUniversal(effectTask,                          // task function
+                       "AppEffectTask",                     // name
+                       psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
+                       NULL,                                // parameter
+                       10,                                  // priority (between 5 and 10: ASYNC_WORKER_TASK_PRIORITY and Restart/Sleep), don't set it higher then 10...
+                       &effectTaskHandle,                   // task handle
+                       1                                    // application core. high speed effect processing
+  );
 
-// Driver Task on Core 1
-xTaskCreateUniversal(driverTask,
-                     "AppDriverTask",
-                     psramFound() ? 4 * 1024 : 3 * 1024,
-                     NULL,
-                     3,  // Priority
-                     &driverTaskHandle,
-                     1   // Core 1 (APP_CPU)
-);
+  xTaskCreateUniversal(driverTask,                          // task function
+                       "AppDriverTask",                     // name
+                       psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
+                       NULL,                                // parameter
+                       3,                                   // priority (between 5 and 10: ASYNC_WORKER_TASK_PRIORITY and Restart/Sleep), don't set it higher then 10...
+                       &driverTaskHandle,                   // task handle
+                       0                                    // protocol core: ideal for Art-Net, need to check behaviour for LED drivers (pre-empt by WiFi ...), so far so good ...
+  );
 ```
 
 ## Summary

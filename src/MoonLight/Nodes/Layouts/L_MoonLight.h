@@ -252,9 +252,6 @@ class TorontoBarCubesLayout : public Node {
   uint8_t granularity = 0;
 
   void setup() override {
-    // addControl(size.x, "width", "number", 1, 128);
-    // addControl(size.y, "height", "number", 1, 128);
-    // addControl(size.z, "depth", "number", 1, 128);
     addControl(nrOfLightsPerCube, "nrOfLightsPerCube", "slider", 1, 128);
     addControl(granularity, "granularity", "select");
     addControlValue("One Cube One Light");
@@ -267,7 +264,7 @@ class TorontoBarCubesLayout : public Node {
     for (int i = 0; i < nrOfLightsPerCube; i++) addLight(Coord3D(pos.x, pos.y, pos.z));  // all cube lights on the same position for the time being
   }
 
-  //One Side One Light
+  // One Side One Light
   void addCubeSides(Coord3D pos) {
     const uint8_t cubeLength = 3;  // each side can be mapped in a 3 * 3 * 3 grid (27 leds), 5 sides + 1 middle LED
     Coord3D sides[] = {Coord3D(1, 1, 0), Coord3D(2, 1, 1), Coord3D(1, 1, 2), Coord3D(0, 1, 1), Coord3D(1, 2, 1)};
@@ -281,10 +278,10 @@ class TorontoBarCubesLayout : public Node {
     addLight(Coord3D(pos.x * cubeLength + side.x, pos.y * cubeLength + side.y, pos.z * cubeLength + side.z));  // middleLED
   }
 
-  //One LED One Light
+  // One LED One Light
   void addCubePixels(Coord3D pos) {
     const uint8_t cubeLength = 7;
-    Coord3D pixels[] = {Coord3D(0, 0), Coord3D(1, 0), Coord3D(2, 0), Coord3D(3, 0), Coord3D(3, 1), Coord3D(3, 2), Coord3D(3, 3), Coord3D(2, 3), Coord3D(1, 3), Coord3D(0, 3), Coord3D(0, 2), Coord3D(0, 1)}; // 12 pixels each
+    Coord3D pixels[] = {Coord3D(0, 0), Coord3D(1, 0), Coord3D(2, 0), Coord3D(3, 0), Coord3D(3, 1), Coord3D(3, 2), Coord3D(3, 3), Coord3D(2, 3), Coord3D(1, 3), Coord3D(0, 3), Coord3D(0, 2), Coord3D(0, 1)};  // 12 pixels each
 
     // back and front: z constant, increasing x and y
     for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * cubeLength + pixel.x, pos.y * cubeLength + pixel.y, pos.z * cubeLength));                   // front
@@ -295,7 +292,7 @@ class TorontoBarCubesLayout : public Node {
     for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * cubeLength + cubeLength - 1, pos.y * cubeLength + pixel.x, pos.z * cubeLength + pixel.y));  // right
 
     // bottom : y constant: increasing x and z
-    for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * cubeLength + pixel.x, pos.y * cubeLength + cubeLength - 1, pos.z * cubeLength + pixel.y));  // right
+    for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * cubeLength + pixel.x, pos.y * cubeLength + cubeLength - 1, pos.z * cubeLength + pixel.y));  // bottom
 
     // + middleLED
     Coord3D side = {3, 3, 3};
@@ -338,6 +335,8 @@ class TorontoBarCubesLayout : public Node {
         Coord3D(3, 2, 1)  //
     };
 
+    uint8_t cubeCounter = 0;
+
     for (Coord3D cube : cubes) {
       if (granularity == 0) {  // one cube one light
         addCube(cube);
@@ -346,9 +345,10 @@ class TorontoBarCubesLayout : public Node {
       } else if (granularity == 2) {  // one LED one light
         addCubePixels(cube);
       }
-    }
 
-    nextPin();  // keep this for now ...
+      if (cubeCounter % 10 == 0) nextPin();  // will not be used by Art-Net but in case of using a LED driver, every 10 cubes (61 LEDs each) will be on a separate pin
+      cubeCounter++;
+    }
   }
 };
 
