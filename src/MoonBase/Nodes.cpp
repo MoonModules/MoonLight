@@ -371,7 +371,7 @@ void DriverNode::loop() {
 
   if (brightness != brightnessSaved || layerP.maxPower != maxPowerSaved) {
     // Use FastLED for setMaxPowerInMilliWatts stuff
-    uint8_t correctedBrightness = calculate_max_brightness_for_power_mW((CRGB*)&layerP.lights.channelsD, layerP.lights.header.nrOfLights, brightness, layerP.maxPower * 1000);
+    uint8_t correctedBrightness = calculate_max_brightness_for_power_mW((CRGB*)&layerP.lights.channelsD, MIN(layerP.lights.header.nrOfLights, UINT16_MAX), brightness, layerP.maxPower * 1000);  // calculate_max_brightness_for_power_mW supports max 65K LEDs
     // EXT_LOGD(ML_TAG, "setBrightness b:%d + p:%d -> cb:%d", brightness, layerP.maxPower, correctedBrightness);
     ledsDriver.setBrightness(correctedBrightness);
     brightnessSaved = brightness;

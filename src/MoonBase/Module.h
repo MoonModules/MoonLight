@@ -38,10 +38,6 @@ struct UpdatedItem {
 
 typedef std::function<void(JsonObject data)> ReadHook;
 
-// heap-optimization: request heap optimization review
-// on boards without PSRAM, heap is only 60 KB (30KB max alloc) available, need to find out how to increase the heap
-// JsonDocument* doc is used to store all definitions of fields in the modules used (about 15 modules in total). doc is a JsonArray with JsonObjects, one for each module
-
 extern JsonDocument* gModulesDoc;  // shared document for all modules, to save RAM
 
 class ModuleState {
@@ -201,10 +197,6 @@ class Module : public StatefulService<ModuleState> {
   }
 
  private:
-  // heap-optimization: request heap optimization review
-  // on boards without PSRAM, heap is only 60 KB (30KB max alloc) available, need to find out how to increase the heap
-  // This module class is used for each module, about 15 times, 1144 bytes each (allocated in main.cpp, in global memory area) + each class allocates it's own heap
-
   FSPersistence<ModuleState> _fsPersistence;
   PsychicHttpServer* _server;
 };

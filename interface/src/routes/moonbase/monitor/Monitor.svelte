@@ -38,7 +38,8 @@
 	};
 
 	const handleMonitor = (data: Uint8Array) => {
-		if (data.length == 37)
+		const headerPrimeNumber = 41;
+		if (data.length == headerPrimeNumber)
 			//see ModuleLightsControl.h:243
 			handleHeader(data);
 		else {
@@ -68,26 +69,26 @@
 
 		// let isPositions:number = header[6];
 		isPositions = true; //(header[6] >> 0) & 0x3; // bits 0-1
-		// offsetRed     = (header[6] >> 2) & 0x3; // bits 2-3
-		// offsetGreen   = (header[6] >> 4) & 0x3; // bits 4-5
-		// offsetBlue    = (header[6] >> 6) & 0x3; // bits 6-7
-		// offsetWhite   = header[13];
+		// offsetRed     = (header[27] >> 2) & 0x3; // bits 2-3
+		// offsetGreen   = (header[27] >> 4) & 0x3; // bits 4-5
+		// offsetBlue    = (header[27] >> 6) & 0x3; // bits 6-7
+		// offsetWhite   = view.getUint8(28);
 
-		nrOfLights = view.getUint16(12, true);
-		channelsPerLight = view.getUint8(19);
-		offsetRGB = view.getUint8(20);
-		offsetWhite = view.getUint8(21);
-		nrOfChannels = view.getUint16(32, true);
-		lightPreset = view.getUint8(34);
+		nrOfLights = view.getUint32(12, true);
+		nrOfChannels = view.getUint32(16, true);
+		lightPreset = view.getUint8(20);
+		channelsPerLight = view.getUint8(21);
+		offsetRGB = view.getUint8(26);
+		offsetWhite = view.getUint8(28);
 
 		//rebuild scene
 		createScene(el);
 
 		// let ledFactor: number = 1;//header[1];
 		// let ledSize: number = header[23];
-		width = view.getInt32(0, true); //header[0] + 256 * header[1];
-		height = view.getInt32(4, true); //header[4] + 256 * header[5];;
-		depth = view.getInt32(8, true); //header[8] + 256 * header[9];;
+		width = view.getInt32(0, true);
+		height = view.getInt32(4, true);
+		depth = view.getInt32(8, true);
 
 		setMatrixDimensions(width, height);
 

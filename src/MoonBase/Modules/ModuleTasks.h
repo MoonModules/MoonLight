@@ -42,7 +42,7 @@ class ModuleTasks : public Module {
       // addControl(rows, "prio", "number", 0, 255, true);
       addControl(rows, "stack", "number", 0, 65538, true);
       addControl(rows, "runtime", "text", 0, 32, true);
-      addControl(rows, "core", "number", 0, 65538, true);
+      // addControl(rows, "core", "number", 0, 65538, true);
     }
   }
 
@@ -97,7 +97,7 @@ class ModuleTasks : public Module {
       }
 
       Char<32> summary;
-      summary.format("%s %d%% @ P%d", state, (uint32_t)(100ULL * ts->ulRunTimeCounter / totalRunTime), ts->uxCurrentPriority);
+      summary.format("%s %d%% @P%d @C%d", state, (uint32_t)(100ULL * ts->ulRunTimeCounter / totalRunTime), ts->uxCurrentPriority,  ts->xCoreID == tskNO_AFFINITY ? -1 : ts->xCoreID);
 
       task["name"] = ts->pcTaskName;
       task["summary"] = summary.c_str();
@@ -106,7 +106,7 @@ class ModuleTasks : public Module {
       // task["prio"] = ts->uxCurrentPriority;
       task["stack"] = ts->usStackHighWaterMark;
       task["runtime"] = ts->ulRunTimeCounter / 1000000;  // in seconds
-      task["core"] = ts->xCoreID == tskNO_AFFINITY ? -1 : ts->xCoreID;
+      // task["core"] = ts->xCoreID == tskNO_AFFINITY ? -1 : ts->xCoreID;
 
       // printf("%-12s %-10s %4u\t%5u\t%10lu\t%s\t%d\n",
       //     ts->pcTaskName,

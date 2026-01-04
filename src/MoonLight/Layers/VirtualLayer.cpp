@@ -17,7 +17,7 @@
   #include "PhysicalLayer.h"
 
 // convenience functions to call fastled functions out of the Leds namespace (there naming conflict)
-void fastled_fadeToBlackBy(CRGB* leds, uint16_t num_leds, uint8_t fadeBy) { fadeToBlackBy(leds, num_leds, fadeBy); }
+void fastled_fadeToBlackBy(CRGB* leds, uint16_t num_leds, uint8_t fadeBy) { fadeToBlackBy(leds, num_leds, fadeBy); }  // supports max UINT16_MAX leds !
 void fastled_fill_solid(struct CRGB* targetArray, int numToFill, const CRGB& color) { fill_solid(targetArray, numToFill, color); }
 void fastled_fill_rainbow(struct CRGB* targetArray, int numToFill, uint8_t initialhue, uint8_t deltahue) { fill_rainbow(targetArray, numToFill, initialhue, deltahue); }
 
@@ -34,7 +34,7 @@ VirtualLayer::~VirtualLayer() {
   nodes.clear();
 
   // clear array of array of indexes
-  for (std::vector<uint16_t>& mappingTableIndex : mappingTableIndexes) {
+  for (std::vector<nrOfLights_t>& mappingTableIndex : mappingTableIndexes) {
     mappingTableIndex.clear();
   }
   mappingTableIndexes.clear();
@@ -72,7 +72,7 @@ void VirtualLayer::loop20ms() {
   }
 }
 
-void VirtualLayer::addIndexP(PhysMap& physMap, uint16_t indexP) {
+void VirtualLayer::addIndexP(PhysMap& physMap, nrOfLights_t indexP) {
   // EXT_LOGV(ML_TAG, "i:%d t:%d s:%d i:%d", indexP, physMap.mapType, mappingTableIndexes.size(), physMap.indexes);
   switch (physMap.mapType) {
   case m_zeroLights:  // zero -> one
@@ -81,7 +81,7 @@ void VirtualLayer::addIndexP(PhysMap& physMap, uint16_t indexP) {
     physMap.mapType = m_oneLight;
     break;
   case m_oneLight: {  // one -> more
-    uint16_t oldIndexP = physMap.indexP;
+    nrOfLights_t oldIndexP = physMap.indexP;
     // change to m_moreLights and add the old indexP and new indexP to the multiple indexP array
     // EXT_LOGD(ML_TAG, "%d %d %d", indexP, mappingTableIndexes.size(), mappingTableIndexesSizeUsed);
     mappingTableIndexesSizeUsed++;  // add a new slot in the mappingTableIndexes
@@ -90,19 +90,19 @@ void VirtualLayer::addIndexP(PhysMap& physMap, uint16_t indexP) {
     else
       mappingTableIndexes[mappingTableIndexesSizeUsed - 1] = {oldIndexP, indexP};
 
-    physMap.indexes = mappingTableIndexesSizeUsed - 1;  // array position
+    physMap.indexesIndex = mappingTableIndexesSizeUsed - 1;  // array position
     physMap.mapType = m_moreLights;
     break;
   }
   case m_moreLights:  // more -> more
-    // mappingTableIndexes.reserve(physMap.indexes+1);
-    mappingTableIndexes[physMap.indexes].push_back(indexP);
+    // mappingTableIndexes.reserve(physMap.indexesIndex+1);
+    mappingTableIndexes[physMap.indexesIndex].push_back(indexP);
     // EXT_LOGV(ML_TAG, " more %d", mappingTableIndexes.size());
     break;
   }
   // EXT_LOGV(ML_TAG, "\n");
 }
-uint16_t VirtualLayer::XYZ(Coord3D& position) {
+nrOfLights_t VirtualLayer::XYZ(Coord3D& position) {
   // XYZ modifiers (this is not slowing things down as you might have expected ...)
   for (Node* node : nodes) {      // e.g. random or scrolling or rotate modifier
     if (node->on)                 //  && node->hasModifier()
@@ -113,8 +113,8 @@ uint16_t VirtualLayer::XYZ(Coord3D& position) {
 }
 
 // void VirtualLayer::setLightsToBlend() {
-//   for (const std::vector<uint16_t>& mappingTableIndex: mappingTableIndexes) {
-//       for (const uint16_t indexP: mappingTableIndex)
+//   for (const std::vector<nrOfLights_t>& mappingTableIndex: mappingTableIndexes) {
+//       for (const nrOfLights_t indexP: mappingTableIndex)
 //       layerP->lightsToBlend[indexP] = true;
 //     }
 //     for (const PhysMap &physMap: mappingTable) {
@@ -123,19 +123,23 @@ uint16_t VirtualLayer::XYZ(Coord3D& position) {
 //     }
 // }
 
-void VirtualLayer::setLight(const uint16_t indexV, const uint8_t* channels, uint8_t offset, uint8_t length) {
+void VirtualLayer::setLight(const nrOfLights_t indexV, const uint8_t* channels, uint8_t offset, uint8_t length) {
   if (indexV < mappingTableSize) {
     // EXT_LOGV(ML_TAG, "setLightColor %d %d %d %d", indexV, color.r, color.g, color.b, mappingTableSize);
     switch (mappingTable[indexV].mapType) {
     case m_zeroLights: {
       // only room for storing colors
       if (length <= 4) {  // also for RGBW, but store only RGB ... 🚧
-        mappingTable[indexV].rgb14 = ((min(channels[0] + 3, 255) >> 3) << 9) + ((min(channels[1] + 3, 255) >> 3) << 4) + (min(channels[2] + 7, 255) >> 4);
+  #ifdef BOARD_HAS_PSRAM
+        memcpy(&mappingTable[indexV].rgb, channels, 3);
+  #else
+        mappingTable[indexV].rgb = ((min(channels[0] + 3, 255) >> 3) << 9) + ((min(channels[1] + 3, 255) >> 3) << 4) + (min(channels[2] + 7, 255) >> 4);
+  #endif
       }
       break;
     }
     case m_oneLight: {
-      uint16_t indexP = mappingTable[indexV].indexP;
+      nrOfLights_t indexP = mappingTable[indexV].indexP;
       if (layerP->lights.header.lightPreset == lightPreset_RGB2040) {  // RGB2040 has empty channels: Skip the 20..39 range, so adjust group mapping
         indexP += (indexP / 20) * 20;
       }
@@ -144,15 +148,15 @@ void VirtualLayer::setLight(const uint16_t indexV, const uint8_t* channels, uint
       break;
     }
     case m_moreLights:
-      if (mappingTable[indexV].indexes < mappingTableIndexes.size())
-        for (uint16_t indexP : mappingTableIndexes[mappingTable[indexV].indexes]) {
+      if (mappingTable[indexV].indexesIndex < mappingTableIndexes.size())
+        for (nrOfLights_t indexP : mappingTableIndexes[mappingTable[indexV].indexesIndex]) {
           if (layerP->lights.header.lightPreset == lightPreset_RGB2040) {  // RGB2040 has empty channels: Skip the 20..39 range, so adjust group mapping
             indexP += (indexP / 20) * 20;
           }
           memcpy(&layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + offset], channels, length);
         }
       else
-        EXT_LOGW(ML_TAG, "dev setLightColor i:%d m:%d s:%d", indexV, mappingTable[indexV].indexes, mappingTableIndexes.size());
+        EXT_LOGW(ML_TAG, "dev setLightColor i:%d m:%d s:%d", indexV, mappingTable[indexV].indexesIndex, mappingTableIndexes.size());
       break;
     default:;
     }
@@ -162,11 +166,11 @@ void VirtualLayer::setLight(const uint16_t indexV, const uint8_t* channels, uint
 }
 
 template <typename T>
-T VirtualLayer::getLight(const uint16_t indexV, uint8_t offset) const {
+T VirtualLayer::getLight(const nrOfLights_t indexV, uint8_t offset) const {
   if (indexV < mappingTableSize) {
     switch (mappingTable[indexV].mapType) {
     case m_oneLight: {
-      uint16_t indexP = mappingTable[indexV].indexP;
+      nrOfLights_t indexP = mappingTable[indexV].indexP;
       if (layerP->lights.header.lightPreset == lightPreset_RGB2040) {  // RGB2040 has empty channels: Skip the 20..39 range, so adjust group mapping
         indexP += (indexP / 20) * 20;
       }
@@ -175,8 +179,8 @@ T VirtualLayer::getLight(const uint16_t indexV, uint8_t offset) const {
       break;
     }
     case m_moreLights: {
-      uint16_t indexP = mappingTableIndexes[mappingTable[indexV].indexes][0];  // any will do as they are all the same
-      if (layerP->lights.header.lightPreset == lightPreset_RGB2040) {          // RGB2040 has empty channels
+      nrOfLights_t indexP = mappingTableIndexes[mappingTable[indexV].indexesIndex][0];  // any will do as they are all the same
+      if (layerP->lights.header.lightPreset == lightPreset_RGB2040) {              // RGB2040 has empty channels
         indexP += (indexP / 20) * 20;
       }
       T* result = (T*)&layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + offset];
@@ -185,11 +189,16 @@ T VirtualLayer::getLight(const uint16_t indexV, uint8_t offset) const {
     }
     default:                                              // m_zeroLights:
       if (layerP->lights.header.channelsPerLight <= 4) {  // also for RGBW but retrieve only RGB ... 🚧
+  #ifdef BOARD_HAS_PSRAM
+        T* result = (T*)&mappingTable[indexV].rgb;
+        return *result;
+  #else
         T result;
-        ((uint8_t*)&result)[0] = (mappingTable[indexV].rgb14 >> 9) << 3;
-        ((uint8_t*)&result)[1] = (mappingTable[indexV].rgb14 >> 4) << 3;
-        ((uint8_t*)&result)[2] = (mappingTable[indexV].rgb14) << 4;
+        ((uint8_t*)&result)[0] = (mappingTable[indexV].rgb >> 9) << 3;
+        ((uint8_t*)&result)[1] = (mappingTable[indexV].rgb >> 4) << 3;
+        ((uint8_t*)&result)[2] = (mappingTable[indexV].rgb) << 4;
         return result;
+  #endif
       } else
         return T();  // not implemented yet
       break;
@@ -220,10 +229,10 @@ void VirtualLayer::fadeToBlackMin() {
     //     }
     //   }
     // } else
-    if (layerP->lights.header.channelsPerLight == 3 && layerP->layers.size() == 1) {  // CRGB lights
+    if (layerP->lights.header.channelsPerLight == 3 && layerP->layers.size() == 1 && layerP->lights.header.nrOfChannels / 3 < UINT16_MAX) {  // CRGB lights, FastLED max UINT16_MAX
       fastled_fadeToBlackBy((CRGB*)layerP->lights.channelsE, layerP->lights.header.nrOfChannels / sizeof(CRGB), fadeBy);
     } else {  // multichannel lights
-      for (uint16_t index = 0; index < nrOfLights; index++) {
+      for (nrOfLights_t index = 0; index < nrOfLights; index++) {
         CRGB color = getRGB(index);  // direct access to the channels
         color.nscale8(255 - fadeBy);
         setRGB(index, color);
@@ -265,7 +274,7 @@ void VirtualLayer::fill_solid(const CRGB& color) {
   if (layerP->lights.header.channelsPerLight == 3 && layerP->layers.size() == 1) {  // faster, else manual
     fastled_fill_solid((CRGB*)layerP->lights.channelsE, layerP->lights.header.nrOfChannels / sizeof(CRGB), color);
   } else {
-    for (uint16_t index = 0; index < nrOfLights; index++) setRGB(index, color);
+    for (nrOfLights_t index = 0; index < nrOfLights; index++) setRGB(index, color);
   }
 }
 
@@ -290,7 +299,7 @@ void VirtualLayer::fill_rainbow(const uint8_t initialhue, const uint8_t deltahue
     hsv.val = 255;
     hsv.sat = 240;
 
-    for (uint16_t index = 0; index < nrOfLights; index++) {
+    for (nrOfLights_t index = 0; index < nrOfLights; index++) {
       setRGB(index, hsv);
       hsv.hue += deltahue;
     }
@@ -321,7 +330,7 @@ void VirtualLayer::onLayoutPre() {
   // resetMapping
 
   mappingTableIndexesSizeUsed = 0;  // do not clear mappingTableIndexes, reuse it
-  for (std::vector<uint16_t>& mappingTableIndex : mappingTableIndexes) {
+  for (std::vector<nrOfLights_t>& mappingTableIndex : mappingTableIndexes) {
     mappingTableIndex.clear();
   }
 
@@ -347,7 +356,7 @@ void VirtualLayer::addLight(Coord3D position) {
   }
 
   if (position.x != UINT16_MAX) {  // can be set to UINT16_MAX by modifier todo: check multiple modifiers
-    uint16_t indexV = XYZUnModified(position);
+    nrOfLights_t indexV = XYZUnModified(position);
     if (indexV < mappingTableSize) {
       nrOfLights = MAX(nrOfLights, indexV + 1);
       addIndexP(mappingTable[indexV], layerP->indexP);
@@ -360,9 +369,9 @@ void VirtualLayer::addLight(Coord3D position) {
 
 void VirtualLayer::onLayoutPost() {
   // prepare logging:
-  uint16_t nrOfOneLight = 0;
-  uint16_t nrOfMoreLights = 0;
-  uint16_t nrOfZeroLights = 0;
+  nrOfLights_t nrOfOneLight = 0;
+  nrOfLights_t nrOfMoreLights = 0;
+  nrOfLights_t nrOfZeroLights = 0;
   for (size_t i = 0; i < nrOfLights; i++) {
     PhysMap& map = mappingTable[i];
     switch (map.mapType) {
@@ -375,7 +384,7 @@ void VirtualLayer::onLayoutPost() {
       break;
     case m_moreLights:
       // Char<32> str;
-      for (uint16_t indexP : mappingTableIndexes[map.indexes]) {
+      for (nrOfLights_t indexP : mappingTableIndexes[map.indexesIndex]) {
         // str += indexP;
         nrOfMoreLights++;
       }
