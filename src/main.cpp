@@ -157,7 +157,7 @@ void driverTask(void* pvParameters) {
   // 🌙
 
   // layerP.setup() done in effectTask
-  
+
   while (true) {
     bool mutexGiven = false;
     // Check and transition state under lock
@@ -322,7 +322,7 @@ void setup() {
 
   // 🌙
   xTaskCreateUniversal(effectTask,                          // task function
-                       "AppEffectTask",                     // name
+                       "AppEffects",                        // name
                        psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
                        NULL,                                // parameter
                        10,                                  // priority (between 5 and 10: ASYNC_WORKER_TASK_PRIORITY and Restart/Sleep), don't set it higher then 10...
@@ -331,7 +331,7 @@ void setup() {
   );
 
   xTaskCreateUniversal(driverTask,                          // task function
-                       "AppDriverTask",                     // name
+                       "AppDrivers",                        // name
                        psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
                        NULL,                                // parameter
                        3,                                   // priority (between 5 and 10: ASYNC_WORKER_TASK_PRIORITY and Restart/Sleep), don't set it higher then 10...

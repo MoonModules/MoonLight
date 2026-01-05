@@ -67,8 +67,7 @@ struct LightsHeader {
   uint8_t offsetBrightness2 = UINT8_MAX;  // 38
   // =============
   // 39 bytes total
-  uint8_t fill[3];  // padding to align struct to headerPrimeNumber bytes total
-  // support for more channels, like white, pan, tilt etc.
+  uint8_t fill[3];  // fill with dummies to have at least headerPrimeNumber bytes total, be aware of padding so do not change order of vars (Coord3D and uint32_t on top, uint8_t after that)
 
   void resetOffsets() {
     nrOfChannels = 0;
@@ -91,8 +90,7 @@ struct LightsHeader {
     offsetBrightness2 = UINT8_MAX;
     memset(fill, 0, sizeof(fill));  // set to 0
   }
-
-};  // fill with dummies to make size 24, be aware of padding so do not change order of vars
+};
 
 struct Lights {
   LightsHeader header;

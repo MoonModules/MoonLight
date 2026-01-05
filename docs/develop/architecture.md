@@ -14,26 +14,26 @@ MoonLight uses a multi-core, multi-task architecture on ESP32 to achieve smooth 
 | **ESP32SvelteKit** | 1 (APP_CPU) | 2 | System | 10ms | HTTP/WebSocket UI framework |
 | **Driver Task** | 1 (APP_CPU) | 3 | 3-4KB | ~60 fps | Output data to LEDs via DMA/I2S/LCD/PARLIO |
 
-Effect Task (Core 0, Priority 10)
+Effect Task (Core 1, Priority 10)
 
 - **Function**: Pure computation - calculates pixel colors based on effect algorithms
 - **Operations**: Reads/writes to `channels` array, performs mathematical calculations
 - **Tolerant to preemption**: WiFi interruptions are acceptable as this is non-timing-critical
-- **Why Core 0**: Can coexist with WiFi; uses idle CPU cycles when WiFi is not transmitting
+- Parking as currently experimenting with running on Core 1!! **Why Core 0**: Can coexist with WiFi; uses idle CPU cycles when WiFi is not transmitting
 
-Driver Task (Core 1, Priority 3)
+Driver Task (Core 0, Priority 3)
 
 - **Function**: Timing-critical hardware operations
 - **Operations**: Sends pixel data to LEDs via DMA, I2S (ESP32), LCD (S3), or PARLIO (P4)
 - **Requires uninterrupted execution**: DMA timing must be precise to avoid LED glitches
-- **Why Core 1**: Isolated from WiFi interference; WiFi on Core 0 cannot preempt this task
+- Parking as currently experimenting with running on Core 0!! **Why Core 1**: Isolated from WiFi interference; WiFi on Core 0 cannot preempt this task
 
-ESP32SvelteKit Task (Core 1, Priority 2)
+ESP32SvelteKit Task (Core 0, Priority 2)
 
 - **Function**: HTTP server and WebSocket handler for UI
 - **Operations**: Processes REST API calls, WebSocket messages, JSON serialization
 - **Runs every**: 10ms
-- **Why Core 1, Priority 2**: Lower priority than Driver Task, so LED output always takes precedence
+- **Why Core 0, Priority 2**: Lower priority than system Tasks
 
 ## Task Interaction Flow
 
@@ -315,7 +315,7 @@ Task Creation
 
 ```cpp
     xTaskCreateUniversal(effectTask,                          // task function
-                       "AppEffectTask",                     // name
+                       "AppEffects",                           // name
                        psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
                        NULL,                                // parameter
                        10,                                  // priority (between 5 and 10: ASYNC_WORKER_TASK_PRIORITY and Restart/Sleep), don't set it higher then 10...
@@ -324,7 +324,7 @@ Task Creation
   );
 
   xTaskCreateUniversal(driverTask,                          // task function
-                       "AppDriverTask",                     // name
+                       "AppDrivers",                           // name
                        psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
                        NULL,                                // parameter
                        3,                                   // priority (between 5 and 10: ASYNC_WORKER_TASK_PRIORITY and Restart/Sleep), don't set it higher then 10...

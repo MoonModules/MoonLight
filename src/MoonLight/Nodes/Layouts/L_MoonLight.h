@@ -346,9 +346,11 @@ class TorontoBarCubesLayout : public Node {
         addCubePixels(cube);
       }
 
-      if (cubeCounter % 10 == 0) nextPin();  // will not be used by Art-Net but in case of using a LED driver, every 10 cubes (61 LEDs each) will be on a separate pin
       cubeCounter++;
+      if (cubeCounter % 10 == 0) nextPin();  // will not be used by Art-Net but in case of using a LED driver, every 10 cubes (61 LEDs each) will be on a separate pin
     }
+
+    if (cubeCounter % 10 != 0) nextPin(); // add final pin
   }
 };
 

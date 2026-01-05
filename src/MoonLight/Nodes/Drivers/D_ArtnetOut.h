@@ -11,15 +11,8 @@
 
 #if FT_MOONLIGHT
 
-  #include <WiFi.h>
-
-  #define ARTNET_CHANNELS_PER_PACKET 512
-static const uint8_t ART_NET_HEADER[] = {0x41, 0x72, 0x74, 0x2d, 0x4e, 0x65, 0x74, 0x00, 0x00, 0x50, 0x00, 0x0e};
-  // 0..7: Array of 8 characters, the final character is a null termination. Value = 'A' 'r' 't' '-' 'N' 'e' 't' 0x00
-  // 8-9: OpOutput Transmitted low byte first (so 0x50, 0x00)
-  // 10: High byte of the Art-Net protocol revision number
-  // 11: Low byte of the Art-Net protocol revision number. Current value 14
   #include <AsyncUDP.h>
+  #include <WiFi.h>
 
 class ArtNetOutDriver : public DriverNode {
  public:
@@ -30,9 +23,14 @@ class ArtNetOutDriver : public DriverNode {
   Char<32> controllerIP3s = "11";
   uint16_t port = 6454;               // Art-Net default port
   uint8_t FPSLimiter = 50;            // default 50 FPS
-  uint8_t universesPerOutput = 1;     // 7 on on Art-Net LED Controller { 0,7,14,21,28,35,42,49 }
+  uint16_t universeSize = 512;        // default 512 bytes
+  uint8_t nrOfOutputsPerIP = 1;       // max 12 on Art-Net LED Controller
+  uint8_t universesPerOutput = 1;     // 8 on on Art-Net LED Controller { 0,7,14,21,28,35,42,49 }
   uint16_t channelsPerOutput = 1024;  // 3096 (1024x3) on Art-Net LED Controller {1024,1024,1024,1024,1024,1024,1024,1024};
-  uint8_t nrOfOutputs = 1;            // max 12 on Art-Net LED Controller
+
+  uint16_t usedChannelsPerUniverse;  // calculated
+  uint16_t totalUniverses;           // calculated
+  uint32_t totalChannels;            // calculated
 
   void setup() override {
     DriverNode::setup();
@@ -40,11 +38,25 @@ class ArtNetOutDriver : public DriverNode {
     addControl(controllerIP3s, "controllerIPs", "text", 0, 32);
     addControl(port, "port", "number", 0, 65538);
     addControl(FPSLimiter, "Limiter", "number", 0, 255, false, "FPS");
+    addControl(universeSize, "universeSize", "number", 0, 1000);
+    addControl(usedChannelsPerUniverse, "used", "number", 0, 1000, true);  // calculated
+    addControl(nrOfOutputsPerIP, "#Outputs per IP", "number", 0, 255);
     addControl(universesPerOutput, "universesPerOutput", "number", 0, 255);
+    addControl(totalUniverses, "total #", "number", 0, 65538, true);
     addControl(channelsPerOutput, "channelsPerOutput", "number", 0, 65538);
-    addControl(nrOfOutputs, "#Outputs per IP", "number", 0, 255);
+    addControl(totalChannels, "total #", "number", 0, 65538, true);
 
-    memcpy(packet_buffer, ART_NET_HEADER, sizeof(ART_NET_HEADER));  // copy in the Art-Net header.
+    // set Art-Net header
+    memcpy(packet_buffer,
+           (uint8_t[]){
+               'A', 'r', 't', '-', 'N', 'e', 't', 0x00, 0x00, 0x50,  // OpCode ArtDMX (little endian)
+               0x00, 0x0e,                                           // ProtVer 14
+               0x00,                                                 // Sequence (filled later)
+               0x00,                                                 // The physical input port from which DMX512 data was input
+               0x00, 0x00,                                           // Universe (filled later)
+               0x00, 0x00                                            // Length (filled later)
+           },
+           18);
   };
 
   uint8_t ipAddresses[16];  // max 16
@@ -66,13 +78,20 @@ class ArtNetOutDriver : public DriverNode {
           EXT_LOGW(MB_TAG, "Too many IPs provided (%d) or invalid IP segment: %d ", nrOfIPAddresses, ipSegment);
       });
     }
+
+    totalChannels = layerP.lights.header.nrOfLights * layerP.lights.header.channelsPerLight;
+    usedChannelsPerUniverse = universeSize / layerP.lights.header.channelsPerLight * layerP.lights.header.channelsPerLight;  // calculated
+    totalUniverses = (totalChannels + usedChannelsPerUniverse - 1) / usedChannelsPerUniverse;                                // ceiling //calculated
+    moduleNodes->requestUIUpdate = true; // update the calculated values in the UI
+
+    EXT_LOGD(ML_TAG, "c/u:%d #u:%d #c%d (%d)", usedChannelsPerUniverse, totalUniverses, totalChannels, totalUniverses * usedChannelsPerUniverse);
   };
 
   // loop variables:
   IPAddress controllerIP;  // tbd: controllerIP also configurable from fixtures and Art-Net instead of pin output
   unsigned long lastMillis = millis();
   unsigned long wait;
-  uint8_t packet_buffer[sizeof(ART_NET_HEADER) + 6 + ARTNET_CHANNELS_PER_PACKET];
+  uint8_t packet_buffer[1024];  // big enough for normal use
   uint_fast16_t packetSize;
   size_t sequenceNumber = 0;  // this needs to be shared across all outputs
   AsyncUDP artnetudp;         // AsyncUDP so we can just blast packets.
@@ -88,7 +107,7 @@ class ArtNetOutDriver : public DriverNode {
     packet_buffer[16] = packetSize >> 8;  // The length of the DMX512 data array. High Byte
     packet_buffer[17] = packetSize;       // Low Byte of above
 
-    if (!artnetudp.writeTo(packet_buffer, MIN(packetSize, 512) + 18, controllerIP, port)) {
+    if (!artnetudp.writeTo(packet_buffer, MIN(packetSize, universeSize) + 18, controllerIP, port)) {
       // Serial.print("🐛");
       return false;  // borked //no connection...
     }
@@ -128,7 +147,6 @@ class ArtNetOutDriver : public DriverNode {
 
     // only need to set once per frame
     packet_buffer[12] = (sequenceNumber++ % 254) + 1;  // The sequence number is used to ensure that ArtDmx packets are used in the correct order, ranging from 1..255
-    packet_buffer[13] = 0;                             // The physical input port from which DMX512 data was input
 
     universe = 0;
     packetSize = 0;
@@ -154,7 +172,7 @@ class ArtNetOutDriver : public DriverNode {
       channels_remaining -= header->channelsPerLight;
 
       // if packet_buffer full, or output full, send the buffer
-      if (packetSize + header->channelsPerLight > ARTNET_CHANNELS_PER_PACKET || channels_remaining < header->channelsPerLight) {  // next light will not fit in the package, so send what we got
+      if (packetSize + header->channelsPerLight > universeSize || channels_remaining < header->channelsPerLight) {  // next light will not fit in the package, so send what we got
         // Serial.printf("; %d %d %d", header->nrOfLights, packetSize+18, header->nrOfLights * header->channelsPerLight);
 
         if (!writePackage()) return;  // resets packagesize
@@ -164,7 +182,7 @@ class ArtNetOutDriver : public DriverNode {
 
           while (universe % universesPerOutput != 0) universe++;  // advance to next port
           processedOutputs++;
-          if (processedOutputs >= nrOfOutputs) {
+          if (processedOutputs >= nrOfOutputsPerIP) {
             if (actualIPIndex + 1 < nrOfIPAddresses) actualIPIndex++;  // advance to the next IP, if exists
             processedOutputs = 0;                                      // processedOutputs per IP
             universe = 0;
@@ -176,11 +194,12 @@ class ArtNetOutDriver : public DriverNode {
 
     // send the last partially filled package
     if (packetSize > 0) {
-      // Serial.printf(", %d %d %d", header->nrOfLights, packetSize+18, header->nrOfLights * header->channelsPerLight);
+      // EXT_LOGD(ML_TAG, ", %d %d %d", header->nrOfLights, packetSize + 18, header->nrOfLights * header->channelsPerLight);
 
       writePackage();  // remaining
     }
-  }
+    // EXT_LOGD(ML_TAG, "Universes send %d %d", universe, packages);
+  }  // loop
 };
 
 #endif
