@@ -205,10 +205,16 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
             if (event != "monitor")
                 ESP_LOGV(SVK_TAG, "Emitting event: %s to %s[%u], Message[%d]: %s", event.c_str(), client->remoteIP().toString().c_str(), client->socket(), len, output);
 #if FT_ENABLED(EVENT_USE_JSON)
-            client->sendMessage(HTTPD_WS_TYPE_TEXT, output, len);
+            esp_err_t result = client->sendMessage(HTTPD_WS_TYPE_TEXT, output, len);
 #else
-            client->sendMessage(HTTPD_WS_TYPE_BINARY, output, len);
+            esp_err_t result = client->sendMessage(HTTPD_WS_TYPE_BINARY, output, len);
 #endif
+            // 🌙 error check
+            if (result != ESP_OK)
+            {
+                ESP_LOGW(SVK_TAG, "Failed to send event %s to client %d: %s", event.c_str(), client->socket(), esp_err_to_name(result));
+                subscriptions.remove(subscription);
+            }
         }
     }
 

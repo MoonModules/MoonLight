@@ -93,6 +93,8 @@ class VirtualLayer {
 
   Coord3D prevSize;  // to calculate size change
 
+  bool oneToOneMapping = false;
+
   VirtualLayer();
 
   ~VirtualLayer();
@@ -219,13 +221,14 @@ class VirtualLayer {
   void fill_rainbow(const uint8_t initialhue, const uint8_t deltahue);
 
   void onLayoutPre();
+  void createMappingTableAndAddOneToOne();
   void onLayoutPost();
 
   // addLight is called by onLayout for each light in the layout
   void addLight(Coord3D position);
 
   // checks if a virtual light is mapped to a physical light (use with XY() or XYZ() to get the indexV)
-  bool isMapped(int indexV) const { return indexV < mappingTableSize && (mappingTable[indexV].mapType == m_oneLight || mappingTable[indexV].mapType == m_moreLights); }
+  bool isMapped(int indexV) const { return oneToOneMapping || indexV < mappingTableSize && (mappingTable[indexV].mapType == m_oneLight || mappingTable[indexV].mapType == m_moreLights); }
 
   void blur1d(fract8 blur_amount, uint16_t x = 0) {
     // todo: check updated in wled-MM

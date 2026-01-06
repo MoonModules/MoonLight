@@ -39,7 +39,6 @@ VirtualLayer::~VirtualLayer() {
   }
   mappingTableIndexes.clear();
   // clear mapping table
-  // mappingTable.clear();
   freeMB(mappingTable);
 }
 
@@ -127,17 +126,6 @@ void VirtualLayer::setLight(const nrOfLights_t indexV, const uint8_t* channels, 
   if (indexV < mappingTableSize) {
     // EXT_LOGV(ML_TAG, "setLightColor %d %d %d %d", indexV, color.r, color.g, color.b, mappingTableSize);
     switch (mappingTable[indexV].mapType) {
-    case m_zeroLights: {
-      // only room for storing colors
-      if (length <= 4) {  // also for RGBW, but store only RGB ... 🚧
-  #ifdef BOARD_HAS_PSRAM
-        memcpy(&mappingTable[indexV].rgb, channels, 3);
-  #else
-        mappingTable[indexV].rgb = ((min(channels[0] + 3, 255) >> 3) << 9) + ((min(channels[1] + 3, 255) >> 3) << 4) + (min(channels[2] + 7, 255) >> 4);
-  #endif
-      }
-      break;
-    }
     case m_oneLight: {
       nrOfLights_t indexP = mappingTable[indexV].indexP;
       if (layerP->lights.header.lightPreset == lightPreset_RGB2040) {  // RGB2040 has empty channels: Skip the 20..39 range, so adjust group mapping
@@ -158,10 +146,25 @@ void VirtualLayer::setLight(const nrOfLights_t indexV, const uint8_t* channels, 
       else
         EXT_LOGW(ML_TAG, "dev setLightColor i:%d m:%d s:%d", indexV, mappingTable[indexV].indexesIndex, mappingTableIndexes.size());
       break;
-    default:;
+    default:
+      // m_zeroLights:
+      // only room for storing colors
+      if (length <= 4) {  // also for RGBW, but store only RGB ... 🚧
+  #ifdef BOARD_HAS_PSRAM
+        memcpy(&mappingTable[indexV].rgb, channels, 3);
+  #else
+        mappingTable[indexV].rgb = ((min(channels[0] + 3, 255) >> 3) << 9) + ((min(channels[1] + 3, 255) >> 3) << 4) + (min(channels[2] + 7, 255) >> 4);
+  #endif
+      }
+      break;
     }
-  } else if (indexV * layerP->lights.header.channelsPerLight + offset + length < layerP->lights.maxChannels) {  // no mapping
-    memcpy(&layerP->lights.channelsE[indexV * layerP->lights.header.channelsPerLight + offset], channels, length);
+  } else {
+    uint32_t index = indexV * layerP->lights.header.channelsPerLight + offset;
+    if (index + length <= layerP->lights.maxChannels) {  // no mapping
+      memcpy(&layerP->lights.channelsE[index], channels, length);
+    } else {
+      EXT_LOGW(ML_TAG, "%d + %d >= %d", indexV, length, layerP->lights.maxChannels);
+    }
   }
 }
 
@@ -180,15 +183,16 @@ T VirtualLayer::getLight(const nrOfLights_t indexV, uint8_t offset) const {
     }
     case m_moreLights: {
       nrOfLights_t indexP = mappingTableIndexes[mappingTable[indexV].indexesIndex][0];  // any will do as they are all the same
-      if (layerP->lights.header.lightPreset == lightPreset_RGB2040) {              // RGB2040 has empty channels
+      if (layerP->lights.header.lightPreset == lightPreset_RGB2040) {                   // RGB2040 has empty channels
         indexP += (indexP / 20) * 20;
       }
       T* result = (T*)&layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + offset];
       return *result;  // return the color as CRGB
       break;
     }
-    default:                                              // m_zeroLights:
-      if (layerP->lights.header.channelsPerLight <= 4) {  // also for RGBW but retrieve only RGB ... 🚧
+    default:
+      // m_zeroLights:
+      if (sizeof(T) <= 4) {  // also for RGBW but retrieve only RGB ... 🚧
   #ifdef BOARD_HAS_PSRAM
         T* result = (T*)&mappingTable[indexV].rgb;
         return *result;
@@ -203,13 +207,15 @@ T VirtualLayer::getLight(const nrOfLights_t indexV, uint8_t offset) const {
         return T();  // not implemented yet
       break;
     }
-  } else if (indexV * layerP->lights.header.channelsPerLight + offset + 3 < layerP->lights.maxChannels) {  // no mapping
-    T* result = (T*)&layerP->lights.channelsE[indexV * layerP->lights.header.channelsPerLight + offset];
-    return *result;  // return the color as CRGB
   } else {
-    // some operations will go out of bounds e.g. VUMeter, uncomment below lines if you wanna test on a specific effect
-    // EXT_LOGV(ML_TAG, " dev gPC %d >= %d", indexV, MAX_CHANNELS);
-    return T();
+    uint32_t index = indexV * layerP->lights.header.channelsPerLight + offset;
+    if (index + sizeof(T) <= layerP->lights.maxChannels) {  // no mapping
+      return (T)layerP->lights.channelsE[index];
+    } else {
+      // some operations will go out of bounds e.g. VUMeter, uncomment below lines if you wanna test on a specific effect
+      EXT_LOGW(ML_TAG, "%d + %d >= %d", indexV, sizeof(T), layerP->lights.maxChannels);
+      return T();
+    }
   }
 }
 
@@ -306,6 +312,27 @@ void VirtualLayer::fill_rainbow(const uint8_t initialhue, const uint8_t deltahue
   }
 }
 
+void VirtualLayer::createMappingTableAndAddOneToOne() {
+  if (mappingTableSize != size.x * size.y * size.z) {
+    PhysMap* newTable = reallocMB<PhysMap>(mappingTable, size.x * size.y * size.z);
+    if (newTable) {
+      mappingTable = newTable;
+      EXT_LOGD(ML_TAG, "realloc mappingTable %d -> %dx%dx%d", mappingTableSize, size.x, size.y, size.z);
+      mappingTableSize = size.x * size.y * size.z;
+    } else {
+      EXT_LOGW(ML_TAG, "realloc mappingTable failed keeping oldSize %d", mappingTableSize);
+    }
+  }
+
+  if (mappingTable && mappingTableSize) memset(mappingTable, 0, mappingTableSize * sizeof(PhysMap));  // on layout, set mappingTable to default PhysMap
+
+  EXT_LOGD(ML_TAG, "Filling mappingTable < %d", layerP->indexP);
+
+  for (nrOfLights_t indexV = 0; indexV < MIN(layerP->indexP, mappingTableSize); indexV++) {
+    addIndexP(mappingTable[indexV], indexV);
+  }
+}
+
 void VirtualLayer::onLayoutPre() {
   // resetMapping
 
@@ -334,18 +361,7 @@ void VirtualLayer::onLayoutPre() {
     mappingTableIndex.clear();
   }
 
-  if (mappingTableSize != size.x * size.y * size.z) {
-    PhysMap* newTable = reallocMB<PhysMap>(mappingTable, size.x * size.y * size.z);
-    if (newTable) {
-      mappingTable = newTable;
-      EXT_LOGD(ML_TAG, "realloc mappingTable %d -> %dx%dx%d", mappingTableSize, size.x, size.y, size.z);
-      mappingTableSize = size.x * size.y * size.z;
-    } else {
-      EXT_LOGW(ML_TAG, "realloc mappingTable failed keeping oldSize %d", mappingTableSize);
-    }
-  }
-
-  if (mappingTable && mappingTableSize) memset(mappingTable, 0, mappingTableSize * sizeof(PhysMap));  // on layout, set mappingTable to default PhysMap
+  oneToOneMapping = true;  // addLight will set it to false as soon as irregularity is discovered
 }
 
 void VirtualLayer::addLight(Coord3D position) {
@@ -357,13 +373,28 @@ void VirtualLayer::addLight(Coord3D position) {
 
   if (position.x != UINT16_MAX) {  // can be set to UINT16_MAX by modifier todo: check multiple modifiers
     nrOfLights_t indexV = XYZUnModified(position);
-    if (indexV < mappingTableSize) {
-      nrOfLights = MAX(nrOfLights, indexV + 1);
-      addIndexP(mappingTable[indexV], layerP->indexP);
+
+    if (oneToOneMapping && layerP->indexP != indexV) {
+      oneToOneMapping = false;
+      createMappingTableAndAddOneToOne();
+    }
+
+    nrOfLights = MAX(nrOfLights, indexV + 1);
+
+    if (!oneToOneMapping) {
+      if (indexV < mappingTableSize) {
+        addIndexP(mappingTable[indexV], layerP->indexP);
+      }
     }
   } else {
+    if (oneToOneMapping) {
+      // we found an irregularity, create the mapping table
+      oneToOneMapping = false;
+      createMappingTableAndAddOneToOne();
+    }
     // set unmapped lights to 0, e.g. needed by checkerboard modifier
     memset(&layerP->lights.channelsE[layerP->indexP * layerP->lights.header.channelsPerLight], 0, layerP->lights.header.channelsPerLight);
+    if (psramFound()) memset(&layerP->lights.channelsD[layerP->indexP * layerP->lights.header.channelsPerLight], 0, layerP->lights.header.channelsPerLight);
   }
 }
 
@@ -372,27 +403,43 @@ void VirtualLayer::onLayoutPost() {
   nrOfLights_t nrOfOneLight = 0;
   nrOfLights_t nrOfMoreLights = 0;
   nrOfLights_t nrOfZeroLights = 0;
-  for (size_t i = 0; i < nrOfLights; i++) {
-    PhysMap& map = mappingTable[i];
-    switch (map.mapType) {
-    case m_zeroLights:
-      nrOfZeroLights++;
-      break;
-    case m_oneLight:
-      // EXT_LOGV(ML_TAG,"%d mapping =1: #ledsP : %d", i, map.indexP);
-      nrOfOneLight++;
-      break;
-    case m_moreLights:
-      // Char<32> str;
-      for (nrOfLights_t indexP : mappingTableIndexes[map.indexesIndex]) {
-        // str += indexP;
-        nrOfMoreLights++;
-      }
-      // EXT_LOGV(ML_TAG, "%d mapping >1: #ledsP : %s", i, str.c_str());
-      break;
+  if (oneToOneMapping) {
+    nrOfOneLight = nrOfLights;
+    // free the mappingTables instead of preserve to allow mapping free memory
+    if (mappingTableIndexes.size()) {
+      EXT_LOGI(ML_TAG, "Clear mappingTableIndexes size %d / %d", mappingTableIndexes.size(), mappingTableIndexesSizeUsed);
+      mappingTableIndexes.clear();
+      mappingTableIndexesSizeUsed = 0;
     }
-    // else
-    //   EXT_LOGV(ML_TAG, "%d no mapping\n", x);
+    if (mappingTable) {
+      EXT_LOGI(ML_TAG, "Clear mappingTable size %d", mappingTableSize);
+      freeMB(mappingTable);
+      mappingTableSize = 0;
+    }
+  } else {
+    EXT_LOGI(ML_TAG, "irregular mapping 1 !");
+    for (size_t indexV = 0; indexV < nrOfLights; indexV++) {
+      PhysMap& map = mappingTable[indexV];
+      switch (map.mapType) {
+      case m_zeroLights:
+        nrOfZeroLights++;
+        break;
+      case m_oneLight:
+        // EXT_LOGV(ML_TAG,"%d mapping =1: #ledsP : %d", i, map.indexP);
+        nrOfOneLight++;
+        break;
+      case m_moreLights:
+        // Char<32> str;
+        for (nrOfLights_t indexP : mappingTableIndexes[map.indexesIndex]) {
+          // str += indexP;
+          nrOfMoreLights++;
+        }
+        // EXT_LOGV(ML_TAG, "%d mapping >1: #ledsP : %s", i, str.c_str());
+        break;
+      }
+      // else
+      //   EXT_LOGV(ML_TAG, "%d no mapping\n", x);
+    }
   }
 
   EXT_LOGD(MB_TAG, "V:%d x %d x %d = v:%d = 1:0:%d + 1:1:%d + mti:%d (1:m:%d)", size.x, size.y, size.z, nrOfLights, nrOfZeroLights, nrOfOneLight, mappingTableIndexesSizeUsed, nrOfMoreLights);

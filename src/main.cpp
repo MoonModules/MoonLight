@@ -325,7 +325,7 @@ void setup() {
                        "AppEffects",                        // name
                        psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
                        NULL,                                // parameter
-                       10,                                  // priority (between 5 and 10: ASYNC_WORKER_TASK_PRIORITY and Restart/Sleep), don't set it higher then 10...
+                       5,                                   // priority (between 5 and 10: ASYNC_WORKER_TASK_PRIORITY and Restart/Sleep), don't set it higher then 10...
                        &effectTaskHandle,                   // task handle
                        1                                    // application core. high speed effect processing
   );

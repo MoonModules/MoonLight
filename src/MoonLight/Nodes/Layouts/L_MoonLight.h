@@ -248,11 +248,11 @@ class TorontoBarCubesLayout : public Node {
   static const char* tags() { return "🚥"; }
 
   // Coord3D size;
-  uint8_t nrOfLightsPerCube = 61;  // 5*12+1;
+  uint8_t nrOfLightsPerCube = 61;  // 5*12+1; mode 0 only
   uint8_t granularity = 0;
 
   void setup() override {
-    addControl(nrOfLightsPerCube, "nrOfLightsPerCube", "slider", 1, 128);
+    addControl(nrOfLightsPerCube, "nrOfLightsPerCube", "slider", 1, 128);  // mode 0 only
     addControl(granularity, "granularity", "select");
     addControlValue("One Cube One Light");
     addControlValue("One Side One Light");
@@ -350,7 +350,7 @@ class TorontoBarCubesLayout : public Node {
       if (cubeCounter % 10 == 0) nextPin();  // will not be used by Art-Net but in case of using a LED driver, every 10 cubes (61 LEDs each) will be on a separate pin
     }
 
-    if (cubeCounter % 10 != 0) nextPin(); // add final pin
+    if (cubeCounter % 10 != 0) nextPin();  // add final pin
   }
 };
 

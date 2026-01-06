@@ -132,7 +132,7 @@ class PinwheelModifier : public Node {
 
   void setup() override {
     addControl(petals, "petals", "slider");
-    addControl(swirlVal, "swirlVal", "slider");
+    addControl(swirlVal, "swirl", "slider");
     addControl(reverse, "reverse", "checkbox");
     addControl(symmetry, "symmetry", "slider");
     addControl(zTwist, "zTwist", "slider");

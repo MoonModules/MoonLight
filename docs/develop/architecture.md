@@ -10,11 +10,11 @@ MoonLight uses a multi-core, multi-task architecture on ESP32 to achieve smooth 
 |------|------|----------|------------|-----------|---------|
 | **WiFi/BT** | 0 (PRO_CPU) | 23 | System | Event-driven | System networking stack |
 | **lwIP TCP/IP** | 0 (PRO_CPU) | 18 | System | Event-driven | TCP/IP protocol processing |
-| **Effect Task** | 0 (PRO_CPU) | 10 | 3-4KB | ~60 fps | Calculate LED colors and effects |
+| **Effect Task** | 0 (PRO_CPU) | 5 | 3-4KB | ~60 fps | Calculate LED colors and effects |
 | **ESP32SvelteKit** | 1 (APP_CPU) | 2 | System | 10ms | HTTP/WebSocket UI framework |
 | **Driver Task** | 1 (APP_CPU) | 3 | 3-4KB | ~60 fps | Output data to LEDs via DMA/I2S/LCD/PARLIO |
 
-Effect Task (Core 1, Priority 10)
+Effect Task (Core 1, Priority 5)
 
 - **Function**: Pure computation - calculates pixel colors based on effect algorithms
 - **Operations**: Reads/writes to `channels` array, performs mathematical calculations
@@ -318,7 +318,7 @@ Task Creation
                        "AppEffects",                           // name
                        psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
                        NULL,                                // parameter
-                       10,                                  // priority (between 5 and 10: ASYNC_WORKER_TASK_PRIORITY and Restart/Sleep), don't set it higher then 10...
+                       5,                                  // priority (between 5 and 10: ASYNC_WORKER_TASK_PRIORITY and Restart/Sleep), don't set it higher then 10...
                        &effectTaskHandle,                   // task handle
                        1                                    // application core. high speed effect processing
   );

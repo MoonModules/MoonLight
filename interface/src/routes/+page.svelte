@@ -19,44 +19,30 @@
 				<b>Effect controller for direct and networked LEDs and lights. By MoonModules.</b>
 			</p>
 			<span>
-				1 Setup <a
-					class="btn btn-primary"
-					href="/wifi/sta"
-					onclick={() => notifications.success('You did it!', 1000)}>WiFi</a
-				>
+				1 Setup <a class="btn btn-primary" href="/wifi/sta">WiFi</a>
 			</span>
 			<span>
 				2 Select a board preset in
-				<a
-					class="btn btn-primary"
-					href="/moonbase/module?group=moonlight&module=inputoutput"
-					onclick={() => notifications.success('You did it!', 1000)}>IO</a
-				>
+				<a class="btn btn-primary" href="/moonbase/module?group=moonlight&module=inputoutput">IO</a>
 			</span>
 			<span>
 				3 Add Layout & Driver
-				<a
-					class="btn btn-primary"
-					href="/moonbase/module?group=moonlight&module=drivers"
-					onclick={() => notifications.success('You did it!', 1000)}>Drivers</a
+				<a class="btn btn-primary" href="/moonbase/module?group=moonlight&module=drivers">Drivers</a
 				>
 			</span>
 			<span>
 				4 Add
-				<a
-					class="btn btn-primary"
-					href="/moonbase/module?group=moonlight&module=effects"
-					onclick={() => notifications.success('You did it!', 1000)}>Effects</a
+				<a class="btn btn-primary" href="/moonbase/module?group=moonlight&module=effects">Effects</a
 				>
 			</span>
 			<span>
-			🛟 
-			<a
-				href="https://moonmodules.github.io/MoonLight"
-				class="link"
-				target="_blank"
-				rel="noopener noreferrer">Help</a
-			>
+				🛟
+				<a
+					href="https://moonmodules.github.io/MoonLight"
+					class="link"
+					target="_blank"
+					rel="noopener noreferrer">Help</a
+				>
 			</span>
 			<span>
 				👀
@@ -70,7 +56,7 @@
 					href="https://www.youtube.com/@MoonModulesLighting"
 					class="link"
 					target="_blank"
-					rel="noopener noreferrer">Youtube</a
+					rel="noopener noreferrer">YouTube</a
 				>
 				<a
 					href="https://reddit.com/r/MoonModules"

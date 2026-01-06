@@ -28,9 +28,9 @@ class ArtNetOutDriver : public DriverNode {
   uint8_t universesPerOutput = 1;     // 8 on on Art-Net LED Controller { 0,7,14,21,28,35,42,49 }
   uint16_t channelsPerOutput = 1024;  // 3096 (1024x3) on Art-Net LED Controller {1024,1024,1024,1024,1024,1024,1024,1024};
 
-  uint16_t usedChannelsPerUniverse;  // calculated
-  uint16_t totalUniverses;           // calculated
-  uint32_t totalChannels;            // calculated
+  uint16_t usedChannelsPerUniverse = 0;  // calculated
+  uint16_t totalUniverses = 0;           // calculated
+  uint32_t totalChannels = 0;            // calculated
 
   void setup() override {
     DriverNode::setup();
@@ -39,12 +39,12 @@ class ArtNetOutDriver : public DriverNode {
     addControl(port, "port", "number", 0, 65538);
     addControl(FPSLimiter, "Limiter", "number", 0, 255, false, "FPS");
     addControl(universeSize, "universeSize", "number", 0, 1000);
-    addControl(usedChannelsPerUniverse, "used", "number", 0, 1000, true);  // calculated
+    addControl(usedChannelsPerUniverse, "usedChannels", "number", 0, 1000, true);  // calculated
     addControl(nrOfOutputsPerIP, "#Outputs per IP", "number", 0, 255);
     addControl(universesPerOutput, "universesPerOutput", "number", 0, 255);
-    addControl(totalUniverses, "total #", "number", 0, 65538, true);
+    addControl(totalUniverses, "totalUniverses", "number", 0, 65538, true);
     addControl(channelsPerOutput, "channelsPerOutput", "number", 0, 65538);
-    addControl(totalChannels, "total #", "number", 0, 65538, true);
+    addControl(totalChannels, "totalChannels", "number", 0, 390000, true);
 
     // set Art-Net header
     memcpy(packet_buffer,
@@ -82,7 +82,13 @@ class ArtNetOutDriver : public DriverNode {
     totalChannels = layerP.lights.header.nrOfLights * layerP.lights.header.channelsPerLight;
     usedChannelsPerUniverse = universeSize / layerP.lights.header.channelsPerLight * layerP.lights.header.channelsPerLight;  // calculated
     totalUniverses = (totalChannels + usedChannelsPerUniverse - 1) / usedChannelsPerUniverse;                                // ceiling //calculated
-    moduleNodes->requestUIUpdate = true; // update the calculated values in the UI
+
+    // Update the JSON control values so UI sees the changes
+    updateControl("usedChannels", usedChannelsPerUniverse);
+    updateControl("totalUniverses", totalUniverses);  // See note below about naming!
+    updateControl("totalChannels", totalChannels);
+
+    moduleNodes->requestUIUpdate = true;  // update the calculated values in the UI
 
     EXT_LOGD(ML_TAG, "c/u:%d #u:%d #c%d (%d)", usedChannelsPerUniverse, totalUniverses, totalChannels, totalUniverses * usedChannelsPerUniverse);
   };
@@ -151,6 +157,7 @@ class ArtNetOutDriver : public DriverNode {
     universe = 0;
     packetSize = 0;
     channels_remaining = channelsPerOutput;
+    processedOutputs = 0;
 
     // send all the leds to artnet
     for (int indexP = 0; indexP < header->nrOfLights; indexP++) {
