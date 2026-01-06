@@ -10,9 +10,9 @@ MoonLight uses a multi-core, multi-task architecture on ESP32 to achieve smooth 
 |------|------|----------|------------|-----------|---------|
 | **WiFi/BT** | 0 (PRO_CPU) | 23 | System | Event-driven | System networking stack |
 | **lwIP TCP/IP** | 0 (PRO_CPU) | 18 | System | Event-driven | TCP/IP protocol processing |
-| **Effect Task** | 0 (PRO_CPU) | 5 | 3-4KB | ~60 fps | Calculate LED colors and effects |
-| **ESP32SvelteKit** | 1 (APP_CPU) | 2 | System | 10ms | HTTP/WebSocket UI framework |
-| **Driver Task** | 1 (APP_CPU) | 3 | 3-4KB | ~60 fps | Output data to LEDs via DMA/I2S/LCD/PARLIO |
+| **ESP32SvelteKit** | 0 (PRO_CPU) | 2 | System | 10ms | HTTP/WebSocket UI framework |
+| **Driver Task** | 0 (PRO_CPU) | 3 | 3-4KB | ~60 fps | Output data to LEDs via DMA/I2S/LCD/PARLIO |
+| **Effect Task** | 1 (APP_CPU) | 5 | 3-4KB | ~60 fps | Calculate LED colors and effects |
 
 Effect Task (Core 1, Priority 5)
 
@@ -329,7 +329,7 @@ Task Creation
                        NULL,                                // parameter
                        3,                                   // priority (between 5 and 10: ASYNC_WORKER_TASK_PRIORITY and Restart/Sleep), don't set it higher then 10...
                        &driverTaskHandle,                   // task handle
-                       0                                    // protocol core: ideal for Art-Net, need to check behaviour for LED drivers (pre-empt by WiFi ...), so far so good ...
+                       0                                    // protocol core: ideal for Art-Net, no issues encountered yet for LED drivers (pre-empt by WiFi ...)
   );
 ```
 

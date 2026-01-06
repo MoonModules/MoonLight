@@ -252,11 +252,11 @@ class TorontoBarCubesLayout : public Node {
   uint8_t granularity = 0;
 
   void setup() override {
-    addControl(nrOfLightsPerCube, "nrOfLightsPerCube", "slider", 1, 128);  // mode 0 only
     addControl(granularity, "granularity", "select");
     addControlValue("One Cube One Light");
     addControlValue("One Side One Light");
     addControlValue("One LED One Light");
+    addControl(nrOfLightsPerCube, "nrOfLightsPerCube", "slider", 1, 128, "One cube");  // mode 0 only
   }
 
   // One Cube One Light

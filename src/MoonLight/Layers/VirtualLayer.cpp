@@ -194,8 +194,7 @@ T VirtualLayer::getLight(const nrOfLights_t indexV, uint8_t offset) const {
       // m_zeroLights:
       if (sizeof(T) <= 4) {  // also for RGBW but retrieve only RGB ... 🚧
   #ifdef BOARD_HAS_PSRAM
-        T* result = (T*)&mappingTable[indexV].rgb;
-        return *result;
+        return *(T*)&mappingTable[indexV].rgb;
   #else
         T result;
         ((uint8_t*)&result)[0] = (mappingTable[indexV].rgb >> 9) << 3;
@@ -210,7 +209,7 @@ T VirtualLayer::getLight(const nrOfLights_t indexV, uint8_t offset) const {
   } else {
     uint32_t index = indexV * layerP->lights.header.channelsPerLight + offset;
     if (index + sizeof(T) <= layerP->lights.maxChannels) {  // no mapping
-      return (T)layerP->lights.channelsE[index];
+      return *(T*)&layerP->lights.channelsE[index];
     } else {
       // some operations will go out of bounds e.g. VUMeter, uncomment below lines if you wanna test on a specific effect
       EXT_LOGW(ML_TAG, "%d + %d >= %d", indexV, sizeof(T), layerP->lights.maxChannels);

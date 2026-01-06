@@ -336,7 +336,7 @@ void setup() {
                        NULL,                                // parameter
                        3,                                   // priority (between 5 and 10: ASYNC_WORKER_TASK_PRIORITY and Restart/Sleep), don't set it higher then 10...
                        &driverTaskHandle,                   // task handle
-                       0                                    // protocol core: ideal for Art-Net, need to check behaviour for LED drivers (pre-empt by WiFi ...), so far so good ...
+                       0                                    // protocol core: ideal for Art-Net, no issues encountered yet for LED drivers (pre-empt by WiFi ...)
   );
   #endif
 
