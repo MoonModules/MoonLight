@@ -295,8 +295,8 @@ class TorontoBarCubesLayout : public Node {
     for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * cubeLength + pixel.x, pos.y * cubeLength + cubeLength - 1, pos.z * cubeLength + pixel.y));  // bottom
 
     // + middleLED
-    Coord3D side = {3, 3, 3};
-    addLight(Coord3D(pos.x * cubeLength + side.x, pos.y * cubeLength + side.y, pos.z * cubeLength + side.z));  // middleLED
+    Coord3D middle = {3, 3, 3};
+    addLight(Coord3D(pos.x * cubeLength + middle.x, pos.y * cubeLength + middle.y, pos.z * cubeLength + middle.z));  // middleLED
   }
 
   bool hasOnLayout() const override { return true; }

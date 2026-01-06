@@ -223,7 +223,7 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
             // 🌙 error check
             if (result != ESP_OK)
             {
-                ESP_LOGW(SVK_TAG, "Failed to send event %s to client %d: %s", event.c_str(), client->socket(), esp_err_to_name(result));
+                ESP_LOGW(SVK_TAG, "Failed to send event %s to client %u: %s", event.c_str(), client->socket(), esp_err_to_name(result));
                 it = subscriptions.erase(it);
             }
             else

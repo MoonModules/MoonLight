@@ -60,7 +60,10 @@ void VirtualLayer::loop() {
   if (prevSize != size) EXT_LOGD(ML_TAG, "onSizeChanged V %d,%d,%d -> %d,%d,%d", prevSize.x, prevSize.y, prevSize.z, size.x, size.y, size.z);
   for (Node* node : nodes) {
     if (prevSize != size) node->onSizeChanged(prevSize);
-    if (node->on) node->loop();
+    if (node->on) {
+      node->loop();
+      taskYIELD();
+    }
   }
   prevSize = size;
 };
@@ -160,11 +163,11 @@ void VirtualLayer::setLight(const nrOfLights_t indexV, const uint8_t* channels, 
     }
   } else {
     uint32_t index = indexV * layerP->lights.header.channelsPerLight + offset;
-    if (index + length <= layerP->lights.maxChannels) {  // no mapping
+    // if (index + length <= layerP->lights.maxChannels) {  // no mapping
       memcpy(&layerP->lights.channelsE[index], channels, length);
-    } else {
-      EXT_LOGW(ML_TAG, "%d + %d >= %d", indexV, length, layerP->lights.maxChannels);
-    }
+    // } else {
+    //   EXT_LOGW(ML_TAG, "%d + %d >= %d", indexV, length, layerP->lights.maxChannels);
+    // }
   }
 }
 
@@ -197,9 +200,9 @@ T VirtualLayer::getLight(const nrOfLights_t indexV, uint8_t offset) const {
         return *(T*)&mappingTable[indexV].rgb;
   #else
         T result;
-        ((uint8_t*)&result)[0] = (mappingTable[indexV].rgb >> 9) << 3;
-        ((uint8_t*)&result)[1] = (mappingTable[indexV].rgb >> 4) << 3;
-        ((uint8_t*)&result)[2] = (mappingTable[indexV].rgb) << 4;
+        ((uint8_t*)&result)[0] = (mappingTable[indexV].rgb >> 9) << 3;           // R: bits [13:9]
+        ((uint8_t*)&result)[1] = ((mappingTable[indexV].rgb >> 4) & 0x1F) << 3;  // G: bits [8:4]
+        ((uint8_t*)&result)[2] = (mappingTable[indexV].rgb & 0x0F) << 4;         // B: bits [3:0]
         return result;
   #endif
       } else
@@ -208,13 +211,13 @@ T VirtualLayer::getLight(const nrOfLights_t indexV, uint8_t offset) const {
     }
   } else {
     uint32_t index = indexV * layerP->lights.header.channelsPerLight + offset;
-    if (index + sizeof(T) <= layerP->lights.maxChannels) {  // no mapping
+    // if (index + sizeof(T) <= layerP->lights.maxChannels) {  // no mapping
       return *(T*)&layerP->lights.channelsE[index];
-    } else {
-      // some operations will go out of bounds e.g. VUMeter, uncomment below lines if you wanna test on a specific effect
-      EXT_LOGW(ML_TAG, "%d + %d >= %d", indexV, sizeof(T), layerP->lights.maxChannels);
-      return T();
-    }
+    // } else {
+    //   // some operations will go out of bounds e.g. VUMeter, uncomment below lines if you wanna test on a specific effect
+    //   EXT_LOGW(ML_TAG, "%d + %d >= %d", indexV, sizeof(T), layerP->lights.maxChannels);
+    //   return T();
+    // }
   }
 }
 

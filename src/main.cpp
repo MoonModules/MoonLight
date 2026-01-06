@@ -116,8 +116,11 @@ volatile bool newFrameReady = false;
 TaskHandle_t effectTaskHandle = NULL;
 TaskHandle_t driverTaskHandle = NULL;
 
+    #include "esp_task_wdt.h"
+
 void effectTask(void* pvParameters) {
   // 🌙
+  esp_task_wdt_add(NULL);
 
   layerP.setup();  // setup virtual layers (no node setup here as done in addNode)
   static unsigned long last20ms = 0;
@@ -149,12 +152,16 @@ void effectTask(void* pvParameters) {
     }
 
     xSemaphoreGive(swapMutex);
-    vTaskDelay(1);  // yield to other tasks, 1 tick (~1ms)
+    esp_task_wdt_reset();
+    vTaskDelay(1);  // taskYIELD() is not handing over to other tasks !
   }
+  // Cleanup (never reached in this case, but good practice)
+  esp_task_wdt_delete(NULL);
 }
 
 void driverTask(void* pvParameters) {
   // 🌙
+  esp_task_wdt_add(NULL);
 
   // layerP.setup() done in effectTask
 
@@ -181,8 +188,11 @@ void driverTask(void* pvParameters) {
     }
 
     if (!mutexGiven) xSemaphoreGive(swapMutex);  // not double buffer or if conditions not met
-    vTaskDelay(1);
+    esp_task_wdt_reset();
+    vTaskDelay(1);  // taskYIELD() is not handing over to other tasks !
   }
+  // Cleanup (never reached in this case, but good practice)
+  esp_task_wdt_delete(NULL);
 }
   #endif
 #endif
@@ -325,7 +335,7 @@ void setup() {
                        "AppEffects",                        // name
                        psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
                        NULL,                                // parameter
-                       5,                                   // priority (between 5 and 10: ASYNC_WORKER_TASK_PRIORITY and Restart/Sleep), don't set it higher then 10...
+                       3,                                   // priority
                        &effectTaskHandle,                   // task handle
                        1                                    // application core. high speed effect processing
   );
@@ -334,7 +344,7 @@ void setup() {
                        "AppDrivers",                        // name
                        psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
                        NULL,                                // parameter
-                       3,                                   // priority (between 5 and 10: ASYNC_WORKER_TASK_PRIORITY and Restart/Sleep), don't set it higher then 10...
+                       3,                                   // priority
                        &driverTaskHandle,                   // task handle
                        0                                    // protocol core: ideal for Art-Net, no issues encountered yet for LED drivers (pre-empt by WiFi ...)
   );

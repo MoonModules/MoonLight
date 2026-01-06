@@ -107,7 +107,10 @@ void PhysicalLayer::loopDrivers() {
 
   for (Node* node : nodes) {
     if (prevSize != lights.header.size) node->onSizeChanged(prevSize);
-    if (node->on) node->loop();
+    if (node->on) {
+      node->loop();
+      taskYIELD();
+    }
   }
 
   prevSize = lights.header.size;

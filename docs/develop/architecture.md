@@ -12,9 +12,9 @@ MoonLight uses a multi-core, multi-task architecture on ESP32 to achieve smooth 
 | **lwIP TCP/IP** | 0 (PRO_CPU) | 18 | System | Event-driven | TCP/IP protocol processing |
 | **ESP32SvelteKit** | 0 (PRO_CPU) | 2 | System | 10ms | HTTP/WebSocket UI framework |
 | **Driver Task** | 0 (PRO_CPU) | 3 | 3-4KB | ~60 fps | Output data to LEDs via DMA/I2S/LCD/PARLIO |
-| **Effect Task** | 1 (APP_CPU) | 5 | 3-4KB | ~60 fps | Calculate LED colors and effects |
+| **Effect Task** | 1 (APP_CPU) | 3 | 3-4KB | ~60 fps | Calculate LED colors and effects |
 
-Effect Task (Core 1, Priority 5)
+Effect Task (Core 1, Priority 3)
 
 - **Function**: Pure computation - calculates pixel colors based on effect algorithms
 - **Operations**: Reads/writes to `channels` array, performs mathematical calculations
@@ -314,20 +314,20 @@ Or in code before including framework:
 Task Creation
 
 ```cpp
-    xTaskCreateUniversal(effectTask,                          // task function
-                       "AppEffects",                           // name
+    xTaskCreateUniversal(effectTask,                        // task function
+                       "AppEffects",                        // name
                        psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
                        NULL,                                // parameter
-                       5,                                  // priority (between 5 and 10: ASYNC_WORKER_TASK_PRIORITY and Restart/Sleep), don't set it higher then 10...
+                       3,                                   // priority
                        &effectTaskHandle,                   // task handle
                        1                                    // application core. high speed effect processing
   );
 
   xTaskCreateUniversal(driverTask,                          // task function
-                       "AppDrivers",                           // name
+                       "AppDrivers",                        // name
                        psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
                        NULL,                                // parameter
-                       3,                                   // priority (between 5 and 10: ASYNC_WORKER_TASK_PRIORITY and Restart/Sleep), don't set it higher then 10...
+                       3,                                   // priority
                        &driverTaskHandle,                   // task handle
                        0                                    // protocol core: ideal for Art-Net, no issues encountered yet for LED drivers (pre-empt by WiFi ...)
   );
