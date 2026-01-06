@@ -33,16 +33,12 @@ PhysicalLayer::PhysicalLayer() {
   layers[0]->layerP = this;
 }
 
-// heap-optimization: request heap optimization review
-// on boards without PSRAM, heap is only 60 KB (30KB max alloc) available, need to find out how to increase the heap
-// goal is to have lights.channelsE/D as large as possible, preferable 12288 at least for boards without PSRAM
-
 void PhysicalLayer::setup() {
   // allocate lights.channelsE/D
 
   if (psramFound()) {
-    lights.maxChannels = MIN(ESP.getPsramSize() / 4, 61440 * 3);  // fill halve with channels, max 120 pins * 512 LEDs, still addressable with uint16_t
-    lights.useDoubleBuffer = true;                                // Enable double buffering
+    lights.maxChannels = MIN(ESP.getPsramSize() / 4, 128 * 64 * 16 * 3);  // fill max 2 * 25% of PSRAM with channels, supporting Virtual driver which is 120 pins * 512..1024 LEDs, max 16 Hub75 128x64 panels
+    lights.useDoubleBuffer = true;                                        // Enable double buffering
   } else {
     lights.maxChannels = 4096 * 3;   // esp32-d0: max 1024->2048->4096 Leds ATM
     lights.useDoubleBuffer = false;  // Single buffer mode
@@ -111,7 +107,10 @@ void PhysicalLayer::loopDrivers() {
 
   for (Node* node : nodes) {
     if (prevSize != lights.header.size) node->onSizeChanged(prevSize);
-    if (node->on) node->loop();
+    if (node->on) {
+      node->loop();
+      taskYIELD();
+    }
   }
 
   prevSize = lights.header.size;
@@ -187,7 +186,7 @@ void PhysicalLayer::addLight(Coord3D position) {
 
 void PhysicalLayer::nextPin(uint8_t ledPinDIO) {
   if (pass == 1 && !monitorPass) {
-    uint16_t prevNrOfLights = 0;
+    nrOfLights_t prevNrOfLights = 0;
     uint8_t i = 0;
     while (i < MAXLEDPINS && ledsPerPin[i] != UINT16_MAX) {
       prevNrOfLights += ledsPerPin[i];
@@ -234,7 +233,7 @@ void PhysicalLayer::onLayoutPost() {
 // void PhysicalLayer::initLightsToBlend() {
 //     lightsToBlend.reserve(lights.header.nrOfLights);
 
-//     for (uint16_t indexP = 0; indexP < lightsToBlend.size(); indexP++)
+//     for (nrOfLights_t indexP = 0; indexP < lightsToBlend.size(); indexP++)
 //       lightsToBlend[indexP] = false;
 // }
 

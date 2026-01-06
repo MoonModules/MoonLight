@@ -81,10 +81,6 @@ PsychicHttpServer server;
 
 ESP32SvelteKit esp32sveltekit(&server, NROF_END_POINTS);  // 🌙 pio variable
 
-// heap-optimization: request heap optimization review
-// on boards without PSRAM, heap is only 60 KB (30KB max alloc) available, need to find out how to increase the heap
-// The module class is used for each module, about 15 times, 1144 bytes each (allocated in main.cpp, in global memory area) + each class allocates it's own heap
-
 // 🌙
 #if FT_ENABLED(FT_MOONBASE)
   #include "MoonBase/Modules/FileManager.h"
@@ -120,8 +116,11 @@ volatile bool newFrameReady = false;
 TaskHandle_t effectTaskHandle = NULL;
 TaskHandle_t driverTaskHandle = NULL;
 
+    #include "esp_task_wdt.h"
+
 void effectTask(void* pvParameters) {
   // 🌙
+  esp_task_wdt_add(NULL);
 
   layerP.setup();  // setup virtual layers (no node setup here as done in addNode)
   static unsigned long last20ms = 0;
@@ -153,15 +152,19 @@ void effectTask(void* pvParameters) {
     }
 
     xSemaphoreGive(swapMutex);
-    vTaskDelay(1);  // yield to other tasks, 1 tick (~1ms)
+    esp_task_wdt_reset();
+    vTaskDelay(1);  // taskYIELD() is not handing over to other tasks !
   }
+  // Cleanup (never reached in this case, but good practice)
+  esp_task_wdt_delete(NULL);
 }
 
 void driverTask(void* pvParameters) {
   // 🌙
+  esp_task_wdt_add(NULL);
 
   // layerP.setup() done in effectTask
-  
+
   while (true) {
     bool mutexGiven = false;
     // Check and transition state under lock
@@ -185,8 +188,11 @@ void driverTask(void* pvParameters) {
     }
 
     if (!mutexGiven) xSemaphoreGive(swapMutex);  // not double buffer or if conditions not met
-    vTaskDelay(1);
+    esp_task_wdt_reset();
+    vTaskDelay(1);  // taskYIELD() is not handing over to other tasks !
   }
+  // Cleanup (never reached in this case, but good practice)
+  esp_task_wdt_delete(NULL);
 }
   #endif
 #endif
@@ -326,21 +332,21 @@ void setup() {
 
   // 🌙
   xTaskCreateUniversal(effectTask,                          // task function
-                       "AppEffectTask",                     // name
-                       psramFound() ? 4 * 1024 : 3 * 1024,  // d0-tuning... stack size (without livescripts we can do with 12...). updated from 4 to 6 to support preset loop
+                       "AppEffects",                        // name
+                       psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
                        NULL,                                // parameter
-                       10,                                  // priority (between 5 and 10: ASYNC_WORKER_TASK_PRIORITY and Restart/Sleep), don't set it higher then 10...
+                       3,                                   // priority
                        &effectTaskHandle,                   // task handle
-                       0                                    // core
+                       1                                    // application core. high speed effect processing
   );
 
   xTaskCreateUniversal(driverTask,                          // task function
-                       "AppDriverTask",                     // name
-                       psramFound() ? 4 * 1024 : 3 * 1024,  // d0-tuning... stack size
+                       "AppDrivers",                        // name
+                       psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
                        NULL,                                // parameter
-                       3,                                   // priority (between 5 and 10: ASYNC_WORKER_TASK_PRIORITY and Restart/Sleep), don't set it higher then 10...
+                       3,                                   // priority
                        &driverTaskHandle,                   // task handle
-                       1                                    // core
+                       0                                    // protocol core: ideal for Art-Net, no issues encountered yet for LED drivers (pre-empt by WiFi ...)
   );
   #endif
 

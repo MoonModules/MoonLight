@@ -370,8 +370,8 @@ void DriverNode::loop() {
   uint8_t brightness = (header->offsetBrightness == UINT8_MAX) ? header->brightness : 255;  // set brightness to 255 if offsetBrightness is set (fixture will do its own brightness)
 
   if (brightness != brightnessSaved || layerP.maxPower != maxPowerSaved) {
-    // Use FastLED for setMaxPowerInMilliWatts stuff
-    uint8_t correctedBrightness = calculate_max_brightness_for_power_mW((CRGB*)&layerP.lights.channelsD, layerP.lights.header.nrOfLights, brightness, layerP.maxPower * 1000);
+    // Use FastLED for setMaxPowerInMilliWatts stuff, don't use if more then 8096 LEDs, decent power is assumed then! Also in case of Art-Net to HUB75 panels this calculation is not using the right mW per LED
+    uint8_t correctedBrightness = layerP.lights.header.nrOfLights > 8096 ? brightness : calculate_max_brightness_for_power_mW((CRGB*)&layerP.lights.channelsD, layerP.lights.header.nrOfLights, brightness, layerP.maxPower * 1000);  // calculate_max_brightness_for_power_mW supports max 65K LEDs
     // EXT_LOGD(ML_TAG, "setBrightness b:%d + p:%d -> cb:%d", brightness, layerP.maxPower, correctedBrightness);
     ledsDriver.setBrightness(correctedBrightness);
     brightnessSaved = brightness;

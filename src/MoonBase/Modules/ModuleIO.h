@@ -613,6 +613,7 @@ class ModuleIO : public Module {
     EXT_LOGD(MB_TAG, "Try to configure ethernet");
     EthernetSettingsService* ess = _sveltekit->getEthernetSettingsService();
     #ifdef CONFIG_IDF_TARGET_ESP32S3
+    // Note: Ethernet pin types are signed (int8_t) and use -1, not UINT8_MAX, to indicate unset state
     ess->v_ETH_SPI_SCK = -1;
     ess->v_ETH_SPI_MISO = -1;
     ess->v_ETH_SPI_MOSI = -1;
@@ -751,9 +752,9 @@ class ModuleIO : public Module {
   }
 
   #if FT_BATTERY
-  uint8_t pinVoltage = -1;
-  uint8_t pinCurrent = -1;
-  uint8_t pinBattery = -1;
+  uint8_t pinVoltage = UINT8_MAX;
+  uint8_t pinCurrent = UINT8_MAX;
+  uint8_t pinBattery = UINT8_MAX;
 
   adc_attenuation_t adc_get_adjusted_gain(adc_attenuation_t current_gain, uint32_t adc_mv_readout) {
     if (current_gain == ADC_11db && adc_mv_readout < 1700) {

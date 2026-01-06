@@ -24,26 +24,26 @@ class ModuleMoonLightInfo : public Module {
     JsonObject control;  // state.data has one or more properties
     JsonArray rows;      // if a control is an array, this is the rows of the array
 
-    addControl(controls, "nrOfLights", "number", 0, 65535, true);
-    addControl(controls, "channelsPerLight", "number", 0, 65535, true);
-    addControl(controls, "nrOfChannels", "number", 0, 65535, true);
-    addControl(controls, "maxChannels", "number", 0, 65535, true);
+    addControl(controls, "nrOfLights", "number", 0, layerP.lights.maxChannels / 3, true);
+    addControl(controls, "channelsPerLight", "number", 0, 255, true);
+    addControl(controls, "nrOfChannels", "number", 0, layerP.lights.maxChannels, true);
+    addControl(controls, "maxChannels", "number", 0, layerP.lights.maxChannels, true);
     addControl(controls, "size", "coord3D", 0, UINT16_MAX, true);
-    addControl(controls, "nodes#", "number", 0, 65535, true);
+    addControl(controls, "nodes#", "number", 0, 255, true);
 
     control = addControl(controls, "layers", "rows");
     control["crud"] = "r";
     rows = control["n"].to<JsonArray>();
     {
       addControl(rows, "layer", "number", 0, 255, true);
-      addControl(rows, "nrOfLights", "number", 0, 65535, true);
+      addControl(rows, "nrOfLights", "number", 0, layerP.lights.maxChannels / 3, true);
       addControl(rows, "size", "coord3D", 0, UINT16_MAX, true);
-      addControl(rows, "mappingTable#", "number", 0, 65535, true);
-      addControl(rows, "nrOfZeroLights", "number", 0, 65535, true);
-      addControl(rows, "nrOfOneLight", "number", 0, 65535, true);
-      addControl(rows, "mappingTableIndexes#", "number", 0, 65535, true);
-      addControl(rows, "nrOfMoreLights", "number", 0, 65535, true);
-      addControl(rows, "nodes#", "number", 0, 65535, true);
+      addControl(rows, "mappingTable#", "number", 0, layerP.lights.maxChannels / 3, true);
+      addControl(rows, "nrOfZeroLights", "number", 0, layerP.lights.maxChannels / 3, true);
+      addControl(rows, "nrOfOneLight", "number", 0, layerP.lights.maxChannels / 3, true);
+      addControl(rows, "mappingTableIndexes#", "number", 0, layerP.lights.maxChannels / 3, true);
+      addControl(rows, "nrOfMoreLights", "number", 0, layerP.lights.maxChannels / 3, true);
+      addControl(rows, "nodes#", "number", 0, 255, true);
     }
   }
 
@@ -63,9 +63,9 @@ class ModuleMoonLightInfo : public Module {
       data["nodes#"] = layerP.nodes.size();
       uint8_t index = 0;
       for (VirtualLayer* layer : layerP.layers) {
-        uint16_t nrOfZeroLights = 0;
-        uint16_t nrOfOneLight = 0;
-        uint16_t nrOfMoreLights = 0;
+        nrOfLights_t nrOfZeroLights = 0;
+        nrOfLights_t nrOfOneLight = 0;
+        nrOfLights_t nrOfMoreLights = 0;
         for (size_t i = 0; i < layer->mappingTableSize; i++) {
           PhysMap& map = layer->mappingTable[i];
           switch (map.mapType) {
@@ -76,7 +76,7 @@ class ModuleMoonLightInfo : public Module {
             nrOfOneLight++;
             break;
           case m_moreLights:
-            for (uint16_t indexP : layer->mappingTableIndexes[map.indexes]) {
+            for (nrOfLights_t indexP : layer->mappingTableIndexes[map.indexesIndex]) {
               nrOfMoreLights++;
             }
             break;

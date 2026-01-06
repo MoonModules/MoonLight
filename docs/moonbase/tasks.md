@@ -22,8 +22,9 @@ Shows system tasks info.
 
 | Task name (runtime) | Kconfig option | Default stack size (words → bytes) | Notes |
 |----------------------|----------------|------------------------------------:|-------|
-| AppEffectTask ||(psramFound()?6:4) * 1024||
-| AppDriverTask ||(psramFound()?4:3) * 1024||
+| AppEffects ||(psramFound()?6:4) * 1024|Core 1|
+| AppDrivers ||(psramFound()?4:3) * 1024|Core 0|
+| Sveltekit ||(psramFound()?8:6) * 1024|Core 0|
 | **wifi** (Wi-Fi driver) | `CONFIG_ESP_WIFI_TASK_STACK_SIZE` | 3072 words → 12288 bytes → 12 KB | Handles Wi-Fi MAC/driver. Needs extra headroom. |
 | **tiT** (TCP/IP / lwIP task) | `CONFIG_TCPIP_TASK_STACK_SIZE` | 3072 words → 12288 bytes → 12 KB | All socket callbacks, DHCP, etc. |
 | **event** (ESP event loop) | `CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE` (older) / `CONFIG_ESP_EVENT_LOOP_TASK_STACK_SIZE` (newer) | 2048 words → 8192 bytes → 8 KB | Dispatches Wi-Fi/IP/BLE events. |

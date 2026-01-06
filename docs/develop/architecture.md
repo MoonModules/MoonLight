@@ -10,30 +10,30 @@ MoonLight uses a multi-core, multi-task architecture on ESP32 to achieve smooth 
 |------|------|----------|------------|-----------|---------|
 | **WiFi/BT** | 0 (PRO_CPU) | 23 | System | Event-driven | System networking stack |
 | **lwIP TCP/IP** | 0 (PRO_CPU) | 18 | System | Event-driven | TCP/IP protocol processing |
-| **Effect Task** | 0 (PRO_CPU) | 10 | 3-4KB | ~60 fps | Calculate LED colors and effects |
-| **ESP32SvelteKit** | 1 (APP_CPU) | 2 | System | 10ms | HTTP/WebSocket UI framework |
-| **Driver Task** | 1 (APP_CPU) | 3 | 3-4KB | ~60 fps | Output data to LEDs via DMA/I2S/LCD/PARLIO |
+| **ESP32SvelteKit** | 0 (PRO_CPU) | 2 | System | 10ms | HTTP/WebSocket UI framework |
+| **Driver Task** | 0 (PRO_CPU) | 3 | 3-4KB | ~60 fps | Output data to LEDs via DMA/I2S/LCD/PARLIO |
+| **Effect Task** | 1 (APP_CPU) | 3 | 3-4KB | ~60 fps | Calculate LED colors and effects |
 
-Effect Task (Core 0, Priority 10)
+Effect Task (Core 1, Priority 3)
 
 - **Function**: Pure computation - calculates pixel colors based on effect algorithms
 - **Operations**: Reads/writes to `channels` array, performs mathematical calculations
 - **Tolerant to preemption**: WiFi interruptions are acceptable as this is non-timing-critical
-- **Why Core 0**: Can coexist with WiFi; uses idle CPU cycles when WiFi is not transmitting
+- Parking as currently experimenting with running on Core 1!! **Why Core 0**: Can coexist with WiFi; uses idle CPU cycles when WiFi is not transmitting
 
-Driver Task (Core 1, Priority 3)
+Driver Task (Core 0, Priority 3)
 
 - **Function**: Timing-critical hardware operations
 - **Operations**: Sends pixel data to LEDs via DMA, I2S (ESP32), LCD (S3), or PARLIO (P4)
 - **Requires uninterrupted execution**: DMA timing must be precise to avoid LED glitches
-- **Why Core 1**: Isolated from WiFi interference; WiFi on Core 0 cannot preempt this task
+- Parking as currently experimenting with running on Core 0!! **Why Core 1**: Isolated from WiFi interference; WiFi on Core 0 cannot preempt this task
 
-ESP32SvelteKit Task (Core 1, Priority 2)
+ESP32SvelteKit Task (Core 0, Priority 2)
 
 - **Function**: HTTP server and WebSocket handler for UI
 - **Operations**: Processes REST API calls, WebSocket messages, JSON serialization
 - **Runs every**: 10ms
-- **Why Core 1, Priority 2**: Lower priority than Driver Task, so LED output always takes precedence
+- **Why Core 0, Priority 2**: Lower priority than system Tasks
 
 ## Task Interaction Flow
 
@@ -293,6 +293,7 @@ if (psramFound()) {
 } else {
   lights.useDoubleBuffer = false;
   lights.channelsE = allocMB<uint8_t>(maxChannels);
+  lights.channelsD = lights.channelsE;
 }
 ```
 
@@ -313,25 +314,23 @@ Or in code before including framework:
 Task Creation
 
 ```cpp
-// Effect Task on Core 0
-xTaskCreateUniversal(effectTask,
-                     "AppEffectTask",
-                     psramFound() ? 4 * 1024 : 3 * 1024,
-                     NULL,
-                     10,  // Priority
-                     &effectTaskHandle,
-                     0   // Core 0 (PRO_CPU)
-);
+    xTaskCreateUniversal(effectTask,                        // task function
+                       "AppEffects",                        // name
+                       psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
+                       NULL,                                // parameter
+                       3,                                   // priority
+                       &effectTaskHandle,                   // task handle
+                       1                                    // application core. high speed effect processing
+  );
 
-// Driver Task on Core 1
-xTaskCreateUniversal(driverTask,
-                     "AppDriverTask",
-                     psramFound() ? 4 * 1024 : 3 * 1024,
-                     NULL,
-                     3,  // Priority
-                     &driverTaskHandle,
-                     1   // Core 1 (APP_CPU)
-);
+  xTaskCreateUniversal(driverTask,                          // task function
+                       "AppDrivers",                        // name
+                       psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
+                       NULL,                                // parameter
+                       3,                                   // priority
+                       &driverTaskHandle,                   // task handle
+                       0                                    // protocol core: ideal for Art-Net, no issues encountered yet for LED drivers (pre-empt by WiFi ...)
+  );
 ```
 
 ## Summary
