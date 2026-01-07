@@ -28,18 +28,18 @@ class ArtNetOutDriver : public DriverNode {
   uint8_t universesPerOutput = 1;     // 8 on on Art-Net LED Controller { 0,7,14,21,28,35,42,49 }
   uint16_t channelsPerOutput = 1024;  // 3096 (1024x3) on Art-Net LED Controller {1024,1024,1024,1024,1024,1024,1024,1024};
 
-  uint16_t usedChannelsPerUniverse = 0;  // calculated
-  uint16_t totalUniverses = 0;           // calculated
-  uint32_t totalChannels = 0;            // calculated
+  uint16_t usedChannelsPerUniverse = 510;  // calculated
+  uint16_t totalUniverses = 0;             // calculated
+  uint32_t totalChannels = 0;              // calculated
 
   void setup() override {
     DriverNode::setup();
 
     addControl(controllerIP3s, "controllerIPs", "text", 0, 32);
     addControl(port, "port", "number", 0, 65538);
-    addControl(FPSLimiter, "Limiter", "number", 0, 255, false, "FPS");
+    addControl(FPSLimiter, "Limiter", "number", 1, 255, false, "FPS");
     addControl(universeSize, "universeSize", "number", 0, 1000);
-    addControl(usedChannelsPerUniverse, "usedChannels", "number", 0, 1000, true);  // calculated
+    addControl(usedChannelsPerUniverse, "usedChannels", "number", 1, 1000, true);  // calculated
     addControl(nrOfOutputsPerIP, "#Outputs per IP", "number", 0, 255);
     addControl(universesPerOutput, "universesPerOutput", "number", 0, 255);
     addControl(totalUniverses, "totalUniverses", "number", 0, 65538, true);
@@ -95,7 +95,6 @@ class ArtNetOutDriver : public DriverNode {
 
   // loop variables:
   IPAddress controllerIP;  // tbd: controllerIP also configurable from fixtures and Art-Net instead of pin output
-  unsigned long lastMillis = millis();
   unsigned long wait;
   uint8_t packet_buffer[1024];  // big enough for normal use
   uint_fast16_t packetSize;
@@ -125,6 +124,7 @@ class ArtNetOutDriver : public DriverNode {
   }
 
   uint8_t processedOutputs = 0;
+  TickType_t xLastWakeTime = xTaskGetTickCount();
 
   void loop() override {
     DriverNode::loop();
@@ -140,17 +140,6 @@ class ArtNetOutDriver : public DriverNode {
 
     if (!controllerIP) return;  // if no connection
 
-    // wait until the throttle FPS is reached
-    // wait needed to avoid misalignment between packages sent and displayed - 🚧
-    wait = 1000 / FPSLimiter + lastMillis - millis();
-    if (wait > 0 && wait < 1000 / FPSLimiter) delay(wait);  // delay in ms
-    // else
-    //   EXT_LOGW(ML_TAG, "wait %d", wait);
-    // if (millis() - lastMillis < 1000 / FPSLimiter)
-    //   delay(1000 / FPSLimiter + lastMillis - millis()); // delay in ms
-    //   return;
-    lastMillis = millis();
-
     // only need to set once per frame
     packet_buffer[12] = (sequenceNumber++ % 254) + 1;  // The sequence number is used to ensure that ArtDmx packets are used in the correct order, ranging from 1..255
 
@@ -159,17 +148,26 @@ class ArtNetOutDriver : public DriverNode {
     channels_remaining = channelsPerOutput;
     processedOutputs = 0;
 
-    // send all the leds to artnet
+    // send all the lights to artnet, light by light
     for (int indexP = 0; indexP < header->nrOfLights; indexP++) {
       // fill a package
-      memcpy(&packet_buffer[packetSize + 18], &layerP.lights.channelsD[indexP * header->channelsPerLight], header->channelsPerLight);  // set all the channels
+      uint8_t* p = &packet_buffer[packetSize + 18];
+      uint8_t* c = &layerP.lights.channelsD[indexP * header->channelsPerLight];
+
+      memcpy(p, c, header->channelsPerLight);  // set all the channels, so the non rgb channels are also filled
 
       // correct the RGB channels for color order and brightness
-      reOrderAndDimRGBW(&packet_buffer[packetSize + 18 + header->offsetRGB], &layerP.lights.channelsD[indexP * header->channelsPerLight + header->offsetRGB]);
+      reOrderAndDimRGBW(p + header->offsetRGB, c + header->offsetRGB);
 
-      if (header->offsetRGB1 != UINT8_MAX) reOrderAndDimRGBW(&packet_buffer[packetSize + 18 + header->offsetRGB1], &layerP.lights.channelsD[indexP * header->channelsPerLight + header->offsetRGB1]);
-      if (header->offsetRGB2 != UINT8_MAX) reOrderAndDimRGBW(&packet_buffer[packetSize + 18 + header->offsetRGB2], &layerP.lights.channelsD[indexP * header->channelsPerLight + header->offsetRGB2]);
-      if (header->offsetRGB3 != UINT8_MAX) reOrderAndDimRGBW(&packet_buffer[packetSize + 18 + header->offsetRGB3], &layerP.lights.channelsD[indexP * header->channelsPerLight + header->offsetRGB3]);
+      if (header->offsetRGB1 != UINT8_MAX) {
+        reOrderAndDimRGBW(p + header->offsetRGB1, c + header->offsetRGB1);
+        if (header->offsetRGB2 != UINT8_MAX) {
+          reOrderAndDimRGBW(p + header->offsetRGB2, c + header->offsetRGB2);
+          if (header->offsetRGB3 != UINT8_MAX) {
+            reOrderAndDimRGBW(p + header->offsetRGB3, c + header->offsetRGB3);
+          }
+        }
+      }
 
       if (header->lightPreset == 9 && indexP < 72)  // RGBWYP this config assumes a mix of 4 channels and 6 channels per light !!!!
         packetSize += 4;
@@ -183,6 +181,8 @@ class ArtNetOutDriver : public DriverNode {
         // Serial.printf("; %d %d %d", header->nrOfLights, packetSize+18, header->nrOfLights * header->channelsPerLight);
 
         if (!writePackage()) return;  // resets packagesize
+
+        addYield(10);
 
         if (channels_remaining < header->channelsPerLight) {  // jump to next output
           channels_remaining = channelsPerOutput;             // reset for a new output
@@ -206,6 +206,8 @@ class ArtNetOutDriver : public DriverNode {
       writePackage();  // remaining
     }
     // EXT_LOGD(ML_TAG, "Universes send %d %d", universe, packages);
+
+    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(1000 / FPSLimiter));  // Yields AND feeds watchdog
   }  // loop
 };
 

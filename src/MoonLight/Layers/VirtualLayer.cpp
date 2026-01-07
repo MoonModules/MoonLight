@@ -62,7 +62,8 @@ void VirtualLayer::loop() {
     if (prevSize != size) node->onSizeChanged(prevSize);
     if (node->on) {
       node->loop();
-      taskYIELD();
+      addYield(10);
+
     }
   }
   prevSize = size;

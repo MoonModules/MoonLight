@@ -153,7 +153,7 @@ void effectTask(void* pvParameters) {
 
     xSemaphoreGive(swapMutex);
     esp_task_wdt_reset();
-    vTaskDelay(1);  // taskYIELD() is not handing over to other tasks !
+    vTaskDelay(1);
   }
   // Cleanup (never reached in this case, but good practice)
   esp_task_wdt_delete(NULL);
@@ -189,7 +189,7 @@ void driverTask(void* pvParameters) {
 
     if (!mutexGiven) xSemaphoreGive(swapMutex);  // not double buffer or if conditions not met
     esp_task_wdt_reset();
-    vTaskDelay(1);  // taskYIELD() is not handing over to other tasks !
+    vTaskDelay(1);
   }
   // Cleanup (never reached in this case, but good practice)
   esp_task_wdt_delete(NULL);
@@ -337,7 +337,7 @@ void setup() {
                        NULL,                                // parameter
                        3,                                   // priority
                        &effectTaskHandle,                   // task handle
-                       1                                    // application core. high speed effect processing
+                       0                                    // protocol core. high speed effect processing
   );
 
   xTaskCreateUniversal(driverTask,                          // task function
@@ -346,7 +346,7 @@ void setup() {
                        NULL,                                // parameter
                        3,                                   // priority
                        &driverTaskHandle,                   // task handle
-                       0                                    // protocol core: ideal for Art-Net, no issues encountered yet for LED drivers (pre-empt by WiFi ...)
+                       1                                    // application core
   );
   #endif
 
@@ -362,6 +362,8 @@ void setup() {
       moduleIO.loop1s();
       moduleDevices.loop1s();
       moduleTasks.loop1s();
+
+      // logYield();
 
   #if FT_ENABLED(FT_MOONLIGHT)
       // set shared data (eg used in scrolling text effect)

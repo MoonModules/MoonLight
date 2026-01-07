@@ -88,8 +88,8 @@ class ModuleDrivers : public NodeManager {
     addControlValue(control, getNameAndTags<RingsLayout>());
     addControlValue(control, getNameAndTags<WheelLayout>());
     addControlValue(control, getNameAndTags<SpiralLayout>());
-    addControlValue(control, getNameAndTags<SingleLineLayout>());
     addControlValue(control, getNameAndTags<SingleRowLayout>());
+    addControlValue(control, getNameAndTags<SingleColumnLayout>());
 
     // Drivers, Most used first
     addControlValue(control, getNameAndTags<ParallelLEDDriver>());
@@ -122,8 +122,8 @@ class ModuleDrivers : public NodeManager {
     if (!node) node = checkAndAlloc<SpiralLayout>(name);
     if (!node) node = checkAndAlloc<HumanSizedCubeLayout>(name);
     if (!node) node = checkAndAlloc<TorontoBarCubesLayout>(name);
-    if (!node) node = checkAndAlloc<SingleLineLayout>(name);
     if (!node) node = checkAndAlloc<SingleRowLayout>(name);
+    if (!node) node = checkAndAlloc<SingleColumnLayout>(name);
 
     // Drivers most used first
     if (!node) node = checkAndAlloc<ParallelLEDDriver>(name);

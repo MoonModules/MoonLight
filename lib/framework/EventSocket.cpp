@@ -157,7 +157,7 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
     // Only process valid events
     if (!isEventValid(event))
     {
-        ESP_LOGW(SVK_TAG, "Method tried to emit unregistered event: %s", event.c_str());
+        ESP_LOGW(SVK_TAG, "Method tried to emit unregistered event: %s from %s (len %d)", event.c_str(), originId, len);
         return;
     }
 
@@ -190,8 +190,8 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
             // 🌙 error check
             if (result != ESP_OK)
             {
-                ESP_LOGW(SVK_TAG, "Failed to send event %s to client %d: %s", event.c_str(), client->socket(), esp_err_to_name(result));
-                subscriptions.remove(originSubscriptionId);
+                ESP_LOGW(SVK_TAG, "Failed to send event %s from %s to client %d: %s", event.c_str(), originId, client->socket(), esp_err_to_name(result));
+                // subscriptions.remove(originSubscriptionId);
             }
         }
     }
@@ -223,8 +223,8 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
             // 🌙 error check
             if (result != ESP_OK)
             {
-                ESP_LOGW(SVK_TAG, "Failed to send event %s to client %u: %s", event.c_str(), client->socket(), esp_err_to_name(result));
-                it = subscriptions.erase(it);
+                ESP_LOGW(SVK_TAG, "Failed to send event %s from %s to client %u: %s", event.c_str(), originId, client->socket(), esp_err_to_name(result));
+                // it = subscriptions.erase(it);
             }
             else
             {

@@ -521,43 +521,43 @@ class WaveEffect : public Node {
 
     CRGB color = CHSV(millis() / 50, 255, 255);
 
-    int prevPos = layer->size.x / 2;  // somewhere in the middle
+    int prevPos = layer->size.y / 2;  // somewhere in the middle
 
-    for (int y = 0; y < layer->size.y; y++) {
+    for (int x = 0; x < layer->size.x; x++) {
       int pos = 0;
 
-      uint8_t b8 = beat8(bpm, y * 100);
-      uint8_t bs8 = beatsin8(bpm, 0, 255, y * 100);
+      uint8_t b8 = beat8(bpm, x * 100);
+      uint8_t bs8 = beatsin8(bpm, 0, 255, x * 100);
       // delay over y-axis..timebase ...
       switch (type) {
       case 0:
-        pos = b8 * layer->size.x / 256;
+        pos = b8 * layer->size.y / 256;
         break;
       case 1:
-        pos = triangle8(bpm, y * 100) * layer->size.x / 256;
+        pos = triangle8(bpm, x * 100) * layer->size.y / 256;
         break;
       case 2:
-        pos = bs8 * layer->size.x / 256;
+        pos = bs8 * layer->size.y / 256;
         break;
       case 3:
-        pos = b8 > 128 ? 0 : layer->size.x - 1;
+        pos = b8 > 128 ? 0 : layer->size.y - 1;
         break;
       case 4:
-        pos = (bs8 + beatsin8(bpm * 0.65, 0, 255, y * 200) + beatsin8(bpm * 1.43, 0, 255, y * 300)) * layer->size.x / 256 / 3;
+        pos = (bs8 + beatsin8(bpm * 0.65, 0, 255, x * 200) + beatsin8(bpm * 1.43, 0, 255, x * 300)) * layer->size.y / 256 / 3;
         break;
       case 5:
-        pos = inoise8(millis() * bpm / 256 + y * 1000) * layer->size.x / 256;
+        pos = inoise8(millis() * bpm / 256 + x * 1000) * layer->size.y / 256;
         break;  // bpm not really bpm, more speed
       default:
         pos = 0;
       }
 
       // connect saw and square
-      if ((type == 0 || type == 3) && abs(prevPos - pos) > layer->size.x / 2) {
-        for (int x = 0; x < layer->size.x; x++) layer->setRGB(Coord3D(x, y), color);
+      if ((type == 0 || type == 3) && abs(prevPos - pos) > layer->size.y / 2) {
+        for (int y = 0; y < layer->size.y; y++) layer->setRGB(Coord3D(x, y), color);
       }
 
-      layer->setRGB(Coord3D(pos, y), color);  //= CRGB(255, random8(), 0);
+      layer->setRGB(Coord3D(x, pos), color);  //= CRGB(255, random8(), 0);
       prevPos = pos;
     }
   }

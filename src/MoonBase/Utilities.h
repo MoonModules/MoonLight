@@ -269,3 +269,19 @@ extern unsigned int moonmanpng_len;
 inline uint32_t fastDiv255(uint32_t x) {  // 3–4 cycles
   return (x * 0x8081u) >> 23;
 }
+
+// Task yields
+inline uint16_t yieldFrequency;
+inline uint16_t yieldCounter;
+
+inline void addYield(uint8_t frequency) {
+  if (++yieldFrequency % frequency == 0) {
+    yieldCounter++;
+    vTaskDelay(1);  // taskYIELD() is not good enough as it does not give back control to idle tasks
+  }
+}
+
+inline void logYield() {
+  EXT_LOGD(ML_TAG, "yieldCounter %d (%d)", yieldFrequency, yieldCounter);
+  yieldCounter = 0;
+}
