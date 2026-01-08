@@ -69,7 +69,7 @@ Initless means there is no addLeds (like in FastLed) or initLed (like in Paralle
 
 * a Context (see below) will be set
 * Driver.show (see below) will use this context to set the right data to the right output.
-* The context can dynamically change without needing to reboot or recompile! e.g. changes in pin allocations, leds per pin, RGB or RGBW, or DMX lights like moving heads.
+* The context can dynamically change without needing to restart or recompile! e.g. changes in pin allocations, leds per pin, RGB or RGBW, or DMX lights like moving heads.
 
 The Art-Net driver is currently working like this, to be added to Parallel LED Driver and parallel IO (P4).
 

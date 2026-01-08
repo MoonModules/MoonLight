@@ -190,7 +190,7 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
             // 🌙 error check
             if (result != ESP_OK)
             {
-                ESP_LOGW(SVK_TAG, "Failed to send event %s from %s to client %d: %s", event.c_str(), originId, client->socket(), esp_err_to_name(result));
+                ESP_LOGW(SVK_TAG, "Failed to send event %s from %s to client %d: %s (len: %d)", event.c_str(), originId, client->socket(), esp_err_to_name(result), len);
                 // subscriptions.remove(originSubscriptionId);
             }
         }
@@ -198,7 +198,7 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
     else
     { // else send the message to all other clients
 
-        // 🌙 use iterator so remove also removes from the iterator
+        // 🌙 use iterator so remove / erase also removes from the iterator
         for (auto it = subscriptions.begin(); it != subscriptions.end(); )
         {
             int subscription = *it;
@@ -223,8 +223,10 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
             // 🌙 error check
             if (result != ESP_OK)
             {
-                ESP_LOGW(SVK_TAG, "Failed to send event %s from %s to client %u: %s", event.c_str(), originId, client->socket(), esp_err_to_name(result));
-                // it = subscriptions.erase(it);
+                ESP_LOGW(SVK_TAG, "Failed to send event %s from %s to client %u: %s (len: %d)", event.c_str(), originId, client->socket(), esp_err_to_name(result), len);
+                vTaskDelay(1); // Task watchdog got triggered.
+                // [29177816][W][EventSocket.cpp:226] emitEvent(): [🐼] Failed to send event monitor from lightscontrol to client 53: ESP_FAIL (len: 49152)
+                // it = subscriptions.erase(it);// do not erase as we hope for better times
             }
             else
             {

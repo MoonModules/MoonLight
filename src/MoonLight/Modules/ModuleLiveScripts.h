@@ -155,7 +155,7 @@ class ModuleLiveScripts : public Module {
       // _state.compareRecursive("scripts", _state.data["scripts"], newData["scripts"], updatedItem); //compare and update
       _state.data["scripts"] = newData["scripts"];  // update without compareRecursive -> without handles
       // JsonObject newDataObject = newData.as<JsonObject>();
-      // _socket->emitEvent("editor", newDataObject);
+      // _socket->emitEvent("editor", newDataObject, _moduleName.c_str());
 
       // requestUIUpdate ...
       update(

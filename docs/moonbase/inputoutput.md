@@ -90,7 +90,7 @@ For each board the following presets are defined:
 
 ![SE-16p](../firmware/installer/images/esp32-s3-stephanelec-16p.jpg)
 
-* Choose the esp32-s3-devkitc-1-n8r8v board in the [MoonLight Installer](../../gettingstarted/installer/) 
+* Choose the esp32-s3-n8r8v board in the [MoonLight Installer](../../gettingstarted/installer/) 
 * Set Switch1 the same as you set the jumper on the board: off / default: Infrared. on: Ethernet.
 * Only 5 boards were ever produced. If you are one of the lucky few, feel free to reach out to limpkin on [Discord](https://discord.gg/TC8NSUSCdV)
 
@@ -99,5 +99,5 @@ For each board the following presets are defined:
 
 ![SE-16p](../firmware/installer/images/esp32-s3-lightcrafter16.jpg)
 
-* Choose the esp32-s3-devkitc-1-n8r8v board in the [MoonLight Installer](../../gettingstarted/installer/) 
+* Choose the esp32-s3-n8r8v board in the [MoonLight Installer](../../gettingstarted/installer/) 
 * Documentation to be soon published on [limpkin's website](https://www.limpkin.fr)

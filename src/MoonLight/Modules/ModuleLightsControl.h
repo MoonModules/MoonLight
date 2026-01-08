@@ -507,8 +507,8 @@ class ModuleLightsControl : public Module {
       read([&](ModuleState& _state) {
         if (_socket->getConnectedClients() && _state.data["monitorOn"]) {
           static_assert(sizeof(LightsHeader) > headerPrimeNumber, "LightsHeader size nog large enough for Monitor protocol");
-          _socket->emitEvent("monitor", (char*)&layerP.lights.header, headerPrimeNumber);                                                      // send headerPrimeNumber bytes so Monitor.svelte can recognize this
-          _socket->emitEvent("monitor", (char*)layerP.lights.channelsE, MIN(layerP.lights.header.nrOfLights * 3, layerP.lights.maxChannels));  //*3 is for 3 bytes position
+          _socket->emitEvent("monitor", (char*)&layerP.lights.header, headerPrimeNumber, _moduleName.c_str());                                                      // send headerPrimeNumber bytes so Monitor.svelte can recognize this
+          _socket->emitEvent("monitor", (char*)layerP.lights.channelsE, MIN(layerP.lights.header.nrOfLights * 3, layerP.lights.maxChannels), _moduleName.c_str());  //*3 is for 3 bytes position
         }
         memset(layerP.lights.channelsE, 0, layerP.lights.maxChannels);  // set all the channels to 0 //cleaning the positions
         xSemaphoreTake(swapMutex, portMAX_DELAY);
@@ -523,7 +523,7 @@ class ModuleLightsControl : public Module {
 
         read([&](ModuleState& _state) {
           if (_socket->getConnectedClients() && _state.data["monitorOn"]) {
-            _socket->emitEvent("monitor", (char*)layerP.lights.channelsD, MIN(layerP.lights.header.nrOfChannels, layerP.lights.maxChannels));  // use channelsD as it won't be overwritten by effects during loop
+            _socket->emitEvent("monitor", (char*)layerP.lights.channelsD, MIN(layerP.lights.header.nrOfChannels, layerP.lights.maxChannels), _moduleName.c_str());  // use channelsD as it won't be overwritten by effects during loop
           }
         });
       }

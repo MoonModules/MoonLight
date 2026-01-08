@@ -271,17 +271,17 @@ inline uint32_t fastDiv255(uint32_t x) {  // 3–4 cycles
 }
 
 // Task yields
-inline uint16_t yieldFrequency;
-inline uint16_t yieldCounter;
+inline uint16_t yieldCallCount = 0;
+inline uint16_t yieldCounter = 0;
 
 inline void addYield(uint8_t frequency) {
-  if (++yieldFrequency % frequency == 0) {
+  if (++yieldCallCount % frequency == 0) {
     yieldCounter++;
     vTaskDelay(1);  // taskYIELD() is not good enough as it does not give back control to idle tasks
   }
 }
 
 inline void logYield() {
-  EXT_LOGD(ML_TAG, "yieldCounter %d (%d)", yieldFrequency, yieldCounter);
+  EXT_LOGD(ML_TAG, "yieldCounter %d (%d)", yieldCallCount, yieldCounter);
   yieldCounter = 0;
 }

@@ -1,5 +1,5 @@
 {
-  "name": "MoonLight on esp32-s3-devkitc-1-n8r8v",
+  "name": "MoonLight on esp32-s3-n8r8v",
   "version": "0.7.0",
   "home_assistant_domain": "esphome",
   "funding_url": "https://esphome.io/guides/supporters.html",
@@ -8,10 +8,10 @@
   "builds": [
     {
       "chipFamily": "ESP32-S3",
-      "name": "esp32-s3-devkitc-1-n8r8v",
-      "image": "./images/esp32-s3-devkitc-1-n8r8v.jpg",
+      "name": "esp32-s3-n8r8v",
+      "image": "./images/esp32-s3-n8r8v.jpg",
       "parts": [
-        { "path": "./MoonLight_esp32-s3-devkitc-1-n8r8v_0-7-0_webflash.bin", "offset": 0 }
+        { "path": "./MoonLight_esp32-s3-n8r8v_0-7-0_webflash.bin", "offset": 0 }
       ]
     }
   ]

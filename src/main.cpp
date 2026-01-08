@@ -291,7 +291,7 @@ void setup() {
   sharedEventEndpoint = new SharedEventEndpoint(esp32sveltekit.getSocket());
   // sharedFsPersistence = new SharedFSPersistence(esp32sveltekit.getFS());
   if (!sharedHttpEndpoint || !sharedWebSocketServer || !sharedEventEndpoint) {
-    EXT_LOGE(ML_TAG, "Failed to allocate shared routers, rebooting");
+    EXT_LOGE(ML_TAG, "Failed to allocate shared routers, restarting");
     esp_restart();  // or another hard-fail strategy appropriate for your platform
   }
 

@@ -38,7 +38,7 @@
 			<span>
 				🛟
 				<a
-					href="https://moonmodules.github.io/MoonLight"
+					href="https://moonmodules.github.io/MoonLight/gettingstarted/installer/#setup-moonlight"
 					class="link"
 					target="_blank"
 					rel="noopener noreferrer">Help</a

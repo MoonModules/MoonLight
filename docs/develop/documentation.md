@@ -10,7 +10,7 @@ Store technical documentation directly in the code. Functional documentation as 
 
 ### Adding or changing Nodes
 
-If you create or change a [node](https://moonmodules.org/MoonLight/develop/nodes/), create or change the node in the overview tables of the node type (Effects, Modifiers, Layers, Drivers). Each row in the table looks as follows: 
+If you create or change a [node](https://moonmodules.org/MoonLight/develop/nodes), create or change the node in the overview tables of the node type (Effects, Modifiers, Layers, Drivers). Each row in the table looks as follows: 
 
 | Name | Preview | Controls | Remarks
 | ---- | ----- | ---- | ---- |
@@ -21,21 +21,21 @@ Add the 🆕 or 🚧 emoji if applicable
 Location of the source doc files and the resulting webpages:
 
 * [Nodes docs](https://github.com/MoonModules/MoonLight/tree/main/docs/moonlight)
-* Nodes webpages: [Effects](https://moonmodules.org/MoonLight/moonlight/effects/), [Modifiers](https://moonmodules.org/MoonLight/moonlight/modifiers/), [Layouts](https://moonmodules.org/MoonLight/moonlight/layouts/) and [Drivers](https://moonmodules.org/MoonLight/moonlight/drivers/)
+* Nodes webpages: [Effects](https://moonmodules.org/MoonLight/moonlight/effects), [Modifiers](https://moonmodules.org/MoonLight/moonlight/modifiers), [Layouts](https://moonmodules.org/MoonLight/moonlight/layouts) and [Drivers](https://moonmodules.org/MoonLight/moonlight/drivers)
 
 ### Adding or changing Modules
 
-If you create or change a [module](https://moonmodules.org/MoonLight/develop/modules/), update the according module docs.
+If you create or change a [module](https://moonmodules.org/MoonLight/develop/modules), update the according module docs.
 
 * Image: see [Image](https://moonmodules.org/MoonLight/develop/documentation#images)
 
 Location of the source doc files and the resulting webpages:
 
 * [MoonBase docs](https://github.com/MoonModules/MoonLight/tree/main/docs/moonbase)
-* [MoonBase Webpages](https://moonmodules.org/MoonLight/moonbase/overview/)
+* [MoonBase Webpages](https://moonmodules.org/MoonLight/moonbase/overview)
 
 * [MoonLight docs](https://github.com/MoonModules/MoonLight/tree/main/docs/moonlight)
-* [MoonLight Webpages](https://moonmodules.org/MoonLight/moonlight/overview/)
+* [MoonLight Webpages](https://moonmodules.org/MoonLight/moonlight/overview)
 
 ## Images
 
@@ -43,7 +43,7 @@ Location of the source doc files and the resulting webpages:
 	* For drivers an image of what is driven, for Effects, Modifiers and layouts image showing the result on the monitor. 
 	* Images should be max 40-100KB, 320 px wide for nodes, 640 px wide, ~100KB for larger images, use [iloveimg resize](https://www.iloveimg.com/resize-image) or similar to resize the image. Otherwise page download will be too slow.
 	* Store the image in the [media folder](https://github.com/MoonModules/MoonLight/tree/main/docs/media) in /moonbase or /moonlight and refer to it using relative paths: ../../media/moonlight/<image>
-	* For WLED effects, copy the image link already existing on [kno.WLED.ge](https://kno.wled.ge/features/effects/) or [MM.kno.WLED.ge](https://mm.kno.wled.ge/features/effects/).
+	* For WLED effects, copy the image link already existing on [kno.WLED.ge](https://kno.wled.ge/features/effects) or [MM.kno.WLED.ge](https://mm.kno.wled.ge/features/effects).
 	* Movie to gif: use the [gifmaker.sh](https://github.com/MoonModules/MoonLight/blob/main/misc/gifmaker.sh) - ffmpeg must be installed.
 
 ## MKDocs
@@ -97,6 +97,6 @@ It should now be visible 🐉
 
 	[https://localhost:8000](https://localhost:8000)
 
-	[https://127.0.0.1:8000/](https://127.0.0.1:8000/)
+	[https://127.0.0.1:8000/](https://127.0.0.1:8000)
 
 3. Ensure mkdocs serve is running and reboot the service.

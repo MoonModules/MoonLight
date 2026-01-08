@@ -161,6 +161,7 @@ class ArtNetOutDriver : public DriverNode {
 
       if (header->offsetRGB1 != UINT8_MAX) {
         reOrderAndDimRGBW(p + header->offsetRGB1, c + header->offsetRGB1);
+        // nested as offsetRGB2 only exists if offsetRGB1 etc (for speed)
         if (header->offsetRGB2 != UINT8_MAX) {
           reOrderAndDimRGBW(p + header->offsetRGB2, c + header->offsetRGB2);
           if (header->offsetRGB3 != UINT8_MAX) {
