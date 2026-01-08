@@ -139,7 +139,7 @@ Launch [ESPConnect](https://thelastoutpostworkshop.github.io/microcontroller_dev
 
 <img width="400" src="https://github.com/user-attachments/assets/3b702b3e-62cc-4330-83f6-d473067df449" />
 
-Click Connect and choose your device. Select Flash Tools, go to Flash Firmware, open a firmware.bin file from your file system, select Flash Offset App0 and Flash
+Click Connect and choose your device. Select Flash Tools, go to Flash Firmware, open a firmware.bin file from your file system, select Flash Offset App0 and Flash.
  
 ### Visual Studio code
 

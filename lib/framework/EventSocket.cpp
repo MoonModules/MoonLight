@@ -228,10 +228,8 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
                 // [29177816][W][EventSocket.cpp:226] emitEvent(): [🐼] Failed to send event monitor from lightscontrol to client 53: ESP_FAIL (len: 49152)
                 // it = subscriptions.erase(it);// do not erase as we hope for better times
             }
-            else
-            {
-                ++it;
-            }
+
+            ++it; // increase if no subscriptions.erase(it) took place!
         }
     }
 

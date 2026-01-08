@@ -72,7 +72,7 @@
     },
     {
       "chipFamily": "ESP32-P4",
-      "name": "esp32-p4- olimex",
+      "name": "esp32-p4-olimex",
       "image": "./images/esp32-p4-olimex.jpg",
       "parts": [
         { "path": "./MoonLight_esp32-p4-olimex_0-7-0_webflash.bin", "offset": 0 }

@@ -272,7 +272,7 @@ This architecture achieves optimal performance through:
 
 ## Idle Watchdog
 
-For big setups, 16K LEDs typically, Task watchdog got triggered crashes occur more frequently. Mostly in the effects and drivers task but also in other tasks like WiFi occassionally. The workaround to avoid this is adding task yields in the code. This is currently done as follow:
+For big setups, 16K LEDs typically, Task watchdog got triggered crashes occur more frequently. Mostly in the effects and drivers task but also in other tasks like WiFi occasionally. The workaround to avoid this is adding task yields in the code. This is currently done as follow:
 
 ```cpp
 void effectOrDriverTask(void* pvParameters) {
@@ -314,8 +314,8 @@ inline void addYield(uint8_t frequency) {
 ```
 
 * esp_task_wdt ( #include "esp_task_wdt.h" ) make sure the tasks are in the watchdog system and in the task loop it is reset and vTaskDelay(1) makes sure there is a yield each time
-* taskYIELD() is not good enough as it does not give back control to the idle task so we need vTaskDelay(1)
-* increasing the watchdog timer from 5s to 10s might trigger less watchdog crashes but is not eliminating it so this is not added
+* taskYIELD() is not good enough as it does not give back control to the idle task so we need vTaskDelay(1), taskYIELD() only yields to tasks of equal or higher priority
+* increasing the watchdog timer from 5s to 10s might trigger less watchdog crashes but is not eliminating it so this is not added yet. However, for extreme setups (up to 100K LEDs), even with yields, processing time might legitimately exceed 5s. So might be added later.
 * Node::loop(): each active node will call addYield(10)
 * ArtNetOutDriver::loop(): as a massive amount of packages are blasted (for 16K LEDs 97 universes / packets), addYield(10) is called after each packet
 * addYield(10) means: send a vTaskDelay(1) every 10 times.

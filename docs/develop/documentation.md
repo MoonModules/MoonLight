@@ -40,11 +40,11 @@ Location of the source doc files and the resulting webpages:
 ## Images
 
 * Image
-	* For drivers an image of what is driven, for Effects, Modifiers and layouts image showing the result on the monitor. 
-	* Images should be max 40-100KB, 320 px wide for nodes, 640 px wide, ~100KB for larger images, use [iloveimg resize](https://www.iloveimg.com/resize-image) or similar to resize the image. Otherwise page download will be too slow.
-	* Store the image in the [media folder](https://github.com/MoonModules/MoonLight/tree/main/docs/media) in /moonbase or /moonlight and refer to it using relative paths: ../../media/moonlight/<image>
-	* For WLED effects, copy the image link already existing on [kno.WLED.ge](https://kno.wled.ge/features/effects) or [MM.kno.WLED.ge](https://mm.kno.wled.ge/features/effects).
-	* Movie to gif: use the [gifmaker.sh](https://github.com/MoonModules/MoonLight/blob/main/misc/gifmaker.sh) - ffmpeg must be installed.
+    * For drivers an image of what is driven, for Effects, Modifiers and layouts image showing the result on the monitor. 
+    * Images should be max 40-100KB, 320 px wide for nodes, 640 px wide, ~100KB for larger images, use [iloveimg resize](https://www.iloveimg.com/resize-image) or similar to resize the image. Otherwise page download will be too slow.
+    * Store the image in the [media folder](https://github.com/MoonModules/MoonLight/tree/main/docs/media) in /moonbase or /moonlight and refer to it using relative paths: ../../media/moonlight/<image>
+    * For WLED effects, copy the image link already existing on [kno.WLED.ge](https://kno.wled.ge/features/effects) or [MM.kno.WLED.ge](https://mm.kno.wled.ge/features/effects).
+    * Movie to gif: use the [gifmaker.sh](https://github.com/MoonModules/MoonLight/blob/main/misc/gifmaker.sh) - ffmpeg must be installed.
 
 ## MKDocs
 
@@ -95,8 +95,8 @@ It should now be visible 🐉
 
 2. Check the address in a browser:
 
-	[https://localhost:8000](https://localhost:8000)
+[https://localhost:8000](https://localhost:8000)
 
-	[https://127.0.0.1:8000/](https://127.0.0.1:8000)
+[https://127.0.0.1:8000/](https://127.0.0.1:8000)
 
 3. Ensure mkdocs serve is running and reboot the service.
