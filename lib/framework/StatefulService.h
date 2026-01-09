@@ -162,16 +162,16 @@ public:
         return result;
     }
 
-    void read(std::function<void(T &)> stateReader)
+    void read(std::function<void(T &)> stateReader, const String &originId) // 🌙 Add originId
     {
-        beginTransaction("read"); // 🌙 Add originId
+        beginTransaction(originId); // 🌙 Add originId
         stateReader(_state);
         endTransaction();
     }
 
-    void read(JsonObject &jsonObject, JsonStateReader<T> stateReader)
+    void read(JsonObject &jsonObject, JsonStateReader<T> stateReader, const String &originId) // 🌙 Add originId
     {
-        beginTransaction("read"); // 🌙 Add originId
+        beginTransaction(originId); // 🌙 Add originId
         stateReader(_state, jsonObject);
         endTransaction();
     }

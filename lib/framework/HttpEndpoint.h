@@ -66,7 +66,7 @@ public:
                         {
                             PsychicJsonResponse response = PsychicJsonResponse(request, false);
                             JsonObject jsonObject = response.getRoot();
-                            _statefulService->read(jsonObject, _stateReader);
+                            _statefulService->read(jsonObject, _stateReader, _servicePath); // 🌙 Add originId
                             return response.send();
                         },
                         _authenticationPredicate));
@@ -99,7 +99,7 @@ public:
                             PsychicJsonResponse response = PsychicJsonResponse(request, false);
                             jsonObject = response.getRoot();
 
-                            _statefulService->read(jsonObject, _stateReader);
+                            _statefulService->read(jsonObject, _stateReader, _servicePath); // 🌙 Add originId
 
                             return response.send();
                         },

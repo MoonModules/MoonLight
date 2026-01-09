@@ -32,40 +32,42 @@ class ModuleDrivers : public NodeManager {
   }
 
   void readPins() {
-    _moduleIO->read([&](ModuleState& state) {
-      // find the pins in board definitions
+    _moduleIO->read(
+        [&](ModuleState& state) {
+          // find the pins in board definitions
 
-      memset(layerP.ledPins, UINT8_MAX, sizeof(layerP.ledPins));
+          memset(layerP.ledPins, UINT8_MAX, sizeof(layerP.ledPins));
 
-      layerP.maxPower = state.data["maxPower"];
-      EXT_LOGD(ML_TAG, "maxPower %d", layerP.maxPower);
+          layerP.maxPower = state.data["maxPower"];
+          EXT_LOGD(ML_TAG, "maxPower %d", layerP.maxPower);
 
-      // assign pins (valid only)
-      for (JsonObject pinObject : state.data["pins"].as<JsonArray>()) {
-        uint8_t usage = pinObject["usage"];
-        uint8_t index = pinObject["index"];
-        uint8_t gpio = pinObject["GPIO"];
-        if (usage == pin_LED && index >=1 && index <= 20 && GPIO_IS_VALID_OUTPUT_GPIO(gpio)) {
-          layerP.ledPins[index-1] = gpio;
-        }
-      }
+          // assign pins (valid only)
+          for (JsonObject pinObject : state.data["pins"].as<JsonArray>()) {
+            uint8_t usage = pinObject["usage"];
+            uint8_t index = pinObject["index"];
+            uint8_t gpio = pinObject["GPIO"];
+            if (usage == pin_LED && index >= 1 && index <= 20 && GPIO_IS_VALID_OUTPUT_GPIO(gpio)) {
+              layerP.ledPins[index - 1] = gpio;
+            }
+          }
 
-      // Remove all UINT8_MAX values by compacting the array
-      layerP.nrOfLedPins = 0;
-      for (int readPos = 0; readPos < sizeof(layerP.ledPins); readPos++) {
-        if (layerP.ledPins[readPos] != UINT8_MAX) {  // only pins which have a nrOfLedPins // && layerP.ledsPerPin[layerP.nrOfLedPins] != UINT16_MAX && layerP.ledsPerPin[layerP.nrOfLedPins] != 0
-          layerP.ledPins[layerP.nrOfLedPins++] = layerP.ledPins[readPos];
-        }
-      }
+          // Remove all UINT8_MAX values by compacting the array
+          layerP.nrOfLedPins = 0;
+          for (int readPos = 0; readPos < sizeof(layerP.ledPins); readPos++) {
+            if (layerP.ledPins[readPos] != UINT8_MAX) {  // only pins which have a nrOfLedPins // && layerP.ledsPerPin[layerP.nrOfLedPins] != UINT16_MAX && layerP.ledsPerPin[layerP.nrOfLedPins] != 0
+              layerP.ledPins[layerP.nrOfLedPins++] = layerP.ledPins[readPos];
+            }
+          }
 
-      // log pins
-      for (int i = 0; i < layerP.nrOfLedPins; i++) {
-        EXT_LOGD(ML_TAG, "ledPins[%d-%d] = %d (#%d)", i, layerP.nrOfLedPins, layerP.ledPins[i], layerP.ledsPerPin[i]);
-      }
+          // log pins
+          for (int i = 0; i < layerP.nrOfLedPins; i++) {
+            EXT_LOGD(ML_TAG, "ledPins[%d-%d] = %d (#%d)", i, layerP.nrOfLedPins, layerP.ledPins[i], layerP.ledsPerPin[i]);
+          }
 
-      layerP.requestMapPhysical = true;
-      layerP.requestMapVirtual = true;
-    });
+          layerP.requestMapPhysical = true;
+          layerP.requestMapVirtual = true;
+        },
+        _moduleName);
   }
 
   void begin() override {
@@ -101,11 +103,13 @@ class ModuleDrivers : public NodeManager {
     addControlValue(control, getNameAndTags<HUB75Driver>());
 
     // board preset specific
-    _moduleIO->read([&](ModuleState& state) {
-      uint8_t boardPreset = state.data["boardPreset"];
-      if (boardPreset == board_SE16V1) addControlValue(control, getNameAndTags<SE16Layout>());
-      if (boardPreset == board_LightCrafter16) addControlValue(control, getNameAndTags<LightCrafter16Layout>());
-    });
+    _moduleIO->read(
+        [&](ModuleState& state) {
+          uint8_t boardPreset = state.data["boardPreset"];
+          if (boardPreset == board_SE16V1) addControlValue(control, getNameAndTags<SE16Layout>());
+          if (boardPreset == board_LightCrafter16) addControlValue(control, getNameAndTags<LightCrafter16Layout>());
+        },
+        _moduleName);
   }
 
   Node* addNode(const uint8_t index, const char* name, const JsonArray& controls) const override {
@@ -135,11 +139,13 @@ class ModuleDrivers : public NodeManager {
     if (!node) node = checkAndAlloc<HUB75Driver>(name);
 
     // board preset specific
-    _moduleIO->read([&](ModuleState& state) {
-      uint8_t boardPreset = state.data["boardPreset"];
-      if (!node && boardPreset == board_SE16V1) node = checkAndAlloc<SE16Layout>(name);
-      if (!node && boardPreset == board_LightCrafter16) node = checkAndAlloc<LightCrafter16Layout>(name);
-    });
+    _moduleIO->read(
+        [&](ModuleState& state) {
+          uint8_t boardPreset = state.data["boardPreset"];
+          if (!node && boardPreset == board_SE16V1) node = checkAndAlloc<SE16Layout>(name);
+          if (!node && boardPreset == board_LightCrafter16) node = checkAndAlloc<LightCrafter16Layout>(name);
+        },
+        _moduleName);
 
   #if FT_LIVESCRIPT
     if (!node) {

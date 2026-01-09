@@ -349,7 +349,11 @@ void setup() {
                        NULL,                                // parameter
                        3,                                   // priority
                        &driverTaskHandle,                   // task handle
-                       1                                    // application core
+#ifdef CONFIG_FREERTOS_UNICORE
+                       0  // Single-core: use Core 0 (only option)
+#else
+                       1  // Multi-core: application core (avoid WiFi interference)
+#endif
   );
   #endif
 

@@ -105,7 +105,7 @@ struct Ball {
 class LinesEffect : public Node {
  public:
   static const char* name() { return "Lines"; }
-  static uint8_t dim() { return _2D; }
+  static uint8_t dim() { return _3D; }
   static const char* tags() { return "🔥"; }
 
   uint8_t bpm = 30;
@@ -232,7 +232,7 @@ class ScrollingTextEffect : public Node {
   void loop() override {
     layer->fadeToBlackBy();
 
-  #define nrOfChoices 9
+  #define nrOfChoices 7
     uint8_t choice;
     if (preset > 0)  // not auto
       choice = preset;
@@ -280,15 +280,9 @@ class ScrollingTextEffect : public Node {
       text.format("%s", sharedData.connectionStatus == 0 ? "Off" : sharedData.connectionStatus == 1 ? "AP-" : sharedData.connectionStatus == 2 ? "AP+" : sharedData.connectionStatus == 3 ? "Sta-" : sharedData.connectionStatus == 4 ? "Sta+" : "mqqt");
       break;
     case 7:
-      text.format("%dC", sharedData.clientListSize);
+      text.format("%d%d-%d", sharedData.clientListSize, sharedData.connectedClients, sharedData.activeClients);
       break;
     case 8:
-      text.format("%dCC", sharedData.connectedClients);
-      break;
-    case 9:
-      text.format("%dAC", sharedData.activeClients);
-      break;
-    case 10:
       text.format("%dK", ESP.getFreeHeap() / 1024);
       break;
     }

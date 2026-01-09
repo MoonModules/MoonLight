@@ -140,7 +140,7 @@ private:
         JsonObject root = jsonDocument.to<JsonObject>();
         String buffer;
 
-        _statefulService->read(root, _stateReader);
+        _statefulService->read(root, _stateReader, originId); // 🌙 Add originId
 
         // serialize the json to a string
         serializeJson(jsonDocument, buffer);

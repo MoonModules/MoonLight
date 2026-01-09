@@ -85,22 +85,24 @@ class ModuleLightsControl : public Module {
     _fileManager->addUpdateHandler([this](const String& originId) {
       EXT_LOGV(ML_TAG, "FileManager::updateHandler %s", originId.c_str());
       // read the file state (read all files and folders on FS and collect changes)
-      _fileManager->read([&](FilesState& filesState) {
-        // loop over all changed files (normally only one)
-        bool presetChanged = false;
-        for (auto updatedItem : filesState.updatedItems) {
-          // if file is the current live script, recompile it (to do: multiple live effects)
-          EXT_LOGV(ML_TAG, "updateHandler updatedItem %s", updatedItem.c_str());
-          if (strstr(updatedItem.c_str(), "/.config/presets")) {
-            EXT_LOGV(ML_TAG, " preset.json updated -> call update %s", updatedItem.c_str());
-            presetChanged = true;
-          }
-        }
-        if (presetChanged) {
-          EXT_LOGV(ML_TAG, "setPresetsFromFolder");
-          setPresetsFromFolder();  // update the presets from the folder
-        }
-      });
+      _fileManager->read(
+          [&](FilesState& filesState) {
+            // loop over all changed files (normally only one)
+            bool presetChanged = false;
+            for (auto updatedItem : filesState.updatedItems) {
+              // if file is the current live script, recompile it (to do: multiple live effects)
+              EXT_LOGV(ML_TAG, "updateHandler updatedItem %s", updatedItem.c_str());
+              if (strstr(updatedItem.c_str(), "/.config/presets")) {
+                EXT_LOGV(ML_TAG, " preset.json updated -> call update %s", updatedItem.c_str());
+                presetChanged = true;
+              }
+            }
+            if (presetChanged) {
+              EXT_LOGV(ML_TAG, "setPresetsFromFolder");
+              setPresetsFromFolder();  // update the presets from the folder
+            }
+          },
+          originId);
     });
     moduleIO.addUpdateHandler([this](const String& originId) { readPins(); }, false);
     readPins();  // initially
@@ -213,41 +215,43 @@ class ModuleLightsControl : public Module {
   }
 
   void readPins() {
-    moduleIO.read([&](ModuleState& state) {
-      pinRelayLightsOn = UINT8_MAX;
-      pinPushButtonLightsOn = UINT8_MAX;
-      pinToggleButtonLightsOn = UINT8_MAX;
-      for (JsonObject pinObject : state.data["pins"].as<JsonArray>()) {
-        uint8_t usage = pinObject["usage"];
-        uint8_t gpio = pinObject["GPIO"];
+    moduleIO.read(
+        [&](ModuleState& state) {
+          pinRelayLightsOn = UINT8_MAX;
+          pinPushButtonLightsOn = UINT8_MAX;
+          pinToggleButtonLightsOn = UINT8_MAX;
+          for (JsonObject pinObject : state.data["pins"].as<JsonArray>()) {
+            uint8_t usage = pinObject["usage"];
+            uint8_t gpio = pinObject["GPIO"];
 
-        if (usage == pin_Relay_LightsOn) {
-          if (GPIO_IS_VALID_OUTPUT_GPIO(gpio)) {
-            pinRelayLightsOn = gpio;
-            pinMode(pinRelayLightsOn, OUTPUT);
-            uint8_t newBri = _state.data["lightsOn"] ? _state.data["brightness"] : 0;
-            digitalWrite(pinRelayLightsOn, newBri > 0 ? HIGH : LOW);
-            EXT_LOGD(ML_TAG, "pinRelayLightsOn found %d", pinRelayLightsOn);
-          } else
-            EXT_LOGE(MB_TAG, "gpio %d not valid", pinRelayLightsOn);
-        } else if (usage == pin_Button_Push_LightsOn) {
-          if (GPIO_IS_VALID_GPIO(gpio)) {
-            pinPushButtonLightsOn = gpio;
-            pinMode(pinPushButtonLightsOn, INPUT_PULLUP);
-            EXT_LOGD(ML_TAG, "pinPushButtonLightsOn found %d", pinPushButtonLightsOn);
-          } else
-            EXT_LOGE(MB_TAG, "gpio %d not valid", pinPushButtonLightsOn);
-        } else if (usage == pin_Button_Toggle_LightsOn) {
-          if (GPIO_IS_VALID_GPIO(gpio)) {
-            pinToggleButtonLightsOn = gpio;
-            pinMode(pinToggleButtonLightsOn, INPUT_PULLUP);
-            EXT_LOGD(ML_TAG, "pinToggleButtonLightsOn found %d", pinToggleButtonLightsOn);
-          } else
-            EXT_LOGE(MB_TAG, "gpio %d not valid", pinToggleButtonLightsOn);
-        }
-      }
-      // for (int i = 0; i < sizeof(pins); i++) EXT_LOGD(ML_TAG, "pin %d = %d", i, pins[i]);
-    });
+            if (usage == pin_Relay_LightsOn) {
+              if (GPIO_IS_VALID_OUTPUT_GPIO(gpio)) {
+                pinRelayLightsOn = gpio;
+                pinMode(pinRelayLightsOn, OUTPUT);
+                uint8_t newBri = _state.data["lightsOn"] ? _state.data["brightness"] : 0;
+                digitalWrite(pinRelayLightsOn, newBri > 0 ? HIGH : LOW);
+                EXT_LOGD(ML_TAG, "pinRelayLightsOn found %d", pinRelayLightsOn);
+              } else
+                EXT_LOGE(MB_TAG, "gpio %d not valid", pinRelayLightsOn);
+            } else if (usage == pin_Button_Push_LightsOn) {
+              if (GPIO_IS_VALID_GPIO(gpio)) {
+                pinPushButtonLightsOn = gpio;
+                pinMode(pinPushButtonLightsOn, INPUT_PULLUP);
+                EXT_LOGD(ML_TAG, "pinPushButtonLightsOn found %d", pinPushButtonLightsOn);
+              } else
+                EXT_LOGE(MB_TAG, "gpio %d not valid", pinPushButtonLightsOn);
+            } else if (usage == pin_Button_Toggle_LightsOn) {
+              if (GPIO_IS_VALID_GPIO(gpio)) {
+                pinToggleButtonLightsOn = gpio;
+                pinMode(pinToggleButtonLightsOn, INPUT_PULLUP);
+                EXT_LOGD(ML_TAG, "pinToggleButtonLightsOn found %d", pinToggleButtonLightsOn);
+              } else
+                EXT_LOGE(MB_TAG, "gpio %d not valid", pinToggleButtonLightsOn);
+            }
+          }
+          // for (int i = 0; i < sizeof(pins); i++) EXT_LOGD(ML_TAG, "pin %d = %d", i, pins[i]);
+        },
+        _moduleName);
   }
 
   // define the data model
@@ -504,28 +508,32 @@ class ModuleLightsControl : public Module {
     xSemaphoreGive(swapMutex);
 
     if (isPositions == 2) {  // send to UI
-      read([&](ModuleState& _state) {
-        if (_socket->getActiveClients() && _state.data["monitorOn"]) {
-          static_assert(sizeof(LightsHeader) > headerPrimeNumber, "LightsHeader size nog large enough for Monitor protocol");
-          _socket->emitEvent("monitor", (char*)&layerP.lights.header, headerPrimeNumber, _moduleName.c_str());                                                      // send headerPrimeNumber bytes so Monitor.svelte can recognize this
-          _socket->emitEvent("monitor", (char*)layerP.lights.channelsE, MIN(layerP.lights.header.nrOfLights * 3, layerP.lights.maxChannels), _moduleName.c_str());  //*3 is for 3 bytes position
-        }
-        memset(layerP.lights.channelsE, 0, layerP.lights.maxChannels);  // set all the channels to 0 //cleaning the positions
-        xSemaphoreTake(swapMutex, portMAX_DELAY);
-        EXT_LOGD(ML_TAG, "positions sent to monitor (2 -> 3)");
-        layerP.lights.header.isPositions = 3;
-        xSemaphoreGive(swapMutex);
-      });
+      read(
+          [&](ModuleState& _state) {
+            if (_socket->getActiveClients() && _state.data["monitorOn"]) {
+              static_assert(sizeof(LightsHeader) > headerPrimeNumber, "LightsHeader size nog large enough for Monitor protocol");
+              _socket->emitEvent("monitor", (char*)&layerP.lights.header, headerPrimeNumber, _moduleName.c_str());                                                      // send headerPrimeNumber bytes so Monitor.svelte can recognize this
+              _socket->emitEvent("monitor", (char*)layerP.lights.channelsE, MIN(layerP.lights.header.nrOfLights * 3, layerP.lights.maxChannels), _moduleName.c_str());  //*3 is for 3 bytes position
+            }
+            memset(layerP.lights.channelsE, 0, layerP.lights.maxChannels);  // set all the channels to 0 //cleaning the positions
+            xSemaphoreTake(swapMutex, portMAX_DELAY);
+            EXT_LOGD(ML_TAG, "positions sent to monitor (2 -> 3)");
+            layerP.lights.header.isPositions = 3;
+            xSemaphoreGive(swapMutex);
+          },
+          _moduleName);
     } else if (isPositions == 0 && layerP.lights.header.nrOfLights) {  // send to UI
       static unsigned long monitorMillis = 0;
       if (millis() - monitorMillis >= MAX(20, layerP.lights.header.nrOfLights / 300)) {  // 12K lights -> 40ms
         monitorMillis = millis();
 
-        read([&](ModuleState& _state) {
-          if (_socket->getActiveClients() && _state.data["monitorOn"]) {
-            _socket->emitEvent("monitor", (char*)layerP.lights.channelsD, MIN(layerP.lights.header.nrOfChannels, layerP.lights.maxChannels), _moduleName.c_str());  // use channelsD as it won't be overwritten by effects during loop
-          }
-        });
+        read(
+            [&](ModuleState& _state) {
+              if (_socket->getActiveClients() && _state.data["monitorOn"]) {
+                _socket->emitEvent("monitor", (char*)layerP.lights.channelsD, MIN(layerP.lights.header.nrOfChannels, layerP.lights.maxChannels), _moduleName.c_str());  // use channelsD as it won't be overwritten by effects during loop
+              }
+            },
+            _moduleName);
       }
     }
   #endif

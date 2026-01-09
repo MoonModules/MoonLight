@@ -50,11 +50,7 @@ void EventSocket::onWSOpen(PsychicWebSocketClient *client)
 
 void EventSocket::onWSClose(PsychicWebSocketClient *client)
 {
-    // 🌙 adding semaphore wait too long logging
-    if (xSemaphoreTake(clientSubscriptionsMutex, pdMS_TO_TICKS(100))==pdFALSE) {
-        ESP_LOGW(SVK_TAG, "clientSubscriptionsMutex wait too long");
-        xSemaphoreTake(clientSubscriptionsMutex, portMAX_DELAY);
-    }
+    xSemaphoreTake(clientSubscriptionsMutex, portMAX_DELAY);
     for (auto &event_subscriptions : client_subscriptions)
     {
         event_subscriptions.second.remove(client->socket());
@@ -172,11 +168,7 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
     }
 
     int originSubscriptionId = originId[0] ? atoi(originId) : -1;
-    // 🌙 adding semaphore wait too long logging
-    if (xSemaphoreTake(clientSubscriptionsMutex, pdMS_TO_TICKS(100))==pdFALSE) {
-        ESP_LOGW(SVK_TAG, "clientSubscriptionsMutex wait too long");
-        xSemaphoreTake(clientSubscriptionsMutex, portMAX_DELAY);
-    }
+    xSemaphoreTake(clientSubscriptionsMutex, portMAX_DELAY);
     auto &subscriptions = client_subscriptions[event];
     if (subscriptions.empty())
     {
@@ -296,10 +288,7 @@ void EventSocket::handleClientInfo(JsonObject &data, int originId)
 {
     bool visible = data["visible"] | false;
     
-    if (xSemaphoreTake(clientSubscriptionsMutex, pdMS_TO_TICKS(100))==pdFALSE) {
-        ESP_LOGW(SVK_TAG, "clientSubscriptionsMutex wait too long");
-        xSemaphoreTake(clientSubscriptionsMutex, portMAX_DELAY);
-    }
+    xSemaphoreTake(clientSubscriptionsMutex, portMAX_DELAY);
     _clientVisibility[originId] = visible;
     xSemaphoreGive(clientSubscriptionsMutex);
 
@@ -308,14 +297,12 @@ void EventSocket::handleClientInfo(JsonObject &data, int originId)
 
 unsigned int EventSocket::getActiveClients() {
   unsigned int count = 0;
-  if (xSemaphoreTake(clientSubscriptionsMutex, pdMS_TO_TICKS(100))==pdFALSE) {
-      ESP_LOGW(SVK_TAG, "clientSubscriptionsMutex wait too long");
-      xSemaphoreTake(clientSubscriptionsMutex, portMAX_DELAY);
-  }
+  xSemaphoreTake(clientSubscriptionsMutex, portMAX_DELAY);
 
   for (const auto& pair : _clientVisibility) {
     if (pair.second) count++;
   }
+  
   xSemaphoreGive(clientSubscriptionsMutex);
   return count;
 }
