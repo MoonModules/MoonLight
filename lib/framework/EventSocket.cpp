@@ -59,6 +59,7 @@ void EventSocket::onWSClose(PsychicWebSocketClient *client)
     {
         event_subscriptions.second.remove(client->socket());
     }
+     _clientVisibility.erase((int)client->socket()); // 🌙
     xSemaphoreGive(clientSubscriptionsMutex);
     ESP_LOGI(SVK_TAG, "ws[%s][%u] disconnect", client->remoteIP().toString().c_str(), client->socket());
 }
@@ -166,7 +167,7 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
     // Only process valid events
     if (!isEventValid(event))
     {
-        ESP_LOGW(SVK_TAG, "Method tried to emit unregistered event: %s from %s (len %d)", event.c_str(), originId, len);
+        ESP_LOGW(SVK_TAG, "Method tried to emit unregistered event: %s from %s (len %zu)", event.c_str(), originId, len);
         return;
     }
 
@@ -199,7 +200,7 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
             // 🌙 error check
             if (result != ESP_OK)
             {
-                ESP_LOGW(SVK_TAG, "Failed to send event %s from %s to client %d: %s (len: %d)", event.c_str(), originId, client->socket(), esp_err_to_name(result), len);
+                ESP_LOGW(SVK_TAG, "Failed to send event %s from %s to client %d: %s (len: %zu)", event.c_str(), originId, client->socket(), esp_err_to_name(result), len);
                 // subscriptions.remove(originSubscriptionId);
             }
         }
@@ -213,7 +214,6 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
             int subscription = *it;
             if (subscription == originSubscriptionId)
             {
-                ++it;
                 continue;
             }
             auto *client = _socket.getClient(subscription);
@@ -233,7 +233,7 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
             // 🌙 error check
             if (result != ESP_OK)
             {
-                ESP_LOGW(SVK_TAG, "Failed to send event %s from %s to client %u: %s (len: %d)", event.c_str(), originId, client->socket(), esp_err_to_name(result), len);
+                ESP_LOGW(SVK_TAG, "Failed to send event %s from %s to client %u: %s (len: %zu)", event.c_str(), originId, client->socket(), esp_err_to_name(result), len);
                 // it = subscriptions.erase(it);// do not erase as we hope for better times
                 // --it; // do not advance because of erase
             }
@@ -297,13 +297,26 @@ void EventSocket::handleClientInfo(JsonObject &data, int originId)
     bool visible = data["visible"] | false;
     
     _clientVisibility[originId] = visible;
+    if (xSemaphoreTake(clientSubscriptionsMutex, pdMS_TO_TICKS(100))==pdFALSE) {
+        ESP_LOGW(SVK_TAG, "clientSubscriptionsMutex wait too long");
+        xSemaphoreTake(clientSubscriptionsMutex, portMAX_DELAY);
+    }
+    _clientVisibility[originId] = visible;
+    xSemaphoreGive(clientSubscriptionsMutex);
+
     ESP_LOGD(SVK_TAG, "Client %d visible: %s", originId, visible ? "Yes" : "No");
 }
 
 unsigned int EventSocket::getActiveClients() {
   unsigned int count = 0;
+  if (xSemaphoreTake(clientSubscriptionsMutex, pdMS_TO_TICKS(100))==pdFALSE) {
+      ESP_LOGW(SVK_TAG, "clientSubscriptionsMutex wait too long");
+      xSemaphoreTake(clientSubscriptionsMutex, portMAX_DELAY);
+  }
+
   for (const auto& pair : _clientVisibility) {
     if (pair.second) count++;
   }
+  xSemaphoreGive(clientSubscriptionsMutex);
   return count;
 }

@@ -145,11 +145,14 @@ void effectTask(void* pvParameters) {
 
       if (layerP.lights.useDoubleBuffer) {  // Atomic swap channels
         xSemaphoreTake(swapMutex, portMAX_DELAY);
-        uint8_t* temp = layerP.lights.channelsD;
-        layerP.lights.channelsD = layerP.lights.channelsE;
-        layerP.lights.channelsE = temp;
-      }
-      newFrameReady = true;
+        if (layerP.lights.header.isPositions == 0) {  // Check if not changed while we were unlocked
+          uint8_t* temp = layerP.lights.channelsD;
+          layerP.lights.channelsD = layerP.lights.channelsE;
+          layerP.lights.channelsE = temp;
+          newFrameReady = true;
+        }
+      } else
+        newFrameReady = true;
     }
 
     xSemaphoreGive(swapMutex);
@@ -291,8 +294,8 @@ void setup() {
   sharedEventEndpoint = new SharedEventEndpoint(esp32sveltekit.getSocket());
   // sharedFsPersistence = new SharedFSPersistence(esp32sveltekit.getFS());
   if (!sharedHttpEndpoint || !sharedWebSocketServer || !sharedEventEndpoint) {
-    EXT_LOGE(ML_TAG, "Failed to allocate shared routers, restarting");
-    esp_restart();  // or another hard-fail strategy appropriate for your platform
+    EXT_LOGE(ML_TAG, "dev: Failed to allocate shared routers");
+    return;
   }
 
   modules.reserve(12);  // Adjust based on actual module count

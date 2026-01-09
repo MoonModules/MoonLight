@@ -505,7 +505,7 @@ class ModuleLightsControl : public Module {
 
     if (isPositions == 2) {  // send to UI
       read([&](ModuleState& _state) {
-        if (_socket->getConnectedClients() && _state.data["monitorOn"]) {
+        if (_socket->getActiveClients() && _state.data["monitorOn"]) {
           static_assert(sizeof(LightsHeader) > headerPrimeNumber, "LightsHeader size nog large enough for Monitor protocol");
           _socket->emitEvent("monitor", (char*)&layerP.lights.header, headerPrimeNumber, _moduleName.c_str());                                                      // send headerPrimeNumber bytes so Monitor.svelte can recognize this
           _socket->emitEvent("monitor", (char*)layerP.lights.channelsE, MIN(layerP.lights.header.nrOfLights * 3, layerP.lights.maxChannels), _moduleName.c_str());  //*3 is for 3 bytes position
@@ -522,7 +522,7 @@ class ModuleLightsControl : public Module {
         monitorMillis = millis();
 
         read([&](ModuleState& _state) {
-          if (_socket->getConnectedClients() && _state.data["monitorOn"]) {
+          if (_socket->getActiveClients() && _state.data["monitorOn"]) {
             _socket->emitEvent("monitor", (char*)layerP.lights.channelsD, MIN(layerP.lights.header.nrOfChannels, layerP.lights.maxChannels), _moduleName.c_str());  // use channelsD as it won't be overwritten by effects during loop
           }
         });

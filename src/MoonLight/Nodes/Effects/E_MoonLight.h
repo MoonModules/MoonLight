@@ -289,7 +289,7 @@ class ScrollingTextEffect : public Node {
       text.format("%dAC", sharedData.activeClients);
       break;
     case 10:
-      text.format("%dKB", ESP.getFreeHeap() / 1024);
+      text.format("%dK", ESP.getFreeHeap() / 1024);
       break;
     }
     layer->setRGB(Coord3D(choice - 1), CRGB::Blue);
