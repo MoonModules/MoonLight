@@ -112,28 +112,31 @@ class LinesEffect : public Node {
 
   void setup() override { addControl(bpm, "bpm", "slider"); }
 
-  int frameNr;
-
   void loop() override {
-    frameNr = 0;
-
     layer->fadeToBlackBy(255);
 
-    Coord3D pos = {0, 0, 0};
-    pos.x = ::map(beat16(bpm), 0, UINT16_MAX, 0, layer->size.x);  // instead of call%width
+    Coord3D pos;
 
-    for (pos.y = 0; pos.y < layer->size.y; pos.y++) {
-      int colorNr = (frameNr / layer->size.y) % 3;
-      layer->setRGB(pos, colorNr == 0 ? CRGB::Red : colorNr == 1 ? CRGB::Green : CRGB::Blue);
+    // vertical: red
+    if (layer->size.x > 1) {
+      pos.x = ::map(beat16(bpm), 0, UINT16_MAX, 0, layer->size.x);
+      for (pos.y = 0; pos.y < layer->size.y; pos.y++)
+        for (pos.z = 0; pos.z < layer->size.z; pos.z++) layer->setRGB(pos, CRGB::Red);
     }
 
-    pos = {0, 0, 0};
-    pos.y = ::map(beat16(bpm), 0, UINT16_MAX, 0, layer->size.y);  // instead of call%height
-    for (pos.x = 0; pos.x < layer->size.x; pos.x++) {
-      int colorNr = 1;//(frameNr / layer->size.x) % 3;
-      layer->setRGB(pos, colorNr == 0 ? CRGB::Red : colorNr == 1 ? CRGB::Green : CRGB::Blue);
+    // horizontal: green
+    if (layer->size.y > 1) {
+      pos.y = ::map(beat16(bpm), 0, UINT16_MAX, 0, layer->size.y);
+      for (pos.x = 0; pos.x < layer->size.x; pos.x++)
+        for (pos.z = 0; pos.z < layer->size.z; pos.z++) layer->setRGB(pos, CRGB::Green);
     }
-    (frameNr)++;
+
+    // depth: blue
+    if (layer->size.z > 1) {
+      pos.z = ::map(beat16(bpm), 0, UINT16_MAX, 0, layer->size.z);
+      for (pos.x = 0; pos.x < layer->size.x; pos.x++)
+        for (pos.y = 0; pos.y < layer->size.y; pos.y++) layer->setRGB(pos, CRGB::Blue);
+    }
   }
 };
 
@@ -218,6 +221,7 @@ class ScrollingTextEffect : public Node {
     addControlValue("Status 🛜");
     addControlValue("Clients 🛜");
     addControlValue("Connected 🛜");
+    addControlValue("Active 🛜");
     addControlValue("Free memory");
 
     addControl(textIn, "text", "text", 1, sizeof(textIn));  // size needed to protect char array!
@@ -228,14 +232,15 @@ class ScrollingTextEffect : public Node {
   void loop() override {
     layer->fadeToBlackBy();
 
+  #define nrOfChoices 9
     uint8_t choice;
     if (preset > 0)  // not auto
       choice = preset;
     else {
-      if (strlen(textIn) == 0)
-        choice = (millis() / 1000 % 8) + 2;
-      else
-        choice = (millis() / 1000 % 9) + 1;
+      if (strlen(textIn) == 0)  // no textIn
+        choice = (millis() / 1000 % nrOfChoices) + 2;
+      else  // add one extra for textIn
+        choice = (millis() / 1000 % (nrOfChoices + 1)) + 1;
     }
 
     IPAddress activeIP = WiFi.isConnected() ? WiFi.localIP() : ETH.localIP();
@@ -281,6 +286,9 @@ class ScrollingTextEffect : public Node {
       text.format("%dCC", sharedData.connectedClients);
       break;
     case 9:
+      text.format("%dAC", sharedData.activeClients);
+      break;
+    case 10:
       text.format("%dKB", ESP.getFreeHeap() / 1024);
       break;
     }

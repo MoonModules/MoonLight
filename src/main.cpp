@@ -127,6 +127,7 @@ void effectTask(void* pvParameters) {
 
   while (true) {
     // Check state under lock
+    esp_task_wdt_reset();
     xSemaphoreTake(swapMutex, portMAX_DELAY);
 
     if (layerP.lights.header.isPositions == 0 && !newFrameReady) {  // within mutex as driver task can change this
@@ -152,7 +153,6 @@ void effectTask(void* pvParameters) {
     }
 
     xSemaphoreGive(swapMutex);
-    esp_task_wdt_reset();
     vTaskDelay(1);
   }
   // Cleanup (never reached in this case, but good practice)
@@ -167,6 +167,7 @@ void driverTask(void* pvParameters) {
 
   while (true) {
     bool mutexGiven = false;
+    esp_task_wdt_reset();
     // Check and transition state under lock
     xSemaphoreTake(swapMutex, portMAX_DELAY);
     if (layerP.lights.header.isPositions == 3) {
@@ -188,7 +189,6 @@ void driverTask(void* pvParameters) {
     }
 
     if (!mutexGiven) xSemaphoreGive(swapMutex);  // not double buffer or if conditions not met
-    esp_task_wdt_reset();
     vTaskDelay(1);
   }
   // Cleanup (never reached in this case, but good practice)
@@ -371,6 +371,7 @@ void setup() {
       sharedData.connectionStatus = (uint8_t)esp32sveltekit.getConnectionStatus();
       sharedData.clientListSize = esp32sveltekit.getServer()->getClientList().size();
       sharedData.connectedClients = esp32sveltekit.getSocket()->getConnectedClients();
+      sharedData.activeClients = esp32sveltekit.getSocket()->getActiveClients();
 
     #if FT_ENABLED(FT_LIVESCRIPT)
       moduleLiveScripts.loop1s();

@@ -46,6 +46,7 @@ public:
     void emitEvent(const String& event, const char *output, size_t len, const char *originId = "", bool onlyToSameOrigin = false); // 🌙 char output directly emitted
 
     unsigned int getConnectedClients();
+    unsigned int getActiveClients();
 
 private:
     PsychicHttpServer *_server;
@@ -65,6 +66,10 @@ private:
     void onWSOpen(PsychicWebSocketClient *client);
     void onWSClose(PsychicWebSocketClient *client);
     esp_err_t onFrame(PsychicWebSocketRequest *request, httpd_ws_frame *frame);
+
+    // 🌙 Track client visibility (clientId -> isVisible)
+    std::map<int, bool> _clientVisibility;
+    void handleClientInfo(JsonObject &data, int originId);
 };
 
 #endif

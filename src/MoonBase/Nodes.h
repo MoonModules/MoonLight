@@ -336,6 +336,7 @@ static struct SharedData {
   uint16_t fps;
   uint8_t connectionStatus;
   size_t connectedClients;
+  size_t activeClients;
   size_t clientListSize;
 } sharedData;
 

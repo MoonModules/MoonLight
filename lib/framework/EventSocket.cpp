@@ -10,6 +10,8 @@ EventSocket::EventSocket(PsychicHttpServer *server,
 {
 }
 
+#define EVENT_CLIENT_INFO "client_info" // 🌙 
+
 void EventSocket::begin()
 {
     _socket.setFilter(_securityManager->filterRequest(_authenticationPredicate));
@@ -17,6 +19,13 @@ void EventSocket::begin()
     _socket.onClose(std::bind(&EventSocket::onWSClose, this, std::placeholders::_1));
     _socket.onFrame(std::bind(&EventSocket::onFrame, this, std::placeholders::_1, std::placeholders::_2));
     _server->on(EVENT_SERVICE_PATH, &_socket);
+
+    // 🌙 Set up handler for INCOMING client updates from clients
+    registerEvent(EVENT_CLIENT_INFO);
+    onEvent(EVENT_CLIENT_INFO, 
+        [this](JsonObject &data, int originId) { 
+            handleClientInfo(data, originId); 
+        });
 
     ESP_LOGV(SVK_TAG, "Registered event socket endpoint: %s", EVENT_SERVICE_PATH);
 }
@@ -199,7 +208,7 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
     { // else send the message to all other clients
 
         // 🌙 use iterator so remove / erase also removes from the iterator
-        for (auto it = subscriptions.begin(); it != subscriptions.end(); )
+        for (auto it = subscriptions.begin(); it != subscriptions.end(); ++it)
         {
             int subscription = *it;
             if (subscription == originSubscriptionId)
@@ -211,6 +220,7 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
             if (!client)
             {
                 it = subscriptions.erase(it);
+                --it; // do not advance because of erase
                 continue;
             }
             if (event != "monitor")
@@ -224,12 +234,9 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
             if (result != ESP_OK)
             {
                 ESP_LOGW(SVK_TAG, "Failed to send event %s from %s to client %u: %s (len: %d)", event.c_str(), originId, client->socket(), esp_err_to_name(result), len);
-                vTaskDelay(1); // Task watchdog got triggered.
-                // [29177816][W][EventSocket.cpp:226] emitEvent(): [🐼] Failed to send event monitor from lightscontrol to client 53: ESP_FAIL (len: 49152)
                 // it = subscriptions.erase(it);// do not erase as we hope for better times
+                // --it; // do not advance because of erase
             }
-
-            ++it; // increase if no subscriptions.erase(it) took place!
         }
     }
 
@@ -281,4 +288,22 @@ bool EventSocket::isEventValid(String event)
 unsigned int EventSocket::getConnectedClients()
 {
     return (unsigned int)_socket.getClientList().size();
+}
+
+// 🌙 Client info / visibility / active clients
+
+void EventSocket::handleClientInfo(JsonObject &data, int originId)
+{
+    bool visible = data["visible"] | false;
+    
+    _clientVisibility[originId] = visible;
+    ESP_LOGD(SVK_TAG, "Client %d visible: %s", originId, visible ? "Yes" : "No");
+}
+
+unsigned int EventSocket::getActiveClients() {
+  unsigned int count = 0;
+  for (const auto& pair : _clientVisibility) {
+    if (pair.second) count++;
+  }
+  return count;
 }
