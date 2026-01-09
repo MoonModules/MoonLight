@@ -296,7 +296,6 @@ void EventSocket::handleClientInfo(JsonObject &data, int originId)
 {
     bool visible = data["visible"] | false;
     
-    _clientVisibility[originId] = visible;
     if (xSemaphoreTake(clientSubscriptionsMutex, pdMS_TO_TICKS(100))==pdFALSE) {
         ESP_LOGW(SVK_TAG, "clientSubscriptionsMutex wait too long");
         xSemaphoreTake(clientSubscriptionsMutex, portMAX_DELAY);
