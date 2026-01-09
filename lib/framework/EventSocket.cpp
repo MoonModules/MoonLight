@@ -212,7 +212,6 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
             if (!client)
             {
                 it = subscriptions.erase(it);
-                --it; // do not advance because of erase
                 continue;
             }
             if (event != "monitor")
@@ -227,7 +226,6 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
             {
                 ESP_LOGW(SVK_TAG, "Failed to send event %s from %s to client %u: %s (len: %zu)", event.c_str(), originId, client->socket(), esp_err_to_name(result), len);
                 // it = subscriptions.erase(it);// do not erase as we hope for better times
-                // --it; // do not advance because of erase
             }
         }
     }
@@ -302,7 +300,7 @@ unsigned int EventSocket::getActiveClients() {
   for (const auto& pair : _clientVisibility) {
     if (pair.second) count++;
   }
-  
+
   xSemaphoreGive(clientSubscriptionsMutex);
   return count;
 }

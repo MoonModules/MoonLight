@@ -64,7 +64,7 @@ class NodeManager : public Module {
 
               //             //wait until setup has been executed?
 
-              //             _moduleEffects->requestUIUpdate = true; //update the Effects UI
+              //             _moduleEffects->requestUIUpdate = true; //update the UI
               //         }
 
               //         EXT_LOGV(ML_TAG, "update due to new node %s done", name.c_str());

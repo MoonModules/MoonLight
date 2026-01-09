@@ -45,7 +45,7 @@ class ModuleLiveScripts : public Module {
             // loop over all changed files (normally only one)
             for (auto updatedItem : filesState.updatedItems) {
               // if file is the current live script, recompile it (to do: multiple live effects)
-              uint8_t index = 0;
+              // uint8_t index = 0;
               _moduleEffects->read(
                   [&](ModuleState& effectsState) {
                     for (JsonObject nodeState : effectsState.data["nodes"].as<JsonArray>()) {
@@ -57,12 +57,12 @@ class ModuleLiveScripts : public Module {
 
                           // wait until setup has been executed?
 
-                          _moduleEffects->requestUIUpdate = true;  // update the Effects UI
+                          _moduleEffects->requestUIUpdate = true;  // update the UI
                         }
 
                         EXT_LOGD(ML_TAG, "update due to new node %s done", nodeState["name"].as<const char*>());
                       }
-                      index++;
+                      // index++;
                     }
                   },
                   originId);
@@ -77,12 +77,12 @@ class ModuleLiveScripts : public Module {
 
                           // wait until setup has been executed?
 
-                          _moduleDrivers->requestUIUpdate = true;  // update the Effects UI
+                          _moduleDrivers->requestUIUpdate = true;  // update the UI
                         }
 
                         EXT_LOGD(ML_TAG, "update due to new node %s done", nodeState["name"].as<const char*>());
                       }
-                      index++;
+                      // index++;
                     }
                   },
                   originId);

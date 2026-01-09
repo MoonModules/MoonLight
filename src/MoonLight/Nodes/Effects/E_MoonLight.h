@@ -220,8 +220,6 @@ class ScrollingTextEffect : public Node {
     addControlValue("Up");
     addControlValue("Status 🛜");
     addControlValue("Clients 🛜");
-    addControlValue("Connected 🛜");
-    addControlValue("Active 🛜");
     addControlValue("Free memory");
 
     addControl(textIn, "text", "text", 1, sizeof(textIn));  // size needed to protect char array!
