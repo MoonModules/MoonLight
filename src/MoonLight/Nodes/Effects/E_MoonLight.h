@@ -54,16 +54,22 @@ class StarSkyEffect : public Node {
   uint8_t* stars_brightness = nullptr;
 
   ~StarSkyEffect() { 
-    freeMB(stars_indexes); 
-    freeMB(stars_fade_dir); 
-    freeMB(stars_brightness); 
+    resetStars();
   }
 
+  void resetStars() {
+     freeMB(stars_indexes);
+     freeMB(stars_fade_dir);
+     freeMB(stars_brightness);
+     stars_indexes = nullptr;
+     stars_fade_dir = nullptr;
+     stars_brightness = nullptr;
+     nb_stars = 0;
+   }
+
   void setup_animation() {
-    freeMB(stars_indexes); 
-    freeMB(stars_fade_dir); 
-    freeMB(stars_brightness); 
-    if (layer->nrOfLights == 0) { return; }
+    resetStars();
+    if (!layer || layer->nrOfLights == 0) return;
     layer->fill_solid(CRGB::Black);
     nb_stars = ((uint32_t)star_fill_ratio * (uint32_t)layer->nrOfLights)/10000 + 1;
     stars_indexes = allocMB<uint16_t>(nb_stars);
@@ -71,12 +77,7 @@ class StarSkyEffect : public Node {
     stars_brightness = allocMB<uint8_t>(nb_stars);
     if (!stars_indexes || !stars_fade_dir || !stars_brightness) {
       EXT_LOGE(ML_TAG, "StarSkyEffect: memory allocation failed");
-      freeMB(stars_indexes);
-      freeMB(stars_fade_dir);
-      freeMB(stars_brightness);
-      stars_indexes = nullptr;
-      stars_fade_dir = nullptr;
-      nb_stars = 0;
+      resetStars();
       return;
     }
     //EXT_LOGD(ML_TAG, "StarSkyEffect: %d stars added for a total of %d pixels", nb_stars, layer->nrOfLights);
@@ -89,7 +90,7 @@ class StarSkyEffect : public Node {
   }
 
   void onSizeChanged(const Coord3D& prevSize) override { setup_animation(); }
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) { if (control["name"] == "star fill") setup_animation(); }
+  void onUpdate(const Char<20>& oldValue, const JsonObject& control) override { if (control["name"] == "star fill") setup_animation(); }
 
   void setup() override {
     addControl(slowness, "slowness", "slider");
@@ -98,6 +99,7 @@ class StarSkyEffect : public Node {
   }
   
   void loop20ms() override {
+    if (nb_stars == 0 || !stars_indexes || !stars_fade_dir || !stars_brightness) return;
     if (local_clock++ == slowness) {
       for (uint32_t i = 0; i < nb_stars; i++) {
         if (stars_fade_dir[i]) {
