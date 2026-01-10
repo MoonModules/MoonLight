@@ -45,13 +45,20 @@ class StarSkyEffect : public Node {
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "🔥🎨"; }
 
+  SemaphoreHandle_t swapMutex;
   uint32_t nb_stars = 0;
   uint8_t local_clock = 0;
+  bool display_reset = true;
   uint8_t star_fill_ratio = 1;
   uint8_t slowness = UINT8_MAX;
   uint8_t* stars_fade_dir = nullptr;
   uint16_t* stars_indexes = nullptr;
   uint8_t* stars_brightness = nullptr;
+
+  StarSkyEffect() {
+    swapMutex = xSemaphoreCreateMutex();
+    xSemaphoreGive(swapMutex);
+  }
 
   ~StarSkyEffect() { 
     resetStars();
@@ -64,13 +71,14 @@ class StarSkyEffect : public Node {
      stars_indexes = nullptr;
      stars_fade_dir = nullptr;
      stars_brightness = nullptr;
+     display_reset = true;
      nb_stars = 0;
    }
 
   void setup_animation() {
+    xSemaphoreTake(swapMutex, portMAX_DELAY);
     resetStars();
     if (!layer || layer->nrOfLights == 0) return;
-    layer->fill_solid(CRGB::Black);
     nb_stars = ((uint32_t)star_fill_ratio * (uint32_t)layer->nrOfLights)/10000 + 1;
     stars_indexes = allocMB<uint16_t>(nb_stars);
     stars_fade_dir = allocMB<uint8_t>(nb_stars);
@@ -78,6 +86,7 @@ class StarSkyEffect : public Node {
     if (!stars_indexes || !stars_fade_dir || !stars_brightness) {
       EXT_LOGE(ML_TAG, "StarSkyEffect: memory allocation failed");
       resetStars();
+      xSemaphoreGive(swapMutex);
       return;
     }
     //EXT_LOGD(ML_TAG, "StarSkyEffect: %d stars added for a total of %d pixels", nb_stars, layer->nrOfLights);
@@ -87,6 +96,7 @@ class StarSkyEffect : public Node {
       stars_brightness[i] = random8();
       //EXT_LOGD(ML_TAG, "StarSkyEffect: using pixel #%d, start brightness %d, fade dir %d", stars_indexes[i], stars_brightness[i], stars_fade_dir[i]);
     }
+    xSemaphoreGive(swapMutex);
   }
 
   void onSizeChanged(const Coord3D& prevSize) override { setup_animation(); }
@@ -101,6 +111,11 @@ class StarSkyEffect : public Node {
   void loop20ms() override {
     if (nb_stars == 0 || !stars_indexes || !stars_fade_dir || !stars_brightness) return;
     if (local_clock++ == slowness) {
+      xSemaphoreTake(swapMutex, portMAX_DELAY);
+      if (display_reset) { 
+        layer->fill_solid(CRGB::Black); 
+        display_reset = false;
+      }
       for (uint32_t i = 0; i < nb_stars; i++) {
         if (stars_fade_dir[i]) {
           stars_brightness[i] = stars_brightness[i] + 1;
@@ -117,6 +132,7 @@ class StarSkyEffect : public Node {
           }
         }
       }
+      xSemaphoreGive(swapMutex);
       local_clock = 0;
     }
   }
