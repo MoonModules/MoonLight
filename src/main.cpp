@@ -334,26 +334,26 @@ void setup() {
   for (Module* module : modules) module->begin();
 
   // 🌙
-  xTaskCreateUniversal(effectTask,                          // task function
-                       "AppEffects",                        // name
-                       psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
-                       NULL,                                // parameter
-                       3,                                   // priority
-                       &effectTaskHandle,                   // task handle
-                       0                                    // protocol core. high speed effect processing
+  xTaskCreatePinnedToCore(effectTask,                          // task function
+                          "AppEffects",                        // name
+                          psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
+                          NULL,                                // parameter
+                          3,                                   // priority
+                          &effectTaskHandle,                   // task handle
+                          0                                    // protocol core. high speed effect processing
   );
 
-  xTaskCreateUniversal(driverTask,                          // task function
-                       "AppDrivers",                        // name
-                       psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
-                       NULL,                                // parameter
-                       3,                                   // priority
-                       &driverTaskHandle,                   // task handle
-#ifdef CONFIG_FREERTOS_UNICORE
-                       0  // Single-core: use Core 0 (only option)
-#else
-                       1  // Multi-core: application core (avoid WiFi interference)
-#endif
+  xTaskCreatePinnedToCore(driverTask,                          // task function
+                          "AppDrivers",                        // name
+                          psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
+                          NULL,                                // parameter
+                          3,                                   // priority
+                          &driverTaskHandle,                   // task handle
+    #ifdef CONFIG_FREERTOS_UNICORE
+                          0  // Single-core: use Core 0 (only option)
+    #else
+                          1  // Multi-core: application core
+    #endif
   );
   #endif
 

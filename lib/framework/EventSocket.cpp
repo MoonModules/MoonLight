@@ -201,7 +201,7 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
     { // else send the message to all other clients
 
         // 🌙 use iterator so remove / erase also removes from the iterator
-        for (auto it = subscriptions.begin(); it != subscriptions.end(); ++it)
+        for (auto it = subscriptions.begin(); it != subscriptions.end();)
         {
             int subscription = *it;
             if (subscription == originSubscriptionId)
@@ -227,6 +227,7 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
                 ESP_LOGW(SVK_TAG, "Failed to send event %s from %s to client %u: %s (len: %zu)", event.c_str(), originId, client->socket(), esp_err_to_name(result), len);
                 // it = subscriptions.erase(it);// do not erase as we hope for better times
             }
+            ++it;
         }
     }
 
