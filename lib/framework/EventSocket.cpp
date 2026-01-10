@@ -10,8 +10,6 @@ EventSocket::EventSocket(PsychicHttpServer *server,
 {
 }
 
-#define EVENT_CLIENT_INFO "client_info" // 🌙 
-
 void EventSocket::begin()
 {
     _socket.setFilter(_securityManager->filterRequest(_authenticationPredicate));
@@ -206,6 +204,7 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
             int subscription = *it;
             if (subscription == originSubscriptionId)
             {
+                ++it;
                 continue;
             }
             auto *client = _socket.getClient(subscription);

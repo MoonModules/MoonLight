@@ -42,7 +42,7 @@ These effects have first been created in MoonLight:
 | Name | Preview | Controls | Remarks
 | ---- | ----- | ---- | ---- |
 | Solid | ![](https://raw.githubusercontent.com/scottrbailey/WLED-Utils/master/gifs/FX_000.gif) | <img width="320" src="https://github.com/user-attachments/assets/844bdbf1-b42b-4b5c-94f9-d1334bce2b10" /> | Can be used as background to other effects when ordered before other effects |
-| Lines | ![lines](https://github.com/user-attachments/assets/6ddd0d7b-bbb2-4b44-8858-c4f444268321) | <img width="320" alt="Speed" src="https://github.com/user-attachments/assets/b99aa9cb-161f-4ade-8d93-bc5343214ac7" /> | To test a layout |
+| Lines | ![lines](../../media/moonlight/effects/lines.gif) | <img width="320" alt="Speed" src="https://github.com/user-attachments/assets/b99aa9cb-161f-4ade-8d93-bc5343214ac7" /> | To test a layout, Red = x, Green = y, Blue = z |
 | Frequency Saws ♫ | ![FreqSaws](https://github.com/user-attachments/assets/9e0f1f22-eba9-470e-850e-bd0e2f7c787f) | <img width="320" src="https://github.com/user-attachments/assets/78828181-c1b3-4d0f-85dc-356ced10fcd9"/> | |
 | Moon Man | <img width="100" alt="MoonMan" src="https://github.com/user-attachments/assets/cd3acd08-2725-4d2c-b809-37a61314d620" /> | No controls | only on devices supporting M5 library, e.g. AtomS3R |
 | Particles 🧊 | ![Particles](https://github.com/user-attachments/assets/c2df7f6b-3b5a-4836-8e21-127de3eb3364) | <img width="320" alt="Particles" src="https://github.com/user-attachments/assets/415d746a-5b9d-4936-9cf7-343661ac86b5" /> | Supports Gyro 🚧 |

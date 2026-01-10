@@ -23,6 +23,7 @@
 #include <vector>
 
 #define EVENT_SERVICE_PATH "/ws/events"
+#define EVENT_CLIENT_INFO "client_info" // 🌙 
 
 typedef std::function<void(JsonObject &root, int originId)> EventCallback;
 typedef std::function<void(const String &originId)> SubscribeCallback;

@@ -244,16 +244,6 @@ npm install
 
 ### MoonLight Installer
 
-!!! info "Bootloader mode"
-    Some boards: Place the board in bootloader mode by press and holding the `Boot` button on the ESP32, press the `Reset` button on the ESP32 and then release the `Boot` button.
-
-!!! tip "ESP32-P4-Nano"
-
-    On each esp32-p4-nano board, install [C6 firmware update](https://esp32-c6-firmware-update.github.io) first, choose Via ESP32-P4 USB/UART port ("OTA update"), then press connect for MoonLight install.
-
-!!! tip "Reset"
-    Some boards need a reset to show up. Press the reset button on the ESP32 or press Reset
-
 !!! tip "4.3.2.1"
     The device will show in 'Captive portal' mode. Alternatively you can close the captive portal and show it in a browser using [http://4.3.2.1](http://4.3.2.1)
 
@@ -270,10 +260,6 @@ npm install
         * Safari: Empty cache: Menu Develop (enable if not visible in the Safari Menu) / empty caches (Command Option E)
 
         * More info: [how to hard refresh your browser and clear cache](https://fabricdigital.co.nz/blog/how-to-hard-refresh-your-browser-and-clear-cache)
-
-!!! tip "Track analytics"
-
-    MoonLight sends anonymous usage data to Google Analytics when it is restarted. This data consists of country, firmware, board, and version. You can opt-out at any time by unchecking this option. See also [WiFi Station](../../network/sta)
 
 !!! info "Hostname"
     The hostname will be used to access your device. E.g. if the hostname is ml-home you can access it using [http://ml-home.local](http://ml-home.local)

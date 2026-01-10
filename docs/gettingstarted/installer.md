@@ -33,6 +33,9 @@ Your device should show up in this list, Connect
 
 Press Install MoonLight. Erase when installing MoonLight first time, do not erase if already installed (to preserve settings). Press Next and Install
 
+!!! info "Bootloader mode"
+    If install doesn't work: some boards have to be placed in bootloader mode by press and holding the `Boot` button on the ESP32, press the `Reset` button on the ESP32 and then release the `Boot` button.
+
 <img width="200" src="https://github.com/user-attachments/assets/25c05a6c-d2ef-41cb-b83c-fc40a60c6ccc" />
 <img width="200" src="https://github.com/user-attachments/assets/b2391752-51c4-400e-b95c-4fa865e93595" />
 <img width="200" src="https://github.com/user-attachments/assets/5e2ceefd-4c31-4b72-a228-f29373b677ac" />
