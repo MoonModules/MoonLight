@@ -39,6 +39,72 @@ class SolidEffect : public Node {
 };
 
 // by limpkin
+class StarSkyEffect : public Node {
+ public:
+  static const char* name() { return "Star Sky"; }
+  static uint8_t dim() { return _3D; }
+  static const char* tags() { return "🔥🎨"; }
+
+  uint32_t nb_stars = 0;
+  uint8_t local_clock = 0;
+  uint8_t star_fill_ratio = 1;
+  uint8_t slowness = UINT8_MAX;
+  uint8_t* stars_fade_dir = nullptr;
+  uint16_t* stars_indexes = nullptr;
+
+  ~StarSkyEffect() { 
+    freeMB(stars_indexes); 
+    freeMB(stars_fade_dir); 
+  }
+
+  void setup_animation() {
+    freeMB(stars_indexes); 
+    freeMB(stars_fade_dir); 
+    if (layer->nrOfLights == 0) { return; }
+    layer->fill_solid(CRGB::Black);
+    nb_stars = ((uint32_t)star_fill_ratio * (uint32_t)layer->nrOfLights)/10000 + 1;
+    stars_indexes = allocMB<uint16_t>(nb_stars);
+    stars_fade_dir = allocMB<uint8_t>(nb_stars);
+    EXT_LOGD(ML_TAG, "StarSkyEffect: %d stars added for a total of %d pixels", nb_stars, layer->nrOfLights);
+    for (uint32_t i = 0; i < nb_stars; i++) {
+      stars_indexes[i] = random16(layer->nrOfLights);
+      stars_fade_dir[i] = random8(2);
+      uint8_t start_brightness = random8();
+      EXT_LOGD(ML_TAG, "StarSkyEffect: using pixel #%d, start brightness %d, fade dir %d", stars_indexes[i], start_brightness, stars_fade_dir[i]);
+      layer->setRGB(stars_indexes[i], CRGB(start_brightness, start_brightness, start_brightness));
+    }
+  }
+
+  void onSizeChanged(const Coord3D& prevSize) override { setup_animation(); }
+  void onUpdate() { setup_animation(); }
+
+  void setup() override {
+    addControl(slowness, "slowness", "slider");
+    addControl(star_fill_ratio, "star fill", "slider");
+    setup_animation();
+  }
+  
+  void loop20ms() override {
+    if (local_clock++ == slowness) {
+      for (uint32_t i = 0; i < nb_stars; i++) {
+        if (stars_fade_dir[i]) {
+          uint8_t brightness = layer->getRGB(stars_indexes[i]).r + 1;
+          layer->setRGB(stars_indexes[i], CRGB(brightness, brightness, brightness));
+          if (brightness == UINT8_MAX) { stars_fade_dir[i] = 0; }
+          if (random8() == 42) { stars_fade_dir[i] = 0; }
+        } else {
+          uint8_t brightness = layer->getRGB(stars_indexes[i]).r - 1;
+          layer->setRGB(stars_indexes[i], CRGB(brightness, brightness, brightness));
+          if (brightness == 0) { stars_fade_dir[i] = 1; }
+          if (random8() == 42) { stars_fade_dir[i] = 1; }
+        }
+      }
+      local_clock = 0;
+    }
+  }
+};
+
+// by limpkin
 class FixedRectangleEffect : public Node {
  public:
   static const char* name() { return "Fixed Rectangle"; }
