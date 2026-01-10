@@ -278,7 +278,7 @@ npm install
 
 !!! info "Tools used"
     The installer is powered by [ESP Web Tools](https://esphome.github.io/esp-web-tools)
-    See also [ESP-Web-Tools-Tutorial]("https://github.com/witnessmenow/ESP-Web-Tools-Tutorial/blob/main/README.md")
+    See also [ESP-Web-Tools-Tutorial](https://github.com/witnessmenow/ESP-Web-Tools-Tutorial/blob/main/README.md)
 
     [ESPConnect on GitHub](https://github.com/thelastoutpostworkshop/ESPConnect)
     ESPConnect is based on [Jason2866](https://github.com/Jason2866)'s [WebSerial ESPTool](https://github.com/Jason2866/WebSerial_ESPTool/tree/development).
@@ -288,9 +288,9 @@ npm install
 In case your computer does not recognise your connected ESP32, you might need to install the right USB-to-serial chip drivers.
 Below are the drivers for common chips used in ESP devices. See the images below to see what chip your ESP32 has.
 
-* CP210x drivers: [Windows & Mac]("https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers")
-* CH342, CH343, CH9102 drivers: [Windows]("https://www.wch.cn/downloads/CH343SER_ZIP.html"), [Mac]("https://www.wch.cn/downloads/CH34XSER_MAC_ZIP.html") (download via blue button with download icon)</li>
-* CH340, CH341 drivers: [Windows]("https://www.wch.cn/downloads/CH341SER_ZIP.html"), [Mac]("https://www.wch.cn/downloads/CH341SER_MAC_ZIP.html") (download via blue button with download icon)</li>
+* CP210x drivers: [Windows & Mac](https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers)
+* CH342, CH343, CH9102 drivers: [Windows](https://www.wch.cn/downloads/CH343SER_ZIP.html), [Mac](https://www.wch.cn/downloads/CH34XSER_MAC_ZIP.html) (download via blue button with download icon)</li>
+* CH340, CH341 drivers: [Windows](https://www.wch.cn/downloads/CH341SER_ZIP.html), [Mac](https://www.wch.cn/downloads/CH341SER_MAC_ZIP.html) (download via blue button with download icon)</li>
 
 <img src="https://moonmodules.org/MoonLight/firmware/installer/images/ch9102.jpg" height="200"/>
 <img src="https://moonmodules.org/MoonLight/firmware/installer/images/cp210x-ch34x.jpg" height="200"/>
