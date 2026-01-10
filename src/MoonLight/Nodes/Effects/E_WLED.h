@@ -295,10 +295,10 @@ class FreqMatrixEffect : public Node {
       }
 
       // shift the pixels one pixel up
-      layer->setRGB(0, color);
-      for (int x = layer->size.x - 1; x >= 0; x--) {  // int as we count down!!!
-        if (x != 0) color = layer->getRGB(x - 1);
-        for (int y = 0; y < layer->size.y; y++)
+      layer->setRGB(Coord3D(0, 0), color);
+      for (int y = layer->size.y - 1; y >= 0; y--) {  // int as we count down!!! start with the y-axis!
+        if (y != 0) color = layer->getRGB(Coord3D(0, y - 1));
+        for (int x = 0; x < layer->size.x; x++)
           for (int z = 0; z < layer->size.z; z++) layer->setRGB(Coord3D(x, y, z), color);
       }
     }
@@ -500,14 +500,14 @@ class NoiseMeterEffect : public Node {
     layer->fadeToBlackBy(fadeRate);
 
     float tmpSound2 = sharedData.volumeRaw * 2.0 * (float)width / 255.0;
-    int maxLen = ::map(tmpSound2, 0, 255, 0, layer->size.x);  // map to pixels availeable in current segment              // Still a bit too sensitive.
+    int maxLen = ::map(tmpSound2, 0, 255, 0, layer->size.y);  // map to pixels availeable in current segment              // Still a bit too sensitive.
     // if (maxLen <0) maxLen = 0;
     // if (maxLen >layer->size.x) maxLen = layer->size.x;
 
     for (int i = 0; i < maxLen; i++) {                                                                                     // The louder the sound, the wider the soundbar. By Andrew Tuline.
       uint8_t index = inoise8(i * sharedData.volume + aux0, aux1 + i * sharedData.volume);                                 // Get a value from the noise function. I'm using both x and y axis.
-      for (int y = 0; y < layer->size.y; y++)                                                                              // propagate to other dimensions
-        for (int z = 0; z < layer->size.z; z++) layer->setRGB(Coord3D(i, y, z), ColorFromPalette(layerP.palette, index));  //, 255, PALETTE_SOLID_WRAP));
+      for (int x = 0; x < layer->size.x; x++)                                                                              // propagate to other dimensions
+        for (int z = 0; z < layer->size.z; z++) layer->setRGB(Coord3D(x, i, z), ColorFromPalette(layerP.palette, index));  //, 255, PALETTE_SOLID_WRAP));
     }
 
     aux0 += beatsin8(5, 0, 10);
@@ -1100,7 +1100,7 @@ class PopCornEffect : public Node {
     layer->fill_solid(CRGB::Black);
 
     float gravity = -0.0001f - (speed / 200000.0f);  // m/s/s
-    gravity *= layer->size.x;
+    gravity *= layer->size.y;
 
     if (numPopcorn == 0) numPopcorn = 1;
 
@@ -1124,7 +1124,7 @@ class PopCornEffect : public Node {
           popcorn[i].pos = 0.01f;
 
           uint16_t peakHeight = 128 + random8(128);  // 0-255
-          peakHeight = (peakHeight * (layer->size.x - 1)) >> 8;
+          peakHeight = (peakHeight * (layer->size.y - 1)) >> 8;
           popcorn[i].vel = sqrtf(-2.0f * gravity * peakHeight);
 
           // if (layer->palette)
@@ -1142,10 +1142,10 @@ class PopCornEffect : public Node {
         // if (!layer->palette && popcorn[i].colIndex < NUM_COLORS) col = SEGCOLOR(popcorn[i].colIndex);
         uint16_t ledIndex = popcorn[i].pos;
         CRGB col = ColorFromPalette(layerP.palette, popcorn[i].colIndex * (256 / maxNumPopcorn));
-        if (ledIndex < layer->size.x) {
+        if (ledIndex < layer->size.y) {
           layer->setRGB(ledIndex, col);
-          for (int y = 0; y < layer->size.y; y++)
-            for (int z = 0; z < layer->size.z; z++) layer->setRGB(Coord3D(ledIndex, y, z), col);
+          for (int x = 0; x < layer->size.x; x++)
+            for (int z = 0; z < layer->size.z; z++) layer->setRGB(Coord3D(x, ledIndex, z), col);
         }
       }
     }

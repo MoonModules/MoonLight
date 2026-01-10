@@ -6,7 +6,7 @@
 
 The Drivers module defines layers and drivers.
 
-* Layout 🚥: A layout (🚥) defines the positions of the lights to control. See [Layouts](../../moonlight/layouts/)
+* Layout 🚥: A layout (🚥) defines the positions of the lights to control. See [Layouts](../../moonlight/layouts)
 * Driver ☸️: A driver is a link between MoonLight to hardware or the network. Drivers can both input data or output data. Examples:
     * LED drivers (FastLED, Parallel LED Drivers, hub75 panels)
     * Light driver (Art-Net / DMX)

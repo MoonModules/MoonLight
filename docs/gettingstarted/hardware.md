@@ -1,14 +1,27 @@
 # Hardware
 
-To get started the minimal you need is an esp32-device connected via USB to your computer and a LED-strip or panel connected via 3 wires to the vcc, ground and a supported GPIO pin of the esp32 (e.g. Pin 2). An ESP32-S3 is preferred as it has more memory to support large setups and Live Scripts. 
+To get started the minimal you need is an ESP32-device connected via USB to your computer. The ESP32 can drive LEDs directly or can use Art-Net over the network to Art-Net controllers.
 
-!!! info "ESP32-D0"
+If driving LEDs directly, one or more LED-strips or panels should be connected via 3 wires to the vcc, ground and a supported GPIO pin of the ESP32. 
 
-    Currently normal ESP32-devices (ESP32-D0, devices without PSRAM) are low on memory if MoonLight is installed. Therefor ESP32-D0-wrover or ESP32-S3 is recommended.
+It's most easy to start with premade boards, however, you can also DIY.
 
-## Minimal hardware
+## Premade ESP32 devices
 
-* One of the ESP32-devices shown in [MoonLight Installer](https://moonmodules.org/MoonLight/gettingstarted/installer/). [ESP32-S3 N16R8](https://s.click.aliexpress.com/e/_DBAtJ2H) recommended. Optional [Expansion board 44pin](https://s.click.aliexpress.com/e/_EJhmlIE)
+See [IO module](../../moonbase/inputoutput) for premade devices which can be preconfigured in MoonLight.
+
+![Dig2Go](https://shop.allnetchina.cn/cdn/shop/products/Led_4.jpg?v=1680836018&width=1600){: style="width:250px"} 
+
+* [QuinLed LED pre-assembled boards](https://quinled.info/pre-assembled-boards/). The Dig2Go is the easiest complete package to use.
+* [Serg74 shields](https://www.tindie.com/products/serg74/esp32-wroom-usb-c-d1-mini32-form-factor-board/)
+* [Home control](https://www.myhome-control.de/), e.g. the ESP32-P4 Nano shield
+* [Athom](https://www.athom.tech/wled) / [Gledopto](https://www.gledopto.eu/Gledopto-WLED-LED-Controller-for-Digital-Light-Strips) / [M5Stack](https://shop.m5stack.com/collections/m5-controllers) / ...
+
+## DIY
+
+### Minimal hardware
+
+* One of the ESP32-devices shown in [MoonLight Installer](../installer). Any ESP32-S3 board or ESP32-P4 nano recommended as they have more memory (PSRAM) then the traditional ESP32-D0 boards.
 * Any WS2812 LED strip or panel. [256 LED panel](https://s.click.aliexpress.com/e/_EIKoYrg) recommended.
 * Connect the ESP32-device with USB to your computer, connect the LED strip or panel
 
@@ -16,9 +29,9 @@ To get started the minimal you need is an esp32-device connected via USB to your
 
 Above is the minimum requirement to have lights burning.
 
-## Recommended hardware
+### Recommended hardware
 
-The [M5Stack AtomS3R](https://docs.m5stack.com/en/core/AtomS3R) will be used to offer 'MoonLight in a box'. 
+The [M5Stack AtomS3R](https://docs.m5stack.com/en/core/AtomS3R) can be used to offer 'MoonLight in a box'. 
 It is perfactly usable to drive Art-Net. To drive LEDs a few more components are needed:
 
 | Product | Image | Shop |
@@ -37,15 +50,9 @@ Currently it is DIY to make it:
 
 Work in progress to make this available as pre-assembled board ([Contact](https://discord.gg/TC8NSUSCdV) us if you want to help manufactering this).
 
-## Premade boards
+## DMX / Art-Net
 
-* [QuinLed LED pre assembled boards](https://quinled.info/pre-assembled-boards/)
-* [Serg74 shields](https://www.tindie.com/products/serg74/esp32-wroom-usb-c-d1-mini32-form-factor-board/)
-* [Wladi](https://www.myhome-control.de/)
-* [Athom](https://www.athom.tech/wled) / [Gledopto](https://www.gledopto.eu/Gledopto-WLED-LED-Controller-for-Digital-Light-Strips) / [M5Stack](https://shop.m5stack.com/collections/m5-controllers) / ...
-* Stephan Electronics
-
-## For latest DMX support 
+A few examples are shown below. Note that MoonLight also supports Art-Net in which can be uased as an alternative to off-the-shelve controllers. In this scenario there is one MoonLight device sending Art-Net and one (or more) MoonLight devices receiving Art-Net
 
 | Product | Image | Shop |
 | ---- | ----- | ---- |

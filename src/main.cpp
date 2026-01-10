@@ -127,6 +127,7 @@ void effectTask(void* pvParameters) {
 
   while (true) {
     // Check state under lock
+    esp_task_wdt_reset();
     xSemaphoreTake(swapMutex, portMAX_DELAY);
 
     if (layerP.lights.header.isPositions == 0 && !newFrameReady) {  // within mutex as driver task can change this
@@ -144,16 +145,18 @@ void effectTask(void* pvParameters) {
 
       if (layerP.lights.useDoubleBuffer) {  // Atomic swap channels
         xSemaphoreTake(swapMutex, portMAX_DELAY);
-        uint8_t* temp = layerP.lights.channelsD;
-        layerP.lights.channelsD = layerP.lights.channelsE;
-        layerP.lights.channelsE = temp;
-      }
-      newFrameReady = true;
+        if (layerP.lights.header.isPositions == 0) {  // Check if not changed while we were unlocked
+          uint8_t* temp = layerP.lights.channelsD;
+          layerP.lights.channelsD = layerP.lights.channelsE;
+          layerP.lights.channelsE = temp;
+          newFrameReady = true;
+        }
+      } else
+        newFrameReady = true;
     }
 
     xSemaphoreGive(swapMutex);
-    esp_task_wdt_reset();
-    vTaskDelay(1);  // taskYIELD() is not handing over to other tasks !
+    vTaskDelay(1);
   }
   // Cleanup (never reached in this case, but good practice)
   esp_task_wdt_delete(NULL);
@@ -167,6 +170,7 @@ void driverTask(void* pvParameters) {
 
   while (true) {
     bool mutexGiven = false;
+    esp_task_wdt_reset();
     // Check and transition state under lock
     xSemaphoreTake(swapMutex, portMAX_DELAY);
     if (layerP.lights.header.isPositions == 3) {
@@ -188,8 +192,7 @@ void driverTask(void* pvParameters) {
     }
 
     if (!mutexGiven) xSemaphoreGive(swapMutex);  // not double buffer or if conditions not met
-    esp_task_wdt_reset();
-    vTaskDelay(1);  // taskYIELD() is not handing over to other tasks !
+    vTaskDelay(1);
   }
   // Cleanup (never reached in this case, but good practice)
   esp_task_wdt_delete(NULL);
@@ -291,8 +294,8 @@ void setup() {
   sharedEventEndpoint = new SharedEventEndpoint(esp32sveltekit.getSocket());
   // sharedFsPersistence = new SharedFSPersistence(esp32sveltekit.getFS());
   if (!sharedHttpEndpoint || !sharedWebSocketServer || !sharedEventEndpoint) {
-    EXT_LOGE(ML_TAG, "Failed to allocate shared routers, rebooting");
-    esp_restart();  // or another hard-fail strategy appropriate for your platform
+    EXT_LOGE(ML_TAG, "dev: Failed to allocate shared routers");
+    return;
   }
 
   modules.reserve(12);  // Adjust based on actual module count
@@ -331,22 +334,26 @@ void setup() {
   for (Module* module : modules) module->begin();
 
   // 🌙
-  xTaskCreateUniversal(effectTask,                          // task function
-                       "AppEffects",                        // name
-                       psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
-                       NULL,                                // parameter
-                       3,                                   // priority
-                       &effectTaskHandle,                   // task handle
-                       1                                    // application core. high speed effect processing
+  xTaskCreatePinnedToCore(effectTask,                          // task function
+                          "AppEffects",                        // name
+                          psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
+                          NULL,                                // parameter
+                          3,                                   // priority
+                          &effectTaskHandle,                   // task handle
+                          0                                    // protocol core. high speed effect processing
   );
 
-  xTaskCreateUniversal(driverTask,                          // task function
-                       "AppDrivers",                        // name
-                       psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
-                       NULL,                                // parameter
-                       3,                                   // priority
-                       &driverTaskHandle,                   // task handle
-                       0                                    // protocol core: ideal for Art-Net, no issues encountered yet for LED drivers (pre-empt by WiFi ...)
+  xTaskCreatePinnedToCore(driverTask,                          // task function
+                          "AppDrivers",                        // name
+                          psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
+                          NULL,                                // parameter
+                          3,                                   // priority
+                          &driverTaskHandle,                   // task handle
+    #ifdef CONFIG_FREERTOS_UNICORE
+                          0  // Single-core: use Core 0 (only option)
+    #else
+                          1  // Multi-core: application core
+    #endif
   );
   #endif
 
@@ -363,12 +370,15 @@ void setup() {
       moduleDevices.loop1s();
       moduleTasks.loop1s();
 
+      // logYield();
+
   #if FT_ENABLED(FT_MOONLIGHT)
       // set shared data (eg used in scrolling text effect)
       sharedData.fps = esp32sveltekit.getAnalyticsService()->lps;
       sharedData.connectionStatus = (uint8_t)esp32sveltekit.getConnectionStatus();
       sharedData.clientListSize = esp32sveltekit.getServer()->getClientList().size();
       sharedData.connectedClients = esp32sveltekit.getSocket()->getConnectedClients();
+      sharedData.activeClients = esp32sveltekit.getSocket()->getActiveClients();
 
     #if FT_ENABLED(FT_LIVESCRIPT)
       moduleLiveScripts.loop1s();

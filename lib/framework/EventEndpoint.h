@@ -62,7 +62,7 @@ private:
     {
         JsonDocument jsonDocument;
         JsonObject root = jsonDocument.to<JsonObject>();
-        _statefulService->read(root, _stateReader);
+        _statefulService->read(root, _stateReader, originId); // 🌙 Add originId
         JsonObject jsonObject = jsonDocument.as<JsonObject>();
         _socket->emitEvent(_event, jsonObject, originId.c_str(), sync);
     }

@@ -56,7 +56,7 @@ class SharedHttpEndpoint {
 
     PsychicJsonResponse response = PsychicJsonResponse(request, false);
     JsonObject jsonObject = response.getRoot();
-    module->read(jsonObject, ModuleState::read);
+    module->read(jsonObject, ModuleState::read, module->_moduleName);
     return response.send();
   }
 
@@ -82,7 +82,7 @@ class SharedHttpEndpoint {
     // ADDED: Return updated state in response
     PsychicJsonResponse response = PsychicJsonResponse(request, false);
     JsonObject responseObj = response.getRoot();
-    module->read(responseObj, ModuleState::read);
+    module->read(responseObj, ModuleState::read, module->_moduleName);
     return response.send();
   }
 

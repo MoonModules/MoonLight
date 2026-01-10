@@ -157,7 +157,7 @@ public:
             // serialize to json doc
             JsonDocument json;
             JsonObject jsonObject = json.to<JsonObject>();
-            _statefulService->read(jsonObject, _stateReader);
+            _statefulService->read(jsonObject, _stateReader, MQTT_ORIGIN_ID); // 🌙 Add originId
 
             // serialize to string
             String payload;

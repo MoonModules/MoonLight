@@ -47,7 +47,7 @@ Below lists are ordered in terms of likelyhood to be accepted:
 
 ### Other improvements
 
-* Add esp32-s3-devkitc-1-n16r8v and LOLIN_WIFI_FIX in pio.ini (including boards folder)
+* Add esp32-s3-n16r8v and LOLIN_WIFI_FIX in pio.ini (including boards folder)
 * Add Monitor
     * socket.ts: add else listeners.get("monitor")?.forEach((listener) => listener(new Uint8Array(message.data)));
     * EventSocket.cpp: add void EventSocket::emitEvent with char * argument

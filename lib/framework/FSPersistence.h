@@ -71,7 +71,7 @@ public:
         // create and populate a new json object
         JsonDocument jsonDocument;
         JsonObject jsonObject = jsonDocument.to<JsonObject>();
-        _statefulService->read(jsonObject, _stateReader);
+        _statefulService->read(jsonObject, _stateReader, _filePath); // 🌙 Add originId
 
         // make directories if required
         mkdirs();

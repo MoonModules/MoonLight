@@ -3,9 +3,8 @@ nav:
   - Home: index.md
   - "Getting Started":
     - gettingstarted/overview.md
-    - gettingstarted/installation.md
-    - gettingstarted/hardware.md
     - gettingstarted/installer.md
+    - gettingstarted/hardware.md
   - "MoonLight":
     - moonlight/overview.md
     - moonlight/lightscontrol.md

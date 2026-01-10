@@ -62,7 +62,7 @@ void VirtualLayer::loop() {
     if (prevSize != size) node->onSizeChanged(prevSize);
     if (node->on) {
       node->loop();
-      taskYIELD();
+      addYield(10);
     }
   }
   prevSize = size;
@@ -164,7 +164,7 @@ void VirtualLayer::setLight(const nrOfLights_t indexV, const uint8_t* channels, 
   } else {
     uint32_t index = indexV * layerP->lights.header.channelsPerLight + offset;
     // if (index + length <= layerP->lights.maxChannels) {  // no mapping
-      memcpy(&layerP->lights.channelsE[index], channels, length);
+    memcpy(&layerP->lights.channelsE[index], channels, length);
     // } else {
     //   EXT_LOGW(ML_TAG, "%d + %d >= %d", indexV, length, layerP->lights.maxChannels);
     // }
@@ -212,7 +212,7 @@ T VirtualLayer::getLight(const nrOfLights_t indexV, uint8_t offset) const {
   } else {
     uint32_t index = indexV * layerP->lights.header.channelsPerLight + offset;
     // if (index + sizeof(T) <= layerP->lights.maxChannels) {  // no mapping
-      return *(T*)&layerP->lights.channelsE[index];
+    return *(T*)&layerP->lights.channelsE[index];
     // } else {
     //   // some operations will go out of bounds e.g. VUMeter, uncomment below lines if you wanna test on a specific effect
     //   EXT_LOGW(ML_TAG, "%d + %d >= %d", indexV, sizeof(T), layerP->lights.maxChannels);

@@ -230,7 +230,11 @@ void ESP32SvelteKit::begin()
         this,                                 // Pass reference to this class instance
         (tskIDLE_PRIORITY + 2),               // task priority
         &_loopTaskHandle,                     // Task handle
-        ESP32SVELTEKIT_RUNNING_CORE           // Pin to application core
+#ifdef CONFIG_FREERTOS_UNICORE
+                       0  // Single-core: use Core 0 (only option)
+#else
+                       ESP32SVELTEKIT_RUNNING_CORE           // Pin to application core
+#endif
     );
 }
 

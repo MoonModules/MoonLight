@@ -11,29 +11,29 @@ MoonLight uses a multi-core, multi-task architecture on ESP32 to achieve smooth 
 | **WiFi/BT** | 0 (PRO_CPU) | 23 | System | Event-driven | System networking stack |
 | **lwIP TCP/IP** | 0 (PRO_CPU) | 18 | System | Event-driven | TCP/IP protocol processing |
 | **ESP32SvelteKit** | 0 (PRO_CPU) | 2 | System | 10ms | HTTP/WebSocket UI framework |
-| **Driver Task** | 0 (PRO_CPU) | 3 | 3-4KB | ~60 fps | Output data to LEDs via DMA/I2S/LCD/PARLIO |
-| **Effect Task** | 1 (APP_CPU) | 3 | 3-4KB | ~60 fps | Calculate LED colors and effects |
+| **Driver Task** | 1 (APP_CPU) | 3 | 3-4KB | ~60 fps | Output data to LEDs via DMA/I2S/LCD/PARLIO |
+| **Effect Task** | 0 (PRO_CPU) | 3 | 3-4KB | ~60 fps | Calculate LED colors and effects |
 
-Effect Task (Core 1, Priority 3)
+Effect Task (Core 0, Priority 3)
 
 - **Function**: Pure computation - calculates pixel colors based on effect algorithms
 - **Operations**: Reads/writes to `channels` array, performs mathematical calculations
 - **Tolerant to preemption**: WiFi interruptions are acceptable as this is non-timing-critical
-- Parking as currently experimenting with running on Core 1!! **Why Core 0**: Can coexist with WiFi; uses idle CPU cycles when WiFi is not transmitting
+- **Why Core 0**: Can coexist with WiFi; uses idle CPU cycles when WiFi is not transmitting
 
-Driver Task (Core 0, Priority 3)
+Driver Task (Core 1, Priority 3)
 
 - **Function**: Timing-critical hardware operations
 - **Operations**: Sends pixel data to LEDs via DMA, I2S (ESP32), LCD (S3), or PARLIO (P4)
 - **Requires uninterrupted execution**: DMA timing must be precise to avoid LED glitches
-- Parking as currently experimenting with running on Core 0!! **Why Core 1**: Isolated from WiFi interference; WiFi on Core 0 cannot preempt this task
+- **Why Core 1**: Isolated from WiFi interference; WiFi on Core 0 cannot preempt this task
 
-ESP32SvelteKit Task (Core 0, Priority 2)
+ESP32SvelteKit Task (Core 1, Priority 2)
 
 - **Function**: HTTP server and WebSocket handler for UI
 - **Operations**: Processes REST API calls, WebSocket messages, JSON serialization
 - **Runs every**: 10ms
-- **Why Core 0, Priority 2**: Lower priority than system Tasks
+- **Why Core 1, Priority 2**: Lower priority than system Tasks
 
 ## Task Interaction Flow
 
@@ -78,7 +78,7 @@ graph TB
     subgraph Core0["Core 0 (PRO_CPU)"]
         WiFi[WiFi/BT<br/>Priority 23]
         lwIP[lwIP TCP/IP<br/>Priority 18]
-        Effect[Effect Task<br/>Priority 10<br/>Computation Only]
+        Effect[Effect Task<br/>Priority 3<br/>Computation Only]
     end
     
     subgraph Core1["Core 1 (APP_CPU)"]
@@ -148,59 +148,6 @@ graph LR
 ```
 
 Synchronization Flow
-
-```c++
-// Simplified synchronization logic
-
-void effectTask(void* param) {
-  while (true) {
-    xSemaphoreTake(swapMutex, portMAX_DELAY);
-
-    if (layerP.lights.header.isPositions == 0 && !newFrameReady) {  // within mutex as driver task can change this
-      if (layerP.lights.useDoubleBuffer) {
-        xSemaphoreGive(swapMutex);
-        memcpy(layerP.lights.channelsE, layerP.lights.channelsD, layerP.lights.header.nrOfChannels);  // Copy previous frame (channelsD) to working buffer (channelsE)
-      }
-
-      layerP.loop();
-
-      if (layerP.lights.useDoubleBuffer) {  // Atomic swap channels
-        xSemaphoreTake(swapMutex, portMAX_DELAY);
-        uint8_t* temp = layerP.lights.channelsD;
-        layerP.lights.channelsD = layerP.lights.channelsE;
-        layerP.lights.channelsE = temp;
-      }
-      newFrameReady = true;
-    }
-
-    xSemaphoreGive(swapMutex);
-    vTaskDelay(1);
-  }
-}
-
-void driverTask(void* param) {
-  while (true) {
-    bool mutexGiven = false;
-    xSemaphoreTake(swapMutex, portMAX_DELAY);
-
-    if (layerP.lights.header.isPositions == 0) {
-      if (newFrameReady) {
-        newFrameReady = false;
-        if (layerP.lights.useDoubleBuffer) {
-          xSemaphoreGive(swapMutex);  // Double buffer: release lock, then send
-          mutexGiven = true;
-        }
-
-        esp32sveltekit.lps++;
-        layerP.loopDrivers();
-      }
-    }
-
-    if (!mutexGiven) xSemaphoreGive(swapMutex);  // not double buffer or if conditions not met
-    vTaskDelay(1);
-  }
-}
-```
 
 **Key Point**: Effects need read-modify-write access (e.g., blur, ripple effects read neighboring pixels), so `memcpy` ensures they see a consistent previous frame.
 
@@ -311,28 +258,6 @@ Or in code before including framework:
 #include <ESP32SvelteKit.h>
 ```
 
-Task Creation
-
-```cpp
-    xTaskCreateUniversal(effectTask,                        // task function
-                       "AppEffects",                        // name
-                       psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
-                       NULL,                                // parameter
-                       3,                                   // priority
-                       &effectTaskHandle,                   // task handle
-                       1                                    // application core. high speed effect processing
-  );
-
-  xTaskCreateUniversal(driverTask,                          // task function
-                       "AppDrivers",                        // name
-                       psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
-                       NULL,                                // parameter
-                       3,                                   // priority
-                       &driverTaskHandle,                   // task handle
-                       0                                    // protocol core: ideal for Art-Net, no issues encountered yet for LED drivers (pre-empt by WiFi ...)
-  );
-```
-
 ## Summary
 
 This architecture achieves optimal performance through:
@@ -343,3 +268,55 @@ This architecture achieves optimal performance through:
 4. **Double Buffering**: Eliminates tearing with <1% overhead
 
 **Result**: Smooth 60fps LED effects with responsive UI and stable networking. 🚀
+
+
+## Idle Watchdog
+
+For big setups, 16K LEDs typically, Task watchdog got triggered crashes occur more frequently. Mostly in the effects and drivers task but also in other tasks like WiFi occasionally. The workaround to avoid this is adding task yields in the code. This is currently done as follow:
+
+```cpp
+void effectOrDriverTask(void* pvParameters) {
+  // 🌙
+  esp_task_wdt_add(NULL);
+
+  setup();
+
+  while (true) {
+
+    loop();
+
+    esp_task_wdt_reset();
+    vTaskDelay(1);
+  }
+  // Cleanup (never reached in this case, but good practice)
+  esp_task_wdt_delete(NULL);
+}
+
+void Node::loop() {
+    addYield(10);
+}
+
+void ArtNetOutDriver::loop() {
+    for (each package) {
+        writePackage();
+        addYield(10);
+    }
+}
+
+inline void addYield(uint8_t frequency) {
+  if (++yieldCallCount % frequency == 0) {
+    yieldCounter++;
+    vTaskDelay(1); 
+  }
+}
+
+
+```
+
+* esp_task_wdt ( #include "esp_task_wdt.h" ) make sure the tasks are in the watchdog system and in the task loop it is reset and vTaskDelay(1) makes sure there is a yield each time
+* taskYIELD() is not good enough as it does not give back control to the idle task so we need vTaskDelay(1), taskYIELD() only yields to tasks of equal or higher priority
+* increasing the watchdog timer from 5s to 10s might trigger less watchdog crashes but is not eliminating it so this is not added yet. However, for extreme setups (up to 100K LEDs), even with yields, processing time might legitimately exceed 5s. So might be added later.
+* Node::loop(): each active node will call addYield(10)
+* ArtNetOutDriver::loop(): as a massive amount of packages are blasted (for 16K LEDs 97 universes / packets), addYield(10) is called after each packet
+* addYield(10) means: send a vTaskDelay(1) every 10 times.
+* Occasional flood of ESP_LOG error messages might also trigger the watchdog so where it happened a vTaskDelay(1) is added e.g. in EventSocket::emitEvent(), failed to send event

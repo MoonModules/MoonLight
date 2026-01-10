@@ -227,7 +227,11 @@ esp_err_t DownloadFirmwareService::downloadUpdate(PsychicRequest *request, JsonV
             urlPtr,                     // Pass reference to this class instance
             (configMAX_PRIORITIES - 1), // Pretty high task priority
             NULL,                       // Task handle
-            1                           // Have it on application core
+#ifdef CONFIG_FREERTOS_UNICORE
+                       0  // Single-core: use Core 0 (only option)
+#else
+                       1  // Multi-core: application core
+#endif
             ) != pdPASS)
     {
         delete urlPtr; // Clean up if task creation fails

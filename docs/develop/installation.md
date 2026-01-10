@@ -97,7 +97,7 @@ The development environment consists of
 
     <img width="350" src="https://github.com/user-attachments/assets/e4cbda64-739c-410d-9cdc-d2645e24c7ba" />
 
-* The firmware is now flashed to your ESP32 device, after flashing the ESP32 device will reboot
+* The firmware is now flashed to your ESP32 device, after flashing the ESP32 device will restart
 
 !!! tip "Serial Monitor"
     Recommended: Press PlatformIO:Serial Monitor to see the debug information produced (the first 🔌 on the VSCode statusbar)
@@ -129,7 +129,6 @@ Before changing code, test if the current download of MoonLight is running fine.
 
      * Optionally you need to install git and nodejs, run npm install and make sure python > v3.10 in VSCode.
      * Instead of Platformio IDE, the pioarduino IDE extension might be needed in VSCode
-
 
 ### Git install
 
@@ -242,3 +241,56 @@ npm install
 * Run everything from within VSCode, close any alternative / external tools which (potentially) access esp32 devices. They can claim resources or send commands to the device which interfere with what we trying to accomplish here.
 * If the ESP32 device AP is not showing up in your WiFi list it might be helpful to fully erase the ESP32 device before flashing (VSCode 👽, Erase flash)
 * Sometimes the Serial log may show: [5817][W][WiFiGeneric.cpp:1408] setTxPower(): Neither AP or STA has been started. This is from setTxPower in APSettingsService. Delay has been added to prevent this.
+
+### MoonLight Installer
+
+!!! tip "4.3.2.1"
+    The device will show in 'Captive portal' mode. Alternatively you can close the captive portal and show it in a browser using [http://4.3.2.1](http://4.3.2.1)
+
+!!! warning "UI not showing when installing new version of MoonLight"
+
+    If you ran previous versions of MoonLight, the UI might not show up if it has been changed since then. In this case it is needed to reload the UI from the ESP32-device (use [http://4.3.2.1](http://4.3.2.1))
+
+    * Chrome: Command Shift R (Mac) or Ctrl Shift R or Control Reload (Windows)
+    * Safari: Reload from Origin : Option Shift R
+    * After this not all UI elements might be immediately visible. If you see 'MoonLight loading ...' in the browser, just wait a bit (☕️)
+
+    * Sometimes it migh be needed to clear the browser cache:
+        * Chrome: Delete Browsing data / delete data (caching data)
+        * Safari: Empty cache: Menu Develop (enable if not visible in the Safari Menu) / empty caches (Command Option E)
+
+        * More info: [how to hard refresh your browser and clear cache](https://fabricdigital.co.nz/blog/how-to-hard-refresh-your-browser-and-clear-cache)
+
+!!! info "Hostname"
+    The hostname will be used to access your device. E.g. if the hostname is ml-home you can access it using [http://ml-home.local](http://ml-home.local)
+
+    * Restart the device to make the hostname known to your network (go to system status, scroll down and press restart)
+    * Enter the hostname in your browser e.g. [http://ml-home.local](http://ml-home.local)
+    * ESP32-P4-Nano: November 16, 2025: hostname is not working correctly, use IP address instead
+
+!!! tip "Choose driver"
+    FastLED driver is best to start with if you have a normal (ws2812) LED strip or panel. 
+
+    Choose the Parallel LED Driver if you have more then 4 LED strips or panels or non standard LEDS (e.g. RGBW lights, curtains...). Other drivers (Virtual, Hub,) not supported yet.
+
+    In some cases restart the device to make layout changes effective is needed.
+
+
+!!! info "Tools used"
+    The installer is powered by [ESP Web Tools](https://esphome.github.io/esp-web-tools)
+    See also [ESP-Web-Tools-Tutorial](https://github.com/witnessmenow/ESP-Web-Tools-Tutorial/blob/main/README.md)
+
+    [ESPConnect on GitHub](https://github.com/thelastoutpostworkshop/ESPConnect)
+    ESPConnect is based on [Jason2866](https://github.com/Jason2866)'s [WebSerial ESPTool](https://github.com/Jason2866/WebSerial_ESPTool/tree/development).
+
+### USB-to-serial chip drivers
+
+In case your computer does not recognise your connected ESP32, you might need to install the right USB-to-serial chip drivers.
+Below are the drivers for common chips used in ESP devices. See the images below to see what chip your ESP32 has.
+
+* CP210x drivers: [Windows & Mac](https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers)
+* CH342, CH343, CH9102 drivers: [Windows](https://www.wch.cn/downloads/CH343SER_ZIP.html), [Mac](https://www.wch.cn/downloads/CH34XSER_MAC_ZIP.html) (download via blue button with download icon)</li>
+* CH340, CH341 drivers: [Windows](https://www.wch.cn/downloads/CH341SER_ZIP.html), [Mac](https://www.wch.cn/downloads/CH341SER_MAC_ZIP.html) (download via blue button with download icon)</li>
+
+<img src="https://moonmodules.org/MoonLight/firmware/installer/images/ch9102.jpg" height="200"/>
+<img src="https://moonmodules.org/MoonLight/firmware/installer/images/cp210x-ch34x.jpg" height="200"/>

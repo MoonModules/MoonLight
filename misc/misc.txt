@@ -13,14 +13,14 @@ help: https://www.reddit.com/r/youtubedl/comments/qzqzaz/comment/hlon6k5/
 flash using esptool
 ===================
 [>_] in the statusbar of vscode
-esptool --port /dev/cu.usbmodem11201 write-flash 0x0 ./build/merged/MoonLight_esp32-s3-devkitc-1-n16r8v_0-7-0_webflash.bin
+esptool --port /dev/cu.usbmodem11201 write-flash 0x0 ./build/merged/MoonLight_esp32-s3-n16r8v_0-7-0_webflash.bin
 optionally add erase-flash before write-flash
 
 Copy changes to ESP32-LedDrivers
 ================================
 
 cp .pio/libdeps/esp32dev/ESP32-LedsDriver/src/* ../../ewowi/ESP32-LedsDriver/src
-cp .pio/libdeps/esp32-s3-devkitc-1-n16r8v/ESP32-LedsDriver/src/* ../../ewowi/ESP32-LedsDriver/src
+cp .pio/libdeps/esp32-s3-n16r8v/ESP32-LedsDriver/src/* ../../ewowi/ESP32-LedsDriver/src
 
 
 Release steps 
@@ -114,14 +114,14 @@ do
     echo upgrade 192.168.168.$i
     curl -s -F "update=@/Users/ewowi/Downloads/StarLight_24060113_lolin_s2_mini.bin" 192.168.1.$i/update &
 done
-    curl -X POST "http://192.168.1.$i/json" -d '{"reboot":true}' -H "Content-Type: application/json"
+    curl -X POST "http://192.168.1.$i/json" -d '{"restart":true}' -H "Content-Type: application/json"
 
 for i in 152 132
 do 
     echo upgrade 192.168.168.$i
     curl -s -F "update=@/Users/ewowi/Downloads/StarLight_24060113_esp32dev.bin" 192.168.1.$i/update &
 done
-    curl -X POST "http://192.168.1.$i/json" -d '{"reboot":true}' -H "Content-Type: application/json"
+    curl -X POST "http://192.168.1.$i/json" -d '{"restart":true}' -H "Content-Type: application/json"
 
 FileCreateDate for png files
 

@@ -122,7 +122,7 @@ public:
 
     StateUpdateResult update(std::function<StateUpdateResult(T &)> stateUpdater, const String &originId)
     {
-        beginTransaction();
+        beginTransaction(originId); // 🌙 Add originId
         StateUpdateResult result = stateUpdater(_state);
         endTransaction();
         callHookHandlers(originId, result);
@@ -135,7 +135,7 @@ public:
 
     StateUpdateResult updateWithoutPropagation(std::function<StateUpdateResult(T &)> stateUpdater, const String &originId)
     {
-        beginTransaction();
+        beginTransaction(originId); // 🌙 Add originId
         StateUpdateResult result = stateUpdater(_state);
         endTransaction();
         return result;
@@ -143,7 +143,7 @@ public:
 
     StateUpdateResult update(JsonObject &jsonObject, JsonStateUpdater<T> stateUpdater, const String &originId)
     {
-        beginTransaction();
+        beginTransaction(originId); // 🌙 Add originId
         StateUpdateResult result = stateUpdater(jsonObject, _state, originId);
         endTransaction();
         callHookHandlers(originId, result);
@@ -156,22 +156,22 @@ public:
 
     StateUpdateResult updateWithoutPropagation(JsonObject &jsonObject, JsonStateUpdater<T> stateUpdater, const String &originId)
     {
-        beginTransaction();
+        beginTransaction(originId); // 🌙 Add originId
         StateUpdateResult result = stateUpdater(jsonObject, _state, originId);
         endTransaction();
         return result;
     }
 
-    void read(std::function<void(T &)> stateReader)
+    void read(std::function<void(T &)> stateReader, const String &originId) // 🌙 Add originId
     {
-        beginTransaction();
+        beginTransaction(originId); // 🌙 Add originId
         stateReader(_state);
         endTransaction();
     }
 
-    void read(JsonObject &jsonObject, JsonStateReader<T> stateReader)
+    void read(JsonObject &jsonObject, JsonStateReader<T> stateReader, const String &originId) // 🌙 Add originId
     {
-        beginTransaction();
+        beginTransaction(originId); // 🌙 Add originId
         stateReader(_state, jsonObject);
         endTransaction();
     }
@@ -195,13 +195,13 @@ public:
 protected:
     T _state;
 
-    inline void beginTransaction()
+    inline void beginTransaction(const String &originId) // 🌙 Add originId
     {
         // 🌙 adding semaphore wait too long logging
         if (xSemaphoreTakeRecursive(_accessMutex, pdMS_TO_TICKS(100))==pdFALSE) {
-            ESP_LOGI("🐼", "_accessMutex wait 100ms");
+            ESP_LOGI("🐼", "_accessMutex %s wait 100ms", originId.c_str());
             if (xSemaphoreTakeRecursive(_accessMutex, pdMS_TO_TICKS(400))==pdFALSE) {
-                ESP_LOGW("🐼", "_accessMutex waited 500ms and continues 🤷‍♂️");
+                ESP_LOGW("🐼", "_accessMutex %s waited 500ms and continues", originId.c_str());
                 // xSemaphoreTakeRecursive(_accessMutex, portMAX_DELAY);
             }
         }

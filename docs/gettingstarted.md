@@ -58,7 +58,7 @@ pip install mkdocs-material
 ```ini
 [platformio]
 ...
-default_envs = esp32-s3-devkitc-1
+default_envs = esp32-s3
 ...
 
 [env:adafruit_feather_esp32_v2]
@@ -69,7 +69,7 @@ board_build.mcu = esp32
 board = lolin_c3_mini
 board_build.mcu = esp32c3
 
-[env:esp32-s3-devkitc-1]
+[env:esp32-s3]
 board = esp32-s3-devkitc-1
 board_build.mcu = esp32s3
 ```

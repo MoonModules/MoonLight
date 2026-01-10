@@ -105,35 +105,38 @@ struct Ball {
 class LinesEffect : public Node {
  public:
   static const char* name() { return "Lines"; }
-  static uint8_t dim() { return _2D; }
+  static uint8_t dim() { return _3D; }
   static const char* tags() { return "🔥"; }
 
   uint8_t bpm = 30;
 
   void setup() override { addControl(bpm, "bpm", "slider"); }
 
-  int frameNr;
-
   void loop() override {
-    frameNr = 0;
-
     layer->fadeToBlackBy(255);
 
-    Coord3D pos = {0, 0, 0};
-    pos.x = ::map(beat16(bpm), 0, UINT16_MAX, 0, layer->size.x);  // instead of call%width
+    Coord3D pos;
 
-    for (pos.y = 0; pos.y < layer->size.y; pos.y++) {
-      int colorNr = (frameNr / layer->size.y) % 3;
-      layer->setRGB(pos, colorNr == 0 ? CRGB::Red : colorNr == 1 ? CRGB::Green : CRGB::Blue);
+    // vertical: red
+    if (layer->size.x > 1) {
+      pos.x = ::map(beat16(bpm), 0, UINT16_MAX, 0, layer->size.x);
+      for (pos.y = 0; pos.y < layer->size.y; pos.y++)
+        for (pos.z = 0; pos.z < layer->size.z; pos.z++) layer->setRGB(pos, CRGB::Red);
     }
 
-    pos = {0, 0, 0};
-    pos.y = ::map(beat16(bpm), 0, UINT16_MAX, 0, layer->size.y);  // instead of call%height
-    for (pos.x = 0; pos.x < layer->size.x; pos.x++) {
-      int colorNr = 1;//(frameNr / layer->size.x) % 3;
-      layer->setRGB(pos, colorNr == 0 ? CRGB::Red : colorNr == 1 ? CRGB::Green : CRGB::Blue);
+    // horizontal: green
+    if (layer->size.y > 1) {
+      pos.y = ::map(beat16(bpm), 0, UINT16_MAX, 0, layer->size.y);
+      for (pos.x = 0; pos.x < layer->size.x; pos.x++)
+        for (pos.z = 0; pos.z < layer->size.z; pos.z++) layer->setRGB(pos, CRGB::Green);
     }
-    (frameNr)++;
+
+    // depth: blue
+    if (layer->size.z > 1) {
+      pos.z = ::map(beat16(bpm), 0, UINT16_MAX, 0, layer->size.z);
+      for (pos.x = 0; pos.x < layer->size.x; pos.x++)
+        for (pos.y = 0; pos.y < layer->size.y; pos.y++) layer->setRGB(pos, CRGB::Blue);
+    }
   }
 };
 
@@ -217,7 +220,6 @@ class ScrollingTextEffect : public Node {
     addControlValue("Up");
     addControlValue("Status 🛜");
     addControlValue("Clients 🛜");
-    addControlValue("Connected 🛜");
     addControlValue("Free memory");
 
     addControl(textIn, "text", "text", 1, sizeof(textIn));  // size needed to protect char array!
@@ -228,14 +230,15 @@ class ScrollingTextEffect : public Node {
   void loop() override {
     layer->fadeToBlackBy();
 
+  #define nrOfChoices 7
     uint8_t choice;
     if (preset > 0)  // not auto
       choice = preset;
     else {
-      if (strlen(textIn) == 0)
-        choice = (millis() / 1000 % 8) + 2;
-      else
-        choice = (millis() / 1000 % 9) + 1;
+      if (strlen(textIn) == 0)  // no textIn
+        choice = (millis() / 1000 % nrOfChoices) + 2;
+      else  // add one extra for textIn
+        choice = (millis() / 1000 % (nrOfChoices + 1)) + 1;
     }
 
     IPAddress activeIP = WiFi.isConnected() ? WiFi.localIP() : ETH.localIP();
@@ -275,13 +278,10 @@ class ScrollingTextEffect : public Node {
       text.format("%s", sharedData.connectionStatus == 0 ? "Off" : sharedData.connectionStatus == 1 ? "AP-" : sharedData.connectionStatus == 2 ? "AP+" : sharedData.connectionStatus == 3 ? "Sta-" : sharedData.connectionStatus == 4 ? "Sta+" : "mqqt");
       break;
     case 7:
-      text.format("%dC", sharedData.clientListSize);
+      text.format("%d%d-%d", sharedData.clientListSize, sharedData.connectedClients, sharedData.activeClients);
       break;
     case 8:
-      text.format("%dCC", sharedData.connectedClients);
-      break;
-    case 9:
-      text.format("%dKB", ESP.getFreeHeap() / 1024);
+      text.format("%dK", ESP.getFreeHeap() / 1024);
       break;
     }
     layer->setRGB(Coord3D(choice - 1), CRGB::Blue);
@@ -521,43 +521,43 @@ class WaveEffect : public Node {
 
     CRGB color = CHSV(millis() / 50, 255, 255);
 
-    int prevPos = layer->size.x / 2;  // somewhere in the middle
+    int prevPos = layer->size.y / 2;  // somewhere in the middle
 
-    for (int y = 0; y < layer->size.y; y++) {
+    for (int x = 0; x < layer->size.x; x++) {
       int pos = 0;
 
-      uint8_t b8 = beat8(bpm, y * 100);
-      uint8_t bs8 = beatsin8(bpm, 0, 255, y * 100);
+      uint8_t b8 = beat8(bpm, x * 100);
+      uint8_t bs8 = beatsin8(bpm, 0, 255, x * 100);
       // delay over y-axis..timebase ...
       switch (type) {
       case 0:
-        pos = b8 * layer->size.x / 256;
+        pos = b8 * layer->size.y / 256;
         break;
       case 1:
-        pos = triangle8(bpm, y * 100) * layer->size.x / 256;
+        pos = triangle8(bpm, x * 100) * layer->size.y / 256;
         break;
       case 2:
-        pos = bs8 * layer->size.x / 256;
+        pos = bs8 * layer->size.y / 256;
         break;
       case 3:
-        pos = b8 > 128 ? 0 : layer->size.x - 1;
+        pos = b8 > 128 ? 0 : layer->size.y - 1;
         break;
       case 4:
-        pos = (bs8 + beatsin8(bpm * 0.65, 0, 255, y * 200) + beatsin8(bpm * 1.43, 0, 255, y * 300)) * layer->size.x / 256 / 3;
+        pos = (bs8 + beatsin8(bpm * 0.65, 0, 255, x * 200) + beatsin8(bpm * 1.43, 0, 255, x * 300)) * layer->size.y / 256 / 3;
         break;
       case 5:
-        pos = inoise8(millis() * bpm / 256 + y * 1000) * layer->size.x / 256;
+        pos = inoise8(millis() * bpm / 256 + x * 1000) * layer->size.y / 256;
         break;  // bpm not really bpm, more speed
       default:
         pos = 0;
       }
 
       // connect saw and square
-      if ((type == 0 || type == 3) && abs(prevPos - pos) > layer->size.x / 2) {
-        for (int x = 0; x < layer->size.x; x++) layer->setRGB(Coord3D(x, y), color);
+      if ((type == 0 || type == 3) && abs(prevPos - pos) > layer->size.y / 2) {
+        for (int y = 0; y < layer->size.y; y++) layer->setRGB(Coord3D(x, y), color);
       }
 
-      layer->setRGB(Coord3D(pos, y), color);  //= CRGB(255, random8(), 0);
+      layer->setRGB(Coord3D(x, pos), color);  //= CRGB(255, random8(), 0);
       prevPos = pos;
     }
   }

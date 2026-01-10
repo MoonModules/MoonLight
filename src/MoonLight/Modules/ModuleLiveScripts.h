@@ -40,49 +40,55 @@ class ModuleLiveScripts : public Module {
     _fileManager->addUpdateHandler([this](const String& originId) {
       EXT_LOGV(ML_TAG, "FileManager::updateHandler %s", originId.c_str());
       // read the file state (read all files and folders on FS and collect changes)
-      _fileManager->read([&](FilesState& filesState) {
-        // loop over all changed files (normally only one)
-        for (auto updatedItem : filesState.updatedItems) {
-          // if file is the current live script, recompile it (to do: multiple live effects)
-          uint8_t index = 0;
-          _moduleEffects->read([&](ModuleState& effectsState) {
-            for (JsonObject nodeState : effectsState.data["nodes"].as<JsonArray>()) {
-              if (updatedItem == nodeState["name"]) {
-                EXT_LOGD(ML_TAG, "updateHandler equals current item -> livescript compile %s", updatedItem.c_str());
-                LiveScriptNode* liveScriptNode = (LiveScriptNode*)_moduleEffects->findLiveScriptNode(nodeState["name"]);
-                if (liveScriptNode) {
-                  liveScriptNode->compileAndRun();
+      _fileManager->read(
+          [&](FilesState& filesState) {
+            // loop over all changed files (normally only one)
+            for (auto updatedItem : filesState.updatedItems) {
+              // if file is the current live script, recompile it (to do: multiple live effects)
+              // uint8_t index = 0;
+              _moduleEffects->read(
+                  [&](ModuleState& effectsState) {
+                    for (JsonObject nodeState : effectsState.data["nodes"].as<JsonArray>()) {
+                      if (updatedItem == nodeState["name"]) {
+                        EXT_LOGD(ML_TAG, "updateHandler equals current item -> livescript compile %s", updatedItem.c_str());
+                        LiveScriptNode* liveScriptNode = (LiveScriptNode*)_moduleEffects->findLiveScriptNode(nodeState["name"]);
+                        if (liveScriptNode) {
+                          liveScriptNode->compileAndRun();
 
-                  // wait until setup has been executed?
+                          // wait until setup has been executed?
 
-                  _moduleEffects->requestUIUpdate = true;  // update the Effects UI
-                }
+                          _moduleEffects->requestUIUpdate = true;  // update the UI
+                        }
 
-                EXT_LOGD(ML_TAG, "update due to new node %s done", nodeState["name"].as<const char*>());
-              }
-              index++;
+                        EXT_LOGD(ML_TAG, "update due to new node %s done", nodeState["name"].as<const char*>());
+                      }
+                      // index++;
+                    }
+                  },
+                  originId);
+              _moduleDrivers->read(
+                  [&](ModuleState& driversState) {
+                    for (JsonObject nodeState : driversState.data["nodes"].as<JsonArray>()) {
+                      if (updatedItem == nodeState["name"]) {
+                        EXT_LOGD(ML_TAG, "updateHandler equals current item -> livescript compile %s", updatedItem.c_str());
+                        LiveScriptNode* liveScriptNode = (LiveScriptNode*)_moduleDrivers->findLiveScriptNode(nodeState["name"]);
+                        if (liveScriptNode) {
+                          liveScriptNode->compileAndRun();
+
+                          // wait until setup has been executed?
+
+                          _moduleDrivers->requestUIUpdate = true;  // update the UI
+                        }
+
+                        EXT_LOGD(ML_TAG, "update due to new node %s done", nodeState["name"].as<const char*>());
+                      }
+                      // index++;
+                    }
+                  },
+                  originId);
             }
-          });
-          _moduleDrivers->read([&](ModuleState& driversState) {
-            for (JsonObject nodeState : driversState.data["nodes"].as<JsonArray>()) {
-              if (updatedItem == nodeState["name"]) {
-                EXT_LOGD(ML_TAG, "updateHandler equals current item -> livescript compile %s", updatedItem.c_str());
-                LiveScriptNode* liveScriptNode = (LiveScriptNode*)_moduleDrivers->findLiveScriptNode(nodeState["name"]);
-                if (liveScriptNode) {
-                  liveScriptNode->compileAndRun();
-
-                  // wait until setup has been executed?
-
-                  _moduleDrivers->requestUIUpdate = true;  // update the Effects UI
-                }
-
-                EXT_LOGD(ML_TAG, "update due to new node %s done", nodeState["name"].as<const char*>());
-              }
-              index++;
-            }
-          });
-        }
-      });
+          },
+          originId);
     });
     #endif
   }
@@ -155,7 +161,7 @@ class ModuleLiveScripts : public Module {
       // _state.compareRecursive("scripts", _state.data["scripts"], newData["scripts"], updatedItem); //compare and update
       _state.data["scripts"] = newData["scripts"];  // update without compareRecursive -> without handles
       // JsonObject newDataObject = newData.as<JsonObject>();
-      // _socket->emitEvent("editor", newDataObject);
+      // _socket->emitEvent("editor", newDataObject, _moduleName.c_str());
 
       // requestUIUpdate ...
       update(

@@ -1,6 +1,6 @@
 # WiFi Station
 
-<img width="320" src="https://github.com/user-attachments/assets/f9967bac-eb73-4bf1-bb34-690f4ff4b28c" />
+<img width="320" src="../../media/network/MB-WiFi1.png" />
 
 * **WiFi TX Power** 🌙: WiFi transmit power can be set to optimize WiFi behavior. Some boards are known to work better by setting transmit power to 8.5 dBM (So called LOLIN_WIFI_FIX).
     * Default is typically 20 dBm (100mW) - the maximum allowed
@@ -19,7 +19,7 @@ You can **opt out** at any time by disabling Track analytics in the settings.
 The data collected consists of:
 
 * Country – e.g. France, determined via ip-api.com; only the country field is extracted.
-* Firmware – e.g. esp32-s3-devkitc-1-n16r8v
+* Firmware – e.g. esp32-s3-n16r8v
 * Board model – e.g. QuinLED DigQuad, based on board presets (not yet implemented)
 * MoonLight version – e.g. 0.7.0
 

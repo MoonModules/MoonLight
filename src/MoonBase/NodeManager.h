@@ -41,37 +41,39 @@ class NodeManager : public Module {
     _fileManager->addUpdateHandler([this](const String& originId) {
       EXT_LOGV(ML_TAG, "FileManager::updateHandler %s", originId.c_str());
       // read the file state (read all files and folders on FS and collect changes)
-      _fileManager->read([&](FilesState& filesState) {
-        // loop over all changed files (normally only one)
-        for (auto updatedItem : filesState.updatedItems) {
-          // if file is the current live script, recompile it (to do: multiple live effects)
-          EXT_LOGV(ML_TAG, "updateHandler updatedItem %s", updatedItem.c_str());
-          Char<32> name;
-          name.format("/.config/%s.json", _moduleName);
-          if (equal(updatedItem.c_str(), name.c_str())) {
-            EXT_LOGV(ML_TAG, " %s updated -> call update %s", name.c_str(), updatedItem.c_str());
-            readFromFS();  // repopulates the state, processing file changes
-          }
-          // uint8_t index = 0;
-          // for (JsonObject nodeState: _state.data["nodes"].as<JsonArray>()) {
+      _fileManager->read(
+          [&](FilesState& filesState) {
+            // loop over all changed files (normally only one)
+            for (auto updatedItem : filesState.updatedItems) {
+              // if file is the current live script, recompile it (to do: multiple live effects)
+              EXT_LOGV(ML_TAG, "updateHandler updatedItem %s", updatedItem.c_str());
+              Char<32> name;
+              name.format("/.config/%s.json", _moduleName);
+              if (equal(updatedItem.c_str(), name.c_str())) {
+                EXT_LOGV(ML_TAG, " %s updated -> call update %s", name.c_str(), updatedItem.c_str());
+                readFromFS();  // repopulates the state, processing file changes
+              }
+              // uint8_t index = 0;
+              // for (JsonObject nodeState: _state.data["nodes"].as<JsonArray>()) {
 
-          //     if (updatedItem == nodeState["name"]) {
-          //         EXT_LOGV(ML_TAG, "updateHandler equals current item -> livescript compile %s", updatedItem.c_str());
-          //         LiveScriptNode *liveScriptNode = (LiveScriptNode *)layerP.layers[0]->findLiveScriptNode(nodeState["name"]);
-          //         if (liveScriptNode) {
-          //             liveScriptNode->compileAndRun();
+              //     if (updatedItem == nodeState["name"]) {
+              //         EXT_LOGV(ML_TAG, "updateHandler equals current item -> livescript compile %s", updatedItem.c_str());
+              //         LiveScriptNode *liveScriptNode = (LiveScriptNode *)layerP.layers[0]->findLiveScriptNode(nodeState["name"]);
+              //         if (liveScriptNode) {
+              //             liveScriptNode->compileAndRun();
 
-          //             //wait until setup has been executed?
+              //             //wait until setup has been executed?
 
-          //             _moduleEffects->requestUIUpdate = true; //update the Effects UI
-          //         }
+              //             _moduleEffects->requestUIUpdate = true; //update the UI
+              //         }
 
-          //         EXT_LOGV(ML_TAG, "update due to new node %s done", name.c_str());
-          //     }
-          //     index++;
-          // }
-        }
-      });
+              //         EXT_LOGV(ML_TAG, "update due to new node %s done", name.c_str());
+              //     }
+              //     index++;
+              // }
+            }
+          },
+          originId);
     });
   }
 
@@ -220,7 +222,7 @@ class NodeManager : public Module {
           }
 
           oldNode->requestMappings();
-          
+
           delay(100);  // to allow the node to finish its last loop
           EXT_LOGD(ML_TAG, "remove oldNode: %d p:%p", nodes->size(), oldNode);
           // delete node; //causing assert failed: multi_heap_free multi_heap_poisoning.c:259 (head != NULL) ATM

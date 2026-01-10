@@ -354,9 +354,9 @@ class TorontoBarCubesLayout : public Node {
   }
 };
 
-class SingleLineLayout : public Node {
+class SingleRowLayout : public Node {
  public:
-  static const char* name() { return "Single Line"; }
+  static const char* name() { return "Single Row"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🚥"; }
 
@@ -395,9 +395,9 @@ class SingleLineLayout : public Node {
   }
 };
 
-class SingleRowLayout : public Node {
+class SingleColumnLayout : public Node {
  public:
-  static const char* name() { return "Single Row"; }
+  static const char* name() { return "Single Column"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🚥"; }
 

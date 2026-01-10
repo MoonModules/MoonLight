@@ -117,7 +117,7 @@ class ModuleIO : public Module {
     addControlValue(control, "QuinLED Dig Uno v3");
     addControlValue(control, "QuinLED Dig Quad v3");
     addControlValue(control, "QuinLED Dig Octa v2");
-    addControlValue(control, "QuinLED Dig 2Go");
+    addControlValue(control, "QuinLED Dig2Go");
     addControlValue(control, "Serg Universal Shield");
     addControlValue(control, "Serg Mini Shield");
     addControlValue(control, "Mathieu SE16 v1");

@@ -51,7 +51,7 @@ class SharedEventEndpoint {
     // CHANGED: Use JsonObject overload, not buffer
     doc["event"] = module->_moduleName;
     JsonObject root = doc["data"].to<JsonObject>();
-    module->read(root, ModuleState::read);
+    module->read(root, ModuleState::read, originId);
 
     _socket->emitEvent(doc, originId.c_str(), sync);
   }

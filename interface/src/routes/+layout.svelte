@@ -63,6 +63,8 @@
 		if (page.data.features.battery) socket.on('battery', handleBattery);
 		if (page.data.features.download_firmware) socket.on('otastatus', handleOAT);
 		if (page.data.features.ethernet) socket.on('ethernet', handleEthernet);
+		
+		document.addEventListener('visibilitychange', handleVisibilityChange); // 🌙 Listen to visibility changes
 	};
 
 	const removeEventListeners = () => {
@@ -74,6 +76,8 @@
 		socket.off('battery', handleBattery);
 		socket.off('otastatus', handleOAT);
 		socket.off('ethernet', handleEthernet);
+
+		document.removeEventListener('visibilitychange', handleVisibilityChange); // 🌙 Clean up clientInfoListener listener and notify server
 	};
 
 	async function validateUser(userdata: userProfile) {
@@ -96,6 +100,7 @@
 	const handleOpen = () => {
 		// $telemetry.rssi.disconnected = false; // 🌙
 		// notifications.success('Connection to device established', 5000);
+		socket.sendEvent('client_info', { visible: isPageVisible }); // 🌙 Notify server of initial info when connection opens
 	};
 
 	const handleClose = () => {
@@ -110,6 +115,8 @@
 			saveNeeded: false,
 			hostName: 'MoonLight'
 		}); // 🌙 add safeMode etc
+
+		socket.sendEvent('client_info', { visible: false }); // 🌙 
 	};
 
 	const handleError = (data: any) => console.error(data);
@@ -149,6 +156,18 @@
 	};
 
 	let menuOpen = $state(false);
+
+	// 🌙 Handle visibility changes
+	let isPageVisible = $state(!document.hidden); // 🌙 Track page visibility
+	const handleVisibilityChange = () => {
+		const wasVisible = isPageVisible;
+		isPageVisible = !document.hidden;
+		
+		if (wasVisible !== isPageVisible) {
+			// console.log('Page visibility changed:', isPageVisible ? 'Visible' : 'Hidden');
+			socket.sendEvent('client_info', { visible: isPageVisible }); // Send visibility update in client_info to server via WebSocket
+		}
+	};
 
 	// 🌙
 	let loadMsg = document.getElementById('loadMsg');
