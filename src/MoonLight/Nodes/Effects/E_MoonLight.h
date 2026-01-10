@@ -93,7 +93,7 @@ class StarSkyEffect : public Node {
     for (uint32_t i = 0; i < nb_stars; i++) {
       stars_indexes[i] = random16(layer->nrOfLights);
       stars_fade_dir[i] = random8(2);
-      stars_brightness[i] = random8();
+      stars_brightness[i] = random8(1, 254);
       //EXT_LOGD(ML_TAG, "StarSkyEffect: using pixel #%d, start brightness %d, fade dir %d", stars_indexes[i], stars_brightness[i], stars_fade_dir[i]);
     }
     xSemaphoreGive(swapMutex);
