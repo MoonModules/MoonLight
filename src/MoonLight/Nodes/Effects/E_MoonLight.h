@@ -78,7 +78,11 @@ class StarSkyEffect : public Node {
   void setup_animation() {
     xSemaphoreTake(swapMutex, portMAX_DELAY);
     resetStars();
-    if (!layer || layer->nrOfLights == 0) return;
+    if (!layer || layer->nrOfLights == 0) 
+    {
+      xSemaphoreGive(swapMutex);
+      return;
+    }
     nb_stars = ((uint32_t)star_fill_ratio * (uint32_t)layer->nrOfLights)/10000 + 1;
     stars_indexes = allocMB<uint16_t>(nb_stars);
     stars_fade_dir = allocMB<uint8_t>(nb_stars);
@@ -109,7 +113,7 @@ class StarSkyEffect : public Node {
   }
   
   void loop20ms() override {
-    if (nb_stars == 0 || !stars_indexes || !stars_fade_dir || !stars_brightness) return;
+    if (!layer || nb_stars == 0 || !stars_indexes || !stars_fade_dir || !stars_brightness) return;
     if (local_clock++ == slowness) {
       xSemaphoreTake(swapMutex, portMAX_DELAY);
       if (display_reset) { 
