@@ -89,7 +89,7 @@ class StarSkyEffect : public Node {
   }
 
   void onSizeChanged(const Coord3D& prevSize) override { setup_animation(); }
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) { setup_animation(); }
+  void onUpdate(const Char<20>& oldValue, const JsonObject& control) { if (control["name"] == "star fill") setup_animation(); }
 
   void setup() override {
     addControl(slowness, "slowness", "slider");
