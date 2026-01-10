@@ -238,6 +238,7 @@ class ModuleIO : public Module {
 
   void setBoardPresetDefaults(uint8_t boardID) {
     JsonDocument doc;
+    current_board_id = boardID;
     JsonObject object = doc.to<JsonObject>();
     object["modded"] = false;
 
@@ -794,7 +795,9 @@ class ModuleIO : public Module {
       analogSetAttenuation(voltage_readout_current_adc_attenuation);
       uint32_t adc_mv_vinput = analogReadMilliVolts(pinVoltage);
       analogSetAttenuation(ADC_11db);
-      float volts = ((float)adc_mv_vinput) * 11.43 / (1.43 * 1000);  // 1k43/10k resistor divider
+      float volts = 0;
+      if (current_board_id == board_SE16V1) { volts = ((float)adc_mv_vinput) * 2 / 1000; } // /2 resistor divider
+      else if (current_board_id == board_LightCrafter16) { volts = ((float)adc_mv_vinput) * 11.43 / (1.43 * 1000); } // 1k43/10k resistor divider 
       batteryService->updateVoltage(volts);
       voltage_readout_current_adc_attenuation = adc_get_adjusted_gain(voltage_readout_current_adc_attenuation, adc_mv_vinput);
     }
@@ -803,11 +806,14 @@ class ModuleIO : public Module {
       uint32_t adc_mv_cinput = analogReadMilliVolts(pinCurrent);
       analogSetAttenuation(ADC_11db);
       current_readout_current_adc_attenuation = adc_get_adjusted_gain(current_readout_current_adc_attenuation, adc_mv_cinput);
-      if (adc_mv_cinput > 330)  // datasheet quiescent output voltage of 0.5V, which is ~330mV after the 10k/5k1 voltage divider. Ideally, this value should be measured at boot when nothing is displayed on the LEDs
-      {
-        batteryService->updateCurrent((((float)(adc_mv_cinput)-330) * 37.75) / 1000);  // 40mV / A with a 10k/5k1 resistor divider, so a 37.75mA/mV
-      } else {
-        batteryService->updateCurrent(0);
+      if ((current_board_id == board_SE16V1) || (current_board_id == board_LightCrafter16)) {
+        if (adc_mv_cinput > 330)  // datasheet quiescent output voltage of 0.5V, which is ~330mV after the 10k/5k1 voltage divider. Ideally, this value should be measured at boot when nothing is displayed on the LEDs
+        {
+          if (current_board_id == board_SE16V1) { batteryService->updateCurrent((((float)(adc_mv_cinput)-250) * 50.00) / 1000); } // 40mV / A with a /2 resistor divider, so a 50mA/mV
+          else if (current_board_id == board_LightCrafter16) { batteryService->updateCurrent((((float)(adc_mv_cinput)-330) * 37.75) / 1000); } // 40mV / A with a 10k/5k1 resistor divider, so a 37.75mA/mV
+        } else {
+          batteryService->updateCurrent(0);
+        }
       }
     }
   #endif
@@ -815,6 +821,7 @@ class ModuleIO : public Module {
 
  private:
   ESP32SvelteKit* _sveltekit;
+  uint8_t current_board_id = UINT8_MAX;
 };
 
 #endif
