@@ -51,32 +51,45 @@ class StarSkyEffect : public Node {
   uint8_t slowness = UINT8_MAX;
   uint8_t* stars_fade_dir = nullptr;
   uint16_t* stars_indexes = nullptr;
+  uint8_t* stars_brightness = nullptr;
 
   ~StarSkyEffect() { 
     freeMB(stars_indexes); 
     freeMB(stars_fade_dir); 
+    freeMB(stars_brightness); 
   }
 
   void setup_animation() {
     freeMB(stars_indexes); 
     freeMB(stars_fade_dir); 
+    freeMB(stars_brightness); 
     if (layer->nrOfLights == 0) { return; }
     layer->fill_solid(CRGB::Black);
     nb_stars = ((uint32_t)star_fill_ratio * (uint32_t)layer->nrOfLights)/10000 + 1;
     stars_indexes = allocMB<uint16_t>(nb_stars);
     stars_fade_dir = allocMB<uint8_t>(nb_stars);
+    stars_brightness = allocMB<uint8_t>(nb_stars);
+    if (!stars_indexes || !stars_fade_dir || !stars_brightness) {
+      EXT_LOGE(ML_TAG, "StarSkyEffect: memory allocation failed");
+      freeMB(stars_indexes);
+      freeMB(stars_fade_dir);
+      freeMB(stars_brightness);
+      stars_indexes = nullptr;
+      stars_fade_dir = nullptr;
+      nb_stars = 0;
+      return;
+    }
     EXT_LOGD(ML_TAG, "StarSkyEffect: %d stars added for a total of %d pixels", nb_stars, layer->nrOfLights);
     for (uint32_t i = 0; i < nb_stars; i++) {
       stars_indexes[i] = random16(layer->nrOfLights);
       stars_fade_dir[i] = random8(2);
-      uint8_t start_brightness = random8();
-      EXT_LOGD(ML_TAG, "StarSkyEffect: using pixel #%d, start brightness %d, fade dir %d", stars_indexes[i], start_brightness, stars_fade_dir[i]);
-      layer->setRGB(stars_indexes[i], CRGB(start_brightness, start_brightness, start_brightness));
+      stars_brightness[i] = random8();
+      EXT_LOGD(ML_TAG, "StarSkyEffect: using pixel #%d, start brightness %d, fade dir %d", stars_indexes[i], stars_brightness[i], stars_fade_dir[i]);
     }
   }
 
   void onSizeChanged(const Coord3D& prevSize) override { setup_animation(); }
-  void onUpdate() { setup_animation(); }
+  void onUpdate(const Char<20>& oldValue, const JsonObject& control) { setup_animation(); }
 
   void setup() override {
     addControl(slowness, "slowness", "slider");
@@ -88,14 +101,14 @@ class StarSkyEffect : public Node {
     if (local_clock++ == slowness) {
       for (uint32_t i = 0; i < nb_stars; i++) {
         if (stars_fade_dir[i]) {
-          uint8_t brightness = layer->getRGB(stars_indexes[i]).r + 1;
-          layer->setRGB(stars_indexes[i], CRGB(brightness, brightness, brightness));
-          if (brightness == UINT8_MAX) { stars_fade_dir[i] = 0; }
+          stars_brightness[i] = stars_brightness[i] + 1;
+          layer->setRGB(stars_indexes[i], CRGB(stars_brightness[i], stars_brightness[i], stars_brightness[i]));
+          if (stars_brightness[i] == UINT8_MAX) { stars_fade_dir[i] = 0; }
           if (random8() == 42) { stars_fade_dir[i] = 0; }
         } else {
-          uint8_t brightness = layer->getRGB(stars_indexes[i]).r - 1;
-          layer->setRGB(stars_indexes[i], CRGB(brightness, brightness, brightness));
-          if (brightness == 0) { stars_fade_dir[i] = 1; }
+          stars_brightness[i] = stars_brightness[i] - 1;
+          layer->setRGB(stars_indexes[i], CRGB(stars_brightness[i], stars_brightness[i], stars_brightness[i]));
+          if (stars_brightness[i] == 0) { stars_fade_dir[i] = 1; }
           if (random8() == 42) { stars_fade_dir[i] = 1; }
         }
       }
