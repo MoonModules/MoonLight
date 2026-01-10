@@ -79,12 +79,12 @@ class StarSkyEffect : public Node {
       nb_stars = 0;
       return;
     }
-    EXT_LOGD(ML_TAG, "StarSkyEffect: %d stars added for a total of %d pixels", nb_stars, layer->nrOfLights);
+    //EXT_LOGD(ML_TAG, "StarSkyEffect: %d stars added for a total of %d pixels", nb_stars, layer->nrOfLights);
     for (uint32_t i = 0; i < nb_stars; i++) {
       stars_indexes[i] = random16(layer->nrOfLights);
       stars_fade_dir[i] = random8(2);
       stars_brightness[i] = random8();
-      EXT_LOGD(ML_TAG, "StarSkyEffect: using pixel #%d, start brightness %d, fade dir %d", stars_indexes[i], stars_brightness[i], stars_fade_dir[i]);
+      //EXT_LOGD(ML_TAG, "StarSkyEffect: using pixel #%d, start brightness %d, fade dir %d", stars_indexes[i], stars_brightness[i], stars_fade_dir[i]);
     }
   }
 
@@ -108,8 +108,11 @@ class StarSkyEffect : public Node {
         } else {
           stars_brightness[i] = stars_brightness[i] - 1;
           layer->setRGB(stars_indexes[i], CRGB(stars_brightness[i], stars_brightness[i], stars_brightness[i]));
-          if (stars_brightness[i] == 0) { stars_fade_dir[i] = 1; }
           if (random8() == 42) { stars_fade_dir[i] = 1; }
+          if (stars_brightness[i] == 0) { 
+            stars_indexes[i] = random16(layer->nrOfLights);
+            stars_fade_dir[i] = 1; 
+          }
         }
       }
       local_clock = 0;
