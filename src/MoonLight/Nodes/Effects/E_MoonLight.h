@@ -114,22 +114,22 @@ class StarSkyEffect : public Node {
       Coord3D pos = Coord3D(stars_indexes[i] % layer->size.x, (stars_indexes[i] / layer->size.x) % layer->size.y, stars_indexes[i] / (layer->size.x * layer->size.y));
       CRGB color = usePalette ? ColorFromPalette(layerP.palette, stars_colors[i], stars_brightness[i]) : CRGB(stars_brightness[i], stars_brightness[i], stars_brightness[i]);
       if (stars_fade_dir[i]) {
-        stars_brightness[i] = MIN(stars_brightness[i] + star_speed, UINT8_MAX);
+        stars_brightness[i] = (stars_brightness[i] >= UINT8_MAX - star_speed)?UINT8_MAX:stars_brightness[i] + star_speed;
         layer->setRGB(pos, color);
         if (stars_brightness[i] == UINT8_MAX) {
           stars_fade_dir[i] = 0;
         }
-        if (random8() < star_speed) {
+        if (random8() < 10) {
           stars_fade_dir[i] = 0;
         }
       } else {
-        stars_brightness[i] = MAX(stars_brightness[i] - star_speed, 0);
+        stars_brightness[i] = (stars_brightness[i] >= star_speed)?stars_brightness[i] - star_speed:0;
         layer->setRGB(pos, color);
         if (stars_brightness[i] == 0) {
           stars_indexes[i] = random16(layer->nrOfLights);
           stars_fade_dir[i] = 1;
         }
-        if (random8() < star_speed) {
+        if (random8() < 10) {
           stars_fade_dir[i] = 1;
         }
       }
