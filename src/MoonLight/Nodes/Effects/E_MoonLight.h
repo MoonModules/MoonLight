@@ -41,6 +41,103 @@ class SolidEffect : public Node {
 };
 
 // by limpkin
+class StarSkyEffect : public Node {
+ public:
+  static const char* name() { return "Star Sky"; }
+  static uint8_t dim() { return _3D; }
+  static const char* tags() { return "🔥🎨"; }
+
+  // control variables
+  uint8_t star_speed = 1;
+  uint8_t star_fill_ratio = 42;
+  bool usePalette = false;
+
+  void setup() override {
+    addControl(star_speed, "speed", "slider", 0, 42);
+    addControl(star_fill_ratio, "star fill", "slider");
+    addControl(usePalette, "usePalette", "checkbox");
+    // do not setup_animation here, onSizeChanged will do it (then there is a layer)
+  }
+
+  // loop variables
+  uint32_t nb_stars = 0;
+  uint8_t* stars_fade_dir = nullptr;
+  uint16_t* stars_indexes = nullptr;
+  uint8_t* stars_brightness = nullptr;
+  uint8_t* stars_colors = nullptr;
+
+  ~StarSkyEffect() { resetStars(); }
+
+  void resetStars() {
+    if (stars_indexes) freeMB(stars_indexes);
+    if (stars_fade_dir) freeMB(stars_fade_dir);
+    if (stars_brightness) freeMB(stars_brightness);
+    if (stars_colors) freeMB(stars_colors);
+    stars_indexes = nullptr;
+    stars_fade_dir = nullptr;
+    stars_brightness = nullptr;
+    stars_colors = nullptr;
+    nb_stars = 0;
+  }
+
+  void setup_animation() {
+    resetStars();
+    nb_stars = ((uint32_t)star_fill_ratio * (uint32_t)layer->nrOfLights) / 10000 + 1;
+    stars_indexes = allocMB<uint16_t>(nb_stars);
+    stars_fade_dir = allocMB<uint8_t>(nb_stars);
+    stars_brightness = allocMB<uint8_t>(nb_stars);
+    if (usePalette) stars_colors = allocMB<uint8_t>(nb_stars);
+    if (!stars_indexes || !stars_fade_dir || !stars_brightness || (usePalette && !stars_colors)) {
+      EXT_LOGE(ML_TAG, "StarSkyEffect: memory allocation failed");
+      resetStars();
+      return;
+    }
+    // EXT_LOGD(ML_TAG, "StarSkyEffect: %d stars added for a total of %d pixels", nb_stars, layer->nrOfLights);
+    for (uint32_t i = 0; i < nb_stars; i++) {
+      stars_indexes[i] = random16(layer->nrOfLights);
+      stars_fade_dir[i] = random8(2);
+      stars_brightness[i] = random8(1, 254);
+      if (usePalette) stars_colors[i] = random8();
+      // EXT_LOGD(ML_TAG, "StarSkyEffect: using pixel #%d, start brightness %d, fade dir %d", stars_indexes[i], stars_brightness[i], stars_fade_dir[i]);
+    }
+  }
+
+  void onSizeChanged(const Coord3D& prevSize) override { setup_animation(); }
+  void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
+    if (control["name"] == "star fill" || control["name"] == "usePalette") setup_animation();
+  }
+
+  void loop() override {
+    if (nb_stars == 0 || !stars_indexes || !stars_fade_dir || !stars_brightness || (usePalette && !stars_colors)) return;
+    layer->fadeToBlackBy(50);  // this is better than fill_solid when more effects run at the same time
+    for (uint32_t i = 0; i < nb_stars; i++) {
+      Coord3D pos = Coord3D(stars_indexes[i] % layer->size.x, (stars_indexes[i] / layer->size.x) % layer->size.y, stars_indexes[i] / (layer->size.x * layer->size.y));
+      CRGB color = usePalette ? ColorFromPalette(layerP.palette, stars_colors[i], stars_brightness[i]) : CRGB(stars_brightness[i], stars_brightness[i], stars_brightness[i]);
+      if (stars_fade_dir[i]) {
+        stars_brightness[i] = MIN(stars_brightness[i] + star_speed, UINT8_MAX);
+        layer->setRGB(pos, color);
+        if (stars_brightness[i] == UINT8_MAX) {
+          stars_fade_dir[i] = 0;
+        }
+        if (random8() < star_speed) {
+          stars_fade_dir[i] = 0;
+        }
+      } else {
+        stars_brightness[i] = MAX(stars_brightness[i] - star_speed, 0);
+        layer->setRGB(pos, color);
+        if (stars_brightness[i] == 0) {
+          stars_indexes[i] = random16(layer->nrOfLights);
+          stars_fade_dir[i] = 1;
+        }
+        if (random8() < star_speed) {
+          stars_fade_dir[i] = 1;
+        }
+      }
+    }
+  }
+};
+
+// by limpkin
 class FixedRectangleEffect : public Node {
  public:
   static const char* name() { return "Fixed Rectangle"; }

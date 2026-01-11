@@ -84,6 +84,7 @@ class ModuleEffects : public NodeManager {
     addControlValue(control, getNameAndTags<AudioRingsEffect>());
     addControlValue(control, getNameAndTags<LinesEffect>());
     addControlValue(control, getNameAndTags<FireEffect>());
+    addControlValue(control, getNameAndTags<StarSkyEffect>());
     addControlValue(control, getNameAndTags<FixedRectangleEffect>());
     addControlValue(control, getNameAndTags<ParticlesEffect>());
     addControlValue(control, getNameAndTags<PraxisEffect>());
@@ -176,6 +177,7 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<AudioRingsEffect>(name);
     if (!node) node = checkAndAlloc<FireEffect>(name);
 
+    if (!node) node = checkAndAlloc<StarSkyEffect>(name);
     if (!node) node = checkAndAlloc<FixedRectangleEffect>(name);
     if (!node) node = checkAndAlloc<FreqSawsEffect>(name);
     if (!node) node = checkAndAlloc<LinesEffect>(name);
