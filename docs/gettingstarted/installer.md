@@ -22,25 +22,15 @@ Connect the device via a USB cable (which supports data transfer) to your PC.
 
 <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
 
-Select your ESP32-device from the list below and press the corresponding Connect button and follow these steps:
+Select your ESP32-device from the table below and press the corresponding Connect button. 
 
-<img width="250" src="https://github.com/user-attachments/assets/f092743f-a362-40da-b932-d31b203d966d" />
-
-Your device should show up in this list, Connect
-
-<img width="200" alt="Screenshot 2025-06-07 at 20 54 31" src="https://github.com/user-attachments/assets/a0a8d92c-dae2-4cfe-ac78-bc7cacb24724" />
-<img width="250" src="https://github.com/user-attachments/assets/35045317-520d-427c-894e-418693877831" />
-
-Press Install MoonLight. Erase when installing MoonLight first time, do not erase if already installed (to preserve settings). Press Next and Install
+* In the popup window, your device should show up in this list, press Connect, 
+* Press Install MoonLight. Erase when installing MoonLight first time, do not erase if already installed (to preserve settings). Press Next and Install
+* Press Next, go to Logs & Console and press Restart.
+* Close the installer.
 
 !!! info "Bootloader mode"
     If install doesn't work: some boards have to be placed in bootloader mode the first time: press and hold the `Boot` button on the ESP32, press the `Reset` button on the ESP32 and then release the `Boot` button.
-
-<img width="200" src="https://github.com/user-attachments/assets/25c05a6c-d2ef-41cb-b83c-fc40a60c6ccc" />
-<img width="200" src="https://github.com/user-attachments/assets/b2391752-51c4-400e-b95c-4fa865e93595" />
-<img width="200" src="https://github.com/user-attachments/assets/5e2ceefd-4c31-4b72-a228-f29373b677ac" />
-
-Restart the device by going to Logs & Console and press Restart.
 
 | Name | Image* | Flash | Shop & Board presets |
 |------|--------|-------|----------------------|
@@ -55,7 +45,15 @@ Restart the device by going to Logs & Console and press Restart.
 | esp32-p4-olimex | ![esp32-p4-olimex](../firmware/installer/images/esp32-p4-olimex.jpg){: style="width:100px"} | <esp-web-install-button manifest="https://moonmodules.org/MoonLight/firmware/installer/manifest_esp32-p4-olimex.json"></esp-web-install-button> | [Olimex](https://www.olimex.com/Products/IoT/ESP32-P4/ESP32-P4-DevKit/open-source-hardware){:target="_blank"} |
 | esp32-c3 | ![esp32-c3](../firmware/installer/images/esp32-c3.jpg){: style="width:100px"} | <esp-web-install-button manifest="https://moonmodules.org/MoonLight/firmware/installer/manifest_esp32-c3.json"></esp-web-install-button> | [Ali*](https://s.click.aliexpress.com/e/_EIl7NKw){:target="_blank"} |
 | esp32-c3-supermini | ![esp32-c3-supermini](../firmware/installer/images/esp32-c3-supermini.jpg){: style="width:100px"} | <esp-web-install-button manifest="https://moonmodules.org/MoonLight/firmware/installer/manifest_esp32-c3-supermini.json"></esp-web-install-button> | [Ali*](https://s.click.aliexpress.com/e/_EIl7NKw){:target="_blank"} |
-| others | ![others](../firmware/installer/images/others.jpg){: style="width:100px"} | <esp-web-install-button manifest="https://moonmodules.org/MoonLight/firmware/installer/manifest.json"></esp-web-install-button> | |
+
+Installer steps:
+
+<img width="250" src="https://github.com/user-attachments/assets/f092743f-a362-40da-b932-d31b203d966d" />
+<img width="200" alt="Screenshot 2025-06-07 at 20 54 31" src="https://github.com/user-attachments/assets/a0a8d92c-dae2-4cfe-ac78-bc7cacb24724" />
+<img width="250" src="https://github.com/user-attachments/assets/35045317-520d-427c-894e-418693877831" />
+<img width="200" src="https://github.com/user-attachments/assets/25c05a6c-d2ef-41cb-b83c-fc40a60c6ccc" />
+<img width="200" src="https://github.com/user-attachments/assets/b2391752-51c4-400e-b95c-4fa865e93595" />
+<img width="200" src="https://github.com/user-attachments/assets/5e2ceefd-4c31-4b72-a228-f29373b677ac" />
 
 ## Setup MoonLight
 
