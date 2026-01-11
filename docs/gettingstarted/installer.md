@@ -1,12 +1,14 @@
 # MoonLight Installer
 
-This page describes how to install <a href="https://github.com/MoonModules/MoonLight" target="_blank">MoonModules/MoonLight</a> on an ESP32 microcontroller. You need a compatible browser like Chrome, or Edge, not supported on Safari.
+Install <a href="https://github.com/MoonModules/MoonLight" target="_blank">MoonModules/MoonLight</a> on an ESP32 microcontroller. You need a compatible browser like Chrome, or Edge, not supported on Safari.
+
+For devices which have already MoonLight installed, go to [Update](#update-moonlight)
 
 <a href="https://www.youtube.com/watch?v=7DQOEWa-Kwg">
   <img width="380" src="https://img.youtube.com/vi/7DQOEWa-Kwg/maxresdefault.jpg" alt="Watch MoonLight Demo">
 </a>
 
-**[▶️ Watch the install tutorial](https://www.youtube.com/watch?v=7DQOEWa-Kwg)** or follow the instructions below
+**[▶️ Watch the install tutorial](https://www.youtube.com/watch?v=7DQOEWa-Kwg)** (v0.6.0) or follow the instructions below
 
 ## Prepare an ESP32 device 
 
@@ -22,12 +24,7 @@ Connect the device via a USB cable (which supports data transfer) to your PC.
 
 <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
 
-Select your ESP32-device from the table below and press the corresponding Connect button. 
-
-* In the popup window, your device should show up in this list, press Connect, 
-* Press Install MoonLight. Erase when installing MoonLight first time, do not erase if already installed (to preserve settings). Press Next and Install
-* Press Next, go to Logs & Console and press Restart.
-* Close the installer.
+Select your ESP32-device from the table below, press the corresponding **Connect** button and follow the steps. Your device should show up in this list. Press the **Erase** checkbox when installing MoonLight for the first time. After succesful install, go to Logs & Console, press **Restart** and close the installer.
 
 !!! info "Bootloader mode"
     If install doesn't work: some boards have to be placed in bootloader mode the first time: press and hold the `Boot` button on the ESP32, press the `Reset` button on the ESP32 and then release the `Boot` button.
@@ -46,10 +43,10 @@ Select your ESP32-device from the table below and press the corresponding Connec
 | esp32-c3 | ![esp32-c3](../firmware/installer/images/esp32-c3.jpg){: style="width:100px"} | <esp-web-install-button manifest="https://moonmodules.org/MoonLight/firmware/installer/manifest_esp32-c3.json"></esp-web-install-button> | [Ali*](https://s.click.aliexpress.com/e/_EIl7NKw){:target="_blank"} |
 | esp32-c3-supermini | ![esp32-c3-supermini](../firmware/installer/images/esp32-c3-supermini.jpg){: style="width:100px"} | <esp-web-install-button manifest="https://moonmodules.org/MoonLight/firmware/installer/manifest_esp32-c3-supermini.json"></esp-web-install-button> | [Ali*](https://s.click.aliexpress.com/e/_EIl7NKw){:target="_blank"} |
 
-Installer steps:
+Install steps in pictures:
 
 <img width="250" src="https://github.com/user-attachments/assets/f092743f-a362-40da-b932-d31b203d966d" />
-<img width="200" alt="Screenshot 2025-06-07 at 20 54 31" src="https://github.com/user-attachments/assets/a0a8d92c-dae2-4cfe-ac78-bc7cacb24724" />
+<img width="200" src="https://github.com/user-attachments/assets/a0a8d92c-dae2-4cfe-ac78-bc7cacb24724" />
 <img width="250" src="https://github.com/user-attachments/assets/35045317-520d-427c-894e-418693877831" />
 <img width="200" src="https://github.com/user-attachments/assets/25c05a6c-d2ef-41cb-b83c-fc40a60c6ccc" />
 <img width="200" src="https://github.com/user-attachments/assets/b2391752-51c4-400e-b95c-4fa865e93595" />
@@ -81,9 +78,9 @@ Go back to your home WiFi open a browser and enter hostname.local to open MoonLi
 
 ### IO Board Presets
 
-Select the specific board you are running in [Module IO](../../moonbase/inputoutput), e.g. premade or custom boards as shown in [hardware](../hardware).
+Select your board in [Module IO](../../moonbase/inputoutput), if you have one of the premade boards supported (see above table), select this. If not sure, leave it as is.
 
-<img width="320" height="441" alt="io11" src="../../media/moonbase/inputoutput.png" />
+<img width="320" height="441" src="../../media/moonbase/inputoutput.png" />
 
 Make sure the defined LED pin(s) are the same as the physical connections on the ESP32 board.
 
@@ -91,13 +88,13 @@ Make sure the defined LED pin(s) are the same as the physical connections on the
 
 The drivers module contains [Layouts](../../moonlight/layouts) and [Drivers](../../moonlight/drivers).
 
-Add a layout first, this defines how your LEDs are arranged. Press (+)
+Layouts define how your LEDs are arranged. Add a layout first, Press (+)
 
-<img width="350" src="https://github.com/user-attachments/assets/8d8b9c2d-bed3-439e-a145-2bb204639c6c" />
+<img width="320" src="../../media/moonlight/layouts/PanelLayout.png"/>
 
 For LED strips, choose Single Column, for Panels choose Panel(s) or other layouts. Layouts are recognized by 🚥. Enter the size of your LEDs
 
-Add the LED driver by pressing the blue + button and select the Physical LED driver or FastLED driver. Drivers are recognized by ☸️
+Next add a LED driver by pressing the (+) button and select the Physical LED driver or FastLED driver. Drivers are recognized by ☸️
 
 <img width="350" src="https://github.com/user-attachments/assets/e7fab24f-3803-4aa5-8638-459cca8a9caf" />
 
@@ -108,6 +105,8 @@ The Effects module contains [Effects](../../moonlight/effects) and [Modifiers](.
 <img width="350" src="https://github.com/user-attachments/assets/2c8a8b75-c429-4038-a5af-adc82b11c9de" />
 
 The effect should be visible on the Monitor in MoonLight and on your LEDs
+
+<img width="320" src="../../media/moonlight/effects/LissajousShot.png"/>
 
 ### Save and next steps
 

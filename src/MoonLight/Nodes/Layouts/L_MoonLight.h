@@ -241,68 +241,68 @@ class CubeLayout : public Node {
   }
 };
 
-class TorontoBarCubesLayout : public Node {
+class TorontoBarGourdsLayout : public Node {
  public:
-  static const char* name() { return "Toronto Bar Cubes"; }
+  static const char* name() { return "Toronto Bar Gourds"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "🚥"; }
 
   // Coord3D size;
-  uint8_t nrOfLightsPerCube = 61;  // 5*12+1; mode 0 only
+  uint8_t nrOfLightsPerGourd = 61;  // 5*12+1; mode 0 only
   uint8_t granularity = 0;
 
   void setup() override {
     addControl(granularity, "granularity", "select");
-    addControlValue("One Cube One Light");
+    addControlValue("One Gourd One Light");
     addControlValue("One Side One Light");
     addControlValue("One LED One Light");
-    addControl(nrOfLightsPerCube, "nrOfLightsPerCube", "slider", 1, 128, "One cube");  // mode 0 only
+    addControl(nrOfLightsPerGourd, "nrOfLightsPerGourd", "slider", 1, 128, "One gourd");  // mode 0 only
   }
 
-  // One Cube One Light
-  void addCube(Coord3D pos) {
-    for (int i = 0; i < nrOfLightsPerCube; i++) addLight(Coord3D(pos.x, pos.y, pos.z));  // all cube lights on the same position for the time being
+  // One Gourd One Light
+  void addGourd(Coord3D pos) {
+    for (int i = 0; i < nrOfLightsPerGourd; i++) addLight(Coord3D(pos.x, pos.y, pos.z));  // all gourd lights on the same position for the time being
   }
 
   // One Side One Light
-  void addCubeSides(Coord3D pos) {
-    const uint8_t cubeLength = 3;  // each side can be mapped in a 3 * 3 * 3 grid (27 leds), 5 sides + 1 middle LED
+  void addGourdSides(Coord3D pos) {
+    const uint8_t gourdLength = 3;  // each side can be mapped in a 3 * 3 * 3 grid (27 leds), 5 sides + 1 middle LED
     Coord3D sides[] = {Coord3D(1, 1, 0), Coord3D(2, 1, 1), Coord3D(1, 1, 2), Coord3D(0, 1, 1), Coord3D(1, 2, 1)};
 
     for (Coord3D side : sides) {                                                                                                              // 5 sides
-      for (int i = 0; i < 12; i++) addLight(Coord3D(pos.x * cubeLength + side.x, pos.y * cubeLength + side.y, pos.z * cubeLength + side.z));  // each side has 12 leds, all mapped to the same virtual pixel
+      for (int i = 0; i < 12; i++) addLight(Coord3D(pos.x * gourdLength + side.x, pos.y * gourdLength + side.y, pos.z * gourdLength + side.z));  // each side has 12 leds, all mapped to the same virtual pixel
     }
 
     // + middleLED
     Coord3D side = {1, 1, 1};
-    addLight(Coord3D(pos.x * cubeLength + side.x, pos.y * cubeLength + side.y, pos.z * cubeLength + side.z));  // middleLED
+    addLight(Coord3D(pos.x * gourdLength + side.x, pos.y * gourdLength + side.y, pos.z * gourdLength + side.z));  // middleLED
   }
 
   // One LED One Light
-  void addCubePixels(Coord3D pos) {
-    const uint8_t cubeLength = 7;
+  void addGourdPixels(Coord3D pos) {
+    const uint8_t gourdLength = 7;
     Coord3D pixels[] = {Coord3D(0, 0), Coord3D(1, 0), Coord3D(2, 0), Coord3D(3, 0), Coord3D(3, 1), Coord3D(3, 2), Coord3D(3, 3), Coord3D(2, 3), Coord3D(1, 3), Coord3D(0, 3), Coord3D(0, 2), Coord3D(0, 1)};  // 12 pixels each
 
     // back and front: z constant, increasing x and y
-    for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * cubeLength + pixel.x, pos.y * cubeLength + pixel.y, pos.z * cubeLength));                   // front
-    for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * cubeLength + pixel.x, pos.y * cubeLength + pixel.y, pos.z * cubeLength + cubeLength - 1));  // back
+    for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * gourdLength + pixel.x, pos.y * gourdLength + pixel.y, pos.z * gourdLength));                   // front
+    for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * gourdLength + pixel.x, pos.y * gourdLength + pixel.y, pos.z * gourdLength + gourdLength - 1));  // back
 
     // left and right: x constant, increasing y and z
-    for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * cubeLength, pos.y * cubeLength + pixel.x, pos.z * cubeLength + pixel.y));                   // left
-    for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * cubeLength + cubeLength - 1, pos.y * cubeLength + pixel.x, pos.z * cubeLength + pixel.y));  // right
+    for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * gourdLength, pos.y * gourdLength + pixel.x, pos.z * gourdLength + pixel.y));                   // left
+    for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * gourdLength + gourdLength - 1, pos.y * gourdLength + pixel.x, pos.z * gourdLength + pixel.y));  // right
 
     // bottom : y constant: increasing x and z
-    for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * cubeLength + pixel.x, pos.y * cubeLength + cubeLength - 1, pos.z * cubeLength + pixel.y));  // bottom
+    for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * gourdLength + pixel.x, pos.y * gourdLength + gourdLength - 1, pos.z * gourdLength + pixel.y));  // bottom
 
     // + middleLED
     Coord3D middle = {3, 3, 3};
-    addLight(Coord3D(pos.x * cubeLength + middle.x, pos.y * cubeLength + middle.y, pos.z * cubeLength + middle.z));  // middleLED
+    addLight(Coord3D(pos.x * gourdLength + middle.x, pos.y * gourdLength + middle.y, pos.z * gourdLength + middle.z));  // middleLED
   }
 
   bool hasOnLayout() const override { return true; }
   void onLayout() override {
-    // modify to whatever cube order and nr of cubes in a 3D grid space
-    Coord3D cubes[] = {
+    // modify to whatever gourd order and nr of gourds in a 3D grid space
+    Coord3D gourds[] = {
         //
         Coord3D(0, 0, 0),
         Coord3D(1, 0, 0),
@@ -335,22 +335,22 @@ class TorontoBarCubesLayout : public Node {
         Coord3D(3, 2, 1)  //
     };
 
-    uint8_t cubeCounter = 0;
+    uint8_t gourdCounter = 0;
 
-    for (Coord3D cube : cubes) {
-      if (granularity == 0) {  // one cube one light
-        addCube(cube);
+    for (Coord3D gourd : gourds) {
+      if (granularity == 0) {  // one gourd one light
+        addGourd(gourd);
       } else if (granularity == 1) {  // one side one light
-        addCubeSides(cube);
+        addGourdSides(gourd);
       } else if (granularity == 2) {  // one LED one light
-        addCubePixels(cube);
+        addGourdPixels(gourd);
       }
 
-      cubeCounter++;
-      if (cubeCounter % 10 == 0) nextPin();  // will not be used by Art-Net but in case of using a LED driver, every 10 cubes (61 LEDs each) will be on a separate pin
+      gourdCounter++;
+      if (gourdCounter % 10 == 0) nextPin();  // will not be used by Art-Net but in case of using a LED driver, every 10 gourds (61 LEDs each) will be on a separate pin
     }
 
-    if (cubeCounter % 10 != 0) nextPin();  // add final pin
+    if (gourdCounter % 10 != 0) nextPin();  // add final pin
   }
 };
 
