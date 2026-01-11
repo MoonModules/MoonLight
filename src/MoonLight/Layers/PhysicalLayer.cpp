@@ -71,7 +71,11 @@ void PhysicalLayer::setup() {
 void PhysicalLayer::loop() {
   // runs the loop of all effects / nodes in the layer
   for (VirtualLayer* layer : layers) {
-    if (layer) layer->loop();  // if (layer) needed when deleting rows ...
+    if (layer) {
+      xSemaphoreTake(nodeMutex, portMAX_DELAY);
+      layer->loop();  // if (layer) needed when deleting rows ...
+      xSemaphoreGive(nodeMutex);
+    }
   }
 }
 
@@ -106,7 +110,11 @@ void PhysicalLayer::loopDrivers() {
   if (prevSize != lights.header.size) EXT_LOGD(ML_TAG, "onSizeChanged P %d,%d,%d -> %d,%d,%d", prevSize.x, prevSize.y, prevSize.z, lights.header.size.x, lights.header.size.y, lights.header.size.z);
 
   for (Node* node : nodes) {
-    if (prevSize != lights.header.size) node->onSizeChanged(prevSize);
+    if (prevSize != lights.header.size) {
+      xSemaphoreTake(nodeMutex, portMAX_DELAY);
+      node->onSizeChanged(prevSize);
+      xSemaphoreGive(nodeMutex);
+    }
     if (node->on) {
       node->loop();
       addYield(10);
@@ -120,7 +128,9 @@ void PhysicalLayer::mapLayout() {
   onLayoutPre();
   for (Node* node : nodes) {
     if (node->on) {  // && node->hasOnLayout
+      xSemaphoreTake(nodeMutex, portMAX_DELAY);
       node->onLayout();
+      xSemaphoreGive(nodeMutex);
     }
   }
   onLayoutPost();

@@ -24,7 +24,7 @@ Connect the device via a USB cable (which supports data transfer) to your PC.
 
 <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
 
-Select your ESP32-device from the table below, press the corresponding **Connect** button and follow the steps. Your device should show up in this list. Press the **Erase** checkbox when installing MoonLight for the first time. After succesful install, go to Logs & Console, press **Restart** and close the installer.
+Select your ESP32-device from the table below, press the corresponding **Connect** button and follow the steps. Your device should show up in this list. Press the **Erase** checkbox when installing MoonLight for the first time. After succesful install, go to Logs & Console, press **Reset Device** and close the installer.
 
 !!! info "Bootloader mode"
     If install doesn't work: some boards have to be placed in bootloader mode the first time: press and hold the `Boot` button on the ESP32, press the `Reset` button on the ESP32 and then release the `Boot` button.
@@ -141,7 +141,7 @@ Launch [ESPConnect](https://thelastoutpostworkshop.github.io/microcontroller_dev
 
 Click Connect and choose your device. Select Flash Tools, go to Flash Firmware, open a firmware.bin file from your file system, select Flash Offset App0 and Flash.
  
-### Visual Studio code
+### Visual Studio Code
 
 For developers. Upload directly from VSCode, see [Develop / Installation](../../develop/installation)
 

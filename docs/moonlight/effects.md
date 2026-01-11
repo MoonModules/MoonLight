@@ -57,7 +57,7 @@ These effects have first been created in MoonLight:
 | Praxis | ![Praxis](https://github.com/user-attachments/assets/f9271d1c-bcd1-4a79-bc1a-cac951758195) | <img width="320" alt="Praxis" src="https://github.com/user-attachments/assets/536ab4c8-5c90-4b76-9f80-2aaed4170901" />| |
 | Wave | ![Wave](https://github.com/user-attachments/assets/a699f3a6-c981-4159-a96e-85d43c9a853c) | <img width="320" alt="Wave" src="https://github.com/user-attachments/assets/2e8408e8-4610-45dd-af36-8560fe5ec024" /> | Type: Saw, Triangle, Sinus, Square, Sin3, Noise |
 | Fixed Rectangle | <img width="120" alt="Rectangle" src="https://github.com/user-attachments/assets/474bd313-d961-4a95-8e44-015539a0ba7f" /> | <img width="320" alt="RectangleC" src="https://github.com/user-attachments/assets/e9c1fca4-d7a2-42f4-9d23-643371b3c615" /> | To test a layout |
-| Star Sky | ![lines](../../media/moonlight/effects/starsky.gif) | ![lines](../../media/moonlight/effects/starskycontrols.png) | tip: add the rotate modifier |
+| Star Sky | ![lines](../../media/moonlight/effects/StarSky.gif) | ![lines](../../media/moonlight/effects/StarSkyControls.png) | tip: add the rotate modifier |
 
 ### MoonModules effects
 
