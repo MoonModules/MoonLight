@@ -34,7 +34,7 @@ Your device should show up in this list, Connect
 Press Install MoonLight. Erase when installing MoonLight first time, do not erase if already installed (to preserve settings). Press Next and Install
 
 !!! info "Bootloader mode"
-    If install doesn't work: some boards have to be placed in bootloader mode by press and holding the `Boot` button on the ESP32, press the `Reset` button on the ESP32 and then release the `Boot` button.
+    If install doesn't work: some boards have to be placed in bootloader mode the first time: press and hold the `Boot` button on the ESP32, press the `Reset` button on the ESP32 and then release the `Boot` button.
 
 <img width="200" src="https://github.com/user-attachments/assets/25c05a6c-d2ef-41cb-b83c-fc40a60c6ccc" />
 <img width="200" src="https://github.com/user-attachments/assets/b2391752-51c4-400e-b95c-4fa865e93595" />
@@ -65,7 +65,7 @@ A new MoonLight device will show itself as a WiFi Access Point (AP) in the WiFi 
 
 Select ML-xxxx, MoonLight will start in a browser:
 
-<img width="350" src="../../media/moonlight/ML-start.png"/>
+<img width="350" src="../../media/moonlight/ML-Start.png"/>
 
 Follow the steps:
 

@@ -2,7 +2,7 @@
 
 <img width="320" height="441" alt="io11" src="../../media/moonbase/inputoutput.png" />
 
-Defines hardware specifics per ESP32 device 🆕
+Defines hardware specifics per ESP32 device
 
 Currently the following boards are defined. Not all are supported yet 🚧
 

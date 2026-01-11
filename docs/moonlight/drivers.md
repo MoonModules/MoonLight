@@ -34,11 +34,11 @@ Want to add a Driver to MoonLight, see [develop](../../develop/overview/). See a
 | ---- | ----- | ---- | ---- |
 | Parallel LED Driver | <img width="100" src="https://github.com/user-attachments/assets/9cbe487e-f330-40a5-8b40-6663c83e5d90"/> | <img width="320" alt="Parallel" src="https://github.com/user-attachments/assets/0c6f1543-623a-45bf-98d7-f5ddd072a1c6" /> | Drive multiple LED types, all devices including ESP32-P4(-nano) supported<br>Light preset: See below<br>DMA buffer: set higher when LEDs flicker<br>Virtual LED Driver will be part of the Parallel LED driver.|
 | FastLED Driver | <img width="100" src="https://avatars.githubusercontent.com/u/5899270?s=48&v=4"/> | <img width="320" alt="FastLed" src="https://github.com/user-attachments/assets/d5ea1510-9766-4687-895a-b68c82575b8f" /> | Most used LED driver. Drive most common LEDs (WS2812). |
-| Art-Net In 🆕 | <img width="100" src="../../media/moonlight/Art-Net-In.png"> | DDP: Yes/No<br>Port<br>Universe Min-Max<br>View: Layers | Receive Art-Net (or DDP) packages e.g. from [Resolume](https://resolume.com/) or Touch Designer. See [below](#art-net-in) |
-| Art-Net Out| <img width="100" src="https://github.com/user-attachments/assets/9c65921c-64e9-4558-b6ef-aed2a163fd88"> | <img width="320" alt="Art-Net" src="https://github.com/user-attachments/assets/1428e990-daf7-43ba-9e50-667d51b456eb" /> | Send Art-Net to Drive LEDS and DMX lights over the network. See [below](#art-net-out) |
+| Art-Net Out| <img width="100" src="https://github.com/user-attachments/assets/9c65921c-64e9-4558-b6ef-aed2a163fd88"> | <img width="320" alt="Art-Net" src="../../media/moonlight/drivers/ArtNetOutControls.png" /> | Send Art-Net to Drive LEDS and DMX lights over the network. See [below](#art-net-out) |
+| Art-Net In | <img width="100" src="../../media/moonlight/drivers/Art-Net-In.png"> | <img width="320" alt="Art-Net" src="../../media/moonlight/drivers/ArtNetInControls.png" /> | Receive Art-Net (or DDP) packages e.g. from [Resolume](https://resolume.com/) or Touch Designer. See [below](#art-net-in) |
 | Audio Sync | <img width="100" src="https://github.com/user-attachments/assets/bfedf80b-6596-41e7-a563-ba7dd58cc476"/> | No controls | Listens to audio sent over the local network by WLED-AC or WLED-MM and allows audio reactive effects (♪ & ♫) to use audio data (volume and bands (FFT)) |
 | HUB75 Driver | <img width="100" src="https://github.com/user-attachments/assets/620f7c41-8078-4024-b2a0-39a7424f9678"/> | <img width="100" src="https://github.com/user-attachments/assets/4d386045-9526-4a5a-aa31-638058b31f32"/> | Drive HUB75 panels<br>Not implemented yet |
-| IR Driver | <img width="100" src="../../media/moonlight/IRDriver.jpeg"/> | <img width="100" src="../../media/moonlight/irdriverpreset.png"/> | Receive IR commands and [Lights Control](../../moonlight/lightscontrol/) |
+| IR Driver | <img width="100" src="../../media/moonlight/drivers/IRDriver.jpeg"/> | <img width="100" src="../../media/moonlight/drivers/irdrivercontrols.png"/> | Receive IR commands and [Lights Control](../../moonlight/lightscontrol/) |
 
 * The Parallel LED driver uses different hardware peripherals depending on the MCU type: ESP32-D0: I2S, ESP32-S3: LCD_CAM, ESP32-P4: Parallel IO (ParLIO).
 * Virtual LED Driver: Driving max 120! outputs (E.g. 48 panels of 256 LEDs each run at 50-100 FPS) using shift registers. Integrated within the Parallel LED Driver architecture. Not implemented yet
@@ -46,7 +46,7 @@ Want to add a Driver to MoonLight, see [develop](../../develop/overview/). See a
 
 ### Light Preset
 
-* **Max Power**: 🆕 moved to [IO Module](../../moonbase/inputoutput) board presets.
+* **Max Power**: moved to [IO Module](../../moonbase/inputoutput) board presets.
 
 * **Light preset**: Defines the channels per light and color order
 
@@ -68,9 +68,40 @@ Want to add a Driver to MoonLight, see [develop](../../develop/overview/). See a
 !!! info "Custom setup"
     These are predefined presets. In a future release custom presets will be possible.
 
+### Art-Net Out ☸️
+
+<img width="300" src="../../media/moonlight/drivers/ArtNetOutControls.png"/>
+
+Sends Lights in Art-Net compatible packages to an Art-Net controller specified by the IP address(es) provided.
+
+#### Controls
+
+* **Light preset**: See above.
+* **Controller IPs**: The last segment of the IP address within your local network, of the hardware Art-Net controller. Add more IPs if you send to more than one controller, comma separated.
+* **Port**: The network port added to the IP address, 6454 is the default for Art-Net.
+* **FPS Limiter**: set the max frames per second Art-Net packages are send out (also all the other nodes will run at this speed).
+    * Art-Net specs recommend about 44 FPS but higher framerates will work mostly (up to until ~130FPS tested)
+* **Universe size**: How many channels per universe. 510 and 512 most common. Make sure it corresponds with the Art-Net receiver used.
+* **Used channels**: Calculated! Shows how many channels are used (e.g. in a universe of 512 only 170 RGB LEDs fits which is 510 channels, so 510 of the 512 channels are used).
+* **Nr of Outputs per IP**: Art-Net LED controllers can have more than 1 output (e.g. 12) If all outputs are sent, Art-Net will be sent to the next IP number.
+* **Universes per output**: How many universes can each output handle. This determines the maximum number of lights an output can drive (nr of universe x nr of channels per universe / channels per light)
+* **Total universes**: Calculated! Based on the nr of lights (specified by the [layout](../../moonlight/layouts/)), how many universes needs to be configured to sent all lights out.
+* **Channels per output**: How many channels will be sent to each output
+* **Total channels**: Calculated! Based on the nr of lights (specified by the [layout](../../moonlight/layouts/)), how many channels should be send to all outputs together to sent all lights out
+
+!!! tip "Controller settings"
+    Set the number of universes and channels per universe also on the controller!
+
+* **Channels per output**: each output can drive a maximum number of channels, determined by the universes per output
+
+!!! warning "DMX start with 1"
+    Dmx channels count from 1 to 512. At the moment MoonLight counts from 0..511 which translates to 1..512.
+
 ### Art-Net In ☸️
 
-Receives Art-Net data from the network.
+<img width="300" src="../../media/moonlight/drivers/ArtNetInControls.png"/>
+
+Receives Art-Net data from the network to setup a MoonLight device as an Art-Net receiver. Can receive Art-Net from other MoonLight devices (see Art-Net out above) and other tools like Resolume, XLights, TouchDesigner, Chataigne etc.
 
 * DDP: If unchecked, processes data in Art-Net format, if checked, process data in DDP format
 * Port: The port listening for Art-Net. When using DDP, change to 4048 (the default port for DDP).
@@ -87,31 +118,9 @@ Receives Art-Net data from the network.
 !!! tip "Running effects and Art-Net In"
     Effects can run at the same time, disable or delete them if you only want to run Art-Net In.
 
-### Art-Net Out ☸️
+### Recommended Art-Net controllers
 
-Sends Lights in Art-Net compatible packages to an Art-Net controller specified by the IP address provided.
-
-#### Controls
-
-* **Controller IPs**: The last segment of the IP address within your local network, of the hardware Art-Net controller. Add more IPs if you send to more than one controller, comma separated.
-* **Port**: The network port added to the IP address, 6454 is the default for Art-Net.
-* **FPS Limiter**: set the max frames per second Art-Net packages are send out (also all the other nodes will run at this speed).
-    * Art-Net specs recommend about 44 FPS but higher framerates will work mostly (up to until ~130FPS tested)
-* **Nr of outputs**: Art-Net LED controllers can have more than 1 output (e.g. 12)
-* **Universes per output**: How many universes can each output handle. This determines the maximum number of lights an output can drive (nr of universe x nr of channels per universe / channels per light)
-* **Nr of Outputs per IP**: How many outputs does one Art-Net controller have. If all outputs are sent, Art-Net will be sent to the next IP number.
-
-!!! tip "Set universes"
-    Set the number of universes also on the controller!
-
-* **Channels per output**: each output can drive a maximum number of channels, determined by the universes per output
-
-!!! warning "DMX start with 1"
-    Dmx channels count from 1 to 512. At the moment we start counting from 0..511.
-
-#### Recommended Art-Net controllers
-
-The following devices have been tested and are recommended:
+Next to using MoonLight as an Art-Net receiver, the following devices have been tested and can also be used:
 
 [PKNight ArtNet2-CR021R](https://s.click.aliexpress.com/e/_ExRrKe4)
 
