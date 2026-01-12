@@ -10,7 +10,7 @@ MoonLight uses a multi-core, multi-task architecture on ESP32 to achieve smooth 
 |------|------|----------|------------|-----------|---------|
 | **WiFi/BT** | 0 (PRO_CPU) | 23 | System | Event-driven | System networking stack |
 | **lwIP TCP/IP** | 0 (PRO_CPU) | 18 | System | Event-driven | TCP/IP protocol processing |
-| **ESP32SvelteKit** | 1 (APP_CPU) | 2 | System | 10ms | HTTP/WebSocket UI framework |
+| **ESP32SvelteKit** | 1 (APP_CPU) | 2 | System | 20ms | HTTP/WebSocket UI framework |
 | **Driver Task** | 1 (APP_CPU) | 3 | 3-4KB | ~60 fps | Output data to LEDs via DMA/I2S/LCD/PARLIO |
 | **Effect Task** | 0 (PRO_CPU) | 3 | 3-4KB | ~60 fps | Calculate LED colors and effects |
 
@@ -74,13 +74,13 @@ HTTPP task
 * no assigned core (OS decides), prio 5
 * processes WebUI / Websockets
 * calls ModuleState read() and update() functions
-* MoonLight Modules: runs Modules::compareRecursive and Modules::checkReOrderSwap which calls postUpdate which presents a semaphore guarded updatedItem (updateProcessedSem, updateReadySem)
+* MoonLight Modules: runs Modules::compareRecursive and Modules::checkReOrderSwap which calls postUpdate which presents a semaphore-guarded updatedItem (updateProcessedSem, updateReadySem)
 * Page refresh: runs onLayout pass 1 for the monitor
 
 SvelteKit task
 
-* Module::loop() runs in the SvelteKit task and calls getUpdate() to retrieve the updatedItam in a synchronized way, getUpdate() calls processUpdatedItem()
-* processUpdatedItem() calls Module::onUpdate(), which is a virtual function which is overriden by Modules to implement custom functionality 
+* Module::loop() runs in the SvelteKit task and calls getUpdate() to retrieve the updatedItem in a synchronized way, getUpdate() calls processUpdatedItem()
+* processUpdatedItem() calls Module::onUpdate(), which is a virtual function which is overridden by Modules to implement custom functionality
 * NodeManager::onUpdate() propagates onUpdate() to Node Controls (together with Node::updateControl()), guarded by nodeMutex
 
 Driver Task
