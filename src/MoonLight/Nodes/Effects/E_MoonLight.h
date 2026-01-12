@@ -114,7 +114,7 @@ class StarSkyEffect : public Node {
       Coord3D pos = Coord3D(stars_indexes[i] % layer->size.x, (stars_indexes[i] / layer->size.x) % layer->size.y, stars_indexes[i] / (layer->size.x * layer->size.y));
       CRGB color = usePalette ? ColorFromPalette(layerP.palette, stars_colors[i], stars_brightness[i]) : CRGB(stars_brightness[i], stars_brightness[i], stars_brightness[i]);
       if (stars_fade_dir[i]) {
-        stars_brightness[i] = (stars_brightness[i] >= UINT8_MAX - star_speed)?UINT8_MAX:stars_brightness[i] + star_speed;
+        stars_brightness[i] = (stars_brightness[i] >= UINT8_MAX - star_speed) ? UINT8_MAX : stars_brightness[i] + star_speed;
         layer->setRGB(pos, color);
         if (stars_brightness[i] == UINT8_MAX) {
           stars_fade_dir[i] = 0;
@@ -123,7 +123,7 @@ class StarSkyEffect : public Node {
           stars_fade_dir[i] = 0;
         }
       } else {
-        stars_brightness[i] = (stars_brightness[i] >= star_speed)?stars_brightness[i] - star_speed:0;
+        stars_brightness[i] = (stars_brightness[i] >= star_speed) ? stars_brightness[i] - star_speed : 0;
         layer->setRGB(pos, color);
         if (stars_brightness[i] == 0) {
           stars_indexes[i] = random16(layer->nrOfLights);
@@ -1566,6 +1566,10 @@ class VUMeterEffect : public Node {
     // Calculate needle end position
     int x1 = x0 - round(size.y * 0.7 * cos((angle + 30) * PI / 180));
     int y1 = y0 - round(size.y * 0.7 * sin((angle + 30) * PI / 180));
+
+    // ✅ Clamp to valid bounds
+    x1 = max(0, min(x1, (int)layer->size.x - 1));
+    y1 = max(0, min(y1, (int)layer->size.y - 1));
 
     // Draw the needle
     layer->drawLine(x0, y0, x1, y1, color, true);

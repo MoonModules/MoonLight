@@ -249,7 +249,7 @@ class TorontoBarGourdsLayout : public Node {
 
   // Coord3D size;
   uint8_t nrOfLightsPerGourd = 61;  // 5*12+1; mode 0 only
-  uint8_t granularity = 0;
+  uint8_t granularity = 2;          // One LED One Light
 
   void setup() override {
     addControl(granularity, "granularity", "select");
@@ -269,7 +269,7 @@ class TorontoBarGourdsLayout : public Node {
     const uint8_t gourdLength = 3;  // each side can be mapped in a 3 * 3 * 3 grid (27 leds), 5 sides + 1 middle LED
     Coord3D sides[] = {Coord3D(1, 1, 0), Coord3D(2, 1, 1), Coord3D(1, 1, 2), Coord3D(0, 1, 1), Coord3D(1, 2, 1)};
 
-    for (Coord3D side : sides) {                                                                                                              // 5 sides
+    for (Coord3D side : sides) {                                                                                                                 // 5 sides
       for (int i = 0; i < 12; i++) addLight(Coord3D(pos.x * gourdLength + side.x, pos.y * gourdLength + side.y, pos.z * gourdLength + side.z));  // each side has 12 leds, all mapped to the same virtual pixel
     }
 
@@ -284,11 +284,11 @@ class TorontoBarGourdsLayout : public Node {
     Coord3D pixels[] = {Coord3D(0, 0), Coord3D(1, 0), Coord3D(2, 0), Coord3D(3, 0), Coord3D(3, 1), Coord3D(3, 2), Coord3D(3, 3), Coord3D(2, 3), Coord3D(1, 3), Coord3D(0, 3), Coord3D(0, 2), Coord3D(0, 1)};  // 12 pixels each
 
     // back and front: z constant, increasing x and y
-    for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * gourdLength + pixel.x, pos.y * gourdLength + pixel.y, pos.z * gourdLength));                   // front
+    for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * gourdLength + pixel.x, pos.y * gourdLength + pixel.y, pos.z * gourdLength));                    // front
     for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * gourdLength + pixel.x, pos.y * gourdLength + pixel.y, pos.z * gourdLength + gourdLength - 1));  // back
 
     // left and right: x constant, increasing y and z
-    for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * gourdLength, pos.y * gourdLength + pixel.x, pos.z * gourdLength + pixel.y));                   // left
+    for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * gourdLength, pos.y * gourdLength + pixel.x, pos.z * gourdLength + pixel.y));                    // left
     for (Coord3D pixel : pixels) addLight(Coord3D(pos.x * gourdLength + gourdLength - 1, pos.y * gourdLength + pixel.x, pos.z * gourdLength + pixel.y));  // right
 
     // bottom : y constant: increasing x and z

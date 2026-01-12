@@ -15,6 +15,7 @@ export let colors: number[] = [];
 // Store LED matrix dimensions
 let matrixWidth: number = 1;
 let matrixHeight: number = 1;
+let matrixDepth: number = 1;
 
 let colorBuffer: WebGLBuffer; // Buffer for color data
 
@@ -116,10 +117,10 @@ export function clearVertices() {
   vertices = [];
 }
 
-// New function to set the LED matrix dimensions
-export function setMatrixDimensions(width: number, height: number) {
+export function setMatrixDimensions(width: number, height: number, depth: number = 1) {
   matrixWidth = width;
   matrixHeight = height;
+  matrixDepth = depth;
 }
 
 export const updateScene = (vertices: number[], colors: number[]) => {
@@ -155,34 +156,31 @@ function getMVPMatrix(): mat4 {
   const projection = mat4.create();
   mat4.perspective(projection, fov, canvasAspect, near, far);
 
-  // Normalize the matrix dimensions to a unit square/rectangle
-  // Use the larger dimension as the base
-  const maxDim = Math.max(matrixWidth, matrixHeight);
+  // Normalize dimensions
+  const maxDim = Math.max(matrixWidth, matrixHeight, matrixDepth);
   const normalizedWidth = matrixWidth / maxDim;
   const normalizedHeight = matrixHeight / maxDim;
-
-  // Calculate the required camera distance to fit the matrix in view
-  // Determine which dimension is limiting based on canvas aspect
-  const verticalSize = normalizedHeight;
-  const horizontalSize = normalizedWidth;
+  const normalizedDepth = matrixDepth / maxDim;
 
   // Calculate required distance for vertical fit
+  const verticalSize = normalizedHeight;
   const distanceForHeight = verticalSize / (2 * Math.tan(fov / 2));
 
   // Calculate required distance for horizontal fit
   const horizontalFov = 2 * Math.atan(Math.tan(fov / 2) * canvasAspect);
+  const horizontalSize = normalizedWidth;
   const distanceForWidth = horizontalSize / (2 * Math.tan(horizontalFov / 2));
 
   // Use the larger distance to ensure both dimensions fit
-  const cameraDistance = Math.max(distanceForHeight, distanceForWidth) * 2.5; // 1.2 adds some padding
+  const cameraDistance = Math.max(distanceForHeight, distanceForWidth) * 2.5;
 
   const view = mat4.create();
   mat4.lookAt(view, [0, 0, cameraDistance], [0, 0, 0], [0, 1, 0]);
 
   const model = mat4.create();
 
-  // Scale by the normalized dimensions to get correct proportions
-  mat4.scale(model, model, [normalizedWidth, normalizedHeight, 1]);
+  // Scale by ALL normalized dimensions  ✅
+  mat4.scale(model, model, [normalizedWidth, normalizedHeight, normalizedDepth]);
 
   const mvp = mat4.create();
   mat4.multiply(mvp, projection, view);
