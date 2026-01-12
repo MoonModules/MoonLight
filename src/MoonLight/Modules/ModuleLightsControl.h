@@ -508,32 +508,24 @@ class ModuleLightsControl : public Module {
     xSemaphoreGive(swapMutex);
 
     if (isPositions == 2) {  // send to UI
-      read(
-          [&](ModuleState& _state) {
-            if (_socket->getActiveClients() && _state.data["monitorOn"]) {
-              static_assert(sizeof(LightsHeader) > headerPrimeNumber, "LightsHeader size nog large enough for Monitor protocol");
-              _socket->emitEvent("monitor", (char*)&layerP.lights.header, headerPrimeNumber, _moduleName.c_str());                                                      // send headerPrimeNumber bytes so Monitor.svelte can recognize this
-              _socket->emitEvent("monitor", (char*)layerP.lights.channelsE, MIN(layerP.lights.header.nrOfLights * 3, layerP.lights.maxChannels), _moduleName.c_str());  //*3 is for 3 bytes position
-            }
-            memset(layerP.lights.channelsE, 0, layerP.lights.maxChannels);  // set all the channels to 0 //cleaning the positions
-            xSemaphoreTake(swapMutex, portMAX_DELAY);
-            EXT_LOGD(ML_TAG, "positions sent to monitor (2 -> 3)");
-            layerP.lights.header.isPositions = 3;
-            xSemaphoreGive(swapMutex);
-          },
-          _moduleName);
+      if (_socket->getActiveClients() && _state.data["monitorOn"]) {
+        static_assert(sizeof(LightsHeader) > headerPrimeNumber, "LightsHeader size nog large enough for Monitor protocol");
+        _socket->emitEvent("monitor", (char*)&layerP.lights.header, headerPrimeNumber, _moduleName.c_str());                                                      // send headerPrimeNumber bytes so Monitor.svelte can recognize this
+        _socket->emitEvent("monitor", (char*)layerP.lights.channelsE, MIN(layerP.lights.header.nrOfLights * 3, layerP.lights.maxChannels), _moduleName.c_str());  //*3 is for 3 bytes position
+      }
+      memset(layerP.lights.channelsE, 0, layerP.lights.maxChannels);  // set all the channels to 0 //cleaning the positions
+      xSemaphoreTake(swapMutex, portMAX_DELAY);
+      EXT_LOGD(ML_TAG, "positions sent to monitor (2 -> 3)");
+      layerP.lights.header.isPositions = 3;
+      xSemaphoreGive(swapMutex);
     } else if (isPositions == 0 && layerP.lights.header.nrOfLights) {  // send to UI
       static unsigned long monitorMillis = 0;
       if (millis() - monitorMillis >= MAX(20, layerP.lights.header.nrOfLights / 300)) {  // 12K lights -> 40ms
         monitorMillis = millis();
 
-        read(
-            [&](ModuleState& _state) {
-              if (_socket->getActiveClients() && _state.data["monitorOn"]) {
-                _socket->emitEvent("monitor", (char*)layerP.lights.channelsD, MIN(layerP.lights.header.nrOfChannels, layerP.lights.maxChannels), _moduleName.c_str());  // use channelsD as it won't be overwritten by effects during loop
-              }
-            },
-            _moduleName);
+        if (_socket->getActiveClients() && _state.data["monitorOn"]) {
+          _socket->emitEvent("monitor", (char*)layerP.lights.channelsD, MIN(layerP.lights.header.nrOfChannels, layerP.lights.maxChannels), _moduleName.c_str());  // use channelsD as it won't be overwritten by effects during loop
+        }
       }
     }
   #endif

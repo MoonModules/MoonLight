@@ -34,9 +34,43 @@
 		currentTime = Date.now();
 	}, 1000);
 
+	// Throttling for slider control updates
+	let throttleTimer: ReturnType<typeof setTimeout> | null = null;
+	let pendingSliderEvent: Event | null = null;
+
+	function handleSliderInput(event: Event) {
+		// Update local value immediately for visual responsiveness
+		// (bind:value already handles this)
+
+		// Store the event for throttled sending
+		pendingSliderEvent = event;
+
+		// Only send to server once per 50ms
+		if (!throttleTimer) {
+			// Send immediately on first interaction
+			onChange(event);
+			pendingSliderEvent = null;
+			
+			throttleTimer = setTimeout(() => {
+				if (pendingSliderEvent) {
+					onChange(pendingSliderEvent);
+					pendingSliderEvent = null;
+				}
+				throttleTimer = null;
+			}, 50); // Max 20 updates/second
+		}
+	}
+
+	// Clean up throttle timer on component destroy
 	onDestroy(() => {
-		// console.log('FieldRenderer clearing interval');
 		clearInterval(interval);
+		if (throttleTimer) {
+			clearTimeout(throttleTimer);
+			// Send final pending update if any
+			if (pendingSliderEvent) {
+				onChange(pendingSliderEvent);
+			}
+		}
 	});
 
 	let dragSource: { row: number; col: number } | null = null;
@@ -107,7 +141,8 @@
 		{#if property.type == 'ip'}
 			<a href="http://{value}" target="_blank">{value}</a>
 		{:else if property.type == 'mDNSName'}
-			<a href="http://{value}.local/moonbase/module?group=moonlight&module=lightscontrol">{value}</a>
+			<a href="http://{value}.local/moonbase/module?group=moonlight&module=lightscontrol">{value}</a
+			>
 		{:else if property.type == 'time'}
 			<span>{getTimeAgo(value, currentTime)}</span>
 		{:else if property.type == 'coord3D' && value != null}
@@ -137,7 +172,7 @@
 		/>
 	{:else if property.type == 'slider'}
 		<!-- range colors: https://daisyui.com/components/range/ 
-         on:input: direct response to server
+         on:input: throttled response to server for performance
          -->
 		<input
 			type="range"
@@ -154,7 +189,7 @@
 					: 'range-secondary')}
 			{disabled}
 			bind:value
-			on:input={onChange}
+			on:input={handleSliderInput}
 		/>
 		{#if hasNumber}
 			<input

@@ -270,8 +270,11 @@ class NodeManager : public Module {
         if (updatedItem.index[0] < nodes->size()) {
           Node* nodeClass = (*nodes)[updatedItem.index[0]];
           if (nodeClass != nullptr) {
+
+            xSemaphoreTake(nodeClass->nodeMutex, portMAX_DELAY);
             nodeClass->updateControl(control);
             nodeClass->onUpdate(updatedItem.oldValue, control);  // custom onUpdate for the node
+            xSemaphoreGive(nodeClass->nodeMutex);
 
             nodeClass->requestMappings();
           } else

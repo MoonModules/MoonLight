@@ -1,33 +1,39 @@
 # MoonLight Installer
 
-Install <a href="https://github.com/MoonModules/MoonLight" target="_blank">MoonModules/MoonLight</a> on an ESP32 microcontroller. You need a compatible browser like Chrome, or Edge, not supported on Safari.
+Install <a href="https://github.com/MoonModules/MoonLight" target="_blank">MoonModules/MoonLight</a> on an ESP32 microcontroller.  
+You need a Web Serial–compatible browser such as **Chrome** or **Edge**. **Safari is not supported.**
 
-For devices which have already MoonLight installed, go to [Update](#update-moonlight)
+For devices that already have MoonLight installed, go to [Update](#update-moonlight).
 
 <a href="https://www.youtube.com/watch?v=7DQOEWa-Kwg">
   <img width="380" src="https://img.youtube.com/vi/7DQOEWa-Kwg/maxresdefault.jpg" alt="Watch MoonLight Demo">
 </a>
 
-**[▶️ Watch the install tutorial](https://www.youtube.com/watch?v=7DQOEWa-Kwg)** (v0.6.0) or follow the instructions below
+**[▶️ Watch the install tutorial](https://www.youtube.com/watch?v=7DQOEWa-Kwg)** (v0.6.0), or follow the instructions below.
 
-## Prepare an ESP32 device 
+## Prepare an ESP32 device
 
-See [Hardware](../hardware)
+Recommended device to get started with: [QuinLED-dig2go](https://quinled.info/quinled-dig2go/)
 
-Recommended device to get started: [QuinLED-dig2go](https://quinled.info/quinled-dig2go/)
+![Dig2Go](https://shop.allnetchina.cn/cdn/shop/products/Led_4.jpg?v=1680836018&width=1600){: style="width:250px"}
 
-![Dig2Go](https://shop.allnetchina.cn/cdn/shop/products/Led_4.jpg?v=1680836018&width=1600){: style="width:250px"} 
+See [Hardware](../hardware) for other options.
 
-Connect the device via a USB cable (which supports data transfer) to your PC.
+Connect the device to your PC using a USB cable that **supports data transfer**.
 
 ## Flash the firmware
 
 <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
 
-Select your ESP32-device from the table below, press the corresponding **Connect** button and follow the steps. Your device should show up in this list. Press the **Erase** checkbox when installing MoonLight for the first time. After succesful install, go to Logs & Console, press **Restart** and close the installer.
+Select your ESP32 device from the table below, press the corresponding **Connect** button, and follow the steps.  
+Your device should appear in the list.
+
+When installing MoonLight for the **first time**, enable the **Erase** checkbox.  
+After a successful install, go to **Logs & Console**, press **Reset Device**, and close the installer.
 
 !!! info "Bootloader mode"
-    If install doesn't work: some boards have to be placed in bootloader mode the first time: press and hold the `Boot` button on the ESP32, press the `Reset` button on the ESP32 and then release the `Boot` button.
+    If installation does not work, some boards must be placed into bootloader mode the first time:
+    press and hold the `Boot` button on the ESP32, press the `Reset` button, then release the `Boot` button.
 
 | Name | Image* | Flash | Shop & Board presets |
 |------|--------|-------|----------------------|
@@ -37,7 +43,7 @@ Select your ESP32-device from the table below, press the corresponding **Connect
 | esp32-s3-n16r8v | ![esp32-s3-n16r8v](../firmware/installer/images/esp32-s3-n8r8v.jpg){: style="width:100px"} | <esp-web-install-button manifest="https://moonmodules.org/MoonLight/firmware/installer/manifest_esp32-s3-n16r8v.json"></esp-web-install-button> | [Ali*](https://s.click.aliexpress.com/e/_DBAtJ2H){:target="_blank"} |
 | esp32-s3-atoms3r | ![esp32-s3-atoms3r](../firmware/installer/images/esp32-s3-atoms3r.jpg){: style="width:100px"} | <esp-web-install-button manifest="https://moonmodules.org/MoonLight/firmware/installer/manifest_esp32-s3-atoms3r.json"></esp-web-install-button> | [M5Stack store](https://shop.m5stack.com/products/atoms3r-dev-kit){:target="_blank"} |
 | esp32-s3-zero-n4r2 | ![esp32-s3-zero-n4r2](../firmware/installer/images/esp32-s3-zero-n4r2.jpg){: style="width:100px"} | <esp-web-install-button manifest="https://moonmodules.org/MoonLight/firmware/installer/manifest_esp32-s3-zero-n4r2.json"></esp-web-install-button> | [Ali*](https://s.click.aliexpress.com/e/_EukjHX8){:target="_blank"} |
-| esp32-p4-nano | ![esp32-p4-nano](../firmware/installer/images/esp32-p4-nano.jpg){: style="width:100px"} | install [esp32-c6-firmware-update](https://esp32-c6-firmware-update.github.io) first <br><esp-web-install-button manifest="https://moonmodules.org/MoonLight/firmware/installer/manifest_esp32-p4-nano.json"></esp-web-install-button> | [Waveshare](https://www.waveshare.com/esp32-p4-nano.htm){:target="_blank"} <br>[ESP32-P4 shield](https://shop.myhome-control.de/en/ABC-WLED-ESP32-P4-shield/HW10027):<br>![ESP32-P4 shield](https://shop.myhome-control.de/thumbnail/ed/a1/f1/1762031307/WLED_ESP32_P4_Shield_04_1920x1354.jpg?ts=1762031316){: style="width:100px"} |
+| esp32-p4-nano | ![esp32-p4-nano](../firmware/installer/images/esp32-p4-nano.jpg){: style="width:100px"} | Install [esp32-c6-firmware-update](https://esp32-c6-firmware-update.github.io) first<br><esp-web-install-button manifest="https://moonmodules.org/MoonLight/firmware/installer/manifest_esp32-p4-nano.json"></esp-web-install-button> | [Waveshare](https://www.waveshare.com/esp32-p4-nano.htm){:target="_blank"}<br>[ESP32-P4 shield](https://shop.myhome-control.de/en/ABC-WLED-ESP32-P4-shield/HW10027):<br>![ESP32-P4 shield](https://shop.myhome-control.de/thumbnail/ed/a1/f1/1762031307/WLED_ESP32_P4_Shield_04_1920x1354.jpg?ts=1762031316){: style="width:100px"} |
 | esp32-d0-wrover | ![esp32-d0-wrover](../firmware/installer/images/esp32-d0-wrover.jpg){: style="width:100px"} | <esp-web-install-button manifest="https://moonmodules.org/MoonLight/firmware/installer/manifest_esp32-d0-wrover.json"></esp-web-install-button> | [Ali*](https://a.aliexpress.com/_EzhPi6g){:target="_blank"} |
 | esp32-p4-olimex | ![esp32-p4-olimex](../firmware/installer/images/esp32-p4-olimex.jpg){: style="width:100px"} | <esp-web-install-button manifest="https://moonmodules.org/MoonLight/firmware/installer/manifest_esp32-p4-olimex.json"></esp-web-install-button> | [Olimex](https://www.olimex.com/Products/IoT/ESP32-P4/ESP32-P4-DevKit/open-source-hardware){:target="_blank"} |
 | esp32-c3 | ![esp32-c3](../firmware/installer/images/esp32-c3.jpg){: style="width:100px"} | <esp-web-install-button manifest="https://moonmodules.org/MoonLight/firmware/installer/manifest_esp32-c3.json"></esp-web-install-button> | [Ali*](https://s.click.aliexpress.com/e/_EIl7NKw){:target="_blank"} |
@@ -54,95 +60,114 @@ Install steps in pictures:
 
 ## Setup MoonLight
 
-A new MoonLight device will show itself as a WiFi Access Point (AP) in the WiFi settings of your PC, tablet or smartphone. The name starts with ML- and 4 characters.
+A new MoonLight device will appear as a WiFi Access Point (AP) in the WiFi settings of your PC, tablet, or smartphone.  
+The name starts with `ML-` followed by four characters.
 
 <img width="200" src="https://github.com/user-attachments/assets/9a146e3c-1a53-4906-ad2a-d70215efcf4b" />
 
-Select ML-xxxx, MoonLight will start in a browser:
+Select `ML-xxxx`. MoonLight will open in your browser:
 
 <img width="350" src="../../media/moonlight/ML-Start.png"/>
 
-Follow the steps:
+Follow the steps below.
 
 ### WiFi connection
 
-Add a [WiFi](../../network/sta) connection
+Add a [WiFi](../../network/sta) connection.
 
 <img width="350" src="../../media/network/MB-WiFi2.png"/>
 
-Enter a hostname, add your WiFi by adding the (+) button, enter SSID and password and press Apply Settings.
+Enter a hostname, add your WiFi network using the (+) button, enter the SSID and password, and press **Apply Settings**.
 
-Restart the device by pressing the boot button or simple unplug and plug the usb cable.
+Restart the device by pressing the boot button, or simply unplug and reconnect the USB cable.
 
-Go back to your home WiFi open a browser and enter hostname.local to open MoonLight via the new WiFi connection.
+Reconnect to your home WiFi, open a browser, and go to `hostname.local` to access MoonLight via the new WiFi connection.
 
 ### IO Board Presets
 
-Select your board in [Module IO](../../moonbase/inputoutput), if you have one of the premade boards supported (see above table), select this. If not sure, leave it as is.
+Select your board in [Module IO](../../moonbase/inputoutput).  
+If you have one of the supported premade boards (see table above), select it.  
+If you are unsure, leave the default settings.
 
 <img width="320" height="441" src="../../media/moonbase/inputoutput.png" />
 
-Make sure the defined LED pin(s) are the same as the physical connections on the ESP32 board.
+Ensure the configured LED pin(s) match the physical connections on your ESP32 board.
 
 ### Drivers
 
-The drivers module contains [Layouts](../../moonlight/layouts) and [Drivers](../../moonlight/drivers).
+The Drivers module contains [Layouts](../../moonlight/layouts) and [Drivers](../../moonlight/drivers).
 
-Layouts define how your LEDs are arranged. Add a layout first, Press (+)
+Layouts define how your LEDs are arranged.  
+First, add a layout by pressing (+).
 
 <img width="320" src="../../media/moonlight/layouts/PanelLayout.png"/>
 
-For LED strips, choose Single Column, for Panels choose Panel(s) or other layouts. Layouts are recognized by 🚥. Enter the size of your LEDs
+For LED strips, choose **Single Column**.  
+For panels, choose **Panel(s)** or another suitable layout.  
+Layouts are indicated by 🚥. Enter the size of your LED setup.
 
-Next add a LED driver by pressing the (+) button and select the Physical LED driver or FastLED driver. Drivers are recognized by ☸️
+Next, add an LED driver by pressing (+) and selecting either the **Physical LED driver** or **FastLED driver**.  
+Drivers are indicated by ☸️.
 
 <img width="350" src="https://github.com/user-attachments/assets/e7fab24f-3803-4aa5-8638-459cca8a9caf" />
 
 ### Effect
 
-The Effects module contains [Effects](../../moonlight/effects) and [Modifiers](../../moonlight/modifiers). Start by adding one effect, press (+)
+The Effects module contains [Effects](../../moonlight/effects) and [Modifiers](../../moonlight/modifiers).
+
+Start by adding an effect using the (+) button.
 
 <img width="350" src="https://github.com/user-attachments/assets/2c8a8b75-c429-4038-a5af-adc82b11c9de" />
 
-The effect should be visible on the Monitor in MoonLight and on your LEDs
+The effect should now be visible in the MoonLight monitor and on your LEDs.
 
 <img width="320" src="../../media/moonlight/effects/LissajousShot.png"/>
 
 ### Save and next steps
 
-Press save (💾). Saves your setup to the file system, so if a device is restarted, your settings are still there.
+Press **Save** (💾).  
+This stores your configuration on the device, so your settings persist after a reboot.
 
-If anything not working as expected, log an issue on GitHUB or contact us on Discord, Reddit or YouTube. See also [Installer troubleshooting](../../develop/installation/#moonlight-installer) and [USB-to-serial chip drivers](../../develop/installation/#usb-to-serial-chip-drivers)
+If something does not work as expected, log an issue on GitHub or contact us via [Discord](https://discord.gg/TC8NSUSCdV), [Reddit](https://reddit.com/r/moonmodules) or [YouTube](https://www.youtube.com/@MoonModulesLighting).  
+See also [Installer troubleshooting](../../develop/installation/#moonlight-installer) and [USB-to-serial chip drivers](../../develop/installation/#usb-to-serial-chip-drivers).
 
 !!! info "Next steps"
-    * You can now change effect or add effects, modifiers, layouts and drivers
-    * Go to [MoonLight Overview](../../moonlight/overview) to learn more
-    * press the (?) in MoonLight to go directly to the relevant page
+    * You can now change or add effects, modifiers, layouts, and drivers
+    * Visit the [MoonLight Overview](../../moonlight/overview) to learn more
+    * Press (?) in MoonLight to jump directly to the relevant documentation page
 
 ## Update MoonLight
 
-MoonLight releases new versions regularly. As it is a new and growing platform it is recommended to update as soon as new releases are published. They can be installed via above procedure (without erase) or via one of the following procedures:
+MoonLight releases new versions regularly.  
+As this is a new and growing platform, it is recommended to update as soon as new releases are published.
+
+Updates can be installed using the installer above (without erasing), or via one of the methods below.
 
 ### System update
 
-The preferred way to update MoonLight is directly in MoonLight via [System update](../../system/update). MoonLight notifies when new versions are available.
+The preferred way to update MoonLight is directly within MoonLight via [System update](../../system/update).  
+MoonLight will notify you when new versions are available.
 
 <img width="350" src="https://github.com/user-attachments/assets/523ea32f-88f8-4994-8d23-9541dce67ba1" />
 
-Currently not supported on smaller devices like the ESP32-D0 and ESP32-C3. Use the MoonLight Installer in this case.
+This method is currently not supported on smaller devices such as the ESP32-D0 and ESP32-C3.  
+Use the MoonLight Installer instead for these devices.
 
 ### ESPConnect
 
-Use ESPConnect to install unreleased firmware e.g. provided via [discord](https://discord.gg/MTn9mVUG5n) or GitHub issues. Published [releases](https://github.com/MoonModules/MoonLight/releases) can also be installed via this way.
+Use ESPConnect to install unreleased firmware (for example, versions shared via [Discord](https://discord.gg/TC8NSUSCdV) or [GitHub issues](https://github.com/MoonModules/MoonLight/issues)).  
+Published [releases](https://github.com/MoonModules/MoonLight/releases) can also be installed this way.
 
-Launch [ESPConnect](https://thelastoutpostworkshop.github.io/microcontroller_devkit/espconnect)
+Launch [ESPConnect](https://thelastoutpostworkshop.github.io/microcontroller_devkit/espconnect).
 
 <img width="400" src="https://github.com/user-attachments/assets/3b702b3e-62cc-4330-83f6-d473067df449" />
 
-Click Connect and choose your device. Select Flash Tools, go to Flash Firmware, open a firmware.bin file from your file system, select Flash Offset App0 and Flash.
- 
-### Visual Studio code
+Click **Connect** and select your device.  
+Choose **Flash Tools**, go to **Flash Firmware**, open a `firmware.bin` file from your file system, select **Flash Offset App0**, and click **Flash**.
 
-For developers. Upload directly from VSCode, see [Develop / Installation](../../develop/installation)
+### Visual Studio Code
 
-*: This page contains affiliate links
+For developers: upload firmware directly from VS Code.  
+See [Develop / Installation](../../develop/installation).
+
+\*: This page contains affiliate links

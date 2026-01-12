@@ -10,7 +10,7 @@ MoonLight uses a multi-core, multi-task architecture on ESP32 to achieve smooth 
 |------|------|----------|------------|-----------|---------|
 | **WiFi/BT** | 0 (PRO_CPU) | 23 | System | Event-driven | System networking stack |
 | **lwIP TCP/IP** | 0 (PRO_CPU) | 18 | System | Event-driven | TCP/IP protocol processing |
-| **ESP32SvelteKit** | 0 (PRO_CPU) | 2 | System | 10ms | HTTP/WebSocket UI framework |
+| **ESP32SvelteKit** | 1 (APP_CPU) | 2 | System | 20ms | HTTP/WebSocket UI framework |
 | **Driver Task** | 1 (APP_CPU) | 3 | 3-4KB | ~60 fps | Output data to LEDs via DMA/I2S/LCD/PARLIO |
 | **Effect Task** | 0 (PRO_CPU) | 3 | 3-4KB | ~60 fps | Calculate LED colors and effects |
 
@@ -18,7 +18,7 @@ Effect Task (Core 0, Priority 3)
 
 - **Function**: Pure computation - calculates pixel colors based on effect algorithms
 - **Operations**: Reads/writes to `channels` array, performs mathematical calculations
-- **Tolerant to preemption**: WiFi interruptions are acceptable as this is non-timing-critical
+- **Tolerant to preemption**: WiFi interruptions are acceptable as this is non-timing-critical and we have a double buffer
 - **Why Core 0**: Can coexist with WiFi; uses idle CPU cycles when WiFi is not transmitting
 
 Driver Task (Core 1, Priority 3)
@@ -32,7 +32,7 @@ ESP32SvelteKit Task (Core 1, Priority 2)
 
 - **Function**: HTTP server and WebSocket handler for UI
 - **Operations**: Processes REST API calls, WebSocket messages, JSON serialization
-- **Runs every**: 10ms
+- **Runs every**: 20ms
 - **Why Core 1, Priority 2**: Lower priority than system Tasks
 
 ## Task Interaction Flow
@@ -68,6 +68,29 @@ sequenceDiagram
     DriverTask->>DriverTask: Send via DMA (1-5ms)
     DriverTask->>LEDs: Pixel data
 ```
+
+HTTPP task
+
+* no assigned core (OS decides), prio 5
+* processes WebUI / Websockets
+* calls ModuleState read() and update() functions
+* MoonLight Modules: runs Modules::compareRecursive and Modules::checkReOrderSwap which calls postUpdate which presents a semaphore-guarded updatedItem (updateProcessedSem, updateReadySem)
+* Page refresh: runs onLayout pass 1 for the monitor
+
+SvelteKit task
+
+* Module::loop() runs in the SvelteKit task and calls getUpdate() to retrieve the updatedItem in a synchronized way, getUpdate() calls processUpdatedItem()
+* processUpdatedItem() calls Module::onUpdate(), which is a virtual function which is overridden by Modules to implement custom functionality
+* NodeManager::onUpdate() propagates onUpdate() to Node Controls (together with Node::updateControl()), guarded by nodeMutex
+
+Driver Task
+
+* PhysicalLayer::loopDrivers(): if requestMap call mapLayout(). mapLayout() calls onLayout(), guarded by nodeMutex
+* PhysicalLayer::loopDrivers(): Node::onSizeChanged() and Node::loop() guarded by nodeMutex
+
+Effect Task
+
+* PhysicalLayer::loop() calls VirtualLayer::Loop(): Node::onSizeChanged() and Node::loop(), guarded by nodeMutex
 
 ## Core Assignments
 
@@ -278,16 +301,14 @@ For big setups, 16K LEDs typically, Task watchdog got triggered crashes occur mo
 void effectOrDriverTask(void* pvParameters) {
   // 🌙
   esp_task_wdt_add(NULL);
-
   setup();
 
   while (true) {
-
-    loop();
-
     esp_task_wdt_reset();
+    loop();
     vTaskDelay(1);
   }
+
   // Cleanup (never reached in this case, but good practice)
   esp_task_wdt_delete(NULL);
 }
@@ -309,8 +330,6 @@ inline void addYield(uint8_t frequency) {
     vTaskDelay(1); 
   }
 }
-
-
 ```
 
 * esp_task_wdt ( #include "esp_task_wdt.h" ) make sure the tasks are in the watchdog system and in the task loop it is reset and vTaskDelay(1) makes sure there is a yield each time

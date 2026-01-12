@@ -75,6 +75,7 @@ class Node {
   Module* moduleControl = nullptr;  // to access global lights control functions if needed
   Module* moduleIO = nullptr;       // to access io pins if needed
   Module* moduleNodes = nullptr;    // to request UI update if needed
+  SemaphoreHandle_t nodeMutex = xSemaphoreCreateMutex();
 
   virtual bool isLiveScriptNode() const { return false; }
   virtual bool hasOnLayout() const { return false; }  // run map on monitor (pass1) and modifier new Node, on/off, control changed or layout setup, on/off or control changed (pass1 and 2)
@@ -86,7 +87,18 @@ class Node {
   virtual void constructor(VirtualLayer* layer, const JsonArray& controls) {
     this->layer = layer;
     this->controls = controls;
+    if (nodeMutex == nullptr) {
+      EXT_LOGE(ML_TAG, "Failed to create nodeMutex");
+    }
   }
+
+  // destructor
+  virtual ~Node() {
+    if (nodeMutex != nullptr) {
+      vSemaphoreDelete(nodeMutex);
+      nodeMutex = NULL;
+    }
+  }  // delete any allocated memory
 
   // effect and layout
   virtual void setup() {};
@@ -234,8 +246,6 @@ class Node {
   virtual void modifySize() {}
   virtual void modifyPosition(Coord3D& position) {}  // not const as position is changed
   virtual void modifyXYZ(Coord3D& position) {}
-
-  virtual ~Node() {}  // delete any allocated memory
 };
 
   #if FT_LIVESCRIPT
