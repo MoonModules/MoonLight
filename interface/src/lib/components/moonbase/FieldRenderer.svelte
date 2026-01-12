@@ -47,6 +47,10 @@
 
 		// Only send to server once per 50ms
 		if (!throttleTimer) {
+			// Send immediately on first interaction
+			onChange(event);
+			pendingSliderEvent = null;
+			
 			throttleTimer = setTimeout(() => {
 				if (pendingSliderEvent) {
 					onChange(pendingSliderEvent);
