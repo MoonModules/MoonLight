@@ -59,9 +59,15 @@ void VirtualLayer::loop() {
 
   if (prevSize != size) EXT_LOGD(ML_TAG, "onSizeChanged V %d,%d,%d -> %d,%d,%d", prevSize.x, prevSize.y, prevSize.z, size.x, size.y, size.z);
   for (Node* node : nodes) {
-    if (prevSize != size) node->onSizeChanged(prevSize);
+    if (prevSize != size) {
+      xSemaphoreTake(node->nodeMutex, portMAX_DELAY);
+      node->onSizeChanged(prevSize);
+      xSemaphoreGive(node->nodeMutex);
+    }
     if (node->on) {
+      xSemaphoreTake(node->nodeMutex, portMAX_DELAY);
       node->loop();
+      xSemaphoreGive(node->nodeMutex);
       addYield(10);
     }
   }

@@ -165,6 +165,8 @@ class ModuleDrivers : public NodeManager {
       node->setup();                                  // run the setup of the effect
       node->onSizeChanged(Coord3D());
       // layers[0]->nodes.reserve(index+1);
+
+      // from here it runs concurrently in the drivers task
       if (index >= layerP.nodes.size())
         layerP.nodes.push_back(node);
       else

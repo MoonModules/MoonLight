@@ -72,9 +72,7 @@ void PhysicalLayer::loop() {
   // runs the loop of all effects / nodes in the layer
   for (VirtualLayer* layer : layers) {
     if (layer) {
-      xSemaphoreTake(nodeMutex, portMAX_DELAY);
       layer->loop();  // if (layer) needed when deleting rows ...
-      xSemaphoreGive(nodeMutex);
     }
   }
 }
@@ -111,12 +109,14 @@ void PhysicalLayer::loopDrivers() {
 
   for (Node* node : nodes) {
     if (prevSize != lights.header.size) {
-      xSemaphoreTake(nodeMutex, portMAX_DELAY);
+      xSemaphoreTake(node->nodeMutex, portMAX_DELAY);
       node->onSizeChanged(prevSize);
-      xSemaphoreGive(nodeMutex);
+      xSemaphoreGive(node->nodeMutex);
     }
     if (node->on) {
+      xSemaphoreTake(node->nodeMutex, portMAX_DELAY);
       node->loop();
+      xSemaphoreGive(node->nodeMutex);
       addYield(10);
     }
   }
@@ -128,9 +128,9 @@ void PhysicalLayer::mapLayout() {
   onLayoutPre();
   for (Node* node : nodes) {
     if (node->on) {  // && node->hasOnLayout
-      xSemaphoreTake(nodeMutex, portMAX_DELAY);
+      xSemaphoreTake(node->nodeMutex, portMAX_DELAY);
       node->onLayout();
-      xSemaphoreGive(nodeMutex);
+      xSemaphoreGive(node->nodeMutex);
     }
   }
   onLayoutPost();
