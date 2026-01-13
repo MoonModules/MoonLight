@@ -39,6 +39,7 @@ nav:
     - develop/nodes.md
     - develop/modules.md
     - develop/layers.md
+    - develop/drivers.md
     - develop/architecture.md
     - develop/sveltekit.md
     - develop/documentation.md

@@ -22,6 +22,7 @@
   #include "I2SClocklessLedDriver.h"
 extern I2SClocklessLedDriver ledsDriver;
 
+//The max_leds_per_output and first_index_per_output are modified in show_parlio and read in transpose_32_slices / create_transposed_led_output_optimized. This is safe given the driver runs on a dedicated core (APP_CPU),
 uint16_t max_leds_per_output = 0;
 uint32_t first_index_per_output[16];
 
@@ -151,7 +152,7 @@ uint8_t gamma8(uint8_t b) {  // we do nothing with gamma for now
   return b;
 }
 
-// 1. Add the RGB offsets parameter to the function signature
+// 1. Add the RGB first_index_per_outputs parameter to the function signature
 // pixels_per_pin = leds_per_output
 void create_transposed_led_output_optimized(const uint8_t* input_buffer, uint16_t* output_buffer, const uint16_t* pixels_per_pin, const uint32_t num_active_pins, const uint8_t COMPONENTS_PER_PIXEL, const uint8_t offsetR, const uint8_t offsetG, const uint8_t offsetB, const uint8_t offsetW) {
   // Only keep waveform cache (for WS2812 protocol timing)
@@ -270,7 +271,7 @@ static portMUX_TYPE parlio_spinlock = portMUX_INITIALIZER_UNLOCKED;
 // parallelPins = array of pin GPIO's
 // length = nrOfLights
 // buffer_in = channels array
-uint8_t IRAM_ATTR __attribute__((hot)) show_parlio(uint8_t* parallelPins, uint32_t length, uint8_t* buffer_in, uint8_t components, uint8_t outputs, uint16_t* leds_per_output, uint8_t offSetR, uint8_t offsetG, uint8_t offsetB, uint8_t offsetW) {
+uint8_t IRAM_ATTR __attribute__((hot)) show_parlio(uint8_t* parallelPins, uint32_t length, uint8_t* buffer_in, uint8_t components, uint8_t outputs, uint16_t* leds_per_output, uint8_t offsetR, uint8_t offsetG, uint8_t offsetB, uint8_t offsetW) {
   // 💫 this is only the case if all leds_per_output for all outputs is the same (we pad everything smaller than that)
   // if (length != outputs * max_leds_per_output) {
   //   delay(100);
@@ -397,13 +398,13 @@ uint8_t IRAM_ATTR __attribute__((hot)) show_parlio(uint8_t* parallelPins, uint32
   parallel_buffer_remapped = buffer_in;
     // why should it be resetted here?
     //  color_order = COL_ORDER_RGB; // This isn't actually changing the color order - we're already there from the BusNetwork doing the right thing pixel-by-pixel.
-    //  offSetR = 0;
+    //  offsetR = 0;
     //  offsetG = 1;
     //  offsetB = 2;
     //  offsetW = 3;
   #endif
 
-  create_transposed_led_output_optimized(parallel_buffer_remapped, parallel_buffer_repacked, leds_per_output, outputs, components, offSetR, offsetG, offsetB, offsetW);
+  create_transposed_led_output_optimized(parallel_buffer_remapped, parallel_buffer_repacked, leds_per_output, outputs, components, offsetR, offsetG, offsetB, offsetW);
 
   // Calculate the exact size of ONE PIXEL's data in bits and bytes.
   const uint32_t symbols_per_pixel = components * 32;  // isRGBW ? 128 : 96;

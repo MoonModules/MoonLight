@@ -121,7 +121,11 @@ class PhysicalLayer {
 
   Coord3D prevSize;  // to calculate size change
 
+  SemaphoreHandle_t effectsMutex = xSemaphoreCreateMutex();
+  SemaphoreHandle_t driversMutex = xSemaphoreCreateMutex();
+
   PhysicalLayer();
+  ~PhysicalLayer();
 
   void setup();
   void loop();

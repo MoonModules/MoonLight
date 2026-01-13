@@ -271,10 +271,10 @@ class NodeManager : public Module {
           Node* nodeClass = (*nodes)[updatedItem.index[0]];
           if (nodeClass != nullptr) {
 
-            xSemaphoreTake(nodeClass->nodeMutex, portMAX_DELAY);
+            xSemaphoreTake(*nodeClass->layerMutex, portMAX_DELAY);
             nodeClass->updateControl(control);
             nodeClass->onUpdate(updatedItem.oldValue, control);  // custom onUpdate for the node
-            xSemaphoreGive(nodeClass->nodeMutex);
+            xSemaphoreGive(*nodeClass->layerMutex);
 
             nodeClass->requestMappings();
           } else

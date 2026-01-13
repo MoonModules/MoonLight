@@ -14,6 +14,6 @@
 
 #if FT_MOONLIGHT
 
-uint8_t show_parlio(uint8_t* parallelPins, uint32_t length, uint8_t* buffer_in, uint8_t components, uint8_t outputs, uint16_t* leds_per_output, uint8_t offSetR, uint8_t offsetG, uint8_t offsetB, uint8_t offsetW);
+uint8_t show_parlio(uint8_t* parallelPins, uint32_t length, uint8_t* buffer_in, uint8_t components, uint8_t outputs, uint16_t* leds_per_output, uint8_t offsetR, uint8_t offsetG, uint8_t offsetB, uint8_t offsetW);
 
 #endif

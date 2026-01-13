@@ -110,7 +110,7 @@ ModuleLiveScripts moduleLiveScripts = ModuleLiveScripts(&server, &esp32sveltekit
 ModuleChannels moduleChannels = ModuleChannels(&server, &esp32sveltekit);
 ModuleMoonLightInfo moduleMoonLightInfo = ModuleMoonLightInfo(&server, &esp32sveltekit);
 
-SemaphoreHandle_t swapMutex = xSemaphoreCreateMutex();
+portMUX_TYPE swapMutex = portMUX_INITIALIZER_UNLOCKED;
 volatile bool newFrameReady = false;
 
 TaskHandle_t effectTaskHandle = NULL;
@@ -128,11 +128,11 @@ void effectTask(void* pvParameters) {
   while (true) {
     // Check state under lock
     esp_task_wdt_reset();
-    xSemaphoreTake(swapMutex, portMAX_DELAY);
+    portENTER_CRITICAL(&swapMutex);
 
     if (layerP.lights.header.isPositions == 0 && !newFrameReady) {  // within mutex as driver task can change this
       if (layerP.lights.useDoubleBuffer) {
-        xSemaphoreGive(swapMutex);
+        portEXIT_CRITICAL(&swapMutex);
         memcpy(layerP.lights.channelsE, layerP.lights.channelsD, layerP.lights.header.nrOfChannels);  // Copy previous frame (channelsD) to working buffer (channelsE)
       }
 
@@ -144,7 +144,7 @@ void effectTask(void* pvParameters) {
       }
 
       if (layerP.lights.useDoubleBuffer) {  // Atomic swap channels
-        xSemaphoreTake(swapMutex, portMAX_DELAY);
+        portENTER_CRITICAL(&swapMutex);
         if (layerP.lights.header.isPositions == 0) {  // Check if not changed while we were unlocked
           uint8_t* temp = layerP.lights.channelsD;
           layerP.lights.channelsD = layerP.lights.channelsE;
@@ -155,7 +155,7 @@ void effectTask(void* pvParameters) {
         newFrameReady = true;
     }
 
-    xSemaphoreGive(swapMutex);
+    portEXIT_CRITICAL(&swapMutex);
     vTaskDelay(1);
   }
   // Cleanup (never reached in this case, but good practice)
@@ -172,7 +172,7 @@ void driverTask(void* pvParameters) {
     bool mutexGiven = false;
     esp_task_wdt_reset();
     // Check and transition state under lock
-    xSemaphoreTake(swapMutex, portMAX_DELAY);
+    portENTER_CRITICAL(&swapMutex);
     if (layerP.lights.header.isPositions == 3) {
       EXT_LOGD(ML_TAG, "positions done (3 -> 0)");
       layerP.lights.header.isPositions = 0;
@@ -182,7 +182,7 @@ void driverTask(void* pvParameters) {
       if (newFrameReady) {
         newFrameReady = false;
         if (layerP.lights.useDoubleBuffer) {
-          xSemaphoreGive(swapMutex);  // Double buffer: release lock, then send
+          portEXIT_CRITICAL(&swapMutex);  // Double buffer: release lock, then send
           mutexGiven = true;
         }
 
@@ -191,7 +191,7 @@ void driverTask(void* pvParameters) {
       }
     }
 
-    if (!mutexGiven) xSemaphoreGive(swapMutex);  // not double buffer or if conditions not met
+    if (!mutexGiven) portEXIT_CRITICAL(&swapMutex);  // not double buffer or if conditions not met
     vTaskDelay(1);
   }
   // Cleanup (never reached in this case, but good practice)

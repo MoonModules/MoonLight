@@ -45,16 +45,13 @@ class ModuleState {
   JsonObject data = JsonObject();  // isNull()
 
   UpdatedItem updatedItem;
-  SemaphoreHandle_t updateReadySem;
-  SemaphoreHandle_t updateProcessedSem;
+  SemaphoreHandle_t updateMutex = xSemaphoreCreateBinary();
+  volatile bool updatePending = false;
 
   static Char<20> updateOriginId;  // static, written by ModuleState::update, no mutex needed as written by one process at a time (http mostly, sveltekit sometimes recursively)
 
   ModuleState() {
     EXT_LOGD(MB_TAG, "ModuleState constructor");
-    updateReadySem = xSemaphoreCreateBinary();      // assuming this will be successful
-    updateProcessedSem = xSemaphoreCreateBinary();  // assuming this will be successful
-    xSemaphoreGive(updateProcessedSem);             // Ready for first update
 
     if (!gModulesDoc) {
       EXT_LOGD(MB_TAG, "Creating doc");
@@ -88,8 +85,7 @@ class ModuleState {
       }
     }
 
-    if (updateReadySem) vSemaphoreDelete(updateReadySem);
-    if (updateProcessedSem) vSemaphoreDelete(updateProcessedSem);
+    if (updateMutex) vSemaphoreDelete(updateMutex);
   }
 
   std::function<void(const JsonArray& controls)> setupDefinition = nullptr;
@@ -115,20 +111,29 @@ class ModuleState {
     if (contains(taskName, "SvelteKit") || contains(taskName, "loopTask")) {  // at boot,  the loopTask starts, after that the loopTask is destroyed
       if (processUpdatedItem) processUpdatedItem(updatedItem);
     } else {
-      if (xSemaphoreTake(updateProcessedSem, portMAX_DELAY) == pdTRUE) {
+      if (xSemaphoreTake(updateMutex, portMAX_DELAY) == pdTRUE) {
         this->updatedItem = updatedItem;
-        xSemaphoreGive(updateReadySem);
+        updatePending = true;
+        xSemaphoreGive(updateMutex);
       }
     }
   }
   // Called by consumer side
-  bool getUpdate() {
-    if (xSemaphoreTake(updateReadySem, 0) == pdTRUE) {
-      if (processUpdatedItem) processUpdatedItem(updatedItem);
-      xSemaphoreGive(updateProcessedSem);
-      return true;  // Update retrieved
+  void getUpdate() {
+    // Try to acquire mutex without blocking
+    if (xSemaphoreTake(updateMutex, 0) == pdTRUE) {
+      if (updatePending) {
+        // Copy update data
+        UpdatedItem localCopy = updatedItem;
+        updatePending = false;
+        xSemaphoreGive(updateMutex);
+
+        // Process OUTSIDE the mutex (no lock held during callback)
+        if (processUpdatedItem) processUpdatedItem(localCopy);
+        return;
+      }
+      xSemaphoreGive(updateMutex);
     }
-    return false;  // Timeout
   }
 };
 

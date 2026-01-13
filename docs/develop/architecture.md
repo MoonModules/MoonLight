@@ -81,16 +81,16 @@ SvelteKit task
 
 * Module::loop() runs in the SvelteKit task and calls getUpdate() to retrieve the updatedItem in a synchronized way, getUpdate() calls processUpdatedItem()
 * processUpdatedItem() calls Module::onUpdate(), which is a virtual function which is overridden by Modules to implement custom functionality
-* NodeManager::onUpdate() propagates onUpdate() to Node Controls (together with Node::updateControl()), guarded by nodeMutex
+* NodeManager::onUpdate() propagates onUpdate() to Node Controls (together with Node::updateControl()), guarded by layerMutex
 
 Driver Task
 
-* PhysicalLayer::loopDrivers(): if requestMap call mapLayout(). mapLayout() calls onLayout(), guarded by nodeMutex
-* PhysicalLayer::loopDrivers(): Node::onSizeChanged() and Node::loop() guarded by nodeMutex
+* PhysicalLayer::loopDrivers(): if requestMap call mapLayout(). mapLayout() calls onLayout(), guarded by layerMutex
+* PhysicalLayer::loopDrivers(): Node::onSizeChanged() and Node::loop() guarded by layerMutex
 
 Effect Task
 
-* PhysicalLayer::loop() calls VirtualLayer::Loop(): Node::onSizeChanged() and Node::loop(), guarded by nodeMutex
+* PhysicalLayer::loop() calls VirtualLayer::Loop(): Node::onSizeChanged() and Node::loop(), guarded by layerMutex
 
 ## Core Assignments
 
