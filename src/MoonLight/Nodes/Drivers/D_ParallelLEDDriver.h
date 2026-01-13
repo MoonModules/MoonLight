@@ -61,13 +61,8 @@ class ParallelLEDDriver : public DriverNode {
 
     // get max leds per pin
 
-    uint16_t maxLedsPerPin = 0;
-    for (uint16_t ledsPerPin : layerP.ledsPerPin) {
-      if (ledsPerPin > maxLedsPerPin) maxLedsPerPin = ledsPerPin;
-    }
-
     // No brightness parameter needed
-    show_parlio(pins, layerP.lights.header.nrOfLights, layerP.lights.channelsD, layerP.lights.header.channelsPerLight == 4, nrOfPins, maxLedsPerPin, layerP.lights.header.offsetRed, layerP.lights.header.offsetGreen, layerP.lights.header.offsetBlue);
+    show_parlio(pins, layerP.lights.header.nrOfLights, layerP.lights.channelsD, layerP.lights.header.channelsPerLight, nrOfPins, layerP.ledsPerPin, layerP.lights.header.offsetRed, layerP.lights.header.offsetGreen, layerP.lights.header.offsetBlue, layerP.lights.header.offsetWhite);
     #endif
   #else  // ESP32_LEDSDRIVER
     if (!ledsDriver.initLedsDone) return;
