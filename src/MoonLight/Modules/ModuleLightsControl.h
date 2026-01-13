@@ -500,12 +500,12 @@ class ModuleLightsControl : public Module {
   #define headerPrimeNumber 41  // prime number so nrOfChannels is not likely to be the same so monitor can recognize a header
 
   #if FT_ENABLED(FT_MONITOR)
-    extern portMUX_TYPE swapMutex;
+    extern SemaphoreHandle_t swapMutex;
 
     // Check and transition under lock
-    portENTER_CRITICAL(&swapMutex);
+    xSemaphoreTake(swapMutex, portMAX_DELAY);
     uint8_t isPositions = layerP.lights.header.isPositions;
-    portEXIT_CRITICAL(&swapMutex);
+    xSemaphoreGive(swapMutex);
 
     if (isPositions == 2) {  // send to UI
       if (_socket->getActiveClients() && _state.data["monitorOn"]) {
@@ -514,10 +514,10 @@ class ModuleLightsControl : public Module {
         _socket->emitEvent("monitor", (char*)layerP.lights.channelsE, MIN(layerP.lights.header.nrOfLights * 3, layerP.lights.maxChannels), _moduleName.c_str());  //*3 is for 3 bytes position
       }
       memset(layerP.lights.channelsE, 0, layerP.lights.maxChannels);  // set all the channels to 0 //cleaning the positions
-      portENTER_CRITICAL(&swapMutex);
+      xSemaphoreTake(swapMutex, portMAX_DELAY);
       EXT_LOGD(ML_TAG, "positions sent to monitor (2 -> 3)");
       layerP.lights.header.isPositions = 3;
-      portEXIT_CRITICAL(&swapMutex);
+      xSemaphoreGive(swapMutex);
     } else if (isPositions == 0 && layerP.lights.header.nrOfLights) {  // send to UI
       static unsigned long monitorMillis = 0;
       if (millis() - monitorMillis >= MAX(20, layerP.lights.header.nrOfLights / 300)) {  // 12K lights -> 40ms

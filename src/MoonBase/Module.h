@@ -53,6 +53,8 @@ class ModuleState {
   ModuleState() {
     EXT_LOGD(MB_TAG, "ModuleState constructor");
 
+    xSemaphoreGive(updateMutex);
+
     if (!gModulesDoc) {
       EXT_LOGD(MB_TAG, "Creating doc");
       if (psramFound())
