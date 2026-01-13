@@ -33,7 +33,7 @@ class SharedWebSocketServer {
   void registerModule(Module* module) {
     EXT_LOGD(ML_TAG, "%s", module->_moduleName);
     // Register this module for state updates
-    module->addUpdateHandler([this, module](const String& originId) { transmitData(String("/rest/" + String(module->_moduleName)).c_str(), nullptr, originId); }, false);
+    module->addUpdateHandler([this, module](const String& originId) { transmitData((String("/rest/") + module->_moduleName).c_str(), nullptr, originId); }, false);
   }
 
   void begin() {

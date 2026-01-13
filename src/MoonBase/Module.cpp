@@ -36,7 +36,7 @@ void setDefaults(JsonObject controls, JsonArray definition) {
 }
 
 // shared static variables
-SemaphoreHandle_t ModuleState::updateMutex = nullptr;
+SemaphoreHandle_t ModuleState::updateMutex = xSemaphoreCreateMutex();;
 Char<20> ModuleState::updateOriginId;
 UpdatedItem ModuleState::updatedItem;
 
@@ -306,11 +306,11 @@ StateUpdateResult ModuleState::update(JsonObject& newData, ModuleState& state, c
 
 Module::Module(const char* moduleName, PsychicHttpServer* server, ESP32SvelteKit* sveltekit)
     : _socket(sveltekit->getSocket()),
-      _fsPersistence(ModuleState::read, ModuleState::update, this, sveltekit->getFS(), String("/.config/" + String(moduleName) + ".json").c_str(), true)  // 🌙 true: delayedWrites
+      _fsPersistence(ModuleState::read, ModuleState::update, this, sveltekit->getFS(), (String("/.config/") + moduleName + ".json").c_str(), true)  // 🌙 true: delayedWrites
 {
-  _moduleName = moduleName;
+  _moduleName = (moduleName && moduleName[0] != '\0') ? moduleName : "unnamed";
 
-  EXT_LOGV(MB_TAG, "constructor %s", moduleName.c_str());
+  EXT_LOGV(MB_TAG, "constructor %s", moduleName);
   _server = server;
 
   _state.processUpdatedItem = [&](const UpdatedItem& updatedItem) {
@@ -330,7 +330,7 @@ void Module::begin() {
   // _state.setupDefinition = this->setupDefinition;
   _state.setupData();  // if no data readFromFS, using overridden virtual function setupDefinition
 
-  _server->on(String("/rest/" + String(_moduleName) + "Def").c_str(), HTTP_GET, [&](PsychicRequest* request) {
+  _server->on((String("/rest/") + _moduleName + "Def").c_str(), HTTP_GET, [&](PsychicRequest* request) {
     PsychicJsonResponse response = PsychicJsonResponse(request, false);
     JsonArray controls = response.getRoot().to<JsonArray>();
 

@@ -54,9 +54,9 @@ class ModuleState {
     EXT_LOGD(MB_TAG, "ModuleState constructor");
 
     if (updateMutex == nullptr) {
-      updateMutex = xSemaphoreCreateBinary();
+      EXT_LOGE(MB_TAG, "Failed to create updateMutex");
+    } else
       xSemaphoreGive(updateMutex);  // Make it available
-    }
 
     if (!gModulesDoc) {
       EXT_LOGD(MB_TAG, "Creating doc");

@@ -32,7 +32,12 @@ class SharedFSPersistence {
 
     ModuleInfo() : module(nullptr), delayedWriting(false), hasDelayedWrite(false), updateHandlerId(0) {}
   };
-  std::map<const char *, ModuleInfo> _modules;  // moduleName -> info
+  struct CStrComparator {
+    bool operator()(const char* a, const char* b) const {
+      return strcmp(a, b) < 0;
+    }
+  };
+  std::map<const char *, ModuleInfo, CStrComparator> _modules;  // moduleName -> info
 
  public:
   SharedFSPersistence(FS* fs) : _fs(fs) {}
@@ -41,7 +46,7 @@ class SharedFSPersistence {
   void registerModule(Module* module, bool delayedWriting = false) {
     ModuleInfo info;
     info.module = module;
-    info.filePath = "/.config/" + String(module->_moduleName) + ".json";
+    info.filePath = String("/.config/") + module->_moduleName + ".json";
     info.delayedWriting = delayedWriting;
     info.hasDelayedWrite = false;
 
