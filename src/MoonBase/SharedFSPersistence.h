@@ -186,7 +186,7 @@ class SharedFSPersistence {
   // ADDED: Apply defaults from empty object
   void applyDefaults(ModuleInfo& info) {
     JsonDocument doc;
-    JsonObject obj = doc.as<JsonObject>();
+    JsonObject obj = doc.to<JsonObject>();
     info.module->updateWithoutPropagation(obj, ModuleState::update);
   }
 };
