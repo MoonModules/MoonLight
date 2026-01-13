@@ -31,9 +31,9 @@ class SharedWebSocketServer {
   SharedWebSocketServer(PsychicHttpServer* server, SecurityManager* securityManager, AuthenticationPredicate authenticationPredicate = AuthenticationPredicates::IS_ADMIN) : _server(server), _securityManager(securityManager), _authenticationPredicate(authenticationPredicate) {}
 
   void registerModule(Module* module) {
-    EXT_LOGD(ML_TAG, "%s", module->_moduleName.c_str());
+    EXT_LOGD(ML_TAG, "%s", module->_moduleName);
     // Register this module for state updates
-    module->addUpdateHandler([this, module](const String& originId) { transmitData(String("/rest/" + module->_moduleName).c_str(), nullptr, originId); }, false);
+    module->addUpdateHandler([this, module](const String& originId) { transmitData(String("/rest/" + String(module->_moduleName)).c_str(), nullptr, originId); }, false);
   }
 
   void begin() {
@@ -117,7 +117,7 @@ class SharedWebSocketServer {
 
   Module* findModule(const String& path) {
     for (Module* module : modules) {
-      if (path.endsWith(module->_moduleName.c_str())) return module;
+      if (path.endsWith(module->_moduleName)) return module;
     }
     return nullptr;
   }

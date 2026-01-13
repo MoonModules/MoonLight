@@ -44,8 +44,8 @@ class ModuleState {
  public:
   JsonObject data = JsonObject();  // isNull()
 
-  UpdatedItem updatedItem;
-  SemaphoreHandle_t updateMutex = xSemaphoreCreateBinary();
+  static UpdatedItem updatedItem;
+  static SemaphoreHandle_t updateMutex;
   volatile bool updatePending = false;
 
   static Char<20> updateOriginId;  // static, written by ModuleState::update, no mutex needed as written by one process at a time (http mostly, sveltekit sometimes recursively)
@@ -53,7 +53,10 @@ class ModuleState {
   ModuleState() {
     EXT_LOGD(MB_TAG, "ModuleState constructor");
 
-    xSemaphoreGive(updateMutex);
+    if (updateMutex == nullptr) {
+      updateMutex = xSemaphoreCreateBinary();
+      xSemaphoreGive(updateMutex);  // Make it available
+    }
 
     if (!gModulesDoc) {
       EXT_LOGD(MB_TAG, "Creating doc");
@@ -86,8 +89,6 @@ class ModuleState {
         }
       }
     }
-
-    if (updateMutex) vSemaphoreDelete(updateMutex);
   }
 
   std::function<void(const JsonArray& controls)> setupDefinition = nullptr;
@@ -141,10 +142,10 @@ class ModuleState {
 
 class Module : public StatefulService<ModuleState> {
  public:
-  String _moduleName = "";
+  const char* _moduleName = "";
   bool requestUIUpdate = false;
 
-  Module(const String& moduleName, PsychicHttpServer* server, ESP32SvelteKit* sveltekit);
+  Module(const char* moduleName, PsychicHttpServer* server, ESP32SvelteKit* sveltekit);
 
   // any Module that overrides begin() must continue to call Module::begin() (e.g., at the start of its own begin()
   virtual void begin();
@@ -164,7 +165,7 @@ class Module : public StatefulService<ModuleState> {
           [&](ModuleState& state) {
             return StateUpdateResult::CHANGED;  // notify StatefulService by returning CHANGED
           },
-          _moduleName + "server");
+          String(_moduleName) + "server");
     }
   }
 

@@ -546,7 +546,7 @@ class ModuleIO : public Module {
     EXT_LOGD(ML_TAG, "boardID %d", boardID);
     // serializeJson(object, Serial);Serial.println();
 
-    update(object, ModuleState::update, _moduleName + "server");
+    update(object, ModuleState::update, String(_moduleName) + "server");
   }
 
   uint8_t newBoardID = UINT8_MAX;
@@ -575,7 +575,7 @@ class ModuleIO : public Module {
       object["modded"] = true;
     }
 
-    if (object.size()) update(object, ModuleState::update, _moduleName + "server");  // if changes made then update
+    if (object.size()) update(object, ModuleState::update, String(_moduleName) + "server");  // if changes made then update
   }
 
   // Function to convert drive capability to string
