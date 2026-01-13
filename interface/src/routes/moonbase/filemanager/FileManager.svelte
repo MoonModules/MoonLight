@@ -34,7 +34,7 @@
 	import Help from '~icons/tabler/help';
 	import FieldRenderer from '$lib/components/moonbase/FieldRenderer.svelte';
 
-	let filesState: any = $state({});;
+	let filesState: any = $state({});
 	let folderList: FilesState[] = $state([]); //all files in a folder
 	let editableFile: FilesState = $state({
 		name: '',

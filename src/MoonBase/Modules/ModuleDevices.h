@@ -114,7 +114,7 @@ class ModuleDevices : public Module {
     }
 
     JsonObject controls = doc2.as<JsonObject>();
-    update(controls, ModuleState::update, _moduleName + "server");
+    update(controls, ModuleState::update, String(_moduleName) + "server");
   }
 
   void readUDP() {

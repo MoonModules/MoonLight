@@ -32,17 +32,13 @@ Want to add a Driver to MoonLight, see [develop](../../develop/overview/). See a
 
 | Name | Preview | Controls | Remarks
 | ---- | ----- | ---- | ---- |
-| Parallel LED Driver | <img width="100" src="https://github.com/user-attachments/assets/9cbe487e-f330-40a5-8b40-6663c83e5d90"/> | <img width="320" alt="Parallel" src="https://github.com/user-attachments/assets/0c6f1543-623a-45bf-98d7-f5ddd072a1c6" /> | Drive multiple LED types, all devices including ESP32-P4(-nano) supported<br>Light preset: See below<br>DMA buffer: set higher when LEDs flicker<br>Virtual LED Driver will be part of the Parallel LED driver.|
+| Parallel LED Driver | <img width="100" src="https://github.com/user-attachments/assets/9cbe487e-f330-40a5-8b40-6663c83e5d90"/> | <img width="320" alt="Parallel" src="https://github.com/user-attachments/assets/0c6f1543-623a-45bf-98d7-f5ddd072a1c6" /> | Drive multiple LED types, all devices including ESP32-P4(-nano) supported<br>Light preset: See below<br>DMA buffer: set higher when LEDs flicker<br>See [below](#parallel-led-driver) |
 | FastLED Driver | <img width="100" src="https://avatars.githubusercontent.com/u/5899270?s=48&v=4"/> | <img width="320" alt="FastLed" src="https://github.com/user-attachments/assets/d5ea1510-9766-4687-895a-b68c82575b8f" /> | Most used LED driver. Drive most common LEDs (WS2812). |
 | Art-Net Out| <img width="100" src="https://github.com/user-attachments/assets/9c65921c-64e9-4558-b6ef-aed2a163fd88"> | <img width="320" alt="Art-Net" src="../../media/moonlight/drivers/ArtNetOutControls.png" /> | Send Art-Net to Drive LEDS and DMX lights over the network. See [below](#art-net-out) |
 | Art-Net In | <img width="100" src="../../media/moonlight/drivers/Art-Net-In.png"> | <img width="320" alt="Art-Net" src="../../media/moonlight/drivers/ArtNetInControls.png" /> | Receive Art-Net (or DDP) packages e.g. from [Resolume](https://resolume.com/) or Touch Designer. See [below](#art-net-in) |
 | Audio Sync | <img width="100" src="https://github.com/user-attachments/assets/bfedf80b-6596-41e7-a563-ba7dd58cc476"/> | No controls | Listens to audio sent over the local network by WLED-AC or WLED-MM and allows audio reactive effects (♪ & ♫) to use audio data (volume and bands (FFT)) |
 | HUB75 Driver | <img width="100" src="https://github.com/user-attachments/assets/620f7c41-8078-4024-b2a0-39a7424f9678"/> | <img width="100" src="https://github.com/user-attachments/assets/4d386045-9526-4a5a-aa31-638058b31f32"/> | Drive HUB75 panels<br>Not implemented yet |
 | IR Driver | <img width="100" src="../../media/moonlight/drivers/IRDriver.jpeg"/> | <img width="100" src="../../media/moonlight/drivers/irdrivercontrols.png"/> | Receive IR commands and [Lights Control](../../moonlight/lightscontrol/) |
-
-* The Parallel LED driver uses different hardware peripherals depending on the MCU type: ESP32-D0: I2S, ESP32-S3: LCD_CAM, ESP32-P4: Parallel IO (ParLIO).
-* Virtual LED Driver: Driving max 120! outputs (E.g. 48 panels of 256 LEDs each run at 50-100 FPS) using shift registers. Integrated within the Parallel LED Driver architecture. Not implemented yet
-<img width="100" src="https://github.com/user-attachments/assets/98fb5010-7192-44db-a5c9-09602681ee15"/><img width="100" src="https://github.com/user-attachments/assets/c81d2f56-00d1-4424-a716-8e3c30e76636"/>
 
 ### Light Preset
 
@@ -68,13 +64,39 @@ Want to add a Driver to MoonLight, see [develop](../../develop/overview/). See a
 !!! info "Custom setup"
     These are predefined presets. In a future release custom presets will be possible.
 
+### Parallel LED Driver
+
+<img width="320" alt="Parallel" src="https://github.com/user-attachments/assets/0c6f1543-623a-45bf-98d7-f5ddd072a1c6" />
+
+* The Parallel LED driver uses different hardware peripherals depending on the MCU type: ESP32-D0: I2S, ESP32-S3: LCD_CAM, ESP32-P4: Parallel IO (ParLIO).
+* For ESP32-D0 and ESP32-S3 the [I2S clockless driver](https://github.com/hpwit/I2SClocklessLedDriver) is used
+* For ESP32-P4 the [parlio driver](https://github.com/troyhacks/WLED) is used.
+* Virtual LED Driver will be part of the Parallel LED driver: Driving max 120! outputs (E.g. 48 panels of 256 LEDs each run at 50-100 FPS) using shift registers. Integrated within the Parallel LED Driver architecture. Not implemented yet
+  
+    <img width="100" src="https://github.com/user-attachments/assets/98fb5010-7192-44db-a5c9-09602681ee15"/><img width="100" src="https://github.com/user-attachments/assets/c81d2f56-00d1-4424-a716-8e3c30e76636"/>
+
+**Parlio (ESP32-P4)**
+
+*Created by @TroyHacks, extended by @ewowi*
+
+The ESP32-P4 Parallel LED Driver uses the hardware PARLIO peripheral to control up to **16 LED strips simultaneously** with independent pixel counts per strip. This enables high-performance setups with thousands of LEDs while maintaining accurate timing through DMA-based transmission.
+
+**Key Features:**
+
+- **Variable LEDs per strip**: Each GPIO pin can drive a different number of WS2812/SK6812 LEDs (e.g., Pin 0: 100 LEDs, Pin 1: 50 LEDs, Pin 2: 120 LEDs)
+- **Automatic padding**: Shorter strips receive black pixels to maintain timing alignment—no visual impact
+- **Memory efficient**: Only stores actual LED data, padding happens during hardware transmission
+- **High-speed operation**: Supports 800 kHz to 1.2 MHz clock speeds with auto-overclocking for smaller LED counts
+- **RGB/RGBW support**: Configurable color ordering and per-component brightness correction
+- **Configuration**: Assign GPIO pins in the MoonLight interface and specify LED counts per pin. The driver automatically calculates the maximum LEDs per pin and handles synchronization.
+
 ### Art-Net Out ☸️
 
 <img width="300" src="../../media/moonlight/drivers/ArtNetOutControls.png"/>
 
 Sends Lights in Art-Net compatible packages to an Art-Net controller specified by the IP address(es) provided.
 
-#### Controls
+**Controls**
 
 * **Light preset**: See above.
 * **Controller IPs**: The last segment of the IP address within your local network, of the hardware Art-Net controller. Add more IPs if you send to more than one controller, comma separated.

@@ -60,14 +60,14 @@ void VirtualLayer::loop() {
   if (prevSize != size) EXT_LOGD(ML_TAG, "onSizeChanged V %d,%d,%d -> %d,%d,%d", prevSize.x, prevSize.y, prevSize.z, size.x, size.y, size.z);
   for (Node* node : nodes) {
     if (prevSize != size) {
-      xSemaphoreTake(node->nodeMutex, portMAX_DELAY);
+      xSemaphoreTake(*node->layerMutex, portMAX_DELAY);
       node->onSizeChanged(prevSize);
-      xSemaphoreGive(node->nodeMutex);
+      xSemaphoreGive(*node->layerMutex);
     }
     if (node->on) {
-      xSemaphoreTake(node->nodeMutex, portMAX_DELAY);
+      xSemaphoreTake(*node->layerMutex, portMAX_DELAY);
       node->loop();
-      xSemaphoreGive(node->nodeMutex);
+      xSemaphoreGive(*node->layerMutex);
       addYield(10);
     }
   }
@@ -322,7 +322,9 @@ void VirtualLayer::fill_rainbow(const uint8_t initialhue, const uint8_t deltahue
 
 void VirtualLayer::createMappingTableAndAddOneToOne() {
   if (mappingTableSize != size.x * size.y * size.z) {
-    PhysMap* newTable = reallocMB<PhysMap>(mappingTable, size.x * size.y * size.z);
+    EXT_LOGD(ML_TAG, "Allocating mappingTable: nrOfLights=%d, sizeof(PhysMap)=%d, total bytes=%d", 
+         size.x * size.y * size.z, sizeof(PhysMap), size.x * size.y * size.z * sizeof(PhysMap));
+    PhysMap* newTable = reallocMB<PhysMap>(mappingTable, size.x * size.y * size.z, "mappingTable");
     if (newTable) {
       mappingTable = newTable;
       EXT_LOGD(ML_TAG, "realloc mappingTable %d -> %dx%dx%d", mappingTableSize, size.x, size.y, size.z);
@@ -426,7 +428,7 @@ void VirtualLayer::onLayoutPost() {
     }
   } else {
     EXT_LOGI(ML_TAG, "irregular mapping 1 !");
-    for (size_t indexV = 0; indexV < nrOfLights; indexV++) {
+    for (size_t indexV = 0; indexV < MIN(nrOfLights, mappingTableSize); indexV++) {
       PhysMap& map = mappingTable[indexV];
       switch (map.mapType) {
       case m_zeroLights:

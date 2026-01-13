@@ -32,7 +32,12 @@ class SharedFSPersistence {
 
     ModuleInfo() : module(nullptr), delayedWriting(false), hasDelayedWrite(false), updateHandlerId(0) {}
   };
-  std::map<String, ModuleInfo> _modules;  // moduleName -> info
+  struct CStrComparator {
+    bool operator()(const char* a, const char* b) const {
+      return strcmp(a, b) < 0;
+    }
+  };
+  std::map<const char *, ModuleInfo, CStrComparator> _modules;  // moduleName -> info
 
  public:
   SharedFSPersistence(FS* fs) : _fs(fs) {}
@@ -41,7 +46,7 @@ class SharedFSPersistence {
   void registerModule(Module* module, bool delayedWriting = false) {
     ModuleInfo info;
     info.module = module;
-    info.filePath = "/.config/" + module->_moduleName + ".json";
+    info.filePath = String("/.config/") + module->_moduleName + ".json";
     info.delayedWriting = delayedWriting;
     info.hasDelayedWrite = false;
 
@@ -59,7 +64,7 @@ class SharedFSPersistence {
   }
 
   // ADDED: Enable/disable update handler for specific module
-  void disableUpdateHandler(const String& moduleName) {
+  void disableUpdateHandler(const char* moduleName) {
     auto it = _modules.find(moduleName);
     if (it != _modules.end() && it->second.updateHandlerId) {
       it->second.module->removeUpdateHandler(it->second.updateHandlerId);
@@ -67,14 +72,14 @@ class SharedFSPersistence {
     }
   }
 
-  void enableUpdateHandler(const String& moduleName) {
+  void enableUpdateHandler(const char* moduleName) {
     auto it = _modules.find(moduleName);
     if (it != _modules.end() && !it->second.updateHandlerId) {
       it->second.updateHandlerId = it->second.module->addUpdateHandler([this, module = it->second.module](const String& originId) { writeToFS(module->_moduleName); }, false);
     }
   }
 
-  void readFromFS(const String& moduleName) {
+  void readFromFS(const char* moduleName) {
     auto it = _modules.find(moduleName);
     if (it == _modules.end()) return;
 
@@ -98,7 +103,7 @@ class SharedFSPersistence {
     writeToFSNow(moduleName);
   }
 
-  void writeToFS(const String& moduleName) {
+  void writeToFS(const char* moduleName) {
     auto it = _modules.find(moduleName);
     if (it == _modules.end()) return;
 
@@ -109,7 +114,7 @@ class SharedFSPersistence {
       if (!info.hasDelayedWrite) {
         ESP_LOGD(SVK_TAG, "delayedWrites: Add %s", info.filePath.c_str());
 
-        sharedDelayedWrites.push_back([this, module = info.module ](char writeOrCancel) {
+        sharedDelayedWrites.push_back([this, module = info.module](char writeOrCancel) {
           auto it = _modules.find(module->_moduleName);
           if (it == _modules.end()) return;
 
@@ -133,7 +138,7 @@ class SharedFSPersistence {
     }
   }
 
-  bool writeToFSNow(const String& moduleName) {
+  bool writeToFSNow(const char* moduleName) {
     auto it = _modules.find(moduleName);
     if (it == _modules.end()) return false;
 
@@ -181,7 +186,7 @@ class SharedFSPersistence {
   // ADDED: Apply defaults from empty object
   void applyDefaults(ModuleInfo& info) {
     JsonDocument doc;
-    JsonObject obj = doc.as<JsonObject>();
+    JsonObject obj = doc.to<JsonObject>();
     info.module->updateWithoutPropagation(obj, ModuleState::update);
   }
 };

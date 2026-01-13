@@ -71,7 +71,7 @@ class ModuleDrivers : public NodeManager {
   }
 
   void begin() override {
-    defaultNodeName = getNameAndTags<PanelLayout>();
+    defaultNodeName = "";  // getNameAndTags<PanelLayout>();
     nodes = &layerP.nodes;
     NodeManager::begin();
 
@@ -158,7 +158,7 @@ class ModuleDrivers : public NodeManager {
     if (node) {
       EXT_LOGD(ML_TAG, "%s (p:%p pr:%d)", name, node, isInPSRAM(node));
 
-      node->constructor(layerP.layers[0], controls);  // pass the layer to the node (C++ constructors are not inherited, so declare it as normal functions)
+      node->constructor(layerP.layers[0], controls, &layerP.driversMutex);  // pass the layer to the node (C++ constructors are not inherited, so declare it as normal functions)
       node->moduleControl = _moduleLightsControl;     // to access global lights control functions if needed
       node->moduleIO = _moduleIO;                     // to get pin allocations
       node->moduleNodes = (Module*)this;              // to request UI update

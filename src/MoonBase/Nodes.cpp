@@ -32,10 +32,14 @@ void Node::updateControl(const JsonObject& control) {
           *valuePointer = control["value"];
           // EXT_LOGV(ML_TAG, "%s = %d", control["name"].as<const char*>(), *valuePointer);
         } else if (control["size"] == 32) {
-          int* valuePointer = (int*)pointer;
+          uint32_t* valuePointer = (uint32_t*)pointer;
           *valuePointer = control["value"];
           // EXT_LOGV(ML_TAG, "%s = %d", control["name"].as<const char*>(), *valuePointer);
         } else if (control["size"] == 33) {
+          int* valuePointer = (int*)pointer;
+          *valuePointer = control["value"];
+          // EXT_LOGV(ML_TAG, "%s = %d", control["name"].as<const char*>(), *valuePointer);
+        } else if (control["size"] == 34) {
           float* valuePointer = (float*)pointer;
           *valuePointer = control["value"];
           // EXT_LOGV(ML_TAG, "%s = %d", control["name"].as<const char*>(), *valuePointer);

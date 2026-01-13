@@ -31,6 +31,20 @@ PhysicalLayer::PhysicalLayer() {
   // create one layer - temporary
   layers.push_back(new VirtualLayer());
   layers[0]->layerP = this;
+
+  if (effectsMutex == nullptr) EXT_LOGE(ML_TAG, "Failed to create effectsMutex");
+  if (driversMutex == nullptr) EXT_LOGE(ML_TAG, "Failed to create driversMutex");
+}
+
+PhysicalLayer::~PhysicalLayer() {
+  if (effectsMutex) {
+    vSemaphoreDelete(effectsMutex);
+    effectsMutex = NULL;
+  }
+  if (driversMutex) {
+    vSemaphoreDelete(driversMutex);
+    driversMutex = NULL;
+  }
 }
 
 void PhysicalLayer::setup() {
@@ -109,14 +123,14 @@ void PhysicalLayer::loopDrivers() {
 
   for (Node* node : nodes) {
     if (prevSize != lights.header.size) {
-      xSemaphoreTake(node->nodeMutex, portMAX_DELAY);
+      xSemaphoreTake(*node->layerMutex, portMAX_DELAY);
       node->onSizeChanged(prevSize);
-      xSemaphoreGive(node->nodeMutex);
+      xSemaphoreGive(*node->layerMutex);
     }
     if (node->on) {
-      xSemaphoreTake(node->nodeMutex, portMAX_DELAY);
+      xSemaphoreTake(*node->layerMutex, portMAX_DELAY);
       node->loop();
-      xSemaphoreGive(node->nodeMutex);
+      xSemaphoreGive(*node->layerMutex);
       addYield(10);
     }
   }
@@ -128,9 +142,9 @@ void PhysicalLayer::mapLayout() {
   onLayoutPre();
   for (Node* node : nodes) {
     if (node->on) {  // && node->hasOnLayout
-      xSemaphoreTake(node->nodeMutex, portMAX_DELAY);
+      xSemaphoreTake(*node->layerMutex, portMAX_DELAY);
       node->onLayout();
-      xSemaphoreGive(node->nodeMutex);
+      xSemaphoreGive(*node->layerMutex);
     }
   }
   onLayoutPost();

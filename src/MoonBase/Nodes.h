@@ -72,10 +72,10 @@ class Node {
 
   VirtualLayer* layer = nullptr;  // the virtual layer this effect is using
   JsonArray controls;
-  Module* moduleControl = nullptr;  // to access global lights control functions if needed
-  Module* moduleIO = nullptr;       // to access io pins if needed
-  Module* moduleNodes = nullptr;    // to request UI update if needed
-  SemaphoreHandle_t nodeMutex = xSemaphoreCreateMutex();
+  Module* moduleControl = nullptr;               // to access global lights control functions if needed
+  Module* moduleIO = nullptr;                    // to access io pins if needed
+  Module* moduleNodes = nullptr;                 // to request UI update if needed
+  const SemaphoreHandle_t* layerMutex = nullptr;  // pointer to layerMutex (set in constructor)
 
   virtual bool isLiveScriptNode() const { return false; }
   virtual bool hasOnLayout() const { return false; }  // run map on monitor (pass1) and modifier new Node, on/off, control changed or layout setup, on/off or control changed (pass1 and 2)
@@ -84,21 +84,14 @@ class Node {
   bool on = false;  // onUpdate will set it on
 
   // C++ constructors are not inherited, so declare it as normal functions
-  virtual void constructor(VirtualLayer* layer, const JsonArray& controls) {
+  virtual void constructor(VirtualLayer* layer, const JsonArray& controls, const SemaphoreHandle_t* layerMutex) {
     this->layer = layer;
     this->controls = controls;
-    if (nodeMutex == nullptr) {
-      EXT_LOGE(ML_TAG, "Failed to create nodeMutex");
-    }
+    this->layerMutex = layerMutex;
   }
 
   // destructor
-  virtual ~Node() {
-    if (nodeMutex != nullptr) {
-      vSemaphoreDelete(nodeMutex);
-      nodeMutex = NULL;
-    }
-  }  // delete any allocated memory
+  virtual ~Node() {}  // delete any allocated memory
 
   // effect and layout
   virtual void setup() {};
@@ -155,10 +148,12 @@ class Node {
         control["size"] = 8;
       } else if (std::is_same<ControlType, uint16_t>::value) {
         control["size"] = 16;
-      } else if (std::is_same<ControlType, int>::value) {
+      } else if (std::is_same<ControlType, uint32_t>::value) {
         control["size"] = 32;
+      } else if (std::is_same<ControlType, int>::value) {
+        control["size"] = 33;  // trick to indicate int (which is 32 bits)
       } else if (std::is_same<ControlType, float>::value) {
-        control["size"] = 33;  // trick to indicate float (which is 32 bits)
+        control["size"] = 34;  // trick to indicate float (which is 32 bits)
       } else {
         EXT_LOGE(ML_TAG, "size %d mismatch for %s", sizeof(ControlType), name);
       }

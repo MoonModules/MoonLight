@@ -53,6 +53,7 @@ class ExampleEffect : public Node {
           pos.y = beatsin8(intensity, 0, layer->size.y - 1);
           pos.z = beatsin8(intensity, 0, layer->size.z - 1);
           layer->setRGB(pos, ColorFromPalette(layerP.palette, beatsin8(12, 0, 255)));
+          // NOTE: effects must ensure pos is within layer->size bounds (setRGB omits bounds checks for performance)
         }
       }
     }

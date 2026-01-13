@@ -30,7 +30,7 @@ class SharedHttpEndpoint {
 
   // Register a module with its path
   void registerModule(Module* module) {
-    String path = "/rest/" + module->_moduleName;
+    String path = String("/rest/") + module->_moduleName;
 
 // ADDED: CORS OPTIONS handler
 #ifdef ENABLE_CORS
@@ -88,7 +88,7 @@ class SharedHttpEndpoint {
 
   Module* findModule(const String& path) {
     for (Module* module : modules) {
-      if (path.endsWith(module->_moduleName.c_str())) return module;
+      if (path.endsWith(module->_moduleName)) return module;
     }
     return nullptr;
   }

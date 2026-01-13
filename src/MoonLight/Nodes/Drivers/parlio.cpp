@@ -22,18 +22,22 @@
   #include "I2SClocklessLedDriver.h"
 extern I2SClocklessLedDriver ledsDriver;
 
+//The max_leds_per_output and first_index_per_output are modified in show_parlio and read in transpose_32_slices / create_transposed_led_output_optimized. This is safe given the driver runs on a dedicated core (APP_CPU),
+uint16_t max_leds_per_output = 0;
+uint32_t first_index_per_output[16];
+
 // --- Namespace for specialized, high-performance worker functions ---
 namespace LedMatrixDetail {
 
 // This intermediate step is common to all packing functions.
 // It transposes the data for 32 time-slices into a cache-friendly temporary buffer.
-inline void transpose_32_slices(uint32_t (&transposed_slices)[32], const uint8_t* input_buffer, const uint32_t pixel_in_pin, const uint32_t input_component, const uint32_t pixels_per_pin, const uint32_t num_active_pins, const uint32_t COMPONENTS_PER_PIXEL, const uint32_t* waveform_cache, const uint8_t* brightness_cache) {
+inline void transpose_32_slices(uint32_t (&transposed_slices)[32], const uint8_t* input_buffer, const uint32_t pixel_in_pin, const uint32_t input_component, const uint16_t* pixels_per_pin, const uint32_t num_active_pins, const uint8_t COMPONENTS_PER_PIXEL, const uint32_t* waveform_cache, const uint8_t* brightness_cache) {
   memset(transposed_slices, 0, sizeof(uint32_t) * 32);
 
   for (uint32_t pin = 0; pin < num_active_pins; ++pin) {
-    const uint32_t pixel_idx = (pin * pixels_per_pin) + pixel_in_pin;
-    const uint32_t component_idx = (pixel_idx * COMPONENTS_PER_PIXEL) + input_component;  // ← Now uses input_component!
-    const uint8_t data_byte = brightness_cache[input_buffer[component_idx]];
+    const uint32_t pixel_idx = first_index_per_output[pin] + pixel_in_pin;
+    const uint32_t component_idx = (pixel_idx * COMPONENTS_PER_PIXEL) + input_component;                               // ← Now uses input_component!
+    const uint8_t data_byte = pixel_in_pin < pixels_per_pin[pin] ? brightness_cache[input_buffer[component_idx]] : 0;  // this is the magic trick to pad pixels if pixels_per_pin < max pixels_per_pin !
     const uint32_t waveform = waveform_cache[data_byte];
     const uint32_t pin_bit = (1 << pin);
 
@@ -148,8 +152,9 @@ uint8_t gamma8(uint8_t b) {  // we do nothing with gamma for now
   return b;
 }
 
-// 1. Add the RGB offsets parameter to the function signature
-void create_transposed_led_output_optimized(const uint8_t* input_buffer, uint16_t* output_buffer, const uint32_t pixels_per_pin, const uint32_t num_active_pins, const bool is_rgbw, const uint8_t offsetR, const uint8_t offsetG, const uint8_t offsetB) {
+// 1. Add the RGB first_index_per_outputs parameter to the function signature
+// pixels_per_pin = leds_per_output
+void create_transposed_led_output_optimized(const uint8_t* input_buffer, uint16_t* output_buffer, const uint16_t* pixels_per_pin, const uint32_t num_active_pins, const uint8_t COMPONENTS_PER_PIXEL, const uint8_t offsetR, const uint8_t offsetG, const uint8_t offsetB, const uint8_t offsetW) {
   // Only keep waveform cache (for WS2812 protocol timing)
   static uint32_t waveform_cache[256];
   static bool waveform_cache_initialized = false;
@@ -168,9 +173,8 @@ void create_transposed_led_output_optimized(const uint8_t* input_buffer, uint16_
     waveform_cache_initialized = true;
   }
 
-  const uint32_t COMPONENTS_PER_PIXEL = is_rgbw ? 4 : 3;
   const uint32_t WAVEFORM_WORDS_PER_PIXEL = COMPONENTS_PER_PIXEL * 32;
-  const uint32_t total_output_words = pixels_per_pin * WAVEFORM_WORDS_PER_PIXEL;
+  const uint32_t total_output_words = max_leds_per_output * WAVEFORM_WORDS_PER_PIXEL;
 
   if (total_output_words == 0) return;
 
@@ -197,10 +201,10 @@ void create_transposed_led_output_optimized(const uint8_t* input_buffer, uint16_
   component_map[1] = offsetG;
   component_map[2] = offsetB;
   // The W component (if it exists) is always the last one.
-  if (is_rgbw) component_map[3] = 3;
+  if (COMPONENTS_PER_PIXEL == 4) component_map[3] = offsetW;  // is_rgbw
 
   // --- Main Processing Loop ---
-  for (uint32_t pixel_in_pin = 0; pixel_in_pin < pixels_per_pin; ++pixel_in_pin) {
+  for (uint32_t pixel_in_pin = 0; pixel_in_pin < max_leds_per_output; ++pixel_in_pin) {  // loop over all the pixels per pin, first all the first pixels for all pins, then the second...
     for (uint32_t component_in_pixel = 0; component_in_pixel < COMPONENTS_PER_PIXEL; ++component_in_pixel) {
       const uint32_t input_component = component_map[component_in_pixel];
       // component_in_pixel is always RGB(W) - looping over the input array
@@ -264,12 +268,16 @@ parlio_transmit_config_t transmit_config = {.idle_value = 0x00,  // the idle val
 
 static portMUX_TYPE parlio_spinlock = portMUX_INITIALIZER_UNLOCKED;
 
-uint8_t IRAM_ATTR __attribute__((hot)) show_parlio(uint8_t* parallelPins, uint32_t length, uint8_t* buffer_in, bool isRGBW, uint8_t outputs, uint16_t leds_per_output, uint8_t offSetR, uint8_t offsetG, uint8_t offsetB) {
-  if (length != outputs * leds_per_output) {
-    delay(100);
-    Serial.printf("Parallel IO isn't set correctly. Check length, outputs, and LEDs per output. (%d != %d x %d)\n", length, outputs, leds_per_output);
-    return 1;
-  }
+// parallelPins = array of pin GPIO's
+// length = nrOfLights
+// buffer_in = channels array
+uint8_t IRAM_ATTR __attribute__((hot)) show_parlio(uint8_t* parallelPins, uint32_t length, uint8_t* buffer_in, uint8_t components, uint8_t outputs, uint16_t* leds_per_output, uint8_t offsetR, uint8_t offsetG, uint8_t offsetB, uint8_t offsetW) {
+  // 💫 this is only the case if all leds_per_output for all outputs is the same (we pad everything smaller than that)
+  // if (length != outputs * max_leds_per_output) {
+  //   delay(100);
+  //   Serial.printf("Parallel IO isn't set correctly. Check length, outputs, and LEDs per output. (%d != %d x %d)\n", length, outputs, max_leds_per_output);
+  //   return 1;
+  // }
 
   #ifdef PARLIO_TIMER
   unsigned long timer = micros();
@@ -281,7 +289,16 @@ uint8_t IRAM_ATTR __attribute__((hot)) show_parlio(uint8_t* parallelPins, uint32
 
   outputs = outputs > SOC_PARLIO_TX_UNIT_MAX_DATA_WIDTH ? SOC_PARLIO_TX_UNIT_MAX_DATA_WIDTH : outputs;
 
-  if (!parlio_setup_done || outputs != last_outputs || leds_per_output != last_leds_per_output) {
+  // setup (only the first time)
+  if (!parlio_setup_done || outputs != last_outputs || max_leds_per_output != last_leds_per_output) {
+    // 💫 calculate max leds per output (for padding)
+    max_leds_per_output = 0;
+    first_index_per_output[0] = 0;
+    for (uint8_t i = 0; i < outputs; i++) {
+      if (leds_per_output[i] > max_leds_per_output) max_leds_per_output = leds_per_output[i];
+      if (i > 0) first_index_per_output[i] = first_index_per_output[i - 1] + leds_per_output[i - 1];
+    }
+
     parlio_config.clk_src = PARLIO_CLK_SRC_DEFAULT;
     if (outputs <= 1)
       parlio_config.data_width = 1;
@@ -300,9 +317,9 @@ uint8_t IRAM_ATTR __attribute__((hot)) show_parlio(uint8_t* parallelPins, uint32
       parlio_config.data_gpio_nums[i] = (i < outputs) ? gpio_num_t(parallelPins[i]) : gpio_num_t(-1);  // @troyhacks update 20251015
     }
   #ifdef PARLIO_AUTO_OVERCLOCK  // This has caused minor annoying glitching.
-    if (leds_per_output <= 256) {
+    if (max_leds_per_output <= 256) {
       parlio_config.output_clk_freq_hz = 1200000 * 4;
-    } else if (leds_per_output <= 512) {
+    } else if (max_leds_per_output <= 512) {
       parlio_config.output_clk_freq_hz = 1100000 * 4;
     } else {
       parlio_config.output_clk_freq_hz = 800000 * 4;
@@ -330,7 +347,7 @@ uint8_t IRAM_ATTR __attribute__((hot)) show_parlio(uint8_t* parallelPins, uint32
     ESP_ERROR_CHECK(parlio_new_tx_unit(&parlio_config, &parlio_tx_unit));
     ESP_ERROR_CHECK(parlio_tx_unit_enable(parlio_tx_unit));
     last_outputs = outputs;
-    last_leds_per_output = leds_per_output;
+    last_leds_per_output = max_leds_per_output;
     parlio_setup_done = true;
     Serial.printf("Parallel IO configured for %u bit width and clock speed %u KHz and %u outputs.\n", parlio_config.data_width, parlio_config.output_clk_freq_hz / 1000 / 4, outputs);
     for (uint8_t i = 0; i < SOC_PARLIO_TX_UNIT_MAX_DATA_WIDTH; i++) {
@@ -360,7 +377,7 @@ uint8_t IRAM_ATTR __attribute__((hot)) show_parlio(uint8_t* parallelPins, uint32
 
   uint32_t* mappingTable = strip.getCustomMappingTable();
   uint32_t mappingTableSize = strip.getCustomMappingTableSize();
-  uint8_t my_bytes_per_pixel = isRGBW ? 4 : 3;
+  uint8_t my_bytes_per_pixel = components;
 
   uint32_t buf_pos = 0;
 
@@ -373,7 +390,7 @@ uint8_t IRAM_ATTR __attribute__((hot)) show_parlio(uint8_t* parallelPins, uint32
     parallel_buffer_remapped[dest_byte_pos + 0] = buffer_in[buf_pos++];
     parallel_buffer_remapped[dest_byte_pos + 1] = buffer_in[buf_pos++];
     parallel_buffer_remapped[dest_byte_pos + 2] = buffer_in[buf_pos++];
-    if (isRGBW) {
+    if (components == 4) {  // rgbw
       parallel_buffer_remapped[dest_byte_pos + 3] = buffer_in[buf_pos++];
     }
   }
@@ -381,24 +398,25 @@ uint8_t IRAM_ATTR __attribute__((hot)) show_parlio(uint8_t* parallelPins, uint32
   parallel_buffer_remapped = buffer_in;
     // why should it be resetted here?
     //  color_order = COL_ORDER_RGB; // This isn't actually changing the color order - we're already there from the BusNetwork doing the right thing pixel-by-pixel.
-    //  offSetR = 0;
+    //  offsetR = 0;
     //  offsetG = 1;
     //  offsetB = 2;
+    //  offsetW = 3;
   #endif
 
-  create_transposed_led_output_optimized(parallel_buffer_remapped, parallel_buffer_repacked, leds_per_output, outputs, isRGBW, offSetR, offsetG, offsetB);
+  create_transposed_led_output_optimized(parallel_buffer_remapped, parallel_buffer_repacked, leds_per_output, outputs, components, offsetR, offsetG, offsetB, offsetW);
 
   // Calculate the exact size of ONE PIXEL's data in bits and bytes.
-  const uint32_t symbols_per_pixel = isRGBW ? 128 : 96;
+  const uint32_t symbols_per_pixel = components * 32;  // isRGBW ? 128 : 96;
   const uint32_t bits_per_pixel = symbols_per_pixel * parlio_config.data_width;
   const uint32_t bytes_per_pixel = (bits_per_pixel + 7) / 8;
   const uint32_t HW_MAX_BYTES_PER_CHUNK = parlio_config.max_transfer_size;
   const uint16_t max_leds_per_chunk = (bytes_per_pixel > 0) ? (HW_MAX_BYTES_PER_CHUNK / bytes_per_pixel) : 0;
-  const uint8_t num_chunks = (leds_per_output + max_leds_per_chunk - 1) / max_leds_per_chunk;
+  const uint8_t num_chunks = (max_leds_per_output + max_leds_per_chunk - 1) / max_leds_per_chunk;
 
   uint32_t chunk_bits[4];
   const uint8_t* chunk_ptrs[4];
-  uint32_t leds_remaining = leds_per_output;
+  uint32_t leds_remaining = max_leds_per_output;
   const size_t chunk_stride_bytes = (size_t)max_leds_per_chunk * bytes_per_pixel;
 
   // Chunk 1

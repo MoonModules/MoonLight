@@ -58,8 +58,9 @@ class ParallelLEDDriver : public DriverNode {
     #else
     uint8_t nrOfPins = min(layerP.nrOfLedPins, layerP.nrOfAssignedPins);
     // LUTs are accessed directly within show_parlio via extern ledsDriver
+
     // No brightness parameter needed
-    show_parlio(pins, layerP.lights.header.nrOfLights, layerP.lights.channelsD, layerP.lights.header.channelsPerLight == 4, nrOfPins, layerP.ledsPerPin[0], layerP.lights.header.offsetRed, layerP.lights.header.offsetGreen, layerP.lights.header.offsetBlue);
+    show_parlio(pins, layerP.lights.header.nrOfLights, layerP.lights.channelsD, layerP.lights.header.channelsPerLight, nrOfPins, layerP.ledsPerPin, layerP.lights.header.offsetRed, layerP.lights.header.offsetGreen, layerP.lights.header.offsetBlue, layerP.lights.header.offsetWhite);
     #endif
   #else  // ESP32_LEDSDRIVER
     if (!ledsDriver.initLedsDone) return;

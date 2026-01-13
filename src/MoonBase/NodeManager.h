@@ -27,8 +27,8 @@ class NodeManager : public Module {
 
   std::vector<Node*, VectorRAMAllocator<Node*>>* nodes;
 
-  NodeManager(const String& moduleName, PsychicHttpServer* server, ESP32SvelteKit* sveltekit, FileManager* fileManager) : Module(moduleName, server, sveltekit) {
-    EXT_LOGV(ML_TAG, "constructor");
+  NodeManager(const char* moduleName, PsychicHttpServer* server, ESP32SvelteKit* sveltekit, FileManager* fileManager) : Module(moduleName, server, sveltekit) {
+    EXT_LOGV(ML_TAG, "constructor %s", moduleName);
     _server = server;
     _fileManager = fileManager;
   }
@@ -270,11 +270,10 @@ class NodeManager : public Module {
         if (updatedItem.index[0] < nodes->size()) {
           Node* nodeClass = (*nodes)[updatedItem.index[0]];
           if (nodeClass != nullptr) {
-
-            xSemaphoreTake(nodeClass->nodeMutex, portMAX_DELAY);
+            xSemaphoreTake(*nodeClass->layerMutex, portMAX_DELAY);
             nodeClass->updateControl(control);
             nodeClass->onUpdate(updatedItem.oldValue, control);  // custom onUpdate for the node
-            xSemaphoreGive(nodeClass->nodeMutex);
+            xSemaphoreGive(*nodeClass->layerMutex);
 
             nodeClass->requestMappings();
           } else

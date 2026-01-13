@@ -129,7 +129,7 @@ class ModuleTasks : public Module {
     // _state.compareRecursive("", _state.data, controls, updatedItem); //fill data with doc
 
     // _socket->emitEvent(_moduleName, controls);
-    update(controls, ModuleState::update, _moduleName + "server");
+    update(controls, ModuleState::update, String(_moduleName) + "server");
   }
 };
 
