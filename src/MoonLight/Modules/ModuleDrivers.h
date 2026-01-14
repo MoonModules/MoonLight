@@ -61,7 +61,7 @@ class ModuleDrivers : public NodeManager {
 
           // log pins
           for (int i = 0; i < layerP.nrOfLedPins; i++) {
-            EXT_LOGD(ML_TAG, "ledPins[%d-%d] = %d (#%d)", i, layerP.nrOfLedPins, layerP.ledPins[i], layerP.ledsPerPin[i]);
+            if (layerP.ledsPerPin[i] > 0 && layerP.ledsPerPin[i] != UINT16_MAX) EXT_LOGD(ML_TAG, "ledPins[%d-%d] = %d (#%d)", i, layerP.nrOfLedPins, layerP.ledPins[i], layerP.ledsPerPin[i]);
           }
 
           layerP.requestMapPhysical = true;
@@ -156,13 +156,13 @@ class ModuleDrivers : public NodeManager {
   #endif
 
     if (node) {
-      EXT_LOGD(ML_TAG, "%s (p:%p pr:%d)", name, node, isInPSRAM(node));
+      EXT_LOGI(ML_TAG, "Add %s (p:%p pr:%d)", name, node, isInPSRAM(node));
 
       node->constructor(layerP.layers[0], controls, &layerP.driversMutex);  // pass the layer to the node (C++ constructors are not inherited, so declare it as normal functions)
-      node->moduleControl = _moduleLightsControl;     // to access global lights control functions if needed
-      node->moduleIO = _moduleIO;                     // to get pin allocations
-      node->moduleNodes = (Module*)this;              // to request UI update
-      node->setup();                                  // run the setup of the effect
+      node->moduleControl = _moduleLightsControl;                           // to access global lights control functions if needed
+      node->moduleIO = _moduleIO;                                           // to get pin allocations
+      node->moduleNodes = (Module*)this;                                    // to request UI update
+      node->setup();                                                        // run the setup of the effect
       node->onSizeChanged(Coord3D());
       // layers[0]->nodes.reserve(index+1);
 

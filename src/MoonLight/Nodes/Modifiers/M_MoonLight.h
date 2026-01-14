@@ -188,8 +188,8 @@ class PinwheelModifier : public Node {
     }
     position.z = 0;
 
-    // if (position.x == 0 && position.y == 0 && position.z == 0) EXT_LOGD(ML_TAG, "Pinwheel  Center: (%d, %d) SwirlVal: %d Symmetry: %d Petals: %d zTwist: %d\n", layer->middle.x, layer->middle.y,
-    // swirlVal, symmetry, petals, zTwist); EXT_LOGD(ML_TAG, "position %2d,%2d,%2d -> %2d,%2d,%2d Angle: %3d Petal: %2d\n", position.x, position.y, position.z, mapped.x, mapped.y, mapped.z, angle,
+    // if (position.x == 0 && position.y == 0 && position.z == 0) EXT_LOGD(ML_TAG, "Pinwheel  Center: (%d, %d) SwirlVal: %d Symmetry: %d Petals: %d zTwist: %d", layer->middle.x, layer->middle.y,
+    // swirlVal, symmetry, petals, zTwist); EXT_LOGD(ML_TAG, "position %2d,%2d,%2d -> %2d,%2d,%2d Angle: %3d Petal: %2d", position.x, position.y, position.z, mapped.x, mapped.y, mapped.z, angle,
     // value);
   }
 };

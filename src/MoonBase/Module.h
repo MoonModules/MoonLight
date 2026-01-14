@@ -46,16 +46,18 @@ class ModuleState {
 
   static UpdatedItem updatedItem;
   static SemaphoreHandle_t updateMutex;
-  static bool updatePending;
+  bool updatePending = false;  // should not be static as each module needs to keep track of it's own status
 
   static Char<20> updateOriginId;  // static, written by ModuleState::update, no mutex needed as written by one process at a time (http mostly, sveltekit sometimes recursively)
 
   ModuleState() {
     EXT_LOGD(MB_TAG, "ModuleState constructor");
 
-    if (updateMutex == nullptr) {
-      EXT_LOGE(MB_TAG, "Failed to create updateMutex");
-    } 
+    if (!updateMutex) {
+      EXT_LOGD(MB_TAG, "creating updateMutex");
+      updateMutex = xSemaphoreCreateMutex();
+      if (!updateMutex) EXT_LOGE(MB_TAG, "Failed to create updateMutex");
+    }
 
     if (!gModulesDoc) {
       EXT_LOGD(MB_TAG, "Creating doc");

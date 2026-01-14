@@ -377,7 +377,7 @@ class GEQEffect : public Node {
       }  // increase remaining but keep the current remaining
       remaining--;  // consume remaining
 
-      // EXT_LOGD(ML_TAG, "x %d b %d n %d w %f %f\n", x, band, NUM_BANDS, bandwidth, remaining);
+      // EXT_LOGD(ML_TAG, "x %d b %d n %d w %f %f", x, band, NUM_BANDS, bandwidth, remaining);
       uint8_t frBand = ((NUM_BANDS < NUM_GEQ_CHANNELS) && (NUM_BANDS > 1)) ? ::map(band, 0, NUM_BANDS, 0, NUM_GEQ_CHANNELS) : band;  // always use full range. comment out this line to get the previous behaviour.
       // frBand = constrain(frBand, 0, NUM_GEQ_CHANNELS-1); //WLEDMM can never be out of bounds (I think...)
       uint16_t colorIndex = frBand * 17;               // WLEDMM 0.255

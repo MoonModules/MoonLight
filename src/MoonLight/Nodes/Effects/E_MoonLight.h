@@ -521,7 +521,7 @@ class StarFieldEffect : public Node {  // Inspired by Daniel Shiffman's Coding T
       float sx = layer->size.x / 2.0 + fmap(float(stars[i].x) / stars[i].z, 0, 1, 0, layer->size.x / 2.0);
       float sy = layer->size.y / 2.0 + fmap(float(stars[i].y) / stars[i].z, 0, 1, 0, layer->size.y / 2.0);
 
-      // EXT_LOGD(ML_TAG, " %f, %f\n", sx, sy);
+      // EXT_LOGD(ML_TAG, " %f, %f", sx, sy);
 
       Coord3D pos = Coord3D(sx, sy);
       if (!pos.isOutofBounds(layer->size)) {
@@ -1090,21 +1090,21 @@ class ParticlesEffect : public Node {
     Coord3D toCoord3DRounded() { return Coord3D(round(x), round(y), round(z)); }
 
     void updatePositionandDraw(VirtualLayer* layer, int particleIndex = 0, bool debugPrint = false) {
-      if (debugPrint) EXT_LOGD(ML_TAG, "Particle %d: Pos: %f, %f, %f Velocity: %f, %f, %f\n", particleIndex, x, y, z, vx, vy, vz);
+      if (debugPrint) EXT_LOGD(ML_TAG, "Particle %d: Pos: %f, %f, %f Velocity: %f, %f, %f", particleIndex, x, y, z, vx, vy, vz);
 
       Coord3D prevPos = toCoord3DRounded();
-      if (debugPrint) EXT_LOGD(ML_TAG, "     PrevPos: %d, %d, %d\n", prevPos.x, prevPos.y, prevPos.z);
+      if (debugPrint) EXT_LOGD(ML_TAG, "     PrevPos: %d, %d, %d", prevPos.x, prevPos.y, prevPos.z);
 
       update();
       Coord3D newPos = toCoord3DRounded();
-      if (debugPrint) EXT_LOGD(ML_TAG, "     NewPos: %d, %d, %d\n", newPos.x, newPos.y, newPos.z);
+      if (debugPrint) EXT_LOGD(ML_TAG, "     NewPos: %d, %d, %d", newPos.x, newPos.y, newPos.z);
 
       if (newPos == prevPos) return;  // Skip if no change in position
 
       layer->setRGB(prevPos, CRGB::Black);  // Clear previous position
 
       if (layer->isMapped(layer->XYZUnModified(newPos)) && !newPos.isOutofBounds(layer->size) && layer->getRGB(newPos) == CRGB::Black) {
-        if (debugPrint) EXT_LOGD(ML_TAG, "     New Pos was mapped and particle placed\n");
+        if (debugPrint) EXT_LOGD(ML_TAG, "     New Pos was mapped and particle placed");
         layer->setRGB(newPos, color);  // Set new position
         return;
       }
@@ -1115,7 +1115,7 @@ class ParticlesEffect : public Node {
       int diff = 0;                                            // If distance the same check how many coordinates are different (larger is better)
       bool changed = false;
 
-      if (debugPrint) EXT_LOGD(ML_TAG, "     %d, %d, %d, Not Mapped! Nearest: %d, %d, %d dist: %d diff: %d\n", newPos.x, newPos.y, newPos.z, nearestMapped.x, nearestMapped.y, nearestMapped.z, nearestDist, diff);
+      if (debugPrint) EXT_LOGD(ML_TAG, "     %d, %d, %d, Not Mapped! Nearest: %d, %d, %d dist: %u diff: %d", newPos.x, newPos.y, newPos.z, nearestMapped.x, nearestMapped.y, nearestMapped.z, nearestDist, diff);
 
       // Check neighbors for nearest mapped pixel. This should be changed to check neighbors with similar velocity
       for (int i = -1; i <= 1; i++)
@@ -1129,7 +1129,7 @@ class ParticlesEffect : public Node {
             unsigned dist = testPos.distanceSquared(newPos);
             int differences = (prevPos.x != testPos.x) + (prevPos.y != testPos.y) + (prevPos.z != testPos.z);
             if (debugPrint) EXT_LOGD(ML_TAG, "     TestPos: %d %d %d Dist: %d Diff: %d", testPos.x, testPos.y, testPos.z, dist, differences);
-            if (debugPrint) EXT_LOGD(ML_TAG, "     New Velocities: %d, %d, %d\n", (testPos.x - prevPos.x), (testPos.y - prevPos.y), (testPos.z - prevPos.z));
+            if (debugPrint) EXT_LOGD(ML_TAG, "     New Velocities: %d, %d, %d", (testPos.x - prevPos.x), (testPos.y - prevPos.y), (testPos.z - prevPos.z));
             if (dist < nearestDist || (dist == nearestDist && differences >= diff)) {
               nearestDist = dist;
               nearestMapped = testPos;
@@ -1146,7 +1146,7 @@ class ParticlesEffect : public Node {
         y = nearestMapped.y;
         z = nearestMapped.z;
 
-        if (debugPrint) EXT_LOGD(ML_TAG, "     New Position: %d, %d, %d New Velocity: %f, %f, %f\n", nearestMapped.x, nearestMapped.y, nearestMapped.z, vx, vy, vz);
+        if (debugPrint) EXT_LOGD(ML_TAG, "     New Position: %d, %d, %d New Velocity: %f, %f, %f", nearestMapped.x, nearestMapped.y, nearestMapped.z, vx, vy, vz);
       } else {
         // No valid position found, revert to previous position
         // Find which direction is causing OoB / not mapped and set velocity to 0
@@ -1164,8 +1164,8 @@ class ParticlesEffect : public Node {
         testing.z = newPos.z;
         if (testing.isOutofBounds(layer->size) || !layer->isMapped(layer->XYZUnModified(testing))) vz = 0;
 
-        if (debugPrint) EXT_LOGD(ML_TAG, "     No valid position found, reverted. Velocity Updated\n");
-        if (debugPrint) EXT_LOGD(ML_TAG, "     New Pos: %f, %f, %f Velo: %f, %f, %f\n", x, y, z, vx, vy, vz);
+        if (debugPrint) EXT_LOGD(ML_TAG, "     No valid position found, reverted. Velocity Updated");
+        if (debugPrint) EXT_LOGD(ML_TAG, "     New Pos: %f, %f, %f Velo: %f, %f, %f", x, y, z, vx, vy, vz);
       }
 
       layer->setRGB(toCoord3DRounded(), color);
@@ -1204,7 +1204,7 @@ class ParticlesEffect : public Node {
   }
 
   void settingUpParticles() {
-    EXT_LOGD(ML_TAG, "Setting Up Particles\n");
+    EXT_LOGD(ML_TAG, "Setting Up Particles");
     layer->fill_solid(CRGB::Black);
 
     if (barriers) {
@@ -1240,7 +1240,7 @@ class ParticlesEffect : public Node {
       Coord3D initPos = particles[index].toCoord3DRounded();
       layer->setRGB(initPos, particles[index].color);
     }
-    EXT_LOGD(ML_TAG, "Particles Set Up\n");
+    EXT_LOGD(ML_TAG, "Particles Set Up");
     step = pal::millis();
   }
 
@@ -1281,7 +1281,7 @@ class ParticlesEffect : public Node {
         gravity[2] = constrain(gravity[2], -1.0f, 1.0f);
 
         if (layer->layerDimension == _2D) gravity[2] = 0;
-        // EXT_LOGD(ML_TAG, "Random Gravity: %f, %f, %f\n", gravity[0], gravity[1], gravity[2]);
+        // EXT_LOGD(ML_TAG, "Random Gravity: %f, %f, %f", gravity[0], gravity[1], gravity[2]);
       }
     }
 

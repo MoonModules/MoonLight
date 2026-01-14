@@ -84,7 +84,6 @@ class NodeManager : public Module {
   template <typename T>
   Node* checkAndAlloc(const char* name) const {
     if (equalAZaz09(name, T::name())) {
-      EXT_LOGD(ML_TAG, "Allocate %s", name);
       return allocMBObject<T>();
     } else
       return nullptr;
