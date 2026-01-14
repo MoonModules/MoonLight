@@ -284,11 +284,11 @@ class IRDriver : public Node {
 
   void parse_nec_frame(rmt_symbol_word_t* rmt_nec_symbols, size_t symbol_num) {
     if (false) {
-      EXT_LOGD(IR_DRIVER_TAG, "NEC frame start---\r\n");
+      EXT_LOGD(IR_DRIVER_TAG, "NEC frame start---");
       for (size_t i = 0; i < symbol_num; i++) {
-        EXT_LOGI(IR_DRIVER_TAG, "{%d:%d},{%d:%d}\r\n", rmt_nec_symbols[i].level0, rmt_nec_symbols[i].duration0, rmt_nec_symbols[i].level1, rmt_nec_symbols[i].duration1);
+        EXT_LOGI(IR_DRIVER_TAG, "{%d:%d},{%d:%d}", rmt_nec_symbols[i].level0, rmt_nec_symbols[i].duration0, rmt_nec_symbols[i].level1, rmt_nec_symbols[i].duration1);
       }
-      EXT_LOGI(IR_DRIVER_TAG, "---NEC frame end: ");
+      EXT_LOGI(IR_DRIVER_TAG, "---NEC frame end:");
     }
     // decode RMT symbols
 

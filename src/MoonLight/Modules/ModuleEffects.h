@@ -263,7 +263,7 @@ class ModuleEffects : public NodeManager {
   #endif
 
     if (node) {
-      EXT_LOGD(ML_TAG, "%s (p:%p pr:%d)", name, node, isInPSRAM(node));
+      EXT_LOGI(ML_TAG, "Add %s (p:%p pr:%d)", name, node, isInPSRAM(node));
 
       node->constructor(layerP.layers[0], controls, &layerP.effectsMutex);  // pass the layer to the node
       // node->moduleControl = _moduleLightsControl;     // to access global lights control functions if needed

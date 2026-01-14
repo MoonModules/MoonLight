@@ -108,7 +108,7 @@ void VirtualLayer::addIndexP(PhysMap& physMap, nrOfLights_t indexP) {
     // EXT_LOGV(ML_TAG, " more %d", mappingTableIndexes.size());
     break;
   }
-  // EXT_LOGV(ML_TAG, "\n");
+  // EXT_LOGV(ML_TAG, "");
 }
 nrOfLights_t VirtualLayer::XYZ(Coord3D& position) {
   // XYZ modifiers (this is not slowing things down as you might have expected ...)
@@ -448,11 +448,11 @@ void VirtualLayer::onLayoutPost() {
         break;
       }
       // else
-      //   EXT_LOGV(ML_TAG, "%d no mapping\n", x);
+      //   EXT_LOGV(ML_TAG, "%d no mapping", x);
     }
   }
 
-  EXT_LOGD(MB_TAG, "V:%d x %d x %d = v:%d = 1:0:%d + 1:1:%d + mti:%d (1:m:%d)", size.x, size.y, size.z, nrOfLights, nrOfZeroLights, nrOfOneLight, mappingTableIndexesSizeUsed, nrOfMoreLights);
+  EXT_LOGI(MB_TAG, "V:%d x %d x %d = v:%d = 1:0:%d + 1:1:%d + mti:%d (1:m:%d)", size.x, size.y, size.z, nrOfLights, nrOfZeroLights, nrOfOneLight, mappingTableIndexesSizeUsed, nrOfMoreLights);
 }
 
 void VirtualLayer::drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, CRGB color, bool soft, uint8_t depth) {

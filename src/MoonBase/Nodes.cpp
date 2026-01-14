@@ -19,7 +19,7 @@ void Node::updateControl(const JsonObject& control) {
   // if (oldValue == "") return;                                                              // newControl, value already set
   if (!control["name"].isNull() && !control["type"].isNull() && !control["p"].isNull()) {  // name and type can be null if control is removed in compareRecursive
     int pointer = control["p"];
-    EXT_LOGD(ML_TAG, "%s = %s t:%s p:%p", control["name"].as<const char*>(), control["value"].as<String>().c_str(), control["type"].as<const char*>(), (void*)pointer);
+    // EXT_LOGD(ML_TAG, "%s = %s t:%s p:%p", control["name"].as<const char*>(), control["value"].as<String>().c_str(), control["type"].as<const char*>(), (void*)pointer);
 
     if (pointer) {
       if (control["type"] == "slider" || control["type"] == "select" || control["type"] == "pin" || control["type"] == "number") {
@@ -542,7 +542,7 @@ void DriverNode::onUpdate(const Char<20>& oldValue, const JsonObject& control) {
       break;
     }
 
-    EXT_LOGI(ML_TAG, "setLightPreset %d (cPL:%d, o:%d,%d,%d,%d)", header->lightPreset, header->channelsPerLight, header->offsetRed, header->offsetGreen, header->offsetBlue, header->offsetWhite);
+    EXT_LOGD(ML_TAG, "setLightPreset %d (cPL:%d, o:%d,%d,%d,%d)", header->lightPreset, header->channelsPerLight, header->offsetRed, header->offsetGreen, header->offsetBlue, header->offsetWhite);
 
     // FASTLED_ASSERT(true, "oki");
 

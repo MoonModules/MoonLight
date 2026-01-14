@@ -604,14 +604,13 @@ class ModuleIO : public Module {
     }
   }
 
-
   void readPins() {
-  uint8_t pinRS485TX = UINT8_MAX;
-  uint8_t pinRS485RX = UINT8_MAX;
-  uint8_t pinRS485DE = UINT8_MAX;
-  
+    uint8_t pinRS485TX = UINT8_MAX;
+    uint8_t pinRS485RX = UINT8_MAX;
+    uint8_t pinRS485DE = UINT8_MAX;
+
   #if FT_ENABLED(FT_ETHERNET)
-    EXT_LOGD(MB_TAG, "Try to configure ethernet");
+    EXT_LOGI(MB_TAG, "Try to configure ethernet");
     EthernetSettingsService* ess = _sveltekit->getEthernetSettingsService();
     #ifdef CONFIG_IDF_TARGET_ESP32S3
     // Note: Ethernet pin types are signed (int8_t) and use -1, not UINT8_MAX, to indicate unset state
@@ -672,7 +671,7 @@ class ModuleIO : public Module {
       } else if (usage == pin_Battery) {
         pinBattery = pinObject["GPIO"];
         EXT_LOGD(ML_TAG, "pinBattery found %d", pinBattery);
-      } 
+      }
     }
   #endif
 
@@ -703,7 +702,7 @@ class ModuleIO : public Module {
       } else if (usage == pin_RS485_TX) {
         rs485_ios_updated = true;
         pinRS485TX = pinObject["GPIO"];
-      } 
+      }
     }
 
     // Check if all RS485 pins are specified
@@ -714,9 +713,9 @@ class ModuleIO : public Module {
       uart_config_t uart_config = {
           .baud_rate = 9600,
           .data_bits = UART_DATA_8_BITS,
-          .parity    = UART_PARITY_DISABLE,
+          .parity = UART_PARITY_DISABLE,
           .stop_bits = UART_STOP_BITS_1,
-          .flow_ctrl = UART_HW_FLOWCTRL_DISABLE, // Flow control handled by RS485 driver
+          .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,  // Flow control handled by RS485 driver
           .source_clk = UART_SCLK_DEFAULT,
       };
       uart_driver_delete(UART_NUM_1);
@@ -725,7 +724,7 @@ class ModuleIO : public Module {
       ESP_ERROR_CHECK(uart_set_pin(UART_NUM_1, pinRS485TX, pinRS485RX, pinRS485DE, UART_PIN_NO_CHANGE));
       ESP_ERROR_CHECK(uart_set_mode(UART_NUM_1, UART_MODE_RS485_HALF_DUPLEX));
 
-      #ifdef DEMOCODE_FOR_SHT30_SENSOR
+  #ifdef DEMOCODE_FOR_SHT30_SENSOR
       // Modbus RTU Request: [Addr][Func][RegHi][RegLo][CountHi][CountLo][CRC_L][CRC_H]
       // To read Reg 0 & 1 from Slave 0x01: 01 03 00 00 00 02 C4 0B
       const uint8_t request[] = {0x01, 0x03, 0x00, 0x00, 0x00, 0x02, 0xC4, 0x0B};
@@ -736,19 +735,19 @@ class ModuleIO : public Module {
 
       // Wait for response (timeout 1 second)
       int len = uart_read_bytes(UART_NUM_1, response, 128, pdMS_TO_TICKS(100));
-      
+
       if (len > 8) {
-          EXT_LOGD(ML_TAG, "Answer received: %d %d %d %d %d %d %d %d %d", response[0], response[1], response[2], response[3], response[4], response[5], response[6], response[7], response[8]);
-          float humidity = ((float)response[3])*256 + (float)response[4];
-          float temperature = ((float)response[5])*256 +(float)response[6];
-          EXT_LOGD(ML_TAG, "humidity: %f temperature: %f", humidity/10, temperature/10);
-          // Process registers here (response[3] to response[6] contain the data)
+        EXT_LOGD(ML_TAG, "Answer received: %d %d %d %d %d %d %d %d %d", response[0], response[1], response[2], response[3], response[4], response[5], response[6], response[7], response[8]);
+        float humidity = ((float)response[3]) * 256 + (float)response[4];
+        float temperature = ((float)response[5]) * 256 + (float)response[6];
+        EXT_LOGD(ML_TAG, "humidity: %f temperature: %f", humidity / 10, temperature / 10);
+        // Process registers here (response[3] to response[6] contain the data)
       } else if (len > 0) {
-          EXT_LOGD(ML_TAG, "Invalid answer length");
+        EXT_LOGD(ML_TAG, "Invalid answer length");
       } else {
-          EXT_LOGD(ML_TAG, "No response from sensor");
-      }  
-      #endif   
+        EXT_LOGD(ML_TAG, "No response from sensor");
+      }
+  #endif
     }
   }
 
@@ -796,8 +795,12 @@ class ModuleIO : public Module {
       uint32_t adc_mv_vinput = analogReadMilliVolts(pinVoltage);
       analogSetAttenuation(ADC_11db);
       float volts = 0;
-      if (current_board_id == board_SE16V1) { volts = ((float)adc_mv_vinput) * 2 / 1000; } // /2 resistor divider
-      else if (current_board_id == board_LightCrafter16) { volts = ((float)adc_mv_vinput) * 11.43 / (1.43 * 1000); } // 1k43/10k resistor divider 
+      if (current_board_id == board_SE16V1) {
+        volts = ((float)adc_mv_vinput) * 2 / 1000;
+      }  // /2 resistor divider
+      else if (current_board_id == board_LightCrafter16) {
+        volts = ((float)adc_mv_vinput) * 11.43 / (1.43 * 1000);
+      }  // 1k43/10k resistor divider
       batteryService->updateVoltage(volts);
       voltage_readout_current_adc_attenuation = adc_get_adjusted_gain(voltage_readout_current_adc_attenuation, adc_mv_vinput);
     }
@@ -809,8 +812,12 @@ class ModuleIO : public Module {
       if ((current_board_id == board_SE16V1) || (current_board_id == board_LightCrafter16)) {
         if (adc_mv_cinput > 330)  // datasheet quiescent output voltage of 0.5V, which is ~330mV after the 10k/5k1 voltage divider. Ideally, this value should be measured at boot when nothing is displayed on the LEDs
         {
-          if (current_board_id == board_SE16V1) { batteryService->updateCurrent((((float)(adc_mv_cinput)-250) * 50.00) / 1000); } // 40mV / A with a /2 resistor divider, so a 50mA/mV
-          else if (current_board_id == board_LightCrafter16) { batteryService->updateCurrent((((float)(adc_mv_cinput)-330) * 37.75) / 1000); } // 40mV / A with a 10k/5k1 resistor divider, so a 37.75mA/mV
+          if (current_board_id == board_SE16V1) {
+            batteryService->updateCurrent((((float)(adc_mv_cinput)-250) * 50.00) / 1000);
+          }  // 40mV / A with a /2 resistor divider, so a 50mA/mV
+          else if (current_board_id == board_LightCrafter16) {
+            batteryService->updateCurrent((((float)(adc_mv_cinput)-330) * 37.75) / 1000);
+          }  // 40mV / A with a 10k/5k1 resistor divider, so a 37.75mA/mV
         } else {
           batteryService->updateCurrent(0);
         }

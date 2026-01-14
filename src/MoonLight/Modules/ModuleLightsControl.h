@@ -71,9 +71,9 @@ class ModuleLightsControl : public Module {
   void begin() override {
     Module::begin();
 
-    EXT_LOGI(ML_TAG, "Lights:%d(Header:%d) L-H:%d Node:%d PL:%d(PL-L:%d) VL:%d PM:%d C3D:%d", sizeof(Lights), sizeof(LightsHeader), sizeof(Lights) - sizeof(LightsHeader), sizeof(Node), sizeof(PhysicalLayer), sizeof(PhysicalLayer) - sizeof(Lights), sizeof(VirtualLayer), sizeof(PhysMap), sizeof(Coord3D));
+    EXT_LOGD(ML_TAG, "Lights:%d(Header:%d) L-H:%d Node:%d PL:%d(PL-L:%d) VL:%d PM:%d C3D:%d", sizeof(Lights), sizeof(LightsHeader), sizeof(Lights) - sizeof(LightsHeader), sizeof(Node), sizeof(PhysicalLayer), sizeof(PhysicalLayer) - sizeof(Lights), sizeof(VirtualLayer), sizeof(PhysMap), sizeof(Coord3D));
 
-    EXT_LOGI(ML_TAG, "isInPSRAM: mt:%d mti:%d ch:%d", isInPSRAM(layerP.layers[0]->mappingTable), isInPSRAM(layerP.layers[0]->mappingTableIndexes.data()), isInPSRAM(layerP.lights.channelsE));
+    EXT_LOGD(ML_TAG, "isInPSRAM: mt:%d mti:%d ch:%d", isInPSRAM(layerP.layers[0]->mappingTable), isInPSRAM(layerP.layers[0]->mappingTableIndexes.data()), isInPSRAM(layerP.lights.channelsE));
 
   #ifdef BOARD_HAS_PSRAM
     if (!psramFound) EXT_LOGE(ML_TAG, "Board has PSRAM but not found !!");

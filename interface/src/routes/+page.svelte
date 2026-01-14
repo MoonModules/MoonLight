@@ -36,6 +36,11 @@
 				>
 			</span>
 			<span>
+				5 
+				<a class="btn btn-primary" href="/moonbase/module?group=moonlight&module=lightscontrol">Control</a
+				>
+			</span>
+			<span>
 				🛟
 				<a
 					href="https://moonmodules.github.io/MoonLight/gettingstarted/installer/#setup-moonlight"
