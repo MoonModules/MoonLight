@@ -46,7 +46,7 @@ class ModuleState {
 
   static UpdatedItem updatedItem;
   static SemaphoreHandle_t updateMutex;
-  volatile bool updatePending = false;
+  bool updatePending = false;  // should not be static as each module needs to keep track of it's own status
 
   static Char<20> updateOriginId;  // static, written by ModuleState::update, no mutex needed as written by one process at a time (http mostly, sveltekit sometimes recursively)
 

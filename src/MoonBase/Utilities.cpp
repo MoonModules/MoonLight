@@ -64,14 +64,14 @@ void walkThroughFiles(File folder, std::function<void(File, File)> fun) {
 bool copyFile(const char* srcPath, const char* dstPath) {
   File src = ESPFS.open(srcPath, "r");
   if (!src) {
-    EXT_LOGD(ML_TAG, "Failed to open source file: %s", srcPath);
+    EXT_LOGE(MB_TAG, "Failed to open source file: %s", srcPath);
     return false;
   }
   // Check if the destination folders already exist
   String dstDir = String(dstPath).substring(0, String(dstPath).lastIndexOf('/'));
   if (!ESPFS.exists(dstDir.c_str())) {
     if (!ESPFS.mkdir(dstDir.c_str())) {
-      EXT_LOGD(ML_TAG, "Failed to create destination directory: %s", dstDir.c_str());
+      EXT_LOGE(MB_TAG, "Failed to create destination directory: %s", dstDir.c_str());
       src.close();
       return false;
     }
@@ -79,7 +79,7 @@ bool copyFile(const char* srcPath, const char* dstPath) {
 
   File dst = ESPFS.open(dstPath, "w");
   if (!dst) {
-    EXT_LOGD(ML_TAG, "Failed to open destination file: %s", dstPath);
+    EXT_LOGE(MB_TAG, "Failed to open destination file: %s", dstPath);
     src.close();
     return false;
   }

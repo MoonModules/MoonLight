@@ -1115,7 +1115,7 @@ class ParticlesEffect : public Node {
       int diff = 0;                                            // If distance the same check how many coordinates are different (larger is better)
       bool changed = false;
 
-      if (debugPrint) EXT_LOGD(ML_TAG, "     %d, %d, %d, Not Mapped! Nearest: %d, %d, %d dist: %d diff: %d", newPos.x, newPos.y, newPos.z, nearestMapped.x, nearestMapped.y, nearestMapped.z, nearestDist, diff);
+      if (debugPrint) EXT_LOGD(ML_TAG, "     %d, %d, %d, Not Mapped! Nearest: %d, %d, %d dist: %u diff: %d", newPos.x, newPos.y, newPos.z, nearestMapped.x, nearestMapped.y, nearestMapped.z, nearestDist, diff);
 
       // Check neighbors for nearest mapped pixel. This should be changed to check neighbors with similar velocity
       for (int i = -1; i <= 1; i++)

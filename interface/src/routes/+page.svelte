@@ -36,7 +36,7 @@
 				>
 			</span>
 			<span>
-				5 
+				5
 				<a class="btn btn-primary" href="/moonbase/module?group=moonlight&module=lightscontrol">Control</a
 				>
 			</span>

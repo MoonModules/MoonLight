@@ -286,7 +286,7 @@ void LiveScriptNode::execute() {
   }
   EXT_LOGV(ML_TAG, "%s", animation);
 
-  requestMappings();  // requestMapPhysical and requestMapVirtual will call the script onLayout function (check if this can be done in case the script also has loop running !!!)
+  requestMappings();  // requestMapPhysical and requestMapVirtual will call the script onLayout function (check if this can be done in case the script also has loop running !)
 
   if (hasLoopFunction) {
     // setup : create controls

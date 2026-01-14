@@ -620,7 +620,7 @@ class ModuleIO : public Module {
     ess->v_ETH_PHY_CS = -1;
     ess->v_ETH_PHY_IRQ = -1;
 
-    auto assignIfValid = [](uint8_t gpio, uint8_t usage, int8_t& target) {
+    auto assignIfValid = [](int8_t gpio, uint8_t usage, int8_t& target) {
       if (GPIO_IS_VALID_GPIO(gpio))
         target = gpio;
       else

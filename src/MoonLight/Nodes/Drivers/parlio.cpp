@@ -11,11 +11,11 @@
 
 #include "parlio.h"  //so it is compiled before Parallel LED Driver use it
 
+#include "MoonBase/Utilities.h"
 #include "soc/soc_caps.h"  // for SOC_PARLIO_SUPPORTED
 
-#include "MoonBase/Utilities.h"
-
 #ifdef SOC_PARLIO_SUPPORTED
+static_assert(SOC_PARLIO_TX_UNIT_MAX_DATA_WIDTH <= 16, "parlio.cpp assumes max data width <= 16 (packing/bit_width/bit shifts).");
 
   #include "driver/parlio_tx.h"
   #include "portmacro.h"
@@ -24,7 +24,7 @@
   #include "I2SClocklessLedDriver.h"
 extern I2SClocklessLedDriver ledsDriver;
 
-//The max_leds_per_output and first_index_per_output are modified in show_parlio and read in transpose_32_slices / create_transposed_led_output_optimized. This is safe given the driver runs on a dedicated core (APP_CPU),
+// The max_leds_per_output and first_index_per_output are modified in show_parlio and read in transpose_32_slices / create_transposed_led_output_optimized. This is safe given the driver runs on a dedicated core (APP_CPU),
 uint16_t max_leds_per_output = 0;
 uint32_t first_index_per_output[SOC_PARLIO_TX_UNIT_MAX_DATA_WIDTH];
 
@@ -351,15 +351,15 @@ uint8_t IRAM_ATTR __attribute__((hot)) show_parlio(uint8_t* parallelPins, uint32
     last_outputs = outputs;
     last_leds_per_output = max_leds_per_output;
     parlio_setup_done = true;
-    EXT_LOGD(ML_TAG, "Parallel IO configured for %u bit width and clock speed %u KHz and %u outputs.", parlio_config.data_width, parlio_config.output_clk_freq_hz / 1000 / 4, outputs);
+    ESP_LOGD(ML_TAG, "Parallel IO configured for %u bit width and clock speed %u KHz and %u outputs.", parlio_config.data_width, parlio_config.output_clk_freq_hz / 1000 / 4, outputs);  // do not use EXT_LOG, unsafe if called from ISR
     for (uint8_t i = 0; i < SOC_PARLIO_TX_UNIT_MAX_DATA_WIDTH; i++) {
       const char* status = "";
       if (i >= parlio_config.data_width || (i >= outputs && i < parlio_config.data_width)) {
         status = "[ignored]";
-      } else if (i <= outputs) {
+      } else if (i < outputs) {  // 💫 not <=
         if (parlio_config.data_gpio_nums[i] == -1) status = "[missing]";
       }
-      EXT_LOGD(ML_TAG, "Parallel IO Output %u = GPIO %d %s", (unsigned int)(i + 1), parlio_config.data_gpio_nums[i], status);
+      ESP_LOGD(ML_TAG, "Parallel IO Output %u = GPIO %d %s", (unsigned int)(i + 1), parlio_config.data_gpio_nums[i], status);  // do not use EXT_LOG, unsafe if called from ISR
     }
     return 0;  // let's give it a frame to set up.
   }
