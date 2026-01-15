@@ -32,6 +32,11 @@ class ModuleDrivers : public NodeManager {
   }
 
   void readPins() {
+    if (safeModeMB) {
+      EXT_LOGW(ML_TAG, "Safe mode enabled, not adding pins");
+      return;
+    }
+
     _moduleIO->read(
         [&](ModuleState& state) {
           // find the pins in board definitions

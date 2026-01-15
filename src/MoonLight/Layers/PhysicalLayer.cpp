@@ -83,6 +83,7 @@ void PhysicalLayer::setup() {
 }
 
 void PhysicalLayer::loop() {
+  if (lights.header.nrOfChannels >= lights.maxChannels) return;  // in case alloc mem is not successful
   // runs the loop of all effects / nodes in the layer
   for (VirtualLayer* layer : layers) {
     if (layer) {

@@ -21,7 +21,7 @@ Recommended low-cost DIY board up to 10K LEDs: [ESP32-S3 n16r8](https://s.click.
 
 ![esp32-s3-n16r8v](../firmware/installer/images/esp32-s3-n8r8v.jpg){: style="width:100px"}
 
-Recommended state-of-the-art DIY board, up to 16K - 98K LEDs !: [ESP32-P4-Nano](https://www.waveshare.com/esp32-p4-nano.htm){:target="_blank"}
+Recommended state-of-the-art DIY board, up to 16-98K LEDs: [ESP32-P4-Nano](https://www.waveshare.com/esp32-p4-nano.htm){:target="_blank"}
 
 ![esp32-p4-nano](../firmware/installer/images/esp32-p4-nano.jpg){: style="width:100px"}
 

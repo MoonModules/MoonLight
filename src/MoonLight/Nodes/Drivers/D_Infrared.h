@@ -38,6 +38,11 @@ class IRDriver : public Node {
   uint8_t irPreset = 1;
 
   void readPins() {
+    if (safeModeMB) {
+      EXT_LOGW(ML_TAG, "Safe mode enabled, not adding pins");
+      return;
+    }
+
     moduleIO->read(
         [&](ModuleState& state) {
           pinInfrared = UINT8_MAX;

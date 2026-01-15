@@ -167,12 +167,12 @@ void VirtualLayer::setLight(const nrOfLights_t indexV, const uint8_t* channels, 
       }
       break;
     }
-  } else {
+  } else {  // no mapping
     uint32_t index = indexV * layerP->lights.header.channelsPerLight + offset;
-    // if (index + length <= layerP->lights.maxChannels) {  // no mapping
+    // if (index + length <= layerP->lights.maxChannels) {
     memcpy(&layerP->lights.channelsE[index], channels, length);
     // } else {
-    //   EXT_LOGW(ML_TAG, "%d + %d >= %d", indexV, length, layerP->lights.maxChannels);
+    //   EXT_LOGW(ML_TAG, "%d + %d >= %d (%d %d)", indexV, length, layerP->lights.maxChannels, index, offset);
     // }
   }
 }
@@ -215,9 +215,9 @@ T VirtualLayer::getLight(const nrOfLights_t indexV, uint8_t offset) const {
         return T();  // not implemented yet
       break;
     }
-  } else {
+  } else {  // no mapping
     uint32_t index = indexV * layerP->lights.header.channelsPerLight + offset;
-    // if (index + sizeof(T) <= layerP->lights.maxChannels) {  // no mapping
+    // if (index + sizeof(T) <= layerP->lights.maxChannels) {
     return *(T*)&layerP->lights.channelsE[index];
     // } else {
     //   // some operations will go out of bounds e.g. VUMeter, uncomment below lines if you wanna test on a specific effect
@@ -322,8 +322,7 @@ void VirtualLayer::fill_rainbow(const uint8_t initialhue, const uint8_t deltahue
 
 void VirtualLayer::createMappingTableAndAddOneToOne() {
   if (mappingTableSize != size.x * size.y * size.z) {
-    EXT_LOGD(ML_TAG, "Allocating mappingTable: nrOfLights=%d, sizeof(PhysMap)=%d, total bytes=%d", 
-         size.x * size.y * size.z, sizeof(PhysMap), size.x * size.y * size.z * sizeof(PhysMap));
+    EXT_LOGD(ML_TAG, "Allocating mappingTable: nrOfLights=%d, sizeof(PhysMap)=%d, total bytes=%d", size.x * size.y * size.z, sizeof(PhysMap), size.x * size.y * size.z * sizeof(PhysMap));
     PhysMap* newTable = reallocMB<PhysMap>(mappingTable, size.x * size.y * size.z, "mappingTable");
     if (newTable) {
       mappingTable = newTable;

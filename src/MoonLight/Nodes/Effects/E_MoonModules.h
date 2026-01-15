@@ -181,11 +181,11 @@ class GameOfLifeEffect : public Node {
   }
 
   void onSizeChanged(const Coord3D& prevSize) override {
-    dataSize = ((layer->size.x * layer->size.y * layer->size.z + 7) / 8);
+    if (cells) freeMB(cells);
+    if (futureCells) freeMB(futureCells);
+    if (cellColors) freeMB(cellColors);
 
-    freeMB(cells);
-    freeMB(futureCells);
-    freeMB(cellColors);
+    dataSize = (layer->size.x * layer->size.y * layer->size.z + 7) / 8;
 
     cells = allocMB<uint8_t>(dataSize);
     futureCells = allocMB<uint8_t>(dataSize);
@@ -193,7 +193,9 @@ class GameOfLifeEffect : public Node {
 
     if (!cells || !futureCells || !cellColors) {
       EXT_LOGE(ML_TAG, "allocation of cells || !futureCells || !cellColors failed");
+      return;
     }
+    EXT_LOGD(ML_TAG, "allocation of cells futureCells cellColors successful %d %d", dataSize, layer->nrOfLights);
 
     startNewGameOfLife();
   }

@@ -1143,7 +1143,7 @@ class PopCornEffect : public Node {
         uint16_t ledIndex = popcorn[i].pos;
         CRGB col = ColorFromPalette(layerP.palette, popcorn[i].colIndex * (256 / maxNumPopcorn));
         if (ledIndex < layer->size.y) {
-          layer->setRGB(ledIndex, col);
+          // layer->setRGB(Coord3D(0, ledIndex), col);
           for (int x = 0; x < layer->size.x; x++)
             for (int z = 0; z < layer->size.z; z++) layer->setRGB(Coord3D(x, ledIndex, z), col);
         }
@@ -1652,7 +1652,9 @@ class FlowEffect : public Node {
       for (int i = 0; i < zoneLen; i++) {
         uint8_t colorIndex = (i * 255 / zoneLen) - counter;
         uint16_t led = (z & 0x01) ? i : (zoneLen - 1) - i;
-        layer->setRGB(Coord3D(0, pos + led), ColorFromPalette(layerP.palette, colorIndex));
+        CRGB color =  ColorFromPalette(layerP.palette, colorIndex);
+        for (int x = 0; x < layer->size.x; x++)
+          for (int z = 0; z < layer->size.z; z++) layer->setRGB(Coord3D(x, pos + led, z), color);
       }
     }
   }

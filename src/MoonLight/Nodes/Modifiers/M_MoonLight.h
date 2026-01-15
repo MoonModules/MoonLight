@@ -55,8 +55,8 @@ class MirrorModifier : public Node {
   static const char* tags() { return "💎🐙"; }
 
   bool mirrorX = true;
-  bool mirrorY = false;
-  bool mirrorZ = false;
+  bool mirrorY = true;
+  bool mirrorZ = true;
 
   void setup() override {
     addControl(mirrorX, "mirrorX", "checkbox");

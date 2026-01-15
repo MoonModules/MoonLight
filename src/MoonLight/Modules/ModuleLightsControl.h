@@ -215,6 +215,11 @@ class ModuleLightsControl : public Module {
   }
 
   void readPins() {
+    if (safeModeMB) {
+      EXT_LOGW(ML_TAG, "Safe mode enabled, not adding pins");
+      return;
+    }
+
     moduleIO.read(
         [&](ModuleState& state) {
           pinRelayLightsOn = UINT8_MAX;

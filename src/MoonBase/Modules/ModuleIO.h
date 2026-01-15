@@ -72,10 +72,11 @@ enum IO_PinUsageEnum {
 
 enum IO_BoardsEnum {
   board_none,  //
+  board_QuinLEDDig2Go,
+  board_QuinLEDDigNext2,
   board_QuinLEDDigUnoV3,
   board_QuinLEDDigQuadV3,
   board_QuinLEDDigOctaV2,
-  board_QuinLEDDig2Go,
   // board_QuinLEDPenta,
   // board_QuinLEDPentaPlus,
   board_SergUniShieldV5,
@@ -114,10 +115,11 @@ class ModuleIO : public Module {
     control = addControl(controls, "boardPreset", "select");
     control["default"] = 0;
     addControlValue(control, BUILD_TARGET);  // 0 none
+    addControlValue(control, "QuinLED Dig2Go");
+    addControlValue(control, "QuinLED DigNext2");
     addControlValue(control, "QuinLED Dig Uno v3");
     addControlValue(control, "QuinLED Dig Quad v3");
     addControlValue(control, "QuinLED Dig Octa v2");
-    addControlValue(control, "QuinLED Dig2Go");
     addControlValue(control, "Serg Universal Shield");
     addControlValue(control, "Serg Mini Shield");
     addControlValue(control, "Mathieu SE16 v1");
@@ -330,42 +332,6 @@ class ModuleIO : public Module {
       pinAssigner.assignPin(10, pin_PHY_CS);    // WIZ850IO nCS
       pinAssigner.assignPin(45, pin_PHY_IRQ);   // WIZ850IO nINT
       pinAssigner.assignPin(4, pin_Infrared);
-    } else if (boardID == board_QuinLEDDigUnoV3) {
-      // Dig-Uno-V3
-      // esp32-d0 (4MB)
-      object["maxPower"] = 50;  // max 75, but 10A fuse
-      pinAssigner.assignPin(16, pin_LED);
-      pinAssigner.assignPin(3, pin_LED);
-      pinAssigner.assignPin(0, pin_ButtonPush);
-      pinAssigner.assignPin(15, pin_Relay);
-      // pinAssigner.assignPin(2, pin_I2S_SD);
-      // pinAssigner.assignPin(12, pin_I2S_WS);
-      // pinAssigner.assignPin(13, pin_Temperature);
-      // pinAssigner.assignPin(15, pin_I2S_SCK);
-      // pinAssigner.assignPin(16, pin_LED_03);
-      // pinAssigner.assignPin(32, pin_Exposed);
-    } else if (boardID == board_QuinLEDDigQuadV3) {
-      // Dig-Quad-V3
-      // esp32-d0 (4MB)
-      object["maxPower"] = 150;
-      uint8_t ledPins[] = {16, 3, 1, 4};  // LED_PINS
-      for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
-      pinAssigner.assignPin(0, pin_ButtonPush);
-
-      pinAssigner.assignPin(15, pin_Relay);
-
-      // pinAssigner.assignPin(2, pin_I2S_SD;
-      // pinAssigner.assignPin(12, pin_I2S_WS;
-      // pinAssigner.assignPin(13, pin_Temperature;
-      // pinAssigner.assignPin(15, pin_I2S_SCK;
-      // pinAssigner.assignPin(32, pin_Exposed;
-    } else if (boardID == board_QuinLEDDigOctaV2) {
-      // Dig-Octa-32-8L
-      object["maxPower"] = 400;                        // 10A Fuse * 8 ... 400 W
-      uint8_t ledPins[] = {0, 1, 2, 3, 4, 5, 12, 13};  // LED_PINS
-      for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
-      pinAssigner.assignPin(33, pin_Relay);
-      pinAssigner.assignPin(34, pin_ButtonPush);
     } else if (boardID == board_QuinLEDDig2Go) {
       // dig2go
       object["maxPower"] = 10;  // USB powered: 2A / 10W
@@ -402,6 +368,62 @@ class ModuleIO : public Module {
       //   pinAssigner.assignPin(16, pin_I2C_SCL);
       //   pinAssigner.assignPin(13, pin_Relay_LightsOn);
       //   pinAssigner.assignPin(5, pin_LED);
+    } else if (boardID == board_QuinLEDDigNext2) {
+      // digNext2
+      object["maxPower"] = 65;
+      pinAssigner.assignPin(2, pin_LED);
+      pinAssigner.assignPin(4, pin_LED);
+      pinAssigner.assignPin(5, pin_Relay_LightsOn);
+      pinAssigner.assignPin(20, pin_Relay_LightsOn);
+      pinAssigner.assignPin(21, pin_Relay_LightsOn);
+      pinAssigner.assignPin(22, pin_Relay_LightsOn);
+      pinAssigner.assignPin(7, pin_I2S_SD);
+      pinAssigner.assignPin(8, pin_I2S_WS);
+      // pinAssigner.assignPin(?, pin_I2S_SCK);
+      pinAssigner.assignPin(15, pin_I2C_SDA);
+      pinAssigner.assignPin(14, pin_I2C_SCL);
+      pinAssigner.assignPin(34, pin_Button_Push_LightsOn);
+      pinAssigner.assignPin(35, pin_ButtonPush);
+      pinAssigner.assignPin(0, pin_Exposed);
+      pinAssigner.assignPin(25, pin_Exposed);
+      pinAssigner.assignPin(32, pin_Exposed);
+      pinAssigner.assignPin(33, pin_Exposed);
+    } else if (boardID == board_QuinLEDDigUnoV3) {
+      // Dig-Uno-V3
+      // esp32-d0 (4MB)
+      object["maxPower"] = 50;  // max 75, but 10A fuse
+      pinAssigner.assignPin(16, pin_LED);
+      pinAssigner.assignPin(3, pin_LED);
+      pinAssigner.assignPin(0, pin_ButtonPush);
+      pinAssigner.assignPin(15, pin_Relay);
+      // pinAssigner.assignPin(2, pin_I2S_SD);
+      // pinAssigner.assignPin(12, pin_I2S_WS);
+      // pinAssigner.assignPin(13, pin_Temperature);
+      // pinAssigner.assignPin(15, pin_I2S_SCK);
+      // pinAssigner.assignPin(16, pin_LED_03);
+      // pinAssigner.assignPin(32, pin_Exposed);
+    } else if (boardID == board_QuinLEDDigQuadV3) {
+      // Dig-Quad-V3
+      // esp32-d0 (4MB)
+      object["maxPower"] = 150;
+      uint8_t ledPins[] = {16, 3, 1, 4};  // LED_PINS
+      for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
+      pinAssigner.assignPin(0, pin_ButtonPush);
+
+      pinAssigner.assignPin(15, pin_Relay);
+
+      // pinAssigner.assignPin(2, pin_I2S_SD;
+      // pinAssigner.assignPin(12, pin_I2S_WS;
+      // pinAssigner.assignPin(13, pin_Temperature;
+      // pinAssigner.assignPin(15, pin_I2S_SCK;
+      // pinAssigner.assignPin(32, pin_Exposed;
+    } else if (boardID == board_QuinLEDDigOctaV2) {
+      // Dig-Octa-32-8L
+      object["maxPower"] = 400;                        // 10A Fuse * 8 ... 400 W
+      uint8_t ledPins[] = {0, 1, 2, 3, 4, 5, 12, 13};  // LED_PINS
+      for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
+      pinAssigner.assignPin(33, pin_Relay);
+      pinAssigner.assignPin(34, pin_ButtonPush);
     } else if (boardID == board_SergMiniShield) {
       object["maxPower"] = 50;  // 10A Fuse ...
       pinAssigner.assignPin(16, pin_LED);
@@ -605,6 +627,11 @@ class ModuleIO : public Module {
   }
 
   void readPins() {
+    if (safeModeMB) {
+      EXT_LOGW(ML_TAG, "Safe mode enabled, not adding pins");
+      return;
+    }
+
     uint8_t pinRS485TX = UINT8_MAX;
     uint8_t pinRS485RX = UINT8_MAX;
     uint8_t pinRS485DE = UINT8_MAX;
