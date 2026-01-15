@@ -78,7 +78,7 @@ class VirtualLayer {
 
   // they will be reused to avoid fragmentation
   PhysMap* mappingTable = nullptr;
-  nrOfLights_t mappingTableSize = 0;
+  size_t mappingTableSize = 0;
   std::vector<std::vector<nrOfLights_t>, VectorRAMAllocator<std::vector<nrOfLights_t> > > mappingTableIndexes;
   nrOfLights_t mappingTableIndexesSizeUsed = 0;
 

@@ -208,6 +208,18 @@ T* reallocMB(T* p, size_t n, const char* name = nullptr) {
   return res;
 }
 
+template <typename T>
+void reallocMB2(T* &p, size_t &pSize, size_t n, const char* name = nullptr) {
+  T* res = (T*)heap_caps_realloc_prefer(p, n * sizeof(T), 2, MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT);  // calloc is malloc + memset(0);
+  if (res) {
+    // EXT_LOGD(MB_TAG, "Re-Allocated %s: %d x %d bytes in %s s:%d", name?name:"x", n, sizeof(T), isInPSRAM(res)?"PSRAM":"RAM", heap_caps_get_allocated_size(res));
+    p = res;
+    pSize = n;
+  } else {
+    EXT_LOGE(MB_TAG, "heap_caps_malloc for %s of %d x %d not succeeded, keeping old %d", name?name:"x", n, sizeof(T), pSize);
+  }
+}
+
 // free memory
 template <typename T>
 void freeMB(T*& p, const char* name = nullptr) {

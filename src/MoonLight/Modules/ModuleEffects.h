@@ -156,7 +156,7 @@ class ModuleEffects : public NodeManager {
     addControlValue(control, getNameAndTags<RotateModifier>());
     addControlValue(control, getNameAndTags<CheckerboardModifier>());
     addControlValue(control, getNameAndTags<PinwheelModifier>());
-    addControlValue(control, getNameAndTags<RippleYZModifier>());
+    addControlValue(control, getNameAndTags<RippleXZModifier>());
 
     // find all the .sc files on FS
     File rootFolder = ESPFS.open("/");
@@ -252,7 +252,7 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<RotateModifier>(name);
     if (!node) node = checkAndAlloc<CheckerboardModifier>(name);
     if (!node) node = checkAndAlloc<PinwheelModifier>(name);
-    if (!node) node = checkAndAlloc<RippleYZModifier>(name);
+    if (!node) node = checkAndAlloc<RippleXZModifier>(name);
 
   #if FT_LIVESCRIPT
     if (!node) {

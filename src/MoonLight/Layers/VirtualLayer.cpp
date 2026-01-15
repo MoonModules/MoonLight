@@ -324,14 +324,7 @@ void VirtualLayer::fill_rainbow(const uint8_t initialhue, const uint8_t deltahue
 void VirtualLayer::createMappingTableAndAddOneToOne() {
   if (mappingTableSize != size.x * size.y * size.z) {
     EXT_LOGD(ML_TAG, "Allocating mappingTable: nrOfLights=%d, sizeof(PhysMap)=%d, total bytes=%d", size.x * size.y * size.z, sizeof(PhysMap), size.x * size.y * size.z * sizeof(PhysMap));
-    PhysMap* newTable = reallocMB<PhysMap>(mappingTable, size.x * size.y * size.z, "mappingTable");
-    if (newTable) {
-      mappingTable = newTable;
-      EXT_LOGD(ML_TAG, "realloc mappingTable %d -> %dx%dx%d", mappingTableSize, size.x, size.y, size.z);
-      mappingTableSize = size.x * size.y * size.z;
-    } else {
-      EXT_LOGW(ML_TAG, "realloc mappingTable failed keeping oldSize %d", mappingTableSize);
-    }
+    reallocMB2<PhysMap>(mappingTable, mappingTableSize, size.x * size.y * size.z, "mappingTable");
   }
 
   if (mappingTable && mappingTableSize) memset(mappingTable, 0, mappingTableSize * sizeof(PhysMap));  // on layout, set mappingTable to default PhysMap

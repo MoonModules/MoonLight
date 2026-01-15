@@ -26,22 +26,13 @@ class BouncingBallsEffect : public Node {
   }
 
   Ball (*balls)[maxNumBalls] = nullptr;  //[maxColumns][maxNumBalls];
-  uint16_t ballsSize = 0;
+  size_t ballsSize = 0;
 
   ~BouncingBallsEffect() override {
     if (balls) freeMB(balls, name());
   }
 
-  void onSizeChanged(const Coord3D& prevSize) override {
-    Ball(*newAlloc)[maxNumBalls] = reallocMB<Ball[maxNumBalls]>(balls, layer->size.x, name());
-
-    if (newAlloc) {
-      balls = newAlloc;
-      ballsSize = layer->size.x;
-    } else {
-      EXT_LOGE(ML_TAG, "(re)allocate balls failed");
-    }
-  }
+  void onSizeChanged(const Coord3D& prevSize) override { reallocMB2<Ball[maxNumBalls]>(balls, ballsSize, layer->size.x, "balls"); }
 
   void loop() override {
     if (!balls) return;
@@ -58,7 +49,7 @@ class BouncingBallsEffect : public Node {
     //    for (size_t i = 0; i < maxNumBalls; i++) balls[i].lastBounceTime = time;
     //  }
 
-    for (int x = 0; x < MIN(layer->size.x, ballsSize); x++) {
+    for (int x = 0; x < ballsSize; x++) {
       for (size_t i = 0; i < MIN(numBalls, maxNumBalls); i++) {
         float timeSinceLastBounce = (time - balls[x][i].lastBounceTime) / ((255 - grav) / 64 + 1);
         float timeSec = timeSinceLastBounce / 1000.0f;
@@ -332,21 +323,13 @@ class GEQEffect : public Node {
   }
 
   uint16_t* previousBarHeight = nullptr;
-  uint8_t previousBarHeightSize = 0;
+  size_t previousBarHeightSize = 0;
 
   ~GEQEffect() {
     if (previousBarHeight) freeMB(previousBarHeight, name());
   }
 
-  void onSizeChanged(const Coord3D& prevSize) override {
-    uint16_t* newAlloc = reallocMB<uint16_t>(previousBarHeight, layer->size.x);
-    if (newAlloc) {
-      previousBarHeight = newAlloc;
-      previousBarHeightSize = layer->size.x;
-    } else {
-      EXT_LOGE(ML_TAG, "(re)allocate previousBarHeight failed");
-    }
-  }
+  void onSizeChanged(const Coord3D& prevSize) override { reallocMB2<uint16_t>(previousBarHeight, previousBarHeightSize, layer->size.x, "previousBarHeight"); }
 
   void loop() override {
     const int NUM_BANDS = NUM_GEQ_CHANNELS;  // ::map(layer->custom1, 0, 255, 1, 16);
@@ -568,7 +551,7 @@ class PacManEffect : public Node {
   }
 
   pacmancharacters_t* character = nullptr;
-  uint8_t nrOfCharacters = 0;
+  size_t nrOfCharacters = 0;
 
   ~PacManEffect() {
     if (character) freeMB(character, name());
@@ -597,13 +580,7 @@ class PacManEffect : public Node {
 
     EXT_LOGD(ML_TAG, "#l:%d #pd:%d #g:%d #pd:%d", layer->nrOfLights, numPowerDotsControl, numGhosts, numPowerDots);
 
-    pacmancharacters_t* newAlloc = reallocMB<pacmancharacters_t>(character, numGhosts + numPowerDots + 1);  // +1 is the PacMan character
-    if (newAlloc) {
-      character = newAlloc;
-      nrOfCharacters = numGhosts + numPowerDots + 1;
-    } else {
-      EXT_LOGE(ML_TAG, "(re)allocate character failed");  // keep old (if existed)
-    }
+    reallocMB2<pacmancharacters_t>(character, nrOfCharacters, numGhosts + numPowerDots + 1, "character");  // +1 is the PacMan character
 
     if (nrOfCharacters > 0) {
       character[PACMAN].color = CRGB::Yellow;
@@ -994,16 +971,11 @@ class TetrixEffect : public Node {
   }
 
   Tetris* drops = nullptr;
-  uint16_t nrOfDrops = 0;
+  size_t nrOfDrops = 0;
 
   void onSizeChanged(const Coord3D& prevSize) override {
-    Tetris* newAlloc = reallocMB<Tetris>(drops, layer->size.x);
-    if (newAlloc) {
-      drops = newAlloc;
-      nrOfDrops = layer->size.x;
-    } else {
-      EXT_LOGE(ML_TAG, "(re)allocate drops failed");  // keep old (if existed)
-    }
+    reallocMB2<Tetris>(drops, nrOfDrops, layer->size.x, "drops");
+
     for (int i = 0; i < nrOfDrops; i++) {
       drops[i].stack = 0;               // reset brick stack size
       drops[i].step = millis() + 2000;  // start by fading out strip
@@ -1340,7 +1312,7 @@ class OctopusEffect : public Node {
 
   Coord3D prevLedSize;
   Map_t* rMap = nullptr;
-  uint16_t rMapSize = 0;
+  size_t rMapSize = 0;
   uint32_t step;
 
   ~OctopusEffect() {
@@ -1363,16 +1335,7 @@ class OctopusEffect : public Node {
     }
   }
 
-  void onSizeChanged(const Coord3D& prevSize) override {
-    Map_t* newAlloc = reallocMB<Map_t>(rMap, layer->size.x * layer->size.y);
-    if (newAlloc) {
-      rMap = newAlloc;
-      rMapSize = layer->size.x * layer->size.y;
-      setRMap();
-    } else {
-      EXT_LOGE(ML_TAG, "(re)allocate rMap failed");
-    }
-  }
+  void onSizeChanged(const Coord3D& prevSize) override { reallocMB2<Map_t>(rMap, rMapSize, layer->size.x * layer->size.y, "rMap"); }
 
   void loop() override {
     if (rMap) {  // check if rMap allocation successful
@@ -1745,25 +1708,19 @@ class RainEffect : public Node {
   }
 
   Spark* drops = nullptr;
-  uint16_t nrOfDrops = 0;
+  size_t nrOfDrops = 0;
 
   ~RainEffect() override {
     if (drops) freeMB(drops, name());
   }
 
   void onSizeChanged(const Coord3D& prevSize) override {
-    Spark* newAlloc = reallocMB<Spark>(drops, layer->size.x);
+    reallocMB2<Spark>(drops, nrOfDrops, layer->size.x, "drops");
 
-    if (newAlloc) {
-      drops = newAlloc;
-      nrOfDrops = layer->size.x;
-      for (int x = 0; x < layer->size.x; x++) {
-        drops[x].pos = 0;
-        drops[x].col = 0;
-        drops[x].vel = 0;
-      }
-    } else {
-      EXT_LOGE(ML_TAG, "(re)allocate drops failed");
+    for (int x = 0; x < nrOfDrops; x++) {
+      drops[x].pos = 0;
+      drops[x].col = 0;
+      drops[x].vel = 0;
     }
   }
 
@@ -1823,25 +1780,19 @@ class DripEffect : public Node {
   }
 
   Spark (*drops)[maxNumDrops] = nullptr;  //[maxColumns][maxNumBalls];
-  uint16_t nrOfDrops = 0;
+  size_t nrOfDrops = 0;
 
   ~DripEffect() override {
     if (drops) freeMB(drops, name());
   }
 
   void onSizeChanged(const Coord3D& prevSize) override {
-    Spark(*newAlloc)[maxNumDrops] = reallocMB<Spark[maxNumDrops]>(drops, layer->size.x);
+    reallocMB2<Spark[maxNumDrops]>(drops, nrOfDrops, layer->size.x, "drops");
 
-    if (newAlloc) {
-      drops = newAlloc;
-      nrOfDrops = layer->size.x;
-      for (int x = 0; x < layer->size.x; x++) {
-        for (int j = 0; j < maxNumDrops; j++) {
-          drops[x][j].colIndex = init;  // Set to init so loop() will initialize properly
-        }
+    for (int x = 0; x < nrOfDrops; x++) {
+      for (int j = 0; j < maxNumDrops; j++) {
+        drops[x][j].colIndex = init;  // Set to init so loop() will initialize properly
       }
-    } else {
-      EXT_LOGE(ML_TAG, "(re)allocate drops failed");
     }
   }
 

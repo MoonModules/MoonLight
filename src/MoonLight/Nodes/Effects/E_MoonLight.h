@@ -327,7 +327,7 @@ class ScrollingTextEffect : public Node {
   }
 
   void loop() override {
-    layer->fadeToBlackBy();
+    layer->fadeToBlackBy(100);
 
   #define nrOfChoices 7
     uint8_t choice;
@@ -1667,8 +1667,9 @@ class MarioTestEffect : public Node {
 
 class RingEffect : public Node {
  protected:
-  void setRing(int ring, CRGB colour) {       // so britisch ;-)
-    layer->setRGB(Coord3D(0, ring), colour);  // 1D effect on y-axis (default)
+  void setRing(int ring, CRGB colour) {  // so britisch ;-)
+    for (int x = 0; x < layer->size.x; x++)
+      for (int z = 0; z < layer->size.z; z++) layer->setRGB(Coord3D(x, ring, z), colour);  // 1D effect on y-axis (default)
   }
 };
 
@@ -1681,26 +1682,21 @@ class RingRandomFlowEffect : public RingEffect {
   // void setup() override {} //so no palette control is created
 
   uint8_t* hue = nullptr;
+  size_t hueSize = 0;
 
   ~RingRandomFlowEffect() {
     if (hue) freeMB(hue, name());
   }
 
-  void onSizeChanged(const Coord3D& prevSize) override {
-    if (hue) freeMB(hue, name());
-    hue = allocMB<uint8_t>(layer->size.y, name());
-    if (!hue) {
-      EXT_LOGE(ML_TAG, "allocate hue failed");
-    }
-  }
+  void onSizeChanged(const Coord3D& prevSize) override { reallocMB2<uint8_t>(hue, hueSize, layer->size.y, "hue"); }
 
   void loop() override {
     if (hue) {
       hue[0] = random(0, 255);
-      for (int r = 0; r < layer->size.y; r++) {
+      for (int r = 0; r < hueSize; r++) {
         setRing(r, CHSV(hue[r], 255, 255));
       }
-      for (int r = (layer->size.y - 1); r >= 1; r--) {
+      for (int r = (hueSize - 1); r >= 1; r--) {
         hue[r] = hue[(r - 1)];  // set this ruing based on the inner
       }
       // FastLED.delay(SPEED);

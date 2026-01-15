@@ -181,7 +181,7 @@ class GameOfLifeEffect : public Node {
   }
 
   void onSizeChanged(const Coord3D& prevSize) override {
-    EXT_LOGW(ML_TAG, "GameOfLife onSizeChanged %d,%d,%d -> %d,%d,%d", prevSize.x, prevSize.y, prevSize.z, layer->size.x, layer->size.y, layer->size.z);
+    // EXT_LOGW(ML_TAG, "GameOfLife onSizeChanged %d,%d,%d -> %d,%d,%d", prevSize.x, prevSize.y, prevSize.z, layer->size.x, layer->size.y, layer->size.z);
 
     if (cells) freeMB(cells, name());
     if (futureCells) freeMB(futureCells, name());
@@ -298,7 +298,7 @@ class GameOfLifeEffect : public Node {
           } else if (!cellValue && birthNumbers[neighbors]) {
             // Reproduction
             setBitValue(futureCells, cIndex, true);
-            uint8_t colorIndex = nColors[random8(colorCount)];
+            uint8_t colorIndex = (colorCount > 0) ? nColors[random8(colorCount)] : random8();
             if (random8(100) < mutation) colorIndex = random8();
             cellColors[cIndex] = colorIndex;
             layer->setRGB(cPos, colorByAge ? CRGB::Green : ColorFromPalette(layerP.palette, colorIndex));

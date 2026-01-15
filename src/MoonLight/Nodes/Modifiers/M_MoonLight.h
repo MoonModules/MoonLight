@@ -195,19 +195,19 @@ class PinwheelModifier : public Node {
 };
 
 // Idea and first implementation (WLEDMM Art-Net) by @Troy
-class RippleYZModifier : public Node {
+class RippleXZModifier : public Node {
  public:
-  static const char* name() { return "RippleYZ"; }
+  static const char* name() { return "RippleXZ"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "💎💫"; }
 
   bool shrink = true;
-  bool towardsY = true;
+  bool towardsX = true;
   bool towardsZ = false;
 
   void setup() override {
     addControl(shrink, "shrink", "checkbox");
-    addControl(towardsY, "towardsY", "checkbox");
+    addControl(towardsX, "towardsX", "checkbox");
     addControl(towardsZ, "towardsZ", "checkbox");
   }
 
@@ -220,25 +220,25 @@ class RippleYZModifier : public Node {
     // layer->size.y++;
     // layer->size.z++;
     if (shrink) {
-      if (towardsY) layer->size.y = 1;
+      if (towardsX) layer->size.x = 1;
       if (towardsZ) layer->size.z = 1;
     }
   }
 
   void modifyPosition(Coord3D& position) override {
     if (shrink) {
-      if (towardsY) position.y = 0;
+      if (towardsX) position.x = 0;
       if (towardsZ) position.z = 0;
     }
   }
 
   void loop() override {
     // 1D->2D: each Y is rippled through the X-axis
-    if (towardsY) {
+    if (towardsX) {
       if (layer->effectDimension == _1D && layer->layerDimension > _1D) {
-        for (int x = layer->size.x - 1; x >= 1; x--) {
-          for (int y = 0; y < layer->size.y; y++) {
-            layer->setRGB(Coord3D(x, y, 0), layer->getRGB(Coord3D(x - 1, y, 0)));
+        for (int y = layer->size.y - 1; y >= 1; y--) {
+          for (int x = 0; x < layer->size.x; x++) {
+            layer->setRGB(Coord3D(x, y, 0), layer->getRGB(Coord3D(x, y-1, 0)));
           }
         }
       }
@@ -257,7 +257,7 @@ class RippleYZModifier : public Node {
       }
     }
   }
-};  // RippleYZ
+};  // RippleXZ
 
 // RotateModifier rotates the light position around the center of the layout.
 // It can flip the x and y coordinates, reverse the rotation direction, and alternate the rotation
