@@ -28,10 +28,12 @@ class BouncingBallsEffect : public Node {
   Ball (*balls)[maxNumBalls] = nullptr;  //[maxColumns][maxNumBalls];
   uint16_t ballsSize = 0;
 
-  ~BouncingBallsEffect() override { freeMB(balls); }
+  ~BouncingBallsEffect() override {
+    if (balls) freeMB(balls, name());
+  }
 
   void onSizeChanged(const Coord3D& prevSize) override {
-    Ball(*newAlloc)[maxNumBalls] = reallocMB<Ball[maxNumBalls]>(balls, layer->size.x);
+    Ball(*newAlloc)[maxNumBalls] = reallocMB<Ball[maxNumBalls]>(balls, layer->size.x, name());
 
     if (newAlloc) {
       balls = newAlloc;
@@ -332,7 +334,9 @@ class GEQEffect : public Node {
   uint16_t* previousBarHeight = nullptr;
   uint8_t previousBarHeightSize = 0;
 
-  ~GEQEffect() { freeMB(previousBarHeight); }
+  ~GEQEffect() {
+    if (previousBarHeight) freeMB(previousBarHeight, name());
+  }
 
   void onSizeChanged(const Coord3D& prevSize) override {
     uint16_t* newAlloc = reallocMB<uint16_t>(previousBarHeight, layer->size.x);
@@ -566,7 +570,9 @@ class PacManEffect : public Node {
   pacmancharacters_t* character = nullptr;
   uint8_t nrOfCharacters = 0;
 
-  ~PacManEffect() { freeMB(character); }
+  ~PacManEffect() {
+    if (character) freeMB(character, name());
+  }
 
   void onSizeChanged(const Coord3D& prevSize) override { initializePacMan(); }
 
@@ -1005,7 +1011,9 @@ class TetrixEffect : public Node {
     }
   }
 
-  ~TetrixEffect() override { freeMB(drops); };
+  ~TetrixEffect() override {
+    if (drops) freeMB(drops, name());
+  };
 
   void loop() override {
     if (!drops) return;
@@ -1335,7 +1343,9 @@ class OctopusEffect : public Node {
   uint16_t rMapSize = 0;
   uint32_t step;
 
-  ~OctopusEffect() { freeMB(rMap); }
+  ~OctopusEffect() {
+    if (rMap) freeMB(rMap, name());
+  }
 
   void setRMap() {
     const uint8_t C_X = layer->size.x / 2 + (offset.x - 50) * layer->size.x / 100;
@@ -1647,12 +1657,12 @@ class FlowEffect : public Node {
 
     layer->fill_solid(ColorFromPalette(layerP.palette, -counter));
 
-    for (int z = 0; z < zones; z++) {
-      uint16_t pos = offset + z * zoneLen;
+    for (int zone = 0; zone < zones; zone++) {
+      uint16_t pos = offset + zone * zoneLen;
       for (int i = 0; i < zoneLen; i++) {
         uint8_t colorIndex = (i * 255 / zoneLen) - counter;
-        uint16_t led = (z & 0x01) ? i : (zoneLen - 1) - i;
-        CRGB color =  ColorFromPalette(layerP.palette, colorIndex);
+        uint16_t led = (zone & 0x01) ? i : (zoneLen - 1) - i;
+        CRGB color = ColorFromPalette(layerP.palette, colorIndex);
         for (int x = 0; x < layer->size.x; x++)
           for (int z = 0; z < layer->size.z; z++) layer->setRGB(Coord3D(x, pos + led, z), color);
       }
@@ -1737,7 +1747,9 @@ class RainEffect : public Node {
   Spark* drops = nullptr;
   uint16_t nrOfDrops = 0;
 
-  ~RainEffect() override { freeMB(drops); }
+  ~RainEffect() override {
+    if (drops) freeMB(drops, name());
+  }
 
   void onSizeChanged(const Coord3D& prevSize) override {
     Spark* newAlloc = reallocMB<Spark>(drops, layer->size.x);
@@ -1813,7 +1825,9 @@ class DripEffect : public Node {
   Spark (*drops)[maxNumDrops] = nullptr;  //[maxColumns][maxNumBalls];
   uint16_t nrOfDrops = 0;
 
-  ~DripEffect() override { freeMB(drops); }
+  ~DripEffect() override {
+    if (drops) freeMB(drops, name());
+  }
 
   void onSizeChanged(const Coord3D& prevSize) override {
     Spark(*newAlloc)[maxNumDrops] = reallocMB<Spark[maxNumDrops]>(drops, layer->size.x);

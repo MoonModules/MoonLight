@@ -130,7 +130,7 @@ class GameOfLifeEffect : public Node {
   uint16_t spaceshipCRC;
   uint16_t cubeGliderCRC;
   bool soloGlider;
-  uint16_t generation;
+  uint16_t generation = 0;
   bool birthNumbers[9];
   bool surviveNumbers[9];
   CRGB prevPalette;
@@ -175,21 +175,23 @@ class GameOfLifeEffect : public Node {
   int dataSize = 0;
 
   ~GameOfLifeEffect() override {
-    freeMB(cells);
-    freeMB(futureCells);
-    freeMB(cellColors);
+    if (cells) freeMB(cells, name());
+    if (futureCells) freeMB(futureCells, name());
+    if (cellColors) freeMB(cellColors, name());
   }
 
   void onSizeChanged(const Coord3D& prevSize) override {
-    if (cells) freeMB(cells);
-    if (futureCells) freeMB(futureCells);
-    if (cellColors) freeMB(cellColors);
+    EXT_LOGW(ML_TAG, "GameOfLife onSizeChanged %d,%d,%d -> %d,%d,%d", prevSize.x, prevSize.y, prevSize.z, layer->size.x, layer->size.y, layer->size.z);
+
+    if (cells) freeMB(cells, name());
+    if (futureCells) freeMB(futureCells, name());
+    if (cellColors) freeMB(cellColors, name());
 
     dataSize = (layer->size.x * layer->size.y * layer->size.z + 7) / 8;
 
-    cells = allocMB<uint8_t>(dataSize);
-    futureCells = allocMB<uint8_t>(dataSize);
-    cellColors = allocMB<uint8_t>(layer->size.x * layer->size.y * layer->size.z);
+    cells = allocMB<uint8_t>(dataSize, name());
+    futureCells = allocMB<uint8_t>(dataSize, name());
+    cellColors = allocMB<uint8_t>(layer->size.x * layer->size.y * layer->size.z, name());
 
     if (!cells || !futureCells || !cellColors) {
       EXT_LOGE(ML_TAG, "allocation of cells || !futureCells || !cellColors failed");
@@ -254,8 +256,8 @@ class GameOfLifeEffect : public Node {
     const int zAxis = (layer->layerDimension == _3D) ? 1 : 0;  // Avoids looping through z axis neighbors if 2D
     bool disableWrap = !wrap || soloGlider || generation % 1500 == 0 || zAxis;
     // Loop through all cells. Count neighbors, apply rules, setPixel
-    for (int x = 0; x < layer->size.x; x++)
-      for (int y = 0; y < layer->size.y; y++)
+    for (int x = 0; x < layer->size.x; x++) {
+      for (int y = 0; y < layer->size.y; y++) {
         for (int z = 0; z < layer->size.z; z++) {
           Coord3D cPos = Coord3D(x, y, z);
           uint16_t cIndex = layer->XYZUnModified(cPos);
@@ -316,6 +318,8 @@ class GameOfLifeEffect : public Node {
             }
           }
         }
+      }
+    }
 
     if (aliveCount == 5)
       soloGlider = true;
@@ -340,7 +344,7 @@ class GameOfLifeEffect : public Node {
     if (generation % 16 == 0) oscillatorCRC = crc;
     if (gliderLength && generation % gliderLength == 0) spaceshipCRC = crc;
     if (cubeGliderLength && generation % cubeGliderLength == 0) cubeGliderCRC = crc;
-    (generation)++;
+    generation++;
     step = millis();
   }
 };  // GameOfLife

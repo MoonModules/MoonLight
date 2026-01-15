@@ -57,6 +57,7 @@ void VirtualLayer::loop() {
     }
   }
 
+  // for virtual nodes
   if (prevSize != size) EXT_LOGD(ML_TAG, "onSizeChanged V %d,%d,%d -> %d,%d,%d", prevSize.x, prevSize.y, prevSize.z, size.x, size.y, size.z);
   for (Node* node : nodes) {
     if (prevSize != size) {
@@ -169,11 +170,11 @@ void VirtualLayer::setLight(const nrOfLights_t indexV, const uint8_t* channels, 
     }
   } else {  // no mapping
     uint32_t index = indexV * layerP->lights.header.channelsPerLight + offset;
-    // if (index + length <= layerP->lights.maxChannels) {
-    memcpy(&layerP->lights.channelsE[index], channels, length);
-    // } else {
-    //   EXT_LOGW(ML_TAG, "%d + %d >= %d (%d %d)", indexV, length, layerP->lights.maxChannels, index, offset);
-    // }
+    if (index + length <= layerP->lights.maxChannels) {
+      memcpy(&layerP->lights.channelsE[index], channels, length);
+    } else {
+      EXT_LOGW(ML_TAG, "%d + %d >= %d (%d %d)", indexV, length, layerP->lights.maxChannels, index, offset);
+    }
   }
 }
 
@@ -217,13 +218,13 @@ T VirtualLayer::getLight(const nrOfLights_t indexV, uint8_t offset) const {
     }
   } else {  // no mapping
     uint32_t index = indexV * layerP->lights.header.channelsPerLight + offset;
-    // if (index + sizeof(T) <= layerP->lights.maxChannels) {
-    return *(T*)&layerP->lights.channelsE[index];
-    // } else {
-    //   // some operations will go out of bounds e.g. VUMeter, uncomment below lines if you wanna test on a specific effect
-    //   EXT_LOGW(ML_TAG, "%d + %d >= %d", indexV, sizeof(T), layerP->lights.maxChannels);
-    //   return T();
-    // }
+    if (index + sizeof(T) <= layerP->lights.maxChannels) {
+      return *(T*)&layerP->lights.channelsE[index];
+    } else {
+      // some operations will go out of bounds e.g. VUMeter, uncomment below lines if you wanna test on a specific effect
+      EXT_LOGW(ML_TAG, "%d + %d >= %d", indexV, sizeof(T), layerP->lights.maxChannels);
+      return T();
+    }
   }
 }
 

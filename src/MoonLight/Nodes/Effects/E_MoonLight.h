@@ -69,10 +69,10 @@ class StarSkyEffect : public Node {
   ~StarSkyEffect() { resetStars(); }
 
   void resetStars() {
-    if (stars_indexes) freeMB(stars_indexes);
-    if (stars_fade_dir) freeMB(stars_fade_dir);
-    if (stars_brightness) freeMB(stars_brightness);
-    if (stars_colors) freeMB(stars_colors);
+    if (stars_indexes) freeMB(stars_indexes, name());
+    if (stars_fade_dir) freeMB(stars_fade_dir, name());
+    if (stars_brightness) freeMB(stars_brightness, name());
+    if (stars_colors) freeMB(stars_colors, name());
     stars_indexes = nullptr;
     stars_fade_dir = nullptr;
     stars_brightness = nullptr;
@@ -1682,11 +1682,13 @@ class RingRandomFlowEffect : public RingEffect {
 
   uint8_t* hue = nullptr;
 
-  ~RingRandomFlowEffect() { freeMB(hue); }
+  ~RingRandomFlowEffect() {
+    if (hue) freeMB(hue, name());
+  }
 
   void onSizeChanged(const Coord3D& prevSize) override {
-    freeMB(hue);
-    hue = allocMB<uint8_t>(layer->size.y);
+    if (hue) freeMB(hue, name());
+    hue = allocMB<uint8_t>(layer->size.y, name());
     if (!hue) {
       EXT_LOGE(ML_TAG, "allocate hue failed");
     }
