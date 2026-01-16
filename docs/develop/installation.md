@@ -163,7 +163,7 @@ Before changing code, test if the current download of MoonLight is running fine.
 
     In some cases LZMA support must be installed
 
-    <img width="320" height="50" alt="Screenshot 2025-09-29 at 13 58 07" src="https://github.com/user-attachments/assets/2eef658f-f297-46cd-bbd5-4d769dbf9e56" />
+    <img width="320" height="50" src="https://github.com/user-attachments/assets/2eef658f-f297-46cd-bbd5-4d769dbf9e56" />
 
     * Run in VSCode / pio shell ([>_])
 
@@ -183,20 +183,20 @@ nodejs is needed if changes on the front-end (UI) are made (interface folder). O
 
 * Windows: if nodejs is not on your system you will get this error:
 
-    <img width="640" height="221" alt="Screenshot 2025-09-25 212255" src="https://github.com/user-attachments/assets/f05ca8d2-6485-4965-8b75-edd4b468ddf4" />
+    <img width="640" height="221" src="https://github.com/user-attachments/assets/f05ca8d2-6485-4965-8b75-edd4b468ddf4" />
 
     * download [nodejs](https://nodejs.org/en/download) if it is not run in admin mode you will get this:
 
-    <img width="640" height="501" alt="Screenshot 2025-09-25 212842" src="https://github.com/user-attachments/assets/9945217f-7b4a-4b97-87df-3b35b61ccc0a" />
+    <img width="640" height="501" src="https://github.com/user-attachments/assets/9945217f-7b4a-4b97-87df-3b35b61ccc0a" />
 
     * if this is the case, run an administrator command prompt and run the downloaded .msi file as follows:
 
-    <img width="649" height="510" alt="Screenshot 2025-09-25 220442" src="https://github.com/user-attachments/assets/144cce1d-bc59-471c-ace3-aa38c52629e4" />
-    <img width="640" height="498" alt="Screenshot 2025-09-25 214052" src="https://github.com/user-attachments/assets/affb20e8-785e-471d-98d9-855e5783ce5e" />
+    <img width="649" height="510" src="https://github.com/user-attachments/assets/144cce1d-bc59-471c-ace3-aa38c52629e4" />
+    <img width="640" height="498" src="https://github.com/user-attachments/assets/affb20e8-785e-471d-98d9-855e5783ce5e" />
 
     * after succesful install of nodejs run ☑️ or ➡️ again. It might be needed to rebuild node_modules and package-lock.json if you see this
 
-    <img width="640" height="688" alt="Screenshot 2025-09-25 214700" src="https://github.com/user-attachments/assets/b92ccba0-17e1-4434-929e-302ec8afd96e" />
+    <img width="640" height="688" src="https://github.com/user-attachments/assets/b92ccba0-17e1-4434-929e-302ec8afd96e" />
 
     * Remove node_modules and package-lock.json - run as administrator if the OS complains!
     * Rebuild node_modules and package-lock.json by opening a VSCode shell using [>_] in the statusbar
@@ -206,11 +206,11 @@ npm install
 ```
     * If that give errors set execution policies as follows:
 
-    <img width="640" height="398" alt="Screenshot 2025-09-25 215039" src="https://github.com/user-attachments/assets/629bc8de-d1ce-4d2d-9a92-e08bc9d31d4b" />
+    <img width="640" height="398" src="https://github.com/user-attachments/assets/629bc8de-d1ce-4d2d-9a92-e08bc9d31d4b" />
 
     * Press run ☑️ or ➡️ again it should now complete succesfully
 
-    <img width="640" height="571" alt="Screenshot 2025-09-25 220023" src="https://github.com/user-attachments/assets/cd6754f4-d6df-446a-94fe-c3d7f491be59" />
+    <img width="640" height="571" src="https://github.com/user-attachments/assets/cd6754f4-d6df-446a-94fe-c3d7f491be59" />
 
 * MacOS
 

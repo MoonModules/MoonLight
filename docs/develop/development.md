@@ -61,7 +61,7 @@ See [Documentation](https://moonmodules.org/MoonLight/develop/documentation/)
 
     * Go back to the homepage of your fork [myfork/MoonLight](https://github.com/ewowi/MoonLight). There is a message inviting to create a Pull Request. Press Compare & pull request.
       
-      <img width="350" alt="Screenshot 2025-04-15 at 14 59 15" src="https://github.com/user-attachments/assets/410aa517-99eb-4907-b1a3-db7f38abb194" />
+      <img width="350" src="https://github.com/user-attachments/assets/410aa517-99eb-4907-b1a3-db7f38abb194" />
   
     * Add a title and Description to the Pull Request and press Create Pull Request
   
@@ -73,7 +73,7 @@ See [Documentation](https://moonmodules.org/MoonLight/develop/documentation/)
 
 * Serial Log shows which code is from which library using emoji:
 
-   <img width="500" alt="Screenshot 2025-06-07 at 12 09 06" src="https://github.com/user-attachments/assets/9ac673d3-6303-40ee-b2a0-26a0befbda01" />
+   <img width="500" src="https://github.com/user-attachments/assets/9ac673d3-6303-40ee-b2a0-26a0befbda01" />
 
     * 🐼: ESP-SvelteKit
     * 🔮: PsychicHTTP

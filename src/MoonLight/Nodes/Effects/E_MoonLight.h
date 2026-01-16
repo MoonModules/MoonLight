@@ -4,7 +4,7 @@
     @repo      https://github.com/MoonModules/MoonLight, submit changes to this file as PRs
     @Authors   https://github.com/MoonModules/MoonLight/commits/main
     @Doc       https://moonmodules.org/MoonLight/moonlight/overview/
-    @Copyright © 2025 Github MoonLight Commit Authors
+    @Copyright © 2026 Github MoonLight Commit Authors
     @license   GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007
     @license   For non GPL-v3 usage, commercial licenses must be purchased. Contact us for more information.
 **/
@@ -62,7 +62,7 @@ class StarSkyEffect : public Node {
   // loop variables
   uint32_t nb_stars = 0;
   uint8_t* stars_fade_dir = nullptr;
-  uint16_t* stars_indexes = nullptr;
+  nrOfLights_t* stars_indexes = nullptr;
   uint8_t* stars_brightness = nullptr;
   uint8_t* stars_colors = nullptr;
 
@@ -83,7 +83,7 @@ class StarSkyEffect : public Node {
   void setup_animation() {
     resetStars();
     nb_stars = ((uint32_t)star_fill_ratio * (uint32_t)layer->nrOfLights) / 10000 + 1;
-    stars_indexes = allocMB<uint16_t>(nb_stars);
+    stars_indexes = allocMB<nrOfLights_t>(nb_stars);
     stars_fade_dir = allocMB<uint8_t>(nb_stars);
     stars_brightness = allocMB<uint8_t>(nb_stars);
     if (usePalette) stars_colors = allocMB<uint8_t>(nb_stars);
@@ -422,7 +422,7 @@ class SinusEffect : public Node {
     static uint16_t phase = 0;  // Tracks the phase of the sine wave
     uint8_t brightness = 255;
 
-    for (uint16_t i = 0; i < layer->nrOfLights; i++) {
+    for (nrOfLights_t i = 0; i < layer->nrOfLights; i++) {
       // Calculate the sine wave value for the current LED
       uint8_t wave = sin8((i * 255 / layer->nrOfLights) + phase);
       // Map the sine wave value to a color hue

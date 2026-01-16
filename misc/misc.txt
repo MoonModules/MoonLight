@@ -13,7 +13,7 @@ help: https://www.reddit.com/r/youtubedl/comments/qzqzaz/comment/hlon6k5/
 flash using esptool
 ===================
 [>_] in the statusbar of vscode
-esptool --port /dev/cu.usbmodem11201 write-flash 0x0 ./build/merged/MoonLight_esp32-s3-n16r8v_0-7-0_webflash.bin
+esptool --port /dev/cu.usbmodem11201 write-flash 0x0 ./build/merged/MoonLight_esp32-s3-n16r8v_0-8-0_webflash.bin
 optionally add erase-flash before write-flash
 
 Copy changes to ESP32-LedDrivers

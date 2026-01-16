@@ -21,7 +21,7 @@ The data collected consists of:
 * Country – e.g. France, determined via ip-api.com; only the country field is extracted.
 * Firmware – e.g. esp32-s3-n16r8v
 * Board model – e.g. QuinLED DigQuad, based on board presets (not yet implemented)
-* MoonLight version – e.g. 0.7.0
+* MoonLight version – e.g. 0.8.0
 
 No personal data, IP addresses, or identifiers that can trace back to an individual are collected, stored, or shared.
 Each event is sent with a random, anonymous client ID, so usage cannot be linked to a specific device or person.

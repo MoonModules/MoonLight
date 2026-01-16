@@ -172,5 +172,5 @@ plugins:
       separator: '[\s\-,:!=\[\]()"/]+|(?!\b)(?=[A-Z][a-z])|\.(?!\d)|&[lg]t;'
 
 copyright: |
-  Copyright &copy; 2025 GPL-3.0 by <a href="https://github.com/MoonModules" target="_blank" rel="noopener">MoonModules</a> -
+  Copyright &copy; 2026 GPL-3.0 by <a href="https://github.com/MoonModules" target="_blank" rel="noopener">MoonModules</a> -
   <a href="#__consent">Change cookie settings</a>
