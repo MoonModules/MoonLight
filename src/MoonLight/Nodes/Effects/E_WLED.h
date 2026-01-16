@@ -29,7 +29,7 @@ class BouncingBallsEffect : public Node {
   size_t ballsSize = 0;
 
   ~BouncingBallsEffect() override {
-    if (balls) freeMB(balls, name());
+    if (balls) freeMB(balls, "balls");
   }
 
   void onSizeChanged(const Coord3D& prevSize) override { reallocMB2<Ball[maxNumBalls]>(balls, ballsSize, layer->size.x, "balls"); }
@@ -326,7 +326,7 @@ class GEQEffect : public Node {
   size_t previousBarHeightSize = 0;
 
   ~GEQEffect() {
-    if (previousBarHeight) freeMB(previousBarHeight, name());
+    if (previousBarHeight) freeMB(previousBarHeight, "previousBarHeight");
   }
 
   void onSizeChanged(const Coord3D& prevSize) override { reallocMB2<uint16_t>(previousBarHeight, previousBarHeightSize, layer->size.x, "previousBarHeight"); }
@@ -554,7 +554,7 @@ class PacManEffect : public Node {
   size_t nrOfCharacters = 0;
 
   ~PacManEffect() {
-    if (character) freeMB(character, name());
+    if (character) freeMB(character, "character");
   }
 
   void onSizeChanged(const Coord3D& prevSize) override { initializePacMan(); }
@@ -984,7 +984,7 @@ class TetrixEffect : public Node {
   }
 
   ~TetrixEffect() override {
-    if (drops) freeMB(drops, name());
+    if (drops) freeMB(drops, "drops");
   };
 
   void loop() override {
@@ -1316,7 +1316,7 @@ class OctopusEffect : public Node {
   uint32_t step;
 
   ~OctopusEffect() {
-    if (rMap) freeMB(rMap, name());
+    if (rMap) freeMB(rMap, "rMap");
   }
 
   void setRMap() {
@@ -1711,7 +1711,7 @@ class RainEffect : public Node {
   size_t nrOfDrops = 0;
 
   ~RainEffect() override {
-    if (drops) freeMB(drops, name());
+    if (drops) freeMB(drops, "drops");
   }
 
   void onSizeChanged(const Coord3D& prevSize) override {
@@ -1783,7 +1783,7 @@ class DripEffect : public Node {
   size_t nrOfDrops = 0;
 
   ~DripEffect() override {
-    if (drops) freeMB(drops, name());
+    if (drops) freeMB(drops, "drops");
   }
 
   void onSizeChanged(const Coord3D& prevSize) override {

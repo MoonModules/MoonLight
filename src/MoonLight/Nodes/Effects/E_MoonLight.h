@@ -69,10 +69,10 @@ class StarSkyEffect : public Node {
   ~StarSkyEffect() { resetStars(); }
 
   void resetStars() {
-    if (stars_indexes) freeMB(stars_indexes, name());
-    if (stars_fade_dir) freeMB(stars_fade_dir, name());
-    if (stars_brightness) freeMB(stars_brightness, name());
-    if (stars_colors) freeMB(stars_colors, name());
+    if (stars_indexes) freeMB(stars_indexes, "indexes");
+    if (stars_fade_dir) freeMB(stars_fade_dir, "fade");
+    if (stars_brightness) freeMB(stars_brightness, "brightness");
+    if (stars_colors) freeMB(stars_colors, "colors");
     stars_indexes = nullptr;
     stars_fade_dir = nullptr;
     stars_brightness = nullptr;
@@ -1685,7 +1685,7 @@ class RingRandomFlowEffect : public RingEffect {
   size_t hueSize = 0;
 
   ~RingRandomFlowEffect() {
-    if (hue) freeMB(hue, name());
+    if (hue) freeMB(hue, "hue");
   }
 
   void onSizeChanged(const Coord3D& prevSize) override { reallocMB2<uint8_t>(hue, hueSize, layer->size.y, "hue"); }

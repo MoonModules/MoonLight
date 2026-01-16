@@ -173,28 +173,26 @@ class GameOfLifeEffect : public Node {
   }
 
   int dataSize = 0;
+  size_t cellsSize = 0;
 
   ~GameOfLifeEffect() override {
-    if (cells) freeMB(cells, name());
-    if (futureCells) freeMB(futureCells, name());
-    if (cellColors) freeMB(cellColors, name());
+    if (cells) freeMB(cells, "cells");
+    if (futureCells) freeMB(futureCells, "futureCells");
+    if (cellColors) freeMB(cellColors, "cellColors");
   }
 
   void onSizeChanged(const Coord3D& prevSize) override {
     // EXT_LOGW(ML_TAG, "GameOfLife onSizeChanged %d,%d,%d -> %d,%d,%d", prevSize.x, prevSize.y, prevSize.z, layer->size.x, layer->size.y, layer->size.z);
 
-    if (cells) freeMB(cells, name());
-    if (futureCells) freeMB(futureCells, name());
-    if (cellColors) freeMB(cellColors, name());
-
     dataSize = (layer->size.x * layer->size.y * layer->size.z + 7) / 8;
 
-    cells = allocMB<uint8_t>(dataSize, name());
-    futureCells = allocMB<uint8_t>(dataSize, name());
-    cellColors = allocMB<uint8_t>(layer->size.x * layer->size.y * layer->size.z, name());
+    reallocMB2<uint8_t>(cells, cellsSize, dataSize, "cells");
+    reallocMB2<uint8_t>(futureCells, cellsSize, dataSize, "futureCells");
+    reallocMB2<uint8_t>(cellColors, cellsSize, layer->size.x * layer->size.y * layer->size.z, "cellColors");
 
     if (!cells || !futureCells || !cellColors) {
       EXT_LOGE(ML_TAG, "allocation of cells || !futureCells || !cellColors failed");
+      // freeMB will be done when GOL is deleted
       return;
     }
     EXT_LOGD(ML_TAG, "allocation of cells futureCells cellColors successful %d %d", dataSize, layer->nrOfLights);

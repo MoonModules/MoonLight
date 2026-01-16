@@ -233,7 +233,7 @@ class RippleXZModifier : public Node {
   }
 
   void loop() override {
-    // 1D->2D: each Y is rippled through the X-axis
+    // 1D->2D: ripple effect propagates along the X-axis
     if (towardsX) {
       if (layer->effectDimension == _1D && layer->layerDimension > _1D) {
         for (int y = layer->size.y - 1; y >= 1; y--) {
@@ -244,7 +244,7 @@ class RippleXZModifier : public Node {
       }
     }
 
-    // 2D->3D: each XY plane is rippled through the z-axis
+    // 2D->3D: each XY plane propagates along the Z-axis
     if (towardsZ) {  // not relevant for 2D fixtures
       if (layer->effectDimension < _3D && layer->layerDimension == _3D) {
         for (int z = layer->size.z - 1; z >= 1; z--) {
