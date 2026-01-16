@@ -55,8 +55,8 @@ class MirrorModifier : public Node {
   static const char* tags() { return "💎🐙"; }
 
   bool mirrorX = true;
-  bool mirrorY = false;
-  bool mirrorZ = false;
+  bool mirrorY = true;
+  bool mirrorZ = true;
 
   void setup() override {
     addControl(mirrorX, "mirrorX", "checkbox");
@@ -195,19 +195,19 @@ class PinwheelModifier : public Node {
 };
 
 // Idea and first implementation (WLEDMM Art-Net) by @Troy
-class RippleYZModifier : public Node {
+class RippleXZModifier : public Node {
  public:
-  static const char* name() { return "RippleYZ"; }
+  static const char* name() { return "RippleXZ"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "💎💫"; }
 
   bool shrink = true;
-  bool towardsY = true;
+  bool towardsX = true;
   bool towardsZ = false;
 
   void setup() override {
     addControl(shrink, "shrink", "checkbox");
-    addControl(towardsY, "towardsY", "checkbox");
+    addControl(towardsX, "towardsX", "checkbox");
     addControl(towardsZ, "towardsZ", "checkbox");
   }
 
@@ -220,21 +220,21 @@ class RippleYZModifier : public Node {
     // layer->size.y++;
     // layer->size.z++;
     if (shrink) {
-      if (towardsY) layer->size.y = 1;
+      if (towardsX) layer->size.x = 1;
       if (towardsZ) layer->size.z = 1;
     }
   }
 
   void modifyPosition(Coord3D& position) override {
     if (shrink) {
-      if (towardsY) position.y = 0;
+      if (towardsX) position.x = 0;
       if (towardsZ) position.z = 0;
     }
   }
 
   void loop() override {
-    // 1D->2D: each Y is rippled through the X-axis
-    if (towardsY) {
+    // 1D->2D: ripple effect propagates along the X-axis
+    if (towardsX) {
       if (layer->effectDimension == _1D && layer->layerDimension > _1D) {
         for (int x = layer->size.x - 1; x >= 1; x--) {
           for (int y = 0; y < layer->size.y; y++) {
@@ -244,7 +244,7 @@ class RippleYZModifier : public Node {
       }
     }
 
-    // 2D->3D: each XY plane is rippled through the z-axis
+    // 2D->3D: each XY plane propagates along the Z-axis
     if (towardsZ) {  // not relevant for 2D fixtures
       if (layer->effectDimension < _3D && layer->layerDimension == _3D) {
         for (int z = layer->size.z - 1; z >= 1; z--) {
@@ -257,7 +257,7 @@ class RippleYZModifier : public Node {
       }
     }
   }
-};  // RippleYZ
+};  // RippleXZ
 
 // RotateModifier rotates the light position around the center of the layout.
 // It can flip the x and y coordinates, reverse the rotation direction, and alternate the rotation

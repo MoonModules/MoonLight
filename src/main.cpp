@@ -132,8 +132,8 @@ void effectTask(void* pvParameters) {
 
     if (layerP.lights.header.isPositions == 0 && !newFrameReady) {  // within mutex as driver task can change this
       if (layerP.lights.useDoubleBuffer) {
-        xSemaphoreGive(swapMutex);
         memcpy(layerP.lights.channelsE, layerP.lights.channelsD, layerP.lights.header.nrOfChannels);  // Copy previous frame (channelsD) to working buffer (channelsE)
+        xSemaphoreGive(swapMutex);
       }
 
       layerP.loop();

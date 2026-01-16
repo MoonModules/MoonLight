@@ -88,7 +88,7 @@ bool copyFile(const char* srcPath, const char* dstPath) {
   size_t n;
   while ((n = src.read(buf, sizeof(buf))) > 0) {
     if (dst.write(buf, n) != n) {
-      Serial.println("Write failed!");
+      EXT_LOGE(MB_TAG, "Write failed!");
       src.close();
       dst.close();
       return false;

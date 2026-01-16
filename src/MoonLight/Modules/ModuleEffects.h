@@ -156,7 +156,7 @@ class ModuleEffects : public NodeManager {
     addControlValue(control, getNameAndTags<RotateModifier>());
     addControlValue(control, getNameAndTags<CheckerboardModifier>());
     addControlValue(control, getNameAndTags<PinwheelModifier>());
-    addControlValue(control, getNameAndTags<RippleYZModifier>());
+    addControlValue(control, getNameAndTags<RippleXZModifier>());
 
     // find all the .sc files on FS
     File rootFolder = ESPFS.open("/");
@@ -252,7 +252,7 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<RotateModifier>(name);
     if (!node) node = checkAndAlloc<CheckerboardModifier>(name);
     if (!node) node = checkAndAlloc<PinwheelModifier>(name);
-    if (!node) node = checkAndAlloc<RippleYZModifier>(name);
+    if (!node) node = checkAndAlloc<RippleXZModifier>(name);
 
   #if FT_LIVESCRIPT
     if (!node) {
@@ -270,7 +270,7 @@ class ModuleEffects : public NodeManager {
       // node->moduleIO = _moduleIO;                     // to get pin allocations
       node->moduleNodes = (Module*)this;  // to request UI update
       node->setup();                      // run the setup of the effect
-      node->onSizeChanged(Coord3D());
+      node->onSizeChanged(Coord3D());     // to init memory allocations
       // layers[0]->nodes.reserve(index+1);
 
       // from here it runs concurrently in the effects task

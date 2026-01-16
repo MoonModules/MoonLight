@@ -32,16 +32,22 @@ class GameOfLifeEffect : public Node {
       for (int i = 0; i < 5; i++) {
         int nx = x + pattern[i][0];
         int ny = y + pattern[i][1];
-        if (getBitValue(futureCells, layer->XYZUnModified(Coord3D(nx, ny, z)))) {
-          canPlace = false;
-          break;
+        nrOfLights_t index = layer->XYZUnModified(Coord3D(nx, ny, z));
+        if (index < dataSize * 8) {
+          if (getBitValue(futureCells, index)) {
+            canPlace = false;
+            break;
+          }
         }
       }
       if (canPlace || attempts == 99) {
         for (int i = 0; i < 5; i++) {
           int nx = x + pattern[i][0];
           int ny = y + pattern[i][1];
-          setBitValue(futureCells, layer->XYZUnModified(Coord3D(nx, ny, z)), true);
+          nrOfLights_t index = layer->XYZUnModified(Coord3D(nx, ny, z));
+          if (index < dataSize * 8) {
+            setBitValue(futureCells, index, true);
+          }
           layer->setRGB(Coord3D(nx, ny, z), colorByAge ? CRGB::Green : color);
         }
         return;
@@ -130,7 +136,7 @@ class GameOfLifeEffect : public Node {
   uint16_t spaceshipCRC;
   uint16_t cubeGliderCRC;
   bool soloGlider;
-  uint16_t generation;
+  uint16_t generation = 0;
   bool birthNumbers[9];
   bool surviveNumbers[9];
   CRGB prevPalette;
@@ -148,18 +154,22 @@ class GameOfLifeEffect : public Node {
 
     // Setup Grid
     memset(cells, 0, dataSize);
-    memset(cellColors, 0, layer->size.x * layer->size.y * layer->size.z);
+    memset(cellColors, 0, cellColorsSize);
 
     for (int x = 0; x < layer->size.x; x++)
       for (int y = 0; y < layer->size.y; y++)
         for (int z = 0; z < layer->size.z; z++) {
           if (layer->layerDimension == _3D && !layer->isMapped(layer->XYZUnModified(Coord3D(x, y, z)))) continue;
           if (random8(100) < lifeChance) {
-            int index = layer->XYZUnModified(Coord3D(x, y, z));
-            setBitValue(cells, index, true);
-            cellColors[index] = random8(1, 255);
-            layer->setRGB(Coord3D(x, y, z), colorByAge ? CRGB::Green : ColorFromPalette(layerP.palette, cellColors[index]));
-            // layer->setRGB(Coord3D(x,y,z), bgColor); // Color set in redraw loop
+            nrOfLights_t index = layer->XYZUnModified(Coord3D(x, y, z));
+            if (index < dataSize * 8) {
+              setBitValue(cells, index, true);
+            }
+            if (index < cellColorsSize) {
+              cellColors[index] = random8(1, 255);
+              layer->setRGB(Coord3D(x, y, z), colorByAge ? CRGB::Green : ColorFromPalette(layerP.palette, cellColors[index]));
+              // layer->setRGB(Coord3D(x,y,z), bgColor); // Color set in redraw loop
+            }
           }
         }
     memcpy(futureCells, cells, dataSize);
@@ -172,28 +182,28 @@ class GameOfLifeEffect : public Node {
     cubeGliderLength = gliderLength * 6;  // Change later for rectangular cuboid
   }
 
-  int dataSize = 0;
+  size_t dataSize = 0;
+  size_t cellColorsSize = 0;
 
   ~GameOfLifeEffect() override {
-    freeMB(cells);
-    freeMB(futureCells);
-    freeMB(cellColors);
+    if (cells) freeMB(cells, "cells");
+    if (futureCells) freeMB(futureCells, "futureCells");
+    if (cellColors) freeMB(cellColors, "cellColors");
   }
 
   void onSizeChanged(const Coord3D& prevSize) override {
-    dataSize = ((layer->size.x * layer->size.y * layer->size.z + 7) / 8);
+    // EXT_LOGW(ML_TAG, "GameOfLife onSizeChanged %d,%d,%d -> %d,%d,%d", prevSize.x, prevSize.y, prevSize.z, layer->size.x, layer->size.y, layer->size.z);
 
-    freeMB(cells);
-    freeMB(futureCells);
-    freeMB(cellColors);
-
-    cells = allocMB<uint8_t>(dataSize);
-    futureCells = allocMB<uint8_t>(dataSize);
-    cellColors = allocMB<uint8_t>(layer->size.x * layer->size.y * layer->size.z);
+    reallocMB2<uint8_t>(cells, dataSize, (layer->size.x * layer->size.y * layer->size.z + 7) / 8, "cells");
+    reallocMB2<uint8_t>(futureCells, dataSize, dataSize, "futureCells");  // take the dataSize of cells (can be smaller then asked for if not enough memory)
+    reallocMB2<uint8_t>(cellColors, cellColorsSize, layer->size.x * layer->size.y * layer->size.z, "cellColors"); // dataSize * 8 > cellColorsSize if alloc okay
 
     if (!cells || !futureCells || !cellColors) {
       EXT_LOGE(ML_TAG, "allocation of cells || !futureCells || !cellColors failed");
+      // freeMB will be done when GOL is deleted
+      return;
     }
+    EXT_LOGD(ML_TAG, "allocation of cells futureCells cellColors successful d:%d c:%d #ol:%d", dataSize, cellColorsSize, layer->nrOfLights);
 
     startNewGameOfLife();
   }
@@ -218,30 +228,34 @@ class GameOfLifeEffect : public Node {
     bool blurDead = step > millis() && !fadedBackground;
     // Redraw Loop
     if (generation <= 1 || blurDead) {  // Readd overlay support when implemented
-      for (int x = 0; x < layer->size.x; x++)
-        for (int y = 0; y < layer->size.y; y++)
+      for (int x = 0; x < layer->size.x; x++) {
+        for (int y = 0; y < layer->size.y; y++) {
           for (int z = 0; z < layer->size.z; z++) {
-            uint16_t cIndex = layer->XYZUnModified(Coord3D(x, y, z));  // Current cell index (bit grid lookup)
-            Coord3D cLocPos = Coord3D(x, y, z);
-            uint16_t cLoc = layer->XYZ(cLocPos);  // Current cell location (led index)
-            if (!layer->isMapped(cIndex)) continue;
-            bool alive = getBitValue(cells, cIndex);
-            bool recolor = (alive && generation == 1 && cellColors[cIndex] == 0 && !random(16));  // Palette change or Initial Color
-            // Redraw alive if palette changed, spawn initial colors randomly, age alive cells while paused
-            if (alive && recolor) {
-              cellColors[cIndex] = random8(1, 255);
-              layer->setRGB(cLoc, colorByAge ? CRGB::Green : ColorFromPalette(layerP.palette, cellColors[cIndex]));
-            } else if (alive && colorByAge && !generation)
-              layer->blendColor(cLoc, CRGB::Red, 248);  // Age alive cells while paused
-            else if (alive && cellColors[cIndex] != 0)
-              layer->setRGB(cLoc, colorByAge ? CRGB::Green : ColorFromPalette(layerP.palette, cellColors[cIndex]));
-            // Redraw dead if palette changed, blur paused game, fade on newgame
-            // if      (!alive && (paletteChanged || disablePause)) layer->setRGB(cLoc, bgColor);   // Remove blended dead cells
-            else if (!alive && blurDead)
-              layer->blendColor(cLoc, bgColor, blur);  // Blend dead cells while paused
-            else if (!alive && generation == 1)
-              layer->blendColor(cLoc, bgColor, 248);  // Fade dead on new game
+            nrOfLights_t cIndex = layer->XYZUnModified(Coord3D(x, y, z));  // Current cell index (bit grid lookup)
+            if (cIndex < cellColorsSize) {
+              Coord3D cLocPos = Coord3D(x, y, z);
+              nrOfLights_t cLoc = layer->XYZ(cLocPos);  // Current cell location (led index)
+              if (!layer->isMapped(cIndex)) continue;
+              bool alive = getBitValue(cells, cIndex);
+              bool recolor = (alive && generation == 1 && cellColors[cIndex] == 0 && !random(16));  // Palette change or Initial Color
+              // Redraw alive if palette changed, spawn initial colors randomly, age alive cells while paused
+              if (alive && recolor) {
+                cellColors[cIndex] = random8(1, 255);
+                layer->setRGB(cLoc, colorByAge ? CRGB::Green : ColorFromPalette(layerP.palette, cellColors[cIndex]));
+              } else if (alive && colorByAge && !generation)
+                layer->blendColor(cLoc, CRGB::Red, 248);  // Age alive cells while paused
+              else if (alive && cellColors[cIndex] != 0)
+                layer->setRGB(cLoc, colorByAge ? CRGB::Green : ColorFromPalette(layerP.palette, cellColors[cIndex]));
+              // Redraw dead if palette changed, blur paused game, fade on newgame
+              // if      (!alive && (paletteChanged || disablePause)) layer->setRGB(cLoc, bgColor);   // Remove blended dead cells
+              else if (!alive && blurDead)
+                layer->blendColor(cLoc, bgColor, blur);  // Blend dead cells while paused
+              else if (!alive && generation == 1)
+                layer->blendColor(cLoc, bgColor, 248);  // Fade dead on new game
+            }
           }
+        }
+      }
     }
 
     // if (!speed || step > millis() || millis() - step < 1000 / speed) return; // Check if enough time has passed for updating
@@ -252,68 +266,79 @@ class GameOfLifeEffect : public Node {
     const int zAxis = (layer->layerDimension == _3D) ? 1 : 0;  // Avoids looping through z axis neighbors if 2D
     bool disableWrap = !wrap || soloGlider || generation % 1500 == 0 || zAxis;
     // Loop through all cells. Count neighbors, apply rules, setPixel
-    for (int x = 0; x < layer->size.x; x++)
-      for (int y = 0; y < layer->size.y; y++)
+    for (int x = 0; x < layer->size.x; x++) {
+      for (int y = 0; y < layer->size.y; y++) {
         for (int z = 0; z < layer->size.z; z++) {
           Coord3D cPos = Coord3D(x, y, z);
-          uint16_t cIndex = layer->XYZUnModified(cPos);
-          bool cellValue = getBitValue(cells, cIndex);
-          if (cellValue)
-            aliveCount++;
-          else
-            deadCount++;
-          if (zAxis && !layer->isMapped(cIndex)) continue;  // Skip if not physical led on 3D fixtures
-          uint8_t neighbors = 0, colorCount = 0;
-          uint8_t nColors[9];
+          nrOfLights_t cIndex = layer->XYZUnModified(cPos);
+          if (cIndex < dataSize * 8) {
+            bool cellValue = getBitValue(cells, cIndex);
+            if (cellValue)
+              aliveCount++;
+            else
+              deadCount++;
+            if (zAxis && !layer->isMapped(cIndex)) continue;  // Skip if not physical led on 3D fixtures
+            uint8_t neighbors = 0, colorCount = 0;
+            uint8_t nColors[9];
 
-          for (int i = -1; i <= 1; i++)
-            for (int j = -1; j <= 1; j++)
-              for (int k = -zAxis; k <= zAxis; k++) {
-                if (i == 0 && j == 0 && k == 0) continue;  // Ignore itself
-                Coord3D nPos = Coord3D(x + i, y + j, z + k);
-                if (nPos.isOutofBounds(layer->size)) {
-                  // Wrap is disabled when unchecked, for 3D fixtures, every 1500 generations, and solo gliders
-                  if (disableWrap) continue;
-                  nPos = (nPos + layer->size) % layer->size;  // Wrap around 3D
+            for (int i = -1; i <= 1; i++)
+              for (int j = -1; j <= 1; j++)
+                for (int k = -zAxis; k <= zAxis; k++) {
+                  if (i == 0 && j == 0 && k == 0) continue;  // Ignore itself
+                  Coord3D nPos = Coord3D(x + i, y + j, z + k);
+                  if (nPos.isOutofBounds(layer->size)) {
+                    // Wrap is disabled when unchecked, for 3D fixtures, every 1500 generations, and solo gliders
+                    if (disableWrap) continue;
+                    nPos = (nPos + layer->size) % layer->size;  // Wrap around 3D
+                  }
+                  nrOfLights_t nIndex = layer->XYZUnModified(nPos);
+                  if (nIndex < dataSize * 8) {
+                    // Count neighbors and store up to 9 neighbor colors
+                    if (getBitValue(cells, nIndex)) {
+                      neighbors++;
+                      if (cellValue || colorByAge) continue;  // Skip if cell is alive (color already set) or color by age (colors are not used)
+                      if (cellColors[nIndex] == 0) continue;  // Skip if neighbor color is 0 (dead cell)
+                      nColors[colorCount % 9] = cellColors[nIndex];
+                      colorCount++;
+                    }
+                  }
                 }
-                uint16_t nIndex = layer->XYZUnModified(nPos);
-                // Count neighbors and store up to 9 neighbor colors
-                if (getBitValue(cells, nIndex)) {
-                  neighbors++;
-                  if (cellValue || colorByAge) continue;  // Skip if cell is alive (color already set) or color by age (colors are not used)
-                  if (cellColors[nIndex] == 0) continue;  // Skip if neighbor color is 0 (dead cell)
-                  nColors[colorCount % 9] = cellColors[nIndex];
-                  colorCount++;
+            // Rules of Life
+            if (cellValue && !surviveNumbers[neighbors]) {
+              // Loneliness or Overpopulation
+              setBitValue(futureCells, cIndex, false);
+              layer->blendColor(cPos, bgColor, blur);
+            } else if (!cellValue && birthNumbers[neighbors]) {
+              // Reproduction
+              setBitValue(futureCells, cIndex, true);
+              uint8_t colorIndex = (colorCount > 0) ? nColors[random8(colorCount)] : random8();
+              if (random8(100) < mutation) colorIndex = random8();
+              if (cIndex < cellColorsSize) {
+                cellColors[cIndex] = colorIndex;
+              }
+              layer->setRGB(cPos, colorByAge ? CRGB::Green : ColorFromPalette(layerP.palette, colorIndex));
+            } else {
+              // Blending, fade dead cells further causing blurring effect to moving cells
+              if (!cellValue) {
+                if (fadedBackground) {
+                  CRGB val = layer->getRGB(cPos);
+                  if (fadedBackground < val.r + val.g + val.b) layer->blendColor(cPos, bgColor, blur);
+                } else
+                  layer->blendColor(cPos, bgColor, blur);
+              } else {  // alive
+                if (colorByAge)
+                  layer->blendColor(cPos, CRGB::Red, 248);
+                else {
+                  if (cIndex < cellColorsSize) {
+                    layer->setRGB(cPos, ColorFromPalette(layerP.palette, cellColors[cIndex]));
+                  }
                 }
               }
-          // Rules of Life
-          if (cellValue && !surviveNumbers[neighbors]) {
-            // Loneliness or Overpopulation
-            setBitValue(futureCells, cIndex, false);
-            layer->blendColor(cPos, bgColor, blur);
-          } else if (!cellValue && birthNumbers[neighbors]) {
-            // Reproduction
-            setBitValue(futureCells, cIndex, true);
-            uint8_t colorIndex = nColors[random8(colorCount)];
-            if (random8(100) < mutation) colorIndex = random8();
-            cellColors[cIndex] = colorIndex;
-            layer->setRGB(cPos, colorByAge ? CRGB::Green : ColorFromPalette(layerP.palette, colorIndex));
-          } else {
-            // Blending, fade dead cells further causing blurring effect to moving cells
-            if (!cellValue) {
-              if (fadedBackground) {
-                CRGB val = layer->getRGB(cPos);
-                if (fadedBackground < val.r + val.g + val.b) layer->blendColor(cPos, bgColor, blur);
-              } else
-                layer->blendColor(cPos, bgColor, blur);
-            } else {  // alive
-              if (colorByAge)
-                layer->blendColor(cPos, CRGB::Red, 248);
-              else
-                layer->setRGB(cPos, ColorFromPalette(layerP.palette, cellColors[cIndex]));
             }
           }
         }
+      }
+    }
 
     if (aliveCount == 5)
       soloGlider = true;
@@ -338,7 +363,7 @@ class GameOfLifeEffect : public Node {
     if (generation % 16 == 0) oscillatorCRC = crc;
     if (gliderLength && generation % gliderLength == 0) spaceshipCRC = crc;
     if (cubeGliderLength && generation % cubeGliderLength == 0) cubeGliderCRC = crc;
-    (generation)++;
+    generation++;
     step = millis();
   }
 };  // GameOfLife

@@ -57,6 +57,7 @@ void VirtualLayer::loop() {
     }
   }
 
+  // for virtual nodes
   if (prevSize != size) EXT_LOGD(ML_TAG, "onSizeChanged V %d,%d,%d -> %d,%d,%d", prevSize.x, prevSize.y, prevSize.z, size.x, size.y, size.z);
   for (Node* node : nodes) {
     if (prevSize != size) {
@@ -167,13 +168,13 @@ void VirtualLayer::setLight(const nrOfLights_t indexV, const uint8_t* channels, 
       }
       break;
     }
-  } else {
+  } else {  // no mapping
     uint32_t index = indexV * layerP->lights.header.channelsPerLight + offset;
-    // if (index + length <= layerP->lights.maxChannels) {  // no mapping
-    memcpy(&layerP->lights.channelsE[index], channels, length);
-    // } else {
-    //   EXT_LOGW(ML_TAG, "%d + %d >= %d", indexV, length, layerP->lights.maxChannels);
-    // }
+    if (index + length <= layerP->lights.maxChannels) {
+      memcpy(&layerP->lights.channelsE[index], channels, length);
+    } else {
+      EXT_LOGW(ML_TAG, "%d + %d >= %d (%d %d)", indexV, length, layerP->lights.maxChannels, index, offset);
+    }
   }
 }
 
@@ -215,15 +216,15 @@ T VirtualLayer::getLight(const nrOfLights_t indexV, uint8_t offset) const {
         return T();  // not implemented yet
       break;
     }
-  } else {
+  } else {  // no mapping
     uint32_t index = indexV * layerP->lights.header.channelsPerLight + offset;
-    // if (index + sizeof(T) <= layerP->lights.maxChannels) {  // no mapping
-    return *(T*)&layerP->lights.channelsE[index];
-    // } else {
-    //   // some operations will go out of bounds e.g. VUMeter, uncomment below lines if you wanna test on a specific effect
-    //   EXT_LOGW(ML_TAG, "%d + %d >= %d", indexV, sizeof(T), layerP->lights.maxChannels);
-    //   return T();
-    // }
+    if (index + sizeof(T) <= layerP->lights.maxChannels) {
+      return *(T*)&layerP->lights.channelsE[index];
+    } else {
+      // some operations will go out of bounds e.g. VUMeter, uncomment below lines if you wanna test on a specific effect
+      EXT_LOGW(ML_TAG, "%d + %d >= %d", indexV, sizeof(T), layerP->lights.maxChannels);
+      return T();
+    }
   }
 }
 
@@ -322,16 +323,8 @@ void VirtualLayer::fill_rainbow(const uint8_t initialhue, const uint8_t deltahue
 
 void VirtualLayer::createMappingTableAndAddOneToOne() {
   if (mappingTableSize != size.x * size.y * size.z) {
-    EXT_LOGD(ML_TAG, "Allocating mappingTable: nrOfLights=%d, sizeof(PhysMap)=%d, total bytes=%d", 
-         size.x * size.y * size.z, sizeof(PhysMap), size.x * size.y * size.z * sizeof(PhysMap));
-    PhysMap* newTable = reallocMB<PhysMap>(mappingTable, size.x * size.y * size.z, "mappingTable");
-    if (newTable) {
-      mappingTable = newTable;
-      EXT_LOGD(ML_TAG, "realloc mappingTable %d -> %dx%dx%d", mappingTableSize, size.x, size.y, size.z);
-      mappingTableSize = size.x * size.y * size.z;
-    } else {
-      EXT_LOGW(ML_TAG, "realloc mappingTable failed keeping oldSize %d", mappingTableSize);
-    }
+    EXT_LOGD(ML_TAG, "Allocating mappingTable: nrOfLights=%d, sizeof(PhysMap)=%d, total bytes=%d", size.x * size.y * size.z, sizeof(PhysMap), size.x * size.y * size.z * sizeof(PhysMap));
+    reallocMB2<PhysMap>(mappingTable, mappingTableSize, size.x * size.y * size.z, "mappingTable");
   }
 
   if (mappingTable && mappingTableSize) memset(mappingTable, 0, mappingTableSize * sizeof(PhysMap));  // on layout, set mappingTable to default PhysMap

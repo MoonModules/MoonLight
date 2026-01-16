@@ -83,6 +83,7 @@ void PhysicalLayer::setup() {
 }
 
 void PhysicalLayer::loop() {
+  if (lights.header.nrOfChannels >= lights.maxChannels) return;  // in case alloc mem is not successful
   // runs the loop of all effects / nodes in the layer
   for (VirtualLayer* layer : layers) {
     if (layer) {
@@ -119,6 +120,7 @@ void PhysicalLayer::loopDrivers() {
     requestMapVirtual = false;
   }
 
+  // for physical layer nodes
   if (prevSize != lights.header.size) EXT_LOGD(ML_TAG, "onSizeChanged P %d,%d,%d -> %d,%d,%d", prevSize.x, prevSize.y, prevSize.z, lights.header.size.x, lights.header.size.y, lights.header.size.z);
 
   for (Node* node : nodes) {
@@ -154,18 +156,24 @@ void PhysicalLayer::onLayoutPre() {
   EXT_LOGD(ML_TAG, "pass %d mp:%d", pass, monitorPass);
 
   if (pass == 1) {
+    // Hold mutex while modifying shared state!
+    if (layerP.lights.useDoubleBuffer) xSemaphoreTake(swapMutex, portMAX_DELAY);
+
     lights.header.nrOfLights = 0;  // for pass1 and pass2 as in pass2 virtual layer needs it
     lights.header.size = {0, 0, 0};
-    if (layerP.lights.useDoubleBuffer) xSemaphoreTake(swapMutex, portMAX_DELAY);
     EXT_LOGD(ML_TAG, "positions in progress (%d -> 1)", lights.header.isPositions);
-    lights.header.isPositions = 1;  // in progress...
+    lights.header.isPositions = 1;  // Stops effectTask from starting NEW frames
+
     if (layerP.lights.useDoubleBuffer) xSemaphoreGive(swapMutex);
 
-    delay(100);  // wait to stop effects
+    delay(100);  // Wait for any in-progress frame to complete
 
-    // set all channels to 0 (e.g for multichannel to not activate unused channels, e.g. fancy modes on MHs)
-    memset(lights.channelsE, 0, lights.maxChannels);  // set all the channels to 0, positions in channelsE
-    // dealloc pins
+    // Now safe to zero the buffer - effectTask won't start new frames while isPositions == 1
+    if (layerP.lights.useDoubleBuffer) xSemaphoreTake(swapMutex, portMAX_DELAY);
+    memset(lights.channelsE, 0, lights.maxChannels);
+    if (layerP.lights.useDoubleBuffer) xSemaphoreGive(swapMutex);
+
+    // dealloc pins (non-critical, can be outside mutex)
     if (!monitorPass) {
       memset(ledsPerPin, 0xFF, sizeof(ledsPerPin));  // UINT16_MAX is 2 * 0xFF
       memset(ledPinsAssigned, 0, sizeof(ledPinsAssigned));

@@ -26,20 +26,13 @@ class BouncingBallsEffect : public Node {
   }
 
   Ball (*balls)[maxNumBalls] = nullptr;  //[maxColumns][maxNumBalls];
-  uint16_t ballsSize = 0;
+  size_t ballsSize = 0;
 
-  ~BouncingBallsEffect() override { freeMB(balls); }
-
-  void onSizeChanged(const Coord3D& prevSize) override {
-    Ball(*newAlloc)[maxNumBalls] = reallocMB<Ball[maxNumBalls]>(balls, layer->size.x);
-
-    if (newAlloc) {
-      balls = newAlloc;
-      ballsSize = layer->size.x;
-    } else {
-      EXT_LOGE(ML_TAG, "(re)allocate balls failed");
-    }
+  ~BouncingBallsEffect() override {
+    if (balls) freeMB(balls, "balls");
   }
+
+  void onSizeChanged(const Coord3D& prevSize) override { reallocMB2<Ball[maxNumBalls]>(balls, ballsSize, layer->size.x, "balls"); }
 
   void loop() override {
     if (!balls) return;
@@ -56,7 +49,7 @@ class BouncingBallsEffect : public Node {
     //    for (size_t i = 0; i < maxNumBalls; i++) balls[i].lastBounceTime = time;
     //  }
 
-    for (int x = 0; x < MIN(layer->size.x, ballsSize); x++) {
+    for (int x = 0; x < ballsSize; x++) {
       for (size_t i = 0; i < MIN(numBalls, maxNumBalls); i++) {
         float timeSinceLastBounce = (time - balls[x][i].lastBounceTime) / ((255 - grav) / 64 + 1);
         float timeSec = timeSinceLastBounce / 1000.0f;
@@ -139,7 +132,7 @@ class BlurzEffect : public Node {
     if ((aux1 < layer->size.x * layer->size.y * layer->size.z) && (sharedData.volume > 1.0f)) layer->setRGB(aux1, step);  // "repaint" last pixel after blur
 
     unsigned freqBand = aux0 % 16;
-    uint16_t segLoc = random16(layer->size.x * layer->size.y * layer->size.z);
+    nrOfLights_t segLoc = random16(layer->size.x * layer->size.y * layer->size.z);
 
     if (freqMap) {  // FreqMap mode : blob location by major frequency
       int freqLocn;
@@ -152,7 +145,7 @@ class BlurzEffect : public Node {
       int bandStart = roundf(bandWidth * freqBand);
       segLoc = bandStart + random16(max(1, int(bandWidth)));
     }
-    segLoc = MAX(uint16_t(0), MIN(uint16_t(layer->size.x * layer->size.y * layer->size.z - 1), segLoc));  // fix overflows
+    segLoc = MAX(nrOfLights_t(0), MIN(nrOfLights_t(layer->size.x * layer->size.y * layer->size.z - 1), segLoc));  // fix overflows
 
     if (layer->size.x * layer->size.y * layer->size.z < 2) segLoc = 0;                                                       // WLEDMM just to be sure
     unsigned pixColor = (2 * sharedData.bands[freqBand] * 240) / max(1, layer->size.x * layer->size.y * layer->size.z - 1);  // WLEDMM avoid uint8 overflow, and preserve pixel parameters for redraw
@@ -330,19 +323,13 @@ class GEQEffect : public Node {
   }
 
   uint16_t* previousBarHeight = nullptr;
-  uint8_t previousBarHeightSize = 0;
+  size_t previousBarHeightSize = 0;
 
-  ~GEQEffect() { freeMB(previousBarHeight); }
-
-  void onSizeChanged(const Coord3D& prevSize) override {
-    uint16_t* newAlloc = reallocMB<uint16_t>(previousBarHeight, layer->size.x);
-    if (newAlloc) {
-      previousBarHeight = newAlloc;
-      previousBarHeightSize = layer->size.x;
-    } else {
-      EXT_LOGE(ML_TAG, "(re)allocate previousBarHeight failed");
-    }
+  ~GEQEffect() {
+    if (previousBarHeight) freeMB(previousBarHeight, "previousBarHeight");
   }
+
+  void onSizeChanged(const Coord3D& prevSize) override { reallocMB2<uint16_t>(previousBarHeight, previousBarHeightSize, layer->size.x, "previousBarHeight"); }
 
   void loop() override {
     const int NUM_BANDS = NUM_GEQ_CHANNELS;  // ::map(layer->custom1, 0, 255, 1, 16);
@@ -564,9 +551,11 @@ class PacManEffect : public Node {
   }
 
   pacmancharacters_t* character = nullptr;
-  uint8_t nrOfCharacters = 0;
+  size_t nrOfCharacters = 0;
 
-  ~PacManEffect() { freeMB(character); }
+  ~PacManEffect() {
+    if (character) freeMB(character, "character");
+  }
 
   void onSizeChanged(const Coord3D& prevSize) override { initializePacMan(); }
 
@@ -591,13 +580,7 @@ class PacManEffect : public Node {
 
     EXT_LOGD(ML_TAG, "#l:%d #pd:%d #g:%d #pd:%d", layer->nrOfLights, numPowerDotsControl, numGhosts, numPowerDots);
 
-    pacmancharacters_t* newAlloc = reallocMB<pacmancharacters_t>(character, numGhosts + numPowerDots + 1);  // +1 is the PacMan character
-    if (newAlloc) {
-      character = newAlloc;
-      nrOfCharacters = numGhosts + numPowerDots + 1;
-    } else {
-      EXT_LOGE(ML_TAG, "(re)allocate character failed");  // keep old (if existed)
-    }
+    reallocMB2<pacmancharacters_t>(character, nrOfCharacters, numGhosts + numPowerDots + 1, "character");  // +1 is the PacMan character
 
     if (nrOfCharacters > 0) {
       character[PACMAN].color = CRGB::Yellow;
@@ -988,16 +971,11 @@ class TetrixEffect : public Node {
   }
 
   Tetris* drops = nullptr;
-  uint16_t nrOfDrops = 0;
+  size_t nrOfDrops = 0;
 
   void onSizeChanged(const Coord3D& prevSize) override {
-    Tetris* newAlloc = reallocMB<Tetris>(drops, layer->size.x);
-    if (newAlloc) {
-      drops = newAlloc;
-      nrOfDrops = layer->size.x;
-    } else {
-      EXT_LOGE(ML_TAG, "(re)allocate drops failed");  // keep old (if existed)
-    }
+    reallocMB2<Tetris>(drops, nrOfDrops, layer->size.x, "drops");
+
     for (int i = 0; i < nrOfDrops; i++) {
       drops[i].stack = 0;               // reset brick stack size
       drops[i].step = millis() + 2000;  // start by fading out strip
@@ -1005,7 +983,9 @@ class TetrixEffect : public Node {
     }
   }
 
-  ~TetrixEffect() override { freeMB(drops); };
+  ~TetrixEffect() override {
+    if (drops) freeMB(drops, "drops");
+  };
 
   void loop() override {
     if (!drops) return;
@@ -1143,7 +1123,7 @@ class PopCornEffect : public Node {
         uint16_t ledIndex = popcorn[i].pos;
         CRGB col = ColorFromPalette(layerP.palette, popcorn[i].colIndex * (256 / maxNumPopcorn));
         if (ledIndex < layer->size.y) {
-          layer->setRGB(ledIndex, col);
+          // layer->setRGB(Coord3D(0, ledIndex), col);
           for (int x = 0; x < layer->size.x; x++)
             for (int z = 0; z < layer->size.z; z++) layer->setRGB(Coord3D(x, ledIndex, z), col);
         }
@@ -1332,10 +1312,12 @@ class OctopusEffect : public Node {
 
   Coord3D prevLedSize;
   Map_t* rMap = nullptr;
-  uint16_t rMapSize = 0;
+  size_t rMapSize = 0;
   uint32_t step;
 
-  ~OctopusEffect() { freeMB(rMap); }
+  ~OctopusEffect() {
+    if (rMap) freeMB(rMap, "rMap");
+  }
 
   void setRMap() {
     const uint8_t C_X = layer->size.x / 2 + (offset.x - 50) * layer->size.x / 100;
@@ -1344,7 +1326,7 @@ class OctopusEffect : public Node {
     const uint8_t mapp = 180 / max(layer->size.x, layer->size.y);
     for (pos.x = 0; pos.x < layer->size.x; pos.x++) {
       for (pos.y = 0; pos.y < layer->size.y; pos.y++) {
-        uint16_t indexV = layer->XYZUnModified(pos);
+        nrOfLights_t indexV = layer->XYZUnModified(pos);
         if (indexV < layer->size.x * layer->size.y) {                        // excluding UINT16_MAX from XY if out of bounds due to projection
           rMap[indexV].angle = 40.7436f * atan2f(pos.y - C_Y, pos.x - C_X);  // avoid 128*atan2()/PI
           rMap[indexV].radius = hypotf(pos.x - C_X, pos.y - C_Y) * mapp;     // thanks Sutaburosu
@@ -1353,16 +1335,7 @@ class OctopusEffect : public Node {
     }
   }
 
-  void onSizeChanged(const Coord3D& prevSize) override {
-    Map_t* newAlloc = reallocMB<Map_t>(rMap, layer->size.x * layer->size.y);
-    if (newAlloc) {
-      rMap = newAlloc;
-      rMapSize = layer->size.x * layer->size.y;
-      setRMap();
-    } else {
-      EXT_LOGE(ML_TAG, "(re)allocate rMap failed");
-    }
-  }
+  void onSizeChanged(const Coord3D& prevSize) override { reallocMB2<Map_t>(rMap, rMapSize, layer->size.x * layer->size.y, "rMap"); }
 
   void loop() override {
     if (rMap) {  // check if rMap allocation successful
@@ -1376,7 +1349,7 @@ class OctopusEffect : public Node {
       Coord3D pos = {0, 0, 0};
       for (pos.x = 0; pos.x < layer->size.x; pos.x++) {
         for (pos.y = 0; pos.y < layer->size.y; pos.y++) {
-          uint16_t indexV = layer->XYZUnModified(pos);
+          nrOfLights_t indexV = layer->XYZUnModified(pos);
           if (indexV < rMapSize) {  // excluding UINT16_MAX from XY if out of bounds due to projection
             byte angle = rMap[indexV].angle;
             byte radius = rMap[indexV].radius;
@@ -1647,12 +1620,14 @@ class FlowEffect : public Node {
 
     layer->fill_solid(ColorFromPalette(layerP.palette, -counter));
 
-    for (int z = 0; z < zones; z++) {
-      uint16_t pos = offset + z * zoneLen;
+    for (int zone = 0; zone < zones; zone++) {
+      uint16_t pos = offset + zone * zoneLen;
       for (int i = 0; i < zoneLen; i++) {
         uint8_t colorIndex = (i * 255 / zoneLen) - counter;
-        uint16_t led = (z & 0x01) ? i : (zoneLen - 1) - i;
-        layer->setRGB(Coord3D(0, pos + led), ColorFromPalette(layerP.palette, colorIndex));
+        uint16_t led = (zone & 0x01) ? i : (zoneLen - 1) - i;
+        CRGB color = ColorFromPalette(layerP.palette, colorIndex);
+        for (int x = 0; x < layer->size.x; x++)
+          for (int z = 0; z < layer->size.z; z++) layer->setRGB(Coord3D(x, pos + led, z), color);
       }
     }
   }
@@ -1733,23 +1708,19 @@ class RainEffect : public Node {
   }
 
   Spark* drops = nullptr;
-  uint16_t nrOfDrops = 0;
+  size_t nrOfDrops = 0;
 
-  ~RainEffect() override { freeMB(drops); }
+  ~RainEffect() override {
+    if (drops) freeMB(drops, "drops");
+  }
 
   void onSizeChanged(const Coord3D& prevSize) override {
-    Spark* newAlloc = reallocMB<Spark>(drops, layer->size.x);
+    reallocMB2<Spark>(drops, nrOfDrops, layer->size.x, "drops");
 
-    if (newAlloc) {
-      drops = newAlloc;
-      nrOfDrops = layer->size.x;
-      for (int x = 0; x < layer->size.x; x++) {
-        drops[x].pos = 0;
-        drops[x].col = 0;
-        drops[x].vel = 0;
-      }
-    } else {
-      EXT_LOGE(ML_TAG, "(re)allocate drops failed");
+    for (int x = 0; x < nrOfDrops; x++) {
+      drops[x].pos = 0;
+      drops[x].col = 0;
+      drops[x].vel = 0;
     }
   }
 
@@ -1809,23 +1780,19 @@ class DripEffect : public Node {
   }
 
   Spark (*drops)[maxNumDrops] = nullptr;  //[maxColumns][maxNumBalls];
-  uint16_t nrOfDrops = 0;
+  size_t nrOfDrops = 0;
 
-  ~DripEffect() override { freeMB(drops); }
+  ~DripEffect() override {
+    if (drops) freeMB(drops, "drops");
+  }
 
   void onSizeChanged(const Coord3D& prevSize) override {
-    Spark(*newAlloc)[maxNumDrops] = reallocMB<Spark[maxNumDrops]>(drops, layer->size.x);
+    reallocMB2<Spark[maxNumDrops]>(drops, nrOfDrops, layer->size.x, "drops");
 
-    if (newAlloc) {
-      drops = newAlloc;
-      nrOfDrops = layer->size.x;
-      for (int x = 0; x < layer->size.x; x++) {
-        for (int j = 0; j < maxNumDrops; j++) {
-          drops[x][j].colIndex = init;  // Set to init so loop() will initialize properly
-        }
+    for (int x = 0; x < nrOfDrops; x++) {
+      for (int j = 0; j < maxNumDrops; j++) {
+        drops[x][j].colIndex = init;  // Set to init so loop() will initialize properly
       }
-    } else {
-      EXT_LOGE(ML_TAG, "(re)allocate drops failed");
     }
   }
 

@@ -32,6 +32,11 @@ class ModuleDrivers : public NodeManager {
   }
 
   void readPins() {
+    if (safeModeMB) {
+      EXT_LOGW(ML_TAG, "Safe mode enabled, not adding pins");
+      return;
+    }
+
     _moduleIO->read(
         [&](ModuleState& state) {
           // find the pins in board definitions
@@ -163,7 +168,7 @@ class ModuleDrivers : public NodeManager {
       node->moduleIO = _moduleIO;                                           // to get pin allocations
       node->moduleNodes = (Module*)this;                                    // to request UI update
       node->setup();                                                        // run the setup of the effect
-      node->onSizeChanged(Coord3D());
+      node->onSizeChanged(Coord3D());     // to init memory allocations
       // layers[0]->nodes.reserve(index+1);
 
       // from here it runs concurrently in the drivers task
