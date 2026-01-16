@@ -236,9 +236,9 @@ class RippleXZModifier : public Node {
     // 1D->2D: ripple effect propagates along the X-axis
     if (towardsX) {
       if (layer->effectDimension == _1D && layer->layerDimension > _1D) {
-        for (int y = layer->size.y - 1; y >= 1; y--) {
-          for (int x = 0; x < layer->size.x; x++) {
-            layer->setRGB(Coord3D(x, y, 0), layer->getRGB(Coord3D(x, y-1, 0)));
+        for (int x = layer->size.x - 1; x >= 1; x--) {
+          for (int y = 0; y < layer->size.y; y++) {
+            layer->setRGB(Coord3D(x, y, 0), layer->getRGB(Coord3D(x - 1, y, 0)));
           }
         }
       }

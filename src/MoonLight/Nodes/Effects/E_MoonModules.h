@@ -147,7 +147,7 @@ class GameOfLifeEffect : public Node {
     if (!cells || !futureCells || !cellColors) return;
 
     // Setup Grid
-    memset(cells, 0, dataSize);
+    memset(cells, 0, cellsSize);
     memset(cellColors, 0, layer->size.x * layer->size.y * layer->size.z);
 
     for (int x = 0; x < layer->size.x; x++)
@@ -162,18 +162,18 @@ class GameOfLifeEffect : public Node {
             // layer->setRGB(Coord3D(x,y,z), bgColor); // Color set in redraw loop
           }
         }
-    memcpy(futureCells, cells, dataSize);
+    memcpy(futureCells, cells, cellsSize);
 
     soloGlider = false;
     // Change CRCs
-    uint16_t crc = crc16((const unsigned char*)cells, dataSize);
+    uint16_t crc = crc16((const unsigned char*)cells, cellsSize);
     oscillatorCRC = crc, spaceshipCRC = crc, cubeGliderCRC = crc;
     gliderLength = lcm(layer->size.y, layer->size.x) * 4;
     cubeGliderLength = gliderLength * 6;  // Change later for rectangular cuboid
   }
 
-  int dataSize = 0;
   size_t cellsSize = 0;
+  size_t cellColorsSize = 0;
 
   ~GameOfLifeEffect() override {
     if (cells) freeMB(cells, "cells");
@@ -184,18 +184,16 @@ class GameOfLifeEffect : public Node {
   void onSizeChanged(const Coord3D& prevSize) override {
     // EXT_LOGW(ML_TAG, "GameOfLife onSizeChanged %d,%d,%d -> %d,%d,%d", prevSize.x, prevSize.y, prevSize.z, layer->size.x, layer->size.y, layer->size.z);
 
-    dataSize = (layer->size.x * layer->size.y * layer->size.z + 7) / 8;
-
-    reallocMB2<uint8_t>(cells, cellsSize, dataSize, "cells");
-    reallocMB2<uint8_t>(futureCells, cellsSize, dataSize, "futureCells");
-    reallocMB2<uint8_t>(cellColors, cellsSize, layer->size.x * layer->size.y * layer->size.z, "cellColors");
+    reallocMB2<uint8_t>(cells, cellsSize, (layer->size.x * layer->size.y * layer->size.z + 7) / 8, "cells");
+    reallocMB2<uint8_t>(futureCells, cellsSize, cellsSize, "futureCells");  // take the cellsSize of cells (can be smaller then asked for if not enough memory)
+    reallocMB2<uint8_t>(cellColors, cellColorsSize, layer->size.x * layer->size.y * layer->size.z, "cellColors");
 
     if (!cells || !futureCells || !cellColors) {
       EXT_LOGE(ML_TAG, "allocation of cells || !futureCells || !cellColors failed");
       // freeMB will be done when GOL is deleted
       return;
     }
-    EXT_LOGD(ML_TAG, "allocation of cells futureCells cellColors successful %d %d", dataSize, layer->nrOfLights);
+    EXT_LOGD(ML_TAG, "allocation of cells futureCells cellColors successful %d %d", cellsSize, layer->nrOfLights);
 
     startNewGameOfLife();
   }
@@ -220,30 +218,34 @@ class GameOfLifeEffect : public Node {
     bool blurDead = step > millis() && !fadedBackground;
     // Redraw Loop
     if (generation <= 1 || blurDead) {  // Readd overlay support when implemented
-      for (int x = 0; x < layer->size.x; x++)
-        for (int y = 0; y < layer->size.y; y++)
+      for (int x = 0; x < layer->size.x; x++) {
+        for (int y = 0; y < layer->size.y; y++) {
           for (int z = 0; z < layer->size.z; z++) {
             uint16_t cIndex = layer->XYZUnModified(Coord3D(x, y, z));  // Current cell index (bit grid lookup)
-            Coord3D cLocPos = Coord3D(x, y, z);
-            uint16_t cLoc = layer->XYZ(cLocPos);  // Current cell location (led index)
-            if (!layer->isMapped(cIndex)) continue;
-            bool alive = getBitValue(cells, cIndex);
-            bool recolor = (alive && generation == 1 && cellColors[cIndex] == 0 && !random(16));  // Palette change or Initial Color
-            // Redraw alive if palette changed, spawn initial colors randomly, age alive cells while paused
-            if (alive && recolor) {
-              cellColors[cIndex] = random8(1, 255);
-              layer->setRGB(cLoc, colorByAge ? CRGB::Green : ColorFromPalette(layerP.palette, cellColors[cIndex]));
-            } else if (alive && colorByAge && !generation)
-              layer->blendColor(cLoc, CRGB::Red, 248);  // Age alive cells while paused
-            else if (alive && cellColors[cIndex] != 0)
-              layer->setRGB(cLoc, colorByAge ? CRGB::Green : ColorFromPalette(layerP.palette, cellColors[cIndex]));
-            // Redraw dead if palette changed, blur paused game, fade on newgame
-            // if      (!alive && (paletteChanged || disablePause)) layer->setRGB(cLoc, bgColor);   // Remove blended dead cells
-            else if (!alive && blurDead)
-              layer->blendColor(cLoc, bgColor, blur);  // Blend dead cells while paused
-            else if (!alive && generation == 1)
-              layer->blendColor(cLoc, bgColor, 248);  // Fade dead on new game
+            if (cIndex < cellColorsSize) {
+              Coord3D cLocPos = Coord3D(x, y, z);
+              uint16_t cLoc = layer->XYZ(cLocPos);  // Current cell location (led index)
+              if (!layer->isMapped(cIndex)) continue;
+              bool alive = getBitValue(cells, cIndex);
+              bool recolor = (alive && generation == 1 && cellColors[cIndex] == 0 && !random(16));  // Palette change or Initial Color
+              // Redraw alive if palette changed, spawn initial colors randomly, age alive cells while paused
+              if (alive && recolor) {
+                cellColors[cIndex] = random8(1, 255);
+                layer->setRGB(cLoc, colorByAge ? CRGB::Green : ColorFromPalette(layerP.palette, cellColors[cIndex]));
+              } else if (alive && colorByAge && !generation)
+                layer->blendColor(cLoc, CRGB::Red, 248);  // Age alive cells while paused
+              else if (alive && cellColors[cIndex] != 0)
+                layer->setRGB(cLoc, colorByAge ? CRGB::Green : ColorFromPalette(layerP.palette, cellColors[cIndex]));
+              // Redraw dead if palette changed, blur paused game, fade on newgame
+              // if      (!alive && (paletteChanged || disablePause)) layer->setRGB(cLoc, bgColor);   // Remove blended dead cells
+              else if (!alive && blurDead)
+                layer->blendColor(cLoc, bgColor, blur);  // Blend dead cells while paused
+              else if (!alive && generation == 1)
+                layer->blendColor(cLoc, bgColor, 248);  // Fade dead on new game
+            }
           }
+        }
+      }
     }
 
     // if (!speed || step > millis() || millis() - step < 1000 / speed) return; // Check if enough time has passed for updating
@@ -323,14 +325,14 @@ class GameOfLifeEffect : public Node {
       soloGlider = true;
     else
       soloGlider = false;
-    memcpy(cells, futureCells, dataSize);
-    uint16_t crc = crc16((const unsigned char*)cells, dataSize);
+    memcpy(cells, futureCells, cellsSize);
+    uint16_t crc = crc16((const unsigned char*)cells, cellsSize);
 
     bool repetition = false;
     if (!aliveCount || crc == oscillatorCRC || crc == spaceshipCRC || crc == cubeGliderCRC) repetition = true;
     if ((repetition && infinite) || (infinite && !random8(50)) || (infinite && float(aliveCount) / (aliveCount + deadCount) < 0.05)) {
       placePentomino(futureCells, colorByAge);  // Place R-pentomino/Glider if infinite mode is enabled
-      memcpy(cells, futureCells, dataSize);
+      memcpy(cells, futureCells, cellsSize);
       repetition = false;
     }
     if (repetition) {
