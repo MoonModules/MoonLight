@@ -132,7 +132,7 @@ class BlurzEffect : public Node {
     if ((aux1 < layer->size.x * layer->size.y * layer->size.z) && (sharedData.volume > 1.0f)) layer->setRGB(aux1, step);  // "repaint" last pixel after blur
 
     unsigned freqBand = aux0 % 16;
-    uint16_t segLoc = random16(layer->size.x * layer->size.y * layer->size.z);
+    nrOfLights_t segLoc = random16(layer->size.x * layer->size.y * layer->size.z);
 
     if (freqMap) {  // FreqMap mode : blob location by major frequency
       int freqLocn;
@@ -145,7 +145,7 @@ class BlurzEffect : public Node {
       int bandStart = roundf(bandWidth * freqBand);
       segLoc = bandStart + random16(max(1, int(bandWidth)));
     }
-    segLoc = MAX(uint16_t(0), MIN(uint16_t(layer->size.x * layer->size.y * layer->size.z - 1), segLoc));  // fix overflows
+    segLoc = MAX(nrOfLights_t(0), MIN(nrOfLights_t(layer->size.x * layer->size.y * layer->size.z - 1), segLoc));  // fix overflows
 
     if (layer->size.x * layer->size.y * layer->size.z < 2) segLoc = 0;                                                       // WLEDMM just to be sure
     unsigned pixColor = (2 * sharedData.bands[freqBand] * 240) / max(1, layer->size.x * layer->size.y * layer->size.z - 1);  // WLEDMM avoid uint8 overflow, and preserve pixel parameters for redraw
@@ -1326,7 +1326,7 @@ class OctopusEffect : public Node {
     const uint8_t mapp = 180 / max(layer->size.x, layer->size.y);
     for (pos.x = 0; pos.x < layer->size.x; pos.x++) {
       for (pos.y = 0; pos.y < layer->size.y; pos.y++) {
-        uint16_t indexV = layer->XYZUnModified(pos);
+        nrOfLights_t indexV = layer->XYZUnModified(pos);
         if (indexV < layer->size.x * layer->size.y) {                        // excluding UINT16_MAX from XY if out of bounds due to projection
           rMap[indexV].angle = 40.7436f * atan2f(pos.y - C_Y, pos.x - C_X);  // avoid 128*atan2()/PI
           rMap[indexV].radius = hypotf(pos.x - C_X, pos.y - C_Y) * mapp;     // thanks Sutaburosu
@@ -1349,7 +1349,7 @@ class OctopusEffect : public Node {
       Coord3D pos = {0, 0, 0};
       for (pos.x = 0; pos.x < layer->size.x; pos.x++) {
         for (pos.y = 0; pos.y < layer->size.y; pos.y++) {
-          uint16_t indexV = layer->XYZUnModified(pos);
+          nrOfLights_t indexV = layer->XYZUnModified(pos);
           if (indexV < rMapSize) {  // excluding UINT16_MAX from XY if out of bounds due to projection
             byte angle = rMap[indexV].angle;
             byte radius = rMap[indexV].radius;

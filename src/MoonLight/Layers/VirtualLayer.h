@@ -227,7 +227,7 @@ class VirtualLayer {
   void addLight(Coord3D position);
 
   // checks if a virtual light is mapped to a physical light (use with XY() or XYZ() to get the indexV)
-  bool isMapped(int indexV) const { return oneToOneMapping || indexV < mappingTableSize && (mappingTable[indexV].mapType == m_oneLight || mappingTable[indexV].mapType == m_moreLights); }
+  bool isMapped(nrOfLights_t indexV) const { return oneToOneMapping || indexV < mappingTableSize && (mappingTable[indexV].mapType == m_oneLight || mappingTable[indexV].mapType == m_moreLights); }
 
   void blur1d(fract8 blur_amount, uint16_t x = 0) {
     // todo: check updated in wled-MM
