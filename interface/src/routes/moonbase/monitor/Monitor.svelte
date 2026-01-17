@@ -38,7 +38,7 @@
 	};
 
 	const handleMonitor = (data: Uint8Array) => {
-		const headerPrimeNumber = 41;
+		const headerPrimeNumber = 47;
 		if (data.length == headerPrimeNumber)
 			//see ModuleLightsControl.h:243
 			handleHeader(data);
@@ -76,10 +76,10 @@
 
 		nrOfLights = view.getUint32(12, true);
 		nrOfChannels = view.getUint32(16, true);
-		lightPreset = view.getUint8(20);
-		channelsPerLight = view.getUint8(21);
-		offsetRGB = view.getUint8(26);
-		offsetWhite = view.getUint8(28);
+		lightPreset = view.getUint8(21);
+		channelsPerLight = view.getUint8(26);
+		offsetRGB = view.getUint8(27);
+		offsetWhite = view.getUint8(31);
 
 		//rebuild scene
 		createScene(el);

@@ -28,8 +28,10 @@ class Modifier;      // Forward as PhysicalLayer refers back to Modifier
 
   #ifdef BOARD_HAS_PSRAM
 typedef uint32_t nrOfLights_t;
+    #define nrOfLights_t_MAX UINT32_MAX
   #else
 typedef uint16_t nrOfLights_t;
+    #define nrOfLights_t_MAX UINT16_MAX
   #endif
 
 // make changes to LightsHeader carefully as the alignment of this struct must be preserved as Monitor.svelte is depending on it
@@ -37,34 +39,32 @@ struct LightsHeader {
   Coord3D size = Coord3D(16, 16, 1);  // 0 max position of light, counted by onLayoutPre/Post and addLight. 12 bytes not 0,0,0 to prevent div0 eg in Octopus2D
   uint32_t nrOfLights = 256;          // 12 nr of physical lights, counted by addLight
   uint32_t nrOfChannels;              // 16,  so we can deal with exceptional cases e.g. RGB2040 make sure it starts at even position!!! for alignment!!!
-  uint8_t lightPreset = 2;            // 20, so we can deal with exceptional cases e.g. RGB2040. default 2 / GRB
-  uint8_t channelsPerLight = 3;       // 21 RGB default
+  uint8_t isPositions = 0;            // 20 is the lights.positions array filled with positions
+  uint8_t lightPreset = 2;            // 21 so we can deal with exceptional cases e.g. RGB2040. default 2 / GRB
   uint8_t brightness;                 // 22 brightness set by light control (sent to LEDs driver normally)
   uint8_t red = 255;                  // 23 brightness set by light control (sent to LEDs driver normally)
   uint8_t green = 255;                // 24 brightness set by light control (sent to LEDs driver normally)
   uint8_t blue = 255;                 // 25 brightness set by light control (sent to LEDs driver normally)
-  uint8_t offsetRGB = 0;              // 26 RGB default
-  struct {                            // 27 condensed rgb
-    uint8_t isPositions : 2 = 0;      // is the lights.positions array filled with positions
-    uint8_t offsetRed : 2 = 1;        // GRB is default
-    uint8_t offsetGreen : 2 = 0;
-    uint8_t offsetBlue : 2 = 2;
-  };  // 8 bits
-  uint8_t offsetWhite = UINT8_MAX;  // 28
+  uint8_t channelsPerLight = 3;       // 26 RGB default
+  uint8_t offsetRGB = 0;              // 27 RGB default
+  uint8_t offsetRed = 1;              // 28 GRB is default
+  uint8_t offsetGreen = 0;            // 29
+  uint8_t offsetBlue = 2;             // 30
+  uint8_t offsetWhite = UINT8_MAX;    // 31
   // PAR lights
-  uint8_t offsetBrightness = UINT8_MAX;  // 29 in case the light has a separate brightness channel
+  uint8_t offsetBrightness = UINT8_MAX;  // 32 in case the light has a separate brightness channel
   // Moving heads
-  uint8_t offsetPan = UINT8_MAX;          // 30
-  uint8_t offsetTilt = UINT8_MAX;         // 31
-  uint8_t offsetZoom = UINT8_MAX;         // 32
-  uint8_t offsetRotate = UINT8_MAX;       // 33
-  uint8_t offsetGobo = UINT8_MAX;         // 34
-  uint8_t offsetRGB1 = UINT8_MAX;         // 35
-  uint8_t offsetRGB2 = UINT8_MAX;         // 36
-  uint8_t offsetRGB3 = UINT8_MAX;         // 37
-  uint8_t offsetBrightness2 = UINT8_MAX;  // 38
+  uint8_t offsetPan = UINT8_MAX;          // 33
+  uint8_t offsetTilt = UINT8_MAX;         // 34
+  uint8_t offsetZoom = UINT8_MAX;         // 35
+  uint8_t offsetRotate = UINT8_MAX;       // 36
+  uint8_t offsetGobo = UINT8_MAX;         // 37
+  uint8_t offsetRGB1 = UINT8_MAX;         // 38
+  uint8_t offsetRGB2 = UINT8_MAX;         // 39
+  uint8_t offsetRGB3 = UINT8_MAX;         // 40
+  uint8_t offsetBrightness2 = UINT8_MAX;  // 41
   // =============
-  // 39 bytes total
+  // 42 bytes total
   uint8_t fill[3];  // fill with dummies to have at least headerPrimeNumber bytes total, be aware of padding so do not change order of vars (Coord3D and uint32_t on top, uint8_t after that)
 
   void resetOffsets() {

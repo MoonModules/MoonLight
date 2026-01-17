@@ -120,6 +120,19 @@ void PhysicalLayer::loopDrivers() {
     requestMapVirtual = false;
   }
 
+  // if (lights.header.channelsPerLight == 4 && lights.header.offsetWhite != UINT8_MAX) {
+  //   for (int indexP = 0; indexP < lights.header.nrOfLights; indexP++) {
+  //     uint8_t* light = &lights.channelsD[indexP * lights.header.channelsPerLight + lights.header.offsetRGB];
+  //     uint8_t white = MIN(MIN(light[lights.header.offsetRed], light[lights.header.offsetGreen]), light[lights.header.offsetBlue]);
+  //     if (white) {
+  //       light[lights.header.offsetWhite] = white;
+  //       light[lights.header.offsetRed] -= white;
+  //       light[lights.header.offsetGreen] -= white;
+  //       light[lights.header.offsetBlue] -= white;
+  //     }
+  //   }
+  // }
+
   // for physical layer nodes
   if (prevSize != lights.header.size) EXT_LOGD(ML_TAG, "onSizeChanged P %d,%d,%d -> %d,%d,%d", prevSize.x, prevSize.y, prevSize.z, lights.header.size.x, lights.header.size.y, lights.header.size.z);
 

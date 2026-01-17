@@ -523,6 +523,7 @@ void DriverNode::onUpdate(const Char<20>& oldValue, const JsonObject& control) {
       header->offsetRed = 0;
       header->offsetGreen = 1;
       header->offsetBlue = 2;
+      header->offsetWhite = 3;
       header->offsetPan = 0;
       header->offsetTilt = 1;
       header->offsetBrightness = 3;
