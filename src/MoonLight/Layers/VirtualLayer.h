@@ -133,15 +133,14 @@ class VirtualLayer {
         }
         break;
       }
-    } else {
-      uint32_t index = indexV * layerP->lights.header.channelsPerLight;
-      if (index + layerP->lights.header.channelsPerLight <= layerP->lights.maxChannels) {
-        callback(index);
+    } else {                                                                                      // no mappnig
+      if (indexV * (layerP->lights.header.channelsPerLight + 1) <= layerP->lights.maxChannels) {  // make sure the light is in the channels array
+        callback(indexV);
       }
     }
   }
 
-  // set the value for each corresponding physical light
+  // set the value for a channel in each corresponding physical light
   void setLight(const nrOfLights_t indexV, uint8_t offset, uint8_t value) {
     forEachLightIndex(indexV, [&](nrOfLights_t indexP) { layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + offset] = value; });
   }
@@ -211,9 +210,9 @@ class VirtualLayer {
   }
   void setBrightness2(Coord3D pos, const uint8_t value) { setBrightness2(XYZ(pos), value); }
 
-  // get the value for each corresponding physical light
+  // get the value for a channel in one! corresponding physical light (the others are the same)
   uint8_t getLight(const nrOfLights_t indexV, uint8_t offset) {
-    uint8_t value;
+    uint8_t value = 0; // assume 0, not UINT8_MAX as that sets the channel to max
     forEachLightIndex(indexV, [&](nrOfLights_t indexP) { value = layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + offset]; }, true);
     return value;
   }
@@ -243,21 +242,24 @@ class VirtualLayer {
   void blendColor(Coord3D position, const CRGB& color, const uint8_t blendAmount) { blendColor(XYZ(position), color, blendAmount); }
 
   CRGB getRGB1(const nrOfLights_t indexV) {
-    CRGB color;
+    if (layerP->lights.header.offsetRGB1 == UINT8_MAX) return CRGB::Black;
+    CRGB color = CRGB::Black;
     forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&color, &layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGB1], sizeof(color)); }, true);
     return color;
   }
   CRGB getRGB1(Coord3D pos) { return getRGB1(XYZ(pos)); }
 
   CRGB getRGB2(const nrOfLights_t indexV) {
-    CRGB color;
+    if (layerP->lights.header.offsetRGB2 == UINT8_MAX) return CRGB::Black;
+    CRGB color = CRGB::Black;
     forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&color, &layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGB2], sizeof(color)); }, true);
     return color;
   }
   CRGB getRGB2(Coord3D pos) { return getRGB2(XYZ(pos)); }
 
   CRGB getRGB3(const nrOfLights_t indexV) {
-    CRGB color;
+    if (layerP->lights.header.offsetRGB3 == UINT8_MAX) return CRGB::Black;
+    CRGB color = CRGB::Black;
     forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&color, &layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGB3], sizeof(color)); }, true);
     return color;
   }

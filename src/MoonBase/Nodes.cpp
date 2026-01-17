@@ -493,10 +493,10 @@ void DriverNode::onUpdate(const Char<20>& oldValue, const JsonObject& control) {
       break;
     case lightPreset_MHBeeEyes150W15:
       header->channelsPerLight = 15;  // set channels per light to 15 (RGB + Pan + Tilt + Zoom + Brightness)
+      header->offsetRGB = 10;  // set offset for RGB lights in DMX map
       header->offsetRed = 0;
       header->offsetGreen = 1;
       header->offsetBlue = 2;
-      header->offsetRGB = 10;  // set offset for RGB lights in DMX map
       header->offsetPan = 0;
       header->offsetTilt = 1;
       header->offsetZoom = 7;
@@ -506,10 +506,10 @@ void DriverNode::onUpdate(const Char<20>& oldValue, const JsonObject& control) {
       break;
     case lightPreset_MHBeTopper19x15W32:
       header->channelsPerLight = 32;
+      header->offsetRGB = 9;
       header->offsetRed = 0;
       header->offsetGreen = 1;
       header->offsetBlue = 2;
-      header->offsetRGB = 9;
       header->offsetRGB1 = 13;
       header->offsetRGB2 = 17;
       header->offsetRGB3 = 24;
@@ -520,14 +520,14 @@ void DriverNode::onUpdate(const Char<20>& oldValue, const JsonObject& control) {
       break;
     case lightPreset_MH19x15W24:
       header->channelsPerLight = 24;
+      header->offsetRGB = 4;
       header->offsetRed = 0;
       header->offsetGreen = 1;
       header->offsetBlue = 2;
-      header->offsetWhite = 3;
+      header->offsetWhite = 3; // offset within offsetRGB ...
       header->offsetPan = 0;
       header->offsetTilt = 1;
       header->offsetBrightness = 3;
-      header->offsetRGB = 4;
       header->offsetRGB1 = 8;
       header->offsetRGB2 = 12;
       header->offsetZoom = 17;

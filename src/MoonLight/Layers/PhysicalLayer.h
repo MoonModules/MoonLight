@@ -59,9 +59,9 @@ struct LightsHeader {
   uint8_t offsetZoom = UINT8_MAX;         // 35
   uint8_t offsetRotate = UINT8_MAX;       // 36
   uint8_t offsetGobo = UINT8_MAX;         // 37
-  uint8_t offsetRGB1 = UINT8_MAX;         // 38
-  uint8_t offsetRGB2 = UINT8_MAX;         // 39
-  uint8_t offsetRGB3 = UINT8_MAX;         // 40
+  uint8_t offsetRGB1 = UINT8_MAX;         // 38 only RGB, not GRB etc
+  uint8_t offsetRGB2 = UINT8_MAX;         // 39 only RGB, not GRB etc
+  uint8_t offsetRGB3 = UINT8_MAX;         // 40 only RGB, not GRB etc
   uint8_t offsetBrightness2 = UINT8_MAX;  // 41
   // =============
   // 42 bytes total
