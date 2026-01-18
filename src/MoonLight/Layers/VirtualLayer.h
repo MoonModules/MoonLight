@@ -153,7 +153,7 @@ class VirtualLayer {
       mappingTable[indexV].rgb = ((min(color[0] + 3, 255) >> 3) << 9) + ((min(color[1] + 3, 255) >> 3) << 4) + (min(color[2] + 7, 255) >> 4);
   #endif
     } else
-      forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGB], &color, sizeof(color)); });
+      forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW], &color, sizeof(color)); });
   }
   void setRGB(Coord3D pos, CRGB color) { setRGB(XYZ(pos), color); }
 
@@ -190,17 +190,17 @@ class VirtualLayer {
   void setGobo(Coord3D pos, const uint8_t value) { setGobo(XYZ(pos), value); }
 
   void setRGB1(const nrOfLights_t indexV, CRGB color) {
-    if (layerP->lights.header.offsetRGB1 != UINT8_MAX) forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGB1], &color, sizeof(color)); });
+    if (layerP->lights.header.offsetRGBW1 != UINT8_MAX) forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW1], &color, sizeof(color)); });
   }
   void setRGB1(Coord3D pos, CRGB color) { setRGB1(XYZ(pos), color); }
 
   void setRGB2(const nrOfLights_t indexV, CRGB color) {
-    if (layerP->lights.header.offsetRGB2 != UINT8_MAX) forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGB2], &color, sizeof(color)); });
+    if (layerP->lights.header.offsetRGBW2 != UINT8_MAX) forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW2], &color, sizeof(color)); });
   }
   void setRGB2(Coord3D pos, CRGB color) { setRGB2(XYZ(pos), color); }
 
   void setRGB3(const nrOfLights_t indexV, CRGB color) {
-    if (layerP->lights.header.offsetRGB3 != UINT8_MAX) forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGB3], &color, sizeof(color)); });
+    if (layerP->lights.header.offsetRGBW3 != UINT8_MAX) forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW3], &color, sizeof(color)); });
   }
   void setRGB3(Coord3D pos, CRGB color) { setRGB3(XYZ(pos), color); }
 
@@ -230,7 +230,7 @@ class VirtualLayer {
   #endif
     } else {
       CRGB color = CRGB::Black;
-      forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&color, &layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGB], sizeof(color)); }, true);
+      forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&color, &layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW], sizeof(color)); }, true);
       return color;
     }
   }
@@ -242,25 +242,25 @@ class VirtualLayer {
   void blendColor(Coord3D position, const CRGB& color, const uint8_t blendAmount) { blendColor(XYZ(position), color, blendAmount); }
 
   CRGB getRGB1(const nrOfLights_t indexV) {
-    if (layerP->lights.header.offsetRGB1 == UINT8_MAX) return CRGB::Black;
+    if (layerP->lights.header.offsetRGBW1 == UINT8_MAX) return CRGB::Black;
     CRGB color = CRGB::Black;
-    forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&color, &layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGB1], sizeof(color)); }, true);
+    forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&color, &layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW1], sizeof(color)); }, true);
     return color;
   }
   CRGB getRGB1(Coord3D pos) { return getRGB1(XYZ(pos)); }
 
   CRGB getRGB2(const nrOfLights_t indexV) {
-    if (layerP->lights.header.offsetRGB2 == UINT8_MAX) return CRGB::Black;
+    if (layerP->lights.header.offsetRGBW2 == UINT8_MAX) return CRGB::Black;
     CRGB color = CRGB::Black;
-    forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&color, &layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGB2], sizeof(color)); }, true);
+    forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&color, &layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW2], sizeof(color)); }, true);
     return color;
   }
   CRGB getRGB2(Coord3D pos) { return getRGB2(XYZ(pos)); }
 
   CRGB getRGB3(const nrOfLights_t indexV) {
-    if (layerP->lights.header.offsetRGB3 == UINT8_MAX) return CRGB::Black;
+    if (layerP->lights.header.offsetRGBW3 == UINT8_MAX) return CRGB::Black;
     CRGB color = CRGB::Black;
-    forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&color, &layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGB3], sizeof(color)); }, true);
+    forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&color, &layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW3], sizeof(color)); }, true);
     return color;
   }
   CRGB getRGB3(Coord3D pos) { return getRGB3(XYZ(pos)); }

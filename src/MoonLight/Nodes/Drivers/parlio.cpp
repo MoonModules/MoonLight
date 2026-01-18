@@ -33,7 +33,7 @@ namespace LedMatrixDetail {
 
 // This intermediate step is common to all packing functions.
 // It transposes the data for 32 time-slices into a cache-friendly temporary buffer.
-inline void transpose_32_slices(uint32_t (&transposed_slices)[32], const uint8_t* input_buffer, const uint32_t pixel_in_pin, const uint32_t input_component, const uint16_t* pixels_per_pin, const uint32_t num_active_pins, const uint8_t COMPONENTS_PER_PIXEL, const uint32_t* waveform_cache, const uint8_t* brightness_cache) {
+inline void transpose_32_slices(uint32_t (&transposed_slices)[32], const uint8_t* input_buffer, const uint32_t pixel_in_pin, const uint8_t input_component, const uint16_t* pixels_per_pin, const uint32_t num_active_pins, const uint8_t COMPONENTS_PER_PIXEL, const uint32_t* waveform_cache, const uint8_t* brightness_cache) {
   memset(transposed_slices, 0, sizeof(uint32_t) * 32);
 
   for (uint32_t pin = 0; pin < num_active_pins; ++pin) {
@@ -208,7 +208,7 @@ void create_transposed_led_output_optimized(const uint8_t* input_buffer, uint16_
   // --- Main Processing Loop ---
   for (uint32_t pixel_in_pin = 0; pixel_in_pin < max_leds_per_output; ++pixel_in_pin) {  // loop over all the pixels per pin, first all the first pixels for all pins, then the second...
     for (uint32_t component_in_pixel = 0; component_in_pixel < COMPONENTS_PER_PIXEL; ++component_in_pixel) {
-      const uint32_t input_component = component_map[component_in_pixel];
+      const uint8_t input_component = component_map[component_in_pixel];
       // component_in_pixel is always RGB(W) - looping over the input array
       // input_component is offsetR,G,B e.g. GRB -> 102, so this loop starts with 1 / green, so green is first processed, then red, then blue
 

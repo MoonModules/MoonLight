@@ -60,7 +60,7 @@ class ParallelLEDDriver : public DriverNode {
     // LUTs are accessed directly within show_parlio via extern ledsDriver
 
     // No brightness parameter needed
-    show_parlio(pins, layerP.lights.header.nrOfLights, layerP.lights.channelsD, layerP.lights.header.channelsPerLight, nrOfPins, layerP.ledsPerPin, layerP.lights.header.offsetRed, layerP.lights.header.offsetGreen, layerP.lights.header.offsetBlue, layerP.lights.header.offsetWhite);
+    show_parlio(pins, layerP.lights.header.nrOfLights, layerP.lights.channelsD, layerP.lights.header.channelsPerLight, nrOfPins, layerP.ledsPerPin, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetRed, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetGreen, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetBlue, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetWhite);
     #endif
   #else  // ESP32_LEDSDRIVER
     if (!ledsDriver.initLedsDone) return;
@@ -118,8 +118,8 @@ class ParallelLEDDriver : public DriverNode {
 
         uint8_t savedBrightness = ledsDriver._brightness;  //(initLed sets it to 255 and thats not what we want)
 
-        EXT_LOGD(ML_TAG, "init Parallel LED Driver %d %d %d %d %d", layerP.lights.header.channelsPerLight, layerP.lights.header.offsetRed, layerP.lights.header.offsetGreen, layerP.lights.header.offsetBlue, layerP.lights.header.offsetWhite);
-        ledsDriver.initled(layerP.lights.channelsD, pins, layerP.ledsPerPin, nrOfPins, layerP.lights.header.channelsPerLight, layerP.lights.header.offsetRed, layerP.lights.header.offsetGreen, layerP.lights.header.offsetBlue, layerP.lights.header.offsetWhite, true);
+        EXT_LOGD(ML_TAG, "init Parallel LED Driver %d %d %d %d %d", layerP.lights.header.channelsPerLight, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetRed, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetGreen, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetBlue, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetWhite);
+        ledsDriver.initled(layerP.lights.channelsD, pins, layerP.ledsPerPin, nrOfPins, layerP.lights.header.channelsPerLight, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetRed, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetGreen, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetBlue, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetWhite, true);
 
         ledsDriver.setBrightness(savedBrightness);  //(initLed sets it to 255 and thats not what we want)
 
@@ -131,8 +131,8 @@ class ParallelLEDDriver : public DriverNode {
       } else {
         // don't call initled again as that will crash because if channelsPerLight (nb_components) change, the dma buffers are not big enough
 
-        EXT_LOGD(ML_TAG, "update Parallel LED Driver %d %d %d %d %d", layerP.lights.header.channelsPerLight, layerP.lights.header.offsetRed, layerP.lights.header.offsetGreen, layerP.lights.header.offsetBlue, layerP.lights.header.offsetWhite);
-        ledsDriver.updateDriver(pins, layerP.ledsPerPin, nrOfPins, dmaBuffer, layerP.lights.header.channelsPerLight, layerP.lights.header.offsetRed, layerP.lights.header.offsetGreen, layerP.lights.header.offsetBlue, layerP.lights.header.offsetWhite);
+        EXT_LOGD(ML_TAG, "update Parallel LED Driver %d %d %d %d %d", layerP.lights.header.channelsPerLight, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetRed, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetGreen, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetBlue, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetWhite);
+        ledsDriver.updateDriver(pins, layerP.ledsPerPin, nrOfPins, dmaBuffer, layerP.lights.header.channelsPerLight, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetRed, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetGreen, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetBlue, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetWhite);
       }
 
     #else  // P4: Parlio Troy Driver
@@ -168,7 +168,7 @@ class ParallelLEDDriver : public DriverNode {
       }
 
       if (numPins > 0) {
-        ledsDriver.initLeds(layerP.lights.channelsD, pinConfig, numPins, layerP.lights.header.channelsPerLight, layerP.lights.header.offsetRed, layerP.lights.header.offsetGreen, layerP.lights.header.offsetBlue, layerP.lights.header.offsetWhite);  // 102 is GRB
+        ledsDriver.initLeds(layerP.lights.channelsD, pinConfig, numPins, layerP.lights.header.channelsPerLight, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetRed, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetGreen, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetBlue, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetWhite);  // 102 is GRB
 
       #if ML_LIVE_MAPPING
         driver.setMapLed(&mapLed);

@@ -155,17 +155,17 @@ void VirtualLayer::fadeToBlackMin() {
         CRGB color = getRGB(index);  // direct access to the channels
         color.nscale8(255 - fadeBy);
         setRGB(index, color);
-        if (layerP->lights.header.offsetRGB1 != UINT8_MAX) {
+        if (layerP->lights.header.offsetRGBW1 != UINT8_MAX) {
           CRGB color = getRGB1(index);  // direct access to the channels
           color.nscale8(255 - fadeBy);
           setRGB1(index, color);
         }
-        if (layerP->lights.header.offsetRGB2 != UINT8_MAX) {
+        if (layerP->lights.header.offsetRGBW2 != UINT8_MAX) {
           CRGB color = getRGB2(index);  // direct access to the channels
           color.nscale8(255 - fadeBy);
           setRGB2(index, color);
         }
-        if (layerP->lights.header.offsetRGB3 != UINT8_MAX) {
+        if (layerP->lights.header.offsetRGBW3 != UINT8_MAX) {
           CRGB color = getRGB3(index);  // direct access to the channels
           color.nscale8(255 - fadeBy);
           setRGB3(index, color);

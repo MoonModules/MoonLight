@@ -52,7 +52,7 @@
 
 	let nrOfLights: number;
 	let channelsPerLight: number;
-	let offsetRGB: number;
+	let offsetRGBW: number;
 	let offsetWhite: number;
 	let isPositions: boolean = false;
 	let lightPreset: number;
@@ -78,7 +78,7 @@
 		nrOfChannels = view.getUint32(16, true);
 		lightPreset = view.getUint8(21);
 		channelsPerLight = view.getUint8(26);
-		offsetRGB = view.getUint8(27);
+		offsetRGBW = view.getUint8(27);
 		offsetWhite = view.getUint8(31);
 
 		//rebuild scene
@@ -101,7 +101,7 @@
 			depth,
 			nrOfLights,
 			channelsPerLight,
-			offsetRGB,
+			offsetRGBW,
 			nrOfChannels
 		);
 	};
@@ -137,11 +137,11 @@
 			if (lightPreset != lightPreset_RGB2040 || Math.floor(index / groupSize) % 2 == 0) {
 				// Math.floor: RGB2040 Skip the empty channels
 				// && index < width * height * depth
-				const r = channels[index + offsetRGB + 0] / 255;
-				const g = channels[index + offsetRGB + 1] / 255;
-				const b = channels[index + offsetRGB + 2] / 255;
+				const r = channels[index + offsetRGBW + 0] / 255;
+				const g = channels[index + offsetRGBW + 1] / 255;
+				const b = channels[index + offsetRGBW + 2] / 255;
 				let w = 0;
-				if (offsetWhite != 255) w = channels[index + offsetRGB + 3] / 255; //add white channel if present
+				if (offsetWhite != 255) w = channels[index + offsetRGBW + 3] / 255; //add white channel if present
 				const a = 1.0; // Full opacity
 				colors.push(r + w, g + w, b + w, a);
 			}

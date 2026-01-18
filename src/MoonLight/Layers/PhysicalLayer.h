@@ -46,8 +46,8 @@ struct LightsHeader {
   uint8_t green = 255;                // 24 brightness set by light control (sent to LEDs driver normally)
   uint8_t blue = 255;                 // 25 brightness set by light control (sent to LEDs driver normally)
   uint8_t channelsPerLight = 3;       // 26 RGB default
-  uint8_t offsetRGB = 0;              // 27 RGB default
-  uint8_t offsetRed = 1;              // 28 GRB is default
+  uint8_t offsetRGBW = 0;             // 27 RGB default
+  uint8_t offsetRed = 1;              // 28 GRB is default, offsetRed/Green/Blue/White is within offsetRGBW!
   uint8_t offsetGreen = 0;            // 29
   uint8_t offsetBlue = 2;             // 30
   uint8_t offsetWhite = UINT8_MAX;    // 31
@@ -59,9 +59,9 @@ struct LightsHeader {
   uint8_t offsetZoom = UINT8_MAX;         // 35
   uint8_t offsetRotate = UINT8_MAX;       // 36
   uint8_t offsetGobo = UINT8_MAX;         // 37
-  uint8_t offsetRGB1 = UINT8_MAX;         // 38 only RGB, not GRB etc
-  uint8_t offsetRGB2 = UINT8_MAX;         // 39 only RGB, not GRB etc
-  uint8_t offsetRGB3 = UINT8_MAX;         // 40 only RGB, not GRB etc
+  uint8_t offsetRGBW1 = UINT8_MAX;        // 38 also uses offsetRed/Green/Blue/White within offsetRGBW!
+  uint8_t offsetRGBW2 = UINT8_MAX;        // 39 offsetRed/Green/Blue/White within offsetRGBW!
+  uint8_t offsetRGBW3 = UINT8_MAX;        // 40 offsetRed/Green/Blue/White within offsetRGBW!
   uint8_t offsetBrightness2 = UINT8_MAX;  // 41
   // =============
   // 42 bytes total
@@ -71,7 +71,7 @@ struct LightsHeader {
     nrOfChannels = 0;
     channelsPerLight = 3;  // RGB default
     // lightPreset = lightPreset_GRB; // don't reset as managed by Drivers
-    offsetRGB = 0;
+    offsetRGBW = 0;
     offsetRed = 1;
     offsetGreen = 0;
     offsetBlue = 2;
@@ -82,9 +82,9 @@ struct LightsHeader {
     offsetZoom = UINT8_MAX;
     offsetRotate = UINT8_MAX;
     offsetGobo = UINT8_MAX;
-    offsetRGB1 = UINT8_MAX;
-    offsetRGB2 = UINT8_MAX;
-    offsetRGB3 = UINT8_MAX;
+    offsetRGBW1 = UINT8_MAX;
+    offsetRGBW2 = UINT8_MAX;
+    offsetRGBW3 = UINT8_MAX;
     offsetBrightness2 = UINT8_MAX;
     memset(fill, 0, sizeof(fill));  // set to 0
   }
