@@ -33,7 +33,7 @@ namespace LedMatrixDetail {
 
 // This intermediate step is common to all packing functions.
 // It transposes the data for 32 time-slices into a cache-friendly temporary buffer.
-inline void transpose_32_slices(uint32_t (&transposed_slices)[32], uint8_t* mappedBuffer, const uint8_t component_in_pixel, const uint32_t num_active_pins, const uint8_t COMPONENTS_PER_PIXEL, const uint32_t* waveform_cache, const uint8_t* component_map) {
+inline void transpose_32_slices(uint32_t (&transposed_slices)[32], uint8_t* mappedBuffer, const uint8_t component_in_pixel, const uint32_t num_active_pins, const uint8_t COMPONENTS_PER_PIXEL, const uint32_t* waveform_cache) {
   memset(transposed_slices, 0, sizeof(uint32_t) * 32);
 
   for (uint32_t pin = 0; pin < num_active_pins; ++pin) {
