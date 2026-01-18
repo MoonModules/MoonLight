@@ -22,21 +22,17 @@ class SolidEffect : public Node {
   uint8_t red = 182;
   uint8_t green = 15;
   uint8_t blue = 98;
-  uint8_t white = 0;
   uint8_t brightness = 255;
 
   void setup() override {
     addControl(red, "red", "slider");
     addControl(green, "green", "slider");
     addControl(blue, "blue", "slider");
-    addControl(white, "white", "slider");
     addControl(brightness, "brightness", "slider");
   }
 
   void loop() override {
     layer->fill_solid(CRGB(red * brightness / 255, green * brightness / 255, blue * brightness / 255));
-    if (layerP.lights.header.offsetWhite != UINT8_MAX && white > 0)
-      for (int index = 0; index < layer->nrOfLights; index++) layer->setWhite(index, white * brightness / 255);
   }
 };
 
@@ -147,7 +143,7 @@ class FixedRectangleEffect : public Node {
   uint8_t red = 182;
   uint8_t green = 15;
   uint8_t blue = 98;
-  uint8_t white = 0;
+  // uint8_t white = 0;
   uint16_t width = 1;
   uint16_t x = 0;
   uint16_t height = 1;
@@ -160,7 +156,7 @@ class FixedRectangleEffect : public Node {
     addControl(red, "red", "slider");
     addControl(green, "green", "slider");
     addControl(blue, "blue", "slider");
-    addControl(white, "white", "slider");
+    // addControl(white, "white", "slider");
     addControl(x, "X position", "slider", 0);
     addControl(y, "Y position", "slider", 0);
     addControl(z, "Z position", "slider", 0);
@@ -183,7 +179,6 @@ class FixedRectangleEffect : public Node {
             layer->setRGB(pos, CRGB::White);
           else
             layer->setRGB(pos, CRGB(red, green, blue));
-          if (white > 0) layer->setWhite(pos, white);
           if (height < width) alternate = !alternate;
         }
         if (height > width) alternate = !alternate;

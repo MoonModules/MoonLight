@@ -502,7 +502,7 @@ class ModuleLightsControl : public Module {
       }
     }
 
-  #define headerPrimeNumber 41  // prime number so nrOfChannels is not likely to be the same so monitor can recognize a header
+  #define headerPrimeNumber 47  // prime number so nrOfChannels is not likely to be the same so monitor can recognize a header
 
   #if FT_ENABLED(FT_MONITOR)
     extern SemaphoreHandle_t swapMutex;

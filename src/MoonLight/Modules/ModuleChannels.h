@@ -85,9 +85,9 @@ class ModuleChannels : public Module {
             layerP.lights.channelsE[select] = value;
         } else {
           if (group)
-            for (uint8_t i = 0; i < layerP.lights.header.channelsPerLight; i++) layerP.layers[view - 1]->setLight(select, &value, i, 1);
+            for (uint8_t i = 0; i < layerP.lights.header.channelsPerLight; i++) layerP.layers[view - 1]->setLight(select, i, value); //setLight(select, &value, i, 1);
           else
-            layerP.layers[view - 1]->setLight(select / layerP.lights.header.channelsPerLight, &value, select % layerP.lights.header.channelsPerLight, 1);
+            layerP.layers[view - 1]->setLight(select / layerP.lights.header.channelsPerLight, select % layerP.lights.header.channelsPerLight, value); //setLight(select / layerP.lights.header.channelsPerLight, &value, select % layerP.lights.header.channelsPerLight, 1);
         }
       }
     } else

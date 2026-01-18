@@ -157,15 +157,15 @@ class ArtNetOutDriver : public DriverNode {
       memcpy(p, c, header->channelsPerLight);  // set all the channels, so the non rgb channels are also filled
 
       // correct the RGB channels for color order and brightness
-      reOrderAndDimRGBW(p + header->offsetRGB, c + header->offsetRGB);
+      rgbwBufferMapping(p + header->offsetRGBW, c + header->offsetRGBW);
 
-      if (header->offsetRGB1 != UINT8_MAX) {
-        reOrderAndDimRGBW(p + header->offsetRGB1, c + header->offsetRGB1);
-        // nested as offsetRGB2 only exists if offsetRGB1 etc (for speed)
-        if (header->offsetRGB2 != UINT8_MAX) {
-          reOrderAndDimRGBW(p + header->offsetRGB2, c + header->offsetRGB2);
-          if (header->offsetRGB3 != UINT8_MAX) {
-            reOrderAndDimRGBW(p + header->offsetRGB3, c + header->offsetRGB3);
+      if (header->offsetRGBW1 != UINT8_MAX) {
+        rgbwBufferMapping(p + header->offsetRGBW1, c + header->offsetRGBW1);
+        // nested as offsetRGBW2 only exists if offsetRGBW1 etc (for speed)
+        if (header->offsetRGBW2 != UINT8_MAX) {
+          rgbwBufferMapping(p + header->offsetRGBW2, c + header->offsetRGBW2);
+          if (header->offsetRGBW3 != UINT8_MAX) {
+            rgbwBufferMapping(p + header->offsetRGBW3, c + header->offsetRGBW3);
           }
         }
       }

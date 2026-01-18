@@ -69,7 +69,8 @@ struct Wiring {
   bool snake[3] = {false, true, false};  // snake on Y
   uint8_t* axes;
 
-  void iterate(int axis, int snaker, std::function<void(uint16_t)> fun) {
+  template <typename Callback>
+  void iterate(int axis, int snaker, Callback&& fun) {
     bool iInc = inc[axes[axis]];
     if (snake[axis] && snaker % 2 == 1) iInc = !iInc;  // reverse order for snake
     for (int j = iInc ? 0 : size[axes[axis]] - 1; iInc ? j < size[axes[axis]] : j >= 0; j += iInc ? 1 : -1) {

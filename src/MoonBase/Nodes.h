@@ -72,9 +72,9 @@ class Node {
 
   VirtualLayer* layer = nullptr;  // the virtual layer this effect is using
   JsonArray controls;
-  Module* moduleControl = nullptr;               // to access global lights control functions if needed
-  Module* moduleIO = nullptr;                    // to access io pins if needed
-  Module* moduleNodes = nullptr;                 // to request UI update if needed
+  Module* moduleControl = nullptr;                // to access global lights control functions if needed
+  Module* moduleIO = nullptr;                     // to access io pins if needed
+  Module* moduleNodes = nullptr;                  // to request UI update if needed
   const SemaphoreHandle_t* layerMutex = nullptr;  // pointer to layerMutex (set in constructor)
 
   virtual bool isLiveScriptNode() const { return false; }
@@ -314,7 +314,8 @@ class DriverNode : public Node {
 
   void loop() override;
 
-  void reOrderAndDimRGBW(uint8_t* packetRGBChannel, uint8_t* lightsRGBChannel);
+  // rgbwBufferMapping: re order, DIM and white extraction
+  void rgbwBufferMapping(uint8_t* packetRGBChannel, uint8_t* lightsRGBChannel);
 
   // called in addControl (oldValue = "") and in NodeManager onUpdate nodes[i].control[j]
   void onUpdate(const Char<20>& oldValue, const JsonObject& control) override;
