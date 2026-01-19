@@ -84,10 +84,10 @@ class ModuleEffects : public NodeManager {
     addControlValue(control, getNameAndTags<AudioRingsEffect>());
     addControlValue(control, getNameAndTags<LinesEffect>());
     addControlValue(control, getNameAndTags<FireEffect>());
-    addControlValue(control, getNameAndTags<StarSkyEffect>());
     addControlValue(control, getNameAndTags<FixedRectangleEffect>());
     addControlValue(control, getNameAndTags<ParticlesEffect>());
     addControlValue(control, getNameAndTags<PraxisEffect>());
+    addControlValue(control, getNameAndTags<StarSkyEffect>());
   #if USE_M5UNIFIED
     addControlValue(control, getNameAndTags<MoonManEffect>());
   #endif
@@ -135,6 +135,10 @@ class ModuleEffects : public NodeManager {
     addControlValue(control, getNameAndTags<RainEffect>());
     addControlValue(control, getNameAndTags<TetrixEffect>());
     addControlValue(control, getNameAndTags<WaverlyEffect>());
+    addControlValue(control, getNameAndTags<ColorTwinkleEffect>());
+    addControlValue(control, getNameAndTags<PlasmaEffect>());
+    addControlValue(control, getNameAndTags<JuliaEffect>());
+    addControlValue(control, getNameAndTags<PoliceEffect>());
 
     // FastLED effects
     addControlValue(control, getNameAndTags<RainbowEffect>());
@@ -176,12 +180,11 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<SolidEffect>(name);
     if (!node) node = checkAndAlloc<AudioRingsEffect>(name);
     if (!node) node = checkAndAlloc<FireEffect>(name);
-
-    if (!node) node = checkAndAlloc<StarSkyEffect>(name);
     if (!node) node = checkAndAlloc<FixedRectangleEffect>(name);
     if (!node) node = checkAndAlloc<FreqSawsEffect>(name);
     if (!node) node = checkAndAlloc<LinesEffect>(name);
     if (!node) node = checkAndAlloc<MarioTestEffect>(name);
+    if (!node) node = checkAndAlloc<StarSkyEffect>(name);
   #if USE_M5UNIFIED
     if (!node) node = checkAndAlloc<MoonManEffect>(name);
   #endif
@@ -229,6 +232,10 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<RainEffect>(name);
     if (!node) node = checkAndAlloc<TetrixEffect>(name);
     if (!node) node = checkAndAlloc<WaverlyEffect>(name);
+    if (!node) node = checkAndAlloc<ColorTwinkleEffect>(name);
+    if (!node) node = checkAndAlloc<PlasmaEffect>(name);
+    if (!node) node = checkAndAlloc<JuliaEffect>(name);
+    if (!node) node = checkAndAlloc<PoliceEffect>(name);
 
     // FastLED
     if (!node) node = checkAndAlloc<RainbowEffect>(name);

@@ -19,6 +19,7 @@
   #include "MoonBase/Module.h"
   #include "MoonBase/Modules/FileManager.h"
   #include "MoonBase/Utilities.h"  //for isInPSRAM
+  #include "palettes.h"
 
 // Convert ModuleLightsControl state -> Home Assistant JSON
 void readMQTT(ModuleState& state, JsonObject& root) {
@@ -277,19 +278,81 @@ class ModuleLightsControl : public Module {
     control = addControl(controls, "blue", "slider");
     control["default"] = 255;
     control["color"] = "Blue";
-    control = addControl(controls, "palette", "select");
+    control = addControl(controls, "palette", "palette");  // palette type
     control["default"] = 9;
-    addControlValue(control, "Cloud");
-    addControlValue(control, "Lava");
-    addControlValue(control, "Ocean");
-    addControlValue(control, "Forest");
-    addControlValue(control, "Rainbow");
-    addControlValue(control, "RainbowStripe");
-    addControlValue(control, "Party");
-    addControlValue(control, "Heat");
-    addControlValue(control, "Random");
-    addControlValue(control, "MoonModules");
-    addControlValue(control, "Orange");
+
+    control["values"].to<JsonArray>();
+
+    const char* const builtInPaletteNames[] = {"Cloud", "Lava", "Ocean", "Forest", "Rainbow", "RainbowStripe", "Party", "Heat"};
+    const CRGBPalette16 builtInPalettes[] = {CloudColors_p, LavaColors_p, OceanColors_p, ForestColors_p, RainbowColors_p, RainbowStripeColors_p, PartyColors_p, HeatColors_p};
+    for (int i = 0; i < sizeof(builtInPaletteNames) / sizeof(char*); i++) {
+      JsonArray values = control["values"];
+      JsonObject object = values.add<JsonObject>();
+      object["name"] = builtInPaletteNames[i];
+
+      // Convert CRGBPalette16 to hex string
+      String hexString = "";
+      const CRGBPalette16 pal = builtInPalettes[i];
+
+      char buf[3];
+      for (int j = 0; j < 16; j++) {
+        // Add index (0, 16, 32, ... 240)
+        sprintf(buf, "%02x", j * 16);
+        hexString += buf;
+
+        // Add R, G, B
+        sprintf(buf, "%02x", pal[j].r);
+        hexString += buf;
+        sprintf(buf, "%02x", pal[j].g);
+        hexString += buf;
+        sprintf(buf, "%02x", pal[j].b);
+        hexString += buf;
+      }
+
+      // Add final entry at index 255
+      sprintf(buf, "%02x", 255);
+      hexString += buf;
+      sprintf(buf, "%02x", pal[15].r);
+      hexString += buf;
+      sprintf(buf, "%02x", pal[15].g);
+      hexString += buf;
+      sprintf(buf, "%02x", pal[15].b);
+      hexString += buf;
+
+      object["colors"] = hexString;
+    }
+
+    const char* const customPaletteNames[] = {"Random", "MoonModules", "Orange"};
+    for (int i = 0; i < sizeof(customPaletteNames) / sizeof(char*); i++) {
+      JsonArray values = control["values"];
+      JsonObject object = values.add<JsonObject>();
+      object["name"] = customPaletteNames[i];
+      object["colors"] = "";
+    }
+
+    // add palettes from palettes.h
+    for (int i = 0; i < sizeof(palette_names) / sizeof(char*); i++) {
+      JsonArray values = control["values"];
+      JsonObject object = values.add<JsonObject>();
+      object["name"] = palette_names[i];
+
+      String hexString = "";
+      const byte* palette = gGradientPalettes[i];
+      int j = 0;
+
+      // Read 4-byte entries (index, r, g, b) until index == 255
+      while (j < 100) {  // Safety limit
+        for (int k = 0; k < 4; k++) {
+          char buf[3];
+          sprintf(buf, "%02x", palette[j++]);
+          hexString += buf;
+        }
+        // Check if we just wrote the final entry (index was 255)
+        if (palette[j - 4] == 255) break;
+      }
+
+      object["colors"] = hexString;
+    }
 
     control = addControl(controls, "preset", "pad");
     control["width"] = 8;
@@ -322,7 +385,7 @@ class ModuleLightsControl : public Module {
       layerP.lights.header.blue = _state.data["blue"];
     } else if (updatedItem.name == "lightsOn" || updatedItem.name == "brightness") {
       uint8_t newBri = _state.data["lightsOn"] ? _state.data["brightness"] : 0;
-      if (!!layerP.lights.header.brightness != !!newBri && pinRelayLightsOn != UINT8_MAX) {
+      if (!!layerP.lights.header.brightness != !!newBri && pinRelayLightsOn != UINT8_MAX) {  // !! is intentional!
         EXT_LOGD(ML_TAG, "pinRelayLightsOn %s", !!newBri ? "On" : "Off");
         digitalWrite(pinRelayLightsOn, newBri > 0 ? HIGH : LOW);
       };
@@ -359,7 +422,9 @@ class ModuleLightsControl : public Module {
           layerP.palette[i] = CRGB(255, map(i, 0, nrOfPaletteEntries - 1, 0, 255), 0);  // from red via orange to yellow
         }
       } else {
-        layerP.palette = PartyColors_p;  // should never occur
+        byte tcp[76] = {255};  // WLEDMM: prevent out-of-range access in loadDynamicGradientPalette()
+        memcpy(tcp, (byte*)pgm_read_dword(&(gGradientPalettes[updatedItem.value.as<uint8_t>() - 11])), 72);
+        layerP.palette.loadDynamicGradientPalette(tcp);
       }
       // layerP.palette = LavaColors_p;
     } else if (updatedItem.name == "preset") {
