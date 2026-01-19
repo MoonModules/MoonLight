@@ -149,7 +149,7 @@ void __attribute__((hot)) process_16bit(uint16_t* buffer, const uint32_t* transp
 
 }  // namespace LedMatrixDetail
 
-void rgbwBufferMapping(uint8_t* packetRGBChannel, const uint8_t* lightsRGBChannel, uint8_t components, const uint8_t offsetRed, const uint8_t offsetGreen, const uint8_t offsetBlue, const uint8_t offsetWhite) {
+void rgbwBufferMapping(uint8_t* packetRGBChannel, const uint8_t* lightsRGBChannel, const uint8_t offsetRed, const uint8_t offsetGreen, const uint8_t offsetBlue, const uint8_t offsetWhite) {
   // use ledsDriver.__rbg_map[0]; for super fast brightness and gamma correction! see secondPixel in ESP32-LedDriver!
   // apply the LUT to the RGB channels !
 
@@ -229,7 +229,7 @@ void create_transposed_led_output_optimized(const uint8_t* input_buffer, uint16_
 
       // rgbwBufferMapping: re order, DIM and white extraction
       if (pixel_in_pin < pixels_per_pin[pin]) {
-        rgbwBufferMapping(&mappedBuffer[pin * COMPONENTS_PER_PIXEL], &input_buffer[component_idx], COMPONENTS_PER_PIXEL, offsetR, offsetG, offsetB, offsetW);
+        rgbwBufferMapping(&mappedBuffer[pin * COMPONENTS_PER_PIXEL], &input_buffer[component_idx], offsetR, offsetG, offsetB, offsetW);
       } else
         memset(&mappedBuffer[pin * COMPONENTS_PER_PIXEL], 0, COMPONENTS_PER_PIXEL);  // this is the magic trick to pad pixels if pixels_per_pin < max pixels_per_pin !
     }
