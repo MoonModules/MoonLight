@@ -158,11 +158,14 @@ void rgbwBufferMapping(uint8_t* packetRGBChannel, const uint8_t* lightsRGBChanne
   uint8_t blue = lightsRGBChannel[2];
   // extract White from RGB
   if (offsetWhite != UINT8_MAX) {
-    uint8_t white;
-    white = MIN(MIN(red, green), blue);
-    red -= white;
-    green -= white;
-    blue -= white;
+    uint8_t white = lightsRGBChannel[3];
+    // if white is filled, use that and do not extract rgbw
+    if (!white) {
+      white = MIN(MIN(red, green), blue);
+      red -= white;
+      green -= white;
+      blue -= white;
+    }
     packetRGBChannel[offsetWhite] = ledsDriver.__white_map[white];
   }
 

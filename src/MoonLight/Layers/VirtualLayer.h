@@ -157,6 +157,16 @@ class VirtualLayer {
   }
   void setRGB(Coord3D pos, CRGB color) { setRGB(XYZ(pos), color); }
 
+  void setWhite(const nrOfLights_t indexV, const uint8_t value) {
+    if (layerP->lights.header.offsetWhite != UINT8_MAX) {
+      // if (layerP->lights.header.channelsPerLight == 4)
+      setLight(indexV, layerP->lights.header.offsetRGBW + 3, value);  // for rgbw lights, w always in third channel
+      // else
+      //   setLight(indexV, layerP->lights.header.offsetRGBW + layerP->lights.header.offsetWhite, value);  // for moving heads
+    }
+  }
+  void setWhite(Coord3D pos, const uint8_t value) { setWhite(XYZ(pos), value); }
+
   void setBrightness(const nrOfLights_t indexV, uint8_t value) {
     if (layerP->lights.header.offsetBrightness != UINT8_MAX) {
       setLight(indexV, layerP->lights.header.offsetBrightness, (value * layerP->lights.header.brightness) / 255);
@@ -240,6 +250,9 @@ class VirtualLayer {
 
   void blendColor(const nrOfLights_t indexV, const CRGB& color, uint8_t blendAmount) { setRGB(indexV, blend(color, getRGB(indexV), blendAmount)); }
   void blendColor(Coord3D position, const CRGB& color, const uint8_t blendAmount) { blendColor(XYZ(position), color, blendAmount); }
+
+  uint8_t getWhite(const nrOfLights_t indexV) { return getLight(indexV, layerP->lights.header.offsetRGBW + 3); }
+  uint8_t getWhite(Coord3D pos) { return getWhite(XYZ(pos)); }
 
   CRGB getRGB1(const nrOfLights_t indexV) {
     if (layerP->lights.header.offsetRGBW1 == UINT8_MAX) return CRGB::Black;

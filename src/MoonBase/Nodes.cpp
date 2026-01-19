@@ -578,11 +578,14 @@ void DriverNode::rgbwBufferMapping(uint8_t* packetRGBChannel, uint8_t* lightsRGB
   uint8_t blue = lightsRGBChannel[2];
   // extract White from RGB
   if (layerP.lights.header.offsetWhite != UINT8_MAX) {
-    uint8_t white;
-    white = MIN(MIN(red, green), blue);
-    red -= white;
-    green -= white;
-    blue -= white;
+    // if white is filled, use that and do not extract rgbw
+    uint8_t white = lightsRGBChannel[3];
+    if (!white) {
+      white = MIN(MIN(red, green), blue);
+      red -= white;
+      green -= white;
+      blue -= white;
+    }
     packetRGBChannel[layerP.lights.header.offsetWhite] = ledsDriver.__white_map[white];
   }
 
