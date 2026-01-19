@@ -179,10 +179,12 @@ class FixedRectangleEffect : public Node {
     for (pos.z = z; pos.z < MIN(z + depth, layer->size.z); pos.z++) {
       for (pos.y = y; pos.y < MIN(y + height, layer->size.y); pos.y++) {
         for (pos.x = x; pos.x < MIN(x + width, layer->size.x); pos.x++) {
-          if (alternateWhite && alternate)
-            layer->setRGB(pos, CRGB::White);
-          else
-            layer->setRGB(pos, CRGB(red, green, blue));
+          if (red || green || blue) { // only setRGB if sliders set
+            if (alternateWhite && alternate)
+              layer->setRGB(pos, CRGB::White);
+            else
+              layer->setRGB(pos, CRGB(red, green, blue));
+          }
           if (white > 0) layer->setWhite(pos, white);
           if (height < width) alternate = !alternate;
         }

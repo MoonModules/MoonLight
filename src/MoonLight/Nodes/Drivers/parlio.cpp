@@ -33,13 +33,12 @@ namespace LedMatrixDetail {
 
 // This intermediate step is common to all packing functions.
 // It transposes the data for 32 time-slices into a cache-friendly temporary buffer.
-inline void transpose_32_slices(uint32_t (&transposed_slices)[32], const uint8_t* input_buffer, const uint32_t pixel_in_pin, const uint32_t input_component, const uint16_t* pixels_per_pin, const uint32_t num_active_pins, const uint8_t COMPONENTS_PER_PIXEL, const uint32_t* waveform_cache, const uint8_t* brightness_cache) {
+inline void transpose_32_slices(uint32_t (&transposed_slices)[32], uint8_t* mappedBuffer, const uint8_t component_in_pixel, const uint32_t num_active_pins, const uint8_t COMPONENTS_PER_PIXEL, const uint32_t* waveform_cache) {
   memset(transposed_slices, 0, sizeof(uint32_t) * 32);
 
   for (uint32_t pin = 0; pin < num_active_pins; ++pin) {
-    const uint32_t pixel_idx = first_index_per_output[pin] + pixel_in_pin;
-    const uint32_t component_idx = (pixel_idx * COMPONENTS_PER_PIXEL) + input_component;                               // ← Now uses input_component!
-    const uint8_t data_byte = pixel_in_pin < pixels_per_pin[pin] ? brightness_cache[input_buffer[component_idx]] : 0;  // this is the magic trick to pad pixels if pixels_per_pin < max pixels_per_pin !
+    const uint32_t component_idx = (pin * COMPONENTS_PER_PIXEL) + component_in_pixel;  // ← Now uses input_component!
+    const uint8_t data_byte = mappedBuffer[component_idx];
     const uint32_t waveform = waveform_cache[data_byte];
     const uint32_t pin_bit = (1 << pin);
 
@@ -150,8 +149,29 @@ void __attribute__((hot)) process_16bit(uint16_t* buffer, const uint32_t* transp
 
 }  // namespace LedMatrixDetail
 
-uint8_t gamma8(uint8_t b) {  // we do nothing with gamma for now
-  return b;
+void rgbwBufferMapping(uint8_t* packetRGBChannel, const uint8_t* lightsRGBChannel, const uint8_t offsetRed, const uint8_t offsetGreen, const uint8_t offsetBlue, const uint8_t offsetWhite) {
+  // use ledsDriver.__rbg_map[0]; for super fast brightness and gamma correction! see secondPixel in ESP32-LedDriver!
+  // apply the LUT to the RGB channels !
+
+  uint8_t red = lightsRGBChannel[0];
+  uint8_t green = lightsRGBChannel[1];
+  uint8_t blue = lightsRGBChannel[2];
+  // extract White from RGB
+  if (offsetWhite != UINT8_MAX) {
+    uint8_t white = lightsRGBChannel[3];
+    // if white is filled, use that and do not extract rgbw
+    if (!white) {
+      white = MIN(MIN(red, green), blue);
+      red -= white;
+      green -= white;
+      blue -= white;
+    }
+    packetRGBChannel[offsetWhite] = ledsDriver.__white_map[white];
+  }
+
+  packetRGBChannel[offsetRed] = ledsDriver.__red_map[red];
+  packetRGBChannel[offsetGreen] = ledsDriver.__green_map[green];
+  packetRGBChannel[offsetBlue] = ledsDriver.__blue_map[blue];
 }
 
 // 1. Add the RGB first_index_per_outputs parameter to the function signature
@@ -197,44 +217,27 @@ void create_transposed_led_output_optimized(const uint8_t* input_buffer, uint16_
 
   uint8_t* out_base_ptr = reinterpret_cast<uint8_t*>(output_buffer);
 
-  // Component mapping for color order
-  uint8_t component_map[4] = {0, 1, 2, 3};  // Default to RGB(W)
-  component_map[0] = offsetR;
-  component_map[1] = offsetG;
-  component_map[2] = offsetB;
-  // The W component (if it exists) is always the last one.
-  if (COMPONENTS_PER_PIXEL == 4) component_map[3] = offsetW;  // is_rgbw
-
   // --- Main Processing Loop ---
   for (uint32_t pixel_in_pin = 0; pixel_in_pin < max_leds_per_output; ++pixel_in_pin) {  // loop over all the pixels per pin, first all the first pixels for all pins, then the second...
-    for (uint32_t component_in_pixel = 0; component_in_pixel < COMPONENTS_PER_PIXEL; ++component_in_pixel) {
-      const uint32_t input_component = component_map[component_in_pixel];
-      // component_in_pixel is always RGB(W) - looping over the input array
-      // input_component is offsetR,G,B e.g. GRB -> 102, so this loop starts with 1 / green, so green is first processed, then red, then blue
 
+    // 🌙 rgbwBufferMapping for all pins for this pixel in pin
+    uint8_t mappedBuffer[COMPONENTS_PER_PIXEL * SOC_PARLIO_TX_UNIT_MAX_DATA_WIDTH];  // rgbw for all pins
+
+    for (uint32_t pin = 0; pin < num_active_pins; ++pin) {
+      const uint32_t pixel_idx = first_index_per_output[pin] + pixel_in_pin;
+      const uint32_t component_idx = (pixel_idx * COMPONENTS_PER_PIXEL);
+
+      // rgbwBufferMapping: re order, DIM and white extraction
+      if (pixel_in_pin < pixels_per_pin[pin]) {
+        rgbwBufferMapping(&mappedBuffer[pin * COMPONENTS_PER_PIXEL], &input_buffer[component_idx], offsetR, offsetG, offsetB, offsetW);
+      } else
+        memset(&mappedBuffer[pin * COMPONENTS_PER_PIXEL], 0, COMPONENTS_PER_PIXEL);  // this is the magic trick to pad pixels if pixels_per_pin < max pixels_per_pin !
+    }
+
+    for (uint32_t component_in_pixel = 0; component_in_pixel < COMPONENTS_PER_PIXEL; ++component_in_pixel) {
       uint32_t transposed_slices[32];
 
-      // Select LUT based on INPUT component (which color we're reading from lights.channelsD)
-      const uint8_t* brightness_cache;
-      switch (input_component) {  // ← Change 1: Use input_component
-      case 0:
-        brightness_cache = ledsDriver.__red_map;  // Position 0 in RGB array = RED
-        break;
-      case 1:
-        brightness_cache = ledsDriver.__green_map;  // Position 1 in RGB array = GREEN
-        break;
-      case 2:
-        brightness_cache = ledsDriver.__blue_map;  // Position 2 in RGB array = BLUE
-        break;
-      case 3:
-        brightness_cache = ledsDriver.__white_map;
-        break;
-      default:
-        brightness_cache = ledsDriver.__red_map;
-        break;
-      }
-
-      LedMatrixDetail::transpose_32_slices(transposed_slices, input_buffer, pixel_in_pin, input_component, pixels_per_pin, num_active_pins, COMPONENTS_PER_PIXEL, waveform_cache, brightness_cache);
+      LedMatrixDetail::transpose_32_slices(transposed_slices, mappedBuffer, component_in_pixel, num_active_pins, COMPONENTS_PER_PIXEL, waveform_cache);
 
       const uint32_t component_start_word = (pixel_in_pin * WAVEFORM_WORDS_PER_PIXEL) + (component_in_pixel * 32);
       uint8_t* current_out_ptr = out_base_ptr + (component_start_word * bit_width / 8);

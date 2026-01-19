@@ -369,7 +369,7 @@ void DriverNode::setup() {
 void DriverNode::loop() {
   LightsHeader* header = &layerP.lights.header;
 
-  // use ledsDriver LUT for super efficient leds dimming 🔥 (used by reOrderAndDimRGBW)
+  // use ledsDriver LUT for super efficient leds dimming 🔥 (used by rgbwBufferMapping)
 
   uint8_t brightness = (header->offsetBrightness == UINT8_MAX) ? header->brightness : 255;  // set brightness to 255 if offsetBrightness is set (fixture will do its own brightness)
 
@@ -493,10 +493,10 @@ void DriverNode::onUpdate(const Char<20>& oldValue, const JsonObject& control) {
       break;
     case lightPreset_MHBeeEyes150W15:
       header->channelsPerLight = 15;  // set channels per light to 15 (RGB + Pan + Tilt + Zoom + Brightness)
+      header->offsetRGBW = 10;        // set offset for RGB lights in DMX map
       header->offsetRed = 0;
       header->offsetGreen = 1;
       header->offsetBlue = 2;
-      header->offsetRGB = 10;  // set offset for RGB lights in DMX map
       header->offsetPan = 0;
       header->offsetTilt = 1;
       header->offsetZoom = 7;
@@ -506,13 +506,13 @@ void DriverNode::onUpdate(const Char<20>& oldValue, const JsonObject& control) {
       break;
     case lightPreset_MHBeTopper19x15W32:
       header->channelsPerLight = 32;
+      header->offsetRGBW = 9;
       header->offsetRed = 0;
       header->offsetGreen = 1;
       header->offsetBlue = 2;
-      header->offsetRGB = 9;
-      header->offsetRGB1 = 13;
-      header->offsetRGB2 = 17;
-      header->offsetRGB3 = 24;
+      header->offsetRGBW1 = 13;
+      header->offsetRGBW2 = 17;
+      header->offsetRGBW3 = 24;
       header->offsetPan = 0;
       header->offsetTilt = 2;
       header->offsetZoom = 5;
@@ -520,15 +520,16 @@ void DriverNode::onUpdate(const Char<20>& oldValue, const JsonObject& control) {
       break;
     case lightPreset_MH19x15W24:
       header->channelsPerLight = 24;
+      header->offsetRGBW = 4;
       header->offsetRed = 0;
       header->offsetGreen = 1;
       header->offsetBlue = 2;
+      header->offsetWhite = 3;
       header->offsetPan = 0;
       header->offsetTilt = 1;
       header->offsetBrightness = 3;
-      header->offsetRGB = 4;
-      header->offsetRGB1 = 8;
-      header->offsetRGB2 = 12;
+      header->offsetRGBW1 = 8;
+      header->offsetRGBW2 = 12;
       header->offsetZoom = 17;
       break;
     default:
@@ -568,14 +569,29 @@ void DriverNode::onUpdate(const Char<20>& oldValue, const JsonObject& control) {
   }
 }
 
-void DriverNode::reOrderAndDimRGBW(uint8_t* packetRGBChannel, uint8_t* lightsRGBChannel) {
+void DriverNode::rgbwBufferMapping(uint8_t* packetRGBChannel, uint8_t* lightsRGBChannel) {
   // use ledsDriver.__rbg_map[0]; for super fast brightness and gamma correction! see secondPixel in ESP32-LedDriver!
   // apply the LUT to the RGB channels !
 
-  packetRGBChannel[layerP.lights.header.offsetRed] = ledsDriver.__red_map[lightsRGBChannel[0]];
-  packetRGBChannel[layerP.lights.header.offsetGreen] = ledsDriver.__green_map[lightsRGBChannel[1]];
-  packetRGBChannel[layerP.lights.header.offsetBlue] = ledsDriver.__blue_map[lightsRGBChannel[2]];
-  if (layerP.lights.header.offsetWhite != UINT8_MAX) packetRGBChannel[layerP.lights.header.offsetWhite] = ledsDriver.__white_map[lightsRGBChannel[3]];
+  uint8_t red = lightsRGBChannel[0];
+  uint8_t green = lightsRGBChannel[1];
+  uint8_t blue = lightsRGBChannel[2];
+  // extract White from RGB
+  if (layerP.lights.header.offsetWhite != UINT8_MAX) {
+    // if white is filled, use that and do not extract rgbw
+    uint8_t white = lightsRGBChannel[3];
+    if (!white) {
+      white = MIN(MIN(red, green), blue);
+      red -= white;
+      green -= white;
+      blue -= white;
+    }
+    packetRGBChannel[layerP.lights.header.offsetWhite] = ledsDriver.__white_map[white];
+  }
+
+  packetRGBChannel[layerP.lights.header.offsetRed] = ledsDriver.__red_map[red];
+  packetRGBChannel[layerP.lights.header.offsetGreen] = ledsDriver.__green_map[green];
+  packetRGBChannel[layerP.lights.header.offsetBlue] = ledsDriver.__blue_map[blue];
 }
 
 #endif  // FT_MOONLIGHT

@@ -132,102 +132,6 @@ nrOfLights_t VirtualLayer::XYZ(Coord3D& position) {
 //     }
 // }
 
-void VirtualLayer::setLight(const nrOfLights_t indexV, const uint8_t* channels, uint8_t offset, uint8_t length) {
-  if (indexV < mappingTableSize) {
-    // EXT_LOGV(ML_TAG, "setLightColor %d %d %d %d", indexV, color.r, color.g, color.b, mappingTableSize);
-    switch (mappingTable[indexV].mapType) {
-    case m_oneLight: {
-      nrOfLights_t indexP = mappingTable[indexV].indexP;
-      if (layerP->lights.header.lightPreset == lightPreset_RGB2040) {  // RGB2040 has empty channels: Skip the 20..39 range, so adjust group mapping
-        indexP += (indexP / 20) * 20;
-      }
-      memcpy(&layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + offset], channels, length);
-
-      break;
-    }
-    case m_moreLights:
-      if (mappingTable[indexV].indexesIndex < mappingTableIndexes.size())
-        for (nrOfLights_t indexP : mappingTableIndexes[mappingTable[indexV].indexesIndex]) {
-          if (layerP->lights.header.lightPreset == lightPreset_RGB2040) {  // RGB2040 has empty channels: Skip the 20..39 range, so adjust group mapping
-            indexP += (indexP / 20) * 20;
-          }
-          memcpy(&layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + offset], channels, length);
-        }
-      else
-        EXT_LOGW(ML_TAG, "dev setLightColor i:%d m:%d s:%d", indexV, mappingTable[indexV].indexesIndex, mappingTableIndexes.size());
-      break;
-    default:
-      // m_zeroLights:
-      // only room for storing colors
-      if (length <= 4) {  // also for RGBW, but store only RGB ... 🚧
-  #ifdef BOARD_HAS_PSRAM
-        memcpy(&mappingTable[indexV].rgb, channels, 3);
-  #else
-        mappingTable[indexV].rgb = ((min(channels[0] + 3, 255) >> 3) << 9) + ((min(channels[1] + 3, 255) >> 3) << 4) + (min(channels[2] + 7, 255) >> 4);
-  #endif
-      }
-      break;
-    }
-  } else {  // no mapping
-    uint32_t index = indexV * layerP->lights.header.channelsPerLight + offset;
-    if (index + length <= layerP->lights.maxChannels) {
-      memcpy(&layerP->lights.channelsE[index], channels, length);
-    } else {
-      EXT_LOGW(ML_TAG, "%d + %d >= %d (%d %d)", indexV, length, layerP->lights.maxChannels, index, offset);
-    }
-  }
-}
-
-template <typename T>
-T VirtualLayer::getLight(const nrOfLights_t indexV, uint8_t offset) const {
-  if (indexV < mappingTableSize) {
-    switch (mappingTable[indexV].mapType) {
-    case m_oneLight: {
-      nrOfLights_t indexP = mappingTable[indexV].indexP;
-      if (layerP->lights.header.lightPreset == lightPreset_RGB2040) {  // RGB2040 has empty channels: Skip the 20..39 range, so adjust group mapping
-        indexP += (indexP / 20) * 20;
-      }
-      T* result = (T*)&layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + offset];
-      return *result;  // return the color as CRGB
-      break;
-    }
-    case m_moreLights: {
-      nrOfLights_t indexP = mappingTableIndexes[mappingTable[indexV].indexesIndex][0];  // any will do as they are all the same
-      if (layerP->lights.header.lightPreset == lightPreset_RGB2040) {                   // RGB2040 has empty channels
-        indexP += (indexP / 20) * 20;
-      }
-      T* result = (T*)&layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + offset];
-      return *result;  // return the color as CRGB
-      break;
-    }
-    default:
-      // m_zeroLights:
-      if (sizeof(T) <= 4) {  // also for RGBW but retrieve only RGB ... 🚧
-  #ifdef BOARD_HAS_PSRAM
-        return *(T*)&mappingTable[indexV].rgb;
-  #else
-        T result;
-        ((uint8_t*)&result)[0] = (mappingTable[indexV].rgb >> 9) << 3;           // R: bits [13:9]
-        ((uint8_t*)&result)[1] = ((mappingTable[indexV].rgb >> 4) & 0x1F) << 3;  // G: bits [8:4]
-        ((uint8_t*)&result)[2] = (mappingTable[indexV].rgb & 0x0F) << 4;         // B: bits [3:0]
-        return result;
-  #endif
-      } else
-        return T();  // not implemented yet
-      break;
-    }
-  } else {  // no mapping
-    uint32_t index = indexV * layerP->lights.header.channelsPerLight + offset;
-    if (index + sizeof(T) <= layerP->lights.maxChannels) {
-      return *(T*)&layerP->lights.channelsE[index];
-    } else {
-      // some operations will go out of bounds e.g. VUMeter, uncomment below lines if you wanna test on a specific effect
-      EXT_LOGW(ML_TAG, "%d + %d >= %d", indexV, sizeof(T), layerP->lights.maxChannels);
-      return T();
-    }
-  }
-}
-
 // fadeToBlackBy will only do primary RGB colors
 void VirtualLayer::fadeToBlackBy(const uint8_t fadeBy) { fadeMin = fadeMin ? MIN(fadeMin, fadeBy) : fadeBy; }
 
@@ -238,7 +142,7 @@ void VirtualLayer::fadeToBlackMin() {
     // if (effectDimension < layerDimension) { //only process the effect lights (so modifiers can do things with the other dimension)
     //   for (int y=0; y < ((effectDimension == _1D)?1:size.y); y++) { //1D effects only on y=0, 2D effects loop over y
     //     for (int x=0; x<size.x; x++) {
-    //       CRGB color = getLight({x,y,0});
+    //       CRGB color = getRGB({x,y,0});
     //       color.nscale8(255-fadeBy);
     //       setRGB({x,y,0}, color);
     //     }
@@ -252,21 +156,19 @@ void VirtualLayer::fadeToBlackMin() {
         color.nscale8(255 - fadeBy);
         setRGB(index, color);
         if (layerP->lights.header.offsetWhite != UINT8_MAX) {
-          uint8_t white = getWhite(index);  // direct access to the channels
-          white = (white * fadeBy) >> 8;
-          setWhite(index, white);
+          setWhite(index, ::scale8(getWhite(index), 255 - fadeBy));
         }
-        if (layerP->lights.header.offsetRGB1 != UINT8_MAX) {
+        if (layerP->lights.header.offsetRGBW1 != UINT8_MAX) {
           CRGB color = getRGB1(index);  // direct access to the channels
           color.nscale8(255 - fadeBy);
           setRGB1(index, color);
         }
-        if (layerP->lights.header.offsetRGB2 != UINT8_MAX) {
+        if (layerP->lights.header.offsetRGBW2 != UINT8_MAX) {
           CRGB color = getRGB2(index);  // direct access to the channels
           color.nscale8(255 - fadeBy);
           setRGB2(index, color);
         }
-        if (layerP->lights.header.offsetRGB3 != UINT8_MAX) {
+        if (layerP->lights.header.offsetRGBW3 != UINT8_MAX) {
           CRGB color = getRGB3(index);  // direct access to the channels
           color.nscale8(255 - fadeBy);
           setRGB3(index, color);
