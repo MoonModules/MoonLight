@@ -109,24 +109,22 @@ class VirtualLayer {
 
   nrOfLights_t XYZUnModified(const Coord3D& position) const { return position.x + position.y * size.x + position.z * size.x * size.y; }
 
+  void presetCorrection(nrOfLights_t &indexP) const;
+
   template <typename Callback>
   void forEachLightIndex(const nrOfLights_t indexV, Callback&& callback, bool onlyOne = false) {
     if (indexV < mappingTableSize) {
       switch (mappingTable[indexV].mapType) {
       case m_oneLight: {
         nrOfLights_t indexP = mappingTable[indexV].indexP;
-        // if (layerP->lights.header.lightPreset == lightPreset_RGB2040) {
-        //   indexP += (indexP / 20) * 20;
-        // }
+        presetCorrection(indexP);
         callback(indexP);
         break;
       }
       case m_moreLights:
         if (mappingTable[indexV].indexesIndex < mappingTableIndexes.size()) {
           for (nrOfLights_t indexP : mappingTableIndexes[mappingTable[indexV].indexesIndex]) {
-            // if (layerP->lights.header.lightPreset == lightPreset_RGB2040) {
-            //   indexP += (indexP / 20) * 20;
-            // }
+            presetCorrection(indexP);
             callback(indexP);
             if (onlyOne) return;
           }

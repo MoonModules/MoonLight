@@ -81,6 +81,10 @@ void VirtualLayer::loop20ms() {
   }
 }
 
+void VirtualLayer::presetCorrection(nrOfLights_t& indexP) const {
+  if (layerP->lights.header.lightPreset == lightPreset_RGB2040) indexP += (indexP / 20) * 20;
+}
+
 void VirtualLayer::addIndexP(PhysMap& physMap, nrOfLights_t indexP) {
   // EXT_LOGV(ML_TAG, "i:%d t:%d s:%d i:%d", indexP, physMap.mapType, mappingTableIndexes.size(), physMap.indexes);
   switch (physMap.mapType) {
