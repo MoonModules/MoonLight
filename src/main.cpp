@@ -242,7 +242,7 @@ void setup() {
   // start serial and filesystem
   Serial.begin(SERIAL_BAUD_RATE);
 
-  delay(5000);  // 🌙 to capture all the serial output
+  // delay(5000);  // 🌙 to capture all the serial output
 
   Serial.printf("C++ Standard: %ld\n", __cplusplus);  // 202002L  // 🌙 safeMode
 

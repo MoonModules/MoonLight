@@ -139,7 +139,7 @@ export type StaticSystemInformation = {
 	arduino_version: string;
 	flash_chip_size: number;
 	flash_chip_speed: number;
-	flash_chip_mode: number; // 🌙
+	flash_chip_mode: string; // 🌙
 	psram_mode: string; // 🌙
 	cpu_reset_reason: string;
 	heap_info_app: string; // 🌙
