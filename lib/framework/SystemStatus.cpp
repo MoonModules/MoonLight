@@ -154,6 +154,15 @@ esp_err_t SystemStatus::systemStatus(PsychicRequest *request)
         root["free_psram"] = ESP.getFreePsram();
         root["used_psram"] = ESP.getPsramSize() - ESP.getFreePsram();
         root["psram_size"] = ESP.getPsramSize();
+        // #if CONFIG_ESP32S3_SPIRAM_SUPPORT  // WLEDMM -S3 has "qspi" or "opi" PSRAM mode
+            #if CONFIG_SPIRAM_MODE_OCT
+            root["psram_mode"]  = "🚀 OPI";
+            #elif CONFIG_SPIRAM_MODE_QUAD
+            root["psram_mode"]  = "QSPI";
+            #else
+            root["psram_mode"]  = "other";
+            #endif
+        // #endif
     }
     root["cpu_freq_mhz"] = ESP.getCpuFreqMHz();
     root["cpu_type"] = ESP.getChipModel();
@@ -169,6 +178,20 @@ esp_err_t SystemStatus::systemStatus(PsychicRequest *request)
     root["arduino_version"] = ARDUINO_VERSION;
     root["flash_chip_size"] = ESP.getFlashChipSize();
     root["flash_chip_speed"] = ESP.getFlashChipSpeed();
+    switch (ESP.getFlashChipMode()) {  // 🌙
+        // missing: Octal modes
+        case FM_QIO:  root["flash_chip_mode"] = "QIO"; break;
+        case FM_QOUT: root["flash_chip_mode"] = "QOUT";break;
+        case FM_DIO:  root["flash_chip_mode"] = "DIO"; break;
+        case FM_DOUT: root["flash_chip_mode"] = "DOUT or other";break;
+        #if defined(CONFIG_IDF_TARGET_ESP32S3) && CONFIG_ESPTOOLPY_FLASHMODE_OPI
+        case FM_FAST_READ: root["flash_chip_mode"] = "🚀OPI";break;
+        #else
+        case FM_FAST_READ: root["flash_chip_mode"] = "fast_read";break;
+        #endif
+        case FM_SLOW_READ: root["flash_chip_mode"] = "slow_read";break;
+        default: root["flash_chip_mode"] = "other"; break;
+    }
     root["fs_total"] = ESPFS.totalBytes();
     root["fs_used"] = ESPFS.usedBytes();
     root["core_temp"] = temperatureRead();

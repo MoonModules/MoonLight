@@ -13,7 +13,7 @@ For devices that already have MoonLight installed, go to [Update](#update-moonli
 
 ## Prepare an ESP32 device
 
-Recommended plug-and-play device to get started with, up to 4096 LEDs: [QuinLED-dig2go](https://quinled.info/quinled-dig2go/)
+Recommended plug-and-play device to get started with, up to 1024 LEDs @ 30FPS (one output) or 4096 LEDs over the network (Art-Net): [QuinLED-dig2go](https://quinled.info/quinled-dig2go/)
 
 ![Dig2Go](https://shop.allnetchina.cn/cdn/shop/products/Led_4.jpg?v=1680836018&width=1600){: style="width:250px"}
 

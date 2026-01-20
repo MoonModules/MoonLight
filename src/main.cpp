@@ -14,7 +14,7 @@
 
 #include <Arduino.h>
 
-#ifdef BOARD_HAS_PSRAM
+#if defined(BOARD_HAS_PSRAM) && defined(CONFIG_SPIRAM_MODE_OCT)
 
 // #include <cstddef> // suggested by copilot to surpress operator warning : first parameter of allocation function must be of type 'size_t' - but made no difference
 
