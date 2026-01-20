@@ -14,7 +14,7 @@
 
 #include <Arduino.h>
 
-#ifdef BOARD_HAS_PSRAM
+#if defined(BOARD_HAS_PSRAM) && defined(CONFIG_SPIRAM_MODE_OCT)
 
 // #include <cstddef> // suggested by copilot to surpress operator warning : first parameter of allocation function must be of type 'size_t' - but made no difference
 
@@ -242,7 +242,7 @@ void setup() {
   // start serial and filesystem
   Serial.begin(SERIAL_BAUD_RATE);
 
-  // delay(5000);  // 🌙 to capture all the serial output
+  delay(5000);  // 🌙 to capture all the serial output
 
   Serial.printf("C++ Standard: %ld\n", __cplusplus);  // 202002L  // 🌙 safeMode
 

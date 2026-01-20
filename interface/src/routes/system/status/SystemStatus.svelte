@@ -296,7 +296,7 @@
 								{((systemInformation.used_psram / systemInformation.psram_size) * 100).toFixed(1)} %
 								of {Math.round(systemInformation.psram_size / 1000).toLocaleString('en-US')} KB
 								<span
-									>({Math.round(systemInformation.free_psram / 1000).toLocaleString('en-US')} KB free)</span
+									>({Math.round(systemInformation.free_psram / 1000).toLocaleString('en-US')} KB free, {systemInformation.psram_mode})</span
 								>
 							</div>
 						</div>
@@ -490,7 +490,7 @@
 						<div class="text-sm opacity-75">
 							{Math.round(systemInformation.flash_chip_size / 1000).toLocaleString('en-US')} KB / {(
 								systemInformation.flash_chip_speed / 1000000
-							).toLocaleString('en-US')} MHz
+							).toLocaleString('en-US')} MHz ({systemInformation.flash_chip_mode}) <!-- 🌙 -->
 						</div>
 					</div>
 				</div>
