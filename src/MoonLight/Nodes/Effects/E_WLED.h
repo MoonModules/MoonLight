@@ -1183,7 +1183,7 @@ class BlackholeEffect : public Node {
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🔥🎨⏳🐙"; }
 
-  uint8_t fadeRate = 128;    // speed
+  uint8_t fadeRate = 16;     // speed
   uint8_t outerYfreq = 128;  // intensity
   uint8_t outerXfreq = 128;  // custom1
   uint8_t innerXfreq = 128;  // custom2
@@ -1191,7 +1191,7 @@ class BlackholeEffect : public Node {
   uint8_t blur = 16;         // check3
 
   void setup() override {
-    addControl(fadeRate, "fadeRate", "slider");
+    addControl(fadeRate, "fadeRate", "slider", 0, 32);
     addControl(outerYfreq, "outerYfreq", "slider");
     addControl(outerXfreq, "outerXfreq", "slider");
     addControl(innerXfreq, "innerXfreq", "slider");
@@ -1204,8 +1204,8 @@ class BlackholeEffect : public Node {
     const int rows = layer->size.y;
     int x, y;
 
-    layer->fadeToBlackBy(16 + (fadeRate >> 3));  // create fading trails
-    unsigned long t = millis() / 128;            // timebase
+    layer->fadeToBlackBy(16 + fadeRate);  // create fading trails
+    unsigned long t = millis() / 128;     // timebase
     // outer stars
     for (size_t i = 0; i < 8; i++) {
       x = beatsin8(outerXfreq >> 3, 0, cols - 1, 0, ((i % 2) ? 128 : 0) + t * i);
@@ -1984,331 +1984,280 @@ class ColorTwinkleEffect : public Node {
   static uint8_t dim() { return _3D; }            // Dimensions supported _3D prefered, _2D or _1D can be used for first phase
   static const char* tags() { return "🔥🎨⏳"; }  // use emojis see https://moonmodules.org/MoonLight/moonlight/overview/#emoji-coding, 🔥 for effect, 🎨 if palette used (recommended)
 
-  uint8_t bpm = 60;  // 1 beat per second
-  uint8_t intensity = 128;
+  uint8_t fadeSpeed = 128;
+  uint8_t spawnSpeed = 128;
   // static const char _data_FX_MODE_COLORTWINKLE[] PROGMEM = "Colortwinkles@Fade speed,Spawn speed;;!;;m12=0"; //pixels
 
   void setup() override {
-    // controls will show in the UI
-    // for different type of controls see other Nodes
-    addControl(bpm, "bpm", "slider");
-    addControl(intensity, "intensity", "slider");
+    addControl(fadeSpeed, "fadeSpeed", "slider");
+    addControl(spawnSpeed, "spawnSpeed", "slider");
+    layer->fadeToBlackBy(100);
   }
 
-  void onSizeChanged(const Coord3D& prevSize) override {}  // e.g. realloc variables
+  uint8_t* data = nullptr;
+  size_t dataSize = 0;
 
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) {
-    // add your custom onUpdate code here
-    if (control["name"] == "bpm") {
-      if (control["value"] == 0) {
+  void onSizeChanged(const Coord3D& prevSize) override { reallocMB2<uint8_t>(data, dataSize, (layer->nrOfLights + 7) >> 3, "data"); }
+
+  void loop() override {
+    CRGB fastled_col, prev;
+    uint8_t brightness = 128;  // strip.getBrightness()
+    fract8 fadeUpAmount = brightness > 28 ? 8 + (fadeSpeed >> 2) : 68 - brightness;
+    fract8 fadeDownAmount = brightness > 28 ? 8 + (fadeSpeed >> 3) : 68 - brightness;
+    for (uint16_t i = 0; i < layer->nrOfLights; i++) {
+      fastled_col = layer->getRGB(i);
+      prev = fastled_col;
+      uint16_t index = i >> 3;
+      uint8_t bitNum = i & 0x07;
+      bool fadeUp = bitRead(data[index], bitNum);
+
+      if (fadeUp) {
+        CRGB incrementalColor = fastled_col;
+        incrementalColor.nscale8_video(fadeUpAmount);
+        fastled_col += incrementalColor;
+
+        if (fastled_col.red == 255 || fastled_col.green == 255 || fastled_col.blue == 255) {
+          bitWrite(data[index], bitNum, false);
+        }
+        layer->setRGB(i, fastled_col);
+
+        if (layer->getRGB(i) == prev) {  // fix "stuck" pixels
+          fastled_col += fastled_col;
+          layer->setRGB(i, fastled_col);
+        }
+      } else {
+        fastled_col.nscale8(255 - fadeDownAmount);
+        layer->setRGB(i, fastled_col);
+      }
+    }
+
+    for (uint16_t j = 0; j <= layer->nrOfLights / 50; j++) {
+      if (random8() <= spawnSpeed) {
+        for (uint8_t times = 0; times < 5; times++) {  // attempt to spawn a new pixel 5 times
+          int i = random16(layer->nrOfLights);
+          if (layer->getRGB(i) == 0) {
+            fastled_col = ColorFromPalette(layerP.palette, random8(), 64, NOBLEND);
+            uint16_t index = i >> 3;
+            uint8_t bitNum = i & 0x07;
+            bitWrite(data[index], bitNum, true);
+            layer->setRGB(i, fastled_col);
+            break;  // only spawn 1 new pixel per frame per 50 LEDs
+          }
+        }
       }
     }
   }
-
-  // each frame of effect
-  // use of bpm functions like beatsin8 is recommended so independent from LEDs framerate (33000/nrOfLights)
-  void loop() override {
-    // uint16_t dataSize = (SEGLEN + 7) >> 3;                   // 1 bit per LED
-    // if (!SEGENV.allocateData(dataSize)) return mode_oops();  // allocation failed
-    // if (SEGENV.call == 0) {
-    //   SEGMENT.setUpLeds();  // WLEDMM use lossless getPixelColor()
-    //   SEGMENT.fill(BLACK);
-    // }
-
-    // CRGB fastled_col, prev;
-    // fract8 fadeUpAmount = strip.getBrightness() > 28 ? 8 + (SEGMENT.speed >> 2) : 68 - strip.getBrightness();
-    // fract8 fadeDownAmount = strip.getBrightness() > 28 ? 8 + (SEGMENT.speed >> 3) : 68 - strip.getBrightness();
-    // for (uint16_t i = 0; i < SEGLEN; i++) {
-    //   fastled_col = SEGMENT.getPixelColor(i);
-    //   prev = fastled_col;
-    //   uint16_t index = i >> 3;
-    //   uint8_t bitNum = i & 0x07;
-    //   bool fadeUp = bitRead(SEGENV.data[index], bitNum);
-
-    //   if (fadeUp) {
-    //     CRGB incrementalColor = fastled_col;
-    //     incrementalColor.nscale8_video(fadeUpAmount);
-    //     fastled_col += incrementalColor;
-
-    //     if (fastled_col.red == 255 || fastled_col.green == 255 || fastled_col.blue == 255) {
-    //       bitWrite(SEGENV.data[index], bitNum, false);
-    //     }
-    //     SEGMENT.setPixelColor(i, fastled_col.red, fastled_col.green, fastled_col.blue);
-
-    //     if (SEGMENT.getPixelColor(i) == RGBW32(prev.r, prev.g, prev.b, 0)) {  // fix "stuck" pixels
-    //       fastled_col += fastled_col;
-    //       SEGMENT.setPixelColor(i, fastled_col);
-    //     }
-    //   } else {
-    //     fastled_col.nscale8(255 - fadeDownAmount);
-    //     SEGMENT.setPixelColor(i, fastled_col);
-    //   }
-    // }
-
-    // for (uint16_t j = 0; j <= SEGLEN / 50; j++) {
-    //   if (random8() <= SEGMENT.intensity) {
-    //     for (uint8_t times = 0; times < 5; times++) {  // attempt to spawn a new pixel 5 times
-    //       int i = random16(SEGLEN);
-    //       if (SEGMENT.getPixelColor(i) == 0) {
-    //         fastled_col = ColorFromPalette(SEGPALETTE, random8(), 64, NOBLEND);
-    //         uint16_t index = i >> 3;
-    //         uint8_t bitNum = i & 0x07;
-    //         bitWrite(SEGENV.data[index], bitNum, true);
-    //         SEGMENT.setPixelColor(i, fastled_col);
-    //         break;  // only spawn 1 new pixel per frame per 50 LEDs
-    //       }
-    //     }
-    //   }
-    // }
-  }
-
-  ~ColorTwinkleEffect() override {};  // e,g, to free allocated memory
 };
 
 class PlasmaEffect : public Node {
  public:
   static const char* name() { return "Plasma"; }
-  static uint8_t dim() { return _3D; }            // Dimensions supported _3D prefered, _2D or _1D can be used for first phase
-  static const char* tags() { return "🔥🎨⏳"; }  // use emojis see https://moonmodules.org/MoonLight/moonlight/overview/#emoji-coding, 🔥 for effect, 🎨 if palette used (recommended)
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🔥🎨"; }
 
-  uint8_t speed = 60;  // 1 beat per second
+  uint8_t speed = 60;
   uint8_t intensity = 128;
 
   void setup() override {
-    // controls will show in the UI
-    // for different type of controls see other Nodes
     addControl(speed, "speed", "slider");
     addControl(intensity, "intensity", "slider");
     // initialize phases on start
     aux0 = random8(0, 2);  // add a bit of randomness
   }
 
-  void onSizeChanged(const Coord3D& prevSize) override {}  // e.g. realloc variables
-
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) {
-    // add your custom onUpdate code here
-    if (control["name"] == "bpm") {
-      if (control["value"] == 0) {
-      }
-    }
-  }
-
   uint8_t aux0;
 
-  // each frame of effect
-  // use of bpm functions like beatsin8 is recommended so independent from LEDs framerate (33000/nrOfLights)
   void loop() override {
     uint8_t thisPhase = beatsin8(6 + aux0, -64, 64);
     uint8_t thatPhase = beatsin8(7 + aux0, -64, 64);
 
     for (int i = 0; i < layer->size.y; i++) {                                               // For each of the LED's in the strand, set color &  brightness based on a wave as follows:
       uint8_t colorIndex = cubicwave8((i * (2 + 3 * (speed >> 5)) + thisPhase) & 0xFF) / 2  // factor=23 // Create a wave and add a phase change and add another wave with its own phase change.
-                           + cos8((i * (1 + 2 * (speed >> 5)) + thatPhase) & 0xFF) / 2;   // factor=15 // Hey, you can even change the frequencies if you wish.
+                           + cos8((i * (1 + 2 * (speed >> 5)) + thatPhase) & 0xFF) / 2;     // factor=15 // Hey, you can even change the frequencies if you wish.
       uint8_t thisBright = qsub8(colorIndex, beatsin8(7, 0, (128 - (intensity >> 1))));
-      layer->setRGB(Coord3D(0, i), ColorFromPalette(layerP.palette, colorIndex, thisBright));
+      for (int x = 0; x < layer->size.x; x++)
+        for (int z = 0; z < layer->size.z; z++) layer->setRGB(Coord3D(x, i, z), ColorFromPalette(layerP.palette, colorIndex, thisBright));
     }
   }
-
-  ~PlasmaEffect() override {};  // e,g, to free allocated memory
 };
 
 class JuliaEffect : public Node {
  public:
   static const char* name() { return "Julia"; }
-  static uint8_t dim() { return _3D; }            // Dimensions supported _3D prefered, _2D or _1D can be used for first phase
-  static const char* tags() { return "🔥🎨⏳"; }  // use emojis see https://moonmodules.org/MoonLight/moonlight/overview/#emoji-coding, 🔥 for effect, 🎨 if palette used (recommended)
+  static uint8_t dim() { return _3D; }
+  static const char* tags() { return "🔥🎨"; }
 
-  uint8_t bpm = 60;  // 1 beat per second
-  uint8_t intensity = 128;
+  uint8_t speed = 60;       // 1 beat per second
+  uint8_t iterations = 64;  // 24;
+  uint8_t centerX = 128;
+  uint8_t centerY = 128;
+  uint8_t areaSize = 128;
+  bool softBlur = false;
+  bool strongBlur = false;
+  bool showCenter = false;
 
   void setup() override {
-    // controls will show in the UI
-    // for different type of controls see other Nodes
-    addControl(bpm, "bpm", "slider");
-    addControl(intensity, "intensity", "slider");
+    addControl(speed, "speed", "slider");
+    addControl(iterations, "iterations", "slider");  // Maximum number of iterations per pixel.
+    addControl(centerX, "centerX", "slider");        // Location of X centerpoint
+    addControl(centerY, "centerY", "slider");        // Location of Y centerpoint
+    addControl(areaSize, "areaSize", "slider");      // Size of the area (small value = smaller area)
+    addControl(softBlur, "softBlur", "checkbox");
+    addControl(strongBlur, "strongBlur", "checkbox");
+    addControl(showCenter, "showCenter", "checkbox");
+
+    layer->fadeToBlackBy(100);  // WLEDMM avoids dimming when blur option is selected
+    julias.xcen = 0.;
+    julias.ycen = 0.;
+    julias.xymag = 1.0;
+
+    // static const char _data_FX_MODE_2DJULIA[] PROGMEM = "Julia@,Max iterations per pixel,X center,Y center,Area size,Soft Blur,Strong Blur,Show Center;!;!;2;ix=24,c1=128,c2=128,c3=16";
   }
 
-  void onSizeChanged(const Coord3D& prevSize) override {}  // e.g. realloc variables
+  typedef struct Julia {
+    float xcen;
+    float ycen;
+    float xymag;
+  } julia;
 
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) {
-    // add your custom onUpdate code here
-    if (control["name"] == "bpm") {
-      if (control["value"] == 0) {
+  Julia julias;
+
+  void loop() override {
+    const uint16_t cols = layer->size.x;
+    const uint16_t rows = layer->size.y;
+
+    float reAl;
+    float imAg;
+
+    // WLEDMM limit drift, so we don't move away into nothing
+    constexpr float maxCenter = 2.5f;  // just an educated guess
+    if (fabsf(julias.xcen) < maxCenter) julias.xcen = julias.xcen + (float)(centerX - 128) / 100000.f;
+    if (fabsf(julias.ycen) < maxCenter) julias.ycen = julias.ycen + (float)(centerY - 128) / 100000.f;
+
+    julias.xymag = julias.xymag + (float)((areaSize - 128)) / 100000.f;  // reduced resolution slider
+    if (julias.xymag < 0.01f) julias.xymag = 0.01f;
+    if (julias.xymag > 1.0f) julias.xymag = 1.0f;
+
+    float xmin = julias.xcen - julias.xymag;
+    float xmax = julias.xcen + julias.xymag;
+    float ymin = julias.ycen - julias.xymag;
+    float ymax = julias.ycen + julias.xymag;
+
+    // Whole set should be within -1.2,1.2 to -.8 to 1.
+    xmin = constrain(xmin, -1.2f, 1.2f);
+    xmax = constrain(xmax, -1.2f, 1.2f);
+    ymin = constrain(ymin, -0.8f, 1.0f);
+    ymax = constrain(ymax, -0.8f, 1.0f);
+
+    float dx;  // Delta x is mapped to the matrix size.
+    float dy;  // Delta y is mapped to the matrix size.
+
+    int maxIterations = 15;  // How many iterations per pixel before we give up. Make it 8 bits to match our range of colours.
+    float maxCalc = 16.0;    // How big is each calculation allowed to be before we give up.
+
+    maxIterations = iterations / 2;
+
+    // Resize section on the fly for some animation.
+    reAl = -0.94299f;  // PixelBlaze example
+    imAg = 0.3162f;
+
+    // reAl += sinf((float)pal::millis()/305.f)/20.f;
+    // imAg += sinf((float)pal::millis()/405.f)/20.f;
+    reAl += (float)sin16(pal::millis() * 34) / 655340.f;
+    imAg += (float)sin16(pal::millis() * 26) / 655340.f;
+
+    dx = (xmax - xmin) / cols;  // Scale the delta x and y values to our matrix size.
+    dy = (ymax - ymin) / rows;
+
+    // Start y
+    float y = ymin;
+    for (int j = 0; j < rows; j++) {
+      // Start x
+      float x = xmin;
+      for (int i = 0; i < cols; i++) {
+        // Now we test, as we iterate z = z^2 + c does z tend towards infinity?
+        float a = x;
+        float b = y;
+        int iter = 0;
+
+        while (iter < maxIterations) {  // Here we determine whether or not we're out of bounds.
+          float aa = a * a;
+          float bb = b * b;
+          float len = aa + bb;
+          if (len > maxCalc) {  // |z| = sqrt(a^2+b^2) OR z^2 = a^2+b^2 to save on having to perform a square root.
+            break;              // Bail
+          }
+
+          // This operation corresponds to z -> z^2+c where z=a+ib c=(x,y). Remember to use 'foil'.
+          b = 2 * a * b + imAg;
+          a = aa - bb + reAl;
+          iter++;
+        }  // while
+
+        // We color each pixel based on how long it takes to get to infinity, or black if it never gets there.
+        if (iter == maxIterations) {
+          layer->setRGB(Coord3D(i, j), 0);
+        } else {
+          layer->setRGB(Coord3D(i, j), ColorFromPalette(layerP.palette, iter * 255 / maxIterations));
+        }
+        x += dx;
       }
+      y += dy;
+    }
+
+    // WLEDMM
+    if (softBlur) layer->blurRows(layer->size.x, layer->size.y, 48);  // slight blurr
+    if (strongBlur) layer->blur2d(64);                                // strong blurr
+    if (showCenter) {                                                 // draw crosshair
+      int screenX = lroundf((0.5f / maxCenter) * (julias.xcen + maxCenter) * float(cols));
+      int screenY = lroundf((0.5f / maxCenter) * (julias.ycen + maxCenter) * float(rows));
+      int hair = min(min(cols - 1, rows - 1) / 2, 3);
+      layer->drawLine(screenX, screenY - hair, screenX, screenY + hair, CRGB::Green, true);
+      layer->drawLine(screenX - hair, screenY, screenX + hair, screenY, CRGB::Green, true);
     }
   }
-
-  // each frame of effect
-  // use of bpm functions like beatsin8 is recommended so independent from LEDs framerate (33000/nrOfLights)
-  void loop() override {
-    // if (!strip.isMatrix) return mode_oops();  // not a 2D set-up
-
-    // const uint16_t cols = SEGMENT.virtualWidth();
-    // const uint16_t rows = SEGMENT.virtualHeight();
-
-    // if (!SEGENV.allocateData(sizeof(julia))) return mode_oops();
-    // Julia* julias = reinterpret_cast<Julia*>(SEGENV.data);
-
-    // float reAl;
-    // float imAg;
-
-    // if (SEGENV.call == 0) {  // Reset the center if we've just re-started this animation.
-    //   SEGMENT.setUpLeds();
-    //   SEGMENT.fill(BLACK);  // WLEDMM avoids dimming when blur option is selected
-    //   julias->xcen = 0.;
-    //   julias->ycen = 0.;
-    //   julias->xymag = 1.0;
-
-    //   SEGMENT.custom1 = 128;  // Make sure the location widgets are centered to start.
-    //   SEGMENT.custom2 = 128;
-    //   SEGMENT.custom3 = 16;
-    //   SEGMENT.intensity = 24;
-    // }
-
-    // // WLEDMM limit drift, so we don't move away into nothing
-    // constexpr float maxCenter = 2.5f;  // just an educated guess
-    // if (fabsf(julias->xcen) < maxCenter) julias->xcen = julias->xcen + (float)(SEGMENT.custom1 - 128) / 100000.f;
-    // if (fabsf(julias->ycen) < maxCenter) julias->ycen = julias->ycen + (float)(SEGMENT.custom2 - 128) / 100000.f;
-
-    // julias->xymag = julias->xymag + (float)((SEGMENT.custom3 - 16) << 3) / 100000.f;  // reduced resolution slider
-    // if (julias->xymag < 0.01f) julias->xymag = 0.01f;
-    // if (julias->xymag > 1.0f) julias->xymag = 1.0f;
-
-    // float xmin = julias->xcen - julias->xymag;
-    // float xmax = julias->xcen + julias->xymag;
-    // float ymin = julias->ycen - julias->xymag;
-    // float ymax = julias->ycen + julias->xymag;
-
-    // // Whole set should be within -1.2,1.2 to -.8 to 1.
-    // xmin = constrain(xmin, -1.2f, 1.2f);
-    // xmax = constrain(xmax, -1.2f, 1.2f);
-    // ymin = constrain(ymin, -0.8f, 1.0f);
-    // ymax = constrain(ymax, -0.8f, 1.0f);
-
-    // float dx;  // Delta x is mapped to the matrix size.
-    // float dy;  // Delta y is mapped to the matrix size.
-
-    // int maxIterations = 15;  // How many iterations per pixel before we give up. Make it 8 bits to match our range of colours.
-    // float maxCalc = 16.0;    // How big is each calculation allowed to be before we give up.
-
-    // maxIterations = SEGMENT.intensity / 2;
-
-    // // Resize section on the fly for some animation.
-    // reAl = -0.94299f;  // PixelBlaze example
-    // imAg = 0.3162f;
-
-    // // reAl += sinf((float)strip.now/305.f)/20.f;
-    // // imAg += sinf((float)strip.now/405.f)/20.f;
-    // reAl += (float)sin16_t(strip.now * 34) / 655340.f;
-    // imAg += (float)sin16_t(strip.now * 26) / 655340.f;
-
-    // dx = (xmax - xmin) / cols;  // Scale the delta x and y values to our matrix size.
-    // dy = (ymax - ymin) / rows;
-
-    // // Start y
-    // float y = ymin;
-    // for (int j = 0; j < rows; j++) {
-    //   // Start x
-    //   float x = xmin;
-    //   for (int i = 0; i < cols; i++) {
-    //     // Now we test, as we iterate z = z^2 + c does z tend towards infinity?
-    //     float a = x;
-    //     float b = y;
-    //     int iter = 0;
-
-    //     while (iter < maxIterations) {  // Here we determine whether or not we're out of bounds.
-    //       float aa = a * a;
-    //       float bb = b * b;
-    //       float len = aa + bb;
-    //       if (len > maxCalc) {  // |z| = sqrt(a^2+b^2) OR z^2 = a^2+b^2 to save on having to perform a square root.
-    //         break;              // Bail
-    //       }
-
-    //       // This operation corresponds to z -> z^2+c where z=a+ib c=(x,y). Remember to use 'foil'.
-    //       b = 2 * a * b + imAg;
-    //       a = aa - bb + reAl;
-    //       iter++;
-    //     }  // while
-
-    //     // We color each pixel based on how long it takes to get to infinity, or black if it never gets there.
-    //     if (iter == maxIterations) {
-    //       SEGMENT.setPixelColorXY(i, j, 0);
-    //     } else {
-    //       SEGMENT.setPixelColorXY(i, j, SEGMENT.color_from_palette(iter * 255 / maxIterations, false, PALETTE_SOLID_WRAP, 0));
-    //     }
-    //     x += dx;
-    //   }
-    //   y += dy;
-    // }
-
-    // // WLEDMM
-    // if (SEGMENT.check1) SEGMENT.blurRows(48, false);  // slight blurr
-    // if (SEGMENT.check2) SEGMENT.blur(64, true);       // strong blurr
-    // if (SEGMENT.check3) {                             // draw crosshair
-    //   int screenX = lroundf((0.5f / maxCenter) * (julias->xcen + maxCenter) * float(cols));
-    //   int screenY = lroundf((0.5f / maxCenter) * (julias->ycen + maxCenter) * float(rows));
-    //   int hair = min(min(cols - 1, rows - 1) / 2, 3);
-    //   SEGMENT.drawLine(screenX, screenY - hair, screenX, screenY + hair, GREEN, true);
-    //   SEGMENT.drawLine(screenX - hair, screenY, screenX + hair, screenY, GREEN, true);
-    // }
-  }
-
-  ~JuliaEffect() override {};  // e,g, to free allocated memory
 };
 
 class PoliceEffect : public Node {
  public:
   static const char* name() { return "Police"; }
-  static uint8_t dim() { return _3D; }            // Dimensions supported _3D prefered, _2D or _1D can be used for first phase
-  static const char* tags() { return "🔥🎨⏳"; }  // use emojis see https://moonmodules.org/MoonLight/moonlight/overview/#emoji-coding, 🔥 for effect, 🎨 if palette used (recommended)
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🔥"; }
 
-  uint8_t bpm = 60;  // 1 beat per second
-  uint8_t intensity = 128;
+  uint8_t speed = 60;  // 1 beat per second
+  uint8_t width = 128;
   // static const char _data_FX_MODE_POLICE[] PROGMEM = "Police@!,Width;,Bg;0";
 
   void setup() override {
-    // controls will show in the UI
-    // for different type of controls see other Nodes
-    addControl(bpm, "bpm", "slider");
-    addControl(intensity, "intensity", "slider");
-  }
-
-  void onSizeChanged(const Coord3D& prevSize) override {}  // e.g. realloc variables
-
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) {
-    // add your custom onUpdate code here
-    if (control["name"] == "bpm") {
-      if (control["value"] == 0) {
-      }
-    }
+    addControl(speed, "speed", "slider");
+    addControl(width, "width", "slider");
   }
 
   // American Police Light with all LEDs Red and Blue
-  uint16_t police_base(uint32_t color1, uint32_t color2) {
-    // if (SEGLEN == 1) return mode_oops();
-    // uint16_t delay = 1 + (FRAMETIME << 3) / SEGLEN;  // longer segments should change faster
-    // uint32_t it = strip.now / map(SEGMENT.speed, 0, 255, delay << 4, delay);
-    // uint16_t offset = it % SEGLEN;
+  void police_base(uint32_t color1, uint32_t color2) {
+    uint16_t delay = 1 + (1000 / 40 << 3) / layer->size.y;  // longer segments should change faster
+    uint32_t it = pal::millis() / map(speed, 0, 255, delay << 4, delay);
+    uint16_t offset = it % layer->size.y;
 
-    // uint16_t width = ((SEGLEN * (SEGMENT.intensity + 1)) >> 9);  // max width is half the strip
-    // if (!width) width = 1;
-    // for (int i = 0; i < width; i++) {
-    //   uint16_t indexR = (offset + i) % SEGLEN;
-    //   uint16_t indexB = (offset + i + (SEGLEN >> 1)) % SEGLEN;
-    //   SEGMENT.setPixelColor(indexR, color1);
-    //   SEGMENT.setPixelColor(indexB, color2);
-    // }
+    uint16_t width = ((layer->size.y * (width + 1)) >> 9);  // max width is half the strip
+    if (!width) width = 1;
+    for (int i = 0; i < width; i++) {
+      uint16_t indexR = (offset + i) % layer->size.y;
+      uint16_t indexB = (offset + i + (layer->size.y >> 1)) % layer->size.y;
+      for (int x = 0; x < layer->size.x; x++)
+        for (int z = 0; z < layer->size.z; z++) {
+          layer->setRGB(Coord3D(x, indexR, z), color1);
+          layer->setRGB(Coord3D(x, indexB, z), color2);
+        }
+    }
   }
 
-  // each frame of effect
-  // use of bpm functions like beatsin8 is recommended so independent from LEDs framerate (33000/nrOfLights)
   void loop() override {
-    //  SEGMENT.fill(SEGCOLOR(1));
-    //  return police_base(RED, BLUE);
+    layer->fadeToBlackBy(100);
+    police_base(CRGB::Red, CRGB::Blue);
   }
-
-  ~PoliceEffect() override {};  // e,g, to free allocated memory
 };
+
 // /*
 //  * Spotlights moving back and forth that cast dancing shadows.
 //  * Shine this through tree branches/leaves or other close-up objects that cast
