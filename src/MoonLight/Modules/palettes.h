@@ -437,6 +437,10 @@ const byte audio_responsive_gp[] = {0, 255, 0, 0, 125, 0, 255, 0, 255, 0, 0, 255
 // a number, rather than having to activate each explicitly
 // by name every time.
 const byte* const gGradientPalettes[] = {
+    // Palette contents not actually used as built on the fly, just here to create menu option
+    audio_responsive_gp,  // 71-58 AudioResponsive  WLEDMM netmindz ar palette - placeholder1
+    audio_responsive_gp,  // 72-59 AudioResponsive  WLEDMM netmindz ar palette - placeholder2
+    audio_responsive_gp,  // 73-60 AudioResponsive  WLEDMM netmindz ar palette - placeholder3
     Sunset_Real_gp,               // 13-00 Sunset
     es_rivendell_15_gp,           // 14-01 Rivendell
     es_ocean_breeze_036_gp,       // 15-02 Breeze
@@ -495,16 +499,12 @@ const byte* const gGradientPalettes[] = {
     red_shift_gp,                 // 68-55 Red Shift
     red_tide_gp,                  // 69-56 Red Tide
     candy2_gp,                    // 70-57 Candy2
-    // Palette contents not actually used as built on the fly, just here to create menu option
-    audio_responsive_gp,  // 71-58 AudioResponsive  WLEDMM netmindz ar palette - placeholder1
-    audio_responsive_gp,  // 72-59 AudioResponsive  WLEDMM netmindz ar palette - placeholder2
-    audio_responsive_gp,  // 73-60 AudioResponsive  WLEDMM netmindz ar palette - placeholder3
 };
 
 const char* const palette_names[] = {
     // "Default","* Random Smooth ☾","* Color 1","* Colors 1&2","* Color Gradient","* Colors Only","Party","Cloud","Lava","Ocean",
     // "Forest","Rainbow","Rainbow Bands",
-    "Sunset", "Rivendell", "Breeze", "Red & Blue", "Yellowout", "Analogous", "Splash", "Pastel", "Sunset 2", "Beach", "Vintage", "Departure", "Landscape", "Beech", "Sherbet", "Hult", "Hult 64", "Drywet", "Jul", "Grintage", "Rewhi", "Tertiary", "Fire", "Icefire", "Cyane", "Light Pink", "Autumn", "Magenta", "Magred", "Yelmag", "Yelblu", "Orange & Teal", "Tiamat", "April Night", "Orangery", "C9", "Sakura", "Aurora", "Atlantica", "C9 2", "C9 New", "Temperature", "Aurora 2", "Retro Clown", "Candy", "Toxy Reaf", "Fairy Reaf", "Semi Blue", "Pink Candy", "Red Reaf", "Aqua Flash", "Yelblu Hot", "Lite Light", "Red Flash", "Blink Red", "Red Shift", "Red Tide", "Candy2", "Audio Responsive Ratio ☾", "Audio Responsive Hue ☾", "Audio Responsive Ramp ☾"
+    "Audio Ratio ☾", "Audio Hue ☾", "Audio Ramp ☾", "Sunset", "Rivendell", "Breeze", "Red & Blue", "Yellowout", "Analogous", "Splash", "Pastel", "Sunset 2", "Beach", "Vintage", "Departure", "Landscape", "Beech", "Sherbet", "Hult", "Hult 64", "Drywet", "Jul", "Grintage", "Rewhi", "Tertiary", "Fire", "Icefire", "Cyane", "Light Pink", "Autumn", "Magenta", "Magred", "Yelmag", "Yelblu", "Orange & Teal", "Tiamat", "April Night", "Orangery", "C9", "Sakura", "Aurora", "Atlantica", "C9 2", "C9 New", "Temperature", "Aurora 2", "Retro Clown", "Candy", "Toxy Reaf", "Fairy Reaf", "Semi Blue", "Pink Candy", "Red Reaf", "Aqua Flash", "Yelblu Hot", "Lite Light", "Red Flash", "Blink Red", "Red Shift", "Red Tide", "Candy2"
     // , "* Random Cycle"
   };
 

@@ -1183,7 +1183,7 @@ class BlackholeEffect : public Node {
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🔥🎨⏳🐙"; }
 
-  uint8_t fadeRate = 16;     // speed
+  uint8_t fadeRate = 128;    // speed
   uint8_t outerYfreq = 128;  // intensity
   uint8_t outerXfreq = 128;  // custom1
   uint8_t innerXfreq = 128;  // custom2
@@ -1191,12 +1191,13 @@ class BlackholeEffect : public Node {
   uint8_t blur = 16;         // check3
 
   void setup() override {
-    addControl(fadeRate, "fadeRate", "slider", 0, 32);
+    addControl(fadeRate, "fadeRate", "slider");
     addControl(outerYfreq, "outerYfreq", "slider");
     addControl(outerXfreq, "outerXfreq", "slider");
     addControl(innerXfreq, "innerXfreq", "slider");
     addControl(innerYfreq, "innerYfreq", "slider");
     addControl(blur, "blur", "slider");
+    layer->fadeToBlackBy(255);
   }
 
   void loop() override {
@@ -1204,19 +1205,20 @@ class BlackholeEffect : public Node {
     const int rows = layer->size.y;
     int x, y;
 
-    layer->fadeToBlackBy(16 + fadeRate);  // create fading trails
-    unsigned long t = millis() / 128;     // timebase
+    layer->fadeToBlackBy(16 + (fadeRate >> 3));  // create fading trails
+    constexpr unsigned long ratio = 128;         // rotation speed
+    unsigned long t = millis();                  // timebase
     // outer stars
     for (size_t i = 0; i < 8; i++) {
-      x = beatsin8(outerXfreq >> 3, 0, cols - 1, 0, ((i % 2) ? 128 : 0) + t * i);
-      y = beatsin8(outerYfreq >> 3, 0, rows - 1, 0, ((i % 2) ? 192 : 64) + t * i);
+      x = beatsin8(outerXfreq >> 3, 0, cols - 1, 0, ((i % 2) ? 128 : 0) + (t * i) / ratio);
+      y = beatsin8(outerYfreq >> 3, 0, rows - 1, 0, ((i % 2) ? 192 : 64) + (t * i) / ratio);
       layer->addRGB(Coord3D(x, y), ColorFromPalette(layerP.palette, i * 32));
     }
     // inner stars
     for (size_t i = 0; i < 4; i++) {
-      x = beatsin8(innerXfreq >> 3, cols / 4, cols - 1 - cols / 4, 0, ((i % 2) ? 128 : 0) + t * i);
-      y = beatsin8(innerYfreq >> 3, rows / 4, rows - 1 - rows / 4, 0, ((i % 2) ? 192 : 64) + t * i);
-      layer->addRGB(Coord3D(x, y), ColorFromPalette(layerP.palette, 255 - i * 64));
+      x = beatsin8(innerXfreq >> 3, cols / 4, cols - 1 - cols / 4, 0, ((i % 2) ? 128 : 0) + (t * i) / ratio);
+      y = beatsin8(innerYfreq >> 3, rows / 4, rows - 1 - rows / 4, 0, ((i % 2) ? 192 : 64) + (t * i) / ratio);
+      layer->addRGB(Coord3D(x, y), ColorFromPalette(layerP.palette, i * 32));
     }
     // central white dot
     layer->setRGB(Coord3D(cols / 2, rows / 2), CRGB::White);
@@ -2000,6 +2002,8 @@ class ColorTwinkleEffect : public Node {
   void onSizeChanged(const Coord3D& prevSize) override { reallocMB2<uint8_t>(data, dataSize, (layer->nrOfLights + 7) >> 3, "data"); }
 
   void loop() override {
+    if (!data) return;
+
     CRGB fastled_col, prev;
     uint8_t brightness = 128;  // strip.getBrightness()
     fract8 fadeUpAmount = brightness > 28 ? 8 + (fadeSpeed >> 2) : 68 - brightness;
@@ -2008,26 +2012,28 @@ class ColorTwinkleEffect : public Node {
       fastled_col = layer->getRGB(i);
       prev = fastled_col;
       uint16_t index = i >> 3;
-      uint8_t bitNum = i & 0x07;
-      bool fadeUp = bitRead(data[index], bitNum);
+      if (index < dataSize) {
+        uint8_t bitNum = i & 0x07;
+        bool fadeUp = bitRead(data[index], bitNum);
 
-      if (fadeUp) {
-        CRGB incrementalColor = fastled_col;
-        incrementalColor.nscale8_video(fadeUpAmount);
-        fastled_col += incrementalColor;
+        if (fadeUp) {
+          CRGB incrementalColor = fastled_col;
+          incrementalColor.nscale8_video(fadeUpAmount);
+          fastled_col += incrementalColor;
 
-        if (fastled_col.red == 255 || fastled_col.green == 255 || fastled_col.blue == 255) {
-          bitWrite(data[index], bitNum, false);
-        }
-        layer->setRGB(i, fastled_col);
+          if (fastled_col.red == 255 || fastled_col.green == 255 || fastled_col.blue == 255) {
+            bitWrite(data[index], bitNum, false);
+          }
+          layer->setRGB(i, fastled_col);
 
-        if (layer->getRGB(i) == prev) {  // fix "stuck" pixels
-          fastled_col += fastled_col;
+          if (layer->getRGB(i) == prev) {  // fix "stuck" pixels
+            fastled_col += fastled_col;
+            layer->setRGB(i, fastled_col);
+          }
+        } else {
+          fastled_col.nscale8(255 - fadeDownAmount);
           layer->setRGB(i, fastled_col);
         }
-      } else {
-        fastled_col.nscale8(255 - fadeDownAmount);
-        layer->setRGB(i, fastled_col);
       }
     }
 
@@ -2038,8 +2044,10 @@ class ColorTwinkleEffect : public Node {
           if (layer->getRGB(i) == 0) {
             fastled_col = ColorFromPalette(layerP.palette, random8(), 64, NOBLEND);
             uint16_t index = i >> 3;
-            uint8_t bitNum = i & 0x07;
-            bitWrite(data[index], bitNum, true);
+            if (index < dataSize) {
+              uint8_t bitNum = i & 0x07;
+              bitWrite(data[index], bitNum, true);
+            }
             layer->setRGB(i, fastled_col);
             break;  // only spawn 1 new pixel per frame per 50 LEDs
           }
@@ -2225,12 +2233,12 @@ class PoliceEffect : public Node {
   static const char* tags() { return "🔥"; }
 
   uint8_t speed = 60;  // 1 beat per second
-  uint8_t width = 128;
+  uint8_t widthC = 128;
   // static const char _data_FX_MODE_POLICE[] PROGMEM = "Police@!,Width;,Bg;0";
 
   void setup() override {
     addControl(speed, "speed", "slider");
-    addControl(width, "width", "slider");
+    addControl(widthC, "width", "slider");
   }
 
   // American Police Light with all LEDs Red and Blue
@@ -2239,7 +2247,7 @@ class PoliceEffect : public Node {
     uint32_t it = pal::millis() / map(speed, 0, 255, delay << 4, delay);
     uint16_t offset = it % layer->size.y;
 
-    uint16_t width = ((layer->size.y * (width + 1)) >> 9);  // max width is half the strip
+    uint16_t width = ((layer->size.y * (widthC + 1)) >> 9);  // max width is half the strip
     if (!width) width = 1;
     for (int i = 0; i < width; i++) {
       uint16_t indexR = (offset + i) % layer->size.y;

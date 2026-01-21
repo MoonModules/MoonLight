@@ -53,8 +53,8 @@ class AudioSyncDriver : public Node {
       moduleControl->read(
           [&](const ModuleState& state) {
             uint8_t palette = state.data["palette"];
-            if (palette >= 69 && palette <= 71) {  // Audio palettes
-              layerP.palette.loadDynamicGradientPalette(getAudioPalette(palette - 69));
+            if (palette >= 11 && palette <= 13) {  // Audio palettes
+              layerP.palette.loadDynamicGradientPalette(getAudioPalette(palette - 11));
             }
           },
           name());

@@ -109,7 +109,7 @@ class VirtualLayer {
 
   nrOfLights_t XYZUnModified(const Coord3D& position) const { return position.x + position.y * size.x + position.z * size.x * size.y; }
 
-  void presetCorrection(nrOfLights_t &indexP) const;
+  void presetCorrection(nrOfLights_t& indexP) const;
 
   template <typename Callback>
   void forEachLightIndex(const nrOfLights_t indexV, Callback&& callback, bool onlyOne = false) {
