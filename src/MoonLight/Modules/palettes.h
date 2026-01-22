@@ -650,16 +650,16 @@ String getPaletteHexString(uint8_t index) {
   String hexString = "";
 
   if (gpArray[0] == 255) {  // fastled and moonlight palettes
-    char buf[3];
+    char buf[9];
     for (int j = 0; j < 16; j++) {
       // Add index (0, 16, 32, ... 240)
       // Add R, G, B
-      sprintf(buf, "%02x%02x%02x%02x", j * 16, palette[j].r, palette[j].g, palette[j].b);
+      snprintf(buf, sizeof(buf), "%02x%02x%02x%02x", j * 16, palette[j].r, palette[j].g, palette[j].b);
       hexString += buf;
     }
 
     // Add final entry at index 255
-    sprintf(buf, "%02x%02x%02x%02x", 255, palette[15].r, palette[15].g, palette[15].b);
+    snprintf(buf, sizeof(buf), "%02x%02x%02x%02x", 255, palette[15].r, palette[15].g, palette[15].b);
     hexString += buf;
   } else {  // gradient array palettes
     int j = 0;

@@ -133,7 +133,7 @@ class VirtualLayer {
       }
     } else {                                                                                      // no mappnig
       if ((indexV + 1) * layerP->lights.header.channelsPerLight <= layerP->lights.maxChannels) {  // make sure the light is in the channels array
-        callback(indexV); // no presetCorrection here ATM as lightPreset_RGB2040 has a mapping and we want max speed here
+        callback(indexV);                                                                         // no presetCorrection here ATM as lightPreset_RGB2040 has a mapping and we want max speed here
       }
     }
   }
@@ -300,14 +300,14 @@ class VirtualLayer {
     const uint8_t keep = 255 - blur_amount;
     const uint8_t seep = blur_amount >> 1;
     CRGB carryover = CRGB::Black;
-    for (uint16_t i = 0; i < size.y; ++i) {
-      CRGB cur = getRGB(Coord3D(x, i));
+    for (uint16_t row = 0; row < size.y; ++row) {
+      CRGB cur = getRGB(Coord3D(x, row));
       CRGB part = cur;
       part.nscale8(seep);
       cur.nscale8(keep);
       cur += carryover;
-      if (i) addRGB(Coord3D(x, i - 1), part);
-      setRGB(Coord3D(x, i), cur);
+      if (row) addRGB(Coord3D(x, row - 1), part);
+      setRGB(Coord3D(x, row), cur);
       carryover = part;
     }
   }
@@ -323,17 +323,17 @@ class VirtualLayer {
     uint8_t seep = blur_amount >> 1;
     for (uint16_t row = 0; row < size.y; row++) {
       CRGB carryover = CRGB::Black;
-      for (uint16_t i = 0; i < size.x; i++) {
-        CRGB cur = getRGB(Coord3D(i, row));
+      for (uint16_t col = 0; col < size.x; col++) {
+        CRGB cur = getRGB(Coord3D(col, row));
         CRGB part = cur;
         part.nscale8(seep);
         cur.nscale8(keep);
         cur += carryover;
-        if (i) addRGB(Coord3D(i - 1, row), part);
-        setRGB(Coord3D(i, row), cur);
+        if (row) addRGB(Coord3D(col - 1, row), part);
+        setRGB(Coord3D(col, row), cur);
         carryover = part;
       }
-      addRGB(Coord3D(size.x - 1, row), carryover);
+      if (size.x) addRGB(Coord3D(size.x - 1, row), carryover);
     }
   }
 
@@ -344,17 +344,17 @@ class VirtualLayer {
     uint8_t seep = blur_amount >> 1;
     for (uint16_t col = 0; col < size.x; ++col) {
       CRGB carryover = CRGB::Black;
-      for (uint16_t i = 0; i < size.y; ++i) {
-        CRGB cur = getRGB(Coord3D(col, i));
+      for (uint16_t row = 0; row < size.y; row++) {
+        CRGB cur = getRGB(Coord3D(col, row));
         CRGB part = cur;
         part.nscale8(seep);
         cur.nscale8(keep);
         cur += carryover;
-        if (i) addRGB(Coord3D(col, i - 1), part);
-        setRGB(Coord3D(col, i), cur);
+        if (row) addRGB(Coord3D(col, row - 1), part);
+        setRGB(Coord3D(col, row), cur);
         carryover = part;
       }
-       addRGB(Coord3D(col, size.y - 1), carryover);
+      if (size.y) addRGB(Coord3D(col, size.y - 1), carryover);
     }
   }
 

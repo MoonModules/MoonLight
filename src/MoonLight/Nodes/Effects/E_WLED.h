@@ -2059,7 +2059,7 @@ class ColorTwinkleEffect : public Node {
     }
   }
 
-  ~ColorTwinkleEffect() { freeMB(data); }
+  ~ColorTwinkleEffect() { if (data) freeMB(data, "data"); }
 };
 
 class PlasmaEffect : public Node {
