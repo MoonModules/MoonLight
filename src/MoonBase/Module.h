@@ -115,17 +115,26 @@ class ModuleState {
     if (contains(taskName, "SvelteKit") || contains(taskName, "loopTask")) {  // at boot,  the loopTask starts, after that the loopTask is destroyed
       if (processUpdatedItem) processUpdatedItem(updatedItem);
     } else {
-      if (xSemaphoreTake(updateMutex, portMAX_DELAY) == pdTRUE) {
-        this->updatedItem = updatedItem;
-        updatePending = true;
-        xSemaphoreGive(updateMutex);
+      // Wait until previous update is processed
+      while (true) {
+        if (xSemaphoreTake(updateMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+          if (!updatePending) {
+            // EXT_LOGD(ML_TAG, "%s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
+            this->updatedItem = updatedItem;
+            updatePending = true;
+            xSemaphoreGive(updateMutex);
+            break;
+          }
+          xSemaphoreGive(updateMutex);
+        }
+        vTaskDelay(pdMS_TO_TICKS(1));  // Need delay here when updatePending is true
       }
     }
   }
   // Called by consumer side
   void getUpdate() {
     // Try to acquire mutex without blocking
-    if (xSemaphoreTake(updateMutex, 0) == pdTRUE) {
+    if (xSemaphoreTake(updateMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
       if (updatePending) {
         // Copy update data
         UpdatedItem localCopy = updatedItem;

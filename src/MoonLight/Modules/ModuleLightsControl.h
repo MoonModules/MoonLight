@@ -19,6 +19,7 @@
   #include "MoonBase/Module.h"
   #include "MoonBase/Modules/FileManager.h"
   #include "MoonBase/Utilities.h"  //for isInPSRAM
+  #include "palettes.h"
 
 // Convert ModuleLightsControl state -> Home Assistant JSON
 void readMQTT(ModuleState& state, JsonObject& root) {
@@ -277,19 +278,19 @@ class ModuleLightsControl : public Module {
     control = addControl(controls, "blue", "slider");
     control["default"] = 255;
     control["color"] = "Blue";
-    control = addControl(controls, "palette", "select");
-    control["default"] = 9;
-    addControlValue(control, "Cloud");
-    addControlValue(control, "Lava");
-    addControlValue(control, "Ocean");
-    addControlValue(control, "Forest");
-    addControlValue(control, "Rainbow");
-    addControlValue(control, "RainbowStripe");
-    addControlValue(control, "Party");
-    addControlValue(control, "Heat");
-    addControlValue(control, "Random");
-    addControlValue(control, "MoonModules");
-    addControlValue(control, "Orange");
+    control = addControl(controls, "palette", "palette");  // palette type
+    control["default"] = 8;
+
+    control["values"].to<JsonArray>();
+
+    // add palettes from palettes.h
+    for (int i = 0; i < sizeof(palette_names) / sizeof(char*); i++) {
+      JsonArray values = control["values"];
+      JsonObject object = values.add<JsonObject>();
+      object["name"] = palette_names[i];
+      object["colors"] = getPaletteHexString(i);
+      ;
+    }
 
     control = addControl(controls, "preset", "pad");
     control["width"] = 8;
@@ -322,46 +323,14 @@ class ModuleLightsControl : public Module {
       layerP.lights.header.blue = _state.data["blue"];
     } else if (updatedItem.name == "lightsOn" || updatedItem.name == "brightness") {
       uint8_t newBri = _state.data["lightsOn"] ? _state.data["brightness"] : 0;
-      if (!!layerP.lights.header.brightness != !!newBri && pinRelayLightsOn != UINT8_MAX) {
+      if (!!layerP.lights.header.brightness != !!newBri && pinRelayLightsOn != UINT8_MAX) {  // !! is intentional!
         EXT_LOGD(ML_TAG, "pinRelayLightsOn %s", !!newBri ? "On" : "Off");
         digitalWrite(pinRelayLightsOn, newBri > 0 ? HIGH : LOW);
       };
       layerP.lights.header.brightness = newBri;
     } else if (updatedItem.name == "palette") {
       const size_t nrOfPaletteEntries = sizeof(layerP.palette.entries) / sizeof(CRGB);
-
-      if (updatedItem.value == 0)
-        layerP.palette = CloudColors_p;
-      else if (updatedItem.value == 1)
-        layerP.palette = LavaColors_p;
-      else if (updatedItem.value == 2)
-        layerP.palette = OceanColors_p;
-      else if (updatedItem.value == 3)
-        layerP.palette = ForestColors_p;
-      else if (updatedItem.value == 4)
-        layerP.palette = RainbowColors_p;
-      else if (updatedItem.value == 5)
-        layerP.palette = RainbowStripeColors_p;
-      else if (updatedItem.value == 6)
-        layerP.palette = PartyColors_p;
-      else if (updatedItem.value == 7)
-        layerP.palette = HeatColors_p;
-      else if (updatedItem.value == 8) {
-        for (int i = 0; i < sizeof(layerP.palette.entries) / sizeof(CRGB); i++) {
-          layerP.palette[i] = CHSV(random8(), 255, 255);  // take the max saturation, max brightness of the colorwheel
-        }
-      } else if (updatedItem.value == 9) {  // MoonModules palette
-        for (int i = 0; i < nrOfPaletteEntries; i++) {
-          layerP.palette[i] = CRGB(map(i, 0, nrOfPaletteEntries - 1, 255, 0), map(i, 0, nrOfPaletteEntries - 1, 31, 0), map(i, 0, nrOfPaletteEntries - 1, 0, 255));  // from orange to blue
-        }
-      } else if (updatedItem.value == 10) {  // Orange palette
-        for (int i = 0; i < nrOfPaletteEntries; i++) {
-          layerP.palette[i] = CRGB(255, map(i, 0, nrOfPaletteEntries - 1, 0, 255), 0);  // from red via orange to yellow
-        }
-      } else {
-        layerP.palette = PartyColors_p;  // should never occur
-      }
-      // layerP.palette = LavaColors_p;
+      layerP.palette = getGradientPalette(updatedItem.value);
     } else if (updatedItem.name == "preset") {
       // copy /.config/effects.json to the hidden folder /.config/presets/preset[x].json
       // do not set preset at boot...

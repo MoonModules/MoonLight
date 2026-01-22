@@ -6,7 +6,7 @@ Shows which other MoonLight devices are present in your local network.
 
 * Device name: name of this device (set the name in the [WiFi station module](https://moonmodules.org/MoonLight/network/sta/))
 * Devices: Devices found on the network
-  * Click on the name to go to the device (controls module) via mDNS
-  * Click on IP to go to the device in a new window
+  * Click on the name to go to the device via mDNS
+  * Click on IP to go to the device via its IP address
 
 * The functionality of this module will also be available in [ESP32 Devices](https://github.com/ewowi/ESP32Devices). ESP32 Devices is a MacOS and Windows application.  🚧

@@ -84,10 +84,10 @@ class ModuleEffects : public NodeManager {
     addControlValue(control, getNameAndTags<AudioRingsEffect>());
     addControlValue(control, getNameAndTags<LinesEffect>());
     addControlValue(control, getNameAndTags<FireEffect>());
-    addControlValue(control, getNameAndTags<StarSkyEffect>());
     addControlValue(control, getNameAndTags<FixedRectangleEffect>());
     addControlValue(control, getNameAndTags<ParticlesEffect>());
     addControlValue(control, getNameAndTags<PraxisEffect>());
+    addControlValue(control, getNameAndTags<StarSkyEffect>());
   #if USE_M5UNIFIED
     addControlValue(control, getNameAndTags<MoonManEffect>());
   #endif
@@ -115,6 +115,7 @@ class ModuleEffects : public NodeManager {
     addControlValue(control, getNameAndTags<BlackholeEffect>());
     addControlValue(control, getNameAndTags<BouncingBallsEffect>());
     addControlValue(control, getNameAndTags<BlurzEffect>());
+    addControlValue(control, getNameAndTags<ColorTwinkleEffect>());
     addControlValue(control, getNameAndTags<DistortionWavesEffect>());
     addControlValue(control, getNameAndTags<DJLightEffect>());
     addControlValue(control, getNameAndTags<DNAEffect>());
@@ -126,11 +127,14 @@ class ModuleEffects : public NodeManager {
     addControlValue(control, getNameAndTags<FunkyPlankEffect>());
     addControlValue(control, getNameAndTags<GEQEffect>());
     addControlValue(control, getNameAndTags<HeartBeatEffect>());
+    addControlValue(control, getNameAndTags<JuliaEffect>());
     addControlValue(control, getNameAndTags<LissajousEffect>());
     addControlValue(control, getNameAndTags<Noise2DEffect>());
     addControlValue(control, getNameAndTags<NoiseMeterEffect>());
     addControlValue(control, getNameAndTags<OctopusEffect>());
     addControlValue(control, getNameAndTags<PacManEffect>());
+    addControlValue(control, getNameAndTags<PlasmaEffect>());
+    addControlValue(control, getNameAndTags<PoliceEffect>());
     addControlValue(control, getNameAndTags<PopCornEffect>());
     addControlValue(control, getNameAndTags<RainEffect>());
     addControlValue(control, getNameAndTags<TetrixEffect>());
@@ -176,12 +180,11 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<SolidEffect>(name);
     if (!node) node = checkAndAlloc<AudioRingsEffect>(name);
     if (!node) node = checkAndAlloc<FireEffect>(name);
-
-    if (!node) node = checkAndAlloc<StarSkyEffect>(name);
     if (!node) node = checkAndAlloc<FixedRectangleEffect>(name);
     if (!node) node = checkAndAlloc<FreqSawsEffect>(name);
     if (!node) node = checkAndAlloc<LinesEffect>(name);
     if (!node) node = checkAndAlloc<MarioTestEffect>(name);
+    if (!node) node = checkAndAlloc<StarSkyEffect>(name);
   #if USE_M5UNIFIED
     if (!node) node = checkAndAlloc<MoonManEffect>(name);
   #endif
@@ -209,6 +212,7 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<BlackholeEffect>(name);
     if (!node) node = checkAndAlloc<BouncingBallsEffect>(name);
     if (!node) node = checkAndAlloc<BlurzEffect>(name);
+    if (!node) node = checkAndAlloc<ColorTwinkleEffect>(name);
     if (!node) node = checkAndAlloc<DistortionWavesEffect>(name);
     if (!node) node = checkAndAlloc<DJLightEffect>(name);
     if (!node) node = checkAndAlloc<DNAEffect>(name);
@@ -220,11 +224,14 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<FunkyPlankEffect>(name);
     if (!node) node = checkAndAlloc<GEQEffect>(name);
     if (!node) node = checkAndAlloc<HeartBeatEffect>(name);
+    if (!node) node = checkAndAlloc<JuliaEffect>(name);
     if (!node) node = checkAndAlloc<LissajousEffect>(name);
     if (!node) node = checkAndAlloc<Noise2DEffect>(name);
     if (!node) node = checkAndAlloc<NoiseMeterEffect>(name);
     if (!node) node = checkAndAlloc<OctopusEffect>(name);
     if (!node) node = checkAndAlloc<PacManEffect>(name);
+    if (!node) node = checkAndAlloc<PlasmaEffect>(name);
+    if (!node) node = checkAndAlloc<PoliceEffect>(name);
     if (!node) node = checkAndAlloc<PopCornEffect>(name);
     if (!node) node = checkAndAlloc<RainEffect>(name);
     if (!node) node = checkAndAlloc<TetrixEffect>(name);

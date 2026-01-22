@@ -1197,6 +1197,7 @@ class BlackholeEffect : public Node {
     addControl(innerXfreq, "innerXfreq", "slider");
     addControl(innerYfreq, "innerYfreq", "slider");
     addControl(blur, "blur", "slider");
+    layer->fadeToBlackBy(255);
   }
 
   void loop() override {
@@ -1205,18 +1206,19 @@ class BlackholeEffect : public Node {
     int x, y;
 
     layer->fadeToBlackBy(16 + (fadeRate >> 3));  // create fading trails
-    unsigned long t = millis() / 128;            // timebase
+    constexpr unsigned long ratio = 128;         // rotation speed
+    unsigned long t = millis();                  // timebase
     // outer stars
     for (size_t i = 0; i < 8; i++) {
-      x = beatsin8(outerXfreq >> 3, 0, cols - 1, 0, ((i % 2) ? 128 : 0) + t * i);
-      y = beatsin8(outerYfreq >> 3, 0, rows - 1, 0, ((i % 2) ? 192 : 64) + t * i);
+      x = beatsin8(outerXfreq >> 3, 0, cols - 1, 0, ((i % 2) ? 128 : 0) + (t * i) / ratio);
+      y = beatsin8(outerYfreq >> 3, 0, rows - 1, 0, ((i % 2) ? 192 : 64) + (t * i) / ratio);
       layer->addRGB(Coord3D(x, y), ColorFromPalette(layerP.palette, i * 32));
     }
     // inner stars
     for (size_t i = 0; i < 4; i++) {
-      x = beatsin8(innerXfreq >> 3, cols / 4, cols - 1 - cols / 4, 0, ((i % 2) ? 128 : 0) + t * i);
-      y = beatsin8(innerYfreq >> 3, rows / 4, rows - 1 - rows / 4, 0, ((i % 2) ? 192 : 64) + t * i);
-      layer->addRGB(Coord3D(x, y), ColorFromPalette(layerP.palette, 255 - i * 64));
+      x = beatsin8(innerXfreq >> 3, cols / 4, cols - 1 - cols / 4, 0, ((i % 2) ? 128 : 0) + (t * i) / ratio);
+      y = beatsin8(innerYfreq >> 3, rows / 4, rows - 1 - rows / 4, 0, ((i % 2) ? 192 : 64) + (t * i) / ratio);
+      layer->addRGB(Coord3D(x, y), ColorFromPalette(layerP.palette, i * 32));
     }
     // central white dot
     layer->setRGB(Coord3D(cols / 2, rows / 2), CRGB::White);
@@ -1320,14 +1322,14 @@ class OctopusEffect : public Node {
   }
 
   void setRMap() {
-    const uint8_t C_X = layer->size.x / 2 + (offset.x - 50) * layer->size.x / 100;
-    const uint8_t C_Y = layer->size.y / 2 + (offset.y - 50) * layer->size.y / 100;
+    const uint16_t C_X = layer->size.x / 2 + (offset.x - 50) * layer->size.x / 100;
+    const uint16_t C_Y = layer->size.y / 2 + (offset.y - 50) * layer->size.y / 100;
     Coord3D pos = {0, 0, 0};
     const uint8_t mapp = 180 / max(layer->size.x, layer->size.y);
     for (pos.x = 0; pos.x < layer->size.x; pos.x++) {
       for (pos.y = 0; pos.y < layer->size.y; pos.y++) {
         nrOfLights_t indexV = layer->XYZUnModified(pos);
-        if (indexV < layer->size.x * layer->size.y) {                        // excluding UINT16_MAX from XY if out of bounds due to projection
+        if (indexV < rMapSize) {                                             // excluding UINT16_MAX from XY if out of bounds due to projection
           rMap[indexV].angle = 40.7436f * atan2f(pos.y - C_Y, pos.x - C_X);  // avoid 128*atan2()/PI
           rMap[indexV].radius = hypotf(pos.x - C_X, pos.y - C_Y) * mapp;     // thanks Sutaburosu
         }
@@ -1335,7 +1337,10 @@ class OctopusEffect : public Node {
     }
   }
 
-  void onSizeChanged(const Coord3D& prevSize) override { reallocMB2<Map_t>(rMap, rMapSize, layer->size.x * layer->size.y, "rMap"); }
+  void onSizeChanged(const Coord3D& prevSize) override {
+    reallocMB2<Map_t>(rMap, rMapSize, layer->size.x * layer->size.y, "rMap");
+    if (rMap) setRMap();
+  }
 
   void loop() override {
     if (rMap) {  // check if rMap allocation successful
@@ -1977,6 +1982,294 @@ class DJLightEffect : public Node {
     }
   }
 };  // DJLight
+
+class ColorTwinkleEffect : public Node {
+ public:
+  static const char* name() { return "ColorTwinkle"; }
+  static uint8_t dim() { return _3D; }            // Dimensions supported _3D prefered, _2D or _1D can be used for first phase
+  static const char* tags() { return "🔥🎨⏳"; }  // use emojis see https://moonmodules.org/MoonLight/moonlight/overview/#emoji-coding, 🔥 for effect, 🎨 if palette used (recommended)
+
+  uint8_t fadeSpeed = 128;
+  uint8_t spawnSpeed = 128;
+  // static const char _data_FX_MODE_COLORTWINKLE[] PROGMEM = "Colortwinkles@Fade speed,Spawn speed;;!;;m12=0"; //pixels
+
+  void setup() override {
+    addControl(fadeSpeed, "fadeSpeed", "slider");
+    addControl(spawnSpeed, "spawnSpeed", "slider");
+    layer->fadeToBlackBy(100);
+  }
+
+  uint8_t* data = nullptr;
+  size_t dataSize = 0;
+
+  void onSizeChanged(const Coord3D& prevSize) override { reallocMB2<uint8_t>(data, dataSize, (layer->nrOfLights + 7) >> 3, "data"); }
+
+  void loop() override {
+    if (!data) return;
+
+    CRGB fastled_col, prev;
+    uint8_t brightness = 128;  // strip.getBrightness()
+    fract8 fadeUpAmount = brightness > 28 ? 8 + (fadeSpeed >> 2) : 68 - brightness;
+    fract8 fadeDownAmount = brightness > 28 ? 8 + (fadeSpeed >> 3) : 68 - brightness;
+    for (uint16_t i = 0; i < layer->nrOfLights; i++) {
+      fastled_col = layer->getRGB(i);
+      prev = fastled_col;
+      uint16_t index = i >> 3;
+      if (index < dataSize) {
+        uint8_t bitNum = i & 0x07;
+        bool fadeUp = bitRead(data[index], bitNum);
+
+        if (fadeUp) {
+          CRGB incrementalColor = fastled_col;
+          incrementalColor.nscale8_video(fadeUpAmount);
+          fastled_col += incrementalColor;
+
+          if (fastled_col.red == 255 || fastled_col.green == 255 || fastled_col.blue == 255) {
+            bitWrite(data[index], bitNum, false);
+          }
+          layer->setRGB(i, fastled_col);
+
+          if (layer->getRGB(i) == prev) {  // fix "stuck" pixels
+            fastled_col += fastled_col;
+            layer->setRGB(i, fastled_col);
+          }
+        } else {
+          fastled_col.nscale8(255 - fadeDownAmount);
+          layer->setRGB(i, fastled_col);
+        }
+      }
+    }
+
+    for (uint16_t j = 0; j <= layer->nrOfLights / 50; j++) {
+      if (random8() <= spawnSpeed) {
+        for (uint8_t times = 0; times < 5; times++) {  // attempt to spawn a new pixel 5 times
+          int i = random16(layer->nrOfLights);
+          if (layer->getRGB(i) == 0) {
+            fastled_col = ColorFromPalette(layerP.palette, random8(), 64, NOBLEND);
+            uint16_t index = i >> 3;
+            if (index < dataSize) {
+              uint8_t bitNum = i & 0x07;
+              bitWrite(data[index], bitNum, true);
+            }
+            layer->setRGB(i, fastled_col);
+            break;  // only spawn 1 new pixel per frame per 50 LEDs
+          }
+        }
+      }
+    }
+  }
+
+  ~ColorTwinkleEffect() { if (data) freeMB(data, "data"); }
+};
+
+class PlasmaEffect : public Node {
+ public:
+  static const char* name() { return "Plasma"; }
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🔥🎨"; }
+
+  uint8_t speed = 60;
+  uint8_t intensity = 128;
+
+  void setup() override {
+    addControl(speed, "speed", "slider");
+    addControl(intensity, "intensity", "slider");
+    // initialize phases on start
+    aux0 = random8(0, 2);  // add a bit of randomness
+  }
+
+  uint8_t aux0;
+
+  void loop() override {
+    uint8_t thisPhase = beatsin8(6 + aux0, -64, 64);
+    uint8_t thatPhase = beatsin8(7 + aux0, -64, 64);
+
+    for (int i = 0; i < layer->size.y; i++) {                                               // For each of the LED's in the strand, set color &  brightness based on a wave as follows:
+      uint8_t colorIndex = cubicwave8((i * (2 + 3 * (speed >> 5)) + thisPhase) & 0xFF) / 2  // factor=23 // Create a wave and add a phase change and add another wave with its own phase change.
+                           + cos8((i * (1 + 2 * (speed >> 5)) + thatPhase) & 0xFF) / 2;     // factor=15 // Hey, you can even change the frequencies if you wish.
+      uint8_t thisBright = qsub8(colorIndex, beatsin8(7, 0, (128 - (intensity >> 1))));
+      for (int x = 0; x < layer->size.x; x++)
+        for (int z = 0; z < layer->size.z; z++) layer->setRGB(Coord3D(x, i, z), ColorFromPalette(layerP.palette, colorIndex, thisBright));
+    }
+  }
+};
+
+class JuliaEffect : public Node {
+ public:
+  static const char* name() { return "Julia"; }
+  static uint8_t dim() { return _3D; }
+  static const char* tags() { return "🔥🎨"; }
+
+  uint8_t speed = 60;       // 1 beat per second
+  uint8_t iterations = 64;  // 24;
+  uint8_t centerX = 128;
+  uint8_t centerY = 128;
+  uint8_t areaSize = 128;
+  bool softBlur = false;
+  bool strongBlur = false;
+  bool showCenter = false;
+
+  void setup() override {
+    addControl(speed, "speed", "slider");
+    addControl(iterations, "iterations", "slider");  // Maximum number of iterations per pixel.
+    addControl(centerX, "centerX", "slider");        // Location of X centerpoint
+    addControl(centerY, "centerY", "slider");        // Location of Y centerpoint
+    addControl(areaSize, "areaSize", "slider");      // Size of the area (small value = smaller area)
+    addControl(softBlur, "softBlur", "checkbox");
+    addControl(strongBlur, "strongBlur", "checkbox");
+    addControl(showCenter, "showCenter", "checkbox");
+
+    layer->fadeToBlackBy(100);  // WLEDMM avoids dimming when blur option is selected
+    julias.xcen = 0.;
+    julias.ycen = 0.;
+    julias.xymag = 1.0;
+
+    // static const char _data_FX_MODE_2DJULIA[] PROGMEM = "Julia@,Max iterations per pixel,X center,Y center,Area size,Soft Blur,Strong Blur,Show Center;!;!;2;ix=24,c1=128,c2=128,c3=16";
+  }
+
+  typedef struct Julia {
+    float xcen;
+    float ycen;
+    float xymag;
+  } julia;
+
+  Julia julias;
+
+  void loop() override {
+    const uint16_t cols = layer->size.x;
+    const uint16_t rows = layer->size.y;
+
+    float reAl;
+    float imAg;
+
+    // WLEDMM limit drift, so we don't move away into nothing
+    constexpr float maxCenter = 2.5f;  // just an educated guess
+    if (fabsf(julias.xcen) < maxCenter) julias.xcen = julias.xcen + (float)(centerX - 128) / 100000.f;
+    if (fabsf(julias.ycen) < maxCenter) julias.ycen = julias.ycen + (float)(centerY - 128) / 100000.f;
+
+    julias.xymag = julias.xymag + (float)((areaSize - 128)) / 100000.f;  // reduced resolution slider
+    if (julias.xymag < 0.01f) julias.xymag = 0.01f;
+    if (julias.xymag > 1.0f) julias.xymag = 1.0f;
+
+    float xmin = julias.xcen - julias.xymag;
+    float xmax = julias.xcen + julias.xymag;
+    float ymin = julias.ycen - julias.xymag;
+    float ymax = julias.ycen + julias.xymag;
+
+    // Whole set should be within -1.2,1.2 to -.8 to 1.
+    xmin = constrain(xmin, -1.2f, 1.2f);
+    xmax = constrain(xmax, -1.2f, 1.2f);
+    ymin = constrain(ymin, -0.8f, 1.0f);
+    ymax = constrain(ymax, -0.8f, 1.0f);
+
+    float dx;  // Delta x is mapped to the matrix size.
+    float dy;  // Delta y is mapped to the matrix size.
+
+    int maxIterations = 15;  // How many iterations per pixel before we give up. Make it 8 bits to match our range of colours.
+    float maxCalc = 16.0;    // How big is each calculation allowed to be before we give up.
+
+    maxIterations = iterations / 2;
+
+    // Resize section on the fly for some animation.
+    reAl = -0.94299f;  // PixelBlaze example
+    imAg = 0.3162f;
+
+    // reAl += sinf((float)pal::millis()/305.f)/20.f;
+    // imAg += sinf((float)pal::millis()/405.f)/20.f;
+    reAl += (float)sin16(pal::millis() * 34) / 655340.f;
+    imAg += (float)sin16(pal::millis() * 26) / 655340.f;
+
+    dx = (xmax - xmin) / cols;  // Scale the delta x and y values to our matrix size.
+    dy = (ymax - ymin) / rows;
+
+    // Start y
+    float y = ymin;
+    for (int j = 0; j < rows; j++) {
+      // Start x
+      float x = xmin;
+      for (int i = 0; i < cols; i++) {
+        // Now we test, as we iterate z = z^2 + c does z tend towards infinity?
+        float a = x;
+        float b = y;
+        int iter = 0;
+
+        while (iter < maxIterations) {  // Here we determine whether or not we're out of bounds.
+          float aa = a * a;
+          float bb = b * b;
+          float len = aa + bb;
+          if (len > maxCalc) {  // |z| = sqrt(a^2+b^2) OR z^2 = a^2+b^2 to save on having to perform a square root.
+            break;              // Bail
+          }
+
+          // This operation corresponds to z -> z^2+c where z=a+ib c=(x,y). Remember to use 'foil'.
+          b = 2 * a * b + imAg;
+          a = aa - bb + reAl;
+          iter++;
+        }  // while
+
+        // We color each pixel based on how long it takes to get to infinity, or black if it never gets there.
+        if (iter == maxIterations) {
+          layer->setRGB(Coord3D(i, j), 0);
+        } else {
+          layer->setRGB(Coord3D(i, j), ColorFromPalette(layerP.palette, iter * 255 / maxIterations));
+        }
+        x += dx;
+      }
+      y += dy;
+    }
+
+    // WLEDMM
+    if (softBlur) layer->blurRows(48);  // slight blurr
+    if (strongBlur) layer->blur2d(64);  // strong blurr
+    if (showCenter) {                   // draw crosshair
+      int screenX = lroundf((0.5f / maxCenter) * (julias.xcen + maxCenter) * float(cols));
+      int screenY = lroundf((0.5f / maxCenter) * (julias.ycen + maxCenter) * float(rows));
+      int hair = min(min(cols - 1, rows - 1) / 2, 3);
+      layer->drawLine(screenX, screenY - hair, screenX, screenY + hair, CRGB::Green, true);
+      layer->drawLine(screenX - hair, screenY, screenX + hair, screenY, CRGB::Green, true);
+    }
+  }
+};
+
+class PoliceEffect : public Node {
+ public:
+  static const char* name() { return "Police"; }
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🔥"; }
+
+  uint8_t speed = 60;  // 1 beat per second
+  uint8_t widthC = 128;
+  // static const char _data_FX_MODE_POLICE[] PROGMEM = "Police@!,Width;,Bg;0";
+
+  void setup() override {
+    addControl(speed, "speed", "slider");
+    addControl(widthC, "width", "slider");
+  }
+
+  // American Police Light with all LEDs Red and Blue
+  void police_base(uint32_t color1, uint32_t color2) {
+    uint16_t delay = 1 + (1000 / 40 << 3) / layer->size.y;  // longer segments should change faster
+    uint32_t it = pal::millis() / map(speed, 0, 255, delay << 4, delay);
+    uint16_t offset = it % layer->size.y;
+
+    uint16_t width = ((layer->size.y * (widthC + 1)) >> 9);  // max width is half the strip
+    if (!width) width = 1;
+    for (int i = 0; i < width; i++) {
+      uint16_t indexR = (offset + i) % layer->size.y;
+      uint16_t indexB = (offset + i + (layer->size.y >> 1)) % layer->size.y;
+      for (int x = 0; x < layer->size.x; x++)
+        for (int z = 0; z < layer->size.z; z++) {
+          layer->setRGB(Coord3D(x, indexR, z), color1);
+          layer->setRGB(Coord3D(x, indexB, z), color2);
+        }
+    }
+  }
+
+  void loop() override {
+    layer->fadeToBlackBy(100);
+    police_base(CRGB::Red, CRGB::Blue);
+  }
+};
 
 // /*
 //  * Spotlights moving back and forth that cast dancing shadows.

@@ -271,8 +271,8 @@ bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& 
   return changed;
 }
 
-StateUpdateResult ModuleState::update(JsonObject& newData, ModuleState& state, const String& originId) {  //, const String& originId
-                                                                                                          // if (state.data.isNull()) EXT_LOGD(ML_TAG, "state data is null %d %d", newData.size(), newData != state.data); // state.data never null here
+StateUpdateResult ModuleState::update(JsonObject& newData, ModuleState& state, const String& originId) {
+  // if (state.data.isNull()) EXT_LOGD(ML_TAG, "state data is null %d %d", newData.size(), newData != state.data); // state.data never null here
 
   updateOriginId = originId;
 
@@ -285,6 +285,12 @@ StateUpdateResult ModuleState::update(JsonObject& newData, ModuleState& state, c
       // bool isNew = state.data.isNull();  // device is starting , not useful as state.data never null here
 
       bool changed = state.checkReOrderSwap("", state.data, newData, updatedItem);
+
+      // if (originId != "devicesserver" && originId != "tasksserver") {
+      //   String ss;
+      //   serializeJson(newData, ss);
+      //   EXT_LOGD(ML_TAG, "newData %s from %s", ss.c_str(), originId.c_str());
+      // }
 
       // EXT_LOGD(ML_TAG, "update isNew %d changed %d", isNew, changed);
       // serializeJson(state.data, Serial);Serial.println();

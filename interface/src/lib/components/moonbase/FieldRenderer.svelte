@@ -50,7 +50,7 @@
 			// Send immediately on first interaction
 			onChange(event);
 			pendingSliderEvent = null;
-			
+
 			throttleTimer = setTimeout(() => {
 				if (pendingSliderEvent) {
 					onChange(pendingSliderEvent);
@@ -128,6 +128,33 @@
 	//precent onClick when dblClick
 	let clickTimeout: any = null;
 	let preventClick = false;
+
+	// inspired by WLED
+	function genPalPrev(hexString: string) {
+		if (!hexString) return '';
+
+		// Convert hex string to byte array
+		const paletteData = [];
+		for (let i = 0; i < hexString.length; i += 2) {
+			paletteData.push(parseInt(hexString.substr(i, 2), 16));
+		}
+
+		// Parse palette data: groups of 4 bytes [index, r, g, b]
+		const gradient = [];
+		for (let i = 0; i < paletteData.length; i += 4) {
+			const index = paletteData[i];
+			const r = paletteData[i + 1];
+			const g = paletteData[i + 2];
+			const b = paletteData[i + 3];
+
+			// Convert index from 0-255 to percentage
+			const percent = Math.round((index / 255) * 100);
+
+			gradient.push(`rgb(${r},${g},${b}) ${percent}%`);
+		}
+
+		return `background: linear-gradient(to right,${gradient.join(',')});`;
+	}
 </script>
 
 <div class="flex-row flex items-center space-x-2 {!noPrompts ? 'mb-1' : ''}">
@@ -138,11 +165,8 @@
 	{/if}
 
 	{#if property.ro}
-		{#if property.type == 'ip'}
-			<a href="http://{value}" target="_blank">{value}</a>
-		{:else if property.type == 'mDNSName'}
-			<a href="http://{value}.local/moonbase/module?group=moonlight&module=lightscontrol">{value}</a
-			>
+		{#if property.type == 'ip' || property.type == 'mDNSName'}
+			<a href="http://{value}">{value}</a>
 		{:else if property.type == 'time'}
 			<span>{getTimeAgo(value, currentTime)}</span>
 		{:else if property.type == 'coord3D' && value != null}
@@ -153,7 +177,6 @@
 		{/if}
 	{:else if property.type == 'select' || property.type == 'selectFile'}
 		<select bind:value on:change={onChange} class="select">
-			<slot></slot>
 			{#each property.values as value, index}
 				<option value={property.type == 'selectFile' ? value : index}>
 					{value}
@@ -163,6 +186,24 @@
 		{#if property.type == 'selectFile'}
 			<FileEditWidget path={value} showEditor={false} />
 		{/if}
+	{:else if property.type == 'palette'}
+		<div style="display: flex; gap: 8px; align-items: center;">
+			<select bind:value on:change={onChange} class="select">
+				{#each property.values as val, index}
+					<option value={index}>{val.name}</option>
+				{/each}
+			</select>
+			<div class="palette-preview" style={genPalPrev(property.values[value]?.colors)}></div>
+		</div>
+
+		<style>
+			.palette-preview {
+				width: 250px;
+				height: 40px;
+				border: 1px solid #ccc;
+				border-radius: 3px;
+			}
+		</style>
 	{:else if property.type == 'checkbox'}
 		<input
 			type="checkbox"

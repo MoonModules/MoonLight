@@ -364,9 +364,9 @@ class IRDriver : public Node {
           if (nec_repeat == false) {
             if (combined_code == codeOff || combined_code == codeOn) {  // Lights on/off
               newState["lightsOn"] = state.data["lightsOn"].as<bool>() ? false : true;
-            } else if (combined_code == codePaletteInc) {                              // palette increase
-              newState["palette"] = MIN(state.data["palette"].as<uint8_t>() + 1, 11);  // to do: replace 8 with max palette count
-            } else if (combined_code == codePaletteDec) {                              // palette decrease
+            } else if (combined_code == codePaletteInc) {                                      // palette increase
+              newState["palette"] = MIN(state.data["palette"].as<uint8_t>() + 1, 8 + 3 + 61);  // 8 FastLED + 3 custom + 61 WLED palettes. to do: replace nr with max palette count
+            } else if (combined_code == codePaletteDec) {                                      // palette decrease
               newState["palette"] = MAX(state.data["palette"].as<uint8_t>() - 1, 0);
             } else if (combined_code == codePresetDec) {  // next button - go to previous preset
               newState["preset"] = state.data["preset"];
