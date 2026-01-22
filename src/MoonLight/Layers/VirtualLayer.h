@@ -310,6 +310,7 @@ class VirtualLayer {
       setRGB(Coord3D(x, row), cur);
       carryover = part;
     }
+    if (size.y) addRGB(Coord3D(x, size.y - 1), carryover);
   }
 
   void blur2d(fract8 blur_amount) {
@@ -329,7 +330,7 @@ class VirtualLayer {
         part.nscale8(seep);
         cur.nscale8(keep);
         cur += carryover;
-        if (row) addRGB(Coord3D(col - 1, row), part);
+        if (col) addRGB(Coord3D(col - 1, row), part);
         setRGB(Coord3D(col, row), cur);
         carryover = part;
       }
