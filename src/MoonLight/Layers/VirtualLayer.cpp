@@ -82,6 +82,8 @@ void VirtualLayer::loop20ms() {
 }
 
 void VirtualLayer::presetCorrection(nrOfLights_t& indexP) const {
+  // RGB2040 has physical layout with alternating 20-light segments:
+  // virtual [0..19] -> physical [0..19], virtual [20..39] -> physical [40..59], etc.
   if (layerP->lights.header.lightPreset == lightPreset_RGB2040) indexP += (indexP / 20) * 20;
 }
 

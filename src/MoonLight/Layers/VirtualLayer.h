@@ -133,7 +133,7 @@ class VirtualLayer {
       }
     } else {                                                                                      // no mappnig
       if ((indexV + 1) * layerP->lights.header.channelsPerLight <= layerP->lights.maxChannels) {  // make sure the light is in the channels array
-        callback(indexV);
+        callback(indexV); // no presetCorrection here ATM as lightPreset_RGB2040 has a mapping and we want max speed here
       }
     }
   }
@@ -313,22 +313,17 @@ class VirtualLayer {
   }
 
   void blur2d(fract8 blur_amount) {
-    blurRows(size.x, size.y, blur_amount);
-    blurColumns(size.x, size.y, blur_amount);
+    blurRows(blur_amount);
+    blurColumns(blur_amount);
   }
 
-  void blurRows(uint16_t width, uint16_t height, fract8 blur_amount) {
-    /*    for (uint16_t row = 0; row < height; row++) {
-            CRGB* rowbase = leds + (row * width);
-            blur1d( rowbase, width, blur_amount);
-        }
-    */
+  void blurRows(fract8 blur_amount) {
     // blur rows same as columns, for irregular matrix
     uint8_t keep = 255 - blur_amount;
     uint8_t seep = blur_amount >> 1;
-    for (uint16_t row = 0; row < height; row++) {
+    for (uint16_t row = 0; row < size.y; row++) {
       CRGB carryover = CRGB::Black;
-      for (uint16_t i = 0; i < width; i++) {
+      for (uint16_t i = 0; i < size.x; i++) {
         CRGB cur = getRGB(Coord3D(i, row));
         CRGB part = cur;
         part.nscale8(seep);
@@ -338,17 +333,18 @@ class VirtualLayer {
         setRGB(Coord3D(i, row), cur);
         carryover = part;
       }
+      addRGB(Coord3D(size.x - 1, row), carryover);
     }
   }
 
   // blurColumns: perform a blur1d on each column of a rectangular matrix
-  void blurColumns(uint16_t width, uint16_t height, fract8 blur_amount) {
+  void blurColumns(fract8 blur_amount) {
     // blur columns
     uint8_t keep = 255 - blur_amount;
     uint8_t seep = blur_amount >> 1;
-    for (uint16_t col = 0; col < width; ++col) {
+    for (uint16_t col = 0; col < size.x; ++col) {
       CRGB carryover = CRGB::Black;
-      for (uint16_t i = 0; i < height; ++i) {
+      for (uint16_t i = 0; i < size.y; ++i) {
         CRGB cur = getRGB(Coord3D(col, i));
         CRGB part = cur;
         part.nscale8(seep);
@@ -358,6 +354,7 @@ class VirtualLayer {
         setRGB(Coord3D(col, i), cur);
         carryover = part;
       }
+       addRGB(Coord3D(col, size.y - 1), carryover);
     }
   }
 

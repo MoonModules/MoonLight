@@ -279,79 +279,17 @@ class ModuleLightsControl : public Module {
     control["default"] = 255;
     control["color"] = "Blue";
     control = addControl(controls, "palette", "palette");  // palette type
-    control["default"] = 9;
+    control["default"] = 8;
 
     control["values"].to<JsonArray>();
-
-    const char* const builtInPaletteNames[] = {"Cloud", "Lava", "Ocean", "Forest", "Rainbow", "RainbowStripe", "Party", "Heat"};
-    const CRGBPalette16 builtInPalettes[] = {CloudColors_p, LavaColors_p, OceanColors_p, ForestColors_p, RainbowColors_p, RainbowStripeColors_p, PartyColors_p, HeatColors_p};
-    for (int i = 0; i < sizeof(builtInPaletteNames) / sizeof(char*); i++) {
-      JsonArray values = control["values"];
-      JsonObject object = values.add<JsonObject>();
-      object["name"] = builtInPaletteNames[i];
-
-      // Convert CRGBPalette16 to hex string
-      String hexString = "";
-      const CRGBPalette16 pal = builtInPalettes[i];
-
-      char buf[3];
-      for (int j = 0; j < 16; j++) {
-        // Add index (0, 16, 32, ... 240)
-        sprintf(buf, "%02x", j * 16);
-        hexString += buf;
-
-        // Add R, G, B
-        sprintf(buf, "%02x", pal[j].r);
-        hexString += buf;
-        sprintf(buf, "%02x", pal[j].g);
-        hexString += buf;
-        sprintf(buf, "%02x", pal[j].b);
-        hexString += buf;
-      }
-
-      // Add final entry at index 255
-      sprintf(buf, "%02x", 255);
-      hexString += buf;
-      sprintf(buf, "%02x", pal[15].r);
-      hexString += buf;
-      sprintf(buf, "%02x", pal[15].g);
-      hexString += buf;
-      sprintf(buf, "%02x", pal[15].b);
-      hexString += buf;
-
-      object["colors"] = hexString;
-    }
-
-    const char* const customPaletteNames[] = {"Random", "MoonModules", "Orange"};
-    for (int i = 0; i < sizeof(customPaletteNames) / sizeof(char*); i++) {
-      JsonArray values = control["values"];
-      JsonObject object = values.add<JsonObject>();
-      object["name"] = customPaletteNames[i];
-      object["colors"] = "";
-    }
 
     // add palettes from palettes.h
     for (int i = 0; i < sizeof(palette_names) / sizeof(char*); i++) {
       JsonArray values = control["values"];
       JsonObject object = values.add<JsonObject>();
       object["name"] = palette_names[i];
-
-      String hexString = "";
-      const byte* palette = gGradientPalettes[i];
-      int j = 0;
-
-      // Read 4-byte entries (index, r, g, b) until index == 255
-      while (j < 100) {  // Safety limit
-        for (int k = 0; k < 4; k++) {
-          char buf[3];
-          sprintf(buf, "%02x", palette[j++]);
-          hexString += buf;
-        }
-        // Check if we just wrote the final entry (index was 255)
-        if (palette[j - 4] == 255) break;
-      }
-
-      object["colors"] = hexString;
+      object["colors"] = getPaletteHexString(i);
+      ;
     }
 
     control = addControl(controls, "preset", "pad");
@@ -392,41 +330,7 @@ class ModuleLightsControl : public Module {
       layerP.lights.header.brightness = newBri;
     } else if (updatedItem.name == "palette") {
       const size_t nrOfPaletteEntries = sizeof(layerP.palette.entries) / sizeof(CRGB);
-
-      if (updatedItem.value == 0)
-        layerP.palette = CloudColors_p;
-      else if (updatedItem.value == 1)
-        layerP.palette = LavaColors_p;
-      else if (updatedItem.value == 2)
-        layerP.palette = OceanColors_p;
-      else if (updatedItem.value == 3)
-        layerP.palette = ForestColors_p;
-      else if (updatedItem.value == 4)
-        layerP.palette = RainbowColors_p;
-      else if (updatedItem.value == 5)
-        layerP.palette = RainbowStripeColors_p;
-      else if (updatedItem.value == 6)
-        layerP.palette = PartyColors_p;
-      else if (updatedItem.value == 7)
-        layerP.palette = HeatColors_p;
-      else if (updatedItem.value == 8) {
-        for (int i = 0; i < sizeof(layerP.palette.entries) / sizeof(CRGB); i++) {
-          layerP.palette[i] = CHSV(random8(), 255, 255);  // take the max saturation, max brightness of the colorwheel
-        }
-      } else if (updatedItem.value == 9) {  // MoonModules palette
-        for (int i = 0; i < nrOfPaletteEntries; i++) {
-          layerP.palette[i] = CRGB(map(i, 0, nrOfPaletteEntries - 1, 255, 0), map(i, 0, nrOfPaletteEntries - 1, 31, 0), map(i, 0, nrOfPaletteEntries - 1, 0, 255));  // from orange to blue
-        }
-      } else if (updatedItem.value == 10) {  // Orange palette
-        for (int i = 0; i < nrOfPaletteEntries; i++) {
-          layerP.palette[i] = CRGB(255, map(i, 0, nrOfPaletteEntries - 1, 0, 255), 0);  // from red via orange to yellow
-        }
-      } else {
-        byte tcp[76] = {255};  // WLEDMM: prevent out-of-range access in loadDynamicGradientPalette()
-        memcpy(tcp, (byte*)pgm_read_dword(&(gGradientPalettes[updatedItem.value.as<uint8_t>() - 11])), 72);
-        layerP.palette.loadDynamicGradientPalette(tcp);
-      }
-      // layerP.palette = LavaColors_p;
+      layerP.palette = getGradientPalette(updatedItem.value);
     } else if (updatedItem.name == "preset") {
       // copy /.config/effects.json to the hidden folder /.config/presets/preset[x].json
       // do not set preset at boot...

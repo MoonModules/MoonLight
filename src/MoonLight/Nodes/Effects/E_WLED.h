@@ -1322,14 +1322,14 @@ class OctopusEffect : public Node {
   }
 
   void setRMap() {
-    const uint8_t C_X = layer->size.x / 2 + (offset.x - 50) * layer->size.x / 100;
-    const uint8_t C_Y = layer->size.y / 2 + (offset.y - 50) * layer->size.y / 100;
+    const uint16_t C_X = layer->size.x / 2 + (offset.x - 50) * layer->size.x / 100;
+    const uint16_t C_Y = layer->size.y / 2 + (offset.y - 50) * layer->size.y / 100;
     Coord3D pos = {0, 0, 0};
     const uint8_t mapp = 180 / max(layer->size.x, layer->size.y);
     for (pos.x = 0; pos.x < layer->size.x; pos.x++) {
       for (pos.y = 0; pos.y < layer->size.y; pos.y++) {
         nrOfLights_t indexV = layer->XYZUnModified(pos);
-        if (indexV < layer->size.x * layer->size.y) {                        // excluding UINT16_MAX from XY if out of bounds due to projection
+        if (indexV < rMapSize) {                                             // excluding UINT16_MAX from XY if out of bounds due to projection
           rMap[indexV].angle = 40.7436f * atan2f(pos.y - C_Y, pos.x - C_X);  // avoid 128*atan2()/PI
           rMap[indexV].radius = hypotf(pos.x - C_X, pos.y - C_Y) * mapp;     // thanks Sutaburosu
         }
@@ -1337,7 +1337,10 @@ class OctopusEffect : public Node {
     }
   }
 
-  void onSizeChanged(const Coord3D& prevSize) override { reallocMB2<Map_t>(rMap, rMapSize, layer->size.x * layer->size.y, "rMap"); }
+  void onSizeChanged(const Coord3D& prevSize) override {
+    reallocMB2<Map_t>(rMap, rMapSize, layer->size.x * layer->size.y, "rMap");
+    if (rMap) setRMap();
+  }
 
   void loop() override {
     if (rMap) {  // check if rMap allocation successful
@@ -2055,6 +2058,8 @@ class ColorTwinkleEffect : public Node {
       }
     }
   }
+
+  ~ColorTwinkleEffect() { freeMB(data); }
 };
 
 class PlasmaEffect : public Node {
@@ -2214,9 +2219,9 @@ class JuliaEffect : public Node {
     }
 
     // WLEDMM
-    if (softBlur) layer->blurRows(layer->size.x, layer->size.y, 48);  // slight blurr
-    if (strongBlur) layer->blur2d(64);                                // strong blurr
-    if (showCenter) {                                                 // draw crosshair
+    if (softBlur) layer->blurRows(48);  // slight blurr
+    if (strongBlur) layer->blur2d(64);  // strong blurr
+    if (showCenter) {                   // draw crosshair
       int screenX = lroundf((0.5f / maxCenter) * (julias.xcen + maxCenter) * float(cols));
       int screenY = lroundf((0.5f / maxCenter) * (julias.ycen + maxCenter) * float(rows));
       int hair = min(min(cols - 1, rows - 1) / 2, 3);
