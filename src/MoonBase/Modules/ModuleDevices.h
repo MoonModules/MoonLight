@@ -16,6 +16,7 @@
 
   #include "MoonBase/Module.h"
   #include "MoonBase/Utilities.h"
+  #include "MoonBase/pal.h"
 
 struct UDPMessage {
   uint8_t rommel[6];
@@ -40,22 +41,22 @@ class ModuleDevices : public Module {
 
     _moduleLightsControl->addUpdateHandler([this](const String& originId) {
       if (deviceUDP.beginPacket(IPAddress(255, 255, 255, 255), deviceUDPPort)) {
-        UDPMessage message;
+        UDPMessage message{};  // {}: zero message
         message.name = esp32sveltekit.getWiFiSettingsService()->getHostname().c_str();
         message.version = APP_VERSION;
         _moduleLightsControl->read(
             [&](ModuleState& state) {
               message.brightness = state.data["brightness"];
               message.palette = state.data["palette"];
-              message.preset = state.data["preset"];
+              message.preset = state.data["preset"]["selected"];
               String ddd;
               serializeJson(state.data["preset"], ddd);
               EXT_LOGD(MB_TAG, "pr %s", ddd.c_str());
             },
             _moduleName);
-            
+
         EXT_LOGD(MB_TAG, "b: %d pa %d pr %d", message.brightness, message.palette, message.preset);
-        message.uptime = time(nullptr) - millis() / 1000;
+        message.uptime = time(nullptr) - pal::millis() / 1000;
         deviceUDP.write((uint8_t*)&message, sizeof(message));
         deviceUDP.endPacket();
 
@@ -90,7 +91,7 @@ class ModuleDevices : public Module {
     }
   }
 
-  void loop1s() {
+  void loop20ms() {
     if (!WiFi.localIP() && !ETH.localIP()) return;
 
     if (!deviceUDPConnected) return;
@@ -166,15 +167,16 @@ class ModuleDevices : public Module {
   }
 
   void readUDP() {
-    size_t packetSize = deviceUDP.parsePacket();
-    if (packetSize >= 38) {  // WLED has 44, MM had ! 38
-      char buffer[packetSize];
-      UDPMessage message;
-      deviceUDP.read(buffer, packetSize);
-      memcpy(&message, buffer, ::min(packetSize, sizeof(message)));
-      // EXT_LOGD(ML_TAG, "UDP packet read from %d: %s (%d)", deviceUDP.remoteIP()[3], buffer + 6, packetSize);
+    while (size_t packetSize = deviceUDP.parsePacket()) {
+      if (packetSize >= 38) {  // WLED has 44, MM had ! 38
+        char buffer[packetSize];
+        UDPMessage message;
+        deviceUDP.read(buffer, packetSize);
+        memcpy(&message, buffer, ::min(packetSize, sizeof(message)));
+        // EXT_LOGD(ML_TAG, "UDP packet read from %d: %s (%d)", deviceUDP.remoteIP()[3], buffer + 6, packetSize);
 
-      updateDevices(message, deviceUDP.remoteIP());
+        updateDevices(message, deviceUDP.remoteIP());
+      }
     }
   }
 
@@ -187,11 +189,11 @@ class ModuleDevices : public Module {
           [&](ModuleState& state) {
             message.brightness = state.data["brightness"];
             message.palette = state.data["palette"];
-            message.preset = state.data["preset"];
+            message.preset = state.data["preset"]["selected"];
           },
           _moduleName);
 
-      message.uptime = time(nullptr) - millis() / 1000;
+      message.uptime = time(nullptr) ? time(nullptr) - pal::millis() / 1000 : pal::millis() / 1000;
       deviceUDP.write((uint8_t*)&message, sizeof(message));
       deviceUDP.endPacket();
 

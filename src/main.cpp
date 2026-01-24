@@ -361,37 +361,42 @@ void setup() {
   esp32sveltekit.addLoopFunction([]() {
     for (Module* module : modules) module->loop();
 
-    // every second
-    static unsigned long lastSecond = 0;
-    if (millis() - lastSecond >= 1000) {
-      lastSecond = millis();
+    static unsigned long last20ms = 0;
+    if (millis() - last20ms >= 20) {
+      last20ms = millis();
+      moduleDevices.loop20ms();
 
-      moduleIO.loop1s();
-      moduleDevices.loop1s();
-      moduleTasks.loop1s();
+      // every second
+      static unsigned long lastSecond = 0;
+      if (millis() - lastSecond >= 1000) {
+        lastSecond = millis();
 
-      // logYield();
+        moduleIO.loop1s();
+        moduleTasks.loop1s();
+
+        // logYield();
 
   #if FT_ENABLED(FT_MOONLIGHT)
-      // set shared data (eg used in scrolling text effect)
-      sharedData.fps = esp32sveltekit.getAnalyticsService()->lps;
-      sharedData.connectionStatus = (uint8_t)esp32sveltekit.getConnectionStatus();
-      sharedData.clientListSize = esp32sveltekit.getServer()->getClientList().size();
-      sharedData.connectedClients = esp32sveltekit.getSocket()->getConnectedClients();
-      sharedData.activeClients = esp32sveltekit.getSocket()->getActiveClients();
+        // set shared data (eg used in scrolling text effect)
+        sharedData.fps = esp32sveltekit.getAnalyticsService()->lps;
+        sharedData.connectionStatus = (uint8_t)esp32sveltekit.getConnectionStatus();
+        sharedData.clientListSize = esp32sveltekit.getServer()->getClientList().size();
+        sharedData.connectedClients = esp32sveltekit.getSocket()->getConnectedClients();
+        sharedData.activeClients = esp32sveltekit.getSocket()->getActiveClients();
 
     #if FT_ENABLED(FT_LIVESCRIPT)
-      moduleLiveScripts.loop1s();
+        moduleLiveScripts.loop1s();
     #endif
   #endif
-    }
+  
+        // every 10 seconds
+        static unsigned long last10Second = 0;
+        if (millis() - last10Second >= 10000) {
+          last10Second = millis();
 
-    // every 10 seconds
-    static unsigned long last10Second = 0;
-    if (millis() - last10Second >= 10000) {
-      last10Second = millis();
-
-      moduleDevices.loop10s();
+          moduleDevices.loop10s();
+        }
+      }
     }
   });
 
