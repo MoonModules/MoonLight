@@ -221,6 +221,7 @@ class ModuleLightsControl : public Module {
       return;
     }
 
+    //get board preset info
     moduleIO.read(
         [&](ModuleState& state) {
           pinRelayLightsOn = UINT8_MAX;

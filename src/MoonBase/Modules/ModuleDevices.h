@@ -20,6 +20,11 @@
 struct UDPMessage {
   uint8_t rommel[6];
   Char<32> name;
+  Char<32> version;
+  uint32_t uptime;
+  uint8_t brightness;
+  uint8_t palette;
+  uint8_t preset;
 };
 
 class ModuleDevices : public Module {
@@ -27,8 +32,41 @@ class ModuleDevices : public Module {
   NetworkUDP deviceUDP;
   uint16_t deviceUDPPort = 65506;
   bool deviceUDPConnected = false;
+  Module* _moduleLightsControl;
 
-  ModuleDevices(PsychicHttpServer* server, ESP32SvelteKit* sveltekit) : Module("devices", server, sveltekit) { EXT_LOGV(MB_TAG, "constructor"); }
+  ModuleDevices(PsychicHttpServer* server, ESP32SvelteKit* sveltekit, Module* moduleLightsControl) : Module("devices", server, sveltekit) {
+    EXT_LOGV(MB_TAG, "constructor");
+    _moduleLightsControl = moduleLightsControl;
+
+    _moduleLightsControl->addUpdateHandler([this](const String& originId) {
+      if (deviceUDP.beginPacket(IPAddress(255, 255, 255, 255), deviceUDPPort)) {
+        UDPMessage message;
+        message.name = esp32sveltekit.getWiFiSettingsService()->getHostname().c_str();
+        message.version = APP_VERSION;
+        _moduleLightsControl->read(
+            [&](ModuleState& state) {
+              message.brightness = state.data["brightness"];
+              message.palette = state.data["palette"];
+              message.preset = state.data["preset"];
+              String ddd;
+              serializeJson(state.data["preset"], ddd);
+              EXT_LOGD(MB_TAG, "pr %s", ddd.c_str());
+            },
+            _moduleName);
+            
+        EXT_LOGD(MB_TAG, "b: %d pa %d pr %d", message.brightness, message.palette, message.preset);
+        message.uptime = time(nullptr) - millis() / 1000;
+        deviceUDP.write((uint8_t*)&message, sizeof(message));
+        deviceUDP.endPacket();
+
+        //   IPAddress activeIP = WiFi.isConnected() ? WiFi.localIP() : ETH.localIP();
+        //   // EXT_LOGD(MB_TAG, "UDP packet written (%s -> %d)", message.name.c_str(), activeIP[3]);
+        //   updateDevices(message, activeIP);
+      }
+    });
+
+    // writeUDP(); }, false);
+  }
 
   void setupDefinition(const JsonArray& controls) override {
     EXT_LOGV(MB_TAG, "");
@@ -44,6 +82,11 @@ class ModuleDevices : public Module {
       addControl(rows, "ip", "ip", 0, 32, true);
       addControl(rows, "time", "time", 0, 32, true);
       addControl(rows, "mac", "text", 0, 32, true);
+      addControl(rows, "version", "text", 0, 32, true);
+      addControl(rows, "uptime", "time", 0, 32, true);
+      addControl(rows, "brightness", "slider", 0, 255);
+      addControl(rows, "palette", "slider", 0, 71);
+      addControl(rows, "preset", "slider", 0, 64);
     }
   }
 
@@ -68,7 +111,7 @@ class ModuleDevices : public Module {
     writeUDP();  // and updateDevices with own device
   }
 
-  void updateDevices(const char* name, IPAddress ip) {
+  void updateDevices(const UDPMessage& message, IPAddress ip) {
     // EXT_LOGD(ML_TAG, "updateDevices ...%d %s", ip[3], name);
     if (_state.data["devices"].isNull()) _state.data["devices"].to<JsonArray>();
 
@@ -90,12 +133,17 @@ class ModuleDevices : public Module {
     }
     if (device.isNull()) {
       device = devices.add<JsonObject>();
-      EXT_LOGD(ML_TAG, "added ...%d %s", ip[3], name);
+      EXT_LOGD(ML_TAG, "added ...%d %s", ip[3], message.name);
       device["ip"] = ip.toString();
     }
 
-    device["name"] = name;           // name can change
     device["time"] = time(nullptr);  // time will change, triggering update
+    device["name"] = message.name;
+    device["version"] = message.version;
+    device["uptime"] = message.uptime;
+    device["brightness"] = message.brightness;
+    device["palette"] = message.palette;
+    device["preset"] = message.preset;
 
     if (!_socket->getConnectedClients()) return;  // no need to update if no clients
 
@@ -119,12 +167,14 @@ class ModuleDevices : public Module {
 
   void readUDP() {
     size_t packetSize = deviceUDP.parsePacket();
-    if (packetSize >= sizeof(UDPMessage)) {  // WLED has 44, MM has 38 ATM
+    if (packetSize >= 38) {  // WLED has 44, MM had ! 38
       char buffer[packetSize];
+      UDPMessage message;
       deviceUDP.read(buffer, packetSize);
+      memcpy(&message, buffer, ::min(packetSize, sizeof(message)));
       // EXT_LOGD(ML_TAG, "UDP packet read from %d: %s (%d)", deviceUDP.remoteIP()[3], buffer + 6, packetSize);
 
-      updateDevices(buffer + 6, deviceUDP.remoteIP());
+      updateDevices(message, deviceUDP.remoteIP());
     }
   }
 
@@ -132,12 +182,22 @@ class ModuleDevices : public Module {
     if (deviceUDP.beginPacket(IPAddress(255, 255, 255, 255), deviceUDPPort)) {
       UDPMessage message;
       message.name = esp32sveltekit.getWiFiSettingsService()->getHostname().c_str();
+      message.version = APP_VERSION;
+      _moduleLightsControl->read(
+          [&](ModuleState& state) {
+            message.brightness = state.data["brightness"];
+            message.palette = state.data["palette"];
+            message.preset = state.data["preset"];
+          },
+          _moduleName);
+
+      message.uptime = time(nullptr) - millis() / 1000;
       deviceUDP.write((uint8_t*)&message, sizeof(message));
       deviceUDP.endPacket();
 
       IPAddress activeIP = WiFi.isConnected() ? WiFi.localIP() : ETH.localIP();
       // EXT_LOGD(MB_TAG, "UDP packet written (%s -> %d)", message.name.c_str(), activeIP[3]);
-      updateDevices(message.name.c_str(), activeIP);
+      updateDevices(message, activeIP);
     }
   }
 };
