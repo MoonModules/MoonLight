@@ -110,7 +110,7 @@
 					title: 'Devices',
 					icon: CPU,
 					href: '/moonbase/module?group=moonbase&module=devices',
-					feature: page.data.features.moonbase
+					feature: page.data.features.moonlight // In MoonLight for the time being, should move to MoonBase using moduleControlCenter ...
 				},
 				{
 					title: 'Tasks',
