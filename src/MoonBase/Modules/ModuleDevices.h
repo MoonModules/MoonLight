@@ -28,6 +28,7 @@ struct UDPMessage {
   uint8_t brightness;
   uint8_t palette;
   uint8_t preset;
+  bool isControlCommand;
 } __attribute__((packed));  // ✅ Force no padding
 
 class ModuleDevices : public Module {
@@ -35,15 +36,15 @@ class ModuleDevices : public Module {
   NetworkUDP deviceUDP;
   uint16_t deviceUDPPort = 65506;
   bool deviceUDPConnected = false;
-  Module* _moduleLightsControl;
+  Module* _moduleControl;
 
-  ModuleDevices(PsychicHttpServer* server, ESP32SvelteKit* sveltekit, Module* moduleLightsControl) : Module("devices", server, sveltekit) {
+  ModuleDevices(PsychicHttpServer* server, ESP32SvelteKit* sveltekit, Module* moduleControl) : Module("devices", server, sveltekit) {
     EXT_LOGV(MB_TAG, "constructor");
-    _moduleLightsControl = moduleLightsControl;
+    _moduleControl = moduleControl;
 
-    _moduleLightsControl->addUpdateHandler(
+    _moduleControl->addUpdateHandler(
         [this](const String& originId) {
-          writeUDP(false);  // send update over the network
+          sendUDP(false);  // send this device update over the network, not updateDevices? (also locks _accessMutex ...)
         },
         false);
   }
@@ -76,34 +77,12 @@ class ModuleDevices : public Module {
     if (_state.updateOriginId == (String(_moduleName) + "server").c_str()) return;  // only triggered by updates from the UI
 
     if (updatedItem.parent[0] == "devices") {
-      Char<64> url;
-      url.format("http://%s/rest/lightscontrol", _state.data["devices"][updatedItem.index[0]]["ip"].as<const char*>());
-      if (updatedItem.name == "brightness") {
-        EXT_LOGD(ML_TAG, "%s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
-        EXT_LOGD(ML_TAG, "%s %s", _state.data["devices"][updatedItem.index[0]]["ip"].as<const char*>(), url.c_str());
-      }
-      HTTPClient http;
-      http.begin(url.c_str());
-      http.addHeader("Content-Type", "application/json");
-
-      JsonDocument doc;
-
-      if (updatedItem.name == "preset") {
-        doc[updatedItem.name]["select"] = updatedItem.value;
-      } else
-        doc[updatedItem.name] = updatedItem.value;
-
-      String body;
-      serializeJson(doc, body);
-
-      int httpCode = http.POST(body);
-
-      if (httpCode > 0) {
-        String response = http.getString();
-        Serial.println(response);
+      IPAddress targetIP;
+      if (!targetIP.fromString(_state.data["devices"][updatedItem.index[0]]["ip"].as<const char*>())) {
+        return;  // Invalid IP
       }
 
-      http.end();
+      sendUDP(false, targetIP);  // send this device update to a specific device, not updateDevices! (comes from device later...)
     }
   }
 
@@ -112,7 +91,7 @@ class ModuleDevices : public Module {
 
     if (!deviceUDPConnected) return;
 
-    readUDP();  // and updateDevices
+    receiveUDP();  // and updateDevices
   }
 
   void loop10s() {
@@ -125,7 +104,7 @@ class ModuleDevices : public Module {
 
     if (!deviceUDPConnected) return;
 
-    writeUDP(true);  // and updateDevices with own device
+    sendUDP(true);  // send this device update to all devices, updateDevices! ...
   }
 
   void updateDevices(const UDPMessage& message, IPAddress ip) {
@@ -184,29 +163,48 @@ class ModuleDevices : public Module {
     update(controls, ModuleState::update, String(_moduleName) + "server");
   }
 
-  void readUDP() {
+  void receiveUDP() {
     while (size_t packetSize = deviceUDP.parsePacket()) {
-      if (packetSize >= 38) {  // WLED has 44, MM had ! 38
-        char buffer[packetSize];
-        UDPMessage message{};
-        deviceUDP.read(buffer, packetSize);
-        memcpy(&message, buffer, min(packetSize, sizeof(message)));
-        // EXT_LOGD(ML_TAG, "UDP packet read from %d: %s (%d)", deviceUDP.remoteIP()[3], buffer + 6, packetSize);
-
-        updateDevices(message, deviceUDP.remoteIP());
+      if (packetSize < 38 || packetSize > sizeof(UDPMessage)) {
+        EXT_LOGW(MB_TAG, "Invalid UDP packet size: %d (expected %d-%d)", packetSize, 38, sizeof(UDPMessage));
+        deviceUDP.clear();  // Discard invalid packet
+        continue;
       }
+
+      char buffer[sizeof(UDPMessage)];
+      UDPMessage message{};
+      deviceUDP.read(buffer, packetSize);
+      memcpy(&message, buffer, packetSize);
+      // EXT_LOGD(ML_TAG, "UDP packet read from %d: %s (%d)", deviceUDP.remoteIP()[3], buffer + 6, packetSize);
+
+      if (message.isControlCommand) {
+        // If this packet is intended for THIS device (not just broadcast status),
+        // OR check a flag in UDPMessage to distinguish control commands from status broadcasts
+        JsonDocument doc;
+        JsonObject newState = doc.to<JsonObject>();
+
+        newState["lightsOn"] = message.lightsOn;
+        newState["brightness"] = message.brightness;
+        newState["palette"] = message.palette;
+        newState["preset"]["selected"] = message.preset;
+
+        _moduleControl->update(newState, ModuleState::update, _moduleName);  // Do not add server in the originID as that blocks updates, see execOnUpdate
+
+        EXT_LOGD(ML_TAG, "Applied UDP control: bri=%d pal=%d preset=%d", message.brightness, message.palette, message.preset);
+      } else
+        updateDevices(message, deviceUDP.remoteIP());
     }
   }
 
-  void writeUDP(bool includingUpdateDevices) {
-    if (deviceUDP.beginPacket(IPAddress(255, 255, 255, 255), deviceUDPPort)) {
-      UDPMessage message;
+  void sendUDP(bool includingUpdateDevices, IPAddress targetIP = IPAddress(255, 255, 255, 255)) {
+    if (deviceUDP.beginPacket(targetIP, deviceUDPPort)) {
+      UDPMessage message{};  // Zero-initialize
       message.name = esp32sveltekit.getWiFiSettingsService()->getHostname().c_str();
       message.version = APP_VERSION;
       // strncpy(message.name, esp32sveltekit.getWiFiSettingsService()->getHostname().c_str(), 32);
       // strncpy(message.version, APP_VERSION, 32);
       message.packageSize = sizeof(message);
-      _moduleLightsControl->read(
+      _moduleControl->read(
           [&](ModuleState& state) {
             message.lightsOn = state.data["lightsOn"];
             message.brightness = state.data["brightness"];
@@ -216,8 +214,11 @@ class ModuleDevices : public Module {
           _moduleName);
 
       message.uptime = time(nullptr) ? time(nullptr) - pal::millis() / 1000 : pal::millis() / 1000;
+      message.isControlCommand = targetIP != IPAddress(255, 255, 255, 255);
+
       deviceUDP.write((uint8_t*)&message, sizeof(message));
       deviceUDP.endPacket();
+      EXT_LOGD(ML_TAG, "UDP update sent to %s bri=%d pal=%d preset=%d", targetIP.toString().c_str(), message.brightness, message.palette, message.preset);
 
       if (includingUpdateDevices) {
         IPAddress activeIP = WiFi.isConnected() ? WiFi.localIP() : ETH.localIP();
