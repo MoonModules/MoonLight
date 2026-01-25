@@ -1,7 +1,12 @@
 name: PlatformIO CI
 
-on: [push]
+on:
+  push:
+    branches:
+      - '*'
+  pull_request:
 
- build:
+jobs:
+  build:
     uses: ./.github/workflows/build.yml
 
