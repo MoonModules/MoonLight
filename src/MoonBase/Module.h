@@ -46,7 +46,7 @@ class ModuleState {
 
   // for post/getUpdate
   static UpdatedItem mutexedUpdatedItem;
-  static const String* mutexedOriginId;
+  static String mutexedOriginId;
   static SemaphoreHandle_t updateMutex;
   bool mutexedUpdatePending = false;  // should not be static as each module needs to keep track of it's own status
 
@@ -121,7 +121,7 @@ class ModuleState {
           if (!mutexedUpdatePending) {
             // EXT_LOGD(ML_TAG, "%s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
             mutexedUpdatedItem = updatedItem;
-            mutexedOriginId = &originId;
+            mutexedOriginId = originId;
             mutexedUpdatePending = true;
             xSemaphoreGive(updateMutex);
             break;
@@ -139,12 +139,12 @@ class ModuleState {
       if (mutexedUpdatePending) {
         // Copy update data
         UpdatedItem localCopy = mutexedUpdatedItem;
-        const String* localOriginId = mutexedOriginId;
+        const String localOriginId = mutexedOriginId;
         mutexedUpdatePending = false;
         xSemaphoreGive(updateMutex);
 
         // Process OUTSIDE the mutex (no lock held during callback)
-        if (processUpdatedItem) processUpdatedItem(localCopy, *localOriginId);
+        if (processUpdatedItem) processUpdatedItem(localCopy, localOriginId);
         return;
       }
       xSemaphoreGive(updateMutex);

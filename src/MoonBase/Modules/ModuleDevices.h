@@ -44,7 +44,8 @@ class ModuleDevices : public Module {
 
     _moduleControl->addUpdateHandler(
         [this](const String& originId) {
-          sendUDP(false);  // send this device update over the network, not updateDevices? (also locks _accessMutex ...)
+          if (originId == (String(_moduleName) + "server")) return;  // Skip broadcast for UDP-sourced changes
+          sendUDP(false);                                            // send this device update over the network, not updateDevices? (also locks _accessMutex ...)
         },
         false);
   }
@@ -101,7 +102,7 @@ class ModuleDevices : public Module {
 
         deviceUDP.write((uint8_t*)&message, sizeof(message));
         deviceUDP.endPacket();
-        EXT_LOGD(ML_TAG, "UDP update sent to %s bri=%d pal=%d preset=%d", targetIP.toString().c_str(), message.brightness, message.palette, message.preset);
+        EXT_LOGD(ML_TAG, "UDP update sent to ...%d bri=%d pal=%d preset=%d", targetIP[3], message.brightness, message.palette, message.preset);
       }
     }
   }
@@ -131,23 +132,32 @@ class ModuleDevices : public Module {
     // EXT_LOGD(ML_TAG, "updateDevices ...%d %s", ip[3], name);
     if (_state.data["devices"].isNull()) _state.data["devices"].to<JsonArray>();
 
-    JsonArray devices;
+    // set the doc
     JsonDocument doc;
-    if (_socket->getConnectedClients()) {
-      doc.set(_state.data);  // copy
-      devices = doc["devices"];
-    } else
-      devices = _state.data["devices"];
+    if (_socket->getActiveClients()) {  // rebuild the devices array
+      doc.set(_state.data);             // copy
+    } else {
+      doc = _state.data;  // reference
+    }
 
+    // set the devices array
+    JsonArray devices;
+    devices = doc["devices"];
+
+    // find out if we have a new device
     JsonObject device = JsonObject();
-
+    bool newDevice = true;
     for (JsonObject dev : devices) {
       if (dev["ip"] == ip.toString()) {
         device = dev;
+        newDevice = false;
+        break;  // found so leave for loop
         // EXT_LOGD(ML_TAG, "updated ...%d %s", ip[3], name);
       }
     }
-    if (device.isNull()) {
+
+    // set the device object
+    if (newDevice) {
       device = devices.add<JsonObject>();
       EXT_LOGD(ML_TAG, "added ...%d %s", ip[3], message.name);
       device["ip"] = ip.toString();
@@ -163,24 +173,29 @@ class ModuleDevices : public Module {
     device["palette"] = message.palette;
     device["preset"] = message.preset;
 
-    if (!_socket->getConnectedClients()) return;  // no need to update if no clients
+    if (!_socket->getActiveClients()) return;  // no need to update if no clients
 
-    // sort in vector
-    std::vector<JsonObject> devicesVector;
-    for (JsonObject dev : devices) {
-      if (time(nullptr) - dev["time"].as<time_t>() < 86400) devicesVector.push_back(dev);  // max 1 day
+    if (newDevice) {  // sort devices in vector and add to a new document and update
+      JsonDocument doc2;
+
+      std::vector<JsonObject> devicesVector;
+      for (JsonObject dev : devices) {
+        if (time(nullptr) - dev["time"].as<time_t>() < 86400) devicesVector.push_back(dev);  // max 1 day
+      }
+      std::sort(devicesVector.begin(), devicesVector.end(), [](JsonObject a, JsonObject b) { return a["name"] < b["name"]; });
+
+      doc2["devices"].to<JsonArray>();
+      for (JsonObject device : devicesVector) {
+        doc2["devices"].add(device);
+      }
+      JsonObject controls = doc2.as<JsonObject>();
+      update(controls, ModuleState::update, String(_moduleName) + "server");
+    } else {
+      // only update the updated device
+      JsonObject controls = doc.as<JsonObject>();
+      update(controls, ModuleState::update, String(_moduleName) + "server");
     }
-    std::sort(devicesVector.begin(), devicesVector.end(), [](JsonObject a, JsonObject b) { return a["name"] < b["name"]; });
 
-    // create sorted devices
-    JsonDocument doc2;
-    doc2["devices"].to<JsonArray>();
-    for (JsonObject device : devicesVector) {
-      doc2["devices"].add(device);
-    }
-
-    JsonObject controls = doc2.as<JsonObject>();
-    update(controls, ModuleState::update, String(_moduleName) + "server");
   }
 
   void receiveUDP() {
@@ -195,7 +210,13 @@ class ModuleDevices : public Module {
       UDPMessage message{};
       deviceUDP.read(buffer, packetSize);
       memcpy(&message, buffer, packetSize);
-      // EXT_LOGD(ML_TAG, "UDP packet read from %d: %s (%d)", deviceUDP.remoteIP()[3], buffer + 6, packetSize);
+      // EXT_LOGD(ML_TAG, "UDP packet received from ...%d: %s (ps:%d isC:%d)", deviceUDP.remoteIP()[3], buffer + 6, packetSize, message.isControlCommand);
+
+      // ✅ Skip own broadcasts to prevent loops : this should never happen
+      if (message.name == esp32sveltekit.getWiFiSettingsService()->getHostname().c_str()) {
+        EXT_LOGW(ML_TAG, "Skipping own broadcast");
+        continue;
+      }
 
       if (message.isControlCommand) {
         // If this packet is intended for THIS device (not just broadcast status),

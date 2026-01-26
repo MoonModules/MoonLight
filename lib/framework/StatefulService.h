@@ -201,7 +201,7 @@ protected:
         if (xSemaphoreTakeRecursive(_accessMutex, pdMS_TO_TICKS(100))==pdFALSE) {
             // ESP_LOGI("🐼", "_accessMutex %s wait 100ms", originId.c_str());
             if (xSemaphoreTakeRecursive(_accessMutex, pdMS_TO_TICKS(400))==pdFALSE) {
-                ESP_LOGW("🐼", "_accessMutex %s waited 500ms and continues", originId.c_str());
+                ESP_LOGW("🐼", "%s _accessMutex %s waited 500ms and continues", pcTaskGetName(xTaskGetCurrentTaskHandle()), originId.c_str());
                 // xSemaphoreTakeRecursive(_accessMutex, portMAX_DELAY);
             }
         }

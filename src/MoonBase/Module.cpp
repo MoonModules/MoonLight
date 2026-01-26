@@ -38,7 +38,7 @@ void setDefaults(JsonObject controls, JsonArray definition) {
 // shared static variables
 SemaphoreHandle_t ModuleState::updateMutex = nullptr;
 UpdatedItem ModuleState::mutexedUpdatedItem;
-const String* ModuleState::mutexedOriginId = nullptr;
+String ModuleState::mutexedOriginId;
 
 void ModuleState::setupData() {
   // only if no file ...
