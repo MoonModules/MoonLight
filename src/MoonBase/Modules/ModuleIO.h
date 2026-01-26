@@ -573,27 +573,27 @@ class ModuleIO : public Module {
 
   uint8_t newBoardID = UINT8_MAX;
 
-  void onUpdate(const UpdatedItem& updatedItem) override {
+  void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
     JsonDocument doc;
     JsonObject object = doc.to<JsonObject>();
-    if (updatedItem.name == "boardPreset" && !_state.updateOriginId.contains("server")) {  // not done by this module: done by UI
+    if (updatedItem.name == "boardPreset" && !originId.endsWith("server")) {  // not done by this module: done by UI
       // if booting and modded is false or ! booting
       if ((updatedItem.oldValue == "" && _state.data["modded"] == false) || updatedItem.oldValue != "") {  // only update unmodded
-        EXT_LOGD(MB_TAG, "%s %s[%d]%s[%d].%s = %s -> %s", _state.updateOriginId.c_str(), updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
+        EXT_LOGD(MB_TAG, "%s %s[%d]%s[%d].%s = %s -> %s", originId.c_str(), updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
         newBoardID = updatedItem.value;  // run in sveltekit task
       }
-    } else if (updatedItem.name == "modded" && !_state.updateOriginId.contains("server")) {  // not done by this module: done by UI
+    } else if (updatedItem.name == "modded" && !originId.endsWith("server")) {  // not done by this module: done by UI
       // set pins to default if modded is turned off
       if (updatedItem.value == false) {
         EXT_LOGD(MB_TAG, "%s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
         newBoardID = _state.data["boardPreset"];  // run in sveltekit task
       }
-    } else if ((updatedItem.name == "switch1" || updatedItem.name == "switch2") && !_state.updateOriginId.contains("server")) {
+    } else if ((updatedItem.name == "switch1" || updatedItem.name == "switch2") && !originId.endsWith("server")) {
       // rebuild with new switch setting
       newBoardID = _state.data["boardPreset"];  // run in sveltekit task
-    } else if (updatedItem.name == "maxPower" && !_state.updateOriginId.contains("server")) {
+    } else if (updatedItem.name == "maxPower" && !originId.endsWith("server")) {
       object["modded"] = true;
-    } else if (updatedItem.name == "usage" && !_state.updateOriginId.contains("server")) {  // not done by this module: done by UI
+    } else if (updatedItem.name == "usage" && !originId.endsWith("server")) {  // not done by this module: done by UI
       object["modded"] = true;
     }
 

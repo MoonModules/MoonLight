@@ -37,8 +37,8 @@ void setDefaults(JsonObject controls, JsonArray definition) {
 
 // shared static variables
 SemaphoreHandle_t ModuleState::updateMutex = nullptr;
-UpdatedItem ModuleState::updatedItem;
-Char<20> ModuleState::updateOriginId;
+UpdatedItem ModuleState::mutexedUpdatedItem;
+const String* ModuleState::mutexedOriginId = nullptr;
 
 void ModuleState::setupData() {
   // only if no file ...
@@ -57,7 +57,7 @@ void ModuleState::setupData() {
     // assign the new defaults to state and run onUpdate
     data.clear();  //->to<JsonObject>(); //clear data
     UpdatedItem updatedItem;
-    compareRecursive("", data, doc.as<JsonObject>(), updatedItem);  // fill data with doc and calls onUpdates
+    compareRecursive("", data, doc.as<JsonObject>(), updatedItem, "module");  // fill data with doc and calls onUpdates
   }
 
   // to do: check if the file matches the definition
@@ -69,7 +69,7 @@ void ModuleState::read(ModuleState& state, JsonObject& stateJson) {
   stateJson.set(state.data);  // copy
 }
 
-bool ModuleState::checkReOrderSwap(const JsonString& parent, const JsonVariant& stateData, const JsonVariant& newData, UpdatedItem& updatedItem, uint8_t depth, uint8_t index) {
+bool ModuleState::checkReOrderSwap(const JsonString& parent, const JsonVariant& stateData, const JsonVariant& newData, UpdatedItem& updatedItem, const String& originId, uint8_t depth, uint8_t index) {
   bool changed = false;
   // check if newData is a reordering of state
   // if so reorder state, no comparison with updates needed
@@ -115,7 +115,7 @@ bool ModuleState::checkReOrderSwap(const JsonString& parent, const JsonVariant& 
                 updatedItem.name = "swap";
                 updatedItem.index[0] = stateIndex;
                 updatedItem.index[1] = newIndex;
-                postUpdate(updatedItem);
+                postUpdate(updatedItem, originId);
               }
 
               if (parkedFromIndex == UINT8_MAX) parkedFromIndex = newIndex;  // the index of value in the array stored in the parking spot
@@ -129,7 +129,7 @@ bool ModuleState::checkReOrderSwap(const JsonString& parent, const JsonVariant& 
   return changed;
 }
 
-bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& stateData, const JsonVariant& newData, UpdatedItem& updatedItem, uint8_t depth, uint8_t index) {
+bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& stateData, const JsonVariant& newData, UpdatedItem& updatedItem, const String& originId, uint8_t depth, uint8_t index) {
   bool changed = false;
   for (JsonPair newControl : newData.as<JsonObject>()) {
     if (stateData[newControl.key()].isNull()) {
@@ -175,7 +175,7 @@ bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& 
             // String xxx;
             // serializeJson(newArray[i], xxx);
             // EXT_LOGD(ML_TAG, "before cr %s", xxx.c_str());
-            changed = compareRecursive(key, stateArray[i], newArray[i], updatedItem, depth + 1, i) || changed;
+            changed = compareRecursive(key, stateArray[i], newArray[i], updatedItem, originId, depth + 1, i) || changed;
           } else if (i >= newArray.size()) {  // newArray has deleted a row
             // newArray.add<JsonObject>(); //add dummy row
             changed = true;  // compareRecursive(key, stateArray[i], newArray[i], updatedItem, depth+1, i) || changed;
@@ -208,7 +208,7 @@ bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& 
                 updatedItem.value = JsonVariant();    // Assign an empty JsonVariant
                 stateArray[i].remove(control.key());  // remove the control from the state row so onUpdate see it as empty
 
-                postUpdate(updatedItem);
+                postUpdate(updatedItem, originId);
               }
 
               // String dbg;
@@ -246,7 +246,7 @@ bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& 
             // String xxx;
             // serializeJson(newArray[i], xxx);
             // EXT_LOGD(ML_TAG, "before cr %s", xxx.c_str());
-            changed = compareRecursive(key, stateArray[i], newArray[i], updatedItem, depth + 1, i) || changed;
+            changed = compareRecursive(key, stateArray[i], newArray[i], updatedItem, originId, depth + 1, i) || changed;
           }
         }
       } else {  // if control is key/value
@@ -260,7 +260,7 @@ bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& 
           // EXT_LOGD(MB_TAG, "kv %s.%s v: %s d: %d", parent.c_str(), key.c_str(), newValue.as<String>().c_str(), depth);
           // EXT_LOGD(MB_TAG, "kv %s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
 
-          postUpdate(updatedItem);
+          postUpdate(updatedItem, originId);
         }
         // else {
         //     EXT_LOGD(MB_TAG, "do not update %s", key.c_str());
@@ -274,8 +274,6 @@ bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& 
 StateUpdateResult ModuleState::update(JsonObject& newData, ModuleState& state, const String& originId) {
   // if (state.data.isNull()) EXT_LOGD(ML_TAG, "state data is null %d %d", newData.size(), newData != state.data); // state.data never null here
 
-  updateOriginId = originId;
-
   if (newData.size() != 0) {  // in case of empty file
 
     // check which controls have updated
@@ -284,7 +282,7 @@ StateUpdateResult ModuleState::update(JsonObject& newData, ModuleState& state, c
 
       // bool isNew = state.data.isNull();  // device is starting , not useful as state.data never null here
 
-      bool changed = state.checkReOrderSwap("", state.data, newData, updatedItem);
+      bool changed = state.checkReOrderSwap("", state.data, newData, updatedItem, originId);
 
       // if (originId != "devicesserver" && originId != "tasksserver") {
       //   String ss;
@@ -296,7 +294,7 @@ StateUpdateResult ModuleState::update(JsonObject& newData, ModuleState& state, c
       // serializeJson(state.data, Serial);Serial.println();
       // serializeJson(newData, Serial);Serial.println();
 
-      if (state.compareRecursive("", state.data, newData, updatedItem)) {
+      if (state.compareRecursive("", state.data, newData, updatedItem, originId)) {
         if (changed) EXT_LOGW(ML_TAG, "checkReOrderSwap changed, compareRecursive also changed? %s", originId.c_str());
         changed = true;
       }
@@ -319,8 +317,8 @@ Module::Module(const char* moduleName, PsychicHttpServer* server, ESP32SvelteKit
   EXT_LOGV(MB_TAG, "constructor %s", moduleName);
   _server = server;
 
-  _state.processUpdatedItem = [&](const UpdatedItem& updatedItem) {
-    processUpdatedItem(updatedItem);  // Ensure updatedItem is of type UpdatedItem&
+  _state.processUpdatedItem = [&](const UpdatedItem& updatedItem, const String& originId) {
+    processUpdatedItem(updatedItem, originId);  // Ensure updatedItem is of type UpdatedItem&
   };
 }
 

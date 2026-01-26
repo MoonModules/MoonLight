@@ -119,7 +119,7 @@ class ModuleLiveScripts : public Module {
   }
 
   // implement business logic
-  void onUpdate(const UpdatedItem& updatedItem) override {
+  void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
     // scripts
     if (updatedItem.parent[0] == "scripts") {
       JsonVariant scriptState = _state.data["scripts"][updatedItem.index[0]];

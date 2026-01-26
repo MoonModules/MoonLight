@@ -73,8 +73,8 @@ class ModuleDevices : public Module {
     }
   }
 
-  void onUpdate(const UpdatedItem& updatedItem) override {
-    if (_state.updateOriginId == (String(_moduleName) + "server").c_str()) return;  // only triggered by updates from the UI
+  void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
+    if (originId == (String(_moduleName) + "server").c_str()) return;  // only triggered by updates from the UI
 
     if (updatedItem.parent[0] == "devices") {
       JsonObject device = _state.data["devices"][updatedItem.index[0]];
@@ -239,7 +239,7 @@ class ModuleDevices : public Module {
 
       deviceUDP.write((uint8_t*)&message, sizeof(message));
       deviceUDP.endPacket();
-      EXT_LOGD(ML_TAG, "UDP update sent bri=%d pal=%d preset=%d", message.brightness, message.palette, message.preset);
+      // EXT_LOGD(ML_TAG, "UDP update sent bri=%d pal=%d preset=%d", message.brightness, message.palette, message.preset);
 
       if (includingUpdateDevices) {
         IPAddress activeIP = WiFi.isConnected() ? WiFi.localIP() : ETH.localIP();

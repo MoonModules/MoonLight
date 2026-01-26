@@ -53,7 +53,7 @@ class ModuleChannels : public Module {
     control["default"]["count"] = 512;
   }
 
-  void onUpdate(const UpdatedItem& updatedItem) override {
+  void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
     uint8_t view = _state.data["view"];
     bool group = _state.data["group"];
 

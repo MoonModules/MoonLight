@@ -44,11 +44,11 @@ class ModuleState {
  public:
   JsonObject data = JsonObject();  // isNull()
 
-  static UpdatedItem updatedItem;
+  // for post/getUpdate
+  static UpdatedItem mutexedUpdatedItem;
+  static const String* mutexedOriginId;
   static SemaphoreHandle_t updateMutex;
-  bool updatePending = false;  // should not be static as each module needs to keep track of it's own status
-
-  static Char<20> updateOriginId;  // static, written by ModuleState::update, no mutex needed as written by one process at a time (http mostly, sveltekit sometimes recursively)
+  bool mutexedUpdatePending = false;  // should not be static as each module needs to keep track of it's own status
 
   ModuleState() {
     EXT_LOGD(MB_TAG, "ModuleState constructor");
@@ -97,31 +97,32 @@ class ModuleState {
   void setupData();
 
   // called from ModuleState::update and ModuleState::setupData()
-  bool compareRecursive(const JsonString& parent, const JsonVariant& oldData, const JsonVariant& newData, UpdatedItem& updatedItem, uint8_t depth = UINT8_MAX, uint8_t index = UINT8_MAX);
+  bool compareRecursive(const JsonString& parent, const JsonVariant& oldData, const JsonVariant& newData, UpdatedItem& updatedItem, const String& originId, uint8_t depth = UINT8_MAX, uint8_t index = UINT8_MAX);
 
   // called from ModuleState::update
-  bool checkReOrderSwap(const JsonString& parent, const JsonVariant& oldData, const JsonVariant& newData, UpdatedItem& updatedItem, uint8_t depth = UINT8_MAX, uint8_t index = UINT8_MAX);
+  bool checkReOrderSwap(const JsonString& parent, const JsonVariant& oldData, const JsonVariant& newData, UpdatedItem& updatedItem, const String& originId, uint8_t depth = UINT8_MAX, uint8_t index = UINT8_MAX);
 
-  std::function<void(const UpdatedItem&)> processUpdatedItem = nullptr;
+  std::function<void(const UpdatedItem&, const String&)> processUpdatedItem = nullptr;
 
   static void read(ModuleState& state, JsonObject& stateJson);
   static StateUpdateResult update(JsonObject& newData, ModuleState& state, const String& originId);  //, const String& originId
 
   ReadHook readHook = nullptr;  // called when the UI requests the state, can be used to update the state before sending it to the UI
 
-  void postUpdate(const UpdatedItem& updatedItem) {
+  void postUpdate(const UpdatedItem& updatedItem, const String& originId) {
     const char* taskName = pcTaskGetName(xTaskGetCurrentTaskHandle());
 
     if (contains(taskName, "SvelteKit") || contains(taskName, "loopTask")) {  // at boot,  the loopTask starts, after that the loopTask is destroyed
-      if (processUpdatedItem) processUpdatedItem(updatedItem);
+      if (processUpdatedItem) processUpdatedItem(updatedItem, originId);
     } else {
       // Wait until previous update is processed
       while (true) {
         if (xSemaphoreTake(updateMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-          if (!updatePending) {
+          if (!mutexedUpdatePending) {
             // EXT_LOGD(ML_TAG, "%s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
-            this->updatedItem = updatedItem;
-            updatePending = true;
+            mutexedUpdatedItem = updatedItem;
+            mutexedOriginId = &originId;
+            mutexedUpdatePending = true;
             xSemaphoreGive(updateMutex);
             break;
           }
@@ -135,14 +136,15 @@ class ModuleState {
   void getUpdate() {
     // Try to acquire mutex without blocking
     if (xSemaphoreTake(updateMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-      if (updatePending) {
+      if (mutexedUpdatePending) {
         // Copy update data
-        UpdatedItem localCopy = updatedItem;
-        updatePending = false;
+        UpdatedItem localCopy = mutexedUpdatedItem;
+        const String* localOriginId = mutexedOriginId;
+        mutexedUpdatePending = false;
         xSemaphoreGive(updateMutex);
 
         // Process OUTSIDE the mutex (no lock held during callback)
-        if (processUpdatedItem) processUpdatedItem(localCopy);
+        if (processUpdatedItem) processUpdatedItem(localCopy, *localOriginId);
         return;
       }
       xSemaphoreGive(updateMutex);
@@ -179,17 +181,17 @@ class Module : public StatefulService<ModuleState> {
     }
   }
 
-  void processUpdatedItem(const UpdatedItem& updatedItem) {
+  void processUpdatedItem(const UpdatedItem& updatedItem, const String& originId) {
     if (updatedItem.name == "swap") {
       onReOrderSwap(updatedItem.index[0], updatedItem.index[1]);
       saveNeeded = true;
     } else {
       if (updatedItem.oldValue != "" && updatedItem.name != "channel") {  // todo: fix the problem at channel, not here...
-        if (!_state.updateOriginId.contains("server")) {                  // only triggered by updates from front-end
+        if (!originId.endsWith("server")) {                               // only triggered by updates from front-end
           saveNeeded = true;
         }
       }
-      onUpdate(updatedItem);
+      onUpdate(updatedItem, originId);
     }
   }
 
@@ -205,7 +207,7 @@ class Module : public StatefulService<ModuleState> {
 
   // called in compareRecursive->execOnUpdate
   // called from compareRecursive
-  virtual void onUpdate(const UpdatedItem& updatedItem) {};
+  virtual void onUpdate(const UpdatedItem& updatedItem, const String& originId) {};
   virtual void onReOrderSwap(uint8_t stateIndex, uint8_t newIndex) {};
 
  protected:
