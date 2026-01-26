@@ -30,6 +30,7 @@ nav:
   - "System":
     - system/status.md
     - system/metrics.md
+    - system/coredump.md
     - system/update.md
   - "Develop":
     - develop/overview.md

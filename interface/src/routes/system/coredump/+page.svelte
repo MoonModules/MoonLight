@@ -5,6 +5,7 @@
 	import SettingsCard from '$lib/components/SettingsCard.svelte';
 	import CoreDump from '~icons/tabler/bug';
 	import Info from '~icons/tabler/info-circle';
+	import Help from '~icons/tabler/help'; // 🌙
 
 	let coreDumpBlob: Blob | null = null;
 	let errorMessage: string | null = null;
@@ -52,6 +53,16 @@
 		{/snippet}
 		{#snippet title()}
 			<span>Core Dump</span>
+			<!-- 🌙 link to docs -->
+			<div class="absolute right-5">
+				<a
+					href="https://{page.data.github.split('/')[0]}.github.io/{page.data.github.split(
+						'/'
+					)[1]}{page.url.pathname}"
+					target="_blank"
+					title="Documentation"><Help class="lex-shrink-0 mr-2 h-6 w-6 self-end" /></a
+				>
+			</div>
 		{/snippet}
 		<div class="alert alert-info shadow-lg">
 			<Info class="h-6 w-6 shrink-0" />
