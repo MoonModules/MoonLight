@@ -77,12 +77,32 @@ class ModuleDevices : public Module {
     if (_state.updateOriginId == (String(_moduleName) + "server").c_str()) return;  // only triggered by updates from the UI
 
     if (updatedItem.parent[0] == "devices") {
+      JsonObject device = _state.data["devices"][updatedItem.index[0]];
+
       IPAddress targetIP;
-      if (!targetIP.fromString(_state.data["devices"][updatedItem.index[0]]["ip"].as<const char*>())) {
+      if (!targetIP.fromString(device["ip"].as<const char*>())) {
         return;  // Invalid IP
       }
 
-      sendUDP(false, targetIP);  // send this device update to a specific device, not updateDevices! (comes from device later...)
+      if (deviceUDP.beginPacket(targetIP, deviceUDPPort)) {
+        UDPMessage message{};  // Zero-initialize
+        message.name = esp32sveltekit.getWiFiSettingsService()->getHostname().c_str();
+        message.version = APP_VERSION;
+        // strncpy(message.name, esp32sveltekit.getWiFiSettingsService()->getHostname().c_str(), 32);
+        // strncpy(message.version, APP_VERSION, 32);
+        message.packageSize = sizeof(message);
+        message.lightsOn = device["lightsOn"];
+        message.brightness = device["brightness"];
+        message.palette = device["palette"];
+        message.preset = device["preset"];
+
+        message.uptime = time(nullptr) ? time(nullptr) - pal::millis() / 1000 : pal::millis() / 1000;
+        message.isControlCommand = true;
+
+        deviceUDP.write((uint8_t*)&message, sizeof(message));
+        deviceUDP.endPacket();
+        EXT_LOGD(ML_TAG, "UDP update sent to %s bri=%d pal=%d preset=%d", targetIP.toString().c_str(), message.brightness, message.palette, message.preset);
+      }
     }
   }
 
@@ -186,9 +206,10 @@ class ModuleDevices : public Module {
         newState["lightsOn"] = message.lightsOn;
         newState["brightness"] = message.brightness;
         newState["palette"] = message.palette;
-        newState["preset"]["selected"] = message.preset;
+        newState["preset"]["action"] = "click";
+        newState["preset"]["select"] = message.preset;
 
-        _moduleControl->update(newState, ModuleState::update, _moduleName);  // Do not add server in the originID as that blocks updates, see execOnUpdate
+        _moduleControl->update(newState, ModuleState::update, String(_moduleName) + "server");  // Do not add server in the originID as that blocks updates, see execOnUpdate
 
         EXT_LOGD(ML_TAG, "Applied UDP control: bri=%d pal=%d preset=%d", message.brightness, message.palette, message.preset);
       } else
@@ -196,8 +217,8 @@ class ModuleDevices : public Module {
     }
   }
 
-  void sendUDP(bool includingUpdateDevices, IPAddress targetIP = IPAddress(255, 255, 255, 255)) {
-    if (deviceUDP.beginPacket(targetIP, deviceUDPPort)) {
+  void sendUDP(bool includingUpdateDevices) {
+    if (deviceUDP.beginPacket(IPAddress(255, 255, 255, 255), deviceUDPPort)) {
       UDPMessage message{};  // Zero-initialize
       message.name = esp32sveltekit.getWiFiSettingsService()->getHostname().c_str();
       message.version = APP_VERSION;
@@ -214,11 +235,11 @@ class ModuleDevices : public Module {
           _moduleName);
 
       message.uptime = time(nullptr) ? time(nullptr) - pal::millis() / 1000 : pal::millis() / 1000;
-      message.isControlCommand = targetIP != IPAddress(255, 255, 255, 255);
+      message.isControlCommand = false;
 
       deviceUDP.write((uint8_t*)&message, sizeof(message));
       deviceUDP.endPacket();
-      EXT_LOGD(ML_TAG, "UDP update sent to %s bri=%d pal=%d preset=%d", targetIP.toString().c_str(), message.brightness, message.palette, message.preset);
+      EXT_LOGD(ML_TAG, "UDP update sent bri=%d pal=%d preset=%d", message.brightness, message.palette, message.preset);
 
       if (includingUpdateDevices) {
         IPAddress activeIP = WiFi.isConnected() ? WiFi.localIP() : ETH.localIP();
