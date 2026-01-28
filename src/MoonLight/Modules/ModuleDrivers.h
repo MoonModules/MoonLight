@@ -92,7 +92,8 @@ class ModuleDrivers : public NodeManager {
     addControlValue(control, getNameAndTags<TorontoBarGourdsLayout>());
     addControlValue(control, getNameAndTags<RingLayout>());
     addControlValue(control, getNameAndTags<Rings16Layout>());
-    addControlValue(control, getNameAndTags<RingsLayout>());
+    addControlValue(control, getNameAndTags<Rings241Layout>());
+    addControlValue(control, getNameAndTags<CarLightsLayout>());
     addControlValue(control, getNameAndTags<WheelLayout>());
     addControlValue(control, getNameAndTags<SpiralLayout>());
     addControlValue(control, getNameAndTags<SingleRowLayout>());
@@ -126,7 +127,8 @@ class ModuleDrivers : public NodeManager {
     if (!node) node = checkAndAlloc<CubeLayout>(name);
     if (!node) node = checkAndAlloc<RingLayout>(name);
     if (!node) node = checkAndAlloc<Rings16Layout>(name);
-    if (!node) node = checkAndAlloc<RingsLayout>(name);
+    if (!node) node = checkAndAlloc<Rings241Layout>(name);
+    if (!node) node = checkAndAlloc<CarLightsLayout>(name);
     if (!node) node = checkAndAlloc<WheelLayout>(name);
     if (!node) node = checkAndAlloc<SpiralLayout>(name);
     if (!node) node = checkAndAlloc<HumanSizedCubeLayout>(name);

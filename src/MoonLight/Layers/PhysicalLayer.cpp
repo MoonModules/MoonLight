@@ -199,6 +199,10 @@ void PhysicalLayer::addLight(Coord3D position) {
     return;
   }
 
+  if (position.x < 0) position.x = 0;
+  if (position.y < 0) position.y = 0;
+  if (position.z < 0) position.z = 0;
+
   if (pass == 1) {
     // EXT_LOGD(ML_TAG, "%d,%d,%d", position.x, position.y, position.z);
     if (lights.header.nrOfLights < lights.maxChannels / 3) {

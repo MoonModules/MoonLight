@@ -165,8 +165,10 @@
 	{/if}
 
 	{#if property.ro}
-		{#if property.type == 'ip' || property.type == 'mDNSName'}
+		{#if property.type == 'ip'}
 			<a href="http://{value}">{value}</a>
+		{:else if property.type == 'mDNSName'}
+			<a href="http://{value}.local">{value}</a>
 		{:else if property.type == 'time'}
 			<span>{getTimeAgo(value, currentTime)}</span>
 		{:else if property.type == 'coord3D' && value != null}

@@ -443,44 +443,92 @@ class RingLayout : public Node {
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🚥"; }
 
-  Coord3D topLeft;
+  Coord3D ringCenter;
   uint8_t nrOfLEDs = 24;
   uint16_t angleFirst = 0;  // top
+  uint16_t rotation = 360;
+  uint8_t scale = 1;
+  bool clockwise = true;
+  bool doNextPin = true;  // add the lights to a pin is default. not in UI, but when RingLayout is used in other layouts it can be switched off so these layouts control the pin assignment
 
   void setup() override {
-    addControl(topLeft, "topLeft", "coord3D", 0, 255);
     addControl(nrOfLEDs, "nrOfLEDs", "slider", 1, 255);
     addControl(angleFirst, "angleFirst", "slider", 0, 359);
+    addControl(rotation, "rotation", "slider", 0, 360);
+    addControl(clockwise, "clockwise", "boolean");
+    addControl(scale, "scale", "slider", 1, 10);
+  }
+
+  void onUpdate(const Char<20>& oldValue, const JsonObject& control) {
+    // add your custom onUpdate code here
+    if (control["name"] == "nrOfLEDs") {
+      ringCenter.x = 1.1 * getRadius(nrOfLEDs);
+      ringCenter.y = 1.1 * getRadius(nrOfLEDs);
+      ringCenter.z = 0;
+    }
   }
 
   bool hasOnLayout() const override { return true; }
 
-  void onLayout() override {
-    // Calculate ring dimensions based on 1cm spacing between LEDs
-    const float radius = nrOfLEDs / (2.0 * PI);  // or nrOfLEDs / 6.28318
-    const float width = 2.2 * radius;
-    const float height = 2.2 * radius;
+  const float getRadius(uint8_t nrOfLEDs) { return nrOfLEDs / (TWO_PI); }
 
-    const float centerX = width / 2.0;
-    const float centerY = height / 2.0;
+  void onLayout() override {
+    // Calculate ring dimensions based on 1cm * scale spacing between LEDs
 
     for (int i = 0; i < nrOfLEDs; i++) {
-      float x = centerX;
-      float y = centerY;
+      float x = scale * ringCenter.x;
+      float y = scale * ringCenter.y;
+
+      // Calculate angle for this LED including the angleFirst offset
+      float ledAngle = fmod(angleFirst + ((float)i / nrOfLEDs) * 360.0, 360.0);
+
+      // Calculate the actual position angle for rendering
+      float angleRad = PI + (TWO_PI * i) / nrOfLEDs + TWO_PI * angleFirst / 360.0;
 
       if (nrOfLEDs != 1) {
-        float angle = PI + (TWO_PI * i) / nrOfLEDs + TWO_PI * angleFirst / 359;
-
-        // EXT_LOGD(ML_TAG, "%d = %d - %d (%d)", angle, (255 * i) / (nrOfLEDs - 1), map(angleFirst, 0, 359, 0, 255), angleFirst);
-
-        x = centerX - sin(angle) * radius;
-        y = centerY + cos(angle) * radius;
+        x -= scale * sinf(angleRad) * getRadius(nrOfLEDs);
+        y += scale * cosf(angleRad) * getRadius(nrOfLEDs);
       }
 
-      addLight({(uint8_t)x + topLeft.x, (uint8_t)y + topLeft.y, topLeft.z});
-    }
+      // Check if this LED should be included in the partial circle
+      bool includeLED = false;
+      if (rotation < 1.0 || rotation >= 360.0) {
+        // Full circle
+        includeLED = true;
+      } else {
+        // Calculate end angle
+        float endAngle;
+        if (clockwise) {
+          endAngle = fmod(angleFirst + rotation, 360.0);
+        } else {
+          endAngle = fmod(angleFirst - rotation + 360.0, 360.0);
+        }
 
-    nextPin();  // all lights to one pin
+        // Check if ledAngle is between angleFirst and endAngle
+        if (clockwise) {
+          if (endAngle >= angleFirst) {
+            // No wrap: angleFirst=180, rotation=90, endAngle=270
+            includeLED = (ledAngle >= angleFirst && ledAngle <= endAngle);
+          } else {
+            // Wraps around 0: angleFirst=270, rotation=180, endAngle=90
+            includeLED = (ledAngle >= angleFirst || ledAngle <= endAngle);
+          }
+        } else {
+          if (endAngle <= angleFirst) {
+            // No wrap: angleFirst=180, rotation=90, endAngle=90
+            includeLED = (ledAngle <= angleFirst && ledAngle >= endAngle);
+          } else {
+            // Wraps around 0: angleFirst=90, rotation=180, endAngle=270
+            includeLED = (ledAngle <= angleFirst || ledAngle >= endAngle);
+          }
+        }
+      }
+
+      if (includeLED) {
+        addLight({(int)x, (int)y, scale * ringCenter.z});
+      }
+    }
+    if (doNextPin) nextPin();  // all lights to one pin
   }
 };
 
@@ -490,91 +538,218 @@ class Rings16Layout : public Node {
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🚥"; }
 
-  // uint8_t nrOfLEDs = 24;
-  // uint16_t angleFirst = 0;  // top
-
+  uint8_t scale = 1;
+  
   void setup() override {
-    // addControl(nrOfLEDs, "nrOfLEDs", "slider", 1, 255);
-    // addControl(angleFirst, "angleFirst", "slider", 0, 359);
+    addControl(scale, "scale", "slider", 1, 10);
   }
 
   bool hasOnLayout() const override { return true; }
 
   void onLayout() override {
     RingLayout ringLayout;
+    ringLayout.scale = scale;
 
-    uint8_t rows[] = {0, 5, 12, 18, 23, 29, 35, 41, 48};
-    uint8_t cols[] = {5, 17, 30, 36, 42, 54, 65};
-    ringLayout.topLeft = {cols[5], rows[3], 0};
+    uint8_t rows[] = {5, 10, 17, 23, 28, 34, 39, 46, 53};
+    uint8_t cols[] = {10, 22, 35, 41, 47, 59, 70};
+    ringLayout.ringCenter = {cols[5], rows[3], 0};
     ringLayout.onLayout();
-    ringLayout.topLeft = {cols[6], rows[4], 0};
+    ringLayout.ringCenter = {cols[6], rows[4], 0};
     ringLayout.onLayout();
-    ringLayout.topLeft = {cols[5], rows[1], 0};
+    ringLayout.ringCenter = {cols[5], rows[1], 0};
     ringLayout.onLayout();
-    ringLayout.topLeft = {cols[5], rows[5], 0};
+    ringLayout.ringCenter = {cols[5], rows[5], 0};
     ringLayout.onLayout();
-    ringLayout.topLeft = {cols[4], rows[2], 0};
+    ringLayout.ringCenter = {cols[4], rows[2], 0};
     ringLayout.onLayout();
-    ringLayout.topLeft = {cols[5], rows[7], 0};
+    ringLayout.ringCenter = {cols[5], rows[7], 0};
     ringLayout.onLayout();
-    ringLayout.topLeft = {cols[3], rows[0], 0};
+    ringLayout.ringCenter = {cols[3], rows[0], 0};
     ringLayout.onLayout();
-    ringLayout.topLeft = {cols[4], rows[6], 0};
+    ringLayout.ringCenter = {cols[4], rows[6], 0};
     ringLayout.onLayout();
-    ringLayout.topLeft = {cols[2], rows[2], 0};
+    ringLayout.ringCenter = {cols[2], rows[2], 0};
     ringLayout.onLayout();
-    ringLayout.topLeft = {cols[3], rows[8], 0};
+    ringLayout.ringCenter = {cols[3], rows[8], 0};
     ringLayout.onLayout();
-    ringLayout.topLeft = {cols[1], rows[1], 0};
+    ringLayout.ringCenter = {cols[1], rows[1], 0};
     ringLayout.onLayout();
-    ringLayout.topLeft = {cols[2], rows[6], 0};
+    ringLayout.ringCenter = {cols[2], rows[6], 0};
     ringLayout.onLayout();
-    ringLayout.topLeft = {cols[1], rows[3], 0};
+    ringLayout.ringCenter = {cols[1], rows[3], 0};
     ringLayout.onLayout();
-    ringLayout.topLeft = {cols[1], rows[7], 0};
+    ringLayout.ringCenter = {cols[1], rows[7], 0};
     ringLayout.onLayout();
-    ringLayout.topLeft = {cols[0], rows[4], 0};
+    ringLayout.ringCenter = {cols[0], rows[4], 0};
     ringLayout.onLayout();
-    ringLayout.topLeft = {cols[1], rows[5], 0};
+    ringLayout.ringCenter = {cols[1], rows[5], 0};
     ringLayout.onLayout();
   }
 };
 
-class RingsLayout : public Node {
+class Rings241Layout : public Node {
  public:
-  static const char* name() { return "Rings"; }
+  static const char* name() { return "Rings 241"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🚥"; }
 
-  uint8_t width = 16;
-  uint8_t height = 16;
+  uint8_t scale = 2;
 
-  void setup() override {}
+  void setup() override { addControl(scale, "scale", "slider", 1, 10); }
 
-  void add(int leds, int radius) {
-    for (int i = 0; i < leds; i++) {
-      uint8_t x = width / 2.0;
-      uint8_t y = height / 2.0;
-      if (leds != 1) {
-        x = width / 2.0 + ((sin8(255 * i / (leds - 1)) - 127) / 127.0) * radius / 10.0;
-        y = height / 2.0 + ((cos8(255 * i / (leds - 1)) - 127) / 127.0) * radius / 10.0;
-      }
-      addLight({x, y, 0});
-    }
+  bool hasOnLayout() const override { return true; }
+  void onLayout() override {
+    RingLayout ringLayout;
+    ringLayout.doNextPin = false;
+    ringLayout.angleFirst = 0;
+    ringLayout.scale = scale;
+    ringLayout.rotation = 360;
+
+    uint8_t leftMargin = 1.1 * ringLayout.getRadius(60);
+
+    // inner light left
+    ringLayout.ringCenter = {leftMargin, leftMargin, 0};
+    ringLayout.nrOfLEDs = 1;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 8;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 12;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 16;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 24;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 32;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 40;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 48;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 60;
+    ringLayout.onLayout();
+
+    nextPin();  // all lights to one pin
+  }
+};
+
+class CarLightsLayout : public Node {
+ public:
+  static const char* name() { return "Car Lights"; }
+  static uint8_t dim() { return _2D; }
+  static const char* tags() { return "🚥"; }
+
+  // uint8_t nrOfSpokes = 12;
+  uint8_t scale = 2;
+
+  void setup() override {
+    // addControl(nrOfSpokes, "nrOfSpokes", "slider", 1, 48);
+    // addControl(ledsPerSpoke, "ledsPerSpoke", "slider", 1, 255);
+    addControl(scale, "scale", "slider", 1, 10);
   }
 
   bool hasOnLayout() const override { return true; }
   void onLayout() override {
-    add(1, 0);
-    add(8, 13);
-    add(12, 23);
-    add(16, 33);
-    add(24, 43);
-    add(32, 53);
-    add(40, 63);
-    add(48, 73);
-    add(60, 83);
-    nextPin();  // all lights to one pin
+    RingLayout ringLayout;
+    ringLayout.doNextPin = false;
+    ringLayout.angleFirst = 90;
+    ringLayout.scale = scale;
+    ringLayout.rotation = 360;
+
+    uint8_t leftMargin = 9;
+
+    // inner light left
+    ringLayout.ringCenter = {leftMargin + 11, 10, 0};
+    ringLayout.nrOfLEDs = 1;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 8;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 12;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 16;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 24;
+    ringLayout.onLayout();
+
+    // outer light left
+    ringLayout.ringCenter = {leftMargin, 6, 0};
+    ringLayout.nrOfLEDs = 1;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 8;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 12;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 16;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 24;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 34;
+    ringLayout.onLayout();
+
+    nextPin();
+
+    // inner light right
+    ringLayout.ringCenter = {leftMargin + 25, 10, 0};
+    ringLayout.nrOfLEDs = 1;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 8;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 12;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 16;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 24;
+    ringLayout.onLayout();
+
+    // outer light right
+    ringLayout.ringCenter = {leftMargin + 36, 6, 0};
+    ringLayout.nrOfLEDs = 1;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 8;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 12;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 16;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 24;
+    ringLayout.onLayout();
+    ringLayout.nrOfLEDs = 34;
+    ringLayout.onLayout();
+
+    nextPin();
+
+    // left strip
+    for (int x = (leftMargin + 16) * scale; x >= leftMargin * scale; x--) {
+      addLight({x, 15 * scale});
+    }
+    ringLayout.ringCenter = {leftMargin, 6, 0};
+    ringLayout.nrOfLEDs = 52;
+    ringLayout.angleFirst = 180;
+    ringLayout.rotation = 90;
+    ringLayout.onLayout();
+
+    for (int y = 5; y >= 1; y--) {
+      addLight({0, y * scale});
+    }
+
+    nextPin();
+
+    // right strip
+    for (int x = (leftMargin + 19) * scale; x <= (leftMargin + 35) * scale; x++) {
+      addLight({x, 15 * scale});
+    }
+
+    ringLayout.ringCenter = {leftMargin + 36, 6, 0};
+    ringLayout.nrOfLEDs = 52;
+    ringLayout.angleFirst = 180;
+    ringLayout.rotation = 90;
+    ringLayout.clockwise = false;
+    ringLayout.onLayout();
+
+    for (int y = 5; y >= 1; y--) {
+      addLight({(leftMargin + 44) * scale, y * scale});
+    }
+
+    nextPin();
   }
 };
 
