@@ -6,8 +6,33 @@ on:
 
 
 jobs:
-  build:
+
+  get_default_envs:
+    name: Gather Environments
     runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    - name: Install PlatformIO
+      run: pip install -r requirements.txt
+    - name: Get default environments
+      id: envs
+      run: |
+        echo "environments=$(pio project config --json-output | jq -cr '.[0][1][0][1]')" >> $GITHUB_OUTPUT
+    outputs:
+      environments: ${{ steps.envs.outputs.environments }}
+
+  build:
+    name: Build Environments
+    runs-on: ubuntu-latest
+    needs: get_default_envs
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ fromJSON(needs.get_default_envs.outputs.environments) }}
 
     steps:
       - uses: actions/checkout@v4
