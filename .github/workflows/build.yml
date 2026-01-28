@@ -1,4 +1,4 @@
-name: PlatformIO CI
+name: build-template
 
 # Only included into other workflows
 on:
