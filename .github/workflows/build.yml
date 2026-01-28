@@ -29,4 +29,5 @@ jobs:
         with:
           path: |
             build/release/*.bin
+            build/merged/*.bin
 
