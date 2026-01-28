@@ -6,8 +6,33 @@ on:
 
 
 jobs:
-  build:
+
+  get_default_envs:
+    name: Gather Environments
     runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+#       cache: 'pip'
+    - name: Install PlatformIO
+      run: pip install --upgrade platformio
+    - name: Get default environments
+      id: envs
+      run: |
+        echo "environments=$(pio project config --json-output | jq -c '[.[] | select(.[0] | startswith("env:")) | .[0] | sub("^env:"; "")]')" >> $GITHUB_OUTPUT
+    outputs:
+      environments: ${{ steps.envs.outputs.environments }}
+
+  build:
+    name: Build Environments
+    runs-on: ubuntu-latest
+    needs: get_default_envs
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ fromJSON(needs.get_default_envs.outputs.environments) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -24,9 +49,10 @@ jobs:
         run: pip install --upgrade platformio
 
       - name: Build PlatformIO Project
-        run: pio run
+        run: pio run  -e ${{ matrix.environment }}
       - uses: actions/upload-artifact@v4
         with:
+          name: firmware-${{ matrix.environment }}
           path: |
             build/release/*.bin
             build/merged/*.bin
