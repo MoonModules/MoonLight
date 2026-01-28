@@ -52,6 +52,7 @@ jobs:
         run: pio run  -e ${{ matrix.environment }}
       - uses: actions/upload-artifact@v4
         with:
+          name: firmware-${{ matrix.environment }}
           path: |
             build/release/*.bin
             build/merged/*.bin
