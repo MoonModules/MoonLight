@@ -93,13 +93,13 @@ class SharedFSPersistence {
 
       if (!error && doc.is<JsonObject>()) {
         JsonObject obj = doc.as<JsonObject>();
-        info.module->updateWithoutPropagation(obj, ModuleState::update);
+        info.module->updateWithoutPropagation(obj, ModuleState::update, moduleName);
         return;
       }
     }
 
     // ADDED: Apply defaults if file doesn't exist or is corrupted
-    applyDefaults(info);
+    applyDefaults(info, moduleName);
     writeToFSNow(moduleName);
   }
 
@@ -150,7 +150,7 @@ class SharedFSPersistence {
     // Create JSON document
     JsonDocument doc;
     JsonObject root = doc.to<JsonObject>();
-    info.module->read(root, ModuleState::read);
+    info.module->read(root, ModuleState::read, moduleName);
 
     // Write to file
     File file = _fs->open(info.filePath.c_str(), "w");
@@ -184,10 +184,10 @@ class SharedFSPersistence {
   }
 
   // ADDED: Apply defaults from empty object
-  void applyDefaults(ModuleInfo& info) {
+  void applyDefaults(ModuleInfo& info, const char* moduleName) {
     JsonDocument doc;
     JsonObject obj = doc.to<JsonObject>();
-    info.module->updateWithoutPropagation(obj, ModuleState::update);
+    info.module->updateWithoutPropagation(obj, ModuleState::update, moduleName);
   }
 };
 

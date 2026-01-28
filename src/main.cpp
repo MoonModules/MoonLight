@@ -84,23 +84,23 @@ ESP32SvelteKit esp32sveltekit(&server, NROF_END_POINTS);  // 🌙 pio variable
 // 🌙
 #if FT_ENABLED(FT_MOONBASE)
   #include "MoonBase/Modules/FileManager.h"
-  #include "MoonBase/Modules/ModuleDevices.h"
   #include "MoonBase/Modules/ModuleIO.h"
   #include "MoonBase/Modules/ModuleTasks.h"
 
 FileManager fileManager = FileManager(&server, &esp32sveltekit);
-ModuleDevices moduleDevices = ModuleDevices(&server, &esp32sveltekit);
 ModuleTasks moduleTasks = ModuleTasks(&server, &esp32sveltekit);
 ModuleIO moduleIO = ModuleIO(&server, &esp32sveltekit);
 
   // 💫
   #if FT_ENABLED(FT_MOONLIGHT)
+    #include "MoonBase/Modules/ModuleDevices.h"  // In MoonLight for the time being, should move to MoonBase using moduleControlCenter ...
     #include "MoonLight/Modules/ModuleChannels.h"
     #include "MoonLight/Modules/ModuleDrivers.h"
     #include "MoonLight/Modules/ModuleEffects.h"
     #include "MoonLight/Modules/ModuleLightsControl.h"
     #include "MoonLight/Modules/ModuleMoonLightInfo.h"
 ModuleLightsControl moduleLightsControl = ModuleLightsControl(&server, &esp32sveltekit, &fileManager, &moduleIO);
+ModuleDevices moduleDevices = ModuleDevices(&server, &esp32sveltekit, &moduleLightsControl);                           // In MoonLight for the time being, should move to MoonBase using moduleControlCenter ...
 ModuleEffects moduleEffects = ModuleEffects(&server, &esp32sveltekit, &fileManager);                                   // fileManager for Live Scripts
 ModuleDrivers moduleDrivers = ModuleDrivers(&server, &esp32sveltekit, &fileManager, &moduleLightsControl, &moduleIO);  // fileManager for Live Scripts, Lights control for drivers
     #if FT_ENABLED(FT_LIVESCRIPT)
@@ -197,8 +197,8 @@ void driverTask(void* pvParameters) {
   // Cleanup (never reached in this case, but good practice)
   esp_task_wdt_delete(NULL);
 }
-  #endif
-#endif
+  #endif  // MoonLight
+#endif    // MoonBase
 
 // 🌙 Custom log output function - 🚧
 #ifdef USE_ESP_IDF_LOG
@@ -299,13 +299,14 @@ void setup() {
   }
 
   modules.reserve(12);  // Adjust based on actual module count
-  modules.push_back(&moduleDevices);
   modules.push_back(&moduleTasks);
   modules.push_back(&moduleIO);
 // modules.push_back(&fileManager);
+
 // MoonLight
 #if FT_ENABLED(FT_MOONLIGHT)
   modules.push_back(&moduleEffects);
+  modules.push_back(&moduleDevices);  // In MoonLight for the time being, should move to MoonBase using moduleControlCenter ...
   modules.push_back(&moduleDrivers);
   modules.push_back(&moduleLightsControl);
   modules.push_back(&moduleChannels);
@@ -313,6 +314,7 @@ void setup() {
   #if FT_ENABLED(FT_LIVESCRIPT)
   modules.push_back(&moduleLiveScripts);
   #endif
+#endif
 
   // Register all modules with shared routers
   for (Module* module : modules) {
@@ -326,14 +328,15 @@ void setup() {
   sharedHttpEndpoint->begin();
   sharedWebSocketServer->begin();
   sharedEventEndpoint->begin();
-  // sharedFsPersistence->begin();
+// sharedFsPersistence->begin();
 
-  // MoonBase
-  #if FT_ENABLED(FT_MOONBASE)
+// MoonBase
+#if FT_ENABLED(FT_MOONBASE)
   fileManager.begin();
   for (Module* module : modules) module->begin();
 
   // 🌙
+  #if FT_ENABLED(FT_MOONLIGHT)
   xTaskCreatePinnedToCore(effectTask,                          // task function
                           "AppEffects",                        // name
                           psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
@@ -355,43 +358,52 @@ void setup() {
                           1  // Multi-core: application core
     #endif
   );
-  #endif
+  #endif  // MoonLight
 
   // run UI stuff in the sveltekit task
   esp32sveltekit.addLoopFunction([]() {
     for (Module* module : modules) module->loop();
 
-    // every second
-    static unsigned long lastSecond = 0;
-    if (millis() - lastSecond >= 1000) {
-      lastSecond = millis();
+    static unsigned long last20ms = 0;
+    if (millis() - last20ms >= 20) {
+      last20ms = millis();
+  #if FT_ENABLED(FT_MOONLIGHT)
+      moduleDevices.loop20ms();  // In MoonLight for the time being, should move to MoonBase using moduleControlCenter ...
+  #endif
 
-      moduleIO.loop1s();
-      moduleDevices.loop1s();
-      moduleTasks.loop1s();
+      // every second
+      static unsigned long lastSecond = 0;
+      if (millis() - lastSecond >= 1000) {
+        lastSecond = millis();
 
-      // logYield();
+        moduleIO.loop1s();
+        moduleTasks.loop1s();
+
+        // logYield();
 
   #if FT_ENABLED(FT_MOONLIGHT)
-      // set shared data (eg used in scrolling text effect)
-      sharedData.fps = esp32sveltekit.getAnalyticsService()->lps;
-      sharedData.connectionStatus = (uint8_t)esp32sveltekit.getConnectionStatus();
-      sharedData.clientListSize = esp32sveltekit.getServer()->getClientList().size();
-      sharedData.connectedClients = esp32sveltekit.getSocket()->getConnectedClients();
-      sharedData.activeClients = esp32sveltekit.getSocket()->getActiveClients();
+        // set shared data (eg used in scrolling text effect)
+        sharedData.fps = esp32sveltekit.getAnalyticsService()->lps;
+        sharedData.connectionStatus = (uint8_t)esp32sveltekit.getConnectionStatus();
+        sharedData.clientListSize = esp32sveltekit.getServer()->getClientList().size();
+        sharedData.connectedClients = esp32sveltekit.getSocket()->getConnectedClients();
+        sharedData.activeClients = esp32sveltekit.getSocket()->getActiveClients();
 
     #if FT_ENABLED(FT_LIVESCRIPT)
-      moduleLiveScripts.loop1s();
+        moduleLiveScripts.loop1s();
     #endif
   #endif
-    }
 
-    // every 10 seconds
-    static unsigned long last10Second = 0;
-    if (millis() - last10Second >= 10000) {
-      last10Second = millis();
+        // every 10 seconds
+        static unsigned long last10Second = 0;
+        if (millis() - last10Second >= 10000) {
+          last10Second = millis();
 
-      moduleDevices.loop10s();
+  #if FT_ENABLED(FT_MOONLIGHT)
+          moduleDevices.loop10s();  // In MoonLight for the time being, should move to MoonBase using moduleControlCenter ...
+  #endif
+        }
+      }
     }
   });
 

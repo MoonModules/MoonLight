@@ -221,6 +221,7 @@ class ModuleLightsControl : public Module {
       return;
     }
 
+    // get board preset info
     moduleIO.read(
         [&](ModuleState& state) {
           pinRelayLightsOn = UINT8_MAX;
@@ -313,7 +314,7 @@ class ModuleLightsControl : public Module {
   }
 
   // implement business logic
-  void onUpdate(const UpdatedItem& updatedItem) override {
+  void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
     // EXT_LOGD(ML_TAG, "handle %s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
     if (updatedItem.name == "red") {
       layerP.lights.header.red = _state.data["red"];
@@ -351,7 +352,7 @@ class ModuleLightsControl : public Module {
                   state.updatedItems.push_back("/.config/effects.json");
                   return StateUpdateResult::CHANGED;  // notify StatefulService by returning CHANGED
                 },
-                _moduleName);
+                originId);
 
           } else {
             copyFile("/.config/effects.json", presetFile.c_str());
@@ -439,7 +440,7 @@ class ModuleLightsControl : public Module {
         if (newState.size()) {
           // serializeJson(doc, Serial);
           // Serial.println();
-          update(newState, ModuleState::update, String(_moduleName) + "server");
+          update(newState, ModuleState::update, _moduleName);
         }
       }
     }
@@ -453,7 +454,7 @@ class ModuleLightsControl : public Module {
           JsonDocument doc;
           JsonObject newState = doc.to<JsonObject>();
           newState["lightsOn"] = !_state.data["lightsOn"];
-          update(newState, ModuleState::update, String(_moduleName) + "server");
+          update(newState, ModuleState::update, _moduleName);
         }
         lastState = state;
       }
@@ -466,7 +467,7 @@ class ModuleLightsControl : public Module {
         JsonDocument doc;
         JsonObject newState = doc.to<JsonObject>();
         newState["lightsOn"] = !_state.data["lightsOn"];
-        update(newState, ModuleState::update, String(_moduleName) + "server");
+        update(newState, ModuleState::update, _moduleName);
         lastState = state;
       }
     }
