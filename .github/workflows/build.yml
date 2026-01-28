@@ -17,7 +17,7 @@ jobs:
         python-version: '3.11'
         cache: 'pip'
     - name: Install PlatformIO
-      run: pip install -r requirements.txt
+      run: pip install --upgrade platformio
     - name: Get default environments
       id: envs
       run: |
@@ -49,7 +49,7 @@ jobs:
         run: pip install --upgrade platformio
 
       - name: Build PlatformIO Project
-        run: pio run
+        run: pio run  -e ${{ matrix.environment }}
       - uses: actions/upload-artifact@v4
         with:
           path: |
