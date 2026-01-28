@@ -1,0 +1,18 @@
+{
+  "name": "MoonLight on esp32-c3",
+  "version": "0.8.0",
+  "home_assistant_domain": "esphome",
+  "funding_url": "https://esphome.io/guides/supporters.html",
+  "new_install_prompt_erase": true,
+  "new_install_immediately": false,
+  "builds": [
+    {
+      "chipFamily": "ESP32-C3",
+      "name": "esp32-c3",
+      "image": "./images/esp32-c3.jpg",
+      "parts": [
+        { "path": "./MoonLight_esp32-c3_0-8-0_webflash.bin", "offset": 0 }
+      ]
+    }
+  ]
+}
