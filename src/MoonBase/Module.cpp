@@ -35,11 +35,6 @@ void setDefaults(JsonObject controls, JsonArray definition) {
   }
 }
 
-// shared static variables
-SemaphoreHandle_t ModuleState::updateMutex = nullptr;
-UpdatedItem ModuleState::mutexedUpdatedItem;
-String ModuleState::mutexedOriginId;
-
 void ModuleState::setupData() {
   // only if no file ...
   if (data.size() == 0) {
@@ -115,7 +110,7 @@ bool ModuleState::checkReOrderSwap(const JsonString& parent, const JsonVariant& 
                 updatedItem.name = "swap";
                 updatedItem.index[0] = stateIndex;
                 updatedItem.index[1] = newIndex;
-                postUpdate(updatedItem, originId);
+                processUpdatedItem(updatedItem, originId); 
               }
 
               if (parkedFromIndex == UINT8_MAX) parkedFromIndex = newIndex;  // the index of value in the array stored in the parking spot
@@ -208,7 +203,7 @@ bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& 
                 updatedItem.value = JsonVariant();    // Assign an empty JsonVariant
                 stateArray[i].remove(control.key());  // remove the control from the state row so onUpdate see it as empty
 
-                postUpdate(updatedItem, originId);
+                processUpdatedItem(updatedItem, originId);
               }
 
               // String dbg;
@@ -260,7 +255,7 @@ bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& 
           // EXT_LOGD(MB_TAG, "kv %s.%s v: %s d: %d", parent.c_str(), key.c_str(), newValue.as<String>().c_str(), depth);
           // EXT_LOGD(MB_TAG, "kv %s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
 
-          postUpdate(updatedItem, originId);
+          processUpdatedItem(updatedItem, originId);
         }
         // else {
         //     EXT_LOGD(MB_TAG, "do not update %s", key.c_str());

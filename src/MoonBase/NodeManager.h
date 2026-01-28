@@ -123,7 +123,7 @@ class NodeManager : public Module {
 
   // implement business logic
   void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
-    // EXT_LOGD(ML_TAG, "%s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
+    EXT_LOGD(ML_TAG, "%s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
 
     // handle nodes
     if (updatedItem.parent[0] == "nodes") {  // onNodes
@@ -188,8 +188,6 @@ class NodeManager : public Module {
 
             // wait until setup has been executed?
 
-            requestUIUpdate = true;
-
             // EXT_LOGD(ML_TAG, "update due to new node %s done", updatedItem.value.as<String>().c_str());
 
             // make sure "p" is also updated
@@ -202,7 +200,7 @@ class NodeManager : public Module {
           //     EXT_LOGW(ML_TAG, "Restart needed");
           //     restartNeeded = true;
           // }
-        }
+        } // name change
 
         // if a node existed and no new node in place, remove
         if (updatedItem.oldValue != "" && oldNode) {
@@ -229,6 +227,10 @@ class NodeManager : public Module {
           oldNode->~Node();
 
           freeMBObject(oldNode);
+        }
+
+        if (newNode) {
+          requestUIUpdate = true;
         }
 
   #if FT_ENABLED(FT_LIVESCRIPT)

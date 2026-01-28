@@ -568,13 +568,13 @@ class ModuleIO : public Module {
     EXT_LOGD(ML_TAG, "boardID %d", boardID);
     // serializeJson(object, Serial);Serial.println();
 
-    update(object, ModuleState::update, String(_moduleName) + "server");
+    update(object, ModuleState::update, _moduleName);
   }
 
   uint8_t newBoardID = UINT8_MAX;
 
   void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
-    if (originId.endsWith("server")) return;  // do not process server generated updates, only UI generated
+    if (!originId.toInt()) return;  // only triggered by updates from front-end (client_id)
 
     JsonDocument doc;
     JsonObject object = doc.to<JsonObject>();
@@ -599,7 +599,7 @@ class ModuleIO : public Module {
       object["modded"] = true;
     }
 
-    if (object.size()) update(object, ModuleState::update, String(_moduleName) + "server");  // if changes made then update
+    if (object.size()) update(object, ModuleState::update, _moduleName);  // if changes made then update
   }
 
   // Function to convert drive capability to string

@@ -68,7 +68,7 @@ class ModuleChannels : public Module {
         JsonObject newState = doc.to<JsonObject>();
         newState["channel"]["count"] = count;
 
-        update(newState, ModuleState::update, String(_moduleName) + "server");
+        update(newState, ModuleState::update, _moduleName);
       }
     } else if (updatedItem.name == "channel") {
       // EXT_LOGD(ML_TAG, "%s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());

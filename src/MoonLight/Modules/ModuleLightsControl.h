@@ -221,7 +221,7 @@ class ModuleLightsControl : public Module {
       return;
     }
 
-    //get board preset info
+    // get board preset info
     moduleIO.read(
         [&](ModuleState& state) {
           pinRelayLightsOn = UINT8_MAX;
@@ -440,7 +440,7 @@ class ModuleLightsControl : public Module {
         if (newState.size()) {
           // serializeJson(doc, Serial);
           // Serial.println();
-          update(newState, ModuleState::update, String(_moduleName) + "server");
+          update(newState, ModuleState::update, _moduleName);
         }
       }
     }
@@ -454,7 +454,7 @@ class ModuleLightsControl : public Module {
           JsonDocument doc;
           JsonObject newState = doc.to<JsonObject>();
           newState["lightsOn"] = !_state.data["lightsOn"];
-          update(newState, ModuleState::update, String(_moduleName) + "server");
+          update(newState, ModuleState::update, _moduleName);
         }
         lastState = state;
       }
@@ -467,7 +467,7 @@ class ModuleLightsControl : public Module {
         JsonDocument doc;
         JsonObject newState = doc.to<JsonObject>();
         newState["lightsOn"] = !_state.data["lightsOn"];
-        update(newState, ModuleState::update, String(_moduleName) + "server");
+        update(newState, ModuleState::update, _moduleName);
         lastState = state;
       }
     }

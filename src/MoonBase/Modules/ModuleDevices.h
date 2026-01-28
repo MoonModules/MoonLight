@@ -44,8 +44,8 @@ class ModuleDevices : public Module {
 
     _moduleControl->addUpdateHandler(
         [this](const String& originId) {
-          if (originId == (String(_moduleName) + "server")) return;  // Skip broadcast for UDP-sourced changes
-          sendUDP(false);                                            // send this device update over the network, not updateDevices? (also locks _accessMutex ...)
+          if (originId.toInt())  // only triggered by updates from front-end (client_id)
+            sendUDP(false);      // send this device update over the network, not updateDevices? (also locks _accessMutex ...)
         },
         false);
   }
@@ -75,7 +75,7 @@ class ModuleDevices : public Module {
   }
 
   void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
-    if (originId == (String(_moduleName) + "server").c_str()) return;  // only triggered by updates from the UI
+    if (!originId.toInt()) return;  // only triggered by updates from front-end (client_id)
 
     if (updatedItem.parent[0] == "devices") {
       JsonObject device = _state.data["devices"][updatedItem.index[0]];
@@ -102,7 +102,7 @@ class ModuleDevices : public Module {
 
         deviceUDP.write((uint8_t*)&message, sizeof(message));
         deviceUDP.endPacket();
-        EXT_LOGD(ML_TAG, "UDP update sent to ...%d bri=%d pal=%d preset=%d", targetIP[3], message.brightness, message.palette, message.preset);
+        EXT_LOGD(ML_TAG, "UDP from %s update sent to ...%d bri=%d pal=%d preset=%d", originId.c_str(), targetIP[3], message.brightness, message.palette, message.preset);
       }
     }
   }
@@ -189,13 +189,12 @@ class ModuleDevices : public Module {
         doc2["devices"].add(device);
       }
       JsonObject controls = doc2.as<JsonObject>();
-      update(controls, ModuleState::update, String(_moduleName) + "server");
+      update(controls, ModuleState::update, _moduleName);
     } else {
       // only update the updated device
       JsonObject controls = doc.as<JsonObject>();
-      update(controls, ModuleState::update, String(_moduleName) + "server");
+      update(controls, ModuleState::update, _moduleName);
     }
-
   }
 
   void receiveUDP() {
@@ -227,10 +226,11 @@ class ModuleDevices : public Module {
         newState["lightsOn"] = message.lightsOn;
         newState["brightness"] = message.brightness;
         newState["palette"] = message.palette;
+        _moduleControl->read([&](ModuleState& state) { newState["preset"] = state.data["preset"]; }, String(_moduleName) + __FUNCTION__);
         newState["preset"]["action"] = "click";
         newState["preset"]["select"] = message.preset;
 
-        _moduleControl->update(newState, ModuleState::update, String(_moduleName) + "server");  // Do not add server in the originID as that blocks updates, see execOnUpdate
+        _moduleControl->update(newState, ModuleState::update, _moduleName);  // Do not add server in the originID as that blocks updates, see execOnUpdate
 
         EXT_LOGD(ML_TAG, "Applied UDP control: bri=%d pal=%d preset=%d", message.brightness, message.palette, message.preset);
       } else

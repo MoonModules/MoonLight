@@ -74,12 +74,8 @@ HTTPP task
 * no assigned core (OS decides), prio 5
 * processes WebUI / Websockets
 * calls ModuleState read() and update() functions
-* MoonLight Modules: runs Modules::compareRecursive and Modules::checkReOrderSwap which calls postUpdate which presents a semaphore-guarded updatedItem (updateProcessedSem, updateReadySem)
+* MoonLight Modules: runs Modules::compareRecursive and Modules::checkReOrderSwap which calls processUpdatedItem()
 * Page refresh: runs onLayout pass 1 for the monitor
-
-SvelteKit task
-
-* Module::loop() runs in the SvelteKit task and calls getUpdate() to retrieve the updatedItem in a synchronized way, getUpdate() calls processUpdatedItem()
 * processUpdatedItem() calls Module::onUpdate(), which is a virtual function which is overridden by Modules to implement custom functionality
 * NodeManager::onUpdate() propagates onUpdate() to Node Controls (together with Node::updateControl()), guarded by layerMutex
 
