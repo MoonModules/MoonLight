@@ -200,7 +200,7 @@ class NodeManager : public Module {
           //     EXT_LOGW(ML_TAG, "Restart needed");
           //     restartNeeded = true;
           // }
-        } // name change
+        }  // name change
 
         // if a node existed and no new node in place, remove
         if (updatedItem.oldValue != "" && oldNode) {

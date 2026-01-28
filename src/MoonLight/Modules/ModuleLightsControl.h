@@ -352,7 +352,7 @@ class ModuleLightsControl : public Module {
                   state.updatedItems.push_back("/.config/effects.json");
                   return StateUpdateResult::CHANGED;  // notify StatefulService by returning CHANGED
                 },
-                _moduleName);
+                originId);
 
           } else {
             copyFile("/.config/effects.json", presetFile.c_str());

@@ -241,10 +241,10 @@ class ModuleIO : public Module {
   void setBoardPresetDefaults(uint8_t boardID) {
     JsonDocument doc;
     current_board_id = boardID;
-    JsonObject object = doc.to<JsonObject>();
-    object["modded"] = false;
+    JsonObject newState = doc.to<JsonObject>();
+    newState["modded"] = false;
 
-    JsonArray pins = object["pins"].to<JsonArray>();
+    JsonArray pins = newState["pins"].to<JsonArray>();
 
     PinAssigner pinAssigner(pins);
 
@@ -294,7 +294,7 @@ class ModuleIO : public Module {
     }
 
     if (boardID == board_SE16V1) {
-      object["maxPower"] = 500;
+      newState["maxPower"] = 500;
       uint8_t ledPins[] = {47, 48, 21, 38, 14, 39, 13, 40, 12, 41, 11, 42, 10, 2, 3, 1};  // LED_PINS
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
       pinAssigner.assignPin(0, pin_ButtonPush);
@@ -314,7 +314,7 @@ class ModuleIO : public Module {
       }
 
     } else if (boardID == board_LightCrafter16) {
-      object["maxPower"] = 500;
+      newState["maxPower"] = 500;
       uint8_t ledPins[] = {47, 21, 14, 9, 8, 16, 15, 7, 1, 2, 42, 41, 40, 39, 38, 48};  // LED_PINS
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
       pinAssigner.assignPin(3, pin_High);                   // WIZ850_nRST, needs to be high to access RS485_DE, VBUS_DET, WIZ580_nINT. Also drives an LED.
@@ -334,7 +334,7 @@ class ModuleIO : public Module {
       pinAssigner.assignPin(4, pin_Infrared);
     } else if (boardID == board_QuinLEDDig2Go) {
       // dig2go
-      object["maxPower"] = 10;  // USB powered: 2A / 10W
+      newState["maxPower"] = 10;  // USB powered: 2A / 10W
       pinAssigner.assignPin(0, pin_Button_Push_LightsOn);
       pinAssigner.assignPin(5, pin_Infrared);
       pinAssigner.assignPin(16, pin_LED);
@@ -370,7 +370,7 @@ class ModuleIO : public Module {
       //   pinAssigner.assignPin(5, pin_LED);
     } else if (boardID == board_QuinLEDDigNext2) {
       // digNext2
-      object["maxPower"] = 65;
+      newState["maxPower"] = 65;
       pinAssigner.assignPin(2, pin_LED);
       pinAssigner.assignPin(4, pin_LED);
       pinAssigner.assignPin(5, pin_Relay_LightsOn);
@@ -391,7 +391,7 @@ class ModuleIO : public Module {
     } else if (boardID == board_QuinLEDDigUnoV3) {
       // Dig-Uno-V3
       // esp32-d0 (4MB)
-      object["maxPower"] = 50;  // max 75, but 10A fuse
+      newState["maxPower"] = 50;  // max 75, but 10A fuse
       pinAssigner.assignPin(16, pin_LED);
       pinAssigner.assignPin(3, pin_LED);
       pinAssigner.assignPin(0, pin_ButtonPush);
@@ -405,7 +405,7 @@ class ModuleIO : public Module {
     } else if (boardID == board_QuinLEDDigQuadV3) {
       // Dig-Quad-V3
       // esp32-d0 (4MB)
-      object["maxPower"] = 150;
+      newState["maxPower"] = 150;
       uint8_t ledPins[] = {16, 3, 1, 4};  // LED_PINS
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
       pinAssigner.assignPin(0, pin_ButtonPush);
@@ -419,13 +419,13 @@ class ModuleIO : public Module {
       // pinAssigner.assignPin(32, pin_Exposed;
     } else if (boardID == board_QuinLEDDigOctaV2) {
       // Dig-Octa-32-8L
-      object["maxPower"] = 400;                        // 10A Fuse * 8 ... 400 W
+      newState["maxPower"] = 400;                        // 10A Fuse * 8 ... 400 W
       uint8_t ledPins[] = {0, 1, 2, 3, 4, 5, 12, 13};  // LED_PINS
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
       pinAssigner.assignPin(33, pin_Relay);
       pinAssigner.assignPin(34, pin_ButtonPush);
     } else if (boardID == board_SergMiniShield) {
-      object["maxPower"] = 50;  // 10A Fuse ...
+      newState["maxPower"] = 50;  // 10A Fuse ...
       pinAssigner.assignPin(16, pin_LED);
       // pinAssigner.assignPin(17, pin_LED); // e.g. apa102...
 
@@ -442,7 +442,7 @@ class ModuleIO : public Module {
       pinAssigner.assignPin(21, pin_I2C_SDA);
       pinAssigner.assignPin(22, pin_I2C_SCL);
     } else if (boardID == board_SergUniShieldV5) {
-      object["maxPower"] = 50;  // 10A Fuse ...
+      newState["maxPower"] = 50;  // 10A Fuse ...
 
       pinAssigner.assignPin(16, pin_LED);  // first pin
       if (_state.data["jumper1"])
@@ -466,7 +466,7 @@ class ModuleIO : public Module {
 
       // pinAssigner.assignPin(?, pin_Temperature); // todo: check temp pin
     } else if (boardID == board_MHCV43) {    // https://shop.myhome-control.de/ABC-WLED-Controller-Board-5-24V/HW10015
-      object["maxPower"] = 75;               // 15A Fuse @ 5V
+      newState["maxPower"] = 75;               // 15A Fuse @ 5V
       uint8_t ledPins[] = {12, 13, 16, 18};  // 4 LED_PINS
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
       pinAssigner.assignPin(32, pin_I2S_SD);
@@ -476,7 +476,7 @@ class ModuleIO : public Module {
       uint8_t exposedPins[] = {4, 5, 17, 19, 21, 22, 23, 25, 26, 27, 33};
       for (uint8_t gpio : exposedPins) pinAssigner.assignPin(gpio, pin_Exposed);  // Ethernet Pins
     } else if (boardID == board_MHCP4NanoV1) {                                    // https://shop.myhome-control.de/ABC-WLED-ESP32-P4-Shield/HW10027
-      object["maxPower"] = 100;                                                   // Assuming decent LED power!!
+      newState["maxPower"] = 100;                                                   // Assuming decent LED power!!
 
       if (_state.data["switch1"]) {                         // on: 8 LED Pins + RS485 + Dig Input
         uint8_t ledPins[] = {21, 20, 25, 5, 7, 23, 8, 27};  // 8 LED pins in this order
@@ -510,7 +510,7 @@ class ModuleIO : public Module {
     } else if (boardID == board_YvesV48) {
       pinAssigner.assignPin(3, pin_LED);
     } else if (boardID == board_TroyP4Nano) {
-      object["maxPower"] = 10;                                                          // USB compliant
+      newState["maxPower"] = 10;                                                          // USB compliant
       uint8_t ledPins[] = {2, 3, 4, 5, 6, 20, 21, 22, 23, 26, 27, 32, 33, 36, 47, 48};  // LED_PINS
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
       pinAssigner.assignPin(7, pin_I2C_SDA);
@@ -541,12 +541,12 @@ class ModuleIO : public Module {
       uint8_t ledPins[] = {5, 6, 7, 8};  // LED_PINS
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
     } else if (boardID == board_Cube202010) {
-      object["maxPower"] = 50;
+      newState["maxPower"] = 50;
       uint8_t ledPins[] = {22, 21, 14, 18, 5, 4, 2, 15, 13, 12};  // LED_PINS, only 10 until now, rest is WIP
                                                                   // char pins[80] = "2,3,4,16,17,18,19,21,22,23,25,26,27,32,33";  //(D0), more pins possible. to do: complete list.
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
     } else {                    // default
-      object["maxPower"] = 10;  // USB compliant
+      newState["maxPower"] = 10;  // USB compliant
   #ifdef CONFIG_IDF_TARGET_ESP32P4
       pinAssigner.assignPin(37, pin_LED);  // p4-nano dpesn't like pin16
   #else
@@ -566,18 +566,18 @@ class ModuleIO : public Module {
     // EXT_LOGD(MB_TAG, "%s", xxx.c_str());
 
     EXT_LOGD(ML_TAG, "boardID %d", boardID);
-    // serializeJson(object, Serial);Serial.println();
+    // serializeJson(newState, Serial);Serial.println();
 
-    update(object, ModuleState::update, _moduleName);
+    update(newState, ModuleState::update, _moduleName);
   }
 
   uint8_t newBoardID = UINT8_MAX;
 
   void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
-    if (!originId.toInt()) return;  // only triggered by updates from front-end (client_id)
+    if (!originId.toInt()) return;  // Front-end client IDs are numeric; internal origins ("module", etc.) return 0
 
     JsonDocument doc;
-    JsonObject object = doc.to<JsonObject>();
+    JsonObject newState = doc.to<JsonObject>();
     if (updatedItem.name == "boardPreset") {
       // if booting and modded is false or ! booting
       if ((updatedItem.oldValue == "" && _state.data["modded"] == false) || updatedItem.oldValue != "") {  // only update unmodded
@@ -594,12 +594,12 @@ class ModuleIO : public Module {
       // rebuild with new switch setting
       newBoardID = _state.data["boardPreset"];  // run in sveltekit task
     } else if (updatedItem.name == "maxPower") {
-      object["modded"] = true;
+      newState["modded"] = true;
     } else if (updatedItem.name == "usage") {
-      object["modded"] = true;
+      newState["modded"] = true;
     }
 
-    if (object.size()) update(object, ModuleState::update, _moduleName);  // if changes made then update
+    if (newState.size()) update(newState, ModuleState::update, _moduleName);  // if changes made then update
   }
 
   // Function to convert drive capability to string

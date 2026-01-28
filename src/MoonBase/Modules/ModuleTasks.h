@@ -67,10 +67,10 @@ class ModuleTasks : public Module {
 
     JsonDocument doc;
     doc["tasks"].to<JsonArray>();
-    JsonObject controls = doc.as<JsonObject>();
+    JsonObject newState = doc.as<JsonObject>();
 
     for (UBaseType_t i = 0; i < taskCount; i++) {
-      JsonObject task = controls["tasks"].as<JsonArray>().add<JsonObject>();
+      JsonObject task = newState["tasks"].as<JsonArray>().add<JsonObject>();
 
       TaskStatus_t* ts = &taskStatusArray[i];
 
@@ -121,15 +121,15 @@ class ModuleTasks : public Module {
     TaskHandle_t current0 = xTaskGetCurrentTaskHandleForCore(0);
     TaskHandle_t current1 = xTaskGetCurrentTaskHandleForCore(1);
 
-    controls["core0"] = pcTaskGetName(current0);
-    controls["core1"] = pcTaskGetName(current1);
+    newState["core0"] = pcTaskGetName(current0);
+    newState["core1"] = pcTaskGetName(current1);
   #endif
 
     // UpdatedItem updatedItem;
-    // _state.compareRecursive("", _state.data, controls, updatedItem); //fill data with doc
+    // _state.compareRecursive("", _state.data, newState, updatedItem); //fill data with doc
 
-    // _socket->emitEvent(_moduleName, controls);
-    update(controls, ModuleState::update, _moduleName);
+    // _socket->emitEvent(_moduleName, newState);
+    update(newState, ModuleState::update, _moduleName);
   }
 };
 

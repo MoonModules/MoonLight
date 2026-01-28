@@ -44,7 +44,7 @@ class ModuleDevices : public Module {
 
     _moduleControl->addUpdateHandler(
         [this](const String& originId) {
-          if (originId.toInt())  // only triggered by updates from front-end (client_id)
+          if (originId.toInt())  // Front-end client IDs are numeric; internal origins ("module", etc.) return 0
             sendUDP(false);      // send this device update over the network, not updateDevices? (also locks _accessMutex ...)
         },
         false);
@@ -75,7 +75,7 @@ class ModuleDevices : public Module {
   }
 
   void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
-    if (!originId.toInt()) return;  // only triggered by updates from front-end (client_id)
+    if (!originId.toInt()) return;  // Front-end client IDs are numeric; internal origins ("module", etc.) return 0
 
     if (updatedItem.parent[0] == "devices") {
       JsonObject device = _state.data["devices"][updatedItem.index[0]];
@@ -188,12 +188,12 @@ class ModuleDevices : public Module {
       for (JsonObject device : devicesVector) {
         doc2["devices"].add(device);
       }
-      JsonObject controls = doc2.as<JsonObject>();
-      update(controls, ModuleState::update, _moduleName);
+      JsonObject newState = doc2.as<JsonObject>();
+      update(newState, ModuleState::update, _moduleName);
     } else {
       // only update the updated device
-      JsonObject controls = doc.as<JsonObject>();
-      update(controls, ModuleState::update, _moduleName);
+      JsonObject newState = doc.as<JsonObject>();
+      update(newState, ModuleState::update, _moduleName);
     }
   }
 

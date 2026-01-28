@@ -131,7 +131,7 @@ class Module : public StatefulService<ModuleState> {
       saveNeeded = true;
     } else {
       if (updatedItem.oldValue != "" && updatedItem.name != "channel") {  // todo: fix the problem at channel, not here...
-        if (originId.toInt()) {                                           // only triggered by updates from front-end (client_id)
+        if (originId.toInt()) {                                           // Front-end client IDs are numeric; internal origins ("module", etc.) return 0
           saveNeeded = true;
         }
       }

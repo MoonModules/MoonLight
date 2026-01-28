@@ -110,7 +110,7 @@ bool ModuleState::checkReOrderSwap(const JsonString& parent, const JsonVariant& 
                 updatedItem.name = "swap";
                 updatedItem.index[0] = stateIndex;
                 updatedItem.index[1] = newIndex;
-                processUpdatedItem(updatedItem, originId); 
+                processUpdatedItem(updatedItem, originId);
               }
 
               if (parkedFromIndex == UINT8_MAX) parkedFromIndex = newIndex;  // the index of value in the array stored in the parking spot
@@ -133,6 +133,7 @@ bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& 
   }
 
   // loop over all properties in stateData
+  bool keyFound = false;
   for (JsonPair stateControl : stateData.as<JsonObject>()) {
     JsonString key = stateControl.key();
     JsonVariant stateValue = stateData[key.c_str()];
@@ -149,120 +150,76 @@ bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& 
       }
 
       if (stateValue.is<JsonArray>() || newValue.is<JsonArray>()) {  // if the control is an array
-        if (stateValue.isNull()) {
-          stateData[key.c_str()].to<JsonArray>();
-          stateValue = stateData[key.c_str()];
-        }  // if old value is null, set to empty array
-        JsonArray stateArray = stateValue.as<JsonArray>();
-        JsonArray newArray = newValue.as<JsonArray>();
+        if (!keyFound) {
+          if (stateValue.isNull()) {
+            stateData[key.c_str()].to<JsonArray>();
+            stateValue = stateData[key.c_str()];
+          }  // if old value is null, set to empty array
+          JsonArray stateArray = stateValue.as<JsonArray>();
+          JsonArray newArray = newValue.as<JsonArray>();
 
-        // EXT_LOGD(MB_TAG, "compare %s[%d] %s = %s -> %s", parent.c_str(), index, key.c_str(), stateValue.as<const char*>(), newValue.as<const char*>());
+          // EXT_LOGD(MB_TAG, "compare %s[%d] %s = %s -> %s", parent.c_str(), index, key.c_str(), stateValue.as<const char*>(), newValue.as<const char*>());
 
-        for (int i = 0; i < max(stateArray.size(), newArray.size()); i++) {  // compare each item in the array
-          // EXT_LOGD(MB_TAG, "compare %s[%d] %s = %s -> %s", parent.c_str(), index, key.c_str(), stateArray[i].as<const char*>(), newArray[i].as<const char*>());
-          if (i >= stateArray.size()) {  // newArray has added a row
-            // EXT_LOGD(MB_TAG, "add %s.%s[%d] (%d/%d) d: %d", parent.c_str(), key.c_str(), i, stateArray.size(), newArray.size(), depth);
-            stateArray.add<JsonObject>();  // add new row
-            // setupdatedItem index right...
-            // updatedItem.parent[0] = parent.c_str();
-            // updatedItem.index[0] = i;
-            // EXT_LOGD(ML_TAG, "before cr %s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
-            // String xxx;
-            // serializeJson(newArray[i], xxx);
-            // EXT_LOGD(ML_TAG, "before cr %s", xxx.c_str());
-            changed = compareRecursive(key, stateArray[i], newArray[i], updatedItem, originId, depth + 1, i) || changed;
-          } else if (i >= newArray.size()) {  // newArray has deleted a row
-            // newArray.add<JsonObject>(); //add dummy row
-            changed = true;  // compareRecursive(key, stateArray[i], newArray[i], updatedItem, depth+1, i) || changed;
+          for (int i = 0; i < max(stateArray.size(), newArray.size()); i++) {  // compare each item in the array
+            // EXT_LOGD(MB_TAG, "compare %s[%d] %s = %s -> %s", parent.c_str(), index, key.c_str(), stateArray[i].as<const char*>(), newArray[i].as<const char*>());
+            if (i >= stateArray.size()) {  // newArray has added a row
+              // EXT_LOGD(MB_TAG, "add %s.%s[%d] (%d/%d) d: %d", parent.c_str(), key.c_str(), i, stateArray.size(), newArray.size(), depth);
+              stateArray.add<JsonObject>();  // add new row
+              changed = compareRecursive(key, stateArray[i], newArray[i], updatedItem, originId, depth + 1, i) || changed;
+            } else if (i >= newArray.size()) {  // newArray has deleted a row
+              changed = true;                   // compareRecursive(key, stateArray[i], newArray[i], updatedItem, depth+1, i) || changed;
 
-            // EXT_LOGD(MB_TAG, "remove %s.%s[%d] (%d/%d) d: %d", parent.c_str(), key.c_str(), i, stateArray.size(), newArray.size(), depth);
+              // EXT_LOGD(MB_TAG, "remove %s.%s[%d] (%d/%d) d: %d", parent.c_str(), key.c_str(), i, stateArray.size(), newArray.size(), depth);
 
-            // set all the values to null
-            //  UpdatedItem updatedItem; //create local updatedItem
-            updatedItem.parent[1] = "";  // reset deeper levels when coming back from recursion (repeat in loop)
-            updatedItem.index[1] = UINT8_MAX;
-            // depth 255: set parent en index 0
-            // depth 0: set parent en index 1
-            // depth 1: set parent en index 2 not possible yet
-            if ((uint8_t)(depth + 1) < 2) {
-              // EXT_LOGD(MB_TAG, "kv %s.%s v: %s d: %d", parent.c_str(), key.c_str(), newValue.as<String>().c_str(), depth);
-              // EXT_LOGD(ML_TAG, "%s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
-              updatedItem.parent[(uint8_t)(depth + 1)] = key;
-              updatedItem.index[(uint8_t)(depth + 1)] = i;
-            }
-            // }
-            // Node controls need not to be removed if they just have been added by Node::addControl via Nodemanager.h - which sets a valid status to a control
-            // Don't remove array items marked as valid (e.g., controls added in setup() that don't exist in persisted state yet)
-            bool isValid = !stateArray[i]["valid"].isNull() && stateArray[i]["valid"].as<bool>();
-            if (!isValid) {
-              for (JsonPair control : stateArray[i].as<JsonObject>()) {
-                // EXT_LOGD(MB_TAG, "     remove %s[%d] %s %s", key.c_str(), i, control.key().c_str(), control.value().as<const char*>());
-                // newArray[i][control.key()] = nullptr; // Initialize the keys in newArray so comparerecusive can compare them
-                updatedItem.name = control.key();
-                updatedItem.oldValue = control.value();
-                updatedItem.value = JsonVariant();    // Assign an empty JsonVariant
-                stateArray[i].remove(control.key());  // remove the control from the state row so onUpdate see it as empty
-
-                processUpdatedItem(updatedItem, originId);
+              updatedItem.parent[1] = "";  // reset deeper levels when coming back from recursion (repeat in loop)
+              updatedItem.index[1] = UINT8_MAX;
+              if ((uint8_t)(depth + 1) < 2) {
+                updatedItem.parent[(uint8_t)(depth + 1)] = key;
+                updatedItem.index[(uint8_t)(depth + 1)] = i;
               }
+              // Node controls need not to be removed if they just have been added by Node::addControl via Nodemanager.h - which sets a valid status to a control
+              // Don't remove array items marked as valid (e.g., controls added in setup() that don't exist in persisted state yet)
+              bool isValid = !stateArray[i]["valid"].isNull() && stateArray[i]["valid"].as<bool>();
+              if (!isValid) {
+                for (JsonPair control : stateArray[i].as<JsonObject>()) {
+                  updatedItem.name = control.key();
+                  updatedItem.oldValue = control.value();
+                  updatedItem.value = JsonVariant();    // Assign an empty JsonVariant
+                  stateArray[i].remove(control.key());  // remove the control from the state row so onUpdate see it as empty
 
-              // String dbg;
-              // serializeJson(stateArray[i], dbg);
-              // EXT_LOGD(MB_TAG, "remove %s.%s[%d] d: %d (%s)", parent.c_str(), key.c_str(), i, depth, dbg.c_str());
+                  processUpdatedItem(updatedItem, originId);
+                }
 
-              stateArray.remove(i);  // remove the state row entirely
-                                     // ([{"name":"xFrequency","type":"slider","default":64,"p":1009144377,"value":173,"size":8},{"name":"fadeRate","type":"slider","default":128,"p":1009144378,"value":128,"size":8},{"name":"speed","type":"slider","default":128,"p":1009144379,"value":128,"size":8},{"name":"brightness","type":"slider","default":255,"p":1009144380,"value":255,"size":8}])
-            } else {
-              // String dbg;
-              // serializeJson(stateArray[i], dbg);
-              EXT_LOGD(MB_TAG, "skip remove %s.%s[%d] d: %d", parent.c_str(), key.c_str(), i, depth);
+                stateArray.remove(i);  // remove the state row entirely
+              } else {
+                EXT_LOGD(MB_TAG, "skip remove %s.%s[%d] d: %d", parent.c_str(), key.c_str(), i, depth);
+              }
+            } else {  // row already exists
+              changed = compareRecursive(key, stateArray[i], newArray[i], updatedItem, originId, depth + 1, i) || changed;
             }
-          } else {  // row already exists
-
-            // if node has changed, remove the controls
-            // "nodes":[{"name":"Lissajous ⏹️ 🔥🎨🐙","on":true,"controls":[{"name":"xFrequency","type":"slider","default":64,"p":1009123281,"value":64,"size":8},{"name":"fadeRate","type":"slider","default":128,"p":1009123282,"value":128,"size":8},{"name":"speed","type":"slider","default":128,"p":1009123283,"value":128,"size":8}]}]}
-            // if (key == "nodes") {
-            //   // the array is a list of nodes, for each node, remove the controls
-            //   // remove the old controls from state, so new controls will be added
-            //   String sr;
-            //   serializeJson(stateArray[i], sr);
-            //   EXT_LOGD(MB_TAG, "remove %s node controls old %s (%s)", parent.c_str(), key.c_str(), sr.c_str());
-            //   stateArray[i].remove("controls");
-            //   stateArray[i]["controls"].to<JsonArray>();
-            //   serializeJson(newArray[i], sr);
-            //   EXT_LOGD(MB_TAG, "remove %s node controls new %s (%s)", parent.c_str(), key.c_str(), sr.c_str());
-            // }
-            // else  // compare the rows (not for node controls)
-            // old node with empty controls, new node with new controls
-            // updatedItem.parent[0] = parent.c_str();
-            // updatedItem.index[0] = i;
-
-            // EXT_LOGD(ML_TAG, "before cr %s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
-            // String xxx;
-            // serializeJson(newArray[i], xxx);
-            // EXT_LOGD(ML_TAG, "before cr %s", xxx.c_str());
-            changed = compareRecursive(key, stateArray[i], newArray[i], updatedItem, originId, depth + 1, i) || changed;
-          }
-        }
-      } else {  // if control is key/value
-        if (key != "p") {
+          }  // loop over array
+        }  // keyFound
+      } else {             // if control is key/value
+        if (key != "p") {  // do not process pointers
           changed = true;
           updatedItem.name = key;
           updatedItem.oldValue = stateValue;
           stateData[key.c_str()] = newValue;           // update the value in stateData, should not be done in runLoopTask as FS update then misses the change!!
           updatedItem.value = stateData[key.c_str()];  // store the stateData item (convenience)
 
-          // EXT_LOGD(MB_TAG, "kv %s.%s v: %s d: %d", parent.c_str(), key.c_str(), newValue.as<String>().c_str(), depth);
-          // EXT_LOGD(MB_TAG, "kv %s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
-
           processUpdatedItem(updatedItem, originId);
+
+          // If both sides are objects and their identifying property "name" changed,
+          // emit only that "name" update for this object and DO NOT recurse into it.
+          // This prevents spurious children (e.g., controls.*) updates during a rename.
+          if (key == "name") {
+            EXT_LOGD(MB_TAG, "key found %s.%s", parent.c_str(), key.c_str());
+            keyFound = true;
+          }
         }
-        // else {
-        //     EXT_LOGD(MB_TAG, "do not update %s", key.c_str());
-        // }
       }
-    }
-  }
+    }  // if value changed
+  }  // for (JsonPair stateControl
   return changed;
 }
 
