@@ -212,7 +212,7 @@ bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& 
           // If both sides are objects and their identifying property "name" changed,
           // emit only that "name" update for this object and DO NOT recurse into it.
           // This prevents spurious children (e.g., controls.*) updates during a rename.
-          if (key == "name") {
+          if (key == "name" && originId.toInt()) { // only when done from UI, 
             EXT_LOGD(MB_TAG, "key found %s.%s", parent.c_str(), key.c_str());
             keyFound = true;
           }
