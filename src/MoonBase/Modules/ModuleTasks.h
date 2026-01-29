@@ -104,14 +104,16 @@ class ModuleTasks : public Module {
       // task["state"] = state;
       // task["cpu"] = cpu_percent.c_str();
       // task["prio"] = ts->uxCurrentPriority;
-      if (equal(ts->pcTaskName, "AppEffects"))
-        text.format("%d - %d", ts->usStackHighWaterMark, EFFECTS_STACK_SIZE);
-      else if (equal(ts->pcTaskName, "AppDrivers"))
-        text.format("%d - %d", ts->usStackHighWaterMark, DRIVERS_STACK_SIZE);
-      else if (equal(ts->pcTaskName, "ESP32 SvelteKit"))
+      if (equal(ts->pcTaskName, "ESP32 SvelteKit"))
         text.format("%d - %d", ts->usStackHighWaterMark, SVELTEKIT_STACK_SIZE);
       else if (equal(ts->pcTaskName, "httpd"))
         text.format("%d - %d", ts->usStackHighWaterMark, HTTPD_STACK_SIZE);
+  #if FT_ENABLED(FT_MOONLIGHT)
+      else if (equal(ts->pcTaskName, "AppEffects"))
+        text.format("%d - %d", ts->usStackHighWaterMark, EFFECTS_STACK_SIZE);
+      else if (equal(ts->pcTaskName, "AppDrivers"))
+        text.format("%d - %d", ts->usStackHighWaterMark, DRIVERS_STACK_SIZE);
+  #endif
       else
         text.format("%d", ts->usStackHighWaterMark);
 

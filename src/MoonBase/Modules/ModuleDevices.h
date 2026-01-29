@@ -68,7 +68,8 @@ class ModuleDevices : public Module {
 
           // send command to all devices in it's group, except to itself
           for (JsonObject device : _state.data["devices"].as<JsonArray>()) {
-            if (device["name"] != esp32sveltekit.getWiFiSettingsService()->getHostname() && partOfGroup(device["name"], esp32sveltekit.getWiFiSettingsService()->getHostname())) {
+            // if update originated from the UI send a control UDP message to all devices in the group (server side generated updates due to receiving an UDP control message will not be propagated)
+            if (originId.toInt() && device["name"] != esp32sveltekit.getWiFiSettingsService()->getHostname() && partOfGroup(esp32sveltekit.getWiFiSettingsService()->getHostname(), device["name"])) {
               IPAddress targetIP;
               if (!targetIP.fromString(device["ip"].as<const char*>())) {
                 continue;  // Invalid IP
