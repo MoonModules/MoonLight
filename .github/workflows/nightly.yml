@@ -37,8 +37,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: nightly
-          name: 'Nightly Release $$'
+          tag_name: v0.8.1
+          name: 'Nightly $$'
           prerelease: true
           body: ${{ steps.changelog.outputs.changelog }}
           files: |
