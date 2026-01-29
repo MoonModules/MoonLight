@@ -337,21 +337,21 @@ void setup() {
 
   // 🌙
   #if FT_ENABLED(FT_MOONLIGHT)
-  xTaskCreatePinnedToCore(effectTask,                          // task function
-                          "AppEffects",                        // name
-                          psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
-                          NULL,                                // parameter
-                          3,                                   // priority
-                          &effectTaskHandle,                   // task handle
-                          0                                    // protocol core. high speed effect processing
+  xTaskCreatePinnedToCore(effectTask,          // task function
+                          "AppEffects",        // name
+                          EFFECTS_STACK_SIZE,  // stack size
+                          NULL,                // parameter
+                          3,                   // priority
+                          &effectTaskHandle,   // task handle
+                          0                    // protocol core. high speed effect processing
   );
 
-  xTaskCreatePinnedToCore(driverTask,                          // task function
-                          "AppDrivers",                        // name
-                          psramFound() ? 4 * 1024 : 3 * 1024,  // stack size, save every byte on small devices
-                          NULL,                                // parameter
-                          3,                                   // priority
-                          &driverTaskHandle,                   // task handle
+  xTaskCreatePinnedToCore(driverTask,          // task function
+                          "AppDrivers",        // name
+                          DRIVERS_STACK_SIZE,  // stack size
+                          NULL,                // parameter
+                          3,                   // priority
+                          &driverTaskHandle,   // task handle
     #ifdef CONFIG_FREERTOS_UNICORE
                           0  // Single-core: use Core 0 (only option)
     #else

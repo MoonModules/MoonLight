@@ -22,6 +22,7 @@ struct UDPMessage {
   uint8_t rommel[6];
   Char<32> name;
   Char<32> version;
+  char build[16];
   uint32_t uptime;
   uint16_t packageSize;
   bool lightsOn;
@@ -38,6 +39,24 @@ class ModuleDevices : public Module {
   bool deviceUDPConnected = false;
   Module* _moduleControl;
 
+  bool partOfGroup(const String& base, const String& device, int level = -1) {
+    EXT_LOGV(MB_TAG, "partOfGroup %s %s level:%d", base.c_str(), device.c_str(), level);
+
+    String prefix = base;
+
+    // Extract prefix up to level dots
+    if (level >= 0) {
+      int pos = -1;
+      for (int i = 0; i < level; i++) {
+        pos = prefix.indexOf('.', pos + 1);
+        if (pos == -1) break;
+      }
+      if (pos != -1) prefix = prefix.substring(0, pos);
+    }
+
+    return device.startsWith(prefix);
+  }
+
   ModuleDevices(PsychicHttpServer* server, ESP32SvelteKit* sveltekit, Module* moduleControl) : Module("devices", server, sveltekit) {
     EXT_LOGV(MB_TAG, "constructor");
     _moduleControl = moduleControl;
@@ -46,6 +65,37 @@ class ModuleDevices : public Module {
         [this](const String& originId) {
           if (originId.toInt())  // Front-end client IDs are numeric; internal origins ("module", etc.) return 0
             sendUDP(false);      // send this device update over the network, not updateDevices? (also locks _accessMutex ...)
+
+          // send command to all devices in it's group, except to itself
+          for (JsonObject device : _state.data["devices"].as<JsonArray>()) {
+            if (device["name"] != esp32sveltekit.getWiFiSettingsService()->getHostname() && partOfGroup(device["name"], esp32sveltekit.getWiFiSettingsService()->getHostname())) {
+              IPAddress targetIP;
+              if (!targetIP.fromString(device["ip"].as<const char*>())) {
+                continue;  // Invalid IP
+              }
+
+              if (deviceUDP.beginPacket(targetIP, deviceUDPPort)) {
+                UDPMessage message{};  // Zero-initialize
+                message.name = esp32sveltekit.getWiFiSettingsService()->getHostname().c_str();
+                message.version = APP_VERSION;
+                strcpy(message.build, APP_DATE);
+                // strncpy(message.name, esp32sveltekit.getWiFiSettingsService()->getHostname().c_str(), 32);
+                // strncpy(message.version, APP_VERSION, 32);
+                message.packageSize = sizeof(message);
+                message.lightsOn = device["lightsOn"];
+                message.brightness = device["brightness"];
+                message.palette = device["palette"];
+                message.preset = device["preset"];
+
+                message.uptime = time(nullptr) ? time(nullptr) - pal::millis() / 1000 : pal::millis() / 1000;
+                message.isControlCommand = true;
+
+                deviceUDP.write((uint8_t*)&message, sizeof(message));
+                deviceUDP.endPacket();
+                EXT_LOGD(ML_TAG, "group UDP from %s update sent to ...%d bri=%d pal=%d preset=%d", originId.c_str(), targetIP[3], message.brightness, message.palette, message.preset);
+              }
+            }
+          }
         },
         false);
   }
@@ -65,11 +115,12 @@ class ModuleDevices : public Module {
       addControl(rows, "time", "time", 0, 32, true);
       addControl(rows, "mac", "text", 0, 32, true);
       addControl(rows, "version", "text", 0, 32, true);
+      addControl(rows, "build", "text", 0, 8, true);
       addControl(rows, "uptime", "time", 0, 32, true);
       addControl(rows, "packageSize", "number", 0, 256, true);
       addControl(rows, "lightsOn", "checkbox");
       addControl(rows, "brightness", "slider", 0, 255);
-      addControl(rows, "palette", "slider", 0, 71);
+      addControl(rows, "palette", "slider", 0, 70);  // todo use define for max palette nr
       addControl(rows, "preset", "slider", 0, 64);
     }
   }
@@ -89,6 +140,7 @@ class ModuleDevices : public Module {
         UDPMessage message{};  // Zero-initialize
         message.name = esp32sveltekit.getWiFiSettingsService()->getHostname().c_str();
         message.version = APP_VERSION;
+        strcpy(message.build, APP_DATE);
         // strncpy(message.name, esp32sveltekit.getWiFiSettingsService()->getHostname().c_str(), 32);
         // strncpy(message.version, APP_VERSION, 32);
         message.packageSize = sizeof(message);
@@ -166,6 +218,7 @@ class ModuleDevices : public Module {
     device["time"] = time(nullptr);  // time will change, triggering update
     device["name"] = message.name.c_str();
     device["version"] = message.version.c_str();
+    device["build"] = message.build;
     device["uptime"] = message.uptime;
     device["packageSize"] = message.packageSize;
     device["lightsOn"] = message.lightsOn;
@@ -243,6 +296,7 @@ class ModuleDevices : public Module {
       UDPMessage message{};  // Zero-initialize
       message.name = esp32sveltekit.getWiFiSettingsService()->getHostname().c_str();
       message.version = APP_VERSION;
+      strcpy(message.build, APP_DATE);
       // strncpy(message.name, esp32sveltekit.getWiFiSettingsService()->getHostname().c_str(), 32);
       // strncpy(message.version, APP_VERSION, 32);
       message.packageSize = sizeof(message);

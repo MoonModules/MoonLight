@@ -133,7 +133,7 @@ bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& 
   }
 
   // loop over all properties in stateData
-  bool keyFound = false;
+  bool identifyingFieldFound = false;
   for (JsonPair stateControl : stateData.as<JsonObject>()) {
     JsonString key = stateControl.key();
     JsonVariant stateValue = stateData[key.c_str()];
@@ -150,7 +150,7 @@ bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& 
       }
 
       if (stateValue.is<JsonArray>() || newValue.is<JsonArray>()) {  // if the control is an array
-        if (!keyFound) {
+        if (!identifyingFieldFound) {
           if (stateValue.isNull()) {
             stateData[key.c_str()].to<JsonArray>();
             stateValue = stateData[key.c_str()];
@@ -198,7 +198,7 @@ bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& 
               changed = compareRecursive(key, stateArray[i], newArray[i], updatedItem, originId, depth + 1, i) || changed;
             }
           }  // loop over array
-        }  // keyFound
+        }  // identifyingFieldFound
       } else {             // if control is key/value
         if (key != "p") {  // do not process pointers
           changed = true;
@@ -212,9 +212,9 @@ bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& 
           // If both sides are objects and their identifying property "name" changed,
           // emit only that "name" update for this object and DO NOT recurse into it.
           // This prevents spurious children (e.g., controls.*) updates during a rename.
-          if (key == "name" && originId.toInt()) { // only when done from UI, 
-            EXT_LOGD(MB_TAG, "key found %s.%s", parent.c_str(), key.c_str());
-            keyFound = true;
+          if (key == "name" && originId.toInt()) { // only when done from UI, Not when system boots and FS loads
+            // EXT_LOGD(MB_TAG, "identifyingFieldFound %s.%s", parent.c_str(), key.c_str());
+            identifyingFieldFound = true;
           }
         }
       }

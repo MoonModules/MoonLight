@@ -226,7 +226,7 @@ void ESP32SvelteKit::begin()
     xTaskCreatePinnedToCore(
         this->_loopImpl,                      // Function that should be called
         "ESP32 SvelteKit Loop",               // Name of the task (for debugging)
-         psramFound() ? 8 * 1024 : 6 * 1024,  // Stack size (bytes) 🌙 4096 to 8192 / 6144
+        SVELTEKIT_STACK_SIZE,                 // Stack size (bytes)  🌙
         this,                                 // Pass reference to this class instance
         (tskIDLE_PRIORITY + 2),               // task priority
         &_loopTaskHandle,                     // Task handle
