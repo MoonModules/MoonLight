@@ -65,38 +65,6 @@ class ModuleDevices : public Module {
         [this](const String& originId) {
           if (originId.toInt())  // Front-end client IDs are numeric; internal origins ("module", etc.) return 0
             sendUDP(false);      // send this device update over the network, not updateDevices? (also locks _accessMutex ...)
-
-          // send command to all devices in it's group, except to itself
-          for (JsonObject device : _state.data["devices"].as<JsonArray>()) {
-            // if update originated from the UI send a control UDP message to all devices in the group (server side generated updates due to receiving an UDP control message will not be propagated)
-            if (originId.toInt() && device["name"] != esp32sveltekit.getWiFiSettingsService()->getHostname() && partOfGroup(esp32sveltekit.getWiFiSettingsService()->getHostname(), device["name"])) {
-              IPAddress targetIP;
-              if (!targetIP.fromString(device["ip"].as<const char*>())) {
-                continue;  // Invalid IP
-              }
-
-              if (deviceUDP.beginPacket(targetIP, deviceUDPPort)) {
-                UDPMessage message{};  // Zero-initialize
-                message.name = esp32sveltekit.getWiFiSettingsService()->getHostname().c_str();
-                message.version = APP_VERSION;
-                strcpy(message.build, APP_DATE);
-                // strncpy(message.name, esp32sveltekit.getWiFiSettingsService()->getHostname().c_str(), 32);
-                // strncpy(message.version, APP_VERSION, 32);
-                message.packageSize = sizeof(message);
-                message.lightsOn = device["lightsOn"];
-                message.brightness = device["brightness"];
-                message.palette = device["palette"];
-                message.preset = device["preset"];
-
-                message.uptime = time(nullptr) ? time(nullptr) - pal::millis() / 1000 : pal::millis() / 1000;
-                message.isControlCommand = true;
-
-                deviceUDP.write((uint8_t*)&message, sizeof(message));
-                deviceUDP.endPacket();
-                EXT_LOGD(ML_TAG, "group UDP from %s update sent to ...%d bri=%d pal=%d preset=%d", originId.c_str(), targetIP[3], message.brightness, message.palette, message.preset);
-              }
-            }
-          }
         },
         false);
   }
@@ -248,6 +216,20 @@ class ModuleDevices : public Module {
       // only update the updated device
       JsonObject newState = doc.as<JsonObject>();
       update(newState, ModuleState::update, _moduleName);
+    }
+
+    if (device["name"] != esp32sveltekit.getWiFiSettingsService()->getHostname() && partOfGroup(esp32sveltekit.getWiFiSettingsService()->getHostname(), device["name"])) {
+      JsonDocument doc;
+      JsonObject newState = doc.to<JsonObject>();
+
+      newState["lightsOn"] = device["lightsOn"];
+      newState["brightness"] = device["brightness"];
+      newState["palette"] = device["palette"];
+      _moduleControl->read([&](ModuleState& state) { newState["preset"] = state.data["preset"]; }, String(_moduleName) + __FUNCTION__);
+      newState["preset"]["action"] = "click";
+      newState["preset"]["select"] = device["preset"];
+
+      _moduleControl->update(newState, ModuleState::update, _moduleName);  // Do not add server in the originID as that blocks updates, see execOnUpdate
     }
   }
 
