@@ -39,21 +39,22 @@ class ModuleDevices : public Module {
   bool deviceUDPConnected = false;
   Module* _moduleControl;
 
-  bool partOfGroup(const String& base, const String& device, int level = -1) {
+  bool partOfGroup(const String& base, const String& device, int level = 0) {
     EXT_LOGV(MB_TAG, "partOfGroup %s %s level:%d", base.c_str(), device.c_str(), level);
 
     String prefix = base;
 
-    // Extract prefix up to level dots
-    if (level >= 0) {
-      int pos = -1;
-      for (int i = 0; i < level; i++) {
-        pos = prefix.indexOf('.', pos + 1);
-        if (pos == -1) break;
+    // Count dots from the end: level 0 = last dot, level 1 = second-last, etc.
+    int pos = base.length();
+    for (int i = 0; i <= level; i++) {
+      pos = base.lastIndexOf('.', pos - 1);
+      if (pos == -1) {
+        // Not enough dots at this level - match all devices
+        return true;
       }
-      if (pos != -1) prefix = prefix.substring(0, pos);
     }
 
+    prefix = base.substring(0, pos);
     return device.startsWith(prefix);
   }
 
@@ -105,6 +106,7 @@ class ModuleDevices : public Module {
         return;  // Invalid IP
       }
 
+      // if a device is updated in the UI, send that update to that device
       if (deviceUDP.beginPacket(targetIP, deviceUDPPort)) {
         UDPMessage message{};  // Zero-initialize
         message.name = esp32sveltekit.getWiFiSettingsService()->getHostname().c_str();
@@ -177,7 +179,7 @@ class ModuleDevices : public Module {
       }
     }
 
-    // set the device object
+    // if an update for a device is received, set the device object so it is shown in the UI
     if (newDevice) {
       device = devices.add<JsonObject>();
       EXT_LOGD(ML_TAG, "added ...%d %s", ip[3], message.name);
@@ -194,8 +196,6 @@ class ModuleDevices : public Module {
     device["brightness"] = message.brightness;
     device["palette"] = message.palette;
     device["preset"] = message.preset;
-
-    if (!_socket->getActiveClients()) return;  // no need to update if no clients
 
     if (newDevice) {  // sort devices in vector and add to a new document and update
       JsonDocument doc2;
@@ -218,6 +218,7 @@ class ModuleDevices : public Module {
       update(newState, ModuleState::update, _moduleName);
     }
 
+    // if device update is part of a group, update also this device
     if (device["name"] != esp32sveltekit.getWiFiSettingsService()->getHostname() && partOfGroup(esp32sveltekit.getWiFiSettingsService()->getHostname(), device["name"])) {
       JsonDocument doc;
       JsonObject newState = doc.to<JsonObject>();
@@ -253,6 +254,7 @@ class ModuleDevices : public Module {
         continue;
       }
 
+      // if a controlmessage is received, update this device, else updateDevices() - which processes group updates
       if (message.isControlCommand) {
         // If this packet is intended for THIS device (not just broadcast status),
         // OR check a flag in UDPMessage to distinguish control commands from status broadcasts
@@ -275,6 +277,7 @@ class ModuleDevices : public Module {
   }
 
   void sendUDP(bool includingUpdateDevices) {
+    // broadcast own status to all devices and if includingUpdateDevices call updateDevices() to update UI, called by addUpdateHandler (false) and loop10s (true)
     if (deviceUDP.beginPacket(IPAddress(255, 255, 255, 255), deviceUDPPort)) {
       UDPMessage message{};  // Zero-initialize
       message.name = esp32sveltekit.getWiFiSettingsService()->getHostname().c_str();
