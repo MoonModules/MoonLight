@@ -64,8 +64,9 @@ class ModuleDevices : public Module {
 
     _moduleControl->addUpdateHandler(
         [this](const String& originId) {
-          if (originId.toInt())  // Front-end client IDs are numeric; internal origins ("module", etc.) return 0
-            sendUDP(false);      // send this device update over the network, not updateDevices? (also locks _accessMutex ...)
+          if (originId.toInt()) {  // Front-end client IDs are numeric; internal origins ("module", etc.) return 0
+            sendUDP(false, true);  // send this device update over the network, not updateDevices, is control message (also locks _accessMutex ...)
+          }
         },
         false);
   }
@@ -108,20 +109,15 @@ class ModuleDevices : public Module {
 
       // if a device is updated in the UI, send that update to that device
       if (deviceUDP.beginPacket(targetIP, deviceUDPPort)) {
-        UDPMessage message{};  // Zero-initialize
-        message.name = esp32sveltekit.getWiFiSettingsService()->getHostname().c_str();
+        UDPMessage message{};                                                           // Zero-initialize
+        message.name = esp32sveltekit.getWiFiSettingsService()->getHostname().c_str();  // ⚡ Use cached hostname
         message.version = APP_VERSION;
         strcpy(message.build, APP_DATE);
-        // strncpy(message.name, esp32sveltekit.getWiFiSettingsService()->getHostname().c_str(), 32);
-        // strncpy(message.version, APP_VERSION, 32);
         message.packageSize = sizeof(message);
-        message.lightsOn = device["lightsOn"];
-        message.brightness = device["brightness"];
-        message.palette = device["palette"];
-        message.preset = device["preset"];
-
         message.uptime = time(nullptr) ? time(nullptr) - pal::millis() / 1000 : pal::millis() / 1000;
-        message.isControlCommand = true;
+        message.isControlCommand = !!originId.toInt();  // if the update comes from the UI it is original, otherwise it is a propagated update
+
+        deviceToMessage(device, message);  // ✅ Centralized conversion
 
         deviceUDP.write((uint8_t*)&message, sizeof(message));
         deviceUDP.endPacket();
@@ -148,7 +144,7 @@ class ModuleDevices : public Module {
 
     if (!deviceUDPConnected) return;
 
-    sendUDP(true);  // send this device update to all devices, updateDevices! ...
+    sendUDP(true, false);  // send this device update to all devices, updateDevices! No control message
   }
 
   void updateDevices(const UDPMessage& message, IPAddress ip) {
@@ -182,20 +178,11 @@ class ModuleDevices : public Module {
     // if an update for a device is received, set the device object so it is shown in the UI
     if (newDevice) {
       device = devices.add<JsonObject>();
-      EXT_LOGD(ML_TAG, "added ...%d %s", ip[3], message.name);
+      EXT_LOGD(ML_TAG, "added ...%d %s", ip[3], message.name.c_str());
       device["ip"] = ip.toString();
     }
 
-    device["time"] = time(nullptr);  // time will change, triggering update
-    device["name"] = message.name.c_str();
-    device["version"] = message.version.c_str();
-    device["build"] = message.build;
-    device["uptime"] = message.uptime;
-    device["packageSize"] = message.packageSize;
-    device["lightsOn"] = message.lightsOn;
-    device["brightness"] = message.brightness;
-    device["palette"] = message.palette;
-    device["preset"] = message.preset;
+    messageToDevice(message, device, ip);  // ✅ Centralized conversion
 
     if (newDevice) {  // sort devices in vector and add to a new document and update
       JsonDocument doc2;
@@ -223,12 +210,7 @@ class ModuleDevices : public Module {
       JsonDocument doc;
       JsonObject newState = doc.to<JsonObject>();
 
-      newState["lightsOn"] = device["lightsOn"];
-      newState["brightness"] = device["brightness"];
-      newState["palette"] = device["palette"];
-      _moduleControl->read([&](ModuleState& state) { newState["preset"] = state.data["preset"]; }, String(_moduleName) + __FUNCTION__);
-      newState["preset"]["action"] = "click";
-      newState["preset"]["select"] = device["preset"];
+      messageToControlState(message, newState);  // ✅ Centralized conversion (includes preset)
 
       _moduleControl->update(newState, ModuleState::update, _moduleName);  // Do not add server in the originID as that blocks updates, see execOnUpdate
     }
@@ -246,9 +228,8 @@ class ModuleDevices : public Module {
       UDPMessage message{};
       deviceUDP.read(buffer, packetSize);
       memcpy(&message, buffer, packetSize);
-      // EXT_LOGD(ML_TAG, "UDP packet received from ...%d: %s (ps:%d isC:%d)", deviceUDP.remoteIP()[3], buffer + 6, packetSize, message.isControlCommand);
 
-      // ✅ Skip own broadcasts to prevent loops : this should never happen
+      // ✅ Skip own broadcasts to prevent loops : this should never happen, to be removed if confirmed
       if (message.name == esp32sveltekit.getWiFiSettingsService()->getHostname().c_str()) {
         EXT_LOGW(ML_TAG, "Skipping own broadcast");
         continue;
@@ -256,47 +237,38 @@ class ModuleDevices : public Module {
 
       // if a controlmessage is received, update this device, else updateDevices() - which processes group updates
       if (message.isControlCommand) {
-        // If this packet is intended for THIS device (not just broadcast status),
-        // OR check a flag in UDPMessage to distinguish control commands from status broadcasts
+        // ✅ Only apply control if it's from the original sender
         JsonDocument doc;
         JsonObject newState = doc.to<JsonObject>();
 
-        newState["lightsOn"] = message.lightsOn;
-        newState["brightness"] = message.brightness;
-        newState["palette"] = message.palette;
-        _moduleControl->read([&](ModuleState& state) { newState["preset"] = state.data["preset"]; }, String(_moduleName) + __FUNCTION__);
-        newState["preset"]["action"] = "click";
-        newState["preset"]["select"] = message.preset;
+        messageToControlState(message, newState);  // ✅ Centralized conversion (includes preset)
 
         _moduleControl->update(newState, ModuleState::update, _moduleName);  // Do not add server in the originID as that blocks updates, see execOnUpdate
 
-        EXT_LOGD(ML_TAG, "Applied UDP control: bri=%d pal=%d preset=%d", message.brightness, message.palette, message.preset);
-      } else
+        EXT_LOGD(ML_TAG, "Applied UDP control from originator: bri=%d pal=%d preset=%d", message.brightness, message.palette, message.preset);
+      } else {
+        // ✅ Status broadcasts: update device list for UI
         updateDevices(message, deviceUDP.remoteIP());
+      }
     }
   }
 
-  void sendUDP(bool includingUpdateDevices) {
+  void sendUDP(bool includingUpdateDevices, bool isControlCommand) {
     // broadcast own status to all devices and if includingUpdateDevices call updateDevices() to update UI, called by addUpdateHandler (false) and loop10s (true)
     if (deviceUDP.beginPacket(IPAddress(255, 255, 255, 255), deviceUDPPort)) {
-      UDPMessage message{};  // Zero-initialize
-      message.name = esp32sveltekit.getWiFiSettingsService()->getHostname().c_str();
+      UDPMessage message{};                                                           // Zero-initialize
+      message.name = esp32sveltekit.getWiFiSettingsService()->getHostname().c_str();  // ⚡ Use cached hostname
       message.version = APP_VERSION;
       strcpy(message.build, APP_DATE);
-      // strncpy(message.name, esp32sveltekit.getWiFiSettingsService()->getHostname().c_str(), 32);
-      // strncpy(message.version, APP_VERSION, 32);
       message.packageSize = sizeof(message);
+      message.uptime = time(nullptr) ? time(nullptr) - pal::millis() / 1000 : pal::millis() / 1000;
+      message.isControlCommand = isControlCommand;  // ✅ Status broadcast, not control Status updates are never "original sender"
+
       _moduleControl->read(
           [&](ModuleState& state) {
-            message.lightsOn = state.data["lightsOn"];
-            message.brightness = state.data["brightness"];
-            message.palette = state.data["palette"];
-            message.preset = state.data["preset"]["selected"];
+            stateToMessage(state.data, message);  // ✅ Fixed: state.data is already JsonObject
           },
           _moduleName);
-
-      message.uptime = time(nullptr) ? time(nullptr) - pal::millis() / 1000 : pal::millis() / 1000;
-      message.isControlCommand = false;
 
       deviceUDP.write((uint8_t*)&message, sizeof(message));
       deviceUDP.endPacket();
@@ -308,6 +280,48 @@ class ModuleDevices : public Module {
         updateDevices(message, activeIP);
       }
     }
+  }
+
+ private:
+  // ✅ Helper: Copy control fields from message to control state (for applying updates)
+  // ✅ MERGED: Now includes preset handling
+  void messageToControlState(const UDPMessage& message, JsonObject& newState) {
+    newState["lightsOn"] = message.lightsOn;
+    newState["brightness"] = message.brightness;
+    newState["palette"] = message.palette;
+    _moduleControl->read([&](ModuleState& state) { newState["preset"] = state.data["preset"]; }, String(_moduleName) + __FUNCTION__);
+    newState["preset"]["action"] = "click";
+    newState["preset"]["select"] = message.preset;
+  }
+
+  // ✅ Helper: Copy control fields from control state to message (for broadcasting)
+  void stateToMessage(const JsonObject& state, UDPMessage& message) {
+    message.lightsOn = state["lightsOn"];
+    message.brightness = state["brightness"];
+    message.palette = state["palette"];
+    message.preset = state["preset"]["selected"];
+  }
+
+  // ✅ Helper: Copy all fields from message to device object (for UI display)
+  void messageToDevice(const UDPMessage& message, JsonObject& device, IPAddress ip) {
+    device["time"] = time(nullptr);  // time will change, triggering update
+    device["name"] = message.name.c_str();
+    device["version"] = message.version.c_str();
+    device["build"] = message.build;
+    device["uptime"] = message.uptime;
+    device["packageSize"] = message.packageSize;
+    device["lightsOn"] = message.lightsOn;
+    device["brightness"] = message.brightness;
+    device["palette"] = message.palette;
+    device["preset"] = message.preset;
+  }
+
+  // ✅ Helper: Copy control fields from device to message (for sending control)
+  void deviceToMessage(const JsonObject& device, UDPMessage& message) {
+    message.lightsOn = device["lightsOn"];
+    message.brightness = device["brightness"];
+    message.palette = device["palette"];
+    message.preset = device["preset"];
   }
 };
 
