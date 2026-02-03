@@ -18,15 +18,16 @@ The Devices module will also implement Supersync. An approach to sync multiple M
 Part 1:
 
 * Every device broadcasts a message every 10 seconds containing general information and the values in the [Control Module](../../moonlight/lightscontrol). (loop10s() → sendUDP() →  updateDevices())
-* If a device updates one of the values in the Control Module, it broadcasts the updated values. (addUpdateHandler() → sendUDP(control))
-* If one of the controls is changed for a device in the devices overview, it sends a message to that device updating the controls accordingly (onUpdate() → 'sendUDP'(control))
-* Every module receives these messages and updates them in the devices overview (loop20ms() → receiveUDP())
+* If one of the values in the Control Module is updated, it broadcasts the updated values. (addUpdateHandler() → sendUDP(control))
+* If one of the controls is changed for a device in the devices overview, it sends a message to that device updating to update its controls (onUpdate() → sendUDP(control))
+* Every module receives these messages and updates them in the devices overview (loop20ms() → receiveUDP() →  updateDevices())
 
 
 Part 2:
 
-* Devices can be grouped. Grouping is done via the hostname (see [WiFi](../../network/STA)). Using dots to group them. E.g. x.y.z1 belongs to the same group as x.y.z2.
+* Devices can be grouped via the hostname (see [WiFi](../../network/sta/)). Using dots to group them. E.g. x.y.z1 belongs to the same group as x.y.z2.
 * If a message is received from a device within its group, the device will also update its own controls. (receiveUDP() → updateDevices())
+* It will notify other devices on its update, but the message is not a control message to avoid infinite sending loops (addUpdateHandler() → sendUDP(no control if group message))
 
 Part 3 (to be done):
 

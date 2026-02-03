@@ -30,7 +30,7 @@ struct UDPMessage {
   uint8_t palette;
   uint8_t preset;
   bool isControlCommand;
-} __attribute__((packed));  // ✅ Force no padding
+} __attribute__((packed));  // Force no padding
 
 class ModuleDevices : public Module {
  public:
@@ -38,25 +38,6 @@ class ModuleDevices : public Module {
   uint16_t deviceUDPPort = 65506;
   bool deviceUDPConnected = false;
   Module* _moduleControl;
-
-  bool partOfGroup(const String& base, const String& device, int level = 0) {
-    EXT_LOGV(MB_TAG, "partOfGroup %s %s level:%d", base.c_str(), device.c_str(), level);
-
-    String prefix = base;
-
-    // Count dots from the end: level 0 = last dot, level 1 = second-last, etc.
-    int pos = base.length();
-    for (int i = 0; i <= level; i++) {
-      pos = base.lastIndexOf('.', pos - 1);
-      if (pos == -1) {
-        // Not enough dots at this level - match all devices
-        return true;
-      }
-    }
-
-    prefix = base.substring(0, pos);
-    return device.startsWith(prefix);
-  }
 
   ModuleDevices(PsychicHttpServer* server, ESP32SvelteKit* sveltekit, Module* moduleControl) : Module("devices", server, sveltekit) {
     EXT_LOGV(MB_TAG, "constructor");
@@ -88,7 +69,6 @@ class ModuleDevices : public Module {
       addControl(rows, "palette", "slider", 0, 70);  // todo use define for max palette nr
       addControl(rows, "preset", "slider", 0, 64);
       addControl(rows, "ip", "ip", 0, 32, true);
-      // addControl(rows, "mac", "text", 0, 32, true);
       addControl(rows, "version", "text", 0, 32, true);
       addControl(rows, "build", "text", 0, 8, true);
       addControl(rows, "uptime", "time", 0, 32, true);
@@ -110,7 +90,7 @@ class ModuleDevices : public Module {
       UDPMessage message{};
       infoToMessage(message, true);  // isControlCommand
 
-      message.name = device["name"].as<const char*>();  // send the name of the device
+      message.name = device["name"].as<const char*>();  // send the name of the device in the table, not this device
       deviceToMessage(device, message);
 
       IPAddress activeIP = WiFi.isConnected() ? WiFi.localIP() : ETH.localIP();
@@ -246,10 +226,9 @@ class ModuleDevices : public Module {
         EXT_LOGD(ML_TAG, "Applied UDP control from group via %s : bri=%d pal=%d preset=%d", message.name.c_str(), message.brightness, message.palette, message.preset);
 
         if (esp32sveltekit.getWiFiSettingsService()->getHostname() == message.name.c_str()) {
-          _moduleControl->update(newState, ModuleState::update, _moduleName);  // Do not add server in the originID as that blocks updates, see execOnUpdate
-          // not a group so it needs to propagate...
+          _moduleControl->update(newState, ModuleState::update, _moduleName);  // addUpdateHandler will send a message with control status
         } else
-          _moduleControl->update(newState, ModuleState::update, "group");  // Do not add server in the originID as that blocks updates, see execOnUpdate
+          _moduleControl->update(newState, ModuleState::update, "group");  // addUpdateHandler will send a message without control status (to avoid infinite loops)
       }
 
       // also update if control command as it can be another device
@@ -257,9 +236,9 @@ class ModuleDevices : public Module {
     }
   }
 
-  // from addUpdateHandler (false, true) and loop10s (true, false)
+  // from addUpdateHandler (!group) and loop10s (false)
   void sendUDP(bool isControlCommand) {
-    // broadcast own status to all devices, called by addUpdateHandler and loop10s
+    // broadcast own status to all devices
     if (deviceUDP.beginPacket(IPAddress(255, 255, 255, 255), deviceUDPPort)) {
       UDPMessage message{};  // Zero-initialize
       infoToMessage(message, isControlCommand);
@@ -268,9 +247,9 @@ class ModuleDevices : public Module {
 
       deviceUDP.write((uint8_t*)&message, sizeof(message));
       deviceUDP.endPacket();
-      EXT_LOGD(ML_TAG, "UDP update sent: bri=%d pal=%d preset=%d control: %d", message.brightness, message.palette, message.preset, isControlCommand);
+      // EXT_LOGD(ML_TAG, "UDP update sent: bri=%d pal=%d preset=%d control: %d", message.brightness, message.palette, message.preset, isControlCommand);
 
-      // in case of loop10s, there is no udp received from itself so update manually
+      // there is no udp received from itself so update manually
       IPAddress activeIP = WiFi.isConnected() ? WiFi.localIP() : ETH.localIP();
       // EXT_LOGD(MB_TAG, "UDP packet written (%s -> %d)", message.name.c_str(), activeIP[3]);
       updateDevices(message, activeIP);
@@ -282,13 +261,12 @@ class ModuleDevices : public Module {
     message.name = esp32sveltekit.getWiFiSettingsService()->getHostname().c_str();
     message.version = APP_VERSION;
     strncpy(message.build, APP_DATE, sizeof(message.build));
-    // message.build[8] = '\0';
     message.packageSize = sizeof(message);
     message.uptime = time(nullptr) ? time(nullptr) - pal::millis() / 1000 : pal::millis() / 1000;
     message.isControlCommand = isControlCommand;
   }
 
-  // ✅ Helper: Copy control fields from message to control state (for applying updates)
+  // Copy control fields from message to control state (for applying updates)
   void messageToControlState(const UDPMessage& message, JsonObject& newState) {
     newState["lightsOn"] = message.lightsOn;
     newState["brightness"] = message.brightness;
@@ -298,7 +276,7 @@ class ModuleDevices : public Module {
     newState["preset"]["select"] = message.preset;
   }
 
-  // ✅ Helper: Copy control fields from control state to message (for broadcasting)
+  // Copy control fields from control state to message (for broadcasting)
   void controlStateToMessage(const JsonObject& state, UDPMessage& message) {
     message.lightsOn = state["lightsOn"];
     message.brightness = state["brightness"];
@@ -306,7 +284,7 @@ class ModuleDevices : public Module {
     message.preset = state["preset"]["selected"];
   }
 
-  // ✅ Helper: Copy all fields from message to device object (for UI display)
+  // Copy all fields from message to device object (for UI display)
   void messageToDevice(const UDPMessage& message, JsonObject& device) {
     device["lightsOn"] = message.lightsOn;
     device["brightness"] = message.brightness;
@@ -314,12 +292,31 @@ class ModuleDevices : public Module {
     device["preset"] = message.preset;
   }
 
-  // ✅ Helper: Copy control fields from device to message (for sending control)
+  // Copy control fields from device to message (for sending control)
   void deviceToMessage(const JsonObject& device, UDPMessage& message) {
     message.lightsOn = device["lightsOn"];
     message.brightness = device["brightness"];
     message.palette = device["palette"];
     message.preset = device["preset"];
+  }
+
+  bool partOfGroup(const String& base, const String& device, int level = 0) {
+    EXT_LOGV(MB_TAG, "partOfGroup %s %s level:%d", base.c_str(), device.c_str(), level);
+
+    String prefix = base;
+
+    // Count dots from the end: level 0 = last dot, level 1 = second-last, etc.
+    int pos = base.length();
+    for (int i = 0; i <= level; i++) {
+      pos = base.lastIndexOf('.', pos - 1);
+      if (pos == -1) {
+        // Not enough dots at this level - match all devices
+        return true;
+      }
+    }
+
+    prefix = base.substring(0, pos);
+    return device.startsWith(prefix);
   }
 };
 
