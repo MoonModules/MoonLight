@@ -46,8 +46,7 @@ class ModuleDevices : public Module {
     _moduleControl->addUpdateHandler(
         [this](const String& originId) {
           EXT_LOGD(MB_TAG, "control update origin %s", originId.c_str());
-          // send control messages directly, status message add random delay by sending it via loop20ms
-          _scheduleSendUDP = originId != "group";  // control message if from UI or not a group (to avoid infinity send loop)
+          sendUDP(originId != "group");  // sendUDP control yes / no
         },
         false);
   }
@@ -121,12 +120,6 @@ class ModuleDevices : public Module {
     if (!WiFi.localIP() && !ETH.localIP()) return;
 
     if (!deviceUDPConnected) return;
-
-    // scheduling sendUDP in loop20ms creates some randomness avoiding all devices sending at the same time
-    if (_scheduleSendUDP != 2) {
-      sendUDP(_scheduleSendUDP == 1); // sendUDP control yes / no
-      _scheduleSendUDP = 2;
-    }
 
     receiveUDP();  // and updateDevices
   }
@@ -211,7 +204,7 @@ class ModuleDevices : public Module {
 
   void receiveUDP() {
     while (size_t packetSize = deviceUDP.parsePacket()) {
-      if (packetSize < 38 || packetSize > sizeof(UDPMessage)) {
+      if (packetSize < 38 || packetSize > 255) { // UDP message is smaller then 256 for the foreseable future
         EXT_LOGW(MB_TAG, "Invalid UDP packet size: %d (expected %d-%d)", packetSize, 38, sizeof(UDPMessage));
         deviceUDP.clear();  // Discard invalid packet (flush (deprecated) is now clear)
         continue;
@@ -224,7 +217,7 @@ class ModuleDevices : public Module {
 
       // if a controlmessage is received (from another device), and this device is part of its group update this device.
       // this can be both a broadcast or a unicast (then partofgroup will also be true)
-      if (message.isControlCommand && partOfGroup(esp32sveltekit.getWiFiSettingsService()->getHostname(), message.name.c_str())) {
+      if (packetSize == sizeof(UDPMessage) && message.isControlCommand && partOfGroup(esp32sveltekit.getWiFiSettingsService()->getHostname(), message.name.c_str())) {
         JsonDocument doc;
         JsonObject newState = doc.to<JsonObject>();
 
@@ -236,12 +229,12 @@ class ModuleDevices : public Module {
           _moduleControl->update(newState, ModuleState::update, _moduleName);  // addUpdateHandler will send a message with control status
         } else
           _moduleControl->update(newState, ModuleState::update, "group");  // addUpdateHandler will send a message without control status (to avoid infinite loops)
-      }
+      } else
 
-      // EXT_LOGD(ML_TAG, "UDP message %s : bri=%d pal=%d preset=%d control:%d", message.name.c_str(), message.brightness, message.palette, message.preset, message.isControlCommand);
+        // EXT_LOGD(ML_TAG, "UDP message %s : bri=%d pal=%d preset=%d control:%d", message.name.c_str(), message.brightness, message.palette, message.preset, message.isControlCommand);
 
-      // also update if control command as it can be another device
-      updateDevices(message, deviceUDP.remoteIP());
+        // also update if control command as it can be another device
+        updateDevices(message, deviceUDP.remoteIP());
     }
   }
 
@@ -266,11 +259,10 @@ class ModuleDevices : public Module {
   }
 
  private:
-  uint8_t _scheduleSendUDP = 2; // 0 is sendUDP(false), 1 us sendUDP(true), 2 is don't sendUDP
-
   void infoToMessage(UDPMessage& message, bool isControlCommand) {
     message.name = esp32sveltekit.getWiFiSettingsService()->getHostname().c_str();
     message.version = APP_VERSION;
+    memset(message.build, 0, sizeof(message.build)); //init with 0
     strlcpy(message.build, APP_DATE, sizeof(message.build));
     message.packageSize = sizeof(message);
     message.uptime = time(nullptr) ? time(nullptr) - pal::millis() / 1000 : pal::millis() / 1000;
@@ -319,7 +311,7 @@ class ModuleDevices : public Module {
     // Count dots from the end: level 0 = last dot, level 1 = second-last, etc.
     int pos = base.length();
     for (int i = 0; i <= level; i++) {
-      pos = base.lastIndexOf('.', pos - 1);
+      pos = base.lastIndexOf('-', pos - 1);
       if (pos == -1) {
         return base == device;  // Not enough dots at this level - only exact match (no group)
       }

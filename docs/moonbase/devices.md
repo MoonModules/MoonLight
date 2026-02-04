@@ -25,7 +25,7 @@ Part 1:
 
 Part 2:
 
-* Devices can be grouped via the hostname (see [WiFi](../../network/sta/)). Using dots to group them. E.g. x.y.z1 belongs to the same group as x.y.z2.
+* Devices can be grouped via the hostname (see [WiFi](../../network/sta/)). Using hyphens to group them. E.g. x-y-z1 belongs to the same group as x-y-z2.
 * If a message is received from a device within its group, the device will also update its own controls. (receiveUDP() → updateDevices())
 * It will notify other devices on its update, but the message is not a control message to avoid infinite sending loops (addUpdateHandler() → sendUDP(no control if group message))
 
