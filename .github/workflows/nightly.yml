@@ -42,6 +42,6 @@ jobs:
           prerelease: true
           body: ${{ steps.changelog.outputs.changelog }}
           files: |
-            build/release/*.bin
-            build/merged/*.bin
-            build/release/*.md5
+            release/*.bin
+            release/*.md5
+            merged/*.bin

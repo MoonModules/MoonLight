@@ -55,5 +55,6 @@ jobs:
           name: firmware-${{ matrix.environment }}
           path: |
             build/release/*.bin
+            build/release/*.md5
             build/merged/*.bin
 
