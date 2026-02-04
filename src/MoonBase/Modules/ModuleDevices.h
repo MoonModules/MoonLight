@@ -64,7 +64,7 @@ class ModuleDevices : public Module {
       addControl(rows, "name", "mDNSName", 0, 32, true);
       addControl(rows, "lightsOn", "checkbox");
       addControl(rows, "brightness", "slider", 0, 255);
-      control = addControl(rows, "time", "time", 0, 32, true);
+      control = addControl(rows, "lastSync", "time", 0, 32, true);
       control["show"] = true;                        // only the first 3 are shown in RowRenderer, allow here the 4th to be shown as well
       addControl(rows, "palette", "slider", 0, 70);  // todo use define for max palette nr
       addControl(rows, "preset", "slider", 0, 64);
@@ -172,7 +172,7 @@ class ModuleDevices : public Module {
     }
 
     device["ip"] = ip.toString();
-    device["time"] = time(nullptr);  // time will change, triggering update
+    device["lastSync"] = time(nullptr);  // time will change, triggering update
     device["name"] = message.name.c_str();
     device["version"] = message.version.c_str();
     device["build"] = message.build;
@@ -185,7 +185,7 @@ class ModuleDevices : public Module {
 
       std::vector<JsonObject> devicesVector;
       for (JsonObject dev : devices) {
-        if (time(nullptr) - dev["time"].as<time_t>() < 86400) devicesVector.push_back(dev);  // max 1 day
+        if (time(nullptr) - dev["lastSync"].as<time_t>() < 86400) devicesVector.push_back(dev);  // max 1 day
       }
       std::sort(devicesVector.begin(), devicesVector.end(), [](JsonObject a, JsonObject b) { return a["name"] < b["name"]; });
 
@@ -260,7 +260,7 @@ class ModuleDevices : public Module {
   void infoToMessage(UDPMessage& message, bool isControlCommand) {
     message.name = esp32sveltekit.getWiFiSettingsService()->getHostname().c_str();
     message.version = APP_VERSION;
-    strncpy(message.build, APP_DATE, sizeof(message.build));
+    strlcpy(message.build, APP_DATE, sizeof(message.build));
     message.packageSize = sizeof(message);
     message.uptime = time(nullptr) ? time(nullptr) - pal::millis() / 1000 : pal::millis() / 1000;
     message.isControlCommand = isControlCommand;
@@ -310,8 +310,7 @@ class ModuleDevices : public Module {
     for (int i = 0; i <= level; i++) {
       pos = base.lastIndexOf('.', pos - 1);
       if (pos == -1) {
-        // Not enough dots at this level - match all devices
-        return true;
+        return base == device;  // Not enough dots at this level - only exact match (no group)
       }
     }
 
