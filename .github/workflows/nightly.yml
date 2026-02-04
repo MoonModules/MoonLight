@@ -11,12 +11,12 @@ permissions:
   contents: write
 
 jobs:
-  wled_build:
+  moonlight_build:
     uses: ./.github/workflows/build.yml
   nightly:
     name: Deploy nightly
     runs-on: ubuntu-latest
-    needs: wled_build
+    needs: moonlight_build
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -42,5 +42,6 @@ jobs:
           prerelease: true
           body: ${{ steps.changelog.outputs.changelog }}
           files: |
-            *.bin
-            *.bin.gz
+            build/release/*.bin
+            build/merged/*.bin
+            build/release/*.md5
