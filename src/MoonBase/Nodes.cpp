@@ -50,9 +50,9 @@ void Node::updateControl(const JsonObject& control) {
         char* valuePointer = (char*)pointer;
         size_t maxLen = control["max"].isNull() ? 32 : control["max"].as<size_t>();
         const char* src = control["value"].as<const char*>();
-        size_t copyLen = maxLen > 0 ? maxLen - 1 : 0;
-        if (copyLen > 0 && src) {
-          strlcpy(valuePointer, src, copyLen);
+        size_t bufSize = maxLen > 0 ? maxLen : 0;
+        if (bufSize > 0 && src) {
+          strlcpy(valuePointer, src, bufSize);
           // valuePointer[copyLen] = '\0';  // strlcpy does this
         } else {
           valuePointer[0] = '\0';

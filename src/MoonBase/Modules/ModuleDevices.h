@@ -46,7 +46,8 @@ class ModuleDevices : public Module {
     _moduleControl->addUpdateHandler(
         [this](const String& originId) {
           EXT_LOGD(MB_TAG, "control update origin %s", originId.c_str());
-          sendUDP(originId != "group");  // control message if from UI or not a group (to avoid infinity send loop)
+          // send control messages directly, status message add random delay by sending it via loop20ms
+          _scheduleSendUDP = originId != "group";  // control message if from UI or not a group (to avoid infinity send loop)
         },
         false);
   }
@@ -120,6 +121,12 @@ class ModuleDevices : public Module {
     if (!WiFi.localIP() && !ETH.localIP()) return;
 
     if (!deviceUDPConnected) return;
+
+    // scheduling sendUDP in loop20ms creates some randomness avoiding all devices sending at the same time
+    if (_scheduleSendUDP != 2) {
+      sendUDP(_scheduleSendUDP == 1); // sendUDP control yes / no
+      _scheduleSendUDP = 2;
+    }
 
     receiveUDP();  // and updateDevices
   }
@@ -206,7 +213,7 @@ class ModuleDevices : public Module {
     while (size_t packetSize = deviceUDP.parsePacket()) {
       if (packetSize < 38 || packetSize > sizeof(UDPMessage)) {
         EXT_LOGW(MB_TAG, "Invalid UDP packet size: %d (expected %d-%d)", packetSize, 38, sizeof(UDPMessage));
-        deviceUDP.clear();  // Discard invalid packet
+        deviceUDP.clear();  // Discard invalid packet (flush (deprecated) is now clear)
         continue;
       }
 
@@ -223,13 +230,15 @@ class ModuleDevices : public Module {
 
         messageToControlState(message, newState);
 
-        EXT_LOGD(ML_TAG, "Applied UDP control from group via %s : bri=%d pal=%d preset=%d", message.name.c_str(), message.brightness, message.palette, message.preset);
+        EXT_LOGD(ML_TAG, "UDP control message from group via %s : bri=%d pal=%d preset=%d", message.name.c_str(), message.brightness, message.palette, message.preset);
 
         if (esp32sveltekit.getWiFiSettingsService()->getHostname() == message.name.c_str()) {
           _moduleControl->update(newState, ModuleState::update, _moduleName);  // addUpdateHandler will send a message with control status
         } else
           _moduleControl->update(newState, ModuleState::update, "group");  // addUpdateHandler will send a message without control status (to avoid infinite loops)
       }
+
+      // EXT_LOGD(ML_TAG, "UDP message %s : bri=%d pal=%d preset=%d control:%d", message.name.c_str(), message.brightness, message.palette, message.preset, message.isControlCommand);
 
       // also update if control command as it can be another device
       updateDevices(message, deviceUDP.remoteIP());
@@ -257,6 +266,8 @@ class ModuleDevices : public Module {
   }
 
  private:
+  uint8_t _scheduleSendUDP = 2; // 0 is sendUDP(false), 1 us sendUDP(true), 2 is don't sendUDP
+
   void infoToMessage(UDPMessage& message, bool isControlCommand) {
     message.name = esp32sveltekit.getWiFiSettingsService()->getHostname().c_str();
     message.version = APP_VERSION;
