@@ -37,9 +37,9 @@ float distance(float x1, float y1, float z1, float x2, float y2, float z2) { ret
 void extractPath(const char* filepath, char* path) {
   const char* lastSlash = strrchr(filepath, '/');
   if (lastSlash != NULL) {
-    size_t pathLength = lastSlash - filepath;
-    strncpy(path, filepath, pathLength);
-    path[pathLength] = '\0';
+    size_t pathLength = lastSlash - filepath + 1;
+    strlcpy(path, filepath, pathLength);
+    // path[pathLength] = '\0'; // strlcpy does this
   } else {
     // No directory separator found, the entire filepath is the filename
     strcpy(path, "");

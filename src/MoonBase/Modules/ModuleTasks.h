@@ -23,7 +23,7 @@ class ModuleTasks : public Module {
   void setupDefinition(const JsonArray& controls) override {
     EXT_LOGV(MB_TAG, "");
     JsonObject control;  // state.data has one or more properties
-    JsonArray rows;   // if a control is an array, this is the rows of the array
+    JsonArray rows;      // if a control is an array, this is the rows of the array
 
   #ifndef CONFIG_IDF_TARGET_ESP32C3
     addControl(controls, "core0", "text", 0, 32, true);
@@ -40,7 +40,7 @@ class ModuleTasks : public Module {
       // addControl(rows, "state", "text", 0, 32, true);
       // addControl(rows, "cpu", "text", 0, 32, true);
       // addControl(rows, "prio", "number", 0, 255, true);
-      addControl(rows, "stack", "number", 0, 65538, true);
+      addControl(rows, "stack", "text", 0, 32, true);
       addControl(rows, "runtime", "text", 0, 32, true);
       // addControl(rows, "core", "number", 0, 65538, true);
     }
@@ -96,15 +96,28 @@ class ModuleTasks : public Module {
         break;  // Unknown
       }
 
-      Char<32> summary;
-      summary.format("%s %d%% @P%d @C%d", state, (uint32_t)(100ULL * ts->ulRunTimeCounter / totalRunTime), ts->uxCurrentPriority,  ts->xCoreID == tskNO_AFFINITY ? -1 : ts->xCoreID);
+      Char<32> text;
+      text.format("%s %d%% @P%d @C%d", state, (uint32_t)(100ULL * ts->ulRunTimeCounter / totalRunTime), ts->uxCurrentPriority, ts->xCoreID == tskNO_AFFINITY ? -1 : ts->xCoreID);
 
       task["name"] = ts->pcTaskName;
-      task["summary"] = summary.c_str();
+      task["summary"] = text.c_str();
       // task["state"] = state;
       // task["cpu"] = cpu_percent.c_str();
       // task["prio"] = ts->uxCurrentPriority;
-      task["stack"] = ts->usStackHighWaterMark;
+      if (equal(ts->pcTaskName, "ESP32 SvelteKit"))
+        text.format("%d - %d", ts->usStackHighWaterMark, SVELTEKIT_STACK_SIZE);
+      else if (equal(ts->pcTaskName, "httpd"))
+        text.format("%d - %d", ts->usStackHighWaterMark, HTTPD_STACK_SIZE);
+  #if FT_ENABLED(FT_MOONLIGHT)
+      else if (equal(ts->pcTaskName, "AppEffects"))
+        text.format("%d - %d", ts->usStackHighWaterMark, EFFECTS_STACK_SIZE);
+      else if (equal(ts->pcTaskName, "AppDrivers"))
+        text.format("%d - %d", ts->usStackHighWaterMark, DRIVERS_STACK_SIZE);
+  #endif
+      else
+        text.format("%d", ts->usStackHighWaterMark);
+
+      task["stack"] = text.c_str();
       task["runtime"] = ts->ulRunTimeCounter / 1000000;  // in seconds
       // task["core"] = ts->xCoreID == tskNO_AFFINITY ? -1 : ts->xCoreID;
 
