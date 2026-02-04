@@ -26,12 +26,12 @@ jobs:
         run: ls -la
       - name: "✏️ Generate release changelog"
         id: changelog
-        uses: janheinrichmerker/action-github-changelog-generator@v2.3
+        uses: janheinrichmerker/action-github-changelog-generator@v2.4
         with:
           token: ${{ secrets.GITHUB_TOKEN }} 
           sinceTag: v0.8.0
           # Exclude issues that were closed without resolution from changelog
-          exclude-labels: 'stale,wontfix,duplicate,invalid'
+          excludeLabels: 'stale,wontfix,duplicate,invalid,question,use-as-is,not_planned'
       - name: Update Nightly Release
         uses: andelf/nightly-release@v1
         env:
