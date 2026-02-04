@@ -150,7 +150,7 @@
 									{/if}
 								</td>
 								<td align="center">
-									{#if compareVersions(page.data.features.firmware_version, release.tag_name) != 0}
+									{#if compareVersions(page.data.features.firmware_version, release.tag_name) != 0 || release.name.includes("Nightly")} <!-- 🌙 always install nightly builds-->
 										<button
 											class="btn btn-ghost btn-circle btn-sm"
 											onclick={() => {

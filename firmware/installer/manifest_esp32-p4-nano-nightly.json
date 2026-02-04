@@ -1,6 +1,6 @@
 {
-  "name": "MoonLight v0.8.0 on esp32-p4-nano",
-  "version": "0.8.0",
+  "name": "MoonLight nightly on esp32-p4-nano",
+  "version": "0.8.1",
   "home_assistant_domain": "esphome",
   "funding_url": "https://esphome.io/guides/supporters.html",
   "new_install_prompt_erase": true,
@@ -11,7 +11,7 @@
       "name": "esp32-p4-nano",
       "image": "./images/esp32-p4-nano.jpg",
       "parts": [
-        { "path": "https://proxy.corsfix.com/?https://github.com/MoonModules/MoonLight/releases/download/v0.8.0/MoonLight_esp32-p4-nano_0-8-0_webflash.bin", "offset": 0 }
+        { "path": "https://proxy.corsfix.com/?https://github.com/MoonModules/MoonLight/releases/download/v0.8.1/MoonLight_esp32-p4-nano_0-8-1_webflash.bin", "offset": 0 }
       ]
     }
   ]
