@@ -204,7 +204,7 @@ class ModuleDevices : public Module {
 
   void receiveUDP() {
     while (size_t packetSize = deviceUDP.parsePacket()) {
-      if (packetSize < 38 || packetSize > 255) { // UDP message is smaller then 256 for the foreseable future
+      if (packetSize < 38 || packetSize > sizeof(UDPMessage)) {  // UDP message is smaller then 256 for the foreseable future
         EXT_LOGW(MB_TAG, "Invalid UDP packet size: %d (expected %d-%d)", packetSize, 38, sizeof(UDPMessage));
         deviceUDP.clear();  // Discard invalid packet (flush (deprecated) is now clear)
         continue;
@@ -262,7 +262,7 @@ class ModuleDevices : public Module {
   void infoToMessage(UDPMessage& message, bool isControlCommand) {
     message.name = esp32sveltekit.getWiFiSettingsService()->getHostname().c_str();
     message.version = APP_VERSION;
-    memset(message.build, 0, sizeof(message.build)); //init with 0
+    memset(message.build, 0, sizeof(message.build));  // init with 0
     strlcpy(message.build, APP_DATE, sizeof(message.build));
     message.packageSize = sizeof(message);
     message.uptime = time(nullptr) ? time(nullptr) - pal::millis() / 1000 : pal::millis() / 1000;
