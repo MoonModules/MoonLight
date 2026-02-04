@@ -30,6 +30,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }} 
           sinceTag: v0.8.0
+          output: CHANGELOG_NIGHTLY.md
           # Exclude issues that were closed without resolution from changelog
           excludeLabels: 'stale,wontfix,duplicate,invalid,question,use-as-is,not_planned'
       - name: Update Nightly Release
