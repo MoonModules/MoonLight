@@ -41,7 +41,7 @@ jobs:
           tag_name: v0.8.1
           name: 'Nightly $$'
           prerelease: true
-          body: ${{ steps.changelog.outputs.changelog }}
+          body_path: CHANGELOG_NIGHTLY.md
           files: |
             release/*.bin
             release/*.md5
