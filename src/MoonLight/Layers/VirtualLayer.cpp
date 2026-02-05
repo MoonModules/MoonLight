@@ -290,7 +290,7 @@ void VirtualLayer::addLight(Coord3D position) {
       createMappingTableAndAddOneToOne();
     }
 
-    nrOfLights = max(nrOfLights, indexV + 1);
+    nrOfLights = max(nrOfLights, nrOfLights_t(indexV + 1));
 
     if (!oneToOneMapping) {
       if (indexV < mappingTableSize) {

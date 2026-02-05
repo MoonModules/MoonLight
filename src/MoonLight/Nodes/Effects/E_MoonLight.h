@@ -1610,7 +1610,7 @@ class PixelMapEffect : public Node {
 
   Coord3D pos = {0, 0, 0};
 
-  void setup() override { addControl(pos, "pos", "coord3D", 0, max(max(layer->size.x, layer->size.x), layer->size.x) - 1); }
+  void setup() override { addControl(pos, "pos", "coord3D", 0, max(max(layer->size.x, layer->size.y), layer->size.z) - 1); }
 
   void loop() override {
     layer->fill_solid(CRGB::Black);
