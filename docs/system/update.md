@@ -1,6 +1,6 @@
 # System Update
 
-<img width="320" src="https://github.com/user-attachments/assets/d7f76c8a-5290-4723-b286-704c574d6beb" />
+<img width="320" height="441" src="../update.png" />
 
 This module supports Over the Air Updates (OTA).
 There are 2 ways to update the firmware in this module:
@@ -11,6 +11,7 @@ There are 2 ways to update the firmware in this module:
      * Select one of the releases to install. In general it is advised to install the most recent version.
      * If there is a new release, the app will notify it's availability.
      * See here for details on releases: [releases](https://github.com/MoonModules/MoonLight/releases)
+     * The Nightly release is experimental, use it to test new features, see the Test Channel on the MoonLight [Discord server](https://discord.gg/TC8NSUSCdV) for new functionality to test.
 
      <img width="362" src="https://github.com/user-attachments/assets/cf72875f-02cf-4c78-97a0-56b2a1723d71" />
 

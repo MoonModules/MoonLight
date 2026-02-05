@@ -33,8 +33,7 @@ Connect the device to your PC using a USB cable that **supports data transfer**.
 
 <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
 
-Select your ESP32 device from the table below, press the corresponding **Connect** button, and follow the steps.  
-Your device should appear in the list.
+Select your ESP32 device from the table below, press the corresponding **Connect** button, and follow the steps. Nightly builds are experimental: See the Test Channel on the MoonLight [Discord server](https://discord.gg/TC8NSUSCdV) for new functionality to test.
 
 When installing MoonLight for the **first time**, enable the **Erase** checkbox.  
 After a successful install, go to **Logs & Console**, press **Reset Device**, and close the installer.
