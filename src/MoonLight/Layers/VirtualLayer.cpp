@@ -18,8 +18,8 @@
 
 // convenience functions to call fastled functions out of the Leds namespace (there naming conflict)
 void fastled_fadeToBlackBy(CRGB* leds, uint16_t num_leds, uint8_t fadeBy) { fadeToBlackBy(leds, num_leds, fadeBy); }  // supports max UINT16_MAX leds !
-void fastled_fill_solid(struct CRGB* targetArray, int numToFill, const CRGB& color) { fill_solid(targetArray, numToFill, color); }
-void fastled_fill_rainbow(struct CRGB* targetArray, int numToFill, uint8_t initialhue, uint8_t deltahue) { fill_rainbow(targetArray, numToFill, initialhue, deltahue); }
+void fastled_fill_solid(CRGB* targetArray, int numToFill, const CRGB& color) { fill_solid(targetArray, numToFill, color); }
+void fastled_fill_rainbow(CRGB* targetArray, int numToFill, uint8_t initialhue, uint8_t deltahue) { fill_rainbow(targetArray, (uint16_t)numToFill, initialhue, deltahue); }
 
 VirtualLayer::VirtualLayer() { EXT_LOGV(ML_TAG, "constructor"); }
 
@@ -290,7 +290,7 @@ void VirtualLayer::addLight(Coord3D position) {
       createMappingTableAndAddOneToOne();
     }
 
-    nrOfLights = MAX(nrOfLights, indexV + 1);
+    nrOfLights = max(nrOfLights, indexV + 1);
 
     if (!oneToOneMapping) {
       if (indexV < mappingTableSize) {

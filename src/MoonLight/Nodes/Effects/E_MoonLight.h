@@ -725,7 +725,7 @@ class FreqSawsEffect : public Node {
       } else {
         // Calculate decay amount based on time to reach zero
         if (decreaser > 0 && bandSpeed[band] > 0) {
-          uint32_t decayAmount = MAX((bandSpeed[band] * deltaMs) / (decreaser * 10UL), 1);  // *10 to scale decreaser range 0-255 to 0-2550ms
+          uint32_t decayAmount = max((bandSpeed[band] * deltaMs) / (decreaser * 10UL), 1UL);  // *10 to scale decreaser range 0-255 to 0-2550ms
           if (decayAmount >= bandSpeed[band]) {
             bandSpeed[band] = 0;
           } else {
@@ -905,9 +905,9 @@ class RubiksCubeEffect : public Node {
     }
 
     void drawCube(VirtualLayer* layer) {
-      int sizeX = MAX(layer->size.x - 1, 1);
-      int sizeY = MAX(layer->size.y - 1, 1);
-      int sizeZ = MAX(layer->size.z - 1, 1);
+      int sizeX = max(layer->size.x - 1, 1);
+      int sizeY = max(layer->size.y - 1, 1);
+      int sizeZ = max(layer->size.z - 1, 1);
 
       // 3 Sided Cube Cheat add 1 to led size if "panels" missing. May affect different fixture types
       if (layer->layerDimension == _3D) {
@@ -1610,7 +1610,7 @@ class PixelMapEffect : public Node {
 
   Coord3D pos = {0, 0, 0};
 
-  void setup() override { addControl(pos, "pos", "coord3D", 0, MAX(MAX(layer->size.x, layer->size.x), layer->size.x) - 1); }
+  void setup() override { addControl(pos, "pos", "coord3D", 0, max(max(layer->size.x, layer->size.x), layer->size.x) - 1); }
 
   void loop() override {
     layer->fill_solid(CRGB::Black);
@@ -1721,7 +1721,7 @@ class AudioRingsEffect : public RingEffect {
   }
 
   void loop() override {
-    uint8_t nrOfRings = MAX(layer->size.y, 2);  // height of the layer, minimal 2
+    uint8_t nrOfRings = max(layer->size.y, 2);  // height of the layer, minimal 2
     for (int i = 0; i < nrOfRings; i++) {
       uint8_t band = ::map(i, 0, nrOfRings - 1, 0, NUM_GEQ_CHANNELS - 1);
 
