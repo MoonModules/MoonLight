@@ -27,27 +27,11 @@ class FastLEDDriver : public Node {
   static uint8_t dim() { return _NoD; }
   static const char* tags() { return "☸️"; }
 
-  char chipSet[20] = TOSTRING(ML_CHIPSET);
   char version[20] = TOSTRING(FASTLED_VERSION);  // "." TOSTRING(FASTLED_VERSION_MINOR) "." TOSTRING(FASTLED_VERSION_PATCH);
-  char colorOrder[20] = TOSTRING(ML_COLOR_ORDER);
-  #if FASTLED_USES_ESP32S3_I2S
-  bool usesI2S = true;
-  #else
-  bool usesI2S = false;
-  #endif
-  #if FASTLED_RMT5
-  bool usesRMT5 = true;
-  #else
-  bool usesRMT5 = false;
-  #endif
   Char<32> status = "ok";
 
   void setup() override {
     addControl(version, "version", "text", 0, 20, true);
-    addControl(chipSet, "chipSet", "text", 0, 20, true);
-    addControl(colorOrder, "colorOrder", "text", 0, 20, true);
-    addControl(usesI2S, "usesI2S", "checkbox", 0, 20, true);
-    addControl(usesRMT5, "usesRMT5", "checkbox", 0, 20, true);
     addControl(status, "status", "text", 0, 32, true);
   }
 
@@ -69,7 +53,6 @@ class FastLEDDriver : public Node {
       CRGB correction = CRGB(layerP.lights.header.red, layerP.lights.header.green, layerP.lights.header.blue);
       CLEDController* pCur = CLEDController::head();
       while (pCur) {
-        // ++x;
         if (pCur->getCorrection() != correction) {
           EXT_LOGD(ML_TAG, "setColorCorrection r:%d, g:%d, b:%d (#:%d)", layerP.lights.header.red, layerP.lights.header.green, layerP.lights.header.blue, pCur->size());
           pCur->setCorrection(correction);
@@ -116,43 +99,57 @@ class FastLEDDriver : public Node {
       updateControl("status", statusString.c_str());
       moduleNodes->requestUIUpdate = true;
 
+      // https://github.com/FastLED/FastLED/blob/master/src/fl/channels/README.md
+      fl::ChipsetTimingConfig timing = fl::makeTimingConfig<fl::TIMING_WS2812_800KHZ>();
+      CRGB* leds = (CRGB*)layerP.lights.channelsD;
       uint16_t startLed = 0;
-      for (uint8_t pinIndex = 0; pinIndex < nrOfPins; pinIndex++) {
-        EXT_LOGD(ML_TAG, "ledPin s:%d #:%d p:%d", pinIndex, layerP.ledsPerPin[pinIndex]);
-
-        uint16_t nrOfLights = layerP.ledsPerPin[pinIndex];
-
-        CRGB* leds = (CRGB*)layerP.lights.channelsD;
-
-        //https://github.com/FastLED/FastLED/blob/master/src/fl/channels/README.md
-
-        fl::ChipsetTimingConfig timing = fl::makeTimingConfig<fl::TIMING_WS2812_800KHZ>();
-        fl::ChannelConfig config(pins[pinIndex], timing, fl::span<CRGB>(&leds[startLed], layerP.ledsPerPin[pinIndex]), GRB);
-
-        // Create channel with specific engine type
   #if CONFIG_IDF_TARGET_ESP32 || CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
-        // fl::ChannelPtr channel = fl::Channel::create<fl::ChannelEngineSpi>(config);
-        fl::ChannelPtr channel = fl::Channel::create(config);
-        FastLED.setExclusiveDriver("SPI");
+      FastLED.setExclusiveDriver("I2S");
   #else
-        // auto channel = fl::Channel::create<fl::ChannelEnginePARLIO>(config);
-        fl::ChannelPtr channel = fl::Channel::create(config);
-        FastLED.setExclusiveDriver("PARLIO");
+      FastLED.setExclusiveDriver("PARLIO");
   #endif
 
-        // Register with FastLED
-        FastLED.addLedChannel(channel);
+      for (uint8_t pinIndex = 0; pinIndex < nrOfPins; pinIndex++) {
+        EXT_LOGD(ML_TAG, "ledPin p:%d #:%d", pins[pinIndex], layerP.ledsPerPin[pinIndex]);
+
+        fl::ChannelOptions options;
+  #if CONFIG_IDF_TARGET_ESP32 || CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
+        options.mAffinity = "I2S";
+  #else
+        options.mAffinity = "PARLIO";
+  #endif
+
+        fl::ChannelConfig config(pins[pinIndex], timing, fl::span<CRGB>(&leds[startLed], layerP.ledsPerPin[pinIndex]), GRB, options);
+        fl::ChannelPtr channel = fl::Channel::create(config);
+
+        FastLED.add(channel);
+
+        // FastLED.addLeds<WS2812, 16, GRB>(leds, layerP.ledsPerPin[pinIndex]); this works!!! (but this is static)
 
         startLed += layerP.ledsPerPin[pinIndex];
 
-      }  // for pinIndex < nrOfPins
-    }
+        CLEDController* pCur = CLEDController::head();
+        EXT_LOGD(ML_TAG, "controller p:%p", pCur);
+        while (pCur) {
+          EXT_LOGD(ML_TAG, "controller %d", pCur->size());
+          pCur = pCur->next();
+        }
 
-    // Check which drivers are available
-    for (size_t i = 0; i < FastLED.getDriverCount(); i++) {
-      auto drivers = FastLED.getDriverInfos();
-      auto& info = drivers[i];
-      EXT_LOGD(ML_TAG, "Driver: %s, Priority: %d, Enabled: %s", info.name.c_str(), info.priority, info.enabled ? "yes" : "no");
+      }  // for pinIndex < nrOfPins
+
+      // Check which drivers are available
+      for (size_t i = 0; i < FastLED.getDriverCount(); i++) {
+        auto drivers = FastLED.getDriverInfos();
+        auto& info = drivers[i];
+        EXT_LOGD(ML_TAG, "Driver: %s, Priority: %d, Enabled: %s", info.name.c_str(), info.priority, info.enabled ? "yes" : "no");
+      }
+
+      CLEDController* pCur = CLEDController::head();
+      EXT_LOGD(ML_TAG, "controller p:%p", pCur);
+      while (pCur) {
+        EXT_LOGD(ML_TAG, "controller %d", pCur->size());
+        pCur = pCur->next();
+      }
     }
 
     FastLED.setMaxPowerInMilliWatts(1000 * layerP.maxPower);  // 5v, 2000mA, to protect usb while developing
