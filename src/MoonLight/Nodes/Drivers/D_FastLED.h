@@ -251,7 +251,7 @@ class FastLEDDriver : public DriverNode {
     if (layerP.pass == 1 && !layerP.monitorPass) {
       uint8_t nrOfPins = MIN(layerP.nrOfLedPins, layerP.nrOfAssignedPins);
 
-      if (affinity == 1 && nrOfPins > 4) nrOfPins == 4;  // FastLED RMT supports max 4 pins!, what about SPI?
+      if (affinity == 1 && nrOfPins > 4) nrOfPins = 4;  // FastLED RMT supports max 4 pins!, what about SPI?
 
       if (nrOfPins == 0) return;
 
@@ -287,13 +287,11 @@ class FastLEDDriver : public DriverNode {
       CRGB* leds = (CRGB*)layerP.lights.channelsD;
       uint16_t startLed = 0;
 
-      for (fl::ChannelPtr* channel = channels.begin(); channel != channels.end();) {
+      for (auto channel : channels) {
         EXT_LOGD(ML_TAG, "remove channel");
-        FastLED.remove(*channel);
-        channels.erase(channel);
-        continue;
-        ++channel;
+        FastLED.remove(channel);
       }
+      channels.clear();
 
       for (uint8_t pinIndex = 0; pinIndex < nrOfPins; pinIndex++) {
         EXT_LOGD(ML_TAG, "ledPin p:%d #:%d rgb:%d aff:%s", pins[pinIndex], layerP.ledsPerPin[pinIndex], rgbOrder, options.mAffinity.c_str());
@@ -303,6 +301,9 @@ class FastLEDDriver : public DriverNode {
 
         FastLED.add(channel);
         channels.push_back(channel);
+
+        fl::IChannelEngine* engine = channel->getChannelEngine();
+        EXT_LOGD(ML_TAG, "Resolved engine: %s", engine->getName().c_str());
 
         // FastLED.addLeds<WS2812, 16, GRB>(leds, layerP.ledsPerPin[pinIndex]);  // this works!!! (but this is static)
 
@@ -336,13 +337,11 @@ class FastLEDDriver : public DriverNode {
   }
 
   ~FastLEDDriver() override {
-      for (fl::ChannelPtr* channel = channels.begin(); channel != channels.end();) {
-        EXT_LOGD(ML_TAG, "remove channel");
-        FastLED.remove(*channel);
-        channels.erase(channel);
-        continue;
-        ++channel;
-      }
+    for (auto channel : channels) {
+      EXT_LOGD(ML_TAG, "remove channel");
+      FastLED.remove(channel);
+    }
+    channels.clear();
   }
 };
 
