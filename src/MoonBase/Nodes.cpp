@@ -154,7 +154,7 @@ void LiveScriptNode::setup() {
   addExternal("uint32_t millis()", (void*)millis);
   addExternal("uint32_t now()", (void*)millis);  // todo: synchronized time (sys->now)
   addExternal("uint16_t random16(uint16_t)", (void*)(uint16_t (*)(uint16_t))random16);
-  addExternal("void delay(uint32_t)", (void*)delay);
+  addExternal("void delay(uint32_t)", (void*)((void (*)(uint32_t))delay));
   addExternal("void pinMode(uint8_t,uint8_t)", (void*)pinMode);
   addExternal("void digitalWrite(uint8_t,uint8_t)", (void*)digitalWrite);
 

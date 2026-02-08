@@ -539,10 +539,8 @@ class Rings16Layout : public Node {
   static const char* tags() { return "🚥"; }
 
   uint8_t scale = 1;
-  
-  void setup() override {
-    addControl(scale, "scale", "slider", 1, 10);
-  }
+
+  void setup() override { addControl(scale, "scale", "slider", 1, 10); }
 
   bool hasOnLayout() const override { return true; }
 
@@ -658,7 +656,7 @@ class CarLightsLayout : public Node {
     uint8_t leftMargin = 9;
 
     // inner light left
-    ringLayout.ringCenter = {leftMargin + 11, 10, 0};
+    ringLayout.ringCenter = {leftMargin + 11, 8, 0};
     ringLayout.nrOfLEDs = 1;
     ringLayout.onLayout();
     ringLayout.nrOfLEDs = 8;
@@ -682,13 +680,13 @@ class CarLightsLayout : public Node {
     ringLayout.onLayout();
     ringLayout.nrOfLEDs = 24;
     ringLayout.onLayout();
-    ringLayout.nrOfLEDs = 34;
+    ringLayout.nrOfLEDs = 32;
     ringLayout.onLayout();
 
     nextPin();
 
     // inner light right
-    ringLayout.ringCenter = {leftMargin + 25, 10, 0};
+    ringLayout.ringCenter = {leftMargin + 25, 8, 0};
     ringLayout.nrOfLEDs = 1;
     ringLayout.onLayout();
     ringLayout.nrOfLEDs = 8;
@@ -712,7 +710,7 @@ class CarLightsLayout : public Node {
     ringLayout.onLayout();
     ringLayout.nrOfLEDs = 24;
     ringLayout.onLayout();
-    ringLayout.nrOfLEDs = 34;
+    ringLayout.nrOfLEDs = 32;
     ringLayout.onLayout();
 
     nextPin();

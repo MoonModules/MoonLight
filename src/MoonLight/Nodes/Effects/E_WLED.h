@@ -72,7 +72,7 @@ class BouncingBallsEffect : public Node {
 
         // uint32_t color = SEGCOLOR(0);
         // if (layerP.palette) {
-        //   color = layer->color_wheel(i*(256/MAX(numBalls, 8)));
+        //   color = layer->color_wheel(i*(256/max(numBalls, 8)));
         // }
         // else if (hasCol2) {
         //   color = SEGCOLOR(i % NUM_COLORS);
@@ -136,7 +136,7 @@ class BlurzEffect : public Node {
 
     if (freqMap) {  // FreqMap mode : blob location by major frequency
       int freqLocn;
-      unsigned maxLen = (geqScanner) ? MAX(1, layer->size.x * layer->size.y * layer->size.z - 16) : layer->size.x * layer->size.y * layer->size.z;  // usable segment length - leave 16 pixels when embedding "GEQ scan"
+      unsigned maxLen = (geqScanner) ? max(1, layer->size.x * layer->size.y * layer->size.z - 16) : layer->size.x * layer->size.y * layer->size.z;  // usable segment length - leave 16 pixels when embedding "GEQ scan"
       freqLocn = roundf((log10f((float)sharedData.majorPeak) - 1.78f) * float(maxLen) / (MAX_FREQ_LOG10 - 1.78f));                                  // log10 frequency range is from 1.78 to 3.71. Let's scale to layer->size.x * layer->size.y * layer->size.z. // WLEDMM proper rounding
       if (freqLocn < 1) freqLocn = 0;                                                                                                               // avoid underflow
       segLoc = (geqScanner) ? freqLocn + freqBand : freqLocn;
@@ -145,7 +145,7 @@ class BlurzEffect : public Node {
       int bandStart = roundf(bandWidth * freqBand);
       segLoc = bandStart + random16(max(1, int(bandWidth)));
     }
-    segLoc = MAX(nrOfLights_t(0), MIN(nrOfLights_t(layer->size.x * layer->size.y * layer->size.z - 1), segLoc));  // fix overflows
+    segLoc = max(nrOfLights_t(0), MIN(nrOfLights_t(layer->size.x * layer->size.y * layer->size.z - 1), segLoc));  // fix overflows
 
     if (layer->size.x * layer->size.y * layer->size.z < 2) segLoc = 0;                                                       // WLEDMM just to be sure
     unsigned pixColor = (2 * sharedData.bands[freqBand] * 240) / max(1, layer->size.x * layer->size.y * layer->size.z - 1);  // WLEDMM avoid uint8 overflow, and preserve pixel parameters for redraw
@@ -1819,10 +1819,10 @@ class DripEffect : public Node {
           drops[x][j].col = sourcedrop;                          // brightness
           drops[x][j].colIndex = forming;                        // drop state
           CRGB c = ColorFromPalette(layerP.palette, random8());  // random color by MoonModules, hacked into velX of type float
-          memcpy(&drops[x][j].velX, &c, sizeof(CRGB));
+          memcpy(&drops[x][j].velX, (void*)&c, sizeof(CRGB));
         }
         CRGB dropColor;
-        memcpy(&dropColor, &drops[x][j].velX, sizeof(CRGB));  // hacked back
+        memcpy((void*)&dropColor, &drops[x][j].velX, sizeof(CRGB));  // hacked back
 
         layer->setRGB(Coord3D(x, 0), blend(CRGB::Black, dropColor, sourcedrop));  // water source
         if (drops[x][j].colIndex == forming) {

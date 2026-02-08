@@ -294,7 +294,7 @@ class RotateModifier : public Node {
 
   void modifySize() override {
     if (expand) {
-      uint8_t size = MAX(layer->size.x, MAX(layer->size.y, layer->size.z));
+      uint8_t size = max(layer->size.x, max(layer->size.y, layer->size.z));
       size = sqrt(size * size * 2) + 1;
       Coord3D offset = Coord3D((size - layer->size.x) / 2, (size - layer->size.y) / 2, 0);
 
@@ -310,7 +310,7 @@ class RotateModifier : public Node {
 
   void modifyPosition(Coord3D& position) override {
     if (expand) {
-      int size = MAX(modifierSize.x, MAX(modifierSize.y, modifierSize.z));
+      int size = max(modifierSize.x, max(modifierSize.y, modifierSize.z));
       size = sqrt(size * size * 2) + 1;
       Coord3D offset = Coord3D((size - modifierSize.x) / 2, (size - modifierSize.y) / 2, 0);
       position += offset;
