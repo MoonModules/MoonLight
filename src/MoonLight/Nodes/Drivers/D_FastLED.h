@@ -21,13 +21,13 @@ class FastLEDDriver : public DriverNode {
 
   char version[20] = TOSTRING(FASTLED_VERSION);  // "." TOSTRING(FASTLED_VERSION_MINOR) "." TOSTRING(FASTLED_VERSION_PATCH);
   Char<32> status = "ok";
-  #if CONFIG_IDF_TARGET_ESP32S3
-  uint8_t affinity = 2;  // I2S
-  #elif CONFIG_IDF_TARGET_ESP32P4
-  uint8_t affinity = 4;  // parlio
-  #else
+  // #if CONFIG_IDF_TARGET_ESP32S3
+  // uint8_t affinity = 2;  // I2S
+  // #elif CONFIG_IDF_TARGET_ESP32P4
+  // uint8_t affinity = 4;  // parlio
+  // #else
   uint8_t affinity = 0;  // auto
-  #endif
+  // #endif
   uint8_t temperature = 0;
   bool correction = 0;
   bool dither = false;
@@ -59,19 +59,34 @@ class FastLEDDriver : public DriverNode {
 
     addControl(version, "version", "text", 0, 20, true);
     addControl(status, "status", "text", 0, 32, true);
+
+    moduleIO->addUpdateHandler(
+        [this](const String& originId) {
+          uint8_t nrOfPins = MIN(layerP.nrOfLedPins, layerP.nrOfAssignedPins);
+
+          EXT_LOGD(ML_TAG, "recreate channels and configs %s %d", originId.c_str(), nrOfPins);
+          // do something similar as in destructor: delete existing channels
+          // do something similar as in onLayout: create new channels
+
+          // should we check here for maxPower changes?
+        },
+        false);
+    moduleControl->addUpdateHandler([this](const String& originId) {
+      // brightness changes here?
+    });
   }
 
   fl::EOrder rgbOrder = GRB;
-  fl::ChannelOptions options;
+  fl::ChannelOptions options = fl::ChannelOptions();
 
   void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
     DriverNode::onUpdate(oldValue, control);  // !!
 
-    LightsHeader* header = &layerP.lights.header;
-
     EXT_LOGD(ML_TAG, "%s: %s ", control["name"].as<const char*>(), control["value"].as<String>().c_str());
 
     if (control["name"] == "lightPreset") {
+      options.mRgbw = RgbwInvalid::value();  // Reset RGBW options so RGB-only presets don't inherit stale W config
+
       switch (layerP.lights.header.lightPreset) {
       case lightPreset_RGB:
         rgbOrder = RGB;
@@ -158,7 +173,7 @@ class FastLEDDriver : public DriverNode {
         options.mAffinity = "PARLIO";
         break;
       }
-      FastLED.setExclusiveDriver(options.mAffinity.c_str());
+      // FastLED.setExclusiveDriver(options.mAffinity.c_str());
     }
 
     else if (control["name"] == "temperature") {
@@ -199,6 +214,8 @@ class FastLEDDriver : public DriverNode {
 
   uint16_t savedMaxPower = UINT16_MAX;
   void loop() override {
+    // DriverNode::loop(); // no need to call this as FastLED is not using ledsDriver LUT tables ...
+
     if (FastLED.count()) {
       if (FastLED.getBrightness() != layerP.lights.header.brightness) {
         EXT_LOGD(ML_TAG, "setBrightness %d", layerP.lights.header.brightness);
@@ -227,10 +244,14 @@ class FastLEDDriver : public DriverNode {
     }
   }
 
+  fl::vector<fl::ChannelPtr> channels;
+
   bool hasOnLayout() const override { return true; }
   void onLayout() override {
     if (layerP.pass == 1 && !layerP.monitorPass) {
-      uint8_t nrOfPins = MIN(MIN(layerP.nrOfLedPins, layerP.nrOfAssignedPins), 4);  // FastLED RMT supports max 4 pins!
+      uint8_t nrOfPins = MIN(layerP.nrOfLedPins, layerP.nrOfAssignedPins);
+
+      if (affinity == 1 && nrOfPins > 4) nrOfPins == 4;  // FastLED RMT supports max 4 pins!, what about SPI?
 
       if (nrOfPins == 0) return;
 
@@ -266,13 +287,22 @@ class FastLEDDriver : public DriverNode {
       CRGB* leds = (CRGB*)layerP.lights.channelsD;
       uint16_t startLed = 0;
 
+      for (fl::ChannelPtr* channel = channels.begin(); channel != channels.end();) {
+        EXT_LOGD(ML_TAG, "remove channel");
+        FastLED.remove(*channel);
+        channels.erase(channel);
+        continue;
+        ++channel;
+      }
+
       for (uint8_t pinIndex = 0; pinIndex < nrOfPins; pinIndex++) {
-        EXT_LOGD(ML_TAG, "ledPin p:%d #:%d", pins[pinIndex], layerP.ledsPerPin[pinIndex]);
+        EXT_LOGD(ML_TAG, "ledPin p:%d #:%d rgb:%d aff:%s", pins[pinIndex], layerP.ledsPerPin[pinIndex], rgbOrder, options.mAffinity.c_str());
 
         fl::ChannelConfig config(pins[pinIndex], timing, fl::span<CRGB>(&leds[startLed], layerP.ledsPerPin[pinIndex]), rgbOrder, options);
         fl::ChannelPtr channel = fl::Channel::create(config);
 
         FastLED.add(channel);
+        channels.push_back(channel);
 
         // FastLED.addLeds<WS2812, 16, GRB>(leds, layerP.ledsPerPin[pinIndex]);  // this works!!! (but this is static)
 
@@ -302,15 +332,17 @@ class FastLEDDriver : public DriverNode {
       }
     }
 
-    FastLED.setMaxPowerInMilliWatts(1000 * layerP.maxPower);  // 5v, 2000mA, to protect usb while developing
+    // FastLED.setMaxPowerInMilliWatts(1000 * layerP.maxPower);  // 5v, 2000mA, to protect usb while developing
   }
 
   ~FastLEDDriver() override {
-    // TODO 
-    // for (auto channel: channels)
-    {
-      // FastLED.remove(channel);
-    }
+      for (fl::ChannelPtr* channel = channels.begin(); channel != channels.end();) {
+        EXT_LOGD(ML_TAG, "remove channel");
+        FastLED.remove(*channel);
+        channels.erase(channel);
+        continue;
+        ++channel;
+      }
   }
 };
 
