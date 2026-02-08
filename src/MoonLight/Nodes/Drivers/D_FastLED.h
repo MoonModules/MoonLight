@@ -29,6 +29,8 @@ class FastLEDDriver : public DriverNode {
   uint8_t affinity = 0;  // auto
   #endif
   uint8_t temperature = 0;
+  bool correction = 0;
+  bool dither = false;
 
   void setup() override {
     DriverNode::setup();  // !!
@@ -48,11 +50,18 @@ class FastLEDDriver : public DriverNode {
     addControlValue("Tungsten100W");
     addControlValue("Halogen");
 
+    addControl(correction, "correction", "select");
+    addControlValue("Uncorrected");
+    addControlValue("Typical LED");
+    addControlValue("Typical SMD5050");
+
+    addControl(dither, "dither", "checkbox");
+
     addControl(version, "version", "text", 0, 20, true);
     addControl(status, "status", "text", 0, 32, true);
   }
 
-  fl::EOrder rgbOrder;
+  fl::EOrder rgbOrder = GRB;
   fl::ChannelOptions options;
 
   void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
@@ -131,11 +140,11 @@ class FastLEDDriver : public DriverNode {
       }
     }
 
-    if (control["name"] == "affinity") {
+    else if (control["name"] == "affinity") {
       switch (control["value"].as<uint8_t>()) {
-      case 0:
+      case 0:  // auto
         options.mAffinity = "";
-        break;  // auto
+        break;
       case 1:
         options.mAffinity = "RMT";
         break;
@@ -150,25 +159,41 @@ class FastLEDDriver : public DriverNode {
         break;
       }
       FastLED.setExclusiveDriver(options.mAffinity.c_str());
+    }
 
-      if (control["name"] == "temperature") {
-        switch (control["value"].as<uint8_t>()) {
-        case 0:
-          options.mTemperature = UncorrectedTemperature;
-          break;
-        case 1:
-          options.mTemperature = Candle;
-          break;
-        case 2:
-          options.mTemperature = Tungsten100W;
-          break;
-        case 3:
-          options.mTemperature = Halogen;
-          break;
-        }
+    else if (control["name"] == "temperature") {
+      switch (control["value"].as<uint8_t>()) {
+      case 0:
+        options.mTemperature = UncorrectedTemperature;
+        break;
+      case 1:
+        options.mTemperature = Candle;
+        break;
+      case 2:
+        options.mTemperature = Tungsten100W;
+        break;
+      case 3:
+        options.mTemperature = Halogen;
+        break;
       }
+    }
 
-      options.mCorrection = TypicalLEDStrip;  // gamma ...
+    else if (control["name"] == "correction") {
+      switch (control["value"].as<uint8_t>()) {
+      case 0:
+        options.mCorrection = UncorrectedColor;
+        break;
+      case 1:
+        options.mCorrection = TypicalLEDStrip;
+        break;
+      case 2:
+        options.mCorrection = TypicalSMD5050;
+        break;
+      }
+    }
+
+    else if (control["name"] == "dither") {
+      options.mDitherMode = control["value"].as<bool>() ? BINARY_DITHER : DISABLE_DITHER;
     }
   }
 
@@ -281,6 +306,7 @@ class FastLEDDriver : public DriverNode {
   }
 
   ~FastLEDDriver() override {
+    // TODO 
     // for (auto channel: channels)
     {
       // FastLED.remove(channel);
