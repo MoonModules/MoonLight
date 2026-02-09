@@ -495,7 +495,7 @@ class ModuleLightsControl : public Module {
       xSemaphoreGive(swapMutex);
     } else if (isPositions == 0 && layerP.lights.header.nrOfLights) {  // send to UI
       static unsigned long monitorMillis = 0;
-      if (millis() - monitorMillis >= max(20UL, layerP.lights.header.nrOfLights / 300)) {  // 12K lights -> 40ms
+      if (millis() - monitorMillis >= MAX(20, layerP.lights.header.nrOfLights / 300)) {  // 12K lights -> 40ms
         monitorMillis = millis();
 
         if (_socket->getActiveClients() && _state.data["monitorOn"]) {

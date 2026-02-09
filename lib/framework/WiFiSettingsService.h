@@ -92,7 +92,7 @@ public:
         root["hostname"] = settings.hostname;
         root["connection_mode"] = settings.staConnectionMode;
         root["txPower"] = settings.txPower;//(uint8_t )WiFi.getTxPower();
-        root["txPowerMeasured"] = abs(WiFi.getTxPower());
+        root["txPowerMeasured"] = std::abs(WiFi.getTxPower());
         root["trackAnalytics"] = settings.trackAnalytics;
 
         // create JSON array from root

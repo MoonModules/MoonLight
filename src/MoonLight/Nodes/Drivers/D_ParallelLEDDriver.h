@@ -56,7 +56,7 @@ class ParallelLEDDriver : public DriverNode {
     #ifndef CONFIG_IDF_TARGET_ESP32P4
     if (ledsDriver.total_leds > 0) ledsDriver.showPixels(WAIT);
     #else
-    uint8_t nrOfPins = min(layerP.nrOfLedPins, layerP.nrOfAssignedPins);
+    uint8_t nrOfPins = MIN(layerP.nrOfLedPins, layerP.nrOfAssignedPins);
     // LUTs are accessed directly within show_parlio via extern ledsDriver
 
     // No brightness parameter needed
@@ -75,7 +75,7 @@ class ParallelLEDDriver : public DriverNode {
   void onLayout() override {
   #if HP_ALL_DRIVERS
     if (layerP.pass == 1 && !layerP.monitorPass) {
-      uint8_t nrOfPins = min(layerP.nrOfLedPins, layerP.nrOfAssignedPins);
+      uint8_t nrOfPins = MIN(layerP.nrOfLedPins, layerP.nrOfAssignedPins);
 
       if (!lightPresetSaved || nrOfPins == 0) {  //|| initDone can be done multiple times now...
         EXT_LOGD(ML_TAG, "return: lightpresetsaved:%d initDone:%d #:%d", lightPresetSaved, initDone, nrOfPins);

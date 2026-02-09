@@ -72,7 +72,7 @@ class BouncingBallsEffect : public Node {
 
         // uint32_t color = SEGCOLOR(0);
         // if (layerP.palette) {
-        //   color = layer->color_wheel(i*(256/max(numBalls, 8)));
+        //   color = layer->color_wheel(i*(256/MAX(numBalls, 8)));
         // }
         // else if (hasCol2) {
         //   color = SEGCOLOR(i % NUM_COLORS);
@@ -80,7 +80,7 @@ class BouncingBallsEffect : public Node {
 
         uint8_t pos = layer->size.y - 1 - roundf(balls[x][i].height * (layer->size.y - 1));  // balls go up
 
-        CRGB color = ColorFromPalette(layerP.palette, i * (256 / max(numBalls, (uint8_t)8)));  // error: no matching function for call to 'max(uint8_t&, int)'
+        CRGB color = ColorFromPalette(layerP.palette, i * (256 / MAX(numBalls, 8)));  // error: no matching function for call to 'MAX(uint8_t&, int)'
 
         layer->setRGB(Coord3D(x, pos), color);
       }  // balls      layer->fill_solid(CRGB::White);
@@ -136,20 +136,20 @@ class BlurzEffect : public Node {
 
     if (freqMap) {  // FreqMap mode : blob location by major frequency
       int freqLocn;
-      unsigned maxLen = (geqScanner) ? max(1, layer->size.x * layer->size.y * layer->size.z - 16) : layer->size.x * layer->size.y * layer->size.z;  // usable segment length - leave 16 pixels when embedding "GEQ scan"
+      unsigned maxLen = (geqScanner) ? MAX(1, layer->size.x * layer->size.y * layer->size.z - 16) : layer->size.x * layer->size.y * layer->size.z;  // usable segment length - leave 16 pixels when embedding "GEQ scan"
       freqLocn = roundf((log10f((float)sharedData.majorPeak) - 1.78f) * float(maxLen) / (MAX_FREQ_LOG10 - 1.78f));                                  // log10 frequency range is from 1.78 to 3.71. Let's scale to layer->size.x * layer->size.y * layer->size.z. // WLEDMM proper rounding
       if (freqLocn < 1) freqLocn = 0;                                                                                                               // avoid underflow
       segLoc = (geqScanner) ? freqLocn + freqBand : freqLocn;
     } else if (geqScanner) {  // GEQ Scanner mode: blob location is defined by frequency band + random offset
       float bandWidth = float(layer->size.x * layer->size.y * layer->size.z) / 16.0f;
       int bandStart = roundf(bandWidth * freqBand);
-      segLoc = bandStart + random16(max(1, int(bandWidth)));
+      segLoc = bandStart + random16(MAX(1, bandWidth));
     }
-    segLoc = max(nrOfLights_t(0), MIN(nrOfLights_t(layer->size.x * layer->size.y * layer->size.z - 1), segLoc));  // fix overflows
+    segLoc = MAX(0, MIN(layer->size.x * layer->size.y * layer->size.z - 1, segLoc));  // fix overflows
 
     if (layer->size.x * layer->size.y * layer->size.z < 2) segLoc = 0;                                                       // WLEDMM just to be sure
-    unsigned pixColor = (2 * sharedData.bands[freqBand] * 240) / max(1, layer->size.x * layer->size.y * layer->size.z - 1);  // WLEDMM avoid uint8 overflow, and preserve pixel parameters for redraw
-    unsigned pixIntensity = MIN((unsigned)(2.0f * sharedData.bands[freqBand]), 255U);
+    unsigned pixColor = (2 * sharedData.bands[freqBand] * 240) / MAX(1, layer->size.x * layer->size.y * layer->size.z - 1);  // WLEDMM avoid uint8 overflow, and preserve pixel parameters for redraw
+    unsigned pixIntensity = MIN(2.0f * sharedData.bands[freqBand], 255);
 
     if (sharedData.volume > 1.0f) {
       layer->setRGB(segLoc, ColorFromPalette(layerP.palette, pixColor));
@@ -576,7 +576,7 @@ class PacManEffect : public Node {
   const uint32_t ghostColors[4] = {CRGB::Red, PURPLEISH, CRGB::Cyan, ORANGEISH};
 
   void initializePacMan() {
-    numPowerDots = MIN(layer->nrOfLights / 10U, numPowerDotsControl);  // cap the max so packed state fits in 8 bits: ML: keep the nr visible in the UI
+    numPowerDots = MIN(layer->nrOfLights / 10, numPowerDotsControl);  // cap the max so packed state fits in 8 bits: ML: keep the nr visible in the UI
 
     EXT_LOGD(ML_TAG, "#l:%d #pd:%d #g:%d #pd:%d", layer->nrOfLights, numPowerDotsControl, numGhosts, numPowerDots);
 
@@ -1165,7 +1165,7 @@ class WaverlyEffect : public Node {
     Coord3D pos = {0, 0, 0};  // initialize z otherwise wrong results
     for (pos.x = 0; pos.x < layer->size.x; pos.x++) {
       uint16_t thisVal = sharedData.volume * amplification * inoise8(pos.x * 45, t, t) / 4096;  // WLEDMM back to SR code
-      uint16_t thisMax = MIN(map(thisVal, 0, 512, 0, layer->size.y), (long)layer->size.y);
+      uint16_t thisMax = MIN(map(thisVal, 0, 512, 0, layer->size.y), layer->size.y);
 
       for (pos.y = 0; pos.y < thisMax; pos.y++) {
         CRGB color = ColorFromPalette(layerP.palette, ::map(pos.y, 0, thisMax, 250, 0));
@@ -1325,7 +1325,7 @@ class OctopusEffect : public Node {
     const uint16_t C_X = layer->size.x / 2 + (offset.x - 50) * layer->size.x / 100;
     const uint16_t C_Y = layer->size.y / 2 + (offset.y - 50) * layer->size.y / 100;
     Coord3D pos = {0, 0, 0};
-    const uint8_t mapp = 180 / max(layer->size.x, layer->size.y);
+    const uint8_t mapp = 180 / MAX(layer->size.x, layer->size.y);
     for (pos.x = 0; pos.x < layer->size.x; pos.x++) {
       for (pos.y = 0; pos.y < layer->size.y; pos.y++) {
         nrOfLights_t indexV = layer->XYZUnModified(pos);
@@ -1483,7 +1483,7 @@ class FireworksEffect : public Node {
        * Size is proportional to the height.
        */
       uint8_t nSparks = flare->pos + random8(4);
-      // nSparks = std::max(nSparks, 4U);  // This is not a standard constrain; numSparks is not guaranteed to be at least 4
+      // nSparks = MAX(nSparks, 4);  // This is not a standard constrain; numSparks is not guaranteed to be at least 4
       nSparks = MIN(nSparks, numSparks);
 
       // initialize sparks
@@ -1683,7 +1683,7 @@ static void mode_fireworks(VirtualLayer* layer, uint16_t x, uint16_t aux0, uint1
   if (valid2) layer->setRGB(Coord3D(x, layer->size.y - 1 - aux1), sv2);
 
   if (addPixels) {  // WLEDSR
-    for (uint16_t i = 0; i < max(1, layer->size.y / 20); i++) {
+    for (uint16_t i = 0; i < MAX(1, layer->size.y / 20); i++) {
       if (random8(my_intensity) == 0) {
         uint16_t index = random(layer->size.y);
         if (soundColor < 0)
@@ -1808,7 +1808,7 @@ class DripEffect : public Node {
 
     float gravity = -(gravityControl / 800000.0f);
 
-    gravity *= max(1, layer->size.y - 1);
+    gravity *= MAX(1, layer->size.y - 1);
     int sourcedrop = 12;
 
     for (int x = 0; x < nrOfDrops; x++) {
@@ -1963,9 +1963,9 @@ class DJLightEffect : public Node {
         CHSV hsvColor = rgb2hsv_approximate(color);
         hsvColor.v = constrain(hsvColor.v, 48, 204);  // 48 < brightness < 204
         if (candyFactory)
-          hsvColor.s = max(hsvColor.s, (uint8_t)204);  // candy factory mode: strongly turn up color saturation (> 192)
+          hsvColor.s = MAX(hsvColor.s, 204);  // candy factory mode: strongly turn up color saturation (> 192)
         else
-          hsvColor.s = max(hsvColor.s, (uint8_t)108);  // normal mode: turn up color saturation to avoid pastels
+          hsvColor.s = MAX(hsvColor.s, 108);  // normal mode: turn up color saturation to avoid pastels
         color = hsvColor;
       }
       // if (color.getLuma() > 12) color.maximizeBrightness();          // for testing
@@ -2059,7 +2059,9 @@ class ColorTwinkleEffect : public Node {
     }
   }
 
-  ~ColorTwinkleEffect() { if (data) freeMB(data, "data"); }
+  ~ColorTwinkleEffect() {
+    if (data) freeMB(data, "data");
+  }
 };
 
 class PlasmaEffect : public Node {
@@ -2224,7 +2226,7 @@ class JuliaEffect : public Node {
     if (showCenter) {                   // draw crosshair
       int screenX = lroundf((0.5f / maxCenter) * (julias.xcen + maxCenter) * float(cols));
       int screenY = lroundf((0.5f / maxCenter) * (julias.ycen + maxCenter) * float(rows));
-      int hair = min(min(cols - 1, rows - 1) / 2, 3);
+      int hair = MIN(MIN(cols - 1, rows - 1) / 2, 3);
       layer->drawLine(screenX, screenY - hair, screenX, screenY + hair, CRGB::Green, true);
       layer->drawLine(screenX - hair, screenY, screenX + hair, screenY, CRGB::Green, true);
     }

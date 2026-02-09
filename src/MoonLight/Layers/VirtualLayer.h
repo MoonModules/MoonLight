@@ -148,7 +148,7 @@ class VirtualLayer {
   #ifdef BOARD_HAS_PSRAM
       memcpy(mappingTable[indexV].rgb, (void*)&color, 3);
   #else
-      mappingTable[indexV].rgb = ((min(color[0] + 3, 255) >> 3) << 9) + ((min(color[1] + 3, 255) >> 3) << 4) + (min(color[2] + 7, 255) >> 4);
+      mappingTable[indexV].rgb = ((MIN(color[0] + 3, 255) >> 3) << 9) + ((MIN(color[1] + 3, 255) >> 3) << 4) + (MIN(color[2] + 7, 255) >> 4);
   #endif
     } else
       forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW], (void*)&color, sizeof(color)); });

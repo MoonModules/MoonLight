@@ -721,11 +721,11 @@ class FreqSawsEffect : public Node {
       uint16_t targetSpeed = (volume * increaser * 257);
 
       if (volume > 0) {
-        bandSpeed[band] = max(bandSpeed[band], targetSpeed);
+        bandSpeed[band] = MAX(bandSpeed[band], targetSpeed);
       } else {
         // Calculate decay amount based on time to reach zero
         if (decreaser > 0 && bandSpeed[band] > 0) {
-          uint32_t decayAmount = max((bandSpeed[band] * deltaMs) / (decreaser * 10UL), 1UL);  // *10 to scale decreaser range 0-255 to 0-2550ms
+          uint32_t decayAmount = MAX((bandSpeed[band] * deltaMs) / (decreaser * 10), 1);  // *10 to scale decreaser range 0-255 to 0-2550ms
           if (decayAmount >= bandSpeed[band]) {
             bandSpeed[band] = 0;
           } else {
@@ -905,9 +905,9 @@ class RubiksCubeEffect : public Node {
     }
 
     void drawCube(VirtualLayer* layer) {
-      int sizeX = max(layer->size.x - 1, 1);
-      int sizeY = max(layer->size.y - 1, 1);
-      int sizeZ = max(layer->size.z - 1, 1);
+      int sizeX = MAX(layer->size.x - 1, 1);
+      int sizeY = MAX(layer->size.y - 1, 1);
+      int sizeZ = MAX(layer->size.z - 1, 1);
 
       // 3 Sided Cube Cheat add 1 to led size if "panels" missing. May affect different fixture types
       if (layer->layerDimension == _3D) {
@@ -940,10 +940,10 @@ class RubiksCubeEffect : public Node {
             int normalizedZ = constrain(round(z * scaleZ) - 1, 0, SIZE - 1);
 
             // Calculate the distance to the closest face
-            int distX = min(x, sizeX - x);
-            int distY = min(y, sizeY - y);
-            int distZ = min(z, sizeZ - z);
-            int dist = min(distX, min(distY, distZ));
+            int distX = MIN(x, sizeX - x);
+            int distY = MIN(y, sizeY - y);
+            int distZ = MIN(z, sizeZ - z);
+            int dist = MIN(distX, MIN(distY, distZ));
 
             if (dist == distZ && z < halfZ)
               layer->setRGB(led, COLOR_MAP[front[normalizedY][normalizedX]]);
@@ -1570,8 +1570,8 @@ class VUMeterEffect : public Node {
     int y1 = y0 - round(size.y * 0.7 * sin((angle + 30) * PI / 180));
 
     // ✅ Clamp to valid bounds
-    x1 = max(0, min(x1, (int)layer->size.x - 1));
-    y1 = max(0, min(y1, (int)layer->size.y - 1));
+    x1 = MAX(0, MIN(x1, layer->size.x - 1));
+    y1 = MAX(0, MIN(y1, layer->size.y - 1));
 
     // Draw the needle
     layer->drawLine(x0, y0, x1, y1, color, true);
@@ -1610,7 +1610,7 @@ class PixelMapEffect : public Node {
 
   Coord3D pos = {0, 0, 0};
 
-  void setup() override { addControl(pos, "pos", "coord3D", 0, max(max(layer->size.x, layer->size.y), layer->size.z) - 1); }
+  void setup() override { addControl(pos, "pos", "coord3D", 0, MAX(MAX(layer->size.x, layer->size.y), layer->size.z) - 1); }
 
   void loop() override {
     layer->fill_solid(CRGB::Black);
@@ -1721,7 +1721,7 @@ class AudioRingsEffect : public RingEffect {
   }
 
   void loop() override {
-    uint8_t nrOfRings = max(layer->size.y, 2);  // height of the layer, minimal 2
+    uint8_t nrOfRings = MAX(layer->size.y, 2);  // height of the layer, minimal 2
     for (int i = 0; i < nrOfRings; i++) {
       uint8_t band = ::map(i, 0, nrOfRings - 1, 0, NUM_GEQ_CHANNELS - 1);
 

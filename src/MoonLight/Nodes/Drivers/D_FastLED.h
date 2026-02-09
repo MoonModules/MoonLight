@@ -287,11 +287,7 @@ class FastLEDDriver : public DriverNode {
       CRGB* leds = (CRGB*)layerP.lights.channelsD;
       uint16_t startLed = 0;
 
-      for (auto channel : channels) {
-        EXT_LOGD(ML_TAG, "remove channel");
-        FastLED.remove(channel);
-      }
-      channels.clear();
+      FastLED.reset(ResetFlags::CHANNELS);
 
       for (uint8_t pinIndex = 0; pinIndex < nrOfPins; pinIndex++) {
         EXT_LOGD(ML_TAG, "ledPin p:%d #:%d rgb:%d aff:%s", pins[pinIndex], layerP.ledsPerPin[pinIndex], rgbOrder, options.mAffinity.c_str());
@@ -336,13 +332,7 @@ class FastLEDDriver : public DriverNode {
     // FastLED.setMaxPowerInMilliWatts(1000 * layerP.maxPower);  // 5v, 2000mA, to protect usb while developing
   }
 
-  ~FastLEDDriver() override {
-    for (auto channel : channels) {
-      EXT_LOGD(ML_TAG, "remove channel");
-      FastLED.remove(channel);
-    }
-    channels.clear();
-  }
+  ~FastLEDDriver() override { FastLED.reset(ResetFlags::CHANNELS); }
 };
 
 #endif

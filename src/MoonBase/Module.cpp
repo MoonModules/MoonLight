@@ -80,7 +80,7 @@ bool ModuleState::checkReOrderSwap(const JsonString& parent, const JsonVariant& 
         uint8_t parkedAtIndex;
         uint8_t parkedFromIndex = UINT8_MAX;
 
-        // size_t minSize = min(stateArray.size(), newArray.size());
+        // size_t minSize = MIN(stateArray.size(), newArray.size());
         for (uint8_t stateIndex = 0; stateIndex < stateArray.size(); stateIndex++) {  //} JsonObject stateObject : stateArray) {
           for (uint8_t newIndex = 0; newIndex < stateArray.size(); newIndex++) {      //} JsonObject newObject : newArray) {
             if (stateIndex != newIndex && stateArray[stateIndex] == newArray[newIndex]) {
@@ -160,7 +160,7 @@ bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& 
 
           // EXT_LOGD(MB_TAG, "compare %s[%d] %s = %s -> %s", parent.c_str(), index, key.c_str(), stateValue.as<const char*>(), newValue.as<const char*>());
 
-          for (int i = 0; i < max(stateArray.size(), newArray.size()); i++) {  // compare each item in the array
+          for (int i = 0; i < MAX(stateArray.size(), newArray.size()); i++) {  // compare each item in the array
             // EXT_LOGD(MB_TAG, "compare %s[%d] %s = %s -> %s", parent.c_str(), index, key.c_str(), stateArray[i].as<const char*>(), newArray[i].as<const char*>());
             if (i >= stateArray.size()) {  // newArray has added a row
               // EXT_LOGD(MB_TAG, "add %s.%s[%d] (%d/%d) d: %d", parent.c_str(), key.c_str(), i, stateArray.size(), newArray.size(), depth);
