@@ -29,7 +29,7 @@ class FastLEDDriver : public DriverNode {
   uint8_t affinity = 0;  // auto
   // #endif
   uint8_t temperature = 0;
-  bool correction = 0;
+  uint8_t correction = 0;
   bool dither = false;
 
   void setup() override {
@@ -229,12 +229,12 @@ class FastLEDDriver : public DriverNode {
       }
 
       // FastLED Led Controllers
-      CRGB correction = CRGB(layerP.lights.header.red, layerP.lights.header.green, layerP.lights.header.blue);
+      CRGB colorCorrection = CRGB(layerP.lights.header.red, layerP.lights.header.green, layerP.lights.header.blue);
       CLEDController* pCur = CLEDController::head();
       while (pCur) {
-        if (pCur->getCorrection() != correction) {
+        if (pCur->getCorrection() != colorCorrection) {
           EXT_LOGD(ML_TAG, "setColorCorrection r:%d, g:%d, b:%d (#:%d)", layerP.lights.header.red, layerP.lights.header.green, layerP.lights.header.blue, pCur->size());
-          pCur->setCorrection(correction);
+          pCur->setCorrection(colorCorrection);
         }
         // pCur->size();
         pCur = pCur->next();
