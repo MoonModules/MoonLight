@@ -158,12 +158,11 @@ class Module : public StatefulService<ModuleState> {
 
  protected:
   EventSocket* _socket;
-  void readFromFS() {             // used in ModuleEffects, for live scripts...
-    _fsPersistence.readFromFS();  // overwrites the default settings in state
-  }
+  // void readFromFS() {             // used in ModuleEffects, for live scripts...
+  //   _fsPersistence.readFromFS();  // overwrites the default settings in state
+  // }
 
  private:
-  FSPersistence<ModuleState> _fsPersistence;
   PsychicHttpServer* _server;
 };
 

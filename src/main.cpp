@@ -223,15 +223,15 @@ static int custom_vprintf(const char* fmt, va_list args) {
 
 std::vector<Module*> modules;
 #include "MoonBase/SharedEventEndpoint.h"
+#include "MoonBase/SharedFSPersistence.h"
 #include "MoonBase/SharedHttpEndpoint.h"
 #include "MoonBase/SharedWebSocketServer.h"
-// #include "MoonBase/SharedFSPersistence.h"
 
 // ADDED: Shared routers (one instance each)
 SharedHttpEndpoint* sharedHttpEndpoint = nullptr;
 SharedWebSocketServer* sharedWebSocketServer = nullptr;
 SharedEventEndpoint* sharedEventEndpoint = nullptr;
-// SharedFSPersistence* sharedFsPersistence = nullptr;
+SharedFSPersistence* sharedFsPersistence = nullptr;
 
 void setup() {
 #ifdef USE_ESP_IDF_LOG  // 🌙
@@ -292,8 +292,8 @@ void setup() {
   sharedHttpEndpoint = new SharedHttpEndpoint(&server, esp32sveltekit.getSecurityManager());
   sharedWebSocketServer = new SharedWebSocketServer(&server, esp32sveltekit.getSecurityManager());
   sharedEventEndpoint = new SharedEventEndpoint(esp32sveltekit.getSocket());
-  // sharedFsPersistence = new SharedFSPersistence(esp32sveltekit.getFS());
-  if (!sharedHttpEndpoint || !sharedWebSocketServer || !sharedEventEndpoint) {
+  sharedFsPersistence = new SharedFSPersistence(esp32sveltekit.getFS());
+  if (!sharedHttpEndpoint || !sharedWebSocketServer || !sharedEventEndpoint || !sharedFsPersistence) {
     EXT_LOGE(ML_TAG, "dev: Failed to allocate shared routers");
     return;
   }
@@ -301,7 +301,6 @@ void setup() {
   modules.reserve(12);  // Adjust based on actual module count
   modules.push_back(&moduleTasks);
   modules.push_back(&moduleIO);
-// modules.push_back(&fileManager);
 
 // MoonLight
 #if FT_ENABLED(FT_MOONLIGHT)
@@ -321,19 +320,21 @@ void setup() {
     sharedHttpEndpoint->registerModule(module);
     sharedWebSocketServer->registerModule(module);
     sharedEventEndpoint->registerModule(module);
-    // sharedFsPersistence->registerModule(module);
+    sharedFsPersistence->registerModule(module, true);  // delayedWriting
   }
 
   // Begin shared routers (one-time setup)
   sharedHttpEndpoint->begin();
   sharedWebSocketServer->begin();
   sharedEventEndpoint->begin();
-// sharedFsPersistence->begin();
+  sharedFsPersistence->begin();
 
 // MoonBase
 #if FT_ENABLED(FT_MOONBASE)
   fileManager.begin();
-  for (Module* module : modules) module->begin();
+  for (Module* module : modules) {
+    module->begin();
+  }
 
   // 🌙
   #if FT_ENABLED(FT_MOONLIGHT)

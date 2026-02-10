@@ -51,7 +51,7 @@ class NodeManager : public Module {
               name.format("/.config/%s.json", _moduleName);
               if (equal(updatedItem.c_str(), name.c_str())) {
                 EXT_LOGV(ML_TAG, " %s updated -> call update %s", name.c_str(), updatedItem.c_str());
-                readFromFS();  // repopulates the state, processing file changes
+                // readFromFS();  // repopulates the state, processing file changes. Comment temporary !!!
               }
               // uint8_t index = 0;
               // for (JsonObject nodeState: _state.data["nodes"].as<JsonArray>()) {

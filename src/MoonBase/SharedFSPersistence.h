@@ -33,11 +33,9 @@ class SharedFSPersistence {
     ModuleInfo() : module(nullptr), delayedWriting(false), hasDelayedWrite(false), updateHandlerId(0) {}
   };
   struct CStrComparator {
-    bool operator()(const char* a, const char* b) const {
-      return strcmp(a, b) < 0;
-    }
+    bool operator()(const char* a, const char* b) const { return strcmp(a, b) < 0; }
   };
-  std::map<const char *, ModuleInfo, CStrComparator> _modules;  // moduleName -> info
+  std::map<const char*, ModuleInfo, CStrComparator> _modules;  // moduleName -> info
 
  public:
   SharedFSPersistence(FS* fs) : _fs(fs) {}
@@ -75,7 +73,12 @@ class SharedFSPersistence {
   void enableUpdateHandler(const char* moduleName) {
     auto it = _modules.find(moduleName);
     if (it != _modules.end() && !it->second.updateHandlerId) {
-      it->second.updateHandlerId = it->second.module->addUpdateHandler([this, module = it->second.module](const String& originId) { writeToFS(module->_moduleName); }, false);
+      it->second.updateHandlerId = it->second.module->addUpdateHandler(
+          [this, module = it->second.module](const String& originId) {
+            ESP_LOGD(SVK_TAG, "writeToFS %s", originId.c_str());
+            writeToFS(module->_moduleName);
+          },
+          false);
     }
   }
 
