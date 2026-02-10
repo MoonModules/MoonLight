@@ -128,10 +128,12 @@ class Module : public StatefulService<ModuleState> {
   void processUpdatedItem(const UpdatedItem& updatedItem, const String& originId) {
     if (updatedItem.name == "swap") {
       onReOrderSwap(updatedItem.index[0], updatedItem.index[1]);
-      saveNeeded = true;
+      if (originId.toInt())
+        saveNeeded = true;
     } else {
-      if (updatedItem.oldValue != "" && updatedItem.name != "channel") {  // todo: fix the problem at channel, not here...
-        if (originId.toInt()) {                                           // Front-end client IDs are numeric; internal origins ("module", etc.) return 0
+      // if (updatedItem.parent[0] != "devices" && updatedItem.parent[0] != "tasks" && updatedItem.name != "core0") EXT_LOGD(ML_TAG, "%s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
+      if (updatedItem.name != "channel") {  // todo: fix the problem at channel, not here...
+        if (originId.toInt()) {             // Front-end client IDs are numeric; internal origins ("module", etc.) return 0
           saveNeeded = true;
         }
       }
