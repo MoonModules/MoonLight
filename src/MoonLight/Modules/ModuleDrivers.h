@@ -118,7 +118,7 @@ class ModuleDrivers : public NodeManager {
         _moduleName);
   }
 
-  Node* addNode(const uint8_t index, const char* name, const JsonArray& controls) const override {
+  Node* addNode(const uint8_t index, char* name, const JsonArray& controls) const override {
     Node* node = nullptr;
 
     // Layouts, most used first
