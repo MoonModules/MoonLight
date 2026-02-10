@@ -15,7 +15,10 @@
 #if FT_MOONLIGHT
 
   #include "MoonBase/Module.h"
+  #include "MoonBase/SharedFSPersistence.h"
   #include "Nodes.h"  //Nodes.h will include VirtualLayer.h which will include PhysicalLayer.h
+
+extern SharedFSPersistence* sharedFsPersistence;
 
 class NodeManager : public Module {
  public:
@@ -51,7 +54,7 @@ class NodeManager : public Module {
               name.format("/.config/%s.json", _moduleName);
               if (equal(updatedItem.c_str(), name.c_str())) {
                 EXT_LOGV(ML_TAG, " %s updated -> call update %s", name.c_str(), updatedItem.c_str());
-                // readFromFS();  // repopulates the state, processing file changes. Comment temporary !!!
+                sharedFsPersistence->readFromFS(_moduleName);  // repopulates the state, processing file changes. Comment temporary !!!
               }
               // uint8_t index = 0;
               // for (JsonObject nodeState: _state.data["nodes"].as<JsonArray>()) {

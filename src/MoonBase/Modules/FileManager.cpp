@@ -13,6 +13,7 @@
 
   #include "FileManager.h"
 
+  #include "MoonBase/SharedFSPersistence.h"
   #include "MoonBase/Utilities.h"
 
 // recursively fill a fileArray with all files and folders on the FS
@@ -55,7 +56,7 @@ void FilesState::read(FilesState& state, JsonObject& stateJson) {
   EXT_LOGI(MB_TAG, "");
 }
 
-StateUpdateResult FilesState::update(JsonObject& newData, FilesState& state, const String &originId) {
+StateUpdateResult FilesState::update(JsonObject& newData, FilesState& state, const String& originId) {
   bool changed = false;
 
   if (newData["showHidden"] != state.showHidden) {
@@ -139,13 +140,13 @@ StateUpdateResult FilesState::update(JsonObject& newData, FilesState& state, con
 }
 
 FileManager::FileManager(PsychicHttpServer* server, ESP32SvelteKit* sveltekit)
-    : _httpEndpoint(FilesState::read, FilesState::update, this, server, "/rest/FileManager", sveltekit->getSecurityManager(), AuthenticationPredicates::IS_AUTHENTICATED),
+    : _httpEndpoint(FilesState::read, FilesState::update, this, server, "/rest/FileManager",  //
+                    sveltekit->getSecurityManager(), AuthenticationPredicates::IS_AUTHENTICATED),
       _eventEndpoint(FilesState::read, FilesState::update, this, sveltekit->getSocket(), "FileManager"),
       _webSocketServer(FilesState::read, FilesState::update, this, server, "/ws/FileManager", sveltekit->getSecurityManager(), AuthenticationPredicates::IS_AUTHENTICATED),
       _socket(sveltekit->getSocket()),
       _server(server),
-      _sveltekit(sveltekit) {
-}
+      _sveltekit(sveltekit) {}
 
 void FileManager::begin() {
   _httpEndpoint.begin();
@@ -160,7 +161,7 @@ void FileManager::begin() {
                   [this](PsychicRequest* request) {
                     request->reply(200);
 
-                    FSPersistence<int>::writeToFSDelayed('W');  // write all delayed writes to the FS
+                    SharedFSPersistence::writeToFSDelayed('W');  // write all delayed writes to the FS
 
                     saveNeeded = false;
 
@@ -172,7 +173,9 @@ void FileManager::begin() {
               _sveltekit->getSecurityManager()->wrapRequest(
                   [this](PsychicRequest* request) {
                     request->reply(200);
-                    FSPersistence<int>::writeToFSDelayed('C');  // read back from FS
+
+                    SharedFSPersistence::writeToFSDelayed('C');  // read back from FS
+
                     // update UI...
 
                     saveNeeded = false;

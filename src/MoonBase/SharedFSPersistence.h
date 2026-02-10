@@ -52,12 +52,13 @@ class SharedFSPersistence {
     info.updateHandlerId = module->addUpdateHandler([this, module](const String& originId) { writeToFS(module->_moduleName); }, false);
 
     _modules[module->_moduleName] = info;
-
-    // Read initial state from filesystem
-    readFromFS(module->_moduleName);
   }
 
   void begin() {
+    // Read initial state from filesystem
+    for (auto& pair : _modules) {
+      readFromFS(pair.first);
+    }
     // All setup happens in registerModule
   }
 
@@ -73,12 +74,7 @@ class SharedFSPersistence {
   void enableUpdateHandler(const char* moduleName) {
     auto it = _modules.find(moduleName);
     if (it != _modules.end() && !it->second.updateHandlerId) {
-      it->second.updateHandlerId = it->second.module->addUpdateHandler(
-          [this, module = it->second.module](const String& originId) {
-            ESP_LOGD(SVK_TAG, "writeToFS %s", originId.c_str());
-            writeToFS(module->_moduleName);
-          },
-          false);
+      it->second.updateHandlerId = it->second.module->addUpdateHandler([this, module = it->second.module](const String& originId) { writeToFS(module->_moduleName); }, false);
     }
   }
 

@@ -323,18 +323,18 @@ void setup() {
     sharedFsPersistence->registerModule(module, true);  // delayedWriting
   }
 
-  // Begin shared routers (one-time setup)
-  sharedHttpEndpoint->begin();
-  sharedWebSocketServer->begin();
-  sharedEventEndpoint->begin();
-  sharedFsPersistence->begin();
-
 // MoonBase
 #if FT_ENABLED(FT_MOONBASE)
   fileManager.begin();
   for (Module* module : modules) {
     module->begin();
   }
+
+  // Begin shared routers (one-time setup)
+  sharedHttpEndpoint->begin();
+  sharedWebSocketServer->begin();
+  sharedEventEndpoint->begin();
+  sharedFsPersistence->begin();
 
   // 🌙
   #if FT_ENABLED(FT_MOONLIGHT)
