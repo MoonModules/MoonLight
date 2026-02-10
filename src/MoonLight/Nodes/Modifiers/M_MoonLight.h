@@ -142,7 +142,7 @@ class PinwheelModifier : public Node {
 
   void modifySize() override {
     if (layer->layerDimension > _1D && layer->effectDimension > _1D) {
-      layer->size.y = sqrt(sq(fl::max<uint8_t>(layer->size.x - layer->middle.x, layer->middle.x)) + sq(fl::max<uint8_t>(layer->size.y - layer->middle.y, layer->middle.y))) + 1;  // Adjust y before x
+      layer->size.y = sqrt(sq(MAX(layer->size.x - layer->middle.x, layer->middle.x)) + sq(MAX(layer->size.y - layer->middle.y, layer->middle.y))) + 1;  // Adjust y before x
       layer->size.x = petals;
       layer->size.z = 1;
     } else {

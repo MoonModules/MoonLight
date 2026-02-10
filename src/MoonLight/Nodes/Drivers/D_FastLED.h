@@ -13,6 +13,9 @@
 
 #if FT_MOONLIGHT
 
+// using the new FastLED channel api
+// https://github.com/FastLED/FastLED/blob/master/src/fl/channels/README.md
+
 class FastLEDDriver : public DriverNode {
  public:
   static const char* name() { return "FastLED Driver"; }
@@ -74,6 +77,15 @@ class FastLEDDriver : public DriverNode {
     moduleControl->addUpdateHandler([this](const String& originId) {
       // brightness changes here?
     });
+
+    // Register event listeners via FastLED
+    auto& events = FastLED.channelEvents();
+
+    // Called when channel is created
+    events.onChannelCreated.add([](const fl::Channel& ch) { EXT_LOGD(ML_TAG, "Channel created: %s", ch.name().c_str()); });
+
+    // Called when channel data is enqueued to engine
+    events.onChannelEnqueued.add([](const fl::Channel& ch, const fl::string& engine) { EXT_LOGD(ML_TAG, "enqueued %s → %s", ch.name().c_str(), engine.c_str()); });
   }
 
   fl::EOrder rgbOrder = GRB;
@@ -282,7 +294,6 @@ class FastLEDDriver : public DriverNode {
       updateControl("status", statusString.c_str());
       moduleNodes->requestUIUpdate = true;
 
-      // https://github.com/FastLED/FastLED/blob/master/src/fl/channels/README.md
       fl::ChipsetTimingConfig timing = fl::makeTimingConfig<fl::TIMING_WS2812_800KHZ>();
       CRGB* leds = (CRGB*)layerP.lights.channelsD;
       uint16_t startLed = 0;
