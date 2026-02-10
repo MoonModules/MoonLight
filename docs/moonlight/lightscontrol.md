@@ -7,7 +7,7 @@ Controls:
 * On: lights on or off
 * Brightness: brightness of the LEDs when on
 * RGB Sliders: control each color separately.
-* Palette: Global palette setting. Effects with the palette icon 🎨 use this palette setting.
+* Palette: Global palette setting used in Effects.
 * Presets: Store the current effects and modifiers or retrieve earlier saved presets. 64 slots available:
     * Blue: Empty preset
     * Green: Saved preset 

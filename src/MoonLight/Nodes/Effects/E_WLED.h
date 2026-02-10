@@ -15,7 +15,7 @@ class BouncingBallsEffect : public Node {
  public:
   static const char* name() { return "Bouncing Balls"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥🎨🐙"; }
+  static const char* tags() { return "🔥🐙"; }
 
   uint8_t grav = 128;
   uint8_t numBalls = 8;
@@ -97,7 +97,7 @@ class BlurzEffect : public Node {
  public:
   static const char* name() { return "Blurz"; }
   static uint8_t dim() { return _3D; }  // test...
-  static const char* tags() { return "🔥🎵🎨☾"; }
+  static const char* tags() { return "🔥🎵☾"; }
 
   // static const char _data_FX_MODE_BLURZ[] PROGMEM = "Blurz Plus ☾@Fade rate,Blur,,,,FreqMap ☾,GEQ Scanner ☾,;!,Color mix;!;01f;sx=48,ix=127,m12=7,si=0"; // Pinwheel, Beatsin
 
@@ -284,7 +284,7 @@ class FreqMatrixEffect : public Node {
         int freqMapped = lowerLimit != upperLimit ? ::map(sharedData.majorPeak, lowerLimit, upperLimit, 0, 255) : sharedData.majorPeak;  // WLEDMM preserve overflows
         uint8_t i = abs(freqMapped) & 0xFF;                                                                                              // WLEDMM we embrace overflow ;-) by "modulo 256"
 
-        color = CHSV(i, 240, (uint8_t)pixVal);  // implicit conversion to RGB supplied by FastLED
+        color = ColorFromPalette(layerP.palette, i, (uint8_t)pixVal);
       }
 
       // shift the pixels one pixel up
@@ -302,7 +302,7 @@ class GEQEffect : public Node {
  public:
   static const char* name() { return "GEQ"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥🎨♫🐙"; }
+  static const char* tags() { return "🔥♫🐙"; }
 
   uint8_t fadeOut = 255;
   uint8_t ripple = 128;
@@ -403,7 +403,7 @@ class GEQEffect : public Node {
       if (previousBarHeight && pos.x < previousBarHeightSize) {
         if (barHeight > previousBarHeight[pos.x]) previousBarHeight[pos.x] = barHeight;                                  // drive the peak up
         if ((ripple > 0) && (previousBarHeight[pos.x] > 0) && (previousBarHeight[pos.x] < layer->size.y))                // WLEDMM avoid "overshooting" into other segments
-          layer->setRGB(Coord3D(pos.x, layer->size.y - previousBarHeight[pos.x]), (CRGB)CHSV(millis() / 50, 255, 255));  // take millis()/50 color for the time being
+          layer->setRGB(Coord3D(pos.x, layer->size.y - previousBarHeight[pos.x]), ColorFromPalette(layerP.palette, millis() / 50));  // take millis()/50 color for the time being
 
         if (rippleTime && previousBarHeight[pos.x] > 0) previousBarHeight[pos.x]--;  // delay/ripple effect
       }
@@ -415,7 +415,7 @@ class LissajousEffect : public Node {
  public:
   static const char* name() { return "Lissajous"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥🎨🐙"; }
+  static const char* tags() { return "🔥🐙"; }
 
   uint8_t xFrequency = 64;
   uint8_t fadeRate = 128;
@@ -446,7 +446,7 @@ class Noise2DEffect : public Node {
  public:
   static const char* name() { return "Noise2D"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥🎨🐙"; }
+  static const char* tags() { return "🔥🐙"; }
 
   uint8_t speed = 8;
   uint8_t scale = 64;
@@ -470,7 +470,7 @@ class NoiseMeterEffect : public Node {
  public:
   static const char* name() { return "Noise Meter"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return "♪🐙🎨"; }
+  static const char* tags() { return "♪🐙"; }
 
   uint8_t fadeRate = 248;
   uint8_t width = 128;
@@ -788,7 +788,7 @@ class AntEffect : public Node {
  public:
   static const char* name() { return "Ants"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return "🔥🎨"; }
+  static const char* tags() { return "🔥"; }
 
   uint8_t antSpeed = 192;
   uint8_t nrOfAnts = MAX_ANTS / 2;
@@ -955,7 +955,7 @@ class TetrixEffect : public Node {
  public:
   static const char* name() { return "Tetrix"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥🐙🎨"; }  // use emojis see https://moonmodules.org/MoonLight/moonlight/overview/#emoji-coding, 🔥 for effect, 🎨 if palette used (recommended)
+  static const char* tags() { return "🔥🐙"; }
 
   uint8_t speedControl = 0;  // 1 beat per second
   uint8_t width = 0;
@@ -1060,7 +1060,7 @@ class PopCornEffect : public Node {
  public:
   static const char* name() { return "PopCorn"; }
   static uint8_t dim() { return _1D; }  // 2D-ish? check latest in WLED...
-  static const char* tags() { return "♪🎨🐙"; }
+  static const char* tags() { return "♪🐙"; }
 
   uint8_t speed = 128;
   uint8_t numPopcorn = maxNumPopcorn / 2;
@@ -1136,7 +1136,7 @@ class WaverlyEffect : public Node {
  public:
   static const char* name() { return "Waverly"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥♪🎨🐙"; }
+  static const char* tags() { return "🔥♪🐙"; }
 
   uint8_t fadeRate = 128;
   uint8_t amplification = 30;
@@ -1181,7 +1181,7 @@ class BlackholeEffect : public Node {
  public:
   static const char* name() { return "Blackhole"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥🎨⏳🐙"; }
+  static const char* tags() { return "🔥⏳🐙"; }
 
   uint8_t fadeRate = 128;    // speed
   uint8_t outerYfreq = 128;  // intensity
@@ -1581,7 +1581,7 @@ class FunkyPlankEffect : public Node {
 
         int hue = sharedData.bands[map(band, 0, bands - 1, 0, NUM_GEQ_CHANNELS - 1)];
         int v = ::map(hue, 0, 255, 10, 255);
-        layer->setRGB(Coord3D(posx, 0), CHSV(hue, 255, v));
+        layer->setRGB(Coord3D(posx, 0), ColorFromPalette(layerP.palette, hue, v));
       }
 
       // drip down:
@@ -1986,8 +1986,8 @@ class DJLightEffect : public Node {
 class ColorTwinkleEffect : public Node {
  public:
   static const char* name() { return "ColorTwinkle"; }
-  static uint8_t dim() { return _3D; }            // Dimensions supported _3D prefered, _2D or _1D can be used for first phase
-  static const char* tags() { return "🔥🎨⏳"; }  // use emojis see https://moonmodules.org/MoonLight/moonlight/overview/#emoji-coding, 🔥 for effect, 🎨 if palette used (recommended)
+  static uint8_t dim() { return _3D; }         
+  static const char* tags() { return "🔥⏳"; } 
 
   uint8_t fadeSpeed = 128;
   uint8_t spawnSpeed = 128;
@@ -2066,7 +2066,7 @@ class PlasmaEffect : public Node {
  public:
   static const char* name() { return "Plasma"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return "🔥🎨"; }
+  static const char* tags() { return "🔥"; }
 
   uint8_t speed = 60;
   uint8_t intensity = 128;
@@ -2098,7 +2098,7 @@ class JuliaEffect : public Node {
  public:
   static const char* name() { return "Julia"; }
   static uint8_t dim() { return _3D; }
-  static const char* tags() { return "🔥🎨"; }
+  static const char* tags() { return "🔥"; }
 
   uint8_t speed = 60;       // 1 beat per second
   uint8_t iterations = 64;  // 24;

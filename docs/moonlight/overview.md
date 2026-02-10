@@ -125,7 +125,6 @@ Contact us in the MoonLight channels on [Discord MoonModules](https://discord.gg
 Effects, Modifiers, Layouts and drivers use emoji's to visualize their usage. See below for an overview:
 
 * 🔥 Effect
-    * 🎨 Using palette
     * 🐙 WLED origin
     * 💫 MoonLight origin
     * ⚡️ FastLED origin
