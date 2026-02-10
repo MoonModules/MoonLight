@@ -106,6 +106,7 @@ class ModuleDrivers : public NodeManager {
     addControlValue(control, getNameAndTags<ArtNetOutDriver>());
     addControlValue(control, getNameAndTags<AudioSyncDriver>());
     addControlValue(control, getNameAndTags<IRDriver>());
+    addControlValue(control, getNameAndTags<MPU6050Driver>());
     addControlValue(control, getNameAndTags<HUB75Driver>());
 
     // board preset specific
@@ -143,6 +144,7 @@ class ModuleDrivers : public NodeManager {
     if (!node) node = checkAndAlloc<ArtNetOutDriver>(name);
     if (!node) node = checkAndAlloc<AudioSyncDriver>(name);
     if (!node) node = checkAndAlloc<IRDriver>(name);
+    if (!node) node = checkAndAlloc<MPU6050Driver>(name);
     if (!node) node = checkAndAlloc<HUB75Driver>(name);
 
     // board preset specific

@@ -264,6 +264,7 @@ class NodeManager : public Module {
           if (nodeClass != nullptr) {
             nodeClass->on = updatedItem.value.as<bool>();  // set nodeclass on/off
             // EXT_LOGD(ML_TAG, "  nodeclass 🔘:%d 🚥:%d 💎:%d", nodeClass->on, nodeClass->hasOnLayout(), nodeClass->hasModifier());
+            nodeClass->onUpdate(updatedItem.oldValue, nodeState);  // custom onUpdate for the node
             nodeClass->requestMappings();
           } else
             EXT_LOGW(ML_TAG, "Nodeclass %s not found", nodeState["name"].as<const char*>());

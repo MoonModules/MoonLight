@@ -1177,11 +1177,7 @@ class ParticlesEffect : public Node {
   uint8_t speed = 15;
   uint8_t numParticles = 10;
   bool barriers = false;
-  #ifdef STARBASE_USERMOD_MPU6050
-  bool gyro = true;
-  #else
   bool gyro = false;
-  #endif
   bool randomGravity = true;
   uint8_t gravityChangeInterval = 5;
   // bool debugPrint    = layer->effectData.read<bool>();
@@ -1191,9 +1187,7 @@ class ParticlesEffect : public Node {
     addControl(speed, "speed", "slider", 0, 30);
     addControl(numParticles, "number of Particles", "slider", 1, 255);
     addControl(barriers, "barriers", "checkbox");
-  #ifdef STARBASE_USERMOD_MPU6050
     addControl(gyro, "gyro", "checkbox");
-  #endif
     addControl(randomGravity, "randomGravity", "checkbox");
     addControl(gravityChangeInterval, "gravityChangeInterval", "slider", 1, 10);
     // addControl(bool, "Debug Print",             layer->effectData.write<bool>(0));
@@ -1256,18 +1250,16 @@ class ParticlesEffect : public Node {
 
     float gravityX, gravityY, gravityZ;  // Gravity if using gyro or random gravity
 
-  #ifdef STARBASE_USERMOD_MPU6050
     if (gyro) {
-      gravity[0] = -mpu6050->gravityVector.x;
-      gravity[1] = mpu6050->gravityVector.z;  // Swap Y and Z axis
-      gravity[2] = -mpu6050->gravityVector.y;
+      gravity[0] = -sharedData.gravity.x;
+      gravity[1] = sharedData.gravity.z;  // Swap Y and Z axis
+      gravity[2] = -sharedData.gravity.y;
 
       if (layer->layerDimension == _2D) {  // Swap back Y and Z axis set Z to 0
         gravity[1] = -gravity[2];
         gravity[2] = 0;
       }
     }
-  #endif
 
     if (randomGravity) {
       if (pal::millis() - gravUpdate > gravityChangeInterval * 1000) {
