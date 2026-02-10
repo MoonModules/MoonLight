@@ -33,11 +33,9 @@ class SharedFSPersistence {
     ModuleInfo() : module(nullptr), delayedWriting(false), hasDelayedWrite(false), updateHandlerId(0) {}
   };
   struct CStrComparator {
-    bool operator()(const char* a, const char* b) const {
-      return strcmp(a, b) < 0;
-    }
+    bool operator()(const char* a, const char* b) const { return strcmp(a, b) < 0; }
   };
-  std::map<const char *, ModuleInfo, CStrComparator> _modules;  // moduleName -> info
+  std::map<const char*, ModuleInfo, CStrComparator> _modules;  // moduleName -> info
 
  public:
   SharedFSPersistence(FS* fs) : _fs(fs) {}
@@ -54,12 +52,13 @@ class SharedFSPersistence {
     info.updateHandlerId = module->addUpdateHandler([this, module](const String& originId) { writeToFS(module->_moduleName); }, false);
 
     _modules[module->_moduleName] = info;
-
-    // Read initial state from filesystem
-    readFromFS(module->_moduleName);
   }
 
   void begin() {
+    // Read initial state from filesystem
+    for (auto& pair : _modules) {
+      readFromFS(pair.first);
+    }
     // All setup happens in registerModule
   }
 

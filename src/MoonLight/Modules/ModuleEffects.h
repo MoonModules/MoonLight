@@ -173,7 +173,7 @@ class ModuleEffects : public NodeManager {
     rootFolder.close();
   }
 
-  Node* addNode(const uint8_t index, const char* name, const JsonArray& controls) const override {
+  Node* addNode(const uint8_t index, char* name, const JsonArray& controls) const override {
     Node* node = nullptr;
 
     // MoonLight effects, Solid first then alphabetically

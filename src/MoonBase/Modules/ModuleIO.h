@@ -129,7 +129,7 @@ class ModuleIO : public Module {
     addControlValue(control, "Yves V48 🚧");
     addControlValue(control, "Troy P4 Nano 🚧");
     addControlValue(control, "Atom S3R");
-    addControlValue(control, "Luxceo Mood1 Xiao Mod 🚧");
+    addControlValue(control, "Luxceo Mood1 Xiao Mod");
     addControlValue(control, "Cube202010 🚧");
 
     control = addControl(controls, "modded", "checkbox");
@@ -419,7 +419,7 @@ class ModuleIO : public Module {
       // pinAssigner.assignPin(32, pin_Exposed;
     } else if (boardID == board_QuinLEDDigOctaV2) {
       // Dig-Octa-32-8L
-      newState["maxPower"] = 400;                        // 10A Fuse * 8 ... 400 W
+      newState["maxPower"] = 400;                      // 10A Fuse * 8 ... 400 W
       uint8_t ledPins[] = {0, 1, 2, 3, 4, 5, 12, 13};  // LED_PINS
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
       pinAssigner.assignPin(33, pin_Relay);
@@ -466,7 +466,7 @@ class ModuleIO : public Module {
 
       // pinAssigner.assignPin(?, pin_Temperature); // todo: check temp pin
     } else if (boardID == board_MHCV43) {    // https://shop.myhome-control.de/ABC-WLED-Controller-Board-5-24V/HW10015
-      newState["maxPower"] = 75;               // 15A Fuse @ 5V
+      newState["maxPower"] = 75;             // 15A Fuse @ 5V
       uint8_t ledPins[] = {12, 13, 16, 18};  // 4 LED_PINS
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
       pinAssigner.assignPin(32, pin_I2S_SD);
@@ -476,7 +476,7 @@ class ModuleIO : public Module {
       uint8_t exposedPins[] = {4, 5, 17, 19, 21, 22, 23, 25, 26, 27, 33};
       for (uint8_t gpio : exposedPins) pinAssigner.assignPin(gpio, pin_Exposed);  // Ethernet Pins
     } else if (boardID == board_MHCP4NanoV1) {                                    // https://shop.myhome-control.de/ABC-WLED-ESP32-P4-Shield/HW10027
-      newState["maxPower"] = 100;                                                   // Assuming decent LED power!!
+      newState["maxPower"] = 100;                                                 // Assuming decent LED power!!
 
       if (_state.data["switch1"]) {                         // on: 8 LED Pins + RS485 + Dig Input
         uint8_t ledPins[] = {21, 20, 25, 5, 7, 23, 8, 27};  // 8 LED pins in this order
@@ -510,7 +510,7 @@ class ModuleIO : public Module {
     } else if (boardID == board_YvesV48) {
       pinAssigner.assignPin(3, pin_LED);
     } else if (boardID == board_TroyP4Nano) {
-      newState["maxPower"] = 10;                                                          // USB compliant
+      newState["maxPower"] = 10;                                                        // USB compliant
       uint8_t ledPins[] = {2, 3, 4, 5, 6, 20, 21, 22, 23, 26, 27, 32, 33, 36, 47, 48};  // LED_PINS
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
       pinAssigner.assignPin(7, pin_I2C_SDA);
@@ -545,7 +545,19 @@ class ModuleIO : public Module {
       uint8_t ledPins[] = {22, 21, 14, 18, 5, 4, 2, 15, 13, 12};  // LED_PINS, only 10 until now, rest is WIP
                                                                   // char pins[80] = "2,3,4,16,17,18,19,21,22,23,25,26,27,32,33";  //(D0), more pins possible. to do: complete list.
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
-    } else {                    // default
+    } else if (boardID == board_LuxceoMood1XiaoMod) {
+      newState["maxPower"] = 50;
+      uint8_t ledPins[] = {1, 2, 3, 4};
+      for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
+      pinAssigner.assignPin(5, pin_I2C_SDA);
+      pinAssigner.assignPin(6, pin_I2C_SCL);
+      pinAssigner.assignPin(7, pin_SPI_SCK);
+      pinAssigner.assignPin(8, pin_SPI_MISO);
+      pinAssigner.assignPin(9, pin_SPI_MOSI);
+      pinAssigner.assignPin(43, pin_Serial_TX);
+      pinAssigner.assignPin(44, pin_Serial_RX);
+
+    } else {                      // default
       newState["maxPower"] = 10;  // USB compliant
   #ifdef CONFIG_IDF_TARGET_ESP32P4
       pinAssigner.assignPin(37, pin_LED);  // p4-nano dpesn't like pin16

@@ -261,8 +261,8 @@ StateUpdateResult ModuleState::update(JsonObject& newData, ModuleState& state, c
 }
 
 Module::Module(const char* moduleName, PsychicHttpServer* server, ESP32SvelteKit* sveltekit)
-    : _socket(sveltekit->getSocket()),
-      _fsPersistence(ModuleState::read, ModuleState::update, this, sveltekit->getFS(), (String("/.config/") + moduleName + ".json").c_str(), true)  // 🌙 true: delayedWrites
+    : _socket(sveltekit->getSocket())
+      // _fsPersistence(ModuleState::read, ModuleState::update, this, sveltekit->getFS(), (String("/.config/") + moduleName + ".json").c_str(), true)  // 🌙 true: delayedWrites
 {
   _moduleName = (moduleName && moduleName[0] != '\0') ? moduleName : "unnamed";
 
@@ -277,7 +277,7 @@ Module::Module(const char* moduleName, PsychicHttpServer* server, ESP32SvelteKit
 void Module::begin() {
   EXT_LOGV(MB_TAG, "");
 
-  _fsPersistence.readFromFS();  // overwrites the default settings in state
+  // _fsPersistence.readFromFS();  // overwrites the default settings in state
 
   // no virtual functions in constructor so this is in begin()
   _state.setupDefinition = [&](const JsonArray& controls) {

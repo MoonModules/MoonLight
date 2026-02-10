@@ -15,7 +15,10 @@
 #if FT_MOONLIGHT
 
   #include "MoonBase/Module.h"
+  #include "MoonBase/SharedFSPersistence.h"
   #include "Nodes.h"  //Nodes.h will include VirtualLayer.h which will include PhysicalLayer.h
+
+extern SharedFSPersistence* sharedFsPersistence;
 
 class NodeManager : public Module {
  public:
@@ -51,7 +54,7 @@ class NodeManager : public Module {
               name.format("/.config/%s.json", _moduleName);
               if (equal(updatedItem.c_str(), name.c_str())) {
                 EXT_LOGV(ML_TAG, " %s updated -> call update %s", name.c_str(), updatedItem.c_str());
-                readFromFS();  // repopulates the state, processing file changes
+                sharedFsPersistence->readFromFS(_moduleName);  // repopulates the state, processing file changes. Comment temporary !!!
               }
               // uint8_t index = 0;
               // for (JsonObject nodeState: _state.data["nodes"].as<JsonArray>()) {
@@ -79,11 +82,12 @@ class NodeManager : public Module {
 
   virtual void addNodes(const JsonObject& control) {}
 
-  virtual Node* addNode(const uint8_t index, const char* name, const JsonArray& controls) const { return nullptr; }
+  virtual Node* addNode(const uint8_t index, char* name, const JsonArray& controls) const { return nullptr; }
 
   template <typename T>
-  Node* checkAndAlloc(const char* name) const {
+  Node* checkAndAlloc(char* name) const {
     if (equalAZaz09(name, T::name())) {
+      strlcpy(name, getNameAndTags<T>().c_str(), 32);  // if the non AZaz09 part of the name changed, reassign the right name
       return allocMBObject<T>();
     } else
       return nullptr;
@@ -170,7 +174,10 @@ class NodeManager : public Module {
             }
           }
 
-          Node* nodeClass = addNode(updatedItem.index[0], updatedItem.value, nodeState["controls"]);  // set controls to valid
+          char name[32];
+          strlcpy(name, updatedItem.value, 32);
+          Node* nodeClass = addNode(updatedItem.index[0], name, nodeState["controls"]);  // set controls to valid
+          if (updatedItem.value != name) nodeState["name"] = name;                       //  if the non AZaz09 part of the name changed, reassign the right name
 
           // remove invalid controls
           // Iterate backwards to avoid index shifting issues

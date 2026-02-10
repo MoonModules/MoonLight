@@ -45,7 +45,7 @@ class StarSkyEffect : public Node {
  public:
   static const char* name() { return "Star Sky"; }
   static uint8_t dim() { return _3D; }
-  static const char* tags() { return "🔥🎨"; }
+  static const char* tags() { return "🔥"; }
 
   // control variables
   uint8_t star_speed = 1;
@@ -245,7 +245,7 @@ class RandomEffect : public Node {
  public:
   static const char* name() { return "Random"; }
   static uint8_t dim() { return _3D; }
-  static const char* tags() { return "🔥🎨"; }
+  static const char* tags() { return "🔥"; }
 
   uint8_t fade = 70;
   void setup() { addControl(fade, "fade", "slider"); }
@@ -281,7 +281,7 @@ class RipplesEffect : public Node {
         float d = distance(layer->size.x / 2.0f, layer->size.z / 2.0f, 0.0f, (float)pos.x, (float)pos.z, 0.0f) / 9.899495f * layer->size.y;
         pos.y = floor(layer->size.y / 2.0f * (1 + sinf(d / ripple_interval + time_interval)));  // between 0 and layer->size.y
 
-        layer->setRGB(pos, (CRGB)CHSV(pal::millis() / 50 + random8(64), 200, 255));
+        layer->setRGB(pos, ColorFromPalette(layerP.palette, pal::millis() / 50 + random8(64)));
       }
     }
   }
@@ -430,7 +430,7 @@ class SinusEffect : public Node {
       // Map the sine wave value to a color hue
       uint8_t hue = wave + hueOffset;
       // Set the LED color using the calculated hue
-      layer->setRGB(i, (CRGB)CHSV(hue, 255, brightness));
+      layer->setRGB(i, ColorFromPalette(layerP.palette, hue, brightness));
     }
 
     // Increment the phase to animate the wave
@@ -467,7 +467,7 @@ class SphereMoveEffect : public Node {
           float d = distance(pos.x, pos.y, pos.z, origin.x, origin.y, origin.z);
 
           if (d > diameter && d < diameter + 1.0) {
-            layer->setRGB(pos, (CRGB)CHSV(pal::millis() / 50 + random8(64), 200, 255));
+            layer->setRGB(pos, ColorFromPalette(layerP.palette, pal::millis() / 50 + random8(64)));
           }
         }
       }
@@ -480,7 +480,7 @@ class StarFieldEffect : public Node {  // Inspired by Daniel Shiffman's Coding T
  public:
   static const char* name() { return "StarField"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥🎨"; }
+  static const char* tags() { return "🔥"; }
 
   struct Star {
     int x, y, z;
@@ -554,7 +554,7 @@ class PraxisEffect : public Node {
  public:
   static const char* name() { return "Praxis"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥🎨"; }
+  static const char* tags() { return "🔥"; }
 
   uint8_t macroMutatorFreq = 3;
   uint8_t macroMutatorMin = 250;
@@ -623,7 +623,7 @@ class WaveEffect : public Node {
   void loop() override {
     layer->fadeToBlackBy(fade);  // should only fade rgb ...
 
-    CRGB color = CHSV(pal::millis() / 50, 255, 255);
+    CRGB color = ColorFromPalette(layerP.palette, pal::millis() / 50);
 
     int prevPos = layer->size.y / 2;  // somewhere in the middle
 
@@ -671,7 +671,7 @@ class FreqSawsEffect : public Node {
  public:
   static const char* name() { return "Frequency Saws"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥♫🎨🪚"; }
+  static const char* tags() { return "🔥♫🪚"; }
 
   uint8_t fade = 4;
   uint8_t increaser = 211;
@@ -1071,7 +1071,7 @@ class ParticlesEffect : public Node {
  public:
   static const char* name() { return "Particles"; }
   static uint8_t dim() { return _3D; }
-  static const char* tags() { return "🔥💫🧭🎨"; }
+  static const char* tags() { return "🔥💫🧭"; }
 
   struct Particle {
     float x, y, z;
@@ -1307,7 +1307,7 @@ class MoonManEffect : public Node {
  public:
   static const char* name() { return "Moon Man"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥🎵🎨☾"; }
+  static const char* tags() { return "🔥🎵☾"; }
 
   // Create an M5Canvas for PNG processing
   M5Canvas* canvas;  //(&M5.Display);
@@ -1372,7 +1372,7 @@ class SpiralFireEffect : public Node {
  public:
   static const char* name() { return "Spiral Fire"; }
   static uint8_t dim() { return _3D; }
-  static const char* tags() { return "🔥🎨⏳"; }
+  static const char* tags() { return "🔥⏳"; }
 
   uint8_t speed = 60;
   uint8_t intensity = 180;
@@ -1615,7 +1615,7 @@ class PixelMapEffect : public Node {
   void loop() override {
     layer->fill_solid(CRGB::Black);
 
-    layer->setRGB(pos, CHSV(pal::millis() / 50 + random8(64), 255, 255));  // ColorFromPalette(layerP.palette,call, bri);
+    layer->setRGB(pos, ColorFromPalette(layerP.palette, pal::millis() / 50 + random8(64)));
   }
 };  // PixelMap
 
@@ -1696,7 +1696,7 @@ class RingRandomFlowEffect : public RingEffect {
     if (hue) {
       hue[0] = random(0, 255);
       for (int r = 0; r < hueSize; r++) {
-        setRing(r, CHSV(hue[r], 255, 255));
+        setRing(r, ColorFromPalette(layerP.palette, hue[r]));
       }
       for (int r = (hueSize - 1); r >= 1; r--) {
         hue[r] = hue[(r - 1)];  // set this ruing based on the inner

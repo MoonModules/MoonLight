@@ -223,15 +223,15 @@ static int custom_vprintf(const char* fmt, va_list args) {
 
 std::vector<Module*> modules;
 #include "MoonBase/SharedEventEndpoint.h"
+#include "MoonBase/SharedFSPersistence.h"
 #include "MoonBase/SharedHttpEndpoint.h"
 #include "MoonBase/SharedWebSocketServer.h"
-// #include "MoonBase/SharedFSPersistence.h"
 
 // ADDED: Shared routers (one instance each)
 SharedHttpEndpoint* sharedHttpEndpoint = nullptr;
 SharedWebSocketServer* sharedWebSocketServer = nullptr;
 SharedEventEndpoint* sharedEventEndpoint = nullptr;
-// SharedFSPersistence* sharedFsPersistence = nullptr;
+SharedFSPersistence* sharedFsPersistence = nullptr;
 
 void setup() {
 #ifdef USE_ESP_IDF_LOG  // 🌙
@@ -252,7 +252,7 @@ void setup() {
   }
 
   //   // check sizes ...
-  //   sizeof(esp32sveltekit);                // 4152
+  //   sizeof(esp32sveltekit);                // 4152 -> 4376
   //   sizeof(WiFiSettingsService);           // 456
   //   sizeof(SystemStatus);                  // 16
   //   sizeof(UploadFirmwareService);         // 32
@@ -260,29 +260,29 @@ void setup() {
   //   sizeof(EventEndpoint<ModuleState>);    // 112
   //   sizeof(SharedEventEndpoint);           // 8
   //   sizeof(WebSocketServer<ModuleState>);  // 488
-  //   sizeof(SharedWebSocketServer);         // 352
+  //   sizeof(SharedWebSocketServer);         // 352 -> 432
   //   sizeof(FSPersistence<ModuleState>);    // 128
   //   sizeof(PsychicHttpServer*);            // 8
   //   sizeof(HttpEndpoint<APSettings>);      // 152
-  //   sizeof(SharedHttpEndpoint);            // 16
+  //   sizeof(SharedHttpEndpoint);            // 16 -> 48
   //   sizeof(FSPersistence<APSettings>);     // 128
   //   sizeof(APSettingsService);             // 600;
   //   sizeof(PsychicWebSocketHandler);       // 336
   //   sizeof(fileManager);                   // 864
-  //   sizeof(Module);                        // 1144 -> 472
-  //   sizeof(moduleDevices);                 // 1320
-  //   sizeof(moduleIO);                      // 1144
+  //   sizeof(Module);                        // 1144 -> 472 -> 208 !
+  //   sizeof(moduleDevices);                 // 1320 -> 392
+  //   sizeof(moduleIO);                      // 1144 -> 240
   // #if FT_ENABLED(FT_MOONLIGHT)
-  //   sizeof(moduleEffects);        // 1208
-  //   sizeof(moduleDrivers);        // 1216
-  //   sizeof(moduleLightsControl);  // 1176
+  //   sizeof(moduleEffects);        // 1208 -> 264
+  //   sizeof(moduleDrivers);        // 1216 -> 288
+  //   sizeof(moduleLightsControl);  // 1176 -> 296
   //   #if FT_ENABLED(FT_LIVESCRIPT)
-  //   sizeof(moduleLiveScripts);  // 1176
+  //   sizeof(moduleLiveScripts);  // 1176 -> 240
   //   #endif
-  //   sizeof(moduleChannels);        // 1144
-  //   sizeof(moduleMoonLightInfo);   // 1144
-  //   sizeof(layerP.lights);         // 56
-  //   sizeof(layerP.lights.header);  // 40
+  //   sizeof(moduleChannels);        // 1144 -> 208
+  //   sizeof(moduleMoonLightInfo);   // 1144 -> 208
+  //   sizeof(layerP.lights);         // 56 -> 96
+  //   sizeof(layerP.lights.header);  // 40 -> 64
   // #endif
 
   // start ESP32-SvelteKit
@@ -292,8 +292,8 @@ void setup() {
   sharedHttpEndpoint = new SharedHttpEndpoint(&server, esp32sveltekit.getSecurityManager());
   sharedWebSocketServer = new SharedWebSocketServer(&server, esp32sveltekit.getSecurityManager());
   sharedEventEndpoint = new SharedEventEndpoint(esp32sveltekit.getSocket());
-  // sharedFsPersistence = new SharedFSPersistence(esp32sveltekit.getFS());
-  if (!sharedHttpEndpoint || !sharedWebSocketServer || !sharedEventEndpoint) {
+  sharedFsPersistence = new SharedFSPersistence(esp32sveltekit.getFS());
+  if (!sharedHttpEndpoint || !sharedWebSocketServer || !sharedEventEndpoint || !sharedFsPersistence) {
     EXT_LOGE(ML_TAG, "dev: Failed to allocate shared routers");
     return;
   }
@@ -301,7 +301,6 @@ void setup() {
   modules.reserve(12);  // Adjust based on actual module count
   modules.push_back(&moduleTasks);
   modules.push_back(&moduleIO);
-// modules.push_back(&fileManager);
 
 // MoonLight
 #if FT_ENABLED(FT_MOONLIGHT)
@@ -321,19 +320,21 @@ void setup() {
     sharedHttpEndpoint->registerModule(module);
     sharedWebSocketServer->registerModule(module);
     sharedEventEndpoint->registerModule(module);
-    // sharedFsPersistence->registerModule(module);
+    sharedFsPersistence->registerModule(module, true);  // delayedWriting
+  }
+
+// MoonBase
+#if FT_ENABLED(FT_MOONBASE)
+  fileManager.begin();
+  for (Module* module : modules) {
+    module->begin();
   }
 
   // Begin shared routers (one-time setup)
   sharedHttpEndpoint->begin();
   sharedWebSocketServer->begin();
   sharedEventEndpoint->begin();
-// sharedFsPersistence->begin();
-
-// MoonBase
-#if FT_ENABLED(FT_MOONBASE)
-  fileManager.begin();
-  for (Module* module : modules) module->begin();
+  sharedFsPersistence->begin();
 
   // 🌙
   #if FT_ENABLED(FT_MOONLIGHT)

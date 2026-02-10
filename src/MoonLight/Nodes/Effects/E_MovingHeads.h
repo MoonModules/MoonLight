@@ -27,7 +27,7 @@ class Troy1ColorEffect : public Node {
         layer->setRGB(x, CRGB(sharedData.bands[NUM_GEQ_CHANNELS - 1], sharedData.bands[7], sharedData.bands[0]));
         layer->setBrightness(x, (sharedData.bands[0] > 200) ? 0 : layerP.lights.header.brightness);
       } else {
-        layer->setRGB(x, CHSV(beatsin8(10), 255, 255));
+        layer->setRGB(x, ColorFromPalette(layerP.palette, beatsin8(10)));
         // layer->setBrightness(x, layerP.lights.header.brightness); // done automatically
       }
     }
@@ -159,7 +159,7 @@ class Troy2ColorEffect : public Node {
           layer->setBrightness(x, 0);
         }
       } else {
-        layer->setRGB(x, CHSV(beatsin8(10), 255, 255));
+        layer->setRGB(x, ColorFromPalette(layerP.palette, beatsin8(10)));
         // layer->setBrightness(x, layerP.lights.header.brightness); // done automatically
       }
     }
@@ -270,14 +270,14 @@ class FreqColorsEffect : public Node {
         uint8_t delta = 256 / nrOfLights;
 
         // set the 3 LED groups for each moving head light
-        layer->setRGB({x, 0, 0}, CHSV((x)*delta, 255, sharedData.bands[(x * 3) % 16]));
-        layer->setRGB1({x, 0, 0}, CHSV((x + 3) * delta, 255, sharedData.bands[(x * 3 + 1) % 16]));
-        layer->setRGB2({x, 0, 0}, CHSV((x + 6) * delta, 255, sharedData.bands[(x * 3 + 2) % 16]));
+        layer->setRGB({x, 0, 0}, ColorFromPalette(layerP.palette, (x)*delta, sharedData.bands[(x * 3) % 16]));
+        layer->setRGB1({x, 0, 0}, ColorFromPalette(layerP.palette, (x + 3) * delta, sharedData.bands[(x * 3 + 1) % 16]));
+        layer->setRGB2({x, 0, 0}, ColorFromPalette(layerP.palette, (x + 6) * delta, sharedData.bands[(x * 3 + 2) % 16]));
       } else {
         if (x == beatsin8(bpm, 0, layer->size.x - 1)) {             // sinelon over moving heads
-          layer->setRGB({x, 0, 0}, CHSV(beatsin8(10), 255, 255));   // colorwheel 10 times per minute
-          layer->setRGB1({x, 0, 0}, CHSV(beatsin8(10), 255, 255));  // colorwheel 10 times per minute
-          layer->setRGB2({x, 0, 0}, CHSV(beatsin8(10), 255, 255));  // colorwheel 10 times per minute
+          layer->setRGB({x, 0, 0}, ColorFromPalette(layerP.palette, beatsin8(10)));   // colorwheel 10 times per minute
+          layer->setRGB1({x, 0, 0}, ColorFromPalette(layerP.palette, beatsin8(10)));  // colorwheel 10 times per minute
+          layer->setRGB2({x, 0, 0}, ColorFromPalette(layerP.palette, beatsin8(10)));  // colorwheel 10 times per minute
         }
       }
 

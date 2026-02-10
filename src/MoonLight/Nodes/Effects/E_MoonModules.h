@@ -18,7 +18,7 @@ class GameOfLifeEffect : public Node {
  public:
   static const char* name() { return "Game Of Life"; }
   static uint8_t dim() { return _3D; }  // supports 3D but also 2D (1D as well?)
-  static const char* tags() { return "🔥💫🎨"; }
+  static const char* tags() { return "🔥💫"; }
 
   void placePentomino(uint8_t* futureCells, bool colorByAge) {
     uint8_t pattern[5][2] = {{1, 0}, {0, 1}, {1, 1}, {2, 1}, {2, 2}};  // R-pentomino
@@ -520,7 +520,7 @@ class PaintBrushEffect : public Node {
  public:
   static const char* name() { return "Paintbrush"; }
   static uint8_t dim() { return _3D; }
-  static const char* tags() { return "🔥🎨♫🐺"; }
+  static const char* tags() { return "🔥♫🐺"; }
 
   uint8_t oscillatorOffset = 6 * 160 / 255;
   uint8_t numLines = 255;
