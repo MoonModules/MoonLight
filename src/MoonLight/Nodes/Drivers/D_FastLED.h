@@ -24,6 +24,7 @@ class FastLEDDriver : public DriverNode {
 
   char version[20] = TOSTRING(FASTLED_VERSION);  // "." TOSTRING(FASTLED_VERSION_MINOR) "." TOSTRING(FASTLED_VERSION_PATCH);
   Char<32> status = "ok";
+  Char<32> engine = "";
   // #if CONFIG_IDF_TARGET_ESP32S3
   // uint8_t affinity = 2;  // I2S
   // #elif CONFIG_IDF_TARGET_ESP32P4
@@ -46,6 +47,7 @@ class FastLEDDriver : public DriverNode {
   #if CONFIG_IDF_TARGET_ESP32P4
     addControlValue("Parlio");
   #endif
+    addControl(engine, "engine", "text", 0, 32, true); // the resolved engine based on affinity
 
     addControl(temperature, "temperature", "select");
     addControlValue("Uncorrected");
@@ -85,7 +87,13 @@ class FastLEDDriver : public DriverNode {
     events.onChannelCreated.add([](const fl::Channel& ch) { EXT_LOGD(ML_TAG, "Channel created: %s", ch.name().c_str()); });
 
     // Called when channel data is enqueued to engine
-    events.onChannelEnqueued.add([](const fl::Channel& ch, const fl::string& engine) { EXT_LOGD(ML_TAG, "enqueued %s → %s", ch.name().c_str(), engine.c_str()); });
+    events.onChannelEnqueued.add([this](const fl::Channel& ch, const fl::string& engine) {
+      if (ch.name() == "Channel_0" && engine != this->engine.c_str()) { // only the first channel for the time being (maybe later we allow for different channels with different engines)
+        EXT_LOGD(ML_TAG, "Resolved engine %s → %s", ch.name().c_str(), engine.c_str());
+        updateControl("engine", engine.c_str());
+        moduleNodes->requestUIUpdate = true;
+      }
+    });
   }
 
   fl::EOrder rgbOrder = GRB;
@@ -308,9 +316,6 @@ class FastLEDDriver : public DriverNode {
 
         FastLED.add(channel);
         channels.push_back(channel);
-
-        fl::IChannelEngine* engine = channel->getChannelEngine();
-        EXT_LOGD(ML_TAG, "Resolved engine: %s", engine->getName().c_str());
 
         // FastLED.addLeds<WS2812, 16, GRB>(leds, layerP.ledsPerPin[pinIndex]);  // this works!!! (but this is static)
 
