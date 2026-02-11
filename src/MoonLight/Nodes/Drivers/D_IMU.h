@@ -23,7 +23,6 @@ class IMUDriver : public Node {
 
   Coord3D gyro;  // in degrees (not radians)
   Coord3D accell;
-  VectorFloat gravityVector;
   uint8_t board = 0;
 
   void setup() override {
@@ -47,7 +46,7 @@ class IMUDriver : public Node {
           if (board == 0) {  // MPU6050
             mpu.initialize();
 
-            delay(100);
+            // delay(100);
 
             // verify connection
             if (mpu.testConnection()) {
@@ -70,20 +69,16 @@ class IMUDriver : public Node {
                 // 1 = initial memory load failed
                 // 2 = DMP configuration updates failed
                 // (if it's going to break, usually the code will be 1)
-                EXT_LOGI(ML_TAG, "DMP Initialization failed (code %d)", devStatus);
+                EXT_LOGW(ML_TAG, "DMP Initialization failed (code %d)", devStatus);
               }
             } else
-              EXT_LOGI(ML_TAG, "Testing device connections MPU6050 connection failed");
+              EXT_LOGW(ML_TAG, "Testing device connections MPU6050 connection failed");
           }
         }
       }
     }
   }
 
-  bool hasOnLayout() const override { return true; }  // so the mapping system knows this node has onLayout, eg each time a modifier changes
-  void onLayout() override {};                        // onLayout for drivers is used to init or update the driver based on the layouts, a driver will use the layout nodes which are defined before the driver node, so order matters
-
-  // use for continuous actions, e.g. reading data from sensors or sending data to lights (e.g. LED drivers or Art-Net)
   void loop20ms() override {
     // mpu.getMotion6(&accell.x, &accell.y, &accell.z, &gyro.x, &gyro.y, &gyro.z);
     // // display tab-separated accel/gyro x/y/z values
@@ -108,9 +103,9 @@ class IMUDriver : public Node {
         EXT_LOGD(ML_TAG, "%f %f %f", gravity.x, gravity.y, gravity.z);
 
         // needed to repeat the following 3 lines (yes if you look at the output: otherwise not 0)
-        mpu.dmpGetQuaternion(&q, fifoBuffer);
-        mpu.dmpGetAccel(&aa, fifoBuffer);
-        mpu.dmpGetGravity(&gravity, &q);
+        // mpu.dmpGetQuaternion(&q, fifoBuffer);
+        // mpu.dmpGetAccel(&aa, fifoBuffer);
+        // mpu.dmpGetGravity(&gravity, &q);
 
         mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
         // mpu.dmpGetLinearAccelInWorld(&aaWorld, &aaReal, &q); //worked in 0.6.0, not in 1.3.0 anymore
@@ -122,13 +117,12 @@ class IMUDriver : public Node {
     }
   };
 
-  ~IMUDriver() override {};  // e.g. to free allocated memory
+  ~IMUDriver() override {};
 
  private:
   MPU6050 mpu;
 
   // MPU control/status vars
-  uint8_t devStatus;       // return status after each device operation (0 = success, !0 = error)
   uint8_t fifoBuffer[64];  // FIFO storage buffer
 
   // orientation/motion vars

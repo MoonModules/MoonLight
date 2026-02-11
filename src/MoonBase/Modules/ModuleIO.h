@@ -219,7 +219,7 @@ class ModuleIO : public Module {
       addControl(rows, "DriveCap", "text", 0, 32, true);  // ro
     }
 
-    addControl(controls, "i2cFreq", "number", 0, 65534, true);
+    addControl(controls, "i2cFreq", "number", 0, 65534, false, "kHz");
 
     control = addControl(controls, "i2cBus", "rows");
     control["crud"] = "r";
@@ -575,8 +575,13 @@ class ModuleIO : public Module {
   #else
       pinAssigner.assignPin(16, pin_LED);
   #endif
+  #ifdef CONFIG_IDF_TARGET_ESP32
       pinAssigner.assignPin(21, pin_I2C_SDA);
       pinAssigner.assignPin(22, pin_I2C_SCL);
+  #else
+      pinAssigner.assignPin(8, pin_I2C_SDA);
+      pinAssigner.assignPin(9, pin_I2C_SCL);
+  #endif
 
       // trying to add more pins, but these pins not liked by esp32-d0-16MB ... 🚧
       // pinAssigner.assignPin(4, pin_LED_02;
@@ -622,6 +627,8 @@ class ModuleIO : public Module {
       newState["modded"] = true;
     } else if (updatedItem.name == "usage") {
       newState["modded"] = true;
+    } else if (updatedItem.name == "i2cFreq") {
+      Wire.setClock(updatedItem.value.as<uint16_t>() * 1000);
     }
 
     if (newState.size()) update(newState, ModuleState::update, _moduleName);  // if changes made then update
@@ -817,10 +824,13 @@ class ModuleIO : public Module {
     }
 
     if (pinI2CSCL != UINT8_MAX && pinI2CSDA != UINT8_MAX) {
-      if (Wire.begin(pinI2CSDA, pinI2CSCL)) {
-        EXT_LOGI(ML_TAG, "initI2C Wire sda:%d scl:%d", pinI2CSDA, pinI2CSCL);
+      Wire.end();  // Clean up any previous I2C initialization
+      uint16_t frequency = _state.data["i2cFreq"];
+      if (Wire.begin(pinI2CSDA, pinI2CSCL, frequency * 1000)) {
+        EXT_LOGI(ML_TAG, "initI2C Wire sda:%d scl:%d freq:%d", pinI2CSDA, pinI2CSCL, frequency);
         // delay(200);            // Give I2C bus time to stabilize
         // Wire.setClock(50000);  // Explicitly set to 100kHz
+        updateDevices();
       } else
         EXT_LOGE(ML_TAG, "initI2C Wire failed");
     }
@@ -902,9 +912,6 @@ class ModuleIO : public Module {
       }
     }
   #endif
-    if (pinI2CSCL != UINT8_MAX && pinI2CSDA != UINT8_MAX) {
-      updateDevices();
-    }
   }
 
   void updateDevices() {
@@ -928,7 +935,7 @@ class ModuleIO : public Module {
     JsonObject i2cDevice = newState["i2cBus"].as<JsonArray>().add<JsonObject>();
     i2cDevice["address"] = 255;
 
-    doc["i2cFreq"] = Wire.getClock();
+    doc["i2cFreq"] = Wire.getClock() / 1000;
 
     update(newState, ModuleState::update, _moduleName);
   }
