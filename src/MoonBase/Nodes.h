@@ -362,7 +362,7 @@ static struct SharedData {
   #include "MoonLight/Nodes/Drivers/D_FastLED.h"
   #include "MoonLight/Nodes/Drivers/D_Hub75.h"
   #include "MoonLight/Nodes/Drivers/D_Infrared.h"
-  #include "MoonLight/Nodes/Drivers/D_MPU6050.h"
+  #include "MoonLight/Nodes/Drivers/D_IMU.h"
   #include "MoonLight/Nodes/Drivers/D_ParallelLEDDriver.h"
   #include "MoonLight/Nodes/Drivers/D__Sandbox.h"
   #include "MoonLight/Nodes/Effects/E_FastLED.h"
