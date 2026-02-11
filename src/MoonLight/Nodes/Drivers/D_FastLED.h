@@ -88,8 +88,8 @@ class FastLEDDriver : public DriverNode {
 
     // Called when channel data is enqueued to engine
     events.onChannelEnqueued.add([this](const fl::Channel& ch, const fl::string& engine) {
-      if (ch.name() == "Channel_0" && engine != this->engine.c_str()) { // only the first channel for the time being (maybe later we allow for different channels with different engines)
-        EXT_LOGD(ML_TAG, "Resolved engine %s → %s", ch.name().c_str(), engine.c_str());
+      if (engine != this->engine.c_str()) {
+        EXT_LOGD(ML_TAG, "Resolved engine %s %s → %s", ch.name().c_str(), this->engine.c_str(), engine.c_str());
         updateControl("engine", engine.c_str());
         moduleNodes->requestUIUpdate = true;
       }
