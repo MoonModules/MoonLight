@@ -13,9 +13,9 @@
 
   #include <MPU6050_6Axis_MotionApps20.h>
 
-class MPU6050Driver : public Node {
+class IMUDriver : public Node {
  public:
-  static const char* name() { return "IMU driver"; } // Inertial Measurement Unit
+  static const char* name() { return "IMU driver"; }  // Inertial Measurement Unit
   static uint8_t dim() { return _NoD; }
   static const char* tags() { return "☸️"; }
 
@@ -35,46 +35,15 @@ class MPU6050Driver : public Node {
     // isEnabled = false;  // need to enable after fresh setup
     addControl(board, "board", "select");
     addControlValue("MPU6050");
-    addControlValue("BMI160"); // not supported yet
-  }
-
-  bool initI2C() {
-    // tbd: set pins in ui!!
-    // allocatePin(21, "Pins", "I2S SDA");
-    // allocatePin(22, "Pins", "I2S SCL");
-    Wire.end();
-    delay(10);
-    bool success = Wire.begin(5, 6);
-    EXT_LOGI(ML_TAG, "initI2C Wire begin %s", success ? "success" : "failure");
-
-    if (success) {
-      delay(200);            // Give I2C bus time to stabilize
-      Wire.setClock(50000);  // Explicitly set to 100kHz
-    }
-
-    return success;
-  }
-
-  void scanI2C() {
-    EXT_LOGI(ML_TAG, "Scanning I2C bus...");
-    byte count = 0;
-    for (byte i = 1; i < 127; i++) {
-      Wire.beginTransmission(i);
-      if (Wire.endTransmission() == 0) {
-        EXT_LOGI(ML_TAG, "Found I2C device at address 0x%02X", i);
-        count++;
-      }
-    }
-    EXT_LOGI(ML_TAG, "Found %d device(s)", count);
+    addControlValue("BMI160");  // not supported yet
   }
 
   void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
     // add your custom onUpdate code here
     if (!control["on"].isNull()) {  // control is the node n case of on!
       if (control["on"] == true) {
-        if (initI2C()) {
-          scanI2C();  // Diagnostic - remove after testing
-
+        bool i2cInited = true;  // todo: check in moduleIO if successfull
+        if (i2cInited) {
           if (board == 0) {  // MPU6050
             mpu.initialize();
 
@@ -131,9 +100,9 @@ class MPU6050Driver : public Node {
         gyro.y = ypr[0] * 180 / M_PI;  // pan = yaw !
         gyro.x = ypr[1] * 180 / M_PI;  // tilt = pitch !
         gyro.z = ypr[2] * 180 / M_PI;  // roll = roll
-        sharedData.gravity.x = gravity.x;
-        sharedData.gravity.y = gravity.y;
-        sharedData.gravity.z = gravity.z;
+        sharedData.gravity.x = gravity.x * INT16_MAX;
+        sharedData.gravity.y = gravity.y * INT16_MAX;
+        sharedData.gravity.z = gravity.z * INT16_MAX;
         // display real acceleration, adjusted to remove gravity
 
         EXT_LOGD(ML_TAG, "%f %f %f", gravity.x, gravity.y, gravity.z);
@@ -153,7 +122,7 @@ class MPU6050Driver : public Node {
     }
   };
 
-  ~MPU6050Driver() override {};  // e.g. to free allocated memory
+  ~IMUDriver() override {};  // e.g. to free allocated memory
 
  private:
   MPU6050 mpu;

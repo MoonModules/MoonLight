@@ -14,6 +14,8 @@
 
 #if FT_MOONBASE == 1
 
+  #include <Wire.h>
+
   #include "MoonBase/Module.h"
   #include "driver/uart.h"
 
@@ -215,6 +217,15 @@ class ModuleIO : public Module {
 
       addControl(rows, "Level", "text", 0, 32, true);     // ro
       addControl(rows, "DriveCap", "text", 0, 32, true);  // ro
+    }
+
+    addControl(controls, "i2cFreq", "number", 0, 65534, true);
+
+    control = addControl(controls, "i2cBus", "rows");
+    control["crud"] = "r";
+    rows = control["n"].to<JsonArray>();
+    {
+      addControl(rows, "address", "number", 0, 255, true);  // ro
     }
   }
 
@@ -564,6 +575,8 @@ class ModuleIO : public Module {
   #else
       pinAssigner.assignPin(16, pin_LED);
   #endif
+      pinAssigner.assignPin(21, pin_I2C_SDA);
+      pinAssigner.assignPin(22, pin_I2C_SCL);
 
       // trying to add more pins, but these pins not liked by esp32-d0-16MB ... 🚧
       // pinAssigner.assignPin(4, pin_LED_02;
@@ -790,7 +803,31 @@ class ModuleIO : public Module {
       }
   #endif
     }
-  }
+
+    for (JsonObject pinObject : _state.data["pins"].as<JsonArray>()) {
+      uint8_t usage = pinObject["usage"];
+      if (usage == pin_I2C_SDA) {
+        pinI2CSDA = pinObject["GPIO"];
+        EXT_LOGD(ML_TAG, "I2CSDA found %d", pinI2CSDA);
+      }
+      if (usage == pin_I2C_SCL) {
+        pinI2CSCL = pinObject["GPIO"];
+        EXT_LOGD(ML_TAG, "I2CSCL found %d", pinI2CSCL);
+      }
+    }
+
+    if (pinI2CSCL != UINT8_MAX && pinI2CSDA != UINT8_MAX) {
+      if (Wire.begin(pinI2CSDA, pinI2CSCL)) {
+        EXT_LOGI(ML_TAG, "initI2C Wire sda:%d scl:%d", pinI2CSDA, pinI2CSCL);
+        // delay(200);            // Give I2C bus time to stabilize
+        // Wire.setClock(50000);  // Explicitly set to 100kHz
+      } else
+        EXT_LOGE(ML_TAG, "initI2C Wire failed");
+    }
+  }  // readPins
+
+  uint8_t pinI2CSDA = UINT8_MAX;
+  uint8_t pinI2CSCL = UINT8_MAX;
 
   #if FT_BATTERY
   uint8_t pinVoltage = UINT8_MAX;
@@ -865,6 +902,35 @@ class ModuleIO : public Module {
       }
     }
   #endif
+    if (pinI2CSCL != UINT8_MAX && pinI2CSDA != UINT8_MAX) {
+      updateDevices();
+    }
+  }
+
+  void updateDevices() {
+    JsonDocument doc;
+    doc["i2cBus"].to<JsonArray>();
+    JsonObject newState = doc.as<JsonObject>();
+
+    EXT_LOGI(ML_TAG, "Scanning I2C bus...");
+    byte count = 0;
+    for (byte i = 1; i < 127; i++) {
+      Wire.beginTransmission(i);
+      if (Wire.endTransmission() == 0) {
+        JsonObject i2cDevice = newState["i2cBus"].as<JsonArray>().add<JsonObject>();
+        i2cDevice["address"] = i;
+
+        EXT_LOGI(ML_TAG, "Found I2C device at address 0x%02X", i);
+        count++;
+      }
+    }
+    EXT_LOGI(ML_TAG, "Found %d device(s)", count);
+    JsonObject i2cDevice = newState["i2cBus"].as<JsonArray>().add<JsonObject>();
+    i2cDevice["address"] = 255;
+
+    doc["i2cFreq"] = Wire.getClock();
+
+    update(newState, ModuleState::update, _moduleName);
   }
 
  private:
