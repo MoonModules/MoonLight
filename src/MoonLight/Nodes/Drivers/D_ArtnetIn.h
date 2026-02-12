@@ -74,7 +74,7 @@ class ArtNetInDriver : public Node {
         continue;
       }
 
-      artnetUdp.read(packetBuffer, min(packetSize, (int)sizeof(packetBuffer)));
+      artnetUdp.read(packetBuffer, MIN(packetSize, sizeof(packetBuffer)));
 
       if (ddp)
         handleDDP();
@@ -124,7 +124,7 @@ class ArtNetInDriver : public Node {
           uint8_t* dmxData = packetBuffer + sizeof(ArtNetHeader);
 
           int startPixel = (universe - universeMin) * (512 / layerP.lights.header.channelsPerLight);
-          int numPixels = min((uint16_t)(dataLength / layerP.lights.header.channelsPerLight), (uint16_t)(layerP.lights.header.nrOfLights - startPixel));
+          int numPixels = MIN(dataLength / layerP.lights.header.channelsPerLight, layerP.lights.header.nrOfLights - startPixel);
 
           for (int i = 0; i < numPixels; i++) {
             int ledIndex = startPixel + i;
@@ -155,7 +155,7 @@ class ArtNetInDriver : public Node {
       uint8_t* pixelData = packetBuffer + sizeof(DDPHeader);
 
       int startPixel = offset / layerP.lights.header.channelsPerLight;
-      int numPixels = min((uint16_t)(dataLen / layerP.lights.header.channelsPerLight), (uint16_t)(layerP.lights.header.nrOfLights - startPixel));
+      int numPixels = MIN(dataLen / layerP.lights.header.channelsPerLight, layerP.lights.header.nrOfLights - startPixel);
 
       for (int i = 0; i < numPixels; i++) {
         int ledIndex = startPixel + i;

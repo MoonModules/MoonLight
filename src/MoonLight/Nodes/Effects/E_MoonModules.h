@@ -433,7 +433,7 @@ class GEQ3DEffect : public Node {
 
       if (heights[i] > 1) {
         ledColorTemp = blend(ledColor, CRGB::Black, 255 - 32);
-        int pPos = max(0, linex + (cols / NUM_BANDS) - 1);
+        int pPos = MAX(0, linex + (cols / NUM_BANDS) - 1);
         for (int y = (i < NUM_BANDS - 1) ? heights[i + 1] : 0; y <= heights[i]; y++) {                            // don't bother drawing what we'll hide anyway
           if (rows - y > 0) layer->drawLine(pPos, rows - y - 1, projector, horizon, ledColorTemp, false, depth);  // right side perspective
         }
@@ -454,7 +454,7 @@ class GEQ3DEffect : public Node {
       uint16_t colorIndex = ::map(cols / NUM_BANDS * i, 0, cols - 1, 0, 255);
       CRGB ledColor = ColorFromPalette(layerP.palette, colorIndex);
       int linex = i * (cols / NUM_BANDS);
-      int pPos = max(0, linex + (cols / NUM_BANDS) - 1);
+      int pPos = MAX(0, linex + (cols / NUM_BANDS) - 1);
 
       if (heights[i] > 1) {
         ledColorTemp = blend(ledColor, CRGB::Black, 255 - 32);
@@ -575,7 +575,7 @@ class PaintBrushEffect : public Node {
 
       length = map8(sharedData.bands[bin], 0, length);
 
-      if (length > max(1, (int)minLength)) {
+      if (length > MAX(1, minLength)) {
         CRGB color;
         if (color_chaos)
           color = ColorFromPalette(layerP.palette, i * 255 / numLines + ((aux0Hue) & 0xFF), 255);
