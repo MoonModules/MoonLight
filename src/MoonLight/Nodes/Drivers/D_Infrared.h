@@ -329,33 +329,33 @@ class IRDriver : public Node {
     moduleControl->read(
         [&](ModuleState& state) {
           if (combined_code == codeBrightnessInc) {  // Brightness increase
-            newState["brightness"] = min(state.data["brightness"].as<uint8_t>() + 5, 255);
+            newState["brightness"] = MIN(state.data["brightness"].as<uint8_t>() + 5, 255);
           } else if (combined_code == codeBrightnessDec) {  // Brightness decrease
-            newState["brightness"] = max(state.data["brightness"].as<uint8_t>() - 5, 0);
+            newState["brightness"] = MAX(state.data["brightness"].as<uint8_t>() - 5, 0);
           } else if (combined_code == codeRedInc) {  // increase red
-            newState["red"] = min(state.data["red"].as<uint8_t>() + 5, 255);
+            newState["red"] = MIN(state.data["red"].as<uint8_t>() + 5, 255);
           } else if (combined_code == codeRedDec) {  // decrease red
-            newState["red"] = max(state.data["red"].as<uint8_t>() - 5, 0);
+            newState["red"] = MAX(state.data["red"].as<uint8_t>() - 5, 0);
           } else if (combined_code == codeGreenInc) {  // increase green
-            newState["green"] = min(state.data["green"].as<uint8_t>() + 5, 255);
+            newState["green"] = MIN(state.data["green"].as<uint8_t>() + 5, 255);
           } else if (combined_code == codeGreenDec) {  // decrease green
-            newState["green"] = max(state.data["green"].as<uint8_t>() - 5, 0);
+            newState["green"] = MAX(state.data["green"].as<uint8_t>() - 5, 0);
           } else if (combined_code == codeBlueInc) {  // increase blue
-            newState["blue"] = min(state.data["blue"].as<uint8_t>() + 5, 255);
+            newState["blue"] = MIN(state.data["blue"].as<uint8_t>() + 5, 255);
           } else if (combined_code == codeBlueDec) {  // decrease blue
-            newState["blue"] = max(state.data["blue"].as<uint8_t>() - 5, 0);
+            newState["blue"] = MAX(state.data["blue"].as<uint8_t>() - 5, 0);
           } else if (combined_code == codePresetLoopInc) {
-            newState["presetLoop"] = min(state.data["presetLoop"].as<uint8_t>() + 5, 255);
+            newState["presetLoop"] = MIN(state.data["presetLoop"].as<uint8_t>() + 5, 255);
           } else if (combined_code == codePresetLoopDec) {
-            newState["presetLoop"] = max(state.data["presetLoop"].as<uint8_t>() - 5, 0);
+            newState["presetLoop"] = MAX(state.data["presetLoop"].as<uint8_t>() - 5, 0);
           } else if (combined_code == codeFirstPresetInc) {
-            newState["firstPreset"] = min(state.data["firstPreset"].as<uint8_t>() + 5, 255);
+            newState["firstPreset"] = MIN(state.data["firstPreset"].as<uint8_t>() + 5, 255);
           } else if (combined_code == codeFirstPresetDec) {
-            newState["firstPreset"] = max(state.data["firstPreset"].as<uint8_t>() - 5, 0);
+            newState["firstPreset"] = MAX(state.data["firstPreset"].as<uint8_t>() - 5, 0);
           } else if (combined_code == codeLastPresetInc) {
-            newState["lastPreset"] = min(state.data["lastPreset"].as<uint8_t>() + 5, 255);
+            newState["lastPreset"] = MIN(state.data["lastPreset"].as<uint8_t>() + 5, 255);
           } else if (combined_code == codeLastPresetDec) {
-            newState["lastPreset"] = max(state.data["lastPreset"].as<uint8_t>() - 5, 0);
+            newState["lastPreset"] = MAX(state.data["lastPreset"].as<uint8_t>() - 5, 0);
           }
 
           // find the current preset in the list, select the next

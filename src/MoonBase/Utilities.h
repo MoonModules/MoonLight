@@ -78,6 +78,15 @@
 #define MB_TAG "🌙"
 #define ML_TAG "💫"
 
+#ifndef MIN
+  #define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#endif
+
+#ifndef MAX
+  #define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#endif
+
+
 struct Coord3D {
   int x;
   int y;
@@ -134,7 +143,7 @@ struct Coord3D {
     return *this;
   }
 
-  Coord3D maximum(const Coord3D rhs) const { return Coord3D(max(x, rhs.x), max(y, rhs.y), max(z, rhs.z)); }
+  Coord3D maximum(const Coord3D rhs) const { return Coord3D(MAX(x, rhs.x), MAX(y, rhs.y), MAX(z, rhs.z)); }
 
   unsigned distanceSquared(const Coord3D rhs) const {
     Coord3D delta = (*this - rhs);

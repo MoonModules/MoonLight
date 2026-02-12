@@ -127,7 +127,7 @@ class ArtNetOutDriver : public DriverNode {
   TickType_t xLastWakeTime = xTaskGetTickCount();
 
   void loop() override {
-    DriverNode::loop();
+    DriverNode::loop();  // this populates the LUT tables
 
     LightsHeader* header = &layerP.lights.header;
 

@@ -26,8 +26,8 @@ class ParallelLEDDriver : public DriverNode {
   static const char* tags() { return "☸️"; }
 
   #if HP_ALL_DRIVERS
-  Char<32> version = HP_ALL_VERSION;
-  Char<32> status = "ok";
+  Char<32> version = HP_ALL_BUILD;
+  Char<32> status = "NoInit";
     #ifndef BOARD_HAS_PSRAM
   uint8_t dmaBuffer = 6;
     #else
@@ -41,7 +41,6 @@ class ParallelLEDDriver : public DriverNode {
     addControl(dmaBuffer, "dmaBuffer", "slider", 1, 100);
     addControl(version, "version", "text", 0, 32, true);  // read only
     addControl(status, "status", "text", 0, 32, true);    // read only
-    updateControl("version", HP_ALL_VERSION);             // update also if node already exists
   #endif
   }
 
@@ -56,7 +55,7 @@ class ParallelLEDDriver : public DriverNode {
     #ifndef CONFIG_IDF_TARGET_ESP32P4
     if (ledsDriver.total_leds > 0) ledsDriver.showPixels(WAIT);
     #else
-    uint8_t nrOfPins = min(layerP.nrOfLedPins, layerP.nrOfAssignedPins);
+    uint8_t nrOfPins = MIN(layerP.nrOfLedPins, layerP.nrOfAssignedPins);
     // LUTs are accessed directly within show_parlio via extern ledsDriver
 
     // No brightness parameter needed
@@ -75,7 +74,7 @@ class ParallelLEDDriver : public DriverNode {
   void onLayout() override {
   #if HP_ALL_DRIVERS
     if (layerP.pass == 1 && !layerP.monitorPass) {
-      uint8_t nrOfPins = min(layerP.nrOfLedPins, layerP.nrOfAssignedPins);
+      uint8_t nrOfPins = MIN(layerP.nrOfLedPins, layerP.nrOfAssignedPins);
 
       if (!lightPresetSaved || nrOfPins == 0) {  //|| initDone can be done multiple times now...
         EXT_LOGD(ML_TAG, "return: lightpresetsaved:%d initDone:%d #:%d", lightPresetSaved, initDone, nrOfPins);
@@ -106,6 +105,8 @@ class ParallelLEDDriver : public DriverNode {
       }
       EXT_LOGD(ML_TAG, "status: %s", statusString.c_str());
 
+      version = HP_ALL_BUILD;
+      updateControl("version", version);
       updateControl("status", statusString.c_str());
       moduleNodes->requestUIUpdate = true;
 

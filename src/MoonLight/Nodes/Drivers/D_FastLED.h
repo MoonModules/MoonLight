@@ -13,52 +13,223 @@
 
 #if FT_MOONLIGHT
 
-  // Expand to , COLOR_ORDER if defined
-  #if defined(ML_COLOR_ORDER)
-    #define COLOR_ORDER_ARG , ML_COLOR_ORDER
-  #else
-    #define COLOR_ORDER_ARG
-  #endif
+// using the new FastLED channel api
+// https://github.com/FastLED/FastLED/blob/master/src/fl/channels/README.md
 
-  // Expand to .setRgbw(RgbwDefault()) if ML_RGBW is 1
-  #if ML_RGBW
-    #define RGBW_CALL .setRgbw(RgbwDefault())
-  #else
-    #define RGBW_CALL
-  #endif
-
-class FastLEDDriver : public Node {
+class FastLEDDriver : public DriverNode {
  public:
   static const char* name() { return "FastLED Driver"; }
   static uint8_t dim() { return _NoD; }
   static const char* tags() { return "☸️"; }
 
-  char chipSet[20] = TOSTRING(ML_CHIPSET);
-  char version[20] = TOSTRING(FASTLED_VERSION);  // "." TOSTRING(FASTLED_VERSION_MINOR) "." TOSTRING(FASTLED_VERSION_PATCH);
-  char colorOrder[20] = TOSTRING(ML_COLOR_ORDER);
-  #if FASTLED_USES_ESP32S3_I2S
-  bool usesI2S = true;
-  #else
-  bool usesI2S = false;
-  #endif
-  #if FASTLED_RMT5
-  bool usesRMT5 = true;
-  #else
-  bool usesRMT5 = false;
-  #endif
-  Char<32> status = "ok";
+  Char<32> version = FASTLED_BUILD;
+  Char<32> status = "NoInit";
+  Char<32> engine = "Auto";
+  uint8_t affinity = 0;  // auto
+  uint8_t temperature = 0;
+  uint8_t correction = 0;
+  bool dither = false;
 
   void setup() override {
+    DriverNode::setup();  // !!
+
+    addControl(affinity, "affinity", "select");
+    addControlValue("Auto");
+    addControlValue("RMT");
+    addControlValue("I2S");  // #ifndef CONFIG_IDF_TARGET_ESP32 ... not now as it changes the order numbering
+    addControlValue("SPI");
+  #if CONFIG_IDF_TARGET_ESP32P4
+    addControlValue("Parlio");
+  #endif
+    addControl(engine, "engine", "text", 0, 32, true);  // the resolved engine based on affinity
+
+    addControl(temperature, "temperature", "select");
+    addControlValue("Uncorrected");
+    addControlValue("Candle");
+    addControlValue("Tungsten100W");
+    addControlValue("Halogen");
+
+    addControl(correction, "correction", "select");
+    addControlValue("Uncorrected");
+    addControlValue("Typical LED");
+    addControlValue("Typical SMD5050");
+
+    addControl(dither, "dither", "checkbox");
+
     addControl(version, "version", "text", 0, 20, true);
-    addControl(chipSet, "chipSet", "text", 0, 20, true);
-    addControl(colorOrder, "colorOrder", "text", 0, 20, true);
-    addControl(usesI2S, "usesI2S", "checkbox", 0, 20, true);
-    addControl(usesRMT5, "usesRMT5", "checkbox", 0, 20, true);
     addControl(status, "status", "text", 0, 32, true);
+
+    moduleIO->addUpdateHandler(
+        [this](const String& originId) {
+          uint8_t nrOfPins = MIN(layerP.nrOfLedPins, layerP.nrOfAssignedPins);
+
+          EXT_LOGD(ML_TAG, "recreate channels and configs %s %d", originId.c_str(), nrOfPins);
+          // do something similar as in destructor: delete existing channels
+          // do something similar as in onLayout: create new channels
+
+          // should we check here for maxPower changes?
+        },
+        false);
+    moduleControl->addUpdateHandler([this](const String& originId) {
+      // brightness changes here?
+    });
+
+    // Register event listeners via FastLED
+    auto& events = FastLED.channelEvents();
+
+    // Called when channel is created
+    events.onChannelCreated.add([](const fl::Channel& ch) { EXT_LOGD(ML_TAG, "Channel created: %s", ch.name().c_str()); });
+
+    // Called when channel data is enqueued to engine
+    events.onChannelEnqueued.add([this](const fl::Channel& ch, const fl::string& engine) {
+      if (engine != this->engine.c_str()) {
+        EXT_LOGD(ML_TAG, "Resolved engine %s %s → %s", ch.name().c_str(), this->engine.c_str(), engine.c_str());
+        updateControl("engine", engine.c_str());
+        moduleNodes->requestUIUpdate = true;
+      }
+    });
+  }
+
+  fl::EOrder rgbOrder = GRB;
+  fl::ChannelOptions options = fl::ChannelOptions();
+
+  void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
+    DriverNode::onUpdate(oldValue, control);  // !!
+
+    EXT_LOGD(ML_TAG, "%s: %s ", control["name"].as<const char*>(), control["value"].as<String>().c_str());
+
+    if (control["name"] == "lightPreset") {
+      options.mRgbw = RgbwInvalid::value();  // Reset RGBW options so RGB-only presets don't inherit stale W config
+
+      switch (layerP.lights.header.lightPreset) {
+      case lightPreset_RGB:
+        rgbOrder = RGB;
+        break;
+      case lightPreset_RBG:
+        rgbOrder = RBG;
+        break;
+      case lightPreset_GRB:
+        rgbOrder = GRB;
+        break;
+      case lightPreset_GBR:
+        rgbOrder = GBR;
+        break;
+      case lightPreset_BRG:
+        rgbOrder = BRG;
+        break;
+      case lightPreset_BGR:
+        rgbOrder = BGR;
+        break;
+      case lightPreset_RGBW:
+        rgbOrder = RGB;
+        options.mRgbw.rgbw_mode = kRGBWExactColors;
+        options.mRgbw.w_placement = W3;
+        break;
+      case lightPreset_GRBW:
+        rgbOrder = GRB;
+        options.mRgbw.rgbw_mode = kRGBWExactColors;
+        options.mRgbw.w_placement = W3;
+        break;
+      case lightPreset_WRGB:
+        rgbOrder = RGB;
+        options.mRgbw.rgbw_mode = kRGBWExactColors;
+        options.mRgbw.w_placement = W0;
+        break;
+      case lightPreset_GRB6:
+        rgbOrder = GRB;
+        break;
+      case lightPreset_RGB2040:
+        // RGB2040 uses standard RGB offsets but has special channel remapping
+        // for dual-channel-group architecture (handled in VirtualLayer)
+        rgbOrder = RGB;
+        break;
+      case lightPreset_RGBWYP:
+        rgbOrder = RGB;
+        options.mRgbw.rgbw_mode = kRGBWExactColors;
+        options.mRgbw.w_placement = W3;
+        break;
+      case lightPreset_MHBeeEyes150W15:
+        rgbOrder = RGB;
+        options.mRgbw.rgbw_mode = kRGBWExactColors;
+        options.mRgbw.w_placement = W3;
+        break;
+      case lightPreset_MHBeTopper19x15W32:
+        rgbOrder = RGB;
+        options.mRgbw.rgbw_mode = kRGBWExactColors;
+        options.mRgbw.w_placement = W3;
+        break;
+      case lightPreset_MH19x15W24:
+        rgbOrder = RGB;
+        options.mRgbw.rgbw_mode = kRGBWExactColors;
+        options.mRgbw.w_placement = W3;
+        break;
+      default:
+        rgbOrder = GRB;
+        break;
+      }
+    }
+
+    else if (control["name"] == "affinity") {
+      switch (control["value"].as<uint8_t>()) {
+      case 0:  // auto
+        options.mAffinity = "";
+        break;
+      case 1:
+        options.mAffinity = "RMT";
+        break;
+      case 2:
+        options.mAffinity = "I2S";
+        break;
+      case 3:
+        options.mAffinity = "SPI";
+        break;
+      case 4:
+        options.mAffinity = "PARLIO";
+        break;
+      }
+      // FastLED.setExclusiveDriver(options.mAffinity.c_str());
+    }
+
+    else if (control["name"] == "temperature") {
+      switch (control["value"].as<uint8_t>()) {
+      case 0:
+        options.mTemperature = UncorrectedTemperature;
+        break;
+      case 1:
+        options.mTemperature = Candle;
+        break;
+      case 2:
+        options.mTemperature = Tungsten100W;
+        break;
+      case 3:
+        options.mTemperature = Halogen;
+        break;
+      }
+    }
+
+    else if (control["name"] == "correction") {
+      switch (control["value"].as<uint8_t>()) {
+      case 0:
+        options.mCorrection = UncorrectedColor;
+        break;
+      case 1:
+        options.mCorrection = TypicalLEDStrip;
+        break;
+      case 2:
+        options.mCorrection = TypicalSMD5050;
+        break;
+      }
+    }
+
+    else if (control["name"] == "dither") {
+      options.mDitherMode = control["value"].as<bool>() ? BINARY_DITHER : DISABLE_DITHER;
+    }
   }
 
   uint16_t savedMaxPower = UINT16_MAX;
   void loop() override {
+    // DriverNode::loop(); // no need to call this as FastLED is not using ledsDriver LUT tables ...
+
     if (FastLED.count()) {
       if (FastLED.getBrightness() != layerP.lights.header.brightness) {
         EXT_LOGD(ML_TAG, "setBrightness %d", layerP.lights.header.brightness);
@@ -72,13 +243,12 @@ class FastLEDDriver : public Node {
       }
 
       // FastLED Led Controllers
-      CRGB correction = CRGB(layerP.lights.header.red, layerP.lights.header.green, layerP.lights.header.blue);
+      CRGB colorCorrection = CRGB(layerP.lights.header.red, layerP.lights.header.green, layerP.lights.header.blue);
       CLEDController* pCur = CLEDController::head();
       while (pCur) {
-        // ++x;
-        if (pCur->getCorrection() != correction) {
+        if (pCur->getCorrection() != colorCorrection) {
           EXT_LOGD(ML_TAG, "setColorCorrection r:%d, g:%d, b:%d (#:%d)", layerP.lights.header.red, layerP.lights.header.green, layerP.lights.header.blue, pCur->size());
-          pCur->setCorrection(correction);
+          pCur->setCorrection(colorCorrection);
         }
         // pCur->size();
         pCur = pCur->next();
@@ -88,10 +258,14 @@ class FastLEDDriver : public Node {
     }
   }
 
+  fl::vector<fl::ChannelPtr> channels;
+
   bool hasOnLayout() const override { return true; }
   void onLayout() override {
     if (layerP.pass == 1 && !layerP.monitorPass) {
-      uint8_t nrOfPins = MIN(MIN(layerP.nrOfLedPins, layerP.nrOfAssignedPins), 4);  // FastLED RMT supports max 4 pins!
+      uint8_t nrOfPins = MIN(layerP.nrOfLedPins, layerP.nrOfAssignedPins);
+
+      if (affinity == 1 && nrOfPins > 4) nrOfPins = 4;  // FastLED RMT supports max 4 pins!, what about SPI?
 
       if (nrOfPins == 0) return;
 
@@ -119,448 +293,58 @@ class FastLEDDriver : public Node {
       }
       EXT_LOGD(ML_TAG, "status: %s", statusString.c_str());
 
+      version.format("4.0 pre release! %s", FASTLED_BUILD);  // version.format("%s %s", TOSTRING(FASTLED_VERSION), FASTLED_BUILD);
+      updateControl("version", version);
       updateControl("status", statusString.c_str());
       moduleNodes->requestUIUpdate = true;
 
+      fl::ChipsetTimingConfig timing = fl::makeTimingConfig<fl::TIMING_WS2812_800KHZ>();
+      CRGB* leds = (CRGB*)layerP.lights.channelsD;
       uint16_t startLed = 0;
+
+      FastLED.reset(ResetFlags::CHANNELS);
+
       for (uint8_t pinIndex = 0; pinIndex < nrOfPins; pinIndex++) {
-        EXT_LOGD(ML_TAG, "ledPin s:%d #:%d p:%d", pinIndex, layerP.ledsPerPin[pinIndex]);
+        EXT_LOGD(ML_TAG, "ledPin p:%d #:%d rgb:%d aff:%s", pins[pinIndex], layerP.ledsPerPin[pinIndex], rgbOrder, options.mAffinity.c_str());
 
-        uint16_t nrOfLights = layerP.ledsPerPin[pinIndex];
+        fl::ChannelConfig config(pins[pinIndex], timing, fl::span<CRGB>(&leds[startLed], layerP.ledsPerPin[pinIndex]), rgbOrder, options);
+        fl::ChannelPtr channel = fl::Channel::create(config);
 
-        CRGB* leds = (CRGB*)layerP.lights.channelsD;
+        FastLED.add(channel);
+        channels.push_back(channel);
 
-        switch (pins[pinIndex]) {
-  #if CONFIG_IDF_TARGET_ESP32
-        case 0:
-          FastLED.addLeds<ML_CHIPSET, 0 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 1:
-          FastLED.addLeds<ML_CHIPSET, 1 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 2:
-          FastLED.addLeds<ML_CHIPSET, 2 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 3:
-          FastLED.addLeds<ML_CHIPSET, 3 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 4:
-          FastLED.addLeds<ML_CHIPSET, 4 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 5:
-          FastLED.addLeds<ML_CHIPSET, 5 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        // case 6: FastLED.addLeds<ML_CHIPSET, 6 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-        // case 7: FastLED.addLeds<ML_CHIPSET, 7 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-        // case 8: FastLED.addLeds<ML_CHIPSET, 8 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-        // case 9: FastLED.addLeds<ML_CHIPSET, 9 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-        // case 10: FastLED.addLeds<ML_CHIPSET, 10 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-        case 11:
-          FastLED.addLeds<ML_CHIPSET, 11 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 12:
-          FastLED.addLeds<ML_CHIPSET, 12 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 13:
-          FastLED.addLeds<ML_CHIPSET, 13 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 14:
-          FastLED.addLeds<ML_CHIPSET, 14 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 15:
-          FastLED.addLeds<ML_CHIPSET, 15 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-    #if !defined(BOARD_HAS_PSRAM) && !defined(ARDUINO_ESP32_PICO)
-        // 16+17 = reserved for PSRAM, or reserved for FLASH on pico-D4
-        case 16:
-          FastLED.addLeds<ML_CHIPSET, 16 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 17:
-          FastLED.addLeds<ML_CHIPSET, 17 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-    #endif
-        case 18:
-          FastLED.addLeds<ML_CHIPSET, 18 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 19:
-          FastLED.addLeds<ML_CHIPSET, 19 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        // case 20: FastLED.addLeds<ML_CHIPSET, 20 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-        case 21:
-          FastLED.addLeds<ML_CHIPSET, 21 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 22:
-          FastLED.addLeds<ML_CHIPSET, 22 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 23:
-          FastLED.addLeds<ML_CHIPSET, 23 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        // case 24: FastLED.addLeds<ML_CHIPSET, 24 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-        case 25:
-          FastLED.addLeds<ML_CHIPSET, 25 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 26:
-          FastLED.addLeds<ML_CHIPSET, 26 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 27:
-          FastLED.addLeds<ML_CHIPSET, 27 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        // case 28: FastLED.addLeds<ML_CHIPSET, 28 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-        // case 29: FastLED.addLeds<ML_CHIPSET, 29 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-        // case 30: FastLED.addLeds<ML_CHIPSET, 30 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-        // case 31: FastLED.addLeds<ML_CHIPSET, 31 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-        case 32:
-          FastLED.addLeds<ML_CHIPSET, 32 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 33:
-          FastLED.addLeds<ML_CHIPSET, 33 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-            // 34-39 input-only
-            // case 34: FastLED.addLeds<ML_CHIPSET, 34 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 35: FastLED.addLeds<ML_CHIPSET, 35 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 36: FastLED.addLeds<ML_CHIPSET, 36 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 37: FastLED.addLeds<ML_CHIPSET, 37 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 38: FastLED.addLeds<ML_CHIPSET, 38 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 39: FastLED.addLeds<ML_CHIPSET, 39 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-  #endif  // CONFIG_IDF_TARGET_ESP32
-
-  #if CONFIG_IDF_TARGET_ESP32S2
-        case 0:
-          FastLED.addLeds<ML_CHIPSET, 0 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 1:
-          FastLED.addLeds<ML_CHIPSET, 1 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 2:
-          FastLED.addLeds<ML_CHIPSET, 2 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 3:
-          FastLED.addLeds<ML_CHIPSET, 3 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 4:
-          FastLED.addLeds<ML_CHIPSET, 4 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 5:
-          FastLED.addLeds<ML_CHIPSET, 5 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 6:
-          FastLED.addLeds<ML_CHIPSET, 6 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 7:
-          FastLED.addLeds<ML_CHIPSET, 7 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 8:
-          FastLED.addLeds<ML_CHIPSET, 8 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 9:
-          FastLED.addLeds<ML_CHIPSET, 9 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 10:
-          FastLED.addLeds<ML_CHIPSET, 10 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 11:
-          FastLED.addLeds<ML_CHIPSET, 11 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 12:
-          FastLED.addLeds<ML_CHIPSET, 12 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 13:
-          FastLED.addLeds<ML_CHIPSET, 13 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 14:
-          FastLED.addLeds<ML_CHIPSET, 14 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 15:
-          FastLED.addLeds<ML_CHIPSET, 15 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 16:
-          FastLED.addLeds<ML_CHIPSET, 16 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 17:
-          FastLED.addLeds<ML_CHIPSET, 17 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 18:
-          FastLED.addLeds<ML_CHIPSET, 18 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-    #if !ARDUINO_USB_CDC_ON_BOOT
-        // 19 + 20 = USB HWCDC. reserved for USB port when ARDUINO_USB_CDC_ON_BOOT=1
-        case 19:
-          FastLED.addLeds<ML_CHIPSET, 19 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 20:
-          FastLED.addLeds<ML_CHIPSET, 20 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-    #endif
-        case 21:
-          FastLED.addLeds<ML_CHIPSET, 21 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-            // 22 to 32: not connected, or reserved for SPI FLASH
-            // case 22: FastLED.addLeds<ML_CHIPSET, 22 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 23: FastLED.addLeds<ML_CHIPSET, 23 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 24: FastLED.addLeds<ML_CHIPSET, 24 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 25: FastLED.addLeds<ML_CHIPSET, 25 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-    #if !defined(BOARD_HAS_PSRAM)
-        // 26-32 = reserved for PSRAM
-        case 26:
-          FastLED.addLeds<ML_CHIPSET, 26 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-              // case 27: FastLED.addLeds<ML_CHIPSET, 27 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-              // case 28: FastLED.addLeds<ML_CHIPSET, 28 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-              // case 29: FastLED.addLeds<ML_CHIPSET, 29 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-              // case 30: FastLED.addLeds<ML_CHIPSET, 30 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-              // case 31: FastLED.addLeds<ML_CHIPSET, 31 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-              // case 32: FastLED.addLeds<ML_CHIPSET, 32 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-    #endif
-        case 33:
-          FastLED.addLeds<ML_CHIPSET, 33 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 34:
-          FastLED.addLeds<ML_CHIPSET, 34 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 35:
-          FastLED.addLeds<ML_CHIPSET, 35 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 36:
-          FastLED.addLeds<ML_CHIPSET, 36 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 37:
-          FastLED.addLeds<ML_CHIPSET, 37 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 38:
-          FastLED.addLeds<ML_CHIPSET, 38 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 39:
-          FastLED.addLeds<ML_CHIPSET, 39 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 40:
-          FastLED.addLeds<ML_CHIPSET, 40 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 41:
-          FastLED.addLeds<ML_CHIPSET, 41 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 42:
-          FastLED.addLeds<ML_CHIPSET, 42 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 43:
-          FastLED.addLeds<ML_CHIPSET, 43 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 44:
-          FastLED.addLeds<ML_CHIPSET, 44 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 45:
-          FastLED.addLeds<ML_CHIPSET, 45 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-            // 46 input-only
-            // case 46: FastLED.addLeds<ML_CHIPSET, 46 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-  #endif  // CONFIG_IDF_TARGET_ESP32S2
-
-  #if CONFIG_IDF_TARGET_ESP32C3
-        case 0:
-          FastLED.addLeds<ML_CHIPSET, 0 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 1:
-          FastLED.addLeds<ML_CHIPSET, 1 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 2:
-          FastLED.addLeds<ML_CHIPSET, 2 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 3:
-          FastLED.addLeds<ML_CHIPSET, 3 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 4:
-          FastLED.addLeds<ML_CHIPSET, 4 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 5:
-          FastLED.addLeds<ML_CHIPSET, 5 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 6:
-          FastLED.addLeds<ML_CHIPSET, 6 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 7:
-          FastLED.addLeds<ML_CHIPSET, 7 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 8:
-          FastLED.addLeds<ML_CHIPSET, 8 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 9:
-          FastLED.addLeds<ML_CHIPSET, 9 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 10:
-          FastLED.addLeds<ML_CHIPSET, 10 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-            // 11-17 reserved for SPI FLASH
-            // case 11: FastLED.addLeds<ML_CHIPSET, 11 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 12: FastLED.addLeds<ML_CHIPSET, 12 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 13: FastLED.addLeds<ML_CHIPSET, 13 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 14: FastLED.addLeds<ML_CHIPSET, 14 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 15: FastLED.addLeds<ML_CHIPSET, 15 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 16: FastLED.addLeds<ML_CHIPSET, 16 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 17: FastLED.addLeds<ML_CHIPSET, 17 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-    #if !ARDUINO_USB_CDC_ON_BOOT
-        // 18 + 19 = USB HWCDC. reserved for USB port when ARDUINO_USB_CDC_ON_BOOT=1
-        case 18:
-          FastLED.addLeds<ML_CHIPSET, 18 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 19:
-          FastLED.addLeds<ML_CHIPSET, 19 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-    #endif
-        // 20+21 = Serial RX+TX --> don't use for LEDS when serial-to-USB is needed
-        case 20:
-          FastLED.addLeds<ML_CHIPSET, 20 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 21:
-          FastLED.addLeds<ML_CHIPSET, 21 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-  #endif  // CONFIG_IDF_TARGET_ESP32S2
-
-  #ifdef CONFIG_IDF_TARGET_ESP32S3
-        case 0:
-          FastLED.addLeds<ML_CHIPSET, 0 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 1:
-          FastLED.addLeds<ML_CHIPSET, 1 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 2:
-          FastLED.addLeds<ML_CHIPSET, 2 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 3:
-          FastLED.addLeds<ML_CHIPSET, 3 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 4:
-          FastLED.addLeds<ML_CHIPSET, 4 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 5:
-          FastLED.addLeds<ML_CHIPSET, 5 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 6:
-          FastLED.addLeds<ML_CHIPSET, 6 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 7:
-          FastLED.addLeds<ML_CHIPSET, 7 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 8:
-          FastLED.addLeds<ML_CHIPSET, 8 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 9:
-          FastLED.addLeds<ML_CHIPSET, 9 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 10:
-          FastLED.addLeds<ML_CHIPSET, 10 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 11:
-          FastLED.addLeds<ML_CHIPSET, 11 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 12:
-          FastLED.addLeds<ML_CHIPSET, 12 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 13:
-          FastLED.addLeds<ML_CHIPSET, 13 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 14:
-          FastLED.addLeds<ML_CHIPSET, 14 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 15:
-          FastLED.addLeds<ML_CHIPSET, 15 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 16:
-          FastLED.addLeds<ML_CHIPSET, 16 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 17:
-          FastLED.addLeds<ML_CHIPSET, 17 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 18:
-          FastLED.addLeds<ML_CHIPSET, 18 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-    #if !ARDUINO_USB_CDC_ON_BOOT
-        // 19 + 20 = USB-JTAG. Not recommended for other uses.
-        case 19:
-          FastLED.addLeds<ML_CHIPSET, 19 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 20:
-          FastLED.addLeds<ML_CHIPSET, 20 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-    #endif
-        case 21:
-          FastLED.addLeds<ML_CHIPSET, 21 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-            // // 22 to 32: not connected, or SPI FLASH
-            // case 22: FastLED.addLeds<ML_CHIPSET, 22 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 23: FastLED.addLeds<ML_CHIPSET, 23 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 24: FastLED.addLeds<ML_CHIPSET, 24 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 25: FastLED.addLeds<ML_CHIPSET, 25 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 26: FastLED.addLeds<ML_CHIPSET, 26 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 27: FastLED.addLeds<ML_CHIPSET, 27 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 28: FastLED.addLeds<ML_CHIPSET, 28 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 29: FastLED.addLeds<ML_CHIPSET, 29 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 30: FastLED.addLeds<ML_CHIPSET, 30 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 31: FastLED.addLeds<ML_CHIPSET, 31 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-            // case 32: FastLED.addLeds<ML_CHIPSET, 32 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL; break;
-    #if !defined(BOARD_HAS_PSRAM)
-        // 33 to 37: reserved if using _octal_ SPI Flash or _octal_ PSRAM
-        case 33:
-          FastLED.addLeds<ML_CHIPSET, 33 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 34:
-          FastLED.addLeds<ML_CHIPSET, 34 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 35:
-          FastLED.addLeds<ML_CHIPSET, 35 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 36:
-          FastLED.addLeds<ML_CHIPSET, 36 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 37:
-          FastLED.addLeds<ML_CHIPSET, 37 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-    #endif
-        case 38:
-          FastLED.addLeds<ML_CHIPSET, 38 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 39:
-          FastLED.addLeds<ML_CHIPSET, 39 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 40:
-          FastLED.addLeds<ML_CHIPSET, 40 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 41:
-          FastLED.addLeds<ML_CHIPSET, 41 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 42:
-          FastLED.addLeds<ML_CHIPSET, 42 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        // 43+44 = Serial RX+TX --> don't use for LEDS when serial-to-USB is needed
-        case 43:
-          FastLED.addLeds<ML_CHIPSET, 43 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 44:
-          FastLED.addLeds<ML_CHIPSET, 44 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 45:
-          FastLED.addLeds<ML_CHIPSET, 45 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 46:
-          FastLED.addLeds<ML_CHIPSET, 46 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 47:
-          FastLED.addLeds<ML_CHIPSET, 47 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-        case 48:
-          FastLED.addLeds<ML_CHIPSET, 48 COLOR_ORDER_ARG>(leds, startLed, nrOfLights).setCorrection(TypicalLEDStrip) RGBW_CALL;
-          break;
-  #endif  // CONFIG_IDF_TARGET_ESP32S3
-
-        default:
-          EXT_LOGW(ML_TAG, "FastLEDPin assignment: pin not supported %d", pins[pinIndex]);
-        }  // switch pins[pinIndex]
+        // FastLED.addLeds<WS2812, 16, GRB>(leds, layerP.ledsPerPin[pinIndex]);  // this works!!! (but this is static)
 
         startLed += layerP.ledsPerPin[pinIndex];
 
+        CLEDController* pCur = CLEDController::head();
+        EXT_LOGD(ML_TAG, "controller p:%p", pCur);
+        while (pCur) {
+          EXT_LOGD(ML_TAG, "controller %d %d", pCur->size(), pCur->getEnabled());
+          pCur = pCur->next();
+        }
+
       }  // for pinIndex < nrOfPins
+
+      // Check which drivers are available
+      auto drivers = FastLED.getDriverInfos();
+      for (size_t i = 0; i < FastLED.getDriverCount(); i++) {
+        auto& info = drivers[i];
+        EXT_LOGD(ML_TAG, "Driver: %s, Priority: %d, Enabled: %s", info.name.c_str(), info.priority, info.enabled ? "yes" : "no");
+      }
+
+      CLEDController* pCur = CLEDController::head();
+      EXT_LOGD(ML_TAG, "controller p:%p", pCur);
+      while (pCur) {
+        EXT_LOGD(ML_TAG, "controller %d %d", pCur->size(), pCur->getEnabled());
+        pCur = pCur->next();
+      }
     }
 
-    FastLED.setMaxPowerInMilliWatts(1000 * layerP.maxPower);  // 5v, 2000mA, to protect usb while developing
+    // FastLED.setMaxPowerInMilliWatts(1000 * layerP.maxPower);  // 5v, 2000mA, to protect usb while developing
   }
+
+  ~FastLEDDriver() override { FastLED.reset(ResetFlags::CHANNELS); }
 };
 
 #endif
