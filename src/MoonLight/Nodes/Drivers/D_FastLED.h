@@ -22,16 +22,10 @@ class FastLEDDriver : public DriverNode {
   static uint8_t dim() { return _NoD; }
   static const char* tags() { return "☸️"; }
 
-  char version[20] = TOSTRING(FASTLED_VERSION);  // "." TOSTRING(FASTLED_VERSION_MINOR) "." TOSTRING(FASTLED_VERSION_PATCH);
-  Char<32> status = "ok";
-  Char<32> engine = "";
-  // #if CONFIG_IDF_TARGET_ESP32S3
-  // uint8_t affinity = 2;  // I2S
-  // #elif CONFIG_IDF_TARGET_ESP32P4
-  // uint8_t affinity = 4;  // parlio
-  // #else
+  Char<32> version = FASTLED_BUILD;
+  Char<32> status = "NoInit";
+  Char<32> engine = "Auto";
   uint8_t affinity = 0;  // auto
-  // #endif
   uint8_t temperature = 0;
   uint8_t correction = 0;
   bool dither = false;
@@ -42,12 +36,12 @@ class FastLEDDriver : public DriverNode {
     addControl(affinity, "affinity", "select");
     addControlValue("Auto");
     addControlValue("RMT");
-    addControlValue("I2S");
+    addControlValue("I2S");  // #ifndef CONFIG_IDF_TARGET_ESP32 ... not now as it changes the order numbering
     addControlValue("SPI");
   #if CONFIG_IDF_TARGET_ESP32P4
     addControlValue("Parlio");
   #endif
-    addControl(engine, "engine", "text", 0, 32, true); // the resolved engine based on affinity
+    addControl(engine, "engine", "text", 0, 32, true);  // the resolved engine based on affinity
 
     addControl(temperature, "temperature", "select");
     addControlValue("Uncorrected");
@@ -299,6 +293,8 @@ class FastLEDDriver : public DriverNode {
       }
       EXT_LOGD(ML_TAG, "status: %s", statusString.c_str());
 
+      version.format("4.0 pre release! %s", FASTLED_BUILD);  // version.format("%s %s", TOSTRING(FASTLED_VERSION), FASTLED_BUILD);
+      updateControl("version", version);
       updateControl("status", statusString.c_str());
       moduleNodes->requestUIUpdate = true;
 

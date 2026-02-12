@@ -26,8 +26,8 @@ class ParallelLEDDriver : public DriverNode {
   static const char* tags() { return "☸️"; }
 
   #if HP_ALL_DRIVERS
-  Char<32> version = HP_ALL_VERSION;
-  Char<32> status = "ok";
+  Char<32> version = HP_ALL_BUILD;
+  Char<32> status = "NoInit";
     #ifndef BOARD_HAS_PSRAM
   uint8_t dmaBuffer = 6;
     #else
@@ -41,7 +41,6 @@ class ParallelLEDDriver : public DriverNode {
     addControl(dmaBuffer, "dmaBuffer", "slider", 1, 100);
     addControl(version, "version", "text", 0, 32, true);  // read only
     addControl(status, "status", "text", 0, 32, true);    // read only
-    updateControl("version", HP_ALL_VERSION);             // update also if node already exists
   #endif
   }
 
@@ -106,6 +105,8 @@ class ParallelLEDDriver : public DriverNode {
       }
       EXT_LOGD(ML_TAG, "status: %s", statusString.c_str());
 
+      version = HP_ALL_BUILD;
+      updateControl("version", version);
       updateControl("status", statusString.c_str());
       moduleNodes->requestUIUpdate = true;
 

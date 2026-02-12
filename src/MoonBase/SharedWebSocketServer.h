@@ -60,8 +60,8 @@ class SharedWebSocketServer {
 
       // Handle incoming frame data
       if (frame->type == HTTPD_WS_TYPE_TEXT) {
-        EXT_LOGD(ML_TAG, "search module %s", request->url());
         Module* module = findModule(request->url());
+        EXT_LOGD(ML_TAG, "search module %s: %p", request->path().c_str(), module);
         if (module) {
           JsonDocument doc;
           DeserializationError error = deserializeJson(doc, (char*)frame->payload, frame->len);

@@ -114,7 +114,7 @@ class Module : public StatefulService<ModuleState> {
 
     if (requestUIUpdate) {
       requestUIUpdate = false;  // reset the flag
-      EXT_LOGD(ML_TAG, "requestUIUpdate");
+      EXT_LOGD(ML_TAG, "requestUIUpdate %s", _moduleName);
 
       // update state to UI
       update(

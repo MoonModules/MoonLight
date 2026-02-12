@@ -50,8 +50,8 @@ class SharedHttpEndpoint {
 
  private:
   esp_err_t handleGet(PsychicRequest* request) {
-    EXT_LOGD(ML_TAG, "search module %s", request->path().c_str());
     Module* module = findModule(request->path());
+    EXT_LOGD(ML_TAG, "search module %s: %p", request->path().c_str(), module);
     if (!module) return request->reply(404);
 
     PsychicJsonResponse response = PsychicJsonResponse(request, false);
