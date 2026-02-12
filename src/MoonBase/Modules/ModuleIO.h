@@ -14,7 +14,7 @@
 
 #if FT_MOONBASE == 1
 
-  #include <Wire.h>
+  #include <Wire.h> // for i2C
 
   #include "MoonBase/Module.h"
   #include "driver/uart.h"
@@ -582,6 +582,23 @@ class ModuleIO : public Module {
       pinAssigner.assignPin(8, pin_I2C_SDA);
       pinAssigner.assignPin(9, pin_I2C_SCL);
   #endif
+  // In setBoardPresetDefaults() for board_none (default case):
+  #ifdef CONFIG_IDF_TARGET_ESP32
+      pinAssigner.assignPin(21, pin_I2C_SDA);  // ESP32 classic
+      pinAssigner.assignPin(22, pin_I2C_SCL);
+  #elif defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32C3)
+      pinAssigner.assignPin(8, pin_I2C_SDA);  // ESP32-C3
+      pinAssigner.assignPin(9, pin_I2C_SCL);
+  #elif defined(CONFIG_IDF_TARGET_ESP32C6)
+      pinAssigner.assignPin(23, pin_I2C_SDA);  // ESP32-C6
+      pinAssigner.assignPin(22, pin_I2C_SCL);
+  #elif defined(CONFIG_IDF_TARGET_ESP32P4)
+      pinAssigner.assignPin(7, pin_I2C_SDA);  // ESP32-P4 (common board default)
+      pinAssigner.assignPin(8, pin_I2C_SCL);
+  #else
+      pinAssigner.assignPin(21, pin_I2C_SDA);  // Fallback
+      pinAssigner.assignPin(22, pin_I2C_SCL);
+  #endif
 
       // trying to add more pins, but these pins not liked by esp32-d0-16MB ... 🚧
       // pinAssigner.assignPin(4, pin_LED_02;
@@ -721,6 +738,9 @@ class ModuleIO : public Module {
   #endif  // ethernet
 
   #if FT_BATTERY
+    pinVoltage = UINT8_MAX;
+    pinCurrent = UINT8_MAX;
+    pinBattery = UINT8_MAX;
     for (JsonObject pinObject : _state.data["pins"].as<JsonArray>()) {
       uint8_t usage = pinObject["usage"];
       if (usage == pin_Voltage) {
@@ -811,6 +831,8 @@ class ModuleIO : public Module {
   #endif
     }
 
+    pinI2CSDA = UINT8_MAX;
+    pinI2CSCL = UINT8_MAX;
     for (JsonObject pinObject : _state.data["pins"].as<JsonArray>()) {
       uint8_t usage = pinObject["usage"];
       if (usage == pin_I2C_SDA) {
@@ -825,9 +847,10 @@ class ModuleIO : public Module {
 
     if (pinI2CSCL != UINT8_MAX && pinI2CSDA != UINT8_MAX) {
       Wire.end();  // Clean up any previous I2C initialization
+      delay(100);
       uint16_t frequency = _state.data["i2cFreq"];
       if (Wire.begin(pinI2CSDA, pinI2CSCL, frequency * 1000)) {
-        EXT_LOGI(ML_TAG, "initI2C Wire sda:%d scl:%d freq:%d", pinI2CSDA, pinI2CSCL, frequency);
+        EXT_LOGI(ML_TAG, "initI2C Wire sda:%d scl:%d freq:%d kHz", pinI2CSDA, pinI2CSCL, frequency);
         // delay(200);            // Give I2C bus time to stabilize
         // Wire.setClock(50000);  // Explicitly set to 100kHz
         updateDevices();

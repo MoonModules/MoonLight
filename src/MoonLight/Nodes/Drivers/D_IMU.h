@@ -11,6 +11,7 @@
 
 #if FT_MOONLIGHT
 
+  // #include <BMI160Gen.h>
   #include <MPU6050_6Axis_MotionApps20.h>
 
 class IMUDriver : public Node {
@@ -26,9 +27,6 @@ class IMUDriver : public Node {
   uint8_t board = 0;
 
   void setup() override {
-    // controls will show in the UI
-    // for different type of controls see other Nodes
-    // addControl(pin, "pin", "slider", 1, SOC_GPIO_PIN_COUNT - 1);
     addControl(gyro, "gyro", "coord3D");
     addControl(accell, "accell", "coord3D");
     // isEnabled = false;  // need to enable after fresh setup
@@ -73,6 +71,16 @@ class IMUDriver : public Node {
               }
             } else
               EXT_LOGW(ML_TAG, "Testing device connections MPU6050 connection failed");
+          } else if (board == 1) {  // BMI160 - NEW
+
+            // BMI160.begin(BMI160GenClass::I2C_MODE, 0x68);
+
+            // if (BMI160.getDeviceID() == 0xD1) {  // BMI160 device ID
+            //   EXT_LOGI(ML_TAG, "BMI160 connection successful");
+            //   motionTrackingReady = true;
+            // } else {
+            //   EXT_LOGW(ML_TAG, "BMI160 connection failed");
+            // }
           }
         }
       }
@@ -104,7 +112,7 @@ class IMUDriver : public Node {
 
         // needed to repeat the following 3 lines (yes if you look at the output: otherwise not 0)
         // mpu.dmpGetQuaternion(&q, fifoBuffer);
-        // mpu.dmpGetAccel(&aa, fifoBuffer);
+        mpu.dmpGetAccel(&aa, fifoBuffer);
         // mpu.dmpGetGravity(&gravity, &q);
 
         mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
@@ -114,6 +122,28 @@ class IMUDriver : public Node {
         accell.y = aaReal.y;
         accell.z = aaReal.z;
       }
+    } else if (board == 1) {  // BMI160 - NEW
+      // int gx, gy, gz, ax, ay, az;
+      // BMI160.readGyro(gx, gy, gz);
+      // BMI160.readAccelerometer(ax, ay, az);
+      
+      // // Convert raw values to degrees (BMI160 gyro: 16.4 LSB/°/s at ±2000°/s range)
+      // gyro.x = gx / 16.4f;
+      // gyro.y = gy / 16.4f;
+      // gyro.z = gz / 16.4f;
+      
+      // // Convert raw accel values (BMI160 accel: 16384 LSB/g at ±2g range)
+      // accell.x = ax;
+      // accell.y = ay;
+      // accell.z = az;
+      
+      // // Calculate gravity vector from accelerometer
+      // float norm = sqrt(ax*ax + ay*ay + az*az);
+      // if (norm > 0) {
+      //   sharedData.gravity.x = (ax / norm) * INT16_MAX;
+      //   sharedData.gravity.y = (ay / norm) * INT16_MAX;
+      //   sharedData.gravity.z = (az / norm) * INT16_MAX;
+      // }
     }
   };
 
