@@ -48,9 +48,6 @@ class SharedFSPersistence {
     info.delayedWriting = delayedWriting;
     info.hasDelayedWrite = false;
 
-    // Register update handler
-    info.updateHandlerId = module->addUpdateHandler([this, module](const String& originId) { writeToFS(module->_moduleName); }, false);
-
     _modules[module->_moduleName] = info;
   }
 
@@ -59,7 +56,16 @@ class SharedFSPersistence {
     for (auto& pair : _modules) {
       readFromFS(pair.first);
     }
-    // All setup happens in registerModule
+
+    // Register update handlers for modules that requested delayed writing
+    for (auto& pair : _modules) {
+      if (pair.second.delayedWriting) {
+        enableUpdateHandler(pair.first);
+        EXT_LOGD(ML_TAG, "Enabled update handler for %s after file read", pair.first);
+      }
+    }
+
+    EXT_LOGI(ML_TAG, "SharedFSPersistence initialization complete");
   }
 
   // ADDED: Enable/disable update handler for specific module

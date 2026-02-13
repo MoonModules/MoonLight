@@ -179,7 +179,7 @@ class FixedRectangleEffect : public Node {
     for (pos.z = z; pos.z < MIN(z + depth, layer->size.z); pos.z++) {
       for (pos.y = y; pos.y < MIN(y + height, layer->size.y); pos.y++) {
         for (pos.x = x; pos.x < MIN(x + width, layer->size.x); pos.x++) {
-          if (red || green || blue) { // only setRGB if sliders set
+          if (red || green || blue) {  // only setRGB if sliders set
             if (alternateWhite && alternate)
               layer->setRGB(pos, CRGB::White);
             else
@@ -1562,8 +1562,8 @@ class VUMeterEffect : public Node {
     int y1 = y0 - round(size.y * 0.7 * sin((angle + 30) * PI / 180));
 
     // ✅ Clamp to valid bounds
-    x1 = MAX(0, MIN(x1, layer->size.x - 1));
-    y1 = MAX(0, MIN(y1, layer->size.y - 1));
+    x1 = MAX(topLeft.x, MIN(x1, topLeft.x + size.x - 1));
+    y1 = MAX(topLeft.y, MIN(y1, topLeft.y + size.y - 1));
 
     // Draw the needle
     layer->drawLine(x0, y0, x1, y1, color, true);
