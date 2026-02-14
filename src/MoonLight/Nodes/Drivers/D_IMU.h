@@ -90,7 +90,7 @@ class IMUDriver : public Node {
   }
 
   void stopBoard() {
-    if (!motionTrackingReady) return; // not active so no need to stop
+    if (!motionTrackingReady) return;  // not active so no need to stop
 
     EXT_LOGI(ML_TAG, "Stopping board %d", board);
     motionTrackingReady = false;
@@ -99,17 +99,18 @@ class IMUDriver : public Node {
     }
   }
 
+  bool requestInitBoard = false;
   void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
     // add your custom onUpdate code here
     if (!control["on"].isNull()) {  // control is the node n case of on!
-      if (control["on"] == true) {
-        initBoard();
+      if (on) {
+        requestInitBoard = true;
       } else {
         stopBoard();
       }
     } else if (control["name"] == "board") {
       stopBoard();
-      initBoard();
+      if (on) requestInitBoard = true;
     }
   }
 
@@ -117,6 +118,12 @@ class IMUDriver : public Node {
     // mpu.getMotion6(&accell.x, &accell.y, &accell.z, &gyro.x, &gyro.y, &gyro.z);
     // // display tab-separated accel/gyro x/y/z values
     // EXT_LOGI(ML_TAG, "mpu6050 %d,%d,%d %d,%d,%d", accell.x, accell.y, accell.z, gyro.x, gyro.y, gyro.z);
+
+    //process this out of onUpdate
+    if (requestInitBoard) {
+      requestInitBoard = false;
+      initBoard();
+    }
 
     // if programming failed, don't try to do anything
     if (!motionTrackingReady) return;

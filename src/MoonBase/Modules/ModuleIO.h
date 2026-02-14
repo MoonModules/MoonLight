@@ -252,7 +252,7 @@ class ModuleIO : public Module {
 
   void setBoardPresetDefaults(uint8_t boardID) {
     JsonDocument doc;
-    current_board_id = boardID;
+    _current_board_id = boardID;
     JsonObject newState = doc.to<JsonObject>();
     newState["modded"] = false;
 
@@ -639,7 +639,7 @@ class ModuleIO : public Module {
     } else if (updatedItem.name == "usage") {
       newState["modded"] = true;
     } else if (updatedItem.name == "i2cFreq") {
-      Wire.setClock(updatedItem.value.as<uint16_t>() * 1000);
+      Wire.setClock(updatedItem.value.as<uint32_t>() * 1000);  // uint32_t instead of uint16_t to multiply in 32-bit arithmetic
     }
 
     if (newState.size()) update(newState, ModuleState::update, _moduleName);  // if changes made then update
@@ -732,20 +732,20 @@ class ModuleIO : public Module {
   #endif  // ethernet
 
   #if FT_BATTERY
-    pinVoltage = UINT8_MAX;
-    pinCurrent = UINT8_MAX;
-    pinBattery = UINT8_MAX;
+    _pinVoltage = UINT8_MAX;
+    _pinCurrent = UINT8_MAX;
+    _pinBattery = UINT8_MAX;
     for (JsonObject pinObject : _state.data["pins"].as<JsonArray>()) {
       uint8_t usage = pinObject["usage"];
       if (usage == pin_Voltage) {
-        pinVoltage = pinObject["GPIO"];
-        EXT_LOGD(ML_TAG, "pinVoltage found %d", pinVoltage);
+        _pinVoltage = pinObject["GPIO"];
+        EXT_LOGD(ML_TAG, "pinVoltage found %d", _pinVoltage);
       } else if (usage == pin_Current) {
-        pinCurrent = pinObject["GPIO"];
-        EXT_LOGD(ML_TAG, "pinCurrent found %d", pinCurrent);
+        _pinCurrent = pinObject["GPIO"];
+        EXT_LOGD(ML_TAG, "pinCurrent found %d", _pinCurrent);
       } else if (usage == pin_Battery) {
-        pinBattery = pinObject["GPIO"];
-        EXT_LOGD(ML_TAG, "pinBattery found %d", pinBattery);
+        _pinBattery = pinObject["GPIO"];
+        EXT_LOGD(ML_TAG, "pinBattery found %d", _pinBattery);
       }
     }
   #endif
@@ -825,8 +825,9 @@ class ModuleIO : public Module {
   #endif
     }
 
-    pinI2CSDA = UINT8_MAX;
-    pinI2CSCL = UINT8_MAX;
+    uint8_t pinI2CSDA = UINT8_MAX;
+    uint8_t pinI2CSCL = UINT8_MAX;
+
     for (JsonObject pinObject : _state.data["pins"].as<JsonArray>()) {
       uint8_t usage = pinObject["usage"];
       if (usage == pin_I2C_SDA) {
@@ -842,26 +843,21 @@ class ModuleIO : public Module {
     if (pinI2CSCL != UINT8_MAX && pinI2CSDA != UINT8_MAX) {
       Wire.end();  // Clean up any previous I2C initialization
       delay(100);
-      uint16_t frequency = _state.data["i2cFreq"];
+      uint32_t frequency = _state.data["i2cFreq"];
       if (Wire.begin(pinI2CSDA, pinI2CSCL, frequency * 1000)) {
         EXT_LOGI(ML_TAG, "initI2C Wire sda:%d scl:%d freq:%d kHz", pinI2CSDA, pinI2CSCL, frequency);
         // delay(200);            // Give I2C bus time to stabilize
         // Wire.setClock(50000);  // Explicitly set to 100kHz
         _state.data["I2CReady"] = true;
         updateDevices();
-      } else
+      } else {
         _state.data["I2CReady"] = false;
         EXT_LOGE(ML_TAG, "initI2C Wire failed");
+      }
     }
   }  // readPins
 
-  uint8_t pinI2CSDA = UINT8_MAX;
-  uint8_t pinI2CSCL = UINT8_MAX;
-
   #if FT_BATTERY
-  uint8_t pinVoltage = UINT8_MAX;
-  uint8_t pinCurrent = UINT8_MAX;
-  uint8_t pinBattery = UINT8_MAX;
 
   adc_attenuation_t adc_get_adjusted_gain(adc_attenuation_t current_gain, uint32_t adc_mv_readout) {
     if (current_gain == ADC_11db && adc_mv_readout < 1700) {
@@ -891,38 +887,38 @@ class ModuleIO : public Module {
   void loop1s() {
   #if FT_BATTERY
     BatteryService* batteryService = _sveltekit->getBatteryService();
-    if (pinBattery != UINT8_MAX) {
-      float mVB = analogReadMilliVolts(pinBattery) * 2.0;
+    if (_pinBattery != UINT8_MAX) {
+      float mVB = analogReadMilliVolts(_pinBattery) * 2.0;
       float perc = (mVB - BATTERY_MV * 0.65) / (BATTERY_MV * 0.35);  // 65% of full battery is 0%, showing 0-100%
       // ESP_LOGD("", "bat mVB %f p:%f", mVB, perc);
       batteryService->updateSOC(perc * 100);
     }
-    if (pinVoltage != UINT8_MAX) {
+    if (_pinVoltage != UINT8_MAX) {
       analogSetAttenuation(voltage_readout_current_adc_attenuation);
-      uint32_t adc_mv_vinput = analogReadMilliVolts(pinVoltage);
+      uint32_t adc_mv_vinput = analogReadMilliVolts(_pinVoltage);
       analogSetAttenuation(ADC_11db);
       float volts = 0;
-      if (current_board_id == board_SE16V1) {
+      if (_current_board_id == board_SE16V1) {
         volts = ((float)adc_mv_vinput) * 2 / 1000;
       }  // /2 resistor divider
-      else if (current_board_id == board_LightCrafter16) {
+      else if (_current_board_id == board_LightCrafter16) {
         volts = ((float)adc_mv_vinput) * 11.43 / (1.43 * 1000);
       }  // 1k43/10k resistor divider
       batteryService->updateVoltage(volts);
       voltage_readout_current_adc_attenuation = adc_get_adjusted_gain(voltage_readout_current_adc_attenuation, adc_mv_vinput);
     }
-    if (pinCurrent != UINT8_MAX) {
+    if (_pinCurrent != UINT8_MAX) {
       analogSetAttenuation(current_readout_current_adc_attenuation);
-      uint32_t adc_mv_cinput = analogReadMilliVolts(pinCurrent);
+      uint32_t adc_mv_cinput = analogReadMilliVolts(_pinCurrent);
       analogSetAttenuation(ADC_11db);
       current_readout_current_adc_attenuation = adc_get_adjusted_gain(current_readout_current_adc_attenuation, adc_mv_cinput);
-      if ((current_board_id == board_SE16V1) || (current_board_id == board_LightCrafter16)) {
+      if ((_current_board_id == board_SE16V1) || (_current_board_id == board_LightCrafter16)) {
         if (adc_mv_cinput > 330)  // datasheet quiescent output voltage of 0.5V, which is ~330mV after the 10k/5k1 voltage divider. Ideally, this value should be measured at boot when nothing is displayed on the LEDs
         {
-          if (current_board_id == board_SE16V1) {
+          if (_current_board_id == board_SE16V1) {
             batteryService->updateCurrent((((float)(adc_mv_cinput)-250) * 50.00) / 1000);
           }  // 40mV / A with a /2 resistor divider, so a 50mA/mV
-          else if (current_board_id == board_LightCrafter16) {
+          else if (_current_board_id == board_LightCrafter16) {
             batteryService->updateCurrent((((float)(adc_mv_cinput)-330) * 37.75) / 1000);
           }  // 40mV / A with a 10k/5k1 resistor divider, so a 37.75mA/mV
         } else {
@@ -961,7 +957,13 @@ class ModuleIO : public Module {
 
  private:
   ESP32SvelteKit* _sveltekit;
-  uint8_t current_board_id = UINT8_MAX;
+  uint8_t _current_board_id = UINT8_MAX;
+  #if FT_BATTERY
+  // used in loop1s()
+  uint8_t _pinVoltage = UINT8_MAX;
+  uint8_t _pinCurrent = UINT8_MAX;
+  uint8_t _pinBattery = UINT8_MAX;
+  #endif
 };
 
 #endif
