@@ -24,66 +24,92 @@ class IMUDriver : public Node {
 
   Coord3D gyro;  // in degrees (not radians)
   Coord3D accell;
-  uint8_t board = 0;
+  uint8_t board = 0;  // default MPU6050
 
   void setup() override {
     addControl(gyro, "gyro", "coord3D");
     addControl(accell, "accell", "coord3D");
-    // isEnabled = false;  // need to enable after fresh setup
     addControl(board, "board", "select");
     addControlValue("MPU6050");
     addControlValue("BMI160");  // not supported yet
+  }
+
+  void initBoard() {
+    if (motionTrackingReady) return;
+
+    EXT_LOGI(ML_TAG, "Starting board %d", board);
+
+    moduleIO->read(
+        [&](ModuleState& state) {
+          if (state.data["I2CReady"].as<bool>()) {
+            if (board == 0) {  // MPU6050
+              mpu.initialize();
+
+              // delay(100);
+
+              // verify connection
+              if (mpu.testConnection()) {
+                EXT_LOGI(ML_TAG, "MPU6050 connection successful Initializing DMP...");
+                uint8_t devStatus = mpu.dmpInitialize();
+
+                if (devStatus == 0) {
+                  // // Calibration Time: generate offsets and calibrate our MPU6050
+                  mpu.CalibrateAccel(6);
+                  mpu.CalibrateGyro(6);
+                  // mpu.PrintActiveOffsets();
+
+                  mpu.setDMPEnabled(true);  // mandatory
+
+                  // mpuIntStatus = mpu.getIntStatus();
+
+                  motionTrackingReady = true;
+                } else {
+                  // ERROR!
+                  // 1 = initial memory load failed
+                  // 2 = DMP configuration updates failed
+                  // (if it's going to break, usually the code will be 1)
+                  EXT_LOGW(ML_TAG, "DMP Initialization failed (code %d)", devStatus);
+                }
+              } else
+                EXT_LOGW(ML_TAG, "Testing device connections MPU6050 connection failed");
+            } else if (board == 1) {  // BMI160 - NEW
+
+              // BMI160.begin(BMI160GenClass::I2C_MODE, 0x68);
+
+              // if (BMI160.getDeviceID() == 0xD1) {  // BMI160 device ID
+              //   EXT_LOGI(ML_TAG, "BMI160 connection successful");
+              //   motionTrackingReady = true;
+              // } else {
+              //   EXT_LOGW(ML_TAG, "BMI160 connection failed");
+              // }
+            }
+          } else
+            EXT_LOGW(ML_TAG, "I2C State not ready");
+        },
+        name());
+  }
+
+  void stopBoard() {
+    if (!motionTrackingReady) return; // not active so no need to stop
+
+    EXT_LOGI(ML_TAG, "Stopping board %d", board);
+    motionTrackingReady = false;
+    if (board == 0) {  // MPU6050
+      mpu.setDMPEnabled(false);
+    }
   }
 
   void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
     // add your custom onUpdate code here
     if (!control["on"].isNull()) {  // control is the node n case of on!
       if (control["on"] == true) {
-        bool i2cInited = true;  // todo: check in moduleIO if successfull
-        if (i2cInited) {
-          if (board == 0) {  // MPU6050
-            mpu.initialize();
-
-            // delay(100);
-
-            // verify connection
-            if (mpu.testConnection()) {
-              EXT_LOGI(ML_TAG, "MPU6050 connection successful Initializing DMP...");
-              uint8_t devStatus = mpu.dmpInitialize();
-
-              if (devStatus == 0) {
-                // // Calibration Time: generate offsets and calibrate our MPU6050
-                mpu.CalibrateAccel(6);
-                mpu.CalibrateGyro(6);
-                // mpu.PrintActiveOffsets();
-
-                mpu.setDMPEnabled(true);  // mandatory
-
-                // mpuIntStatus = mpu.getIntStatus();
-
-                motionTrackingReady = true;
-              } else {
-                // ERROR!
-                // 1 = initial memory load failed
-                // 2 = DMP configuration updates failed
-                // (if it's going to break, usually the code will be 1)
-                EXT_LOGW(ML_TAG, "DMP Initialization failed (code %d)", devStatus);
-              }
-            } else
-              EXT_LOGW(ML_TAG, "Testing device connections MPU6050 connection failed");
-          } else if (board == 1) {  // BMI160 - NEW
-
-            // BMI160.begin(BMI160GenClass::I2C_MODE, 0x68);
-
-            // if (BMI160.getDeviceID() == 0xD1) {  // BMI160 device ID
-            //   EXT_LOGI(ML_TAG, "BMI160 connection successful");
-            //   motionTrackingReady = true;
-            // } else {
-            //   EXT_LOGW(ML_TAG, "BMI160 connection failed");
-            // }
-          }
-        }
+        initBoard();
+      } else {
+        stopBoard();
       }
+    } else if (control["name"] == "board") {
+      stopBoard();
+      initBoard();
     }
   }
 
@@ -106,11 +132,10 @@ class IMUDriver : public Node {
         sharedData.gravity.x = gravity.x * INT16_MAX;
         sharedData.gravity.y = gravity.y * INT16_MAX;
         sharedData.gravity.z = gravity.z * INT16_MAX;
-        // display real acceleration, adjusted to remove gravity
 
         EXT_LOGD(ML_TAG, "%f %f %f", gravity.x, gravity.y, gravity.z);
 
-        // needed to repeat the following 3 lines (yes if you look at the output: otherwise not 0)
+        // needed to repeat the following 3 lines (yes if you look at the output: otherwise not 0): commented out
         // mpu.dmpGetQuaternion(&q, fifoBuffer);
         mpu.dmpGetAccel(&aa, fifoBuffer);
         // mpu.dmpGetGravity(&gravity, &q);
@@ -126,17 +151,17 @@ class IMUDriver : public Node {
       // int gx, gy, gz, ax, ay, az;
       // BMI160.readGyro(gx, gy, gz);
       // BMI160.readAccelerometer(ax, ay, az);
-      
+
       // // Convert raw values to degrees (BMI160 gyro: 16.4 LSB/°/s at ±2000°/s range)
       // gyro.x = gx / 16.4f;
       // gyro.y = gy / 16.4f;
       // gyro.z = gz / 16.4f;
-      
+
       // // Convert raw accel values (BMI160 accel: 16384 LSB/g at ±2g range)
       // accell.x = ax;
       // accell.y = ay;
       // accell.z = az;
-      
+
       // // Calculate gravity vector from accelerometer
       // float norm = sqrt(ax*ax + ay*ay + az*az);
       // if (norm > 0) {
@@ -147,7 +172,7 @@ class IMUDriver : public Node {
     }
   };
 
-  ~IMUDriver() override {};
+  ~IMUDriver() override { stopBoard(); }
 
  private:
   MPU6050 mpu;

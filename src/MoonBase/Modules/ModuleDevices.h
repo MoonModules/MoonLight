@@ -187,7 +187,16 @@ class ModuleDevices : public Module {
       for (JsonObject dev : devices) {
         if (time(nullptr) - dev["lastSync"].as<time_t>() < 86400) devicesVector.push_back(dev);  // max 1 day
       }
-      std::sort(devicesVector.begin(), devicesVector.end(), [](JsonObject a, JsonObject b) { return a["name"] < b["name"]; });
+
+      std::sort(devicesVector.begin(), devicesVector.end(), [](JsonObject a, JsonObject b) {
+        // Primary sort: by name
+        // int nameCompare = strcmp(a["name"].as<const char*>(), b["name"].as<const char*>());
+        // if (nameCompare != 0) return nameCompare < 0;
+        if (a["name"] != b["name"]) return a["name"] < b["name"];
+
+        // Tie-breaker: by IP address (ensures stable sort)
+        return strcmp(a["ip"].as<const char*>(), b["ip"].as<const char*>()) < 0;
+      });
 
       doc2["devices"].to<JsonArray>();
       for (JsonObject device : devicesVector) {

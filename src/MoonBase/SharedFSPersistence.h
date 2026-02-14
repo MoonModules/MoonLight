@@ -163,17 +163,20 @@ class SharedFSPersistence {
 
     serializeJson(doc, file);
     file.close();
+
     return true;
   }
 
   // ADDED: Static method to process all delayed writes
   static void writeToFSDelayed(char writeOrCancel) {
-    ESP_LOGD(SVK_TAG, "calling %d writeFuncs from delayedWrites", sharedDelayedWrites.size());
+    ESP_LOGD(SVK_TAG, "calling %u writeFuncs from delayedWrites", sharedDelayedWrites.size());
 
-    for (auto& writeFunc : sharedDelayedWrites) {
+    // writeFunc("C") calls readFromFS and module->update, which will call SharedFSPersistence.h onUpdate which will send any state change to writeToFS which add to sharedDelayedWrites
+    auto pending = std::move(sharedDelayedWrites);
+    sharedDelayedWrites.clear();  // leave in valid-but-empty state
+    for (auto& writeFunc : pending) {
       writeFunc(writeOrCancel);
     }
-    sharedDelayedWrites.clear();
   }
 
  private:

@@ -54,7 +54,7 @@ void PhysicalLayer::setup() {
     lights.maxChannels = MIN(ESP.getPsramSize() / 4, 128 * 64 * 16 * 3);  // fill max 2 * 25% of PSRAM with channels, supporting Virtual driver which is 120 pins * 512..1024 LEDs, max 16 Hub75 128x64 panels
     lights.useDoubleBuffer = true;                                        // Enable double buffering
   } else {
-    lights.maxChannels = 2048 * 3;   // esp32-d0: max 1024->2048->4096 Leds ATM
+    lights.maxChannels = 2048 * 3;   // esp32-d0: max 1024->2048->4096->2048 Leds ATM (4096 is too bleeding edge still - hope is replacing PhysicHTTP by Async webserver solves this)
     lights.useDoubleBuffer = false;  // Single buffer mode
   }
 

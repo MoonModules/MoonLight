@@ -14,7 +14,7 @@
 
 #if FT_MOONBASE == 1
 
-  #include <Wire.h> // for i2C
+  #include <Wire.h>  // for i2C
 
   #include "MoonBase/Module.h"
   #include "driver/uart.h"
@@ -219,7 +219,8 @@ class ModuleIO : public Module {
       addControl(rows, "DriveCap", "text", 0, 32, true);  // ro
     }
 
-    addControl(controls, "i2cFreq", "number", 0, 65534, false, "kHz");
+    control = addControl(controls, "i2cFreq", "number", 10, 1000, false, "kHz");
+    control["default"] = 100;  // 100 kHz standard mode
 
     control = addControl(controls, "i2cBus", "rows");
     control["crud"] = "r";
@@ -575,14 +576,7 @@ class ModuleIO : public Module {
   #else
       pinAssigner.assignPin(16, pin_LED);
   #endif
-  #ifdef CONFIG_IDF_TARGET_ESP32
-      pinAssigner.assignPin(21, pin_I2C_SDA);
-      pinAssigner.assignPin(22, pin_I2C_SCL);
-  #else
-      pinAssigner.assignPin(8, pin_I2C_SDA);
-      pinAssigner.assignPin(9, pin_I2C_SCL);
-  #endif
-  // In setBoardPresetDefaults() for board_none (default case):
+
   #ifdef CONFIG_IDF_TARGET_ESP32
       pinAssigner.assignPin(21, pin_I2C_SDA);  // ESP32 classic
       pinAssigner.assignPin(22, pin_I2C_SCL);
@@ -853,8 +847,10 @@ class ModuleIO : public Module {
         EXT_LOGI(ML_TAG, "initI2C Wire sda:%d scl:%d freq:%d kHz", pinI2CSDA, pinI2CSCL, frequency);
         // delay(200);            // Give I2C bus time to stabilize
         // Wire.setClock(50000);  // Explicitly set to 100kHz
+        _state.data["I2CReady"] = true;
         updateDevices();
       } else
+        _state.data["I2CReady"] = false;
         EXT_LOGE(ML_TAG, "initI2C Wire failed");
     }
   }  // readPins

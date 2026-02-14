@@ -1177,8 +1177,9 @@ class ParticlesEffect : public Node {
   uint8_t speed = 15;
   uint8_t numParticles = 10;
   bool barriers = false;
-  bool gyro = false;
-  bool randomGravity = true;
+  // bool gyro = false;
+  // bool randomGravity = true;
+  uint8_t gravityType = 0;
   uint8_t gravityChangeInterval = 5;
   // bool debugPrint    = layer->effectData.read<bool>();
   bool debugPrint = false;
@@ -1187,8 +1188,10 @@ class ParticlesEffect : public Node {
     addControl(speed, "speed", "slider", 0, 30);
     addControl(numParticles, "number of Particles", "slider", 1, 255);
     addControl(barriers, "barriers", "checkbox");
-    addControl(gyro, "gyro", "checkbox");
-    addControl(randomGravity, "randomGravity", "checkbox");
+    addControl(gravityType, "gravity", "select");
+    addControlValue("None");
+    addControlValue("Random");
+    addControlValue("Gyro");
     addControl(gravityChangeInterval, "gravityChangeInterval", "slider", 1, 10);
     // addControl(bool, "Debug Print",             layer->effectData.write<bool>(0));
   }
@@ -1248,12 +1251,10 @@ class ParticlesEffect : public Node {
   void loop() override {
     if (!speed || pal::millis() - step < 1000 / speed) return;  // Not enough time passed
 
-    float gravityX, gravityY, gravityZ;  // Gravity if using gyro or random gravity
-
-    if (gyro) {
-      gravity[0] = -sharedData.gravity.x;
-      gravity[1] = sharedData.gravity.z;  // Swap Y and Z axis
-      gravity[2] = -sharedData.gravity.y;
+    if (gravityType == 2) {  // Gyro
+      gravity[0] = -sharedData.gravity.x / INT16_MAX;
+      gravity[1] = sharedData.gravity.z / INT16_MAX;  // Swap Y and Z axis
+      gravity[2] = -sharedData.gravity.y / INT16_MAX;
 
       if (layer->layerDimension == _2D) {  // Swap back Y and Z axis set Z to 0
         gravity[1] = -gravity[2];
@@ -1261,7 +1262,7 @@ class ParticlesEffect : public Node {
       }
     }
 
-    if (randomGravity) {
+    if (gravityType == 1) {  // random
       if (pal::millis() - gravUpdate > gravityChangeInterval * 1000) {
         gravUpdate = pal::millis();
         float scale = 5.0f;
@@ -1280,7 +1281,7 @@ class ParticlesEffect : public Node {
     }
 
     for (int index = 0; index < numParticles; index++) {
-      if (gyro || randomGravity) {  // Lerp gravity towards gyro or random gravity if enabled
+      if (gravityType > 0) {  // Lerp gravity towards gyro or random gravity if enabled
         float lerpFactor = .75;
         particles[index].vx += (gravity[0] - particles[index].vx) * lerpFactor;
         particles[index].vy += (gravity[1] - particles[index].vy) * lerpFactor;  // Swap Y and Z axis
