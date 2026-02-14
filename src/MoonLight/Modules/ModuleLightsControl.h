@@ -15,7 +15,6 @@
 #if FT_MOONLIGHT
 
   #include "FastLED.h"
-  #include "ModuleEffects.h"
   #include "MoonBase/Module.h"
   #include "MoonBase/Modules/FileManager.h"
   #include "MoonBase/Utilities.h"  //for isInPSRAM
@@ -342,21 +341,22 @@ class ModuleLightsControl : public Module {
 
         if (updatedItem.value["action"] == "click") {
           updatedItem.value["selected"] = select;  // store the selected preset
-          if (arrayContainsValue(updatedItem.value["list"], select)) {
-            copyFile(presetFile.c_str(), "/.config/effects.json");
+          if (select != 255) {
+            if (arrayContainsValue(updatedItem.value["list"], select)) {
+              copyFile(presetFile.c_str(), "/.config/effects.json");
 
-            // trigger notification of update of effects.json
-            _fileManager->update(
-                [&](FilesState& state) {
-                  state.updatedItems.clear();
-                  state.updatedItems.push_back("/.config/effects.json");
-                  return StateUpdateResult::CHANGED;  // notify StatefulService by returning CHANGED
-                },
-                originId);
-
-          } else {
-            copyFile("/.config/effects.json", presetFile.c_str());
-            setPresetsFromFolder();  // update presets in UI
+              // trigger notification of update of effects.json
+              _fileManager->update(
+                  [&](FilesState& state) {
+                    state.updatedItems.clear();
+                    state.updatedItems.push_back("/.config/effects.json");
+                    return StateUpdateResult::CHANGED;  // notify StatefulService by returning CHANGED
+                  },
+                  originId);
+            } else {
+              copyFile("/.config/effects.json", presetFile.c_str());
+              setPresetsFromFolder();  // update presets in UI
+            }
           }
         } else if (updatedItem.value["action"] == "dblclick") {
           ESPFS.remove(presetFile.c_str());

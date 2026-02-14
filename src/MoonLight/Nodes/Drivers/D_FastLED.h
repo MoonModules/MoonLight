@@ -96,7 +96,7 @@ class FastLEDDriver : public DriverNode {
   void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
     DriverNode::onUpdate(oldValue, control);  // !!
 
-    EXT_LOGD(ML_TAG, "%s: %s ", control["name"].as<const char*>(), control["value"].as<String>().c_str());
+    // EXT_LOGD(ML_TAG, "%s: %s ", control["name"].as<const char*>(), control["value"].as<String>().c_str());
 
     if (control["name"] == "lightPreset") {
       options.mRgbw = RgbwInvalid::value();  // Reset RGBW options so RGB-only presets don't inherit stale W config

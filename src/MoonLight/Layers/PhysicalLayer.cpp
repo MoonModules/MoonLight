@@ -140,6 +140,15 @@ void PhysicalLayer::loopDrivers() {
   prevSize = lights.header.size;
 }
 
+void PhysicalLayer::loop20msDrivers() {
+  // runs the loop of all effects / nodes in the layer
+  for (Node* node : nodes) {
+    if (node->on) {
+      node->loop20ms();
+    }
+  }
+}
+
 void PhysicalLayer::mapLayout() {
   onLayoutPre();
   for (Node* node : nodes) {

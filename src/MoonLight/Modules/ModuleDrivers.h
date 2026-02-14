@@ -15,7 +15,6 @@
 #if FT_MOONLIGHT
 
   #include "FastLED.h"
-  // #include "MoonBase/Module.h"
   #include "MoonBase/NodeManager.h"
   #include "MoonLight/Modules/ModuleLightsControl.h"
 

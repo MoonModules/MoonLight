@@ -119,10 +119,10 @@ class IMUDriver : public Node {
     // // display tab-separated accel/gyro x/y/z values
     // EXT_LOGI(ML_TAG, "mpu6050 %d,%d,%d %d,%d,%d", accell.x, accell.y, accell.z, gyro.x, gyro.y, gyro.z);
 
-    //process this out of onUpdate
+    // process this out of onUpdate
     if (requestInitBoard) {
-      requestInitBoard = false;
       initBoard();
+      requestInitBoard = false;
     }
 
     // if programming failed, don't try to do anything

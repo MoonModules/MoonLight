@@ -622,13 +622,13 @@ class ModuleIO : public Module {
     if (updatedItem.name == "boardPreset") {
       // if booting and modded is false or ! booting
       if ((updatedItem.oldValue == "" && _state.data["modded"] == false) || updatedItem.oldValue != "") {  // only update unmodded
-        EXT_LOGD(MB_TAG, "%s %s[%d]%s[%d].%s = %s -> %s", originId.c_str(), updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
+        // EXT_LOGD(MB_TAG, "%s %s[%d]%s[%d].%s = %s -> %s", originId.c_str(), updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
         newBoardID = updatedItem.value;  // run in sveltekit task
       }
     } else if (updatedItem.name == "modded") {
       // set pins to default if modded is turned off
       if (updatedItem.value == false) {
-        EXT_LOGD(MB_TAG, "%s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
+        // EXT_LOGD(MB_TAG, "%s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
         newBoardID = _state.data["boardPreset"];  // run in sveltekit task
       }
     } else if (updatedItem.name == "switch1" || updatedItem.name == "switch2") {
@@ -841,8 +841,6 @@ class ModuleIO : public Module {
     }
 
     if (pinI2CSCL != UINT8_MAX && pinI2CSDA != UINT8_MAX) {
-      Wire.end();  // Clean up any previous I2C initialization
-      delay(100);
       uint32_t frequency = _state.data["i2cFreq"];
       if (Wire.begin(pinI2CSDA, pinI2CSCL, frequency * 1000)) {
         EXT_LOGI(ML_TAG, "initI2C Wire sda:%d scl:%d freq:%d kHz", pinI2CSDA, pinI2CSCL, frequency);
@@ -935,8 +933,8 @@ class ModuleIO : public Module {
     JsonObject newState = doc.as<JsonObject>();
 
     EXT_LOGI(ML_TAG, "Scanning I2C bus...");
-    byte count = 0;
-    for (byte i = 1; i < 127; i++) {
+    uint8_t count = 0;
+    for (uint8_t i = 1; i < 127; i++) {
       Wire.beginTransmission(i);
       if (Wire.endTransmission() == 0) {
         JsonObject i2cDevice = newState["i2cBus"].as<JsonArray>().add<JsonObject>();
