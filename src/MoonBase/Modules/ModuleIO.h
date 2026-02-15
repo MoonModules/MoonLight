@@ -87,6 +87,7 @@ enum IO_BoardsEnum {
   board_LightCrafter16,
   board_MHCV43,       // by Wladi
   board_MHCP4NanoV1,  // by Wladi V1.0
+  board_MHCP4NanoV2,  // by Wladi V2.0
   board_YvesV48,
   board_TroyP4Nano,
   board_AtomS3,
@@ -128,6 +129,7 @@ class ModuleIO : public Module {
     addControlValue(control, "Lightcrafter16");
     addControlValue(control, "MyHome-Control V43 controller");
     addControlValue(control, "MyHome-Control P4 Nano Shield V1.0");
+    addControlValue(control, "MyHome-Control P4 Nano Shield V2.0");
     addControlValue(control, "Yves V48 🚧");
     addControlValue(control, "Troy P4 Nano 🚧");
     addControlValue(control, "Atom S3R");
@@ -503,6 +505,39 @@ class ModuleIO : public Module {
         pinAssigner.assignPin(48, pin_Dig_Input);
       } else {                                                                           // off / default: 16 LED pins
         uint8_t ledPins[] = {21, 20, 25, 5, 7, 23, 8, 27, 3, 22, 24, 4, 46, 47, 2, 48};  // 16 LED_PINS in this order
+        for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
+      }
+
+      if (_state.data["switch2"]) {
+        // pins used for Line-In
+        pinAssigner.assignPin(33, pin_I2S_SD);
+        pinAssigner.assignPin(26, pin_I2S_WS);
+        pinAssigner.assignPin(32, pin_I2S_SCK);
+        pinAssigner.assignPin(36, pin_I2S_MCLK);
+      } else {  // default
+        // Pins used for build-in Mic over I2S
+        pinAssigner.assignPin(10, pin_I2S_WS);
+        pinAssigner.assignPin(11, pin_I2S_SD);
+        pinAssigner.assignPin(12, pin_I2S_SCK);
+        pinAssigner.assignPin(13, pin_I2S_MCLK);
+      }
+    } else if (boardID == board_MHCP4NanoV2) {                                    // https://shop.myhome-control.de/ABC-WLED-ESP32-P4-Shield/HW10027
+      newState["maxPower"] = 100;                                                 // Assuming decent LED power!!
+      pinAssigner.assignPin(7, pin_I2C_SDA); // on V2 these are I2C Pins
+      pinAssigner.assignPin(8, pin_I2C_SCL); // on V2 these are I2C Pins
+      if (_state.data["switch1"]) {                         // on: 8 LED Pins + RS485 + Dig Input
+        uint8_t ledPins[] = {21, 20, 25, 5, 22, 23, 24, 27};  // 8 LED pins in this order
+        for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
+        pinAssigner.assignPin(3, pin_RS485_TX);
+        pinAssigner.assignPin(4, pin_RS485_TX);
+        pinAssigner.assignPin(6, pin_RS485_TX);
+        pinAssigner.assignPin(53, pin_RS485_TX);
+        pinAssigner.assignPin(2, pin_Dig_Input);
+        pinAssigner.assignPin(46, pin_Dig_Input);
+        pinAssigner.assignPin(47, pin_Dig_Input);
+        pinAssigner.assignPin(48, pin_Dig_Input);
+      } else {                                                                           // off / default: 16 LED pins
+        uint8_t ledPins[] = {21, 20, 25, 5, 22, 23, 24, 27, 3, 6, 53, 4, 46, 47, 2, 48};  // 16 LED_PINS in this order
         for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
       }
 
