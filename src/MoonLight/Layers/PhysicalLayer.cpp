@@ -144,7 +144,10 @@ void PhysicalLayer::loop20msDrivers() {
   // runs the loop of all effects / nodes in the layer
   for (Node* node : nodes) {
     if (node->on) {
+      xSemaphoreTake(*node->layerMutex, portMAX_DELAY);
       node->loop20ms();
+      xSemaphoreGive(*node->layerMutex);
+      addYield(10);
     }
   }
 }

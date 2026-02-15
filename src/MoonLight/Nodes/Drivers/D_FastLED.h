@@ -345,10 +345,11 @@ class FastLEDDriver : public DriverNode {
   }
 
   ~FastLEDDriver() override {
+    // global: ensure only one FastLEDDriver instance exists. If multiple driver nodes are possible, this destructor will tear down channels for all of them. If singleton is guaranteed by design, consider documenting that assumption at the class level.
     auto& events = FastLED.channelEvents();
     events.onChannelCreated.clear();
     events.onChannelEnqueued.clear();
-    FastLED.reset(ResetFlags::CHANNELS);  // global: ensure only one FastLEDDriver instance exists. If multiple driver nodes are possible, this destructor will tear down channels for all of them. If singleton is guaranteed by design, consider documenting that assumption at the class level.
+    FastLED.reset(ResetFlags::CHANNELS);
   }
 };
 

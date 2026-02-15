@@ -251,8 +251,8 @@ class ModuleIO : public Module {
   };
 
   void setBoardPresetDefaults(uint8_t boardID) {
-    JsonDocument doc;
     _current_board_id = boardID;
+    JsonDocument doc;
     JsonObject newState = doc.to<JsonObject>();
     newState["modded"] = false;
 
@@ -572,22 +572,22 @@ class ModuleIO : public Module {
     } else {                      // default
       newState["maxPower"] = 10;  // USB compliant
   #ifdef CONFIG_IDF_TARGET_ESP32P4
-      pinAssigner.assignPin(37, pin_LED);  // p4-nano dpesn't like pin16
+      pinAssigner.assignPin(37, pin_LED);  // p4-nano doesn't like pin16
   #else
       pinAssigner.assignPin(16, pin_LED);
   #endif
 
   #ifdef CONFIG_IDF_TARGET_ESP32
-      pinAssigner.assignPin(21, pin_I2C_SDA);  // ESP32 classic
+      pinAssigner.assignPin(21, pin_I2C_SDA);
       pinAssigner.assignPin(22, pin_I2C_SCL);
   #elif defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32C3)
-      pinAssigner.assignPin(8, pin_I2C_SDA);  // ESP32-C3
+      pinAssigner.assignPin(8, pin_I2C_SDA);
       pinAssigner.assignPin(9, pin_I2C_SCL);
   #elif defined(CONFIG_IDF_TARGET_ESP32C6)
-      pinAssigner.assignPin(23, pin_I2C_SDA);  // ESP32-C6
+      pinAssigner.assignPin(23, pin_I2C_SDA);
       pinAssigner.assignPin(22, pin_I2C_SCL);
   #elif defined(CONFIG_IDF_TARGET_ESP32P4)
-      pinAssigner.assignPin(7, pin_I2C_SDA);  // ESP32-P4 (common board default)
+      pinAssigner.assignPin(7, pin_I2C_SDA);
       pinAssigner.assignPin(8, pin_I2C_SCL);
   #else
       pinAssigner.assignPin(21, pin_I2C_SDA);  // Fallback
@@ -609,11 +609,13 @@ class ModuleIO : public Module {
     EXT_LOGD(ML_TAG, "boardID %d", boardID);
     // serializeJson(newState, Serial);Serial.println();
 
-    update(newState, ModuleState::update, _moduleName);
+    update(newState, ModuleState::update, _moduleName);  // triggers an update from sveltekit
   }
 
   uint8_t newBoardID = UINT8_MAX;
 
+  // on update triggers another onUpdates on 2 occasions: 1) newState modded (directly) and 2) setBoardPresetDefaults (via main loop)
+  // each will trigger the updateHandler of this module sending readpins again ...
   void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
     if (!originId.toInt()) return;  // Front-end client IDs are numeric; internal origins ("module", etc.) return 0
 
@@ -636,7 +638,7 @@ class ModuleIO : public Module {
       newBoardID = _state.data["boardPreset"];  // run in sveltekit task
     } else if (updatedItem.name == "maxPower") {
       newState["modded"] = true;
-    } else if (updatedItem.name == "usage") {
+    } else if (updatedItem.name == "usage") {  // usage of any of the pins
       newState["modded"] = true;
     } else if (updatedItem.name == "i2cFreq") {
       Wire.setClock(updatedItem.value.as<uint32_t>() * 1000);  // uint32_t instead of uint16_t to multiply in 32-bit arithmetic
@@ -682,9 +684,8 @@ class ModuleIO : public Module {
     uint8_t pinRS485DE = UINT8_MAX;
 
   #if FT_ENABLED(FT_ETHERNET)
-    EXT_LOGI(MB_TAG, "Try to configure ethernet");
-    EthernetSettingsService* ess = _sveltekit->getEthernetSettingsService();
     #ifdef CONFIG_IDF_TARGET_ESP32S3
+    EthernetSettingsService* ess = _sveltekit->getEthernetSettingsService();
     // Note: Ethernet pin types are signed (int8_t) and use -1, not UINT8_MAX, to indicate unset state
     ess->v_ETH_SPI_SCK = -1;
     ess->v_ETH_SPI_MISO = -1;
@@ -723,13 +724,14 @@ class ModuleIO : public Module {
 
     // allocate the pins found
     if (ess->v_ETH_SPI_SCK != -1 && ess->v_ETH_SPI_MISO != -1 && ess->v_ETH_SPI_MOSI != -1 && ess->v_ETH_PHY_CS != -1 && ess->v_ETH_PHY_IRQ != -1) {
+      EXT_LOGI(MB_TAG, "configure ethernet");
       // ess->v_ETH_PHY_TYPE = ETH_PHY_W5500;
       // ess->v_ETH_PHY_ADDR = 1;
       ess->v_ETH_PHY_RST = -1;  // not wired
       ess->initEthernet();      // restart ethernet
     }
-    #endif
-  #endif  // ethernet
+    #endif  // CONFIG_IDF_TARGET_ESP32S3
+  #endif    // ethernet
 
   #if FT_BATTERY
     _pinVoltage = UINT8_MAX;
@@ -778,7 +780,7 @@ class ModuleIO : public Module {
         rs485_ios_updated = true;
         pinRS485TX = pinObject["GPIO"];
       }
-    }
+    }  // rs485
 
     // Check if all RS485 pins are specified
     if (rs485_ios_updated && (pinRS485TX != UINT8_MAX) && (pinRS485RX != UINT8_MAX) && (pinRS485DE != UINT8_MAX)) {
@@ -822,34 +824,38 @@ class ModuleIO : public Module {
       } else {
         EXT_LOGD(ML_TAG, "No response from sensor");
       }
-  #endif
-    }
+  #endif  // DEMOCODE_FOR_SHT30_SENSOR
+    }  // rs485
 
-    uint8_t pinI2CSDA = UINT8_MAX;
-    uint8_t pinI2CSCL = UINT8_MAX;
-
+    bool pinsI2SChanged = false;
     for (JsonObject pinObject : _state.data["pins"].as<JsonArray>()) {
       uint8_t usage = pinObject["usage"];
       if (usage == pin_I2C_SDA) {
-        pinI2CSDA = pinObject["GPIO"];
-        EXT_LOGD(ML_TAG, "I2CSDA found %d", pinI2CSDA);
+        if (_pinI2CSDA != pinObject["GPIO"]) {
+          pinsI2SChanged = true;
+          _pinI2CSDA = pinObject["GPIO"];
+          EXT_LOGD(ML_TAG, "I2CSDA changed %d", _pinI2CSDA);
+        }
       }
       if (usage == pin_I2C_SCL) {
-        pinI2CSCL = pinObject["GPIO"];
-        EXT_LOGD(ML_TAG, "I2CSCL found %d", pinI2CSCL);
+        if (_pinI2CSCL != pinObject["GPIO"]) {
+          pinsI2SChanged = true;
+          _pinI2CSCL = pinObject["GPIO"];
+          EXT_LOGD(ML_TAG, "I2CSCL changed %d", _pinI2CSCL);
+        }
       }
     }
 
-    if (pinI2CSCL != UINT8_MAX && pinI2CSDA != UINT8_MAX) {
+    if (pinsI2SChanged && _pinI2CSCL != UINT8_MAX && _pinI2CSDA != UINT8_MAX) {
       uint32_t frequency = _state.data["i2cFreq"];
-      if (Wire.begin(pinI2CSDA, pinI2CSCL, frequency * 1000)) {
-        EXT_LOGI(ML_TAG, "initI2C Wire sda:%d scl:%d freq:%d kHz", pinI2CSDA, pinI2CSCL, frequency);
+
+      if (Wire.begin(_pinI2CSDA, _pinI2CSCL, frequency * 1000)) {
+        EXT_LOGI(ML_TAG, "initI2C Wire sda:%d scl:%d freq:%d kHz (%d)", _pinI2CSDA, _pinI2CSCL, frequency, Wire.getClock());
         // delay(200);            // Give I2C bus time to stabilize
         // Wire.setClock(50000);  // Explicitly set to 100kHz
-        _state.data["I2CReady"] = true;
-        updateDevices();
+        _triggerUpdateI2S = 1;
       } else {
-        _state.data["I2CReady"] = false;
+        _triggerUpdateI2S = 0;
         EXT_LOGE(ML_TAG, "initI2C Wire failed");
       }
     }
@@ -883,6 +889,11 @@ class ModuleIO : public Module {
   #endif
 
   void loop1s() {
+    if (_triggerUpdateI2S != UINT8_MAX) {
+      _updateI2SDevices();
+      _triggerUpdateI2S = UINT8_MAX;
+    }
+
   #if FT_BATTERY
     BatteryService* batteryService = _sveltekit->getBatteryService();
     if (_pinBattery != UINT8_MAX) {
@@ -927,32 +938,6 @@ class ModuleIO : public Module {
   #endif
   }
 
-  void updateDevices() {
-    JsonDocument doc;
-    doc["i2cBus"].to<JsonArray>();
-    JsonObject newState = doc.as<JsonObject>();
-
-    EXT_LOGI(ML_TAG, "Scanning I2C bus...");
-    uint8_t count = 0;
-    for (uint8_t i = 1; i < 127; i++) {
-      Wire.beginTransmission(i);
-      if (Wire.endTransmission() == 0) {
-        JsonObject i2cDevice = newState["i2cBus"].as<JsonArray>().add<JsonObject>();
-        i2cDevice["address"] = i;
-
-        EXT_LOGI(ML_TAG, "Found I2C device at address 0x%02X", i);
-        count++;
-      }
-    }
-    EXT_LOGI(ML_TAG, "Found %d device(s)", count);
-    JsonObject i2cDevice = newState["i2cBus"].as<JsonArray>().add<JsonObject>();
-    i2cDevice["address"] = 255;
-
-    doc["i2cFreq"] = Wire.getClock() / 1000;
-
-    update(newState, ModuleState::update, _moduleName);
-  }
-
  private:
   ESP32SvelteKit* _sveltekit;
   uint8_t _current_board_id = UINT8_MAX;
@@ -962,6 +947,44 @@ class ModuleIO : public Module {
   uint8_t _pinCurrent = UINT8_MAX;
   uint8_t _pinBattery = UINT8_MAX;
   #endif
+
+  uint8_t _pinI2CSDA = UINT8_MAX;
+  uint8_t _pinI2CSCL = UINT8_MAX;
+  uint8_t _I2CFreq = UINT8_MAX;
+
+  uint8_t _triggerUpdateI2S = UINT8_MAX;
+  void _updateI2SDevices() {
+    JsonDocument doc;
+    JsonObject newState = doc.to<JsonObject>();
+
+    newState["I2CReady"] = _triggerUpdateI2S == 1;
+
+    if (_triggerUpdateI2S == 1) {
+      JsonArray i2cDevices = newState["i2cBus"].to<JsonArray>();
+
+      EXT_LOGI(ML_TAG, "Scanning I2C bus...");
+      uint8_t count = 0;
+      for (uint8_t i = 1; i < 127; i++) {
+        Wire.beginTransmission(i);
+        if (Wire.endTransmission() == 0) {
+          JsonObject i2cDevice = i2cDevices.add<JsonObject>();
+          i2cDevice["address"] = i;
+
+          EXT_LOGI(ML_TAG, "Found I2C device at address 0x%02X", i);
+          count++;
+        }
+      }
+      EXT_LOGI(ML_TAG, "Found %d device(s)", count);
+
+      // for testing:
+      JsonObject i2cDevice = i2cDevices.add<JsonObject>();
+      i2cDevice["address"] = 255;
+
+      newState["i2cFreq"] = Wire.getClock() / 1000;
+    }
+
+    update(newState, ModuleState::update, _moduleName);
+  }
 };
 
 #endif

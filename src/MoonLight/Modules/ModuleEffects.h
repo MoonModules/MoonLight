@@ -295,26 +295,32 @@ class ModuleEffects : public NodeManager {
     return node;
   }
 
-  // run effects
-  void loop() override { NodeManager::loop(); }
+  void loop() override {
+    NodeManager::loop();
 
-  void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
-    NodeManager::onUpdate(updatedItem, originId);
-    if (originId.toInt()) { // UI triggered
+    if (triggerResetPreset) {
+      triggerResetPreset = false;
       _moduleLightsControl->read(
           [&](ModuleState& state) {
-            JsonDocument doc;
-            JsonObject newState = doc.to<JsonObject>();
+            if (state.data["preset"]["selected"] != 255) {  // not needed if already 255
+              JsonDocument doc;
+              JsonObject newState = doc.to<JsonObject>();
 
-            EXT_LOGI(ML_TAG, "remove preset");
-            newState["preset"] = state.data["preset"];
-            newState["preset"]["select"] = 255;
-            newState["preset"]["selected"] = 255;
-            if (newState.size()) {
-              _moduleLightsControl->update(newState, ModuleState::update, originId);  // Do not add server in the originID as that blocks updates, see execOnUpdate
+              EXT_LOGD(ML_TAG, "remove preset");
+              newState["preset"] = state.data["preset"];
+              newState["preset"]["select"] = 255;
+              _moduleLightsControl->update(newState, ModuleState::update, _moduleName);  // Do not add server in the originID as that blocks updates, see execOnUpdate
             }
           },
-          originId);
+          _moduleName);
+    }
+  }
+
+  bool triggerResetPreset = false;
+  void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
+    NodeManager::onUpdate(updatedItem, originId);
+    if (originId.toInt()) {  // UI triggered
+      triggerResetPreset = true;
     }
   }
 

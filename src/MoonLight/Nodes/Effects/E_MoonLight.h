@@ -1588,7 +1588,7 @@ class VUMeterEffect : public Node {
     uint8_t band = 0;
     for (int h = 0; h < nHorizontal; h++) {
       for (int v = 0; v < nVertical; v++) {
-        drawNeedle((float)sharedData.bands[2 * (band++)] / 2.0, {layer->size.x * h / nHorizontal, layer->size.y * v / nVertical, 0}, {layer->size.x / nHorizontal, layer->size.y / nVertical, 0}, ColorFromPalette(layerP.palette, 255 / (nHorizontal * nVertical) * band));
+        drawNeedle((float)sharedData.bands[2 * (band++)] / 2.0, {layer->size.x * h / nHorizontal, layer->size.y * v / nVertical, 0}, {(layer->size.x-1) / nHorizontal, (layer->size.y-1) / nVertical, 0}, ColorFromPalette(layerP.palette, 255 / (nHorizontal * nVertical) * band));
       }  // sharedData.bands[band++] / 200
     }
     // ppf(" v:%f, f:%f", sharedData.volume, (float) sharedData.bands[5]);
