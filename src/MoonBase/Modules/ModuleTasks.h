@@ -66,8 +66,8 @@ class ModuleTasks : public Module {
     // printf("Name\t\tState\tPrio\tStack\tRun Time\tCPU %%\tCore\n");
 
     JsonDocument doc;
-    doc["tasks"].to<JsonArray>();
-    JsonObject newState = doc.as<JsonObject>();
+    JsonObject newState = doc.to<JsonObject>();
+    newState["tasks"].to<JsonArray>();
 
     for (UBaseType_t i = 0; i < taskCount; i++) {
       JsonObject task = newState["tasks"].as<JsonArray>().add<JsonObject>();

@@ -123,7 +123,7 @@ class ModuleLiveScripts : public Module {
     // scripts
     if (updatedItem.parent[0] == "scripts") {
       JsonVariant scriptState = _state.data["scripts"][updatedItem.index[0]];
-      EXT_LOGV(ML_TAG, "handle %s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
+      // EXT_LOGV(ML_TAG, "handle %s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
       if (updatedItem.oldValue != "") {  // do not run at boot!
         LiveScriptNode* liveScriptNode = (LiveScriptNode*)_moduleEffects->findLiveScriptNode(scriptState["name"]);
         if (!liveScriptNode) {

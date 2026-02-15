@@ -32,7 +32,7 @@ class ExampleEffect : public Node {
 
   void onSizeChanged(const Coord3D& prevSize) override {}  // e.g. realloc variables
 
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) {
+  void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
     // add your custom onUpdate code here
     if (control["name"] == "bpm") {
       if (control["value"] == 0) {

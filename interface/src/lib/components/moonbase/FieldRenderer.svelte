@@ -361,6 +361,7 @@
 										if (!preventClick) {
 											value.select = x + y * property.width + 1;
 											console.log('click', y, x, value.select);
+											if (value.selected == value.select) value.select = 255;
 											value.selected = value.select;
 											value.action = 'click';
 											onChange(event);

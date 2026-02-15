@@ -183,7 +183,7 @@ class ArtNetOutDriver : public DriverNode {
 
         if (!writePackage()) return;  // resets packagesize
 
-        addYield(10);
+        // addYield(10);
 
         if (channels_remaining < header->channelsPerLight) {  // jump to next output
           channels_remaining = channelsPerOutput;             // reset for a new output
@@ -208,7 +208,7 @@ class ArtNetOutDriver : public DriverNode {
     }
     // EXT_LOGD(ML_TAG, "Universes send %d %d", universe, packages);
 
-    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(1000 / FPSLimiter));  // Yields AND feeds watchdog
+    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(1000.0 / FPSLimiter));  // Yields AND feeds watchdog
   }  // loop
 };
 

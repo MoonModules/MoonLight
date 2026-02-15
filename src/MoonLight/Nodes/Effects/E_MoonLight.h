@@ -179,7 +179,7 @@ class FixedRectangleEffect : public Node {
     for (pos.z = z; pos.z < MIN(z + depth, layer->size.z); pos.z++) {
       for (pos.y = y; pos.y < MIN(y + height, layer->size.y); pos.y++) {
         for (pos.x = x; pos.x < MIN(x + width, layer->size.x); pos.x++) {
-          if (red || green || blue) { // only setRGB if sliders set
+          if (red || green || blue) {  // only setRGB if sliders set
             if (alternateWhite && alternate)
               layer->setRGB(pos, CRGB::White);
             else
@@ -1177,12 +1177,9 @@ class ParticlesEffect : public Node {
   uint8_t speed = 15;
   uint8_t numParticles = 10;
   bool barriers = false;
-  #ifdef STARBASE_USERMOD_MPU6050
-  bool gyro = true;
-  #else
-  bool gyro = false;
-  #endif
-  bool randomGravity = true;
+  // bool gyro = false;
+  // bool randomGravity = true;
+  uint8_t gravityType = 0;
   uint8_t gravityChangeInterval = 5;
   // bool debugPrint    = layer->effectData.read<bool>();
   bool debugPrint = false;
@@ -1191,10 +1188,10 @@ class ParticlesEffect : public Node {
     addControl(speed, "speed", "slider", 0, 30);
     addControl(numParticles, "number of Particles", "slider", 1, 255);
     addControl(barriers, "barriers", "checkbox");
-  #ifdef STARBASE_USERMOD_MPU6050
-    addControl(gyro, "gyro", "checkbox");
-  #endif
-    addControl(randomGravity, "randomGravity", "checkbox");
+    addControl(gravityType, "gravity", "select");
+    addControlValue("None");
+    addControlValue("Random");
+    addControlValue("Gyro");
     addControl(gravityChangeInterval, "gravityChangeInterval", "slider", 1, 10);
     // addControl(bool, "Debug Print",             layer->effectData.write<bool>(0));
   }
@@ -1254,22 +1251,18 @@ class ParticlesEffect : public Node {
   void loop() override {
     if (!speed || pal::millis() - step < 1000 / speed) return;  // Not enough time passed
 
-    float gravityX, gravityY, gravityZ;  // Gravity if using gyro or random gravity
-
-  #ifdef STARBASE_USERMOD_MPU6050
-    if (gyro) {
-      gravity[0] = -mpu6050->gravityVector.x;
-      gravity[1] = mpu6050->gravityVector.z;  // Swap Y and Z axis
-      gravity[2] = -mpu6050->gravityVector.y;
+    if (gravityType == 2) {  // Gyro
+      gravity[0] = -sharedData.gravity.x / (float)INT16_MAX;
+      gravity[1] = sharedData.gravity.z / (float)INT16_MAX;  // Swap Y and Z axis
+      gravity[2] = -sharedData.gravity.y / (float)INT16_MAX;
 
       if (layer->layerDimension == _2D) {  // Swap back Y and Z axis set Z to 0
         gravity[1] = -gravity[2];
         gravity[2] = 0;
       }
     }
-  #endif
 
-    if (randomGravity) {
+    if (gravityType == 1) {  // random
       if (pal::millis() - gravUpdate > gravityChangeInterval * 1000) {
         gravUpdate = pal::millis();
         float scale = 5.0f;
@@ -1288,7 +1281,7 @@ class ParticlesEffect : public Node {
     }
 
     for (int index = 0; index < numParticles; index++) {
-      if (gyro || randomGravity) {  // Lerp gravity towards gyro or random gravity if enabled
+      if (gravityType > 0) {  // Lerp gravity towards gyro or random gravity if enabled
         float lerpFactor = .75;
         particles[index].vx += (gravity[0] - particles[index].vx) * lerpFactor;
         particles[index].vy += (gravity[1] - particles[index].vy) * lerpFactor;  // Swap Y and Z axis
@@ -1570,8 +1563,8 @@ class VUMeterEffect : public Node {
     int y1 = y0 - round(size.y * 0.7 * sin((angle + 30) * PI / 180));
 
     // ✅ Clamp to valid bounds
-    x1 = MAX(0, MIN(x1, layer->size.x - 1));
-    y1 = MAX(0, MIN(y1, layer->size.y - 1));
+    x1 = MAX(topLeft.x, MIN(x1, topLeft.x + size.x - 1));
+    y1 = MAX(topLeft.y, MIN(y1, topLeft.y + size.y - 1));
 
     // Draw the needle
     layer->drawLine(x0, y0, x1, y1, color, true);
@@ -1595,7 +1588,7 @@ class VUMeterEffect : public Node {
     uint8_t band = 0;
     for (int h = 0; h < nHorizontal; h++) {
       for (int v = 0; v < nVertical; v++) {
-        drawNeedle((float)sharedData.bands[2 * (band++)] / 2.0, {layer->size.x * h / nHorizontal, layer->size.y * v / nVertical, 0}, {layer->size.x / nHorizontal, layer->size.y / nVertical, 0}, ColorFromPalette(layerP.palette, 255 / (nHorizontal * nVertical) * band));
+        drawNeedle((float)sharedData.bands[2 * (band++)] / 2.0, {layer->size.x * h / nHorizontal, layer->size.y * v / nVertical, 0}, {(layer->size.x-1) / nHorizontal, (layer->size.y-1) / nVertical, 0}, ColorFromPalette(layerP.palette, 255 / (nHorizontal * nVertical) * band));
       }  // sharedData.bands[band++] / 200
     }
     // ppf(" v:%f, f:%f", sharedData.volume, (float) sharedData.bands[5]);

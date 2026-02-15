@@ -187,7 +187,14 @@ class ModuleDevices : public Module {
       for (JsonObject dev : devices) {
         if (time(nullptr) - dev["lastSync"].as<time_t>() < 86400) devicesVector.push_back(dev);  // max 1 day
       }
-      std::sort(devicesVector.begin(), devicesVector.end(), [](JsonObject a, JsonObject b) { return a["name"] < b["name"]; });
+
+      std::sort(devicesVector.begin(), devicesVector.end(), [](JsonObject a, JsonObject b) {
+        // Primary sort: by name
+        if (a["name"] != b["name"]) return a["name"] < b["name"];
+
+        // Tie-breaker: by IP address (ensures stable sort)
+        return a["ip"] < b["ip"];
+      });
 
       doc2["devices"].to<JsonArray>();
       for (JsonObject device : devicesVector) {
@@ -200,6 +207,29 @@ class ModuleDevices : public Module {
       JsonObject newState = doc.as<JsonObject>();
       update(newState, ModuleState::update, _moduleName);
     }
+
+    // JsonDocument doc2;
+
+    // // Build deduplication map: key = "name|ip", value = device
+    // // std::map automatically keeps entries sorted by key (name|ip)
+    // std::map<String, JsonObject> uniqueDevices;
+
+    // for (JsonObject dev : devices) {
+    //   if (time(nullptr) - dev["lastSync"].as<time_t>() < 86400) {  // max 1 day
+    //     String key = String(dev["name"].as<const char*>()) + "|" + String(dev["ip"].as<const char*>());
+
+    //     // Only keep the most recent entry for each name+ip combination
+    //     if (uniqueDevices.find(key) == uniqueDevices.end() || dev["lastSync"].as<time_t>() > uniqueDevices[key]["lastSync"].as<time_t>()) {
+    //       uniqueDevices[key] = dev;
+    //     }
+    //   }
+    // }
+
+    // // Map is already sorted by key (name|ip), just iterate and add
+    // doc2["devices"].to<JsonArray>();
+    // for (auto& pair : uniqueDevices) {
+    //   doc2["devices"].add(pair.second);
+    // }
   }
 
   void receiveUDP() {

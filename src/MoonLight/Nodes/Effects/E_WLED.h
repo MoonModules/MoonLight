@@ -401,8 +401,8 @@ class GEQEffect : public Node {
       }
 
       if (previousBarHeight && pos.x < previousBarHeightSize) {
-        if (barHeight > previousBarHeight[pos.x]) previousBarHeight[pos.x] = barHeight;                                  // drive the peak up
-        if ((ripple > 0) && (previousBarHeight[pos.x] > 0) && (previousBarHeight[pos.x] < layer->size.y))                // WLEDMM avoid "overshooting" into other segments
+        if (barHeight > previousBarHeight[pos.x]) previousBarHeight[pos.x] = barHeight;                                              // drive the peak up
+        if ((ripple > 0) && (previousBarHeight[pos.x] > 0) && (previousBarHeight[pos.x] < layer->size.y))                            // WLEDMM avoid "overshooting" into other segments
           layer->setRGB(Coord3D(pos.x, layer->size.y - previousBarHeight[pos.x]), ColorFromPalette(layerP.palette, millis() / 50));  // take millis()/50 color for the time being
 
         if (rippleTime && previousBarHeight[pos.x] > 0) previousBarHeight[pos.x]--;  // delay/ripple effect
@@ -576,7 +576,7 @@ class PacManEffect : public Node {
   const uint32_t ghostColors[4] = {CRGB::Red, PURPLEISH, CRGB::Cyan, ORANGEISH};
 
   void initializePacMan() {
-    numPowerDots = MIN(layer->nrOfLights / 10, numPowerDotsControl);  // cap the max so packed state fits in 8 bits: ML: keep the nr visible in the UI
+    numPowerDots = MAX(1, MIN(layer->nrOfLights / 10, numPowerDotsControl));  // Must be >= 1 because loop() indexes character[numGhosts + 1] and divides by numPowerDots.
 
     EXT_LOGD(ML_TAG, "#l:%d #pd:%d #g:%d #pd:%d", layer->nrOfLights, numPowerDotsControl, numGhosts, numPowerDots);
 
@@ -1325,13 +1325,14 @@ class OctopusEffect : public Node {
     const uint16_t C_X = layer->size.x / 2 + (offset.x - 50) * layer->size.x / 100;
     const uint16_t C_Y = layer->size.y / 2 + (offset.y - 50) * layer->size.y / 100;
     Coord3D pos = {0, 0, 0};
-    const uint8_t mapp = 180 / MAX(layer->size.x, layer->size.y);
+    // const uint8_t mapp = MAX(1, 180 / MAX(layer->size.x, layer->size.y));
+    const float mapp = 180.0f / (float)MAX(layer->size.x, layer->size.y);
     for (pos.x = 0; pos.x < layer->size.x; pos.x++) {
       for (pos.y = 0; pos.y < layer->size.y; pos.y++) {
         nrOfLights_t indexV = layer->XYZUnModified(pos);
         if (indexV < rMapSize) {                                             // excluding UINT16_MAX from XY if out of bounds due to projection
           rMap[indexV].angle = 40.7436f * atan2f(pos.y - C_Y, pos.x - C_X);  // avoid 128*atan2()/PI
-          rMap[indexV].radius = hypotf(pos.x - C_X, pos.y - C_Y) * mapp;     // thanks Sutaburosu
+          rMap[indexV].radius = constrain(lroundf(hypotf(pos.x - C_X, pos.y - C_Y) * mapp), 0, 255);
         }
       }
     }
@@ -1483,8 +1484,8 @@ class FireworksEffect : public Node {
        * Size is proportional to the height.
        */
       uint8_t nSparks = flare->pos + random8(4);
-      // nSparks = MAX(nSparks, 4);  // This is not a standard constrain; numSparks is not guaranteed to be at least 4
-      nSparks = MIN(nSparks, numSparks);
+      // Need at least 2 because logic relies on sparks[1] as the "known spark".
+      nSparks = MAX(2, MIN(nSparks, numSparks));
 
       // initialize sparks
       if (aux0Flare == 2) {
@@ -1986,8 +1987,8 @@ class DJLightEffect : public Node {
 class ColorTwinkleEffect : public Node {
  public:
   static const char* name() { return "ColorTwinkle"; }
-  static uint8_t dim() { return _3D; }         
-  static const char* tags() { return "🔥⏳"; } 
+  static uint8_t dim() { return _3D; }
+  static const char* tags() { return "🔥⏳"; }
 
   uint8_t fadeSpeed = 128;
   uint8_t spawnSpeed = 128;

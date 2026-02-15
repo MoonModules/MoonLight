@@ -15,7 +15,6 @@
 #if FT_MOONLIGHT
 
   #include "FastLED.h"
-  // #include "MoonBase/Module.h"
   #include "MoonBase/NodeManager.h"
   #include "MoonLight/Modules/ModuleLightsControl.h"
 
@@ -106,6 +105,7 @@ class ModuleDrivers : public NodeManager {
     addControlValue(control, getNameAndTags<ArtNetOutDriver>());
     addControlValue(control, getNameAndTags<AudioSyncDriver>());
     addControlValue(control, getNameAndTags<IRDriver>());
+    addControlValue(control, getNameAndTags<IMUDriver>());
     addControlValue(control, getNameAndTags<HUB75Driver>());
 
     // board preset specific
@@ -143,6 +143,7 @@ class ModuleDrivers : public NodeManager {
     if (!node) node = checkAndAlloc<ArtNetOutDriver>(name);
     if (!node) node = checkAndAlloc<AudioSyncDriver>(name);
     if (!node) node = checkAndAlloc<IRDriver>(name);
+    if (!node) node = checkAndAlloc<IMUDriver>(name);
     if (!node) node = checkAndAlloc<HUB75Driver>(name);
 
     // board preset specific

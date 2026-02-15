@@ -19,6 +19,7 @@
 
 // ADDED: Global delayed writes queue (matches templated version)
 inline std::vector<std::function<void(char)>> sharedDelayedWrites;
+inline portMUX_TYPE sharedDelayedWritesMux = portMUX_INITIALIZER_UNLOCKED;
 
 class SharedFSPersistence {
  private:
@@ -48,9 +49,6 @@ class SharedFSPersistence {
     info.delayedWriting = delayedWriting;
     info.hasDelayedWrite = false;
 
-    // Register update handler
-    info.updateHandlerId = module->addUpdateHandler([this, module](const String& originId) { writeToFS(module->_moduleName); }, false);
-
     _modules[module->_moduleName] = info;
   }
 
@@ -59,7 +57,16 @@ class SharedFSPersistence {
     for (auto& pair : _modules) {
       readFromFS(pair.first);
     }
-    // All setup happens in registerModule
+
+    // Register update handlers for modules that requested delayed writing
+    for (auto& pair : _modules) {
+      if (pair.second.delayedWriting) {
+        enableUpdateHandler(pair.first);
+        EXT_LOGD(ML_TAG, "Enabled update handler for %s after file read", pair.first);
+      }
+    }
+
+    EXT_LOGI(ML_TAG, "SharedFSPersistence initialization complete");
   }
 
   // ADDED: Enable/disable update handler for specific module
@@ -113,6 +120,7 @@ class SharedFSPersistence {
       if (!info.hasDelayedWrite) {
         ESP_LOGD(SVK_TAG, "delayedWrites: Add %s", info.filePath.c_str());
 
+        portENTER_CRITICAL(&sharedDelayedWritesMux);
         sharedDelayedWrites.push_back([this, module = info.module](char writeOrCancel) {
           auto it = _modules.find(module->_moduleName);
           if (it == _modules.end()) return;
@@ -131,6 +139,7 @@ class SharedFSPersistence {
         });
 
         info.hasDelayedWrite = true;
+        portEXIT_CRITICAL(&sharedDelayedWritesMux);
       }
     } else {
       writeToFSNow(moduleName);
@@ -157,17 +166,24 @@ class SharedFSPersistence {
 
     serializeJson(doc, file);
     file.close();
+
     return true;
   }
 
   // ADDED: Static method to process all delayed writes
   static void writeToFSDelayed(char writeOrCancel) {
-    ESP_LOGD(SVK_TAG, "calling %d writeFuncs from delayedWrites", sharedDelayedWrites.size());
+    std::vector<std::function<void(char)>> pending;
+    portENTER_CRITICAL(&sharedDelayedWritesMux);
+    // writeFunc("C") calls readFromFS and module->update, which will call SharedFSPersistence.h onUpdate which will send any state change to writeToFS which add to sharedDelayedWrites
+    pending = std::move(sharedDelayedWrites);
+    sharedDelayedWrites.clear();  // leave in valid-but-empty state
+    portEXIT_CRITICAL(&sharedDelayedWritesMux);
 
-    for (auto& writeFunc : sharedDelayedWrites) {
-      writeFunc(writeOrCancel);
+    ESP_LOGD(SVK_TAG, "calling %u writeFuncs from delayedWrites", pending.size());
+
+    for (auto& writeFunc : pending) {
+      writeFunc(writeOrCancel);  // this makes sure hasDelayedWrite is set to false for all modules, never  sharedDelayedWrites.clear(); without invoking this!
     }
-    sharedDelayedWrites.clear();
   }
 
  private:

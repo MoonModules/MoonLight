@@ -101,7 +101,7 @@ ModuleIO moduleIO = ModuleIO(&server, &esp32sveltekit);
     #include "MoonLight/Modules/ModuleMoonLightInfo.h"
 ModuleLightsControl moduleLightsControl = ModuleLightsControl(&server, &esp32sveltekit, &fileManager, &moduleIO);
 ModuleDevices moduleDevices = ModuleDevices(&server, &esp32sveltekit, &moduleLightsControl);                           // In MoonLight for the time being, should move to MoonBase using moduleControlCenter ...
-ModuleEffects moduleEffects = ModuleEffects(&server, &esp32sveltekit, &fileManager);                                   // fileManager for Live Scripts
+ModuleEffects moduleEffects = ModuleEffects(&server, &esp32sveltekit, &fileManager, &moduleLightsControl);             // fileManager for Live Scripts
 ModuleDrivers moduleDrivers = ModuleDrivers(&server, &esp32sveltekit, &fileManager, &moduleLightsControl, &moduleIO);  // fileManager for Live Scripts, Lights control for drivers
     #if FT_ENABLED(FT_LIVESCRIPT)
       #include "MoonLight/Modules/ModuleLiveScripts.h"
@@ -167,6 +167,7 @@ void driverTask(void* pvParameters) {
   esp_task_wdt_add(NULL);
 
   // layerP.setup() done in effectTask
+  static unsigned long last20ms = 0;
 
   while (true) {
     bool mutexGiven = false;
@@ -188,6 +189,11 @@ void driverTask(void* pvParameters) {
 
         esp32sveltekit.lps++;
         layerP.loopDrivers();
+
+        if (millis() - last20ms >= 20) {
+          last20ms = millis();
+          layerP.loop20msDrivers();
+        }
       }
     }
 

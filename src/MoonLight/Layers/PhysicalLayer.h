@@ -131,6 +131,7 @@ class PhysicalLayer {
   void loop();
   void loop20ms();
   void loopDrivers();
+  void loop20msDrivers();
 
   // mapLayout calls onLayoutPre, onLayout for each node and onLayoutPost and expects pass to be set (1 or 2)
   void mapLayout();

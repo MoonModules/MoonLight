@@ -96,7 +96,7 @@ class FastLEDDriver : public DriverNode {
   void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
     DriverNode::onUpdate(oldValue, control);  // !!
 
-    EXT_LOGD(ML_TAG, "%s: %s ", control["name"].as<const char*>(), control["value"].as<String>().c_str());
+    // EXT_LOGD(ML_TAG, "%s: %s ", control["name"].as<const char*>(), control["value"].as<String>().c_str());
 
     if (control["name"] == "lightPreset") {
       options.mRgbw = RgbwInvalid::value();  // Reset RGBW options so RGB-only presets don't inherit stale W config
@@ -344,7 +344,13 @@ class FastLEDDriver : public DriverNode {
     // FastLED.setMaxPowerInMilliWatts(1000 * layerP.maxPower);  // 5v, 2000mA, to protect usb while developing
   }
 
-  ~FastLEDDriver() override { FastLED.reset(ResetFlags::CHANNELS); }
+  ~FastLEDDriver() override {
+    // global: ensure only one FastLEDDriver instance exists. If multiple driver nodes are possible, this destructor will tear down channels for all of them. If singleton is guaranteed by design, consider documenting that assumption at the class level.
+    auto& events = FastLED.channelEvents();
+    events.onChannelCreated.clear();
+    events.onChannelEnqueued.clear();
+    FastLED.reset(ResetFlags::CHANNELS);
+  }
 };
 
 #endif

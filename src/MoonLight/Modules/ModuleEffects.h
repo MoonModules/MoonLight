@@ -15,14 +15,19 @@
 #if FT_MOONLIGHT
 
   #include "FastLED.h"
-  // #include "MoonBase/Module.h"
   #include "MoonBase/NodeManager.h"
+  #include "MoonLight/Modules/ModuleLightsControl.h"
 
 // #include "MoonBase/Nodes.h" //Nodes.h will include VirtualLayer.h which will include PhysicalLayer.h
 
 class ModuleEffects : public NodeManager {
  public:
-  ModuleEffects(PsychicHttpServer* server, ESP32SvelteKit* sveltekit, FileManager* fileManager) : NodeManager("effects", server, sveltekit, fileManager) { EXT_LOGV(ML_TAG, "constructor"); }
+  ModuleLightsControl* _moduleLightsControl;
+
+  ModuleEffects(PsychicHttpServer* server, ESP32SvelteKit* sveltekit, FileManager* fileManager, ModuleLightsControl* moduleLightsControl) : NodeManager("effects", server, sveltekit, fileManager) {
+    EXT_LOGV(ML_TAG, "constructor");
+    _moduleLightsControl = moduleLightsControl;
+  }
 
   void begin() override {
     defaultNodeName = getNameAndTags<RandomEffect>();
@@ -63,7 +68,7 @@ class ModuleEffects : public NodeManager {
     control["default"] = 0;  // the first entry has index 0 and refers to Layer 1 (layer counting starts with 1)
     uint8_t i = 1;           // start with one
     for (VirtualLayer* layer : layerP.layers) {
-      Char<32> layerName;
+      Char<12> layerName;
       layerName.format("Layer %d", i);
       addControlValue(control, layerName.c_str());
       i++;
@@ -273,7 +278,7 @@ class ModuleEffects : public NodeManager {
       EXT_LOGI(ML_TAG, "Add %s (p:%p pr:%d)", name, node, isInPSRAM(node));
 
       node->constructor(layerP.layers[0], controls, &layerP.effectsMutex);  // pass the layer to the node
-      // node->moduleControl = _moduleLightsControl;     // to access global lights control functions if needed
+      node->moduleControl = _moduleLightsControl;                           // to access global lights control functions if needed
       // node->moduleIO = _moduleIO;                     // to get pin allocations
       node->moduleNodes = (Module*)this;  // to request UI update
       node->setup();                      // run the setup of the effect
@@ -290,8 +295,34 @@ class ModuleEffects : public NodeManager {
     return node;
   }
 
-  // run effects
-  void loop() override { NodeManager::loop(); }
+  void loop() override {
+    NodeManager::loop();
+
+    if (triggerResetPreset) {
+      triggerResetPreset = false;
+      _moduleLightsControl->read(
+          [&](ModuleState& state) {
+            if (state.data["preset"]["selected"] != 255) {  // not needed if already 255
+              JsonDocument doc;
+              JsonObject newState = doc.to<JsonObject>();
+
+              EXT_LOGD(ML_TAG, "remove preset");
+              newState["preset"] = state.data["preset"];
+              newState["preset"]["select"] = 255;
+              _moduleLightsControl->update(newState, ModuleState::update, _moduleName);  // Do not add server in the originID as that blocks updates, see execOnUpdate
+            }
+          },
+          _moduleName);
+    }
+  }
+
+  bool triggerResetPreset = false;
+  void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
+    NodeManager::onUpdate(updatedItem, originId);
+    if (originId.toInt()) {  // UI triggered
+      triggerResetPreset = true;
+    }
+  }
 
 };  // class ModuleEffects
 

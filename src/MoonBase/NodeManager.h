@@ -127,7 +127,7 @@ class NodeManager : public Module {
 
   // implement business logic
   void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
-    EXT_LOGD(ML_TAG, "%s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
+    // EXT_LOGD(ML_TAG, "%s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
 
     // handle nodes
     if (updatedItem.parent[0] == "nodes") {  // onNodes
@@ -264,6 +264,9 @@ class NodeManager : public Module {
           if (nodeClass != nullptr) {
             nodeClass->on = updatedItem.value.as<bool>();  // set nodeclass on/off
             // EXT_LOGD(ML_TAG, "  nodeclass 🔘:%d 🚥:%d 💎:%d", nodeClass->on, nodeClass->hasOnLayout(), nodeClass->hasModifier());
+            xSemaphoreTake(*nodeClass->layerMutex, portMAX_DELAY);
+            nodeClass->onUpdate(updatedItem.oldValue, nodeState);  // custom onUpdate for the node
+            xSemaphoreGive(*nodeClass->layerMutex);
             nodeClass->requestMappings();
           } else
             EXT_LOGW(ML_TAG, "Nodeclass %s not found", nodeState["name"].as<const char*>());
