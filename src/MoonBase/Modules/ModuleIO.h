@@ -84,6 +84,7 @@ enum IO_BoardsEnum {
   board_SE16V1,
   board_LightCrafter16,
   board_MHCV43,       // by Wladi
+  board_MHCV57PRO,    // by Wladi
   board_MHCP4NanoV1,  // by Wladi V1.0
   board_YvesV48,
   board_TroyP4Nano,
@@ -125,6 +126,7 @@ class ModuleIO : public Module {
     addControlValue(control, "Mathieu SE16 v1");
     addControlValue(control, "Lightcrafter16");
     addControlValue(control, "MyHome-Control V43 controller");
+    addControlValue(control, "MyHome-Control V57 PRO controller");
     addControlValue(control, "MyHome-Control P4 Nano Shield V1.0");
     addControlValue(control, "Yves V48 🚧");
     addControlValue(control, "Troy P4 Nano 🚧");
@@ -475,6 +477,19 @@ class ModuleIO : public Module {
       pinAssigner.assignPin(0, pin_I2S_MCLK);
       uint8_t exposedPins[] = {4, 5, 17, 19, 21, 22, 23, 25, 26, 27, 33};
       for (uint8_t gpio : exposedPins) pinAssigner.assignPin(gpio, pin_Exposed);  // Ethernet Pins
+        
+    } else if (boardID == board_MHCV57PRO) {    // https://shop.myhome-control.de/ABC-WLED-Controller-PRO-V57-mit-iMOSFET/HW10030
+      newState["maxPower"] = 75;             // 15A Fuse @ 5V
+      uint8_t ledPins[] = {12, 13, 18, 32};  // 4 LED_PINS
+      for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
+      pinAssigner.assignPin(4, pin_Relay_LightsOn);
+      pinAssigner.assignPin(35, pin_I2S_SD);
+      pinAssigner.assignPin(15, pin_I2S_WS);
+      pinAssigner.assignPin(14, pin_I2S_SCK);
+      pinAssigner.assignPin(0, pin_I2S_MCLK);
+      uint8_t exposedPins[] = {4, 5, 17, 19, 21, 22, 23, 25, 26, 27, 33};
+      for (uint8_t gpio : exposedPins) pinAssigner.assignPin(gpio, pin_Exposed);  // Ethernet Pins
+
     } else if (boardID == board_MHCP4NanoV1) {                                    // https://shop.myhome-control.de/ABC-WLED-ESP32-P4-Shield/HW10027
       newState["maxPower"] = 100;                                                 // Assuming decent LED power!!
 
