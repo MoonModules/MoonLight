@@ -827,35 +827,35 @@ class ModuleIO : public Module {
   #endif  // DEMOCODE_FOR_SHT30_SENSOR
     }  // rs485
 
-    bool pinsI2SChanged = false;
+    bool pinsI2CChanged = false;
     for (JsonObject pinObject : _state.data["pins"].as<JsonArray>()) {
       uint8_t usage = pinObject["usage"];
       if (usage == pin_I2C_SDA) {
         if (_pinI2CSDA != pinObject["GPIO"]) {
-          pinsI2SChanged = true;
+          pinsI2CChanged = true;
           _pinI2CSDA = pinObject["GPIO"];
           EXT_LOGD(ML_TAG, "I2CSDA changed %d", _pinI2CSDA);
         }
       }
       if (usage == pin_I2C_SCL) {
         if (_pinI2CSCL != pinObject["GPIO"]) {
-          pinsI2SChanged = true;
+          pinsI2CChanged = true;
           _pinI2CSCL = pinObject["GPIO"];
           EXT_LOGD(ML_TAG, "I2CSCL changed %d", _pinI2CSCL);
         }
       }
     }
 
-    if (pinsI2SChanged && _pinI2CSCL != UINT8_MAX && _pinI2CSDA != UINT8_MAX) {
+    if (pinsI2CChanged && _pinI2CSCL != UINT8_MAX && _pinI2CSDA != UINT8_MAX) {
       uint32_t frequency = _state.data["i2cFreq"];
 
       if (Wire.begin(_pinI2CSDA, _pinI2CSCL, frequency * 1000)) {
         EXT_LOGI(ML_TAG, "initI2C Wire sda:%d scl:%d freq:%d kHz (%d)", _pinI2CSDA, _pinI2CSCL, frequency, Wire.getClock());
         // delay(200);            // Give I2C bus time to stabilize
         // Wire.setClock(50000);  // Explicitly set to 100kHz
-        _triggerUpdateI2S = 1;
+        _triggerUpdateI2C = 1;
       } else {
-        _triggerUpdateI2S = 0;
+        _triggerUpdateI2C = 0;
         EXT_LOGE(ML_TAG, "initI2C Wire failed");
       }
     }
@@ -889,9 +889,9 @@ class ModuleIO : public Module {
   #endif
 
   void loop1s() {
-    if (_triggerUpdateI2S != UINT8_MAX) {
-      _updateI2SDevices();
-      _triggerUpdateI2S = UINT8_MAX;
+    if (_triggerUpdateI2C != UINT8_MAX) {
+      _updateI2CDevices();
+      _triggerUpdateI2C = UINT8_MAX;
     }
 
   #if FT_BATTERY
@@ -952,14 +952,14 @@ class ModuleIO : public Module {
   uint8_t _pinI2CSCL = UINT8_MAX;
   uint8_t _I2CFreq = UINT8_MAX;
 
-  uint8_t _triggerUpdateI2S = UINT8_MAX;
-  void _updateI2SDevices() {
+  uint8_t _triggerUpdateI2C = UINT8_MAX;
+  void _updateI2CDevices() {
     JsonDocument doc;
     JsonObject newState = doc.to<JsonObject>();
 
-    newState["I2CReady"] = _triggerUpdateI2S == 1;
+    newState["I2CReady"] = _triggerUpdateI2C == 1;
 
-    if (_triggerUpdateI2S == 1) {
+    if (_triggerUpdateI2C == 1) {
       JsonArray i2cDevices = newState["i2cBus"].to<JsonArray>();
 
       EXT_LOGI(ML_TAG, "Scanning I2C bus...");

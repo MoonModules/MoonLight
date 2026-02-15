@@ -1252,9 +1252,9 @@ class ParticlesEffect : public Node {
     if (!speed || pal::millis() - step < 1000 / speed) return;  // Not enough time passed
 
     if (gravityType == 2) {  // Gyro
-      gravity[0] = -sharedData.gravity.x / INT16_MAX;
-      gravity[1] = sharedData.gravity.z / INT16_MAX;  // Swap Y and Z axis
-      gravity[2] = -sharedData.gravity.y / INT16_MAX;
+      gravity[0] = -sharedData.gravity.x / (float)INT16_MAX;
+      gravity[1] = sharedData.gravity.z / (float)INT16_MAX;  // Swap Y and Z axis
+      gravity[2] = -sharedData.gravity.y / (float)INT16_MAX;
 
       if (layer->layerDimension == _2D) {  // Swap back Y and Z axis set Z to 0
         gravity[1] = -gravity[2];
