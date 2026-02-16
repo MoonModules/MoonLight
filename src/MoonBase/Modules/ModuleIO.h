@@ -210,6 +210,7 @@ class ModuleIO : public Module {
       addControlValue(control, "Digital Input");
       addControlValue(control, "Exposed");
       addControlValue(control, "Reserved");
+      addControlValue(control, "PIR ♨️");
 
       control = addControl(rows, "index", "number", 1, 32);  // max 32 of one type, e.g 32 led pins
       control["default"] = UINT8_MAX;
@@ -715,9 +716,9 @@ class ModuleIO : public Module {
     }
   }
 
-  void loop() override {
+  void loop20ms() override {
     // run in sveltekit task
-    Module::loop();
+    Module::loop20ms();
 
     if (newBoardID != UINT8_MAX) {
       setBoardPresetDefaults(newBoardID);  // run from sveltekit task
@@ -940,7 +941,7 @@ class ModuleIO : public Module {
   adc_attenuation_t current_readout_current_adc_attenuation = ADC_11db;
   #endif
 
-  void loop1s() {
+  void loop1s() override {
     if (_triggerUpdateI2C != UINT8_MAX) {
       _updateI2CDevices();
       _triggerUpdateI2C = UINT8_MAX;

@@ -116,7 +116,7 @@ class ModuleDevices : public Module {
     }
   }
 
-  void loop20ms() {
+  void loop20ms() override {
     if (!WiFi.localIP() && !ETH.localIP()) return;
 
     if (!deviceUDPConnected) return;
@@ -124,7 +124,7 @@ class ModuleDevices : public Module {
     receiveUDP();  // and updateDevices
   }
 
-  void loop10s() {
+  void loop10s() override {
     if (!WiFi.localIP() && !ETH.localIP()) return;
 
     if (!deviceUDPConnected) {

@@ -188,8 +188,8 @@ class ModuleDrivers : public NodeManager {
 
   bool initPins = false;
 
-  void loop() override {
-    NodeManager::loop();
+  void loop20ms() override {
+    NodeManager::loop20ms();
 
     if (!initPins) {
       readPins();  // initially

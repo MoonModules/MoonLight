@@ -46,7 +46,7 @@ class ModuleTasks : public Module {
     }
   }
 
-  void loop1s() {
+  void loop1s() override {
     if (!_socket->getConnectedClients()) return;  // 🌙 No need for UI tasks
     if (!WiFi.localIP() && !ETH.localIP()) return;
 

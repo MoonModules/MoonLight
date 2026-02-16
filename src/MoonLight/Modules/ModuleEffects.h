@@ -295,8 +295,8 @@ class ModuleEffects : public NodeManager {
     return node;
   }
 
-  void loop() override {
-    NodeManager::loop();
+  void loop20ms() override {
+    NodeManager::loop20ms();
 
     if (triggerResetPreset) {
       triggerResetPreset = false;
@@ -314,6 +314,15 @@ class ModuleEffects : public NodeManager {
           },
           _moduleName);
     }
+  }
+
+  void loop1s() override {
+    // set shared data (eg used in scrolling text effect), every second
+    sharedData.fps = esp32sveltekit.getAnalyticsService()->lps;
+    sharedData.connectionStatus = (uint8_t)esp32sveltekit.getConnectionStatus();
+    sharedData.clientListSize = esp32sveltekit.getServer()->getClientList().size();
+    sharedData.connectedClients = esp32sveltekit.getSocket()->getConnectedClients();
+    sharedData.activeClients = esp32sveltekit.getSocket()->getActiveClients();
   }
 
   bool triggerResetPreset = false;

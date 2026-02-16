@@ -108,10 +108,9 @@ class Module : public StatefulService<ModuleState> {
   // any Module that overrides begin() must continue to call Module::begin() (e.g., at the start of its own begin()
   virtual void begin();
 
-  // any Module that overrides loop() must continue to call Module::loop() (e.g., at the start of its own loop()
-  virtual void loop() {
-    // run in sveltekit task
-
+  // run in sveltekit task
+  virtual void loop() {}
+  virtual void loop20ms() { // any Module that overrides loop20ms() must continue to call Module::loop20ms()
     if (requestUIUpdate) {
       requestUIUpdate = false;  // reset the flag
       EXT_LOGD(ML_TAG, "requestUIUpdate %s", _moduleName);
@@ -124,12 +123,13 @@ class Module : public StatefulService<ModuleState> {
           _moduleName);
     }
   }
+  virtual void loop1s() {}
+  virtual void loop10s() {}
 
   void processUpdatedItem(const UpdatedItem& updatedItem, const String& originId) {
     if (updatedItem.name == "swap") {
       onReOrderSwap(updatedItem.index[0], updatedItem.index[1]);
-      if (originId.toInt())
-        saveNeeded = true;
+      if (originId.toInt()) saveNeeded = true;
     } else {
       // if (updatedItem.parent[0] != "devices" && updatedItem.parent[0] != "tasks" && updatedItem.name != "core0") EXT_LOGD(ML_TAG, "%s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
       if (updatedItem.name != "channel") {  // todo: fix the problem at channel, not here...
