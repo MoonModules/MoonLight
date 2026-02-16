@@ -69,6 +69,7 @@ enum IO_PinUsageEnum {
   pin_Dig_Input,  // Digital Input pin type. May contains some protection circuit
   pin_Exposed,
   pin_Reserved,
+  pin_PIR, // support for PIR (passive infrared) sensor
   pin_count
 };
 
@@ -609,8 +610,9 @@ class ModuleIO : public Module {
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
     } else if (boardID == board_LuxceoMood1XiaoMod) {
       newState["maxPower"] = 50;
-      uint8_t ledPins[] = {1, 2, 3, 4};
+      uint8_t ledPins[] = {1, 2, 3};
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
+      pinAssigner.assignPin(4, pin_PIR);
       pinAssigner.assignPin(5, pin_I2C_SDA);
       pinAssigner.assignPin(6, pin_I2C_SCL);
       pinAssigner.assignPin(7, pin_SPI_SCK);

@@ -57,6 +57,7 @@ class ModuleLightsControl : public Module {
   uint8_t pinRelayLightsOn = UINT8_MAX;
   uint8_t pinPushButtonLightsOn = UINT8_MAX;
   uint8_t pinToggleButtonLightsOn = UINT8_MAX;
+  uint8_t pinPIR = UINT8_MAX;
 
   ModuleLightsControl(PsychicHttpServer* server, ESP32SvelteKit* sveltekit, FileManager* fileManager, ModuleIO* moduleIO)
       : Module("lightscontrol", server, sveltekit),  //
@@ -226,6 +227,7 @@ class ModuleLightsControl : public Module {
           pinRelayLightsOn = UINT8_MAX;
           pinPushButtonLightsOn = UINT8_MAX;
           pinToggleButtonLightsOn = UINT8_MAX;
+          pinPIR = UINT8_MAX;
           for (JsonObject pinObject : state.data["pins"].as<JsonArray>()) {
             uint8_t usage = pinObject["usage"];
             uint8_t gpio = pinObject["GPIO"];
@@ -253,6 +255,13 @@ class ModuleLightsControl : public Module {
                 EXT_LOGD(ML_TAG, "pinToggleButtonLightsOn found %d", pinToggleButtonLightsOn);
               } else
                 EXT_LOGE(MB_TAG, "gpio %d not valid", pinToggleButtonLightsOn);
+            } else if (usage == pin_PIR) {
+              if (GPIO_IS_VALID_GPIO(gpio)) {
+                pinPIR = gpio;
+                pinMode(pinPIR, INPUT_PULLUP);
+                EXT_LOGD(ML_TAG, "pinPIR found %d", pinPIR);
+              } else
+                EXT_LOGE(MB_TAG, "gpio %d not valid", pinPIR);
             }
           }
           // for (int i = 0; i < sizeof(pins); i++) EXT_LOGD(ML_TAG, "pin %d = %d", i, pins[i]);
@@ -396,10 +405,10 @@ class ModuleLightsControl : public Module {
   // see pinPushButtonLightsOn
   unsigned long lastDebounceTime = 0;
   static constexpr unsigned long debounceDelay = 50;  // 50ms debounce
-  int lastState = HIGH;
+  int lastButtonPinState = HIGH;
 
   void loop() override {
-    Module::loop();
+    Module::loop();  // requestUIUpdate
     // process presetLoop
     uint8_t presetLoop = _state.data["presetLoop"];
     if (presetLoop && millis() - lastPresetTime > presetLoop * 1000) {  // every presetLoop seconds
@@ -446,29 +455,47 @@ class ModuleLightsControl : public Module {
     }
 
     if (pinPushButtonLightsOn != UINT8_MAX) {
-      int state = digitalRead(pinPushButtonLightsOn);
-      if ((state != lastState) && ((((millis() - lastDebounceTime) > debounceDelay) || (millis() < lastDebounceTime)))) {
+      if ((millis() - lastDebounceTime) > debounceDelay || millis() < lastDebounceTime) {
         lastDebounceTime = millis();
-        // Trigger only on button press (HIGH to LOW transition for INPUT_PULLUP)
-        if (state == LOW) {
-          JsonDocument doc;
-          JsonObject newState = doc.to<JsonObject>();
-          newState["lightsOn"] = !_state.data["lightsOn"];
-          update(newState, ModuleState::update, _moduleName);
+        int state = digitalRead(pinPushButtonLightsOn);
+        if (state != lastButtonPinState) {
+          // Trigger only on button press (HIGH to LOW transition for INPUT_PULLUP)
+          if (state == LOW) {
+            JsonDocument doc;
+            JsonObject newState = doc.to<JsonObject>();
+            newState["lightsOn"] = !_state.data["lightsOn"];
+            update(newState, ModuleState::update, _moduleName);
+          }
+          lastButtonPinState = state;
         }
-        lastState = state;
       }
     }
 
     if (pinToggleButtonLightsOn != UINT8_MAX) {
-      int state = digitalRead(pinToggleButtonLightsOn);
-      if ((state != lastState) && ((((millis() - lastDebounceTime) > debounceDelay) || (millis() < lastDebounceTime)))) {
+      if (((millis() - lastDebounceTime) > debounceDelay || millis() < lastDebounceTime)) {
         lastDebounceTime = millis();
-        JsonDocument doc;
-        JsonObject newState = doc.to<JsonObject>();
-        newState["lightsOn"] = !_state.data["lightsOn"];
-        update(newState, ModuleState::update, _moduleName);
-        lastState = state;
+        int state = digitalRead(pinToggleButtonLightsOn);
+        if (state != lastButtonPinState) {
+          JsonDocument doc;
+          JsonObject newState = doc.to<JsonObject>();
+          newState["lightsOn"] = !_state.data["lightsOn"];
+          update(newState, ModuleState::update, _moduleName);
+          lastButtonPinState = state;
+        }
+      }
+    }
+
+    if (pinPIR != UINT8_MAX) {
+      if ((millis() - lastDebounceTime) > debounceDelay || millis() < lastDebounceTime) {
+        lastDebounceTime = millis();
+        int state = digitalRead(pinPIR);
+        bool pirOn = state == HIGH;
+        if (pirOn != _state.data["lightsOn"]) {
+          JsonDocument doc;
+          JsonObject newState = doc.to<JsonObject>();
+          newState["lightsOn"] = pirOn;
+          update(newState, ModuleState::update, _moduleName);
+        }
       }
     }
 
