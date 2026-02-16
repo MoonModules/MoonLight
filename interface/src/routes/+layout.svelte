@@ -19,7 +19,7 @@
 	import type { Analytics } from '$lib/types/models';
 	import type { RSSI } from '$lib/types/models';
 	import type { Battery } from '$lib/types/models';
-	import type { DownloadOTA } from '$lib/types/models';
+	import type { OTAStatus } from '$lib/types/models';
 	import Monitor from './moonbase/monitor/Monitor.svelte'; // 🌙
 	import type { Ethernet } from '$lib/types/models';
 
@@ -61,7 +61,7 @@
 		socket.on('notification', handleNotification);
 		if (page.data.features.analytics) socket.on('analytics', handleAnalytics);
 		if (page.data.features.battery) socket.on('battery', handleBattery);
-		if (page.data.features.download_firmware) socket.on('otastatus', handleOAT);
+		if (page.data.features.download_firmware) socket.on('otastatus', handleOTA);
 		if (page.data.features.ethernet) socket.on('ethernet', handleEthernet);
 		
 		document.addEventListener('visibilitychange', handleVisibilityChange); // 🌙 Listen to visibility changes
@@ -74,7 +74,7 @@
 		socket.off('rssi', handleNetworkStatus);
 		socket.off('notification', handleNotification);
 		socket.off('battery', handleBattery);
-		socket.off('otastatus', handleOAT);
+		socket.off('otastatus', handleOTA);
 		socket.off('ethernet', handleEthernet);
 
 		document.removeEventListener('visibilitychange', handleVisibilityChange); // 🌙 Clean up clientInfoListener listener and notify server
@@ -149,7 +149,9 @@
 		batteryHistory.addData(data);
 	};
 
-	const handleOAT = (data: DownloadOTA) => telemetry.setDownloadOTA(data);
+	const handleOTA = (data: OTAStatus) => {
+		telemetry.setOTAStatus(data);
+	};
 
 	const handleEthernet = (data: Ethernet) => {
 		telemetry.setEthernet(data);

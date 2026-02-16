@@ -46,6 +46,8 @@ public:
     // if onlyToSameOrigin == true, the message will be sent to the originId only, otherwise it will be broadcasted to all clients except the originId
     void emitEvent(const String& event, const char *output, size_t len, const char *originId = "", bool onlyToSameOrigin = false); // 🌙 char output directly emitted
 
+    bool isEventValid(String event);
+
     unsigned int getConnectedClients();
     unsigned int getActiveClients();
 
@@ -61,8 +63,6 @@ private:
     std::map<String, std::list<SubscribeCallback>> subscribe_callbacks;
     void handleEventCallbacks(String event, JsonObject &jsonObject, int originId);
     void handleSubscribeCallbacks(String event, const String &originId);
-
-    bool isEventValid(String event);
 
     void onWSOpen(PsychicWebSocketClient *client);
     void onWSClose(PsychicWebSocketClient *client);

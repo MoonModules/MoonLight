@@ -117,9 +117,11 @@ export type Battery = {
 	current: number; // 🌙
 };
 
-export type DownloadOTA = {
-	status: string;
+export type OTAStatus = {
+	status: 'none' | 'preparing' | 'progress' | 'finished' | 'error';
 	progress: number;
+	bytes_written?: number;
+	total_bytes?: number;
 	error: string;
 };
 
