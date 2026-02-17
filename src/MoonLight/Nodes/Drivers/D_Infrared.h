@@ -104,7 +104,7 @@ class IRDriver : public Node {
     addControlValue("Luxceo");
 
     moduleIO->addUpdateHandler([this](const String& originId) { readPins(); }, false);
-    readPins();  // initially
+    readPins();  // Node added at runtime so initial IO update not received so run explicitly
   }
 
   uint32_t codeOn;

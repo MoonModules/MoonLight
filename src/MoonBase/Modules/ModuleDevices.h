@@ -45,7 +45,7 @@ class ModuleDevices : public Module {
 
     _moduleControl->addUpdateHandler(
         [this](const String& originId) {
-          EXT_LOGD(MB_TAG, "control update origin %s", originId.c_str());
+          EXT_LOGD(MB_TAG, "control update %s", originId.c_str());
           sendUDP(originId != "group");  // sendUDP control yes / no
         },
         false);
@@ -117,6 +117,8 @@ class ModuleDevices : public Module {
   }
 
   void loop20ms() override {
+    Module::loop20ms();
+    
     if (!WiFi.localIP() && !ETH.localIP()) return;
 
     if (!deviceUDPConnected) return;

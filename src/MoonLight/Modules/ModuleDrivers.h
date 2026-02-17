@@ -27,7 +27,8 @@ class ModuleDrivers : public NodeManager {
   ModuleDrivers(PsychicHttpServer* server, ESP32SvelteKit* sveltekit, FileManager* fileManager, ModuleLightsControl* moduleLightsControl, ModuleIO* moduleIO) : NodeManager("drivers", server, sveltekit, fileManager) {
     _moduleLightsControl = moduleLightsControl;
     _moduleIO = moduleIO;
-    EXT_LOGV(ML_TAG, "constructor");
+
+    _moduleIO->addUpdateHandler([this](const String& originId) { readPins(); }, false);
   }
 
   void readPins() {
@@ -72,14 +73,13 @@ class ModuleDrivers : public NodeManager {
           layerP.requestMapVirtual = true;
         },
         _moduleName);
-  }
+  } // readPins
 
   void begin() override {
     defaultNodeName = "";  // getNameAndTags<PanelLayout>();
     nodes = &layerP.nodes;
     NodeManager::begin();
 
-    _moduleIO->addUpdateHandler([this](const String& originId) { readPins(); }, false);
   }
 
   void addNodes(const JsonObject& control) override {
@@ -184,17 +184,6 @@ class ModuleDrivers : public NodeManager {
     EXT_LOGV(ML_TAG, "%s (s:%d p:%p)", name, layerP.nodes.size(), node);
 
     return node;
-  }
-
-  bool initPins = false;
-
-  void loop20ms() override {
-    NodeManager::loop20ms();
-
-    if (!initPins) {
-      readPins();  // initially
-      initPins = true;
-    }
   }
 
 };  // class ModuleDrivers

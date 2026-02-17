@@ -69,7 +69,7 @@ enum IO_PinUsageEnum {
   pin_Dig_Input,  // Digital Input pin type. May contains some protection circuit
   pin_Exposed,
   pin_Reserved,
-  pin_PIR, // support for PIR (passive infrared) sensor
+  pin_PIR,  // support for PIR (passive infrared) sensor
   pin_count
 };
 
@@ -172,8 +172,8 @@ class ModuleIO : public Module {
       addControlValue(control, "I2S WS");
       addControlValue(control, "I2S SCK");
       addControlValue(control, "I2S MCLK");
-      addControlValue(control, "I2C SDA");
-      addControlValue(control, "I2C SCL");
+      addControlValue(control, "I2C SDA 🔌");
+      addControlValue(control, "I2C SCL 🔌");
       addControlValue(control, "Button 🛎️");
       addControlValue(control, "Button 𓐟");
       addControlValue(control, "Button LightOn 🛎️");
@@ -493,10 +493,10 @@ class ModuleIO : public Module {
       pinAssigner.assignPin(0, pin_I2S_MCLK);
       uint8_t exposedPins[] = {4, 5, 17, 19, 21, 22, 23, 25, 26, 27, 33};
       for (uint8_t gpio : exposedPins) pinAssigner.assignPin(gpio, pin_Exposed);  // Ethernet Pins
-        
-    } else if (boardID == board_MHCV57PRO) {    // https://shop.myhome-control.de/ABC-WLED-Controller-PRO-V57-mit-iMOSFET/HW10030
-      newState["maxPower"] = 75;             // 15A Fuse @ 5V
-      uint8_t ledPins[] = {12, 13, 18, 32};  // 4 LED_PINS
+
+    } else if (boardID == board_MHCV57PRO) {  // https://shop.myhome-control.de/ABC-WLED-Controller-PRO-V57-mit-iMOSFET/HW10030
+      newState["maxPower"] = 75;              // 15A Fuse @ 5V
+      uint8_t ledPins[] = {12, 13, 18, 32};   // 4 LED_PINS
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
       pinAssigner.assignPin(4, pin_Relay_LightsOn);
       pinAssigner.assignPin(35, pin_I2S_SD);
@@ -506,8 +506,8 @@ class ModuleIO : public Module {
       uint8_t exposedPins[] = {4, 5, 17, 19, 21, 22, 23, 25, 26, 27, 33};
       for (uint8_t gpio : exposedPins) pinAssigner.assignPin(gpio, pin_Exposed);  // Ethernet Pins
 
-    } else if (boardID == board_MHCP4NanoV1) {                                    // https://shop.myhome-control.de/ABC-WLED-ESP32-P4-Shield/HW10027
-      newState["maxPower"] = 100;                                                 // Assuming decent LED power!!
+    } else if (boardID == board_MHCP4NanoV1) {  // https://shop.myhome-control.de/ABC-WLED-ESP32-P4-Shield/HW10027
+      newState["maxPower"] = 100;               // Assuming decent LED power!!
 
       if (_state.data["switch1"]) {                         // on: 8 LED Pins + RS485 + Dig Input
         uint8_t ledPins[] = {21, 20, 25, 5, 7, 23, 8, 27};  // 8 LED pins in this order
@@ -538,11 +538,11 @@ class ModuleIO : public Module {
         pinAssigner.assignPin(12, pin_I2S_SCK);
         pinAssigner.assignPin(13, pin_I2S_MCLK);
       }
-    } else if (boardID == board_MHCP4NanoV2) {                                    // https://shop.myhome-control.de/ABC-WLED-ESP32-P4-Shield/HW10027
-      newState["maxPower"] = 100;                                                 // Assuming decent LED power!!
-      pinAssigner.assignPin(7, pin_I2C_SDA); // on V2 these are I2C Pins
-      pinAssigner.assignPin(8, pin_I2C_SCL); // on V2 these are I2C Pins
-      if (_state.data["switch1"]) {                         // on: 8 LED Pins + RS485 + Dig Input
+    } else if (boardID == board_MHCP4NanoV2) {                // https://shop.myhome-control.de/ABC-WLED-ESP32-P4-Shield/HW10027
+      newState["maxPower"] = 100;                             // Assuming decent LED power!!
+      pinAssigner.assignPin(7, pin_I2C_SDA);                  // on V2 these are I2C Pins
+      pinAssigner.assignPin(8, pin_I2C_SCL);                  // on V2 these are I2C Pins
+      if (_state.data["switch1"]) {                           // on: 8 LED Pins + RS485 + Dig Input
         uint8_t ledPins[] = {21, 20, 25, 5, 22, 23, 24, 27};  // 8 LED pins in this order
         for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
         pinAssigner.assignPin(3, pin_RS485_TX);
@@ -553,7 +553,7 @@ class ModuleIO : public Module {
         pinAssigner.assignPin(46, pin_Dig_Input);
         pinAssigner.assignPin(47, pin_Dig_Input);
         pinAssigner.assignPin(48, pin_Dig_Input);
-      } else {                                                                           // off / default: 16 LED pins
+      } else {                                                                            // off / default: 16 LED pins
         uint8_t ledPins[] = {21, 20, 25, 5, 22, 23, 24, 27, 3, 6, 53, 4, 46, 47, 2, 48};  // 16 LED_PINS in this order
         for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
       }
@@ -716,6 +716,8 @@ class ModuleIO : public Module {
     }
   }
 
+  bool called = false;
+
   void loop20ms() override {
     // run in sveltekit task
     Module::loop20ms();
@@ -723,6 +725,12 @@ class ModuleIO : public Module {
     if (newBoardID != UINT8_MAX) {
       setBoardPresetDefaults(newBoardID);  // run from sveltekit task
       newBoardID = UINT8_MAX;
+    }
+
+    // during boot, the IO module is unchanged , not triggering updates, so need to do it manually
+    if (!called) {
+      callUpdateHandlers(_moduleName);  // calls readPins for all subscribed handlers
+      called = true;
     }
   }
 

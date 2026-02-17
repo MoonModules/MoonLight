@@ -387,37 +387,72 @@ void loop() {
   vTaskDelete(NULL);
 #endif
 
-//   // check sizes ...
-//   sizeof(esp32sveltekit);                // 4152 -> 4376
-//   sizeof(WiFiSettingsService);           // 456
-//   sizeof(SystemStatus);                  // 16
-//   sizeof(UploadFirmwareService);         // 32
-//   sizeof(HttpEndpoint<ModuleState>);     // 152
-//   sizeof(EventEndpoint<ModuleState>);    // 112
-//   sizeof(SharedEventEndpoint);           // 8
-//   sizeof(WebSocketServer<ModuleState>);  // 488
-//   sizeof(SharedWebSocketServer);         // 352 -> 432
-//   sizeof(FSPersistence<ModuleState>);    // 128
-//   sizeof(PsychicHttpServer*);            // 8
-//   sizeof(HttpEndpoint<APSettings>);      // 152
-//   sizeof(SharedHttpEndpoint);            // 16 -> 48
-//   sizeof(FSPersistence<APSettings>);     // 128
-//   sizeof(APSettingsService);             // 600;
-//   sizeof(PsychicWebSocketHandler);       // 336
-//   sizeof(fileManager);                   // 864
-//   sizeof(Module);                        // 1144 -> 472 -> 208 !
-//   sizeof(moduleDevices);                 // 1320 -> 392
-//   sizeof(moduleIO);                      // 1144 -> 240
-// #if FT_ENABLED(FT_MOONLIGHT)
-//   sizeof(moduleEffects);        // 1208 -> 264
-//   sizeof(moduleDrivers);        // 1216 -> 288
-//   sizeof(moduleLightsControl);  // 1176 -> 296
-//   #if FT_ENABLED(FT_LIVESCRIPT)
-//   sizeof(moduleLiveScripts);  // 1176 -> 240
-//   #endif
-//   sizeof(moduleChannels);        // 1144 -> 208
-//   sizeof(moduleMoonLightInfo);   // 1144 -> 208
-//   sizeof(layerP.lights);         // 56 -> 96
-//   sizeof(layerP.lights.header);  // 40 -> 64
-// #endif
+#if 0
+  // check sizes ...
+  sizeof(esp32sveltekit);                // 4152 -> 4376
+  sizeof(WiFiSettingsService);           // 456
+  sizeof(SystemStatus);                  // 16
+  sizeof(UploadFirmwareService);         // 32
+  sizeof(HttpEndpoint<ModuleState>);     // 152
+  sizeof(EventEndpoint<ModuleState>);    // 112
+  sizeof(SharedEventEndpoint);           // 8
+  sizeof(WebSocketServer<ModuleState>);  // 488
+  sizeof(SharedWebSocketServer);         // 352 -> 432
+  sizeof(FSPersistence<ModuleState>);    // 128
+  sizeof(PsychicHttpServer*);            // 8
+  sizeof(HttpEndpoint<APSettings>);      // 152
+  sizeof(SharedHttpEndpoint);            // 16 -> 48
+  sizeof(FSPersistence<APSettings>);     // 128
+  sizeof(APSettingsService);             // 600;
+  sizeof(PsychicWebSocketHandler);       // 336
+  sizeof(fileManager);                   // 864
+  sizeof(Module);                        // 1144 -> 472 -> 208 !
+  sizeof(moduleDevices);                 // 1320 -> 392
+  sizeof(moduleIO);                      // 1144 -> 240
+  #if FT_ENABLED(FT_MOONLIGHT)
+  sizeof(moduleEffects);        // 1208 -> 264
+  sizeof(moduleDrivers);        // 1216 -> 288
+  sizeof(moduleLightsControl);  // 1176 -> 296
+    #if FT_ENABLED(FT_LIVESCRIPT)
+  sizeof(moduleLiveScripts);  // 1176 -> 240
+    #endif
+  sizeof(moduleChannels);        // 1144 -> 208
+  sizeof(moduleMoonLightInfo);   // 1144 -> 208
+  sizeof(layerP.lights);         // 56 -> 96
+  sizeof(layerP.lights.header);  // 40 -> 64
+  #endif
+  // check sizes ...
+  sizeof(esp32sveltekit);                // 4152 -> 4376
+  sizeof(WiFiSettingsService);           // 456
+  sizeof(SystemStatus);                  // 16
+  sizeof(UploadFirmwareService);         // 32
+  sizeof(HttpEndpoint<ModuleState>);     // 152
+  sizeof(EventEndpoint<ModuleState>);    // 112
+  sizeof(SharedEventEndpoint);           // 8
+  sizeof(WebSocketServer<ModuleState>);  // 488
+  sizeof(SharedWebSocketServer);         // 352 -> 432
+  sizeof(FSPersistence<ModuleState>);    // 128
+  sizeof(PsychicHttpServer*);            // 8
+  sizeof(HttpEndpoint<APSettings>);      // 152
+  sizeof(SharedHttpEndpoint);            // 16 -> 48
+  sizeof(FSPersistence<APSettings>);     // 128
+  sizeof(APSettingsService);             // 600;
+  sizeof(PsychicWebSocketHandler);       // 336
+  sizeof(fileManager);                   // 864
+  sizeof(Module);                        // 1144 -> 472 -> 208 !
+  sizeof(moduleDevices);                 // 1320 -> 392
+  sizeof(moduleIO);                      // 1144 -> 240
+  #if FT_ENABLED(FT_MOONLIGHT)
+  sizeof(moduleEffects);        // 1208 -> 264
+  sizeof(moduleDrivers);        // 1216 -> 288
+  sizeof(moduleLightsControl);  // 1176 -> 296
+    #if FT_ENABLED(FT_LIVESCRIPT)
+  sizeof(moduleLiveScripts);  // 1176 -> 240
+    #endif
+  sizeof(moduleChannels);        // 1144 -> 208
+  sizeof(moduleMoonLightInfo);   // 1144 -> 208
+  sizeof(layerP.lights);         // 56 -> 96
+  sizeof(layerP.lights.header);  // 40 -> 64
+  #endif
+#endif
 }

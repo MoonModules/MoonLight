@@ -67,6 +67,8 @@ class ModuleLightsControl : public Module {
     _server = server;
     _fileManager = fileManager;
     _moduleIO = moduleIO;
+
+    _moduleIO->addUpdateHandler([this](const String& originId) { readPins(); }, false);
   }
 
   void begin() override {
@@ -105,8 +107,6 @@ class ModuleLightsControl : public Module {
           },
           originId);
     });
-    moduleIO.addUpdateHandler([this](const String& originId) { readPins(); }, false);
-    readPins();  // initially
 
     // Register handler to react to MQTT settings changes (including enable/disable)
     if (_mqttSettingsService) {
@@ -258,7 +258,7 @@ class ModuleLightsControl : public Module {
             } else if (usage == pin_PIR) {
               if (GPIO_IS_VALID_GPIO(gpio)) {
                 pinPIR = gpio;
-                pinMode(pinPIR, INPUT_PULLUP);
+                pinMode(pinPIR, INPUT);
                 EXT_LOGD(ML_TAG, "pinPIR found %d", pinPIR);
               } else
                 EXT_LOGE(MB_TAG, "gpio %d not valid", pinPIR);
@@ -413,6 +413,7 @@ class ModuleLightsControl : public Module {
 
   void loop20ms() override {
     Module::loop20ms();  // requestUIUpdate
+
     // process presetLoop
     uint8_t presetLoop = _state.data["presetLoop"];
     if (presetLoop && millis() - lastPresetTime > presetLoop * 1000) {  // every presetLoop seconds
@@ -493,7 +494,9 @@ class ModuleLightsControl : public Module {
       if ((millis() - lastPIRDebounceTime) > debounceDelay) {
         lastPIRDebounceTime = millis();
         int state = digitalRead(pinPIR);
+        // EXT_LOGD(ML_TAG, "PIR  %d -> %d", lastPIRPinState, state);
         if (state != lastPIRPinState) {
+          EXT_LOGD(ML_TAG, "PIR toggle %d -> %d", lastPIRPinState, state);
           lastPIRPinState = state;
           JsonDocument doc;
           JsonObject newState = doc.to<JsonObject>();
