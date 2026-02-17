@@ -261,6 +261,7 @@ class ModuleIO : public Module {
     JsonDocument doc;
     JsonObject newState = doc.to<JsonObject>();
     newState["modded"] = false;
+    newState["I2CReady"] = false;
 
     JsonArray pins = newState["pins"].to<JsonArray>();
 
