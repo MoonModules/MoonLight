@@ -1,12 +1,12 @@
 # IO Module
 
-<img width="320" height="441" alt="io11" src="../../media/moonbase/inputoutput.png" />
+<img width="320" height="441" alt="io11" src="../inputoutput.png" />
 
 Defines hardware specifics per ESP32 device
 
 Currently the following boards are defined. Not all are supported yet 🚧
 
-<img width="320" height="441" alt="io11" src="../../media/moonbase/inputoutputpresets.png" />
+<img width="320" height="441" alt="io11" src="../inputoutputpresets.png" />
 
 For each board the following presets are defined:
 
@@ -39,7 +39,15 @@ For each board the following presets are defined:
     * Battery
   * Planned later
     * I2S for microphone and line in
-    * I2C
+
+## I2C peripherals
+
+<img width="320" height="441" alt="io11" src="../inputoutputI2C.png" />
+
+If pins for SDA and SCL are defined, I2C devices will be scanned and displayed here
+
+* Address: The address of a peripheral found
+* Name and ID: Unknown if the device is not initialized. If a driver (e.g. [IMU driver](../../moonlight/drivers/#driver-nodes)) is added, it will provide name and ID
 
 ## Naming convention
 

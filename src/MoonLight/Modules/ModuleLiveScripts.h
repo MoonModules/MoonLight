@@ -147,7 +147,7 @@ class ModuleLiveScripts : public Module {
   }
 
   // update scripts / read only values in the UI
-  void loop1s() {
+  void loop1s() override {
     if (!_socket->getConnectedClients()) return;
     if (!WiFi.localIP() && !ETH.localIP()) return;
 

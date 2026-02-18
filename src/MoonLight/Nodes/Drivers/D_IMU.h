@@ -26,67 +26,92 @@ class IMUDriver : public Node {
   Coord3D accell;
   uint8_t board = 0;  // default MPU6050
 
+  bool i2cActuallyReady = false;
+
   void setup() override {
     addControl(gyro, "gyro", "coord3D");
     addControl(accell, "accell", "coord3D");
     addControl(board, "board", "select");
     addControlValue("MPU6050");
     addControlValue("BMI160");  // not supported yet
+
+    // Subscribe to IO updates to detect when I2C becomes ready
+    moduleIO->addUpdateHandler([this](const String& originId) { moduleIO->read([&](ModuleState& state) { i2cActuallyReady = state.data["I2CReady"]; }, name()); }, false);
+    // Read current I2C state in case boot-time handler dispatch already occurred
+    moduleIO->read([this](ModuleState& state) { i2cActuallyReady = state.data["I2CReady"]; }, name());
+    requestInitBoard = true;
   }
 
   void initBoard() {
     if (motionTrackingReady) return;
 
     EXT_LOGI(ML_TAG, "Starting board %d", board);
+    if (board == 0) {  // MPU6050
+      mpu.initialize();
 
-    moduleIO->read(
-        [&](ModuleState& state) {
-          if (state.data["I2CReady"].as<bool>()) {
-            if (board == 0) {  // MPU6050
-              mpu.initialize();
+      // delay(100);
 
-              // delay(100);
+      // verify connection
+      if (mpu.testConnection()) {
+        // update device name to Module IO
+        JsonDocument doc;
+        JsonObject newState = doc.to<JsonObject>();
 
-              // verify connection
-              if (mpu.testConnection()) {
-                EXT_LOGI(ML_TAG, "MPU6050 connection successful Initializing DMP...");
-                uint8_t devStatus = mpu.dmpInitialize();
+        Char<8> address;
+        address.format("0x%02X", mpu.getDeviceID());
 
-                if (devStatus == 0) {
-                  // // Calibration Time: generate offsets and calibrate our MPU6050
-                  mpu.CalibrateAccel(6);
-                  mpu.CalibrateGyro(6);
-                  // mpu.PrintActiveOffsets();
+        bool found = false;
 
-                  mpu.setDMPEnabled(true);  // mandatory
-
-                  // mpuIntStatus = mpu.getIntStatus();
-
-                  motionTrackingReady = true;
-                } else {
-                  // ERROR!
-                  // 1 = initial memory load failed
-                  // 2 = DMP configuration updates failed
-                  // (if it's going to break, usually the code will be 1)
-                  EXT_LOGW(ML_TAG, "DMP Initialization failed (code %d)", devStatus);
+        moduleIO->read(
+            [&](ModuleState& state) {
+              newState.set(state.data);  // deep-copy
+              // loop over I2C bus
+              for (auto i2cDevice : newState["i2cBus"].as<JsonArray>()) {
+                if (i2cDevice["address"] == "0x68" || i2cDevice["address"] == "0x69") {  // depending on ADO gnd or vcc
+                  i2cDevice["name"] = "MPU6050";
+                  i2cDevice["id"] = address.c_str();
+                  found = true;
                 }
-              } else
-                EXT_LOGW(ML_TAG, "Testing device connections MPU6050 connection failed");
-            } else if (board == 1) {  // BMI160 - NEW
+              }
+            },
+            name());
 
-              // BMI160.begin(BMI160GenClass::I2C_MODE, 0x68);
+        if (found) moduleIO->update(newState, ModuleState::update, name());
 
-              // if (BMI160.getDeviceID() == 0xD1) {  // BMI160 device ID
-              //   EXT_LOGI(ML_TAG, "BMI160 connection successful");
-              //   motionTrackingReady = true;
-              // } else {
-              //   EXT_LOGW(ML_TAG, "BMI160 connection failed");
-              // }
-            }
-          } else
-            EXT_LOGW(ML_TAG, "I2C State not ready");
-        },
-        name());
+        EXT_LOGI(ML_TAG, "MPU6050 connection successful at %s Initializing DMP... (%d)", address.c_str(), found);
+        uint8_t devStatus = mpu.dmpInitialize();
+
+        if (devStatus == 0) {
+          // // Calibration Time: generate offsets and calibrate our MPU6050
+          mpu.CalibrateAccel(6);
+          mpu.CalibrateGyro(6);
+          // mpu.PrintActiveOffsets();
+
+          mpu.setDMPEnabled(true);  // mandatory
+
+          // mpuIntStatus = mpu.getIntStatus();
+
+          motionTrackingReady = true;
+        } else {
+          // ERROR!
+          // 1 = initial memory load failed
+          // 2 = DMP configuration updates failed
+          // (if it's going to break, usually the code will be 1)
+          EXT_LOGW(ML_TAG, "DMP Initialization failed (code %d)", devStatus);
+        }
+      } else
+        EXT_LOGW(ML_TAG, "Testing device connections MPU6050 connection failed");
+    } else if (board == 1) {  // BMI160 - NEW
+
+      // BMI160.begin(BMI160GenClass::I2C_MODE, 0x68);
+
+      // if (BMI160.getDeviceID() == 0xD1) {  // BMI160 device ID
+      //   EXT_LOGI(ML_TAG, "BMI160 connection successful");
+      //   motionTrackingReady = true;
+      // } else {
+      //   EXT_LOGW(ML_TAG, "BMI160 connection failed");
+      // }
+    }
   }
 
   void stopBoard() {
@@ -121,12 +146,15 @@ class IMUDriver : public Node {
 
     // process this out of onUpdate
     if (requestInitBoard) {
-      initBoard();
-      requestInitBoard = false;
+      if (i2cActuallyReady) {  // Only init if I2C is ACTUALLY ready RIGHT NOW
+        initBoard();
+        requestInitBoard = false;
+      }
     }
 
     // if programming failed, don't try to do anything
     if (!motionTrackingReady) return;
+
     // read a packet from FIFO
     if (board == 0) {                                 // MPU6050
       if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) {  // Get the Latest packet
@@ -140,7 +168,7 @@ class IMUDriver : public Node {
         sharedData.gravity.y = gravity.y * INT16_MAX;
         sharedData.gravity.z = gravity.z * INT16_MAX;
 
-        EXT_LOGD(ML_TAG, "%f %f %f", gravity.x, gravity.y, gravity.z);
+        // EXT_LOGD(ML_TAG, "%f %f %f", gravity.x, gravity.y, gravity.z);
 
         // needed to repeat the following 3 lines (yes if you look at the output: otherwise not 0): commented out
         // mpu.dmpGetQuaternion(&q, fifoBuffer);

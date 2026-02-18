@@ -69,6 +69,7 @@ enum IO_PinUsageEnum {
   pin_Dig_Input,  // Digital Input pin type. May contains some protection circuit
   pin_Exposed,
   pin_Reserved,
+  pin_PIR,  // support for PIR (passive infrared) sensor
   pin_count
 };
 
@@ -171,8 +172,8 @@ class ModuleIO : public Module {
       addControlValue(control, "I2S WS");
       addControlValue(control, "I2S SCK");
       addControlValue(control, "I2S MCLK");
-      addControlValue(control, "I2C SDA");
-      addControlValue(control, "I2C SCL");
+      addControlValue(control, "I2C SDA 🔌");
+      addControlValue(control, "I2C SCL 🔌");
       addControlValue(control, "Button 🛎️");
       addControlValue(control, "Button 𓐟");
       addControlValue(control, "Button LightOn 🛎️");
@@ -209,6 +210,7 @@ class ModuleIO : public Module {
       addControlValue(control, "Digital Input");
       addControlValue(control, "Exposed");
       addControlValue(control, "Reserved");
+      addControlValue(control, "PIR ♨️");
 
       control = addControl(rows, "index", "number", 1, 32);  // max 32 of one type, e.g 32 led pins
       control["default"] = UINT8_MAX;
@@ -230,7 +232,11 @@ class ModuleIO : public Module {
     control["crud"] = "r";
     rows = control["n"].to<JsonArray>();
     {
-      addControl(rows, "address", "number", 0, 255, true);  // ro
+      addControl(rows, "address", "number", 0, 255, true);      // ro
+      control = addControl(rows, "name", "text", 0, 32, true);  // ro
+      control["default"] = "unknown";
+      control = addControl(rows, "id", "text", 0, 8, true);  // ro
+      control["default"] = "unknown";
     }
   }
 
@@ -259,6 +265,7 @@ class ModuleIO : public Module {
     JsonDocument doc;
     JsonObject newState = doc.to<JsonObject>();
     newState["modded"] = false;
+    newState["I2CReady"] = false;
 
     JsonArray pins = newState["pins"].to<JsonArray>();
 
@@ -491,10 +498,10 @@ class ModuleIO : public Module {
       pinAssigner.assignPin(0, pin_I2S_MCLK);
       uint8_t exposedPins[] = {4, 5, 17, 19, 21, 22, 23, 25, 26, 27, 33};
       for (uint8_t gpio : exposedPins) pinAssigner.assignPin(gpio, pin_Exposed);  // Ethernet Pins
-        
-    } else if (boardID == board_MHCV57PRO) {    // https://shop.myhome-control.de/ABC-WLED-Controller-PRO-V57-mit-iMOSFET/HW10030
-      newState["maxPower"] = 75;             // 15A Fuse @ 5V
-      uint8_t ledPins[] = {12, 13, 18, 32};  // 4 LED_PINS
+
+    } else if (boardID == board_MHCV57PRO) {  // https://shop.myhome-control.de/ABC-WLED-Controller-PRO-V57-mit-iMOSFET/HW10030
+      newState["maxPower"] = 75;              // 15A Fuse @ 5V
+      uint8_t ledPins[] = {12, 13, 18, 32};   // 4 LED_PINS
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
       pinAssigner.assignPin(4, pin_Relay_LightsOn);
       pinAssigner.assignPin(35, pin_I2S_SD);
@@ -504,8 +511,8 @@ class ModuleIO : public Module {
       uint8_t exposedPins[] = {4, 5, 17, 19, 21, 22, 23, 25, 26, 27, 33};
       for (uint8_t gpio : exposedPins) pinAssigner.assignPin(gpio, pin_Exposed);  // Ethernet Pins
 
-    } else if (boardID == board_MHCP4NanoV1) {                                    // https://shop.myhome-control.de/ABC-WLED-ESP32-P4-Shield/HW10027
-      newState["maxPower"] = 100;                                                 // Assuming decent LED power!!
+    } else if (boardID == board_MHCP4NanoV1) {  // https://shop.myhome-control.de/ABC-WLED-ESP32-P4-Shield/HW10027
+      newState["maxPower"] = 100;               // Assuming decent LED power!!
 
       if (_state.data["switch1"]) {                         // on: 8 LED Pins + RS485 + Dig Input
         uint8_t ledPins[] = {21, 20, 25, 5, 7, 23, 8, 27};  // 8 LED pins in this order
@@ -536,11 +543,11 @@ class ModuleIO : public Module {
         pinAssigner.assignPin(12, pin_I2S_SCK);
         pinAssigner.assignPin(13, pin_I2S_MCLK);
       }
-    } else if (boardID == board_MHCP4NanoV2) {                                    // https://shop.myhome-control.de/ABC-WLED-ESP32-P4-Shield/HW10027
-      newState["maxPower"] = 100;                                                 // Assuming decent LED power!!
-      pinAssigner.assignPin(7, pin_I2C_SDA); // on V2 these are I2C Pins
-      pinAssigner.assignPin(8, pin_I2C_SCL); // on V2 these are I2C Pins
-      if (_state.data["switch1"]) {                         // on: 8 LED Pins + RS485 + Dig Input
+    } else if (boardID == board_MHCP4NanoV2) {                // https://shop.myhome-control.de/ABC-WLED-ESP32-P4-Shield/HW10027
+      newState["maxPower"] = 100;                             // Assuming decent LED power!!
+      pinAssigner.assignPin(7, pin_I2C_SDA);                  // on V2 these are I2C Pins
+      pinAssigner.assignPin(8, pin_I2C_SCL);                  // on V2 these are I2C Pins
+      if (_state.data["switch1"]) {                           // on: 8 LED Pins + RS485 + Dig Input
         uint8_t ledPins[] = {21, 20, 25, 5, 22, 23, 24, 27};  // 8 LED pins in this order
         for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
         pinAssigner.assignPin(3, pin_RS485_TX);
@@ -551,7 +558,7 @@ class ModuleIO : public Module {
         pinAssigner.assignPin(46, pin_Dig_Input);
         pinAssigner.assignPin(47, pin_Dig_Input);
         pinAssigner.assignPin(48, pin_Dig_Input);
-      } else {                                                                           // off / default: 16 LED pins
+      } else {                                                                            // off / default: 16 LED pins
         uint8_t ledPins[] = {21, 20, 25, 5, 22, 23, 24, 27, 3, 6, 53, 4, 46, 47, 2, 48};  // 16 LED_PINS in this order
         for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
       }
@@ -609,8 +616,9 @@ class ModuleIO : public Module {
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
     } else if (boardID == board_LuxceoMood1XiaoMod) {
       newState["maxPower"] = 50;
-      uint8_t ledPins[] = {1, 2, 3, 4};
+      uint8_t ledPins[] = {1, 2, 3};
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
+      pinAssigner.assignPin(4, pin_PIR);
       pinAssigner.assignPin(5, pin_I2C_SDA);
       pinAssigner.assignPin(6, pin_I2C_SCL);
       pinAssigner.assignPin(7, pin_SPI_SCK);
@@ -644,7 +652,7 @@ class ModuleIO : public Module {
       pinAssigner.assignPin(22, pin_I2C_SCL);
   #endif
 
-      // trying to add more pins, but these pins not liked by esp32-d0-16MB ... 🚧
+      // trying to add more pins, but these pins not liked by esp32-d0-16mb ... 🚧
       // pinAssigner.assignPin(4, pin_LED_02;
       // pinAssigner.assignPin(5, pin_LED_03;
       // pinAssigner.assignPin(6, pin_LED_04;
@@ -667,17 +675,19 @@ class ModuleIO : public Module {
   // on update triggers another onUpdates on 2 occasions: 1) newState modded (directly) and 2) setBoardPresetDefaults (via main loop)
   // each will trigger the updateHandler of this module sending readpins again ...
   void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
-    if (!originId.toInt()) return;  // Front-end client IDs are numeric; internal origins ("module", etc.) return 0
-
     JsonDocument doc;
     JsonObject newState = doc.to<JsonObject>();
     if (updatedItem.name == "boardPreset") {
       // if booting and modded is false or ! booting
       if ((updatedItem.oldValue == "" && _state.data["modded"] == false) || updatedItem.oldValue != "") {  // only update unmodded
-        // EXT_LOGD(MB_TAG, "%s %s[%d]%s[%d].%s = %s -> %s", originId.c_str(), updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
+        EXT_LOGD(MB_TAG, "newBoardID %s %s[%d]%s[%d].%s = %s -> %s", originId.c_str(), updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
         newBoardID = updatedItem.value;  // run in sveltekit task
       }
-    } else if (updatedItem.name == "modded") {
+    }
+
+    if (!originId.toInt()) return;  // below updates only triggered from UI
+
+    if (updatedItem.name == "modded") {
       // set pins to default if modded is turned off
       if (updatedItem.value == false) {
         // EXT_LOGD(MB_TAG, "%s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
@@ -688,7 +698,7 @@ class ModuleIO : public Module {
       newBoardID = _state.data["boardPreset"];  // run in sveltekit task
     } else if (updatedItem.name == "maxPower") {
       newState["modded"] = true;
-    } else if (updatedItem.name == "usage") {  // usage of any of the pins
+    } else if (updatedItem.name == "usage" || updatedItem.name == "index") {  // usage / index of any of the pins
       newState["modded"] = true;
     } else if (updatedItem.name == "i2cFreq") {
       Wire.setClock(updatedItem.value.as<uint32_t>() * 1000);  // uint32_t instead of uint16_t to multiply in 32-bit arithmetic
@@ -713,13 +723,29 @@ class ModuleIO : public Module {
     }
   }
 
-  void loop() override {
-    // run in sveltekit task
-    Module::loop();
+  bool _initialPinReadDone = false;
 
+  void loop20ms() override {
+    // run in sveltekit task
+    Module::loop20ms();
+
+    // update board presets
     if (newBoardID != UINT8_MAX) {
       setBoardPresetDefaults(newBoardID);  // run from sveltekit task
       newBoardID = UINT8_MAX;
+      _initialPinReadDone = true;
+    }
+
+    // during boot, the IO module is unchanged, not triggering updates, so need to do it manually
+    if (!_initialPinReadDone) {
+      callUpdateHandlers(_moduleName);  // calls readPins for all subscribed handlers
+      _initialPinReadDone = true;
+    }
+
+    // update I2C devices
+    if (_triggerUpdateI2C != UINT8_MAX) {
+      _updateI2CDevices();
+      _triggerUpdateI2C = UINT8_MAX;
     }
   }
 
@@ -938,12 +964,7 @@ class ModuleIO : public Module {
   adc_attenuation_t current_readout_current_adc_attenuation = ADC_11db;
   #endif
 
-  void loop1s() {
-    if (_triggerUpdateI2C != UINT8_MAX) {
-      _updateI2CDevices();
-      _triggerUpdateI2C = UINT8_MAX;
-    }
-
+  void loop1s() override {
   #if FT_BATTERY
     BatteryService* batteryService = _sveltekit->getBatteryService();
     if (_pinBattery != UINT8_MAX) {
@@ -1018,17 +1039,15 @@ class ModuleIO : public Module {
         Wire.beginTransmission(i);
         if (Wire.endTransmission() == 0) {
           JsonObject i2cDevice = i2cDevices.add<JsonObject>();
-          i2cDevice["address"] = i;
+          Char<8> address;
+          address.format("0x%02X", i);
+          i2cDevice["address"] = address.c_str();
 
-          EXT_LOGI(ML_TAG, "Found I2C device at address 0x%02X", i);
+          EXT_LOGI(ML_TAG, "Found I2C device at address %s", address.c_str());
           count++;
         }
       }
       EXT_LOGI(ML_TAG, "Found %d device(s)", count);
-
-      // for testing:
-      JsonObject i2cDevice = i2cDevices.add<JsonObject>();
-      i2cDevice["address"] = 255;
 
       newState["i2cFreq"] = Wire.getClock() / 1000;
     }

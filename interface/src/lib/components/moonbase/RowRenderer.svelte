@@ -264,3 +264,4 @@
 		{/snippet}
 	</DraggableList>
 </div>
+<div class="divider mb-2 mt-0"></div>

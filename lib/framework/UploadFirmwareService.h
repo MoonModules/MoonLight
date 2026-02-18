@@ -43,7 +43,7 @@ constexpr uint8_t ESP_MAGIC_BYTE = 0xE9;       // ESP binary magic byte
 #elif CONFIG_IDF_TARGET_ESP32S3
     constexpr uint8_t ESP_CHIP_ID = 9;
 #elif CONFIG_IDF_TARGET_ESP32P4
-    constexpr uint8_t ESP_CHIP_ID = 19; // 🌙 P4 support
+    constexpr uint8_t ESP_CHIP_ID = 18; // 🌙 P4 support
 #else
     #error "Unsupported ESP32 target"
 #endif

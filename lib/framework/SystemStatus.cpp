@@ -51,6 +51,10 @@
 #define ARDUINO_VERSION ARDUINO_VERSION_STR(ESP_ARDUINO_VERSION_MAJOR, ESP_ARDUINO_VERSION_MINOR, ESP_ARDUINO_VERSION_PATCH)
 #endif
 
+// 🌙 for esp32sveltekit.lps
+#include <ESP32SvelteKit.h>
+extern ESP32SvelteKit esp32sveltekit;
+
 String verbosePrintResetReason(int reason)
 {
     switch (reason)
@@ -197,6 +201,8 @@ esp_err_t SystemStatus::systemStatus(PsychicRequest *request)
     root["core_temp"] = temperatureRead();
     root["cpu_reset_reason"] = verbosePrintResetReason(esp_reset_reason());
     root["uptime"] = millis() / 1000;
+    root["lps"] = esp32sveltekit.lps; // 🌙
+    // 🌙
     #ifdef CONFIG_IDF_TARGET_ESP32P4
         esp_hosted_coprocessor_fwver_t c6_fw_version;
         esp_hosted_get_coprocessor_fwversion(&c6_fw_version);
@@ -205,6 +211,7 @@ esp_err_t SystemStatus::systemStatus(PsychicRequest *request)
         root["coprocessor"] = coprocessor;
     #endif
 
+    // 🌙
     heapHealth(root["heap_info_app"].to<JsonVariant>(), MALLOC_CAP_INTERNAL);
     heapHealth(root["heap_info_dma"].to<JsonVariant>(), MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
 

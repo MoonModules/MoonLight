@@ -56,23 +56,23 @@
 		}
 	}
 
-	function confirmGithubUpdate(assets: any) {
+	function confirmGithubUpdate(release: any) { // 🌙 use release instead of assets
 		let url = '';
 		// iterate over assets and find the correct one
-		for (let i = 0; i < assets.length; i++) {
+		for (let i = 0; i < release.assets.length; i++) {
 			// check if the asset is of type *.bin
 			if (
-				assets[i].name.includes('.bin') &&
-				assets[i].name.includes(page.data.features.firmware_built_target)
+				release.assets[i].name.includes('.bin') &&
+				release.assets[i].name.includes(page.data.features.firmware_built_target)
 			) {
-				url = assets[i].browser_download_url;
+				url = release.assets[i].browser_download_url;
 			}
 		}
 		if (url === '') {
 			modals.open(InfoDialog as unknown as ModalComponent<any>, {
 				title: 'No matching firmware found',
 				message:
-					'No matching firmware was found for the current device. Upload the firmware manually or build from sources.',
+					'No matching firmware was found in ' + release.name + ' for ' + page.data.features.firmware_built_target, // 🌙
 				dismiss: { label: 'OK', icon: Check },
 				onDismiss: () => modals.close()
 			});
@@ -157,7 +157,7 @@
 										<button
 											class="btn btn-ghost btn-circle btn-sm"
 											onclick={() => {
-												confirmGithubUpdate(release.assets);
+												confirmGithubUpdate(release); // 🌙 use release instead of assets
 											}}
 										>
 											<CloudDown class="text-secondary h-6 w-6" />
