@@ -64,10 +64,10 @@ class IMUDriver : public Node {
 
         moduleIO->read(
             [&](ModuleState& state) {
-              newState = state.data;
+              newState.set(state.data);  // deep-copy
               // loop over I2C bus
               for (auto i2cDevice : newState["i2cBus"].as<JsonArray>()) {
-                if (i2cDevice["address"] == "0x68" || i2cDevice["address"] == "0x69") { // depending on ADO gnd or vcc
+                if (i2cDevice["address"] == "0x68" || i2cDevice["address"] == "0x69") {  // depending on ADO gnd or vcc
                   i2cDevice["name"] = "MPU6050";
                   i2cDevice["id"] = address.c_str();
                   found = true;

@@ -736,7 +736,7 @@ class ModuleIO : public Module {
       _initialPinReadDone = true;
     }
 
-    // during boot, the IO module is unchanged , not triggering updates, so need to do it manually
+    // during boot, the IO module is unchanged, not triggering updates, so need to do it manually
     if (!_initialPinReadDone) {
       callUpdateHandlers(_moduleName);  // calls readPins for all subscribed handlers
       _initialPinReadDone = true;

@@ -39,7 +39,6 @@ For each board the following presets are defined:
     * Battery
   * Planned later
     * I2S for microphone and line in
-    * I2C
 
 ## I2C peripherals
 
@@ -48,7 +47,7 @@ For each board the following presets are defined:
 If pins for SDA and SCL are defined, I2C devices will be scanned and displayed here
 
 * Address: The address of a peripheral found
-* Name and ID: Unknown if the device is not initalized. If a driver (e.g. [IMU driver](../../moonlight/drivers/#driver-nodes)) is added, it will provide name and ID
+* Name and ID: Unknown if the device is not initialized. If a driver (e.g. [IMU driver](../../moonlight/drivers/#driver-nodes)) is added, it will provide name and ID
 
 ## Naming convention
 

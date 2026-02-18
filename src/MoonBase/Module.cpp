@@ -61,7 +61,7 @@ void ModuleState::setupData() {
 void ModuleState::read(ModuleState& state, JsonObject& stateJson) {
   if (state.readHook) state.readHook(state.data);
 
-  stateJson.set(state.data);  // copy
+  stateJson.set(state.data);  // deep copy
 }
 
 bool ModuleState::checkReOrderSwap(const JsonString& parent, const JsonVariant& stateData, const JsonVariant& newData, UpdatedItem& updatedItem, const String& originId, uint8_t depth, uint8_t index) {
@@ -212,7 +212,7 @@ bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& 
           // If both sides are objects and their identifying property "name" changed,
           // emit only that "name" update for this object and DO NOT recurse into it.
           // This prevents spurious children (e.g., controls.*) updates during a rename.
-          if (key == "name" && originId.toInt()) { // only when done from UI, Not when system boots and FS loads
+          if (key == "name" && originId.toInt()) {  // only when done from UI, Not when system boots and FS loads
             // EXT_LOGD(MB_TAG, "identifyingFieldFound %s.%s", parent.c_str(), key.c_str());
             identifyingFieldFound = true;
           }
@@ -262,7 +262,6 @@ StateUpdateResult ModuleState::update(JsonObject& newData, ModuleState& state, c
 
 Module::Module(const char* moduleName, PsychicHttpServer* server, ESP32SvelteKit* sveltekit)
     : _socket(sveltekit->getSocket())
-      // _fsPersistence(ModuleState::read, ModuleState::update, this, sveltekit->getFS(), (String("/.config/") + moduleName + ".json").c_str(), true)  // 🌙 true: delayedWrites
 {
   _moduleName = (moduleName && moduleName[0] != '\0') ? moduleName : "unnamed";
 
@@ -276,8 +275,6 @@ Module::Module(const char* moduleName, PsychicHttpServer* server, ESP32SvelteKit
 
 void Module::begin() {
   EXT_LOGV(MB_TAG, "");
-
-  // _fsPersistence.readFromFS();  // overwrites the default settings in state
 
   // no virtual functions in constructor so this is in begin()
   _state.setupDefinition = [&](const JsonArray& controls) {
