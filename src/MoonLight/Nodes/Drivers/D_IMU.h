@@ -37,6 +37,9 @@ class IMUDriver : public Node {
 
     // Subscribe to IO updates to detect when I2C becomes ready
     moduleIO->addUpdateHandler([this](const String& originId) { moduleIO->read([&](ModuleState& state) { i2cActuallyReady = state.data["I2CReady"]; }, name()); }, false);
+    // Read current I2C state in case boot-time handler dispatch already occurred
+    moduleIO->read([this](ModuleState& state) { i2cActuallyReady = state.data["I2CReady"]; }, name());
+    requestInitBoard = true;
   }
 
   void initBoard() {
@@ -50,7 +53,32 @@ class IMUDriver : public Node {
 
       // verify connection
       if (mpu.testConnection()) {
-        EXT_LOGI(ML_TAG, "MPU6050 connection successful Initializing DMP...");
+        // update device name to Module IO
+        JsonDocument doc;
+        JsonObject newState = doc.to<JsonObject>();
+
+        Char<8> address;
+        address.format("0x%02X", mpu.getDeviceID());
+
+        bool found = false;
+
+        moduleIO->read(
+            [&](ModuleState& state) {
+              newState = state.data;
+              // loop over I2C bus
+              for (auto i2cDevice : newState["i2cBus"].as<JsonArray>()) {
+                if (i2cDevice["address"] == "0x68" || i2cDevice["address"] == "0x69") { // depending on ADO gnd or vcc
+                  i2cDevice["name"] = "MPU6050";
+                  i2cDevice["id"] = address.c_str();
+                  found = true;
+                }
+              }
+            },
+            name());
+
+        if (found) moduleIO->update(newState, ModuleState::update, name());
+
+        EXT_LOGI(ML_TAG, "MPU6050 connection successful at %s Initializing DMP... (%d)", address.c_str(), found);
         uint8_t devStatus = mpu.dmpInitialize();
 
         if (devStatus == 0) {
@@ -140,7 +168,7 @@ class IMUDriver : public Node {
         sharedData.gravity.y = gravity.y * INT16_MAX;
         sharedData.gravity.z = gravity.z * INT16_MAX;
 
-        EXT_LOGD(ML_TAG, "%f %f %f", gravity.x, gravity.y, gravity.z);
+        // EXT_LOGD(ML_TAG, "%f %f %f", gravity.x, gravity.y, gravity.z);
 
         // needed to repeat the following 3 lines (yes if you look at the output: otherwise not 0): commented out
         // mpu.dmpGetQuaternion(&q, fifoBuffer);

@@ -39,6 +39,7 @@ Want to add a Driver to MoonLight, see [develop](../../develop/overview/). See a
 | Audio Sync | <img width="100" src="https://github.com/user-attachments/assets/bfedf80b-6596-41e7-a563-ba7dd58cc476"/> | No controls | Listens to audio sent over the local network by WLED-AC or WLED-MM and allows audio reactive effects (♪ & ♫) to use audio data (volume and bands (FFT)) |
 | HUB75 Driver | <img width="100" src="https://github.com/user-attachments/assets/620f7c41-8078-4024-b2a0-39a7424f9678"/> | <img width="100" src="https://github.com/user-attachments/assets/4d386045-9526-4a5a-aa31-638058b31f32"/> | Drive HUB75 panels<br>Not implemented yet |
 | IR Driver | <img width="100" src="../../media/moonlight/drivers/IRDriver.jpeg"/> | <img width="100" src="../../media/moonlight/drivers/irdrivercontrols.png"/> | Receive IR commands and [Lights Control](../../moonlight/lightscontrol/) |
+| IMU Driver | <img width="100" src="../../media/moonlight/drivers/MPU-6050.jpg"/> | <img width="100" src="../../media/moonlight/drivers/IMUDriverControls.png"/> | Receive inertion from an IMU / I2C peripheral, see [IO](../../moonbase/inputoutput/#i2c-peripherals)<br>Used in [particles effect](../../moonlight/effects/#moonlight-effects) |
 
 ### Light Preset
 
