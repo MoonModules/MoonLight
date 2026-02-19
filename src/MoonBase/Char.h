@@ -88,6 +88,7 @@ struct Char {
 
   char operator[](const uint16_t indexV) const { return (indexV < sizeof(s)) ? s[indexV] : '\0'; }
 
+  // returns a substring, starting at begin and ending at end-1 (not exclusive)
   Char<N> substring(uint16_t begin, uint16_t end = sizeof(s) - 1) {
     Char<N> sub;
     if (begin >= sizeof(s) || end >= sizeof(s) || end < begin)
@@ -102,6 +103,7 @@ struct Char {
   int toInt() const { return atoi(s); }
   float toFloat() const { return atof(s); }
   bool contains(const char* rhs) const { return strnstr(s, rhs, sizeof(s)) != nullptr; }
+  // returns index of first character of token (starting with 0)
   size_t indexOf(const char* token) const {
     const char* pos = strnstr(s, token, sizeof(s));
     return pos ? (pos - s) : SIZE_MAX;

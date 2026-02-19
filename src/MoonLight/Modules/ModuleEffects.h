@@ -90,15 +90,15 @@ class ModuleEffects : public NodeManager {
     addControlValue(control, getNameAndTags<LinesEffect>());
     addControlValue(control, getNameAndTags<FireEffect>());
     addControlValue(control, getNameAndTags<FixedRectangleEffect>());
-    addControlValue(control, getNameAndTags<ParticlesEffect>());
-    addControlValue(control, getNameAndTags<PraxisEffect>());
-    addControlValue(control, getNameAndTags<StarSkyEffect>());
   #if USE_M5UNIFIED
     addControlValue(control, getNameAndTags<MoonManEffect>());
   #endif
     addControlValue(control, getNameAndTags<FreqSawsEffect>());
     addControlValue(control, getNameAndTags<MarioTestEffect>());
+    addControlValue(control, getNameAndTags<ParticlesEffect>());
     addControlValue(control, getNameAndTags<PixelMapEffect>());
+    addControlValue(control, getNameAndTags<PraxisEffect>());
+    addControlValue(control, getNameAndTags<RadarEffect>());
     addControlValue(control, getNameAndTags<RandomEffect>());
     addControlValue(control, getNameAndTags<RingRandomFlowEffect>());
     addControlValue(control, getNameAndTags<RipplesEffect>());
@@ -108,6 +108,7 @@ class ModuleEffects : public NodeManager {
     addControlValue(control, getNameAndTags<SphereMoveEffect>());
     addControlValue(control, getNameAndTags<SpiralFireEffect>());
     addControlValue(control, getNameAndTags<StarFieldEffect>());
+    addControlValue(control, getNameAndTags<StarSkyEffect>());
     addControlValue(control, getNameAndTags<VUMeterEffect>());
     addControlValue(control, getNameAndTags<WaveEffect>());
 
@@ -189,13 +190,13 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<FreqSawsEffect>(name);
     if (!node) node = checkAndAlloc<LinesEffect>(name);
     if (!node) node = checkAndAlloc<MarioTestEffect>(name);
-    if (!node) node = checkAndAlloc<StarSkyEffect>(name);
   #if USE_M5UNIFIED
     if (!node) node = checkAndAlloc<MoonManEffect>(name);
   #endif
     if (!node) node = checkAndAlloc<ParticlesEffect>(name);
-    if (!node) node = checkAndAlloc<PraxisEffect>(name);
     if (!node) node = checkAndAlloc<PixelMapEffect>(name);
+    if (!node) node = checkAndAlloc<PraxisEffect>(name);
+    if (!node) node = checkAndAlloc<RadarEffect>(name);
     if (!node) node = checkAndAlloc<RandomEffect>(name);
     if (!node) node = checkAndAlloc<RingRandomFlowEffect>(name);
     if (!node) node = checkAndAlloc<RipplesEffect>(name);
@@ -203,10 +204,11 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<ScrollingTextEffect>(name);
     if (!node) node = checkAndAlloc<SinusEffect>(name);
     if (!node) node = checkAndAlloc<SphereMoveEffect>(name);
-    if (!node) node = checkAndAlloc<StarFieldEffect>(name);
-    if (!node) node = checkAndAlloc<WaveEffect>(name);
     if (!node) node = checkAndAlloc<SpiralFireEffect>(name);
+    if (!node) node = checkAndAlloc<StarFieldEffect>(name);
+    if (!node) node = checkAndAlloc<StarSkyEffect>(name);
     if (!node) node = checkAndAlloc<VUMeterEffect>(name);
+    if (!node) node = checkAndAlloc<WaveEffect>(name);
 
     // MoonModules effects, alphabetically
     if (!node) node = checkAndAlloc<GameOfLifeEffect>(name);

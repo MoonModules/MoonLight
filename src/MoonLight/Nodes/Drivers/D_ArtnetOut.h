@@ -66,20 +66,33 @@ class ArtNetOutDriver : public DriverNode {
     DriverNode::onUpdate(oldValue, control);  // !!
 
     if (control["name"] == "controllerIPs") {
-      EXT_LOGD(MB_TAG, "IPs: %s", controllerIP3s.c_str());
       nrOfIPAddresses = 0;
-      controllerIP3s.split(",", [this](const char* token, uint8_t nr) {
-        int ipSegment = atoi(token);
-        if (nrOfIPAddresses < std::size(ipAddresses) && ipSegment >= 0 && ipSegment <= 255) {
-          EXT_LOGD(MB_TAG, "Found IP: %s (%d / %d)", token, nr, nrOfIPAddresses);
-          ipAddresses[nrOfIPAddresses] = ipSegment;
-          nrOfIPAddresses++;
-        } else
-          EXT_LOGW(MB_TAG, "Too many IPs provided (%d) or invalid IP segment: %d ", nrOfIPAddresses, ipSegment);
-      });
+      size_t index = controllerIP3s.indexOf("-");
+      EXT_LOGD(MB_TAG, "IPs: %s (%d)", controllerIP3s.c_str(), index);
+      if (index != SIZE_MAX) {
+        Char<8> first = controllerIP3s.substring(0, index);
+        Char<8> second = controllerIP3s.substring(index + 1);
+        for (int ipSegment = first.toInt(); ipSegment <= second.toInt(); ipSegment++) {
+          if (nrOfIPAddresses < std::size(ipAddresses) && ipSegment >= 0 && ipSegment <= 255) {
+            EXT_LOGD(MB_TAG, "Found IP: %s-%s %d (%d)", first.c_str(), second.c_str(), ipSegment, nrOfIPAddresses);
+            ipAddresses[nrOfIPAddresses] = ipSegment;
+            nrOfIPAddresses++;
+          }
+        }
+      } else {
+        controllerIP3s.split(",", [this](const char* token, uint8_t nr) {
+          int ipSegment = atoi(token);
+          if (nrOfIPAddresses < std::size(ipAddresses) && ipSegment >= 0 && ipSegment <= 255) {
+            EXT_LOGD(MB_TAG, "Found IP: %s (%d / %d)", token, nr, nrOfIPAddresses);
+            ipAddresses[nrOfIPAddresses] = ipSegment;
+            nrOfIPAddresses++;
+          } else
+            EXT_LOGW(MB_TAG, "Too many IPs provided (%d) or invalid IP segment: %d ", nrOfIPAddresses, ipSegment);
+        });
+      }
     }
 
-    totalChannels = layerP.lights.header.nrOfLights * layerP.lights.header.channelsPerLight;
+    totalChannels = layerP.lights.header.nrOfLights * layerP.lights.header.channelsPerLight / (nrOfIPAddresses?nrOfIPAddresses:1);
     usedChannelsPerUniverse = universeSize / layerP.lights.header.channelsPerLight * layerP.lights.header.channelsPerLight;  // calculated
     totalUniverses = (totalChannels + usedChannelsPerUniverse - 1) / usedChannelsPerUniverse;                                // ceiling //calculated
 
