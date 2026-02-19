@@ -11,6 +11,8 @@
 
 #if FT_MOONLIGHT
 
+extern SemaphoreHandle_t swapMutex ;
+
 class ArtNetInDriver : public Node {
  public:
   static const char* name() { return "Art-Net In"; }
