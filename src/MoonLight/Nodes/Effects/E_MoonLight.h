@@ -1773,12 +1773,12 @@ class RadarEffect : public Node {
     float physH = H * 1.0f;
     float physPerimeter = 2.0f * (physW + physH);
 
-    uint32_t cycleMs = 60000 / bpm;
+    uint32_t cycleMs = bpm ? 60000 / bpm : UINT32_MAX;
     float physPos = (float)(millis() % cycleMs) / cycleMs * physPerimeter;
 
     auto physToXY = [&](float p, int16_t& x, int16_t& y) {
       if (p < physW) {
-        x = (int16_t)(p / 10.0f);
+        x = (int16_t)(p / (float)tubeSpacing);
         y = 0;
       }  // top
       else if (p < physW + physH) {
@@ -1786,7 +1786,7 @@ class RadarEffect : public Node {
         y = (int16_t)(p - physW);
       }  // right
       else if (p < 2 * physW + physH) {
-        x = (int16_t)((2 * physW + physH - p) / 10.0f);
+        x = (int16_t)((2 * physW + physH - p) / (float)tubeSpacing);
         y = H - 1;
       }  // bottom
       else {
@@ -1795,7 +1795,7 @@ class RadarEffect : public Node {
       }  // left
     };
 
-    int16_t x1, y1, x2, y2;
+    int16_t x1, y1;
     physToXY(physPos, x1, y1);
 
     if (fullLine) {

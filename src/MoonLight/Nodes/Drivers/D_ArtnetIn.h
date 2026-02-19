@@ -126,6 +126,7 @@ class ArtNetInDriver : public Node {
           int startPixel = (universe - universeMin) * (512 / layerP.lights.header.channelsPerLight);
           int numPixels = MIN(dataLength / layerP.lights.header.channelsPerLight, layerP.lights.header.nrOfLights - startPixel);
 
+          xSemaphoreTake(swapMutex, portMAX_DELAY);  // because ArtNetIn is like an effect writing data into the channels array
           for (int i = 0; i < numPixels; i++) {
             int ledIndex = startPixel + i;
             if (ledIndex < layerP.lights.header.nrOfLights) {
@@ -137,6 +138,7 @@ class ArtNetInDriver : public Node {
               }
             }
           }
+          xSemaphoreGive(swapMutex);
         }
       }
     }
@@ -157,6 +159,7 @@ class ArtNetInDriver : public Node {
       int startPixel = offset / layerP.lights.header.channelsPerLight;
       int numPixels = MIN(dataLen / layerP.lights.header.channelsPerLight, layerP.lights.header.nrOfLights - startPixel);
 
+      xSemaphoreTake(swapMutex, portMAX_DELAY);  // because ArtNetIn is like an effect writing data into the channels array
       for (int i = 0; i < numPixels; i++) {
         int ledIndex = startPixel + i;
         if (ledIndex < layerP.lights.header.nrOfLights) {
@@ -168,6 +171,7 @@ class ArtNetInDriver : public Node {
           }
         }
       }
+      xSemaphoreGive(swapMutex);
     }
   }
 };

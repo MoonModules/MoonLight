@@ -1974,11 +1974,15 @@ class DJLightEffect : public Node {
       // layer->setRGB(mid, color.fadeToBlackBy(map(sharedData.bands[4], 0, 255, 255, 4)));     // 0.13.x  fade -> 180hz-260hz
       uint8_t fadeVal = ::map(sharedData.bands[3], 0, 255, 255, 4);  // 0.14.x  fade -> 216hz-301hz
       if (candyFactory) fadeVal = constrain(fadeVal, 0, 176);        // "candy factory" mode - avoid complete fade-out
-      layer->setRGB(Coord3D(0, mid), color.fadeToBlackBy(fadeVal));
 
-      for (int i = layer->size.y - 1; i > mid; i--) layer->setRGB(Coord3D(0, i), layer->getRGB(Coord3D(0, i - 1)));  // move to the left
-      for (int i = 0; i < mid; i++) layer->setRGB(Coord3D(0, i), layer->getRGB(Coord3D(0, i + 1)));                  // move to the right
+      for (int x = 0; x < layer->size.x; x++) {
+        for (int z = 0; z < layer->size.z; z++) {
+          layer->setRGB(Coord3D(x, mid, z), color.fadeToBlackBy(fadeVal));
 
+          for (int y = layer->size.y - 1; y > mid; y--) layer->setRGB(Coord3D(x, y, z), layer->getRGB(Coord3D(x, y - 1, z)));  // move to the left
+          for (int y = 0; y < mid; y++) layer->setRGB(Coord3D(x, y, z), layer->getRGB(Coord3D(x, y + 1, z)));                  // move to the right
+        }
+      }
       layer->fadeToBlackBy(fade);
     }
   }
