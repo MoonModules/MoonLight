@@ -671,7 +671,7 @@ class FreqSawsEffect : public Node {
  public:
   static const char* name() { return "Frequency Saws"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥♫🪚"; }
+  static const char* tags() { return "🔥♫"; }
 
   uint8_t fade = 4;
   uint8_t increaser = 211;
@@ -767,7 +767,7 @@ class RubiksCubeEffect : public Node {
  public:
   static const char* name() { return "Rubik's Cube"; }
   static uint8_t dim() { return _3D; }
-  static const char* tags() { return "🔥💫"; }
+  static const char* tags() { return "🔥"; }
 
   struct Cube {
     uint8_t SIZE;
@@ -1071,7 +1071,7 @@ class ParticlesEffect : public Node {
  public:
   static const char* name() { return "Particles"; }
   static uint8_t dim() { return _3D; }
-  static const char* tags() { return "🔥💫🧭"; }
+  static const char* tags() { return "🔥🧭"; }
 
   struct Particle {
     float x, y, z;
@@ -1300,7 +1300,7 @@ class MoonManEffect : public Node {
  public:
   static const char* name() { return "Moon Man"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥🎵☾"; }
+  static const char* tags() { return "🔥🎵"; }
 
   // Create an M5Canvas for PNG processing
   M5Canvas* canvas;  //(&M5.Display);
@@ -1365,7 +1365,7 @@ class SpiralFireEffect : public Node {
  public:
   static const char* name() { return "Spiral Fire"; }
   static uint8_t dim() { return _3D; }
-  static const char* tags() { return "🔥⏳"; }
+  static const char* tags() { return "🔥"; }
 
   uint8_t speed = 60;
   uint8_t intensity = 180;
@@ -1434,7 +1434,7 @@ class FireEffect : public Node {
  public:
   static const char* name() { return "Fire"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "💫"; }
+  static const char* tags() { return "🔥"; }
 
   const uint32_t colors[11] = {0x000000, 0x100000, 0x300000, 0x600000, 0x800000, 0xA00000, 0xC02000, 0xC04000, 0xC06000, 0xC08000, 0x807080};
   const uint8_t NCOLORS = std::size(colors);
@@ -1550,7 +1550,7 @@ class VUMeterEffect : public Node {
  public:
   static const char* name() { return "VU Meter"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "♫💫📺"; }
+  static const char* tags() { return "🔥♫"; }
 
   void drawNeedle(float angle, Coord3D topLeft, Coord3D size, CRGB color) {
     int x0 = topLeft.x + size.x / 2;  // Center of the needle
@@ -1599,7 +1599,7 @@ class PixelMapEffect : public Node {
  public:
   static const char* name() { return "PixelMap"; }
   static uint8_t dim() { return _3D; }
-  static const char* tags() { return "💫"; }
+  static const char* tags() { return "🔥"; }
 
   Coord3D pos = {0, 0, 0};
 
@@ -1616,7 +1616,7 @@ class MarioTestEffect : public Node {
  public:
   static const char* name() { return "MarioTest"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "💫"; }
+  static const char* tags() { return "🔥"; }
 
   bool background = false;
   Coord3D offset = {0, 0, 0};
@@ -1672,7 +1672,7 @@ class RingRandomFlowEffect : public RingEffect {
  public:
   static const char* name() { return "RingRandomFlow"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return "💫"; }
+  static const char* tags() { return "🔥"; }
 
   // void setup() override {} //so no palette control is created
 
@@ -1704,7 +1704,7 @@ class AudioRingsEffect : public RingEffect {
  public:
   static const char* name() { return "AudioRings"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return "♫💫"; }
+  static const char* tags() { return "🔥♫"; }
 
   bool inWards = true;
 
@@ -1760,7 +1760,7 @@ class RadarEffect : public Node {
     addControl(bpm, "bpm", "slider");
     addControl(fade, "fade", "slider");
     addControl(fullLine, "fullLine", "checkbox");
-    addControl(tubeSpacing, "tubeSpacing", "number");
+    addControl(tubeSpacing, "tubeSpacing", "number", 1);
   }
 
   void loop() override {

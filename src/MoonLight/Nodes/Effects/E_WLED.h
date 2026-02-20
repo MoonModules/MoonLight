@@ -15,7 +15,7 @@ class BouncingBallsEffect : public Node {
  public:
   static const char* name() { return "Bouncing Balls"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥🐙"; }
+  static const char* tags() { return "🐙"; }
 
   uint8_t grav = 128;
   uint8_t numBalls = 8;
@@ -97,7 +97,7 @@ class BlurzEffect : public Node {
  public:
   static const char* name() { return "Blurz"; }
   static uint8_t dim() { return _3D; }  // test...
-  static const char* tags() { return "🔥🎵☾"; }
+  static const char* tags() { return "🐙🎵"; }
 
   // static const char _data_FX_MODE_BLURZ[] PROGMEM = "Blurz Plus ☾@Fade rate,Blur,,,,FreqMap ☾,GEQ Scanner ☾,;!,Color mix;!;01f;sx=48,ix=127,m12=7,si=0"; // Pinwheel, Beatsin
 
@@ -171,7 +171,7 @@ class DistortionWavesEffect : public Node {
  public:
   static const char* name() { return "Distortion Waves"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥🐙"; }
+  static const char* tags() { return "🐙"; }
 
   uint8_t speed = 4;
   uint8_t scale = 4;
@@ -228,7 +228,7 @@ class FreqMatrixEffect : public Node {
  public:
   static const char* name() { return "Freq Matrix"; }
   static uint8_t dim() { return _1D; }  // 2D/3D-ish?
-  static const char* tags() { return "🔥♪🐙"; }
+  static const char* tags() { return "🐙♪"; }
 
   uint8_t speed = 255;
   uint8_t fx = 128;
@@ -302,7 +302,7 @@ class GEQEffect : public Node {
  public:
   static const char* name() { return "GEQ"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥♫🐙"; }
+  static const char* tags() { return "🐙♫"; }
 
   uint8_t fadeOut = 255;
   uint8_t ripple = 128;
@@ -415,7 +415,7 @@ class LissajousEffect : public Node {
  public:
   static const char* name() { return "Lissajous"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥🐙"; }
+  static const char* tags() { return "🐙"; }
 
   uint8_t xFrequency = 64;
   uint8_t fadeRate = 128;
@@ -446,7 +446,7 @@ class Noise2DEffect : public Node {
  public:
   static const char* name() { return "Noise2D"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥🐙"; }
+  static const char* tags() { return "🐙"; }
 
   uint8_t speed = 8;
   uint8_t scale = 64;
@@ -470,7 +470,7 @@ class NoiseMeterEffect : public Node {
  public:
   static const char* name() { return "Noise Meter"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return "♪🐙"; }
+  static const char* tags() { return "🐙♪"; }
 
   uint8_t fadeRate = 248;
   uint8_t width = 128;
@@ -527,7 +527,7 @@ class PacManEffect : public Node {
  public:
   static const char* name() { return "PacMan"; }
   static uint8_t dim() { return _1D; }  // it is a 1D effect, todo: 2D
-  static const char* tags() { return "🔥🐙"; }
+  static const char* tags() { return "🐙"; }
 
   // static const char _data_FX_MODE_PACMAN[] PROGMEM = "PacMan@Speed,# of PowerDots,Blink distance,Blur,# of Ghosts,Dots,Smear,Compact;;!;1;m12=0,sx=192,ix=64,c1=64,c2=0,c3=12,o1=1,o2=0";
   uint8_t speed = 192;
@@ -788,7 +788,7 @@ class AntEffect : public Node {
  public:
   static const char* name() { return "Ants"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return "🔥"; }
+  static const char* tags() { return "🐙"; }
 
   uint8_t antSpeed = 192;
   uint8_t nrOfAnts = MAX_ANTS / 2;
@@ -955,7 +955,7 @@ class TetrixEffect : public Node {
  public:
   static const char* name() { return "Tetrix"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥🐙"; }
+  static const char* tags() { return "🐙"; }
 
   uint8_t speedControl = 0;  // 1 beat per second
   uint8_t width = 0;
@@ -1060,7 +1060,7 @@ class PopCornEffect : public Node {
  public:
   static const char* name() { return "PopCorn"; }
   static uint8_t dim() { return _1D; }  // 2D-ish? check latest in WLED...
-  static const char* tags() { return "♪🐙"; }
+  static const char* tags() { return "🐙♪"; }
 
   uint8_t speed = 128;
   uint8_t numPopcorn = maxNumPopcorn / 2;
@@ -1136,7 +1136,7 @@ class WaverlyEffect : public Node {
  public:
   static const char* name() { return "Waverly"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥♪🐙"; }
+  static const char* tags() { return "🐙♪"; }
 
   uint8_t fadeRate = 128;
   uint8_t amplification = 30;
@@ -1181,7 +1181,7 @@ class BlackholeEffect : public Node {
  public:
   static const char* name() { return "Blackhole"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥⏳🐙"; }
+  static const char* tags() { return "🐙"; }
 
   uint8_t fadeRate = 128;    // speed
   uint8_t outerYfreq = 128;  // intensity
@@ -1232,7 +1232,7 @@ class DNAEffect : public Node {
  public:
   static const char* name() { return "DNA"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🐙💫"; }
+  static const char* tags() { return "🐙"; }
 
   uint8_t speed = 16;
   uint8_t blur = 128;
@@ -1551,7 +1551,7 @@ class FunkyPlankEffect : public Node {
  public:
   static const char* name() { return "Funky Plank"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "♫🐙💫"; }
+  static const char* tags() { return "🐙♫"; }
 
   uint8_t speed = 255;
   uint8_t bands = NUM_GEQ_CHANNELS;
@@ -1600,7 +1600,7 @@ class FlowEffect : public Node {
  public:
   static const char* name() { return "Flow"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return "🐙"; }  // 🐙 means wled origin
+  static const char* tags() { return "🐙"; }  //  means wled origin
 
   uint8_t speed = 128;
   uint8_t zonesControl = 128;
@@ -1771,7 +1771,7 @@ class DripEffect : public Node {
  public:
   static const char* name() { return "Drip"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🐙💫"; }
+  static const char* tags() { return "🐙"; }
 
   uint8_t gravityControl = 128;
   uint8_t drips = 4;
@@ -1875,7 +1875,7 @@ class HeartBeatEffect : public Node {
  public:
   static const char* name() { return "HeartBeat"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return "🐙💫♥"; }
+  static const char* tags() { return "♥"; }
 
   uint8_t speed = 15;
   uint8_t intensity = 128;
@@ -1918,7 +1918,7 @@ class DJLightEffect : public Node {
  public:
   static const char* name() { return "DJLight"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return "♫🐙"; }
+  static const char* tags() { return "🐙♫"; }
 
   uint8_t speed = 255;
   bool candyFactory = true;
@@ -1975,9 +1975,11 @@ class DJLightEffect : public Node {
       uint8_t fadeVal = ::map(sharedData.bands[3], 0, 255, 255, 4);  // 0.14.x  fade -> 216hz-301hz
       if (candyFactory) fadeVal = constrain(fadeVal, 0, 176);        // "candy factory" mode - avoid complete fade-out
 
+      CRGB fadedColor = color;
+      fadedColor.fadeToBlackBy(fadeVal);
       for (int x = 0; x < layer->size.x; x++) {
         for (int z = 0; z < layer->size.z; z++) {
-          layer->setRGB(Coord3D(x, mid, z), color.fadeToBlackBy(fadeVal));
+          layer->setRGB(Coord3D(x, mid, z), fadedColor);
 
           for (int y = layer->size.y - 1; y > mid; y--) layer->setRGB(Coord3D(x, y, z), layer->getRGB(Coord3D(x, y - 1, z)));  // move to the left
           for (int y = 0; y < mid; y++) layer->setRGB(Coord3D(x, y, z), layer->getRGB(Coord3D(x, y + 1, z)));                  // move to the right
@@ -1992,7 +1994,7 @@ class ColorTwinkleEffect : public Node {
  public:
   static const char* name() { return "ColorTwinkle"; }
   static uint8_t dim() { return _3D; }
-  static const char* tags() { return "🔥⏳"; }
+  static const char* tags() { return "🐙"; }
 
   uint8_t fadeSpeed = 128;
   uint8_t spawnSpeed = 128;
@@ -2073,7 +2075,7 @@ class PlasmaEffect : public Node {
  public:
   static const char* name() { return "Plasma"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return "🔥"; }
+  static const char* tags() { return "🐙"; }
 
   uint8_t speed = 60;
   uint8_t intensity = 128;
@@ -2105,7 +2107,7 @@ class JuliaEffect : public Node {
  public:
   static const char* name() { return "Julia"; }
   static uint8_t dim() { return _3D; }
-  static const char* tags() { return "🔥"; }
+  static const char* tags() { return "🐙"; }
 
   uint8_t speed = 60;       // 1 beat per second
   uint8_t iterations = 64;  // 24;
@@ -2242,7 +2244,7 @@ class PoliceEffect : public Node {
  public:
   static const char* name() { return "Police"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return "🔥"; }
+  static const char* tags() { return "🐙"; }
 
   uint8_t speed = 60;  // 1 beat per second
   uint8_t widthC = 128;
@@ -2543,5 +2545,239 @@ class PoliceEffect : public Node {
 //   return twinklefox_base(true);
 // }
 // static const char _data_FX_MODE_TWINKLECAT[] PROGMEM = "Twinklecat@!,Twinkle rate;!,!;!";
+
+class BlinkRainbowEffect : public Node {
+ public:
+  static const char* name() { return "Blink Rainbow"; }
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🐙"; }
+
+  uint8_t frequency = 128;
+  uint8_t blinkDuration = 128;
+
+  void setup() override {
+    addControl(frequency, "frequency", "slider");
+    addControl(blinkDuration, "blinkDuration", "slider");
+  }
+
+  uint8_t colorIndex = 0;
+
+  void loop() override {
+    uint16_t dutyCycle = blinkDuration + 1;
+    uint16_t onTime = (dutyCycle * frequency) >> 8;
+    uint16_t offTime = dutyCycle - onTime;
+
+    unsigned long timebase = millis();
+    bool on = (timebase % dutyCycle) < onTime;
+
+    if (on) {
+      CRGB color = ColorFromPalette(layerP.palette, colorIndex);
+      layer->fill_solid(color);
+    } else {
+      layer->fill_solid(CRGB::Black);
+    }
+
+    // Change color every cycle
+    if ((timebase % dutyCycle) == 0) {
+      colorIndex += 32;
+    }
+  }
+};
+
+class MeteorEffect : public Node {
+ public:
+  static const char* name() { return "Meteor"; }
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🐙"; }
+
+  uint8_t speed = 128;
+  uint8_t trail = 128;
+  bool gradient = false;
+  bool smooth = false;
+
+  void setup() override {
+    addControl(speed, "speed", "slider");
+    addControl(trail, "trail", "slider");
+    addControl(gradient, "gradient", "checkbox");
+    addControl(smooth, "smooth", "checkbox");
+  }
+
+  uint8_t* trailData = nullptr;
+  size_t trailDataSize = 0;
+  uint16_t step = 0;
+
+  ~MeteorEffect() override {
+    if (trailData) freeMB(trailData, "trailData");
+  }
+
+  void onSizeChanged(const Coord3D& prevSize) override { reallocMB2<uint8_t>(trailData, trailDataSize, layer->nrOfLights, "trailData"); }
+
+  void loop() override {
+    if (!trailData) return;
+
+    const unsigned meteorSize = 1 + layer->nrOfLights / 20;  // 5%
+    uint16_t meteorStart;
+
+    if (smooth) {
+      meteorStart = beatsin16(speed >> 2, 0, layer->nrOfLights - 1);
+    } else {
+      unsigned counter = millis() * ((speed >> 2) + 8);
+      meteorStart = (counter * layer->nrOfLights) >> 16;
+    }
+
+    // Fade all LEDs
+    for (int i = 0; i < layer->nrOfLights; i++) {
+      if (random8() <= 255 - trail) {
+        if (smooth) {
+          if (trailData[i] > 0) {
+            int change = trailData[i] + 4 - random8(24);
+            trailData[i] = constrain(change, 0, 240);
+          }
+          CRGB col = gradient ? ColorFromPalette(layerP.palette, i * 255 / layer->nrOfLights, trailData[i]) : ColorFromPalette(layerP.palette, trailData[i]);
+          layer->setRGB(i, col);
+        } else {
+          trailData[i] = scale8(trailData[i], 128 + random8(127));
+          int index = gradient ? map(i, 0, layer->nrOfLights, 0, 240) : trailData[i];
+          CRGB col = ColorFromPalette(layerP.palette, index, trailData[i]);
+          layer->setRGB(i, col);
+        }
+      }
+    }
+
+    // Draw meteor head
+    for (int j = 0; j < meteorSize; j++) {
+      int index = (meteorStart + j) % layer->nrOfLights;
+      trailData[index] = 240;
+      int colorIdx = gradient ? (index * 255 / layer->nrOfLights) : 240;
+      CRGB col = ColorFromPalette(layerP.palette, colorIdx, 255);
+      layer->setRGB(index, col);
+    }
+
+    step += speed + 1;
+  }
+};
+
+class OscillateEffect : public Node {
+ public:
+  static const char* name() { return "Oscillate"; }
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🐙"; }
+
+  uint8_t speed = 128;
+  uint8_t intensity = 128;
+
+  void setup() override {
+    addControl(speed, "speed", "slider");
+    addControl(intensity, "intensity", "slider");
+  }
+
+  struct Oscillator {
+    int16_t pos;
+    int8_t size;
+    int8_t dir;
+    int8_t oscSpeed;  // Renamed from 'speed' to avoid shadowing
+  };
+
+  Oscillator oscillators[3];
+  uint32_t lastUpdate = 0;
+  bool initialized = false;
+
+  void onSizeChanged(const Coord3D& prevSize) override {
+    // Initialize oscillators when layer size is known
+    if (layer->nrOfLights > 0) {
+      oscillators[0] = {(int16_t)(layer->nrOfLights / 4), (int8_t)(layer->nrOfLights / 8), 1, 1};
+      oscillators[1] = {(int16_t)(layer->nrOfLights / 4 * 3), (int8_t)(layer->nrOfLights / 8), 1, 2};
+      oscillators[2] = {(int16_t)(layer->nrOfLights / 4 * 2), (int8_t)(layer->nrOfLights / 8), -1, 1};
+      initialized = true;
+      lastUpdate = 0xFFFFFFFF;  // Force update on first frame
+    }
+  }
+
+  void loop() override {
+    if (!initialized || layer->nrOfLights == 0) return;
+
+    uint32_t cycleTime = 20 + (2 * (uint32_t)(255 - speed));
+    uint32_t it = millis() / cycleTime;
+
+    // Update oscillator positions
+    for (int i = 0; i < 3; i++) {
+      if (it != lastUpdate) {
+        oscillators[i].pos += oscillators[i].dir * oscillators[i].oscSpeed;
+      }
+
+      oscillators[i].size = layer->nrOfLights / (3 + intensity / 8);
+
+      if ((oscillators[i].dir == -1) && (oscillators[i].pos <= 0)) {
+        oscillators[i].pos = 0;
+        oscillators[i].dir = 1;
+        oscillators[i].oscSpeed = speed > 100 ? random8(2, 4) : random8(1, 3);
+      }
+      if ((oscillators[i].dir == 1) && (oscillators[i].pos >= (layer->nrOfLights - 1))) {
+        oscillators[i].pos = layer->nrOfLights - 1;
+        oscillators[i].dir = -1;
+        oscillators[i].oscSpeed = speed > 100 ? random8(2, 4) : random8(1, 3);
+      }
+    }
+
+    // Clear and render
+    layer->fill_solid(CRGB::Black);
+
+    for (int i = 0; i < layer->nrOfLights; i++) {
+      CRGB color = CRGB::Black;
+      for (int j = 0; j < 3; j++) {
+        if (i >= oscillators[j].pos - oscillators[j].size && i <= oscillators[j].pos + oscillators[j].size) {
+          CRGB newColor = ColorFromPalette(layerP.palette, j * 85);
+          color = (color == CRGB::Black) ? newColor : blend(color, newColor, 128);
+        }
+      }
+      layer->setRGB(i, color);
+    }
+
+    lastUpdate = it;
+  }
+};
+
+class PhasedNoiseEffect : public Node {
+ public:
+  static const char* name() { return "Phased Noise"; }
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🐙"; }
+
+  uint8_t speed = 128;
+  uint8_t intensity = 128;
+
+  void setup() override {
+    addControl(speed, "speed", "slider");
+    addControl(intensity, "intensity", "slider");
+  }
+
+  float phase = 0;
+
+  void loop() override {
+    uint8_t allfreq = 16;                // Base frequency
+    uint8_t cutOff = (255 - intensity);  // Cutoff threshold
+    uint8_t index = millis() / 64;       // Color rotation
+
+    phase += speed / 32.0f;  // Phase increment
+
+    for (int i = 0; i < layer->nrOfLights; i++) {
+      // Add noise modulation
+      uint8_t modVal = (inoise8(i * 10 + i * 10) / 16);
+      if (modVal == 0) modVal = 1;
+
+      uint16_t val = (i + 1) * allfreq;
+      val += phase * (i % modVal + 1) / 2;
+
+      uint8_t b = cubicwave8(val);
+      b = (b > cutOff) ? (b - cutOff) : 0;
+
+      CRGB color = blend(CRGB::Black, ColorFromPalette(layerP.palette, index), b);
+      layer->setRGB(i, color);
+
+      index += 256 / layer->nrOfLights;
+      if (layer->nrOfLights > 256) index++;
+    }
+  }
+};
 
 #endif

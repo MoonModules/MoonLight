@@ -439,6 +439,14 @@ const uint8_t fastled_rainbow_gp[] = {255, 1, 6, 0};
 const uint8_t fastled_rainbow_stripe_gp[] = {255, 1, 7, 0};
 const uint8_t moonlight_mm_gp[] = {255, 2, 0, 0};
 const uint8_t moonlight_random_gp[] = {255, 2, 1, 0};
+const uint8_t moonlight_red_gp[] = {255, 2, 2, 0};
+const uint8_t moonlight_green_gp[] = {255, 2, 3, 0};
+const uint8_t moonlight_blue_gp[] = {255, 2, 4, 0};
+const uint8_t moonlight_orange_gp[] = {255, 2, 5, 0};
+const uint8_t moonlight_purple_gp[] = {255, 2, 6, 0};
+const uint8_t moonlight_cyan_gp[] = {255, 2, 7, 0};
+const uint8_t moonlight_w_white_gp[] = {255, 2, 8, 0};
+const uint8_t moonlight_c_white_gp[] = {255, 2, 9, 0};
 
 // Single array of defined cpt-city color palettes.
 // This will let us programmatically choose one based on
@@ -456,6 +464,14 @@ const uint8_t* const gGradientPalettes[] = {
     fastled_rainbow_stripe_gp,    // Rainbow bands
     moonlight_mm_gp,              // MoonLight 💫
     moonlight_random_gp,          // Random
+    moonlight_red_gp,             // Red
+    moonlight_green_gp,           // Green
+    moonlight_blue_gp,            // Blue
+    moonlight_orange_gp,          // Orange
+    moonlight_purple_gp,          // Purple
+    moonlight_cyan_gp,            // Cyan
+    moonlight_w_white_gp,         // Warm White
+    moonlight_c_white_gp,         // Cold White
     audio_responsive_gp,          // Audio Hue ☾
     audio_responsive_gp,          // Audio Ramp ☾
     audio_responsive_gp,          // Audio Ratio ☾
@@ -519,77 +535,29 @@ const uint8_t* const gGradientPalettes[] = {
     retro2_16_gp,                 // Yellowout
 };
 
-const char* const palette_names[] = {"Cloud⚡️",
-                                     "Forest⚡️",
-                                     "Heat⚡️",
-                                     "Lava⚡️",
-                                     "Ocean⚡️",
-                                     "Party⚡️",
-                                     "Rainbow⚡️",
-                                     "Rainbow Bands⚡️",  //
-                                     "MoonLight💫",
-                                     "Random💫",
-                                     "Audio Hue🌙",
-                                     "Audio Ramp🌙",
-                                     "Audio Ratio🌙",
-                                     "Analogous",
-                                     "April Night",
-                                     "Aqua Flash",
-                                     "Atlantica",
-                                     "Aurora",
-                                     "Aurora 2",
-                                     "Autumn",
+const char* const palette_names[] = {"Cloud⚡️",       "Forest⚡️",    "Heat⚡️",      "Lava⚡️",
+                                     "Ocean⚡️",       "Party⚡️",     "Rainbow⚡️",   "Rainbow Bands⚡️",
+                                     "MoonLight💫",   "Random💫",    "Red",         "Green",
+                                     "Blue",          "Orange",      "Purple",      "Cyan",
+                                     "Warm White",    "Cold White",  "Audio Hue🌙", "Audio Ramp🌙",
+                                     "Audio Ratio🌙", "Analogous",   "April Night", "Aqua Flash",
+                                     "Atlantica",     "Aurora",      "Aurora 2",    "Autumn",
                                      "Beach",  //
-                                     "Beech",
-                                     "Blink Red",
-                                     "Breeze",
-                                     "C9",
-                                     "C9 2",
-                                     "C9 New",
-                                     "Candy",
-                                     "Candy2",
-                                     "Cyane",
-                                     "Departure",
+                                     "Beech",         "Blink Red",   "Breeze",      "C9",
+                                     "C9 2",          "C9 New",      "Candy",       "Candy2",
+                                     "Cyane",         "Departure",
                                      "Drywet",  //
-                                     "Fairy Reaf",
-                                     "Fire",
-                                     "Grintage",
-                                     "Hult",
-                                     "Hult 64",
-                                     "Icefire",
-                                     "Jul",
-                                     "Landscape",
+                                     "Fairy Reaf",    "Fire",        "Grintage",    "Hult",
+                                     "Hult 64",       "Icefire",     "Jul",         "Landscape",
                                      "Light Pink",  //
-                                     "Lite Light",
-                                     "Magenta",
-                                     "Magred",
-                                     "Orange & Teal",
-                                     "Orangery",
-                                     "Pastel",
-                                     "Pink Candy",
-                                     "Red & Blue",
-                                     "Red Flash",
-                                     "Red Reaf",
-                                     "Red Shift",
-                                     "Red Tide",
-                                     "Retro Clown",
-                                     "Rewhi",
-                                     "Rivendell",
-                                     "Sakura",
-                                     "Semi Blue",
-                                     "Sherbet",
-                                     "Splash",
-                                     "Sunset",
-                                     "Sunset 2",
-                                     "Temperature",
-                                     "Tertiary",
-                                     "Tiamat",
-                                     "Toxy Reaf",
-                                     "Vintage",
-                                     "Yelblu Hot",
-                                     "Yelblu",
-                                     "Yelmag",
-                                     "Yellowout"};
+                                     "Lite Light",    "Magenta",     "Magred",      "Orange & Teal",
+                                     "Orangery",      "Pastel",      "Pink Candy",  "Red & Blue",
+                                     "Red Flash",     "Red Reaf",    "Red Shift",   "Red Tide",
+                                     "Retro Clown",   "Rewhi",       "Rivendell",   "Sakura",
+                                     "Semi Blue",     "Sherbet",     "Splash",      "Sunset",
+                                     "Sunset 2",      "Temperature", "Tertiary",    "Tiamat",
+                                     "Toxy Reaf",     "Vintage",     "Yelblu Hot",  "Yelblu",
+                                     "Yelmag",        "Yellowout"};
 
 CRGBPalette16 getGradientPalette(uint8_t index) {
   CRGBPalette16 palette;
@@ -624,15 +592,43 @@ CRGBPalette16 getGradientPalette(uint8_t index) {
         break;
       }
     } else if (gpArray[1] == 2) {  // MoonLight palettes
-      if (gpArray[2] == 0) {       // MoonLight
+      switch (gpArray[2]) {
+      case 0:  // MoonLight
         for (int i = 0; i < 16; i++) {
           palette[i] = CRGB(map(i, 0, 15, 255, 0), map(i, 0, 15, 31, 0), map(i, 0, 15, 0, 255));  // from orange to blue
         }
-      }
-      if (gpArray[2] == 1) {  // random
+        break;
+      case 1:  // random
         for (int i = 0; i < 16; i++) {
           palette[i] = CHSV(random8(), 255, 255);  // take the max saturation, max brightness of the colorwheel
         }
+        break;
+      case 2:  // Red
+        for (int i = 0; i < 16; i++) palette[i] = CRGB::Red;
+        break;
+      case 3:  // Green
+        for (int i = 0; i < 16; i++) palette[i] = CRGB::Green;
+        break;
+      case 4:  // Blue
+        for (int i = 0; i < 16; i++) palette[i] = CRGB::Blue;
+        break;
+      case 5:  // Orange
+        for (int i = 0; i < 16; i++) palette[i] = CRGB(255, 31, 0);
+        // CRGB::Orange is too yellow
+        break;
+      case 6:  // Purple
+        for (int i = 0; i < 16; i++) palette[i] = CRGB::Purple;
+        break;
+      case 7:  // Cyan
+        for (int i = 0; i < 16; i++) palette[i] = CRGB::Cyan;
+        break;
+      case 8:  // Warm White
+        for (int i = 0; i < 16; i++) palette[i] = CRGB(255, 120, 20);
+        // Very Warm / Candle-like (≈2200K) or CRGB(255, 160, 60) - Softer Warm White or CRGB(255, 147, 41) - Typical Warm White (≈2700K)
+        break;
+      case 9:  // Cold White
+        for (int i = 0; i < 16; i++) palette[i] = CRGB::White;
+        break;
       }
     }
   } else {                 // gradient array palettes

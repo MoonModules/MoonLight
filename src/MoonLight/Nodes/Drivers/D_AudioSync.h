@@ -14,6 +14,8 @@
   #include <WLED-sync.h>  // https://github.com/netmindz/WLED-sync
   #include <WiFi.h>
 
+  #define audioPaletteIndex 18  // see palettes.h
+
 class AudioSyncDriver : public Node {
  public:
   static const char* name() { return "Audio Sync"; }
@@ -53,8 +55,8 @@ class AudioSyncDriver : public Node {
       moduleControl->read(
           [&](const ModuleState& state) {
             uint8_t palette = state.data["palette"];
-            if (palette >= 10 && palette <= 12) {  // Audio palettes
-              layerP.palette.loadDynamicGradientPalette(getAudioPalette(palette-10));
+            if (palette >= audioPaletteIndex && palette <= audioPaletteIndex + 2) {  // Audio palettes
+              layerP.palette.loadDynamicGradientPalette(getAudioPalette(palette - audioPaletteIndex));
             }
           },
           name());

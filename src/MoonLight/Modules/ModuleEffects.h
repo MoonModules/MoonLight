@@ -145,6 +145,10 @@ class ModuleEffects : public NodeManager {
     addControlValue(control, getNameAndTags<RainEffect>());
     addControlValue(control, getNameAndTags<TetrixEffect>());
     addControlValue(control, getNameAndTags<WaverlyEffect>());
+    addControlValue(control, getNameAndTags<BlinkRainbowEffect>());
+    addControlValue(control, getNameAndTags<MeteorEffect>());
+    addControlValue(control, getNameAndTags<OscillateEffect>());
+    addControlValue(control, getNameAndTags<PhasedNoiseEffect>());
 
     // FastLED effects
     addControlValue(control, getNameAndTags<RainbowEffect>());
@@ -243,6 +247,10 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<RainEffect>(name);
     if (!node) node = checkAndAlloc<TetrixEffect>(name);
     if (!node) node = checkAndAlloc<WaverlyEffect>(name);
+    if (!node) node = checkAndAlloc<BlinkRainbowEffect>(name);
+    if (!node) node = checkAndAlloc<MeteorEffect>(name);
+    if (!node) node = checkAndAlloc<OscillateEffect>(name);
+    if (!node) node = checkAndAlloc<PhasedNoiseEffect>(name);
 
     // FastLED
     if (!node) node = checkAndAlloc<RainbowEffect>(name);

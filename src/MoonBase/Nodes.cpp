@@ -361,8 +361,8 @@ void DriverNode::setup() {
   addControlValue("Curtain GRB6");              // some LED curtains
   addControlValue("Curtain RGB2040");           // curtain RGB2040
   addControlValue("Lightbar RGBWYP");           // 6 channel par/dmx light with UV etc
-  addControlValue("MH BeeEyes 150W-15 🐺");     // 15 channels moving head, see https://moonmodules.org/MoonLight/moonlight/drivers/#art-net
-  addControlValue("MH BeTopper 19x15W-32 🐺");  // 32 channels moving head
+  addControlValue("MH BeeEyes 150W-15");     // 15 channels moving head, see https://moonmodules.org/MoonLight/moonlight/drivers/#art-net
+  addControlValue("MH BeTopper 19x15W-32");  // 32 channels moving head
   addControlValue("MH 19x15W-24");              // 24 channels moving heads
 }
 
