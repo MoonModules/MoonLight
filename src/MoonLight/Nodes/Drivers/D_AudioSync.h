@@ -14,8 +14,6 @@
   #include <WLED-sync.h>  // https://github.com/netmindz/WLED-sync
   #include <WiFi.h>
 
-  #define audioPaletteIndex 18  // see palettes.h
-
 class AudioSyncDriver : public Node {
  public:
   static const char* name() { return "Audio Sync"; }
@@ -24,6 +22,7 @@ class AudioSyncDriver : public Node {
 
   WLEDSync sync;
   bool init = false;
+  static constexpr uint8_t audioPaletteIndex = 18;  // see palettes.h
 
   void loop() override {
     if (!WiFi.isConnected() && !ETH.connected()) {

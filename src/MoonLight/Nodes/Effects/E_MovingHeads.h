@@ -53,18 +53,18 @@ class Troy1MoveEffect : public Node {
   bool autoMove = true;
   bool audioReactive = true;
   bool invert = true;
-  int closestColorIndex = -1;
+  // int closestColorIndex = -1;
 
-  std::vector<CRGB> colorwheelpalette = {
-      CRGB(255, 255, 255),  // White
-      CRGB(255, 0, 0),      // Red
-      CRGB(0, 255, 0),      // Green
-      CRGB(0, 0, 255),      // Blue
-      CRGB(255, 255, 0),    // Yellow
-      CRGB(0, 255, 255),    // Cyan
-      CRGB(255, 165, 0),    // Orange
-      CRGB(128, 0, 128)     // Purple
-  };
+  // std::vector<CRGB> colorwheelpalette = {
+  //     CRGB(255, 255, 255),  // White
+  //     CRGB(255, 0, 0),      // Red
+  //     CRGB(0, 255, 0),      // Green
+  //     CRGB(0, 0, 255),      // Blue
+  //     CRGB(255, 255, 0),    // Yellow
+  //     CRGB(0, 255, 255),    // Cyan
+  //     CRGB(255, 165, 0),    // Orange
+  //     CRGB(128, 0, 128)     // Purple
+  // };
 
   void setup() override {
     addControl(bpm, "bpm", "slider");
@@ -74,29 +74,29 @@ class Troy1MoveEffect : public Node {
     addControl(colorwheel, "colorwheel", "slider", 0, 7);                // 0-7 for 8 colors in the colorwheel
     addControl(colorwheelbrightness, "colorwheelbrightness", "slider");  // 0-7 for 8 colors in the colorwheel
     addControl(autoMove, "autoMove", "checkbox");
-    addControl(range, "slider", "slider");
+    addControl(range, "range", "slider");
     addControl(audioReactive, "audioReactive", "checkbox");
     addControl(invert, "invert", "checkbox");
   }
 
   // Function to compute Euclidean distance between two colors
-  double colorDistance(const CRGB& c1, const CRGB& c2) { return std::sqrt(std::pow(c1.r - c2.r, 2) + std::pow(c1.g - c2.g, 2) + std::pow(c1.b - c2.b, 2)); }
+  // double colorDistance(const CRGB& c1, const CRGB& c2) { return std::sqrt(std::pow(c1.r - c2.r, 2) + std::pow(c1.g - c2.g, 2) + std::pow(c1.b - c2.b, 2)); }
 
   // Function to find the index of the closest color
-  int findClosestColorWheelIndex(const CRGB& inputColor, const std::vector<CRGB>& palette) {
-    int closestIndex = 0;
-    double minDistance = colorDistance(inputColor, palette[0]);
+  // int findClosestColorWheelIndex(const CRGB& inputColor, const std::vector<CRGB>& palette) {
+  //   int closestIndex = 0;
+  //   double minDistance = colorDistance(inputColor, palette[0]);
 
-    for (size_t i = 1; i < palette.size(); ++i) {
-      double distance = colorDistance(inputColor, palette[i]);
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestIndex = static_cast<int>(i);
-      }
-    }
+  //   for (size_t i = 1; i < palette.size(); ++i) {
+  //     double distance = colorDistance(inputColor, palette[i]);
+  //     if (distance < minDistance) {
+  //       minDistance = distance;
+  //       closestIndex = static_cast<int>(i);
+  //     }
+  //   }
 
-    return closestIndex;
-  }
+  //   return closestIndex;
+  // }
 
   void loop() override {
     for (int x = 0; x < layer->size.x; x++) {  // loop over lights defined in layout
@@ -191,27 +191,28 @@ class Troy2MoveEffect : public Node {
     addControl(zoom, "zoom", "slider");
     addControl(cutin, "cutin", "slider");
     addControl(autoMove, "autoMove", "checkbox");
-    addControl(range, "slider", "slider");
+    addControl(range, "range", "slider");
     addControl(audioReactive, "audioReactive", "checkbox");
     addControl(invert, "invert", "checkbox");
   }
 
   // Function to compute Euclidean distance between two colors
-  double colorDistance(const CRGB& c1, const CRGB& c2) { return std::sqrt(std::pow(c1.r - c2.r, 2) + std::pow(c1.g - c2.g, 2) + std::pow(c1.b - c2.b, 2)); }
+  // double colorDistance(const CRGB& c1, const CRGB& c2) { return std::sqrt(std::pow(c1.r - c2.r, 2) + std::pow(c1.g - c2.g, 2) + std::pow(c1.b - c2.b, 2)); }
 
-  // Function to find the index of the closest color
-  int findClosestColorWheelIndex(const CRGB& inputColor, const std::vector<CRGB>& palette) {
-    int closestIndex = 0;
-    double minDistance = colorDistance(inputColor, palette[0]);
-    for (size_t i = 1; i < palette.size(); ++i) {
-      double distance = colorDistance(inputColor, palette[i]);
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestIndex = static_cast<int>(i);
-      }
-    }
-    return closestIndex;
-  }
+  // // Function to find the index of the closest color
+  // int findClosestColorWheelIndex(const CRGB& inputColor, const std::vector<CRGB>& palette) {
+  //   int closestIndex = 0;
+  //   double minDistance = colorDistance(inputColor, palette[0]);
+
+  //   for (size_t i = 1; i < palette.size(); ++i) {
+  //     double distance = colorDistance(inputColor, palette[i]);
+  //     if (distance < minDistance) {
+  //       minDistance = distance;
+  //       closestIndex = static_cast<int>(i);
+  //     }
+  //   }
+  //   return closestIndex;
+  // }
 
   void loop() override {
     bool coolDownSet = false;
@@ -307,7 +308,7 @@ class WowiMoveEffect : public Node {
     addControl(tilt, "tilt", "slider");
     addControl(zoom, "zoom", "slider");
     addControl(autoMove, "autoMove", "checkbox");
-    addControl(range, "slider", "slider");
+    addControl(range, "range", "slider");
     addControl(invert, "invert", "checkbox");
   }
 

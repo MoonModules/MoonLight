@@ -11,6 +11,14 @@
 
 #if FT_MOONLIGHT
 
+  // #define MAX_FREQ_LOG10 4.04238f  // log10(MAX_FREQUENCY)
+  #define MIN_FREQUENCY 80             // 80 HZ - due to lower resolution
+  #define MIN_FREQ_LOG10 1.90309f      // log10(MIN_FREQUENCY)
+  #define MIN_FREQ_LOG 4.38202663467f  // log(MIN_FREQUENCY)
+  #define MAX_FREQUENCY 11025          // sample frequency / 2 (as per Nyquist criterion)
+  #define MAX_FREQ_LOG10 4.04238f      // log10(MAX_FREQUENCY)
+  #define MAX_FREQ_LOG 9.30792070f     // log(MAX_FREQUENCY)
+
 class BouncingBallsEffect : public Node {
  public:
   static const char* name() { return "Bouncing Balls"; }
@@ -88,11 +96,10 @@ class BouncingBallsEffect : public Node {
   }
 };
 
-  // original version from SR 0.13, with some enhancements by @softhack007
-  // Blurz. By Andrew Tuline.
-  // Hint: Looks best with segment brightness set to max (use global brightness to reduce brightness)
-  // even with 1D effect we have to take logic for 2D segments for allocation as fill_solid() fills whole segment
-  #define MAX_FREQ_LOG10 4.04238f  // log10(MAX_FREQUENCY)
+// original version from SR 0.13, with some enhancements by @softhack007
+// Blurz. By Andrew Tuline.
+// Hint: Looks best with segment brightness set to max (use global brightness to reduce brightness)
+// even with 1D effect we have to take logic for 2D segments for allocation as fill_solid() fills whole segment
 class BlurzEffect : public Node {
  public:
   static const char* name() { return "Blurz"; }
@@ -221,8 +228,6 @@ class DistortionWavesEffect : public Node {
     }
   }
 };  // DistortionWaves
-
-  #define MAX_FREQUENCY 11025  // sample frequency / 2 (as per Nyquist criterion)
 
 class FreqMatrixEffect : public Node {
  public:
@@ -2561,11 +2566,12 @@ class BlinkRainbowEffect : public Node {
   }
 
   uint8_t colorIndex = 0;
+  uint32_t lastCycle = 0;
 
   void loop() override {
     uint16_t dutyCycle = blinkDuration + 1;
     uint16_t onTime = (dutyCycle * frequency) >> 8;
-    uint16_t offTime = dutyCycle - onTime;
+    // uint16_t offTime = dutyCycle - onTime;
 
     unsigned long timebase = millis();
     bool on = (timebase % dutyCycle) < onTime;
@@ -2577,9 +2583,11 @@ class BlinkRainbowEffect : public Node {
       layer->fill_solid(CRGB::Black);
     }
 
-    // Change color every cycle
-    if ((timebase % dutyCycle) == 0) {
+    // Advance color exactly once per complete cycle
+    uint32_t currentCycle = timebase / dutyCycle;
+    if (currentCycle != lastCycle) {
       colorIndex += 32;
+      lastCycle = currentCycle;
     }
   }
 };
@@ -2604,7 +2612,7 @@ class MeteorEffect : public Node {
 
   uint8_t* trailData = nullptr;
   size_t trailDataSize = 0;
-  uint16_t step = 0;
+  // uint16_t step = 0;
 
   ~MeteorEffect() override {
     if (trailData) freeMB(trailData, "trailData");
@@ -2653,7 +2661,7 @@ class MeteorEffect : public Node {
       layer->setRGB(index, col);
     }
 
-    step += speed + 1;
+    // step += speed + 1;
   }
 };
 
@@ -2672,8 +2680,8 @@ class OscillateEffect : public Node {
   }
 
   struct Oscillator {
-    int16_t pos;
-    int8_t size;
+    nrOfLights_t pos;
+    nrOfLights_t size;
     int8_t dir;
     int8_t oscSpeed;  // Renamed from 'speed' to avoid shadowing
   };
@@ -2685,9 +2693,9 @@ class OscillateEffect : public Node {
   void onSizeChanged(const Coord3D& prevSize) override {
     // Initialize oscillators when layer size is known
     if (layer->nrOfLights > 0) {
-      oscillators[0] = {(int16_t)(layer->nrOfLights / 4), (int8_t)(layer->nrOfLights / 8), 1, 1};
-      oscillators[1] = {(int16_t)(layer->nrOfLights / 4 * 3), (int8_t)(layer->nrOfLights / 8), 1, 2};
-      oscillators[2] = {(int16_t)(layer->nrOfLights / 4 * 2), (int8_t)(layer->nrOfLights / 8), -1, 1};
+      oscillators[0] = {(nrOfLights_t)(layer->nrOfLights / 4), (nrOfLights_t)(layer->nrOfLights / 8), 1, 1};
+      oscillators[1] = {(nrOfLights_t)(layer->nrOfLights / 4 * 3), (nrOfLights_t)(layer->nrOfLights / 8), 1, 2};
+      oscillators[2] = {(nrOfLights_t)(layer->nrOfLights / 4 * 2), (nrOfLights_t)(layer->nrOfLights / 8), -1, 1};
       initialized = true;
       lastUpdate = 0xFFFFFFFF;  // Force update on first frame
     }
@@ -2762,7 +2770,7 @@ class PhasedNoiseEffect : public Node {
 
     for (int i = 0; i < layer->nrOfLights; i++) {
       // Add noise modulation
-      uint8_t modVal = (inoise8(i * 10 + i * 10) / 16);
+      uint8_t modVal = (inoise8(i * 10, i * 10) / 16);
       if (modVal == 0) modVal = 1;
 
       uint16_t val = (i + 1) * allfreq;
@@ -2776,6 +2784,791 @@ class PhasedNoiseEffect : public Node {
 
       index += 256 / layer->nrOfLights;
       if (layer->nrOfLights > 256) index++;
+    }
+  }
+};
+
+class FreqmapEffect : public Node {
+ public:
+  static const char* name() { return "Freqmap"; }
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🐙♪"; }
+
+  uint8_t speed = 128;
+  uint8_t intensity = 128;
+
+  void setup() override {
+    addControl(speed, "speed", "slider");
+    addControl(intensity, "intensity", "slider");
+  }
+
+  void loop() override {
+    int fadeoutDelay = (256 - speed) / 96;
+    if ((fadeoutDelay <= 1) || ((millis() % fadeoutDelay) == 0)) layer->fadeToBlackBy(speed);
+
+    float myMajorPeak = MAX(sharedData.majorPeak, 1.0f);
+    float myMagnitude = sharedData.volume / 4.0f;
+
+    int locn = roundf((log10f(myMajorPeak) - 1.78f) * (float)layer->nrOfLights / (MAX_FREQ_LOG10 - 1.78f));
+    if (locn < 1) locn = 0;
+    if (locn >= layer->nrOfLights) locn = layer->nrOfLights - 1;
+
+    uint16_t pixCol = (log10f(myMajorPeak) - 1.78f) * 255.0f / (MAX_FREQ_LOG10 - 1.78f);
+    if (myMajorPeak < 61.0f) pixCol = 0;
+
+    uint16_t bright = (int)(sqrtf(myMagnitude) * 16.0f);
+
+    CRGB color = ColorFromPalette(layerP.palette, intensity + pixCol);
+    layer->setRGB(locn, color);  // blend(layerP.color2, color, bright));
+
+    if (speed > 228) {
+      layer->blur2d(5 * (speed - 224));
+      layer->setRGB(locn, color);  // blend(layerP.color2, color, bright));
+    }
+  }
+};
+
+class FreqpixelsEffect : public Node {
+ public:
+  static const char* name() { return "Freqpixels"; }
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🐙♪"; }
+
+  uint8_t speed = 128;
+  uint8_t intensity = 128;
+
+  void setup() override {
+    addControl(speed, "speed", "slider");
+    addControl(intensity, "intensity", "slider");
+  }
+
+  void loop() override {
+    uint16_t fadeRate = 2 * speed - speed * speed / 255;
+
+    int fadeoutDelay = (256 - speed) / 64;
+    if ((fadeoutDelay <= 1) || ((millis() % fadeoutDelay) == 0)) layer->fadeToBlackBy(fadeRate);
+
+    float myMajorPeak = MAX(sharedData.majorPeak, 1.0f);
+    float myMagnitude = sharedData.volume / 16.0f;
+
+    for (int i = 0; i < intensity / 32 + 1; i++) {
+      uint16_t locn = random16(0, layer->nrOfLights);
+      uint8_t pixCol = (log10f(myMajorPeak) - 1.78f) * 255.0f / (MAX_FREQ_LOG10 - 1.78f);
+      if (myMajorPeak < 61.0f) pixCol = 0;
+
+      CRGB color = ColorFromPalette(layerP.palette, intensity + pixCol);
+      layer->setRGB(locn, color);  // blend(layerP.color2, color, (int)myMagnitude));
+    }
+  }
+};
+
+static float mapf(float x, float in_min, float in_max, float out_min, float out_max) {
+  if (in_max == in_min) return (out_min);  // WLEDMM avoid div/0
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+class FreqwaveEffect : public Node {
+ public:
+  static const char* name() { return "Freqwave"; }
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🐙♪"; }
+
+  uint8_t speed = 128;
+  uint8_t lowBin = 3;
+  uint8_t highBin = 42;
+  bool musicalScale = false;
+
+  void setup() override {
+    addControl(speed, "speed", "slider");
+    addControl(lowBin, "lowBin", "slider");
+    addControl(highBin, "highBin", "slider");
+    addControl(musicalScale, "musicalScale", "checkbox");
+  }
+
+  uint8_t secondHand = 0;
+
+  void loop() override {
+    uint8_t newSecondHand = (speed < 255) ? (micros() / (256 - speed) / 500 % 16) : 0;
+    if ((speed > 254) || (secondHand != newSecondHand)) {
+      secondHand = newSecondHand;
+
+      float sensitivity = 0.5f * map(31, 1, 31, 0.5, 10);
+      float pixVal = sharedData.volume * (float)255 / 256.0f * sensitivity;
+      if (pixVal > 255) pixVal = 255;
+
+      float intensity = mapf(pixVal, 0, 255, 0, 100) / 100.0f;
+      CRGB color = CRGB::Black;
+
+      if ((sharedData.majorPeak > 80.0f) && (sharedData.volume > 0.25f) && (sharedData.majorPeak < 10800.0f)) {
+        uint8_t i = 0;
+        if (!musicalScale) {
+          int upperLimit = 80 + 42 * highBin;
+          int lowerLimit = 80 + 3 * lowBin;
+          i = (lowerLimit != upperLimit) ? mapf(sharedData.majorPeak, lowerLimit, upperLimit, 0, 255) : sharedData.majorPeak;
+        } else {
+          float upperLimit = logf(80 + 42 * highBin);
+          float lowerLimit = logf(80 + 3 * lowBin);
+          float peakMapped = fabsf(lowerLimit - upperLimit) > 0.05f ? mapf(logf(sharedData.majorPeak), lowerLimit, upperLimit, 0, 255) : sharedData.majorPeak;
+          if (peakMapped > 255) intensity = constrain((320 - peakMapped), 0, intensity * 100) / 100.0f;
+          i = constrain(peakMapped, 0, 255);
+        }
+        uint16_t b = 255.0f * intensity;
+        if (b > 255) b = 255;
+        color = CHSV(i, 176 + (uint8_t)b / 4, (uint8_t)b);
+      }
+
+      layer->setRGB(layer->nrOfLights / 2, color);
+
+      // Shift pixels outward
+      for (int i = layer->nrOfLights - 1; i > layer->nrOfLights / 2; i--) layer->setRGB(i, layer->getRGB(i - 1));
+      for (int i = 0; i < layer->nrOfLights / 2; i++) layer->setRGB(i, layer->getRGB(i + 1));
+    }
+  }
+};
+
+// Shared Gravity struct
+struct Gravity {
+  int16_t topLED = 0;
+  uint8_t gravityCounter = 0;
+};
+
+class GravfreqEffect : public Node {
+ public:
+  static const char* name() { return "Gravfreq"; }
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🐙♪"; }
+
+  uint8_t speed = 128;
+  uint8_t intensity = 128;
+
+  void setup() override {
+    addControl(speed, "speed", "slider");
+    addControl(intensity, "intensity", "slider");
+  }
+
+  Gravity* gravData = nullptr;
+  size_t gravDataSize = 0;
+  uint8_t lastColorIndex = 0;
+
+  ~GravfreqEffect() override {
+    if (gravData) freeMB(gravData, "gravData");
+  }
+
+  void onSizeChanged(const Coord3D& prevSize) override {
+    reallocMB2<Gravity>(gravData, gravDataSize, 1, "gravData");
+    if (gravData) {
+      gravData->topLED = 0;
+      gravData->gravityCounter = 0;
+    }
+  }
+
+  void loop() override {
+    if (!gravData) return;
+
+    layer->fadeToBlackBy(96);
+
+    float segmentSampleAvg = sharedData.volume * (float)intensity / 255.0f * 0.125f;
+    float mySampleAvg = mapf(segmentSampleAvg * 2.0f, 0, 32, 0, (float)layer->nrOfLights / 2.0f);
+    int tempsamp = constrain(mySampleAvg, 0, layer->nrOfLights / 2);
+    uint8_t gravity = 8 - speed / 32;
+
+    float myMajorPeak = MAX(sharedData.majorPeak, 1.0f);
+    int indexNew = (logf(myMajorPeak) - MIN_FREQ_LOG) * 255.0f / (MAX_FREQ_LOG - MIN_FREQ_LOG);
+    indexNew = constrain(indexNew, 0, 255);
+    int palIndex = (indexNew + lastColorIndex) / 2;
+
+    for (int i = 0; i < tempsamp; i++) {
+      CRGB color = ColorFromPalette(layerP.palette, (uint8_t)palIndex);
+      layer->setRGB(i + layer->nrOfLights / 2, color);
+      layer->setRGB(layer->nrOfLights / 2 - i - 1, color);
+    }
+
+    if (tempsamp >= gravData->topLED)
+      gravData->topLED = tempsamp - 1;
+    else if (gravData->gravityCounter % gravity == 0)
+      gravData->topLED--;
+
+    if ((gravData->topLED >= 0) && (speed < 255)) {
+      layer->setRGB(gravData->topLED + layer->nrOfLights / 2, CRGB::Gray);
+      layer->setRGB(layer->nrOfLights / 2 - 1 - gravData->topLED, CRGB::Gray);
+    }
+    gravData->gravityCounter = (gravData->gravityCounter + 1) % gravity;
+    lastColorIndex = indexNew;
+  }
+};
+
+class GravimeterEffect : public Node {
+ public:
+  static const char* name() { return "Gravimeter"; }
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🐙♪"; }
+
+  uint8_t speed = 128;
+  uint8_t intensity = 128;
+  bool reverse = false;
+
+  void setup() override {
+    addControl(speed, "speed", "slider");
+    addControl(intensity, "intensity", "slider");
+    addControl(reverse, "reverse", "checkbox");
+  }
+
+  Gravity* gravData = nullptr;
+  size_t gravDataSize = 0;
+
+  ~GravimeterEffect() override {
+    if (gravData) freeMB(gravData, "gravData");
+  }
+
+  void onSizeChanged(const Coord3D& prevSize) override {
+    reallocMB2<Gravity>(gravData, gravDataSize, 1, "gravData");
+    if (gravData) {
+      gravData->topLED = 0;
+      gravData->gravityCounter = 0;
+    }
+  }
+
+  void loop() override {
+    if (!gravData) return;
+
+    layer->fadeToBlackBy(253);
+
+    float sensGain = (float)(intensity + 2) / 257.0f;
+    if (sensGain > 0.5f) sensGain = ((sensGain - 0.5f) * 3.0f) + 0.5f;
+
+    float segmentSampleAvg = sharedData.volume * sensGain * 0.25f;
+    float mySampleAvg = mapf(segmentSampleAvg * 2.0f, 0, 64, 0, layer->nrOfLights - 1);
+    int tempsamp = constrain(mySampleAvg, 0, layer->nrOfLights - 1);
+    uint8_t gravity = 8 - speed / 32;
+
+    int blendVal = reverse ? 255 - roundf(segmentSampleAvg * 6.5f) : roundf(segmentSampleAvg * 8.0f);
+    blendVal = constrain(blendVal, 32, 255);
+
+    if (sharedData.volume > 0.85f) {
+      for (int i = 0; i < tempsamp; i++) {
+        uint8_t index = inoise8(i * segmentSampleAvg + millis(), 5000 + i * segmentSampleAvg);
+        CRGB color = ColorFromPalette(layerP.palette, index, (uint8_t)blendVal);
+        layer->setRGB(i, color);  // blend(layerP.color2, color, (uint8_t)blendVal));
+      }
+    }
+
+    if (tempsamp >= gravData->topLED)
+      gravData->topLED = tempsamp;
+    else if (gravData->gravityCounter % gravity == 0)
+      gravData->topLED--;
+
+    if ((gravData->topLED > 0) && (speed < 255)) {
+      CRGB color = ColorFromPalette(layerP.palette, MAX(uint16_t(millis() / 2), (uint16_t)2));
+      layer->setRGB(gravData->topLED, color);
+    }
+    gravData->gravityCounter = (gravData->gravityCounter + 1) % gravity;
+  }
+};
+
+class GravcenterEffect : public Node {
+ public:
+  static const char* name() { return "Gravcenter"; }
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🐙♪"; }
+
+  uint8_t speed = 128;
+  uint8_t intensity = 128;
+
+  void setup() override {
+    addControl(speed, "speed", "slider");
+    addControl(intensity, "intensity", "slider");
+  }
+
+  Gravity* gravData = nullptr;
+  size_t gravDataSize = 0;
+
+  ~GravcenterEffect() override {
+    if (gravData) freeMB(gravData, "gravData");
+  }
+
+  void onSizeChanged(const Coord3D& prevSize) override {
+    reallocMB2<Gravity>(gravData, gravDataSize, 1, "gravData");
+    if (gravData) {
+      gravData->topLED = 0;
+      gravData->gravityCounter = 0;
+    }
+  }
+
+  void loop() override {
+    if (!gravData) return;
+
+    layer->fadeToBlackBy(251);
+
+    float segmentSampleAvg = sharedData.volume * (float)intensity / 255.0f * 0.125f;
+    float mySampleAvg = mapf(segmentSampleAvg * 2.0f, 0, 32, 0, (float)layer->nrOfLights / 2.0f);
+    uint16_t tempsamp = constrain(mySampleAvg, 0, layer->nrOfLights / 2);
+    uint8_t gravity = 8 - speed / 32;
+
+    for (int i = 0; i < tempsamp; i++) {
+      uint8_t index = inoise8(i * segmentSampleAvg + millis(), 5000 + i * segmentSampleAvg);
+      CRGB color = ColorFromPalette(layerP.palette, index, segmentSampleAvg * 8);
+      // color = blend(layerP.color2, color, segmentSampleAvg * 8);
+      layer->setRGB(i + layer->nrOfLights / 2, color);
+      layer->setRGB(layer->nrOfLights / 2 - i - 1, color);
+    }
+
+    if (tempsamp >= gravData->topLED)
+      gravData->topLED = tempsamp - 1;
+    else if (gravData->gravityCounter % gravity == 0)
+      gravData->topLED--;
+
+    if (gravData->topLED >= 0) {
+      CRGB color = ColorFromPalette(layerP.palette, millis() / 4);
+      layer->setRGB(gravData->topLED + layer->nrOfLights / 2, color);
+      layer->setRGB(layer->nrOfLights / 2 - 1 - gravData->topLED, color);
+    }
+    gravData->gravityCounter = (gravData->gravityCounter + 1) % gravity;
+  }
+};
+
+class GravcentricEffect : public Node {
+ public:
+  static const char* name() { return "Gravcentric"; }
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🐙♪"; }
+
+  uint8_t speed = 128;
+  uint8_t intensity = 128;
+
+  void setup() override {
+    addControl(speed, "speed", "slider");
+    addControl(intensity, "intensity", "slider");
+  }
+
+  Gravity* gravData = nullptr;
+  size_t gravDataSize = 0;
+
+  ~GravcentricEffect() override {
+    if (gravData) freeMB(gravData, "gravData");
+  }
+
+  void onSizeChanged(const Coord3D& prevSize) override {
+    reallocMB2<Gravity>(gravData, gravDataSize, 1, "gravData");
+    if (gravData) {
+      gravData->topLED = 0;
+      gravData->gravityCounter = 0;
+    }
+  }
+
+  void loop() override {
+    if (!gravData) return;
+
+    layer->fadeToBlackBy(253);
+
+    float segmentSampleAvg = sharedData.volume * (float)intensity / 255.0f * 0.125f;
+    float mySampleAvg = mapf(segmentSampleAvg * 2.0f, 0.0f, 32.0f, 0.0f, (float)layer->nrOfLights / 2.0f);
+    int tempsamp = constrain(mySampleAvg, 0, layer->nrOfLights / 2);
+    uint8_t gravity = 8 - speed / 32;
+
+    for (int i = 0; i < tempsamp; i++) {
+      uint8_t index = segmentSampleAvg * 24 + millis() / 200;
+      CRGB color = ColorFromPalette(layerP.palette, index);
+      layer->setRGB(i + layer->nrOfLights / 2, color);
+      layer->setRGB(layer->nrOfLights / 2 - 1 - i, color);
+    }
+
+    if (tempsamp >= gravData->topLED)
+      gravData->topLED = tempsamp - 1;
+    else if (gravData->gravityCounter % gravity == 0)
+      gravData->topLED--;
+
+    if (gravData->topLED >= 0) {
+      layer->setRGB(gravData->topLED + layer->nrOfLights / 2, CRGB::Gray);
+      layer->setRGB(layer->nrOfLights / 2 - 1 - gravData->topLED, CRGB::Gray);
+    }
+    gravData->gravityCounter = (gravData->gravityCounter + 1) % gravity;
+  }
+};
+
+class MidnoiseEffect : public Node {
+ public:
+  static const char* name() { return "Midnoise"; }
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🐙♪"; }
+
+  uint8_t speed = 128;
+  uint8_t intensity = 128;
+
+  void setup() override {
+    addControl(speed, "speed", "slider");
+    addControl(intensity, "intensity", "slider");
+  }
+
+  uint16_t xdist = 0;
+  uint16_t ydist = 0;
+
+  void loop() override {
+    layer->fadeToBlackBy(speed / 2);
+
+    float tmpSound2 = sharedData.volume * (float)intensity / 256.0f * (float)intensity / 128.0f;
+    int maxLen = mapf(tmpSound2, 0, 127, 0, layer->nrOfLights / 2);
+    if (maxLen > layer->nrOfLights / 2) maxLen = layer->nrOfLights / 2;
+
+    for (int i = (layer->nrOfLights / 2 - maxLen); i < (layer->nrOfLights / 2 + maxLen); i++) {
+      uint8_t index = inoise8(i * sharedData.volume + xdist, ydist + i * sharedData.volume);
+      layer->setRGB(i, ColorFromPalette(layerP.palette, index));
+    }
+
+    xdist = xdist + beatsin8(5, 0, 10);
+    ydist = ydist + beatsin8(4, 0, 10);
+  }
+};
+
+class NoisemoveEffect : public Node {
+ public:
+  static const char* name() { return "Noisemove"; }
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🐙"; }
+
+  uint8_t speed = 128;
+  uint8_t intensity = 128;
+
+  void setup() override {
+    addControl(speed, "speed", "slider");
+    addControl(intensity, "intensity", "slider");
+  }
+
+  unsigned long call = 0;
+
+  void loop() override {
+    int fadeoutDelay = (256 - speed) / 96;
+    if ((fadeoutDelay <= 1) || ((call % fadeoutDelay) == 0)) layer->fadeToBlackBy(4 + speed / 4);
+
+    uint8_t numBins = ::map(intensity, 0, 255, 0, 16);
+    for (int i = 0; i < numBins; i++) {
+      uint16_t locn = inoise16(millis() * speed + i * 50000, millis() * speed);
+      locn = ::map(locn, 7500, 58000, 0, layer->nrOfLights - 1);
+      CRGB color = ColorFromPalette(layerP.palette, i * 64);
+      // color = blend(layerP.color2, color, sharedData.bands[i % 16] * 4);
+      layer->setRGB(locn, color);
+    }
+    call++;
+  }
+};
+
+class NoisefireEffect : public Node {
+ public:
+  static const char* name() { return "Noisefire"; }
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🔥"; }
+
+  uint8_t speed = 128;
+  uint8_t intensity = 128;
+
+  void setup() override {
+    addControl(speed, "speed", "slider");
+    addControl(intensity, "intensity", "slider");
+  }
+
+  void loop() override {
+    CRGBPalette16 myPal = CRGBPalette16(CHSV(0, 255, 2), CHSV(0, 255, 4), CHSV(0, 255, 8), CHSV(0, 255, 8), CHSV(0, 255, 16), CRGB::Red, CRGB::Red, CRGB::Red, CRGB::DarkOrange, CRGB::DarkOrange, CRGB::Orange, CRGB::Orange, CRGB::Yellow, CRGB::Orange, CRGB::Yellow, CRGB::Yellow);
+
+    for (int i = 0; i < layer->nrOfLights; i++) {
+      uint16_t index = inoise8(i * speed / 64, millis() * speed / 64 * layer->nrOfLights / 255);
+      index = (255 - i * 256 / layer->nrOfLights) * index / (256 - intensity);
+
+      CRGB color = ColorFromPalette(myPal, index, sharedData.volume * 2, LINEARBLEND);
+      layer->setRGB(i, color);
+    }
+  }
+};
+
+class PixelwaveEffect : public Node {
+ public:
+  static const char* name() { return "Pixelwave"; }
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🐙♪"; }
+
+  uint8_t speed = 128;
+  uint8_t intensity = 128;
+
+  void setup() override {
+    addControl(speed, "speed", "slider");
+    addControl(intensity, "intensity", "slider");
+  }
+
+  uint8_t secondHand = 0;
+
+  void loop() override {
+    uint8_t newSecondHand = micros() / (256 - speed) / 500 + 1 % 16;
+    if ((speed > 254) || (secondHand != newSecondHand)) {
+      secondHand = newSecondHand;
+
+      float rawPixel = (float)sharedData.volumeRaw;
+      rawPixel = rawPixel * rawPixel / 256.0f;
+      int pixBri = rawPixel * (intensity + 1) / 96;
+
+      CRGB color = ColorFromPalette(layerP.palette, millis() / 5, pixBri);
+      // color = blend(layerP.color2, color, pixBri);
+      layer->setRGB(layer->nrOfLights / 2, color);
+
+      for (int i = layer->nrOfLights - 1; i > layer->nrOfLights / 2; i--) layer->setRGB(i, layer->getRGB(i - 1));
+      for (int i = 0; i < layer->nrOfLights / 2; i++) layer->setRGB(i, layer->getRGB(i + 1));
+    }
+  }
+};
+
+struct Plasphase {
+  int8_t thisphase = 0;
+  int8_t thatphase = 0;
+};
+
+class PlasmoidEffect : public Node {
+ public:
+  static const char* name() { return "Plasmoid"; }
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🐙"; }
+
+  uint8_t speed = 128;
+  uint8_t intensity = 128;
+
+  void setup() override {
+    addControl(speed, "speed", "slider");
+    addControl(intensity, "intensity", "slider");
+  }
+
+  Plasphase* phaseData = nullptr;
+  size_t phaseDataSize = 0;
+
+  ~PlasmoidEffect() override {
+    if (phaseData) freeMB(phaseData, "phaseData");
+  }
+
+  void onSizeChanged(const Coord3D& prevSize) override {
+    reallocMB2<Plasphase>(phaseData, phaseDataSize, 1, "phaseData");
+    if (phaseData) {
+      phaseData->thisphase = 0;
+      phaseData->thatphase = 0;
+    }
+  }
+
+  void loop() override {
+    if (!phaseData) return;
+
+    layer->fadeToBlackBy(48);
+
+    phaseData->thisphase += beatsin8(6, -4, 4);
+    phaseData->thatphase += beatsin8(7, -4, 4);
+
+    for (int i = 0; i < layer->nrOfLights; i++) {
+      uint8_t thisbright = cubicwave8(((i * (1 + (3 * speed / 32))) + phaseData->thisphase) & 0xFF) / 2;
+      thisbright += cos8(((i * (97 + (5 * speed / 32))) + phaseData->thatphase) & 0xFF) / 2;
+
+      uint8_t colorIndex = thisbright;
+      if (sharedData.volume * intensity / 64 < thisbright) {
+        thisbright = 0;
+      }
+
+      CRGB color = ColorFromPalette(layerP.palette, colorIndex, thisbright);
+      layer->addRGB(i, color);  // blend(layerP.color2, color, thisbright));
+    }
+  }
+};
+
+class PuddlepeakEffect : public Node {
+ public:
+  static const char* name() { return "Puddlepeak"; }
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🐙♪"; }
+
+  uint8_t speed = 128;
+  uint8_t intensity = 128;
+
+  void setup() override {
+    addControl(speed, "speed", "slider");
+    addControl(intensity, "intensity", "slider");
+  }
+
+  void loop() override {
+    uint8_t fadeVal = ::map(speed, 0, 255, 224, 254);
+    layer->fadeToBlackBy(fadeVal);
+
+    // Note: samplePeak not in SharedData - using volume threshold instead
+    bool peak = sharedData.volume > 128.0f;
+    uint16_t size = 0;
+    uint16_t pos = random16(layer->nrOfLights);
+
+    if (peak) {
+      size = sharedData.volume * intensity / 256 / 4 + 1;
+      if (pos + size >= layer->nrOfLights) size = layer->nrOfLights - pos;
+    }
+
+    for (int i = 0; i < size; i++) {
+      layer->setRGB(pos + i, ColorFromPalette(layerP.palette, millis() / 4));
+    }
+  }
+};
+
+class PuddlesEffect : public Node {
+ public:
+  static const char* name() { return "Puddles"; }
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🐙♪"; }
+
+  uint8_t speed = 128;
+  uint8_t intensity = 128;
+
+  void setup() override {
+    addControl(speed, "speed", "slider");
+    addControl(intensity, "intensity", "slider");
+  }
+
+  void loop() override {
+    uint8_t fadeVal = ::map(speed, 0, 255, 224, 254);
+    layer->fadeToBlackBy(fadeVal);
+
+    uint16_t size = 0;
+    uint16_t pos = random16(layer->nrOfLights);
+
+    if (sharedData.volumeRaw > 1) {
+      size = sharedData.volumeRaw * intensity / 256 / 8 + 1;
+      if (pos + size >= layer->nrOfLights) size = layer->nrOfLights - pos;
+    }
+
+    for (int i = 0; i < size; i++) {
+      layer->setRGB(pos + i, ColorFromPalette(layerP.palette, millis() / 4));
+    }
+  }
+};
+
+struct Ripple {
+  uint16_t pos = 0;
+  uint8_t color = 0;
+  uint8_t state = 254;
+};
+
+class RipplepeakEffect : public Node {
+ public:
+  static const char* name() { return "Ripple Peak"; }
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🐙♪"; }
+
+  uint8_t intensity = 128;
+
+  void setup() override { addControl(intensity, "intensity", "slider"); }
+
+  Ripple* ripples = nullptr;
+  size_t ripplesSize = 0;
+
+  ~RipplepeakEffect() override {
+    if (ripples) freeMB(ripples, "ripples");
+  }
+
+  void onSizeChanged(const Coord3D& prevSize) override { reallocMB2<Ripple>(ripples, ripplesSize, 16, "ripples"); }
+
+  void loop() override {
+    if (!ripples) return;
+
+    layer->fadeToBlackBy(224);
+
+    bool peak = sharedData.volume > 128.0f;
+
+    for (int i = 0; i < intensity / 16; i++) {
+      if (peak) ripples[i].state = 255;
+
+      switch (ripples[i].state) {
+      case 254:
+        break;
+      case 255:
+        ripples[i].pos = random16(layer->nrOfLights);
+        if (sharedData.majorPeak > 1.0f)
+          ripples[i].color = (int)(logf(sharedData.majorPeak) * 32.0f);
+        else
+          ripples[i].color = 0;
+        ripples[i].state = 0;
+        break;
+      case 0:
+        layer->setRGB(ripples[i].pos, ColorFromPalette(layerP.palette, ripples[i].color));  // blend(layerP.color2, ColorFromPalette(layerP.palette, ripples[i].color), brightness));
+        ripples[i].state++;
+        break;
+      case 16:
+        ripples[i].state = 254;
+        break;
+      default:
+        layer->setRGB((ripples[i].pos + ripples[i].state + layer->nrOfLights) % layer->nrOfLights, ColorFromPalette(layerP.palette, ripples[i].color));  // blend(layerP.color2, ColorFromPalette(layerP.palette, ripples[i].color), brightness / ripples[i].state * 2));
+        layer->setRGB((ripples[i].pos - ripples[i].state + layer->nrOfLights) % layer->nrOfLights, ColorFromPalette(layerP.palette, ripples[i].color));  // blend(layerP.color2, ColorFromPalette(layerP.palette, ripples[i].color), brightness / ripples[i].state * 2));
+        ripples[i].state++;
+        break;
+      }
+    }
+  }
+};
+
+class RocktavesEffect : public Node {
+ public:
+  static const char* name() { return "Rocktaves"; }
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🐙♪"; }
+
+  void setup() override {}
+
+  void loop() override {
+    layer->fadeToBlackBy(16);
+
+    float frTemp = sharedData.majorPeak;
+    uint8_t octCount = 0;
+    uint8_t volTemp = 0;
+
+    float myMagnitude = sharedData.volume / 16.0f;
+    volTemp = 32.0f + myMagnitude * 1.5f;
+    if (myMagnitude < 48) volTemp = 0;
+    if (myMagnitude > 144) volTemp = 255;
+
+    while (frTemp > 249) {
+      octCount++;
+      frTemp = frTemp / 2;
+    }
+
+    frTemp -= 132;
+    frTemp = fabsf(frTemp * 2.1f);
+
+    uint16_t i = ::map(beatsin8(8 + octCount * 4, 0, 255, 0, octCount * 8), 0, 255, 0, layer->nrOfLights - 1);
+    i = constrain(i, 0, layer->nrOfLights - 1);
+    layer->addRGB(i, ColorFromPalette(layerP.palette, (uint8_t)frTemp));  // blend(layerP.color2, ColorFromPalette(layerP.palette, (uint8_t)frTemp), volTemp));
+  }
+};
+
+class WaterfallEffect : public Node {
+ public:
+  static const char* name() { return "Waterfall"; }
+  static uint8_t dim() { return _1D; }
+  static const char* tags() { return "🐙♪"; }
+
+  uint8_t speed = 128;
+  uint8_t intensity = 128;
+
+  void setup() override {
+    addControl(speed, "speed", "slider");
+    addControl(intensity, "intensity", "slider");
+  }
+
+  uint8_t secondHand = 0;
+
+  void loop() override {
+    uint8_t newSecondHand = micros() / (256 - speed) / 500 + 1 % 16;
+    if ((speed > 254) || (secondHand != newSecondHand)) {
+      secondHand = newSecondHand;
+
+      float myMajorPeak = MAX(sharedData.majorPeak, 1.0f);
+      float myMagnitude = sharedData.volume / 8.0f;
+
+      uint8_t pixCol = (log10f(myMajorPeak) - 2.26f) * 150;
+      if (myMajorPeak < 182.0f) pixCol = 0;
+
+      for (int i = 0; i < layer->nrOfLights - 1; i++) layer->setRGB(i, layer->getRGB(i + 1));
+
+      bool peak = sharedData.volume > 128.0f;
+      if (peak) {
+        layer->setRGB(layer->nrOfLights - 1, CHSV(92, 92, 92));
+      } else {
+        CRGB color = ColorFromPalette(layerP.palette, pixCol + intensity, 127 + myMagnitude / 2.0);
+        layer->setRGB(layer->nrOfLights - 1, color);  // blend(layerP.color2, color, (int)myMagnitude));
+      }
     }
   }
 };

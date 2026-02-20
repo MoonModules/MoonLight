@@ -1808,8 +1808,6 @@ class RadarEffect : public Node {
       layer->drawLine(W / 2, H / 2, x1, y1, ColorFromPalette(layerP.palette, (uint8_t)(physPos / physPerimeter * 255)), false);
     }
   }
-
-  ~RadarEffect() override {};  // e,g, to free allocated memory
 };
 
 #endif

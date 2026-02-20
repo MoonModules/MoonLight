@@ -559,6 +559,8 @@ const char* const palette_names[] = {"Cloud⚡️",       "Forest⚡️",    "He
                                      "Toxy Reaf",     "Vintage",     "Yelblu Hot",  "Yelblu",
                                      "Yelmag",        "Yellowout"};
 
+static_assert(sizeof(gGradientPalettes) / sizeof(gGradientPalettes[0]) == sizeof(palette_names) / sizeof(palette_names[0]), "gGradientPalettes and palette_names must have the same number of entries");
+
 CRGBPalette16 getGradientPalette(uint8_t index) {
   CRGBPalette16 palette;
   const byte* gpArray = gGradientPalettes[index];
@@ -590,6 +592,9 @@ CRGBPalette16 getGradientPalette(uint8_t index) {
       case 7:
         palette = RainbowStripeColors_p;
         break;
+      default:
+        palette = RainbowStripeColors_p;
+        break;
       }
     } else if (gpArray[1] == 2) {  // MoonLight palettes
       switch (gpArray[2]) {
@@ -607,7 +612,7 @@ CRGBPalette16 getGradientPalette(uint8_t index) {
         for (int i = 0; i < 16; i++) palette[i] = CRGB::Red;
         break;
       case 3:  // Green
-        for (int i = 0; i < 16; i++) palette[i] = CRGB::Green;
+        for (int i = 0; i < 16; i++) palette[i] = CRGB(0, 255, 0); // CRGB::Green is CRGB(0, 128, 0)
         break;
       case 4:  // Blue
         for (int i = 0; i < 16; i++) palette[i] = CRGB::Blue;
@@ -628,6 +633,9 @@ CRGBPalette16 getGradientPalette(uint8_t index) {
         break;
       case 9:  // Cold White
         for (int i = 0; i < 16; i++) palette[i] = CRGB::White;
+        break;
+      default:  // unknown MoonLight sub-palette — fall back to black
+        for (int i = 0; i < 16; i++) palette[i] = CRGB::Black;
         break;
       }
     }

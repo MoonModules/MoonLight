@@ -36,7 +36,7 @@ class ArtNetInDriver : public Node {
     addControl(layer, "layer", "select");
     addControlValue("Physical layer");
     uint8_t i = 1;  // start with one
-    for (VirtualLayer* layer : layerP.layers) {
+    for (VirtualLayer* vLayer : layerP.layers) {
       Char<32> layerName;
       layerName.format("Layer %d", i);
       addControlValue(layerName.c_str());

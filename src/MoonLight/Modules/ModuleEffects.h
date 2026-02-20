@@ -119,8 +119,9 @@ class ModuleEffects : public NodeManager {
 
     // WLED effects, alphabetically
     addControlValue(control, getNameAndTags<BlackholeEffect>());
-    addControlValue(control, getNameAndTags<BouncingBallsEffect>());
+    addControlValue(control, getNameAndTags<BlinkRainbowEffect>());
     addControlValue(control, getNameAndTags<BlurzEffect>());
+    addControlValue(control, getNameAndTags<BouncingBallsEffect>());
     addControlValue(control, getNameAndTags<ColorTwinkleEffect>());
     addControlValue(control, getNameAndTags<DistortionWavesEffect>());
     addControlValue(control, getNameAndTags<DJLightEffect>());
@@ -135,20 +136,37 @@ class ModuleEffects : public NodeManager {
     addControlValue(control, getNameAndTags<HeartBeatEffect>());
     addControlValue(control, getNameAndTags<JuliaEffect>());
     addControlValue(control, getNameAndTags<LissajousEffect>());
+    addControlValue(control, getNameAndTags<MeteorEffect>());
     addControlValue(control, getNameAndTags<Noise2DEffect>());
     addControlValue(control, getNameAndTags<NoiseMeterEffect>());
     addControlValue(control, getNameAndTags<OctopusEffect>());
+    addControlValue(control, getNameAndTags<OscillateEffect>());
     addControlValue(control, getNameAndTags<PacManEffect>());
+    addControlValue(control, getNameAndTags<PhasedNoiseEffect>());
     addControlValue(control, getNameAndTags<PlasmaEffect>());
     addControlValue(control, getNameAndTags<PoliceEffect>());
     addControlValue(control, getNameAndTags<PopCornEffect>());
     addControlValue(control, getNameAndTags<RainEffect>());
     addControlValue(control, getNameAndTags<TetrixEffect>());
     addControlValue(control, getNameAndTags<WaverlyEffect>());
-    addControlValue(control, getNameAndTags<BlinkRainbowEffect>());
-    addControlValue(control, getNameAndTags<MeteorEffect>());
-    addControlValue(control, getNameAndTags<OscillateEffect>());
-    addControlValue(control, getNameAndTags<PhasedNoiseEffect>());
+
+    addControlValue(control, getNameAndTags<FreqmapEffect>());
+    addControlValue(control, getNameAndTags<FreqpixelsEffect>());
+    addControlValue(control, getNameAndTags<FreqwaveEffect>());
+    addControlValue(control, getNameAndTags<GravfreqEffect>());
+    addControlValue(control, getNameAndTags<GravimeterEffect>());
+    addControlValue(control, getNameAndTags<GravcenterEffect>());
+    addControlValue(control, getNameAndTags<GravcentricEffect>());
+    addControlValue(control, getNameAndTags<MidnoiseEffect>());
+    addControlValue(control, getNameAndTags<NoisemoveEffect>());
+    addControlValue(control, getNameAndTags<NoisefireEffect>());
+    addControlValue(control, getNameAndTags<PixelwaveEffect>());
+    addControlValue(control, getNameAndTags<PlasmoidEffect>());
+    addControlValue(control, getNameAndTags<PuddlepeakEffect>());
+    addControlValue(control, getNameAndTags<PuddlesEffect>());
+    addControlValue(control, getNameAndTags<RipplepeakEffect>());
+    addControlValue(control, getNameAndTags<RocktavesEffect>());
+    addControlValue(control, getNameAndTags<WaterfallEffect>());
 
     // FastLED effects
     addControlValue(control, getNameAndTags<RainbowEffect>());
@@ -221,8 +239,9 @@ class ModuleEffects : public NodeManager {
 
     // WLED effects, alphabetically
     if (!node) node = checkAndAlloc<BlackholeEffect>(name);
-    if (!node) node = checkAndAlloc<BouncingBallsEffect>(name);
+    if (!node) node = checkAndAlloc<BlinkRainbowEffect>(name);
     if (!node) node = checkAndAlloc<BlurzEffect>(name);
+    if (!node) node = checkAndAlloc<BouncingBallsEffect>(name);
     if (!node) node = checkAndAlloc<ColorTwinkleEffect>(name);
     if (!node) node = checkAndAlloc<DistortionWavesEffect>(name);
     if (!node) node = checkAndAlloc<DJLightEffect>(name);
@@ -237,20 +256,37 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<HeartBeatEffect>(name);
     if (!node) node = checkAndAlloc<JuliaEffect>(name);
     if (!node) node = checkAndAlloc<LissajousEffect>(name);
+    if (!node) node = checkAndAlloc<MeteorEffect>(name);
     if (!node) node = checkAndAlloc<Noise2DEffect>(name);
     if (!node) node = checkAndAlloc<NoiseMeterEffect>(name);
     if (!node) node = checkAndAlloc<OctopusEffect>(name);
+    if (!node) node = checkAndAlloc<OscillateEffect>(name);
     if (!node) node = checkAndAlloc<PacManEffect>(name);
+    if (!node) node = checkAndAlloc<PhasedNoiseEffect>(name);
     if (!node) node = checkAndAlloc<PlasmaEffect>(name);
     if (!node) node = checkAndAlloc<PoliceEffect>(name);
     if (!node) node = checkAndAlloc<PopCornEffect>(name);
     if (!node) node = checkAndAlloc<RainEffect>(name);
     if (!node) node = checkAndAlloc<TetrixEffect>(name);
     if (!node) node = checkAndAlloc<WaverlyEffect>(name);
-    if (!node) node = checkAndAlloc<BlinkRainbowEffect>(name);
-    if (!node) node = checkAndAlloc<MeteorEffect>(name);
-    if (!node) node = checkAndAlloc<OscillateEffect>(name);
-    if (!node) node = checkAndAlloc<PhasedNoiseEffect>(name);
+
+    if (!node) node = checkAndAlloc<FreqmapEffect>(name);
+    if (!node) node = checkAndAlloc<FreqpixelsEffect>(name);
+    if (!node) node = checkAndAlloc<FreqwaveEffect>(name);
+    if (!node) node = checkAndAlloc<GravfreqEffect>(name);
+    if (!node) node = checkAndAlloc<GravimeterEffect>(name);
+    if (!node) node = checkAndAlloc<GravcenterEffect>(name);
+    if (!node) node = checkAndAlloc<GravcentricEffect>(name);
+    if (!node) node = checkAndAlloc<MidnoiseEffect>(name);
+    if (!node) node = checkAndAlloc<NoisemoveEffect>(name);
+    if (!node) node = checkAndAlloc<NoisefireEffect>(name);
+    if (!node) node = checkAndAlloc<PixelwaveEffect>(name);
+    if (!node) node = checkAndAlloc<PlasmoidEffect>(name);
+    if (!node) node = checkAndAlloc<PuddlepeakEffect>(name);
+    if (!node) node = checkAndAlloc<PuddlesEffect>(name);
+    if (!node) node = checkAndAlloc<RipplepeakEffect>(name);
+    if (!node) node = checkAndAlloc<RocktavesEffect>(name);
+    if (!node) node = checkAndAlloc<WaterfallEffect>(name);
 
     // FastLED
     if (!node) node = checkAndAlloc<RainbowEffect>(name);
