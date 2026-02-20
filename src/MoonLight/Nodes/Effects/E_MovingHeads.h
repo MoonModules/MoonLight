@@ -74,7 +74,7 @@ class Troy1MoveEffect : public Node {
     addControl(colorwheel, "colorwheel", "slider", 0, 7);                // 0-7 for 8 colors in the colorwheel
     addControl(colorwheelbrightness, "colorwheelbrightness", "slider");  // 0-7 for 8 colors in the colorwheel
     addControl(autoMove, "autoMove", "checkbox");
-    addControl(range, "range", "slider");
+    addControl(range, "range", "slider", 0, 127);
     addControl(audioReactive, "audioReactive", "checkbox");
     addControl(invert, "invert", "checkbox");
   }
@@ -147,11 +147,8 @@ class Troy2ColorEffect : public Node {
       if (audioReactive) {
         layer->setRGB(x, CRGB(sharedData.bands[NUM_GEQ_CHANNELS - 1] > cutin ? sharedData.bands[NUM_GEQ_CHANNELS - 1] : 0, sharedData.bands[7] > cutin ? sharedData.bands[7] : 0, sharedData.bands[0]));
         layer->setRGB1(x, CRGB(sharedData.bands[NUM_GEQ_CHANNELS - 1], sharedData.bands[7] > cutin ? sharedData.bands[7] : 0, sharedData.bands[0] > cutin ? sharedData.bands[0] : 0));
-        layer->setRGB2(x,
-                       CRGB(sharedData.bands[NUM_GEQ_CHANNELS - 1] > cutin ? sharedData.bands[NUM_GEQ_CHANNELS - 1] : 0, sharedData.bands[7], sharedData.bands[0] > cutin ? sharedData.bands[0] : 0));
-        layer->setRGB3(
-            x, CRGB(sharedData.bands[NUM_GEQ_CHANNELS - 1] > cutin ? ::map(sharedData.bands[NUM_GEQ_CHANNELS - 1], cutin - 1, 255, 0, 255) : 0,
-                    sharedData.bands[7] > cutin ? ::map(sharedData.bands[7], cutin - 1, 255, 0, 255) : 0, sharedData.bands[0] > cutin ? ::map(sharedData.bands[0], cutin - 1, 255, 0, 255) : 0));
+        layer->setRGB2(x, CRGB(sharedData.bands[NUM_GEQ_CHANNELS - 1] > cutin ? sharedData.bands[NUM_GEQ_CHANNELS - 1] : 0, sharedData.bands[7], sharedData.bands[0] > cutin ? sharedData.bands[0] : 0));
+        layer->setRGB3(x, CRGB(sharedData.bands[NUM_GEQ_CHANNELS - 1] > cutin ? ::map(sharedData.bands[NUM_GEQ_CHANNELS - 1], cutin - 1, 255, 0, 255) : 0, sharedData.bands[7] > cutin ? ::map(sharedData.bands[7], cutin - 1, 255, 0, 255) : 0, sharedData.bands[0] > cutin ? ::map(sharedData.bands[0], cutin - 1, 255, 0, 255) : 0));
         // layer->setZoom(x, (sharedData.bands[0]>cutin)?255:0);
         if (sharedData.bands[0] + sharedData.bands[7] + sharedData.bands[NUM_GEQ_CHANNELS - 1] > 1) {
           layer->setBrightness(x, 255);
@@ -275,7 +272,7 @@ class FreqColorsEffect : public Node {
         layer->setRGB1({x, 0, 0}, ColorFromPalette(layerP.palette, (x + 3) * delta, sharedData.bands[(x * 3 + 1) % 16]));
         layer->setRGB2({x, 0, 0}, ColorFromPalette(layerP.palette, (x + 6) * delta, sharedData.bands[(x * 3 + 2) % 16]));
       } else {
-        if (x == beatsin8(bpm, 0, layer->size.x - 1)) {             // sinelon over moving heads
+        if (x == beatsin8(bpm, 0, layer->size.x - 1)) {                               // sinelon over moving heads
           layer->setRGB({x, 0, 0}, ColorFromPalette(layerP.palette, beatsin8(10)));   // colorwheel 10 times per minute
           layer->setRGB1({x, 0, 0}, ColorFromPalette(layerP.palette, beatsin8(10)));  // colorwheel 10 times per minute
           layer->setRGB2({x, 0, 0}, ColorFromPalette(layerP.palette, beatsin8(10)));  // colorwheel 10 times per minute
@@ -308,7 +305,7 @@ class WowiMoveEffect : public Node {
     addControl(tilt, "tilt", "slider");
     addControl(zoom, "zoom", "slider");
     addControl(autoMove, "autoMove", "checkbox");
-    addControl(range, "range", "slider");
+    addControl(range, "range", "slider"), 0, 127;
     addControl(invert, "invert", "checkbox");
   }
 
@@ -364,7 +361,7 @@ class AmbientMoveEffect : public Node {
       uint8_t tilt = ::map(bandSpeed[band], 0, UINT16_MAX, tiltMin, tiltMax);  // the higher the band speed, the higher the tilt
 
       uint8_t pan = ::map(beatsin8((bandSpeed[band] > UINT16_MAX / 4) ? panBPM : 0, 0, 255, 0, (invert && x % 2 == 0) ? 128 : 0), 0, 255, panMin, panMax);  // expect a bit of volume before panning
-      uint8_t tilt2 = ::map(beatsin8((bandSpeed[band] > UINT16_MAX / 4) ? panBPM : 0, 0, 255, 0, 64), 0, 255, panMin, panMax);  // this is beatcos8, so pan and tilt draw a circle
+      uint8_t tilt2 = ::map(beatsin8((bandSpeed[band] > UINT16_MAX / 4) ? panBPM : 0, 0, 255, 0, 64), 0, 255, panMin, panMax);                              // this is beatcos8, so pan and tilt draw a circle
 
       layer->setTilt(x, (tilt + tilt2) / 2);
       layer->setPan(x, pan);

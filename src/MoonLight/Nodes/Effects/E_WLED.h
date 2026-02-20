@@ -449,7 +449,7 @@ class LissajousEffect : public Node {
 
 class Noise2DEffect : public Node {
  public:
-  static const char* name() { return "Noise2D"; }
+  static const char* name() { return "Noise 2D"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🐙"; }
 
@@ -1063,7 +1063,7 @@ struct Spark {
 
 class PopCornEffect : public Node {
  public:
-  static const char* name() { return "PopCorn"; }
+  static const char* name() { return "Popcorn"; }
   static uint8_t dim() { return _1D; }  // 2D-ish? check latest in WLED...
   static const char* tags() { return "🐙♪"; }
 
@@ -1878,7 +1878,7 @@ class DripEffect : public Node {
 
 class HeartBeatEffect : public Node {
  public:
-  static const char* name() { return "HeartBeat"; }
+  static const char* name() { return "Heartbeat"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "♥"; }
 
@@ -1921,7 +1921,7 @@ class HeartBeatEffect : public Node {
 
 class DJLightEffect : public Node {
  public:
-  static const char* name() { return "DJLight"; }
+  static const char* name() { return "DJ Light"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♫"; }
 
@@ -1997,7 +1997,7 @@ class DJLightEffect : public Node {
 
 class ColorTwinkleEffect : public Node {
  public:
-  static const char* name() { return "ColorTwinkle"; }
+  static const char* name() { return "Color Twinkle"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "🐙"; }
 
@@ -2790,7 +2790,7 @@ class PhasedNoiseEffect : public Node {
 
 class FreqmapEffect : public Node {
  public:
-  static const char* name() { return "Freqmap"; }
+  static const char* name() { return "Freq Map"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♪"; }
 
@@ -2830,7 +2830,7 @@ class FreqmapEffect : public Node {
 
 class FreqpixelsEffect : public Node {
  public:
-  static const char* name() { return "Freqpixels"; }
+  static const char* name() { return "Freq Pixels"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♪"; }
 
@@ -2869,7 +2869,7 @@ static float mapf(float x, float in_min, float in_max, float out_min, float out_
 
 class FreqwaveEffect : public Node {
  public:
-  static const char* name() { return "Freqwave"; }
+  static const char* name() { return "Freq Wave"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♪"; }
 
@@ -2934,7 +2934,7 @@ struct Gravity {
 
 class GravfreqEffect : public Node {
  public:
-  static const char* name() { return "Gravfreq"; }
+  static const char* name() { return "Grav Freq"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♪"; }
 
@@ -3067,7 +3067,7 @@ class GravimeterEffect : public Node {
 
 class GravcenterEffect : public Node {
  public:
-  static const char* name() { return "Gravcenter"; }
+  static const char* name() { return "Grav Center"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♪"; }
 
@@ -3128,7 +3128,7 @@ class GravcenterEffect : public Node {
 
 class GravcentricEffect : public Node {
  public:
-  static const char* name() { return "Gravcentric"; }
+  static const char* name() { return "Grav Centric"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♪"; }
 
@@ -3221,7 +3221,7 @@ class MidnoiseEffect : public Node {
 
 class NoisemoveEffect : public Node {
  public:
-  static const char* name() { return "Noisemove"; }
+  static const char* name() { return "Noise Move"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙"; }
 
@@ -3253,9 +3253,9 @@ class NoisemoveEffect : public Node {
 
 class NoisefireEffect : public Node {
  public:
-  static const char* name() { return "Noisefire"; }
+  static const char* name() { return "Noise Fire"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return "🔥"; }
+  static const char* tags() { return "🐙"; }
 
   uint8_t speed = 128;
   uint8_t intensity = 128;
@@ -3295,7 +3295,7 @@ class PixelwaveEffect : public Node {
   uint8_t secondHand = 0;
 
   void loop() override {
-    uint8_t newSecondHand = micros() / (256 - speed) / 500 + 1 % 16;
+    uint8_t newSecondHand = (micros() / (256 - speed) / 500 + 1) % 16;
     if ((speed > 254) || (secondHand != newSecondHand)) {
       secondHand = newSecondHand;
 
@@ -3322,7 +3322,7 @@ class PlasmoidEffect : public Node {
  public:
   static const char* name() { return "Plasmoid"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return "🐙"; }
+  static const char* tags() { return "🐙♪"; }
 
   uint8_t speed = 128;
   uint8_t intensity = 128;
@@ -3372,7 +3372,7 @@ class PlasmoidEffect : public Node {
 
 class PuddlepeakEffect : public Node {
  public:
-  static const char* name() { return "Puddlepeak"; }
+  static const char* name() { return "Puddle Peak"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♪"; }
 
@@ -3550,7 +3550,7 @@ class WaterfallEffect : public Node {
   uint8_t secondHand = 0;
 
   void loop() override {
-    uint8_t newSecondHand = micros() / (256 - speed) / 500 + 1 % 16;
+    uint8_t newSecondHand = (micros() / (256 - speed) / 500 + 1) % 16;
     if ((speed > 254) || (secondHand != newSecondHand)) {
       secondHand = newSecondHand;
 

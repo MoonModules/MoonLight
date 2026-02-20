@@ -127,7 +127,6 @@ class ModuleEffects : public NodeManager {
     addControlValue(control, getNameAndTags<DJLightEffect>());
     addControlValue(control, getNameAndTags<DNAEffect>());
     addControlValue(control, getNameAndTags<DripEffect>());
-    addControlValue(control, getNameAndTags<FreqMatrixEffect>());
     addControlValue(control, getNameAndTags<FireworksEffect>());
     addControlValue(control, getNameAndTags<FlowEffect>());
     addControlValue(control, getNameAndTags<FrizzlesEffect>());
@@ -138,7 +137,8 @@ class ModuleEffects : public NodeManager {
     addControlValue(control, getNameAndTags<LissajousEffect>());
     addControlValue(control, getNameAndTags<MeteorEffect>());
     addControlValue(control, getNameAndTags<Noise2DEffect>());
-    addControlValue(control, getNameAndTags<NoiseMeterEffect>());
+    addControlValue(control, getNameAndTags<NoisefireEffect>());
+    addControlValue(control, getNameAndTags<NoisemoveEffect>());
     addControlValue(control, getNameAndTags<OctopusEffect>());
     addControlValue(control, getNameAndTags<OscillateEffect>());
     addControlValue(control, getNameAndTags<PacManEffect>());
@@ -151,6 +151,7 @@ class ModuleEffects : public NodeManager {
     addControlValue(control, getNameAndTags<WaverlyEffect>());
 
     addControlValue(control, getNameAndTags<FreqmapEffect>());
+    addControlValue(control, getNameAndTags<FreqMatrixEffect>());
     addControlValue(control, getNameAndTags<FreqpixelsEffect>());
     addControlValue(control, getNameAndTags<FreqwaveEffect>());
     addControlValue(control, getNameAndTags<GravfreqEffect>());
@@ -158,8 +159,7 @@ class ModuleEffects : public NodeManager {
     addControlValue(control, getNameAndTags<GravcenterEffect>());
     addControlValue(control, getNameAndTags<GravcentricEffect>());
     addControlValue(control, getNameAndTags<MidnoiseEffect>());
-    addControlValue(control, getNameAndTags<NoisemoveEffect>());
-    addControlValue(control, getNameAndTags<NoisefireEffect>());
+    addControlValue(control, getNameAndTags<NoiseMeterEffect>());
     addControlValue(control, getNameAndTags<PixelwaveEffect>());
     addControlValue(control, getNameAndTags<PlasmoidEffect>());
     addControlValue(control, getNameAndTags<PuddlepeakEffect>());
@@ -185,6 +185,7 @@ class ModuleEffects : public NodeManager {
     addControlValue(control, getNameAndTags<MirrorModifier>());
     addControlValue(control, getNameAndTags<TransposeModifier>());
     addControlValue(control, getNameAndTags<CircleModifier>());
+    addControlValue(control, getNameAndTags<BlockModifier>());
     addControlValue(control, getNameAndTags<RotateModifier>());
     addControlValue(control, getNameAndTags<CheckerboardModifier>());
     addControlValue(control, getNameAndTags<PinwheelModifier>());
@@ -249,7 +250,6 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<DripEffect>(name);
     if (!node) node = checkAndAlloc<FireworksEffect>(name);
     if (!node) node = checkAndAlloc<FlowEffect>(name);
-    if (!node) node = checkAndAlloc<FreqMatrixEffect>(name);
     if (!node) node = checkAndAlloc<FrizzlesEffect>(name);
     if (!node) node = checkAndAlloc<FunkyPlankEffect>(name);
     if (!node) node = checkAndAlloc<GEQEffect>(name);
@@ -258,7 +258,8 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<LissajousEffect>(name);
     if (!node) node = checkAndAlloc<MeteorEffect>(name);
     if (!node) node = checkAndAlloc<Noise2DEffect>(name);
-    if (!node) node = checkAndAlloc<NoiseMeterEffect>(name);
+    if (!node) node = checkAndAlloc<NoisefireEffect>(name);
+    if (!node) node = checkAndAlloc<NoisemoveEffect>(name);
     if (!node) node = checkAndAlloc<OctopusEffect>(name);
     if (!node) node = checkAndAlloc<OscillateEffect>(name);
     if (!node) node = checkAndAlloc<PacManEffect>(name);
@@ -271,6 +272,7 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<WaverlyEffect>(name);
 
     if (!node) node = checkAndAlloc<FreqmapEffect>(name);
+    if (!node) node = checkAndAlloc<FreqMatrixEffect>(name);
     if (!node) node = checkAndAlloc<FreqpixelsEffect>(name);
     if (!node) node = checkAndAlloc<FreqwaveEffect>(name);
     if (!node) node = checkAndAlloc<GravfreqEffect>(name);
@@ -278,8 +280,7 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<GravcenterEffect>(name);
     if (!node) node = checkAndAlloc<GravcentricEffect>(name);
     if (!node) node = checkAndAlloc<MidnoiseEffect>(name);
-    if (!node) node = checkAndAlloc<NoisemoveEffect>(name);
-    if (!node) node = checkAndAlloc<NoisefireEffect>(name);
+    if (!node) node = checkAndAlloc<NoiseMeterEffect>(name);
     if (!node) node = checkAndAlloc<PixelwaveEffect>(name);
     if (!node) node = checkAndAlloc<PlasmoidEffect>(name);
     if (!node) node = checkAndAlloc<PuddlepeakEffect>(name);
@@ -307,6 +308,7 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<MirrorModifier>(name);
     if (!node) node = checkAndAlloc<TransposeModifier>(name);
     if (!node) node = checkAndAlloc<CircleModifier>(name);
+    if (!node) node = checkAndAlloc<BlockModifier>(name);
     if (!node) node = checkAndAlloc<RotateModifier>(name);
     if (!node) node = checkAndAlloc<CheckerboardModifier>(name);
     if (!node) node = checkAndAlloc<PinwheelModifier>(name);

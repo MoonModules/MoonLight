@@ -612,7 +612,8 @@ CRGBPalette16 getGradientPalette(uint8_t index) {
         for (int i = 0; i < 16; i++) palette[i] = CRGB::Red;
         break;
       case 3:  // Green
-        for (int i = 0; i < 16; i++) palette[i] = CRGB(0, 255, 0); // CRGB::Green is CRGB(0, 128, 0)
+        for (int i = 0; i < 16; i++) palette[i] = CRGB(0, 255, 0);
+        // CRGB::Green is CRGB(0, 128, 0)
         break;
       case 4:  // Blue
         for (int i = 0; i < 16; i++) palette[i] = CRGB::Blue;
@@ -622,7 +623,8 @@ CRGBPalette16 getGradientPalette(uint8_t index) {
         // CRGB::Orange is too yellow
         break;
       case 6:  // Purple
-        for (int i = 0; i < 16; i++) palette[i] = CRGB::Purple;
+        for (int i = 0; i < 16; i++) palette[i] = CRGB(128, 0, 255);
+        // CRGB::Purple is CRGB(128,0,128) — half brightness; use a full-intensity violet instead
         break;
       case 7:  // Cyan
         for (int i = 0; i < 16; i++) palette[i] = CRGB::Cyan;

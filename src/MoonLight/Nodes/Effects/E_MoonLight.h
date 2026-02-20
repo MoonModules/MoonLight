@@ -1597,7 +1597,7 @@ class VUMeterEffect : public Node {
 
 class PixelMapEffect : public Node {
  public:
-  static const char* name() { return "PixelMap"; }
+  static const char* name() { return "Pixel Map"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "🔥"; }
 
@@ -1614,7 +1614,7 @@ class PixelMapEffect : public Node {
 
 class MarioTestEffect : public Node {
  public:
-  static const char* name() { return "MarioTest"; }
+  static const char* name() { return "Mario Test"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🔥"; }
 
@@ -1670,7 +1670,7 @@ class RingEffect : public Node {
 
 class RingRandomFlowEffect : public RingEffect {
  public:
-  static const char* name() { return "RingRandomFlow"; }
+  static const char* name() { return "Ring Random Flow"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🔥"; }
 
@@ -1702,7 +1702,7 @@ class RingRandomFlowEffect : public RingEffect {
 // by netmindz
 class AudioRingsEffect : public RingEffect {
  public:
-  static const char* name() { return "AudioRings"; }
+  static const char* name() { return "Audio Rings"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🔥♫"; }
 
