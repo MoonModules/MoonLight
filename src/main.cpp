@@ -245,17 +245,16 @@ void setup() {
   esp_log_level_set("*", LOG_LOCAL_LEVEL);  // use the platformio setting here
 #endif
 
-  // start serial and filesystem
-#if ARDUINO_USB_CDC_ON_BOOT && (defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32P4))
-  Serial.begin(SERIAL_BAUD_RATE);      //  WLEDMM avoid "hung devices" when USB_CDC is enabled; see https://github.com/espressif/arduino-esp32/issues/9043
-  Serial.setTxTimeoutMs(0);  // potential side-effect: incomplete debug output, with missing characters whenever TX buffer is full.
-#else
   Serial.begin(SERIAL_BAUD_RATE);
-#endif
 
-  if (!Serial) delay(300);  // just a tiny wait to avoid problems later when acessing serial
+  for (int i = 0; i < 5; i++) {
+    if (!Serial) delay(300);  // just a tiny wait to avoid problems later when acessing serial
+    if (Serial) Serial.printf("Serial init wait %d", i * 300);
+  }
 
-  Serial.printf("C++ Standard: %ld\n", __cplusplus);  // 202002L  // 🌙 safeMode
+  if (Serial) Serial.flush();
+
+  Serial.printf("C++ Standard: %ld\n", __cplusplus);  // 202002L
 
   if (esp_reset_reason() != ESP_RST_UNKNOWN && esp_reset_reason() != ESP_RST_POWERON && esp_reset_reason() != ESP_RST_SW && esp_reset_reason() != ESP_RST_USB) {  // see verbosePrintResetReason
     // ESP_RST_USB is after usb flashing! since esp-idf5

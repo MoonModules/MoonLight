@@ -88,7 +88,7 @@ struct Char {
 
   char operator[](const uint16_t indexV) const { return (indexV < sizeof(s)) ? s[indexV] : '\0'; }
 
-  // returns a substring, starting at begin and ending at end-1 (not exclusive)
+  // returns a substring from begin (inclusive) to end (exclusive)
   Char<N> substring(uint16_t begin, uint16_t end = sizeof(s) - 1) {
     Char<N> sub;
     if (begin >= sizeof(s) || end >= sizeof(s) || end < begin)
