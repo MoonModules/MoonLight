@@ -39,6 +39,8 @@ void WiFiSettingsService::initWiFi()
 {
     WiFi.mode(WIFI_MODE_STA); // this is the default.
 
+    WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);   // 🌙 from WLED-MM bugfix: ensure that all channels are scanned, and the strongest signal is used, see https://github.com/wled/WLED/pull/5351 and https://github.com/MoonModules/WLED-MM/commit/812c5ca31532c741cb45b83d856c102a37877ca4
+
     // Disable WiFi config persistance and auto reconnect
     #ifndef CONFIG_IDF_TARGET_ESP32P4
         WiFi.persistent(false);

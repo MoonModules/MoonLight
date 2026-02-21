@@ -361,7 +361,7 @@ class AmbientMoveEffect : public Node {
       uint8_t tilt = ::map(bandSpeed[band], 0, UINT16_MAX, tiltMin, tiltMax);  // the higher the band speed, the higher the tilt
 
       uint8_t pan = ::map(beatsin8((bandSpeed[band] > UINT16_MAX / 4) ? panBPM : 0, 0, 255, 0, (invert && x % 2 == 0) ? 128 : 0), 0, 255, panMin, panMax);  // expect a bit of volume before panning
-      uint8_t tilt2 = ::map(beatsin8((bandSpeed[band] > UINT16_MAX / 4) ? panBPM : 0, 0, 255, 0, 64), 0, 255, panMin, panMax);                              // this is beatcos8, so pan and tilt draw a circle
+      uint8_t tilt2 = ::map(beatsin8((bandSpeed[band] > UINT16_MAX / 4) ? panBPM : 0, 0, 255, 0, 64), 0, 255, tiltMin, tiltMax);                            // this is beatcos8, so pan and tilt draw a circle
 
       layer->setTilt(x, (tilt + tilt2) / 2);
       layer->setPan(x, pan);

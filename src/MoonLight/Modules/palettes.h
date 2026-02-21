@@ -593,7 +593,7 @@ CRGBPalette16 getGradientPalette(uint8_t index) {
         palette = RainbowStripeColors_p;
         break;
       default:
-        palette = RainbowStripeColors_p;
+        palette = PartyColors_p;
         break;
       }
     } else if (gpArray[1] == 2) {  // MoonLight palettes
