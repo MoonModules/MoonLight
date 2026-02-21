@@ -15,7 +15,7 @@ class RainbowEffect : public Node {
  public:
   static const char* name() { return "Rainbow"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return "🔥⚡️"; }
+  static const char* tags() { return "⚡️"; }
 
   uint8_t speed = 8;  // default 8*32 = 256 / 256 = 1 = hue++
   uint8_t deltaHue = 7;

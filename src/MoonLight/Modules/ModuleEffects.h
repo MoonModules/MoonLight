@@ -90,15 +90,15 @@ class ModuleEffects : public NodeManager {
     addControlValue(control, getNameAndTags<LinesEffect>());
     addControlValue(control, getNameAndTags<FireEffect>());
     addControlValue(control, getNameAndTags<FixedRectangleEffect>());
-    addControlValue(control, getNameAndTags<ParticlesEffect>());
-    addControlValue(control, getNameAndTags<PraxisEffect>());
-    addControlValue(control, getNameAndTags<StarSkyEffect>());
   #if USE_M5UNIFIED
     addControlValue(control, getNameAndTags<MoonManEffect>());
   #endif
     addControlValue(control, getNameAndTags<FreqSawsEffect>());
     addControlValue(control, getNameAndTags<MarioTestEffect>());
+    addControlValue(control, getNameAndTags<ParticlesEffect>());
     addControlValue(control, getNameAndTags<PixelMapEffect>());
+    addControlValue(control, getNameAndTags<PraxisEffect>());
+    addControlValue(control, getNameAndTags<RadarEffect>());
     addControlValue(control, getNameAndTags<RandomEffect>());
     addControlValue(control, getNameAndTags<RingRandomFlowEffect>());
     addControlValue(control, getNameAndTags<RipplesEffect>());
@@ -108,6 +108,7 @@ class ModuleEffects : public NodeManager {
     addControlValue(control, getNameAndTags<SphereMoveEffect>());
     addControlValue(control, getNameAndTags<SpiralFireEffect>());
     addControlValue(control, getNameAndTags<StarFieldEffect>());
+    addControlValue(control, getNameAndTags<StarSkyEffect>());
     addControlValue(control, getNameAndTags<VUMeterEffect>());
     addControlValue(control, getNameAndTags<WaveEffect>());
 
@@ -118,14 +119,14 @@ class ModuleEffects : public NodeManager {
 
     // WLED effects, alphabetically
     addControlValue(control, getNameAndTags<BlackholeEffect>());
-    addControlValue(control, getNameAndTags<BouncingBallsEffect>());
+    addControlValue(control, getNameAndTags<BlinkRainbowEffect>());
     addControlValue(control, getNameAndTags<BlurzEffect>());
+    addControlValue(control, getNameAndTags<BouncingBallsEffect>());
     addControlValue(control, getNameAndTags<ColorTwinkleEffect>());
     addControlValue(control, getNameAndTags<DistortionWavesEffect>());
     addControlValue(control, getNameAndTags<DJLightEffect>());
     addControlValue(control, getNameAndTags<DNAEffect>());
     addControlValue(control, getNameAndTags<DripEffect>());
-    addControlValue(control, getNameAndTags<FreqMatrixEffect>());
     addControlValue(control, getNameAndTags<FireworksEffect>());
     addControlValue(control, getNameAndTags<FlowEffect>());
     addControlValue(control, getNameAndTags<FrizzlesEffect>());
@@ -134,16 +135,38 @@ class ModuleEffects : public NodeManager {
     addControlValue(control, getNameAndTags<HeartBeatEffect>());
     addControlValue(control, getNameAndTags<JuliaEffect>());
     addControlValue(control, getNameAndTags<LissajousEffect>());
+    addControlValue(control, getNameAndTags<MeteorEffect>());
     addControlValue(control, getNameAndTags<Noise2DEffect>());
-    addControlValue(control, getNameAndTags<NoiseMeterEffect>());
+    addControlValue(control, getNameAndTags<NoisefireEffect>());
+    addControlValue(control, getNameAndTags<NoisemoveEffect>());
     addControlValue(control, getNameAndTags<OctopusEffect>());
+    addControlValue(control, getNameAndTags<OscillateEffect>());
     addControlValue(control, getNameAndTags<PacManEffect>());
+    addControlValue(control, getNameAndTags<PhasedNoiseEffect>());
     addControlValue(control, getNameAndTags<PlasmaEffect>());
     addControlValue(control, getNameAndTags<PoliceEffect>());
     addControlValue(control, getNameAndTags<PopCornEffect>());
     addControlValue(control, getNameAndTags<RainEffect>());
     addControlValue(control, getNameAndTags<TetrixEffect>());
     addControlValue(control, getNameAndTags<WaverlyEffect>());
+
+    addControlValue(control, getNameAndTags<FreqmapEffect>());
+    addControlValue(control, getNameAndTags<FreqMatrixEffect>());
+    addControlValue(control, getNameAndTags<FreqpixelsEffect>());
+    addControlValue(control, getNameAndTags<FreqwaveEffect>());
+    addControlValue(control, getNameAndTags<GravfreqEffect>());
+    addControlValue(control, getNameAndTags<GravimeterEffect>());
+    addControlValue(control, getNameAndTags<GravcenterEffect>());
+    addControlValue(control, getNameAndTags<GravcentricEffect>());
+    addControlValue(control, getNameAndTags<MidnoiseEffect>());
+    addControlValue(control, getNameAndTags<NoiseMeterEffect>());
+    addControlValue(control, getNameAndTags<PixelwaveEffect>());
+    addControlValue(control, getNameAndTags<PlasmoidEffect>());
+    addControlValue(control, getNameAndTags<PuddlepeakEffect>());
+    addControlValue(control, getNameAndTags<PuddlesEffect>());
+    addControlValue(control, getNameAndTags<RipplepeakEffect>());
+    addControlValue(control, getNameAndTags<RocktavesEffect>());
+    addControlValue(control, getNameAndTags<WaterfallEffect>());
 
     // FastLED effects
     addControlValue(control, getNameAndTags<RainbowEffect>());
@@ -162,6 +185,7 @@ class ModuleEffects : public NodeManager {
     addControlValue(control, getNameAndTags<MirrorModifier>());
     addControlValue(control, getNameAndTags<TransposeModifier>());
     addControlValue(control, getNameAndTags<CircleModifier>());
+    addControlValue(control, getNameAndTags<BlockModifier>());
     addControlValue(control, getNameAndTags<RotateModifier>());
     addControlValue(control, getNameAndTags<CheckerboardModifier>());
     addControlValue(control, getNameAndTags<PinwheelModifier>());
@@ -189,13 +213,13 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<FreqSawsEffect>(name);
     if (!node) node = checkAndAlloc<LinesEffect>(name);
     if (!node) node = checkAndAlloc<MarioTestEffect>(name);
-    if (!node) node = checkAndAlloc<StarSkyEffect>(name);
   #if USE_M5UNIFIED
     if (!node) node = checkAndAlloc<MoonManEffect>(name);
   #endif
     if (!node) node = checkAndAlloc<ParticlesEffect>(name);
-    if (!node) node = checkAndAlloc<PraxisEffect>(name);
     if (!node) node = checkAndAlloc<PixelMapEffect>(name);
+    if (!node) node = checkAndAlloc<PraxisEffect>(name);
+    if (!node) node = checkAndAlloc<RadarEffect>(name);
     if (!node) node = checkAndAlloc<RandomEffect>(name);
     if (!node) node = checkAndAlloc<RingRandomFlowEffect>(name);
     if (!node) node = checkAndAlloc<RipplesEffect>(name);
@@ -203,10 +227,11 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<ScrollingTextEffect>(name);
     if (!node) node = checkAndAlloc<SinusEffect>(name);
     if (!node) node = checkAndAlloc<SphereMoveEffect>(name);
-    if (!node) node = checkAndAlloc<StarFieldEffect>(name);
-    if (!node) node = checkAndAlloc<WaveEffect>(name);
     if (!node) node = checkAndAlloc<SpiralFireEffect>(name);
+    if (!node) node = checkAndAlloc<StarFieldEffect>(name);
+    if (!node) node = checkAndAlloc<StarSkyEffect>(name);
     if (!node) node = checkAndAlloc<VUMeterEffect>(name);
+    if (!node) node = checkAndAlloc<WaveEffect>(name);
 
     // MoonModules effects, alphabetically
     if (!node) node = checkAndAlloc<GameOfLifeEffect>(name);
@@ -215,8 +240,9 @@ class ModuleEffects : public NodeManager {
 
     // WLED effects, alphabetically
     if (!node) node = checkAndAlloc<BlackholeEffect>(name);
-    if (!node) node = checkAndAlloc<BouncingBallsEffect>(name);
+    if (!node) node = checkAndAlloc<BlinkRainbowEffect>(name);
     if (!node) node = checkAndAlloc<BlurzEffect>(name);
+    if (!node) node = checkAndAlloc<BouncingBallsEffect>(name);
     if (!node) node = checkAndAlloc<ColorTwinkleEffect>(name);
     if (!node) node = checkAndAlloc<DistortionWavesEffect>(name);
     if (!node) node = checkAndAlloc<DJLightEffect>(name);
@@ -224,23 +250,44 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<DripEffect>(name);
     if (!node) node = checkAndAlloc<FireworksEffect>(name);
     if (!node) node = checkAndAlloc<FlowEffect>(name);
-    if (!node) node = checkAndAlloc<FreqMatrixEffect>(name);
     if (!node) node = checkAndAlloc<FrizzlesEffect>(name);
     if (!node) node = checkAndAlloc<FunkyPlankEffect>(name);
     if (!node) node = checkAndAlloc<GEQEffect>(name);
     if (!node) node = checkAndAlloc<HeartBeatEffect>(name);
     if (!node) node = checkAndAlloc<JuliaEffect>(name);
     if (!node) node = checkAndAlloc<LissajousEffect>(name);
+    if (!node) node = checkAndAlloc<MeteorEffect>(name);
     if (!node) node = checkAndAlloc<Noise2DEffect>(name);
-    if (!node) node = checkAndAlloc<NoiseMeterEffect>(name);
+    if (!node) node = checkAndAlloc<NoisefireEffect>(name);
+    if (!node) node = checkAndAlloc<NoisemoveEffect>(name);
     if (!node) node = checkAndAlloc<OctopusEffect>(name);
+    if (!node) node = checkAndAlloc<OscillateEffect>(name);
     if (!node) node = checkAndAlloc<PacManEffect>(name);
+    if (!node) node = checkAndAlloc<PhasedNoiseEffect>(name);
     if (!node) node = checkAndAlloc<PlasmaEffect>(name);
     if (!node) node = checkAndAlloc<PoliceEffect>(name);
     if (!node) node = checkAndAlloc<PopCornEffect>(name);
     if (!node) node = checkAndAlloc<RainEffect>(name);
     if (!node) node = checkAndAlloc<TetrixEffect>(name);
     if (!node) node = checkAndAlloc<WaverlyEffect>(name);
+
+    if (!node) node = checkAndAlloc<FreqmapEffect>(name);
+    if (!node) node = checkAndAlloc<FreqMatrixEffect>(name);
+    if (!node) node = checkAndAlloc<FreqpixelsEffect>(name);
+    if (!node) node = checkAndAlloc<FreqwaveEffect>(name);
+    if (!node) node = checkAndAlloc<GravfreqEffect>(name);
+    if (!node) node = checkAndAlloc<GravimeterEffect>(name);
+    if (!node) node = checkAndAlloc<GravcenterEffect>(name);
+    if (!node) node = checkAndAlloc<GravcentricEffect>(name);
+    if (!node) node = checkAndAlloc<MidnoiseEffect>(name);
+    if (!node) node = checkAndAlloc<NoiseMeterEffect>(name);
+    if (!node) node = checkAndAlloc<PixelwaveEffect>(name);
+    if (!node) node = checkAndAlloc<PlasmoidEffect>(name);
+    if (!node) node = checkAndAlloc<PuddlepeakEffect>(name);
+    if (!node) node = checkAndAlloc<PuddlesEffect>(name);
+    if (!node) node = checkAndAlloc<RipplepeakEffect>(name);
+    if (!node) node = checkAndAlloc<RocktavesEffect>(name);
+    if (!node) node = checkAndAlloc<WaterfallEffect>(name);
 
     // FastLED
     if (!node) node = checkAndAlloc<RainbowEffect>(name);
@@ -261,6 +308,7 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<MirrorModifier>(name);
     if (!node) node = checkAndAlloc<TransposeModifier>(name);
     if (!node) node = checkAndAlloc<CircleModifier>(name);
+    if (!node) node = checkAndAlloc<BlockModifier>(name);
     if (!node) node = checkAndAlloc<RotateModifier>(name);
     if (!node) node = checkAndAlloc<CheckerboardModifier>(name);
     if (!node) node = checkAndAlloc<PinwheelModifier>(name);

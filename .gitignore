@@ -25,3 +25,5 @@ ssl_certs/cacert.pem
 /site
 .DS_Store
 *.bak
+.idea
+compile_commands.json

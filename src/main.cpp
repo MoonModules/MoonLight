@@ -113,14 +113,14 @@ ModuleMoonLightInfo moduleMoonLightInfo = ModuleMoonLightInfo(&server, &esp32sve
 SemaphoreHandle_t swapMutex = xSemaphoreCreateMutex();
 volatile bool newFrameReady = false;
 
-TaskHandle_t effectTaskHandle = NULL;
-TaskHandle_t driverTaskHandle = NULL;
+TaskHandle_t effectTaskHandle = nullptr;
+TaskHandle_t driverTaskHandle = nullptr;
 
     #include "esp_task_wdt.h"
 
-void effectTask(void* pvParameters) {
+[[noreturn]] void effectTask(void* pvParameters) {
   // 🌙
-  esp_task_wdt_add(NULL);
+  esp_task_wdt_add(nullptr);
 
   layerP.setup();  // setup virtual layers (no node setup here as done in addNode)
   static unsigned long last20ms = 0;
@@ -159,12 +159,12 @@ void effectTask(void* pvParameters) {
     vTaskDelay(1);
   }
   // Cleanup (never reached in this case, but good practice)
-  esp_task_wdt_delete(NULL);
+  esp_task_wdt_delete(nullptr);
 }
 
-void driverTask(void* pvParameters) {
+[[noreturn]] void driverTask(void* pvParameters) {
   // 🌙
-  esp_task_wdt_add(NULL);
+  esp_task_wdt_add(nullptr);
 
   // layerP.setup() done in effectTask
   static unsigned long last20ms = 0;
@@ -201,7 +201,7 @@ void driverTask(void* pvParameters) {
     vTaskDelay(1);
   }
   // Cleanup (never reached in this case, but good practice)
-  esp_task_wdt_delete(NULL);
+  esp_task_wdt_delete(nullptr);
 }
   #endif  // MoonLight
 #endif    // MoonBase
@@ -246,11 +246,23 @@ void setup() {
 #endif
 
   // start serial and filesystem
+#if ARDUINO_USB_CDC_ON_BOOT && (defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32P4))
+  Serial.begin(SERIAL_BAUD_RATE);  //  WLEDMM avoid "hung devices" when USB_CDC is enabled; see https://github.com/espressif/arduino-esp32/issues/9043
+  Serial.setTxTimeoutMs(0);        // potential side-effect: incomplete debug output, with missing characters whenever TX buffer is full.
+#else
   Serial.begin(SERIAL_BAUD_RATE);
+#endif
 
-  // delay(5000);  // 🌙 to capture all the serial output
+  for (int i = 0; i < 5; i++) {
+    if (!Serial) delay(300);  // just a tiny wait to avoid problems later when acessing serial
+    if (Serial) Serial.printf("Serial init wait %d\n", i * 300);
+  }
 
-  Serial.printf("C++ Standard: %ld\n", __cplusplus);  // 202002L  // 🌙 safeMode
+  if (Serial) Serial.flush();
+
+  Serial.setDebugOutput(true);
+
+  Serial.printf("C++ Standard: %ld\n", __cplusplus);  // 202002L
 
   if (esp_reset_reason() != ESP_RST_UNKNOWN && esp_reset_reason() != ESP_RST_POWERON && esp_reset_reason() != ESP_RST_SW && esp_reset_reason() != ESP_RST_USB) {  // see verbosePrintResetReason
     // ESP_RST_USB is after usb flashing! since esp-idf5
@@ -313,7 +325,7 @@ void setup() {
   xTaskCreatePinnedToCore(effectTask,          // task function
                           "AppEffects",        // name
                           EFFECTS_STACK_SIZE,  // stack size
-                          NULL,                // parameter
+                          nullptr,             // parameter
                           3,                   // priority
                           &effectTaskHandle,   // task handle
                           0                    // protocol core. high speed effect processing
@@ -322,7 +334,7 @@ void setup() {
   xTaskCreatePinnedToCore(driverTask,          // task function
                           "AppDrivers",        // name
                           DRIVERS_STACK_SIZE,  // stack size
-                          NULL,                // parameter
+                          nullptr,             // parameter
                           3,                   // priority
                           &driverTaskHandle,   // task handle
     #ifdef CONFIG_FREERTOS_UNICORE
@@ -384,7 +396,7 @@ void loop() {
   delay(100);
 #else
   // Delete Arduino loop task, as it is not needed
-  vTaskDelete(NULL);
+  vTaskDelete(nullptr);
 #endif
 
 #if 0

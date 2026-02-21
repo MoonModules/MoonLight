@@ -102,8 +102,8 @@ This is the current list of supported lights ranging from 3 channels per light (
 * GRBW: rgbw LED eg. SK6812
 * GRB6: some LED curtains
 * RGBWYP: 6 channel par/dmx light with UV etc
-* MHBeeEyes150W-15 🐺: 15 channels moving head, see https://moonmodules.org/MoonLight/moonbase/module/drivers/#art-net
-* MHBeTopper19x15W-32 🐺: 32 channels moving head
+* MHBeeEyes150W-15: 15 channels moving head, see https://moonmodules.org/MoonLight/moonbase/module/drivers/#art-net
+* MHBeTopper19x15W-32: 32 channels moving head
 * MH19x15W-24: 24 channels moving heads
 
 Based on the chosen value, the channels per light and the offsets will be set e.g. for GRB: header->channelsPerLight = 3; header->offsetRed = 1; header->offsetGreen = 0; header->offsetBlue = 2;. Drivers should not make this mapping, the code calling drivers should do.

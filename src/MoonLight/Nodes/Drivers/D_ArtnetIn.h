@@ -11,6 +11,8 @@
 
 #if FT_MOONLIGHT
 
+extern SemaphoreHandle_t swapMutex;
+
 class ArtNetInDriver : public Node {
  public:
   static const char* name() { return "Art-Net In"; }
@@ -34,7 +36,7 @@ class ArtNetInDriver : public Node {
     addControl(layer, "layer", "select");
     addControlValue("Physical layer");
     uint8_t i = 1;  // start with one
-    for (VirtualLayer* layer : layerP.layers) {
+    for (VirtualLayer* vLayer : layerP.layers) {
       Char<32> layerName;
       layerName.format("Layer %d", i);
       addControlValue(layerName.c_str());
@@ -126,17 +128,19 @@ class ArtNetInDriver : public Node {
           int startPixel = (universe - universeMin) * (512 / layerP.lights.header.channelsPerLight);
           int numPixels = MIN(dataLength / layerP.lights.header.channelsPerLight, layerP.lights.header.nrOfLights - startPixel);
 
+          xSemaphoreTake(swapMutex, portMAX_DELAY);  // prevent effectTask from swapping channelsD/channelsE pointers while writing directly to channelsD (effects must be disabled when ArtNetIn is active)
           for (int i = 0; i < numPixels; i++) {
             int ledIndex = startPixel + i;
             if (ledIndex < layerP.lights.header.nrOfLights) {
               if (layer == 0) {  // Physical layer
-                memcpy(&layerP.lights.channelsE[ledIndex * layerP.lights.header.channelsPerLight], &dmxData[i * layerP.lights.header.channelsPerLight], layerP.lights.header.channelsPerLight);
+                memcpy(&layerP.lights.channelsD[ledIndex * layerP.lights.header.channelsPerLight], &dmxData[i * layerP.lights.header.channelsPerLight], layerP.lights.header.channelsPerLight);
               } else {  // Virtual layer
-                layerP.layers[layer - 1]->forEachLightIndex(ledIndex, [&](nrOfLights_t indexP) { memcpy(&layerP.lights.channelsE[indexP * layerP.lights.header.channelsPerLight], &dmxData[i * layerP.lights.header.channelsPerLight], layerP.lights.header.channelsPerLight); });
+                layerP.layers[layer - 1]->forEachLightIndex(ledIndex, [&](nrOfLights_t indexP) { memcpy(&layerP.lights.channelsD[indexP * layerP.lights.header.channelsPerLight], &dmxData[i * layerP.lights.header.channelsPerLight], layerP.lights.header.channelsPerLight); });
                 // setLight(ledIndex, &dmxData[i * layerP.lights.header.channelsPerLight], 0, layerP.lights.header.channelsPerLight);
               }
             }
           }
+          xSemaphoreGive(swapMutex);
         }
       }
     }
@@ -157,17 +161,19 @@ class ArtNetInDriver : public Node {
       int startPixel = offset / layerP.lights.header.channelsPerLight;
       int numPixels = MIN(dataLen / layerP.lights.header.channelsPerLight, layerP.lights.header.nrOfLights - startPixel);
 
+      xSemaphoreTake(swapMutex, portMAX_DELAY);  // prevent effectTask from swapping channelsD/channelsE pointers while writing directly to channelsD (effects must be disabled when ArtNetIn is active)
       for (int i = 0; i < numPixels; i++) {
         int ledIndex = startPixel + i;
         if (ledIndex < layerP.lights.header.nrOfLights) {
           if (layer == 0) {  // Physical layer
-            memcpy(&layerP.lights.channelsE[ledIndex * layerP.lights.header.channelsPerLight], &pixelData[i * layerP.lights.header.channelsPerLight], layerP.lights.header.channelsPerLight);
+            memcpy(&layerP.lights.channelsD[ledIndex * layerP.lights.header.channelsPerLight], &pixelData[i * layerP.lights.header.channelsPerLight], layerP.lights.header.channelsPerLight);
           } else {  // Virtual layer
-            layerP.layers[layer - 1]->forEachLightIndex(ledIndex, [&](nrOfLights_t indexP) { memcpy(&layerP.lights.channelsE[indexP * layerP.lights.header.channelsPerLight], &pixelData[i * layerP.lights.header.channelsPerLight], layerP.lights.header.channelsPerLight); });
+            layerP.layers[layer - 1]->forEachLightIndex(ledIndex, [&](nrOfLights_t indexP) { memcpy(&layerP.lights.channelsD[indexP * layerP.lights.header.channelsPerLight], &pixelData[i * layerP.lights.header.channelsPerLight], layerP.lights.header.channelsPerLight); });
             // setLight(ledIndex, &pixelData[i * layerP.lights.header.channelsPerLight], 0, layerP.lights.header.channelsPerLight);
           }
         }
       }
+      xSemaphoreGive(swapMutex);
     }
   }
 };

@@ -16,7 +16,7 @@ class CircleModifier : public Node {
  public:
   static const char* name() { return "Circle"; }
   static uint8_t dim() { return _2D; }  // 1D to 2D ...
-  static const char* tags() { return "💎🐙"; }
+  static const char* tags() { return "💎"; }
 
   Coord3D modifierSize;
 
@@ -48,11 +48,50 @@ class CircleModifier : public Node {
   }
 };
 
+// Takes the y dimension from the layout (1D effect) and turn it into concentric square blocks in 2D.
+class BlockModifier : public Node {
+ public:
+  static const char* name() { return "Block"; }
+  static uint8_t dim() { return _2D; }  // 1D to 2D
+  static const char* tags() { return "💎"; }
+
+  Coord3D modifierSize;
+
+  bool hasModifier() const override { return true; }
+
+  void modifySize() override {
+    modifierSize = layer->size;
+
+    modifyPosition(layer->size);  // modify the virtual size as x, 0, 0
+
+    // change the size to be one bigger in each dimension
+    layer->size.x++;
+    layer->size.y++;
+    layer->size.z++;
+  }
+
+  void modifyPosition(Coord3D& position) override {
+    // Calculate the distance from center using Chebyshev distance (max of abs differences)
+    int centerX = (modifierSize.x + 1) / 2 - 1;
+    int centerY = (modifierSize.y + 1) / 2 - 1;
+
+    int dx = abs((int)position.x - centerX);
+    int dy = abs((int)position.y - centerY);
+
+    // Block distance is the maximum of the two deltas (creates square rings)
+    int distance = MAX(dx, dy);
+
+    position.x = 0;
+    position.y = distance;
+    position.z = 0;
+  }
+};
+
 class MirrorModifier : public Node {
  public:
   static const char* name() { return "Mirror"; }
   static uint8_t dim() { return _3D; }
-  static const char* tags() { return "💎🐙"; }
+  static const char* tags() { return "💎"; }
 
   bool mirrorX = true;
   bool mirrorY = true;
@@ -199,7 +238,7 @@ class RippleXZModifier : public Node {
  public:
   static const char* name() { return "RippleXZ"; }
   static uint8_t dim() { return _3D; }
-  static const char* tags() { return "💎💫"; }
+  static const char* tags() { return "💎"; }
 
   bool shrink = true;
   bool towardsX = true;
@@ -267,7 +306,7 @@ class RotateModifier : public Node {
  public:
   static const char* name() { return "Rotate"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "💎💫"; }
+  static const char* tags() { return "💎"; }
 
   bool expand = false;
   bool flip, reverse, alternate;
@@ -394,7 +433,7 @@ class TransposeModifier : public Node {
  public:
   static const char* name() { return "Transpose"; }
   static uint8_t dim() { return _3D; }
-  static const char* tags() { return "💎🐙"; }
+  static const char* tags() { return "💎"; }
 
   bool transposeXY = true;
   bool transposeXZ = false;
@@ -463,7 +502,7 @@ class TransposeModifier : public Node {
 class CheckerboardModifier : public Node {
  public:
   static const char* name() { return "Checkerboard"; }
-  static const char* tags() { return "💎💫"; }
+  static const char* tags() { return "💎"; }
 
   Coord3D size = {3, 3, 3};
   bool invert = false;

@@ -22,6 +22,7 @@ class AudioSyncDriver : public Node {
 
   WLEDSync sync;
   bool init = false;
+  static constexpr uint8_t audioPaletteIndex = 18;  // see palettes.h
 
   void loop() override {
     if (!WiFi.isConnected() && !ETH.connected()) {
@@ -53,8 +54,8 @@ class AudioSyncDriver : public Node {
       moduleControl->read(
           [&](const ModuleState& state) {
             uint8_t palette = state.data["palette"];
-            if (palette >= 10 && palette <= 12) {  // Audio palettes
-              layerP.palette.loadDynamicGradientPalette(getAudioPalette(palette-10));
+            if (palette >= audioPaletteIndex && palette <= audioPaletteIndex + 2) {  // Audio palettes
+              layerP.palette.loadDynamicGradientPalette(getAudioPalette(palette - audioPaletteIndex));
             }
           },
           name());

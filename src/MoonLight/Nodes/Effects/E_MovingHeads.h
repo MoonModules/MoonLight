@@ -15,7 +15,7 @@ class Troy1ColorEffect : public Node {
  public:
   static const char* name() { return "Troy1 Color"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return "🚨♫🐺"; }
+  static const char* tags() { return "🚨♫"; }
 
   bool audioReactive = true;
 
@@ -38,7 +38,7 @@ class Troy1MoveEffect : public Node {
  public:
   static const char* name() { return "Troy1 Move"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return "🗼♫🐺"; }
+  static const char* tags() { return "🗼♫"; }
 
   // set default values here
   uint8_t bpm = 30;
@@ -53,18 +53,18 @@ class Troy1MoveEffect : public Node {
   bool autoMove = true;
   bool audioReactive = true;
   bool invert = true;
-  int closestColorIndex = -1;
+  // int closestColorIndex = -1;
 
-  std::vector<CRGB> colorwheelpalette = {
-      CRGB(255, 255, 255),  // White
-      CRGB(255, 0, 0),      // Red
-      CRGB(0, 255, 0),      // Green
-      CRGB(0, 0, 255),      // Blue
-      CRGB(255, 255, 0),    // Yellow
-      CRGB(0, 255, 255),    // Cyan
-      CRGB(255, 165, 0),    // Orange
-      CRGB(128, 0, 128)     // Purple
-  };
+  // std::vector<CRGB> colorwheelpalette = {
+  //     CRGB(255, 255, 255),  // White
+  //     CRGB(255, 0, 0),      // Red
+  //     CRGB(0, 255, 0),      // Green
+  //     CRGB(0, 0, 255),      // Blue
+  //     CRGB(255, 255, 0),    // Yellow
+  //     CRGB(0, 255, 255),    // Cyan
+  //     CRGB(255, 165, 0),    // Orange
+  //     CRGB(128, 0, 128)     // Purple
+  // };
 
   void setup() override {
     addControl(bpm, "bpm", "slider");
@@ -74,29 +74,29 @@ class Troy1MoveEffect : public Node {
     addControl(colorwheel, "colorwheel", "slider", 0, 7);                // 0-7 for 8 colors in the colorwheel
     addControl(colorwheelbrightness, "colorwheelbrightness", "slider");  // 0-7 for 8 colors in the colorwheel
     addControl(autoMove, "autoMove", "checkbox");
-    addControl(range, "slider", "slider");
+    addControl(range, "range", "slider", 0, 127);
     addControl(audioReactive, "audioReactive", "checkbox");
     addControl(invert, "invert", "checkbox");
   }
 
   // Function to compute Euclidean distance between two colors
-  double colorDistance(const CRGB& c1, const CRGB& c2) { return std::sqrt(std::pow(c1.r - c2.r, 2) + std::pow(c1.g - c2.g, 2) + std::pow(c1.b - c2.b, 2)); }
+  // double colorDistance(const CRGB& c1, const CRGB& c2) { return std::sqrt(std::pow(c1.r - c2.r, 2) + std::pow(c1.g - c2.g, 2) + std::pow(c1.b - c2.b, 2)); }
 
   // Function to find the index of the closest color
-  int findClosestColorWheelIndex(const CRGB& inputColor, const std::vector<CRGB>& palette) {
-    int closestIndex = 0;
-    double minDistance = colorDistance(inputColor, palette[0]);
+  // int findClosestColorWheelIndex(const CRGB& inputColor, const std::vector<CRGB>& palette) {
+  //   int closestIndex = 0;
+  //   double minDistance = colorDistance(inputColor, palette[0]);
 
-    for (size_t i = 1; i < palette.size(); ++i) {
-      double distance = colorDistance(inputColor, palette[i]);
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestIndex = static_cast<int>(i);
-      }
-    }
+  //   for (size_t i = 1; i < palette.size(); ++i) {
+  //     double distance = colorDistance(inputColor, palette[i]);
+  //     if (distance < minDistance) {
+  //       minDistance = distance;
+  //       closestIndex = static_cast<int>(i);
+  //     }
+  //   }
 
-    return closestIndex;
-  }
+  //   return closestIndex;
+  // }
 
   void loop() override {
     for (int x = 0; x < layer->size.x; x++) {  // loop over lights defined in layout
@@ -131,7 +131,7 @@ class Troy2ColorEffect : public Node {
  public:
   static const char* name() { return "Troy2 Color"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return "🚨♫🐺"; }
+  static const char* tags() { return "🚨♫"; }
 
   uint8_t cutin = 200;
 
@@ -147,11 +147,8 @@ class Troy2ColorEffect : public Node {
       if (audioReactive) {
         layer->setRGB(x, CRGB(sharedData.bands[NUM_GEQ_CHANNELS - 1] > cutin ? sharedData.bands[NUM_GEQ_CHANNELS - 1] : 0, sharedData.bands[7] > cutin ? sharedData.bands[7] : 0, sharedData.bands[0]));
         layer->setRGB1(x, CRGB(sharedData.bands[NUM_GEQ_CHANNELS - 1], sharedData.bands[7] > cutin ? sharedData.bands[7] : 0, sharedData.bands[0] > cutin ? sharedData.bands[0] : 0));
-        layer->setRGB2(x,
-                       CRGB(sharedData.bands[NUM_GEQ_CHANNELS - 1] > cutin ? sharedData.bands[NUM_GEQ_CHANNELS - 1] : 0, sharedData.bands[7], sharedData.bands[0] > cutin ? sharedData.bands[0] : 0));
-        layer->setRGB3(
-            x, CRGB(sharedData.bands[NUM_GEQ_CHANNELS - 1] > cutin ? ::map(sharedData.bands[NUM_GEQ_CHANNELS - 1], cutin - 1, 255, 0, 255) : 0,
-                    sharedData.bands[7] > cutin ? ::map(sharedData.bands[7], cutin - 1, 255, 0, 255) : 0, sharedData.bands[0] > cutin ? ::map(sharedData.bands[0], cutin - 1, 255, 0, 255) : 0));
+        layer->setRGB2(x, CRGB(sharedData.bands[NUM_GEQ_CHANNELS - 1] > cutin ? sharedData.bands[NUM_GEQ_CHANNELS - 1] : 0, sharedData.bands[7], sharedData.bands[0] > cutin ? sharedData.bands[0] : 0));
+        layer->setRGB3(x, CRGB(sharedData.bands[NUM_GEQ_CHANNELS - 1] > cutin ? ::map(sharedData.bands[NUM_GEQ_CHANNELS - 1], cutin - 1, 255, 0, 255) : 0, sharedData.bands[7] > cutin ? ::map(sharedData.bands[7], cutin - 1, 255, 0, 255) : 0, sharedData.bands[0] > cutin ? ::map(sharedData.bands[0], cutin - 1, 255, 0, 255) : 0));
         // layer->setZoom(x, (sharedData.bands[0]>cutin)?255:0);
         if (sharedData.bands[0] + sharedData.bands[7] + sharedData.bands[NUM_GEQ_CHANNELS - 1] > 1) {
           layer->setBrightness(x, 255);
@@ -170,7 +167,7 @@ class Troy2MoveEffect : public Node {
  public:
   static const char* name() { return "Troy2 Move"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return "🗼♫🐺"; }
+  static const char* tags() { return "🗼♫"; }
 
   uint8_t bpm = 30;
   uint8_t pan = 175;
@@ -191,27 +188,28 @@ class Troy2MoveEffect : public Node {
     addControl(zoom, "zoom", "slider");
     addControl(cutin, "cutin", "slider");
     addControl(autoMove, "autoMove", "checkbox");
-    addControl(range, "slider", "slider");
+    addControl(range, "range", "slider");
     addControl(audioReactive, "audioReactive", "checkbox");
     addControl(invert, "invert", "checkbox");
   }
 
   // Function to compute Euclidean distance between two colors
-  double colorDistance(const CRGB& c1, const CRGB& c2) { return std::sqrt(std::pow(c1.r - c2.r, 2) + std::pow(c1.g - c2.g, 2) + std::pow(c1.b - c2.b, 2)); }
+  // double colorDistance(const CRGB& c1, const CRGB& c2) { return std::sqrt(std::pow(c1.r - c2.r, 2) + std::pow(c1.g - c2.g, 2) + std::pow(c1.b - c2.b, 2)); }
 
-  // Function to find the index of the closest color
-  int findClosestColorWheelIndex(const CRGB& inputColor, const std::vector<CRGB>& palette) {
-    int closestIndex = 0;
-    double minDistance = colorDistance(inputColor, palette[0]);
-    for (size_t i = 1; i < palette.size(); ++i) {
-      double distance = colorDistance(inputColor, palette[i]);
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestIndex = static_cast<int>(i);
-      }
-    }
-    return closestIndex;
-  }
+  // // Function to find the index of the closest color
+  // int findClosestColorWheelIndex(const CRGB& inputColor, const std::vector<CRGB>& palette) {
+  //   int closestIndex = 0;
+  //   double minDistance = colorDistance(inputColor, palette[0]);
+
+  //   for (size_t i = 1; i < palette.size(); ++i) {
+  //     double distance = colorDistance(inputColor, palette[i]);
+  //     if (distance < minDistance) {
+  //       minDistance = distance;
+  //       closestIndex = static_cast<int>(i);
+  //     }
+  //   }
+  //   return closestIndex;
+  // }
 
   void loop() override {
     bool coolDownSet = false;
@@ -274,7 +272,7 @@ class FreqColorsEffect : public Node {
         layer->setRGB1({x, 0, 0}, ColorFromPalette(layerP.palette, (x + 3) * delta, sharedData.bands[(x * 3 + 1) % 16]));
         layer->setRGB2({x, 0, 0}, ColorFromPalette(layerP.palette, (x + 6) * delta, sharedData.bands[(x * 3 + 2) % 16]));
       } else {
-        if (x == beatsin8(bpm, 0, layer->size.x - 1)) {             // sinelon over moving heads
+        if (x == beatsin8(bpm, 0, layer->size.x - 1)) {                               // sinelon over moving heads
           layer->setRGB({x, 0, 0}, ColorFromPalette(layerP.palette, beatsin8(10)));   // colorwheel 10 times per minute
           layer->setRGB1({x, 0, 0}, ColorFromPalette(layerP.palette, beatsin8(10)));  // colorwheel 10 times per minute
           layer->setRGB2({x, 0, 0}, ColorFromPalette(layerP.palette, beatsin8(10)));  // colorwheel 10 times per minute
@@ -307,7 +305,7 @@ class WowiMoveEffect : public Node {
     addControl(tilt, "tilt", "slider");
     addControl(zoom, "zoom", "slider");
     addControl(autoMove, "autoMove", "checkbox");
-    addControl(range, "slider", "slider");
+    addControl(range, "range", "slider"), 0, 127;
     addControl(invert, "invert", "checkbox");
   }
 
@@ -363,7 +361,7 @@ class AmbientMoveEffect : public Node {
       uint8_t tilt = ::map(bandSpeed[band], 0, UINT16_MAX, tiltMin, tiltMax);  // the higher the band speed, the higher the tilt
 
       uint8_t pan = ::map(beatsin8((bandSpeed[band] > UINT16_MAX / 4) ? panBPM : 0, 0, 255, 0, (invert && x % 2 == 0) ? 128 : 0), 0, 255, panMin, panMax);  // expect a bit of volume before panning
-      uint8_t tilt2 = ::map(beatsin8((bandSpeed[band] > UINT16_MAX / 4) ? panBPM : 0, 0, 255, 0, 64), 0, 255, panMin, panMax);  // this is beatcos8, so pan and tilt draw a circle
+      uint8_t tilt2 = ::map(beatsin8((bandSpeed[band] > UINT16_MAX / 4) ? panBPM : 0, 0, 255, 0, 64), 0, 255, tiltMin, tiltMax);                            // this is beatcos8, so pan and tilt draw a circle
 
       layer->setTilt(x, (tilt + tilt2) / 2);
       layer->setPan(x, pan);

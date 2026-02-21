@@ -100,7 +100,7 @@ Sends Lights in Art-Net compatible packages to an Art-Net controller specified b
 **Controls**
 
 * **Light preset**: See above.
-* **Controller IPs**: The last segment of the IP address within your local network, of the hardware Art-Net controller. Add more IPs if you send to more than one controller, comma separated.
+* **Controller IPs**: The last segment of the IP address within your local network, of the hardware Art-Net controller. Add more IPs if you send to more than one controller, comma separated or use a hyphen for a range of IPs.
 * **Port**: The network port added to the IP address, 6454 is the default for Art-Net.
 * **FPS Limiter**: set the max frames per second Art-Net packages are send out (also all the other nodes will run at this speed).
     * Art-Net specs recommend about 44 FPS but higher framerates will work mostly (up to until ~130FPS tested)

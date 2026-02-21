@@ -671,7 +671,7 @@ class FreqSawsEffect : public Node {
  public:
   static const char* name() { return "Frequency Saws"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥♫🪚"; }
+  static const char* tags() { return "🔥♫"; }
 
   uint8_t fade = 4;
   uint8_t increaser = 211;
@@ -767,7 +767,7 @@ class RubiksCubeEffect : public Node {
  public:
   static const char* name() { return "Rubik's Cube"; }
   static uint8_t dim() { return _3D; }
-  static const char* tags() { return "🔥💫"; }
+  static const char* tags() { return "🔥"; }
 
   struct Cube {
     uint8_t SIZE;
@@ -1071,7 +1071,7 @@ class ParticlesEffect : public Node {
  public:
   static const char* name() { return "Particles"; }
   static uint8_t dim() { return _3D; }
-  static const char* tags() { return "🔥💫🧭"; }
+  static const char* tags() { return "🔥🧭"; }
 
   struct Particle {
     float x, y, z;
@@ -1300,7 +1300,7 @@ class MoonManEffect : public Node {
  public:
   static const char* name() { return "Moon Man"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥🎵☾"; }
+  static const char* tags() { return "🔥🎵"; }
 
   // Create an M5Canvas for PNG processing
   M5Canvas* canvas;  //(&M5.Display);
@@ -1365,7 +1365,7 @@ class SpiralFireEffect : public Node {
  public:
   static const char* name() { return "Spiral Fire"; }
   static uint8_t dim() { return _3D; }
-  static const char* tags() { return "🔥⏳"; }
+  static const char* tags() { return "🔥"; }
 
   uint8_t speed = 60;
   uint8_t intensity = 180;
@@ -1434,7 +1434,7 @@ class FireEffect : public Node {
  public:
   static const char* name() { return "Fire"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "💫"; }
+  static const char* tags() { return "🔥"; }
 
   const uint32_t colors[11] = {0x000000, 0x100000, 0x300000, 0x600000, 0x800000, 0xA00000, 0xC02000, 0xC04000, 0xC06000, 0xC08000, 0x807080};
   const uint8_t NCOLORS = std::size(colors);
@@ -1550,7 +1550,7 @@ class VUMeterEffect : public Node {
  public:
   static const char* name() { return "VU Meter"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "♫💫📺"; }
+  static const char* tags() { return "🔥♫"; }
 
   void drawNeedle(float angle, Coord3D topLeft, Coord3D size, CRGB color) {
     int x0 = topLeft.x + size.x / 2;  // Center of the needle
@@ -1588,7 +1588,7 @@ class VUMeterEffect : public Node {
     uint8_t band = 0;
     for (int h = 0; h < nHorizontal; h++) {
       for (int v = 0; v < nVertical; v++) {
-        drawNeedle((float)sharedData.bands[2 * (band++)] / 2.0, {layer->size.x * h / nHorizontal, layer->size.y * v / nVertical, 0}, {(layer->size.x-1) / nHorizontal, (layer->size.y-1) / nVertical, 0}, ColorFromPalette(layerP.palette, 255 / (nHorizontal * nVertical) * band));
+        drawNeedle((float)sharedData.bands[2 * (band++)] / 2.0, {layer->size.x * h / nHorizontal, layer->size.y * v / nVertical, 0}, {(layer->size.x - 1) / nHorizontal, (layer->size.y - 1) / nVertical, 0}, ColorFromPalette(layerP.palette, 255 / (nHorizontal * nVertical) * band));
       }  // sharedData.bands[band++] / 200
     }
     // ppf(" v:%f, f:%f", sharedData.volume, (float) sharedData.bands[5]);
@@ -1597,9 +1597,9 @@ class VUMeterEffect : public Node {
 
 class PixelMapEffect : public Node {
  public:
-  static const char* name() { return "PixelMap"; }
+  static const char* name() { return "Pixel Map"; }
   static uint8_t dim() { return _3D; }
-  static const char* tags() { return "💫"; }
+  static const char* tags() { return "🔥"; }
 
   Coord3D pos = {0, 0, 0};
 
@@ -1614,9 +1614,9 @@ class PixelMapEffect : public Node {
 
 class MarioTestEffect : public Node {
  public:
-  static const char* name() { return "MarioTest"; }
+  static const char* name() { return "Mario Test"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "💫"; }
+  static const char* tags() { return "🔥"; }
 
   bool background = false;
   Coord3D offset = {0, 0, 0};
@@ -1670,9 +1670,9 @@ class RingEffect : public Node {
 
 class RingRandomFlowEffect : public RingEffect {
  public:
-  static const char* name() { return "RingRandomFlow"; }
+  static const char* name() { return "Ring Random Flow"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return "💫"; }
+  static const char* tags() { return "🔥"; }
 
   // void setup() override {} //so no palette control is created
 
@@ -1702,9 +1702,9 @@ class RingRandomFlowEffect : public RingEffect {
 // by netmindz
 class AudioRingsEffect : public RingEffect {
  public:
-  static const char* name() { return "AudioRings"; }
+  static const char* name() { return "Audio Rings"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return "♫💫"; }
+  static const char* tags() { return "🔥♫"; }
 
   bool inWards = true;
 
@@ -1742,6 +1742,71 @@ class AudioRingsEffect : public RingEffect {
     CRGB color = ColorFromPalette(layerP.palette, val);
     color.nscale8_video(val);
     setRing(ring, color);
+  }
+};
+
+class RadarEffect : public Node {
+ public:
+  static const char* name() { return "Radar"; }
+  static uint8_t dim() { return _2D; }
+  static const char* tags() { return "🔥"; }
+
+  uint8_t bpm = 60;  // 1 beat per second
+  uint8_t fade = 128;
+  bool fullLine = false;
+  uint8_t tubeSpacing = 10;
+
+  void setup() override {
+    addControl(bpm, "bpm", "slider");
+    addControl(fade, "fade", "slider");
+    addControl(fullLine, "fullLine", "checkbox");
+    addControl(tubeSpacing, "tubeSpacing", "number", 1);
+  }
+
+  void loop() override {
+    layer->fadeToBlackBy(fade);
+
+    uint16_t W = layer->size.x;
+    uint16_t H = layer->size.y;
+
+    float physW = W * (float)tubeSpacing;
+    float physH = H * 1.0f;
+    float physPerimeter = 2.0f * (physW + physH);
+
+    uint32_t cycleMs = bpm ? 60000 / bpm : UINT32_MAX;
+    float physPos = (float)(millis() % cycleMs) / cycleMs * physPerimeter;
+
+    auto physToXY = [&](float p, int16_t& x, int16_t& y) {
+      if (p < physW) {
+        x = (int16_t)(p / (float)tubeSpacing);
+        y = 0;
+      }  // top
+      else if (p < physW + physH) {
+        x = W - 1;
+        y = (int16_t)(p - physW);
+      }  // right
+      else if (p < 2 * physW + physH) {
+        x = (int16_t)((2 * physW + physH - p) / (float)tubeSpacing);
+        y = H - 1;
+      }  // bottom
+      else {
+        x = 0;
+        y = (int16_t)(physPerimeter - p);
+      }  // left
+    };
+
+    int16_t x1, y1;
+    physToXY(physPos, x1, y1);
+
+    if (fullLine) {
+      float physPosB = fmod(physPos + physPerimeter / 2.0f, physPerimeter);
+      int16_t x2, y2;
+      physToXY(physPosB, x2, y2);
+      layer->drawLine(x1, y1, x2, y2, ColorFromPalette(layerP.palette, (uint8_t)(physPos / physPerimeter * 255)), false);
+    } else {
+      // Half line: from center to perimeter point
+      layer->drawLine(W / 2, H / 2, x1, y1, ColorFromPalette(layerP.palette, (uint8_t)(physPos / physPerimeter * 255)), false);
+    }
   }
 };
 
