@@ -348,7 +348,6 @@ static struct SharedData {
   Coord3D gravity;
 
   //FastLED Audio
-  uint8_t beatBrightness = 0;  // Decaying brightness for beat pulse
   bool vocalsActive = false;
   float vocalConfidence = 0;
   float bassLevel = 0;

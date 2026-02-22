@@ -35,63 +35,67 @@ class FastLEDAudioDriver : public Node {
 
   fl::AudioProcessor audioProcessor;
 
-  // Beat detection state
-  float currentBPM = 0.0f;
-  uint32_t lastBeatTime = 0;
-  uint32_t beatCount = 0;
-  uint32_t onsetCount = 0;
-
   void setup() override {
     Node::setup();  // !!
 
     fl::string errorMsg;
     audioInput = fl::IAudioInput::create(config, &errorMsg);
+    if (!audioInput) {
+      EXT_LOGE(ML_TAG, "Failed to create audio input: %s", errorMsg.c_str());
+      return;
+    }
     audioInput->start();
 
-    audioProcessor.onBeat([&]() {
-      beatCount++;
-      lastBeatTime = fl::millis();
+    audioProcessor.onBeat([]() {
       sharedData.beat = true;
-      EXT_LOGD(ML_TAG, "BEAT #: %d", beatCount);
+      EXT_LOGD(ML_TAG, "onBeat");
     });
 
-    audioProcessor.onVocalStart([&]() { sharedData.vocalsActive = true; });
+    audioProcessor.onVocalStart([]() {
+      sharedData.vocalsActive = true;
+      // EXT_LOGD(ML_TAG, "onVocalStart");
+    });
 
-    audioProcessor.onVocalEnd([&]() { sharedData.vocalsActive = false; });
+    audioProcessor.onVocalEnd([]() {
+      sharedData.vocalsActive = false;
+      // EXT_LOGD(ML_TAG, "onVocalEnd");
+    });
 
     audioProcessor.onVocalConfidence([](float confidence) {
-      static uint32_t lastPrint = 0;
-      if (fl::millis() - lastPrint > 200) {
-        sharedData.vocalConfidence = confidence;
-        EXT_LOGD(ML_TAG, "Vocal confidence: %f", confidence);
-        lastPrint = fl::millis();
-      }
+      sharedData.vocalConfidence = sharedData.vocalsActive ? confidence : 0.0;
+      // EXT_LOGD(ML_TAG, "onVocalConfidence %d", confidence);
     });
 
     audioProcessor.onBass([](float level) {
       if (level > 0.01f) {
         sharedData.bassLevel = level;
-        EXT_LOGD(ML_TAG, "Bass: %f", level);
+        // EXT_LOGD(ML_TAG, "onBass: %f", level);
       }
     });
 
     audioProcessor.onTreble([](float level) {
       if (level > 0.01f) {
         sharedData.trebleLevel = level;
-        EXT_LOGD(ML_TAG, "Treble: %f", level);
+        // EXT_LOGD(ML_TAG, "onTreble: %f", level);
       }
     });
   }
 
   void loop20ms() override {
+    if (!audioInput) return;
+
+    sharedData.beat = false;
+
     while (fl::AudioSample sample = audioInput->read()) {
       audioProcessor.update(sample);
     }
-
-    sharedData.beat = false;
   }
 
-  ~FastLEDAudioDriver() override {}
+  ~FastLEDAudioDriver() override {
+    if (audioInput) {
+      audioInput->stop();
+    }
+  }
 };
 
 #endif

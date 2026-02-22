@@ -46,28 +46,34 @@ class FLAudioEffect : public Node {
   void setup() {}
 
   uint16_t hue = 0;
-  uint8_t beatBrightness = 0;
+  uint8_t beatLevel = 0;
+  float maxBass = 0;
+  float maxTreble = 0;
+  float maxVocal = 0;
 
   void loop() override {
-    if (sharedData.vocalsActive) {
-      layer->fill_rainbow((hue += 8 * 32) >> 8, 7);  // hue back to uint8_t
-    } else if (beatBrightness > 0) {
-      if (sharedData.beat) beatBrightness = 255;
-      CHSV color = CHSV(hue, 255, beatBrightness);
-      layer->fill_solid(color);
+    layer->fadeToBlackBy(70);
 
-      // Decay the brightness
-      if (beatBrightness > 10) {
-        beatBrightness = beatBrightness * 0.85f;  // Exponential decay
-        hue += 32;                                // Shift color on each beat
+    // maxLevels
+    if (sharedData.bassLevel > maxBass) maxBass = sharedData.bassLevel;
+    if (sharedData.trebleLevel > maxTreble) maxTreble = sharedData.trebleLevel;
+    if (sharedData.vocalConfidence > maxVocal) maxVocal = sharedData.vocalConfidence;
 
-      } else {
-        beatBrightness = 0;
-      }
-    } else {  // random pixels
-      layer->fadeToBlackBy(70);
-      layer->setRGB(random16(layer->nrOfLights), ColorFromPalette(layerP.palette, random8()));
-    }
+    if (sharedData.beat) beatLevel = 255;
+
+    // EXT_LOGD(ML_TAG, "%f-%d %f-%d %d-%d %f-%d", sharedData.bassLevel, bassLevel, sharedData.trebleLevel, trebleLevel, sharedData.beat, beatLevel, sharedData.vocalsActive ? sharedData.vocalConfidence : 0, vocalsLevel);
+
+    layer->drawLine(0, layer->size.y - 1, 0, layer->size.y - 1 - layer->size.y * sharedData.bassLevel / maxBass, CRGB::Blue);
+    layer->drawLine(1, layer->size.y - 1, 1, layer->size.y - 1 - layer->size.y * sharedData.trebleLevel / maxTreble, CRGB::Orange);
+    layer->drawLine(2, layer->size.y - 1, 2, layer->size.y - 1 - layer->size.y * sharedData.vocalConfidence / maxVocal, CRGB::Green);
+    layer->drawLine(3, layer->size.y - 1, 3, layer->size.y - 1 - layer->size.y * beatLevel / 255, CRGB::Red);
+
+    //correct if lower output
+    if (maxBass > 0) maxBass -= 0.01;
+    if (maxTreble > 0) maxTreble -= 0.01;
+    if (maxVocal > 0) maxVocal -= 0.01;
+
+    if (beatLevel) beatLevel--;
   }
 };
 
