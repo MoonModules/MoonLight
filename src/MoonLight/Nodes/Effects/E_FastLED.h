@@ -37,4 +37,38 @@ class RainbowEffect : public Node {
   }
 };
 
+class FLAudioEffect : public Node {
+ public:
+  static const char* name() { return "FLAudio"; }
+  static uint8_t dim() { return _2D; }
+  static const char* tags() { return "⚡️🎵"; }
+
+  void setup() {}
+
+  uint16_t hue = 0;
+  uint8_t beatBrightness = 0;
+
+  void loop() override {
+    if (sharedData.vocalsActive) {
+      layer->fill_rainbow((hue += 8 * 32) >> 8, 7);  // hue back to uint8_t
+    } else if (beatBrightness > 0) {
+      if (sharedData.beat) beatBrightness = 255;
+      CHSV color = CHSV(hue, 255, beatBrightness);
+      layer->fill_solid(color);
+
+      // Decay the brightness
+      if (beatBrightness > 10) {
+        beatBrightness = beatBrightness * 0.85f;  // Exponential decay
+        hue += 32;                                // Shift color on each beat
+
+      } else {
+        beatBrightness = 0;
+      }
+    } else {  // random pixels
+      layer->fadeToBlackBy(70);
+      layer->setRGB(random16(layer->nrOfLights), ColorFromPalette(layerP.palette, random8()));
+    }
+  }
+};
+
 #endif

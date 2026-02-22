@@ -268,7 +268,7 @@ class LiveScriptNode : public Node {
   // layout
   void onLayout() override;  // call map in LiveScript
 
-  ~LiveScriptNode();
+  ~LiveScriptNode() override;
 
   // LiveScript functions
   void compileAndRun();
@@ -346,6 +346,15 @@ static struct SharedData {
   size_t clientListSize;
 
   Coord3D gravity;
+
+  //FastLED Audio
+  uint8_t beatBrightness = 0;  // Decaying brightness for beat pulse
+  bool vocalsActive = false;
+  float vocalConfidence = 0;
+  float bassLevel = 0;
+  float trebleLevel = 0;
+  bool beat = false;
+
 } sharedData;
 
   /**
@@ -359,7 +368,8 @@ static struct SharedData {
   #include "MoonLight/Nodes/Drivers/D_ArtnetIn.h"
   #include "MoonLight/Nodes/Drivers/D_ArtnetOut.h"
   #include "MoonLight/Nodes/Drivers/D_AudioSync.h"
-  #include "MoonLight/Nodes/Drivers/D_FastLED.h"
+  #include "MoonLight/Nodes/Drivers/D_FastLEDDriver.h"
+  #include "MoonLight/Nodes/Drivers/D_FastLEDAudio.h"
   #include "MoonLight/Nodes/Drivers/D_Hub75.h"
   #include "MoonLight/Nodes/Drivers/D_Infrared.h"
   #include "MoonLight/Nodes/Drivers/D_IMU.h"
