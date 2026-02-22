@@ -347,11 +347,12 @@ static struct SharedData {
 
   Coord3D gravity;
 
-  //FastLED Audio
+  // FastLED Audio
   bool vocalsActive = false;
-  float vocalConfidence = 0;
-  float bassLevel = 0;
-  float trebleLevel = 0;
+  float vocalConfidence = 0.0f;
+  float bassLevel = 0.0f;
+  float midLevel = 0.0f;
+  float trebleLevel = 0.0f;
   bool beat = false;
 
 } sharedData;
@@ -367,11 +368,11 @@ static struct SharedData {
   #include "MoonLight/Nodes/Drivers/D_ArtnetIn.h"
   #include "MoonLight/Nodes/Drivers/D_ArtnetOut.h"
   #include "MoonLight/Nodes/Drivers/D_AudioSync.h"
-  #include "MoonLight/Nodes/Drivers/D_FastLEDDriver.h"
   #include "MoonLight/Nodes/Drivers/D_FastLEDAudio.h"
+  #include "MoonLight/Nodes/Drivers/D_FastLEDDriver.h"
   #include "MoonLight/Nodes/Drivers/D_Hub75.h"
-  #include "MoonLight/Nodes/Drivers/D_Infrared.h"
   #include "MoonLight/Nodes/Drivers/D_IMU.h"
+  #include "MoonLight/Nodes/Drivers/D_Infrared.h"
   #include "MoonLight/Nodes/Drivers/D_ParallelLEDDriver.h"
   #include "MoonLight/Nodes/Drivers/D__Sandbox.h"
   #include "MoonLight/Nodes/Effects/E_FastLED.h"

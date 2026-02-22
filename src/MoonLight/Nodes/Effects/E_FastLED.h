@@ -48,14 +48,16 @@ class FLAudioEffect : public Node {
   uint16_t hue = 0;
   uint8_t beatLevel = 0;
   float maxBass = 0;
+  float maxMid = 0;
   float maxTreble = 0;
   float maxVocal = 0;
 
   void loop() override {
     layer->fadeToBlackBy(70);
 
-    // maxLevels
+    // calculate max levels
     if (sharedData.bassLevel > maxBass) maxBass = sharedData.bassLevel;
+    if (sharedData.midLevel > maxMid) maxMid = sharedData.midLevel;
     if (sharedData.trebleLevel > maxTreble) maxTreble = sharedData.trebleLevel;
     if (sharedData.vocalConfidence > maxVocal) maxVocal = sharedData.vocalConfidence;
 
@@ -63,17 +65,21 @@ class FLAudioEffect : public Node {
 
     // EXT_LOGD(ML_TAG, "%f-%d %f-%d %d-%d %f-%d", sharedData.bassLevel, bassLevel, sharedData.trebleLevel, trebleLevel, sharedData.beat, beatLevel, sharedData.vocalsActive ? sharedData.vocalConfidence : 0, vocalsLevel);
 
-    layer->drawLine(0, layer->size.y - 1, 0, layer->size.y - 1 - layer->size.y * sharedData.bassLevel / maxBass, CRGB::Blue);
-    layer->drawLine(1, layer->size.y - 1, 1, layer->size.y - 1 - layer->size.y * sharedData.trebleLevel / maxTreble, CRGB::Orange);
-    layer->drawLine(2, layer->size.y - 1, 2, layer->size.y - 1 - layer->size.y * sharedData.vocalConfidence / maxVocal, CRGB::Green);
-    layer->drawLine(3, layer->size.y - 1, 3, layer->size.y - 1 - layer->size.y * beatLevel / 255, CRGB::Red);
+    uint8_t columnNr = 0;
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr++, layer->size.y - 1 - layer->size.y * sharedData.bassLevel / maxBass, CRGB::Red);
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr++, layer->size.y - 1 - layer->size.y * sharedData.midLevel / maxMid, CRGB::Orange);
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr++, layer->size.y - 1 - layer->size.y * sharedData.trebleLevel / maxTreble, CRGB::Green);
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr++, layer->size.y - 1 - layer->size.y * sharedData.vocalConfidence / maxVocal, CRGB::Blue);
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr++, layer->size.y - 1 - layer->size.y * beatLevel / 255, CRGB::Purple);
 
-    //correct if lower output
+    // correct for lower output
     if (maxBass > 0) maxBass -= 0.01;
+    if (maxMid > 0) maxMid -= 0.01;
     if (maxTreble > 0) maxTreble -= 0.01;
     if (maxVocal > 0) maxVocal -= 0.01;
 
-    if (beatLevel) beatLevel--;
+    // beat delay
+    if (beatLevel) beatLevel -= MIN(255/layer->size.y, beatLevel);
   }
 };
 
