@@ -34,6 +34,8 @@ class FastLEDAudioDriver : public Node {
 
   fl::AudioProcessor audioProcessor;
 
+  update_handler_id_t ioUpdateHandler;
+
   bool signalConditioning = true;
   bool autoGain = false;
   bool noiseFloorTracking = false;
@@ -48,7 +50,7 @@ class FastLEDAudioDriver : public Node {
     addControlValue("Right");
     addControlValue("Both");
 
-    moduleIO->addUpdateHandler([this](const String& originId) { readPins(); }, false);
+    ioUpdateHandler = moduleIO->addUpdateHandler([this](const String& originId) { readPins(); }, true);
     readPins();  // Node added at runtime so initial IO update not received so run explicitly
 
     audioProcessor.onBeat([]() {
@@ -81,7 +83,7 @@ class FastLEDAudioDriver : public Node {
     audioProcessor.onMid([](float level) {
       if (level > 0.01f) {
         sharedData.midLevel = level;
-        // EXT_LOGD(ML_TAG, "onBass: %f", level);
+        // EXT_LOGD(ML_TAG, "onMid: %f", level);
       }
     });
 
@@ -92,7 +94,8 @@ class FastLEDAudioDriver : public Node {
       }
     });
     audioProcessor.onPercussion([](fl::PercussionType type) {
-        EXT_LOGD(ML_TAG, "onPercussion: %d", type);
+      // EXT_LOGD(ML_TAG, "onPercussion: %d", type);
+      sharedData.percussionType = (uint8_t)type;
     });
   }
 
@@ -117,52 +120,43 @@ class FastLEDAudioDriver : public Node {
   uint8_t pinI2SWS = UINT8_MAX;
   uint8_t pinI2SSCK = UINT8_MAX;
 
+  bool updatePin(uint8_t& pin, const uint8_t pinUsage) {
+    bool i2sPinsChanged = false;
+    moduleIO->read(
+        [&](ModuleState& state) {
+          for (JsonObject pinObject : state.data["pins"].as<JsonArray>()) {
+            if (pinObject["usage"] == pinUsage && pin != pinObject["GPIO"]) {
+              pin = pinObject["GPIO"];
+              i2sPinsChanged = true;
+            }
+          }
+        },
+        name());
+    return i2sPinsChanged;  // an empty pin means it is not allocated anymore
+  }
+
   void readPins() {
     if (safeModeMB) {
       EXT_LOGW(ML_TAG, "Safe mode enabled, not adding pins");
       return;
     }
 
-    moduleIO->read(
-        [&](ModuleState& state) {
-          bool i2sPinsChanged = false;
-          for (JsonObject pinObject : state.data["pins"].as<JsonArray>()) {
-            uint8_t usage = pinObject["usage"];
-            switch (usage) {
-            case pin_I2S_SD:
-              if (pinI2SSD != pinObject["GPIO"]) {
-                pinI2SSD = pinObject["GPIO"];
-                i2sPinsChanged = true;
-              }
-              break;
-            case pin_I2S_WS:
-              if (pinI2SWS != pinObject["GPIO"]) {
-                pinI2SWS = pinObject["GPIO"];
-                i2sPinsChanged = true;
-              }
-              break;
-            case pin_I2S_SCK:
-              if (pinI2SSCK != pinObject["GPIO"]) {
-                pinI2SSCK = pinObject["GPIO"];
-                i2sPinsChanged = true;
-              }
-              break;
-            }
-          }
-          if (i2sPinsChanged && pinI2SSD != UINT8_MAX && pinI2SWS != UINT8_MAX && pinI2SSCK != UINT8_MAX) {
-            EXT_LOGI(ML_TAG, "(re)creating audioInput)");
+    bool changed = updatePin(pinI2SWS, pin_I2S_WS);
+    changed = updatePin(pinI2SSD, pin_I2S_SD) || changed;
+    changed = updatePin(pinI2SSCK, pin_I2S_SCK) || changed;
 
-            stopAudio();
-            startAudio();
-          }
-        },
-        name());
+    if (changed) {
+      EXT_LOGI(ML_TAG, "(re)creating audioInput %d %d %d", pinI2SWS, pinI2SSD, pinI2SSCK);
+      stopAudio();
+      if (pinI2SWS != UINT8_MAX && pinI2SSD != UINT8_MAX && pinI2SSCK != UINT8_MAX) startAudio();
+    }
   }
 
-  void loop20ms() override {
+  void loop() override {
     if (!audioInput) return;
 
     sharedData.beat = false;
+    sharedData.percussionType = UINT8_MAX;
 
     while (fl::AudioSample sample = audioInput->read()) {
       audioProcessor.update(sample);
@@ -202,7 +196,10 @@ class FastLEDAudioDriver : public Node {
     }
   }
 
-  ~FastLEDAudioDriver() override { stopAudio(); }
+  ~FastLEDAudioDriver() override {
+    stopAudio();
+    moduleIO->removeUpdateHandler(ioUpdateHandler);
+  }
 };
 
 #endif

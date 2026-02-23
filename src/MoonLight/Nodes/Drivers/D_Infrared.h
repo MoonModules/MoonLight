@@ -97,13 +97,15 @@ class IRDriver : public Node {
         IR_DRIVER_TAG);
   }
 
+  update_handler_id_t ioUpdateHandler;
+
   void setup() override {
     addControl(irPreset, "irPreset", "select");
     addControlValue("Swiss remote");
     addControlValue("Athom");  // see https://www.athom.tech/blank-1/wled-esp32-music-addressable-led-strip-controller
     addControlValue("Luxceo");
 
-    moduleIO->addUpdateHandler([this](const String& originId) { readPins(); }, false);
+    ioUpdateHandler = moduleIO->addUpdateHandler([this](const String& originId) { readPins(); }, false);
     readPins();  // Node added at runtime so initial IO update not received so run explicitly
   }
 
@@ -428,6 +430,8 @@ class IRDriver : public Node {
       }
     }
   };
+
+  ~IRDriver() { moduleIO->removeUpdateHandler(ioUpdateHandler); }
 };
 
 #endif

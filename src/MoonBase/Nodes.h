@@ -354,6 +354,7 @@ static struct SharedData {
   float midLevel = 0.0f;
   float trebleLevel = 0.0f;
   bool beat = false;
+  uint8_t percussionType = UINT8_MAX;
 
 } sharedData;
 

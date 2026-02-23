@@ -43,43 +43,44 @@ class FLAudioEffect : public Node {
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "⚡️🎵"; }
 
-  void setup() {}
+  uint8_t fade = 70;
 
-  uint16_t hue = 0;
+  void setup() { addControl(fade, "fade", "slider"); }
+
   uint8_t beatLevel = 0;
-  float maxBass = 0;
-  float maxMid = 0;
-  float maxTreble = 0;
-  float maxVocal = 0;
+  float maxBass = 255;
+  float maxMid = 255;
+  float maxTreble = 255;
+  float maxVocal = 255;
 
   void loop() override {
-    layer->fadeToBlackBy(70);
-
-    // calculate max levels
-    if (sharedData.bassLevel > maxBass) maxBass = sharedData.bassLevel;
-    if (sharedData.midLevel > maxMid) maxMid = sharedData.midLevel;
-    if (sharedData.trebleLevel > maxTreble) maxTreble = sharedData.trebleLevel;
-    if (sharedData.vocalConfidence > maxVocal) maxVocal = sharedData.vocalConfidence;
+    layer->fadeToBlackBy(fade);
 
     if (sharedData.beat) beatLevel = 255;
 
-    // EXT_LOGD(ML_TAG, "%f-%d %f-%d %d-%d %f-%d", sharedData.bassLevel, bassLevel, sharedData.trebleLevel, trebleLevel, sharedData.beat, beatLevel, sharedData.vocalsActive ? sharedData.vocalConfidence : 0, vocalsLevel);
+    // EXT_LOGD(ML_TAG, "%f %f %d %f", sharedData.bassLevel, sharedData.trebleLevel, sharedData.beat, beatLevel, sharedData.vocalsActive ? sharedData.vocalConfidence : 0);
 
     uint8_t columnNr = 0;
-    layer->drawLine(columnNr, layer->size.y - 1, columnNr++, layer->size.y - 1 - layer->size.y * sharedData.bassLevel / maxBass, CRGB::Red);
-    layer->drawLine(columnNr, layer->size.y - 1, columnNr++, layer->size.y - 1 - layer->size.y * sharedData.midLevel / maxMid, CRGB::Orange);
-    layer->drawLine(columnNr, layer->size.y - 1, columnNr++, layer->size.y - 1 - layer->size.y * sharedData.trebleLevel / maxTreble, CRGB::Green);
-    layer->drawLine(columnNr, layer->size.y - 1, columnNr++, layer->size.y - 1 - layer->size.y * sharedData.vocalConfidence / maxVocal, CRGB::Blue);
+    if (maxBass > 0.0f) layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.bassLevel / maxBass, CRGB::Red);
+    columnNr++;
+    if (maxMid > 0.0f) layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.midLevel / maxMid, CRGB::Orange);
+    columnNr++;
+    if (maxTreble > 0.0f) layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.trebleLevel / maxTreble, CRGB::Green);
+    columnNr++;
+    if (maxVocal > 0.0f) layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.vocalConfidence / maxVocal, CRGB::Blue);
+    columnNr++;
+    
+    // beat
     layer->drawLine(columnNr, layer->size.y - 1, columnNr++, layer->size.y - 1 - layer->size.y * beatLevel / 255, CRGB::Purple);
+    if (sharedData.beat) layer->setRGB(Coord3D(columnNr, layer->size.y - 1), CRGB::Purple);
+    columnNr++;
 
-    // correct for lower output
-    if (maxBass > 0) maxBass -= 0.01;
-    if (maxMid > 0) maxMid -= 0.01;
-    if (maxTreble > 0) maxTreble -= 0.01;
-    if (maxVocal > 0) maxVocal -= 0.01;
+    // percussion 
+    if (sharedData.percussionType != UINT8_MAX) layer->setRGB(Coord3D(columnNr + sharedData.percussionType, layer->size.y - 1), CRGB::Cyan);
+    columnNr+=3;
 
-    // beat delay
-    if (beatLevel) beatLevel -= MIN(255/layer->size.y, beatLevel);
+    // beat decay
+    if (beatLevel && layer->size.y > 0) beatLevel -= MIN(255 / layer->size.y, beatLevel);
   }
 };
 

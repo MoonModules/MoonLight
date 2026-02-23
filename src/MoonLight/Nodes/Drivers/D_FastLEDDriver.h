@@ -22,6 +22,9 @@ class FastLEDDriver : public DriverNode {
   static uint8_t dim() { return _NoD; }
   static const char* tags() { return "☸️"; }
 
+  update_handler_id_t ioUpdateHandler;
+  update_handler_id_t controlUpdateHandler;
+
   Char<32> version = FASTLED_BUILD;
   Char<32> status = "NoInit";
   Char<32> engine = "Auto";
@@ -59,7 +62,7 @@ class FastLEDDriver : public DriverNode {
     addControl(version, "version", "text", 0, 20, true);
     addControl(status, "status", "text", 0, 32, true);
 
-    moduleIO->addUpdateHandler(
+    ioUpdateHandler = moduleIO->addUpdateHandler(
         [this](const String& originId) {
           uint8_t nrOfPins = MIN(layerP.nrOfLedPins, layerP.nrOfAssignedPins);
 
@@ -70,7 +73,7 @@ class FastLEDDriver : public DriverNode {
           // should we check here for maxPower changes?
         },
         false);
-    moduleControl->addUpdateHandler([this](const String& originId) {
+    controlUpdateHandler = moduleControl->addUpdateHandler([this](const String& originId) {
       // brightness changes here?
     });
 
@@ -302,7 +305,7 @@ class FastLEDDriver : public DriverNode {
       CRGB* leds = (CRGB*)layerP.lights.channelsD;
       uint16_t startLed = 0;
 
-      FastLED.reset(ResetFlags::CHANNELS);
+      FastLED.clear(ClearFlags::CHANNELS);
 
       for (uint8_t pinIndex = 0; pinIndex < nrOfPins; pinIndex++) {
         EXT_LOGD(ML_TAG, "ledPin p:%d #:%d rgb:%d aff:%s", pins[pinIndex], layerP.ledsPerPin[pinIndex], rgbOrder, options.mAffinity.c_str());
@@ -349,7 +352,10 @@ class FastLEDDriver : public DriverNode {
     auto& events = FastLED.channelEvents();
     events.onChannelCreated.clear();
     events.onChannelEnqueued.clear();
-    FastLED.reset(ResetFlags::CHANNELS);
+    FastLED.clear(ClearFlags::CHANNELS);
+
+    moduleIO->removeUpdateHandler(ioUpdateHandler);
+    moduleControl->removeUpdateHandler(controlUpdateHandler);
   }
 };
 
