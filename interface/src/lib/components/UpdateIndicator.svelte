@@ -46,6 +46,7 @@
 					// check if the asset is of type *.bin
 					if (
 						results.assets[i].name.includes('.bin') &&
+						!results.assets[i].name.includes('webflash') && // 🌙
 						results.assets[i].name.includes(page.data.features.firmware_built_target)
 					) {
 						update = true;

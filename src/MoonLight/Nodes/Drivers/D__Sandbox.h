@@ -25,7 +25,7 @@ class ExampleDriver : public Node {
   void setup() override {
     // controls will show in the UI
     // for different type of controls see other Nodes
-    addControl(pin, "pin", "slider", 1, SOC_GPIO_PIN_COUNT - 1);
+    addControl(pin, "pin", "slider", 1, GPIO_PIN_COUNT - 1);
   }
 
   void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {

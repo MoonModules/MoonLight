@@ -1,6 +1,6 @@
 /**
     @title     MoonLight
-    @file      FastLED.h
+    @file      D_FastLEDDriver.h
     @repo      https://github.com/MoonModules/MoonLight, submit changes to this file as PRs
     @Authors   https://github.com/MoonModules/MoonLight/commits/main
     @Doc       https://moonmodules.org/MoonLight/moonlight/overview/
@@ -59,18 +59,16 @@ class FastLEDDriver : public DriverNode {
     addControl(version, "version", "text", 0, 20, true);
     addControl(status, "status", "text", 0, 32, true);
 
-    moduleIO->addUpdateHandler(
-        [this](const String& originId) {
-          uint8_t nrOfPins = MIN(layerP.nrOfLedPins, layerP.nrOfAssignedPins);
+    ioUpdateHandler = moduleIO->addUpdateHandler([this](const String& originId) {
+      uint8_t nrOfPins = MIN(layerP.nrOfLedPins, layerP.nrOfAssignedPins);
 
-          EXT_LOGD(ML_TAG, "recreate channels and configs %s %d", originId.c_str(), nrOfPins);
-          // do something similar as in destructor: delete existing channels
-          // do something similar as in onLayout: create new channels
+      EXT_LOGD(ML_TAG, "recreate channels and configs %s %d", originId.c_str(), nrOfPins);
+      // do something similar as in destructor: delete existing channels
+      // do something similar as in onLayout: create new channels
 
-          // should we check here for maxPower changes?
-        },
-        false);
-    moduleControl->addUpdateHandler([this](const String& originId) {
+      // should we check here for maxPower changes?
+    });
+    controlUpdateHandler = moduleControl->addUpdateHandler([this](const String& originId) {
       // brightness changes here?
     });
 
@@ -302,7 +300,7 @@ class FastLEDDriver : public DriverNode {
       CRGB* leds = (CRGB*)layerP.lights.channelsD;
       uint16_t startLed = 0;
 
-      FastLED.reset(ResetFlags::CHANNELS);
+      FastLED.clear(ClearFlags::CHANNELS);
 
       for (uint8_t pinIndex = 0; pinIndex < nrOfPins; pinIndex++) {
         EXT_LOGD(ML_TAG, "ledPin p:%d #:%d rgb:%d aff:%s", pins[pinIndex], layerP.ledsPerPin[pinIndex], rgbOrder, options.mAffinity.c_str());
@@ -349,8 +347,15 @@ class FastLEDDriver : public DriverNode {
     auto& events = FastLED.channelEvents();
     events.onChannelCreated.clear();
     events.onChannelEnqueued.clear();
-    FastLED.reset(ResetFlags::CHANNELS);
+    FastLED.clear(ClearFlags::CHANNELS);
+
+    moduleIO->removeUpdateHandler(ioUpdateHandler);
+    moduleControl->removeUpdateHandler(controlUpdateHandler);
   }
+
+ private:
+  update_handler_id_t ioUpdateHandler;
+  update_handler_id_t controlUpdateHandler;
 };
 
 #endif

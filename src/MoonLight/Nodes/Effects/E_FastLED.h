@@ -37,4 +37,47 @@ class RainbowEffect : public Node {
   }
 };
 
+class FLAudioEffect : public Node {
+ public:
+  static const char* name() { return "FLAudio"; }
+  static uint8_t dim() { return _2D; }
+  static const char* tags() { return "⚡️🎵"; }
+
+  uint8_t fade = 70;
+
+  void setup() { addControl(fade, "fade", "slider"); }
+
+  uint8_t beatLevel = 0;
+
+  void loop() override {
+    layer->fadeToBlackBy(fade);
+
+    if (sharedData.beat) beatLevel = 255;
+
+    // EXT_LOGD(ML_TAG, "%f %f %d %f", sharedData.bassLevel, sharedData.trebleLevel, sharedData.beat, beatLevel, sharedData.vocalsActive ? sharedData.vocalConfidence : 0);
+
+    uint8_t columnNr = 0;
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.bassLevel / 255.0f, CRGB::Red);
+    columnNr++;
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.midLevel / 255.0f, CRGB::Orange);
+    columnNr++;
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.trebleLevel / 255.0f, CRGB::Green);
+    columnNr++;
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.vocalConfidence / 255.0f, CRGB::Blue);
+    columnNr++;
+    
+    // beat
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr++, layer->size.y - 1 - layer->size.y * beatLevel / 255, CRGB::Purple);
+    if (sharedData.beat) layer->setRGB(Coord3D(columnNr, layer->size.y - 1), CRGB::Purple);
+    columnNr++;
+
+    // percussion 
+    if (sharedData.percussionType != UINT8_MAX) layer->setRGB(Coord3D(columnNr + sharedData.percussionType, layer->size.y - 1), CRGB::Cyan);
+    columnNr+=3;
+
+    // beat decay
+    if (beatLevel && layer->size.y > 0) beatLevel -= MIN(255 / layer->size.y, beatLevel);
+  }
+};
+
 #endif

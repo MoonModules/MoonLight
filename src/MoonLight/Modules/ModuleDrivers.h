@@ -73,13 +73,12 @@ class ModuleDrivers : public NodeManager {
           layerP.requestMapVirtual = true;
         },
         _moduleName);
-  } // readPins
+  }  // readPins
 
   void begin() override {
     defaultNodeName = "";  // getNameAndTags<PanelLayout>();
     nodes = &layerP.nodes;
     NodeManager::begin();
-
   }
 
   void addNodes(const JsonObject& control) override {
@@ -97,10 +96,12 @@ class ModuleDrivers : public NodeManager {
     addControlValue(control, getNameAndTags<SpiralLayout>());
     addControlValue(control, getNameAndTags<SingleRowLayout>());
     addControlValue(control, getNameAndTags<SingleColumnLayout>());
+    addControlValue(control, getNameAndTags<TubesLayout>());
 
     // Drivers, Most used first
     addControlValue(control, getNameAndTags<ParallelLEDDriver>());
     addControlValue(control, getNameAndTags<FastLEDDriver>());
+    addControlValue(control, getNameAndTags<FastLEDAudioDriver>());
     addControlValue(control, getNameAndTags<ArtNetInDriver>());
     addControlValue(control, getNameAndTags<ArtNetOutDriver>());
     addControlValue(control, getNameAndTags<AudioSyncDriver>());
@@ -135,10 +136,12 @@ class ModuleDrivers : public NodeManager {
     if (!node) node = checkAndAlloc<TorontoBarGourdsLayout>(name);
     if (!node) node = checkAndAlloc<SingleRowLayout>(name);
     if (!node) node = checkAndAlloc<SingleColumnLayout>(name);
+    if (!node) node = checkAndAlloc<TubesLayout>(name);
 
     // Drivers most used first
     if (!node) node = checkAndAlloc<ParallelLEDDriver>(name);
     if (!node) node = checkAndAlloc<FastLEDDriver>(name);
+    if (!node) node = checkAndAlloc<FastLEDAudioDriver>(name);
     if (!node) node = checkAndAlloc<ArtNetInDriver>(name);
     if (!node) node = checkAndAlloc<ArtNetOutDriver>(name);
     if (!node) node = checkAndAlloc<AudioSyncDriver>(name);
@@ -171,7 +174,7 @@ class ModuleDrivers : public NodeManager {
       node->moduleIO = _moduleIO;                                           // to get pin allocations
       node->moduleNodes = (Module*)this;                                    // to request UI update
       node->setup();                                                        // run the setup of the effect
-      node->onSizeChanged(Coord3D());     // to init memory allocations
+      node->onSizeChanged(Coord3D());                                       // to init memory allocations
       // layers[0]->nodes.reserve(index+1);
 
       // from here it runs concurrently in the drivers task

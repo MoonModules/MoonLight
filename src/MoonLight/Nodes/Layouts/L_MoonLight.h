@@ -9,6 +9,8 @@
     @license   For non GPL-v3 usage, commercial licenses must be purchased. Contact us for more information.
 **/
 
+#pragma once
+
 #if FT_MOONLIGHT
 
 class HumanSizedCubeLayout : public Node {
@@ -434,6 +436,36 @@ class SingleColumnLayout : public Node {
       }
     }
     nextPin(ledPinDIO == 0 ? UINT8_MAX : ledPinDIO - 1);  // all lights to one pin, default: use default
+  }
+};
+
+class TubesLayout : public Node {
+ public:
+  static const char* name() { return "Tubes"; }
+  static uint8_t dim() { return _2D; }
+  static const char* tags() { return "🚥"; }
+
+  uint8_t nrOfTubes = 4;
+  uint8_t ledsPerTube = 54;
+  uint8_t tubeDistance = 10;
+  bool reversed_order = false;
+
+  void setup() override {
+    addControl(nrOfTubes, "nrOfTubes", "slider");
+    addControl(ledsPerTube, "ledsPerTube", "slider");
+    addControl(tubeDistance, "tubeDistance", "slider");
+    addControl(reversed_order, "reversed order", "checkbox");
+  }
+
+  bool hasOnLayout() const override { return true; }
+  void onLayout() override {
+    for (int tube = 0; tube < nrOfTubes; tube++) {
+      SingleColumnLayout tubeLayout;
+      tubeLayout.height = ledsPerTube;
+      tubeLayout.reversed_order = reversed_order;
+      tubeLayout.xposition = tube * tubeDistance;
+      tubeLayout.onLayout();
+    }
   }
 };
 

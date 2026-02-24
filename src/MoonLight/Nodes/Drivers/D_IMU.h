@@ -36,7 +36,7 @@ class IMUDriver : public Node {
     addControlValue("BMI160");  // not supported yet
 
     // Subscribe to IO updates to detect when I2C becomes ready
-    moduleIO->addUpdateHandler([this](const String& originId) { moduleIO->read([&](ModuleState& state) { i2cActuallyReady = state.data["I2CReady"]; }, name()); }, false);
+    ioUpdateHandler = moduleIO->addUpdateHandler([this](const String& originId) { moduleIO->read([&](ModuleState& state) { i2cActuallyReady = state.data["I2CReady"]; }, name()); });
     // Read current I2C state in case boot-time handler dispatch already occurred
     moduleIO->read([this](ModuleState& state) { i2cActuallyReady = state.data["I2CReady"]; }, name());
     requestInitBoard = true;
@@ -207,9 +207,14 @@ class IMUDriver : public Node {
     }
   };
 
-  ~IMUDriver() override { stopBoard(); }
+  ~IMUDriver() override {
+    stopBoard();
+    moduleIO->removeUpdateHandler(ioUpdateHandler);
+  }
 
  private:
+  update_handler_id_t ioUpdateHandler;
+
   MPU6050 mpu;
 
   // MPU control/status vars

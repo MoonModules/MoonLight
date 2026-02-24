@@ -3560,14 +3560,18 @@ class WaterfallEffect : public Node {
       uint8_t pixCol = (log10f(myMajorPeak) - 2.26f) * 150;
       if (myMajorPeak < 182.0f) pixCol = 0;
 
-      for (int i = 0; i < layer->nrOfLights - 1; i++) layer->setRGB(i, layer->getRGB(i + 1));
+      for (int x = 0; x < layer->size.x; x++)
+        for (int z = 0; z < layer->size.z; z++)
+          for (int y = 0; y < layer->size.y - 1; y++) layer->setRGB(Coord3D(x, y, z), layer->getRGB(Coord3D(x, y + 1, z)));
 
       bool peak = sharedData.volume > 128.0f;
       if (peak) {
-        layer->setRGB(layer->nrOfLights - 1, CHSV(92, 92, 92));
+        for (int x = 0; x < layer->size.x; x++)
+          for (int z = 0; z < layer->size.z; z++) layer->setRGB(Coord3D(x, layer->size.y - 1, z), CHSV(92, 92, 92));
       } else {
         CRGB color = ColorFromPalette(layerP.palette, pixCol + intensity, 127 + myMagnitude / 2.0);
-        layer->setRGB(layer->nrOfLights - 1, color);  // blend(layerP.color2, color, (int)myMagnitude));
+        for (int x = 0; x < layer->size.x; x++)
+          for (int z = 0; z < layer->size.z; z++) layer->setRGB(Coord3D(x, layer->size.y - 1, z), color);  // blend(layerP.color2, color, (int)myMagnitude));
       }
     }
   }

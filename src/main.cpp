@@ -258,9 +258,10 @@ void setup() {
     if (Serial) Serial.printf("Serial init wait %d\n", i * 300);
   }
 
-  if (Serial) Serial.flush();
-
-  Serial.setDebugOutput(true);
+  if (Serial) {
+    Serial.flush();
+    // Serial.setDebugOutput(true); //causes all EXT_LOG to dissappear
+  }
 
   Serial.printf("C++ Standard: %ld\n", __cplusplus);  // 202002L
 
