@@ -73,13 +73,12 @@ class ModuleDrivers : public NodeManager {
           layerP.requestMapVirtual = true;
         },
         _moduleName);
-  } // readPins
+  }  // readPins
 
   void begin() override {
     defaultNodeName = "";  // getNameAndTags<PanelLayout>();
     nodes = &layerP.nodes;
     NodeManager::begin();
-
   }
 
   void addNodes(const JsonObject& control) override {
@@ -175,7 +174,7 @@ class ModuleDrivers : public NodeManager {
       node->moduleIO = _moduleIO;                                           // to get pin allocations
       node->moduleNodes = (Module*)this;                                    // to request UI update
       node->setup();                                                        // run the setup of the effect
-      node->onSizeChanged(Coord3D());     // to init memory allocations
+      node->onSizeChanged(Coord3D());                                       // to init memory allocations
       // layers[0]->nodes.reserve(index+1);
 
       // from here it runs concurrently in the drivers task

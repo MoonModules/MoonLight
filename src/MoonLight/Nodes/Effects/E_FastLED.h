@@ -48,10 +48,6 @@ class FLAudioEffect : public Node {
   void setup() { addControl(fade, "fade", "slider"); }
 
   uint8_t beatLevel = 0;
-  float maxBass = 255;
-  float maxMid = 255;
-  float maxTreble = 255;
-  float maxVocal = 255;
 
   void loop() override {
     layer->fadeToBlackBy(fade);
@@ -61,13 +57,13 @@ class FLAudioEffect : public Node {
     // EXT_LOGD(ML_TAG, "%f %f %d %f", sharedData.bassLevel, sharedData.trebleLevel, sharedData.beat, beatLevel, sharedData.vocalsActive ? sharedData.vocalConfidence : 0);
 
     uint8_t columnNr = 0;
-    if (maxBass > 0.0f) layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.bassLevel / maxBass, CRGB::Red);
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.bassLevel / 255.0f, CRGB::Red);
     columnNr++;
-    if (maxMid > 0.0f) layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.midLevel / maxMid, CRGB::Orange);
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.midLevel / 255.0f, CRGB::Orange);
     columnNr++;
-    if (maxTreble > 0.0f) layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.trebleLevel / maxTreble, CRGB::Green);
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.trebleLevel / 255.0f, CRGB::Green);
     columnNr++;
-    if (maxVocal > 0.0f) layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.vocalConfidence / maxVocal, CRGB::Blue);
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.vocalConfidence / 255.0f, CRGB::Blue);
     columnNr++;
     
     // beat

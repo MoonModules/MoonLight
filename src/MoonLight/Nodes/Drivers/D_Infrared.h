@@ -37,77 +37,27 @@ class IRDriver : public Node {
   uint8_t pinInfrared = UINT8_MAX;
   uint8_t irPreset = 1;
 
-  void readPins() {
-    if (safeModeMB) {
-      EXT_LOGW(ML_TAG, "Safe mode enabled, not adding pins");
-      return;
-    }
-
-    moduleIO->read(
-        [&](ModuleState& state) {
-          pinInfrared = UINT8_MAX;
-          for (JsonObject pinObject : state.data["pins"].as<JsonArray>()) {
-            uint8_t usage = pinObject["usage"];
-            uint8_t gpio = pinObject["GPIO"];
-            if (usage == pin_Infrared) {
-              if (GPIO_IS_VALID_GPIO(gpio)) {
-                pinInfrared = gpio;
-                EXT_LOGD(ML_TAG, "pin_Infrared found %d", pinInfrared);
-              } else {
-                EXT_LOGE(MB_TAG, "gpio %d not valid", pinInfrared);
-              }
-            }
-          }
-
-          if (pinInfrared != UINT8_MAX) {
-            EXT_LOGI(IR_DRIVER_TAG, "Changing to pin #%d", pinInfrared);
-
-            if (rx_channel) {
-              EXT_LOGI(IR_DRIVER_TAG, "Removing callback");
-              ESP_ERROR_CHECK(rmt_rx_register_event_callbacks(rx_channel, &cbs_empty, receive_queue));
-              EXT_LOGI(IR_DRIVER_TAG, "Stopping RMT reception");
-              ESP_ERROR_CHECK(rmt_disable(rx_channel));
-              EXT_LOGI(IR_DRIVER_TAG, "Deleting old RX channel");
-              ESP_ERROR_CHECK(rmt_del_channel(rx_channel));
-              rx_channel = NULL;
-            }
-
-            if (receive_queue) {
-              vQueueDelete(receive_queue);
-              receive_queue = NULL;
-            }
-
-            rx_channel_cfg.gpio_num = (gpio_num_t)pinInfrared;
-            EXT_LOGI(IR_DRIVER_TAG, "create RMT RX channel");
-            ESP_ERROR_CHECK(rmt_new_rx_channel(&rx_channel_cfg, &rx_channel));
-
-            EXT_LOGI(IR_DRIVER_TAG, "Enable RMT RX channel");
-            ESP_ERROR_CHECK(rmt_enable(rx_channel));
-
-            EXT_LOGI(IR_DRIVER_TAG, "Register RX done callback");
-            receive_queue = xQueueCreate(1, sizeof(rmt_rx_done_event_data_t));
-            assert(receive_queue);
-            ESP_ERROR_CHECK(rmt_rx_register_event_callbacks(rx_channel, &cbs, receive_queue));
-
-            EXT_LOGI(IR_DRIVER_TAG, "Arm receive");
-            ESP_ERROR_CHECK(rmt_receive(rx_channel, raw_symbols, sizeof(raw_symbols), &receive_config));
-          }
-          // for (int i = 0; i < sizeof(pins); i++) EXT_LOGD(ML_TAG, "pin %d = %d", i, pins[i]);
-        },
-        IR_DRIVER_TAG);
-  }
-
-  update_handler_id_t ioUpdateHandler;
-
   void setup() override {
     addControl(irPreset, "irPreset", "select");
     addControlValue("Swiss remote");
     addControlValue("Athom");  // see https://www.athom.tech/blank-1/wled-esp32-music-addressable-led-strip-controller
     addControlValue("Luxceo");
 
-    ioUpdateHandler = moduleIO->addUpdateHandler([this](const String& originId) { readPins(); }, false);
+    ioUpdateHandler = moduleIO->addUpdateHandler([this](const String& originId) { readPins(); });
     readPins();  // Node added at runtime so initial IO update not received so run explicitly
   }
+
+  void loop() override {
+    if (receive_queue) {
+      if (xQueueReceive(receive_queue, &rx_data, 0) == pdPASS) {
+        if (rx_data.num_symbols != 1) EXT_LOGD(IR_DRIVER_TAG, "Received symbols: #%d", rx_data.num_symbols);  // will not be processed (only 34 and 2)
+        // parse the receive symbols and print the result
+        parse_nec_frame(rx_data.received_symbols, rx_data.num_symbols);
+        // start receive again
+        ESP_ERROR_CHECK(rmt_receive(rx_channel, raw_symbols, sizeof(raw_symbols), &receive_config));
+      }
+    }
+  };
 
   uint32_t codeOn;
   uint32_t codeOff;
@@ -419,19 +369,80 @@ class IRDriver : public Node {
         IR_DRIVER_TAG);
   }
 
-  void loop() override {
-    if (receive_queue) {
-      if (xQueueReceive(receive_queue, &rx_data, 0) == pdPASS) {
-        if (rx_data.num_symbols != 1) EXT_LOGD(IR_DRIVER_TAG, "Received symbols: #%d", rx_data.num_symbols);  // will not be processed (only 34 and 2)
-        // parse the receive symbols and print the result
-        parse_nec_frame(rx_data.received_symbols, rx_data.num_symbols);
-        // start receive again
-        ESP_ERROR_CHECK(rmt_receive(rx_channel, raw_symbols, sizeof(raw_symbols), &receive_config));
-      }
+  void readPins() {
+    if (safeModeMB) {
+      EXT_LOGW(ML_TAG, "Safe mode enabled, not adding pins");
+      return;
     }
-  };
 
-  ~IRDriver() { moduleIO->removeUpdateHandler(ioUpdateHandler); }
+    moduleIO->read(
+        [&](ModuleState& state) {
+          pinInfrared = UINT8_MAX;
+          for (JsonObject pinObject : state.data["pins"].as<JsonArray>()) {
+            uint8_t usage = pinObject["usage"];
+            uint8_t gpio = pinObject["GPIO"];
+            if (usage == pin_Infrared) {
+              if (GPIO_IS_VALID_GPIO(gpio)) {
+                pinInfrared = gpio;
+                EXT_LOGD(ML_TAG, "pin_Infrared found %d", pinInfrared);
+              } else {
+                EXT_LOGE(MB_TAG, "gpio %d not valid", pinInfrared);
+              }
+            }
+          }
+
+          if (pinInfrared != UINT8_MAX) {
+            stopService();
+            startService();
+          }
+          // for (int i = 0; i < sizeof(pins); i++) EXT_LOGD(ML_TAG, "pin %d = %d", i, pins[i]);
+        },
+        IR_DRIVER_TAG);
+  }
+
+  void stopService() {
+    if (rx_channel) {
+      EXT_LOGI(IR_DRIVER_TAG, "Removing callback");
+      ESP_ERROR_CHECK(rmt_rx_register_event_callbacks(rx_channel, &cbs_empty, receive_queue));
+      EXT_LOGI(IR_DRIVER_TAG, "Stopping RMT reception");
+      ESP_ERROR_CHECK(rmt_disable(rx_channel));
+      EXT_LOGI(IR_DRIVER_TAG, "Deleting old RX channel");
+      ESP_ERROR_CHECK(rmt_del_channel(rx_channel));
+      rx_channel = NULL;
+    }
+
+    if (receive_queue) {
+      vQueueDelete(receive_queue);
+      receive_queue = NULL;
+    }
+  }
+
+  void startService() {
+    EXT_LOGI(IR_DRIVER_TAG, "Changing to pin #%d", pinInfrared);
+
+    rx_channel_cfg.gpio_num = (gpio_num_t)pinInfrared;
+    EXT_LOGI(IR_DRIVER_TAG, "create RMT RX channel");
+    ESP_ERROR_CHECK(rmt_new_rx_channel(&rx_channel_cfg, &rx_channel));
+
+    EXT_LOGI(IR_DRIVER_TAG, "Enable RMT RX channel");
+    ESP_ERROR_CHECK(rmt_enable(rx_channel));
+
+    EXT_LOGI(IR_DRIVER_TAG, "Register RX done callback");
+    receive_queue = xQueueCreate(1, sizeof(rmt_rx_done_event_data_t));
+    assert(receive_queue);
+    ESP_ERROR_CHECK(rmt_rx_register_event_callbacks(rx_channel, &cbs, receive_queue));
+
+    EXT_LOGI(IR_DRIVER_TAG, "Arm receive");
+    ESP_ERROR_CHECK(rmt_receive(rx_channel, raw_symbols, sizeof(raw_symbols), &receive_config));
+  }
+
+  ~IRDriver() {
+    moduleIO->removeUpdateHandler(ioUpdateHandler);
+    stopService();
+  }
+
+ private:
+  update_handler_id_t ioUpdateHandler;
 };
 
 #endif

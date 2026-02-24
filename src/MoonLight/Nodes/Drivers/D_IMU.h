@@ -20,8 +20,6 @@ class IMUDriver : public Node {
   static uint8_t dim() { return _NoD; }
   static const char* tags() { return "☸️"; }
 
-  update_handler_id_t ioUpdateHandler;
-
   bool motionTrackingReady = false;  // set true if DMP init was successful
 
   Coord3D gyro;  // in degrees (not radians)
@@ -38,7 +36,7 @@ class IMUDriver : public Node {
     addControlValue("BMI160");  // not supported yet
 
     // Subscribe to IO updates to detect when I2C becomes ready
-    ioUpdateHandler = moduleIO->addUpdateHandler([this](const String& originId) { moduleIO->read([&](ModuleState& state) { i2cActuallyReady = state.data["I2CReady"]; }, name()); }, false);
+    ioUpdateHandler = moduleIO->addUpdateHandler([this](const String& originId) { moduleIO->read([&](ModuleState& state) { i2cActuallyReady = state.data["I2CReady"]; }, name()); });
     // Read current I2C state in case boot-time handler dispatch already occurred
     moduleIO->read([this](ModuleState& state) { i2cActuallyReady = state.data["I2CReady"]; }, name());
     requestInitBoard = true;
@@ -215,6 +213,8 @@ class IMUDriver : public Node {
   }
 
  private:
+  update_handler_id_t ioUpdateHandler;
+
   MPU6050 mpu;
 
   // MPU control/status vars

@@ -34,8 +34,6 @@ class FastLEDAudioDriver : public Node {
 
   fl::AudioProcessor audioProcessor;
 
-  update_handler_id_t ioUpdateHandler;
-
   bool signalConditioning = true;
   bool autoGain = false;
   bool noiseFloorTracking = false;
@@ -50,7 +48,7 @@ class FastLEDAudioDriver : public Node {
     addControlValue("Right");
     addControlValue("Both");
 
-    ioUpdateHandler = moduleIO->addUpdateHandler([this](const String& originId) { readPins(); }, true);
+    ioUpdateHandler = moduleIO->addUpdateHandler([this](const String& originId) { readPins(); });
     readPins();  // Node added at runtime so initial IO update not received so run explicitly
 
     audioProcessor.onBeat([]() {
@@ -111,8 +109,8 @@ class FastLEDAudioDriver : public Node {
     }
     if (control["name"] == "channel" && oldValue != "") {  // not on boot as readPins will do it then
       // recreate with the new channel
-      stopAudio();
-      startAudio();
+      stopService();
+      startService();
     }
   }
 
@@ -120,19 +118,30 @@ class FastLEDAudioDriver : public Node {
   uint8_t pinI2SWS = UINT8_MAX;
   uint8_t pinI2SSCK = UINT8_MAX;
 
-  bool updatePin(uint8_t& pin, const uint8_t pinUsage) {
-    bool i2sPinsChanged = false;
+  bool updatePin(uint8_t& pin, const uint8_t pinUsage, bool checkOut = false) {
+    uint8_t oldPin = pin;
+    pin = UINT8_MAX;  // Assume deleted until found
+
     moduleIO->read(
         [&](ModuleState& state) {
           for (JsonObject pinObject : state.data["pins"].as<JsonArray>()) {
-            if (pinObject["usage"] == pinUsage && pin != pinObject["GPIO"]) {
-              pin = pinObject["GPIO"];
-              i2sPinsChanged = true;
-            }
+            uint8_t gpio = pinObject["GPIO"];
+            if (GPIO_IS_VALID_GPIO(gpio) && gpio < GPIO_PIN_COUNT && (!checkOut || GPIO_IS_VALID_OUTPUT_GPIO(gpio))) {
+              if (pinObject["usage"] == pinUsage && pin != gpio) {
+                pin = gpio;
+                break;
+              }
+            } else
+              EXT_LOGW(MB_TAG, "Pin %d (u:%d) not valid (o:%d)", gpio, pinUsage, checkOut);
           }
         },
         name());
-    return i2sPinsChanged;  // an empty pin means it is not allocated anymore
+    if (pin != oldPin) {
+      return true;
+    } else {
+      pin = oldPin;  // set the original value
+      return false;
+    }
   }
 
   void readPins() {
@@ -147,8 +156,8 @@ class FastLEDAudioDriver : public Node {
 
     if (changed) {
       EXT_LOGI(ML_TAG, "(re)creating audioInput %d %d %d", pinI2SWS, pinI2SSD, pinI2SSCK);
-      stopAudio();
-      if (pinI2SWS != UINT8_MAX && pinI2SSD != UINT8_MAX && pinI2SSCK != UINT8_MAX) startAudio();
+      stopService();
+      if (pinI2SWS != UINT8_MAX && pinI2SSD != UINT8_MAX && pinI2SSCK != UINT8_MAX) startService();
     }
   }
 
@@ -163,7 +172,7 @@ class FastLEDAudioDriver : public Node {
     }
   }
 
-  void startAudio() {
+  void startService() {
     // Create configuration objects
     i2sConfig = new fl::AudioConfigI2S(pinI2SWS, pinI2SSD, pinI2SSCK, 0, channel == 1 ? fl::Right : channel == 2 ? fl::Both : fl::Left, 44100, 16, fl::Philips);
 
@@ -178,7 +187,7 @@ class FastLEDAudioDriver : public Node {
     audioInput->start();
   }
 
-  void stopAudio() {
+  void stopService() {
     if (audioInput) {
       audioInput->stop();
       audioInput.reset();  // Explicitly release shared_ptr, even makes it a nullptr...
@@ -197,9 +206,12 @@ class FastLEDAudioDriver : public Node {
   }
 
   ~FastLEDAudioDriver() override {
-    stopAudio();
+    stopService();
     moduleIO->removeUpdateHandler(ioUpdateHandler);
   }
+
+ private:
+  update_handler_id_t ioUpdateHandler;
 };
 
 #endif

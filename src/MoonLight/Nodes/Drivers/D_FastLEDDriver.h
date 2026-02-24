@@ -22,9 +22,6 @@ class FastLEDDriver : public DriverNode {
   static uint8_t dim() { return _NoD; }
   static const char* tags() { return "☸️"; }
 
-  update_handler_id_t ioUpdateHandler;
-  update_handler_id_t controlUpdateHandler;
-
   Char<32> version = FASTLED_BUILD;
   Char<32> status = "NoInit";
   Char<32> engine = "Auto";
@@ -62,17 +59,15 @@ class FastLEDDriver : public DriverNode {
     addControl(version, "version", "text", 0, 20, true);
     addControl(status, "status", "text", 0, 32, true);
 
-    ioUpdateHandler = moduleIO->addUpdateHandler(
-        [this](const String& originId) {
-          uint8_t nrOfPins = MIN(layerP.nrOfLedPins, layerP.nrOfAssignedPins);
+    ioUpdateHandler = moduleIO->addUpdateHandler([this](const String& originId) {
+      uint8_t nrOfPins = MIN(layerP.nrOfLedPins, layerP.nrOfAssignedPins);
 
-          EXT_LOGD(ML_TAG, "recreate channels and configs %s %d", originId.c_str(), nrOfPins);
-          // do something similar as in destructor: delete existing channels
-          // do something similar as in onLayout: create new channels
+      EXT_LOGD(ML_TAG, "recreate channels and configs %s %d", originId.c_str(), nrOfPins);
+      // do something similar as in destructor: delete existing channels
+      // do something similar as in onLayout: create new channels
 
-          // should we check here for maxPower changes?
-        },
-        false);
+      // should we check here for maxPower changes?
+    });
     controlUpdateHandler = moduleControl->addUpdateHandler([this](const String& originId) {
       // brightness changes here?
     });
@@ -357,6 +352,10 @@ class FastLEDDriver : public DriverNode {
     moduleIO->removeUpdateHandler(ioUpdateHandler);
     moduleControl->removeUpdateHandler(controlUpdateHandler);
   }
+
+ private:
+  update_handler_id_t ioUpdateHandler;
+  update_handler_id_t controlUpdateHandler;
 };
 
 #endif

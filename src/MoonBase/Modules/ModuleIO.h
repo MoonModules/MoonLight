@@ -157,7 +157,7 @@ class ModuleIO : public Module {
 
     rows = control["n"].to<JsonArray>();
     {
-      control = addControl(rows, "GPIO", "number", 0, SOC_GPIO_PIN_COUNT - 1, true);  // ro
+      control = addControl(rows, "GPIO", "number", 0, GPIO_PIN_COUNT - 1, true);  // ro
 
       control = addControl(rows, "usage", "select");
       control["default"] = 0;
@@ -272,7 +272,7 @@ class ModuleIO : public Module {
     PinAssigner pinAssigner(pins);
 
     // reset all pins
-    for (int gpio_num = 0; gpio_num < SOC_GPIO_PIN_COUNT; gpio_num++) {
+    for (int gpio_num = 0; gpio_num < GPIO_PIN_COUNT; gpio_num++) {
       JsonObject pin = pins.add<JsonObject>();
       pin["GPIO"] = gpio_num;
       pin["usage"] = 0;
