@@ -63,6 +63,7 @@
 			// check if the asset is of type *.bin
 			if (
 				release.assets[i].name.includes('.bin') &&
+				!release.assets[i].name.includes('webflash') && // 🌙
 				release.assets[i].name.includes(page.data.features.firmware_built_target)
 			) {
 				url = release.assets[i].browser_download_url;

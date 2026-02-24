@@ -110,7 +110,7 @@ class Module : public StatefulService<ModuleState> {
 
   // run in sveltekit task
   virtual void loop() {}
-  virtual void loop20ms() { // any Module that overrides loop20ms() must continue to call Module::loop20ms()
+  virtual void loop20ms() {  // any Module that overrides loop20ms() must continue to call Module::loop20ms()
     if (requestUIUpdate) {
       requestUIUpdate = false;  // reset the flag
       EXT_LOGD(ML_TAG, "requestUIUpdate %s", _moduleName);
@@ -155,6 +155,32 @@ class Module : public StatefulService<ModuleState> {
   // called from compareRecursive
   virtual void onUpdate(const UpdatedItem& updatedItem, const String& originId) {};
   virtual void onReOrderSwap(uint8_t stateIndex, uint8_t newIndex) {};
+
+  bool updatePin(uint8_t& pin, const uint8_t pinUsage, bool checkOut = false) {
+    uint8_t oldPin = pin;
+    pin = UINT8_MAX;  // Assume deleted until found
+
+    read(
+        [&](ModuleState& state) {
+          for (JsonObject pinObject : state.data["pins"].as<JsonArray>()) {
+            uint8_t gpio = pinObject["GPIO"];
+            if (GPIO_IS_VALID_GPIO(gpio) && gpio < GPIO_PIN_COUNT && (!checkOut || GPIO_IS_VALID_OUTPUT_GPIO(gpio))) {
+              if (pinObject["usage"] == pinUsage && pin != gpio) {
+                pin = gpio;
+                break;
+              }
+            } else
+              EXT_LOGW(MB_TAG, "Pin %d (u:%d) not valid (o:%d)", gpio, pinUsage, checkOut);
+          }
+        },
+        _moduleName);
+    if (pin != oldPin) {
+      return true;
+    } else {
+      pin = oldPin;  // set the original value
+      return false;
+    }
+  }
 
  protected:
   EventSocket* _socket;

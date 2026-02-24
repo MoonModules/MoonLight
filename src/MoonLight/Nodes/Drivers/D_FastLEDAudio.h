@@ -118,41 +118,15 @@ class FastLEDAudioDriver : public Node {
   uint8_t pinI2SWS = UINT8_MAX;
   uint8_t pinI2SSCK = UINT8_MAX;
 
-  bool updatePin(uint8_t& pin, const uint8_t pinUsage, bool checkOut = false) {
-    uint8_t oldPin = pin;
-    pin = UINT8_MAX;  // Assume deleted until found
-
-    moduleIO->read(
-        [&](ModuleState& state) {
-          for (JsonObject pinObject : state.data["pins"].as<JsonArray>()) {
-            uint8_t gpio = pinObject["GPIO"];
-            if (GPIO_IS_VALID_GPIO(gpio) && gpio < GPIO_PIN_COUNT && (!checkOut || GPIO_IS_VALID_OUTPUT_GPIO(gpio))) {
-              if (pinObject["usage"] == pinUsage && pin != gpio) {
-                pin = gpio;
-                break;
-              }
-            } else
-              EXT_LOGW(MB_TAG, "Pin %d (u:%d) not valid (o:%d)", gpio, pinUsage, checkOut);
-          }
-        },
-        name());
-    if (pin != oldPin) {
-      return true;
-    } else {
-      pin = oldPin;  // set the original value
-      return false;
-    }
-  }
-
   void readPins() {
     if (safeModeMB) {
       EXT_LOGW(ML_TAG, "Safe mode enabled, not adding pins");
       return;
     }
 
-    bool changed = updatePin(pinI2SWS, pin_I2S_WS);
-    changed = updatePin(pinI2SSD, pin_I2S_SD) || changed;
-    changed = updatePin(pinI2SSCK, pin_I2S_SCK) || changed;
+    bool changed = moduleIO->updatePin(pinI2SWS, pin_I2S_WS);
+    changed = moduleIO->updatePin(pinI2SSD, pin_I2S_SD) || changed;
+    changed = moduleIO->updatePin(pinI2SSCK, pin_I2S_SCK) || changed;
 
     if (changed) {
       EXT_LOGI(ML_TAG, "(re)creating audioInput %d %d %d", pinI2SWS, pinI2SSD, pinI2SSCK);

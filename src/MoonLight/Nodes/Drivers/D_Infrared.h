@@ -375,29 +375,13 @@ class IRDriver : public Node {
       return;
     }
 
-    moduleIO->read(
-        [&](ModuleState& state) {
-          pinInfrared = UINT8_MAX;
-          for (JsonObject pinObject : state.data["pins"].as<JsonArray>()) {
-            uint8_t usage = pinObject["usage"];
-            uint8_t gpio = pinObject["GPIO"];
-            if (usage == pin_Infrared) {
-              if (GPIO_IS_VALID_GPIO(gpio)) {
-                pinInfrared = gpio;
-                EXT_LOGD(ML_TAG, "pin_Infrared found %d", pinInfrared);
-              } else {
-                EXT_LOGE(MB_TAG, "gpio %d not valid", pinInfrared);
-              }
-            }
-          }
-
-          if (pinInfrared != UINT8_MAX) {
-            stopService();
-            startService();
-          }
-          // for (int i = 0; i < sizeof(pins); i++) EXT_LOGD(ML_TAG, "pin %d = %d", i, pins[i]);
-        },
-        IR_DRIVER_TAG);
+    if (moduleIO->updatePin(pinInfrared, pin_Infrared)) {
+      stopService();
+      if (pinInfrared != UINT8_MAX) {
+        // start
+        startService();
+      }
+    }
   }
 
   void stopService() {
@@ -436,7 +420,7 @@ class IRDriver : public Node {
     ESP_ERROR_CHECK(rmt_receive(rx_channel, raw_symbols, sizeof(raw_symbols), &receive_config));
   }
 
-  ~IRDriver() {
+  ~IRDriver() override {
     moduleIO->removeUpdateHandler(ioUpdateHandler);
     stopService();
   }
