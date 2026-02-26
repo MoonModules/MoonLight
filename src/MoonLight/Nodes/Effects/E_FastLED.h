@@ -57,13 +57,13 @@ class FLAudioEffect : public Node {
     // EXT_LOGD(ML_TAG, "%f %f %d %f", sharedData.bassLevel, sharedData.trebleLevel, sharedData.beat, beatLevel, sharedData.vocalsActive ? sharedData.vocalConfidence : 0);
 
     uint8_t columnNr = 0;
-    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.bassLevel / 255.0f, CRGB::Red);
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.bassLevel, CRGB::Red);
     columnNr++;
-    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.midLevel / 255.0f, CRGB::Orange);
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.midLevel, CRGB::Orange);
     columnNr++;
-    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.trebleLevel / 255.0f, CRGB::Green);
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.trebleLevel, CRGB::Green);
     columnNr++;
-    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.vocalConfidence / 255.0f, CRGB::Blue);
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.vocalConfidence, CRGB::Blue);
     columnNr++;
     
     // beat

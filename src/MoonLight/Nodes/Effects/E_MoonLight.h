@@ -24,6 +24,7 @@ class SolidEffect : public Node {
   uint8_t blue = 98;
   uint8_t white = 0;
   uint8_t brightness = 255;
+  bool usePalette = false;
 
   void setup() override {
     addControl(red, "red", "slider");
@@ -31,12 +32,33 @@ class SolidEffect : public Node {
     addControl(blue, "blue", "slider");
     addControl(white, "white", "slider");
     addControl(brightness, "brightness", "slider");
+    addControl(usePalette, "usePalette", "checkbox");
   }
 
   void loop() override {
-    layer->fill_solid(CRGB(red * brightness / 255, green * brightness / 255, blue * brightness / 255));
-    if (layerP.lights.header.offsetWhite != UINT8_MAX && white > 0)
-      for (int index = 0; index < layer->nrOfLights; index++) layer->setWhite(index, white * brightness / 255);
+    if (usePalette) {
+      uint16_t avgRed = 0;
+      uint16_t avgGreen = 0;
+      uint16_t avgBlue = 0;
+      uint8_t nrOfColors = 0;
+      for (int index = 0; index < 16; index++) {
+        CRGB color = ColorFromPalette(layerP.palette, 127);
+        if (color != CRGB::Black) {
+          avgRed += color.red;
+          avgGreen += color.green;
+          avgBlue += color.blue;
+          nrOfColors++;
+        }
+      }
+      avgRed /= nrOfColors;
+      avgGreen /= nrOfColors;
+      avgBlue /= nrOfColors;
+      for (int index = 0; index < layer->nrOfLights; index++) layer->setRGB(index, CRGB(avgRed, avgGreen, avgBlue));
+    } else {
+      layer->fill_solid(CRGB(red * brightness / 255, green * brightness / 255, blue * brightness / 255));
+      if (layerP.lights.header.offsetWhite != UINT8_MAX && white > 0)
+        for (int index = 0; index < layer->nrOfLights; index++) layer->setWhite(index, white * brightness / 255);
+    }
   }
 };
 
