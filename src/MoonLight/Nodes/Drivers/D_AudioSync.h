@@ -11,7 +11,7 @@
 
 #if FT_MOONLIGHT
 
-  #include <WLED-sync.h>  // https://github.com/netmindz/WLED-sync
+  #include <audio_sync.h>  // https://github.com/netmindz/WLED-AudioReactive-Usermod
   #include <WiFi.h>
 
 class AudioSyncDriver : public Node {
@@ -20,7 +20,7 @@ class AudioSyncDriver : public Node {
   static uint8_t dim() { return _NoD; }
   static const char* tags() { return "☸️♫"; }
 
-  WLEDSync sync;
+  AudioSync sync;
   bool init = false;
 
   void loop() override {
@@ -39,16 +39,21 @@ class AudioSyncDriver : public Node {
     }
 
     if (!init) {
+      AudioSync::Config config;
+      config.enableReceive = true;
+      config.enableTransmit = false;
+      sync.configure(config);
       sync.begin();
       init = true;
       EXT_LOGI(ML_TAG, "Audio Sync: Initialized");
     }
 
-    if (sync.read()) {
-      memcpy(sharedData.bands, sync.fftResult, sizeof(sharedData.bands));
-      sharedData.volume = sync.volumeSmth;
-      sharedData.volumeRaw = sync.volumeRaw;
-      sharedData.majorPeak = sync.FFT_MajorPeak;
+    if (sync.receive()) {
+      const AudioSync::ReceivedData& data = sync.getReceivedData();
+      memcpy(sharedData.bands, data.fftResult, sizeof(sharedData.bands));
+      sharedData.volume = data.volumeSmth;
+      sharedData.volumeRaw = data.volumeRaw;
+      sharedData.majorPeak = data.fftMajorPeak;
 
       moduleControl->read(
           [&](const ModuleState& state) {
