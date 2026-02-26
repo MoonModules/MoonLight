@@ -548,7 +548,7 @@ const char* const palette_names[] = {"Cloud⚡️💙",       "Forest⚡️💚"
                                      "Cyane🩷",         "Departure💚-",
                                      "Drywet💙",  //
                                      "Fairy Reaf💜",  "Fire❤️-",      "Grintage🩷",    "Hult💜",
-                                     "Hult 64💚",       "Icefire💙",     "Jul💚",         "Landscape💚",
+                                     "Hult 64💚",       "Icefire💙",     "Jul💚",         "Landscape💚-",
                                      "Light Pink🤍-",  //
                                      "Lite Light💜-",    "Magenta💙",     "Magred💜-",      "Orange & Teal🤍",
                                      "Orangery💛",      "Pastel🤍",      "Pink Candy🩷",  "Red & Blue💙",

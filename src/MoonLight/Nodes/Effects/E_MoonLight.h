@@ -37,23 +37,23 @@ class SolidEffect : public Node {
 
   void loop() override {
     if (usePalette) {
-      uint16_t avgRed = 0;
-      uint16_t avgGreen = 0;
-      uint16_t avgBlue = 0;
-      uint8_t nrOfColors = 0;
-      for (int index = 0; index < 16; index++) {
-        CRGB color = ColorFromPalette(layerP.palette, 127);
+      // Square-Root Averaging 
+      uint32_t sumRedSq = 0, sumGreenSq = 0, sumBlueSq = 0;
+      uint16_t nrOfColors = 0;
+
+      for (int index = 0; index < 256; index++) {  // Sample entire palette
+        CRGB color = ColorFromPalette(layerP.palette, index);
         if (color != CRGB::Black) {
-          avgRed += color.red;
-          avgGreen += color.green;
-          avgBlue += color.blue;
+          sumRedSq += color.red * color.red;
+          sumGreenSq += color.green * color.green;
+          sumBlueSq += color.blue * color.blue;
           nrOfColors++;
         }
       }
-      avgRed /= nrOfColors;
-      avgGreen /= nrOfColors;
-      avgBlue /= nrOfColors;
-      for (int index = 0; index < layer->nrOfLights; index++) layer->setRGB(index, CRGB(avgRed, avgGreen, avgBlue));
+
+      CRGB color = CRGB(sqrt(sumRedSq / nrOfColors), sqrt(sumGreenSq / nrOfColors), sqrt(sumBlueSq / nrOfColors));
+
+      for (int index = 0; index < layer->nrOfLights; index++) layer->setRGB(index, color);
     } else {
       layer->fill_solid(CRGB(red * brightness / 255, green * brightness / 255, blue * brightness / 255));
       if (layerP.lights.header.offsetWhite != UINT8_MAX && white > 0)
