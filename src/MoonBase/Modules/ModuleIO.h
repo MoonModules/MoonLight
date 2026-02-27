@@ -684,7 +684,6 @@ class ModuleIO : public Module {
     // Handle boardPreset changes
     if (updatedItem.name == "boardPreset") {
       // Only load board defaults if modded is false
-      // This handles: boot initialization, UI changes, but NOT when modded=true
       if (_state.data["modded"] == false) {
         EXT_LOGD(MB_TAG, "newBoardID %s %s[%d]%s[%d].%s = %s -> %s", originId.c_str(), updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
         newBoardID = updatedItem.value;  // Will be processed in loop20ms
@@ -700,9 +699,7 @@ class ModuleIO : public Module {
         EXT_LOGD(MB_TAG, "modded set to false - reloading board defaults");
         newBoardID = _state.data["boardPreset"];  // Reload current board
       }
-      // When modded is set to true, do nothing (keep current custom pins)
     } else if (updatedItem.name == "switch1" || updatedItem.name == "switch2") {
-      newState["modded"] = true;
       // Rebuild pins with new switch settings
       EXT_LOGD(MB_TAG, "switch changed - rebuilding board defaults");
       newBoardID = _state.data["boardPreset"];
@@ -737,26 +734,35 @@ class ModuleIO : public Module {
     }
   }
 
-  bool _initialPinReadDone = false;
+  bool _initialUpdateDone = false;
 
   void loop20ms() override {
     // run in sveltekit task
     Module::loop20ms();
 
-    // update board presets
+    // Update board presets
     if (newBoardID != UINT8_MAX) {
-      setBoardPresetDefaults(newBoardID);  // run from sveltekit task
+      setBoardPresetDefaults(newBoardID);
       newBoardID = UINT8_MAX;
-      _initialPinReadDone = true;
+      _initialUpdateDone = true;
     }
 
-    // during boot, the IO module is unchanged, not triggering updates, so need to do it manually
-    if (!_initialPinReadDone) {
-      callUpdateHandlers(_moduleName);  // calls readPins for all subscribed handlers
-      _initialPinReadDone = true;
+    // During boot, handle boardPreset from file if modded=false
+    // This runs AFTER file load completes and all values (including modded) are restored
+    if (!_initialUpdateDone) {
+      if (_state.data["modded"] == false) {
+        uint8_t boardPreset = _state.data["boardPreset"];
+        EXT_LOGD(MB_TAG, "Applying board preset %d defaults from file (modded=false)", boardPreset);
+        newBoardID = boardPreset;
+        // Will be processed in next loop20ms iteration at top, setting _initialUpdateDone
+      } else {
+        EXT_LOGD(MB_TAG, "Skipping board preset defaults - using custom pins from file (modded=true)");
+        callUpdateHandlers(_moduleName);
+        _initialUpdateDone = true;
+      }
     }
 
-    // update I2C devices
+    // Update I2C devices
     if (_triggerUpdateI2C != UINT8_MAX) {
       _updateI2CDevices();
       _triggerUpdateI2C = UINT8_MAX;
