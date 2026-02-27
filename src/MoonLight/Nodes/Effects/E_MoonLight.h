@@ -37,7 +37,7 @@ class SolidEffect : public Node {
 
   void loop() override {
     if (usePalette) {
-      // Square-Root Averaging 
+      // Square-Root Averaging
       uint32_t sumRedSq = 0, sumGreenSq = 0, sumBlueSq = 0;
       uint16_t nrOfColors = 0;
 
@@ -49,6 +49,11 @@ class SolidEffect : public Node {
           sumBlueSq += color.blue * color.blue;
           nrOfColors++;
         }
+      }
+
+      if (nrOfColors == 0) {
+        layer->fill_solid(CRGB::Black);
+        return;
       }
 
       CRGB color = CRGB(sqrt(sumRedSq / nrOfColors), sqrt(sumGreenSq / nrOfColors), sqrt(sumBlueSq / nrOfColors));

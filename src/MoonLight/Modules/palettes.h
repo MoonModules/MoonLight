@@ -552,11 +552,11 @@ const char* const palette_names[] = {"Cloud⚡️💙",       "Forest⚡️💚"
                                      "Light Pink🤍-",  //
                                      "Lite Light💜-",    "Magenta💙",     "Magred💜-",      "Orange & Teal🤍",
                                      "Orangery💛",      "Pastel🤍",      "Pink Candy🩷",  "Red & Blue💙",
-                                     "Red Flash🤍",     "Red Reaf🤍",    "Red Shift💛",   "Red Tide",
+                                     "Red Flash🤍",     "Red Reaf🤍",    "Red Shift💛",   "Red Tide🧡",
                                      "Retro Clown🩷",   "Rewhi🩷",       "Rivendell🧟‍♂️",   "Sakura🩷",
                                      "Semi Blue💙",     "Sherbet❤️",     "Splash🩷",      "Sunset💜",
                                      "Sunset 2🤍",      "Temperature💛", "Tertiary💚",    "Tiamat🩵",
-                                     "Toxy Reaf🩵",     "Vintage🧡-",     "Yelblu Hot💜-",  "Yelblu🩵",
+                                     "Toxy Reaf🩵",     "Vintage🧡-",     "Yelblu Hot🧡-",  "Yelblu🩵",
                                      "Yelmag🩷",        "Yellowout💛"};
 
 static_assert(sizeof(gGradientPalettes) / sizeof(gGradientPalettes[0]) == sizeof(palette_names) / sizeof(palette_names[0]), "gGradientPalettes and palette_names must have the same number of entries");
