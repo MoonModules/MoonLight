@@ -151,7 +151,7 @@
 	<div class="w-full">
 		{#await getMQTTStatus()}
 			<Spinner />
-		{:then nothing}
+		{:then}
 			<div
 				class="flex w-full flex-col space-y-1"
 				transition:slide|local={{ duration: 300, easing: cubicOut }}

@@ -31,6 +31,79 @@
 	// Check if PSRAM data is available
 	let hasPsramData = $derived(Math.max(...$analytics.psram_size) > 0);
 
+	$effect(() => {
+		if (hasPsramData) initPsramChart();
+	});
+
+	function initPsramChart() {
+		if (!psramChartElement || psramChart) return;
+		psramChart = new Chart(psramChartElement, {
+			type: 'line',
+			data: {
+				labels: $analytics.uptime,
+				datasets: [
+					{
+						label: 'Used',
+						borderColor: daisyColor('--color-primary'),
+						backgroundColor: daisyColor('--color-primary', 50),
+						borderWidth: 2,
+						data: $analytics.used_psram,
+						yAxisID: 'y'
+					}
+				]
+			},
+			options: {
+				maintainAspectRatio: false,
+				responsive: true,
+				plugins: {
+					legend: {
+						display: true
+					},
+					tooltip: {
+						mode: 'index',
+						intersect: false
+					}
+				},
+				elements: {
+					point: {
+						radius: 1
+					}
+				},
+				scales: {
+					x: {
+						grid: {
+							color: daisyColor('--color-base-content', 10)
+						},
+						ticks: {
+							color: daisyColor('--color-base-content')
+						},
+						display: false
+					},
+					y: {
+						type: 'linear',
+						title: {
+							display: true,
+							text: 'PSRAM [KB]',
+							color: daisyColor('--color-base-content'),
+							font: {
+								size: 16,
+								weight: 'bold'
+							}
+						},
+						position: 'left',
+						min: 0,
+						max: Math.round(Math.max(...$analytics.psram_size)),
+						grid: { color: daisyColor('--color-base-content', 10) },
+						ticks: {
+							color: daisyColor('--color-base-content')
+						},
+						border: { color: daisyColor('--color-base-content', 10) }
+					}
+				}
+			}
+		});
+	}
+
 	onMount(() => {
 		// 🌙
 		lpsChart = new Chart(lpsChartElement, {
@@ -173,73 +246,7 @@
 		});
 		
 		// Only create PSRAM chart if PSRAM data is available
-		if (hasPsramData) {
-			psramChart = new Chart(psramChartElement, {
-			type: 'line',
-			data: {
-				labels: $analytics.uptime,
-				datasets: [
-					{
-						label: 'Used',
-						borderColor: daisyColor('--color-primary'),
-						backgroundColor: daisyColor('--color-primary', 50),
-						borderWidth: 2,
-						data: $analytics.used_psram,
-						yAxisID: 'y'
-					}
-				]
-			},
-			options: {
-				maintainAspectRatio: false,
-				responsive: true,
-				plugins: {
-					legend: {
-						display: true
-					},
-					tooltip: {
-						mode: 'index',
-						intersect: false
-					}
-				},
-				elements: {
-					point: {
-						radius: 1
-					}
-				},
-				scales: {
-					x: {
-						grid: {
-							color: daisyColor('--color-base-content', 10)
-						},
-						ticks: {
-							color: daisyColor('--color-base-content')
-						},
-						display: false
-					},
-					y: {
-						type: 'linear',
-						title: {
-							display: true,
-							text: 'PSRAM [KB]',
-							color: daisyColor('--color-base-content'),
-							font: {
-								size: 16,
-								weight: 'bold'
-							}
-						},
-						position: 'left',
-						min: 0,
-						max: Math.round(Math.max(...$analytics.psram_size)),
-						grid: { color: daisyColor('--color-base-content', 10) },
-						ticks: {
-							color: daisyColor('--color-base-content')
-						},
-						border: { color: daisyColor('--color-base-content', 10) }
-					}
-				}
-			}
-		});
-		}
+		if (hasPsramData) initPsramChart();
 		
 		filesystemChart = new Chart(filesystemChartElement, {
 			type: 'line',
@@ -371,9 +378,16 @@
 				}
 			}
 		});
-		setInterval(() => {
-			updateData();
-		}, 2000);
+
+		const poller = setInterval(updateData, 2000);
+		return () => {
+			clearInterval(poller);
+			lpsChart?.destroy();
+			heapChart?.destroy();
+			psramChart?.destroy();
+			filesystemChart?.destroy();
+			temperatureChart?.destroy();
+		};
 	});
 
 	function updateData() {
@@ -393,7 +407,7 @@
 			heapChart.options.scales.y.max = Math.round(Math.max(...$analytics.total_heap));
 		}
 
-		if (hasPsramData) {
+		if (hasPsramData && psramChart) {
 			psramChart.data.labels = $analytics.uptime;
 			psramChart.data.datasets[0].data = $analytics.used_psram;
 			psramChart.update('none');

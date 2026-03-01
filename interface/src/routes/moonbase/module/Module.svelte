@@ -152,7 +152,6 @@
 				if (oldData[key].length > newData[key].length) {
 					oldData[key].splice(newData[key].length);
 				}
-
 			} else if (newData[key] !== null && typeof newData[key] === 'object') {
 				// passing a partial object acts as a patch and missing siblings should be preserved. (MoonModules/MoonLight Module::update() + compareRecursive)
 				if (

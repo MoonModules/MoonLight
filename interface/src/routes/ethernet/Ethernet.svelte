@@ -232,7 +232,7 @@
 	{/snippet}
 	{#await getEthernetData()}
 		<Spinner />
-	{:then nothing}
+	{:then}
 		<div class="w-full overflow-x-auto">
 			<div
 				class="flex w-full flex-col space-y-1"

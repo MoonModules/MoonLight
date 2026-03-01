@@ -18,9 +18,9 @@ const config = {
 		alias: {
 			$src: './src'
 		},
-        output: {
-            bundleStrategy: 'single'
-        }
+		output: {
+			bundleStrategy: 'single'
+		}
 	}
 };
 

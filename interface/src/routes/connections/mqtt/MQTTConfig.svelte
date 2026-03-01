@@ -118,7 +118,7 @@
 	<div class="w-full">
 		{#await getBrokerSettings()}
 			<Spinner />
-		{:then nothing}
+		{:then}
 			<form
 				class="fieldset"
 				onsubmit={preventDefault(handleSubmitBroker)}

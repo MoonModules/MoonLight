@@ -109,7 +109,7 @@
 					</div>
 				{:else}
 					<ul class="menu w-full">
-						{#each listOfNetworks as network, i}
+						{#each listOfNetworks as network, i (network.bssid)}
 							<li>
 								<!-- svelte-ignore a11y_click_events_have_key_events -->
 								<div

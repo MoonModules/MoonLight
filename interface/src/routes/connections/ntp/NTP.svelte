@@ -100,7 +100,7 @@
 		const regexExpIPv4 =
 			/\b(?:(?:2(?:[0-4][0-9]|5[0-5])|[0-1]?[0-9]?[0-9])\.){3}(?:(?:2([0-4][0-9]|5[0-5])|[0-1]?[0-9]?[0-9]))\b/;
 		const regexExpURL =
-			/[-a-zA-Z0-9@:%_\+.~#?&//=]{2,256}\.[a-z]{2,4}\b(\/[-a-zA-Z0-9@:%_\+.~#?&//=]*)?/i;
+			/[-a-zA-Z0-9@:%_.~#?&//=]{2,256}\.[a-z]{2,4}\b(\/[-a-zA-Z0-9@:%_.~#?&//=]*)?/i;
 
 		if (!regexExpURL.test(ntpSettings.server) && !regexExpIPv4.test(ntpSettings.server)) {
 			valid = false;
@@ -164,7 +164,7 @@
 	<div class="w-full">
 		{#await getNTPStatus()}
 			<Spinner />
-		{:then nothing}
+		{:then}
 			<div
 				class="flex w-full flex-col space-y-1"
 				transition:slide|local={{ duration: 300, easing: cubicOut }}
@@ -284,7 +284,7 @@
 
 				<label class="label" for="tz">Pick Time Zone</label>
 				<select class="select w-full" bind:value={ntpSettings.tz_label} id="tz">
-					{#each Object.entries(TIME_ZONES) as [tz_label, tz_format]}
+					{#each Object.entries(TIME_ZONES) as [tz_label, tz_format] (tz_label)}
 						<option value={tz_label}>{tz_label}</option>
 					{/each}
 				</select>

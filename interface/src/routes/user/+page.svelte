@@ -163,7 +163,7 @@
 			{/snippet}
 			{#await getSecuritySettings()}
 				<Spinner />
-			{:then nothing}
+			{:then}
 				<div class="relative w-full overflow-visible">
 					<button
 						class="btn btn-primary text-primary-content btn-md absolute -top-14 right-0"
@@ -182,7 +182,7 @@
 								</tr>
 							</thead>
 							<tbody>
-								{#each securitySettings.users as user, index}
+								{#each securitySettings.users as user, index (user.username)}
 									<tr>
 										<td align="left">{user.username}</td>
 										<td align="center">

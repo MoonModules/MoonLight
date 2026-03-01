@@ -238,7 +238,7 @@
 
 <SettingsCard collapsible={false}>
 	{#snippet icon()}
-		<FilesIcon class="shrink-0 mr-2 h-6 w-6 self-end" />
+		<FilesIcon class="mr-2 h-6 w-6 shrink-0 self-end" />
 	{/snippet}
 	{#snippet title()}
 		<span>Files</span>
@@ -249,7 +249,7 @@
 				)[1]}{page.url.pathname}"
 				target="_blank"
 				rel="noopener noreferrer"
-				title="Documentation"><Help class="shrink-0 mr-2 h-6 w-6 self-end" /></a
+				title="Documentation"><Help class="mr-2 h-6 w-6 shrink-0 self-end" /></a
 			>
 		</div>
 		<!-- 🌙 link to docs -->

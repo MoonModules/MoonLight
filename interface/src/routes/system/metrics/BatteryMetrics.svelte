@@ -13,11 +13,11 @@
 	Chart.register(...registerables);
 	Chart.register(LuxonAdapter);
 
-	let heapChartElement: HTMLCanvasElement = $state();
-	let heapChart: Chart;
+	let batteryChartElement: HTMLCanvasElement | undefined = $state();
+	let batteryChart: Chart;
 
 	onMount(() => {
-		heapChart = new Chart(heapChartElement, {
+		batteryChart = new Chart(batteryChartElement, {
 			type: 'line',
 			data: {
 				labels: $batteryHistory.timestamp,
@@ -137,20 +137,22 @@
 			}
 		});
 
-		setInterval(() => {
-			updateData();
-		}, 5000);
+		const poller = setInterval(updateData, 5000);
+		return () => {
+			clearInterval(poller);
+			batteryChart?.destroy();
+		};
 	});
 
 	function updateData() {
-		heapChart.data.labels = $batteryHistory.timestamp;
-		heapChart.data.datasets[0].data = $batteryHistory.soc;
-		heapChart.data.datasets[1].data = $batteryHistory.charging;
-		heapChart.data.datasets[2].data = $batteryHistory.voltage; // 🌙
-		heapChart.data.datasets[3].data = $batteryHistory.current; // 🌙
-		heapChart.update('none');
-		if (heapChart.options?.scales?.y) {
-			heapChart.options.scales.y.max = Math.round(
+		batteryChart.data.labels = $batteryHistory.timestamp;
+		batteryChart.data.datasets[0].data = $batteryHistory.soc;
+		batteryChart.data.datasets[1].data = $batteryHistory.charging;
+		batteryChart.data.datasets[2].data = $batteryHistory.voltage; // 🌙
+		batteryChart.data.datasets[3].data = $batteryHistory.current; // 🌙
+		batteryChart.update('none');
+		if (batteryChart.options?.scales?.y) {
+			batteryChart.options.scales.y.max = Math.round(
 				Math.max(Math.max(...$batteryHistory.voltage), Math.max(...$batteryHistory.current))
 			);
 		}
@@ -197,7 +199,7 @@
 			class="flex h-60 w-full flex-col space-y-1"
 			transition:slide|local={{ duration: 300, easing: cubicOut }}
 		>
-			<canvas bind:this={heapChartElement}></canvas>
+			<canvas bind:this={batteryChartElement}></canvas>
 		</div>
 	</div>
 </SettingsCard>

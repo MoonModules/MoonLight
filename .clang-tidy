@@ -1,0 +1,88 @@
+# clang-tidy configuration for MoonLight
+#
+# Run locally after generating a compilation database:
+#   pio run -e esp32-s3 -t compiledb
+#   run-clang-tidy -p . $(find src -name "*.cpp") 2>&1 | grep -v "^clang-tidy"
+#
+# Or per-file:
+#   clang-tidy -p compile_commands.json src/MoonLight/Nodes/Effects/E_MoonLight.h
+#
+# Install on macOS: brew install llvm
+# Then: export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
+
+Checks: >
+  clang-diagnostic-*,
+  clang-analyzer-*,
+  bugprone-assert-side-effect,
+  bugprone-assignment-in-if-condition,
+  bugprone-bool-pointer-implicit-conversion,
+  bugprone-copy-constructor-init,
+  bugprone-dangling-handle,
+  bugprone-implicit-widening-of-multiplication-result,
+  bugprone-incorrect-roundings,
+  bugprone-infinite-loop,
+  bugprone-integer-division,
+  bugprone-misplaced-operator-in-strlen-in-alloc,
+  bugprone-misplaced-widening-cast,
+  bugprone-move-forwarding-reference,
+  bugprone-multiple-new-in-one-expression,
+  bugprone-not-null-terminated-result,
+  bugprone-parent-virtual-call,
+  bugprone-signed-char-misuse,
+  bugprone-sizeof-container,
+  bugprone-sizeof-expression,
+  bugprone-string-constructor,
+  bugprone-string-integer-assignment,
+  bugprone-suspicious-enum-usage,
+  bugprone-suspicious-memset-usage,
+  bugprone-suspicious-missing-comma,
+  bugprone-suspicious-semicolon,
+  bugprone-suspicious-string-compare,
+  bugprone-swapped-arguments,
+  bugprone-terminating-continue,
+  bugprone-throw-keyword-missing,
+  bugprone-too-small-loop-variable,
+  bugprone-undefined-memory-manipulation,
+  bugprone-unused-return-value,
+  bugprone-use-after-move,
+  bugprone-virtual-near-miss,
+  modernize-use-nullptr,
+  modernize-use-override,
+  modernize-use-default-member-init,
+  modernize-redundant-void-arg,
+  performance-for-range-copy,
+  performance-implicit-conversion-in-loop,
+  performance-inefficient-algorithm,
+  performance-inefficient-string-concatenation,
+  performance-inefficient-vector-operation,
+  performance-move-const-arg,
+  performance-no-automatic-move,
+  performance-type-promotion-in-math-fn,
+  performance-unnecessary-copy-initialization,
+  readability-avoid-const-params-in-decls,
+  readability-const-return-type,
+  readability-container-size-empty,
+  readability-delete-null-pointer,
+  readability-duplicate-include,
+  readability-else-after-return,
+  readability-misplaced-array-index,
+  readability-misleading-indentation,
+  readability-redundant-control-flow,
+  readability-redundant-declaration,
+  readability-redundant-member-init,
+  readability-redundant-preprocessor,
+  readability-redundant-smartptr-get,
+  readability-redundant-string-cstr,
+  readability-redundant-string-init,
+  readability-simplify-boolean-expr,
+  readability-static-accessed-through-instance,
+  readability-string-compare,
+  readability-uniqueptr-delete-release
+
+WarningsAsErrors: ""
+
+HeaderFilterRegex: "^.*/src/.*"
+
+CheckOptions:
+  - key: modernize-use-default-member-init.UseAssignment
+    value: "true"

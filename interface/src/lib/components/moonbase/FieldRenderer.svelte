@@ -207,12 +207,7 @@
 			}
 		</style>
 	{:else if property.type == 'checkbox'}
-		<input
-			type="checkbox"
-			class="toggle toggle-primary"
-			bind:checked={value}
-			onchange={onChange}
-		/>
+		<input type="checkbox" class="toggle toggle-primary" bind:checked={value} onchange={onChange} />
 	{:else if property.type == 'slider'}
 		<!-- range colors: https://daisyui.com/components/range/ 
          oninput: throttled response to server for performance

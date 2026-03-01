@@ -197,7 +197,7 @@
 	<div class="w-full">
 		{#await getAPStatus()}
 			<Spinner />
-		{:then nothing}
+		{:then}
 			<div
 				class="flex w-full flex-col space-y-1"
 				transition:slide|local={{ duration: 300, easing: cubicOut }}
@@ -264,7 +264,7 @@
 			</div>
 			{#await getAPSettings()}
 				<Spinner />
-			{:then nothing}
+			{:then}
 				<div
 					class="flex flex-col gap-2 p-0"
 					transition:slide|local={{ duration: 300, easing: cubicOut }}
@@ -278,7 +278,7 @@
 						<div>
 							<label class="label" for="apmode">Provide Access Point ... </label>
 							<select class="select w-full" id="apmode" bind:value={apSettings.provision_mode}>
-								{#each provisionMode as mode}
+								{#each provisionMode as mode (mode.id)}
 									<option value={mode.id}>
 										{mode.text}
 									</option>

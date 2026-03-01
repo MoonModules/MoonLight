@@ -301,7 +301,7 @@
 	{/snippet}
 	{#await getWifiData()}
 		<Spinner />
-	{:then nothing}
+	{:then}
 		<div class="w-full overflow-x-auto">
 			<div
 				class="flex w-full flex-col space-y-1"
@@ -484,7 +484,7 @@
 						<div>
 							<label class="label" for="apmode">WiFi Connection Mode</label>
 							<select class="select w-full" id="apmode" bind:value={wifiSettings.connection_mode}>
-								{#each connectionMode as mode}
+								{#each connectionMode as mode (mode.id)}
 									<option value={mode.id}>
 										{mode.text}
 									</option>
@@ -496,7 +496,7 @@
 						<div>
 							<label class="label" for="apmode">WiFi TX Power </label>
 							<select class="select w-full" id="apmode" bind:value={wifiSettings.txPower}>
-								{#each txPowerIDToText as mode}
+								{#each txPowerIDToText as mode (mode.id)}
 									<option value={mode.id}>
 										{mode.text}
 									</option>
@@ -559,7 +559,6 @@
 							class="space-y-2"
 						>
 							{#snippet children({ item: network, index }: { item: any; index: number })}
-								<!-- svelte-ignore a11y_click_events_have_key_events -->
 								<div
 									class="rounded-box bg-base-100 grid grid-cols-[auto_auto_minmax(6rem,1fr)_auto] items-center gap-3 p-2"
 								>
