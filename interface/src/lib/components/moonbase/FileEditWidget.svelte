@@ -85,9 +85,9 @@
 				await tick();
 				showEditor = true; //Trigger reactivity (folderList = [...folderList]; is not doing it)
 				console.log('uploadFileWithText', file, editableFile.contents);
+				changed = true;
 			};
 			reader.readAsText(file);
-			changed = true;
 		}
 	}
 
@@ -132,7 +132,7 @@
 		changed = false;
 	}
 
-	function onSave() {
+	async function onSave() {
 		console.log('onSave', editableFile.isFile);
 		let valid = true;
 
@@ -166,9 +166,11 @@
 				response.updates = [];
 				response.updates.push(editableFile);
 			}
-			postFilesState(response);
-			showEditor = false;
-			changed = false;
+			const saved = await postFilesState(response);
+			if (saved !== null) {
+				showEditor = false;
+				changed = false;
+			}
 		}
 	}
 </script>
@@ -220,7 +222,7 @@
 			<button
 				class="btn btn-primary"
 				onclick={() => {
-					console.log('Save');
+					console.log('Cancel');
 					onCancel();
 				}}
 				disabled={!changed}

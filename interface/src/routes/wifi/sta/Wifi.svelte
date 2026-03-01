@@ -293,11 +293,11 @@
 
 <SettingsCard collapsible={false}>
 	{#snippet icon()}
-		<Router class="lex-shrink-0 mr-2 h-6 w-6 self-end" />
+		<Router class="shrink-0 mr-2 h-6 w-6 self-end" />
 	{/snippet}
 	{#snippet title()}
 		<span>WiFi Connection</span>
-		<div class="absolute right-5"><a href="https://{page.data.github.split("/")[0]}.github.io/{page.data.github.split("/")[1]}/network/sta" target="_blank" title="Documentation"><Help  class="lex-shrink-0 mr-2 h-6 w-6 self-end" /></a></div> <!-- 🌙 link to docs - {page.url.pathname} hardcoded -->
+		<div class="absolute right-5"><a href="https://{page.data.github.split("/")[0]}.github.io/{page.data.github.split("/")[1]}/network/sta" target="_blank" title="Documentation"><Help  class="shrink-0 mr-2 h-6 w-6 self-end" /></a></div> <!-- 🌙 link to docs - {page.url.pathname} hardcoded -->
 	{/snippet}
 	{#await getWifiData()}
 		<Spinner />
@@ -450,7 +450,7 @@
 		{#if !page.data.features.security || $user.admin}
 			<Collapsible open={true} class="shadow-lg" isDirty={isSettingsDirty}>
 				{#snippet icon()}
-					<Settings class="lex-shrink-0 mr-2 h-6 w-6 self-end" />
+					<Settings class="shrink-0 mr-2 h-6 w-6 self-end" />
 				{/snippet}
 				{#snippet title()}
 					<span>Settings & Networks</span>
@@ -571,13 +571,13 @@
 										<div class="font-bold truncate">{network.ssid}</div>
 										{#if network.static_ip_config}
 											<div
-												class="badge badge-sm badge-secondary opacity-75 flex-shrink-0 hidden sm:block"
+												class="badge badge-sm badge-secondary opacity-75 shrink-0 hidden sm:block"
 											>
 												Static
 											</div>
 										{:else}
 											<div
-												class="badge badge-sm badge-outline badge-secondary opacity-75 flex-shrink-0 hidden sm:block"
+												class="badge badge-sm badge-outline badge-secondary opacity-75 shrink-0 hidden sm:block"
 											>
 												DHCP
 											</div>

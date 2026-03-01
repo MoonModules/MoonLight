@@ -211,7 +211,7 @@
 
 <SettingsCard collapsible={false}>
 	{#snippet icon()}
-		<OTA class="flex-shrink-0 mr-2 h-6 w-6 self-end rounded-full" />
+		<OTA class="shrink-0 mr-2 h-6 w-6 self-end rounded-full" />
 	{/snippet}
 	{#snippet title()}
 		<span>Upload Firmware</span>

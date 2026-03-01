@@ -225,7 +225,7 @@
 
 <SettingsCard collapsible={false}>
 	{#snippet icon()}
-		<PlugConnected class="lex-shrink-0 mr-2 h-6 w-6 self-end" />
+		<PlugConnected class="shrink-0 mr-2 h-6 w-6 self-end" />
 	{/snippet}
 	{#snippet title()}
 		<span>Ethernet Connection</span>
@@ -342,7 +342,7 @@
 		{#if !page.data.features.security || $user.admin}
 			<Collapsible open={true} class="shadow-lg" isDirty={isSettingsDirty}>
 				{#snippet icon()}
-					<Settings class="lex-shrink-0 mr-2 h-6 w-6 self-end" />
+					<Settings class="shrink-0 mr-2 h-6 w-6 self-end" />
 				{/snippet}
 				{#snippet title()}
 					<span>Settings</span>

@@ -209,7 +209,7 @@
 		{#snippet children({ item: itemWrapper }: { item: any })}
 			<div class="rounded-box bg-base-100 flex items-center space-x-3 px-4 py-2">
 				{#if findItemInDefinition?.crud == null || findItemInDefinition?.crud?.includes('s')}
-					<Grip class="text-base-content/30 h-6 w-6 flex-shrink-0 cursor-grab" />
+					<Grip class="text-base-content/30 h-6 w-6 shrink-0 cursor-grab" />
 				{/if}
 				<!-- Show the first 3 fields -->
 				{#each property.n.filter((propertyN: any, index: any) => {

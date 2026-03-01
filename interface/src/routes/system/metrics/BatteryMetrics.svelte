@@ -180,7 +180,7 @@
 
 <SettingsCard collapsible={false}>
 	{#snippet icon()}
-		<Battery class="lex-shrink-0 mr-2 h-6 w-6 self-end" />
+		<Battery class="shrink-0 mr-2 h-6 w-6 self-end" />
 	{/snippet}
 	{#snippet title()}
 		<span>Energy History</span>

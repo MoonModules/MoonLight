@@ -128,7 +128,7 @@
 			// } else {
 			if (Array.isArray(newData[key])) {
 				//loop over array
-				if (!oldData[key]) oldData[key] = []; //create an empty array
+				if (!Array.isArray(oldData[key])) oldData[key] = []; //normalize to array
 				for (let i = 0; i < Math.max(oldData[key].length, newData[key].length); i++) {
 					if (oldData[key][i] == undefined) {
 						// console.log("add row", key, i, newData[key][i]);
@@ -138,10 +138,17 @@
 						oldData[key].splice(i);
 					} else {
 						// console.log("change row", key, i, oldData[key][i], newData[key][i]);
-						if (newData[key][i] !== null && typeof newData[key][i] === 'object') {
-							updateRecursive(oldData[key][i], newData[key][i]);
-						} else if (oldData[key][i] !== newData[key][i]) {
-							oldData[key][i] = newData[key][i];
+						const oldItem = oldData[key][i];
+						const newItem = newData[key][i];
+						const bothObjects =
+							oldItem !== null &&
+							typeof oldItem === 'object' &&
+							newItem !== null &&
+							typeof newItem === 'object';
+						if (bothObjects) {
+							updateRecursive(oldItem, newItem);
+						} else if (oldItem !== newItem) {
+							oldData[key][i] = newItem;
 						}
 					}
 				}
@@ -184,7 +191,7 @@
 
 <SettingsCard collapsible={false} bind:data>
 	{#snippet icon()}
-		<Router class="lex-shrink-0 mr-2 h-6 w-6 self-end" />
+		<Router class="shrink-0 mr-2 h-6 w-6 self-end" />
 	{/snippet}
 	{#snippet title()}
 		<span>{initCap(page.url.searchParams.get('module') || '')}</span>
@@ -194,7 +201,7 @@
 					'/'
 				)[1]}/{page.url.searchParams.get('group') + '/' + page.url.searchParams.get('module')}"
 				target="_blank"
-				title="Documentation"><Help class="lex-shrink-0 mr-2 h-6 w-6 self-end" /></a
+				title="Documentation"><Help class="shrink-0 mr-2 h-6 w-6 self-end" /></a
 			>
 		</div>
 		<!-- 🌙 link to docs -->
