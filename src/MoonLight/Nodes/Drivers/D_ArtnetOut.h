@@ -92,7 +92,7 @@ class ArtNetOutDriver : public DriverNode {
       }
     }
 
-    totalChannels = layerP.lights.header.nrOfLights * layerP.lights.header.channelsPerLight / (nrOfIPAddresses?nrOfIPAddresses:1);
+    totalChannels = layerP.lights.header.nrOfLights * layerP.lights.header.channelsPerLight / (nrOfIPAddresses ? nrOfIPAddresses : 1);
     usedChannelsPerUniverse = universeSize / layerP.lights.header.channelsPerLight * layerP.lights.header.channelsPerLight;  // calculated
     totalUniverses = (totalChannels + usedChannelsPerUniverse - 1) / usedChannelsPerUniverse;                                // ceiling //calculated
 
@@ -137,10 +137,20 @@ class ArtNetOutDriver : public DriverNode {
   }
 
   uint8_t processedOutputs = 0;
-  TickType_t xLastWakeTime = xTaskGetTickCount();
+  unsigned long lastSendTime = 0;
 
   void loop() override {
-    DriverNode::loop();  // this populates the LUT tables
+    DriverNode::loop();  // this populates the LUT tables when needed
+
+    // Non-blocking FPS limiter - check if enough time has elapsed
+    unsigned long currentTime = millis();
+    unsigned long frameInterval = 1000 / FPSLimiter;  // e.g., 20ms for 50 FPS
+
+    if (currentTime - lastSendTime < frameInterval) {
+      return;  // Not enough time elapsed, skip this frame without blocking
+    }
+
+    lastSendTime = currentTime;  // Update last send time
 
     LightsHeader* header = &layerP.lights.header;
 
@@ -196,7 +206,7 @@ class ArtNetOutDriver : public DriverNode {
 
         if (!writePackage()) return;  // resets packagesize
 
-        // addYield(10);
+        addYield(10);  // Yield every 10 packets to allow AsyncUDP to actually transmit
 
         if (channels_remaining < header->channelsPerLight) {  // jump to next output
           channels_remaining = channelsPerOutput;             // reset for a new output
@@ -220,8 +230,6 @@ class ArtNetOutDriver : public DriverNode {
       writePackage();  // remaining
     }
     // EXT_LOGD(ML_TAG, "Universes send %d %d", universe, packages);
-
-    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(1000.0 / FPSLimiter));  // Yields AND feeds watchdog
   }  // loop
 };
 

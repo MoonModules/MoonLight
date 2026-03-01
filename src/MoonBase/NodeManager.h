@@ -259,7 +259,8 @@ class NodeManager : public Module {
         // EXT_LOGD(ML_TAG, "handle %s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(),
         // updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
         if (updatedItem.index[0] < nodes->size()) {
-          EXT_LOGD(ML_TAG, "%s on: %s (#%d)", nodeState["name"].as<const char*>(), updatedItem.value.as<String>().c_str(), nodes->size());
+          const char* name = nodeState["name"];
+          EXT_LOGD(ML_TAG, "%s on: %s (#%d)", name ? name : "", updatedItem.value.as<String>().c_str(), nodes->size());
           Node* nodeClass = (*nodes)[updatedItem.index[0]];
           if (nodeClass != nullptr) {
             nodeClass->on = updatedItem.value.as<bool>();  // set nodeclass on/off
@@ -269,7 +270,7 @@ class NodeManager : public Module {
             xSemaphoreGive(*nodeClass->layerMutex);
             nodeClass->requestMappings();
           } else
-            EXT_LOGW(ML_TAG, "Nodeclass %s not found", nodeState["name"].as<const char*>());
+            EXT_LOGW(ML_TAG, "Nodeclass %s not found", name ? name : "");
         }
       }  // nodes[i].on
 
@@ -287,8 +288,10 @@ class NodeManager : public Module {
             xSemaphoreGive(*nodeClass->layerMutex);
 
             nodeClass->requestMappings();
-          } else
-            EXT_LOGW(ML_TAG, "nodeClass not found %s", nodeState["name"].as<const char*>());
+          } else {
+            const char* name = nodeState["name"];
+            EXT_LOGW(ML_TAG, "nodeClass not found %s", name ? name : "");
+          }
         }
 
       }  // nodes[i].controls[j].value

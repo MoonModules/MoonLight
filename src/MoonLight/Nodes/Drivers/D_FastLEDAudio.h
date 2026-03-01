@@ -38,9 +38,11 @@ class FastLEDAudioDriver : public Node {
   bool autoGain = false;
   bool noiseFloorTracking = false;
   uint8_t channel = fl::Left;
+  uint8_t gain = 128;
 
   void setup() override {
     addControl(signalConditioning, "signalConditioning", "checkbox");
+    addControl(gain, "gain", "slider");
     addControl(autoGain, "autoGain", "checkbox");
     addControl(noiseFloorTracking, "noiseFloorTracking", "checkbox");
     addControl(channel, "channel", "select");
@@ -102,7 +104,10 @@ class FastLEDAudioDriver : public Node {
       audioProcessor.setSignalConditioningEnabled(signalConditioning);
     }
     if (control["name"] == "autoGain") {
-      audioProcessor.setAutoGainEnabled(autoGain);
+      // audioProcessor.setAutoGainEnabled(autoGain);
+    }
+    if (control["name"] == "gain") {
+      audioProcessor.setGain(gain / 128.0f);
     }
     if (control["name"] == "noiseFloorTracking") {
       audioProcessor.setNoiseFloorTrackingEnabled(noiseFloorTracking);

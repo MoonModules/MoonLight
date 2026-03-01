@@ -496,10 +496,10 @@ class NoiseMeterEffect : public Node {
     // if (maxLen <0) maxLen = 0;
     // if (maxLen >layer->size.x) maxLen = layer->size.x;
 
-    for (int i = 0; i < maxLen; i++) {                                                                                     // The louder the sound, the wider the soundbar. By Andrew Tuline.
-      uint8_t index = inoise8(i * sharedData.volume + aux0, aux1 + i * sharedData.volume);                                 // Get a value from the noise function. I'm using both x and y axis.
+    for (int y = 0; y < maxLen; y++) {                                                                                     // The louder the sound, the wider the soundbar. By Andrew Tuline.
+      uint8_t index = inoise8(y * sharedData.volume + aux0, aux1 + y * sharedData.volume);                                 // Get a value from the noise function. I'm using both x and y axis.
       for (int x = 0; x < layer->size.x; x++)                                                                              // propagate to other dimensions
-        for (int z = 0; z < layer->size.z; z++) layer->setRGB(Coord3D(x, i, z), ColorFromPalette(layerP.palette, index));  //, 255, PALETTE_SOLID_WRAP));
+        for (int z = 0; z < layer->size.z; z++) layer->setRGB(Coord3D(x, layer->size.y -1 - y, z), ColorFromPalette(layerP.palette, index));  //, 255, PALETTE_SOLID_WRAP));
     }
 
     aux0 += beatsin8(5, 0, 10);
@@ -564,7 +564,7 @@ class PacManEffect : public Node {
 
   void onSizeChanged(const Coord3D& prevSize) override { initializePacMan(); }
 
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) {
+  void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
     if (control["name"] == "#powerdots" || control["name"] == "#ghosts") {
       initializePacMan();
     }
@@ -1310,7 +1310,7 @@ class OctopusEffect : public Node {
     addControl(radialWave, "radialWave", "checkbox");
   }
 
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) {
+  void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
     // add your custom onUpdate code here
     if (control["name"] == "offset") {
       if (rMap) setRMap();
@@ -2914,14 +2914,19 @@ class FreqwaveEffect : public Node {
         }
         uint16_t b = 255.0f * intensity;
         if (b > 255) b = 255;
-        color = CHSV(i, 176 + (uint8_t)b / 4, (uint8_t)b);
+        // color = CHSV(i, 176 + (uint8_t)b / 4, (uint8_t)b);
+        color = ColorFromPalette(layerP.palette, i, (uint8_t)b);
       }
 
-      layer->setRGB(layer->nrOfLights / 2, color);
+      for (int x = 0; x < layer->size.x; x++)
+        for (int z = 0; z < layer->size.z; z++) {
+          layer->setRGB(Coord3D(x, layer->size.y / 2, z), color);
 
-      // Shift pixels outward
-      for (int i = layer->nrOfLights - 1; i > layer->nrOfLights / 2; i--) layer->setRGB(i, layer->getRGB(i - 1));
-      for (int i = 0; i < layer->nrOfLights / 2; i++) layer->setRGB(i, layer->getRGB(i + 1));
+          // Shift pixels outward
+          for (int y = layer->size.y - 1; y > layer->size.y / 2; y--) layer->setRGB(Coord3D(x, y, z), layer->getRGB(Coord3D(x, y - 1, z)));
+
+          for (int y = 0; y < layer->size.y / 2; y++) layer->setRGB(Coord3D(x, y, z), layer->getRGB(Coord3D(x, y + 1, z)));
+        }
     }
   }
 };

@@ -50,7 +50,7 @@ class ParallelLEDDriver : public DriverNode {
   #if HP_ALL_DRIVERS
     if (!initDone) return;
 
-    DriverNode::loop();  // This populates the LUT tables!
+    DriverNode::loop();  // This populates the LUT tables when needed
 
     #ifndef CONFIG_IDF_TARGET_ESP32P4
     if (ledsDriver.total_leds > 0) ledsDriver.showPixels(WAIT);

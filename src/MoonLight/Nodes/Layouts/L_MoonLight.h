@@ -491,7 +491,7 @@ class RingLayout : public Node {
     addControl(scale, "scale", "slider", 1, 10);
   }
 
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) {
+  void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
     // add your custom onUpdate code here
     if (control["name"] == "nrOfLEDs") {
       ringCenter.x = 1.1 * getRadius(nrOfLEDs);

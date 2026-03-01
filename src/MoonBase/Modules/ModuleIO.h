@@ -675,36 +675,47 @@ class ModuleIO : public Module {
   // on update triggers another onUpdates on 2 occasions: 1) newState modded (directly) and 2) setBoardPresetDefaults (via main loop)
   // each will trigger the updateHandler of this module sending readpins again ...
   void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
+    // Below updates only triggered from UI (not from backend updates)
+    if (!originId.toInt()) return;
+
     JsonDocument doc;
     JsonObject newState = doc.to<JsonObject>();
-    if (updatedItem.name == "boardPreset") {
-      // if booting and modded is false or ! booting
-      if ((updatedItem.oldValue == "" && _state.data["modded"] == false) || updatedItem.oldValue != "") {  // only update unmodded
-        EXT_LOGD(MB_TAG, "newBoardID %s %s[%d]%s[%d].%s = %s -> %s", originId.c_str(), updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
-        newBoardID = updatedItem.value;  // run in sveltekit task
-      }
-    }
 
-    if (!originId.toInt()) return;  // below updates only triggered from UI
+    // Handle boardPreset changes
+    if (updatedItem.name == "boardPreset") {
+      // Only load board defaults if modded is false
+      if (_state.data["modded"] == false) {
+        EXT_LOGD(MB_TAG, "newBoardID %s %s[%d]%s[%d].%s = %s -> %s", originId.c_str(), updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
+        newBoardID = updatedItem.value;  // Will be processed in loop20ms
+      } else {
+        EXT_LOGD(MB_TAG, "boardPreset change ignored - modded=true");
+      }
+      return;  // Don't process further for boardPreset changes
+    }
 
     if (updatedItem.name == "modded") {
-      // set pins to default if modded is turned off
+      // When modded is set to false, reload the current board preset defaults
       if (updatedItem.value == false) {
-        // EXT_LOGD(MB_TAG, "%s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
-        newBoardID = _state.data["boardPreset"];  // run in sveltekit task
+        EXT_LOGD(MB_TAG, "modded set to false - reloading board defaults");
+        newBoardID = _state.data["boardPreset"];  // Reload current board
       }
     } else if (updatedItem.name == "switch1" || updatedItem.name == "switch2") {
-      // rebuild with new switch setting
-      newBoardID = _state.data["boardPreset"];  // run in sveltekit task
+      // Rebuild pins with new switch settings
+      EXT_LOGD(MB_TAG, "switch changed - rebuilding board defaults");
+      newBoardID = _state.data["boardPreset"];
     } else if (updatedItem.name == "maxPower") {
+      // Manual maxPower change = user is customizing
       newState["modded"] = true;
-    } else if (updatedItem.name == "usage" || updatedItem.name == "index") {  // usage / index of any of the pins
+    } else if (updatedItem.name == "usage" || updatedItem.name == "index") {
+      // Manual pin usage change = user is customizing
       newState["modded"] = true;
     } else if (updatedItem.name == "i2cFreq") {
-      Wire.setClock(updatedItem.value.as<uint32_t>() * 1000);  // uint32_t instead of uint16_t to multiply in 32-bit arithmetic
+      Wire.setClock(updatedItem.value.as<uint32_t>() * 1000);
     }
 
-    if (newState.size()) update(newState, ModuleState::update, _moduleName);  // if changes made then update
+    if (newState.size()) {
+      update(newState, ModuleState::update, _moduleName);
+    }
   }
 
   // Function to convert drive capability to string
@@ -723,26 +734,35 @@ class ModuleIO : public Module {
     }
   }
 
-  bool _initialPinReadDone = false;
+  bool _initialUpdateDone = false;
 
   void loop20ms() override {
     // run in sveltekit task
     Module::loop20ms();
 
-    // update board presets
+    // Update board presets
     if (newBoardID != UINT8_MAX) {
-      setBoardPresetDefaults(newBoardID);  // run from sveltekit task
+      setBoardPresetDefaults(newBoardID);
       newBoardID = UINT8_MAX;
-      _initialPinReadDone = true;
+      _initialUpdateDone = true;
     }
 
-    // during boot, the IO module is unchanged, not triggering updates, so need to do it manually
-    if (!_initialPinReadDone) {
-      callUpdateHandlers(_moduleName);  // calls readPins for all subscribed handlers
-      _initialPinReadDone = true;
+    // During boot, handle boardPreset from file if modded=false
+    // This runs AFTER file load completes and all values (including modded) are restored
+    if (!_initialUpdateDone) {
+      if (_state.data["modded"] == false) {
+        uint8_t boardPreset = _state.data["boardPreset"];
+        EXT_LOGD(MB_TAG, "Applying board preset %d defaults from file (modded=false)", boardPreset);
+        newBoardID = boardPreset;
+        // Will be processed in next loop20ms iteration at top, setting _initialUpdateDone
+      } else {
+        EXT_LOGD(MB_TAG, "Skipping board preset defaults - using custom pins from file (modded=true)");
+        callUpdateHandlers(_moduleName);
+        _initialUpdateDone = true;
+      }
     }
 
-    // update I2C devices
+    // Update I2C devices
     if (_triggerUpdateI2C != UINT8_MAX) {
       _updateI2CDevices();
       _triggerUpdateI2C = UINT8_MAX;

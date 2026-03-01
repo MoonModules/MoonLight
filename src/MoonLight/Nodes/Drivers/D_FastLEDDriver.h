@@ -301,6 +301,7 @@ class FastLEDDriver : public DriverNode {
       uint16_t startLed = 0;
 
       FastLED.clear(ClearFlags::CHANNELS);
+      // FastLED.reset(ResetFlags::CHANNELS);
 
       for (uint8_t pinIndex = 0; pinIndex < nrOfPins; pinIndex++) {
         EXT_LOGD(ML_TAG, "ledPin p:%d #:%d rgb:%d aff:%s", pins[pinIndex], layerP.ledsPerPin[pinIndex], rgbOrder, options.mAffinity.c_str());
@@ -348,6 +349,7 @@ class FastLEDDriver : public DriverNode {
     events.onChannelCreated.clear();
     events.onChannelEnqueued.clear();
     FastLED.clear(ClearFlags::CHANNELS);
+    // FastLED.reset(ResetFlags::CHANNELS);
 
     moduleIO->removeUpdateHandler(ioUpdateHandler);
     moduleControl->removeUpdateHandler(controlUpdateHandler);
