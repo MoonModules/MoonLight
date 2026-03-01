@@ -11,3 +11,30 @@ node_modules
 pnpm-lock.yaml
 package-lock.json
 yarn.lock
+
+# Upstream ESP32-sveltekit files – do not reformat to keep merges clean.
+# Only MoonLight-specific files (src/routes/moonbase/, src/lib/components/moonbase/,
+# src/lib/stores/moonbase_utilities.ts, src/lib/types/moonbase_models.ts) are formatted.
+src/app.css
+src/app.html
+src/lib/components/*.svelte
+src/lib/components/*.ts
+src/lib/components/toasts/
+src/lib/stores/analytics.ts
+src/lib/stores/battery.ts
+src/lib/stores/socket.ts
+src/lib/stores/telemetry.ts
+src/lib/stores/user.ts
+src/lib/types/models.ts
+src/routes/+error.svelte
+src/routes/+layout.svelte
+src/routes/+layout.ts
+src/routes/+page.svelte
+src/routes/connections/
+src/routes/ethernet/
+src/routes/login.svelte
+src/routes/menu.svelte
+src/routes/statusbar.svelte
+src/routes/system/
+src/routes/user/
+src/routes/wifi/

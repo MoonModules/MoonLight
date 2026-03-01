@@ -157,9 +157,9 @@
 	}
 </script>
 
-<div class="flex-row flex items-center space-x-2 {!noPrompts ? 'mb-1' : ''}">
+<div class="flex flex-row items-center space-x-2 {!noPrompts ? 'mb-1' : ''}">
 	{#if !noPrompts}
-		<label class="label cursor-pointer min-w-24" for={property.name}>
+		<label class="label min-w-24 cursor-pointer" for={property.name}>
 			<span class="mr-4">{initCap(property.name)}</span>
 		</label>
 	{/if}
@@ -179,7 +179,7 @@
 		{/if}
 	{:else if property.type == 'select' || property.type == 'selectFile'}
 		<select bind:value on:change={onChange} class="select">
-			{#each property.values as value, index}
+			{#each property.values as value, index (index)}
 				<option value={property.type == 'selectFile' ? value : index}>
 					{value}
 				</option>
@@ -191,7 +191,7 @@
 	{:else if property.type == 'palette'}
 		<div style="display: flex; gap: 8px; align-items: center;">
 			<select bind:value on:change={onChange} class="select">
-				{#each property.values as val, index}
+				{#each property.values as val, index (index)}
 					<option value={index}>{val.name}</option>
 				{/each}
 			</select>
@@ -222,7 +222,7 @@
 			min={property.min ? property.min : 0}
 			max={property.max ? property.max : 255}
 			{step}
-			class={'flex-1 range ' +
+			class={'range flex-1 ' +
 				(disabled == false
 					? property.color == 'Red'
 						? 'range-error'
@@ -251,7 +251,7 @@
 		<textarea
 			rows="10"
 			cols="61"
-			class="w-full textarea"
+			class="textarea w-full"
 			on:change={onChange}
 			on:input={(event: any) => {
 				if (changeOnInput) onChange(event);
@@ -339,12 +339,12 @@
 		/>
 	{:else if property.type == 'pad'}
 		<div class="flex flex-col space-y-2">
-			{#each Array(Math.ceil((value.count || 64) / (property.width || 8))) as _, y}
+			{#each Array(Math.ceil((value.count || 64) / (property.width || 8))) as _, y (y)}
 				<div class="flex flex-row space-x-2">
-					{#each Array(property.width) as _, x}
+					{#each Array(property.width) as _, x (x)}
 						{#if x + y * property.width < value.count}
 							<button
-								class="btn btn-square w-{property.size} h-{property.size} text-xl rounded-lg {value.selected ==
+								class="btn btn-square w-{property.size} h-{property.size} rounded-lg text-xl {value.selected ==
 								x + y * property.width + 1
 									? `btn-error`
 									: Array.isArray(value.list) && value.list.includes(x + y * property.width + 1)
@@ -402,12 +402,12 @@
 								{x + y * property.width + 1}
 								{#if popupCell === x + y * property.width + 1}
 									<div
-										class="fixed z-50 bg-neutral-100 p-6 rounded shadow-lg mt-2 min-h-0 text-left inline-block min-w-0"
+										class="fixed z-50 mt-2 inline-block min-h-0 min-w-0 rounded bg-neutral-100 p-6 text-left shadow-lg"
 										style="left: {popupX}px; top: {popupY}px;"
 									>
 										<!-- Popup for {cell} -->
 										{#if fileContent && fileContent.nodes}
-											{#each fileContent.nodes as node}
+											{#each fileContent.nodes as node, ni (ni)}
 												{console.log('node.name', node.name)}
 												<p>{node.name} {node.on ? 'on' : 'off'}</p>
 											{/each}

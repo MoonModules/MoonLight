@@ -49,7 +49,7 @@
 	transition:fly={{ y: 50 }}
 >
 	<div
-		class="rounded-box bg-base-100 shadow-secondary/30 pointer-events-auto flex min-w-fit max-w-md flex-col justify-between p-4 shadow-lg md:w-[28rem]"
+		class="rounded-box bg-base-100 shadow-secondary/30 pointer-events-auto flex max-w-md min-w-fit flex-col justify-between p-4 shadow-lg md:w-[28rem]"
 	>
 		<h2 class="text-base-content text-start text-2xl font-bold">{title}</h2>
 		<div class="divider my-2"></div>
@@ -58,7 +58,7 @@
 			transition:slide|local={{ duration: 300, easing: cubicOut }}
 		>
 			<!-- <div class="divider my-0"></div> -->
-			{#each property.n as propertyN}
+			{#each property.n as propertyN, i (i)}
 				{#if propertyN.type == 'array'}
 					<label for={propertyN.name}>{propertyN.name}</label>
 					<RowRenderer
@@ -69,7 +69,7 @@
 						{changeOnInput}
 					></RowRenderer>
 				{:else if propertyN.type == 'controls'}
-					{#each dataEditable[propertyN.name] as control}
+					{#each dataEditable[propertyN.name] as control, j (j)}
 						<!-- e.g. dE["controls"] -> {"name":"xFrequency","type":"slider","default":64,"p":1070417419,"value":64} -->
 						<FieldRenderer property={control} bind:value={control.value} {onChange} {changeOnInput}
 						></FieldRenderer>

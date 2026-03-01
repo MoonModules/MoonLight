@@ -157,8 +157,8 @@
 	});
 </script>
 
-<div class="divider mb-2 mt-0"></div>
-<div class="h-16 flex w-full items-center justify-between space-x-3 p-0 text-xl font-medium">
+<div class="divider mt-0 mb-2"></div>
+<div class="flex h-16 w-full items-center justify-between space-x-3 p-0 text-xl font-medium">
 	{initCap(property.name)}
 </div>
 {#if findItemInDefinition?.crud == null || findItemInDefinition?.crud?.includes('c')}
@@ -190,14 +190,14 @@
 		}}
 	></FieldRenderer>
 	{#if data[property.name + '_filter']}
-		<div class="text-sm text-base-content/60 mt-1 ml-1">
+		<div class="text-base-content/60 mt-1 ml-1 text-sm">
 			{filteredItems.length} of {data[property.name].length} items
 			{data[property.name + '_filter'].startsWith('!') ? '(excluding matches)' : ''}
 		</div>
 	{/if}
 {/if}
 
-<div class="overflow-x-auto space-y-1" transition:slide|local={{ duration: 300, easing: cubicOut }}>
+<div class="space-y-1 overflow-x-auto" transition:slide|local={{ duration: 300, easing: cubicOut }}>
 	<DraggableList
 		items={filteredItems}
 		onReorder={handleReorder}
@@ -207,15 +207,14 @@
 		)}
 	>
 		{#snippet children({ item: itemWrapper }: { item: any })}
-			<!-- svelte-ignore a11y_click_events_have_key_events -->
 			<div class="rounded-box bg-base-100 flex items-center space-x-3 px-4 py-2">
 				{#if findItemInDefinition?.crud == null || findItemInDefinition?.crud?.includes('s')}
-					<Grip class="h-6 w-6 text-base-content/30 cursor-grab flex-shrink-0" />
+					<Grip class="text-base-content/30 h-6 w-6 flex-shrink-0 cursor-grab" />
 				{/if}
 				<!-- Show the first 3 fields -->
 				{#each property.n.filter((propertyN: any, index: any) => {
 					return index < 3 || propertyN.show === true;
-				}) as propertyN}
+				}) as propertyN (propertyN.name)}
 					{#if propertyN.type != 'array' && propertyN.type != 'controls' && propertyN.type != 'password'}
 						<FieldRenderer
 							property={propertyN}
@@ -228,7 +227,7 @@
 					{/if}
 				{/each}
 				<!-- Show nr of controls -->
-				{#each property.n as propertyN}
+				{#each property.n as propertyN (propertyN.name)}
 					{#if propertyN.type == 'array' || propertyN.type == 'controls'}
 						<div>
 							<div class="font-bold">
@@ -239,7 +238,7 @@
 				{/each}
 				{#if !page.data.features.security || $user.admin}
 					<div class="grow"></div>
-					<div class="space-x-0 px-0 mx-0">
+					<div class="mx-0 space-x-0 px-0">
 						<button
 							class="btn btn-ghost btn-sm"
 							onclick={() => {
@@ -264,4 +263,4 @@
 		{/snippet}
 	</DraggableList>
 </div>
-<div class="divider mb-2 mt-0"></div>
+<div class="divider mt-0 mb-2"></div>

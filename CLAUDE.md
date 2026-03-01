@@ -114,6 +114,20 @@ Node lifecycle: `constructor()` → `setup()` → `loop()` / `loop20ms()` → `~
 - `/interface/src/lib/stores/` — Svelte stores for global state (auth, websocket connection)
 - WebSocket communication uses MessagePack (not JSON) by default for efficiency
 
+### Frontend Upstream Boundary
+
+MoonLight periodically merges upstream ESP32-sveltekit changes. To keep merges clean:
+
+- **Minimise changes to upstream files.** Upstream files are everything in `/interface/src/` **except**:
+  - `src/routes/moonbase/` — MoonLight-specific routes
+  - `src/lib/components/moonbase/` — MoonLight-specific components
+  - `src/lib/stores/moonbase_utilities.ts`
+  - `src/lib/types/moonbase_models.ts`
+  - `vite-plugin-littlefs.ts`
+- **Do not reformat upstream files** with Prettier or other tools. The `.prettierignore` in `/interface/` excludes all upstream paths. Running `npm run format` will only touch MoonLight-specific files.
+- **ESLint only lints MoonLight-specific files.** The `eslint.config.js` ignores all upstream paths. `npm run lint` checks only `src/routes/moonbase/`, `src/lib/components/moonbase/`, and the moonbase stores/types.
+- **For real bugs found in upstream files**, prefer submitting a PR to [theelims/ESP32-sveltekit](https://github.com/theelims/ESP32-sveltekit) rather than fixing locally. Document the issue and PR in `misc/upstream-prs/`.
+
 ## Code Conventions
 
 **Critical path** (effect/driver loops) — optimize for minimal overhead:

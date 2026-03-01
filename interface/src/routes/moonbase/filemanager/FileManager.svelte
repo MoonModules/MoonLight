@@ -46,13 +46,13 @@
 		files: [],
 		fs_total: 0,
 		fs_used: 0,
-		showHidden: false,
+		showHidden: false
 	});
-	let breadCrumbs:string[] = $state([]);
+	let breadCrumbs: string[] = $state([]);
 
 	let newItem: boolean = $state(true);
 	let showEditor: boolean = $state(false);
-	let path: string = $state("");
+	let path: string = $state('');
 
 	async function getState() {
 		try {
@@ -72,7 +72,7 @@
 		return filesState;
 	}
 
-	async function postFilesState(data: any) { 
+	async function postFilesState(data: any) {
 		//export needed to call from other components
 		try {
 			const response = await fetch('/rest/FileManager', {
@@ -95,9 +95,9 @@
 	}
 
 	function addFile() {
-		console.log("addFile")
+		console.log('addFile');
 		newItem = true;
-		path = "/" + breadCrumbs.join("/");
+		path = '/' + breadCrumbs.join('/');
 		editableFile = {
 			name: '',
 			path: '',
@@ -108,13 +108,13 @@
 			files: [],
 			fs_total: 0,
 			fs_used: 0,
-			showHidden: false,
+			showHidden: false
 		};
 	}
 	function addFolder() {
-		console.log("addFolder")
+		console.log('addFolder');
 		newItem = true;
-		path = "/" + breadCrumbs.join("/");
+		path = '/' + breadCrumbs.join('/');
 		editableFile = {
 			name: '',
 			path: '',
@@ -125,7 +125,7 @@
 			files: [],
 			fs_total: 0,
 			fs_used: 0,
-			showHidden: false,
+			showHidden: false
 		};
 	}
 
@@ -141,7 +141,8 @@
 					found = true;
 				}
 			}
-			if (!found) { //e.g. old coookie, reset
+			if (!found) {
+				//e.g. old coookie, reset
 				breadCrumbs = [];
 				folderList = filesState.files;
 				return;
@@ -153,21 +154,23 @@
 	async function handleEdit(index: number) {
 		newItem = false;
 		editableFile = folderList[index];
-		path = editableFile.path
+		path = editableFile.path;
 
-		if (breadCrumbs.length > 0 && editableFile.name === breadCrumbs[breadCrumbs.length-1]) { 
+		if (breadCrumbs.length > 0 && editableFile.name === breadCrumbs[breadCrumbs.length - 1]) {
 			//if parent folder
 			breadCrumbs.pop(); //remove last folder
 			folderListFromBreadCrumbs();
 
 			localStorage.setItem('breadCrumbs', JSON.stringify(breadCrumbs));
 			showEditor = false;
-			console.log("handleEdit parent", folderList, breadCrumbs)
-		} else if (editableFile.isFile) { 
+			console.log('handleEdit parent', folderList, breadCrumbs);
+		} else if (editableFile.isFile) {
 			//if file
-			console.log("handleEdit file", editableFile, path)
-			showEditor = false; await tick(); showEditor = true; //Trigger reactivity
-		} else { 
+			console.log('handleEdit file', editableFile, path);
+			showEditor = false;
+			await tick();
+			showEditor = true; //Trigger reactivity
+		} else {
 			//if folder, go to folder
 			breadCrumbs.push(editableFile.name);
 			localStorage.setItem('breadCrumbs', JSON.stringify(breadCrumbs));
@@ -176,11 +179,11 @@
 			// showEditor = true; await tick(); //wait for reactivity, not needed here
 			showEditor = false;
 
-			console.log("handleEdit go to folder", folderList, breadCrumbs)
+			console.log('handleEdit go to folder', folderList, breadCrumbs);
 		}
 	}
 
-	function confirmDelete(index: number) { 
+	function confirmDelete(index: number) {
 		modals.open(ConfirmDialog, {
 			title: 'Delete item',
 			message: 'Are you sure you want to delete ' + folderList[index].name + '?',
@@ -195,10 +198,10 @@
 				// }
 
 				//update filesState
-				let response:any = {};
+				let response: any = {};
 				response.deletes = [];
 				response.deletes.push(folderList[index]);
-				console.log("confirmDelete", response)
+				console.log('confirmDelete', response);
 				//send the new itemstate to server
 				response.showHidden = filesState.showHidden; //otherwise set to false
 				postFilesState(response);
@@ -210,22 +213,20 @@
 	}
 
 	const handleFilesState = (data: FilesState) => {
-		console.log("socket update received");
+		console.log('socket update received');
 		filesState = data;
 		folderListFromBreadCrumbs();
 	};
 
 	onMount(() => {
 		let bc = localStorage.getItem('breadCrumbs');
-		if (bc)
-			breadCrumbs = JSON.parse(bc);
+		if (bc) breadCrumbs = JSON.parse(bc);
 
 		socket.on('FileManager', handleFilesState);
 		// getState(); //done in settingscard
 	});
 
 	onDestroy(() => socket.off('FileManager', handleFilesState));
-
 </script>
 
 <SettingsCard collapsible={false}>
@@ -234,17 +235,26 @@
 	{/snippet}
 	{#snippet title()}
 		<span>Files</span>
-		<div class="absolute right-5"><a href="https://{page.data.github.split("/")[0]}.github.io/{page.data.github.split("/")[1]}{page.url.pathname}" target="_blank" title="Documentation"><Help  class="lex-shrink-0 mr-2 h-6 w-6 self-end" /></a></div> <!-- 🌙 link to docs -->
+		<div class="absolute right-5">
+			<a
+				href="https://{page.data.github.split('/')[0]}.github.io/{page.data.github.split(
+					'/'
+				)[1]}{page.url.pathname}"
+				target="_blank"
+				title="Documentation"><Help class="lex-shrink-0 mr-2 h-6 w-6 self-end" /></a
+			>
+		</div>
+		<!-- 🌙 link to docs -->
 	{/snippet}
 
 	{#if !page.data.features.security || $user.admin}
-		<div class="bg-base-200 shadow-lg relative grid w-full max-w-2xl self-center overflow-hidden">
-			<div class="h-16 flex w-full items-center justify-between space-x-3 p-0 text-xl font-medium">
-				Files /{breadCrumbs.join("/")}
+		<div class="bg-base-200 relative grid w-full max-w-2xl self-center overflow-hidden shadow-lg">
+			<div class="flex h-16 w-full items-center justify-between space-x-3 p-0 text-xl font-medium">
+				Files /{breadCrumbs.join('/')}
 			</div>
 			{#await getState()}
 				<Spinner />
-			{:then nothing}
+			{:then}
 				<div class="relative w-full overflow-visible">
 					<button
 						class="btn btn-primary text-primary-content btn-md absolute -top-14 right-16"
@@ -271,20 +281,15 @@
 					transition:slide|local={{ duration: 300, easing: cubicOut }}
 				>
 					{#if showEditor}
-						<FileEditWidget
-							newItem={newItem}
-							path = {path}
-							isFile = {editableFile.isFile}
-						/>-
+						<FileEditWidget {newItem} {path} isFile={editableFile.isFile} />-
 					{/if}
 				</div>
 
 				<div
-					class="overflow-x-auto space-y-1"
+					class="space-y-1 overflow-x-auto"
 					transition:slide|local={{ duration: 300, easing: cubicOut }}
 				>
-					{#each folderList as item, index}
-
+					{#each folderList as item, index (item.path || item.name)}
 						<div class="rounded-box bg-base-100 flex items-center space-x-3 px-4 py-2">
 							<div class="mask mask-hexagon bg-primary h-auto w-10 shrink-0">
 								{#if item.isFile}
@@ -294,26 +299,27 @@
 								{/if}
 							</div>
 							<div>
-								{#if breadCrumbs.length > 0 && item.name === breadCrumbs[breadCrumbs.length-1]}
+								{#if breadCrumbs.length > 0 && item.name === breadCrumbs[breadCrumbs.length - 1]}
 									<div>..</div>
 								{:else}
 									<div class="font-bold">{item.name}</div>
 									{#if item.isFile}
-										<div>{item.size/1000} KB {new Intl.DateTimeFormat('en-GB', {
-											dateStyle: 'short',
-											timeStyle: 'short',
-											timeZone: 'UTC'
-										}).format(item.time*1000)}
+										<div>
+											{item.size / 1000} KB {new Intl.DateTimeFormat('en-GB', {
+												dateStyle: 'short',
+												timeStyle: 'short',
+												timeZone: 'UTC'
+											}).format(item.time * 1000)}
 										</div>
 									{:else}
 										<div>{item.files.length} files/folders</div>
 									{/if}
 								{/if}
 							</div>
-							
+
 							{#if !page.data.features.security || $user.admin}
 								<div class="grow"></div>
-								<div class="space-x-0 px-0 mx-0">
+								<div class="mx-0 space-x-0 px-0">
 									<button
 										class="btn btn-ghost btn-sm"
 										onclick={() => {
@@ -322,13 +328,13 @@
 									>
 										<Edit class="h-6 w-6" /></button
 									>
-									{#if !(breadCrumbs.length > 0 && item.name === breadCrumbs[breadCrumbs.length-1])}
+									{#if !(breadCrumbs.length > 0 && item.name === breadCrumbs[breadCrumbs.length - 1])}
 										<button
 											class="btn btn-ghost btn-sm"
 											onclick={() => {
 												confirmDelete(index);
 											}}
-											disabled={item.files && item.files.length>0}
+											disabled={item.files && item.files.length > 0}
 										>
 											<Delete class="text-error h-6 w-6" />
 										</button>
@@ -340,7 +346,7 @@
 						</div>
 					{/each}
 				</div>
-				<br>
+				<br />
 				<div class="rounded-box bg-base-100 flex items-center space-x-3 px-4 py-2">
 					<div class="mask mask-hexagon bg-primary h-auto w-10 flex-none">
 						<FolderIcon class="text-primary-content h-auto w-full scale-75" />
@@ -355,20 +361,21 @@
 							>
 
 							<span
-								>({Math.round(
-									(filesState.fs_total - filesState.fs_used) /
-									1000
-								).toLocaleString('en-US')}
+								>({Math.round((filesState.fs_total - filesState.fs_used) / 1000).toLocaleString(
+									'en-US'
+								)}
 								KB free)</span
 							>
 						</div>
 					</div>
 				</div>
-				<FieldRenderer property={{name:"showHidden", type:"checkbox"}} bind:value={filesState.showHidden}
+				<FieldRenderer
+					property={{ name: 'showHidden', type: 'checkbox' }}
+					bind:value={filesState.showHidden}
 					onChange={() => {
-						postFilesState({"showHidden":filesState.showHidden});
-					}}>
-				</FieldRenderer>
+						postFilesState({ showHidden: filesState.showHidden });
+					}}
+				></FieldRenderer>
 			{/await}
 		</div>
 	{/if}
