@@ -1,0 +1,32 @@
+- Moonlight is a fork of Upstream sveltekit repo (theelims/ESP32-sveltekit): 
+    - /interface except moonbase folders (frontend)
+    - /lib folder (backend)
+    - Changes in upstream code has been commented with // 🌙 (moonbase) or // 💫 (moonlight)
+    - Core benefits of upstream sveltekit: state and services with subscriptions and up and running svelte (reactive framework)
+    - Improvements to the sveltekit stuff can be added, but always submitting a pull request to upstream needs to be considered. In theory all the  // 🌙 are possible PR’s but for different reasons they not always end up in upstream
+    - MoonLight UI is now pretty much inspired by the UI used in upstream. Future goals is to develop more 
+- Repo is split in 
+    - moonbase (everything not lights related, see for instance env:esp32-d0-moonbase in esp32-d0.ini, compiles only moonbase, not moonlight. Can be the basis for any IOT project)
+    - Moonlight: everything lights related
+- MoonBase / MoonLight
+    - /src contains everything moonbase and moonlight specific
+    - See /src/MoonBase: some files contains MoonLight specifics, e.g. Nodes.h/.cpp. This is work in progress, eventually things like Nodes should be generic also for non light applications.
+    - pal.h and pal_espidf.cpp as a first attempt to come to an esp-idf only repository (not using arduino). This is very much work in progress.
+    - Modules and nodes are the core concepts of MoonBase/MoonLight. Modules are fully generated frontend(UI)/backend(server) modules (no specific sveltekit code per module, see /interface/src/lib/components/moonbase and  /interface/src/routes/moonbase for Module specific code)
+    - Monitor module is now also lights specific, in the future should be a generic moonbase feature.
+    - Lightscontrol is now also lights specific, in the future should be a generic module, maybe renamed to something more generic. Lightscontrol is the interface / API to the outside world. e.g. DMX, IR, Home assistant etc, all have the variables / rest api / web sockets / … of lights control as their interface point
+    - MoonLight core concepts are physical and virtual layer. The physical layer has a double buffered / two array called channelsE/D: channels for effects and channels for drivers. Main.cpp manages the double buffering / producer/consumer synchronization of the two arrays in a way 2 core MCU’s like the ESP32 series uses one core for the producer (effects) and 1 core for the consumer (drivers)
+    - The channel array(s) are a generalization of FastLED’s CRGB leds. In FastLED’s, each entry is one CRGB object. In Moonlight each entry is one light with a nrOfChannels. So RGB lights have 3 nrOfChannels, RGBW 4, but other lights like moving heads are also supported (can be up to 24/32/… lights) 
+    - The effects module contains effect nodes and modifier nodes, the Driver module contains layout and driver nodes.
+    - Eventually the effects and drivers module will be replaced / augmented by a graphical interface showing nodes, connected to other nodes in different lanes (e.g. physical lane and multiple virtual layer lanes)
+    - MoonLight documentation is maintained in the same repo and is deployed here: https://moonmodules.org/MoonLight/
+    - See architecture : https://moonmodules.org/MoonLight/develop/architecture/ for more details on system tasks, producer/consumer double bufering etc.
+    - /src/MoonLight/Nodes contain subfolders for all currently supported Effects, Modifiers, Driver and layout nodes. Each node is a class with constructor and destructor to manage all their memory usage (after deleting a node in the effects or drivers module, they should be completely reverse their resource claims). Nodes have controls, each node can define their own unique controls and is shown and managed in the UI.
+    - MoonLight supports different LED drivers , the FastLED channels api drivers and also physical led driver which is based on I2SClocklessDriver repo for non P4 and on parlio.h/cpp for P4. They can be used as alternatives.
+    - All pins are manager by the IO module by board presets. Board presets is the only place where pins are defined. Nodes can use the pin definitions (and can report back to the . Currently the IO module supports also I2C, in the future I2S, SPi, … will also be supported.
+    - Live scripts (moonbase)
+- General
+    - MoonLight should run on all ESP32 devices. Mainly used and tested now on ESP32-D0 (standard dev MCU’s), ESP32-S3 and ESP32-P4. Running MoonLight on ESP32-D0 is a challenge as heap is pretty much used up, and Flash size is limited. We currently use a 3MB flash partition so 4MB boards cannot do OTA at the moment. In the future we plan to implement a minimal OTA partition (as investigated at Tasmota/ESPHome …), so also small flash size boards (4MB) can do OTA.
+    - Optimize on the critical process: running effects / modifiers (producers) and displaying them on leds (direct via pins on the board using led drivers or via Art-Net over the network). So code for the critical process should compile to minimal assembler code and checks on code should be minimal. (Example use int instead of unsigned int as no need to control if it is negative if the developer should ensure it is possible, or do not check if a const char * is null as it’s the developer responsibility to make sure this is the case). In short: the code should not be resilient to developer mistakes, the developer must solve the mistakes.
+    - Non critical processes can run in reasonable time, in general 20ms response time for UI is more than enough.
+    - See also GIMINI.md in /misc/parking for info about upstream sveltekit

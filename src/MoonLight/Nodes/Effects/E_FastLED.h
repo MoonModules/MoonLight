@@ -84,7 +84,12 @@ class FLAudioEffect : public Node {
     columnNr++;
 
     // percussion
-    if (sharedData.percussionType != UINT8_MAX) layer->setRGB(Coord3D(columnNr + sharedData.percussionType, layer->size.y - 1), CRGB::Cyan);
+    if (sharedData.percussionType != UINT8_MAX) {
+      uint16_t percussionCol = columnNr + sharedData.percussionType;
+      if (percussionCol < layer->size.x) {
+        layer->setRGB(Coord3D(percussionCol, layer->size.y - 1), CRGB::Cyan);
+      }
+    }
     columnNr += 3;
 
     // beat decay
