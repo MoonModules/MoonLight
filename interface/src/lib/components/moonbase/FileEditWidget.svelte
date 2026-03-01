@@ -213,7 +213,6 @@
 					bind:value={editableFile.contents}
 					onChange={(event) => {
 						uploadFile(event);
-						changed = true;
 					}}
 				></FieldRenderer>
 			</div>

@@ -159,7 +159,7 @@
 			{/snippet}
 			{#snippet title()}
 				<span>Manage Users</span>
-						<div class="absolute right-20"><a href="https://{page.data.github.split("/")[0]}.github.io/{page.data.github.split("/")[1]}{page.url.pathname}" target="_blank" title="Documentation"><Help  class="shrink-0 mr-2 h-6 w-6 self-end" /></a></div> <!-- 🌙 link to docs -->
+						<div class="absolute right-20"><a href="https://{page.data.github.split("/")[0]}.github.io/{page.data.github.split("/")[1]}{page.url.pathname}" target="_blank" rel="noopener noreferrer" title="Documentation"><Help  class="shrink-0 mr-2 h-6 w-6 self-end" /></a></div> <!-- 🌙 link to docs -->
 			{/snippet}
 			{#await getSecuritySettings()}
 				<Spinner />

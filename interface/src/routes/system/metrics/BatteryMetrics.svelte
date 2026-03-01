@@ -28,7 +28,7 @@
 						backgroundColor: daisyColor('--color-primary', 50),
 						borderWidth: 2,
 						data: $batteryHistory.soc,
-						yAxisID: 'y',
+						yAxisID: 'y'
 						// hidden: Math.max(...$batteryHistory.soc) < 0
 					},
 					{
@@ -39,7 +39,7 @@
 						data: $batteryHistory.charging,
 						fill: true,
 						stepped: true,
-						yAxisID: 'y',
+						yAxisID: 'y'
 						// hidden: Math.max(...$batteryHistory.soc) < 0
 					},
 					{
@@ -48,7 +48,7 @@
 						backgroundColor: daisyColor('--color-primary', 50),
 						borderWidth: 2,
 						data: $batteryHistory.voltage,
-						yAxisID: 'y',
+						yAxisID: 'y'
 						// hidden: Math.max(...$batteryHistory.voltage) < 0
 					},
 					{
@@ -57,9 +57,9 @@
 						backgroundColor: daisyColor('--color-secondary', 50),
 						borderWidth: 2,
 						data: $batteryHistory.current,
-						yAxisID: 'y',
+						yAxisID: 'y'
 						// hidden: Math.max(...$batteryHistory.current) < 0
-					},
+					}
 				]
 			},
 			options: {
@@ -103,13 +103,15 @@
 						},
 						position: 'left',
 						min: 0,
-						max: Math.round(Math.max(Math.max(...$batteryHistory.voltage), Math.max(...$batteryHistory.current))),
+						max: Math.round(
+							Math.max(Math.max(...$batteryHistory.voltage), Math.max(...$batteryHistory.current))
+						),
 						grid: { color: daisyColor('--color-base-content', 10) },
 						ticks: {
 							color: daisyColor('--color-base-content')
 						},
 						border: { color: daisyColor('--color-base-content', 10) }
-					},
+					}
 					// y2: {
 					// 	type: 'linear',
 					// 	position: 'right',
@@ -136,8 +138,8 @@
 		});
 
 		setInterval(() => {
-			updateData(), 5000;
-		});
+			updateData();
+		}, 5000);
 	});
 
 	function updateData() {
@@ -147,7 +149,11 @@
 		heapChart.data.datasets[2].data = $batteryHistory.voltage; // 🌙
 		heapChart.data.datasets[3].data = $batteryHistory.current; // 🌙
 		heapChart.update('none');
-		heapChart.options.scales.y.max = Math.round(Math.max(Math.max(...$batteryHistory.voltage), Math.max(...$batteryHistory.current)));
+		if (heapChart.options?.scales?.y) {
+			heapChart.options.scales.y.max = Math.round(
+				Math.max(Math.max(...$batteryHistory.voltage), Math.max(...$batteryHistory.current))
+			);
+		}
 	}
 
 	function convertSeconds(seconds: number) {
@@ -180,7 +186,7 @@
 
 <SettingsCard collapsible={false}>
 	{#snippet icon()}
-		<Battery class="shrink-0 mr-2 h-6 w-6 self-end" />
+		<Battery class="mr-2 h-6 w-6 shrink-0 self-end" />
 	{/snippet}
 	{#snippet title()}
 		<span>Energy History</span>
@@ -188,7 +194,7 @@
 
 	<div class="w-full overflow-x-auto">
 		<div
-			class="flex w-full flex-col space-y-1 h-60"
+			class="flex h-60 w-full flex-col space-y-1"
 			transition:slide|local={{ duration: 300, easing: cubicOut }}
 		>
 			<canvas bind:this={heapChartElement}></canvas>

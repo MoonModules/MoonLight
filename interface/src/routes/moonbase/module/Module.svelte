@@ -152,11 +152,19 @@
 						}
 					}
 				}
-			} else {
-				if (newData[key] != oldData[key]) {
-					// console.log("updateRecursive", key, newData[key], oldData[key]);
-					oldData[key] = newData[key]; //trigger reactiveness
+			} else if (newData[key] !== null && typeof newData[key] === 'object') {
+				// passing a partial object acts as a patch and missing siblings should be preserved. (MoonModules/MoonLight Module::update() + compareRecursive)
+				if (
+					oldData[key] === null ||
+					typeof oldData[key] !== 'object' ||
+					Array.isArray(oldData[key])
+				) {
+					oldData[key] = {};
 				}
+				updateRecursive(oldData[key], newData[key]);
+			} else if (newData[key] !== oldData[key]) {
+				// console.log("updateRecursive", key, newData[key], oldData[key]);
+				oldData[key] = newData[key]; //trigger reactiveness
 			}
 			// }
 		}
@@ -191,7 +199,7 @@
 
 <SettingsCard collapsible={false} bind:data>
 	{#snippet icon()}
-		<Router class="shrink-0 mr-2 h-6 w-6 self-end" />
+		<Router class="mr-2 h-6 w-6 shrink-0 self-end" />
 	{/snippet}
 	{#snippet title()}
 		<span>{initCap(page.url.searchParams.get('module') || '')}</span>
@@ -201,7 +209,8 @@
 					'/'
 				)[1]}/{page.url.searchParams.get('group') + '/' + page.url.searchParams.get('module')}"
 				target="_blank"
-				title="Documentation"><Help class="shrink-0 mr-2 h-6 w-6 self-end" /></a
+				rel="noopener noreferrer"
+				title="Documentation"><Help class="mr-2 h-6 w-6 shrink-0 self-end" /></a
 			>
 		</div>
 		<!-- 🌙 link to docs -->

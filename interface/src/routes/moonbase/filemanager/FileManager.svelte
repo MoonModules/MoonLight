@@ -241,6 +241,7 @@
 					'/'
 				)[1]}{page.url.pathname}"
 				target="_blank"
+				rel="noopener noreferrer"
 				title="Documentation"><Help class="shrink-0 mr-2 h-6 w-6 self-end" /></a
 			>
 		</div>

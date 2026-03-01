@@ -104,7 +104,7 @@
 	{/snippet}
 	{#snippet title()}
 		<span>Github Firmware Manager</span>
-		<div class="absolute right-5"><a href="https://{page.data.github.split("/")[0]}.github.io/{page.data.github.split("/")[1]}{page.url.pathname}" target="_blank" title="Documentation"><Help  class="shrink-0 mr-2 h-6 w-6 self-end" /></a></div> <!-- 🌙 link to docs -->
+		<div class="absolute right-5"><a href="https://{page.data.github.split("/")[0]}.github.io/{page.data.github.split("/")[1]}{page.url.pathname}" target="_blank" rel="noopener noreferrer" title="Documentation"><Help class="shrink-0 mr-2 h-6 w-6 self-end" /></a></div> <!-- 🌙 link to docs -->
 	{/snippet}
 	{#await getGithubAPI()}
 		<Spinner />
@@ -127,7 +127,7 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#each githubReleases as release}
+						{#each githubReleases as release (release.id)}
 							<tr
 								class={compareVersions(page.data.features.firmware_version, release.tag_name) === 0
 									? 'bg-primary text-primary-content'

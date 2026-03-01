@@ -297,7 +297,7 @@
 	{/snippet}
 	{#snippet title()}
 		<span>WiFi Connection</span>
-		<div class="absolute right-5"><a href="https://{page.data.github.split("/")[0]}.github.io/{page.data.github.split("/")[1]}/network/sta" target="_blank" title="Documentation"><Help  class="shrink-0 mr-2 h-6 w-6 self-end" /></a></div> <!-- 🌙 link to docs - {page.url.pathname} hardcoded -->
+		<div class="absolute right-5"><a href="https://{page.data.github.split("/")[0]}.github.io/{page.data.github.split("/")[1]}/network/sta" target="_blank" rel="noopener noreferrer" title="Documentation"><Help  class="shrink-0 mr-2 h-6 w-6 self-end" /></a></div> <!-- 🌙 link to docs - {page.url.pathname} hardcoded -->
 	{/snippet}
 	{#await getWifiData()}
 		<Spinner />

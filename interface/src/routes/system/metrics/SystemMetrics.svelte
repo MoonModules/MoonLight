@@ -381,25 +381,33 @@
 		lpsChart.data.labels = $analytics.uptime;
 		lpsChart.data.datasets[0].data = $analytics.lps;
 		lpsChart.update('none');
-		lpsChart.options.scales.y.max = Math.round(Math.max(...$analytics.lps));
+		if (lpsChart.options.scales?.y) {
+			lpsChart.options.scales.y.max = Math.round(Math.max(...$analytics.lps));
+		}
 
 		heapChart.data.labels = $analytics.uptime;
 		heapChart.data.datasets[0].data = $analytics.used_heap;
 		heapChart.data.datasets[1].data = $analytics.max_alloc_heap;
 		heapChart.update('none');
-		heapChart.options.scales.y.max = Math.round(Math.max(...$analytics.total_heap));
+		if (heapChart.options.scales?.y) {
+			heapChart.options.scales.y.max = Math.round(Math.max(...$analytics.total_heap));
+		}
 
 		if (hasPsramData) {
 			psramChart.data.labels = $analytics.uptime;
 			psramChart.data.datasets[0].data = $analytics.used_psram;
 			psramChart.update('none');
-			psramChart.options.scales.y.max = Math.round(Math.max(...$analytics.psram_size));
+			if (psramChart.options.scales?.y) {
+				psramChart.options.scales.y.max = Math.round(Math.max(...$analytics.psram_size));
+			}
 		}
 
 		filesystemChart.data.labels = $analytics.uptime;
 		filesystemChart.data.datasets[0].data = $analytics.fs_used;
 		filesystemChart.update('none');
-		filesystemChart.options.scales.y.max = Math.round(Math.max(...$analytics.fs_total));
+		if (filesystemChart.options.scales?.y) {
+			filesystemChart.options.scales.y.max = Math.round(Math.max(...$analytics.fs_total));
+		}
 
 		temperatureChart.data.labels = $analytics.uptime;
 		temperatureChart.data.datasets[0].data = $analytics.core_temp;
@@ -440,7 +448,7 @@
 	{/snippet}
 	{#snippet title()}
 		<span>System Metrics</span>
-		<div class="absolute right-5"><a href="https://{page.data.github.split("/")[0]}.github.io/{page.data.github.split("/")[1]}{page.url.pathname}" target="_blank" title="Documentation"><Help  class="shrink-0 mr-2 h-6 w-6 self-end" /></a></div> <!-- 🌙 link to docs -->
+		<div class="absolute right-5"><a href="https://{page.data.github.split("/")[0]}.github.io/{page.data.github.split("/")[1]}{page.url.pathname}" target="_blank" rel="noopener noreferrer" title="Documentation"><Help  class="shrink-0 mr-2 h-6 w-6 self-end" /></a></div> <!-- 🌙 link to docs -->
 	{/snippet}
 
 	<div class="w-full overflow-x-auto">
