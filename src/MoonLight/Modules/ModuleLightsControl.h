@@ -338,7 +338,7 @@ class ModuleLightsControl : public Module {
       };
       layerP.lights.header.brightness = newBri;
     } else if (updatedItem.name == "palette") {
-      const size_t nrOfPaletteEntries = sizeof(layerP.palette.entries) / sizeof(CRGB);
+      // const size_t nrOfPaletteEntries = sizeof(layerP.palette.entries) / sizeof(CRGB);
       layerP.palette = getGradientPalette(updatedItem.value);
     } else if (updatedItem.name == "preset") {
       // copy /.config/effects.json to the hidden folder /.config/presets/preset[x].json

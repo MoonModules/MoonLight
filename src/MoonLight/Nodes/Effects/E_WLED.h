@@ -496,10 +496,10 @@ class NoiseMeterEffect : public Node {
     // if (maxLen <0) maxLen = 0;
     // if (maxLen >layer->size.x) maxLen = layer->size.x;
 
-    for (int i = 0; i < maxLen; i++) {                                                                                     // The louder the sound, the wider the soundbar. By Andrew Tuline.
-      uint8_t index = inoise8(i * sharedData.volume + aux0, aux1 + i * sharedData.volume);                                 // Get a value from the noise function. I'm using both x and y axis.
+    for (int y = 0; y < maxLen; y++) {                                                                                     // The louder the sound, the wider the soundbar. By Andrew Tuline.
+      uint8_t index = inoise8(y * sharedData.volume + aux0, aux1 + y * sharedData.volume);                                 // Get a value from the noise function. I'm using both x and y axis.
       for (int x = 0; x < layer->size.x; x++)                                                                              // propagate to other dimensions
-        for (int z = 0; z < layer->size.z; z++) layer->setRGB(Coord3D(x, i, z), ColorFromPalette(layerP.palette, index));  //, 255, PALETTE_SOLID_WRAP));
+        for (int z = 0; z < layer->size.z; z++) layer->setRGB(Coord3D(x, layer->size.y -1 - y, z), ColorFromPalette(layerP.palette, index));  //, 255, PALETTE_SOLID_WRAP));
     }
 
     aux0 += beatsin8(5, 0, 10);

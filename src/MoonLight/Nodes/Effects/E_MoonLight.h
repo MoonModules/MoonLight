@@ -24,25 +24,37 @@ class SolidEffect : public Node {
   uint8_t blue = 98;
   uint8_t white = 0;
   uint8_t brightness = 255;
-  bool usePalette = false;
+  uint8_t colorMode = 0;
 
   void setup() override {
+    addControl(colorMode, "colorMode", "select");
+    addControlValue("RGB(W)");
+    addControlValue("Palette");
+    addControlValue("Palette avg");
     addControl(red, "red", "slider");
     addControl(green, "green", "slider");
     addControl(blue, "blue", "slider");
     addControl(white, "white", "slider");
     addControl(brightness, "brightness", "slider");
-    addControl(usePalette, "usePalette", "checkbox");
   }
 
   void loop() override {
-    if (usePalette) {
+    if (colorMode == 0) {
+      layer->fill_solid(CRGB(red * brightness / 255, green * brightness / 255, blue * brightness / 255));
+      if (layerP.lights.header.offsetWhite != UINT8_MAX && white > 0)
+        for (int index = 0; index < layer->nrOfLights; index++) layer->setWhite(index, white * brightness / 255);
+
+    } else if (colorMode == 1) {
+      for (int index = 0; index < layer->nrOfLights; index++) {
+        layer->setRGB(index, ColorFromPalette(layerP.palette, map(index, 0, layer->nrOfLights, 0, 256), brightness));
+      }
+    } else if (colorMode == 2) {
       // Square-Root Averaging
       uint32_t sumRedSq = 0, sumGreenSq = 0, sumBlueSq = 0;
       uint16_t nrOfColors = 0;
 
       for (int index = 0; index < 256; index++) {  // Sample entire palette
-        CRGB color = ColorFromPalette(layerP.palette, index);
+        CRGB color = ColorFromPalette(layerP.palette, index, brightness);
         if (color != CRGB::Black) {
           sumRedSq += color.red * color.red;
           sumGreenSq += color.green * color.green;
@@ -59,10 +71,6 @@ class SolidEffect : public Node {
       CRGB color = CRGB(sqrt(sumRedSq / nrOfColors), sqrt(sumGreenSq / nrOfColors), sqrt(sumBlueSq / nrOfColors));
 
       for (int index = 0; index < layer->nrOfLights; index++) layer->setRGB(index, color);
-    } else {
-      layer->fill_solid(CRGB(red * brightness / 255, green * brightness / 255, blue * brightness / 255));
-      if (layerP.lights.header.offsetWhite != UINT8_MAX && white > 0)
-        for (int index = 0; index < layer->nrOfLights; index++) layer->setWhite(index, white * brightness / 255);
     }
   }
 };

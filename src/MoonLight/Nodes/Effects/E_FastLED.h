@@ -20,17 +20,29 @@ class RainbowEffect : public Node {
   uint8_t speed = 8;  // default 8*32 = 256 / 256 = 1 = hue++
   uint8_t deltaHue = 7;
   uint8_t chanceOfGlitter = 80;
+  bool usePalette = false;
 
   void setup() {
     addControl(speed, "speed", "slider", 0, 32);
     addControl(deltaHue, "deltaHue", "slider", 0, 32);
     addControl(chanceOfGlitter, "chanceOfGlitter", "slider", 0, 100);
+    addControl(usePalette, "usePalette", "checkbox");
   }
 
   uint16_t hue = 0;
 
   void loop() override {
-    layer->fill_rainbow((hue += speed * 32) >> 8, deltaHue);  // hue back to uint8_t
+    if (usePalette) {
+      uint8_t paletteIndex = hue >> 8;
+      for (int i = 0; i < layer->nrOfLights; ++i) {
+        layer->setRGB(i, ColorFromPalette(layerP.palette, paletteIndex));
+        paletteIndex += deltaHue;
+      }
+    } else {
+      layer->fill_rainbow(hue >> 8, deltaHue);  // hue back to uint8_t
+    }
+    hue += speed * 32;
+
     if (chanceOfGlitter && random8() < chanceOfGlitter) {
       layer->setRGB(random16(layer->nrOfLights), CRGB::White);
     }
@@ -65,15 +77,15 @@ class FLAudioEffect : public Node {
     columnNr++;
     layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.vocalConfidence, CRGB::Blue);
     columnNr++;
-    
+
     // beat
     layer->drawLine(columnNr, layer->size.y - 1, columnNr++, layer->size.y - 1 - layer->size.y * beatLevel / 255, CRGB::Purple);
     if (sharedData.beat) layer->setRGB(Coord3D(columnNr, layer->size.y - 1), CRGB::Purple);
     columnNr++;
 
-    // percussion 
+    // percussion
     if (sharedData.percussionType != UINT8_MAX) layer->setRGB(Coord3D(columnNr + sharedData.percussionType, layer->size.y - 1), CRGB::Cyan);
-    columnNr+=3;
+    columnNr += 3;
 
     // beat decay
     if (beatLevel && layer->size.y > 0) beatLevel -= MIN(255 / layer->size.y, beatLevel);
