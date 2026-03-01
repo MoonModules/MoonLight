@@ -93,23 +93,26 @@
 
 	async function getFileContents() {
 		// console.log("getFileContents", path, path[0])
+		const requestedPath = path;
 		editableFile.isFile = isFile;
-		editableFile.path = path;
+		editableFile.path = requestedPath;
 		if (newItem) {
 			editableFile.name = '';
-			folder = path.endsWith('/') ? path : `${path}/`;
+			folder = requestedPath.endsWith('/') ? requestedPath : `${requestedPath}/`;
 			editableFile.contents = '';
 		} else {
-			const parts = path.split('/');
+			const parts = requestedPath.split('/');
 			editableFile.name = parts.pop() || '';
 			const base = parts.join('/');
 			folder = base === '' ? '/' : `${base}/`;
-			if (path[0] === '/') {
-				const response = await fetch('/rest/file/' + editableFile.path, {
+			if (requestedPath[0] === '/') {
+				const response = await fetch('/rest/file/' + requestedPath, {
 					method: 'GET',
 					headers: { 'Content-Type': 'text/plain' }
 				});
-				editableFile.contents = await response.text();
+				const text = await response.text();
+				if (path !== requestedPath) return;
+				editableFile.contents = text;
 				// console.log("getFileContents", editableFile.contents)
 			}
 		}

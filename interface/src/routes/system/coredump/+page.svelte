@@ -73,7 +73,7 @@
 			>
 		</div>
 		{#if coreDumpBlob}
-			<button class="btn btn-primary mt-4" on:click={downloadCoreDump}>
+			<button class="btn btn-primary mt-4" onclick={downloadCoreDump}>
 				Download Core Dump (coredump.bin)
 			</button>
 		{:else if errorMessage}

@@ -178,7 +178,7 @@
 			<span>{value}</span>
 		{/if}
 	{:else if property.type == 'select' || property.type == 'selectFile'}
-		<select bind:value on:change={onChange} class="select">
+		<select bind:value onchange={onChange} class="select">
 			{#each property.values as value, index (index)}
 				<option value={property.type == 'selectFile' ? value : index}>
 					{value}
@@ -190,7 +190,7 @@
 		{/if}
 	{:else if property.type == 'palette'}
 		<div style="display: flex; gap: 8px; align-items: center;">
-			<select bind:value on:change={onChange} class="select">
+			<select bind:value onchange={onChange} class="select">
 				{#each property.values as val, index (index)}
 					<option value={index}>{val.name}</option>
 				{/each}
@@ -211,11 +211,11 @@
 			type="checkbox"
 			class="toggle toggle-primary"
 			bind:checked={value}
-			on:change={onChange}
+			onchange={onChange}
 		/>
 	{:else if property.type == 'slider'}
 		<!-- range colors: https://daisyui.com/components/range/ 
-         on:input: throttled response to server for performance
+         oninput: throttled response to server for performance
          -->
 		<input
 			type="range"
@@ -232,7 +232,7 @@
 					: 'range-secondary')}
 			{disabled}
 			bind:value
-			on:input={handleSliderInput}
+			oninput={handleSliderInput}
 		/>
 		{#if hasNumber}
 			<input
@@ -244,7 +244,7 @@
 				style="height: 2rem; width: 5rem"
 				{disabled}
 				bind:value
-				on:change={onChange}
+				onchange={onChange}
 			/>
 		{/if}
 	{:else if property.type == 'textarea'}
@@ -252,13 +252,13 @@
 			rows="10"
 			cols="61"
 			class="textarea w-full"
-			on:change={onChange}
-			on:input={(event: any) => {
+			onchange={onChange}
+			oninput={(event: any) => {
 				if (changeOnInput) onChange(event);
 			}}>{value}</textarea
 		>
 	{:else if property.type == 'file'}
-		<input type="file" on:change={onChange} />
+		<input type="file" onchange={onChange} />
 	{:else if property.type == 'number'}
 		<input
 			type="number"
@@ -267,8 +267,8 @@
 			max={property.max ? property.max : 255}
 			class="input invalid:border-error invalid:border-2"
 			bind:value
-			on:change={onChange}
-			on:input={(event: any) => {
+			onchange={onChange}
+			oninput={(event: any) => {
 				if (changeOnInput) onChange(event);
 			}}
 		/>
@@ -279,8 +279,8 @@
 			minlength={property.min ? property.min : 0}
 			maxlength={property.max ? property.max : 255}
 			bind:value
-			on:change={onChange}
-			on:input={(event: any) => {
+			onchange={onChange}
+			oninput={(event: any) => {
 				if (changeOnInput) onChange(event);
 			}}
 		/>
@@ -293,8 +293,8 @@
 			minlength="3"
 			maxlength="15"
 			bind:value
-			on:change={onChange}
-			on:input={(event: any) => {
+			onchange={onChange}
+			oninput={(event: any) => {
 				if (changeOnInput) onChange(event);
 			}}
 		/>
@@ -303,7 +303,7 @@
 		<button
 			class="btn btn-primary"
 			type="button"
-			on:click={(event: any) => {
+			onclick={(event: any) => {
 				if (value == null) value = 1;
 				else value++;
 				onChange(event);
@@ -317,7 +317,7 @@
 			min="0"
 			max="65536"
 			bind:value={value.x}
-			on:change={onChange}
+			onchange={onChange}
 		/>
 		<input
 			type="number"
@@ -326,7 +326,7 @@
 			min="0"
 			max="65536"
 			bind:value={value.y}
-			on:change={onChange}
+			onchange={onChange}
 		/>
 		<input
 			type="number"
@@ -335,7 +335,7 @@
 			min="0"
 			max="65536"
 			bind:value={value.z}
-			on:change={onChange}
+			onchange={onChange}
 		/>
 	{:else if property.type == 'pad'}
 		<div class="flex flex-col space-y-2">
@@ -352,10 +352,10 @@
 										: 'btn-primary'}"
 								type="button"
 								draggable="true"
-								on:dragstart={(event) => handleDragStart(event, y, x)}
-								on:dragover|preventDefault
-								on:drop={(event) => handleDrop(event, y, x)}
-								on:click={(event: any) => {
+								ondragstart={(event) => handleDragStart(event, y, x)}
+								ondragover={(event) => event.preventDefault()}
+								ondrop={(event) => handleDrop(event, y, x)}
+								onclick={(event: any) => {
 									preventClick = false;
 									clickTimeout = setTimeout(() => {
 										if (!preventClick) {
@@ -369,7 +369,7 @@
 									}, 250);
 									// 250ms is a typical double-click threshold
 								}}
-								on:dblclick={(event: any) => {
+								ondblclick={(event: any) => {
 									preventClick = true;
 									clearTimeout(clickTimeout);
 									value.select = x + y * property.width + 1;
@@ -377,7 +377,7 @@
 									value.action = 'dblclick';
 									onChange(event);
 								}}
-								on:mouseenter={(event: any) => {
+								onmouseenter={(event: any) => {
 									// console.log("mousenter", rowIndex, colIndex, cell, value);
 									if (property.hoverToServer) {
 										value.select = x + y * property.width + 1;
@@ -390,7 +390,7 @@
 											value.list.includes(x + y * property.width + 1)
 										);
 								}}
-								on:mouseleave={(event: any) => {
+								onmouseleave={(event: any) => {
 									// console.log("mouseleave", rowIndex, colIndex, cell, value);
 									if (property.hoverToServer) {
 										value.select = x + y * property.width + 1;
@@ -428,7 +428,7 @@ Adjust space-x-2 and space-y-2 for spacing. -->
 			type={property.type}
 			class="input invalid:border-error invalid:border-2"
 			bind:value
-			on:change={onChange}
+			onchange={onChange}
 		/>
 	{/if}
 	{#if !noPrompts}
@@ -442,7 +442,7 @@ Adjust space-x-2 and space-y-2 for spacing. -->
 							property.default.y == value.y &&
 							property.default.z == value.z
 						: property.default == value)}
-				on:click={(event: any) => {
+				onclick={(event: any) => {
 					if (property.type == 'coord3D') {
 						value.x = property.default.x;
 						value.y = property.default.y;

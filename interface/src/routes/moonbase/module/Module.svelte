@@ -129,13 +129,10 @@
 			if (Array.isArray(newData[key])) {
 				//loop over array
 				if (!Array.isArray(oldData[key])) oldData[key] = []; //normalize to array
-				for (let i = 0; i < Math.max(oldData[key].length, newData[key].length); i++) {
+				for (let i = 0; i < newData[key].length; i++) {
 					if (oldData[key][i] == undefined) {
 						// console.log("add row", key, i, newData[key][i]);
 						oldData[key][i] = newData[key][i]; //create new row if not existed, trigger reactiveness
-					} else if (newData[key][i] == undefined) {
-						// console.log("remove remaining rows", key, i, oldData[key][i]);
-						oldData[key].splice(i);
 					} else {
 						// console.log("change row", key, i, oldData[key][i], newData[key][i]);
 						const oldItem = oldData[key][i];
@@ -152,6 +149,10 @@
 						}
 					}
 				}
+				if (oldData[key].length > newData[key].length) {
+					oldData[key].splice(newData[key].length);
+				}
+
 			} else if (newData[key] !== null && typeof newData[key] === 'object') {
 				// passing a partial object acts as a patch and missing siblings should be preserved. (MoonModules/MoonLight Module::update() + compareRecursive)
 				if (

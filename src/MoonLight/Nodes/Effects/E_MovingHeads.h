@@ -305,7 +305,7 @@ class WowiMoveEffect : public Node {
     addControl(tilt, "tilt", "slider");
     addControl(zoom, "zoom", "slider");
     addControl(autoMove, "autoMove", "checkbox");
-    addControl(range, "range", "slider"), 0, 127;
+    addControl(range, "range", "slider", 0, 127);
     addControl(invert, "invert", "checkbox");
   }
 

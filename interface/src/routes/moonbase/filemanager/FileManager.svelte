@@ -220,7 +220,14 @@
 
 	onMount(() => {
 		let bc = localStorage.getItem('breadCrumbs');
-		if (bc) breadCrumbs = JSON.parse(bc);
+		if (bc) {
+			try {
+				breadCrumbs = JSON.parse(bc);
+			} catch {
+				breadCrumbs = [];
+				localStorage.removeItem('breadCrumbs');
+			}
+		}
 
 		socket.on('FileManager', handleFilesState);
 		// getState(); //done in settingscard

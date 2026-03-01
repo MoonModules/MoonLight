@@ -102,7 +102,7 @@ class EspIdfUdpSocket : public UdpSocket {
  public:
   EspIdfUdpSocket() : sock_(-1) {}
 
-  ~EspIdfUdpSocket() override { close(); }
+  ~EspIdfUdpSocket() override { EspIdfUdpSocket::close(); }
 
   // below functions is poc code. Need to be verified when actually used
 

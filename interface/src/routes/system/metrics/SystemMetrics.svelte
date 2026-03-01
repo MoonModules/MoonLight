@@ -372,8 +372,8 @@
 			}
 		});
 		setInterval(() => {
-			updateData(), 2000;
-		});
+			updateData();
+		}, 2000);
 	});
 
 	function updateData() {
