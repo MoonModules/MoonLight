@@ -97,12 +97,13 @@
 		editableFile.path = path;
 		if (newItem) {
 			editableFile.name = '';
-			folder = path + '/';
+			folder = path.endsWith('/') ? path : `${path}/`;
 			editableFile.contents = '';
 		} else {
 			const parts = path.split('/');
 			editableFile.name = parts.pop() || '';
-			folder = parts.join('/') + '/';
+			const base = parts.join('/');
+			folder = base === '' ? '/' : `${base}/`;
 			if (path[0] === '/') {
 				const response = await fetch('/rest/file/' + editableFile.path, {
 					method: 'GET',

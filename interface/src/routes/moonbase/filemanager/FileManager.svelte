@@ -281,7 +281,7 @@
 					transition:slide|local={{ duration: 300, easing: cubicOut }}
 				>
 					{#if showEditor}
-						<FileEditWidget {newItem} {path} isFile={editableFile.isFile} />-
+						<FileEditWidget {newItem} {path} isFile={editableFile.isFile} />
 					{/if}
 				</div>
 

@@ -58,7 +58,7 @@
 			transition:slide|local={{ duration: 300, easing: cubicOut }}
 		>
 			<!-- <div class="divider my-0"></div> -->
-			{#each property.n as propertyN, i (i)}
+			{#each property.n as propertyN (propertyN.name)}
 				{#if propertyN.type == 'array'}
 					<label for={propertyN.name}>{propertyN.name}</label>
 					<RowRenderer
@@ -69,7 +69,7 @@
 						{changeOnInput}
 					></RowRenderer>
 				{:else if propertyN.type == 'controls'}
-					{#each dataEditable[propertyN.name] as control, j (j)}
+					{#each dataEditable[propertyN.name] as control (control.p ?? control.name ?? control.id)}
 						<!-- e.g. dE["controls"] -> {"name":"xFrequency","type":"slider","default":64,"p":1070417419,"value":64} -->
 						<FieldRenderer property={control} bind:value={control.value} {onChange} {changeOnInput}
 						></FieldRenderer>

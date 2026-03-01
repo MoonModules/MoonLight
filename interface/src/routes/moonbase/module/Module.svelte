@@ -138,7 +138,11 @@
 						oldData[key].splice(i);
 					} else {
 						// console.log("change row", key, i, oldData[key][i], newData[key][i]);
-						updateRecursive(oldData[key][i], newData[key][i]);
+						if (newData[key][i] !== null && typeof newData[key][i] === 'object') {
+							updateRecursive(oldData[key][i], newData[key][i]);
+						} else if (oldData[key][i] !== newData[key][i]) {
+							oldData[key][i] = newData[key][i];
+						}
 					}
 				}
 			} else {

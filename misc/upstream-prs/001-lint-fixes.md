@@ -15,7 +15,7 @@ can benefit from the corrections.
 **File:** `interface/src/routes/system/metrics/BatteryMetrics.svelte`
 
 The `setInterval` call is wrapped in an arrow function that forms a comma expression. This
-means the interval fires with **no delay** (0 ms) instead of the intended 2000 ms, and the
+means the interval fires with **no delay** (0 ms) instead of the intended 5000 ms, and the
 second argument `5000` is silently discarded as an unused expression.
 
 ```js
