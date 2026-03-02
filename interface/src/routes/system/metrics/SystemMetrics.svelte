@@ -32,7 +32,12 @@
 	let hasPsramData = $derived(Math.max(...$analytics.psram_size) > 0);
 
 	$effect(() => {
-		if (hasPsramData) initPsramChart();
+		if (hasPsramData) {
+			initPsramChart();
+		} else if (psramChart) {
+			psramChart.destroy();
+			// psramChart = undefined;
+		}
 	});
 
 	function initPsramChart() {

@@ -107,7 +107,7 @@ class ModuleDevices : public Module {
       } else {
         // if a device is updated in the UI, send that update to that device
         if (deviceUDP.beginPacket(targetIP, deviceUDPPort)) {
-          deviceUDP.write((uint8_t*)&message, sizeof(message));
+          deviceUDP.write(reinterpret_cast<uint8_t*>(&message), sizeof(message));
           deviceUDP.endPacket();
           EXT_LOGD(ML_TAG, "UDP from %s update sent to ...%d / %s bri=%d pal=%d preset=%d", originId.c_str(), targetIP[3], message.name.c_str(), message.brightness, message.palette, message.preset);
           // need to add the targetip?
@@ -279,7 +279,7 @@ class ModuleDevices : public Module {
 
       _moduleControl->read([&](ModuleState& state) { controlStateToMessage(state.data, message); }, _moduleName);
 
-      deviceUDP.write((uint8_t*)&message, sizeof(message));
+      deviceUDP.write(reinterpret_cast<uint8_t*>(&message), sizeof(message));
       deviceUDP.endPacket();
       // EXT_LOGD(ML_TAG, "UDP update sent: bri=%d pal=%d preset=%d control: %d", message.brightness, message.palette, message.preset, isControlCommand);
 

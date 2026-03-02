@@ -1762,7 +1762,7 @@ class RainEffect : public Node {
           drops[x].col++;
         }
         if (drops[x].pos <= 0) drops[x].pos = UINT16_MAX;     // reset previous spark position
-        if (drops[x].col <= 0) drops[x].pos = UINT16_MAX;     // reset previous spark position
+        if (drops[x].col == 0) drops[x].col = UINT16_MAX;     // reset previous spark position (uint16_t: <= 0 is == 0; was a copy-paste bug setting pos)
         if (drops[x].pos >= layer->size.y) drops[x].pos = 0;  // ignore
         if (drops[x].col >= layer->size.y) drops[x].col = 0;
       }
@@ -1862,6 +1862,7 @@ class DripEffect : public Node {
             if (drops[x][j].colIndex > falling) {  // bouncing, already hit once, so back to forming
               drops[x][j].colIndex = init;
             } else {
+              // cppcheck-suppress knownConditionTrueFalse -- always true by state machine (> forming && <= falling), kept for readability
               if (drops[x][j].colIndex == falling) {                // init bounce
                 drops[x][j].vel = -drops[x][j].vel * bounce / 255;  // reverse velocity with damping
                 drops[x][j].pos += drops[x][j].vel;
@@ -2020,8 +2021,10 @@ class ColorTwinkleEffect : public Node {
     if (!data) return;
 
     CRGB fastled_col, prev;
-    uint8_t brightness = 128;  // strip.getBrightness()
+    uint8_t brightness = 128;  // strip.getBrightness() TODO: make dynamic
+    // cppcheck-suppress knownConditionTrueFalse -- brightness is hardcoded 128; original WLED used dynamic getBrightness()
     fract8 fadeUpAmount = brightness > 28 ? 8 + (fadeSpeed >> 2) : 68 - brightness;
+    // cppcheck-suppress knownConditionTrueFalse
     fract8 fadeDownAmount = brightness > 28 ? 8 + (fadeSpeed >> 3) : 68 - brightness;
     for (uint16_t i = 0; i < layer->nrOfLights; i++) {
       fastled_col = layer->getRGB(i);

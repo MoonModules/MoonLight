@@ -52,7 +52,9 @@ function createWebSocket() {
 				payload = binary ? msgpack.decode(new Uint8Array(payload)) : JSON.parse(payload);
 			} catch (error) {
 				console.error('[WebSocket] Decode error:', error); // 🌙
-				listeners.get('error')?.forEach((listener) => listener(error));
+				listeners.get('error')?.forEach((listener) => {
+					listener(error);
+				});
 				return;
 			}
 			
@@ -62,20 +64,26 @@ function createWebSocket() {
 				return;
 			}
 			
-			listeners.get('json')?.forEach((listener) => listener(payload));
+			listeners.get('json')?.forEach((listener) => {
+				listener(payload);
+			});
 			
 			// Safe destructuring
 			const { event = null, data = null } = payload;
 			
 			if (event) {
-				if (data !== null && data !== undefined) {
-					listeners.get(event)?.forEach((listener) => listener(data));
-				}
-			} else { // 🌙 if no event, assume monitor data (see emitEvent char * output)
-				listeners.get("monitor")?.forEach((listener) => 
-					listener(new Uint8Array(message.data))
-				);
-			}
+				// if (data !== null && data !== undefined) {
+					listeners.get(event)?.forEach((listener) => {
+						listener(data);
+					});
+				// }
+			} else if (binary) { // 🌙 if no event, assume monitor data (raw binary)
+				listeners.get('monitor')?.forEach((listener) => {
+					listener(new Uint8Array(message.data));
+				});
+			} else {
+				console.warn('[WebSocket] Missing "event" in non-binary payload:', payload);
+ 			}
 		};
 		ws.onerror = (ev) => disconnect('error', ev);
 		ws.onclose = (ev) => disconnect('close', ev);

@@ -90,7 +90,7 @@ StateUpdateResult FilesState::update(JsonObject& newData, FilesState& state, con
         File file = ESPFS.open(var["path"].as<const char*>(), FILE_WRITE);
         const char* contents = var["contents"];
         if (strlen(contents)) {
-          if (!file.write((byte*)contents, strlen(contents))) {  // changed not true as contents is not part of the state
+          if (!file.write(reinterpret_cast<const byte*>(contents), strlen(contents))) {  // changed not true as contents is not part of the state
             EXT_LOGE(MB_TAG, "Write failed");
           }
         }
@@ -112,7 +112,7 @@ StateUpdateResult FilesState::update(JsonObject& newData, FilesState& state, con
         EXT_LOGE(MB_TAG, "Failed to open file");
       } else {
         const char* contents = var["contents"];
-        if (!file.write((byte*)contents, strlen(contents))) {  // changed not true as contents is not part of the state
+        if (!file.write(reinterpret_cast<const byte*>(contents), strlen(contents))) {  // changed not true as contents is not part of the state
           EXT_LOGE(MB_TAG, "Write failed");
         }
         file.close();

@@ -138,7 +138,18 @@ Current status: **0 errors, 49 warnings** (all `@typescript-eslint/no-explicit-a
 Run cppcheck (full): see comment block in `platformio.ini` for the manual command.
 Run clang-tidy: `pio run -e esp32-s3 -t compiledb` then `run-clang-tidy -p . $(find src -name "*.cpp")`
 
-Current status: **0 defects** (cppcheck clean after fixes in session 2026-03-01)
+Current status: **0 defects** (cppcheck clean after fixes in session 2026-03-02)
+
+Recent fixes (session 2026-03-02):
+- `E_MoonModules.h:413`: `uint16_t projector <= 0` → `== 0` (semantically equivalent, silences warning)
+- `M_MoonLight.h:215`: `uint8_t swirlVal < 0` always false — suppressed with note (reverse swirl feature broken until type changes to `int8_t`)
+- `E_WLED.h:1765`: Copy-paste bug — `drops[x].col == 0` was resetting `pos` instead of `col`; also changed `<= 0` to `== 0` for `uint16_t`
+- `E_WLED.h:1866`: Suppressed `knownConditionTrueFalse` — `colIndex == falling` is always true by state machine logic in that branch
+- `E_WLED.h:2024-2025`: Suppressed `knownConditionTrueFalse` — `brightness` hardcoded to 128 (original WLED used dynamic `getBrightness()`)
+- `ModuleDrivers.h:126`, `ModuleEffects.h:210`: Suppressed `knownConditionTrueFalse` — first `if (!node)` always true after `node = nullptr`; intentional chain pattern
+- `E_MoonLight.h:1169,1205`: Suppressed `duplicateCondition` — consecutive `if (debugPrint)` debug log lines; intentional
+- All C-style casts (`(uint8_t*)`, `(byte*)`, `(CRGB*)`, `(Module*)`, `(ArtNetHeader*)`, `(DDPHeader*)`) converted to `reinterpret_cast<>` / `static_cast<>` (cppcheck 2.19 `dangerousTypeCast`)
+- CI: Added `-DFT_ENABLED(x)=x` to cppcheck command (was causing `syntaxError` for function-like macro)
 
 ### CI (GitHub Actions)
 

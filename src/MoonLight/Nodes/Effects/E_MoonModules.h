@@ -410,7 +410,7 @@ class GEQ3DEffect : public Node {
 
     if (counter++ % (11 - speed) == 0) projector += projector_dir;
     if (projector >= cols) projector_dir = -1;
-    if (projector <= 0) projector_dir = 1;
+    if (projector == 0) projector_dir = 1;  // uint16_t: <= 0 is always == 0
 
     layer->fill_solid(CRGB::Black);
 

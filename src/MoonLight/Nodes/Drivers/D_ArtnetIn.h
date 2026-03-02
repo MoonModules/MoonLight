@@ -112,7 +112,7 @@ class ArtNetInDriver : public Node {
   void handleArtNet() {
     // Verify Art-Net packet
     if (memcmp(packetBuffer, "Art-Net", 7) == 0) {
-      ArtNetHeader* header = (ArtNetHeader*)packetBuffer;
+      ArtNetHeader* header = reinterpret_cast<ArtNetHeader*>(packetBuffer);
       uint16_t opcode = header->opcode;
 
       // EXT_LOGD(ML_TAG, "size:%d universe:%d", packetSize, header->universe);
@@ -147,7 +147,7 @@ class ArtNetInDriver : public Node {
   }
 
   void handleDDP() {
-    DDPHeader* header = (DDPHeader*)packetBuffer;
+    DDPHeader* header = reinterpret_cast<DDPHeader*>(packetBuffer);
 
     // bool pushFlag = (header->flags & 0x80) != 0;
     uint8_t dataType = header->dataType;

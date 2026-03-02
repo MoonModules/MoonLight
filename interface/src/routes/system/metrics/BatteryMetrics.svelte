@@ -150,12 +150,12 @@
 		batteryChart.data.datasets[1].data = $batteryHistory.charging;
 		batteryChart.data.datasets[2].data = $batteryHistory.voltage; // 🌙
 		batteryChart.data.datasets[3].data = $batteryHistory.current; // 🌙
-		batteryChart.update('none');
 		if (batteryChart.options?.scales?.y) {
 			batteryChart.options.scales.y.max = Math.round(
 				Math.max(Math.max(...$batteryHistory.voltage), Math.max(...$batteryHistory.current))
 			);
 		}
+		batteryChart.update('none');
 	}
 
 </script>

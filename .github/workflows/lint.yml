@@ -52,5 +52,6 @@ jobs:
             -DPLATFORMIO=1 \
             -DFT_MOONLIGHT=1 \
             -DFT_MOONBASE=1 \
+            "-DFT_ENABLED(x)=x" \
             --template="{file}:{line}: {severity}: {message} [{id}]" \
             $(find src \( -name "*.cpp" -o -name "*.h" \) ! -path "*moonmanpng*" -print)

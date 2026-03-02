@@ -20,26 +20,18 @@ export default function viteLittleFS(): Plugin[] {
 						next.assetFileNames = next.assetFileNames.replace('.[hash]', '');
 					}
 
-					if (
-						typeof next.chunkFileNames === 'string' &&
-						next.chunkFileNames.includes('[hash]')
-					) {
+					if (typeof next.chunkFileNames === 'string' && next.chunkFileNames.includes('[hash]')) {
 						next.chunkFileNames = next.chunkFileNames.replace('.[hash]', '');
 					}
 
-					if (
-						typeof next.entryFileNames === 'string' &&
-						next.entryFileNames.includes('[hash]')
-					) {
+					if (typeof next.entryFileNames === 'string' && next.entryFileNames.includes('[hash]')) {
 						next.entryFileNames = next.entryFileNames.replace('.[hash]', '');
 					}
 
 					return next;
 				});
 
-				config.build!.rollupOptions!.output = Array.isArray(output)
-					? normalized
-					: normalized[0];
+				config.build!.rollupOptions!.output = Array.isArray(output) ? normalized : normalized[0];
 			}
 		}
 	];
