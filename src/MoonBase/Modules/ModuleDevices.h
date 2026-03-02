@@ -338,8 +338,6 @@ class ModuleDevices : public Module {
   bool partOfGroup(const String& base, const String& device, int level = 0) {
     EXT_LOGV(MB_TAG, "partOfGroup %s %s level:%d", base.c_str(), device.c_str(), level);
 
-    String prefix = base;
-
     // Count dots from the end: level 0 = last dot, level 1 = second-last, etc.
     int pos = base.length();
     for (int i = 0; i <= level; i++) {
@@ -349,8 +347,7 @@ class ModuleDevices : public Module {
       }
     }
 
-    prefix = base.substring(0, pos);
-    return device.startsWith(prefix);
+    return device.startsWith(base.substring(0, pos));
   }
 };
 

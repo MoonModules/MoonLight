@@ -1361,12 +1361,12 @@ class MoonManEffect : public Node {
     // Draw PNG to canvas - M5GFX handles scaling automatically
     success = canvas->drawPng(moonmanpng, moonmanpng_len, 0, 0, 0, 0, 0, 0, layer->size.x / 320.0, layer->size.y / 320.0);
     if (success) {
-      Serial.println("PNG decoded successfully!");
+      EXT_LOGI(ML_TAG, "PNG decoded successfully!");
 
       // Transfer canvas to LED panel
       transferCanvasToPanel();
     } else {
-      Serial.println("PNG decode failed!");
+      EXT_LOGE(ML_TAG, "PNG decode failed!");
     }
   }
 
