@@ -155,15 +155,15 @@
 	>
 		<SettingsCard collapsible={false}>
 			{#snippet icon()}
-				<Users class="lex-shrink-0 mr-2 h-6 w-6 self-end" />
+				<Users class="shrink-0 mr-2 h-6 w-6 self-end" />
 			{/snippet}
 			{#snippet title()}
 				<span>Manage Users</span>
-						<div class="absolute right-20"><a href="https://{page.data.github.split("/")[0]}.github.io/{page.data.github.split("/")[1]}{page.url.pathname}" target="_blank" title="Documentation"><Help  class="lex-shrink-0 mr-2 h-6 w-6 self-end" /></a></div> <!-- 🌙 link to docs -->
+						<div class="absolute right-20"><a href="https://{page.data.github.split("/")[0]}.github.io/{page.data.github.split("/")[1]}{page.url.pathname}" target="_blank" rel="noopener noreferrer" title="Documentation"><Help  class="shrink-0 mr-2 h-6 w-6 self-end" /></a></div> <!-- 🌙 link to docs -->
 			{/snippet}
 			{#await getSecuritySettings()}
 				<Spinner />
-			{:then nothing}
+			{:then}
 				<div class="relative w-full overflow-visible">
 					<button
 						class="btn btn-primary text-primary-content btn-md absolute -top-14 right-0"
@@ -182,7 +182,7 @@
 								</tr>
 							</thead>
 							<tbody>
-								{#each securitySettings.users as user, index}
+								{#each securitySettings.users as user, index (user.username)}
 									<tr>
 										<td align="left">{user.username}</td>
 										<td align="center">

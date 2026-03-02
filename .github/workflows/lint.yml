@@ -1,0 +1,57 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  frontend-lint:
+    name: Frontend (ESLint + Prettier)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: interface
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: interface/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+  backend-lint:
+    name: Backend (cppcheck)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cppcheck
+        run: sudo apt-get install -y cppcheck
+
+      - name: Run cppcheck
+        run: |
+          cppcheck \
+            --enable=warning \
+            --suppress=missingInclude \
+            --suppress=missingIncludeSystem \
+            --inline-suppr \
+            --language=c++ \
+            --std=c++20 \
+            --error-exitcode=1 \
+            -DPLATFORMIO=1 \
+            -DFT_MOONLIGHT=1 \
+            -DFT_MOONBASE=1 \
+            "-DFT_ENABLED(x)=x" \
+            --template="{file}:{line}: {severity}: {message} [{id}]" \
+            $(find src \( -name "*.cpp" -o -name "*.h" \) ! -path "*moonmanpng*" -print)

@@ -49,7 +49,7 @@
 >
 	<SettingsCard collapsible={false}>
 		{#snippet icon()}
-			<CoreDump class="lex-shrink-0 mr-2 h-6 w-6 self-end rounded-full" />
+			<CoreDump class="shrink-0 mr-2 h-6 w-6 self-end rounded-full" />
 		{/snippet}
 		{#snippet title()}
 			<span>Core Dump</span>
@@ -60,7 +60,8 @@
 						'/'
 					)[1]}{page.url.pathname}"
 					target="_blank"
-					title="Documentation"><Help class="lex-shrink-0 mr-2 h-6 w-6 self-end" /></a
+					rel="noopener noreferrer"
+					title="Documentation"><Help class="shrink-0 mr-2 h-6 w-6 self-end" /></a
 				>
 			</div>
 		{/snippet}
@@ -72,7 +73,7 @@
 			>
 		</div>
 		{#if coreDumpBlob}
-			<button class="btn btn-primary mt-4" on:click={downloadCoreDump}>
+			<button class="btn btn-primary mt-4" onclick={downloadCoreDump}>
 				Download Core Dump (coredump.bin)
 			</button>
 		{:else if errorMessage}

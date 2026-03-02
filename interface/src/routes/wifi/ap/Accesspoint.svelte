@@ -188,16 +188,16 @@
 
 <SettingsCard collapsible={false}>
 	{#snippet icon()}
-		<AP class="lex-shrink-0 mr-2 h-6 w-6 self-end" />
+		<AP class="shrink-0 mr-2 h-6 w-6 self-end" />
 	{/snippet}
 	{#snippet title()}
 		<span>Access Point</span>
-		<div class="absolute right-5"><a href="https://{page.data.github.split("/")[0]}.github.io/{page.data.github.split("/")[1]}/network/ap" target="_blank" title="Documentation"><Help  class="lex-shrink-0 mr-2 h-6 w-6 self-end" /></a></div> <!-- 🌙 link to docs - {page.url.pathname} hardcoded -->
+		<div class="absolute right-5"><a href="https://{page.data.github.split("/")[0]}.github.io/{page.data.github.split("/")[1]}/network/ap" target="_blank" rel="noopener noreferrer" title="Documentation"><Help  class="shrink-0 mr-2 h-6 w-6 self-end" /></a></div> <!-- 🌙 link to docs - {page.url.pathname} hardcoded -->
 	{/snippet}
 	<div class="w-full">
 		{#await getAPStatus()}
 			<Spinner />
-		{:then nothing}
+		{:then}
 			<div
 				class="flex w-full flex-col space-y-1"
 				transition:slide|local={{ duration: 300, easing: cubicOut }}
@@ -264,7 +264,7 @@
 			</div>
 			{#await getAPSettings()}
 				<Spinner />
-			{:then nothing}
+			{:then}
 				<div
 					class="flex flex-col gap-2 p-0"
 					transition:slide|local={{ duration: 300, easing: cubicOut }}
@@ -278,7 +278,7 @@
 						<div>
 							<label class="label" for="apmode">Provide Access Point ... </label>
 							<select class="select w-full" id="apmode" bind:value={apSettings.provision_mode}>
-								{#each provisionMode as mode}
+								{#each provisionMode as mode (mode.id)}
 									<option value={mode.id}>
 										{mode.text}
 									</option>

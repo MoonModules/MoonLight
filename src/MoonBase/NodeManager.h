@@ -28,7 +28,7 @@ class NodeManager : public Module {
   PsychicHttpServer* _server;
   FileManager* _fileManager;
 
-  std::vector<Node*, VectorRAMAllocator<Node*>>* nodes;
+  std::vector<Node*, VectorRAMAllocator<Node*>>* nodes = nullptr;
 
   NodeManager(const char* moduleName, PsychicHttpServer* server, ESP32SvelteKit* sveltekit, FileManager* fileManager) : Module(moduleName, server, sveltekit) {
     EXT_LOGV(ML_TAG, "constructor %s", moduleName);

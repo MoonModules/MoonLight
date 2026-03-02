@@ -47,7 +47,7 @@
 			{@render title?.()}
 			{#if isDirty}
 				<div data-tip="There are unsaved changes." class="tooltip tooltip-right tooltip-error">
-					<Alert class="text-error lex-shrink-0 ml-2 h-6 w-6 self-end cursor-help" />
+					<Alert class="text-error shrink-0 ml-2 h-6 w-6 self-end cursor-help" />
 				</div>
 			{/if}
 		</span>

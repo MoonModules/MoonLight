@@ -64,6 +64,8 @@
 	// Clean up throttle timer on component destroy
 	onDestroy(() => {
 		clearInterval(interval);
+		if (hoverTimeout) clearTimeout(hoverTimeout);
+		if (clickTimeout) clearTimeout(clickTimeout);
 		if (throttleTimer) {
 			clearTimeout(throttleTimer);
 			// Send final pending update if any
@@ -157,9 +159,9 @@
 	}
 </script>
 
-<div class="flex-row flex items-center space-x-2 {!noPrompts ? 'mb-1' : ''}">
+<div class="flex flex-row items-center space-x-2 {!noPrompts ? 'mb-1' : ''}">
 	{#if !noPrompts}
-		<label class="label cursor-pointer min-w-24" for={property.name}>
+		<label class="label min-w-24 cursor-pointer" for={property.name}>
 			<span class="mr-4">{initCap(property.name)}</span>
 		</label>
 	{/if}
@@ -178,8 +180,8 @@
 			<span>{value}</span>
 		{/if}
 	{:else if property.type == 'select' || property.type == 'selectFile'}
-		<select bind:value on:change={onChange} class="select">
-			{#each property.values as value, index}
+		<select bind:value onchange={onChange} class="select">
+			{#each property.values as value, index (index)}
 				<option value={property.type == 'selectFile' ? value : index}>
 					{value}
 				</option>
@@ -190,8 +192,8 @@
 		{/if}
 	{:else if property.type == 'palette'}
 		<div style="display: flex; gap: 8px; align-items: center;">
-			<select bind:value on:change={onChange} class="select">
-				{#each property.values as val, index}
+			<select bind:value onchange={onChange} class="select">
+				{#each property.values as val, index (index)}
 					<option value={index}>{val.name}</option>
 				{/each}
 			</select>
@@ -207,22 +209,17 @@
 			}
 		</style>
 	{:else if property.type == 'checkbox'}
-		<input
-			type="checkbox"
-			class="toggle toggle-primary"
-			bind:checked={value}
-			on:change={onChange}
-		/>
+		<input type="checkbox" class="toggle toggle-primary" bind:checked={value} onchange={onChange} />
 	{:else if property.type == 'slider'}
 		<!-- range colors: https://daisyui.com/components/range/ 
-         on:input: throttled response to server for performance
+         oninput: throttled response to server for performance
          -->
 		<input
 			type="range"
 			min={property.min ? property.min : 0}
 			max={property.max ? property.max : 255}
 			{step}
-			class={'flex-1 range ' +
+			class={'range flex-1 ' +
 				(disabled == false
 					? property.color == 'Red'
 						? 'range-error'
@@ -232,7 +229,7 @@
 					: 'range-secondary')}
 			{disabled}
 			bind:value
-			on:input={handleSliderInput}
+			oninput={handleSliderInput}
 		/>
 		{#if hasNumber}
 			<input
@@ -244,21 +241,21 @@
 				style="height: 2rem; width: 5rem"
 				{disabled}
 				bind:value
-				on:change={onChange}
+				onchange={onChange}
 			/>
 		{/if}
 	{:else if property.type == 'textarea'}
 		<textarea
 			rows="10"
 			cols="61"
-			class="w-full textarea"
-			on:change={onChange}
-			on:input={(event: any) => {
+			class="textarea w-full"
+			onchange={onChange}
+			oninput={(event: any) => {
 				if (changeOnInput) onChange(event);
 			}}>{value}</textarea
 		>
 	{:else if property.type == 'file'}
-		<input type="file" on:change={onChange} />
+		<input type="file" onchange={onChange} />
 	{:else if property.type == 'number'}
 		<input
 			type="number"
@@ -267,8 +264,8 @@
 			max={property.max ? property.max : 255}
 			class="input invalid:border-error invalid:border-2"
 			bind:value
-			on:change={onChange}
-			on:input={(event: any) => {
+			onchange={onChange}
+			oninput={(event: any) => {
 				if (changeOnInput) onChange(event);
 			}}
 		/>
@@ -279,8 +276,8 @@
 			minlength={property.min ? property.min : 0}
 			maxlength={property.max ? property.max : 255}
 			bind:value
-			on:change={onChange}
-			on:input={(event: any) => {
+			onchange={onChange}
+			oninput={(event: any) => {
 				if (changeOnInput) onChange(event);
 			}}
 		/>
@@ -293,8 +290,8 @@
 			minlength="3"
 			maxlength="15"
 			bind:value
-			on:change={onChange}
-			on:input={(event: any) => {
+			onchange={onChange}
+			oninput={(event: any) => {
 				if (changeOnInput) onChange(event);
 			}}
 		/>
@@ -303,7 +300,7 @@
 		<button
 			class="btn btn-primary"
 			type="button"
-			on:click={(event: any) => {
+			onclick={(event: any) => {
 				if (value == null) value = 1;
 				else value++;
 				onChange(event);
@@ -317,7 +314,7 @@
 			min="0"
 			max="65536"
 			bind:value={value.x}
-			on:change={onChange}
+			onchange={onChange}
 		/>
 		<input
 			type="number"
@@ -326,7 +323,7 @@
 			min="0"
 			max="65536"
 			bind:value={value.y}
-			on:change={onChange}
+			onchange={onChange}
 		/>
 		<input
 			type="number"
@@ -335,16 +332,16 @@
 			min="0"
 			max="65536"
 			bind:value={value.z}
-			on:change={onChange}
+			onchange={onChange}
 		/>
 	{:else if property.type == 'pad'}
 		<div class="flex flex-col space-y-2">
-			{#each Array(Math.ceil((value.count || 64) / (property.width || 8))) as _, y}
+			{#each Array(Math.ceil((value.count || 64) / (property.width || 8))) as _, y (y)}
 				<div class="flex flex-row space-x-2">
-					{#each Array(property.width) as _, x}
+					{#each Array(property.width) as _, x (x)}
 						{#if x + y * property.width < value.count}
 							<button
-								class="btn btn-square w-{property.size} h-{property.size} text-xl rounded-lg {value.selected ==
+								class="btn btn-square w-{property.size} h-{property.size} rounded-lg text-xl {value.selected ==
 								x + y * property.width + 1
 									? `btn-error`
 									: Array.isArray(value.list) && value.list.includes(x + y * property.width + 1)
@@ -352,10 +349,10 @@
 										: 'btn-primary'}"
 								type="button"
 								draggable="true"
-								on:dragstart={(event) => handleDragStart(event, y, x)}
-								on:dragover|preventDefault
-								on:drop={(event) => handleDrop(event, y, x)}
-								on:click={(event: any) => {
+								ondragstart={(event) => handleDragStart(event, y, x)}
+								ondragover={(event) => event.preventDefault()}
+								ondrop={(event) => handleDrop(event, y, x)}
+								onclick={(event: any) => {
 									preventClick = false;
 									clickTimeout = setTimeout(() => {
 										if (!preventClick) {
@@ -369,7 +366,7 @@
 									}, 250);
 									// 250ms is a typical double-click threshold
 								}}
-								on:dblclick={(event: any) => {
+								ondblclick={(event: any) => {
 									preventClick = true;
 									clearTimeout(clickTimeout);
 									value.select = x + y * property.width + 1;
@@ -377,7 +374,7 @@
 									value.action = 'dblclick';
 									onChange(event);
 								}}
-								on:mouseenter={(event: any) => {
+								onmouseenter={(event: any) => {
 									// console.log("mousenter", rowIndex, colIndex, cell, value);
 									if (property.hoverToServer) {
 										value.select = x + y * property.width + 1;
@@ -390,7 +387,7 @@
 											value.list.includes(x + y * property.width + 1)
 										);
 								}}
-								on:mouseleave={(event: any) => {
+								onmouseleave={(event: any) => {
 									// console.log("mouseleave", rowIndex, colIndex, cell, value);
 									if (property.hoverToServer) {
 										value.select = x + y * property.width + 1;
@@ -402,12 +399,12 @@
 								{x + y * property.width + 1}
 								{#if popupCell === x + y * property.width + 1}
 									<div
-										class="fixed z-50 bg-neutral-100 p-6 rounded shadow-lg mt-2 min-h-0 text-left inline-block min-w-0"
+										class="fixed z-50 mt-2 inline-block min-h-0 min-w-0 rounded bg-neutral-100 p-6 text-left shadow-lg"
 										style="left: {popupX}px; top: {popupY}px;"
 									>
 										<!-- Popup for {cell} -->
 										{#if fileContent && fileContent.nodes}
-											{#each fileContent.nodes as node}
+											{#each fileContent.nodes as node, ni (ni)}
 												{console.log('node.name', node.name)}
 												<p>{node.name} {node.on ? 'on' : 'off'}</p>
 											{/each}
@@ -428,7 +425,7 @@ Adjust space-x-2 and space-y-2 for spacing. -->
 			type={property.type}
 			class="input invalid:border-error invalid:border-2"
 			bind:value
-			on:change={onChange}
+			onchange={onChange}
 		/>
 	{/if}
 	{#if !noPrompts}
@@ -442,7 +439,7 @@ Adjust space-x-2 and space-y-2 for spacing. -->
 							property.default.y == value.y &&
 							property.default.z == value.z
 						: property.default == value)}
-				on:click={(event: any) => {
+				onclick={(event: any) => {
 					if (property.type == 'coord3D') {
 						value.x = property.default.x;
 						value.y = property.default.y;

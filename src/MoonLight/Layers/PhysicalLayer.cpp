@@ -23,7 +23,7 @@ extern SemaphoreHandle_t swapMutex;
 
 PhysicalLayer layerP;  // global declaration of the physical layer
 
-PhysicalLayer::PhysicalLayer() {
+PhysicalLayer::PhysicalLayer() : ledPins{}, ledPinsAssigned{}, ledsPerPin{} {
   EXT_LOGD(ML_TAG, "constructor");
 
   // initLightsToBlend();
@@ -201,8 +201,11 @@ void PhysicalLayer::onLayoutPre() {
 }
 
 void packCoord3DInto3Bytes(uint8_t* buf, Coord3D position) {  // max size supported is 255x255x255
+  // cppcheck-suppress objectIndex  // buf points into a heap-allocated array with >= 3 bytes
   buf[0] = MIN(position.x, 255);
+  // cppcheck-suppress objectIndex
   buf[1] = MIN(position.y, 255);
+  // cppcheck-suppress objectIndex
   buf[2] = MIN(position.z, 255);
 }
 void PhysicalLayer::addLight(Coord3D position) {

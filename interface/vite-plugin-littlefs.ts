@@ -1,4 +1,4 @@
-import type { UserConfig, Plugin } from 'vite';
+import type { Plugin } from 'vite';
 
 export default function viteLittleFS(): Plugin[] {
 	return [
@@ -8,25 +8,31 @@ export default function viteLittleFS(): Plugin[] {
 			apply: 'build',
 
 			async config(config, _configEnv) {
-				const { assetFileNames, chunkFileNames, entryFileNames } =
-					config.build?.rollupOptions?.output;
+				// 🌙 refactor
+				const output = config.build?.rollupOptions?.output;
+				if (!output) return;
 
-        // Handle Server-build + Client Assets
-        config.build.rollupOptions.output = {
-          ...config.build?.rollupOptions?.output,
-          assetFileNames: assetFileNames.replace('.[hash]', '')
-        }
+				const outputs = Array.isArray(output) ? output : [output];
+				const normalized = outputs.map((o) => {
+					const next = { ...o };
 
-        // Handle Client-build
-        if (config.build?.rollupOptions?.output.chunkFileNames.includes('hash')) {
+					if (typeof next.assetFileNames === 'string') {
+						next.assetFileNames = next.assetFileNames.replace('.[hash]', '');
+					}
 
-          config.build.rollupOptions.output = {
-            ...config.build?.rollupOptions?.output,
-            chunkFileNames: chunkFileNames.replace('.[hash]', ''),
-            entryFileNames: entryFileNames.replace('.[hash]', ''),
-          }
-        }
-      }
-    }
-  ]
+					if (typeof next.chunkFileNames === 'string' && next.chunkFileNames.includes('[hash]')) {
+						next.chunkFileNames = next.chunkFileNames.replace('.[hash]', '');
+					}
+
+					if (typeof next.entryFileNames === 'string' && next.entryFileNames.includes('[hash]')) {
+						next.entryFileNames = next.entryFileNames.replace('.[hash]', '');
+					}
+
+					return next;
+				});
+
+				config.build!.rollupOptions!.output = Array.isArray(output) ? normalized : normalized[0];
+			}
+		}
+	];
 }

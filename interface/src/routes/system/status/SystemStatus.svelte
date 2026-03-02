@@ -157,7 +157,7 @@
 
 <SettingsCard collapsible={false}>
 	{#snippet icon()}
-		<Health class="lex-shrink-0 mr-2 h-6 w-6 self-end" />
+		<Health class="shrink-0 mr-2 h-6 w-6 self-end" />
 	{/snippet}
 	{#snippet title()}
 		<span>System Status</span>
@@ -167,7 +167,8 @@
 					'/'
 				)[1]}{page.url.pathname}"
 				target="_blank"
-				title="Documentation"><Help class="lex-shrink-0 mr-2 h-6 w-6 self-end" /></a
+				rel="noopener noreferrer"
+				title="Documentation"><Help class="shrink-0 mr-2 h-6 w-6 self-end" /></a
 			>
 		</div>
 		<!-- 🌙 link to docs -->
@@ -176,7 +177,7 @@
 	<div class="w-full overflow-x-auto">
 		{#await getSystemStatus()}
 			<Spinner />
-		{:then nothing}
+		{:then}
 			<div
 				class="flex w-full flex-col space-y-1"
 				transition:slide|local={{ duration: 300, easing: cubicOut }}

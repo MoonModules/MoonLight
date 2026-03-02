@@ -13,11 +13,11 @@
 	Chart.register(...registerables);
 	Chart.register(LuxonAdapter);
 
-	let heapChartElement: HTMLCanvasElement = $state();
-	let heapChart: Chart;
+	let batteryChartElement: HTMLCanvasElement | undefined = $state();
+	let batteryChart: Chart;
 
 	onMount(() => {
-		heapChart = new Chart(heapChartElement, {
+		batteryChart = new Chart(batteryChartElement, {
 			type: 'line',
 			data: {
 				labels: $batteryHistory.timestamp,
@@ -28,7 +28,7 @@
 						backgroundColor: daisyColor('--color-primary', 50),
 						borderWidth: 2,
 						data: $batteryHistory.soc,
-						yAxisID: 'y',
+						yAxisID: 'y'
 						// hidden: Math.max(...$batteryHistory.soc) < 0
 					},
 					{
@@ -39,7 +39,7 @@
 						data: $batteryHistory.charging,
 						fill: true,
 						stepped: true,
-						yAxisID: 'y',
+						yAxisID: 'y'
 						// hidden: Math.max(...$batteryHistory.soc) < 0
 					},
 					{
@@ -48,7 +48,7 @@
 						backgroundColor: daisyColor('--color-primary', 50),
 						borderWidth: 2,
 						data: $batteryHistory.voltage,
-						yAxisID: 'y',
+						yAxisID: 'y'
 						// hidden: Math.max(...$batteryHistory.voltage) < 0
 					},
 					{
@@ -57,9 +57,9 @@
 						backgroundColor: daisyColor('--color-secondary', 50),
 						borderWidth: 2,
 						data: $batteryHistory.current,
-						yAxisID: 'y',
+						yAxisID: 'y'
 						// hidden: Math.max(...$batteryHistory.current) < 0
-					},
+					}
 				]
 			},
 			options: {
@@ -103,13 +103,15 @@
 						},
 						position: 'left',
 						min: 0,
-						max: Math.round(Math.max(Math.max(...$batteryHistory.voltage), Math.max(...$batteryHistory.current))),
+						max: Math.round(
+							Math.max(Math.max(...$batteryHistory.voltage), Math.max(...$batteryHistory.current))
+						),
 						grid: { color: daisyColor('--color-base-content', 10) },
 						ticks: {
 							color: daisyColor('--color-base-content')
 						},
 						border: { color: daisyColor('--color-base-content', 10) }
-					},
+					}
 					// y2: {
 					// 	type: 'linear',
 					// 	position: 'right',
@@ -135,52 +137,32 @@
 			}
 		});
 
-		setInterval(() => {
-			updateData(), 5000;
-		});
+		const poller = setInterval(updateData, 5000);
+		return () => {
+			clearInterval(poller);
+			batteryChart?.destroy();
+		};
 	});
 
 	function updateData() {
-		heapChart.data.labels = $batteryHistory.timestamp;
-		heapChart.data.datasets[0].data = $batteryHistory.soc;
-		heapChart.data.datasets[1].data = $batteryHistory.charging;
-		heapChart.data.datasets[2].data = $batteryHistory.voltage; // 🌙
-		heapChart.data.datasets[3].data = $batteryHistory.current; // 🌙
-		heapChart.update('none');
-		heapChart.options.scales.y.max = Math.round(Math.max(Math.max(...$batteryHistory.voltage), Math.max(...$batteryHistory.current)));
+		batteryChart.data.labels = $batteryHistory.timestamp;
+		batteryChart.data.datasets[0].data = $batteryHistory.soc;
+		batteryChart.data.datasets[1].data = $batteryHistory.charging;
+		batteryChart.data.datasets[2].data = $batteryHistory.voltage; // 🌙
+		batteryChart.data.datasets[3].data = $batteryHistory.current; // 🌙
+		if (batteryChart.options?.scales?.y) {
+			batteryChart.options.scales.y.max = Math.round(
+				Math.max(Math.max(...$batteryHistory.voltage), Math.max(...$batteryHistory.current))
+			);
+		}
+		batteryChart.update('none');
 	}
 
-	function convertSeconds(seconds: number) {
-		// Calculate the number of seconds, minutes, hours, and days
-		let minutes = Math.floor(seconds / 60);
-		let hours = Math.floor(minutes / 60);
-		let days = Math.floor(hours / 24);
-
-		// Calculate the remaining hours, minutes, and seconds
-		hours = hours % 24;
-		minutes = minutes % 60;
-		seconds = seconds % 60;
-
-		// Create the formatted string
-		let result = '';
-		if (days > 0) {
-			result += days + ' day' + (days > 1 ? 's' : '') + ' ';
-		}
-		if (hours > 0) {
-			result += hours + ' hour' + (hours > 1 ? 's' : '') + ' ';
-		}
-		if (minutes > 0) {
-			result += minutes + ' minute' + (minutes > 1 ? 's' : '') + ' ';
-		}
-		result += seconds + ' second' + (seconds > 1 ? 's' : '');
-
-		return result;
-	}
 </script>
 
 <SettingsCard collapsible={false}>
 	{#snippet icon()}
-		<Battery class="lex-shrink-0 mr-2 h-6 w-6 self-end" />
+		<Battery class="mr-2 h-6 w-6 shrink-0 self-end" />
 	{/snippet}
 	{#snippet title()}
 		<span>Energy History</span>
@@ -188,10 +170,10 @@
 
 	<div class="w-full overflow-x-auto">
 		<div
-			class="flex w-full flex-col space-y-1 h-60"
+			class="flex h-60 w-full flex-col space-y-1"
 			transition:slide|local={{ duration: 300, easing: cubicOut }}
 		>
-			<canvas bind:this={heapChartElement}></canvas>
+			<canvas bind:this={batteryChartElement}></canvas>
 		</div>
 	</div>
 </SettingsCard>

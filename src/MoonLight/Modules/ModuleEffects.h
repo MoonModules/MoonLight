@@ -207,6 +207,7 @@ class ModuleEffects : public NodeManager {
     Node* node = nullptr;
 
     // MoonLight effects, Solid first then alphabetically
+    // cppcheck-suppress knownConditionTrueFalse -- intentional: chain tries each type in order; first check is always true after node=nullptr
     if (!node) node = checkAndAlloc<SolidEffect>(name);
     if (!node) node = checkAndAlloc<AudioRingsEffect>(name);
     if (!node) node = checkAndAlloc<FireEffect>(name);

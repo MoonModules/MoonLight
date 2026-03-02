@@ -100,7 +100,7 @@
 		const regexExpIPv4 =
 			/\b(?:(?:2(?:[0-4][0-9]|5[0-5])|[0-1]?[0-9]?[0-9])\.){3}(?:(?:2([0-4][0-9]|5[0-5])|[0-1]?[0-9]?[0-9]))\b/;
 		const regexExpURL =
-			/[-a-zA-Z0-9@:%_\+.~#?&//=]{2,256}\.[a-z]{2,4}\b(\/[-a-zA-Z0-9@:%_\+.~#?&//=]*)?/i;
+			/[-a-zA-Z0-9@:%_.~#?&//=]{2,256}\.[a-z]{2,4}\b(\/[-a-zA-Z0-9@:%_.~#?&//=]*)?/i;
 
 		if (!regexExpURL.test(ntpSettings.server) && !regexExpIPv4.test(ntpSettings.server)) {
 			valid = false;
@@ -155,16 +155,16 @@
 
 <SettingsCard collapsible={false}>
 	{#snippet icon()}
-		<Clock class="lex-shrink-0 mr-2 h-6 w-6 self-end" />
+		<Clock class="shrink-0 mr-2 h-6 w-6 self-end" />
 	{/snippet}
 	{#snippet title()}
 		<span>Network Time</span>
-		<div class="absolute right-5"><a href="https://{page.data.github.split("/")[0]}.github.io/{page.data.github.split("/")[1]}/network/ntp" target="_blank" title="Documentation"><Help  class="lex-shrink-0 mr-2 h-6 w-6 self-end" /></a></div> <!-- 🌙 link to docs  - {page.url.pathname} hardcoded -->
+		<div class="absolute right-5"><a href="https://{page.data.github.split("/")[0]}.github.io/{page.data.github.split("/")[1]}/network/ntp" target="_blank" rel="noopener noreferrer" title="Documentation"><Help  class="shrink-0 mr-2 h-6 w-6 self-end" /></a></div> <!-- 🌙 link to docs  - {page.url.pathname} hardcoded -->
 	{/snippet}
 	<div class="w-full">
 		{#await getNTPStatus()}
 			<Spinner />
-		{:then nothing}
+		{:then}
 			<div
 				class="flex w-full flex-col space-y-1"
 				transition:slide|local={{ duration: 300, easing: cubicOut }}
@@ -284,7 +284,7 @@
 
 				<label class="label" for="tz">Pick Time Zone</label>
 				<select class="select w-full" bind:value={ntpSettings.tz_label} id="tz">
-					{#each Object.entries(TIME_ZONES) as [tz_label, tz_format]}
+					{#each Object.entries(TIME_ZONES) as [tz_label, tz_format] (tz_label)}
 						<option value={tz_label}>{tz_label}</option>
 					{/each}
 				</select>

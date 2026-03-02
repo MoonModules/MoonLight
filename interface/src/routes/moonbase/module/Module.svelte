@@ -10,7 +10,7 @@
 	import FieldRenderer from '$lib/components/moonbase/FieldRenderer.svelte';
 	import { socket } from '$lib/stores/socket';
 	import RowRenderer from '$src/lib/components/moonbase/RowRenderer.svelte';
-    import {initCap} from '$lib/stores/moonbase_utilities';
+	import { initCap } from '$lib/stores/moonbase_utilities';
 
 	let definition: any = $state([]);
 	let data: any = $state({});
@@ -24,23 +24,22 @@
 	// let params = $state(page.url.searchParams)
 	// let mName = $derived(params.get('module'));
 	// didn't work
-	let oldName: string = "";//workaround for let params = $state(page.url.searchParams)
+	let oldName: string = ''; //workaround for let params = $state(page.url.searchParams)
 
 	async function getState() {
-
 		let moduleName = page.url.searchParams.get('module') || '';
 
 		//workaround for let params = $state(page.url.searchParams)
 		if (moduleName != oldName) {
-			console.log("getState new module loaded", moduleName);
-			if (oldName != "") {
+			console.log('getState new module loaded', moduleName);
+			if (oldName != '') {
 				socketOff(oldName);
 			}
 			oldName = moduleName;
 			socketOn(moduleName);
 		}
 
-		console.log("getState", '/rest/' + moduleName)
+		console.log('getState', '/rest/' + moduleName);
 
 		//load definition
 		try {
@@ -57,7 +56,7 @@
 			console.error('Error:', error);
 		}
 
-		console.log("get data", '/rest/' + moduleName)
+		console.log('get data', '/rest/' + moduleName);
 		//load data
 		try {
 			const response = await fetch('/rest/' + moduleName, {
@@ -68,7 +67,7 @@
 				}
 			});
 			data = {}; //clear the data of the old module
-			handleState(await response.json())
+			handleState(await response.json());
 			// console.log("data", data)
 		} catch (error) {
 			console.error('Error:', error);
@@ -80,7 +79,7 @@
 		//validation (if needed) here?
 		//optional checks if the whole state is correct
 
-		let moduleName = page.url.searchParams.get('module') || ''
+		let moduleName = page.url.searchParams.get('module') || '';
 
 		try {
 			const response = await fetch('/rest/' + moduleName, {
@@ -110,15 +109,15 @@
 
 	function inputChanged() {
 		if (modeWS) {
-			let moduleName = page.url.searchParams.get('module')||'';
+			let moduleName = page.url.searchParams.get('module') || '';
 			// console.log("inputChanged", moduleName, data);
-			socket.sendEvent(moduleName, data)
+			socket.sendEvent(moduleName, data);
 		} else {
 			changed = true;
 		}
 	}
 
-	function updateRecursive(oldData:any, newData: any) {
+	function updateRecursive(oldData: any, newData: any, pruneMissing = false) {
 		//loop over properties
 		for (let key in newData) {
 			// if (typeof newData[key] != 'object') {
@@ -127,34 +126,52 @@
 			// 		oldData[key] = newData[key]; //trigger reactiveness
 			// 	}
 			// } else {
-				if (Array.isArray(newData[key])) {
-					//loop over array
-					if (!oldData[key]) oldData[key] = []; //create an empty array
-					for (let i = 0; i < Math.max(oldData[key].length, newData[key].length); i++) {
-						if (oldData[key][i] == undefined) {
-							// console.log("add row", key, i, newData[key][i]);
-							oldData[key][i] = newData[key][i]; //create new row if not existed, trigger reactiveness
-						} else if (newData[key][i] == undefined) {
-							// console.log("remove remaining rows", key, i, oldData[key][i]);
-							oldData[key].splice(i);
-						} else {
-							// console.log("change row", key, i, oldData[key][i], newData[key][i]);
-							updateRecursive(oldData[key][i], newData[key][i]);
+			if (Array.isArray(newData[key])) {
+				//loop over array
+				if (!Array.isArray(oldData[key])) oldData[key] = []; //normalize to array
+				for (let i = 0; i < newData[key].length; i++) {
+					if (oldData[key][i] == undefined) {
+						// console.log("add row", key, i, newData[key][i]);
+						oldData[key][i] = newData[key][i]; //create new row if not existed, trigger reactiveness
+					} else {
+						// console.log("change row", key, i, oldData[key][i], newData[key][i]);
+						const oldItem = oldData[key][i];
+						const newItem = newData[key][i];
+						const bothObjects =
+							oldItem !== null &&
+							typeof oldItem === 'object' &&
+							newItem !== null &&
+							typeof newItem === 'object';
+						if (bothObjects) {
+							updateRecursive(oldItem, newItem, pruneMissing);
+						} else if (oldItem !== newItem) {
+							oldData[key][i] = newItem;
 						}
 					}
-				} else {
-					if (newData[key] != oldData[key]) {
-						// console.log("updateRecursive", key, newData[key], oldData[key]);
-						oldData[key] = newData[key]; //trigger reactiveness
-					}
-
 				}
+				if (oldData[key].length > newData[key].length) {
+					oldData[key].splice(newData[key].length);
+				}
+			} else if (newData[key] !== null && typeof newData[key] === 'object') {
+				// passing a partial object acts as a patch and missing siblings should be preserved. (MoonModules/MoonLight Module::update() + compareRecursive)
+				if (
+					oldData[key] === null ||
+					typeof oldData[key] !== 'object' ||
+					Array.isArray(oldData[key])
+				) {
+					oldData[key] = {};
+				}
+				updateRecursive(oldData[key], newData[key], pruneMissing);
+			} else if (newData[key] !== oldData[key]) {
+				// console.log("updateRecursive", key, newData[key], oldData[key]);
+				oldData[key] = newData[key]; //trigger reactiveness
+			}
 			// }
 		}
 		//remove properties that are not in newData (e.g. control min and max)
-		for (let key in oldData) {
-			if (newData[key] == null) {
-				delete oldData[key]; //remove property if not in newData
+		if (pruneMissing) {
+			for (let key in oldData) {
+				if (!(key in newData)) delete oldData[key];
 			}
 		}
 	}
@@ -166,51 +183,71 @@
 	};
 
 	//workaround for let params = $state(page.url.searchParams)
-	const socketOn = ((name: string) => {
+	const socketOn = (name: string) => {
 		if (modeWS) {
-			console.log("socketOn", name);
+			console.log('socketOn', name);
 			socket.on(name, handleState);
 		}
-	});
-	const socketOff = ((name: string) => {
+	};
+	const socketOff = (name: string) => {
 		if (modeWS) {
-			console.log("socketOff", name);
+			console.log('socketOff', name);
 			socket.off(name, handleState);
 		}
-	});
-
+	};
 </script>
 
-<SettingsCard collapsible={false} bind:data={data}>
+<SettingsCard collapsible={false} bind:data>
 	{#snippet icon()}
-		<Router  class="lex-shrink-0 mr-2 h-6 w-6 self-end" />
+		<Router class="mr-2 h-6 w-6 shrink-0 self-end" />
 	{/snippet}
 	{#snippet title()}
 		<span>{initCap(page.url.searchParams.get('module') || '')}</span>
-		<div class="absolute right-5"><a href="https://{page.data.github.split("/")[0]}.github.io/{page.data.github.split("/")[1]}/{page.url.searchParams.get('group') + '/' + page.url.searchParams.get('module')}" target="_blank" title="Documentation"><Help  class="lex-shrink-0 mr-2 h-6 w-6 self-end" /></a></div> <!-- 🌙 link to docs -->
+		<div class="absolute right-5">
+			<a
+				href="https://{page.data.github.split('/')[0]}.github.io/{page.data.github.split(
+					'/'
+				)[1]}/{page.url.searchParams.get('group') + '/' + page.url.searchParams.get('module')}"
+				target="_blank"
+				rel="noopener noreferrer"
+				title="Documentation"><Help class="mr-2 h-6 w-6 shrink-0 self-end" /></a
+			>
+		</div>
+		<!-- 🌙 link to docs -->
 	{/snippet}
 
 	{#if !page.data.features.security || $user.admin}
-		<div class="bg-base-200 shadow-lg relative grid w-full max-w-2xl self-center overflow-hidden">
+		<div class="bg-base-200 relative grid w-full max-w-2xl self-center overflow-hidden shadow-lg">
 			{#await getState()}
 				<Spinner />
-			{:then nothing}
+			{:then}
 				<!-- <div class="grid w-full grid-cols-1 content-center gap-x-4 px-4 sm:grid-cols-2"> -->
 				<div class="relative w-full overflow-visible">
-					{#each definition as property}
-						{#if property.type != "rows"}
+					{#each definition as property (property.name)}
+						{#if property.type != 'rows'}
 							<div>
-								<FieldRenderer property={property} bind:value={data[property.name]} onChange={inputChanged} changeOnInput={!modeWS}></FieldRenderer>
+								<FieldRenderer
+									{property}
+									bind:value={data[property.name]}
+									onChange={inputChanged}
+									changeOnInput={!modeWS}
+								></FieldRenderer>
 							</div>
-						{:else if property.type == "rows"}
-						    <!-- e.g. definition: [name:"nodes", n: [name: ,,, name:"on", name:"controls", n:[]]]] -->
-							<RowRenderer property={property} bind:data={data} definition={definition} onChange={inputChanged} changeOnInput={!modeWS}></RowRenderer>
+						{:else if property.type == 'rows'}
+							<!-- e.g. definition: [name:"nodes", n: [name: ,,, name:"on", name:"controls", n:[]]]] -->
+							<RowRenderer
+								{property}
+								bind:data
+								{definition}
+								onChange={inputChanged}
+								changeOnInput={!modeWS}
+							></RowRenderer>
 						{/if}
 					{/each}
 				</div>
 
 				{#if !modeWS}
-					<div class="divider mb-2 mt-0"></div>
+					<div class="divider mt-0 mb-2"></div>
 					<div class="mx-4 mb-4 flex flex-wrap justify-end gap-2">
 						<button class="btn btn-primary" type="button" onclick={cancelState} disabled={!changed}
 							>Cancel</button

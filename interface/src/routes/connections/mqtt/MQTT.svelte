@@ -142,16 +142,16 @@
 
 <SettingsCard collapsible={false}>
 	{#snippet icon()}
-		<MQTT class="lex-shrink-0 mr-2 h-6 w-6 self-end" />
+		<MQTT class="shrink-0 mr-2 h-6 w-6 self-end" />
 	{/snippet}
 	{#snippet title()}
 		<span>MQTT</span>
-		<div class="absolute right-5"><a href="https://{page.data.github.split("/")[0]}.github.io/{page.data.github.split("/")[1]}/network/mqtt" target="_blank" title="Documentation"><Help  class="lex-shrink-0 mr-2 h-6 w-6 self-end" /></a></div> <!-- 🌙 link to docs - {page.url.pathname} hardcoded  -->
+		<div class="absolute right-5"><a href="https://{page.data.github.split("/")[0]}.github.io/{page.data.github.split("/")[1]}/network/mqtt" target="_blank" rel="noopener noreferrer" title="Documentation"><Help  class="shrink-0 mr-2 h-6 w-6 self-end" /></a></div> <!-- 🌙 link to docs - {page.url.pathname} hardcoded  -->
 	{/snippet}
 	<div class="w-full">
 		{#await getMQTTStatus()}
 			<Spinner />
-		{:then nothing}
+		{:then}
 			<div
 				class="flex w-full flex-col space-y-1"
 				transition:slide|local={{ duration: 300, easing: cubicOut }}

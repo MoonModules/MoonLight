@@ -82,10 +82,10 @@ class VirtualLayer {
   std::vector<std::vector<nrOfLights_t>, VectorRAMAllocator<std::vector<nrOfLights_t> > > mappingTableIndexes;
   nrOfLights_t mappingTableIndexesSizeUsed = 0;
 
-  PhysicalLayer* layerP;  // physical LEDs the virtual LEDs are mapped to
+  PhysicalLayer* layerP = nullptr;  // physical LEDs the virtual LEDs are mapped to
   std::vector<Node*, VectorRAMAllocator<Node*> > nodes;
 
-  uint8_t fadeMin;
+  uint8_t fadeMin = 0;
 
   uint8_t effectDimension = _3D;  // assuming 3D for the moment
   uint8_t layerDimension = UINT8_MAX;

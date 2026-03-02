@@ -47,16 +47,43 @@ function createWebSocket() {
 
 			const binary = payload instanceof ArrayBuffer;
 			listeners.get(binary ? 'binary' : 'message')?.forEach((listener) => listener(payload));
+			
 			try {
 				payload = binary ? msgpack.decode(new Uint8Array(payload)) : JSON.parse(payload);
 			} catch (error) {
-				listeners.get('error')?.forEach((listener) => listener(error));
+				console.error('[WebSocket] Decode error:', error); // 🌙
+				listeners.get('error')?.forEach((listener) => {
+					listener(error);
+				});
 				return;
 			}
-			listeners.get('json')?.forEach((listener) => listener(payload));
-			const { event, data } = payload; //no event if monitor data
-			if (event) listeners.get(event)?.forEach((listener) => listener(data));
-			else listeners.get("monitor")?.forEach((listener) => listener(new Uint8Array(message.data))); // 🌙 if no event, assume monitor data (see emitEvent char * output)
+			
+			// 🌙 Validate before destructuring
+			if (!payload || typeof payload !== 'object') {
+				console.error('[WebSocket] Invalid payload:', payload);
+				return;
+			}
+			
+			listeners.get('json')?.forEach((listener) => {
+				listener(payload);
+			});
+			
+			// Safe destructuring
+			const { event = null, data = null } = payload;
+			
+			if (event) {
+				// if (data !== null && data !== undefined) {
+					listeners.get(event)?.forEach((listener) => {
+						listener(data);
+					});
+				// }
+			} else if (binary) { // 🌙 if no event, assume monitor data (raw binary)
+				listeners.get('monitor')?.forEach((listener) => {
+					listener(new Uint8Array(message.data));
+				});
+			} else {
+				console.warn('[WebSocket] Missing "event" in non-binary payload:', payload);
+ 			}
 		};
 		ws.onerror = (ev) => disconnect('error', ev);
 		ws.onclose = (ev) => disconnect('close', ev);

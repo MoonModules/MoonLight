@@ -102,7 +102,7 @@ class EspIdfUdpSocket : public UdpSocket {
  public:
   EspIdfUdpSocket() : sock_(-1) {}
 
-  ~EspIdfUdpSocket() override { close(); }
+  ~EspIdfUdpSocket() override { EspIdfUdpSocket::close(); }
 
   // below functions is poc code. Need to be verified when actually used
 
@@ -139,7 +139,7 @@ class EspIdfUdpSocket : public UdpSocket {
   int recv_from(uint8_t* buffer, size_t max_len,
                 char* src_ip,       // out: must be at least 16 bytes (INET_ADDRSTRLEN)
                 uint16_t* src_port  // out
-  ) {
+                ) override {
     sockaddr_in src_addr{};
     socklen_t src_len = sizeof(src_addr);
 

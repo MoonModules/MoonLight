@@ -293,15 +293,15 @@
 
 <SettingsCard collapsible={false}>
 	{#snippet icon()}
-		<Router class="lex-shrink-0 mr-2 h-6 w-6 self-end" />
+		<Router class="shrink-0 mr-2 h-6 w-6 self-end" />
 	{/snippet}
 	{#snippet title()}
 		<span>WiFi Connection</span>
-		<div class="absolute right-5"><a href="https://{page.data.github.split("/")[0]}.github.io/{page.data.github.split("/")[1]}/network/sta" target="_blank" title="Documentation"><Help  class="lex-shrink-0 mr-2 h-6 w-6 self-end" /></a></div> <!-- 🌙 link to docs - {page.url.pathname} hardcoded -->
+		<div class="absolute right-5"><a href="https://{page.data.github.split("/")[0]}.github.io/{page.data.github.split("/")[1]}/network/sta" target="_blank" rel="noopener noreferrer" title="Documentation"><Help  class="shrink-0 mr-2 h-6 w-6 self-end" /></a></div> <!-- 🌙 link to docs - {page.url.pathname} hardcoded -->
 	{/snippet}
 	{#await getWifiData()}
 		<Spinner />
-	{:then nothing}
+	{:then}
 		<div class="w-full overflow-x-auto">
 			<div
 				class="flex w-full flex-col space-y-1"
@@ -450,7 +450,7 @@
 		{#if !page.data.features.security || $user.admin}
 			<Collapsible open={true} class="shadow-lg" isDirty={isSettingsDirty}>
 				{#snippet icon()}
-					<Settings class="lex-shrink-0 mr-2 h-6 w-6 self-end" />
+					<Settings class="shrink-0 mr-2 h-6 w-6 self-end" />
 				{/snippet}
 				{#snippet title()}
 					<span>Settings & Networks</span>
@@ -484,7 +484,7 @@
 						<div>
 							<label class="label" for="apmode">WiFi Connection Mode</label>
 							<select class="select w-full" id="apmode" bind:value={wifiSettings.connection_mode}>
-								{#each connectionMode as mode}
+								{#each connectionMode as mode (mode.id)}
 									<option value={mode.id}>
 										{mode.text}
 									</option>
@@ -496,7 +496,7 @@
 						<div>
 							<label class="label" for="apmode">WiFi TX Power </label>
 							<select class="select w-full" id="apmode" bind:value={wifiSettings.txPower}>
-								{#each txPowerIDToText as mode}
+								{#each txPowerIDToText as mode (mode.id)}
 									<option value={mode.id}>
 										{mode.text}
 									</option>
@@ -559,7 +559,6 @@
 							class="space-y-2"
 						>
 							{#snippet children({ item: network, index }: { item: any; index: number })}
-								<!-- svelte-ignore a11y_click_events_have_key_events -->
 								<div
 									class="rounded-box bg-base-100 grid grid-cols-[auto_auto_minmax(6rem,1fr)_auto] items-center gap-3 p-2"
 								>
@@ -571,13 +570,13 @@
 										<div class="font-bold truncate">{network.ssid}</div>
 										{#if network.static_ip_config}
 											<div
-												class="badge badge-sm badge-secondary opacity-75 flex-shrink-0 hidden sm:block"
+												class="badge badge-sm badge-secondary opacity-75 shrink-0 hidden sm:block"
 											>
 												Static
 											</div>
 										{:else}
 											<div
-												class="badge badge-sm badge-outline badge-secondary opacity-75 flex-shrink-0 hidden sm:block"
+												class="badge badge-sm badge-outline badge-secondary opacity-75 shrink-0 hidden sm:block"
 											>
 												DHCP
 											</div>

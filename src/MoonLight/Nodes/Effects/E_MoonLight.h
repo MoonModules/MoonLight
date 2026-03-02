@@ -1166,6 +1166,7 @@ class ParticlesEffect : public Node {
             unsigned dist = testPos.distanceSquared(newPos);
             int differences = (prevPos.x != testPos.x) + (prevPos.y != testPos.y) + (prevPos.z != testPos.z);
             if (debugPrint) EXT_LOGD(ML_TAG, "     TestPos: %d %d %d Dist: %d Diff: %d", testPos.x, testPos.y, testPos.z, dist, differences);
+            // cppcheck-suppress duplicateCondition -- intentional: separate debug log lines with same guard
             if (debugPrint) EXT_LOGD(ML_TAG, "     New Velocities: %d, %d, %d", (testPos.x - prevPos.x), (testPos.y - prevPos.y), (testPos.z - prevPos.z));
             if (dist < nearestDist || (dist == nearestDist && differences >= diff)) {
               nearestDist = dist;
@@ -1202,6 +1203,7 @@ class ParticlesEffect : public Node {
         if (testing.isOutofBounds(layer->size) || !layer->isMapped(layer->XYZUnModified(testing))) vz = 0;
 
         if (debugPrint) EXT_LOGD(ML_TAG, "     No valid position found, reverted. Velocity Updated");
+        // cppcheck-suppress duplicateCondition -- intentional: separate debug log lines with same guard
         if (debugPrint) EXT_LOGD(ML_TAG, "     New Pos: %f, %f, %f Velo: %f, %f, %f", x, y, z, vx, vy, vz);
       }
 

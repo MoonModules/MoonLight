@@ -123,6 +123,7 @@ class ModuleDrivers : public NodeManager {
     Node* node = nullptr;
 
     // Layouts, most used first
+    // cppcheck-suppress knownConditionTrueFalse -- intentional: chain tries each type in order; first check is always true after node=nullptr
     if (!node) node = checkAndAlloc<PanelLayout>(name);
     if (!node) node = checkAndAlloc<PanelsLayout>(name);
     if (!node) node = checkAndAlloc<CubeLayout>(name);

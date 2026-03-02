@@ -15,22 +15,22 @@
 <script lang="ts">
 	import type { FilesState } from '$lib/types/moonbase_models';
 	import { tick } from 'svelte';
-    import { user } from '$lib/stores/user';
+	import { user } from '$lib/stores/user';
 	import { page } from '$app/state';
 	import { notifications } from '$lib/components/toasts/notifications';
 	import Collapsible from '$lib/components/Collapsible.svelte';
 	import { onMount } from 'svelte';
 	import FieldRenderer from '$lib/components/moonbase/FieldRenderer.svelte';
 
-	let { path = "", showEditor = true, newItem = false, isFile = true } = $props();
+	let { path = '', showEditor = true, newItem = false, isFile = true } = $props();
 
-	let folder:string = "";
+	let folder: string = '';
 
 	let formErrors = {
 		name: false
 	};
 
-    let editableFile: FilesState = $state({
+	let editableFile: FilesState = $state({
 		name: '',
 		path: path,
 		isFile: isFile,
@@ -40,12 +40,13 @@
 		files: [],
 		fs_total: 0,
 		fs_used: 0,
-		showHidden: false,
+		showHidden: false
 	});
 
 	let changed: boolean = $state(false);
 
-    async function postFilesState(data: any) { //export needed to call from other components
+	async function postFilesState(data: any) {
+		//export needed to call from other components
 		try {
 			const response = await fetch('/rest/FileManager', {
 				method: 'POST',
@@ -64,62 +65,68 @@
 		} catch (error) {
 			console.error('Error:', error);
 		}
-        return null; //no need to return anything!
+		return null; //no need to return anything!
 	}
 
-    function uploadFile(event: any) {
+	function uploadFile(event: any) {
 		let fileNode = event.target;
-        let file = fileNode.files[0]; // the first file uploaded (multiple files not supported yet)
+		let file = fileNode.files[0]; // the first file uploaded (multiple files not supported yet)
 		// console.log("uploadFile", event, file)
 		if (file) {
 			// let fileContents: string | ArrayBuffer | null = null;
 
-            const reader = new FileReader();
+			const reader = new FileReader();
 			reader.onload = async (e) => {
 				const contents = e.target?.result;
 				editableFile.name = file.name;
-				editableFile.contents = typeof contents === 'string' ? contents : '';			
+				editableFile.contents = typeof contents === 'string' ? contents : '';
 
-				showEditor = false; await tick(); showEditor = true; //Trigger reactivity (folderList = [...folderList]; is not doing it)
-				console.log("uploadFileWithText", file, editableFile.contents)
+				showEditor = false;
+				await tick();
+				showEditor = true; //Trigger reactivity (folderList = [...folderList]; is not doing it)
+				console.log('uploadFileWithText', file, editableFile.contents);
+				changed = true;
 			};
-            reader.readAsText(file);
-			changed = true;
-        }
+			reader.readAsText(file);
+		}
 	}
 
-    async function getFileContents() {
+	async function getFileContents() {
 		// console.log("getFileContents", path, path[0])
+		const requestedPath = path;
 		editableFile.isFile = isFile;
-		editableFile.path = path;
+		editableFile.path = requestedPath;
 		if (newItem) {
 			editableFile.name = '';
-			folder = path + "/";
+			folder = requestedPath.endsWith('/') ? requestedPath : `${requestedPath}/`;
 			editableFile.contents = '';
 		} else {
-			const parts = path.split('/');
+			const parts = requestedPath.split('/');
 			editableFile.name = parts.pop() || '';
-			folder = parts.join('/') + "/";
-			if (path[0] === '/') {
-				const response = await fetch('/rest/file/' + editableFile.path, {
+			const base = parts.join('/');
+			folder = base === '' ? '/' : `${base}/`;
+			if (requestedPath[0] === '/') {
+				const response = await fetch('/rest/file/' + requestedPath, {
 					method: 'GET',
-					headers: {'Content-Type': 'text/plain'}
+					headers: { 'Content-Type': 'text/plain' }
 				});
-				editableFile.contents = await response.text();
+				const text = await response.text();
+				if (path !== requestedPath) return;
+				editableFile.contents = text;
 				// console.log("getFileContents", editableFile.contents)
 			}
 		}
-    }
+	}
 
-    //reactive response as soon as path changes, load new file contents
+	//reactive response as soon as path changes, load new file contents
 	$effect(() => {
 		if (editableFile.path != path) {
 			getFileContents();
-	    }
+		}
 	});
 
 	onMount(() => {
-       	getFileContents();
+		getFileContents();
 	});
 
 	function onCancel() {
@@ -128,8 +135,8 @@
 		changed = false;
 	}
 
-	function onSave() {
-		console.log("onSave", editableFile.isFile)
+	async function onSave() {
+		console.log('onSave', editableFile.isFile);
 		let valid = true;
 
 		// Validate Name
@@ -142,7 +149,7 @@
 
 		// Submit JSON to REST API
 		if (valid) {
-			let response:any = {};
+			let response: any = {};
 			if (newItem) {
 				editableFile.path = folder + editableFile.name;
 				// folderList.push(editableFile);
@@ -153,37 +160,39 @@
 				// editableFile.path = "/" + breadCrumbs.join("/") + "/" + editableFile.name;
 				response.news = [];
 				response.news.push(editableFile);
-				console.log("new item", response)
+				console.log('new item', response);
 				//send the new itemstate to server
-				
 			} else {
-				console.log("update item", editableFile)
+				console.log('update item', editableFile);
 				// folderList.splice(folderList.indexOf(editableFile), 1, editableFile);
-				
+
 				response.updates = [];
 				response.updates.push(editableFile);
 			}
-			postFilesState(response);
-			showEditor = false;
-			changed = false;
+			const saved = await postFilesState(response);
+			if (saved !== null) {
+				showEditor = false;
+				changed = false;
+			}
 		}
 	}
-
 </script>
 
 {#if path[0] === '/'}
 	<Collapsible open={showEditor} class="shadow-lg" opened={() => {}} closed={() => {}}>
 		{#snippet title()}
-			<span>{newItem ? 'Add ' + (isFile?"file":"folder") : 'Edit ' + editableFile.name}</span>
+			<span>{newItem ? 'Add ' + (isFile ? 'file' : 'folder') : 'Edit ' + editableFile.name}</span>
 		{/snippet}
 		<div class="divider my-0"></div>
 
 		<div>
-			<FieldRenderer property={{name:"Name", type:"text"}} bind:value={editableFile.name}
+			<FieldRenderer
+				property={{ name: 'Name', type: 'text' }}
+				bind:value={editableFile.name}
 				onChange={() => {
 					changed = true;
-				}}>
-			</FieldRenderer>
+				}}
+			></FieldRenderer>
 			<label class="label" for="name">
 				<span class="text-error {formErrors.name ? '' : 'hidden'}"
 					>Name must be between 3 and 32 characters long</span
@@ -192,27 +201,30 @@
 		</div>
 		{#if isFile}
 			<div>
-				<FieldRenderer property={{name:"Contents", type:"textarea"}} bind:value={editableFile.contents} 
+				<FieldRenderer
+					property={{ name: 'Contents', type: 'textarea' }}
+					bind:value={editableFile.contents}
 					onChange={(event) => {
 						editableFile.contents = event.target.value;
 						changed = true;
-					}}>
-				</FieldRenderer>
+					}}
+				></FieldRenderer>
 			</div>
 			<div>
-				<FieldRenderer property={{name:"Upload", type:"file"}} bind:value={editableFile.contents} 
+				<FieldRenderer
+					property={{ name: 'Upload', type: 'file' }}
+					bind:value={editableFile.contents}
 					onChange={(event) => {
 						uploadFile(event);
-						changed = true;
-					}}>
-				</FieldRenderer>
+					}}
+				></FieldRenderer>
 			</div>
 		{/if}
 		<div class="flex flex-wrap justify-end gap-2">
 			<button
 				class="btn btn-primary"
 				onclick={() => {
-					console.log("Save");
+					console.log('Cancel');
 					onCancel();
 				}}
 				disabled={!changed}
@@ -222,7 +234,7 @@
 			<button
 				class="btn btn-primary"
 				onclick={() => {
-					console.log("Save");
+					console.log('Save');
 					onSave();
 				}}
 				disabled={!changed}
@@ -230,6 +242,6 @@
 				Save</button
 			>
 		</div>
-		<div class="divider mb-2 mt-0"></div>
+		<div class="divider mt-0 mb-2"></div>
 	</Collapsible>
 {/if}
