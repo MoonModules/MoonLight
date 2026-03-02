@@ -199,7 +199,7 @@ Recent fixes (session 2026-03-02):
    ```
 
 3. **Add `cppcheck-misra`** — MISRA C++ 2008 compliance checking (safety-critical embedded
-   coding standard). Requires MISRA addon license. Very strict — evaluate if worth the noise.
+   coding standard). Requires MISRA addon license. Very strict — evaluate whether it’s worth the noise.
 
 4. **clang-tidy in CI** — Once enabled locally, add to `.github/workflows/lint.yml`:
    ```yaml

@@ -79,9 +79,9 @@ class ArtNetInDriver : public Node {
       artnetUdp.read(packetBuffer, MIN(packetSize, sizeof(packetBuffer)));
 
       if (ddp)
-        handleDDP();
+        handleDDP(packetSize);
       else
-        handleArtNet();
+        handleArtNet(packetSize);
     }
   }
 
@@ -146,7 +146,9 @@ class ArtNetInDriver : public Node {
     }
   }
 
-  void handleDDP() {
+  void handleDDP(int packetSize) {
+    if (packetSize < static_cast<int>(sizeof(DDPHeader))) return;
+
     DDPHeader* header = reinterpret_cast<DDPHeader*>(packetBuffer);
 
     // bool pushFlag = (header->flags & 0x80) != 0;
@@ -157,9 +159,11 @@ class ArtNetInDriver : public Node {
 
     if (dataType == 0x01) {
       uint8_t* pixelData = packetBuffer + sizeof(DDPHeader);
+      int payloadBytes = packetSize - static_cast<int>(sizeof(DDPHeader));
+      int safeDataLen = MIN(static_cast<int>(dataLen), payloadBytes);
 
       int startPixel = offset / layerP.lights.header.channelsPerLight;
-      int numPixels = MIN(dataLen / layerP.lights.header.channelsPerLight, layerP.lights.header.nrOfLights - startPixel);
+      int numPixels = MIN(safeDataLen / layerP.lights.header.channelsPerLight, layerP.lights.header.nrOfLights - startPixel);
 
       xSemaphoreTake(swapMutex, portMAX_DELAY);  // prevent effectTask from swapping channelsD/channelsE pointers while writing directly to channelsD (effects must be disabled when ArtNetIn is active)
       for (int i = 0; i < numPixels; i++) {
