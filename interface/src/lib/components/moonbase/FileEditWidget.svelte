@@ -45,7 +45,7 @@
 
 	let changed: boolean = $state(false);
 
-	async function postFilesState(data: any) {
+	async function postFilesState(data: Record<string, unknown>) {
 		//export needed to call from other components
 		try {
 			const response = await fetch('/rest/FileManager', {
@@ -68,9 +68,9 @@
 		return null; //no need to return anything!
 	}
 
-	function uploadFile(event: any) {
-		let fileNode = event.target;
-		let file = fileNode.files[0]; // the first file uploaded (multiple files not supported yet)
+	function uploadFile(event: Event) {
+		const fileNode = event.target as HTMLInputElement;
+		const file = fileNode.files?.[0]; // the first file uploaded (multiple files not supported yet)
 		// console.log("uploadFile", event, file)
 		if (file) {
 			// let fileContents: string | ArrayBuffer | null = null;
@@ -149,7 +149,7 @@
 
 		// Submit JSON to REST API
 		if (valid) {
-			let response: any = {};
+			let response: { news?: FilesState[]; updates?: FilesState[] } = {};
 			if (newItem) {
 				editableFile.path = folder + editableFile.name;
 				// folderList.push(editableFile);

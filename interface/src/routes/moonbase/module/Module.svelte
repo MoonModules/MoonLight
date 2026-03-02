@@ -11,9 +11,10 @@
 	import { socket } from '$lib/stores/socket';
 	import RowRenderer from '$src/lib/components/moonbase/RowRenderer.svelte';
 	import { initCap } from '$lib/stores/moonbase_utilities';
+	import type { ModuleProperty, ModuleData } from '$lib/types/moonbase_models';
 
-	let definition: any = $state([]);
-	let data: any = $state({});
+	let definition: ModuleProperty[] = $state([]);
+	let data: ModuleData = $state({});
 
 	let changed: boolean = $state(false);
 
@@ -117,7 +118,11 @@
 		}
 	}
 
-	function updateRecursive(oldData: any, newData: any, pruneMissing = false) {
+	function updateRecursive(
+		oldData: Record<string, unknown>,
+		newData: Record<string, unknown>,
+		pruneMissing = false
+	) {
 		//loop over properties
 		for (let key in newData) {
 			// if (typeof newData[key] != 'object') {
@@ -129,28 +134,34 @@
 			if (Array.isArray(newData[key])) {
 				//loop over array
 				if (!Array.isArray(oldData[key])) oldData[key] = []; //normalize to array
-				for (let i = 0; i < newData[key].length; i++) {
-					if (oldData[key][i] == undefined) {
-						// console.log("add row", key, i, newData[key][i]);
-						oldData[key][i] = newData[key][i]; //create new row if not existed, trigger reactiveness
+				const oldArr = oldData[key] as unknown[];
+				const newArr = newData[key] as unknown[];
+				for (let i = 0; i < newArr.length; i++) {
+					if (oldArr[i] == undefined) {
+						// console.log("add row", key, i, newArr[i]);
+						oldArr[i] = newArr[i]; //create new row if not existed, trigger reactiveness
 					} else {
-						// console.log("change row", key, i, oldData[key][i], newData[key][i]);
-						const oldItem = oldData[key][i];
-						const newItem = newData[key][i];
+						// console.log("change row", key, i, oldArr[i], newArr[i]);
+						const oldItem = oldArr[i];
+						const newItem = newArr[i];
 						const bothObjects =
 							oldItem !== null &&
 							typeof oldItem === 'object' &&
 							newItem !== null &&
 							typeof newItem === 'object';
 						if (bothObjects) {
-							updateRecursive(oldItem, newItem, pruneMissing);
+							updateRecursive(
+								oldItem as Record<string, unknown>,
+								newItem as Record<string, unknown>,
+								pruneMissing
+							);
 						} else if (oldItem !== newItem) {
-							oldData[key][i] = newItem;
+							oldArr[i] = newItem;
 						}
 					}
 				}
-				if (oldData[key].length > newData[key].length) {
-					oldData[key].splice(newData[key].length);
+				if (oldArr.length > newArr.length) {
+					oldArr.splice(newArr.length);
 				}
 			} else if (newData[key] !== null && typeof newData[key] === 'object') {
 				// passing a partial object acts as a patch and missing siblings should be preserved. (MoonModules/MoonLight Module::update() + compareRecursive)
@@ -161,7 +172,11 @@
 				) {
 					oldData[key] = {};
 				}
-				updateRecursive(oldData[key], newData[key], pruneMissing);
+				updateRecursive(
+					oldData[key] as Record<string, unknown>,
+					newData[key] as Record<string, unknown>,
+					pruneMissing
+				);
 			} else if (newData[key] !== oldData[key]) {
 				// console.log("updateRecursive", key, newData[key], oldData[key]);
 				oldData[key] = newData[key]; //trigger reactiveness
@@ -176,7 +191,7 @@
 		}
 	}
 
-	const handleState = (state: any) => {
+	const handleState = (state: ModuleData) => {
 		// console.log("handleState", state);
 		updateRecursive(data, state);
 		// data = state;

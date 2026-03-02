@@ -18,13 +18,16 @@
 	import FieldRenderer from '$lib/components/moonbase/FieldRenderer.svelte';
 	import RowRenderer from '$src/lib/components/moonbase/RowRenderer.svelte';
 
+	import type { ModuleProperty, ModuleRow } from '$lib/types/moonbase_models';
+
 	interface Props {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		property: any;
-		localDefinition: any[];
+		localDefinition: ModuleProperty[];
 		title: string;
-		dataEditable: any;
-		onChange: any;
-		changeOnInput: any;
+		dataEditable: ModuleRow;
+		onChange: (event?: Event) => void;
+		changeOnInput: boolean;
 	}
 
 	let {

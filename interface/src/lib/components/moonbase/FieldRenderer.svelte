@@ -15,9 +15,11 @@
 	import FileEditWidget from '$lib/components/moonbase/FileEditWidget.svelte';
 	import { initCap, getTimeAgo } from '$lib/stores/moonbase_utilities';
 
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	export let property: any;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	export let value: any;
-	export let onChange = (event: any) => {
+	export let onChange = (event: Event) => {
 		console.log(event);
 	};
 	export let hasNumber = true;
@@ -93,8 +95,8 @@
 		}
 	}
 
-	let hoverTimeout: any = null;
-	let fileContent: any;
+	let hoverTimeout: ReturnType<typeof setTimeout> | null = null;
+	let fileContent: { nodes?: { name: string; on: boolean }[] } | string | null;
 	let popupCell: number | null = null;
 	let popupX = 0;
 	let popupY = 0;
@@ -128,7 +130,7 @@
 	}
 
 	//precent onClick when dblClick
-	let clickTimeout: any = null;
+	let clickTimeout: ReturnType<typeof setTimeout> | null = null;
 	let preventClick = false;
 
 	// inspired by WLED
@@ -250,7 +252,7 @@
 			cols="61"
 			class="textarea w-full"
 			onchange={onChange}
-			oninput={(event: any) => {
+			oninput={(event: Event) => {
 				if (changeOnInput) onChange(event);
 			}}>{value}</textarea
 		>
@@ -265,7 +267,7 @@
 			class="input invalid:border-error invalid:border-2"
 			bind:value
 			onchange={onChange}
-			oninput={(event: any) => {
+			oninput={(event: Event) => {
 				if (changeOnInput) onChange(event);
 			}}
 		/>
@@ -277,7 +279,7 @@
 			maxlength={property.max ? property.max : 255}
 			bind:value
 			onchange={onChange}
-			oninput={(event: any) => {
+			oninput={(event: Event) => {
 				if (changeOnInput) onChange(event);
 			}}
 		/>
@@ -291,7 +293,7 @@
 			maxlength="15"
 			bind:value
 			onchange={onChange}
-			oninput={(event: any) => {
+			oninput={(event: Event) => {
 				if (changeOnInput) onChange(event);
 			}}
 		/>
@@ -300,7 +302,7 @@
 		<button
 			class="btn btn-primary"
 			type="button"
-			onclick={(event: any) => {
+			onclick={(event: MouseEvent) => {
 				if (value == null) value = 1;
 				else value++;
 				onChange(event);
@@ -352,7 +354,7 @@
 								ondragstart={(event) => handleDragStart(event, y, x)}
 								ondragover={(event) => event.preventDefault()}
 								ondrop={(event) => handleDrop(event, y, x)}
-								onclick={(event: any) => {
+								onclick={(event: MouseEvent) => {
 									preventClick = false;
 									clickTimeout = setTimeout(() => {
 										if (!preventClick) {
@@ -366,7 +368,7 @@
 									}, 250);
 									// 250ms is a typical double-click threshold
 								}}
-								ondblclick={(event: any) => {
+								ondblclick={(event: MouseEvent) => {
 									preventClick = true;
 									clearTimeout(clickTimeout);
 									value.select = x + y * property.width + 1;
@@ -374,7 +376,7 @@
 									value.action = 'dblclick';
 									onChange(event);
 								}}
-								onmouseenter={(event: any) => {
+								onmouseenter={(event: MouseEvent) => {
 									// console.log("mousenter", rowIndex, colIndex, cell, value);
 									if (property.hoverToServer) {
 										value.select = x + y * property.width + 1;
@@ -387,7 +389,7 @@
 											value.list.includes(x + y * property.width + 1)
 										);
 								}}
-								onmouseleave={(event: any) => {
+								onmouseleave={(event: MouseEvent) => {
 									// console.log("mouseleave", rowIndex, colIndex, cell, value);
 									if (property.hoverToServer) {
 										value.select = x + y * property.width + 1;
@@ -439,7 +441,7 @@ Adjust space-x-2 and space-y-2 for spacing. -->
 							property.default.y == value.y &&
 							property.default.z == value.z
 						: property.default == value)}
-				onclick={(event: any) => {
+				onclick={(event: MouseEvent) => {
 					if (property.type == 'coord3D') {
 						value.x = property.default.x;
 						value.y = property.default.y;

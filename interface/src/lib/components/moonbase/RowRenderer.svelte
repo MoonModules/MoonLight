@@ -27,17 +27,18 @@
 	import Grip from '~icons/tabler/grip-vertical';
 	import FieldRenderer from './FieldRenderer.svelte';
 	import { isNumber } from 'chart.js/helpers';
+	import type { ModuleProperty, ModuleRow } from '$lib/types/moonbase_models';
 
 	let { property, data = $bindable(), definition, onChange, changeOnInput } = $props();
 
-	let dataEditable: any = $state({});
+	let dataEditable: ModuleRow = $state({});
 
 	//if no records added yet, add an empty array
 	if (data[property.name] == undefined) {
 		data[property.name] = [];
 	}
 
-	let localDefinition: any = $state([]);
+	let localDefinition: ModuleProperty[] = $state([]);
 
 	// console.log("Array property", property, data, definition, changeOnInput, data[property.name], value1, value2);
 	for (let i = 0; i < definition.length; i++) {
@@ -48,11 +49,13 @@
 		}
 	}
 
-	function handleReorder(reorderedItems: { item: any; originalIndex: number }[]) {
+	function handleReorder(reorderedItems: { item: ModuleRow; originalIndex: number }[]) {
 		console.log('handleReorder', property.name, reorderedItems);
 		const full = [...data[property.name]];
 		// Capture the current filteredItems mapping before any potential state changes
-		const indexMap = filteredItems.map((f: any) => f.originalIndex);
+		const indexMap = filteredItems.map(
+			(f: { item: ModuleRow; originalIndex: number }) => f.originalIndex
+		);
 		reorderedItems.forEach(({ item }, pos) => {
 			const originalIndex = indexMap[pos];
 			full[originalIndex] = item;
@@ -80,8 +83,9 @@
 		}
 	}
 
-	function handleEdit(propertyName: string, itemToEdit: any) {
+	function handleEdit(propertyName: string, itemToEdit: ModuleRow) {
 		console.log('handleEdit', propertyName);
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		modals.open(EditRowWidget as any, {
 			property,
 			localDefinition,
@@ -92,9 +96,11 @@
 		});
 	}
 
-	function deleteItem(propertyName: string, itemToDelete: any) {
+	function deleteItem(propertyName: string, itemToDelete: ModuleRow) {
 		console.log('deleteItem', propertyName);
-		data[propertyName] = data[propertyName].filter((item: any) => item !== itemToDelete);
+		data[propertyName] = (data[propertyName] as ModuleRow[]).filter(
+			(item: ModuleRow) => item !== itemToDelete
+		);
 		onChange();
 	}
 
@@ -106,20 +112,20 @@
 
 		// No filter or empty query → return items directly
 		if (!query)
-			return data[property.name].map((item: any, index: number) => ({
+			return (data[property.name] as ModuleRow[]).map((item: ModuleRow, index: number) => ({
 				item,
 				originalIndex: index
 			}));
 
 		// Filtered items
-		return data[property.name]
-			.map((item: any, index: number) => ({ item, originalIndex: index }))
-			.filter(({ item }: { item: any }) => {
+		return (data[property.name] as ModuleRow[])
+			.map((item: ModuleRow, index: number) => ({ item, originalIndex: index }))
+			.filter(({ item }: { item: ModuleRow }) => {
 				const matchFound = property.n
-					.filter((propertyN: any, index: number) => {
+					.filter((propertyN: ModuleProperty, index: number) => {
 						return index < 3 || propertyN.show === true;
 					})
-					.some((propertyN: any) => {
+					.some((propertyN: ModuleProperty) => {
 						let valueStr;
 
 						if (
@@ -139,7 +145,9 @@
 			});
 	});
 
-	const findItemInDefinition = $derived(definition.find((obj: any) => obj.name === property.name));
+	const findItemInDefinition = $derived(
+		definition.find((obj: ModuleProperty) => obj.name === property.name)
+	);
 
 	let propertyFilter = $state({
 		name: property.name + '_filter',
@@ -206,13 +214,13 @@
 			findItemInDefinition?.crud == null || findItemInDefinition?.crud?.includes('s')
 		)}
 	>
-		{#snippet children({ item: itemWrapper }: { item: any })}
+		{#snippet children({ item: itemWrapper }: { item: { item: ModuleRow; originalIndex: number } })}
 			<div class="rounded-box bg-base-100 flex items-center space-x-3 px-4 py-2">
 				{#if findItemInDefinition?.crud == null || findItemInDefinition?.crud?.includes('s')}
 					<Grip class="text-base-content/30 h-6 w-6 shrink-0 cursor-grab" />
 				{/if}
 				<!-- Show the first 3 fields -->
-				{#each property.n.filter((propertyN: any, index: any) => {
+				{#each property.n.filter((propertyN: ModuleProperty, index: number) => {
 					return index < 3 || propertyN.show === true;
 				}) as propertyN (propertyN.name)}
 					{#if propertyN.type != 'array' && propertyN.type != 'controls' && propertyN.type != 'password'}
