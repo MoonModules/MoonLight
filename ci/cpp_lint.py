@@ -163,6 +163,8 @@ def check_file(path: Path) -> list:
         # Only check the non-comment portion of the line.
         # ------------------------------------------------------------------
         line_no_comment = re.sub(r'//.*', '', line)
+        line_no_comment = re.sub(r'"(?:[^"\\]|\\.)*"', '""', line_no_comment)
+        line_no_comment = re.sub(r"'(?:[^'\\]|\\.)*'", "''", line_no_comment)
         if RE_SERIAL_PRINT.search(line_no_comment):
             if not RE_OK_LINT.search(line):
                 violations.append((path, lineno, 'no-serial-print',

@@ -156,7 +156,7 @@ class BlurzEffect : public Node {
 
     if (layer->size.x * layer->size.y * layer->size.z < 2) segLoc = 0;                                                       // WLEDMM just to be sure
     unsigned pixColor = (2 * sharedData.bands[freqBand] * 240) / MAX(1, layer->size.x * layer->size.y * layer->size.z - 1);  // WLEDMM avoid uint8 overflow, and preserve pixel parameters for redraw
-    unsigned pixIntensity = MIN(2.0f * sharedData.bands[freqBand], 255);  // cppcheck-suppress unreadVariable -- WLED ported code
+    // unsigned pixIntensity = MIN(2.0f * sharedData.bands[freqBand], 255);  // cppcheck-suppress unreadVariable -- WLED ported code
 
     if (sharedData.volume > 1.0f) {
       layer->setRGB(segLoc, ColorFromPalette(layerP.palette, pixColor));
@@ -1946,8 +1946,7 @@ class DJLightEffect : public Node {
     if ((speed > 254) || (aux0 != secondHand)) {  // WLEDMM allow run run at full speed
       aux0 = secondHand;
 
-      // cppcheck-suppress redundantInitialization -- defensive zero-init; always overwritten by if/else below
-      CRGB color = CRGB(0, 0, 0);
+      CRGB color;
       // color = CRGB(sharedData.bands[NUM_GEQ_CHANNELS-1]/2, sharedData.bands[5]/2, sharedData.bands[0]/2);   // formula from 0.13.x (10Khz): R = 3880-5120, G=240-340, B=60-100
       if (!candyFactory) {
         // cppcheck-suppress redundantInitialization -- WLED ported code; initial black overwritten by both branches
