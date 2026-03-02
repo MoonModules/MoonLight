@@ -71,7 +71,8 @@ class ArtNetInDriver : public Node {
     }
 
     while (int packetSize = artnetUdp.parsePacket()) {
-      if (packetSize < sizeof(ArtNetHeader) || packetSize > sizeof(packetBuffer)) {
+      const int minHeader = ddp ? static_cast<int>(sizeof(DDPHeader)) : static_cast<int>(sizeof(ArtNetHeader));
+      if (packetSize < minHeader || packetSize > static_cast<int>(sizeof(packetBuffer))) {
         artnetUdp.clear();  // drains all available packets
         continue;
       }
@@ -109,7 +110,9 @@ class ArtNetInDriver : public Node {
     uint16_t dataLen;  // Length of data in bytes
   };
 
-  void handleArtNet() {
+  void handleArtNet(int packetSize) {
+    if (packetSize < static_cast<int>(sizeof(ArtNetHeader))) return;
+
     // Verify Art-Net packet
     if (memcmp(packetBuffer, "Art-Net", 7) == 0) {
       ArtNetHeader* header = reinterpret_cast<ArtNetHeader*>(packetBuffer);
@@ -122,11 +125,13 @@ class ArtNetInDriver : public Node {
         uint16_t universe = header->universe;
         if (universe >= universeMin && universe <= universeMax) {
           uint16_t dataLength = (header->length >> 8) | (header->length << 8);
+          int payloadBytes = packetSize - static_cast<int>(sizeof(ArtNetHeader));
+          int safeDataLen = MIN(static_cast<int>(dataLength), payloadBytes);
 
           uint8_t* dmxData = packetBuffer + sizeof(ArtNetHeader);
 
           int startPixel = (universe - universeMin) * (512 / layerP.lights.header.channelsPerLight);
-          int numPixels = MIN(dataLength / layerP.lights.header.channelsPerLight, layerP.lights.header.nrOfLights - startPixel);
+          int numPixels = MIN(safeDataLen / layerP.lights.header.channelsPerLight, layerP.lights.header.nrOfLights - startPixel);
 
           xSemaphoreTake(swapMutex, portMAX_DELAY);  // prevent effectTask from swapping channelsD/channelsE pointers while writing directly to channelsD (effects must be disabled when ArtNetIn is active)
           for (int i = 0; i < numPixels; i++) {
@@ -162,8 +167,13 @@ class ArtNetInDriver : public Node {
       int payloadBytes = packetSize - static_cast<int>(sizeof(DDPHeader));
       int safeDataLen = MIN(static_cast<int>(dataLen), payloadBytes);
 
-      int startPixel = offset / layerP.lights.header.channelsPerLight;
-      int numPixels = MIN(safeDataLen / layerP.lights.header.channelsPerLight, layerP.lights.header.nrOfLights - startPixel);
+      const uint32_t channelsPerLight = static_cast<uint32_t>(layerP.lights.header.channelsPerLight);
+      const uint32_t startPixelU = offset / channelsPerLight;
+      if (startPixelU >= static_cast<uint32_t>(layerP.lights.header.nrOfLights)) return;
+
+      const int startPixel = static_cast<int>(startPixelU);
+      const int maxWritablePixels = layerP.lights.header.nrOfLights - startPixel;
+      const int numPixels = MIN(safeDataLen / static_cast<int>(channelsPerLight), maxWritablePixels);
 
       xSemaphoreTake(swapMutex, portMAX_DELAY);  // prevent effectTask from swapping channelsD/channelsE pointers while writing directly to channelsD (effects must be disabled when ArtNetIn is active)
       for (int i = 0; i < numPixels; i++) {
