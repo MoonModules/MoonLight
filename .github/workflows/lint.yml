@@ -53,4 +53,4 @@ jobs:
             -DFT_MOONLIGHT=1 \
             -DFT_MOONBASE=1 \
             --template="{file}:{line}: {severity}: {message} [{id}]" \
-            $(find src -name "*.cpp" -o -name "*.h" | grep -v moonmanpng)
+            $(find src \( -name "*.cpp" -o -name "*.h" \) ! -path "*moonmanpng*" -print)

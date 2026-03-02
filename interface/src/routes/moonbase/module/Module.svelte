@@ -117,7 +117,7 @@
 		}
 	}
 
-	function updateRecursive(oldData: any, newData: any) {
+	function updateRecursive(oldData: any, newData: any, pruneMissing = false) {
 		//loop over properties
 		for (let key in newData) {
 			// if (typeof newData[key] != 'object') {
@@ -143,7 +143,7 @@
 							newItem !== null &&
 							typeof newItem === 'object';
 						if (bothObjects) {
-							updateRecursive(oldItem, newItem);
+							updateRecursive(oldItem, newItem, pruneMissing);
 						} else if (oldItem !== newItem) {
 							oldData[key][i] = newItem;
 						}
@@ -161,7 +161,7 @@
 				) {
 					oldData[key] = {};
 				}
-				updateRecursive(oldData[key], newData[key]);
+				updateRecursive(oldData[key], newData[key], pruneMissing);
 			} else if (newData[key] !== oldData[key]) {
 				// console.log("updateRecursive", key, newData[key], oldData[key]);
 				oldData[key] = newData[key]; //trigger reactiveness
@@ -169,9 +169,9 @@
 			// }
 		}
 		//remove properties that are not in newData (e.g. control min and max)
-		for (let key in oldData) {
-			if (newData[key] == null) {
-				delete oldData[key]; //remove property if not in newData
+		if (pruneMissing) {
+			for (let key in oldData) {
+				if (!(key in newData)) delete oldData[key];
 			}
 		}
 	}

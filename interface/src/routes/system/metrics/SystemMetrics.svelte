@@ -394,66 +394,40 @@
 		// 🌙
 		lpsChart.data.labels = $analytics.uptime;
 		lpsChart.data.datasets[0].data = $analytics.lps;
-		lpsChart.update('none');
 		if (lpsChart.options.scales?.y) {
 			lpsChart.options.scales.y.max = Math.round(Math.max(...$analytics.lps));
 		}
+		lpsChart.update('none');
 
 		heapChart.data.labels = $analytics.uptime;
 		heapChart.data.datasets[0].data = $analytics.used_heap;
 		heapChart.data.datasets[1].data = $analytics.max_alloc_heap;
-		heapChart.update('none');
 		if (heapChart.options.scales?.y) {
 			heapChart.options.scales.y.max = Math.round(Math.max(...$analytics.total_heap));
 		}
+		heapChart.update('none');
 
 		if (hasPsramData && psramChart) {
 			psramChart.data.labels = $analytics.uptime;
 			psramChart.data.datasets[0].data = $analytics.used_psram;
-			psramChart.update('none');
 			if (psramChart.options.scales?.y) {
 				psramChart.options.scales.y.max = Math.round(Math.max(...$analytics.psram_size));
 			}
+			psramChart.update('none');
 		}
 
 		filesystemChart.data.labels = $analytics.uptime;
 		filesystemChart.data.datasets[0].data = $analytics.fs_used;
-		filesystemChart.update('none');
 		if (filesystemChart.options.scales?.y) {
 			filesystemChart.options.scales.y.max = Math.round(Math.max(...$analytics.fs_total));
 		}
+		filesystemChart.update('none');
 
 		temperatureChart.data.labels = $analytics.uptime;
 		temperatureChart.data.datasets[0].data = $analytics.core_temp;
 		temperatureChart.update('none');
 	}
 
-	function convertSeconds(seconds: number) {
-		// Calculate the number of seconds, minutes, hours, and days
-		let minutes = Math.floor(seconds / 60);
-		let hours = Math.floor(minutes / 60);
-		let days = Math.floor(hours / 24);
-
-		// Calculate the remaining hours, minutes, and seconds
-		hours = hours % 24;
-		minutes = minutes % 60;
-		seconds = seconds % 60;
-
-		// Create the formatted string
-		let result = '';
-		if (days > 0) {
-			result += days + ' day' + (days > 1 ? 's' : '') + ' ';
-		}
-		if (hours > 0) {
-			result += hours + ' hour' + (hours > 1 ? 's' : '') + ' ';
-		}
-		if (minutes > 0) {
-			result += minutes + ' minute' + (minutes > 1 ? 's' : '') + ' ';
-		}
-		result += seconds + ' second' + (seconds > 1 ? 's' : '');
-
-		return result;
-	}
 </script>
 
 <SettingsCard collapsible={false}>

@@ -64,6 +64,8 @@
 	// Clean up throttle timer on component destroy
 	onDestroy(() => {
 		clearInterval(interval);
+		if (hoverTimeout) clearTimeout(hoverTimeout);
+		if (clickTimeout) clearTimeout(clickTimeout);
 		if (throttleTimer) {
 			clearTimeout(throttleTimer);
 			// Send final pending update if any
