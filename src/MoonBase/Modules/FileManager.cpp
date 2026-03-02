@@ -132,7 +132,7 @@ StateUpdateResult FilesState::update(JsonObject& newData, FilesState& state, con
     }
   }
 
-  changed |= state.updatedItems.size();
+  changed = changed || !state.updatedItems.empty();
 
   if (changed && state.updatedItems.size()) EXT_LOGV(MB_TAG, "first item %s", state.updatedItems.front().c_str());
 

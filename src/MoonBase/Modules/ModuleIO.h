@@ -157,7 +157,7 @@ class ModuleIO : public Module {
 
     rows = control["n"].to<JsonArray>();
     {
-      control = addControl(rows, "GPIO", "number", 0, GPIO_PIN_COUNT - 1, true);  // ro
+      addControl(rows, "GPIO", "number", 0, GPIO_PIN_COUNT - 1, true);  // ro, return value not needed
 
       control = addControl(rows, "usage", "select");
       control["default"] = 0;
@@ -289,13 +289,7 @@ class ModuleIO : public Module {
         level = gpio_get_level((gpio_num_t)gpio_num);
       }
 
-      // For RTC GPIOs, can also use RTC-specific read
-      int rtc_level = -1;
-  #ifndef CONFIG_IDF_TARGET_ESP32C3
-      if (is_rtc_gpio) {
-        rtc_level = rtc_gpio_get_level((gpio_num_t)gpio_num);  // to do find c3 alternative
-      }
-  #endif
+      // RTC-specific GPIO read (to do: find ESP32-C3 alternative)
 
       // Get drive capability (if output capable)
       gpio_drive_cap_t drive_cap = GPIO_DRIVE_CAP_DEFAULT;
@@ -984,6 +978,7 @@ class ModuleIO : public Module {
   adc_attenuation_t current_readout_current_adc_attenuation = ADC_11db;
   #endif
 
+  // cppcheck-suppress uselessOverride -- has content when FT_BATTERY is defined
   void loop1s() override {
   #if FT_BATTERY
     BatteryService* batteryService = _sveltekit->getBatteryService();

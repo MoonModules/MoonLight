@@ -42,7 +42,7 @@ class ExampleDriver : public Node {
   // use for continuous actions, e.g. reading data from sensors or sending data to lights (e.g. LED drivers or Art-Net)
   void loop() override {
     pinMode(pin, INPUT);
-    int value = digitalRead(pin);
+    int value = digitalRead(pin);  // cppcheck-suppress unreadVariable -- sandbox template code
     sharedData;  // write value to shared data if needed, add sharedData if needed, use in other nodes (e.g. effects)
   };
 

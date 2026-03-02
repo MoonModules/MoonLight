@@ -156,7 +156,7 @@ class BlurzEffect : public Node {
 
     if (layer->size.x * layer->size.y * layer->size.z < 2) segLoc = 0;                                                       // WLEDMM just to be sure
     unsigned pixColor = (2 * sharedData.bands[freqBand] * 240) / MAX(1, layer->size.x * layer->size.y * layer->size.z - 1);  // WLEDMM avoid uint8 overflow, and preserve pixel parameters for redraw
-    unsigned pixIntensity = MIN(2.0f * sharedData.bands[freqBand], 255);
+    unsigned pixIntensity = MIN(2.0f * sharedData.bands[freqBand], 255);  // cppcheck-suppress unreadVariable -- WLED ported code
 
     if (sharedData.volume > 1.0f) {
       layer->setRGB(segLoc, ColorFromPalette(layerP.palette, pixColor));
@@ -1696,7 +1696,7 @@ static void mode_fireworks(VirtualLayer* layer, uint16_t x, uint16_t aux0, uint1
           layer->setRGB(Coord3D(x, layer->size.y - 1 - index), ColorFromPalette(layerP.palette, random8()));
         else
           layer->setRGB(Coord3D(x, layer->size.y - 1 - index), ColorFromPalette(layerP.palette, soundColor + random8(24)));  // WLEDSR
-        aux1 = aux0;
+        aux1 = aux0;  // cppcheck-suppress unreadVariable -- WLED ported code
         aux0 = index;
       }
     }
@@ -1946,9 +1946,11 @@ class DJLightEffect : public Node {
     if ((speed > 254) || (aux0 != secondHand)) {  // WLEDMM allow run run at full speed
       aux0 = secondHand;
 
+      // cppcheck-suppress redundantInitialization -- defensive zero-init; always overwritten by if/else below
       CRGB color = CRGB(0, 0, 0);
       // color = CRGB(sharedData.bands[NUM_GEQ_CHANNELS-1]/2, sharedData.bands[5]/2, sharedData.bands[0]/2);   // formula from 0.13.x (10Khz): R = 3880-5120, G=240-340, B=60-100
       if (!candyFactory) {
+        // cppcheck-suppress redundantInitialization -- WLED ported code; initial black overwritten by both branches
         color = CRGB(sharedData.bands[12] / 2, sharedData.bands[3] / 2, sharedData.bands[1] / 2);  // formula for 0.14.x  (22Khz): R = 3015-3704, G=216-301, B=86-129
       } else {
         // candy factory: an attempt to get more colors
@@ -2819,7 +2821,7 @@ class FreqmapEffect : public Node {
     uint16_t pixCol = (log10f(myMajorPeak) - 1.78f) * 255.0f / (MAX_FREQ_LOG10 - 1.78f);
     if (myMajorPeak < 61.0f) pixCol = 0;
 
-    uint16_t bright = (int)(sqrtf(myMagnitude) * 16.0f);
+    uint16_t bright = (int)(sqrtf(myMagnitude) * 16.0f);  // cppcheck-suppress unreadVariable -- WLED ported code
 
     CRGB color = ColorFromPalette(layerP.palette, intensity + pixCol);
     layer->setRGB(locn, color);  // blend(layerP.color2, color, bright));
@@ -2852,7 +2854,7 @@ class FreqpixelsEffect : public Node {
     if ((fadeoutDelay <= 1) || ((millis() % fadeoutDelay) == 0)) layer->fadeToBlackBy(fadeRate);
 
     float myMajorPeak = MAX(sharedData.majorPeak, 1.0f);
-    float myMagnitude = sharedData.volume / 16.0f;
+    float myMagnitude = sharedData.volume / 16.0f;  // cppcheck-suppress unreadVariable -- WLED ported code
 
     for (int i = 0; i < intensity / 32 + 1; i++) {
       uint16_t locn = random16(0, layer->nrOfLights);
@@ -3523,8 +3525,11 @@ class RocktavesEffect : public Node {
     uint8_t volTemp = 0;
 
     float myMagnitude = sharedData.volume / 16.0f;
+    // cppcheck-suppress unreadVariable -- WLED ported code; volTemp used later in function
     volTemp = 32.0f + myMagnitude * 1.5f;
+    // cppcheck-suppress unreadVariable
     if (myMagnitude < 48) volTemp = 0;
+    // cppcheck-suppress unreadVariable
     if (myMagnitude > 144) volTemp = 255;
 
     while (frTemp > 249) {

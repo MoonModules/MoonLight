@@ -30,11 +30,14 @@ jobs:
         run: npm run lint
 
   backend-lint:
-    name: Backend (cppcheck)
+    name: Backend (cppcheck + cpp_lint)
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Run custom lint rules
+        run: python3 ci/cpp_lint.py
 
       - name: Install cppcheck
         run: sudo apt-get install -y cppcheck
@@ -42,7 +45,7 @@ jobs:
       - name: Run cppcheck
         run: |
           cppcheck \
-            --enable=warning \
+            --enable=warning,performance,style \
             --suppress=missingInclude \
             --suppress=missingIncludeSystem \
             --inline-suppr \
@@ -53,5 +56,21 @@ jobs:
             -DFT_MOONLIGHT=1 \
             -DFT_MOONBASE=1 \
             "-DFT_ENABLED(x)=x" \
+            --suppress=noExplicitConstructor \
+            --suppress=functionStatic \
+            --suppress=constParameterReference \
+            --suppress=constParameterPointer \
+            --suppress=constParameterCallback \
+            --suppress=constVariablePointer \
+            --suppress=constVariableReference \
+            --suppress=constVariable \
+            --suppress=cstyleCast \
+            --suppress=unusedStructMember \
+            --suppress=useStlAlgorithm \
+            --suppress=variableScope \
+            --suppress=shadowVariable \
+            --suppress=shadowArgument \
+            --suppress=stlFindInsert \
+            --suppress=noConstructor \
             --template="{file}:{line}: {severity}: {message} [{id}]" \
             $(find src \( -name "*.cpp" -o -name "*.h" \) ! -path "*moonmanpng*" -print)

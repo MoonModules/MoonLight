@@ -161,7 +161,7 @@ class PinwheelModifier : public Node {
   static const char* tags() { return "💎"; }
 
   uint8_t petals = 60;
-  uint8_t swirlVal = 30;
+  int8_t swirlVal = 30;  // signed: negative values reverse the swirl direction
   bool reverse = false;
   uint8_t symmetry = 1;
   uint8_t zTwist = 0;
@@ -212,8 +212,7 @@ class PinwheelModifier : public Node {
     const int swirlFactor = swirlVal == 0 ? 0 : hypot(dy, dx) * abs(swirlVal);  // Only calculate if swirlVal != 0
     int angle = degrees(atan2(dy, dx)) + 180;                                   // 0 - 360
 
-    // cppcheck-suppress unsignedLessThanZero -- swirlVal is uint8_t; reverse swirl not reachable until type changes to int8_t
-    if (swirlVal < 0) angle = 360 - angle;  // Reverse Swirl (dead code: uint8_t can't be < 0)
+    if (swirlVal < 0) angle = 360 - angle;  // Reverse Swirl
 
     int value = angle + swirlFactor + (zTwist * position.z);
     value /= petalWidth;

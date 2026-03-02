@@ -213,7 +213,7 @@ class IMUDriver : public Node {
   }
 
  private:
-  update_handler_id_t ioUpdateHandler;
+  update_handler_id_t ioUpdateHandler = 0;
 
   MPU6050 mpu;
 

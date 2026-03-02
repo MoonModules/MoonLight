@@ -113,7 +113,7 @@ struct Char {
   Char& format(const char* format, ...) {
     va_list args;
     va_start(args, format);
-    size_t len = vsnprintf(s, sizeof(s), format, args);
+    vsnprintf(s, sizeof(s), format, args);
     va_end(args);
     return *this;
   }
