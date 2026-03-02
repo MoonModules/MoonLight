@@ -45,7 +45,15 @@ npm run lint     # Prettier + ESLint check
 npm run format   # Auto-format with Prettier
 ```
 
-There are no automated tests for this project.
+### Unit Tests (PlatformIO Native)
+
+```bash
+pio test -e native    # Run all native unit tests (~1 second)
+```
+
+Tests live in `test/test_native/` and run on the host machine (no ESP32 needed). They use the [Unity](https://github.com/ThrowTheSwitch/Unity) test framework (built into PlatformIO).
+
+**When to add unit tests:** Add tests for simple, pure, side-effect-free functions and structs (e.g. math utilities, coordinate operations, string helpers). Do not add tests for every function — focus on functions that are self-contained and don't depend on ESP32 hardware, FreeRTOS, or WiFi/filesystem. Since the source headers have ESP32 dependencies, test functions are currently copied into the test file. Keep them in sync when modifying the originals.
 
 ## Architecture
 

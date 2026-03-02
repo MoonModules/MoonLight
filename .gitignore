@@ -1,4 +1,5 @@
 .pio
+.cache
 .clang_complete
 .gcc-flags.json
 *Thumbs.db

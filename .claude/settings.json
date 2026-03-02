@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '=== MoonLight lint ===' && cd \"$CLAUDE_PROJECT_DIR/interface\" && npm run lint && echo '--- backend ---' && cd \"$CLAUDE_PROJECT_DIR\" && python3 ci/cpp_lint.py && echo '--- unit tests ---' && ~/.platformio/penv/bin/pio test -e native"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -99,25 +99,37 @@ def check_file(path: Path) -> list:
 
     # Stack frames: {'name': str, 'depth_at_open': int, 'is_node': bool}
     class_stack: list = []
+    pending_class = None  # {'name': str, 'depth_at_open': int, 'header': str}
     brace_depth = 0          # absolute brace depth
 
     for lineno, line in enumerate(lines, start=1):
         # ------------------------------------------------------------------
         # Track class/struct openings BEFORE updating brace_depth
         # ------------------------------------------------------------------
-        m = RE_CLASS_OPEN.match(line)
-        if m:
-            class_name = m.group(1)
-            # Determine if this inherits from Node (look for ': public Node'
-            # or ': Node' or multiple bases containing Node).
-            is_node = bool(re.search(r':\s*(?:public\s+)?(?:\w+,\s*)*Node\b', line))
-            # The class body starts at the '{' on this line (or later).
-            # We record the depth *before* this line's braces are counted.
-            class_stack.append({
-                'name': class_name,
+        header_line = re.sub(r'//.*', '', line)
+        m = RE_CLASS_OPEN.match(header_line)
+        if pending_class:
+            pending_class['header'] += ' ' + header_line.strip()
+            if '{' in header_line:
+                class_stack.append({
+                    'name': pending_class['name'],
+                    'depth_at_open': pending_class['depth_at_open'],
+                    'is_node': bool(re.search(r':\s*(?:public\s+)?(?:\w+,\s*)*Node\b', pending_class['header'])),
+                })
+                pending_class = None
+        elif m:
+            pending_class = {
+                'name': m.group(1),
                 'depth_at_open': brace_depth,
-                'is_node': is_node,
-            })
+                'header': header_line.strip(),
+            }
+            if '{' in header_line:
+                class_stack.append({
+                    'name': pending_class['name'],
+                    'depth_at_open': pending_class['depth_at_open'],
+                    'is_node': bool(re.search(r':\s*(?:public\s+)?(?:\w+,\s*)*Node\b', pending_class['header'])),
+                })
+                pending_class = None
 
         # ------------------------------------------------------------------
         # Update brace depth

@@ -34,7 +34,18 @@
 	import Help from '~icons/tabler/help';
 	import FieldRenderer from '$lib/components/moonbase/FieldRenderer.svelte';
 
-	let filesState = $state({} as FilesState);
+	let filesState: FilesState = $state({
+		name: '',
+		path: '',
+		isFile: false,
+		size: 0,
+		time: 0,
+		contents: '',
+		files: [],
+		fs_total: 0,
+		fs_used: 0,
+		showHidden: false
+	});
 	let folderList: FilesState[] = $state([]); //all files in a folder
 	let editableFile: FilesState = $state({
 		name: '',
