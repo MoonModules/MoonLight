@@ -32,8 +32,8 @@
 
 	let editableFile: FilesState = $state({
 		name: '',
-		path: path,
-		isFile: isFile,
+		path: '',
+		isFile: true,
 		size: 0,
 		time: 0,
 		contents: '',

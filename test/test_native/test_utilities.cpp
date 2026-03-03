@@ -5,8 +5,8 @@
     @Copyright © 2026 Github MoonLight Commit Authors
     @license   GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007
 
-    Native unit tests for pure functions from Utilities.h/.cpp and Char.h.
-    These functions are copied here to avoid ESP32 header dependencies.
+    Native unit tests for pure functions from PureFunctions.h and Coord3D.h.
+    Kept free of ESP32/Arduino header dependencies.
     Run with: pio test -e native
 **/
 
@@ -32,6 +32,9 @@ TEST_CASE("lcm") {
   CHECK_EQ(lcm(12, 18), 36);
   CHECK_EQ(lcm(7, 13), 91);
   CHECK_EQ(lcm(12, 8), 24);
+  CHECK_EQ(lcm(0, 0), 0);
+  CHECK_EQ(lcm(0, 5), 0);
+  CHECK_EQ(lcm(5, 0), 0);
 }
 
 TEST_CASE("fastDiv255") {
@@ -156,14 +159,22 @@ TEST_CASE("Coord3D") {
 
 TEST_CASE("extractPath") {
   char path[64];
-  extractPath("/foo/bar/baz.txt", path);
+  CHECK(extractPath("/foo/bar/baz.txt", path, sizeof(path)) == 8);
   CHECK(strcmp(path, "/foo/bar") == 0);
 
-  extractPath("nodir.txt", path);
+  CHECK(extractPath("nodir.txt", path, sizeof(path)) == 0);
   CHECK(strcmp(path, "") == 0);
 
-  extractPath("/root.txt", path);
+  CHECK(extractPath("/root.txt", path, sizeof(path)) == 0);
   CHECK(strcmp(path, "") == 0);
+
+  // truncation: buffer holds only 4 bytes → 3 chars + null terminator
+  char tiny[4];
+  CHECK(extractPath("/foo/bar/baz.txt", tiny, sizeof(tiny)) == 3);
+  CHECK(strcmp(tiny, "/fo") == 0);
+
+  // zero-size buffer: no writes, returns 0
+  CHECK(extractPath("/foo/bar/baz.txt", nullptr, 0) == 0);
 }
 
 TEST_CASE("distance") {

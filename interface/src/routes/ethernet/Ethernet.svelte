@@ -47,11 +47,19 @@
 		link_speed: 0,
 	});
 
-	let ethernetEditable = $state(_ethernetEditable);
+	// 🌙 Initialize with safe defaults; data always loaded from API in getEthernetSettings() (Svelte 5.36+)
+	let ethernetEditable: EthernetSettings = $state({
+		hostname: '',
+		static_ip_config: false,
+		local_ip: undefined,
+		subnet_mask: undefined,
+		gateway_ip: undefined,
+		dns_ip_1: undefined,
+		dns_ip_2: undefined
+	});
 
-	// Stringify to recognize changes
-	// svelte-ignore state_referenced_locally
-	let strEthernetEditable: string = $state(JSON.stringify(_ethernetEditable, emptyStringToUndefinedReplacer));
+	// Stringify to recognize changes; updated in getEthernetSettings()
+	let strEthernetEditable: string = $state('');
 	// Recognize changes in settings
 	let isSettingsDirty: boolean = $derived(JSON.stringify(ethernetEditable, emptyStringToUndefinedReplacer) !== strEthernetEditable);
 

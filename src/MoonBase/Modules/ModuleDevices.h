@@ -15,8 +15,8 @@
 #if FT_MOONBASE == 1
 
   #include "MoonBase/Module.h"
-  #include "MoonBase/Utilities.h"
-  #include "MoonBase/pal.h"
+  #include "MoonBase/utilities/Utilities.h"
+  #include "MoonBase/utilities/pal.h"
 
 struct UDPMessage {
   uint8_t rommel[6];

@@ -34,20 +34,16 @@
 	let dataEditable: ModuleRow = $state({});
 
 	//if no records added yet, add an empty array
-	if (data[property.name] == undefined) {
-		data[property.name] = [];
-	}
-
-	let localDefinition: ModuleProperty[] = $state([]);
+	$effect(() => {
+		if (data[property.name] == undefined) {
+			data[property.name] = [];
+		}
+	});
 
 	// console.log("Array property", property, data, definition, changeOnInput, data[property.name], value1, value2);
-	for (let i = 0; i < definition.length; i++) {
-		// console.log("addItem def", propertyName, property)
-		if (property.name == definition[i].name) {
-			localDefinition = definition[i].n;
-			// console.log("localDefinition", property.name, definition[i].n)
-		}
-	}
+	const localDefinition: ModuleProperty[] = $derived(
+		definition.find((d: ModuleProperty) => d.name === property.name)?.n ?? []
+	);
 
 	function handleReorder(reorderedItems: { item: ModuleRow; originalIndex: number }[]) {
 		console.log('handleReorder', property.name, reorderedItems);
@@ -149,16 +145,14 @@
 		definition.find((obj: ModuleProperty) => obj.name === property.name)
 	);
 
-	let propertyFilter = $state({
+	const propertyFilter = $derived.by(() => ({
 		name: property.name + '_filter',
 		type: 'text',
 		label: 'Filter ' + initCap(property.name),
-		default: ''
-	});
+		default: findItemInDefinition?.filter ?? '!Unused'
+	}));
 
-	// Update the default value reactively so we don't capture the initial derived value only once
 	$effect(() => {
-		propertyFilter.default = findItemInDefinition?.filter ?? '!Unused';
 		// assign default filter if not defined yet
 		if (data[property.name + '_filter'] == null)
 			data[property.name + '_filter'] = propertyFilter.default;

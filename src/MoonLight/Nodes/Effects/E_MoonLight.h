@@ -11,7 +11,7 @@
 
 #if FT_MOONLIGHT
 
-  #include "MoonBase/pal.h"
+  #include "MoonBase/utilities/pal.h"
 
 class SolidEffect : public Node {
  public:

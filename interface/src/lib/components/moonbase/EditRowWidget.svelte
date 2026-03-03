@@ -39,8 +39,6 @@
 		changeOnInput
 	}: Props = $props();
 
-	console.log(property, localDefinition, dataEditable);
-
 	// Make passed object reactive to prevent Svelte warning 'binding_property_non_reactive'
 	// https://github.com/sveltejs/svelte/issues/12320
 	// let dataEditable = $state(_dataEditable);

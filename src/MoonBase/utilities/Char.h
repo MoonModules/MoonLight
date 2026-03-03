@@ -159,4 +159,3 @@ Char<N> operator+(const char* lhs, const Char<N>& rhs) {
 // test.split(" - ", [](const char *token) {
 //     EXT_LOGV(MB_TAG, "token: %s", token);
 // });
-

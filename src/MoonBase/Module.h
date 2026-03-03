@@ -18,7 +18,7 @@
   #include <FSPersistence.h>
   #include <PsychicHttp.h>
 
-  #include "Utilities.h"
+  #include "utilities/Utilities.h"
 
 // sizeof was 160 chars -> 80 -> 68 -> 88
 struct UpdatedItem {

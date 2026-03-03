@@ -27,16 +27,18 @@ inline float distance(float x1, float y1, float z1, float x2, float y2, float z2
   return sqrtf((x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2) + (z1 - z2) * (z1 - z2));
 }
 
-inline void extractPath(const char* filepath, char* path) {
+inline size_t extractPath(const char* filepath, char* path, size_t pathSize) {
+  if (pathSize == 0) return 0;
   const char* lastSlash = strrchr(filepath, '/');
-  if (lastSlash != NULL) {
-    size_t pathLength = lastSlash - filepath + 1;
-    strlcpy(path, filepath, pathLength);
-    // path[pathLength] = '\0'; // strlcpy does this
-  } else {
-    // No directory separator found, the entire filepath is the filename
-    strcpy(path, "");
+  if (lastSlash != nullptr) {
+    size_t pathLen = static_cast<size_t>(lastSlash - filepath);
+    size_t toCopy = pathLen < pathSize - 1 ? pathLen : pathSize - 1;
+    memcpy(path, filepath, toCopy);
+    path[toCopy] = '\0';
+    return toCopy;
   }
+  path[0] = '\0';
+  return 0;
 }
 
 // for game of live

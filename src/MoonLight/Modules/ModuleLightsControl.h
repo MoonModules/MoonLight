@@ -17,7 +17,7 @@
   #include "FastLED.h"
   #include "MoonBase/Module.h"
   #include "MoonBase/Modules/FileManager.h"
-  #include "MoonBase/Utilities.h"  //for isInPSRAM
+  #include "MoonBase/utilities/Utilities.h"  //for isInPSRAM
   #include "palettes.h"
 
 // Convert ModuleLightsControl state -> Home Assistant JSON

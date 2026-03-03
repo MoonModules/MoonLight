@@ -29,6 +29,33 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Unit tests
+        run: npm run test
+
+  iwyu:
+    name: IWYU (Include What You Use)
+    runs-on: ubuntu-latest
+    continue-on-error: true  # informational only — never blocks CI
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install IWYU
+        run: sudo apt-get install -y iwyu
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Install native dependencies
+        run: pio pkg install -e native
+
+      - name: Run IWYU analysis
+        run: python3 ci/iwyu.py
+
   backend-lint:
     name: Backend (cppcheck + cpp_lint)
     runs-on: ubuntu-latest
