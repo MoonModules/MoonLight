@@ -104,3 +104,23 @@ jobs:
             --suppress=noConstructor \
             --template="{file}:{line}: {severity}: {message} [{id}]" \
             $(find src \( -name "*.cpp" -o -name "*.h" \) ! -path "*moonmanpng*" -print)
+
+  backend-tests:
+    name: Backend Unit Tests (doctest)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Install native dependencies
+        run: pio pkg install -e native
+
+      - name: Run native tests
+        run: pio test -e native

@@ -19,6 +19,17 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/MoonModules/MoonLight/actions/workflows/lint.yml"><img src="https://github.com/MoonModules/MoonLight/actions/workflows/lint.yml/badge.svg" alt="Lint Status">Lint Status</a>
+  <a href="https://github.com/MoonModules/MoonLight/actions/workflows/ci-pio.yaml"><img src="https://github.com/MoonModules/MoonLight/actions/workflows/build.yml/badge.svg" alt="Build Status">Build Status</a>
+  <a href="https://github.com/MoonModules/MoonLight/actions/workflows/nightly.yml"><img src="https://github.com/MoonModules/MoonLight/actions/workflows/build.yml/badge.svg" alt="Build Status">Nightly</a>
+
+  <a href="https://github.com/MoonModules/MoonLight/actions/workflows/lint.yml"><img src="https://github.com/MoonModules/MoonLight/actions/workflows/lint.yml/badge.svg?event=push&job=frontend-lint" alt="Frontend Tests">Frontend Tests</a>
+
+  <a href="https://github.com/MoonModules/MoonLight/actions/workflows/lint.yml"><img src="https://github.com/MoonModules/MoonLight/actions/workflows/lint.yml/badge.svg?event=push&job=backend-tests" alt="Backend tests">Backend Tests</a>
+
+</p>
+
+<p align="center">
   <a href="https://moonmodules.org/MoonLight/gettingstarted/overview">🚀 Get Started</a> • 
   <a href="https://moonmodules.org/MoonLight/moonlight/overview">💫 Enjoy</a> • 
   <a href="https://moonmodules.org/MoonLight/develop/overview">🛠️ Contribute</a>
@@ -34,7 +45,7 @@
 </p>
 <p align="center">
   <a href="https://www.youtube.com/watch?v=TtHu7hYC1oU">
-    <img width="380" src="https://i9.ytimg.com/vi/TtHu7hYC1oU/mqdefault.jpg?v=69494f29&sqp=CJSupcoG&rs=AOn4CLBXfMICdn7xvZqUkCwNRvkHytOhGw">
+    <img width="380" src="https://img.youtube.com//vi/TtHu7hYC1oU/maxresdefault.jpg">
   </a>
 </p>
 <p align="center">

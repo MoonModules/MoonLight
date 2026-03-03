@@ -99,7 +99,7 @@ Select your board in [Module IO](../../moonbase/inputoutput).
 If you have one of the supported premade boards (see table above), select it.  
 If you are unsure, leave the default settings.
 
-<img width="320" height="441" src="../../media/moonbase/inputoutput.png" />
+<img width="320" height="441" src="../../moonbase/inputoutput.png" />
 
 Ensure the configured LED pin(s) match the physical connections on your ESP32 board.
 
