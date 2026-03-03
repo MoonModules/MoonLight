@@ -63,19 +63,19 @@ struct Coord3D {
   Coord3D operator%(const Coord3D& rhs) const { return Coord3D(rhs.x ? x % rhs.x : x, rhs.y ? y % rhs.y : y, rhs.z ? z % rhs.z : z); }
 
   // assignments
-  Coord3D operator=(const Coord3D& rhs) {
+  Coord3D& operator=(const Coord3D& rhs) {
     x = rhs.x;
     y = rhs.y;
     z = rhs.z;
     return *this;
   }
-  Coord3D operator+=(const Coord3D& rhs) {
+  Coord3D& operator+=(const Coord3D& rhs) {
     x += rhs.x;
     y += rhs.y;
     z += rhs.z;
     return *this;
   }
-  Coord3D operator/=(const Coord3D& rhs) {
+  Coord3D& operator/=(const Coord3D& rhs) {
     if (rhs.x) x /= rhs.x;
     if (rhs.y) y /= rhs.y;
     if (rhs.z) z /= rhs.z;

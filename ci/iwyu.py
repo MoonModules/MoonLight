@@ -43,7 +43,7 @@ else:
 
 def run_iwyu(path: Path) -> tuple[bool, str]:
     """Run IWYU on one file. Returns (compiled_ok, iwyu_suggestions)."""
-    cmd = ["include-what-you-use"] + INCLUDE_FLAGS + [str(path)]
+    cmd = ["include-what-you-use", *INCLUDE_FLAGS, str(path)]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         # IWYU writes suggestions to stderr; stdout is unused

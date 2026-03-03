@@ -8,9 +8,11 @@ export default function viteLittleFS(): Plugin[] {
 			apply: 'build',
 
 			async config(config, _configEnv) {
-				// 🌙 refactor
-				const output = config.build?.rollupOptions?.output;
-				if (!output) return;
+				// 🌙 Initialise rollupOptions.output if absent so the plugin is
+				// self-sufficient and doesn't require it to be pre-set in vite.config.ts
+				if (!config.build) config.build = {};
+				if (!config.build.rollupOptions) config.build.rollupOptions = {};
+				const output = config.build.rollupOptions.output ?? {};
 
 				const outputs = Array.isArray(output) ? output : [output];
 				const normalized = outputs.map((o) => {
@@ -31,7 +33,7 @@ export default function viteLittleFS(): Plugin[] {
 					return next;
 				});
 
-				config.build!.rollupOptions!.output = Array.isArray(output) ? normalized : normalized[0];
+				config.build.rollupOptions.output = Array.isArray(output) ? normalized : normalized[0];
 			}
 		}
 	];

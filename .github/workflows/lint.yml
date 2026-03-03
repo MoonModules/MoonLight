@@ -26,6 +26,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate SvelteKit types
+        run: npx svelte-kit sync
+
       - name: Lint
         run: npm run lint
 

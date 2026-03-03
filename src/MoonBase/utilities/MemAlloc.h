@@ -11,8 +11,9 @@
 
 #pragma once
 
-#include "ArduinoJson.h"
 #include <cstddef>
+
+#include "ArduinoJson.h"
 
 // Fallback no-op macros when included standalone (real definitions come from Utilities.h)
 #ifndef EXT_LOGE
@@ -40,7 +41,7 @@ T* allocMB(size_t n, const char* name = nullptr) {
     totalAllocatedMB += heap_caps_get_allocated_size(res);
     // EXT_LOGD(MB_TAG, "Allocated %s: %d x %d bytes in %s s:%d (tot:%d)", name?name:"x", n, sizeof(T), isInPSRAM(res)?"PSRAM":"RAM", heap_caps_get_allocated_size(res), totalAllocatedMB);
   } else
-    EXT_LOGE(MB_TAG, "heap_caps_malloc for %s of %d x %d not succeeded", name?name:"x", n, sizeof(T));
+    EXT_LOGE(MB_TAG, "heap_caps_malloc for %s of %d x %d not succeeded", name ? name : "x", n, sizeof(T));
   return res;
 }
 
@@ -50,19 +51,19 @@ T* reallocMB(T* p, size_t n, const char* name = nullptr) {
   if (res) {
     // EXT_LOGD(MB_TAG, "Re-Allocated %s: %d x %d bytes in %s s:%d", name?name:"x", n, sizeof(T), isInPSRAM(res)?"PSRAM":"RAM", heap_caps_get_allocated_size(res));
   } else
-    EXT_LOGE(MB_TAG, "heap_caps_malloc for %s of %d x %d not succeeded", name?name:"x", n, sizeof(T));
+    EXT_LOGE(MB_TAG, "heap_caps_malloc for %s of %d x %d not succeeded", name ? name : "x", n, sizeof(T));
   return res;
 }
 
 template <typename T>
-void reallocMB2(T* &p, size_t &pSize, size_t n, const char* name = nullptr) {
+void reallocMB2(T*& p, size_t& pSize, size_t n, const char* name = nullptr) {
   T* res = (T*)heap_caps_realloc_prefer(p, n * sizeof(T), 2, MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT);  // calloc is malloc + memset(0);
   if (res) {
     // EXT_LOGD(MB_TAG, "Re-Allocated %s: %d x %d bytes in %s s:%d", name?name:"x", n, sizeof(T), isInPSRAM(res)?"PSRAM":"RAM", heap_caps_get_allocated_size(res));
     p = res;
     pSize = n;
   } else {
-    EXT_LOGE(MB_TAG, "heap_caps_malloc for %s of %d x %d not succeeded, keeping old %d", name?name:"x", n, sizeof(T), pSize);
+    EXT_LOGE(MB_TAG, "heap_caps_malloc for %s of %d x %d not succeeded, keeping old %d", name ? name : "x", n, sizeof(T), pSize);
   }
 }
 
@@ -75,7 +76,7 @@ void freeMB(T*& p, const char* name = nullptr) {
     heap_caps_free(p);
     p = nullptr;
   } else
-    EXT_LOGW(MB_TAG, "Nothing to free for %s: pointer is null", name?name:"x");
+    EXT_LOGW(MB_TAG, "Nothing to free for %s: pointer is null", name ? name : "x");
 }
 
 // allocate vector
@@ -114,5 +115,8 @@ T* allocMBObject(Args&&... args) {
 // free object
 template <typename T>
 void freeMBObject(T*& obj) {
+  if (obj) {
+    obj->~T();
+  }
   freeMB(obj, "object");
 }

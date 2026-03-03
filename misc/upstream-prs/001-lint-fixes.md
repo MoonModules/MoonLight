@@ -126,7 +126,7 @@ const regex = /[-a-zA-Z0-9@:%_.~#?&//=]{2,256}.../
 
 Run: `npm run lint` (Prettier check + ESLint) · `npm run format` (auto-fix Prettier) · `npm run test` (Vitest unit tests)
 
-Current test coverage: `moonbase_utilities.test.ts` — 9 tests for `initCap` and `getTimeAgo`.
+Current test coverage: `moonbase_utilities.test.ts` — covers for `initCap` and `getTimeAgo`.
 
 Current status: **0 errors, 49 warnings** (all `@typescript-eslint/no-explicit-any` — intentional, set to `warn`)
 

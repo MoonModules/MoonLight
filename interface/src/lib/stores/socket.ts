@@ -51,6 +51,12 @@ function createWebSocket() {
 			try {
 				payload = binary ? msgpack.decode(new Uint8Array(payload)) : JSON.parse(payload);
 			} catch (error) {
+				if (binary) {
+					listeners.get('monitor')?.forEach((listener) => {
+						listener(new Uint8Array(message.data));
+					});
+					return;
+				}
 				console.error('[WebSocket] Decode error:', error); // 🌙
 				listeners.get('error')?.forEach((listener) => {
 					listener(error);
@@ -61,7 +67,9 @@ function createWebSocket() {
 			// 🌙 Non-object binary = raw monitor data (not msgpack); route directly and skip destructuring
 			if (!payload || typeof payload !== 'object') {
 				if (binary) {
-					listeners.get('monitor')?.forEach((listener) => listener(new Uint8Array(message.data)));
+					listeners.get('monitor')?.forEach((listener) => {
+						listener(new Uint8Array(message.data));
+					});
 				} else {
 					console.error('[WebSocket] Invalid payload:', payload);
 				}
