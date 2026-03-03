@@ -294,13 +294,12 @@ StateUpdateResult ModuleState::update(JsonObject& newData, ModuleState& state, c
   }
 }
 
-Module::Module(const char* moduleName, PsychicHttpServer* server, ESP32SvelteKit* sveltekit)
-    : _socket(sveltekit->getSocket())
-{
+Module::Module(const char* moduleName, PsychicHttpServer* server, ESP32SvelteKit* sveltekit) {
   _moduleName = (moduleName && moduleName[0] != '\0') ? moduleName : "unnamed";
 
   EXT_LOGV(MB_TAG, "constructor %s", moduleName);
   _server = server;
+  _sveltekit = sveltekit;
 
   _state.processUpdatedItem = [&](const UpdatedItem& updatedItem, const String& originId) {
     processUpdatedItem(updatedItem, originId);  // Ensure updatedItem is of type UpdatedItem&

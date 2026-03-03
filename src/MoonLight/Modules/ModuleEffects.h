@@ -35,7 +35,7 @@ class ModuleEffects : public NodeManager {
     NodeManager::begin();
 
   #if FT_ENABLED(FT_MONITOR)
-    _socket->registerEvent("monitor");
+    _sveltekit->getSocket()->registerEvent("monitor");
     _server->on("/rest/monitorLayout", HTTP_GET, [&](PsychicRequest* request) {
       EXT_LOGV(ML_TAG, "rest monitor triggered");
 

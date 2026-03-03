@@ -136,11 +136,10 @@ class Module : public StatefulService<ModuleState> {
   bool updatePin(uint8_t& pin, const uint8_t pinUsage, bool checkOut = false);
 
  protected:
-  /// WebSocket/event interface provided by ESP32SvelteKit.
-  EventSocket* _socket;
 
   /// HTTP server for registering REST endpoints. Protected so subclasses (e.g. NodeManager) can register additional routes.
   PsychicHttpServer* _server;
+  ESP32SvelteKit* _sveltekit;
 };
 
 #endif

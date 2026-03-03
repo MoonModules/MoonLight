@@ -20,14 +20,12 @@
 
 class ModuleLiveScripts : public Module {
  public:
-  PsychicHttpServer* _server;
   FileManager* _fileManager;
   ModuleEffects* _moduleEffects;
   ModuleDrivers* _moduleDrivers;
 
   ModuleLiveScripts(PsychicHttpServer* server, ESP32SvelteKit* sveltekit, FileManager* fileManager, ModuleEffects* moduleEffects, ModuleDrivers* moduleDrivers) : Module("livescripts", server, sveltekit) {
     EXT_LOGV(ML_TAG, "constructor");
-    _server = server;
     _fileManager = fileManager;
     _moduleEffects = moduleEffects;
     _moduleDrivers = moduleDrivers;
@@ -148,7 +146,7 @@ class ModuleLiveScripts : public Module {
 
   // update scripts / read only values in the UI
   void loop1s() override {
-    if (!_socket->getConnectedClients()) return;
+    if (!_sveltekit->getSocket()->getConnectedClients()) return;
     if (!WiFi.localIP() && !ETH.localIP()) return;
 
     JsonDocument newData;                                    // to only send updatedData

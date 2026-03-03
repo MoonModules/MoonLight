@@ -145,7 +145,7 @@ class ModuleDevices : public Module {
 
     // set the doc
     JsonDocument doc;
-    if (_socket->getActiveClients()) {  // rebuild the devices array
+    if (_sveltekit->getSocket()->getActiveClients()) {  // rebuild the devices array
       doc.set(_state.data);             // copy
     } else {
       doc = _state.data;  // reference
