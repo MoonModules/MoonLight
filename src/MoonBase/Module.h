@@ -15,11 +15,9 @@
 #if FT_MOONBASE == 1
 
   #include <ESP32SvelteKit.h>
-  #include <FSPersistence.h>
-  #include <PsychicHttp.h>
-
   #include "utilities/Utilities.h"
 
+/// Tracks which control changed during a state update, including its parent context and old/new values.
 // sizeof was 160 chars -> 80 -> 68 -> 88
 struct UpdatedItem {
   Char<20> parent[2];  // 24 -> 2*20
@@ -28,6 +26,7 @@ struct UpdatedItem {
   Char<20> oldValue;   // 32 -> 16 -> 20, smaller then 11 bytes mostly
   JsonVariant value;   // 8->16->4
 
+  /// Initializes parent/index fields to empty/unset defaults.
   UpdatedItem() {
     parent[0] = "";  // will be checked in onUpdate
     parent[1] = "";
@@ -38,112 +37,86 @@ struct UpdatedItem {
 
 typedef std::function<void(JsonObject data)> ReadHook;
 
+/// Shared ArduinoJson document for all modules (saves RAM vs one doc per module).
 extern JsonDocument* gModulesDoc;  // shared document for all modules, to save RAM
 
+/// Holds the JSON state for a single module. Manages setup, comparison, and update dispatch.
 class ModuleState {
  public:
+  /// The module's live state object, stored inside the shared gModulesDoc.
   JsonObject data = JsonObject();  // isNull()
 
-  ModuleState() {
-    EXT_LOGD(MB_TAG, "ModuleState constructor");
+  /// Allocates a new JsonObject in the shared gModulesDoc (creates the doc on first use).
+  ModuleState();
 
-    if (!gModulesDoc) {
-      EXT_LOGD(MB_TAG, "Creating doc");
-      if (psramFound())
-        gModulesDoc = new JsonDocument(JsonRAMAllocator::instance());  // crashed on non psram esp32-d0
-      else
-        gModulesDoc = new JsonDocument();
-    }
-    if (gModulesDoc) {
-      // doc = new JsonDocument();
-      data = gModulesDoc->add<JsonObject>();
-      // data = doc->to<JsonObject>();
-    } else {
-      EXT_LOGE(MB_TAG, "Failed to create doc");
-    }
-  }
+  /// Removes this module's data from the shared gModulesDoc.
+  ~ModuleState();
 
-  ~ModuleState() {
-    EXT_LOGD(MB_TAG, "ModuleState destructor");
-
-    // delete data from doc
-    if (gModulesDoc) {
-      JsonArray arr = gModulesDoc->as<JsonArray>();
-      for (size_t i = 0; i < arr.size(); i++) {
-        JsonObject obj = arr[i];
-        if (obj == data) {  // same object (identity check)
-          EXT_LOGD(MB_TAG, "Deleting data from doc");
-          arr.remove(i);
-          break;  // optional, if only one match
-        }
-      }
-    }
-  }
-
+  /// Callback to populate the control definition array; set by Module::begin().
   std::function<void(const JsonArray& controls)> setupDefinition = nullptr;
 
+  /// Initializes state from the definition's defaults if no persisted data exists.
   void setupData();
 
+  /// Recursively compares old and new state, updating stateData in-place and dispatching processUpdatedItem for each change.
   // called from ModuleState::update and ModuleState::setupData()
   bool compareRecursive(const JsonString& parent, const JsonVariant& oldData, const JsonVariant& newData, UpdatedItem& updatedItem, const String& originId, uint8_t depth = UINT8_MAX, uint8_t index = UINT8_MAX);
 
+  /// Detects row-swap reorderings in arrays and dispatches processUpdatedItem with name="swap".
   // called from ModuleState::update
   bool checkReOrderSwap(const JsonString& parent, const JsonVariant& oldData, const JsonVariant& newData, UpdatedItem& updatedItem, const String& originId, uint8_t depth = UINT8_MAX, uint8_t index = UINT8_MAX);
 
+  /// Callback invoked for each changed control; set by Module constructor to route to Module::processUpdatedItem.
   std::function<void(const UpdatedItem&, const String&)> processUpdatedItem = nullptr;
 
+  /// Copies module state into stateJson for sending to the UI (calls readHook first if set).
   static void read(ModuleState& state, JsonObject& stateJson);
+
+  /// Applies newData to the module state, detecting changes and dispatching updates. Returns CHANGED or UNCHANGED.
   static StateUpdateResult update(JsonObject& newData, ModuleState& state, const String& originId);  //, const String& originId
 
+  /// Optional hook called before read() copies state, allowing modules to refresh dynamic data.
   ReadHook readHook = nullptr;  // called when the UI requests the state, can be used to update the state before sending it to the UI
 };
 
+/// Base class for all MoonBase modules. Provides lifecycle hooks, state management, and generic UI control registration.
 class Module : public StatefulService<ModuleState> {
  public:
+  /// Human-readable module name, used for REST/WS endpoints and logging.
   const char* _moduleName = "";
+
+  /// Set to true to push current state to UI on next loop20ms() cycle.
   bool requestUIUpdate = false;
 
   Module(const char* moduleName, PsychicHttpServer* server, ESP32SvelteKit* sveltekit);
 
+  /// Registers HTTP/WS endpoints and initializes state from definition or persisted file.
   // any Module that overrides begin() must continue to call Module::begin() (e.g., at the start of its own begin()
   virtual void begin();
 
+  /// Called every SvelteKit loop iteration (fastest). Override for high-frequency polling.
   // run in sveltekit task
   virtual void loop() {}
-  virtual void loop20ms() {  // any Module that overrides loop20ms() must continue to call Module::loop20ms()
-    if (requestUIUpdate) {
-      requestUIUpdate = false;  // reset the flag
-      EXT_LOGD(ML_TAG, "requestUIUpdate %s", _moduleName);
 
-      // update state to UI
-      update(
-          [&](ModuleState& state) {
-            return StateUpdateResult::CHANGED;  // notify StatefulService by returning CHANGED
-          },
-          _moduleName);
-    }
-  }
+  /// Called every 20ms. Flushes requestUIUpdate to the UI. Subclasses must call Module::loop20ms().
+  virtual void loop20ms();
+
+  /// Called every ~1 second. Override for periodic checks.
   virtual void loop1s() {}
+
+  /// Called every ~10 seconds. Override for infrequent maintenance.
   virtual void loop10s() {}
 
-  void processUpdatedItem(const UpdatedItem& updatedItem, const String& originId) {
-    if (updatedItem.name == "swap") {
-      onReOrderSwap(updatedItem.index[0], updatedItem.index[1]);
-      if (originId.toInt()) saveNeeded = true;
-    } else {
-      // if (updatedItem.parent[0] != "devices" && updatedItem.parent[0] != "tasks" && updatedItem.name != "core0") EXT_LOGD(ML_TAG, "%s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
-      if (updatedItem.name != "channel") {  // todo: fix the problem at channel, not here...
-        if (originId.toInt()) {             // Front-end client IDs are numeric; internal origins ("module", etc.) return 0
-          saveNeeded = true;
-        }
-      }
-      onUpdate(updatedItem, originId);
-    }
-  }
+  /// Routes an updated control to onUpdate() or onReOrderSwap(), and marks state for saving if from the UI.
+  void processUpdatedItem(const UpdatedItem& updatedItem, const String& originId);
 
+  /// Override to populate the control definition array with addControl() calls.
   virtual void setupDefinition(const JsonArray& controls);
 
+  /// Adds a control definition to the array. Returns the new control object for further customization.
   JsonObject addControl(const JsonArray& controls, const char* name, const char* type, int min = 0, int max = UINT8_MAX, bool ro = false, const char* desc = nullptr);
+
+  /// Appends a value to the control's "values" array (creates the array if needed).
   template <typename T>
   void addControlValue(const JsonObject& control, const T& value) {
     if (control["values"].isNull()) control["values"].to<JsonArray>();  // add array of values
@@ -151,41 +124,22 @@ class Module : public StatefulService<ModuleState> {
     values.add(value);
   }
 
+  /// Called when a non-swap control value changes. Override to react to specific control updates.
   // called in compareRecursive->execOnUpdate
   // called from compareRecursive
   virtual void onUpdate(const UpdatedItem& updatedItem, const String& originId) {};
+
+  /// Called when rows are reordered via drag-and-drop. Override to update internal data structures.
   virtual void onReOrderSwap(uint8_t stateIndex, uint8_t newIndex) {};
 
-  bool updatePin(uint8_t& pin, const uint8_t pinUsage, bool checkOut = false) {
-    uint8_t oldPin = pin;
-    pin = UINT8_MAX;  // Assume deleted until found
-
-    read(
-        [&](ModuleState& state) {
-          for (JsonObject pinObject : state.data["pins"].as<JsonArray>()) {
-            uint8_t gpio = pinObject["GPIO"];
-            if (GPIO_IS_VALID_GPIO(gpio) && gpio < GPIO_PIN_COUNT && (!checkOut || GPIO_IS_VALID_OUTPUT_GPIO(gpio))) {
-              if (pinObject["usage"] == pinUsage && pin != gpio) {
-                pin = gpio;
-                break;
-              }
-            } else
-              EXT_LOGW(MB_TAG, "Pin %d (u:%d) not valid (o:%d)", gpio, pinUsage, checkOut);
-          }
-        },
-        _moduleName);
-    if (pin != oldPin) {
-      return true;
-    } else {
-      pin = oldPin;  // set the original value
-      return false;
-    }
-  }
+  /// Reads the assigned GPIO pin for the given usage from ModuleIO state. Returns true if pin changed.
+  bool updatePin(uint8_t& pin, const uint8_t pinUsage, bool checkOut = false);
 
  protected:
+  /// WebSocket/event interface provided by ESP32SvelteKit.
   EventSocket* _socket;
 
- private:
+  /// HTTP server for registering REST endpoints. Protected so subclasses (e.g. NodeManager) can register additional routes.
   PsychicHttpServer* _server;
 };
 

@@ -15,6 +15,40 @@
 
 JsonDocument* gModulesDoc = nullptr;
 
+ModuleState::ModuleState() {
+  EXT_LOGD(MB_TAG, "ModuleState constructor");
+
+  if (!gModulesDoc) {
+    EXT_LOGD(MB_TAG, "Creating doc");
+    if (psramFound())
+      gModulesDoc = new JsonDocument(JsonRAMAllocator::instance());  // crashed on non psram esp32-d0
+    else
+      gModulesDoc = new JsonDocument();
+  }
+  if (gModulesDoc) {
+    data = gModulesDoc->add<JsonObject>();
+  } else {
+    EXT_LOGE(MB_TAG, "Failed to create doc");
+  }
+}
+
+ModuleState::~ModuleState() {
+  EXT_LOGD(MB_TAG, "ModuleState destructor");
+
+  // delete data from doc
+  if (gModulesDoc) {
+    JsonArray arr = gModulesDoc->as<JsonArray>();
+    for (size_t i = 0; i < arr.size(); i++) {
+      JsonObject obj = arr[i];
+      if (obj == data) {  // same object (identity check)
+        EXT_LOGD(MB_TAG, "Deleting data from doc");
+        arr.remove(i);
+        break;  // optional, if only one match
+      }
+    }
+  }
+}
+
 void setDefaults(JsonObject controls, JsonArray definition) {
   for (JsonObject control : definition) {
     // if (control["type"] == "coord3Dxx") {
@@ -271,6 +305,60 @@ Module::Module(const char* moduleName, PsychicHttpServer* server, ESP32SvelteKit
   _state.processUpdatedItem = [&](const UpdatedItem& updatedItem, const String& originId) {
     processUpdatedItem(updatedItem, originId);  // Ensure updatedItem is of type UpdatedItem&
   };
+}
+
+void Module::loop20ms() {
+  if (requestUIUpdate) {
+    requestUIUpdate = false;  // reset the flag
+    EXT_LOGD(ML_TAG, "requestUIUpdate %s", _moduleName);
+
+    // update state to UI
+    update(
+        [&](ModuleState& state) {
+          return StateUpdateResult::CHANGED;  // notify StatefulService by returning CHANGED
+        },
+        _moduleName);
+  }
+}
+
+void Module::processUpdatedItem(const UpdatedItem& updatedItem, const String& originId) {
+  if (updatedItem.name == "swap") {
+    onReOrderSwap(updatedItem.index[0], updatedItem.index[1]);
+    if (originId.toInt()) saveNeeded = true;
+  } else {
+    if (updatedItem.name != "channel") {  // todo: fix the problem at channel, not here...
+      if (originId.toInt()) {             // Front-end client IDs are numeric; internal origins ("module", etc.) return 0
+        saveNeeded = true;
+      }
+    }
+    onUpdate(updatedItem, originId);
+  }
+}
+
+bool Module::updatePin(uint8_t& pin, const uint8_t pinUsage, bool checkOut) {
+  uint8_t oldPin = pin;
+  pin = UINT8_MAX;  // Assume deleted until found
+
+  read(
+      [&](ModuleState& state) {
+        for (JsonObject pinObject : state.data["pins"].as<JsonArray>()) {
+          uint8_t gpio = pinObject["GPIO"];
+          if (GPIO_IS_VALID_GPIO(gpio) && gpio < GPIO_PIN_COUNT && (!checkOut || GPIO_IS_VALID_OUTPUT_GPIO(gpio))) {
+            if (pinObject["usage"] == pinUsage && pin != gpio) {
+              pin = gpio;
+              break;
+            }
+          } else
+            EXT_LOGW(MB_TAG, "Pin %d (u:%d) not valid (o:%d)", gpio, pinUsage, checkOut);
+        }
+      },
+      _moduleName);
+  if (pin != oldPin) {
+    return true;
+  } else {
+    pin = oldPin;  // set the original value
+    return false;
+  }
 }
 
 void Module::begin() {
