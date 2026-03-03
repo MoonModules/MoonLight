@@ -255,21 +255,21 @@ class LinesEffect : public Node {
 
     // vertical: red
     if (layer->size.x > 1) {
-      pos.x = ::map(beat16(bpm), 0, UINT16_MAX, 0, layer->size.x);
+      pos.x = ::map(beat16(bpm), 0, UINT16_MAX, 0, layer->size.x - 1);
       for (pos.y = 0; pos.y < layer->size.y; pos.y++)
         for (pos.z = 0; pos.z < layer->size.z; pos.z++) layer->setRGB(pos, CRGB::Red);
     }
 
     // horizontal: green
     if (layer->size.y > 1) {
-      pos.y = ::map(beat16(bpm), 0, UINT16_MAX, 0, layer->size.y);
+      pos.y = ::map(beat16(bpm), 0, UINT16_MAX, 0, layer->size.y - 1);
       for (pos.x = 0; pos.x < layer->size.x; pos.x++)
         for (pos.z = 0; pos.z < layer->size.z; pos.z++) layer->setRGB(pos, CRGB::Green);
     }
 
     // depth: blue
     if (layer->size.z > 1) {
-      pos.z = ::map(beat16(bpm), 0, UINT16_MAX, 0, layer->size.z);
+      pos.z = ::map(beat16(bpm), 0, UINT16_MAX, 0, layer->size.z - 1);
       for (pos.x = 0; pos.x < layer->size.x; pos.x++)
         for (pos.y = 0; pos.y < layer->size.y; pos.y++) layer->setRGB(pos, CRGB::Blue);
     }

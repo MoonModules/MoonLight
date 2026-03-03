@@ -15,6 +15,8 @@
 
 #include "ArduinoJson.h"
 #include "Char.h"
+#include "Coord3D.h"
+#include "PureFunctions.h"
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)  // e.g. for pio.ini settings (see ML_CHIPSET)
@@ -78,81 +80,6 @@
 #define MB_TAG "🌙"
 #define ML_TAG "💫"
 
-#ifndef MIN
-  #define MIN(a, b) (((a) < (b)) ? (a) : (b))
-#endif
-
-#ifndef MAX
-  #define MAX(a, b) (((a) > (b)) ? (a) : (b))
-#endif
-
-
-struct Coord3D {
-  int x;
-  int y;
-  int z;
-
-  // Coord3D() : x(0), y(0), z(0) {} // Default constructor
-
-  Coord3D() {
-    this->x = 0;
-    this->y = 0;
-    this->z = 0;
-  }
-
-  Coord3D(int x, int y = 0, int z = 0) {
-    this->x = x;
-    this->y = y;
-    this->z = z;
-  }
-
-  // comparisons
-  bool operator!=(const Coord3D& rhs) {
-    return x != rhs.x || y != rhs.y || z != rhs.z;
-    // return !(*this==rhs);
-  }
-  bool operator==(const Coord3D rhs) const { return x == rhs.x && y == rhs.y && z == rhs.z; }
-  bool operator<(const int rhs) const { return x < rhs && y < rhs && z < rhs; }
-
-  // Minus / delta (abs)
-  Coord3D operator-(const Coord3D rhs) const { return Coord3D(x - rhs.x, y - rhs.y, z - rhs.z); }
-  Coord3D operator-(const int rhs) const { return Coord3D(x - rhs, y - rhs, z - rhs); }
-  Coord3D operator+(const Coord3D rhs) const { return Coord3D(x + rhs.x, y + rhs.y, z + rhs.z); }
-  Coord3D operator*(const Coord3D rhs) const { return Coord3D(x * rhs.x, y * rhs.y, z * rhs.z); }
-  Coord3D operator/(const Coord3D rhs) const { return Coord3D(x / rhs.x, y / rhs.y, z / rhs.z); }
-  Coord3D operator/(const int rhs) const { return Coord3D(x / rhs, y / rhs, z / rhs); }
-  Coord3D operator%(const Coord3D rhs) const { return Coord3D(x % rhs.x, y % rhs.y, z % rhs.z); }
-
-  // assignments
-  Coord3D operator=(const Coord3D rhs) {
-    x = rhs.x;
-    y = rhs.y;
-    z = rhs.z;
-    return *this;
-  }
-  Coord3D operator+=(const Coord3D rhs) {
-    x += rhs.x;
-    y += rhs.y;
-    z += rhs.z;
-    return *this;
-  }
-  Coord3D operator/=(const Coord3D rhs) {
-    if (rhs.x) x /= rhs.x;
-    if (rhs.y) y /= rhs.y;
-    if (rhs.z) z /= rhs.z;
-    return *this;
-  }
-
-  Coord3D maximum(const Coord3D rhs) const { return Coord3D(MAX(x, rhs.x), MAX(y, rhs.y), MAX(z, rhs.z)); }
-
-  unsigned distanceSquared(const Coord3D rhs) const {
-    Coord3D delta = (*this - rhs);
-    return (delta.x) * (delta.x) + (delta.y) * (delta.y) + (delta.z) * (delta.z);
-  }
-
-  bool isOutofBounds(const Coord3D rhs) const { return x < 0 || y < 0 || z < 0 || x >= rhs.x || y >= rhs.y || z >= rhs.z; }
-};
-
 // https://arduinojson.org/news/2021/05/04/version-6-18-0/
 namespace ArduinoJson {
 template <>
@@ -174,22 +101,11 @@ struct Converter<Coord3D> {
 bool arrayContainsValue(JsonArray array, int value);
 int getNextItemInArray(JsonArray array, size_t currentValue, bool backwards = false);
 
-float distance(float x1, float y1, float z1, float x2, float y2, float z2);
-
 // file functions
-
-void extractPath(const char* filepath, char* path);
 
 void walkThroughFiles(File folder, std::function<void(File, File)> fun);
 
 bool copyFile(const char* srcPath, const char* dstPath);
-
-// for game of live
-uint16_t crc16(const unsigned char* data_p, size_t length);
-uint16_t gcd(uint16_t a, uint16_t b);
-uint16_t lcm(uint16_t a, uint16_t b);
-bool getBitValue(const uint8_t* byteArray, size_t n);
-void setBitValue(uint8_t* byteArray, size_t n, bool value);
 
 bool isInPSRAM(void* ptr);
 
@@ -285,10 +201,6 @@ void freeMBObject(T*& obj) {
 extern unsigned char moonmanpng[];
 extern unsigned int moonmanpng_len;
 #endif
-
-inline uint32_t fastDiv255(uint32_t x) {  // 3–4 cycles
-  return (x * 0x8081u) >> 23;
-}
 
 // Task yields
 inline uint16_t yieldCallCount = 0;

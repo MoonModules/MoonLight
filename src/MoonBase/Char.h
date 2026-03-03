@@ -12,6 +12,7 @@
 #pragma once
 
 #include "ArduinoJson.h"
+#include "PureFunctions.h"
 
 // See https://discord.com/channels/473448917040758787/718943978636050542/1357670679196991629
 template <size_t N>
@@ -159,33 +160,3 @@ Char<N> operator+(const char* lhs, const Char<N>& rhs) {
 //     EXT_LOGV(MB_TAG, "token: %s", token);
 // });
 
-// convenience function to compare two char strings
-inline bool equal(const char* a, const char* b) {
-  if (a == nullptr || b == nullptr) {
-    return false;
-  }
-  return strcmp(a, b) == 0;
-}
-
-// compare two char strings, ignoring non-alphanumeric characters
-inline bool equalAZaz09(const char* a, const char* b) {
-  if (a == nullptr || b == nullptr) return false;
-
-  while (*a || *b) {
-    while (*a && !((*a >= '0' && *a <= '9') || (*a >= 'A' && *a <= 'Z') || (*a >= 'a' && *a <= 'z'))) a++;
-    while (*b && !((*b >= '0' && *b <= '9') || (*b >= 'A' && *b <= 'Z') || (*b >= 'a' && *b <= 'z'))) b++;
-    if (*a != *b) return false;
-    if (*a) {
-      a++;
-      b++;
-    }
-  }
-  return true;
-}
-
-inline bool contains(const char* a, const char* b) {
-  if (a == nullptr || b == nullptr) {
-    return false;
-  }
-  return strstr(a, b) != nullptr;
-}
