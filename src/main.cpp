@@ -33,11 +33,11 @@ void* operator new(size_t size) {
     if (ptr) return ptr;  // success
   }
   //
-  Serial.printf("'new' Fallback to internal RAM %d\n", size);
+  Serial.printf("'new' Fallback to internal RAM %d\n", size);  // ok-lint: Serial used before logging is initialized
   ptr = heap_caps_malloc(size, MALLOC_CAP_INTERNAL);
 
   if (!ptr) {
-    Serial.printf("new: CRITICAL - failed to allocate %d bytes\n", size);
+    Serial.printf("new: CRITICAL - failed to allocate %d bytes\n", size);  // ok-lint: Serial used before logging is initialized
     // throw std::bad_alloc(); // Standard requires throwing std::bad_alloc on failure
   }
 
@@ -255,7 +255,7 @@ void setup() {
 
   for (int i = 0; i < 5; i++) {
     if (!Serial) delay(300);  // just a tiny wait to avoid problems later when acessing serial
-    if (Serial) Serial.printf("Serial init wait %d\n", i * 300);
+    if (Serial) Serial.printf("Serial init wait %d\n", i * 300);  // ok-lint: Serial used before logging is initialized
   }
 
   if (Serial) {
@@ -263,7 +263,7 @@ void setup() {
     // Serial.setDebugOutput(true); //causes all EXT_LOG to dissappear
   }
 
-  Serial.printf("C++ Standard: %ld\n", __cplusplus);  // 202002L
+  Serial.printf("C++ Standard: %ld\n", __cplusplus);  // ok-lint: Serial used before logging is initialized
 
   if (esp_reset_reason() != ESP_RST_UNKNOWN && esp_reset_reason() != ESP_RST_POWERON && esp_reset_reason() != ESP_RST_SW && esp_reset_reason() != ESP_RST_USB) {  // see verbosePrintResetReason
     // ESP_RST_USB is after usb flashing! since esp-idf5

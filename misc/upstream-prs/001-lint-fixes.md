@@ -122,8 +122,11 @@ const regex = /[-a-zA-Z0-9@:%_.~#?&//=]{2,256}.../
 | ESLint 9 (flat) | `eslint.config.js` | MoonLight files only (`src/routes/moonbase/`, `src/lib/components/moonbase/`, moonbase stores/types, `vite-plugin-littlefs.ts`) |
 | Prettier | `.prettierrc` / `.prettierignore` | Same MoonLight boundary |
 | svelte-check | `tsconfig.json` | All files |
+| Vitest | `vite.config.ts` | MoonLight-specific files only (pure TS functions, no Svelte components or upstream files) |
 
-Run: `npm run lint` (Prettier check + ESLint) · `npm run format` (auto-fix Prettier)
+Run: `npm run lint` (Prettier check + ESLint) · `npm run format` (auto-fix Prettier) · `npm run test` (Vitest unit tests)
+
+Current test coverage: `moonbase_utilities.test.ts` — covers for `initCap` and `getTimeAgo`.
 
 Current status: **0 errors, 49 warnings** (all `@typescript-eslint/no-explicit-any` — intentional, set to `warn`)
 
@@ -155,6 +158,7 @@ Recent fixes (session 2026-03-02):
 
 `.github/workflows/lint.yml` — runs on push/PR to `main`:
 - `npm run lint` in `interface/` (fails on Prettier or ESLint errors)
+- `npm run test` in `interface/` (Vitest unit tests, fails on test failures)
 - `cppcheck` on `src/` (fails on warnings or errors)
 
 ---

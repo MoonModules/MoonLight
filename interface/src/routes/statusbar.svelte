@@ -14,7 +14,6 @@
 	import UpdateIndicator from '$lib/components/UpdateIndicator.svelte';
 	import logo from '$lib/assets/logo.png';
 	import PlugConnected from '~icons/tabler/plug-connected';
-	import PlugConnectedX from '~icons/tabler/plug-connected-x';
 
 	async function postSleep() {
 		const response = await fetch('/rest/sleep', {
@@ -132,12 +131,9 @@
 	<ThemeSelector />
 	
 	<div class="flex-none">
-		{#if page.data.features.ethernet}
-			{#if $telemetry.ethernet.connected}
-				<PlugConnected class="inline-block h-7 w-7" />
-			{:else}
-				<PlugConnectedX class="inline-block h-7 w-7" />
-			{/if}
+		<!-- 🌙 don't show disconnected as ethernet always enabled and no always present  -->
+		{#if page.data.features.ethernet && $telemetry.ethernet.connected}
+			<PlugConnected class="inline-block h-7 w-7" />
 		{/if}
 		{#if $telemetry.rssi.disconnected}
 			<WiFiOff class="inline-block h-7 w-7" />
@@ -151,7 +147,8 @@
 		{/if}
 	</div>
 
-	{#if page.data.features.battery}
+	<!-- 🌙 show only if soc >-0  -->
+	{#if page.data.features.battery && $telemetry.battery.soc >= 0}
 		<div class="flex-none">
 			<BatteryIndicator
 				charging={$telemetry.battery.charging}

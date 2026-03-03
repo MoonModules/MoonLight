@@ -32,20 +32,6 @@ int getNextItemInArray(JsonArray array, size_t currentValue, bool backwards) {
   return array[next];
 }
 
-float distance(float x1, float y1, float z1, float x2, float y2, float z2) { return sqrtf((x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2) + (z1 - z2) * (z1 - z2)); }
-
-void extractPath(const char* filepath, char* path) {
-  const char* lastSlash = strrchr(filepath, '/');
-  if (lastSlash != NULL) {
-    size_t pathLength = lastSlash - filepath + 1;
-    strlcpy(path, filepath, pathLength);
-    // path[pathLength] = '\0'; // strlcpy does this
-  } else {
-    // No directory separator found, the entire filepath is the filename
-    strcpy(path, "");
-  }
-}
-
 void walkThroughFiles(File folder, std::function<void(File, File)> fun) {
   folder.rewindDirectory();
   while (true) {
@@ -102,7 +88,7 @@ bool copyFile(const char* srcPath, const char* dstPath) {
 
 bool isInPSRAM(void* ptr) {
   if (!psramFound() || !ptr) return false;
-  uintptr_t addr = (uintptr_t)ptr;
+  uintptr_t addr = (uintptr_t)ptr;  // cppcheck-suppress unreadVariable -- used in #if blocks below
 #if defined(CONFIG_IDF_TARGET_ESP32)
   return (addr >= 0x3F800000 && addr < 0x40000000);
 #elif defined(CONFIG_IDF_TARGET_ESP32S2)
@@ -123,44 +109,6 @@ bool isInPSRAM(void* ptr) {
 #endif
   EXT_LOGE(MB_TAG, "isInPSRAM not implemented for this target");
   return false;
-}
-
-uint16_t crc16(const unsigned char* data_p, size_t length) {
-  uint8_t x;
-  uint16_t crc = 0xFFFF;
-  if (!length) return 0x1D0F;
-  while (length--) {
-    x = crc >> 8 ^ *data_p++;
-    x ^= x >> 4;
-    crc = (crc << 8) ^ ((uint16_t)(x << 12)) ^ ((uint16_t)(x << 5)) ^ ((uint16_t)x);
-  }
-  return crc;
-}
-
-uint16_t gcd(uint16_t a, uint16_t b) {
-  while (b != 0) {
-    uint16_t t = b;
-    b = a % b;
-    a = t;
-  }
-  return a;
-}
-
-uint16_t lcm(uint16_t a, uint16_t b) { return a / gcd(a, b) * b; }
-
-bool getBitValue(const uint8_t* byteArray, size_t n) {
-  size_t byteIndex = n / 8;
-  size_t bitIndex = n % 8;
-  uint8_t byte = byteArray[byteIndex];
-  return (byte >> bitIndex) & 1;
-}
-void setBitValue(uint8_t* byteArray, size_t n, bool value) {
-  size_t byteIndex = n / 8;
-  size_t bitIndex = n % 8;
-  if (value)
-    byteArray[byteIndex] |= (1 << bitIndex);
-  else
-    byteArray[byteIndex] &= ~(1 << bitIndex);
 }
 
 #if USE_M5UNIFIED

@@ -15,28 +15,37 @@
 		onSaveNetwork: any;
 	}
 
+	const EMPTY_NETWORK_EDITABLE: KnownNetworkItem = {
+		ssid: '',
+		password: '',
+		static_ip_config: false,
+		local_ip: undefined,
+		subnet_mask: undefined,
+		gateway_ip: undefined,
+		dns_ip_1: undefined,
+		dns_ip_2: undefined
+	};
+
 	let {
 		isOpen,
 		title,
-		networkEditable: _networkEditable = {
-			ssid: '',
-			password: '',
-			static_ip_config: false,
-			local_ip: undefined,
-			subnet_mask: undefined,
-			gateway_ip: undefined,
-			dns_ip_1: undefined,
-			dns_ip_2: undefined
-		} as KnownNetworkItem,
+		networkEditable: _networkEditable = EMPTY_NETWORK_EDITABLE,
 		onSaveNetwork
 	}: Props = $props();
 
 	// Make passed object reactive to prevent Svelte warning 'binding_property_non_reactive'
 	// https://github.com/sveltejs/svelte/issues/12320
-	let networkEditable = $state(_networkEditable);
+	// 🌙 Initialize with safe defaults; loaded from prop in $effect.pre before first render (Svelte 5.36+)
+	let networkEditable: KnownNetworkItem = $state({ ...EMPTY_NETWORK_EDITABLE });
 
 	// Create helper variable to achieve reactivity
-	let staticIPConfig = $state(networkEditable.static_ip_config);
+	let staticIPConfig = $state(false);
+
+	// 🌙 Load from prop before first render (Svelte 5.36+)
+	$effect.pre(() => {
+		networkEditable = { ..._networkEditable };
+		staticIPConfig = _networkEditable.static_ip_config;
+	});
 
 	// Use this to directly access the form's DOM element
 	let formField: any = $state();

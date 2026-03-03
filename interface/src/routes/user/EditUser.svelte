@@ -28,11 +28,17 @@
 
 	// Make passed object reactive to prevent Svelte warning 'binding_property_non_reactive'
 	// https://github.com/sveltejs/svelte/issues/12320
-	let user = $state(_user);
+	// 🌙 Initialize with safe defaults; loaded from prop in $effect.pre before first render (Svelte 5.36+)
+	let user = $state({ username: '', password: '', admin: false });
 
 	let errorUsername = $state(false);
 
 	let usernameEditable = $state(false);
+
+	// 🌙 Load from prop before first render (Svelte 5.36+)
+	$effect.pre(() => {
+		user = { ..._user };
+	});
 
 	onMount(() => {
 		if (user.username == '') {

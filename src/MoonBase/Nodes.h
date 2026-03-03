@@ -146,14 +146,16 @@ class Node {
     if (control["type"] == "slider" || control["type"] == "select" || control["type"] == "pin" || control["type"] == "number") {
       if (std::is_same<ControlType, uint8_t>::value) {
         control["size"] = 8;
+      } else if (std::is_same<ControlType, int8_t>::value) {
+        control["size"] = 108; // code for int8_t
       } else if (std::is_same<ControlType, uint16_t>::value) {
         control["size"] = 16;
       } else if (std::is_same<ControlType, uint32_t>::value) {
         control["size"] = 32;
       } else if (std::is_same<ControlType, int>::value) {
-        control["size"] = 33;  // trick to indicate int (which is 32 bits)
+        control["size"] = 33;  // code for int (which is 32 bits)
       } else if (std::is_same<ControlType, float>::value) {
-        control["size"] = 34;  // trick to indicate float (which is 32 bits)
+        control["size"] = 34;  // code for float float (which is 32 bits)
       } else {
         EXT_LOGE(ML_TAG, "size %d mismatch for %s", sizeof(ControlType), name);
       }

@@ -43,9 +43,28 @@ npm run build    # Production build (also triggered by PlatformIO)
 npm run check    # TypeScript type checking via svelte-check
 npm run lint     # Prettier + ESLint check
 npm run format   # Auto-format with Prettier
+npm run test     # Run Vitest unit tests (fast, no browser needed)
 ```
 
-There are no automated tests for this project.
+### Unit Tests (PlatformIO Native — Backend)
+
+```bash
+pio test -e native    # Run all native unit tests (~1 second)
+```
+
+Tests live in `test/test_native/` and run on the host machine (no ESP32 needed). They use the [doctest](https://github.com/doctest/doctest) framework.
+
+**When to add unit tests:** Add tests for simple, pure, side-effect-free functions and structs (e.g. math utilities, coordinate operations, string helpers). Do not add tests for every function — focus on functions that are self-contained and don't depend on ESP32 hardware, FreeRTOS, or WiFi/filesystem. Since the source headers have ESP32 dependencies, test functions are currently copied into the test file. Keep them in sync when modifying the originals.
+
+### Unit Tests (Vitest — Frontend)
+
+```bash
+cd interface && npm run test    # Run all frontend unit tests (fast, no browser)
+```
+
+Tests live co-located with the source file they test (e.g. `moonbase_utilities.test.ts` next to `moonbase_utilities.ts`). They use [Vitest](https://vitest.dev/), which integrates natively with Vite and TypeScript.
+
+**When to add unit tests:** Add tests for pure, side-effect-free TypeScript functions in the MoonLight-specific files (i.e. files under `src/routes/moonbase/`, `src/lib/components/moonbase/`, `src/lib/stores/moonbase_utilities.ts`, `src/lib/types/moonbase_models.ts`). Do not add tests for Svelte component rendering, browser API behaviour, or upstream files. Focus on functions with clear inputs/outputs like string formatters, time helpers, and data transformers.
 
 ## Architecture
 

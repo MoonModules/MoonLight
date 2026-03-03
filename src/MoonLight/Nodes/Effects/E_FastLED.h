@@ -90,8 +90,6 @@ class FLAudioEffect : public Node {
         layer->setRGB(Coord3D(percussionCol, layer->size.y - 1), CRGB::Cyan);
       }
     }
-    columnNr += 3;
-
     // beat decay
     if (beatLevel && layer->size.y > 0) beatLevel -= MIN(255 / layer->size.y, beatLevel);
   }

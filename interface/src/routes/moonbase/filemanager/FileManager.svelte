@@ -34,7 +34,18 @@
 	import Help from '~icons/tabler/help';
 	import FieldRenderer from '$lib/components/moonbase/FieldRenderer.svelte';
 
-	let filesState: any = $state({});
+	let filesState: FilesState = $state({
+		name: '',
+		path: '',
+		isFile: false,
+		size: 0,
+		time: 0,
+		contents: '',
+		files: [],
+		fs_total: 0,
+		fs_used: 0,
+		showHidden: false
+	});
 	let folderList: FilesState[] = $state([]); //all files in a folder
 	let editableFile: FilesState = $state({
 		name: '',
@@ -72,7 +83,7 @@
 		return filesState;
 	}
 
-	async function postFilesState(data: any) {
+	async function postFilesState(data: Record<string, unknown>) {
 		//export needed to call from other components
 		try {
 			const response = await fetch('/rest/FileManager', {
@@ -198,8 +209,7 @@
 				// }
 
 				//update filesState
-				let response: any = {};
-				response.deletes = [];
+				const response: { deletes: FilesState[]; showHidden?: boolean } = { deletes: [] };
 				response.deletes.push(folderList[index]);
 				console.log('confirmDelete', response);
 				//send the new itemstate to server

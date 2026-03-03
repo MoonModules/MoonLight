@@ -27,6 +27,10 @@ void Node::updateControl(const JsonObject& control) {
           uint8_t* valuePointer = (uint8_t*)pointer;
           *valuePointer = control["value"];
           // EXT_LOGV(ML_TAG, "%s = %d", control["name"].as<const char*>(), *valuePointer);
+        } else if (control["size"] == 108) {
+          int8_t* valuePointer = (int8_t*)pointer;
+          *valuePointer = control["value"];
+          // EXT_LOGV(ML_TAG, "%s = %d", control["name"].as<const char*>(), *valuePointer);
         } else if (control["size"] == 16) {
           uint16_t* valuePointer = (uint16_t*)pointer;
           *valuePointer = control["value"];

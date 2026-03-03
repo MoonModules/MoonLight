@@ -843,16 +843,11 @@ class SpiralLayout : public Node {
     middle.y = 0;
     middle.z = bottomRadius;
 
-    // Calculate strip length: 1cm between LEDs
-    float stripLength = (ledCount - 1) * 1.0f;  // in cm
-
     // Calculate circumference at bottom
     float bottomCircumference = 2.0f * PI * bottomRadius;
 
     // Estimate LEDs per round at bottom (adjusts as radius changes)
     float ledsPerRound = bottomCircumference / 1.0f;  // 1cm spacing
-
-    float currentLength = 0;
 
     for (int i = 0; i < ledCount; i++) {
       // Calculate progress through the spiral (0 to 1)
@@ -866,10 +861,6 @@ class SpiralLayout : public Node {
 
       // Calculate angle - accumulate based on arc length
       // For each LED, advance by 1cm along the current circumference
-      float currentCircumference = 2.0f * PI * currentRadius;
-      float angleIncrement = (currentCircumference > 0) ? (1.0f / currentRadius) : 0;
-      currentLength += (i > 0) ? angleIncrement : 0;
-
       // Alternative: use estimated leds per round
       float radians = i * 2.0f * PI / ledsPerRound;
 
