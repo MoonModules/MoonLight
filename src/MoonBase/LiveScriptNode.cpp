@@ -186,6 +186,11 @@ void LiveScriptNode::compileAndRun() {
     scScript += file.readString().c_str();
     file.close();
 
+    hasSetupFunction = false;
+    hasLoopFunction = false;
+    hasOnLayoutFunction = false;
+    hasModifyFunction = false;
+
     if (scScript.find("setup()") != std::string::npos) hasSetupFunction = true;
     if (scScript.find("loop()") != std::string::npos) hasLoopFunction = true;
     if (scScript.find("onLayout()") != std::string::npos) hasOnLayoutFunction = true;

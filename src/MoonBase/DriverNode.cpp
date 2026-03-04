@@ -16,6 +16,14 @@
 
   #if HP_ALL_DRIVERS
 I2SClocklessLedDriver ledsDriver;
+  #else  // ESP32_LEDSDRIVER
+    #if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)
+PhysicalDriverESP32S3 ledsDriver;
+    #elif defined(CONFIG_IDF_TARGET_ESP32)
+PhysicalDriverESP32D0 ledsDriver;
+    #else
+LedsDriver ledsDriver;
+    #endif
   #endif
 
 void DriverNode::setup() {
@@ -47,12 +55,7 @@ void DriverNode::loop() {
   if (brightness != brightnessSaved || layerP.maxPower != maxPowerSaved) {
     // Use FastLED for setMaxPowerInMilliWatts stuff, don't use if more then 8096 LEDs, decent power is assumed then! Also in case of Art-Net to HUB75 panels this calculation is not using the right mW per LED
     bool canUseFastLedPowerCalc = (header->channelsPerLight == 3) && (layerP.lights.header.nrOfLights <= 8096);
-    uint8_t correctedBrightness = canUseFastLedPowerCalc
-                                      ? calculate_max_brightness_for_power_mW(reinterpret_cast<CRGB*>(layerP.lights.channelsD),
-                                                                              layerP.lights.header.nrOfLights,
-                                                                              brightness,
-                                                                              layerP.maxPower * 1000)
-                                      : brightness;
+    uint8_t correctedBrightness = canUseFastLedPowerCalc ? calculate_max_brightness_for_power_mW(reinterpret_cast<CRGB*>(layerP.lights.channelsD), layerP.lights.header.nrOfLights, brightness, layerP.maxPower * 1000) : brightness;
 
     // EXT_LOGD(ML_TAG, "setBrightness b:%d + p:%d -> cb:%d", brightness, layerP.maxPower, correctedBrightness);
     ledsDriver.setBrightness(correctedBrightness);

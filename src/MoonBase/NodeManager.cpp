@@ -87,8 +87,7 @@ void NodeManager::onUpdate(const UpdatedItem& updatedItem, const String& originI
       handleNodeNameChange(updatedItem, originId, nodeState);
     } else if (updatedItem.name == "on" && updatedItem.parent[1] == "") {  // nodes[i].on
       handleNodeOnChange(updatedItem, originId, nodeState);
-    // } else if (updatedItem.parent[1] == "controls" && (updatedItem.name == "value" || updatedItem.name == "default") && updatedItem.index[1] < nodeState["controls"].size()) {  // nodes[i].controls[j].{value|default}
-    } else if (updatedItem.parent[1] == "controls" && updatedItem.name == "value" && updatedItem.index[1] < nodeState["controls"].size()) {  // nodes[i].controls[j].value
+    } else if (updatedItem.parent[1] == "controls" && (updatedItem.name == "value" || updatedItem.name == "default") && updatedItem.index[1] < nodeState["controls"].size()) {  // nodes[i].controls[j].{value|default}
       handleNodeControlValueChange(updatedItem, originId, nodeState);
     }
   }

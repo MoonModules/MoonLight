@@ -90,7 +90,7 @@ class ModuleLightsControl : public Module {
           [&](FilesState& filesState) {
             // loop over all changed files (normally only one)
             bool presetChanged = false;
-            for (auto updatedItem : filesState.updatedItems) {
+            for (const auto& updatedItem : filesState.updatedItems) {
               // if file is the current live script, recompile it (to do: multiple live effects)
               EXT_LOGV(ML_TAG, "updateHandler updatedItem %s", updatedItem.c_str());
               if (strstr(updatedItem.c_str(), "/.config/presets")) {
