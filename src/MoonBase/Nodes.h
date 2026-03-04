@@ -16,8 +16,8 @@
   #include "MoonBase/Modules/ModuleIO.h"      // Includes also Module.h but also enum IO_Pins
   #include "MoonLight/Layers/VirtualLayer.h"  //VirtualLayer.h will include PhysicalLayer.h
 
-/// Builds display name with dimension emoji and tags. Implementation in Nodes.cpp.
-String buildNameAndTags(const char* name, uint8_t dim, const char* tags);
+/// Builds display name with dimension emoji and tags. Implementation in PureFunctions.cpp.
+#include "MoonBase/utilities/PureFunctions.h"
 
 /// Returns the display name of a node type with dimension emoji and tags appended.
 /// Used in the UI dropdown to show e.g. "Glow 📏 ⚙️".
@@ -68,8 +68,7 @@ class Node {
   JsonObject findOrCreateControl(const char* name, bool& newControl);
 
   /// Sets control properties, size, and calls onUpdate for new controls. Implementation in Nodes.cpp.
-  JsonObject setupControl(const char* name, const char* type, int min, int max, bool ro, const char* desc,
-                          uint8_t sizeCode, size_t sizeofVar, bool newControl, JsonObject control);
+  JsonObject setupControl(const char* name, const char* type, int min, int max, bool ro, const char* desc, uint8_t sizeCode, size_t sizeofVar, bool newControl, JsonObject control);
 
   /// Registers a UI control for this node, binding it to the given variable.
   /// The template sets value/default/pointer; all other logic is in findOrCreateControl() and setupControl().
@@ -78,21 +77,28 @@ class Node {
     bool newControl = false;
     JsonObject control = findOrCreateControl(name, newControl);
 
-    if (newControl)
-      control["value"] = variable;  // set default value for new controls
+    if (newControl) control["value"] = variable;  // set default value for new controls
     control["default"] = variable;
     control["p"] = (uint32_t)&variable;
 
     // encode ControlType as a size code for the non-template helper
     uint8_t sizeCode = 0;
-    if (std::is_same<ControlType, uint8_t>::value)        sizeCode = 8;
-    else if (std::is_same<ControlType, int8_t>::value)    sizeCode = 108;
-    else if (std::is_same<ControlType, uint16_t>::value)  sizeCode = 16;
-    else if (std::is_same<ControlType, uint32_t>::value)  sizeCode = 32;
-    else if (std::is_same<ControlType, int>::value)       sizeCode = 33;
-    else if (std::is_same<ControlType, float>::value)     sizeCode = 34;
-    else if (std::is_same<ControlType, bool>::value)      sizeCode = sizeof(bool);
-    else if (std::is_same<ControlType, Coord3D>::value)   sizeCode = sizeof(Coord3D);
+    if (std::is_same<ControlType, uint8_t>::value)
+      sizeCode = 8;
+    else if (std::is_same<ControlType, int8_t>::value)
+      sizeCode = 108;
+    else if (std::is_same<ControlType, uint16_t>::value)
+      sizeCode = 16;
+    else if (std::is_same<ControlType, uint32_t>::value)
+      sizeCode = 32;
+    else if (std::is_same<ControlType, int>::value)
+      sizeCode = 33;
+    else if (std::is_same<ControlType, float>::value)
+      sizeCode = 34;
+    else if (std::is_same<ControlType, bool>::value)
+      sizeCode = sizeof(bool);
+    else if (std::is_same<ControlType, Coord3D>::value)
+      sizeCode = sizeof(Coord3D);
 
     return setupControl(name, type, min, max, ro, desc, sizeCode, sizeof(variable), newControl, control);
   }
@@ -166,7 +172,7 @@ inline uint8_t triangle8(uint8_t bpm, uint32_t timebase = 0) {
 
 /// Data shared between nodes (audio sync, status info, gravity, etc.).
 /// Single static instance accessible by all effect/driver nodes.
-static struct SharedData {
+struct SharedData {
   // audio sync
   uint8_t bands[16] = {0};  // Our calculated freq. channel result table to be used by effects
   float volume;             // either sampleAvg or sampleAgc depending on soundAgc; smoothed sample
@@ -190,8 +196,8 @@ static struct SharedData {
   float trebleLevel = 0.0f;
   bool beat = false;
   uint8_t percussionType = UINT8_MAX;
-
-} sharedData;
+};
+extern SharedData sharedData;
 
   /**
    * Nodes Guidelines:

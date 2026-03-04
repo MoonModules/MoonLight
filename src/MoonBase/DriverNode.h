@@ -24,13 +24,13 @@ extern I2SClocklessLedDriver ledsDriver;  // defined in DriverNode.cpp
   #else                                   // ESP32_LEDSDRIVER
     #include "ESP32-LedsDriver.h"
     #define MAX_PINS 20  // this is also defined in ESP32-LedsDriver.h...
-    #if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)
-static PhysicalDriverESP32S3 ledsDriver;  //    sizeof(driver) = 1080K !
-    #elif CONFIG_IDF_TARGET_ESP32
-static PhysicalDriverESP32D0 ledsDriver;  //    sizeof(driver) = 1080K !
-    #else
-static LedsDriver ledsDriver;  //   only the core driver, for setBrightness and setColorCorrection and LUT
-    #endif
+     #if  defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)
+extern PhysicalDriverESP32S3 ledsDriver;
+     #elif  defined(CONFIG_IDF_TARGET_ESP32)
+extern PhysicalDriverESP32D0 ledsDriver;
+     #else 
+extern LedsDriver ledsDriver;
+     #endif 
   #endif
 
 /// Enumeration of supported LED/fixture color-channel orderings and multi-channel presets.

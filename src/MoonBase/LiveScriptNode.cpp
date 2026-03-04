@@ -112,7 +112,7 @@ void LiveScriptNode::setup() {
   addExternal("uint8_t inoise8(uint16_t,uint16_t,uint16_t)", (void*)(uint8_t (*)(uint16_t, uint16_t, uint16_t))inoise8);
   addExternal("uint8_t beatsin8(uint16_t,uint8_t,uint8_t,uint32_t,uint8_t)", (void*)beatsin8);
   addExternal("float hypot(float,float)", (void*)(float (*)(float, float))hypot);
-  addExternal("float beat8(uint8_t,uint32_t)", (void*)beat8);  // saw wave
+  addExternal("uint8_t beat8(uint16_t,uint32_t)", (void*)(uint8_t (*)(uint16_t, uint32_t))beat8);  // saw wave
   addExternal("uint8_t triangle8(uint8_t)", (void*)triangle8);
 
   // MoonLight functions

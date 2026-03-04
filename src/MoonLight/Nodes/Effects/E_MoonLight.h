@@ -1774,7 +1774,7 @@ class AudioRingsEffect : public RingEffect {
     if (nrOfRings >= 1) setRingFromFtt(0, nrOfRings - 1);  // set outer rings to bass
   }
   void setRingFromFtt(int index, int ring) {
-    byte val = sharedData.bands[index];
+    uint8_t val = sharedData.bands[index];
     // Visualize leds to the beat
     CRGB color = ColorFromPalette(layerP.palette, val);
     color.nscale8_video(val);

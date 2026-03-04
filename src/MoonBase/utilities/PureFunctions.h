@@ -19,6 +19,14 @@
 #include <cstring>
 #include <cmath>
 
+// for unit testing
+#ifndef ARDUINO
+  #include <string>
+  using String = std::string;
+// #else
+//   #include <WString.h>
+#endif
+
 inline uint32_t fastDiv255(uint32_t x) {  // 3-4 cycles
   return (x * 0x8081u) >> 23;
 }
@@ -113,4 +121,32 @@ inline bool contains(const char* a, const char* b) {
     return false;
   }
   return strstr(a, b) != nullptr;
+}
+
+// Dimension constants (used by Nodes and VirtualLayer)
+#define _0D 0
+#define _1D 1
+#define _2D 2
+#define _3D 3
+#define _NoD 4
+
+/// Builds display name with dimension emoji and tags.
+inline String buildNameAndTags(const char* name, uint8_t dim, const char* tags) {
+  String result = name;
+
+  if (dim == _0D)
+    result += " 💡";
+  else if (dim == _1D)
+    result += " 📏";
+  else if (dim == _2D)
+    result += " ⏹️";
+  else if (dim == _3D)
+    result += " 🧊";
+
+  if (strlen(tags)) {
+    result += " ";
+    result += tags;
+  }
+
+  return result;
 }

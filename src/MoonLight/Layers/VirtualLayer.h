@@ -64,12 +64,6 @@ struct PhysMap {
   }
 };
 
-  #define _0D 0
-  #define _1D 1
-  #define _2D 2
-  #define _3D 3
-  #define _NoD 4
-
 class VirtualLayer {
  public:
   nrOfLights_t nrOfLights = 256;

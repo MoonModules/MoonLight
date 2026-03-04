@@ -12,25 +12,7 @@
 #if FT_MOONLIGHT
   #include "Nodes.h"
 
-String buildNameAndTags(const char* name, uint8_t dim, const char* tags) {
-  String result = name;
-
-  if (dim == _0D)
-    result += " 💡";
-  else if (dim == _1D)
-    result += " 📏";
-  else if (dim == _2D)
-    result += " ⏹️";
-  else if (dim == _3D)
-    result += " 🧊";
-
-  if (strlen(tags)) {
-    result += " ";
-    result += tags;
-  }
-
-  return result;
-}
+SharedData sharedData;
 
 JsonObject Node::findOrCreateControl(const char* name, bool& newControl) {
   JsonObject control = JsonObject();
@@ -48,8 +30,7 @@ JsonObject Node::findOrCreateControl(const char* name, bool& newControl) {
   return control;
 }
 
-JsonObject Node::setupControl(const char* name, const char* type, int min, int max, bool ro, const char* desc,
-                               uint8_t sizeCode, size_t sizeofVar, bool newControl, JsonObject control) {
+JsonObject Node::setupControl(const char* name, const char* type, int min, int max, bool ro, const char* desc, uint8_t sizeCode, size_t sizeofVar, bool newControl, JsonObject control) {
   control["type"] = type;
   control["valid"] = true;
   // optional properties
@@ -137,9 +118,12 @@ void Node::updateControl(const JsonObject& control) {
         }
       } else if (control["type"] == "selectFile" || control["type"] == "text") {
         char* valuePointer = (char*)pointer;
-        size_t maxLen = control["max"].isNull() ? 32 : control["max"].as<size_t>();
+        size_t bufSize = control["size"].isNull() ? 32 : control["size"].as<size_t>();
+        if (!control["max"].isNull()) {
+          // `max` is content length; reserve one byte for '\0'
+          bufSize = MIN(bufSize, control["max"].as<size_t>() + 1);
+        }
         const char* src = control["value"].as<const char*>();
-        size_t bufSize = maxLen > 0 ? maxLen : 0;
         if (bufSize > 0 && src) {
           strlcpy(valuePointer, src, bufSize);
           // valuePointer[copyLen] = '\0';  // strlcpy does this

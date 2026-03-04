@@ -309,7 +309,7 @@ Module::Module(const char* moduleName, PsychicHttpServer* server, ESP32SvelteKit
 void Module::loop20ms() {
   if (requestUIUpdate) {
     requestUIUpdate = false;  // reset the flag
-    EXT_LOGD(ML_TAG, "requestUIUpdate %s", _moduleName);
+    EXT_LOGD(MB_TAG, "requestUIUpdate %s", _moduleName);
 
     // update state to UI
     update(

@@ -15,7 +15,7 @@
 
   #include "MoonBase/SharedFSPersistence.h"
 
-  extern SharedFSPersistence* sharedFsPersistence;
+extern SharedFSPersistence* sharedFsPersistence;
 
 NodeManager::NodeManager(const char* moduleName, PsychicHttpServer* server, ESP32SvelteKit* sveltekit, FileManager* fileManager) : Module(moduleName, server, sveltekit) {
   EXT_LOGV(ML_TAG, "constructor %s", moduleName);
@@ -87,6 +87,7 @@ void NodeManager::onUpdate(const UpdatedItem& updatedItem, const String& originI
       handleNodeNameChange(updatedItem, originId, nodeState);
     } else if (updatedItem.name == "on" && updatedItem.parent[1] == "") {  // nodes[i].on
       handleNodeOnChange(updatedItem, originId, nodeState);
+    // } else if (updatedItem.parent[1] == "controls" && (updatedItem.name == "value" || updatedItem.name == "default") && updatedItem.index[1] < nodeState["controls"].size()) {  // nodes[i].controls[j].{value|default}
     } else if (updatedItem.parent[1] == "controls" && updatedItem.name == "value" && updatedItem.index[1] < nodeState["controls"].size()) {  // nodes[i].controls[j].value
       handleNodeControlValueChange(updatedItem, originId, nodeState);
     }
@@ -177,9 +178,7 @@ void NodeManager::handleNodeNameChange(const UpdatedItem& updatedItem, const Str
     }
 
     EXT_LOGD(ML_TAG, "remove oldNode: %d p:%p", nodes->size(), oldNode);
-    oldNode->~Node();
-
-    freeMBObject(oldNode);
+    freeMBObject(oldNode);  // calls virtual destructor + frees memory
   }
 
   if (newNode) {
@@ -219,6 +218,10 @@ void NodeManager::handleNodeOnChange(const UpdatedItem& updatedItem, const Strin
 
 void NodeManager::handleNodeControlValueChange(const UpdatedItem& updatedItem, const String& originId, JsonVariant nodeState) {
   JsonObject control = nodeState["controls"][updatedItem.index[1]];
+
+  if (control[updatedItem.name] == updatedItem.value) {
+    return;  // avoid re-applying stale compareRecursive emissions
+  }
 
   if (updatedItem.index[0] < nodes->size()) {
     Node* nodeClass = (*nodes)[updatedItem.index[0]];

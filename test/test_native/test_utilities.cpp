@@ -13,8 +13,9 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
-#include "Coord3D.h"
-#include "PureFunctions.h"
+#include "MoonBase/utilities/Char.h"
+#include "MoonBase/utilities/Coord3D.h"
+#include "MoonBase/utilities/PureFunctions.h"
 
 // ============================================================
 // Tests
@@ -203,6 +204,159 @@ TEST_CASE("contains") {
   CHECK_FALSE(contains("hello", "world"));
   CHECK_FALSE(contains(nullptr, "test"));
   CHECK_FALSE(contains("test", nullptr));
+}
+
+// ============================================================
+// Char<N> tests (included directly from Char.h — no copy!)
+// ============================================================
+
+TEST_CASE("Char: constructor from string literal") {
+  Char<16> c("hello");
+  CHECK(strcmp(c.c_str(), "hello") == 0);
+}
+
+TEST_CASE("Char: default constructor is empty") {
+  Char<16> c;
+  CHECK(c.length() == 0);
+  CHECK(strcmp(c.c_str(), "") == 0);
+}
+
+TEST_CASE("Char: assignment from const char*") {
+  Char<16> c;
+  c = "world";
+  CHECK(strcmp(c.c_str(), "world") == 0);
+}
+
+TEST_CASE("Char: comparison operators") {
+  Char<16> a("test");
+  CHECK(a == "test");
+  CHECK(a != "other");
+
+  Char<16> b("test");
+  CHECK(a == b);
+}
+
+TEST_CASE("Char: length and c_str") {
+  Char<16> c("hello");
+  CHECK(c.length() == 5);
+  CHECK(strcmp(c.c_str(), "hello") == 0);
+
+  Char<16> empty;
+  CHECK(empty.length() == 0);
+}
+
+TEST_CASE("Char: substring") {
+  Char<16> c("hello world");
+  Char<16> sub = c.substring(6, 11);
+  CHECK(sub == "world");
+
+  Char<16> sub2 = c.substring(0, 5);
+  CHECK(sub2 == "hello");
+}
+
+TEST_CASE("Char: indexOf and contains") {
+  Char<32> c("hello world");
+  CHECK(c.indexOf("world") == 6);
+  CHECK(c.indexOf("xyz") == SIZE_MAX);
+  CHECK(c.contains("hello"));
+  CHECK(c.contains("world"));
+  CHECK_FALSE(c.contains("xyz"));
+}
+
+TEST_CASE("Char: format (printf-style)") {
+  Char<32> c;
+  c.format("val=%d str=%s", 42, "ok");
+  CHECK(c == "val=42 str=ok");
+}
+
+TEST_CASE("Char: split with callback") {
+  Char<32> c("one,two,three");
+  int count = 0;
+  const char* expected[] = {"one", "two", "three"};
+  c.split(",", [&](const char* token, uint8_t seq) {
+    CHECK(strcmp(token, expected[seq]) == 0);
+    count++;
+  });
+  CHECK(count == 3);
+  // original string should be restored after split
+  CHECK(c == "one,two,three");
+}
+
+TEST_CASE("Char: concatenation + and +=") {
+  Char<32> a("hello");
+  Char<32> b = a + " world";
+  CHECK(b == "hello world");
+
+  Char<32> c("foo");
+  c += "bar";
+  CHECK(c == "foobar");
+
+  Char<32> d("num");
+  d += 42;
+  CHECK(d == "num42");
+}
+
+TEST_CASE("Char: truncation when exceeding buffer") {
+  Char<6> c("hello world");  // buffer is 6, fits 5 chars + null
+  CHECK(c.length() == 5);
+  CHECK(c == "hello");
+}
+
+TEST_CASE("Char: converting constructor between sizes") {
+  Char<32> big("hello world");
+  Char<8> small(big);  // truncates to 7 chars + null
+  CHECK(small == "hello w");
+  CHECK(small.length() == 7);
+}
+
+TEST_CASE("Char: operator[] access") {
+  Char<16> c("abc");
+  CHECK(c[0] == 'a');
+  CHECK(c[1] == 'b');
+  CHECK(c[2] == 'c');
+  CHECK(c[100] == '\0');  // out of bounds returns null
+}
+
+TEST_CASE("Char: toInt and toFloat") {
+  Char<16> i("42");
+  CHECK(i.toInt() == 42);
+
+  Char<16> f("3.14");
+  CHECK(f.toFloat() == doctest::Approx(3.14f).epsilon(0.01f));
+}
+
+TEST_CASE("Char: assignment from String (std::string)") {
+  String s = "from string";
+  Char<16> c;
+  c = s;
+  CHECK(c == "from string");
+}
+
+TEST_CASE("Char: += with String") {
+  Char<32> c("hello ");
+  String s = "world";
+  c += s;
+  CHECK(c == "hello world");
+}
+
+TEST_CASE("Char: += with another Char") {
+  Char<32> a("hello ");
+  Char<16> b("world");
+  a += b;
+  CHECK(a == "hello world");
+}
+
+TEST_CASE("Char: cross-size assignment") {
+  Char<32> big("long string here");
+  Char<8> small;
+  small = big;
+  CHECK(small == "long st");
+}
+
+TEST_CASE("Char: non-member operator+ (const char* + Char)") {
+  Char<32> c("world");
+  Char<32> result = "hello " + c;
+  CHECK(result == "hello world");
 }
 
 // ============================================================
