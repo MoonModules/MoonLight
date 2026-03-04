@@ -150,3 +150,93 @@ inline String buildNameAndTags(const char* name, uint8_t dim, const char* tags) 
 
   return result;
 }
+
+// ============================================================
+// JSON-based control functions (require ArduinoJson)
+// ============================================================
+
+#include "ArduinoJson.h"
+#include "Coord3D.h"
+
+#ifdef ARDUINO
+  #include "Utilities.h"  // Coord3D ArduinoJson converter
+#endif
+
+/// Finds an existing control by name in the JsonArray, or creates a new one.
+inline JsonObject findOrCreateControl(JsonArray controls, const char* name, bool& newControl) {
+  JsonObject control = JsonObject();
+  for (JsonObject control1 : controls) {
+    if (control1["name"] == name) {
+      control = control1;
+      break;
+    }
+  }
+  if (control.isNull()) {
+    control = controls.add<JsonObject>();
+    control["name"] = name;
+    newControl = true;
+  }
+  return control;
+}
+
+/// Writes a JSON control value to a typed memory location via pointer stored in control["p"].
+inline void updateControl(const JsonObject& control) {
+  if (!control["name"].isNull() && !control["type"].isNull() && !control["p"].isNull()) {
+    uintptr_t pointer = control["p"];
+
+    if (pointer) {
+      if (control["type"] == "slider" || control["type"] == "select" || control["type"] == "pin" || control["type"] == "number") {
+        if (control["size"] == 8) {
+          uint8_t* valuePointer = (uint8_t*)pointer;
+          *valuePointer = control["value"];
+        } else if (control["size"] == 108) {
+          int8_t* valuePointer = (int8_t*)pointer;
+          *valuePointer = control["value"];
+        } else if (control["size"] == 16) {
+          uint16_t* valuePointer = (uint16_t*)pointer;
+          *valuePointer = control["value"];
+        } else if (control["size"] == 32) {
+          uint32_t* valuePointer = (uint32_t*)pointer;
+          *valuePointer = control["value"];
+        } else if (control["size"] == 33) {
+          int* valuePointer = (int*)pointer;
+          *valuePointer = control["value"];
+        } else if (control["size"] == 34) {
+          float* valuePointer = (float*)pointer;
+          *valuePointer = control["value"];
+#if defined(ARDUINO) && defined(EXT_LOGW)
+        } else {
+          EXT_LOGW(ML_TAG, "size not supported or not set for %s: %d", control["name"].as<const char*>(), control["size"].as<int>());
+#endif
+        }
+      } else if (control["type"] == "selectFile" || control["type"] == "text") {
+        char* valuePointer = (char*)pointer;
+        size_t bufSize = control["size"].isNull() ? 32 : control["size"].as<size_t>();
+        if (!control["max"].isNull()) {
+          bufSize = MIN(bufSize, control["max"].as<size_t>() + 1);
+        }
+        const char* src = control["value"].as<const char*>();
+        if (bufSize > 0 && src) {
+          strlcpy(valuePointer, src, bufSize);
+        } else {
+          valuePointer[0] = '\0';
+        }
+      } else if (control["type"] == "checkbox" && control["size"] == sizeof(bool)) {
+        bool* valuePointer = (bool*)pointer;
+        *valuePointer = control["value"].as<bool>();
+#ifdef ARDUINO
+      } else if (control["type"] == "coord3D" && control["size"] == sizeof(Coord3D)) {
+        Coord3D* valuePointer = (Coord3D*)pointer;
+        *valuePointer = control["value"].as<Coord3D>();
+  #ifdef EXT_LOGE
+      } else
+        EXT_LOGE(ML_TAG, "type of %s not compatible: %s (%d)", control["name"].as<const char*>(), control["type"].as<const char*>(), control["size"].as<uint8_t>());
+  #else
+      }
+  #endif
+#else
+      }
+#endif
+    }
+  }
+}

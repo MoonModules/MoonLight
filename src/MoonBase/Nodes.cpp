@@ -15,19 +15,7 @@
 SharedData sharedData;
 
 JsonObject Node::findOrCreateControl(const char* name, bool& newControl) {
-  JsonObject control = JsonObject();
-  for (JsonObject control1 : controls) {
-    if (control1["name"] == name) {
-      control = control1;
-      break;
-    }
-  }
-  if (control.isNull()) {
-    control = controls.add<JsonObject>();
-    control["name"] = name;
-    newControl = true;
-  }
-  return control;
+  return ::findOrCreateControl(controls, name, newControl);
 }
 
 JsonObject Node::setupControl(const char* name, const char* type, int min, int max, bool ro, const char* desc, uint8_t sizeCode, size_t sizeofVar, bool newControl, JsonObject control) {
@@ -81,65 +69,7 @@ JsonObject Node::setupControl(const char* name, const char* type, int min, int m
 }
 
 void Node::updateControl(const JsonObject& control) {
-  // EXT_LOGD(ML_TAG, "onUpdate %s", control["name"].as<const char*>());
-  // if (oldValue == "") return;                                                              // newControl, value already set
-  if (!control["name"].isNull() && !control["type"].isNull() && !control["p"].isNull()) {  // name and type can be null if control is removed in compareRecursive
-    int pointer = control["p"];
-    // EXT_LOGD(ML_TAG, "%s = %s t:%s p:%p", control["name"].as<const char*>(), control["value"].as<String>().c_str(), control["type"].as<const char*>(), (void*)pointer);
-
-    if (pointer) {
-      if (control["type"] == "slider" || control["type"] == "select" || control["type"] == "pin" || control["type"] == "number") {
-        if (control["size"] == 8) {
-          uint8_t* valuePointer = (uint8_t*)pointer;
-          *valuePointer = control["value"];
-          // EXT_LOGV(ML_TAG, "%s = %d", control["name"].as<const char*>(), *valuePointer);
-        } else if (control["size"] == 108) {
-          int8_t* valuePointer = (int8_t*)pointer;
-          *valuePointer = control["value"];
-          // EXT_LOGV(ML_TAG, "%s = %d", control["name"].as<const char*>(), *valuePointer);
-        } else if (control["size"] == 16) {
-          uint16_t* valuePointer = (uint16_t*)pointer;
-          *valuePointer = control["value"];
-          // EXT_LOGV(ML_TAG, "%s = %d", control["name"].as<const char*>(), *valuePointer);
-        } else if (control["size"] == 32) {
-          uint32_t* valuePointer = (uint32_t*)pointer;
-          *valuePointer = control["value"];
-          // EXT_LOGV(ML_TAG, "%s = %d", control["name"].as<const char*>(), *valuePointer);
-        } else if (control["size"] == 33) {
-          int* valuePointer = (int*)pointer;
-          *valuePointer = control["value"];
-          // EXT_LOGV(ML_TAG, "%s = %d", control["name"].as<const char*>(), *valuePointer);
-        } else if (control["size"] == 34) {
-          float* valuePointer = (float*)pointer;
-          *valuePointer = control["value"];
-          // EXT_LOGV(ML_TAG, "%s = %d", control["name"].as<const char*>(), *valuePointer);
-        } else {
-          EXT_LOGW(ML_TAG, "size not supported or not set for %s: %d", control["name"].as<const char*>(), control["size"].as<int>());
-        }
-      } else if (control["type"] == "selectFile" || control["type"] == "text") {
-        char* valuePointer = (char*)pointer;
-        size_t bufSize = control["size"].isNull() ? 32 : control["size"].as<size_t>();
-        if (!control["max"].isNull()) {
-          // `max` is content length; reserve one byte for '\0'
-          bufSize = MIN(bufSize, control["max"].as<size_t>() + 1);
-        }
-        const char* src = control["value"].as<const char*>();
-        if (bufSize > 0 && src) {
-          strlcpy(valuePointer, src, bufSize);
-          // valuePointer[copyLen] = '\0';  // strlcpy does this
-        } else {
-          valuePointer[0] = '\0';
-        }
-      } else if (control["type"] == "checkbox" && control["size"] == sizeof(bool)) {
-        bool* valuePointer = (bool*)pointer;
-        *valuePointer = control["value"].as<bool>();
-      } else if (control["type"] == "coord3D" && control["size"] == sizeof(Coord3D)) {
-        Coord3D* valuePointer = (Coord3D*)pointer;
-        *valuePointer = control["value"].as<Coord3D>();
-      } else
-        EXT_LOGE(ML_TAG, "type of %s not compatible: %s (%d)", control["name"].as<const char*>(), control["type"].as<const char*>(), control["size"].as<uint8_t>());
-    }
-  }
-};
+  ::updateControl(control);
+}
 
 #endif  // FT_MOONLIGHT

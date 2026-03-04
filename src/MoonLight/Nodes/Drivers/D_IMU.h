@@ -66,7 +66,7 @@ class IMUDriver : public Node {
             [&](ModuleState& state) {
               newState.set(state.data);  // deep-copy
               // loop over I2C bus
-              for (const auto& i2cDevice : newState["i2cBus"].as<JsonArray>()) {
+              for (JsonVariant i2cDevice : newState["i2cBus"].as<JsonArray>()) {         // no (const auto&
                 if (i2cDevice["address"] == "0x68" || i2cDevice["address"] == "0x69") {  // depending on ADO gnd or vcc
                   i2cDevice["name"] = "MPU6050";
                   i2cDevice["id"] = address.c_str();

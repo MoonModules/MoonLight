@@ -16,8 +16,8 @@
   #include "MoonBase/Modules/ModuleIO.h"      // Includes also Module.h but also enum IO_Pins
   #include "MoonLight/Layers/VirtualLayer.h"  //VirtualLayer.h will include PhysicalLayer.h
 
-/// Builds display name with dimension emoji and tags. Implementation in PureFunctions.cpp.
-#include "MoonBase/utilities/PureFunctions.h"
+  /// Portable pure functions (buildNameAndTags, dimension constants, control functions).
+  #include "MoonBase/utilities/PureFunctions.h"
 
 /// Returns the display name of a node type with dimension emoji and tags appended.
 /// Used in the UI dropdown to show e.g. "Glow 📏 ⚙️".
