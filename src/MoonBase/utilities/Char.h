@@ -16,8 +16,6 @@
 
 // for unit testing
 #ifndef ARDUINO
-  #include <string>
-using String = std::string;
   #include <cstdarg>
   #include <functional>
 #endif

@@ -229,7 +229,7 @@ class ModuleDevices : public Module {
 
     // // Map is already sorted by key (name|ip), just iterate and add
     // doc2["devices"].to<JsonArray>();
-    // for (auto& pair : uniqueDevices) {
+    // for (const auto& pair : uniqueDevices) {
     //   doc2["devices"].add(pair.second);
     // }
   }

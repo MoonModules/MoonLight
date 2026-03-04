@@ -41,7 +41,7 @@ class ModuleLiveScripts : public Module {
       _fileManager->read(
           [&](FilesState& filesState) {
             // loop over all changed files (normally only one)
-            for (auto updatedItem : filesState.updatedItems) {
+            for (const auto& updatedItem : filesState.updatedItems) {
               // if file is the current live script, recompile it (to do: multiple live effects)
               // uint8_t index = 0;
               _moduleEffects->read(

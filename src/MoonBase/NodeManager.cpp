@@ -32,7 +32,7 @@ void NodeManager::begin() {
     _fileManager->read(
         [&](FilesState& filesState) {
           // loop over all changed files (normally only one)
-          for (auto updatedItem : filesState.updatedItems) {
+          for (const auto& updatedItem : filesState.updatedItems) {
             // if file is the current live script, recompile it (to do: multiple live effects)
             EXT_LOGV(ML_TAG, "updateHandler updatedItem %s", updatedItem.c_str());
             Char<32> name;

@@ -65,7 +65,7 @@ void DriverNode::loop() {
 
   #if HP_ALL_DRIVERS
   if (savedColorCorrection.red != layerP.lights.header.red || savedColorCorrection.green != layerP.lights.header.green || savedColorCorrection.blue != layerP.lights.header.blue) {
-    ledsDriver.setGamma(layerP.lights.header.red / 255.0, layerP.lights.header.blue / 255.0, layerP.lights.header.green / 255.0, 1.0);
+    ledsDriver.setGamma(layerP.lights.header.red / 255.0, layerP.lights.header.blue / 255.0, layerP.lights.header.green / 255.0, 1.0); // mind the rbg order !!!
     // EXT_LOGD(ML_TAG, "setColorCorrection r:%d, g:%d, b:%d (%d %d %d)", layerP.lights.header.red, layerP.lights.header.green, layerP.lights.header.blue,
     // savedColorCorrection.red, savedColorCorrection.green, savedColorCorrection.blue);
     savedColorCorrection.red = layerP.lights.header.red;

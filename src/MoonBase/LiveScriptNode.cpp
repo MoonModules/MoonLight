@@ -22,7 +22,7 @@
 Node* gNode = nullptr;
 
 static void _addControl(uint8_t* var, char* name, char* type, uint8_t min = 0, uint8_t max = UINT8_MAX) {
-  EXT_LOGV(ML_TAG, "%s %s %d (%d-%d)", name, type, var, min, max);
+  EXT_LOGV(ML_TAG, "%s %s %p (%d-%d)", name, type, (void*)var, min, max);
   gNode->addControl(*var, name, type, min, max);
 }
 static void _nextPin() { layerP.nextPin(); }
