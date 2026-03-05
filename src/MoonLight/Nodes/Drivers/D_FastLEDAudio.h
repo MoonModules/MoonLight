@@ -143,7 +143,7 @@ class FastLEDAudioDriver : public Node {
     if (control["name"] == "noiseFloorTracking") {
       audioProcessor.setNoiseFloorTrackingEnabled(noiseFloorTracking);
     }
-    if (control["name"] == "channel") {  // } && oldValue != "") {  // not on boot as readPins will do it then
+    if (control["name"] == "channel" && audioInput) {  // skip init-time recreate; readPins handles initial startup
       // recreate with the new channel
       stopService();
       startService();

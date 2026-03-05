@@ -371,7 +371,7 @@ class IRDriver : public Node {
 
   void readPins() {
     if (safeModeMB) {
-      EXT_LOGW(ML_TAG, "Safe mode enabled, not adding pins");
+      EXT_LOGW(MB_TAG, "Safe mode enabled, not adding pins");
       return;
     }
 

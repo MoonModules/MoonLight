@@ -45,7 +45,7 @@ class IMUDriver : public Node {
   void initBoard() {
     if (motionTrackingReady) return;
 
-    EXT_LOGI(ML_TAG, "Starting board %d", board);
+    EXT_LOGI(MB_TAG, "Starting board %d", board);
     if (board == 0) {  // MPU6050
       mpu.initialize();
 
@@ -78,7 +78,7 @@ class IMUDriver : public Node {
 
         if (found) moduleIO->update(newState, ModuleState::update, name());
 
-        EXT_LOGI(ML_TAG, "MPU6050 connection successful at %s Initializing DMP... (%d)", address.c_str(), found);
+        EXT_LOGI(MB_TAG, "MPU6050 connection successful at %s Initializing DMP... (%d)", address.c_str(), found);
         uint8_t devStatus = mpu.dmpInitialize();
 
         if (devStatus == 0) {
@@ -97,19 +97,19 @@ class IMUDriver : public Node {
           // 1 = initial memory load failed
           // 2 = DMP configuration updates failed
           // (if it's going to break, usually the code will be 1)
-          EXT_LOGW(ML_TAG, "DMP Initialization failed (code %d)", devStatus);
+          EXT_LOGW(MB_TAG, "DMP Initialization failed (code %d)", devStatus);
         }
       } else
-        EXT_LOGW(ML_TAG, "Testing device connections MPU6050 connection failed");
+        EXT_LOGW(MB_TAG, "Testing device connections MPU6050 connection failed");
     } else if (board == 1) {  // BMI160 - NEW
 
       // BMI160.begin(BMI160GenClass::I2C_MODE, 0x68);
 
       // if (BMI160.getDeviceID() == 0xD1) {  // BMI160 device ID
-      //   EXT_LOGI(ML_TAG, "BMI160 connection successful");
+      //   EXT_LOGI(MB_TAG, "BMI160 connection successful");
       //   motionTrackingReady = true;
       // } else {
-      //   EXT_LOGW(ML_TAG, "BMI160 connection failed");
+      //   EXT_LOGW(MB_TAG, "BMI160 connection failed");
       // }
     }
   }
@@ -117,7 +117,7 @@ class IMUDriver : public Node {
   void stopBoard() {
     if (!motionTrackingReady) return;  // not active so no need to stop
 
-    EXT_LOGI(ML_TAG, "Stopping board %d", board);
+    EXT_LOGI(MB_TAG, "Stopping board %d", board);
     motionTrackingReady = false;
     if (board == 0) {  // MPU6050
       mpu.setDMPEnabled(false);
@@ -142,7 +142,7 @@ class IMUDriver : public Node {
   void loop20ms() override {
     // mpu.getMotion6(&accell.x, &accell.y, &accell.z, &gyro.x, &gyro.y, &gyro.z);
     // // display tab-separated accel/gyro x/y/z values
-    // EXT_LOGI(ML_TAG, "mpu6050 %d,%d,%d %d,%d,%d", accell.x, accell.y, accell.z, gyro.x, gyro.y, gyro.z);
+    // EXT_LOGI(MB_TAG, "mpu6050 %d,%d,%d %d,%d,%d", accell.x, accell.y, accell.z, gyro.x, gyro.y, gyro.z);
 
     // process this out of onUpdate
     if (requestInitBoard) {
@@ -168,7 +168,7 @@ class IMUDriver : public Node {
         sharedData.gravity.y = gravity.y * INT16_MAX;
         sharedData.gravity.z = gravity.z * INT16_MAX;
 
-        // EXT_LOGD(ML_TAG, "%f %f %f", gravity.x, gravity.y, gravity.z);
+        // EXT_LOGD(MB_TAG, "%f %f %f", gravity.x, gravity.y, gravity.z);
 
         // needed to repeat the following 3 lines (yes if you look at the output: otherwise not 0): commented out
         // mpu.dmpGetQuaternion(&q, fifoBuffer);
