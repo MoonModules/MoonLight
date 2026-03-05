@@ -1,0 +1,18 @@
+{
+  "name": "MoonLight nightly on esp32-d0-moonbase",
+  "version": "0.8.1",
+  "home_assistant_domain": "esphome",
+  "funding_url": "https://esphome.io/guides/supporters.html",
+  "new_install_prompt_erase": true,
+  "new_install_immediately": false,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "name": "esp32-d0-moonbase",
+      "image": "./images/esp32-d0.jpg",
+      "parts": [
+        { "path": "https://proxy.corsfix.com/?https://github.com/MoonModules/MoonLight/releases/download/v0.8.1/MoonLight_esp32-d0-moonbase_0-8-1_webflash.bin", "offset": 0 }
+      ]
+    }
+  ]
+}
