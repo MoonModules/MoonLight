@@ -102,19 +102,16 @@
 
 	// Filter items based on filter query - returns array of {item, originalIndex}
 	let filteredItems = $derived.by(() => {
+		const items = data[property.name] as ModuleRow[] | null | undefined;
+		if (!Array.isArray(items)) return []; // ← guard: nothing to show yet
 		const filterValue = data[property.name + '_filter']?.trim() || '';
 		const isNegated = filterValue.startsWith('!');
 		const query = (isNegated ? filterValue.slice(1) : filterValue).toLowerCase();
 
-		// No filter or empty query → return items directly
 		if (!query)
-			return (data[property.name] as ModuleRow[]).map((item: ModuleRow, index: number) => ({
-				item,
-				originalIndex: index
-			}));
+			return items.map((item: ModuleRow, index: number) => ({ item, originalIndex: index }));
 
-		// Filtered items
-		return (data[property.name] as ModuleRow[])
+		return items
 			.map((item: ModuleRow, index: number) => ({ item, originalIndex: index }))
 			.filter(({ item }: { item: ModuleRow }) => {
 				const matchFound = property.n
@@ -129,7 +126,7 @@
 							Array.isArray(propertyN.values) &&
 							isNumber(item[propertyN.name])
 						) {
-							valueStr = propertyN.values[item[propertyN.name]];
+							valueStr = propertyN.values[item[propertyN.name] as number];
 						} else {
 							valueStr = item[propertyN.name];
 						}

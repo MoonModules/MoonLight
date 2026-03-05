@@ -61,6 +61,7 @@ void setDefaults(JsonObject controls, JsonArray definition) {
     if (control["type"] != "rows") {
       controls[control["name"]] = control["default"];
     } else {
+      controls[control["name"]].to<JsonArray>();  // ← initialize as empty array
       // JsonArray array = controls[control["name"]].to<JsonArray>();
       // //loop over detail controls (recursive)
       // JsonObject object = array.add<JsonObject>(); // add one row

@@ -15,6 +15,7 @@
 
   #include "fl/audio.h"
   #include "fl/audio/audio_processor.h"
+  #include "fl/audio/detectors/equalizer.h"
   #include "fl/audio_input.h"
   #include "fl/time_alpha.h"
 
@@ -96,6 +97,36 @@ class FastLEDAudioDriver : public Node {
     audioProcessor.onPercussion([](fl::PercussionType type) {
       // EXT_LOGD(ML_TAG, "onPercussion: %d", type);
       sharedData.percussionType = (uint8_t)type;
+    });
+
+    // Each drum hit triggers a different color
+    audioProcessor.onKick([]() {
+      // gFlashColor = CRGB::Red;
+    });
+
+    audioProcessor.onSnare([]() {
+      // gFlashColor = CRGB::Yellow;
+    });
+
+    audioProcessor.onHiHat([]() {
+      // gFlashColor = CRGB::Cyan;
+    });
+
+    audioProcessor.onTom([]() {
+      // gFlashColor = CRGB::Purple;
+    });
+
+    // Callback: get everything in one struct
+    audioProcessor.onEqualizer([](const fl::Equalizer& eq) {
+      // eq.bass, eq.mid, eq.treble, eq.volume, eq.zcf — all 0.0-1.0
+      // eq.bins — span<const float, 16>, each 0.0-1.0
+      for (int i = 0; i < 16; ++i) {
+        sharedData.bands[i] = static_cast<uint8_t>(eq.bins[i] * 255);
+      }
+      sharedData.volume = eq.volume / eq.volumeNormFactor;
+      sharedData.volumeRaw = eq.volume / eq.volumeNormFactor;
+      sharedData.majorPeak = eq.dominantFreqHz;
+      // sharedData.majorPeak = eq.dominantMagnitude;
     });
   }
 

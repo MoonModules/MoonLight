@@ -218,9 +218,9 @@ void NodeManager::handleNodeOnChange(const UpdatedItem& updatedItem, const Strin
 void NodeManager::handleNodeControlValueChange(const UpdatedItem& updatedItem, const String& originId, JsonVariant nodeState) {
   JsonObject control = nodeState["controls"][updatedItem.index[1]];
 
-  if (control[updatedItem.name] == updatedItem.value) {
-    return;  // avoid re-applying stale compareRecursive emissions
-  }
+  // if (control[updatedItem.name] == updatedItem.value) {
+  //   return;  // avoid re-applying stale compareRecursive emissions
+  // }
 
   if (updatedItem.index[0] < nodes->size()) {
     Node* nodeClass = (*nodes)[updatedItem.index[0]];

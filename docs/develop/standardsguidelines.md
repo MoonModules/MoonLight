@@ -11,21 +11,20 @@
 * The src folder is for all MoonBase and MoonLight Nodes and Modules development. No need for UI changes as that is generated for Nodes and Modules. The lib folder is for upstream (Sveltekit). The interface folder is for UI, mainly Sveltekit and Modules and Nodes generic functions.
 * A pull request should contain compilable code that is tested to, at minimum, not crash the system and also supports boards without PSRAM, e.g. ESP32-D0. Code may be work in progress.
 
-## Describe your PR
+## Pull Requests (PR)
+
+### Create a PR
+
+Make all PRs against the `main` branch: Create a branch from the main branch first.
 
 Please add a description of your proposed code changes. It does not need to be an exhaustive essay, however a PR with no description or just a few words might not get accepted, simply because very basic information is missing.
 
 A good description helps us to review and understand your proposed changes. For example, you could say a few words about
+
 * what you try to achieve (new feature, fixing a bug, refactoring, security enhancements, etc.)
 * how your code works (short technical summary - focus on important aspects that might not be obvious when reading the code)
 * testing you performed, known limitations, open ends you possibly could not solve.
 * any areas where you like to get help from an experienced maintainer
-
-## Your Pull Request (PR)
-
-### Target branch for pull requests
-
-Please make all PRs against the `main` branch.
 
 ### Updating your code
 
@@ -39,8 +38,17 @@ Github will pick up the changes so your PR stays up-to-date.
 
 You can find a collection of very useful tips and tricks here: [How to properly submit a PR](https://github.com/wled-dev/WLED/wiki/How-to-properly-submit-a-PR)
 
+The 🐰 (see AI) will review each commit, please process the review recommendations.
+
+### Merge a PR
+
+Before merging a PR back into main ask the 🐰 the following:
+
+@coderabbitai, I am about to merge this PR, please do an in depth review of all the commits made, make a summary,  a recommendation to merge and a list of possible future actions.
 
 ## Artificial Intelligence
+
+MoonLight supports the use of AI. Using AI is a hot topic and different people have different opinions. The reason MoonLight supports it is becasue to talk about it you need to know about it. So we will investigate the use of it and monitor learnings and change use of it accordingly. Below the principles we are using, of which Reversible is the most important: MoonLight should never be depending on AI !!!
 
 ### AI Principles
 
@@ -55,7 +63,6 @@ For AI generated code, the 4 Eyes Principle (**4EP**) applies:
   * Coderabbit automatically reviews each commit 👀 in a Pull Request
   * Coderabbit reviews must be processed by the developer and resolved (following above steps)
 
-
 **Unit tests**
 
 Unit tests needs to be added for AI and non AI code (Claude code can assist in creating unit tests). The following unit test tools are used:
@@ -65,9 +72,9 @@ Unit tests needs to be added for AI and non AI code (Claude code can assist in c
      * doctest: see https://github.com/MoonModules/MoonLight/tree/main/test/test_native, run by [lint.yml](https://github.com/MoonModules/MoonLight/blob/main/.github/workflows/lint.yml) by compiling env:native
 * frontend: 
     * Vitest see [moonbase_utilities.test](https://github.com/MoonModules/MoonLight/blob/main/interface/src/lib/stores/moonbase_utilities.test.ts)
-* experimental: IWYU See [lint.yml](https://github.com/MoonModules/MoonLight/blob/main/.github/workflows/lint.yml)
+    * ESLint + Prettier, See [lint.yml](https://github.com/MoonModules/MoonLight/blob/main/.github/workflows/lint.yml)
+* experimental: IWYU, See [lint.yml](https://github.com/MoonModules/MoonLight/blob/main/.github/workflows/lint.yml)
 * Unit tests are part of the CI, See [lint.yml](https://github.com/MoonModules/MoonLight/blob/main/.github/workflows/lint.yml)
-
 
 **Reversible**
 
