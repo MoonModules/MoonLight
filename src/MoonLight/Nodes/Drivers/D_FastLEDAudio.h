@@ -123,9 +123,9 @@ class FastLEDAudioDriver : public Node {
       for (int i = 0; i < 16; ++i) {
         sharedData.bands[i] = static_cast<uint8_t>(eq.bins[i] * 255);
       }
-      sharedData.volume = eq.volume / eq.volumeNormFactor;
-      sharedData.volumeRaw = eq.volume / eq.volumeNormFactor;
-      sharedData.majorPeak = eq.dominantFreqHz;
+      const float norm = (eq.volumeNormFactor > 0.000001f) ? eq.volumeNormFactor : 1.0f;
+      sharedData.volume = eq.volume / norm;
+      sharedData.volumeRaw = static_cast<int16_t>(sharedData.volume * 32767.0f);
       // sharedData.majorPeak = eq.dominantMagnitude;
     });
   }

@@ -23,7 +23,7 @@
 extern I2SClocklessLedDriver ledsDriver;  // defined in DriverNode.cpp
   #else                                   // ESP32_LEDSDRIVER
     #include "ESP32-LedsDriver.h"
-    #define MAX_PINS 20  // this is also defined in ESP32-LedsDriver.h...
+    // #define MAX_PINS 20  // this is also defined in ESP32-LedsDriver.h...
     #if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)
 extern PhysicalDriverESP32S3 ledsDriver;
     #elif defined(CONFIG_IDF_TARGET_ESP32)

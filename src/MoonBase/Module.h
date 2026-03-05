@@ -33,6 +33,7 @@ struct UpdatedItem {
     parent[1] = "";
     index[0] = UINT8_MAX;
     index[1] = UINT8_MAX;
+    originId = nullptr;
   }
 };
 

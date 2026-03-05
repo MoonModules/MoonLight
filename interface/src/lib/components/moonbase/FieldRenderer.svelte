@@ -261,7 +261,7 @@
 	{:else if property.type == 'number'}
 		<input
 			type="number"
-			style="width: {String(property.max || 255).length + 5}ch"
+			style="width: {String(property.max ?? 255).length + 5}ch"
 			min={property.min ?? 0}
 			max={property.max ?? 255}
 			class="input invalid:border-error invalid:border-2"
@@ -311,7 +311,7 @@
 	{:else if property.type == 'coord3D'}
 		<input
 			type="number"
-			style="width: {String(property.max || 255).length + 5}ch"
+			style="width: {String(property.max ?? 255).length + 5}ch"
 			class="input invalid:border-error invalid:border-2"
 			min="0"
 			max="65536"
@@ -320,7 +320,7 @@
 		/>
 		<input
 			type="number"
-			style="width: {String(property.max || 255).length + 5}ch"
+			style="width: {String(property.max ?? 255).length + 5}ch"
 			class="input invalid:border-error invalid:border-2"
 			min="0"
 			max="65536"
@@ -329,7 +329,7 @@
 		/>
 		<input
 			type="number"
-			style="width: {String(property.max || 255).length + 5}ch"
+			style="width: {String(property.max ?? 255).length + 5}ch"
 			class="input invalid:border-error invalid:border-2"
 			min="0"
 			max="65536"

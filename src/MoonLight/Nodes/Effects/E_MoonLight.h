@@ -1755,7 +1755,7 @@ class AudioRingsEffect : public RingEffect {
     for (int i = 0; i < nrOfRings; i++) {
       uint8_t band = ::map(i, 0, nrOfRings - 1, 0, NUM_GEQ_CHANNELS - 1);
 
-      byte val;
+      uint8_t val;
       if (inWards) {
         val = sharedData.bands[band];
       } else {
