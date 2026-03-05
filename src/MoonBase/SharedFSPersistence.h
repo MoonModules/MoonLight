@@ -54,12 +54,12 @@ class SharedFSPersistence {
 
   void begin() {
     // Read initial state from filesystem
-    for (auto& pair : _modules) {
+    for (const auto& pair : _modules) {
       readFromFS(pair.first);
     }
 
     // Register update handlers for modules that requested delayed writing
-    for (auto& pair : _modules) {
+    for (const auto& pair : _modules) {
       if (pair.second.delayedWriting) {
         enableUpdateHandler(pair.first);
         EXT_LOGD(ML_TAG, "Enabled update handler for %s after file read", pair.first);
@@ -181,7 +181,7 @@ class SharedFSPersistence {
 
     ESP_LOGD(SVK_TAG, "calling %u writeFuncs from delayedWrites", pending.size());
 
-    for (auto& writeFunc : pending) {
+    for (const auto& writeFunc : pending) {
       writeFunc(writeOrCancel);  // this makes sure hasDelayedWrite is set to false for all modules, never  sharedDelayedWrites.clear(); without invoking this!
     }
   }

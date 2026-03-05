@@ -51,7 +51,6 @@ class ModuleLightsControl : public Module {
   update_handler_id_t _mqttSettingsUpdateHandlerId = 0;  // track handler ID
 
  public:
-  PsychicHttpServer* _server;
   FileManager* _fileManager;
   ModuleIO* _moduleIO;
   uint8_t pinRelayLightsOn = UINT8_MAX;
@@ -64,7 +63,6 @@ class ModuleLightsControl : public Module {
         _mqttClient(sveltekit->getMqttClient()),
         _mqttSettingsService(sveltekit->getMqttSettingsService()) {
     EXT_LOGV(ML_TAG, "constructor");
-    _server = server;
     _fileManager = fileManager;
     _moduleIO = moduleIO;
 
@@ -92,7 +90,7 @@ class ModuleLightsControl : public Module {
           [&](FilesState& filesState) {
             // loop over all changed files (normally only one)
             bool presetChanged = false;
-            for (auto updatedItem : filesState.updatedItems) {
+            for (const auto& updatedItem : filesState.updatedItems) {
               // if file is the current live script, recompile it (to do: multiple live effects)
               EXT_LOGV(ML_TAG, "updateHandler updatedItem %s", updatedItem.c_str());
               if (strstr(updatedItem.c_str(), "/.config/presets")) {
@@ -322,7 +320,7 @@ class ModuleLightsControl : public Module {
   }
 
   // implement business logic
-  void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
+  void onUpdate(const UpdatedItem& updatedItem) override {
     // EXT_LOGD(ML_TAG, "handle %s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
     if (updatedItem.name == "red") {
       layerP.lights.header.red = _state.data["red"];
@@ -361,7 +359,7 @@ class ModuleLightsControl : public Module {
                     state.updatedItems.push_back("/.config/effects.json");
                     return StateUpdateResult::CHANGED;  // notify StatefulService by returning CHANGED
                   },
-                  originId);
+                  *updatedItem.originId);
             } else {
               copyFile("/.config/effects.json", presetFile.c_str());
               setPresetsFromFolder();  // update presets in UI
@@ -517,10 +515,10 @@ class ModuleLightsControl : public Module {
     xSemaphoreGive(swapMutex);
 
     if (isPositions == 2) {  // send to UI
-      if (_socket->getActiveClients() && _state.data["monitorOn"]) {
+      if (_sveltekit->getSocket()->getActiveClients() && _state.data["monitorOn"]) {
         static_assert(sizeof(LightsHeader) > headerPrimeNumber, "LightsHeader size nog large enough for Monitor protocol");
-        _socket->emitEvent("monitor", (char*)&layerP.lights.header, headerPrimeNumber, _moduleName);                                                      // send headerPrimeNumber bytes so Monitor.svelte can recognize this
-        _socket->emitEvent("monitor", (char*)layerP.lights.channelsE, MIN(layerP.lights.header.nrOfLights * 3, layerP.lights.maxChannels), _moduleName);  //*3 is for 3 bytes position
+        _sveltekit->getSocket()->emitEvent("monitor", (char*)&layerP.lights.header, headerPrimeNumber, _moduleName);                                                      // send headerPrimeNumber bytes so Monitor.svelte can recognize this
+        _sveltekit->getSocket()->emitEvent("monitor", (char*)layerP.lights.channelsE, MIN(layerP.lights.header.nrOfLights * 3, layerP.lights.maxChannels), _moduleName);  //*3 is for 3 bytes position
       }
       memset(layerP.lights.channelsE, 0, layerP.lights.maxChannels);  // set all the channels to 0 //cleaning the positions
       xSemaphoreTake(swapMutex, portMAX_DELAY);
@@ -532,8 +530,8 @@ class ModuleLightsControl : public Module {
       if (millis() - monitorMillis >= MAX(20, layerP.lights.header.nrOfLights / 300)) {  // 12K lights -> 40ms
         monitorMillis = millis();
 
-        if (_socket->getActiveClients() && _state.data["monitorOn"]) {
-          _socket->emitEvent("monitor", (char*)layerP.lights.channelsD, MIN(layerP.lights.header.nrOfChannels, layerP.lights.maxChannels), _moduleName);  // use channelsD as it won't be overwritten by effects during loop
+        if (_sveltekit->getSocket()->getActiveClients() && _state.data["monitorOn"]) {
+          _sveltekit->getSocket()->emitEvent("monitor", (char*)layerP.lights.channelsD, MIN(layerP.lights.header.nrOfChannels, layerP.lights.maxChannels), _moduleName);  // use channelsD as it won't be overwritten by effects during loop
         }
       }
     }

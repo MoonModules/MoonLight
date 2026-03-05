@@ -13,57 +13,23 @@
 
 #if FT_MOONLIGHT
 
-  #include <ESPFS.h>
-
   #include "MoonBase/Modules/ModuleIO.h"      // Includes also Module.h but also enum IO_Pins
   #include "MoonLight/Layers/VirtualLayer.h"  //VirtualLayer.h will include PhysicalLayer.h
 
-enum LightPresetsEnum {
-  lightPreset_RGB,
-  lightPreset_RBG,
-  lightPreset_GRB,  // default WS2812
-  lightPreset_GBR,
-  lightPreset_BRG,
-  lightPreset_BGR,
-  lightPreset_RGBW,                // e.g. 4 channel par/dmx light
-  lightPreset_GRBW,                // rgbw LED eg. sk6812
-  lightPreset_WRGB,                // rgbw ws2814 LEDs
-  lightPreset_GRB6,                // some LED curtains
-  lightPreset_RGB2040,             // curtain 2040
-  lightPreset_RGBWYP,              // 6 channel par/dmx light with UV etc
-  lightPreset_MHBeeEyes150W15,     // 15 channels moving head, see https://moonmodules.org/MoonLight/moonlight/drivers/#art-net
-  lightPreset_MHBeTopper19x15W32,  // 32 channels moving head
-  lightPreset_MH19x15W24,          // 24 channels moving heads
-  lightPreset_count
-};
+  /// Portable pure functions (buildNameAndTags, dimension constants, control functions).
+  #include "MoonBase/utilities/PureFunctions.h"
 
-  #define NODE_METADATA_VIRTUALS()                          \
-    const char* getName() const override { return name(); } \
-    uint8_t getDim() const override { return dim(); }       \
-    const char* getTags() const override { return tags(); }
-
+/// Returns the display name of a node type with dimension emoji and tags appended.
+/// Used in the UI dropdown to show e.g. "Glow 📏 ⚙️".
 template <typename T>
 String getNameAndTags() {
-  String result = T::name();
-
-  uint8_t dim = T::dim();
-  if (dim == _0D)
-    result += " 💡";
-  else if (dim == _1D)
-    result += " 📏";
-  else if (dim == _2D)
-    result += " ⏹️";
-  else if (dim == _3D)
-    result += " 🧊";
-
-  if (strlen(T::tags())) {
-    result += " ";
-    result += T::tags();
-  }
-
-  return result;
+  return buildNameAndTags(T::name(), T::dim(), T::tags());
 }
 
+/// Base class for all node types (effects, layouts, modifiers, drivers).
+/// Nodes define their own UI controls via addControl() and receive lifecycle callbacks:
+/// constructor() → setup() → loop()/loop20ms() → ~destructor().
+/// Subclasses override onLayout() for layout nodes, modifySize()/modifyPosition()/modifyXYZ() for modifiers.
 class Node {
  public:
   static const char* name() { return "noname"; }
@@ -98,96 +64,44 @@ class Node {
 
   // effect, layout and modifier
 
+  /// Finds an existing control by name, or creates a new one. Sets newControl flag. Implementation in Nodes.cpp.
+  JsonObject findOrCreateControl(const char* name, bool& newControl);
+
+  /// Sets control properties, size, and calls onUpdate for new controls. Implementation in Nodes.cpp.
+  JsonObject setupControl(const char* name, const char* type, int min, int max, bool ro, const char* desc, uint8_t sizeCode, size_t sizeofVar, bool newControl, JsonObject control);
+
+  /// Registers a UI control for this node, binding it to the given variable.
+  /// The template sets value/default/pointer; all other logic is in findOrCreateControl() and setupControl().
   template <class ControlType>
-  JsonObject addControl(const ControlType& variable, const char* name, const char* type, int min = 0, int max = UINT8_MAX, bool ro = false, const char* desc = nullptr) {
-    bool newControl = false;  // flag to check if control is new or already exists
-    // if control already exists only update it's pointer
-    JsonObject control = JsonObject();
-    for (JsonObject control1 : controls) {
-      if (control1["name"] == name) {
-        // EXT_LOGD(ML_TAG, "%s t:%s p:%p ps:%d", name, type, pointer, sizeof(ControlType));
-        control = control1;  // set control to the found one
-        break;
-      }
-    }
+  JsonObject addControl(ControlType& variable, const char* name, const char* type, int min = 0, int max = UINT8_MAX, bool ro = false, const char* desc = nullptr) {
+    // ControlType& parameter should be non-const to enforce binding to writable lvalues only, preventing accidental binding to temporaries or const references.
+    bool newControl = false;
+    JsonObject control = findOrCreateControl(name, newControl);
 
-    // if control not found, create a new one
-    if (control.isNull()) {
-      control = controls.add<JsonObject>();
-      control["name"] = name;
-      control["value"] = variable;  // set default
-      newControl = true;            // set flag to true, as control is new
-    }
-
-    // update the control definition (see also setupDefinition...)
-    control["type"] = type;
+    if (newControl) control["value"] = variable;  // set default value for new controls
     control["default"] = variable;
-    control["p"] = (uint32_t)&variable;  // pointer to variable
-    control["valid"] = true;             // invalid controls will be deleted
-    // optional properties
-    if (ro)
-      control["ro"] = true;
-    else if (!control["ro"].isNull())
-      control.remove("ro");
-    if (min != 0)
-      control["min"] = min;
-    else if (!control["min"].isNull())
-      control.remove("min");
-    if (max != UINT8_MAX)
-      control["max"] = max;
-    else if (!control["max"].isNull())
-      control.remove("max");
-    if (desc)
-      control["desc"] = desc;
-    else if (!control["desc"].isNull())
-      control.remove("desc");
+    control["p"] = reinterpret_cast<uintptr_t>(&variable);
 
-    // setValue
-    if (control["type"] == "slider" || control["type"] == "select" || control["type"] == "pin" || control["type"] == "number") {
-      if (std::is_same<ControlType, uint8_t>::value) {
-        control["size"] = 8;
-      } else if (std::is_same<ControlType, int8_t>::value) {
-        control["size"] = 108; // code for int8_t
-      } else if (std::is_same<ControlType, uint16_t>::value) {
-        control["size"] = 16;
-      } else if (std::is_same<ControlType, uint32_t>::value) {
-        control["size"] = 32;
-      } else if (std::is_same<ControlType, int>::value) {
-        control["size"] = 33;  // code for int (which is 32 bits)
-      } else if (std::is_same<ControlType, float>::value) {
-        control["size"] = 34;  // code for float float (which is 32 bits)
-      } else {
-        EXT_LOGE(ML_TAG, "size %d mismatch for %s", sizeof(ControlType), name);
-      }
-    } else if (control["type"] == "selectFile" || control["type"] == "text") {
-      // if (sizeof(ControlType) != 4) {
-      //   EXT_LOGE(ML_TAG, "sizeof mismatch for %s", name);
-      // } else
-      control["size"] = sizeof(variable);
-    } else if (control["type"] == "checkbox") {
-      if (!std::is_same<ControlType, bool>::value) {
-        EXT_LOGE(ML_TAG, "type for %s is not bool", name);
-      } else
-        control["size"] = sizeof(bool);
-    } else if (control["type"] == "coord3D") {
-      if (!std::is_same<ControlType, Coord3D>::value) {
-        EXT_LOGE(ML_TAG, "type for %s is not Coord3D", name);
-      } else {
-        control["size"] = sizeof(Coord3D);
-      }
-    } else
-      EXT_LOGE(ML_TAG, "type of %s not compatible: %s (%d)", control["name"].as<const char*>(), control["type"].as<const char*>(), control["size"].as<uint8_t>());
+    // encode ControlType as a size code for the non-template helper
+    uint8_t sizeCode = 0;
+    if (std::is_same<ControlType, uint8_t>::value)
+      sizeCode = 8;
+    else if (std::is_same<ControlType, int8_t>::value)
+      sizeCode = 108;
+    else if (std::is_same<ControlType, uint16_t>::value)
+      sizeCode = 16;
+    else if (std::is_same<ControlType, uint32_t>::value)
+      sizeCode = 32;
+    else if (std::is_same<ControlType, int>::value)
+      sizeCode = 33;
+    else if (std::is_same<ControlType, float>::value)
+      sizeCode = 34;
+    else if (std::is_same<ControlType, bool>::value)
+      sizeCode = sizeof(bool);
+    else if (std::is_same<ControlType, Coord3D>::value)
+      sizeCode = sizeof(Coord3D);
 
-    if (newControl) {
-      Char<20> oldValue = "";
-      onUpdate(oldValue, control);  // custom onUpdate for the node
-    }
-
-    // String sss;
-    // serializeJson(control, sss);
-    // EXT_LOGD(ML_TAG, "%s t:%s p:%p ps:%d %s", name, type, pointer, sizeof(ControlType), sss.c_str());
-
-    return control;
+    return setupControl(name, type, min, max, ro, desc, sizeCode, sizeof(variable), newControl, control);
   }
 
   template <typename T>
@@ -201,6 +115,7 @@ class Node {
 
   // called in addControl (oldValue = "") and in NodeManager onUpdate nodes[i].control[j]
   void updateControl(const JsonObject& control);  // see Nodes.cpp for implementation
+
   template <typename T>
   void updateControl(const char* name, const T value) {
     for (JsonObject control : controls) {
@@ -212,7 +127,7 @@ class Node {
     }
   }
 
-  virtual void onUpdate(const Char<20>& oldValue, const JsonObject& control) {}
+  virtual void onUpdate(const JsonObject& control) {}
 
   void requestMappings() {
     if (hasModifier() || hasOnLayout()) {
@@ -245,85 +160,9 @@ class Node {
   virtual void modifyXYZ(Coord3D& position) {}
 };
 
-  #if FT_LIVESCRIPT
-class LiveScriptNode : public Node {
- public:
-  static const char* name() { return "LiveScriptNode"; }
-  static uint8_t dim() { return _NoD; }
-  static const char* tags() { return "⚙️"; }
+  #include "DriverNode.h"
 
-  bool hasSetupFunction = false;
-  bool hasLoopFunction = false;
-  // bool hasAddControlFunction = false;
-  bool hasModifyFunction = false;
-  bool hasOnLayoutFunction = false;
-  bool isLiveScriptNode() const override { return true; }
-  bool hasModifier() const override { return hasModifyFunction; }
-  bool hasOnLayout() const override { return hasOnLayoutFunction; }
-
-  const char* animation = nullptr;  // which animation (file) to run
-
-  void setup() override;  // addExternal, compileAndRun
-
-  void loop() override;  // call Node.loop to process requestMapLayout. todo: sync with script...
-
-  // layout
-  void onLayout() override;  // call map in LiveScript
-
-  ~LiveScriptNode() override;
-
-  // LiveScript functions
-  void compileAndRun();
-  void execute();
-  void kill();
-  void free();
-  void killAndDelete();
-  static void getScriptsJson(JsonArray scripts);
-};
-
-  #endif
-
-  #if HP_ALL_DRIVERS
-    // #define NUM_LEDS_PER_STRIP 256 not for non virtal... (only setting __delay when NO_WAIT)
-    #include "I2SClocklessLedDriver.h"
-extern I2SClocklessLedDriver ledsDriver;  // defined in Nodes.cpp
-  #else                                   // ESP32_LEDSDRIVER
-    #include "ESP32-LedsDriver.h"
-    #define MAX_PINS 20  // this is also defined in ESP32-LedsDriver.h...
-    #if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)
-static PhysicalDriverESP32S3 ledsDriver;  //    sizeof(driver) = 1080K !
-    #elif CONFIG_IDF_TARGET_ESP32
-static PhysicalDriverESP32D0 ledsDriver;  //    sizeof(driver) = 1080K !
-    #else
-static LedsDriver ledsDriver;  //   only the core driver, for setBrightness and setColorCorrection and LUT
-    #endif
-  #endif
-
-class DriverNode : public Node {
-  uint8_t brightnessSaved = UINT8_MAX;
-  uint16_t maxPowerSaved = UINT16_MAX;
-
- protected:
-  bool lightPresetSaved = false;  // initLeds can only start if this has been saved
-
-  #if HP_ALL_DRIVERS
-  CRGB savedColorCorrection;
-  bool initDone = false;
-  #endif
-
- public:
-  void setup() override;
-
-  void loop() override;
-
-  // rgbwBufferMapping: re order, DIM and white extraction
-  void rgbwBufferMapping(uint8_t* packetRGBChannel, uint8_t* lightsRGBChannel);
-
-  // called in addControl (oldValue = "") and in NodeManager onUpdate nodes[i].control[j]
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) override;
-};
-
-// Helper function to generate a triangle wave similar to beat16
+/// Generates a triangle wave (0→255→0) at the given BPM, similar to beat8 but symmetric.
 inline uint8_t triangle8(uint8_t bpm, uint32_t timebase = 0) {
   uint8_t beat = beat8(bpm, timebase);
   if (beat < 128)
@@ -332,8 +171,9 @@ inline uint8_t triangle8(uint8_t bpm, uint32_t timebase = 0) {
     return (255 - ((beat - 128) * 2));  // falling edge
 }
 
-// data shared between nodes
-static struct SharedData {
+/// Data shared between nodes (audio sync, status info, gravity, etc.).
+/// Single shared instance accessible by all effect/driver nodes.
+struct SharedData {
   // audio sync
   uint8_t bands[16] = {0};  // Our calculated freq. channel result table to be used by effects
   float volume;             // either sampleAvg or sampleAgc depending on soundAgc; smoothed sample
@@ -357,8 +197,8 @@ static struct SharedData {
   float trebleLevel = 0.0f;
   bool beat = false;
   uint8_t percussionType = UINT8_MAX;
-
-} sharedData;
+};
+extern SharedData sharedData;
 
   /**
    * Nodes Guidelines:

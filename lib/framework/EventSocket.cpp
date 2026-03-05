@@ -225,6 +225,8 @@ void EventSocket::emitEvent(const String& event, const char *output, size_t len,
             {
                 ESP_LOGW(SVK_TAG, "Failed to send event %s from %s to client %u: %s (len: %zu)", event.c_str(), originId, client->socket(), esp_err_to_name(result), len);
                 // it = subscriptions.erase(it);// do not erase as we hope for better times
+                it = subscriptions.erase(it);  // remove dead client; don't keep retrying
+                continue;
             }
             ++it;
         }

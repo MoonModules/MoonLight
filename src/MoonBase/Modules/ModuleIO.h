@@ -107,8 +107,6 @@ class ModuleIO : public Module {
     //     pinMode(19, OUTPUT); digitalWrite(19, HIGH); // for serg shield boards: to be done: move to new pin manager module, switch off for S3!!!! tbd: add pin manager
     // #endif
 
-    _sveltekit = sveltekit;
-
     addUpdateHandler([this](const String& originId) { readPins(); }, false);
   }
 
@@ -658,7 +656,7 @@ class ModuleIO : public Module {
     // EXT_LOGD(MB_TAG, "%s", xxx.c_str());
     // EXT_LOGD(MB_TAG, "%s", xxx.c_str());
 
-    EXT_LOGD(ML_TAG, "boardID %d", boardID);
+    EXT_LOGD(MB_TAG, "boardID %d", boardID);
     // serializeJson(newState, Serial);Serial.println();
 
     update(newState, ModuleState::update, _moduleName);  // triggers an update from sveltekit
@@ -668,9 +666,9 @@ class ModuleIO : public Module {
 
   // on update triggers another onUpdates on 2 occasions: 1) newState modded (directly) and 2) setBoardPresetDefaults (via main loop)
   // each will trigger the updateHandler of this module sending readpins again ...
-  void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
+  void onUpdate(const UpdatedItem& updatedItem) override {
     // Below updates only triggered from UI (not from backend updates)
-    if (!originId.toInt()) return;
+    if (!updatedItem.originId->toInt()) return;
 
     JsonDocument doc;
     JsonObject newState = doc.to<JsonObject>();
@@ -679,7 +677,7 @@ class ModuleIO : public Module {
     if (updatedItem.name == "boardPreset") {
       // Only load board defaults if modded is false
       if (_state.data["modded"] == false) {
-        EXT_LOGD(MB_TAG, "newBoardID %s %s[%d]%s[%d].%s = %s -> %s", originId.c_str(), updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
+        EXT_LOGD(MB_TAG, "newBoardID %s %s[%d]%s[%d].%s = %s -> %s", updatedItem.originId->c_str(), updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
         newBoardID = updatedItem.value;  // Will be processed in loop20ms
       } else {
         EXT_LOGD(MB_TAG, "boardPreset change ignored - modded=true");
@@ -765,7 +763,7 @@ class ModuleIO : public Module {
 
   void readPins() {
     if (safeModeMB) {
-      EXT_LOGW(ML_TAG, "Safe mode enabled, not adding pins");
+      EXT_LOGW(MB_TAG, "Safe mode enabled, not adding pins");
       return;
     }
 
@@ -831,13 +829,13 @@ class ModuleIO : public Module {
       uint8_t usage = pinObject["usage"];
       if (usage == pin_Voltage) {
         _pinVoltage = pinObject["GPIO"];
-        EXT_LOGD(ML_TAG, "pinVoltage found %d", _pinVoltage);
+        EXT_LOGD(MB_TAG, "pinVoltage found %d", _pinVoltage);
       } else if (usage == pin_Current) {
         _pinCurrent = pinObject["GPIO"];
-        EXT_LOGD(ML_TAG, "pinCurrent found %d", _pinCurrent);
+        EXT_LOGD(MB_TAG, "pinCurrent found %d", _pinCurrent);
       } else if (usage == pin_Battery) {
         _pinBattery = pinObject["GPIO"];
-        EXT_LOGD(ML_TAG, "pinBattery found %d", _pinBattery);
+        EXT_LOGD(MB_TAG, "pinBattery found %d", _pinBattery);
       }
     }
   #endif
@@ -852,14 +850,14 @@ class ModuleIO : public Module {
           gpio_set_direction((gpio_num_t)pinHigh, GPIO_MODE_OUTPUT);
           gpio_set_level((gpio_num_t)pinHigh, 1);
         }
-        EXT_LOGD(ML_TAG, "Setting pin %d to high", pinHigh);
+        EXT_LOGD(MB_TAG, "Setting pin %d to high", pinHigh);
       } else if (usage == pin_Low) {
         uint8_t pinLow = pinObject["GPIO"];
         if (GPIO_IS_VALID_OUTPUT_GPIO(pinLow)) {
           gpio_set_direction((gpio_num_t)pinLow, GPIO_MODE_OUTPUT);
           gpio_set_level((gpio_num_t)pinLow, 0);
         }
-        EXT_LOGD(ML_TAG, "Setting pin %d to low", pinLow);
+        EXT_LOGD(MB_TAG, "Setting pin %d to low", pinLow);
       } else if (usage == pin_RS485_DE) {
         rs485_ios_updated = true;
         pinRS485DE = pinObject["GPIO"];
@@ -874,7 +872,7 @@ class ModuleIO : public Module {
 
     // Check if all RS485 pins are specified
     if (rs485_ios_updated && (pinRS485TX != UINT8_MAX) && (pinRS485RX != UINT8_MAX) && (pinRS485DE != UINT8_MAX)) {
-      EXT_LOGD(ML_TAG, "RS485 init with pins %d %d %d", pinRS485TX, pinRS485RX, pinRS485DE);
+      EXT_LOGD(MB_TAG, "RS485 init with pins %d %d %d", pinRS485TX, pinRS485RX, pinRS485DE);
 
       // test code to be replaced with functional code. use UART1 as UART0 is (AFAIK) always for debug serial
       uart_config_t uart_config = {
@@ -898,21 +896,21 @@ class ModuleIO : public Module {
       uint8_t response[128];
       // Send request
       uart_write_bytes(UART_NUM_1, (const char*)request, sizeof(request));
-      EXT_LOGD(ML_TAG, "Request sent");
+      EXT_LOGD(MB_TAG, "Request sent");
 
       // Wait for response (timeout 1 second)
       int len = uart_read_bytes(UART_NUM_1, response, 128, pdMS_TO_TICKS(100));
 
       if (len > 8) {
-        EXT_LOGD(ML_TAG, "Answer received: %d %d %d %d %d %d %d %d %d", response[0], response[1], response[2], response[3], response[4], response[5], response[6], response[7], response[8]);
+        EXT_LOGD(MB_TAG, "Answer received: %d %d %d %d %d %d %d %d %d", response[0], response[1], response[2], response[3], response[4], response[5], response[6], response[7], response[8]);
         float humidity = ((float)response[3]) * 256 + (float)response[4];
         float temperature = ((float)response[5]) * 256 + (float)response[6];
-        EXT_LOGD(ML_TAG, "humidity: %f temperature: %f", humidity / 10, temperature / 10);
+        EXT_LOGD(MB_TAG, "humidity: %f temperature: %f", humidity / 10, temperature / 10);
         // Process registers here (response[3] to response[6] contain the data)
       } else if (len > 0) {
-        EXT_LOGD(ML_TAG, "Invalid answer length");
+        EXT_LOGD(MB_TAG, "Invalid answer length");
       } else {
-        EXT_LOGD(ML_TAG, "No response from sensor");
+        EXT_LOGD(MB_TAG, "No response from sensor");
       }
   #endif  // DEMOCODE_FOR_SHT30_SENSOR
     }  // rs485
@@ -924,14 +922,14 @@ class ModuleIO : public Module {
         if (_pinI2CSDA != pinObject["GPIO"]) {
           pinsI2CChanged = true;
           _pinI2CSDA = pinObject["GPIO"];
-          EXT_LOGD(ML_TAG, "I2CSDA changed %d", _pinI2CSDA);
+          EXT_LOGD(MB_TAG, "I2CSDA changed %d", _pinI2CSDA);
         }
       }
       if (usage == pin_I2C_SCL) {
         if (_pinI2CSCL != pinObject["GPIO"]) {
           pinsI2CChanged = true;
           _pinI2CSCL = pinObject["GPIO"];
-          EXT_LOGD(ML_TAG, "I2CSCL changed %d", _pinI2CSCL);
+          EXT_LOGD(MB_TAG, "I2CSCL changed %d", _pinI2CSCL);
         }
       }
     }
@@ -940,13 +938,13 @@ class ModuleIO : public Module {
       uint32_t frequency = _state.data["i2cFreq"];
 
       if (Wire.begin(_pinI2CSDA, _pinI2CSCL, frequency * 1000)) {
-        EXT_LOGI(ML_TAG, "initI2C Wire sda:%d scl:%d freq:%d kHz (%d)", _pinI2CSDA, _pinI2CSCL, frequency, Wire.getClock());
+        EXT_LOGI(MB_TAG, "initI2C Wire sda:%d scl:%d freq:%d kHz (%d)", _pinI2CSDA, _pinI2CSCL, frequency, Wire.getClock());
         // delay(200);            // Give I2C bus time to stabilize
         // Wire.setClock(50000);  // Explicitly set to 100kHz
         _triggerUpdateI2C = 1;
       } else {
         _triggerUpdateI2C = 0;
-        EXT_LOGE(ML_TAG, "initI2C Wire failed");
+        EXT_LOGE(MB_TAG, "initI2C Wire failed");
       }
     }
   }  // readPins
@@ -1025,7 +1023,6 @@ class ModuleIO : public Module {
   }
 
  private:
-  ESP32SvelteKit* _sveltekit;
   uint8_t _current_board_id = UINT8_MAX;
   #if FT_BATTERY
   // used in loop1s()
@@ -1048,7 +1045,7 @@ class ModuleIO : public Module {
     if (_triggerUpdateI2C == 1) {
       JsonArray i2cDevices = newState["i2cBus"].to<JsonArray>();
 
-      EXT_LOGI(ML_TAG, "Scanning I2C bus...");
+      EXT_LOGI(MB_TAG, "Scanning I2C bus...");
       uint8_t count = 0;
       for (uint8_t i = 1; i < 127; i++) {
         Wire.beginTransmission(i);
@@ -1058,11 +1055,11 @@ class ModuleIO : public Module {
           address.format("0x%02X", i);
           i2cDevice["address"] = address.c_str();
 
-          EXT_LOGI(ML_TAG, "Found I2C device at address %s", address.c_str());
+          EXT_LOGI(MB_TAG, "Found I2C device at address %s", address.c_str());
           count++;
         }
       }
-      EXT_LOGI(ML_TAG, "Found %d device(s)", count);
+      EXT_LOGI(MB_TAG, "Found %d device(s)", count);
 
       newState["i2cFreq"] = Wire.getClock() / 1000;
     }

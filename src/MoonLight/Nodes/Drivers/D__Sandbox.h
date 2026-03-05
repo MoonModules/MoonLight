@@ -28,7 +28,7 @@ class ExampleDriver : public Node {
     addControl(pin, "pin", "slider", 1, GPIO_PIN_COUNT - 1);
   }
 
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
+  void onUpdate(const JsonObject& control) override {
     // add your custom onUpdate code here
     if (control["name"] == "pin") {
       if (control["value"] == 0) {

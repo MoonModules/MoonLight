@@ -54,6 +54,15 @@ PsychicWebSocketClient::~PsychicWebSocketClient() {
 
 esp_err_t PsychicWebSocketClient::sendMessage(httpd_ws_frame_t * ws_pkt)
 {
+  // 🌙
+  // Guard: check socket is still a valid active WebSocket before sending.
+  // Without this, httpd_ws_send_frame_async can propagate into lwIP and hard-assert
+  // when the underlying netconn is in an invalid/closed state.
+  httpd_ws_client_info_t info = httpd_ws_get_fd_info(this->server(), this->socket());
+  if (info != HTTPD_WS_CLIENT_WEBSOCKET) {
+    ESP_LOGD(PH_TAG, "underlying netconn is in an invalid/closed state.");
+    return ESP_FAIL;
+  }
   return httpd_ws_send_frame_async(this->server(), this->socket(), ws_pkt);
 } 
 
@@ -236,7 +245,11 @@ void PsychicWebSocketHandler::sendAll(httpd_ws_frame_t * ws_pkt)
     }
 
     if (((PsychicWebSocketClient*)client->_friend)->sendMessage(ws_pkt) != ESP_OK)
-      break;
+    {
+      // 🌙 continue instead of break
+      ESP_LOGD(PH_TAG, "sendAll: skip failed client fd=%d", client->socket());
+      continue;
+    }
   }
 }
 

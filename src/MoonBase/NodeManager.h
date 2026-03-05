@@ -15,75 +15,38 @@
 #if FT_MOONLIGHT
 
   #include "MoonBase/Module.h"
-  #include "MoonBase/SharedFSPersistence.h"
+  #include "MoonBase/Modules/FileManager.h"
   #include "Nodes.h"  //Nodes.h will include VirtualLayer.h which will include PhysicalLayer.h
+  #if FT_LIVESCRIPT
+    #include "LiveScriptNode.h"
+  #endif
 
-extern SharedFSPersistence* sharedFsPersistence;
-
+/// Manages a list of Node instances (effects, drivers, layouts, or modifiers) and their lifecycle.
+/// Handles node creation/destruction, control updates, and row reordering via the generic module UI.
 class NodeManager : public Module {
  public:
+  /// Default node name shown in the "add node" dropdown (e.g. "Glow" for effects).
   Char<32> defaultNodeName;
 
  protected:
-  PsychicHttpServer* _server;
+  /// File manager for detecting config file changes on the filesystem.
   FileManager* _fileManager;
 
+  /// The live list of Node instances managed by this module. Allocated with PSRAM-aware allocator.
   std::vector<Node*, VectorRAMAllocator<Node*>>* nodes = nullptr;
 
-  NodeManager(const char* moduleName, PsychicHttpServer* server, ESP32SvelteKit* sveltekit, FileManager* fileManager) : Module(moduleName, server, sveltekit) {
-    EXT_LOGV(ML_TAG, "constructor %s", moduleName);
-    _server = server;
-    _fileManager = fileManager;
-  }
+  NodeManager(const char* moduleName, PsychicHttpServer* server, ESP32SvelteKit* sveltekit, FileManager* fileManager);
 
-  void begin() {
-    Module::begin();
-    // if (false)
-    // if file changes, read the file and bring into state
-    // create a handler which recompiles the live script when the file of a current running live script changes in the File Manager
-    _fileManager->addUpdateHandler([this](const String& originId) {
-      EXT_LOGV(ML_TAG, "FileManager::updateHandler %s", originId.c_str());
-      // read the file state (read all files and folders on FS and collect changes)
-      _fileManager->read(
-          [&](FilesState& filesState) {
-            // loop over all changed files (normally only one)
-            for (auto updatedItem : filesState.updatedItems) {
-              // if file is the current live script, recompile it (to do: multiple live effects)
-              EXT_LOGV(ML_TAG, "updateHandler updatedItem %s", updatedItem.c_str());
-              Char<32> name;
-              name.format("/.config/%s.json", _moduleName);
-              if (equal(updatedItem.c_str(), name.c_str())) {
-                EXT_LOGV(ML_TAG, " %s updated -> call update %s", name.c_str(), updatedItem.c_str());
-                sharedFsPersistence->readFromFS(_moduleName);  // repopulates the state, processing file changes. Comment temporary !!!
-              }
-              // uint8_t index = 0;
-              // for (JsonObject nodeState: _state.data["nodes"].as<JsonArray>()) {
+  /// Registers file-change handler and calls Module::begin(). Subclasses must call NodeManager::begin().
+  void begin() override;
 
-              //     if (updatedItem == nodeState["name"]) {
-              //         EXT_LOGV(ML_TAG, "updateHandler equals current item -> livescript compile %s", updatedItem.c_str());
-              //         LiveScriptNode *liveScriptNode = (LiveScriptNode *)layerP.layers[0]->findLiveScriptNode(nodeState["name"]);
-              //         if (liveScriptNode) {
-              //             liveScriptNode->compileAndRun();
-
-              //             //wait until setup has been executed?
-
-              //             _moduleEffects->requestUIUpdate = true; //update the UI
-              //         }
-
-              //         EXT_LOGV(ML_TAG, "update due to new node %s done", name.c_str());
-              //     }
-              //     index++;
-              // }
-            }
-          },
-          originId);
-    });
-  }
-
+  /// Override to populate the node name dropdown with addControlValue() calls.
   virtual void addNodes(const JsonObject& control) {}
 
+  /// Factory method: creates the correct Node subclass for the given name. Returns nullptr if unknown.
   virtual Node* addNode(const uint8_t index, char* name, const JsonArray& controls) const { return nullptr; }
 
+  /// Checks if name matches T::name() (case/symbol insensitive) and allocates a T if so.
   template <typename T>
   Node* checkAndAlloc(char* name) const {
     if (equalAZaz09(name, T::name())) {
@@ -93,247 +56,31 @@ class NodeManager : public Module {
       return nullptr;
   }
 
-  // define the data model
-  void setupDefinition(const JsonArray& controls) override {
-    EXT_LOGV(ML_TAG, "");
-    JsonObject control;  // state.data has one or more properties
-    JsonArray rows;      // if a control is an array, this is the rows of the array
+  /// Defines the data model: nodes array with name, on/off, and controls sub-rows.
+  void setupDefinition(const JsonArray& controls) override;
 
-    control = addControl(controls, "nodes", "rows");
-    rows = control["n"].to<JsonArray>();
-    {
-      control = addControl(rows, "name", "selectFile");
-      control["default"] = defaultNodeName.c_str();
-      addNodes(control);
+  /// Dispatches control updates to the appropriate handler based on parent/name context.
+  void onUpdate(const UpdatedItem& updatedItem) override;
 
-      control = addControl(rows, "on", "checkbox");
-      control["default"] = true;
-      control = addControl(rows, "controls", "controls");
-      rows = control["n"].to<JsonArray>();
-      {
-        control = addControl(rows, "name", "text");
-        control["default"] = "speed";
-        control = addControl(rows, "type", "select");
-        control["default"] = "number";
-        addControlValue(control, "number");
-        addControlValue(control, "slider");
-        addControlValue(control, "text");
-        addControlValue(control, "coordinate");
-        control = addControl(rows, "value", "text");
-        control["default"] = "128";
-      }
-    }
-  }
+  /// Swaps two nodes in the nodes vector and requests remapping.
+  void onReOrderSwap(uint8_t stateIndex, uint8_t newIndex) override;
 
-  // implement business logic
-  void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
-    // EXT_LOGD(ML_TAG, "%s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
+ private:
+  /// Handles nodes[i].name changes: creates/destroys nodes, manages controls, applies migrations.
+  // Migration note (20251204): hardcoded renames for legacy driver names ("Physical Driver" → ParallelLEDDriver,
+  // "IR Driver" → IRDriver). When adding new migrations, follow the same pattern with contains() + getNameAndTags<T>().
+  void handleNodeNameChange(const UpdatedItem& updatedItem, JsonVariant nodeState);
 
-    // handle nodes
-    if (updatedItem.parent[0] == "nodes") {  // onNodes
-      JsonVariant nodeState = _state.data["nodes"][updatedItem.index[0]];
-      // serializeJson(nodeState, Serial); Serial.println();
+  /// Handles nodes[i].on changes: toggles node on/off state and calls node's onUpdate.
+  void handleNodeOnChange(const UpdatedItem& updatedItem, JsonVariant nodeState);
 
-      if (updatedItem.name == "name" && updatedItem.parent[1] == "") {  // nodes[i].name
-
-        Node* oldNode = updatedItem.index[0] < nodes->size() ? (*nodes)[updatedItem.index[0]] : nullptr;  // find the node in the nodes list
-        bool newNode = false;
-
-        // remove or add Nodes (incl controls)
-        if (!updatedItem.value.isNull()) {  // if name changed // == updatedItem.value
-
-          // // if old node exists then remove it's controls
-          if (updatedItem.oldValue != "") {
-            // EXT_LOGD(ML_TAG, "remove controls %s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1],
-            // updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
-            nodeState.remove("controls");  // remove the controls from the nodeState
-          }
-
-          // Migration 20251204: this is optional as we accept data updates from legacy driver names (migration is mandatory for changes in the data definitions)
-          if (contains(updatedItem.value.as<const char*>(), "Physical Driver")) {
-            EXT_LOGD(ML_TAG, "update [%s] to ...", updatedItem.value.as<const char*>());
-            nodeState["name"] = getNameAndTags<ParallelLEDDriver>();  // set to current combination of name and tags
-            EXT_LOGD(ML_TAG, "... to [%s]", updatedItem.value.as<const char*>());
-          }
-          if (contains(updatedItem.value.as<const char*>(), "IR Driver")) {
-            EXT_LOGD(ML_TAG, "update [%s] to ...", updatedItem.value.as<const char*>());
-            nodeState["name"] = getNameAndTags<IRDriver>();  // set to current combination of name and tags
-            EXT_LOGD(ML_TAG, "... to [%s]", updatedItem.value.as<const char*>());
-          }
-
-          // String xx;
-          // serializeJson(nodeState["controls"], xx);
-          // EXT_LOGD(ML_TAG, "add %s[%d]%s[%d].%s = %s -> %s (%s)", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str(), xx.c_str());
-
-          // invalidate controls
-          if (nodeState["controls"].isNull()) {     // if controls are not set, create empty array
-            nodeState["controls"].to<JsonArray>();  // clear the controls
-          } else {
-            for (JsonObject control : nodeState["controls"].as<JsonArray>()) {
-              control["valid"] = false;
-            }
-          }
-
-          char name[32];
-          strlcpy(name, updatedItem.value, 32);
-          Node* nodeClass = addNode(updatedItem.index[0], name, nodeState["controls"]);  // set controls to valid
-          if (updatedItem.value != name) nodeState["name"] = name;                       //  if the non AZaz09 part of the name changed, reassign the right name
-
-          // remove invalid controls
-          // Iterate backwards to avoid index shifting issues
-          for (int i = nodeState["controls"].as<JsonArray>().size() - 1; i >= 0; i--) {
-            JsonObject control = nodeState["controls"][i];
-            if (!control["valid"].as<bool>()) {
-              EXT_LOGD(ML_TAG, "remove control %d", i);
-              nodeState["controls"].remove(i);
-            }
-          }
-
-          if (nodeClass != nullptr) {
-            nodeClass->on = nodeState["on"];
-            newNode = true;
-
-            // wait until setup has been executed?
-
-            // EXT_LOGD(ML_TAG, "update due to new node %s done", updatedItem.value.as<String>().c_str());
-
-            // make sure "p" is also updated
-
-            nodeClass->requestMappings();
-          } else
-            EXT_LOGW(ML_TAG, "Nodeclass %s not found", updatedItem.value.as<String>().c_str());
-
-          // if (updatedItem.oldValue.indexOf("Driver") != -1 && updatedItem.value.as<String>().indexOf("Driver") != -1) {
-          //     EXT_LOGW(ML_TAG, "Restart needed");
-          //     restartNeeded = true;
-          // }
-        }  // name change
-
-        // if a node existed and no new node in place, remove
-        if (updatedItem.oldValue != "" && oldNode) {
-          // EXT_LOGD(ML_TAG, "remove %s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(),
-          // updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
-          if (!newNode) {
-            // remove oldNode from the nodes list
-            for (uint8_t i = 0; i < nodes->size(); i++) {
-              if ((*nodes)[i] == oldNode) {
-                EXT_LOGD(ML_TAG, "remove node %d %s", i, updatedItem.oldValue.c_str());
-                nodes->erase(nodes->begin() + i);
-                break;
-              }
-            }
-            EXT_LOGD(ML_TAG, "No newnode - remove! %d s:%d", updatedItem.index[0], nodes->size());
-          }
-
-          oldNode->requestMappings();
-
-          delay(100);  // to allow the node to finish its last loop
-          EXT_LOGD(ML_TAG, "remove oldNode: %d p:%p", nodes->size(), oldNode);
-          // delete node; //causing assert failed: multi_heap_free multi_heap_poisoning.c:259 (head != NULL) ATM
-          // EXT_LOGD(MB_TAG, "destructing object (inPR:%d)", isInPSRAM(node));
-          oldNode->~Node();
-
-          freeMBObject(oldNode);
-        }
-
-        if (newNode) {
-          requestUIUpdate = true;
-        }
-
-  #if FT_ENABLED(FT_LIVESCRIPT)
-            // if (updatedItem.oldValue.length()) {
-            //     EXT_LOGV(ML_TAG, "delete %s %s ...", updatedItem.name.c_str(), updatedItem.oldValue.c_str());
-            //     LiveScriptNode *liveScriptNode = findLiveScriptNode(node["name"]);
-            //     if (liveScriptNode) liveScriptNode->kill();
-            //     else EXT_LOGW(ML_TAG, "liveScriptNode not found %s", node["name"].as<const char*>());
-            // }
-            // if (!node["name"].isNull() && !node["type"].isNull()) {
-            //     LiveScriptNode *liveScriptNode = findLiveScriptNode(node["name"]); //todo: can be 2 nodes with the same name ...
-            //     if (liveScriptNode) liveScriptNode->compileAndRun();
-            //     // not needed as creating the node is already running it ...
-            // }
-  #endif
-      }  // nodes[i].name
-
-      else if (updatedItem.name == "on" && updatedItem.parent[1] == "") {  // nodes[i].on
-        // EXT_LOGD(ML_TAG, "handle %s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(),
-        // updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
-        if (updatedItem.index[0] < nodes->size()) {
-          const char* name = nodeState["name"];
-          EXT_LOGD(ML_TAG, "%s on: %s (#%d)", name ? name : "", updatedItem.value.as<String>().c_str(), nodes->size());
-          Node* nodeClass = (*nodes)[updatedItem.index[0]];
-          if (nodeClass != nullptr) {
-            nodeClass->on = updatedItem.value.as<bool>();  // set nodeclass on/off
-            // EXT_LOGD(ML_TAG, "  nodeclass 🔘:%d 🚥:%d 💎:%d", nodeClass->on, nodeClass->hasOnLayout(), nodeClass->hasModifier());
-            xSemaphoreTake(*nodeClass->layerMutex, portMAX_DELAY);
-            nodeClass->onUpdate(updatedItem.oldValue, nodeState);  // custom onUpdate for the node
-            xSemaphoreGive(*nodeClass->layerMutex);
-            nodeClass->requestMappings();
-          } else
-            EXT_LOGW(ML_TAG, "Nodeclass %s not found", name ? name : "");
-        }
-      }  // nodes[i].on
-
-      else if (updatedItem.parent[1] == "controls" && updatedItem.name == "value" && updatedItem.index[1] < nodeState["controls"].size()) {  // nodes[i].controls[j].value
-        JsonObject control = nodeState["controls"][updatedItem.index[1]];
-        // serializeJson(control, Serial);
-        // EXT_LOGD(ML_TAG, "handle control value %s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
-
-        if (updatedItem.index[0] < nodes->size()) {
-          Node* nodeClass = (*nodes)[updatedItem.index[0]];
-          if (nodeClass != nullptr) {
-            xSemaphoreTake(*nodeClass->layerMutex, portMAX_DELAY);
-            nodeClass->updateControl(control);
-            nodeClass->onUpdate(updatedItem.oldValue, control);  // custom onUpdate for the node
-            xSemaphoreGive(*nodeClass->layerMutex);
-
-            nodeClass->requestMappings();
-          } else {
-            const char* name = nodeState["name"];
-            EXT_LOGW(ML_TAG, "nodeClass not found %s", name ? name : "");
-          }
-        }
-
-      }  // nodes[i].controls[j].value
-      // else
-      //     EXT_LOGD(ML_TAG, "no handle for %s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1],
-      //     updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
-      // end Nodes
-    }
-    // else
-    // EXT_LOGD(ML_TAG, "no handle for %s[%d]%s[%d].%s = %s -> %s", updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(),
-    // updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
-  }
-
-  void onReOrderSwap(uint8_t stateIndex, uint8_t newIndex) override {
-    EXT_LOGD(ML_TAG, "%d %d %d", nodes->size(), stateIndex, newIndex);
-    // swap nodes
-    Node* nodeS = (*nodes)[stateIndex];
-    Node* nodeN = (*nodes)[newIndex];
-    (*nodes)[stateIndex] = nodeN;
-    (*nodes)[newIndex] = nodeS;
-
-    // modifiers and layouts trigger remaps
-    nodeS->requestMappings();
-    nodeN->requestMappings();
-  }
+  /// Handles nodes[i].controls[j].value changes: updates the control value and calls node's onUpdate.
+  void handleNodeControlValueChange(const UpdatedItem& updatedItem, JsonVariant nodeState);
 
  public:
   #if FT_LIVESCRIPT
-  Node* findLiveScriptNode(const char* animation) {
-    if (!nodes) return nullptr;
-
-    for (Node* node : *nodes) {
-      if (node && node->isLiveScriptNode()) {
-        LiveScriptNode* liveScriptNode = (LiveScriptNode*)node;
-        if (equal(liveScriptNode->animation, animation)) {
-          EXT_LOGV(ML_TAG, "found %s", animation);
-          return liveScriptNode;
-        }
-      }
-    }
-    return nullptr;
-  }
+  /// Finds a LiveScript node by its animation file name. Returns nullptr if not found.
+  Node* findLiveScriptNode(const char* animation);
   #endif
 };
 

@@ -87,7 +87,7 @@ class IRDriver : public Node {
   uint32_t codeLastPresetInc;
   uint32_t codeLastPresetDec;
 
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
+  void onUpdate(const JsonObject& control) override {
     if (control["name"] == "irPreset") {
       uint8_t value = control["value"];
       switch (value) {
@@ -371,7 +371,7 @@ class IRDriver : public Node {
 
   void readPins() {
     if (safeModeMB) {
-      EXT_LOGW(ML_TAG, "Safe mode enabled, not adding pins");
+      EXT_LOGW(MB_TAG, "Safe mode enabled, not adding pins");
       return;
     }
 

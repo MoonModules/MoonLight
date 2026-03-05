@@ -15,6 +15,40 @@
 
 JsonDocument* gModulesDoc = nullptr;
 
+ModuleState::ModuleState() {
+  EXT_LOGD(MB_TAG, "ModuleState constructor");
+
+  if (!gModulesDoc) {
+    EXT_LOGD(MB_TAG, "Creating doc");
+    if (psramFound())
+      gModulesDoc = new JsonDocument(JsonRAMAllocator::instance());  // crashed on non psram esp32-d0
+    else
+      gModulesDoc = new JsonDocument();
+  }
+  if (gModulesDoc) {
+    data = gModulesDoc->add<JsonObject>();
+  } else {
+    EXT_LOGE(MB_TAG, "Failed to create doc");
+  }
+}
+
+ModuleState::~ModuleState() {
+  EXT_LOGD(MB_TAG, "ModuleState destructor");
+
+  // delete data from doc
+  if (gModulesDoc) {
+    JsonArray arr = gModulesDoc->as<JsonArray>();
+    for (size_t i = 0; i < arr.size(); i++) {
+      JsonObject obj = arr[i];
+      if (obj == data) {  // same object (identity check)
+        EXT_LOGD(MB_TAG, "Deleting data from doc");
+        arr.remove(i);
+        break;  // optional, if only one match
+      }
+    }
+  }
+}
+
 void setDefaults(JsonObject controls, JsonArray definition) {
   for (JsonObject control : definition) {
     // if (control["type"] == "coord3Dxx") {
@@ -27,6 +61,7 @@ void setDefaults(JsonObject controls, JsonArray definition) {
     if (control["type"] != "rows") {
       controls[control["name"]] = control["default"];
     } else {
+      controls[control["name"]].to<JsonArray>();  // ← initialize as empty array
       // JsonArray array = controls[control["name"]].to<JsonArray>();
       // //loop over detail controls (recursive)
       // JsonObject object = array.add<JsonObject>(); // add one row
@@ -110,7 +145,8 @@ bool ModuleState::checkReOrderSwap(const JsonString& parent, const JsonVariant& 
                 updatedItem.name = "swap";
                 updatedItem.index[0] = stateIndex;
                 updatedItem.index[1] = newIndex;
-                processUpdatedItem(updatedItem, originId);
+                updatedItem.originId = &originId;
+                processUpdatedItem(updatedItem);
               }
 
               if (parkedFromIndex == UINT8_MAX) parkedFromIndex = newIndex;  // the index of value in the array stored in the parking spot
@@ -187,7 +223,8 @@ bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& 
                   updatedItem.value = JsonVariant();    // Assign an empty JsonVariant
                   stateArray[i].remove(control.key());  // remove the control from the state row so onUpdate see it as empty
 
-                  processUpdatedItem(updatedItem, originId);
+                  updatedItem.originId = &originId;
+                  processUpdatedItem(updatedItem);
                 }
 
                 stateArray.remove(i);  // remove the state row entirely
@@ -207,7 +244,8 @@ bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& 
           stateData[key.c_str()] = newValue;           // update the value in stateData, should not be done in runLoopTask as FS update then misses the change!!
           updatedItem.value = stateData[key.c_str()];  // store the stateData item (convenience)
 
-          processUpdatedItem(updatedItem, originId);
+          updatedItem.originId = &originId;
+          processUpdatedItem(updatedItem);
 
           // If both sides are objects and their identifying property "name" changed,
           // emit only that "name" update for this object and DO NOT recurse into it.
@@ -260,17 +298,70 @@ StateUpdateResult ModuleState::update(JsonObject& newData, ModuleState& state, c
   }
 }
 
-Module::Module(const char* moduleName, PsychicHttpServer* server, ESP32SvelteKit* sveltekit)
-    : _socket(sveltekit->getSocket())
-{
+Module::Module(const char* moduleName, PsychicHttpServer* server, ESP32SvelteKit* sveltekit) {
   _moduleName = (moduleName && moduleName[0] != '\0') ? moduleName : "unnamed";
 
   EXT_LOGV(MB_TAG, "constructor %s", moduleName);
   _server = server;
+  _sveltekit = sveltekit;
 
-  _state.processUpdatedItem = [&](const UpdatedItem& updatedItem, const String& originId) {
-    processUpdatedItem(updatedItem, originId);  // Ensure updatedItem is of type UpdatedItem&
+  _state.processUpdatedItem = [&](const UpdatedItem& updatedItem) {
+    processUpdatedItem(updatedItem);  // Ensure updatedItem is of type UpdatedItem&
   };
+}
+
+void Module::loop20ms() {
+  if (requestUIUpdate) {
+    requestUIUpdate = false;  // reset the flag
+    EXT_LOGD(MB_TAG, "requestUIUpdate %s", _moduleName);
+
+    // update state to UI
+    update(
+        [&](ModuleState& state) {
+          return StateUpdateResult::CHANGED;  // notify StatefulService by returning CHANGED
+        },
+        _moduleName);
+  }
+}
+
+void Module::processUpdatedItem(const UpdatedItem& updatedItem) {
+  if (updatedItem.name == "swap") {
+    onReOrderSwap(updatedItem.index[0], updatedItem.index[1]);
+    if (updatedItem.originId->toInt()) saveNeeded = true;
+  } else {
+    if (updatedItem.name != "channel") {  // todo: fix the problem at channel, not here...
+      if (updatedItem.originId->toInt()) {             // Front-end client IDs are numeric; internal origins ("module", etc.) return 0
+        saveNeeded = true;
+      }
+    }
+    onUpdate(updatedItem);
+  }
+}
+
+bool Module::updatePin(uint8_t& pin, const uint8_t pinUsage, bool checkOut) {
+  uint8_t oldPin = pin;
+  pin = UINT8_MAX;  // Assume deleted until found
+
+  read(
+      [&](ModuleState& state) {
+        for (JsonObject pinObject : state.data["pins"].as<JsonArray>()) {
+          uint8_t gpio = pinObject["GPIO"];
+          if (GPIO_IS_VALID_GPIO(gpio) && gpio < GPIO_PIN_COUNT && (!checkOut || GPIO_IS_VALID_OUTPUT_GPIO(gpio))) {
+            if (pinObject["usage"] == pinUsage && pin != gpio) {
+              pin = gpio;
+              break;
+            }
+          } else
+            EXT_LOGW(MB_TAG, "Pin %d (u:%d) not valid (o:%d)", gpio, pinUsage, checkOut);
+        }
+      },
+      _moduleName);
+  if (pin != oldPin) {
+    return true;
+  } else {
+    pin = oldPin;  // set the original value
+    return false;
+  }
 }
 
 void Module::begin() {

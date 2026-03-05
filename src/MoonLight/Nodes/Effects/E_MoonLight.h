@@ -138,7 +138,7 @@ class StarSkyEffect : public Node {
   }
 
   void onSizeChanged(const Coord3D& prevSize) override { setup_animation(); }
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
+  void onUpdate(const JsonObject& control) override {
     if (control["name"] == "star fill" || control["name"] == "usePalette") setup_animation();
   }
 
@@ -1037,7 +1037,7 @@ class RubiksCubeEffect : public Node {
   }
 
   bool doInit = false;
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
+  void onUpdate(const JsonObject& control) override {
     if (control["name"] == "cubeSize" || control["name"] == "randomTurning") {
       doInit = true;
     }
@@ -1233,7 +1233,7 @@ class ParticlesEffect : public Node {
     // addControl(bool, "Debug Print",             layer->effectData.write<bool>(0));
   }
 
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
+  void onUpdate(const JsonObject& control) override {
     if (control["name"] == "number of Particles" || control["name"] == "barriers") {
       settingUpParticles();
     }
@@ -1755,7 +1755,7 @@ class AudioRingsEffect : public RingEffect {
     for (int i = 0; i < nrOfRings; i++) {
       uint8_t band = ::map(i, 0, nrOfRings - 1, 0, NUM_GEQ_CHANNELS - 1);
 
-      byte val;
+      uint8_t val;
       if (inWards) {
         val = sharedData.bands[band];
       } else {
@@ -1774,7 +1774,7 @@ class AudioRingsEffect : public RingEffect {
     if (nrOfRings >= 1) setRingFromFtt(0, nrOfRings - 1);  // set outer rings to bass
   }
   void setRingFromFtt(int index, int ring) {
-    byte val = sharedData.bands[index];
+    uint8_t val = sharedData.bands[index];
     // Visualize leds to the beat
     CRGB color = ColorFromPalette(layerP.palette, val);
     color.nscale8_video(val);

@@ -334,7 +334,11 @@ class GEQEffect : public Node {
     if (previousBarHeight) freeMB(previousBarHeight, "previousBarHeight");
   }
 
-  void onSizeChanged(const Coord3D& prevSize) override { reallocMB2<uint16_t>(previousBarHeight, previousBarHeightSize, layer->size.x, "previousBarHeight"); }
+  // void onSizeChanged(const Coord3D& prevSize) override { reallocMB2<uint16_t>(previousBarHeight, previousBarHeightSize, layer->size.x, "previousBarHeight"); }
+  void onSizeChanged(const Coord3D& prevSize) override {
+    reallocMB2<uint16_t>(previousBarHeight, previousBarHeightSize, layer->size.x, "previousBarHeight");
+    if (previousBarHeight) memset(previousBarHeight, 0, previousBarHeightSize * sizeof(uint16_t));  // clear garbage values
+  }
 
   void loop() override {
     const int NUM_BANDS = NUM_GEQ_CHANNELS;  // ::map(layer->custom1, 0, 255, 1, 16);
@@ -493,13 +497,12 @@ class NoiseMeterEffect : public Node {
 
     float tmpSound2 = sharedData.volumeRaw * 2.0 * (float)width / 255.0;
     int maxLen = ::map(tmpSound2, 0, 255, 0, layer->size.y);  // map to pixels availeable in current segment              // Still a bit too sensitive.
-    // if (maxLen <0) maxLen = 0;
-    // if (maxLen >layer->size.x) maxLen = layer->size.x;
+    maxLen = constrain(maxLen, 0, layer->size.y); // as tmpSound2 not guaranteed between 0 and 255
 
-    for (int y = 0; y < maxLen; y++) {                                                                                     // The louder the sound, the wider the soundbar. By Andrew Tuline.
-      uint8_t index = inoise8(y * sharedData.volume + aux0, aux1 + y * sharedData.volume);                                 // Get a value from the noise function. I'm using both x and y axis.
-      for (int x = 0; x < layer->size.x; x++)                                                                              // propagate to other dimensions
-        for (int z = 0; z < layer->size.z; z++) layer->setRGB(Coord3D(x, layer->size.y -1 - y, z), ColorFromPalette(layerP.palette, index));  //, 255, PALETTE_SOLID_WRAP));
+    for (int y = 0; y < maxLen; y++) {                                                                                                         // The louder the sound, the wider the soundbar. By Andrew Tuline.
+      uint8_t index = inoise8(y * sharedData.volume + aux0, aux1 + y * sharedData.volume);                                                     // Get a value from the noise function. I'm using both x and y axis.
+      for (int x = 0; x < layer->size.x; x++)                                                                                                  // propagate to other dimensions
+        for (int z = 0; z < layer->size.z; z++) layer->setRGB(Coord3D(x, layer->size.y - 1 - y, z), ColorFromPalette(layerP.palette, index));  //, 255, PALETTE_SOLID_WRAP));
     }
 
     aux0 += beatsin8(5, 0, 10);
@@ -564,7 +567,7 @@ class PacManEffect : public Node {
 
   void onSizeChanged(const Coord3D& prevSize) override { initializePacMan(); }
 
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
+  void onUpdate(const JsonObject& control) override {
     if (control["name"] == "#powerdots" || control["name"] == "#ghosts") {
       initializePacMan();
     }
@@ -1310,7 +1313,7 @@ class OctopusEffect : public Node {
     addControl(radialWave, "radialWave", "checkbox");
   }
 
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
+  void onUpdate(const JsonObject& control) override {
     // add your custom onUpdate code here
     if (control["name"] == "offset") {
       if (rMap) setRMap();
@@ -1696,7 +1699,7 @@ static void mode_fireworks(VirtualLayer* layer, uint16_t x, uint16_t aux0, uint1
           layer->setRGB(Coord3D(x, layer->size.y - 1 - index), ColorFromPalette(layerP.palette, random8()));
         else
           layer->setRGB(Coord3D(x, layer->size.y - 1 - index), ColorFromPalette(layerP.palette, soundColor + random8(24)));  // WLEDSR
-        aux1 = aux0;  // cppcheck-suppress unreadVariable -- WLED ported code
+        aux1 = aux0;                                                                                                         // cppcheck-suppress unreadVariable -- WLED ported code
         aux0 = index;
       }
     }

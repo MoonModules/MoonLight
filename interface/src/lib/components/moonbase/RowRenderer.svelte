@@ -100,21 +100,22 @@
 		onChange();
 	}
 
+	const rowItems = $derived.by(() => {
+		const v = data[property.name];
+		return Array.isArray(v) ? (v as ModuleRow[]) : [];
+	});
+
 	// Filter items based on filter query - returns array of {item, originalIndex}
 	let filteredItems = $derived.by(() => {
+		const items = rowItems;
 		const filterValue = data[property.name + '_filter']?.trim() || '';
 		const isNegated = filterValue.startsWith('!');
 		const query = (isNegated ? filterValue.slice(1) : filterValue).toLowerCase();
 
-		// No filter or empty query → return items directly
 		if (!query)
-			return (data[property.name] as ModuleRow[]).map((item: ModuleRow, index: number) => ({
-				item,
-				originalIndex: index
-			}));
+			return items.map((item: ModuleRow, index: number) => ({ item, originalIndex: index }));
 
-		// Filtered items
-		return (data[property.name] as ModuleRow[])
+		return items
 			.map((item: ModuleRow, index: number) => ({ item, originalIndex: index }))
 			.filter(({ item }: { item: ModuleRow }) => {
 				const matchFound = property.n
@@ -129,7 +130,7 @@
 							Array.isArray(propertyN.values) &&
 							isNumber(item[propertyN.name])
 						) {
-							valueStr = propertyN.values[item[propertyN.name]];
+							valueStr = propertyN.values[item[propertyN.name] as number];
 						} else {
 							valueStr = item[propertyN.name];
 						}
@@ -172,7 +173,7 @@
 				addItem(property.name);
 
 				//add the new item to the data
-				data[property.name].push(dataEditable);
+				rowItems.push(dataEditable);
 				onChange();
 			}}
 		>
@@ -193,7 +194,7 @@
 	></FieldRenderer>
 	{#if data[property.name + '_filter']}
 		<div class="text-base-content/60 mt-1 ml-1 text-sm">
-			{filteredItems.length} of {data[property.name].length} items
+			{filteredItems.length} of {rowItems.length} items
 			{data[property.name + '_filter'].startsWith('!') ? '(excluding matches)' : ''}
 		</div>
 	{/if}

@@ -14,10 +14,16 @@
 #include "ArduinoJson.h"
 #include "PureFunctions.h"
 
+// for unit testing
+#ifndef ARDUINO
+  #include <cstdarg>
+  #include <functional>
+#endif
+
 // See https://discord.com/channels/473448917040758787/718943978636050542/1357670679196991629
 template <size_t N>
 struct Char {
-  char s[N] = "";
+  char s[N] = {};
 
   // Constructors
   Char() = default;                                      // Keep default constructor
@@ -103,10 +109,10 @@ struct Char {
   size_t length() const { return strnlen(s, sizeof(s)); }
   int toInt() const { return atoi(s); }
   float toFloat() const { return atof(s); }
-  bool contains(const char* rhs) const { return strnstr(s, rhs, sizeof(s)) != nullptr; }
+  bool contains(const char* rhs) const { return strstr(s, rhs) != nullptr; }
   // returns index of first character of token (starting with 0)
   size_t indexOf(const char* token) const {
-    const char* pos = strnstr(s, token, sizeof(s));
+    const char* pos = strstr(s, token);
     return pos ? (pos - s) : SIZE_MAX;
   }
   const char* c_str() const { return s; }

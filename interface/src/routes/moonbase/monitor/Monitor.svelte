@@ -60,7 +60,7 @@
 	// let offsetRed:number;
 	// let offsetGreen:number;
 	// let offsetBlue:number;
-	const lightPreset_RGB2040 = 9;
+	const lightPreset_RGB2040 = 10;
 
 	const handleHeader = (header: Uint8Array) => {
 		console.log('Monitor.handleHeader', header);

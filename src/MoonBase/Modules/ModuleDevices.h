@@ -76,8 +76,8 @@ class ModuleDevices : public Module {
     }
   }
 
-  void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
-    if (!originId.toInt()) return;  // Front-end client IDs are numeric; internal origins ("module", etc.) return 0
+  void onUpdate(const UpdatedItem& updatedItem) override {
+    if (!updatedItem.originId->toInt()) return;  // Front-end client IDs are numeric; internal origins ("module", etc.) return 0
 
     if (updatedItem.parent[0] == "devices") {
       JsonObject device = _state.data["devices"][updatedItem.index[0]];
@@ -103,13 +103,13 @@ class ModuleDevices : public Module {
 
         _moduleControl->update(newState, ModuleState::update, _moduleName);  // Do not add server in the originID as that blocks updates, see execOnUpdate
 
-        EXT_LOGD(ML_TAG, "Applied UDP control from originator: bri=%d pal=%d preset=%d", message.brightness, message.palette, message.preset);
+        EXT_LOGD(MB_TAG, "Applied UDP control from originator: bri=%d pal=%d preset=%d", message.brightness, message.palette, message.preset);
       } else {
         // if a device is updated in the UI, send that update to that device
         if (deviceUDP.beginPacket(targetIP, deviceUDPPort)) {
           deviceUDP.write(reinterpret_cast<uint8_t*>(&message), sizeof(message));
           deviceUDP.endPacket();
-          EXT_LOGD(ML_TAG, "UDP from %s update sent to ...%d / %s bri=%d pal=%d preset=%d", originId.c_str(), targetIP[3], message.name.c_str(), message.brightness, message.palette, message.preset);
+          EXT_LOGD(MB_TAG, "UDP from %s update sent to ...%d / %s bri=%d pal=%d preset=%d", updatedItem.originId->c_str(), targetIP[3], message.name.c_str(), message.brightness, message.palette, message.preset);
           // need to add the targetip?
         }
       }
@@ -131,7 +131,7 @@ class ModuleDevices : public Module {
 
     if (!deviceUDPConnected) {
       deviceUDPConnected = deviceUDP.begin(deviceUDPPort);
-      EXT_LOGD(ML_TAG, "deviceUDPConnected %d i:%d p:%d", deviceUDPConnected, deviceUDP.remoteIP()[3], deviceUDPPort);
+      EXT_LOGD(MB_TAG, "deviceUDPConnected %d i:%d p:%d", deviceUDPConnected, deviceUDP.remoteIP()[3], deviceUDPPort);
     }
 
     if (!deviceUDPConnected) return;
@@ -140,12 +140,12 @@ class ModuleDevices : public Module {
   }
 
   void updateDevices(const UDPMessage& message, IPAddress ip) {
-    // EXT_LOGD(ML_TAG, "updateDevices ...%d %s", ip[3], name);
+    // EXT_LOGD(MB_TAG, "updateDevices ...%d %s", ip[3], name);
     if (_state.data["devices"].isNull()) _state.data["devices"].to<JsonArray>();
 
     // set the doc
     JsonDocument doc;
-    if (_socket->getActiveClients()) {  // rebuild the devices array
+    if (_sveltekit->getSocket()->getActiveClients()) {  // rebuild the devices array
       doc.set(_state.data);             // copy
     } else {
       doc = _state.data;  // reference
@@ -163,14 +163,14 @@ class ModuleDevices : public Module {
         device = dev;
         newDevice = false;
         break;  // found so leave for loop
-        // EXT_LOGD(ML_TAG, "updated ...%d %s", ip[3], name);
+        // EXT_LOGD(MB_TAG, "updated ...%d %s", ip[3], name);
       }
     }
 
     // if an update for a device is received, set the device object so it is shown in the UI
     if (newDevice) {
       device = devices.add<JsonObject>();
-      EXT_LOGD(ML_TAG, "added ...%d %s", ip[3], message.name.c_str());
+      EXT_LOGD(MB_TAG, "added ...%d %s", ip[3], message.name.c_str());
     }
 
     device["ip"] = ip.toString();
@@ -229,7 +229,7 @@ class ModuleDevices : public Module {
 
     // // Map is already sorted by key (name|ip), just iterate and add
     // doc2["devices"].to<JsonArray>();
-    // for (auto& pair : uniqueDevices) {
+    // for (const auto& pair : uniqueDevices) {
     //   doc2["devices"].add(pair.second);
     // }
   }
@@ -255,7 +255,7 @@ class ModuleDevices : public Module {
 
         messageToControlState(message, newState);
 
-        EXT_LOGD(ML_TAG, "UDP control message from group via %s : bri=%d pal=%d preset=%d", message.name.c_str(), message.brightness, message.palette, message.preset);
+        EXT_LOGD(MB_TAG, "UDP control message from group via %s : bri=%d pal=%d preset=%d", message.name.c_str(), message.brightness, message.palette, message.preset);
 
         if (esp32sveltekit.getWiFiSettingsService()->getHostname() == message.name.c_str()) {
           _moduleControl->update(newState, ModuleState::update, _moduleName);  // addUpdateHandler will send a message with control status
@@ -263,7 +263,7 @@ class ModuleDevices : public Module {
           _moduleControl->update(newState, ModuleState::update, "group");  // addUpdateHandler will send a message without control status (to avoid infinite loops)
       } else
 
-        // EXT_LOGD(ML_TAG, "UDP message %s : bri=%d pal=%d preset=%d control:%d", message.name.c_str(), message.brightness, message.palette, message.preset, message.isControlCommand);
+        // EXT_LOGD(MB_TAG, "UDP message %s : bri=%d pal=%d preset=%d control:%d", message.name.c_str(), message.brightness, message.palette, message.preset, message.isControlCommand);
 
         // also update if control command as it can be another device
         updateDevices(message, deviceUDP.remoteIP());
@@ -281,7 +281,7 @@ class ModuleDevices : public Module {
 
       deviceUDP.write(reinterpret_cast<uint8_t*>(&message), sizeof(message));
       deviceUDP.endPacket();
-      // EXT_LOGD(ML_TAG, "UDP update sent: bri=%d pal=%d preset=%d control: %d", message.brightness, message.palette, message.preset, isControlCommand);
+      // EXT_LOGD(MB_TAG, "UDP update sent: bri=%d pal=%d preset=%d control: %d", message.brightness, message.palette, message.preset, isControlCommand);
 
       // there is no udp received from itself so update manually
       IPAddress activeIP = WiFi.isConnected() ? WiFi.localIP() : ETH.localIP();

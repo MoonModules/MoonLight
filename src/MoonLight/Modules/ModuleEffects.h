@@ -35,7 +35,7 @@ class ModuleEffects : public NodeManager {
     NodeManager::begin();
 
   #if FT_ENABLED(FT_MONITOR)
-    _socket->registerEvent("monitor");
+    _sveltekit->getSocket()->registerEvent("monitor");
     _server->on("/rest/monitorLayout", HTTP_GET, [&](PsychicRequest* request) {
       EXT_LOGV(ML_TAG, "rest monitor triggered");
 
@@ -377,9 +377,9 @@ class ModuleEffects : public NodeManager {
   }
 
   bool triggerResetPreset = false;
-  void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
-    NodeManager::onUpdate(updatedItem, originId);
-    if (originId.toInt()) {  // UI triggered
+  void onUpdate(const UpdatedItem& updatedItem) override {
+    NodeManager::onUpdate(updatedItem);
+    if (updatedItem.originId->toInt()) {  // UI triggered
       triggerResetPreset = true;
     }
   }

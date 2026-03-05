@@ -16,7 +16,6 @@
 #include "ArduinoJson.h"
 #include "Char.h"
 #include "Coord3D.h"
-#include "PureFunctions.h"
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)  // e.g. for pio.ini settings (see ML_CHIPSET)
@@ -80,6 +79,7 @@
 #define MB_TAG "🌙"
 #define ML_TAG "💫"
 
+#include "PureFunctions.h"
 #include "MemAlloc.h"
 
 // https://arduinojson.org/news/2021/05/04/version-6-18-0/
