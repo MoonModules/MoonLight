@@ -245,7 +245,11 @@ void PsychicWebSocketHandler::sendAll(httpd_ws_frame_t * ws_pkt)
     }
 
     if (((PsychicWebSocketClient*)client->_friend)->sendMessage(ws_pkt) != ESP_OK)
-      break;
+    {
+      // 🌙 continue instead of break
+      ESP_LOGD(PH_TAG, "sendAll: skip failed client fd=%d", client->socket());
+      continue;
+    }
   }
 }
 

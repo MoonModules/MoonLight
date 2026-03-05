@@ -100,10 +100,14 @@
 		onChange();
 	}
 
+	const rowItems = $derived.by(() => {
+		const v = data[property.name];
+		return Array.isArray(v) ? (v as ModuleRow[]) : [];
+	});
+
 	// Filter items based on filter query - returns array of {item, originalIndex}
 	let filteredItems = $derived.by(() => {
-		const items = data[property.name] as ModuleRow[] | null | undefined;
-		if (!Array.isArray(items)) return []; // ← guard: nothing to show yet
+		const items = rowItems;
 		const filterValue = data[property.name + '_filter']?.trim() || '';
 		const isNegated = filterValue.startsWith('!');
 		const query = (isNegated ? filterValue.slice(1) : filterValue).toLowerCase();
@@ -169,7 +173,7 @@
 				addItem(property.name);
 
 				//add the new item to the data
-				data[property.name].push(dataEditable);
+				rowItems.push(dataEditable);
 				onChange();
 			}}
 		>
@@ -190,7 +194,7 @@
 	></FieldRenderer>
 	{#if data[property.name + '_filter']}
 		<div class="text-base-content/60 mt-1 ml-1 text-sm">
-			{filteredItems.length} of {data[property.name].length} items
+			{filteredItems.length} of {rowItems.length} items
 			{data[property.name + '_filter'].startsWith('!') ? '(excluding matches)' : ''}
 		</div>
 	{/if}

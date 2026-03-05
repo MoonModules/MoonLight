@@ -497,8 +497,7 @@ class NoiseMeterEffect : public Node {
 
     float tmpSound2 = sharedData.volumeRaw * 2.0 * (float)width / 255.0;
     int maxLen = ::map(tmpSound2, 0, 255, 0, layer->size.y);  // map to pixels availeable in current segment              // Still a bit too sensitive.
-    // if (maxLen <0) maxLen = 0;
-    // if (maxLen >layer->size.x) maxLen = layer->size.x;
+    maxLen = constrain(maxLen, 0, layer->size.y); // as tmpSound2 not guaranteed between 0 and 255
 
     for (int y = 0; y < maxLen; y++) {                                                                                                         // The louder the sound, the wider the soundbar. By Andrew Tuline.
       uint8_t index = inoise8(y * sharedData.volume + aux0, aux1 + y * sharedData.volume);                                                     // Get a value from the noise function. I'm using both x and y axis.

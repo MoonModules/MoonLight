@@ -218,8 +218,8 @@
          -->
 		<input
 			type="range"
-			min={property.min ? property.min : 0}
-			max={property.max ? property.max : 255}
+			min={property.min ?? 0}
+			max={property.max ?? 255}
 			{step}
 			class={'range flex-1 ' +
 				(disabled == false

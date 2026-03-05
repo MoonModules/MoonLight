@@ -44,11 +44,11 @@ The 🐰 (see AI) will review each commit, please process the review recommendat
 
 Before merging a PR back into main ask the 🐰 the following:
 
-@coderabbitai, I am about to merge this PR, please do an in depth review of all the commits made, make a summary,  a recommendation to merge and a list of possible future actions.
+@coderabbitai, I am about to merge this PR, please do an in-depth review of all the commits made, make a summary,  a recommendation to merge and a list of possible future actions.
 
 ## Artificial Intelligence
 
-MoonLight supports the use of AI. Using AI is a hot topic and different people have different opinions. The reason MoonLight supports it is becasue to talk about it you need to know about it. So we will investigate the use of it and monitor learnings and change use of it accordingly. Below the principles we are using, of which Reversible is the most important: MoonLight should never be depending on AI !!!
+MoonLight supports the use of AI. Using AI is a hot topic and different people have different opinions. The reason MoonLight supports it is because to talk about it you need to know about it. So we will investigate the use of it and monitor learnings and change use of it accordingly. Below the principles we are using, of which Reversible is the most important: MoonLight should never be depending on AI !!!
 
 ### AI Principles
 
@@ -56,7 +56,7 @@ MoonLight currently uses CodeRabbit and Claude Code AI tools, using the followin
 
 **4 Eyes Principle (4EP)**
 
-For AI generated code, the 4 Eyes Principle (**4EP**) applies: 
+For AI-generated code, the 4 Eyes Principle (**4EP**) applies: 
 
   * Code is added via commits to (feature) branches on the main branch and via Pull Requests merged back into main
   * Code generated with Claude Code must be reviewed by the developer 👀 before committing it to a feature branch
@@ -65,10 +65,10 @@ For AI generated code, the 4 Eyes Principle (**4EP**) applies:
 
 **Unit tests**
 
-Unit tests needs to be added for AI and non AI code (Claude code can assist in creating unit tests). The following unit test tools are used:
+Unit tests needs to be added for AI and non-AI code (Claude code can assist in creating unit tests). The following unit test tools are used:
 
 * backend: 
-     * cppcheck: see [pio.ini](https://github.com/MoonModules/MoonLight/blob/main/platformio.ini) for compile checks (less strict) and [lint.yml](https://github.com/MoonModules/MoonLight/blob/main/.github/workflows/lint.yml) for CI checks (more strict). Iignores are added in the code by using // cppcheck-suppress
+     * cppcheck: see [pio.ini](https://github.com/MoonModules/MoonLight/blob/main/platformio.ini) for compile checks (less strict) and [lint.yml](https://github.com/MoonModules/MoonLight/blob/main/.github/workflows/lint.yml) for CI checks (more strict). Ignores are added in the code by using // cppcheck-suppress
      * doctest: see https://github.com/MoonModules/MoonLight/tree/main/test/test_native, run by [lint.yml](https://github.com/MoonModules/MoonLight/blob/main/.github/workflows/lint.yml) by compiling env:native
 * frontend: 
     * Vitest see [moonbase_utilities.test](https://github.com/MoonModules/MoonLight/blob/main/interface/src/lib/stores/moonbase_utilities.test.ts)

@@ -73,13 +73,14 @@ class Node {
   /// Registers a UI control for this node, binding it to the given variable.
   /// The template sets value/default/pointer; all other logic is in findOrCreateControl() and setupControl().
   template <class ControlType>
-  JsonObject addControl(const ControlType& variable, const char* name, const char* type, int min = 0, int max = UINT8_MAX, bool ro = false, const char* desc = nullptr) {
+  JsonObject addControl(ControlType& variable, const char* name, const char* type, int min = 0, int max = UINT8_MAX, bool ro = false, const char* desc = nullptr) {
+    // ControlType& parameter should be non-const to enforce binding to writable lvalues only, preventing accidental binding to temporaries or const references.
     bool newControl = false;
     JsonObject control = findOrCreateControl(name, newControl);
 
     if (newControl) control["value"] = variable;  // set default value for new controls
     control["default"] = variable;
-    control["p"] = (uint32_t)&variable;
+    control["p"] = reinterpret_cast<uintptr_t>(&variable);
 
     // encode ControlType as a size code for the non-template helper
     uint8_t sizeCode = 0;
