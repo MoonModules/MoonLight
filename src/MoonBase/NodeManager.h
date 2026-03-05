@@ -60,7 +60,7 @@ class NodeManager : public Module {
   void setupDefinition(const JsonArray& controls) override;
 
   /// Dispatches control updates to the appropriate handler based on parent/name context.
-  void onUpdate(const UpdatedItem& updatedItem, const String& originId) override;
+  void onUpdate(const UpdatedItem& updatedItem) override;
 
   /// Swaps two nodes in the nodes vector and requests remapping.
   void onReOrderSwap(uint8_t stateIndex, uint8_t newIndex) override;
@@ -69,13 +69,13 @@ class NodeManager : public Module {
   /// Handles nodes[i].name changes: creates/destroys nodes, manages controls, applies migrations.
   // Migration note (20251204): hardcoded renames for legacy driver names ("Physical Driver" → ParallelLEDDriver,
   // "IR Driver" → IRDriver). When adding new migrations, follow the same pattern with contains() + getNameAndTags<T>().
-  void handleNodeNameChange(const UpdatedItem& updatedItem, const String& originId, JsonVariant nodeState);
+  void handleNodeNameChange(const UpdatedItem& updatedItem, JsonVariant nodeState);
 
   /// Handles nodes[i].on changes: toggles node on/off state and calls node's onUpdate.
-  void handleNodeOnChange(const UpdatedItem& updatedItem, const String& originId, JsonVariant nodeState);
+  void handleNodeOnChange(const UpdatedItem& updatedItem, JsonVariant nodeState);
 
   /// Handles nodes[i].controls[j].value changes: updates the control value and calls node's onUpdate.
-  void handleNodeControlValueChange(const UpdatedItem& updatedItem, const String& originId, JsonVariant nodeState);
+  void handleNodeControlValueChange(const UpdatedItem& updatedItem, JsonVariant nodeState);
 
  public:
   #if FT_LIVESCRIPT

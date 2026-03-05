@@ -61,8 +61,7 @@ JsonObject Node::setupControl(const char* name, const char* type, int min, int m
     EXT_LOGE(ML_TAG, "type of %s not compatible: %s (%d)", control["name"].as<const char*>(), control["type"].as<const char*>(), control["size"].as<uint8_t>());
 
   if (newControl) {
-    Char<20> oldValue = "";
-    onUpdate(oldValue, control);  // custom onUpdate for the node
+    onUpdate(control);  // custom onUpdate for the node
   }
 
   return control;

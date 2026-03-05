@@ -236,8 +236,8 @@
 		{#if hasNumber}
 			<input
 				type="number"
-				min={property.min ? property.min : 0}
-				max={property.max ? property.max : 255}
+				min={property.min ?? 0}
+				max={property.max ?? 255}
 				{step}
 				class="input"
 				style="height: 2rem; width: 5rem"
@@ -262,8 +262,8 @@
 		<input
 			type="number"
 			style="width: {String(property.max || 255).length + 5}ch"
-			min={property.min ? property.min : 0}
-			max={property.max ? property.max : 255}
+			min={property.min ?? 0}
+			max={property.max ?? 255}
 			class="input invalid:border-error invalid:border-2"
 			bind:value
 			onchange={onChange}

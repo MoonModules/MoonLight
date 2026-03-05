@@ -567,7 +567,7 @@ class PacManEffect : public Node {
 
   void onSizeChanged(const Coord3D& prevSize) override { initializePacMan(); }
 
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
+  void onUpdate(const JsonObject& control) override {
     if (control["name"] == "#powerdots" || control["name"] == "#ghosts") {
       initializePacMan();
     }
@@ -1313,7 +1313,7 @@ class OctopusEffect : public Node {
     addControl(radialWave, "radialWave", "checkbox");
   }
 
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
+  void onUpdate(const JsonObject& control) override {
     // add your custom onUpdate code here
     if (control["name"] == "offset") {
       if (rMap) setRMap();

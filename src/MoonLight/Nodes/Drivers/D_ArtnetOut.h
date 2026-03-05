@@ -62,8 +62,8 @@ class ArtNetOutDriver : public DriverNode {
   uint8_t ipAddresses[16];  // max 16
   uint8_t nrOfIPAddresses = 0;
 
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
-    DriverNode::onUpdate(oldValue, control);  // !!
+  void onUpdate(const JsonObject& control) override {
+    DriverNode::onUpdate(control);  // !!
 
     if (control["name"] == "controllerIPs") {
       nrOfIPAddresses = 0;

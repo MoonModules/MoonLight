@@ -91,8 +91,8 @@ class FastLEDDriver : public DriverNode {
   fl::EOrder rgbOrder = GRB;
   fl::ChannelOptions options = fl::ChannelOptions();
 
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
-    DriverNode::onUpdate(oldValue, control);  // !!
+  void onUpdate(const JsonObject& control) override {
+    DriverNode::onUpdate(control);  // !!
 
     // EXT_LOGD(ML_TAG, "%s: %s ", control["name"].as<const char*>(), control["value"].as<String>().c_str());
 

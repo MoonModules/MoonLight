@@ -127,7 +127,7 @@ class Node {
     }
   }
 
-  virtual void onUpdate(const Char<20>& oldValue, const JsonObject& control) {}
+  virtual void onUpdate(const JsonObject& control) {}
 
   void requestMappings() {
     if (hasModifier() || hasOnLayout()) {
@@ -172,7 +172,7 @@ inline uint8_t triangle8(uint8_t bpm, uint32_t timebase = 0) {
 }
 
 /// Data shared between nodes (audio sync, status info, gravity, etc.).
-/// Single static instance accessible by all effect/driver nodes.
+/// Single shared instance accessible by all effect/driver nodes.
 struct SharedData {
   // audio sync
   uint8_t bands[16] = {0};  // Our calculated freq. channel result table to be used by effects

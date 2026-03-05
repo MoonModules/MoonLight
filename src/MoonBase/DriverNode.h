@@ -24,13 +24,13 @@ extern I2SClocklessLedDriver ledsDriver;  // defined in DriverNode.cpp
   #else                                   // ESP32_LEDSDRIVER
     #include "ESP32-LedsDriver.h"
     #define MAX_PINS 20  // this is also defined in ESP32-LedsDriver.h...
-     #if  defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)
+    #if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)
 extern PhysicalDriverESP32S3 ledsDriver;
-     #elif  defined(CONFIG_IDF_TARGET_ESP32)
+    #elif defined(CONFIG_IDF_TARGET_ESP32)
 extern PhysicalDriverESP32D0 ledsDriver;
-     #else 
+    #else
 extern LedsDriver ledsDriver;
-     #endif 
+    #endif
   #endif
 
 /// Enumeration of supported LED/fixture color-channel orderings and multi-channel presets.
@@ -80,7 +80,7 @@ class DriverNode : public Node {
   void rgbwBufferMapping(uint8_t* packetRGBChannel, uint8_t* lightsRGBChannel);
 
   /// Handles lightPreset changes: sets channel offsets and notifies the driver.
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) override;
+  void onUpdate(const JsonObject& control) override;
 };
 
 #endif  // FT_MOONLIGHT

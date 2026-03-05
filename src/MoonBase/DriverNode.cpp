@@ -83,7 +83,7 @@ void DriverNode::loop() {
   #endif
 }
 
-void DriverNode::onUpdate(const Char<20>& oldValue, const JsonObject& control) {
+void DriverNode::onUpdate(const JsonObject& control) {
   LightsHeader* header = &layerP.lights.header;
 
   // EXT_LOGD(ML_TAG, "%s: %s ", control["name"].as<const char*>(), control["value"].as<String>().c_str());

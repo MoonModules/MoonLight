@@ -666,9 +666,9 @@ class ModuleIO : public Module {
 
   // on update triggers another onUpdates on 2 occasions: 1) newState modded (directly) and 2) setBoardPresetDefaults (via main loop)
   // each will trigger the updateHandler of this module sending readpins again ...
-  void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
+  void onUpdate(const UpdatedItem& updatedItem) override {
     // Below updates only triggered from UI (not from backend updates)
-    if (!originId.toInt()) return;
+    if (!updatedItem.originId->toInt()) return;
 
     JsonDocument doc;
     JsonObject newState = doc.to<JsonObject>();
@@ -677,7 +677,7 @@ class ModuleIO : public Module {
     if (updatedItem.name == "boardPreset") {
       // Only load board defaults if modded is false
       if (_state.data["modded"] == false) {
-        EXT_LOGD(MB_TAG, "newBoardID %s %s[%d]%s[%d].%s = %s -> %s", originId.c_str(), updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
+        EXT_LOGD(MB_TAG, "newBoardID %s %s[%d]%s[%d].%s = %s -> %s", updatedItem.originId->c_str(), updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
         newBoardID = updatedItem.value;  // Will be processed in loop20ms
       } else {
         EXT_LOGD(MB_TAG, "boardPreset change ignored - modded=true");

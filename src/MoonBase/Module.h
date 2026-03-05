@@ -25,6 +25,7 @@ struct UpdatedItem {
   Char<20> name;       // 16 -> 16 -> 20
   Char<20> oldValue;   // 32 -> 16 -> 20, smaller then 11 bytes mostly
   JsonVariant value;   // 8->16->4
+  const String* originId;
 
   /// Initializes parent/index fields to empty/unset defaults.
   UpdatedItem() {
@@ -67,7 +68,7 @@ class ModuleState {
   bool checkReOrderSwap(const JsonString& parent, const JsonVariant& oldData, const JsonVariant& newData, UpdatedItem& updatedItem, const String& originId, uint8_t depth = UINT8_MAX, uint8_t index = UINT8_MAX);
 
   /// Callback invoked for each changed control; set by Module constructor to route to Module::processUpdatedItem.
-  std::function<void(const UpdatedItem&, const String&)> processUpdatedItem = nullptr;
+  std::function<void(const UpdatedItem&)> processUpdatedItem = nullptr;
 
   /// Copies module state into stateJson for sending to the UI (calls readHook first if set).
   static void read(ModuleState& state, JsonObject& stateJson);
@@ -108,7 +109,7 @@ class Module : public StatefulService<ModuleState> {
   virtual void loop10s() {}
 
   /// Routes an updated control to onUpdate() or onReOrderSwap(), and marks state for saving if from the UI.
-  void processUpdatedItem(const UpdatedItem& updatedItem, const String& originId);
+  void processUpdatedItem(const UpdatedItem& updatedItem);
 
   /// Override to populate the control definition array with addControl() calls.
   virtual void setupDefinition(const JsonArray& controls);
@@ -127,7 +128,7 @@ class Module : public StatefulService<ModuleState> {
   /// Called when a non-swap control value changes. Override to react to specific control updates.
   // called in compareRecursive->execOnUpdate
   // called from compareRecursive
-  virtual void onUpdate(const UpdatedItem& updatedItem, const String& originId) {};
+  virtual void onUpdate(const UpdatedItem& updatedItem) {};
 
   /// Called when rows are reordered via drag-and-drop. Override to update internal data structures.
   virtual void onReOrderSwap(uint8_t stateIndex, uint8_t newIndex) {};

@@ -145,7 +145,8 @@ bool ModuleState::checkReOrderSwap(const JsonString& parent, const JsonVariant& 
                 updatedItem.name = "swap";
                 updatedItem.index[0] = stateIndex;
                 updatedItem.index[1] = newIndex;
-                processUpdatedItem(updatedItem, originId);
+                updatedItem.originId = &originId;
+                processUpdatedItem(updatedItem);
               }
 
               if (parkedFromIndex == UINT8_MAX) parkedFromIndex = newIndex;  // the index of value in the array stored in the parking spot
@@ -222,7 +223,8 @@ bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& 
                   updatedItem.value = JsonVariant();    // Assign an empty JsonVariant
                   stateArray[i].remove(control.key());  // remove the control from the state row so onUpdate see it as empty
 
-                  processUpdatedItem(updatedItem, originId);
+                  updatedItem.originId = &originId;
+                  processUpdatedItem(updatedItem);
                 }
 
                 stateArray.remove(i);  // remove the state row entirely
@@ -242,7 +244,8 @@ bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& 
           stateData[key.c_str()] = newValue;           // update the value in stateData, should not be done in runLoopTask as FS update then misses the change!!
           updatedItem.value = stateData[key.c_str()];  // store the stateData item (convenience)
 
-          processUpdatedItem(updatedItem, originId);
+          updatedItem.originId = &originId;
+          processUpdatedItem(updatedItem);
 
           // If both sides are objects and their identifying property "name" changed,
           // emit only that "name" update for this object and DO NOT recurse into it.
@@ -302,8 +305,8 @@ Module::Module(const char* moduleName, PsychicHttpServer* server, ESP32SvelteKit
   _server = server;
   _sveltekit = sveltekit;
 
-  _state.processUpdatedItem = [&](const UpdatedItem& updatedItem, const String& originId) {
-    processUpdatedItem(updatedItem, originId);  // Ensure updatedItem is of type UpdatedItem&
+  _state.processUpdatedItem = [&](const UpdatedItem& updatedItem) {
+    processUpdatedItem(updatedItem);  // Ensure updatedItem is of type UpdatedItem&
   };
 }
 
@@ -321,17 +324,17 @@ void Module::loop20ms() {
   }
 }
 
-void Module::processUpdatedItem(const UpdatedItem& updatedItem, const String& originId) {
+void Module::processUpdatedItem(const UpdatedItem& updatedItem) {
   if (updatedItem.name == "swap") {
     onReOrderSwap(updatedItem.index[0], updatedItem.index[1]);
-    if (originId.toInt()) saveNeeded = true;
+    if (updatedItem.originId->toInt()) saveNeeded = true;
   } else {
     if (updatedItem.name != "channel") {  // todo: fix the problem at channel, not here...
-      if (originId.toInt()) {             // Front-end client IDs are numeric; internal origins ("module", etc.) return 0
+      if (updatedItem.originId->toInt()) {             // Front-end client IDs are numeric; internal origins ("module", etc.) return 0
         saveNeeded = true;
       }
     }
-    onUpdate(updatedItem, originId);
+    onUpdate(updatedItem);
   }
 }
 

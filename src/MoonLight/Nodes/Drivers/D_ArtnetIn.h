@@ -44,7 +44,7 @@ class ArtNetInDriver : public Node {
     }
   }
 
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
+  void onUpdate(const JsonObject& control) override {
     // add your custom onUpdate code here
     if (control["name"] == "DDP") {
       if (control["value"] == 0) {

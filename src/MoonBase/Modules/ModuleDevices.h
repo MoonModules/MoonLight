@@ -76,8 +76,8 @@ class ModuleDevices : public Module {
     }
   }
 
-  void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
-    if (!originId.toInt()) return;  // Front-end client IDs are numeric; internal origins ("module", etc.) return 0
+  void onUpdate(const UpdatedItem& updatedItem) override {
+    if (!updatedItem.originId->toInt()) return;  // Front-end client IDs are numeric; internal origins ("module", etc.) return 0
 
     if (updatedItem.parent[0] == "devices") {
       JsonObject device = _state.data["devices"][updatedItem.index[0]];
@@ -109,7 +109,7 @@ class ModuleDevices : public Module {
         if (deviceUDP.beginPacket(targetIP, deviceUDPPort)) {
           deviceUDP.write(reinterpret_cast<uint8_t*>(&message), sizeof(message));
           deviceUDP.endPacket();
-          EXT_LOGD(ML_TAG, "UDP from %s update sent to ...%d / %s bri=%d pal=%d preset=%d", originId.c_str(), targetIP[3], message.name.c_str(), message.brightness, message.palette, message.preset);
+          EXT_LOGD(ML_TAG, "UDP from %s update sent to ...%d / %s bri=%d pal=%d preset=%d", updatedItem.originId->c_str(), targetIP[3], message.name.c_str(), message.brightness, message.palette, message.preset);
           // need to add the targetip?
         }
       }

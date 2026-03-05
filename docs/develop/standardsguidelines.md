@@ -65,7 +65,7 @@ For AI-generated code, the 4 Eyes Principle (**4EP**) applies:
 
 **Unit tests**
 
-Unit tests needs to be added for AI and non-AI code (Claude code can assist in creating unit tests). The following unit test tools are used:
+Unit tests need to be added for AI and non-AI code (Claude code can assist in creating unit tests). The following unit test tools are used:
 
 * backend: 
      * cppcheck: see [pio.ini](https://github.com/MoonModules/MoonLight/blob/main/platformio.ini) for compile checks (less strict) and [lint.yml](https://github.com/MoonModules/MoonLight/blob/main/.github/workflows/lint.yml) for CI checks (more strict). Ignores are added in the code by using // cppcheck-suppress
@@ -78,14 +78,14 @@ Unit tests needs to be added for AI and non-AI code (Claude code can assist in c
 
 **Reversible**
 
-AI tools needs to be **reversible** at all times
+AI tools need to be **reversible** at all times
 
 * Development should never be depending on any AI tool. A commit must always be possible without using AI tools
 * It should be possible at any moment to stop using a specific tool or add / replace another tool.
 
 ### Contributing
 
-Its OK if you took help from an AI for writing your source code. 
+It's OK if you took help from an AI for writing your source code. 
     
 However, we expect a few things from you as the person making a contribution to MoonLight:
 

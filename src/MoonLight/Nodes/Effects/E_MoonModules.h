@@ -123,7 +123,7 @@ class GameOfLifeEffect : public Node {
     addControl(blur, "blur", "slider", 0, 255);
   }
 
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
+  void onUpdate(const JsonObject& control) override {
     if (control["name"] == "ruleset" || control["name"] == "customRuleString") {
       setBirthAndSurvive();
     }

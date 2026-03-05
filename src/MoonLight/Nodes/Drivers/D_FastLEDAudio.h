@@ -130,7 +130,7 @@ class FastLEDAudioDriver : public Node {
     });
   }
 
-  void onUpdate(const Char<20>& oldValue, const JsonObject& control) override {
+  void onUpdate(const JsonObject& control) override {
     if (control["name"] == "signalConditioning") {
       audioProcessor.setSignalConditioningEnabled(signalConditioning);
     }
@@ -143,7 +143,7 @@ class FastLEDAudioDriver : public Node {
     if (control["name"] == "noiseFloorTracking") {
       audioProcessor.setNoiseFloorTrackingEnabled(noiseFloorTracking);
     }
-    if (control["name"] == "channel" && oldValue != "") {  // not on boot as readPins will do it then
+    if (control["name"] == "channel") {  // } && oldValue != "") {  // not on boot as readPins will do it then
       // recreate with the new channel
       stopService();
       startService();

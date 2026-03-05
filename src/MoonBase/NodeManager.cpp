@@ -78,22 +78,22 @@ void NodeManager::setupDefinition(const JsonArray& controls) {
   }
 }
 
-void NodeManager::onUpdate(const UpdatedItem& updatedItem, const String& originId) {
+void NodeManager::onUpdate(const UpdatedItem& updatedItem) {
   // handle nodes
   if (updatedItem.parent[0] == "nodes") {  // onNodes
     JsonVariant nodeState = _state.data["nodes"][updatedItem.index[0]];
 
     if (updatedItem.name == "name" && updatedItem.parent[1] == "") {  // nodes[i].name
-      handleNodeNameChange(updatedItem, originId, nodeState);
+      handleNodeNameChange(updatedItem, nodeState);
     } else if (updatedItem.name == "on" && updatedItem.parent[1] == "") {  // nodes[i].on
-      handleNodeOnChange(updatedItem, originId, nodeState);
+      handleNodeOnChange(updatedItem, nodeState);
     } else if (updatedItem.parent[1] == "controls" && (updatedItem.name == "value" || updatedItem.name == "default") && updatedItem.index[1] < nodeState["controls"].size()) {  // nodes[i].controls[j].{value|default}
-      handleNodeControlValueChange(updatedItem, originId, nodeState);
+      handleNodeControlValueChange(updatedItem, nodeState);
     }
   }
 }
 
-void NodeManager::handleNodeNameChange(const UpdatedItem& updatedItem, const String& originId, JsonVariant nodeState) {
+void NodeManager::handleNodeNameChange(const UpdatedItem& updatedItem, JsonVariant nodeState) {
   Node* oldNode = updatedItem.index[0] < nodes->size() ? (*nodes)[updatedItem.index[0]] : nullptr;  // find the node in the nodes list
   bool newNode = false;
 
@@ -199,7 +199,7 @@ void NodeManager::handleNodeNameChange(const UpdatedItem& updatedItem, const Str
   #endif
 }
 
-void NodeManager::handleNodeOnChange(const UpdatedItem& updatedItem, const String& originId, JsonVariant nodeState) {
+void NodeManager::handleNodeOnChange(const UpdatedItem& updatedItem, JsonVariant nodeState) {
   if (updatedItem.index[0] < nodes->size()) {
     const char* name = nodeState["name"];
     EXT_LOGD(ML_TAG, "%s on: %s (#%d)", name ? name : "", updatedItem.value.as<String>().c_str(), nodes->size());
@@ -207,7 +207,7 @@ void NodeManager::handleNodeOnChange(const UpdatedItem& updatedItem, const Strin
     if (nodeClass != nullptr) {
       nodeClass->on = updatedItem.value.as<bool>();  // set nodeclass on/off
       xSemaphoreTake(*nodeClass->layerMutex, portMAX_DELAY);
-      nodeClass->onUpdate(updatedItem.oldValue, nodeState);  // custom onUpdate for the node
+      nodeClass->onUpdate(nodeState);  // custom onUpdate for the node
       xSemaphoreGive(*nodeClass->layerMutex);
       nodeClass->requestMappings();
     } else
@@ -215,7 +215,7 @@ void NodeManager::handleNodeOnChange(const UpdatedItem& updatedItem, const Strin
   }
 }
 
-void NodeManager::handleNodeControlValueChange(const UpdatedItem& updatedItem, const String& originId, JsonVariant nodeState) {
+void NodeManager::handleNodeControlValueChange(const UpdatedItem& updatedItem, JsonVariant nodeState) {
   JsonObject control = nodeState["controls"][updatedItem.index[1]];
 
   // if (control[updatedItem.name] == updatedItem.value) {
@@ -227,7 +227,7 @@ void NodeManager::handleNodeControlValueChange(const UpdatedItem& updatedItem, c
     if (nodeClass != nullptr) {
       xSemaphoreTake(*nodeClass->layerMutex, portMAX_DELAY);
       nodeClass->updateControl(control);
-      nodeClass->onUpdate(updatedItem.oldValue, control);  // custom onUpdate for the node
+      nodeClass->onUpdate(control);  // custom onUpdate for the node
       xSemaphoreGive(*nodeClass->layerMutex);
 
       nodeClass->requestMappings();

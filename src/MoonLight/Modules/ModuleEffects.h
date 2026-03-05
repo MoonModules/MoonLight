@@ -377,9 +377,9 @@ class ModuleEffects : public NodeManager {
   }
 
   bool triggerResetPreset = false;
-  void onUpdate(const UpdatedItem& updatedItem, const String& originId) override {
-    NodeManager::onUpdate(updatedItem, originId);
-    if (originId.toInt()) {  // UI triggered
+  void onUpdate(const UpdatedItem& updatedItem) override {
+    NodeManager::onUpdate(updatedItem);
+    if (updatedItem.originId->toInt()) {  // UI triggered
       triggerResetPreset = true;
     }
   }
