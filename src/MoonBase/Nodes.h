@@ -190,13 +190,18 @@ struct SharedData {
   Coord3D gravity;
 
   // FastLED Audio
-  bool vocalsActive = false;
-  float vocalConfidence = 0.0f;
-  float bassLevel = 0.0f;
-  float midLevel = 0.0f;
-  float trebleLevel = 0.0f;
-  bool beat = false;
-  uint8_t percussionType = UINT8_MAX;
+  // bool fl_vocalsActive = false;
+  float fl_vocalConfidence = 0.0f;
+  float fl_bassLevel = 0.0f;
+  float fl_midLevel = 0.0f;
+  float fl_trebleLevel = 0.0f;
+  float fl_bpm = 0;
+  bool fl_beat = false;
+  bool fl_hihat = false;
+  bool fl_kick = false;
+  bool fl_snare = false;
+  bool fl_tom = false;
+  float fl_beatConfidence = 0.0f;
 };
 extern SharedData sharedData;
 

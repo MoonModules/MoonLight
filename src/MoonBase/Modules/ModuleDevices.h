@@ -109,7 +109,7 @@ class ModuleDevices : public Module {
         if (deviceUDP.beginPacket(targetIP, deviceUDPPort)) {
           deviceUDP.write(reinterpret_cast<uint8_t*>(&message), sizeof(message));
           deviceUDP.endPacket();
-          EXT_LOGD(MB_TAG, "UDP from %s update sent to ...%d / %s bri=%d pal=%d preset=%d", updatedItem.originId->c_str(), targetIP[3], message.name.c_str(), message.brightness, message.palette, message.preset);
+          EXT_LOGD(MB_TAG, "UDP from %s update sent to ...%d / %s on=%d bri=%d pal=%d preset=%d", updatedItem.originId->c_str(), targetIP[3], message.name.c_str(), message.lightsOn, message.brightness, message.palette, message.preset);
           // need to add the targetip?
         }
       }

@@ -31,6 +31,8 @@ class SolidEffect : public Node {
     addControlValue("RGB(W)");
     addControlValue("Palette");
     addControlValue("Palette avg");
+    addControlValue("Palette rows");
+    addControlValue("Palette cols");
     addControl(red, "red", "slider");
     addControl(green, "green", "slider");
     addControl(blue, "blue", "slider");
@@ -71,6 +73,14 @@ class SolidEffect : public Node {
       CRGB color = CRGB(sqrt(sumRedSq / nrOfColors), sqrt(sumGreenSq / nrOfColors), sqrt(sumBlueSq / nrOfColors));
 
       for (int index = 0; index < layer->nrOfLights; index++) layer->setRGB(index, color);
+    } else if (colorMode == 3 || colorMode == 4) {
+      for (int x = 0; x < layer->size.x; x++) {
+        for (int y = 0; y < layer->size.y; y++) {
+          for (int z = 0; z < layer->size.z; z++) {
+            layer->setRGB(Coord3D(x, y, z), ColorFromPalette(layerP.palette, map(colorMode == 3?y:x, 0, colorMode == 3?layer->size.y:layer->size.x, 0, 256), brightness));
+          }
+        }
+      }
     }
   }
 };
