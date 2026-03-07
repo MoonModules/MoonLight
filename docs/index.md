@@ -153,7 +153,7 @@ Start creating stunning effects immediately on both mobile and desktop.
 **From 0.6.0 Forward:** Community-driven development focused on ease of use, more effects, and expanded hardware support.
 ### Version 0.7.0 - December 2025
 **Art-Net, board presets and ESP32-P4 release**
-### Version 0.8.0 - Januari 2026
+### Version 0.8.0 - January 2026
 **16K LEDs and more**
 
 See [v0.8.0 Kanban board](https://github.com/users/MoonModules/projects/4) or log an [Issue](https://github.com/MoonModules/MoonLight/issues/new/choose) to report issues or request enhancements.

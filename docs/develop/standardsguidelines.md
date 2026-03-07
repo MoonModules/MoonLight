@@ -52,7 +52,7 @@ MoonLight supports the use of AI. Using AI is a hot topic and different people h
 
 ### AI Principles
 
-MoonLight currently uses CodeRabbit and Claude Code AI tools, using the following principles: **4EP, Unit tests and Reversible**:
+MoonLight currently uses CodeRabbit and Claude Code AI tools, using the following principles: **4EP, Unit tests, Reversible, Attribution and Documentation**:
 
 **4 Eyes Principle (4EP)**
 
@@ -82,6 +82,14 @@ AI tools need to be **reversible** at all times
 
 * Development should never be depending on any AI tool. A commit must always be possible without using AI tools
 * It should be possible at any moment to stop using a specific tool or add / replace another tool.
+
+**Attribution**
+
+Using AI generated code can hide the source of the inspiration / knowledge / sources it used. Document attribution of this in the code, e.g. Github repositories or other websites describing the principles / algorithms used.
+
+**Documentation**
+
+Make sure AI generated code is well documented
 
 ### Contributing
 

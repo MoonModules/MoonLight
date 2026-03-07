@@ -118,17 +118,17 @@ class FastLEDAudioDriver : public Node {
     // });
 
     // Callback: get everything in one struct
-    audioProcessor.onEqualizer([](const fl::Equalizer& eq) {
-      // eq.bass, eq.mid, eq.treble, eq.volume, eq.zcf — all 0.0-1.0
-      // eq.bins — span<const float, 16>, each 0.0-1.0
-      // for (int i = 0; i < 16; ++i) {
-      //   sharedData.bands[i] = static_cast<uint8_t>(eq.bins[i] * 255);
-      // }
-      const float norm = (eq.volumeNormFactor > 0.000001f) ? eq.volumeNormFactor : 1.0f;
-      sharedData.volume = eq.volume / norm;
-      sharedData.volumeRaw = static_cast<int16_t>(sharedData.volume * 32767.0f);
-      // sharedData.majorPeak = eq.dominantMagnitude;
-    });
+    // audioProcessor.onEqualizer([](const fl::Equalizer& eq) {
+    //   eq.bass, eq.mid, eq.treble, eq.volume, eq.zcf — all 0.0-1.0
+    //   eq.bins — span<const float, 16>, each 0.0-1.0
+    //   for (int i = 0; i < 16; ++i) {
+    //     sharedData.bands[i] = static_cast<uint8_t>(eq.bins[i] * 255);
+    //   }
+    //   const float norm = (eq.volumeNormFactor > 0.000001f) ? eq.volumeNormFactor : 1.0f;
+    //   sharedData.volume = eq.volume / norm;
+    //   sharedData.volumeRaw = static_cast<int16_t>(sharedData.volume * 32767.0f);
+    //   // sharedData.majorPeak = eq.dominantMagnitude;
+    // });
   }
 
   void onUpdate(const JsonObject& control) override {
@@ -182,6 +182,11 @@ class FastLEDAudioDriver : public Node {
     sharedData.fl_snare = false;
     // sharedData.percussionType = UINT8_MAX;
 
+    // To verify ...
+    // The FastLED audio input uses a background task/interrupt to fill a sample buffer.
+    // Calling audioInput->read() only once per iteration drains a single sample while leaving the remaining buffered samples unprocessed.
+    // With 44.1 kHz input and typical loop cadence (~20 ms), roughly 800+ samples accumulate and are discarded each frame, causing severe data loss and degraded EQ/beat/BPM detection.
+
     // while (fl::AudioSample sample = audioInput->read()) {
     //   audioProcessor.update(sample);
     // }
@@ -194,9 +199,9 @@ class FastLEDAudioDriver : public Node {
     for (int i = 0; i < 16; ++i) {
       sharedData.bands[i] = static_cast<uint8_t>(audioProcessor.getEqBin(i) * 255);
     }
-    // const float norm = 0.1;  //(audioProcessor.getEqVolumeNormFactor() > 0.000001f) ? audioProcessor.getEqVolumeNormFactor() : 1.0f;
-    // sharedData.volume = audioProcessor.getEqVolume() / norm;
-    // sharedData.volumeRaw = static_cast<int16_t>(sharedData.volume * 32767.0f);
+    const float norm = 0.1;  //(audioProcessor.getEqVolumeNormFactor() > 0.000001f) ? audioProcessor.getEqVolumeNormFactor() : 1.0f;
+    sharedData.volume = audioProcessor.getEqVolume() / norm;
+    sharedData.volumeRaw = static_cast<int16_t>(sharedData.volume * 32767.0f);
 
     sharedData.fl_bassLevel = audioProcessor.getEqBass();
     sharedData.fl_midLevel = audioProcessor.getEqMid();
@@ -210,7 +215,7 @@ class FastLEDAudioDriver : public Node {
     sharedData.fl_snare = audioProcessor.isSnare();
     sharedData.fl_tom = audioProcessor.isTom();
 
-    sharedData.fl_beat = sharedData.fl_beatConfidence > 0.5f;  // audioProcessor.isBeat(); // not implemented...
+    sharedData.fl_beat = sharedData.fl_beatConfidence > 0.5f;  // audioProcessor.isBeat(); // not implemented yet ...
 
     sharedData.fl_bpm = audioProcessor.getBPM();
   }

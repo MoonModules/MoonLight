@@ -97,9 +97,9 @@ If pins for SDA and SCL are defined, I2C devices will be scanned and displayed h
 
 ### MHC ESP32-P4 shield
 
-![MCH ESP32-P4 shield](../MCH-ESP32-P4-shield.png){: style="width: 200px"}
+![MHC ESP32-P4 shield](../MHC-ESP32-P4-shield.png){: style="width: 200px"}
 
-* See [MCH ESP32-P4 shield](https://shop.myhome-control.de/en/ABC-WLED-ESP32-P4-shield/HW10027). Choose the esp32-p4-nano board in the [MoonLight Installer](../../gettingstarted/installer/) 
+* See [MHC ESP32-P4 shield](https://shop.myhome-control.de/en/ABC-WLED-ESP32-P4-shield/HW10027). Choose the esp32-p4-nano board in the [MoonLight Installer](../../gettingstarted/installer/) 
 * On new ESP32-P4 Nano boards, the WiFi coprocessor needs to be updated first to a recent version, currently ESP-Hosted v2.0.17, see the link in the [MoonLight Installer](../../gettingstarted/installer/)
 * After install, select the **MHC P4 Nano Shield** board preset to have the pins assigned correctly.
     * Assuming 100W LED power; change if needed.
@@ -130,7 +130,7 @@ If pins for SDA and SCL are defined, I2C devices will be scanned and displayed h
 
 ### LightCrafter16
 
-![SE-16p](../firmware/installer/images/esp32-s3-lightcrafter16.jpg){: style="width: 200px"}
+![LightCrafter16](../firmware/installer/images/esp32-s3-lightcrafter16.jpg){: style="width: 200px"}
 
 * Choose the esp32-s3-n8r8v board in the [MoonLight Installer](../../gettingstarted/installer/) 
 * Documentation to be soon published on [limpkin's website](https://www.limpkin.fr)

@@ -126,7 +126,7 @@ class ModuleIO : public Module {
     addControlValue(control, "Serg Universal Shield");
     addControlValue(control, "Serg Mini Shield");
     addControlValue(control, "Mathieu SE16 v1");
-    addControlValue(control, "Lightcrafter16");
+    addControlValue(control, "LightCrafter16");
     addControlValue(control, "MyHome-Control V43 controller");
     addControlValue(control, "MyHome-Control V57 PRO controller");
     addControlValue(control, "MyHome-Control P4 Nano Shield V1.0");
