@@ -8,7 +8,7 @@
 
 MoonLight is an open-source lighting platform that scales from art installations to professional stages.
 
-Drive lots of lights or thousands of LEDs with stunning effects running on ESP32 microcontrollers. For creators who demand professional results without enterprise costs. Scales from small installations to large displays.
+MoonLight is open-source software that lets you control a wide range of DMX and LED lights using ESP32 microcontrollers, for home, for artists, and for stages.
 
 <img width="163" src="https://github.com/user-attachments/assets/1afd0d4b-f846-4d5b-8cc9-8fa8586c405b" />
 

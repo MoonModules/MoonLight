@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  Drive lots of DMX or LED lights with stunning effects running on ESP32 microcontrollers. For creators who demand professional results without enterprise costs.
+  MoonLight is open-source software that lets you control a wide range of DMX and LED lights using ESP32 microcontrollers, for home, for artists, and for stages.
 </p>
 
 <p align="center">
@@ -229,7 +229,7 @@ Help us enjoy a good beer, a tasty meal, or a fine club night while we code:
 - [I2SClocklessLedDriver](https://github.com/hpwit/I2SClocklessLedDriver) - Parallel LED control
 - [I2SClocklessVirtualLedDriver](https://github.com/hpwit/I2SClocklessVirtualLedDriver) - Virtual driver
 - [ESPLiveScript](https://github.com/hpwit/ESPLiveScript) - Scripts
-- [WLED-sync](https://github.com/netmindz/WLED-sync) - Audio synchronization
+- [WLED-sync](https://github.com/netmindz/WLED-sync) - WLED Audio synchronization
 
 ---
 
