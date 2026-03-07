@@ -20,6 +20,8 @@
 // 💫 HomeKit native support via HomeSpan (only compiled on boards with FT_HOMEKIT)
 #if FT_ENABLED(FT_HOMEKIT)
   #include "HomeSpan.h"
+
+  /** @brief Convert RGB (0-255 each) to HSV. h is 0-360, s and v are 0-1. */
   static void rgbToHsv(uint8_t r, uint8_t g, uint8_t b, float &h, float &s, float &v) {
     float rf=r/255.f, gf=g/255.f, bf=b/255.f;
     float mx=max(max(rf,gf),bf), mn=min(min(rf,gf),bf), d=mx-mn;
@@ -27,22 +29,35 @@
     if(d==0){h=0;} else if(mx==rf){h=60.f*fmod((gf-bf)/d,6.f);} else if(mx==gf){h=60.f*((bf-rf)/d+2);} else{h=60.f*((rf-gf)/d+4);}
     if(h<0)h+=360.f;
   }
+
+  /** @brief Convert HSV (h: 0-360, s: 0-1, v: 0-1) to RGB (0-255 each). */
   static void hsvToRgb(float h, float s, float v, uint8_t &r, uint8_t &g, uint8_t &b) {
     float c=v*s, x=c*(1.f-fabs(fmod(h/60.f,2.f)-1.f)), m=v-c, rf,gf,bf;
     if(h<60){rf=c;gf=x;bf=0;} else if(h<120){rf=x;gf=c;bf=0;} else if(h<180){rf=0;gf=c;bf=x;}
     else if(h<240){rf=0;gf=x;bf=c;} else if(h<300){rf=x;gf=0;bf=c;} else{rf=c;gf=0;bf=x;}
     r=(uint8_t)((rf+m)*255.5f); g=(uint8_t)((gf+m)*255.5f); b=(uint8_t)((bf+m)*255.5f);
   }
+
   class ModuleHomeAutomation;
+
+  /** @brief HomeSpan LightBulb service bridging HomeKit commands to ModuleLightsControl state. */
   struct MoonLightBulb : Service::LightBulb {
     SpanCharacteristic *power, *brightness, *hue, *saturation;
     ModuleHomeAutomation *module;
+    /** @brief Initialise HomeKit characteristics and store back-reference to the owning module. */
     explicit MoonLightBulb(ModuleHomeAutomation *mod);
+    /** @brief Called by HomeSpan when Apple Home sends a command; forwards to applyFromHomeKit(). */
     boolean update() override;
   };
 #endif
 
-// 💫
+/** @brief Module that exposes a home automation mode selector in the MoonLight UI.
+ *
+ *  Supported modes (runtime-selectable via the GUI dropdown):
+ *  - 0 Off            — no integration active
+ *  - 1 Homebridge HTTP — logs the existing /api/lightscontrol URL for use with an HTTP Homebridge plugin; zero extra flash
+ *  - 2 HomeKit Native  — starts a HomeKit Accessory Protocol server via HomeSpan (S3/P4 only, requires FT_HOMEKIT=1)
+ */
 class ModuleHomeAutomation : public Module {
  private:
   ModuleLightsControl *_lightsControl;
@@ -52,9 +67,11 @@ class ModuleHomeAutomation : public Module {
 #endif
 
  public:
+  /** @brief Construct the module, storing a reference to ModuleLightsControl for bidirectional state sync. */
   ModuleHomeAutomation(PsychicHttpServer *server, ESP32SvelteKit *sveltekit, ModuleLightsControl *lightsControl)
       : Module("homeautomation", server, sveltekit), _lightsControl(lightsControl) {}
 
+  /** @brief Start HomeKit if the persisted mode is HomeKit Native, and register a state-change listener on ModuleLightsControl. */
   void begin() override {
     Module::begin();
 #if FT_ENABLED(FT_HOMEKIT)
@@ -63,6 +80,7 @@ class ModuleHomeAutomation : public Module {
 #endif
   }
 
+  /** @brief Register the homeAutomation select control. Options depend on compile-time FT_HOMEKIT flag. */
   void setupDefinition(const JsonArray &controls) override {
     JsonObject control = addControl(controls, "homeAutomation", "select");
     control["default"] = 0;
@@ -74,6 +92,7 @@ class ModuleHomeAutomation : public Module {
 #endif
   }
 
+  /** @brief React to homeAutomation mode changes: log the Homebridge URL or start the HomeKit server. */
   void onUpdate(const UpdatedItem &updatedItem) override {
     if (updatedItem.name != "homeAutomation") return;
     uint8_t mode = _state.data["homeAutomation"];
@@ -86,8 +105,10 @@ class ModuleHomeAutomation : public Module {
   }
 
 #if FT_ENABLED(FT_HOMEKIT)
+  /** @brief Poll the HomeSpan HAP server every loop iteration while HomeKit Native mode is active. */
   void loop() override { if (_homeKitStarted) homeSpan.poll(); }
 
+  /** @brief Initialise the HomeSpan accessory tree and start the HAP server. Called once on first activation. */
   void startHomeKit() {
     _homeKitStarted = true;
     String hn = _sveltekit->getWiFiSettingsService()->getHostname();
@@ -103,6 +124,7 @@ class ModuleHomeAutomation : public Module {
     EXT_LOGI(ML_TAG, "HomeKit started as \"%s\"", hn.c_str());
   }
 
+  /** @brief Push the current ModuleLightsControl state (on/off, brightness, RGB→HSV) into HomeKit characteristics. */
   void syncToHomeKit() {
     if (!_lightBulb) return;
     _lightsControl->read([&](ModuleState &state) {
@@ -114,6 +136,7 @@ class ModuleHomeAutomation : public Module {
     }, "homekit-sync");
   }
 
+  /** @brief Apply a HomeKit command to ModuleLightsControl state, converting HSV→RGB and HomeKit brightness to 0-255. */
   void applyFromHomeKit(bool on, int hkBri, float h, float s) {
     uint8_t r, g, b;
     hsvToRgb(h, s / 100.f, 1.f, r, g, b);
@@ -126,10 +149,12 @@ class ModuleHomeAutomation : public Module {
 };  // class ModuleHomeAutomation
 
 #if FT_ENABLED(FT_HOMEKIT)
+/** @brief Initialise all four HomeKit characteristics with sensible defaults. */
 MoonLightBulb::MoonLightBulb(ModuleHomeAutomation *mod) : Service::LightBulb(), module(mod) {
   power=new Characteristic::On(false); brightness=new Characteristic::Brightness(20);
   hue=new Characteristic::Hue(0); saturation=new Characteristic::Saturation(0);
 }
+/** @brief Collect updated characteristic values from HomeSpan and forward them to ModuleLightsControl. */
 boolean MoonLightBulb::update() {
   if (!module) return false;
   module->applyFromHomeKit(
