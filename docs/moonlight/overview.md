@@ -23,7 +23,7 @@ MoonLight consist of the following modules:
 
 ## MoonLight by MoonModules
 
-MoonLight is created by [MoonModules](https://moonmodules.org/). MoonModules is a collective of light artist, hardware- and software developers. We love creating DIY lighting solutions based on microcontrollers, mainly ESP32. Our work can be found on GitHub and we use mainly [Discord]([Discord](https://discord.com/channels/700041398778331156/1203994211301728296)) for communications. We develop our products for a large community of light enthusiasts and make products we show to the world, e.g. on art-exhibitions, in venues, or at festivals. See also [about](https://moonmodules.org/about/).
+MoonLight is created by [MoonModules](https://moonmodules.org/). MoonModules is a collective of light artist, hardware- and software developers. We love creating DIY lighting solutions based on microcontrollers, mainly ESP32. Our work can be found on GitHub and we use mainly [Discord](https://discord.com/channels/700041398778331156/1203994211301728296) for communications. We develop our products for a large community of light enthusiasts and make products we show to the world, e.g. on art-exhibitions, in venues, or at festivals. See also [about](https://moonmodules.org/about/).
 Our flagship product is WLED-MM, a fork of WLED focussing on driving more LEDs, new platforms (e.g. ESP32-P4), better audio and so on. As currently most of the MoonModules team are also core developers of WLED, WLED-MM functionality is slowly moving to WLED.
 
 Started in 2023 we are also developing a new product based on our experience working with WLED called MoonLight. MoonLight is a modern alternative to WLED, with a modern UI, supporting 1D, 2D and 3D layouts, effects and modifiers, live scripts and led drivers.
@@ -114,7 +114,7 @@ MoonLight
 * Improve the UI (Svelte 5, DaisyUI 5, TailWind 4)
   * e.g. File Manager, Multi row layout, Monitor (WebGL)
 * Tune FastLED, add FastLED 2D effects
-* CI automation (Generate daily builds in Github and use by installer)
+* CI automation (Generate daily builds in GitHub and use by installer)
 * Palettes: more, custom, audio-reactive
 * ...
 
@@ -134,8 +134,8 @@ Effects, Modifiers, Layouts and drivers use emoji's to visualize their usage. Se
 * 🚥 Layout
 * ☸️ Driver
 
-* ♫ Audio-reactive FFT based
-* ♪ Audio-reactive volume based
+* ♫ Audio-reactive FFT-based
+* ♪ Audio-reactive volume-based
 * 💡 supports up to 0D
 * 📏 supports up to 1D
 * 🟦 supports up to 2D

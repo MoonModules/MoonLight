@@ -2,7 +2,7 @@
     @title     MoonBase Unit Tests
     @file      test_utilities.cpp
     @repo      https://github.com/MoonModules/MoonLight
-    @Copyright © 2026 Github MoonLight Commit Authors
+    @Copyright © 2026 GitHub MoonLight Commit Authors
     @license   GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007
 
     Native unit tests for pure functions from PureFunctions.h and Coord3D.h.

@@ -4,7 +4,7 @@
     @repo      https://github.com/MoonModules/MoonLight, submit changes to this file as PRs
     @Authors   https://github.com/MoonModules/MoonLight/commits/main
     @Doc       https://moonmodules.org/MoonLight/moonlight/overview/
-    @Copyright © 2026 Github MoonLight Commit Authors
+    @Copyright © 2026 GitHub MoonLight Commit Authors
     @license   GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007
     @license   For non GPL-v3 usage, commercial licenses must be purchased. Contact us for more information.
 **/
@@ -199,7 +199,7 @@ class FastLEDAudioDriver : public Node {
     for (int i = 0; i < 16; ++i) {
       sharedData.bands[i] = static_cast<uint8_t>(audioProcessor.getEqBin(i) * 255);
     }
-    const float norm = 0.1;  //(audioProcessor.getEqVolumeNormFactor() > 0.000001f) ? audioProcessor.getEqVolumeNormFactor() : 1.0f;
+    const float norm = (audioProcessor.getEqVolumeNormFactor() > 0.000001f) ? audioProcessor.getEqVolumeNormFactor() : 1.0f;
     sharedData.volume = audioProcessor.getEqVolume() / norm;
     sharedData.volumeRaw = static_cast<int16_t>(sharedData.volume * 32767.0f);
 

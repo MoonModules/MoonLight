@@ -30,7 +30,7 @@ A good description helps us to review and understand your proposed changes. For 
 
 While the PR is open - and under review by maintainers - you may be asked to modify your PR source code.
 You can simply update your own branch, and push changes in response to reviewer recommendations. 
-Github will pick up the changes so your PR stays up-to-date.
+GitHub will pick up the changes so your PR stays up-to-date.
 
 !!! warning "Do not use force-push while your PR is open!"
     * It has many subtle and unexpected consequences on our GitHub repository.
@@ -85,11 +85,11 @@ AI tools need to be **reversible** at all times
 
 **Attribution**
 
-Using AI generated code can hide the source of the inspiration / knowledge / sources it used. Document attribution of this in the code, e.g. Github repositories or other websites describing the principles / algorithms used.
+Using AI-generated code can hide the source of the inspiration / knowledge / sources it used. Document attribution of this in the code, e.g. GitHub repositories or other websites describing the principles / algorithms used.
 
 **Documentation**
 
-Make sure AI generated code is well documented
+Make sure AI-generated code is well documented
 
 ### Contributing
 

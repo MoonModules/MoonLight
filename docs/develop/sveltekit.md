@@ -120,7 +120,7 @@ This is a checklist, More info on most of the items can be found in the ESP32-Sv
     * interface/src/lib/components/moonbase
     * interface/src/lib/types/moonbase_model.ts
     * interface/src/lib/stores/moonbase_utilities.ts
-* Github repo
+* GitHub repo
     * change license
     * change description
     * change webhook
