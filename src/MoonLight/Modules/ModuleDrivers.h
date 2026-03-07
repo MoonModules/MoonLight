@@ -17,6 +17,7 @@
   #include "FastLED.h"
   #include "MoonBase/NodeManager.h"
   #include "MoonLight/Modules/ModuleLightsControl.h"
+  #include "MoonLight/Nodes/Drivers/D_HomeKit.h"
 
 // #include "Nodes.h" //Nodes.h will include VirtualLayer.h which will include PhysicalLayer.h
 
@@ -106,6 +107,7 @@ class ModuleDrivers : public NodeManager {
     addControlValue(control, getNameAndTags<ArtNetOutDriver>());
     addControlValue(control, getNameAndTags<AudioSyncDriver>());
     addControlValue(control, getNameAndTags<IRDriver>());
+    addControlValue(control, getNameAndTags<HomeKitNode>());
     addControlValue(control, getNameAndTags<IMUDriver>());
     addControlValue(control, getNameAndTags<HUB75Driver>());
 
@@ -147,6 +149,7 @@ class ModuleDrivers : public NodeManager {
     if (!node) node = checkAndAlloc<ArtNetOutDriver>(name);
     if (!node) node = checkAndAlloc<AudioSyncDriver>(name);
     if (!node) node = checkAndAlloc<IRDriver>(name);
+    if (!node) node = checkAndAlloc<HomeKitNode>(name);
     if (!node) node = checkAndAlloc<IMUDriver>(name);
     if (!node) node = checkAndAlloc<HUB75Driver>(name);
 
