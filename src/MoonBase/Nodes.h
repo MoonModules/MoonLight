@@ -4,7 +4,7 @@
     @repo      https://github.com/MoonModules/MoonLight, submit changes to this file as PRs
     @Authors   https://github.com/MoonModules/MoonLight/commits/main
     @Doc       https://moonmodules.org/MoonLight/moonlight/overview/
-    @Copyright © 2026 Github MoonLight Commit Authors
+    @Copyright © 2026 GitHub MoonLight Commit Authors
     @license   GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007
     @license   For non GPL-v3 usage, commercial licenses must be purchased. Contact us for more information.
 **/
@@ -190,13 +190,18 @@ struct SharedData {
   Coord3D gravity;
 
   // FastLED Audio
-  bool vocalsActive = false;
-  float vocalConfidence = 0.0f;
-  float bassLevel = 0.0f;
-  float midLevel = 0.0f;
-  float trebleLevel = 0.0f;
-  bool beat = false;
-  uint8_t percussionType = UINT8_MAX;
+  // bool fl_vocalsActive = false;
+  float fl_vocalConfidence = 0.0f;
+  float fl_bassLevel = 0.0f;
+  float fl_midLevel = 0.0f;
+  float fl_trebleLevel = 0.0f;
+  float fl_bpm = 0;
+  bool fl_beat = false;
+  bool fl_hihat = false;
+  bool fl_kick = false;
+  bool fl_snare = false;
+  bool fl_tom = false;
+  float fl_beatConfidence = 0.0f;
 };
 extern SharedData sharedData;
 

@@ -68,17 +68,27 @@ If pins for SDA and SCL are defined, I2C devices will be scanned and displayed h
 
 ### QuinLed boards
 
-![Dig2Go](https://shop.allnetchina.cn/cdn/shop/products/Led_4.jpg?v=1680836018&width=1600){: style="width:100px"} 
-![DigNext2](https://quinled.info/wp-content/uploads/2026/01/P1087754-Enhanced-NR-2560x1358.jpg){: style="width:100px"}
-![Dig Uno](https://quinled.info/wp-content/uploads/2020/02/QuinLED-Dig-Uno-v3_front.png){: style="width:100px"} 
-![Dig Quad](https://quinled.info/wp-content/uploads/2021/11/QuinLED-Dig-Quad-AB_v3r1-2048x1154.png){: style="width:100px"}
-![Dig Octa](https://quinled.info/wp-content/uploads/2024/10/20240924_141857-2048x1444.png){: style="width:100px"}
+#### Dig-2-Go, Dig-Uno, Dig-Quad
 
-* [Dig2Go](https://quinled.info/quinled-dig2go/), [Dig Uno](https://quinled.info/pre-assembled-quinled-dig-uno/), [Dig Quad](https://quinled.info/pre-assembled-quinled-dig-quad/): Choose the esp32-d0 (4MB) board in the [MoonLight Installer](../../gettingstarted/installer/) 
-    * Dig2Go: Shipped with a 300 LED, GRBW led strip: Choose layout with 300 lights (e.g. Single Column for 1D, Panel 15x20 for 2D). Select Light preset GRBW in the LED Driver.
-    * Currently no OTA support on ESP32-D0 boards: Dig2Go, Uno, Quad.
-* [DigNext2](https://quinled.info/dig-next-2): Choose the esp32-d0-pico2 board in the [MoonLight Installer](../../gettingstarted/installer/) 
-* [Dig Octa](https://quinled.info/quinled-dig-octa/): Choose the esp32-d0-16mb board in the [MoonLight Installer](../../gettingstarted/installer/) 
+![Dig-2-Go](https://shop.allnetchina.cn/cdn/shop/products/Led_4.jpg?v=1680836018&width=1600){: style="width: 200px"} 
+![Dig-Uno](https://quinled.info/wp-content/uploads/2020/02/QuinLED-Dig-Uno-v3_front.png){: style="width: 200px"} 
+![Dig-Quad](https://quinled.info/wp-content/uploads/2021/11/QuinLED-Dig-Quad-AB_v3r1-2048x1154.png){: style="width: 200px"}
+
+* [Dig-2-Go](https://quinled.info/quinled-dig2go/), [Dig-Uno](https://quinled.info/pre-assembled-quinled-dig-uno/), [Dig-Quad](https://quinled.info/pre-assembled-quinled-dig-quad/): Choose the esp32-d0 (4MB) board in the [MoonLight Installer](../../gettingstarted/installer/) 
+    * Dig-2-Go: Shipped with a 300 LED, GRBW led strip: Choose layout with 300 lights (e.g. Single Column for 1D, Panel 15x20 for 2D). Select Light preset GRBW in the LED Driver.
+    * Currently no OTA support on ESP32-D0 boards: Dig-2-Go, Uno, Quad.
+
+#### Dig-Next-2
+
+![Dig-Next-2](https://quinled.info/wp-content/uploads/2026/01/P1087754-Enhanced-NR-2560x1358.jpg){: style="width: 200px"}
+
+* [Dig-Next-2](https://quinled.info/dig-next-2): Choose the esp32-d0-pico2 board in the [MoonLight Installer](../../gettingstarted/installer/) 
+
+#### Dig-Octa
+
+![Dig-Octa](https://quinled.info/wp-content/uploads/2024/10/20240924_141857-2048x1444.png){: style="width: 200px"}
+
+* [Dig-Octa](https://quinled.info/quinled-dig-octa/): Choose the esp32-d0-16mb board in the [MoonLight Installer](../../gettingstarted/installer/) 
 * On first install, erase flash first (Especially when other firmware like WLED was on it) as MoonLight uses a partition scheme with 3MB of flash
 * After install, select the QuinLED board preset to have the pins assigned correctly.
 
@@ -87,11 +97,11 @@ If pins for SDA and SCL are defined, I2C devices will be scanned and displayed h
 
 ### MyHome-Control
 
-### MHC ESP32-P4 shield
+#### MHC ESP32-P4 shield
 
-![MCH ESP32-P4 shield](../MCH-ESP32-P4-shield.png){: style="width:320px"}
+![MHC ESP32-P4 shield](../MHC-ESP32-P4-shield.png){: style="width: 200px"}
 
-* See [MCH ESP32-P4 shield](https://shop.myhome-control.de/en/ABC-WLED-ESP32-P4-shield/HW10027). Choose the esp32-p4-nano board in the [MoonLight Installer](../../gettingstarted/installer/) 
+* See [MHC ESP32-P4 shield](https://shop.myhome-control.de/en/ABC-WLED-ESP32-P4-shield/HW10027). Choose the esp32-p4-nano board in the [MoonLight Installer](../../gettingstarted/installer/) 
 * On new ESP32-P4 Nano boards, the WiFi coprocessor needs to be updated first to a recent version, currently ESP-Hosted v2.0.17, see the link in the [MoonLight Installer](../../gettingstarted/installer/)
 * After install, select the **MHC P4 Nano Shield** board preset to have the pins assigned correctly.
     * Assuming 100W LED power; change if needed.
@@ -103,24 +113,26 @@ If pins for SDA and SCL are defined, I2C devices will be scanned and displayed h
         * On: Pins 33, 25, 32, 36 used for Line in, pin 7 and 8: additional LED pins. 
 * Add the Parallel LED Driver, see [Drivers](../../moonlight/drivers/). It uses [@troyhacks](https://github.com/troyhacks) his parallel IO driver to drive all LED pins configured for the shield.
 
-### MHC V57 PRO
+#### MHC V57 PRO
 
-![MHC V57 PRO](https://shop.myhome-control.de/media/09/90/ff/1771179461/WLED_V57_Bild1a.jpg){: style="width:320px"}
+![MHC V57 PRO](https://shop.myhome-control.de/media/09/90/ff/1771179461/WLED_V57_Bild1a.jpg){: style="width: 200px"}
 
 * See [MHC V57 PRO](https://shop.myhome-control.de/en/ABC-WLED-controller-PRO-V57-with-iMOSFET/HW10030). Choose the esp32-d0-pico2 board in the [MoonLight Installer](../../gettingstarted/installer/)  
 
-### SE16 v1
+### StephanElec
 
-![SE-16p](../firmware/installer/images/esp32-s3-stephanelec-16p.jpg)
+#### SE16 v1
+
+![SE-16p](../firmware/installer/images/esp32-s3-stephanelec-16p.jpg){: style="width: 200px"}
 
 * Choose the esp32-s3-n8r8v board in the [MoonLight Installer](../../gettingstarted/installer/) 
 * Set Switch1 the same as you set the jumper on the board: off / default: Infrared. on: Ethernet.
 * Only 5 boards were ever produced. If you are one of the lucky few, feel free to reach out to limpkin on [Discord](https://discord.gg/TC8NSUSCdV)
 
 
-### LightCrafter16
+#### LightCrafter16
 
-![SE-16p](../firmware/installer/images/esp32-s3-lightcrafter16.jpg)
+![LightCrafter16](../firmware/installer/images/esp32-s3-lightcrafter16.jpg){: style="width: 200px"}
 
 * Choose the esp32-s3-n8r8v board in the [MoonLight Installer](../../gettingstarted/installer/) 
 * Documentation to be soon published on [limpkin's website](https://www.limpkin.fr)

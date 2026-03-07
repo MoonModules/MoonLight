@@ -4,7 +4,7 @@
     @repo      https://github.com/MoonModules/MoonLight, submit changes to this file as PRs
     @Authors   https://github.com/MoonModules/MoonLight/commits/main
     @Doc       https://moonmodules.org/MoonLight/moonlight/overview/
-    @Copyright © 2026 Github MoonLight Commit Authors
+    @Copyright © 2026 GitHub MoonLight Commit Authors
     @license   GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007
     @license   For non GPL-v3 usage, commercial licenses must be purchased. Contact us for more information.
 **/
@@ -54,80 +54,81 @@ class FastLEDAudioDriver : public Node {
     ioUpdateHandler = moduleIO->addUpdateHandler([this](const String& originId) { readPins(); });
     readPins();  // Node added at runtime so initial IO update not received so run explicitly
 
-    audioProcessor.onBeat([]() {
-      sharedData.beat = true;
-      // EXT_LOGD(ML_TAG, "onBeat");
-    });
+    // audioProcessor.onBeat([]() {
+    //   sharedData.beat = true;
+    //   // EXT_LOGD(ML_TAG, "onBeat");
+    // });
 
-    audioProcessor.onVocalStart([]() {
-      sharedData.vocalsActive = true;
-      // EXT_LOGD(ML_TAG, "onVocalStart");
-    });
+    // audioProcessor.onVocalStart([]() {
+    //   sharedData.vocalsActive = true;
+    //   // EXT_LOGD(ML_TAG, "onVocalStart");
+    // });
 
-    audioProcessor.onVocalEnd([]() {
-      sharedData.vocalsActive = false;
-      // EXT_LOGD(ML_TAG, "onVocalEnd");
-    });
+    // audioProcessor.onVocalEnd([]() {
+    //   sharedData.vocalsActive = false;
+    //   // EXT_LOGD(ML_TAG, "onVocalEnd");
+    // });
 
-    audioProcessor.onVocalConfidence([](float confidence) {
-      sharedData.vocalConfidence = sharedData.vocalsActive ? confidence : 0.0;
-      // EXT_LOGD(ML_TAG, "onVocalConfidence %d", confidence);
-    });
+    // audioProcessor.onVocalConfidence([](float confidence) {
+    //   sharedData.vocalConfidence = sharedData.vocalsActive ? confidence : 0.0;
+    //   // EXT_LOGD(ML_TAG, "onVocalConfidence %d", confidence);
+    // });
 
-    audioProcessor.onBass([](float level) {
-      if (level > 0.01f) {
-        sharedData.bassLevel = level;
-        // EXT_LOGD(ML_TAG, "onBass: %f", level);
-      }
-    });
+    // audioProcessor.onBass([](float level) {
+    //   if (level > 0.01f) {
+    //     sharedData.bassLevel = level;
+    //     // EXT_LOGD(ML_TAG, "onBass: %f", level);
+    //   }
+    // });
 
-    audioProcessor.onMid([](float level) {
-      if (level > 0.01f) {
-        sharedData.midLevel = level;
-        // EXT_LOGD(ML_TAG, "onMid: %f", level);
-      }
-    });
+    // audioProcessor.onMid([](float level) {
+    //   if (level > 0.01f) {
+    //     sharedData.midLevel = level;
+    //     // EXT_LOGD(ML_TAG, "onMid: %f", level);
+    //   }
+    // });
 
-    audioProcessor.onTreble([](float level) {
-      if (level > 0.01f) {
-        sharedData.trebleLevel = level;
-        // EXT_LOGD(ML_TAG, "onTreble: %f", level);
-      }
-    });
-    audioProcessor.onPercussion([](fl::PercussionType type) {
-      // EXT_LOGD(ML_TAG, "onPercussion: %d", type);
-      sharedData.percussionType = (uint8_t)type;
-    });
+    // audioProcessor.onTreble([](float level) {
+    //   if (level > 0.01f) {
+    //     sharedData.trebleLevel = level;
+    //     // EXT_LOGD(ML_TAG, "onTreble: %f", level);
+    //   }
+    // });
 
-    // Each drum hit triggers a different color
-    audioProcessor.onKick([]() {
-      // gFlashColor = CRGB::Red;
-    });
+    // audioProcessor.onPercussion([](fl::PercussionType type) {
+    //   // EXT_LOGD(ML_TAG, "onPercussion: %d", type);
+    //   sharedData.percussionType = (uint8_t)type;
+    // });
 
-    audioProcessor.onSnare([]() {
-      // gFlashColor = CRGB::Yellow;
-    });
+    // // Each drum hit triggers a different color
+    // audioProcessor.onKick([]() {
+    //   // gFlashColor = CRGB::Red;
+    // });
 
-    audioProcessor.onHiHat([]() {
-      // gFlashColor = CRGB::Cyan;
-    });
+    // audioProcessor.onSnare([]() {
+    //   // gFlashColor = CRGB::Yellow;
+    // });
 
-    audioProcessor.onTom([]() {
-      // gFlashColor = CRGB::Purple;
-    });
+    // audioProcessor.onHiHat([]() {
+    //   // gFlashColor = CRGB::Cyan;
+    // });
+
+    // audioProcessor.onTom([]() {
+    //   // gFlashColor = CRGB::Purple;
+    // });
 
     // Callback: get everything in one struct
-    audioProcessor.onEqualizer([](const fl::Equalizer& eq) {
-      // eq.bass, eq.mid, eq.treble, eq.volume, eq.zcf — all 0.0-1.0
-      // eq.bins — span<const float, 16>, each 0.0-1.0
-      for (int i = 0; i < 16; ++i) {
-        sharedData.bands[i] = static_cast<uint8_t>(eq.bins[i] * 255);
-      }
-      const float norm = (eq.volumeNormFactor > 0.000001f) ? eq.volumeNormFactor : 1.0f;
-      sharedData.volume = eq.volume / norm;
-      sharedData.volumeRaw = static_cast<int16_t>(sharedData.volume * 32767.0f);
-      // sharedData.majorPeak = eq.dominantMagnitude;
-    });
+    // audioProcessor.onEqualizer([](const fl::Equalizer& eq) {
+    //   eq.bass, eq.mid, eq.treble, eq.volume, eq.zcf — all 0.0-1.0
+    //   eq.bins — span<const float, 16>, each 0.0-1.0
+    //   for (int i = 0; i < 16; ++i) {
+    //     sharedData.bands[i] = static_cast<uint8_t>(eq.bins[i] * 255);
+    //   }
+    //   const float norm = (eq.volumeNormFactor > 0.000001f) ? eq.volumeNormFactor : 1.0f;
+    //   sharedData.volume = eq.volume / norm;
+    //   sharedData.volumeRaw = static_cast<int16_t>(sharedData.volume * 32767.0f);
+    //   // sharedData.majorPeak = eq.dominantMagnitude;
+    // });
   }
 
   void onUpdate(const JsonObject& control) override {
@@ -174,12 +175,49 @@ class FastLEDAudioDriver : public Node {
   void loop() override {
     if (!audioInput) return;
 
-    sharedData.beat = false;
-    sharedData.percussionType = UINT8_MAX;
+    sharedData.fl_beat = false;
+    sharedData.fl_kick = false;
+    sharedData.fl_tom = false;
+    sharedData.fl_hihat = false;
+    sharedData.fl_snare = false;
+    // sharedData.percussionType = UINT8_MAX;
 
-    while (fl::AudioSample sample = audioInput->read()) {
+    // To verify ...
+    // The FastLED audio input uses a background task/interrupt to fill a sample buffer.
+    // Calling audioInput->read() only once per iteration drains a single sample while leaving the remaining buffered samples unprocessed.
+    // With 44.1 kHz input and typical loop cadence (~20 ms), roughly 800+ samples accumulate and are discarded each frame, causing severe data loss and degraded EQ/beat/BPM detection.
+
+    // while (fl::AudioSample sample = audioInput->read()) {
+    //   audioProcessor.update(sample);
+    // }
+
+    fl::AudioSample sample = audioInput->read();
+    if (sample.isValid()) {
       audioProcessor.update(sample);
     }
+
+    for (int i = 0; i < 16; ++i) {
+      sharedData.bands[i] = static_cast<uint8_t>(audioProcessor.getEqBin(i) * 255);
+    }
+    const float norm = (audioProcessor.getEqVolumeNormFactor() > 0.000001f) ? audioProcessor.getEqVolumeNormFactor() : 1.0f;
+    sharedData.volume = audioProcessor.getEqVolume() / norm;
+    sharedData.volumeRaw = static_cast<int16_t>(sharedData.volume * 32767.0f);
+
+    sharedData.fl_bassLevel = audioProcessor.getEqBass();
+    sharedData.fl_midLevel = audioProcessor.getEqMid();
+    sharedData.fl_trebleLevel = audioProcessor.getEqTreble();
+
+    sharedData.fl_vocalConfidence = audioProcessor.getVocalConfidence();
+    sharedData.fl_beatConfidence = audioProcessor.getBeatConfidence();
+
+    sharedData.fl_hihat = audioProcessor.isHiHat();
+    sharedData.fl_kick = audioProcessor.isKick();
+    sharedData.fl_snare = audioProcessor.isSnare();
+    sharedData.fl_tom = audioProcessor.isTom();
+
+    sharedData.fl_beat = sharedData.fl_beatConfidence > 0.5f;  // audioProcessor.isBeat(); // not implemented yet ...
+
+    sharedData.fl_bpm = audioProcessor.getBPM();
   }
 
   void startService() {

@@ -9,10 +9,10 @@ The development environment consists of
     * git
     * python
 
-* Github manager
+* GitHub manager
     * GitKraken (recommended)
     * GitHub Desktop
-    * No Github manager (not recommended)
+    * No GitHub manager (not recommended)
 
 ## Summary
 

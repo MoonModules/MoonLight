@@ -4,7 +4,7 @@
     @repo      https://github.com/MoonModules/MoonLight, submit changes to this file as PRs
     @Authors   https://github.com/MoonModules/MoonLight/commits/main
     @Doc       https://moonmodules.org/MoonLight/moonbase/inputoutput/
-    @Copyright © 2026 Github MoonLight Commit Authors
+    @Copyright © 2026 GitHub MoonLight Commit Authors
     @license   GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007
     @license   For non GPL-v3 usage, commercial licenses must be purchased. Contact us for more information.
 **/
@@ -118,15 +118,15 @@ class ModuleIO : public Module {
     control = addControl(controls, "boardPreset", "select");
     control["default"] = 0;
     addControlValue(control, BUILD_TARGET);  // 0 none
-    addControlValue(control, "QuinLED Dig2Go");
-    addControlValue(control, "QuinLED DigNext2");
-    addControlValue(control, "QuinLED Dig Uno v3");
-    addControlValue(control, "QuinLED Dig Quad v3");
-    addControlValue(control, "QuinLED Dig Octa v2");
+    addControlValue(control, "QuinLED Dig-2-Go");
+    addControlValue(control, "QuinLED Dig-Next-2");
+    addControlValue(control, "QuinLED Dig-Uno v3");
+    addControlValue(control, "QuinLED Dig-Quad v3");
+    addControlValue(control, "QuinLED Dig-Octa v2");
     addControlValue(control, "Serg Universal Shield");
     addControlValue(control, "Serg Mini Shield");
     addControlValue(control, "Mathieu SE16 v1");
-    addControlValue(control, "Lightcrafter16");
+    addControlValue(control, "LightCrafter16");
     addControlValue(control, "MyHome-Control V43 controller");
     addControlValue(control, "MyHome-Control V57 PRO controller");
     addControlValue(control, "MyHome-Control P4 Nano Shield V1.0");
@@ -348,7 +348,7 @@ class ModuleIO : public Module {
       pinAssigner.assignPin(45, pin_PHY_IRQ);   // WIZ850IO nINT
       pinAssigner.assignPin(4, pin_Infrared);
     } else if (boardID == board_QuinLEDDig2Go) {
-      // dig2go
+      // Dig-2-Go
       newState["maxPower"] = 10;  // USB powered: 2A / 10W
       pinAssigner.assignPin(0, pin_Button_Push_LightsOn);
       pinAssigner.assignPin(5, pin_Infrared);
@@ -384,7 +384,7 @@ class ModuleIO : public Module {
       //   pinAssigner.assignPin(13, pin_Relay_LightsOn);
       //   pinAssigner.assignPin(5, pin_LED);
     } else if (boardID == board_QuinLEDDigNext2) {
-      // digNext2
+      // Dig-Next-2
       newState["maxPower"] = 65;
       pinAssigner.assignPin(2, pin_LED);
       pinAssigner.assignPin(4, pin_LED);
