@@ -26,7 +26,7 @@
     float rf=r/255.f, gf=g/255.f, bf=b/255.f;
     float mx=max(max(rf,gf),bf), mn=min(min(rf,gf),bf), d=mx-mn;
     v=mx; s=(mx>0)?d/mx:0;
-    if(d==0){h=0;} else if(mx==rf){h=60.f*fmod((gf-bf)/d,6.f);} else if(mx==gf){h=60.f*((bf-rf)/d+2);} else{h=60.f*((rf-gf)/d+4);}
+    if(d<1e-6f){h=0;} else if(mx==rf){h=60.f*fmod((gf-bf)/d,6.f);} else if(mx==gf){h=60.f*((bf-rf)/d+2);} else{h=60.f*((rf-gf)/d+4);}
     if(h<0)h+=360.f;
   }
 
@@ -92,7 +92,7 @@ class ModuleHomeAutomation : public Module {
 #endif
   }
 
-  /** @brief React to homeAutomation mode changes: log the Homebridge URL or start the HomeKit server. */
+  /** @brief React to homeAutomation mode changes: log the Homebridge URL, start, stop, or sync the HomeKit server. */
   void onUpdate(const UpdatedItem &updatedItem) override {
     if (updatedItem.name != "homeAutomation") return;
     uint8_t mode = _state.data["homeAutomation"];
@@ -101,6 +101,7 @@ class ModuleHomeAutomation : public Module {
                _sveltekit->getWiFiSettingsService()->getHostname().c_str());
 #if FT_ENABLED(FT_HOMEKIT)
     if (mode == 2) { if (!_homeKitStarted) startHomeKit(); else syncToHomeKit(); }
+    else if (_homeKitStarted) stopHomeKit();
 #endif
   }
 
@@ -134,6 +135,13 @@ class ModuleHomeAutomation : public Module {
       _lightBulb->brightness->setVal((int)(state.data["brightness"].as<uint8_t>() / 2.55f + 0.5f));
       _lightBulb->hue->setVal(h); _lightBulb->saturation->setVal(s * 100.f);
     }, "homekit-sync");
+  }
+
+  /** @brief Stop the HomeKit server by halting poll() and resetting state; HomeSpan cannot be fully uninitialised at runtime. */
+  void stopHomeKit() {
+    _homeKitStarted = false;
+    _lightBulb = nullptr;
+    EXT_LOGI(ML_TAG, "HomeKit stopped (poll disabled; re-enable by selecting HomeKit Native again)");
   }
 
   /** @brief Apply a HomeKit command to ModuleLightsControl state, converting HSV→RGB and HomeKit brightness to 0-255. */
