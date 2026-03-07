@@ -107,6 +107,8 @@ ModuleDrivers moduleDrivers = ModuleDrivers(&server, &esp32sveltekit, &fileManag
       #include "MoonLight/Modules/ModuleLiveScripts.h"
 ModuleLiveScripts moduleLiveScripts = ModuleLiveScripts(&server, &esp32sveltekit, &fileManager, &moduleEffects, &moduleDrivers);
     #endif
+    #include "MoonLight/Modules/ModuleHomeAutomation.h"
+ModuleHomeAutomation moduleHomeAutomation = ModuleHomeAutomation(&server, &esp32sveltekit, &moduleLightsControl);
 ModuleChannels moduleChannels = ModuleChannels(&server, &esp32sveltekit);
 ModuleMoonLightInfo moduleMoonLightInfo = ModuleMoonLightInfo(&server, &esp32sveltekit);
 
@@ -293,6 +295,7 @@ void setup() {
   modules.push_back(&moduleDevices);  // In MoonLight for the time being, should move to MoonBase using moduleControlCenter ...
   modules.push_back(&moduleDrivers);
   modules.push_back(&moduleLightsControl);
+  modules.push_back(&moduleHomeAutomation);
   modules.push_back(&moduleChannels);
   modules.push_back(&moduleMoonLightInfo);
   #if FT_ENABLED(FT_LIVESCRIPT)
