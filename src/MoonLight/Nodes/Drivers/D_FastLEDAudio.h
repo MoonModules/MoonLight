@@ -13,11 +13,11 @@
 
 #if FT_MOONLIGHT
 
-  #include "fl/audio.h"
+  #include "fl/audio/audio.h"
   #include "fl/audio/audio_processor.h"
   #include "fl/audio/detectors/equalizer.h"
-  #include "fl/audio_input.h"
-  #include "fl/time_alpha.h"
+  #include "fl/audio/audio_input.h"
+  // #include "fl/time_alpha.h"
 
 // https://github.com/FastLED/FastLED/blob/master/src/fl/audio/README.md
 

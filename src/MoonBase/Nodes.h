@@ -78,9 +78,13 @@ class Node {
     bool newControl = false;
     JsonObject control = findOrCreateControl(name, newControl);
 
+    EXT_LOGD(ML_TAG, "%s: %s %d-%d %d (%s) %d", name ? name : "", type, min, max, ro, desc ? desc : "", newControl);
+
     if (newControl) control["value"] = variable;  // set default value for new controls
     control["default"] = variable;
     control["p"] = reinterpret_cast<uintptr_t>(&variable);
+
+    if (strcmp(type, "select") == 0) control.remove("values");  // will be re-added by addControlValue
 
     // encode ControlType as a size code for the non-template helper
     uint8_t sizeCode = 0;
@@ -104,14 +108,8 @@ class Node {
     return setupControl(name, type, min, max, ro, desc, sizeCode, sizeof(variable), newControl, control);
   }
 
-  template <typename T>
-  void addControlValue(const T& value) {
-    if (controls.size() == 0) return;                                   // guard against empty controls
-    JsonObject control = controls[controls.size() - 1];                 // last control
-    if (control["values"].isNull()) control["values"].to<JsonArray>();  // add array of values
-    JsonArray values = control["values"];
-    values.add(value);
-  }
+  // add select options to select control
+  void addControlValue(const char * value);
 
   // called in addControl (oldValue = "") and in NodeManager onUpdate nodes[i].control[j]
   void updateControl(const JsonObject& control);  // see Nodes.cpp for implementation
@@ -195,7 +193,7 @@ struct SharedData {
   float fl_bassLevel = 0.0f;
   float fl_midLevel = 0.0f;
   float fl_trebleLevel = 0.0f;
-  float fl_bpm = 0;
+  float fl_bpm = 0.0f;
   bool fl_beat = false;
   bool fl_hihat = false;
   bool fl_kick = false;

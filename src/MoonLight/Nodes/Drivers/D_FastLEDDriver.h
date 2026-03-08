@@ -38,7 +38,7 @@ class FastLEDDriver : public DriverNode {
     addControlValue("RMT");
     addControlValue("I2S");  // #ifndef CONFIG_IDF_TARGET_ESP32 ... not now as it changes the order numbering
     addControlValue("SPI");
-  #if CONFIG_IDF_TARGET_ESP32P4
+  #if CONFIG_IDF_TARGET_ESP32P4 || CONFIG_IDF_TARGET_ESP32C6
     addControlValue("Parlio");
   #endif
     addControl(engine, "engine", "text", 0, 32, true);  // the resolved engine based on affinity

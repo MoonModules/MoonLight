@@ -183,9 +183,9 @@
 		{/if}
 	{:else if property.type == 'select' || property.type == 'selectFile'}
 		<select bind:value onchange={onChange} class="select">
-			{#each property.values as value, index (index)}
-				<option value={property.type == 'selectFile' ? value : index}>
-					{value}
+			{#each property.values as optionLabel, index (index)}
+				<option value={property.type == 'selectFile' ? optionLabel : index}>
+					{optionLabel}
 				</option>
 			{/each}
 		</select>

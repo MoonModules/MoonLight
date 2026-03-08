@@ -77,7 +77,11 @@ class SolidEffect : public Node {
       for (int x = 0; x < layer->size.x; x++) {
         for (int y = 0; y < layer->size.y; y++) {
           for (int z = 0; z < layer->size.z; z++) {
-            layer->setRGB(Coord3D(x, y, z), ColorFromPalette(layerP.palette, map(colorMode == 3?y:x, 0, colorMode == 3?layer->size.y:layer->size.x, 0, 256), brightness));
+            int axisValue = colorMode == 3 ? y : x;
+            int axisSize = colorMode == 3 ? layer->size.y : layer->size.x;
+            uint8_t paletteIndex = axisSize <= 1 ? 0 : ::map(axisValue, 0, axisSize - 1, 0, 255);
+            layer->setRGB(Coord3D(x, y, z), ColorFromPalette(layerP.palette, paletteIndex, brightness));
+
           }
         }
       }
