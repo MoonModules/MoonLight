@@ -16,7 +16,7 @@
 		<div class="card-body w-80">
 			<h2 class="card-title text-center text-2xl">Welcome to MoonLight</h2>
 			<p class="py-6 text-center">
-				<b>Effect controller for direct and networked LEDs and lights. By MoonModules.</b>
+				<b>Open-source LED & DMX controller for home, artists, and stages.</b>
 			</p>
 			<span>
 				1 Setup <a class="btn btn-primary" href="/wifi/sta">WiFi</a>

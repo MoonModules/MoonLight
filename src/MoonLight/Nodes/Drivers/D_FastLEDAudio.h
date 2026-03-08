@@ -14,10 +14,10 @@
 #if FT_MOONLIGHT
 
   #include "fl/audio/audio.h"
+  #include "fl/audio/audio_input.h"
   #include "fl/audio/audio_processor.h"
   #include "fl/audio/detectors/equalizer.h"
-  #include "fl/audio/audio_input.h"
-  // #include "fl/time_alpha.h"
+// #include "fl/time_alpha.h"
 
 // https://github.com/FastLED/FastLED/blob/master/src/fl/audio/README.md
 
@@ -35,21 +35,23 @@ class FastLEDAudioDriver : public Node {
 
   fl::AudioProcessor audioProcessor;
 
-  bool signalConditioning = true;
-  bool autoGain = false;
+  bool signalConditioning = false; // if true nothng is displayed ...
+  // bool autoGain = false;
   bool noiseFloorTracking = false;
   uint8_t channel = fl::Left;
   uint8_t gain = 128;
+  bool drainBuffer = false; // if false 60 fps. otherwise 40 fps
 
   void setup() override {
     addControl(signalConditioning, "signalConditioning", "checkbox");
     addControl(gain, "gain", "slider");
-    addControl(autoGain, "autoGain", "checkbox");
+    // addControl(autoGain, "autoGain", "checkbox"); // option was removed
     addControl(noiseFloorTracking, "noiseFloorTracking", "checkbox");
     addControl(channel, "channel", "select");
     addControlValue("Left");
     addControlValue("Right");
     addControlValue("Both");
+    addControl(drainBuffer, "drainBuffer", "checkbox");
 
     ioUpdateHandler = moduleIO->addUpdateHandler([this](const String& originId) { readPins(); });
     readPins();  // Node added at runtime so initial IO update not received so run explicitly
@@ -135,9 +137,9 @@ class FastLEDAudioDriver : public Node {
     if (control["name"] == "signalConditioning") {
       audioProcessor.setSignalConditioningEnabled(signalConditioning);
     }
-    if (control["name"] == "autoGain") {
-      // audioProcessor.setAutoGainEnabled(autoGain);
-    }
+    // if (control["name"] == "autoGain") {
+    //   audioProcessor.setAutoGainEnabled(autoGain);
+    // }
     if (control["name"] == "gain") {
       audioProcessor.setGain(gain / 128.0f);
     }
@@ -187,13 +189,16 @@ class FastLEDAudioDriver : public Node {
     // Calling audioInput->read() only once per iteration drains a single sample while leaving the remaining buffered samples unprocessed.
     // With 44.1 kHz input and typical loop cadence (~20 ms), roughly 800+ samples accumulate and are discarded each frame, causing severe data loss and degraded EQ/beat/BPM detection.
 
-    // while (fl::AudioSample sample = audioInput->read()) {
-    //   audioProcessor.update(sample);
-    // }
+    if (drainBuffer) {
+      while (fl::AudioSample sample = audioInput->read()) {
+        audioProcessor.update(sample);
+      }
 
-    fl::AudioSample sample = audioInput->read();
-    if (sample.isValid()) {
-      audioProcessor.update(sample);
+    } else {
+      fl::AudioSample sample = audioInput->read();
+      if (sample.isValid()) {
+        audioProcessor.update(sample);
+      }
     }
 
     for (int i = 0; i < 16; ++i) {
