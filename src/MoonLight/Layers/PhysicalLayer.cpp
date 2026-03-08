@@ -21,7 +21,7 @@
 
 extern SemaphoreHandle_t swapMutex;
 
-PhysicalLayer layerP;  // global declaration of the physical layer
+PhysicalLayer layerP;  // global singleton of the physical layer
 
 PhysicalLayer::PhysicalLayer() : ledPins{}, ledPinsAssigned{}, ledsPerPin{} {
   EXT_LOGD(ML_TAG, "constructor");
@@ -278,6 +278,11 @@ void PhysicalLayer::onLayoutPost() {
     }
   }
 }
+// Gamma correction — currently a no-op; reserved for future use.
+uint8_t PhysicalLayer::gamma8(uint8_t b) {
+  return b;
+}
+
 // an effect is using a virtual layer: tell the effect in which layer to run...
 
 // // to be called in setup, if more then one effect

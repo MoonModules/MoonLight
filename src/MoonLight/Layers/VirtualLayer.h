@@ -18,93 +18,94 @@
   #include <vector>
 
   #include "PhysicalLayer.h"
+  #include "PhysMap.h"  // pure types: MapTypeEnum, PhysMap — no ESP32 deps
 
-enum MapTypeEnum {
-  m_zeroLights,
-  m_oneLight,
-  m_moreLights,
-  m_count  // keep as last entry
-};
-
-struct PhysMap {
-  union {
-  #ifdef BOARD_HAS_PSRAM
-    struct {
-      uint8_t rgb[3];
-      uint8_t mapType;
-    };
-    struct {
-      uint32_t indexP : 24;
-      uint32_t mapType_unused1 : 8;
-    };
-    struct {
-      uint32_t indexesIndex : 24;
-      uint32_t mapType_unused2 : 8;
-    };
-    uint32_t raw;
-  #else
-    // 2 bytes struct
-    struct {                 // condensed rgb
-      uint16_t rgb : 14;     // 14 bits (554 RGB)
-      uint16_t mapType : 2;  // 2 bits (4)
-    };  // 16 bits
-    uint16_t indexP : 14;        // 16384 one physical light (type==1) index to ledsP array
-    uint16_t indexesIndex : 14;  // 16384 multiple physical lights (type==2) index in std::vector<std::vector<nrOfLights_t>> mappingTableIndexes;
-  #endif
-  };
-
-  PhysMap() {
-    // EXT_LOGV(ML_TAG, "Constructor");
-    mapType = m_zeroLights;  // the default until indexP is added
-  #ifdef BOARD_HAS_PSRAM
-    memset(rgb, 0, 3);
-  #else
-    rgb = 0;
-  #endif
-  }
-};
-
+// ----------------------------------------------------------------------------
+// VirtualLayer — a logical 3-D grid of virtual pixels mapped to physical lights.
+// Effects and modifiers operate on virtual pixels; this layer translates them
+// to physical channel writes via the mapping table.
+//
+// Lifecycle: constructed by PhysicalLayer, setup() called once, then
+// loop() / loop20ms() called every frame from effectTask / SvelteKit task.
+// The mapping table is rebuilt by onLayoutPre → addLight → onLayoutPost
+// whenever requestMapVirtual is set.
+// ----------------------------------------------------------------------------
 class VirtualLayer {
  public:
+  // Number of virtual lights (set by onLayoutPre, updated by addLight).
   nrOfLights_t nrOfLights = 256;
-  Coord3D size = {16, 16, 1};                                    // not 0,0,0 to prevent div0 eg in Octopus2D
-  Coord3D start = {0, 0, 0}, middle = size / 2, end = size - 1;  //{UINT16_MAX,UINT16_MAX,UINT16_MAX}; //default
 
-  // they will be reused to avoid fragmentation
+  // Virtual grid dimensions (may differ from physical size if modifiers are applied).
+  Coord3D size = {16, 16, 1};  // not 0,0,0 to avoid divide-by-zero in effects like Octopus2D
+
+  // Convenience aliases updated every time size changes.
+  Coord3D start = {0, 0, 0}, middle = size / 2, end = size - 1;
+
+  // Virtual→physical mapping table (one PhysMap per virtual pixel).
+  // Kept allocated between layout passes to avoid heap fragmentation.
   PhysMap* mappingTable = nullptr;
   size_t mappingTableSize = 0;
-  std::vector<std::vector<nrOfLights_t>, VectorRAMAllocator<std::vector<nrOfLights_t> > > mappingTableIndexes;
+
+  // Secondary lookup for m_moreLights entries: each entry is a list of physical indices.
+  // Preserved and reused across layout passes (entries are cleared, vector not freed).
+  std::vector<std::vector<nrOfLights_t>, VectorRAMAllocator<std::vector<nrOfLights_t>>> mappingTableIndexes;
   nrOfLights_t mappingTableIndexesSizeUsed = 0;
 
-  PhysicalLayer* layerP = nullptr;  // physical LEDs the virtual LEDs are mapped to
-  std::vector<Node*, VectorRAMAllocator<Node*> > nodes;
+  // Pointer to the owning physical layer (set by PhysicalLayer constructor).
+  PhysicalLayer* layerP = nullptr;
 
+  // Effect / modifier / layout nodes assigned to this virtual layer.
+  std::vector<Node*, VectorRAMAllocator<Node*>> nodes;
+
+  // Minimum fade amount requested this frame (0 = no fade). Applied at start of loop().
   uint8_t fadeMin = 0;
 
-  uint8_t effectDimension = _3D;  // assuming 3D for the moment
+  // Dimensionality of the current effect (1D / 2D / 3D).
+  uint8_t effectDimension = _3D;
+
+  // Dimensionality of the virtual layer (derived from size in onLayoutPre).
   uint8_t layerDimension = UINT8_MAX;
 
-  Coord3D prevSize;  // to calculate size change
+  // Previous size, used to detect size changes and trigger onSizeChanged().
+  Coord3D prevSize;
 
+  // When true, every virtual index maps 1:1 to a physical index (no mappingTable needed).
   bool oneToOneMapping = false;
 
   VirtualLayer();
-
   ~VirtualLayer();
 
+  // No per-node setup here — nodes are set up by addNode() individually.
   void setup();
+
+  // Run one effect frame: apply fade, update brightness channels, loop all effect nodes.
+  // Called from effectTask (Core 0) every frame.
   void loop();
+
+  // Run 20 ms periodic updates for all nodes (called from SvelteKit task, Core 1).
   void loop20ms();
 
+  // Register an additional physical light index for a given virtual pixel.
+  // Upgrades physMap from m_zeroLights → m_oneLight → m_moreLights as needed.
   void addIndexP(PhysMap& physMap, nrOfLights_t indexP);
 
-  // position is by reference as within XYZ, the position can be modified, for efficiency reasons, don't declare an extra variable for that in XYZ
+  // Map a 3-D virtual coordinate to a flat virtual index, applying all active modifiers.
+  // NOTE: position is passed by reference because modifiers may alter it in-place.
   nrOfLights_t XYZ(Coord3D& position);
 
+  // Map a 3-D virtual coordinate to a flat virtual index without applying modifiers.
+  // Inline for hot-path use by effects that skip XYZ modifier processing.
   nrOfLights_t XYZUnModified(const Coord3D& position) const { return position.x + position.y * size.x + position.z * size.x * size.y; }
 
+  // Apply lightPreset correction to a physical index (e.g. RGB2040 interleaving).
   void presetCorrection(nrOfLights_t& indexP) const;
 
+  // ----------------------------------------------------------------------------
+  // forEachLightIndex — core dispatch: invoke callback for every physical light
+  // that a given virtual index maps to.
+  // Must remain in the header as a template (cannot be moved to .cpp).
+  // onlyOne = true: stop after the first physical light (used by get* functions).
+  // ----------------------------------------------------------------------------
   template <typename Callback>
   void forEachLightIndex(const nrOfLights_t indexV, Callback&& callback, bool onlyOne = false) {
     if (indexV < mappingTableSize) {
@@ -125,18 +126,24 @@ class VirtualLayer {
         }
         break;
       }
-    } else {                                                                                      // no mappnig
-      if ((indexV + 1) * layerP->lights.header.channelsPerLight <= layerP->lights.maxChannels) {  // make sure the light is in the channels array
-        callback(indexV);                                                                         // no presetCorrection here ATM as lightPreset_RGB2040 has a mapping and we want max speed here
+    } else {                                                                                      // no mapping table — direct pass-through
+      if ((indexV + 1) * layerP->lights.header.channelsPerLight <= layerP->lights.maxChannels) {  // bounds check
+        callback(indexV);                                                                         // no presetCorrection here (lightPreset_RGB2040 has a mapping)
       }
     }
   }
 
-  // set the value for a channel in each corresponding physical light
+  // ----------------------------------------------------------------------------
+  // Pixel write methods — inline hot path (called per pixel per frame).
+  // All positions/indices are virtual (mapped to physical by forEachLightIndex).
+  // ----------------------------------------------------------------------------
+
+  // Set one channel value (by offset within a light's channel block) for all physical lights at indexV.
   void setLight(const nrOfLights_t indexV, uint8_t offset, uint8_t value) {
     forEachLightIndex(indexV, [&](nrOfLights_t indexP) { layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + offset] = value; });
   }
 
+  // Write RGB colour to the primary RGBW block of all physical lights at indexV.
   void setRGB(const nrOfLights_t indexV, CRGB color) {
     if (indexV < mappingTableSize && mappingTable[indexV].mapType == m_zeroLights) {
   #ifdef BOARD_HAS_PSRAM
@@ -149,16 +156,15 @@ class VirtualLayer {
   }
   void setRGB(Coord3D pos, CRGB color) { setRGB(XYZ(pos), color); }
 
+  // Write white channel value (only when offsetWhite is configured).
   void setWhite(const nrOfLights_t indexV, const uint8_t value) {
     if (layerP->lights.header.offsetWhite != UINT8_MAX) {
-      // if (layerP->lights.header.channelsPerLight == 4)
-      setLight(indexV, layerP->lights.header.offsetRGBW + 3, value);  // for rgbw lights, w always in third channel
-      // else
-      //   setLight(indexV, layerP->lights.header.offsetRGBW + layerP->lights.header.offsetWhite, value);  // for moving heads
+      setLight(indexV, layerP->lights.header.offsetRGBW + 3, value);
     }
   }
   void setWhite(Coord3D pos, const uint8_t value) { setWhite(XYZ(pos), value); }
 
+  // Write brightness channel, scaled by global brightness (only when offsetBrightness is configured).
   void setBrightness(const nrOfLights_t indexV, uint8_t value) {
     if (layerP->lights.header.offsetBrightness != UINT8_MAX) {
       setLight(indexV, layerP->lights.header.offsetBrightness, (value * layerP->lights.header.brightness) / 255);
@@ -166,6 +172,7 @@ class VirtualLayer {
   }
   void setBrightness(Coord3D pos, const uint8_t value) { setBrightness(XYZ(pos), value); }
 
+  // Moving-head channel setters — each is a no-op if the corresponding offset is not configured.
   void setPan(const nrOfLights_t indexV, const uint8_t value) {
     if (layerP->lights.header.offsetPan != UINT8_MAX) setLight(indexV, layerP->lights.header.offsetPan, value);
   }
@@ -191,6 +198,7 @@ class VirtualLayer {
   }
   void setGobo(Coord3D pos, const uint8_t value) { setGobo(XYZ(pos), value); }
 
+  // Write RGB to secondary RGBW blocks (moving heads with multiple colour wheels).
   void setRGB1(const nrOfLights_t indexV, CRGB color) {
     if (layerP->lights.header.offsetRGBW1 != UINT8_MAX) forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW1], (void*)&color, sizeof(color)); });
   }
@@ -206,19 +214,26 @@ class VirtualLayer {
   }
   void setRGB3(Coord3D pos, CRGB color) { setRGB3(XYZ(pos), color); }
 
+  // Write secondary brightness channel, scaled by global brightness.
   void setBrightness2(const nrOfLights_t indexV, uint8_t value) {
     value = (value * layerP->lights.header.brightness) / 255;
     if (layerP->lights.header.offsetBrightness2 != UINT8_MAX) setLight(indexV, layerP->lights.header.offsetBrightness2, value);
   }
   void setBrightness2(Coord3D pos, const uint8_t value) { setBrightness2(XYZ(pos), value); }
 
-  // get the value for a channel in one! corresponding physical light (the others are the same)
+  // ----------------------------------------------------------------------------
+  // Pixel read methods — inline hot path.
+  // Reads from the first physical light mapped to indexV (onlyOne = true).
+  // ----------------------------------------------------------------------------
+
+  // Read one channel value from the first physical light at indexV.
   uint8_t getLight(const nrOfLights_t indexV, uint8_t offset) {
-    uint8_t value = 0;  // assume 0, not UINT8_MAX as that sets the channel to max
+    uint8_t value = 0;
     forEachLightIndex(indexV, [&](nrOfLights_t indexP) { value = layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + offset]; }, true);
     return value;
   }
 
+  // Read RGB from the primary RGBW block of the first physical light at indexV.
   CRGB getRGB(const nrOfLights_t indexV) {
     if (indexV < mappingTableSize && mappingTable[indexV].mapType == m_zeroLights) {
   #ifdef BOARD_HAS_PSRAM
@@ -238,19 +253,22 @@ class VirtualLayer {
   }
   CRGB getRGB(Coord3D pos) { return getRGB(XYZ(pos)); }
 
+  // Add color to the existing RGB value at a virtual position (saturating add).
   void addRGB(const Coord3D& position, const CRGB& color) {
-    // setRGB(position, getRGB(position) + color); + not working anymore in newest FastLED ???
     CRGB result = getRGB(position);
     result += color;
     setRGB(position, result);
   }
 
+  // Blend a colour toward the existing pixel (blendAmount 0 = all new, 255 = all existing).
   void blendColor(const nrOfLights_t indexV, const CRGB& color, uint8_t blendAmount) { setRGB(indexV, blend(color, getRGB(indexV), blendAmount)); }
   void blendColor(Coord3D position, const CRGB& color, const uint8_t blendAmount) { blendColor(XYZ(position), color, blendAmount); }
 
+  // Read white channel from the first physical light at indexV.
   uint8_t getWhite(const nrOfLights_t indexV) { return getLight(indexV, layerP->lights.header.offsetRGBW + 3); }
   uint8_t getWhite(Coord3D pos) { return getWhite(XYZ(pos)); }
 
+  // Read RGB from secondary colour blocks.
   CRGB getRGB1(const nrOfLights_t indexV) {
     if (layerP->lights.header.offsetRGBW1 == UINT8_MAX) return CRGB::Black;
     CRGB color = CRGB::Black;
@@ -275,100 +293,80 @@ class VirtualLayer {
   }
   CRGB getRGB3(Coord3D pos) { return getRGB3(XYZ(pos)); }
 
-  // to be called in loop, if more then one effect
-  //  void setLightsToBlend(); //uses LEDs
+  // ----------------------------------------------------------------------------
+  // Frame-level fill / fade operations
+  // ----------------------------------------------------------------------------
 
-  void fadeToBlackBy(const uint8_t fadeBy = 255);
+  // Schedule a fade-to-black by fadeBy amount for this frame.
+  // Multiple calls take the minimum (most conservative fade).
+  void fadeToBlackBy(uint8_t fadeBy = 255);
+
+  // Apply the accumulated fadeMin value to all lights and reset it.
   void fadeToBlackMin();
 
+  // Fill all virtual lights with a solid colour.
   void fill_solid(const CRGB& color);
-  void fill_rainbow(const uint8_t initialhue, const uint8_t deltahue);
 
+  // Fill all virtual lights with a rainbow, starting at initialhue, advancing by deltahue per light.
+  void fill_rainbow(uint8_t initialhue, uint8_t deltahue);
+
+  // ----------------------------------------------------------------------------
+  // Layout mapping (called from PhysicalLayer::mapLayout during pass 2)
+  // ----------------------------------------------------------------------------
+
+  // Reset mapping state and apply modifier sizes before addLight() calls.
   void onLayoutPre();
+
+  // Allocate (or reuse) the mapping table and seed it with a 1:1 mapping.
+  // Called internally when a non-1:1 mapping is first detected.
   void createMappingTableAndAddOneToOne();
+
+  // Finalise the mapping table after all addLight() calls; log mapping statistics.
   void onLayoutPost();
 
-  // addLight is called by onLayout for each light in the layout
+  // Register one physical light (at the given position) into this virtual layer.
+  // Applies modifier positions and routes to addIndexP().
   void addLight(Coord3D position);
 
-  // checks if a virtual light is mapped to a physical light (use with XY() or XYZ() to get the indexV)
-  bool isMapped(nrOfLights_t indexV) const { return oneToOneMapping || indexV < mappingTableSize && (mappingTable[indexV].mapType == m_oneLight || mappingTable[indexV].mapType == m_moreLights); }
+  // Returns true if the virtual light at indexV has at least one physical light mapped to it.
+  bool isMapped(nrOfLights_t indexV) const;
 
-  void blur1d(fract8 blur_amount, uint16_t x = 0) {
-    // todo: check updated in wled-MM
-    const uint8_t keep = 255 - blur_amount;
-    const uint8_t seep = blur_amount >> 1;
-    CRGB carryover = CRGB::Black;
-    for (uint16_t row = 0; row < size.y; ++row) {
-      CRGB cur = getRGB(Coord3D(x, row));
-      CRGB part = cur;
-      part.nscale8(seep);
-      cur.nscale8(keep);
-      cur += carryover;
-      if (row) addRGB(Coord3D(x, row - 1), part);
-      setRGB(Coord3D(x, row), cur);
-      carryover = part;
-    }
-    if (size.y) addRGB(Coord3D(x, size.y - 1), carryover);
-  }
+  // ----------------------------------------------------------------------------
+  // Drawing primitives — operate on the virtual grid via setRGB/getRGB.
+  // Large implementations live in VirtualLayer.cpp.
+  // ----------------------------------------------------------------------------
 
-  void blur2d(fract8 blur_amount) {
-    blurRows(blur_amount);
-    blurColumns(blur_amount);
-  }
+  // 1-D blur along a column (x) of the virtual grid.
+  void blur1d(fract8 blur_amount, uint16_t x = 0);
 
-  void blurRows(fract8 blur_amount) {
-    // blur rows same as columns, for irregular matrix
-    uint8_t keep = 255 - blur_amount;
-    uint8_t seep = blur_amount >> 1;
-    for (uint16_t row = 0; row < size.y; row++) {
-      CRGB carryover = CRGB::Black;
-      for (uint16_t col = 0; col < size.x; col++) {
-        CRGB cur = getRGB(Coord3D(col, row));
-        CRGB part = cur;
-        part.nscale8(seep);
-        cur.nscale8(keep);
-        cur += carryover;
-        if (col) addRGB(Coord3D(col - 1, row), part);
-        setRGB(Coord3D(col, row), cur);
-        carryover = part;
-      }
-      if (size.x) addRGB(Coord3D(size.x - 1, row), carryover);
-    }
-  }
+  // 2-D blur: blur all rows then all columns.
+  void blur2d(fract8 blur_amount);
 
-  // blurColumns: perform a blur1d on each column of a rectangular matrix
-  void blurColumns(fract8 blur_amount) {
-    // blur columns
-    uint8_t keep = 255 - blur_amount;
-    uint8_t seep = blur_amount >> 1;
-    for (uint16_t col = 0; col < size.x; ++col) {
-      CRGB carryover = CRGB::Black;
-      for (uint16_t row = 0; row < size.y; row++) {
-        CRGB cur = getRGB(Coord3D(col, row));
-        CRGB part = cur;
-        part.nscale8(seep);
-        cur.nscale8(keep);
-        cur += carryover;
-        if (row) addRGB(Coord3D(col, row - 1), part);
-        setRGB(Coord3D(col, row), cur);
-        carryover = part;
-      }
-      if (size.y) addRGB(Coord3D(col, size.y - 1), carryover);
-    }
-  }
+  // Blur every row independently (horizontal 1-D blur).
+  void blurRows(fract8 blur_amount);
 
+  // Blur every column independently (vertical 1-D blur).
+  void blurColumns(fract8 blur_amount);
+
+  // Draw a 2-D line between (x0,y0) and (x1,y1).
+  // soft = true: Xiaolin Wu anti-aliasing; depth: shorten line (255 = full length).
   void drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, CRGB color, bool soft = false, uint8_t depth = UINT8_MAX);
 
+  // Draw a 3-D line from point a to point b (convenience overload).
   void drawLine3D(const Coord3D& a, Coord3D b, CRGB color, bool soft = false, uint8_t depth = UINT8_MAX) { drawLine3D(a.x, a.y, a.z, b.x, b.y, b.z, color, soft, depth); }
-  // to do: merge with drawLine to support 2D and 3D
+
+  // Draw a 3-D line using Bresenham's 3-D algorithm.
   void drawLine3D(uint8_t x1, uint8_t y1, uint8_t z1, uint8_t x2, uint8_t y2, uint8_t z2, CRGB color, bool soft = false, uint8_t depth = UINT8_MAX);
 
+  // Draw a circle centred at (cx, cy) with the given radius.
+  // soft = true: Xiaolin Wu anti-aliasing.
   void drawCircle(int cx, int cy, uint8_t radius, CRGB col, bool soft);
 
-  // shift is used by drawText indicating which letter it is drawing
+  // Render one ASCII character (32–126) at pixel position (x, y).
+  // shiftPixel: sub-character horizontal scroll offset; shiftChr: character index within a string.
   void drawCharacter(unsigned char chr, int x = 0, int y = 0, uint8_t font = 0, CRGB col = CRGB::Red, uint16_t shiftPixel = 0, uint16_t shiftChr = 0);
 
+  // Render a null-terminated ASCII string at pixel position (x, y), with optional horizontal scroll.
   void drawText(const char* text, int x = 0, int y = 0, uint8_t font = 0, CRGB col = CRGB::Red, uint16_t shiftPixel = 0);
 };
 
