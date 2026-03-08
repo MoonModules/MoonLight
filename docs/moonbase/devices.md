@@ -22,8 +22,6 @@ Overview of MoonLight (and WLED) devices in your local network. MoonLight device
 
 ## Supersync
 
-🆕 in 0.8.1
-
 The Devices module will also implement Supersync. An approach to sync multiple MoonLight devices in the network.
 
 Part 1:

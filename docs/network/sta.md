@@ -23,7 +23,7 @@ so development can focus where it matters most.
 | Country (e.g. "France") | Your device's IP address is sent to [ip-api.com](http://ip-api.com) to look up the country. Only the country field is then forwarded to Google Analytics — the IP itself is not sent to Google. |
 | Firmware type (e.g. `esp32-s3-n16r8v`) | Read from the build configuration. |
 | Board model (e.g. `QuinLED DigQuad`) | Read from board presets (when available). |
-| MoonLight version (e.g. `0.8.0`) | Read from the build. |
+| MoonLight version (e.g. `0.6.0`) | Read from the build. |
 
 No names, email addresses, MAC addresses, or other information that can identify a person are
 collected or sent.

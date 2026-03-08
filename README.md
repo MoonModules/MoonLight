@@ -149,8 +149,10 @@ Start creating stunning effects immediately on both mobile and desktop.
 **Art-Net, board presets and ESP32-P4 release**
 ### Version 0.8.0 - January 2026
 **16K LEDs and more**
+### Version 0.9.0 - March 2026
+**FastLED Channels API, FastLED Audio, sensors and palettes**
 
-See [v0.8.0 Kanban board](https://github.com/users/MoonModules/projects/4) or log an [Issue](https://github.com/MoonModules/MoonLight/issues/new/choose) to report issues or request enhancements.
+See [v0.9.0 Kanban board](https://github.com/users/MoonModules/projects/4) or log an [Issue](https://github.com/MoonModules/MoonLight/issues/new/choose) to report issues or request enhancements.
 
 ---
 
@@ -245,14 +247,14 @@ MoonLight is a [MoonModules.org](https://moonmodules.org) project - Created by t
 
 ## 🔒 Privacy & Analytics
 
-MoonLight **can** send anonymous usage data to Google Analytics when the device restarts.
+MoonLight **can** send anonymous usage data to Google Analytics when the device starts.
 The data is limited to: country, firmware type, board model, and MoonLight version.
 A random, anonymous client ID is generated on each boot — no persistent device or user
 tracking is possible.
 
 **Opt out anytime** via the *Track analytics* toggle in the WiFi → Station settings page.
 
-See [MoonLight analytics](../../network/sta/#moonlight-analytics) for full details,
+See [MoonLight analytics](https://moonmodules.org/MoonLight/network/sta/#moonlight-analytics) for full details,
 including what data is collected, which third parties receive it (ip-api.com and Google
 Analytics).
 
