@@ -43,8 +43,12 @@ class PhysicalLayer {
   // Shared colour palette, used by effects that don't define their own.
   CRGBPalette16 palette = PartyColors_p;
 
-  // Set to true to request a re-run of the physical or virtual layout mapping.
-  // Flags are consumed at the start of loopDrivers().
+  // Layout remap request flags, consumed at the start of loopDrivers().
+  // IMPORTANT: setting requestMapPhysical (pass 1) automatically triggers
+  // requestMapVirtual (pass 2) in loopDrivers() — pass 2 must always follow
+  // pass 1 so the virtual mapping table stays in sync with the physical layout.
+  // Callers should set requestMapPhysical when the physical light count or
+  // positions change, and requestMapVirtual alone when only modifiers change.
   uint8_t requestMapPhysical = false;
   uint8_t requestMapVirtual = false;
 

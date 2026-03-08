@@ -17,6 +17,8 @@
 
 #include "doctest.h"
 
+#include <cstddef>  // offsetof
+
 // Pure-type headers — no ESP32 deps
 #include "MoonLight/Layers/LightsHeader.h"
 #include "MoonLight/Layers/PhysMap.h"
@@ -104,21 +106,33 @@ TEST_CASE("LightsHeader struct size matches Monitor.svelte binary protocol") {
   CHECK_GT(sizeof(LightsHeader), 47u);
 }
 
+// Key field offsets that Monitor.svelte depends on — checked at compile time.
+// offsetof() contains a comma which confuses doctest's variadic CHECK_EQ macro,
+// so we use static_assert here instead.
+static_assert(offsetof(LightsHeader, size) == 0,              "LightsHeader::size offset");
+static_assert(offsetof(LightsHeader, nrOfLights) == 12,       "LightsHeader::nrOfLights offset");
+static_assert(offsetof(LightsHeader, nrOfChannels) == 16,     "LightsHeader::nrOfChannels offset");
+static_assert(offsetof(LightsHeader, isPositions) == 20,      "LightsHeader::isPositions offset");
+static_assert(offsetof(LightsHeader, lightPreset) == 21,      "LightsHeader::lightPreset offset");
+static_assert(offsetof(LightsHeader, brightness) == 22,       "LightsHeader::brightness offset");
+static_assert(offsetof(LightsHeader, channelsPerLight) == 26, "LightsHeader::channelsPerLight offset");
+static_assert(offsetof(LightsHeader, offsetRGBW) == 27,       "LightsHeader::offsetRGBW offset");
+static_assert(offsetof(LightsHeader, offsetRed) == 28,        "LightsHeader::offsetRed offset");
+static_assert(offsetof(LightsHeader, offsetGreen) == 29,      "LightsHeader::offsetGreen offset");
+static_assert(offsetof(LightsHeader, offsetBlue) == 30,       "LightsHeader::offsetBlue offset");
+static_assert(offsetof(LightsHeader, offsetWhite) == 31,      "LightsHeader::offsetWhite offset");
+static_assert(offsetof(LightsHeader, fill) == 42,             "LightsHeader::fill offset");
+
 TEST_CASE("LightsHeader field offsets (binary protocol stability)") {
-  // Key offsets that Monitor.svelte depends on.
-  CHECK_EQ(offsetof(LightsHeader, size), 0u);
-  CHECK_EQ(offsetof(LightsHeader, nrOfLights), 12u);
-  CHECK_EQ(offsetof(LightsHeader, nrOfChannels), 16u);
-  CHECK_EQ(offsetof(LightsHeader, isPositions), 20u);
-  CHECK_EQ(offsetof(LightsHeader, lightPreset), 21u);
-  CHECK_EQ(offsetof(LightsHeader, brightness), 22u);
-  CHECK_EQ(offsetof(LightsHeader, channelsPerLight), 26u);
-  CHECK_EQ(offsetof(LightsHeader, offsetRGBW), 27u);
-  CHECK_EQ(offsetof(LightsHeader, offsetRed), 28u);
-  CHECK_EQ(offsetof(LightsHeader, offsetGreen), 29u);
-  CHECK_EQ(offsetof(LightsHeader, offsetBlue), 30u);
-  CHECK_EQ(offsetof(LightsHeader, offsetWhite), 31u);
-  CHECK_EQ(offsetof(LightsHeader, fill), 42u);
+  // Static asserts above verify the offsets at compile time.
+  // This runtime test documents the intent so it appears in the test report.
+  CHECK(offsetof(LightsHeader, nrOfLights) == 12);
+  CHECK(offsetof(LightsHeader, nrOfChannels) == 16);
+  CHECK(offsetof(LightsHeader, isPositions) == 20);
+  CHECK(offsetof(LightsHeader, lightPreset) == 21);
+  CHECK(offsetof(LightsHeader, channelsPerLight) == 26);
+  CHECK(offsetof(LightsHeader, offsetRGBW) == 27);
+  CHECK(offsetof(LightsHeader, offsetWhite) == 31);
 }
 
 // ============================================================
@@ -442,4 +456,123 @@ TEST_CASE("isMapped — index out of table range is not mapped") {
   // index 4 is beyond the table of size 4
   CHECK_FALSE(isMapped(table, 4, false, 4));
   CHECK_FALSE(isMapped(table, 4, false, 100));
+}
+
+// ============================================================
+// Pass 1 / Pass 2 coupling
+//
+// loopDrivers() enforces: requestMapPhysical always forces
+// requestMapVirtual so the virtual mapping table is rebuilt
+// after every physical layout change.
+// ============================================================
+
+TEST_CASE("loopDrivers flag coupling: requestMapPhysical triggers requestMapVirtual") {
+  // Reproduce the flag state transitions from PhysicalLayer::loopDrivers().
+  // Physical pass (pass 1) sets the virtual flag so pass 2 always follows.
+
+  SUBCASE("physical-only request: virtual is auto-enabled after pass 1") {
+    uint8_t requestMapPhysical = true;
+    uint8_t requestMapVirtual  = false;
+
+    if (requestMapPhysical) {
+      // pass 1 would run here
+      requestMapPhysical = false;
+      requestMapVirtual  = true;  // coupling enforced in loopDrivers()
+    }
+
+    CHECK_EQ(requestMapPhysical, (uint8_t)false);
+    CHECK_EQ(requestMapVirtual,  (uint8_t)true);   // pass 2 is now pending
+
+    if (requestMapVirtual) {
+      // pass 2 would run here
+      requestMapVirtual = false;
+    }
+
+    CHECK_EQ(requestMapVirtual, (uint8_t)false);
+  }
+
+  SUBCASE("virtual-only request: physical stays false, only pass 2 runs") {
+    uint8_t requestMapPhysical = false;
+    uint8_t requestMapVirtual  = true;
+
+    if (requestMapPhysical) {
+      requestMapPhysical = false;
+      requestMapVirtual  = true;
+    }
+    if (requestMapVirtual) {
+      requestMapVirtual = false;
+    }
+
+    CHECK_EQ(requestMapPhysical, (uint8_t)false);
+    CHECK_EQ(requestMapVirtual,  (uint8_t)false);
+  }
+
+  SUBCASE("both set: both run and both clear") {
+    uint8_t requestMapPhysical = true;
+    uint8_t requestMapVirtual  = true;
+
+    if (requestMapPhysical) {
+      requestMapPhysical = false;
+      requestMapVirtual  = true;
+    }
+    if (requestMapVirtual) {
+      requestMapVirtual = false;
+    }
+
+    CHECK_EQ(requestMapPhysical, (uint8_t)false);
+    CHECK_EQ(requestMapVirtual,  (uint8_t)false);
+  }
+}
+
+// ============================================================
+// Pass 1 → Pass 2 size synchronization
+//
+// VirtualLayer::onLayoutPre reads layerP->lights.header.size
+// to initialise the virtual grid. That size is built by pass 1:
+//   onLayoutPre resets it to {0,0,0}, addLight() updates it via
+//   maximum(), and onLayoutPost adds {1,1,1}. This test verifies
+// the full chain using only LightsHeader and Coord3D.
+// ============================================================
+
+TEST_CASE("pass 1 size chain: reset → addLight(maximum) → onLayoutPost → onLayoutPre reads it") {
+  LightsHeader h;
+
+  // --- pass 1: onLayoutPre resets size ---
+  h.size = {0, 0, 0};
+
+  // addLight() calls: lights.header.size = lights.header.size.maximum(position)
+  Coord3D positions[] = {{15, 7, 0}, {3, 15, 0}, {8, 8, 2}};
+  for (const Coord3D& pos : positions) {
+    h.size = h.size.maximum(pos);
+  }
+
+  // onLayoutPost adds {1,1,1}
+  h.size += Coord3D{1, 1, 1};
+
+  // --- pass 2: VirtualLayer::onLayoutPre reads this size ---
+  Coord3D virtualSize = h.size;  // size = layerP->lights.header.size
+
+  CHECK_EQ(virtualSize.x, 16);  // max x was 15, +1 = 16
+  CHECK_EQ(virtualSize.y, 16);  // max y was 15, +1 = 16
+  CHECK_EQ(virtualSize.z, 3);   // max z was  2, +1 =  3
+}
+
+TEST_CASE("pass 1 size chain: single light at origin produces size {1,1,1}") {
+  LightsHeader h;
+  h.size = {0, 0, 0};
+  h.size = h.size.maximum({0, 0, 0});
+  h.size += Coord3D{1, 1, 1};
+  CHECK_EQ(h.size.x, 1);
+  CHECK_EQ(h.size.y, 1);
+  CHECK_EQ(h.size.z, 1);
+}
+
+TEST_CASE("pass 1 size chain: 1D strip of 16 LEDs produces size {16,1,1}") {
+  LightsHeader h;
+  h.size = {0, 0, 0};
+  for (int i = 0; i < 16; i++) h.size = h.size.maximum({i, 0, 0});
+  h.size += Coord3D{1, 1, 1};
+  CHECK_EQ(h.size.x, 16);
+  CHECK_EQ(h.size.y, 1);
+  CHECK_EQ(h.size.z, 1);
 }

@@ -109,6 +109,7 @@ void PhysicalLayer::loopDrivers() {
     mapLayout();
 
     requestMapPhysical = false;
+    requestMapVirtual = true;  // pass 2 must always follow pass 1 so the virtual mapping table reflects the new physical layout
   }
 
   if (requestMapVirtual) {

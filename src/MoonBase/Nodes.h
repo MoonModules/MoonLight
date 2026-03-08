@@ -128,13 +128,13 @@ class Node {
   virtual void onUpdate(const JsonObject& control) {}
 
   void requestMappings() {
-    if (hasModifier() || hasOnLayout()) {
-      // EXT_LOGD(ML_TAG, "hasOnLayout or Modifier -> requestMapVirtual");
-      layerP.requestMapVirtual = true;
-    }
     if (hasOnLayout()) {
       // EXT_LOGD(ML_TAG, "hasOnLayout -> requestMapPhysical");
       layerP.requestMapPhysical = true;
+    }
+    if (hasModifier()) {
+      // EXT_LOGD(ML_TAG, "hasOnLayout or Modifier -> requestMapVirtual");
+      layerP.requestMapVirtual = true;
     }
   }
 

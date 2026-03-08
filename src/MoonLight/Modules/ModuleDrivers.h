@@ -70,7 +70,6 @@ class ModuleDrivers : public NodeManager {
           }
 
           layerP.requestMapPhysical = true;
-          layerP.requestMapVirtual = true;
         },
         _moduleName);
   }  // readPins
