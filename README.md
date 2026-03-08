@@ -243,9 +243,22 @@ MoonLight is a [MoonModules.org](https://moonmodules.org) project - Created by t
 
 ---
 
+## 🔒 Privacy & Analytics
+
+MoonLight **can** send anonymous usage data to Google Analytics when the device restarts.
+The data is limited to: country, firmware type, board model, and MoonLight version.
+A random, anonymous client ID is generated on each boot — no persistent device or user
+tracking is possible.
+
+**Opt out anytime** via the *Track analytics* toggle in the WiFi → Station settings page.
+
+See [MoonLight analytics](../../network/sta/#moonlight-analytics) for full details,
+including what data is collected, which third parties receive it (ip-api.com and Google
+Analytics).
+
 ## ⚠️ Disclaimer
 
-Using this software is at your own risk. While we strive for quality, this software is not bug-free. Contributors to this repository are not liable for any issues, including but not limited to spontaneous combustion of LED strips, hardware damage, or the inevitable heat death of the universe. 🔥🕺🌌
+Using this software is at your own risk. While we strive for quality, this software is not bug-free. Contributors to MoonLight are not liable for any issues, including but not limited to spontaneous combustion of LED strips, or the inevitable heat death of the universe. 🔥🕺🌌
 
 ---
 

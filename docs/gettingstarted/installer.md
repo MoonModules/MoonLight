@@ -75,9 +75,12 @@ The name starts with `ML-` followed by four characters.
 
 <img width="200" src="https://github.com/user-attachments/assets/9a146e3c-1a53-4906-ad2a-d70215efcf4b" />
 
-Select `ML-xxxx`. MoonLight will open in your browser:
+Select `ML-xxxx`. MoonLight will open automatically in your browser (Captive portal):
 
 <img width="350" src="../../media/moonlight/ML-Start.png"/>
+
+!!! Info
+    If MoonLight is opened in a Captive Portal, it is not possible to add Nodes, this is because WebSockets are disabled in captive browsers on some systems (e.g. MacOS). Go to http://4.3.2.1 in a normal browser to have all functionality working.
 
 Follow the steps below.
 
