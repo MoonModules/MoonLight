@@ -3,7 +3,7 @@
    @file      FieldRenderer.svelte
    @repo      https://github.com/MoonModules/MoonLight, submit changes to this file as PRs
    @Authors   https://github.com/MoonModules/MoonLight/commits/main
-   @Copyright © 2026 Github MoonLight Commit Authors
+   @Copyright © 2026 GitHub MoonLight Commit Authors
    @license   GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007
    @license   For non GPL-v3 usage, commercial licenses must be purchased. Contact us for more information.
 
@@ -183,9 +183,9 @@
 		{/if}
 	{:else if property.type == 'select' || property.type == 'selectFile'}
 		<select bind:value onchange={onChange} class="select">
-			{#each property.values as value, index (index)}
-				<option value={property.type == 'selectFile' ? value : index}>
-					{value}
+			{#each property.values as optionLabel, index (index)}
+				<option value={property.type == 'selectFile' ? optionLabel : index}>
+					{optionLabel}
 				</option>
 			{/each}
 		</select>

@@ -4,7 +4,7 @@
     @repo      https://github.com/MoonModules/MoonLight, submit changes to this file as PRs
     @Authors   https://github.com/MoonModules/MoonLight/commits/main
     @Doc       https://moonmodules.org/MoonLight/moonlight/overview/
-    @Copyright © 2026 Github MoonLight Commit Authors
+    @Copyright © 2026 GitHub MoonLight Commit Authors
     @license   GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007
     @license   For non GPL-v3 usage, commercial licenses must be purchased. Contact us for more information.
 **/
@@ -31,6 +31,8 @@ class SolidEffect : public Node {
     addControlValue("RGB(W)");
     addControlValue("Palette");
     addControlValue("Palette avg");
+    addControlValue("Palette rows");
+    addControlValue("Palette cols");
     addControl(red, "red", "slider");
     addControl(green, "green", "slider");
     addControl(blue, "blue", "slider");
@@ -71,6 +73,18 @@ class SolidEffect : public Node {
       CRGB color = CRGB(sqrt(sumRedSq / nrOfColors), sqrt(sumGreenSq / nrOfColors), sqrt(sumBlueSq / nrOfColors));
 
       for (int index = 0; index < layer->nrOfLights; index++) layer->setRGB(index, color);
+    } else if (colorMode == 3 || colorMode == 4) {
+      for (int x = 0; x < layer->size.x; x++) {
+        for (int y = 0; y < layer->size.y; y++) {
+          for (int z = 0; z < layer->size.z; z++) {
+            int axisValue = colorMode == 3 ? y : x;
+            int axisSize = colorMode == 3 ? layer->size.y : layer->size.x;
+            uint8_t paletteIndex = axisSize <= 1 ? 0 : ::map(axisValue, 0, axisSize - 1, 0, 255);
+            layer->setRGB(Coord3D(x, y, z), ColorFromPalette(layerP.palette, paletteIndex, brightness));
+
+          }
+        }
+      }
     }
   }
 };
@@ -441,7 +455,7 @@ class ScrollingTextEffect : public Node {
   }
 };  // ScrollingText
 
-// AI generated
+// AI-generated
 class SinusEffect : public Node {
  public:
   static const char* name() { return "Sinus"; }

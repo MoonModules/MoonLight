@@ -4,7 +4,7 @@
     @repo      https://github.com/MoonModules/MoonLight, submit changes to this file as PRs
     @Authors   https://github.com/MoonModules/MoonLight/commits/main
     @Doc       https://moonmodules.org/MoonLight/moonbase/devices/
-    @Copyright © 2026 Github MoonLight Commit Authors
+    @Copyright © 2026 GitHub MoonLight Commit Authors
     @license   GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007
     @license   For non GPL-v3 usage, commercial licenses must be purchased. Contact us for more information.
 **/
@@ -109,7 +109,7 @@ class ModuleDevices : public Module {
         if (deviceUDP.beginPacket(targetIP, deviceUDPPort)) {
           deviceUDP.write(reinterpret_cast<uint8_t*>(&message), sizeof(message));
           deviceUDP.endPacket();
-          EXT_LOGD(MB_TAG, "UDP from %s update sent to ...%d / %s bri=%d pal=%d preset=%d", updatedItem.originId->c_str(), targetIP[3], message.name.c_str(), message.brightness, message.palette, message.preset);
+          EXT_LOGD(MB_TAG, "UDP from %s update sent to ...%d / %s on=%d bri=%d pal=%d preset=%d", updatedItem.originId->c_str(), targetIP[3], message.name.c_str(), message.lightsOn, message.brightness, message.palette, message.preset);
           // need to add the targetip?
         }
       }

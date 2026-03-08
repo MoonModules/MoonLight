@@ -178,6 +178,12 @@
   font-weight: 600;
 }
 
+.md-content h4 {
+  color: var(--moonlight-primary);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
 /* Enhanced Links */
 .md-content a {
   background: var(--moonlight-gradient);

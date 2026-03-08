@@ -10,9 +10,9 @@ It's most easy to start with premade boards, however, you can also DIY.
 
 See [IO module](../../moonbase/inputoutput) for premade devices which can be preconfigured in MoonLight.
 
-![Dig2Go](https://shop.allnetchina.cn/cdn/shop/products/Led_4.jpg?v=1680836018&width=1600){: style="width:250px"} 
+![Dig-2-Go](https://shop.allnetchina.cn/cdn/shop/products/Led_4.jpg?v=1680836018&width=1600){: style="width:250px"} 
 
-* [QuinLed LED pre-assembled boards](https://quinled.info/pre-assembled-boards/). The Dig2Go is the easiest complete package to use.
+* [QuinLed LED pre-assembled boards](https://quinled.info/pre-assembled-boards/). The Dig-2-Go is the easiest complete package to use.
 * [Serg74 shields](https://www.tindie.com/products/serg74/esp32-wroom-usb-c-d1-mini32-form-factor-board/)
 * [Home control](https://www.myhome-control.de/), e.g. the ESP32-P4 Nano shield
 * [Athom](https://www.athom.tech/wled) / [Gledopto](https://www.gledopto.eu/Gledopto-WLED-LED-Controller-for-Digital-Light-Strips) / [M5Stack](https://shop.m5stack.com/collections/m5-controllers) / ...

@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  Drive lots of DMX or LED lights with stunning effects running on ESP32 microcontrollers. For creators who demand professional results without enterprise costs.
+  MoonLight is open-source software that lets you control a wide range of DMX and LED lights using ESP32 microcontrollers, for home, for artists, and for stages.
 </p>
 
 <p align="center">
@@ -147,7 +147,7 @@ Start creating stunning effects immediately on both mobile and desktop.
 **From 0.6.0 Forward:** Community-driven development focused on ease of use, more effects, and expanded hardware support.
 ### Version 0.7.0 - December 2025
 **Art-Net, board presets and ESP32-P4 release**
-### Version 0.8.0 - Januari 2026
+### Version 0.8.0 - January 2026
 **16K LEDs and more**
 
 See [v0.8.0 Kanban board](https://github.com/users/MoonModules/projects/4) or log an [Issue](https://github.com/MoonModules/MoonLight/issues/new/choose) to report issues or request enhancements.
@@ -229,7 +229,7 @@ Help us enjoy a good beer, a tasty meal, or a fine club night while we code:
 - [I2SClocklessLedDriver](https://github.com/hpwit/I2SClocklessLedDriver) - Parallel LED control
 - [I2SClocklessVirtualLedDriver](https://github.com/hpwit/I2SClocklessVirtualLedDriver) - Virtual driver
 - [ESPLiveScript](https://github.com/hpwit/ESPLiveScript) - Scripts
-- [WLED-sync](https://github.com/netmindz/WLED-sync) - Audio synchronization
+- [WLED-sync](https://github.com/netmindz/WLED-sync) - WLED Audio synchronization
 
 ---
 
@@ -243,9 +243,22 @@ MoonLight is a [MoonModules.org](https://moonmodules.org) project - Created by t
 
 ---
 
+## 🔒 Privacy & Analytics
+
+MoonLight **can** send anonymous usage data to Google Analytics when the device restarts.
+The data is limited to: country, firmware type, board model, and MoonLight version.
+A random, anonymous client ID is generated on each boot — no persistent device or user
+tracking is possible.
+
+**Opt out anytime** via the *Track analytics* toggle in the WiFi → Station settings page.
+
+See [MoonLight analytics](../../network/sta/#moonlight-analytics) for full details,
+including what data is collected, which third parties receive it (ip-api.com and Google
+Analytics).
+
 ## ⚠️ Disclaimer
 
-Using this software is at your own risk. While we strive for quality, this software is not bug-free. Contributors to this repository are not liable for any issues, including but not limited to spontaneous combustion of LED strips, hardware damage, or the inevitable heat death of the universe. 🔥🕺🌌
+Using this software is at your own risk. While we strive for quality, this software is not bug-free. Contributors to MoonLight are not liable for any issues, including but not limited to spontaneous combustion of LED strips, or the inevitable heat death of the universe. 🔥🕺🌌
 
 ---
 

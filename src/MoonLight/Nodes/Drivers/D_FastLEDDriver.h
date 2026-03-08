@@ -4,7 +4,7 @@
     @repo      https://github.com/MoonModules/MoonLight, submit changes to this file as PRs
     @Authors   https://github.com/MoonModules/MoonLight/commits/main
     @Doc       https://moonmodules.org/MoonLight/moonlight/overview/
-    @Copyright © 2026 Github MoonLight Commit Authors
+    @Copyright © 2026 GitHub MoonLight Commit Authors
     @license   GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007
     @license   For non GPL-v3 usage, commercial licenses must be purchased. Contact us for more information.
 **/
@@ -38,7 +38,7 @@ class FastLEDDriver : public DriverNode {
     addControlValue("RMT");
     addControlValue("I2S");  // #ifndef CONFIG_IDF_TARGET_ESP32 ... not now as it changes the order numbering
     addControlValue("SPI");
-  #if CONFIG_IDF_TARGET_ESP32P4
+  #if CONFIG_IDF_TARGET_ESP32P4 || CONFIG_IDF_TARGET_ESP32C6
     addControlValue("Parlio");
   #endif
     addControl(engine, "engine", "text", 0, 32, true);  // the resolved engine based on affinity

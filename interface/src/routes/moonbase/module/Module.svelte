@@ -150,11 +150,17 @@
 							newItem !== null &&
 							typeof newItem === 'object';
 						if (bothObjects) {
-							updateRecursive(
-								oldItem as Record<string, unknown>,
-								newItem as Record<string, unknown>,
-								pruneMissing
-							);
+							const oldObj = oldItem as Record<string, unknown>;
+							const newObj = newItem as Record<string, unknown>;
+							// If 'p' or 'name' changed, this is a different control in the same slot → replace entirely
+							if (
+								(newObj.p !== undefined && oldObj.p !== newObj.p) ||
+								(newObj.name !== undefined && oldObj.name !== newObj.name)
+							) {
+								oldArr[i] = newItem; // Full replacement — no stale key bleed
+							} else {
+								updateRecursive(oldObj, newObj, pruneMissing);
+							}
 						} else if (oldItem !== newItem) {
 							oldArr[i] = newItem;
 						}

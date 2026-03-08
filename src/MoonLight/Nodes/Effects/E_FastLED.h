@@ -4,7 +4,7 @@
     @repo      https://github.com/MoonModules/MoonLight, submit changes to this file as PRs
     @Authors   https://github.com/MoonModules/MoonLight/commits/main
     @Doc       https://moonmodules.org/MoonLight/moonlight/overview/
-    @Copyright © 2026 Github MoonLight Commit Authors
+    @Copyright © 2026 GitHub MoonLight Commit Authors
     @license   GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007
     @license   For non GPL-v3 usage, commercial licenses must be purchased. Contact us for more information.
 **/
@@ -64,32 +64,47 @@ class FLAudioEffect : public Node {
   void loop() override {
     layer->fadeToBlackBy(fade);
 
-    if (sharedData.beat) beatLevel = 255;
+    if (sharedData.fl_beat) beatLevel = 255;
 
-    // EXT_LOGD(ML_TAG, "%f %f %d %f", sharedData.bassLevel, sharedData.trebleLevel, sharedData.beat, beatLevel, sharedData.vocalsActive ? sharedData.vocalConfidence : 0);
+    // EXT_LOGD(ML_TAG, "%f %f %d %f", sharedData.fl_bassLevel, sharedData.fl_trebleLevel, sharedData.fl_beat, beatLevel, sharedData.fl_vocalsActive ? sharedData.fl_vocalConfidence : 0);
 
     uint8_t columnNr = 0;
-    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.bassLevel, CRGB::Red);
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.fl_bassLevel, CRGB::Red);
     columnNr++;
-    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.midLevel, CRGB::Orange);
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.fl_midLevel, CRGB::Orange);
     columnNr++;
-    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.trebleLevel, CRGB::Green);
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.fl_trebleLevel, CRGB::Green);
     columnNr++;
-    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.vocalConfidence, CRGB::Blue);
+
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.volume, CRGB::Yellow);
+    columnNr++;
+    // Normalize BPM to 0-1 range (assuming typical range 60-200 BPM)
+    float normalizedBpm = constrain(sharedData.fl_bpm, 60.0f, 200.0f);
+    normalizedBpm = (normalizedBpm - 60.0f) / 140.0f;
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * normalizedBpm, CRGB::Yellow);
+    columnNr++;
+
+    // vocal
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.fl_vocalConfidence, CRGB::Purple);
     columnNr++;
 
     // beat
-    layer->drawLine(columnNr, layer->size.y - 1, columnNr++, layer->size.y - 1 - layer->size.y * beatLevel / 255, CRGB::Purple);
-    if (sharedData.beat) layer->setRGB(Coord3D(columnNr, layer->size.y - 1), CRGB::Purple);
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.fl_beatConfidence, CRGB::Blue);
+    columnNr++;
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * beatLevel / 255.0f, CRGB::Blue);
+    columnNr++;
+    if (sharedData.fl_beat) layer->setRGB(Coord3D(columnNr, layer->size.y - 1), CRGB::Blue);
     columnNr++;
 
     // percussion
-    if (sharedData.percussionType != UINT8_MAX) {
-      uint16_t percussionCol = columnNr + sharedData.percussionType;
-      if (percussionCol < layer->size.x) {
-        layer->setRGB(Coord3D(percussionCol, layer->size.y - 1), CRGB::Cyan);
-      }
-    }
+    if (sharedData.fl_hihat) layer->setRGB(Coord3D(columnNr, layer->size.y - 1), CRGB::Cyan);
+    columnNr++;
+    if (sharedData.fl_kick) layer->setRGB(Coord3D(columnNr, layer->size.y - 1), CRGB::Cyan);
+    columnNr++;
+    if (sharedData.fl_snare) layer->setRGB(Coord3D(columnNr, layer->size.y - 1), CRGB::Cyan);
+    columnNr++;
+    if (sharedData.fl_tom) layer->setRGB(Coord3D(columnNr, layer->size.y - 1), CRGB::Cyan);
+
     // beat decay
     if (beatLevel && layer->size.y > 0) beatLevel -= MIN(255 / layer->size.y, beatLevel);
   }

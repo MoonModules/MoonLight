@@ -8,7 +8,7 @@
 
 MoonLight is an open-source lighting platform that scales from art installations to professional stages.
 
-Drive lots of lights or thousands of LEDs with stunning effects running on ESP32 microcontrollers. For creators who demand professional results without enterprise costs. Scales from small installations to large displays.
+MoonLight is open-source software that lets you control a wide range of DMX and LED lights using ESP32 microcontrollers, for home, for artists, and for stages.
 
 <img width="163" src="https://github.com/user-attachments/assets/1afd0d4b-f846-4d5b-8cc9-8fa8586c405b" />
 
@@ -23,8 +23,8 @@ MoonLight consist of the following modules:
 
 ## MoonLight by MoonModules
 
-MoonLight is created by [MoonModules](https://moonmodules.org/). MoonModules is a collective of light artist, hardware- and software developers. We love creating DIY lighting solutions based on microcontrollers, mainly ESP32. Our work can be found on GitHub and we use mainly [Discord]([Discord](https://discord.com/channels/700041398778331156/1203994211301728296)) for communications. We develop our products for a large community of light enthousiasts and make products we show to the world, e.g. on art-exhibitions, in venues, or at festivals. See also [about](https://moonmodules.org/about/).
-Our flagship product is WLED-MM, a fork of WLED focussing on driving more LEDs, new platforms (e.g. ESP32-P4), better audio and so on. As currenyly most of the MoonModules team are also core developers of WLED, WLED-MM functionality is slowly moving to WLED.
+MoonLight is created by [MoonModules](https://moonmodules.org/). MoonModules is a collective of light artists, hardware- and software developers. We love creating DIY lighting solutions based on microcontrollers, mainly ESP32. Our work can be found on GitHub and we use mainly [Discord](https://discord.gg/TC8NSUSCdV) for communications. We develop our products for a large community of light enthusiasts and make products we show to the world, e.g. on art-exhibitions, in venues, or at festivals. See also [about](https://moonmodules.org/about/).
+Our flagship product is WLED-MM, a fork of WLED focussing on driving more LEDs, new platforms (e.g. ESP32-P4), better audio and so on. As currently most of the MoonModules team are also core developers of WLED, WLED-MM functionality is slowly moving to WLED.
 
 Started in 2023 we are also developing a new product based on our experience working with WLED called MoonLight. MoonLight is a modern alternative to WLED, with a modern UI, supporting 1D, 2D and 3D layouts, effects and modifiers, live scripts and led drivers.
 
@@ -44,7 +44,7 @@ This is a personal overview by me (ewowi). It’s not meant to burn down WLED, q
 
 * **Mapping system**: WLED’s mapping is based on strips and panels, and requires hacks to handle shapes like rings or hexagons. 3D isn’t supported. MoonLight uses “inverse mapping”: instead of placing LEDs on a grid, you just define their coordinates, and the system maps everything internally.
 
-* **Technical debt**: WLED has accumulated a lot of code that “just evolved.” Audio reactive is the clearest example. It’s hard to maintain, and in practice only a few people really can. WLED started with a strong architecture, but that hasn’t evolved much over time. (Yes, I share some of the blame 🙈)
+* **Technical debt**: WLED has accumulated a lot of code that “just evolved.” Audio-reactive is the clearest example. It’s hard to maintain, and in practice only a few people really can. WLED started with a strong architecture, but that hasn’t evolved much over time. (Yes, I share some of the blame 🙈)
 
 * **Too big** to change: WLED has grown so large, with so many users, that making deep architectural changes is nearly impossible. The last major thing I worked on in WLED (2023) was “SuperSync”, linking multiple microcontrollers to drive a single fixture, inspired by drone swarms. I quickly hit the system’s boundaries, and the plans we had seemed unachievable within WLED.
 
@@ -114,8 +114,8 @@ MoonLight
 * Improve the UI (Svelte 5, DaisyUI 5, TailWind 4)
   * e.g. File Manager, Multi row layout, Monitor (WebGL)
 * Tune FastLED, add FastLED 2D effects
-* CI automation (Generate daily builds in Github and use by installer)
-* Palettes: more, custom, audio reactive
+* CI automation (Generate daily builds in GitHub and use by installer)
+* Palettes: more, custom, audio-reactive
 * ...
 
 Contact us in the MoonLight channels on [Discord MoonModules](https://discord.gg/TC8NSUSCdV)
@@ -134,8 +134,8 @@ Effects, Modifiers, Layouts and drivers use emoji's to visualize their usage. Se
 * 🚥 Layout
 * ☸️ Driver
 
-* ♫ Audio reactive FFT based
-* ♪ Audio reactive volume based
+* ♫ Audio-reactive FFT-based
+* ♪ Audio-reactive volume-based
 * 💡 supports up to 0D
 * 📏 supports up to 1D
 * 🟦 supports up to 2D

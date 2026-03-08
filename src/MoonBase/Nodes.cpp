@@ -4,7 +4,7 @@
     @repo      https://github.com/MoonModules/MoonLight, submit changes to this file as PRs
     @Authors   https://github.com/MoonModules/MoonLight/commits/main
     @Doc       https://moonmodules.org/MoonLight/moonlight/overview/
-    @Copyright © 2026 Github MoonLight Commit Authors
+    @Copyright © 2026 GitHub MoonLight Commit Authors
     @license   GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007
     @license   For non GPL-v3 usage, commercial licenses must be purchased. Contact us for more information.
 **/
@@ -14,9 +14,7 @@
 
 SharedData sharedData;
 
-JsonObject Node::findOrCreateControl(const char* name, bool& newControl) {
-  return ::findOrCreateControl(controls, name, newControl);
-}
+JsonObject Node::findOrCreateControl(const char* name, bool& newControl) { return ::findOrCreateControl(controls, name, newControl); }
 
 JsonObject Node::setupControl(const char* name, const char* type, int min, int max, bool ro, const char* desc, uint8_t sizeCode, size_t sizeofVar, bool newControl, JsonObject control) {
   control["type"] = type;
@@ -67,8 +65,15 @@ JsonObject Node::setupControl(const char* name, const char* type, int min, int m
   return control;
 }
 
-void Node::updateControl(const JsonObject& control) {
-  ::updateControl(control);
+void Node::addControlValue(const char* value) {
+  if (controls.size() == 0) return;                                   // guard against empty controls
+  JsonObject control = controls[controls.size() - 1];                 // last control
+  if (control["values"].isNull()) control["values"].to<JsonArray>();  // add array of values
+  JsonArray values = control["values"];
+  values.add(value);
+  EXT_LOGD(ML_TAG, "%s, %d", value, control["values"].size());
 }
+
+void Node::updateControl(const JsonObject& control) { ::updateControl(control); }
 
 #endif  // FT_MOONLIGHT
