@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getTimeAgo, initCap } from './moonbase_utilities';
+import { getTimeAgo, initCap } from '../lib/stores/moonbase_utilities';
 
 describe('initCap', () => {
 	it('capitalises first letter', () => {

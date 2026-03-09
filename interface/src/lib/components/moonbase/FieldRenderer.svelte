@@ -11,7 +11,7 @@
 -->
 
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, tick } from 'svelte';
 	import FileEditWidget from '$lib/components/moonbase/FileEditWidget.svelte';
 	import { initCap, getTimeAgo } from '$lib/stores/moonbase_utilities';
 
@@ -135,6 +135,45 @@
 
 	let paletteOpen = false;
 	let paletteDropdownEl: HTMLElement | undefined;
+	let paletteListEl: HTMLElement | undefined;
+
+	async function openPalette() {
+		paletteOpen = true;
+		await tick();
+		if (!paletteListEl || !paletteDropdownEl) return;
+
+		const triggerRect = (paletteDropdownEl.querySelector('button') as HTMLElement).getBoundingClientRect();
+		const vh = window.innerHeight;
+
+		// Position off-screen first with fixed so offsetTop of children is measured
+		// relative to the list container (not the nearest positioned ancestor in the page)
+		paletteListEl.style.position = 'fixed';
+		paletteListEl.style.top = '-9999px';
+		paletteListEl.style.left = `${triggerRect.left}px`;
+		paletteListEl.style.maxHeight = `${vh}px`;
+		void paletteListEl.offsetHeight; // force reflow so offsetTop is accurate
+
+		const selectedEl = paletteListEl.querySelector('[aria-selected="true"]') as HTMLElement | null;
+
+		if (selectedEl) {
+			// Align selected item centre with trigger button centre
+			const triggerCenterY = triggerRect.top + triggerRect.height / 2;
+			const idealTop = triggerCenterY - selectedEl.offsetTop - selectedEl.offsetHeight / 2;
+
+			// Clamp top and bottom independently to viewport
+			const clampedTop = Math.max(4, idealTop);
+			const naturalBottom = idealTop + paletteListEl.scrollHeight;
+			const clampedBottom = Math.min(vh - 4, naturalBottom);
+			paletteListEl.style.top = `${clampedTop}px`;
+			paletteListEl.style.maxHeight = `${clampedBottom - clampedTop}px`;
+			// Scroll so the selected item appears at the trigger position
+			paletteListEl.scrollTop = Math.max(0, clampedTop + selectedEl.offsetTop + selectedEl.offsetHeight / 2 - triggerCenterY);
+		} else {
+			// No selection — open below trigger
+			paletteListEl.style.top = `${triggerRect.bottom + 2}px`;
+			paletteListEl.style.maxHeight = `${vh - triggerRect.bottom - 8}px`;
+		}
+	}
 
 	function closePaletteOnOutsideClick(e: MouseEvent) {
 		if (paletteOpen && paletteDropdownEl && !paletteDropdownEl.contains(e.target as Node)) {
@@ -212,7 +251,7 @@
 				type="button"
 				class="select flex min-w-122 cursor-pointer items-center gap-2"
 				onclick={() => {
-					paletteOpen = !paletteOpen;
+					if (!paletteOpen) openPalette(); else paletteOpen = false;
 				}}
 			>
 				<span
@@ -223,7 +262,8 @@
 			</button>
 			{#if paletteOpen}
 				<div
-					class="absolute left-0 z-50 mt-1 max-h-72 min-w-full overflow-y-auto rounded border border-base-300 bg-base-100 shadow-xl"
+					bind:this={paletteListEl}
+					class="z-50 max-h-72 overflow-y-auto rounded border border-base-300 bg-base-100 shadow-xl"
 				>
 					{#each property.values as val, index (index)}
 						<button

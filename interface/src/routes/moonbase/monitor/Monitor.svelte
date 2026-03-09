@@ -7,7 +7,8 @@
 		createScene,
 		updateScene,
 		setMatrixDimensions
-	} from './monitor';
+	} from './monitor_webgl';
+	import { normalizePosition } from './monitor';
 	import SettingsCard from '$lib/components/SettingsCard.svelte';
 	import { socket } from '$lib/stores/socket';
 	import ControlIcon from '~icons/tabler/adjustments';
@@ -116,9 +117,7 @@
 
 			//set to -1,1 coordinate system of webGL
 			//width -1 etc as 0,0 should be top left, not bottom right
-			x = width == 1 ? 0 : (x / (width - 1)) * 2.0 - 1.0;
-			y = height == 1 ? 0 : ((height - 1 - y) / (height - 1)) * 2.0 - 1.0;
-			z = depth == 1 ? 0 : ((depth - 1 - z) / (depth - 1)) * 2.0 - 1.0;
+			[x, y, z] = normalizePosition(x, y, z, width, height, depth);
 
 			vertices.push(x, y, z);
 		}
