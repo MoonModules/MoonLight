@@ -16,7 +16,7 @@ export function updateRecursive(
 	newData: Record<string, unknown>,
 	pruneMissing = false
 ) {
-	for (let key in newData) {
+	for (const key in newData) {
 		if (Array.isArray(newData[key])) {
 			if (!Array.isArray(oldData[key])) oldData[key] = [];
 			const oldArr = oldData[key] as unknown[];
@@ -69,7 +69,7 @@ export function updateRecursive(
 		}
 	}
 	if (pruneMissing) {
-		for (let key in oldData) {
+		for (const key in oldData) {
 			if (!(key in newData)) delete oldData[key];
 		}
 	}
