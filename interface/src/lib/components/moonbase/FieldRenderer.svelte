@@ -11,7 +11,7 @@
 -->
 
 <script lang="ts">
-	import { onDestroy } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import FileEditWidget from '$lib/components/moonbase/FileEditWidget.svelte';
 	import { initCap, getTimeAgo } from '$lib/stores/moonbase_utilities';
 
@@ -133,6 +133,20 @@
 	let clickTimeout: ReturnType<typeof setTimeout> | null = null;
 	let preventClick = false;
 
+	let paletteOpen = false;
+	let paletteDropdownEl: HTMLElement | undefined;
+
+	function closePaletteOnOutsideClick(e: MouseEvent) {
+		if (paletteOpen && paletteDropdownEl && !paletteDropdownEl.contains(e.target as Node)) {
+			paletteOpen = false;
+		}
+	}
+
+	onMount(() => {
+		window.addEventListener('mousedown', closePaletteOnOutsideClick);
+		return () => window.removeEventListener('mousedown', closePaletteOnOutsideClick);
+	});
+
 	// inspired by WLED
 	function genPalPrev(hexString: string) {
 		if (!hexString) return '';
@@ -193,23 +207,48 @@
 			<FileEditWidget path={value} showEditor={false} />
 		{/if}
 	{:else if property.type == 'palette'}
-		<div style="display: flex; gap: 8px; align-items: center;">
-			<select bind:value onchange={onChange} class="select">
-				{#each property.values as val, index (index)}
-					<option value={index}>{val.name}</option>
-				{/each}
-			</select>
-			<div class="palette-preview" style={genPalPrev(property.values[value]?.colors)}></div>
+		<div class="relative" bind:this={paletteDropdownEl}>
+			<button
+				type="button"
+				class="select flex min-w-122 cursor-pointer items-center gap-2"
+				onclick={() => {
+					paletteOpen = !paletteOpen;
+				}}
+			>
+				<span
+					style="{genPalPrev(property.values[value]?.colors)} width:240px; height:30px; border-radius:2px; flex-shrink:0; display:inline-block; border:1px solid rgba(128,128,128,0.25);"
+				></span>
+				<span class="flex-1 truncate text-left text-sm">{property.values[value]?.name ?? ''}</span>
+				<span class="ml-1 text-xs opacity-60">▾</span>
+			</button>
+			{#if paletteOpen}
+				<div
+					class="absolute left-0 z-50 mt-1 max-h-72 min-w-full overflow-y-auto rounded border border-base-300 bg-base-100 shadow-xl"
+				>
+					{#each property.values as val, index (index)}
+						<button
+							type="button"
+							role="option"
+							aria-selected={value === index}
+							class="flex w-full cursor-pointer items-center gap-2 px-2 py-1.5 hover:bg-base-200 {value ===
+							index
+								? 'bg-base-300'
+								: ''}"
+							onclick={(event) => {
+								value = index;
+								paletteOpen = false;
+								onChange(event);
+							}}
+						>
+							<span
+								style="{genPalPrev(val.colors)} width:240px; height:20px; border-radius:2px; flex-shrink:0; display:inline-block; border:1px solid rgba(128,128,128,0.25);"
+							></span>
+							<span class="truncate text-sm">{val.name}</span>
+						</button>
+					{/each}
+				</div>
+			{/if}
 		</div>
-
-		<style>
-			.palette-preview {
-				width: 250px;
-				height: 40px;
-				border: 1px solid #ccc;
-				border-radius: 3px;
-			}
-		</style>
 	{:else if property.type == 'checkbox'}
 		<input type="checkbox" class="toggle toggle-primary" bind:checked={value} onchange={onChange} />
 	{:else if property.type == 'slider'}
