@@ -91,6 +91,8 @@ class PhysicalLayer {
   uint8_t pass = 0;
 
   // When true, addLight() also stores positions in channelsE for transmission to the UI Monitor.
+  // When true, pass 1 is being run for monitor/layout inspection only;
+  // physical pin assignment state is preserved instead of being rebuilt.
   bool monitorPass = false;
 
   // Called before each layout pass to reset counters and prepare buffers.

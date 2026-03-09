@@ -304,8 +304,15 @@ void ESP32SvelteKit::_loop()
         if (millis() - lastTime > 1000)
         {
             lastTime = millis();
-            _analyticsService.lps = lps; // 🌙
-            lps = 0; // 🌙
+#if FT_ENABLED(FT_ANALYTICS)
+            _analyticsService.lps_all = lps_all; // 🌙
+            uint32_t cpuHz = getCpuFrequencyMhz() * 1000000UL; // 🌙
+            _analyticsService.lps_effects = (lps_all > 0 && lps_effects_cycles > 0) ? (uint16_t)((uint64_t)cpuHz * lps_all / lps_effects_cycles) : 0; // 🌙
+            _analyticsService.lps_drivers = (lps_all > 0 && lps_drivers_cycles > 0) ? (uint16_t)((uint64_t)cpuHz * lps_all / lps_drivers_cycles) : 0; // 🌙
+#endif
+            lps_all = 0; // 🌙
+            lps_effects_cycles = 0; // 🌙
+            lps_drivers_cycles = 0; // 🌙
 #ifdef TELEPLOT_TASKS
             Serial.printf(">ESP32SveltekitTask:%i:%i\n", millis(), uxTaskGetStackHighWaterMark(NULL));
 #endif

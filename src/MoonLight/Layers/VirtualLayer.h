@@ -17,8 +17,8 @@
 
   #include <vector>
 
-  #include "PhysicalLayer.h"
   #include "PhysMap.h"  // pure types: MapTypeEnum, PhysMap — no ESP32 deps
+  #include "PhysicalLayer.h"
 
 // ----------------------------------------------------------------------------
 // VirtualLayer — a logical 3-D grid of virtual pixels mapped to physical lights.
@@ -129,7 +129,8 @@ class VirtualLayer {
     } else {                                                                                      // no mapping table — direct pass-through
       if ((indexV + 1) * layerP->lights.header.channelsPerLight <= layerP->lights.maxChannels) {  // bounds check
         callback(indexV);                                                                         // no presetCorrection here (lightPreset_RGB2040 has a mapping)
-      }
+      } else
+        EXT_LOGD(ML_TAG, "%d", indevV);
     }
   }
 

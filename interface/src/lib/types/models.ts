@@ -98,7 +98,9 @@ export type Analytics = {
 	fs_total: number;
 	fs_used: number;
 	uptime: number;
-	lps: number; // 🌙
+	lps_all: number;     // 🌙
+	lps_effects: number; // 🌙
+	lps_drivers: number; // 🌙
 };
 
 export type RSSI = {

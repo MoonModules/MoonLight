@@ -96,7 +96,9 @@ extern bool saveNeeded; // 🌙 saveNeeded Indicates that changes has been made 
 class ESP32SvelteKit
 {
 public:
-    uint16_t lps = 0; // 🌙
+    uint16_t lps_all = 0;            // 🌙 frame rate counter — effects and drivers are 1:1 so one counter suffices
+    uint32_t lps_effects_cycles = 0; // 🌙 CPU cycles consumed by layerP.loop() per second (accumulated)
+    uint32_t lps_drivers_cycles = 0; // 🌙 CPU cycles consumed by layerP.loopDrivers() per second (accumulated)
 
     ESP32SvelteKit(PsychicHttpServer *server, unsigned int numberEndpoints = 115);
 

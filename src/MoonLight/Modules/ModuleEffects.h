@@ -369,7 +369,7 @@ class ModuleEffects : public NodeManager {
 
   void loop1s() override {
     // set shared data (eg used in scrolling text effect), every second
-    sharedData.fps = esp32sveltekit.getAnalyticsService()->lps;
+    sharedData.fps = esp32sveltekit.getAnalyticsService()->lps_all;
     sharedData.connectionStatus = (uint8_t)esp32sveltekit.getConnectionStatus();
     sharedData.clientListSize = esp32sveltekit.getServer()->getClientList().size();
     sharedData.connectedClients = esp32sveltekit.getSocket()->getConnectedClients();
