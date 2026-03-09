@@ -67,7 +67,7 @@ class VirtualLayer {
   uint8_t layerDimension = UINT8_MAX;
 
   // Previous size, used to detect size changes and trigger onSizeChanged().
-  Coord3D prevSize;
+  Coord3D prevSize = {0,0,0};
 
   // When true, every virtual index maps 1:1 to a physical index (no mappingTable needed).
   bool oneToOneMapping = false;
@@ -127,10 +127,10 @@ class VirtualLayer {
         break;
       }
     } else {                                                                                      // no mapping table — direct pass-through
-      if ((indexV + 1) * layerP->lights.header.channelsPerLight <= layerP->lights.maxChannels) {  // bounds check
+      // if ((indexV + 1) * layerP->lights.header.channelsPerLight <= layerP->lights.maxChannels) {  // bounds check
         callback(indexV);                                                                         // no presetCorrection here (lightPreset_RGB2040 has a mapping)
-      } else
-        EXT_LOGD(ML_TAG, "%d", indevV);
+      // } else
+      //   EXT_LOGD(ML_TAG, "%d", indexV);
     }
   }
 
