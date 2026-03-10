@@ -19,6 +19,7 @@ class ExampleEffect : public Node {
   static const char* name() { return "Example"; }
   static uint8_t dim() { return _3D; }            // Dimensions supported _3D prefered, _2D or _1D can be used for first phase
   static const char* tags() { return "🔥🆕"; }  // use emojis see https://moonmodules.org/MoonLight/moonlight/overview/#emoji-coding, 🔥 for effect
+  static const char* category() { return "MoonLight"; }
 
   uint8_t bpm = 60;  // 1 beat per second
   uint8_t intensity = 128;

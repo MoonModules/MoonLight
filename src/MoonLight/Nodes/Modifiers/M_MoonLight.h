@@ -17,6 +17,7 @@ class CircleModifier : public Node {
   static const char* name() { return "Circle"; }
   static uint8_t dim() { return _2D; }  // 1D to 2D ...
   static const char* tags() { return "💎"; }
+  static const char* category() { return "Modifier"; }
 
   Coord3D modifierSize;
 
@@ -54,6 +55,7 @@ class BlockModifier : public Node {
   static const char* name() { return "Block"; }
   static uint8_t dim() { return _2D; }  // 1D to 2D
   static const char* tags() { return "💎"; }
+  static const char* category() { return "Modifier"; }
 
   Coord3D modifierSize;
 
@@ -92,6 +94,7 @@ class MirrorModifier : public Node {
   static const char* name() { return "Mirror"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "💎"; }
+  static const char* category() { return "Modifier"; }
 
   bool mirrorX = true;
   bool mirrorY = true;
@@ -127,6 +130,7 @@ class MultiplyModifier : public Node {
   static const char* name() { return "Multiply"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "💎"; }
+  static const char* category() { return "Modifier"; }
 
   Coord3D proMulti = {2, 2, 2};
   bool mirror = false;
@@ -159,6 +163,7 @@ class PinwheelModifier : public Node {
   static const char* name() { return "Pinwheel"; }
   static uint8_t dim() { return _3D; }  // test zTwist...
   static const char* tags() { return "💎"; }
+  static const char* category() { return "Modifier"; }
 
   uint8_t petals = 60;
   int8_t swirlVal = 30;  // signed: negative values reverse the swirl direction
@@ -239,6 +244,7 @@ class RippleXZModifier : public Node {
   static const char* name() { return "RippleXZ"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "💎"; }
+  static const char* category() { return "Modifier"; }
 
   bool shrink = true;
   bool towardsX = true;
@@ -307,6 +313,7 @@ class RotateModifier : public Node {
   static const char* name() { return "Rotate"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "💎"; }
+  static const char* category() { return "Modifier"; }
 
   bool expand = false;
   bool flip, reverse, alternate;
@@ -434,6 +441,7 @@ class TransposeModifier : public Node {
   static const char* name() { return "Transpose"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "💎"; }
+  static const char* category() { return "Modifier"; }
 
   bool transposeXY = true;
   bool transposeXZ = false;
@@ -503,6 +511,7 @@ class CheckerboardModifier : public Node {
  public:
   static const char* name() { return "Checkerboard"; }
   static const char* tags() { return "💎"; }
+  static const char* category() { return "Modifier"; }
 
   Coord3D size = {3, 3, 3};
   bool invert = false;

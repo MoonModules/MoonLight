@@ -90,9 +90,9 @@ class PhysicalLayer {
   // Current layout pass: 1 = physical (count lights, assign pins), 2 = virtual (build mapping table).
   uint8_t pass = 0;
 
-  // When true, addLight() also stores positions in channelsE for transmission to the UI Monitor.
-  // When true, pass 1 is being run for monitor/layout inspection only;
-  // physical pin assignment state is preserved instead of being rebuilt.
+  // When true, pass 1 skips pin-state rebuild: ledsPerPin/ledPinsAssigned are not reset
+  // and nextPin() assignments are suppressed. Positions are always stored to channelsE on
+  // every pass 1 regardless of this flag; only pin-state mutation is gated.
   bool monitorPass = false;
 
   // Called before each layout pass to reset counters and prepare buffers.

@@ -34,6 +34,7 @@ class Node {
  public:
   static const char* name() { return "noname"; }
   static const char* tags() { return ""; }
+  static const char* category() { return ""; }
   static uint8_t dim() { return _NoD; };
 
   VirtualLayer* layer = nullptr;  // the virtual layer this effect is using

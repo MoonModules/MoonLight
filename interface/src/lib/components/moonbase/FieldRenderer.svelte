@@ -11,8 +11,9 @@
 -->
 
 <script lang="ts">
-	import { onMount, onDestroy, tick } from 'svelte';
+	import { onDestroy } from 'svelte';
 	import FileEditWidget from '$lib/components/moonbase/FileEditWidget.svelte';
+	import SearchableDropdown from '$lib/components/moonbase/SearchableDropdown.svelte';
 	import { initCap, getTimeAgo } from '$lib/stores/moonbase_utilities';
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -133,63 +134,12 @@
 	let clickTimeout: ReturnType<typeof setTimeout> | null = null;
 	let preventClick = false;
 
-	let paletteOpen = false;
-	let paletteDropdownEl: HTMLElement | undefined;
-	let paletteListEl: HTMLElement | undefined;
-
-	async function openPalette() {
-		paletteOpen = true;
-		await tick();
-		if (!paletteListEl || !paletteDropdownEl) return;
-
-		const triggerRect = (
-			paletteDropdownEl.querySelector('button') as HTMLElement
-		).getBoundingClientRect();
-		const vh = window.innerHeight;
-
-		// Position off-screen first with fixed so offsetTop of children is measured
-		// relative to the list container (not the nearest positioned ancestor in the page)
-		paletteListEl.style.position = 'fixed';
-		paletteListEl.style.top = '-9999px';
-		paletteListEl.style.left = `${triggerRect.left}px`;
-		paletteListEl.style.maxHeight = `${vh}px`;
-		void paletteListEl.offsetHeight; // force reflow so offsetTop is accurate
-
-		const selectedEl = paletteListEl.querySelector('[aria-selected="true"]') as HTMLElement | null;
-
-		if (selectedEl) {
-			// Align selected item centre with trigger button centre
-			const triggerCenterY = triggerRect.top + triggerRect.height / 2;
-			const idealTop = triggerCenterY - selectedEl.offsetTop - selectedEl.offsetHeight / 2;
-
-			// Clamp top and bottom independently to viewport
-			const clampedTop = Math.max(4, idealTop);
-			const naturalBottom = idealTop + paletteListEl.scrollHeight;
-			const clampedBottom = Math.min(vh - 4, naturalBottom);
-			paletteListEl.style.top = `${clampedTop}px`;
-			paletteListEl.style.maxHeight = `${clampedBottom - clampedTop}px`;
-			// Scroll so the selected item appears at the trigger position
-			paletteListEl.scrollTop = Math.max(
-				0,
-				clampedTop + selectedEl.offsetTop + selectedEl.offsetHeight / 2 - triggerCenterY
-			);
-		} else {
-			// No selection — open below trigger
-			paletteListEl.style.top = `${triggerRect.bottom + 2}px`;
-			paletteListEl.style.maxHeight = `${vh - triggerRect.bottom - 8}px`;
-		}
-	}
-
-	function closePaletteOnOutsideClick(e: MouseEvent) {
-		if (paletteOpen && paletteDropdownEl && !paletteDropdownEl.contains(e.target as Node)) {
-			paletteOpen = false;
-		}
-	}
-
-	onMount(() => {
-		window.addEventListener('mousedown', closePaletteOnOutsideClick);
-		return () => window.removeEventListener('mousedown', closePaletteOnOutsideClick);
-	});
+	// Find currently selected node object by matching value string
+	$: selectedNode =
+		property.type === 'selectFile' && Array.isArray(property.values)
+			? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+				property.values.find((v: any) => v.name === value)
+			: undefined;
 
 	// inspired by WLED
 	function genPalPrev(hexString: string) {
@@ -239,66 +189,59 @@
 		{:else}
 			<span>{value}</span>
 		{/if}
-	{:else if property.type == 'select' || property.type == 'selectFile'}
+	{:else if property.type == 'select'}
 		<select bind:value onchange={onChange} class="select">
 			{#each property.values as optionLabel, index (index)}
-				<option value={property.type == 'selectFile' ? optionLabel : index}>
+				<option value={index}>
 					{optionLabel}
 				</option>
 			{/each}
 		</select>
-		{#if property.type == 'selectFile'}
-			<FileEditWidget path={value} showEditor={false} />
-		{/if}
-	{:else if property.type == 'palette'}
-		<div class="relative" bind:this={paletteDropdownEl}>
-			<button
-				type="button"
-				class="select flex min-w-122 cursor-pointer items-center gap-2"
-				onclick={() => {
-					if (!paletteOpen) openPalette();
-					else paletteOpen = false;
-				}}
+	{:else if property.type == 'selectFile'}
+		<SearchableDropdown
+			values={property.values ?? []}
+			isSelected={(val) => value === val.name}
+			onSelect={(val, _idx, event) => {
+				value = val.name;
+				onChange(event);
+			}}
+			{disabled}
+			showTags={true}
+			minWidth="min-w-60"
+		>
+			<span slot="trigger" class="flex-1 truncate text-left text-sm"
+				>{selectedNode?.name ?? value ?? ''}</span
 			>
+		</SearchableDropdown>
+		<FileEditWidget path={value} showEditor={false} />
+	{:else if property.type == 'palette'}
+		<SearchableDropdown
+			values={property.values ?? []}
+			isSelected={(_val, idx) => value === idx}
+			onSelect={(_val, idx, event) => {
+				value = idx;
+				onChange(event);
+			}}
+			{disabled}
+			minWidth="min-w-122"
+		>
+			<span slot="trigger" class="flex items-center gap-2">
 				<span
 					style="{genPalPrev(
 						property.values[value]?.colors
 					)} width:240px; height:30px; border-radius:2px; flex-shrink:0; display:inline-block; border:1px solid rgba(128,128,128,0.25);"
 				></span>
 				<span class="flex-1 truncate text-left text-sm">{property.values[value]?.name ?? ''}</span>
-				<span class="ml-1 text-xs opacity-60">▾</span>
-			</button>
-			{#if paletteOpen}
-				<div
-					bind:this={paletteListEl}
-					class="border-base-300 bg-base-100 z-50 max-h-72 overflow-y-auto rounded border shadow-xl"
-				>
-					{#each property.values as val, index (index)}
-						<button
-							type="button"
-							role="option"
-							aria-selected={value === index}
-							class="hover:bg-base-200 flex w-full cursor-pointer items-center gap-2 px-2 py-1.5 {value ===
-							index
-								? 'bg-base-300'
-								: ''}"
-							onclick={(event) => {
-								value = index;
-								paletteOpen = false;
-								onChange(event);
-							}}
-						>
-							<span
-								style="{genPalPrev(
-									val.colors
-								)} width:240px; height:20px; border-radius:2px; flex-shrink:0; display:inline-block; border:1px solid rgba(128,128,128,0.25);"
-							></span>
-							<span class="truncate text-sm">{val.name}</span>
-						</button>
-					{/each}
-				</div>
-			{/if}
-		</div>
+			</span>
+			<span slot="item" let:val class="flex items-center gap-2">
+				<span
+					style="{genPalPrev(
+						val.colors
+					)} width:240px; height:20px; border-radius:2px; flex-shrink:0; display:inline-block; border:1px solid rgba(128,128,128,0.25);"
+				></span>
+				<span class="truncate text-sm">{val.name}</span>
+			</span>
+		</SearchableDropdown>
 	{:else if property.type == 'checkbox'}
 		<input type="checkbox" class="toggle toggle-primary" bind:checked={value} onchange={onChange} />
 	{:else if property.type == 'slider'}

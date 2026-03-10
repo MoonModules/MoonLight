@@ -19,6 +19,7 @@ class ExampleModifier : public Node {
   static const char* name() { return "Example"; }
   static uint8_t dim() { return _3D; }          // for which effect dimension this modifier can be used, preferably 3D
   static const char* tags() { return "💎🆕"; }  // use emojis see https://moonmodules.org/MoonLight/moonlight/overview/#emoji-coding, 💎 for modifier
+  static const char* category() { return "Modifier"; }
 
   bool mirror = true;
 

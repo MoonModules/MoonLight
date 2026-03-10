@@ -17,6 +17,7 @@ class SE16Layout : public Node {
   static const char* name() { return "SE16"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🚥"; }
+  static const char* category() { return "Layout"; }
 
   bool mirroredPins = false;
   bool pinsAreColumns = false;
@@ -86,6 +87,7 @@ class LightCrafter16Layout : public Node {
   static const char* name() { return "LightCrafter16"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🚥"; }
+  static const char* category() { return "Layout"; }
 
   bool pinsAreColumns = false;
   uint16_t ledsPerPin = 10;

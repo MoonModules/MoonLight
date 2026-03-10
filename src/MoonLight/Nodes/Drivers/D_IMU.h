@@ -19,6 +19,7 @@ class IMUDriver : public Node {
   static const char* name() { return "IMU driver"; }  // Inertial Measurement Unit
   static uint8_t dim() { return _NoD; }
   static const char* tags() { return "☸️"; }
+  static const char* category() { return "Driver"; }
 
   bool motionTrackingReady = false;  // set true if DMP init was successful
 

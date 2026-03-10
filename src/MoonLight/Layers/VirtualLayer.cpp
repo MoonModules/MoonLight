@@ -360,11 +360,11 @@ bool VirtualLayer::isMapped(nrOfLights_t indexV) const {
   return oneToOneMapping || (indexV < mappingTableSize && (mappingTable[indexV].mapType == m_oneLight || mappingTable[indexV].mapType == m_moreLights));
 }
 
-void VirtualLayer::blur1d(fract8 blur_amount, uint16_t x) {
+void VirtualLayer::blur1d(fract8 blur_amount, nrOfLights_t x) {
   const uint8_t keep = 255 - blur_amount;
   const uint8_t seep = blur_amount >> 1;
   CRGB carryover = CRGB::Black;
-  for (uint16_t row = 0; row < size.y; ++row) {
+  for (nrOfLights_t row = 0; row < size.y; ++row) {
     CRGB cur = getRGB(Coord3D(x, row));
     CRGB part = cur;
     part.nscale8(seep);
@@ -385,9 +385,9 @@ void VirtualLayer::blur2d(fract8 blur_amount) {
 void VirtualLayer::blurRows(fract8 blur_amount) {
   uint8_t keep = 255 - blur_amount;
   uint8_t seep = blur_amount >> 1;
-  for (uint16_t row = 0; row < size.y; row++) {
+  for (nrOfLights_t row = 0; row < size.y; row++) {
     CRGB carryover = CRGB::Black;
-    for (uint16_t col = 0; col < size.x; col++) {
+    for (nrOfLights_t col = 0; col < size.x; col++) {
       CRGB cur = getRGB(Coord3D(col, row));
       CRGB part = cur;
       part.nscale8(seep);
@@ -404,9 +404,9 @@ void VirtualLayer::blurRows(fract8 blur_amount) {
 void VirtualLayer::blurColumns(fract8 blur_amount) {
   uint8_t keep = 255 - blur_amount;
   uint8_t seep = blur_amount >> 1;
-  for (uint16_t col = 0; col < size.x; ++col) {
+  for (nrOfLights_t col = 0; col < size.x; ++col) {
     CRGB carryover = CRGB::Black;
-    for (uint16_t row = 0; row < size.y; row++) {
+    for (nrOfLights_t row = 0; row < size.y; row++) {
       CRGB cur = getRGB(Coord3D(col, row));
       CRGB part = cur;
       part.nscale8(seep);

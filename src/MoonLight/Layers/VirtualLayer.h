@@ -338,7 +338,7 @@ class VirtualLayer {
   // ----------------------------------------------------------------------------
 
   // 1-D blur along a column (x) of the virtual grid.
-  void blur1d(fract8 blur_amount, uint16_t x = 0);
+  void blur1d(fract8 blur_amount, nrOfLights_t x = 0);
 
   // 2-D blur: blur all rows then all columns.
   void blur2d(fract8 blur_amount);

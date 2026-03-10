@@ -18,6 +18,7 @@ class HumanSizedCubeLayout : public Node {
   static const char* name() { return "Human Sized Cube"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "🚥"; }
+  static const char* category() { return "Layout"; }
 
   uint8_t width = 10;
   uint8_t height = 10;
@@ -87,6 +88,7 @@ class PanelLayout : public Node {
   static const char* name() { return "Panel"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🚥"; }
+  static const char* category() { return "Layout"; }
 
   Wiring panel = {{16, 16, 1}, 1, {true, true, true}, {false, true, false}};
   ;  // 16x16 panel, increasing over the axis, snake on the Y-axis
@@ -127,6 +129,7 @@ class PanelsLayout : public Node {
   static const char* name() { return "Panels"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🚥"; }
+  static const char* category() { return "Layout"; }
 
   Wiring panels = {{2, 2, 1}, 1, {true, true, true}, {false, false, false}};  // 2x2 panels, increasing over the axis,
   Wiring panel = {{16, 16, 1}, 1, {true, true, true}, {false, true, false}};  // 16x16 panel, increasing over the axis, snake on the Y-axis
@@ -193,6 +196,7 @@ class CubeLayout : public Node {
   static const char* name() { return "Cube"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "🚥"; }
+  static const char* category() { return "Layout"; }
 
   Wiring panels = {{10, 10, 10}, 3, {true, true, true}, {false, true, false}};
   ;  // 16x16 panel, increasing over the axis, snake on the Y-axis
@@ -249,6 +253,7 @@ class TorontoBarGourdsLayout : public Node {
   static const char* name() { return "Toronto Bar Gourds"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "🚥"; }
+  static const char* category() { return "Layout"; }
 
   // Coord3D size;
   uint8_t nrOfLightsPerGourd = 61;  // 5*12+1; mode 0 only
@@ -362,6 +367,7 @@ class SingleRowLayout : public Node {
   static const char* name() { return "Single Row"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🚥"; }
+  static const char* category() { return "Layout"; }
 
   uint8_t start_x = 0;
   uint16_t width = 30;
@@ -403,6 +409,7 @@ class SingleColumnLayout : public Node {
   static const char* name() { return "Single Column"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🚥"; }
+  static const char* category() { return "Layout"; }
 
   uint8_t start_y = 0;
   uint16_t height = 30;
@@ -444,6 +451,7 @@ class TubesLayout : public Node {
   static const char* name() { return "Tubes"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🚥"; }
+  static const char* category() { return "Layout"; }
 
   uint8_t nrOfTubes = 4;
   uint8_t ledsPerTube = 54;
@@ -474,6 +482,7 @@ class RingLayout : public Node {
   static const char* name() { return "Ring"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🚥"; }
+  static const char* category() { return "Layout"; }
 
   Coord3D ringCenter;
   uint8_t nrOfLEDs = 24;
@@ -569,6 +578,7 @@ class Rings16Layout : public Node {
   static const char* name() { return "16 Rings"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🚥"; }
+  static const char* category() { return "Layout"; }
 
   uint8_t scale = 1;
 
@@ -622,6 +632,7 @@ class Rings241Layout : public Node {
   static const char* name() { return "Rings 241"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🚥"; }
+  static const char* category() { return "Layout"; }
 
   uint8_t scale = 2;
 
@@ -667,6 +678,7 @@ class CarLightsLayout : public Node {
   static const char* name() { return "Car Lights"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🚥"; }
+  static const char* category() { return "Layout"; }
 
   // uint8_t nrOfSpokes = 12;
   uint8_t scale = 2;
@@ -788,6 +800,7 @@ class WheelLayout : public Node {
   static const char* name() { return "Wheel"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🚥"; }
+  static const char* category() { return "Layout"; }
 
   uint8_t nrOfSpokes = 12;
   uint8_t ledsPerSpoke = 16;
@@ -822,6 +835,7 @@ class SpiralLayout : public Node {
   static const char* name() { return "Spiral"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "🚥"; }
+  static const char* category() { return "Layout"; }
 
   uint16_t ledCount = 640;
   uint16_t bottomRadius = 10;
