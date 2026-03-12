@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getTimeAgo, initCap } from '../lib/stores/moonbase_utilities';
+import { getTimeAgo, initCap, extractEmojis } from '../lib/stores/moonbase_utilities';
 
 describe('initCap', () => {
 	it('capitalises first letter', () => {
@@ -41,5 +41,23 @@ describe('getTimeAgo', () => {
 
 	it('shows days and hours', () => {
 		expect(getTimeAgo(now / 1000 - 90000, now)).toBe('1d1h');
+	});
+});
+
+describe('extractEmojis', () => {
+	it('extracts single emoji', () => {
+		expect(extractEmojis('Hello 🌙')).toEqual(['🌙']);
+	});
+
+	it('extracts multiple emojis', () => {
+		expect(extractEmojis('🔥 Fire 💧 Water')).toEqual(['🔥', '💧']);
+	});
+
+	it('returns empty array for no emojis', () => {
+		expect(extractEmojis('No emojis here')).toEqual([]);
+	});
+
+	it('handles ZWJ sequences', () => {
+		expect(extractEmojis('Family: 👨‍👩‍👧')).toHaveLength(1);
 	});
 });

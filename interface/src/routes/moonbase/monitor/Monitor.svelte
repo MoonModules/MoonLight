@@ -91,7 +91,7 @@
 		height = view.getInt32(4, true);
 		depth = view.getInt32(8, true);
 
-		setMatrixDimensions(width, height);
+		setMatrixDimensions(width, height, depth);
 
 		// let nrOfLights = header[4] + 256 * header[5];
 

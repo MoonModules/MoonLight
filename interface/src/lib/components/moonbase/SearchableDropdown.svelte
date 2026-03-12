@@ -29,6 +29,7 @@
 	let search = '';
 	let categoryFilter = '';
 	let tagFilter = '';
+	let activeIndex = -1;
 
 	$: categories = [
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -60,10 +61,13 @@
 	async function openDropdown() {
 		open = true;
 		search = '';
+		activeIndex = -1;
 		await tick();
 		if (!listEl || !dropdownEl) return;
 		const triggerEl = dropdownEl.querySelector('button') as HTMLElement;
 		positionDropdown(triggerEl, listEl);
+		// Initialise activeIndex to the currently selected item
+		activeIndex = filtered.findIndex((v) => isSelected(v, v._idx));
 		// Scroll selected item to center
 		const selectedEl = listEl.querySelector('[aria-selected="true"]') as HTMLElement | null;
 		if (selectedEl) {
@@ -88,12 +92,50 @@
 		}
 	}
 
+	function handleKeydown(e: KeyboardEvent) {
+		if (!open) return;
+		if (e.key === 'Escape') {
+			e.preventDefault();
+			open = false;
+			const triggerEl = dropdownEl?.querySelector('button') as HTMLElement | null;
+			triggerEl?.focus();
+		} else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+			e.preventDefault();
+			if (!listEl) return;
+			const options = listEl.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
+			const count = options.length;
+			if (count === 0) return;
+			activeIndex =
+				e.key === 'ArrowDown'
+					? Math.min(activeIndex + 1, count - 1)
+					: Math.max(activeIndex - 1, 0);
+			options[activeIndex]?.focus();
+		} else if (e.key === 'Enter' && activeIndex >= 0) {
+			e.preventDefault();
+			const val = filtered[activeIndex];
+			if (val) {
+				open = false;
+				onSelect(val, val._idx, e as unknown as Event);
+			}
+		}
+	}
+
+	function handleTriggerKeydown(e: KeyboardEvent) {
+		if (disabled) return;
+		if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			if (!open) openDropdown();
+		}
+	}
+
 	onMount(() => {
 		window.addEventListener('mousedown', closeOnOutsideClick);
+		window.addEventListener('keydown', handleKeydown);
 	});
 
 	onDestroy(() => {
 		window.removeEventListener('mousedown', closeOnOutsideClick);
+		window.removeEventListener('keydown', handleKeydown);
 	});
 
 	// Sticky top offset depends on how many header rows are visible
@@ -111,6 +153,7 @@
 		aria-haspopup="listbox"
 		aria-expanded={open}
 		onclick={() => toggle()}
+		onkeydown={handleTriggerKeydown}
 	>
 		<slot name="trigger">
 			<span class="flex-1 truncate text-left text-sm">Select...</span>

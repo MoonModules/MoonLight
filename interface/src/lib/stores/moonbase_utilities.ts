@@ -68,7 +68,7 @@ export function extractEmojis(text: string): string[] {
 	const emojiRegex =
 		/[\p{Emoji_Presentation}\p{Extended_Pictographic}]\uFE0F?(\u200D[\p{Emoji_Presentation}\p{Extended_Pictographic}]\uFE0F?)*/gu;
 	const matches = text.match(emojiRegex);
-	return matches ? matches : [];
+	return matches ? [...new Set(matches)] : [];
 }
 
 export function getTimeAgo(timestamp: number, currentTime: number = Date.now()): string {

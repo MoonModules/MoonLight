@@ -279,10 +279,6 @@ void PhysicalLayer::onLayoutPost() {
     }
   }
 }
-// Gamma correction — currently a no-op; reserved for future use.
-uint8_t PhysicalLayer::gamma8(uint8_t b) {
-  return b;
-}
 
 // an effect is using a virtual layer: tell the effect in which layer to run...
 

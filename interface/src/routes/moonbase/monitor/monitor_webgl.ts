@@ -62,13 +62,15 @@ export function createScene(el: HTMLCanvasElement) {
 
 	// Set up position buffer
 	positionBuffer = gl.createBuffer();
-	const positionAttributeLocation = gl.getAttribLocation(program, 'aPosition');
+	if (!positionBuffer) throw new Error('Failed to create position buffer');
+ 	const positionAttributeLocation = gl.getAttribLocation(program, 'aPosition');
 	gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
 	gl.enableVertexAttribArray(positionAttributeLocation);
 	gl.vertexAttribPointer(positionAttributeLocation, 3, gl.FLOAT, false, 0, 0);
 
 	// Set up color buffer
 	colorBuffer = gl.createBuffer();
+	if (!colorBuffer) throw new Error('Failed to create color buffer');
 	const colorAttributeLocation = gl.getAttribLocation(program, 'aColor');
 	gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
 	gl.enableVertexAttribArray(colorAttributeLocation);

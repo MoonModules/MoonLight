@@ -222,9 +222,9 @@ class DistortionWavesEffect : public Node {
         uint8_t valueG = gdistort + w * (a2 - (((xoffs - cx1) * (xoffs - cx1) + (yoffs - cy1) * (yoffs - cy1)) >> 7));
         uint8_t valueB = bdistort + w * (a3 - (((xoffs - cx2) * (xoffs - cx2) + (yoffs - cy2) * (yoffs - cy2)) >> 7));
 
-        valueR = layerP.gamma8(cos8(valueR));
-        valueG = layerP.gamma8(cos8(valueG));
-        valueB = layerP.gamma8(cos8(valueB));
+        valueR = cos8(valueR);
+        valueG = cos8(valueG);
+        valueB = cos8(valueB);
 
         layer->setRGB(pos, CRGB(valueR, valueG, valueB));
       }

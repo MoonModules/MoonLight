@@ -118,8 +118,6 @@ class PhysicalLayer {
   uint8_t nrOfAssignedPins = 0;        // pins actually assigned during layout pass 1
   uint16_t maxPower = 0;               // power budget in mA (0 = unlimited)
 
-  // Gamma correction placeholder — currently a no-op (returns b unchanged).
-  uint8_t gamma8(uint8_t b);
 };
 
 // Global singleton physical layer, defined in PhysicalLayer.cpp.
