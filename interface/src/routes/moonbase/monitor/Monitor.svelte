@@ -147,7 +147,7 @@
 			}
 		}
 
-		updateScene(vertices, colors);
+		updateScene();
 	};
 
 	onMount(() => {

@@ -144,7 +144,7 @@ export function setMatrixDimensions(width: number, height: number, depth: number
 	matrixDepth = depth;
 }
 
-export const updateScene = (vertices: number[], colors: number[]) => {
+export const updateScene = () => {
 	if (!gl) return;
 
 	// Set the MVP matrix
