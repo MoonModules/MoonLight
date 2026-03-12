@@ -307,9 +307,10 @@ class ModuleLightsControl : public Module {
         object["category"] = "WLED";
     }
 
-    control = addControl(controls, "preset", "pad");
+    control = addControl(controls, "preset", "preset");
     control["width"] = 8;
     control["size"] = 18;
+    control["wrap"] = true;
     control["default"].to<JsonObject>();  // clear the preset array before adding new presets
     control["default"]["list"].to<JsonArray>();
     control["default"]["labels"].to<JsonArray>();
