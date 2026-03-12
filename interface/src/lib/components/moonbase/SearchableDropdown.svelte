@@ -102,7 +102,7 @@
 		} else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
 			e.preventDefault();
 			if (!listEl) return;
-			const options = listEl.querySelectorAll<HTMLElement>('[role="option"]');
+			const options = Array.from(listEl.querySelectorAll('[role="option"]')) as HTMLElement[];
 			const count = options.length;
 			if (count === 0) return;
 			activeIndex =
@@ -140,7 +140,7 @@
 	$: hasCategoryRow = categories.length > 1;
 	$: hasTagRow = tags.length > 0;
 	// search bar is ~2.5rem, category row is ~2.25rem
-	$: tagTop = hasCategoryRow ? 'top-[4.75rem]' : 'top-10';
+	$: tagTopPx = hasCategoryRow ? '4.75rem' : '2.5rem';
 </script>
 
 <div class="relative" bind:this={dropdownEl}>
@@ -196,7 +196,10 @@
 			{/if}
 			<!-- Tag cloud -->
 			{#if hasTagRow}
-				<div class="border-base-300 sticky {tagTop} z-10 flex flex-wrap gap-1 border-b p-1">
+				<div
+					class="border-base-300 sticky z-10 flex flex-wrap gap-1 border-b p-1"
+					style="top: {tagTopPx}"
+				>
 					{#each tags as tag (tag)}
 						<button
 							type="button"

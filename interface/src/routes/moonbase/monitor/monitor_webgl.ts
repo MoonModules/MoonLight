@@ -35,7 +35,10 @@ export function createScene(el: HTMLCanvasElement) {
 		gl.deleteBuffer(positionBuffer);
 		gl.deleteBuffer(colorBuffer);
 		const shaders = gl.getAttachedShaders(program);
-		if (shaders) shaders.forEach((s) => gl!.deleteShader(s));
+		if (shaders)
+			shaders.forEach((s) => {
+				gl!.deleteShader(s);
+			});
 		gl.deleteProgram(program);
 	}
 
@@ -115,6 +118,7 @@ const createProgram = (
 	fragmentShader: WebGLShader
 ): WebGLProgram => {
 	const program = gl.createProgram();
+	if (!program) throw new Error('Unable to create program');
 	gl.attachShader(program, vertexShader);
 	gl.attachShader(program, fragmentShader);
 	gl.linkProgram(program);

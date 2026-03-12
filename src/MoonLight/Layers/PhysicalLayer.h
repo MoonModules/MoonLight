@@ -68,6 +68,12 @@ class PhysicalLayer {
   PhysicalLayer();
   ~PhysicalLayer();
 
+  //Deleting copy/assignment prevents accidental shallow copies of ownership-bearing state.
+  PhysicalLayer(const PhysicalLayer&) = delete;
+  PhysicalLayer& operator=(const PhysicalLayer&) = delete;
+  PhysicalLayer(PhysicalLayer&&) = delete;
+  PhysicalLayer& operator=(PhysicalLayer&&) = delete;
+
   // Allocate channel buffers and initialise all virtual layers.
   void setup();
 
