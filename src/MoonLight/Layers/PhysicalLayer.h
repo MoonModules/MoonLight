@@ -74,13 +74,13 @@ class PhysicalLayer {
   // Run one effect frame across all virtual layers (called from effectTask, Core 0).
   void loop();
 
-  // Run 20 ms periodic updates across all virtual layers (called from SvelteKit task, Core 1).
+  // Run 20 ms periodic updates across all virtual layers (called from effectTask(), Core 0).
   void loop20ms();
 
   // Run one driver frame: process pending layout mapping, then loop all driver nodes (Core 1).
   void loopDrivers();
 
-  // Run 20 ms periodic driver updates (called from SvelteKit task, Core 1).
+  // Run 20 ms periodic driver updates (called from driverTask(), Core 1).
   void loop20msDrivers();
 
   // Execute a full layout mapping pass: calls onLayoutPre → onLayout (per node) → onLayoutPost.

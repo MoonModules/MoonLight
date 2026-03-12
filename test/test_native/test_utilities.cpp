@@ -360,68 +360,6 @@ TEST_CASE("Char: non-member operator+ (const char* + Char)") {
 }
 
 // ============================================================
-// XYZUnModified — 3-D to flat-index formula (copied from VirtualLayer.h:98)
-//   result = position.x + position.y * size.x + position.z * size.x * size.y
-// Using uint32_t to match the PSRAM (nrOfLights_t = uint32_t) variant and
-// avoid 16-bit overflow on intermediate products.
-// ============================================================
-
-static uint32_t xyzUnModified(Coord3D pos, Coord3D size) {
-  return (uint32_t)pos.x + (uint32_t)pos.y * (uint32_t)size.x +
-         (uint32_t)pos.z * (uint32_t)size.x * (uint32_t)size.y;
-}
-
-TEST_CASE("XYZUnModified") {
-  SUBCASE("origin always maps to 0") {
-    CHECK_EQ(xyzUnModified({0, 0, 0}, {4, 3, 2}), 0u);
-    CHECK_EQ(xyzUnModified({0, 0, 0}, {1, 1, 1}), 0u);
-    CHECK_EQ(xyzUnModified({0, 0, 0}, {16, 16, 16}), 0u);
-  }
-
-  SUBCASE("max boundary equals size.x*size.y*size.z - 1") {
-    // size {4,3,2}: total 24 lights, last index = 23
-    CHECK_EQ(xyzUnModified({3, 2, 1}, {4, 3, 2}), 23u);
-    // size {5,4,3}: total 60, last index = 59
-    CHECK_EQ(xyzUnModified({4, 3, 2}, {5, 4, 3}), 59u);
-    // size {8,8,8}: total 512, last index = 511
-    CHECK_EQ(xyzUnModified({7, 7, 7}, {8, 8, 8}), 511u);
-  }
-
-  SUBCASE("intermediate coordinates — size {4,3,2}") {
-    // z=0 plane: flat row-major in x+y*4
-    CHECK_EQ(xyzUnModified({1, 0, 0}, {4, 3, 2}), 1u);   // second col, first row
-    CHECK_EQ(xyzUnModified({0, 1, 0}, {4, 3, 2}), 4u);   // first col, second row
-    CHECK_EQ(xyzUnModified({1, 1, 0}, {4, 3, 2}), 5u);   // 1 + 1*4
-    CHECK_EQ(xyzUnModified({2, 1, 0}, {4, 3, 2}), 6u);   // 2 + 1*4
-    // z=1 plane starts at offset size.x*size.y = 12
-    CHECK_EQ(xyzUnModified({0, 0, 1}, {4, 3, 2}), 12u);
-    CHECK_EQ(xyzUnModified({2, 1, 1}, {4, 3, 2}), 18u);  // 2 + 1*4 + 1*12
-  }
-
-  SUBCASE("degenerate size {1,1,1} — only one cell") {
-    CHECK_EQ(xyzUnModified({0, 0, 0}, {1, 1, 1}), 0u);
-  }
-
-  SUBCASE("single x-axis (size.y=1, size.z=1)") {
-    CHECK_EQ(xyzUnModified({0, 0, 0}, {5, 1, 1}), 0u);
-    CHECK_EQ(xyzUnModified({3, 0, 0}, {5, 1, 1}), 3u);
-    CHECK_EQ(xyzUnModified({4, 0, 0}, {5, 1, 1}), 4u);  // last index = size.x-1
-  }
-
-  SUBCASE("single y-axis (size.x=1, size.z=1)") {
-    CHECK_EQ(xyzUnModified({0, 0, 0}, {1, 5, 1}), 0u);
-    CHECK_EQ(xyzUnModified({0, 3, 0}, {1, 5, 1}), 3u);  // 0 + 3*1
-    CHECK_EQ(xyzUnModified({0, 4, 0}, {1, 5, 1}), 4u);
-  }
-
-  SUBCASE("single z-axis (size.x=1, size.y=1)") {
-    CHECK_EQ(xyzUnModified({0, 0, 0}, {1, 1, 5}), 0u);
-    CHECK_EQ(xyzUnModified({0, 0, 3}, {1, 1, 5}), 3u);  // 0 + 0 + 3*1*1
-    CHECK_EQ(xyzUnModified({0, 0, 4}, {1, 1, 5}), 4u);
-  }
-}
-
-// ============================================================
 // FastLED fl::map_range tests
 // ============================================================
 

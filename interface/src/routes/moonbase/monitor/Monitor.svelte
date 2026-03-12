@@ -65,6 +65,7 @@
 
 	const handleHeader = (header: Uint8Array) => {
 		console.log('Monitor.handleHeader', header);
+		// done = false; // causes continues onLayoutChanged !
 
 		let view = new DataView(header.buffer);
 

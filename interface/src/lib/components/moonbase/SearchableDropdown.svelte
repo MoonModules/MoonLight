@@ -48,7 +48,7 @@
 
 	$: filtered = values
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		.map((v: any, i: number) => ({ ...v, _idx: i }))
+		.map((v: any, i: number) => ({ ...v, _sd_idx: i }))
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		.filter((v: any) => {
 			const name: string = v.name || '';
@@ -67,7 +67,7 @@
 		const triggerEl = dropdownEl.querySelector('button') as HTMLElement;
 		positionDropdown(triggerEl, listEl);
 		// Initialise activeIndex to the currently selected item
-		activeIndex = filtered.findIndex((v) => isSelected(v, v._idx));
+		activeIndex = filtered.findIndex((v) => isSelected(v, v._sd_idx));
 		// Scroll selected item to center
 		const selectedEl = listEl.querySelector('[aria-selected="true"]') as HTMLElement | null;
 		if (selectedEl) {
@@ -102,20 +102,18 @@
 		} else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
 			e.preventDefault();
 			if (!listEl) return;
-			const options = listEl.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
+			const options = listEl.querySelectorAll<HTMLElement>('[role="option"]');
 			const count = options.length;
 			if (count === 0) return;
 			activeIndex =
-				e.key === 'ArrowDown'
-					? Math.min(activeIndex + 1, count - 1)
-					: Math.max(activeIndex - 1, 0);
+				e.key === 'ArrowDown' ? Math.min(activeIndex + 1, count - 1) : Math.max(activeIndex - 1, 0);
 			options[activeIndex]?.focus();
 		} else if (e.key === 'Enter' && activeIndex >= 0) {
 			e.preventDefault();
 			const val = filtered[activeIndex];
 			if (val) {
 				open = false;
-				onSelect(val, val._idx, e as unknown as Event);
+				onSelect(val, val._sd_idx, e as unknown as Event);
 			}
 		}
 	}
@@ -212,23 +210,23 @@
 				</div>
 			{/if}
 			<!-- Items -->
-			{#each filtered as val (val._idx)}
+			{#each filtered as val (val._sd_idx)}
 				<button
 					type="button"
 					role="option"
-					aria-selected={isSelected(val, val._idx)}
+					aria-selected={isSelected(val, val._sd_idx)}
 					class="hover:bg-base-200 flex w-full cursor-pointer items-center gap-2 px-2 py-1.5 {isSelected(
 						val,
-						val._idx
+						val._sd_idx
 					)
 						? 'bg-base-300'
 						: ''}"
 					onclick={(event) => {
 						open = false;
-						onSelect(val, val._idx, event);
+						onSelect(val, val._sd_idx, event);
 					}}
 				>
-					<slot name="item" {val} index={val._idx}>
+					<slot name="item" {val} index={val._sd_idx}>
 						<span class="truncate text-sm">{val.name}</span>
 					</slot>
 				</button>

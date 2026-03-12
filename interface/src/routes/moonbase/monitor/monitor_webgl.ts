@@ -21,12 +21,25 @@ let colorBuffer: WebGLBuffer; // Buffer for color data
 
 export function createScene(el: HTMLCanvasElement) {
 	// Initialize WebGL
-	gl = el.getContext('webgl');
-	if (!gl) {
+	const newGl = el.getContext('webgl');
+	if (!newGl) {
 		console.error('WebGL not supported');
 		return;
 	}
 
+	// Same canvas/context: already initialized, nothing to do.
+	if (gl === newGl) return;
+
+	// Different canvas: release resources on the previous context before switching.
+	if (gl) {
+		gl.deleteBuffer(positionBuffer);
+		gl.deleteBuffer(colorBuffer);
+		const shaders = gl.getAttachedShaders(program);
+		if (shaders) shaders.forEach((s) => gl!.deleteShader(s));
+		gl.deleteProgram(program);
+	}
+
+	gl = newGl;
 	clearVertices();
 
 	// Set up shaders
@@ -63,7 +76,7 @@ export function createScene(el: HTMLCanvasElement) {
 	// Set up position buffer
 	positionBuffer = gl.createBuffer();
 	if (!positionBuffer) throw new Error('Failed to create position buffer');
- 	const positionAttributeLocation = gl.getAttribLocation(program, 'aPosition');
+	const positionAttributeLocation = gl.getAttribLocation(program, 'aPosition');
 	gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
 	gl.enableVertexAttribArray(positionAttributeLocation);
 	gl.vertexAttribPointer(positionAttributeLocation, 3, gl.FLOAT, false, 0, 0);
@@ -176,7 +189,8 @@ function getMVPMatrix(): mat4 {
 	const distanceForWidth = horizontalSize / (2 * Math.tan(horizontalFov / 2));
 
 	// Use the larger distance to ensure both dimensions fit
-	const cameraDistance = Math.max(distanceForHeight, distanceForWidth) * 2.5;
+	const cameraPadding = 2.5; // 5 makes it too small
+	const cameraDistance = Math.max(distanceForHeight, distanceForWidth) * cameraPadding;
 
 	const view = mat4.create();
 	mat4.lookAt(view, [0, 0, cameraDistance], [0, 0, 0], [0, 1, 0]);
