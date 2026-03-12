@@ -200,8 +200,8 @@
 					</div>
 					<div>
 						<div class="font-bold">Performance</div>
-						<div class="text-sm opacity-75">
-							{systemInformation.lps} loops/s <!-- 🌙 -->
+						<div class="text-sm opacity-75"> <!-- 🌙 -->
+							Effects: {systemInformation.lps_effects} lps &nbsp;|&nbsp; Drivers: {systemInformation.lps_drivers} lps &nbsp;➡&nbsp; All: {systemInformation.lps_all} lps
 						</div>
 					</div>
 				</div>

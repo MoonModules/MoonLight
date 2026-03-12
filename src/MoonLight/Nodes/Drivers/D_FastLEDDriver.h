@@ -21,6 +21,7 @@ class FastLEDDriver : public DriverNode {
   static const char* name() { return "FastLED Driver"; }
   static uint8_t dim() { return _NoD; }
   static const char* tags() { return "☸️"; }
+  static const char* category() { return "Driver"; }
 
   Char<32> version = FASTLED_BUILD;
   Char<32> status = "NoInit";

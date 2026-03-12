@@ -24,6 +24,7 @@ class BouncingBallsEffect : public Node {
   static const char* name() { return "Bouncing Balls"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t grav = 128;
   uint8_t numBalls = 8;
@@ -105,6 +106,7 @@ class BlurzEffect : public Node {
   static const char* name() { return "Blurz"; }
   static uint8_t dim() { return _3D; }  // test...
   static const char* tags() { return "🐙🎵"; }
+  static const char* category() { return "WLED"; }
 
   // static const char _data_FX_MODE_BLURZ[] PROGMEM = "Blurz Plus ☾@Fade rate,Blur,,,,FreqMap ☾,GEQ Scanner ☾,;!,Color mix;!;01f;sx=48,ix=127,m12=7,si=0"; // Pinwheel, Beatsin
 
@@ -179,6 +181,7 @@ class DistortionWavesEffect : public Node {
   static const char* name() { return "Distortion Waves"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 4;
   uint8_t scale = 4;
@@ -219,9 +222,9 @@ class DistortionWavesEffect : public Node {
         uint8_t valueG = gdistort + w * (a2 - (((xoffs - cx1) * (xoffs - cx1) + (yoffs - cy1) * (yoffs - cy1)) >> 7));
         uint8_t valueB = bdistort + w * (a3 - (((xoffs - cx2) * (xoffs - cx2) + (yoffs - cy2) * (yoffs - cy2)) >> 7));
 
-        valueR = layerP.gamma8(cos8(valueR));
-        valueG = layerP.gamma8(cos8(valueG));
-        valueB = layerP.gamma8(cos8(valueB));
+        valueR = cos8(valueR);
+        valueG = cos8(valueG);
+        valueB = cos8(valueB);
 
         layer->setRGB(pos, CRGB(valueR, valueG, valueB));
       }
@@ -234,6 +237,7 @@ class FreqMatrixEffect : public Node {
   static const char* name() { return "Freq Matrix"; }
   static uint8_t dim() { return _1D; }  // 2D/3D-ish?
   static const char* tags() { return "🐙♪"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 255;
   uint8_t fx = 128;
@@ -308,6 +312,7 @@ class GEQEffect : public Node {
   static const char* name() { return "GEQ"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🐙♫"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t fadeOut = 255;
   uint8_t ripple = 128;
@@ -425,6 +430,7 @@ class LissajousEffect : public Node {
   static const char* name() { return "Lissajous"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t xFrequency = 64;
   uint8_t fadeRate = 128;
@@ -456,6 +462,7 @@ class Noise2DEffect : public Node {
   static const char* name() { return "Noise 2D"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 8;
   uint8_t scale = 64;
@@ -480,6 +487,7 @@ class NoiseMeterEffect : public Node {
   static const char* name() { return "Noise Meter"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♪"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t fadeRate = 248;
   uint8_t width = 128;
@@ -536,6 +544,7 @@ class PacManEffect : public Node {
   static const char* name() { return "PacMan"; }
   static uint8_t dim() { return _1D; }  // it is a 1D effect, todo: 2D
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   // static const char _data_FX_MODE_PACMAN[] PROGMEM = "PacMan@Speed,# of PowerDots,Blink distance,Blur,# of Ghosts,Dots,Smear,Compact;;!;1;m12=0,sx=192,ix=64,c1=64,c2=0,c3=12,o1=1,o2=0";
   uint8_t speed = 192;
@@ -797,6 +806,7 @@ class AntEffect : public Node {
   static const char* name() { return "Ants"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t antSpeed = 192;
   uint8_t nrOfAnts = MAX_ANTS / 2;
@@ -964,6 +974,7 @@ class TetrixEffect : public Node {
   static const char* name() { return "Tetrix"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speedControl = 0;  // 1 beat per second
   uint8_t width = 0;
@@ -1069,6 +1080,7 @@ class PopCornEffect : public Node {
   static const char* name() { return "Popcorn"; }
   static uint8_t dim() { return _1D; }  // 2D-ish? check latest in WLED...
   static const char* tags() { return "🐙♪"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 128;
   uint8_t numPopcorn = maxNumPopcorn / 2;
@@ -1145,6 +1157,7 @@ class WaverlyEffect : public Node {
   static const char* name() { return "Waverly"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🐙♪"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t fadeRate = 128;
   uint8_t amplification = 30;
@@ -1190,6 +1203,7 @@ class BlackholeEffect : public Node {
   static const char* name() { return "Blackhole"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t fadeRate = 128;    // speed
   uint8_t outerYfreq = 128;  // intensity
@@ -1241,6 +1255,7 @@ class DNAEffect : public Node {
   static const char* name() { return "DNA"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 16;
   uint8_t blur = 128;
@@ -1294,6 +1309,7 @@ class OctopusEffect : public Node {
   static const char* name() { return "Octopus"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   struct Map_t {
     uint8_t angle;
@@ -1388,6 +1404,7 @@ class FrizzlesEffect : public Node {
   static const char* name() { return "Frizzles"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t bpm = 60;
   uint8_t intensity = 128;
@@ -1424,6 +1441,7 @@ class FireworksEffect : public Node {
   static const char* name() { return "Fireworks"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t gravityControl = 128;
   uint8_t firingSide = 128;
@@ -1560,6 +1578,7 @@ class FunkyPlankEffect : public Node {
   static const char* name() { return "Funky Plank"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🐙♫"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 255;
   uint8_t bands = NUM_GEQ_CHANNELS;
@@ -1609,6 +1628,7 @@ class FlowEffect : public Node {
   static const char* name() { return "Flow"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙"; }  //  means wled origin
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 128;
   uint8_t zonesControl = 128;
@@ -1712,6 +1732,7 @@ class RainEffect : public Node {
   static const char* name() { return "Rain"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 128;
   uint8_t intensity = 64;
@@ -1780,6 +1801,7 @@ class DripEffect : public Node {
   static const char* name() { return "Drip"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t gravityControl = 128;
   uint8_t drips = 4;
@@ -1885,6 +1907,7 @@ class HeartBeatEffect : public Node {
   static const char* name() { return "Heartbeat"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "♥"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 15;
   uint8_t intensity = 128;
@@ -1928,6 +1951,7 @@ class DJLightEffect : public Node {
   static const char* name() { return "DJ Light"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♫"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 255;
   bool candyFactory = true;
@@ -2005,6 +2029,7 @@ class ColorTwinkleEffect : public Node {
   static const char* name() { return "Color Twinkle"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t fadeSpeed = 128;
   uint8_t spawnSpeed = 128;
@@ -2088,6 +2113,7 @@ class PlasmaEffect : public Node {
   static const char* name() { return "Plasma"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 60;
   uint8_t intensity = 128;
@@ -2120,6 +2146,7 @@ class JuliaEffect : public Node {
   static const char* name() { return "Julia"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 60;       // 1 beat per second
   uint8_t iterations = 64;  // 24;
@@ -2257,6 +2284,7 @@ class PoliceEffect : public Node {
   static const char* name() { return "Police"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 60;  // 1 beat per second
   uint8_t widthC = 128;
@@ -2563,6 +2591,7 @@ class BlinkRainbowEffect : public Node {
   static const char* name() { return "Blink Rainbow"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t frequency = 128;
   uint8_t blinkDuration = 128;
@@ -2604,6 +2633,7 @@ class MeteorEffect : public Node {
   static const char* name() { return "Meteor"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 128;
   uint8_t trail = 128;
@@ -2677,6 +2707,7 @@ class OscillateEffect : public Node {
   static const char* name() { return "Oscillate"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 128;
   uint8_t intensity = 128;
@@ -2757,6 +2788,7 @@ class PhasedNoiseEffect : public Node {
   static const char* name() { return "Phased Noise"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 128;
   uint8_t intensity = 128;
@@ -2800,6 +2832,7 @@ class FreqmapEffect : public Node {
   static const char* name() { return "Freq Map"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♪"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 128;
   uint8_t intensity = 128;
@@ -2840,6 +2873,7 @@ class FreqpixelsEffect : public Node {
   static const char* name() { return "Freq Pixels"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♪"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 128;
   uint8_t intensity = 128;
@@ -2879,6 +2913,7 @@ class FreqwaveEffect : public Node {
   static const char* name() { return "Freq Wave"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♪"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 128;
   uint8_t lowBin = 3;
@@ -2949,6 +2984,7 @@ class GravfreqEffect : public Node {
   static const char* name() { return "Grav Freq"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♪"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 128;
   uint8_t intensity = 128;
@@ -3014,6 +3050,7 @@ class GravimeterEffect : public Node {
   static const char* name() { return "Gravimeter"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♪"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 128;
   uint8_t intensity = 128;
@@ -3082,6 +3119,7 @@ class GravcenterEffect : public Node {
   static const char* name() { return "Grav Center"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♪"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 128;
   uint8_t intensity = 128;
@@ -3143,6 +3181,7 @@ class GravcentricEffect : public Node {
   static const char* name() { return "Grav Centric"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♪"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 128;
   uint8_t intensity = 128;
@@ -3202,6 +3241,7 @@ class MidnoiseEffect : public Node {
   static const char* name() { return "Midnoise"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♪"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 128;
   uint8_t intensity = 128;
@@ -3236,6 +3276,7 @@ class NoisemoveEffect : public Node {
   static const char* name() { return "Noise Move"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 128;
   uint8_t intensity = 128;
@@ -3268,6 +3309,7 @@ class NoisefireEffect : public Node {
   static const char* name() { return "Noise Fire"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 128;
   uint8_t intensity = 128;
@@ -3295,6 +3337,7 @@ class PixelwaveEffect : public Node {
   static const char* name() { return "Pixelwave"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♪"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 128;
   uint8_t intensity = 128;
@@ -3335,6 +3378,7 @@ class PlasmoidEffect : public Node {
   static const char* name() { return "Plasmoid"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♪"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 128;
   uint8_t intensity = 128;
@@ -3387,6 +3431,7 @@ class PuddlepeakEffect : public Node {
   static const char* name() { return "Puddle Peak"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♪"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 128;
   uint8_t intensity = 128;
@@ -3421,6 +3466,7 @@ class PuddlesEffect : public Node {
   static const char* name() { return "Puddles"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♪"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 128;
   uint8_t intensity = 128;
@@ -3459,6 +3505,7 @@ class RipplepeakEffect : public Node {
   static const char* name() { return "Ripple Peak"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♪"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t intensity = 128;
 
@@ -3516,6 +3563,7 @@ class RocktavesEffect : public Node {
   static const char* name() { return "Rocktaves"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♪"; }
+  static const char* category() { return "WLED"; }
 
   void setup() override {}
 
@@ -3553,6 +3601,7 @@ class WaterfallEffect : public Node {
   static const char* name() { return "Waterfall"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🐙♪"; }
+  static const char* category() { return "WLED"; }
 
   uint8_t speed = 128;
   uint8_t intensity = 128;

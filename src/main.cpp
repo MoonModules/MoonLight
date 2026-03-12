@@ -136,7 +136,11 @@ TaskHandle_t driverTaskHandle = nullptr;
         xSemaphoreGive(swapMutex);
       }
 
+      uint32_t cycleStartE = esp_cpu_get_cycle_count();
+
       layerP.loop();
+
+      esp32sveltekit.lps_effects_cycles += esp_cpu_get_cycle_count() - cycleStartE;
 
       if (millis() - last20ms >= 20) {
         last20ms = millis();
@@ -187,8 +191,12 @@ TaskHandle_t driverTaskHandle = nullptr;
           mutexGiven = true;
         }
 
-        esp32sveltekit.lps++;
+        esp32sveltekit.lps_all++;
+        uint32_t cycleStartD = esp_cpu_get_cycle_count();
+
         layerP.loopDrivers();
+
+        esp32sveltekit.lps_drivers_cycles += esp_cpu_get_cycle_count() - cycleStartD;
 
         if (millis() - last20ms >= 20) {
           last20ms = millis();
@@ -254,7 +262,7 @@ void setup() {
 #endif
 
   for (int i = 0; i < 5; i++) {
-    if (!Serial) delay(300);  // just a tiny wait to avoid problems later when acessing serial
+    if (!Serial) delay(300);                                      // just a tiny wait to avoid problems later when acessing serial
     if (Serial) Serial.printf("Serial init wait %d\n", i * 300);  // ok-lint: Serial used before logging is initialized
   }
 

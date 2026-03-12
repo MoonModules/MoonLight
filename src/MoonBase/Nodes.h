@@ -34,6 +34,7 @@ class Node {
  public:
   static const char* name() { return "noname"; }
   static const char* tags() { return ""; }
+  static const char* category() { return ""; }
   static uint8_t dim() { return _NoD; };
 
   VirtualLayer* layer = nullptr;  // the virtual layer this effect is using
@@ -128,13 +129,13 @@ class Node {
   virtual void onUpdate(const JsonObject& control) {}
 
   void requestMappings() {
-    if (hasModifier() || hasOnLayout()) {
-      // EXT_LOGD(ML_TAG, "hasOnLayout or Modifier -> requestMapVirtual");
-      layerP.requestMapVirtual = true;
-    }
     if (hasOnLayout()) {
       // EXT_LOGD(ML_TAG, "hasOnLayout -> requestMapPhysical");
       layerP.requestMapPhysical = true;
+    }
+    if (hasModifier()) {
+      // EXT_LOGD(ML_TAG, "hasOnLayout or Modifier -> requestMapVirtual");
+      layerP.requestMapVirtual = true;
     }
   }
 

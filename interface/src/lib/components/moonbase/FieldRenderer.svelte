@@ -13,6 +13,7 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 	import FileEditWidget from '$lib/components/moonbase/FileEditWidget.svelte';
+	import SearchableDropdown from '$lib/components/moonbase/SearchableDropdown.svelte';
 	import { initCap, getTimeAgo } from '$lib/stores/moonbase_utilities';
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -133,6 +134,13 @@
 	let clickTimeout: ReturnType<typeof setTimeout> | null = null;
 	let preventClick = false;
 
+	// Find currently selected node object by matching value string
+	$: selectedNode =
+		property.type === 'selectFile' && Array.isArray(property.values)
+			? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+				property.values.find((v: any) => v.name === value)
+			: undefined;
+
 	// inspired by WLED
 	function genPalPrev(hexString: string) {
 		if (!hexString) return '';
@@ -181,35 +189,59 @@
 		{:else}
 			<span>{value}</span>
 		{/if}
-	{:else if property.type == 'select' || property.type == 'selectFile'}
+	{:else if property.type == 'select'}
 		<select bind:value onchange={onChange} class="select">
 			{#each property.values as optionLabel, index (index)}
-				<option value={property.type == 'selectFile' ? optionLabel : index}>
+				<option value={index}>
 					{optionLabel}
 				</option>
 			{/each}
 		</select>
-		{#if property.type == 'selectFile'}
-			<FileEditWidget path={value} showEditor={false} />
-		{/if}
+	{:else if property.type == 'selectFile'}
+		<SearchableDropdown
+			values={property.values ?? []}
+			isSelected={(val) => value === val.name}
+			onSelect={(val, _idx, event) => {
+				value = val.name;
+				onChange(event);
+			}}
+			{disabled}
+			showTags={true}
+			minWidth="min-w-60"
+		>
+			<span slot="trigger" class="flex-1 truncate text-left text-sm"
+				>{selectedNode?.name ?? value ?? ''}</span
+			>
+		</SearchableDropdown>
+		<FileEditWidget path={value} showEditor={false} />
 	{:else if property.type == 'palette'}
-		<div style="display: flex; gap: 8px; align-items: center;">
-			<select bind:value onchange={onChange} class="select">
-				{#each property.values as val, index (index)}
-					<option value={index}>{val.name}</option>
-				{/each}
-			</select>
-			<div class="palette-preview" style={genPalPrev(property.values[value]?.colors)}></div>
-		</div>
-
-		<style>
-			.palette-preview {
-				width: 250px;
-				height: 40px;
-				border: 1px solid #ccc;
-				border-radius: 3px;
-			}
-		</style>
+		<SearchableDropdown
+			values={property.values ?? []}
+			isSelected={(_val, idx) => value === idx}
+			onSelect={(_val, idx, event) => {
+				value = idx;
+				onChange(event);
+			}}
+			{disabled}
+			minWidth="min-w-122"
+		>
+			<span slot="trigger" class="flex items-center gap-2">
+				<span
+					style="{genPalPrev(
+						property.values[value]?.colors
+					)} width:240px; height:30px; border-radius:2px; flex-shrink:0; display:inline-block; border:1px solid rgba(128,128,128,0.25);"
+				></span>
+				<span class="flex-1 truncate text-left text-sm">{property.values[value]?.name ?? ''}</span>
+			</span>
+			<span slot="item" let:val class="flex items-center gap-2">
+				<span
+					style="{genPalPrev(
+						val.colors
+					)} width:240px; height:20px; border-radius:2px; flex-shrink:0; display:inline-block; border:1px solid rgba(128,128,128,0.25);"
+				></span>
+				<span class="truncate text-sm">{val.name}</span>
+			</span>
+		</SearchableDropdown>
 	{:else if property.type == 'checkbox'}
 		<input type="checkbox" class="toggle toggle-primary" bind:checked={value} onchange={onChange} />
 	{:else if property.type == 'slider'}

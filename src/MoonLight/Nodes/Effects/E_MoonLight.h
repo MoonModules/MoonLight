@@ -18,6 +18,7 @@ class SolidEffect : public Node {
   static const char* name() { return "Solid"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "🔥"; }
+  static const char* category() { return "MoonLight"; }
 
   uint8_t red = 182;
   uint8_t green = 15;
@@ -95,6 +96,7 @@ class StarSkyEffect : public Node {
   static const char* name() { return "Star Sky"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "🔥"; }
+  static const char* category() { return "MoonLight"; }
 
   // control variables
   uint8_t star_speed = 1;
@@ -192,6 +194,7 @@ class FixedRectangleEffect : public Node {
   static const char* name() { return "Fixed Rectangle"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🔥"; }
+  static const char* category() { return "MoonLight"; }
 
   uint8_t red = 182;
   uint8_t green = 15;
@@ -257,6 +260,7 @@ class LinesEffect : public Node {
   static const char* name() { return "Lines"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "🔥"; }
+  static const char* category() { return "MoonLight"; }
 
   uint8_t bpm = 30;
 
@@ -295,6 +299,7 @@ class RandomEffect : public Node {
   static const char* name() { return "Random"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "🔥"; }
+  static const char* category() { return "MoonLight"; }
 
   uint8_t fade = 70;
   void setup() { addControl(fade, "fade", "slider"); }
@@ -309,6 +314,7 @@ class RipplesEffect : public Node {
   static const char* name() { return "Ripples"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "🔥"; }
+  static const char* category() { return "MoonLight"; }
 
   uint8_t speed = 50;
   uint8_t interval = 128;
@@ -345,6 +351,7 @@ class ScrollingTextEffect : public Node {
   static const char* name() { return "Scrolling Text"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🔥"; }
+  static const char* category() { return "MoonLight"; }
 
   char textIn[32];
   Char<32> text;  // = Char<32>("MoonLight");
@@ -461,6 +468,7 @@ class SinusEffect : public Node {
   static const char* name() { return "Sinus"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "🔥"; }
+  static const char* category() { return "MoonLight"; }
 
   uint8_t speed = 5;
 
@@ -492,6 +500,7 @@ class SphereMoveEffect : public Node {
   static const char* name() { return "Sphere Move"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "🔥"; }
+  static const char* category() { return "MoonLight"; }
 
   uint8_t speed = 50;
 
@@ -530,6 +539,7 @@ class StarFieldEffect : public Node {  // Inspired by Daniel Shiffman's Coding T
   static const char* name() { return "StarField"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🔥"; }
+  static const char* category() { return "MoonLight"; }
 
   struct Star {
     int x, y, z;
@@ -604,6 +614,7 @@ class PraxisEffect : public Node {
   static const char* name() { return "Praxis"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🔥"; }
+  static const char* category() { return "MoonLight"; }
 
   uint8_t macroMutatorFreq = 3;
   uint8_t macroMutatorMin = 250;
@@ -652,6 +663,7 @@ class WaveEffect : public Node {
   static const char* name() { return "Wave"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🔥"; }
+  static const char* category() { return "MoonLight"; }
 
   uint8_t bpm = 60;
   uint8_t fade = 20;
@@ -721,6 +733,7 @@ class FreqSawsEffect : public Node {
   static const char* name() { return "Frequency Saws"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🔥♫"; }
+  static const char* category() { return "MoonLight"; }
 
   uint8_t fade = 4;
   uint8_t increaser = 211;
@@ -817,6 +830,7 @@ class RubiksCubeEffect : public Node {
   static const char* name() { return "Rubik's Cube"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "🔥"; }
+  static const char* category() { return "MoonLight"; }
 
   struct Cube {
     uint8_t SIZE;
@@ -1121,6 +1135,7 @@ class ParticlesEffect : public Node {
   static const char* name() { return "Particles"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "🔥🧭"; }
+  static const char* category() { return "MoonLight"; }
 
   struct Particle {
     float x, y, z;
@@ -1352,6 +1367,7 @@ class MoonManEffect : public Node {
   static const char* name() { return "Moon Man"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🔥🎵"; }
+  static const char* category() { return "MoonLight"; }
 
   // Create an M5Canvas for PNG processing
   M5Canvas* canvas;  //(&M5.Display);
@@ -1417,6 +1433,7 @@ class SpiralFireEffect : public Node {
   static const char* name() { return "Spiral Fire"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "🔥"; }
+  static const char* category() { return "MoonLight"; }
 
   uint8_t speed = 60;
   uint8_t intensity = 180;
@@ -1486,6 +1503,7 @@ class FireEffect : public Node {
   static const char* name() { return "Fire"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🔥"; }
+  static const char* category() { return "MoonLight"; }
 
   const uint32_t colors[11] = {0x000000, 0x100000, 0x300000, 0x600000, 0x800000, 0xA00000, 0xC02000, 0xC04000, 0xC06000, 0xC08000, 0x807080};
   const uint8_t NCOLORS = std::size(colors);
@@ -1602,6 +1620,7 @@ class VUMeterEffect : public Node {
   static const char* name() { return "VU Meter"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🔥♫"; }
+  static const char* category() { return "MoonLight"; }
 
   void drawNeedle(float angle, Coord3D topLeft, Coord3D size, CRGB color) {
     int x0 = topLeft.x + size.x / 2;  // Center of the needle
@@ -1651,6 +1670,7 @@ class PixelMapEffect : public Node {
   static const char* name() { return "Pixel Map"; }
   static uint8_t dim() { return _3D; }
   static const char* tags() { return "🔥"; }
+  static const char* category() { return "MoonLight"; }
 
   Coord3D pos = {0, 0, 0};
 
@@ -1668,6 +1688,7 @@ class MarioTestEffect : public Node {
   static const char* name() { return "Mario Test"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🔥"; }
+  static const char* category() { return "MoonLight"; }
 
   bool background = false;
   Coord3D offset = {0, 0, 0};
@@ -1724,6 +1745,7 @@ class RingRandomFlowEffect : public RingEffect {
   static const char* name() { return "Ring Random Flow"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🔥"; }
+  static const char* category() { return "MoonLight"; }
 
   // void setup() override {} //so no palette control is created
 
@@ -1756,6 +1778,7 @@ class AudioRingsEffect : public RingEffect {
   static const char* name() { return "Audio Rings"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🔥♫"; }
+  static const char* category() { return "MoonLight"; }
 
   bool inWards = true;
 
@@ -1801,6 +1824,7 @@ class RadarEffect : public Node {
   static const char* name() { return "Radar"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🔥"; }
+  static const char* category() { return "MoonLight"; }
 
   uint8_t bpm = 60;  // 1 beat per second
   uint8_t fade = 128;

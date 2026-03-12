@@ -21,7 +21,7 @@
 
 extern SemaphoreHandle_t swapMutex;
 
-PhysicalLayer layerP;  // global declaration of the physical layer
+PhysicalLayer layerP;  // global singleton of the physical layer
 
 PhysicalLayer::PhysicalLayer() : ledPins{}, ledPinsAssigned{}, ledsPerPin{} {
   EXT_LOGD(ML_TAG, "constructor");
@@ -109,6 +109,7 @@ void PhysicalLayer::loopDrivers() {
     mapLayout();
 
     requestMapPhysical = false;
+    requestMapVirtual = true;  // pass 2 must always follow pass 1 so the virtual mapping table reflects the new physical layout
   }
 
   if (requestMapVirtual) {
@@ -278,6 +279,7 @@ void PhysicalLayer::onLayoutPost() {
     }
   }
 }
+
 // an effect is using a virtual layer: tell the effect in which layer to run...
 
 // // to be called in setup, if more then one effect

@@ -40,8 +40,18 @@ class NodeManager : public Module {
   /// Registers file-change handler and calls Module::begin(). Subclasses must call NodeManager::begin().
   void begin() override;
 
-  /// Override to populate the node name dropdown with addControlValue() calls.
+  /// Override to populate the node name dropdown with addNodeValue() calls.
   virtual void addNodes(const JsonObject& control) {}
+
+  /// Adds a node entry as {name, category} object to the control's values array.
+  template <typename T>
+  void addNodeValue(const JsonObject& control) {
+    if (control["values"].isNull()) control["values"].to<JsonArray>();
+    JsonArray values = control["values"];
+    JsonObject entry = values.add<JsonObject>();
+    entry["name"] = getNameAndTags<T>();
+    entry["category"] = T::category();
+  }
 
   /// Factory method: creates the correct Node subclass for the given name. Returns nullptr if unknown.
   virtual Node* addNode(const uint8_t index, char* name, const JsonArray& controls) const { return nullptr; }

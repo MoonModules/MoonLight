@@ -16,6 +16,7 @@ class Troy1ColorEffect : public Node {
   static const char* name() { return "Troy1 Color"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🚨♫"; }
+  static const char* category() { return "MovingHeads"; }
 
   bool audioReactive = true;
 
@@ -39,6 +40,7 @@ class Troy1MoveEffect : public Node {
   static const char* name() { return "Troy1 Move"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🗼♫"; }
+  static const char* category() { return "MovingHeads"; }
 
   // set default values here
   uint8_t bpm = 30;
@@ -132,6 +134,7 @@ class Troy2ColorEffect : public Node {
   static const char* name() { return "Troy2 Color"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🚨♫"; }
+  static const char* category() { return "MovingHeads"; }
 
   uint8_t cutin = 200;
 
@@ -168,6 +171,7 @@ class Troy2MoveEffect : public Node {
   static const char* name() { return "Troy2 Move"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🗼♫"; }
+  static const char* category() { return "MovingHeads"; }
 
   uint8_t bpm = 30;
   uint8_t pan = 175;
@@ -249,6 +253,7 @@ class FreqColorsEffect : public Node {
   static const char* name() { return "Freq Colors"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🚨♫"; }
+  static const char* category() { return "MovingHeads"; }
 
   uint8_t bpm = 30;
   bool audioReactive = true;
@@ -289,6 +294,7 @@ class WowiMoveEffect : public Node {
   static const char* name() { return "Wowi Move"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🗼♫"; }
+  static const char* category() { return "MovingHeads"; }
 
   uint8_t bpm = 30;
   uint8_t pan = 175;
@@ -324,6 +330,7 @@ class AmbientMoveEffect : public Node {
   static const char* name() { return "Ambient Move"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "🗼♫"; }
+  static const char* category() { return "MovingHeads"; }
 
   uint8_t increaser = 255;
   uint8_t decreaser = 8;

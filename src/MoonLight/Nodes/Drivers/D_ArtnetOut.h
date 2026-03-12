@@ -19,6 +19,7 @@ class ArtNetOutDriver : public DriverNode {
   static const char* name() { return "Art-Net Out"; }
   static uint8_t dim() { return _NoD; }
   static const char* tags() { return "☸️"; }
+  static const char* category() { return "Driver"; }
 
   Char<32> controllerIP3s = "11";
   uint16_t port = 6454;               // Art-Net default port

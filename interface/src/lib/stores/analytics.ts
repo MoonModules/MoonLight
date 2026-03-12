@@ -11,7 +11,9 @@ let analytics_data = {
 	fs_used: <number[]>[],
 	fs_total: <number[]>[],
 	core_temp: <number[]>[],
-	lps: <number[]>[], // 🌙
+	lps_all: <number[]>[],     // 🌙
+	lps_effects: <number[]>[], // 🌙
+	lps_drivers: <number[]>[], // 🌙
 	free_psram: <number[]>[],
 	used_psram: <number[]>[],
 	psram_size: <number[]>[],
@@ -42,7 +44,9 @@ function createAnalytics() {
 				fs_used: [...analytics_data.fs_used, content.fs_used / 1000].slice(-maxAnalyticsData),
 				fs_total: [...analytics_data.fs_total, content.fs_total / 1000].slice(-maxAnalyticsData),
 				core_temp: [...analytics_data.core_temp, content.core_temp].slice(-maxAnalyticsData),
-				lps: [...analytics_data.lps, content.lps].slice(-maxAnalyticsData), // 🌙
+				lps_all: [...analytics_data.lps_all, content.lps_all].slice(-maxAnalyticsData),             // 🌙
+				lps_effects: [...analytics_data.lps_effects, content.lps_effects].slice(-maxAnalyticsData), // 🌙
+				lps_drivers: [...analytics_data.lps_drivers, content.lps_drivers].slice(-maxAnalyticsData), // 🌙
 				free_psram: [...analytics_data.free_psram, content.free_psram / 1000].slice(-maxAnalyticsData),
 				used_psram: [...analytics_data.used_psram, content.used_psram / 1000].slice(-maxAnalyticsData),
 				psram_size: [...analytics_data.psram_size, content.psram_size / 1000].slice(-maxAnalyticsData),

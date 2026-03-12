@@ -25,7 +25,9 @@
 class AnalyticsService
 {
 public:
-    uint16_t lps = 0; // 🌙
+    uint16_t lps_all = 0;      // 🌙 frame rate — effects and drivers are 1:1 synchronized
+    uint16_t lps_effects = 0;  // 🌙 effects theoretical max loops/s at full CPU speed
+    uint16_t lps_drivers = 0;  // 🌙 drivers theoretical max loops/s at full CPU speed
 
     AnalyticsService(EventSocket *socket) : _socket(socket) {};
 
@@ -51,7 +53,9 @@ public:
             doc["fs_used"] = ESPFS.usedBytes();
             doc["fs_total"] = ESPFS.totalBytes();
             doc["core_temp"] = temperatureRead();
-            doc["lps"] = lps; // 🌙
+            doc["lps_all"] = lps_all;             // 🌙
+            doc["lps_effects"] = lps_effects; // 🌙
+            doc["lps_drivers"] = lps_drivers; // 🌙
             if (psramFound())
             {
                 doc["free_psram"] = ESP.getFreePsram();

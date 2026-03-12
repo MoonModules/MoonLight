@@ -24,6 +24,7 @@ class ParallelLEDDriver : public DriverNode {
   static const char* name() { return "Parallel LED Driver"; }
   static uint8_t dim() { return _NoD; }
   static const char* tags() { return "☸️"; }
+  static const char* category() { return "Driver"; }
 
   #if HP_ALL_DRIVERS
   Char<32> version = HP_ALL_BUILD;

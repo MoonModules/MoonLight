@@ -18,6 +18,7 @@ class ArtNetInDriver : public Node {
   static const char* name() { return "Art-Net In"; }
   static uint8_t dim() { return _NoD; }
   static const char* tags() { return "☸️"; }
+  static const char* category() { return "Driver"; }
 
   NetworkUDP artnetUdp;
   uint8_t packetBuffer[1500];

@@ -85,119 +85,121 @@ class ModuleEffects : public NodeManager {
     // keep the order the same as in https://moonmodules.org/MoonLight/moonlight/effects
 
     // MoonLight effects, Solid first then alphabetically
-    addControlValue(control, getNameAndTags<SolidEffect>());
-    addControlValue(control, getNameAndTags<AudioRingsEffect>());
-    addControlValue(control, getNameAndTags<LinesEffect>());
-    addControlValue(control, getNameAndTags<FireEffect>());
-    addControlValue(control, getNameAndTags<FixedRectangleEffect>());
+    addNodeValue<SolidEffect>(control);
+    addNodeValue<AudioRingsEffect>(control);
+    addNodeValue<LinesEffect>(control);
+    addNodeValue<FireEffect>(control);
+    addNodeValue<FixedRectangleEffect>(control);
   #if USE_M5UNIFIED
-    addControlValue(control, getNameAndTags<MoonManEffect>());
+    addNodeValue<MoonManEffect>(control);
   #endif
-    addControlValue(control, getNameAndTags<FreqSawsEffect>());
-    addControlValue(control, getNameAndTags<MarioTestEffect>());
-    addControlValue(control, getNameAndTags<ParticlesEffect>());
-    addControlValue(control, getNameAndTags<PixelMapEffect>());
-    addControlValue(control, getNameAndTags<PraxisEffect>());
-    addControlValue(control, getNameAndTags<RadarEffect>());
-    addControlValue(control, getNameAndTags<RandomEffect>());
-    addControlValue(control, getNameAndTags<RingRandomFlowEffect>());
-    addControlValue(control, getNameAndTags<RipplesEffect>());
-    addControlValue(control, getNameAndTags<RubiksCubeEffect>());
-    addControlValue(control, getNameAndTags<ScrollingTextEffect>());
-    addControlValue(control, getNameAndTags<SinusEffect>());
-    addControlValue(control, getNameAndTags<SphereMoveEffect>());
-    addControlValue(control, getNameAndTags<SpiralFireEffect>());
-    addControlValue(control, getNameAndTags<StarFieldEffect>());
-    addControlValue(control, getNameAndTags<StarSkyEffect>());
-    addControlValue(control, getNameAndTags<VUMeterEffect>());
-    addControlValue(control, getNameAndTags<WaveEffect>());
+    addNodeValue<FreqSawsEffect>(control);
+    addNodeValue<MarioTestEffect>(control);
+    addNodeValue<ParticlesEffect>(control);
+    addNodeValue<PixelMapEffect>(control);
+    addNodeValue<PraxisEffect>(control);
+    addNodeValue<RadarEffect>(control);
+    addNodeValue<RandomEffect>(control);
+    addNodeValue<RingRandomFlowEffect>(control);
+    addNodeValue<RipplesEffect>(control);
+    addNodeValue<RubiksCubeEffect>(control);
+    addNodeValue<ScrollingTextEffect>(control);
+    addNodeValue<SinusEffect>(control);
+    addNodeValue<SphereMoveEffect>(control);
+    addNodeValue<SpiralFireEffect>(control);
+    addNodeValue<StarFieldEffect>(control);
+    addNodeValue<StarSkyEffect>(control);
+    addNodeValue<VUMeterEffect>(control);
+    addNodeValue<WaveEffect>(control);
 
     // MoonModules effects, alphabetically
-    addControlValue(control, getNameAndTags<GameOfLifeEffect>());
-    addControlValue(control, getNameAndTags<GEQ3DEffect>());
-    addControlValue(control, getNameAndTags<PaintBrushEffect>());
+    addNodeValue<GameOfLifeEffect>(control);
+    addNodeValue<GEQ3DEffect>(control);
+    addNodeValue<PaintBrushEffect>(control);
 
     // WLED effects, alphabetically
-    addControlValue(control, getNameAndTags<BlackholeEffect>());
-    addControlValue(control, getNameAndTags<BlinkRainbowEffect>());
-    addControlValue(control, getNameAndTags<BlurzEffect>());
-    addControlValue(control, getNameAndTags<BouncingBallsEffect>());
-    addControlValue(control, getNameAndTags<ColorTwinkleEffect>());
-    addControlValue(control, getNameAndTags<DistortionWavesEffect>());
-    addControlValue(control, getNameAndTags<DJLightEffect>());
-    addControlValue(control, getNameAndTags<DNAEffect>());
-    addControlValue(control, getNameAndTags<DripEffect>());
-    addControlValue(control, getNameAndTags<FireworksEffect>());
-    addControlValue(control, getNameAndTags<FlowEffect>());
-    addControlValue(control, getNameAndTags<FrizzlesEffect>());
-    addControlValue(control, getNameAndTags<FunkyPlankEffect>());
-    addControlValue(control, getNameAndTags<GEQEffect>());
-    addControlValue(control, getNameAndTags<HeartBeatEffect>());
-    addControlValue(control, getNameAndTags<JuliaEffect>());
-    addControlValue(control, getNameAndTags<LissajousEffect>());
-    addControlValue(control, getNameAndTags<MeteorEffect>());
-    addControlValue(control, getNameAndTags<Noise2DEffect>());
-    addControlValue(control, getNameAndTags<NoisefireEffect>());
-    addControlValue(control, getNameAndTags<NoisemoveEffect>());
-    addControlValue(control, getNameAndTags<OctopusEffect>());
-    addControlValue(control, getNameAndTags<OscillateEffect>());
-    addControlValue(control, getNameAndTags<PacManEffect>());
-    addControlValue(control, getNameAndTags<PhasedNoiseEffect>());
-    addControlValue(control, getNameAndTags<PlasmaEffect>());
-    addControlValue(control, getNameAndTags<PoliceEffect>());
-    addControlValue(control, getNameAndTags<PopCornEffect>());
-    addControlValue(control, getNameAndTags<RainEffect>());
-    addControlValue(control, getNameAndTags<TetrixEffect>());
-    addControlValue(control, getNameAndTags<WaverlyEffect>());
+    addNodeValue<BlackholeEffect>(control);
+    addNodeValue<BlinkRainbowEffect>(control);
+    addNodeValue<BlurzEffect>(control);
+    addNodeValue<BouncingBallsEffect>(control);
+    addNodeValue<ColorTwinkleEffect>(control);
+    addNodeValue<DistortionWavesEffect>(control);
+    addNodeValue<DJLightEffect>(control);
+    addNodeValue<DNAEffect>(control);
+    addNodeValue<DripEffect>(control);
+    addNodeValue<FireworksEffect>(control);
+    addNodeValue<FlowEffect>(control);
+    addNodeValue<FrizzlesEffect>(control);
+    addNodeValue<FunkyPlankEffect>(control);
+    addNodeValue<GEQEffect>(control);
+    addNodeValue<HeartBeatEffect>(control);
+    addNodeValue<JuliaEffect>(control);
+    addNodeValue<LissajousEffect>(control);
+    addNodeValue<MeteorEffect>(control);
+    addNodeValue<Noise2DEffect>(control);
+    addNodeValue<NoisefireEffect>(control);
+    addNodeValue<NoisemoveEffect>(control);
+    addNodeValue<OctopusEffect>(control);
+    addNodeValue<OscillateEffect>(control);
+    addNodeValue<PacManEffect>(control);
+    addNodeValue<PhasedNoiseEffect>(control);
+    addNodeValue<PlasmaEffect>(control);
+    addNodeValue<PoliceEffect>(control);
+    addNodeValue<PopCornEffect>(control);
+    addNodeValue<RainEffect>(control);
+    addNodeValue<TetrixEffect>(control);
+    addNodeValue<WaverlyEffect>(control);
 
-    addControlValue(control, getNameAndTags<FreqmapEffect>());
-    addControlValue(control, getNameAndTags<FreqMatrixEffect>());
-    addControlValue(control, getNameAndTags<FreqpixelsEffect>());
-    addControlValue(control, getNameAndTags<FreqwaveEffect>());
-    addControlValue(control, getNameAndTags<GravfreqEffect>());
-    addControlValue(control, getNameAndTags<GravimeterEffect>());
-    addControlValue(control, getNameAndTags<GravcenterEffect>());
-    addControlValue(control, getNameAndTags<GravcentricEffect>());
-    addControlValue(control, getNameAndTags<MidnoiseEffect>());
-    addControlValue(control, getNameAndTags<NoiseMeterEffect>());
-    addControlValue(control, getNameAndTags<PixelwaveEffect>());
-    addControlValue(control, getNameAndTags<PlasmoidEffect>());
-    addControlValue(control, getNameAndTags<PuddlepeakEffect>());
-    addControlValue(control, getNameAndTags<PuddlesEffect>());
-    addControlValue(control, getNameAndTags<RipplepeakEffect>());
-    addControlValue(control, getNameAndTags<RocktavesEffect>());
-    addControlValue(control, getNameAndTags<WaterfallEffect>());
+    addNodeValue<FreqmapEffect>(control);
+    addNodeValue<FreqMatrixEffect>(control);
+    addNodeValue<FreqpixelsEffect>(control);
+    addNodeValue<FreqwaveEffect>(control);
+    addNodeValue<GravfreqEffect>(control);
+    addNodeValue<GravimeterEffect>(control);
+    addNodeValue<GravcenterEffect>(control);
+    addNodeValue<GravcentricEffect>(control);
+    addNodeValue<MidnoiseEffect>(control);
+    addNodeValue<NoiseMeterEffect>(control);
+    addNodeValue<PixelwaveEffect>(control);
+    addNodeValue<PlasmoidEffect>(control);
+    addNodeValue<PuddlepeakEffect>(control);
+    addNodeValue<PuddlesEffect>(control);
+    addNodeValue<RipplepeakEffect>(control);
+    addNodeValue<RocktavesEffect>(control);
+    addNodeValue<WaterfallEffect>(control);
 
     // FastLED effects
-    addControlValue(control, getNameAndTags<RainbowEffect>());
-    addControlValue(control, getNameAndTags<FLAudioEffect>());
+    addNodeValue<RainbowEffect>(control);
+    addNodeValue<FLAudioEffect>(control);
 
     // Moving head effects, alphabetically
-    addControlValue(control, getNameAndTags<AmbientMoveEffect>());
-    addControlValue(control, getNameAndTags<FreqColorsEffect>());
-    addControlValue(control, getNameAndTags<Troy1ColorEffect>());
-    addControlValue(control, getNameAndTags<Troy1MoveEffect>());
-    addControlValue(control, getNameAndTags<Troy2ColorEffect>());
-    addControlValue(control, getNameAndTags<Troy2MoveEffect>());
-    addControlValue(control, getNameAndTags<WowiMoveEffect>());
+    addNodeValue<AmbientMoveEffect>(control);
+    addNodeValue<FreqColorsEffect>(control);
+    addNodeValue<Troy1ColorEffect>(control);
+    addNodeValue<Troy1MoveEffect>(control);
+    addNodeValue<Troy2ColorEffect>(control);
+    addNodeValue<Troy2MoveEffect>(control);
+    addNodeValue<WowiMoveEffect>(control);
 
     // Modifiers, most used first
-    addControlValue(control, getNameAndTags<MultiplyModifier>());
-    addControlValue(control, getNameAndTags<MirrorModifier>());
-    addControlValue(control, getNameAndTags<TransposeModifier>());
-    addControlValue(control, getNameAndTags<CircleModifier>());
-    addControlValue(control, getNameAndTags<BlockModifier>());
-    addControlValue(control, getNameAndTags<RotateModifier>());
-    addControlValue(control, getNameAndTags<CheckerboardModifier>());
-    addControlValue(control, getNameAndTags<PinwheelModifier>());
-    addControlValue(control, getNameAndTags<RippleXZModifier>());
+    addNodeValue<MultiplyModifier>(control);
+    addNodeValue<MirrorModifier>(control);
+    addNodeValue<TransposeModifier>(control);
+    addNodeValue<CircleModifier>(control);
+    addNodeValue<BlockModifier>(control);
+    addNodeValue<RotateModifier>(control);
+    addNodeValue<CheckerboardModifier>(control);
+    addNodeValue<PinwheelModifier>(control);
+    addNodeValue<RippleXZModifier>(control);
 
     // find all the .sc files on FS
     File rootFolder = ESPFS.open("/");
     walkThroughFiles(rootFolder, [&](File folder, File file) {
       if (strstr(file.name(), ".sc")) {
-        // EXT_LOGV(ML_TAG, "found file %s", file.path());
-        addControlValue(control, (char*)file.path());
+        if (control["values"].isNull()) control["values"].to<JsonArray>();
+        JsonObject entry = control["values"].as<JsonArray>().add<JsonObject>();
+        entry["name"] = (const char*)file.path();
+        entry["category"] = "LiveScript";
       }
     });
     rootFolder.close();
@@ -333,7 +335,8 @@ class ModuleEffects : public NodeManager {
       // node->moduleIO = _moduleIO;                     // to get pin allocations
       node->moduleNodes = (Module*)this;  // cppcheck-suppress dangerousTypeCast -- upcast; to request UI update
       node->setup();                      // run the setup of the effect
-      node->onSizeChanged(Coord3D());     // to init memory allocations
+      if (layerP.lights.maxChannels > 0)  // only if channels are allocated (layerP.setup() has run)
+        node->onSizeChanged(Coord3D());   // to init memory allocations
       // layers[0]->nodes.reserve(index+1);
 
       // from here it runs concurrently in the effects task
@@ -369,7 +372,7 @@ class ModuleEffects : public NodeManager {
 
   void loop1s() override {
     // set shared data (eg used in scrolling text effect), every second
-    sharedData.fps = esp32sveltekit.getAnalyticsService()->lps;
+    sharedData.fps = esp32sveltekit.getAnalyticsService()->lps_all;
     sharedData.connectionStatus = (uint8_t)esp32sveltekit.getConnectionStatus();
     sharedData.clientListSize = esp32sveltekit.getServer()->getClientList().size();
     sharedData.connectedClients = esp32sveltekit.getSocket()->getConnectedClients();

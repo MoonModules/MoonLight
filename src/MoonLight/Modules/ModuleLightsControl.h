@@ -296,7 +296,11 @@ class ModuleLightsControl : public Module {
       JsonObject object = values.add<JsonObject>();
       object["name"] = palette_names[i];
       object["colors"] = getPaletteHexString(i);
-      ;
+      const char* n = palette_names[i];
+      if (strstr(n, "⚡️")) object["category"] = "FastLED";
+      else if (strstr(n, "🌙")) object["category"] = "MoonModules";
+      else if (strstr(n, "💫")) object["category"] = "MoonLight";
+      else object["category"] = "WLED";
     }
 
     control = addControl(controls, "preset", "pad");

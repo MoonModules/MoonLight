@@ -70,7 +70,6 @@ class ModuleDrivers : public NodeManager {
           }
 
           layerP.requestMapPhysical = true;
-          layerP.requestMapVirtual = true;
         },
         _moduleName);
   }  // readPins
@@ -83,38 +82,38 @@ class ModuleDrivers : public NodeManager {
 
   void addNodes(const JsonObject& control) override {
     // Layouts, Most used first
-    addControlValue(control, getNameAndTags<PanelLayout>());
-    addControlValue(control, getNameAndTags<PanelsLayout>());
-    addControlValue(control, getNameAndTags<CubeLayout>());
-    addControlValue(control, getNameAndTags<HumanSizedCubeLayout>());
-    addControlValue(control, getNameAndTags<TorontoBarGourdsLayout>());
-    addControlValue(control, getNameAndTags<RingLayout>());
-    addControlValue(control, getNameAndTags<Rings16Layout>());
-    addControlValue(control, getNameAndTags<Rings241Layout>());
-    addControlValue(control, getNameAndTags<CarLightsLayout>());
-    addControlValue(control, getNameAndTags<WheelLayout>());
-    addControlValue(control, getNameAndTags<SpiralLayout>());
-    addControlValue(control, getNameAndTags<SingleRowLayout>());
-    addControlValue(control, getNameAndTags<SingleColumnLayout>());
-    addControlValue(control, getNameAndTags<TubesLayout>());
+    addNodeValue<PanelLayout>(control);
+    addNodeValue<PanelsLayout>(control);
+    addNodeValue<CubeLayout>(control);
+    addNodeValue<HumanSizedCubeLayout>(control);
+    addNodeValue<TorontoBarGourdsLayout>(control);
+    addNodeValue<RingLayout>(control);
+    addNodeValue<Rings16Layout>(control);
+    addNodeValue<Rings241Layout>(control);
+    addNodeValue<CarLightsLayout>(control);
+    addNodeValue<WheelLayout>(control);
+    addNodeValue<SpiralLayout>(control);
+    addNodeValue<SingleRowLayout>(control);
+    addNodeValue<SingleColumnLayout>(control);
+    addNodeValue<TubesLayout>(control);
 
     // Drivers, Most used first
-    addControlValue(control, getNameAndTags<ParallelLEDDriver>());
-    addControlValue(control, getNameAndTags<FastLEDDriver>());
-    addControlValue(control, getNameAndTags<FastLEDAudioDriver>());
-    addControlValue(control, getNameAndTags<ArtNetInDriver>());
-    addControlValue(control, getNameAndTags<ArtNetOutDriver>());
-    addControlValue(control, getNameAndTags<AudioSyncDriver>());
-    addControlValue(control, getNameAndTags<IRDriver>());
-    addControlValue(control, getNameAndTags<IMUDriver>());
-    addControlValue(control, getNameAndTags<HUB75Driver>());
+    addNodeValue<ParallelLEDDriver>(control);
+    addNodeValue<FastLEDDriver>(control);
+    addNodeValue<FastLEDAudioDriver>(control);
+    addNodeValue<ArtNetInDriver>(control);
+    addNodeValue<ArtNetOutDriver>(control);
+    addNodeValue<AudioSyncDriver>(control);
+    addNodeValue<IRDriver>(control);
+    addNodeValue<IMUDriver>(control);
+    addNodeValue<HUB75Driver>(control);
 
     // board preset specific
     _moduleIO->read(
         [&](ModuleState& state) {
           uint8_t boardPreset = state.data["boardPreset"];
-          if (boardPreset == board_SE16V1) addControlValue(control, getNameAndTags<SE16Layout>());
-          if (boardPreset == board_LightCrafter16) addControlValue(control, getNameAndTags<LightCrafter16Layout>());
+          if (boardPreset == board_SE16V1) addNodeValue<SE16Layout>(control);
+          if (boardPreset == board_LightCrafter16) addNodeValue<LightCrafter16Layout>(control);
         },
         _moduleName);
   }
@@ -173,9 +172,10 @@ class ModuleDrivers : public NodeManager {
       node->constructor(layerP.layers[0], controls, &layerP.driversMutex);  // pass the layer to the node (C++ constructors are not inherited, so declare it as normal functions)
       node->moduleControl = _moduleLightsControl;                           // to access global lights control functions if needed
       node->moduleIO = _moduleIO;                                           // to get pin allocations
-      node->moduleNodes = (Module*)this;  // cppcheck-suppress dangerousTypeCast -- upcast; to request UI update
+      node->moduleNodes = (Module*)this;                                    // cppcheck-suppress dangerousTypeCast -- upcast; to request UI update
       node->setup();                                                        // run the setup of the effect
-      node->onSizeChanged(Coord3D());                                       // to init memory allocations
+      if (layerP.lights.maxChannels > 0)                                    // only if channels are allocated (layerP.setup() has run)
+        node->onSizeChanged(Coord3D());                                     // to init memory allocations
       // layers[0]->nodes.reserve(index+1);
 
       // from here it runs concurrently in the drivers task

@@ -201,7 +201,9 @@ esp_err_t SystemStatus::systemStatus(PsychicRequest *request)
     root["core_temp"] = temperatureRead();
     root["cpu_reset_reason"] = verbosePrintResetReason(esp_reset_reason());
     root["uptime"] = millis() / 1000;
-    root["lps"] = esp32sveltekit.lps; // 🌙
+    root["lps_all"]         = esp32sveltekit.getAnalyticsService()->lps_all;  // 🌙
+    root["lps_effects"] = esp32sveltekit.getAnalyticsService()->lps_effects;  // 🌙
+    root["lps_drivers"] = esp32sveltekit.getAnalyticsService()->lps_drivers;  // 🌙
     // 🌙
     #ifdef CONFIG_IDF_TARGET_ESP32P4
         esp_hosted_coprocessor_fwver_t c6_fw_version;

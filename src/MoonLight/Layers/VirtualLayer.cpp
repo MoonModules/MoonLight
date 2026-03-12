@@ -1,6 +1,6 @@
 /**
     @title     MoonLight
-    @file      VirtualLayer.h
+    @file      VirtualLayer.cpp
     @repo      https://github.com/MoonModules/MoonLight, submit changes to this file as PRs
     @Authors   https://github.com/MoonModules/MoonLight/commits/main
     @Doc       https://moonmodules.org/MoonLight/moonlight/overview/
@@ -354,6 +354,70 @@ void VirtualLayer::onLayoutPost() {
   }
 
   EXT_LOGI(MB_TAG, "V:%d x %d x %d = v:%d = 1:0:%d + 1:1:%d + mti:%d (1:m:%d)", size.x, size.y, size.z, nrOfLights, nrOfZeroLights, nrOfOneLight, mappingTableIndexesSizeUsed, nrOfMoreLights);
+}
+
+bool VirtualLayer::isMapped(nrOfLights_t indexV) const {
+  return oneToOneMapping || (indexV < mappingTableSize && (mappingTable[indexV].mapType == m_oneLight || mappingTable[indexV].mapType == m_moreLights));
+}
+
+void VirtualLayer::blur1d(fract8 blur_amount, nrOfLights_t x) {
+  const uint8_t keep = 255 - blur_amount;
+  const uint8_t seep = blur_amount >> 1;
+  CRGB carryover = CRGB::Black;
+  for (nrOfLights_t row = 0; row < size.y; ++row) {
+    CRGB cur = getRGB(Coord3D(x, row));
+    CRGB part = cur;
+    part.nscale8(seep);
+    cur.nscale8(keep);
+    cur += carryover;
+    if (row) addRGB(Coord3D(x, row - 1), part);
+    setRGB(Coord3D(x, row), cur);
+    carryover = part;
+  }
+  if (size.y) addRGB(Coord3D(x, size.y - 1), carryover);
+}
+
+void VirtualLayer::blur2d(fract8 blur_amount) {
+  blurRows(blur_amount);
+  blurColumns(blur_amount);
+}
+
+void VirtualLayer::blurRows(fract8 blur_amount) {
+  uint8_t keep = 255 - blur_amount;
+  uint8_t seep = blur_amount >> 1;
+  for (nrOfLights_t row = 0; row < size.y; row++) {
+    CRGB carryover = CRGB::Black;
+    for (nrOfLights_t col = 0; col < size.x; col++) {
+      CRGB cur = getRGB(Coord3D(col, row));
+      CRGB part = cur;
+      part.nscale8(seep);
+      cur.nscale8(keep);
+      cur += carryover;
+      if (col) addRGB(Coord3D(col - 1, row), part);
+      setRGB(Coord3D(col, row), cur);
+      carryover = part;
+    }
+    if (size.x) addRGB(Coord3D(size.x - 1, row), carryover);
+  }
+}
+
+void VirtualLayer::blurColumns(fract8 blur_amount) {
+  uint8_t keep = 255 - blur_amount;
+  uint8_t seep = blur_amount >> 1;
+  for (nrOfLights_t col = 0; col < size.x; ++col) {
+    CRGB carryover = CRGB::Black;
+    for (nrOfLights_t row = 0; row < size.y; row++) {
+      CRGB cur = getRGB(Coord3D(col, row));
+      CRGB part = cur;
+      part.nscale8(seep);
+      cur.nscale8(keep);
+      cur += carryover;
+      if (row) addRGB(Coord3D(col, row - 1), part);
+      setRGB(Coord3D(col, row), cur);
+      carryover = part;
+    }
+    if (size.y) addRGB(Coord3D(col, size.y - 1), carryover);
+  }
 }
 
 void VirtualLayer::drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, CRGB color, bool soft, uint8_t depth) {

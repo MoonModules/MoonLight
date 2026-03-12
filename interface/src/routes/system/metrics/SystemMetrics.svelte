@@ -117,13 +117,29 @@
 				labels: $analytics.uptime,
 				datasets: [
 					{
-						label: 'Loops/s',
-						borderColor: daisyColor('--color-primary'),
-						backgroundColor: daisyColor('--color-primary', 50),
+						label: 'All lps',
+						borderColor: 'rgb(30, 80, 200)',
+						backgroundColor: 'rgba(30, 80, 200, 0.15)',
 						borderWidth: 2,
-						data: $analytics.lps,
+						data: $analytics.lps_all,
 						yAxisID: 'y'
 					},
+					{
+						label: 'Effects lps',
+						borderColor: 'rgb(200, 30, 30)',
+						backgroundColor: 'rgba(200, 30, 30, 0.15)',
+						borderWidth: 2,
+						data: $analytics.lps_effects,
+						yAxisID: 'y'
+					},
+					{
+						label: 'Drivers lps',
+						borderColor: 'rgb(30, 160, 30)',
+						backgroundColor: 'rgba(30, 160, 30, 0.15)',
+						borderWidth: 2,
+						data: $analytics.lps_drivers,
+						yAxisID: 'y'
+					}
 				]
 			},
 			options: {
@@ -166,7 +182,7 @@
 						},
 						position: 'left',
 						min: 0,
-						max: Math.round(Math.max(...$analytics.lps)),
+						max: Math.round(Math.max(...$analytics.lps_all, ...$analytics.lps_effects, ...$analytics.lps_drivers)),
 						grid: { color: daisyColor('--color-base-content', 10) },
 						ticks: {
 							color: daisyColor('--color-base-content')
@@ -398,9 +414,11 @@
 	function updateData() {
 		// 🌙
 		lpsChart.data.labels = $analytics.uptime;
-		lpsChart.data.datasets[0].data = $analytics.lps;
+		lpsChart.data.datasets[0].data = $analytics.lps_all;
+		lpsChart.data.datasets[1].data = $analytics.lps_effects;
+		lpsChart.data.datasets[2].data = $analytics.lps_drivers;
 		if (lpsChart.options.scales?.y) {
-			lpsChart.options.scales.y.max = Math.round(Math.max(...$analytics.lps));
+			lpsChart.options.scales.y.max = Math.round(Math.max(...$analytics.lps_all, ...$analytics.lps_effects, ...$analytics.lps_drivers));
 		}
 		lpsChart.update('none');
 

@@ -19,6 +19,7 @@ class AudioSyncDriver : public Node {
   static const char* name() { return "Audio Sync"; }
   static uint8_t dim() { return _NoD; }
   static const char* tags() { return "☸️♫"; }
+  static const char* category() { return "Driver"; }
 
   WLEDSync sync;
   bool init = false;

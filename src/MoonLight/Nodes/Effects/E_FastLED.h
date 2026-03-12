@@ -16,6 +16,7 @@ class RainbowEffect : public Node {
   static const char* name() { return "Rainbow"; }
   static uint8_t dim() { return _1D; }
   static const char* tags() { return "⚡️"; }
+  static const char* category() { return "FastLED"; }
 
   uint8_t speed = 8;  // default 8*32 = 256 / 256 = 1 = hue++
   uint8_t deltaHue = 7;
@@ -54,6 +55,7 @@ class FLAudioEffect : public Node {
   static const char* name() { return "FLAudio"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "⚡️🎵"; }
+  static const char* category() { return "FastLED"; }
 
   uint8_t fade = 70;
 
