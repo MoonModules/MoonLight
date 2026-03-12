@@ -26,6 +26,7 @@ class SolidEffect : public Node {
   uint8_t white = 0;
   uint8_t brightness = 255;
   uint8_t colorMode = 0;
+  uint8_t minRGB = 10;
 
   void setup() override {
     addControl(colorMode, "colorMode", "select");
@@ -39,6 +40,7 @@ class SolidEffect : public Node {
     addControl(blue, "blue", "slider");
     addControl(white, "white", "slider");
     addControl(brightness, "brightness", "slider");
+    addControl(minRGB, "minRGB", "slider");
   }
 
   void loop() override {
@@ -75,14 +77,26 @@ class SolidEffect : public Node {
 
       for (int index = 0; index < layer->nrOfLights; index++) layer->setRGB(index, color);
     } else if (colorMode == 3 || colorMode == 4) {
+      // Collect palette indices that meet the minRGB threshold
+      uint8_t validIndices[256];
+      uint16_t nrValid = 0;
+      for (int index = 0; index < 256; index++) {
+        CRGB color = ColorFromPalette(layerP.palette, index, brightness);
+        if (color.red >= minRGB || color.green >= minRGB || color.blue >= minRGB) validIndices[nrValid++] = index;
+      }
+
       for (int x = 0; x < layer->size.x; x++) {
         for (int y = 0; y < layer->size.y; y++) {
           for (int z = 0; z < layer->size.z; z++) {
             int axisValue = colorMode == 3 ? y : x;
             int axisSize = colorMode == 3 ? layer->size.y : layer->size.x;
-            uint8_t paletteIndex = axisSize <= 1 ? 0 : ::map(axisValue, 0, axisSize - 1, 0, 255);
-            layer->setRGB(Coord3D(x, y, z), ColorFromPalette(layerP.palette, paletteIndex, brightness));
-
+            if (nrValid) {
+              uint16_t validIdx = axisSize <= 1 ? 0 : ::map(axisValue, 0, axisSize - 1, 0, nrValid - 1);
+              layer->setRGB(Coord3D(x, y, z), ColorFromPalette(layerP.palette, validIndices[validIdx], brightness));
+            } else {
+              uint8_t paletteIndex = axisSize <= 1 ? 0 : ::map(axisValue, 0, axisSize - 1, 0, 255);
+              layer->setRGB(Coord3D(x, y, z), ColorFromPalette(layerP.palette, paletteIndex, brightness));
+            }
           }
         }
       }

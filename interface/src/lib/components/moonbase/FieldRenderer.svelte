@@ -370,12 +370,16 @@
 		/>
 	{:else if property.type == 'pad'}
 		<div class="flex flex-col space-y-2">
+			<!-- <span>{JSON.stringify(value.labels)}</span> -->
 			{#each Array(Math.ceil((value.count || 64) / (property.width || 8))) as _, y (y)}
 				<div class="flex flex-row space-x-2">
 					{#each Array(property.width) as _, x (x)}
 						{#if x + y * property.width < value.count}
 							<button
-								class="btn btn-square w-{property.size} h-{property.size} rounded-lg text-xl {value.selected ==
+								class="btn {value.labels
+									? 'flex-col !gap-0 overflow-hidden'
+									: 'btn-square'} w-{property.size} h-{property.size} rounded-lg text-xl {value.selected ==
+								// class="btn btn-square w-{property.size} h-{property.size} rounded-lg text-xl {value.selected ==
 								x + y * property.width + 1
 									? `btn-error`
 									: Array.isArray(value.list) && value.list.includes(x + y * property.width + 1)
@@ -430,7 +434,13 @@
 									} else handleMouseLeave();
 								}}
 							>
-								{x + y * property.width + 1}
+								{#if value.labels && Array.isArray(value.labels) && value.labels[value.list?.indexOf(x + y * property.width + 1)]}
+									<span class="block w-full truncate text-[9px] leading-tight opacity-80"
+										>{value.labels[value.list.indexOf(x + y * property.width + 1)]}</span
+									>
+								{:else}
+									{x + y * property.width + 1}
+								{/if}
 								{#if popupCell === x + y * property.width + 1}
 									<div
 										class="fixed z-50 mt-2 inline-block min-h-0 min-w-0 rounded bg-neutral-100 p-6 text-left shadow-lg"

@@ -297,10 +297,14 @@ class ModuleLightsControl : public Module {
       object["name"] = palette_names[i];
       object["colors"] = getPaletteHexString(i);
       const char* n = palette_names[i];
-      if (strstr(n, "⚡️")) object["category"] = "FastLED";
-      else if (strstr(n, "🌙")) object["category"] = "MoonModules";
-      else if (strstr(n, "💫")) object["category"] = "MoonLight";
-      else object["category"] = "WLED";
+      if (strstr(n, "⚡️"))
+        object["category"] = "FastLED";
+      else if (strstr(n, "🌙"))
+        object["category"] = "MoonModules";
+      else if (strstr(n, "💫"))
+        object["category"] = "MoonLight";
+      else
+        object["category"] = "WLED";
     }
 
     control = addControl(controls, "preset", "pad");
@@ -308,6 +312,7 @@ class ModuleLightsControl : public Module {
     control["size"] = 18;
     control["default"].to<JsonObject>();  // clear the preset array before adding new presets
     control["default"]["list"].to<JsonArray>();
+    control["default"]["labels"].to<JsonArray>();
     control["default"]["count"] = 64;
 
     control = addControl(controls, "presetLoop", "slider");
@@ -381,17 +386,47 @@ class ModuleLightsControl : public Module {
   void setPresetsFromFolder() {
     // loop over all files in the presets folder and add them to the preset array
     File rootFolder = ESPFS.open("/.config/presets/");
-    _state.data["preset"]["list"].clear();  //.to<JsonArray>(); // clear the active preset array before adding new presets
+    _state.data["preset"]["list"].clear();    //.to<JsonArray>(); // clear the active preset array before adding new presets
+    _state.data["preset"]["labels"].clear();  // clear and recreate labels
     bool changed = false;
     walkThroughFiles(rootFolder, [&](File folder, File file) {
       int seq = -1;
       if (sscanf(file.name(), "preset%02d.json", &seq) == 1) {
         // seq now contains the 2-digit number, e.g., 34
-        EXT_LOGV(ML_TAG, "Preset %d found", seq);
+        EXT_LOGD(ML_TAG, "Preset %d found", seq);
         _state.data["preset"]["list"].add(seq);  // add the preset to the preset array
+
+        char label[20] = "";
+        // Extract effect name from preset file for button labels
+        file.seek(0);
+        JsonDocument doc;
+        if (!deserializeJson(doc, file)) {
+          JsonArray nodes = doc["nodes"];
+          if (nodes.size() > 0) {
+            const char* nodeName = nodes[0]["name"];
+            if (nodeName) {
+              // Strip emoji tags: keep only ASCII chars before first emoji
+              char label[20];
+              int j = 0;
+              for (int i = 0; nodeName[i] && j < 19; i++) {
+                if ((uint8_t)nodeName[i] >= 0x80) break;  // stop at first emoji/unicode
+                label[j++] = nodeName[i];
+              }
+              while (j > 0 && label[j - 1] == ' ') j--;  // trim trailing spaces
+              label[j] = '\0';
+            }
+          }
+        }
+
+        _state.data["preset"]["labels"].add((const char*)label);
+
         changed = true;
       }
     });
+
+    // String xxx;
+    // serializeJson( _state.data["preset"], xxx);
+    // EXT_LOGD(ML_TAG, "%s", xxx.c_str());
 
     if (changed) {
       // requestUIUpdate ...
