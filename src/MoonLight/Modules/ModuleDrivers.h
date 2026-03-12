@@ -159,7 +159,7 @@ class ModuleDrivers : public NodeManager {
         _moduleName);
 
   #if FT_LIVESCRIPT
-    if (!node) {
+    if (!node && !safeModeMB) {
       LiveScriptNode* liveScriptNode = allocMBObject<LiveScriptNode>();
       liveScriptNode->animation = name;  // set the (file)name of the script
       node = liveScriptNode;

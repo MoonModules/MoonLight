@@ -188,7 +188,6 @@ Shows filename, file contents and uploadfile (from file system). Used in FileMan
 Arguments
 
 * path: file or folder to edit
-* showEditor: collapsed or not
 * newItem
 * isFile: or folder
 

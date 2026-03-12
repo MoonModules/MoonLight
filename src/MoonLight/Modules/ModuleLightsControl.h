@@ -406,7 +406,6 @@ class ModuleLightsControl : public Module {
             const char* nodeName = nodes[0]["name"];
             if (nodeName) {
               // Strip emoji tags: keep only ASCII chars before first emoji
-              char label[20];
               int j = 0;
               for (int i = 0; nodeName[i] && j < 19; i++) {
                 if ((uint8_t)nodeName[i] >= 0x80) break;  // stop at first emoji/unicode
@@ -423,10 +422,6 @@ class ModuleLightsControl : public Module {
         changed = true;
       }
     });
-
-    // String xxx;
-    // serializeJson( _state.data["preset"], xxx);
-    // EXT_LOGD(ML_TAG, "%s", xxx.c_str());
 
     if (changed) {
       // requestUIUpdate ...

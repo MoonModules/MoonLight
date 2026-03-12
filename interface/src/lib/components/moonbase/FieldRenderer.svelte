@@ -12,6 +12,7 @@
 
 <script lang="ts">
 	import { onDestroy } from 'svelte';
+	import { modals } from 'svelte-modals';
 	import FileEditWidget from '$lib/components/moonbase/FileEditWidget.svelte';
 	import SearchableDropdown from '$lib/components/moonbase/SearchableDropdown.svelte';
 	import { initCap, getTimeAgo } from '$lib/stores/moonbase_utilities';
@@ -213,7 +214,15 @@
 				>{selectedNode?.name ?? value ?? ''}</span
 			>
 		</SearchableDropdown>
-		<FileEditWidget path={value} showEditor={false} />
+		<button
+			class="btn btn-ghost btn-sm"
+			onclick={() => {
+				modals.open(FileEditWidget as any, { path: value });
+			}}
+			title="Edit file"
+		>
+			&#9998;
+		</button>
 	{:else if property.type == 'palette'}
 		<SearchableDropdown
 			values={property.values ?? []}
@@ -370,7 +379,6 @@
 		/>
 	{:else if property.type == 'pad'}
 		<div class="flex flex-col space-y-2">
-			<!-- <span>{JSON.stringify(value.labels)}</span> -->
 			{#each Array(Math.ceil((value.count || 64) / (property.width || 8))) as _, y (y)}
 				<div class="flex flex-row space-x-2">
 					{#each Array(property.width) as _, x (x)}
