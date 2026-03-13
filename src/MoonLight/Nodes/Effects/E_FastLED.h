@@ -182,7 +182,6 @@ class SutaburosuDemoEffect : public Node {
     if (effect > 0) {
       // Fixed effect: no cycling, no transitions
       demo = effect - 1;
-      msInSlot = 0;
       tScale = coord::from_raw(65536);  // full scale
       fadeBr = 255u;
     } else {
@@ -893,9 +892,9 @@ class SutaburosuDemoEffect : public Node {
         {3, 7},  //  3 rot, max_r=17, bold 3-lobed
     };
     static constexpr uint8_t kNTable = sizeof(kTable) / sizeof(kTable[0]);
-    static const uint8_t kR_int = layer->size.x / 2 - 3;  // 13
-    static const coord kR = coord::from_raw((int32_t)kR_int << 16);
-    static const coord kStep = coord::from_raw(16384);  // 0.25 rad/frame
+    const uint8_t kR_int = layer->size.x / 2 - 3;  // 13
+    const coord kR = coord::from_raw((int32_t)kR_int << 16);
+    const coord kStep = coord::from_raw(16384);  // 0.25 rad/frame
 
     // Pick a new random variant and reset curve state.
     if (reinit || closeRaw == 0) {
