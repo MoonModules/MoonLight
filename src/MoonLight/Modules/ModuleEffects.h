@@ -171,6 +171,7 @@ class ModuleEffects : public NodeManager {
     // FastLED effects
     addNodeValue<RainbowEffect>(control);
     addNodeValue<FLAudioEffect>(control);
+    addNodeValue<SutaburosuDemoEffect>(control);
 
     // Moving head effects, alphabetically
     addNodeValue<AmbientMoveEffect>(control);
@@ -296,6 +297,7 @@ class ModuleEffects : public NodeManager {
     // FastLED
     if (!node) node = checkAndAlloc<RainbowEffect>(name);
     if (!node) node = checkAndAlloc<FLAudioEffect>(name);
+    if (!node) node = checkAndAlloc<SutaburosuDemoEffect>(name);
 
     // Moving head effects, alphabetically
 
