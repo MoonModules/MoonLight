@@ -27,6 +27,7 @@ class SolidEffect : public Node {
   uint8_t brightness = 255;
   uint8_t colorMode = 0;
   uint8_t minRGB = 10;
+  bool randomColors = false;
 
   void setup() override {
     addControl(colorMode, "colorMode", "select");
@@ -41,6 +42,7 @@ class SolidEffect : public Node {
     addControl(white, "white", "slider");
     addControl(brightness, "brightness", "slider");
     addControl(minRGB, "minRGB", "slider");
+    addControl(randomColors, "randomColors", "checkbox");
   }
 
   void loop() override {
@@ -83,6 +85,18 @@ class SolidEffect : public Node {
       for (int index = 0; index < 256; index++) {
         CRGB color = ColorFromPalette(layerP.palette, index, brightness);
         if (color.red >= minRGB || color.green >= minRGB || color.blue >= minRGB) validIndices[nrValid++] = index;
+      }
+
+      // Shuffle valid indices for random color order (deterministic per-frame using fixed seed)
+      if (randomColors && nrValid > 1) {
+        uint16_t seed = 12345;
+        for (uint16_t i = nrValid - 1; i > 0; i--) {
+          seed = seed * 25173 + 13849;  // simple LCG
+          uint16_t j = seed % (i + 1);
+          uint8_t tmp = validIndices[i];
+          validIndices[i] = validIndices[j];
+          validIndices[j] = tmp;
+        }
       }
 
       for (int x = 0; x < layer->size.x; x++) {

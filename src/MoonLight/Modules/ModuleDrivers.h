@@ -106,7 +106,7 @@ class ModuleDrivers : public NodeManager {
     addNodeValue<AudioSyncDriver>(control);
     addNodeValue<IRDriver>(control);
     addNodeValue<IMUDriver>(control);
-    addNodeValue<HUB75Driver>(control);
+    // addNodeValue<HUB75Driver>(control);
 
     // board preset specific
     _moduleIO->read(
@@ -161,7 +161,7 @@ class ModuleDrivers : public NodeManager {
     if (!node) node = checkAndAlloc<AudioSyncDriver>(name);
     if (!node) node = checkAndAlloc<IRDriver>(name);
     if (!node) node = checkAndAlloc<IMUDriver>(name);
-    if (!node) node = checkAndAlloc<HUB75Driver>(name);
+    // if (!node) node = checkAndAlloc<HUB75Driver>(name);
 
     // board preset specific
     _moduleIO->read(
