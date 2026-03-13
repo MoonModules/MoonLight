@@ -54,7 +54,7 @@ class FLAudioEffect : public Node {
  public:
   static const char* name() { return "FLAudio"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "⚡️🎵"; }
+  static const char* tags() { return "⚡️♫"; }
   static const char* category() { return "FastLED"; }
 
   uint8_t fade = 70;

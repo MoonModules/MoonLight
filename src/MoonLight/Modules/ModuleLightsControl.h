@@ -307,6 +307,21 @@ class ModuleLightsControl : public Module {
         object["category"] = "WLED";
     }
 
+    #if FT_LIVESCRIPT
+    // find palette live scripts (P_*.sc files) on FS
+    {
+      File rootFolder = ESPFS.open("/");
+      walkThroughFiles(rootFolder, [&](File folder, File file) {
+        if (strstr(file.name(), ".sc") && strncmp(file.name(), "P_", 2) == 0) {
+          JsonObject entry = control["values"].as<JsonArray>().add<JsonObject>();
+          entry["name"] = (const char*)file.path();
+          entry["category"] = "LiveScript";
+        }
+      });
+      rootFolder.close();
+    }
+    #endif
+
     control = addControl(controls, "preset", "preset");
     control["width"] = 8;
     control["size"] = 18;

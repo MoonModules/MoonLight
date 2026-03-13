@@ -105,7 +105,7 @@ class BlurzEffect : public Node {
  public:
   static const char* name() { return "Blurz"; }
   static uint8_t dim() { return _3D; }  // test...
-  static const char* tags() { return "🐙🎵"; }
+  static const char* tags() { return "🐙♫"; }
   static const char* category() { return "WLED"; }
 
   // static const char _data_FX_MODE_BLURZ[] PROGMEM = "Blurz Plus ☾@Fade rate,Blur,,,,FreqMap ☾,GEQ Scanner ☾,;!,Color mix;!;01f;sx=48,ix=127,m12=7,si=0"; // Pinwheel, Beatsin
@@ -1906,7 +1906,7 @@ class HeartBeatEffect : public Node {
  public:
   static const char* name() { return "Heartbeat"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return "♥"; }
+  static const char* tags() { return ""; }
   static const char* category() { return "WLED"; }
 
   uint8_t speed = 15;

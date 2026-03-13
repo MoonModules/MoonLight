@@ -63,4 +63,9 @@ describe('extractEmojis', () => {
 	it('returns unique emojis only', () => {
 		expect(extractEmojis('🔥🔥🔥 triple fire')).toEqual(['🔥']);
 	});
+
+	it('extracts miscellaneous symbol characters (♪ ♫)', () => {
+		expect(extractEmojis('🐙♪🐰')).toEqual(['🐙', '♪', '🐰']);
+		expect(extractEmojis('🐙♫')).toEqual(['🐙', '♫']);
+	});
 });

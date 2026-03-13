@@ -116,6 +116,20 @@ class ModuleDrivers : public NodeManager {
           if (boardPreset == board_LightCrafter16) addNodeValue<LightCrafter16Layout>(control);
         },
         _moduleName);
+
+    #if FT_LIVESCRIPT
+    // find layout/driver live scripts (.sc files with L_ or D_ prefix) on FS
+    File rootFolder = ESPFS.open("/");
+    walkThroughFiles(rootFolder, [&](File folder, File file) {
+      if (strstr(file.name(), ".sc") && (strncmp(file.name(), "L_", 2) == 0 || strncmp(file.name(), "D_", 2) == 0)) {
+        if (control["values"].isNull()) control["values"].to<JsonArray>();
+        JsonObject entry = control["values"].as<JsonArray>().add<JsonObject>();
+        entry["name"] = (const char*)file.path();
+        entry["category"] = "LiveScript";
+      }
+    });
+    rootFolder.close();
+    #endif
   }
 
   Node* addNode(const uint8_t index, char* name, const JsonArray& controls) const override {
