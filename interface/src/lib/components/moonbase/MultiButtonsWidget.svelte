@@ -36,7 +36,7 @@
 	}
 
 	let hoverTimeout: ReturnType<typeof setTimeout> | null = null;
-	let fileContent: { nodes?: { name: string; on: boolean }[] } | string | null;
+	let fileContent: { nodes?: { name: string; on: boolean }[] } | null;
 	let popupCell: number | null = null;
 	let popupX = 0;
 	let popupY = 0;
@@ -49,9 +49,8 @@
 				);
 				if (response.ok) {
 					fileContent = await response.json();
-					console.log(fileContent);
 				} else {
-					fileContent = 'Failed to load file.';
+					fileContent = null;
 				}
 				popupCell = cell;
 			}
@@ -121,7 +120,7 @@
 				value.select = btnIdx;
 				value.action = 'mouseenter';
 				onChange(event);
-			} else handleMouseEnter(btnIdx, event, value.list.includes(btnIdx));
+			} else handleMouseEnter(btnIdx, event, value.list?.includes(btnIdx) ?? false);
 		}}
 		onmouseleave={(event: MouseEvent) => {
 			if (property.hoverToServer) {
@@ -145,7 +144,6 @@
 			>
 				{#if fileContent && fileContent.nodes}
 					{#each fileContent.nodes as node, ni (ni)}
-						{console.log('node.name', node.name)}
 						<p>{node.name} {node.on ? 'on' : 'off'}</p>
 					{/each}
 				{/if}

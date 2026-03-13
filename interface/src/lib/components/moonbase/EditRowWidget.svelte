@@ -97,8 +97,8 @@
 					modals.close(1);
 				}}
 				type="button"
-				// disabled={changed} // changed is unknown... todo
 			>
+				<!-- TODO: disabled={changed} - changed variable is currently undefined -->
 				<Cancel class="mr-2 h-5 w-5" />
 				<span>Close</span>
 			</button>

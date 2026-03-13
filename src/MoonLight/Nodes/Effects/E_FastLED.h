@@ -129,25 +129,41 @@ class SutaburosuDemoEffect : public Node {
   static const char* category() { return "FastLED"; }
 
   uint8_t fade = 70;
+  uint8_t effect = 0;
 
   void setup() override {
     addControl(fade, "fade", "slider");
+    addControl(effect, "effect", "select");
+    addControlValue("All");
+    addControlValue("Clock");
+    addControlValue("Orbiting Discs");
+    addControlValue("Star Web");
+    addControlValue("Spirograph");
+    addControlValue("Lissajous");
+    addControlValue("Cube Thin");
+    addControlValue("Cube Thick");
+    addControlValue("Organic Walkers");
+    addControlValue("Boids");
+    addControlValue("Hypotrochoid");
+    addControlValue("Branching Tree");
   }
 
-  CRGB* canvas_buf = (CRGB*)layerP.lights.channelsE;
+  CRGB* canvas_buf = nullptr;
+
+  coord starSpin{};
+  uint8_t dimAfterShow = 255;
+  uint32_t sFrameCount = 0;
+  uint8_t lastDemo = 255;
 
   void loop() override {
+    canvas_buf = (CRGB*)layerP.lights.channelsE;  // refresh each frame: channelsE may change after double-buffer swap
     layer->fadeToBlackBy(fade);
-
-    static coord starSpin{0};
-    static uint8_t dimAfterShow = 255;
 
     coord cx = coord::from_raw((int32_t)layer->size.x << 15);           // 16.0 px: matrix centre x
     coord cy = coord::from_raw((int32_t)layer->size.y << 15);           // 16.0 px: matrix centre y
     coord r = coord::from_raw((int32_t)(layer->size.x / 2 - 3) << 16);  // 13.0 px: radius
     uint32_t ms = fl::millis();
     // gLastLoopMs = ms;  // updated each frame; preserved in .noinit across a crash-reset
-    static uint32_t sFrameCount = 0;
     ++sFrameCount;
     coord t = coord::from_raw((int32_t)((uint32_t)(ms % 6284u) * (uint32_t)kTwoPi.raw() / 6284u));
     // orbit the drawing origin to stress subpixel AA
@@ -157,39 +173,47 @@ class SutaburosuDemoEffect : public Node {
     static constexpr uint32_t kSlotMs = 8192u;
     static constexpr uint32_t kTransMs = 768u;     // half-transition window (ms)
     static constexpr uint32_t kFadeMs = kTransMs;  // fade spans the full zoom window
-    uint8_t demo = (ms / kSlotMs) % 11;
-    // demo = 10;  // --- DEBUG: force a specific demo ---
-    uint32_t msInSlot = ms % kSlotMs;
-    static uint8_t lastDemo = 255;
+
+    uint8_t demo;
+    uint32_t msInSlot;
+    coord tScale;
+    uint8_t fadeBr;
+
+    if (effect > 0) {
+      // Fixed effect: no cycling, no transitions
+      demo = effect - 1;
+      msInSlot = 0;
+      tScale = coord::from_raw(65536);  // full scale
+      fadeBr = 255u;
+    } else {
+      // Cycle through all demos
+      demo = (ms / kSlotMs) % 11;
+      msInSlot = ms % kSlotMs;
+
+      // Half-cosine scale envelope: 1 during the body, tapers to 0 at slot edges.
+      static const coord kPi = coord::from_raw(205887);  // π = 3.14159265
+      if (msInSlot < kTransMs) {
+        coord phase = coord::from_raw((int32_t)msInSlot * 65536 / (int32_t)kTransMs);
+        tScale = (coord::from_raw(65536) - fl::s16x16::cos(kPi * phase)) / coord(2);  // 0 -> 1
+      } else if (msInSlot >= kSlotMs - kTransMs) {
+        coord phase = coord::from_raw((int32_t)(msInSlot - (kSlotMs - kTransMs)) * 65536 / (int32_t)kTransMs);
+        tScale = (coord::from_raw(65536) + fl::s16x16::cos(kPi * phase)) / coord(2);  // 1 -> 0
+      } else {
+        tScale = coord::from_raw(65536);
+      }
+
+      // Brightness fade at slot boundaries
+      if (msInSlot < kFadeMs) {
+        fadeBr = (uint8_t)((uint32_t)msInSlot * 255u / kFadeMs);
+      } else if (msInSlot >= kSlotMs - kFadeMs) {
+        fadeBr = (uint8_t)((kSlotMs - msInSlot) * 255u / kFadeMs);
+      } else {
+        fadeBr = 255u;
+      }
+    }
+
     bool reinit = (demo != lastDemo);
     lastDemo = demo;
-
-    // Half-cosine scale envelope: 1 during the body, tapers to 0 at slot edges.
-    //   zoom-out: last kTransMs of the slot  (msInSlot in [kSlotMs-kTransMs, kSlotMs))
-    //   zoom-in:  first kTransMs of the slot (msInSlot in [0, kTransMs))
-    static const coord kPi = coord::from_raw(205887);  // π = 3.14159265
-    coord tScale;
-    if (msInSlot < kTransMs) {
-      // phase ∈ [0,1): msInSlot*65536 max = 599*65536 = 39,255,664 < 2^31
-      coord phase = coord::from_raw((int32_t)msInSlot * 65536 / (int32_t)kTransMs);
-      tScale = (coord::from_raw(65536) - fl::s16x16::cos(kPi * phase)) / coord(2);  // 0 -> 1
-    } else if (msInSlot >= kSlotMs - kTransMs) {
-      coord phase = coord::from_raw((int32_t)(msInSlot - (kSlotMs - kTransMs)) * 65536 / (int32_t)kTransMs);
-      tScale = (coord::from_raw(65536) + fl::s16x16::cos(kPi * phase)) / coord(2);  // 1 -> 0
-    } else {
-      tScale = coord::from_raw(65536);
-    }
-
-    // Brightness fade: black in the final kFadeMs of the outgoing slot and the
-    // first kFadeMs of the incoming slot — sits inside the zoom envelope.
-    uint8_t fadeBr;
-    if (msInSlot < kFadeMs) {
-      fadeBr = (uint8_t)((uint32_t)msInSlot * 255u / kFadeMs);
-    } else if (msInSlot >= kSlotMs - kFadeMs) {
-      fadeBr = (uint8_t)((kSlotMs - msInSlot) * 255u / kFadeMs);
-    } else {
-      fadeBr = 255u;
-    }
 
     // Scale radius; lerp orbiting origin toward display centre so transition stays centred.
     coord tr = r * tScale;
@@ -227,10 +251,10 @@ class SutaburosuDemoEffect : public Node {
     } else {
       wantDim = demoBranchingTree(cx, cy, r, ms);  // fractal wind-swaying tree
     }
-    // // Fade entire frame to black at slot boundaries via global brightness.
-    // FastLED.setBrightness(fadeBr);
-    // FastLED.show();
-    // // Breadcrumb C: survived FastLED.show()
+    // Apply brightness envelope at slot transitions (replaces original FastLED.setBrightness(fadeBr)).
+    // fadeBr < 255 only during the first/last kFadeMs of each slot, creating a fade-to-black transition.
+    if (fadeBr < 255) layer->fadeToBlackBy(255 - fadeBr);
+
     dimAfterShow = wantDim;
 
     starSpin = starSpin + coord::from_raw(1966);  // +0.03 rad/frame
@@ -348,6 +372,8 @@ class SutaburosuDemoEffect : public Node {
   //   orbit = pr - ri - t
   // Radii: 13, 9.5, 6, 3.5, 1.25  →  orbit radii: 2.25, 2.25, 1.25, 0.98  with t=1.25.
   // Each ring is drawn in a rainbow colour; no filled discs.
+  coord angles[4] = {};
+
   uint8_t demoOrbitingDiscs(coord cx, coord cy, coord R, coord tScale) {
     static const CRGB kColors[] = {
         CRGB::Red, CRGB::Orange, CRGB::Yellow, CRGB::Green, CRGB::Blue,
@@ -367,7 +393,6 @@ class SutaburosuDemoEffect : public Node {
     // Each ring gets its own angle that advances by baseDelta*speed per frame
     // and wraps independently — avoids the phase jump that occurs when a shared
     // spin counter is multiplied by a non-integer speed then wrapped to [0,2π).
-    static coord angles[4] = {coord{0.0f}, coord{0.0f}, coord{0.0f}, coord{0.0f}};
     static const coord kBaseDelta = coord::from_raw(2621);  // 0.04 rad/frame
 
     fl::CanvasRGB canvas(fl::span<CRGB>(canvas_buf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
@@ -449,6 +474,8 @@ class SutaburosuDemoEffect : public Node {
   // Parameters: R=13, r=6, h=5  →  kRatio fixed at 3/2=1.5 for a clean 3-lobed curve
   //             closes after 2 full outer rotations (theta=4π)
   //             max pen radius = (R-r)+h = 7+5 = 12 px  (fits the display)
+  coord spiroTheta{};
+
   uint8_t demoSpirograph(coord cx, coord cy, coord R, coord tScale, bool reinit) {
     // static constexpr float   kInnerR = 6.0f;   // rolling circle radius
     // static constexpr float   kPenArm = 5.0f;   // pen arm length
@@ -459,22 +486,20 @@ class SutaburosuDemoEffect : public Node {
     // so wrap at 4π, not 2π, to avoid a mid-curve position discontinuity.
     static const coord fourPi = coord::from_raw(823548);  // 4π = 12.5663706
 
-    static coord theta{0};
-
     // Rolling-circle centre
     coord arm = R - coord::from_raw(393216);  // R - kInnerR(6.0)
-    coord rcx = cx + fl::s16x16::cos(theta) * arm;
-    coord rcy = cy + fl::s16x16::sin(theta) * arm;
+    coord rcx = cx + fl::s16x16::cos(spiroTheta) * arm;
+    coord rcy = cy + fl::s16x16::sin(spiroTheta) * arm;
     // Pen position: roll angle = theta * ratio; minus sign on sin gives correct
     // rotation direction for a rolling (not sliding) inner circle.
-    coord roll = theta * coord::from_raw(98304);                         // kRatio = 1.5
+    coord roll = spiroTheta * coord::from_raw(98304);                    // kRatio = 1.5
     coord penX = rcx + fl::s16x16::cos(roll) * coord::from_raw(327680);  // kPenArm = 5.0
     coord penY = rcy - fl::s16x16::sin(roll) * coord::from_raw(327680);  // kPenArm = 5.0
 
     // On (re-)activation pre-simulate kPts steps so the trail is fully populated.
     if (reinit) {
       gTrailHead = 0;
-      coord t = theta - kDelta * coord(kPts);
+      coord t = spiroTheta - kDelta * coord(kPts);
       while (t.raw() < 0) t = t + fourPi;
       for (uint8_t i = 0; i < kPts; ++i) {
         coord pa = R - coord::from_raw(393216);  // R - kInnerR(6.0)
@@ -511,8 +536,8 @@ class SutaburosuDemoEffect : public Node {
     // Pen dot at scaled position
     canvas.drawDisc(CRGB::White, s_penX, s_penY, coord::from_raw(98304) * tScale);  // r=1.5
 
-    theta = theta + kDelta;
-    if (theta.raw() > fourPi.raw()) theta = theta - fourPi;
+    spiroTheta = spiroTheta + kDelta;
+    if (spiroTheta.raw() > fourPi.raw()) spiroTheta = spiroTheta - fourPi;
     return 255;
   }
 
@@ -521,23 +546,25 @@ class SutaburosuDemoEffect : public Node {
   // φ advances slowly each frame, continuously morphing the knot through all
   // Bowditch forms.  θ wraps at 2π (the 3:2 figure closes at that period).
   // An 80-point ring buffer stores the trail; drawn as fading rainbow AA lines.
+  coord lissaTheta{};
+  coord lissaPhase{};
+
   uint8_t demoLissajous(coord cx, coord cy, coord R, coord tScale, bool reinit) {
     static constexpr uint8_t kPts = 80;
     static const coord kStep = coord::from_raw(7864);  // 0.12 rad/frame
     static const coord twoPi = kTwoPi;
 
-    static coord theta{0};
-    static coord phase{0};  // φ: drifts to morph the figure
+    // lissaPhase is a class member: φ drifts to morph the figure
 
     // Current pen position
-    coord px = cx + fl::s16x16::sin(theta * coord::from_raw(196608) + phase) * R;  // sin(3θ+ϕ)
-    coord py = cy + fl::s16x16::sin(theta * coord::from_raw(131072)) * R;          // sin(2θ)
+    coord px = cx + fl::s16x16::sin(lissaTheta * coord::from_raw(196608) + lissaPhase) * R;  // sin(3θ+ϕ)
+    coord py = cy + fl::s16x16::sin(lissaTheta * coord::from_raw(131072)) * R;               // sin(2θ)
 
     // On (re-)activation pre-simulate kPts steps so the trail is fully populated.
     if (reinit) {
       gTrailHead = 0;
-      coord t = theta - kStep * coord(kPts);
-      coord p = phase - coord(0.007f * kPts);
+      coord t = lissaTheta - kStep * coord(kPts);
+      coord p = lissaPhase - coord(0.007f * kPts);
       while (t.raw() < 0) t = t + twoPi;
       while (p.raw() < 0) p = p + twoPi;
       for (uint8_t i = 0; i < kPts; ++i) {
@@ -565,11 +592,11 @@ class SutaburosuDemoEffect : public Node {
     coord s_py = cy + (py - cy) * tScale;
     canvas.drawDisc(CRGB::White, s_px, s_py, coord{1.5f} * tScale);
 
-    theta = theta + kStep;
-    if (theta.raw() > twoPi.raw()) theta = theta - twoPi;
+    lissaTheta = lissaTheta + kStep;
+    if (lissaTheta.raw() > twoPi.raw()) lissaTheta = lissaTheta - twoPi;
 
-    phase = phase + coord(0.007f);
-    if (phase.raw() > twoPi.raw()) phase = phase - twoPi;
+    lissaPhase = lissaPhase + coord(0.007f);
+    if (lissaPhase.raw() > twoPi.raw()) lissaPhase = lissaPhase - twoPi;
     return 255;
   }
 
@@ -579,6 +606,9 @@ class SutaburosuDemoEffect : public Node {
   // transition from one to the other feels continuous.
   //   thin=true:  drawLine — 1-px Wu AA; depth cued by brightness only.
   //   thin=false: canvas.drawStrokeLine — depth cued by both thickness and brightness.
+  coord spinY{};
+  coord spinX{};
+
   uint8_t demoCubeImpl(coord cx, coord cy, bool thin, coord tScale) {
     static const coord kS = coord::from_raw(458752);         // 7.0
     static const coord kSThin = coord::from_raw(720896);     // 11.0
@@ -594,9 +624,6 @@ class SutaburosuDemoEffect : public Node {
         {4, 5}, {5, 6}, {6, 7}, {7, 4},  // front face
         {0, 4}, {1, 5}, {2, 6}, {3, 7},  // pillars
     };
-
-    static coord spinY{0};
-    static coord spinX{0};
 
     const coord cosY = fl::s16x16::cos(spinY);
     const coord sinY = fl::s16x16::sin(spinY);
@@ -654,10 +681,14 @@ class SutaburosuDemoEffect : public Node {
   // toward the display centre, so they wander freely without flying off-screen.
   // Returns 20 so the caller dims the framebuffer slightly each frame, leaving
   // long glowing colour trails that shift hue slowly over time.
+  coord wx[6] = {};
+  coord wy[6] = {};
+  coord wvx[6] = {};
+  coord wvy[6] = {};
+  uint8_t whue[6] = {};
+
   uint8_t demoOrganicWalkers(coord cx, coord cy, coord tScale, bool reinit) {
     static constexpr uint8_t kN = 6;
-    static coord wx[kN], wy[kN], wvx[kN], wvy[kN];
-    static uint8_t whue[kN];
 
     if (reinit) {
       for (uint8_t i = 0; i < kN; ++i) {
@@ -710,10 +741,14 @@ class SutaburosuDemoEffect : public Node {
   // plus a soft wall force keeping them inside the display area.  Each boid is
   // drawn as a short velocity-aligned stroke.  Returns 18 so the caller dims
   // the framebuffer each frame and trails persist for roughly 20 frames.
+  coord bx[7] = {};
+  coord by[7] = {};
+  coord bvx[7] = {};
+  coord bvy[7] = {};
+  uint8_t bhue[7] = {};
+
   uint8_t demoBoids(coord cx, coord cy, coord r, coord tScale, bool reinit) {
     static constexpr uint8_t kN = 7;
-    static coord bx[kN], by[kN], bvx[kN], bvy[kN];
-    static uint8_t bhue[kN];
 
     if (reinit) {
       for (uint8_t i = 0; i < kN; ++i) {
@@ -834,6 +869,15 @@ class SutaburosuDemoEffect : public Node {
   // Closing angle = 2π × r/gcd(r, R−r); all entries use R=13 (prime) so gcd=1
   // for every row, giving clean petal counts with 3–9 rotations each.
   // Returns 0 while drawing (no fade), 255 on completion (clear next frame).
+  uint8_t idx = 0;
+  coord hypoTheta{};
+  coord rollPhase{};
+  coord prevX{};
+  coord prevY{};
+  bool firstPoint = true;
+  uint8_t hue = 0;
+  int32_t closeRaw = 0;
+
   uint8_t demoHypoRand(coord cx, coord cy, bool reinit) {
     struct Params {
       uint8_t r;
@@ -853,20 +897,11 @@ class SutaburosuDemoEffect : public Node {
     static const coord kR = coord::from_raw((int32_t)kR_int << 16);
     static const coord kStep = coord::from_raw(16384);  // 0.25 rad/frame
 
-    static uint8_t idx = 0;
-    static coord theta = coord{};
-    static coord rollPhase = coord{};
-    static coord prevX = coord{};
-    static coord prevY = coord{};
-    static bool firstPoint = true;
-    static uint8_t hue = 0;
-    static int32_t closeRaw = 0;  // closing angle raw = 2π × r
-
     // Pick a new random variant and reset curve state.
     if (reinit || closeRaw == 0) {
       idx = random8() % kNTable;
       hue = random8();
-      theta = coord{};
+      hypoTheta = coord{};
       rollPhase = coord{};
       firstPoint = true;
       // closeAngle = 2π × r  (gcd(r, R−r) = 1 for all table entries with R=13 prime)
@@ -878,8 +913,8 @@ class SutaburosuDemoEffect : public Node {
     coord arm = kR - ri_c;                   // (R − r)
     coord rollDelta = kStep * (arm / ri_c);  // advance roll by kStep × (R−r)/r
 
-    coord penX = cx + fl::s16x16::cos(theta) * arm + fl::s16x16::cos(rollPhase) * h_c;
-    coord penY = cy + fl::s16x16::sin(theta) * arm - fl::s16x16::sin(rollPhase) * h_c;
+    coord penX = cx + fl::s16x16::cos(hypoTheta) * arm + fl::s16x16::cos(rollPhase) * h_c;
+    coord penY = cy + fl::s16x16::sin(hypoTheta) * arm - fl::s16x16::sin(rollPhase) * h_c;
 
     fl::CanvasRGB canvas(fl::span<CRGB>(canvas_buf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
 
@@ -892,15 +927,15 @@ class SutaburosuDemoEffect : public Node {
     prevX = penX;
     prevY = penY;
 
-    theta = theta + kStep;
+    hypoTheta = hypoTheta + kStep;
     rollPhase = rollPhase + rollDelta;
     if (rollPhase.raw() >= kTwoPi.raw()) rollPhase = rollPhase - kTwoPi;
 
-    if (theta.raw() >= closeRaw) {
+    if (hypoTheta.raw() >= closeRaw) {
       // Cycle complete — pick next variant; signal caller to clear the screen.
       idx = random8() % kNTable;
       hue = random8();
-      theta = coord{};
+      hypoTheta = coord{};
       rollPhase = coord{};
       firstPoint = true;
       closeRaw = (int32_t)kTable[idx].r * kTwoPi.raw();
@@ -990,6 +1025,8 @@ class SutaburosuDemoEffect : public Node {
     --gTreeNest;
   }
 
+  uint8_t sLastNestMax = 0;
+
   uint8_t demoBranchingTree(coord cx, coord cy, coord r, uint32_t ms) {
     // Wind sway: 9 s period
     coord windPhase = coord::from_raw((int32_t)((uint64_t)(ms % 9000u) * (uint32_t)kTwoPi.raw() / 9000u));
@@ -1015,7 +1052,6 @@ class SutaburosuDemoEffect : public Node {
     // gCP = 0;  // 0 = outside treeSegment
     treeSegment(trunkX, trunkY, coord{}, trunkLen, 6);
     // Report max nesting depth reached this frame (printed once per new maximum).
-    static uint8_t sLastNestMax = 0;
     if (gTreeNestMax != sLastNestMax) {
       sLastNestMax = gTreeNestMax;
     }
