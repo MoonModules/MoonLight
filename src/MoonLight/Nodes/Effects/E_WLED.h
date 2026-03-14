@@ -1411,7 +1411,7 @@ class FrizzlesEffect : public Node {
   uint8_t blur = 128;
 
   void setup() override {
-    addControl(bpm, "BPM", "slider");
+    addControl(bpm, "bpm", "slider");
     addControl(intensity, "intensity", "slider");
     addControl(blur, "blur", "slider");
   }
@@ -1993,15 +1993,11 @@ class DJLightEffect : public Node {
 
       if (sharedData.volume < 1.0f) color = CRGB(0, 0, 0);  // silence = black
 
-      // make colors less "pastel", by turning up color saturation in HSV space
+      // use palette: map audio-derived color hue and brightness to palette
       if (color.getLuma() > 32) {  // don't change "dark" pixels
         CHSV hsvColor = rgb2hsv_approximate(color);
         hsvColor.v = constrain(hsvColor.v, 48, 204);  // 48 < brightness < 204
-        if (candyFactory)
-          hsvColor.s = MAX(hsvColor.s, 204);  // candy factory mode: strongly turn up color saturation (> 192)
-        else
-          hsvColor.s = MAX(hsvColor.s, 108);  // normal mode: turn up color saturation to avoid pastels
-        color = hsvColor;
+        color = ColorFromPalette(layerP.palette, hsvColor.h, hsvColor.v);
       }
       // if (color.getLuma() > 12) color.maximizeBrightness();          // for testing
 

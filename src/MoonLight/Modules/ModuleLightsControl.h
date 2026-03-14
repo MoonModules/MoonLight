@@ -17,6 +17,7 @@
   #include "FastLED.h"
   #include "MoonBase/Module.h"
   #include "MoonBase/Modules/FileManager.h"
+  #include "MoonBase/Nodes.h"  // for Node::updateControl
   #include "MoonBase/utilities/Utilities.h"  //for isInPSRAM
   #include "palettes.h"
 
@@ -322,6 +323,12 @@ class ModuleLightsControl : public Module {
     }
     #endif
 
+    control = addControl(controls, "bpm", "slider");
+    control["default"] = 60;
+
+    control = addControl(controls, "intensity", "slider");
+    control["default"] = 128;
+
     control = addControl(controls, "preset", "preset");
     control["width"] = 8;
     control["size"] = 18;
@@ -363,6 +370,21 @@ class ModuleLightsControl : public Module {
     } else if (updatedItem.name == "palette") {
       // const size_t nrOfPaletteEntries = sizeof(layerP.palette.entries) / sizeof(CRGB);
       layerP.palette = getGradientPalette(updatedItem.value);
+    } else if (updatedItem.name == "bpm") {
+      uint8_t bpm = _state.data["bpm"];
+      for (auto* node : layerP.layers[0]->nodes) {
+        if (node && node->on) {
+          node->updateControl("speed", bpm);
+          node->updateControl("bpm", bpm);
+        }
+      }
+    } else if (updatedItem.name == "intensity") {
+      uint8_t intensity = _state.data["intensity"];
+      for (auto* node : layerP.layers[0]->nodes) {
+        if (node && node->on) {
+          node->updateControl("intensity", intensity);
+        }
+      }
     } else if (updatedItem.name == "preset") {
       // copy /.config/effects.json to the hidden folder /.config/presets/preset[x].json
       // do not set preset at boot...

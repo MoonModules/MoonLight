@@ -66,12 +66,13 @@
 		fileContent = null;
 	}
 
-	let clickTimeout: ReturnType<typeof setTimeout> | null = null;
-	let preventClick = false;
+	let longPressTimeout: ReturnType<typeof setTimeout> | null = null;
+	let longPressed = false;
+	let longPressCell: number | null = null;
 
 	onDestroy(() => {
 		if (hoverTimeout) clearTimeout(hoverTimeout);
-		if (clickTimeout) clearTimeout(clickTimeout);
+		if (longPressTimeout) clearTimeout(longPressTimeout);
 	});
 
 	$: width = property.width || 8;
@@ -94,26 +95,30 @@
 		ondragstart={(event) => handleDragStart(event, y, x)}
 		ondragover={(event) => event.preventDefault()}
 		ondrop={(event) => handleDrop(event, y, x)}
-		onclick={(event: MouseEvent) => {
-			preventClick = false;
-			clickTimeout = setTimeout(() => {
-				if (!preventClick) {
-					value.select = btnIdx;
-					console.log('click', y, x, value.select);
-					if (value.selected == value.select) value.select = 255;
-					value.selected = value.select;
-					value.action = 'click';
-					onChange(event);
-				}
-			}, 250);
+		onpointerdown={() => {
+			longPressed = false;
+			longPressCell = null;
+			longPressTimeout = setTimeout(() => {
+				longPressed = true;
+				longPressCell = btnIdx;
+			}, 500);
 		}}
-		ondblclick={(event: MouseEvent) => {
-			preventClick = true;
-			clearTimeout(clickTimeout);
+		onpointerup={(event: PointerEvent) => {
+			clearTimeout(longPressTimeout);
+			longPressCell = null;
 			value.select = btnIdx;
-			console.log('dblclick', y, x, value.select);
-			value.action = 'dblclick';
+			if (longPressed) {
+				value.action = 'dblclick';
+			} else {
+				if (value.selected == value.select) value.select = 255;
+				value.selected = value.select;
+				value.action = 'click';
+			}
 			onChange(event);
+		}}
+		onpointerleave={() => {
+			clearTimeout(longPressTimeout);
+			longPressCell = null;
 		}}
 		onmouseenter={(event: MouseEvent) => {
 			if (property.hoverToServer) {
@@ -136,6 +141,14 @@
 			>
 		{:else}
 			{btnIdx}
+		{/if}
+		{#if longPressCell === btnIdx}
+			<div
+				class="bg-warning text-warning-content fixed z-50 rounded px-2 py-1 text-xs shadow-lg"
+				style="pointer-events: none;"
+			>
+				Long press
+			</div>
 		{/if}
 		{#if popupCell === btnIdx}
 			<div

@@ -373,6 +373,16 @@ class ModuleEffects : public NodeManager {
           },
           _moduleName);
     }
+
+    if (triggerSyncControl != "") {
+      Char<12> syncName = triggerSyncControl;
+      uint8_t syncValue = triggerSyncValue;
+      triggerSyncControl = "";
+      JsonDocument doc;
+      JsonObject newState = doc.to<JsonObject>();
+      newState[syncName.c_str()] = syncValue;
+      _moduleLightsControl->update(newState, ModuleState::update, _moduleName);
+    }
   }
 
   void loop1s() override {
@@ -385,10 +395,28 @@ class ModuleEffects : public NodeManager {
   }
 
   bool triggerResetPreset = false;
+  Char<12> triggerSyncControl;  // control name to sync back to LightsControl (e.g. "speed" → BPM, "intensity")
+  uint8_t triggerSyncValue = 0;
+
   void onUpdate(const UpdatedItem& updatedItem) override {
     NodeManager::onUpdate(updatedItem);
     if (updatedItem.originId->toInt()) {  // UI triggered
       triggerResetPreset = true;
+    }
+
+    // sync effect speed/BPM/intensity back to LightsControl (also on preset load)
+    if (updatedItem.parent[1] == "controls" && updatedItem.name == "value" && updatedItem.index[1] != UINT8_MAX) {
+      JsonObject control = _state.data["nodes"][updatedItem.index[0]]["controls"][updatedItem.index[1]];
+      const char* controlName = control["name"];
+      if (controlName) {
+        if (equal(controlName, "speed") || equal(controlName, "bpm")) {
+          triggerSyncControl = "bpm";
+          triggerSyncValue = control["value"];
+        } else if (equal(controlName, "intensity")) {
+          triggerSyncControl = "intensity";
+          triggerSyncValue = control["value"];
+        }
+      }
     }
   }
 
