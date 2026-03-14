@@ -398,24 +398,39 @@ class ModuleEffects : public NodeManager {
   Char<12> triggerSyncControl;  // control name to sync back to LightsControl (e.g. "speed" → BPM, "intensity")
   uint8_t triggerSyncValue = 0;
 
+  void syncControlToLightsControl(uint8_t nodeIndex, uint8_t controlIndex) {
+    JsonObject control = _state.data["nodes"][nodeIndex]["controls"][controlIndex];
+    const char* controlName = control["name"];
+    if (controlName) {
+      if (equal(controlName, "speed") || equal(controlName, "bpm")) {
+        triggerSyncControl = "bpm";
+        triggerSyncValue = control["value"];
+      } else if (equal(controlName, "intensity")) {
+        triggerSyncControl = "intensity";
+        triggerSyncValue = control["value"];
+      }
+    }
+  }
+
   void onUpdate(const UpdatedItem& updatedItem) override {
     NodeManager::onUpdate(updatedItem);
     if (updatedItem.originId->toInt()) {  // UI triggered
       triggerResetPreset = true;
     }
 
-    // sync effect speed/BPM/intensity back to LightsControl (also on preset load)
+    // sync effect speed/BPM/intensity back to LightsControl (UI changes and preset loads)
+    // No loop risk: LightsControl's bpm/intensity handlers have toInt() guard, and
+    // node->updateControl() modifies JSON directly without triggering ModuleEffects::onUpdate
     if (updatedItem.parent[1] == "controls" && updatedItem.name == "value" && updatedItem.index[1] != UINT8_MAX) {
-      JsonObject control = _state.data["nodes"][updatedItem.index[0]]["controls"][updatedItem.index[1]];
-      const char* controlName = control["name"];
-      if (controlName) {
-        if (equal(controlName, "speed") || equal(controlName, "bpm")) {
-          triggerSyncControl = "bpm";
-          triggerSyncValue = control["value"];
-        } else if (equal(controlName, "intensity")) {
-          triggerSyncControl = "intensity";
-          triggerSyncValue = control["value"];
-        }
+      syncControlToLightsControl(updatedItem.index[0], updatedItem.index[1]);
+    }
+
+    // when a node name changes (new node created, e.g. preset load), sync its controls too
+    // compareRecursive may not fire value changes if preset values match defaults
+    if (updatedItem.parent[0] == "nodes" && updatedItem.name == "name" && updatedItem.parent[1] == "") {
+      JsonArray controls = _state.data["nodes"][updatedItem.index[0]]["controls"];
+      for (uint8_t j = 0; j < controls.size(); j++) {
+        syncControlToLightsControl(updatedItem.index[0], j);
       }
     }
   }

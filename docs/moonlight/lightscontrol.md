@@ -1,6 +1,6 @@
 # Lights Control
 
-<img width="320" src="https://github.com/user-attachments/assets/8ca3e8a4-8025-43a4-8746-336ef72fa81d" />
+<img width="320" src="../lightscontrol.png" />
 
 Lights Control is the **central command panel** for your LEDs. It is also the integration point for every external controller — Home Assistant, DMX, IR remotes, hardware buttons, displays — all talk to the same module.
 
@@ -77,7 +77,7 @@ A 64-slot grid for saving and loading complete effect configurations.
 |---|---|
 | **Click** an empty (blue) slot | Saves the current effects & modifiers to that slot |
 | **Click** a saved (green) slot | Loads that preset |
-| **Double-click** a saved slot | Deletes the preset |
+| **Long-press** a saved slot | Deletes the preset |
 | **Hover** over a saved slot | Shows a popup listing the effects and modifiers stored inside |
 
 > **Note:** Presets store **Effects and Modifiers only** — not Layouts or Drivers. Configure those separately.

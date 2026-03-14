@@ -371,18 +371,22 @@ class ModuleLightsControl : public Module {
       // const size_t nrOfPaletteEntries = sizeof(layerP.palette.entries) / sizeof(CRGB);
       layerP.palette = getGradientPalette(updatedItem.value);
     } else if (updatedItem.name == "bpm") {
-      uint8_t bpm = _state.data["bpm"];
-      for (auto* node : layerP.layers[0]->nodes) {
-        if (node && node->on) {
-          node->updateControl("speed", bpm);
-          node->updateControl("bpm", bpm);
+      if (updatedItem.originId->toInt()) {  // only propagate UI-initiated changes to nodes
+        uint8_t bpm = _state.data["bpm"];
+        for (auto* node : layerP.layers[0]->nodes) {
+          if (node && node->on) {
+            node->updateControl("speed", bpm);
+            node->updateControl("bpm", bpm);
+          }
         }
       }
     } else if (updatedItem.name == "intensity") {
-      uint8_t intensity = _state.data["intensity"];
-      for (auto* node : layerP.layers[0]->nodes) {
-        if (node && node->on) {
-          node->updateControl("intensity", intensity);
+      if (updatedItem.originId->toInt()) {  // only propagate UI-initiated changes to nodes
+        uint8_t intensity = _state.data["intensity"];
+        for (auto* node : layerP.layers[0]->nodes) {
+          if (node && node->on) {
+            node->updateControl("intensity", intensity);
+          }
         }
       }
     } else if (updatedItem.name == "preset") {
