@@ -1394,7 +1394,7 @@ class MoonManEffect : public Node {
  public:
   static const char* name() { return "Moon Man"; }
   static uint8_t dim() { return _2D; }
-  static const char* tags() { return "🔥♫"; }
+  static const char* tags() { return "🔥"; }
   static const char* category() { return "MoonLight"; }
 
   // Create an M5Canvas for PNG processing

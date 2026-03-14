@@ -1906,7 +1906,7 @@ class HeartBeatEffect : public Node {
  public:
   static const char* name() { return "Heartbeat"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return ""; }
+  static const char* tags() { return "🐙"; }
   static const char* category() { return "WLED"; }
 
   uint8_t speed = 15;

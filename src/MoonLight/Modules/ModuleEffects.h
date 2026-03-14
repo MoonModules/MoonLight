@@ -196,7 +196,10 @@ class ModuleEffects : public NodeManager {
     // find all the .sc files on FS
     File rootFolder = ESPFS.open("/");
     walkThroughFiles(rootFolder, [&](File folder, File file) {
-      if (strstr(file.name(), ".sc") && (strncmp(file.name(), "E_", 2) == 0 || strncmp(file.name(), "M_", 2) == 0)) {
+      const char* fname = file.name();
+      size_t len = strlen(fname);
+      bool isSc = (len >= 3) && strcmp(fname + (len - 3), ".sc") == 0;
+      if (isSc && (strncmp(fname, "E_", 2) == 0 || strncmp(fname, "M_", 2) == 0)) {
         if (control["values"].isNull()) control["values"].to<JsonArray>();
         JsonObject entry = control["values"].as<JsonArray>().add<JsonObject>();
         entry["name"] = (const char*)file.path();
