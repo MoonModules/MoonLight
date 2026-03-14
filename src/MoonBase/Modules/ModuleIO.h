@@ -259,7 +259,6 @@ class ModuleIO : public Module {
   };
 
   void setBoardPresetDefaults(uint8_t boardID) {
-    _current_board_id = boardID;
     JsonDocument doc;
     JsonObject newState = doc.to<JsonObject>();
     newState["modded"] = false;
@@ -675,6 +674,7 @@ class ModuleIO : public Module {
 
     // Handle boardPreset changes
     if (updatedItem.name == "boardPreset") {
+      _current_board_preset = updatedItem.value;
       // Only load board defaults if modded is false
       if (_state.data["modded"] == false) {
         EXT_LOGD(MB_TAG, "newBoardID %s %s[%d]%s[%d].%s = %s -> %s", updatedItem.originId->c_str(), updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
@@ -742,10 +742,10 @@ class ModuleIO : public Module {
     // During boot, handle boardPreset from file if modded=false
     // This runs AFTER file load completes and all values (including modded) are restored
     if (!_initialUpdateDone) {
+       _current_board_preset = _state.data["boardPreset"];
       if (_state.data["modded"] == false) {
-        uint8_t boardPreset = _state.data["boardPreset"];
-        EXT_LOGD(MB_TAG, "Applying board preset %d defaults from file (modded=false)", boardPreset);
-        newBoardID = boardPreset;
+        EXT_LOGD(MB_TAG, "Applying board preset %d defaults from file (modded=false)", _current_board_preset);
+        newBoardID = _current_board_preset;
         // Will be processed in next loop20ms iteration at top, setting _initialUpdateDone
       } else {
         EXT_LOGD(MB_TAG, "Skipping board preset defaults - using custom pins from file (modded=true)");
@@ -991,10 +991,10 @@ class ModuleIO : public Module {
       uint32_t adc_mv_vinput = analogReadMilliVolts(_pinVoltage);
       analogSetAttenuation(ADC_11db);
       float volts = 0;
-      if (_current_board_id == board_SE16V1) {
+      if (_current_board_preset == board_SE16V1) {
         volts = ((float)adc_mv_vinput) * 2 / 1000;
       }  // /2 resistor divider
-      else if (_current_board_id == board_LightCrafter16) {
+      else if (_current_board_preset == board_LightCrafter16) {
         volts = ((float)adc_mv_vinput) * 11.43 / (1.43 * 1000);
       }  // 1k43/10k resistor divider
       batteryService->updateVoltage(volts);
@@ -1005,13 +1005,13 @@ class ModuleIO : public Module {
       uint32_t adc_mv_cinput = analogReadMilliVolts(_pinCurrent);
       analogSetAttenuation(ADC_11db);
       current_readout_current_adc_attenuation = adc_get_adjusted_gain(current_readout_current_adc_attenuation, adc_mv_cinput);
-      if ((_current_board_id == board_SE16V1) || (_current_board_id == board_LightCrafter16)) {
+      if ((_current_board_preset == board_SE16V1) || (_current_board_preset == board_LightCrafter16)) {
         if (adc_mv_cinput > 330)  // datasheet quiescent output voltage of 0.5V, which is ~330mV after the 10k/5k1 voltage divider. Ideally, this value should be measured at boot when nothing is displayed on the LEDs
         {
-          if (_current_board_id == board_SE16V1) {
+          if (_current_board_preset == board_SE16V1) {
             batteryService->updateCurrent((((float)(adc_mv_cinput)-250) * 50.00) / 1000);
           }  // 40mV / A with a /2 resistor divider, so a 50mA/mV
-          else if (_current_board_id == board_LightCrafter16) {
+          else if (_current_board_preset == board_LightCrafter16) {
             batteryService->updateCurrent((((float)(adc_mv_cinput)-330) * 37.75) / 1000);
           }  // 40mV / A with a 10k/5k1 resistor divider, so a 37.75mA/mV
         } else {
@@ -1023,7 +1023,7 @@ class ModuleIO : public Module {
   }
 
  private:
-  uint8_t _current_board_id = UINT8_MAX;
+  uint8_t _current_board_preset = UINT8_MAX;
   #if FT_BATTERY
   // used in loop1s()
   uint8_t _pinVoltage = UINT8_MAX;
