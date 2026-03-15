@@ -1073,8 +1073,9 @@ class ColorTrailsEffect : public Node {
   static const char* category() { return "FastLED"; }
 
   // Controls
-  uint8_t mode = 0;        // 0=orbital, 1=lissajous, 2=border
-  uint8_t fade = 250;      // 0=fast fade, 255=slow fade → fadeFactor [0.90, 1.00]
+  uint8_t bpm = 60;        // overall animation speed (60 = normal)
+  uint8_t mode = 0;        // 0=all, 1=orbital, 2=lissajous, 3=border
+  uint8_t fade = 250;      // 0=fast fade, 255=slow fade
   uint8_t flowSpeed = 128; // noise scroll speed
   uint8_t flowShift = 128; // max pixel shift per row/column
   uint8_t noiseScale = 85; // noise spatial frequency
@@ -1083,7 +1084,9 @@ class ColorTrailsEffect : public Node {
   bool smear = false;      // reverse X noise profile
 
   void setup() override {
+    addControl(bpm, "bpm", "slider");
     addControl(mode, "mode", "select");
+    addControlValue("All");
     addControlValue("Orbital");
     addControlValue("Lissajous");
     addControlValue("Border");
@@ -1131,7 +1134,7 @@ class ColorTrailsEffect : public Node {
     }
   };
 
-  Perlin1D noiseX, noiseY;
+  Perlin1D noiseX{}, noiseY{};
   float* xProf = nullptr;  // one noise value per column
   float* yProf = nullptr;  // one noise value per row
   CRGB* tempBuf = nullptr; // intermediate buffer for advection
@@ -1140,6 +1143,7 @@ class ColorTrailsEffect : public Node {
   size_t tempBufSize = 0;
   unsigned long t0 = 0;
   unsigned long lastFrameMs = 0;
+  uint8_t lastActiveMode = 0;
 
   static float clampf(float v, float lo, float hi) {
     return (v < lo) ? lo : (v > hi) ? hi : v;
@@ -1159,8 +1163,9 @@ class ColorTrailsEffect : public Node {
   }
 
   // Sample 1D Perlin noise into a profile array
+  // freq scales inversely with count so flow structures stay proportional on any display size
   void sampleProfile(const Perlin1D& n, float t, float speed, float amp, float scale, int count, float* out) {
-    const float freq  = 0.23f;
+    const float freq  = 0.23f * (16.0f / MAX(count, 1));
     const float phase = t * speed;
     for (int i = 0; i < count; i++) {
       float v = n.noise(i * freq * scale + phase);
@@ -1172,7 +1177,7 @@ class ColorTrailsEffect : public Node {
   void advectAndDim(CRGB* buf, int W, int H, float dt) {
     float fadePerSec = fl::powf((0.90f + fade * 0.000392f), 60.0f);
     float fadeMul = fl::powf(fadePerSec, dt);
-    float fShift = flowShift / 85.0f; // ~0-3.0 pixels
+    float fShift = (flowShift / 85.0f) * (MIN(W, H) / 16.0f); // scales with display (original ~1.8 on 16px)
 
     // Pass 1 — horizontal row shift (Y-noise drives X movement)
     for (int y = 0; y < H; y++) {
@@ -1217,12 +1222,15 @@ class ColorTrailsEffect : public Node {
   void injectOrbiting(fl::CanvasRGB& canvas, float t, int W, int H) {
     coord cx = coord::from_raw((int32_t)W << 15);
     coord cy = coord::from_raw((int32_t)H << 15);
-    float orbDiam = emitterSize / 12.8f; // ~0-20 pixels
-    coord orad = coord(orbDiam * 0.5f);
+    int minDim = MIN(W, H);
+    // orbit radius scales with display: emitterSize controls fraction of half-display (0→0%, 255→~90%)
+    float orbRadius = (emitterSize / 255.0f) * (minDim * 0.45f);
+    coord orad = coord(orbRadius);
     float orbSpeed = emitterSize / 365.0f; // ~0-0.7
     float colSpeed = colorSpeed / 2550.0f;
     float base = t * orbSpeed;
-    float circleDiam = 1.5f;
+    // circle size scales with display (relative to a 16px baseline)
+    float circleDiam = 1.5f * (minDim / 16.0f);
 
     for (int i = 0; i < 3; i++) {
       float a = base + i * (2.0f * 3.14159265f / 3.0f);
@@ -1236,6 +1244,9 @@ class ColorTrailsEffect : public Node {
     }
   }
 
+  // Previous Lissajous endpoint positions for inter-frame interpolation
+  float prevLx1 = -1, prevLy1 = -1, prevLx2 = -1, prevLy2 = -1;
+
   // Inject a Lissajous line with rainbow color using canvas drawLine + drawDisc
   void injectLissajous(fl::CanvasRGB& canvas, float t, int W, int H) {
     float c = (MIN(W, H) - 1) * 0.5f;
@@ -1248,31 +1259,60 @@ class ColorTrailsEffect : public Node {
     float lx2 = c + (amp + 2.0f) * fl::sinf(t * s * 1.89f + 2.20f);
     float ly2 = c + (amp + 1.0f) * fl::sinf(t * s * 1.37f + 0.70f);
 
-    // Draw the line with rainbow gradient using multiple segments
-    float dx = lx2 - lx1;
-    float dy = ly2 - ly1;
-    float maxd = fl::fabsf(dx) > fl::fabsf(dy) ? fl::fabsf(dx) : fl::fabsf(dy);
-    int steps = MAX(1, (int)(maxd * 3.0f));
-    for (int i = 0; i < steps; i++) {
-      float u0 = (float)i / (float)steps;
-      float u1 = (float)(i + 1) / (float)steps;
-      float hue = fmodPos(t * colShift + u0, 1.0f);
-      CHSV hsv((uint8_t)(hue * 255.0f), 255, 255);
-      CRGB rgb;
-      hsv2rgb_rainbow(hsv, rgb);
-      canvas.drawLine(rgb,
-        coord(lx1 + dx * u0), coord(ly1 + dy * u0),
-        coord(lx1 + dx * u1), coord(ly1 + dy * u1));
+    // On large displays, endpoints can jump several pixels between frames.
+    // Interpolate sub-steps between previous and current positions to fill gaps.
+    int nSub = 1;
+    if (prevLx1 >= 0) {
+      float maxJump = MAX(
+        MAX(fl::fabsf(lx1 - prevLx1), fl::fabsf(ly1 - prevLy1)),
+        MAX(fl::fabsf(lx2 - prevLx2), fl::fabsf(ly2 - prevLy2))
+      );
+      nSub = MAX(1, (int)(maxJump * 0.5f)); // one sub-step per ~2 pixels of motion
     }
 
-    // Endpoint discs
+    for (int sub = 0; sub < nSub; sub++) {
+      float frac = (nSub == 1) ? 1.0f : (float)(sub + 1) / (float)nSub;
+      float sx1, sy1, sx2, sy2;
+      if (prevLx1 >= 0 && nSub > 1) {
+        sx1 = prevLx1 + (lx1 - prevLx1) * frac;
+        sy1 = prevLy1 + (ly1 - prevLy1) * frac;
+        sx2 = prevLx2 + (lx2 - prevLx2) * frac;
+        sy2 = prevLy2 + (ly2 - prevLy2) * frac;
+      } else {
+        sx1 = lx1; sy1 = ly1; sx2 = lx2; sy2 = ly2;
+      }
+
+      // Draw the line with rainbow gradient using multiple segments
+      float dx = sx2 - sx1;
+      float dy = sy2 - sy1;
+      float maxd = fl::fabsf(dx) > fl::fabsf(dy) ? fl::fabsf(dx) : fl::fabsf(dy);
+      int steps = MAX(1, (int)(maxd * 3.0f));
+      for (int i = 0; i < steps; i++) {
+        float u0 = (float)i / (float)steps;
+        float u1 = (float)(i + 1) / (float)steps;
+        // blend sub-step fraction into hue for temporal continuity
+        float tSub = t - (1.0f - frac) * 0.033f; // approximate temporal offset
+        float hue = fmodPos(tSub * colShift + u0, 1.0f);
+        CHSV hsv((uint8_t)(hue * 255.0f), 255, 255);
+        CRGB rgb;
+        hsv2rgb_rainbow(hsv, rgb);
+        canvas.drawLine(rgb,
+          coord(sx1 + dx * u0), coord(sy1 + dy * u0),
+          coord(sx1 + dx * u1), coord(sy1 + dy * u1));
+      }
+    }
+
+    // Endpoint discs at final position
     float hue0 = fmodPos(t * colShift, 1.0f);
     float hue1 = fmodPos(t * colShift + 1.0f, 1.0f);
     CRGB ca, cb;
     hsv2rgb_rainbow(CHSV((uint8_t)(hue0 * 255.0f), 255, 255), ca);
     hsv2rgb_rainbow(CHSV((uint8_t)(hue1 * 255.0f), 255, 255), cb);
-    canvas.drawDisc(ca, coord(lx1), coord(ly1), coord(0.85f));
-    canvas.drawDisc(cb, coord(lx2), coord(ly2), coord(0.85f));
+    float discR = 0.85f * (MIN(W, H) / 16.0f);
+    canvas.drawDisc(ca, coord(lx1), coord(ly1), coord(discR));
+    canvas.drawDisc(cb, coord(lx2), coord(ly2), coord(discR));
+
+    prevLx1 = lx1; prevLy1 = ly1; prevLx2 = lx2; prevLy2 = ly2;
   }
 
   // Inject rainbow colors along the grid border
@@ -1309,7 +1349,7 @@ class ColorTrailsEffect : public Node {
     float dt = (now - lastFrameMs) * 0.001f;
     if (dt > 0.5f) dt = 0.033f; // clamp on first frame or long stalls
     lastFrameMs = now;
-    float t = (now - t0) * 0.001f;
+    float t = (now - t0) * 0.001f * (bpm / 60.0f); // bpm scales animation speed (60 = normal)
 
     // Map controls to float ranges
     float fFlowSpeed = flowSpeed / 75.0f;  // ~0-3.4
@@ -1331,11 +1371,19 @@ class ColorTrailsEffect : public Node {
 
     // Inject emitters
     fl::CanvasRGB canvas(fl::span<CRGB>(canvas_buf, W * H), W, H);
-    switch (mode) {
+    uint8_t activeMode = mode;
+    if (activeMode == 0) { // All: cycle every 8 seconds
+      activeMode = ((now - t0) / 8000) % 3 + 1;
+    }
+    if (activeMode != lastActiveMode) {
+      prevLx1 = -1; // reset Lissajous interpolation on mode switch
+      lastActiveMode = activeMode;
+    }
+    switch (activeMode) {
       default:
-      case 0: injectOrbiting(canvas, t, W, H); break;
-      case 1: injectLissajous(canvas, t, W, H); break;
-      case 2: injectBorder(canvas_buf, t, W, H); break;
+      case 1: injectOrbiting(canvas, t, W, H); break;
+      case 2: injectLissajous(canvas, t, W, H); break;
+      case 3: injectBorder(canvas_buf, t, W, H); break;
     }
 
     // Advect + fade
