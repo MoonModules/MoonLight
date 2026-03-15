@@ -121,9 +121,10 @@ using coord = fl::s16x16;
 static const coord kTwoPi = coord::from_raw(411774);  // 2π = 6.2831853
 constexpr uint8_t kTrailMax = 80;
 
-class SutaburosuDemoEffect : public Node {
+// by Sutaburosu
+class FixedPointCanvasEffect : public Node {
  public:
-  static const char* name() { return "SutaburosuDemo"; }
+  static const char* name() { return "Fixed-Point Canvas Demo"; }
   static uint8_t dim() { return _2D; }
   static const char* tags() { return "🔥🆕"; }
   static const char* category() { return "FastLED"; }
@@ -1057,7 +1058,7 @@ class SutaburosuDemoEffect : public Node {
     return 255;
   }
 
-  ~SutaburosuDemoEffect() override {};  // e,g, to free allocated memory
+  ~FixedPointCanvasDemoEffect() override {};  // e,g, to free allocated memory
 };
 
 #endif

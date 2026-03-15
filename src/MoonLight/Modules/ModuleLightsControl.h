@@ -17,7 +17,7 @@
   #include "FastLED.h"
   #include "MoonBase/Module.h"
   #include "MoonBase/Modules/FileManager.h"
-  #include "MoonBase/Nodes.h"  // for Node::updateControl
+  #include "MoonBase/Nodes.h"                // for Node::updateControl
   #include "MoonBase/utilities/Utilities.h"  //for isInPSRAM
   #include "palettes.h"
 
@@ -308,12 +308,15 @@ class ModuleLightsControl : public Module {
         object["category"] = "WLED";
     }
 
-    #if FT_LIVESCRIPT
+  #if FT_LIVESCRIPT
     // find palette live scripts (P_*.sc files) on FS
     {
       File rootFolder = ESPFS.open("/");
       walkThroughFiles(rootFolder, [&](File folder, File file) {
-        if (strstr(file.name(), ".sc") && strncmp(file.name(), "P_", 2) == 0) {
+        const char* fname = file.name();
+        size_t len = strlen(fname);
+        bool isSc = (len >= 3) && strcmp(fname + (len - 3), ".sc") == 0;
+        if (isSc && strncmp(fname, "P_", 2) == 0) {
           JsonObject entry = control["values"].as<JsonArray>().add<JsonObject>();
           entry["name"] = (const char*)file.path();
           entry["category"] = "LiveScript";
@@ -321,7 +324,7 @@ class ModuleLightsControl : public Module {
       });
       rootFolder.close();
     }
-    #endif
+  #endif
 
     control = addControl(controls, "bpm", "slider");
     control["default"] = 60;
@@ -420,6 +423,11 @@ class ModuleLightsControl : public Module {
           ESPFS.remove(presetFile.c_str());
           setPresetsFromFolder();  // update presets in UI
         }
+        // Clear transient action/select fields after processing to prevent stale UI echoes.
+        // The UI sends the full state on every change (e.g. slider drag), which may include
+        // old action/select values that would re-trigger preset operations.
+        _state.data["preset"].remove("action");
+        _state.data["preset"].remove("select");
       }
     }
   }
@@ -435,7 +443,7 @@ class ModuleLightsControl : public Module {
       int seq = -1;
       if (sscanf(file.name(), "preset%02d.json", &seq) == 1) {
         // seq now contains the 2-digit number, e.g., 34
-        EXT_LOGD(ML_TAG, "Preset %d found", seq);
+        // EXT_LOGD(ML_TAG, "Preset %d found", seq);
         _state.data["preset"]["list"].add(seq);  // add the preset to the preset array
 
         char label[20] = "";

@@ -166,7 +166,7 @@ void PhysicalLayer::mapLayout() {
 }
 
 void PhysicalLayer::onLayoutPre() {
-  EXT_LOGD(ML_TAG, "pass %d mp:%d", pass, monitorPass);
+  // EXT_LOGD(ML_TAG, "pass %d mp:%d", pass, monitorPass);
 
   if (pass == 1) {
     // Hold mutex while modifying shared state!

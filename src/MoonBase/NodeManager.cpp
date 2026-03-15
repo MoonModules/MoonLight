@@ -27,19 +27,18 @@ void NodeManager::begin() {
   // if file changes, read the file and bring into state
   // create a handler which recompiles the live script when the file of a current running live script changes in the File Manager
   _fileManager->addUpdateHandler([this](const String& originId) {
-    EXT_LOGD(ML_TAG, "FileManager::updateHandler %s", originId.c_str());
+    // EXT_LOGD(ML_TAG, "FileManager::updateHandler %s", originId.c_str());
     // read the file state (read all files and folders on FS and collect changes)
     _fileManager->read(
         [&](FilesState& filesState) {
           // loop over all changed files (normally only one)
-          for (const auto& updatedItem : filesState.updatedItems) {
-            // if file is the current live script, recompile it (to do: multiple live effects)
-            EXT_LOGD(ML_TAG, "updateHandler updatedItem %s", updatedItem.c_str());
-            Char<32> name;
-            name.format("/.config/%s.json", _moduleName);
-            if (equal(updatedItem.c_str(), name.c_str())) {
-              EXT_LOGD(ML_TAG, " %s updated -> call update %s", name.c_str(), updatedItem.c_str());
-              sharedFsPersistence->readFromFS(_moduleName);  // repopulates the state, processing file changes. Comment temporary !!!
+          Char<32> name;
+          name.format("/.config/%s.json", _moduleName);
+          for (int i = filesState.updatedItems.size() - 1; i >= 0; i--) {
+            if (equal(filesState.updatedItems[i].c_str(), name.c_str())) {
+              EXT_LOGD(ML_TAG, " %s updated -> call update %s", name.c_str(), filesState.updatedItems[i].c_str());
+              filesState.updatedItems.erase(filesState.updatedItems.begin() + i);  // consume the item so it doesn't trigger again
+              sharedFsPersistence->readFromFS(_moduleName);  // repopulates the state, processing file changes
             }
           }
         },

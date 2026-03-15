@@ -109,11 +109,17 @@
 		changed = false;
 	}
 
-	function inputChanged() {
+	function inputChanged(_event: Event, propertyName?: string) {
 		if (modeWS) {
 			let moduleName = page.url.searchParams.get('module') || '';
-			// console.log("inputChanged", moduleName, data);
-			socket.sendEvent(moduleName, data);
+			if (propertyName) {
+				// Send only the changed property to avoid overwriting unrelated server-side state changes with stale values
+				const partial: ModuleData = {};
+				partial[propertyName] = data[propertyName];
+				socket.sendEvent(moduleName, partial);
+			} else {
+				socket.sendEvent(moduleName, data);
+			}
 		} else {
 			changed = true;
 		}
@@ -172,7 +178,7 @@
 								<FieldRenderer
 									{property}
 									bind:value={data[property.name]}
-									onChange={inputChanged}
+									onChange={(event: Event) => inputChanged(event, property.name)}
 									changeOnInput={!modeWS}
 								></FieldRenderer>
 							</div>
@@ -182,7 +188,7 @@
 								{property}
 								bind:data
 								{definition}
-								onChange={inputChanged}
+								onChange={(event: Event) => inputChanged(event, property.name)}
 								changeOnInput={!modeWS}
 							></RowRenderer>
 						{/if}
