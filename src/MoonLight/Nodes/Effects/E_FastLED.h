@@ -1249,15 +1249,16 @@ class ColorTrailsEffect : public Node {
 
   // Inject a Lissajous line with rainbow color using canvas drawLine + drawDisc
   void injectLissajous(fl::CanvasRGB& canvas, float t, int W, int H) {
-    float c = (MIN(W, H) - 1) * 0.5f;
+    float cx = (W - 1) * 0.5f;
+    float cy = (H - 1) * 0.5f;
     float s = emitterSize / 365.0f;
     float amp = (MIN(W, H) - 4) * 0.5f;
     float colShift = colorSpeed / 2550.0f;
 
-    float lx1 = c + (amp + 1.5f) * fl::sinf(t * s * 1.13f + 0.20f);
-    float ly1 = c + (amp + 0.5f) * fl::sinf(t * s * 1.71f + 1.30f);
-    float lx2 = c + (amp + 2.0f) * fl::sinf(t * s * 1.89f + 2.20f);
-    float ly2 = c + (amp + 1.0f) * fl::sinf(t * s * 1.37f + 0.70f);
+    float lx1 = cx + (amp + 1.5f) * fl::sinf(t * s * 1.13f + 0.20f);
+    float ly1 = cy + (amp + 0.5f) * fl::sinf(t * s * 1.71f + 1.30f);
+    float lx2 = cx + (amp + 2.0f) * fl::sinf(t * s * 1.89f + 2.20f);
+    float ly2 = cy + (amp + 1.0f) * fl::sinf(t * s * 1.37f + 0.70f);
 
     // On large displays, endpoints can jump several pixels between frames.
     // Interpolate sub-steps between previous and current positions to fill gaps.
