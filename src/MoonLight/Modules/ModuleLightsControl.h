@@ -436,9 +436,10 @@ class ModuleLightsControl : public Module {
   void setPresetsFromFolder() {
     // loop over all files in the presets folder and add them to the preset array
     File rootFolder = ESPFS.open("/.config/presets/");
-    _state.data["preset"]["list"].clear();    //.to<JsonArray>(); // clear the active preset array before adding new presets
-    _state.data["preset"]["labels"].clear();  // clear and recreate labels
-    bool changed = false;
+    const bool hadPresets = _state.data["preset"]["list"].size() || _state.data["preset"]["labels"].size();
+    _state.data["preset"]["list"].clear();
+    _state.data["preset"]["labels"].clear();
+    bool changed = hadPresets;
     walkThroughFiles(rootFolder, [&](File folder, File file) {
       int seq = -1;
       if (sscanf(file.name(), "preset%02d.json", &seq) == 1) {

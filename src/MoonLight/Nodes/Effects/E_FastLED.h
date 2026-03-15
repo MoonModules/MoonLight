@@ -122,7 +122,7 @@ static const coord kTwoPi = coord::from_raw(411774);  // 2π = 6.2831853
 constexpr uint8_t kTrailMax = 80;
 
 // by Sutaburosu
-class FixedPointCanvasEffect : public Node {
+class FixedPointCanvasDemoEffect : public Node {
  public:
   static const char* name() { return "Fixed-Point Canvas Demo"; }
   static uint8_t dim() { return _2D; }
@@ -1059,6 +1059,294 @@ class FixedPointCanvasEffect : public Node {
   }
 
   ~FixedPointCanvasDemoEffect() override {};  // e,g, to free allocated memory
+};
+
+// Ported from AuroraPortal colorTrails by u/StefanPetrick / 4wheeljive
+// https://github.com/4wheeljive/AuroraPortal/blob/main/src/programs/colorTrails_detail.hpp
+// Noise-driven advection flow field with color emitters (orbiting circles, Lissajous line, rainbow border).
+// Uses fl::CanvasRGB for subpixel-accurate emitter drawing and s16x16 fixed-point math.
+class ColorTrailsEffect : public Node {
+ public:
+  static const char* name() { return "Color Trails"; }
+  static uint8_t dim() { return _2D; }
+  static const char* tags() { return "🔥🆕"; }
+  static const char* category() { return "FastLED"; }
+
+  // Controls
+  uint8_t mode = 0;        // 0=orbital, 1=lissajous, 2=border
+  uint8_t fade = 250;      // 0=fast fade, 255=slow fade → fadeFactor [0.90, 1.00]
+  uint8_t flowSpeed = 128; // noise scroll speed
+  uint8_t flowShift = 128; // max pixel shift per row/column
+  uint8_t noiseScale = 85; // noise spatial frequency
+  uint8_t colorSpeed = 128;
+  uint8_t emitterSize = 128; // orbit diameter or endpoint speed
+  bool smear = false;      // reverse X noise profile
+
+  void setup() override {
+    addControl(mode, "mode", "select");
+    addControlValue("Orbital");
+    addControlValue("Lissajous");
+    addControlValue("Border");
+    addControl(fade, "fade", "slider");
+    addControl(flowSpeed, "flowSpeed", "slider");
+    addControl(flowShift, "flowShift", "slider");
+    addControl(noiseScale, "noiseScale", "slider");
+    addControl(colorSpeed, "colorSpeed", "slider");
+    addControl(emitterSize, "emitterSize", "slider");
+    addControl(smear, "smear", "checkbox");
+
+    noiseX.init(42);
+    noiseY.init(1337);
+    t0 = fl::millis();
+    lastFrameMs = t0;
+  }
+
+ private:
+  // 1D Perlin noise generator (no static state — each instance is independent)
+  struct Perlin1D {
+    uint8_t perm[512];
+
+    void init(uint32_t seed) {
+      uint8_t p[256];
+      for (int i = 0; i < 256; i++) p[i] = (uint8_t)i;
+      uint32_t s = seed;
+      for (int i = 255; i > 0; i--) {
+        s = s * 1664525u + 1013904223u;
+        int j = (int)((s >> 16) % (uint32_t)(i + 1));
+        uint8_t tmp = p[i]; p[i] = p[j]; p[j] = tmp;
+      }
+      for (int i = 0; i < 256; i++) {
+        perm[i]       = p[i];
+        perm[i + 256] = p[i];
+      }
+    }
+
+    float noise(float x) const {
+      int   xi = ((int)fl::floorf(x)) & 255;
+      float xf = x - fl::floorf(x);
+      float u  = xf * xf * xf * (xf * (xf * 6.0f - 15.0f) + 10.0f);
+      float ga = (perm[xi]     & 1) ? -xf         :  xf;
+      float gb = (perm[xi + 1] & 1) ? -(xf - 1.f) : (xf - 1.f);
+      return ga + u * (gb - ga);
+    }
+  };
+
+  Perlin1D noiseX, noiseY;
+  float* xProf = nullptr;  // one noise value per column
+  float* yProf = nullptr;  // one noise value per row
+  CRGB* tempBuf = nullptr; // intermediate buffer for advection
+  size_t xProfSize = 0;
+  size_t yProfSize = 0;
+  size_t tempBufSize = 0;
+  unsigned long t0 = 0;
+  unsigned long lastFrameMs = 0;
+
+  static float clampf(float v, float lo, float hi) {
+    return (v < lo) ? lo : (v > hi) ? hi : v;
+  }
+
+  static float fmodPos(float x, float m) {
+    float r = fl::fmodf(x, m);
+    return r < 0.0f ? r + m : r;
+  }
+
+  void allocBuffers() {
+    int W = layer->size.x;
+    int H = layer->size.y;
+    reallocMB2<float>(xProf, xProfSize, W, "ctXProf");
+    reallocMB2<float>(yProf, yProfSize, H, "ctYProf");
+    reallocMB2<CRGB>(tempBuf, tempBufSize, W * H, "ctTemp");
+  }
+
+  // Sample 1D Perlin noise into a profile array
+  void sampleProfile(const Perlin1D& n, float t, float speed, float amp, float scale, int count, float* out) {
+    const float freq  = 0.23f;
+    const float phase = t * speed;
+    for (int i = 0; i < count; i++) {
+      float v = n.noise(i * freq * scale + phase);
+      out[i]  = clampf(v * amp, -1.0f, 1.0f);
+    }
+  }
+
+  // Two-pass fractional advection (bilinear interpolation) + per-pixel fade
+  void advectAndDim(CRGB* buf, int W, int H, float dt) {
+    float fadePerSec = fl::powf((0.90f + fade * 0.000392f), 60.0f);
+    float fadeMul = fl::powf(fadePerSec, dt);
+    float fShift = flowShift / 85.0f; // ~0-3.0 pixels
+
+    // Pass 1 — horizontal row shift (Y-noise drives X movement)
+    for (int y = 0; y < H; y++) {
+      float sh = (y < (int)yProfSize) ? yProf[y] * fShift : 0.0f;
+      for (int x = 0; x < W; x++) {
+        float sx  = fmodPos((float)x - sh, (float)W);
+        int   ix0 = (int)fl::floorf(sx) % W;
+        int   ix1 = (ix0 + 1) % W;
+        float f   = sx - fl::floorf(sx);
+        float inv = 1.0f - f;
+        CRGB& s0 = buf[y * W + ix0];
+        CRGB& s1 = buf[y * W + ix1];
+        tempBuf[y * W + x] = CRGB(
+          (uint8_t)(s0.r * inv + s1.r * f),
+          (uint8_t)(s0.g * inv + s1.g * f),
+          (uint8_t)(s0.b * inv + s1.b * f)
+        );
+      }
+    }
+
+    // Pass 2 — vertical column shift (X-noise drives Y movement) + dim
+    for (int x = 0; x < W; x++) {
+      float sh = (x < (int)xProfSize) ? xProf[x] * fShift : 0.0f;
+      for (int y = 0; y < H; y++) {
+        float sy  = fmodPos((float)y - sh, (float)H);
+        int   iy0 = (int)fl::floorf(sy) % H;
+        int   iy1 = (iy0 + 1) % H;
+        float f   = sy - fl::floorf(sy);
+        float inv = 1.0f - f;
+        CRGB& s0 = tempBuf[iy0 * W + x];
+        CRGB& s1 = tempBuf[iy1 * W + x];
+        buf[y * W + x] = CRGB(
+          (uint8_t)fl::floorf((s0.r * inv + s1.r * f) * fadeMul),
+          (uint8_t)fl::floorf((s0.g * inv + s1.g * f) * fadeMul),
+          (uint8_t)fl::floorf((s0.b * inv + s1.b * f) * fadeMul)
+        );
+      }
+    }
+  }
+
+  // Inject 3 orbiting rainbow circles using canvas drawDisc
+  void injectOrbiting(fl::CanvasRGB& canvas, float t, int W, int H) {
+    coord cx = coord::from_raw((int32_t)W << 15);
+    coord cy = coord::from_raw((int32_t)H << 15);
+    float orbDiam = emitterSize / 12.8f; // ~0-20 pixels
+    coord orad = coord(orbDiam * 0.5f);
+    float orbSpeed = emitterSize / 365.0f; // ~0-0.7
+    float colSpeed = colorSpeed / 2550.0f;
+    float base = t * orbSpeed;
+    float circleDiam = 1.5f;
+
+    for (int i = 0; i < 3; i++) {
+      float a = base + i * (2.0f * 3.14159265f / 3.0f);
+      coord dcx = cx + coord(fl::cosf(a)) * orad;
+      coord dcy = cy + coord(fl::sinf(a)) * orad;
+      float hue = fmodPos(t * colSpeed + i / 3.0f, 1.0f);
+      CHSV hsv((uint8_t)(hue * 255.0f), 255, 255);
+      CRGB rgb;
+      hsv2rgb_rainbow(hsv, rgb);
+      canvas.drawDisc(rgb, dcx, dcy, coord(circleDiam * 0.5f));
+    }
+  }
+
+  // Inject a Lissajous line with rainbow color using canvas drawLine + drawDisc
+  void injectLissajous(fl::CanvasRGB& canvas, float t, int W, int H) {
+    float c = (MIN(W, H) - 1) * 0.5f;
+    float s = emitterSize / 365.0f;
+    float amp = (MIN(W, H) - 4) * 0.5f;
+    float colShift = colorSpeed / 2550.0f;
+
+    float lx1 = c + (amp + 1.5f) * fl::sinf(t * s * 1.13f + 0.20f);
+    float ly1 = c + (amp + 0.5f) * fl::sinf(t * s * 1.71f + 1.30f);
+    float lx2 = c + (amp + 2.0f) * fl::sinf(t * s * 1.89f + 2.20f);
+    float ly2 = c + (amp + 1.0f) * fl::sinf(t * s * 1.37f + 0.70f);
+
+    // Draw the line with rainbow gradient using multiple segments
+    float dx = lx2 - lx1;
+    float dy = ly2 - ly1;
+    float maxd = fl::fabsf(dx) > fl::fabsf(dy) ? fl::fabsf(dx) : fl::fabsf(dy);
+    int steps = MAX(1, (int)(maxd * 3.0f));
+    for (int i = 0; i < steps; i++) {
+      float u0 = (float)i / (float)steps;
+      float u1 = (float)(i + 1) / (float)steps;
+      float hue = fmodPos(t * colShift + u0, 1.0f);
+      CHSV hsv((uint8_t)(hue * 255.0f), 255, 255);
+      CRGB rgb;
+      hsv2rgb_rainbow(hsv, rgb);
+      canvas.drawLine(rgb,
+        coord(lx1 + dx * u0), coord(ly1 + dy * u0),
+        coord(lx1 + dx * u1), coord(ly1 + dy * u1));
+    }
+
+    // Endpoint discs
+    float hue0 = fmodPos(t * colShift, 1.0f);
+    float hue1 = fmodPos(t * colShift + 1.0f, 1.0f);
+    CRGB ca, cb;
+    hsv2rgb_rainbow(CHSV((uint8_t)(hue0 * 255.0f), 255, 255), ca);
+    hsv2rgb_rainbow(CHSV((uint8_t)(hue1 * 255.0f), 255, 255), cb);
+    canvas.drawDisc(ca, coord(lx1), coord(ly1), coord(0.85f));
+    canvas.drawDisc(cb, coord(lx2), coord(ly2), coord(0.85f));
+  }
+
+  // Inject rainbow colors along the grid border
+  void injectBorder(CRGB* buf, float t, int W, int H) {
+    float colShift = colorSpeed / 2550.0f;
+    int total = 2 * (W + H) - 4;
+    int idx = 0;
+    auto rainbow = [&](int i) -> CRGB {
+      float hue = fmodPos(t * colShift + (float)i / total, 1.0f);
+      CHSV hsv((uint8_t)(hue * 255.0f), 255, 255);
+      CRGB rgb;
+      hsv2rgb_rainbow(hsv, rgb);
+      return rgb;
+    };
+    for (int x = 0; x < W; x++) { buf[x] = rainbow(idx++); }
+    for (int y = 1; y < H; y++) { buf[y * W + W - 1] = rainbow(idx++); }
+    for (int x = W - 2; x >= 0; x--) { buf[(H - 1) * W + x] = rainbow(idx++); }
+    for (int y = H - 2; y > 0; y--) { buf[y * W] = rainbow(idx++); }
+  }
+
+ public:
+  void onSizeChanged(const Coord3D& prevSize) override { allocBuffers(); }
+
+  void loop() override {
+    CRGB* canvas_buf = (CRGB*)layerP.lights.channelsE;
+    int W = layer->size.x;
+    int H = layer->size.y;
+    if (W <= 0 || H <= 0) return;
+
+    if (!tempBuf) allocBuffers();
+    if (!tempBuf || !xProf || !yProf) return;
+
+    unsigned long now = fl::millis();
+    float dt = (now - lastFrameMs) * 0.001f;
+    if (dt > 0.5f) dt = 0.033f; // clamp on first frame or long stalls
+    lastFrameMs = now;
+    float t = (now - t0) * 0.001f;
+
+    // Map controls to float ranges
+    float fFlowSpeed = flowSpeed / 75.0f;  // ~0-3.4
+    float fNoiseScale = noiseScale / 255.0f; // 0-1.0
+
+    // Build noise profiles
+    sampleProfile(noiseX, t, fFlowSpeed, 1.0f, fNoiseScale, MIN(W, (int)xProfSize), xProf);
+    sampleProfile(noiseY, t, fFlowSpeed * 0.99f, 1.0f, fNoiseScale * 0.97f, MIN(H, (int)yProfSize), yProf);
+
+    // Apply smear (reverse X profile)
+    if (smear) {
+      int half = MIN(W, (int)xProfSize) / 2;
+      for (int i = 0; i < half; i++) {
+        float tmp = xProf[i];
+        xProf[i] = xProf[MIN(W, (int)xProfSize) - 1 - i];
+        xProf[MIN(W, (int)xProfSize) - 1 - i] = tmp;
+      }
+    }
+
+    // Inject emitters
+    fl::CanvasRGB canvas(fl::span<CRGB>(canvas_buf, W * H), W, H);
+    switch (mode) {
+      default:
+      case 0: injectOrbiting(canvas, t, W, H); break;
+      case 1: injectLissajous(canvas, t, W, H); break;
+      case 2: injectBorder(canvas_buf, t, W, H); break;
+    }
+
+    // Advect + fade
+    advectAndDim(canvas_buf, W, H, dt);
+  }
+
+  ~ColorTrailsEffect() override {
+    if (xProf) freeMB(xProf, "ctXProf");
+    if (yProf) freeMB(yProf, "ctYProf");
+    if (tempBuf) freeMB(tempBuf, "ctTemp");
+  }
 };
 
 #endif

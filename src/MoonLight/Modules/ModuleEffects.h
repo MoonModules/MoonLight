@@ -169,6 +169,7 @@ class ModuleEffects : public NodeManager {
     addNodeValue<WaterfallEffect>(control);
 
     // FastLED effects
+    addNodeValue<ColorTrailsEffect>(control);
     addNodeValue<RainbowEffect>(control);
     addNodeValue<FLAudioEffect>(control);
     addNodeValue<FixedPointCanvasDemoEffect>(control);
@@ -298,6 +299,7 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<WaterfallEffect>(name);
 
     // FastLED
+    if (!node) node = checkAndAlloc<ColorTrailsEffect>(name);
     if (!node) node = checkAndAlloc<RainbowEffect>(name);
     if (!node) node = checkAndAlloc<FLAudioEffect>(name);
     if (!node) node = checkAndAlloc<FixedPointCanvasDemoEffect>(name);
@@ -374,13 +376,17 @@ class ModuleEffects : public NodeManager {
           _moduleName);
     }
 
-    if (triggerSyncControl != "") {
-      Char<12> syncName = triggerSyncControl;
-      uint8_t syncValue = triggerSyncValue;
-      triggerSyncControl = "";
+    if (pendingSyncBpm >= 0 || pendingSyncIntensity >= 0) {
       JsonDocument doc;
       JsonObject newState = doc.to<JsonObject>();
-      newState[syncName.c_str()] = syncValue;
+      if (pendingSyncBpm >= 0) {
+        newState["bpm"] = (uint8_t)pendingSyncBpm;
+        pendingSyncBpm = -1;
+      }
+      if (pendingSyncIntensity >= 0) {
+        newState["intensity"] = (uint8_t)pendingSyncIntensity;
+        pendingSyncIntensity = -1;
+      }
       _moduleLightsControl->update(newState, ModuleState::update, _moduleName);
     }
   }
@@ -395,19 +401,17 @@ class ModuleEffects : public NodeManager {
   }
 
   bool triggerResetPreset = false;
-  Char<12> triggerSyncControl;  // control name to sync back to LightsControl (e.g. "speed" → BPM, "intensity")
-  uint8_t triggerSyncValue = 0;
+  int16_t pendingSyncBpm = -1;       // -1 = no pending sync; 0-255 = value to sync
+  int16_t pendingSyncIntensity = -1; // -1 = no pending sync; 0-255 = value to sync
 
   void syncControlToLightsControl(uint8_t nodeIndex, uint8_t controlIndex) {
     JsonObject control = _state.data["nodes"][nodeIndex]["controls"][controlIndex];
     const char* controlName = control["name"];
     if (controlName) {
       if (equal(controlName, "speed") || equal(controlName, "bpm")) {
-        triggerSyncControl = "bpm";
-        triggerSyncValue = control["value"];
+        pendingSyncBpm = control["value"].as<uint8_t>();
       } else if (equal(controlName, "intensity")) {
-        triggerSyncControl = "intensity";
-        triggerSyncValue = control["value"];
+        pendingSyncIntensity = control["value"].as<uint8_t>();
       }
     }
   }
