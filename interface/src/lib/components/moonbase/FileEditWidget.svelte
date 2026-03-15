@@ -7,22 +7,22 @@
    @Copyright © 2026 GitHub MoonLight Commit Authors
    @license   GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007
    @license   For non GPL-v3 usage, commercial licenses must be purchased. Contact us for more information.
-
-   known issues
-   - showEditor does collapse in Files module, but not in Virtual and Physical Module
 -->
 
 <script lang="ts">
 	import type { FilesState } from '$lib/types/moonbase_models';
-	import { tick } from 'svelte';
 	import { user } from '$lib/stores/user';
 	import { page } from '$app/state';
 	import { notifications } from '$lib/components/toasts/notifications';
-	import Collapsible from '$lib/components/Collapsible.svelte';
+	import { modals } from 'svelte-modals';
+	import { fly } from 'svelte/transition';
+	import { slide } from 'svelte/transition';
+	import { cubicOut } from 'svelte/easing';
 	import { onMount } from 'svelte';
 	import FieldRenderer from '$lib/components/moonbase/FieldRenderer.svelte';
+	import Cancel from '~icons/tabler/x';
 
-	let { path = '', showEditor = true, newItem = false, isFile = true } = $props();
+	let { path = '', newItem = false, isFile = true } = $props();
 
 	let folder: string = '';
 
@@ -71,19 +71,12 @@
 	function uploadFile(event: Event) {
 		const fileNode = event.target as HTMLInputElement;
 		const file = fileNode.files?.[0]; // the first file uploaded (multiple files not supported yet)
-		// console.log("uploadFile", event, file)
 		if (file) {
-			// let fileContents: string | ArrayBuffer | null = null;
-
 			const reader = new FileReader();
 			reader.onload = async (e) => {
 				const contents = e.target?.result;
 				editableFile.name = file.name;
 				editableFile.contents = typeof contents === 'string' ? contents : '';
-
-				showEditor = false;
-				await tick();
-				showEditor = true; //Trigger reactivity (folderList = [...folderList]; is not doing it)
 				console.log('uploadFileWithText', file, editableFile.contents);
 				changed = true;
 			};
@@ -131,8 +124,8 @@
 
 	function onCancel() {
 		getFileContents();
-		showEditor = false;
 		changed = false;
+		modals.close(1);
 	}
 
 	async function onSave() {
@@ -171,56 +164,69 @@
 			}
 			const saved = await postFilesState(response);
 			if (saved !== null) {
-				showEditor = false;
 				changed = false;
+				modals.close(1);
 			}
 		}
 	}
 </script>
 
-{#if path[0] === '/'}
-	<Collapsible open={showEditor} class="shadow-lg" opened={() => {}} closed={() => {}}>
-		{#snippet title()}
-			<span>{newItem ? 'Add ' + (isFile ? 'file' : 'folder') : 'Edit ' + editableFile.name}</span>
-		{/snippet}
-		<div class="divider my-0"></div>
-
-		<div>
-			<FieldRenderer
-				property={{ name: 'Name', type: 'text' }}
-				bind:value={editableFile.name}
-				onChange={() => {
-					changed = true;
-				}}
-			></FieldRenderer>
-			<label class="label" for="name">
-				<span class="text-error {formErrors.name ? '' : 'hidden'}"
-					>Name must be between 3 and 32 characters long</span
-				>
-			</label>
-		</div>
-		{#if isFile}
+<div
+	role="dialog"
+	class="pointer-events-none fixed inset-0 z-50 flex items-center justify-center overflow-y-auto"
+	transition:fly={{ y: 50 }}
+>
+	<div
+		class="rounded-box bg-base-100 shadow-secondary/30 pointer-events-auto flex max-w-lg min-w-fit flex-col justify-between p-4 shadow-lg md:w-[32rem]"
+	>
+		<h2 class="text-base-content text-start text-2xl font-bold">
+			{newItem ? 'Add ' + (isFile ? 'file' : 'folder') : 'Edit ' + editableFile.name}
+		</h2>
+		<div class="divider my-2"></div>
+		<div
+			class="w-full content-center gap-4 px-4"
+			transition:slide|local={{ duration: 300, easing: cubicOut }}
+		>
 			<div>
 				<FieldRenderer
-					property={{ name: 'Contents', type: 'textarea' }}
-					bind:value={editableFile.contents}
-					onChange={(event) => {
-						editableFile.contents = event.target.value;
+					property={{ name: 'Name', type: 'text' }}
+					bind:value={editableFile.name}
+					onChange={() => {
 						changed = true;
 					}}
 				></FieldRenderer>
+				<label class="label" for="name">
+					<span class="text-error {formErrors.name ? '' : 'hidden'}"
+						>Name must be between 3 and 32 characters long</span
+					>
+				</label>
 			</div>
-			<div>
-				<FieldRenderer
-					property={{ name: 'Upload', type: 'file' }}
-					bind:value={editableFile.contents}
-					onChange={(event) => {
-						uploadFile(event);
-					}}
-				></FieldRenderer>
-			</div>
-		{/if}
-		<div class="flex flex-wrap justify-end gap-2">
+			{#if isFile}
+				<div>
+					<FieldRenderer
+						property={{ name: 'Contents', type: 'textarea' }}
+						bind:value={editableFile.contents}
+						onChange={(event) => {
+							editableFile.contents = event.target.value;
+							changed = true;
+						}}
+					></FieldRenderer>
+				</div>
+				<div>
+					<FieldRenderer
+						property={{ name: 'Upload', type: 'file' }}
+						bind:value={editableFile.contents}
+						onChange={(event) => {
+							uploadFile(event);
+						}}
+					></FieldRenderer>
+				</div>
+			{/if}
+		</div>
+
+		<div class="divider my-2"></div>
+
+		<div class="flex justify-end gap-2">
 			<button
 				class="btn btn-primary"
 				onclick={() => {
@@ -229,8 +235,8 @@
 				}}
 				disabled={!changed}
 			>
-				Cancel</button
-			>
+				Cancel
+			</button>
 			<button
 				class="btn btn-primary"
 				onclick={() => {
@@ -239,9 +245,18 @@
 				}}
 				disabled={!changed}
 			>
-				Save</button
+				Save
+			</button>
+			<button
+				class="btn btn-neutral text-neutral-content inline-flex items-center"
+				onclick={() => {
+					modals.close(1);
+				}}
+				type="button"
 			>
+				<Cancel class="mr-2 h-5 w-5" />
+				<span>Close</span>
+			</button>
 		</div>
-		<div class="divider mt-0 mb-2"></div>
-	</Collapsible>
-{/if}
+	</div>
+</div>

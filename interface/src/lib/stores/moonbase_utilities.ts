@@ -62,11 +62,13 @@ export function positionDropdown(
 }
 
 /**
- * Extracts unique emoji characters from a string. Used for tag cloud in node selector.
+ * Extracts unique emoji/symbol characters from a string. Used for tag cloud in node selector.
+ * Covers emoji (Emoji_Presentation, Extended_Pictographic) and Unicode Miscellaneous Symbols
+ * (U+2600–U+26FF) which includes ♪ ♫ ♥ ⚡ used as non-emoji tags.
  */
 export function extractEmojis(text: string): string[] {
 	const emojiRegex =
-		/[\p{Emoji_Presentation}\p{Extended_Pictographic}]\uFE0F?(\u200D[\p{Emoji_Presentation}\p{Extended_Pictographic}]\uFE0F?)*/gu;
+		/[\u2600-\u26FF\p{Emoji_Presentation}\p{Extended_Pictographic}]\uFE0F?(\u200D[\p{Emoji_Presentation}\p{Extended_Pictographic}]\uFE0F?)*/gu;
 	const matches = text.match(emojiRegex);
 	return matches ? [...new Set(matches)] : [];
 }

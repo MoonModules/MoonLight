@@ -98,6 +98,7 @@
 				}}
 				type="button"
 			>
+				<!-- TODO: disabled={changed} - changed variable is currently undefined -->
 				<Cancel class="mr-2 h-5 w-5" />
 				<span>Close</span>
 			</button>

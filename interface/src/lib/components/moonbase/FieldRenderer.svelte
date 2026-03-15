@@ -12,7 +12,9 @@
 
 <script lang="ts">
 	import { onDestroy } from 'svelte';
+	import { modals } from 'svelte-modals';
 	import FileEditWidget from '$lib/components/moonbase/FileEditWidget.svelte';
+	import MultiButtonsWidget from '$lib/components/moonbase/MultiButtonsWidget.svelte';
 	import SearchableDropdown from '$lib/components/moonbase/SearchableDropdown.svelte';
 	import { initCap, getTimeAgo } from '$lib/stores/moonbase_utilities';
 
@@ -67,8 +69,6 @@
 	// Clean up throttle timer on component destroy
 	onDestroy(() => {
 		clearInterval(interval);
-		if (hoverTimeout) clearTimeout(hoverTimeout);
-		if (clickTimeout) clearTimeout(clickTimeout);
 		if (throttleTimer) {
 			clearTimeout(throttleTimer);
 			// Send final pending update if any
@@ -77,62 +77,6 @@
 			}
 		}
 	});
-
-	let dragSource: { row: number; col: number } | null = null;
-
-	function handleDragStart(event: DragEvent, row: number, col: number) {
-		dragSource = { row, col };
-		// Optionally, set drag data for external DnD
-		event.dataTransfer?.setData('text/plain', `${row},${col}`);
-	}
-
-	function handleDrop(event: DragEvent, targetRow: number, targetCol: number) {
-		if (dragSource && property.rows) {
-			// Swap the cells
-			const temp = property.rows[dragSource.row][dragSource.col];
-			property.rows[dragSource.row][dragSource.col] = property.rows[targetRow][targetCol];
-			property.rows[targetRow][targetCol] = temp;
-			dragSource = null;
-		}
-	}
-
-	let hoverTimeout: ReturnType<typeof setTimeout> | null = null;
-	let fileContent: { nodes?: { name: string; on: boolean }[] } | string | null;
-	let popupCell: number | null = null;
-	let popupX = 0;
-	let popupY = 0;
-
-	function handleMouseEnter(cell: number, event: MouseEvent, savedPreset: boolean) {
-		hoverTimeout = setTimeout(async () => {
-			if (!property.hoverToServer && savedPreset) {
-				//open the file with cell
-				const response = await fetch(
-					`/rest/file/.config/presets/preset${cell.toString().padStart(2, '0')}.json`
-				);
-				if (response.ok) {
-					fileContent = await response.json();
-					console.log(fileContent);
-				} else {
-					fileContent = 'Failed to load file.';
-				}
-				popupCell = cell;
-			}
-			// Offset the popup a bit to the right and down
-			popupX = event.clientX + 16;
-			popupY = event.clientY + 16;
-		}, 1000);
-		// 2 seconds
-	}
-
-	function handleMouseLeave() {
-		clearTimeout(hoverTimeout);
-		popupCell = null;
-		fileContent = null;
-	}
-
-	//precent onClick when dblClick
-	let clickTimeout: ReturnType<typeof setTimeout> | null = null;
-	let preventClick = false;
 
 	// Find currently selected node object by matching value string
 	$: selectedNode =
@@ -213,7 +157,15 @@
 				>{selectedNode?.name ?? value ?? ''}</span
 			>
 		</SearchableDropdown>
-		<FileEditWidget path={value} showEditor={false} />
+		<button
+			class="btn btn-ghost btn-sm"
+			onclick={() => {
+				modals.open(FileEditWidget as any, { path: value });
+			}}
+			title="Edit file"
+		>
+			&#9998;
+		</button>
 	{:else if property.type == 'palette'}
 		<SearchableDropdown
 			values={property.values ?? []}
@@ -368,92 +320,8 @@
 			bind:value={value.z}
 			onchange={onChange}
 		/>
-	{:else if property.type == 'pad'}
-		<div class="flex flex-col space-y-2">
-			{#each Array(Math.ceil((value.count || 64) / (property.width || 8))) as _, y (y)}
-				<div class="flex flex-row space-x-2">
-					{#each Array(property.width) as _, x (x)}
-						{#if x + y * property.width < value.count}
-							<button
-								class="btn btn-square w-{property.size} h-{property.size} rounded-lg text-xl {value.selected ==
-								x + y * property.width + 1
-									? `btn-error`
-									: Array.isArray(value.list) && value.list.includes(x + y * property.width + 1)
-										? `btn-success`
-										: 'btn-primary'}"
-								type="button"
-								draggable="true"
-								ondragstart={(event) => handleDragStart(event, y, x)}
-								ondragover={(event) => event.preventDefault()}
-								ondrop={(event) => handleDrop(event, y, x)}
-								onclick={(event: MouseEvent) => {
-									preventClick = false;
-									clickTimeout = setTimeout(() => {
-										if (!preventClick) {
-											value.select = x + y * property.width + 1;
-											console.log('click', y, x, value.select);
-											if (value.selected == value.select) value.select = 255;
-											value.selected = value.select;
-											value.action = 'click';
-											onChange(event);
-										}
-									}, 250);
-									// 250ms is a typical double-click threshold
-								}}
-								ondblclick={(event: MouseEvent) => {
-									preventClick = true;
-									clearTimeout(clickTimeout);
-									value.select = x + y * property.width + 1;
-									console.log('dblclick', y, x, value.select);
-									value.action = 'dblclick';
-									onChange(event);
-								}}
-								onmouseenter={(event: MouseEvent) => {
-									// console.log("mousenter", rowIndex, colIndex, cell, value);
-									if (property.hoverToServer) {
-										value.select = x + y * property.width + 1;
-										value.action = 'mouseenter';
-										onChange(event);
-									} else
-										handleMouseEnter(
-											x + y * property.width + 1,
-											event,
-											value.list.includes(x + y * property.width + 1)
-										);
-								}}
-								onmouseleave={(event: MouseEvent) => {
-									// console.log("mouseleave", rowIndex, colIndex, cell, value);
-									if (property.hoverToServer) {
-										value.select = x + y * property.width + 1;
-										value.action = 'mouseleave';
-										onChange(event);
-									} else handleMouseLeave();
-								}}
-							>
-								{x + y * property.width + 1}
-								{#if popupCell === x + y * property.width + 1}
-									<div
-										class="fixed z-50 mt-2 inline-block min-h-0 min-w-0 rounded bg-neutral-100 p-6 text-left shadow-lg"
-										style="left: {popupX}px; top: {popupY}px;"
-									>
-										<!-- Popup for {cell} -->
-										{#if fileContent && fileContent.nodes}
-											{#each fileContent.nodes as node, ni (ni)}
-												{console.log('node.name', node.name)}
-												<p>{node.name} {node.on ? 'on' : 'off'}</p>
-											{/each}
-										{/if}
-									</div>
-								{/if}
-							</button>
-						{/if}
-					{/each}
-				</div>
-			{/each}
-		</div>
-		<!-- btn btn-square btn-primary gives you square, colored buttons (DaisyUI).
-flex flex-col and flex flex-row create the grid layout (TailwindCSS).
-Adjust space-x-2 and space-y-2 for spacing. -->
+	{:else if property.type == 'preset' || property.type == 'channels'}
+		<MultiButtonsWidget {property} {value} {onChange} />
 	{:else}
 		<input
 			type={property.type}
@@ -463,7 +331,7 @@ Adjust space-x-2 and space-y-2 for spacing. -->
 		/>
 	{/if}
 	{#if !noPrompts}
-		{#if !property.ro && property.default != null && property.type != 'pad'}
+		{#if !property.ro && property.default != null && property.type != 'preset' && property.type != 'channels'}
 			<button
 				type="button"
 				class="btn btn-ghost btn-sm"

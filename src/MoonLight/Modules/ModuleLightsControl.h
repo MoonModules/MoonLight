@@ -17,6 +17,7 @@
   #include "FastLED.h"
   #include "MoonBase/Module.h"
   #include "MoonBase/Modules/FileManager.h"
+  #include "MoonBase/Nodes.h"                // for Node::updateControl
   #include "MoonBase/utilities/Utilities.h"  //for isInPSRAM
   #include "palettes.h"
 
@@ -297,17 +298,47 @@ class ModuleLightsControl : public Module {
       object["name"] = palette_names[i];
       object["colors"] = getPaletteHexString(i);
       const char* n = palette_names[i];
-      if (strstr(n, "⚡️")) object["category"] = "FastLED";
-      else if (strstr(n, "🌙")) object["category"] = "MoonModules";
-      else if (strstr(n, "💫")) object["category"] = "MoonLight";
-      else object["category"] = "WLED";
+      if (strstr(n, "⚡️"))
+        object["category"] = "FastLED";
+      else if (strstr(n, "🌙"))
+        object["category"] = "MoonModules";
+      else if (strstr(n, "💫"))
+        object["category"] = "MoonLight";
+      else
+        object["category"] = "WLED";
     }
 
-    control = addControl(controls, "preset", "pad");
+  #if FT_LIVESCRIPT
+    // find palette live scripts (P_*.sc files) on FS
+    {
+      File rootFolder = ESPFS.open("/");
+      walkThroughFiles(rootFolder, [&](File folder, File file) {
+        const char* fname = file.name();
+        size_t len = strlen(fname);
+        bool isSc = (len >= 3) && strcmp(fname + (len - 3), ".sc") == 0;
+        if (isSc && strncmp(fname, "P_", 2) == 0) {
+          JsonObject entry = control["values"].as<JsonArray>().add<JsonObject>();
+          entry["name"] = (const char*)file.path();
+          entry["category"] = "LiveScript";
+        }
+      });
+      rootFolder.close();
+    }
+  #endif
+
+    control = addControl(controls, "bpm", "slider");
+    control["default"] = 60;
+
+    control = addControl(controls, "intensity", "slider");
+    control["default"] = 128;
+
+    control = addControl(controls, "preset", "preset");
     control["width"] = 8;
     control["size"] = 18;
+    control["wrap"] = true;
     control["default"].to<JsonObject>();  // clear the preset array before adding new presets
     control["default"]["list"].to<JsonArray>();
+    control["default"]["labels"].to<JsonArray>();
     control["default"]["count"] = 64;
 
     control = addControl(controls, "presetLoop", "slider");
@@ -342,6 +373,25 @@ class ModuleLightsControl : public Module {
     } else if (updatedItem.name == "palette") {
       // const size_t nrOfPaletteEntries = sizeof(layerP.palette.entries) / sizeof(CRGB);
       layerP.palette = getGradientPalette(updatedItem.value);
+    } else if (updatedItem.name == "bpm") {
+      if (updatedItem.originId->toInt()) {  // only propagate UI-initiated changes to nodes
+        uint8_t bpm = _state.data["bpm"];
+        for (auto* node : layerP.layers[0]->nodes) {
+          if (node && node->on) {
+            node->updateControl("speed", bpm);
+            node->updateControl("bpm", bpm);
+          }
+        }
+      }
+    } else if (updatedItem.name == "intensity") {
+      if (updatedItem.originId->toInt()) {  // only propagate UI-initiated changes to nodes
+        uint8_t intensity = _state.data["intensity"];
+        for (auto* node : layerP.layers[0]->nodes) {
+          if (node && node->on) {
+            node->updateControl("intensity", intensity);
+          }
+        }
+      }
     } else if (updatedItem.name == "preset") {
       // copy /.config/effects.json to the hidden folder /.config/presets/preset[x].json
       // do not set preset at boot...
@@ -373,6 +423,11 @@ class ModuleLightsControl : public Module {
           ESPFS.remove(presetFile.c_str());
           setPresetsFromFolder();  // update presets in UI
         }
+        // Clear transient action/select fields after processing to prevent stale UI echoes.
+        // The UI sends the full state on every change (e.g. slider drag), which may include
+        // old action/select values that would re-trigger preset operations.
+        _state.data["preset"].remove("action");
+        _state.data["preset"].remove("select");
       }
     }
   }
@@ -381,14 +436,40 @@ class ModuleLightsControl : public Module {
   void setPresetsFromFolder() {
     // loop over all files in the presets folder and add them to the preset array
     File rootFolder = ESPFS.open("/.config/presets/");
-    _state.data["preset"]["list"].clear();  //.to<JsonArray>(); // clear the active preset array before adding new presets
-    bool changed = false;
+    const bool hadPresets = _state.data["preset"]["list"].size() || _state.data["preset"]["labels"].size();
+    _state.data["preset"]["list"].clear();
+    _state.data["preset"]["labels"].clear();
+    bool changed = hadPresets;
     walkThroughFiles(rootFolder, [&](File folder, File file) {
       int seq = -1;
       if (sscanf(file.name(), "preset%02d.json", &seq) == 1) {
         // seq now contains the 2-digit number, e.g., 34
-        EXT_LOGV(ML_TAG, "Preset %d found", seq);
+        // EXT_LOGD(ML_TAG, "Preset %d found", seq);
         _state.data["preset"]["list"].add(seq);  // add the preset to the preset array
+
+        char label[20] = "";
+        // Extract effect name from preset file for button labels
+        file.seek(0);
+        JsonDocument doc;
+        if (!deserializeJson(doc, file)) {
+          JsonArray nodes = doc["nodes"];
+          if (nodes.size() > 0) {
+            const char* nodeName = nodes[0]["name"];
+            if (nodeName) {
+              // Strip emoji tags: keep only ASCII chars before first emoji
+              int j = 0;
+              for (int i = 0; nodeName[i] && j < 19; i++) {
+                if ((uint8_t)nodeName[i] >= 0x80) break;  // stop at first emoji/unicode
+                label[j++] = nodeName[i];
+              }
+              while (j > 0 && label[j - 1] == ' ') j--;  // trim trailing spaces
+              label[j] = '\0';
+            }
+          }
+        }
+
+        _state.data["preset"]["labels"].add((const char*)label);
+
         changed = true;
       }
     });

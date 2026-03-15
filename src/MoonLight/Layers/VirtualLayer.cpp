@@ -237,7 +237,7 @@ void VirtualLayer::createMappingTableAndAddOneToOne() {
 
   if (mappingTable && mappingTableSize) memset(mappingTable, 0, mappingTableSize * sizeof(PhysMap));  // on layout, set mappingTable to default PhysMap
 
-  EXT_LOGD(ML_TAG, "Filling mappingTable < %d", layerP->indexP);
+  // EXT_LOGD(ML_TAG, "Filling mappingTable < %d", layerP->indexP);
 
   for (nrOfLights_t indexV = 0; indexV < MIN(layerP->indexP, mappingTableSize); indexV++) {
     addIndexP(mappingTable[indexV], indexV);

@@ -10,8 +10,6 @@
 -->
 
 <script lang="ts">
-	import { slide } from 'svelte/transition';
-	import { cubicOut } from 'svelte/easing';
 	import { modals } from 'svelte-modals';
 	import { user } from '$lib/stores/user';
 	import { page } from '$app/state';
@@ -29,7 +27,6 @@
 	import type { FilesState } from '$lib/types/moonbase_models';
 	import { onMount, onDestroy } from 'svelte';
 	import { socket } from '$lib/stores/socket';
-	import { tick } from 'svelte';
 	import FileEditWidget from '$lib/components/moonbase/FileEditWidget.svelte';
 	import Help from '~icons/tabler/help';
 	import FieldRenderer from '$lib/components/moonbase/FieldRenderer.svelte';
@@ -61,8 +58,6 @@
 	});
 	let breadCrumbs: string[] = $state([]);
 
-	let newItem: boolean = $state(true);
-	let showEditor: boolean = $state(false);
 	let path: string = $state('');
 
 	async function getState() {
@@ -105,39 +100,23 @@
 		}
 	}
 
+	function openFileEditor(isNew: boolean, isFile: boolean, filePath: string) {
+		modals.open(FileEditWidget as any, {
+			newItem: isNew,
+			isFile: isFile,
+			path: filePath
+		});
+	}
+
 	function addFile() {
 		console.log('addFile');
-		newItem = true;
 		path = '/' + breadCrumbs.join('/');
-		editableFile = {
-			name: '',
-			path: '',
-			isFile: true,
-			size: 0,
-			time: 0,
-			contents: '',
-			files: [],
-			fs_total: 0,
-			fs_used: 0,
-			showHidden: false
-		};
+		openFileEditor(true, true, path);
 	}
 	function addFolder() {
 		console.log('addFolder');
-		newItem = true;
 		path = '/' + breadCrumbs.join('/');
-		editableFile = {
-			name: '',
-			path: '',
-			isFile: false,
-			size: 0,
-			time: 0,
-			contents: '',
-			files: [],
-			fs_total: 0,
-			fs_used: 0,
-			showHidden: false
-		};
+		openFileEditor(true, false, path);
 	}
 
 	function folderListFromBreadCrumbs() {
@@ -162,8 +141,7 @@
 		// console.log("folderListFromBreadCrumbs", filesState, breadCrumbs, folderList)
 	}
 
-	async function handleEdit(index: number) {
-		newItem = false;
+	function handleEdit(index: number) {
 		editableFile = folderList[index];
 		path = editableFile.path;
 
@@ -171,25 +149,17 @@
 			//if parent folder
 			breadCrumbs.pop(); //remove last folder
 			folderListFromBreadCrumbs();
-
 			localStorage.setItem('breadCrumbs', JSON.stringify(breadCrumbs));
-			showEditor = false;
 			console.log('handleEdit parent', folderList, breadCrumbs);
 		} else if (editableFile.isFile) {
 			//if file
 			console.log('handleEdit file', editableFile, path);
-			showEditor = false;
-			await tick();
-			showEditor = true; //Trigger reactivity
+			openFileEditor(false, true, path);
 		} else {
 			//if folder, go to folder
 			breadCrumbs.push(editableFile.name);
 			localStorage.setItem('breadCrumbs', JSON.stringify(breadCrumbs));
-			// folderList = [folderList[index], ...editableFile.files];
 			folderListFromBreadCrumbs();
-			// showEditor = true; await tick(); //wait for reactivity, not needed here
-			showEditor = false;
-
 			console.log('handleEdit go to folder', folderList, breadCrumbs);
 		}
 	}
@@ -216,7 +186,6 @@
 				response.showHidden = filesState.showHidden; //otherwise set to false
 				postFilesState(response);
 
-				showEditor = false;
 				modals.close();
 			}
 		});
@@ -278,7 +247,6 @@
 						class="btn btn-primary text-primary-content btn-md absolute -top-14 right-16"
 						onclick={() => {
 							addFile();
-							showEditor = true;
 						}}
 					>
 						<Add class="h-6 w-6" /></button
@@ -287,26 +255,13 @@
 						class="btn btn-primary text-primary-content btn-md absolute -top-14 right-1"
 						onclick={() => {
 							addFolder();
-							showEditor = true;
 						}}
 					>
 						<Add class="h-6 w-6" /></button
 					>
 				</div>
 
-				<div
-					class="flex flex-col gap-2 p-0"
-					transition:slide|local={{ duration: 300, easing: cubicOut }}
-				>
-					{#if showEditor}
-						<FileEditWidget {newItem} {path} isFile={editableFile.isFile} />
-					{/if}
-				</div>
-
-				<div
-					class="space-y-1 overflow-x-auto"
-					transition:slide|local={{ duration: 300, easing: cubicOut }}
-				>
+				<div class="space-y-1 overflow-x-auto">
 					{#each folderList as item, index (item.path || item.name)}
 						<div class="rounded-box bg-base-100 flex items-center space-x-3 px-4 py-2">
 							<div class="mask mask-hexagon bg-primary h-auto w-10 shrink-0">

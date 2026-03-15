@@ -43,7 +43,7 @@ class ModuleChannels : public Module {
     // control = addControl(controls, "universe", "number");
     // control["default"] = 0;
 
-    control = addControl(controls, "channel", "pad");
+    control = addControl(controls, "channel", "channels");
     control["width"] = 12;
     control["hoverToServer"] = true;
     control["size"] = 10;

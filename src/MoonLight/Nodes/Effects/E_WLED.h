@@ -105,7 +105,7 @@ class BlurzEffect : public Node {
  public:
   static const char* name() { return "Blurz"; }
   static uint8_t dim() { return _3D; }  // test...
-  static const char* tags() { return "🐙🎵"; }
+  static const char* tags() { return "🐙♫"; }
   static const char* category() { return "WLED"; }
 
   // static const char _data_FX_MODE_BLURZ[] PROGMEM = "Blurz Plus ☾@Fade rate,Blur,,,,FreqMap ☾,GEQ Scanner ☾,;!,Color mix;!;01f;sx=48,ix=127,m12=7,si=0"; // Pinwheel, Beatsin
@@ -1411,7 +1411,7 @@ class FrizzlesEffect : public Node {
   uint8_t blur = 128;
 
   void setup() override {
-    addControl(bpm, "BPM", "slider");
+    addControl(bpm, "bpm", "slider");
     addControl(intensity, "intensity", "slider");
     addControl(blur, "blur", "slider");
   }
@@ -1906,7 +1906,7 @@ class HeartBeatEffect : public Node {
  public:
   static const char* name() { return "Heartbeat"; }
   static uint8_t dim() { return _1D; }
-  static const char* tags() { return "♥"; }
+  static const char* tags() { return "🐙"; }
   static const char* category() { return "WLED"; }
 
   uint8_t speed = 15;
@@ -1993,15 +1993,11 @@ class DJLightEffect : public Node {
 
       if (sharedData.volume < 1.0f) color = CRGB(0, 0, 0);  // silence = black
 
-      // make colors less "pastel", by turning up color saturation in HSV space
+      // use palette: map audio-derived color hue and brightness to palette
       if (color.getLuma() > 32) {  // don't change "dark" pixels
         CHSV hsvColor = rgb2hsv_approximate(color);
         hsvColor.v = constrain(hsvColor.v, 48, 204);  // 48 < brightness < 204
-        if (candyFactory)
-          hsvColor.s = MAX(hsvColor.s, 204);  // candy factory mode: strongly turn up color saturation (> 192)
-        else
-          hsvColor.s = MAX(hsvColor.s, 108);  // normal mode: turn up color saturation to avoid pastels
-        color = hsvColor;
+        color = ColorFromPalette(layerP.palette, hsvColor.h, hsvColor.v);
       }
       // if (color.getLuma() > 12) color.maximizeBrightness();          // for testing
 

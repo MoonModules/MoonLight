@@ -169,8 +169,10 @@ class ModuleEffects : public NodeManager {
     addNodeValue<WaterfallEffect>(control);
 
     // FastLED effects
+    addNodeValue<ColorTrailsEffect>(control);
     addNodeValue<RainbowEffect>(control);
     addNodeValue<FLAudioEffect>(control);
+    addNodeValue<FixedPointCanvasDemoEffect>(control);
 
     // Moving head effects, alphabetically
     addNodeValue<AmbientMoveEffect>(control);
@@ -195,7 +197,10 @@ class ModuleEffects : public NodeManager {
     // find all the .sc files on FS
     File rootFolder = ESPFS.open("/");
     walkThroughFiles(rootFolder, [&](File folder, File file) {
-      if (strstr(file.name(), ".sc")) {
+      const char* fname = file.name();
+      size_t len = strlen(fname);
+      bool isSc = (len >= 3) && strcmp(fname + (len - 3), ".sc") == 0;
+      if (isSc && (strncmp(fname, "E_", 2) == 0 || strncmp(fname, "M_", 2) == 0)) {
         if (control["values"].isNull()) control["values"].to<JsonArray>();
         JsonObject entry = control["values"].as<JsonArray>().add<JsonObject>();
         entry["name"] = (const char*)file.path();
@@ -294,8 +299,10 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<WaterfallEffect>(name);
 
     // FastLED
+    if (!node) node = checkAndAlloc<ColorTrailsEffect>(name);
     if (!node) node = checkAndAlloc<RainbowEffect>(name);
     if (!node) node = checkAndAlloc<FLAudioEffect>(name);
+    if (!node) node = checkAndAlloc<FixedPointCanvasDemoEffect>(name);
 
     // Moving head effects, alphabetically
 
@@ -320,7 +327,7 @@ class ModuleEffects : public NodeManager {
     if (!node) node = checkAndAlloc<RippleXZModifier>(name);
 
   #if FT_LIVESCRIPT
-    if (!node) {
+    if (!node && !safeModeMB) {
       LiveScriptNode* liveScriptNode = allocMBObject<LiveScriptNode>();
       liveScriptNode->animation = name;  // set the (file)name of the script
       node = liveScriptNode;
@@ -368,6 +375,20 @@ class ModuleEffects : public NodeManager {
           },
           _moduleName);
     }
+
+    if (pendingSyncBpm >= 0 || pendingSyncIntensity >= 0) {
+      JsonDocument doc;
+      JsonObject newState = doc.to<JsonObject>();
+      if (pendingSyncBpm >= 0) {
+        newState["bpm"] = (uint8_t)pendingSyncBpm;
+        pendingSyncBpm = -1;
+      }
+      if (pendingSyncIntensity >= 0) {
+        newState["intensity"] = (uint8_t)pendingSyncIntensity;
+        pendingSyncIntensity = -1;
+      }
+      _moduleLightsControl->update(newState, ModuleState::update, _moduleName);
+    }
   }
 
   void loop1s() override {
@@ -380,10 +401,41 @@ class ModuleEffects : public NodeManager {
   }
 
   bool triggerResetPreset = false;
+  int16_t pendingSyncBpm = -1;       // -1 = no pending sync; 0-255 = value to sync
+  int16_t pendingSyncIntensity = -1; // -1 = no pending sync; 0-255 = value to sync
+
+  void syncControlToLightsControl(uint8_t nodeIndex, uint8_t controlIndex) {
+    JsonObject control = _state.data["nodes"][nodeIndex]["controls"][controlIndex];
+    const char* controlName = control["name"];
+    if (controlName) {
+      if (equal(controlName, "speed") || equal(controlName, "bpm")) {
+        pendingSyncBpm = control["value"].as<uint8_t>();
+      } else if (equal(controlName, "intensity")) {
+        pendingSyncIntensity = control["value"].as<uint8_t>();
+      }
+    }
+  }
+
   void onUpdate(const UpdatedItem& updatedItem) override {
     NodeManager::onUpdate(updatedItem);
     if (updatedItem.originId->toInt()) {  // UI triggered
       triggerResetPreset = true;
+    }
+
+    // sync effect speed/BPM/intensity back to LightsControl (UI changes and preset loads)
+    // No loop risk: LightsControl's bpm/intensity handlers have toInt() guard, and
+    // node->updateControl() modifies JSON directly without triggering ModuleEffects::onUpdate
+    if (updatedItem.parent[1] == "controls" && updatedItem.name == "value" && updatedItem.index[1] != UINT8_MAX) {
+      syncControlToLightsControl(updatedItem.index[0], updatedItem.index[1]);
+    }
+
+    // when a node name changes (new node created, e.g. preset load), sync its controls too
+    // compareRecursive may not fire value changes if preset values match defaults
+    if (updatedItem.parent[0] == "nodes" && updatedItem.name == "name" && updatedItem.parent[1] == "") {
+      JsonArray controls = _state.data["nodes"][updatedItem.index[0]]["controls"];
+      for (uint8_t j = 0; j < controls.size(); j++) {
+        syncControlToLightsControl(updatedItem.index[0], j);
+      }
     }
   }
 

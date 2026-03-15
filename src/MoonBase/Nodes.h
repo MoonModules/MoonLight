@@ -79,7 +79,7 @@ class Node {
     bool newControl = false;
     JsonObject control = findOrCreateControl(name, newControl);
 
-    EXT_LOGD(ML_TAG, "%s: %s %d-%d %d (%s) %d", name ? name : "", type, min, max, ro, desc ? desc : "", newControl);
+    // EXT_LOGD(ML_TAG, "%s: %s %d-%d %d (%s) %d", name ? name : "", type, min, max, ro, desc ? desc : "", newControl);
 
     if (newControl) control["value"] = variable;  // set default value for new controls
     control["default"] = variable;
@@ -217,7 +217,7 @@ extern SharedData sharedData;
   #include "MoonLight/Nodes/Drivers/D_AudioSync.h"
   #include "MoonLight/Nodes/Drivers/D_FastLEDAudio.h"
   #include "MoonLight/Nodes/Drivers/D_FastLEDDriver.h"
-  #include "MoonLight/Nodes/Drivers/D_Hub75.h"
+  // #include "MoonLight/Nodes/Drivers/D_Hub75.h"
   #include "MoonLight/Nodes/Drivers/D_IMU.h"
   #include "MoonLight/Nodes/Drivers/D_Infrared.h"
   #include "MoonLight/Nodes/Drivers/D_ParallelLEDDriver.h"

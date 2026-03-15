@@ -106,7 +106,7 @@ class ModuleDrivers : public NodeManager {
     addNodeValue<AudioSyncDriver>(control);
     addNodeValue<IRDriver>(control);
     addNodeValue<IMUDriver>(control);
-    addNodeValue<HUB75Driver>(control);
+    // addNodeValue<HUB75Driver>(control);
 
     // board preset specific
     _moduleIO->read(
@@ -116,6 +116,23 @@ class ModuleDrivers : public NodeManager {
           if (boardPreset == board_LightCrafter16) addNodeValue<LightCrafter16Layout>(control);
         },
         _moduleName);
+
+    #if FT_LIVESCRIPT
+    // find layout/driver live scripts (.sc files with L_ or D_ prefix) on FS
+    File rootFolder = ESPFS.open("/");
+    walkThroughFiles(rootFolder, [&](File folder, File file) {
+      const char* fname = file.name();
+      size_t len = strlen(fname);
+      bool isSc = (len >= 3) && strcmp(fname + (len - 3), ".sc") == 0;
+      if (isSc && (strncmp(fname, "L_", 2) == 0 || strncmp(fname, "D_", 2) == 0)) {
+        if (control["values"].isNull()) control["values"].to<JsonArray>();
+        JsonObject entry = control["values"].as<JsonArray>().add<JsonObject>();
+        entry["name"] = (const char*)file.path();
+        entry["category"] = "LiveScript";
+      }
+    });
+    rootFolder.close();
+    #endif
   }
 
   Node* addNode(const uint8_t index, char* name, const JsonArray& controls) const override {
@@ -147,7 +164,7 @@ class ModuleDrivers : public NodeManager {
     if (!node) node = checkAndAlloc<AudioSyncDriver>(name);
     if (!node) node = checkAndAlloc<IRDriver>(name);
     if (!node) node = checkAndAlloc<IMUDriver>(name);
-    if (!node) node = checkAndAlloc<HUB75Driver>(name);
+    // if (!node) node = checkAndAlloc<HUB75Driver>(name);
 
     // board preset specific
     _moduleIO->read(
@@ -159,7 +176,7 @@ class ModuleDrivers : public NodeManager {
         _moduleName);
 
   #if FT_LIVESCRIPT
-    if (!node) {
+    if (!node && !safeModeMB) {
       LiveScriptNode* liveScriptNode = allocMBObject<LiveScriptNode>();
       liveScriptNode->animation = name;  // set the (file)name of the script
       node = liveScriptNode;

@@ -45,7 +45,7 @@ class ModuleDevices : public Module {
 
     _moduleControl->addUpdateHandler(
         [this](const String& originId) {
-          EXT_LOGD(MB_TAG, "control update %s", originId.c_str());
+          // EXT_LOGD(MB_TAG, "control update %s", originId.c_str());
           sendUDP(originId != "group");  // sendUDP control yes / no
         },
         false);
