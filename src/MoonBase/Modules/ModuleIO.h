@@ -793,6 +793,7 @@ class ModuleIO : public Module {
     // 🌙 Ethernet configuration — reads ethernetType + pin assignments from board preset
     EthernetSettingsService* ess = _sveltekit->getEthernetSettingsService();
     ess->v_ETH_SPI_CONFIGURED = false;
+    ess->v_ETH_PHY_ADDR = 0;
     ess->v_ETH_SPI_SCK = -1;
     ess->v_ETH_SPI_MISO = -1;
     ess->v_ETH_SPI_MOSI = -1;

@@ -323,7 +323,6 @@ void WiFiSettingsService::manageSTA()
         return;
     }
 #endif
-    else
     {
 #ifdef SERIAL_INFO
         Serial.println("Connecting to WiFi...");

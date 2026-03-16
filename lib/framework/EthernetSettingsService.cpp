@@ -110,6 +110,7 @@ void EthernetSettingsService::configureNetwork(ethernet_settings_t &network)
     }
 #endif
     else {
+        // Fallback for boards with built-in ethernet that works with default ETH.begin()
         ETH.begin();
     }
     // set hostname (again) after (re)starting ethernet due to a bug in the ESP-IDF implementation
