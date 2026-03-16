@@ -127,7 +127,7 @@ void EthernetSettingsService::updateEthernet()
 
     // 🌙 Disable WiFi when ethernet is connected to free ~50KB heap (critical on ESP32-D0).
     // Re-enable WiFi when ethernet is lost so the device remains reachable.
-    if (ethConnected && !_wifiDisabledByEthernet) {
+    if (ethConnected && !_wifiDisabledByEthernet && WiFi.getMode() != WIFI_OFF) {
         ESP_LOGI(SVK_TAG, "Ethernet connected — disabling WiFi to free heap (free: %lu)", (unsigned long)ESP.getFreeHeap());
         WiFi.mode(WIFI_OFF);
         _wifiDisabledByEthernet = true;

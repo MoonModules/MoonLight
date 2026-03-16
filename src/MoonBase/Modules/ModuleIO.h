@@ -657,22 +657,11 @@ class ModuleIO : public Module {
       pinAssigner.assignPin(16, pin_LED);
   #endif
 
-  #ifdef CONFIG_IDF_TARGET_ESP32
-      pinAssigner.assignPin(21, pin_I2C_SDA);
-      pinAssigner.assignPin(22, pin_I2C_SCL);
-  #elif defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32C3)
-      pinAssigner.assignPin(8, pin_I2C_SDA);
-      pinAssigner.assignPin(9, pin_I2C_SCL);
-  #elif defined(CONFIG_IDF_TARGET_ESP32C6)
-      pinAssigner.assignPin(23, pin_I2C_SDA);
-      pinAssigner.assignPin(22, pin_I2C_SCL);
-  #elif defined(CONFIG_IDF_TARGET_ESP32P4)
-      pinAssigner.assignPin(7, pin_I2C_SDA);
-      pinAssigner.assignPin(8, pin_I2C_SCL);
-  #else
-      pinAssigner.assignPin(21, pin_I2C_SDA);  // Fallback
-      pinAssigner.assignPin(22, pin_I2C_SCL);
-  #endif
+      // Use board-variant defaults from pins_arduino.h — no #ifdef chain needed
+      pinAssigner.assignPin(SDA, pin_I2C_SDA);
+      pinAssigner.assignPin(SCL, pin_I2C_SCL);
+      pinAssigner.assignPin(TX,  pin_Serial_TX);
+      pinAssigner.assignPin(RX,  pin_Serial_RX);
 
       // trying to add more pins, but these pins not liked by esp32-d0-16mb ... 🚧
       // pinAssigner.assignPin(4, pin_LED_02;

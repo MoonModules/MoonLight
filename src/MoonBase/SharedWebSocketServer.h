@@ -108,9 +108,8 @@ class SharedWebSocketServer {
     String buffer;
     serializeJson(doc, buffer);
 
-    // Guard against NULL from String::c_str() when heap is too low for serialization
+    if (buffer.length() == 0) return;
     const char* data = buffer.c_str();
-    if (!data || buffer.length() == 0) return;
 
     if (client) {
       client->sendMessage(data);
