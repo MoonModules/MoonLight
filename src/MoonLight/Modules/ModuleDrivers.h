@@ -64,6 +64,19 @@ class ModuleDrivers : public NodeManager {
             }
           }
 
+          // GPIO 1 (UART0 TX) / GPIO 3 (UART0 RX) as LED pin: disable all UART0 output
+          // to prevent the I2S LED driver and UART driver from fighting over the pin,
+          // which causes serial noise and eventual watchdog crash.
+          // Note: using GPIO 1/3 as LED pins is discouraged — you lose all serial debugging.
+          for (int i = 0; i < layerP.nrOfLedPins; i++) {
+            if (layerP.ledPins[i] == 1 || layerP.ledPins[i] == 3) {
+              EXT_LOGW(ML_TAG, "GPIO %d used as LED pin — disabling UART0 to prevent crash (serial debug lost!)", layerP.ledPins[i]);
+              Serial.end();
+              esp_log_set_vprintf([](const char*, va_list) -> int { return 0; });  // suppress ESP_LOGx
+              break;
+            }
+          }
+
           // log pins
           for (int i = 0; i < layerP.nrOfLedPins; i++) {
             if (layerP.ledsPerPin[i] > 0 && layerP.ledsPerPin[i] != UINT16_MAX) EXT_LOGD(ML_TAG, "ledPins[%d-%d] = %d (#%d)", i, layerP.nrOfLedPins, layerP.ledPins[i], layerP.ledsPerPin[i]);

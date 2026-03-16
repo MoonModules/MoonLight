@@ -146,6 +146,7 @@ private:
     FSPersistence<EthernetSettings> _fsPersistence;
     EventSocket *_socket;
     unsigned long _lastEthernetUpdate;
+    bool _wifiDisabledByEthernet = false; // 🌙 tracks whether we disabled WiFi for ethernet
 
     void configureNetwork(ethernet_settings_t &network);
     void reconfigureEthernet();
