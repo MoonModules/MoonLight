@@ -112,17 +112,31 @@ public:
     String getHostname();
     String getIP();
 
-    // 🌙 compiler directives to variables
-    #ifdef CONFIG_IDF_TARGET_ESP32S3 
-        int8_t v_ETH_SPI_SCK = -1; //42; v_ETH_SPI_SCK is check if configured, see configureNetwork and ModuleIO
-        int8_t v_ETH_SPI_MISO = 44;
-        int8_t v_ETH_SPI_MOSI = 43;
+    // 🌙 Ethernet configuration — set by ModuleIO board presets via ethernetType + pin assignments
+    // Common — v_ETH_PHY_TYPE is always set by readPins() before use
+    eth_phy_type_t v_ETH_PHY_TYPE = (eth_phy_type_t)0;
+    int32_t v_ETH_PHY_ADDR = 0;
+    int8_t v_ETH_PHY_POWER = -1;  // -1 = no GPIO power enable
 
-        eth_phy_type_t v_ETH_PHY_TYPE = ETH_PHY_W5500; //currently only one supported for S3 ...
-        int32_t v_ETH_PHY_ADDR = 1;
-        int8_t v_ETH_PHY_CS = 41;
-        int8_t v_ETH_PHY_IRQ = 2; // -1 if you won't wire
-        int8_t v_ETH_PHY_RST = 1; // -1 if you won't wire
+    // SPI Ethernet (W5500 etc.) — available on all targets
+    bool v_ETH_SPI_CONFIGURED = false;
+    int8_t v_ETH_SPI_SCK = -1;
+    int8_t v_ETH_SPI_MISO = -1;
+    int8_t v_ETH_SPI_MOSI = -1;
+    int8_t v_ETH_PHY_CS = -1;
+    int8_t v_ETH_PHY_IRQ = -1;
+    int8_t v_ETH_PHY_RST = -1;
+
+    // RMII Ethernet (LAN8720A etc.) — only on chips with built-in EMAC (ESP32, ESP32-P4)
+    #if CONFIG_ETH_USE_ESP32_EMAC
+    bool v_ETH_RMII_CONFIGURED = false;
+    int8_t v_ETH_PHY_MDC = -1;
+    int8_t v_ETH_PHY_MDIO = -1;
+    #ifdef CONFIG_IDF_TARGET_ESP32
+    eth_clock_mode_t v_ETH_CLK_MODE = ETH_CLOCK_GPIO17_OUT;
+    #else  // ESP32-P4 etc.
+    eth_clock_mode_t v_ETH_CLK_MODE = EMAC_CLK_OUT;
+    #endif
     #endif
 
 private:

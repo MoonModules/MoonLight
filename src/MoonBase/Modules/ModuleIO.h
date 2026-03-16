@@ -63,6 +63,10 @@ enum IO_PinUsageEnum {
   pin_SPI_MOSI,
   pin_PHY_CS,
   pin_PHY_IRQ,
+  pin_ETH_MDC,   // Ethernet Management Data Clock — PHY register access clock
+  pin_ETH_MDIO,  // Ethernet Management Data I/O — PHY register read/write data
+  pin_ETH_CLK,   // Ethernet RMII Reference Clock — 50 MHz clock to/from PHY
+  pin_ETH_PWR,   // Ethernet PHY Power Enable — GPIO to power on/off the PHY chip
   pin_RS485_TX,
   pin_RS485_RX,
   pin_RS485_DE,
@@ -71,6 +75,12 @@ enum IO_PinUsageEnum {
   pin_Reserved,
   pin_PIR,  // support for PIR (passive infrared) sensor
   pin_count
+};
+
+enum IO_EthernetTypeEnum {
+  eth_None,
+  eth_LAN8720,  // RMII — built-in EMAC (ESP32-D0)
+  eth_W5500     // SPI — external module (ESP32-S3 etc.)
 };
 
 enum IO_BoardsEnum {
@@ -149,6 +159,12 @@ class ModuleIO : public Module {
     control = addControl(controls, "switch2", "checkbox");
     control["default"] = false;
 
+    control = addControl(controls, "ethernetType", "select");
+    control["default"] = 0;
+    addControlValue(control, "None");
+    addControlValue(control, "LAN8720 (RMII)");
+    addControlValue(control, "W5500 (SPI)");
+
     control = addControl(controls, "pins", "rows");
     control["filter"] = "!Unused";
     control["crud"] = "ru";
@@ -202,6 +218,10 @@ class ModuleIO : public Module {
       addControlValue(control, "SPI MOSI 🔗");
       addControlValue(control, "PHY CS 🔗");
       addControlValue(control, "PHY IRQ 🔗");
+      addControlValue(control, "ETH MDC 🔗");   // Management Data Clock
+      addControlValue(control, "ETH MDIO 🔗");  // Management Data I/O
+      addControlValue(control, "ETH CLK 🔗");   // RMII Reference Clock (50 MHz)
+      addControlValue(control, "ETH PWR 🔗");   // PHY Power Enable
       addControlValue(control, "RS-485 TX");
       addControlValue(control, "RS-485 RX");
       addControlValue(control, "RS-485 DE");
@@ -317,7 +337,8 @@ class ModuleIO : public Module {
       pinAssigner.assignPin(8, pin_Voltage);
       pinAssigner.assignPin(9, pin_Current);
 
-      if (_state.data["switch1"]) {  // on: Ethernet
+      if (_state.data["switch1"]) {  // on: Ethernet (W5500 SPI)
+        newState["ethernetType"] = eth_W5500;
         pinAssigner.assignPin(5, pin_SPI_MISO);
         pinAssigner.assignPin(6, pin_SPI_MOSI);
         pinAssigner.assignPin(7, pin_SPI_SCK);
@@ -340,6 +361,7 @@ class ModuleIO : public Module {
       pinAssigner.assignPin(0, pin_Dig_Input);  // Native USB port vbus detection
       pinAssigner.assignPin(5, pin_Voltage);    // Input voltage
       pinAssigner.assignPin(6, pin_Current);    // Input current
+      newState["ethernetType"] = eth_W5500;     // WIZ850IO (W5500 SPI)
       pinAssigner.assignPin(13, pin_SPI_MISO);  // WIZ850IO MISO
       pinAssigner.assignPin(11, pin_SPI_MOSI);  // WIZ850IO MOSI
       pinAssigner.assignPin(12, pin_SPI_SCK);   // WIZ850IO CLK
@@ -432,12 +454,21 @@ class ModuleIO : public Module {
       // pinAssigner.assignPin(15, pin_I2S_SCK;
       // pinAssigner.assignPin(32, pin_Exposed;
     } else if (boardID == board_QuinLEDDigOctaV2) {
-      // Dig-Octa-32-8L
+      // Dig-Octa-32-8L — ESP32-D0-16MB with onboard LAN8720A Ethernet
+      // https://quinled.info/quinled-dig-octa-brainboard-32-8l-pinout-guide/
       newState["maxPower"] = 400;                      // 10A Fuse * 8 ... 400 W
       uint8_t ledPins[] = {0, 1, 2, 3, 4, 5, 12, 13};  // LED_PINS
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
       pinAssigner.assignPin(33, pin_Relay);
       pinAssigner.assignPin(34, pin_ButtonPush);
+      // RMII Ethernet (LAN8720A) — data pins fixed in ESP32 silicon
+      newState["ethernetType"] = eth_LAN8720;
+      pinAssigner.assignPin(17, pin_ETH_CLK);   // RMII 50 MHz clock output to PHY
+      pinAssigner.assignPin(18, pin_ETH_MDIO);  // PHY register data
+      pinAssigner.assignPin(23, pin_ETH_MDC);   // PHY register clock
+      // RMII data pins (hardwired in silicon, reserved to prevent conflicts)
+      uint8_t rmiiDataPins[] = {19, 21, 22, 25, 26, 27};  // TXD0, TX_EN, TXD1, RXD0, RXD1, CRS_DV
+      for (uint8_t gpio : rmiiDataPins) pinAssigner.assignPin(gpio, pin_Ethernet);
     } else if (boardID == board_SergMiniShield) {
       newState["maxPower"] = 50;  // 10A Fuse ...
       pinAssigner.assignPin(16, pin_LED);
@@ -661,8 +692,6 @@ class ModuleIO : public Module {
     update(newState, ModuleState::update, _moduleName);  // triggers an update from sveltekit
   }
 
-  uint8_t newBoardID = UINT8_MAX;
-
   // on update triggers another onUpdates on 2 occasions: 1) newState modded (directly) and 2) setBoardPresetDefaults (via main loop)
   // each will trigger the updateHandler of this module sending readpins again ...
   void onUpdate(const UpdatedItem& updatedItem) override {
@@ -674,11 +703,11 @@ class ModuleIO : public Module {
 
     // Handle boardPreset changes
     if (updatedItem.name == "boardPreset") {
-      _current_board_preset = updatedItem.value;
+      _currentBoardPreset = updatedItem.value;
       // Only load board defaults if modded is false
       if (_state.data["modded"] == false) {
-        EXT_LOGD(MB_TAG, "newBoardID %s %s[%d]%s[%d].%s = %s -> %s", updatedItem.originId->c_str(), updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
-        newBoardID = updatedItem.value;  // Will be processed in loop20ms
+        EXT_LOGD(MB_TAG, "_newBoardPreset %s %s[%d]%s[%d].%s = %s -> %s", updatedItem.originId->c_str(), updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
+        _newBoardPreset = updatedItem.value;  // Will be processed in loop20ms
       } else {
         EXT_LOGD(MB_TAG, "boardPreset change ignored - modded=true");
       }
@@ -689,12 +718,12 @@ class ModuleIO : public Module {
       // When modded is set to false, reload the current board preset defaults
       if (updatedItem.value == false) {
         EXT_LOGD(MB_TAG, "modded set to false - reloading board defaults");
-        newBoardID = _state.data["boardPreset"];  // Reload current board
+        _newBoardPreset = _state.data["boardPreset"];  // Reload current board
       }
-    } else if (updatedItem.name == "switch1" || updatedItem.name == "switch2") {
-      // Rebuild pins with new switch settings
-      EXT_LOGD(MB_TAG, "switch changed - rebuilding board defaults");
-      newBoardID = _state.data["boardPreset"];
+    } else if (updatedItem.name == "switch1" || updatedItem.name == "switch2" || updatedItem.name == "ethernetType") {
+      // Rebuild pins with new switch/ethernet settings
+      EXT_LOGD(MB_TAG, "%s changed - rebuilding board defaults", updatedItem.name.c_str());
+      _newBoardPreset = _state.data["boardPreset"];
     } else if (updatedItem.name == "maxPower") {
       // Manual maxPower change = user is customizing
       newState["modded"] = true;
@@ -733,19 +762,19 @@ class ModuleIO : public Module {
     Module::loop20ms();
 
     // Update board presets
-    if (newBoardID != UINT8_MAX) {
-      setBoardPresetDefaults(newBoardID);
-      newBoardID = UINT8_MAX;
+    if (_newBoardPreset != UINT8_MAX) {
+      setBoardPresetDefaults(_newBoardPreset);
+      _newBoardPreset = UINT8_MAX;
       _initialUpdateDone = true;
     }
 
     // During boot, handle boardPreset from file if modded=false
     // This runs AFTER file load completes and all values (including modded) are restored
     if (!_initialUpdateDone) {
-       _current_board_preset = _state.data["boardPreset"];
+      _currentBoardPreset = _state.data["boardPreset"];
       if (_state.data["modded"] == false) {
-        EXT_LOGD(MB_TAG, "Applying board preset %d defaults from file (modded=false)", _current_board_preset);
-        newBoardID = _current_board_preset;
+        EXT_LOGD(MB_TAG, "Applying board preset %d defaults from file (modded=false)", _currentBoardPreset);
+        _newBoardPreset = _currentBoardPreset;
         // Will be processed in next loop20ms iteration at top, setting _initialUpdateDone
       } else {
         EXT_LOGD(MB_TAG, "Skipping board preset defaults - using custom pins from file (modded=true)");
@@ -772,54 +801,71 @@ class ModuleIO : public Module {
     uint8_t pinRS485DE = UINT8_MAX;
 
   #if FT_ENABLED(FT_ETHERNET)
-    #ifdef CONFIG_IDF_TARGET_ESP32S3
+    // 🌙 Ethernet configuration — reads ethernetType + pin assignments from board preset
     EthernetSettingsService* ess = _sveltekit->getEthernetSettingsService();
-    // Note: Ethernet pin types are signed (int8_t) and use -1, not UINT8_MAX, to indicate unset state
+    ess->v_ETH_SPI_CONFIGURED = false;
     ess->v_ETH_SPI_SCK = -1;
     ess->v_ETH_SPI_MISO = -1;
     ess->v_ETH_SPI_MOSI = -1;
     ess->v_ETH_PHY_CS = -1;
     ess->v_ETH_PHY_IRQ = -1;
+    ess->v_ETH_PHY_RST = -1;
+    ess->v_ETH_PHY_POWER = -1;
+    #if CONFIG_ETH_USE_ESP32_EMAC
+    ess->v_ETH_RMII_CONFIGURED = false;
+    ess->v_ETH_PHY_MDC = -1;
+    ess->v_ETH_PHY_MDIO = -1;
+    #endif
 
-    auto assignIfValid = [](int8_t gpio, uint8_t usage, int8_t& target) {
-      if (GPIO_IS_VALID_GPIO(gpio))
-        target = gpio;
-      else
-        EXT_LOGE(MB_TAG, "%d: gpio %d not valid", usage, gpio);
-    };
+    uint8_t ethType = _state.data["ethernetType"] | 0;
 
-    // if ethernet pins change
-    // find the pins needed
+    // Read pin assignments for ethernet
     for (JsonObject pinObject : _state.data["pins"].as<JsonArray>()) {
       uint8_t usage = pinObject["usage"];
-      uint8_t gpio = pinObject["GPIO"];
-      if (usage == pin_SPI_SCK) {
-        assignIfValid(gpio, usage, ess->v_ETH_SPI_SCK);
-      }
-      if (usage == pin_SPI_MISO) {
-        assignIfValid(gpio, usage, ess->v_ETH_SPI_MISO);
-      }
-      if (usage == pin_SPI_MOSI) {
-        assignIfValid(gpio, usage, ess->v_ETH_SPI_MOSI);
-      }
-      if (usage == pin_PHY_CS) {
-        assignIfValid(gpio, usage, ess->v_ETH_PHY_CS);
-      }
-      if (usage == pin_PHY_IRQ) {
-        assignIfValid(gpio, usage, ess->v_ETH_PHY_IRQ);
-      }
+      int8_t gpio = pinObject["GPIO"];
+      // SPI pins
+      if (usage == pin_SPI_SCK) ess->v_ETH_SPI_SCK = gpio;
+      if (usage == pin_SPI_MISO) ess->v_ETH_SPI_MISO = gpio;
+      if (usage == pin_SPI_MOSI) ess->v_ETH_SPI_MOSI = gpio;
+      if (usage == pin_PHY_CS) ess->v_ETH_PHY_CS = gpio;
+      if (usage == pin_PHY_IRQ) ess->v_ETH_PHY_IRQ = gpio;
+    // RMII pins
+    #if CONFIG_ETH_USE_ESP32_EMAC
+      if (usage == pin_ETH_MDC) ess->v_ETH_PHY_MDC = gpio;
+      if (usage == pin_ETH_MDIO) ess->v_ETH_PHY_MDIO = gpio;
+      #ifdef CONFIG_IDF_TARGET_ESP32
+      if (usage == pin_ETH_CLK) ess->v_ETH_CLK_MODE = (gpio == 0) ? ETH_CLOCK_GPIO0_OUT : ETH_CLOCK_GPIO17_OUT;
+      #else  // ESP32-P4: clock mode is simpler (EMAC_CLK_OUT)
+      if (usage == pin_ETH_CLK) ess->v_ETH_CLK_MODE = EMAC_CLK_OUT;
+      #endif
+    #endif
+      if (usage == pin_ETH_PWR) ess->v_ETH_PHY_POWER = gpio;
     }
 
-    // allocate the pins found
-    if (ess->v_ETH_SPI_SCK != -1 && ess->v_ETH_SPI_MISO != -1 && ess->v_ETH_SPI_MOSI != -1 && ess->v_ETH_PHY_CS != -1 && ess->v_ETH_PHY_IRQ != -1) {
-      EXT_LOGI(MB_TAG, "configure ethernet");
-      // ess->v_ETH_PHY_TYPE = ETH_PHY_W5500;
-      // ess->v_ETH_PHY_ADDR = 1;
-      ess->v_ETH_PHY_RST = -1;  // not wired
-      ess->initEthernet();      // restart ethernet
+    if (ethType == eth_W5500) {
+      if (ess->v_ETH_SPI_SCK != -1 && ess->v_ETH_SPI_MISO != -1 && ess->v_ETH_SPI_MOSI != -1 && ess->v_ETH_PHY_CS != -1) {
+        EXT_LOGI(MB_TAG, "configure SPI ethernet (W5500 sck=%d miso=%d mosi=%d cs=%d irq=%d rst=%d)", ess->v_ETH_SPI_SCK, ess->v_ETH_SPI_MISO, ess->v_ETH_SPI_MOSI, ess->v_ETH_PHY_CS, ess->v_ETH_PHY_IRQ, ess->v_ETH_PHY_RST);
+        ess->v_ETH_PHY_TYPE = ETH_PHY_W5500;
+        ess->v_ETH_PHY_ADDR = 1;
+        ess->v_ETH_SPI_CONFIGURED = true;
+        ess->initEthernet();
+      } else {
+        EXT_LOGW(MB_TAG, "W5500 selected but SPI/PHY pins not fully assigned");
+      }
     }
-    #endif  // CONFIG_IDF_TARGET_ESP32S3
-  #endif    // ethernet
+    #if CONFIG_ETH_USE_ESP32_EMAC
+    else if (ethType == eth_LAN8720) {
+      if (ess->v_ETH_PHY_MDC != -1 && ess->v_ETH_PHY_MDIO != -1) {
+        EXT_LOGI(MB_TAG, "configure RMII ethernet (LAN8720 addr=%d mdc=%d mdio=%d power=%d clk=%d)", ess->v_ETH_PHY_ADDR, ess->v_ETH_PHY_MDC, ess->v_ETH_PHY_MDIO, ess->v_ETH_PHY_POWER, ess->v_ETH_CLK_MODE);
+        ess->v_ETH_PHY_TYPE = ETH_PHY_LAN8720;
+        ess->v_ETH_RMII_CONFIGURED = true;
+        ess->initEthernet();
+      } else {
+        EXT_LOGW(MB_TAG, "LAN8720 selected but ETH MDC/MDIO pins not assigned");
+      }
+    }
+    #endif
+  #endif  // ethernet
 
   #if FT_BATTERY
     _pinVoltage = UINT8_MAX;
@@ -991,10 +1037,10 @@ class ModuleIO : public Module {
       uint32_t adc_mv_vinput = analogReadMilliVolts(_pinVoltage);
       analogSetAttenuation(ADC_11db);
       float volts = 0;
-      if (_current_board_preset == board_SE16V1) {
+      if (_currentBoardPreset == board_SE16V1) {
         volts = ((float)adc_mv_vinput) * 2 / 1000;
       }  // /2 resistor divider
-      else if (_current_board_preset == board_LightCrafter16) {
+      else if (_currentBoardPreset == board_LightCrafter16) {
         volts = ((float)adc_mv_vinput) * 11.43 / (1.43 * 1000);
       }  // 1k43/10k resistor divider
       batteryService->updateVoltage(volts);
@@ -1005,13 +1051,13 @@ class ModuleIO : public Module {
       uint32_t adc_mv_cinput = analogReadMilliVolts(_pinCurrent);
       analogSetAttenuation(ADC_11db);
       current_readout_current_adc_attenuation = adc_get_adjusted_gain(current_readout_current_adc_attenuation, adc_mv_cinput);
-      if ((_current_board_preset == board_SE16V1) || (_current_board_preset == board_LightCrafter16)) {
+      if ((_currentBoardPreset == board_SE16V1) || (_currentBoardPreset == board_LightCrafter16)) {
         if (adc_mv_cinput > 330)  // datasheet quiescent output voltage of 0.5V, which is ~330mV after the 10k/5k1 voltage divider. Ideally, this value should be measured at boot when nothing is displayed on the LEDs
         {
-          if (_current_board_preset == board_SE16V1) {
+          if (_currentBoardPreset == board_SE16V1) {
             batteryService->updateCurrent((((float)(adc_mv_cinput)-250) * 50.00) / 1000);
           }  // 40mV / A with a /2 resistor divider, so a 50mA/mV
-          else if (_current_board_preset == board_LightCrafter16) {
+          else if (_currentBoardPreset == board_LightCrafter16) {
             batteryService->updateCurrent((((float)(adc_mv_cinput)-330) * 37.75) / 1000);
           }  // 40mV / A with a 10k/5k1 resistor divider, so a 37.75mA/mV
         } else {
@@ -1023,7 +1069,8 @@ class ModuleIO : public Module {
   }
 
  private:
-  uint8_t _current_board_preset = UINT8_MAX;
+  uint8_t _currentBoardPreset = UINT8_MAX;
+  uint8_t _newBoardPreset = UINT8_MAX;
   #if FT_BATTERY
   // used in loop1s()
   uint8_t _pinVoltage = UINT8_MAX;

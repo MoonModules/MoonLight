@@ -84,22 +84,21 @@ void EthernetSettingsService::configureNetwork(ethernet_settings_t &network)
         // configure for DHCP
         ETH.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
     }
-// (re)start ethernet
-// 🌙 compiler directives to variables
-#ifdef CONFIG_IDF_TARGET_ESP32S3 
-    if (v_ETH_SPI_SCK != -1) {
-        // For SPI based ethernet modules like W5500, ENC28J60 etc.
+// 🌙 (re)start ethernet — configured by ModuleIO board presets
+    if (v_ETH_SPI_CONFIGURED) {
+        // SPI Ethernet (W5500, ENC28J60 etc.) — available on all targets
         SPI.begin(v_ETH_SPI_SCK, v_ETH_SPI_MISO, v_ETH_SPI_MOSI);
         ETH.begin(v_ETH_PHY_TYPE, v_ETH_PHY_ADDR, v_ETH_PHY_CS, v_ETH_PHY_IRQ, v_ETH_PHY_RST, SPI);
     }
-    else 
-        ETH.begin();
-#elif defined(CONFIG_IDF_TARGET_ESP32P4)
-    ETH.begin(); // for the time being, todo: setup in P4
-#else // CONFIG_IDF_TARGET_ESP32, what about S2/C3 ...
-    // ESP32 chips with built-in ethernet MAC/PHY
-    ETH.begin();
+#if CONFIG_ETH_USE_ESP32_EMAC
+    else if (v_ETH_RMII_CONFIGURED) {
+        // RMII Ethernet (LAN8720A etc.) — ESP32/P4 with built-in EMAC
+        ETH.begin(v_ETH_PHY_TYPE, v_ETH_PHY_ADDR, v_ETH_PHY_MDC, v_ETH_PHY_MDIO, v_ETH_PHY_POWER, v_ETH_CLK_MODE);
+    }
 #endif
+    else {
+        ETH.begin();
+    }
     // set hostname (again) after (re)starting ethernet due to a bug in the ESP-IDF implementation
     ETH.setHostname(_state.hostname.c_str());
 }

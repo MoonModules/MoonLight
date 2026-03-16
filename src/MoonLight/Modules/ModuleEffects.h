@@ -401,8 +401,8 @@ class ModuleEffects : public NodeManager {
   }
 
   bool triggerResetPreset = false;
-  int16_t pendingSyncBpm = -1;       // -1 = no pending sync; 0-255 = value to sync
-  int16_t pendingSyncIntensity = -1; // -1 = no pending sync; 0-255 = value to sync
+  int16_t pendingSyncBpm = -1;        // -1 = no pending sync; 0-255 = value to sync
+  int16_t pendingSyncIntensity = -1;  // -1 = no pending sync; 0-255 = value to sync
 
   void syncControlToLightsControl(uint8_t nodeIndex, uint8_t controlIndex) {
     JsonObject control = _state.data["nodes"][nodeIndex]["controls"][controlIndex];
