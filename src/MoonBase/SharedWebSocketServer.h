@@ -108,10 +108,13 @@ class SharedWebSocketServer {
     String buffer;
     serializeJson(doc, buffer);
 
+    if (buffer.length() == 0) return;
+    const char* data = buffer.c_str();
+
     if (client) {
-      client->sendMessage(buffer.c_str());
+      client->sendMessage(data);
     } else {
-      _handler.sendAll(buffer.c_str());
+      _handler.sendAll(data);
     }
   }
 

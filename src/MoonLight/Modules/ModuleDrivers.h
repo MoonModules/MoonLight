@@ -22,8 +22,6 @@
 
 class ModuleDrivers : public NodeManager {
  public:
-  ModuleLightsControl* _moduleLightsControl;
-  ModuleIO* _moduleIO;
   ModuleDrivers(PsychicHttpServer* server, ESP32SvelteKit* sveltekit, FileManager* fileManager, ModuleLightsControl* moduleLightsControl, ModuleIO* moduleIO) : NodeManager("drivers", server, sveltekit, fileManager) {
     _moduleLightsControl = moduleLightsControl;
     _moduleIO = moduleIO;
@@ -61,6 +59,32 @@ class ModuleDrivers : public NodeManager {
           for (int readPos = 0; readPos < sizeof(layerP.ledPins); readPos++) {
             if (layerP.ledPins[readPos] != UINT8_MAX) {  // only pins which have a nrOfLedPins // && layerP.ledsPerPin[layerP.nrOfLedPins] != UINT16_MAX && layerP.ledsPerPin[layerP.nrOfLedPins] != 0
               layerP.ledPins[layerP.nrOfLedPins++] = layerP.ledPins[readPos];
+            }
+          }
+
+          // UART0 TX/RX pins used as LED pin: disable all UART0 output
+          // to prevent the I2S LED driver and UART driver from fighting over the pin,
+          // which causes serial noise and eventual watchdog crash.
+          // TX/RX are board-specific (ESP32: 1/3, S3: 43/44, C3: 21/20, P4: 37/38).
+          // Note: using UART0 pins as LED pins is discouraged — you lose all serial debugging.
+          {
+            bool needsUartSuppression = false;
+            for (int i = 0; i < layerP.nrOfLedPins; i++) {
+              if (layerP.ledPins[i] == TX || layerP.ledPins[i] == RX) {
+                needsUartSuppression = true;
+                break;
+              }
+            }
+            if (needsUartSuppression && !_uartSuppressed) {
+              EXT_LOGW(ML_TAG, "UART0 TX/RX (GPIO %d/%d) used as LED pin — disabling UART0 to prevent crash (serial debug lost!)", TX, RX);
+              _origVprintf = esp_log_set_vprintf([](const char*, va_list) -> int { return 0; });
+              Serial.end();
+              _uartSuppressed = true;
+            } else if (!needsUartSuppression && _uartSuppressed) {
+              Serial.begin(SERIAL_BAUD_RATE);
+              esp_log_set_vprintf(_origVprintf);
+              _uartSuppressed = false;
+              EXT_LOGI(ML_TAG, "UART0 TX/RX (GPIO %d/%d) no longer LED pins — UART0 and logging restored", TX, RX);
             }
           }
 
@@ -117,7 +141,7 @@ class ModuleDrivers : public NodeManager {
         },
         _moduleName);
 
-    #if FT_LIVESCRIPT
+  #if FT_LIVESCRIPT
     // find layout/driver live scripts (.sc files with L_ or D_ prefix) on FS
     File rootFolder = ESPFS.open("/");
     walkThroughFiles(rootFolder, [&](File folder, File file) {
@@ -132,7 +156,7 @@ class ModuleDrivers : public NodeManager {
       }
     });
     rootFolder.close();
-    #endif
+  #endif
   }
 
   Node* addNode(const uint8_t index, char* name, const JsonArray& controls) const override {
@@ -206,6 +230,12 @@ class ModuleDrivers : public NodeManager {
 
     return node;
   }
+
+ private:
+  ModuleLightsControl* _moduleLightsControl;
+  ModuleIO* _moduleIO;
+  bool _uartSuppressed = false;
+  vprintf_like_t _origVprintf = nullptr;
 
 };  // class ModuleDrivers
 

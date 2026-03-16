@@ -44,7 +44,7 @@ The 🐰 (see AI) will review each commit, please process the review recommendat
 
 Before merging a PR back into main ask the 🐰 the following:
 
-@coderabbitai, I am about to merge this PR, please do an in-depth review of all the commits made, make a summary,  a recommendation to merge and a list of possible future actions.
+@coderabbitai, I am about to merge this PR, please do an in-depth review of all the commits made in this PR, make a summary,  a recommendation to merge and a list of possible future actions.
 
 ## Artificial Intelligence
 

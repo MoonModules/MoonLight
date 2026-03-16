@@ -33,6 +33,19 @@ EthernetSettingsService::EthernetSettingsService(PsychicHttpServer *server,
 
 void EthernetSettingsService::initEthernet()
 {
+    // 🌙 Disable WiFi BEFORE starting ethernet to free ~50KB heap.
+    // EMAC DMA buffers are allocated during ETH.begin() — if WiFi is still running,
+    // there may not be enough heap for both, causing "no mem for receive buffer" errors.
+    // Use WiFi.mode(WIFI_OFF) only — it handles disconnect + stop + deinit in one call.
+    // Do NOT call WiFi.disconnect(true) separately as double-deinit causes
+    // "wifi_init_default: netstack cb reg failed" errors and leaks memory.
+    if (WiFi.getMode() != WIFI_OFF) {
+        ESP_LOGI(SVK_TAG, "Disabling WiFi before ethernet init to free heap (free: %lu)", (unsigned long)ESP.getFreeHeap());
+        WiFi.mode(WIFI_OFF);
+        _wifiDisabledByEthernet = true;
+        ESP_LOGI(SVK_TAG, "WiFi disabled (free heap now: %lu)", (unsigned long)ESP.getFreeHeap());
+    }
+
     // make sure the interface is stopped before continuing and initializing
     ETH.end();
     _fsPersistence.readFromFS();
@@ -97,6 +110,7 @@ void EthernetSettingsService::configureNetwork(ethernet_settings_t &network)
     }
 #endif
     else {
+        // Fallback for boards with built-in ethernet that works with default ETH.begin()
         ETH.begin();
     }
     // set hostname (again) after (re)starting ethernet due to a bug in the ESP-IDF implementation
@@ -110,8 +124,28 @@ void EthernetSettingsService::reconfigureEthernet()
 
 void EthernetSettingsService::updateEthernet()
 {
+    bool ethConnected = ETH.connected();
+
+    // 🌙 Disable WiFi when ethernet is connected to free ~50KB heap (critical on ESP32-D0).
+    // Re-enable WiFi when ethernet is lost so the device remains reachable.
+    if (ethConnected && WiFi.getMode() != WIFI_OFF) {
+        // 🌙 Always re-disable WiFi while ethernet is connected — WiFiSettingsService
+        // may have re-enabled it via manageSTA()/scanNetworks().
+        ESP_LOGI(SVK_TAG, "Ethernet connected — disabling WiFi to free heap (free: %lu)", (unsigned long)ESP.getFreeHeap());
+        WiFi.mode(WIFI_OFF);
+        _wifiDisabledByEthernet = true;
+        ESP_LOGI(SVK_TAG, "WiFi disabled (free heap now: %lu)", (unsigned long)ESP.getFreeHeap());
+    } else if (!ethConnected && _wifiDisabledByEthernet) {
+        // 🌙 Just clear the flag — WiFiSettingsService::manageSTA() will handle
+        // reconnection with proper credentials on its next loop iteration.
+        // Don't call WiFi.begin() here: WiFi.persistent(false) means credentials
+        // aren't stored, so WiFi.begin() without SSID/password would fail.
+        ESP_LOGI(SVK_TAG, "Ethernet lost — allowing WiFi reconnection");
+        _wifiDisabledByEthernet = false;
+    }
+
     JsonDocument doc;
-    doc["connected"] = ETH.connected();
+    doc["connected"] = ethConnected;
     JsonObject jsonObject = doc.as<JsonObject>();
     _socket->emitEvent(EVENT_ETHERNET, jsonObject);
 }
