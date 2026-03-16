@@ -15,6 +15,9 @@
 #include <WiFiSettingsService.h>
 
 #include <ESP32SvelteKit.h> // 🌙 safeMode
+#if FT_ENABLED(FT_ETHERNET)
+#include <ETH.h> // 🌙 ETH.connected() check in manageSTA()
+#endif
 
 WiFiSettingsService::WiFiSettingsService(PsychicHttpServer *server,
                                          FS *fs,
@@ -313,6 +316,13 @@ void WiFiSettingsService::manageSTA()
     {
         return;
     }
+    // 🌙 Don't reconnect WiFi while ethernet is active — saves ~50KB heap on ESP32-D0
+#if FT_ENABLED(FT_ETHERNET)
+    if (ETH.connected())
+    {
+        return;
+    }
+#endif
     else
     {
 #ifdef SERIAL_INFO

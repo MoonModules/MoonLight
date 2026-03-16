@@ -273,6 +273,21 @@ The **I2C frequency** can be adjusted (default 100 kHz). Higher frequencies (400
 * After install, select the QuinLED board preset to have the pins assigned correctly.
 * Features onboard LAN8720A ethernet — automatically configured by the board preset (ethernetType = LAN8720, RMII pins assigned)
 
+!!! warning "GPIO 1 and GPIO 3 — UART0 TX/RX"
+    The Dig-Octa routes **GPIO 1** (UART0 TX) and **GPIO 3** (UART0 RX) to two of its eight LED outputs. These pins are shared with the USB-serial interface used for flashing and serial monitoring.
+
+    When used as LED pins, MoonLight automatically suppresses UART0 output (both `Serial` and ESP-IDF logging) to prevent the LED driver and UART driver from fighting over the pin, which would cause serial noise and eventual watchdog crashes.
+
+    However, the USB-serial chip is **hardwired** to GPIO 1/3 — so the serial monitor will still show garbage characters (`>>>?>>>...`) as it interprets the LED data signal as serial data. This is electrical, not a software bug — there is no way to prevent it.
+
+    **Consequences of using GPIO 1/3 as LED pins:**
+
+    - All serial debug output is lost (logging is suppressed)
+    - Serial monitor shows garbage from LED data on the TX pin
+    - You lose the ability to diagnose issues via serial
+
+    The board preset marks GPIO 1 and 3 as **Reserved** by default. If you need all 8 outputs, you can manually reassign them to LED — but be aware of the trade-offs above.
+
 !!! tip "Reset router"
     You might need to reset your router if you first run WLED on the same board and no new IP is assigned.
 

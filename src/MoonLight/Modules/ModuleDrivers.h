@@ -81,7 +81,7 @@ class ModuleDrivers : public NodeManager {
               Serial.end();
               _uartSuppressed = true;
             } else if (!needsUartSuppression && _uartSuppressed) {
-              Serial.begin(115200);
+              Serial.begin(SERIAL_BAUD_RATE);
               esp_log_set_vprintf(_origVprintf);
               _uartSuppressed = false;
               EXT_LOGI(ML_TAG, "UART0 TX/RX (GPIO %d/%d) no longer LED pins — UART0 and logging restored", TX, RX);

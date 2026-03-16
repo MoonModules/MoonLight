@@ -127,15 +127,19 @@ void EthernetSettingsService::updateEthernet()
 
     // 🌙 Disable WiFi when ethernet is connected to free ~50KB heap (critical on ESP32-D0).
     // Re-enable WiFi when ethernet is lost so the device remains reachable.
-    if (ethConnected && !_wifiDisabledByEthernet && WiFi.getMode() != WIFI_OFF) {
+    if (ethConnected && WiFi.getMode() != WIFI_OFF) {
+        // 🌙 Always re-disable WiFi while ethernet is connected — WiFiSettingsService
+        // may have re-enabled it via manageSTA()/scanNetworks().
         ESP_LOGI(SVK_TAG, "Ethernet connected — disabling WiFi to free heap (free: %lu)", (unsigned long)ESP.getFreeHeap());
         WiFi.mode(WIFI_OFF);
         _wifiDisabledByEthernet = true;
         ESP_LOGI(SVK_TAG, "WiFi disabled (free heap now: %lu)", (unsigned long)ESP.getFreeHeap());
     } else if (!ethConnected && _wifiDisabledByEthernet) {
-        ESP_LOGI(SVK_TAG, "Ethernet lost — re-enabling WiFi");
-        WiFi.mode(WIFI_STA);
-        WiFi.begin();
+        // 🌙 Just clear the flag — WiFiSettingsService::manageSTA() will handle
+        // reconnection with proper credentials on its next loop iteration.
+        // Don't call WiFi.begin() here: WiFi.persistent(false) means credentials
+        // aren't stored, so WiFi.begin() without SSID/password would fail.
+        ESP_LOGI(SVK_TAG, "Ethernet lost — allowing WiFi reconnection");
         _wifiDisabledByEthernet = false;
     }
 
