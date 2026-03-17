@@ -338,6 +338,7 @@ void ESP32SvelteKit::_loop()
             uint32_t cpuHz = getCpuFrequencyMhz() * 1000000UL;
             lps_effects = (lps_all > 0 && lps_effects_cycles > 0) ? (uint16_t)((uint64_t)cpuHz * lps_all / lps_effects_cycles) : 0;
             lps_drivers = (lps_all > 0 && lps_drivers_cycles > 0) ? (uint16_t)((uint64_t)cpuHz * lps_all / lps_drivers_cycles) : 0;
+            lps_all_snapshot = lps_all; // 🌙 latch before reset so SystemStatus reads a stable value
 #if FT_ENABLED(FT_ANALYTICS)
             _analyticsService.lps_all = lps_all;
             _analyticsService.lps_effects = lps_effects;

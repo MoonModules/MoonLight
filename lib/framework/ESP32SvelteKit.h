@@ -117,7 +117,8 @@ inline IPAddress networkLocalIP() {
 class ESP32SvelteKit
 {
 public:
-    uint16_t lps_all = 0;            // 🌙 frame rate counter — effects and drivers are 1:1 so one counter suffices
+    uint16_t lps_all = 0;            // 🌙 frame rate live counter — incremented by driverTask, reset each second
+    uint16_t lps_all_snapshot = 0;   // 🌙 latched copy of lps_all (stable for readers like SystemStatus)
     uint32_t lps_effects_cycles = 0; // 🌙 CPU cycles consumed by layerP.loop() per second (accumulated)
     uint32_t lps_drivers_cycles = 0; // 🌙 CPU cycles consumed by layerP.loopDrivers() per second (accumulated)
     uint16_t lps_effects = 0;        // 🌙 effects theoretical max loops/s (computed each second)

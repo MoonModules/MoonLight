@@ -21,7 +21,7 @@
 
 * **Restart needed**: e.g. when drivers are changed, a restart might be needed, see 🔄 in the statusbar. Clicking on the 🔄 icon allows you to restart
 
-* **Save** and **Cancel** Changes are only saved after pressing the save button 💾. To undo changes, press the cancel button ↻ and the last saved state will be restored.
+* **Save** and **Cancel**: When there are unsaved changes, a Save button 💾 and a Cancel button ↻ appear. Save applies your changes permanently. Cancel discards the changes and restores the last saved state.
 
 * **Theme**: Light, Dark, Auto
 

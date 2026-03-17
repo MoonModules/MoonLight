@@ -814,12 +814,12 @@ class ModuleIO : public Module {
     for (JsonObject pinObject : _state.data["pins"].as<JsonArray>()) {
       uint8_t usage = pinObject["usage"];
       int8_t gpio = pinObject["GPIO"];
-      // SPI pins
-      if (usage == pin_SPI_SCK) ess->v_ETH_SPI_SCK = gpio;
-      if (usage == pin_SPI_MISO) ess->v_ETH_SPI_MISO = gpio;
-      if (usage == pin_SPI_MOSI) ess->v_ETH_SPI_MOSI = gpio;
-      if (usage == pin_PHY_CS) ess->v_ETH_PHY_CS = gpio;
-      if (usage == pin_PHY_IRQ) ess->v_ETH_PHY_IRQ = gpio;
+      // SPI pins — validate before assignment to prevent invalid GPIOs reaching ETH.begin()
+      if (usage == pin_SPI_SCK && GPIO_IS_VALID_GPIO(gpio)) ess->v_ETH_SPI_SCK = gpio;
+      if (usage == pin_SPI_MISO && GPIO_IS_VALID_GPIO(gpio)) ess->v_ETH_SPI_MISO = gpio;
+      if (usage == pin_SPI_MOSI && GPIO_IS_VALID_GPIO(gpio)) ess->v_ETH_SPI_MOSI = gpio;
+      if (usage == pin_PHY_CS && GPIO_IS_VALID_GPIO(gpio)) ess->v_ETH_PHY_CS = gpio;
+      if (usage == pin_PHY_IRQ && GPIO_IS_VALID_GPIO(gpio)) ess->v_ETH_PHY_IRQ = gpio;
     // RMII pins
     #if CONFIG_ETH_USE_ESP32_EMAC
       if (usage == pin_ETH_MDC) ess->v_ETH_PHY_MDC = gpio;
