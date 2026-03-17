@@ -258,8 +258,9 @@ public:
         _loopFunctions.push_back(function);
     }
 
-    // 🌙 Unified system hostname — returns the active network hostname.
-    // Priority: WiFi hostname → Ethernet hostname → "ML" + last 4 MAC chars → "MoonLight"
+    // 🌙 Deterministic system hostname by fixed priority — does NOT depend on connection state.
+    // Returns: WiFi configured hostname → Ethernet configured hostname → "ML"+last4MAC → "MoonLight".
+    // Stable for mDNS, DHCP and AP naming: the result won't flip-flop when interfaces go up/down.
     String getSystemHostname()
     {
 #if FT_ENABLED(FT_WIFI) // 🌙

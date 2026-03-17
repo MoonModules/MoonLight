@@ -815,10 +815,10 @@ class ModuleIO : public Module {
       uint8_t usage = pinObject["usage"];
       int8_t gpio = pinObject["GPIO"];
       // SPI pins — validate before assignment to prevent invalid GPIOs reaching ETH.begin()
-      if (usage == pin_SPI_SCK && GPIO_IS_VALID_GPIO(gpio)) ess->v_ETH_SPI_SCK = gpio;
+      if (usage == pin_SPI_SCK && GPIO_IS_VALID_OUTPUT_GPIO(gpio)) ess->v_ETH_SPI_SCK = gpio;
       if (usage == pin_SPI_MISO && GPIO_IS_VALID_GPIO(gpio)) ess->v_ETH_SPI_MISO = gpio;
-      if (usage == pin_SPI_MOSI && GPIO_IS_VALID_GPIO(gpio)) ess->v_ETH_SPI_MOSI = gpio;
-      if (usage == pin_PHY_CS && GPIO_IS_VALID_GPIO(gpio)) ess->v_ETH_PHY_CS = gpio;
+      if (usage == pin_SPI_MOSI && GPIO_IS_VALID_OUTPUT_GPIO(gpio)) ess->v_ETH_SPI_MOSI = gpio;
+      if (usage == pin_PHY_CS && GPIO_IS_VALID_OUTPUT_GPIO(gpio)) ess->v_ETH_PHY_CS = gpio;
       if (usage == pin_PHY_IRQ && GPIO_IS_VALID_GPIO(gpio)) ess->v_ETH_PHY_IRQ = gpio;
     // RMII pins
     #if CONFIG_ETH_USE_ESP32_EMAC
