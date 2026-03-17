@@ -149,16 +149,40 @@ class FixedPointCanvasDemoEffect : public Node {
     addControlValue("Branching Tree");
   }
 
-  CRGB* canvas_buf = nullptr;
+  CRGB* canvasBuf = nullptr;  // local buffer when needed, or points to channelsE
+  size_t canvasBufSize = 0;
+  bool canvasBufOwned = false; // true if we allocated canvasBuf (must free it)
 
   coord starSpin{};
   uint8_t dimAfterShow = 255;
   uint32_t sFrameCount = 0;
   uint8_t lastDemo = 255;
 
+  // Returns true when canvas operations need a separate CRGB buffer
+  // (non-RGB lights or virtual mapping means channelsE isn't a flat CRGB array)
+  bool needsLocalBuf() { return !layer->oneToOneMapping || layerP.lights.header.channelsPerLight != 3; }
+
+  void onSizeChanged(const Coord3D& prevSize) override {
+    nrOfLights_t nrOfLights = layer->size.x * layer->size.y;
+    if (needsLocalBuf()) {
+      if (!canvasBufOwned) { canvasBuf = nullptr; canvasBufSize = 0; } // don't realloc the aliased channelsE pointer
+      reallocMB2<CRGB>(canvasBuf, canvasBufSize, nrOfLights, "fpcdBuf");
+      canvasBufOwned = true;
+    } else {
+      if (canvasBufOwned && canvasBuf) { freeMB(canvasBuf, "fpcdBuf"); }
+      canvasBuf = (CRGB*)layerP.lights.channelsE;
+      canvasBufSize = nrOfLights;
+      canvasBufOwned = false;
+    }
+  }
+
   void loop() override {
-    canvas_buf = (CRGB*)layerP.lights.channelsE;  // refresh each frame: channelsE may change after double-buffer swap
-    layer->fadeToBlackBy(fade);
+    // Refresh buffer if uninitialized or if mapping/channel config changed without a size change
+    if (!canvasBuf || canvasBufOwned != needsLocalBuf()) onSizeChanged(Coord3D());
+    if (!canvasBuf) return;
+
+    // Fade the local canvas buffer directly (works regardless of channelsPerLight)
+    fastled_fadeToBlackBy(canvasBuf, canvasBufSize, fade);
 
     coord cx = coord::from_raw((int32_t)layer->size.x << 15);           // 16.0 px: matrix centre x
     coord cy = coord::from_raw((int32_t)layer->size.y << 15);           // 16.0 px: matrix centre y
@@ -220,11 +244,11 @@ class FixedPointCanvasDemoEffect : public Node {
     coord tcx = cx + (ocx - cx) * tScale;
     coord tcy = cy + (ocy - cy) * tScale;
 
-    // Apply previous frame's dim request; always hard-clear on a demo transition.
+    // Apply previous frame's dim request on canvasBuf; always hard-clear on a demo transition.
     if (reinit || dimAfterShow == 255) {
-      FastLED.clear();
+      ::memset(canvasBuf, 0, canvasBufSize * sizeof(CRGB));
     } else if (dimAfterShow > 0) {
-      layer->fadeToBlackBy(dimAfterShow);
+      fastled_fadeToBlackBy(canvasBuf, canvasBufSize, dimAfterShow);
     }
 
     uint8_t wantDim;
@@ -253,12 +277,20 @@ class FixedPointCanvasDemoEffect : public Node {
     }
     // Apply brightness envelope at slot transitions (replaces original FastLED.setBrightness(fadeBr)).
     // fadeBr < 255 only during the first/last kFadeMs of each slot, creating a fade-to-black transition.
-    if (fadeBr < 255) layer->fadeToBlackBy(255 - fadeBr);
+    if (fadeBr < 255) fastled_fadeToBlackBy(canvasBuf, canvasBufSize, 255 - fadeBr);
 
     dimAfterShow = wantDim;
 
     starSpin = starSpin + coord::from_raw(1966);  // +0.03 rad/frame
     if (starSpin.raw() > kTwoPi.raw()) starSpin = starSpin - kTwoPi;
+
+    // Copy canvasBuf to channelsE via setRGB when using local buffer
+    if (canvasBufOwned) {
+      nrOfLights_t nrOfLights = layer->size.x * layer->size.y;
+      for (nrOfLights_t i = 0; i < nrOfLights && i < canvasBufSize; i++) {
+        layer->setRGB(i, canvasBuf[i]);
+      }
+    }
   }
 
   // Shared trail ring-buffer reused by demoSpirograph (60 pts) and demoLissajous (80 pts).
@@ -269,7 +301,7 @@ class FixedPointCanvasDemoEffect : public Node {
   // Helper: render a rainbow-gradient trail connecting points in the shared trail buffer.
   // Saturation differs between spirograph (220) and lissajous (230) for color tuning.
   void renderRainbowTrail(const coord& cx, const coord& cy, coord tScale, uint8_t numPts, uint8_t saturation) {
-    fl::CanvasRGB canvas(fl::span<CRGB>(canvas_buf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
+    fl::CanvasRGB canvas(fl::span<CRGB>(canvasBuf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
 
     for (uint8_t i = 0; i < numPts - 1; ++i) {
       uint8_t a = (gTrailHead + i) % numPts;
@@ -320,7 +352,7 @@ class FixedPointCanvasDemoEffect : public Node {
     coord eff_r = r * zoom;
     coord eff_zoom = zoom;
 
-    fl::CanvasRGB canvas(fl::span<CRGB>(canvas_buf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
+    fl::CanvasRGB canvas(fl::span<CRGB>(canvasBuf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
 
     // Face ring
     canvas.drawRing(CRGB(40, 40, 40), eff_cx, eff_cy, eff_r, eff_zoom);  // thickness = 1.0 * eff_zoom
@@ -395,7 +427,7 @@ class FixedPointCanvasDemoEffect : public Node {
     // spin counter is multiplied by a non-integer speed then wrapped to [0,2π).
     static const coord kBaseDelta = coord::from_raw(2621);  // 0.04 rad/frame
 
-    fl::CanvasRGB canvas(fl::span<CRGB>(canvas_buf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
+    fl::CanvasRGB canvas(fl::span<CRGB>(canvasBuf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
 
     // Scale all ring radii and thickness proportionally with tScale so the
     // chain geometry stays consistent as the scene zooms in/out.
@@ -433,7 +465,7 @@ class FixedPointCanvasDemoEffect : public Node {
     // Inner accent ring at the natural inner-pentagon radius (golden ratio ≈ 0.382 R).
     coord innerR = R * coord::from_raw(25034);  // R * 0.382 (inner pentagon radius)
 
-    fl::CanvasRGB canvas(fl::span<CRGB>(canvas_buf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
+    fl::CanvasRGB canvas(fl::span<CRGB>(canvasBuf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
 
     canvas.drawRing(CRGB::Blue, cx, cy, R, coord::from_raw(131072) * tScale);  // thick=2.0
     canvas.drawRing(CRGB(0, 60, 120), cx, cy, innerR, tScale);
@@ -524,7 +556,7 @@ class FixedPointCanvasDemoEffect : public Node {
     coord s_penX = cx + (penX - cx) * tScale;
     coord s_penY = cy + (penY - cy) * tScale;
 
-    fl::CanvasRGB canvas(fl::span<CRGB>(canvas_buf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
+    fl::CanvasRGB canvas(fl::span<CRGB>(canvasBuf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
 
     canvas.drawRing(CRGB(0, 0, 180), cx, cy, R * tScale, coord::from_raw(98304) * tScale);       // thick=1.5
     canvas.drawRing(CRGB(0, 100, 140), s_rcx, s_rcy, coord::from_raw(393216) * tScale, tScale);  // r=6.0
@@ -581,7 +613,7 @@ class FixedPointCanvasDemoEffect : public Node {
     gTrailY[gTrailHead] = py;
     gTrailHead = (gTrailHead + 1) % kPts;
 
-    fl::CanvasRGB canvas(fl::span<CRGB>(canvas_buf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
+    fl::CanvasRGB canvas(fl::span<CRGB>(canvasBuf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
 
     // Trail: oldest → dim, newest → bright, full rainbow.
     // Scale stored positions toward cx/cy by tScale to match the transition zoom.
@@ -650,7 +682,7 @@ class FixedPointCanvasDemoEffect : public Node {
       pz[i] = z3;  // positive = towards viewer
     }
 
-    fl::CanvasRGB canvas(fl::span<CRGB>(canvas_buf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
+    fl::CanvasRGB canvas(fl::span<CRGB>(canvasBuf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
 
     for (uint8_t e = 0; e < 12; ++e) {
       const uint8_t a = kEdges[e][0], b = kEdges[e][1];
@@ -707,7 +739,7 @@ class FixedPointCanvasDemoEffect : public Node {
     static const coord kSpring = coord::from_raw(393);    // ≈ 0.006   spring pull toward centre
     static const coord kMaxV = coord::from_raw(196608);   //   3.0 px/frame velocity cap
 
-    fl::CanvasRGB canvas(fl::span<CRGB>(canvas_buf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
+    fl::CanvasRGB canvas(fl::span<CRGB>(canvasBuf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
 
     for (uint8_t i = 0; i < kN; ++i) {
       // Random acceleration + weak spring toward display centre
@@ -775,7 +807,7 @@ class FixedPointCanvasDemoEffect : public Node {
     static const coord kMaxV = coord::from_raw(131072);  // 2.0 px/frame
     static const coord kDamp = coord::from_raw(63897);   // ≈ 0.975
 
-    fl::CanvasRGB canvas(fl::span<CRGB>(canvas_buf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
+    fl::CanvasRGB canvas(fl::span<CRGB>(canvasBuf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
 
     for (uint8_t i = 0; i < kN; ++i) {
       coord ax{}, ay{};
@@ -916,7 +948,7 @@ class FixedPointCanvasDemoEffect : public Node {
     coord penX = cx + fl::s16x16::cos(hypoTheta) * arm + fl::s16x16::cos(rollPhase) * h_c;
     coord penY = cy + fl::s16x16::sin(hypoTheta) * arm - fl::s16x16::sin(rollPhase) * h_c;
 
-    fl::CanvasRGB canvas(fl::span<CRGB>(canvas_buf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
+    fl::CanvasRGB canvas(fl::span<CRGB>(canvasBuf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
 
     if (!firstPoint) {
       canvas.drawLine(CHSV(hue, 220, 255), prevX, prevY, penX, penY);
@@ -1012,7 +1044,7 @@ class FixedPointCanvasDemoEffect : public Node {
 
     static const coord kScale = coord::from_raw(53739);  // 0.82 branch-length ratio
 
-    fl::CanvasRGB canvas(fl::span<CRGB>(canvas_buf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
+    fl::CanvasRGB canvas(fl::span<CRGB>(canvasBuf, layer->size.x * layer->size.y), layer->size.x, layer->size.y);
 
     canvas.drawLine(col, x0, y0, x1, y1);
     // gCP = (uint8_t)((depth << 4) | 0x4);  // step 4: drawLine done, about to recurse left
@@ -1058,7 +1090,9 @@ class FixedPointCanvasDemoEffect : public Node {
     return 255;
   }
 
-  ~FixedPointCanvasDemoEffect() override {};  // e,g, to free allocated memory
+  ~FixedPointCanvasDemoEffect() override {
+    if (canvasBufOwned && canvasBuf) freeMB(canvasBuf, "fpcdBuf");
+  }
 };
 
 // Ported from AuroraPortal colorTrails by u/StefanPetrick / 4wheeljive
@@ -1137,10 +1171,13 @@ class ColorTrailsEffect : public Node {
   Perlin1D noiseX{}, noiseY{};
   float* xProf = nullptr;  // one noise value per column
   float* yProf = nullptr;  // one noise value per row
-  CRGB* tempBuf = nullptr; // intermediate buffer for advection
+  CRGB* canvasBuf = nullptr;  // local buffer when needed, or points to channelsE
+  CRGB* tempBuf = nullptr;    // intermediate buffer for advection (always allocated)
+  size_t canvasBufSize = 0;
   size_t xProfSize = 0;
   size_t yProfSize = 0;
   size_t tempBufSize = 0;
+  bool canvasBufOwned = false; // true if we allocated canvasBuf (must free it)
   unsigned long t0 = 0;
   unsigned long lastFrameMs = 0;
   uint8_t lastActiveMode = 0;
@@ -1154,12 +1191,25 @@ class ColorTrailsEffect : public Node {
     return r < 0.0f ? r + m : r;
   }
 
+  bool needsLocalBuf() { return !layer->oneToOneMapping || layerP.lights.header.channelsPerLight != 3; }
+
   void allocBuffers() {
     int W = layer->size.x;
     int H = layer->size.y;
+    size_t nrOfLights = W * H;
+    if (needsLocalBuf()) {
+      if (!canvasBufOwned) { canvasBuf = nullptr; canvasBufSize = 0; } // don't realloc the aliased channelsE pointer
+      reallocMB2<CRGB>(canvasBuf, canvasBufSize, nrOfLights, "ctCanvas");
+      canvasBufOwned = true;
+    } else {
+      if (canvasBufOwned && canvasBuf) { freeMB(canvasBuf, "ctCanvas"); }
+      canvasBuf = (CRGB*)layerP.lights.channelsE;
+      canvasBufSize = nrOfLights;
+      canvasBufOwned = false;
+    }
     reallocMB2<float>(xProf, xProfSize, W, "ctXProf");
     reallocMB2<float>(yProf, yProfSize, H, "ctYProf");
-    reallocMB2<CRGB>(tempBuf, tempBufSize, W * H, "ctTemp");
+    reallocMB2<CRGB>(tempBuf, tempBufSize, nrOfLights, "ctTemp");
   }
 
   // Sample 1D Perlin noise into a profile array
@@ -1338,13 +1388,13 @@ class ColorTrailsEffect : public Node {
   void onSizeChanged(const Coord3D& prevSize) override { allocBuffers(); }
 
   void loop() override {
-    CRGB* canvas_buf = (CRGB*)layerP.lights.channelsE;
     int W = layer->size.x;
     int H = layer->size.y;
     if (W <= 0 || H <= 0) return;
 
-    if (!tempBuf) allocBuffers();
-    if (!tempBuf || !xProf || !yProf) return;
+    // Refresh buffers if uninitialized or if mapping/channel config changed without a size change
+    if (!canvasBuf || canvasBufOwned != needsLocalBuf()) allocBuffers();
+    if (!canvasBuf || !tempBuf || !xProf || !yProf) return;
 
     unsigned long now = fl::millis();
     float dt = (now - lastFrameMs) * 0.001f;
@@ -1371,7 +1421,7 @@ class ColorTrailsEffect : public Node {
     }
 
     // Inject emitters
-    fl::CanvasRGB canvas(fl::span<CRGB>(canvas_buf, W * H), W, H);
+    fl::CanvasRGB canvas(fl::span<CRGB>(canvasBuf, W * H), W, H);
     uint8_t activeMode = mode;
     if (activeMode == 0) { // All: cycle every 8 seconds
       activeMode = ((now - t0) / 8000) % 3 + 1;
@@ -1384,14 +1434,23 @@ class ColorTrailsEffect : public Node {
       default:
       case 1: injectOrbiting(canvas, t, W, H); break;
       case 2: injectLissajous(canvas, t, W, H); break;
-      case 3: injectBorder(canvas_buf, t, W, H); break;
+      case 3: injectBorder(canvasBuf, t, W, H); break;
     }
 
     // Advect + fade
-    advectAndDim(canvas_buf, W, H, dt);
+    advectAndDim(canvasBuf, W, H, dt);
+
+    // Copy canvas to channelsE via setRGB when using local buffer
+    if (canvasBufOwned) {
+      nrOfLights_t nrOfLights = W * H;
+      for (nrOfLights_t i = 0; i < nrOfLights && i < canvasBufSize; i++) {
+        layer->setRGB(i, canvasBuf[i]);
+      }
+    }
   }
 
   ~ColorTrailsEffect() override {
+    if (canvasBufOwned && canvasBuf) freeMB(canvasBuf, "ctCanvas");
     if (xProf) freeMB(xProf, "ctXProf");
     if (yProf) freeMB(yProf, "ctYProf");
     if (tempBuf) freeMB(tempBuf, "ctTemp");

@@ -229,6 +229,7 @@ class WiFiSettingsService : public StatefulService<WiFiSettings>
 public:
     WiFiSettingsService(PsychicHttpServer *server, FS *fs, SecurityManager *securityManager, EventSocket *socket);
 
+    void loadState() { _fsPersistence.readFromFS(); } // 🌙 load state from FS without starting WiFi (for early hostname access)
     void initWiFi();
     void begin();
     void loop();

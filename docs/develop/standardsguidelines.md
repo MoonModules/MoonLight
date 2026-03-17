@@ -44,7 +44,7 @@ The 🐰 (see AI) will review each commit, please process the review recommendat
 
 Before merging a PR back into main ask the 🐰 the following:
 
-@coderabbitai, I am about to merge this PR, please do an in-depth review of all the commits made in this PR, make a summary,  a recommendation to merge and a list of possible future actions.
+@coderabbitai, I am about to merge this PR, please do an in-depth review of all the commits made in this PR, make a summary, a recommendation to merge and a list of possible future actions including a prompt for AI agents to look at the most urgent items before merge. Also make a prompt for AI agents to update end-user documentation (/docs) based on all changes in this PR. Please note the documentation is end-user documentation so end users don't have to know anything about the internals so make compact and user-friendly updates only describing usage implications of the changes made.
 
 ## Artificial Intelligence
 

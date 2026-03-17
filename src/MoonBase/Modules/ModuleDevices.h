@@ -93,7 +93,7 @@ class ModuleDevices : public Module {
       message.name = device["name"].as<const char*>();  // send the name of the device in the table, not this device
       deviceToMessage(device, message);
 
-      IPAddress activeIP = WiFi.isConnected() ? WiFi.localIP() : ETH.localIP();
+      IPAddress activeIP = networkLocalIP();
       if (targetIP == activeIP) {
         // this device, only update light controls
         JsonDocument doc;
@@ -119,7 +119,7 @@ class ModuleDevices : public Module {
   void loop20ms() override {
     Module::loop20ms();
     
-    if (!WiFi.localIP() && !ETH.localIP()) return;
+    if (!networkIsConnected()) return;
 
     if (!deviceUDPConnected) return;
 
@@ -127,7 +127,7 @@ class ModuleDevices : public Module {
   }
 
   void loop10s() override {
-    if (!WiFi.localIP() && !ETH.localIP()) return;
+    if (!networkIsConnected()) return;
 
     if (!deviceUDPConnected) {
       deviceUDPConnected = deviceUDP.begin(deviceUDPPort);
@@ -249,7 +249,7 @@ class ModuleDevices : public Module {
 
       // if a controlmessage is received (from another device), and this device is part of its group update this device.
       // this can be both a broadcast or a unicast (then partofgroup will also be true)
-      if (packetSize == sizeof(UDPMessage) && message.isControlCommand && partOfGroup(esp32sveltekit.getWiFiSettingsService()->getHostname(), message.name.c_str())) {
+      if (packetSize == sizeof(UDPMessage) && message.isControlCommand && partOfGroup(esp32sveltekit.getSystemHostname(), message.name.c_str())) {
         JsonDocument doc;
         JsonObject newState = doc.to<JsonObject>();
 
@@ -257,7 +257,7 @@ class ModuleDevices : public Module {
 
         EXT_LOGD(MB_TAG, "UDP control message from group via %s : bri=%d pal=%d preset=%d", message.name.c_str(), message.brightness, message.palette, message.preset);
 
-        if (esp32sveltekit.getWiFiSettingsService()->getHostname() == message.name.c_str()) {
+        if (esp32sveltekit.getSystemHostname() == message.name.c_str()) {
           _moduleControl->update(newState, ModuleState::update, _moduleName);  // addUpdateHandler will send a message with control status
         } else
           _moduleControl->update(newState, ModuleState::update, "group");  // addUpdateHandler will send a message without control status (to avoid infinite loops)
@@ -284,7 +284,7 @@ class ModuleDevices : public Module {
       // EXT_LOGD(MB_TAG, "UDP update sent: bri=%d pal=%d preset=%d control: %d", message.brightness, message.palette, message.preset, isControlCommand);
 
       // there is no udp received from itself so update manually
-      IPAddress activeIP = WiFi.isConnected() ? WiFi.localIP() : ETH.localIP();
+      IPAddress activeIP = networkLocalIP();
       // EXT_LOGD(MB_TAG, "UDP packet written (%s -> %d)", message.name.c_str(), activeIP[3]);
       updateDevices(message, activeIP);
     }
@@ -292,7 +292,7 @@ class ModuleDevices : public Module {
 
  private:
   void infoToMessage(UDPMessage& message, bool isControlCommand) {
-    message.name = esp32sveltekit.getWiFiSettingsService()->getHostname().c_str();
+    message.name = esp32sveltekit.getSystemHostname().c_str();
     message.version = APP_VERSION;
     memset(message.build, 0, sizeof(message.build));  // init with 0
     strlcpy(message.build, APP_DATE, sizeof(message.build));

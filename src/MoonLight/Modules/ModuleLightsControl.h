@@ -47,10 +47,11 @@ StateUpdateResult updateMQTT(JsonObject& root, ModuleState& state, const String&
 class ModuleLightsControl : public Module {
  private:
   MqttEndpoint<ModuleState>* _mqttEndpoint = nullptr;  // pointer, dynamically allocated
+  #if FT_ENABLED(FT_MQTT)
   PsychicMqttClient* _mqttClient;
   MqttSettingsService* _mqttSettingsService;
   update_handler_id_t _mqttSettingsUpdateHandlerId = 0;  // track handler ID
-
+  #endif
  public:
   FileManager* _fileManager;
   ModuleIO* _moduleIO;
@@ -60,9 +61,13 @@ class ModuleLightsControl : public Module {
   uint8_t pinPIR = UINT8_MAX;
 
   ModuleLightsControl(PsychicHttpServer* server, ESP32SvelteKit* sveltekit, FileManager* fileManager, ModuleIO* moduleIO)
-      : Module("lightscontrol", server, sveltekit),  //
+      : Module("lightscontrol", server, sveltekit)
+  #if FT_ENABLED(FT_MQTT)
+        ,
         _mqttClient(sveltekit->getMqttClient()),
-        _mqttSettingsService(sveltekit->getMqttSettingsService()) {
+        _mqttSettingsService(sveltekit->getMqttSettingsService())
+  #endif
+  {
     EXT_LOGV(ML_TAG, "constructor");
     _fileManager = fileManager;
     _moduleIO = moduleIO;
@@ -107,6 +112,7 @@ class ModuleLightsControl : public Module {
           originId);
     });
 
+  #if FT_ENABLED(FT_MQTT)
     // Register handler to react to MQTT settings changes (including enable/disable)
     if (_mqttSettingsService) {
       _mqttSettingsUpdateHandlerId = _mqttSettingsService->addUpdateHandler([this](const String& originId) { onMqttSettingsChanged(); },
@@ -114,8 +120,10 @@ class ModuleLightsControl : public Module {
       );
       onMqttSettingsChanged();  // Initialize MQTT if enabled at boot
     }
+  #endif
   }
 
+  #if FT_ENABLED(FT_MQTT)
   void onMqttSettingsChanged() {
     if (!_mqttSettingsService) return;
 
@@ -171,8 +179,8 @@ class ModuleLightsControl : public Module {
     String pubTopic;
 
     String settingsUniqueId = _mqttSettingsService->getClientId() ? _mqttSettingsService->getClientId() : SettingValue::format("#{platform}-#{unique_id}");
-    String settingsMqttPath = "homeassistant/light/" + esp32sveltekit.getWiFiSettingsService()->getHostname();  // currently configured as a homeassistent light type
-    String settingsName = esp32sveltekit.getWiFiSettingsService()->getHostname();
+    String settingsMqttPath = "homeassistant/light/" + esp32sveltekit.getSystemHostname();  // currently configured as a homeassistent light type
+    String settingsName = esp32sveltekit.getSystemHostname();
     String settingsStateTopic = SettingValue::format(FACTORY_MQTT_STATUS_TOPIC);
 
     JsonDocument doc;
@@ -213,6 +221,7 @@ class ModuleLightsControl : public Module {
 
     EXT_LOGI(ML_TAG, "Published HA discovery to %s", configTopic.c_str());
   }
+  #endif
 
   void readPins() {
     if (safeModeMB) {

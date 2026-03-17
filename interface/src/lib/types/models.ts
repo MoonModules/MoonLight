@@ -106,10 +106,14 @@ export type Analytics = {
 export type RSSI = {
 	rssi: number;
 	ssid: string;
-	safeMode: boolean; // 🌙 safeMode Indicates if the system is in safe mode
-	restartNeeded: boolean; // 🌙 restartNeeded Indicates if the system needs to be restarted
-	saveNeeded: boolean; // 🌙 saveNeeded Indicates that changes has been made which need to be saved (or canceled)
-	hostName: string; // 🌙 to show in title and statusbar
+};
+
+// 🌙 System status flags — emitted independently of WiFi so they work on all boards
+export type SystemStatus = {
+	safeMode: boolean;
+	restartNeeded: boolean;
+	saveNeeded: boolean;
+	hostName: string;
 };
 
 export type Battery = {

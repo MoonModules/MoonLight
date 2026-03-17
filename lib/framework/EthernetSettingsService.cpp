@@ -34,12 +34,20 @@ EthernetSettingsService::EthernetSettingsService(PsychicHttpServer *server,
 void EthernetSettingsService::initEthernet()
 {
     // 🌙 Disable WiFi BEFORE starting ethernet to free ~50KB heap.
-    // EMAC DMA buffers are allocated during ETH.begin() — if WiFi is still running,
-    // there may not be enough heap for both, causing "no mem for receive buffer" errors.
+    // Only on non-PSRAM boards (ESP32-D0) where heap is tight.
+    // Skip on PSRAM boards for two reasons:
+    //  1. Plenty of heap — WiFi and ethernet can coexist.
+    //  2. On ESP32-P4 with WiFi coprocessor (ESP-Hosted), WiFi.mode(WIFI_OFF) deinits
+    //     the coprocessor, but any subsequent WiFi API call (even WiFi.getMode() in
+    //     updateEthernet()) triggers a full coprocessor reinit — creating an infinite
+    //     deinit/reinit loop every 500ms. On D0 this doesn't happen because WiFi is
+    //     built-in and getMode() is just reading a variable with no side effects.
+    //  Note: ESP32-P4-ETH (FT_WIFI=0) has no WiFi at all — this code is safely skipped
+    //  via the psramFound() guard since all P4 boards have PSRAM.
     // Use WiFi.mode(WIFI_OFF) only — it handles disconnect + stop + deinit in one call.
     // Do NOT call WiFi.disconnect(true) separately as double-deinit causes
     // "wifi_init_default: netstack cb reg failed" errors and leaks memory.
-    if (WiFi.getMode() != WIFI_OFF) {
+    if (!psramFound() && WiFi.getMode() != WIFI_OFF) {
         ESP_LOGI(SVK_TAG, "Disabling WiFi before ethernet init to free heap (free: %lu)", (unsigned long)ESP.getFreeHeap());
         WiFi.mode(WIFI_OFF);
         _wifiDisabledByEthernet = true;
@@ -85,8 +93,9 @@ String EthernetSettingsService::getIP()
 
 void EthernetSettingsService::configureNetwork(ethernet_settings_t &network)
 {
-    // set hostname before IP configuration starts
-    ETH.setHostname(_state.hostname.c_str());
+    // 🌙 Use system hostname (unified across WiFi/Ethernet) when available, otherwise own
+    String hostname = systemHostnameProvider ? systemHostnameProvider() : _state.hostname;
+    ETH.setHostname(hostname.c_str());
     if (network.staticIPConfig)
     {
         // configure for static IP
@@ -114,7 +123,7 @@ void EthernetSettingsService::configureNetwork(ethernet_settings_t &network)
         ETH.begin();
     }
     // set hostname (again) after (re)starting ethernet due to a bug in the ESP-IDF implementation
-    ETH.setHostname(_state.hostname.c_str());
+    ETH.setHostname(hostname.c_str());
 }
 
 void EthernetSettingsService::reconfigureEthernet()
@@ -126,11 +135,11 @@ void EthernetSettingsService::updateEthernet()
 {
     bool ethConnected = ETH.connected();
 
-    // 🌙 Disable WiFi when ethernet is connected to free ~50KB heap (critical on ESP32-D0).
-    // Re-enable WiFi when ethernet is lost so the device remains reachable.
-    if (ethConnected && WiFi.getMode() != WIFI_OFF) {
-        // 🌙 Always re-disable WiFi while ethernet is connected — WiFiSettingsService
-        // may have re-enabled it via manageSTA()/scanNetworks().
+    // 🌙 Disable WiFi when ethernet is connected to free ~50KB heap (ESP32-D0 only).
+    // Skip on PSRAM boards — plenty of heap; on P4 with coprocessor WiFi, calling
+    // WiFi.mode(WIFI_OFF) then WiFi.getMode() reinits ESP-Hosted in an infinite loop.
+    // On P4-ETH (FT_WIFI=0) there is no WiFi — safely skipped via psramFound().
+    if (!psramFound() && ethConnected && WiFi.getMode() != WIFI_OFF) {
         ESP_LOGI(SVK_TAG, "Ethernet connected — disabling WiFi to free heap (free: %lu)", (unsigned long)ESP.getFreeHeap());
         WiFi.mode(WIFI_OFF);
         _wifiDisabledByEthernet = true;

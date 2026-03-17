@@ -80,19 +80,21 @@ Toggling a switch **does not** set the modded flag — it reloads the board pres
 
 | Control | Type | Options |
 |---|---|---|
-| **ethernetType** | Select | None, LAN8720 (RMII), W5500 (SPI) |
+| **ethernetType** | Select | Board Default, LAN8720 (RMII), W5500 (SPI) |
 
 Selects the ethernet hardware type. This is typically set automatically by the board preset but can be changed manually.
 
 | Type | Interface | Chips | Available on |
 |---|---|---|---|
-| **None** | — | — | All targets |
+| **Board Default** | Compile-time pins | Varies | Boards with ethernet defined in `pins_arduino.h` |
 | **LAN8720 (RMII)** | Built-in EMAC | LAN8720A | ESP32-D0, ESP32-P4 |
 | **W5500 (SPI)** | External SPI module | W5500, WIZ850IO | All targets |
 
-RMII ethernet requires **ETH MDC**, **ETH MDIO**, and **ETH CLK** pins to be assigned. The six RMII data pins (TXD0, TX_EN, TXD1, RXD0, RXD1, CRS_DV) are hardwired in silicon and are reserved as **Ethernet** pin type.
+**Board Default** uses the pin definitions baked into the board variant at compile time (via `pins_arduino.h`). No runtime pin assignment is needed — `ETH.begin()` is called with no arguments and the framework resolves the pins automatically. This is used by boards like the ESP32-P4-ETH where ethernet pins are fixed by the hardware design. If the board variant does not define ethernet pins, this option has no effect.
 
-SPI ethernet requires **SPI SCK**, **SPI MISO**, **SPI MOSI**, and **PHY CS** pins to be assigned. **PHY IRQ** is optional.
+**LAN8720 (RMII)** requires **ETH MDC**, **ETH MDIO**, and **ETH CLK** pins to be assigned. The six RMII data pins (TXD0, TX_EN, TXD1, RXD0, RXD1, CRS_DV) are hardwired in silicon and are reserved as **Ethernet** pin type.
+
+**W5500 (SPI)** requires **SPI SCK**, **SPI MISO**, **SPI MOSI**, and **PHY CS** pins to be assigned. **PHY IRQ** is optional.
 
 See [Ethernet settings](../../network/ethernet/) for hostname and IP configuration.
 

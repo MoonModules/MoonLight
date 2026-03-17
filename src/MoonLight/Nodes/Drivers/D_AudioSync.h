@@ -26,7 +26,7 @@ class AudioSyncDriver : public Node {
   static constexpr uint8_t audioPaletteIndex = 18;  // see palettes.h
 
   void loop() override {
-    if (!WiFi.isConnected() && !ETH.connected()) {
+    if (!networkIsConnected()) {
       // make WLED Audio Sync network failure resilient - WIP
       if (init) {
         // set all data to 0

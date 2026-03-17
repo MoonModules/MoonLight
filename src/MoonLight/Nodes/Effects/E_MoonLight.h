@@ -426,13 +426,12 @@ class ScrollingTextEffect : public Node {
         choice = (pal::millis() / 1000 % (nrOfChoices + 1)) + 1;
     }
 
-    IPAddress activeIP = WiFi.isConnected() ? WiFi.localIP() : ETH.localIP();
     switch (choice) {
     case 1:
       text.format("%s", textIn);
       break;
     case 2:
-      text.format(".%d", activeIP[3]);
+      text.format(".%d", networkLocalIP()[3]);
       break;
     case 3:
       text.format("%ds", sharedData.fps);

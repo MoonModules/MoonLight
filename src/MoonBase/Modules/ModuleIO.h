@@ -18,6 +18,7 @@
 
   #include "MoonBase/Module.h"
   #include "driver/uart.h"
+  #include "driver/rtc_io.h" // for rtc_gpio_is_valid_gpio
 
 enum IO_PinUsageEnum {
   pin_Unused,  // 0
@@ -78,9 +79,9 @@ enum IO_PinUsageEnum {
 };
 
 enum IO_EthernetTypeEnum {
-  eth_None,
-  eth_LAN8720,  // RMII — built-in EMAC (ESP32-D0)
-  eth_W5500     // SPI — external module (ESP32-S3 etc.)
+  eth_BoardDefault,  // uses compile-time pins from pins_arduino.h (ETH.begin() with no args)
+  eth_LAN8720,       // RMII — built-in EMAC (ESP32-D0)
+  eth_W5500          // SPI — external module (ESP32-S3 etc.)
 };
 
 enum IO_BoardsEnum {
@@ -161,7 +162,7 @@ class ModuleIO : public Module {
 
     control = addControl(controls, "ethernetType", "select");
     control["default"] = 0;
-    addControlValue(control, "None");
+    addControlValue(control, "Board Default");
     addControlValue(control, "LAN8720 (RMII)");
     addControlValue(control, "W5500 (SPI)");
 
@@ -813,12 +814,12 @@ class ModuleIO : public Module {
     for (JsonObject pinObject : _state.data["pins"].as<JsonArray>()) {
       uint8_t usage = pinObject["usage"];
       int8_t gpio = pinObject["GPIO"];
-      // SPI pins
-      if (usage == pin_SPI_SCK) ess->v_ETH_SPI_SCK = gpio;
-      if (usage == pin_SPI_MISO) ess->v_ETH_SPI_MISO = gpio;
-      if (usage == pin_SPI_MOSI) ess->v_ETH_SPI_MOSI = gpio;
-      if (usage == pin_PHY_CS) ess->v_ETH_PHY_CS = gpio;
-      if (usage == pin_PHY_IRQ) ess->v_ETH_PHY_IRQ = gpio;
+      // SPI pins — validate before assignment to prevent invalid GPIOs reaching ETH.begin()
+      if (usage == pin_SPI_SCK && GPIO_IS_VALID_OUTPUT_GPIO(gpio)) ess->v_ETH_SPI_SCK = gpio;
+      if (usage == pin_SPI_MISO && GPIO_IS_VALID_GPIO(gpio)) ess->v_ETH_SPI_MISO = gpio;
+      if (usage == pin_SPI_MOSI && GPIO_IS_VALID_OUTPUT_GPIO(gpio)) ess->v_ETH_SPI_MOSI = gpio;
+      if (usage == pin_PHY_CS && GPIO_IS_VALID_OUTPUT_GPIO(gpio)) ess->v_ETH_PHY_CS = gpio;
+      if (usage == pin_PHY_IRQ && GPIO_IS_VALID_GPIO(gpio)) ess->v_ETH_PHY_IRQ = gpio;
     // RMII pins
     #if CONFIG_ETH_USE_ESP32_EMAC
       if (usage == pin_ETH_MDC) ess->v_ETH_PHY_MDC = gpio;

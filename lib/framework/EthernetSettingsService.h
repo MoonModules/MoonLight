@@ -112,6 +112,10 @@ public:
     String getHostname();
     String getIP();
 
+    // 🌙 When set, ETH.setHostname() uses this instead of the Ethernet-specific hostname.
+    // Set by ESP32SvelteKit to enforce a single system-wide hostname for DHCP/mDNS.
+    std::function<String()> systemHostnameProvider = nullptr;
+
     // 🌙 Ethernet configuration — set by ModuleIO board presets via ethernetType + pin assignments
     // Common — v_ETH_PHY_TYPE is always set by readPins() before use
     eth_phy_type_t v_ETH_PHY_TYPE = (eth_phy_type_t)0;

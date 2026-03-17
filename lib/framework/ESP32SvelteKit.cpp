@@ -23,11 +23,13 @@ ESP32SvelteKit::ESP32SvelteKit(PsychicHttpServer *server, unsigned int numberEnd
                                                                                           _numberEndpoints(numberEndpoints),
                                                                                           _featureService(server, &_socket),
                                                                                           _securitySettingsService(server, &ESPFS),
+#if FT_ENABLED(FT_WIFI) // 🌙
                                                                                           _wifiSettingsService(server, &ESPFS, &_securitySettingsService, &_socket),
                                                                                           _wifiScanner(server, &_securitySettingsService),
                                                                                           _wifiStatus(server, &_securitySettingsService),
                                                                                           _apSettingsService(server, &ESPFS, &_securitySettingsService),
                                                                                           _apStatus(server, &_securitySettingsService, &_apSettingsService),
+#endif
 #if FT_ENABLED(FT_ETHERNET)
                                                                                           _ethernetSettingsService(server, &ESPFS, &_securitySettingsService, &_socket),
                                                                                           _ethernetStatus(server, &_securitySettingsService),
@@ -74,7 +76,15 @@ void ESP32SvelteKit::begin()
     ESP_LOGV(SVK_TAG, "Loading settings from files system");
     ESPFS.begin(true);
 
+#if FT_ENABLED(FT_WIFI) // 🌙
+    // 🌙 Load WiFi state early so getSystemHostname() returns the configured hostname
+    // before Ethernet init (which needs it for ETH.setHostname/DHCP).
+    _wifiSettingsService.loadState();
+#endif
+
 #if FT_ENABLED(FT_ETHERNET)
+    // 🌙 Ethernet DHCP uses the unified system hostname (WiFi hostname preferred, falls back to Ethernet's own)
+    _ethernetSettingsService.systemHostnameProvider = [this]() -> String { return getSystemHostname(); };
     _ethernetSettingsService.initEthernet();
 #endif
 
@@ -144,7 +154,7 @@ void ESP32SvelteKit::begin()
 #endif
 
     ESP_LOGV(SVK_TAG, "Starting MDNS");
-    MDNS.begin(_wifiSettingsService.getHostname().c_str());
+    MDNS.begin(getSystemHostname().c_str()); // 🌙 use unified hostname
     MDNS.setInstanceName(_appName);
     MDNS.addService("http", "tcp", 80);
     MDNS.addService("ws", "tcp", 80);
@@ -155,19 +165,20 @@ void ESP32SvelteKit::begin()
 #endif
 
     // Start the services
-    _apStatus.begin();
     _socket.begin();
     _notificationService.begin();
-    _apSettingsService.begin();
     _factoryResetService.begin();
     _featureService.begin();
     _restartService.begin();
     _systemStatus.begin();
 #if FT_ENABLED(FT_WIFI) // 🌙
+    _apStatus.begin();
+    _apSettingsService.begin();
     _wifiSettingsService.begin();
     _wifiScanner.begin();
     _wifiStatus.begin();
 #endif
+    _socket.registerEvent("status"); // 🌙 system status event (saveNeeded, restartNeeded, safeMode, hostName)
 #if FT_ENABLED(FT_ETHERNET)
     _ethernetSettingsService.begin();
     _ethernetStatus.begin();
@@ -312,15 +323,30 @@ void ESP32SvelteKit::_loop()
         if (millis() - lastTime > 1000)
         {
             lastTime = millis();
+            // 🌙 Emit system status flags independently of WiFi — works on all boards
+            // (including ethernet-only boards where WiFiSettingsService doesn't exist)
+            if (_socket.getConnectedClients()) {
+                JsonDocument doc;
+                doc["safeMode"] = safeModeMB;
+                doc["restartNeeded"] = restartNeeded;
+                doc["saveNeeded"] = saveNeeded;
+                doc["hostName"] = getSystemHostname();
+                JsonObject jsonObject = doc.as<JsonObject>();
+                _socket.emitEvent("status", jsonObject);
+            }
+            // 🌙 Compute lps values (used by both SystemStatus and AnalyticsService)
+            uint32_t cpuHz = getCpuFrequencyMhz() * 1000000UL;
+            lps_effects = (lps_all > 0 && lps_effects_cycles > 0) ? (uint16_t)((uint64_t)cpuHz * lps_all / lps_effects_cycles) : 0;
+            lps_drivers = (lps_all > 0 && lps_drivers_cycles > 0) ? (uint16_t)((uint64_t)cpuHz * lps_all / lps_drivers_cycles) : 0;
+            lps_all_snapshot = lps_all; // 🌙 latch before reset so SystemStatus reads a stable value
 #if FT_ENABLED(FT_ANALYTICS)
-            _analyticsService.lps_all = lps_all; // 🌙
-            uint32_t cpuHz = getCpuFrequencyMhz() * 1000000UL; // 🌙
-            _analyticsService.lps_effects = (lps_all > 0 && lps_effects_cycles > 0) ? (uint16_t)((uint64_t)cpuHz * lps_all / lps_effects_cycles) : 0; // 🌙
-            _analyticsService.lps_drivers = (lps_all > 0 && lps_drivers_cycles > 0) ? (uint16_t)((uint64_t)cpuHz * lps_all / lps_drivers_cycles) : 0; // 🌙
+            _analyticsService.lps_all = lps_all;
+            _analyticsService.lps_effects = lps_effects;
+            _analyticsService.lps_drivers = lps_drivers;
 #endif
-            lps_all = 0; // 🌙
-            lps_effects_cycles = 0; // 🌙
-            lps_drivers_cycles = 0; // 🌙
+            lps_all = 0;
+            lps_effects_cycles = 0;
+            lps_drivers_cycles = 0;
 #ifdef TELEPLOT_TASKS
             Serial.printf(">ESP32SveltekitTask:%i:%i\n", millis(), uxTaskGetStackHighWaterMark(NULL));
 #endif

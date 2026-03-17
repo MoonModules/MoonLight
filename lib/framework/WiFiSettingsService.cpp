@@ -316,9 +316,13 @@ void WiFiSettingsService::manageSTA()
     {
         return;
     }
-    // 🌙 Don't reconnect WiFi while ethernet is active — saves ~50KB heap on ESP32-D0
+    // 🌙 Don't reconnect WiFi while ethernet is active — saves ~50KB heap on ESP32-D0.
+    // Only on non-PSRAM boards; PSRAM boards (S3/P4) have enough heap for both stacks.
+    // On P4 with coprocessor WiFi (ESP-Hosted), toggling WiFi causes costly reinit cycles.
+    // This code only runs when FT_WIFI=1 (WiFiSettingsService compiled in), so P4-ETH
+    // (FT_WIFI=0) is unaffected.
 #if FT_ENABLED(FT_ETHERNET)
-    if (ETH.connected())
+    if (!psramFound() && ETH.connected())
     {
         return;
     }
@@ -489,10 +493,6 @@ void WiFiSettingsService::updateRSSI()
     JsonDocument doc;
     doc["rssi"] = WiFi.RSSI();
     doc["ssid"] = WiFi.isConnected() ? WiFi.SSID() : "disconnected";
-    doc["safeMode"] = safeModeMB; // 🌙
-    doc["restartNeeded"] = restartNeeded; // 🌙
-    doc["saveNeeded"] = saveNeeded; // 🌙
-    doc["hostName"] = getHostname(); // 🌙
     JsonObject jsonObject = doc.as<JsonObject>();
     _socket->emitEvent(EVENT_RSSI, jsonObject);
 }

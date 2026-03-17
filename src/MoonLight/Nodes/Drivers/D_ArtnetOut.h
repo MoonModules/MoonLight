@@ -159,7 +159,7 @@ class ArtNetOutDriver : public DriverNode {
 
     // continue with Art-Net code
     uint8_t actualIPIndex = 0;
-    controllerIP = WiFi.isConnected() ? WiFi.localIP() : ETH.localIP();
+    controllerIP = networkLocalIP();
     controllerIP[3] = ipAddresses[actualIPIndex];
 
     if (!controllerIP) return;  // if no connection

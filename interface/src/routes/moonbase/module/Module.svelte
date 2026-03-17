@@ -189,6 +189,7 @@
 								bind:data
 								{definition}
 								onChange={(event: Event) => inputChanged(event, property.name)}
+								onFilterChange={(event: Event) => inputChanged(event, property.name + '_filter')}
 								changeOnInput={!modeWS}
 							></RowRenderer>
 						{/if}

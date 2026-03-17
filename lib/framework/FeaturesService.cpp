@@ -127,6 +127,13 @@ void FeaturesService::createJSON(JsonObject &root)
     root["event_use_json"] = false;
 #endif
 
+// 🌙 wifi feature flag — hides WiFi/AP menu items when FT_WIFI=0
+#if FT_ENABLED(FT_WIFI)
+    root["wifi"] = true;
+#else
+    root["wifi"] = false;
+#endif
+
 #if FT_ENABLED(FT_ETHERNET)
     root["ethernet"] = true;
 #else
