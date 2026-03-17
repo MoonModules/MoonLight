@@ -111,7 +111,12 @@
 		// 	notifications.error('Connection to device lost', 5000);
 		// $telemetry.rssi.disconnected = true; // 🌙
 		telemetry.setRSSI({ rssi: 0, ssid: '' }); // 🌙
-		telemetry.setStatus({ safeMode: false, restartNeeded: false, saveNeeded: false, hostName: 'MoonLight' }); // 🌙
+		telemetry.setStatus({
+			safeMode: false,
+			restartNeeded: false,
+			saveNeeded: false,
+			hostName: $telemetry.status.hostName || 'MoonLight'
+		}); // 🌙
 
 		socket.sendEvent('client_info', { visible: false }); // 🌙 
 	};

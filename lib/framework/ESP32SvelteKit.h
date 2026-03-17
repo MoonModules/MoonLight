@@ -228,6 +228,30 @@ public:
         _loopFunctions.push_back(function);
     }
 
+    // 🌙 Unified system hostname — returns the active network hostname.
+    // Priority: WiFi hostname → Ethernet hostname → "ML" + last 4 MAC chars → "MoonLight"
+    String getSystemHostname()
+    {
+#if FT_ENABLED(FT_WIFI)
+        String h = _wifiSettingsService.getHostname();
+        if (h.length()) return h;
+#endif
+#if FT_ENABLED(FT_ETHERNET)
+        String h2 = _ethernetSettingsService.getHostname();
+        if (h2.length()) return h2;
+#endif
+        // Fallback: "ML" + last 4 hex chars of base MAC (e.g. "ML1A2B")
+        // Use esp_efuse base MAC — always available on all ESP32 variants,
+        // independent of WiFi/Ethernet interface state.
+        uint8_t mac[6];
+        if (esp_efuse_mac_get_default(mac) == ESP_OK) {
+            char suffix[5];
+            snprintf(suffix, sizeof(suffix), "%02X%02X", mac[4], mac[5]);
+            return String("ML") + suffix;
+        }
+        return "MoonLight";
+    }
+
 private:
     PsychicHttpServer *_server;
     TaskHandle_t _loopTaskHandle;

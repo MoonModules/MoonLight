@@ -93,8 +93,9 @@ String EthernetSettingsService::getIP()
 
 void EthernetSettingsService::configureNetwork(ethernet_settings_t &network)
 {
-    // set hostname before IP configuration starts
-    ETH.setHostname(_state.hostname.c_str());
+    // 🌙 Use system hostname (unified across WiFi/Ethernet) when available, otherwise own
+    String hostname = systemHostnameProvider ? systemHostnameProvider() : _state.hostname;
+    ETH.setHostname(hostname.c_str());
     if (network.staticIPConfig)
     {
         // configure for static IP
@@ -122,7 +123,7 @@ void EthernetSettingsService::configureNetwork(ethernet_settings_t &network)
         ETH.begin();
     }
     // set hostname (again) after (re)starting ethernet due to a bug in the ESP-IDF implementation
-    ETH.setHostname(_state.hostname.c_str());
+    ETH.setHostname(hostname.c_str());
 }
 
 void EthernetSettingsService::reconfigureEthernet()

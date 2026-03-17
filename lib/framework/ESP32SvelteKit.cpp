@@ -74,7 +74,13 @@ void ESP32SvelteKit::begin()
     ESP_LOGV(SVK_TAG, "Loading settings from files system");
     ESPFS.begin(true);
 
+    // 🌙 Load WiFi state early so getSystemHostname() returns the configured hostname
+    // before Ethernet init (which needs it for ETH.setHostname/DHCP).
+    _wifiSettingsService.loadState();
+
 #if FT_ENABLED(FT_ETHERNET)
+    // 🌙 Ethernet DHCP uses the unified system hostname (WiFi hostname preferred, falls back to Ethernet's own)
+    _ethernetSettingsService.systemHostnameProvider = [this]() -> String { return getSystemHostname(); };
     _ethernetSettingsService.initEthernet();
 #endif
 
@@ -144,7 +150,7 @@ void ESP32SvelteKit::begin()
 #endif
 
     ESP_LOGV(SVK_TAG, "Starting MDNS");
-    MDNS.begin(_wifiSettingsService.getHostname().c_str());
+    MDNS.begin(getSystemHostname().c_str()); // 🌙 use unified hostname
     MDNS.setInstanceName(_appName);
     MDNS.addService("http", "tcp", 80);
     MDNS.addService("ws", "tcp", 80);
@@ -320,13 +326,7 @@ void ESP32SvelteKit::_loop()
                 doc["safeMode"] = safeModeMB;
                 doc["restartNeeded"] = restartNeeded;
                 doc["saveNeeded"] = saveNeeded;
-#if FT_ENABLED(FT_WIFI)
-                doc["hostName"] = _wifiSettingsService.getHostname();
-#elif FT_ENABLED(FT_ETHERNET)
-                doc["hostName"] = _ethernetSettingsService.getHostname();
-#else
-                doc["hostName"] = "MoonLight";
-#endif
+                doc["hostName"] = getSystemHostname();
                 JsonObject jsonObject = doc.as<JsonObject>();
                 _socket.emitEvent("status", jsonObject);
             }

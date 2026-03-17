@@ -171,8 +171,8 @@ class ModuleLightsControl : public Module {
     String pubTopic;
 
     String settingsUniqueId = _mqttSettingsService->getClientId() ? _mqttSettingsService->getClientId() : SettingValue::format("#{platform}-#{unique_id}");
-    String settingsMqttPath = "homeassistant/light/" + esp32sveltekit.getWiFiSettingsService()->getHostname();  // currently configured as a homeassistent light type
-    String settingsName = esp32sveltekit.getWiFiSettingsService()->getHostname();
+    String settingsMqttPath = "homeassistant/light/" + esp32sveltekit.getSystemHostname();  // currently configured as a homeassistent light type
+    String settingsName = esp32sveltekit.getSystemHostname();
     String settingsStateTopic = SettingValue::format(FACTORY_MQTT_STATUS_TOPIC);
 
     JsonDocument doc;
