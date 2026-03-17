@@ -135,13 +135,13 @@
 					title: 'WiFi Station',
 					icon: Router,
 					href: '/wifi/sta',
-					feature: true
+					feature: page.data.features.wifi // 🌙
 				},
 				{
 					title: 'Access Point',
 					icon: AP,
 					href: '/wifi/ap',
-					feature: true
+					feature: page.data.features.wifi // 🌙
 				},
 				{
 					title: 'Ethernet',

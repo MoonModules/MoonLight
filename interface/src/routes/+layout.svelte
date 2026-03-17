@@ -73,6 +73,7 @@
 		socket.off('analytics', handleAnalytics);
 		socket.off('open', handleOpen);
 		socket.off('close', handleClose);
+		socket.off('error', handleError);
 		socket.off('rssi', handleNetworkStatus);
 		socket.off('status', handleStatus); // 🌙
 		socket.off('notification', handleNotification);

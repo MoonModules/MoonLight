@@ -18,6 +18,7 @@
 
   #include "MoonBase/Module.h"
   #include "driver/uart.h"
+  #include "driver/rtc_io.h" // for rtc_gpio_is_valid_gpio
 
 enum IO_PinUsageEnum {
   pin_Unused,  // 0

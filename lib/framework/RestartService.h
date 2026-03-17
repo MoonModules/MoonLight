@@ -35,8 +35,10 @@ public:
         delay(250);
         MDNS.end();
         delay(100);
+#if FT_ENABLED(FT_WIFI) // 🌙 skip on boards without WiFi (e.g. ESP32-P4-ETH) — avoids ESP-Hosted crash
         WiFi.disconnect(true);
         delay(200);
+#endif
         ESP.restart();
     }
 

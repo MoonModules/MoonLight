@@ -21,10 +21,17 @@
 #include <ESPmDNS.h>
 #include <AnalyticsService.h>
 #include <FeaturesService.h>
+#if FT_ENABLED(FT_WIFI) // 🌙
 #include <APSettingsService.h>
 #include <APStatus.h>
+#include <WiFiScanner.h>
+#include <WiFiSettingsService.h>
+#include <WiFiStatus.h>
+#endif
+#if FT_ENABLED(FT_ETHERNET) // 🌙
 #include <EthernetSettingsService.h>
 #include <EthernetStatus.h>
+#endif
 #include <AuthenticationService.h>
 #include <BatteryService.h>
 #include <FactoryResetService.h>
@@ -41,11 +48,6 @@
 #include <SleepService.h>
 #include <SystemStatus.h>
 #include <CoreDump.h>
-#include <WiFiScanner.h>
-#include <WiFiSettingsService.h>
-#include <WiFiStatus.h>
-#include <EthernetSettingsService.h>
-#include <EthernetStatus.h>
 #include <ESPFS.h>
 #include <PsychicHttp.h>
 #include <vector>
@@ -90,8 +92,27 @@ enum class ConnectionStatus
 
 //🌙 added to telemetry
 extern bool safeModeMB; // 🌙 true when the ESP32 is in safe mode, false when it is not
-extern bool restartNeeded; // 🌙 
+extern bool restartNeeded; // 🌙
 extern bool saveNeeded; // 🌙 saveNeeded Indicates that changes has been made which need to be saved (or canceled)
+
+// 🌙 Network helpers — work regardless of FT_WIFI / FT_ETHERNET feature flags
+/// Returns true if any network interface (WiFi or Ethernet) is connected.
+inline bool networkIsConnected() {
+    if (WiFi.isConnected()) return true;
+#if FT_ENABLED(FT_ETHERNET)
+    if (ETH.connected()) return true;
+#endif
+    return false;
+}
+
+/// Returns the local IP of the active network interface (WiFi preferred, then Ethernet).
+inline IPAddress networkLocalIP() {
+    if (WiFi.isConnected()) return WiFi.localIP();
+#if FT_ENABLED(FT_ETHERNET)
+    if (ETH.connected()) return ETH.localIP();
+#endif
+    return IPAddress();
+}
 
 class ESP32SvelteKit
 {
@@ -99,6 +120,8 @@ public:
     uint16_t lps_all = 0;            // 🌙 frame rate counter — effects and drivers are 1:1 so one counter suffices
     uint32_t lps_effects_cycles = 0; // 🌙 CPU cycles consumed by layerP.loop() per second (accumulated)
     uint32_t lps_drivers_cycles = 0; // 🌙 CPU cycles consumed by layerP.loopDrivers() per second (accumulated)
+    uint16_t lps_effects = 0;        // 🌙 effects theoretical max loops/s (computed each second)
+    uint16_t lps_drivers = 0;        // 🌙 drivers theoretical max loops/s (computed each second)
 
     ESP32SvelteKit(PsychicHttpServer *server, unsigned int numberEndpoints = 115);
 
@@ -136,6 +159,7 @@ public:
     }
 #endif
 
+#if FT_ENABLED(FT_WIFI) // 🌙
     WiFiSettingsService *getWiFiSettingsService()
     {
         return &_wifiSettingsService;
@@ -145,6 +169,7 @@ public:
     {
         return &_apSettingsService;
     }
+#endif
 
     // 🌙 added getEthernetSettingsService
 #if FT_ENABLED(FT_ETHERNET)
@@ -202,11 +227,13 @@ public:
         return &_restartService;
     }
 
+#if FT_ENABLED(FT_ANALYTICS)
     // 🌙 needed to get lps 
     AnalyticsService *getAnalyticsService()
     {
         return &_analyticsService;
     }
+#endif
 
     void factoryReset()
     {
@@ -218,10 +245,12 @@ public:
         _appName = name;
     }
 
+#if FT_ENABLED(FT_WIFI) // 🌙
     void recoveryMode()
     {
         _apSettingsService.recoveryMode();
     }
+#endif
 
     void addLoopFunction(loopCallback function)
     {
@@ -232,7 +261,7 @@ public:
     // Priority: WiFi hostname → Ethernet hostname → "ML" + last 4 MAC chars → "MoonLight"
     String getSystemHostname()
     {
-#if FT_ENABLED(FT_WIFI)
+#if FT_ENABLED(FT_WIFI) // 🌙
         String h = _wifiSettingsService.getHostname();
         if (h.length()) return h;
 #endif
@@ -258,11 +287,13 @@ private:
     unsigned int _numberEndpoints;
     FeaturesService _featureService;
     SecuritySettingsService _securitySettingsService;
+#if FT_ENABLED(FT_WIFI) // 🌙
     WiFiSettingsService _wifiSettingsService;
     WiFiScanner _wifiScanner;
     WiFiStatus _wifiStatus;
     APSettingsService _apSettingsService;
     APStatus _apStatus;
+#endif
 #if FT_ENABLED(FT_ETHERNET)
     EthernetSettingsService _ethernetSettingsService;
     EthernetStatus _ethernetStatus;

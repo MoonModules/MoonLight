@@ -147,7 +147,7 @@ class ModuleLiveScripts : public Module {
   // update scripts / read only values in the UI
   void loop1s() override {
     if (!_sveltekit->getSocket()->getConnectedClients()) return;
-    if (!WiFi.isConnected() && !ETH.connected()) return;
+    if (!networkIsConnected()) return;
 
     JsonDocument newData;                                    // to only send updatedData
     JsonArray scripts = newData["scripts"].to<JsonArray>();  // to: remove old array

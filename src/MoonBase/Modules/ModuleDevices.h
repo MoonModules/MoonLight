@@ -93,7 +93,7 @@ class ModuleDevices : public Module {
       message.name = device["name"].as<const char*>();  // send the name of the device in the table, not this device
       deviceToMessage(device, message);
 
-      IPAddress activeIP = WiFi.isConnected() ? WiFi.localIP() : ETH.localIP();
+      IPAddress activeIP = networkLocalIP();
       if (targetIP == activeIP) {
         // this device, only update light controls
         JsonDocument doc;
@@ -119,7 +119,7 @@ class ModuleDevices : public Module {
   void loop20ms() override {
     Module::loop20ms();
     
-    if (!WiFi.isConnected() && !ETH.connected()) return;
+    if (!networkIsConnected()) return;
 
     if (!deviceUDPConnected) return;
 
@@ -127,7 +127,7 @@ class ModuleDevices : public Module {
   }
 
   void loop10s() override {
-    if (!WiFi.isConnected() && !ETH.connected()) return;
+    if (!networkIsConnected()) return;
 
     if (!deviceUDPConnected) {
       deviceUDPConnected = deviceUDP.begin(deviceUDPPort);
@@ -284,7 +284,7 @@ class ModuleDevices : public Module {
       // EXT_LOGD(MB_TAG, "UDP update sent: bri=%d pal=%d preset=%d control: %d", message.brightness, message.palette, message.preset, isControlCommand);
 
       // there is no udp received from itself so update manually
-      IPAddress activeIP = WiFi.isConnected() ? WiFi.localIP() : ETH.localIP();
+      IPAddress activeIP = networkLocalIP();
       // EXT_LOGD(MB_TAG, "UDP packet written (%s -> %d)", message.name.c_str(), activeIP[3]);
       updateDevices(message, activeIP);
     }

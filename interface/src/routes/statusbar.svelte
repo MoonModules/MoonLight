@@ -5,7 +5,6 @@
 	import { user } from '$lib/stores/user';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import ThemeSelector from '$lib/components/ThemeSelector.svelte';
-	import WiFiOff from '~icons/tabler/wifi-off';
 	import Hamburger from '~icons/tabler/menu-2';
 	import Power from '~icons/tabler/power';
 	import Cancel from '~icons/tabler/x';
@@ -135,9 +134,7 @@
 		{#if page.data.features.ethernet && $telemetry.ethernet.connected}
 			<PlugConnected class="inline-block h-7 w-7" />
 		{/if}
-		{#if $telemetry.rssi.disconnected}
-			<WiFiOff class="inline-block h-7 w-7" />
-		{:else}
+		{#if !$telemetry.rssi.disconnected}
 			<RssiIndicator
 				showDBm={false}
 				rssi_dbm={$telemetry.rssi.rssi}
