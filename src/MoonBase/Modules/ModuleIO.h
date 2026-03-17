@@ -78,9 +78,9 @@ enum IO_PinUsageEnum {
 };
 
 enum IO_EthernetTypeEnum {
-  eth_None,
-  eth_LAN8720,  // RMII — built-in EMAC (ESP32-D0)
-  eth_W5500     // SPI — external module (ESP32-S3 etc.)
+  eth_BoardDefault,  // uses compile-time pins from pins_arduino.h (ETH.begin() with no args)
+  eth_LAN8720,       // RMII — built-in EMAC (ESP32-D0)
+  eth_W5500          // SPI — external module (ESP32-S3 etc.)
 };
 
 enum IO_BoardsEnum {
@@ -161,7 +161,7 @@ class ModuleIO : public Module {
 
     control = addControl(controls, "ethernetType", "select");
     control["default"] = 0;
-    addControlValue(control, "None");
+    addControlValue(control, "Board Default");
     addControlValue(control, "LAN8720 (RMII)");
     addControlValue(control, "W5500 (SPI)");
 
