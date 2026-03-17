@@ -27,9 +27,26 @@
 	import Grip from '~icons/tabler/grip-vertical';
 	import FieldRenderer from './FieldRenderer.svelte';
 	import { isNumber } from 'chart.js/helpers';
-	import type { ModuleProperty, ModuleRow } from '$lib/types/moonbase_models';
+	import type { ModuleProperty, ModuleRow, ModuleData } from '$lib/types/moonbase_models';
 
-	let { property, data = $bindable(), definition, onChange, changeOnInput } = $props();
+	interface Props {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		property: any;
+		data: ModuleData;
+		definition: ModuleProperty[];
+		onChange: (event?: Event) => void;
+		onFilterChange?: (event?: Event) => void;
+		changeOnInput: boolean;
+	}
+
+	let {
+		property,
+		data = $bindable(),
+		definition,
+		onChange,
+		onFilterChange,
+		changeOnInput
+	}: Props = $props();
 
 	let dataEditable: ModuleRow = $state({});
 
@@ -188,8 +205,10 @@
 		property={propertyFilter}
 		bind:value={data[property.name + '_filter']}
 		noPrompts={false}
+		changeOnInput={false}
 		onChange={(event) => {
-			onChange(event);
+			if (onFilterChange) onFilterChange(event);
+			else onChange(event);
 		}}
 	></FieldRenderer>
 	{#if data[property.name + '_filter']}

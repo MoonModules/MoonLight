@@ -2,6 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import {
 		clearColors,
+		clearVertices,
 		colors,
 		vertices,
 		createScene,
@@ -85,6 +86,7 @@
 
 		//rebuild scene
 		createScene(el);
+		clearVertices(); // clear old positions before receiving new ones
 
 		// let ledFactor: number = 1;//header[1];
 		// let ledSize: number = header[23];

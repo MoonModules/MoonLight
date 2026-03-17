@@ -334,7 +334,10 @@ void Module::processUpdatedItem(const UpdatedItem& updatedItem) {
         saveNeeded = true;
       }
     }
-    onUpdate(updatedItem);
+    // 🌙 _filter properties are UI-only display preferences — persist them but don't
+    // trigger onUpdate/update handlers (which would cause unnecessary hardware reconfig)
+    if (!updatedItem.name.contains("_filter"))
+      onUpdate(updatedItem);
   }
 }
 
