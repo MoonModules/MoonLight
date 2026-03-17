@@ -18,6 +18,7 @@
 	import Login from './login.svelte';
 	import type { Analytics } from '$lib/types/models';
 	import type { RSSI } from '$lib/types/models';
+	import type { SystemStatus } from '$lib/types/models'; // 🌙
 	import type { Battery } from '$lib/types/models';
 	import type { OTAStatus } from '$lib/types/models';
 	import Monitor from './moonbase/monitor/Monitor.svelte'; // 🌙
@@ -58,6 +59,7 @@
 		socket.on('close', handleClose);
 		socket.on('error', handleError);
 		socket.on('rssi', handleNetworkStatus);
+		socket.on('status', handleStatus); // 🌙
 		socket.on('notification', handleNotification);
 		if (page.data.features.analytics) socket.on('analytics', handleAnalytics);
 		if (page.data.features.battery) socket.on('battery', handleBattery);
@@ -72,6 +74,7 @@
 		socket.off('open', handleOpen);
 		socket.off('close', handleClose);
 		socket.off('rssi', handleNetworkStatus);
+		socket.off('status', handleStatus); // 🌙
 		socket.off('notification', handleNotification);
 		socket.off('battery', handleBattery);
 		socket.off('otastatus', handleOTA);
@@ -107,14 +110,8 @@
 		// if (!location.host.includes("captive.apple.com")) // 🌙 dirty workaround to not show this on macOS captive portal...
 		// 	notifications.error('Connection to device lost', 5000);
 		// $telemetry.rssi.disconnected = true; // 🌙
-		telemetry.setRSSI({
-			rssi: 0,
-			ssid: '',
-			safeMode: false,
-			restartNeeded: false,
-			saveNeeded: false,
-			hostName: 'MoonLight'
-		}); // 🌙 add safeMode etc
+		telemetry.setRSSI({ rssi: 0, ssid: '' }); // 🌙
+		telemetry.setStatus({ safeMode: false, restartNeeded: false, saveNeeded: false, hostName: 'MoonLight' }); // 🌙
 
 		socket.sendEvent('client_info', { visible: false }); // 🌙 
 	};
@@ -143,6 +140,7 @@
 	const handleAnalytics = (data: Analytics) => analytics.addData(data);
 
 	const handleNetworkStatus = (data: RSSI) => telemetry.setRSSI(data);
+	const handleStatus = (data: SystemStatus) => telemetry.setStatus(data); // 🌙
 
 	const handleBattery = (data: Battery) => {
 		telemetry.setBattery(data);
@@ -177,7 +175,7 @@
 </script>
 
 <svelte:head>
-	<title>{$telemetry.rssi.hostName || 'MoonLight'}</title>
+	<title>{$telemetry.status.hostName || 'MoonLight'}</title>
 </svelte:head>
 
 {#if page.data.features.security && $user.bearer_token === ''}

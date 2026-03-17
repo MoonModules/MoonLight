@@ -94,13 +94,13 @@
 			><Hamburger class="h-6 w-auto" /></label
 		>
 		<img src={logo} alt="Logo" class="h-12 w-12 lg:hidden" /> <!-- 🌙 -->
-		<span class="px-2 text-xl font-bold lg:text-2xl">{$telemetry.rssi.hostName || 'MoonLight'}</span> <!-- 🌙 -->
+		<span class="px-2 text-xl font-bold lg:text-2xl">{$telemetry.status.hostName || 'MoonLight'}</span> <!-- 🌙 -->
 	</div>
 	<div class="indicator flex-none">
 		<UpdateIndicator />
 	</div>
 	<!-- 🌙 safeMode -->
-	{#if $telemetry.rssi.safeMode}
+	{#if $telemetry.status.safeMode}
 		<div class="flex-none">
 			<button class="btn btn-square btn-ghost h-9 w-10" onclick={() => {confirmDialog("Restart", postRestart)}}>
 				🛡️
@@ -108,7 +108,7 @@
 		</div>
 	{/if}
 	<!-- 🌙 restartNeeded -->
-	{#if $telemetry.rssi.restartNeeded}
+	{#if $telemetry.status.restartNeeded}
 		<div class="flex-none">
 			<button class="btn btn-square btn-ghost h-9 w-10" onclick={() => {confirmDialog("Restart", postRestart)}}>
 				🔄
@@ -116,7 +116,7 @@
 		</div>
 	{/if}
 	<!-- 🌙 saveNeeded: save of cancel -->
-	{#if $telemetry.rssi.saveNeeded}
+	{#if $telemetry.status.saveNeeded}
 		<div class="flex-none">
 			<button class="btn btn-square btn-ghost h-9 w-10" onclick={postSaveConfig}>
 				💾

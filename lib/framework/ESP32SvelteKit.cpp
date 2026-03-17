@@ -168,6 +168,7 @@ void ESP32SvelteKit::begin()
     _wifiScanner.begin();
     _wifiStatus.begin();
 #endif
+    _socket.registerEvent("status"); // 🌙 system status event (saveNeeded, restartNeeded, safeMode, hostName)
 #if FT_ENABLED(FT_ETHERNET)
     _ethernetSettingsService.begin();
     _ethernetStatus.begin();
@@ -312,6 +313,23 @@ void ESP32SvelteKit::_loop()
         if (millis() - lastTime > 1000)
         {
             lastTime = millis();
+            // 🌙 Emit system status flags independently of WiFi — works on all boards
+            // (including ethernet-only boards where WiFiSettingsService doesn't exist)
+            if (_socket.getConnectedClients()) {
+                JsonDocument doc;
+                doc["safeMode"] = safeModeMB;
+                doc["restartNeeded"] = restartNeeded;
+                doc["saveNeeded"] = saveNeeded;
+#if FT_ENABLED(FT_WIFI)
+                doc["hostName"] = _wifiSettingsService.getHostname();
+#elif FT_ENABLED(FT_ETHERNET)
+                doc["hostName"] = _ethernetSettingsService.getHostname();
+#else
+                doc["hostName"] = "MoonLight";
+#endif
+                JsonObject jsonObject = doc.as<JsonObject>();
+                _socket.emitEvent("status", jsonObject);
+            }
 #if FT_ENABLED(FT_ANALYTICS)
             _analyticsService.lps_all = lps_all; // 🌙
             uint32_t cpuHz = getCpuFrequencyMhz() * 1000000UL; // 🌙
