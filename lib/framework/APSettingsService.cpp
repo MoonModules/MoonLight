@@ -70,7 +70,7 @@ void APSettingsService::manageAP()
 {
     WiFiMode_t currentWiFiMode = WiFi.getMode();
     if (_state.provisionMode == AP_MODE_ALWAYS ||
-        (_state.provisionMode == AP_MODE_DISCONNECTED && (WiFi.status() != WL_CONNECTED || ETH.localIP())) || // 🌙 keep AP when WiFi disconnected or Ethernet is the active connection
+        (_state.provisionMode == AP_MODE_DISCONNECTED && (WiFi.status() != WL_CONNECTED || ETH.connected())) || // 🌙 keep AP when WiFi disconnected or Ethernet is the active connection
         _recoveryMode)
     {
         if (_reconfigureAp || currentWiFiMode == WIFI_OFF || currentWiFiMode == WIFI_STA)
@@ -143,7 +143,7 @@ APNetworkStatus APSettingsService::getAPNetworkStatus()
 {
     WiFiMode_t currentWiFiMode = WiFi.getMode();
     bool apActive = currentWiFiMode == WIFI_AP || currentWiFiMode == WIFI_AP_STA;
-    if (apActive && _state.provisionMode != AP_MODE_ALWAYS && WiFi.status() == WL_CONNECTED && !ETH.localIP()) // 🌙 not lingering when Ethernet is also connected
+    if (apActive && _state.provisionMode != AP_MODE_ALWAYS && WiFi.status() == WL_CONNECTED && !ETH.connected()) // 🌙 not lingering when Ethernet is also connected
     {
         return APNetworkStatus::LINGERING;
     }

@@ -48,7 +48,7 @@ class ModuleTasks : public Module {
 
   void loop1s() override {
     if (!_sveltekit->getSocket()->getConnectedClients()) return;  // 🌙 No need for UI tasks
-    if (!WiFi.localIP() && !ETH.localIP()) return;
+    if (!WiFi.isConnected() && !ETH.connected()) return;
 
   #define MAX_TASKS 30
 

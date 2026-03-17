@@ -149,16 +149,38 @@ class FixedPointCanvasDemoEffect : public Node {
     addControlValue("Branching Tree");
   }
 
-  CRGB* canvas_buf = nullptr;
+  CRGB* canvas_buf = nullptr;  // local buffer when needed, or points to channelsE
+  size_t canvas_bufSize = 0;
+  bool canvas_bufOwned = false; // true if we allocated canvas_buf (must free it)
 
   coord starSpin{};
   uint8_t dimAfterShow = 255;
   uint32_t sFrameCount = 0;
   uint8_t lastDemo = 255;
 
+  // Returns true when canvas operations need a separate CRGB buffer
+  // (non-RGB lights or virtual mapping means channelsE isn't a flat CRGB array)
+  bool needsLocalBuf() { return !layer->oneToOneMapping || layerP.lights.header.channelsPerLight != 3; }
+
+  void onSizeChanged(const Coord3D& prevSize) override {
+    nrOfLights_t nrOfLights = layer->size.x * layer->size.y;
+    if (needsLocalBuf()) {
+      reallocMB2<CRGB>(canvas_buf, canvas_bufSize, nrOfLights, "fpcdBuf");
+      canvas_bufOwned = true;
+    } else {
+      if (canvas_bufOwned && canvas_buf) { freeMB(canvas_buf, "fpcdBuf"); }
+      canvas_buf = (CRGB*)layerP.lights.channelsE;
+      canvas_bufSize = nrOfLights;
+      canvas_bufOwned = false;
+    }
+  }
+
   void loop() override {
-    canvas_buf = (CRGB*)layerP.lights.channelsE;  // refresh each frame: channelsE may change after double-buffer swap
-    layer->fadeToBlackBy(fade);
+    if (!canvas_buf) onSizeChanged(Coord3D());
+    if (!canvas_buf) return;
+
+    // Fade the local canvas buffer directly (works regardless of channelsPerLight)
+    fastled_fadeToBlackBy(canvas_buf, canvas_bufSize, fade);
 
     coord cx = coord::from_raw((int32_t)layer->size.x << 15);           // 16.0 px: matrix centre x
     coord cy = coord::from_raw((int32_t)layer->size.y << 15);           // 16.0 px: matrix centre y
@@ -220,11 +242,11 @@ class FixedPointCanvasDemoEffect : public Node {
     coord tcx = cx + (ocx - cx) * tScale;
     coord tcy = cy + (ocy - cy) * tScale;
 
-    // Apply previous frame's dim request; always hard-clear on a demo transition.
+    // Apply previous frame's dim request on canvas_buf; always hard-clear on a demo transition.
     if (reinit || dimAfterShow == 255) {
-      FastLED.clear();
+      ::memset(canvas_buf, 0, canvas_bufSize * sizeof(CRGB));
     } else if (dimAfterShow > 0) {
-      layer->fadeToBlackBy(dimAfterShow);
+      fastled_fadeToBlackBy(canvas_buf, canvas_bufSize, dimAfterShow);
     }
 
     uint8_t wantDim;
@@ -253,12 +275,20 @@ class FixedPointCanvasDemoEffect : public Node {
     }
     // Apply brightness envelope at slot transitions (replaces original FastLED.setBrightness(fadeBr)).
     // fadeBr < 255 only during the first/last kFadeMs of each slot, creating a fade-to-black transition.
-    if (fadeBr < 255) layer->fadeToBlackBy(255 - fadeBr);
+    if (fadeBr < 255) fastled_fadeToBlackBy(canvas_buf, canvas_bufSize, 255 - fadeBr);
 
     dimAfterShow = wantDim;
 
     starSpin = starSpin + coord::from_raw(1966);  // +0.03 rad/frame
     if (starSpin.raw() > kTwoPi.raw()) starSpin = starSpin - kTwoPi;
+
+    // Copy canvas_buf to channelsE via setRGB when using local buffer
+    if (canvas_bufOwned) {
+      nrOfLights_t nrOfLights = layer->size.x * layer->size.y;
+      for (nrOfLights_t i = 0; i < nrOfLights && i < canvas_bufSize; i++) {
+        layer->setRGB(i, canvas_buf[i]);
+      }
+    }
   }
 
   // Shared trail ring-buffer reused by demoSpirograph (60 pts) and demoLissajous (80 pts).
@@ -1058,7 +1088,9 @@ class FixedPointCanvasDemoEffect : public Node {
     return 255;
   }
 
-  ~FixedPointCanvasDemoEffect() override {};  // e,g, to free allocated memory
+  ~FixedPointCanvasDemoEffect() override {
+    if (canvas_bufOwned && canvas_buf) freeMB(canvas_buf, "fpcdBuf");
+  }
 };
 
 // Ported from AuroraPortal colorTrails by u/StefanPetrick / 4wheeljive
@@ -1137,10 +1169,13 @@ class ColorTrailsEffect : public Node {
   Perlin1D noiseX{}, noiseY{};
   float* xProf = nullptr;  // one noise value per column
   float* yProf = nullptr;  // one noise value per row
-  CRGB* tempBuf = nullptr; // intermediate buffer for advection
+  CRGB* canvasBuf = nullptr;  // local buffer when needed, or points to channelsE
+  CRGB* tempBuf = nullptr;    // intermediate buffer for advection (always allocated)
+  size_t canvasBufSize = 0;
   size_t xProfSize = 0;
   size_t yProfSize = 0;
   size_t tempBufSize = 0;
+  bool canvasBufOwned = false; // true if we allocated canvasBuf (must free it)
   unsigned long t0 = 0;
   unsigned long lastFrameMs = 0;
   uint8_t lastActiveMode = 0;
@@ -1154,12 +1189,24 @@ class ColorTrailsEffect : public Node {
     return r < 0.0f ? r + m : r;
   }
 
+  bool needsLocalBuf() { return !layer->oneToOneMapping || layerP.lights.header.channelsPerLight != 3; }
+
   void allocBuffers() {
     int W = layer->size.x;
     int H = layer->size.y;
+    size_t nrOfLights = W * H;
+    if (needsLocalBuf()) {
+      reallocMB2<CRGB>(canvasBuf, canvasBufSize, nrOfLights, "ctCanvas");
+      canvasBufOwned = true;
+    } else {
+      if (canvasBufOwned && canvasBuf) { freeMB(canvasBuf, "ctCanvas"); }
+      canvasBuf = (CRGB*)layerP.lights.channelsE;
+      canvasBufSize = nrOfLights;
+      canvasBufOwned = false;
+    }
     reallocMB2<float>(xProf, xProfSize, W, "ctXProf");
     reallocMB2<float>(yProf, yProfSize, H, "ctYProf");
-    reallocMB2<CRGB>(tempBuf, tempBufSize, W * H, "ctTemp");
+    reallocMB2<CRGB>(tempBuf, tempBufSize, nrOfLights, "ctTemp");
   }
 
   // Sample 1D Perlin noise into a profile array
@@ -1338,13 +1385,12 @@ class ColorTrailsEffect : public Node {
   void onSizeChanged(const Coord3D& prevSize) override { allocBuffers(); }
 
   void loop() override {
-    CRGB* canvas_buf = (CRGB*)layerP.lights.channelsE;
     int W = layer->size.x;
     int H = layer->size.y;
     if (W <= 0 || H <= 0) return;
 
-    if (!tempBuf) allocBuffers();
-    if (!tempBuf || !xProf || !yProf) return;
+    if (!canvasBuf) allocBuffers();
+    if (!canvasBuf || !tempBuf || !xProf || !yProf) return;
 
     unsigned long now = fl::millis();
     float dt = (now - lastFrameMs) * 0.001f;
@@ -1371,7 +1417,7 @@ class ColorTrailsEffect : public Node {
     }
 
     // Inject emitters
-    fl::CanvasRGB canvas(fl::span<CRGB>(canvas_buf, W * H), W, H);
+    fl::CanvasRGB canvas(fl::span<CRGB>(canvasBuf, W * H), W, H);
     uint8_t activeMode = mode;
     if (activeMode == 0) { // All: cycle every 8 seconds
       activeMode = ((now - t0) / 8000) % 3 + 1;
@@ -1384,14 +1430,23 @@ class ColorTrailsEffect : public Node {
       default:
       case 1: injectOrbiting(canvas, t, W, H); break;
       case 2: injectLissajous(canvas, t, W, H); break;
-      case 3: injectBorder(canvas_buf, t, W, H); break;
+      case 3: injectBorder(canvasBuf, t, W, H); break;
     }
 
     // Advect + fade
-    advectAndDim(canvas_buf, W, H, dt);
+    advectAndDim(canvasBuf, W, H, dt);
+
+    // Copy canvas to channelsE via setRGB when using local buffer
+    if (canvasBufOwned) {
+      nrOfLights_t nrOfLights = W * H;
+      for (nrOfLights_t i = 0; i < nrOfLights && i < canvasBufSize; i++) {
+        layer->setRGB(i, canvasBuf[i]);
+      }
+    }
   }
 
   ~ColorTrailsEffect() override {
+    if (canvasBufOwned && canvasBuf) freeMB(canvasBuf, "ctCanvas");
     if (xProf) freeMB(xProf, "ctXProf");
     if (yProf) freeMB(yProf, "ctYProf");
     if (tempBuf) freeMB(tempBuf, "ctTemp");

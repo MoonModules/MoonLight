@@ -119,7 +119,7 @@ class ModuleDevices : public Module {
   void loop20ms() override {
     Module::loop20ms();
     
-    if (!WiFi.localIP() && !ETH.localIP()) return;
+    if (!WiFi.isConnected() && !ETH.connected()) return;
 
     if (!deviceUDPConnected) return;
 
@@ -127,7 +127,7 @@ class ModuleDevices : public Module {
   }
 
   void loop10s() override {
-    if (!WiFi.localIP() && !ETH.localIP()) return;
+    if (!WiFi.isConnected() && !ETH.connected()) return;
 
     if (!deviceUDPConnected) {
       deviceUDPConnected = deviceUDP.begin(deviceUDPPort);

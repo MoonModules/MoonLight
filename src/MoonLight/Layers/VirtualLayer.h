@@ -371,4 +371,7 @@ class VirtualLayer {
   void drawText(const char* text, int x = 0, int y = 0, uint8_t font = 0, CRGB col = CRGB::Red, uint16_t shiftPixel = 0);
 };
 
+// Free function: applies FastLED fadeToBlackBy directly on a raw CRGB array.
+void fastled_fadeToBlackBy(CRGB* leds, uint16_t num_leds, uint8_t fadeBy);
+
 #endif

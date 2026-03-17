@@ -56,7 +56,7 @@ class ArtNetInDriver : public Node {
   bool init = false;
 
   void loop() override {
-    if (!WiFi.localIP() && !ETH.localIP()) {
+    if (!WiFi.isConnected() && !ETH.connected()) {
       if (init) {
         EXT_LOGI(ML_TAG, "Stop Listening for %s on port %d", ddp ? "DDP" : "Art-Net", port);
         artnetUdp.stop();

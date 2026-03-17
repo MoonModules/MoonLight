@@ -328,7 +328,7 @@ void VirtualLayer::onLayoutPost() {
       mappingTableSize = 0;
     }
   } else {
-    EXT_LOGI(ML_TAG, "irregular mapping 1 !");
+    EXT_LOGI(ML_TAG, "!oneToOne mapping !");
     for (size_t indexV = 0; indexV < MIN(nrOfLights, mappingTableSize); indexV++) {
       PhysMap& map = mappingTable[indexV];
       switch (map.mapType) {
