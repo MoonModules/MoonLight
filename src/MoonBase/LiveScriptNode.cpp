@@ -34,9 +34,11 @@ static void _modifyPosition(Coord3D& position) { gNode->modifyPosition(position)
 
 void _fadeToBlackBy(uint8_t fadeValue) { gNode->layer->fadeToBlackBy(fadeValue); }
 static void _setRGB(uint16_t indexV, CRGB color) { gNode->layer->setRGB(indexV, color); }
-static void _setRGBPal(uint16_t indexV, uint8_t index, uint8_t brightness) { gNode->layer->setRGB(indexV, ColorFromPalette(PartyColors_p, index, brightness)); }
+static void _setRGBPal(uint16_t indexV, uint8_t index, uint8_t brightness) { gNode->layer->setRGB(indexV, ColorFromPalette(layerP.palette, index, brightness)); }
 static void _setPan(uint16_t indexV, uint8_t value) { gNode->layer->setPan(indexV, value); }
 static void _setTilt(uint16_t indexV, uint8_t value) { gNode->layer->setTilt(indexV, value); }
+static void _setPalEntry(uint8_t index, uint8_t r, uint8_t g, uint8_t b) { if (index < 16) layerP.palette.entries[index] = CRGB(r, g, b); }
+static void _setPalEntryHSV(uint8_t index, uint8_t h, uint8_t s, uint8_t v) { if (index < 16) layerP.palette.entries[index] = CHSV(h, s, v); }
 
 volatile SemaphoreHandle_t WaitAnimationSync = xSemaphoreCreateCounting(4, 0);  // max 4 concurrent scripts
 volatile uint8_t scriptsToSync = 0;                                             // count of scripts that still need to finish their frame
@@ -139,6 +141,8 @@ void LiveScriptNode::setup() {
   addExternal("void setRGBPal(uint16_t,uint8_t,uint8_t)", (void*)_setRGBPal);
   addExternal("void setPan(uint16_t,uint8_t)", (void*)_setPan);
   addExternal("void setTilt(uint16_t,uint8_t)", (void*)_setTilt);
+  addExternal("void setPalEntry(uint8_t,uint8_t,uint8_t,uint8_t)", (void*)_setPalEntry);
+  addExternal("void setPalEntryHSV(uint8_t,uint8_t,uint8_t,uint8_t)", (void*)_setPalEntryHSV);
   addExternal("uint8_t width", &layer->size.x);
   addExternal("uint8_t height", &layer->size.y);
   addExternal("uint8_t depth", &layer->size.z);
@@ -155,7 +159,7 @@ void LiveScriptNode::setup() {
 }
 
 void LiveScriptNode::loop() {
-  // Serial.print("l");
+  if (!hasLoopFunction) return;  // only sync scripts that have a running loop task
   scriptsToSync += 1;
   xSemaphoreGive(WaitAnimationSync);  // unblock script task to run its loop()
 }
