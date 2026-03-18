@@ -9,6 +9,6 @@ void setup() {
 void onLayout() {
   for (int x = 0; x<width; x++)
     for (int y=0; y<height; y++)
-      addLight(x,(x%2)?y:height - 1 - y,0);
+      addLight(x,(x%2==0)?y:height - 1 - y,0);
   nextPin(); // all lights to one pin
 }

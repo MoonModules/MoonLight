@@ -46,6 +46,26 @@ void NodeManager::begin() {
   });
 }
 
+void NodeManager::loop20ms() {
+  Module::loop20ms();  // requestUIUpdate
+
+  #if FT_LIVESCRIPT
+  // Process deferred LiveScript compilations (when another compile was in progress during setup).
+  if (nodes) {
+    for (Node* node : *nodes) {
+      if (node && node->isLiveScriptNode()) {
+        LiveScriptNode* lsn = static_cast<LiveScriptNode*>(node);
+        if (lsn->needsCompile) {
+          lsn->needsCompile = false;
+          lsn->startCompile();
+          break;  // one at a time
+        }
+      }
+    }
+  }
+  #endif
+}
+
 void NodeManager::setupDefinition(const JsonArray& controls) {
   EXT_LOGV(ML_TAG, "");
   JsonObject control;  // state.data has one or more properties
@@ -257,7 +277,7 @@ Node* NodeManager::findLiveScriptNode(const char* animation) {
   for (Node* node : *nodes) {
     if (node && node->isLiveScriptNode()) {
       LiveScriptNode* liveScriptNode = (LiveScriptNode*)node;
-      if (equal(liveScriptNode->animation, animation)) {
+      if (equal(liveScriptNode->animation.c_str(), animation)) {
         EXT_LOGV(ML_TAG, "found %s", animation);
         return liveScriptNode;
       }

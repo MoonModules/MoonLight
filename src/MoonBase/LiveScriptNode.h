@@ -28,12 +28,13 @@ class LiveScriptNode : public Node {
   bool hasLoopFunction = false;      ///< True if the script defines a loop() function
   bool hasModifyFunction = false;    ///< True if the script defines a modifyPosition() function
   bool hasOnLayoutFunction = false;  ///< True if the script defines an onLayout() function
+  bool needsCompile = false;         ///< True if compilation is deferred (another compile in progress)
 
   bool isLiveScriptNode() const override { return true; }
   bool hasModifier() const override { return hasModifyFunction; }
   bool hasOnLayout() const override { return hasOnLayoutFunction; }
 
-  const char* animation = nullptr;  ///< Path to the .sc script file on ESPFS
+  Char<32> animation;  ///< Path to the .sc script file on ESPFS (owned copy, not a pointer)
 
   /// Registers external functions/variables with the LiveScript runtime, then compiles and runs the script.
   void setup() override;
@@ -47,6 +48,9 @@ class LiveScriptNode : public Node {
   /// Kills the running script on destruction.
   ~LiveScriptNode() override;
 
+  /// Spawns a temporary task to compile the script (parser needs ~6KB stack).
+  /// If a compile is already in progress, defers via needsCompile flag.
+  void startCompile();
   /// Reads the .sc file from ESPFS, parses it, and starts execution.
   void compileAndRun();
   /// Requests mappings and starts script execution (as task if loop exists, synchronous otherwise).

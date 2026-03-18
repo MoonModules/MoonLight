@@ -40,6 +40,9 @@ class NodeManager : public Module {
   /// Registers file-change handler and calls Module::begin(). Subclasses must call NodeManager::begin().
   void begin() override;
 
+  /// Processes deferred LiveScript compilations. Subclasses must call NodeManager::loop20ms().
+  void loop20ms() override;
+
   /// Override to populate the node name dropdown with addNodeValue() calls.
   virtual void addNodes(const JsonObject& control) {}
 

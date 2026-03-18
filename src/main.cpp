@@ -140,6 +140,18 @@ TaskHandle_t driverTaskHandle = nullptr;
 
       layerP.loop();
 
+      // Wait for all live script tasks to finish writing their frame
+      #if FT_LIVESCRIPT
+      {
+        extern volatile uint8_t scriptsToSync;
+        while (scriptsToSync > 0) {
+          ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));
+          uint8_t count = scriptsToSync;  // read volatile once
+          scriptsToSync = count - 1;      // write back
+        }
+      }
+      #endif
+
       esp32sveltekit.lps_effects_cycles += esp_cpu_get_cycle_count() - cycleStartE;
 
       if (millis() - last20ms >= 20) {

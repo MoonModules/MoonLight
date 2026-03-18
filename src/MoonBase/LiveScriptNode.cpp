@@ -38,13 +38,15 @@ static void _setRGBPal(uint16_t indexV, uint8_t index, uint8_t brightness) { gNo
 static void _setPan(uint16_t indexV, uint8_t value) { gNode->layer->setPan(indexV, value); }
 static void _setTilt(uint16_t indexV, uint8_t value) { gNode->layer->setTilt(indexV, value); }
 
-volatile xSemaphoreHandle WaitAnimationSync = xSemaphoreCreateBinary();
+volatile SemaphoreHandle_t WaitAnimationSync = xSemaphoreCreateCounting(4, 0);  // max 4 concurrent scripts
+volatile uint8_t scriptsToSync = 0;                                             // count of scripts that still need to finish their frame
+extern TaskHandle_t effectTaskHandle;
 
 void sync() {
   static uint32_t frameCounter = 0;
   frameCounter++;
-  delay(1);  // feed the watchdog, otherwise watchdog will reset the ESP
-  // Serial.print("s");
+  xTaskNotifyGive(effectTaskHandle);  // signal "frame done" to effectTask
+  delay(1);                           // feed the watchdog, otherwise watchdog will reset the ESP
   // 🌙 adding semaphore wait too long logging
   if (xSemaphoreTake(WaitAnimationSync, pdMS_TO_TICKS(100)) == pdFALSE) {
     EXT_LOGW(ML_TAG, "WaitAnimationSync wait too long");
@@ -87,7 +89,7 @@ void addExternal(string definition, void* ptr) {
 Parser parser = Parser();
 
 void LiveScriptNode::setup() {
-  // EXT_LOGV(ML_TAG, "animation %s", animation);
+  // EXT_LOGV(ML_TAG, "animation %s", animation.c_str());
 
   if (animation[0] != '/') {  // no sc script
     return;
@@ -149,35 +151,60 @@ void LiveScriptNode::setup() {
   //   runningPrograms.setPrekill(layerP.ledsDriver.preKill, layerP.ledsDriver.postKill); //for clockless driver...
   runningPrograms.setFunctionToSync(sync);
 
-  compileAndRun();
+  startCompile();
 }
 
 void LiveScriptNode::loop() {
   // Serial.print("l");
-  xSemaphoreGive(WaitAnimationSync);
+  scriptsToSync += 1;
+  xSemaphoreGive(WaitAnimationSync);  // unblock script task to run its loop()
 }
 
 void LiveScriptNode::onLayout() {
   if (hasOnLayout()) {
-    EXT_LOGV(ML_TAG, "%s", animation);
-    scriptRuntime.execute(animation, "onLayout");
+    EXT_LOGV(ML_TAG, "%s", animation.c_str());
+    // Call onLayout directly without @__footer, which would reset global variables
+    // (including control values) to their compiled defaults
+    Executable* exec = scriptRuntime.findExecutable(animation.c_str());
+    if (exec) {
+      Arguments args;
+      executeBinary("@__onLayout", exec->_executecmd, 9999, exec, args);
+    }
   }
 }
 
 LiveScriptNode::~LiveScriptNode() {
-  EXT_LOGV(ML_TAG, "%s", animation);
-  scriptRuntime.kill(animation);
+  EXT_LOGV(ML_TAG, "%s", animation.c_str());
+  scriptRuntime.kill(animation.c_str());
 }
 
 // LiveScriptNode functions
+
+static volatile bool compileInProgress = false;
+
+static void compileTask(void* param) {
+  LiveScriptNode* node = static_cast<LiveScriptNode*>(param);
+  node->compileAndRun();
+  compileInProgress = false;
+  vTaskDelete(nullptr);
+}
+
+void LiveScriptNode::startCompile() {
+  if (!compileInProgress) {
+    compileInProgress = true;
+    xTaskCreate(compileTask, "lsCompile", 8192, this, 1, nullptr);
+  } else {
+    needsCompile = true;  // picked up by NodeManager::loop20ms when current compile finishes
+  }
+}
 
 void LiveScriptNode::compileAndRun() {
   // send UI spinner
 
   // run the recompile not in httpd but in main loopTask (otherwise we run out of stack space)
   //  runInAppTask.push_back([&, animation, type, error] {
-  EXT_LOGV(ML_TAG, "%s", animation);
-  File file = ESPFS.open(animation);
+  EXT_LOGV(ML_TAG, "%s", animation.c_str());
+  File file = ESPFS.open(animation.c_str());
   if (file) {
     Char<32> pre;
     pre.format("#define NUM_LEDS %d\n", layer->nrOfLights);
@@ -208,8 +235,8 @@ void LiveScriptNode::compileAndRun() {
     // EXT_LOGV(ML_TAG, "parsing %s", scScript.c_str());
 
     Executable executable = parser.parseScript(&scScript);  // note that this class will be deleted after the function call !!!
-    executable.name = animation;
-    EXT_LOGV(ML_TAG, "parsing %s done", animation);
+    executable.name = animation.c_str();
+    EXT_LOGV(ML_TAG, "parsing %s done", animation.c_str());
     scriptRuntime.addExe(executable);  // if already exists, delete it first
     EXT_LOGV(ML_TAG, "addExe success %s", executable.exeExist ? "true" : "false");
 
@@ -231,10 +258,10 @@ void LiveScriptNode::compileAndRun() {
 
 void LiveScriptNode::execute() {
   if (safeModeMB) {
-    EXT_LOGW(ML_TAG, "Safe mode enabled, not executing script %s", animation);
+    EXT_LOGW(ML_TAG, "Safe mode enabled, not executing script %s", animation.c_str());
     return;
   }
-  EXT_LOGV(ML_TAG, "%s", animation);
+  EXT_LOGV(ML_TAG, "%s", animation.c_str());
 
   requestMappings();  // requestMapPhysical and requestMapVirtual will call the script onLayout function (check if this can be done in case the script also has loop running !)
 
@@ -243,31 +270,31 @@ void LiveScriptNode::execute() {
     // executable.execute("setup");
     // send controls to UI
     // executable.executeAsTask("main"); //background task (async - vs sync)
-    EXT_LOGV(ML_TAG, "%s executeAsTask main", animation);
-    scriptRuntime.executeAsTask(animation, "main");  // background task (async - vs sync)
+    EXT_LOGV(ML_TAG, "%s executeAsTask main", animation.c_str());
+    scriptRuntime.executeAsTask(animation.c_str(), "main");  // background task (async - vs sync)
     // assert failed: xEventGroupSync event_groups.c:228 (uxBitsToWaitFor != 0)
   } else {
-    EXT_LOGV(ML_TAG, "%s execute main", animation);
-    scriptRuntime.execute(animation, "main");
+    EXT_LOGV(ML_TAG, "%s execute main", animation.c_str());
+    scriptRuntime.execute(animation.c_str(), "main");
   }
-  EXT_LOGV(ML_TAG, "%s execute started", animation);
+  EXT_LOGV(ML_TAG, "%s execute started", animation.c_str());
 }
 
 void LiveScriptNode::kill() {
-  EXT_LOGV(ML_TAG, "%s", animation);
-  scriptRuntime.kill(animation);
+  EXT_LOGV(ML_TAG, "%s", animation.c_str());
+  scriptRuntime.kill(animation.c_str());
 }
 
 void LiveScriptNode::free() {
-  EXT_LOGV(ML_TAG, "%s", animation);
-  scriptRuntime.free(animation);
+  EXT_LOGV(ML_TAG, "%s", animation.c_str());
+  scriptRuntime.free(animation.c_str());
 }
 
 void LiveScriptNode::killAndDelete() {
-  EXT_LOGV(ML_TAG, "%s", animation);
-  scriptRuntime.kill(animation);
-  // scriptRuntime.free(animation);
-  scriptRuntime.deleteExe(animation);
+  EXT_LOGV(ML_TAG, "%s", animation.c_str());
+  scriptRuntime.kill(animation.c_str());
+  // scriptRuntime.free(animation.c_str());
+  scriptRuntime.deleteExe(animation.c_str());
 };
 
 void LiveScriptNode::getScriptsJson(JsonArray scripts) {
