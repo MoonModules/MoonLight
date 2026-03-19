@@ -2,9 +2,7 @@
 // Original: Mover.wled (idea by @Atuline)
 
 void loop() {
-  for (int i = 0; i < NUM_LEDS; i++) {
-    setRGB(i, CRGB(0, 0, 0));
-  }
+  fadeToBlackBy(255);  // instant clear
 
   int locn = millis() / 100;
   for (int i = 0; i < NUM_LEDS; i = i + 30) {

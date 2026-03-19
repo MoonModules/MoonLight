@@ -16,8 +16,8 @@ Fix A alone is sufficient to allow scripts to write helper functions with user-d
 
 ### Symptom
 
-```
-member  not foudn in Coord3D
+```text
+member  not found in Coord3D
 Guru Meditation Error: Core 0 panic'ed (LoadProhibited)
   #0 copyPrty(NodeToken*, NodeToken*) at NodeToken.h:1272
   #1 createNodeVariable(Token*, bool) at NodeToken.h:1544

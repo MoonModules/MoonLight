@@ -8,7 +8,6 @@ void loop() {
   int scale = NUM_LEDS / 2;
   float timeOff = (millis() % 13107) / 13107.0;
   float offset = sin(timeOff * PI2) * NUM_LEDS / 10.0;
-  float offsetL = offset / NUM_LEDS;
 
   for (int i = 0; i < NUM_LEDS; i++) {
     float diff = (i + offset) - scale;

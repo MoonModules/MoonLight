@@ -12,7 +12,7 @@ void setup() {
 }
 
 void loop() {
-  fadeToBlackBy(255 - fade);
+  fadeToBlackBy(fade);
 
   for (int i = 0; i < intensity / 16 + 1; i++) {
     uint16_t y = millis() * 128 / (260 - speed);

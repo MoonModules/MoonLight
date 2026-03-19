@@ -6,6 +6,7 @@
 void loop() {
   float t1 = (millis() % 6553) / 6553.0;
   int hl = NUM_LEDS / 2;
+  if (hl < 1) hl = 1;
 
   for (int i = 0; i < NUM_LEDS; i++) {
     float diff = i - hl;

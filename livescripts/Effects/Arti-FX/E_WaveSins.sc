@@ -18,7 +18,8 @@ void setup() {
 void loop() {
   for (int i = 0; i < NUM_LEDS; i++) {
     float bri = sin(millis() / 4.0 + i * intensity) * 128.0 + 128.0;
-    uint8_t palIdx = beatsin8(speed, custom1, custom1 + custom2, 0, i * custom3);
+    uint8_t highest = (custom1 + custom2 > 255) ? 255 : custom1 + custom2;
+    uint8_t palIdx = beatsin8(speed, custom1, highest, 0, i * custom3);
     setRGBPal(i, palIdx, (int)bri);
   }
 }

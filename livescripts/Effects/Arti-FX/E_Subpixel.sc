@@ -18,6 +18,7 @@ void loop() {
     if (diff < 0.0) diff = 0.0 - diff;
     if (diff > 256 / reverseSlider) diff = 256 / reverseSlider;
     int bri = 256 - (int)(diff * reverseSlider);
+    if (bri > 255) bri = 255;
     if (bri < 0) bri = 0;
     setHSV(i, 0, 255, bri);
   }

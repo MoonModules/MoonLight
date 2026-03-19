@@ -5,10 +5,7 @@
 #define PI2 6.28318
 
 void loop() {
-  // clear all
-  for (int i = 0; i < NUM_LEDS; i++) {
-    setRGB(i, CRGB(0, 0, 0));
-  }
+  fadeToBlackBy(255);  // instant clear
 
   int cx = width / 2;
   int cy = height / 2;

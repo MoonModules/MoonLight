@@ -21,11 +21,11 @@ void loop() {
   dripSpd = dripSpd + grav;
   dripLocn = dripLocn - dripSpd;
 
-  if (dripLocn > 0.0) {
+  if (dripLocn >= 0.0) {
     setRGBPal((int)dripLocn, colr, bri);
   }
 
-  if (dripLocn <= 0.0) {
+  if (dripLocn < 0.0) {
     dripLocn = NUM_LEDS - 1;
     dripSpd = 0.0;
   }

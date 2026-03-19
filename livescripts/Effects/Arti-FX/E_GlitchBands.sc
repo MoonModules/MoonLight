@@ -49,10 +49,9 @@ void loop() {
     float st = s1 * s2;
     float stt = st * 2.0 - 1.0;
     if (stt < 0.0) stt = 0.0 - stt;
-    float s = 1.0 - (1.0 - stt);
 
     float v = 0.5;
     if (s1 > s2) v = 1.5;
-    setHSV(i, h * 255, s * 255, v * 170);
+    setHSV(i, h * 255, sst * 255, v * 170);
   }
 }

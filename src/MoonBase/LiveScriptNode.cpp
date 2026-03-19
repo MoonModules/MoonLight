@@ -50,7 +50,7 @@ static void _addControl(uint8_t* var, char* name, char* type, uint8_t min = 0, u
   currentNode()->addControl(*var, name, type, min, max);
 }
 static void _nextPin() { layerP.nextPin(); }
-static void _addLight(uint8_t x, uint8_t y, uint8_t z) { layerP.addLight({x, y, z}); }
+static void _addLight(uint16_t x, uint16_t y, uint16_t z) { layerP.addLight({x, y, z}); }
 
 static void _modifySize() { currentNode()->modifySize(); }
 static void _modifyPosition(Coord3D& position) { currentNode()->modifyPosition(position); }  // need &position parameter
@@ -80,8 +80,8 @@ static uint8_t _lsMinute = 0;
 static uint8_t _lsSecond = 0;
 static void _updateTime() {
   time_t now = time(nullptr);
-  struct tm* t = localtime(&now);
-  if (t) { _lsHour = t->tm_hour; _lsMinute = t->tm_min; _lsSecond = t->tm_sec; }
+  struct tm t;
+  if (localtime_r(&now, &t)) { _lsHour = t.tm_hour; _lsMinute = t.tm_min; _lsSecond = t.tm_sec; }
 }
 
 volatile SemaphoreHandle_t WaitAnimationSync = xSemaphoreCreateCounting(4, 0);  // max 4 concurrent scripts
@@ -167,7 +167,7 @@ void LiveScriptNode::setup() {
   // MoonLight functions
   addExternal("void addControl(void*,char*,char*,uint8_t,uint8_t)", (void*)_addControl);
   addExternal("void nextPin()", (void*)_nextPin);
-  addExternal("void addLight(uint8_t,uint8_t,uint8_t)", (void*)_addLight);
+  addExternal("void addLight(uint16_t,uint16_t,uint16_t)", (void*)_addLight);
   addExternal("void modifySize()", (void*)_modifySize);
   //   addExternal(    "void modifyPosition(Coord3D &position)", (void *)_modifyPosition);
   //   addExternal(    "void modifyXYZ(uint16_t,uint16_t,uint16_t)", (void *)_modifyXYZ);
@@ -392,13 +392,7 @@ void LiveScriptNode::free() {
 
 void LiveScriptNode::killAndDelete() {
   EXT_LOGV(MB_TAG, "%s", animation.c_str());
-  // 🌙 Unregister task → node mapping before the task is deleted.
-  Executable* exec = scriptRuntime.findExecutable(animation.c_str());
-  if (exec && exec->__run_handle_index != 9999) {
-    TaskHandle_t h = *runningPrograms.getHandleByIndex(exec->__run_handle_index);
-    if (h) unregisterNodeForTask(h);
-  }
-  scriptRuntime.kill(animation.c_str());
+  kill();
   // scriptRuntime.free(animation.c_str());
   scriptRuntime.deleteExe(animation.c_str());
 };

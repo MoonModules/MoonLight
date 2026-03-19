@@ -10,7 +10,9 @@ void loop() {
   // face circle
   int cx = width / 2;
   int cy = height / 2;
-  int radius = width * 2 / 5;
+  int minDim = width;
+  if (height < minDim) minDim = height;
+  int radius = minDim * 2 / 5;
   drawCircle(cx, cy, radius, faceColor);
 
   // left eye

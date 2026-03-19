@@ -25,6 +25,8 @@ void loop() {
 
     float sv = 1.0;
     if (spark) sv = 0.0;
-    setHSV(i, h * 255, sv * 255, ((sv + vout)) * 255);
+    float val = sv + vout;
+    if (val > 1.0) val = 1.0;
+    setHSV(i, h * 255, sv * 255, val * 255);
   }
 }
