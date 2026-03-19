@@ -136,7 +136,7 @@ A script can combine these — for example, an effect with both `setup()` (to cr
 
 | Function | Description |
 |---|---|
-| `void addControl(void* var, char* name, char* type, uint8_t min, uint8_t max)` | Add a UI control linked to a variable. Types: `"slider"`, `"checkbox"`, `"pin"` |
+| `void addControl(void* var, char* name, char* type, uint8_t min = 0, uint8_t max = 255)` | Add a UI control linked to a variable. Types: `"slider"`, `"checkbox"`, `"pin"`. `min`/`max` are optional for `"checkbox"`. |
 | `void modifySize()` | Notify that the layout size has changed (modifiers) |
 
 ### Available variables
@@ -166,7 +166,7 @@ void setup() {
   printf("Run Live Script good morning\n");
 }
 void loop() {
-  setRGB(random16(255), CRGB(0, 0, 255));
+  setRGB(random16(NUM_LEDS), CRGB(0, 0, 255));
 }
 ```
 
