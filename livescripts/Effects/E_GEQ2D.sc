@@ -16,7 +16,7 @@ void loop() {
     // scale level to column height
     uint8_t barHeight = level * height / 255;
     for (int y = 0; y < barHeight; y++) {
-      setRGBPal(y * width + x, x * 255 / width + y * 4, 255);
+      setRGBXY(x, y, ColorFromPalette(x * 255 / width + y * 4, 255));
     }
   }
 }
