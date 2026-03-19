@@ -9,7 +9,7 @@ A modifier (💎) is an effect on an effect. It can change the size of the effec
 ## Modifier 💎 Nodes
 
 Below is a list of Modifiers in MoonLight. 
-Want to add a Modifier to MoonLight, see [develop](https://moonmodules.org/MoonLight/develop/overview/). See also [Live scripts](https://moonmodules.org/MoonLight/moonlight/livescripts/) to add runtime Modifiers.
+Want to add a Modifier to MoonLight, see [develop](https://moonmodules.org/MoonLight/develop/overview/). You can also create custom modifiers as [Live Scripts](https://moonmodules.org/MoonLight/moonlight/livescripts/).
 
 The following Modifiers are defined in MoonLight. Some found there origin in WLED and WLED-MM (Expand1D):
 

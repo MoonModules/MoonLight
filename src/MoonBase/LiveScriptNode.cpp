@@ -43,6 +43,7 @@ static void _setPalEntryHSV(uint8_t index, uint8_t h, uint8_t s, uint8_t v) { if
 volatile SemaphoreHandle_t WaitAnimationSync = xSemaphoreCreateCounting(4, 0);  // max 4 concurrent scripts
 volatile uint8_t scriptsToSync = 0;                                             // count of scripts that still need to finish their frame
 extern TaskHandle_t effectTaskHandle;
+static volatile bool compileInProgress = false;  // 🌙 declared here so destructor can reference it
 
 void sync() {
   static uint32_t frameCounter = 0;
@@ -148,6 +149,15 @@ void LiveScriptNode::setup() {
   addExternal("uint8_t depth", &layer->size.z);
   addExternal("bool on", &on);
 
+  // audio sync
+  addExternal("uint8_t* bands", (void*)sharedData.bands);
+  addExternal("float volume", &sharedData.volume);
+
+  // gyro / IMU
+  addExternal("int gravityX", &sharedData.gravity.x);
+  addExternal("int gravityY", &sharedData.gravity.y);
+  addExternal("int gravityZ", &sharedData.gravity.z);
+
   //   for (asm_external el: external_links) {
   //       EXT_LOGV(ML_TAG, "elink %s %s %d", el.shortname.c_str(), el.name.c_str(), el.type);
   //   }
@@ -179,12 +189,13 @@ void LiveScriptNode::onLayout() {
 
 LiveScriptNode::~LiveScriptNode() {
   EXT_LOGV(ML_TAG, "%s", animation.c_str());
+  // 🌙 Wait for any in-progress compile task to finish before freeing this node,
+  // to prevent the compileTask from accessing a dangling this pointer.
+  while (compileInProgress) delay(10);
   scriptRuntime.kill(animation.c_str());
 }
 
 // LiveScriptNode functions
-
-static volatile bool compileInProgress = false;
 
 static void compileTask(void* param) {
   LiveScriptNode* node = static_cast<LiveScriptNode*>(param);
@@ -196,7 +207,10 @@ static void compileTask(void* param) {
 void LiveScriptNode::startCompile() {
   if (!compileInProgress) {
     compileInProgress = true;
-    xTaskCreate(compileTask, "lsCompile", 8192, this, 1, nullptr);
+    if (xTaskCreate(compileTask, "lsCompile", 8192, this, 1, nullptr) != pdPASS) {
+      EXT_LOGE(ML_TAG, "startCompile xTaskCreate failed");  // 🌙
+      compileInProgress = false;                            // 🌙 prevent permanent lock-out on task creation failure
+    }
   } else {
     needsCompile = true;  // picked up by NodeManager::loop20ms when current compile finishes
   }

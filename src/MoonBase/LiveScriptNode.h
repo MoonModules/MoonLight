@@ -34,7 +34,7 @@ class LiveScriptNode : public Node {
   bool hasModifier() const override { return hasModifyFunction; }
   bool hasOnLayout() const override { return hasOnLayoutFunction; }
 
-  Char<32> animation;  ///< Path to the .sc script file on ESPFS (owned copy, not a pointer)
+  Char<64> animation;  ///< Path to the .sc script file on ESPFS (owned copy, not a pointer)
 
   /// Registers external functions/variables with the LiveScript runtime, then compiles and runs the script.
   void setup() override;

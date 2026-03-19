@@ -145,9 +145,10 @@ TaskHandle_t driverTaskHandle = nullptr;
       {
         extern volatile uint8_t scriptsToSync;
         while (scriptsToSync > 0) {
-          ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));
-          uint8_t count = scriptsToSync;  // read volatile once
-          scriptsToSync = count - 1;      // write back
+          uint32_t notified = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));
+          if (notified > 0)
+            scriptsToSync = (scriptsToSync > notified ? scriptsToSync - notified : 0);
+          // on timeout (notified == 0) do not decrement — avoid spurious decrements
         }
       }
       #endif

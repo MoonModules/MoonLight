@@ -58,24 +58,25 @@ struct LightsHeader {
   uint8_t offsetRed = 1;             // 28 red offset within offsetRGBW block (GRB default: R=1)
   uint8_t offsetGreen = 0;           // 29 green offset within offsetRGBW block (GRB default: G=0)
   uint8_t offsetBlue = 2;            // 30 blue offset within offsetRGBW block (GRB default: B=2)
-  uint8_t offsetWhite = UINT8_MAX;   // 31 white channel offset; UINT8_MAX = no white channel
+  uint8_t offsetWhite = UINT8_MAX;   // 31 white channel offset (cold white for RGBCCT); UINT8_MAX = no white channel
+  uint8_t offsetWhite2 = UINT8_MAX;  // 32 second white channel (warm white for RGBCCT); UINT8_MAX = not present // 🌙
   // PAR lights
-  uint8_t offsetBrightness = UINT8_MAX;  // 32 separate brightness channel; UINT8_MAX = not present
+  uint8_t offsetBrightness = UINT8_MAX;  // 33 separate brightness channel; UINT8_MAX = not present
   // Moving heads
-  uint8_t offsetPan = UINT8_MAX;          // 33
-  uint8_t offsetTilt = UINT8_MAX;         // 34
-  uint8_t offsetZoom = UINT8_MAX;         // 35
-  uint8_t offsetRotate = UINT8_MAX;       // 36
-  uint8_t offsetGobo = UINT8_MAX;         // 37
-  uint8_t offsetRGBW1 = UINT8_MAX;        // 38 secondary RGBW block
-  uint8_t offsetRGBW2 = UINT8_MAX;        // 39
-  uint8_t offsetRGBW3 = UINT8_MAX;        // 40
-  uint8_t offsetBrightness2 = UINT8_MAX;  // 41
+  uint8_t offsetPan = UINT8_MAX;          // 34
+  uint8_t offsetTilt = UINT8_MAX;         // 35
+  uint8_t offsetZoom = UINT8_MAX;         // 36
+  uint8_t offsetRotate = UINT8_MAX;       // 37
+  uint8_t offsetGobo = UINT8_MAX;         // 38
+  uint8_t offsetRGBW1 = UINT8_MAX;        // 39 secondary RGBW block
+  uint8_t offsetRGBW2 = UINT8_MAX;        // 40
+  uint8_t offsetRGBW3 = UINT8_MAX;        // 41
+  uint8_t offsetBrightness2 = UINT8_MAX;  // 42
   // =============
-  // 42 bytes used + 3 fill bytes = 45 total.
+  // 43 bytes used + 2 fill bytes = 45 total.
   // Fields above must stay in this order (Coord3D + uint32_t first, uint8_t after)
   // to preserve natural alignment and binary compatibility with Monitor.svelte.
-  uint8_t fill[3] = {};
+  uint8_t fill[2] = {};
 
   // Reset all channel offsets to RGB/GRB defaults.
   // Called before each layout pass so the driver can re-configure the preset.
@@ -88,6 +89,7 @@ struct LightsHeader {
     offsetGreen = 0;
     offsetBlue = 2;
     offsetWhite = UINT8_MAX;
+    offsetWhite2 = UINT8_MAX;  // 🌙
     offsetBrightness = UINT8_MAX;
     offsetPan = UINT8_MAX;
     offsetTilt = UINT8_MAX;
