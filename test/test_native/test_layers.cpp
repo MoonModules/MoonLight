@@ -90,9 +90,8 @@ TEST_CASE("LightsHeader default values") {
   }
 
   SUBCASE("fill bytes are zero-initialised") {
-    CHECK_EQ(h.fill[0], 0);
-    CHECK_EQ(h.fill[1], 0);
-    CHECK_EQ(h.fill[2], 0);
+    for (size_t i = 0; i < sizeof(h.fill); i++)
+      CHECK_EQ(h.fill[i], 0);
   }
 }
 

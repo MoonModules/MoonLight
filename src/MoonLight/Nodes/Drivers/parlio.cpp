@@ -412,6 +412,17 @@ uint8_t IRAM_ATTR __attribute__((hot)) show_parlio(uint8_t* parallelPins, uint32
     //  offsetW = 3;
   #endif
 
+  // 🌙 Guard against overflow: parallel_buffer_repacked is sized for 4 channels max.
+  // 5-channel presets (RGBCCT) overflow at 1024 LEDs × 16 outputs × 16-bit width.
+  static const uint32_t repacked_buffer_bytes = 1024u * 16u * 16u;
+  const uint32_t required_repacked_bytes = ((uint32_t)max_leds_per_output * components * 32u * parlio_config.data_width + 7u) / 8u;
+  if (required_repacked_bytes > repacked_buffer_bytes) {
+    EXT_LOGE(ML_TAG, "show_parlio: repacked buffer too small (%u needed, %u allocated) for %u LEDs x %u ch x %u-bit — skipping frame",
+             (unsigned)required_repacked_bytes, (unsigned)repacked_buffer_bytes,
+             (unsigned)max_leds_per_output, (unsigned)components, (unsigned)parlio_config.data_width);
+    return 2;
+  }
+
   create_transposed_led_output_optimized(parallel_buffer_remapped, parallel_buffer_repacked, leds_per_output, outputs, components, offsetR, offsetG, offsetB, offsetW, offsetW2);  // 🌙
 
   // Calculate the exact size of ONE PIXEL's data in bits and bytes.
