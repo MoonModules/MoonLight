@@ -326,6 +326,7 @@ The **I2C frequency** can be adjusted (default 100 kHz). Higher frequencies (400
 * Choose the esp32-s3-n8r8v board in the [MoonLight Installer](../../gettingstarted/installer/)
 * Set Switch1 the same as you set the jumper on the board: off / default: Infrared. on: Ethernet.
 * Only 5 boards were ever produced. If you are one of the lucky few, feel free to reach out to limpkin on [Discord](https://discord.gg/TC8NSUSCdV)
+* Use the [L_SE16.sc](https://github.com/MoonModules/MoonLight/blob/main/livescripts/Layouts/L_SE16.sc) Live Script layout for this board. Controls: `mirroredPins` (wiring mode), `pinsAreColumns` (axis orientation), `ledsPerPin` (LEDs per output).
 
 
 #### LightCrafter16
@@ -334,3 +335,4 @@ The **I2C frequency** can be adjusted (default 100 kHz). Higher frequencies (400
 
 * Choose the esp32-s3-n8r8v board in the [MoonLight Installer](../../gettingstarted/installer/)
 * Documentation to be soon published on [limpkin's website](https://www.limpkin.fr)
+* Use the [L_LC16.sc](https://github.com/MoonModules/MoonLight/blob/main/livescripts/Layouts/L_LC16.sc) Live Script layout for this board. Controls: `pinsAreColumns` (axis orientation), `ledsPerPin` (LEDs per output).

@@ -19,26 +19,70 @@
   #define USE_FASTLED  // as ESPLiveScript.h calls hsv ! one of the reserved functions!!
   #include "ESPLiveScript.h"
 
-Node* gNode = nullptr;
+Node* gNode = nullptr;  // fallback for synchronous (non-task) contexts such as onLayout
+
+// Per-task node map: maps each script's FreeRTOS TaskHandle to its LiveScriptNode. 🌙
+// Fixes the gNode race when multiple scripts run concurrently as separate tasks.
+// Max 4 matches the WaitAnimationSync semaphore count.
+static const int MAX_LIVE_SCRIPTS = 4;
+struct TaskNodePair { TaskHandle_t task = nullptr; Node* node = nullptr; };
+static TaskNodePair gTaskNodeMap[MAX_LIVE_SCRIPTS];
+
+// Returns the Node for the calling task; falls back to gNode for synchronous contexts. 🌙
+static Node* currentNode() {
+  TaskHandle_t h = xTaskGetCurrentTaskHandle();
+  for (const auto& m : gTaskNodeMap)
+    if (m.task == h) return m.node;
+  return gNode;
+}
+static void registerNodeForTask(TaskHandle_t task, Node* node) {
+  for (auto& m : gTaskNodeMap)
+    if (m.task == nullptr) { m.task = task; m.node = node; return; }
+  EXT_LOGE(MB_TAG, "gTaskNodeMap full");
+}
+static void unregisterNodeForTask(TaskHandle_t task) {
+  for (auto& m : gTaskNodeMap)
+    if (m.task == task) { m.task = nullptr; m.node = nullptr; return; }
+}
 
 static void _addControl(uint8_t* var, char* name, char* type, uint8_t min = 0, uint8_t max = UINT8_MAX) {
   EXT_LOGV(MB_TAG, "%s %s %p (%d-%d)", name, type, (void*)var, min, max);
-  gNode->addControl(*var, name, type, min, max);
+  currentNode()->addControl(*var, name, type, min, max);
 }
 static void _nextPin() { layerP.nextPin(); }
-static void _addLight(uint8_t x, uint8_t y, uint8_t z) { layerP.addLight({x, y, z}); }
+static void _addLight(uint16_t x, uint16_t y, uint16_t z) { layerP.addLight({x, y, z}); }
 
-static void _modifySize() { gNode->modifySize(); }
-static void _modifyPosition(Coord3D& position) { gNode->modifyPosition(position); }  // need &position parameter
-// static void _modifyXYZ() {gNode->modifyXYZ();}//need &position parameter
+static void _modifySize() { currentNode()->modifySize(); }
+static void _modifyPosition(Coord3D& position) { currentNode()->modifyPosition(position); }  // need &position parameter
+// static void _modifyXYZ() {currentNode()->modifyXYZ();}//need &position parameter
 
-void _fadeToBlackBy(uint8_t fadeValue) { gNode->layer->fadeToBlackBy(fadeValue); }
-static void _setRGB(uint16_t indexV, CRGB color) { gNode->layer->setRGB(indexV, color); }
-static void _setRGBPal(uint16_t indexV, uint8_t index, uint8_t brightness) { gNode->layer->setRGB(indexV, ColorFromPalette(layerP.palette, index, brightness)); }
-static void _setPan(uint16_t indexV, uint8_t value) { gNode->layer->setPan(indexV, value); }
-static void _setTilt(uint16_t indexV, uint8_t value) { gNode->layer->setTilt(indexV, value); }
+void _fadeToBlackBy(uint8_t fadeValue) { currentNode()->layer->fadeToBlackBy(fadeValue); }
+static CRGB _getRGB(uint16_t indexV) { return currentNode()->layer->getRGB(indexV); }
+static void _setRGB(uint16_t indexV, CRGB color) { currentNode()->layer->setRGB(indexV, color); }
+static void _setRGBXY(int x, int y, CRGB color) { currentNode()->layer->setRGB(Coord3D{x, y}, color); }  // 🌙 coordinate-based setRGB, exposed via preamble-injected setRGB(Coord3D,CRGB) wrapper
+static void _setRGBXYZ(int x, int y, int z, CRGB color) { currentNode()->layer->setRGB(Coord3D{x, y, z}, color); }  // 🌙 coordinate-based setRGB, exposed via preamble-injected setRGB(Coord3D,CRGB) wrapper
+static CRGB _colorFromPalette(uint8_t index, uint8_t bri) { return ColorFromPalette(layerP.palette, index, bri); }  // 🌙
+static void _setRGBPal(uint16_t indexV, uint8_t index, uint8_t brightness) { currentNode()->layer->setRGB(indexV, ColorFromPalette(layerP.palette, index, brightness)); }
+static void _setPan(uint16_t indexV, uint8_t value) { currentNode()->layer->setPan(indexV, value); }
+static void _setTilt(uint16_t indexV, uint8_t value) { currentNode()->layer->setTilt(indexV, value); }
 static void _setPalEntry(uint8_t index, uint8_t r, uint8_t g, uint8_t b) { if (index < 16) layerP.palette.entries[index] = CRGB(r, g, b); }
 static void _setPalEntryHSV(uint8_t index, uint8_t h, uint8_t s, uint8_t v) { if (index < 16) layerP.palette.entries[index] = CHSV(h, s, v); }
+static void _setHSV(uint16_t indexV, uint8_t h, uint8_t s, uint8_t v) { currentNode()->layer->setRGB(indexV, CHSV(h, s, v)); }
+static void _setHSVXY(int x, int y, uint8_t h, uint8_t s, uint8_t v) { currentNode()->layer->setRGB(Coord3D{x, y}, CHSV(h, s, v)); }
+
+// 2D drawing
+static void _drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, CRGB color) { currentNode()->layer->drawLine(x0, y0, x1, y1, color); }
+static void _drawCircle(int cx, int cy, uint8_t radius, CRGB color) { currentNode()->layer->drawCircle(cx, cy, radius, color, false); }
+
+// time of day
+static uint8_t _lsHour = 0;
+static uint8_t _lsMinute = 0;
+static uint8_t _lsSecond = 0;
+static void _updateTime() {
+  time_t now = time(nullptr);
+  struct tm t;
+  if (localtime_r(&now, &t)) { _lsHour = t.tm_hour; _lsMinute = t.tm_min; _lsSecond = t.tm_sec; }
+}
 
 volatile SemaphoreHandle_t WaitAnimationSync = xSemaphoreCreateCounting(4, 0);  // max 4 concurrent scripts
 volatile uint8_t scriptsToSync = 0;                                             // count of scripts that still need to finish their frame
@@ -123,7 +167,7 @@ void LiveScriptNode::setup() {
   // MoonLight functions
   addExternal("void addControl(void*,char*,char*,uint8_t,uint8_t)", (void*)_addControl);
   addExternal("void nextPin()", (void*)_nextPin);
-  addExternal("void addLight(uint8_t,uint8_t,uint8_t)", (void*)_addLight);
+  addExternal("void addLight(uint16_t,uint16_t,uint16_t)", (void*)_addLight);
   addExternal("void modifySize()", (void*)_modifySize);
   //   addExternal(    "void modifyPosition(Coord3D &position)", (void *)_modifyPosition);
   //   addExternal(    "void modifyXYZ(uint16_t,uint16_t,uint16_t)", (void *)_modifyXYZ);
@@ -138,12 +182,18 @@ void LiveScriptNode::setup() {
 
   addExternal("void fadeToBlackBy(uint8_t)", (void*)_fadeToBlackBy);
   addExternal("CRGB* leds", (void*)(CRGB*)layerP.lights.channelsE);
+  addExternal("CRGB getRGB(uint16_t)", (void*)_getRGB);
   addExternal("void setRGB(uint16_t,CRGB)", (void*)_setRGB);
+  addExternal("void setRGBXY(int,int,CRGB)", (void*)_setRGBXY);  // 🌙 called by preamble-injected setRGB(Coord3D,CRGB)
+  addExternal("void setRGBXYZ(int,int,int,CRGB)", (void*)_setRGBXYZ);  // 🌙 called by preamble-injected setRGB(Coord3D,CRGB)
+  addExternal("CRGB ColorFromPalette(uint8_t,uint8_t)", (void*)_colorFromPalette);  // 🌙
   addExternal("void setRGBPal(uint16_t,uint8_t,uint8_t)", (void*)_setRGBPal);
   addExternal("void setPan(uint16_t,uint8_t)", (void*)_setPan);
   addExternal("void setTilt(uint16_t,uint8_t)", (void*)_setTilt);
   addExternal("void setPalEntry(uint8_t,uint8_t,uint8_t,uint8_t)", (void*)_setPalEntry);
   addExternal("void setPalEntryHSV(uint8_t,uint8_t,uint8_t,uint8_t)", (void*)_setPalEntryHSV);
+  addExternal("void setHSV(uint16_t,uint8_t,uint8_t,uint8_t)", (void*)_setHSV);
+  addExternal("void setHSVXY(int,int,uint8_t,uint8_t,uint8_t)", (void*)_setHSVXY);
   addExternal("uint8_t width", &layer->size.x);
   addExternal("uint8_t height", &layer->size.y);
   addExternal("uint8_t depth", &layer->size.z);
@@ -158,6 +208,16 @@ void LiveScriptNode::setup() {
   addExternal("int gravityY", &sharedData.gravity.y);
   addExternal("int gravityZ", &sharedData.gravity.z);
 
+  // 2D drawing
+  addExternal("void drawLine(uint8_t,uint8_t,uint8_t,uint8_t,CRGB)", (void*)_drawLine);
+  addExternal("void drawCircle(int,int,uint8_t,CRGB)", (void*)_drawCircle);
+
+  // time of day
+  _updateTime();
+  addExternal("uint8_t hour", &_lsHour);
+  addExternal("uint8_t minute", &_lsMinute);
+  addExternal("uint8_t second", &_lsSecond);
+
   //   for (asm_external el: external_links) {
   //       EXT_LOGV(MB_TAG, "elink %s %s %d", el.shortname.c_str(), el.name.c_str(), el.type);
   //   }
@@ -169,6 +229,7 @@ void LiveScriptNode::setup() {
 }
 
 void LiveScriptNode::loop() {
+  _updateTime();  // keep hour/minute/second current for clock scripts
   if (!hasLoopTask) return;  // 🌙 only sync scripts whose loop task is actually running
   // 🌙 Only increment scriptsToSync when the give succeeds. If the semaphore is full
   // (more than 4 concurrent loop scripts) the give fails and we skip this frame rather
@@ -265,7 +326,7 @@ void LiveScriptNode::compileAndRun() {
     scriptRuntime.addExe(executable);  // if already exists, delete it first
     EXT_LOGV(MB_TAG, "addExe success %s", executable.exeExist ? "true" : "false");
 
-    gNode = this;  // todo: this is not working well with multiple scripts running!!!
+    gNode = this;  // fallback for the brief window before registerNodeForTask() and for synchronous scripts
 
     if (executable.exeExist) {
       execute();
@@ -299,6 +360,12 @@ void LiveScriptNode::execute() {
     scriptRuntime.executeAsTask(animation.c_str(), "main");  // background task (async - vs sync)
     hasLoopTask = true;  // 🌙 task is now running; loop() may start signalling WaitAnimationSync
     // assert failed: xEventGroupSync event_groups.c:228 (uxBitsToWaitFor != 0)
+    // 🌙 Register the task handle → node mapping so concurrent scripts each use their own node.
+    Executable* exec = scriptRuntime.findExecutable(animation.c_str());
+    if (exec && exec->__run_handle_index != 9999) {
+      TaskHandle_t h = *runningPrograms.getHandleByIndex(exec->__run_handle_index);
+      if (h) registerNodeForTask(h, this);
+    }
   } else {
     EXT_LOGV(MB_TAG, "%s execute main", animation.c_str());
     scriptRuntime.execute(animation.c_str(), "main");
@@ -309,6 +376,12 @@ void LiveScriptNode::execute() {
 void LiveScriptNode::kill() {
   EXT_LOGV(MB_TAG, "%s", animation.c_str());
   hasLoopTask = false;  // 🌙 task is being killed; loop() must not signal WaitAnimationSync
+  // 🌙 Unregister task → node mapping before the task is deleted.
+  Executable* exec = scriptRuntime.findExecutable(animation.c_str());
+  if (exec && exec->__run_handle_index != 9999) {
+    TaskHandle_t h = *runningPrograms.getHandleByIndex(exec->__run_handle_index);
+    if (h) unregisterNodeForTask(h);
+  }
   scriptRuntime.kill(animation.c_str());
 }
 
@@ -319,7 +392,7 @@ void LiveScriptNode::free() {
 
 void LiveScriptNode::killAndDelete() {
   EXT_LOGV(MB_TAG, "%s", animation.c_str());
-  scriptRuntime.kill(animation.c_str());
+  kill();
   // scriptRuntime.free(animation.c_str());
   scriptRuntime.deleteExe(animation.c_str());
 };

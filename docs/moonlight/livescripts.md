@@ -36,7 +36,7 @@ The **Live Scripts module** itself does not create scripts — it shows all curr
 
 <img width="300" alt="image" src="https://github.com/user-attachments/assets/3b7eca3c-ae57-43f6-910e-3fc03f6fa380" />
 
-See [example scripts on GitHub](https://github.com/MoonModules/MoonLight/tree/main/misc/livescripts) — `E_*.sc` for effects, `L_*.sc` for layouts, `P_*.sc` for palettes.
+See example scripts on GitHub: [Effects](https://github.com/MoonModules/MoonLight/tree/main/livescripts/Effects), [Layouts](https://github.com/MoonModules/MoonLight/tree/main/livescripts/Layouts), [Palettes](https://github.com/MoonModules/MoonLight/tree/main/livescripts/Palettes).
 
 **Step 3**: Select the script in the appropriate module:
 
@@ -74,9 +74,11 @@ A script can combine these — for example, an effect with both `setup()` (to cr
 
 `uint8_t`, `uint16_t`, `uint32_t`, `int`, `float`, `bool`, `void`, `CRGB`
 
-### Predefined variable: `NUM_LEDS`
+### Predefined types and constants
 
-`NUM_LEDS` is automatically defined as the current number of lights before compilation.
+| Name | Definition | Description |
+|---|---|---|
+| `NUM_LEDS` | `#define` | Current number of lights, set before compilation |
 
 ---
 
@@ -113,10 +115,18 @@ A script can combine these — for example, an effect with both `setup()` (to cr
 | Function | Description |
 |---|---|
 | `void fadeToBlackBy(uint8_t amount)` | Fade all LEDs toward black |
+| `CRGB ColorFromPalette(uint8_t index, uint8_t brightness)` | Look up a color from the current global palette (index 0–255) |
+| `CRGB getRGB(uint16_t index)` | Read the current color of LED at index |
 | `void setRGB(uint16_t index, CRGB color)` | Set LED at index to an RGB color |
+| `void setRGBXY(int x, int y, CRGB color)` | Set LED at coordinate (x, y) — runs through modifier chain |
+| `void setRGBXYZ(int x, int y, int z, CRGB color)` | Set LED at coordinate (x, y, z) — runs through modifier chain |
+| `void setHSV(uint16_t index, uint8_t h, uint8_t s, uint8_t v)` | Set LED at index to an HSV color |
+| `void setHSVXY(int x, int y, uint8_t h, uint8_t s, uint8_t v)` | Set LED at coordinate (x, y) to an HSV color |
 | `void setRGBPal(uint16_t index, uint8_t palIndex, uint8_t brightness)` | Set LED using the current palette |
 | `void setPan(uint16_t index, uint8_t value)` | Set pan channel (moving heads) |
 | `void setTilt(uint16_t index, uint8_t value)` | Set tilt channel (moving heads) |
+| `void drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, CRGB color)` | Draw a 2D line between two points |
+| `void drawCircle(int cx, int cy, uint8_t radius, CRGB color)` | Draw a 2D circle outline |
 
 ### Layout functions (for `L_` scripts)
 
@@ -153,6 +163,9 @@ A script can combine these — for example, an effect with both `setup()` (to cr
 | `gravityX` | `int` | IMU gravity vector X component |
 | `gravityY` | `int` | IMU gravity vector Y component |
 | `gravityZ` | `int` | IMU gravity vector Z component |
+| `hour` | `uint8_t` | Current hour (0–23), requires NTP |
+| `minute` | `uint8_t` | Current minute (0–59), requires NTP |
+| `second` | `uint8_t` | Current second (0–59), requires NTP |
 
 ---
 
@@ -265,4 +278,4 @@ void loop() {
 
 ---
 
-More example scripts are available on [GitHub](https://github.com/MoonModules/MoonLight/tree/main/misc/livescripts). To request new functions, send a [ping on Discord](https://discord.com/channels/700041398778331156/1369578126450884608).
+More example scripts are available on GitHub: [Effects](https://github.com/MoonModules/MoonLight/tree/main/livescripts/Effects), [Layouts](https://github.com/MoonModules/MoonLight/tree/main/livescripts/Layouts), [Palettes](https://github.com/MoonModules/MoonLight/tree/main/livescripts/Palettes). To request new functions, send a [ping on Discord](https://discord.com/channels/700041398778331156/1369578126450884608).
