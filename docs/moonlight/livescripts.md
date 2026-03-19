@@ -36,7 +36,7 @@ The **Live Scripts module** itself does not create scripts — it shows all curr
 
 <img width="300" alt="image" src="https://github.com/user-attachments/assets/3b7eca3c-ae57-43f6-910e-3fc03f6fa380" />
 
-See [example scripts on GitHub](https://github.com/MoonModules/MoonLight/tree/main/misc/livescripts) — `E_*.sc` for effects, `L_*.sc` for layouts, `P_*.sc` for palettes.
+See example scripts on GitHub: [Effects](https://github.com/MoonModules/MoonLight/tree/main/livescripts/Effects), [Layouts](https://github.com/MoonModules/MoonLight/tree/main/livescripts/Layouts), [Palettes](https://github.com/MoonModules/MoonLight/tree/main/livescripts/Palettes).
 
 **Step 3**: Select the script in the appropriate module:
 
@@ -265,4 +265,4 @@ void loop() {
 
 ---
 
-More example scripts are available on [GitHub](https://github.com/MoonModules/MoonLight/tree/main/misc/livescripts). To request new functions, send a [ping on Discord](https://discord.com/channels/700041398778331156/1369578126450884608).
+More example scripts are available on GitHub: [Effects](https://github.com/MoonModules/MoonLight/tree/main/livescripts/Effects), [Layouts](https://github.com/MoonModules/MoonLight/tree/main/livescripts/Layouts), [Palettes](https://github.com/MoonModules/MoonLight/tree/main/livescripts/Palettes). To request new functions, send a [ping on Discord](https://discord.com/channels/700041398778331156/1369578126450884608).
