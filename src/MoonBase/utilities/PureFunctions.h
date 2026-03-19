@@ -206,7 +206,7 @@ inline void updateControl(const JsonObject& control) {
           *valuePointer = control["value"];
 #if defined(ARDUINO) && defined(EXT_LOGW)
         } else {
-          EXT_LOGW(ML_TAG, "size not supported or not set for %s: %d", control["name"].as<const char*>(), control["size"].as<int>());
+          EXT_LOGW(MB_TAG, "size not supported or not set for %s: %d", control["name"].as<const char*>(), control["size"].as<int>());
 #endif
         }
       } else if (control["type"] == "selectFile" || control["type"] == "text") {
@@ -230,7 +230,7 @@ inline void updateControl(const JsonObject& control) {
         *valuePointer = control["value"].as<Coord3D>();
   #ifdef EXT_LOGE
       } else
-        EXT_LOGE(ML_TAG, "type of %s not compatible: %s (%d)", control["name"].as<const char*>(), control["type"].as<const char*>(), control["size"].as<uint8_t>());
+        EXT_LOGE(MB_TAG, "type of %s not compatible: %s (%d)", control["name"].as<const char*>(), control["type"].as<const char*>(), control["size"].as<uint8_t>());
   #else
       }
   #endif

@@ -20,6 +20,9 @@
   #include "MoonBase/Nodes.h"                // for Node::updateControl
   #include "MoonBase/utilities/Utilities.h"  //for isInPSRAM
   #include "palettes.h"
+  #if FT_LIVESCRIPT
+    #include "MoonBase/LiveScriptNode.h"
+  #endif
 
 // Convert ModuleLightsControl state -> Home Assistant JSON
 void readMQTT(ModuleState& state, JsonObject& root) {
@@ -380,8 +383,43 @@ class ModuleLightsControl : public Module {
       };
       layerP.lights.header.brightness = newBri;
     } else if (updatedItem.name == "palette") {
-      // const size_t nrOfPaletteEntries = sizeof(layerP.palette.entries) / sizeof(CRGB);
-      layerP.palette = getGradientPalette(updatedItem.value);
+      #if FT_LIVESCRIPT
+      if (paletteNode) {
+        delete paletteNode;
+        paletteNode = nullptr;
+      }
+      #endif
+
+      uint8_t index = updatedItem.value;
+      uint8_t nrOfHardcodedPalettes = sizeof(palette_names) / sizeof(palette_names[0]);
+
+      if (index < nrOfHardcodedPalettes) {
+        layerP.palette = getGradientPalette(index);
+      }
+      #if FT_LIVESCRIPT
+      else {
+        // LiveScript palette — find the P_ script by index offset
+        uint8_t palScriptIndex = index - nrOfHardcodedPalettes;
+        uint8_t count = 0;
+        File rootFolder = ESPFS.open("/");
+        walkThroughFiles(rootFolder, [&](File folder, File file) {
+          const char* fname = file.name();
+          size_t len = strlen(fname);
+          bool isSc = (len >= 3) && strcmp(fname + (len - 3), ".sc") == 0;
+          if (isSc && strncmp(fname, "P_", 2) == 0) {
+            if (count == palScriptIndex) {
+              EXT_LOGI(ML_TAG, "Palette LiveScript: %s", file.path());
+              paletteNode = allocMBObject<LiveScriptNode>();
+              paletteNode->animation = file.path();
+              paletteNode->constructor(layerP.layers[0], JsonArray(), &layerP.driversMutex);
+              paletteNode->setup();
+            }
+            count++;
+          }
+        });
+        rootFolder.close();
+      }
+      #endif
     } else if (updatedItem.name == "bpm") {
       if (updatedItem.originId->toInt()) {  // only propagate UI-initiated changes to nodes
         uint8_t bpm = _state.data["bpm"];
@@ -492,6 +530,10 @@ class ModuleLightsControl : public Module {
           _moduleName);
     }
   }
+
+  #if FT_LIVESCRIPT
+  LiveScriptNode* paletteNode = nullptr;
+  #endif
 
   unsigned long lastPresetTime = 0;
   // see pinPushButtonLightsOn

@@ -90,15 +90,14 @@ TEST_CASE("LightsHeader default values") {
   }
 
   SUBCASE("fill bytes are zero-initialised") {
-    CHECK_EQ(h.fill[0], 0);
-    CHECK_EQ(h.fill[1], 0);
-    CHECK_EQ(h.fill[2], 0);
+    for (size_t i = 0; i < sizeof(h.fill); i++)
+      CHECK_EQ(h.fill[i], 0);
   }
 }
 
 TEST_CASE("LightsHeader struct size matches Monitor.svelte binary protocol") {
   // The frontend reads this struct byte-by-byte. Any change in size breaks the UI.
-  // Total data: 12 (Coord3D) + 4 (nrOfLights) + 4 (nrOfChannels) + 22 (uint8_t fields) + 3 (fill) = 45 bytes
+  // Total data: 12 (Coord3D) + 4 (nrOfLights) + 4 (nrOfChannels) + 23 (uint8_t fields) + 2 (fill) = 45 bytes
   // Compiler pads to 4-byte alignment (due to Coord3D/uint32_t members): sizeof = 48.
   // ModuleLightsControl.h sends exactly headerPrimeNumber (47) bytes, verified by static_assert.
   CHECK_EQ(sizeof(LightsHeader), 48u);
@@ -121,7 +120,8 @@ static_assert(offsetof(LightsHeader, offsetRed) == 28,        "LightsHeader::off
 static_assert(offsetof(LightsHeader, offsetGreen) == 29,      "LightsHeader::offsetGreen offset");
 static_assert(offsetof(LightsHeader, offsetBlue) == 30,       "LightsHeader::offsetBlue offset");
 static_assert(offsetof(LightsHeader, offsetWhite) == 31,      "LightsHeader::offsetWhite offset");
-static_assert(offsetof(LightsHeader, fill) == 42,             "LightsHeader::fill offset");
+static_assert(offsetof(LightsHeader, offsetWhite2) == 32,     "LightsHeader::offsetWhite2 offset");
+static_assert(offsetof(LightsHeader, fill) == 43,             "LightsHeader::fill offset");
 
 TEST_CASE("LightsHeader field offsets (binary protocol stability)") {
   // Static asserts above verify the offsets at compile time.
@@ -163,6 +163,7 @@ TEST_CASE("LightsHeader::resetOffsets restores GRB defaults") {
   CHECK_EQ(h.offsetGreen, 0);  // GRB: G=0
   CHECK_EQ(h.offsetBlue, 2);   // GRB: B=2
   CHECK_EQ(h.offsetWhite, UINT8_MAX);
+  CHECK_EQ(h.offsetWhite2, UINT8_MAX);
   CHECK_EQ(h.offsetBrightness, UINT8_MAX);
   CHECK_EQ(h.offsetPan, UINT8_MAX);
   CHECK_EQ(h.offsetTilt, UINT8_MAX);

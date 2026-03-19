@@ -32,8 +32,10 @@ The Effects module defines Effects and Modifiers. They run in a 'layer'.
 
 ## Effect 🔥 Nodes
 
-Below is a list of effects in MoonLight.
-Want to add an effect to MoonLight, see [develop](https://moonmodules.org/MoonLight/develop/overview/). See also [Live scripts](https://moonmodules.org/MoonLight/moonlight/livescripts/) to add runtime effects.
+Below is a list of built-in effects in MoonLight.
+Want to add an effect to MoonLight, see [develop](https://moonmodules.org/MoonLight/develop/overview/).
+
+You can also create custom effects and modifiers as **Live Scripts** — `.sc` files that are compiled and run directly on the ESP32. Any `.sc` file on the filesystem can be selected as an effect node. See [Live Scripts](https://moonmodules.org/MoonLight/moonlight/livescripts/) for how to write and run them.
 
 ### MoonLight effects
 

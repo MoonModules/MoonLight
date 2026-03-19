@@ -62,11 +62,11 @@ class SharedFSPersistence {
     for (const auto& pair : _modules) {
       if (pair.second.delayedWriting) {
         enableUpdateHandler(pair.first);
-        EXT_LOGD(ML_TAG, "Enabled update handler for %s after file read", pair.first);
+        EXT_LOGD(MB_TAG, "Enabled update handler for %s after file read", pair.first);
       }
     }
 
-    EXT_LOGI(ML_TAG, "SharedFSPersistence initialization complete");
+    EXT_LOGI(MB_TAG, "SharedFSPersistence initialization complete");
   }
 
   // ADDED: Enable/disable update handler for specific module

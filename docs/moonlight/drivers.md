@@ -27,8 +27,10 @@ Layouts need to be defined before drivers as the driver takes the layouts define
 
 ## Driver ☸️ nodes
 
-Below is a list of Drivers in MoonLight. 
-Want to add a Driver to MoonLight, see [develop](../../develop/overview/). See also [Live scripts](../../moonlight/livescripts/) to add runtime drivers.
+Below is a list of Drivers in MoonLight.
+Want to add a Driver to MoonLight, see [develop](../../develop/overview/).
+
+Custom layouts can also be created as **Live Scripts** — `.sc` files with an `onLayout()` function that define light positions and pin assignments. Any `.sc` file on the filesystem can be selected as a layout node. See [Live Scripts](../../moonlight/livescripts/) for details and examples.
 
 | Name | Preview | Controls | Remarks
 | ---- | ----- | ---- | ---- |

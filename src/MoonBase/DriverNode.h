@@ -48,6 +48,7 @@ enum LightPresetsEnum {
   lightPreset_GRB6,                // some LED curtains
   lightPreset_RGB2040,             // curtain 2040
   lightPreset_RGBWYP,              // 6 channel par/dmx light with UV etc
+  lightPreset_RGBCCT,              // 5 channel RGB + cold white + warm white // 🌙
   lightPreset_MHBeeEyes150W15,     // 15 channels moving head, see https://moonmodules.org/MoonLight/moonlight/drivers/#art-net
   lightPreset_MHBeTopper19x15W32,  // 32 channels moving head
   lightPreset_MH19x15W24,          // 24 channels moving heads

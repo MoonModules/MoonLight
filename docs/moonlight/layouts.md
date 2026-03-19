@@ -13,7 +13,7 @@ A layout (🚥) defines the positions of lights connected to a MoonLight device.
 ## Layout 🚥 Nodes
 
 Below is a list of Layouts in MoonLight. 
-Want to add a a Layout to MoonLight, see [develop](https://moonmodules.org/MoonLight/develop/overview/). See also [Live scripts](https://moonmodules.org/MoonLight/moonlight/livescripts/) to add runtime effects.
+Want to add a Layout to MoonLight, see [develop](https://moonmodules.org/MoonLight/develop/overview/). You can also create custom layouts as [Live Scripts](https://moonmodules.org/MoonLight/moonlight/livescripts/) using `onLayout()`, `addLight()`, and `nextPin()`.
 
 | Name | Preview | Controls | Remarks
 | ---- | ----- | ---- | ---- |

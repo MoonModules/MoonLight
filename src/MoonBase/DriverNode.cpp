@@ -40,6 +40,7 @@ void DriverNode::setup() {
   addControlValue("Curtain GRB6");           // some LED curtains
   addControlValue("Curtain RGB2040");        // curtain RGB2040
   addControlValue("Lightbar RGBWYP");        // 6 channel par/dmx light with UV etc
+  addControlValue("RGBCCT");                 // 5 channel RGB + cold white + warm white // 🌙
   addControlValue("MH BeeEyes 150W-15");     // 15 channels moving head, see https://moonmodules.org/MoonLight/moonlight/drivers/#art-net
   addControlValue("MH BeTopper 19x15W-32");  // 32 channels moving head
   addControlValue("MH 19x15W-24");           // 24 channels moving heads
@@ -171,6 +172,14 @@ void DriverNode::onUpdate(const JsonObject& control) {
       header->offsetGreen = 1;
       header->offsetBlue = 2;
       header->offsetWhite = 3;
+      break;
+    case lightPreset_RGBCCT:  // 🌙
+      header->channelsPerLight = 5;
+      header->offsetRed = 0;
+      header->offsetGreen = 1;
+      header->offsetBlue = 2;
+      header->offsetWhite = 3;   // cold white
+      header->offsetWhite2 = 4;  // warm white
       break;
     case lightPreset_MHBeeEyes150W15:
       header->channelsPerLight = 15;  // set channels per light to 15 (RGB + Pan + Tilt + Zoom + Brightness)

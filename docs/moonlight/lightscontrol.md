@@ -42,7 +42,7 @@ A searchable dropdown listing all available palettes, grouped by origin:
 
 The selected palette is the **global palette** used by effects that reference `layerP.palette`. See [WLED-MM palettes](https://mm.kno.wled.ge/features/palettes/) for the full WLED-MM palette reference.
 
-> **Tip:** LiveScript palette files (`P_*.sc`) stored on the filesystem appear automatically under the *LiveScript* category.
+> **Tip:** LiveScript palette files (`P_*.sc`) stored on the filesystem appear automatically under the *LiveScript* category. Palette scripts can define colors statically (using `setup()`) or animate them over time (using `loop()`). See [Live Scripts](../moonlight/livescripts/) for how to write palette scripts and the full list of available functions.
 
 ---
 
