@@ -42,21 +42,21 @@ JsonObject Node::setupControl(const char* name, const char* type, int min, int m
     if (sizeCode == 8 || sizeCode == 108 || sizeCode == 16 || sizeCode == 32 || sizeCode == 33 || sizeCode == 34)
       control["size"] = sizeCode;
     else
-      EXT_LOGE(ML_TAG, "size %d mismatch for %s", sizeCode, name);
+      EXT_LOGE(MB_TAG, "size %d mismatch for %s", sizeCode, name);
   } else if (control["type"] == "selectFile" || control["type"] == "text") {
     control["size"] = sizeofVar;
   } else if (control["type"] == "checkbox") {
     if (sizeCode != sizeof(bool))
-      EXT_LOGE(ML_TAG, "type for %s is not bool", name);
+      EXT_LOGE(MB_TAG, "type for %s is not bool", name);
     else
       control["size"] = sizeof(bool);
   } else if (control["type"] == "coord3D") {
     if (sizeCode != sizeof(Coord3D))
-      EXT_LOGE(ML_TAG, "type for %s is not Coord3D", name);
+      EXT_LOGE(MB_TAG, "type for %s is not Coord3D", name);
     else
       control["size"] = sizeof(Coord3D);
   } else
-    EXT_LOGE(ML_TAG, "type of %s not compatible: %s (%d)", control["name"].as<const char*>(), control["type"].as<const char*>(), control["size"].as<uint8_t>());
+    EXT_LOGE(MB_TAG, "type of %s not compatible: %s (%d)", control["name"].as<const char*>(), control["type"].as<const char*>(), control["size"].as<uint8_t>());
 
   if (newControl) {
     onUpdate(control);  // custom onUpdate for the node
@@ -71,7 +71,7 @@ void Node::addControlValue(const char* value) {
   if (control["values"].isNull()) control["values"].to<JsonArray>();  // add array of values
   JsonArray values = control["values"];
   values.add(value);
-  EXT_LOGD(ML_TAG, "%s, %d", value, control["values"].size());
+  EXT_LOGD(MB_TAG, "%s, %d", value, control["values"].size());
 }
 
 void Node::updateControl(const JsonObject& control) { ::updateControl(control); }

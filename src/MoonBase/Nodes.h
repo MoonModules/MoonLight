@@ -79,7 +79,7 @@ class Node {
     bool newControl = false;
     JsonObject control = findOrCreateControl(name, newControl);
 
-    // EXT_LOGD(ML_TAG, "%s: %s %d-%d %d (%s) %d", name ? name : "", type, min, max, ro, desc ? desc : "", newControl);
+    // EXT_LOGD(MB_TAG, "%s: %s %d-%d %d (%s) %d", name ? name : "", type, min, max, ro, desc ? desc : "", newControl);
 
     if (newControl) control["value"] = variable;  // set default value for new controls
     control["default"] = variable;
@@ -130,11 +130,11 @@ class Node {
 
   void requestMappings() {
     if (hasOnLayout()) {
-      // EXT_LOGD(ML_TAG, "hasOnLayout -> requestMapPhysical");
+      // EXT_LOGD(MB_TAG, "hasOnLayout -> requestMapPhysical");
       layerP.requestMapPhysical = true;
     }
     if (hasModifier()) {
-      // EXT_LOGD(ML_TAG, "hasOnLayout or Modifier -> requestMapVirtual");
+      // EXT_LOGD(MB_TAG, "hasOnLayout or Modifier -> requestMapVirtual");
       layerP.requestMapVirtual = true;
     }
   }

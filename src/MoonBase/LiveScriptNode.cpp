@@ -22,7 +22,7 @@
 Node* gNode = nullptr;
 
 static void _addControl(uint8_t* var, char* name, char* type, uint8_t min = 0, uint8_t max = UINT8_MAX) {
-  EXT_LOGV(ML_TAG, "%s %s %p (%d-%d)", name, type, (void*)var, min, max);
+  EXT_LOGV(MB_TAG, "%s %s %p (%d-%d)", name, type, (void*)var, min, max);
   gNode->addControl(*var, name, type, min, max);
 }
 static void _nextPin() { layerP.nextPin(); }
@@ -51,8 +51,8 @@ void sync() {
   xTaskNotifyGive(effectTaskHandle);  // signal "frame done" to effectTask
   delay(1);                           // feed the watchdog, otherwise watchdog will reset the ESP
   // 🌙 adding semaphore wait too long logging
-  if (xSemaphoreTake(WaitAnimationSync, pdMS_TO_TICKS(100)) == pdFALSE) {
-    EXT_LOGW(ML_TAG, "WaitAnimationSync wait too long");
+  if (xSemaphoreTake(WaitAnimationSync, pdMS_TO_TICKS(500)) == pdFALSE) {
+    EXT_LOGW(MB_TAG, "WaitAnimationSync wait too long");
     xSemaphoreTake(WaitAnimationSync, portMAX_DELAY);
   }
 }
@@ -85,14 +85,14 @@ void addExternal(string definition, void* ptr) {
     }
   }
   if (!success) {
-    EXT_LOGE(ML_TAG, "Failed to parse function definition: %s", definition.c_str());
+    EXT_LOGE(MB_TAG, "Failed to parse function definition: %s", definition.c_str());
   }
 }
 
 Parser parser = Parser();
 
 void LiveScriptNode::setup() {
-  // EXT_LOGV(ML_TAG, "animation %s", animation.c_str());
+  // EXT_LOGV(MB_TAG, "animation %s", animation.c_str());
 
   if (animation[0] != '/') {  // no sc script
     return;
@@ -159,7 +159,7 @@ void LiveScriptNode::setup() {
   addExternal("int gravityZ", &sharedData.gravity.z);
 
   //   for (asm_external el: external_links) {
-  //       EXT_LOGV(ML_TAG, "elink %s %s %d", el.shortname.c_str(), el.name.c_str(), el.type);
+  //       EXT_LOGV(MB_TAG, "elink %s %s %d", el.shortname.c_str(), el.name.c_str(), el.type);
   //   }
 
   //   runningPrograms.setPrekill(layerP.ledsDriver.preKill, layerP.ledsDriver.postKill); //for clockless driver...
@@ -169,14 +169,20 @@ void LiveScriptNode::setup() {
 }
 
 void LiveScriptNode::loop() {
-  if (!hasLoopFunction) return;  // only sync scripts that have a running loop task
-  scriptsToSync += 1;
-  xSemaphoreGive(WaitAnimationSync);  // unblock script task to run its loop()
+  if (!hasLoopTask) return;  // 🌙 only sync scripts whose loop task is actually running
+  // 🌙 Only increment scriptsToSync when the give succeeds. If the semaphore is full
+  // (more than 4 concurrent loop scripts) the give fails and we skip this frame rather
+  // than incrementing a counter that effectTask will wait on but never receive.
+  if (xSemaphoreGive(WaitAnimationSync) == pdTRUE) {
+    scriptsToSync += 1;
+  } else {
+    EXT_LOGW(MB_TAG, "WaitAnimationSync full — skipping frame for %s", animation.c_str());
+  }
 }
 
 void LiveScriptNode::onLayout() {
   if (hasOnLayout()) {
-    EXT_LOGV(ML_TAG, "%s", animation.c_str());
+    EXT_LOGV(MB_TAG, "%s", animation.c_str());
     // Call onLayout directly without @__footer, which would reset global variables
     // (including control values) to their compiled defaults
     Executable* exec = scriptRuntime.findExecutable(animation.c_str());
@@ -188,7 +194,7 @@ void LiveScriptNode::onLayout() {
 }
 
 LiveScriptNode::~LiveScriptNode() {
-  EXT_LOGV(ML_TAG, "%s", animation.c_str());
+  EXT_LOGV(MB_TAG, "%s", animation.c_str());
   // 🌙 Wait for any in-progress compile task to finish before freeing this node,
   // to prevent the compileTask from accessing a dangling this pointer.
   while (compileInProgress) delay(10);
@@ -208,7 +214,7 @@ void LiveScriptNode::startCompile() {
   if (!compileInProgress) {
     compileInProgress = true;
     if (xTaskCreate(compileTask, "lsCompile", 8192, this, 1, nullptr) != pdPASS) {
-      EXT_LOGE(ML_TAG, "startCompile xTaskCreate failed");  // 🌙
+      EXT_LOGE(MB_TAG, "startCompile xTaskCreate failed");  // 🌙
       compileInProgress = false;                            // 🌙 prevent permanent lock-out on task creation failure
     }
   } else {
@@ -221,7 +227,7 @@ void LiveScriptNode::compileAndRun() {
 
   // run the recompile not in httpd but in main loopTask (otherwise we run out of stack space)
   //  runInAppTask.push_back([&, animation, type, error] {
-  EXT_LOGV(ML_TAG, "%s", animation.c_str());
+  EXT_LOGV(MB_TAG, "%s", animation.c_str());
   File file = ESPFS.open(animation.c_str());
   if (file) {
     Char<32> pre;
@@ -233,6 +239,7 @@ void LiveScriptNode::compileAndRun() {
 
     hasSetupFunction = false;
     hasLoopFunction = false;
+    hasLoopTask = false;  // 🌙 reset before recompile; set again in execute() if task starts
     hasOnLayoutFunction = false;
     hasModifyFunction = false;
 
@@ -248,22 +255,22 @@ void LiveScriptNode::compileAndRun() {
     if (hasLoopFunction) scScript += "while(true){if(on){loop();sync();}else delay(1);}";  // loop must pauze when layout changes pass == 1! delay to avoid idle
     scScript += "}";
 
-    EXT_LOGV(ML_TAG, "script \n%s", scScript.c_str());
+    EXT_LOGV(MB_TAG, "script \n%s", scScript.c_str());
 
-    // EXT_LOGV(ML_TAG, "parsing %s", scScript.c_str());
+    // EXT_LOGV(MB_TAG, "parsing %s", scScript.c_str());
 
     Executable executable = parser.parseScript(&scScript);  // note that this class will be deleted after the function call !!!
     executable.name = animation.c_str();
-    EXT_LOGV(ML_TAG, "parsing %s done", animation.c_str());
+    EXT_LOGV(MB_TAG, "parsing %s done", animation.c_str());
     scriptRuntime.addExe(executable);  // if already exists, delete it first
-    EXT_LOGV(ML_TAG, "addExe success %s", executable.exeExist ? "true" : "false");
+    EXT_LOGV(MB_TAG, "addExe success %s", executable.exeExist ? "true" : "false");
 
     gNode = this;  // todo: this is not working well with multiple scripts running!!!
 
     if (executable.exeExist) {
       execute();
     } else
-      EXT_LOGV(ML_TAG, "error %s", executable.error.error_message.c_str());
+      EXT_LOGV(MB_TAG, "error %s", executable.error.error_message.c_str());
 
     // send error to client ... not working yet
     //  error.set(executable.error.error_message); //String(executable.error.error_message.c_str());
@@ -276,10 +283,10 @@ void LiveScriptNode::compileAndRun() {
 
 void LiveScriptNode::execute() {
   if (safeModeMB) {
-    EXT_LOGW(ML_TAG, "Safe mode enabled, not executing script %s", animation.c_str());
+    EXT_LOGW(MB_TAG, "Safe mode enabled, not executing script %s", animation.c_str());
     return;
   }
-  EXT_LOGV(ML_TAG, "%s", animation.c_str());
+  EXT_LOGV(MB_TAG, "%s", animation.c_str());
 
   requestMappings();  // requestMapPhysical and requestMapVirtual will call the script onLayout function (check if this can be done in case the script also has loop running !)
 
@@ -288,28 +295,30 @@ void LiveScriptNode::execute() {
     // executable.execute("setup");
     // send controls to UI
     // executable.executeAsTask("main"); //background task (async - vs sync)
-    EXT_LOGV(ML_TAG, "%s executeAsTask main", animation.c_str());
+    EXT_LOGV(MB_TAG, "%s executeAsTask main", animation.c_str());
     scriptRuntime.executeAsTask(animation.c_str(), "main");  // background task (async - vs sync)
+    hasLoopTask = true;  // 🌙 task is now running; loop() may start signalling WaitAnimationSync
     // assert failed: xEventGroupSync event_groups.c:228 (uxBitsToWaitFor != 0)
   } else {
-    EXT_LOGV(ML_TAG, "%s execute main", animation.c_str());
+    EXT_LOGV(MB_TAG, "%s execute main", animation.c_str());
     scriptRuntime.execute(animation.c_str(), "main");
   }
-  EXT_LOGV(ML_TAG, "%s execute started", animation.c_str());
+  EXT_LOGV(MB_TAG, "%s execute started", animation.c_str());
 }
 
 void LiveScriptNode::kill() {
-  EXT_LOGV(ML_TAG, "%s", animation.c_str());
+  EXT_LOGV(MB_TAG, "%s", animation.c_str());
+  hasLoopTask = false;  // 🌙 task is being killed; loop() must not signal WaitAnimationSync
   scriptRuntime.kill(animation.c_str());
 }
 
 void LiveScriptNode::free() {
-  EXT_LOGV(ML_TAG, "%s", animation.c_str());
+  EXT_LOGV(MB_TAG, "%s", animation.c_str());
   scriptRuntime.free(animation.c_str());
 }
 
 void LiveScriptNode::killAndDelete() {
-  EXT_LOGV(ML_TAG, "%s", animation.c_str());
+  EXT_LOGV(MB_TAG, "%s", animation.c_str());
   scriptRuntime.kill(animation.c_str());
   // scriptRuntime.free(animation.c_str());
   scriptRuntime.deleteExe(animation.c_str());
@@ -331,7 +340,7 @@ void LiveScriptNode::getScriptsJson(JsonArray scripts) {
     object["free"] = 0;
     object["delete"] = 0;
     object["execute"] = 0;
-    // EXT_LOGV(ML_TAG, "scriptRuntime exec %s r:%d h:%d, e:%d h:%d b:%d + d:%d = %d", exec.name.c_str(), exec.isRunning(), exec.isHalted, exec.exeExist, exec.__run_handle_index, exeInfo.binary_size,
+    // EXT_LOGV(MB_TAG, "scriptRuntime exec %s r:%d h:%d, e:%d h:%d b:%d + d:%d = %d", exec.name.c_str(), exec.isRunning(), exec.isHalted, exec.exeExist, exec.__run_handle_index, exeInfo.binary_size,
     // exeInfo.data_size, exeInfo.total_size);
   }
 }

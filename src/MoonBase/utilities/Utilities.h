@@ -129,6 +129,6 @@ inline void addYield(uint8_t frequency) {
 }
 
 inline void logYield() {
-  EXT_LOGD(ML_TAG, "yieldCounter %d (%d)", yieldCallCount, yieldCounter);
+  EXT_LOGD(MB_TAG, "yieldCounter %d (%d)", yieldCallCount, yieldCounter);
   yieldCounter = 0;
 }

@@ -148,6 +148,11 @@ A script can combine these — for example, an effect with both `setup()` (to cr
 | `depth` | `uint8_t` | Layout depth (z size) |
 | `on` | `bool` | Whether the node is currently enabled |
 | `leds` | `CRGB*` | Direct access to the LED array (advanced) |
+| `bands` | `uint8_t[16]` | Audio frequency band magnitudes (0–255), 16 bands from bass to treble |
+| `volume` | `float` | Current audio volume level |
+| `gravityX` | `int` | IMU gravity vector X component |
+| `gravityY` | `int` | IMU gravity vector Y component |
+| `gravityZ` | `int` | IMU gravity vector Z component |
 
 ---
 

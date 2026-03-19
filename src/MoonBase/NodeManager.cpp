@@ -18,7 +18,7 @@
 extern SharedFSPersistence* sharedFsPersistence;
 
 NodeManager::NodeManager(const char* moduleName, PsychicHttpServer* server, ESP32SvelteKit* sveltekit, FileManager* fileManager) : Module(moduleName, server, sveltekit) {
-  EXT_LOGV(ML_TAG, "constructor %s", moduleName);
+  EXT_LOGV(MB_TAG, "constructor %s", moduleName);
   _fileManager = fileManager;
 }
 
@@ -27,7 +27,7 @@ void NodeManager::begin() {
   // if file changes, read the file and bring into state
   // create a handler which recompiles the live script when the file of a current running live script changes in the File Manager
   _fileManager->addUpdateHandler([this](const String& originId) {
-    // EXT_LOGD(ML_TAG, "FileManager::updateHandler %s", originId.c_str());
+    // EXT_LOGD(MB_TAG, "FileManager::updateHandler %s", originId.c_str());
     // read the file state (read all files and folders on FS and collect changes)
     _fileManager->read(
         [&](FilesState& filesState) {
@@ -36,7 +36,7 @@ void NodeManager::begin() {
           name.format("/.config/%s.json", _moduleName);
           for (int i = filesState.updatedItems.size() - 1; i >= 0; i--) {
             if (equal(filesState.updatedItems[i].c_str(), name.c_str())) {
-              EXT_LOGD(ML_TAG, " %s updated -> call update %s", name.c_str(), filesState.updatedItems[i].c_str());
+              EXT_LOGD(MB_TAG, " %s updated -> call update %s", name.c_str(), filesState.updatedItems[i].c_str());
               filesState.updatedItems.erase(filesState.updatedItems.begin() + i);  // consume the item so it doesn't trigger again
               sharedFsPersistence->readFromFS(_moduleName);  // repopulates the state, processing file changes
             }
@@ -67,7 +67,7 @@ void NodeManager::loop20ms() {
 }
 
 void NodeManager::setupDefinition(const JsonArray& controls) {
-  EXT_LOGV(ML_TAG, "");
+  EXT_LOGV(MB_TAG, "");
   JsonObject control;  // state.data has one or more properties
   JsonArray rows;      // if a control is an array, this is the rows of the array
 
@@ -127,14 +127,14 @@ void NodeManager::handleNodeNameChange(const UpdatedItem& updatedItem, JsonVaria
     // Migration 20251204: this is optional as we accept data updates from legacy driver names (migration is mandatory for changes in the data definitions)
     // When adding new migrations, follow the same pattern with contains() + getNameAndTags<T>().
     if (contains(updatedItem.value.as<const char*>(), "Physical Driver")) {
-      EXT_LOGD(ML_TAG, "update [%s] to ...", updatedItem.value.as<const char*>());
+      EXT_LOGD(MB_TAG, "update [%s] to ...", updatedItem.value.as<const char*>());
       nodeState["name"] = getNameAndTags<ParallelLEDDriver>();  // set to current combination of name and tags
-      EXT_LOGD(ML_TAG, "... to [%s]", updatedItem.value.as<const char*>());
+      EXT_LOGD(MB_TAG, "... to [%s]", updatedItem.value.as<const char*>());
     }
     if (contains(updatedItem.value.as<const char*>(), "IR Driver")) {
-      EXT_LOGD(ML_TAG, "update [%s] to ...", updatedItem.value.as<const char*>());
+      EXT_LOGD(MB_TAG, "update [%s] to ...", updatedItem.value.as<const char*>());
       nodeState["name"] = getNameAndTags<IRDriver>();  // set to current combination of name and tags
-      EXT_LOGD(ML_TAG, "... to [%s]", updatedItem.value.as<const char*>());
+      EXT_LOGD(MB_TAG, "... to [%s]", updatedItem.value.as<const char*>());
     }
 
     // invalidate controls
@@ -156,7 +156,7 @@ void NodeManager::handleNodeNameChange(const UpdatedItem& updatedItem, JsonVaria
     for (int i = nodeState["controls"].as<JsonArray>().size() - 1; i >= 0; i--) {
       JsonObject control = nodeState["controls"][i];
       if (!control["valid"].as<bool>()) {
-        EXT_LOGD(ML_TAG, "remove control %d", i);
+        EXT_LOGD(MB_TAG, "remove control %d", i);
         nodeState["controls"].remove(i);
       }
     }
@@ -168,7 +168,7 @@ void NodeManager::handleNodeNameChange(const UpdatedItem& updatedItem, JsonVaria
       // make sure "p" is also updated
       nodeClass->requestMappings();
     } else
-      EXT_LOGW(ML_TAG, "Nodeclass %s not found", updatedItem.value.as<String>().c_str());
+      EXT_LOGW(MB_TAG, "Nodeclass %s not found", updatedItem.value.as<String>().c_str());
   }  // name change
 
   // if a node existed and no new node in place, remove
@@ -177,12 +177,12 @@ void NodeManager::handleNodeNameChange(const UpdatedItem& updatedItem, JsonVaria
       // remove oldNode from the nodes list
       for (uint8_t i = 0; i < nodes->size(); i++) {
         if ((*nodes)[i] == oldNode) {
-          EXT_LOGD(ML_TAG, "remove node %d %s", i, updatedItem.oldValue.c_str());
+          EXT_LOGD(MB_TAG, "remove node %d %s", i, updatedItem.oldValue.c_str());
           nodes->erase(nodes->begin() + i);
           break;
         }
       }
-      EXT_LOGD(ML_TAG, "No newnode - remove! %d s:%d", updatedItem.index[0], nodes->size());
+      EXT_LOGD(MB_TAG, "No newnode - remove! %d s:%d", updatedItem.index[0], nodes->size());
     }
 
     oldNode->requestMappings();
@@ -195,7 +195,7 @@ void NodeManager::handleNodeNameChange(const UpdatedItem& updatedItem, JsonVaria
       xSemaphoreGive(*oldNode->layerMutex);
     }
 
-    EXT_LOGD(ML_TAG, "remove oldNode: %d p:%p", nodes->size(), oldNode);
+    EXT_LOGD(MB_TAG, "remove oldNode: %d p:%p", nodes->size(), oldNode);
     freeMBObject(oldNode);  // calls virtual destructor + frees memory
   }
 
@@ -205,10 +205,10 @@ void NodeManager::handleNodeNameChange(const UpdatedItem& updatedItem, JsonVaria
 
   #if FT_ENABLED(FT_LIVESCRIPT)
   // if (updatedItem.oldValue.length()) {
-  //     EXT_LOGV(ML_TAG, "delete %s %s ...", updatedItem.name.c_str(), updatedItem.oldValue.c_str());
+  //     EXT_LOGV(MB_TAG, "delete %s %s ...", updatedItem.name.c_str(), updatedItem.oldValue.c_str());
   //     LiveScriptNode *liveScriptNode = findLiveScriptNode(node["name"]);
   //     if (liveScriptNode) liveScriptNode->kill();
-  //     else EXT_LOGW(ML_TAG, "liveScriptNode not found %s", node["name"].as<const char*>());
+  //     else EXT_LOGW(MB_TAG, "liveScriptNode not found %s", node["name"].as<const char*>());
   // }
   // if (!node["name"].isNull() && !node["type"].isNull()) {
   //     LiveScriptNode *liveScriptNode = findLiveScriptNode(node["name"]); //todo: can be 2 nodes with the same name ...
@@ -221,7 +221,7 @@ void NodeManager::handleNodeNameChange(const UpdatedItem& updatedItem, JsonVaria
 void NodeManager::handleNodeOnChange(const UpdatedItem& updatedItem, JsonVariant nodeState) {
   if (updatedItem.index[0] < nodes->size()) {
     const char* name = nodeState["name"];
-    EXT_LOGD(ML_TAG, "%s on: %s (#%d)", name ? name : "", updatedItem.value.as<String>().c_str(), nodes->size());
+    EXT_LOGD(MB_TAG, "%s on: %s (#%d)", name ? name : "", updatedItem.value.as<String>().c_str(), nodes->size());
     Node* nodeClass = (*nodes)[updatedItem.index[0]];
     if (nodeClass != nullptr) {
       nodeClass->on = updatedItem.value.as<bool>();  // set nodeclass on/off
@@ -230,7 +230,7 @@ void NodeManager::handleNodeOnChange(const UpdatedItem& updatedItem, JsonVariant
       xSemaphoreGive(*nodeClass->layerMutex);
       nodeClass->requestMappings();
     } else
-      EXT_LOGW(ML_TAG, "Nodeclass %s not found", name ? name : "");
+      EXT_LOGW(MB_TAG, "Nodeclass %s not found", name ? name : "");
   }
 }
 
@@ -252,13 +252,13 @@ void NodeManager::handleNodeControlValueChange(const UpdatedItem& updatedItem, J
       nodeClass->requestMappings();
     } else {
       const char* name = nodeState["name"];
-      EXT_LOGW(ML_TAG, "nodeClass not found %s", name ? name : "");
+      EXT_LOGW(MB_TAG, "nodeClass not found %s", name ? name : "");
     }
   }
 }
 
 void NodeManager::onReOrderSwap(uint8_t stateIndex, uint8_t newIndex) {
-  EXT_LOGD(ML_TAG, "%d %d %d", nodes->size(), stateIndex, newIndex);
+  EXT_LOGD(MB_TAG, "%d %d %d", nodes->size(), stateIndex, newIndex);
   // swap nodes
   Node* nodeS = (*nodes)[stateIndex];
   Node* nodeN = (*nodes)[newIndex];
@@ -278,7 +278,7 @@ Node* NodeManager::findLiveScriptNode(const char* animation) {
     if (node && node->isLiveScriptNode()) {
       LiveScriptNode* liveScriptNode = (LiveScriptNode*)node;
       if (equal(liveScriptNode->animation.c_str(), animation)) {
-        EXT_LOGV(ML_TAG, "found %s", animation);
+        EXT_LOGV(MB_TAG, "found %s", animation);
         return liveScriptNode;
       }
     }

@@ -2,7 +2,6 @@
 // A glowing ball that rolls across the display following gravity (IMU)
 // Requires an IMU driver (e.g. MPU-6050) to be active
 
-uint8_t fade = 50;
 uint8_t ballSize = 2;
 uint8_t trail = 200;
 
@@ -12,7 +11,6 @@ int velX = 0; // velocity
 int velY = 0;
 
 void setup() {
-  addControl(&fade, "fade", "slider", 1, 255);
   addControl(&ballSize, "size", "slider", 1, 8);
   addControl(&trail, "trail", "slider", 1, 255);
   posX = width * 128;  // center

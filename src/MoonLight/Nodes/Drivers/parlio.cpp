@@ -149,7 +149,7 @@ void __attribute__((hot)) process_16bit(uint16_t* buffer, const uint32_t* transp
 
 }  // namespace LedMatrixDetail
 
-void rgbwBufferMapping(uint8_t* packetRGBChannel, const uint8_t* lightsRGBChannel, const uint8_t offsetRed, const uint8_t offsetGreen, const uint8_t offsetBlue, const uint8_t offsetWhite) {
+void rgbwBufferMapping(uint8_t* packetRGBChannel, const uint8_t* lightsRGBChannel, const uint8_t offsetRed, const uint8_t offsetGreen, const uint8_t offsetBlue, const uint8_t offsetWhite, const uint8_t offsetWhite2) {  // 🌙 offsetWhite2 for RGBCCT warm white
   // use ledsDriver.__rbg_map[0]; for super fast brightness and gamma correction! see secondPixel in ESP32-LedDriver!
   // apply the LUT to the RGB channels !
 
@@ -168,6 +168,9 @@ void rgbwBufferMapping(uint8_t* packetRGBChannel, const uint8_t* lightsRGBChanne
     }
     packetRGBChannel[offsetWhite] = ledsDriver.__white_map[white];
   }
+  if (offsetWhite2 != UINT8_MAX) {  // 🌙 second white channel for RGBCCT warm white (passed through with LUT)
+    packetRGBChannel[offsetWhite2] = ledsDriver.__white_map[lightsRGBChannel[offsetWhite2]];
+  }
 
   packetRGBChannel[offsetRed] = ledsDriver.__red_map[red];
   packetRGBChannel[offsetGreen] = ledsDriver.__green_map[green];
@@ -176,7 +179,7 @@ void rgbwBufferMapping(uint8_t* packetRGBChannel, const uint8_t* lightsRGBChanne
 
 // 1. Add the RGB first_index_per_outputs parameter to the function signature
 // pixels_per_pin = leds_per_output
-void create_transposed_led_output_optimized(const uint8_t* input_buffer, uint16_t* output_buffer, const uint16_t* pixels_per_pin, const uint32_t num_active_pins, const uint8_t COMPONENTS_PER_PIXEL, const uint8_t offsetR, const uint8_t offsetG, const uint8_t offsetB, const uint8_t offsetW) {
+void create_transposed_led_output_optimized(const uint8_t* input_buffer, uint16_t* output_buffer, const uint16_t* pixels_per_pin, const uint32_t num_active_pins, const uint8_t COMPONENTS_PER_PIXEL, const uint8_t offsetR, const uint8_t offsetG, const uint8_t offsetB, const uint8_t offsetW, const uint8_t offsetW2) {  // 🌙 offsetW2 for RGBCCT warm white
   // Only keep waveform cache (for WS2812 protocol timing)
   static uint32_t waveform_cache[256];
   static bool waveform_cache_initialized = false;
@@ -229,7 +232,7 @@ void create_transposed_led_output_optimized(const uint8_t* input_buffer, uint16_
 
       // rgbwBufferMapping: re order, DIM and white extraction
       if (pixel_in_pin < pixels_per_pin[pin]) {
-        rgbwBufferMapping(&mappedBuffer[pin * COMPONENTS_PER_PIXEL], &input_buffer[component_idx], offsetR, offsetG, offsetB, offsetW);
+        rgbwBufferMapping(&mappedBuffer[pin * COMPONENTS_PER_PIXEL], &input_buffer[component_idx], offsetR, offsetG, offsetB, offsetW, offsetW2);  // 🌙
       } else
         memset(&mappedBuffer[pin * COMPONENTS_PER_PIXEL], 0, COMPONENTS_PER_PIXEL);  // this is the magic trick to pad pixels if pixels_per_pin < max pixels_per_pin !
     }
@@ -276,7 +279,7 @@ static portMUX_TYPE parlio_spinlock = portMUX_INITIALIZER_UNLOCKED;
 // parallelPins = array of pin GPIO's
 // length = nrOfLights
 // buffer_in = channels array
-uint8_t IRAM_ATTR __attribute__((hot)) show_parlio(uint8_t* parallelPins, uint32_t length, uint8_t* buffer_in, uint8_t components, uint8_t outputs, uint16_t* leds_per_output, uint8_t offsetR, uint8_t offsetG, uint8_t offsetB, uint8_t offsetW) {
+uint8_t IRAM_ATTR __attribute__((hot)) show_parlio(uint8_t* parallelPins, uint32_t length, uint8_t* buffer_in, uint8_t components, uint8_t outputs, uint16_t* leds_per_output, uint8_t offsetR, uint8_t offsetG, uint8_t offsetB, uint8_t offsetW, uint8_t offsetW2) {  // 🌙 offsetW2 for RGBCCT warm white
   // 💫 this is only the case if all leds_per_output for all outputs is the same (we pad everything smaller than that)
   // if (length != outputs * max_leds_per_output) {
   //   delay(100);
@@ -409,7 +412,7 @@ uint8_t IRAM_ATTR __attribute__((hot)) show_parlio(uint8_t* parallelPins, uint32
     //  offsetW = 3;
   #endif
 
-  create_transposed_led_output_optimized(parallel_buffer_remapped, parallel_buffer_repacked, leds_per_output, outputs, components, offsetR, offsetG, offsetB, offsetW);
+  create_transposed_led_output_optimized(parallel_buffer_remapped, parallel_buffer_repacked, leds_per_output, outputs, components, offsetR, offsetG, offsetB, offsetW, offsetW2);  // 🌙
 
   // Calculate the exact size of ONE PIXEL's data in bits and bytes.
   const uint32_t symbols_per_pixel = components * 32;  // isRGBW ? 128 : 96;

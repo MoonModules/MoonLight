@@ -39,7 +39,7 @@ typedef uint16_t nrOfLights_t;
 // LightsHeader — fixed-size metadata block at the front of the channel array.
 // Layout must remain stable: Monitor.svelte reads it directly over WebSocket.
 // Do not reorder or insert fields without updating the frontend.
-// Data: 12 (Coord3D) + 4 + 4 (uint32_t) + 22 (uint8_t fields) + 3 (fill) = 45 bytes.
+// Data: 12 (Coord3D) + 4 + 4 (uint32_t) + 23 (uint8_t fields) + 2 (fill) = 45 bytes.
 // sizeof(LightsHeader) == 48 (compiler pads to 4-byte alignment).
 // ModuleLightsControl sends exactly 47 bytes (headerPrimeNumber) over the socket.
 // ----------------------------------------------------------------------------

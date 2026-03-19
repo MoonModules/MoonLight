@@ -26,6 +26,7 @@ class LiveScriptNode : public Node {
 
   bool hasSetupFunction = false;     ///< True if the script defines a setup() function
   bool hasLoopFunction = false;      ///< True if the script defines a loop() function
+  bool hasLoopTask = false;          ///< True only when executeAsTask() was actually called; used by loop() to gate semaphore signalling // 🌙
   bool hasModifyFunction = false;    ///< True if the script defines a modifyPosition() function
   bool hasOnLayoutFunction = false;  ///< True if the script defines an onLayout() function
   bool needsCompile = false;         ///< True if compilation is deferred (another compile in progress)

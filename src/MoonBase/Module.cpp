@@ -52,7 +52,7 @@ ModuleState::~ModuleState() {
 void setDefaults(JsonObject controls, JsonArray definition) {
   for (JsonObject control : definition) {
     // if (control["type"] == "coord3Dxx") {
-    //     EXT_LOGD(ML_TAG, "coord3D %d %d %d",  control["default"]["x"].as<int>(),  control["default"]["y"].as<int>(),  control["default"]["z"].as<int>());
+    //     EXT_LOGD(MB_TAG, "coord3D %d %d %d",  control["default"]["x"].as<int>(),  control["default"]["y"].as<int>(),  control["default"]["z"].as<int>());
     //     JsonObject object = controls[control["name"]].to<JsonObject>();
     //     controls[control["name"]]["x"] = control["default"]["x"];
     //     controls[control["name"]]["y"] = control["default"]["y"];
@@ -121,7 +121,7 @@ bool ModuleState::checkReOrderSwap(const JsonString& parent, const JsonVariant& 
             if (stateIndex != newIndex && stateArray[stateIndex] == newArray[newIndex]) {
               // if the old value found somewhere else, it has been moved so we can overwrite the current value
               stateArray[stateIndex].set(newArray[stateIndex]);  // copies the value to the state array
-              EXT_LOGD(ML_TAG, "(%d @ %d) %d -> %d", parkedFromIndex, parkedAtIndex, stateIndex, newIndex);
+              EXT_LOGD(MB_TAG, "(%d @ %d) %d -> %d", parkedFromIndex, parkedAtIndex, stateIndex, newIndex);
               changed = true;
 
               // calculate swap indexes
@@ -262,7 +262,7 @@ bool ModuleState::compareRecursive(const JsonString& parent, const JsonVariant& 
 }
 
 StateUpdateResult ModuleState::update(JsonObject& newData, ModuleState& state, const String& originId) {
-  // if (state.data.isNull()) EXT_LOGD(ML_TAG, "state data is null %d %d", newData.size(), newData != state.data); // state.data never null here
+  // if (state.data.isNull()) EXT_LOGD(MB_TAG, "state data is null %d %d", newData.size(), newData != state.data); // state.data never null here
 
   if (newData.size() != 0) {  // in case of empty file
 
@@ -277,15 +277,15 @@ StateUpdateResult ModuleState::update(JsonObject& newData, ModuleState& state, c
       // if (originId != "devicesserver" && originId != "tasksserver") {
       //   String ss;
       //   serializeJson(newData, ss);
-      //   EXT_LOGD(ML_TAG, "newData %s from %s", ss.c_str(), originId.c_str());
+      //   EXT_LOGD(MB_TAG, "newData %s from %s", ss.c_str(), originId.c_str());
       // }
 
-      // EXT_LOGD(ML_TAG, "update isNew %d changed %d", isNew, changed);
+      // EXT_LOGD(MB_TAG, "update isNew %d changed %d", isNew, changed);
       // serializeJson(state.data, Serial);Serial.println();
       // serializeJson(newData, Serial);Serial.println();
 
       if (state.compareRecursive("", state.data, newData, updatedItem, originId)) {
-        if (changed) EXT_LOGW(ML_TAG, "checkReOrderSwap changed, compareRecursive also changed? %s", originId.c_str());
+        if (changed) EXT_LOGW(MB_TAG, "checkReOrderSwap changed, compareRecursive also changed? %s", originId.c_str());
         changed = true;
       }
 

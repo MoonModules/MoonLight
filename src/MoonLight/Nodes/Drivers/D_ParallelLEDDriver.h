@@ -60,7 +60,7 @@ class ParallelLEDDriver : public DriverNode {
     // LUTs are accessed directly within show_parlio via extern ledsDriver
 
     // No brightness parameter needed
-    show_parlio(pins, layerP.lights.header.nrOfLights, layerP.lights.channelsD, layerP.lights.header.channelsPerLight, nrOfPins, layerP.ledsPerPin, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetRed, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetGreen, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetBlue, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetWhite);
+    show_parlio(pins, layerP.lights.header.nrOfLights, layerP.lights.channelsD, layerP.lights.header.channelsPerLight, nrOfPins, layerP.ledsPerPin, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetRed, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetGreen, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetBlue, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetWhite, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetWhite2);  // 🌙 offsetWhite2 for RGBCCT warm white
     #endif
   #else  // ESP32_LEDSDRIVER
     if (!ledsDriver.initLedsDone) return;

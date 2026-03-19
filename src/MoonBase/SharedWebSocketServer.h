@@ -31,7 +31,7 @@ class SharedWebSocketServer {
   SharedWebSocketServer(PsychicHttpServer* server, SecurityManager* securityManager, AuthenticationPredicate authenticationPredicate = AuthenticationPredicates::IS_ADMIN) : _server(server), _securityManager(securityManager), _authenticationPredicate(authenticationPredicate) {}
 
   void registerModule(Module* module) {
-    EXT_LOGD(ML_TAG, "%s", module->_moduleName);
+    EXT_LOGD(MB_TAG, "%s", module->_moduleName);
     // Register this module for state updates
     module->addUpdateHandler([this, module](const String& originId) { transmitData((String("/rest/") + module->_moduleName).c_str(), nullptr, originId); }, false);
   }
@@ -61,7 +61,7 @@ class SharedWebSocketServer {
       // Handle incoming frame data
       if (frame->type == HTTPD_WS_TYPE_TEXT) {
         Module* module = findModule(request->url());
-        EXT_LOGD(ML_TAG, "search module %s: %p", request->url().c_str(), module);
+        EXT_LOGD(MB_TAG, "search module %s: %p", request->url().c_str(), module);
         if (module) {
           JsonDocument doc;
           DeserializationError error = deserializeJson(doc, (char*)frame->payload, frame->len);
