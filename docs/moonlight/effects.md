@@ -44,10 +44,10 @@ These effects have first been created in MoonLight:
 | Name | Preview | Controls | Remarks
 | ---- | ----- | ---- | ---- |
 | Solid | ![](https://raw.githubusercontent.com/scottrbailey/WLED-Utils/master/gifs/FX_000.gif) | <img width="320" src="https://github.com/user-attachments/assets/844bdbf1-b42b-4b5c-94f9-d1334bce2b10" /> | Can be used as background to other effects when ordered before other effects |
-| Lines | ![lines](../../media/moonlight/effects/lines.gif) | <img width="320" src="https://github.com/user-attachments/assets/b99aa9cb-161f-4ade-8d93-bc5343214ac7" /> | To test a layout, Red = x, Green = y, Blue = z |
+| Lines | ![lines](../media/moonlight/effects/lines.gif) | <img width="320" src="https://github.com/user-attachments/assets/b99aa9cb-161f-4ade-8d93-bc5343214ac7" /> | To test a layout, Red = x, Green = y, Blue = z |
 | Frequency Saws ♫ | ![FreqSaws](https://github.com/user-attachments/assets/9e0f1f22-eba9-470e-850e-bd0e2f7c787f) | <img width="320" src="https://github.com/user-attachments/assets/78828181-c1b3-4d0f-85dc-356ced10fcd9"/> | |
 | Moon Man | <img width="100" alt="MoonMan" src="https://github.com/user-attachments/assets/cd3acd08-2725-4d2c-b809-37a61314d620" /> | No controls | only on devices supporting M5 library, e.g. AtomS3R |
-| Particles 🧊 | ![Particles](https://github.com/user-attachments/assets/c2df7f6b-3b5a-4836-8e21-127de3eb3364) | <img width="320" alt="Particles" src="https://github.com/user-attachments/assets/415d746a-5b9d-4936-9cf7-343661ac86b5" /> | Supports gyro, see [IMU driver](../../moonlight/drivers/#driver-nodes) |
+| Particles 🧊 | ![Particles](https://github.com/user-attachments/assets/c2df7f6b-3b5a-4836-8e21-127de3eb3364) | <img width="320" alt="Particles" src="https://github.com/user-attachments/assets/415d746a-5b9d-4936-9cf7-343661ac86b5" /> | Supports gyro, see [IMU driver](drivers.md#driver-nodes) |
 | Rainbow | ![Rainbow](https://github.com/user-attachments/assets/d74832fa-0e77-481c-9823-588042751f87) | <img width="320" alt="Rainbow" src="https://github.com/user-attachments/assets/ca28f78f-dc54-4999-a0ee-700390b24f97" /> | |
 | Random | ![Random](https://github.com/user-attachments/assets/b7874741-7a30-4ad1-9a8b-db0093da1297) | <img width="320" src="https://github.com/user-attachments/assets/b99aa9cb-161f-4ade-8d93-bc5343214ac7" /> | |
 | Ripples 🧊 | ![Ripples](https://github.com/user-attachments/assets/ad1d96d9-60fc-4301-8f17-239e45de8d38) | <img width="320" alt="Ripples" src="https://github.com/user-attachments/assets/d9c83988-d60a-4eed-9e04-ea7ddbfc37ab" /> | |
@@ -59,7 +59,7 @@ These effects have first been created in MoonLight:
 | Praxis | ![Praxis](https://github.com/user-attachments/assets/f9271d1c-bcd1-4a79-bc1a-cac951758195) | <img width="320" alt="Praxis" src="https://github.com/user-attachments/assets/536ab4c8-5c90-4b76-9f80-2aaed4170901" />| |
 | Wave | ![Wave](https://github.com/user-attachments/assets/a699f3a6-c981-4159-a96e-85d43c9a853c) | <img width="320" alt="Wave" src="https://github.com/user-attachments/assets/2e8408e8-4610-45dd-af36-8560fe5ec024" /> | Type: Saw, Triangle, Sinus, Square, Sin3, Noise |
 | Fixed Rectangle | <img width="120" alt="Rectangle" src="https://github.com/user-attachments/assets/474bd313-d961-4a95-8e44-015539a0ba7f" /> | <img width="320" alt="RectangleC" src="https://github.com/user-attachments/assets/e9c1fca4-d7a2-42f4-9d23-643371b3c615" /> | To test a layout |
-| Star Sky | ![lines](../../media/moonlight/effects/StarSky.gif) | ![lines](../../media/moonlight/effects/StarSkyControls.png) | tip: add the rotate modifier |
+| Star Sky | ![lines](../media/moonlight/effects/StarSky.gif) | ![lines](../media/moonlight/effects/StarSkyControls.png) | tip: add the rotate modifier |
 
 ### MoonModules effects
 

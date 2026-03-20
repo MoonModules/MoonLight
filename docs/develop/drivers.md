@@ -6,7 +6,7 @@
 
 ### Parallel LED Driver Technical Implementation
 
-For end-user documentation, see [Parallel LED Driver for ESP32-P4](#parallel-led-driver-for-esp32-p4).
+For end-user documentation, see [Parallel LED Driver for ESP32-P4](#parlio-esp32-p4).
 
 **Architecture Overview:**
 

@@ -8,7 +8,7 @@ It's most easy to start with premade boards, however, you can also DIY.
 
 ## Premade ESP32 devices
 
-See [IO module](../../moonbase/inputoutput) for premade devices which can be preconfigured in MoonLight.
+See [IO module](../moonbase/inputoutput.md) for premade devices which can be preconfigured in MoonLight.
 
 ![Dig-2-Go](https://shop.allnetchina.cn/cdn/shop/products/Led_4.jpg?v=1680836018&width=1600){: style="width:250px"} 
 
@@ -21,7 +21,7 @@ See [IO module](../../moonbase/inputoutput) for premade devices which can be pre
 
 ### Minimal hardware
 
-* One of the ESP32-devices shown in [MoonLight Installer](../installer). Any ESP32-S3 board or ESP32-P4 nano recommended as they have more memory (PSRAM) then the traditional ESP32-D0 boards.
+* One of the ESP32-devices shown in [MoonLight Installer](installer.md). Any ESP32-S3 board or ESP32-P4 nano recommended as they have more memory (PSRAM) then the traditional ESP32-D0 boards.
 * Any WS2812 LED strip or panel. [256 LED panel](https://s.click.aliexpress.com/e/_EIKoYrg) recommended.
 * Connect the ESP32-device with USB to your computer, connect the LED strip or panel
 

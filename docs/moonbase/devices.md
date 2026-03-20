@@ -8,7 +8,7 @@ Overview of MoonLight (and WLED) devices in your local network. MoonLight device
     * **Name**: name of this device (set the name in the [WiFi station module](https://moonmodules.org/MoonLight/network/sta/))
         * Click on the name to go to the device via mDNS
         * Devices are grouped if the name contains hyphens, see below.
-    * Light controls: change values found in the [Light controls module](../../moonlight/lightscontrol/)
+    * Light controls: change values found in the [Light controls module](../moonlight/lightscontrol.md)
         * **Lights On**: set the device on or off
         * **Brightness**: control the brightness of a device
         * **Palette**: Palette used
@@ -26,7 +26,7 @@ The Devices module will also implement Supersync. An approach to sync multiple M
 
 Part 1:
 
-* Every device broadcasts a message every 10 seconds containing general information and the values in the [Control Module](../../moonlight/lightscontrol).
+* Every device broadcasts a message every 10 seconds containing general information and the values in the [Control Module](../moonlight/lightscontrol.md).
 * If one of the values in the Control Module is updated, it broadcasts the updated values.
 * If one of the controls is changed for a device in the devices overview, it sends a message to that device updating to update its controls
 * Every module receives these messages and updates them in the devices overview
@@ -34,7 +34,7 @@ Part 1:
 
 Part 2:
 
-* Devices can be grouped via the hostname (see [WiFi](../../network/sta/)). Using hyphens to group them. E.g. x-y-z1 belongs to the same group as x-y-z2.
+* Devices can be grouped via the hostname (see [WiFi](../network/sta.md)). Using hyphens to group them. E.g. x-y-z1 belongs to the same group as x-y-z2.
 * If a message is received from a device within its group, the device will also update its own controls.
 * It will notify other devices on its update, but the message is not a control message to avoid infinite sending loops
 

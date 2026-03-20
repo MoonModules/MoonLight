@@ -57,7 +57,7 @@ Sets the maximum power budget in Watts. The LED driver automatically limits brig
 
 The default of **10 W** (5 V × 2 A) is safe for USB power supplies. Increase this to match your actual power supply — for example, a 5 V / 40 A supply = 200 W.
 
-Used by LED drivers; see [Drivers](../../moonlight/drivers/).
+Used by LED drivers; see [Drivers](../moonlight/drivers.md).
 
 ---
 
@@ -96,7 +96,7 @@ Selects the ethernet hardware type. This is typically set automatically by the b
 
 **W5500 (SPI)** requires **SPI SCK**, **SPI MISO**, **SPI MOSI**, and **PHY CS** pins to be assigned. **PHY IRQ** is optional.
 
-See [Ethernet settings](../../network/ethernet/) for hostname and IP configuration.
+See [Ethernet settings](../network/ethernet.md) for hostname and IP configuration.
 
 ---
 
@@ -130,7 +130,7 @@ Changing any pin assignment or index sets the **modded** flag.
 | **LED WW** | Warm white PWM channel |
 | **LED R / G / B** | Individual red / green / blue PWM channels |
 
-Used by LED drivers to set up outputs. See [Drivers](../../moonlight/drivers/).
+Used by LED drivers to set up outputs. See [Drivers](../moonlight/drivers.md).
 
 ### Audio (I2S)
 
@@ -156,7 +156,7 @@ When both SDA and SCL are assigned, the I2C bus is initialised and peripherals a
 |---|---|
 | **Button** 🛎️ | Momentary push button (active-low, debounced) |
 | **Button** 𓐟 | Toggle switch — any state change triggers |
-| **Button LightOn** 🛎️ | Push button that toggles lights on/off in [Lights Control](../../moonlight/lightscontrol/) |
+| **Button LightOn** 🛎️ | Push button that toggles lights on/off in [Lights Control](../moonlight/lightscontrol.md) |
 | **Button LightOn** 𓐟 | Toggle switch that toggles lights on/off |
 | **Relay** | General-purpose relay output |
 | **Relay LightOn** 🔀 | Relay driven by the lights on/off state |
@@ -169,7 +169,7 @@ When both SDA and SCL are assigned, the I2C bus is initialised and peripherals a
 | **Current** ⚡️ | ADC input for current measurement |
 | **Battery** | ADC input for battery voltage |
 
-See [System Status](../../system/status) and [System Metrics](../../system/metrics).
+See [System Status](../system/status.md) and [System Metrics](../system/metrics.md).
 
 ### Ethernet
 
@@ -190,7 +190,7 @@ See [System Status](../../system/status) and [System Metrics](../../system/metri
 
 | Pin type | Description |
 |---|---|
-| **Infrared** ♨️ | IR receiver input. Used by IR driver, see [Drivers](../../moonlight/drivers/) |
+| **Infrared** ♨️ | IR receiver input. Used by IR driver, see [Drivers](../moonlight/drivers.md) |
 | **DMX in** | DMX512 input (planned) |
 | **RS-485 TX / RX / DE** | RS-485 half-duplex UART — all three must be assigned for initialisation |
 | **Serial TX / RX** | UART serial pins |
@@ -229,7 +229,7 @@ When both I2C SDA and SCL pins are assigned, the bus is initialised and a scan r
 | **Name** | Device name — shows "unknown" until a driver identifies it |
 | **ID** | Device ID — shows "unknown" until a driver provides it |
 
-A driver node (e.g. the [IMU driver](../../moonlight/drivers/#driver-nodes)) will fill in the name and ID when added.
+A driver node (e.g. the [IMU driver](../moonlight/drivers.md#driver-nodes)) will fill in the name and ID when added.
 
 The **I2C frequency** can be adjusted (default 100 kHz). Higher frequencies (400 kHz) are faster but may not work with all peripherals or cable lengths.
 
@@ -256,7 +256,7 @@ The **I2C frequency** can be adjusted (default 100 kHz). Higher frequencies (400
 ![Dig-Uno](https://quinled.info/wp-content/uploads/2020/02/QuinLED-Dig-Uno-v3_front.png){: style="width: 200px"}
 ![Dig-Quad](https://quinled.info/wp-content/uploads/2021/11/QuinLED-Dig-Quad-AB_v3r1-2048x1154.png){: style="width: 200px"}
 
-* [Dig-2-Go](https://quinled.info/quinled-dig2go/), [Dig-Uno](https://quinled.info/pre-assembled-quinled-dig-uno/), [Dig-Quad](https://quinled.info/pre-assembled-quinled-dig-quad/): Choose the esp32-d0 (4MB) board in the [MoonLight Installer](../../gettingstarted/installer/)
+* [Dig-2-Go](https://quinled.info/quinled-dig2go/), [Dig-Uno](https://quinled.info/pre-assembled-quinled-dig-uno/), [Dig-Quad](https://quinled.info/pre-assembled-quinled-dig-quad/): Choose the esp32-d0 (4MB) board in the [MoonLight Installer](../gettingstarted/installer.md)
     * Dig-2-Go: Shipped with a 300 LED, GRBW led strip: Choose layout with 300 lights (e.g. Single Column for 1D, Panel 15x20 for 2D). Select Light preset GRBW in the LED Driver.
     * Currently no OTA support on ESP32-D0 boards: Dig-2-Go, Uno, Quad.
 
@@ -264,13 +264,13 @@ The **I2C frequency** can be adjusted (default 100 kHz). Higher frequencies (400
 
 ![Dig-Next-2](https://quinled.info/wp-content/uploads/2026/01/P1087754-Enhanced-NR-2560x1358.jpg){: style="width: 200px"}
 
-* [Dig-Next-2](https://quinled.info/dig-next-2): Choose the esp32-d0-pico2 board in the [MoonLight Installer](../../gettingstarted/installer/)
+* [Dig-Next-2](https://quinled.info/dig-next-2): Choose the esp32-d0-pico2 board in the [MoonLight Installer](../gettingstarted/installer.md)
 
 #### Dig-Octa
 
 ![Dig-Octa](https://quinled.info/wp-content/uploads/2024/10/20240924_141857-2048x1444.png){: style="width: 200px"}
 
-* [Dig-Octa](https://quinled.info/quinled-dig-octa/): Choose the esp32-d0-16mb board in the [MoonLight Installer](../../gettingstarted/installer/)
+* [Dig-Octa](https://quinled.info/quinled-dig-octa/): Choose the esp32-d0-16mb board in the [MoonLight Installer](../gettingstarted/installer.md)
 * On first install, erase flash first (Especially when other firmware like WLED was on it) as MoonLight uses a partition scheme with 3MB of flash
 * After install, select the QuinLED board preset to have the pins assigned correctly.
 * Features onboard LAN8720A ethernet — automatically configured by the board preset (ethernetType = LAN8720, RMII pins assigned)
@@ -297,10 +297,10 @@ The **I2C frequency** can be adjusted (default 100 kHz). Higher frequencies (400
 
 #### MHC ESP32-P4 shield
 
-![MHC ESP32-P4 shield](../MHC-ESP32-P4-shield.png){: style="width: 200px"}
+![MHC ESP32-P4 shield](MHC-ESP32-P4-shield.png){: style="width: 200px"}
 
-* See [MHC ESP32-P4 shield](https://shop.myhome-control.de/en/ABC-WLED-ESP32-P4-shield/HW10027). Choose the esp32-p4-nano board in the [MoonLight Installer](../../gettingstarted/installer/)
-* On new ESP32-P4 Nano boards, the WiFi coprocessor needs to be updated first to a recent version, currently ESP-Hosted v2.0.17, see the link in the [MoonLight Installer](../../gettingstarted/installer/)
+* See [MHC ESP32-P4 shield](https://shop.myhome-control.de/en/ABC-WLED-ESP32-P4-shield/HW10027). Choose the esp32-p4-nano board in the [MoonLight Installer](../gettingstarted/installer.md)
+* On new ESP32-P4 Nano boards, the WiFi coprocessor needs to be updated first to a recent version, currently ESP-Hosted v2.0.17, see the link in the [MoonLight Installer](../gettingstarted/installer.md)
 * After install, select the **MHC P4 Nano Shield** board preset to have the pins assigned correctly.
     * Assuming 100W LED power; change if needed.
     * Switch1: (also set the switches on the board)
@@ -309,13 +309,13 @@ The **I2C frequency** can be adjusted (default 100 kHz). Higher frequencies (400
     * Switch2:
         * off (default): Pins 10, 11, 12, 13 used for build-in Mic over I2S, pin 7 and 8: I2C SDA and SCL
         * On: Pins 33, 25, 32, 36 used for Line in, pin 7 and 8: additional LED pins.
-* Add the Parallel LED Driver, see [Drivers](../../moonlight/drivers/). It uses [@troyhacks](https://github.com/troyhacks) his parallel IO driver to drive all LED pins configured for the shield.
+* Add the Parallel LED Driver, see [Drivers](../moonlight/drivers.md). It uses [@troyhacks](https://github.com/troyhacks) his parallel IO driver to drive all LED pins configured for the shield.
 
 #### MHC V57 PRO
 
 ![MHC V57 PRO](https://shop.myhome-control.de/media/09/90/ff/1771179461/WLED_V57_Bild1a.jpg){: style="width: 200px"}
 
-* See [MHC V57 PRO](https://shop.myhome-control.de/en/ABC-WLED-controller-PRO-V57-with-iMOSFET/HW10030). Choose the esp32-d0-pico2 board in the [MoonLight Installer](../../gettingstarted/installer/)
+* See [MHC V57 PRO](https://shop.myhome-control.de/en/ABC-WLED-controller-PRO-V57-with-iMOSFET/HW10030). Choose the esp32-d0-pico2 board in the [MoonLight Installer](../gettingstarted/installer.md)
 
 ### StephanElec
 
@@ -323,7 +323,7 @@ The **I2C frequency** can be adjusted (default 100 kHz). Higher frequencies (400
 
 ![SE-16p](../firmware/installer/images/esp32-s3-stephanelec-16p.jpg){: style="width: 200px"}
 
-* Choose the esp32-s3-n8r8v board in the [MoonLight Installer](../../gettingstarted/installer/)
+* Choose the esp32-s3-n8r8v board in the [MoonLight Installer](../gettingstarted/installer.md)
 * Set Switch1 the same as you set the jumper on the board: off / default: Infrared. on: Ethernet.
 * Only 5 boards were ever produced. If you are one of the lucky few, feel free to reach out to limpkin on [Discord](https://discord.gg/TC8NSUSCdV)
 * Use the [L_SE16.sc](https://github.com/MoonModules/MoonLight/blob/main/livescripts/Layouts/L_SE16.sc) Live Script layout for this board. Controls: `mirroredPins` (wiring mode), `pinsAreColumns` (axis orientation), `ledsPerPin` (LEDs per output).
@@ -333,6 +333,6 @@ The **I2C frequency** can be adjusted (default 100 kHz). Higher frequencies (400
 
 ![LightCrafter16](../firmware/installer/images/esp32-s3-lightcrafter16.jpg){: style="width: 200px"}
 
-* Choose the esp32-s3-n8r8v board in the [MoonLight Installer](../../gettingstarted/installer/)
+* Choose the esp32-s3-n8r8v board in the [MoonLight Installer](../gettingstarted/installer.md)
 * Documentation to be soon published on [limpkin's website](https://www.limpkin.fr)
 * Use the [L_LC16.sc](https://github.com/MoonModules/MoonLight/blob/main/livescripts/Layouts/L_LC16.sc) Live Script layout for this board. Controls: `pinsAreColumns` (axis orientation), `ledsPerPin` (LEDs per output).

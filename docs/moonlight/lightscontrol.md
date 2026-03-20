@@ -42,7 +42,7 @@ A searchable dropdown listing all available palettes, grouped by origin:
 
 The selected palette is the **global palette** used by effects that reference `layerP.palette`. See [WLED-MM palettes](https://mm.kno.wled.ge/features/palettes/) for the full WLED-MM palette reference.
 
-> **Tip:** LiveScript palette files (`P_*.sc`) stored on the filesystem appear automatically under the *LiveScript* category. Palette scripts can define colors statically (using `setup()`) or animate them over time (using `loop()`). See [Live Scripts](../moonlight/livescripts/) for how to write palette scripts and the full list of available functions.
+> **Tip:** LiveScript palette files (`P_*.sc`) stored on the filesystem appear automatically under the *LiveScript* category. Palette scripts can define colors statically (using `setup()`) or animate them over time (using `loop()`). See [Live Scripts](livescripts.md) for how to write palette scripts and the full list of available functions.
 
 ---
 
@@ -100,13 +100,13 @@ The loop skips empty slots and wraps around when it reaches *Last preset*.
 
 ## Monitor
 
-**Monitor On** — when enabled, the current LED frame is streamed to the [Monitor](../moonbase/monitor.md) view in the UI. Disable to reduce WebSocket traffic when monitoring is not needed.
+**Monitor On** — when enabled, the current LED frame is streamed to the [Channels](channels.md) view in the UI. Disable to reduce WebSocket traffic when monitoring is not needed.
 
 ---
 
 ## Hardware Pins
 
-Pin assignments are configured in [IO](../moonbase/io.md). Lights Control reacts to the following pin types:
+Pin assignments are configured in [IO](../moonbase/inputoutput.md). Lights Control reacts to the following pin types:
 
 | Pin type | Behaviour |
 |---|---|
@@ -121,4 +121,4 @@ Pin assignments are configured in [IO](../moonbase/io.md). Lights Control reacts
 
 When MQTT is enabled, Lights Control auto-registers as a **Home Assistant light entity** via MQTT discovery. HA can then control **On/Off** and **Brightness**; the device appears under the hostname of the ESP32.
 
-The integration activates and deactivates automatically when MQTT is enabled or disabled in the [MQTT settings](../moonbase/mqtt.md) — no restart required.
+The integration activates and deactivates automatically when MQTT is enabled or disabled in the [MQTT settings](../network/mqtt.md) — no restart required.

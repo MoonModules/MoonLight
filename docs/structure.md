@@ -21,7 +21,7 @@ The back end provides a JSON which features of the back end are enabled by the [
 
 ## Delete `demo/` Project
 
-The light state demo project is included by default to demonstrate the use of the backend and front end. It demonstrates the use of the MQTT-API, websocket API and REST API to switch on the build in LED of the board. [routes/connections/mqtt/MQTTConfig.svelte](https://github.com/theelims/ESP32-sveltekit/blob/main/interface/src/routes/connections/mqtt/MQTTConfig.svelte) is also part of the 'demo/' Project. You can reuse this to set your own MQTT topics, or delete it. Do not forget to adjust `+page.svelte` as well. Use it as an example how to create your own custom API and access it from the front end. It can be deleted safely after it has been [removed from the menu](#adapt-the-menu) as well.
+The light state demo project is included by default to demonstrate the use of the backend and front end. It demonstrates the use of the MQTT-API, websocket API and REST API to switch on the build in LED of the board. [routes/connections/mqtt/MQTTConfig.svelte](https://github.com/theelims/ESP32-sveltekit/blob/main/interface/src/routes/connections/mqtt/MQTTConfig.svelte) is also part of the 'demo/' Project. You can reuse this to set your own MQTT topics, or delete it. Do not forget to adjust `+page.svelte` as well. Use it as an example how to create your own custom API and access it from the front end. It can be deleted safely after it has been [removed from the menu](#customize-the-main-menu) as well.
 
 ## Create your root `+page.svelte`
 

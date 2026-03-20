@@ -13,9 +13,9 @@ Live Scripts are `.sc` files stored on the ESP32 filesystem. They appear in diff
 
 | Script type | Prefix | Where to select | What it does |
 |---|---|---|---|
-| **Effect** | `E_` | [Effects module](../moonlight/effects/) | Animates LEDs each frame |
-| **Layout** | `L_` | [Drivers module](../moonlight/drivers/) | Defines physical light positions and pin assignments |
-| **Palette** | `P_` | [Lights Control](../moonlight/lightscontrol/) palette dropdown | Sets or animates the global color palette |
+| **Effect** | `E_` | [Effects module](effects.md) | Animates LEDs each frame |
+| **Layout** | `L_` | [Drivers module](drivers.md) | Defines physical light positions and pin assignments |
+| **Palette** | `P_` | [Lights Control](lightscontrol.md) palette dropdown | Sets or animates the global color palette |
 
 The **Live Scripts module** itself does not create scripts — it shows all currently running scripts and lets you stop, restart, or delete them.
 
@@ -40,9 +40,9 @@ See example scripts on GitHub: [Effects](https://github.com/MoonModules/MoonLigh
 
 **Step 3**: Select the script in the appropriate module:
 
-- **Effects/Modifiers**: Go to [Effects](../moonlight/effects/), add or edit a node (🔥), and pick the `.sc` file from the dropdown
-- **Layouts**: Go to [Drivers](../moonlight/drivers/), add or edit a layout node (🚥), and pick the `.sc` file
-- **Palettes**: Go to [Lights Control](../moonlight/lightscontrol/), open the palette dropdown, and select a `P_*.sc` file from the LiveScript category
+- **Effects/Modifiers**: Go to [Effects](effects.md), add or edit a node (🔥), and pick the `.sc` file from the dropdown
+- **Layouts**: Go to [Drivers](drivers.md), add or edit a layout node (🚥), and pick the `.sc` file
+- **Palettes**: Go to [Lights Control](lightscontrol.md), open the palette dropdown, and select a `P_*.sc` file from the LiveScript category
 
 <img width="300" alt="image" src="https://github.com/user-attachments/assets/60f99421-aa74-4aa7-805d-05125cc5f222" />
 

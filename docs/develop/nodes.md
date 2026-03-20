@@ -52,7 +52,7 @@ A node implements the following (overloaded) functions:
     * Lights
         * Regular patterns (CRGB as default but also others like Moving Head ...)
 
-* See [Modules](../modules)
+* See [Modules](modules.md)
 * Upon changing a pin, driver.init will rerun (FastLED.addLeds, Parallel LED Driver.init)
 * Uses ESPLiveScripts, see compileAndRun. compileAndRun is started when in Nodes a file.sc is chosen
     * To do: kill running scripts, e.g. when changing effects

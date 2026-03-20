@@ -613,6 +613,6 @@ A build script copies the firmware binary files for all build environment to `bu
 #### Custom Update Server
 
 If Github is not desired as the update server this can be easily modified to any other custom server. The REST API will accept any valid HTTPS-Link. However, SSL is mandatory and may require a different Root CA Certificate then Github to validate correctly.
-Follow the instructions here how to change the [SSL CA Certificate](buildprocess.md#ssl-root-certificate-for-download-ota).
+Follow the instructions here how to change the [SSL CA Certificate](buildprocess.md#ssl-root-certificate-store).
 
 If you use a custom update server you must also adapt the [frontend](structure.md#custom-update-server) code to suit your needs.

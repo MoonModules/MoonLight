@@ -115,7 +115,6 @@ theme:
 # Add custom CSS for MoonLight styling
 extra_css:
   - stylesheets/moonlight.css
-  - stylesheets/extra.css
 
 # Add this section to your existing mkdocs.yml
 extra_javascript:
@@ -133,8 +132,8 @@ markdown_extensions:
           class: mermaid
           format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.emoji:
-      emoji_index: !!python/name:materialx.emoji.twemoji
-      emoji_generator: !!python/name:materialx.emoji.to_svg
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite

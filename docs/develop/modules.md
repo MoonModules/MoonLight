@@ -83,7 +83,7 @@ void setupDefinition(const JsonArray& controls) override{
     }
 ```
 
-* Implement function **loop1s** to send [readonly data](#Readonly_data) from the server to the UI
+* Implement function **loop1s** to send [readonly data](#readonly-data) from the server to the UI
     * Optionally, only when a module has readonly data
 
 ```cpp

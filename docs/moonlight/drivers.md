@@ -6,7 +6,7 @@
 
 The Drivers module defines layers and drivers.
 
-* Layout 🚥: A layout (🚥) defines the positions of the lights to control. See [Layouts](../../moonlight/layouts)
+* Layout 🚥: A layout (🚥) defines the positions of the lights to control. See [Layouts](layouts.md)
 * Driver ☸️: A driver is a link between MoonLight to hardware or the network. Drivers can both input data or output data. Examples:
     * LED drivers (FastLED, Parallel LED Drivers)
     * Light driver (Art-Net / DMX)
@@ -28,25 +28,25 @@ Layouts need to be defined before drivers as the driver takes the layouts define
 ## Driver ☸️ nodes
 
 Below is a list of Drivers in MoonLight.
-Want to add a Driver to MoonLight, see [develop](../../develop/overview/).
+Want to add a Driver to MoonLight, see [develop](../develop/overview.md).
 
-Custom layouts can also be created as **Live Scripts** — `.sc` files with an `onLayout()` function that define light positions and pin assignments. Any `.sc` file on the filesystem can be selected as a layout node. See [Live Scripts](../../moonlight/livescripts/) for details and examples.
+Custom layouts can also be created as **Live Scripts** — `.sc` files with an `onLayout()` function that define light positions and pin assignments. Any `.sc` file on the filesystem can be selected as a layout node. See [Live Scripts](livescripts.md) for details and examples.
 
 | Name | Preview | Controls | Remarks
 | ---- | ----- | ---- | ---- |
 | Parallel LED Driver | <img width="100" src="https://github.com/user-attachments/assets/9cbe487e-f330-40a5-8b40-6663c83e5d90"/> | <img width="320" alt="Parallel" src="https://github.com/user-attachments/assets/0c6f1543-623a-45bf-98d7-f5ddd072a1c6" /> | Drive multiple LED types, all devices including ESP32-P4(-nano) supported<br>Light preset: See below<br>DMA buffer: set higher when LEDs flicker<br>See [below](#parallel-led-driver) |
 | FastLED Driver | <img width="100" src="https://avatars.githubusercontent.com/u/5899270?s=48&v=4"/> | <img width="320" src="../../media/moonlight/drivers/FastLED-Driver.png" /> | Based on the FastLED Channels API to set Pins, Color order, Engine and other settings at runtime! Based on upcoming FastLED v4.0 ! See [Channels API](https://github.com/FastLED/FastLED/blob/master/src/fl/channels/README.md) |
-| FastLED Audio | <img width="100" src="https://avatars.githubusercontent.com/u/5899270?s=48&v=4"/> | <img width="320" src="../../media/moonlight/drivers/FastLED-Audio.png" /> | On-board microphone audio processing, allows audio-reactive effects (♪ & ♫) to use audio data (volume and bands (FFT)) and much more. Based on upcoming FastLED v4.0 ! see [FastLED Audio](https://github.com/FastLED/FastLED/blob/master/src/fl/audio/README.md)<br>Connect a digital microphone (e.g. INMP441) to an ESP32 and setup the I2S pins in the [IO module](../../moonbase/inputoutput)|
+| FastLED Audio | <img width="100" src="https://avatars.githubusercontent.com/u/5899270?s=48&v=4"/> | <img width="320" src="../../media/moonlight/drivers/FastLED-Audio.png" /> | On-board microphone audio processing, allows audio-reactive effects (♪ & ♫) to use audio data (volume and bands (FFT)) and much more. Based on upcoming FastLED v4.0 ! see [FastLED Audio](https://github.com/FastLED/FastLED/blob/master/src/fl/audio/README.md)<br>Connect a digital microphone (e.g. INMP441) to an ESP32 and setup the I2S pins in the [IO module](../moonbase/inputoutput.md)|
 | Art-Net Out| <img width="100" src="https://github.com/user-attachments/assets/9c65921c-64e9-4558-b6ef-aed2a163fd88"> | <img width="320" src="../../media/moonlight/drivers/ArtNetOutControls.png" /> | Send Art-Net to Drive LEDS and DMX lights over the network. See [below](#art-net-out) |
 | Art-Net In | <img width="100" src="../../media/moonlight/drivers/Art-Net-In.png"> | <img width="320" src="../../media/moonlight/drivers/ArtNetInControls.png" /> | Receive Art-Net (or DDP) packages e.g. from [Resolume](https://resolume.com/) or Touch Designer. See [below](#art-net-in) |
 | WLED Audio | <img width="100" src="https://github.com/user-attachments/assets/bfedf80b-6596-41e7-a563-ba7dd58cc476"/> | No controls | Listens to audio sent over the local network by WLED or WLED-MM and allows audio-reactive effects (♪ & ♫) to use audio data (volume and bands (FFT)) |
 | HUB75 Driver | <img width="100" src="https://github.com/user-attachments/assets/620f7c41-8078-4024-b2a0-39a7424f9678"/> | <img width="100" src="https://github.com/user-attachments/assets/4d386045-9526-4a5a-aa31-638058b31f32"/> | Drive HUB75 panels<br>Not implemented yet |
-| IR Driver | <img width="100" src="../../media/moonlight/drivers/IRDriver.jpeg"/> | <img width="100" src="../../media/moonlight/drivers/irdrivercontrols.png"/> | Receive IR commands and [Lights Control](../../moonlight/lightscontrol/) |
-| IMU Driver | <img width="100" src="../../media/moonlight/drivers/MPU-6050.jpg"/> | <img width="100" src="../../media/moonlight/drivers/IMUDriverControls.png"/> | Receive inertial data from an IMU / I2C peripheral, see [IO](../../moonbase/inputoutput/#i2c-peripherals)<br>Used in [particles effect](../../moonlight/effects/#moonlight-effects) |
+| IR Driver | <img width="100" src="../../media/moonlight/drivers/IRDriver.jpeg"/> | <img width="100" src="../../media/moonlight/drivers/irdrivercontrols.png"/> | Receive IR commands and [Lights Control](lightscontrol.md) |
+| IMU Driver | <img width="100" src="../../media/moonlight/drivers/MPU-6050.jpg"/> | <img width="100" src="../../media/moonlight/drivers/IMUDriverControls.png"/> | Receive inertial data from an IMU / I2C peripheral, see [IO](../moonbase/inputoutput.md#i2c-peripherals)<br>Used in [particles effect](effects.md#moonlight-effects) |
 
 ### Light Preset
 
-* **Max Power**: moved to [IO Module](../../moonbase/inputoutput) board presets.
+* **Max Power**: moved to [IO Module](../moonbase/inputoutput.md) board presets.
 
 * **Light preset**: Defines the channels per light and color order
 
@@ -111,9 +111,9 @@ Sends Lights in Art-Net compatible packages to an Art-Net controller specified b
 * **Used channels**: Calculated! Shows how many channels are used (e.g. in a universe of 512 only 170 RGB LEDs fits which is 510 channels, so 510 of the 512 channels are used).
 * **Nr of Outputs per IP**: Art-Net LED controllers can have more than 1 output (e.g. 12) If all outputs are sent, Art-Net will be sent to the next IP number.
 * **Universes per output**: How many universes can each output handle. This determines the maximum number of lights an output can drive (nr of universe x nr of channels per universe / channels per light)
-* **Total universes**: Calculated! Based on the nr of lights (specified by the [layout](../../moonlight/layouts/)), how many universes needs to be configured to sent all lights out.
+* **Total universes**: Calculated! Based on the nr of lights (specified by the [layout](layouts.md)), how many universes needs to be configured to sent all lights out.
 * **Channels per output**: How many channels will be sent to each output
-* **Total channels**: Calculated! Based on the nr of lights (specified by the [layout](../../moonlight/layouts/)), how many channels should be send to all outputs together to sent all lights out
+* **Total channels**: Calculated! Based on the nr of lights (specified by the [layout](layouts.md)), how many channels should be send to all outputs together to sent all lights out
 
 !!! tip "Controller settings"
     Set the number of universes and channels per universe also on the controller!
@@ -134,12 +134,12 @@ Receives Art-Net data from the network to setup a MoonLight device as an Art-Net
 * Universe Min-Max: Filters Universes (Art-Net only).
 * View: 
     * Select physical layer to directly store the received channels into the physical layer
-    * Select one of the (virtual layers) to take mapping into account (using layout specification and modifiers specified (recommended), see [Modifiers](../../moonlight/modifiers/), part of the [Effects Module](../../moonlight/effects/))
+    * Select one of the (virtual layers) to take mapping into account (using layout specification and modifiers specified (recommended), see [Modifiers](modifiers.md), part of the [Effects Module](effects.md))
 
 !!! tip "Other setup"
     * Add a Layout driver to specifify the fixture you are displaying on, e.g. Single Line for Tubes or Panel for Matrices
     * Add the Parallel LED Driver to enable connected LEDs
-    * Go to the [IO Module](../../moonbase/inputoutput) to define a board preset.
+    * Go to the [IO Module](../moonbase/inputoutput.md) to define a board preset.
 
 !!! tip "Running effects and Art-Net In"
     Effects can run at the same time, disable or delete them if you only want to run Art-Net In.
