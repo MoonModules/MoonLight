@@ -201,7 +201,7 @@
 					<div>
 						<div class="font-bold">Performance</div>
 						<div class="text-sm opacity-75"> <!-- 🌙 -->
-							Effects: {systemInformation.lps_effects} max &nbsp;|&nbsp; Drivers: {systemInformation.lps_drivers} max &nbsp;➡&nbsp; All: {systemInformation.lps_all} lps
+							Effects: {systemInformation.lps_effects}/s max &nbsp;|&nbsp; Drivers: {systemInformation.lps_drivers}/s max &nbsp;➡&nbsp; All: {systemInformation.lps_all} lps
 						</div>
 					</div>
 				</div>
