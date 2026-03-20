@@ -76,7 +76,7 @@
 ## 🚀 Quick Start
 
 ### 1️⃣ Flash & Go
-Use our [MoonLight Installer](https://moonmodules.org/MoonLight/gettingstarted/installation/) to flash MoonLight directly via a USB cable to your ESP32, connect LEDs to it and you are ready to go.
+Use our [MoonLight Installer](https://moonmodules.org/MoonLight/gettingstarted/installer/) to flash MoonLight directly via a USB cable to your ESP32, connect LEDs to it and you are ready to go.
 
 ### 2️⃣ Connect & Configure
 Built-in access point makes WiFi setup effortless. Configure through the intuitive web interface.

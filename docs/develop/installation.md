@@ -106,7 +106,7 @@ The development environment consists of
 
 **Step 3**: Connect to MoonLight
 
-Before changing code, test if the current download of MoonLight is running fine. Follow the instructions in [Connect MoonLight](https://moonmodules.org/MoonLight/gettingstarted/installation/#connect-moonlight) and [Setup MoonLight](https://moonmodules.org/MoonLight/gettingstarted/installation/#setup-moonlight).
+Before changing code, test if the current download of MoonLight is running fine. Follow the instructions in [Connect MoonLight](https://moonmodules.org/MoonLight/gettingstarted/installer/#connect-moonlight) and [Setup MoonLight](https://moonmodules.org/MoonLight/gettingstarted/installer/#setup-moonlight).
 
 * If you are developing or updating existing MoonLight installations MoonLight might be outdated or not show up correctly in the browser or not even appear. Two reasons
 
@@ -116,7 +116,7 @@ Before changing code, test if the current download of MoonLight is running fine.
         * build the project (✔) - if nodejs is not installed (yet) you will get errors. See troubleshooting
         * check in your github manager (gitkraken of github desktop) that a new WWWData.h is created
 
-    * An old version is cached in the browser. See [UI not showing when installing new version of MoonLight](https://moonmodules.org/MoonLight/gettingstarted/installation/#connect-moonlight) how to solve that.
+    * An old version is cached in the browser. See [UI not showing when installing new version of MoonLight](https://moonmodules.org/MoonLight/gettingstarted/installer/#connect-moonlight) how to solve that.
 
 * A MoonLight device can be accessed via it's IP address or via [http://ml-home.local](http://ml-home.local). The latter uses MDNS.
 

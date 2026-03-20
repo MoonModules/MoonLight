@@ -49,7 +49,7 @@ There are 3 levels to add functionality:
 
 * Go to the file(s) you want to change press edit and make the changes. 
 * ☑️ and ➡️ to build and or upload
-* Changes made to the UI are not always visible in the browser, clear the browser cache to see latest UI (see [connect to MoonLight](https://moonmodules.org/MoonLight/gettingstarted/installation/#connect-moonlight)).
+* Changes made to the UI are not always visible in the browser, clear the browser cache to see latest UI (see [connect to MoonLight](https://moonmodules.org/MoonLight/gettingstarted/installer/#connect-moonlight)).
 * MoonLight uses clang-format for c/c++ code and prettier for Svelte, javascript etc. Format your code before submitting! (right-click Format Document on each page you change)
 * Press Commit Changes..., enter a commit message and an extended description, Press Commit Changes
 

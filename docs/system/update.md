@@ -22,4 +22,4 @@ There are 2 ways to update the firmware in this module:
 When starting the update, a progress indicator is shown, upon completion the device will restart with the new firmware.
 
 !!! warning "Uptate on small devices not possible"
-    On some devices firmware update using above methods is not possible (yet) due to a limited amount of file size or memory (ESP32-D0 devices). Use the [Installer](https://moonmodules.org/MoonLight/gettingstarted/installation/) procedure instead (without erasing the device)
+    On some devices firmware update using above methods is not possible (yet) due to a limited amount of file size or memory (ESP32-D0 devices). Use the [Installer](https://moonmodules.org/MoonLight/gettingstarted/installer/) procedure instead (without erasing the device)
