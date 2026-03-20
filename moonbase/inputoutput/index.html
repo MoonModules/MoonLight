@@ -1,0 +1,3781 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="MoonLight is open-source software that lets you control a wide range of DMX and LED lights using ESP32 microcontrollers, for home, for artists, and for stages.">
+      
+      
+        <meta name="author" content="ewowi">
+      
+      
+      
+        <link rel="prev" href="../tasks/">
+      
+      
+        <link rel="next" href="../../network/sta/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../media/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>IO Module - MoonLight</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/moonlight.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+  
+  
+
+<script id="__analytics">function __md_analytics(){function e(){dataLayer.push(arguments)}window.dataLayer=window.dataLayer||[],e("js",new Date),e("config","G-R6QYDG0126"),document.addEventListener("DOMContentLoaded",(function(){document.forms.search&&document.forms.search.query.addEventListener("blur",(function(){this.value&&e("event","search",{search_term:this.value})}));document$.subscribe((function(){var t=document.forms.feedback;if(void 0!==t)for(var a of t.querySelectorAll("[type=submit]"))a.addEventListener("click",(function(a){a.preventDefault();var n=document.location.pathname,d=this.getAttribute("data-md-value");e("event","feedback",{page:n,data:d}),t.firstElementChild.disabled=!0;var r=t.querySelector(".md-feedback__note [data-md-value='"+d+"']");r&&(r.hidden=!1)})),t.hidden=!1})),location$.subscribe((function(t){e("config","G-R6QYDG0126",{page_path:t.pathname})}))}));var t=document.createElement("script");t.async=!0,t.src="https://www.googletagmanager.com/gtag/js?id=G-R6QYDG0126",document.getElementById("__analytics").insertAdjacentElement("afterEnd",t)}</script>
+  
+    <script>if("undefined"!=typeof __md_analytics){var consent=__md_get("__consent");consent&&consent.analytics&&__md_analytics()}</script>
+  
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="deep-purple" data-md-color-accent="pink">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#io-module" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="MoonLight" class="md-header__button md-logo" aria-label="MoonLight" data-md-component="logo">
+      
+  <img src="../../media/moonlight-logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            MoonLight
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              IO Module
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="deep-purple" data-md-color-accent="pink"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="pink"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="pink"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m14.3 16-.7-2h-3.2l-.7 2H7.8L11 7h2l3.2 9zM20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12zm-9.15 3.96h2.3L12 9z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/MoonModules/MoonLight" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    MoonModules/MoonLight
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../gettingstarted/overview/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../moonlight/overview/" class="md-tabs__link">
+          
+  
+  
+  MoonLight
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../overview/" class="md-tabs__link">
+          
+  
+  
+  MoonBase
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../network/sta/" class="md-tabs__link">
+          
+  
+  
+  Network
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../system/status/" class="md-tabs__link">
+          
+  
+  
+  System
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../develop/overview/" class="md-tabs__link">
+          
+  
+  
+  Develop
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../esp32sveltekit/" class="md-tabs__link">
+          
+  
+  
+  ESP32 SvelteKit
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../gettingstarted/" class="md-tabs__link">
+          
+  
+  
+  Build Tools
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../sveltekit/" class="md-tabs__link">
+          
+  
+  
+  Front End
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../statefulservice/" class="md-tabs__link">
+          
+  
+  
+  Back End
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--lifted md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="MoonLight" class="md-nav__button md-logo" aria-label="MoonLight" data-md-component="logo">
+      
+  <img src="../../media/moonlight-logo.png" alt="logo">
+
+    </a>
+    MoonLight
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/MoonModules/MoonLight" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    MoonModules/MoonLight
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../gettingstarted/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../gettingstarted/installer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MoonLight Installer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../gettingstarted/hardware/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MoonLight
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    MoonLight
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../moonlight/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MoonLight Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../moonlight/lightscontrol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lights Control
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../moonlight/effects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Effects module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../moonlight/modifiers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Modifiers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../moonlight/drivers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Drivers module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../moonlight/layouts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Layouts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../moonlight/channels/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Channels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../moonlight/livescripts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Live Scripts module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../moonlight/effects-tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to create stunning effects with Live Scripts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../moonlight/moonlightinfo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MoonLight info
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MoonBase
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    MoonBase
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MoonBase Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../filemanager/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    File Manager
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../devices/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Devices module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tasks module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IO Module
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IO Module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#board-preset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Board Preset
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#modded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Modded
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#max-power" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Max Power
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#switches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Switches
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ethernet-type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ethernet Type
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pins
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pin-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pin Types
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pin Types">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#led-outputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LED Outputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#audio-i2s" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audio (I2S)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#i2c" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        I2C
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#buttons-relays" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Buttons &amp; Relays
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#energy-monitoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Energy Monitoring
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ethernet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ethernet
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#communication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Communication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sensors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sensors
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#system-utility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        System &amp; Utility
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#i2c-peripherals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        I2C Peripherals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#naming-convention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Naming Convention
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#board-details" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Board Details
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Board Details">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#quinled-boards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        QuinLED Boards
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="QuinLED Boards">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dig-2-go-dig-uno-dig-quad" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dig-2-Go, Dig-Uno, Dig-Quad
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dig-next-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dig-Next-2
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dig-octa" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dig-Octa
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myhome-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MyHome-Control
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MyHome-Control">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mhc-esp32-p4-shield" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MHC ESP32-P4 shield
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mhc-v57-pro" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MHC V57 PRO
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stephanelec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        StephanElec
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="StephanElec">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#se16-v1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SE16 v1
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lightcrafter16" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LightCrafter16
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Network
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/sta/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    WiFi Station
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/ap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    WiFi Access Point
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/ethernet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ethernet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/mqtt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MQTT
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/ntp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NTP
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    System
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    System
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../system/status/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    System Status
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../system/metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    System Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../system/coredump/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Dump
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../system/update/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    System Update
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Develop
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Develop
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../develop/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Develop Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../develop/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../develop/development/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../develop/standardsguidelines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standards and Guidelines
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../develop/nodes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nodes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../develop/modules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Modules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../develop/layers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Layers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../develop/drivers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Drivers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../develop/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../develop/sveltekit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sveltekit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../develop/documentation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32 SvelteKit
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    ESP32 SvelteKit
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../esp32sveltekit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32 SvelteKit - Create Amazing IoT Projects
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Build Tools
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Build Tools
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../gettingstarted/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../buildprocess/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Build Process
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Front End
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Front End
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sveltekit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started with SvelteKit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../structure/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Customizing the Front End
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../stores/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stores
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../components/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Components
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Back End
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Back End
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../statefulservice/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developing with the Framework
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../restfulapi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RESTful API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="io-module">IO Module</h1>
+<p><img width="320" height="441" alt="io11" src="../inputoutput.png" /></p>
+<p>The IO module defines the <strong>hardware identity</strong> of your ESP32 device — which board it is, what pins do what, and how much power to allow. It is the foundation that all other modules and nodes build on: LED drivers read pin assignments from here, ethernet is configured here, I2C peripherals are discovered here.</p>
+<hr />
+<h2 id="board-preset">Board Preset</h2>
+<p>A dropdown listing all supported boards. Selecting a preset auto-configures <strong>all pins</strong>, <strong>max power</strong>, <strong>ethernet type</strong>, and <strong>switches</strong> to match the board's hardware layout.</p>
+<p><img width="320" height="441" alt="io11" src="../inputoutputpresets.png" /></p>
+<p>Currently supported boards:</p>
+<table>
+<thead>
+<tr>
+<th>Board</th>
+<th>MCU</th>
+<th>Max Power</th>
+<th>Ethernet</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>QuinLED Dig-2-Go</td>
+<td>ESP32-D0</td>
+<td>10 W</td>
+<td>—</td>
+<td>USB powered, ships with GRBW strip</td>
+</tr>
+<tr>
+<td>QuinLED Dig-Next-2</td>
+<td>ESP32-D0</td>
+<td>65 W</td>
+<td>—</td>
+<td>2 LED outputs, 4 relay pins</td>
+</tr>
+<tr>
+<td>QuinLED Dig-Uno v3</td>
+<td>ESP32-D0</td>
+<td>50 W</td>
+<td>—</td>
+<td>2 LED outputs</td>
+</tr>
+<tr>
+<td>QuinLED Dig-Quad v3</td>
+<td>ESP32-D0</td>
+<td>150 W</td>
+<td>—</td>
+<td>4 LED outputs</td>
+</tr>
+<tr>
+<td>QuinLED Dig-Octa v2</td>
+<td>ESP32-D0-16MB</td>
+<td>400 W</td>
+<td>LAN8720 (RMII)</td>
+<td>8 LED outputs, onboard ethernet</td>
+</tr>
+<tr>
+<td>Serg Universal Shield</td>
+<td>ESP32-D0</td>
+<td>50 W</td>
+<td>—</td>
+<td>IR, relay, mic, I2C</td>
+</tr>
+<tr>
+<td>Serg Mini Shield</td>
+<td>ESP32-D0</td>
+<td>50 W</td>
+<td>—</td>
+<td>Compact, mic, I2C</td>
+</tr>
+<tr>
+<td>Mathieu SE16 v1</td>
+<td>ESP32-S3</td>
+<td>500 W</td>
+<td>W5500 (SPI)</td>
+<td>16 LED outputs, Switch1: IR / Ethernet</td>
+</tr>
+<tr>
+<td>LightCrafter16</td>
+<td>ESP32-S3</td>
+<td>500 W</td>
+<td>W5500 (SPI)</td>
+<td>16 LED outputs, RS-485, voltage/current</td>
+</tr>
+<tr>
+<td>MHC V43 controller</td>
+<td>ESP32-D0</td>
+<td>75 W</td>
+<td>—</td>
+<td>4 LED outputs, mic</td>
+</tr>
+<tr>
+<td>MHC V57 PRO</td>
+<td>ESP32-D0</td>
+<td>75 W</td>
+<td>—</td>
+<td>4 LED outputs, relay</td>
+</tr>
+<tr>
+<td>MHC P4 Nano Shield V1.0</td>
+<td>ESP32-P4</td>
+<td>100 W</td>
+<td>—</td>
+<td>Up to 16 LED outputs, mic/line-in</td>
+</tr>
+<tr>
+<td>MHC P4 Nano Shield V2.0</td>
+<td>ESP32-P4</td>
+<td>100 W</td>
+<td>—</td>
+<td>Up to 16 LED outputs, I2C, mic/line-in</td>
+</tr>
+<tr>
+<td>Atom S3R</td>
+<td>ESP32-S3</td>
+<td>10 W</td>
+<td>—</td>
+<td>4 LED outputs</td>
+</tr>
+<tr>
+<td>Luxceo Mood1 Xiao Mod</td>
+<td>ESP32</td>
+<td>50 W</td>
+<td>—</td>
+<td>3 LED outputs, PIR sensor</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Tip:</strong> If your board is not listed, select the default preset (your build target) and manually assign pins. This sets the <strong>modded</strong> flag automatically.</p>
+</blockquote>
+<hr />
+<h2 id="modded">Modded</h2>
+<p>A checkbox that tracks whether the pin configuration has been <strong>manually customised</strong>. It is set automatically when you change any pin assignment or max power.</p>
+<ul>
+<li><strong>On</strong> — custom configuration; changing the board preset will <em>not</em> overwrite your pins</li>
+<li><strong>Off</strong> — using board defaults; selecting a different preset or toggling switches will reload the preset defaults</li>
+</ul>
+<p>To return to factory defaults for the current board: turn <strong>modded</strong> off.</p>
+<hr />
+<h2 id="max-power">Max Power</h2>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Type</th>
+<th>Range</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>maxPower</strong></td>
+<td>Number</td>
+<td>0–500 W</td>
+<td>10 W</td>
+</tr>
+</tbody>
+</table>
+<p>Sets the maximum power budget in Watts. The LED driver automatically limits brightness to stay within this envelope, based on the number of LEDs configured.</p>
+<p>The default of <strong>10 W</strong> (5 V × 2 A) is safe for USB power supplies. Increase this to match your actual power supply — for example, a 5 V / 40 A supply = 200 W.</p>
+<p>Used by LED drivers; see <a href="../../moonlight/drivers/">Drivers</a>.</p>
+<hr />
+<h2 id="switches">Switches</h2>
+<p>Two board-specific toggle switches that select between alternate pin configurations. What each switch does depends on the board preset:</p>
+<table>
+<thead>
+<tr>
+<th>Board</th>
+<th>Switch1</th>
+<th>Switch2</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>MHC P4 Nano Shield</strong></td>
+<td>Off: 16 LED pins (default). On: 8 LED + RS-485 + digital inputs</td>
+<td>Off: onboard mic (I2S). On: line-in audio</td>
+</tr>
+<tr>
+<td><strong>MHC P4 Nano Shield V2</strong></td>
+<td>Off: 16 LED pins (default). On: 8 LED + RS-485 + digital inputs</td>
+<td>Off: onboard mic (I2S). On: line-in audio</td>
+</tr>
+<tr>
+<td><strong>Mathieu SE16 v1</strong></td>
+<td>Off: infrared (default). On: ethernet (W5500 SPI)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>Serg Universal Shield</strong></td>
+<td>Selects second LED pin (GPIO 1 or GPIO 3)</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>Toggling a switch <strong>does not</strong> set the modded flag — it reloads the board preset with the new switch position applied.</p>
+<hr />
+<h2 id="ethernet-type">Ethernet Type</h2>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Type</th>
+<th>Options</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>ethernetType</strong></td>
+<td>Select</td>
+<td>Board Default, LAN8720 (RMII), W5500 (SPI)</td>
+</tr>
+</tbody>
+</table>
+<p>Selects the ethernet hardware type. This is typically set automatically by the board preset but can be changed manually.</p>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Interface</th>
+<th>Chips</th>
+<th>Available on</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Board Default</strong></td>
+<td>Compile-time pins</td>
+<td>Varies</td>
+<td>Boards with ethernet defined in <code>pins_arduino.h</code></td>
+</tr>
+<tr>
+<td><strong>LAN8720 (RMII)</strong></td>
+<td>Built-in EMAC</td>
+<td>LAN8720A</td>
+<td>ESP32-D0, ESP32-P4</td>
+</tr>
+<tr>
+<td><strong>W5500 (SPI)</strong></td>
+<td>External SPI module</td>
+<td>W5500, WIZ850IO</td>
+<td>All targets</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Board Default</strong> uses the pin definitions baked into the board variant at compile time (via <code>pins_arduino.h</code>). No runtime pin assignment is needed — <code>ETH.begin()</code> is called with no arguments and the framework resolves the pins automatically. This is used by boards like the ESP32-P4-ETH where ethernet pins are fixed by the hardware design. If the board variant does not define ethernet pins, this option has no effect.</p>
+<p><strong>LAN8720 (RMII)</strong> requires <strong>ETH MDC</strong>, <strong>ETH MDIO</strong>, and <strong>ETH CLK</strong> pins to be assigned. The six RMII data pins (TXD0, TX_EN, TXD1, RXD0, RXD1, CRS_DV) are hardwired in silicon and are reserved as <strong>Ethernet</strong> pin type.</p>
+<p><strong>W5500 (SPI)</strong> requires <strong>SPI SCK</strong>, <strong>SPI MISO</strong>, <strong>SPI MOSI</strong>, and <strong>PHY CS</strong> pins to be assigned. <strong>PHY IRQ</strong> is optional.</p>
+<p>See <a href="../../network/ethernet/">Ethernet settings</a> for hostname and IP configuration.</p>
+<hr />
+<h2 id="pins">Pins</h2>
+<p>The pin table lists every GPIO on the chip with its current assignment. Pins with usage "Unused" are hidden by default — use the filter to show all.</p>
+<p>Each pin row shows:</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>GPIO</strong></td>
+<td>GPIO number (read-only)</td>
+</tr>
+<tr>
+<td><strong>Usage</strong></td>
+<td>What the pin is used for — see <a href="#pin-types">Pin types</a> below</td>
+</tr>
+<tr>
+<td><strong>Index</strong></td>
+<td>Order within a usage type (e.g. LED D01, D02, …, D16)</td>
+</tr>
+<tr>
+<td><strong>Summary</strong></td>
+<td>Capability flags: ✅ Valid, 💡 Output capable, ⏰ RTC GPIO</td>
+</tr>
+<tr>
+<td><strong>Level</strong></td>
+<td>Current logic level: HIGH, LOW, or N/A</td>
+</tr>
+<tr>
+<td><strong>DriveCap</strong></td>
+<td>Drive strength: WEAK, STRONGER, MEDIUM, STRONGEST, or N/A</td>
+</tr>
+</tbody>
+</table>
+<p>Changing any pin assignment or index sets the <strong>modded</strong> flag.</p>
+<hr />
+<h2 id="pin-types">Pin Types</h2>
+<h3 id="led-outputs">LED Outputs</h3>
+<table>
+<thead>
+<tr>
+<th>Pin type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>LED</strong> 🚦</td>
+<td>Digital addressable LED data pin (WS2812B, SK6812, etc.)</td>
+</tr>
+<tr>
+<td><strong>LED CW</strong></td>
+<td>Cold white PWM channel</td>
+</tr>
+<tr>
+<td><strong>LED WW</strong></td>
+<td>Warm white PWM channel</td>
+</tr>
+<tr>
+<td><strong>LED R / G / B</strong></td>
+<td>Individual red / green / blue PWM channels</td>
+</tr>
+</tbody>
+</table>
+<p>Used by LED drivers to set up outputs. See <a href="../../moonlight/drivers/">Drivers</a>.</p>
+<h3 id="audio-i2s">Audio (I2S)</h3>
+<table>
+<thead>
+<tr>
+<th>Pin type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>I2S SD</strong></td>
+<td>Serial data (microphone or line-in input)</td>
+</tr>
+<tr>
+<td><strong>I2S WS</strong></td>
+<td>Word select (left/right channel clock)</td>
+</tr>
+<tr>
+<td><strong>I2S SCK</strong></td>
+<td>Serial clock</td>
+</tr>
+<tr>
+<td><strong>I2S MCLK</strong></td>
+<td>Master clock (not always required)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="i2c">I2C</h3>
+<table>
+<thead>
+<tr>
+<th>Pin type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>I2C SDA</strong> 🔌</td>
+<td>I2C data line</td>
+</tr>
+<tr>
+<td><strong>I2C SCL</strong> 🔌</td>
+<td>I2C clock line</td>
+</tr>
+</tbody>
+</table>
+<p>When both SDA and SCL are assigned, the I2C bus is initialised and peripherals are scanned automatically. See <a href="#i2c-peripherals">I2C peripherals</a> below.</p>
+<h3 id="buttons-relays">Buttons &amp; Relays</h3>
+<table>
+<thead>
+<tr>
+<th>Pin type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Button</strong> 🛎️</td>
+<td>Momentary push button (active-low, debounced)</td>
+</tr>
+<tr>
+<td><strong>Button</strong> 𓐟</td>
+<td>Toggle switch — any state change triggers</td>
+</tr>
+<tr>
+<td><strong>Button LightOn</strong> 🛎️</td>
+<td>Push button that toggles lights on/off in <a href="../../moonlight/lightscontrol/">Lights Control</a></td>
+</tr>
+<tr>
+<td><strong>Button LightOn</strong> 𓐟</td>
+<td>Toggle switch that toggles lights on/off</td>
+</tr>
+<tr>
+<td><strong>Relay</strong></td>
+<td>General-purpose relay output</td>
+</tr>
+<tr>
+<td><strong>Relay LightOn</strong> 🔀</td>
+<td>Relay driven by the lights on/off state</td>
+</tr>
+</tbody>
+</table>
+<h3 id="energy-monitoring">Energy Monitoring</h3>
+<table>
+<thead>
+<tr>
+<th>Pin type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Voltage</strong> ⚡️</td>
+<td>ADC input for voltage measurement</td>
+</tr>
+<tr>
+<td><strong>Current</strong> ⚡️</td>
+<td>ADC input for current measurement</td>
+</tr>
+<tr>
+<td><strong>Battery</strong></td>
+<td>ADC input for battery voltage</td>
+</tr>
+</tbody>
+</table>
+<p>See <a href="../../system/status/">System Status</a> and <a href="../../system/metrics/">System Metrics</a>.</p>
+<h3 id="ethernet">Ethernet</h3>
+<table>
+<thead>
+<tr>
+<th>Pin type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Ethernet</strong></td>
+<td>Reserved RMII data pins (hardwired in silicon)</td>
+</tr>
+<tr>
+<td><strong>SPI SCK</strong> 🔗</td>
+<td>SPI clock — for W5500 ethernet</td>
+</tr>
+<tr>
+<td><strong>SPI MISO</strong> 🔗</td>
+<td>SPI data in — for W5500 ethernet</td>
+</tr>
+<tr>
+<td><strong>SPI MOSI</strong> 🔗</td>
+<td>SPI data out — for W5500 ethernet</td>
+</tr>
+<tr>
+<td><strong>PHY CS</strong> 🔗</td>
+<td>SPI chip select — for W5500 ethernet</td>
+</tr>
+<tr>
+<td><strong>PHY IRQ</strong> 🔗</td>
+<td>Interrupt from ethernet PHY (optional)</td>
+</tr>
+<tr>
+<td><strong>ETH MDC</strong> 🔗</td>
+<td>Management Data Clock — RMII PHY register access</td>
+</tr>
+<tr>
+<td><strong>ETH MDIO</strong> 🔗</td>
+<td>Management Data I/O — RMII PHY register read/write</td>
+</tr>
+<tr>
+<td><strong>ETH CLK</strong> 🔗</td>
+<td>RMII 50 MHz reference clock to/from PHY</td>
+</tr>
+<tr>
+<td><strong>ETH PWR</strong> 🔗</td>
+<td>PHY power enable GPIO</td>
+</tr>
+</tbody>
+</table>
+<h3 id="communication">Communication</h3>
+<table>
+<thead>
+<tr>
+<th>Pin type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Infrared</strong> ♨️</td>
+<td>IR receiver input. Used by IR driver, see <a href="../../moonlight/drivers/">Drivers</a></td>
+</tr>
+<tr>
+<td><strong>DMX in</strong></td>
+<td>DMX512 input (planned)</td>
+</tr>
+<tr>
+<td><strong>RS-485 TX / RX / DE</strong></td>
+<td>RS-485 half-duplex UART — all three must be assigned for initialisation</td>
+</tr>
+<tr>
+<td><strong>Serial TX / RX</strong></td>
+<td>UART serial pins</td>
+</tr>
+</tbody>
+</table>
+<h3 id="sensors">Sensors</h3>
+<table>
+<thead>
+<tr>
+<th>Pin type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>PIR</strong> ♨️</td>
+<td>Passive infrared motion sensor — HIGH = lights on, LOW = lights off</td>
+</tr>
+<tr>
+<td><strong>Temperature</strong></td>
+<td>Temperature sensor input (planned)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="system-utility">System &amp; Utility</h3>
+<table>
+<thead>
+<tr>
+<th>Pin type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>High</strong></td>
+<td>Set GPIO permanently HIGH</td>
+</tr>
+<tr>
+<td><strong>Low</strong></td>
+<td>Set GPIO permanently LOW</td>
+</tr>
+<tr>
+<td><strong>Onboard LED</strong></td>
+<td>Board's built-in indicator LED</td>
+</tr>
+<tr>
+<td><strong>Onboard Key</strong></td>
+<td>Board's built-in button</td>
+</tr>
+<tr>
+<td><strong>Digital Input</strong></td>
+<td>General-purpose digital input (may have protection circuit)</td>
+</tr>
+<tr>
+<td><strong>Exposed</strong></td>
+<td>Header pin available for external use</td>
+</tr>
+<tr>
+<td><strong>Reserved</strong></td>
+<td>Pin reserved by other subsystem (USB, WiFi coprocessor, etc.)</td>
+</tr>
+<tr>
+<td><strong>SDIO CMD / CLK / D0–D3</strong></td>
+<td>SDIO interface (used by ESP-Hosted WiFi coprocessor on P4)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="i2c-peripherals">I2C Peripherals</h2>
+<p><img width="320" height="441" alt="io11" src="../inputoutputI2C.png" /></p>
+<p>When both I2C SDA and SCL pins are assigned, the bus is initialised and a scan runs automatically. Discovered devices appear in a table:</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Address</strong></td>
+<td>Hex address of the peripheral (e.g. 0x68)</td>
+</tr>
+<tr>
+<td><strong>Name</strong></td>
+<td>Device name — shows "unknown" until a driver identifies it</td>
+</tr>
+<tr>
+<td><strong>ID</strong></td>
+<td>Device ID — shows "unknown" until a driver provides it</td>
+</tr>
+</tbody>
+</table>
+<p>A driver node (e.g. the <a href="../../moonlight/drivers/#driver-nodes">IMU driver</a>) will fill in the name and ID when added.</p>
+<p>The <strong>I2C frequency</strong> can be adjusted (default 100 kHz). Higher frequencies (400 kHz) are faster but may not work with all peripherals or cable lengths.</p>
+<hr />
+<h2 id="naming-convention">Naming Convention</h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Abbreviation</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MicroController</td>
+<td>MCU</td>
+<td>The ESP32 chip (D0, S3, P4, …)</td>
+</tr>
+<tr>
+<td>MCU-Board</td>
+<td>MCB</td>
+<td>MCU on a PCB (e.g. ESP32-DevKitC, ESP32-S3-N8R8)</td>
+</tr>
+<tr>
+<td>Carrier Board</td>
+<td>CRB</td>
+<td>Board that the MCU-board plugs into (shield / controller)</td>
+</tr>
+<tr>
+<td>Device</td>
+<td>DVC</td>
+<td>Complete assembly in a case with connectors</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="board-details">Board Details</h2>
+<h3 id="quinled-boards">QuinLED Boards</h3>
+<h4 id="dig-2-go-dig-uno-dig-quad">Dig-2-Go, Dig-Uno, Dig-Quad</h4>
+<p><img alt="Dig-2-Go" src="https://shop.allnetchina.cn/cdn/shop/products/Led_4.jpg?v=1680836018&amp;width=1600" style="width: 200px" />
+<img alt="Dig-Uno" src="https://quinled.info/wp-content/uploads/2020/02/QuinLED-Dig-Uno-v3_front.png" style="width: 200px" />
+<img alt="Dig-Quad" src="https://quinled.info/wp-content/uploads/2021/11/QuinLED-Dig-Quad-AB_v3r1-2048x1154.png" style="width: 200px" /></p>
+<ul>
+<li><a href="https://quinled.info/quinled-dig2go/">Dig-2-Go</a>, <a href="https://quinled.info/pre-assembled-quinled-dig-uno/">Dig-Uno</a>, <a href="https://quinled.info/pre-assembled-quinled-dig-quad/">Dig-Quad</a>: Choose the esp32-d0 (4MB) board in the <a href="../../gettingstarted/installer/">MoonLight Installer</a><ul>
+<li>Dig-2-Go: Shipped with a 300 LED, GRBW led strip: Choose layout with 300 lights (e.g. Single Column for 1D, Panel 15x20 for 2D). Select Light preset GRBW in the LED Driver.</li>
+<li>Currently no OTA support on ESP32-D0 boards: Dig-2-Go, Uno, Quad.</li>
+</ul>
+</li>
+</ul>
+<h4 id="dig-next-2">Dig-Next-2</h4>
+<p><img alt="Dig-Next-2" src="https://quinled.info/wp-content/uploads/2026/01/P1087754-Enhanced-NR-2560x1358.jpg" style="width: 200px" /></p>
+<ul>
+<li><a href="https://quinled.info/dig-next-2">Dig-Next-2</a>: Choose the esp32-d0-pico2 board in the <a href="../../gettingstarted/installer/">MoonLight Installer</a></li>
+</ul>
+<h4 id="dig-octa">Dig-Octa</h4>
+<p><img alt="Dig-Octa" src="https://quinled.info/wp-content/uploads/2024/10/20240924_141857-2048x1444.png" style="width: 200px" /></p>
+<ul>
+<li><a href="https://quinled.info/quinled-dig-octa/">Dig-Octa</a>: Choose the esp32-d0-16mb board in the <a href="../../gettingstarted/installer/">MoonLight Installer</a></li>
+<li>On first install, erase flash first (Especially when other firmware like WLED was on it) as MoonLight uses a partition scheme with 3MB of flash</li>
+<li>After install, select the QuinLED board preset to have the pins assigned correctly.</li>
+<li>Features onboard LAN8720A ethernet — automatically configured by the board preset (ethernetType = LAN8720, RMII pins assigned)</li>
+</ul>
+<div class="admonition warning">
+<p class="admonition-title">GPIO 1 and GPIO 3 — UART0 TX/RX</p>
+<p>The Dig-Octa routes <strong>GPIO 1</strong> (UART0 TX) and <strong>GPIO 3</strong> (UART0 RX) to two of its eight LED outputs. These pins are shared with the USB-serial interface used for flashing and serial monitoring.</p>
+<p>When used as LED pins, MoonLight automatically suppresses UART0 output (both <code>Serial</code> and ESP-IDF logging) to prevent the LED driver and UART driver from fighting over the pin, which would cause serial noise and eventual watchdog crashes.</p>
+<p>However, the USB-serial chip is <strong>hardwired</strong> to GPIO 1/3 — so the serial monitor will still show garbage characters (<code>&gt;&gt;&gt;?&gt;&gt;&gt;...</code>) as it interprets the LED data signal as serial data. This is electrical, not a software bug — there is no way to prevent it.</p>
+<p><strong>Consequences of using GPIO 1/3 as LED pins:</strong></p>
+<ul>
+<li>All serial debug output is lost (logging is suppressed)</li>
+<li>Serial monitor shows garbage from LED data on the TX pin</li>
+<li>You lose the ability to diagnose issues via serial</li>
+</ul>
+<p>The board preset marks GPIO 1 and 3 as <strong>Reserved</strong> by default. If you need all 8 outputs, you can manually reassign them to LED — but be aware of the trade-offs above.</p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">Reset router</p>
+<p>You might need to reset your router if you first run WLED on the same board and no new IP is assigned.</p>
+</div>
+<h3 id="myhome-control">MyHome-Control</h3>
+<h4 id="mhc-esp32-p4-shield">MHC ESP32-P4 shield</h4>
+<p><img alt="MHC ESP32-P4 shield" src="../MHC-ESP32-P4-shield.png" style="width: 200px" /></p>
+<ul>
+<li>See <a href="https://shop.myhome-control.de/en/ABC-WLED-ESP32-P4-shield/HW10027">MHC ESP32-P4 shield</a>. Choose the esp32-p4-nano board in the <a href="../../gettingstarted/installer/">MoonLight Installer</a></li>
+<li>On new ESP32-P4 Nano boards, the WiFi coprocessor needs to be updated first to a recent version, currently ESP-Hosted v2.0.17, see the link in the <a href="../../gettingstarted/installer/">MoonLight Installer</a></li>
+<li>After install, select the <strong>MHC P4 Nano Shield</strong> board preset to have the pins assigned correctly.<ul>
+<li>Assuming 100W LED power; change if needed.</li>
+<li>Switch1: (also set the switches on the board)<ul>
+<li>off (default): 16 LED pins.</li>
+<li>On: 8 LED pins, 4 RS-485 pins and 4 exposed pins</li>
+</ul>
+</li>
+<li>Switch2:<ul>
+<li>off (default): Pins 10, 11, 12, 13 used for build-in Mic over I2S, pin 7 and 8: I2C SDA and SCL</li>
+<li>On: Pins 33, 25, 32, 36 used for Line in, pin 7 and 8: additional LED pins.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Add the Parallel LED Driver, see <a href="../../moonlight/drivers/">Drivers</a>. It uses <a href="https://github.com/troyhacks">@troyhacks</a> his parallel IO driver to drive all LED pins configured for the shield.</li>
+</ul>
+<h4 id="mhc-v57-pro">MHC V57 PRO</h4>
+<p><img alt="MHC V57 PRO" src="https://shop.myhome-control.de/media/09/90/ff/1771179461/WLED_V57_Bild1a.jpg" style="width: 200px" /></p>
+<ul>
+<li>See <a href="https://shop.myhome-control.de/en/ABC-WLED-controller-PRO-V57-with-iMOSFET/HW10030">MHC V57 PRO</a>. Choose the esp32-d0-pico2 board in the <a href="../../gettingstarted/installer/">MoonLight Installer</a></li>
+</ul>
+<h3 id="stephanelec">StephanElec</h3>
+<h4 id="se16-v1">SE16 v1</h4>
+<p><img alt="SE-16p" src="../../firmware/installer/images/esp32-s3-stephanelec-16p.jpg" style="width: 200px" /></p>
+<ul>
+<li>Choose the esp32-s3-n8r8v board in the <a href="../../gettingstarted/installer/">MoonLight Installer</a></li>
+<li>Set Switch1 the same as you set the jumper on the board: off / default: Infrared. on: Ethernet.</li>
+<li>Only 5 boards were ever produced. If you are one of the lucky few, feel free to reach out to limpkin on <a href="https://discord.gg/TC8NSUSCdV">Discord</a></li>
+<li>Use the <a href="https://github.com/MoonModules/MoonLight/blob/main/livescripts/Layouts/L_SE16.sc">L_SE16.sc</a> Live Script layout for this board. Controls: <code>mirroredPins</code> (wiring mode), <code>pinsAreColumns</code> (axis orientation), <code>ledsPerPin</code> (LEDs per output).</li>
+</ul>
+<h4 id="lightcrafter16">LightCrafter16</h4>
+<p><img alt="LightCrafter16" src="../../firmware/installer/images/esp32-s3-lightcrafter16.jpg" style="width: 200px" /></p>
+<ul>
+<li>Choose the esp32-s3-n8r8v board in the <a href="../../gettingstarted/installer/">MoonLight Installer</a></li>
+<li>Documentation to be soon published on <a href="https://www.limpkin.fr">limpkin's website</a></li>
+<li>Use the <a href="https://github.com/MoonModules/MoonLight/blob/main/livescripts/Layouts/L_LC16.sc">L_LC16.sc</a> Live Script layout for this board. Controls: <code>pinsAreColumns</code> (axis orientation), <code>ledsPerPin</code> (LEDs per output).</li>
+</ul>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2026 GPL-3.0 by <a href="https://github.com/MoonModules" target="_blank" rel="noopener">MoonModules</a> -
+<a href="#__consent">Change cookie settings</a>
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/MoonModules/MoonLight" target="_blank" rel="noopener" title="GitHub Repository" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://discord.gg/TC8NSUSCdV" target="_blank" rel="noopener" title="Discord Community" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M492.5 69.8c-.2-.3-.4-.6-.8-.7-38.1-17.5-78.4-30-119.7-37.1-.4-.1-.8 0-1.1.1s-.6.4-.8.8c-5.5 9.9-10.5 20.2-14.9 30.6-44.6-6.8-89.9-6.8-134.4 0-4.5-10.5-9.5-20.7-15.1-30.6-.2-.3-.5-.6-.8-.8s-.7-.2-1.1-.2C162.5 39 122.2 51.5 84.1 69c-.3.1-.6.4-.8.7C7.1 183.5-13.8 294.6-3.6 404.2c0 .3.1.5.2.8s.3.4.5.6c44.4 32.9 94 58 146.8 74.2.4.1.8.1 1.1 0s.7-.4.9-.7c11.3-15.4 21.4-31.8 30-48.8.1-.2.2-.5.2-.8s0-.5-.1-.8-.2-.5-.4-.6-.4-.3-.7-.4c-15.8-6.1-31.2-13.4-45.9-21.9-.3-.2-.5-.4-.7-.6s-.3-.6-.3-.9 0-.6.2-.9.3-.5.6-.7c3.1-2.3 6.2-4.7 9.1-7.1.3-.2.6-.4.9-.4s.7 0 1 .1c96.2 43.9 200.4 43.9 295.5 0 .3-.1.7-.2 1-.2s.7.2.9.4c2.9 2.4 6 4.9 9.1 7.2.2.2.4.4.6.7s.2.6.2.9-.1.6-.3.9-.4.5-.6.6c-14.7 8.6-30 15.9-45.9 21.8-.2.1-.5.2-.7.4s-.3.4-.4.7-.1.5-.1.8.1.5.2.8c8.8 17 18.8 33.3 30 48.8.2.3.6.6.9.7s.8.1 1.1 0c52.9-16.2 102.6-41.3 147.1-74.2.2-.2.4-.4.5-.6s.2-.5.2-.8c12.3-126.8-20.5-236.9-86.9-334.5zm-302 267.7c-29 0-52.8-26.6-52.8-59.2s23.4-59.2 52.8-59.2c29.7 0 53.3 26.8 52.8 59.2 0 32.7-23.4 59.2-52.8 59.2m195.4 0c-29 0-52.8-26.6-52.8-59.2s23.4-59.2 52.8-59.2c29.7 0 53.3 26.8 52.8 59.2 0 32.7-23.2 59.2-52.8 59.2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://reddit.com/r/moonmodules" target="_blank" rel="noopener" title="Reddit Community" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M0 256C0 114.6 114.6 0 256 0s256 114.6 256 256-114.6 256-256 256H37.1c-13.7 0-20.5-16.5-10.9-26.2L75 437C28.7 390.7 0 326.7 0 256m349.6-102.4c23.6 0 42.7-19.1 42.7-42.7s-19.1-42.7-42.7-42.7c-20.6 0-37.8 14.6-41.8 34-34.5 3.7-61.4 33-61.4 68.4v.2c-37.5 1.6-71.8 12.3-99 29.1-10.1-7.8-22.8-12.5-36.5-12.5-33 0-59.8 26.8-59.8 59.8 0 24 14.1 44.6 34.4 54.1 2 69.4 77.6 125.2 170.6 125.2s168.7-55.9 170.6-125.3c20.2-9.6 34.1-30.2 34.1-54 0-33-26.8-59.8-59.8-59.8-13.7 0-26.3 4.6-36.4 12.4-27.4-17-62.1-27.7-100-29.1v-.2c0-25.4 18.9-46.5 43.4-49.9 4.4 18.8 21.3 32.8 41.5 32.8zm-172.5 93.3c16.7 0 29.5 17.6 28.5 39.3s-13.5 29.6-30.3 29.6-31.4-8.8-30.4-30.5S160.3 247 177 247zm190.1 38.3c1 21.7-13.7 30.5-30.4 30.5s-29.3-7.9-30.3-29.6 11.8-39.3 28.5-39.3 31.2 16.6 32.1 38.3zm-48.1 56.7c-10.3 24.6-34.6 41.9-63 41.9s-52.7-17.3-63-41.9c-1.2-2.9.8-6.2 3.9-6.5 18.4-1.9 38.3-2.9 59.1-2.9s40.7 1 59.1 2.9c3.1.3 5.1 3.6 3.9 6.5"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://www.youtube.com/@MoonModulesLighting" target="_blank" rel="noopener" title="YouTube Channel" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M549.7 124.1c-6.2-23.7-24.8-42.3-48.3-48.6C458.9 64 288.1 64 288.1 64S117.3 64 74.7 75.5c-23.5 6.3-42 24.9-48.3 48.6C15 167 15 256.4 15 256.4s0 89.4 11.4 132.3c6.3 23.6 24.8 41.5 48.3 47.8C117.3 448 288.1 448 288.1 448s170.8 0 213.4-11.5c23.5-6.3 42-24.2 48.3-47.8 11.4-42.9 11.4-132.3 11.4-132.3s0-89.4-11.4-132.3zM232.2 337.6V175.2l142.7 81.2z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+      <div class="md-consent" data-md-component="consent" id="__consent" hidden>
+        <div class="md-consent__overlay"></div>
+        <aside class="md-consent__inner">
+          <form class="md-consent__form md-grid md-typeset" name="consent">
+            
+
+
+
+  
+
+<h4>Cookie consent</h4>
+<p>We use cookies to recognize your repeated visits and preferences, as well as to measure the effectiveness of our documentation and whether users find what they're searching for. With your consent, you're helping us to make our documentation better.</p>
+<input class="md-toggle" type="checkbox" id="__settings" checked>
+<div class="md-consent__settings">
+  <ul class="task-list">
+    
+    
+      
+        
+  
+  
+    
+    
+  
+  <li class="task-list-item">
+    <label class="task-list-control">
+      <input type="checkbox" name="analytics" checked>
+      <span class="task-list-indicator"></span>
+      Google Analytics
+    </label>
+  </li>
+
+      
+    
+    
+      
+        
+  
+  
+    
+    
+  
+  <li class="task-list-item">
+    <label class="task-list-control">
+      <input type="checkbox" name="github" checked>
+      <span class="task-list-indicator"></span>
+      GitHub
+    </label>
+  </li>
+
+      
+    
+    
+  </ul>
+</div>
+<div class="md-consent__controls">
+  
+    
+      <button class="md-button md-button--primary">Accept</button>
+    
+    
+    
+  
+    
+    
+      <button type="reset" class="md-button md-button--primary">Reject</button>
+    
+    
+  
+</div>
+          </form>
+        </aside>
+      </div>
+      <script>var consent=__md_get("__consent");if(consent)for(var input of document.forms.consent.elements)input.name&&(input.checked=consent[input.name]||!1);else"file:"!==location.protocol&&setTimeout((function(){document.querySelector("[data-md-component=consent]").hidden=!1}),250);var form=document.forms.consent;for(var action of["submit","reset"])form.addEventListener(action,(function(e){if(e.preventDefault(),"reset"===e.type)for(var n of document.forms.consent.elements)n.name&&(n.checked=!1);__md_set("__consent",Object.fromEntries(Array.from(new FormData(form).keys()).map((function(e){return[e,!0]})))),location.hash="",location.reload()}))</script>
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "toc.follow", "toc.integrate", "navigation.top", "content.code.copy", "search.highlight", "search.share"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/moonlight.js"></script>
+      
+    
+  </body>
+</html>
