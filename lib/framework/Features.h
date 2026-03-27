@@ -67,6 +67,11 @@
 #define FT_COREDUMP 0
 #endif
 
+// WiFi feature on by default (set to 0 for ethernet-only boards like ESP32-P4-ETH) // 🌙
+#ifndef FT_WIFI
+#define FT_WIFI 1
+#endif
+
 // Ethernet feature off by default
 #ifndef FT_ETHERNET
 #define FT_ETHERNET 0

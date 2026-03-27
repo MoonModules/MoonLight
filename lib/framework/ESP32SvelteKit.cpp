@@ -78,7 +78,9 @@ void ESP32SvelteKit::begin()
     _ethernetSettingsService.initEthernet();
 #endif
 
+#if FT_ENABLED(FT_WIFI) // 🌙
     _wifiSettingsService.initWiFi();
+#endif
 
     // SvelteKit uses a lot of handlers, so we need to increase the max_uri_handlers
     // WWWData has 77->27!! Endpoints, Framework has 27, and each module has 4 // 🌙 updated numbers
@@ -161,9 +163,11 @@ void ESP32SvelteKit::begin()
     _featureService.begin();
     _restartService.begin();
     _systemStatus.begin();
+#if FT_ENABLED(FT_WIFI) // 🌙
     _wifiSettingsService.begin();
     _wifiScanner.begin();
     _wifiStatus.begin();
+#endif
 #if FT_ENABLED(FT_ETHERNET)
     _ethernetSettingsService.begin();
     _ethernetStatus.begin();
@@ -253,8 +257,10 @@ void ESP32SvelteKit::_loop()
 
     while (1)
     {
+#if FT_ENABLED(FT_WIFI) // 🌙
         _wifiSettingsService.loop(); // 30 seconds
         _apSettingsService.loop();   // 10 seconds
+#endif
 #if FT_ENABLED(FT_MQTT)
         _mqttSettingsService.loop(); // 5 seconds
 #endif
@@ -268,9 +274,11 @@ void ESP32SvelteKit::_loop()
 #endif
 
         // Query the connectivity status
+#if FT_ENABLED(FT_WIFI) // 🌙
         wifi = _wifiStatus.isConnected();
         if (wifi) { wifi_eth_combined = true; }
         ap = _apStatus.isActive();
+#endif
         event = _socket.getConnectedClients() > 0;
 #if FT_ENABLED(FT_MQTT)
         mqtt = _mqttStatus.isConnected();
