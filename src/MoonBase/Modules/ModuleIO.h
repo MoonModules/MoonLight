@@ -738,6 +738,7 @@ class ModuleIO : public Module {
       _currentBoardPreset = updatedItem.value | "";
       EXT_LOGD(MB_TAG, "_newBoardPreset %s %s[%d]%s[%d].%s = %s -> %s", updatedItem.originId->c_str(), updatedItem.parent[0].c_str(), updatedItem.index[0], updatedItem.parent[1].c_str(), updatedItem.index[1], updatedItem.name.c_str(), updatedItem.oldValue.c_str(), updatedItem.value.as<String>().c_str());
       _newBoardPreset = updatedItem.value | "";  // Will be processed in loop20ms (sets modded=false)
+      _newBoardPresetPending = true;
       return;  // Don't process further for boardPreset changes
     }
 
@@ -746,11 +747,15 @@ class ModuleIO : public Module {
       if (updatedItem.value == false) {
         EXT_LOGD(MB_TAG, "modded set to false - reloading board defaults");
         _newBoardPreset = _state.data["boardPreset"] | "";  // Reload current board
+        _newBoardPresetPending = true;
       }
-    } else if (updatedItem.name == "switch1" || updatedItem.name == "switch2" || updatedItem.name == "ethernetType") {
-      // Rebuild pins with new switch/ethernet settings
+    } else if (updatedItem.name == "switch1" || updatedItem.name == "switch2") {
+      // Rebuild pins with new switch position — board preset must be re-applied
       EXT_LOGD(MB_TAG, "%s changed - rebuilding board defaults", updatedItem.name.c_str());
       _newBoardPreset = _state.data["boardPreset"] | "";
+      _newBoardPresetPending = true;
+      // ethernetType/ethPhyAddr/ethClkMode changes are handled automatically:
+      // addUpdateHandler calls readPins() which reads them directly from state
     } else if (updatedItem.name == "maxPower") {
       // Manual maxPower change = user is customizing
       newState["modded"] = true;
@@ -789,9 +794,9 @@ class ModuleIO : public Module {
     Module::loop20ms();
 
     // Update board presets
-    if (_newBoardPreset != "") {
+    if (_newBoardPresetPending) {
       setBoardPresetDefaults(_newBoardPreset);
-      _newBoardPreset = "";
+      _newBoardPresetPending = false;
       _initialUpdateDone = true;
     }
 
@@ -802,6 +807,7 @@ class ModuleIO : public Module {
       if (_state.data["modded"] == false) {
         EXT_LOGD(MB_TAG, "Applying board preset '%s' defaults from file (modded=false)", _currentBoardPreset.c_str());
         _newBoardPreset = _currentBoardPreset;
+        _newBoardPresetPending = true;
         // Will be processed in next loop20ms iteration at top, setting _initialUpdateDone
       } else {
         EXT_LOGD(MB_TAG, "Skipping board preset defaults - using custom pins from file (modded=true)");
@@ -1103,8 +1109,9 @@ class ModuleIO : public Module {
   }
 
  private:
-  Char<32> _currentBoardPreset;  // "" = none/unknown
-  Char<32> _newBoardPreset;      // "" = no pending preset (sentinel)
+  Char<32> _currentBoardPreset;        // "" = none/unknown
+  Char<32> _newBoardPreset;            // board name to apply; valid only when _newBoardPresetPending
+  bool _newBoardPresetPending = false; // true = apply _newBoardPreset on next loop20ms
   #if FT_BATTERY
   // used in loop1s()
   uint8_t _pinVoltage = UINT8_MAX;

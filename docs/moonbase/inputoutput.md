@@ -24,7 +24,7 @@ Currently supported boards:
 | Olimex ESP32-POE | ESP32-D0 | — | LAN8720 (RMII) | PoE board, onboard ethernet, GPIO12 power pin |
 | Serg Universal Shield | ESP32-D0 | 50 W | — | IR, relay, mic, I2C |
 | Serg Mini Shield | ESP32-D0 | 50 W | — | Compact, mic, I2C |
-| Mathieu SE16 v1 | ESP32-S3 | 500 W | W5500 (SPI) | 16 LED outputs, Switch1: IR / Ethernet |
+| SE16 v1 | ESP32-S3 | 500 W | W5500 (SPI) | 16 LED outputs, Switch1: IR / Ethernet |
 | LightCrafter16 | ESP32-S3 | 500 W | W5500 (SPI) | 16 LED outputs, RS-485, voltage/current |
 | MHC V43 controller | ESP32-D0 | 75 W | — | 4 LED outputs, mic |
 | MHC V57 PRO | ESP32-D0 | 75 W | — | 4 LED outputs, relay |
@@ -203,9 +203,9 @@ Two board-specific toggle switches that select between alternate pin configurati
 
 | Board | Switch1 | Switch2 |
 |---|---|---|
-| **MHC P4 Nano Shield** | Off: 16 LED pins (default). On: 8 LED + RS-485 + digital inputs | Off: onboard mic (I2S). On: line-in audio |
-| **MHC P4 Nano Shield V2** | Off: 16 LED pins (default). On: 8 LED + RS-485 + digital inputs | Off: onboard mic (I2S). On: line-in audio |
-| **Mathieu SE16 v1** | Off: infrared (default). On: ethernet (W5500 SPI) | — |
+| **MHC P4 Nano Shield V1.0** | Off: 16 LED pins (default). On: 8 LED + RS-485 + digital inputs | Off: onboard mic (I2S). On: line-in audio |
+| **MHC P4 Nano Shield V2.0** | Off: 16 LED pins (default). On: 8 LED + RS-485 + digital inputs | Off: onboard mic (I2S). On: line-in audio |
+| **SE16 v1** | Off: infrared (default). On: ethernet (W5500 SPI) | — |
 | **Serg Universal Shield** | Selects second LED pin (GPIO 1 or GPIO 3) | — |
 
 Toggling a switch **does not** set the modded flag — it reloads the board preset with the new switch position applied.
@@ -336,7 +336,7 @@ Board presets set the correct value automatically.
 
 * See [MHC ESP32-P4 shield](https://shop.myhome-control.de/en/ABC-WLED-ESP32-P4-shield/HW10027). Choose the esp32-p4-nano board in the [MoonLight Installer](../gettingstarted/installer.md)
 * On new ESP32-P4 Nano boards, the WiFi coprocessor needs to be updated first to a recent version, currently ESP-Hosted v2.0.17, see the link in the [MoonLight Installer](../gettingstarted/installer.md)
-* After install, select the **MHC P4 Nano Shield** board preset to have the pins assigned correctly.
+* After install, select the **MHC P4 Nano Shield V1.0** board preset to have the pins assigned correctly.
     * Assuming 100W LED power; change if needed.
     * Switch1: (also set the switches on the board)
         * off (default): 16 LED pins.
