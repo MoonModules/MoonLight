@@ -1,5 +1,8 @@
-// Drip - single drip falling with gravity
-// Original: drip.wled by Andrew Tuline
+// E_Drip.sc - Drip
+// Simulates a single drip falling with gravity and resetting at the bottom.
+// speed: drip gravity/acceleration
+// fade: trail fade speed (1=long trail, 255=instant)
+// @Copyright © 2026 GitHub MoonLight Commit Authors
 
 uint8_t speed = 50;
 uint8_t fade = 64;

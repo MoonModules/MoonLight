@@ -1,3 +1,9 @@
+// E_octo.sc - Octopus
+// Renders a rotating spiral pattern using polar-mapped sine waves.
+// speed: rotation speed
+// branches: number of spiral arms
+// @Copyright © 2026 GitHub MoonLight Commit Authors
+
 #define PI 3.1415926535
 int nb_branches;
 uint8_t C_X;

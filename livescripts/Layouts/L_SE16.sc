@@ -1,3 +1,10 @@
+// L_SE16.sc - ShieldEsp32 16-Pin Layout
+// Defines a 16-pin strip layout with optional mirrored and column/row orientation.
+// mirroredPins: pair adjacent pins in opposite directions
+// pinsAreColumns: true = strips are columns, false = strips are rows
+// ledsPerPin: number of LEDs per output pin
+// @Copyright © 2026 GitHub MoonLight Commit Authors
+
 bool mirroredPins = false;
 bool pinsAreColumns = false;
 uint16_t ledsPerPin = 10;

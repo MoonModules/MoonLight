@@ -1,3 +1,7 @@
+// E_lines.sc - Vertical Red Line
+// Draws a red vertical line that scrolls horizontally across the display.
+// @Copyright © 2026 GitHub MoonLight Commit Authors
+
 void loop() {
   fadeToBlackBy(100);
   int x = millis() / 100;

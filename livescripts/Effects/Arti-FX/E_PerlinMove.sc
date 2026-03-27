@@ -1,3 +1,4 @@
+// E_PerlinMove.sc
 // Perlin Move - noise-driven moving pixels
 // Original: PerlinMove.wled from MoonModules/MM-Effects
 

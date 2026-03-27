@@ -1,3 +1,4 @@
+// E_RainbowPinwheel.sc
 // Rainbow Pinwheel - scrolling rainbow
 // Original: rainbow_pinwheel.wled (PixelBlaze)
 

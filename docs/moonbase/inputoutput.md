@@ -244,7 +244,7 @@ See [Ethernet settings](../network/ethernet.md) for hostname and IP configuratio
 
 The MDIO address of the ethernet PHY chip on the RMII bus. Only applies to **LAN8720 (RMII)** mode.
 
-Most LAN8720A boards use address **0**. A small number of modules use address **1** (some bare LAN8720 breakout modules). Check your board's datasheet if ethernet does not initialise. Board presets set the correct value automatically.
+Most LAN8720A boards use address **0**. Some modules use address **1** (for example, certain bare LAN8720 breakout modules). Check your board's datasheet if ethernet does not initialise. Board presets set the correct value automatically.
 
 ---
 

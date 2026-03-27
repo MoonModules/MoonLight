@@ -1,3 +1,4 @@
+// E_SpinCycle.sc
 // Spin Cycle - spinning color pattern
 // Original: spin_cycle.wled (PixelBlaze, converted by Andrew Tuline)
 

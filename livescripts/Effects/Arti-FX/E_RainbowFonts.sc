@@ -1,3 +1,4 @@
+// E_RainbowFonts.sc
 // Rainbow Fonts - center-outward rainbow waves
 // Original: rainbow_fonts.wled (PixelBlaze, converted by Andrew Tuline)
 

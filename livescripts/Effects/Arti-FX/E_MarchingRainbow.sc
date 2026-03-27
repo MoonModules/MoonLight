@@ -1,3 +1,4 @@
+// E_MarchingRainbow.sc
 // Marching Rainbow - layered sine waves
 // Original: marching_rainbow.wled (PixelBlaze, converted by Andrew Tuline)
 

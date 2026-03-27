@@ -1,6 +1,7 @@
-// Bright Pulse - fill LEDs based on audio volume
-// Original: BrightPulseSR.wled (idea by @tony)
-// Requires an audio driver (WLED Audio or FastLED Audio)
+// E_BrightPulse.sc - Bright Pulse
+// Fills all LEDs with a brightness level driven by audio volume.
+// sensitivity: audio sensitivity scaling (higher = brighter response)
+// @Copyright © 2026 GitHub MoonLight Commit Authors
 
 uint8_t speed = 128;
 

@@ -1,3 +1,4 @@
+// E_Kitt.sc
 // Kitt - bouncing bar of light
 // Original: Kitt.wled from MoonModules/MM-Effects
 

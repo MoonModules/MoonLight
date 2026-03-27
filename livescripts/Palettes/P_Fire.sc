@@ -1,4 +1,6 @@
-// P_Fire.sc
+// P_Fire.sc - Fire Palette
+// Defines a black-red-orange-yellow-white gradient palette for fire effects.
+// @Copyright © 2026 GitHub MoonLight Commit Authors
 
 void setup() {
   setPalEntry(0,   0,   0,   0);

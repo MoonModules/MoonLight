@@ -1,3 +1,9 @@
+// L_panel.sc - Single Panel Layout
+// Defines a snake-wired rectangular LED panel on a single pin.
+// width: panel width in pixels
+// height: panel height in pixels
+// @Copyright © 2026 GitHub MoonLight Commit Authors
+
 uint8_t width = 16;
 uint8_t height = 16;
 

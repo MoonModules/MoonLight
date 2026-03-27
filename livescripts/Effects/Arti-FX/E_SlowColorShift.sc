@@ -1,3 +1,4 @@
+// E_SlowColorShift.sc
 // Slow Color Shift - gently shifting colors
 // Original: slow_color_shift.wled (PixelBlaze, converted by Andrew Tuline)
 

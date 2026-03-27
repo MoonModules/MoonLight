@@ -1,3 +1,4 @@
+// E_Ripple.sc
 // Ripple - expanding ripple from random center
 // Original: ripple.wled by Andrew Tuline
 

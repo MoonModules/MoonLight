@@ -1,3 +1,4 @@
+// E_GlitchBands.sc
 // Glitch Bands - glitchy color bands
 // Original: glitch_bands.wled (PixelBlaze, converted by Andrew Tuline)
 

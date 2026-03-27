@@ -1,5 +1,6 @@
-// Color Twinkles - sparkling color twinkles
-// Original: color_twinkles.wled (PixelBlaze, converted by Andrew Tuline)
+// E_ColorTwinkles.sc - Color Twinkles
+// Sparkling color twinkles that fade in and out with shifting hues.
+// @Copyright © 2026 GitHub MoonLight Commit Authors
 
 #define PI2 6.28318
 

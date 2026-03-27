@@ -1,3 +1,4 @@
+// E_RainbowFonts2.sc
 // Rainbow Fonts 2 - center-outward with oscillating offset
 // Original: rainbow_fonts_2.wled (PixelBlaze, converted by Andrew Tuline)
 

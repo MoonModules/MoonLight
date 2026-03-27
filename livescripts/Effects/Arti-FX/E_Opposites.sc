@@ -1,3 +1,4 @@
+// E_Opposites.sc
 // Opposites - opposing wave patterns
 // Original: opposites.wled (PixelBlaze, converted by Andrew Tuline)
 

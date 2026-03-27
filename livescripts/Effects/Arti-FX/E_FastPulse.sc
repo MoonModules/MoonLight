@@ -1,5 +1,6 @@
-// Fast Pulse - pulsing light wave
-// Original: fast_pulse.wled (PixelBlaze, converted by Andrew Tuline)
+// E_FastPulse.sc - Fast Pulse
+// A sharp pulsing light wave that travels along the strip with color shift.
+// @Copyright © 2026 GitHub MoonLight Commit Authors
 
 #define PI2 6.28318
 

@@ -1,3 +1,4 @@
+// E_WaveSins.sc
 // Wave Sins - phase-shifted beat sine waves
 // Original: WaveSins.wled by Andrew Tuline
 

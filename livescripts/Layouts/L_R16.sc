@@ -1,6 +1,7 @@
-// Rings16Layout: 16 rings of 24 LEDs arranged in a hexagonal pattern.
-// Each ring is assigned to its own pin (16 pins total).
-// Ring positions match the Rings16Layout C++ class.
+// L_R16.sc - Rings16 Layout
+// Arranges 16 rings of 24 LEDs each in a hexagonal pattern, one pin per ring.
+// scale: spacing multiplier between rings
+// @Copyright © 2026 GitHub MoonLight Commit Authors
 
 uint8_t scale = 1;
 

@@ -1,3 +1,4 @@
+// E_Matrix2DPulse.sc
 // Matrix 2D Pulse - pulsing 2D matrix pattern
 // Original: matrix_2D_pulse.wled (PixelBlaze, converted by Ewoud Wijma)
 // Requires a 2D layout (panel)

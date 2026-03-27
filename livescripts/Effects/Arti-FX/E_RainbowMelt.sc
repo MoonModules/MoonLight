@@ -1,3 +1,4 @@
+// E_RainbowMelt.sc
 // Rainbow Melt - melting rainbow from center
 // Original: rainbow_melt.wled (PixelBlaze, converted by Andrew Tuline)
 

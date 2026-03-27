@@ -25,6 +25,7 @@ class FastLEDAudioDriver : public Node {
  private:
   // Member variables for audio configuration
   fl::audio::ConfigI2S* i2sConfig = nullptr;
+  fl::audio::ConfigPdm* pdmConfig = nullptr;
   fl::audio::Config* config = nullptr;
   fl::shared_ptr<fl::audio::IInput> audioInput;
 
@@ -42,6 +43,7 @@ class FastLEDAudioDriver : public Node {
   uint8_t channel = (uint8_t)fl::audio::AudioChannel::Left;
   uint8_t gain = 128;
   bool drainBuffer = false; // if false 60 fps. otherwise 40 fps
+  Char<32> status = "No pins";
 
   void setup() override {
     addControl(signalConditioning, "signalConditioning", "checkbox");
@@ -53,6 +55,7 @@ class FastLEDAudioDriver : public Node {
     addControlValue("Right");
     addControlValue("Both");
     addControl(drainBuffer, "drainBuffer", "checkbox");
+    addControl(status, "status", "text", 0, 32, true);
 
     ioUpdateHandler = moduleIO->addUpdateHandler([this](const String& originId) { readPins(); });
     readPins();  // Node added at runtime so initial IO update not received so run explicitly
@@ -169,9 +172,13 @@ class FastLEDAudioDriver : public Node {
     changed = moduleIO->updatePin(pinI2SSCK, pin_I2S_SCK) || changed;
 
     if (changed) {
-      EXT_LOGI(ML_TAG, "(re)creating audioInput %d %d %d", pinI2SWS, pinI2SSD, pinI2SSCK);
       stopService();
-      if (pinI2SWS != UINT8_MAX && pinI2SSD != UINT8_MAX && pinI2SSCK != UINT8_MAX) startService();
+      if (pinI2SWS != UINT8_MAX && pinI2SSD != UINT8_MAX) {
+        EXT_LOGI(ML_TAG, "(re)creating audioInput WS:%d SD:%d SCK:%d (%s)", pinI2SWS, pinI2SSD, pinI2SSCK, pinI2SSCK != UINT8_MAX ? "I2S" : "PDM");
+        startService();
+      } else {
+        updateControl("status", "No pins");
+      }
     }
   }
 
@@ -227,24 +234,38 @@ class FastLEDAudioDriver : public Node {
   }
 
   void startService() {
-    // Create configuration objects
-    i2sConfig = new fl::audio::ConfigI2S(pinI2SWS, pinI2SSD, pinI2SSCK, 0, channel == 1 ? fl::audio::AudioChannel::Right : channel == 2 ? fl::audio::AudioChannel::Both : fl::audio::AudioChannel::Left, 44100, 16, fl::audio::I2SCommFormat::Philips);
-
-    config = new fl::audio::Config(*i2sConfig);
+    if (pinI2SSCK != UINT8_MAX) {
+      // Standard I2S microphone (3 pins: WS, SD, SCK)
+      i2sConfig = new fl::audio::ConfigI2S(pinI2SWS, pinI2SSD, pinI2SSCK, 0, channel == 1 ? fl::audio::AudioChannel::Right : channel == 2 ? fl::audio::AudioChannel::Both : fl::audio::AudioChannel::Left, 44100, 16, fl::audio::I2SCommFormat::Philips);
+      config = new fl::audio::Config(*i2sConfig);
+    } else {
+      // PDM microphone (2 pins: SD=data, WS=clock) — e.g. QuinLED Dig-Next-2
+      pdmConfig = new fl::audio::ConfigPdm(pinI2SSD, pinI2SWS, 0);
+      config = new fl::audio::Config(*pdmConfig);
+    }
 
     fl::string errorMsg;
     audioInput = fl::audio::IInput::create(*config, &errorMsg);
     if (!audioInput) {
       EXT_LOGE(ML_TAG, "Failed to create audio input: %s", errorMsg.c_str());
+      updateControl("status", errorMsg.c_str());
       return;
     }
     audioInput->start();
+    fl::string startError;
+    if (audioInput->error(&startError)) {
+      EXT_LOGE(ML_TAG, "Audio input error after start: %s", startError.c_str());
+      updateControl("status", startError.c_str());
+    } else {
+      updateControl("status", pinI2SSCK != UINT8_MAX ? "I2S active" : "PDM active");
+    }
   }
 
   void stopService() {
     if (audioInput) {
       audioInput->stop();
-      audioInput.reset();  // Explicitly release shared_ptr, even makes it a nullptr...
+      audioInput.reset();
+      updateControl("status", "Stopped");
     }
 
     // Clean up raw pointers
@@ -256,6 +277,11 @@ class FastLEDAudioDriver : public Node {
     if (i2sConfig) {
       delete i2sConfig;
       i2sConfig = nullptr;
+    }
+
+    if (pdmConfig) {
+      delete pdmConfig;
+      pdmConfig = nullptr;
     }
   }
 

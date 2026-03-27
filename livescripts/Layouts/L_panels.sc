@@ -1,3 +1,12 @@
+// L_panels.sc - Multi-Panel Grid Layout
+// Arranges multiple LED panels in a grid with configurable dimensions and snake wiring.
+// horizontalPanels: number of panels across
+// verticalPanels: number of panels down
+// panelWidth: width of each panel in pixels
+// panelHeight: height of each panel in pixels
+// snake: enable snake (zigzag) wiring within panels
+// @Copyright © 2026 GitHub MoonLight Commit Authors
+
 uint8_t  horizontalPanels = 1;
 uint8_t  verticalPanels = 4;
 uint8_t  panelWidth = 32;

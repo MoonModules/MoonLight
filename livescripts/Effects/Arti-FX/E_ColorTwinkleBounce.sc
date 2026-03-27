@@ -1,5 +1,6 @@
-// Color Twinkle Bounce - twinkling bouncing colors
-// Original: color_twinkle_bounce.wled (PixelBlaze, converted by Andrew Tuline)
+// E_ColorTwinkleBounce.sc - Color Twinkle Bounce
+// Creates twinkling lights that bounce and shift color over time.
+// @Copyright © 2026 GitHub MoonLight Commit Authors
 
 #define PI2 6.28318
 

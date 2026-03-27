@@ -1,3 +1,4 @@
+// E_HalloweenTwinkles.sc
 // Halloween Color Twinkles - orange and purple twinkles
 // Original: halloween_color_twinkles.wled (PixelBlaze, converted by Andrew Tuline)
 

@@ -1,5 +1,8 @@
-// Beatmania - beat-synced moving lights
-// Original: beatmania.wled by Andrew Tuline
+// E_Beatmania.sc - Beatmania
+// Beat-synced moving lights that bounce between positions using sine waves.
+// speed: movement speed of the light positions
+// intensity: color and brightness variation intensity
+// @Copyright © 2026 GitHub MoonLight Commit Authors
 
 uint8_t speed = 128;
 uint8_t intensity = 128;

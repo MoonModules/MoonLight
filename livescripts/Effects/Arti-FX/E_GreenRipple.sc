@@ -1,3 +1,4 @@
+// E_GreenRipple.sc
 // Green Ripple Reflections - layered green sine waves
 // Original: green_ripple_reflections.wled (PixelBlaze, converted by Andrew Tuline)
 

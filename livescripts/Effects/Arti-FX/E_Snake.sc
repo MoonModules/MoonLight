@@ -1,3 +1,4 @@
+// E_Snake.sc
 // Snake - moving segment of light
 // Original: snake.wled (PixelBlaze)
 

@@ -1,3 +1,4 @@
+// E_Smiley.sc
 // Smiley - draws a smiley face on a 2D matrix
 // Original: Smiley.wled from MoonModules/MM-Effects
 // Requires a 2D layout (panel)
