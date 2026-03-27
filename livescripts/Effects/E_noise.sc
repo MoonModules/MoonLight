@@ -2,7 +2,6 @@
 // Fills a 2D matrix with animated Perlin noise colored by palette.
 // speed: animation speed
 // scale: noise zoom level
-// @Copyright © 2026 GitHub MoonLight Commit Authors
 
 uint8_t speed = 128;
 uint8_t scale = 128;

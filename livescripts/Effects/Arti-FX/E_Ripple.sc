@@ -1,6 +1,7 @@
-// E_Ripple.sc
-// Ripple - expanding ripple from random center
-// Original: ripple.wled by Andrew Tuline
+// E_Ripple.sc - Ripple
+// An expanding ripple spreads outward from a random center point along the strip.
+// fade: trail fade speed (1=long trail, 255=instant)
+// Original: ripple.wled by Andrew Tuline, cross compiled by MoonLight
 
 uint8_t fade = 64;
 int step = -1;

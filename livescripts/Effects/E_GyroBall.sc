@@ -2,7 +2,6 @@
 // A glowing ball that rolls across the display following gravity from an IMU sensor.
 // size: radius of the ball in pixels
 // trail: trail fade speed (1=long trail, 255=no trail)
-// @Copyright © 2026 GitHub MoonLight Commit Authors
 
 uint8_t ballSize = 2;
 uint8_t trail = 200;

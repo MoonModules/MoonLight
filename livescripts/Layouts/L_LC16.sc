@@ -2,7 +2,6 @@
 // Defines a 16-pin snake-wired grid layout for the LightCrafter16 board.
 // pinsAreColumns: true = strips are columns, false = strips are rows
 // ledsPerPin: number of LEDs per output pin
-// @Copyright © 2026 GitHub MoonLight Commit Authors
 
 bool pinsAreColumns = false;
 uint16_t ledsPerPin = 10;

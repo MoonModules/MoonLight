@@ -5,7 +5,6 @@
 // panelWidth: width of each panel in pixels
 // panelHeight: height of each panel in pixels
 // snake: enable snake (zigzag) wiring within panels
-// @Copyright © 2026 GitHub MoonLight Commit Authors
 
 uint8_t  horizontalPanels = 1;
 uint8_t  verticalPanels = 4;

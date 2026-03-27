@@ -1,6 +1,6 @@
 // E_Clock2D.sc - 2D Analog Clock
 // Draws an analog clock face with hour markers and rotating hands on a 2D matrix.
-// @Copyright © 2026 GitHub MoonLight Commit Authors
+// Original: Clock2D.wled from MoonModules/MM-Effects, cross compiled by MoonLight
 
 #define PI2 6.28318
 

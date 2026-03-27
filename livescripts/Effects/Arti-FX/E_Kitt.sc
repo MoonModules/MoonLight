@@ -1,6 +1,6 @@
-// E_Kitt.sc
-// Kitt - bouncing bar of light
-// Original: Kitt.wled from MoonModules/MM-Effects
+// E_Kitt.sc - Kitt
+// A colored bar of light bounces back and forth along the strip like the KITT scanner.
+// Original: Kitt.wled from MoonModules/MM-Effects, cross compiled by MoonLight
 
 int pixelCounter = 0;
 bool goingUp = true;

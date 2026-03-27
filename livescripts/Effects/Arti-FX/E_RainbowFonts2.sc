@@ -1,6 +1,6 @@
-// E_RainbowFonts2.sc
-// Rainbow Fonts 2 - center-outward with oscillating offset
-// Original: rainbow_fonts_2.wled (PixelBlaze, converted by Andrew Tuline)
+// E_RainbowFonts2.sc - Rainbow Fonts 2
+// Center-outward rainbow waves with a slowly oscillating center offset for added movement.
+// Original: rainbow_fonts_2.wled (PixelBlaze, converted by Andrew Tuline), cross compiled by MoonLight
 
 #define PI2 6.28318
 

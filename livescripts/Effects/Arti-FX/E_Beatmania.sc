@@ -2,7 +2,7 @@
 // Beat-synced moving lights that bounce between positions using sine waves.
 // speed: movement speed of the light positions
 // intensity: color and brightness variation intensity
-// @Copyright © 2026 GitHub MoonLight Commit Authors
+// Original: beatmania.wled by Andrew Tuline, cross compiled by MoonLight
 
 uint8_t speed = 128;
 uint8_t intensity = 128;

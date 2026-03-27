@@ -1,6 +1,6 @@
 // E_FireworkDust.sc - Firework Dust
 // Random sparkles that flash briefly in random colors like firework dust.
-// @Copyright © 2026 GitHub MoonLight Commit Authors
+// Original: firework_dust.wled (PixelBlaze), cross compiled by MoonLight
 
 void loop() {
   for (int i = 0; i < NUM_LEDS; i++) {

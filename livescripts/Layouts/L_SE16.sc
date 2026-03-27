@@ -3,7 +3,6 @@
 // mirroredPins: pair adjacent pins in opposite directions
 // pinsAreColumns: true = strips are columns, false = strips are rows
 // ledsPerPin: number of LEDs per output pin
-// @Copyright © 2026 GitHub MoonLight Commit Authors
 
 bool mirroredPins = false;
 bool pinsAreColumns = false;

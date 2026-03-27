@@ -1,6 +1,6 @@
-// E_GreenRipple.sc
-// Green Ripple Reflections - layered green sine waves
-// Original: green_ripple_reflections.wled (PixelBlaze, converted by Andrew Tuline)
+// E_GreenRipple.sc - Green Ripple Reflections
+// Layered green sine waves that create a rippling reflection pattern along the strip.
+// Original: green_ripple_reflections.wled (PixelBlaze, converted by Andrew Tuline), cross compiled by MoonLight
 
 #define PI2 6.28318
 #define PI6 18.84954

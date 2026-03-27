@@ -5,7 +5,6 @@
 // tilt: center tilt position
 // range: sweep amplitude
 // invert: invert every other fixture for mirrored movement
-// @Copyright © 2026 GitHub MoonLight Commit Authors
 
 uint8_t bpm = 30;
 uint8_t pan = 175;

@@ -1,6 +1,6 @@
 // E_EdgeBurst.sc - Edge Burst
 // Produces color bursts that sweep inward from both edges of the strip.
-// @Copyright © 2026 GitHub MoonLight Commit Authors
+// Original: edge_burst.wled (PixelBlaze, converted by Andrew Tuline), cross compiled by MoonLight
 
 void loop() {
   // t1 = triangle(time(0.1))

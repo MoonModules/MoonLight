@@ -1,6 +1,6 @@
 // E_FireworkSparks.sc - Firework Rocket Sparks
 // Flickering rocket sparks that travel in a sine wave with random bursts.
-// @Copyright © 2026 GitHub MoonLight Commit Authors
+// Original: firework_rocket_sparks.wled (PixelBlaze, converted by Andrew Tuline), cross compiled by MoonLight
 
 #define PI2 6.28318
 

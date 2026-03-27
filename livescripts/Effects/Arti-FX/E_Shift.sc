@@ -1,6 +1,6 @@
-// E_Shift.sc
-// Shift - shift all pixels and add random at start
-// Original: Shift.wled (idea by @Haribro)
+// E_Shift.sc - Shift
+// Shifts all pixels along the strip each frame and inserts a new random color at the start.
+// Original: Shift.wled (idea by @Haribro), cross compiled by MoonLight
 
 void loop() {
   // shift all pixels up by one

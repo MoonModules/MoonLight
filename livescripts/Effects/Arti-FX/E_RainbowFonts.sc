@@ -1,6 +1,6 @@
-// E_RainbowFonts.sc
-// Rainbow Fonts - center-outward rainbow waves
-// Original: rainbow_fonts.wled (PixelBlaze, converted by Andrew Tuline)
+// E_RainbowFonts.sc - Rainbow Fonts
+// Center-outward rainbow waves that ripple symmetrically from the middle of the strip.
+// Original: rainbow_fonts.wled (PixelBlaze, converted by Andrew Tuline), cross compiled by MoonLight
 
 #define PI2 6.28318
 

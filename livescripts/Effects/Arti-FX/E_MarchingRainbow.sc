@@ -1,6 +1,6 @@
-// E_MarchingRainbow.sc
-// Marching Rainbow - layered sine waves
-// Original: marching_rainbow.wled (PixelBlaze, converted by Andrew Tuline)
+// E_MarchingRainbow.sc - Marching Rainbow
+// Layered sine waves produce a marching rainbow that pulses and sweeps along the strip.
+// Original: marching_rainbow.wled (PixelBlaze, converted by Andrew Tuline), cross compiled by MoonLight
 
 #define PI2 6.28318
 

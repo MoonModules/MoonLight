@@ -1,6 +1,6 @@
 // E_BlockReflections.sc - Block Reflections
 // Displays shifting reflected color blocks using modular arithmetic and sine waves.
-// @Copyright © 2026 GitHub MoonLight Commit Authors
+// Original: block_reflections.wled (PixelBlaze, converted by Andrew Tuline), cross compiled by MoonLight
 
 #define PI2 6.28318
 

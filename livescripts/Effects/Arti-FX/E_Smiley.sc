@@ -1,7 +1,6 @@
-// E_Smiley.sc
-// Smiley - draws a smiley face on a 2D matrix
-// Original: Smiley.wled from MoonModules/MM-Effects
-// Requires a 2D layout (panel)
+// E_Smiley.sc - Smiley
+// Draws a smiley face with eyes, nose, and mouth on a 2D matrix display.
+// Original: Smiley.wled from MoonModules/MM-Effects, cross compiled by MoonLight
 
 void loop() {
   fadeToBlackBy(10);

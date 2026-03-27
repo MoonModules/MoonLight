@@ -1,6 +1,7 @@
-// E_Snake.sc
-// Snake - moving segment of light
-// Original: snake.wled (PixelBlaze)
+// E_Snake.sc - Snake
+// A glowing snake of configurable length scrolls around the strip with a rainbow hue.
+// length: number of LEDs in the snake body
+// Original: snake.wled (PixelBlaze), cross compiled by MoonLight
 
 uint8_t snakeLen = 10;
 

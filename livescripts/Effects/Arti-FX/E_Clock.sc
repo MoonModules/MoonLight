@@ -1,6 +1,6 @@
 // E_Clock.sc - 1D Clock
 // Shows hour, minute, and second as colored dots at positions along the strip.
-// @Copyright © 2026 GitHub MoonLight Commit Authors
+// Original: Clock.wled from MoonModules/MM-Effects, cross compiled by MoonLight
 
 void loop() {
   fadeToBlackBy(255);  // instant clear

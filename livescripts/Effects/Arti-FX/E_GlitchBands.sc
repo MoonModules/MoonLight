@@ -1,6 +1,6 @@
-// E_GlitchBands.sc
-// Glitch Bands - glitchy color bands
-// Original: glitch_bands.wled (PixelBlaze, converted by Andrew Tuline)
+// E_GlitchBands.sc - Glitch Bands
+// Glitchy shifting color bands driven by modular arithmetic and layered sine waves.
+// Original: glitch_bands.wled (PixelBlaze, converted by Andrew Tuline), cross compiled by MoonLight
 
 #define PI2 6.28318
 

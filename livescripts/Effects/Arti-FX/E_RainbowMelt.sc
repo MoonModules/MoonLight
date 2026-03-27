@@ -1,6 +1,6 @@
-// E_RainbowMelt.sc
-// Rainbow Melt - melting rainbow from center
-// Original: rainbow_melt.wled (PixelBlaze, converted by Andrew Tuline)
+// E_RainbowMelt.sc - Rainbow Melt
+// A melting rainbow pattern that pulses outward from the center with layered sine modulation.
+// Original: rainbow_melt.wled (PixelBlaze, converted by Andrew Tuline), cross compiled by MoonLight
 
 #define PI2 6.28318
 
