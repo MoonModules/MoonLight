@@ -21,6 +21,7 @@ Currently supported boards:
 | QuinLED Dig-Uno v3 | ESP32-D0 | 50 W | — | 2 LED outputs |
 | QuinLED Dig-Quad v3 | ESP32-D0 | 150 W | — | 4 LED outputs |
 | QuinLED Dig-Octa v2 | ESP32-D0-16MB | 400 W | LAN8720 (RMII) | 8 LED outputs, onboard ethernet |
+| Olimex ESP32-POE | ESP32-D0 | — | LAN8720 (RMII) | PoE board, onboard ethernet, GPIO12 power pin |
 | Serg Universal Shield | ESP32-D0 | 50 W | — | IR, relay, mic, I2C |
 | Serg Mini Shield | ESP32-D0 | 50 W | — | Compact, mic, I2C |
 | Mathieu SE16 v1 | ESP32-S3 | 500 W | W5500 (SPI) | 16 LED outputs, Switch1: IR / Ethernet |
@@ -58,45 +59,6 @@ Sets the maximum power budget in Watts. The LED driver automatically limits brig
 The default of **10 W** (5 V × 2 A) is safe for USB power supplies. Increase this to match your actual power supply — for example, a 5 V / 40 A supply = 200 W.
 
 Used by LED drivers; see [Drivers](../moonlight/drivers.md).
-
----
-
-## Switches
-
-Two board-specific toggle switches that select between alternate pin configurations. What each switch does depends on the board preset:
-
-| Board | Switch1 | Switch2 |
-|---|---|---|
-| **MHC P4 Nano Shield** | Off: 16 LED pins (default). On: 8 LED + RS-485 + digital inputs | Off: onboard mic (I2S). On: line-in audio |
-| **MHC P4 Nano Shield V2** | Off: 16 LED pins (default). On: 8 LED + RS-485 + digital inputs | Off: onboard mic (I2S). On: line-in audio |
-| **Mathieu SE16 v1** | Off: infrared (default). On: ethernet (W5500 SPI) | — |
-| **Serg Universal Shield** | Selects second LED pin (GPIO 1 or GPIO 3) | — |
-
-Toggling a switch **does not** set the modded flag — it reloads the board preset with the new switch position applied.
-
----
-
-## Ethernet Type
-
-| Control | Type | Options |
-|---|---|---|
-| **ethernetType** | Select | Board Default, LAN8720 (RMII), W5500 (SPI) |
-
-Selects the ethernet hardware type. This is typically set automatically by the board preset but can be changed manually.
-
-| Type | Interface | Chips | Available on |
-|---|---|---|---|
-| **Board Default** | Compile-time pins | Varies | Boards with ethernet defined in `pins_arduino.h` |
-| **LAN8720 (RMII)** | Built-in EMAC | LAN8720A | ESP32-D0, ESP32-P4 |
-| **W5500 (SPI)** | External SPI module | W5500, WIZ850IO | All targets |
-
-**Board Default** uses the pin definitions baked into the board variant at compile time (via `pins_arduino.h`). No runtime pin assignment is needed — `ETH.begin()` is called with no arguments and the framework resolves the pins automatically. This is used by boards like the ESP32-P4-ETH where ethernet pins are fixed by the hardware design. If the board variant does not define ethernet pins, this option has no effect.
-
-**LAN8720 (RMII)** requires **ETH MDC**, **ETH MDIO**, and **ETH CLK** pins to be assigned. The six RMII data pins (TXD0, TX_EN, TXD1, RXD0, RXD1, CRS_DV) are hardwired in silicon and are reserved as **Ethernet** pin type.
-
-**W5500 (SPI)** requires **SPI SCK**, **SPI MISO**, **SPI MOSI**, and **PHY CS** pins to be assigned. **PHY IRQ** is optional.
-
-See [Ethernet settings](../network/ethernet.md) for hostname and IP configuration.
 
 ---
 
@@ -235,6 +197,79 @@ The **I2C frequency** can be adjusted (default 100 kHz). Higher frequencies (400
 
 ---
 
+## Switches
+
+Two board-specific toggle switches that select between alternate pin configurations. What each switch does depends on the board preset:
+
+| Board | Switch1 | Switch2 |
+|---|---|---|
+| **MHC P4 Nano Shield** | Off: 16 LED pins (default). On: 8 LED + RS-485 + digital inputs | Off: onboard mic (I2S). On: line-in audio |
+| **MHC P4 Nano Shield V2** | Off: 16 LED pins (default). On: 8 LED + RS-485 + digital inputs | Off: onboard mic (I2S). On: line-in audio |
+| **Mathieu SE16 v1** | Off: infrared (default). On: ethernet (W5500 SPI) | — |
+| **Serg Universal Shield** | Selects second LED pin (GPIO 1 or GPIO 3) | — |
+
+Toggling a switch **does not** set the modded flag — it reloads the board preset with the new switch position applied.
+
+---
+
+## Ethernet Type
+
+| Control | Type | Options |
+|---|---|---|
+| **ethernetType** | Select | Board Default, LAN8720 (RMII), W5500 (SPI) |
+
+Selects the ethernet hardware type. This is typically set automatically by the board preset but can be changed manually.
+
+| Type | Interface | Chips | Available on |
+|---|---|---|---|
+| **Board Default** | Compile-time pins | Varies | Boards with ethernet defined in `pins_arduino.h` |
+| **LAN8720 (RMII)** | Built-in EMAC | LAN8720A | ESP32-D0, ESP32-P4 |
+| **W5500 (SPI)** | External SPI module | W5500, WIZ850IO | All targets |
+
+**Board Default** uses the pin definitions baked into the board variant at compile time (via `pins_arduino.h`). No runtime pin assignment is needed — `ETH.begin()` is called with no arguments and the framework resolves the pins automatically. This is used by boards like the ESP32-P4-ETH where ethernet pins are fixed by the hardware design. If the board variant does not define ethernet pins, this option has no effect.
+
+**LAN8720 (RMII)** requires **ETH MDC**, **ETH MDIO**, and **ETH CLK** pins to be assigned. The six RMII data pins (TXD0, TX_EN, TXD1, RXD0, RXD1, CRS_DV) are hardwired in silicon and are reserved as **Ethernet** pin type.
+
+**W5500 (SPI)** requires **SPI SCK**, **SPI MISO**, **SPI MOSI**, and **PHY CS** pins to be assigned. **PHY IRQ** is optional.
+
+See [Ethernet settings](../network/ethernet.md) for hostname and IP configuration.
+
+---
+
+## PHY Address
+
+| Control | Type | Range | Default |
+|---|---|---|---|
+| **ethPhyAddr** | Number | 0–31 | 0 |
+
+The MDIO address of the ethernet PHY chip on the RMII bus. Only applies to **LAN8720 (RMII)** mode.
+
+Most LAN8720A boards use address **0**. A small number of modules use address **1** (some bare LAN8720 breakout modules). Check your board's datasheet if ethernet does not initialise. Board presets set the correct value automatically.
+
+---
+
+## PHY Clock Mode
+
+| Control | Type | Options | Default |
+|---|---|---|---|
+| **ethClkMode** | Select | GPIO0 IN, GPIO0 OUT, GPIO16 OUT, GPIO17 OUT | GPIO17 OUT |
+
+Selects how the 50 MHz RMII reference clock is routed. Only applies to **LAN8720 (RMII)** mode.
+
+| Option | Direction | When to use |
+|---|---|---|
+| **GPIO0 IN (ext clock from PHY)** | PHY → ESP32 | The PHY chip generates the 50 MHz clock and feeds it into GPIO0. Used by Olimex ESP32-POE (WROVER variant) and similar boards where the LAN8720 is the clock source. |
+| **GPIO0 OUT** | ESP32 → PHY | ESP32 outputs the clock on GPIO0. Less common — GPIO0 is a strapping pin so this is rarely used in new designs. |
+| **GPIO16 OUT** | ESP32 → PHY | ESP32 outputs the clock on GPIO16. Used by some bare LAN8720 breakout modules. |
+| **GPIO17 OUT** | ESP32 → PHY | ESP32 outputs the clock on GPIO17. Most common for WROOM-based boards including QuinLED Dig-Octa and Olimex ESP32-POE (WROOM variant). **Default.** |
+
+Board presets set the correct value automatically.
+
+!!! warning "GPIO0 is a strapping pin"
+    When using **GPIO0 IN**, the PHY drives GPIO0 at boot. Ensure your hardware design keeps this pin at the correct strapping level before the ESP32 samples it during reset, or the device may boot into flash mode.
+
+---
+
 ## Naming Convention
 
 | Term | Abbreviation | Meaning |
@@ -273,7 +308,7 @@ The **I2C frequency** can be adjusted (default 100 kHz). Higher frequencies (400
 * [Dig-Octa](https://quinled.info/quinled-dig-octa/): Choose the esp32-d0-16mb board in the [MoonLight Installer](../gettingstarted/installer.md)
 * On first install, erase flash first (Especially when other firmware like WLED was on it) as MoonLight uses a partition scheme with 3MB of flash
 * After install, select the QuinLED board preset to have the pins assigned correctly.
-* Features onboard LAN8720A ethernet — automatically configured by the board preset (ethernetType = LAN8720, RMII pins assigned)
+* Features onboard LAN8720A ethernet — automatically configured by the board preset (ethernetType = LAN8720, ethPhyAddr = 0, ethClkMode = GPIO17 OUT, RMII pins assigned)
 
 !!! warning "GPIO 1 and GPIO 3 — UART0 TX/RX"
     The Dig-Octa routes **GPIO 1** (UART0 TX) and **GPIO 3** (UART0 RX) to two of its eight LED outputs. These pins are shared with the USB-serial interface used for flashing and serial monitoring.
@@ -328,6 +363,30 @@ The **I2C frequency** can be adjusted (default 100 kHz). Higher frequencies (400
 * Only 5 boards were ever produced. If you are one of the lucky few, feel free to reach out to limpkin on [Discord](https://discord.gg/TC8NSUSCdV)
 * Use the [L_SE16.sc](https://github.com/MoonModules/MoonLight/blob/main/livescripts/Layouts/L_SE16.sc) Live Script layout for this board. Controls: `mirroredPins` (wiring mode), `pinsAreColumns` (axis orientation), `ledsPerPin` (LEDs per output).
 
+
+### Olimex
+
+#### ESP32-POE
+
+* See [Olimex ESP32-POE](https://www.olimex.com/Products/IoT/ESP32/ESP32-POE/open-source-hardware). Choose the esp32-d0 board in the [MoonLight Installer](../gettingstarted/installer.md)
+* After install, select the **Olimex ESP32-POE** board preset to have the pins assigned correctly.
+* Features onboard LAN8720A ethernet with Power-over-Ethernet — automatically configured by the board preset.
+
+Pin mapping set by the preset:
+
+| GPIO | Usage | Notes |
+|---|---|---|
+| 12 | ETH PWR | LAN8720 reset/power control — **critical**, must be assigned |
+| 17 | ETH CLK | 50 MHz clock output from ESP32 to PHY (GPIO17 OUT mode) |
+| 18 | ETH MDIO | PHY register data |
+| 23 | ETH MDC | PHY register clock |
+| 19, 21, 22, 25, 26, 27 | Ethernet | RMII data pins (hardwired in silicon) |
+
+!!! warning "Static IP — assign after flashing"
+    If you want a static IP address, configure it in **Ethernet Settings** after the board is running. Due to how the ESP32 Ethernet stack works, the static IP is applied after `ETH.begin()` completes — this is handled correctly by MoonLight.
+
+!!! note "WROVER variant"
+    The Olimex ESP32-POE also exists in a WROVER variant. On that variant the reference clock comes **from** the LAN8720 into GPIO0 rather than being driven by the ESP32. If you have the WROVER variant, change **ethClkMode** to **GPIO0 IN (ext clock from PHY)** and assign GPIO0 as **ETH CLK** instead of GPIO17.
 
 #### LightCrafter16
 

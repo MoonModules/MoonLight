@@ -135,9 +135,9 @@ class ModuleDrivers : public NodeManager {
     // board preset specific
     _moduleIO->read(
         [&](ModuleState& state) {
-          uint8_t boardPreset = state.data["boardPreset"];
-          if (boardPreset == board_SE16V1) addNodeValue<SE16Layout>(control);
-          if (boardPreset == board_LightCrafter16) addNodeValue<LightCrafter16Layout>(control);
+          const char* boardPreset = state.data["boardPreset"] | "";
+          if (strcmp(boardPreset, BoardName::SE16V1) == 0) addNodeValue<SE16Layout>(control);
+          if (strcmp(boardPreset, BoardName::LightCrafter16) == 0) addNodeValue<LightCrafter16Layout>(control);
         },
         _moduleName);
 
@@ -193,9 +193,9 @@ class ModuleDrivers : public NodeManager {
     // board preset specific
     _moduleIO->read(
         [&](ModuleState& state) {
-          uint8_t boardPreset = state.data["boardPreset"];
-          if (!node && boardPreset == board_SE16V1) node = checkAndAlloc<SE16Layout>(name);
-          if (!node && boardPreset == board_LightCrafter16) node = checkAndAlloc<LightCrafter16Layout>(name);
+          const char* boardPreset = state.data["boardPreset"] | "";
+          if (!node && strcmp(boardPreset, BoardName::SE16V1) == 0) node = checkAndAlloc<SE16Layout>(name);
+          if (!node && strcmp(boardPreset, BoardName::LightCrafter16) == 0) node = checkAndAlloc<LightCrafter16Layout>(name);
         },
         _moduleName);
 
