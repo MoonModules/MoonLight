@@ -158,7 +158,10 @@ class DMXInDriver : public Node {
             if (rxPos > 1 && rxBuffer[0] == 0x00)
               processChannels(rxBuffer, rxPos);
           } else {
-            // mode==0 (LightsControl): read only the bytes we need into a small local buffer
+            // mode==0 (LightsControl): read only the bytes we need into a small local buffer.
+            // 32 bytes covers start code + up to 11 channels at startChannel offset up to 20.
+            // If startChannel > 21 some tail channels will fall outside the buffer and be
+            // silently skipped by processLightsControl — acceptable for the typical case (startChannel=1).
             uint8_t localBuf[32];
             int len = uart_read_bytes(uartNum, localBuf, sizeof(localBuf), 0);
             if (len > 1 && localBuf[0] == 0x00)

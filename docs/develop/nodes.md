@@ -47,17 +47,15 @@ A node implements the following (overloaded) functions:
         * layout
         * effect
         * modifier
-    * Live scripts
-        * See Nodes.h / nodes.cpp
+    * Live scripts — see [Live Scripts (Developer)](livescripts.md) for full architecture documentation
     * Lights
         * Regular patterns (CRGB as default but also others like Moving Head ...)
 
 * See [Modules](modules.md)
 * Upon changing a pin, driver.init will rerun (FastLED.addLeds, Parallel LED Driver.init)
-* Uses ESPLiveScripts, see compileAndRun. compileAndRun is started when in Nodes a file.sc is chosen
-    * To do: kill running scripts, e.g. when changing effects
-* [Nodes.h](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes.cpp): class Node (constructor, destructor, setup, loop, hasFunctions, map, modify, addControl(s), onUpdate)
-* [Nodes.cpp](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes.cpp): implement LiveScriptNode
+* Uses [ESPLiveScript](https://github.com/hpwit/ESPLiveScript) for runtime-compiled `.sc` scripts — see [Live Scripts (Developer)](livescripts.md) for full details
+* [Nodes.h](https://github.com/MoonModules/MoonLight/blob/main/src/MoonBase/Nodes.h): class Node (constructor, destructor, setup, loop, hasFunctions, map, modify, addControl(s), onUpdate)
+* [LiveScriptNode.h](https://github.com/MoonModules/MoonLight/blob/main/src/MoonBase/LiveScriptNode.h) / [.cpp](https://github.com/MoonModules/MoonLight/blob/main/src/MoonBase/LiveScriptNode.cpp): LiveScriptNode implementation
 
     * An effect has a loop which is ran for each frame produced. In each loop, the lights in the virtual layer gets it's values using the setRGB function. For multichannel lights also functions as setWhite or (for Moving Heads) setPan, setTilt, setZoom etc. Also getRGB etc functions exists.
 

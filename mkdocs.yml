@@ -39,6 +39,7 @@ nav:
     - develop/development.md
     - develop/standardsguidelines.md
     - develop/nodes.md
+    - develop/livescripts.md
     - develop/modules.md
     - develop/layers.md
     - develop/drivers.md

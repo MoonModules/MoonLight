@@ -133,7 +133,7 @@ class DMXOutDriver : public DriverNode {
     const uint8_t startCode = 0;
     uart_write_bytes(uartNum, &startCode, 1);
     for (uint16_t i = 0; i < offset; i++)
-      uart_write_bytes(uartNum, &startCode, 1);  // reuse zero byte for padding
+      uart_write_bytes(uartNum, &startCode, 1);  // zero padding; offset==0 in the common case
     uart_write_bytes_with_break(uartNum, layerP.lights.channelsD, nrChannels, 24);
   }
 
