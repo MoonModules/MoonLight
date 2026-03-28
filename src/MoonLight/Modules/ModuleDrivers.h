@@ -127,6 +127,8 @@ class ModuleDrivers : public NodeManager {
     addNodeValue<FastLEDAudioDriver>(control);
     addNodeValue<ArtNetInDriver>(control);
     addNodeValue<ArtNetOutDriver>(control);
+    addNodeValue<DMXInDriver>(control);
+    addNodeValue<DMXOutDriver>(control);
     addNodeValue<AudioSyncDriver>(control);
     addNodeValue<IRDriver>(control);
     addNodeValue<IMUDriver>(control);
@@ -185,6 +187,8 @@ class ModuleDrivers : public NodeManager {
     if (!node) node = checkAndAlloc<FastLEDAudioDriver>(name);
     if (!node) node = checkAndAlloc<ArtNetInDriver>(name);
     if (!node) node = checkAndAlloc<ArtNetOutDriver>(name);
+    if (!node) node = checkAndAlloc<DMXInDriver>(name);
+    if (!node) node = checkAndAlloc<DMXOutDriver>(name);
     if (!node) node = checkAndAlloc<AudioSyncDriver>(name);
     if (!node) node = checkAndAlloc<IRDriver>(name);
     if (!node) node = checkAndAlloc<IMUDriver>(name);

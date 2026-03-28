@@ -87,27 +87,62 @@ enum IO_EthernetTypeEnum {
 // Board name constants — these strings are the stable persistent identifiers stored in JSON.
 // They must match the names passed to addBoardValue() in setupDefinition().
 // Never rename these; adding new boards anywhere in the list is safe.
+// The array order matches the old numeric IDs for legacy migration (index 0 = none/empty).
 namespace BoardName {
-  static constexpr const char* none               = "";
-  static constexpr const char* QuinLEDDig2Go      = "QuinLED Dig-2-Go";
-  static constexpr const char* QuinLEDDigNext2    = "QuinLED Dig-Next-2";
-  static constexpr const char* QuinLEDDigUnoV3    = "QuinLED Dig-Uno v3";
-  static constexpr const char* QuinLEDDigQuadV3   = "QuinLED Dig-Quad v3";
-  static constexpr const char* QuinLEDDigOctaV2   = "QuinLED Dig-Octa v2";
-  static constexpr const char* SergUniShieldV5    = "Serg Universal Shield";
-  static constexpr const char* SergMiniShield     = "Serg Mini Shield";
-  static constexpr const char* SE16V1             = "SE16 v1";
-  static constexpr const char* LightCrafter16     = "LightCrafter16";
-  static constexpr const char* MHCV43             = "MHC V43 controller";
-  static constexpr const char* MHCV57PRO          = "MHC V57 PRO controller";
-  static constexpr const char* MHCP4NanoV1        = "MHC P4 Nano Shield V1.0";
-  static constexpr const char* MHCP4NanoV2        = "MHC P4 Nano Shield V2.0";
-  static constexpr const char* YvesV48            = "Yves V48";
-  static constexpr const char* TroyP4Nano         = "Troy P4 Nano";
-  static constexpr const char* AtomS3             = "Atom S3R";
-  static constexpr const char* LuxceoMood1XiaoMod = "Luxceo Mood1 Xiao Mod";
-  static constexpr const char* Cube202010         = "Cube202010";
-  static constexpr const char* OlimexESP32POE     = "Olimex ESP32-POE";
+  // Order must match old IO_BoardsEnum for legacy numeric ID migration.
+  // New boards must be appended at the end.
+  static constexpr const char* names[] = {
+    "",                          //  0 — none (board_none)
+    "QuinLED Dig-2-Go",         //  1 (board_QuinLEDDig2Go)
+    "QuinLED Dig-Next-2",       //  2 (board_QuinLEDDigNext2)
+    "QuinLED Dig-Uno v3",       //  3 (board_QuinLEDDigUnoV3)
+    "QuinLED Dig-Quad v3",      //  4 (board_QuinLEDDigQuadV3)
+    "QuinLED Dig-Octa v2",      //  5 (board_QuinLEDDigOctaV2)
+    "Serg Universal Shield",    //  6 (board_SergUniShieldV5)
+    "Serg Mini Shield",         //  7 (board_SergMiniShield)
+    "SE16 v1",                  //  8 (board_SE16V1)
+    "LightCrafter16",           //  9 (board_LightCrafter16)
+    "MHC V43 controller",       // 10 (board_MHCV43)
+    "MHC V57 PRO controller",   // 11 (board_MHCV57PRO)
+    "MHC P4 Nano Shield V1.0",  // 12 (board_MHCP4NanoV1)
+    "MHC P4 Nano Shield V2.0",  // 13 (board_MHCP4NanoV2)
+    "Yves V48",                 // 14 (board_YvesV48)
+    "Troy P4 Nano",             // 15 (board_TroyP4Nano)
+    "Atom S3R",                 // 16 (board_AtomS3)
+    "Luxceo Mood1 Xiao Mod",   // 17 (board_LuxceoMood1XiaoMod)
+    "Cube202010",               // 18 (board_Cube202010)
+    "Olimex ESP32-POE",         // 19 — new (not in old enum)
+  };
+  static constexpr size_t count = sizeof(names) / sizeof(names[0]);
+
+  // Named accessors — same values as the array, for readable code
+  static constexpr const char* none               = names[0];
+  static constexpr const char* QuinLEDDig2Go      = names[1];
+  static constexpr const char* QuinLEDDigNext2    = names[2];
+  static constexpr const char* QuinLEDDigUnoV3    = names[3];
+  static constexpr const char* QuinLEDDigQuadV3   = names[4];
+  static constexpr const char* QuinLEDDigOctaV2   = names[5];
+  static constexpr const char* SergUniShieldV5    = names[6];
+  static constexpr const char* SergMiniShield     = names[7];
+  static constexpr const char* SE16V1             = names[8];
+  static constexpr const char* LightCrafter16     = names[9];
+  static constexpr const char* MHCV43             = names[10];
+  static constexpr const char* MHCV57PRO          = names[11];
+  static constexpr const char* MHCP4NanoV1        = names[12];
+  static constexpr const char* MHCP4NanoV2        = names[13];
+  static constexpr const char* YvesV48            = names[14];
+  static constexpr const char* TroyP4Nano         = names[15];
+  static constexpr const char* AtomS3             = names[16];
+  static constexpr const char* LuxceoMood1XiaoMod = names[17];
+  static constexpr const char* Cube202010         = names[18];
+  static constexpr const char* OlimexESP32POE     = names[19];
+
+  /// Convert a legacy numeric board preset ID to the corresponding name string.
+  /// Returns names[0] ("") if the ID is out of range.
+  static const char* fromLegacyId(int id) {
+    if (id >= 0 && id < (int)count) return names[id];
+    return names[0];
+  }
 }
 
 class ModuleIO : public Module {
@@ -139,6 +174,7 @@ class ModuleIO : public Module {
     control = addControl(controls, "boardPreset", "selectFile");
     control["default"] = "";
     addBoardValue(control, BUILD_TARGET,                                  "");
+    #ifdef CONFIG_IDF_TARGET_ESP32   // ESP32-D0 boards
     addBoardValue(control, BoardName::QuinLEDDig2Go,                     "QuinLED");
     addBoardValue(control, BoardName::QuinLEDDigNext2,                   "QuinLED");
     addBoardValue(control, BoardName::QuinLEDDigUnoV3,                   "QuinLED");
@@ -146,17 +182,21 @@ class ModuleIO : public Module {
     addBoardValue(control, BoardName::QuinLEDDigOctaV2,                  "QuinLED");
     addBoardValue(control, BoardName::SergUniShieldV5,                   "Serg");
     addBoardValue(control, BoardName::SergMiniShield,                    "Serg");
-    addBoardValue(control, BoardName::SE16V1,                            "SE");
-    addBoardValue(control, BoardName::LightCrafter16,                    "SE");
     addBoardValue(control, BoardName::MHCV43,                            "MHC");
     addBoardValue(control, BoardName::MHCV57PRO,                         "MHC");
+    addBoardValue(control, BoardName::OlimexESP32POE,                    "Olimex");
+    #elif CONFIG_IDF_TARGET_ESP32S3  // ESP32-S3 boards
+    addBoardValue(control, BoardName::SE16V1,                            "SE");
+    addBoardValue(control, BoardName::LightCrafter16,                    "SE");
+    addBoardValue(control, BoardName::AtomS3,                            "Atom");
+    addBoardValue(control, BoardName::LuxceoMood1XiaoMod,                "Custom");
+    #elif CONFIG_IDF_TARGET_ESP32P4  // ESP32-P4 boards
     addBoardValue(control, BoardName::MHCP4NanoV1,                       "MHC");
     addBoardValue(control, BoardName::MHCP4NanoV2,                       "MHC");
-    addBoardValue(control, BoardName::AtomS3,                            "Atom");
-    addBoardValue(control, BoardName::OlimexESP32POE,                    "Olimex");
-    addBoardValue(control, BoardName::YvesV48,                           "Custom");
     addBoardValue(control, BoardName::TroyP4Nano,                        "Custom");
-    addBoardValue(control, BoardName::LuxceoMood1XiaoMod,                "Custom");
+    #endif
+    // Boards that work on any target
+    addBoardValue(control, BoardName::YvesV48,                           "Custom");
     addBoardValue(control, BoardName::Cube202010,                        "Custom");
 
     control = addControl(controls, "modded", "checkbox");
@@ -272,12 +312,16 @@ class ModuleIO : public Module {
     control = addControl(controls, "ethPhyAddr", "number", 0, 31);
     control["default"] = 0;
 
+    #ifdef CONFIG_IDF_TARGET_ESP32
+    // Clock mode selection is only relevant for ESP32-D0 (hardwired RMII clock routing in silicon).
+    // ESP32-P4 always uses EMAC_CLK_OUT — no user choice needed.
     control = addControl(controls, "ethClkMode", "select");
     control["default"] = 3;  // GPIO17 OUT — most common for LAN8720 boards
     addControlValue(control, "GPIO0 IN (ext clock from PHY)");
     addControlValue(control, "GPIO0 OUT");
     addControlValue(control, "GPIO16 OUT");
     addControlValue(control, "GPIO17 OUT");
+    #endif
   }
 
   class PinAssigner {
@@ -308,7 +352,9 @@ class ModuleIO : public Module {
     // Reset ethernet controls to defaults; board presets override as needed
     newState["ethernetType"] = 0;   // Board Default
     newState["ethPhyAddr"] = 0;
-    newState["ethClkMode"] = 3;     // GPIO17 OUT
+    #ifdef CONFIG_IDF_TARGET_ESP32
+    newState["ethClkMode"] = 3;     // GPIO17 OUT (ESP32-D0 only)
+    #endif
 
     JsonArray pins = newState["pins"].to<JsonArray>();
 
@@ -353,6 +399,7 @@ class ModuleIO : public Module {
       pin["DriveCap"] = (drive_result == ESP_OK) ? drive_cap_to_string(drive_cap) : "N/A";
     }
 
+#if defined(CONFIG_IDF_TARGET_ESP32S3)  // S3 boards
     if (boardID == BoardName::SE16V1) {
       newState["maxPower"] = 500;
       uint8_t ledPins[] = {47, 48, 21, 38, 14, 39, 13, 40, 12, 41, 11, 42, 10, 2, 3, 1};  // LED_PINS
@@ -394,7 +441,24 @@ class ModuleIO : public Module {
       pinAssigner.assignPin(10, pin_PHY_CS);    // WIZ850IO nCS
       pinAssigner.assignPin(45, pin_PHY_IRQ);   // WIZ850IO nINT
       pinAssigner.assignPin(4, pin_Infrared);
-    } else if (boardID == BoardName::QuinLEDDig2Go) {
+    } else if (boardID == BoardName::AtomS3) {
+      uint8_t ledPins[] = {5, 6, 7, 8};  // LED_PINS
+      for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
+    } else if (boardID == BoardName::LuxceoMood1XiaoMod) {
+      newState["maxPower"] = 50;
+      uint8_t ledPins[] = {1, 2, 3};
+      for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
+      pinAssigner.assignPin(4, pin_PIR);
+      pinAssigner.assignPin(5, pin_I2C_SDA);
+      pinAssigner.assignPin(6, pin_I2C_SCL);
+      pinAssigner.assignPin(7, pin_SPI_SCK);
+      pinAssigner.assignPin(8, pin_SPI_MISO);
+      pinAssigner.assignPin(9, pin_SPI_MOSI);
+      pinAssigner.assignPin(43, pin_Serial_TX);
+      pinAssigner.assignPin(44, pin_Serial_RX);
+    } else
+#elif defined(CONFIG_IDF_TARGET_ESP32)  // D0 boards
+    if (boardID == BoardName::QuinLEDDig2Go) {
       // Dig-2-Go
       newState["maxPower"] = 10;  // USB powered: 2A / 10W
       pinAssigner.assignPin(0, pin_Button_Push_LightsOn);
@@ -575,7 +639,9 @@ class ModuleIO : public Module {
       uint8_t exposedPins[] = {4, 5, 17, 19, 21, 22, 23, 25, 26, 27, 33};
       for (uint8_t gpio : exposedPins) pinAssigner.assignPin(gpio, pin_Exposed);  // Ethernet Pins
 
-    } else if (boardID == BoardName::MHCP4NanoV1) {  // https://shop.myhome-control.de/ABC-WLED-ESP32-P4-Shield/HW10027
+    } else
+#elif defined(CONFIG_IDF_TARGET_ESP32P4)  // P4 boards
+    if (boardID == BoardName::MHCP4NanoV1) {  // https://shop.myhome-control.de/ABC-WLED-ESP32-P4-Shield/HW10027
       newState["maxPower"] = 100;               // Assuming decent LED power!!
 
       if (_state.data["switch1"]) {                         // on: 8 LED Pins + RS485 + Dig Input
@@ -640,8 +706,6 @@ class ModuleIO : public Module {
         pinAssigner.assignPin(12, pin_I2S_SCK);
         pinAssigner.assignPin(13, pin_I2S_MCLK);
       }
-    } else if (boardID == BoardName::YvesV48) {
-      pinAssigner.assignPin(3, pin_LED);
     } else if (boardID == BoardName::TroyP4Nano) {
       newState["maxPower"] = 10;                                                        // USB compliant
       uint8_t ledPins[] = {2, 3, 4, 5, 6, 20, 21, 22, 23, 26, 27, 32, 33, 36, 47, 48};  // LED_PINS
@@ -670,27 +734,16 @@ class ModuleIO : public Module {
       // 45 is SD power but it's NC without hacking the board.
       // 53 is for PA enable but it's exposed on header and works for WLED pin output. Best to not use it but left available.
       // 54 is "C4 EN pin" so I guess we shouldn't fuck with that.
-    } else if (boardID == BoardName::AtomS3) {
-      uint8_t ledPins[] = {5, 6, 7, 8};  // LED_PINS
-      for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
+    } else
+#endif
+    // Universal boards (all targets)
+    if (boardID == BoardName::YvesV48) {
+      pinAssigner.assignPin(3, pin_LED);
     } else if (boardID == BoardName::Cube202010) {
       newState["maxPower"] = 50;
       uint8_t ledPins[] = {22, 21, 14, 18, 5, 4, 2, 15, 13, 12};  // LED_PINS, only 10 until now, rest is WIP
                                                                   // char pins[80] = "2,3,4,16,17,18,19,21,22,23,25,26,27,32,33";  //(D0), more pins possible. to do: complete list.
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
-    } else if (boardID == BoardName::LuxceoMood1XiaoMod) {
-      newState["maxPower"] = 50;
-      uint8_t ledPins[] = {1, 2, 3};
-      for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
-      pinAssigner.assignPin(4, pin_PIR);
-      pinAssigner.assignPin(5, pin_I2C_SDA);
-      pinAssigner.assignPin(6, pin_I2C_SCL);
-      pinAssigner.assignPin(7, pin_SPI_SCK);
-      pinAssigner.assignPin(8, pin_SPI_MISO);
-      pinAssigner.assignPin(9, pin_SPI_MOSI);
-      pinAssigner.assignPin(43, pin_Serial_TX);
-      pinAssigner.assignPin(44, pin_Serial_RX);
-
     } else {                      // default
       newState["maxPower"] = 10;  // USB compliant
   #ifdef CONFIG_IDF_TARGET_ESP32P4
@@ -803,6 +856,13 @@ class ModuleIO : public Module {
     // During boot, handle boardPreset from file if modded=false
     // This runs AFTER file load completes and all values (including modded) are restored
     if (!_initialUpdateDone) {
+      // Migrate legacy numeric board preset IDs to string names
+      JsonVariant bp = _state.data["boardPreset"];
+      if (bp.is<int>()) {
+        const char* name = BoardName::fromLegacyId(bp.as<int>());
+        EXT_LOGI(MB_TAG, "Migrating legacy board preset %d -> '%s'", bp.as<int>(), name);
+        _state.data["boardPreset"] = name;
+      }
       _currentBoardPreset = _state.data["boardPreset"] | "";
       if (_state.data["modded"] == false) {
         EXT_LOGD(MB_TAG, "Applying board preset '%s' defaults from file (modded=false)", _currentBoardPreset.c_str());

@@ -39,6 +39,8 @@ Custom layouts can also be created as **Live Scripts** — `.sc` files with an `
 | FastLED Audio | <img width="100" src="https://avatars.githubusercontent.com/u/5899270?s=48&v=4"/> | <img width="320" src="../../media/moonlight/drivers/FastLED-Audio.png" /> | On-board microphone audio processing, allows audio-reactive effects (♪ & ♫) to use audio data (volume and bands (FFT)) and much more. Based on upcoming FastLED v4.0 ! see [FastLED Audio](https://github.com/FastLED/FastLED/blob/master/src/fl/audio/README.md)<br>Connect a digital microphone (e.g. INMP441) to an ESP32 and setup the I2S pins in the [IO module](../moonbase/inputoutput.md)|
 | Art-Net Out| <img width="100" src="https://github.com/user-attachments/assets/9c65921c-64e9-4558-b6ef-aed2a163fd88"> | <img width="320" src="../../media/moonlight/drivers/ArtNetOutControls.png" /> | Send Art-Net to Drive LEDS and DMX lights over the network. See [below](#art-net-out) |
 | Art-Net In | <img width="100" src="../../media/moonlight/drivers/Art-Net-In.png"> | <img width="320" src="../../media/moonlight/drivers/ArtNetInControls.png" /> | Receive Art-Net (or DDP) packages e.g. from [Resolume](https://resolume.com/) or Touch Designer. See [below](#art-net-in) |
+| DMX Out | | | Send channel data to DMX fixtures over RS-485. See [below](#dmx-out) |
+| DMX In | | | Receive DMX data from an external DMX controller via RS-485. See [below](#dmx-in) |
 | WLED Audio | <img width="100" src="https://github.com/user-attachments/assets/bfedf80b-6596-41e7-a563-ba7dd58cc476"/> | No controls | Listens to audio sent over the local network by WLED or WLED-MM and allows audio-reactive effects (♪ & ♫) to use audio data (volume and bands (FFT)) |
 | HUB75 Driver | <img width="100" src="https://github.com/user-attachments/assets/620f7c41-8078-4024-b2a0-39a7424f9678"/> | <img width="100" src="https://github.com/user-attachments/assets/4d386045-9526-4a5a-aa31-638058b31f32"/> | Drive HUB75 panels<br>Not implemented yet |
 | IR Driver | <img width="100" src="../../media/moonlight/drivers/IRDriver.jpeg"/> | <img width="100" src="../../media/moonlight/drivers/irdrivercontrols.png"/> | Receive IR commands and [Lights Control](lightscontrol.md) |
@@ -143,6 +145,62 @@ Receives Art-Net data from the network to setup a MoonLight device as an Art-Net
 
 !!! tip "Running effects and Art-Net In"
     Effects can run at the same time, disable or delete them if you only want to run Art-Net In.
+
+### DMX Out ☸️
+
+Sends channel data from the physical layer to DMX512 fixtures over RS-485. This lets MoonLight directly drive DMX par lights, LED bars, moving heads and other DMX-compatible fixtures without a separate Art-Net controller.
+
+**Requirements**
+
+* An RS-485 transceiver module (e.g. MAX485 / MAX3485) connected to the ESP32.
+* Assign `RS-485 TX` (and optionally `RS-485 DE`) pins in the [IO module](../moonbase/inputoutput.md) board preset.
+
+**Controls**
+
+* **Light preset**: See [above](#light-preset). Choose the preset that matches your DMX fixture (e.g. RGBW for IRGB par lights, MH* for moving heads).
+* **startChannel**: The DMX start address (1–512). Channel data from the physical layer is placed at this offset in the DMX universe.
+* **status**: Read-only indicator — shows "Active", "No pins", or an error message.
+
+!!! example "48-pixel IRGB LED bar"
+    A 48-pixel LED bar with 4 DMX channels per pixel (Intensity, R, G, B) uses 192 channels. Select the **RGBW** light preset, set **startChannel** to 1, and create a layout with 48 lights. The brightness channel maps to the fixture's Intensity channel.
+
+### DMX In ☸️
+
+Receives DMX512 data from an external controller via RS-485 and either writes it into the channel buffer or forwards it to [Lights Control](lightscontrol.md).
+
+**Requirements**
+
+* An RS-485 receiver connected to the ESP32.
+* Assign a `DMX in` or `RS-485 RX` pin in the [IO module](../moonbase/inputoutput.md) board preset. If both are assigned, `DMX in` takes priority.
+
+**Controls**
+
+* **startChannel**: The DMX start address (1–512) to begin reading from within the incoming DMX frame.
+* **mode**:
+    * **Channels** — writes received DMX data directly into the physical-layer channel buffer (`channelsD`), similar to Art-Net In. Use this to replace or supplement effect output with data from an external DMX console.
+    * **LightsControl** — maps DMX channels starting at `startChannel` to [Lights Control](lightscontrol.md) properties. Useful for controlling MoonLight from a standard DMX fader wing. All values are 0–255 (DMX channels 1–256 relative to the start address):
+
+        | DMX channel | Lights Control property | Range |
+        | ----------- | ----------------------- | ----- |
+        | 1  | Brightness   | 0–255 |
+        | 2  | Red          | 0–255 |
+        | 3  | Green        | 0–255 |
+        | 4  | Blue         | 0–255 |
+        | 5  | Palette      | 0–255 |
+        | 6  | BPM          | 0–255 |
+        | 7  | Intensity    | 0–255 |
+        | 8  | Preset       | 0–255 (selects preset by index) |
+        | 9  | Preset Loop  | 0–255 |
+        | 10 | First Preset | 0–255 (scaled to 1–64) |
+        | 11 | Last Preset  | 0–255 (scaled to 1–64) |
+        
+* **status**: Read-only indicator — shows "Listening", "No pins", or an error message.
+
+!!! tip "Using DMX In and DMX Out simultaneously"
+    DMX In and DMX Out use separate UARTs (UART2 and UART1 respectively) so they can run at the same time — provided you have two separate RS-485 transceivers wired to different GPIO pins.
+
+!!! tip "Running effects and DMX In"
+    Effects can run at the same time. Disable or delete them if you only want DMX In to control the lights.
 
 ### Recommended Art-Net controllers
 

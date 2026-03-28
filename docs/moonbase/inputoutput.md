@@ -100,8 +100,15 @@ Used by LED drivers to set up outputs. See [Drivers](../moonlight/drivers.md).
 |---|---|
 | **I2S SD** | Serial data (microphone or line-in input) |
 | **I2S WS** | Word select (left/right channel clock) |
-| **I2S SCK** | Serial clock |
+| **I2S SCK** | Serial clock (not needed for PDM microphones) |
 | **I2S MCLK** | Master clock (not always required) |
+
+Two microphone types are supported:
+
+- **Standard I2S** (e.g. INMP441) — requires SD, WS, and SCK pins.
+- **PDM** (e.g. QuinLED Dig-Next-2 built-in mic) — requires only SD and WS pins. When SCK is not assigned, the FastLED Audio driver automatically uses PDM mode.
+
+The FastLED Audio driver shows a **status** field indicating whether the microphone is active and which mode is in use.
 
 ### I2C
 
@@ -248,13 +255,15 @@ Most LAN8720A boards use address **0**. Some modules use address **1** (for exam
 
 ---
 
-## PHY Clock Mode
+## PHY Clock Mode (ESP32-D0 only)
 
 | Control | Type | Options | Default |
 |---|---|---|---|
 | **ethClkMode** | Select | GPIO0 IN, GPIO0 OUT, GPIO16 OUT, GPIO17 OUT | GPIO17 OUT |
 
-Selects how the 50 MHz RMII reference clock is routed. Only applies to **LAN8720 (RMII)** mode.
+Selects how the 50 MHz RMII reference clock is routed between the ESP32 and the LAN8720 PHY. Only applies to **LAN8720 (RMII)** mode on **ESP32-D0** boards.
+
+This control is **not shown** on ESP32-S3 (no internal EMAC) or ESP32-P4 (clock mode is fixed).
 
 | Option | Direction | When to use |
 |---|---|---|
