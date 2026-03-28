@@ -28,7 +28,7 @@ extern SemaphoreHandle_t swapMutex;
 class DMXInDriver : public Node {
  private:
   uint16_t startChannel = 1;   // DMX start address (1-512)
-  uint8_t  mode = 0;           // 0 = Channels, 1 = LightsControl
+  uint8_t  mode = 0;           // 0 = LightsControl (default), 1 = Channels
   Char<32> status = "No pins";
 
   uint8_t pinDMX     = UINT8_MAX;
@@ -43,11 +43,8 @@ class DMXInDriver : public Node {
   bool dmxActive = false;
   QueueHandle_t uartQueue = nullptr;
 
-  uint8_t  rxBuffer[513] = {};   // accumulates bytes between BREAKs
+  uint8_t* rxBuffer = nullptr;   // 513 bytes, allocated only when mode==1 (Channels)
   uint16_t rxPos = 0;
-  uint8_t  dmxData[513] = {};    // latest complete DMX frame
-  uint16_t dmxLength = 0;
-  bool     newFrame = false;
 
   update_handler_id_t ioUpdateHandler;
 
@@ -60,12 +57,20 @@ class DMXInDriver : public Node {
   void setup() override {
     addControl(startChannel, "startChannel", "number", 1, 512);
     addControl(mode, "mode", "select");
-    addControlValue("Channels");
     addControlValue("LightsControl");
+    addControlValue("Channels");
     addControl(status, "status", "text", 0, 32, true);
 
     ioUpdateHandler = moduleIO->addUpdateHandler([this](const String& originId) { readPins(); });
     readPins();
+  }
+
+  void onUpdate(const JsonObject& control) override {
+    if (control["name"] == "mode") {
+      if (mode == 1 && !rxBuffer) rxBuffer = allocMB<uint8_t>(513, "DMXIn");
+      else                        freeMB(rxBuffer, "DMXIn");
+      rxPos = 0;
+    }
   }
 
   void readPins() {
@@ -107,9 +112,9 @@ class DMXInDriver : public Node {
     uart_param_config(uartNum, &uartConfig);
     uart_set_pin(uartNum, UART_PIN_NO_CHANGE, pinRX, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 
+    if (mode == 1 && !rxBuffer) rxBuffer = allocMB<uint8_t>(513, "DMXIn");
     dmxActive = true;
     rxPos = 0;
-    newFrame = false;
     updateControl("status", "Listening");
     EXT_LOGI(ML_TAG, "DMX In started RX:%d", pinRX);
   }
@@ -119,6 +124,7 @@ class DMXInDriver : public Node {
       uart_driver_delete(uartNum);
       uartQueue = nullptr;
       dmxActive = false;
+      freeMB(rxBuffer, "DMXIn");
       updateControl("status", "Stopped");
     }
   }
@@ -131,7 +137,9 @@ class DMXInDriver : public Node {
     while (xQueueReceive(uartQueue, &event, 0)) {
       switch (event.type) {
         case UART_DATA:
-          if (rxPos < 513) {
+          // mode==1 (Channels): accumulate into rxBuffer; mode==0 (LightsControl): leave bytes
+          // in the UART ring buffer and read only what's needed at BREAK time.
+          if (rxBuffer && rxPos < 513) {
             int toRead = min((int)event.size, 513 - (int)rxPos);
             int len = uart_read_bytes(uartNum, &rxBuffer[rxPos], toRead, 0);
             if (len > 0) rxPos += len;
@@ -139,18 +147,22 @@ class DMXInDriver : public Node {
           break;
 
         case UART_BREAK: {
-          // Grab any remaining bytes that arrived just before the BREAK
-          size_t buffered = 0;
-          uart_get_buffered_data_len(uartNum, &buffered);
-          if (buffered > 0 && rxPos + buffered <= 513) {
-            int len = uart_read_bytes(uartNum, &rxBuffer[rxPos], buffered, 0);
-            if (len > 0) rxPos += len;
-          }
-          // If we accumulated a valid frame (start code 0x00 = dimmer data), save it
-          if (rxPos > 1 && rxBuffer[0] == 0x00) {
-            memcpy(dmxData, rxBuffer, rxPos);
-            dmxLength = rxPos;
-            newFrame = true;
+          if (rxBuffer) {
+            // mode==1 (Channels): grab remaining bytes then process full frame
+            size_t buffered = 0;
+            uart_get_buffered_data_len(uartNum, &buffered);
+            if (buffered > 0 && rxPos + buffered <= 513) {
+              int len = uart_read_bytes(uartNum, &rxBuffer[rxPos], buffered, 0);
+              if (len > 0) rxPos += len;
+            }
+            if (rxPos > 1 && rxBuffer[0] == 0x00)
+              processChannels(rxBuffer, rxPos);
+          } else {
+            // mode==0 (LightsControl): read only the bytes we need into a small local buffer
+            uint8_t localBuf[32];
+            int len = uart_read_bytes(uartNum, localBuf, sizeof(localBuf), 0);
+            if (len > 1 && localBuf[0] == 0x00)
+              processLightsControl(localBuf, len);
           }
           rxPos = 0;
           uart_flush_input(uartNum);
@@ -161,29 +173,20 @@ class DMXInDriver : public Node {
           break;
       }
     }
-
-    if (!newFrame || dmxLength <= 1) return;
-    newFrame = false;
-
-    if (mode == 0) {
-      processChannels();
-    } else {
-      processLightsControl();
-    }
   }
 
   // Write received DMX channel data into the physical-layer channel buffer
-  void processChannels() {
+  void processChannels(const uint8_t* data, uint16_t length) {
     LightsHeader* header = &layerP.lights.header;
     uint16_t offset = startChannel - 1;
 
-    if (offset >= dmxLength - 1) return;
-    uint16_t available = dmxLength - 1 - offset;
+    if (offset >= length - 1) return;
+    uint16_t available = length - 1 - offset;
     uint16_t nrChannels = min(available, (uint16_t)header->nrOfChannels);
     if (nrChannels == 0) return;
 
     xSemaphoreTake(swapMutex, portMAX_DELAY);
-    memcpy(layerP.lights.channelsD, &dmxData[1 + offset], nrChannels);
+    memcpy(layerP.lights.channelsD, &data[1 + offset], nrChannels);
     xSemaphoreGive(swapMutex);
   }
 
@@ -194,14 +197,14 @@ class DMXInDriver : public Node {
   //   CH7  = intensity       CH8  = preset (select)
   //   CH9  = presetLoop      CH10 = firstPreset (1-64, scaled)
   //   CH11 = lastPreset  (1-64, scaled)
-  void processLightsControl() {
+  void processLightsControl(const uint8_t* data, uint16_t length) {
     if (!moduleControl) return;
 
     uint16_t offset = startChannel - 1;
-    if (offset >= dmxLength - 1) return;
+    if (offset >= length - 1) return;
 
-    uint8_t* ch = &dmxData[1 + offset];
-    uint16_t available = dmxLength - 1 - offset;
+    const uint8_t* ch = &data[1 + offset];
+    uint16_t available = length - 1 - offset;
 
     JsonDocument doc;
     JsonObject newState = doc.to<JsonObject>();

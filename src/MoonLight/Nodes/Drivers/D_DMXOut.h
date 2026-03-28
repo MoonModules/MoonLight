@@ -39,8 +39,6 @@ class DMXOutDriver : public DriverNode {
   static constexpr uart_port_t uartNum = UART_NUM_1;  // ESP32-C3/H2 only has UART0/1
 #endif
   bool dmxActive = false;
-  uint8_t dmxBuffer[513];  // start code (1 byte) + up to 512 data channels
-
   update_handler_id_t ioUpdateHandler;
 
  public:
@@ -122,20 +120,21 @@ class DMXOutDriver : public DriverNode {
     LightsHeader* header = &layerP.lights.header;
     if (header->nrOfChannels == 0) return;
 
-    memset(dmxBuffer, 0, sizeof(dmxBuffer));
-    dmxBuffer[0] = 0;  // DMX512 start code (NULL = dimmer data)
-
     uint16_t offset = startChannel - 1;  // convert 1-based address to 0-based offset
     uint16_t nrChannels = header->nrOfChannels;
     if (offset + nrChannels > 512) nrChannels = 512 - offset;
 
-    memcpy(&dmxBuffer[1 + offset], layerP.lights.channelsD, nrChannels);
-
-    // Wait for previous frame to finish, then send new frame with trailing BREAK.
-    // The trailing BREAK (24 bit-periods ≈ 96 µs at 250 kbaud) acts as the
-    // start-of-frame marker for the next frame — standard DMX practice on ESP32.
+    // Wait for previous frame to finish, then build the DMX frame in three
+    // sequential UART writes (queued into the TX FIFO as a contiguous stream):
+    //   1. start code (1 byte, always 0x00 = dimmer data)
+    //   2. zero padding for startChannel offset (0 bytes when startChannel == 1)
+    //   3. channel data directly from channelsD, with trailing BREAK
     uart_wait_tx_done(uartNum, pdMS_TO_TICKS(50));
-    uart_write_bytes_with_break(uartNum, dmxBuffer, 1 + offset + nrChannels, 24);
+    const uint8_t startCode = 0;
+    uart_write_bytes(uartNum, &startCode, 1);
+    for (uint16_t i = 0; i < offset; i++)
+      uart_write_bytes(uartNum, &startCode, 1);  // reuse zero byte for padding
+    uart_write_bytes_with_break(uartNum, layerP.lights.channelsD, nrChannels, 24);
   }
 
   ~DMXOutDriver() override {
