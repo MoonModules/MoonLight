@@ -15,7 +15,7 @@
 #if FT_MOONBASE == 1
 
   #include "MoonBase/Module.h"
-  #include "MoonBase/utilities/Utilities.h"
+  #include "MoonBase/utilities/PlatformFunctions.h"
   #include "MoonBase/utilities/pal.h"
 
 struct UDPMessage {

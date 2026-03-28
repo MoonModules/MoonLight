@@ -14,12 +14,14 @@
 #if FT_MOONLIGHT
 
 #include "driver/uart.h"
+#include "soc/soc_caps.h"
 
 extern SemaphoreHandle_t swapMutex;
 
 // DMX512 input driver — receives DMX data via RS-485 and writes it to the
 // channel buffer or forwards it to LightsControl.
-// Uses UART_NUM_2.  Accepts pin_DMX or pin_RS485_RX from the board preset.
+// Uses UART_NUM_2 on chips that have it; falls back to UART_NUM_1 on C3/H2.
+// Accepts pin_DMX or pin_RS485_RX from the board preset.
 //
 // See also: https://github.com/MoonModules/MoonLight/issues/157
 
@@ -33,13 +35,17 @@ class DMXInDriver : public Node {
   uint8_t pinRS485RX = UINT8_MAX;
   uint8_t pinRX      = UINT8_MAX;  // effective RX pin (pinDMX or pinRS485RX)
 
+#if SOC_UART_NUM > 2
   static constexpr uart_port_t uartNum = UART_NUM_2;
+#else
+  static constexpr uart_port_t uartNum = UART_NUM_1;  // ESP32-C3/H2 only has UART0/1
+#endif
   bool dmxActive = false;
   QueueHandle_t uartQueue = nullptr;
 
-  uint8_t  rxBuffer[513];   // accumulates bytes between BREAKs
+  uint8_t  rxBuffer[513] = {};   // accumulates bytes between BREAKs
   uint16_t rxPos = 0;
-  uint8_t  dmxData[513];    // latest complete DMX frame
+  uint8_t  dmxData[513] = {};    // latest complete DMX frame
   uint16_t dmxLength = 0;
   bool     newFrame = false;
 
@@ -65,8 +71,8 @@ class DMXInDriver : public Node {
   void readPins() {
     if (safeModeMB) return;
 
-    bool changed = moduleIO->updatePin(pinDMX, pin_DMX);
-    changed = moduleIO->updatePin(pinRS485RX, pin_RS485_RX) || changed;
+    moduleIO->updatePin(pinDMX, pin_DMX);
+    moduleIO->updatePin(pinRS485RX, pin_RS485_RX);
 
     uint8_t effectiveRX = (pinDMX != UINT8_MAX) ? pinDMX : pinRS485RX;
 
@@ -200,10 +206,8 @@ class DMXInDriver : public Node {
     JsonDocument doc;
     JsonObject newState = doc.to<JsonObject>();
 
-    if (available >= 1) {
-      newState["brightness"] = ch[0];
-      newState["lightsOn"] = (bool)(ch[0] > 0);
-    }
+    newState["brightness"] = ch[0];
+    newState["lightsOn"] = (bool)(ch[0] > 0);
     if (available >= 2)  newState["red"]       = ch[1];
     if (available >= 3)  newState["green"]     = ch[2];
     if (available >= 4)  newState["blue"]      = ch[3];
@@ -229,4 +233,4 @@ class DMXInDriver : public Node {
   }
 };
 
-#endif
+#endif  // FT_MOONLIGHT

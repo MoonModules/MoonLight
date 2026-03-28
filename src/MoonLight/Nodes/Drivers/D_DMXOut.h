@@ -14,9 +14,13 @@
 #if FT_MOONLIGHT
 
 #include "driver/uart.h"
+#include "soc/soc_caps.h"
 
 // DMX512 output driver — sends channel data from the physical layer over RS-485.
-// Uses UART_NUM_1.  Requires at minimum pin_RS485_TX assigned in the board preset;
+// Uses UART_NUM_2 on chips that have it (ESP32, S3, P4); falls back to UART_NUM_1
+// on C3/H2.  Avoids UART_NUM_1 where possible because ModuleIO's generic RS-485
+// bootstrap also uses UART_NUM_1.
+// Requires at minimum pin_RS485_TX assigned in the board preset;
 // pin_RS485_DE is optional (enables automatic RS-485 direction control).
 //
 // See also: https://github.com/MoonModules/MoonLight/issues/157
@@ -29,7 +33,11 @@ class DMXOutDriver : public DriverNode {
   uint8_t pinTX = UINT8_MAX;
   uint8_t pinDE = UINT8_MAX;
 
-  static constexpr uart_port_t uartNum = UART_NUM_1;
+#if SOC_UART_NUM > 2
+  static constexpr uart_port_t uartNum = UART_NUM_2;
+#else
+  static constexpr uart_port_t uartNum = UART_NUM_1;  // ESP32-C3/H2 only has UART0/1
+#endif
   bool dmxActive = false;
   uint8_t dmxBuffer[513];  // start code (1 byte) + up to 512 data channels
 

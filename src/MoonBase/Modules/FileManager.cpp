@@ -14,7 +14,7 @@
   #include "FileManager.h"
 
   #include "MoonBase/SharedFSPersistence.h"
-  #include "MoonBase/utilities/Utilities.h"
+  #include "MoonBase/utilities/PlatformFunctions.h"
 
 // recursively fill a fileArray with all files and folders on the FS
 void addFolder(File folder, bool showHidden, const JsonArray& fileArray) {

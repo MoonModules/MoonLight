@@ -54,7 +54,9 @@ pio test -e native    # Run all native unit tests (~1 second)
 
 Tests live in `test/test_native/` and run on the host machine (no ESP32 needed). They use the [doctest](https://github.com/doctest/doctest) framework.
 
-**When to add unit tests:** Add tests for simple, pure, side-effect-free functions and structs (e.g. math utilities, coordinate operations, string helpers). Do not add tests for every function — focus on functions that are self-contained and don't depend on ESP32 hardware, FreeRTOS, or WiFi/filesystem. Since the source headers have ESP32 dependencies, test functions are currently copied into the test file. Keep them in sync when modifying the originals.
+**When to add unit tests:** Add tests for simple, pure, side-effect-free functions and structs (e.g. math utilities, coordinate operations, string helpers). Do not add tests for every function — focus on functions that are self-contained and don't depend on ESP32 hardware, FreeRTOS, or WiFi/filesystem.
+
+**Never copy code into test files.** If the function lives in a header that has ESP32 dependencies, extract it first into a standalone pure-C++ header under `src/MoonBase/utilities/` (no Arduino/ESP32 includes), then `#include` that header from both the original file and the test. Copied code drifts — the test would verify a stale snapshot instead of the real function.
 
 ### Unit Tests (Vitest — Frontend)
 

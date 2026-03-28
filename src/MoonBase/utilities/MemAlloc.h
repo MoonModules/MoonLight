@@ -15,7 +15,7 @@
 
 #include "ArduinoJson.h"
 
-// Fallback no-op macros when included standalone (real definitions come from Utilities.h)
+// Fallback no-op macros when included standalone (real definitions come from PlatformFunctions.h)
 #ifndef EXT_LOGE
   #define EXT_LOGE(tag, fmt, ...)
 #endif

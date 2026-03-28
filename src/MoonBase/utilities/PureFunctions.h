@@ -159,7 +159,7 @@ inline String buildNameAndTags(const char* name, uint8_t dim, const char* tags) 
 #include "Coord3D.h"
 
 #ifdef ARDUINO
-  #include "Utilities.h"  // Coord3D ArduinoJson converter
+  #include "PlatformFunctions.h"  // Coord3D ArduinoJson converter
 #endif
 
 /// Finds an existing control by name in the JsonArray, or creates a new one.

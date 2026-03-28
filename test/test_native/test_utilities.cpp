@@ -13,6 +13,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
+#include "MoonBase/utilities/BoardNames.h"
 #include "MoonBase/utilities/Char.h"
 #include "MoonBase/utilities/Coord3D.h"
 #include "MoonBase/utilities/PureFunctions.h"
@@ -402,3 +403,28 @@ TEST_CASE("Char: non-member operator+ (const char* + Char)") {
 //     CHECK_EQ(fl::map_range((uint8_t)255, (uint8_t)0, (uint8_t)255, (uint8_t)0, (uint8_t)100), 100);
 //   }
 // }
+
+// ============================================================
+// BoardName::fromLegacyId — tests the actual header
+// ============================================================
+
+TEST_CASE("BoardName::fromLegacyId") {
+  SUBCASE("all valid indices return names[i]") {
+    for (int i = 0; i < (int)BoardName::count; i++) {
+      CHECK_EQ(BoardName::fromLegacyId(i), BoardName::names[i]);
+    }
+  }
+  SUBCASE("negative index returns names[0]") {
+    CHECK_EQ(BoardName::fromLegacyId(-1), BoardName::names[0]);
+  }
+  SUBCASE("index >= count returns names[0]") {
+    CHECK_EQ(BoardName::fromLegacyId((int)BoardName::count),     BoardName::names[0]);
+    CHECK_EQ(BoardName::fromLegacyId((int)BoardName::count + 99), BoardName::names[0]);
+  }
+  SUBCASE("spot-check known entries") {
+    CHECK_EQ(std::string(BoardName::fromLegacyId(0)),  "");
+    CHECK_EQ(std::string(BoardName::fromLegacyId(5)),  "QuinLED Dig-Octa v2");
+    CHECK_EQ(std::string(BoardName::fromLegacyId(8)),  "SE16 v1");
+    CHECK_EQ(std::string(BoardName::fromLegacyId(19)), "Olimex ESP32-POE");
+  }
+}

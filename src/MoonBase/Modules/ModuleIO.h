@@ -84,66 +84,7 @@ enum IO_EthernetTypeEnum {
   eth_W5500          // SPI — external module (ESP32-S3 etc.)
 };
 
-// Board name constants — these strings are the stable persistent identifiers stored in JSON.
-// They must match the names passed to addBoardValue() in setupDefinition().
-// Never rename these; adding new boards anywhere in the list is safe.
-// The array order matches the old numeric IDs for legacy migration (index 0 = none/empty).
-namespace BoardName {
-  // Order must match old IO_BoardsEnum for legacy numeric ID migration.
-  // New boards must be appended at the end.
-  static constexpr const char* names[] = {
-    "",                          //  0 — none (board_none)
-    "QuinLED Dig-2-Go",         //  1 (board_QuinLEDDig2Go)
-    "QuinLED Dig-Next-2",       //  2 (board_QuinLEDDigNext2)
-    "QuinLED Dig-Uno v3",       //  3 (board_QuinLEDDigUnoV3)
-    "QuinLED Dig-Quad v3",      //  4 (board_QuinLEDDigQuadV3)
-    "QuinLED Dig-Octa v2",      //  5 (board_QuinLEDDigOctaV2)
-    "Serg Universal Shield",    //  6 (board_SergUniShieldV5)
-    "Serg Mini Shield",         //  7 (board_SergMiniShield)
-    "SE16 v1",                  //  8 (board_SE16V1)
-    "LightCrafter16",           //  9 (board_LightCrafter16)
-    "MHC V43 controller",       // 10 (board_MHCV43)
-    "MHC V57 PRO controller",   // 11 (board_MHCV57PRO)
-    "MHC P4 Nano Shield V1.0",  // 12 (board_MHCP4NanoV1)
-    "MHC P4 Nano Shield V2.0",  // 13 (board_MHCP4NanoV2)
-    "Yves V48",                 // 14 (board_YvesV48)
-    "Troy P4 Nano",             // 15 (board_TroyP4Nano)
-    "Atom S3R",                 // 16 (board_AtomS3)
-    "Luxceo Mood1 Xiao Mod",   // 17 (board_LuxceoMood1XiaoMod)
-    "Cube202010",               // 18 (board_Cube202010)
-    "Olimex ESP32-POE",         // 19 — new (not in old enum)
-  };
-  static constexpr size_t count = sizeof(names) / sizeof(names[0]);
-
-  // Named accessors — same values as the array, for readable code
-  static constexpr const char* none               = names[0];
-  static constexpr const char* QuinLEDDig2Go      = names[1];
-  static constexpr const char* QuinLEDDigNext2    = names[2];
-  static constexpr const char* QuinLEDDigUnoV3    = names[3];
-  static constexpr const char* QuinLEDDigQuadV3   = names[4];
-  static constexpr const char* QuinLEDDigOctaV2   = names[5];
-  static constexpr const char* SergUniShieldV5    = names[6];
-  static constexpr const char* SergMiniShield     = names[7];
-  static constexpr const char* SE16V1             = names[8];
-  static constexpr const char* LightCrafter16     = names[9];
-  static constexpr const char* MHCV43             = names[10];
-  static constexpr const char* MHCV57PRO          = names[11];
-  static constexpr const char* MHCP4NanoV1        = names[12];
-  static constexpr const char* MHCP4NanoV2        = names[13];
-  static constexpr const char* YvesV48            = names[14];
-  static constexpr const char* TroyP4Nano         = names[15];
-  static constexpr const char* AtomS3             = names[16];
-  static constexpr const char* LuxceoMood1XiaoMod = names[17];
-  static constexpr const char* Cube202010         = names[18];
-  static constexpr const char* OlimexESP32POE     = names[19];
-
-  /// Convert a legacy numeric board preset ID to the corresponding name string.
-  /// Returns names[0] ("") if the ID is out of range.
-  static const char* fromLegacyId(int id) {
-    if (id >= 0 && id < (int)count) return names[id];
-    return names[0];
-  }
-}
+#include "MoonBase/utilities/BoardNames.h"
 
 class ModuleIO : public Module {
  public:
@@ -344,11 +285,12 @@ class ModuleIO : public Module {
     uint8_t lastUsage = UINT8_MAX;
   };
 
-  void setBoardPresetDefaults(const Char<32>& boardID) {
+  void setBoardPresetDefaults(const Char<32>& boardName) {
     JsonDocument doc;
     JsonObject newState = doc.to<JsonObject>();
     newState["modded"] = false;
     newState["I2CReady"] = false;
+    newState["maxPower"] = 10;      // USB compliant default; board presets override as needed
     // Reset ethernet controls to defaults; board presets override as needed
     newState["ethernetType"] = 0;   // Board Default
     newState["ethPhyAddr"] = 0;
@@ -400,7 +342,7 @@ class ModuleIO : public Module {
     }
 
 #if defined(CONFIG_IDF_TARGET_ESP32S3)  // S3 boards
-    if (boardID == BoardName::SE16V1) {
+    if (boardName == BoardName::SE16V1) {
       newState["maxPower"] = 500;
       uint8_t ledPins[] = {47, 48, 21, 38, 14, 39, 13, 40, 12, 41, 11, 42, 10, 2, 3, 1};  // LED_PINS
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
@@ -421,7 +363,7 @@ class ModuleIO : public Module {
         pinAssigner.assignPin(5, pin_Infrared);
       }
 
-    } else if (boardID == BoardName::LightCrafter16) {
+    } else if (boardName == BoardName::LightCrafter16) {
       newState["maxPower"] = 500;
       uint8_t ledPins[] = {47, 21, 14, 9, 8, 16, 15, 7, 1, 2, 42, 41, 40, 39, 38, 48};  // LED_PINS
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
@@ -441,10 +383,10 @@ class ModuleIO : public Module {
       pinAssigner.assignPin(10, pin_PHY_CS);    // WIZ850IO nCS
       pinAssigner.assignPin(45, pin_PHY_IRQ);   // WIZ850IO nINT
       pinAssigner.assignPin(4, pin_Infrared);
-    } else if (boardID == BoardName::AtomS3) {
+    } else if (boardName == BoardName::AtomS3) {
       uint8_t ledPins[] = {5, 6, 7, 8};  // LED_PINS
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
-    } else if (boardID == BoardName::LuxceoMood1XiaoMod) {
+    } else if (boardName == BoardName::LuxceoMood1XiaoMod) {
       newState["maxPower"] = 50;
       uint8_t ledPins[] = {1, 2, 3};
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
@@ -458,7 +400,7 @@ class ModuleIO : public Module {
       pinAssigner.assignPin(44, pin_Serial_RX);
     } else
 #elif defined(CONFIG_IDF_TARGET_ESP32)  // D0 boards
-    if (boardID == BoardName::QuinLEDDig2Go) {
+    if (boardName == BoardName::QuinLEDDig2Go) {
       // Dig-2-Go
       newState["maxPower"] = 10;  // USB powered: 2A / 10W
       pinAssigner.assignPin(0, pin_Button_Push_LightsOn);
@@ -473,7 +415,7 @@ class ModuleIO : public Module {
       pinAssigner.assignPin(23, pin_Exposed);
       pinAssigner.assignPin(25, pin_Exposed);
       // pinAssigner.assignPin(xx, pin_I2S_MCLK);
-      // } else if (boardID == board_QuinLEDPenta) {
+      // } else if (boardName == board_QuinLEDPenta) {
       //   uint8_t ledPins[] = {14, 13, 12, 4, 2};  // LED_PINS
       //   for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
       //   pinAssigner.assignPin(34, pin_ButtonPush);
@@ -481,7 +423,7 @@ class ModuleIO : public Module {
       //   pinAssigner.assignPin(39, pin_ButtonPush);
       //   pinAssigner.assignPin(1, pin_I2C_SDA);
       //   pinAssigner.assignPin(3, pin_I2C_SCL);
-      // } else if (boardID == board_QuinLEDPentaPlus) {
+      // } else if (boardName == board_QuinLEDPentaPlus) {
       //   pinAssigner.assignPin(33, pin_LED_CW);
       //   pinAssigner.assignPin(32, pin_LED_WW);
       //   pinAssigner.assignPin(2, pin_LED_R);
@@ -494,7 +436,7 @@ class ModuleIO : public Module {
       //   pinAssigner.assignPin(16, pin_I2C_SCL);
       //   pinAssigner.assignPin(13, pin_Relay_LightsOn);
       //   pinAssigner.assignPin(5, pin_LED);
-    } else if (boardID == BoardName::QuinLEDDigNext2) {
+    } else if (boardName == BoardName::QuinLEDDigNext2) {
       // Dig-Next-2
       newState["maxPower"] = 65;
       pinAssigner.assignPin(2, pin_LED);
@@ -514,7 +456,7 @@ class ModuleIO : public Module {
       pinAssigner.assignPin(25, pin_Exposed);
       pinAssigner.assignPin(32, pin_Exposed);
       pinAssigner.assignPin(33, pin_Exposed);
-    } else if (boardID == BoardName::QuinLEDDigUnoV3) {
+    } else if (boardName == BoardName::QuinLEDDigUnoV3) {
       // Dig-Uno-V3
       // esp32-d0 (4MB)
       newState["maxPower"] = 50;  // max 75, but 10A fuse
@@ -528,7 +470,7 @@ class ModuleIO : public Module {
       // pinAssigner.assignPin(15, pin_I2S_SCK);
       // pinAssigner.assignPin(16, pin_LED_03);
       // pinAssigner.assignPin(32, pin_Exposed);
-    } else if (boardID == BoardName::QuinLEDDigQuadV3) {
+    } else if (boardName == BoardName::QuinLEDDigQuadV3) {
       // Dig-Quad-V3
       // esp32-d0 (4MB)
       newState["maxPower"] = 150;
@@ -543,7 +485,7 @@ class ModuleIO : public Module {
       // pinAssigner.assignPin(13, pin_Temperature;
       // pinAssigner.assignPin(15, pin_I2S_SCK;
       // pinAssigner.assignPin(32, pin_Exposed;
-    } else if (boardID == BoardName::QuinLEDDigOctaV2) {
+    } else if (boardName == BoardName::QuinLEDDigOctaV2) {
       // Dig-Octa-32-8L — ESP32-D0-16MB with onboard LAN8720A Ethernet
       // https://quinled.info/quinled-dig-octa-brainboard-32-8l-pinout-guide/
       newState["maxPower"] = 400;                      // 10A Fuse * 8 ... 400 W
@@ -561,7 +503,7 @@ class ModuleIO : public Module {
       // RMII data pins (hardwired in silicon, reserved to prevent conflicts)
       uint8_t rmiiDataPins[] = {19, 21, 22, 25, 26, 27};  // TXD0, TX_EN, TXD1, RXD0, RXD1, CRS_DV
       for (uint8_t gpio : rmiiDataPins) pinAssigner.assignPin(gpio, pin_Ethernet);
-    } else if (boardID == BoardName::OlimexESP32POE) {
+    } else if (boardName == BoardName::OlimexESP32POE) {
       // Olimex ESP32-POE (WROOM) — ESP32-D0 with onboard LAN8720A Ethernet
       // https://github.com/OLIMEX/ESP32-POE/blob/master/DOCUMENTS/ESP32-POE-user-manual.pdf
       // PHY_ADDR=0, MDC=GPIO23, MDIO=GPIO18, CLK=GPIO17(OUT), PWR/RST=GPIO12
@@ -575,7 +517,7 @@ class ModuleIO : public Module {
       // RMII data pins (hardwired in silicon, reserved to prevent conflicts)
       uint8_t rmiiDataPinsOlimex[] = {19, 21, 22, 25, 26, 27};  // TXD0, TX_EN, TXD1, RXD0, RXD1, CRS_DV
       for (uint8_t gpio : rmiiDataPinsOlimex) pinAssigner.assignPin(gpio, pin_Ethernet);
-    } else if (boardID == BoardName::SergMiniShield) {
+    } else if (boardName == BoardName::SergMiniShield) {
       newState["maxPower"] = 50;  // 10A Fuse ...
       pinAssigner.assignPin(16, pin_LED);
       // pinAssigner.assignPin(17, pin_LED); // e.g. apa102...
@@ -592,7 +534,7 @@ class ModuleIO : public Module {
       // e.g. for 4 line display
       pinAssigner.assignPin(21, pin_I2C_SDA);
       pinAssigner.assignPin(22, pin_I2C_SCL);
-    } else if (boardID == BoardName::SergUniShieldV5) {
+    } else if (boardName == BoardName::SergUniShieldV5) {
       newState["maxPower"] = 50;  // 10A Fuse ...
 
       pinAssigner.assignPin(16, pin_LED);  // first pin
@@ -616,7 +558,7 @@ class ModuleIO : public Module {
       pinAssigner.assignPin(22, pin_I2C_SCL);
 
       // pinAssigner.assignPin(?, pin_Temperature); // todo: check temp pin
-    } else if (boardID == BoardName::MHCV43) {    // https://shop.myhome-control.de/ABC-WLED-Controller-Board-5-24V/HW10015
+    } else if (boardName == BoardName::MHCV43) {    // https://shop.myhome-control.de/ABC-WLED-Controller-Board-5-24V/HW10015
       newState["maxPower"] = 75;             // 15A Fuse @ 5V
       uint8_t ledPins[] = {12, 13, 16, 18};  // 4 LED_PINS
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
@@ -627,7 +569,7 @@ class ModuleIO : public Module {
       uint8_t exposedPins[] = {4, 5, 17, 19, 21, 22, 23, 25, 26, 27, 33};
       for (uint8_t gpio : exposedPins) pinAssigner.assignPin(gpio, pin_Exposed);  // Ethernet Pins
 
-    } else if (boardID == BoardName::MHCV57PRO) {  // https://shop.myhome-control.de/ABC-WLED-Controller-PRO-V57-mit-iMOSFET/HW10030
+    } else if (boardName == BoardName::MHCV57PRO) {  // https://shop.myhome-control.de/ABC-WLED-Controller-PRO-V57-mit-iMOSFET/HW10030
       newState["maxPower"] = 75;              // 15A Fuse @ 5V
       uint8_t ledPins[] = {12, 13, 18, 32};   // 4 LED_PINS
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
@@ -641,7 +583,7 @@ class ModuleIO : public Module {
 
     } else
 #elif defined(CONFIG_IDF_TARGET_ESP32P4)  // P4 boards
-    if (boardID == BoardName::MHCP4NanoV1) {  // https://shop.myhome-control.de/ABC-WLED-ESP32-P4-Shield/HW10027
+    if (boardName == BoardName::MHCP4NanoV1) {  // https://shop.myhome-control.de/ABC-WLED-ESP32-P4-Shield/HW10027
       newState["maxPower"] = 100;               // Assuming decent LED power!!
 
       if (_state.data["switch1"]) {                         // on: 8 LED Pins + RS485 + Dig Input
@@ -673,7 +615,7 @@ class ModuleIO : public Module {
         pinAssigner.assignPin(12, pin_I2S_SCK);
         pinAssigner.assignPin(13, pin_I2S_MCLK);
       }
-    } else if (boardID == BoardName::MHCP4NanoV2) {                // https://shop.myhome-control.de/ABC-WLED-ESP32-P4-Shield/HW10027
+    } else if (boardName == BoardName::MHCP4NanoV2) {                // https://shop.myhome-control.de/ABC-WLED-ESP32-P4-Shield/HW10027
       newState["maxPower"] = 100;                             // Assuming decent LED power!!
       pinAssigner.assignPin(7, pin_I2C_SDA);                  // on V2 these are I2C Pins
       pinAssigner.assignPin(8, pin_I2C_SCL);                  // on V2 these are I2C Pins
@@ -706,7 +648,7 @@ class ModuleIO : public Module {
         pinAssigner.assignPin(12, pin_I2S_SCK);
         pinAssigner.assignPin(13, pin_I2S_MCLK);
       }
-    } else if (boardID == BoardName::TroyP4Nano) {
+    } else if (boardName == BoardName::TroyP4Nano) {
       newState["maxPower"] = 10;                                                        // USB compliant
       uint8_t ledPins[] = {2, 3, 4, 5, 6, 20, 21, 22, 23, 26, 27, 32, 33, 36, 47, 48};  // LED_PINS
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
@@ -737,15 +679,14 @@ class ModuleIO : public Module {
     } else
 #endif
     // Universal boards (all targets)
-    if (boardID == BoardName::YvesV48) {
+    if (boardName == BoardName::YvesV48) {
       pinAssigner.assignPin(3, pin_LED);
-    } else if (boardID == BoardName::Cube202010) {
+    } else if (boardName == BoardName::Cube202010) {
       newState["maxPower"] = 50;
       uint8_t ledPins[] = {22, 21, 14, 18, 5, 4, 2, 15, 13, 12};  // LED_PINS, only 10 until now, rest is WIP
                                                                   // char pins[80] = "2,3,4,16,17,18,19,21,22,23,25,26,27,32,33";  //(D0), more pins possible. to do: complete list.
       for (uint8_t gpio : ledPins) pinAssigner.assignPin(gpio, pin_LED);
     } else {                      // default
-      newState["maxPower"] = 10;  // USB compliant
   #ifdef CONFIG_IDF_TARGET_ESP32P4
       pinAssigner.assignPin(37, pin_LED);  // p4-nano doesn't like pin16
   #else
@@ -770,7 +711,7 @@ class ModuleIO : public Module {
     // EXT_LOGD(MB_TAG, "%s", xxx.c_str());
     // EXT_LOGD(MB_TAG, "%s", xxx.c_str());
 
-    EXT_LOGD(MB_TAG, "boardID %d", boardID);
+    EXT_LOGD(MB_TAG, "boardName %s", boardName.c_str());
     // serializeJson(newState, Serial);Serial.println();
 
     update(newState, ModuleState::update, _moduleName);  // triggers an update from sveltekit

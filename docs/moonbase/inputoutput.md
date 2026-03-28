@@ -210,8 +210,8 @@ Two board-specific toggle switches that select between alternate pin configurati
 
 | Board | Switch1 | Switch2 |
 |---|---|---|
-| **MHC P4 Nano Shield V1.0** | Off: 16 LED pins (default). On: 8 LED + RS-485 + digital inputs | Off: onboard mic (I2S). On: line-in audio |
-| **MHC P4 Nano Shield V2.0** | Off: 16 LED pins (default). On: 8 LED + RS-485 + digital inputs | Off: onboard mic (I2S). On: line-in audio |
+| **MHC P4 Nano Shield V1.0** | Off: 16 LED pins (default). On: 8 LED + 4 RS-485-capable LED outputs + digital inputs | Off: onboard mic (I2S). On: line-in audio |
+| **MHC P4 Nano Shield V2.0** | Off: 16 LED pins (default). On: 8 LED + 4 RS-485-capable LED outputs + digital inputs | Off: onboard mic (I2S). On: line-in audio |
 | **SE16 v1** | Off: infrared (default). On: ethernet (W5500 SPI) | — |
 | **Serg Universal Shield** | Selects second LED pin (GPIO 1 or GPIO 3) | — |
 

@@ -16,7 +16,7 @@
   #include <ESP32SvelteKit.h>  //for safeModeMB
 
   #include "MoonBase/Nodes.h"
-  #include "MoonBase/utilities/Utilities.h"
+  #include "MoonBase/utilities/PlatformFunctions.h"
   #include "VirtualLayer.h"
 
 extern SemaphoreHandle_t swapMutex;
