@@ -389,7 +389,7 @@ void VirtualLayer::onLayoutPost() {
     }
   }
 
-  EXT_LOGI(MB_TAG, "V:%d x %d x %d = v:%d = 1:0:%d + 1:1:%d + mti:%d (1:m:%d)", size.x, size.y, size.z, nrOfLights, nrOfZeroLights, nrOfOneLight, mappingTableIndexesSizeUsed, nrOfMoreLights);
+  EXT_LOGI(ML_TAG, "V:%d x %d x %d = v:%d = 1:0:%d + 1:1:%d + mti:%d (1:m:%d)", size.x, size.y, size.z, nrOfLights, nrOfZeroLights, nrOfOneLight, mappingTableIndexesSizeUsed, nrOfMoreLights);
 }
 
 bool VirtualLayer::isMapped(nrOfLights_t indexV) const {

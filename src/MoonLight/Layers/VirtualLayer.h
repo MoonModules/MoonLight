@@ -180,7 +180,7 @@ class VirtualLayer {
   // Write brightness channel, scaled by global and layer brightness (only when offsetBrightness is configured).
   void setBrightness(const nrOfLights_t indexV, uint8_t value) {
     if (layerP->lights.header.offsetBrightness != UINT8_MAX) {
-      uint16_t scaled = (value * layerP->lights.header.brightness) / 255;
+      uint16_t scaled = ((uint32_t)value * layerP->lights.header.brightness * brightness + 32512) / 65025;
       scaled = (scaled * brightness) / 255;
       setLight(indexV, layerP->lights.header.offsetBrightness, scaled);
     }

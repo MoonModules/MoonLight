@@ -49,6 +49,17 @@ PhysicalLayer::~PhysicalLayer() {
   }
 }
 
+VirtualLayer* PhysicalLayer::ensureLayer(uint8_t index) {
+  if (index >= layers.size()) return nullptr;
+  if (!layers[index]) {
+    layers[index] = new VirtualLayer();
+    layers[index]->layerP = this;
+    layers[index]->setup();
+    EXT_LOGD(ML_TAG, "Created VirtualLayer %d on demand", index);
+  }
+  return layers[index];
+}
+
 void PhysicalLayer::setup() {
   // allocate lights.channelsE/D
 
@@ -115,6 +126,10 @@ void PhysicalLayer::loopDrivers() {
   }
 
   if (requestMapVirtual) {
+    // wait until monitor has consumed the positions from pass 1 before running pass 2,
+    // because pass 2 writes to channelsE which pass 1 used to store position data
+    if (lights.header.isPositions == 2) return;  // will retry next loopDrivers() iteration
+
     EXT_LOGD(ML_TAG, "mapLayout virtual requested");
 
     pass = 2;

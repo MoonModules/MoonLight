@@ -65,17 +65,10 @@
 	const lightPreset_RGB2040 = 10;
 
 	const handleHeader = (header: Uint8Array) => {
-		console.log('Monitor.handleHeader', header);
-		// done = false; // causes continues onLayoutChanged !
-
 		let view = new DataView(header.buffer);
 
 		// let isPositions:number = header[6];
 		isPositions = true; //(header[6] >> 0) & 0x3; // bits 0-1
-		// offsetRed     = (header[27] >> 2) & 0x3; // bits 2-3
-		// offsetGreen   = (header[27] >> 4) & 0x3; // bits 4-5
-		// offsetBlue    = (header[27] >> 6) & 0x3; // bits 6-7
-		// offsetWhite   = view.getUint8(28);
 
 		nrOfLights = view.getUint32(12, true);
 		nrOfChannels = view.getUint32(16, true);
@@ -88,15 +81,11 @@
 		createScene(el);
 		clearVertices(); // clear old positions before receiving new ones
 
-		// let ledFactor: number = 1;//header[1];
-		// let ledSize: number = header[23];
 		width = view.getInt32(0, true);
 		height = view.getInt32(4, true);
 		depth = view.getInt32(8, true);
 
 		setMatrixDimensions(width, height, depth);
-
-		// let nrOfLights = header[4] + 256 * header[5];
 
 		console.log(
 			'Monitor.handleHeader',
@@ -124,6 +113,8 @@
 
 			vertices.push(x, y, z);
 		}
+
+		updateScene(); // render immediately so layout changes are visible without waiting for channel data
 	};
 
 	const handleChannels = (channels: Uint8Array) => {

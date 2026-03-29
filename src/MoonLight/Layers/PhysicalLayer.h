@@ -116,6 +116,10 @@ class PhysicalLayer {
   // Called after all addLight() calls in a pass; finalises sizes and notifies virtual layers.
   void onLayoutPost();
 
+  // Ensures the VirtualLayer at the given index exists, creating it on demand if needed.
+  // Returns nullptr if index is out of bounds.
+  VirtualLayer* ensureLayer(uint8_t index);
+
   // Per-pin LED strip configuration (populated by board presets via ModuleIO).
   uint8_t ledPins[MAXLEDPINS];          // pin numbers in board preset order
   uint8_t ledPinsAssigned[MAXLEDPINS];  // pin numbers after assignment/override

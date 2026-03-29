@@ -24,32 +24,93 @@ class ModuleEffects : public NodeManager {
  public:
   ModuleLightsControl* _moduleLightsControl;
   uint8_t selectedLayer = 0;  // index of the currently selected virtual layer in the UI
+  bool needsRestoreNonSelectedLayers = false;  // set after FS load, cleared after first restore
 
   ModuleEffects(PsychicHttpServer* server, ESP32SvelteKit* sveltekit, FileManager* fileManager, ModuleLightsControl* moduleLightsControl) : NodeManager("effects", server, sveltekit, fileManager) {
     EXT_LOGV(ML_TAG, "constructor");
     _moduleLightsControl = moduleLightsControl;
   }
 
-  /// Ensures the layer at the given index exists, creating it on demand if needed.
-  VirtualLayer* ensureLayer(uint8_t index) {
-    if (index >= layerP.layers.size()) return nullptr;
-    if (!layerP.layers[index]) {
-      layerP.layers[index] = new VirtualLayer();
-      layerP.layers[index]->layerP = &layerP;
-      layerP.layers[index]->setup();
-      EXT_LOGD(ML_TAG, "Created VirtualLayer %d on demand", index);
+/// After boot, instantiate nodes for non-selected layers and restore their per-layer bounds.
+  void restoreNonSelectedLayers() {
+    uint8_t savedSelectedLayer = selectedLayer;
+    Char<16> key;
+    bool restoredAny = false;
+    for (uint8_t i = 0; i < layerP.layers.size(); i++) {
+      if (i == savedSelectedLayer) continue;  // already handled by compareRecursive
+
+      key.format("nodes_%d", i);
+      JsonArray layerNodes = _state.data[key.c_str()];
+      if (layerNodes.isNull() || layerNodes.size() == 0) continue;
+
+      VirtualLayer* layer = layerP.ensureLayer(i);
+      selectedLayer = i;            // addNode uses selectedLayer to find the target layer
+      nodes = &(layer->nodes);      // temporarily point to this layer's nodes
+
+      // instantiate each node from the stored JSON
+      for (uint8_t j = 0; j < layerNodes.size(); j++) {
+        JsonObject nodeState = layerNodes[j];
+        if (nodeState["name"].isNull()) continue;
+        char name[32];
+        strlcpy(name, nodeState["name"].as<const char*>(), 32);
+        Node* node = addNode(j, name, nodeState["controls"]);
+        if (node) {
+          node->on = nodeState["on"];
+          node->requestMappings();
+        }
+      }
+
+      // restore per-layer bounds
+      key.format("start_%d", i);
+      if (!_state.data[key.c_str()].isNull()) {
+        layer->startPct = {_state.data[key.c_str()]["x"] | 0, _state.data[key.c_str()]["y"] | 0, _state.data[key.c_str()]["z"] | 0};
+      }
+      key.format("end_%d", i);
+      if (!_state.data[key.c_str()].isNull()) {
+        layer->endPct = {_state.data[key.c_str()]["x"] | 100, _state.data[key.c_str()]["y"] | 100, _state.data[key.c_str()]["z"] | 100};
+      }
+      key.format("brightness_%d", i);
+      if (!_state.data[key.c_str()].isNull()) {
+        layer->brightness = _state.data[key.c_str()].as<uint8_t>();
+      }
+
+      EXT_LOGD(ML_TAG, "Restored layer %d: %d nodes, start:%d,%d,%d end:%d,%d,%d brightness:%d",
+               i, layer->nodes.size(), layer->startPct.x, layer->startPct.y, layer->startPct.z,
+               layer->endPct.x, layer->endPct.y, layer->endPct.z, layer->brightness);
+      restoredAny = true;
     }
-    return layerP.layers[index];
+
+    // restore selectedLayer and nodes pointer back to the originally selected layer
+    selectedLayer = savedSelectedLayer;
+    nodes = &(layerP.layers[selectedLayer]->nodes);
+
+    if (restoredAny) layerP.requestMapPhysical = true;  // remap to apply restored bounds
   }
 
   void selectLayer(uint8_t index, bool swapState = true) {
     if (index >= layerP.layers.size()) return;
 
     if (swapState && !_state.data["nodes"].isNull()) {
-      // save current layer's node state
       Char<16> key;
+
+      // save current layer's node state
       key.format("nodes_%d", selectedLayer);
       _state.data[key.c_str()].to<JsonArray>().set(_state.data["nodes"].as<JsonArray>());
+
+      // save current layer's per-layer properties
+      VirtualLayer* curLayer = layerP.layers[selectedLayer];
+      if (curLayer) {
+        key.format("start_%d", selectedLayer);
+        _state.data[key.c_str()]["x"] = curLayer->startPct.x;
+        _state.data[key.c_str()]["y"] = curLayer->startPct.y;
+        _state.data[key.c_str()]["z"] = curLayer->startPct.z;
+        key.format("end_%d", selectedLayer);
+        _state.data[key.c_str()]["x"] = curLayer->endPct.x;
+        _state.data[key.c_str()]["y"] = curLayer->endPct.y;
+        _state.data[key.c_str()]["z"] = curLayer->endPct.z;
+        key.format("brightness_%d", selectedLayer);
+        _state.data[key.c_str()] = curLayer->brightness;
+      }
 
       // load new layer's node state
       key.format("nodes_%d", index);
@@ -61,7 +122,7 @@ class ModuleEffects : public NodeManager {
     }
 
     selectedLayer = index;
-    VirtualLayer* layer = ensureLayer(selectedLayer);
+    VirtualLayer* layer = layerP.ensureLayer(selectedLayer);
     nodes = &(layer->nodes);
   }
 
@@ -69,6 +130,7 @@ class ModuleEffects : public NodeManager {
     defaultNodeName = getNameAndTags<RandomEffect>();
     selectLayer(0, false);  // initial setup, no state to swap yet
     NodeManager::begin();
+    needsRestoreNonSelectedLayers = true;  // will be processed in loop20ms after SharedFSPersistence loads state
 
   #if FT_ENABLED(FT_MONITOR)
     _sveltekit->getSocket()->registerEvent("monitor");
@@ -87,7 +149,8 @@ class ModuleEffects : public NodeManager {
   #endif
 
     _state.readHook = [&](JsonObject data) {
-      VirtualLayer* layer = layerP.layers[selectedLayer];
+      VirtualLayer* layer = layerP.ensureLayer(selectedLayer);
+      if (!layer) return;  // safety guard
       data["start"]["x"] = layer->startPct.x;
       data["start"]["y"] = layer->startPct.y;
       data["start"]["z"] = layer->startPct.z;
@@ -374,7 +437,7 @@ class ModuleEffects : public NodeManager {
     if (node) {
       EXT_LOGI(ML_TAG, "Add %s (p:%p pr:%d)", name, node, isInPSRAM(node));
 
-      VirtualLayer* layer = layerP.layers[selectedLayer];
+      VirtualLayer* layer = layerP.ensureLayer(selectedLayer);
       node->constructor(layer, controls, &layerP.effectsMutex);  // pass the selected layer to the node
       node->moduleControl = _moduleLightsControl;                // to access global lights control functions if needed
       // node->moduleIO = _moduleIO;                     // to get pin allocations
@@ -393,8 +456,22 @@ class ModuleEffects : public NodeManager {
     return node;
   }
 
+  void onNodeRemoved() override {
+    // destroy the virtual layer if it has no nodes left (but never destroy layer 0)
+    if (selectedLayer > 0 && layerP.layers[selectedLayer] && layerP.layers[selectedLayer]->nodes.empty()) {
+      EXT_LOGD(ML_TAG, "Destroying empty VirtualLayer %d", selectedLayer);
+      delete layerP.layers[selectedLayer];
+      layerP.layers[selectedLayer] = nullptr;
+    }
+  }
+
   void loop20ms() override {
     NodeManager::loop20ms();
+
+    if (needsRestoreNonSelectedLayers) {
+      needsRestoreNonSelectedLayers = false;
+      restoreNonSelectedLayers();
+    }
 
     if (triggerResetPreset) {
       triggerResetPreset = false;
@@ -462,17 +539,20 @@ class ModuleEffects : public NodeManager {
       return;
     }
     if (updatedItem.parent[0] == "" && updatedItem.name == "brightness") {
-      layerP.layers[selectedLayer]->brightness = updatedItem.value.as<uint8_t>();
+      VirtualLayer* layer = layerP.ensureLayer(selectedLayer);
+      if (layer) layer->brightness = updatedItem.value.as<uint8_t>();
       return;
     }
     if (updatedItem.parent[0] == "" && updatedItem.name == "start") {
-      VirtualLayer* layer = layerP.layers[selectedLayer];
-      layer->startPct = {updatedItem.value["x"] | 0, updatedItem.value["y"] | 0, updatedItem.value["z"] | 0};
+      VirtualLayer* layer = layerP.ensureLayer(selectedLayer);
+      if (!layer) return;
+      layer->startPct = {updatedItem.value["x"].as<int>(), updatedItem.value["y"].as<int>(), updatedItem.value["z"].as<int>()};
       layerP.requestMapPhysical = true;  // remap to apply new bounds
       return;
     }
     if (updatedItem.parent[0] == "" && updatedItem.name == "end") {
-      VirtualLayer* layer = layerP.layers[selectedLayer];
+      VirtualLayer* layer = layerP.ensureLayer(selectedLayer);
+      if (!layer) return;
       layer->endPct = {updatedItem.value["x"] | 100, updatedItem.value["y"] | 100, updatedItem.value["z"] | 100};
       layerP.requestMapPhysical = true;  // remap to apply new bounds
       return;
