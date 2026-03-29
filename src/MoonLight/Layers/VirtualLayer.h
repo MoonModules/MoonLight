@@ -72,6 +72,17 @@ class VirtualLayer {
   // When true, every virtual index maps 1:1 to a physical index (no mappingTable needed).
   bool oneToOneMapping = false;
 
+  // Per-layer brightness (0–255). Scales pixel output within this layer. Default 255 = full.
+  uint8_t brightness = 255;
+
+  // Layer boundaries as percentages (0–100) of the total fixture size. Default 100% = full fixture.
+  Coord3D startPct = {0, 0, 0};
+  Coord3D endPct = {100, 100, 100};
+
+  // Physical coordinates computed from percentages during onLayoutPre (used by addLight to filter/remap).
+  Coord3D startPhy = {0, 0, 0};
+  Coord3D endPhy = {0, 0, 0};
+
   VirtualLayer();
   ~VirtualLayer();
 
@@ -146,6 +157,7 @@ class VirtualLayer {
 
   // Write RGB colour to the primary RGBW block of all physical lights at indexV.
   void setRGB(const nrOfLights_t indexV, CRGB color) {
+    if (brightness < 255) color.nscale8_video(brightness);  // apply per-layer brightness
     if (indexV < mappingTableSize && mappingTable[indexV].mapType == m_zeroLights) {
   #ifdef BOARD_HAS_PSRAM
       memcpy(mappingTable[indexV].rgb, (void*)&color, 3);
@@ -165,10 +177,12 @@ class VirtualLayer {
   }
   void setWhite(Coord3D pos, const uint8_t value) { setWhite(XYZ(pos), value); }
 
-  // Write brightness channel, scaled by global brightness (only when offsetBrightness is configured).
+  // Write brightness channel, scaled by global and layer brightness (only when offsetBrightness is configured).
   void setBrightness(const nrOfLights_t indexV, uint8_t value) {
     if (layerP->lights.header.offsetBrightness != UINT8_MAX) {
-      setLight(indexV, layerP->lights.header.offsetBrightness, (value * layerP->lights.header.brightness) / 255);
+      uint16_t scaled = (value * layerP->lights.header.brightness) / 255;
+      scaled = (scaled * brightness) / 255;
+      setLight(indexV, layerP->lights.header.offsetBrightness, scaled);
     }
   }
   void setBrightness(Coord3D pos, const uint8_t value) { setBrightness(XYZ(pos), value); }

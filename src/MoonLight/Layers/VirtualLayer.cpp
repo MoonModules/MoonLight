@@ -47,6 +47,8 @@ void VirtualLayer::setup() {
 }
 
 void VirtualLayer::loop() {
+  if (nodes.empty()) return;  // skip empty layers (no effects assigned)
+
   fadeToBlackMin();
 
   // set brightness default to global brightness
@@ -245,10 +247,20 @@ void VirtualLayer::createMappingTableAndAddOneToOne() {
 }
 
 void VirtualLayer::onLayoutPre() {
+  if (nodes.empty()) return;  // skip layout for empty layers (no effects assigned)
+
   // resetMapping
 
   nrOfLights = 0;
-  size = layerP->lights.header.size;  // start with the physical size
+  Coord3D physSize = layerP->lights.header.size;  // physical fixture size
+
+  // apply percentage bounds to compute the virtual layer's window into the physical fixture
+  startPhy = {(int)(physSize.x * startPct.x / 100), (int)(physSize.y * startPct.y / 100), (int)(physSize.z * startPct.z / 100)};
+  endPhy = {(int)(physSize.x * endPct.x / 100), (int)(physSize.y * endPct.y / 100), (int)(physSize.z * endPct.z / 100)};
+  // ensure at least 1 pixel in each dimension to avoid zero-size layers
+  endPhy = endPhy.maximum(Coord3D(startPhy.x + 1, startPhy.y + 1, startPhy.z + 1));
+
+  size = endPhy - startPhy;
   start = {0, 0, 0};
   end = size - 1;
   middle = size / 2;
@@ -276,6 +288,28 @@ void VirtualLayer::onLayoutPre() {
 }
 
 void VirtualLayer::addLight(Coord3D position) {
+  if (nodes.empty()) return;  // skip layout for empty layers
+
+  // filter: positions outside the percentage-based bounds are blacked out (unmapped)
+  bool outsideBounds = position.x < startPhy.x || position.x >= endPhy.x ||
+                       position.y < startPhy.y || position.y >= endPhy.y ||
+                       position.z < startPhy.z || position.z >= endPhy.z;
+
+  if (outsideBounds) {
+    // treat as unmapped — same as modifier setting position to UINT16_MAX
+    if (oneToOneMapping) {
+      oneToOneMapping = false;
+      createMappingTableAndAddOneToOne();
+    }
+    // black out this physical light
+    memset(&layerP->lights.channelsE[layerP->indexP * layerP->lights.header.channelsPerLight], 0, layerP->lights.header.channelsPerLight);
+    if (psramFound()) memset(&layerP->lights.channelsD[layerP->indexP * layerP->lights.header.channelsPerLight], 0, layerP->lights.header.channelsPerLight);
+    return;
+  }
+
+  // remap position to virtual coordinates (0-based within the layer's window)
+  position = position - startPhy;
+
   // modifiers
   for (Node* node : nodes) {
     if (node->on)  //  && node->hasModifier()
@@ -310,6 +344,8 @@ void VirtualLayer::addLight(Coord3D position) {
 }
 
 void VirtualLayer::onLayoutPost() {
+  if (nodes.empty()) return;  // skip layout for empty layers
+
   // prepare logging:
   nrOfLights_t nrOfOneLight = 0;
   nrOfLights_t nrOfMoreLights = 0;

@@ -202,6 +202,7 @@ void NodeManager::handleNodeNameChange(const UpdatedItem& updatedItem, JsonVaria
 
     EXT_LOGD(MB_TAG, "remove oldNode: %d p:%p", nodes->size(), oldNode);
     freeMBObject(oldNode);  // calls virtual destructor + frees memory
+    onNodeRemoved();
   }
 
   if (newNode) {

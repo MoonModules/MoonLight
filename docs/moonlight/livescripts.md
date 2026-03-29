@@ -4,8 +4,8 @@
 
 Live Scripts let you write custom effects, layouts, and palettes in a simple C-like language. Scripts are compiled on the ESP32 and executed as native code — no PC needed.
 
-!!! info "ESP32-S3 only"
-    Live Scripts require an ESP32-S3 board. Standard ESP32-D0 boards do not have enough memory.
+!!! info "PSRAM only"
+    Live Scripts require an ESP32 board with PSRAM. Standard ESP32 boards do not have enough memory.
 
 ## Where Live Scripts are used
 

@@ -90,6 +90,10 @@ class NodeManager : public Module {
   /// Handles nodes[i].controls[j].value changes: updates the control value and calls node's onUpdate.
   void handleNodeControlValueChange(const UpdatedItem& updatedItem, JsonVariant nodeState);
 
+ protected:
+  /// Called after a node is removed from the nodes list. Override to handle cleanup (e.g. destroying empty layers).
+  virtual void onNodeRemoved() {}
+
  public:
   #if FT_LIVESCRIPT
   /// Finds a LiveScript node by its animation file name. Returns nullptr if not found.

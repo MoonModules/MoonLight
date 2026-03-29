@@ -28,8 +28,10 @@ PhysicalLayer::PhysicalLayer() : ledPins{}, ledPinsAssigned{}, ledsPerPin{} {
 
   // initLightsToBlend();
 
-  // create one layer - temporary
-  layers.push_back(new VirtualLayer());
+  // pre-allocate 16 layer slots (nullptr = not yet created, allocated on demand)
+  layers.resize(16, nullptr);
+  // layer 0 always exists
+  layers[0] = new VirtualLayer();
   layers[0]->layerP = this;
 
   if (effectsMutex == nullptr) EXT_LOGE(ML_TAG, "Failed to create effectsMutex");
@@ -78,7 +80,7 @@ void PhysicalLayer::setup() {
   }
 
   for (VirtualLayer* layer : layers) {
-    layer->setup();
+    if (layer) layer->setup();
   }
 }
 
@@ -195,8 +197,7 @@ void PhysicalLayer::onLayoutPre() {
   } else if (pass == 2) {
     indexP = 0;
     for (VirtualLayer* layer : layers) {
-      // add the lights in the virtual layer
-      layer->onLayoutPre();
+      if (layer) layer->onLayoutPre();
     }
   }
 }
@@ -229,8 +230,7 @@ void PhysicalLayer::addLight(Coord3D position) {
     lights.header.nrOfLights++;
   } else {  // pass == 2
     for (VirtualLayer* layer : layers) {
-      // add the position in the virtual layer
-      layer->addLight(position);
+      if (layer) layer->addLight(position);
     }
     indexP++;
   }
@@ -274,8 +274,7 @@ void PhysicalLayer::onLayoutPost() {
   } else if (pass == 2) {
     EXT_LOGD(ML_TAG, "pass %d indexP: %d", pass, indexP);
     for (VirtualLayer* layer : layers) {
-      // add the position in the virtual layer
-      layer->onLayoutPost();
+      if (layer) layer->onLayoutPost();
     }
   }
 }
