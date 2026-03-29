@@ -33,10 +33,14 @@ class DMXOutDriver : public DriverNode {
   uint8_t pinTX = UINT8_MAX;
   uint8_t pinDE = UINT8_MAX;
 
+// DMXOut uses UART_NUM_2 on 3-UART chips so it doesn't collide with DMXIn (UART_NUM_1) or
+// ModuleIO's RS-485 bootstrap (also UART_NUM_1).  On 2-UART chips there is no UART_NUM_2, so
+// both DMX nodes fall back to UART_NUM_1 — startDMX() detects the conflict at runtime.
+// SOC_UART_NUM counts only the standard HP UARTs; see D_DMXIn.h for the full explanation.
 #if SOC_UART_NUM > 2
   static constexpr uart_port_t uartNum = UART_NUM_2;
 #else
-  static constexpr uart_port_t uartNum = UART_NUM_1;  // ESP32-C3/H2 only has UART0/1
+  static constexpr uart_port_t uartNum = UART_NUM_1;  // ESP32-C3/H2: no UART_NUM_2 available
 #endif
   bool dmxActive = false;
   update_handler_id_t ioUpdateHandler;
@@ -86,8 +90,19 @@ class DMXOutDriver : public DriverNode {
       .source_clk = UART_SCLK_DEFAULT,
     };
 
+#if SOC_UART_NUM <= 2
+    // On 2-UART chips DMXIn and DMXOut share UART_NUM_1.  Skip the pre-delete so that
+    // uart_driver_install() returns ESP_ERR_INVALID_STATE when DMXIn already owns the port.
+    esp_err_t err = uart_driver_install(uartNum, 256, 513 + 16, 0, NULL, 0);
+    if (err == ESP_ERR_INVALID_STATE) {
+      EXT_LOGW(ML_TAG, "DMX Out: UART_NUM_1 already in use (DMX In active?) — not starting");
+      updateControl("status", "UART conflict");
+      return;
+    }
+#else
     uart_driver_delete(uartNum);  // clean up any prior installation
     esp_err_t err = uart_driver_install(uartNum, 256, 513 + 16, 0, NULL, 0);
+#endif
     if (err != ESP_OK) {
       EXT_LOGE(ML_TAG, "DMX Out: UART install failed: %s", esp_err_to_name(err));
       updateControl("status", "UART error");
@@ -121,20 +136,36 @@ class DMXOutDriver : public DriverNode {
     if (header->nrOfChannels == 0) return;
 
     uint16_t offset = startChannel - 1;  // convert 1-based address to 0-based offset
-    uint16_t nrChannels = header->nrOfChannels;
-    if (offset + nrChannels > 512) nrChannels = 512 - offset;
 
-    // Wait for previous frame to finish, then build the DMX frame in three
-    // sequential UART writes (queued into the TX FIFO as a contiguous stream):
-    //   1. start code (1 byte, always 0x00 = dimmer data)
-    //   2. zero padding for startChannel offset (0 bytes when startChannel == 1)
-    //   3. channel data directly from channelsD, with trailing BREAK
-    uart_wait_tx_done(uartNum, pdMS_TO_TICKS(50));
+    // Build the DMX channel payload into a 511-byte stack frame (DMX512 minus start code).
+    // Zero-init covers both the startChannel offset padding and any trailing unused slots.
+    // rgbwBufferMapping reorders R/G/B to the fixture's channel order (e.g. GRB, WRGB) and
+    // extracts a white channel from RGB for RGBW/RGBWYP presets, applying the brightness LUT.
+    // This mirrors the ArtNet output driver's per-light remapping.
+    uint8_t dmxFrame[511] = {};
+    uint16_t frameSize = 0;
+    for (uint16_t indexP = 0; indexP < header->nrOfLights; indexP++) {
+      uint16_t dstBase = offset + indexP * header->channelsPerLight;
+      if (dstBase + header->channelsPerLight > 511) break;
+      uint8_t* src = &layerP.lights.channelsD[indexP * header->channelsPerLight];
+      uint8_t* dst = &dmxFrame[dstBase];
+      memcpy(dst, src, header->channelsPerLight);
+      rgbwBufferMapping(dst + header->offsetRGBW, src + header->offsetRGBW);
+      if (header->offsetRGBW1 != UINT8_MAX) {
+        rgbwBufferMapping(dst + header->offsetRGBW1, src + header->offsetRGBW1);
+        if (header->offsetRGBW2 != UINT8_MAX) {
+          rgbwBufferMapping(dst + header->offsetRGBW2, src + header->offsetRGBW2);
+          if (header->offsetRGBW3 != UINT8_MAX)
+            rgbwBufferMapping(dst + header->offsetRGBW3, src + header->offsetRGBW3);
+        }
+      }
+      frameSize = dstBase + header->channelsPerLight;
+    }
+
     const uint8_t startCode = 0;
+    uart_wait_tx_done(uartNum, pdMS_TO_TICKS(50));
     uart_write_bytes(uartNum, &startCode, 1);
-    for (uint16_t i = 0; i < offset; i++)
-      uart_write_bytes(uartNum, &startCode, 1);  // zero padding; offset==0 in the common case
-    uart_write_bytes_with_break(uartNum, layerP.lights.channelsD, nrChannels, 24);
+    uart_write_bytes_with_break(uartNum, dmxFrame, frameSize, 24);
   }
 
   ~DMXOutDriver() override {

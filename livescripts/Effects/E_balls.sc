@@ -9,19 +9,6 @@
 
 uint8_t nrOfBalls = 10;
 
-void setup() {
-  addControl(&nrOfBalls, "nrOfBalls", "slider", 1, max_nb_balls);
-
-  for (int i = 0; i < max_nb_balls; i++) {
-    Balls[i].vx = random8() / 255.0 + 0.5;
-    Balls[i].vy = random8() / 255.0 + 0.3;
-    Balls[i].r  = (rmax - rmin) * (random8() / 180.0) + rmin;
-    Balls[i].xc = width / 2.0 * (random8() / 255.0 + 0.3) + 15;
-    Balls[i].yc = height / 2.0 * (random8() / 255.0 + 0.3) + 15;
-    Balls[i].color = random8();
-  }
-}
-
 struct ball {
   float vx;
   float vy;
@@ -63,8 +50,21 @@ struct ball {
   }
 }
 
-ball Balls[max_nb_balls];
 uint32_t h = 1;
+
+ball Balls[max_nb_balls];
+void setup() {
+  addControl(&nrOfBalls, "nrOfBalls", "slider", 1, max_nb_balls);
+
+  for (int i = 0; i < max_nb_balls; i++) {
+    Balls[i].vx = random8(255) / 255.0 + 0.5;
+    Balls[i].vy = random8(255) / 255.0 + 0.3;
+    Balls[i].r  = (rmax - rmin) * (random8(255) / 180.0) + rmin;
+    Balls[i].xc = width / 2.0 * (random8(255) / 255.0 + 0.3) + 15;
+    Balls[i].yc = height / 2.0 * (random8(255) / 255.0 + 0.3) + 15;
+    Balls[i].color = random8(255);
+  }
+}
 
 void loop() {
   for (int i = 0; i < width; i++)

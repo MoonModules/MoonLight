@@ -17,7 +17,7 @@ MoonLight uses the [ESPLiveScript](https://github.com/hpwit/ESPLiveScript) libra
 
 ## Lifecycle
 
-```
+```text
 setup() → startCompile() → [compileTask] → compileAndRun()
                                                 ↓
                                           needsExecute = true
@@ -99,7 +99,7 @@ LiveScript tasks run concurrently with the `effectTask` (both on core 0). Frame 
 
 ### Sync flow (per frame)
 
-```
+```text
 effectTask (core 0, priority 3)          livescript _run_task (core 0, priority 3)
 ─────────────────────────────────        ──────────────────────────────────────────
 layerP.loop()

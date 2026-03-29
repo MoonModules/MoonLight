@@ -1,4 +1,4 @@
-// E_greenRippleReflections.sc - Green Ripple Reflections
+// E_GreenRippleReflections.sc - Green Ripple Reflections
 // 2D ripple effect combining two sine waves and a triangle wave, fixed green hue.
 // Note: uses time() and triangle() — requires Arti-FX / PixelBlaze compatible engine.
 // Original: green_ripple_reflections.wled (PixelBlaze via Andrew Tuline / Ewoud Wijma), cross compiled by MoonLight
@@ -19,7 +19,7 @@ void loop() {
   t2 = time(0.05) * PI2;
   t3 = time(0.04) * PI2;
 
-  for (uint8_t index = 0; index < width; index++) {
+  for (int index = 0; index < width; index++) {
     float a = sin(index * PI10 / width + t1);
     a = a * a;
     float b = sin(index * PI6 / width - t2);
@@ -27,7 +27,7 @@ void loop() {
     float v = (a + b + c) / 3;
     v = v * v;
 
-    for (uint8_t y = 0; y < height; y++)
+    for (int y = 0; y < height; y++)
       setRGB(y * width + index, hsv((int)(0.3 * 255), (int)(a * 255), (int)(v * 255)));
   }
 }

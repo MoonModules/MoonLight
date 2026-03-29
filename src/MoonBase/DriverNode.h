@@ -52,6 +52,7 @@ enum LightPresetsEnum {
   lightPreset_MHBeeEyes150W15,     // 15 channels moving head, see https://moonmodules.org/MoonLight/moonlight/drivers/#art-net
   lightPreset_MHBeTopper19x15W32,  // 32 channels moving head
   lightPreset_MH19x15W24,          // 24 channels moving heads
+  lightPreset_IRGB,                // 4 channel par/dmx light: CH1=Intensity, CH2=R, CH3=G, CH4=B
   lightPreset_count
 };
 

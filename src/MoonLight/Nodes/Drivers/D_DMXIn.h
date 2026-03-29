@@ -35,16 +35,17 @@ class DMXInDriver : public Node {
   uint8_t pinRS485RX = UINT8_MAX;
   uint8_t pinRX      = UINT8_MAX;  // effective RX pin (pinDMX or pinRS485RX)
 
-#if SOC_UART_NUM > 2
-  static constexpr uart_port_t uartNum = UART_NUM_2;
-#else
-  static constexpr uart_port_t uartNum = UART_NUM_1;  // ESP32-C3/H2 only has UART0/1
-#endif
+// DMXIn always uses UART_NUM_1; DMXOut uses UART_NUM_2 (on 3-UART chips) so they don't collide.
+// UART_NUM_0 is the console.  On 2-UART chips (C3/H2) both nodes would share UART_NUM_1 —
+// startDMX() detects this at runtime and refuses to start if the port is already in use.
+// SOC_UART_NUM counts only the standard HP UARTs — see D_DMXOut.h for a fuller explanation.
+  static constexpr uart_port_t uartNum = UART_NUM_1;
   bool dmxActive = false;
   QueueHandle_t uartQueue = nullptr;
 
   uint8_t* rxBuffer = nullptr;   // 513 bytes, allocated only when mode==1 (Channels)
   uint16_t rxPos = 0;
+  uint8_t  pendingMode = UINT8_MAX;  // UINT8_MAX = no pending change; set by onUpdate, applied in loop()
 
   update_handler_id_t ioUpdateHandler;
 
@@ -66,11 +67,8 @@ class DMXInDriver : public Node {
   }
 
   void onUpdate(const JsonObject& control) override {
-    if (control["name"] == "mode") {
-      if (mode == 1 && !rxBuffer) rxBuffer = allocMB<uint8_t>(513, "DMXIn");
-      else                        freeMB(rxBuffer, "DMXIn");
-      rxPos = 0;
-    }
+    if (control["name"] == "mode")
+      pendingMode = mode;  // defer alloc/free to loop() to avoid racing with UART reads
   }
 
   void readPins() {
@@ -102,8 +100,19 @@ class DMXInDriver : public Node {
       .source_clk = UART_SCLK_DEFAULT,
     };
 
+#if SOC_UART_NUM <= 2
+    // On 2-UART chips DMXIn and DMXOut share UART_NUM_1.  Skip the pre-delete so that
+    // uart_driver_install() returns ESP_ERR_INVALID_STATE when DMXOut already owns the port.
+    esp_err_t err = uart_driver_install(uartNum, 1024, 0, 20, &uartQueue, 0);
+    if (err == ESP_ERR_INVALID_STATE) {
+      EXT_LOGW(ML_TAG, "DMX In: UART_NUM_1 already in use (DMX Out active?) — not starting");
+      updateControl("status", "UART conflict");
+      return;
+    }
+#else
     uart_driver_delete(uartNum);
     esp_err_t err = uart_driver_install(uartNum, 1024, 0, 20, &uartQueue, 0);
+#endif
     if (err != ESP_OK) {
       EXT_LOGE(ML_TAG, "DMX In: UART install failed: %s", esp_err_to_name(err));
       updateControl("status", "UART error");
@@ -130,6 +139,14 @@ class DMXInDriver : public Node {
   }
 
   void loop() override {
+    // Apply pending mode change here (not in onUpdate) so alloc/free never races with UART reads
+    if (pendingMode != UINT8_MAX) {
+      if (pendingMode == 1 && !rxBuffer) rxBuffer = allocMB<uint8_t>(513, "DMXIn");
+      else if (pendingMode == 0)         freeMB(rxBuffer, "DMXIn");
+      rxPos = 0;
+      pendingMode = UINT8_MAX;
+    }
+
     if (!dmxActive || !uartQueue) return;
 
     // Drain the UART event queue — a BREAK marks the boundary between DMX frames.
@@ -158,14 +175,25 @@ class DMXInDriver : public Node {
             if (rxPos > 1 && rxBuffer[0] == 0x00)
               processChannels(rxBuffer, rxPos);
           } else {
-            // mode==0 (LightsControl): read only the bytes we need into a small local buffer.
-            // 32 bytes covers start code + up to 11 channels at startChannel offset up to 20.
-            // If startChannel > 21 some tail channels will fall outside the buffer and be
-            // silently skipped by processLightsControl — acceptable for the typical case (startChannel=1).
-            uint8_t localBuf[32];
-            int len = uart_read_bytes(uartNum, localBuf, sizeof(localBuf), 0);
-            if (len > 1 && localBuf[0] == 0x00)
-              processLightsControl(localBuf, len);
+            // mode==0 (LightsControl): validate start code, skip startChannel-1 offset bytes,
+            // then read up to 11 channel bytes — correct for any startChannel value, no heap needed.
+            uint8_t startCode = 0;
+            bool valid = (uart_read_bytes(uartNum, &startCode, 1, 0) == 1 && startCode == 0x00);
+            if (valid) {
+              uint16_t toSkip = startChannel - 1;
+              uint8_t skipBuf[16];
+              while (toSkip > 0) {
+                uint16_t chunk = toSkip < (uint16_t)sizeof(skipBuf) ? toSkip : (uint16_t)sizeof(skipBuf);
+                int n = uart_read_bytes(uartNum, skipBuf, chunk, 0);
+                if (n <= 0) { valid = false; break; }
+                toSkip -= (uint16_t)n;
+              }
+            }
+            if (valid) {
+              uint8_t ch[11];
+              int len = uart_read_bytes(uartNum, ch, sizeof(ch), 0);
+              if (len > 0) processLightsControl(ch, (uint16_t)len);
+            }
           }
           rxPos = 0;
           uart_flush_input(uartNum);
@@ -200,14 +228,9 @@ class DMXInDriver : public Node {
   //   CH7  = intensity       CH8  = preset (select)
   //   CH9  = presetLoop      CH10 = firstPreset (1-64, scaled)
   //   CH11 = lastPreset  (1-64, scaled)
-  void processLightsControl(const uint8_t* data, uint16_t length) {
+  // ch points directly to the first channel byte (start code and startChannel offset already consumed by caller)
+  void processLightsControl(const uint8_t* ch, uint16_t available) {
     if (!moduleControl) return;
-
-    uint16_t offset = startChannel - 1;
-    if (offset >= length - 1) return;
-
-    const uint8_t* ch = &data[1 + offset];
-    uint16_t available = length - 1 - offset;
 
     JsonDocument doc;
     JsonObject newState = doc.to<JsonObject>();
