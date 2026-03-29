@@ -47,7 +47,12 @@ static void unregisterNodeForTask(TaskHandle_t task) {
 
 static void _addControl(uint8_t* var, char* name, char* type, uint8_t min = 0, uint8_t max = UINT8_MAX) {
   EXT_LOGV(MB_TAG, "%s %s %p (%d-%d)", name, type, (void*)var, min, max);
-  currentNode()->addControl(*var, name, type, min, max);
+  // "checkbox" requires ControlType=bool; reinterpret so the template deduces bool (same 1-byte
+  // storage as uint8_t on all supported targets) and setupControl gets sizeCode==sizeof(bool).
+  if (strcmp(type, "checkbox") == 0)
+    currentNode()->addControl(*reinterpret_cast<bool*>(var), name, type, min, max);
+  else
+    currentNode()->addControl(*var, name, type, min, max);
 }
 static void _nextPin() { layerP.nextPin(); }
 static void _addLight(uint16_t x, uint16_t y, uint16_t z) { layerP.addLight({x, y, z}); }

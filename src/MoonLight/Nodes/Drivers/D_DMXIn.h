@@ -47,6 +47,10 @@ class DMXInDriver : public Node {
   uint16_t rxPos = 0;
   uint8_t  pendingMode = UINT8_MAX;  // UINT8_MAX = no pending change; set by onUpdate, applied in loop()
 
+  // Cache for LightsControl mode: skip moduleControl->update() when values are unchanged.
+  uint8_t prevCh[11] = {};
+  bool    firstFrame = true;
+
   update_handler_id_t ioUpdateHandler;
 
  public:
@@ -231,6 +235,12 @@ class DMXInDriver : public Node {
   // ch points directly to the first channel byte (start code and startChannel offset already consumed by caller)
   void processLightsControl(const uint8_t* ch, uint16_t available) {
     if (!moduleControl) return;
+
+    // Skip update if values unchanged — avoids redundant JSON construction and WebSocket
+    // broadcasts at DMX rate (~44 Hz) for static scenes.
+    if (!firstFrame && available <= 11 && memcmp(ch, prevCh, available) == 0) return;
+    memcpy(prevCh, ch, min(available, (uint16_t)11));
+    firstFrame = false;
 
     JsonDocument doc;
     JsonObject newState = doc.to<JsonObject>();

@@ -2,7 +2,7 @@
 
 // Board name constants — these strings are the stable persistent identifiers stored in JSON.
 // They must match the names passed to addBoardValue() in setupDefinition().
-// Never rename these; adding new boards anywhere in the list is safe.
+// Never rename these; new boards must be appended at the end.
 // The array order matches the old numeric IDs for legacy migration (index 0 = none/empty).
 //
 // This header is pure C++ (no ESP32/Arduino dependencies) so it can be included in native tests.
