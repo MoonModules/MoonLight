@@ -1,5 +1,6 @@
-// Millipede - crawling wave pattern
-// Original: millipede.wled (PixelBlaze, converted by Andrew Tuline)
+// E_Millipede.sc - Millipede
+// A crawling wave pattern of color segments that ripples along the strip like a millipede.
+// Original: millipede.wled (PixelBlaze, converted by Andrew Tuline), cross compiled by MoonLight
 
 #define PI2 6.28318
 

@@ -18,7 +18,7 @@
   #include "MoonBase/Module.h"
   #include "MoonBase/Modules/FileManager.h"
   #include "MoonBase/Nodes.h"                // for Node::updateControl
-  #include "MoonBase/utilities/Utilities.h"  //for isInPSRAM
+  #include "MoonBase/utilities/PlatformFunctions.h"  //for isInPSRAM
   #include "palettes.h"
   #if FT_LIVESCRIPT
     #include "MoonBase/LiveScriptNode.h"

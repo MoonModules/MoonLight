@@ -1,5 +1,7 @@
-// Subpixel - smooth sub-pixel movement
-// Original: Subpixel.wled (idea by @Atuline)
+// E_Subpixel.sc - Subpixel
+// A smooth sub-pixel brightness spot glides back and forth along the strip.
+// intensity: width of the bright spot (higher = narrower)
+// Original: Subpixel.wled (idea by @Atuline), cross compiled by MoonLight
 
 uint8_t intensity = 128;
 

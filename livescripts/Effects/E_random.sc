@@ -1,3 +1,6 @@
+// E_random.sc - Random Blue Pixels
+// Sets random pixels to blue each frame for a sparkling effect.
+
 void setup() {
   printf("Run Live Script good morning\n");
 }

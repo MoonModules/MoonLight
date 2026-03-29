@@ -44,6 +44,7 @@ void DriverNode::setup() {
   addControlValue("MH BeeEyes 150W-15");     // 15 channels moving head, see https://moonmodules.org/MoonLight/moonlight/drivers/#art-net
   addControlValue("MH BeTopper 19x15W-32");  // 32 channels moving head
   addControlValue("MH 19x15W-24");           // 24 channels moving heads
+  addControlValue("IRGB");                   // 4 channel par/dmx: CH1=Intensity, CH2-4=RGB
 }
 
 void DriverNode::loop() {
@@ -221,6 +222,17 @@ void DriverNode::onUpdate(const JsonObject& control) {
       header->offsetRGBW1 = 8;
       header->offsetRGBW2 = 12;
       header->offsetZoom = 17;
+      break;
+    case lightPreset_IRGB:
+      // 4-channel DMX par: CH1=Intensity (master dimmer), CH2=R, CH3=G, CH4=B.
+      // offsetBrightness=0 tells VirtualLayer to pre-fill CH1 with global brightness each frame,
+      // and tells DriverNode::loop() to drive the RGB LUT at full (fixture dims via CH1).
+      header->channelsPerLight = 4;
+      header->offsetBrightness = 0;
+      header->offsetRGBW = 1;
+      header->offsetRed = 0;
+      header->offsetGreen = 1;
+      header->offsetBlue = 2;
       break;
     default:
       EXT_LOGW(ML_TAG, "Invalid lightPreset value: %d", header->lightPreset);

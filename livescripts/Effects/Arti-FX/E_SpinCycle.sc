@@ -1,5 +1,6 @@
-// Spin Cycle - spinning color pattern
-// Original: spin_cycle.wled (PixelBlaze, converted by Andrew Tuline)
+// E_SpinCycle.sc - Spin Cycle
+// A spinning color pattern with modulated hue and brightness that pulses as it rotates.
+// Original: spin_cycle.wled (PixelBlaze, converted by Andrew Tuline), cross compiled by MoonLight
 
 #define PI2 6.28318
 

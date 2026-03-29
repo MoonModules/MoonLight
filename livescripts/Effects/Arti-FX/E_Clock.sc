@@ -1,6 +1,6 @@
-// Clock - show hour, minute, second as colored pixels
-// Original: Clock.wled from MoonModules/MM-Effects
-// Requires NTP to be configured for correct time
+// E_Clock.sc - 1D Clock
+// Shows hour, minute, and second as colored dots at positions along the strip.
+// Original: Clock.wled from MoonModules/MM-Effects, cross compiled by MoonLight
 
 void loop() {
   fadeToBlackBy(255);  // instant clear

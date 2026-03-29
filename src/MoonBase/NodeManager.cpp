@@ -55,6 +55,11 @@ void NodeManager::loop20ms() {
     for (Node* node : *nodes) {
       if (node && node->isLiveScriptNode()) {
         LiveScriptNode* lsn = static_cast<LiveScriptNode*>(node);
+        if (lsn->needsExecute) {
+          lsn->needsExecute = false;
+          lsn->execute();
+          break;  // one at a time
+        }
         if (lsn->needsCompile) {
           lsn->needsCompile = false;
           lsn->startCompile();

@@ -30,6 +30,7 @@ class LiveScriptNode : public Node {
   bool hasModifyFunction = false;    ///< True if the script defines a modifyPosition() function
   bool hasOnLayoutFunction = false;  ///< True if the script defines an onLayout() function
   bool needsCompile = false;         ///< True if compilation is deferred (another compile in progress)
+  bool needsExecute = false;         ///< True after compile succeeds; picked up by loop20ms to call execute() after compile task exits
 
   bool isLiveScriptNode() const override { return true; }
   bool hasModifier() const override { return hasModifyFunction; }
@@ -52,7 +53,7 @@ class LiveScriptNode : public Node {
   /// Spawns a temporary task to compile the script (parser needs ~6KB stack).
   /// If a compile is already in progress, defers via needsCompile flag.
   void startCompile();
-  /// Reads the .sc file from ESPFS, parses it, and starts execution.
+  /// Reads the .sc file from ESPFS, parses it, and sets needsExecute (execution deferred to loop20ms).
   void compileAndRun();
   /// Requests mappings and starts script execution (as task if loop exists, synchronous otherwise).
   void execute();

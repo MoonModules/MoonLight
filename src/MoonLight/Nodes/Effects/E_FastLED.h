@@ -114,7 +114,7 @@ class FLAudioEffect : public Node {
 
   #include <fl/gfx/gfx.h>
 
-  #include "fl/stl/fixed_point/s16x16.h"
+  #include "fl/math/fixed_point/s16x16.h"
 
 using coord = fl::s16x16;
 

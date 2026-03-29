@@ -144,11 +144,19 @@ TaskHandle_t driverTaskHandle = nullptr;
       #if FT_LIVESCRIPT
       {
         extern volatile uint8_t scriptsToSync;
+        uint8_t timeouts = 0;
         while (scriptsToSync > 0) {
+          esp_task_wdt_reset();  // keep watchdog happy while waiting for livescripts
           uint32_t notified = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));
-          if (notified > 0)
+          if (notified > 0) {
             scriptsToSync = (scriptsToSync > notified ? scriptsToSync - notified : 0);
-          // on timeout (notified == 0) do not decrement — avoid spurious decrements
+            timeouts = 0;
+          } else if (++timeouts >= 10) {
+            // 🌙 1 second without any script completing a frame — script task likely dead or stuck.
+            // Force-reset to prevent effectTask from blocking forever (0 lps).
+            EXT_LOGW(ML_TAG, "scriptsToSync=%d after 1s timeout — forcing reset (script task dead?)", scriptsToSync);
+            scriptsToSync = 0;
+          }
         }
       }
       #endif

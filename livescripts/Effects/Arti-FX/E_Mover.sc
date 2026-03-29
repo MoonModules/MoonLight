@@ -1,5 +1,6 @@
-// Mover - moving colored segments
-// Original: Mover.wled (idea by @Atuline)
+// E_Mover.sc - Mover
+// Three colored segments scroll continuously around the strip at a fixed pace.
+// Original: Mover.wled (idea by @Atuline), cross compiled by MoonLight
 
 void loop() {
   fadeToBlackBy(255);  // instant clear

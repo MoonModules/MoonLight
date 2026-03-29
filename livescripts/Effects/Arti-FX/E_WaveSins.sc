@@ -1,5 +1,11 @@
-// Wave Sins - phase-shifted beat sine waves
-// Original: WaveSins.wled by Andrew Tuline
+// E_WaveSins.sc - Wave Sins
+// Phase-shifted beat sine waves sweep palette colors along the strip.
+// speed: rate of the beat sine wave oscillation
+// intensity: per-pixel phase shift amount
+// offset: palette index starting offset
+// range: palette index sweep range
+// phase: per-pixel phase increment for the beat sine
+// Original: WaveSins.wled by Andrew Tuline, cross compiled by MoonLight
 
 uint8_t speed = 128;
 uint8_t intensity = 128;

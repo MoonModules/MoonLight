@@ -1,5 +1,6 @@
-// FFT Bands - frequency-reactive brightness per band
-// Original: fftBrightness.wled by ewowi
+// E_FFTBands.sc - FFT Bands
+// Maps audio frequency band levels to LED brightness with palette coloring.
+// Original: fftBrightness.wled by ewowi, cross compiled by MoonLight
 
 void loop() {
   for (int i = 0; i < NUM_LEDS; i++) {

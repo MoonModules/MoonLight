@@ -16,7 +16,7 @@
   #include <vector>
 
   #include "FastLED.h"
-  #include "MoonBase/utilities/Utilities.h"
+  #include "MoonBase/utilities/PlatformFunctions.h"
   #include "LightsHeader.h"  // pure types: nrOfLights_t, LightsHeader, Lights — no ESP32 deps
 
 // #include "VirtualLayer.h"

@@ -1,5 +1,6 @@
 // E_GEQ2D.sc - 2D Graphic Equalizer
-// Displays audio frequency bands as colored columns
+// Displays audio frequency bands as colored columns on a 2D matrix.
+// fade: fade speed (1=slow, 255=instant)
 
 uint8_t fade = 200;
 

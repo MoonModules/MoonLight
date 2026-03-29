@@ -1,4 +1,5 @@
-// P_Fire.sc
+// P_Fire.sc - Fire Palette
+// Defines a black-red-orange-yellow-white gradient palette for fire effects.
 
 void setup() {
   setPalEntry(0,   0,   0,   0);

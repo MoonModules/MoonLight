@@ -1,5 +1,6 @@
-// Twinkle Up - fade LEDs in and out with pseudo-random timing
-// Original: twinkleup.wled by @Atuline
+// E_TwinkleUp.sc - Twinkle Up
+// Each LED fades in and out independently using pseudo-random per-pixel timing.
+// Original: twinkleup.wled by @Atuline, cross compiled by MoonLight
 
 void loop() {
   for (int i = 0; i < NUM_LEDS; i++) {

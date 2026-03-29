@@ -1,5 +1,6 @@
-// Opposites - opposing wave patterns
-// Original: opposites.wled (PixelBlaze, converted by Andrew Tuline)
+// E_Opposites.sc - Opposites
+// Two opposing sine waves combine and modulate hue to create a dynamic color pattern.
+// Original: opposites.wled (PixelBlaze, converted by Andrew Tuline), cross compiled by MoonLight
 
 #define PI2 6.28318
 

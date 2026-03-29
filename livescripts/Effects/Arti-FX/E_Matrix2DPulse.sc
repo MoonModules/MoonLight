@@ -1,6 +1,6 @@
-// Matrix 2D Pulse - pulsing 2D matrix pattern
-// Original: matrix_2D_pulse.wled (PixelBlaze, converted by Ewoud Wijma)
-// Requires a 2D layout (panel)
+// E_Matrix2DPulse.sc - Matrix 2D Pulse
+// Pulsing 2D sine wave pattern that zooms in and out across a matrix display.
+// Original: matrix_2D_pulse.wled (PixelBlaze, converted by Ewoud Wijma), cross compiled by MoonLight
 
 #define PI2 6.28318
 

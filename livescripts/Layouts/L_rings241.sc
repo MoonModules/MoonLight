@@ -1,3 +1,7 @@
+// L_rings241.sc - 241-LED Concentric Rings Layout
+// Defines 9 concentric rings totaling 241 LEDs on a single pin.
+// pin: output pin number
+
 #define width 16
 #define height 16
 

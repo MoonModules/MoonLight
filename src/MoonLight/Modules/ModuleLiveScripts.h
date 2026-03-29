@@ -108,6 +108,7 @@ class ModuleLiveScripts : public Module {
       addControl(rows, "handle", "number", 0, 65535, true);
       addControl(rows, "binary_size", "number", 0, 65535, true);
       addControl(rows, "data_size", "number", 0, 65535, true);
+      addControl(rows, "stack", "text", 0, 32, true);
       addControl(rows, "error", "text", 0, 32, true);
       addControl(rows, "stop", "button");
       addControl(rows, "start", "button");

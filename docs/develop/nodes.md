@@ -47,17 +47,15 @@ A node implements the following (overloaded) functions:
         * layout
         * effect
         * modifier
-    * Live scripts
-        * See Nodes.h / nodes.cpp
+    * Live scripts — see [Live Scripts (Developer)](livescripts.md) for full architecture documentation
     * Lights
         * Regular patterns (CRGB as default but also others like Moving Head ...)
 
 * See [Modules](modules.md)
 * Upon changing a pin, driver.init will rerun (FastLED.addLeds, Parallel LED Driver.init)
-* Uses ESPLiveScripts, see compileAndRun. compileAndRun is started when in Nodes a file.sc is chosen
-    * To do: kill running scripts, e.g. when changing effects
-* [Nodes.h](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes.cpp): class Node (constructor, destructor, setup, loop, hasFunctions, map, modify, addControl(s), onUpdate)
-* [Nodes.cpp](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes.cpp): implement LiveScriptNode
+* Uses [ESPLiveScript](https://github.com/hpwit/ESPLiveScript) for runtime-compiled `.sc` scripts — see [Live Scripts (Developer)](livescripts.md) for full details
+* [Nodes.h](https://github.com/MoonModules/MoonLight/blob/main/src/MoonBase/Nodes.h): class Node (constructor, destructor, setup, loop, hasFunctions, map, modify, addControl(s), onUpdate)
+* [LiveScriptNode.h](https://github.com/MoonModules/MoonLight/blob/main/src/MoonBase/LiveScriptNode.h) / [.cpp](https://github.com/MoonModules/MoonLight/blob/main/src/MoonBase/LiveScriptNode.cpp): LiveScriptNode implementation
 
     * An effect has a loop which is ran for each frame produced. In each loop, the lights in the virtual layer gets it's values using the setRGB function. For multichannel lights also functions as setWhite or (for Moving Heads) setPan, setTilt, setZoom etc. Also getRGB etc functions exists.
 
@@ -100,8 +98,11 @@ This is the current list of supported lights ranging from 3 channels per light (
 * BGR
 * RGBW: e.g. 4 channel par/dmx light
 * GRBW: rgbw LED eg. SK6812
+* WRGB: e.g. ws2814 LEDs
 * GRB6: some LED curtains
 * RGBWYP: 6 channel par/dmx light with UV etc
+* RGBCCT: 5-channel RGB + cold + warm white
+* **IRGB**: 4-channel par/dmx light — CH1 = master intensity, CH2-4 = R/G/B (see [Driver node patterns](#driver-node-patterns) below)
 * MHBeeEyes150W-15: 15 channels moving head, see https://moonmodules.org/MoonLight/moonbase/module/drivers/#art-net
 * MHBeTopper19x15W-32: 32 channels moving head
 * MH19x15W-24: 24 channels moving heads
@@ -153,3 +154,64 @@ For an example of the loop, see [Artnet loop](https://github.com/MoonModules/Moo
         * fills secondPixel using LUT and RGB(W) offsets
         * transpose16x1_noinline2(secondpixel)
 * i2sStart: uses dma buffers: Okay
+
+### Driver node patterns
+
+#### UART portability (DMX drivers)
+
+Drivers that use a hardware UART select the port at compile time:
+
+```cpp
+#if SOC_UART_NUM > 2
+  static constexpr uart_port_t uartNum = UART_NUM_2;  // DMXOut
+#else
+  static constexpr uart_port_t uartNum = UART_NUM_1;
+#endif
+```
+
+`SOC_UART_NUM` counts only the standard HP UARTs accessible via the ESP-IDF UART driver — the correct macro for this purpose. `SOC_UART_HP_NUM` is intentionally avoided (added in newer IDF releases, unfamiliar to most readers).
+
+UART_NUM_0 = console, UART_NUM_1 = DMX In / ModuleIO RS-485, UART_NUM_2 = DMX Out (on 3-UART chips). On 2-UART chips both DMX nodes share UART_NUM_1; `startDMX()` skips the pre-delete and detects the conflict via `ESP_ERR_INVALID_STATE` from `uart_driver_install()`, surfacing "UART conflict" through the node's status control.
+
+See [`D_DMXOut.h`](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Drivers/D_DMXOut.h) and [`D_DMXIn.h`](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Drivers/D_DMXIn.h) as reference.
+
+#### Adding a new light preset
+
+1. Add an enum value to `LightPresetsEnum` in [`DriverNode.h`](https://github.com/MoonModules/MoonLight/blob/main/src/MoonBase/DriverNode.h) — append at the end before `lightPreset_count` to avoid renumbering saved configs.
+2. Call `addControlValue("MyPreset")` in `DriverNode::setup()`.
+3. Add a `case lightPreset_MyPreset:` in `DriverNode::onUpdate()` setting `channelsPerLight`, `offsetRGBW`, `offsetRed/Green/Blue`, and any extra offsets (`offsetBrightness`, `offsetWhite`, `offsetPan`, …).
+
+All downstream logic — gamma/brightness LUT via `rgbwBufferMapping()`, per-light intensity via `VirtualLayer::loop()` pre-filling `offsetBrightness` — applies automatically.
+
+**IRGB example**: `offsetBrightness = 0` (CH1 = master dimmer), `offsetRGBW = 1`, `offsetRed/Green/Blue = 0/1/2`. `VirtualLayer::loop()` fills CH1 with the global brightness before effects run; `DriverNode::loop()` drives the LUT at full so RGB channels are unscaled.
+
+#### Double-buffer reads in driver loop()
+
+Drivers always read `channelsD` **without** holding `swapMutex`. This is intentional: `driverTask` releases `swapMutex` before calling `loopDrivers()` (see `main.cpp` lines 210-218). `effectTask` may swap the `channelsD`/`channelsE` pointers concurrently, producing at most one torn frame — an accepted trade-off of the double-buffer design.
+
+Do not add `swapMutex` guards inside `DriverNode::loop()`. The reference is [`D_ArtnetOut.h`](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Drivers/D_ArtnetOut.h).
+
+Exception: writes **to** `channelsD` from non-driver-task paths (e.g. DMX In `processChannels()`, ArtNet In) must take `swapMutex`.
+
+### DMX In / DMX Out
+
+Both drivers are in `src/MoonLight/Nodes/Drivers/`.
+
+| Driver | Source | What it does |
+|---|---|---|
+| **DMX Out** | [`D_DMXOut.h`](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Drivers/D_DMXOut.h) | Reads `channelsD`, applies `rgbwBufferMapping()` per light into a 511-byte stack frame, sends via RS-485 UART with DMX512 BREAK framing |
+| **DMX In** | [`D_DMXIn.h`](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Drivers/D_DMXIn.h) | Channels mode: writes into `channelsD` under `swapMutex`. LightsControl mode: reads up to 11 channels at BREAK time (no heap), dispatches to `moduleControl->update()` with change-detection cache to avoid redundant WebSocket broadcasts |
+
+They use separate UARTs and can run concurrently.
+
+---
+
+## Native testing policy
+
+Tests live in `test/test_native/` and run on the host via `pio test -e native`. The policy is defined in `CLAUDE.md`; the key rule:
+
+**Never copy code into test files.** If a function lives in a header with ESP32/Arduino dependencies, extract it into a standalone pure-C++ header under `src/MoonBase/utilities/` (no Arduino/ESP32 includes), then `#include` it from both the original file and the test.
+
+Canonical example: [`src/MoonBase/utilities/BoardNames.h`](https://github.com/MoonModules/MoonLight/blob/main/src/MoonBase/utilities/BoardNames.h) — extracted from `ModuleIO.h`; tested in `test/test_native/test_utilities.cpp`; included from `ModuleIO.h` unchanged.
+
+Why: copied code drifts. The test would verify a stale snapshot instead of the real implementation.

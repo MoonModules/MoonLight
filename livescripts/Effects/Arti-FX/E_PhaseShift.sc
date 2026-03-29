@@ -1,5 +1,6 @@
-// PhaseShift - shifting palette pattern
-// Original: PhaseShift.wled from MoonModules/MM-Effects
+// E_PhaseShift.sc - Phase Shift
+// Cycles the palette index multiplier back and forth to create a shifting color pattern.
+// Original: PhaseShift.wled from MoonModules/MM-Effects, cross compiled by MoonLight
 
 int pixelCounter = 3;
 int countAdd = 1;

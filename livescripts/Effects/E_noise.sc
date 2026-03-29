@@ -1,3 +1,8 @@
+// E_noise.sc - 2D Perlin Noise
+// Fills a 2D matrix with animated Perlin noise colored by palette.
+// speed: animation speed
+// scale: noise zoom level
+
 uint8_t speed = 128;
 uint8_t scale = 128;
 

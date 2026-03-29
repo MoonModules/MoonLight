@@ -96,16 +96,6 @@ void EthernetSettingsService::configureNetwork(ethernet_settings_t &network)
     // 🌙 Use system hostname (unified across WiFi/Ethernet) when available, otherwise own
     String hostname = systemHostnameProvider ? systemHostnameProvider() : _state.hostname;
     ETH.setHostname(hostname.c_str());
-    if (network.staticIPConfig)
-    {
-        // configure for static IP
-        ETH.config(network.localIP, network.gatewayIP, network.subnetMask, network.dnsIP1, network.dnsIP2);
-    }
-    else
-    {
-        // configure for DHCP
-        ETH.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
-    }
 // 🌙 (re)start ethernet — configured by ModuleIO board presets
     if (v_ETH_SPI_CONFIGURED) {
         // SPI Ethernet (W5500, ENC28J60 etc.) — available on all targets
@@ -121,6 +111,19 @@ void EthernetSettingsService::configureNetwork(ethernet_settings_t &network)
     else {
         // Fallback for boards with built-in ethernet that works with default ETH.begin()
         ETH.begin();
+    }
+    // 🌙 Configure IP after ETH.begin() — ETH.config() requires the esp_netif object
+    // created by ETH.begin(). Calling it before begin() silently does nothing (static IP
+    // is discarded, interface falls back to DHCP).
+    if (network.staticIPConfig)
+    {
+        // configure for static IP
+        ETH.config(network.localIP, network.gatewayIP, network.subnetMask, network.dnsIP1, network.dnsIP2);
+    }
+    else
+    {
+        // configure for DHCP
+        ETH.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
     }
     // set hostname (again) after (re)starting ethernet due to a bug in the ESP-IDF implementation
     ETH.setHostname(hostname.c_str());

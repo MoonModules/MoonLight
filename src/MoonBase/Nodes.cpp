@@ -60,6 +60,9 @@ JsonObject Node::setupControl(const char* name, const char* type, int min, int m
 
   if (newControl) {
     onUpdate(control);  // custom onUpdate for the node
+  } else {
+    updateControl(control);  // restore persisted value into the C++ variable (needed for LiveScript controls registered after boot)
+    onUpdate(control);       // apply the restored value (e.g. trigger side effects)
   }
 
   return control;

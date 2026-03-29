@@ -1,5 +1,6 @@
-// Slow Color Shift - gently shifting colors
-// Original: slow_color_shift.wled (PixelBlaze, converted by Andrew Tuline)
+// E_SlowColorShift.sc - Slow Color Shift
+// Gently and slowly shifts colors along the strip using layered sine wave modulation.
+// Original: slow_color_shift.wled (PixelBlaze, converted by Andrew Tuline), cross compiled by MoonLight
 
 #define PI2 6.28318
 

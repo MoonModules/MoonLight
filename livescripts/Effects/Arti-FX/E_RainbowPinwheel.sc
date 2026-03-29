@@ -1,5 +1,6 @@
-// Rainbow Pinwheel - scrolling rainbow
-// Original: rainbow_pinwheel.wled (PixelBlaze)
+// E_RainbowPinwheel.sc - Rainbow Pinwheel
+// A full-spectrum rainbow scrolls continuously along the strip using a sine wave hue.
+// Original: rainbow_pinwheel.wled (PixelBlaze), cross compiled by MoonLight
 
 #define PI2 6.28318
 

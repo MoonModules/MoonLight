@@ -1,6 +1,7 @@
-// LightCrafter16 board layout
-// Pins 0-7 run top-to-bottom, pins 8-15 run bottom-to-top (snake wiring).
-// pinsAreColumns: true = strips are columns (limpkin), false = strips are rows (ewowi).
+// L_LC16.sc - LightCrafter16 Board Layout
+// Defines a 16-pin snake-wired grid layout for the LightCrafter16 board.
+// pinsAreColumns: true = strips are columns, false = strips are rows
+// ledsPerPin: number of LEDs per output pin
 
 bool pinsAreColumns = false;
 uint16_t ledsPerPin = 10;

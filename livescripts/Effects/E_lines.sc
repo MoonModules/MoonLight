@@ -1,3 +1,6 @@
+// E_lines.sc - Vertical Red Line
+// Draws a red vertical line that scrolls horizontally across the display.
+
 void loop() {
   fadeToBlackBy(100);
   int x = millis() / 100;

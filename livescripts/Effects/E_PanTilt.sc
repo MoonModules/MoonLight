@@ -1,3 +1,11 @@
+// E_PanTilt.sc - Pan Tilt Sweep
+// Sweeps pan and tilt channels using sine waves for moving-head fixtures.
+// bpm: sweep speed in beats per minute
+// pan: center pan position
+// tilt: center tilt position
+// range: sweep amplitude
+// invert: invert every other fixture for mirrored movement
+
 uint8_t bpm = 30;
 uint8_t pan = 175;
 uint8_t tilt = 90;

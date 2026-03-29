@@ -1,5 +1,9 @@
-// Perlin Move - noise-driven moving pixels
-// Original: PerlinMove.wled from MoonModules/MM-Effects
+// E_PerlinMove.sc - Perlin Move
+// Perlin noise drives multiple pixels to random positions with palette coloring.
+// speed: movement speed of noise-driven pixels
+// intensity: number of simultaneously moving pixels
+// fade: trail fade speed (1=long trail, 255=instant)
+// Original: PerlinMove.wled from MoonModules/MM-Effects, cross compiled by MoonLight
 
 uint8_t speed = 128;
 uint8_t intensity = 128;

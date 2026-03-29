@@ -47,7 +47,12 @@ static void unregisterNodeForTask(TaskHandle_t task) {
 
 static void _addControl(uint8_t* var, char* name, char* type, uint8_t min = 0, uint8_t max = UINT8_MAX) {
   EXT_LOGV(MB_TAG, "%s %s %p (%d-%d)", name, type, (void*)var, min, max);
-  currentNode()->addControl(*var, name, type, min, max);
+  // "checkbox" requires ControlType=bool; reinterpret so the template deduces bool (same 1-byte
+  // storage as uint8_t on all supported targets) and setupControl gets sizeCode==sizeof(bool).
+  if (strcmp(type, "checkbox") == 0)
+    currentNode()->addControl(*reinterpret_cast<bool*>(var), name, type, min, max);
+  else
+    currentNode()->addControl(*var, name, type, min, max);
 }
 static void _nextPin() { layerP.nextPin(); }
 static void _addLight(uint16_t x, uint16_t y, uint16_t z) { layerP.addLight({x, y, z}); }
@@ -88,6 +93,20 @@ volatile SemaphoreHandle_t WaitAnimationSync = xSemaphoreCreateCounting(4, 0);  
 volatile uint8_t scriptsToSync = 0;                                             // count of scripts that still need to finish their frame
 extern TaskHandle_t effectTaskHandle;
 static volatile bool compileInProgress = false;  // 🌙 declared here so destructor can reference it
+
+// 🌙 Stack sizes for livescript tasks. Tune per board after checking actual usage:
+//   - compile task: serial log "compileTask stack high-water mark" after each compile
+//   - run task: "stack" column in Live Scripts module UI
+// S3/P4: larger stacks in PSRAM. D0: smaller stacks in internal RAM.
+// Both compile and run tasks use __LS_STACK_CAPS from ESPLiveScript (PSRAM on S3/P4, internal on D0).
+// File I/O (ESPFS.open) is done in startCompile() on the main task, so the compile task is flash-I/O-free.
+#if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32P4)
+  static constexpr uint32_t compileTaskStackSize = 16384;
+  static constexpr uint32_t runTaskStackSize = 8192;
+#else
+  static constexpr uint32_t compileTaskStackSize = 8192;
+  static constexpr uint32_t runTaskStackSize = 4096;
+#endif
 
 void sync() {
   static uint32_t frameCounter = 0;
@@ -147,6 +166,7 @@ void LiveScriptNode::setup() {
   // generic functions
   addExternal("uint32_t millis()", (void*)millis);
   addExternal("uint32_t now()", (void*)millis);  // todo: synchronized time (sys->now)
+  addExternal("uint8_t random8(uint8_t)", (void*)(uint8_t (*)(uint8_t))random8);
   addExternal("uint16_t random16(uint16_t)", (void*)(uint16_t (*)(uint16_t))random16);
   addExternal("void delay(uint32_t)", (void*)((void (*)(uint32_t))delay));
   addExternal("void pinMode(uint8_t,uint8_t)", (void*)pinMode);
@@ -232,6 +252,15 @@ void LiveScriptNode::setup() {
 void LiveScriptNode::loop() {
   _updateTime();  // keep hour/minute/second current for clock scripts
   if (!hasLoopTask) return;  // 🌙 only sync scripts whose loop task is actually running
+  // 🌙 Check if the livescript task is still alive. ESPLiveScript sets _isRunning=false and
+  // removes the handle when the task exits (normally or via error). If that happened,
+  // stop signalling WaitAnimationSync to prevent effectTask deadlock (0 lps).
+  Executable* exec = scriptRuntime.findExecutable(animation.c_str());
+  if (!exec || !exec->_isRunning) {
+    EXT_LOGW(MB_TAG, "%s: livescript task no longer running, disabling sync", animation.c_str());
+    hasLoopTask = false;
+    return;
+  }
   // 🌙 Only increment scriptsToSync when the give succeeds. If the semaphore is full
   // (more than 4 concurrent loop scripts) the give fails and we skip this frame rather
   // than incrementing a counter that effectTask will wait on but never receive.
@@ -260,24 +289,57 @@ LiveScriptNode::~LiveScriptNode() {
   // 🌙 Wait for any in-progress compile task to finish before freeing this node,
   // to prevent the compileTask from accessing a dangling this pointer.
   while (compileInProgress) delay(10);
+  // 🌙 Guard against ESPLiveScript freeSync() crash: if getMask()==0 but _isRunning
+  // is true, xEventGroupSync asserts (uxBitsToWaitFor != 0). Force _isRunning false
+  // so Executable::kill() skips the sync path.
+  Executable* exec = scriptRuntime.findExecutable(animation.c_str());
+  if (exec && exec->_isRunning && runningPrograms.getMask() == 0) {
+    EXT_LOGW(MB_TAG, "%s: mask=0 but _isRunning=true, forcing stop to avoid assert", animation.c_str());
+    exec->_isRunning = false;
+  }
   scriptRuntime.kill(animation.c_str());
 }
 
 // LiveScriptNode functions
 
+static TaskHandle_t compileTaskHandle = nullptr;
+static std::string compileScript;  // script source read by startCompile(), consumed by compileTask
+
 static void compileTask(void* param) {
   LiveScriptNode* node = static_cast<LiveScriptNode*>(param);
   node->compileAndRun();
+  compileScript.clear();
+  compileScript.shrink_to_fit();  // free the string memory
+  // 🌙 Log stack high-water mark so we can tune the compile task stack size.
+  UBaseType_t hwm = uxTaskGetStackHighWaterMark(nullptr);
+  EXT_LOGI(MB_TAG, "compileTask stack high-water mark: %u bytes free (of %u)", hwm * sizeof(StackType_t), compileTaskStackSize);
   compileInProgress = false;
-  vTaskDelete(nullptr);
+  TaskHandle_t h = compileTaskHandle;
+  compileTaskHandle = nullptr;
+  vTaskDeleteWithCaps(h);
 }
 
 void LiveScriptNode::startCompile() {
   if (!compileInProgress) {
+    // 🌙 Read the .sc file here (on the main task with internal RAM stack) so the compile task
+    // doesn't do SPI flash I/O — allowing it to use a PSRAM stack on S3/P4.
+    File file = ESPFS.open(animation.c_str());
+    if (!file) {
+      EXT_LOGE(MB_TAG, "startCompile: cannot open %s", animation.c_str());
+      return;
+    }
+    Char<32> pre;
+    pre.format("#define NUM_LEDS %d\n", layer->nrOfLights);
+    compileScript = pre.c_str();
+    compileScript += file.readString().c_str();
+    file.close();
+
     compileInProgress = true;
-    if (xTaskCreate(compileTask, "lsCompile", 8192, this, 1, nullptr) != pdPASS) {
+    if (xTaskCreateWithCaps(compileTask, "lsCompile", compileTaskStackSize, this, 1, &compileTaskHandle, __LS_STACK_CAPS) != pdPASS) {
       EXT_LOGE(MB_TAG, "startCompile xTaskCreate failed");  // 🌙
       compileInProgress = false;                            // 🌙 prevent permanent lock-out on task creation failure
+      compileScript.clear();
+      compileScript.shrink_to_fit();
     }
   } else {
     needsCompile = true;  // picked up by NodeManager::loop20ms when current compile finishes
@@ -287,17 +349,10 @@ void LiveScriptNode::startCompile() {
 void LiveScriptNode::compileAndRun() {
   // send UI spinner
 
-  // run the recompile not in httpd but in main loopTask (otherwise we run out of stack space)
-  //  runInAppTask.push_back([&, animation, type, error] {
+  // File reading is done in startCompile() (on main task) so this task doesn't do flash I/O.
   EXT_LOGV(MB_TAG, "%s", animation.c_str());
-  File file = ESPFS.open(animation.c_str());
-  if (file) {
-    Char<32> pre;
-    pre.format("#define NUM_LEDS %d\n", layer->nrOfLights);
-
-    std::string scScript = pre.c_str();
-    scScript += file.readString().c_str();
-    file.close();
+  if (!compileScript.empty()) {
+    std::string& scScript = compileScript;  // use the pre-read script source
 
     hasSetupFunction = false;
     hasLoopFunction = false;
@@ -321,16 +376,23 @@ void LiveScriptNode::compileAndRun() {
 
     // EXT_LOGV(MB_TAG, "parsing %s", scScript.c_str());
 
+    uint32_t parseStart = millis();
     Executable executable = parser.parseScript(&scScript);  // note that this class will be deleted after the function call !!!
     executable.name = animation.c_str();
-    EXT_LOGV(MB_TAG, "parsing %s done", animation.c_str());
+    uint32_t parseTime = millis() - parseStart;
+    EXT_LOGI(MB_TAG, "parsing %s done in %dms (exeExist=%s)", animation.c_str(), parseTime,
+             executable.exeExist ? "true" : "false");
     scriptRuntime.addExe(executable);  // if already exists, delete it first
     EXT_LOGV(MB_TAG, "addExe success %s", executable.exeExist ? "true" : "false");
 
     gNode = this;  // fallback for the brief window before registerNodeForTask() and for synchronous scripts
 
     if (executable.exeExist) {
-      execute();
+      // 🌙 Don't call execute() here — we're still inside the compileTask (8KB stack).
+      // Deferring to needsExecute lets the compile task exit first, freeing its stack
+      // before executeAsTask() tries to allocate another 8KB for the run task.
+      // On D0 with tight heap, this makes the difference between success and failure.
+      needsExecute = true;
     } else
       EXT_LOGV(MB_TAG, "error %s", executable.error.error_message.c_str());
 
@@ -357,19 +419,38 @@ void LiveScriptNode::execute() {
     // executable.execute("setup");
     // send controls to UI
     // executable.executeAsTask("main"); //background task (async - vs sync)
-    EXT_LOGV(MB_TAG, "%s executeAsTask main", animation.c_str());
-    scriptRuntime.executeAsTask(animation.c_str(), "main");  // background task (async - vs sync)
-    hasLoopTask = true;  // 🌙 task is now running; loop() may start signalling WaitAnimationSync
-    // assert failed: xEventGroupSync event_groups.c:228 (uxBitsToWaitFor != 0)
-    // 🌙 Register the task handle → node mapping so concurrent scripts each use their own node.
+    EXT_LOGV(MB_TAG, "%s executeAsTask main (stack %u)", animation.c_str(), runTaskStackSize);
+    scriptRuntime.executeAsTask(animation.c_str(), "main", runTaskStackSize);  // background task (async - vs sync)
+    // 🌙 Verify the task actually started. ESPLiveScript's _run() doesn't check the return
+    // value of xTaskCreateUniversal — if it fails (e.g. low heap on D0), _isRunning is true
+    // but the task handle is NULL. Setting hasLoopTask in that case would cause effectTask
+    // to deadlock in the scriptsToSync wait loop (0 lps).
     Executable* exec = scriptRuntime.findExecutable(animation.c_str());
+    bool taskStarted = false;
     if (exec && exec->__run_handle_index != 9999) {
       TaskHandle_t h = *runningPrograms.getHandleByIndex(exec->__run_handle_index);
-      if (h) registerNodeForTask(h, this);
+      if (h) {
+        registerNodeForTask(h, this);
+        taskStarted = true;
+      } else {
+        EXT_LOGE(MB_TAG, "%s: task handle NULL after executeAsTask — task creation likely failed (low heap?)", animation.c_str());
+        exec->_isRunning = false;  // prevent freeSync crash later
+      }
+    } else {
+      EXT_LOGE(MB_TAG, "%s: no valid handle index after executeAsTask (index=%d)", animation.c_str(),
+               exec ? exec->__run_handle_index : -1);
     }
+    hasLoopTask = taskStarted;  // 🌙 only signal WaitAnimationSync if the task is actually running
   } else {
     EXT_LOGV(MB_TAG, "%s execute main", animation.c_str());
     scriptRuntime.execute(animation.c_str(), "main");
+    // 🌙 No loop — script ran synchronously. If it also has no onLayout, it's fully
+    // done and we can free the executable now. Layout scripts must keep the executable
+    // alive until onLayout() runs (triggered asynchronously by requestMapPhysical).
+    if (!hasOnLayoutFunction) {
+      scriptRuntime.deleteExe(animation.c_str());
+      EXT_LOGI(MB_TAG, "%s: no-loop script finished, executable freed", animation.c_str());
+    }
   }
   EXT_LOGV(MB_TAG, "%s execute started", animation.c_str());
 }
@@ -382,6 +463,13 @@ void LiveScriptNode::kill() {
   if (exec && exec->__run_handle_index != 9999) {
     TaskHandle_t h = *runningPrograms.getHandleByIndex(exec->__run_handle_index);
     if (h) unregisterNodeForTask(h);
+  }
+  // 🌙 Guard against ESPLiveScript freeSync() crash: if getMask()==0 but _isRunning
+  // is true, xEventGroupSync asserts (uxBitsToWaitFor != 0). Force _isRunning false
+  // so Executable::kill() skips the sync path.
+  if (exec && exec->_isRunning && runningPrograms.getMask() == 0) {
+    EXT_LOGW(MB_TAG, "%s: mask=0 but _isRunning=true, forcing stop to avoid assert", animation.c_str());
+    exec->_isRunning = false;
   }
   scriptRuntime.kill(animation.c_str());
 }
@@ -409,13 +497,25 @@ void LiveScriptNode::getScriptsJson(JsonArray scripts) {
     object["handle"] = exec.__run_handle_index;
     object["binary_size"] = exeInfo.binary_size;
     object["data_size"] = exeInfo.data_size;
+    // 🌙 Show run task stack usage: "free / total" (only when task is running)
+    Char<32> stackText;
+    if (exec.isRunning() && exec.__run_handle_index != 9999) {
+      TaskHandle_t h = *runningPrograms.getHandleByIndex(exec.__run_handle_index);
+      if (h) {
+        UBaseType_t hwm = uxTaskGetStackHighWaterMark(h);
+        stackText.format("%u / %u", (unsigned)(hwm * sizeof(StackType_t)), runTaskStackSize);
+      } else {
+        stackText = "no handle";
+      }
+    } else {
+      stackText = "-";
+    }
+    object["stack"] = stackText.c_str();
     object["error"] = exec.error.error_message;
     object["kill"] = 0;
     object["free"] = 0;
     object["delete"] = 0;
     object["execute"] = 0;
-    // EXT_LOGV(MB_TAG, "scriptRuntime exec %s r:%d h:%d, e:%d h:%d b:%d + d:%d = %d", exec.name.c_str(), exec.isRunning(), exec.isHalted, exec.exeExist, exec.__run_handle_index, exeInfo.binary_size,
-    // exeInfo.data_size, exeInfo.total_size);
   }
 }
 

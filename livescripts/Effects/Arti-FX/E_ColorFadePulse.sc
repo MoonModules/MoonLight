@@ -1,5 +1,6 @@
-// Color Fade Pulse - fading color pulse
-// Original: color_fade_pulse.wled (PixelBlaze, converted by Andrew Tuline)
+// E_ColorFadePulse.sc - Color Fade Pulse
+// Produces a smooth fading color pulse that travels along the strip.
+// Original: color_fade_pulse.wled (PixelBlaze, converted by Andrew Tuline), cross compiled by MoonLight
 
 #define PI 3.14159
 #define PI2 6.28318

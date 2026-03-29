@@ -1,5 +1,6 @@
-// Halloween Color Twinkles - orange and purple twinkles
-// Original: halloween_color_twinkles.wled (PixelBlaze, converted by Andrew Tuline)
+// E_HalloweenTwinkles.sc - Halloween Color Twinkles
+// Orange and purple twinkling pixels that fade in and out using animated sine waves.
+// Original: halloween_color_twinkles.wled (PixelBlaze, converted by Andrew Tuline), cross compiled by MoonLight
 
 #define PI2 6.28318
 
