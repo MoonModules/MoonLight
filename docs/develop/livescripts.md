@@ -169,6 +169,10 @@ To expose a new C++ function to LiveScript:
 
 The `addExternal()` helper parses C-style function signatures (e.g. `"CRGB getRGB(uint16_t)"`) and registers them with the ESPLiveScript linker. Variables use the same mechanism without parentheses: `"uint8_t width"`.
 
+**Recently added bindings**: `random8(uint8_t maxValue)` — scripts can call it without any Arduino include.
+
+**Checkbox controls**: `_addControl` always receives a `uint8_t*`. For `"checkbox"` type it reinterprets the pointer as `bool*` before calling the `addControl<bool>()` template, so `setupControl()` gets `sizeCode == sizeof(bool)`. Declare checkbox variables as `bool` in scripts.
+
 !!! warning "Type safety"
     ESPLiveScript does not perform type checking at the ABI level. If the signature string doesn't match the actual function pointer's calling convention, the script will crash at runtime. Always verify parameter types match exactly.
 

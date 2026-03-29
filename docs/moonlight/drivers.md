@@ -157,12 +157,12 @@ Sends channel data from the physical layer to DMX512 fixtures over RS-485. This 
 
 **Controls**
 
-* **Light preset**: See [above](#light-preset). Choose the preset that matches your DMX fixture (e.g. RGBW for IRGB par lights, MH* for moving heads).
+* **Light preset**: See [above](#light-preset). Choose the preset that matches your DMX fixture (e.g. **IRGB** for par lights with a master dimmer channel, MH* for moving heads).
 * **startChannel**: The DMX start address (1–512). Channel data from the physical layer is placed at this offset in the DMX universe.
-* **status**: Read-only indicator — shows "Active", "No pins", or an error message.
+* **status**: Read-only indicator — shows "Active", "Stopped", "UART conflict", "No pins", or an error message.
 
 !!! example "48-pixel IRGB LED bar"
-    A 48-pixel LED bar with 4 DMX channels per pixel (Intensity, R, G, B) uses 192 channels. Select the **RGBW** light preset, set **startChannel** to 1, and create a layout with 48 lights. The brightness channel maps to the fixture's Intensity channel.
+    A 48-pixel LED bar with 4 DMX channels per pixel (Intensity, R, G, B) uses 192 channels. Select the **IRGB** light preset, set **startChannel** to 1, and create a layout with 48 lights. The master dimmer (CH1) is driven by the global brightness.
 
 ### DMX In ☸️
 
@@ -177,7 +177,7 @@ Receives DMX512 data from an external controller via RS-485 and either writes it
 
 * **startChannel**: The DMX start address (1–512) to begin reading from within the incoming DMX frame.
 * **mode**:
-    * **Channels** — writes received DMX data directly into the physical-layer channel buffer (`channelsD`), similar to Art-Net In. Use this to replace or supplement effect output with data from an external DMX console.
+    * **Channels** — writes received DMX data directly into the LED channel buffer, similar to Art-Net In. Use this to replace or supplement effect output with data from an external DMX console.
     * **LightsControl** — maps DMX channels starting at `startChannel` to [Lights Control](lightscontrol.md) properties. Useful for controlling MoonLight from a standard DMX fader wing. All values are 0–255 (DMX channels 1–256 relative to the start address):
 
         | DMX channel | Lights Control property | Range |
