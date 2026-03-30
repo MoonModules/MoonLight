@@ -342,6 +342,10 @@ class ModuleEffects : public NodeManager {
     layerMgr.onNodeRemoved();
   }
 
+  void onBeforeStateLoad() override {
+    layerMgr.prepareForPresetLoad();
+  }
+
   void loop20ms() override {
     NodeManager::loop20ms();
 

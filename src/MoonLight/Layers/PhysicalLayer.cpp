@@ -98,11 +98,31 @@ void PhysicalLayer::setup() {
 
 void PhysicalLayer::loop() {
   if (lights.header.nrOfChannels >= lights.maxChannels) return;  // in case alloc mem is not successful
-  // runs the loop of all effects / nodes in the layer
-  for (VirtualLayer* layer : layers) {
-    if (layer) {
-      layer->loop();  // if (layer) needed when deleting rows ...
+
+  // Apply the accumulated fade request from all layers (set via fadeToBlackBy()) once to the
+  // physical buffer. Doing it here — before any layer's loop() runs — prevents shared physical
+  // pixels from being faded multiple times when virtual layers overlap.
+  if (fadeMin > 0) {
+    if (lights.header.channelsPerLight == 3 && lights.header.nrOfChannels / 3 < UINT16_MAX) {
+      // RGB-only fast path: single FastLED call scales the entire buffer
+      fastled_fadeToBlackBy(reinterpret_cast<CRGB*>(lights.channelsE), lights.header.nrOfChannels / sizeof(CRGB), fadeMin);
+    } else {
+      // Multi-channel: scale only the colour channels of each physical light in place
+      uint8_t scale = 255 - fadeMin;
+      for (nrOfLights_t i = 0; i < lights.header.nrOfLights; i++) {
+        uint8_t* ch = &lights.channelsE[i * lights.header.channelsPerLight];
+        reinterpret_cast<CRGB*>(&ch[lights.header.offsetRGBW])->nscale8(scale);
+        if (lights.header.offsetWhite != UINT8_MAX) ch[lights.header.offsetWhite] = scale8(ch[lights.header.offsetWhite], scale);
+        if (lights.header.offsetRGBW1 != UINT8_MAX) reinterpret_cast<CRGB*>(&ch[lights.header.offsetRGBW1])->nscale8(scale);
+        if (lights.header.offsetRGBW2 != UINT8_MAX) reinterpret_cast<CRGB*>(&ch[lights.header.offsetRGBW2])->nscale8(scale);
+        if (lights.header.offsetRGBW3 != UINT8_MAX) reinterpret_cast<CRGB*>(&ch[lights.header.offsetRGBW3])->nscale8(scale);
+      }
     }
+    fadeMin = 0;  // reset for next frame
+  }
+
+  for (VirtualLayer* layer : layers) {
+    if (layer) layer->loop();  // if (layer) needed when deleting rows ...
   }
 }
 

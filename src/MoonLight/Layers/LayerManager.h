@@ -79,6 +79,52 @@ class LayerManager {
     *nodesPtr = &(layer->nodes);
   }
 
+  /// Call before a full state reload from the filesystem (preset switch).
+  /// Destroys all non-selected VirtualLayers and clears their state keys so that compareRecursive
+  /// sees a clean slate and restoreNonSelectedLayers can rebuild from the new preset.
+  void prepareForPresetLoad() {
+    Char<16> key;
+    for (uint8_t i = 1; i < layerP.layers.size(); i++) {
+      if (!layerP.layers[i]) continue;
+
+      // destroy the VirtualLayer (destructor clears LEDs and deletes all nodes)
+      delete layerP.layers[i];
+      layerP.layers[i] = nullptr;
+      if (layerP.activeLayerCount > 1) layerP.activeLayerCount--;
+
+      // clear per-layer JSON state so compareRecursive treats these keys as absent
+      key.format("nodes_%d", i);
+      state->data.remove(key.c_str());
+      key.format("start_%d", i);
+      state->data.remove(key.c_str());
+      key.format("end_%d", i);
+      state->data.remove(key.c_str());
+      key.format("brightness_%d", i);
+      state->data.remove(key.c_str());
+    }
+
+    // if the selected layer was > 0 (unlikely but safe), fall back to layer 0
+    if (selectedLayer > 0) {
+      selectLayer(0, false);
+      state->data["layer"] = 0;
+    }
+
+    // reset layer 0's bounds to defaults in both the VirtualLayer and state, so that old-style
+    // presets that omit start/end/brightness get the defaults instead of stale values from the
+    // previous preset (compareRecursive skips absent keys, so we must pre-clear them)
+    if (layerP.layers[0]) {
+      layerP.layers[0]->startPct = {0, 0, 0};
+      layerP.layers[0]->endPct = {100, 100, 100};
+      layerP.layers[0]->brightness = 255;
+    }
+    state->data.remove("start");
+    state->data.remove("end");
+    state->data.remove("brightness");
+
+    // schedule restore so non-selected layers from the new preset are rebuilt after readFromFS
+    needsRestore = true;
+  }
+
   /// Schedule restoration of non-selected layers. Call from begin() after NodeManager::begin().
   void scheduleRestore() { needsRestore = true; }
 
@@ -231,7 +277,9 @@ class LayerManager {
     }
 
     selectedLayer = savedSelectedLayer;
-    *nodesPtr = &(layerP.layers[selectedLayer]->nodes);
+    VirtualLayer* layer = layerP.layers[selectedLayer];
+    if (layer) *nodesPtr = &(layer->nodes);
+
 
     if (restoredAny) layerP.requestMapPhysical = true;
   }

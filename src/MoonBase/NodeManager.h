@@ -97,6 +97,10 @@ class NodeManager : public Module {
   /// Called after a node is removed from the nodes list. Override to handle cleanup (e.g. destroying empty layers).
   virtual void onNodeRemoved() {}
 
+  /// Called just before a full state reload from the filesystem (e.g. preset switch).
+  /// Override to clean up any state that must be cleared before compareRecursive runs.
+  virtual void onBeforeStateLoad() {}
+
  public:
   #if FT_LIVESCRIPT
   /// Finds a LiveScript node by its animation file name. Returns nullptr if not found.

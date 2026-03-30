@@ -68,7 +68,7 @@ The following effects are created by the MoonModules team, mostly first in WLED-
 | Name | Preview | Controls | Remarks
 | ---- | ----- | ---- | ---- |
 | GEQ 3D ♫ | ![GEQ3D](https://github.com/user-attachments/assets/decb902d-1ecf-4be5-a83d-dff0a83cc65f) | <img width="320" alt="GEQ3D" src="https://github.com/user-attachments/assets/5ee5fcdf-86a4-4e88-a59e-b84166be91e2" /> | 2D effect |
-| PaintBrush ♫ 🧊 | ![PaintBrush](https://github.com/user-attachments/assets/213629af-eb8b-4c7b-9768-c0f1f2be3ed5) | <img width="320" alt="PaintBrush" src="https://github.com/user-attachments/assets/de1f9379-9984-4d9e-a95a-954df1ba69f4" /> | |
+| PaintBrush ♫ 🧊 | ![PaintBrush](https://github.com/user-attachments/assets/213629af-eb8b-4c7b-9768-c0f1f2be3ed5) | <img width="320" alt="PaintBrush" src="https://github.com/user-attachments/assets/de1f9379-9984-4d9e-a95a-954df1ba69f4" /> | The bass drives the timebase, pushing the 4 sine waves (x1,y1,z1,x2,y2,z2) "into the future" by adjusting their timebase by the amount of the lowest bass.<br>Phrase chaos adds a random number into the phase offset.<br>Color chaos wraps thru the colors whereas without it, it's picking a color based on the bar. |
 | Game Of Life 🧊 | ![](https://raw.githubusercontent.com/scottrbailey/WLED-Utils/master/gifs/FX_172.gif) | <img width="320" src="https://github.com/user-attachments/assets/18498c30-b249-4390-bfdf-084deedbfc49" /> | |
 
 

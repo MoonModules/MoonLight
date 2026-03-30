@@ -38,6 +38,7 @@ void NodeManager::begin() {
             if (equal(filesState.updatedItems[i].c_str(), name.c_str())) {
               EXT_LOGD(MB_TAG, " %s updated -> call update %s", name.c_str(), filesState.updatedItems[i].c_str());
               filesState.updatedItems.erase(filesState.updatedItems.begin() + i);  // consume the item so it doesn't trigger again
+              onBeforeStateLoad();                           // let subclass clear transient state (e.g. non-selected layers) before compareRecursive runs
               sharedFsPersistence->readFromFS(_moduleName);  // repopulates the state, processing file changes
             }
           }

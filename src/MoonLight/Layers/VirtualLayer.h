@@ -58,9 +58,6 @@ class VirtualLayer {
   // Effect / modifier / layout nodes assigned to this virtual layer.
   std::vector<Node*, VectorRAMAllocator<Node*>> nodes;
 
-  // Minimum fade amount requested this frame (0 = no fade). Applied at start of loop().
-  uint8_t fadeMin = 0;
-
   // Dimensionality of the current effect (1D / 2D / 3D).
   uint8_t effectDimension = _3D;
 
@@ -93,6 +90,11 @@ class VirtualLayer {
   // Run one effect frame: apply fade, update brightness channels, loop all effect nodes.
   // Called from effectTask (Core 0) every frame.
   void loop();
+
+  // Apply per-layer brightness to all mapped pixels. Called once at the end of loop(),
+  // after all effects have written full-brightness values. This avoids compound dimming
+  // when effects use getRGB+setRGB patterns (blur, scroll, blend).
+  void applyBrightness();
 
   // Run 20 ms periodic updates for all nodes (called from SvelteKit task, Core 1).
   void loop20ms();
@@ -157,8 +159,9 @@ class VirtualLayer {
   }
 
   // Write RGB colour to the primary RGBW block of all physical lights at indexV.
+  // Note: per-layer brightness is NOT applied here — it is applied once per frame in applyBrightness()
+  // after all effects have run. This avoids compound dimming when effects read-then-write (getRGB+setRGB).
   void setRGB(const nrOfLights_t indexV, CRGB color) {
-    if (brightness < 255) color.nscale8_video(brightness);  // apply per-layer brightness
     if (indexV < mappingTableSize && mappingTable[indexV].mapType == m_zeroLights) {
   #ifdef BOARD_HAS_PSRAM
       memcpy(mappingTable[indexV].rgb, (void*)&color, 3);
@@ -312,12 +315,9 @@ class VirtualLayer {
   // Frame-level fill / fade operations
   // ----------------------------------------------------------------------------
 
-  // Schedule a fade-to-black by fadeBy amount for this frame.
-  // Multiple calls take the minimum (most conservative fade).
-  void fadeToBlackBy(uint8_t fadeBy = 255);
-
-  // Apply the accumulated fadeMin value to all lights and reset it.
-  void fadeToBlackMin();
+  // Schedule a fade-to-black by fadeBy amount for this frame. Forwards to PhysicalLayer::fadeToBlackBy()
+  // which accumulates the minimum across all layers and applies it once per frame to the physical buffer.
+  void fadeToBlackBy(uint8_t fadeBy = 255) { layerP->fadeToBlackBy(fadeBy); }
 
   // Fill all virtual lights with a solid colour.
   void fill_solid(const CRGB& color);

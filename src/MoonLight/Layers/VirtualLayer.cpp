@@ -26,7 +26,6 @@ VirtualLayer::VirtualLayer() { EXT_LOGV(ML_TAG, "constructor"); }
 
 VirtualLayer::~VirtualLayer() {
   EXT_LOGV(ML_TAG, "destructor");
-  fadeToBlackBy(255);  // clear the LEDs
 
   for (Node* node : nodes) {
     // node->destructor();
@@ -48,9 +47,8 @@ void VirtualLayer::setup() {
 }
 
 void VirtualLayer::loop() {
-  if (nodes.empty()) return;  // skip empty layers (no effects assigned)
-
-  fadeToBlackMin();
+  if (nodes.empty()) return;   // skip empty layers (no effects assigned)
+  if (brightness == 0) return; // skip invisible layers entirely
 
   // set brightness default to global brightness
   if (layerP->lights.header.offsetBrightness != UINT8_MAX) {
@@ -76,6 +74,8 @@ void VirtualLayer::loop() {
     }
   }
   prevSize = size;
+
+  applyBrightness();
 };
 
 void VirtualLayer::loop20ms() {
@@ -141,51 +141,23 @@ nrOfLights_t VirtualLayer::XYZ(Coord3D& position) {
 //     }
 // }
 
-// fadeToBlackBy will only do primary RGB colors
-void VirtualLayer::fadeToBlackBy(const uint8_t fadeBy) { fadeMin = fadeMin ? MIN(fadeMin, fadeBy) : fadeBy; }
 
-void VirtualLayer::fadeToBlackMin() {
-  if (fadeMin > 0) {  // at least one fadeBy
+void VirtualLayer::applyBrightness() {
+  if (brightness >= 255) return;  // no-op at full brightness
 
-    uint8_t fadeBy = fadeMin;  // + fadeMax / div;
-    // if (effectDimension < layerDimension) { //only process the effect lights (so modifiers can do things with the other dimension)
-    //   for (int y=0; y < ((effectDimension == _1D)?1:size.y); y++) { //1D effects only on y=0, 2D effects loop over y
-    //     for (int x=0; x<size.x; x++) {
-    //       CRGB color = getRGB({x,y,0});
-    //       color.nscale8(255-fadeBy);
-    //       setRGB({x,y,0}, color);
-    //     }
-    //   }
-    // } else
-    if (layerP->lights.header.channelsPerLight == 3 && layerP->activeLayerCount == 1 && layerP->lights.header.nrOfChannels / 3 < UINT16_MAX) {  // CRGB lights, FastLED max UINT16_MAX
-      fastled_fadeToBlackBy(reinterpret_cast<CRGB*>(layerP->lights.channelsE), layerP->lights.header.nrOfChannels / sizeof(CRGB), fadeBy);
-    } else {  // multichannel lights
-      for (nrOfLights_t index = 0; index < nrOfLights; index++) {
-        CRGB color = getRGB(index);  // direct access to the channels
-        color.nscale8(255 - fadeBy);
-        setRGB(index, color);
-        if (layerP->lights.header.offsetWhite != UINT8_MAX) {
-          setWhite(index, ::scale8(getWhite(index), 255 - fadeBy));
-        }
-        if (layerP->lights.header.offsetRGBW1 != UINT8_MAX) {
-          CRGB color = getRGB1(index);  // direct access to the channels
-          color.nscale8(255 - fadeBy);
-          setRGB1(index, color);
-        }
-        if (layerP->lights.header.offsetRGBW2 != UINT8_MAX) {
-          CRGB color = getRGB2(index);  // direct access to the channels
-          color.nscale8(255 - fadeBy);
-          setRGB2(index, color);
-        }
-        if (layerP->lights.header.offsetRGBW3 != UINT8_MAX) {
-          CRGB color = getRGB3(index);  // direct access to the channels
-          color.nscale8(255 - fadeBy);
-          setRGB3(index, color);
-        }
-      }
+  // Fast path: single layer, 3-channel RGB, within FastLED limits — scale channelsE directly (cache-friendly sequential access)
+  if (layerP->lights.header.channelsPerLight == 3 && layerP->activeLayerCount == 1 && layerP->lights.header.nrOfChannels / 3 < UINT16_MAX) {
+    CRGB* leds = reinterpret_cast<CRGB*>(layerP->lights.channelsE);
+    nrOfLights_t count = layerP->lights.header.nrOfChannels / sizeof(CRGB);
+    for (nrOfLights_t i = 0; i < count; i++) {
+      leds[i].nscale8_video(brightness);
     }
-    // reset fade
-    fadeMin = 0;  // no fade
+  } else {  // multi-layer or multi-channel: iterate virtual pixels via mapping
+    for (nrOfLights_t index = 0; index < nrOfLights; index++) {
+      CRGB color = getRGB(index);
+      color.nscale8_video(brightness);
+      setRGB(index, color);
+    }
   }
 }
 
