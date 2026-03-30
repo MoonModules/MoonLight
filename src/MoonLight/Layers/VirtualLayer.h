@@ -17,6 +17,7 @@
 
   #include <vector>
 
+  #include "MoonBase/utilities/LayerFunctions.h"
   #include "PhysMap.h"  // pure types: MapTypeEnum, PhysMap — no ESP32 deps
   #include "PhysicalLayer.h"
 
@@ -180,9 +181,7 @@ class VirtualLayer {
   // Write brightness channel, scaled by global and layer brightness (only when offsetBrightness is configured).
   void setBrightness(const nrOfLights_t indexV, uint8_t value) {
     if (layerP->lights.header.offsetBrightness != UINT8_MAX) {
-      uint16_t scaled = ((uint32_t)value * layerP->lights.header.brightness * brightness + 32512) / 65025;
-      scaled = (scaled * brightness) / 255;
-      setLight(indexV, layerP->lights.header.offsetBrightness, scaled);
+      setLight(indexV, layerP->lights.header.offsetBrightness, scale8x8(value, layerP->lights.header.brightness, brightness));
     }
   }
   void setBrightness(Coord3D pos, const uint8_t value) { setBrightness(XYZ(pos), value); }
@@ -229,10 +228,11 @@ class VirtualLayer {
   }
   void setRGB3(Coord3D pos, CRGB color) { setRGB3(XYZ(pos), color); }
 
-  // Write secondary brightness channel, scaled by global brightness.
+  // Write secondary brightness channel, scaled by global and layer brightness.
   void setBrightness2(const nrOfLights_t indexV, uint8_t value) {
-    value = (value * layerP->lights.header.brightness) / 255;
-    if (layerP->lights.header.offsetBrightness2 != UINT8_MAX) setLight(indexV, layerP->lights.header.offsetBrightness2, value);
+    if (layerP->lights.header.offsetBrightness2 != UINT8_MAX) {
+      setLight(indexV, layerP->lights.header.offsetBrightness2, scale8x8(value, layerP->lights.header.brightness, brightness));
+    }
   }
   void setBrightness2(Coord3D pos, const uint8_t value) { setBrightness2(XYZ(pos), value); }
 

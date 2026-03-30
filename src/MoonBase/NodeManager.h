@@ -56,8 +56,11 @@ class NodeManager : public Module {
     entry["category"] = T::category();
   }
 
+ public:
   /// Factory method: creates the correct Node subclass for the given name. Returns nullptr if unknown.
   virtual Node* addNode(const uint8_t index, char* name, const JsonArray& controls) const { return nullptr; }
+
+ protected:
 
   /// Checks if name matches T::name() (case/symbol insensitive) and allocates a T if so.
   template <typename T>

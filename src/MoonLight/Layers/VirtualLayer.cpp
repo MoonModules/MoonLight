@@ -14,6 +14,7 @@
   #include "VirtualLayer.h"
 
   #include "MoonBase/Nodes.h"
+  #include "MoonBase/utilities/LayerFunctions.h"
   #include "PhysicalLayer.h"
 
 // convenience functions to call fastled functions out of the Leds namespace (there naming conflict)
@@ -156,7 +157,7 @@ void VirtualLayer::fadeToBlackMin() {
     //     }
     //   }
     // } else
-    if (layerP->lights.header.channelsPerLight == 3 && layerP->layers.size() == 1 && layerP->lights.header.nrOfChannels / 3 < UINT16_MAX) {  // CRGB lights, FastLED max UINT16_MAX
+    if (layerP->lights.header.channelsPerLight == 3 && layerP->activeLayerCount == 1 && layerP->lights.header.nrOfChannels / 3 < UINT16_MAX) {  // CRGB lights, FastLED max UINT16_MAX
       fastled_fadeToBlackBy(reinterpret_cast<CRGB*>(layerP->lights.channelsE), layerP->lights.header.nrOfChannels / sizeof(CRGB), fadeBy);
     } else {  // multichannel lights
       for (nrOfLights_t index = 0; index < nrOfLights; index++) {
@@ -196,7 +197,7 @@ void VirtualLayer::fill_solid(const CRGB& color) {
   //     }
   //   }
   // } else
-  if (layerP->lights.header.channelsPerLight == 3 && layerP->layers.size() == 1) {  // faster, else manual
+  if (layerP->lights.header.channelsPerLight == 3 && layerP->activeLayerCount == 1) {  // faster, else manual
     fastled_fill_solid(reinterpret_cast<CRGB*>(layerP->lights.channelsE), layerP->lights.header.nrOfChannels / sizeof(CRGB), color);
   } else {
     for (nrOfLights_t index = 0; index < nrOfLights; index++) setRGB(index, color);
@@ -216,7 +217,7 @@ void VirtualLayer::fill_rainbow(const uint8_t initialhue, const uint8_t deltahue
   //     }
   //   }
   // } else
-  if (layerP->lights.header.channelsPerLight == 3 && layerP->layers.size() == 1) {  // faster, else manual
+  if (layerP->lights.header.channelsPerLight == 3 && layerP->activeLayerCount == 1) {  // faster, else manual
     fastled_fill_rainbow(reinterpret_cast<CRGB*>(layerP->lights.channelsE), layerP->lights.header.nrOfChannels / sizeof(CRGB), initialhue, deltahue);
   } else {
     CHSV hsv;
@@ -252,13 +253,9 @@ void VirtualLayer::onLayoutPre() {
   // resetMapping
 
   nrOfLights = 0;
-  Coord3D physSize = layerP->lights.header.size;  // physical fixture size
 
   // apply percentage bounds to compute the virtual layer's window into the physical fixture
-  startPhy = {(int)(physSize.x * startPct.x / 100), (int)(physSize.y * startPct.y / 100), (int)(physSize.z * startPct.z / 100)};
-  endPhy = {(int)(physSize.x * endPct.x / 100), (int)(physSize.y * endPct.y / 100), (int)(physSize.z * endPct.z / 100)};
-  // ensure at least 1 pixel in each dimension to avoid zero-size layers
-  endPhy = endPhy.maximum(Coord3D(startPhy.x + 1, startPhy.y + 1, startPhy.z + 1));
+  computeLayerBounds(layerP->lights.header.size, startPct, endPct, startPhy, endPhy);
 
   size = endPhy - startPhy;
   start = {0, 0, 0};
@@ -291,9 +288,7 @@ void VirtualLayer::addLight(Coord3D position) {
   if (nodes.empty()) return;  // skip layout for empty layers
 
   // filter: positions outside the percentage-based bounds are blacked out (unmapped)
-  bool outsideBounds = position.x < startPhy.x || position.x >= endPhy.x ||
-                       position.y < startPhy.y || position.y >= endPhy.y ||
-                       position.z < startPhy.z || position.z >= endPhy.z;
+  bool outsideBounds = isOutsideLayerBounds(position, startPhy, endPhy);
 
   if (outsideBounds) {
     // treat as unmapped — same as modifier setting position to UINT16_MAX
@@ -303,7 +298,7 @@ void VirtualLayer::addLight(Coord3D position) {
     }
     // black out this physical light
     memset(&layerP->lights.channelsE[layerP->indexP * layerP->lights.header.channelsPerLight], 0, layerP->lights.header.channelsPerLight);
-    if (psramFound()) memset(&layerP->lights.channelsD[layerP->indexP * layerP->lights.header.channelsPerLight], 0, layerP->lights.header.channelsPerLight);
+    if (layerP->lights.useDoubleBuffer) memset(&layerP->lights.channelsD[layerP->indexP * layerP->lights.header.channelsPerLight], 0, layerP->lights.header.channelsPerLight);
     return;
   }
 
@@ -339,7 +334,7 @@ void VirtualLayer::addLight(Coord3D position) {
     }
     // set unmapped lights to 0, e.g. needed by checkerboard modifier
     memset(&layerP->lights.channelsE[layerP->indexP * layerP->lights.header.channelsPerLight], 0, layerP->lights.header.channelsPerLight);
-    if (psramFound()) memset(&layerP->lights.channelsD[layerP->indexP * layerP->lights.header.channelsPerLight], 0, layerP->lights.header.channelsPerLight);
+    if (layerP->lights.useDoubleBuffer) memset(&layerP->lights.channelsD[layerP->indexP * layerP->lights.header.channelsPerLight], 0, layerP->lights.header.channelsPerLight);
   }
 }
 

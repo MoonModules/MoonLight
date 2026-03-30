@@ -55,7 +55,8 @@ VirtualLayer* PhysicalLayer::ensureLayer(uint8_t index) {
     layers[index] = new VirtualLayer();
     layers[index]->layerP = this;
     layers[index]->setup();
-    EXT_LOGD(ML_TAG, "Created VirtualLayer %d on demand", index);
+    activeLayerCount++;
+    EXT_LOGD(ML_TAG, "Created VirtualLayer %d on demand (active: %d)", index, activeLayerCount);
   }
   return layers[index];
 }

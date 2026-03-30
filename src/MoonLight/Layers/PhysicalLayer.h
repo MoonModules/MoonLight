@@ -116,6 +116,11 @@ class PhysicalLayer {
   // Called after all addLight() calls in a pass; finalises sizes and notifies virtual layers.
   void onLayoutPost();
 
+  // Number of VirtualLayer slots currently in use (created and non-null).
+  // Starts at 1 (layer 0 always exists). Incremented by ensureLayer(), decremented when a layer is deleted.
+  // Use this instead of layers.size() to distinguish active layers from pre-allocated empty slots.
+  uint8_t activeLayerCount = 1;
+
   // Ensures the VirtualLayer at the given index exists, creating it on demand if needed.
   // Returns nullptr if index is out of bounds.
   VirtualLayer* ensureLayer(uint8_t index);
