@@ -40,7 +40,14 @@ class RainbowEffect : public Node {
         paletteIndex += deltaHue;
       }
     } else {
-      layer->fill_rainbow(hue >> 8, deltaHue);  // hue back to uint8_t
+      CHSV hsv;
+      hsv.hue = hue >> 8;
+      hsv.val = 255;
+      hsv.sat = 240;
+      for (nrOfLights_t i = 0; i < layer->nrOfLights; i++) {
+        layer->setRGB(i, hsv);
+        hsv.hue += deltaHue;
+      }
     }
     hue += speed * 32;
 

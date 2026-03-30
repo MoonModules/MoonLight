@@ -93,13 +93,11 @@ class PhysicalLayer {
   // pass must be set to 1 (physical) or 2 (virtual) before calling.
   void mapLayout();
 
-  // Minimum fade amount requested this frame across all layers (0 = no fade).
-  // Set by VirtualLayer::fadeToBlackBy() (forwarded here); applied and reset in loop().
-  uint8_t fadeMin = 0;
-
-  // Accumulate a fade request for this frame. Takes the minimum of all requests
-  // so the most conservative fade wins when multiple layers run simultaneously.
-  void fadeToBlackBy(uint8_t fadeBy) { fadeMin = fadeMin ? MIN(fadeMin, fadeBy) : fadeBy; }
+  // Per-physical-pixel bit flags for the current frame. nullptr when activeLayerCount <= 1 (no overhead).
+  // Each array holds 1 bit per physical pixel: size = (nrOfLights + 7) / 8 bytes.
+  // Allocated on demand when multi-layer mode is first entered; kept until destructor.
+  uint8_t* fadeBits = nullptr;   // set when pixel has been faded this frame (prevents double-fading)
+  uint8_t* writeBits = nullptr;  // set when pixel has been written this frame (triggers 50/50 blend on overlap)
 
   // Current layout pass: 1 = physical (count lights, assign pins), 2 = virtual (build mapping table).
   uint8_t pass = 0;

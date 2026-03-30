@@ -73,6 +73,9 @@ class VirtualLayer {
   // Per-layer brightness (0–255). Scales pixel output within this layer. Default 255 = full.
   uint8_t brightness = 255;
 
+  // Fade amount requested by effects this frame (consumed by PhysicalLayer::loop() next frame).
+  uint8_t fadeBy = 0;
+
   // Layer boundaries as percentages (0–100) of the total fixture size. Default 100% = full fixture.
   Coord3D startPct = {0, 0, 0};
   Coord3D endPct = {100, 100, 100};
@@ -95,6 +98,11 @@ class VirtualLayer {
   // after all effects have written full-brightness values. This avoids compound dimming
   // when effects use getRGB+setRGB patterns (blur, scroll, blend).
   void applyBrightness();
+
+  // Fade this layer's mapped physical pixels by the stored fadeBy amount.
+  // Uses fadeBits (1 bit/pixel) to prevent double-fading of overlapping pixels.
+  // Called by PhysicalLayer::loop() in multi-layer mode (single-layer uses fast global path).
+  void fadeOwnPixels(uint8_t* fadeBits);
 
   // Run 20 ms periodic updates for all nodes (called from SvelteKit task, Core 1).
   void loop20ms();
@@ -161,6 +169,8 @@ class VirtualLayer {
   // Write RGB colour to the primary RGBW block of all physical lights at indexV.
   // Note: per-layer brightness is NOT applied here — it is applied once per frame in applyBrightness()
   // after all effects have run. This avoids compound dimming when effects read-then-write (getRGB+setRGB).
+  // In multi-layer mode (frameState != nullptr): blends 50/50 with existing colour when another layer
+  // already wrote this pixel this frame (bit 0x02 set in frameState). Single-layer path is zero-overhead.
   void setRGB(const nrOfLights_t indexV, CRGB color) {
     if (indexV < mappingTableSize && mappingTable[indexV].mapType == m_zeroLights) {
   #ifdef BOARD_HAS_PSRAM
@@ -168,8 +178,21 @@ class VirtualLayer {
   #else
       mappingTable[indexV].rgb = ((MIN(color[0] + 3, 255) >> 3) << 9) + ((MIN(color[1] + 3, 255) >> 3) << 4) + (MIN(color[2] + 7, 255) >> 4);
   #endif
-    } else
-      forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW], (void*)&color, sizeof(color)); });
+    } else {
+      forEachLightIndex(indexV, [&](nrOfLights_t indexP) {
+        uint8_t* dst = &layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW];
+        if (layerP->writeBits) {
+          if (getBitValue(layerP->writeBits, indexP)) {
+            nblend(*reinterpret_cast<CRGB*>(dst), color, 128);  // overlap: blend 50/50 with existing
+          } else {
+            memcpy(dst, (void*)&color, sizeof(color));
+            setBitValue(layerP->writeBits, indexP, true);  // mark as written this frame
+          }
+        } else {
+          memcpy(dst, (void*)&color, sizeof(color));  // single-layer fast path: direct write
+        }
+      });
+    }
   }
   void setRGB(Coord3D pos, CRGB color) { setRGB(XYZ(pos), color); }
 
@@ -315,15 +338,12 @@ class VirtualLayer {
   // Frame-level fill / fade operations
   // ----------------------------------------------------------------------------
 
-  // Schedule a fade-to-black by fadeBy amount for this frame. Forwards to PhysicalLayer::fadeToBlackBy()
-  // which accumulates the minimum across all layers and applies it once per frame to the physical buffer.
-  void fadeToBlackBy(uint8_t fadeBy = 255) { layerP->fadeToBlackBy(fadeBy); }
+  // Schedule a fade-to-black for this layer. Stored per-layer and applied next frame by
+  // PhysicalLayer::loop() — either globally (single layer fast path) or per-mapped-pixel (multi-layer).
+  void fadeToBlackBy(uint8_t amount = 255) { fadeBy = fadeBy ? MIN(fadeBy, amount) : amount; }
 
   // Fill all virtual lights with a solid colour.
   void fill_solid(const CRGB& color);
-
-  // Fill all virtual lights with a rainbow, starting at initialhue, advancing by deltahue per light.
-  void fill_rainbow(uint8_t initialhue, uint8_t deltahue);
 
   // ----------------------------------------------------------------------------
   // Layout mapping (called from PhysicalLayer::mapLayout during pass 2)

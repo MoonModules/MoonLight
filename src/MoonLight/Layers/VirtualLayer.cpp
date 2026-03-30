@@ -20,7 +20,6 @@
 // convenience functions to call fastled functions out of the Leds namespace (there naming conflict)
 void fastled_fadeToBlackBy(CRGB* leds, uint16_t num_leds, uint8_t fadeBy) { fadeToBlackBy(leds, num_leds, fadeBy); }  // supports max UINT16_MAX leds !
 void fastled_fill_solid(CRGB* targetArray, int numToFill, const CRGB& color) { fill_solid(targetArray, numToFill, color); }
-void fastled_fill_rainbow(CRGB* targetArray, int numToFill, uint8_t initialhue, uint8_t deltahue) { fill_rainbow(targetArray, (uint16_t)numToFill, initialhue, deltahue); }
 
 VirtualLayer::VirtualLayer() { EXT_LOGV(ML_TAG, "constructor"); }
 
@@ -75,7 +74,8 @@ void VirtualLayer::loop() {
   }
   prevSize = size;
 
-  applyBrightness();
+  if (brightness < 255)   // no-op at full brightness
+    applyBrightness();
 };
 
 void VirtualLayer::loop20ms() {
@@ -130,21 +130,30 @@ nrOfLights_t VirtualLayer::XYZ(Coord3D& position) {
   return XYZUnModified(position);
 }
 
-// void VirtualLayer::setLightsToBlend() {
-//   for (const std::vector<nrOfLights_t>& mappingTableIndex: mappingTableIndexes) {
-//       for (const nrOfLights_t indexP: mappingTableIndex)
-//       layerP->lightsToBlend[indexP] = true;
-//     }
-//     for (const PhysMap &physMap: mappingTable) {
-//       if (physMap.mapType == m_oneLight)
-//       layerP->lightsToBlend[physMap.indexP] = true;
-//     }
-// }
 
+
+void VirtualLayer::fadeOwnPixels(uint8_t* fadeBits) {
+  if (fadeBy == 0) return;
+  uint8_t scale = 255 - fadeBy;
+  uint8_t cpl = layerP->lights.header.channelsPerLight;
+  fadeBy = 0;  // consumed for this frame
+
+  for (nrOfLights_t indexV = 0; indexV < nrOfLights; indexV++) {
+    forEachLightIndex(indexV, [&](nrOfLights_t indexP) {
+      if (fadeBits && getBitValue(fadeBits, indexP)) return;  // already faded by another layer
+      if (fadeBits) setBitValue(fadeBits, indexP, true);
+
+      uint8_t* ch = &layerP->lights.channelsE[indexP * cpl];
+      reinterpret_cast<CRGB*>(&ch[layerP->lights.header.offsetRGBW])->nscale8(scale);
+      if (layerP->lights.header.offsetWhite != UINT8_MAX) ch[layerP->lights.header.offsetWhite] = scale8(ch[layerP->lights.header.offsetWhite], scale);
+      if (layerP->lights.header.offsetRGBW1 != UINT8_MAX) reinterpret_cast<CRGB*>(&ch[layerP->lights.header.offsetRGBW1])->nscale8(scale);
+      if (layerP->lights.header.offsetRGBW2 != UINT8_MAX) reinterpret_cast<CRGB*>(&ch[layerP->lights.header.offsetRGBW2])->nscale8(scale);
+      if (layerP->lights.header.offsetRGBW3 != UINT8_MAX) reinterpret_cast<CRGB*>(&ch[layerP->lights.header.offsetRGBW3])->nscale8(scale);
+    });
+  }
+}
 
 void VirtualLayer::applyBrightness() {
-  if (brightness >= 255) return;  // no-op at full brightness
-
   // Fast path: single layer, 3-channel RGB, within FastLED limits — scale channelsE directly (cache-friendly sequential access)
   if (layerP->lights.header.channelsPerLight == 3 && layerP->activeLayerCount == 1 && layerP->lights.header.nrOfChannels / 3 < UINT16_MAX) {
     CRGB* leds = reinterpret_cast<CRGB*>(layerP->lights.channelsE);
@@ -176,33 +185,6 @@ void VirtualLayer::fill_solid(const CRGB& color) {
   }
 }
 
-void VirtualLayer::fill_rainbow(const uint8_t initialhue, const uint8_t deltahue) {
-  // if (effectDimension < layerDimension) { //only process the effect lights (so modifiers can do things with the other dimension)
-  //   CHSV hsv;
-  //   hsv.hue = initialhue;
-  //   hsv.val = 255;
-  //   hsv.sat = 240;
-  //   for (int y=0; y < ((effectDimension == _1D)?1:size.y); y++) { //1D effects only on y=0, 2D effects loop over y
-  //     for (int x=0; x<size.x; x++) {
-  //       setRGB({x,y,0}, hsv);
-  //       hsv.hue += deltahue;
-  //     }
-  //   }
-  // } else
-  if (layerP->lights.header.channelsPerLight == 3 && layerP->activeLayerCount == 1) {  // faster, else manual
-    fastled_fill_rainbow(reinterpret_cast<CRGB*>(layerP->lights.channelsE), layerP->lights.header.nrOfChannels / sizeof(CRGB), initialhue, deltahue);
-  } else {
-    CHSV hsv;
-    hsv.hue = initialhue;
-    hsv.val = 255;
-    hsv.sat = 240;
-
-    for (nrOfLights_t index = 0; index < nrOfLights; index++) {
-      setRGB(index, hsv);
-      hsv.hue += deltahue;
-    }
-  }
-}
 
 void VirtualLayer::createMappingTableAndAddOneToOne() {
   if (mappingTableSize != size.x * size.y * size.z) {

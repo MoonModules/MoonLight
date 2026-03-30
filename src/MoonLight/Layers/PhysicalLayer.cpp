@@ -26,8 +26,6 @@ PhysicalLayer layerP;  // global singleton of the physical layer
 PhysicalLayer::PhysicalLayer() : ledPins{}, ledPinsAssigned{}, ledsPerPin{} {
   EXT_LOGD(ML_TAG, "constructor");
 
-  // initLightsToBlend();
-
   // pre-allocate 16 layer slots (nullptr = not yet created, allocated on demand)
   layers.resize(16, nullptr);
   // layer 0 always exists
@@ -47,6 +45,8 @@ PhysicalLayer::~PhysicalLayer() {
     vSemaphoreDelete(driversMutex);
     driversMutex = NULL;
   }
+  freeMB(fadeBits);
+  freeMB(writeBits);
 }
 
 VirtualLayer* PhysicalLayer::ensureLayer(uint8_t index) {
@@ -99,30 +99,47 @@ void PhysicalLayer::setup() {
 void PhysicalLayer::loop() {
   if (lights.header.nrOfChannels >= lights.maxChannels) return;  // in case alloc mem is not successful
 
-  // Apply the accumulated fade request from all layers (set via fadeToBlackBy()) once to the
-  // physical buffer. Doing it here — before any layer's loop() runs — prevents shared physical
-  // pixels from being faded multiple times when virtual layers overlap.
-  if (fadeMin > 0) {
-    if (lights.header.channelsPerLight == 3 && lights.header.nrOfChannels / 3 < UINT16_MAX) {
-      // RGB-only fast path: single FastLED call scales the entire buffer
-      fastled_fadeToBlackBy(reinterpret_cast<CRGB*>(lights.channelsE), lights.header.nrOfChannels / sizeof(CRGB), fadeMin);
-    } else {
-      // Multi-channel: scale only the colour channels of each physical light in place
-      uint8_t scale = 255 - fadeMin;
-      for (nrOfLights_t i = 0; i < lights.header.nrOfLights; i++) {
-        uint8_t* ch = &lights.channelsE[i * lights.header.channelsPerLight];
-        reinterpret_cast<CRGB*>(&ch[lights.header.offsetRGBW])->nscale8(scale);
-        if (lights.header.offsetWhite != UINT8_MAX) ch[lights.header.offsetWhite] = scale8(ch[lights.header.offsetWhite], scale);
-        if (lights.header.offsetRGBW1 != UINT8_MAX) reinterpret_cast<CRGB*>(&ch[lights.header.offsetRGBW1])->nscale8(scale);
-        if (lights.header.offsetRGBW2 != UINT8_MAX) reinterpret_cast<CRGB*>(&ch[lights.header.offsetRGBW2])->nscale8(scale);
-        if (lights.header.offsetRGBW3 != UINT8_MAX) reinterpret_cast<CRGB*>(&ch[lights.header.offsetRGBW3])->nscale8(scale);
+  if (activeLayerCount <= 1 && layers[0]) {
+    // ── Single-layer fast path: fade entire channelsE globally (same speed as before) ──
+    if (layers[0]->fadeBy > 0) {
+      if (lights.header.channelsPerLight == 3 && lights.header.nrOfChannels / 3 < UINT16_MAX) {
+        fastled_fadeToBlackBy(reinterpret_cast<CRGB*>(lights.channelsE), lights.header.nrOfChannels / sizeof(CRGB), layers[0]->fadeBy);
+      } else {
+        uint8_t scale = 255 - layers[0]->fadeBy;
+        for (nrOfLights_t i = 0; i < lights.header.nrOfLights; i++) {
+          uint8_t* ch = &lights.channelsE[i * lights.header.channelsPerLight];
+          // cppcheck-suppress objectIndex  // ch points into heap-allocated channelsE with >= channelsPerLight bytes
+          reinterpret_cast<CRGB*>(&ch[lights.header.offsetRGBW])->nscale8(scale);
+          // cppcheck-suppress objectIndex
+          if (lights.header.offsetWhite != UINT8_MAX) ch[lights.header.offsetWhite] = scale8(ch[lights.header.offsetWhite], scale);
+          // cppcheck-suppress objectIndex
+          if (lights.header.offsetRGBW1 != UINT8_MAX) reinterpret_cast<CRGB*>(&ch[lights.header.offsetRGBW1])->nscale8(scale);
+          // cppcheck-suppress objectIndex
+          if (lights.header.offsetRGBW2 != UINT8_MAX) reinterpret_cast<CRGB*>(&ch[lights.header.offsetRGBW2])->nscale8(scale);
+          // cppcheck-suppress objectIndex
+          if (lights.header.offsetRGBW3 != UINT8_MAX) reinterpret_cast<CRGB*>(&ch[lights.header.offsetRGBW3])->nscale8(scale);
+        }
       }
+      layers[0]->fadeBy = 0;
     }
-    fadeMin = 0;  // reset for next frame
-  }
+    layers[0]->loop();
+  } else {
+    // ── Multi-layer path: each layer fades only its own mapped physical pixels ──
+    // Allocate bit arrays on demand (1 bit/pixel, kept until destructor)
+    size_t bitBytes = (lights.header.nrOfLights + 7) / 8;
+    if (!fadeBits)  fadeBits  = allocMB<uint8_t>(bitBytes);
+    if (!writeBits) writeBits = allocMB<uint8_t>(bitBytes);
+    if (fadeBits)  memset(fadeBits,  0, bitBytes);
+    if (writeBits) memset(writeBits, 0, bitBytes);
 
-  for (VirtualLayer* layer : layers) {
-    if (layer) layer->loop();  // if (layer) needed when deleting rows ...
+    // Phase 1: per-layer fade (fadeBits prevents double-fading of overlapping pixels)
+    for (VirtualLayer* layer : layers) {
+      if (layer) layer->fadeOwnPixels(fadeBits);
+    }
+    // Phase 2: run all layers' effects (setRGB uses writeBits to blend overlapping writes)
+    for (VirtualLayer* layer : layers) {
+      if (layer) layer->loop();
+    }
   }
 }
 
@@ -304,8 +321,6 @@ void PhysicalLayer::onLayoutPost() {
     lights.header.isPositions = lights.header.nrOfLights ? 2 : 3;  // filled with positions, set back to 3 in ModuleEffects, or direct to 3 if no lights (effects will move it to 0)
     if (layerP.lights.useDoubleBuffer) xSemaphoreGive(swapMutex);
 
-    // initLightsToBlend();
-
     // ledsDriver.init(lights, sortedPins); //init the driver with the sorted pins and lights
   } else if (pass == 2) {
     EXT_LOGD(ML_TAG, "pass %d indexP: %d", pass, indexP);
@@ -314,15 +329,5 @@ void PhysicalLayer::onLayoutPost() {
     }
   }
 }
-
-// an effect is using a virtual layer: tell the effect in which layer to run...
-
-// // to be called in setup, if more then one effect
-// void PhysicalLayer::initLightsToBlend() {
-//     lightsToBlend.reserve(lights.header.nrOfLights);
-
-//     for (nrOfLights_t indexP = 0; indexP < lightsToBlend.size(); indexP++)
-//       lightsToBlend[indexP] = false;
-// }
 
 #endif  // FT_MOONLIGHT

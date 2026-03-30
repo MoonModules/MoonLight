@@ -29,6 +29,7 @@ class DMXInDriver : public Node {
  private:
   uint16_t startChannel = 1;   // DMX start address (1-512)
   uint8_t  mode = 0;           // 0 = LightsControl (default), 1 = Channels
+  uint8_t  layer = 1;          // 0 = Physical layer, 1..N = Virtual layer N (shown as layer N)
   Char<32> status = "No pins";
 
   uint8_t pinDMX     = UINT8_MAX;
@@ -64,6 +65,15 @@ class DMXInDriver : public Node {
     addControl(mode, "mode", "select");
     addControlValue("LightsControl");
     addControlValue("Channels");
+    addControl(layer, "layer", "select");
+    addControlValue("Physical layer");
+    uint8_t i = 1;
+    for (VirtualLayer* vLayer : layerP.layers) {
+      Char<32> layerName;
+      layerName.format("Layer %d", i);
+      addControlValue(layerName.c_str());
+      i++;
+    }
     addControl(status, "status", "text", 0, 32, true);
 
     ioUpdateHandler = moduleIO->addUpdateHandler([this](const String& originId) { readPins(); });
@@ -210,19 +220,38 @@ class DMXInDriver : public Node {
     }
   }
 
-  // Write received DMX channel data into the physical-layer channel buffer
+  // Write received DMX channel data into the channel buffer.
+  // layer == 0: write raw channels directly to the physical buffer (channelsD).
+  // layer  > 0: pixel-index through the virtual layer mapping (same as ArtNet In).
   void processChannels(const uint8_t* data, uint16_t length) {
     LightsHeader* header = &layerP.lights.header;
     uint16_t offset = startChannel - 1;
 
     if (offset >= length - 1) return;
+    const uint8_t* src = &data[1 + offset];
     uint16_t available = length - 1 - offset;
-    uint16_t nrChannels = min(available, (uint16_t)header->nrOfChannels);
-    if (nrChannels == 0) return;
 
-    xSemaphoreTake(swapMutex, portMAX_DELAY);
-    memcpy(layerP.lights.channelsD, &data[1 + offset], nrChannels);
-    xSemaphoreGive(swapMutex);
+    if (layer == 0) {
+      // Physical layer: copy raw channels starting at channelsD[0]
+      uint16_t nrChannels = min(available, (uint16_t)header->nrOfChannels);
+      if (nrChannels == 0) return;
+      xSemaphoreTake(swapMutex, portMAX_DELAY);
+      memcpy(layerP.lights.channelsD, src, nrChannels);
+      xSemaphoreGive(swapMutex);
+    } else {
+      // Virtual layer: map each virtual pixel index through the layer's mapping table
+      VirtualLayer* vLayer = layerP.layers[layer - 1];
+      if (!vLayer) return;
+      uint16_t nrPixels = min(available / header->channelsPerLight, (uint16_t)vLayer->nrOfLights);
+      if (nrPixels == 0) return;
+      xSemaphoreTake(swapMutex, portMAX_DELAY);
+      for (uint16_t i = 0; i < nrPixels; i++) {
+        vLayer->forEachLightIndex(i, [&](nrOfLights_t indexP) {
+          memcpy(&layerP.lights.channelsD[indexP * header->channelsPerLight], &src[i * header->channelsPerLight], header->channelsPerLight);
+        });
+      }
+      xSemaphoreGive(swapMutex);
+    }
   }
 
   // Map received DMX channels to LightsControl properties (all 0-255):

@@ -141,8 +141,9 @@ class ArtNetInDriver : public Node {
               if (layer == 0) {  // Physical layer
                 memcpy(&layerP.lights.channelsD[ledIndex * layerP.lights.header.channelsPerLight], &dmxData[i * layerP.lights.header.channelsPerLight], layerP.lights.header.channelsPerLight);
               } else {  // Virtual layer — guard against a slot that hasn't been created yet
-                if (layerP.layers[layer - 1])
+                if (layerP.layers[layer - 1]) {
                   layerP.layers[layer - 1]->forEachLightIndex(ledIndex, [&](nrOfLights_t indexP) { memcpy(&layerP.lights.channelsD[indexP * layerP.lights.header.channelsPerLight], &dmxData[i * layerP.lights.header.channelsPerLight], layerP.lights.header.channelsPerLight); });
+                }
                 // setLight(ledIndex, &dmxData[i * layerP.lights.header.channelsPerLight], 0, layerP.lights.header.channelsPerLight);
               }
             }
@@ -184,8 +185,9 @@ class ArtNetInDriver : public Node {
           if (layer == 0) {  // Physical layer
             memcpy(&layerP.lights.channelsD[ledIndex * layerP.lights.header.channelsPerLight], &pixelData[i * layerP.lights.header.channelsPerLight], layerP.lights.header.channelsPerLight);
           } else {  // Virtual layer — guard against a slot that hasn't been created yet
-            if (layerP.layers[layer - 1])
+            if (layerP.layers[layer - 1]) {
               layerP.layers[layer - 1]->forEachLightIndex(ledIndex, [&](nrOfLights_t indexP) { memcpy(&layerP.lights.channelsD[indexP * layerP.lights.header.channelsPerLight], &pixelData[i * layerP.lights.header.channelsPerLight], layerP.lights.header.channelsPerLight); });
+            }
             // setLight(ledIndex, &pixelData[i * layerP.lights.header.channelsPerLight], 0, layerP.lights.header.channelsPerLight);
           }
         }
