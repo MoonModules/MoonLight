@@ -70,6 +70,11 @@ class VirtualLayer {
   // When true, every virtual index maps 1:1 to a physical index (no mappingTable needed).
   bool oneToOneMapping = false;
 
+  // When true, no virtual pixel fans out to more than one physical pixel (all entries are
+  // m_oneLight or m_zeroLights). Enables a direct-table fast path in compositeTo() that
+  // bypasses the forEachLightIndex switch. Set false as soon as any m_moreLights entry is created.
+  bool allOneLight = true;
+
   // Per-layer brightness (0–255). Scales pixel output within this layer. Default 255 = full.
   uint8_t brightness = 255;
 

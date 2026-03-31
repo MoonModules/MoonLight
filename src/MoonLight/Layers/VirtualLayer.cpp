@@ -131,6 +131,7 @@ void VirtualLayer::addIndexP(PhysMap& physMap, nrOfLights_t indexP) {
 
     physMap.indexesIndex = mappingTableIndexesSizeUsed - 1;  // array position
     physMap.mapType = m_moreLights;
+    allOneLight = false;  // this layer now has at least one fan-out entry
     break;
   }
   case m_moreLights:  // more -> more
@@ -212,6 +213,7 @@ void VirtualLayer::onLayoutPre() {
   }
 
   oneToOneMapping = true;  // addLight will set it to false as soon as irregularity is discovered
+  allOneLight = true;      // addIndexP will set it to false as soon as any m_moreLights entry appears
 }
 
 bool VirtualLayer::addLight(Coord3D position) {
@@ -330,6 +332,42 @@ void VirtualLayer::compositeTo(uint8_t* dest, const LightsHeader& header) {
   if (!virtualChannels || nodes.empty()) return;
   uint8_t cpl = header.channelsPerLight;
   uint8_t b = scale8(brightness, transitionBrightness);
+
+  // Fast path for pure RGB (cpl==3): no white/control channels to check.
+  // When oneToOneMapping is also true this is the tightest possible loop —
+  // avoids forEachLightIndex dispatch and all UINT8_MAX-guarded branches.
+  if (cpl == 3) {
+    CRGB* src = reinterpret_cast<CRGB*>(virtualChannels);
+    CRGB* dst = reinterpret_cast<CRGB*>(dest);
+    if (oneToOneMapping) {
+      if (b == 255) {
+        for (nrOfLights_t i = 0; i < nrOfLights; i++) dst[i] += src[i];
+      } else {
+        for (nrOfLights_t i = 0; i < nrOfLights; i++) { CRGB c = src[i]; c.nscale8_video(b); dst[i] += c; }
+      }
+    } else if (allOneLight) {
+      // Serpentine / shifted panel fast path: all mapped entries are m_oneLight —
+      // direct table access, no switch dispatch, no forEachLightIndex overhead.
+      for (nrOfLights_t indexV = 0; indexV < nrOfLights; indexV++) {
+        if (mappingTable[indexV].mapType != m_oneLight) continue;  // skip unmapped pixels
+        CRGB color = src[indexV];
+        if (b < 255) color.nscale8_video(b);
+        nrOfLights_t indexP = mappingTable[indexV].indexP;
+        presetCorrection(indexP);
+        dst[indexP] += color;
+      }
+    } else {
+      // General 1:N path (e.g. modifiers that map 1D rings to 2D grid positions).
+      for (nrOfLights_t indexV = 0; indexV < nrOfLights; indexV++) {
+        CRGB color = src[indexV];
+        if (b < 255) color.nscale8_video(b);
+        forEachLightIndex(indexV, [&](nrOfLights_t indexP) { dst[indexP] += color; });
+      }
+    }
+    return;
+  }
+
+  // General path for multi-channel lights (cpl > 3: RGBW, moving heads, etc.)
   for (nrOfLights_t indexV = 0; indexV < nrOfLights; indexV++) {
     uint8_t* vch = &virtualChannels[indexV * cpl];
 
@@ -347,11 +385,11 @@ void VirtualLayer::compositeTo(uint8_t* dest, const LightsHeader& header) {
         uint8_t w = vch[header.offsetRGBW + 3];  // canonical white slot: setWhite() writes here
         if (b < 255) w = scale8(w, b);
         dst[header.offsetWhite] = qadd8(dst[header.offsetWhite], w);  // driver wire-order destination
-      }
-      if (header.offsetWhite2 != UINT8_MAX) {
-        uint8_t w = vch[header.offsetRGBW + 4];  // canonical second-white slot
-        if (b < 255) w = scale8(w, b);
-        dst[header.offsetWhite2] = qadd8(dst[header.offsetWhite2], w);
+        if (header.offsetWhite2 != UINT8_MAX) {
+          uint8_t w = vch[header.offsetRGBW + 4];  // canonical second-white slot
+          if (b < 255) w = scale8(w, b);
+          dst[header.offsetWhite2] = qadd8(dst[header.offsetWhite2], w);
+        }
       }
       if (header.offsetRGBW1 != UINT8_MAX) {
         CRGB c = *reinterpret_cast<CRGB*>(&vch[header.offsetRGBW1]);
@@ -360,22 +398,22 @@ void VirtualLayer::compositeTo(uint8_t* dest, const LightsHeader& header) {
         uint8_t w = vch[header.offsetRGBW1 + 3];
         if (b < 255) w = scale8(w, b);
         dst[header.offsetRGBW1 + 3] = qadd8(dst[header.offsetRGBW1 + 3], w);
-      }
-      if (header.offsetRGBW2 != UINT8_MAX) {
-        CRGB c = *reinterpret_cast<CRGB*>(&vch[header.offsetRGBW2]);
-        if (b < 255) c.nscale8_video(b);
-        *reinterpret_cast<CRGB*>(&dst[header.offsetRGBW2]) += c;
-        uint8_t w = vch[header.offsetRGBW2 + 3];
-        if (b < 255) w = scale8(w, b);
-        dst[header.offsetRGBW2 + 3] = qadd8(dst[header.offsetRGBW2 + 3], w);
-      }
-      if (header.offsetRGBW3 != UINT8_MAX) {
-        CRGB c = *reinterpret_cast<CRGB*>(&vch[header.offsetRGBW3]);
-        if (b < 255) c.nscale8_video(b);
-        *reinterpret_cast<CRGB*>(&dst[header.offsetRGBW3]) += c;
-        uint8_t w = vch[header.offsetRGBW3 + 3];
-        if (b < 255) w = scale8(w, b);
-        dst[header.offsetRGBW3 + 3] = qadd8(dst[header.offsetRGBW3 + 3], w);
+        if (header.offsetRGBW2 != UINT8_MAX) {
+          CRGB c = *reinterpret_cast<CRGB*>(&vch[header.offsetRGBW2]);
+          if (b < 255) c.nscale8_video(b);
+          *reinterpret_cast<CRGB*>(&dst[header.offsetRGBW2]) += c;
+          uint8_t w = vch[header.offsetRGBW2 + 3];
+          if (b < 255) w = scale8(w, b);
+          dst[header.offsetRGBW2 + 3] = qadd8(dst[header.offsetRGBW2 + 3], w);
+          if (header.offsetRGBW3 != UINT8_MAX) {
+            CRGB c = *reinterpret_cast<CRGB*>(&vch[header.offsetRGBW3]);
+            if (b < 255) c.nscale8_video(b);
+            *reinterpret_cast<CRGB*>(&dst[header.offsetRGBW3]) += c;
+            uint8_t w = vch[header.offsetRGBW3 + 3];
+            if (b < 255) w = scale8(w, b);
+            dst[header.offsetRGBW3 + 3] = qadd8(dst[header.offsetRGBW3 + 3], w);
+          }
+        }
       }
 
       // Control channels (brightness, pan, tilt, zoom, rotate, gobo): copy — last layer wins.

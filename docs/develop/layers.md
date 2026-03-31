@@ -2,7 +2,7 @@
 
 ## Overview
 
-MoonLight uses a two-level layer model: one **PhysicalLayer** owns the hardware channel buffer and all **VirtualLayers**. Effects run on virtual layers in isolation; the results are composited into the physical display buffer once per frame.
+MoonLight uses a two-level layer model: one **PhysicalLayer** owns the hardware channel buffer and all **VirtualLayers**. Effects write to isolated per-layer buffers; the results are composited into the display buffer once per frame.
 
 ```
 PhysicalLayer (layerP)
@@ -10,11 +10,10 @@ PhysicalLayer (layerP)
 ├── lights.header             ← size, nrOfLights, channelsPerLight, …
 ├── layers[0] VirtualLayer    ← first effect stack
 │   ├── virtualChannels       ← per-layer pixel buffer (effects write here)
-│   ├── mappingTable[]        ← virtual→physical index lookup (PhysMap)
+│   ├── mappingTable[]        ← virtual→physical index lookup
 │   ├── nodes[]               ← effect / modifier nodes
-│   └── brightness, startPct/endPct, transitionBrightness, …
+│   └── brightness, startPct/endPct, transitionBrightness
 ├── layers[1] VirtualLayer    ← second effect stack (created on demand)
-│   └── …
 └── nodes[]                   ← layout / driver nodes (physical layer)
 ```
 
@@ -24,42 +23,68 @@ PhysicalLayer (layerP)
 
 | Type | Runs on | Purpose |
 |------|---------|---------|
-| **Layout** | PhysicalLayer | Calls `addLight(Coord3D)` to register physical lights and their positions |
+| **Layout** | PhysicalLayer | Calls `addLight(Coord3D)` to register physical lights and positions |
 | **Effect** | VirtualLayer | Writes pixel colours to `virtualChannels` each frame |
 | **Modifier** | VirtualLayer | Transforms virtual coordinates (mirror, rotate, projection, …) |
 | **Driver** | PhysicalLayer | Reads `channelsD` and sends to hardware (FastLED, ArtNet, DDP, …) |
-
-- Each node can have user-defined controls (sliders, selects, checkboxes). ✅
-- Nodes can be compiled C++ or Live Scripts (`.sc`). ✅
 
 ---
 
 ## Virtual Layer
 
-Each `VirtualLayer` maintains:
+Each `VirtualLayer` holds:
 
-- **`virtualChannels`** — per-layer pixel buffer. Effects write here (indexed by virtual pixel, not physical). Allocated after layout completes (`onLayoutPost()`). Persists across frames so fade-trail effects see the previous frame's data.
-- **`mappingTable[]`** — array of `PhysMap` entries (one per virtual pixel). Each entry records which physical index or indices a virtual pixel maps to:
-  - `m_zeroLights` — virtual pixel not mapped to any physical light
-  - `m_oneLight` — maps to exactly one physical light (most common, stored inline)
-  - `m_moreLights` — maps to multiple physical lights (e.g. when a modifier fans out)
-- **`size` / `nrOfLights`** — virtual grid dimensions; may differ from physical size when modifiers are active.
-- **`oneToOneMapping`** — set `true` when virtual and physical are identical (no mapping table walk needed; fastest path).
-- **`brightness`** (0–255) — per-layer output brightness, set by the user.
-- **`transitionBrightness`** — animated brightness overlay stepped per frame by `PhysicalLayer::loop()`. Allows smooth fade-in/out independent of the brightness control. `startTransition(target, durationMs)` drives it; it is triggered automatically on first layout (fade-in from 0 when a new effect is activated).
-- **`startPct` / `endPct`** — layer bounds as percentages of the full fixture, allowing each layer to target a sub-region.
+- **`virtualChannels`** — per-layer pixel buffer, indexed by virtual pixel. Allocated after layout completes, persists across frames (fade-trail effects see previous frame data).
+- **`mappingTable[]`** — one `PhysMap` entry per virtual pixel:
+  - `m_zeroLights` — not mapped (stays black)
+  - `m_oneLight` — maps to one physical light
+  - `m_moreLights` — maps to multiple physical lights (fan-out from modifiers)
+- **`oneToOneMapping`** — `true` when virtual = physical, no table needed; fastest path.
+- **`allOneLight`** — `true` when no fan-out exists; enables the serpentine fast path.
+- **`brightness`** (0–255) — per-layer output brightness.
+- **`transitionBrightness`** — animated brightness stepped per frame for smooth fade-in/out; triggered automatically when a new effect is activated.
+- **`startPct` / `endPct`** — layer bounds as percentages of the full fixture.
 
 ### Mapping table example
 
 ```
-virtualChannels index:  0   1   2   3   4   5   …
-PhysMap entry:          ∅  [0] [1,2] [3] [4,5,6] …
+virtual index:  0    1    2    3    4
+PhysMap:        ∅   [0]  [1,2] [3]  [4,5,6]
 ```
 
-- Virtual pixel 0 → not mapped (stays black in channelsD)
-- Virtual pixel 1 → physical light 0
-- Virtual pixel 2 → physical lights 1 and 2
-- Virtual pixel 4 → physical lights 4, 5 and 6
+Virtual pixel 0 → unmapped, pixel 1 → physical 0, pixel 2 → physical 1 and 2, etc.
+
+---
+
+## Speed and memory
+
+Symbols: **N** = virtual LEDs, **M** = average fan-out (1:N case), **L** = layers, **cpl** = channels/light (3=RGB, 4=RGBW, 5=RGBCCT, 15–32=moving heads).
+
+`channelsD` is shared across all layers: **P × cpl bytes**.
+Per-layer: `virtualChannels` **N×cpl**, `mappingTable` **N×2/4 B** (no PSRAM / PSRAM), `mappingTableIndexes` **≈N×M×2/4 B**.
+
+| Scenario | Speed (relative) | Memory per layer | Layer overlap behaviour |
+|----------|-----------------|------------------|------------------------|
+| **1:1 mapping, 1 layer** | **1× (fastest)** | N×cpl | — |
+| **1:1 mapping, L layers** | L× | L×N×cpl | No overlap: each pixel written once. Partial overlap: additive (saturates at 255 at full brightness, cross-fades when dimmed). |
+| **Serpentine / shifted panel, 1 layer** | ~1.2× | N×cpl + N×2/4 B | — |
+| **Serpentine / shifted panel, L layers** | ~1.2×L | L×(N×cpl + N×2/4 B) | Same overlap semantics as 1:1 |
+| **1:N modifier (rings, circles…), 1 layer** | ~M× | N×cpl + N×(1+M)×2/4 B | — |
+| **1:N modifier, L layers** | ~L×M× | L×(above) | Same; random writes amplified by L |
+
+**Notes:**
+- `cpl > 3` (RGBW, moving heads) always uses the general compositor path. Extra channels add memory proportionally (e.g. N×4 for RGBW vs N×3) and one `scale8` per white channel per pixel; control channels (pan, tilt, …) are a copy.
+- 1:N random writes to `channelsD` become costly at large fixture sizes on PSRAM boards (~80 ns/access vs ~8 ns sequential). At N=1024 RGB, all data fits in L1 cache; at N=4096+ the 1:N penalty is measurable.
+- Non-overlapping layers (via `startPct/endPct`) cost the same as a single full layer since each physical pixel is written exactly once.
+
+**Example — N = 1024, cpl = 3, M = 4:**
+
+| | 1:1, 1L | 1:1, 4L | Serpentine, 1L | Serpentine, 4L | 1:N M=4, 1L | 1:N M=4, 4L |
+|---|---|---|---|---|---|---|
+| virtualChannels | 3 KB | 12 KB | 3 KB | 12 KB | 3 KB | 12 KB |
+| mappingTable | — | — | 2/4 KB | 8/16 KB | 2/4 KB | 8/16 KB |
+| mappingTableIndexes | — | — | — | — | 8/16 KB | 32/64 KB |
+| **Total (no PSRAM / PSRAM)** | **3 KB** | **12 KB** | **5/7 KB** | **20/28 KB** | **13/23 KB** | **52/92 KB** |
 
 ---
 
@@ -70,7 +95,7 @@ effectTask (Core 0)                        driverTask (Core 1)
 ───────────────────                        ──────────────────
 PhysicalLayer::loop()
   for each VirtualLayer:
-    layer->loop()                          ← reads channelsD (previous frame)
+    layer->loop()                          reads channelsD (previous frame)
       fadeBy virtualChannels
       run effect nodes → virtualChannels
 
@@ -80,59 +105,34 @@ compositeLayers():
   memset(channelsD, 0)
   for each VirtualLayer:
     layer->compositeTo(channelsD)          PhysicalLayer::loopDrivers()
-      apply brightness                       process pending layout mapping
-      apply transitionBrightness             loop driver nodes → channelsD
-      additive blend into channelsD
+      scale by brightness                    process layout mapping
+      additive blend → channelsD             loop driver nodes
 newFrameReady = true
-                                           ← picks up newFrameReady, sends to LEDs
+                                           picks up newFrameReady, sends to LEDs
                                            give channelsDFreeSemaphore
 ```
 
-Key points:
-
-- `virtualChannels` and `channelsD` are **separate buffers** — effectTask writes the former while driverTask reads the latter simultaneously. No race condition.
-- `channelsDFreeSemaphore` (counting semaphore, max=1) is the handoff: the driver gives it after `loopDrivers()` finishes; the effectTask takes it before `compositeLayers()` writes `channelsD`.
-- `swapMutex` protects only the `newFrameReady` / `isPositions` flags — it is **not** held across long operations.
-- `compositeLayers()` **zeroes `channelsD` first** so additive layer blending always starts from black. Multiple layers at reduced brightness cross-fade naturally; at full brightness they saturate at 255.
+`virtualChannels` and `channelsD` are **separate buffers** — effectTask writes while driverTask reads, with no race. `channelsDFreeSemaphore` gates the handoff; `swapMutex` protects only the `newFrameReady` flag.
 
 ---
 
 ## Compositing
 
-`VirtualLayer::compositeTo(channelsD, header)`:
+`compositeTo()` blends one VirtualLayer into `channelsD`:
 
-- For colour channels (R, G, B, W): **additive** — `channelsD[i] = saturate(channelsD[i] + scaled)`. Multiple layers blending at 128 brightness produce a natural cross-fade.
-- For control channels (pan, tilt, zoom, …): **copy** — last layer wins.
+- **Colour channels** (R, G, B, W): additive `+=`, saturates at 255. Two layers at brightness 128 cross-fade naturally.
+- **Control channels** (pan, tilt, zoom, …): copy — last layer wins.
 - Effective brightness = `scale8(brightness, transitionBrightness)`.
 
 ---
 
 ## Layout mapping pipeline
 
-When `requestMapPhysical` or `requestMapVirtual` is set (triggered by a layout or modifier change):
+Triggered when `requestMapPhysical` or `requestMapVirtual` is set.
 
-**Pass 1 — physical** (run in driverTask):
+**Pass 1 — physical** (driverTask): layout nodes call `addLight(Coord3D)` to count lights, record positions, and assign pins.
 
-1. `onLayoutPre()` — reset counters
-2. Layout nodes call `addLight(Coord3D)` — registers physical lights, records positions into `channelsD` for the monitor
-3. `onLayoutPost()` — finalises `lights.header` (size, nrOfLights, channelsPerLight)
-
-**Pass 2 — virtual** (run in driverTask, guarded by `swapMutex`):
-
-1. `onLayoutPre()` for each VirtualLayer — reset mapping table entries
-2. Layout nodes call `addLight(Coord3D)` again — each VirtualLayer filters by its `startPct/endPct` and builds its `mappingTable`
-3. `onLayoutPost()` — allocates / reallocates `virtualChannels` to match the new virtual size; sets `oneToOneMapping` if applicable
-
-Modifiers intercept `addLight()` during pass 2 via `modifyPosition()` / `modifySize()` to remap coordinates.
-
----
-
-## Physical Layer
-
-- `layerP` is the global singleton (`PhysicalLayer.cpp`).
-- Owns `lights.channelsD` — allocated once in `setup()`. On PSRAM boards this lands in PSRAM (large allocation); on ESP32-D0 it is capped at 2048×3 bytes.
-- Owns `layers[]` — pre-allocated to 16 slots, created on demand via `ensureLayer(index)`. Layer 0 always exists.
-- `activeLayerCount` tracks how many slots are in use (starts at 1).
+**Pass 2 — virtual** (driverTask): layout nodes call `addLight()` again; each VirtualLayer filters by `startPct/endPct` and builds its `mappingTable`. Modifiers intercept via `modifyPosition()`. `onLayoutPost()` allocates `virtualChannels` and sets `oneToOneMapping` / `allOneLight`.
 
 ---
 
@@ -148,32 +148,4 @@ Modifiers intercept `addLight()` during pass 2 via `modifyPosition()` / `modifyS
 | Effect nodes (virtual coordinate space) | ✅ |
 | Modifier nodes (mirror, rotate, projections, …) | 🚧 |
 | Graphical node/noodle editor | 🚧 |
-| 3-D virtual coordinate addressing (x + y\*sizeX + z\*sizeX\*sizeY) | 🚧 |
-| Presets / playlist (swap part of the nodes model) | 🚧 |
-
----
-
-## Example nodes JSON
-
-```json
-{
-  "nodes": [
-    {
-      "name": "Lissajous 🔥🐙",
-      "on": true,
-      "controls": [
-        { "name": "xFrequency", "type": "slider", "default": 64,  "p": 1065414703, "value": 64  },
-        { "name": "fadeRate",   "type": "slider", "default": 128, "p": 1065414704, "value": 128 },
-        { "name": "speed",      "type": "slider", "default": 128, "p": 1065414705, "value": 128 }
-      ]
-    },
-    {
-      "name": "Random 🔥",
-      "on": true,
-      "controls": [
-        { "name": "speed", "type": "slider", "default": 128, "p": 1065405731, "value": 128 }
-      ]
-    }
-  ]
-}
-```
+| Presets / playlist | 🚧 |

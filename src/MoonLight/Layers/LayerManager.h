@@ -78,6 +78,7 @@ class LayerManager {
 
     selectedLayer = index;
     VirtualLayer* layer = layerP.ensureLayer(selectedLayer);
+    if (!layer) return;  // allocation failed
     *nodesPtr = &(layer->nodes);
   }
 
