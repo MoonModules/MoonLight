@@ -59,6 +59,10 @@ A node implements the following (overloaded) functions:
 
     * An effect has a loop which is ran for each frame produced. In each loop, the lights in the virtual layer gets it's values using the setRGB function. For multichannel lights also functions as setWhite or (for Moving Heads) setPan, setTilt, setZoom etc. Also getRGB etc functions exists.
 
+### LayerManager and layer targeting
+
+Node construction is routed through `LayerManager`: `ModuleEffects::addNode()` calls `layerMgr.getSelectedLayer()` and `layerP.ensureLayer(index)` to target the currently active layer — never hard-code `layers[0]` in a new module. Modules that host layers must also override `onNodeRemoved()` and `onBeforeStateLoad()` to delegate to `layerMgr.onNodeRemoved()` and `layerMgr.prepareForPresetLoad()` respectively; `ModuleEffects` is the reference implementation for both.
+
 ## Drivers
 
 ### Initless drivers

@@ -150,9 +150,11 @@ class LayerManager {
     if (selectedLayer > 0 && layerP.layers[selectedLayer] && layerP.layers[selectedLayer]->nodes.empty()) {
       uint8_t destroyedLayer = selectedLayer;
       EXT_LOGD(ML_TAG, "Destroying empty VirtualLayer %d", destroyedLayer);
+      vTaskSuspend(effectTaskHandle);
       delete layerP.layers[destroyedLayer];
       layerP.layers[destroyedLayer] = nullptr;
       layerP.activeLayerCount--;
+      vTaskResume(effectTaskHandle);
 
       // clean up JSON state for the destroyed layer
       Char<16> key;
@@ -249,12 +251,16 @@ class LayerManager {
   static void addLayerControls(Module& module, const JsonArray& controls) {
     JsonObject control = module.addControl(controls, "layer", "select");
     control["default"] = 0;
-    uint8_t i = 1;
-    for (VirtualLayer* layer : layerP.layers) {
+    // Find highest active index so that a "add new" slot always appears beyond it,
+    // even when middle layers have been deleted and activeLayerCount has holes.
+    uint8_t highestActive = 0;
+    for (uint8_t i = 0; i < layerP.layers.size(); i++) {
+      if (layerP.layers[i]) highestActive = i;
+    }
+    for (uint8_t i = 0; i <= highestActive + 1 && i < layerP.layers.size(); i++) {
       Char<12> layerName;
-      layerName.format("Layer %d", i);
+      layerName.format("Layer %d", i + 1);
       module.addControlValue(control, layerName.c_str());
-      i++;
     }
 
     module.addControl(controls, "start", "coord3D", 0, 100, false, "%");
@@ -276,6 +282,7 @@ class LayerManager {
       if (layerNodes.isNull() || layerNodes.size() == 0) continue;
 
       VirtualLayer* layer = layerP.ensureLayer(i);
+      if (!layer) return;  // allocation failed
       selectedLayer = i;
       *nodesPtr = &(layer->nodes);
 

@@ -4,7 +4,7 @@
 
 MoonLight uses a two-level layer model: one **PhysicalLayer** owns the hardware channel buffer and all **VirtualLayers**. Effects write to isolated per-layer buffers; the results are composited into the display buffer once per frame.
 
-```
+```text
 PhysicalLayer (layerP)
 ├── lights.channelsD          ← single display buffer, read by drivers
 ├── lights.header             ← size, nrOfLights, channelsPerLight, …
@@ -16,6 +16,8 @@ PhysicalLayer (layerP)
 ├── layers[1] VirtualLayer    ← second effect stack (created on demand)
 └── nodes[]                   ← layout / driver nodes (physical layer)
 ```
+
+`layerP.layers` is a 16-element `std::vector<VirtualLayer*>` pre-allocated in the `PhysicalLayer` constructor with every slot set to `nullptr`. `activeLayerCount` tracks how many slots are currently instantiated. Hot-path loops iterate the full vector with `if (!layer) continue;` — new code must follow the same pattern and never assume all slots are populated.
 
 ---
 
@@ -47,7 +49,7 @@ Each `VirtualLayer` holds:
 
 ### Mapping table example
 
-```
+```text
 virtual index:  0    1    2    3    4
 PhysMap:        ∅   [0]  [1,2] [3]  [4,5,6]
 ```
@@ -90,7 +92,7 @@ Per-layer: `virtualChannels` **N×cpl**, `mappingTable` **N×2/4 B** (no PSRAM /
 
 ## Per-frame pipeline
 
-```
+```text
 effectTask (Core 0)                        driverTask (Core 1)
 ───────────────────                        ──────────────────
 PhysicalLayer::loop()
@@ -120,19 +122,35 @@ newFrameReady = true
 
 `compositeTo()` blends one VirtualLayer into `channelsD`:
 
-- **Colour channels** (R, G, B, W): additive `+=`, saturates at 255. Two layers at brightness 128 cross-fade naturally.
-- **Control channels** (pan, tilt, zoom, …): copy — last layer wins.
+- **Colour channels** (R, G, B, W): additive `+=`, saturates at 255. Two layers at brightness 128 cross-fade naturally. Rationale: additive blending matches physical light — two sources always sum.
+- **Control channels** (pan, tilt, zoom, …): copy — last layer wins. Rationale: summing control signals (e.g. pan angles) is meaningless; last-wins lets effects override safely without coordination.
 - Effective brightness = `scale8(brightness, transitionBrightness)`.
 
 ---
 
 ## Layout mapping pipeline
 
-Triggered when `requestMapPhysical` or `requestMapVirtual` is set.
+Normally triggered as a coupled two-pass operation via `requestMappings()`: layout nodes set `requestMapPhysical`; modifier-only changes set `requestMapVirtual` directly. In `PhysicalLayer::loopDrivers()`, completing pass 1 always sets `requestMapVirtual`, so pass 2 always follows pass 1. The one exception is the `/rest/monitorLayout` endpoint in `ModuleEffects`, which calls `mapLayout(pass=1, monitorPass=true)` directly to run pass 1 only — without touching the request flags and without triggering pass 2.
 
 **Pass 1 — physical** (driverTask): layout nodes call `addLight(Coord3D)` to count lights, record positions, and assign pins.
 
 **Pass 2 — virtual** (driverTask): layout nodes call `addLight()` again; each VirtualLayer filters by `startPct/endPct` and builds its `mappingTable`. Modifiers intercept via `modifyPosition()`. `onLayoutPost()` allocates `virtualChannels` and sets `oneToOneMapping` / `allOneLight`.
+
+---
+
+## Design decisions
+
+### fadeToBlackBy accumulation
+
+`VirtualLayer::fadeToBlackBy(amount)` writes the request into the per-layer `fadeBy` field using `fadeBy = fadeBy ? MIN(fadeBy, amount) : amount`. When multiple callers invoke it in the same frame the **smallest** amount wins — a layer requesting a slow trail (small amount) takes precedence over one requesting a faster decay. This prevents a secondary effect from erasing the trail data a primary effect depends on.
+
+### scale8x8 rounding constant
+
+`scale8x8(v, f1, f2)` in `LayerFunctions.h` computes `(v * f1 * f2 + 32512) / 65025`. The constant `32512 = (255×255−1)/2` gives correct round-half-up behaviour for a denominator of 65025. Do not change it to 32767 — that is only correct for power-of-two denominators.
+
+### Pure helper extraction for native testing
+
+Any pure arithmetic helper that needs host-side unit testing must live in `src/MoonBase/utilities/` in a header with no Arduino/ESP32 includes, then `#include`d from both the production file and the test. `LayerFunctions.h` (containing `scale8x8`, fade helpers, etc.) is the canonical second example of this pattern; the first is `BoardNames.h` (PR #158). Never copy the function body into the test file — copied code drifts and the test verifies a stale snapshot.
 
 ---
 
