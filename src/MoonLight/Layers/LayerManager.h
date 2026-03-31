@@ -20,6 +20,8 @@
   #include "MoonBase/NodeManager.h"
   #include "PhysicalLayer.h"
 
+extern TaskHandle_t effectTaskHandle;
+
 class LayerManager {
   uint8_t selectedLayer = 0;
   bool needsRestore = false;
@@ -84,6 +86,11 @@ class LayerManager {
   /// sees a clean slate and restoreNonSelectedLayers can rebuild from the new preset.
   void prepareForPresetLoad() {
     Char<16> key;
+    // Suspend the effectTask while deleting VirtualLayer objects to prevent a
+    // use-after-free: effectTask iterates layerP.layers without a lock, so it must
+    // not run while we delete and null out entries.  vTaskSuspend/Resume costs zero
+    // extra bytes (no new FreeRTOS object) and effectTask holds no mutex during loop().
+    vTaskSuspend(effectTaskHandle);
     for (uint8_t i = 1; i < layerP.layers.size(); i++) {
       if (!layerP.layers[i]) continue;
 
@@ -102,6 +109,7 @@ class LayerManager {
       key.format("brightness_%d", i);
       state->data.remove(key.c_str());
     }
+    vTaskResume(effectTaskHandle);
 
     // if the selected layer was > 0 (unlikely but safe), fall back to layer 0
     if (selectedLayer > 0) {
@@ -156,9 +164,35 @@ class LayerManager {
       key.format("brightness_%d", destroyedLayer);
       state->data.remove(key.c_str());
 
-      // switch UI back to layer 0
+      // switch UI back to layer 0: reload layer 0's nodes and properties from state
       selectLayer(0, false);
       state->data["layer"] = 0;
+
+      // Reload layer 0's node array into state->data["nodes"] (selectLayer(false) skipped state swap)
+      key.format("nodes_%d", 0);
+      if (!state->data[key.c_str()].isNull() && state->data[key.c_str()].as<JsonArray>().size() > 0) {
+        state->data["nodes"].to<JsonArray>().set(state->data[key.c_str()].as<JsonArray>());
+      } else {
+        state->data["nodes"].to<JsonArray>();  // empty array if none saved
+      }
+
+      // Reload layer 0's per-layer properties from state
+      VirtualLayer* layer0 = layerP.layers[0];
+      if (layer0) {
+        key.format("start_%d", 0);
+        if (!state->data[key.c_str()].isNull()) {
+          layer0->startPct = {state->data[key.c_str()]["x"].as<int>(), state->data[key.c_str()]["y"].as<int>(), state->data[key.c_str()]["z"].as<int>()};
+        }
+        key.format("end_%d", 0);
+        if (!state->data[key.c_str()].isNull()) {
+          layer0->endPct = {state->data[key.c_str()]["x"] | 100, state->data[key.c_str()]["y"] | 100, state->data[key.c_str()]["z"] | 100};
+        }
+        key.format("brightness_%d", 0);
+        if (!state->data[key.c_str()].isNull()) {
+          layer0->brightness = state->data[key.c_str()] | 255;
+        }
+      }
+
       layerP.requestMapVirtual = true;
       *requestUIUpdatePtr = true;
     }
@@ -267,7 +301,7 @@ class LayerManager {
       }
       key.format("brightness_%d", i);
       if (!state->data[key.c_str()].isNull()) {
-        layer->brightness = state->data[key.c_str()].as<uint8_t>();
+        layer->brightness = state->data[key.c_str()] | 255;
       }
 
       EXT_LOGD(ML_TAG, "Restored layer %d: %d nodes, start:%d,%d,%d end:%d,%d,%d brightness:%d",

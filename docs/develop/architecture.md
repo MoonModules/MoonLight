@@ -69,7 +69,7 @@ sequenceDiagram
     DriverTask->>DriverTask: Give channelsDFreeSemaphore
 ```
 
-HTTPP task
+HTTP task
 
 * no assigned core (OS decides), prio 5
 * processes WebUI / Websockets

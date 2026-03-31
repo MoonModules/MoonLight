@@ -257,13 +257,13 @@ void PhysicalLayer::addLight(Coord3D position) {
     lights.header.size = lights.header.size.maximum(position);
     lights.header.nrOfLights++;
   } else {  // pass == 2
-    anyLayerCoveredCurrentPixel = false;
+    bool anyCovered = false;
     for (VirtualLayer* layer : layers) {
-      if (layer) layer->addLight(position);
+      if (layer) anyCovered |= layer->addLight(position);
     }
     // If no layer claimed this physical pixel (all were out-of-bounds for it), zero it so
     // stale channel values from a previous layout don't persist indefinitely.
-    if (!anyLayerCoveredCurrentPixel) {
+    if (!anyCovered) {
       uint8_t cpl = lights.header.channelsPerLight;
       memset(&lights.channelsD[indexP * cpl], 0, cpl);
     }

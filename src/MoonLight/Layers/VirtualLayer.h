@@ -382,7 +382,8 @@ class VirtualLayer {
 
   // Register one physical light (at the given position) into this virtual layer.
   // Applies modifier positions and routes to addIndexP().
-  void addLight(Coord3D position);
+  // Returns true if this layer covered the physical pixel (used by PhysicalLayer to zero unclaimed pixels).
+  bool addLight(Coord3D position);
 
   // Returns true if the virtual light at indexV has at least one physical light mapped to it.
   bool isMapped(nrOfLights_t indexV) const;

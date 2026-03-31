@@ -58,11 +58,6 @@ class PhysicalLayer {
   // Current physical light index, incremented by addLight() during pass 2.
   nrOfLights_t indexP = 0;
 
-  // Scratch flag reset per physical pixel in addLight() pass 2.
-  // Set by VirtualLayer::addLight() when the pixel falls within that layer's bounds.
-  // If still false after all layers have processed a pixel, no layer covers it — zero it.
-  bool anyLayerCoveredCurrentPixel = false;
-
   // Previous size, used to detect size changes and trigger onSizeChanged().
   Coord3D prevSize;
 
