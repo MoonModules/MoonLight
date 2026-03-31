@@ -202,7 +202,7 @@ void LiveScriptNode::setup() {
   //   addExternal( "uint8_t dmaBuffer", &layerP.ledsDriver.dmaBuffer);
 
   addExternal("void fadeToBlackBy(uint8_t)", (void*)_fadeToBlackBy);
-  addExternal("CRGB* leds", (void*)(CRGB*)layerP.lights.channelsE);
+  addExternal("CRGB* leds", (void*)(CRGB*)layer->virtualChannels);
   addExternal("CRGB getRGB(uint16_t)", (void*)_getRGB);
   addExternal("void setRGB(uint16_t,CRGB)", (void*)_setRGB);
   addExternal("void setRGBXY(int,int,CRGB)", (void*)_setRGBXY);  // 🌙 called by preamble-injected setRGB(Coord3D,CRGB)

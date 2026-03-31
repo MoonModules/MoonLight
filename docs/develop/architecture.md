@@ -53,20 +53,20 @@ sequenceDiagram
     SvelteKit->>SvelteKit: Update in-memory state
     
     Note over EffectTask: Core 0 (PRO_CPU)
-    EffectTask->>EffectTask: Take mutex (10µs)
-    EffectTask->>EffectTask: memcpy channelsD → channelsE
+    EffectTask->>EffectTask: Take mutex, check !newFrameReady
     EffectTask->>EffectTask: Release mutex
-    EffectTask->>EffectTask: Compute effects (5-15ms)
+    EffectTask->>EffectTask: Write effects → virtualChannels (5-15ms)
+    EffectTask->>EffectTask: Wait: channelsDFreeSemaphore
     EffectTask->>EffectTask: Take mutex (10µs)
-    EffectTask->>EffectTask: Swap buffer pointers
-    EffectTask->>EffectTask: Release mutex
+    EffectTask->>EffectTask: compositeLayers(): zero + composite → channelsD
+    EffectTask->>EffectTask: newFrameReady = true, release mutex
 
     Note over DriverTask: Core 1 (APP_CPU)
-    DriverTask->>DriverTask: Take mutex (10µs)
-    DriverTask->>DriverTask: Capture buffer pointer
+    DriverTask->>DriverTask: Take mutex, newFrameReady=false
     DriverTask->>DriverTask: Release mutex
-    DriverTask->>DriverTask: Send via DMA (1-5ms)
+    DriverTask->>DriverTask: Send channelsD via DMA (1-5ms)
     DriverTask->>LEDs: Pixel data
+    DriverTask->>DriverTask: Give channelsDFreeSemaphore
 ```
 
 HTTPP task
@@ -144,26 +144,26 @@ Design Principles
     - Tasks interleave efficiently via FreeRTOS scheduling
     - **Result**: "Full speed ahead" - minimal blocking
 
-## Double Buffering & Synchronization
+## Parallel Rendering & Synchronization
 
-Buffer Architecture (PSRAM Only)
+Buffer Architecture
 
 ```mermaid
 graph LR
     subgraph MemoryBuffers["Memory Buffers"]
-        Effects[Effects Buffer<br/>channelsE*]
-        Drivers[Drivers Buffer<br/>channelsD*]
+        Virtual[Per-layer<br/>virtualChannels]
+        Display[Display Buffer<br/>channelsD]
     end
-    
-    EffectTask[Effect Task<br/>Core 0] -.->|1. memcpy| Effects
-    EffectTask -.->|2. Compute effects| Effects
-    EffectTask -.->|3. Swap pointers<br/>MUTEX 10µs| Drivers
-    
-    DriverTask[Driver Task<br/>Core 1] -->|4. Read pixels| Drivers
-    DriverTask -->|5. Send via DMA| LEDs[LEDs]
-    
-    style Effects fill:#898f89
-    style Drivers fill:#898c8f
+
+    EffectTask[Effect Task<br/>Core 0] -.->|1. Write effects| Virtual
+    EffectTask -.->|2. compositeLayers()<br/>MUTEX + semaphore| Display
+
+    DriverTask[Driver Task<br/>Core 1] -->|3. Read pixels| Display
+    DriverTask -->|4. Send via DMA| LEDs[LEDs]
+    DriverTask -.->|5. Give semaphore| EffectTask
+
+    style Virtual fill:#898f89
+    style Display fill:#898c8f
 ```
 
 Synchronization Flow
@@ -246,21 +246,18 @@ Overhead Analysis
 
 ## Configuration
 
-Enabling Double Buffering
+Buffer Allocation
 
-Double buffering is **automatically enabled** when PSRAM is detected:
+A single `channelsD` buffer is allocated on all boards. On PSRAM boards the buffer lands in PSRAM and is larger; on ESP32-D0 it uses internal RAM with a smaller cap. Per-layer `virtualChannels` are always allocated in `VirtualLayer::onLayoutPost()`.
 
 ```cpp
 // In PhysicalLayer::setup()
 if (psramFound()) {
-  lights.useDoubleBuffer = true;
-  lights.channelsE = allocMB<uint8_t>(maxChannels);
-  lights.channelsD = allocMB<uint8_t>(maxChannels);
+  lights.maxChannels = ...;  // large PSRAM allocation
 } else {
-  lights.useDoubleBuffer = false;
-  lights.channelsE = allocMB<uint8_t>(maxChannels);
-  lights.channelsD = lights.channelsE;
+  lights.maxChannels = 2048 * 3;  // ESP32-D0 cap
 }
+lights.channelsD = allocMB<uint8_t>(lights.maxChannels);
 ```
 
 Moving ESP32SvelteKit to Core 1

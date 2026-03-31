@@ -111,6 +111,9 @@ ModuleChannels moduleChannels = ModuleChannels(&server, &esp32sveltekit);
 ModuleMoonLightInfo moduleMoonLightInfo = ModuleMoonLightInfo(&server, &esp32sveltekit);
 
 SemaphoreHandle_t swapMutex = xSemaphoreCreateMutex();
+// Binary semaphore (max 1): driver gives after loopDrivers(), effectTask takes before compositeLayers().
+// Initialized to 1 — channelsD is "free" before the first frame.
+SemaphoreHandle_t channelsDFreeSemaphore = xSemaphoreCreateCounting(1, 1);
 volatile bool newFrameReady = false;
 
 TaskHandle_t effectTaskHandle = nullptr;
@@ -131,14 +134,11 @@ TaskHandle_t driverTaskHandle = nullptr;
     xSemaphoreTake(swapMutex, portMAX_DELAY);
 
     if (layerP.lights.header.isPositions == 0 && !newFrameReady) {  // within mutex as driver task can change this
-      if (layerP.lights.useDoubleBuffer) {
-        memcpy(layerP.lights.channelsE, layerP.lights.channelsD, layerP.lights.header.nrOfChannels);  // Copy previous frame (channelsD) to working buffer (channelsE)
-        xSemaphoreGive(swapMutex);
-      }
+      xSemaphoreGive(swapMutex);  // release so driver can run concurrently while effects write virtualChannels
 
       uint32_t cycleStartE = esp_cpu_get_cycle_count();
 
-      layerP.loop();
+      layerP.loop();  // effects write to per-layer virtualChannels — runs in parallel with driver reading channelsD
 
       // Wait for all live script tasks to finish writing their frame
       #if FT_LIVESCRIPT
@@ -168,16 +168,15 @@ TaskHandle_t driverTaskHandle = nullptr;
         layerP.loop20ms();
       }
 
-      if (layerP.lights.useDoubleBuffer) {  // Atomic swap channels
-        xSemaphoreTake(swapMutex, portMAX_DELAY);
-        if (layerP.lights.header.isPositions == 0) {  // Check if not changed while we were unlocked
-          uint8_t* temp = layerP.lights.channelsD;
-          layerP.lights.channelsD = layerP.lights.channelsE;
-          layerP.lights.channelsE = temp;
-          newFrameReady = true;
-        }
-      } else
+      // Wait for driver to finish reading channelsD, then composite virtualChannels into it
+      xSemaphoreTake(channelsDFreeSemaphore, portMAX_DELAY);
+      xSemaphoreTake(swapMutex, portMAX_DELAY);
+      if (layerP.lights.header.isPositions == 0) {  // check if layout didn't start while we were unlocked
+        layerP.compositeLayers();  // zero channelsD + composite all virtualChannels into it
         newFrameReady = true;
+      } else {
+        xSemaphoreGive(channelsDFreeSemaphore);  // layout started — release so driver can signal again
+      }
     }
 
     xSemaphoreGive(swapMutex);
@@ -207,15 +206,15 @@ TaskHandle_t driverTaskHandle = nullptr;
     if (layerP.lights.header.isPositions == 0) {
       if (newFrameReady) {
         newFrameReady = false;
-        if (layerP.lights.useDoubleBuffer) {
-          xSemaphoreGive(swapMutex);  // Double buffer: release lock, then send
-          mutexGiven = true;
-        }
+        xSemaphoreGive(swapMutex);  // release lock before sending — effectTask writes virtualChannels concurrently
+        mutexGiven = true;
 
         esp32sveltekit.lps_all++;
         uint32_t cycleStartD = esp_cpu_get_cycle_count();
 
         layerP.loopDrivers();
+
+        xSemaphoreGive(channelsDFreeSemaphore);  // signal: done reading channelsD, effectTask may now composite
 
         esp32sveltekit.lps_drivers_cycles += esp_cpu_get_cycle_count() - cycleStartD;
 

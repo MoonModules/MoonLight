@@ -134,7 +134,7 @@ class ArtNetInDriver : public Node {
           int startPixel = (universe - universeMin) * (512 / layerP.lights.header.channelsPerLight);
           int numPixels = MIN(safeDataLen / layerP.lights.header.channelsPerLight, layerP.lights.header.nrOfLights - startPixel);
 
-          xSemaphoreTake(swapMutex, portMAX_DELAY);  // prevent effectTask from swapping channelsD/channelsE pointers while writing directly to channelsD (effects must be disabled when ArtNetIn is active)
+          xSemaphoreTake(swapMutex, portMAX_DELAY);  // block compositeLayers() while writing directly to channelsD
           for (int i = 0; i < numPixels; i++) {
             int ledIndex = startPixel + i;
             if (ledIndex < layerP.lights.header.nrOfLights) {
@@ -178,7 +178,7 @@ class ArtNetInDriver : public Node {
       const int maxWritablePixels = layerP.lights.header.nrOfLights - startPixel;
       const int numPixels = MIN(safeDataLen / static_cast<int>(channelsPerLight), maxWritablePixels);
 
-      xSemaphoreTake(swapMutex, portMAX_DELAY);  // prevent effectTask from swapping channelsD/channelsE pointers while writing directly to channelsD (effects must be disabled when ArtNetIn is active)
+      xSemaphoreTake(swapMutex, portMAX_DELAY);  // block compositeLayers() while writing directly to channelsD
       for (int i = 0; i < numPixels; i++) {
         int ledIndex = startPixel + i;
         if (ledIndex < layerP.lights.header.nrOfLights) {

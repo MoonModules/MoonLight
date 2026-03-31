@@ -111,7 +111,7 @@ wait: ulTaskNotifyTake()                  → sync()
   ← xTaskNotifyGive(effectTaskHandle)       → notify effectTask
     scriptsToSync--                         → wait on WaitAnimationSync semaphore
 [all scripts done]
-swap channelsE ↔ channelsD
+compositeLayers(): virtualChannels → channelsD
 vTaskDelay(1)
 next frame: give semaphore ──────────────→  ← semaphore released, next loop()
 ```

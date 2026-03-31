@@ -76,11 +76,11 @@ MoonLight runs three concurrent tasks:
 
 | Task | Core | Purpose |
 |---|---|---|
-| `effectTask` | Core 0 | Runs effect nodes → writes to `channelsE` |
+| `effectTask` | Core 0 | Runs effect nodes → writes to `virtualChannels` |
 | `driverTask` | Core 1 | Reads `channelsD` → sends to LEDs/ArtNet |
 | SvelteKit loop | Core 1 | HTTP/WS/UI, module `loop()`/`loop20ms()` |
 
-Double buffering: `channelsE` (effects write) and `channelsD` (drivers read) are swapped atomically under `swapMutex` when a new frame is ready (`newFrameReady`).
+Per-layer `virtualChannels` buffers (effects write) and `channelsD` (drivers read) run in parallel — different memory, no race. Handoff: `channelsDFreeSemaphore` gates `compositeLayers()` (zeros `channelsD`, then composites all `virtualChannels` into it); `swapMutex` protects `newFrameReady` state.
 
 ### Channel Array
 

@@ -45,8 +45,6 @@ PhysicalLayer::~PhysicalLayer() {
     vSemaphoreDelete(driversMutex);
     driversMutex = NULL;
   }
-  freeMB(fadeBits);
-  freeMB(writeBits);
 }
 
 VirtualLayer* PhysicalLayer::ensureLayer(uint8_t index) {
@@ -62,30 +60,19 @@ VirtualLayer* PhysicalLayer::ensureLayer(uint8_t index) {
 }
 
 void PhysicalLayer::setup() {
-  // allocate lights.channelsE/D
-
+  // Allocate the single display buffer (channelsD).
+  // Effects write to per-layer virtualChannels; compositeLayers() composites into channelsD
+  // only after channelsDFreeSemaphore confirms the driver has finished reading it.
   if (psramFound()) {
     lights.maxChannels = MIN(ESP.getPsramSize() / 4, 128 * 64 * 16 * 3);  // fill max 2 * 25% of PSRAM with channels, supporting Virtual driver which is 120 pins * 512..1024 LEDs, max 16 Hub75 128x64 panels
-    lights.useDoubleBuffer = true;                                        // Enable double buffering
   } else {
     lights.maxChannels = 2048 * 3;   // esp32-d0: max 1024->2048->4096->2048 Leds ATM (4096 is too bleeding edge still - hope is replacing PhysicHTTP by Async webserver solves this)
-    lights.useDoubleBuffer = false;  // Single buffer mode
   }
 
-  lights.channelsE = allocMB<uint8_t>(lights.maxChannels);
+  lights.channelsD = allocMB<uint8_t>(lights.maxChannels);
 
-  if (lights.channelsE) {
-    EXT_LOGD(ML_TAG, "allocated %d bytes in %s", lights.maxChannels, isInPSRAM(lights.channelsE) ? "PSRAM" : "RAM");
-    // Allocate back buffer only if PSRAM available
-    if (lights.useDoubleBuffer) {
-      lights.channelsD = allocMB<uint8_t>(lights.maxChannels);
-      if (!lights.channelsD) {
-        EXT_LOGW(ML_TAG, "Failed to allocate back buffer, disabling double buffering");
-        lights.useDoubleBuffer = false;
-      }
-    } else {
-      lights.channelsD = lights.channelsE;  // share the same array
-    }
+  if (lights.channelsD) {
+    EXT_LOGD(ML_TAG, "allocated %d bytes in %s", lights.maxChannels, isInPSRAM(lights.channelsD) ? "PSRAM" : "RAM");
   } else {
     EXT_LOGE(ML_TAG, "failed to allocated %d bytes of RAM or PSRAM", lights.maxChannels);
     lights.maxChannels = 0;
@@ -99,61 +86,35 @@ void PhysicalLayer::setup() {
 void PhysicalLayer::loop() {
   if (lights.header.nrOfChannels >= lights.maxChannels) return;  // in case alloc mem is not successful
 
-  if (activeLayerCount <= 1 && layers[0]) {
-    // ── Single-layer fast path: fade entire channelsE globally (same speed as before) ──
-    if (layers[0]->fadeBy > 0) {
-      if (lights.header.channelsPerLight == 3 && lights.header.nrOfChannels / 3 < UINT16_MAX) {
-        fastled_fadeToBlackBy(reinterpret_cast<CRGB*>(lights.channelsE), lights.header.nrOfChannels / sizeof(CRGB), layers[0]->fadeBy);
-      } else {
-        uint8_t scale = 255 - layers[0]->fadeBy;
-        for (nrOfLights_t i = 0; i < lights.header.nrOfLights; i++) {
-          uint8_t* ch = &lights.channelsE[i * lights.header.channelsPerLight];
-          // cppcheck-suppress objectIndex  // ch points into heap-allocated channelsE with >= channelsPerLight bytes
-          reinterpret_cast<CRGB*>(&ch[lights.header.offsetRGBW])->nscale8(scale);
-          // cppcheck-suppress objectIndex
-          if (lights.header.offsetWhite != UINT8_MAX) ch[lights.header.offsetWhite] = scale8(ch[lights.header.offsetWhite], scale);
-          // cppcheck-suppress objectIndex
-          if (lights.header.offsetRGBW1 != UINT8_MAX) reinterpret_cast<CRGB*>(&ch[lights.header.offsetRGBW1])->nscale8(scale);
-          // cppcheck-suppress objectIndex
-          if (lights.header.offsetRGBW2 != UINT8_MAX) reinterpret_cast<CRGB*>(&ch[lights.header.offsetRGBW2])->nscale8(scale);
-          // cppcheck-suppress objectIndex
-          if (lights.header.offsetRGBW3 != UINT8_MAX) reinterpret_cast<CRGB*>(&ch[lights.header.offsetRGBW3])->nscale8(scale);
-        }
-      }
-      layers[0]->fadeBy = 0;
-    }
-    layers[0]->loop();
-  } else {
-    // ── Multi-layer path: each layer fades only its own mapped physical pixels ──
-    // Allocate bit arrays on demand; reallocate if nrOfLights has grown since last allocation
-    size_t bitBytes = (lights.header.nrOfLights + 7) / 8;
-    if (bitBytes > bitBytesAllocated) {
-      freeMB(fadeBits);
-      freeMB(writeBits);
-      fadeBits  = allocMB<uint8_t>(bitBytes);
-      writeBits = allocMB<uint8_t>(bitBytes);
-      bitBytesAllocated = (fadeBits && writeBits) ? bitBytes : 0;
-      // free per-layer localWriteBits so they are reallocated at the new size
-      for (VirtualLayer* layer : layers) {
-        if (layer) { freeMB(layer->localWriteBits); layer->localWriteBits = nullptr; }
-      }
-    }
-    if (fadeBits)  memset(fadeBits,  0, bitBytesAllocated);
-    if (writeBits) memset(writeBits, 0, bitBytesAllocated);
+  // Effects write to per-layer virtualChannels; channelsD is zeroed and composited
+  // in compositeLayers(), called from main.cpp after channelsDFreeSemaphore is signalled.
 
-    // Phase 1: per-layer fade (fadeBits prevents double-fading of overlapping pixels)
-    for (VirtualLayer* layer : layers) {
-      if (layer) layer->fadeOwnPixels(fadeBits);
+  for (VirtualLayer* layer : layers) {
+    if (!layer) continue;
+    layer->loop();
+
+    // Step transition animation: move transitionBrightness toward transitionTarget one step per frame
+    if (layer->transitionStep != 0) {
+      int16_t next = (int16_t)layer->transitionBrightness + layer->transitionStep;
+      if (layer->transitionStep > 0) {
+        if (next >= (int16_t)layer->transitionTarget) { next = layer->transitionTarget; layer->transitionStep = 0; }
+      } else {
+        if (next <= (int16_t)layer->transitionTarget) { next = layer->transitionTarget; layer->transitionStep = 0; }
+      }
+      layer->transitionBrightness = (uint8_t)next;
     }
-    // Phase 2: run all layers' effects (setRGB uses writeBits/localWriteBits to blend overlapping writes)
-    for (VirtualLayer* layer : layers) {
-      if (!layer) continue;
-      // allocate and clear this layer's local write-tracking bitmap
-      if (!layer->localWriteBits && bitBytesAllocated > 0)
-        layer->localWriteBits = allocMB<uint8_t>(bitBytesAllocated);
-      if (layer->localWriteBits) memset(layer->localWriteBits, 0, bitBytesAllocated);
-      layer->loop();
-    }
+  }
+}
+
+void PhysicalLayer::compositeLayers() {
+  if (lights.header.nrOfChannels >= lights.maxChannels) return;
+
+  // Zero channelsD so additive layer blending starts from black each frame
+  memset(lights.channelsD, 0, lights.header.nrOfChannels);
+
+  for (VirtualLayer* layer : layers) {
+    if (!layer) continue;
+    layer->compositeTo(lights.channelsD, lights.header);
   }
 }
 
@@ -179,7 +140,7 @@ void PhysicalLayer::loopDrivers() {
 
   if (requestMapVirtual) {
     // wait until monitor has consumed the positions from pass 1 before running pass 2,
-    // because pass 2 writes to channelsE which pass 1 used to store position data
+    // because pass 2 writes to channelsD which pass 1 used to store position data
     if (lights.header.isPositions == 2) return;  // will retry next loopDrivers() iteration
 
     EXT_LOGD(ML_TAG, "mapLayout virtual requested");
@@ -239,21 +200,21 @@ void PhysicalLayer::onLayoutPre() {
 
   if (pass == 1) {
     // Hold mutex while modifying shared state!
-    if (layerP.lights.useDoubleBuffer) xSemaphoreTake(swapMutex, portMAX_DELAY);
+    xSemaphoreTake(swapMutex, portMAX_DELAY);
 
     lights.header.nrOfLights = 0;  // for pass1 and pass2 as in pass2 virtual layer needs it
     lights.header.size = {0, 0, 0};
     EXT_LOGD(ML_TAG, "positions in progress (%d -> 1)", lights.header.isPositions);
     lights.header.isPositions = 1;  // Stops effectTask from starting NEW frames
 
-    if (layerP.lights.useDoubleBuffer) xSemaphoreGive(swapMutex);
+    xSemaphoreGive(swapMutex);
 
     delay(100);  // Wait for any in-progress frame to complete
 
     // Now safe to zero the buffer - effectTask won't start new frames while isPositions == 1
-    if (layerP.lights.useDoubleBuffer) xSemaphoreTake(swapMutex, portMAX_DELAY);
-    memset(lights.channelsE, 0, lights.maxChannels);
-    if (layerP.lights.useDoubleBuffer) xSemaphoreGive(swapMutex);
+    xSemaphoreTake(swapMutex, portMAX_DELAY);
+    memset(lights.channelsD, 0, lights.maxChannels);
+    xSemaphoreGive(swapMutex);
 
     // dealloc pins (non-critical, can be outside mutex)
     if (!monitorPass) {
@@ -290,14 +251,21 @@ void PhysicalLayer::addLight(Coord3D position) {
   if (pass == 1) {
     // EXT_LOGD(ML_TAG, "%d,%d,%d", position.x, position.y, position.z);
     if (lights.header.nrOfLights < lights.maxChannels / 3) {
-      packCoord3DInto3Bytes(&lights.channelsE[lights.header.nrOfLights * 3], position);  // positions in channelsE
+      packCoord3DInto3Bytes(&lights.channelsD[lights.header.nrOfLights * 3], position);  // positions in channelsD
     }
 
     lights.header.size = lights.header.size.maximum(position);
     lights.header.nrOfLights++;
   } else {  // pass == 2
+    anyLayerCoveredCurrentPixel = false;
     for (VirtualLayer* layer : layers) {
       if (layer) layer->addLight(position);
+    }
+    // If no layer claimed this physical pixel (all were out-of-bounds for it), zero it so
+    // stale channel values from a previous layout don't persist indefinitely.
+    if (!anyLayerCoveredCurrentPixel) {
+      uint8_t cpl = lights.header.channelsPerLight;
+      memset(&lights.channelsD[indexP * cpl], 0, cpl);
     }
     indexP++;
   }
@@ -330,10 +298,10 @@ void PhysicalLayer::onLayoutPost() {
     lights.header.nrOfChannels = lights.header.nrOfLights * lights.header.channelsPerLight * ((lights.header.lightPreset == lightPreset_RGB2040) ? 2 : 1);  // RGB2040 has empty channels
     EXT_LOGD(ML_TAG, "pass %d mp:%d #:%d / %d s:%d,%d,%d", pass, monitorPass, lights.header.nrOfLights, lights.header.nrOfChannels, lights.header.size.x, lights.header.size.y, lights.header.size.z);
     // send the positions to the UI _socket_emit
-    if (layerP.lights.useDoubleBuffer) xSemaphoreTake(swapMutex, portMAX_DELAY);
+    xSemaphoreTake(swapMutex, portMAX_DELAY);
     EXT_LOGD(ML_TAG, "positions stored (%d -> %d)", lights.header.isPositions, lights.header.nrOfLights ? 2 : 3);
     lights.header.isPositions = lights.header.nrOfLights ? 2 : 3;  // filled with positions, set back to 3 in ModuleEffects, or direct to 3 if no lights (effects will move it to 0)
-    if (layerP.lights.useDoubleBuffer) xSemaphoreGive(swapMutex);
+    xSemaphoreGive(swapMutex);
 
     // ledsDriver.init(lights, sortedPins); //init the driver with the sorted pins and lights
   } else if (pass == 2) {

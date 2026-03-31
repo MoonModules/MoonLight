@@ -58,6 +58,11 @@ class PhysicalLayer {
   // Current physical light index, incremented by addLight() during pass 2.
   nrOfLights_t indexP = 0;
 
+  // Scratch flag reset per physical pixel in addLight() pass 2.
+  // Set by VirtualLayer::addLight() when the pixel falls within that layer's bounds.
+  // If still false after all layers have processed a pixel, no layer covers it — zero it.
+  bool anyLayerCoveredCurrentPixel = false;
+
   // Previous size, used to detect size changes and trigger onSizeChanged().
   Coord3D prevSize;
 
@@ -78,7 +83,14 @@ class PhysicalLayer {
   void setup();
 
   // Run one effect frame across all virtual layers (called from effectTask, Core 0).
+  // Effects write to per-layer virtualChannels; compositeLayers() is called from main.cpp
+  // after channelsDFreeSemaphore confirms the driver has finished reading channelsD.
   void loop();
+
+  // Composite all virtual layers into channelsD.
+  // Called from effectTask under swapMutex after channelsDFreeSemaphore confirms the driver
+  // has finished reading channelsD. Zeroes the buffer first so additive blending starts clean.
+  void compositeLayers();
 
   // Run 20 ms periodic updates across all virtual layers (called from effectTask(), Core 0).
   void loop20ms();
@@ -93,18 +105,11 @@ class PhysicalLayer {
   // pass must be set to 1 (physical) or 2 (virtual) before calling.
   void mapLayout();
 
-  // Per-physical-pixel bit flags for the current frame. nullptr when activeLayerCount <= 1 (no overhead).
-  // Each array holds 1 bit per physical pixel: size = (nrOfLights + 7) / 8 bytes.
-  // Allocated on demand when multi-layer mode is first entered; kept until destructor.
-  uint8_t* fadeBits = nullptr;   // set when pixel has been faded this frame (prevents double-fading)
-  uint8_t* writeBits = nullptr;  // set when pixel has been written this frame (triggers 50/50 blend on overlap)
-  size_t bitBytesAllocated = 0;  // tracks how many bytes fadeBits/writeBits were allocated for
-
   // Current layout pass: 1 = physical (count lights, assign pins), 2 = virtual (build mapping table).
   uint8_t pass = 0;
 
   // When true, pass 1 skips pin-state rebuild: ledsPerPin/ledPinsAssigned are not reset
-  // and nextPin() assignments are suppressed. Positions are always stored to channelsE on
+  // and nextPin() assignments are suppressed. Positions are always stored to channelsD on
   // every pass 1 regardless of this flag; only pin-state mutation is gated.
   bool monitorPass = false;
 
