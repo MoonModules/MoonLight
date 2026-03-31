@@ -98,6 +98,7 @@ class PhysicalLayer {
   // Allocated on demand when multi-layer mode is first entered; kept until destructor.
   uint8_t* fadeBits = nullptr;   // set when pixel has been faded this frame (prevents double-fading)
   uint8_t* writeBits = nullptr;  // set when pixel has been written this frame (triggers 50/50 blend on overlap)
+  size_t bitBytesAllocated = 0;  // tracks how many bytes fadeBits/writeBits were allocated for
 
   // Current layout pass: 1 = physical (count lights, assign pins), 2 = virtual (build mapping table).
   uint8_t pass = 0;

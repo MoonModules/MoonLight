@@ -159,7 +159,7 @@ class LayerManager {
       // switch UI back to layer 0
       selectLayer(0, false);
       state->data["layer"] = 0;
-      layerP.requestMapPhysical = true;
+      layerP.requestMapVirtual = true;
       *requestUIUpdatePtr = true;
     }
   }
@@ -182,14 +182,14 @@ class LayerManager {
       VirtualLayer* layer = layerP.ensureLayer(selectedLayer);
       if (!layer) return true;
       layer->startPct = {updatedItem.value["x"].as<int>(), updatedItem.value["y"].as<int>(), updatedItem.value["z"].as<int>()};
-      layerP.requestMapPhysical = true;
+      layerP.requestMapVirtual = true;
       return true;
     }
     if (updatedItem.name == "end") {
       VirtualLayer* layer = layerP.ensureLayer(selectedLayer);
       if (!layer) return true;
       layer->endPct = {updatedItem.value["x"] | 100, updatedItem.value["y"] | 100, updatedItem.value["z"] | 100};
-      layerP.requestMapPhysical = true;
+      layerP.requestMapVirtual = true;
       return true;
     }
     return false;
@@ -281,7 +281,7 @@ class LayerManager {
     if (layer) *nodesPtr = &(layer->nodes);
 
 
-    if (restoredAny) layerP.requestMapPhysical = true;
+    if (restoredAny) layerP.requestMapVirtual = true;
   }
 };
 

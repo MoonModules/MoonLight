@@ -76,6 +76,12 @@ class VirtualLayer {
   // Fade amount requested by effects this frame (consumed by PhysicalLayer::loop() next frame).
   uint8_t fadeBy = 0;
 
+  // Per-layer write-tracking bitmap (1 bit per physical pixel). Tracks which pixels THIS layer
+  // has written this frame. Allocated/cleared by PhysicalLayer::loop() in multi-layer mode.
+  // Used by setRGB() to distinguish re-writes within the same layer (overwrite) from
+  // a different layer's pixel (blend). nullptr in single-layer mode.
+  uint8_t* localWriteBits = nullptr;
+
   // Layer boundaries as percentages (0–100) of the total fixture size. Default 100% = full fixture.
   Coord3D startPct = {0, 0, 0};
   Coord3D endPct = {100, 100, 100};
@@ -169,8 +175,8 @@ class VirtualLayer {
   // Write RGB colour to the primary RGBW block of all physical lights at indexV.
   // Note: per-layer brightness is NOT applied here — it is applied once per frame in applyBrightness()
   // after all effects have run. This avoids compound dimming when effects read-then-write (getRGB+setRGB).
-  // In multi-layer mode (frameState != nullptr): blends 50/50 with existing colour when another layer
-  // already wrote this pixel this frame (bit 0x02 set in frameState). Single-layer path is zero-overhead.
+  // In multi-layer mode: blends 50/50 with existing colour only when a DIFFERENT layer has already
+  // written this pixel this frame. Re-writes from the same layer always overwrite (no spurious blending).
   void setRGB(const nrOfLights_t indexV, CRGB color) {
     if (indexV < mappingTableSize && mappingTable[indexV].mapType == m_zeroLights) {
   #ifdef BOARD_HAS_PSRAM
@@ -181,15 +187,19 @@ class VirtualLayer {
     } else {
       forEachLightIndex(indexV, [&](nrOfLights_t indexP) {
         uint8_t* dst = &layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW];
-        if (layerP->writeBits) {
-          if (getBitValue(layerP->writeBits, indexP)) {
-            nblend(*reinterpret_cast<CRGB*>(dst), color, 128);  // overlap: blend 50/50 with existing
+        if (layerP->writeBits && layerP->activeLayerCount > 1) {
+          // multi-layer: blend only when a different layer wrote this pixel (global bit set, local bit clear)
+          bool writtenByOther = getBitValue(layerP->writeBits, indexP) &&
+                                !(localWriteBits && getBitValue(localWriteBits, indexP));
+          if (writtenByOther) {
+            nblend(*reinterpret_cast<CRGB*>(dst), color, 128);
           } else {
             memcpy(dst, (void*)&color, sizeof(color));
-            setBitValue(layerP->writeBits, indexP, true);  // mark as written this frame
           }
+          setBitValue(layerP->writeBits, indexP, true);
+          if (localWriteBits) setBitValue(localWriteBits, indexP, true);
         } else {
-          memcpy(dst, (void*)&color, sizeof(color));  // single-layer fast path: direct write
+          memcpy(dst, (void*)&color, sizeof(color));  // single-layer: direct write, no bit tracking
         }
       });
     }

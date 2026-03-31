@@ -39,6 +39,7 @@ VirtualLayer::~VirtualLayer() {
   mappingTableIndexes.clear();
   // clear mapping table
   freeMB(mappingTable);
+  freeMB(localWriteBits);
 }
 
 void VirtualLayer::setup() {
@@ -47,7 +48,7 @@ void VirtualLayer::setup() {
 
 void VirtualLayer::loop() {
   if (nodes.empty()) return;   // skip empty layers (no effects assigned)
-  if (brightness == 0) return; // skip invisible layers entirely
+  if (brightness == 0) { applyBrightness(); return; }  // zero mapped pixels, skip effects
 
   // set brightness default to global brightness
   if (layerP->lights.header.offsetBrightness != UINT8_MAX) {
@@ -178,7 +179,8 @@ void VirtualLayer::fill_solid(const CRGB& color) {
   //     }
   //   }
   // } else
-  if (layerP->lights.header.channelsPerLight == 3 && layerP->activeLayerCount == 1) {  // faster, else manual
+  if (layerP->lights.header.channelsPerLight == 3 && layerP->activeLayerCount == 1
+      && nrOfLights == layerP->lights.header.nrOfLights) {  // full 1:1 coverage: virtual count == physical count
     fastled_fill_solid(reinterpret_cast<CRGB*>(layerP->lights.channelsE), layerP->lights.header.nrOfChannels / sizeof(CRGB), color);
   } else {
     for (nrOfLights_t index = 0; index < nrOfLights; index++) setRGB(index, color);
@@ -250,9 +252,13 @@ void VirtualLayer::addLight(Coord3D position) {
       oneToOneMapping = false;
       createMappingTableAndAddOneToOne();
     }
-    // black out this physical light
-    memset(&layerP->lights.channelsE[layerP->indexP * layerP->lights.header.channelsPerLight], 0, layerP->lights.header.channelsPerLight);
-    if (layerP->lights.useDoubleBuffer) memset(&layerP->lights.channelsD[layerP->indexP * layerP->lights.header.channelsPerLight], 0, layerP->lights.header.channelsPerLight);
+    // Black out this physical pixel only in single-layer mode: no other layer owns it so
+    // it would otherwise persist indefinitely via the channelsD→channelsE copy each frame.
+    // In multi-layer mode, skip — another layer may own this pixel and will write it correctly.
+    if (layerP->activeLayerCount == 1) {
+      memset(&layerP->lights.channelsE[layerP->indexP * layerP->lights.header.channelsPerLight], 0, layerP->lights.header.channelsPerLight);
+      if (layerP->lights.useDoubleBuffer) memset(&layerP->lights.channelsD[layerP->indexP * layerP->lights.header.channelsPerLight], 0, layerP->lights.header.channelsPerLight);
+    }
     return;
   }
 

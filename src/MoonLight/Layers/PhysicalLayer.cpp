@@ -125,20 +125,34 @@ void PhysicalLayer::loop() {
     layers[0]->loop();
   } else {
     // ── Multi-layer path: each layer fades only its own mapped physical pixels ──
-    // Allocate bit arrays on demand (1 bit/pixel, kept until destructor)
+    // Allocate bit arrays on demand; reallocate if nrOfLights has grown since last allocation
     size_t bitBytes = (lights.header.nrOfLights + 7) / 8;
-    if (!fadeBits)  fadeBits  = allocMB<uint8_t>(bitBytes);
-    if (!writeBits) writeBits = allocMB<uint8_t>(bitBytes);
-    if (fadeBits)  memset(fadeBits,  0, bitBytes);
-    if (writeBits) memset(writeBits, 0, bitBytes);
+    if (bitBytes > bitBytesAllocated) {
+      freeMB(fadeBits);
+      freeMB(writeBits);
+      fadeBits  = allocMB<uint8_t>(bitBytes);
+      writeBits = allocMB<uint8_t>(bitBytes);
+      bitBytesAllocated = (fadeBits && writeBits) ? bitBytes : 0;
+      // free per-layer localWriteBits so they are reallocated at the new size
+      for (VirtualLayer* layer : layers) {
+        if (layer) { freeMB(layer->localWriteBits); layer->localWriteBits = nullptr; }
+      }
+    }
+    if (fadeBits)  memset(fadeBits,  0, bitBytesAllocated);
+    if (writeBits) memset(writeBits, 0, bitBytesAllocated);
 
     // Phase 1: per-layer fade (fadeBits prevents double-fading of overlapping pixels)
     for (VirtualLayer* layer : layers) {
       if (layer) layer->fadeOwnPixels(fadeBits);
     }
-    // Phase 2: run all layers' effects (setRGB uses writeBits to blend overlapping writes)
+    // Phase 2: run all layers' effects (setRGB uses writeBits/localWriteBits to blend overlapping writes)
     for (VirtualLayer* layer : layers) {
-      if (layer) layer->loop();
+      if (!layer) continue;
+      // allocate and clear this layer's local write-tracking bitmap
+      if (!layer->localWriteBits && bitBytesAllocated > 0)
+        layer->localWriteBits = allocMB<uint8_t>(bitBytesAllocated);
+      if (layer->localWriteBits) memset(layer->localWriteBits, 0, bitBytesAllocated);
+      layer->loop();
     }
   }
 }
