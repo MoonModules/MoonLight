@@ -128,10 +128,10 @@ class PhysicalLayer {
   // Use this instead of layers.size() to distinguish active layers from pre-allocated empty slots.
   uint8_t activeLayerCount = 1;
 
-  // Actual byte count of the channelsD allocation. Zero until first layout pass 1.
-  // Grows lazily inside addLight() (doubling strategy) as lights are added, then shrinks
-  // to nrOfChannels at the end of pass 1 — so at steady state only actual panel bytes are held.
-  // For unchanged layouts, zero reallocs occur during subsequent passes.
+  // Internal: actual byte count of the channelsD allocation.  Zero until first layout pass 1.
+  // Grows lazily inside addLight() (doubling), resized to nrOfChannels at end of pass 1.
+  // At steady state equals lights.header.nrOfChannels; kept separate because during pass 1
+  // nrOfChannels still holds the previous layout's value while channelsD is being grown.
   size_t channelsDCapacity = 0;
 
   // Ensures the VirtualLayer at the given index exists, creating it on demand if needed.

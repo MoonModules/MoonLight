@@ -245,7 +245,7 @@ void PhysicalLayer::addLight(Coord3D position) {
       reallocMB2<uint8_t>(lights.channelsD, channelsDCapacity, newCapacity, "channelsD");
       if (lights.channelsD && channelsDCapacity > oldCapacity) {
         memset(lights.channelsD + oldCapacity, 0, channelsDCapacity - oldCapacity);
-        EXT_LOGD(ML_TAG, "channelsD grown to %d bytes in %s", (int)channelsDCapacity, isInPSRAM(lights.channelsD) ? "PSRAM" : "RAM");
+        EXT_LOGD(ML_TAG, "channelsD grown from %d to %d bytes in %s", oldCapacity, (int)channelsDCapacity, isInPSRAM(lights.channelsD) ? "PSRAM" : "RAM");
       } else if (!lights.channelsD) {
         EXT_LOGE(ML_TAG, "failed to grow channelsD to %zu bytes", newCapacity);
         channelsDCapacity = 0;
@@ -315,7 +315,7 @@ void PhysicalLayer::onLayoutPost() {
       if (lights.channelsD) {
         if (channelsDCapacity > oldCapacity)
           memset(lights.channelsD + oldCapacity, 0, channelsDCapacity - oldCapacity);
-        EXT_LOGD(ML_TAG, "channelsD %s to %d bytes in %s", channelsDCapacity > oldCapacity ? "grown" : "shrunk", (int)channelsDCapacity, isInPSRAM(lights.channelsD) ? "PSRAM" : "RAM");
+        EXT_LOGD(ML_TAG, "channelsD %s from %d to %d bytes in %s", channelsDCapacity > oldCapacity ? "grown" : "shrunk", oldCapacity, (int)channelsDCapacity, isInPSRAM(lights.channelsD) ? "PSRAM" : "RAM");
       } else {
         EXT_LOGE(ML_TAG, "failed to resize channelsD to %zu bytes", needed);
         channelsDCapacity = 0;

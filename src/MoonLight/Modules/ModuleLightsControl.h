@@ -656,7 +656,7 @@ class ModuleLightsControl : public Module {
         _sveltekit->getSocket()->emitEvent("monitor", (char*)&layerP.lights.header, headerPrimeNumber, _moduleName);                                                      // send headerPrimeNumber bytes so Monitor.svelte can recognize this
         _sveltekit->getSocket()->emitEvent("monitor", (char*)layerP.lights.channelsD, layerP.lights.header.nrOfLights * 3, _moduleName);  //*3 is for 3 bytes position
       }
-      memset(layerP.lights.channelsD, 0, layerP.channelsDCapacity);  // set all the channels to 0 //cleaning the positions
+      memset(layerP.lights.channelsD, 0, layerP.lights.header.nrOfChannels);  // set all the channels to 0 //cleaning the positions
       xSemaphoreTake(swapMutex, portMAX_DELAY);
       EXT_LOGD(ML_TAG, "positions sent to monitor (2 -> 3)");
       layerP.lights.header.isPositions = 3;

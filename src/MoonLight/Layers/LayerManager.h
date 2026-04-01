@@ -16,11 +16,44 @@
 
 #if FT_MOONLIGHT
 
-  #include "MoonBase/Module.h"
-  #include "MoonBase/NodeManager.h"
-  #include "PhysicalLayer.h"
+  #include <ArduinoJson.h>
+  #include "MoonBase/utilities/Char.h"
 
-extern TaskHandle_t effectTaskHandle;
+  #ifdef ARDUINO
+    #include "MoonBase/Module.h"
+    #include "MoonBase/NodeManager.h"
+    #include "PhysicalLayer.h"
+    extern TaskHandle_t effectTaskHandle;
+  #endif
+
+  /// Copy data["nodes"] → data["nodes_<layer>"]. Called when leaving a layer.
+  inline void layerStateSave(JsonObject data, uint8_t layer) {
+    Char<16> key;
+    key.format("nodes_%d", layer);
+    data[key.c_str()].to<JsonArray>().set(data["nodes"].as<JsonArray>());
+  }
+
+  /// Copy data["nodes_<layer>"] → data["nodes"], or clear data["nodes"] if absent/empty.
+  /// Called when entering a layer, or when restoring layer 0 after a preset load.
+  inline void layerStateLoad(JsonObject data, uint8_t layer) {
+    Char<16> key;
+    key.format("nodes_%d", layer);
+    if (!data[key.c_str()].isNull() && data[key.c_str()].as<JsonArray>().size() > 0) {
+      data["nodes"].to<JsonArray>().set(data[key.c_str()].as<JsonArray>());
+    } else {
+      data["nodes"].to<JsonArray>();
+    }
+  }
+
+  /// Remove the four per-layer state keys (nodes_N, start_N, end_N, brightness_N).
+  /// Called when a layer is destroyed so compareRecursive treats the keys as absent.
+  inline void layerStateClearKeys(JsonObject data, uint8_t layer) {
+    Char<16> key;
+    key.format("nodes_%d",      layer); data.remove(key.c_str());
+    key.format("start_%d",      layer); data.remove(key.c_str());
+    key.format("end_%d",        layer); data.remove(key.c_str());
+    key.format("brightness_%d", layer); data.remove(key.c_str());
+  }
 
 class LayerManager {
   uint8_t selectedLayer = 0;
@@ -46,13 +79,10 @@ class LayerManager {
     if (index >= layerP.layers.size()) return;
 
     if (swapState && !state->data["nodes"].isNull()) {
-      Char<16> key;
-
-      // save current layer's node state
-      key.format("nodes_%d", selectedLayer);
-      state->data[key.c_str()].to<JsonArray>().set(state->data["nodes"].as<JsonArray>());
+      layerStateSave(state->data, selectedLayer);  // save current layer's node state
 
       // save current layer's per-layer properties
+      Char<16> key;
       VirtualLayer* curLayer = layerP.layers[selectedLayer];
       if (curLayer) {
         key.format("start_%d", selectedLayer);
@@ -67,13 +97,7 @@ class LayerManager {
         state->data[key.c_str()] = curLayer->brightness;
       }
 
-      // load new layer's node state
-      key.format("nodes_%d", index);
-      if (!state->data[key.c_str()].isNull() && state->data[key.c_str()].as<JsonArray>().size() > 0) {
-        state->data["nodes"].to<JsonArray>().set(state->data[key.c_str()].as<JsonArray>());
-      } else {
-        state->data["nodes"].to<JsonArray>();  // empty array for unused layers
-      }
+      layerStateLoad(state->data, index);  // load new layer's node state
     }
 
     selectedLayer = index;
@@ -86,12 +110,13 @@ class LayerManager {
   /// Destroys all non-selected VirtualLayers and clears their state keys so that compareRecursive
   /// sees a clean slate and restoreNonSelectedLayers can rebuild from the new preset.
   void prepareForPresetLoad() {
-    Char<16> key;
     // Suspend the effectTask while deleting VirtualLayer objects to prevent a
     // use-after-free: effectTask iterates layerP.layers without a lock, so it must
     // not run while we delete and null out entries.  vTaskSuspend/Resume costs zero
     // extra bytes (no new FreeRTOS object) and effectTask holds no mutex during loop().
+    #ifdef ARDUINO
     vTaskSuspend(effectTaskHandle);
+    #endif
     for (uint8_t i = 1; i < layerP.layers.size(); i++) {
       if (!layerP.layers[i]) continue;
 
@@ -101,21 +126,20 @@ class LayerManager {
       if (layerP.activeLayerCount > 1) layerP.activeLayerCount--;
 
       // clear per-layer JSON state so compareRecursive treats these keys as absent
-      key.format("nodes_%d", i);
-      state->data.remove(key.c_str());
-      key.format("start_%d", i);
-      state->data.remove(key.c_str());
-      key.format("end_%d", i);
-      state->data.remove(key.c_str());
-      key.format("brightness_%d", i);
-      state->data.remove(key.c_str());
+      layerStateClearKeys(state->data, i);
     }
+    #ifdef ARDUINO
     vTaskResume(effectTaskHandle);
+    #endif
 
     // if the selected layer was > 0 (unlikely but safe), fall back to layer 0
     if (selectedLayer > 0) {
       selectLayer(0, false);
       state->data["layer"] = 0;
+      // reload layer 0's nodes into state->data["nodes"]: selectLayer(false) skips the state swap,
+      // so without this compareRecursive would diff the new preset against the stale layer-N nodes.
+      // If they matched, it would skip node recreation even though the nodes were already destroyed.
+      layerStateLoad(state->data, 0);
     }
 
     // reset layer 0's bounds to defaults in both the VirtualLayer and state, so that old-style
@@ -150,36 +174,28 @@ class LayerManager {
     if (selectedLayer > 0 && layerP.layers[selectedLayer] && layerP.layers[selectedLayer]->nodes.empty()) {
       uint8_t destroyedLayer = selectedLayer;
       EXT_LOGD(ML_TAG, "Destroying empty VirtualLayer %d", destroyedLayer);
+      #ifdef ARDUINO
       vTaskSuspend(effectTaskHandle);
+      #endif
       delete layerP.layers[destroyedLayer];
       layerP.layers[destroyedLayer] = nullptr;
       layerP.activeLayerCount--;
+      #ifdef ARDUINO
       vTaskResume(effectTaskHandle);
+      #endif
 
       // clean up JSON state for the destroyed layer
-      Char<16> key;
-      key.format("nodes_%d", destroyedLayer);
-      state->data.remove(key.c_str());
-      key.format("start_%d", destroyedLayer);
-      state->data.remove(key.c_str());
-      key.format("end_%d", destroyedLayer);
-      state->data.remove(key.c_str());
-      key.format("brightness_%d", destroyedLayer);
-      state->data.remove(key.c_str());
+      layerStateClearKeys(state->data, destroyedLayer);
 
       // switch UI back to layer 0: reload layer 0's nodes and properties from state
       selectLayer(0, false);
       state->data["layer"] = 0;
 
       // Reload layer 0's node array into state->data["nodes"] (selectLayer(false) skipped state swap)
-      key.format("nodes_%d", 0);
-      if (!state->data[key.c_str()].isNull() && state->data[key.c_str()].as<JsonArray>().size() > 0) {
-        state->data["nodes"].to<JsonArray>().set(state->data[key.c_str()].as<JsonArray>());
-      } else {
-        state->data["nodes"].to<JsonArray>();  // empty array if none saved
-      }
+      layerStateLoad(state->data, 0);
 
       // Reload layer 0's per-layer properties from state
+      Char<16> key;
       VirtualLayer* layer0 = layerP.layers[0];
       if (layer0) {
         key.format("start_%d", 0);
@@ -248,6 +264,7 @@ class LayerManager {
   }
 
   /// Add layer selection dropdown and per-layer bound controls to setupDefinition.
+  #ifdef ARDUINO // Because addLayerControls takes a Module& parameter, and Module is only defined when #include "MoonBase/Module.h" is processed — which is guarded by #ifdef ARDUINO. Without the method-level guard, native compilation fails with "unknown type name 'Module'". It's a consequence of the include guard, not a deliberate design choice. It's not testable anyway (it's pure UI setup), so the guard is harmless. If you'd prefer to avoid it, the alternative is to add a Module stub to the test stubs — but Module is complex enough that guarding the one method is simpler.
   static void addLayerControls(Module& module, const JsonArray& controls) {
     JsonObject control = module.addControl(controls, "layer", "select");
     control["default"] = 0;
@@ -270,6 +287,7 @@ class LayerManager {
     control = module.addControl(controls, "brightness", "slider", 0, 255);
     control["default"] = 255;
   }
+  #endif  // ARDUINO
 
  private:
   /// Instantiate nodes for non-selected layers and restore their per-layer bounds from JSON state.
@@ -293,6 +311,15 @@ class LayerManager {
       EXT_LOGD(ML_TAG, "Migrated old-format state: reset layer %d bounds to defaults", savedSelectedLayer);
     }
 
+    // Suspend effectTask while adding nodes to non-selected layers: ensureLayer() makes the
+    // layer non-null in layerP.layers immediately, so Core 0 would see it and iterate
+    // layer->nodes via VirtualLayer::loop() concurrently with our push_back calls here.
+    // A push_back that triggers reallocation while Core 0 holds an iterator is a use-after-free.
+    // effectTask holds no mutex during loop(), so suspend/resume is safe (same pattern as
+    // prepareForPresetLoad and onNodeRemoved).
+    #ifdef ARDUINO
+    vTaskSuspend(effectTaskHandle);
+    #endif
     for (uint8_t i = 0; i < layerP.layers.size(); i++) {
       if (i == savedSelectedLayer) continue;
 
@@ -336,6 +363,9 @@ class LayerManager {
                layer->endPct.x, layer->endPct.y, layer->endPct.z, layer->brightness);
       restoredAny = true;
     }
+    #ifdef ARDUINO
+    vTaskResume(effectTaskHandle);
+    #endif
 
     selectedLayer = savedSelectedLayer;
     VirtualLayer* layer = layerP.layers[selectedLayer];

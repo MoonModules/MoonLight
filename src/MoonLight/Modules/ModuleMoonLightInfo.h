@@ -27,7 +27,6 @@ class ModuleMoonLightInfo : public Module {
     addControl(controls, "nrOfLights", "number", 0, UINT16_MAX, true);
     addControl(controls, "channelsPerLight", "number", 0, 255, true);
     addControl(controls, "nrOfChannels", "number", 0, UINT16_MAX, true);
-    addControl(controls, "channelsDCapacity", "number", 0, UINT16_MAX, true);
     addControl(controls, "size", "coord3D", 0, UINT16_MAX, true);
     addControl(controls, "nodes#", "number", 0, 255, true);
 
@@ -56,11 +55,11 @@ class ModuleMoonLightInfo : public Module {
       data["nrOfLights"] = layerP.lights.header.nrOfLights;
       data["channelsPerLight"] = layerP.lights.header.channelsPerLight;
       data["nrOfChannels"] = layerP.lights.header.nrOfChannels;
-      data["channelsDCapacity"] = layerP.channelsDCapacity;
       data["size"]["x"] = layerP.lights.header.size.x;
       data["size"]["y"] = layerP.lights.header.size.y;
       data["size"]["z"] = layerP.lights.header.size.z;
       data["nodes#"] = layerP.nodes.size();
+      data["layers"].to<JsonArray>();  // clear before rebuild so deleted layers don't leave stale rows
       uint8_t index = 0;
       for (VirtualLayer* layer : layerP.layers) {
         if (!layer) { index++; continue; }

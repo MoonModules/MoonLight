@@ -251,13 +251,14 @@ Buffer Allocation
 `channelsD` is allocated lazily — nothing is pre-allocated at boot. During layout pass 1, `addLight()` grows `channelsD` on demand using a doubling strategy (starting at 768 bytes). At the end of pass 1, `onLayoutPost()` resizes it to exactly `nrOfChannels = nrOfLights × channelsPerLight`. Per-layer `virtualChannels` are allocated the same way in `VirtualLayer::onLayoutPost()`.
 
 This means:
+
 - **Steady state**: `channelsD` holds only the bytes needed for the active panel (e.g. 768 bytes for 256 RGB LEDs on ESP32-D0).
 - **Same layout, next pass**: zero reallocs — existing capacity already fits both position storage (`nrOfLights × 3`) and channel data.
 - **Layout grows**: `addLight()` doubles capacity as needed; `onLayoutPost()` trims to exact size.
 - **Layout shrinks** or **`channelsPerLight` changes**: `onLayoutPost()` resizes to the new `nrOfChannels`.
 - **OOM**: `realloc` returns `nullptr`; position writes are skipped but light counts still accumulate. `loop()` and `compositeLayers()` guard on `!channelsD`.
 
-The old `maxChannels` field (a static pre-computed safety cap stored in `Lights`) has been removed. The `channelsDCapacity` field on `PhysicalLayer` tracks the actual allocation size.
+The old `maxChannels` field (a static pre-computed safety cap stored in `Lights`) has been removed. A file-scope `channelsDCapacity` variable in `PhysicalLayer.cpp` tracks the actual allocation size during layout passes; at steady state it equals `nrOfChannels` and is not exposed outside that file.
 
 Moving ESP32SvelteKit to Core 1
 
