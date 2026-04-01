@@ -72,8 +72,9 @@ class NetworkOutDriver : public DriverNode {
     addControl(totalUniverses, "totalUniverses", "number", 0, 65538, true);
     addControl(channelsPerOutput, "channelsPerOutput", "number", 0, 65538);
     addControl(totalChannels, "totalChannels", "number", 0, 390000, true);
-
-    setupArtNetHeader();
+    // Packet template is initialised by onUpdate("protocol") inside addControl(protocol,...) above.
+    // Do NOT call setupArtNetHeader() here — it would overwrite the correct template for
+    // restored E1.31 (or DDP) nodes with Art-Net bytes.
   }
 
   uint8_t ipAddresses[16];
@@ -122,7 +123,8 @@ class NetworkOutDriver : public DriverNode {
     }
 
     totalChannels = layerP.lights.header.nrOfLights * layerP.lights.header.channelsPerLight / (nrOfIPAddresses ? nrOfIPAddresses : 1);
-    usedChannelsPerUniverse = universeSize / layerP.lights.header.channelsPerLight * layerP.lights.header.channelsPerLight;
+    uint32_t lightsPerUniverse = max(1u, (uint32_t)universeSize / layerP.lights.header.channelsPerLight);
+    usedChannelsPerUniverse = lightsPerUniverse * layerP.lights.header.channelsPerLight;
     totalUniverses = (totalChannels + usedChannelsPerUniverse - 1) / usedChannelsPerUniverse;
 
     updateControl("usedChannels", usedChannelsPerUniverse);

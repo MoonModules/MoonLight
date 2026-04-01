@@ -46,7 +46,14 @@ class AudioSyncDriver : public Node {
       EXT_LOGI(ML_TAG, "Audio Sync: Initialized");
     }
 
-    if (sync.read()) {
+    // Drain ALL pending packets — keep only the most recent.
+    // Without this, a slow-running display (large pixel count → low FPS) lets packets
+    // accumulate in the UDP buffer; each single read returns the oldest packet,
+    // causing audio data to lag by seconds on large displays.
+    bool gotData = false;
+    while (sync.read()) gotData = true;
+
+    if (gotData) {
       memcpy(sharedData.bands, sync.fftResult, sizeof(sharedData.bands));
       sharedData.volume = sync.volumeSmth;
       sharedData.volumeRaw = sync.volumeRaw;
@@ -60,10 +67,6 @@ class AudioSyncDriver : public Node {
             }
           },
           name());
-
-      // if (audio.bands[0] > 0) {
-      //   EXT_LOGV(ML_TAG, "Audio Sync: %d %f", audio.bands[0], audio.volume);
-      // }
     }
   }
 

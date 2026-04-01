@@ -78,7 +78,8 @@ class NetworkInDriver : public Node {
     }
 
     while (int packetSize = udp.parsePacket()) {
-      const int minHeader = (protocol == 1) ? static_cast<int>(sizeof(DDPHeader))
+      static constexpr int DDP_HEADER_LEN = 10;
+      const int minHeader = (protocol == 1) ? DDP_HEADER_LEN
                           : (protocol == 2) ? 126  // E1.31 DMP layer starts at byte 126
                                             : static_cast<int>(sizeof(ArtNetHeader));
       if (packetSize < minHeader || packetSize > static_cast<int>(sizeof(packetBuffer))) {
@@ -108,14 +109,8 @@ class NetworkInDriver : public Node {
     uint16_t length;   // DMX data length
   };
 
-  struct DDPHeader {
-    uint8_t flags;
-    uint8_t sequence;
-    uint8_t dataType;
-    uint8_t id;
-    uint32_t offset;
-    uint16_t dataLen;
-  };
+  // DDP header is exactly 10 bytes on the wire: flags(1) seq(1) type(1) id(1) offset(4BE) dataLen(2BE)
+  // Do NOT use a struct — trailing alignment padding would make sizeof == 12, mis-indexing the payload.
 
   // -----------------------------------------------------------------------
   // Pixel write helper — shared by all three protocols
@@ -171,17 +166,19 @@ class NetworkInDriver : public Node {
   }
 
   void handleDDP(int packetSize) {
-    if (packetSize < static_cast<int>(sizeof(DDPHeader))) return;
+    static constexpr int DDP_HEADER_LEN = 10;
+    if (packetSize < DDP_HEADER_LEN) return;
 
-    DDPHeader* header = reinterpret_cast<DDPHeader*>(packetBuffer);
-    uint8_t dataType = header->dataType;
+    // Explicit byte indexing — avoids struct padding and unaligned multi-byte reads on ESP32
+    uint8_t dataType = packetBuffer[2];
     if (dataType != 0x01 && dataType != 0x1A) return;  // accept RGB24 and RGBW32
 
-    uint32_t offset = (header->offset >> 24) | ((header->offset >> 8) & 0xFF00) | ((header->offset << 8) & 0xFF0000) | (header->offset << 24);
-    uint16_t dataLen = (header->dataLen >> 8) | (header->dataLen << 8);
+    uint32_t offset = ((uint32_t)packetBuffer[4] << 24) | ((uint32_t)packetBuffer[5] << 16) |
+                      ((uint32_t)packetBuffer[6] <<  8) |  (uint32_t)packetBuffer[7];
+    uint16_t dataLen = ((uint16_t)packetBuffer[8] << 8) | packetBuffer[9];
 
-    uint8_t* pixelData = packetBuffer + sizeof(DDPHeader);
-    int payloadBytes = packetSize - static_cast<int>(sizeof(DDPHeader));
+    uint8_t* pixelData = packetBuffer + DDP_HEADER_LEN;
+    int payloadBytes = packetSize - DDP_HEADER_LEN;
     int safeDataLen = MIN(static_cast<int>(dataLen), payloadBytes);
 
     const uint32_t channelsPerLight = static_cast<uint32_t>(layerP.lights.header.channelsPerLight);
@@ -210,7 +207,8 @@ class NetworkInDriver : public Node {
     int payloadBytes = packetSize - 126;
     int safeDataLen = MIN(static_cast<int>(dataLength), payloadBytes);
 
-    int startPixel = (universe - universeMin) * (512 / layerP.lights.header.channelsPerLight);
+    uint16_t e131Base = universeMin > 0 ? universeMin : 1;  // E1.31 universes are 1-based; universe 1 → pixel 0
+    int startPixel = (universe - e131Base) * (512 / layerP.lights.header.channelsPerLight);
     int numPixels = safeDataLen / layerP.lights.header.channelsPerLight;
     writePixels(startPixel, numPixels, dmxData);
   }
