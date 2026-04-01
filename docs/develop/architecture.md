@@ -310,7 +310,7 @@ void Node::loop() {
     addYield(10);
 }
 
-void ArtNetOutDriver::loop() {
+void NetworkOutDriver::loop() {
     for (each package) {
         writePackage();
         addYield(10);
@@ -329,6 +329,6 @@ inline void addYield(uint8_t frequency) {
 * taskYIELD() is not good enough as it does not give back control to the idle task so we need vTaskDelay(1), taskYIELD() only yields to tasks of equal or higher priority
 * increasing the watchdog timer from 5s to 10s might trigger less watchdog crashes but is not eliminating it so this is not added yet. However, for extreme setups (up to 100K LEDs), even with yields, processing time might legitimately exceed 5s. So might be added later.
 * Node::loop(): each active node will call addYield(10)
-* ArtNetOutDriver::loop(): as a massive amount of packages are blasted (for 16K LEDs 97 universes / packets), addYield(10) is called after each packet
+* NetworkOutDriver::loop(): as a massive amount of packages are blasted (for 16K LEDs 97 universes / packets), addYield(10) is called after each packet
 * addYield(10) means: send a vTaskDelay(1) every 10 times.
 * Occasional flood of ESP_LOG error messages might also trigger the watchdog so where it happened a vTaskDelay(1) is added e.g. in EventSocket::emitEvent(), failed to send event

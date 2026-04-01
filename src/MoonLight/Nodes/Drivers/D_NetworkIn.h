@@ -13,9 +13,9 @@
 
 extern SemaphoreHandle_t swapMutex;
 
-class ArtNetInDriver : public Node {
+class NetworkInDriver : public Node {
  public:
-  static const char* name() { return "Art-Net In"; }
+  static const char* name() { return "Network In"; }
   static uint8_t dim() { return _NoD; }
   static const char* tags() { return "☸️"; }
   static const char* category() { return "Driver"; }
@@ -175,7 +175,7 @@ class ArtNetInDriver : public Node {
 
     DDPHeader* header = reinterpret_cast<DDPHeader*>(packetBuffer);
     uint8_t dataType = header->dataType;
-    if (dataType != 0x01) return;
+    if (dataType != 0x01 && dataType != 0x1A) return;  // accept RGB24 and RGBW32
 
     uint32_t offset = (header->offset >> 24) | ((header->offset >> 8) & 0xFF00) | ((header->offset << 8) & 0xFF0000) | (header->offset << 24);
     uint16_t dataLen = (header->dataLen >> 8) | (header->dataLen << 8);

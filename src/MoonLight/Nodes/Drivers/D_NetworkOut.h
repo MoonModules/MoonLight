@@ -29,9 +29,9 @@
   #define E131_DMP_DATA           125    // byte offset of property_values[0] (DMX start code)
   #define E131_HEADER_LEN         126    // bytes before DMX channel data
 
-class ArtNetOutDriver : public DriverNode {
+class NetworkOutDriver : public DriverNode {
  public:
-  static const char* name() { return "Art-Net Out"; }
+  static const char* name() { return "Network Out"; }
   static uint8_t dim() { return _NoD; }
   static const char* tags() { return "☸️"; }
   static const char* category() { return "Driver"; }
@@ -376,7 +376,7 @@ class ArtNetOutDriver : public DriverNode {
   }
 
   void loopE131(LightsHeader* header) {
-    uint8_t seqNum = (sequenceNumber++ % 254) + 1;
+    uint8_t seqNum = static_cast<uint8_t>(sequenceNumber++);
     uint16_t e131universeSize = MIN(universeSize, (uint16_t)512);  // E1.31 max 512 per universe
 
     uint16_t e131universe = 1;  // E1.31 universes are 1-based
