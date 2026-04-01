@@ -73,8 +73,10 @@ void PhysicalLayer::loop() {
   // Effects write to per-layer virtualChannels; channelsD is zeroed and composited
   // in compositeLayers(), called from main.cpp after channelsDFreeSemaphore is signalled.
 
-  for (VirtualLayer* layer : layers) {
-    if (!layer) continue;
+  for (uint8_t i = 0; i < activeLayerCount && i < layers.size(); i++) {
+    VirtualLayer* layer = layers[i];
+    if (!layer) continue;  // defensive, should not happen with sequential creation
+  
     layer->loop();
 
     // Step transition animation: move transitionBrightness toward transitionTarget one step per frame
@@ -104,7 +106,8 @@ void PhysicalLayer::compositeLayers() {
 
 void PhysicalLayer::loop20ms() {
   // runs the loop of all effects / nodes in the layer
-  for (VirtualLayer* layer : layers) {
+  for (uint8_t i = 0; i < activeLayerCount && i < layers.size(); i++) {
+    VirtualLayer* layer = layers[i];
     if (layer) layer->loop20ms();  // if (layer) needed when deleting rows ...
   }
 }

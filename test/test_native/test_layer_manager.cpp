@@ -84,6 +84,10 @@ struct PhysicalLayer {
     return layers[i];
   }
 
+  ~PhysicalLayer() {
+    for (auto& l : layers) { delete l; l = nullptr; }
+  }
+
   void reset() {
     for (auto& l : layers) { delete l; l = nullptr; }
     layers[0] = new VirtualLayer();

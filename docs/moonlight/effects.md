@@ -32,6 +32,9 @@ Control channels (pan, tilt, zoom for moving heads) are not additive — the las
 * **Layer**: Select which layer to configure. Adding the first node to a new layer slot creates that layer.
     * **Start / End**: bounds as % of the fixture on each axis (X, Y, Z). Default 0–100% = full fixture.
     * **Brightness**: per-layer output brightness (0–255).
+
+    ![lines](../media/moonlight/effects/layers.gif)
+
 * **Nodes**: list of Effects and Modifiers for the selected layer.
     * Nodes can be added (+), deleted (🗑️), edited (✎) or reordered (drag and drop). Press save (💾) to persist changes across restarts or to save as a preset (see Light Control).
     * Reorder defines execution order:

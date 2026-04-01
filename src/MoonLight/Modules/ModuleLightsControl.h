@@ -651,12 +651,16 @@ class ModuleLightsControl : public Module {
     xSemaphoreGive(swapMutex);
 
     if (isPositions == 2) {  // send to UI
-      if (_sveltekit->getSocket()->getActiveClients() && _state.data["monitorOn"]) {
-        static_assert(sizeof(LightsHeader) > headerPrimeNumber, "LightsHeader size nog large enough for Monitor protocol");
-        _sveltekit->getSocket()->emitEvent("monitor", (char*)&layerP.lights.header, headerPrimeNumber, _moduleName);                                                      // send headerPrimeNumber bytes so Monitor.svelte can recognize this
-        _sveltekit->getSocket()->emitEvent("monitor", (char*)layerP.lights.channelsD, layerP.lights.header.nrOfLights * 3, _moduleName);  //*3 is for 3 bytes position
+      if (layerP.lights.channelsD) {  // guard: OOM in addLight() can leave channelsD null while isPositions==2
+        if (_sveltekit->getSocket()->getActiveClients() && _state.data["monitorOn"]) {
+          static_assert(sizeof(LightsHeader) > headerPrimeNumber, "LightsHeader size nog large enough for Monitor protocol");
+          _sveltekit->getSocket()->emitEvent("monitor", (char*)&layerP.lights.header, headerPrimeNumber, _moduleName);                                                      // send headerPrimeNumber bytes so Monitor.svelte can recognize this
+          _sveltekit->getSocket()->emitEvent("monitor", (char*)layerP.lights.channelsD, layerP.lights.header.nrOfLights * 3, _moduleName);  //*3 is for 3 bytes position
+        }
+        // isPositions==2 is set before onLayoutPost() resizes channelsD to nrOfChannels,
+        // so channelsD holds only nrOfLights*3 bytes here. Use that size, not nrOfChannels.
+        memset(layerP.lights.channelsD, 0, layerP.lights.header.nrOfLights * 3);  // clear position data only
       }
-      memset(layerP.lights.channelsD, 0, layerP.lights.header.nrOfChannels);  // set all the channels to 0 //cleaning the positions
       xSemaphoreTake(swapMutex, portMAX_DELAY);
       EXT_LOGD(ML_TAG, "positions sent to monitor (2 -> 3)");
       layerP.lights.header.isPositions = 3;
@@ -666,7 +670,7 @@ class ModuleLightsControl : public Module {
       if (millis() - monitorMillis >= MAX(20, layerP.lights.header.nrOfLights / 300)) {  // 12K lights -> 40ms
         monitorMillis = millis();
 
-        if (_sveltekit->getSocket()->getActiveClients() && _state.data["monitorOn"]) {
+        if (layerP.lights.channelsD && _sveltekit->getSocket()->getActiveClients() && _state.data["monitorOn"]) {
           _sveltekit->getSocket()->emitEvent("monitor", (char*)layerP.lights.channelsD, layerP.lights.header.nrOfChannels, _moduleName);  // use channelsD as it won't be overwritten by effects during loop
         }
       }
