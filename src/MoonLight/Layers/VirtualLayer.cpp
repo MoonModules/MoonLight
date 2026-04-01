@@ -14,18 +14,17 @@
   #include "VirtualLayer.h"
 
   #include "MoonBase/Nodes.h"
+  #include "MoonBase/utilities/LayerFunctions.h"
   #include "PhysicalLayer.h"
 
 // convenience functions to call fastled functions out of the Leds namespace (there naming conflict)
 void fastled_fadeToBlackBy(CRGB* leds, uint16_t num_leds, uint8_t fadeBy) { fadeToBlackBy(leds, num_leds, fadeBy); }  // supports max UINT16_MAX leds !
 void fastled_fill_solid(CRGB* targetArray, int numToFill, const CRGB& color) { fill_solid(targetArray, numToFill, color); }
-void fastled_fill_rainbow(CRGB* targetArray, int numToFill, uint8_t initialhue, uint8_t deltahue) { fill_rainbow(targetArray, (uint16_t)numToFill, initialhue, deltahue); }
 
 VirtualLayer::VirtualLayer() { EXT_LOGV(ML_TAG, "constructor"); }
 
 VirtualLayer::~VirtualLayer() {
   EXT_LOGV(ML_TAG, "destructor");
-  fadeToBlackBy(255);  // clear the LEDs
 
   for (Node* node : nodes) {
     // node->destructor();
@@ -40,6 +39,7 @@ VirtualLayer::~VirtualLayer() {
   mappingTableIndexes.clear();
   // clear mapping table
   freeMB(mappingTable);
+  freeMB(virtualChannels);
 }
 
 void VirtualLayer::setup() {
@@ -47,15 +47,38 @@ void VirtualLayer::setup() {
 }
 
 void VirtualLayer::loop() {
-  fadeToBlackMin();
+  if (nodes.empty()) return;  // skip empty layers (no effects assigned)
 
-  // set brightness default to global brightness
+  // Consume fadeBy: scale virtualChannels before running effects this frame
+  if (fadeBy > 0 && virtualChannels) {
+    uint8_t cpl = layerP->lights.header.channelsPerLight;
+    if (cpl == 3 && nrOfLights < UINT16_MAX) {
+      fastled_fadeToBlackBy(reinterpret_cast<CRGB*>(virtualChannels), (uint16_t)nrOfLights, fadeBy);
+    } else {
+      uint8_t scale = 255 - fadeBy;
+      for (nrOfLights_t i = 0; i < nrOfLights; i++) {
+        uint8_t* vch = &virtualChannels[i * cpl];
+        reinterpret_cast<CRGB*>(&vch[layerP->lights.header.offsetRGBW])->nscale8(scale);
+        if (layerP->lights.header.offsetWhite  != UINT8_MAX) vch[layerP->lights.header.offsetRGBW + 3] = scale8(vch[layerP->lights.header.offsetRGBW + 3], scale);
+        if (layerP->lights.header.offsetWhite2 != UINT8_MAX) vch[layerP->lights.header.offsetRGBW + 4] = scale8(vch[layerP->lights.header.offsetRGBW + 4], scale);
+        if (layerP->lights.header.offsetRGBW1  != UINT8_MAX) { reinterpret_cast<CRGB*>(&vch[layerP->lights.header.offsetRGBW1])->nscale8(scale); vch[layerP->lights.header.offsetRGBW1 + 3] = scale8(vch[layerP->lights.header.offsetRGBW1 + 3], scale); }
+        if (layerP->lights.header.offsetRGBW2  != UINT8_MAX) { reinterpret_cast<CRGB*>(&vch[layerP->lights.header.offsetRGBW2])->nscale8(scale); vch[layerP->lights.header.offsetRGBW2 + 3] = scale8(vch[layerP->lights.header.offsetRGBW2 + 3], scale); }
+        if (layerP->lights.header.offsetRGBW3  != UINT8_MAX) { reinterpret_cast<CRGB*>(&vch[layerP->lights.header.offsetRGBW3])->nscale8(scale); vch[layerP->lights.header.offsetRGBW3 + 3] = scale8(vch[layerP->lights.header.offsetRGBW3 + 3], scale); }
+      }
+    }
+  }
+  fadeBy = 0;
+
+  // Reset dimmer channels to default before effects run (or to 0 when brightness==0 to avoid
+  // stale values reaching compositeTo() when effects are skipped by the early-return below).
   if (layerP->lights.header.offsetBrightness != UINT8_MAX) {
     for (int i = 0; i < nrOfLights; i++) {
       setBrightness(i, 255);   // will be corrected with globalbrighness
       setBrightness2(i, 255);  // will be corrected with globalbrighness
     }
   }
+
+  if (brightness == 0) return;  // compositeTo() will output black — skip running effects
 
   // for virtual nodes
   if (prevSize != size) EXT_LOGD(ML_TAG, "onSizeChanged V %d,%d,%d -> %d,%d,%d", prevSize.x, prevSize.y, prevSize.z, size.x, size.y, size.z);
@@ -73,6 +96,7 @@ void VirtualLayer::loop() {
     }
   }
   prevSize = size;
+  // brightness is applied in compositeTo(), not here
 };
 
 void VirtualLayer::loop20ms() {
@@ -107,6 +131,7 @@ void VirtualLayer::addIndexP(PhysMap& physMap, nrOfLights_t indexP) {
 
     physMap.indexesIndex = mappingTableIndexesSizeUsed - 1;  // array position
     physMap.mapType = m_moreLights;
+    allOneLight = false;  // this layer now has at least one fan-out entry
     break;
   }
   case m_moreLights:  // more -> more
@@ -127,107 +152,16 @@ nrOfLights_t VirtualLayer::XYZ(Coord3D& position) {
   return XYZUnModified(position);
 }
 
-// void VirtualLayer::setLightsToBlend() {
-//   for (const std::vector<nrOfLights_t>& mappingTableIndex: mappingTableIndexes) {
-//       for (const nrOfLights_t indexP: mappingTableIndex)
-//       layerP->lightsToBlend[indexP] = true;
-//     }
-//     for (const PhysMap &physMap: mappingTable) {
-//       if (physMap.mapType == m_oneLight)
-//       layerP->lightsToBlend[physMap.indexP] = true;
-//     }
-// }
 
-// fadeToBlackBy will only do primary RGB colors
-void VirtualLayer::fadeToBlackBy(const uint8_t fadeBy) { fadeMin = fadeMin ? MIN(fadeMin, fadeBy) : fadeBy; }
-
-void VirtualLayer::fadeToBlackMin() {
-  if (fadeMin > 0) {  // at least one fadeBy
-
-    uint8_t fadeBy = fadeMin;  // + fadeMax / div;
-    // if (effectDimension < layerDimension) { //only process the effect lights (so modifiers can do things with the other dimension)
-    //   for (int y=0; y < ((effectDimension == _1D)?1:size.y); y++) { //1D effects only on y=0, 2D effects loop over y
-    //     for (int x=0; x<size.x; x++) {
-    //       CRGB color = getRGB({x,y,0});
-    //       color.nscale8(255-fadeBy);
-    //       setRGB({x,y,0}, color);
-    //     }
-    //   }
-    // } else
-    if (layerP->lights.header.channelsPerLight == 3 && layerP->layers.size() == 1 && layerP->lights.header.nrOfChannels / 3 < UINT16_MAX) {  // CRGB lights, FastLED max UINT16_MAX
-      fastled_fadeToBlackBy(reinterpret_cast<CRGB*>(layerP->lights.channelsE), layerP->lights.header.nrOfChannels / sizeof(CRGB), fadeBy);
-    } else {  // multichannel lights
-      for (nrOfLights_t index = 0; index < nrOfLights; index++) {
-        CRGB color = getRGB(index);  // direct access to the channels
-        color.nscale8(255 - fadeBy);
-        setRGB(index, color);
-        if (layerP->lights.header.offsetWhite != UINT8_MAX) {
-          setWhite(index, ::scale8(getWhite(index), 255 - fadeBy));
-        }
-        if (layerP->lights.header.offsetRGBW1 != UINT8_MAX) {
-          CRGB color = getRGB1(index);  // direct access to the channels
-          color.nscale8(255 - fadeBy);
-          setRGB1(index, color);
-        }
-        if (layerP->lights.header.offsetRGBW2 != UINT8_MAX) {
-          CRGB color = getRGB2(index);  // direct access to the channels
-          color.nscale8(255 - fadeBy);
-          setRGB2(index, color);
-        }
-        if (layerP->lights.header.offsetRGBW3 != UINT8_MAX) {
-          CRGB color = getRGB3(index);  // direct access to the channels
-          color.nscale8(255 - fadeBy);
-          setRGB3(index, color);
-        }
-      }
-    }
-    // reset fade
-    fadeMin = 0;  // no fade
-  }
-}
 
 void VirtualLayer::fill_solid(const CRGB& color) {
-  // if (effectDimension < layerDimension) { //only process the effect lights (so modifiers can do things with the other dimension)
-  //   for (int y=0; y < ((effectDimension == _1D)?1:size.y); y++) { //1D effects only on y=0, 2D effects loop over y
-  //     for (int x=0; x<size.x; x++) {
-  //       setRGB({x,y,0}, color);
-  //     }
-  //   }
-  // } else
-  if (layerP->lights.header.channelsPerLight == 3 && layerP->layers.size() == 1) {  // faster, else manual
-    fastled_fill_solid(reinterpret_cast<CRGB*>(layerP->lights.channelsE), layerP->lights.header.nrOfChannels / sizeof(CRGB), color);
+  if (virtualChannels && layerP->lights.header.channelsPerLight == 3) {
+    fastled_fill_solid(reinterpret_cast<CRGB*>(virtualChannels), nrOfLights, color);
   } else {
     for (nrOfLights_t index = 0; index < nrOfLights; index++) setRGB(index, color);
   }
 }
 
-void VirtualLayer::fill_rainbow(const uint8_t initialhue, const uint8_t deltahue) {
-  // if (effectDimension < layerDimension) { //only process the effect lights (so modifiers can do things with the other dimension)
-  //   CHSV hsv;
-  //   hsv.hue = initialhue;
-  //   hsv.val = 255;
-  //   hsv.sat = 240;
-  //   for (int y=0; y < ((effectDimension == _1D)?1:size.y); y++) { //1D effects only on y=0, 2D effects loop over y
-  //     for (int x=0; x<size.x; x++) {
-  //       setRGB({x,y,0}, hsv);
-  //       hsv.hue += deltahue;
-  //     }
-  //   }
-  // } else
-  if (layerP->lights.header.channelsPerLight == 3 && layerP->layers.size() == 1) {  // faster, else manual
-    fastled_fill_rainbow(reinterpret_cast<CRGB*>(layerP->lights.channelsE), layerP->lights.header.nrOfChannels / sizeof(CRGB), initialhue, deltahue);
-  } else {
-    CHSV hsv;
-    hsv.hue = initialhue;
-    hsv.val = 255;
-    hsv.sat = 240;
-
-    for (nrOfLights_t index = 0; index < nrOfLights; index++) {
-      setRGB(index, hsv);
-      hsv.hue += deltahue;
-    }
-  }
-}
 
 void VirtualLayer::createMappingTableAndAddOneToOne() {
   if (mappingTableSize != size.x * size.y * size.z) {
@@ -245,10 +179,16 @@ void VirtualLayer::createMappingTableAndAddOneToOne() {
 }
 
 void VirtualLayer::onLayoutPre() {
+  if (nodes.empty()) return;  // skip layout for empty layers (no effects assigned)
+
   // resetMapping
 
   nrOfLights = 0;
-  size = layerP->lights.header.size;  // start with the physical size
+
+  // apply percentage bounds to compute the virtual layer's window into the physical fixture
+  computeLayerBounds(layerP->lights.header.size, startPct, endPct, startPhy, endPhy);
+
+  size = endPhy - startPhy;
   start = {0, 0, 0};
   end = size - 1;
   middle = size / 2;
@@ -273,9 +213,27 @@ void VirtualLayer::onLayoutPre() {
   }
 
   oneToOneMapping = true;  // addLight will set it to false as soon as irregularity is discovered
+  allOneLight = true;      // addIndexP will set it to false as soon as any m_moreLights entry appears
 }
 
-void VirtualLayer::addLight(Coord3D position) {
+bool VirtualLayer::addLight(Coord3D position) {
+  if (nodes.empty()) return false;  // skip layout for empty layers
+
+  // filter: positions outside the percentage-based bounds are blacked out (unmapped)
+  bool outsideBounds = isOutsideLayerBounds(position, startPhy, endPhy);
+
+  if (outsideBounds) {
+    // treat as unmapped — same as modifier setting position to UINT16_MAX
+    if (oneToOneMapping) {
+      oneToOneMapping = false;
+      createMappingTableAndAddOneToOne();
+    }
+    return false;  // this layer did not cover the pixel
+  }
+
+  // remap position to virtual coordinates (0-based within the layer's window)
+  position = position - startPhy;
+
   // modifiers
   for (Node* node : nodes) {
     if (node->on)  //  && node->hasModifier()
@@ -303,13 +261,15 @@ void VirtualLayer::addLight(Coord3D position) {
       oneToOneMapping = false;
       createMappingTableAndAddOneToOne();
     }
-    // set unmapped lights to 0, e.g. needed by checkerboard modifier
-    memset(&layerP->lights.channelsE[layerP->indexP * layerP->lights.header.channelsPerLight], 0, layerP->lights.header.channelsPerLight);
-    if (psramFound()) memset(&layerP->lights.channelsD[layerP->indexP * layerP->lights.header.channelsPerLight], 0, layerP->lights.header.channelsPerLight);
+    // modifier rejected this pixel (position.x == UINT16_MAX): leave channelsD untouched.
+    // compositeLayers() zeroes channelsD before every composite step, so no explicit clear needed here.
   }
+  return true;  // this layer covered the pixel
 }
 
 void VirtualLayer::onLayoutPost() {
+  if (nodes.empty()) return;  // skip layout for empty layers
+
   // prepare logging:
   nrOfLights_t nrOfOneLight = 0;
   nrOfLights_t nrOfMoreLights = 0;
@@ -353,7 +313,123 @@ void VirtualLayer::onLayoutPost() {
     }
   }
 
-  EXT_LOGI(MB_TAG, "V:%d x %d x %d = v:%d = 1:0:%d + 1:1:%d + mti:%d (1:m:%d)", size.x, size.y, size.z, nrOfLights, nrOfZeroLights, nrOfOneLight, mappingTableIndexesSizeUsed, nrOfMoreLights);
+  EXT_LOGI(ML_TAG, "V:%d x %d x %d = v:%d = 1:0:%d + 1:1:%d + mti:%d (1:m:%d)", size.x, size.y, size.z, nrOfLights, nrOfZeroLights, nrOfOneLight, mappingTableIndexesSizeUsed, nrOfMoreLights);
+
+  // Allocate (or reuse) the per-layer virtual pixel buffer now that nrOfLights is final.
+  size_t needed = (size_t)nrOfLights * layerP->lights.header.channelsPerLight;
+  if (needed > virtualChannelsByteSize) {
+    bool firstAlloc = (virtualChannelsByteSize == 0);
+    freeMB(virtualChannels);
+    virtualChannels = allocMB<uint8_t>(needed);
+    virtualChannelsByteSize = virtualChannels ? needed : 0;
+    EXT_LOGD(ML_TAG, "virtualChannels: %d bytes in %s", (int)needed, isInPSRAM(virtualChannels) ? "PSRAM" : "RAM");
+    if (firstAlloc) { transitionBrightness = 0; startTransition(255, 500); }  // fade in when layer first comes to life
+  }
+  if (virtualChannels) memset(virtualChannels, 0, virtualChannelsByteSize);
+}
+
+void VirtualLayer::compositeTo(uint8_t* dest, const LightsHeader& header) {
+  if (!virtualChannels || nodes.empty()) return;
+  uint8_t cpl = header.channelsPerLight;
+  uint8_t b = scale8(brightness, transitionBrightness);
+
+  // Fast path for pure RGB (cpl==3): no white/control channels to check.
+  // When oneToOneMapping is also true this is the tightest possible loop —
+  // avoids forEachLightIndex dispatch and all UINT8_MAX-guarded branches.
+  if (cpl == 3) {
+    CRGB* src = reinterpret_cast<CRGB*>(virtualChannels);
+    CRGB* dst = reinterpret_cast<CRGB*>(dest);
+    if (oneToOneMapping) {
+      if (b == 255) {
+        for (nrOfLights_t i = 0; i < nrOfLights; i++) dst[i] += src[i];
+      } else {
+        for (nrOfLights_t i = 0; i < nrOfLights; i++) { CRGB c = src[i]; c.nscale8_video(b); dst[i] += c; }
+      }
+    } else if (allOneLight) {
+      // Serpentine / shifted panel fast path: all mapped entries are m_oneLight —
+      // direct table access, no switch dispatch, no forEachLightIndex overhead.
+      for (nrOfLights_t indexV = 0; indexV < nrOfLights; indexV++) {
+        if (mappingTable[indexV].mapType != m_oneLight) continue;  // skip unmapped pixels
+        CRGB color = src[indexV];
+        if (b < 255) color.nscale8_video(b);
+        nrOfLights_t indexP = mappingTable[indexV].indexP;
+        presetCorrection(indexP);
+        dst[indexP] += color;
+      }
+    } else {
+      // General 1:N path (e.g. modifiers that map 1D rings to 2D grid positions).
+      for (nrOfLights_t indexV = 0; indexV < nrOfLights; indexV++) {
+        CRGB color = src[indexV];
+        if (b < 255) color.nscale8_video(b);
+        forEachLightIndex(indexV, [&](nrOfLights_t indexP) { dst[indexP] += color; });
+      }
+    }
+    return;
+  }
+
+  // General path for multi-channel lights (cpl > 3: RGBW, moving heads, etc.)
+  for (nrOfLights_t indexV = 0; indexV < nrOfLights; indexV++) {
+    uint8_t* vch = &virtualChannels[indexV * cpl];
+
+    // Primary RGB — apply effective brightness, additive composite
+    CRGB color = *reinterpret_cast<CRGB*>(&vch[header.offsetRGBW]);
+    if (b < 255) color.nscale8_video(b);
+
+    forEachLightIndex(indexV, [&](nrOfLights_t indexP) {
+      uint8_t* dst = &dest[indexP * cpl];
+
+      // Color channels: additive compositing (saturates at 255)
+      *reinterpret_cast<CRGB*>(&dst[header.offsetRGBW]) += color;
+
+      if (header.offsetWhite  != UINT8_MAX) {
+        uint8_t w = vch[header.offsetRGBW + 3];  // canonical white slot: setWhite() writes here
+        if (b < 255) w = scale8(w, b);
+        dst[header.offsetWhite] = qadd8(dst[header.offsetWhite], w);  // driver wire-order destination
+        if (header.offsetWhite2 != UINT8_MAX) {
+          uint8_t w = vch[header.offsetRGBW + 4];  // canonical second-white slot
+          if (b < 255) w = scale8(w, b);
+          dst[header.offsetWhite2] = qadd8(dst[header.offsetWhite2], w);
+        }
+      }
+      if (header.offsetRGBW1 != UINT8_MAX) {
+        CRGB c = *reinterpret_cast<CRGB*>(&vch[header.offsetRGBW1]);
+        if (b < 255) c.nscale8_video(b);
+        *reinterpret_cast<CRGB*>(&dst[header.offsetRGBW1]) += c;
+        uint8_t w = vch[header.offsetRGBW1 + 3];
+        if (b < 255) w = scale8(w, b);
+        dst[header.offsetRGBW1 + 3] = qadd8(dst[header.offsetRGBW1 + 3], w);
+        if (header.offsetRGBW2 != UINT8_MAX) {
+          CRGB c = *reinterpret_cast<CRGB*>(&vch[header.offsetRGBW2]);
+          if (b < 255) c.nscale8_video(b);
+          *reinterpret_cast<CRGB*>(&dst[header.offsetRGBW2]) += c;
+          uint8_t w = vch[header.offsetRGBW2 + 3];
+          if (b < 255) w = scale8(w, b);
+          dst[header.offsetRGBW2 + 3] = qadd8(dst[header.offsetRGBW2 + 3], w);
+          if (header.offsetRGBW3 != UINT8_MAX) {
+            CRGB c = *reinterpret_cast<CRGB*>(&vch[header.offsetRGBW3]);
+            if (b < 255) c.nscale8_video(b);
+            *reinterpret_cast<CRGB*>(&dst[header.offsetRGBW3]) += c;
+            uint8_t w = vch[header.offsetRGBW3 + 3];
+            if (b < 255) w = scale8(w, b);
+            dst[header.offsetRGBW3 + 3] = qadd8(dst[header.offsetRGBW3 + 3], w);
+          }
+        }
+      }
+
+      // Control channels (brightness, pan, tilt, zoom, rotate, gobo): copy — last layer wins.
+      // Additive semantics don't apply to positional/control signals.
+      // Brightness channels: setBrightness() already bakes in globalBrightness and layer brightness,
+      // so only transitionBrightness needs to be applied here to keep dimmer channels in sync with
+      // the layer fade-in/out without double-scaling.
+      if (header.offsetBrightness  != UINT8_MAX) dst[header.offsetBrightness]  = transitionBrightness < 255 ? scale8(vch[header.offsetBrightness],  transitionBrightness) : vch[header.offsetBrightness];
+      if (header.offsetBrightness2 != UINT8_MAX) dst[header.offsetBrightness2] = transitionBrightness < 255 ? scale8(vch[header.offsetBrightness2], transitionBrightness) : vch[header.offsetBrightness2];
+      if (header.offsetPan         != UINT8_MAX) dst[header.offsetPan]         = vch[header.offsetPan];
+      if (header.offsetTilt        != UINT8_MAX) dst[header.offsetTilt]        = vch[header.offsetTilt];
+      if (header.offsetZoom        != UINT8_MAX) dst[header.offsetZoom]        = vch[header.offsetZoom];
+      if (header.offsetRotate      != UINT8_MAX) dst[header.offsetRotate]      = vch[header.offsetRotate];
+      if (header.offsetGobo        != UINT8_MAX) dst[header.offsetGobo]        = vch[header.offsetGobo];
+    });
+  }
 }
 
 bool VirtualLayer::isMapped(nrOfLights_t indexV) const {

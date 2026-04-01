@@ -105,14 +105,14 @@ struct LightsHeader {
 };
 
 // ----------------------------------------------------------------------------
-// Lights — owns the raw channel byte arrays used for double-buffered rendering.
-// channelsE is written by effect nodes; channelsD is read by driver nodes.
-// On boards without PSRAM, both pointers alias the same allocation.
+// Lights — owns the raw channel byte array used for rendering.
+// One allocation: channelsD is the single display buffer used by both effects and drivers.
+// Parallelism between effects and drivers is achieved via per-layer virtualChannels:
+//   effects write to virtualChannels (no mutex); driver reads channelsD concurrently;
+//   compositeLayers() writes virtualChannels → channelsD only after the driver signals
+//   completion via channelsDFreeSemaphore (main.cpp).
 // ----------------------------------------------------------------------------
 struct Lights {
   LightsHeader header;
-  uint8_t* channelsE = nullptr;  // effects write here (double-buffer front)
-  uint8_t* channelsD = nullptr;  // drivers read from here (double-buffer back)
-  nrOfLights_t maxChannels = 0;
-  bool useDoubleBuffer = false;  // true only when PSRAM is available
+  uint8_t* channelsD = nullptr;  // display buffer: drivers read, compositeLayers writes
 };

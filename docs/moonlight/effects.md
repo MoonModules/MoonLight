@@ -4,31 +4,41 @@
 
 ## Overview
 
-The Effects module defines Effects and Modifiers. They run in a 'layer'. 
+The Effects module defines Effects and Modifiers. They run in a **layer**.
 
-* Effect 🔥: An animation running in a layer, see below for am overview of effects. Effects can run in 1D, 2D or 3D coordinate spaces.
+* Effect 🔥: An animation running in a layer, see below for an overview of effects. Effects can run in 1D, 2D or 3D coordinate spaces.
 * Modifier 💎: An effect on an effect e.g. mirror, multiply or rotate. See [Modifiers](https://moonmodules.org/MoonLight/moonlight/modifiers/)
-* Layer: An area on a (LED) display. Effects and modifier run in this area. Each layer maps a coordinate space to the display
-
-!!! info "One layer"
-
-    Currently there is only one layer, projected on the whole display. Multiple layers is planned later
+* Layer: An area on a (LED) display. Effects and modifiers run in this area. Each layer has its own pixel buffer and maps a coordinate space to the display.
 
 !!! info "3D"
 
-    MoonLight is build from the ground to support 3D. First there where LED strips, later LED matrices and now also 3D shapes like spheres or cubes, making it suitable for art-installations. 1D and 2D objects can be seen as 3D objects where some dimensions have a width of 1. Most effects are 1D or 2D, they will slowly be adapted to support also 3D. Modifiers can be used to project 1D on 2D or 2D on 3D layouts.
+    MoonLight is built from the ground up to support 3D. First there were LED strips, later LED matrices and now also 3D shapes like spheres or cubes, making it suitable for art-installations. 1D and 2D objects can be seen as 3D objects where some dimensions have a width of 1. Most effects are 1D or 2D, they will slowly be adapted to support also 3D. Modifiers can be used to project 1D on 2D or 2D on 3D layouts.
+
+## Layers
+
+Up to 16 independent layers can run simultaneously. Each layer:
+
+- Has its own isolated pixel buffer — effects on one layer never interfere with another.
+- Composites additively into the display: colour channels (R, G, B, W) saturate at 255, so two layers at full brightness sum together. Two layers each at half brightness (128) cross-fade naturally.
+- Has its own **Start / End** bounds (as % of the full fixture) to restrict it to a section of the display. Non-overlapping layers each cover their own segment; overlapping layers blend additively.
+- Has its own **Brightness** (0–255).
+- Fades in automatically (500 ms) when created.
+- Is destroyed automatically when its last node is removed.
+
+Control channels (pan, tilt, zoom for moving heads) are not additive — the last layer wins.
 
 ## Controls
 
-* Layer: Choose the layer (currently only one layer supported)
-    * Start, End and Brightness: read only for now, when multiple layers are implemented, these can be set per layer
-* Nodes: a list of Effects and Modifiers for a specific layer
-    * Nodes can be added (+), deleted (🗑️) or edited (✎) or reordered (drag and drop). The node to edit will be shown below the list, press save (💾) if you want to preserve the change when the device is restarted or you want to save as a preset (see Light Control)
-    * Reorder: Nodes can be reordered, defining the order of execution
-        * Effects: which effect on top of the other effect.
-        * Modifiers: which modifier is done first, e.g. circle then multiply will yield to a different result than multiply then circle
-    * Controls. A node can be switched on and off and has custom controls, which defines the behaviour of the node (e.g. effect speed).
-    * See below for a list of existing Effects and Modifiers
+* **Layer**: Select which layer to configure. Adding the first node to a new layer slot creates that layer.
+    * **Start / End**: bounds as % of the fixture on each axis (X, Y, Z). Default 0–100% = full fixture.
+    * **Brightness**: per-layer output brightness (0–255).
+* **Nodes**: list of Effects and Modifiers for the selected layer.
+    * Nodes can be added (+), deleted (🗑️), edited (✎) or reordered (drag and drop). Press save (💾) to persist changes across restarts or to save as a preset (see Light Control).
+    * Reorder defines execution order:
+        * Effects: determines which effect draws on top.
+        * Modifiers: order matters — e.g. Circle then Multiply gives a different result than Multiply then Circle.
+    * Each node can be switched on/off and has its own controls (e.g. speed, palette).
+    * See below for a list of existing Effects and Modifiers.
 
 ## Effect 🔥 Nodes
 
@@ -68,7 +78,7 @@ The following effects are created by the MoonModules team, mostly first in WLED-
 | Name | Preview | Controls | Remarks
 | ---- | ----- | ---- | ---- |
 | GEQ 3D ♫ | ![GEQ3D](https://github.com/user-attachments/assets/decb902d-1ecf-4be5-a83d-dff0a83cc65f) | <img width="320" alt="GEQ3D" src="https://github.com/user-attachments/assets/5ee5fcdf-86a4-4e88-a59e-b84166be91e2" /> | 2D effect |
-| PaintBrush ♫ 🧊 | ![PaintBrush](https://github.com/user-attachments/assets/213629af-eb8b-4c7b-9768-c0f1f2be3ed5) | <img width="320" alt="PaintBrush" src="https://github.com/user-attachments/assets/de1f9379-9984-4d9e-a95a-954df1ba69f4" /> | |
+| PaintBrush ♫ 🧊 | ![PaintBrush](https://github.com/user-attachments/assets/213629af-eb8b-4c7b-9768-c0f1f2be3ed5) | <img width="320" alt="PaintBrush" src="https://github.com/user-attachments/assets/de1f9379-9984-4d9e-a95a-954df1ba69f4" /> | The bass drives the timebase, pushing the 4 sine waves (x1,y1,z1,x2,y2,z2) "into the future" by adjusting their timebase by the amount of the lowest bass.<br>Phrase chaos adds a random number into the phase offset.<br>Color chaos wraps thru the colors whereas without it, it's picking a color based on the bar. |
 | Game Of Life 🧊 | ![](https://raw.githubusercontent.com/scottrbailey/WLED-Utils/master/gifs/FX_172.gif) | <img width="320" src="https://github.com/user-attachments/assets/18498c30-b249-4390-bfdf-084deedbfc49" /> | |
 
 

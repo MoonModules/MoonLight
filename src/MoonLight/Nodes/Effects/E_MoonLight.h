@@ -406,6 +406,7 @@ class ScrollingTextEffect : public Node {
     addControlValue("Status 🛜");
     addControlValue("Clients 🛜");
     addControlValue("Free memory");
+    addControlValue("Max free");
 
     addControl(textIn, "text", "text", 1, sizeof(textIn));  // size needed to protect char array!
 
@@ -415,7 +416,7 @@ class ScrollingTextEffect : public Node {
   void loop() override {
     layer->fadeToBlackBy(100);
 
-  #define nrOfChoices 7
+  #define nrOfChoices 8
     uint8_t choice;
     if (preset > 0)  // not auto
       choice = preset;
@@ -469,6 +470,9 @@ class ScrollingTextEffect : public Node {
       break;
     case 8:
       text.format("%dK", ESP.getFreeHeap() / 1024);
+      break;
+    case 9:
+      text.format("%dK", ESP.getMaxAllocHeap() / 1024);
       break;
     }
     layer->setRGB(Coord3D(choice - 1), CRGB::Blue);

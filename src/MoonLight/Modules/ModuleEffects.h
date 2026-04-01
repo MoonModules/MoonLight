@@ -16,6 +16,7 @@
 
   #include "FastLED.h"
   #include "MoonBase/NodeManager.h"
+  #include "MoonLight/Layers/LayerManager.h"
   #include "MoonLight/Modules/ModuleLightsControl.h"
 
 // #include "MoonBase/Nodes.h" //Nodes.h will include VirtualLayer.h which will include PhysicalLayer.h
@@ -23,6 +24,7 @@
 class ModuleEffects : public NodeManager {
  public:
   ModuleLightsControl* _moduleLightsControl;
+  LayerManager layerMgr;
 
   ModuleEffects(PsychicHttpServer* server, ESP32SvelteKit* sveltekit, FileManager* fileManager, ModuleLightsControl* moduleLightsControl) : NodeManager("effects", server, sveltekit, fileManager) {
     EXT_LOGV(ML_TAG, "constructor");
@@ -31,8 +33,10 @@ class ModuleEffects : public NodeManager {
 
   void begin() override {
     defaultNodeName = getNameAndTags<RandomEffect>();
-    nodes = &(layerP.layers[0]->nodes);  // to do add nodes from all layers...
+    layerMgr.init(_state, nodes, requestUIUpdate);
+    layerMgr.selectLayer(0, false);  // initial setup, no state to swap yet
     NodeManager::begin();
+    layerMgr.scheduleRestore();
 
   #if FT_ENABLED(FT_MONITOR)
     _sveltekit->getSocket()->registerEvent("monitor");
@@ -50,34 +54,12 @@ class ModuleEffects : public NodeManager {
     });
   #endif
 
-    _state.readHook = [&](JsonObject data) {
-      data["start"]["x"] = 0;
-      data["start"]["y"] = 0;
-      data["start"]["z"] = 0;
-      data["end"]["x"] = layerP.lights.header.size.x;
-      data["end"]["y"] = layerP.lights.header.size.y;
-      data["end"]["z"] = layerP.lights.header.size.z;
-      data["brightness"] = layerP.lights.header.brightness;
-    };
+    layerMgr.installReadHook();
   }
 
   void setupDefinition(const JsonArray& controls) override {
     EXT_LOGV(ML_TAG, "");
-    JsonObject control;  // state.data has one or more properties
-    control = addControl(controls, "layer", "select");
-    control["default"] = 0;  // the first entry has index 0 and refers to Layer 1 (layer counting starts with 1)
-    uint8_t i = 1;           // start with one
-    for (VirtualLayer* layer : layerP.layers) {
-      Char<12> layerName;
-      layerName.format("Layer %d", i);
-      addControlValue(control, layerName.c_str());
-      i++;
-    }
-
-    addControl(controls, "start", "coord3D", 0, UINT16_MAX, true);
-    addControl(controls, "end", "coord3D", 0, UINT16_MAX, true);
-    addControl(controls, "brightness", "slider", 0, UINT8_MAX, true);
-
+    LayerManager::addLayerControls(*this, controls);
     NodeManager::setupDefinition(controls);
   }
 
@@ -337,27 +319,36 @@ class ModuleEffects : public NodeManager {
     if (node) {
       EXT_LOGI(ML_TAG, "Add %s (p:%p pr:%d)", name, node, isInPSRAM(node));
 
-      node->constructor(layerP.layers[0], controls, &layerP.effectsMutex);  // pass the layer to the node
-      node->moduleControl = _moduleLightsControl;                           // to access global lights control functions if needed
+      VirtualLayer* layer = layerP.ensureLayer(layerMgr.getSelectedLayer());
+      node->constructor(layer, controls, &layerP.effectsMutex);  // pass the selected layer to the node
+      node->moduleControl = _moduleLightsControl;                // to access global lights control functions if needed
       // node->moduleIO = _moduleIO;                     // to get pin allocations
       node->moduleNodes = (Module*)this;  // cppcheck-suppress dangerousTypeCast -- upcast; to request UI update
       node->setup();                      // run the setup of the effect
-      if (layerP.lights.maxChannels > 0)  // only if channels are allocated (layerP.setup() has run)
-        node->onSizeChanged(Coord3D());   // to init memory allocations
-      // layers[0]->nodes.reserve(index+1);
+      node->onSizeChanged(Coord3D());   // to init memory allocations
 
       // from here it runs concurrently in the effects task
-      if (index >= layerP.layers[0]->nodes.size())
-        layerP.layers[0]->nodes.push_back(node);
+      if (index >= layer->nodes.size())
+        layer->nodes.push_back(node);
       else
-        layerP.layers[0]->nodes[index] = node;  // add the node to the layer
+        layer->nodes[index] = node;  // add the node to the layer
     }
 
     return node;
   }
 
+  void onNodeRemoved() override {
+    layerMgr.onNodeRemoved();
+  }
+
+  void onBeforeStateLoad() override {
+    layerMgr.prepareForPresetLoad();
+  }
+
   void loop20ms() override {
     NodeManager::loop20ms();
+
+    layerMgr.checkRestore(*this);
 
     if (triggerResetPreset) {
       triggerResetPreset = false;
@@ -417,6 +408,9 @@ class ModuleEffects : public NodeManager {
   }
 
   void onUpdate(const UpdatedItem& updatedItem) override {
+    // delegate layer-related updates to LayerManager
+    if (layerMgr.handleUpdate(updatedItem)) return;
+
     NodeManager::onUpdate(updatedItem);
     if (updatedItem.originId->toInt()) {  // UI triggered
       triggerResetPreset = true;

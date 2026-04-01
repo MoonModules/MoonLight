@@ -40,7 +40,14 @@ class RainbowEffect : public Node {
         paletteIndex += deltaHue;
       }
     } else {
-      layer->fill_rainbow(hue >> 8, deltaHue);  // hue back to uint8_t
+      CHSV hsv;
+      hsv.hue = hue >> 8;
+      hsv.val = 255;
+      hsv.sat = 240;
+      for (nrOfLights_t i = 0; i < layer->nrOfLights; i++) {
+        layer->setRGB(i, hsv);
+        hsv.hue += deltaHue;
+      }
     }
     hue += speed * 32;
 
@@ -149,7 +156,7 @@ class FixedPointCanvasDemoEffect : public Node {
     addControlValue("Branching Tree");
   }
 
-  CRGB* canvasBuf = nullptr;  // local buffer when needed, or points to channelsE
+  CRGB* canvasBuf = nullptr;  // local buffer when needed, or points to virtualChannels
   size_t canvasBufSize = 0;
   bool canvasBufOwned = false; // true if we allocated canvasBuf (must free it)
 
@@ -159,18 +166,18 @@ class FixedPointCanvasDemoEffect : public Node {
   uint8_t lastDemo = 255;
 
   // Returns true when canvas operations need a separate CRGB buffer
-  // (non-RGB lights or virtual mapping means channelsE isn't a flat CRGB array)
+  // (non-RGB lights or virtual mapping means virtualChannels isn't a flat CRGB array)
   bool needsLocalBuf() { return !layer->oneToOneMapping || layerP.lights.header.channelsPerLight != 3; }
 
   void onSizeChanged(const Coord3D& prevSize) override {
     nrOfLights_t nrOfLights = layer->size.x * layer->size.y;
     if (needsLocalBuf()) {
-      if (!canvasBufOwned) { canvasBuf = nullptr; canvasBufSize = 0; } // don't realloc the aliased channelsE pointer
+      if (!canvasBufOwned) { canvasBuf = nullptr; canvasBufSize = 0; } // don't realloc the aliased virtualChannels pointer
       reallocMB2<CRGB>(canvasBuf, canvasBufSize, nrOfLights, "fpcdBuf");
       canvasBufOwned = true;
     } else {
       if (canvasBufOwned && canvasBuf) { freeMB(canvasBuf, "fpcdBuf"); }
-      canvasBuf = (CRGB*)layerP.lights.channelsE;
+      canvasBuf = (CRGB*)layer->virtualChannels;  // alias virtualChannels directly (one-to-one RGB3 mapping)
       canvasBufSize = nrOfLights;
       canvasBufOwned = false;
     }
@@ -284,7 +291,7 @@ class FixedPointCanvasDemoEffect : public Node {
     starSpin = starSpin + coord::from_raw(1966);  // +0.03 rad/frame
     if (starSpin.raw() > kTwoPi.raw()) starSpin = starSpin - kTwoPi;
 
-    // Copy canvasBuf to channelsE via setRGB when using local buffer
+    // Copy canvasBuf to virtualChannels via setRGB when using local buffer
     if (canvasBufOwned) {
       nrOfLights_t nrOfLights = layer->size.x * layer->size.y;
       for (nrOfLights_t i = 0; i < nrOfLights && i < canvasBufSize; i++) {
@@ -1171,7 +1178,7 @@ class ColorTrailsEffect : public Node {
   Perlin1D noiseX{}, noiseY{};
   float* xProf = nullptr;  // one noise value per column
   float* yProf = nullptr;  // one noise value per row
-  CRGB* canvasBuf = nullptr;  // local buffer when needed, or points to channelsE
+  CRGB* canvasBuf = nullptr;  // local buffer when needed, or points to virtualChannels
   CRGB* tempBuf = nullptr;    // intermediate buffer for advection (always allocated)
   size_t canvasBufSize = 0;
   size_t xProfSize = 0;
@@ -1198,12 +1205,12 @@ class ColorTrailsEffect : public Node {
     int H = layer->size.y;
     size_t nrOfLights = W * H;
     if (needsLocalBuf()) {
-      if (!canvasBufOwned) { canvasBuf = nullptr; canvasBufSize = 0; } // don't realloc the aliased channelsE pointer
+      if (!canvasBufOwned) { canvasBuf = nullptr; canvasBufSize = 0; } // don't realloc the aliased virtualChannels pointer
       reallocMB2<CRGB>(canvasBuf, canvasBufSize, nrOfLights, "ctCanvas");
       canvasBufOwned = true;
     } else {
       if (canvasBufOwned && canvasBuf) { freeMB(canvasBuf, "ctCanvas"); }
-      canvasBuf = (CRGB*)layerP.lights.channelsE;
+      canvasBuf = (CRGB*)layer->virtualChannels;  // alias virtualChannels directly (one-to-one RGB3 mapping)
       canvasBufSize = nrOfLights;
       canvasBufOwned = false;
     }
@@ -1440,7 +1447,7 @@ class ColorTrailsEffect : public Node {
     // Advect + fade
     advectAndDim(canvasBuf, W, H, dt);
 
-    // Copy canvas to channelsE via setRGB when using local buffer
+    // Copy canvas to virtualChannels via setRGB when using local buffer
     if (canvasBufOwned) {
       nrOfLights_t nrOfLights = W * H;
       for (nrOfLights_t i = 0; i < nrOfLights && i < canvasBufSize; i++) {

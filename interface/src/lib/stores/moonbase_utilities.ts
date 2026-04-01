@@ -56,8 +56,19 @@ export function positionDropdown(
 			clampedTop + selectedEl.offsetTop + selectedEl.offsetHeight / 2 - triggerCenterY
 		);
 	} else {
-		listEl.style.top = `${triggerRect.bottom + 2}px`;
-		listEl.style.maxHeight = `${vh - triggerRect.bottom - 8}px`;
+		// No selected item: open below if there is enough room, otherwise flip above —
+		// mirroring the behaviour of a native <select>.
+		const spaceBelow = vh - triggerRect.bottom - 8;
+		const spaceAbove = triggerRect.top - 8;
+		const listHeight = Math.min(listEl.scrollHeight, vh * 0.75);
+		if (spaceBelow >= listHeight || spaceBelow >= spaceAbove) {
+			listEl.style.top = `${triggerRect.bottom + 2}px`;
+			listEl.style.maxHeight = `${Math.max(0, spaceBelow)}px`;
+		} else {
+			const cappedHeight = Math.min(listHeight, spaceAbove);
+			listEl.style.top = `${Math.max(4, triggerRect.top - cappedHeight - 2)}px`;
+			listEl.style.maxHeight = `${cappedHeight}px`;
+		}
 	}
 }
 

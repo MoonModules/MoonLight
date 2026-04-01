@@ -56,8 +56,11 @@ class NodeManager : public Module {
     entry["category"] = T::category();
   }
 
+ public:
   /// Factory method: creates the correct Node subclass for the given name. Returns nullptr if unknown.
   virtual Node* addNode(const uint8_t index, char* name, const JsonArray& controls) const { return nullptr; }
+
+ protected:
 
   /// Checks if name matches T::name() (case/symbol insensitive) and allocates a T if so.
   template <typename T>
@@ -89,6 +92,14 @@ class NodeManager : public Module {
 
   /// Handles nodes[i].controls[j].value changes: updates the control value and calls node's onUpdate.
   void handleNodeControlValueChange(const UpdatedItem& updatedItem, JsonVariant nodeState);
+
+ protected:
+  /// Called after a node is removed from the nodes list. Override to handle cleanup (e.g. destroying empty layers).
+  virtual void onNodeRemoved() {}
+
+  /// Called just before a full state reload from the filesystem (e.g. preset switch).
+  /// Override to clean up any state that must be cleared before compareRecursive runs.
+  virtual void onBeforeStateLoad() {}
 
  public:
   #if FT_LIVESCRIPT

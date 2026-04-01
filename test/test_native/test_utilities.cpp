@@ -361,6 +361,168 @@ TEST_CASE("Char: non-member operator+ (const char* + Char)") {
 }
 
 // ============================================================
+// LayerFunctions tests
+// ============================================================
+
+#include "MoonBase/utilities/LayerFunctions.h"
+
+TEST_CASE("pctToPixel") {
+  CHECK_EQ(pctToPixel(0, 16), 0);
+  CHECK_EQ(pctToPixel(100, 16), 16);
+  CHECK_EQ(pctToPixel(50, 16), 8);
+  CHECK_EQ(pctToPixel(25, 16), 4);
+  CHECK_EQ(pctToPixel(75, 16), 12);
+  CHECK_EQ(pctToPixel(50, 1), 0);     // 50% of 1 pixel rounds down to 0
+  CHECK_EQ(pctToPixel(100, 1), 1);
+  CHECK_EQ(pctToPixel(0, 256), 0);
+  CHECK_EQ(pctToPixel(100, 256), 256);
+}
+
+TEST_CASE("computeLayerBounds: full range") {
+  Coord3D startPhy, endPhy;
+  computeLayerBounds({16, 16, 1}, {0, 0, 0}, {100, 100, 100}, startPhy, endPhy);
+  CHECK(startPhy == Coord3D(0, 0, 0));
+  CHECK(endPhy == Coord3D(16, 16, 1));
+}
+
+TEST_CASE("computeLayerBounds: half range") {
+  Coord3D startPhy, endPhy;
+  computeLayerBounds({16, 16, 1}, {0, 0, 0}, {50, 50, 100}, startPhy, endPhy);
+  CHECK(startPhy == Coord3D(0, 0, 0));
+  CHECK(endPhy == Coord3D(8, 8, 1));
+}
+
+TEST_CASE("computeLayerBounds: second half") {
+  Coord3D startPhy, endPhy;
+  computeLayerBounds({16, 16, 1}, {50, 50, 0}, {100, 100, 100}, startPhy, endPhy);
+  CHECK(startPhy == Coord3D(8, 8, 0));
+  CHECK(endPhy == Coord3D(16, 16, 1));
+}
+
+TEST_CASE("computeLayerBounds: minimum size guarantee") {
+  // end == start should still produce at least 1 pixel per dimension
+  Coord3D startPhy, endPhy;
+  computeLayerBounds({16, 16, 1}, {50, 50, 0}, {50, 50, 0}, startPhy, endPhy);
+  CHECK(startPhy == Coord3D(8, 8, 0));
+  CHECK(endPhy == Coord3D(9, 9, 1));  // guaranteed minimum 1 pixel
+}
+
+TEST_CASE("computeLayerBounds: z-dimension with depth 1") {
+  // end.z 50% of depth=1 → 0, but minimum guarantee bumps to start+1
+  Coord3D startPhy, endPhy;
+  computeLayerBounds({16, 16, 1}, {0, 0, 0}, {100, 100, 50}, startPhy, endPhy);
+  CHECK(endPhy.z == 1);  // minimum 1, not 0
+}
+
+TEST_CASE("isOutsideLayerBounds") {
+  Coord3D start(4, 4, 0), end(12, 12, 1);
+
+  // inside
+  CHECK_FALSE(isOutsideLayerBounds({4, 4, 0}, start, end));
+  CHECK_FALSE(isOutsideLayerBounds({11, 11, 0}, start, end));
+  CHECK_FALSE(isOutsideLayerBounds({8, 8, 0}, start, end));
+
+  // outside — boundary is exclusive on the end
+  CHECK(isOutsideLayerBounds({3, 4, 0}, start, end));   // x below
+  CHECK(isOutsideLayerBounds({12, 4, 0}, start, end));  // x at end (exclusive)
+  CHECK(isOutsideLayerBounds({4, 3, 0}, start, end));   // y below
+  CHECK(isOutsideLayerBounds({4, 12, 0}, start, end));  // y at end
+  CHECK(isOutsideLayerBounds({4, 4, 1}, start, end));   // z at end
+  CHECK(isOutsideLayerBounds({0, 0, 0}, start, end));   // completely outside
+}
+
+TEST_CASE("coordToIndex: 2D grid") {
+  Coord3D size(16, 16, 1);
+  CHECK_EQ(coordToIndex({0, 0, 0}, size), 0);
+  CHECK_EQ(coordToIndex({1, 0, 0}, size), 1);
+  CHECK_EQ(coordToIndex({0, 1, 0}, size), 16);
+  CHECK_EQ(coordToIndex({15, 15, 0}, size), 255);
+}
+
+TEST_CASE("coordToIndex: 3D grid") {
+  Coord3D size(4, 4, 4);
+  CHECK_EQ(coordToIndex({0, 0, 0}, size), 0);
+  CHECK_EQ(coordToIndex({3, 3, 3}, size), 63);
+  CHECK_EQ(coordToIndex({0, 0, 1}, size), 16);  // z=1 → 4*4=16
+  CHECK_EQ(coordToIndex({1, 2, 3}, size), 1 + 2 * 4 + 3 * 16);
+}
+
+TEST_CASE("coordToIndex: 1D strip") {
+  Coord3D size(100, 1, 1);
+  CHECK_EQ(coordToIndex({0, 0, 0}, size), 0);
+  CHECK_EQ(coordToIndex({99, 0, 0}, size), 99);
+}
+
+TEST_CASE("scale8x8: identity") {
+  CHECK_EQ(scale8x8(255, 255, 255), 255);
+  CHECK_EQ(scale8x8(0, 255, 255), 0);
+  CHECK_EQ(scale8x8(255, 0, 255), 0);
+  CHECK_EQ(scale8x8(255, 255, 0), 0);
+}
+
+TEST_CASE("scale8x8: single factor") {
+  // value * 255 * factor / 65025 = value * factor / 255
+  CHECK_EQ(scale8x8(255, 128, 255), 128);
+  CHECK_EQ(scale8x8(255, 255, 128), 128);
+  CHECK_EQ(scale8x8(128, 255, 255), 128);
+}
+
+TEST_CASE("scale8x8: double factor") {
+  // 255 * 128 * 128 / 65025 ≈ 64
+  CHECK_EQ(scale8x8(255, 128, 128), 64);
+  // symmetry
+  CHECK_EQ(scale8x8(128, 128, 255), 64);
+}
+
+TEST_CASE("scale8x8: small values") {
+  CHECK_EQ(scale8x8(1, 1, 1), 0);      // rounds down
+  CHECK_EQ(scale8x8(1, 255, 255), 1);   // preserves 1 when both factors max
+  CHECK_EQ(scale8x8(10, 128, 255), 5);  // 10 * 128 / 255 ≈ 5
+}
+
+TEST_CASE("multi-layer memory: proportional allocation") {
+  // Two half-layers should have the same total virtual pixels as one full layer
+  Coord3D physSize(16, 16, 1);
+
+  // Full layer
+  Coord3D fullStart, fullEnd;
+  computeLayerBounds(physSize, {0, 0, 0}, {100, 100, 100}, fullStart, fullEnd);
+  Coord3D fullSize = fullEnd - fullStart;
+  int fullPixels = fullSize.x * fullSize.y * fullSize.z;
+
+  // Two half-layers (left and right)
+  Coord3D halfStart1, halfEnd1, halfStart2, halfEnd2;
+  computeLayerBounds(physSize, {0, 0, 0}, {50, 100, 100}, halfStart1, halfEnd1);
+  computeLayerBounds(physSize, {50, 0, 0}, {100, 100, 100}, halfStart2, halfEnd2);
+  Coord3D halfSize1 = halfEnd1 - halfStart1;
+  Coord3D halfSize2 = halfEnd2 - halfStart2;
+  int halfPixels = halfSize1.x * halfSize1.y * halfSize1.z + halfSize2.x * halfSize2.y * halfSize2.z;
+
+  CHECK_EQ(fullPixels, halfPixels);
+  CHECK_EQ(fullPixels, 256);
+  CHECK_EQ(halfSize1.x, 8);
+  CHECK_EQ(halfSize2.x, 8);
+}
+
+TEST_CASE("multi-layer memory: four quadrants") {
+  Coord3D physSize(16, 16, 1);
+
+  Coord3D fullStart, fullEnd;
+  computeLayerBounds(physSize, {0, 0, 0}, {100, 100, 100}, fullStart, fullEnd);
+  int fullPixels = (fullEnd.x - fullStart.x) * (fullEnd.y - fullStart.y) * (fullEnd.z - fullStart.z);
+
+  int totalQuadrantPixels = 0;
+  int pcts[4][4] = {{0, 0, 50, 50}, {50, 0, 100, 50}, {0, 50, 50, 100}, {50, 50, 100, 100}};
+  for (auto& p : pcts) {
+    Coord3D s, e;
+    computeLayerBounds(physSize, {p[0], p[1], 0}, {p[2], p[3], 100}, s, e);
+    totalQuadrantPixels += (e.x - s.x) * (e.y - s.y) * (e.z - s.z);
+  }
+
+  CHECK_EQ(fullPixels, totalQuadrantPixels);
+}
+
+// ============================================================
 // FastLED fl::map_range tests
 // ============================================================
 

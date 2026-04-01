@@ -59,6 +59,10 @@ A node implements the following (overloaded) functions:
 
     * An effect has a loop which is ran for each frame produced. In each loop, the lights in the virtual layer gets it's values using the setRGB function. For multichannel lights also functions as setWhite or (for Moving Heads) setPan, setTilt, setZoom etc. Also getRGB etc functions exists.
 
+### LayerManager and layer targeting
+
+Node construction is routed through `LayerManager`: `ModuleEffects::addNode()` calls `layerMgr.getSelectedLayer()` and `layerP.ensureLayer(index)` to target the currently active layer — never hard-code `layers[0]` in a new module. Modules that host layers must also override `onNodeRemoved()` and `onBeforeStateLoad()` to delegate to `layerMgr.onNodeRemoved()` and `layerMgr.prepareForPresetLoad()` respectively; `ModuleEffects` is the reference implementation for both.
+
 ## Drivers
 
 ### Initless drivers
@@ -185,13 +189,13 @@ All downstream logic — gamma/brightness LUT via `rgbwBufferMapping()`, per-lig
 
 **IRGB example**: `offsetBrightness = 0` (CH1 = master dimmer), `offsetRGBW = 1`, `offsetRed/Green/Blue = 0/1/2`. `VirtualLayer::loop()` fills CH1 with the global brightness before effects run; `DriverNode::loop()` drives the LUT at full so RGB channels are unscaled.
 
-#### Double-buffer reads in driver loop()
+#### Concurrent reads in driver loop()
 
-Drivers always read `channelsD` **without** holding `swapMutex`. This is intentional: `driverTask` releases `swapMutex` before calling `loopDrivers()` (see `main.cpp` lines 210-218). `effectTask` may swap the `channelsD`/`channelsE` pointers concurrently, producing at most one torn frame — an accepted trade-off of the double-buffer design.
+Drivers always read `channelsD` **without** holding `swapMutex`. This is safe: `effectTask` writes to per-layer `virtualChannels` (different memory) while the driver reads `channelsD`. The `compositeLayers()` step that writes `virtualChannels → channelsD` only runs after the driver gives `channelsDFreeSemaphore`, so there is no concurrent access to `channelsD`.
 
 Do not add `swapMutex` guards inside `DriverNode::loop()`. The reference is [`D_ArtnetOut.h`](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Drivers/D_ArtnetOut.h).
 
-Exception: writes **to** `channelsD` from non-driver-task paths (e.g. DMX In `processChannels()`, ArtNet In) must take `swapMutex`.
+Exception: writes **to** `channelsD` from non-driver-task paths (e.g. DMX In `processChannels()`, ArtNet In) must take `swapMutex` to avoid racing with `compositeLayers()`.
 
 ### DMX In / DMX Out
 

@@ -78,7 +78,14 @@ class PhysicalLayer {
   void setup();
 
   // Run one effect frame across all virtual layers (called from effectTask, Core 0).
+  // Effects write to per-layer virtualChannels; compositeLayers() is called from main.cpp
+  // after channelsDFreeSemaphore confirms the driver has finished reading channelsD.
   void loop();
+
+  // Composite all virtual layers into channelsD.
+  // Called from effectTask under swapMutex after channelsDFreeSemaphore confirms the driver
+  // has finished reading channelsD. Zeroes the buffer first so additive blending starts clean.
+  void compositeLayers();
 
   // Run 20 ms periodic updates across all virtual layers (called from effectTask(), Core 0).
   void loop20ms();
@@ -97,7 +104,7 @@ class PhysicalLayer {
   uint8_t pass = 0;
 
   // When true, pass 1 skips pin-state rebuild: ledsPerPin/ledPinsAssigned are not reset
-  // and nextPin() assignments are suppressed. Positions are always stored to channelsE on
+  // and nextPin() assignments are suppressed. Positions are always stored to channelsD on
   // every pass 1 regardless of this flag; only pin-state mutation is gated.
   bool monitorPass = false;
 
@@ -115,6 +122,21 @@ class PhysicalLayer {
 
   // Called after all addLight() calls in a pass; finalises sizes and notifies virtual layers.
   void onLayoutPost();
+
+  // Number of VirtualLayer slots currently in use (created and non-null).
+  // Starts at 1 (layer 0 always exists). Incremented by ensureLayer(), decremented when a layer is deleted.
+  // Use this instead of layers.size() to distinguish active layers from pre-allocated empty slots.
+  uint8_t activeLayerCount = 1;
+
+  // Internal: actual byte count of the channelsD allocation.  Zero until first layout pass 1.
+  // Grows lazily inside addLight() (doubling), resized to nrOfChannels at end of pass 1.
+  // At steady state equals lights.header.nrOfChannels; kept separate because during pass 1
+  // nrOfChannels still holds the previous layout's value while channelsD is being grown.
+  size_t channelsDCapacity = 0;
+
+  // Ensures the VirtualLayer at the given index exists, creating it on demand if needed.
+  // Returns nullptr if index is out of bounds.
+  VirtualLayer* ensureLayer(uint8_t index);
 
   // Per-pin LED strip configuration (populated by board presets via ModuleIO).
   uint8_t ledPins[MAXLEDPINS];          // pin numbers in board preset order

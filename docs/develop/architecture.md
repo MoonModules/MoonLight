@@ -53,23 +53,23 @@ sequenceDiagram
     SvelteKit->>SvelteKit: Update in-memory state
     
     Note over EffectTask: Core 0 (PRO_CPU)
-    EffectTask->>EffectTask: Take mutex (10µs)
-    EffectTask->>EffectTask: memcpy channelsD → channelsE
+    EffectTask->>EffectTask: Take mutex, check !newFrameReady
     EffectTask->>EffectTask: Release mutex
-    EffectTask->>EffectTask: Compute effects (5-15ms)
+    EffectTask->>EffectTask: Write effects → virtualChannels (5-15ms)
+    EffectTask->>EffectTask: Wait: channelsDFreeSemaphore
     EffectTask->>EffectTask: Take mutex (10µs)
-    EffectTask->>EffectTask: Swap buffer pointers
-    EffectTask->>EffectTask: Release mutex
+    EffectTask->>EffectTask: compositeLayers(): zero + composite → channelsD
+    EffectTask->>EffectTask: newFrameReady = true, release mutex
 
     Note over DriverTask: Core 1 (APP_CPU)
-    DriverTask->>DriverTask: Take mutex (10µs)
-    DriverTask->>DriverTask: Capture buffer pointer
+    DriverTask->>DriverTask: Take mutex, newFrameReady=false
     DriverTask->>DriverTask: Release mutex
-    DriverTask->>DriverTask: Send via DMA (1-5ms)
+    DriverTask->>DriverTask: Send channelsD via DMA (1-5ms)
     DriverTask->>LEDs: Pixel data
+    DriverTask->>DriverTask: Give channelsDFreeSemaphore
 ```
 
-HTTPP task
+HTTP task
 
 * no assigned core (OS decides), prio 5
 * processes WebUI / Websockets
@@ -144,26 +144,26 @@ Design Principles
     - Tasks interleave efficiently via FreeRTOS scheduling
     - **Result**: "Full speed ahead" - minimal blocking
 
-## Double Buffering & Synchronization
+## Parallel Rendering & Synchronization
 
-Buffer Architecture (PSRAM Only)
+Buffer Architecture
 
 ```mermaid
 graph LR
     subgraph MemoryBuffers["Memory Buffers"]
-        Effects[Effects Buffer<br/>channelsE*]
-        Drivers[Drivers Buffer<br/>channelsD*]
+        Virtual[Per-layer<br/>virtualChannels]
+        Display[Display Buffer<br/>channelsD]
     end
-    
-    EffectTask[Effect Task<br/>Core 0] -.->|1. memcpy| Effects
-    EffectTask -.->|2. Compute effects| Effects
-    EffectTask -.->|3. Swap pointers<br/>MUTEX 10µs| Drivers
-    
-    DriverTask[Driver Task<br/>Core 1] -->|4. Read pixels| Drivers
-    DriverTask -->|5. Send via DMA| LEDs[LEDs]
-    
-    style Effects fill:#898f89
-    style Drivers fill:#898c8f
+
+    EffectTask[Effect Task<br/>Core 0] -.->|1. Write effects| Virtual
+    EffectTask -.->|2. compositeLayers()<br/>MUTEX + semaphore| Display
+
+    DriverTask[Driver Task<br/>Core 1] -->|3. Read pixels| Display
+    DriverTask -->|4. Send via DMA| LEDs[LEDs]
+    DriverTask -.->|5. Give semaphore| EffectTask
+
+    style Virtual fill:#898f89
+    style Display fill:#898c8f
 ```
 
 Synchronization Flow
@@ -246,22 +246,19 @@ Overhead Analysis
 
 ## Configuration
 
-Enabling Double Buffering
+Buffer Allocation
 
-Double buffering is **automatically enabled** when PSRAM is detected:
+`channelsD` is allocated lazily — nothing is pre-allocated at boot. During layout pass 1, `addLight()` grows `channelsD` on demand using a doubling strategy (starting at 768 bytes). At the end of pass 1, `onLayoutPost()` resizes it to exactly `nrOfChannels = nrOfLights × channelsPerLight`. Per-layer `virtualChannels` are allocated the same way in `VirtualLayer::onLayoutPost()`.
 
-```cpp
-// In PhysicalLayer::setup()
-if (psramFound()) {
-  lights.useDoubleBuffer = true;
-  lights.channelsE = allocMB<uint8_t>(maxChannels);
-  lights.channelsD = allocMB<uint8_t>(maxChannels);
-} else {
-  lights.useDoubleBuffer = false;
-  lights.channelsE = allocMB<uint8_t>(maxChannels);
-  lights.channelsD = lights.channelsE;
-}
-```
+This means:
+
+- **Steady state**: `channelsD` holds only the bytes needed for the active panel (e.g. 768 bytes for 256 RGB LEDs on ESP32-D0).
+- **Same layout, next pass**: zero reallocs — existing capacity already fits both position storage (`nrOfLights × 3`) and channel data.
+- **Layout grows**: `addLight()` doubles capacity as needed; `onLayoutPost()` trims to exact size.
+- **Layout shrinks** or **`channelsPerLight` changes**: `onLayoutPost()` resizes to the new `nrOfChannels`.
+- **OOM**: `realloc` returns `nullptr`; position writes are skipped but light counts still accumulate. `loop()` and `compositeLayers()` guard on `!channelsD`.
+
+The old `maxChannels` field (a static pre-computed safety cap stored in `Lights`) has been removed. A file-scope `channelsDCapacity` variable in `PhysicalLayer.cpp` tracks the actual allocation size during layout passes; at steady state it equals `nrOfChannels` and is not exposed outside that file.
 
 Moving ESP32SvelteKit to Core 1
 

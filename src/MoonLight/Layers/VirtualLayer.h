@@ -17,6 +17,7 @@
 
   #include <vector>
 
+  #include "MoonBase/utilities/LayerFunctions.h"
   #include "PhysMap.h"  // pure types: MapTypeEnum, PhysMap — no ESP32 deps
   #include "PhysicalLayer.h"
 
@@ -57,9 +58,6 @@ class VirtualLayer {
   // Effect / modifier / layout nodes assigned to this virtual layer.
   std::vector<Node*, VectorRAMAllocator<Node*>> nodes;
 
-  // Minimum fade amount requested this frame (0 = no fade). Applied at start of loop().
-  uint8_t fadeMin = 0;
-
   // Dimensionality of the current effect (1D / 2D / 3D).
   uint8_t effectDimension = _3D;
 
@@ -72,6 +70,38 @@ class VirtualLayer {
   // When true, every virtual index maps 1:1 to a physical index (no mappingTable needed).
   bool oneToOneMapping = false;
 
+  // When true, no virtual pixel fans out to more than one physical pixel (all entries are
+  // m_oneLight or m_zeroLights). Enables a direct-table fast path in compositeTo() that
+  // bypasses the forEachLightIndex switch. Set false as soon as any m_moreLights entry is created.
+  bool allOneLight = true;
+
+  // Per-layer brightness (0–255). Scales pixel output within this layer. Default 255 = full.
+  uint8_t brightness = 255;
+
+  // Transition animation: auto-stepped brightness overlay applied in compositeTo() independently
+  // of the user-set brightness. Allows smooth fade-in/out without changing the brightness control.
+  // Effective brightness = scale8(brightness, transitionBrightness).
+  uint8_t transitionBrightness = 255;  // current animated value (255 = no extra dimming)
+  uint8_t transitionTarget     = 255;  // value to animate toward; animation stops here
+  int16_t transitionStep       = 0;    // signed delta added per frame; 0 = idle
+
+  // Fade amount requested by effects this frame (consumed by PhysicalLayer::loop() next frame).
+  uint8_t fadeBy = 0;
+
+  // Per-layer virtual pixel buffer. Effects write here (indexed by virtual pixel index, not
+  // physical). compositeTo() maps virtualChannels → physical channelsD after all layers render.
+  // Allocated in onLayoutPost(), freed in destructor. nullptr until first layout completes.
+  uint8_t* virtualChannels     = nullptr;
+  size_t   virtualChannelsByteSize = 0;
+
+  // Layer boundaries as percentages (0–100) of the total fixture size. Default 100% = full fixture.
+  Coord3D startPct = {0, 0, 0};
+  Coord3D endPct = {100, 100, 100};
+
+  // Physical coordinates computed from percentages during onLayoutPre (used by addLight to filter/remap).
+  Coord3D startPhy = {0, 0, 0};
+  Coord3D endPhy = {0, 0, 0};
+
   VirtualLayer();
   ~VirtualLayer();
 
@@ -81,6 +111,12 @@ class VirtualLayer {
   // Run one effect frame: apply fade, update brightness channels, loop all effect nodes.
   // Called from effectTask (Core 0) every frame.
   void loop();
+
+  // Composite virtualChannels into dest[], applying per-layer brightness and the physical
+  // mapping (forEachLightIndex). Uses additive compositing (saturates at 255) so multiple
+  // layers at full brightness sum correctly, and overlapping layers at reduced brightness
+  // crossfade naturally. Called by PhysicalLayer::loop() after each layer->loop().
+  void compositeTo(uint8_t* dest, const LightsHeader& header);
 
   // Run 20 ms periodic updates for all nodes (called from SvelteKit task, Core 1).
   void loop20ms();
@@ -127,7 +163,7 @@ class VirtualLayer {
         break;
       }
     } else {                                                                                      // no mapping table — direct pass-through
-      // if ((indexV + 1) * layerP->lights.header.channelsPerLight <= layerP->lights.maxChannels) {  // bounds check
+      // bounds check omitted: nrOfChannels is always sized to the actual layout
         callback(indexV);                                                                         // no presetCorrection here (lightPreset_RGB2040 has a mapping)
       // } else
       //   EXT_LOGD(ML_TAG, "%d", indexV);
@@ -139,21 +175,27 @@ class VirtualLayer {
   // All positions/indices are virtual (mapped to physical by forEachLightIndex).
   // ----------------------------------------------------------------------------
 
-  // Set one channel value (by offset within a light's channel block) for all physical lights at indexV.
+  // Set one channel value (by offset within a light's channel block) at virtual index indexV.
+  // Writes to virtualChannels; compositeTo() maps to channelsD after all layers render.
   void setLight(const nrOfLights_t indexV, uint8_t offset, uint8_t value) {
-    forEachLightIndex(indexV, [&](nrOfLights_t indexP) { layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + offset] = value; });
+    if (virtualChannels && indexV < nrOfLights)
+      virtualChannels[indexV * layerP->lights.header.channelsPerLight + offset] = value;
   }
 
-  // Write RGB colour to the primary RGBW block of all physical lights at indexV.
+  // Write RGB colour to virtualChannels at indexV.
+  // compositeTo() maps to channelsD after all layers have rendered.
+  // Per-layer brightness is applied in compositeTo().
   void setRGB(const nrOfLights_t indexV, CRGB color) {
-    if (indexV < mappingTableSize && mappingTable[indexV].mapType == m_zeroLights) {
+    if (virtualChannels && indexV < nrOfLights) {
+      memcpy(&virtualChannels[indexV * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW], (void*)&color, sizeof(color));
+    } else if (indexV < mappingTableSize && mappingTable[indexV].mapType == m_zeroLights) {
+      // m_zeroLights: store in mappingTable so getRGB() can read it back before first layout completes
   #ifdef BOARD_HAS_PSRAM
       memcpy(mappingTable[indexV].rgb, (void*)&color, 3);
   #else
       mappingTable[indexV].rgb = ((MIN(color[0] + 3, 255) >> 3) << 9) + ((MIN(color[1] + 3, 255) >> 3) << 4) + (MIN(color[2] + 7, 255) >> 4);
   #endif
-    } else
-      forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW], (void*)&color, sizeof(color)); });
+    }
   }
   void setRGB(Coord3D pos, CRGB color) { setRGB(XYZ(pos), color); }
 
@@ -165,10 +207,10 @@ class VirtualLayer {
   }
   void setWhite(Coord3D pos, const uint8_t value) { setWhite(XYZ(pos), value); }
 
-  // Write brightness channel, scaled by global brightness (only when offsetBrightness is configured).
+  // Write brightness channel, scaled by global and layer brightness (only when offsetBrightness is configured).
   void setBrightness(const nrOfLights_t indexV, uint8_t value) {
     if (layerP->lights.header.offsetBrightness != UINT8_MAX) {
-      setLight(indexV, layerP->lights.header.offsetBrightness, (value * layerP->lights.header.brightness) / 255);
+      setLight(indexV, layerP->lights.header.offsetBrightness, scale8x8(value, layerP->lights.header.brightness, brightness));
     }
   }
   void setBrightness(Coord3D pos, const uint8_t value) { setBrightness(XYZ(pos), value); }
@@ -201,24 +243,28 @@ class VirtualLayer {
 
   // Write RGB to secondary RGBW blocks (moving heads with multiple colour wheels).
   void setRGB1(const nrOfLights_t indexV, CRGB color) {
-    if (layerP->lights.header.offsetRGBW1 != UINT8_MAX) forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW1], (void*)&color, sizeof(color)); });
+    if (layerP->lights.header.offsetRGBW1 != UINT8_MAX && virtualChannels && indexV < nrOfLights)
+      memcpy(&virtualChannels[indexV * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW1], (void*)&color, sizeof(color));
   }
   void setRGB1(Coord3D pos, CRGB color) { setRGB1(XYZ(pos), color); }
 
   void setRGB2(const nrOfLights_t indexV, CRGB color) {
-    if (layerP->lights.header.offsetRGBW2 != UINT8_MAX) forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW2], (void*)&color, sizeof(color)); });
+    if (layerP->lights.header.offsetRGBW2 != UINT8_MAX && virtualChannels && indexV < nrOfLights)
+      memcpy(&virtualChannels[indexV * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW2], (void*)&color, sizeof(color));
   }
   void setRGB2(Coord3D pos, CRGB color) { setRGB2(XYZ(pos), color); }
 
   void setRGB3(const nrOfLights_t indexV, CRGB color) {
-    if (layerP->lights.header.offsetRGBW3 != UINT8_MAX) forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy(&layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW3], (void*)&color, sizeof(color)); });
+    if (layerP->lights.header.offsetRGBW3 != UINT8_MAX && virtualChannels && indexV < nrOfLights)
+      memcpy(&virtualChannels[indexV * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW3], (void*)&color, sizeof(color));
   }
   void setRGB3(Coord3D pos, CRGB color) { setRGB3(XYZ(pos), color); }
 
-  // Write secondary brightness channel, scaled by global brightness.
+  // Write secondary brightness channel, scaled by global and layer brightness.
   void setBrightness2(const nrOfLights_t indexV, uint8_t value) {
-    value = (value * layerP->lights.header.brightness) / 255;
-    if (layerP->lights.header.offsetBrightness2 != UINT8_MAX) setLight(indexV, layerP->lights.header.offsetBrightness2, value);
+    if (layerP->lights.header.offsetBrightness2 != UINT8_MAX) {
+      setLight(indexV, layerP->lights.header.offsetBrightness2, scale8x8(value, layerP->lights.header.brightness, brightness));
+    }
   }
   void setBrightness2(Coord3D pos, const uint8_t value) { setBrightness2(XYZ(pos), value); }
 
@@ -227,15 +273,22 @@ class VirtualLayer {
   // Reads from the first physical light mapped to indexV (onlyOne = true).
   // ----------------------------------------------------------------------------
 
-  // Read one channel value from the first physical light at indexV.
+  // Read one channel value from the virtual buffer at indexV (falls back to channelsD before first layout).
   uint8_t getLight(const nrOfLights_t indexV, uint8_t offset) {
-    uint8_t value = 0;
-    forEachLightIndex(indexV, [&](nrOfLights_t indexP) { value = layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + offset]; }, true);
-    return value;
+    if (virtualChannels && indexV < nrOfLights)
+      return virtualChannels[indexV * layerP->lights.header.channelsPerLight + offset];
+    return 0;  // before first layout completes
   }
 
-  // Read RGB from the primary RGBW block of the first physical light at indexV.
+  // Read RGB from the primary RGBW block at indexV.
+  // Phase 1: reads from virtualChannels when available — returns THIS layer's own pixel value,
+  // not the shared blended channelsD. This is the key correctness fix for multi-layer effects
+  // that use getRGB+setRGB patterns (blur, scroll, blend): they now operate on their own buffer.
   CRGB getRGB(const nrOfLights_t indexV) {
+    if (virtualChannels && indexV < nrOfLights) {
+      return *reinterpret_cast<CRGB*>(&virtualChannels[indexV * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW]);
+    }
+    // Fallback: no virtualChannels yet (before first layout completes)
     if (indexV < mappingTableSize && mappingTable[indexV].mapType == m_zeroLights) {
   #ifdef BOARD_HAS_PSRAM
       return *(CRGB*)&mappingTable[indexV].rgb;
@@ -246,11 +299,8 @@ class VirtualLayer {
       ((uint8_t*)&result)[2] = (mappingTable[indexV].rgb & 0x0F) << 4;         // B: bits [3:0]
       return result;
   #endif
-    } else {
-      CRGB color = CRGB::Black;
-      forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy((void*)&color, &layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW], sizeof(color)); }, true);
-      return color;
     }
+    return CRGB::Black;  // before first layout completes
   }
   CRGB getRGB(Coord3D pos) { return getRGB(XYZ(pos)); }
 
@@ -272,25 +322,25 @@ class VirtualLayer {
   // Read RGB from secondary colour blocks.
   CRGB getRGB1(const nrOfLights_t indexV) {
     if (layerP->lights.header.offsetRGBW1 == UINT8_MAX) return CRGB::Black;
-    CRGB color = CRGB::Black;
-    forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy((void*)&color, &layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW1], sizeof(color)); }, true);
-    return color;
+    if (virtualChannels && indexV < nrOfLights)
+      return *reinterpret_cast<CRGB*>(&virtualChannels[indexV * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW1]);
+    return CRGB::Black;
   }
   CRGB getRGB1(Coord3D pos) { return getRGB1(XYZ(pos)); }
 
   CRGB getRGB2(const nrOfLights_t indexV) {
     if (layerP->lights.header.offsetRGBW2 == UINT8_MAX) return CRGB::Black;
-    CRGB color = CRGB::Black;
-    forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy((void*)&color, &layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW2], sizeof(color)); }, true);
-    return color;
+    if (virtualChannels && indexV < nrOfLights)
+      return *reinterpret_cast<CRGB*>(&virtualChannels[indexV * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW2]);
+    return CRGB::Black;
   }
   CRGB getRGB2(Coord3D pos) { return getRGB2(XYZ(pos)); }
 
   CRGB getRGB3(const nrOfLights_t indexV) {
     if (layerP->lights.header.offsetRGBW3 == UINT8_MAX) return CRGB::Black;
-    CRGB color = CRGB::Black;
-    forEachLightIndex(indexV, [&](nrOfLights_t indexP) { memcpy((void*)&color, &layerP->lights.channelsE[indexP * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW3], sizeof(color)); }, true);
-    return color;
+    if (virtualChannels && indexV < nrOfLights)
+      return *reinterpret_cast<CRGB*>(&virtualChannels[indexV * layerP->lights.header.channelsPerLight + layerP->lights.header.offsetRGBW3]);
+    return CRGB::Black;
   }
   CRGB getRGB3(Coord3D pos) { return getRGB3(XYZ(pos)); }
 
@@ -298,18 +348,28 @@ class VirtualLayer {
   // Frame-level fill / fade operations
   // ----------------------------------------------------------------------------
 
-  // Schedule a fade-to-black by fadeBy amount for this frame.
-  // Multiple calls take the minimum (most conservative fade).
-  void fadeToBlackBy(uint8_t fadeBy = 255);
+  // Schedule a fade-to-black for this layer. Applied to virtualChannels at the start of the
+  // next loop() call, before effects run, so trail effects accumulate correctly.
+  void fadeToBlackBy(uint8_t amount = 255) { fadeBy = fadeBy ? MIN(fadeBy, amount) : amount; }
 
-  // Apply the accumulated fadeMin value to all lights and reset it.
-  void fadeToBlackMin();
+  // Start an animated brightness transition toward target (0=invisible, 255=full).
+  // durationMs: approximate duration assuming ~50 fps (20 ms/frame).
+  // Calling with durationMs=0 snaps immediately.
+  void startTransition(uint8_t target, uint16_t durationMs) {
+    transitionTarget = target;
+    if (transitionBrightness == target || durationMs == 0) {
+      transitionBrightness = target;
+      transitionStep = 0;
+      return;
+    }
+    uint16_t frames = MAX((durationMs + 19) / 20, 1);  // round up, ~50 fps, min 1
+    int16_t diff = (int16_t)target - (int16_t)transitionBrightness;
+    transitionStep = diff / (int16_t)frames;
+    if (transitionStep == 0) transitionStep = (diff > 0) ? 1 : -1;  // ensure progress
+  }
 
   // Fill all virtual lights with a solid colour.
   void fill_solid(const CRGB& color);
-
-  // Fill all virtual lights with a rainbow, starting at initialhue, advancing by deltahue per light.
-  void fill_rainbow(uint8_t initialhue, uint8_t deltahue);
 
   // ----------------------------------------------------------------------------
   // Layout mapping (called from PhysicalLayer::mapLayout during pass 2)
@@ -327,7 +387,8 @@ class VirtualLayer {
 
   // Register one physical light (at the given position) into this virtual layer.
   // Applies modifier positions and routes to addIndexP().
-  void addLight(Coord3D position);
+  // Returns true if this layer covered the physical pixel (used by PhysicalLayer to zero unclaimed pixels).
+  bool addLight(Coord3D position);
 
   // Returns true if the virtual light at indexV has at least one physical light mapped to it.
   bool isMapped(nrOfLights_t indexV) const;

@@ -153,7 +153,6 @@ It might be arguable that readonly variables are not stored in state data.
 {
   "nrOfLights": 256,
   "channelsPerLight": 3,
-  "maxChannels": 12288,
   "size": {
     "x": 16,
     "y": 16,

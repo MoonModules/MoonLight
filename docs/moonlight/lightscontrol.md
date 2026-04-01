@@ -82,6 +82,8 @@ A 64-slot grid for saving and loading complete effect configurations.
 
 > **Note:** Presets store **Effects and Modifiers only** — not Layouts or Drivers. Configure those separately.
 
+> **Note:** Presets save and restore all layers. When a preset is loaded, effects on non-selected layers are cleared first and then rebuilt from the preset file, ensuring a clean switch without stale effects from the previous preset carrying over.
+
 ---
 
 ## Preset Loop
