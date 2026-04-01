@@ -235,7 +235,6 @@ TEST_CASE("nrOfChannels formula") {
 TEST_CASE("Lights struct defaults") {
   Lights l;
   CHECK(l.channelsD == nullptr);
-  CHECK_EQ(l.maxChannels, 0u);
 }
 
 // ============================================================

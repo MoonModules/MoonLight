@@ -163,7 +163,7 @@ class VirtualLayer {
         break;
       }
     } else {                                                                                      // no mapping table — direct pass-through
-      // if ((indexV + 1) * layerP->lights.header.channelsPerLight <= layerP->lights.maxChannels) {  // bounds check
+      // bounds check omitted: nrOfChannels is always sized to the actual layout
         callback(indexV);                                                                         // no presetCorrection here (lightPreset_RGB2040 has a mapping)
       // } else
       //   EXT_LOGD(ML_TAG, "%d", indexV);

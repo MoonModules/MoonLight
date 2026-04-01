@@ -18,7 +18,12 @@
 
 // #include <cstddef> // suggested by copilot to surpress operator warning : first parameter of allocation function must be of type 'size_t' - but made no difference
 
-// Threshold (bytes) above which allocations go into PSRAM
+// Only active for OPI/OCT PSRAM (S3/P4).
+// Classic ESP32 with QIO PSRAM (pico2) cannot safely use this override: heap_caps_malloc_prefer
+// may be called before PSRAM is fully registered during global-constructor time, returning a
+// garbage address; the resulting constructor writes to that address (which lands in IROM/IRAM)
+// and crashes with LoadStoreError.  -mfix-esp32-psram-cache-issue does not help because the
+// root cause is not a cache-coherency issue but an invalid pointer from the allocator.
 constexpr size_t PSRAM_THRESHOLD = 0;  // 87K free, works fine until now
 // constexpr size_t PSRAM_THRESHOLD = 512;  //recommended ... ? 32K free, (Small stuff (pointers, FreeRTOS objects, WiFi stack internals) → must stay in internal RAM....)?
 // constexpr size_t PSRAM_THRESHOLD = 64;  //65K free, fallback if 0 gives problems?

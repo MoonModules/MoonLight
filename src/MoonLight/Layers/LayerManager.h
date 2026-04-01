@@ -263,9 +263,12 @@ class LayerManager {
       module.addControlValue(control, layerName.c_str());
     }
 
-    module.addControl(controls, "start", "coord3D", 0, 100, false, "%");
-    module.addControl(controls, "end", "coord3D", 0, 100, false, "%");
-    module.addControl(controls, "brightness", "slider", 0, 255);
+    control = module.addControl(controls, "start", "coord3D", 0, 100, false, "%");
+    control["default"]["x"] = 0; control["default"]["y"] = 0; control["default"]["z"] = 0;
+    control = module.addControl(controls, "end", "coord3D", 0, 100, false, "%");
+    control["default"]["x"] = 100; control["default"]["y"] = 100; control["default"]["z"] = 100;
+    control = module.addControl(controls, "brightness", "slider", 0, 255);
+    control["default"] = 255;
   }
 
  private:
@@ -274,6 +277,22 @@ class LayerManager {
     uint8_t savedSelectedLayer = selectedLayer;
     Char<16> key;
     bool restoredAny = false;
+
+    // Migrate old-format state: old firmware stored 'end' as pixel coordinates (e.g. {16,16,1}
+    // for a 16×16 panel) rather than percentages. New firmware uses per-layer keys (end_0, …).
+    // If end_0 is absent, reset layer 0 bounds to defaults now — after all deferred compareRecursive
+    // updates have settled — so the stale pixel values cannot win by arriving after scheduleRestore().
+    key.format("end_%d", savedSelectedLayer);
+    if (state->data[key.c_str()].isNull() && layerP.layers[savedSelectedLayer]) {
+      layerP.layers[savedSelectedLayer]->startPct  = {0, 0, 0};
+      layerP.layers[savedSelectedLayer]->endPct    = {100, 100, 100};
+      layerP.layers[savedSelectedLayer]->brightness = 255;
+      state->data.remove("start");
+      state->data.remove("end");
+      state->data.remove("brightness");
+      EXT_LOGD(ML_TAG, "Migrated old-format state: reset layer %d bounds to defaults", savedSelectedLayer);
+    }
+
     for (uint8_t i = 0; i < layerP.layers.size(); i++) {
       if (i == savedSelectedLayer) continue;
 
@@ -282,7 +301,7 @@ class LayerManager {
       if (layerNodes.isNull() || layerNodes.size() == 0) continue;
 
       VirtualLayer* layer = layerP.ensureLayer(i);
-      if (!layer) return;  // allocation failed
+      if (!layer) { EXT_LOGW(ML_TAG, "ensureLayer(%d) failed, skipping", i); continue; }
       selectedLayer = i;
       *nodesPtr = &(layer->nodes);
 

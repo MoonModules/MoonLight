@@ -331,6 +331,12 @@
 		/>
 	{/if}
 	{#if !noPrompts}
+		{#if property.desc}
+			<label class="label cursor-pointer" for={property.desc}>
+				<!-- <span class="text-md">{initCap(property.name)}</span> -->
+				<span class="mr-4">{initCap(property.desc)}</span>
+			</label>
+		{/if}
 		{#if !property.ro && property.default != null && property.type != 'preset' && property.type != 'channels'}
 			<button
 				type="button"
@@ -357,12 +363,6 @@
 						: property.default) +
 					')'}>↻</button
 			>
-		{/if}
-		{#if property.desc}
-			<label class="label cursor-pointer" for={property.desc}>
-				<!-- <span class="text-md">{initCap(property.name)}</span> -->
-				<span class="mr-4">{initCap(property.desc)}</span>
-			</label>
 		{/if}
 	{/if}
 </div>

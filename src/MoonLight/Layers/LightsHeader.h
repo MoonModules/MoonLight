@@ -115,5 +115,4 @@ struct LightsHeader {
 struct Lights {
   LightsHeader header;
   uint8_t* channelsD = nullptr;  // display buffer: drivers read, compositeLayers writes
-  nrOfLights_t maxChannels = 0;
 };

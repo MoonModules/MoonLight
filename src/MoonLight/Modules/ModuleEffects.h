@@ -325,8 +325,7 @@ class ModuleEffects : public NodeManager {
       // node->moduleIO = _moduleIO;                     // to get pin allocations
       node->moduleNodes = (Module*)this;  // cppcheck-suppress dangerousTypeCast -- upcast; to request UI update
       node->setup();                      // run the setup of the effect
-      if (layerP.lights.maxChannels > 0)  // only if channels are allocated (layerP.setup() has run)
-        node->onSizeChanged(Coord3D());   // to init memory allocations
+      node->onSizeChanged(Coord3D());   // to init memory allocations
 
       // from here it runs concurrently in the effects task
       if (index >= layer->nodes.size())

@@ -60,31 +60,15 @@ VirtualLayer* PhysicalLayer::ensureLayer(uint8_t index) {
 }
 
 void PhysicalLayer::setup() {
-  // Allocate the single display buffer (channelsD).
-  // Effects write to per-layer virtualChannels; compositeLayers() composites into channelsD
-  // only after channelsDFreeSemaphore confirms the driver has finished reading it.
-  if (psramFound()) {
-    lights.maxChannels = MIN(ESP.getPsramSize() / 4, 128 * 64 * 16 * 3);  // fill max 2 * 25% of PSRAM with channels, supporting Virtual driver which is 120 pins * 512..1024 LEDs, max 16 Hub75 128x64 panels
-  } else {
-    lights.maxChannels = 2048 * 3;   // esp32-d0: max 1024->2048->4096->2048 Leds ATM (4096 is too bleeding edge still - hope is replacing PhysicHTTP by Async webserver solves this)
-  }
-
-  lights.channelsD = allocMB<uint8_t>(lights.maxChannels);
-
-  if (lights.channelsD) {
-    EXT_LOGD(ML_TAG, "allocated %d bytes in %s", lights.maxChannels, isInPSRAM(lights.channelsD) ? "PSRAM" : "RAM");
-  } else {
-    EXT_LOGE(ML_TAG, "failed to allocated %d bytes of RAM or PSRAM", lights.maxChannels);
-    lights.maxChannels = 0;
-  }
-
+  // channelsD is allocated lazily in addLight() during pass 1 as lights are added (doubling strategy).
+  // It is shrunk to nrOfChannels at the end of pass 1.  OOM is handled by realloc returning nullptr.
   for (VirtualLayer* layer : layers) {
     if (layer) layer->setup();
   }
 }
 
 void PhysicalLayer::loop() {
-  if (lights.header.nrOfChannels >= lights.maxChannels) return;  // in case alloc mem is not successful
+  if (!lights.channelsD || lights.header.nrOfChannels == 0) return;  // no layout yet or alloc failed
 
   // Effects write to per-layer virtualChannels; channelsD is zeroed and composited
   // in compositeLayers(), called from main.cpp after channelsDFreeSemaphore is signalled.
@@ -107,7 +91,7 @@ void PhysicalLayer::loop() {
 }
 
 void PhysicalLayer::compositeLayers() {
-  if (lights.header.nrOfChannels >= lights.maxChannels) return;
+  if (!lights.channelsD || lights.header.nrOfChannels == 0) return;  // no layout yet or alloc failed
 
   // Zero channelsD so additive layer blending starts from black each frame
   memset(lights.channelsD, 0, lights.header.nrOfChannels);
@@ -211,9 +195,11 @@ void PhysicalLayer::onLayoutPre() {
 
     delay(100);  // Wait for any in-progress frame to complete
 
-    // Now safe to zero the buffer - effectTask won't start new frames while isPositions == 1
+    // Zero existing buffer — channelsD will grow lazily inside addLight() as lights are added,
+    // so we only zero what is currently allocated.  New bytes are zeroed at growth time.
+    // effectTask won't start new frames while isPositions == 1, so no mutex needed here.
     xSemaphoreTake(swapMutex, portMAX_DELAY);
-    memset(lights.channelsD, 0, lights.maxChannels);
+    if (lights.channelsD) memset(lights.channelsD, 0, channelsDCapacity);
     xSemaphoreGive(swapMutex);
 
     // dealloc pins (non-critical, can be outside mutex)
@@ -250,7 +236,22 @@ void PhysicalLayer::addLight(Coord3D position) {
 
   if (pass == 1) {
     // EXT_LOGD(ML_TAG, "%d,%d,%d", position.x, position.y, position.z);
-    if (lights.header.nrOfLights < lights.maxChannels / 3) {
+    // Grow channelsD on demand as lights are added (doubling strategy, limited by system memory).
+    // Avoids one large upfront allocation; for unchanged layouts: zero reallocs.
+    size_t needed = ((size_t)lights.header.nrOfLights + 1) * 3;
+    if (needed > channelsDCapacity) {
+      size_t oldCapacity = channelsDCapacity;
+      size_t newCapacity = MAX(needed, oldCapacity > 0 ? oldCapacity * 2 : (size_t)768);
+      reallocMB2<uint8_t>(lights.channelsD, channelsDCapacity, newCapacity, "channelsD");
+      if (lights.channelsD && channelsDCapacity > oldCapacity) {
+        memset(lights.channelsD + oldCapacity, 0, channelsDCapacity - oldCapacity);
+        EXT_LOGD(ML_TAG, "channelsD grown to %d bytes in %s", (int)channelsDCapacity, isInPSRAM(lights.channelsD) ? "PSRAM" : "RAM");
+      } else if (!lights.channelsD) {
+        EXT_LOGE(ML_TAG, "failed to grow channelsD to %zu bytes", newCapacity);
+        channelsDCapacity = 0;
+      }
+    }
+    if (lights.channelsD && lights.header.nrOfLights < channelsDCapacity / 3) {
       packCoord3DInto3Bytes(&lights.channelsD[lights.header.nrOfLights * 3], position);  // positions in channelsD
     }
 
@@ -302,6 +303,24 @@ void PhysicalLayer::onLayoutPost() {
     EXT_LOGD(ML_TAG, "positions stored (%d -> %d)", lights.header.isPositions, lights.header.nrOfLights ? 2 : 3);
     lights.header.isPositions = lights.header.nrOfLights ? 2 : 3;  // filled with positions, set back to 3 in ModuleEffects, or direct to 3 if no lights (effects will move it to 0)
     xSemaphoreGive(swapMutex);
+
+    // Resize channelsD to exactly nrOfChannels for rendering.
+    // Shrinks when lights decrease; grows when channelsPerLight > 3 (e.g. RGBW) means
+    // nrOfChannels > positions buffer (nrOfLights*3) that addLight() grew to.
+    // For unchanged same-cpl layouts: needed == channelsDCapacity → zero reallocs.
+    size_t needed = (size_t)lights.header.nrOfChannels;
+    if (needed > 0 && needed != channelsDCapacity) {
+      size_t oldCapacity = channelsDCapacity;
+      reallocMB2<uint8_t>(lights.channelsD, channelsDCapacity, needed, "channelsD");
+      if (lights.channelsD) {
+        if (channelsDCapacity > oldCapacity)
+          memset(lights.channelsD + oldCapacity, 0, channelsDCapacity - oldCapacity);
+        EXT_LOGD(ML_TAG, "channelsD %s to %d bytes in %s", channelsDCapacity > oldCapacity ? "grown" : "shrunk", (int)channelsDCapacity, isInPSRAM(lights.channelsD) ? "PSRAM" : "RAM");
+      } else {
+        EXT_LOGE(ML_TAG, "failed to resize channelsD to %zu bytes", needed);
+        channelsDCapacity = 0;
+      }
+    }
 
     // ledsDriver.init(lights, sortedPins); //init the driver with the sorted pins and lights
   } else if (pass == 2) {
