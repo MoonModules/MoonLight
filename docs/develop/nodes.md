@@ -193,7 +193,7 @@ All downstream logic — gamma/brightness LUT via `rgbwBufferMapping()`, per-lig
 
 Drivers always read `channelsD` **without** holding `swapMutex`. This is safe: `effectTask` writes to per-layer `virtualChannels` (different memory) while the driver reads `channelsD`. The `compositeLayers()` step that writes `virtualChannels → channelsD` only runs after the driver gives `channelsDFreeSemaphore`, so there is no concurrent access to `channelsD`.
 
-Do not add `swapMutex` guards inside `DriverNode::loop()`. The reference is [`D_ArtnetOut.h`](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Drivers/D_ArtnetOut.h).
+Do not add `swapMutex` guards inside `DriverNode::loop()`. The reference is [`D_NetworkOut.h`](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Drivers/D_NetworkOut.h).
 
 Exception: writes **to** `channelsD` from non-driver-task paths (e.g. DMX In `processChannels()`, ArtNet In) must take `swapMutex` to avoid racing with `compositeLayers()`.
 
