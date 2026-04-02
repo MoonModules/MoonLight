@@ -129,7 +129,7 @@ class ModuleDrivers : public NodeManager {
     addNodeValue<NetworkOutDriver>(control);
     addNodeValue<DMXInDriver>(control);
     addNodeValue<DMXOutDriver>(control);
-    addNodeValue<AudioSyncDriver>(control);
+    addNodeValue<WLEDAudioDriver>(control);
     addNodeValue<IRDriver>(control);
     addNodeValue<IMUDriver>(control);
     // addNodeValue<HUB75Driver>(control);
@@ -187,9 +187,15 @@ class ModuleDrivers : public NodeManager {
     if (!node) node = checkAndAlloc<FastLEDAudioDriver>(name);
     if (!node) node = checkAndAlloc<NetworkInDriver>(name);
     if (!node) node = checkAndAlloc<NetworkOutDriver>(name);
+    // Migration: Art-Net In / Art-Net Out were renamed to Network In / Network Out.
+    // equalAZaz09 strips punctuation, so "ArtNetIn" != "NetworkIn" — handle explicitly.
+    if (!node && equalAZaz09(name, "ArtNetIn"))  { strlcpy(name, NetworkInDriver::name(),  32); node = allocMBObject<NetworkInDriver>();  }
+    if (!node && equalAZaz09(name, "ArtNetOut")) { strlcpy(name, NetworkOutDriver::name(), 32); node = allocMBObject<NetworkOutDriver>(); }
     if (!node) node = checkAndAlloc<DMXInDriver>(name);
     if (!node) node = checkAndAlloc<DMXOutDriver>(name);
-    if (!node) node = checkAndAlloc<AudioSyncDriver>(name);
+    if (!node) node = checkAndAlloc<WLEDAudioDriver>(name);
+    // Migration: Audio Sync was renamed to WLED Audio.
+    if (!node && equalAZaz09(name, "AudioSync")) { strlcpy(name, WLEDAudioDriver::name(), 32); node = allocMBObject<WLEDAudioDriver>(); }
     if (!node) node = checkAndAlloc<IRDriver>(name);
     if (!node) node = checkAndAlloc<IMUDriver>(name);
     // if (!node) node = checkAndAlloc<HUB75Driver>(name);

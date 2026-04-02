@@ -173,12 +173,16 @@ class NetworkInDriver : public Node {
 
     // Explicit byte indexing — avoids struct padding and unaligned multi-byte reads on ESP32
     uint8_t dataType = packetBuffer[2];
-    if (dataType != 0x01 && dataType != 0x1A) return;  // accept RGB24 and RGBW32
+    // Accept both de-facto values (0x01 RGB, 0x1A RGBW — used by WLED ecosystem) and
+    // strict-spec values (0x0B RGB, 0x1B RGBW — TTT/SSS bit fields per 3waylabs spec).
+    const bool isRGBW = (dataType == 0x1A || dataType == 0x1B);
+    const bool isRGB  = (dataType == 0x01 || dataType == 0x0B);
+    if (!isRGB && !isRGBW) return;
 
     // Reject if the packet's pixel stride doesn't match the configured channel layout.
     // DDP offset is an absolute byte offset into the receiver's channel memory, so the
     // stride used here must equal channelsPerLight — otherwise pixel positions are wrong.
-    const uint8_t packetBytesPerPixel = (dataType == 0x1A) ? 4 : 3;  // RGBW32=4, RGB24=3
+    const uint8_t packetBytesPerPixel = isRGBW ? 4 : 3;
     const uint32_t channelsPerLight = static_cast<uint32_t>(layerP.lights.header.channelsPerLight);
     if (packetBytesPerPixel != channelsPerLight) return;
 

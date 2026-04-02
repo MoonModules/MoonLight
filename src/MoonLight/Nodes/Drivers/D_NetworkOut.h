@@ -20,8 +20,10 @@
   #define DDP_FLAGS1_VER1         0x40
   #define DDP_FLAGS1_PUSH         0x01
   #define DDP_ID_DISPLAY          1
-  #define DDP_TYPE_RGB24          0x01   // 3 channels/pixel
-  #define DDP_TYPE_RGBW32         0x1A   // 4 channels/pixel (bits 5:3 = 011)
+  #define DDP_TYPE_RGB24          0x01   // 3 ch/pixel — de-facto value used by WLED ecosystem
+  #define DDP_TYPE_RGBW32         0x1A   // 4 ch/pixel — de-facto value used by WLED ecosystem
+  // Note: strict 3waylabs spec (byte2 = C R TTT SSS) gives 0x0B for RGB and 0x1B for RGBW.
+  // We send the de-facto values for WLED interoperability; NetworkIn accepts both.
   #define DDP_CHANNELS_PER_PACKET 1440
 
   // E1.31 / sACN constants

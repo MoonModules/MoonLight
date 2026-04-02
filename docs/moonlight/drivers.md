@@ -21,7 +21,7 @@ Layouts need to be defined before drivers as the driver takes the layouts define
     * Nodes can be added (+), deleted (🗑️) or edited (✎) or reordered (drag and drop). The node to edit will be shown below the list, press save (💾) if you want to preserve the change when the device is restarted
     * Reorder: Nodes can be reordered, defining the order of execution
         * Layouts: Need to be before drivers, multiple layouts can be added
-        * Drivers: After Layouts, choose one LEDs driver and optionally add Art-Net and Audio Sync, reordering might need a restart.
+        * Drivers: After Layouts, choose one LEDs driver and optionally add Network In/Out and WLED Audio, reordering might need a restart.
     * Controls. A node can be switched on and off and has custom controls, which defines the behaviour of the node 
     * See below for a list of existing Layouts and Drivers
 

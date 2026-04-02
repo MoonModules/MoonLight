@@ -79,8 +79,8 @@ MoonLight
     * Control, Channels and Info
     * Effects & Modifiers
     * Layouts & Drivers.
-        * DMX / Art-Net out
-        * WLED Audio Sync
+        * DMX / Network Out (Art-Net, DDP, E1.31)
+        * WLED Audio (Audio Sync / Audio Driver)
 
 ### Looking ahead
 
@@ -98,7 +98,7 @@ MoonBase
 MoonLight 
 
 * Multiple Layers
-* DMX / Art-Net in
+* DMX / Network In (Art-Net, DDP, E1.31)
 * Virtual driver
 * Effects: Limited nr of effects but easy to add (tutorial)
     * Help needed!
