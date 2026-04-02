@@ -56,6 +56,8 @@ class NetworkInDriver : public Node {
       updateControl("port", port);
       // restart UDP listener on the new port
       if (init) { udp.stop(); init = false; }
+    } else if (control["name"] == "port") {
+      if (init) { udp.stop(); init = false; }
     }
   }
 
@@ -187,6 +189,7 @@ class NetworkInDriver : public Node {
     uint8_t* pixelData = packetBuffer + DDP_HEADER_LEN;
     int payloadBytes = packetSize - DDP_HEADER_LEN;
     int safeDataLen = MIN(static_cast<int>(dataLen), payloadBytes);
+
     const uint32_t startPixelU = offset / channelsPerLight;
     if (startPixelU >= static_cast<uint32_t>(layerP.lights.header.nrOfLights)) return;
 

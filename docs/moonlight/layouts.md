@@ -26,7 +26,18 @@ MoonLight automatically detects the dimensionality from the coordinates you defi
 
 ### How effects fill the grid
 
-The effect runs across every point in the bounding grid, but your fixture only has lights at specific positions inside it. MoonLight builds a **mapping** that links each grid point to the nearest physical light — so even a 500-LED Christmas tree mounted inside a 25×25×100 bounding box gets a smooth, full-volume effect. Sparse fixtures (few lights in a large space) work fine as long as the pixel density is reasonable. Very sparse grids — for example, a handful of moving heads spread across a large stage — are a future use case.
+Effects run across every point in the bounding grid, but MoonLight only lights the positions where your physical LEDs actually sit. The mapping is built **sequentially** during layout construction:
+
+1. The layout calls `addLight(position)` once for each LED, in wiring order (LED 0 first, LED 1 second, …).
+2. Each call records which 3D grid position that LED occupies, building a mapping table from virtual grid index → physical LED index.
+3. After all lights are placed, each grid slot is categorised:
+    - **one light** — exactly one LED landed here; effects light it normally.
+    - **more lights** — multiple LEDs share the same grid position; all receive the same colour.
+    - **no light** — no LED was placed at this grid point; effects compute a colour here but nothing shows it.
+
+There is **no nearest-neighbour interpolation** — grid points with no LED are simply dark. A 500-LED Christmas tree in a 25×25×100 bounding box has 500 lit grid points and ~62 000 dark ones; the effect wraps naturally around the whole tree volume and every LED shows the colour of its exact position in the grid.
+
+This works best when your fixture has a reasonable pixel density relative to its bounding box. Very sparse fixtures — a handful of moving heads spread across a large stage — would have most of the effect invisible; algorithms optimised for that case are a future addition.
 
 ### Multiple layout nodes
 
@@ -71,6 +82,19 @@ Want to add a Layout to MoonLight, see [develop](https://moonmodules.org/MoonLig
 
 !!! tip "Multiple layouts"
     Single line, single row or panel are suitable layouts to combine into a larger fixture.
+
+### Panel — serpentine (snake) wiring
+
+Most commercially made LED matrix panels use **serpentine wiring**: row 0 runs left-to-right, row 1 runs right-to-left, row 2 left-to-right again, and so on. Without this being accounted for, every other row of your effect would appear mirrored.
+
+The **snake** checkbox in the Panel controls tells MoonLight that your panel uses this wiring pattern. It corresponds to `Wiring::snake[1]` (the Y-axis flag) in the layout code (`L_MoonLight.h`). The `snake` array has three slots — `[0]` for X, `[1]` for Y, `[2]` for Z — but for a flat panel only the Y-axis snake is relevant and exposed as the **snake** control.
+
+| Your panel wiring | **snake** setting |
+|---|---|
+| Alternate rows reversed (most LED matrix panels) | ☑ enabled |
+| All rows run the same direction | ☐ disabled |
+
+If effects look correct on row 0 but every other row is mirrored, toggle the **snake** checkbox. For 3D cubes (where all three axes can snake independently), the Cube layout exposes **snakeX**, **snakeY** and **snakeZ** controls separately.
 
 ### SE16
 
