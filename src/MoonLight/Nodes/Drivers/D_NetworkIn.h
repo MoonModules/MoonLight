@@ -128,8 +128,8 @@ class NetworkInDriver : public Node {
         memcpy(&layerP.lights.channelsD[ledIndex * layerP.lights.header.channelsPerLight],
                &dmxData[i * layerP.lights.header.channelsPerLight],
                layerP.lights.header.channelsPerLight);
-      } else {  // Virtual layer — guard against a slot that hasn't been created yet
-        if (layerP.layers[layer - 1]) {
+      } else {  // Virtual layer — guard against out-of-range index and uninitialised slot
+        if (layer - 1 < layerP.layers.size() && layerP.layers[layer - 1]) {
           layerP.layers[layer - 1]->forEachLightIndex(ledIndex, [&](nrOfLights_t indexP) {
             memcpy(&layerP.lights.channelsD[indexP * layerP.lights.header.channelsPerLight],
                    &dmxData[i * layerP.lights.header.channelsPerLight],
@@ -173,6 +173,13 @@ class NetworkInDriver : public Node {
     uint8_t dataType = packetBuffer[2];
     if (dataType != 0x01 && dataType != 0x1A) return;  // accept RGB24 and RGBW32
 
+    // Reject if the packet's pixel stride doesn't match the configured channel layout.
+    // DDP offset is an absolute byte offset into the receiver's channel memory, so the
+    // stride used here must equal channelsPerLight — otherwise pixel positions are wrong.
+    const uint8_t packetBytesPerPixel = (dataType == 0x1A) ? 4 : 3;  // RGBW32=4, RGB24=3
+    const uint32_t channelsPerLight = static_cast<uint32_t>(layerP.lights.header.channelsPerLight);
+    if (packetBytesPerPixel != channelsPerLight) return;
+
     uint32_t offset = ((uint32_t)packetBuffer[4] << 24) | ((uint32_t)packetBuffer[5] << 16) |
                       ((uint32_t)packetBuffer[6] <<  8) |  (uint32_t)packetBuffer[7];
     uint16_t dataLen = ((uint16_t)packetBuffer[8] << 8) | packetBuffer[9];
@@ -180,8 +187,6 @@ class NetworkInDriver : public Node {
     uint8_t* pixelData = packetBuffer + DDP_HEADER_LEN;
     int payloadBytes = packetSize - DDP_HEADER_LEN;
     int safeDataLen = MIN(static_cast<int>(dataLen), payloadBytes);
-
-    const uint32_t channelsPerLight = static_cast<uint32_t>(layerP.lights.header.channelsPerLight);
     const uint32_t startPixelU = offset / channelsPerLight;
     if (startPixelU >= static_cast<uint32_t>(layerP.lights.header.nrOfLights)) return;
 

@@ -112,7 +112,7 @@ Sends pixel data over the network to LED controllers and DMX fixtures. Supports 
 * **Port**: Network port. Updated automatically when switching protocol; can be overridden manually.
 * **FPS Limiter**: Maximum frames per second sent. Art-Net spec recommends ~44 FPS; higher rates (up to ~130 FPS tested) work with most controllers.
 * **Universe size**: Channels per universe (max 512). Match the setting on your controller.
-* **Used channels** *(read-only)*: Channels actually used per universe after rounding to whole lights (e.g. 510 for RGB at 512-channel universes).
+* **Used channels** *(read-only)*: Channels actually used per universe after rounding down to a whole number of lights (e.g. 510 for RGB at 512-channel universes). Always at least one light's worth of channels — if **Universe size** is set smaller than the channels per light, one full light is still included per universe.
 * **#Outputs per IP**: Number of physical outputs per controller. When all outputs for one IP are filled, sending continues on the next IP.
 * **Universes per output**: How many universes each output handles, determining the maximum lights per output.
 * **Total universes** *(read-only)*: Universes required to transmit all lights.

@@ -1,14 +1,49 @@
 # Layouts
 
-A layout (🚥) defines the positions of lights connected to a MoonLight device.
+A layout (🚥) tells MoonLight **where your lights physically are** and **how they are wired**. Get this right and every effect — from a simple rainbow to a 3D plasma — automatically fits your fixture perfectly.
 
-* The **coordinates** of each light are defined in a 3D coordinate space 
-    * Coordinates needs to be specified in the order the lights are wired so MoonLight knows which light is first, which is second etc.
-    * For lights in a straight line (1D, e.g. LED strips or a LED bar), specify coordinates as [x,0,0] 
-    * For lights in a flat area (2D, e.g. LED matrix), specify coordinates as [x,y,0] 
-* **Multiple layout nodes** can be defined which will be mapped in the order of the layouts
-* MoonLight will use the layout definition to generate a **mapping** of the effects to a real world light layout. Most simple example is a panel which has a snake layout. The mapping will create a layer for effects where the snake layout is hidden.
-* Layouts also assign groups of LEDs to esp32 GPIO pins.
+## How layouts work
+
+### The coordinate grid
+
+When you define a layout, each light gets a position in a 3D coordinate space (X, Y, Z). MoonLight takes all those positions and figures out the bounding box — the smallest grid that contains every light. Effects are then computed across that whole grid and automatically mapped to your physical lights.
+
+This means:
+
+- **Effects are fixture-aware.** A plasma effect on a 16×16 panel looks like a full-screen plasma. The same effect on a 3D cube wraps correctly around all three axes. You don't write a different effect for each shape.
+- **Wiring order doesn't matter to effects.** Your LED strip might snake left-to-right on odd rows and right-to-left on even rows (serpentine wiring). The layout describes that wiring pattern; effects just see a clean grid.
+- **Resolution scales automatically.** A 10×10 panel and a 32×32 panel both run the same effects — the effect adapts to however many lights you have.
+
+### 1D, 2D and 3D fixtures
+
+| Fixture type | Typical examples | Grid shape |
+|---|---|---|
+| **1D** — a line | LED strip, LED bar, single tube | Y axis only — X and Z are 0. The Y axis runs vertically so 1D effects like bouncing balls, drip and rain move in the natural downward direction |
+| **2D** — a flat surface | LED matrix, panel, ring, wheel | X and Y axes — Z is 0 |
+| **3D** — a volume | Cube, Christmas tree, spiral tower, Human Sized Cube | X, Y and Z axes all used |
+
+MoonLight automatically detects the dimensionality from the coordinates you define, so 1D effects run on strips and 3D effects light up cubes without any extra configuration.
+
+### How effects fill the grid
+
+The effect runs across every point in the bounding grid, but your fixture only has lights at specific positions inside it. MoonLight builds a **mapping** that links each grid point to the nearest physical light — so even a 500-LED Christmas tree mounted inside a 25×25×100 bounding box gets a smooth, full-volume effect. Sparse fixtures (few lights in a large space) work fine as long as the pixel density is reasonable. Very sparse grids — for example, a handful of moving heads spread across a large stage — are a future use case.
+
+### Multiple layout nodes
+
+You can add more than one layout node — for example three separate panels or a ring combined with a bar. MoonLight merges all their positions into a single shared grid and maps effects across all of them together. Lights are assigned to the grid in the order the layouts appear in the node list.
+
+### GPIO pin assignment
+
+Layouts also assign groups of LEDs to the ESP32 GPIO pins that drive them. Each layout node controls which pin(s) its lights are connected to. Complex fixtures like a cube or a multi-panel wall often use one pin per face or one pin per panel so each segment can be driven in parallel, improving performance.
+
+!!! tip "Start simple"
+    Not sure which layout to use? Start with **Single Row** for a strip, **Panel** for a matrix, or **Rings** for circular fixtures. These cover the most common setups and are easy to combine into larger builds.
+
+!!! tip "Custom shapes"
+    Any shape that isn't covered by the built-in layouts can be created as a **Live Script** — a small `.sc` file with an `onLayout()` function that places lights exactly where you need them. See [Live Scripts](livescripts.md).
+
+!!! note "Future: room-scale mapping"
+    It is possible in principle to treat an entire room or stage as the coordinate space and map all fixtures — panels, moving heads, tubes — into that shared grid. This would let effects flow seamlessly from one fixture to another across physical space. MoonLight's architecture supports it, but algorithms optimised for very sparse, large-scale grids are not yet implemented.
 
 ## Layout 🚥 Nodes
 

@@ -65,12 +65,12 @@ class NetworkOutDriver : public DriverNode {
     addControl(controllerIP3s, "controllerIPs", "text", 0, 32);
     addControl(port, "port", "number", 0, 65535);
     addControl(FPSLimiter, "Limiter", "number", 1, 255, false, "FPS");
-    addControl(universeSize, "universeSize", "number", 0, 512);
+    addControl(universeSize, "universeSize", "number", 1, 512);
     addControl(usedChannelsPerUniverse, "usedChannels", "number", 1, 1000, true);
-    addControl(nrOfOutputsPerIP, "#Outputs per IP", "number", 0, 255);
-    addControl(universesPerOutput, "universesPerOutput", "number", 0, 255);
+    addControl(nrOfOutputsPerIP, "#Outputs per IP", "number", 1, 255);
+    addControl(universesPerOutput, "universesPerOutput", "number", 1, 255);
     addControl(totalUniverses, "totalUniverses", "number", 0, 65538, true);
-    addControl(channelsPerOutput, "channelsPerOutput", "number", 0, 65538);
+    addControl(channelsPerOutput, "channelsPerOutput", "number", 1, 65538);
     addControl(totalChannels, "totalChannels", "number", 0, 390000, true);
     // Packet template is initialised by onUpdate("protocol") inside addControl(protocol,...) above.
     // Do NOT call setupArtNetHeader() here — it would overwrite the correct template for
@@ -121,6 +121,13 @@ class NetworkOutDriver : public DriverNode {
         });
       }
     }
+
+    // Clamp controls to safe minimums — guards against old saved values of 0 and prevents
+    // modulo-by-zero (universesPerOutput, nrOfOutputsPerIP) and unsigned wrap (channelsPerOutput).
+    universeSize        = max<uint16_t>(universeSize,        layerP.lights.header.channelsPerLight ? layerP.lights.header.channelsPerLight : 1);
+    channelsPerOutput   = max<uint16_t>(channelsPerOutput,   layerP.lights.header.channelsPerLight ? layerP.lights.header.channelsPerLight : 1);
+    universesPerOutput  = max<uint8_t> (universesPerOutput,  1);
+    nrOfOutputsPerIP    = max<uint8_t> (nrOfOutputsPerIP,    1);
 
     totalChannels = layerP.lights.header.nrOfLights * layerP.lights.header.channelsPerLight / (nrOfIPAddresses ? nrOfIPAddresses : 1);
     uint32_t lightsPerUniverse = max(1u, (uint32_t)universeSize / layerP.lights.header.channelsPerLight);
@@ -206,7 +213,7 @@ class NetworkOutDriver : public DriverNode {
 
     universe = 0;
     packetSize = 0;
-    channels_remaining = channelsPerOutput;
+    channels_remaining = max((uint32_t)channelsPerOutput, (uint32_t)header->channelsPerLight);
     processedOutputs = 0;
     uint8_t actualIPIndex = 0;
 
@@ -241,7 +248,7 @@ class NetworkOutDriver : public DriverNode {
         addYield(10);
 
         if (channels_remaining < header->channelsPerLight) {
-          channels_remaining = channelsPerOutput;
+          channels_remaining = max((uint32_t)channelsPerOutput, (uint32_t)header->channelsPerLight);
           while (universe % universesPerOutput != 0) universe++;
           processedOutputs++;
           if (!broadcast && processedOutputs >= nrOfOutputsPerIP) {
@@ -263,7 +270,7 @@ class NetworkOutDriver : public DriverNode {
 
   bool sendDDPPacket(IPAddress& ip, uint32_t channelOffset, uint16_t dataLen, bool push) {
     uint8_t flags = DDP_FLAGS1_VER1 | (push ? DDP_FLAGS1_PUSH : 0);
-    uint8_t dataType = (layerP.lights.header.channelsPerLight >= 4) ? DDP_TYPE_RGBW32 : DDP_TYPE_RGB24;
+    uint8_t dataType = (layerP.lights.header.channelsPerLight == 4) ? DDP_TYPE_RGBW32 : DDP_TYPE_RGB24;
 
     packet_buffer[0] = flags;
     packet_buffer[1] = sequenceNumber++ & 0x0F;
@@ -280,6 +287,10 @@ class NetworkOutDriver : public DriverNode {
   }
 
   void loopDDP(LightsHeader* header) {
+    // DDP only defines RGB24 (3 ch) and RGBW32 (4 ch). Reject other channel counts early
+    // so no data is accumulated in packet_buffer with a mismatched stride.
+    if (header->channelsPerLight != 3 && header->channelsPerLight != 4) return;
+
     uint32_t lightsPerIP = header->nrOfLights / nrOfIPAddresses;
 
     for (uint8_t ipIdx = 0; ipIdx < nrOfIPAddresses; ipIdx++) {
@@ -383,7 +394,7 @@ class NetworkOutDriver : public DriverNode {
 
     uint16_t e131universe = 1;  // E1.31 universes are 1-based
     uint16_t e131packetSize = 0;
-    channels_remaining = channelsPerOutput;
+    channels_remaining = max((uint32_t)channelsPerOutput, (uint32_t)header->channelsPerLight);
     processedOutputs = 0;
     uint8_t actualIPIndex = 0;
 
@@ -416,7 +427,7 @@ class NetworkOutDriver : public DriverNode {
         addYield(10);
 
         if (channels_remaining < header->channelsPerLight) {
-          channels_remaining = channelsPerOutput;
+          channels_remaining = max((uint32_t)channelsPerOutput, (uint32_t)header->channelsPerLight);
           while ((e131universe - 1) % universesPerOutput != 0) e131universe++;  // advance to next output boundary
           processedOutputs++;
           if (processedOutputs >= nrOfOutputsPerIP) {
