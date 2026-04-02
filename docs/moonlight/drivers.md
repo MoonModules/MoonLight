@@ -21,7 +21,7 @@ Layouts need to be defined before drivers as the driver takes the layouts define
     * Nodes can be added (+), deleted (🗑️) or edited (✎) or reordered (drag and drop). The node to edit will be shown below the list, press save (💾) if you want to preserve the change when the device is restarted
     * Reorder: Nodes can be reordered, defining the order of execution
         * Layouts: Need to be before drivers, multiple layouts can be added
-        * Drivers: After Layouts, choose one LEDs driver and optionally add Art-Net and Audio Sync, reordering might need a restart.
+        * Drivers: After Layouts, choose one LEDs driver and optionally add Network In/Out and WLED Audio, reordering might need a restart.
     * Controls. A node can be switched on and off and has custom controls, which defines the behaviour of the node 
     * See below for a list of existing Layouts and Drivers
 
@@ -37,8 +37,8 @@ Custom layouts can also be created as **Live Scripts** — `.sc` files with an `
 | Parallel LED Driver | <img width="100" src="https://github.com/user-attachments/assets/9cbe487e-f330-40a5-8b40-6663c83e5d90"/> | <img width="320" alt="Parallel" src="https://github.com/user-attachments/assets/0c6f1543-623a-45bf-98d7-f5ddd072a1c6" /> | Drive multiple LED types, all devices including ESP32-P4(-nano) supported<br>Light preset: See below<br>DMA buffer: set higher when LEDs flicker<br>See [below](#parallel-led-driver) |
 | FastLED Driver | <img width="100" src="https://avatars.githubusercontent.com/u/5899270?s=48&v=4"/> | <img width="320" src="../../media/moonlight/drivers/FastLED-Driver.png" /> | Based on the FastLED Channels API to set Pins, Color order, Engine and other settings at runtime! Based on upcoming FastLED v4.0 ! See [Channels API](https://github.com/FastLED/FastLED/blob/master/src/fl/channels/README.md) |
 | FastLED Audio | <img width="100" src="https://avatars.githubusercontent.com/u/5899270?s=48&v=4"/> | <img width="320" src="../../media/moonlight/drivers/FastLED-Audio.png" /> | On-board microphone audio processing, allows audio-reactive effects (♪ & ♫) to use audio data (volume and bands (FFT)) and much more. Based on upcoming FastLED v4.0 ! see [FastLED Audio](https://github.com/FastLED/FastLED/blob/master/src/fl/audio/README.md)<br>Connect a digital microphone (e.g. INMP441) to an ESP32 and setup the I2S pins in the [IO module](../moonbase/inputoutput.md)|
-| Art-Net Out| <img width="100" src="https://github.com/user-attachments/assets/9c65921c-64e9-4558-b6ef-aed2a163fd88"> | <img width="320" src="../../media/moonlight/drivers/ArtNetOutControls.png" /> | Send Art-Net to Drive LEDS and DMX lights over the network. See [below](#art-net-out) |
-| Art-Net In | <img width="100" src="../../media/moonlight/drivers/Art-Net-In.png"> | <img width="320" src="../../media/moonlight/drivers/ArtNetInControls.png" /> | Receive Art-Net (or DDP) packages e.g. from [Resolume](https://resolume.com/) or Touch Designer. See [below](#art-net-in) |
+| Network Out | <img width="100" src="https://github.com/user-attachments/assets/9c65921c-64e9-4558-b6ef-aed2a163fd88"> | | Send pixel data over the network using Art-Net, DDP or E1.31/sACN. See [below](#network-out) |
+| Network In | <img width="100" src="../../media/moonlight/drivers/Art-Net-In.png"> | | Receive pixel data from the network (Art-Net, DDP or E1.31/sACN) e.g. from [Resolume](https://resolume.com/) or TouchDesigner. See [below](#network-in) |
 | DMX Out | | | Send channel data to DMX fixtures over RS-485. See [below](#dmx-out) |
 | DMX In | | | Receive DMX data from an external DMX controller via RS-485. See [below](#dmx-in) |
 | WLED Audio | <img width="100" src="https://github.com/user-attachments/assets/bfedf80b-6596-41e7-a563-ba7dd58cc476"/> | No controls | Listens to audio sent over the local network by WLED or WLED-MM and allows audio-reactive effects (♪ & ♫) to use audio data (volume and bands (FFT)) |
@@ -96,55 +96,58 @@ The ESP32-P4 Parallel LED Driver uses the hardware PARLIO peripheral to control 
 - **RGB/RGBW support**: Configurable color ordering and per-component brightness correction
 - **Configuration**: Assign GPIO pins in the MoonLight interface and specify LED counts per pin. The driver automatically calculates the maximum LEDs per pin and handles synchronization.
 
-### Art-Net Out ☸️
+### Network Out ☸️
 
-<img width="300" src="../../media/moonlight/drivers/ArtNetOutControls.png"/>
-
-Sends Lights in Art-Net compatible packages to an Art-Net controller specified by the IP address(es) provided.
+Sends pixel data over the network to LED controllers and DMX fixtures. Supports three protocols selectable at runtime — the port updates automatically when you switch protocol.
 
 **Controls**
 
-* **Light preset**: See above.
-* **Controller IPs**: The last segment of the IP address within your local network, of the hardware Art-Net controller. Add more IPs if you send to more than one controller, comma separated or use a hyphen for a range of IPs.
-* **Port**: The network port added to the IP address, 6454 is the default for Art-Net.
-* **FPS Limiter**: set the max frames per second Art-Net packages are send out (also all the other nodes will run at this speed).
-    * Art-Net specs recommend about 44 FPS but higher framerates will work mostly (up to until ~130FPS tested)
-* **Universe size**: How many channels per universe. 510 and 512 most common. Make sure it corresponds with the Art-Net receiver used.
-* **Used channels**: Calculated! Shows how many channels are used (e.g. in a universe of 512 only 170 RGB LEDs fits which is 510 channels, so 510 of the 512 channels are used).
-* **Nr of Outputs per IP**: Art-Net LED controllers can have more than 1 output (e.g. 12) If all outputs are sent, Art-Net will be sent to the next IP number.
-* **Universes per output**: How many universes can each output handle. This determines the maximum number of lights an output can drive (nr of universe x nr of channels per universe / channels per light)
-* **Total universes**: Calculated! Based on the nr of lights (specified by the [layout](layouts.md)), how many universes needs to be configured to sent all lights out.
-* **Channels per output**: How many channels will be sent to each output
-* **Total channels**: Calculated! Based on the nr of lights (specified by the [layout](layouts.md)), how many channels should be send to all outputs together to sent all lights out
+* **Light preset**: See [above](#light-preset).
+* **Protocol**: Selects the output protocol:
+    * **Art-Net** (port 6454) — industry-standard DMX-over-IP. Unicast or broadcast. An ArtSync packet is broadcast after each frame so all receivers display simultaneously.
+    * **DDP** (port 4048) — lightweight pixel protocol. Unicast only; the push flag signals the last packet of each frame.
+    * **E1.31 / sACN** (port 5568) — ANSI standard for streaming channel data. Unicast. Universes are 1-based, max 512 channels per universe.
+* **Broadcast** *(Art-Net only)*: When enabled, sends to the subnet broadcast address (`x.x.x.255`) instead of specific IPs. All Art-Net receivers on the subnet pick up the data and select their own universes. The **Controller IPs** field is ignored.
+* **Controller IPs** *(unicast only)*: The last segment(s) of the IP address(es) of the network controllers. Use a comma-separated list (`11,12,13`) or a hyphen for a range (`11-20`). Pixel data is divided equally across all IPs.
+* **Port**: Network port. Updated automatically when switching protocol; can be overridden manually.
+* **FPS Limiter**: Maximum frames per second sent. Art-Net spec recommends ~44 FPS; higher rates (up to ~130 FPS tested) work with most controllers.
+* **Universe size**: Channels per universe (max 512). Match the setting on your controller.
+* **Used channels** *(read-only)*: Channels actually used per universe after rounding down to a whole number of lights (e.g. 510 for RGB at 512-channel universes). Always at least one light's worth of channels — if **Universe size** is set smaller than the channels per light, one full light is still included per universe.
+* **#Outputs per IP**: Number of physical outputs per controller. When all outputs for one IP are filled, sending continues on the next IP.
+* **Universes per output**: How many universes each output handles, determining the maximum lights per output.
+* **Total universes** *(read-only)*: Universes required to transmit all lights.
+* **Channels per output**: Channel budget per output.
+* **Total channels** *(read-only)*: Total channels sent across all outputs and IPs.
 
 !!! tip "Controller settings"
-    Set the number of universes and channels per universe also on the controller!
+    Set the universe count and channels per universe to the same values on your controller.
 
-* **Channels per output**: each output can drive a maximum number of channels, determined by the universes per output
+!!! warning "DMX channel numbering"
+    DMX channels count from 1 to 512. MoonLight internally uses 0–511, which maps to DMX 1–512.
 
-!!! warning "DMX start with 1"
-    Dmx channels count from 1 to 512. At the moment MoonLight counts from 0..511 which translates to 1..512.
+### Network In ☸️
 
-### Art-Net In ☸️
+Receives pixel data from the network and writes it into the MoonLight channel buffer. Supports Art-Net, DDP and E1.31/sACN — protocol and port can be changed without restarting. Compatible with [Resolume](https://resolume.com/), XLights, TouchDesigner, Chataigne, other MoonLight devices (via Network Out), and any standard Art-Net/sACN source.
 
-<img width="300" src="../../media/moonlight/drivers/ArtNetInControls.png"/>
+**Controls**
 
-Receives Art-Net data from the network to setup a MoonLight device as an Art-Net receiver. Can receive Art-Net from other MoonLight devices (see Art-Net out above) and other tools like Resolume, XLights, TouchDesigner, Chataigne etc.
+* **Protocol**: Selects the input protocol — port updates automatically:
+    * **Art-Net** (port 6454)
+    * **DDP** (port 4048)
+    * **E1.31 / sACN** (port 5568)
+* **Port**: UDP port to listen on. Updated automatically when switching protocol; can be overridden.
+* **Universe Min / Universe Max** *(Art-Net and E1.31)*: Filters incoming universes; packets outside this range are ignored.
+* **Layer**: Where received pixel data is written:
+    * **Physical layer** — writes directly into the channel buffer, bypassing layout mapping.
+    * **Layer 1 … N** — writes into the selected virtual layer, which applies the layout and any active modifiers (recommended for mapped fixtures). See [Modifiers](modifiers.md).
 
-* DDP: If unchecked, processes data in Art-Net format, if checked, process data in DDP format
-* Port: The port listening for Art-Net. When using DDP, change to 4048 (the default port for DDP).
-* Universe Min-Max: Filters Universes (Art-Net only).
-* View: 
-    * Select physical layer to directly store the received channels into the physical layer
-    * Select one of the (virtual layers) to take mapping into account (using layout specification and modifiers specified (recommended), see [Modifiers](modifiers.md), part of the [Effects Module](effects.md))
+!!! tip "Recommended setup"
+    * Add a Layout node to define the fixture shape (e.g. Single Line for tubes, Panel for matrices).
+    * Add a Parallel LED Driver to drive connected LEDs.
+    * Configure GPIO pins in the [IO Module](../moonbase/inputoutput.md).
 
-!!! tip "Other setup"
-    * Add a Layout driver to specifify the fixture you are displaying on, e.g. Single Line for Tubes or Panel for Matrices
-    * Add the Parallel LED Driver to enable connected LEDs
-    * Go to the [IO Module](../moonbase/inputoutput.md) to define a board preset.
-
-!!! tip "Running effects and Art-Net In"
-    Effects can run at the same time, disable or delete them if you only want to run Art-Net In.
+!!! tip "Running effects alongside Network In"
+    Effects and Network In can run on the same layer at the same time. Disable or delete effects if you want Network In to be the sole pixel source.
 
 ### DMX Out ☸️
 
@@ -177,7 +180,7 @@ Receives DMX512 data from an external controller via RS-485 and either writes it
 
 * **startChannel**: The DMX start address (1–512) to begin reading from within the incoming DMX frame.
 * **mode**:
-    * **Channels** — writes received DMX data directly into the LED channel buffer, similar to Art-Net In. Use this to replace or supplement effect output with data from an external DMX console.
+    * **Channels** — writes received DMX data directly into the LED channel buffer, similar to Network In. Use this to replace or supplement effect output with data from an external DMX console.
     * **LightsControl** — maps DMX channels starting at `startChannel` to [Lights Control](lightscontrol.md) properties. Useful for controlling MoonLight from a standard DMX fader wing. All values are 0–255 (DMX channels 1–256 relative to the start address):
 
         | DMX channel | Lights Control property | Range |

@@ -1,6 +1,6 @@
 /**
     @title     MoonLight
-    @file      AudioSync.h
+    @file      D_WLEDAudio.h
     @repo      https://github.com/MoonModules/MoonLight, submit changes to this file as PRs
     @Authors   https://github.com/MoonModules/MoonLight/commits/main
     @Doc       https://moonmodules.org/MoonLight/moonlight/overview/
@@ -14,9 +14,9 @@
   #include <WLED-sync.h>  // https://github.com/netmindz/WLED-sync
   #include <WiFi.h>
 
-class AudioSyncDriver : public Node {
+class WLEDAudioDriver : public Node {
  public:
-  static const char* name() { return "Audio Sync"; }
+  static const char* name() { return "WLED Audio"; }
   static uint8_t dim() { return _NoD; }
   static const char* tags() { return "☸️♫"; }
   static const char* category() { return "Driver"; }
@@ -25,7 +25,23 @@ class AudioSyncDriver : public Node {
   bool init = false;
   static constexpr uint8_t audioPaletteIndex = 18;  // see palettes.h
 
+  uint8_t mode = 0;  // 0=Audio Sync, 1=Audio Driver
+
+  void setup() override {
+    addControl(mode, "mode", "select");
+    addControlValue("Audio Sync");
+    addControlValue("Audio Driver");
+  }
+
   void loop() override {
+    if (mode == 1) {
+      loopAudioDriver();
+    } else {
+      loopAudioSync();
+    }
+  }
+
+  void loopAudioSync() {
     if (!networkIsConnected()) {
       // make WLED Audio Sync network failure resilient - WIP
       if (init) {
@@ -35,7 +51,7 @@ class AudioSyncDriver : public Node {
         sharedData.volumeRaw = 0;
         sharedData.majorPeak = 0;
         init = false;
-        EXT_LOGI(ML_TAG, "Audio Sync: stopped");
+        EXT_LOGI(ML_TAG, "WLED Audio Sync: stopped");
       }
       return;
     }
@@ -43,10 +59,19 @@ class AudioSyncDriver : public Node {
     if (!init) {
       sync.begin();
       init = true;
-      EXT_LOGI(ML_TAG, "Audio Sync: Initialized");
+      EXT_LOGI(ML_TAG, "WLED Audio Sync: Initialized");
     }
 
-    if (sync.read()) {
+    // Drain ALL pending packets — keep only the most recent.
+    // Without this, a slow-running display (large pixel count → low FPS) lets packets
+    // accumulate in the UDP buffer; each single read returns the oldest packet,
+    // causing audio data to lag by seconds on large displays.
+    // Intentional: intermediate packets are discarded; only the last packet's band/volume
+    // state (held in the WLEDSync object after the final sync.read()) is applied below.
+    bool gotData = false;
+    while (sync.read()) gotData = true;
+
+    if (gotData) {
       memcpy(sharedData.bands, sync.fftResult, sizeof(sharedData.bands));
       sharedData.volume = sync.volumeSmth;
       sharedData.volumeRaw = sync.volumeRaw;
@@ -60,11 +85,13 @@ class AudioSyncDriver : public Node {
             }
           },
           name());
-
-      // if (audio.bands[0] > 0) {
-      //   EXT_LOGV(ML_TAG, "Audio Sync: %d %f", audio.bands[0], audio.volume);
-      // }
     }
+  }
+
+  void loopAudioDriver() {
+    // Stub: future implementation using a dedicated audio library.
+    // Will capture audio locally (e.g. via I2S microphone or line-in) and populate
+    // sharedData.bands / sharedData.volume without requiring a WLED sync source.
   }
 
   // WLEDMM netmindz ar palette

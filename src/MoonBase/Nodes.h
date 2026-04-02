@@ -212,11 +212,11 @@ extern SharedData sharedData;
    */
 
   // Drivers first as used by others
-  #include "MoonLight/Nodes/Drivers/D_ArtnetIn.h"
-  #include "MoonLight/Nodes/Drivers/D_ArtnetOut.h"
+  #include "MoonLight/Nodes/Drivers/D_NetworkIn.h"
+  #include "MoonLight/Nodes/Drivers/D_NetworkOut.h"
   #include "MoonLight/Nodes/Drivers/D_DMXIn.h"
   #include "MoonLight/Nodes/Drivers/D_DMXOut.h"
-  #include "MoonLight/Nodes/Drivers/D_AudioSync.h"
+  #include "MoonLight/Nodes/Drivers/D_WLEDAudio.h"
   #include "MoonLight/Nodes/Drivers/D_FastLEDAudio.h"
   #include "MoonLight/Nodes/Drivers/D_FastLEDDriver.h"
   // #include "MoonLight/Nodes/Drivers/D_Hub75.h"

@@ -193,9 +193,15 @@ All downstream logic — gamma/brightness LUT via `rgbwBufferMapping()`, per-lig
 
 Drivers always read `channelsD` **without** holding `swapMutex`. This is safe: `effectTask` writes to per-layer `virtualChannels` (different memory) while the driver reads `channelsD`. The `compositeLayers()` step that writes `virtualChannels → channelsD` only runs after the driver gives `channelsDFreeSemaphore`, so there is no concurrent access to `channelsD`.
 
-Do not add `swapMutex` guards inside `DriverNode::loop()`. The reference is [`D_ArtnetOut.h`](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Drivers/D_ArtnetOut.h).
+Do not add `swapMutex` guards inside `DriverNode::loop()`. The reference is [`D_NetworkOut.h`](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Drivers/D_NetworkOut.h).
 
-Exception: writes **to** `channelsD` from non-driver-task paths (e.g. DMX In `processChannels()`, ArtNet In) must take `swapMutex` to avoid racing with `compositeLayers()`.
+Exception: writes **to** `channelsD` from non-driver-task paths (e.g. DMX In `processChannels()`, Network In) must take `swapMutex` to avoid racing with `compositeLayers()`.
+
+#### NetworkInDriver and NetworkOutDriver mutex behaviour
+
+`NetworkInDriver::writePixels()` takes `swapMutex` before writing incoming pixel data into `channelsD`, even though the pipeline ordering (effectTask `compositeLayers()` runs before driverTask `loopDrivers()`) already prevents a race. The mutex is kept as a defence-in-depth guard and for consistency with the previous `ArtNetInDriver`; removing it is a separate, deliberate decision.
+
+`NetworkOutDriver::loop()` reads `channelsD` without holding `swapMutex`, consistent with every other driver node. Single-frame tearing (reading a partially composited frame) is the accepted trade-off of the double-buffer design.
 
 ### DMX In / DMX Out
 
