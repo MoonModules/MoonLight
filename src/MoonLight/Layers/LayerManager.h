@@ -228,12 +228,25 @@ class LayerManager {
     }
     if (updatedItem.name == "brightness") {
       VirtualLayer* layer = layerP.ensureLayer(selectedLayer);
-      if (layer) layer->brightness = updatedItem.value.as<uint8_t>();
+      if (!layer) return true;
+      // Old presets stored the global brightness under bare "brightness"; new presets use "brightness_0".
+      // If "brightness_0" is absent this is an old preset — keep layer brightness at 255 (100%).
+      if (state->data["brightness_0"].isNull()) {
+        EXT_LOGD(ML_TAG, "Old preset: ignoring bare 'brightness' (was global, not layer), using default 255");
+        return true;
+      }
+      layer->brightness = updatedItem.value.as<uint8_t>();
       return true;
     }
     if (updatedItem.name == "start") {
       VirtualLayer* layer = layerP.ensureLayer(selectedLayer);
       if (!layer) return true;
+      // Old presets stored pixel coordinates under bare "start"/"end"; new presets use "start_0".
+      // If "start_0" is absent this is an old preset — keep the default {0,0,0} set by prepareForPresetLoad.
+      if (state->data["start_0"].isNull()) {
+        EXT_LOGD(ML_TAG, "Old preset: ignoring bare 'start' pixel coords, using default {0,0,0}");
+        return true;
+      }
       layer->startPct = {updatedItem.value["x"].as<int>(), updatedItem.value["y"].as<int>(), updatedItem.value["z"].as<int>()};
       layerP.requestMapVirtual = true;
       return true;
@@ -241,6 +254,12 @@ class LayerManager {
     if (updatedItem.name == "end") {
       VirtualLayer* layer = layerP.ensureLayer(selectedLayer);
       if (!layer) return true;
+      // Old presets stored pixel coordinates under bare "start"/"end"; new presets use "end_0".
+      // If "end_0" is absent this is an old preset — keep the default {100,100,100} set by prepareForPresetLoad.
+      if (state->data["end_0"].isNull()) {
+        EXT_LOGD(ML_TAG, "Old preset: ignoring bare 'end' pixel coords, using default {100,100,100}");
+        return true;
+      }
       layer->endPct = {updatedItem.value["x"] | 100, updatedItem.value["y"] | 100, updatedItem.value["z"] | 100};
       layerP.requestMapVirtual = true;
       return true;

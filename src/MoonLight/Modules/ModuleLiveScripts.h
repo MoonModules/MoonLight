@@ -52,7 +52,7 @@ class ModuleLiveScripts : public Module {
                         LiveScriptNode* liveScriptNode = (LiveScriptNode*)_moduleEffects->findLiveScriptNode(nodeState["name"]);
                         if (liveScriptNode) {
                           liveScriptNode->startCompile();
-                          _moduleEffects->requestUIUpdate = true;  // update the UI
+                          // requestUIUpdate is set by LayerManager after execute() completes
                         }
 
                         EXT_LOGD(ML_TAG, "update due to new node %s done", nodeState["name"].as<const char*>());
@@ -69,7 +69,7 @@ class ModuleLiveScripts : public Module {
                         LiveScriptNode* liveScriptNode = (LiveScriptNode*)_moduleDrivers->findLiveScriptNode(nodeState["name"]);
                         if (liveScriptNode) {
                           liveScriptNode->startCompile();
-                          _moduleDrivers->requestUIUpdate = true;  // update the UI
+                          // requestUIUpdate is set by LayerManager after execute() completes
                         }
 
                         EXT_LOGD(ML_TAG, "update due to new node %s done", nodeState["name"].as<const char*>());

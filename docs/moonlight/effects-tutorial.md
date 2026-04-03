@@ -266,8 +266,6 @@ void loop() {
 }
 ```
 
-... watchdog due to expensive inoise8 function, only on cube, not on panel ...
-
 Each slice through the cube looks like a shifting 2D noise field. The z offset in the noise coordinates makes adjacent layers look related but distinct — like a 3D fire or fog.
 
 ![E_Noise3D](../media/moonlight/effects/E_Noise3D.gif)

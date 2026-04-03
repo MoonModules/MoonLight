@@ -161,3 +161,11 @@ MoonLight periodically merges upstream ESP32-sveltekit changes. To keep merges c
 **Memory** — On S3/P4 with PSRAM, `operator new` is overridden in `main.cpp` to prefer PSRAM for allocations above a threshold. On ESP32-D0 (no PSRAM), heap is very tight; watch flash usage too (target <3MB firmware).
 
 **Logging** — Use `EXT_LOGD` / `EXT_LOGI` / `EXT_LOGW` / `EXT_LOGE` (not `Serial.printf` directly in module/node code). Tag constants: `ML_TAG` (MoonLight), `MB_TAG` (MoonBase).
+
+## Additional Reference Documents
+
+Supplementary guidance for AI assistants lives in `/misc/instructions/`:
+
+- **`MoonLight.md`** — project philosophy, architectural goals, future roadmap, and broader context not covered above.
+- **`GEMINI.md`** — structural overview of the upstream [ESP32-sveltekit](https://github.com/theelims/ESP32-sveltekit) repo (services, file layout, key dependencies). Useful when touching upstream-derived code.
+- **`svelte.instructions.md`** — Svelte 5 development guidelines. Applies **only** to moonbase-specific frontend files (`src/routes/moonbase/`, `src/lib/components/moonbase/`, `moonbase_utilities.ts`, `moonbase_models.ts`). Do not apply runes patterns or reformatting to upstream files.
