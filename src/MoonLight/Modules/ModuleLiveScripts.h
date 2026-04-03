@@ -51,10 +51,7 @@ class ModuleLiveScripts : public Module {
                         EXT_LOGD(ML_TAG, "updateHandler equals current item -> livescript compile %s", updatedItem.c_str());
                         LiveScriptNode* liveScriptNode = (LiveScriptNode*)_moduleEffects->findLiveScriptNode(nodeState["name"]);
                         if (liveScriptNode) {
-                          liveScriptNode->compileAndRun();
-
-                          // wait until setup has been executed?
-
+                          liveScriptNode->startCompile();
                           _moduleEffects->requestUIUpdate = true;  // update the UI
                         }
 
@@ -71,10 +68,7 @@ class ModuleLiveScripts : public Module {
                         EXT_LOGD(ML_TAG, "updateHandler equals current item -> livescript compile %s", updatedItem.c_str());
                         LiveScriptNode* liveScriptNode = (LiveScriptNode*)_moduleDrivers->findLiveScriptNode(nodeState["name"]);
                         if (liveScriptNode) {
-                          liveScriptNode->compileAndRun();
-
-                          // wait until setup has been executed?
-
+                          liveScriptNode->startCompile();
                           _moduleDrivers->requestUIUpdate = true;  // update the UI
                         }
 

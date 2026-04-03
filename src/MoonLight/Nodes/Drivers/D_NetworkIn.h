@@ -119,8 +119,25 @@ class NetworkInDriver : public Node {
   // -----------------------------------------------------------------------
 
   void writePixels(int startPixel, int numPixels, uint8_t* dmxData) {
-    if (startPixel < 0 || startPixel >= layerP.lights.header.nrOfLights) return;
-    numPixels = MIN(numPixels, layerP.lights.header.nrOfLights - startPixel);
+    if (startPixel < 0) return;
+
+    // Resolve bounds against the target layer's own light count.
+    // Physical layer: clamp to nrOfLights (physical).
+    // Virtual layer:  clamp to vLayer->nrOfLights (virtual) — physical count may be
+    //                 smaller when a modifier expands the virtual grid, so clamping to
+    //                 physical would silently drop valid virtual indices.
+    VirtualLayer* vLayer = nullptr;
+    nrOfLights_t maxLights;
+    if (layer == 0) {
+      maxLights = layerP.lights.header.nrOfLights;
+    } else {
+      if (layer - 1 >= layerP.layers.size() || !layerP.layers[layer - 1]) return;
+      vLayer = layerP.layers[layer - 1];
+      maxLights = vLayer->nrOfLights;
+    }
+
+    if (startPixel >= (int)maxLights) return;
+    numPixels = MIN(numPixels, (int)(maxLights - startPixel));
     if (numPixels <= 0) return;
 
     xSemaphoreTake(swapMutex, portMAX_DELAY);
@@ -130,14 +147,12 @@ class NetworkInDriver : public Node {
         memcpy(&layerP.lights.channelsD[ledIndex * layerP.lights.header.channelsPerLight],
                &dmxData[i * layerP.lights.header.channelsPerLight],
                layerP.lights.header.channelsPerLight);
-      } else {  // Virtual layer — guard against out-of-range index and uninitialised slot
-        if (layer - 1 < layerP.layers.size() && layerP.layers[layer - 1]) {
-          layerP.layers[layer - 1]->forEachLightIndex(ledIndex, [&](nrOfLights_t indexP) {
-            memcpy(&layerP.lights.channelsD[indexP * layerP.lights.header.channelsPerLight],
-                   &dmxData[i * layerP.lights.header.channelsPerLight],
-                   layerP.lights.header.channelsPerLight);
-          });
-        }
+      } else {  // Virtual layer
+        vLayer->forEachLightIndex(ledIndex, [&](nrOfLights_t indexP) {
+          memcpy(&layerP.lights.channelsD[indexP * layerP.lights.header.channelsPerLight],
+                 &dmxData[i * layerP.lights.header.channelsPerLight],
+                 layerP.lights.header.channelsPerLight);
+        });
       }
     }
     xSemaphoreGive(swapMutex);
@@ -188,6 +203,9 @@ class NetworkInDriver : public Node {
 
     uint32_t offset = ((uint32_t)packetBuffer[4] << 24) | ((uint32_t)packetBuffer[5] << 16) |
                       ((uint32_t)packetBuffer[6] <<  8) |  (uint32_t)packetBuffer[7];
+    // Reject mid-pixel offsets: a non-aligned offset shifts all pixel boundaries and
+    // causes silent color corruption. Compliant senders always use pixel-aligned offsets.
+    if (offset % channelsPerLight != 0) return;
     uint16_t dataLen = ((uint16_t)packetBuffer[8] << 8) | packetBuffer[9];
 
     uint8_t* pixelData = packetBuffer + DDP_HEADER_LEN;

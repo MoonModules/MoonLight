@@ -28,6 +28,27 @@ The **Live Scripts module** itself does not create scripts — it shows all curr
 
 ---
 
+## Important notes
+
+Live Scripts use a C-like language that is still under active development. If you are familiar with C, writing your own scripts should be straightforward.
+See the [example scripts](https://github.com/MoonModules/MoonLight/tree/main/livescripts) for inspiration.
+
+There are a few known limitations:
+
+* **Debugging**: Script output is only visible in the serial monitor. If a script is not behaving as expected:
+    * Connect your device via USB to your PC.
+    * Open [ESP Connect](https://thelastoutpostworkshop.github.io/microcontroller_devkit/espconnect) (not supported on Safari).
+    * Click **Connect** and select your device.
+    * Click **Serial Monitor**, then **Start**.
+    * Script output appears in the window.
+* **Inline constructor arguments**: Passing a constructed value directly as a function argument may not work correctly — for example, `setRGB(i, CRGB(0, 0, 255))`. If you see unexpected results, assign the value to a variable first: `CRGB color = CRGB(0, 0, 255); setRGB(i, color);`
+* **Heavy loops**: Long-running calculations in `loop()` can trigger a watchdog crash and reboot. If this happens, the device reboots in safe mode so the script can be edited.
+* **Type conversions**: The Live Script compiler sometimes requires explicit type casts where standard C would handle them implicitly. If a script produces unexpected values, try adding an explicit cast.
+
+These limitations are expected to be resolved in future releases.
+
+---
+
 ## How to run a Live Script
 
 **Step 1**: Go to [MoonBase / File Manager](https://moonmodules.org/MoonLight/moonbase/files/) and navigate to a folder for your scripts. Create a folder if needed (press the second + button):
