@@ -44,9 +44,14 @@ There are a few known limitations:
 * **Inline constructor arguments**: Some cases of passing a constructed value directly as a function argument might fail (some have been fixed). If you see unexpected results, assign the value to a variable first: `CRGB color = CRGB(0, 0, 255); setRGB(i, color);`
 * **Heavy loops**: Long-running calculations in `loop()` can trigger a watchdog crash and reboot. If this happens, the device reboots in safe mode so the script can be edited.
 * **Type conversions**: The Live Script compiler sometimes requires explicit type casts where standard C would handle them implicitly. If a script produces unexpected values, try adding an explicit cast.
+* **Conditional operator**: the condition must be between parentheses e.g. `(x>y)?x:y`.
+* (uint16_t) typecasting is not supported yet
+* **`int` is 8-bit signed** (range −128 to 127). Loops using `int i` stop at i=127 regardless of the bound — use `uint16_t` for loop counters and intermediate values that may exceed 127. Example: `for (uint16_t i = 0; i < NUM_LEDS; i++)`. Similarly, store `NUM_LEDS` in a `uint16_t` variable before arithmetic: `uint16_t n = NUM_LEDS;`.
 
 These limitations are expected to be resolved in future releases.
 
+!!! tip "log"
+    Use printf() to print log information, variables etc. See [General functions](#general)
 ---
 
 ## How to run a Live Script
@@ -113,6 +118,7 @@ A script can combine these — for example, an effect with both `setup()` (to cr
 |---|---|
 | `uint32_t millis()` | Milliseconds since boot |
 | `uint32_t now()` | Same as `millis()` (alias) |
+| `void printf("%d,%d\n", x, y)` | print to serial log |
 | `uint16_t random16(uint16_t max)` | Random number 0 to max |
 | `void delay(uint32_t ms)` | Delay in milliseconds |
 | `void pinMode(uint8_t pin, uint8_t mode)` | Set GPIO pin mode |
@@ -157,6 +163,7 @@ A script can combine these — for example, an effect with both `setup()` (to cr
 |---|---|
 | `void addLight(uint8_t x, uint8_t y, uint8_t z)` | Add a light at position (x, y, z) |
 | `void nextPin()` | Assign following lights to the next GPIO pin |
+| `void addTube(uint16_t x1, uint16_t y1, uint16_t z1, uint16_t x2, uint16_t y2, uint16_t z2, uint8_t numPixels)` | Add `numPixels` lights linearly interpolated between two 3D points, then advance to the next pin. Convenience wrapper around `addLight` + `nextPin` for strip fixtures. |
 
 ### Palette functions (for `P_` scripts)
 

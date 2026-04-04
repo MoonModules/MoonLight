@@ -57,6 +57,19 @@ static void _addControl(uint8_t* var, char* name, char* type, uint8_t min = 0, u
 static void _nextPin() { layerP.nextPin(); }
 static void _addLight(uint16_t x, uint16_t y, uint16_t z) { layerP.addLight({x, y, z}); }
 
+// Layout drawing helper: adds numPixels lights linearly interpolated between two 3D points
+// and advances to the next output pin. Mirrors drawLine3D for effects, but for onLayout().
+static void _addTube(uint16_t x1, uint16_t y1, uint16_t z1, uint16_t x2, uint16_t y2, uint16_t z2, uint8_t numPixels) {
+  for (uint8_t i = 0; i < numPixels; i++) {
+    float t = numPixels > 1 ? (float)i / (float)(numPixels - 1) : 0.0f;
+    int x = (int)(x1 + ((float)x2 - (float)x1) * t + 0.5f);
+    int y = (int)(y1 + ((float)y2 - (float)y1) * t + 0.5f);
+    int z = (int)(z1 + ((float)z2 - (float)z1) * t + 0.5f);
+    layerP.addLight({x, y, z});
+  }
+  layerP.nextPin();
+}
+
 static void _modifySize() { currentNode()->modifySize(); }
 static void _modifyPosition(Coord3D& position) { currentNode()->modifyPosition(position); }  // need &position parameter
 // static void _modifyXYZ() {currentNode()->modifyXYZ();}//need &position parameter
@@ -192,6 +205,7 @@ void LiveScriptNode::setup() {
   addExternal("void addControl(void*,char*,char*,uint8_t,uint8_t)", (void*)_addControl);
   addExternal("void nextPin()", (void*)_nextPin);
   addExternal("void addLight(uint16_t,uint16_t,uint16_t)", (void*)_addLight);
+  addExternal("void addTube(uint16_t,uint16_t,uint16_t,uint16_t,uint16_t,uint16_t,uint8_t)", (void*)_addTube);  // 🌙 interpolates numPixels lights along a 3D line then calls nextPin
   addExternal("void modifySize()", (void*)_modifySize);
   //   addExternal(    "void modifyPosition(Coord3D &position)", (void *)_modifyPosition);
   //   addExternal(    "void modifyXYZ(uint16_t,uint16_t,uint16_t)", (void *)_modifyXYZ);
