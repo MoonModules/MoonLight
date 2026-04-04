@@ -290,7 +290,7 @@ void loop() {
 }
 ```
 
-The number of lit LEDs follows the volume. The colour sweeps from one end of the palette to the other so loud = lots of colour.
+The number of lit LEDs follows the volume (scaled by dividing by 400, so the meter reaches full scale at a volume of 400). The colour sweeps from one end of the palette to the other so loud = lots of colour.
 
 ![E_Vu1D](../media/moonlight/effects/E_Vu1D.gif)
 

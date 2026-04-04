@@ -53,6 +53,11 @@ Spawns a one-shot FreeRTOS task (`compileTask`, 8KB stack, priority 1) to run `c
 
 If a compile is already in progress (`compileInProgress == true`), sets `needsCompile = true` instead. `NodeManager::loop20ms()` picks this up and calls `startCompile()` again once the current compile finishes.
 
+!!! note "File-change handler"
+    `ModuleLiveScripts`' filesystem-change handler calls `startCompile()` (async, non-blocking), **not** `compileAndRun()` (synchronous). This prevents blocking the SvelteKit loop task during recompile of large scripts, which would cause HTTP/WS timeouts visible as UI freezes.
+
+    `requestUIUpdate` is no longer set directly by the handler. `LayerManager` sets it after the compiled effect completes its first execution — this ensures the UI refresh reflects the new effect's controls, not stale state from before compilation.
+
 !!! note "Deferred execution for D0 heap"
     `compileAndRun()` does **not** call `execute()` directly. Instead it sets `needsExecute = true` and returns, allowing the compile task to exit and free its 8KB stack. `NodeManager::loop20ms()` then picks up the flag and calls `execute()`. This ensures the compile task's stack is freed before `executeAsTask()` tries to allocate another 8KB for the run task — critical on ESP32-D0 where heap is tight.
 
@@ -169,7 +174,16 @@ To expose a new C++ function to LiveScript:
 
 The `addExternal()` helper parses C-style function signatures (e.g. `"CRGB getRGB(uint16_t)"`) and registers them with the ESPLiveScript linker. Variables use the same mechanism without parentheses: `"uint8_t width"`.
 
-**Recently added bindings**: `random8(uint8_t maxValue)` — scripts can call it without any Arduino include.
+**Recently added bindings:**
+
+| Binding | Maps to | Notes |
+|---|---|---|
+| `random8(uint8_t maxValue)` | FastLED `random8()` | No Arduino include needed in scripts |
+| `float sqrt(float)` | `sqrtf` (C standard) | Safe to call in `loop()` |
+| `void drawLine3D(x1,y1,z1,x2,y2,z2,CRGB)` | `layer->drawLine3D()` | Routed via `currentNode()` wrapper; use an intermediate `CRGB` variable if inline construction fails |
+| `void blur2d(uint8_t)` | `layer->blur2d()` | 2D blur across the virtual layer |
+
+**ESPLiveScript version note:** The library is pinned to commit `48715099`, which partially fixes inline `CRGB(r,g,b)` constructor arguments passed directly to registered functions. Some patterns are still broken — if a script produces wrong colours, assign the value first: `CRGB c = CRGB(r,g,b); fn(c);`. See [Known Limitations](../moonlight/livescripts.md#important-notes).
 
 **Checkbox controls**: `_addControl` always receives a `uint8_t*`. For `"checkbox"` type it reinterprets the pointer as `bool*` before calling the `addControl<bool>()` template, so `setupControl()` gets `sizeCode == sizeof(bool)`. Declare checkbox variables as `bool` in scripts.
 

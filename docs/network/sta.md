@@ -4,6 +4,8 @@
 
 * **Hostname**: The hostname you set here is used as the device name everywhere in MoonLight: mDNS (for `.local` access), the Access Point name, and the name shown in the Devices module. Configure it once here and it applies across all network interfaces.
 
+* **Reconnection**: When a connection attempt is in progress, MoonLight waits for the result before starting another attempt, preventing duplicate connection requests if the access point is slow to respond. No user action is required.
+
 * **WiFi TX Power** 🌙: WiFi transmit power can be set to optimize WiFi behavior. Some boards are known to work better by setting transmit power to 8.5 dBM (So called LOLIN_WIFI_FIX).
     * Default is typically 20 dBm (100mW) - the maximum allowed
     * Common recommended settings:

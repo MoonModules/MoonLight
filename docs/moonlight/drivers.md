@@ -110,6 +110,7 @@ Sends pixel data over the network to LED controllers and DMX fixtures. Supports 
 * **Broadcast** *(Art-Net only)*: When enabled, sends to the subnet broadcast address (`x.x.x.255`) instead of specific IPs. All Art-Net receivers on the subnet pick up the data and select their own universes. The **Controller IPs** field is ignored.
 * **Controller IPs** *(unicast only)*: The last segment(s) of the IP address(es) of the network controllers. Use a comma-separated list (`11,12,13`) or a hyphen for a range (`11-20`). Pixel data is divided equally across all IPs.
 * **Port**: Network port. Updated automatically when switching protocol; can be overridden manually.
+* **status** *(read-only)*: Shows the current output state — "No target IPs", "Sending Art-Net / DDP / E1.31", or "DDP: unsupported layout". Updates live.
 * **FPS Limiter**: Maximum frames per second sent. Art-Net spec recommends ~44 FPS; higher rates (up to ~130 FPS tested) work with most controllers.
 * **Universe size**: Channels per universe (max 512). Match the setting on your controller.
 * **Used channels** *(read-only)*: Channels actually used per universe after rounding down to a whole number of lights (e.g. 510 for RGB at 512-channel universes). Always at least one light's worth of channels — if **Universe size** is set smaller than the channels per light, one full light is still included per universe.
@@ -118,6 +119,9 @@ Sends pixel data over the network to LED controllers and DMX fixtures. Supports 
 * **Total universes** *(read-only)*: Universes required to transmit all lights.
 * **Channels per output**: Channel budget per output. Make sure it matches the number of lights per output (check total channels)
 * **Total channels** *(read-only)*: Total channels sent across all outputs and IPs.
+
+!!! note "DDP channel count"
+    DDP output requires channels-per-light to be 3 (RGB) or 4 (RGBW). Other values will show "DDP: unsupported layout" in the status field and stop sending until you switch to a compatible light preset.
 
 !!! tip "Controller settings"
     Set the universe count and channels per universe to the same values on your controller.
@@ -137,6 +141,7 @@ Receives pixel data from the network and writes it into the MoonLight channel bu
     * **E1.31 / sACN** (port 5568)
 * **Port**: UDP port to listen on. Updated automatically when switching protocol; can be overridden.
 * **Universe Min / Universe Max** *(Art-Net and E1.31)*: Filters incoming universes; packets outside this range are ignored.
+* **status** *(read-only)*: Shows the current connection state — "Not connected", "Listening proto:port", or "Receiving proto:port". Updates live as packets arrive.
 * **Layer**: Where received pixel data is written:
     * **Physical layer** — writes directly into the channel buffer, bypassing layout mapping.
     * **Layer 1 … N** — writes into the selected virtual layer, which applies the layout and any active modifiers (recommended for mapped fixtures). See [Modifiers](modifiers.md).
@@ -148,6 +153,9 @@ Receives pixel data from the network and writes it into the MoonLight channel bu
 
 !!! tip "Running effects alongside Network In"
     Effects and Network In can run on the same layer at the same time. Disable or delete effects if you want Network In to be the sole pixel source.
+
+!!! note "DDP alignment"
+    Incoming DDP packets must be aligned to the configured channels-per-light boundary. Packets with a misaligned byte offset are silently discarded.
 
 ### DMX Out ☸️
 

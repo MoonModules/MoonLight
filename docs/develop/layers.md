@@ -140,6 +140,45 @@ Normally triggered as a coupled two-pass operation via `requestMappings()`: layo
 
 ## Design decisions
 
+### Virtual-layer pixel writes from driver nodes
+
+Drivers that receive external pixel data (Network In, DMX In) and target a virtual layer **must** write into `VirtualLayer::virtualChannels[]` directly — not into `layerP.lights.channelsD` via `forEachLightIndex()`.
+
+**Why:** `compositeLayers()` calls `memset(channelsD, 0)` before compositing every frame. Any direct write to `channelsD` is silently zeroed on the next composite cycle.
+
+**Correct pattern:**
+
+```cpp
+xSemaphoreTake(swapMutex, portMAX_DELAY);
+if (vLayer->virtualChannels && ledIndex < vLayer->nrOfLights)
+    memcpy(&vLayer->virtualChannels[ledIndex * cpl], src, cpl);
+xSemaphoreGive(swapMutex);
+```
+
+`compositeTo()` is called by the layer pipeline and applies the mapping table — the driver does not need to traverse it.
+
+**Flat-index assumption:** Direct writes to `virtualChannels[ledIndex]` assume a 0-based flat virtual index. For non-trivial mapping tables (zigzag, segment) this is still correct because the mapping table is applied by `compositeTo()`. However, if the *sender* is transmitting in physical-LED order rather than virtual order and the virtual layer has a non-flat map, pixels will appear misplaced. Such setups should use the physical layer (`layer == 0`) instead.
+
+**Null check:** Always validate `vLayer->virtualChannels` inside the mutex. Allocation happens during layout (under the `isPositions` gate, not under `swapMutex`), but a re-check inside the mutex eliminates the TOCTOU gap.
+
+---
+
+### LayerManager: backward-compat guard for legacy preset JSON keys
+
+Pre-multilayer presets stored global values under bare keys `brightness`, `start`, `end`. New presets use per-layer keys `brightness_0`, `start_0`, `end_0` (suffix = layer index).
+
+When the `LayerManager` update handler receives a bare key update it checks whether the corresponding `_0` key is present in `state->data`:
+
+```cpp
+if (state->data["brightness_0"].isNull()) return true;  // old preset — ignore
+```
+
+If absent, the update is silently dropped and per-layer defaults are kept (brightness 255, start {0,0,0}, end {100,100,100}). This prevents the bare global value from overwriting per-layer state with data that carries no layer context.
+
+**Convention for new per-layer controls:** Follow the same `_N` suffix pattern and add an equivalent `isNull()` guard for the `_0` key in the update handler. Without the guard, any old preset JSON that happens to contain the bare key name will corrupt per-layer state silently.
+
+---
+
 ### fadeToBlackBy accumulation
 
 `VirtualLayer::fadeToBlackBy(amount)` writes the request into the per-layer `fadeBy` field using `fadeBy = fadeBy ? MIN(fadeBy, amount) : amount`. When multiple callers invoke it in the same frame the **smallest** amount wins — a layer requesting a slow trail (small amount) takes precedence over one requesting a faster decay. This prevents a secondary effect from erasing the trail data a primary effect depends on.
