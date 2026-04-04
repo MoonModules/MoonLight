@@ -9,7 +9,7 @@ uint8_t amplitude = 100;
 
 void setup() {
     addControl(&bpm, "bpm", "slider", 1, 120);
-    addControl(&amplitude, "amplitude", "slider", 0, 100);
+    addControl(&amplitude, "amplitude", "slider", 0, 255);
 }
 
 void loop() {
