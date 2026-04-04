@@ -6,137 +6,184 @@
 
 **[▶️ Watch the functional overview](https://www.youtube.com/watch?v=bJIgiBBx3lg)**
 
-MoonLight is an open-source lighting platform that scales from art installations to professional stages.
-
-MoonLight is open-source software that lets you control a wide range of DMX and LED lights using ESP32 microcontrollers, for home, for artists, and for stages.
+MoonLight is open-source software that lets you control a wide range of DMX and LED lights using ESP32 microcontrollers — for home use, art installations, and professional stages.
 
 <img width="163" src="https://github.com/user-attachments/assets/1afd0d4b-f846-4d5b-8cc9-8fa8586c405b" />
 
-MoonLight consist of the following modules:
+---
 
-* [Lights control](https://moonmodules.org/MoonLight/moonlight/lightscontrol/)
-* [Effects](https://moonmodules.org/MoonLight/moonlight/effects/)
-* [Drivers](https://moonmodules.org/MoonLight/moonlight/drivers/)
-* [Channels](https://moonmodules.org/MoonLight/moonlight/channels/)
-* [Live Scripts](https://moonmodules.org/MoonLight/moonlight/livescripts/)
-* [MoonLight info](https://moonmodules.org/MoonLight/moonlight/moonlightinfo/)
+## What's inside MoonLight
 
-## MoonLight by MoonModules
+MoonLight is organised into modules, each covering a specific area of functionality:
 
-MoonLight is created by [MoonModules](https://moonmodules.org/). MoonModules is a collective of light artists, hardware- and software developers. We love creating DIY lighting solutions based on microcontrollers, mainly ESP32. Our work can be found on GitHub and we use mainly [Discord](https://discord.gg/TC8NSUSCdV) for communications. We develop our products for a large community of light enthusiasts and make products we show to the world, e.g. on art-exhibitions, in venues, or at festivals. See also [about](https://moonmodules.org/about/).
-Our flagship product is WLED-MM, a fork of WLED focussing on driving more LEDs, new platforms (e.g. ESP32-P4), better audio and so on. As currently most of the MoonModules team are also core developers of WLED, WLED-MM functionality is slowly moving to WLED.
+| Module | What it does |
+|---|---|
+| [Lights Control](https://moonmodules.org/MoonLight/moonlight/lightscontrol/) | Global brightness, colour, presets and external control (DMX, IR, Home Assistant) |
+| [Effects](https://moonmodules.org/MoonLight/moonlight/effects/) | Visual effects and modifiers that run on virtual layers |
+| [Drivers](https://moonmodules.org/MoonLight/moonlight/drivers/) | Layouts and drivers that send data to physical lights |
+| [Channels](https://moonmodules.org/MoonLight/moonlight/channels/) | Live monitor of the raw channel data going to your lights |
+| [Live Scripts](https://moonmodules.org/MoonLight/moonlight/livescripts/) | Write and run custom effects directly on the device |
+| [MoonLight Info](https://moonmodules.org/MoonLight/moonlight/moonlightinfo/) | Firmware build info and system diagnostics |
 
-Started in 2023 we are also developing a new product based on our experience working with WLED called MoonLight. MoonLight is a modern alternative to WLED, with a modern UI, supporting 1D, 2D and 3D layouts, effects and modifiers, live scripts and led drivers.
+---
 
-## Why MoonLight
+## About MoonModules
 
-So why build MoonLight when we already have WLED(-MM)?
+MoonLight is created by [MoonModules](https://moonmodules.org/) — a collective of light artists, hardware and software developers who love building DIY lighting solutions based on ESP32. You can find our work on GitHub and reach us on [Discord](https://discord.gg/TC8NSUSCdV).
 
-This is a personal overview by me (ewowi). It’s not meant to burn down WLED, quite the opposite. I worked on it for years (mainly on 2D: first in WLED SR, then in WLED/WLED, and later in WLED-MM) and I was, and still am, deeply impressed with what it offers. But along the way I ran into some limitations that eventually convinced me to start MoonLight.
+We develop our products for a large community of light enthusiasts and show them at art exhibitions, in venues, and at festivals. See also [about MoonModules](https://moonmodules.org/about/).
 
-* **UI**: extending or modifying the UI is difficult, not only because the code is complex and non-intuitive, but also because of memory and flash constraints. On top of that, WLED has two UI systems: one for the main screen, and another for setup/configuration, which adds complexity. The UI stack is “classic” HTML, JavaScript, and CSS, without modern concepts like reactive frameworks.
+We started creating **WLED-MM**, a fork of WLED focused on driving more LEDs, supporting new platforms (e.g. ESP32-P4), and better audio. As most of the MoonModules team are also core WLED developers, WLED-MM functionality is gradually moving back into WLED.
 
-* **ESP8266 support**: WLED still supports ESP8266, and that legacy support complicates the codebase a lot. MoonLight takes a different stance: if you need ESP8266, use an older WLED release. But don’t hold back development for it, most advanced features won’t fit on the ESP8266 anyway.
+Starting in 2023 we began building **MoonLight** — a modern alternative to WLED with a reactive UI, 1D/2D/3D layout support, live scripts and flexible LED drivers.
 
-* **Outdated libraries**: WLED relies on older versions of FastLED, ArduinoJson, ESP-IDF, and others. MoonLight’s philosophy is to keep libraries up to date. “Don’t change what works” only delays the inevitable, you’re forced to upgrade eventually.
+---
 
-* Effects and fixture **dimensions**: WLED effects are designed around 1D and 2D, with a lot of hardcoding. MoonLight supports up to 3D at the core, with no hardcoded constraints. An effect doesn’t “know” the fixture or its size, so you can run a 1D effect on 3D, or 2D on 1D, without issues. MoonLight doesn’t use effect IDs, an effect is a class (Node). Modifiers, layouts, and drivers are also Node types. This eliminates hacks like shared data, limited effect controls, effect metadata, virtual strips, expand1D, etc. (some of which I originally introduced in WLED, sorry 😜).
+## Why build MoonLight when WLED already exists?
 
-* **Mapping system**: WLED’s mapping is based on strips and panels, and requires hacks to handle shapes like rings or hexagons. 3D isn’t supported. MoonLight uses “inverse mapping”: instead of placing LEDs on a grid, you just define their coordinates, and the system maps everything internally.
+| Pain point | How MoonLight addresses it |
+|---|---|
+| **Complex UI** — two separate UI systems, hard to extend | Single reactive SvelteKit UI, fully generic module rendering |
+| **ESP8266 legacy** — constrains the codebase | ESP32-only, no legacy baggage |
+| **Outdated libraries** — ArduinoJson, FastLED, ESP-IDF | Philosophy: keep dependencies up to date |
+| **1D/2D effects only** — lots of hardcoding | 3D at the core; effects don't know fixture size |
+| **Strip/panel mapping** — no 3D, hacks for rings/hexagons | Inverse mapping: just define LED coordinates |
+| **Accumulated tech debt** — hard to maintain audio-reactive | Clean architecture with Node-based isolation |
+| **Too large to change** — deep architectural changes are nearly impossible | Built from scratch with extensibility in mind |
 
-* **Technical debt**: WLED has accumulated a lot of code that “just evolved.” Audio-reactive is the clearest example. It’s hard to maintain, and in practice only a few people really can. WLED started with a strong architecture, but that hasn’t evolved much over time. (Yes, I share some of the blame 🙈)
+What I love most about WLED and wanted to keep: **UserMods** ❤️ — small, isolated, opt-in code pieces each with their own UI. That idea evolved into MoonLight's **Nodes** class: self-contained objects that initialise, run, expose controls, and clean up after themselves.
 
-* **Too big** to change: WLED has grown so large, with so many users, that making deep architectural changes is nearly impossible. The last major thing I worked on in WLED (2023) was “SuperSync”, linking multiple microcontrollers to drive a single fixture, inspired by drone swarms. I quickly hit the system’s boundaries, and the plans we had seemed unachievable within WLED.
-
-* What I love most in WLED: **UserMods** ❤️! Small, isolated pieces of code you can enable or disable, each with its own UI integration. This makes WLED incredibly versatile, with a huge library of UserMods. MoonLight originally was named “StarMod” (or *Mod: everything as a module). That idea evolved into the Nodes class: self-contained objects that initialize, run, expose controls, and can be destructed.
+---
 
 ## Current status
 
-As of fall 2025, MoonLight can best be described as having its foundation solidly in place.
+As of late 2025 MoonLight's foundation is solidly in place.
 
-Earlier releases involved major structural changes that often required fresh installs or renaming. Future updates should generally work seamlessly without erasing existing settings, though major version upgrades might still include exceptions.
+Earlier releases involved major structural changes that sometimes required fresh installs. Future updates should generally be seamless, though major version upgrades may still include exceptions.
 
-MoonBase now serves as a flexible foundation for any IoT project, while MoonLight provides a ready-to-use, plug-and-play application built on top of it.
+**MoonBase** is now a flexible IoT foundation you can use independently of lights. **MoonLight** is a ready-to-use lighting application built on top of it.
 
-That doesn’t mean the work is done, quite the opposite. This is just the beginning. MoonLight began as a solo project, but it’s open for collaboration. You’re warmly invited to help shape its future; check out the [Develop](https://moonmodules.org/MoonLight/develop/) pages to learn how to get started.
+That doesn't mean the work is done — this is just the beginning. MoonLight is open for collaboration. You're warmly invited to help shape its future; see the [Develop](https://moonmodules.org/MoonLight/develop/) pages to get started.
 
-### What has been done so far
+### What's been done
 
-MoonBase
+**MoonBase**
 
-* ESP32-SvelteKit foundation (Svelte framework, PhysicsHttp, Stateful service, Event Sockets, Restful API, MDNS, MQTT)
-* [Modules](https://moonmodules.org/MoonLight/develop/modules/): Generic building block to create server and UI functionality which can be activated through the menu by means of a json definition.
-* [Nodes](https://moonmodules.org/MoonLight/develop/nodes/)🥜: Generic building block to setup and run specific code and shows controls in the UI.
-* Utilities (System logging, 3D coordinate system, String Management, Memory Management)
-* Functionality, See [MoonBase](https://moonmodules.org/MoonLight/moonbase/) overview
-    * Sveltekit: Connections, WiFi, System. 
-    * MoonBase: Files, Tasks, Devices, IO.
+- ESP32-SvelteKit foundation (SvelteKit UI, PsychicHttp, Stateful services, Event Sockets, RESTful API, mDNS, MQTT)
+- [Modules](https://moonmodules.org/MoonLight/develop/modules/): generic building blocks for server + UI functionality activated via a JSON definition
+- [Nodes](https://moonmodules.org/MoonLight/develop/nodes/) 🥜: generic building blocks that run code and expose controls in the UI
+- Utilities: system logging, 3D coordinate system, string and memory management
+- MoonBase features: Connections, WiFi, System, Files, Tasks, Devices, IO
+- ESP32-P4 support
+- Ethernet
+- Specific board profiles; see [Premade boards](https://moonmodules.org/MoonLight/gettingstarted/hardware/#premade-boards)
 
-MoonLight 
+**MoonLight**
 
-* [Layers](https://moonmodules.org/MoonLight/develop/layers/): Physical and Virtual layers. Physical layer manages the real physical Lights or LEDs (using Layouts and Drivers). Multiple (currently 1) virtual layers (effects & modifiers) are mapped to the physical layer.
-* Functionality, See [MoonLight](https://moonmodules.org/MoonLight/moonlight/) overview
-    * Control, Channels and Info
-    * Effects & Modifiers
-    * Layouts & Drivers.
-        * DMX / Network Out (Art-Net, DDP, E1.31)
-        * WLED Audio (Audio Sync / Audio Driver)
+- [Layers](https://moonmodules.org/MoonLight/develop/layers/): physical and virtual layers; physical layer manages real LEDs/lights via layouts and drivers; virtual layers run effects and modifiers
+- Control, Channels and Info
+- Effects & Modifiers
+- Layouts & Drivers — FastLED, parallel LED driver, DMX, Art-Net, DDP, E1.31, WLED Audio Sync
+- Live Scripts (already in MoonLight, planned for MoonBase)
+- Multiple layers
+- DMX / Network In (Art-Net, DDP, E1.31)
+- Palettes: more options, custom, audio-reactive
 
 ### Looking ahead
 
-MoonBase
+**MoonBase**
 
-* ESP32-P4 support
-* MIDI support (light control desks) 
-* Ethernet
-* Live Scripts, see [Live Scripts](https://moonmodules.org/MoonLight/moonbase/module/liveScripts/), included in MoonLight
-* SuperSync 🥜: See above: development basically stopped in 2023 but the ideas are still there: device groups, sync effects, distributed effects.
-* HA / MQTT
-* UI enrichments
-* Specific board profiles, E.g. see [Premade boards](https://moonmodules.org/MoonLight/gettingstarted/hardware/#premade-boards)
+- MIDI (light control desks)
+- SuperSync 🥜 — distributed effects across multiple devices
+- HA / MQTT improvements
 
-MoonLight 
+**MoonLight**
 
-* Multiple Layers
-* DMX / Network In (Art-Net, DDP, E1.31)
-* Virtual driver
-* Effects: Limited nr of effects but easy to add (tutorial)
-    * Help needed!
-    * FastLED
-    * Animartrix
-    * Physics
-    * Live Scripts
+- Virtual driver
+- More effects (FastLED, Animartrix, Physics, Live Scripts)
 
 ### Where you can help
 
-* Add more effects (FastLED, WLED, Particle system, Animartrix, Soulmate lights, ...), modifiers, layouts and drivers
-* Improve the [MoonLight Installer](https://moonmodules.org/MoonLight/gettingstarted/installer/)
-* Improve the UI (Svelte 5, DaisyUI 5, TailWind 4)
-  * e.g. File Manager, Multi row layout, Monitor (WebGL)
-* Tune FastLED, add FastLED 2D effects
-* CI automation (Generate daily builds in GitHub and use by installer)
-* Palettes: more, custom, audio-reactive
-* ...
+- Add effects (FastLED, WLED, particle systems, Animartrix, Soulmate Lights…), modifiers, layouts and drivers
+- Improve the UI (Svelte 5, DaisyUI 5, TailWind 4) — File Manager, multi-row layout, Monitor (WebGL)
+- Tune FastLED, add FastLED 2D effects
+- CI automation
 
-Contact us in the MoonLight channels on [Discord MoonModules](https://discord.gg/TC8NSUSCdV)
+Come say hi in the MoonLight channels on [Discord MoonModules](https://discord.gg/TC8NSUSCdV) 👋
 
-## Emoji coding
+---
 
-Effects, Modifiers, Layouts and drivers use emoji's to visualize their usage. See below for an overview:
+## Emoji key
 
-* 🔥 Effect
-    * 🐙 WLED origin
-    * 💫 MoonLight origin
-    * ⚡️ FastLED origin
-    * 🚨 Moving head color effect
-    * 🗼 Moving head move effect
-* 💎 Modifier
-* 🚥 Layout
-* ☸️ Driver
+Effects, Modifiers, Layouts and Drivers use emojis to show their capabilities at a glance:
 
-* ♫ Audio-reactive FFT-based
-* ♪ Audio-reactive volume-based
-* 💡 supports up to 0D
-* 📏 supports up to 1D
-* 🟦 supports up to 2D
-* 🧊 supports up to 3D
+| Emoji | Meaning |
+|---|---|
+| 🔥 | Effect |
+| 🐙 | WLED origin |
+| 💫 | MoonLight origin |
+| ⚡️ | FastLED origin |
+| 🚨 | Moving head — colour effect |
+| 🗼 | Moving head — move effect |
+| 💎 | Modifier |
+| 🚥 | Layout |
+| ☸️ | Driver |
+| ♫ | Audio-reactive (FFT-based) |
+| ♪ | Audio-reactive (volume-based) |
+| 💡 | Supports 0D and up |
+| 📏 | Supports 1D and up |
+| 🟦 | Supports 2D and up |
+| 🧊 | Supports 3D |
+
+---
+
+## Reporting issues
+
+Found a bug or want to request a feature? Please open an issue on GitHub:
+
+👉 **[https://github.com/MoonModules/MoonLight/issues](https://github.com/MoonModules/MoonLight/issues)**
+
+### Before you open an issue
+
+- Search existing issues to check whether yours has already been reported.
+- If you found it, add a 👍 reaction rather than opening a duplicate.
+
+### What makes a good bug report
+
+A clear, reproducible report helps us fix things much faster. Please include:
+
+1. **Steps to reproduce** — exactly what you did, step by step, starting from a fresh state.
+2. **Expected behaviour** — what should have happened.
+3. **Actual behaviour** — what actually happened (error messages, screenshots, or a short video help a lot).
+4. **Device and firmware** — ESP32 variant (D0 / S3 / P4), firmware version (shown in *MoonLight Info*), and browser/OS if it's a UI issue.
+5. **Module API output** — see below.
+
+### Attaching the module API output
+
+Every module exposes a REST endpoint that returns its full current state as JSON. This is the single most useful piece of diagnostic information you can include.
+
+**How to get it:**
+
+1. Open the affected module in the MoonLight UI (e.g. *Effects* or *Drivers*).
+2. Click the **API icon** (↔) at the bottom-right of the module card — it opens the REST endpoint in a new browser tab.
+   - The URL looks like `http://<device-ip>/rest/ModuleEffects`
+   - You can also type it directly into your browser's address bar.
+3. Copy the entire JSON response and paste it into your issue.
+
+> **Tip:** You can also reach the endpoint from any browser on the same network — you do not need to be in the MoonLight UI.
+
+Example endpoints:
+
+```
+http://192.168.1.42/rest/effects
+http://192.168.1.42/rest/drivers
+http://192.168.1.42/rest/lightscontrol
+```
+
+### Feature requests
+
+Feature requests are also welcome on the same issue tracker. Please describe:
+
+- The use case you are trying to solve.
+- What behaviour you would expect.
+- Any alternatives you have already considered.

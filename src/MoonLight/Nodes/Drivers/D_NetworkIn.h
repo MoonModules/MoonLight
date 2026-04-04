@@ -247,7 +247,18 @@ class NetworkInDriver : public Node {
     int safeDataLen = MIN(static_cast<int>(dataLen), payloadBytes);
 
     const uint32_t startPixelU = offset / channelsPerLight;
-    if (startPixelU >= static_cast<uint32_t>(layerP.lights.header.nrOfLights)) return;
+    // Compute per-layer max — mirrors the logic in writePixels() so virtual layers
+    // with more lights than the physical layer are not incorrectly rejected.
+    nrOfLights_t ddpMaxLights;
+    if (layer == 0) {
+      ddpMaxLights = layerP.lights.header.nrOfLights;
+    } else if (layer - 1 < layerP.layers.size() && layerP.layers[layer - 1]) {
+      VirtualLayer* vl = layerP.layers[layer - 1];
+      ddpMaxLights = (vl->mappingTableSize > 0) ? vl->nrOfLights : layerP.lights.header.nrOfLights;
+    } else {
+      ddpMaxLights = layerP.lights.header.nrOfLights;
+    }
+    if (startPixelU >= static_cast<uint32_t>(ddpMaxLights)) return;
 
     writePixels(static_cast<int>(startPixelU), safeDataLen / static_cast<int>(channelsPerLight), pixelData);
   }

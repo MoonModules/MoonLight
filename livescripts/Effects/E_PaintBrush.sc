@@ -36,16 +36,16 @@ void loop() {
     if (depth > 1) {
       uint8_t z1 = beatsin8(oscillatorOffset * 5 + band / 16, 0, depth - 1, band, 0);
       uint8_t z2 = beatsin8(oscillatorOffset * 6 + band / 16, 0, depth - 1, band, 0);
-      float dx = x2 - x1;
-      float dy = y2 - y1;
-      float dz = z2 - z1;
-      float len = sqrt(dx * dx + dy * dy + dz * dz);
-      if (len > 1) drawLine3D(x1, y1, z1, x2, y2, z2, color);
+      int dx = (int)x2 - (int)x1;
+      int dy = (int)y2 - (int)y1;
+      int dz = (int)z2 - (int)z1;
+      int dist2 = dx * dx + dy * dy + dz * dz;
+      if (dist2 > 1) drawLine3D(x1, y1, z1, x2, y2, z2, color);
     } else {
-      float dx = x2 - x1;
-      float dy = y2 - y1;
-      float len = sqrt(dx * dx + dy * dy);
-      if (len > 1) drawLine(x1, y1, x2, y2, color);
+      int dx = (int)x2 - (int)x1;
+      int dy = (int)y2 - (int)y1;
+      int dist2 = dx * dx + dy * dy;
+      if (dist2 > 1) drawLine(x1, y1, x2, y2, color);
     }
   }
 }

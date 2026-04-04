@@ -239,14 +239,17 @@ class DMXInDriver : public Node {
       memcpy(layerP.lights.channelsD, src, nrChannels);
       xSemaphoreGive(swapMutex);
     } else {
-      // Virtual layer: write to virtualChannels so compositeTo() maps it to channelsD
+      // Virtual layer: write to virtualChannels so compositeTo() maps it to channelsD.
+      // Null-check and bounds are validated inside the mutex to match the pattern used
+      // in NetworkIn::writePixels and avoid a TOCTOU between the check and the write.
+      if (layer - 1 >= layerP.layers.size() || !layerP.layers[layer - 1]) return;
       VirtualLayer* vLayer = layerP.layers[layer - 1];
-      if (!vLayer || !vLayer->virtualChannels) return;
-      uint16_t nrPixels = min(available / header->channelsPerLight, (uint16_t)vLayer->nrOfLights);
-      if (nrPixels == 0) return;
       xSemaphoreTake(swapMutex, portMAX_DELAY);
-      for (uint16_t i = 0; i < nrPixels; i++)
-        memcpy(&vLayer->virtualChannels[i * header->channelsPerLight], &src[i * header->channelsPerLight], header->channelsPerLight);
+      if (vLayer->virtualChannels) {
+        uint16_t nrPixels = min(available / header->channelsPerLight, (uint16_t)vLayer->nrOfLights);
+        for (uint16_t i = 0; i < nrPixels; i++)
+          memcpy(&vLayer->virtualChannels[i * header->channelsPerLight], &src[i * header->channelsPerLight], header->channelsPerLight);
+      }
       xSemaphoreGive(swapMutex);
     }
   }

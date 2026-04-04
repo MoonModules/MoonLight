@@ -10,6 +10,7 @@
 	import Spinner from '$lib/components/Spinner.svelte';
 	import Collapsible from '$lib/components/Collapsible.svelte';
 	import Help from '~icons/tabler/help';
+	import Api from '~icons/tabler/api'; // 🌙
 	import MQTT from '~icons/tabler/topology-star-3';
 	import Client from '~icons/tabler/robot';
 	import type { MQTTSettings, MQTTStatus } from '$lib/types/models';
@@ -329,4 +330,8 @@
 			</form>
 		</Collapsible>
 	{/if}
+	<!-- 🌙 link to api -->
+	<div class="flex justify-end px-4 pb-3">
+		<a href="http://{page.url.host}/rest/mqttSettings" target="_blank" rel="noopener noreferrer" title="API: http://{page.url.host}/rest/mqttSettings"><Api class="mr-2 h-6 w-6 shrink-0 self-end" /></a>
+	</div>
 </SettingsCard>

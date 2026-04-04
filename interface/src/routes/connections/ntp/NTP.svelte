@@ -10,6 +10,7 @@
 	import { notifications } from '$lib/components/toasts/notifications';
 	import { TIME_ZONES } from './timezones';
 	import Help from '~icons/tabler/help';
+	import Api from '~icons/tabler/api'; // 🌙
 	import NTP from '~icons/tabler/clock-check';
 	import Server from '~icons/tabler/server';
 	import Clock from '~icons/tabler/clock';
@@ -295,4 +296,8 @@
 			</form>
 		</Collapsible>
 	{/if}
+	<!-- 🌙 link to api -->
+	<div class="flex justify-end px-4 pb-3">
+		<a href="http://{page.url.host}/rest/ntpSettings" target="_blank" rel="noopener noreferrer" title="API: http://{page.url.host}/rest/ntpSettings"><Api class="mr-2 h-6 w-6 shrink-0 self-end" /></a>
+	</div>
 </SettingsCard>

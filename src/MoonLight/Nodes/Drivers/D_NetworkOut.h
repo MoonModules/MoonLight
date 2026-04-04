@@ -498,18 +498,36 @@ class NetworkOutDriver : public DriverNode {
       blackFrameSent = false;
     }
 
-    if (lastStatusCode != 2) {
-      lastStatusCode = 2;
-      const char* proto = protocol == 0 ? "Art-Net" : protocol == 1 ? "DDP" : "E1.31";
-      status.format("Sending %s", proto);
-      updateControl("status", status);
-    }
-
     if (protocol == 1) {
+      // DDP only supports 3- or 4-channel layouts; show an explicit status when
+      // the current layout is unsupported rather than claiming we are sending.
+      if (header->channelsPerLight != 3 && header->channelsPerLight != 4) {
+        if (lastStatusCode != 3) {
+          lastStatusCode = 3;
+          status = "DDP: unsupported layout";
+          updateControl("status", status);
+        }
+        return;
+      }
+      if (lastStatusCode != 2) {
+        lastStatusCode = 2;
+        status = "Sending DDP";
+        updateControl("status", status);
+      }
       loopDDP(header);
     } else if (protocol == 2) {
+      if (lastStatusCode != 2) {
+        lastStatusCode = 2;
+        status = "Sending E1.31";
+        updateControl("status", status);
+      }
       loopE131(header);
     } else {
+      if (lastStatusCode != 2) {
+        lastStatusCode = 2;
+        status = "Sending Art-Net";
+        updateControl("status", status);
+      }
       loopArtNet(header);
       sendArtSync();
     }
