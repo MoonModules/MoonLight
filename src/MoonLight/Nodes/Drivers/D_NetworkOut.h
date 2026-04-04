@@ -15,21 +15,21 @@
   #include <WiFi.h>
 
   // DDP constants
-  #define DDP_HEADER_LEN          10
-  #define DDP_DEFAULT_PORT        4048
-  #define DDP_FLAGS1_VER1         0x40
-  #define DDP_FLAGS1_PUSH         0x01
-  #define DDP_ID_DISPLAY          1
-  #define DDP_TYPE_RGB24          0x01   // 3 ch/pixel — de-facto value used by WLED ecosystem
-  #define DDP_TYPE_RGBW32         0x1A   // 4 ch/pixel — de-facto value used by WLED ecosystem
+  #define DDP_HEADER_LEN 10
+  #define DDP_DEFAULT_PORT 4048
+  #define DDP_FLAGS1_VER1 0x40
+  #define DDP_FLAGS1_PUSH 0x01
+  #define DDP_ID_DISPLAY 1
+  #define DDP_TYPE_RGB24 0x01   // 3 ch/pixel — de-facto value used by WLED ecosystem
+  #define DDP_TYPE_RGBW32 0x1A  // 4 ch/pixel — de-facto value used by WLED ecosystem
   // Note: strict 3waylabs spec (byte2 = C R TTT SSS) gives 0x0B for RGB and 0x1B for RGBW.
   // We send the de-facto values for WLED interoperability; NetworkIn accepts both.
   #define DDP_CHANNELS_PER_PACKET 1440
 
   // E1.31 / sACN constants
-  #define E131_DEFAULT_PORT       5568
-  #define E131_DMP_DATA           125    // byte offset of property_values[0] (DMX start code)
-  #define E131_HEADER_LEN         126    // bytes before DMX channel data
+  #define E131_DEFAULT_PORT 5568
+  #define E131_DMP_DATA 125    // byte offset of property_values[0] (DMX start code)
+  #define E131_HEADER_LEN 126  // bytes before DMX channel data
 
 class NetworkOutDriver : public DriverNode {
  public:
@@ -38,15 +38,17 @@ class NetworkOutDriver : public DriverNode {
   static const char* tags() { return "☸️"; }
   static const char* category() { return "Driver"; }
 
-  uint8_t protocol = 0;           // 0=Art-Net, 1=DDP, 2=E1.31
-  bool broadcast = false;         // Art-Net only: send to subnet broadcast instead of unicast IPs
+  uint8_t protocol = 0;    // 0=Art-Net, 1=DDP, 2=E1.31
+  bool broadcast = false;  // Art-Net only: send to subnet broadcast instead of unicast IPs
   Char<32> controllerIP3s = "11";
-  uint16_t port = 6454;           // auto-updated when protocol changes
+  uint16_t port = 6454;  // auto-updated when protocol changes
   uint8_t FPSLimiter = 50;
-  uint16_t universeSize = 512;    // Art-Net / E1.31: bytes per universe (max 512)
+  uint16_t universeSize = 512;  // Art-Net / E1.31: bytes per universe (max 512)
   uint8_t nrOfOutputsPerIP = 1;
   uint8_t universesPerOutput = 1;
   uint16_t channelsPerOutput = 1024;
+  Char<32> status = "Not connected";
+  uint8_t lastStatusCode = 255;  // 0=not connected, 1=no IPs, 2=sending; 255=force initial update
 
   uint16_t usedChannelsPerUniverse = 510;  // calculated
   uint16_t totalUniverses = 0;             // calculated
@@ -74,6 +76,7 @@ class NetworkOutDriver : public DriverNode {
     addControl(totalUniverses, "totalUniverses", "number", 0, 65538, true);
     addControl(channelsPerOutput, "channelsPerOutput", "number", 1, 65538);
     addControl(totalChannels, "totalChannels", "number", 0, 390000, true);
+    addControl(status, "status", "text", 0, 32, true);
     // Packet template is initialised by onUpdate("protocol") inside addControl(protocol,...) above.
     // Do NOT call setupArtNetHeader() here — it would overwrite the correct template for
     // restored E1.31 (or DDP) nodes with Art-Net bytes.
@@ -90,11 +93,18 @@ class NetworkOutDriver : public DriverNode {
     DriverNode::onUpdate(control);
 
     if (control["name"] == "protocol") {
-      if      (protocol == 0) { port = 6454;             setupArtNetHeader(); }
-      else if (protocol == 1) { port = DDP_DEFAULT_PORT;                      }
-      else if (protocol == 2) { port = E131_DEFAULT_PORT; setupE131Header();  }
+      if (protocol == 0) {
+        port = 6454;
+        setupArtNetHeader();
+      } else if (protocol == 1) {
+        port = DDP_DEFAULT_PORT;
+      } else if (protocol == 2) {
+        port = E131_DEFAULT_PORT;
+        setupE131Header();
+      }
       updateControl("port", port);
       moduleNodes->requestUIUpdate = true;
+      lastStatusCode = 255;  // force status refresh on next send
     }
 
     if (control["name"] == "controllerIPs") {
@@ -126,10 +136,10 @@ class NetworkOutDriver : public DriverNode {
 
     // Clamp controls to safe minimums — guards against old saved values of 0 and prevents
     // modulo-by-zero (universesPerOutput, nrOfOutputsPerIP) and unsigned wrap (channelsPerOutput).
-    universeSize        = max<uint16_t>(universeSize,        layerP.lights.header.channelsPerLight ? layerP.lights.header.channelsPerLight : 1);
-    channelsPerOutput   = max<uint16_t>(channelsPerOutput,   layerP.lights.header.channelsPerLight ? layerP.lights.header.channelsPerLight : 1);
-    universesPerOutput  = max<uint8_t> (universesPerOutput,  1);
-    nrOfOutputsPerIP    = max<uint8_t> (nrOfOutputsPerIP,    1);
+    universeSize = max<uint16_t>(universeSize, layerP.lights.header.channelsPerLight ? layerP.lights.header.channelsPerLight : 1);
+    channelsPerOutput = max<uint16_t>(channelsPerOutput, layerP.lights.header.channelsPerLight ? layerP.lights.header.channelsPerLight : 1);
+    universesPerOutput = max<uint8_t>(universesPerOutput, 1);
+    nrOfOutputsPerIP = max<uint8_t>(nrOfOutputsPerIP, 1);
 
     totalChannels = layerP.lights.header.nrOfLights * layerP.lights.header.channelsPerLight / (nrOfIPAddresses ? nrOfIPAddresses : 1);
     uint32_t lightsPerUniverse = max(1u, (uint32_t)universeSize / layerP.lights.header.channelsPerLight);
@@ -174,11 +184,11 @@ class NetworkOutDriver : public DriverNode {
     memcpy(packet_buffer,
            (uint8_t[]){
                'A', 'r', 't', '-', 'N', 'e', 't', 0x00, 0x00, 0x50,  // OpCode ArtDMX (little-endian)
-               0x00, 0x0e,                                            // ProtVer 14
-               0x00,                                                  // Sequence (filled per frame)
-               0x00,                                                  // Physical input port
-               0x00, 0x00,                                            // Universe (filled per packet)
-               0x00, 0x00                                             // Length (filled per packet)
+               0x00, 0x0e,                                           // ProtVer 14
+               0x00,                                                 // Sequence (filled per frame)
+               0x00,                                                 // Physical input port
+               0x00, 0x00,                                           // Universe (filled per packet)
+               0x00, 0x00                                            // Length (filled per packet)
            },
            18);
   }
@@ -189,8 +199,7 @@ class NetworkOutDriver : public DriverNode {
     packet_buffer[16] = packetSize >> 8;
     packet_buffer[17] = packetSize;
 
-    if (!udp.writeTo(packet_buffer, MIN(packetSize, universeSize) + 18, controllerIP, port))
-      return false;
+    if (!udp.writeTo(packet_buffer, MIN(packetSize, universeSize) + 18, controllerIP, port)) return false;
 
     packetSize = 0;
     universe++;
@@ -200,10 +209,10 @@ class NetworkOutDriver : public DriverNode {
   // Broadcast ArtSync (OpCode 0x5200) after each frame so all receivers display simultaneously.
   void sendArtSync() {
     uint8_t syncPacket[14] = {
-        'A', 'r', 't', '-', 'N', 'e', 't', 0x00,  // ID
-        0x00, 0x52,                                  // OpSync (little-endian)
-        0x00, 0x0e,                                  // ProtVer 14
-        0x00, 0x00                                   // AuxData
+        'A',  'r',  't', '-', 'N', 'e', 't', 0x00,  // ID
+        0x00, 0x52,                                 // OpSync (little-endian)
+        0x00, 0x0e,                                 // ProtVer 14
+        0x00, 0x00                                  // AuxData
     };
     IPAddress broadcastIP = networkLocalIP();
     broadcastIP[3] = 255;
@@ -233,8 +242,7 @@ class NetworkOutDriver : public DriverNode {
         rgbwBufferMapping(p + header->offsetRGBW1, c + header->offsetRGBW1);
         if (header->offsetRGBW2 != UINT8_MAX) {
           rgbwBufferMapping(p + header->offsetRGBW2, c + header->offsetRGBW2);
-          if (header->offsetRGBW3 != UINT8_MAX)
-            rgbwBufferMapping(p + header->offsetRGBW3, c + header->offsetRGBW3);
+          if (header->offsetRGBW3 != UINT8_MAX) rgbwBufferMapping(p + header->offsetRGBW3, c + header->offsetRGBW3);
         }
       }
 
@@ -280,10 +288,10 @@ class NetworkOutDriver : public DriverNode {
     packet_buffer[3] = DDP_ID_DISPLAY;
     packet_buffer[4] = (channelOffset >> 24) & 0xFF;
     packet_buffer[5] = (channelOffset >> 16) & 0xFF;
-    packet_buffer[6] = (channelOffset >>  8) & 0xFF;
-    packet_buffer[7] =  channelOffset        & 0xFF;
+    packet_buffer[6] = (channelOffset >> 8) & 0xFF;
+    packet_buffer[7] = channelOffset & 0xFF;
     packet_buffer[8] = (dataLen >> 8) & 0xFF;
-    packet_buffer[9] =  dataLen       & 0xFF;
+    packet_buffer[9] = dataLen & 0xFF;
 
     return udp.writeTo(packet_buffer, DDP_HEADER_LEN + dataLen, ip, port);
   }
@@ -301,9 +309,9 @@ class NetworkOutDriver : public DriverNode {
       if (!ip) continue;
 
       uint32_t lightStart = (uint32_t)ipIdx * lightsPerIP;
-      uint32_t lightEnd   = (ipIdx == nrOfIPAddresses - 1) ? header->nrOfLights : lightStart + lightsPerIP;
+      uint32_t lightEnd = (ipIdx == nrOfIPAddresses - 1) ? header->nrOfLights : lightStart + lightsPerIP;
 
-      uint16_t packetDataLen    = 0;
+      uint16_t packetDataLen = 0;
       uint32_t ddpChannelOffset = 0;
 
       for (uint32_t indexP = lightStart; indexP < lightEnd; indexP++) {
@@ -316,14 +324,13 @@ class NetworkOutDriver : public DriverNode {
           rgbwBufferMapping(dst + header->offsetRGBW1, src + header->offsetRGBW1);
           if (header->offsetRGBW2 != UINT8_MAX) {
             rgbwBufferMapping(dst + header->offsetRGBW2, src + header->offsetRGBW2);
-            if (header->offsetRGBW3 != UINT8_MAX)
-              rgbwBufferMapping(dst + header->offsetRGBW3, src + header->offsetRGBW3);
+            if (header->offsetRGBW3 != UINT8_MAX) rgbwBufferMapping(dst + header->offsetRGBW3, src + header->offsetRGBW3);
           }
         }
         packetDataLen += header->channelsPerLight;
 
         bool isLastLight = (indexP == lightEnd - 1);
-        bool packetFull  = (packetDataLen + header->channelsPerLight > DDP_CHANNELS_PER_PACKET);
+        bool packetFull = (packetDataLen + header->channelsPerLight > DDP_CHANNELS_PER_PACKET);
 
         if (packetFull || isLastLight) {
           if (!sendDDPPacket(ip, ddpChannelOffset, packetDataLen, /*push=*/isLastLight)) return;
@@ -345,7 +352,8 @@ class NetworkOutDriver : public DriverNode {
   void setupE131Header() {
     memset(packet_buffer, 0, E131_HEADER_LEN);
     // Preamble size = 0x0010 (big-endian)
-    packet_buffer[0] = 0x00; packet_buffer[1] = 0x10;
+    packet_buffer[0] = 0x00;
+    packet_buffer[1] = 0x10;
     // ACN Packet Identifier (12 bytes at offset 4)
     memcpy(&packet_buffer[4], "ASC-E1.17\0\0\0", 12);
     // Root vector = 0x00000004 VECTOR_ROOT_E131_DATA (big-endian, offset 18)
@@ -371,21 +379,26 @@ class NetworkOutDriver : public DriverNode {
     uint16_t packetLen = E131_HEADER_LEN + nrOfChannels;
 
     // root_flength (offset 16–17): PDU length from offset 16, flags 0x70 in high nibble
-    uint16_t rootLen  = 0x7000 | (packetLen - 16);
-    packet_buffer[16] = rootLen >> 8;  packet_buffer[17] = rootLen & 0xFF;
+    uint16_t rootLen = 0x7000 | (packetLen - 16);
+    packet_buffer[16] = rootLen >> 8;
+    packet_buffer[17] = rootLen & 0xFF;
     // frame_flength (offset 38–39): PDU length from offset 38
     uint16_t frameLen = 0x7000 | (packetLen - 38);
-    packet_buffer[38] = frameLen >> 8; packet_buffer[39] = frameLen & 0xFF;
+    packet_buffer[38] = frameLen >> 8;
+    packet_buffer[39] = frameLen & 0xFF;
     // sequence_number (offset 111)
     packet_buffer[111] = seqNum;
     // universe (offset 113–114, big-endian; E1.31 universes are 1-based)
-    packet_buffer[113] = e131universe >> 8; packet_buffer[114] = e131universe & 0xFF;
+    packet_buffer[113] = e131universe >> 8;
+    packet_buffer[114] = e131universe & 0xFF;
     // dmp_flength (offset 115–116): PDU length from offset 115
-    uint16_t dmpLen   = 0x7000 | (packetLen - 115);
-    packet_buffer[115] = dmpLen >> 8;  packet_buffer[116] = dmpLen & 0xFF;
+    uint16_t dmpLen = 0x7000 | (packetLen - 115);
+    packet_buffer[115] = dmpLen >> 8;
+    packet_buffer[116] = dmpLen & 0xFF;
     // property_value_count (offset 123–124, big-endian): channels + 1 start code
     uint16_t propCount = nrOfChannels + 1;
-    packet_buffer[123] = propCount >> 8; packet_buffer[124] = propCount & 0xFF;
+    packet_buffer[123] = propCount >> 8;
+    packet_buffer[124] = propCount & 0xFF;
 
     return udp.writeTo(packet_buffer, packetLen, ip, port);
   }
@@ -414,12 +427,11 @@ class NetworkOutDriver : public DriverNode {
         rgbwBufferMapping(p + header->offsetRGBW1, c + header->offsetRGBW1);
         if (header->offsetRGBW2 != UINT8_MAX) {
           rgbwBufferMapping(p + header->offsetRGBW2, c + header->offsetRGBW2);
-          if (header->offsetRGBW3 != UINT8_MAX)
-            rgbwBufferMapping(p + header->offsetRGBW3, c + header->offsetRGBW3);
+          if (header->offsetRGBW3 != UINT8_MAX) rgbwBufferMapping(p + header->offsetRGBW3, c + header->offsetRGBW3);
         }
       }
 
-      e131packetSize  += header->channelsPerLight;
+      e131packetSize += header->channelsPerLight;
       channels_remaining -= header->channelsPerLight;
 
       if (e131packetSize + header->channelsPerLight > e131universeSize || channels_remaining < header->channelsPerLight) {
@@ -452,13 +464,27 @@ class NetworkOutDriver : public DriverNode {
   void loop() override {
     DriverNode::loop();  // populates LUT tables when needed
 
-    if (!networkIsConnected()) return;
+    if (!networkIsConnected()) {
+      if (lastStatusCode != 0) {
+        lastStatusCode = 0;
+        status = "Not connected";
+        updateControl("status", status);
+      }
+      return;
+    }
 
     unsigned long currentTime = millis();
     if (currentTime - lastSendTime < (unsigned long)(1000 / FPSLimiter)) return;
     lastSendTime = currentTime;
 
-    if (nrOfIPAddresses == 0 && !(protocol == 0 && broadcast)) return;
+    if (nrOfIPAddresses == 0 && !(protocol == 0 && broadcast)) {
+      if (lastStatusCode != 1) {
+        lastStatusCode = 1;
+        status = "No target IPs";
+        updateControl("status", status);
+      }
+      return;
+    }
 
     LightsHeader* header = &layerP.lights.header;
     if (!header->nrOfLights || !layerP.lights.channelsD) return;
@@ -473,10 +499,35 @@ class NetworkOutDriver : public DriverNode {
     }
 
     if (protocol == 1) {
+      // DDP only supports 3- or 4-channel layouts; show an explicit status when
+      // the current layout is unsupported rather than claiming we are sending.
+      if (header->channelsPerLight != 3 && header->channelsPerLight != 4) {
+        if (lastStatusCode != 3) {
+          lastStatusCode = 3;
+          status = "DDP: unsupported layout";
+          updateControl("status", status);
+        }
+        return;
+      }
+      if (lastStatusCode != 2) {
+        lastStatusCode = 2;
+        status = "Sending DDP";
+        updateControl("status", status);
+      }
       loopDDP(header);
     } else if (protocol == 2) {
+      if (lastStatusCode != 2) {
+        lastStatusCode = 2;
+        status = "Sending E1.31";
+        updateControl("status", status);
+      }
       loopE131(header);
     } else {
+      if (lastStatusCode != 2) {
+        lastStatusCode = 2;
+        status = "Sending Art-Net";
+        updateControl("status", status);
+      }
       loopArtNet(header);
       sendArtSync();
     }

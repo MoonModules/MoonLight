@@ -6,6 +6,7 @@
 	import Spinner from '$lib/components/Spinner.svelte';
 	import Router from '~icons/tabler/router';
 	import Help from '~icons/tabler/help';
+	import Api from '~icons/tabler/api';
 	// import Cancel from '~icons/tabler/x';
 	import FieldRenderer from '$lib/components/moonbase/FieldRenderer.svelte';
 	import { socket } from '$lib/stores/socket';
@@ -152,6 +153,7 @@
 	{/snippet}
 	{#snippet title()}
 		<span>{initCap(page.url.searchParams.get('module') || '')}</span>
+		<!-- 🌙 link to docs -->
 		<div class="absolute right-5">
 			<a
 				href="https://{page.data.github.split('/')[0]}.github.io/{page.data.github.split(
@@ -162,7 +164,6 @@
 				title="Documentation"><Help class="mr-2 h-6 w-6 shrink-0 self-end" /></a
 			>
 		</div>
-		<!-- 🌙 link to docs -->
 	{/snippet}
 
 	{#if !page.data.features.security || $user.admin}
@@ -210,4 +211,13 @@
 			{/await}
 		</div>
 	{/if}
+	<!-- 🌙 link to api -->
+	<div class="flex justify-end px-4 pb-3">
+		<a
+			href="/rest/{page.url.searchParams.get('module')}"
+			target="_blank"
+			rel="noopener noreferrer"
+			title="API"><Api class="mr-2 h-6 w-6 shrink-0 self-end" /></a
+		>
+	</div>
 </SettingsCard>

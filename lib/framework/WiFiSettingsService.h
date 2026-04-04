@@ -250,6 +250,7 @@ private:
     bool _analyticsSent; // 🌙 
 
     bool _stopping;
+    bool _connecting = false; // 🌙 true while a WiFi.begin() is in flight — prevents re-entrant scans
     void onStationModeDisconnected(WiFiEvent_t event, WiFiEventInfo_t info);
     void onStationModeStop(WiFiEvent_t event, WiFiEventInfo_t info);
 

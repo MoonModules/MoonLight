@@ -57,6 +57,17 @@ void WiFiSettingsService::initWiFi()
         WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
     WiFi.onEvent(std::bind(&WiFiSettingsService::onStationModeStop, this, std::placeholders::_1, std::placeholders::_2),
                  WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_STOP);
+    // 🌙 Reset the reconnection timer when WiFi actually connects so the 5s loop-timer counts
+    // from the moment of successful connection rather than from the last scan attempt.
+    // Without this, the timer fires again ~5s after the initial scan (even if already connected)
+    // and a brief WiFi.isConnected()==false (e.g. during blocking HTTP calls) triggers a
+    // redundant reconnect that forces a disconnect of the active connection.
+    WiFi.onEvent(
+        [this](WiFiEvent_t, WiFiEventInfo_t) {
+            _connecting = false;
+            _lastConnectionAttempt = millis(); // 🌙 restart the 5s timer from now
+        },
+        WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
 
     _fsPersistence.readFromFS();
     reconfigureWiFiConnection();
@@ -314,7 +325,18 @@ void WiFiSettingsService::manageSTA()
     // Abort if already connected, if we have no SSID, or are in offline mode
     if (WiFi.isConnected() || _state.wifiSettings.empty() || _state.staConnectionMode == (u_int8_t)STAConnectionMode::OFFLINE)
     {
+        _connecting = false; // 🌙 clear in-flight flag once we know we are connected (or no longer need to connect)
         return;
+    }
+    // 🌙 A connection attempt is already in progress — wait for it to succeed or fail.
+    // Safety timeout: if neither CONNECTED nor DISCONNECTED event arrives within 30 s
+    // (e.g. IDF event loop dropped both events), reset _connecting so we can retry.
+    if (_connecting)
+    {
+        if ((unsigned long)(millis() - _lastConnectionAttempt) < 30000UL)
+            return;
+        ESP_LOGW(SVK_TAG, "WiFi connect timeout — no event after 30 s, resetting _connecting");
+        _connecting = false;
     }
     // 🌙 Don't reconnect WiFi while ethernet is active — saves ~50KB heap on ESP32-D0.
     // Only on non-PSRAM boards; PSRAM boards (S3/P4) have enough heap for both stacks.
@@ -455,6 +477,7 @@ void WiFiSettingsService::configureNetwork(wifi_settings_t &network)
     WiFi.setHostname(_state.hostname.c_str());
 
     // attempt to connect to the network
+    _connecting = true; // 🌙 guard against re-entrant manageSTA calls during connection
     WiFi.begin(network.ssid.c_str(), network.password.c_str(), network.channel, network.bssid);
     // WiFi.begin(network.ssid.c_str(), network.password.c_str());
 
@@ -499,7 +522,8 @@ void WiFiSettingsService::updateRSSI()
 
 void WiFiSettingsService::onStationModeDisconnected(WiFiEvent_t event, WiFiEventInfo_t info)
 {
-    manageSTA();
+    _connecting = false;                      // 🌙 connection attempt ended (failed or dropped)
+    _lastConnectionAttempt = millis();        // 🌙 retry after WIFI_RECONNECTION_DELAY — avoids scanning while WiFi stack is still mid-connection
 }
 
 void WiFiSettingsService::onStationModeStop(WiFiEvent_t event, WiFiEventInfo_t info)

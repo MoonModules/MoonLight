@@ -9,6 +9,7 @@
 	import { notifications } from '$lib/components/toasts/notifications';
 	import Spinner from '$lib/components/Spinner.svelte';
 	import Help from '~icons/tabler/help';
+	import Api from '~icons/tabler/api'; // 🌙
 	import AP from '~icons/tabler/access-point';
 	import MAC from '~icons/tabler/dna-2';
 	import Home from '~icons/tabler/home';
@@ -422,4 +423,8 @@
 			{/await}
 		</div>
 	{/if}
+	<!-- 🌙 link to api -->
+	<div class="flex justify-end px-4 pb-3">
+		<a href="/rest/apSettings" target="_blank" rel="noopener noreferrer" title="API"><Api class="mr-2 h-6 w-6 shrink-0 self-end" /></a>
+	</div>
 </SettingsCard>

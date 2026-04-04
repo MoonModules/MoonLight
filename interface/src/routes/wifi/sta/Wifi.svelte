@@ -17,6 +17,7 @@
 	import EditNetwork from './EditNetwork.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
 	import Help from '~icons/tabler/help';
+	import Api from '~icons/tabler/api'; // 🌙
 	import AP from '~icons/tabler/access-point';
 	import Router from '~icons/tabler/router';
 	import Settings from '~icons/tabler/settings';
@@ -636,4 +637,8 @@
 			</Collapsible>
 		{/if}
 	{/await}
+	<!-- 🌙 link to api -->
+	<div class="flex justify-end px-4 pb-3">
+		<a href="/rest/wifiSettings" target="_blank" rel="noopener noreferrer" title="API"><Api class="mr-2 h-6 w-6 shrink-0 self-end" /></a>
+	</div>
 </SettingsCard>

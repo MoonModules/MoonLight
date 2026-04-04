@@ -168,7 +168,7 @@ Use the MoonLight Installer instead for these devices.
 
 ### ESPConnect
 
-Use ESPConnect to install unreleased firmware (for example, versions shared via [Discord](https://discord.gg/TC8NSUSCdV) or [GitHub issues](https://github.com/MoonModules/MoonLight/issues)).  
+Use ESPConnect to install unreleased firmware (for example, versions shared via [Discord](https://discord.gg/TC8NSUSCdV) or [GitHub issues](../moonlight/overview.md#reporting-issues)).  
 Published [releases](https://github.com/MoonModules/MoonLight/releases) can also be installed this way.
 
 Launch [ESPConnect](https://thelastoutpostworkshop.github.io/microcontroller_devkit/espconnect).

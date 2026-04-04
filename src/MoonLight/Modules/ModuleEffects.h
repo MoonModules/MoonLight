@@ -358,7 +358,7 @@ class ModuleEffects : public NodeManager {
               JsonDocument doc;
               JsonObject newState = doc.to<JsonObject>();
 
-              EXT_LOGD(ML_TAG, "remove preset");
+              // EXT_LOGD(ML_TAG, "remove preset");
               newState["preset"] = state.data["preset"];
               newState["preset"]["select"] = 255;
               _moduleLightsControl->update(newState, ModuleState::update, _moduleName);  // Do not add server in the originID as that blocks updates, see execOnUpdate

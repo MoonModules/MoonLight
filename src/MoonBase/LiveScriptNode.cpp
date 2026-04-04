@@ -75,9 +75,11 @@ static void _setPalEntryHSV(uint8_t index, uint8_t h, uint8_t s, uint8_t v) { if
 static void _setHSV(uint16_t indexV, uint8_t h, uint8_t s, uint8_t v) { currentNode()->layer->setRGB(indexV, CHSV(h, s, v)); }
 static void _setHSVXY(int x, int y, uint8_t h, uint8_t s, uint8_t v) { currentNode()->layer->setRGB(Coord3D{x, y}, CHSV(h, s, v)); }
 
-// 2D drawing
+// 2D/3D drawing
 static void _drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, CRGB color) { currentNode()->layer->drawLine(x0, y0, x1, y1, color); }
+static void _drawLine3D(uint8_t x1, uint8_t y1, uint8_t z1, uint8_t x2, uint8_t y2, uint8_t z2, CRGB color) { currentNode()->layer->drawLine3D(x1, y1, z1, x2, y2, z2, color); }
 static void _drawCircle(int cx, int cy, uint8_t radius, CRGB color) { currentNode()->layer->drawCircle(cx, cy, radius, color, false); }
+static void _blur2d(uint8_t blur_amount) { currentNode()->layer->blur2d(blur_amount); }
 
 // time of day
 static uint8_t _lsHour = 0;
@@ -181,6 +183,7 @@ void LiveScriptNode::setup() {
   addExternal("uint8_t inoise8(uint16_t,uint16_t,uint16_t)", (void*)(uint8_t (*)(uint16_t, uint16_t, uint16_t))inoise8);
   addExternal("uint8_t beatsin8(uint16_t,uint8_t,uint8_t,uint32_t,uint8_t)", (void*)beatsin8);
   addExternal("uint8_t beatsin16(uint16_t,uint16_t,uint16_t,uint32_t,uint8_t)", (void*)beatsin16);
+  addExternal("float sqrt(float)", (void*)(float (*)(float))sqrtf);
   addExternal("float hypot(float,float)", (void*)(float (*)(float, float))hypot);
   addExternal("uint8_t beat8(uint16_t,uint32_t)", (void*)(uint8_t (*)(uint16_t, uint32_t))beat8);  // saw wave
   addExternal("uint8_t triangle8(uint8_t)", (void*)triangle8);
@@ -229,9 +232,11 @@ void LiveScriptNode::setup() {
   addExternal("int gravityY", &sharedData.gravity.y);
   addExternal("int gravityZ", &sharedData.gravity.z);
 
-  // 2D drawing
+  // 2D/3D drawing
   addExternal("void drawLine(uint8_t,uint8_t,uint8_t,uint8_t,CRGB)", (void*)_drawLine);
+  addExternal("void drawLine3D(uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,CRGB)", (void*)_drawLine3D);
   addExternal("void drawCircle(int,int,uint8_t,CRGB)", (void*)_drawCircle);
+  addExternal("void blur2d(uint8_t)", (void*)_blur2d);
 
   // time of day
   _updateTime();

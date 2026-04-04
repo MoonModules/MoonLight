@@ -19,6 +19,7 @@
 	import Subnet from '~icons/tabler/grid-dots';
 	import Cancel from '~icons/tabler/x';
 	import Save from '~icons/tabler/device-floppy';
+	import Api from '~icons/tabler/api'; // 🌙
 
 	interface Props {
 		ethernetEditable?: EthernetSettings;
@@ -558,4 +559,8 @@
 			</Collapsible>
 		{/if}
 	{/await}
+	<!-- 🌙 link to api -->
+	<div class="flex justify-end px-4 pb-3">
+		<a href="/rest/ethernetSettings" target="_blank" rel="noopener noreferrer" title="API"><Api class="mr-2 h-6 w-6 shrink-0 self-end" /></a>
+	</div>
 </SettingsCard>

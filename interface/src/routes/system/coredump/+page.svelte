@@ -6,6 +6,7 @@
 	import CoreDump from '~icons/tabler/bug';
 	import Info from '~icons/tabler/info-circle';
 	import Help from '~icons/tabler/help'; // 🌙
+	import Api from '~icons/tabler/api'; // 🌙
 
 	let coreDumpBlob: Blob | null = null;
 	let errorMessage: string | null = null;
@@ -81,5 +82,9 @@
 		{:else}
 			<p class="mt-4">Loading core dump...</p>
 		{/if}
+		<!-- 🌙 link to api -->
+		<div class="flex justify-end px-4 pb-3">
+			<a href="/rest/coreDump" target="_blank" rel="noopener noreferrer" title="API"><Api class="mr-2 h-6 w-6 shrink-0 self-end" /></a>
+		</div>
 	</SettingsCard>
 </div>

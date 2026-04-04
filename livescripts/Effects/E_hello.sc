@@ -19,7 +19,7 @@ void setup() {
 
 void loop() {
   fadeToBlackBy(2);
-  setRGB(index, rgb(red, green, blue));
+  setRGB(index, CRGB(red, green, blue));
   index += 1;
   if (index == NUM_LEDS) index = 0;
 }

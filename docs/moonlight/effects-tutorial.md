@@ -5,6 +5,7 @@ Live Scripts let you write your own light effects in a simple C-like language �
 This tutorial walks you from a single blinking pixel to a full 3D audio-reactive noise effect. Each step builds on the previous one. By the end you will have a complete script that looks beautiful on a 1D strip, a 2D matrix, and a 3D cube — all from the same code.
 
 Before you start: follow the [Live Scripts guide](livescripts.md) to upload and run a script.
+Check especially [Important notes](livescripts.md#important-notes)
 
 ---
 
@@ -13,7 +14,7 @@ Before you start: follow the [Live Scripts guide](livescripts.md) to upload and 
 The simplest possible effect. Pick a random LED and light it blue.
 
 ```c
-// E_hello.sc
+// E_Hello1D.sc
 void loop() {
   setRGB(random16(NUM_LEDS), CRGB(0, 0, 255));
 }
@@ -23,6 +24,8 @@ void loop() {
 
 Run this and you will see random blue flashes across all your lights.
 
+![E_Hello1D](../media/moonlight/effects/E_Hello1D.gif)
+
 ---
 
 ## Step 2 — Trails with fadeToBlackBy
@@ -30,7 +33,7 @@ Run this and you will see random blue flashes across all your lights.
 Random flashes are fine but trails make motion feel alive. Add one line:
 
 ```c
-// E_hello.sc
+// E_Random1D.sc
 void loop() {
   fadeToBlackBy(20);
   setRGB(random16(NUM_LEDS), CRGB(0, 255, 128));
@@ -40,6 +43,8 @@ void loop() {
 `fadeToBlackBy(amount)` dims every LED a little each frame. With amount = 20 (out of 255), a pixel fades to black in about 13 frames. Lower = longer trail. Higher = shorter trail.
 
 **Try it:** change the amount between 5 and 200 and watch the behaviour change.
+
+![E_Random1D](../media/moonlight/effects/E_Random1D.gif)
 
 ---
 
@@ -56,7 +61,7 @@ beatsin8(bpm, lo, hi, timebase, phase)
 Returns a value that smoothly sweeps between `lo` and `hi`, `bpm` times per minute. Think of it as a gentle wave, timed to music tempo.
 
 ```c
-// E_sweep.sc
+// E_Sweep2D.sc
 uint8_t bpm = 60;
 
 void setup() {
@@ -65,28 +70,33 @@ void setup() {
 
 void loop() {
   fadeToBlackBy(40);
-  uint8_t pos = beatsin8(bpm, 0, NUM_LEDS - 1);
+  uint8_t pos = beatsin8(bpm, 0, NUM_LEDS - 1, 0, 0);
   setRGB(pos, CRGB(255, 128, 0));
 }
 ```
 
 A glowing amber dot sweeps back and forth at 60 BPM. Change `bpm` and it syncs to any music tempo.
 
+![E_Sweep2D](../media/moonlight/effects/E_Sweep2D.gif)
+
 ### Multiple oscillators at different speeds
 
 The magic starts when you combine oscillators. Two sines at different speeds never repeat the same pattern:
 
 ```c
+// E_Oscillate2D.sc
 void loop() {
   fadeToBlackBy(30);
-  uint8_t pos1 = beatsin8(60,  0, NUM_LEDS - 1);
-  uint8_t pos2 = beatsin8(37,  0, NUM_LEDS - 1);
+  uint8_t pos1 = beatsin8(60,  0, NUM_LEDS - 1, 0, 0);
+  uint8_t pos2 = beatsin8(37,  0, NUM_LEDS - 1, 0, 0);
   setRGB(pos1, CRGB(255, 0, 0));
   setRGB(pos2, CRGB(0, 0, 255));
 }
 ```
 
 Red and blue dots chase each other, crossing and diverging in an ever-changing dance.
+
+![E_Oscillate2D](../media/moonlight/effects/E_Oscillate2D.gif)
 
 ---
 
@@ -101,7 +111,7 @@ ColorFromPalette(index, brightness)
 `index` is 0–255: a position in a colour wheel. `brightness` is 0–255.
 
 ```c
-// E_sweep.sc  (updated)
+// E_Sweep2D.sc  (updated)
 uint8_t bpm = 60;
 uint8_t hue = 0;
 
@@ -112,12 +122,14 @@ void setup() {
 void loop() {
   fadeToBlackBy(30);
   hue++;
-  uint8_t pos = beatsin8(bpm, 0, NUM_LEDS - 1);
+  uint8_t pos = beatsin8(bpm, 0, NUM_LEDS - 1, 0, 0);
   setRGBPal(pos, hue, 255);
 }
 ```
 
 `setRGBPal(index, palIndex, brightness)` is a shorthand for set-from-palette. `hue++` shifts the colour every frame, cycling through the full palette continuously.
+
+![E_Sweep2D](../media/moonlight/effects/E_Sweep2D.gif)
 
 ---
 
@@ -134,7 +146,7 @@ The layout maps coordinates to physical LEDs. Your script does not need to know 
 ### Bouncing ball on a 2D grid
 
 ```c
-// E_ball2D.sc
+// E_Ball2D.sc
 uint8_t bpm = 40;
 
 void setup() {
@@ -143,20 +155,22 @@ void setup() {
 
 void loop() {
   fadeToBlackBy(40);
-  int x = beatsin8(bpm,      0, width  - 1);
-  int y = beatsin8(bpm * 13 / 10, 0, height - 1);
+  int x = beatsin8(bpm,      0, width  - 1, 0, 0);
+  int y = beatsin8(bpm * 13 / 10, 0, height - 1, 0, 0);
   setRGBXY(x, y, ColorFromPalette(millis() / 20, 255));
 }
 ```
 
 Two `beatsin8` calls with slightly different speeds create a Lissajous curve — a looping figure-eight pattern. The ratio 13/10 means the vertical frequency is 1.3× the horizontal, giving a pattern that shifts gracefully over time.
 
+![E_Ball2D](../media/moonlight/effects/E_Ball2D.gif)
+
 ### A 2D noise field
 
 Perlin noise is a smooth pseudo-random function. Feed it two coordinates and it returns a value that changes continuously — perfect for organic, flowing animations.
 
 ```c
-// E_noise2D.sc
+// E_Noise2D.sc
 uint8_t speed = 128;
 uint8_t scale = 128;
 
@@ -169,7 +183,8 @@ void loop() {
   for (int y = 0; y < height; y++) {
     for (int x = 0; x < width; x++) {
       uint8_t n = inoise8(x * scale, y * scale, now() / (16 - speed/16));
-      setRGBXY(x, y, ColorFromPalette(n, 255));
+      CRGB color = ColorFromPalette(n, 255);
+      setRGBXY(x, y, color);
     }
   }
 }
@@ -178,6 +193,8 @@ void loop() {
 `inoise8(x, y, z)` takes three coordinates. Using `now()` (milliseconds since boot) as the third dimension makes the field evolve through time — the pattern flows and ripples like fire or water.
 
 **Try it:** use the Fire palette. With `speed = 100` and `scale = 80` you get convincing fire that works on any matrix size.
+
+![E_Noise2D](../media/moonlight/effects/E_Noise2D.gif)
 
 ---
 
@@ -193,15 +210,15 @@ y = cy + radius * sin(angle)
 As `angle` increases from 0 to 2π, the point traces a perfect circle. Use `sin8`/`cos8` for fast integer math (0–255 range instead of −1…1):
 
 ```c
-// E_orbit.sc
+// E_Orbit2D.sc
 void loop() {
   fadeToBlackBy(20);
   uint8_t angle = millis() / 10;   // increases over time
   int cx = width  / 2;
   int cy = height / 2;
-  int r  = (width < height ? width : height) / 2 - 1;
-  int x  = cx + r * (int)(cos8(angle) - 128) / 128;
-  int y  = cy + r * (int)(sin8(angle) - 128) / 128;
+  int r  = (cx < cy) ? cx : cy;
+  int x  = cx + r * (cos8(angle) - 128) / 128;
+  int y  = cy + r * (sin8(angle) - 128) / 128;
   setRGBXY(x, y, ColorFromPalette(angle, 255));
 }
 ```
@@ -209,6 +226,8 @@ void loop() {
 `cos8` and `sin8` return 0–255. Subtracting 128 centres them at zero, then divide by 128 to scale into −1…+1 range. The result is a glowing dot orbiting the centre, cycling through the palette.
 
 **Extend it:** run a second orbit at a different speed using `angle * 3 / 2` for a spirograph effect.
+
+![E_Orbit2D](../media/moonlight/effects/E_Orbit2D.gif)
 
 ---
 
@@ -227,12 +246,20 @@ Coordinates go from 0 to `width−1`, `height−1`, `depth−1`.
 Extend the noise example by adding a third spatial dimension:
 
 ```c
+// E_Noise3D.sc
+uint8_t scale = 128;
+
+void setup() {
+  addControl(&scale, "scale", "slider", 1, 255);
+}
+
 void loop() {
   for (int z = 0; z < depth; z++) {
     for (int y = 0; y < height; y++) {
       for (int x = 0; x < width; x++) {
         uint8_t n = inoise8(x * scale, y * scale + z * scale / 2, now() / 20);
-        setRGBXYZ(x, y, z, ColorFromPalette(n, 255));
+        CRGB color = ColorFromPalette(n, 255);
+        setRGBXYZ(x, y, z, color);
       }
     }
   }
@@ -240,6 +267,8 @@ void loop() {
 ```
 
 Each slice through the cube looks like a shifting 2D noise field. The z offset in the noise coordinates makes adjacent layers look related but distinct — like a 3D fire or fog.
+
+![E_Noise3D](../media/moonlight/effects/E_Noise3D.gif)
 
 ---
 
@@ -250,11 +279,12 @@ Each slice through the cube looks like a shifting 2D noise field. The z offset i
 ### Simplest audio effect: VU meter on a strip
 
 ```c
-// E_vu.sc
+// E_Vu1D.sc
 void loop() {
   fadeToBlackBy(60);
-  int lit = (int)(volume * NUM_LEDS);
-  for (int i = 0; i < lit && i < NUM_LEDS; i++) {
+  int lit = (int)(volume/400 * NUM_LEDS);
+  if (lit >= NUM_LEDS) lit = NUM_LEDS;
+  for (int i = 0; i < lit; i++) {
     setRGBPal(i, i * 255 / NUM_LEDS, 255);
   }
 }
@@ -262,12 +292,14 @@ void loop() {
 
 The number of lit LEDs follows the volume. The colour sweeps from one end of the palette to the other so loud = lots of colour.
 
+![E_Vu1D](../media/moonlight/effects/E_Vu1D.gif)
+
 ### Frequency columns on a 2D matrix
 
 Map each column to a frequency band:
 
 ```c
-// E_geq.sc
+// E_Geq2D.sc
 uint8_t fade = 200;
 
 void setup() {
@@ -289,6 +321,8 @@ void loop() {
 
 Each column shows the energy of one frequency band. The colour shifts with position so bass is one hue and treble another.
 
+![E_Geq2D](../media/moonlight/effects/E_Geq2D.gif)
+
 ---
 
 ## The final effect — Cosmic Noise
@@ -303,7 +337,7 @@ This is the effect the whole tutorial has been building toward. It combines Perl
 - The palette colours the noise so the result looks like living fire or aurora borealis
 
 ```c
-// E_cosmic.sc
+// E_Cosmic.sc
 uint8_t bpm   = 60;
 uint8_t scale = 80;
 uint8_t speed = 100;
@@ -316,7 +350,7 @@ void setup() {
 
 void loop() {
   // Pulse the overall brightness to the beat
-  uint8_t pulse = beatsin8(bpm, 120, 255);
+  uint8_t pulse = beatsin8(bpm, 120, 255, 0, 0);
 
   for (int z = 0; z < depth; z++) {
     for (int y = 0; y < height; y++) {
@@ -327,7 +361,7 @@ void loop() {
 
         // Colour from palette, brightness modulated by beat pulse
         uint8_t bright = n * pulse / 255;
-        setRGBXYZ(x, y, z, ColorFromPalette(n, bright));
+        setRGBXYZ(x, y, z, ColorFromPalette(n, bright)); // this works !!
       }
     }
   }
@@ -344,6 +378,8 @@ On a 1D strip (`height=1`, `depth=1`) you get a flowing ribbon of colour that pu
 | Ocean    | 40  | 100   | 60    | Slow ocean swell |
 | Rainbow  | 90  | 50    | 150   | Fast psychedelic flow |
 | Forest   | 50  | 120   | 40    | Deep forest breathing |
+
+![E_Cosmic3D](../media/moonlight/effects/E_Cosmic3D.gif)
 
 ---
 
