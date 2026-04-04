@@ -186,6 +186,9 @@ class NetworkInDriver : public Node {
       if (layer == 0) {  // Physical layer — write directly to channelsD (bypasses compositing)
         memcpy(&layerP.lights.channelsD[ledIndex * layerP.lights.header.channelsPerLight], &dmxData[i * layerP.lights.header.channelsPerLight], layerP.lights.header.channelsPerLight);
       } else {  // Virtual layer — write to virtualChannels so compositeTo() maps it to channelsD
+        // Note: data is written in virtual-pixel order. compositeTo() applies the mapping table
+        // when compositing to channelsD, so non-flat (zigzag/segment) maps are handled correctly.
+        // If a sender expects physical-LED order it should target layer 0 instead.
         if (vLayer->virtualChannels && (nrOfLights_t)ledIndex < vLayer->nrOfLights)
           memcpy(&vLayer->virtualChannels[ledIndex * layerP.lights.header.channelsPerLight], &dmxData[i * layerP.lights.header.channelsPerLight], layerP.lights.header.channelsPerLight);
       }

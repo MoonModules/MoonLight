@@ -41,7 +41,7 @@ There are a few known limitations:
     * Click **Connect** and select your device.
     * Click **Serial Monitor**, then **Start**.
     * Script output appears in the window.
-* **Inline constructor arguments**: Passing a constructed value directly as a function argument may not work correctly — for example, `setRGB(i, CRGB(0, 0, 255))`. If you see unexpected results, assign the value to a variable first: `CRGB color = CRGB(0, 0, 255); setRGB(i, color);`
+* **Inline constructor arguments**: Some cases of passing a constructed value directly as a function argument might fail (some have been fixed). If you see unexpected results, assign the value to a variable first: `CRGB color = CRGB(0, 0, 255); setRGB(i, color);`
 * **Heavy loops**: Long-running calculations in `loop()` can trigger a watchdog crash and reboot. If this happens, the device reboots in safe mode so the script can be edited.
 * **Type conversions**: The Live Script compiler sometimes requires explicit type casts where standard C would handle them implicitly. If a script produces unexpected values, try adding an explicit cast.
 

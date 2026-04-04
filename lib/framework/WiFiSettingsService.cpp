@@ -328,10 +328,15 @@ void WiFiSettingsService::manageSTA()
         _connecting = false; // 🌙 clear in-flight flag once we know we are connected (or no longer need to connect)
         return;
     }
-    // 🌙 A connection attempt is already in progress — wait for it to succeed or fail
+    // 🌙 A connection attempt is already in progress — wait for it to succeed or fail.
+    // Safety timeout: if neither CONNECTED nor DISCONNECTED event arrives within 30 s
+    // (e.g. IDF event loop dropped both events), reset _connecting so we can retry.
     if (_connecting)
     {
-        return;
+        if ((unsigned long)(millis() - _lastConnectionAttempt) < 30000UL)
+            return;
+        ESP_LOGW(SVK_TAG, "WiFi connect timeout — no event after 30 s, resetting _connecting");
+        _connecting = false;
     }
     // 🌙 Don't reconnect WiFi while ethernet is active — saves ~50KB heap on ESP32-D0.
     // Only on non-PSRAM boards; PSRAM boards (S3/P4) have enough heap for both stacks.

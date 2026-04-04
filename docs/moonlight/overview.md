@@ -105,7 +105,7 @@ That doesn't mean the work is done — this is just the beginning. MoonLight is 
 ### Where you can help
 
 - Add effects (FastLED, WLED, particle systems, Animartrix, Soulmate Lights…), modifiers, layouts and drivers
-- Improve the UI (Svelte 5, DaisyUI 5, TailWind 4) — File Manager, multi-row layout, Monitor (WebGL)
+- Improve the UI (Svelte 5, DaisyUI 5, Tailwind 4) — File Manager, multi-row layout, Monitor (WebGL)
 - Tune FastLED, add FastLED 2D effects
 - CI automation
 
@@ -166,7 +166,7 @@ Every module exposes a REST endpoint that returns its full current state as JSON
 
 1. Open the affected module in the MoonLight UI (e.g. *Effects* or *Drivers*).
 2. Click the **API icon** (↔) at the bottom-right of the module card — it opens the REST endpoint in a new browser tab.
-   - The URL looks like `http://<device-ip>/rest/ModuleEffects`
+   - The URL looks like `http://<device-ip>/rest/effects`
    - You can also type it directly into your browser's address bar.
 3. Copy the entire JSON response and paste it into your issue.
 

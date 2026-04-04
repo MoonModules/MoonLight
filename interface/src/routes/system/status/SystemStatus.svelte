@@ -517,6 +517,6 @@
 	</div>
 	<!-- 🌙 link to api -->
 	<div class="flex justify-end px-4 pb-3">
-		<a href="http://{page.url.host}/rest/systemStatus" target="_blank" rel="noopener noreferrer" title="API: http://{page.url.host}/rest/systemStatus"><Api class="mr-2 h-6 w-6 shrink-0 self-end" /></a>
+		<a href="/rest/systemStatus" target="_blank" rel="noopener noreferrer" title="API"><Api class="mr-2 h-6 w-6 shrink-0 self-end" /></a>
 	</div>
 </SettingsCard>
