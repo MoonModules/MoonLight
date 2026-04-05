@@ -47,6 +47,8 @@ There are a few known limitations:
 * **Conditional operator**: the condition must be between parentheses e.g. `(x>y)?x:y`.
 * (uint16_t) typecasting is not supported yet
 * **`int` is 8-bit signed** (range −128 to 127). Loops using `int i` stop at i=127 regardless of the bound — use `uint16_t` for loop counters and intermediate values that may exceed 127. Example: `for (uint16_t i = 0; i < NUM_LEDS; i++)`. Similarly, store `NUM_LEDS` in a `uint16_t` variable before arithmetic: `uint16_t n = NUM_LEDS;`.
+* Sometimes **changing an effect** node from one live script to another, will crash the device, workaround is to select a normal effect first and then change to another live script.
+* If Livescripts (or anything) causes a crash, the device will reboot in **safe mode**. See [MoonBase overview](../moonbase/overview.md#status-bar). During safe mode live scripts will not be launched. In safe mode you can fix the reason for crash, then restart the device.
 
 These limitations are expected to be resolved in future releases.
 
