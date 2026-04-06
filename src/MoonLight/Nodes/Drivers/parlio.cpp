@@ -166,15 +166,16 @@ void rgbwBufferMapping(uint8_t* packetRGBChannel, const uint8_t* lightsRGBChanne
       green -= white;
       blue -= white;
     }
-    packetRGBChannel[offsetWhite] = ledsDriver.__white_map[white];
-  }
-  if (offsetWhite2 != UINT8_MAX) {  // 🌙 second white channel for RGBCCT warm white (passed through with LUT)
-    packetRGBChannel[offsetWhite2] = ledsDriver.__white_map[lightsRGBChannel[offsetWhite2]];
+    packetRGBChannel[offsetWhite] = ledsDriver.whiteMap[white];
+
+    if (offsetWhite2 != UINT8_MAX) {  // 🌙 second white channel for RGBCCT warm white (passed through with LUT)
+      packetRGBChannel[offsetWhite2] = ledsDriver.white2Map[white];
+    }
   }
 
-  packetRGBChannel[offsetRed] = ledsDriver.__red_map[red];
-  packetRGBChannel[offsetGreen] = ledsDriver.__green_map[green];
-  packetRGBChannel[offsetBlue] = ledsDriver.__blue_map[blue];
+  packetRGBChannel[offsetRed] = ledsDriver.redMap[red];
+  packetRGBChannel[offsetGreen] = ledsDriver.greenMap[green];
+  packetRGBChannel[offsetBlue] = ledsDriver.blueMap[blue];
 }
 
 // 1. Add the RGB first_index_per_outputs parameter to the function signature

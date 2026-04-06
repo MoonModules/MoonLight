@@ -289,6 +289,10 @@ void DriverNode::rgbwBufferMapping(uint8_t* packetRGBChannel, uint8_t* lightsRGB
       blue -= white;
     }
     packetRGBChannel[layerP.lights.header.offsetWhite] = ledsDriver.whiteMap[white];
+    
+    if (layerP.lights.header.offsetWhite2 != UINT8_MAX) {  // 🌙 second white channel for RGBCCT warm white (passed through with LUT)
+      packetRGBChannel[layerP.lights.header.offsetWhite2] = ledsDriver.white2Map[white];
+    }
   }
 
   packetRGBChannel[layerP.lights.header.offsetRed] = ledsDriver.redMap[red];
