@@ -288,12 +288,12 @@ void DriverNode::rgbwBufferMapping(uint8_t* packetRGBChannel, uint8_t* lightsRGB
       green -= white;
       blue -= white;
     }
-    packetRGBChannel[layerP.lights.header.offsetWhite] = ledsDriver.__white_map[white];
+    packetRGBChannel[layerP.lights.header.offsetWhite] = ledsDriver.whiteMap[white];
   }
 
-  packetRGBChannel[layerP.lights.header.offsetRed] = ledsDriver.__red_map[red];
-  packetRGBChannel[layerP.lights.header.offsetGreen] = ledsDriver.__green_map[green];
-  packetRGBChannel[layerP.lights.header.offsetBlue] = ledsDriver.__blue_map[blue];
+  packetRGBChannel[layerP.lights.header.offsetRed] = ledsDriver.redMap[red];
+  packetRGBChannel[layerP.lights.header.offsetGreen] = ledsDriver.greenMap[green];
+  packetRGBChannel[layerP.lights.header.offsetBlue] = ledsDriver.blueMap[blue];
 }
 
 #endif  // FT_MOONLIGHT

@@ -54,7 +54,7 @@ class ParallelLEDDriver : public DriverNode {
     DriverNode::loop();  // This populates the LUT tables when needed
 
     #ifndef CONFIG_IDF_TARGET_ESP32P4
-    if (ledsDriver.total_leds > 0) ledsDriver.showPixels(WAIT);
+    if (ledsDriver.totalLeds > 0) ledsDriver.showPixels(WAIT);
     #else
     uint8_t nrOfPins = MIN(layerP.nrOfLedPins, layerP.nrOfAssignedPins);
     // LUTs are accessed directly within show_parlio via extern ledsDriver
@@ -116,9 +116,9 @@ class ParallelLEDDriver : public DriverNode {
     #ifndef CONFIG_IDF_TARGET_ESP32P4  // Non P4: Yves driver
 
       if (!initDone) {
-        __NB_DMA_BUFFER = dmaBuffer;  // __NB_DMA_BUFFER is a variable
+        ledsDriver.nbDmaBuffer = dmaBuffer;
 
-        uint8_t savedBrightness = ledsDriver._brightness;  //(initLed sets it to 255 and thats not what we want)
+        uint8_t savedBrightness = ledsDriver.brightness;  //(initLed sets it to 255 and thats not what we want)
 
         EXT_LOGD(ML_TAG, "init Parallel LED Driver %d %d %d %d %d", layerP.lights.header.channelsPerLight, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetRed, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetGreen, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetBlue, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetWhite);
         ledsDriver.initled(layerP.lights.channelsD, pins, layerP.ledsPerPin, nrOfPins, layerP.lights.header.channelsPerLight, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetRed, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetGreen, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetBlue, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetWhite, layerP.lights.header.offsetRGBW + layerP.lights.header.offsetWhite2, true);  // 🌙 offsetWhite2 for RGBCCT warm white
@@ -183,7 +183,7 @@ class ParallelLEDDriver : public DriverNode {
 
   ~ParallelLEDDriver() override {
   #if HP_ALL_DRIVERS
-    EXT_LOGD(ML_TAG, "Destroy %d + 1 dma buffers", __NB_DMA_BUFFER);
+    EXT_LOGD(ML_TAG, "Destroy %d + 1 dma buffers", dmaBuffer);
 
     ledsDriver.deleteDriver();
 
