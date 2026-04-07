@@ -108,7 +108,7 @@ Ensure the configured LED pin(s) match the physical connections on your ESP32 bo
 
 ### Drivers
 
-The Drivers module contains [Layouts](../moonlight/layouts.md) and [Drivers](../moonlight/drivers.md).
+The Drivers module contains [Layouts](../moonlight/layouts.md) and [Drivers](../moonlight/drivers.md). **Both** a layout and a driver must be created to output to LEDs.
 
 Layouts define how your LEDs are arranged.  
 First, add a layout by pressing (+).
