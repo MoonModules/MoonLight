@@ -141,13 +141,26 @@ The effect should now be visible in the MoonLight monitor and on your LEDs.
 Press **Save** (💾).  
 This stores your configuration on the device, so your settings persist after a reboot.
 
-If something does not work as expected, log an issue on GitHub or contact us via [Discord](https://discord.gg/TC8NSUSCdV), [Reddit](https://reddit.com/r/moonmodules) or [YouTube](https://www.youtube.com/@MoonModulesLighting).  
-See also [Installer troubleshooting](../develop/installation.md#moonlight-installer) and [USB-to-serial chip drivers](../develop/installation.md#usb-to-serial-chip-drivers).
-
 !!! info "Next steps"
     * You can now change or add effects, modifiers, layouts, and drivers
     * Visit the [MoonLight Overview](../moonlight/overview.md) to learn more
     * Press (?) in MoonLight to jump directly to the relevant documentation page
+
+## Troubleshooting & Reporting Issues
+
+If you encounter problems during installation or setup, we want to help! Please check our troubleshooting guides first, and if you can't find a solution, report the issue on GitHub.
+
+**Before reporting an issue:**
+
+- Check [Installer troubleshooting](../develop/installation.md#moonlight-installer) for common installation problems
+- Check [USB-to-serial chip drivers](../develop/installation.md#usb-to-serial-chip-drivers) if your device is not recognized
+- Try joining the [Discord community](https://discord.gg/TC8NSUSCdV) — your issue might already be solved there
+
+**Reporting an issue on GitHub:**
+
+If your problem is not solved by the guides above, [report it on GitHub](../moonlight/overview.md#reporting-issues). Your detailed report helps us identify and fix bugs faster. See [Reporting Issues](../moonlight/overview.md#reporting-issues) for guidance on what information to include.
+
+You can also reach out on [Discord](https://discord.gg/TC8NSUSCdV), [Reddit](https://reddit.com/r/moonmodules), or [YouTube](https://www.youtube.com/@MoonModulesLighting) if you prefer community support.
 
 ## Update MoonLight
 

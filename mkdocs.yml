@@ -38,6 +38,8 @@ nav:
     - develop/installation.md
     - develop/development.md
     - develop/standardsguidelines.md
+    - develop/workinprogress.md
+    - develop/CLAUDE.md
     - develop/nodes.md
     - develop/livescripts.md
     - develop/modules.md

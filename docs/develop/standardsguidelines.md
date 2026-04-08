@@ -8,7 +8,7 @@
 | **One firmware per board** | Everything in a single binary — keeps management simple. Target ≤ 3 MB flash. |
 | **Docs with every PR** | Functionality and documentation go in the same Pull Request. |
 | **Minimal upstream changes** | Stay in sync with [ESP32-sveltekit](https://github.com/theelims/ESP32-sveltekit). Mark any upstream change with `// 🌙` (MoonBase) or `// 💫` (MoonLight). |
-| **Main branch is protected** | No direct code commits to `main`. Branch → develop → PR → merge. Doc-only changes may go directly to `main` (docs folder = website source). |
+| **Main branch is protected** | No direct code commits to `main`. Branch → PR → merge. Doc-only changes may go directly to `main` (docs folder = website source). |
 | **Compilable PRs** | Every PR must compile and not crash the system. Must support boards without PSRAM (e.g. ESP32-D0). Work-in-progress code is fine if it compiles. |
 
 ### Where code lives
@@ -20,57 +20,6 @@ interface/    Frontend — SvelteKit + generic module/node UI
 ```
 
 The UI for modules and nodes is **generated automatically** — no module-specific Svelte code is needed.
-
----
-
-## Pull Requests
-
-### Creating a PR
-
-Always target the `main` branch. Create a feature branch first, then open the PR.
-
-**Every PR description should cover:**
-
-- What you're trying to achieve (new feature, bug fix, refactor, …)
-- How it works — a short technical summary of non-obvious aspects
-- Testing performed, known limitations, open ends
-- Any areas where you'd like reviewer help
-
-A PR with no description or just a few words may not get accepted.
-
-### Updating an open PR
-
-Push additional commits to your branch — GitHub keeps the PR up-to-date automatically.
-
-!!! warning "Do not force-push while your PR is open"
-    Force-pushing causes review comments to disappear and has other subtle side effects on the repository history.
-
-Useful reference: [How to properly submit a PR](https://github.com/wled-dev/WLED/wiki/How-to-properly-submit-a-PR)
-
-The 🐰 (CodeRabbit) reviews each commit — address its recommendations before requesting a merge.
-
-### Merging a PR
-
-Before merging, ask CodeRabbit:
-
-```
-@coderabbitai, I am about to merge this PR. Please produce three outputs:
-
-1. **PR review** — in-depth review of all commits: a concise summary of what changed
-   and why, a merge recommendation, and a prioritised list of follow-up actions.
-   For the most urgent items (blockers or high-risk changes), include a ready-to-paste
-   prompt that a Claude Code agent can execute immediately before merge.
-
-2. **End-user docs prompt** — a ready-to-paste prompt for a Claude Code agent to update
-   `/docs`. Rules: only describe usage implications (what changed for the user);
-   no internals, no code, no architecture; check existing pages before adding —
-   update in place rather than duplicating; keep additions compact and user-friendly.
-
-3. **Developer docs prompt** — a ready-to-paste prompt for a Claude Code agent to update
-   `/docs/develop`. Rules: target contributors, not end users; be concise — if the
-   detail is already in the code or commit messages, do not repeat it; focus on
-   decisions, patterns, and guidance that are not obvious from reading the source.
-```
 
 ---
 
@@ -133,18 +82,49 @@ AI-generated code must be documented to the same standard as human-written code.
 
 ---
 
+### Tooling: with or without AI
+
+You're free to contribute **with or without AI tools**. Both approaches are fully supported.
+
+**Without AI:** You can write, review, and commit code entirely on your own using your favorite editor and tools. This is fast for small changes and gives you complete control.
+
+**With AI:** Tools like Claude Code or Mistral can help with planning, writing code, and addressing review feedback. This is useful for complex tasks, exploring unfamiliar areas, or getting a second opinion.
+
+**Most developers use both** — writing some code manually, using AI for other parts, and letting CodeRabbit guide the process. Pick what works for you.
+
+---
+
 ### Contributing with AI
 
-Using AI assistance is fine. As the contributor, you are still responsible for the code:
+If you use AI tools, remember that you're ultimately responsible for the code. Take time to understand and review what the AI produces:
 
-- **Understand it** — do not accept AI output because it "seems to work"
-- **Review changes to existing code** — AI edits can silently drop comments or break subtle logic
-- **Check translations** — AI is good at language, but technical terms can be wrong; always verify
+- **Understand it** — don't just accept output because it "seems to work"
+- **Review changes to existing code carefully** — AI can silently drop comments or break subtle logic
+- **Verify technical accuracy** — AI is good with language, but technical terms and concepts can sometimes be wrong
 
 Mark larger AI-generated sections with a comment:
 ```cpp
 // Below section generated with AI assistance
 ```
+
+#### Using CodeRabbit's AI prompts
+
+When CodeRabbit reviews your PR, it may provide **Prompt for AI agents** — ready-to-use prompts for Claude Code or Mistral. If you'd like help addressing feedback, you can copy these prompts directly into your AI tool. They can help with:
+
+- Fixing code style issues
+- Improving documentation
+- Resolving failing tests
+- Addressing other feedback
+
+Of course, you're also welcome to address feedback manually — just do what works best for you.
+
+#### AI Context for contributions
+
+If you use AI tools to contribute, it helps to give them context about MoonLight:
+
+- **Claude Code**: Reference [CLAUDE.md](CLAUDE.md) — it has an overview of the architecture, build process, coding rules, and project structure. Share this file with Claude Code when asking for help with significant contributions.
+
+- **Mistral Vibe**: Mistral doesn't have a dedicated context file. Instead, you can share relevant excerpts from this document, the [AI Models](#ai-models) section, or other architecture docs in your prompt as needed.
 
 ---
 
@@ -152,11 +132,9 @@ Mark larger AI-generated sections with a comment:
 
 > **Status: April 2026.** AI models evolve rapidly — re-evaluate model choices every few months.
 
-MoonLight uses two AI coding tools: **Claude Code** (Anthropic CLI) and **Mistral** (vibe coding via Le Chat / API). Both support multiple underlying models with different capability/cost trade-offs.
+MoonLight uses two AI coding tools: **Claude Code** (Anthropic CLI) and **Mistral** (vibe coding via Le Chat / API).
 
----
-
-#### Claude Code models
+#### Claude Code
 
 Claude Code is a CLI tool (`claude`) that integrates with your terminal and editor.
 
@@ -168,31 +146,21 @@ Claude Code is a CLI tool (`claude`) that integrates with your terminal and edit
 
 Switch model with `/model <model-id>` inside a Claude Code session. Enable Fast mode with `/fast` (same Opus model, faster output).
 
----
+#### Mistral
 
-#### Mistral models
-
-Mistral's vibe coding approach works best via [Le Chat](https://chat.mistral.ai) or the Mistral API.
+Mistral's code generation is available via [Le Chat](https://chat.mistral.ai) or the Mistral API.
 
 | Model | Use when |
 |-------|----------|
-| **Mistral Large** | Complex reasoning, architectural questions, cross-file analysis |
-| **Codestral** | Code generation and completion — optimised for code |
-| **Mistral Small** | Fast iteration, quick Q&A, low-cost tasks |
-| **Pixtral** | When you need to attach a screenshot or image (e.g. schematic, UI mockup) |
-
----
+| **devstral-2** | General-purpose coding tasks, debugging, and documentation — solid alternative to Claude Code |
 
 #### Task → model guide
-
-Use this as a quick reference. All examples assume Claude Code unless noted.
 
 **Add a new node (e.g. a new effect `E_MyEffect.h`)**
 
 > Complexity: medium — mostly self-contained  
-> Model: **Sonnet 4.6** (Claude) · **Codestral** (Mistral)
+> Model: **Sonnet 4.6** (Claude) · **devstral-2** (Mistral)
 
-Prompt pattern:
 ```
 Create a new effect node E_MyEffect in src/MoonLight/Nodes/Effects/.
 Base it on an existing simple effect like E_Sinelon.h.
@@ -206,9 +174,8 @@ Register it in ModuleEffects.
 **Add a new module (e.g. `ModuleFoo`)**
 
 > Complexity: high — touches backend state, HTTP/WS endpoints, and the generic UI  
-> Model: **Opus 4.6** (Claude) · **Mistral Large** (Mistral)
+> Model: **Opus 4.6** (Claude) · **devstral-2** (Mistral)
 
-Prompt pattern:
 ```
 Create a new MoonBase module ModuleFoo following the pattern in src/MoonBase/.
 State fields: [list fields and types].
@@ -222,9 +189,8 @@ Show how the generic UI will render it.
 **Change a node implementation (tweak an existing effect/layout/driver)**
 
 > Complexity: low–medium — scoped to one file  
-> Model: **Sonnet 4.6** (Claude) · **Codestral** (Mistral)
+> Model: **Sonnet 4.6** (Claude) · **devstral-2** (Mistral)
 
-Prompt pattern:
 ```
 In src/MoonLight/Nodes/Effects/E_Plasma.h, change the speed control
 from a float [0–1] range to an int [1–255] range.
@@ -237,9 +203,8 @@ Do not change anything outside this file.
 **Change a module implementation (tweak state, controls, or loop logic)**
 
 > Complexity: medium — may affect UI rendering and persistence  
-> Model: **Sonnet 4.6** (Claude) · **Mistral Large** for cross-module impact
+> Model: **Sonnet 4.6** (Claude) · **devstral-2** for cross-module impact
 
-Prompt pattern:
 ```
 In ModuleDrivers, add a new boolean field `autoRestart` to the state struct.
 Default to false. When true, restart the driver node if loop() hasn't produced
@@ -251,10 +216,9 @@ a frame in 5 seconds. Persist it via FSPersistence.
 **Change the UI (SvelteKit frontend)**
 
 > Complexity: medium — must not touch upstream files  
-> Model: **Sonnet 4.6** (Claude) · **Codestral** (Mistral)  
+> Model: **Sonnet 4.6** (Claude) · **devstral-2** (Mistral)  
 > Key constraint: only edit files under `src/routes/moonbase/`, `src/lib/components/moonbase/`, `moonbase_utilities.ts`, `moonbase_models.ts`
 
-Prompt pattern:
 ```
 In interface/src/lib/components/moonbase/FieldRenderer.svelte,
 add rendering support for control type "color" (currently unhandled).
@@ -268,9 +232,8 @@ Do not reformat any surrounding code.
 **Debugging a crash / hard-to-reproduce bug**
 
 > Complexity: high — needs full context  
-> Model: **Opus 4.6** (Claude) · **Mistral Large** (Mistral) with image if you have a screenshot of the stack trace
+> Model: **Opus 4.6** (Claude) · **devstral-2** (Mistral) with image if you have a screenshot of the stack trace
 
-Prompt pattern:
 ```
 The ESP32 crashes with the following stack trace (decoded):
 [paste decoded trace]
@@ -283,9 +246,8 @@ Identify the root cause and suggest a minimal fix.
 
 **Writing or extending unit tests**
 
-> Model: **Sonnet 4.6** (Claude) · **Codestral** (Mistral)
+> Model: **Sonnet 4.6** (Claude) · **devstral-2** (Mistral)
 
-Prompt pattern:
 ```
 Add doctest unit tests for the function fastDiv255() in
 src/MoonBase/utilities/PureFunctions.h.

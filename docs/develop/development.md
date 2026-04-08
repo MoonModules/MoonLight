@@ -1,128 +1,192 @@
 
 # Development
 
-## Summary
+See [Standards and Guidelines](standardsguidelines.md) for coding rules, code style, and guidance on using AI tools (optional) before contributing.
 
-* Create a branch
-* Make changes
-* Document your change
-* Submit a pull request
+---
 
-[Standards and Guidelines](https://moonmodules.org/MoonLight/develop/standardsguidelines/). Check before submitting a request!
+## Pull Requests
 
-## Create a branch
+Complete workflow: create branch → create PR → make changes → merge.
 
-* Want to make changes: fork the repo (see installation) and submit pull requests, see [creating-a-pull-request-from-a-fork](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request-from-a-fork):
+Found a bug while developing? See [Reporting Issues](../moonlight/overview.md#reporting-issues) for how to document and report it properly.
 
-  * Only branch from the main branch! Press Branches, press New Branch, give it a name e.g. background-script and press Create new Branch, click on background-script
-      
-    <img width="90" src="https://github.com/user-attachments/assets/588d0854-bac1-4b70-8931-ba6db4c94248" />
+### Creating a PR
+
+**Step 1: Create a feature branch** from `main` — always target `main`.
+
+**Step 2: Make your first commit**
+
+For complex tasks, optionally create an implementation plan in [Work in progress](workinprogress.md):
+
+- **Option A (for simpler tasks)**: Skip planning, or write a brief plan yourself and commit to `workinprogress.md`.
+
+- **Option B (if you prefer)**: If you'd like help planning, you can ask an AI agent (Claude Code or Mistral) to draft a detailed plan. The result is an updated `workinprogress.md` — commit that to your branch before writing code.
+
+  **Good times to ask an AI for a plan:**
+  - Adding a new module or feature area
+  - Cross-cutting refactors affecting multiple files
+  - Complex architectural decisions
+
+  **Prompt template (if using AI):**
+
+  ```
+  Create a detailed implementation plan for [task description], outlining:
+  - The steps involved
+  - Affected files and modules
+  - Architectural decisions
+  - Any risks or edge cases
+
+  Add this plan to /docs/develop/workinprogress.md and refer to it in your commits.
+  Check the Work in Progress document to see current plans, their status, and phases.
+  ```
+
+Make changes to the code base, see [Make changes](#make-changes)
+
+**Step 3: Open the PR**
+
+1. Push the first commit to your branch
+2. Create a Pull Request with an **empty description** — CodeRabbit will analyze your commits and auto-generate one
+3. Review CodeRabbit's description — optionally edit it before requesting review
+
+### Updating an open PR
+
+Push additional commits to your branch — GitHub keeps the PR up-to-date automatically.
+
+!!! warning "Do not force-push while your PR is open"
+    Force-pushing causes review comments to disappear and has other subtle side effects on the repository history.
+
+See [Make changes](#make-changes) for how to edit frontend/backend code, format, and commit.
+
+**If you'd like to use AI for code changes:**
+
+If you choose to use Claude Code or Mistral Vibe, see [AI Context for contributions](standardsguidelines.md#ai-context-for-contributions) for tips on providing the right context to get helpful results.
+
+**Address feedback:**
+
+1. **CodeRabbit's recommendations** — address in subsequent commits
+    - Use icons in commit title/description to identify the source: 🐰 (CodeRabbit), ✴️ (Claude), 🐱 (Mistral Vibe)
+    - Example: `🐰 issues solved by ✴️` (CodeRabbit issues fixed by Claude Code)
+    - CodeRabbit provides [ready-to-use prompts for AI agents](standardsguidelines.md#using-coderabbit-s-ai-prompts) if you'd like help addressing its recommendations
+    - Commit description: if you use AI to fix issues, you can use its summary — it provides a clear summary of the changes
+2. **Code review feedback** — address per reviewer comments
+3. **Ensure docs are updated** in your commits, AI can help here.
+
+### Merging a PR
+
+**Keep PRs moving** — target **a week or less** from opening to merge. Stale PRs slow down development and cause conflicts.
+
+Before merging:
+
+1. Ensure all documentation is updated
+2. Ask CodeRabbit for a final review:
+
+```
+@coderabbitai, I am about to merge this PR. Please produce three outputs:
+
+1. **PR review** — in-depth review of all commits: a concise summary of what changed
+   and why, a merge recommendation, and a prioritised list of follow-up actions.
+   For the most urgent items (blockers or high-risk changes), include a ready-to-paste
+   prompt that a Claude Code agent can execute immediately before merge.
+
+2. **End-user docs prompt** — a ready-to-paste prompt for a Claude Code agent to update
+   `/docs`. Rules: only describe usage implications (what changed for the user);
+   no internals, no code, no architecture; check existing pages before adding —
+   update in place rather than duplicating; keep additions compact and user-friendly.
+
+3. **Developer docs prompt** — a ready-to-paste prompt for a Claude Code agent to update
+   `/docs/develop`. Rules: target contributors, not end users; be concise — if the
+   detail is already in the code or commit messages, do not repeat it; focus on
+   decisions, patterns, and guidance that are not obvious from reading the source.
+```
+
+After merging, **delete the feature branch** — it keeps the repository clean and is always recoverable via git if needed.
+
+---
 
 ## Make changes
 
-### Front-end (UI)
+Instructions for editing and committing code (used while [updating an open PR](#updating-an-open-pr)).
 
-* interface folder
-    * interface/src/routes/moonbase for MoonBase and MoonLight (modules)
-* see [Prepare for development](https://moonmodules.org/MoonLight/develop/installation/#prepare-for-development) about nodejs, npm install
+### Frontend (UI)
 
-```markdown
+- Files live in `interface/src/routes/moonbase/` (MoonBase and MoonLight modules)
+- See [Prepare for development](installation.md#prepare-for-development) for Node.js setup
+
+```bash
 npm install
 npm run dev
 ```
 
-* see [Troubleshooting](https://moonmodules.org/MoonLight/develop/installation/#troubleshooting) about WWWData.h
+See [Troubleshooting](installation.md#troubleshooting) for common issues.
 
-### Back-end (Server)
+**UI development server:** Deploy backend to an ESP32 and proxy API calls through the local dev server — no reflashing needed for UI changes. After setup, open [localhost:5173](http://localhost:5173/).  
+See [Setup Proxy for Development](installation.md#prepare-for-development) for details.
 
-There are 3 levels to add functionality:
+!!! tip "Node.js"
+    If Node.js is not installed: see [Prepare for development](installation.md#prepare-for-development).
 
-* **Standard ESP32-Sveltekit code**, e.g. Connections, Wifi and System. MoonBase files are also made using standard SvelteKit as examples but contain a few components used in MoonLight modules. Might be rewritten as a MoonLight Module in the future.
-  * lib folder for Sveltekit back-end
-  * Read the [ESP32 Sveltekit docs](https://moonmodules.org/MoonLight/esp32sveltekit/)
-* [MoonLight Modules](https://moonmodules.org/MoonLight/moonbase/modules/) e.g. Lights Control, Effects, Info, Channels. They are subclasses of Modules.h/cpp and implement setupDefinition, onUpdate and optional loop. New modules need to be defined in main.cpp and added to menu.svelte. All further UI is generated by Module.svelte.
-  * src folder for MoonBase and MoonLight back-end
-* **MoonLight Nodes**: the easiest and recommended way. See Effects.h, Layouts.h, Modifiers.h and Drivers.h for examples. They match closest WLED usermods. Each node has controls, a setup and a loop and can be switched on and off. For specific purposes hasOnLayout() and hasModifier() can return true.
-  * src/MoonLight/nodes
+### Backend (Server)
+
+Three levels to add functionality:
+
+| Level | Where | Use when |
+|-------|-------|----------|
+| **ESP32-SvelteKit standard** | `lib/` | Connections, WiFi, System — do not modify |
+| **[MoonBase Modules](../moonbase/overview.md)** | `src/` | New modules: subclass `Module`, implement `setupDefinition`, `onUpdate`, optional `loop` |
+| **[MoonLight Nodes](nodes.md)** | `src/MoonLight/nodes/` | New effects, layouts, modifiers, drivers — easiest approach, closest to WLED usermods |
 
 ### Steps
 
-* Go to the file(s) you want to change press edit and make the changes. 
-* ☑️ and ➡️ to build and or upload
-* Changes made to the UI are not always visible in the browser, clear the browser cache to see latest UI (see [connect to MoonLight](https://moonmodules.org/MoonLight/gettingstarted/installer/#connect-moonlight)).
-* MoonLight uses clang-format for c/c++ code and prettier for Svelte, javascript etc. Format your code before submitting! (right-click Format Document on each page you change)
-* Press Commit Changes..., enter a commit message and an extended description, Press Commit Changes
+1. Edit the file(s), build with ☑️ and/or upload with ➡️
+2. Format code before committing: right-click → **Format Document** (clang-format for C/C++, Prettier for frontend)
+3. Clear browser cache if UI changes are not visible
+4. Commit with a descriptive message and extended description
+5. Update documentation in `/docs` alongside code changes
 
-## Document your changes
+---
 
-See [Documentation](https://moonmodules.org/MoonLight/develop/documentation/)
-
-## Submit a pull request
-
-    * Go back to the homepage of your fork [myfork/MoonLight](https://github.com/ewowi/MoonLight). There is a message inviting to create a Pull Request. Press Compare & pull request.
-      
-      <img width="350" src="https://github.com/user-attachments/assets/410aa517-99eb-4907-b1a3-db7f38abb194" />
-  
-    * Add a title and Description to the Pull Request and press Create Pull Request
-  
-    * The upstream MoonLight repo can now process this PR
-
-## Additional info
+## Additional reference
 
 ### Emoji coding
 
-* Serial Log shows which code is from which library using emoji:
+Serial log shows which library the output is from:
 
-   <img width="500" src="https://github.com/user-attachments/assets/9ac673d3-6303-40ee-b2a0-26a0befbda01" />
+| Emoji | Library |
+|-------|---------|
+| 🐼 | ESP-SvelteKit |
+| 🔮 | PsychicHTTP |
+| 🐸 | Live Scripts |
+| 🌙 | MoonBase |
+| 💫 | MoonLight |
 
-    * 🐼: ESP-SvelteKit
-    * 🔮: PsychicHTTP
-    * 🐸: Live Scripts
-    * 🌙: MoonBase
-    * 💫: MoonLight
-    🌙 and 💫 is also used in code comments of ESP32-SvelteKit to show where changes to upstream have been made.
-* The following ESP32-SvelteKit features have been switched off in the default builts (they can be switched on if you want to use them, see [features.ini](https://github.com/MoonModules/MoonLight/blob/main/features.ini))
-    *   -D FT_SECURITY=0
-    *   -D FT_SLEEP=0
-    *   ~~-D FT_BATTERY=1~~ enabled!
-
-### UI development server
-
-To ease the front-end development you can deploy the back-end code on an ESP32 board and pass the websocket and REST API calls through the development server's proxy running on your computer.
-
-This very much speeds up UI development, as no flashing to the ESP32 is required to test updated UI. Saving a UI file is enough to see the results.
-
-See [Setup Proxy for Development](https://moonmodules.org/MoonLight/gettingstarted/#setup-proxy-for-development) and [development-server](https://moonmodules.org/MoonLight/gettingstarted/#development-server) how to setup.
-
-!!! tip "nodejs" 
-     if nodejs is not installed yet: see [Prepare for development](https://moonmodules.org/MoonLight/develop/installation/#prepare-for-development) to install nodejs
-
-After configuring the development server, a local webserver starts on [localhost:5173](http://localhost:5173/). 
+`🌙` and `💫` are also used in code comments to mark changes to upstream ESP32-SvelteKit files.
 
 ### Release and merged firmware binaries
 
-Firmware binaries come in 2 flavours: including boot and partition (merged) and MoonLight code only (release). They are stored in the build folder of the MoonLight repo and updated each time a build or upload (☑️ or ➡️) is done. Subfolder merged contains the first type, release the second type.
+Firmware binaries come in two flavours:
 
-* Merged bins are used by the [MoonLight Installer](https://moonmodules.org/MoonLight/gettingstarted/installer/), release bins by the [System update](https://moonmodules.org/MoonLight/system/update/) module (OTA). System update uses the bins stored in [GitHub releases](https://github.com/MoonModules/MoonLight/releases).
-* Merged bins starts flashing on address 0x0, release bins on address 0x10000.
-* All MoonLight partition schemes have a firmware size of 3MB. Smaller devices (e.g. ESP32-D0) have no OTA partition. System update is possible in this situation, but there is no fallback if update fails (need to flash using USB in that case) 🚧
+| Type | Folder | Used by | Flash offset |
+|------|--------|---------|--------------|
+| Merged (boot + partition + firmware) | `build/merged/` | [MoonLight Installer](../gettingstarted/installer.md) | `0x0` |
+| Release (firmware only) | `build/release/` | [System update](../system/update.md) (OTA) · [GitHub releases](https://github.com/MoonModules/MoonLight/releases) | `0x10000` |
 
-!!! tip "flash firmware using esptool"
-     * [>_] in the statusbar of vscode
-     ```
-     esptool --port /dev/cu.usbserial-1130 write-flash -b 2000000 0x0 ./build/merged/MoonLight_esp32-s3-n16r8v_0-6-1_webflash.bin
-     ```
-     * replace port and file to match your setup
-     * optionally add erase-flash before write-flash
-     * -b 2000000: Baud rate: lower if too high for your device
-     * use ./build/release/MoonLight_esp32-s3-n16r8v_0-6-1.bin and address 0x10000 to flash only the MoonLight partition
+All partition schemes have a 3 MB firmware size. ESP32-D0 has no OTA partition — system update works but has no fallback if it fails (flash via USB in that case).
 
-### Adding an ESP32 device Definition
+!!! tip "Flash firmware using esptool"
+    ```bash
+    esptool --port /dev/cu.usbserial-1130 write-flash -b 2000000 0x0 ./build/merged/MoonLight_esp32-s3-n16r8v_0-6-1_webflash.bin
+    ```
+    Replace port and filename to match your setup. Optionally add `erase-flash` before `write-flash`. Use `0x10000` and the `build/release/` binary to flash only the MoonLight partition.
 
-Before starting, ensure you have the datasheet of your particular chip and ESP32-device confirmed and available. Many modules have near-identical markings that can hide varying hardware.
+### Adding an ESP32 device definition
 
-There are 3 files to consider when making a ESP32-device definition.
+Before starting, ensure you have the datasheet confirmed. Many modules have near-identical markings that can hide varying hardware.
 
-	boards/BOARD_NAME.csv
-	boards/BOARD_NAME.JSON
-	firmware/BOARD_TYPE_NAME.ini (e.g. esp32dev, esp32-s3), contains different boards
+Three files to create or modify:
+
+```
+boards/BOARD_NAME.csv
+boards/BOARD_NAME.json
+firmware/BOARD_TYPE_NAME.ini   (e.g. esp32dev, esp32-s3 — one file may contain multiple boards)
+```

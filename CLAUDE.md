@@ -169,3 +169,13 @@ Supplementary guidance for AI assistants lives in `/misc/instructions/`:
 - **`MoonLight.md`** — project philosophy, architectural goals, future roadmap, and broader context not covered above.
 - **`GEMINI.md`** — structural overview of the upstream [ESP32-sveltekit](https://github.com/theelims/ESP32-sveltekit) repo (services, file layout, key dependencies). Useful when touching upstream-derived code.
 - **`svelte.instructions.md`** — Svelte 5 development guidelines. Applies **only** to moonbase-specific frontend files (`src/routes/moonbase/`, `src/lib/components/moonbase/`, `moonbase_utilities.ts`, `moonbase_models.ts`). Do not apply runes patterns or reformatting to upstream files.
+
+### Loading These Documents
+
+To optimize token usage, these additional reference documents are **not loaded by default**. Load them explicitly only when:
+
+- Working on architectural decisions or long-term planning (load `MoonLight.md`)
+- Modifying upstream-derived code or understanding ESP32-sveltekit patterns (load `GEMINI.md`)
+- Building or modifying Svelte frontend components (load `svelte.instructions.md`)
+
+Unless you receive explicit instructions to reference these files, AI assistants should not load them to conserve context and improve efficiency.
