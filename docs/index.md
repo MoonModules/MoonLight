@@ -158,7 +158,7 @@ Start creating stunning effects immediately on both mobile and desktop.
 ### Version 0.9.0 - March 2026
 **FastLED Channels API, FastLED Audio, sensors and palettes**
 
-See [v0.9.0 Kanban board](https://github.com/users/MoonModules/projects/4) or log an [Issue](moonlight/overview.md#reporting-issues) to report issues or request enhancements.
+See [v1.0.0 Kanban board](https://github.com/users/MoonModules/projects/4) or log an [Issue](moonlight/overview.md#reporting-issues) to report issues or request enhancements.
 
 ---
 

@@ -151,6 +151,8 @@ Found a bug or want to request a feature?
 
 ### Bug report template
 
+See [A github issue](https://github.com/MoonModules/MoonLight/issues/164) for an example.
+
 **1. Describe the problem**
 
 ```
@@ -176,16 +178,44 @@ The API output is a JSON snapshot of your device state — ⚠️ **this is the 
 2. Click the **API icon** (↔) at the bottom-right of the module card
 3. Copy the entire JSON, paste it in your issue in a code block
 
-**Always include the API output of these three:**
+**Include the following API output:**
 
-1. [System status](../system/status.md)
-2. [MoonLight Info](./moonlightinfo.md)
-3. Affected module, e.g.:
+1. Always: [System status](../system/status.md)
+2. If lights related: [MoonLight Info](./moonlightinfo.md)
+3. If pins related: [Board preset](../moonbase/inputoutput.md)
+4. If drivers related: [Drivers](./drivers.md)
+5. Affected module, e.g.:
 
     - [Effects](./effects.md)
-    - [Drivers](./drivers.md)
     - [Lights Control](./lightscontrol.md)
     - [Channels](./channels.md)
+
+use ```text to have all the output on one line to avoid very long issue texts like this:
+
+````text
+API output:
+
+- System status 
+```text
+{"esp_platform":"ESP32-S3","firmware_version":"0.9.1","firmware_date":"20260406","firmware_target":"esp32-s3-n8r8v","platform_version":"pioarduino-55.03.37","ma...}
+```
+
+- MoonLight info
+```text
+{"nrOfLights":256,"channelsPerLight":3,"nrOfChannels":768,"size":{"x":16,"y":16,"z":1},"nodes#":2,"layers":...}
+```
+
+- Module IO Board preset
+```text
+{"boardPreset":"LightCrafter16","modded":false,"maxPower":500,"pins":...}
+```
+
+- Module Drivers
+```text
+{"nodes":[{"name":"Panel â¹ï¸ ðŸš¥","on":true,"controls":[{"name":"panelWidth","value":16,"default":16,"p":1009379704,"type":"number","valid":true,"min":1,"max":65536,"size":16},]}]...}
+```
+
+````
 
 **3. Ask for analysis (optional)**
 

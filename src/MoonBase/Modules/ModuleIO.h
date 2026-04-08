@@ -1061,6 +1061,9 @@ class ModuleIO : public Module {
 
   adc_attenuation_t voltage_readout_current_adc_attenuation = ADC_11db;
   adc_attenuation_t current_readout_current_adc_attenuation = ADC_11db;
+  adc_attenuation_t _savedVoltageAttenuation = (adc_attenuation_t)0xFF;  // invalid = force first set
+  adc_attenuation_t _savedCurrentAttenuation = (adc_attenuation_t)0xFF;  // invalid = force first set
+
   #endif
 
   // cppcheck-suppress uselessOverride -- has content when FT_BATTERY is defined
@@ -1074,9 +1077,12 @@ class ModuleIO : public Module {
       batteryService->updateSOC(perc * 100);
     }
     if (_pinVoltage != UINT8_MAX) {
-      analogSetAttenuation(voltage_readout_current_adc_attenuation);
+      if (voltage_readout_current_adc_attenuation != _savedVoltageAttenuation) {
+        analogSetPinAttenuation(_pinVoltage, voltage_readout_current_adc_attenuation);
+        _savedVoltageAttenuation = voltage_readout_current_adc_attenuation;
+      }
       uint32_t adc_mv_vinput = analogReadMilliVolts(_pinVoltage);
-      analogSetAttenuation(ADC_11db);
+      // No reset to ADC_11db needed — pin-specific attenuation is persistent
       float volts = 0;
       if (_currentBoardPreset == BoardName::SE16V1) {
         volts = ((float)adc_mv_vinput) * 2 / 1000;
@@ -1088,9 +1094,12 @@ class ModuleIO : public Module {
       voltage_readout_current_adc_attenuation = adc_get_adjusted_gain(voltage_readout_current_adc_attenuation, adc_mv_vinput);
     }
     if (_pinCurrent != UINT8_MAX) {
-      analogSetAttenuation(current_readout_current_adc_attenuation);
+      if (current_readout_current_adc_attenuation != _savedCurrentAttenuation) {
+        analogSetPinAttenuation(_pinCurrent, current_readout_current_adc_attenuation);
+        _savedCurrentAttenuation = current_readout_current_adc_attenuation;
+      }
       uint32_t adc_mv_cinput = analogReadMilliVolts(_pinCurrent);
-      analogSetAttenuation(ADC_11db);
+      // No reset to ADC_11db needed
       current_readout_current_adc_attenuation = adc_get_adjusted_gain(current_readout_current_adc_attenuation, adc_mv_cinput);
       if ((_currentBoardPreset == BoardName::SE16V1) || (_currentBoardPreset == BoardName::LightCrafter16)) {
         if (adc_mv_cinput > 330)  // datasheet quiescent output voltage of 0.5V, which is ~330mV after the 10k/5k1 voltage divider. Ideally, this value should be measured at boot when nothing is displayed on the LEDs
