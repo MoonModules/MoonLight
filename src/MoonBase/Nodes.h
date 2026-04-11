@@ -178,6 +178,45 @@ struct SharedData {
   float volume;             // either sampleAvg or sampleAgc depending on soundAgc; smoothed sample
   int16_t volumeRaw;
   float majorPeak;  // FFT: strongest (peak) frequency
+  float magnitude;  // FFT: strongest (peak) frequency
+
+  // ┌───────────────┬─────────────────────┬────────────────────────────────────────────┬──────────────┐
+  // │   Variable    │        Range        │                  Use Case                  │   Priority   │
+  // ├───────────────┼─────────────────────┼────────────────────────────────────────────┼──────────────┤
+  // │ volumeSmth    │ 0.0–255.0           │ Overall volume/intensity responsiveness    │ 🔴 Essential │
+  // ├───────────────┼─────────────────────┼────────────────────────────────────────────┼──────────────┤
+  // │ sampleAvg     │ 0.0–255.0           │ Smoothed volume (simpler, no AGC)          │ 🟡 Secondary │
+  // ├───────────────┼─────────────────────┼────────────────────────────────────────────┼──────────────┤
+  // │ sampleAgc     │ 0.0–255.0           │ AGC-adjusted volume (responds to gain)     │ 🟡 Secondary │
+  // ├───────────────┼─────────────────────┼────────────────────────────────────────────┼──────────────┤
+  // │ FFT_MajorPeak │ 1.0–11025.0 Hz      │ Dominant frequency (bass/treble detection) │ 🟡 Secondary │
+  // ├───────────────┼─────────────────────┼────────────────────────────────────────────┼──────────────┤
+  // │ FFT_Magnitude │ 0.0–4096.0          │ Strength of peak frequency                 │ 🟡 Secondary │
+  // ├───────────────┼─────────────────────┼────────────────────────────────────────────┼──────────────┤
+  // │ fftResult[16] │ 0–255 (per channel) │ 16-band graphic EQ                         │ 🟡 Secondary │
+  // ├───────────────┼─────────────────────┼────────────────────────────────────────────┼──────────────┤
+  // │ samplePeak    │ true/false          │ Beat/peak detection                        │ 🟢 Optional  │
+  // ├───────────────┼─────────────────────┼────────────────────────────────────────────┼──────────────┤
+  // │ soundAgc      │ 0–3                 │ AGC mode (for debugging)                   │ 🟢 Optional  │
+  // // └───────────────┴─────────────────────┴────────────────────────────────────────────┴──────────────┘
+  
+  // Recommended Approach:
+
+  // 1. For intensity-based effects (brightness scaling):
+  //   - Use volumeSmth — automatically handles AGC mode internally
+  //   - Falls back gracefully if audio not available
+  // 2. For frequency-reactive effects (spectrum analyzers, bass boosters):
+  //   - Primary: FFT_MajorPeak + FFT_Magnitude for single-band response
+  //   - Advanced: fftResult[16] for 16-band EQ visualization
+  // 3. For beat detection:
+  //   - Use samplePeak flag with debounce logic (resets automatically)
+  //   - Only if effect has beat-sync features
+
+  // Value Normalization Tips:
+
+  // - Normalize volumeSmth by dividing by 255 to get 0.0–1.0 float for effect calculations
+  // - FFT_MajorPeak is already in Hz — compare directly to frequency thresholds (e.g., < 200 Hz for bass, > 2000 Hz for treble)
+  // - fftResult[16] channels: 0–3 (bass), 4–8 (mid), 9–15 (treble) — useful for visual effect zones
 
   // used in scrollingtext
   uint16_t fps;

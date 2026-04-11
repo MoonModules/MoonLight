@@ -76,6 +76,7 @@ class WLEDAudioDriver : public Node {
       sharedData.volume = sync.volumeSmth;
       sharedData.volumeRaw = sync.volumeRaw;
       sharedData.majorPeak = sync.FFT_MajorPeak;
+      sharedData.magnitude = sync.FFT_Magnitude;
 
       moduleControl->read(
           [&](const ModuleState& state) {

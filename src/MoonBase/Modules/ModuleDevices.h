@@ -34,8 +34,10 @@ struct UDPMessage {
 
 class ModuleDevices : public Module {
  public:
-  NetworkUDP deviceUDP;
-  uint16_t deviceUDPPort = 65506;
+  NetworkUDP deviceUDP;  // Listen for discovery messages from other devices (port 65506)
+  NetworkUDP deviceControlUDP;  // Send control messages to other devices (port 65507)
+  uint16_t deviceUDPPort = 65506;  // Discovery: receive WLED device info and MoonLight broadcasts
+  uint16_t deviceControlUDPPort = 65507;  // Control: send control commands (isolated from WLED discovery)
   bool deviceUDPConnected = false;
   Module* _moduleControl;
 
@@ -105,11 +107,11 @@ class ModuleDevices : public Module {
 
         EXT_LOGD(MB_TAG, "Applied UDP control from originator: bri=%d pal=%d preset=%d", message.brightness, message.palette, message.preset);
       } else {
-        // if a device is updated in the UI, send that update to that device
-        if (deviceUDP.beginPacket(targetIP, deviceUDPPort)) {
-          deviceUDP.write(reinterpret_cast<uint8_t*>(&message), sizeof(message));
-          deviceUDP.endPacket();
-          EXT_LOGD(MB_TAG, "UDP from %s update sent to ...%d / %s on=%d bri=%d pal=%d preset=%d", updatedItem.originId->c_str(), targetIP[3], message.name.c_str(), message.lightsOn, message.brightness, message.palette, message.preset);
+        // if a device is updated in the UI, send that update to that device via control port
+        if (deviceControlUDP.beginPacket(targetIP, deviceControlUDPPort)) {
+          deviceControlUDP.write(reinterpret_cast<uint8_t*>(&message), sizeof(message));
+          deviceControlUDP.endPacket();
+          EXT_LOGD(MB_TAG, "UDP control from %s update sent to ...%d / %s on=%d bri=%d pal=%d preset=%d", updatedItem.originId->c_str(), targetIP[3], message.name.c_str(), message.lightsOn, message.brightness, message.palette, message.preset);
           // need to add the targetip?
         }
       }
@@ -131,7 +133,8 @@ class ModuleDevices : public Module {
 
     if (!deviceUDPConnected) {
       deviceUDPConnected = deviceUDP.begin(deviceUDPPort);
-      EXT_LOGD(MB_TAG, "deviceUDPConnected %d i:%d p:%d", deviceUDPConnected, deviceUDP.remoteIP()[3], deviceUDPPort);
+      deviceControlUDP.begin(deviceControlUDPPort);  // Initialize control UDP on separate port
+      EXT_LOGD(MB_TAG, "deviceUDPConnected %d i:%d p:%d, control on p:%d", deviceUDPConnected, deviceUDP.remoteIP()[3], deviceUDPPort, deviceControlUDPPort);
     }
 
     if (!deviceUDPConnected) return;

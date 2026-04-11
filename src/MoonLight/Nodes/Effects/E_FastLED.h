@@ -85,7 +85,13 @@ class FLAudioEffect : public Node {
     layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.fl_trebleLevel, CRGB::Green);
     columnNr++;
 
-    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.volume, CRGB::Yellow);
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.volume / 255.0, CRGB::Yellow);
+    columnNr++;
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.volumeRaw / 255.0, CRGB::Yellow);
+    columnNr++;
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.majorPeak / 11025.0, CRGB::Yellow);
+    columnNr++;
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * sharedData.magnitude / 4096.0, CRGB::Yellow);
     columnNr++;
     // Normalize BPM to 0-1 range (assuming typical range 60-200 BPM)
     float normalizedBpm = constrain(sharedData.fl_bpm, 60.0f, 200.0f);

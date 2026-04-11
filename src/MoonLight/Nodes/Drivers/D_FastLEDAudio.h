@@ -14,9 +14,9 @@
 #if FT_MOONLIGHT
 
   #include "fl/audio/audio.h"
-  #include "fl/audio/input.h"
   #include "fl/audio/audio_processor.h"
   #include "fl/audio/detector/equalizer.h"
+  #include "fl/audio/input.h"
 // #include "fl/time_alpha.h"
 
 // https://github.com/FastLED/FastLED/blob/master/src/fl/audio/README.md
@@ -37,12 +37,12 @@ class FastLEDAudioDriver : public Node {
 
   fl::audio::Processor audioProcessor;
 
-  bool signalConditioning = false; // if true nothng is displayed ...
+  bool signalConditioning = false;  // if true nothng is displayed ...
   // bool autoGain = false;
   bool noiseFloorTracking = false;
   uint8_t channel = (uint8_t)fl::audio::AudioChannel::Left;
   uint8_t gain = 128;
-  bool drainBuffer = false; // if false 60 fps. otherwise 40 fps
+  bool drainBuffer = false;  // if false 60 fps. otherwise 40 fps
   Char<32> status = "No pins";
 
   void setup() override {
@@ -212,9 +212,13 @@ class FastLEDAudioDriver : public Node {
     for (int i = 0; i < 16; ++i) {
       sharedData.bands[i] = static_cast<uint8_t>(audioProcessor.getEqBin(i) * 255);
     }
-    const float norm = (audioProcessor.getEqVolumeNormFactor() > 0.000001f) ? audioProcessor.getEqVolumeNormFactor() : 1.0f;
-    sharedData.volume = audioProcessor.getEqVolume() / norm;
-    sharedData.volumeRaw = static_cast<int16_t>(sharedData.volume * 32767.0f);
+    // Volume system overhaul — now 0.0–1.0 normalized: https://github.com/FastLED/FastLED/issues/2193#issuecomment-4192711473
+    // const float norm = (audioProcessor.getEqVolumeNormFactor() > 0.000001f) ? audioProcessor.getEqVolumeNormFactor() : 1.0f;
+    sharedData.volume = audioProcessor.getEqVolume() * 255.0;// normalised volume (   * 255 * 2560.0f; // WLED correction!)
+    sharedData.volumeRaw = (int16_t)sharedData.volume;
+    // sharedData.volumeRaw = audioProcessor.getEqVolumeDb() * 255;
+    sharedData.majorPeak = audioProcessor.getPeakLevel() * 11025.0; // we need Dominant frequency ...
+    sharedData.magnitude = audioProcessor.getPeakLevel() * 4096.0; // 4096 is WLED max
 
     sharedData.fl_bassLevel = audioProcessor.getEqBass();
     sharedData.fl_midLevel = audioProcessor.getEqMid();
