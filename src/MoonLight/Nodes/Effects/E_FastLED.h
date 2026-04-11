@@ -96,7 +96,7 @@ class FLAudioEffect : public Node {
     // Normalize BPM to 0-1 range (assuming typical range 60-200 BPM)
     float normalizedBpm = constrain(sharedData.fl_bpm, 60.0f, 200.0f);
     normalizedBpm = (normalizedBpm - 60.0f) / 140.0f;
-    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * normalizedBpm / 255.0, CRGB::Yellow);
+    layer->drawLine(columnNr, layer->size.y - 1, columnNr, layer->size.y - 1 - layer->size.y * normalizedBpm, CRGB::Yellow);
     columnNr++;
 
     // vocal

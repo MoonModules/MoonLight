@@ -46,6 +46,10 @@ Custom layouts can also be created as **Live Scripts** — `.sc` files with an `
 | IR Driver | <img width="100" src="../../media/moonlight/drivers/IRDriver.jpeg"/> | <img width="100" src="../../media/moonlight/drivers/irdrivercontrols.png"/> | Receive IR commands and [Lights Control](lightscontrol.md) |
 | IMU Driver | <img width="100" src="../../media/moonlight/drivers/MPU-6050.jpg"/> | <img width="100" src="../../media/moonlight/drivers/IMUDriverControls.png"/> | Receive inertial data from an IMU / I2C peripheral, see [IO](../moonbase/inputoutput.md#i2c-peripherals)<br>Used in [particles effect](effects.md#moonlight-effects) |
 
+### Audio Driver Data
+
+Both **FastLED Audio** and **WLED Audio** drivers provide audio data to effects. In addition to volume and frequency bands (FFT), effects can now access **magnitude** — the strength of the dominant frequency peak. This enables more sophisticated audio-reactive visualizations. See [Effects](effects.md) for details on using audio data in effects.
+
 ### Light Preset
 
 * **Max Power**: moved to [IO Module](../moonbase/inputoutput.md) board presets.

@@ -63,6 +63,39 @@ A node implements the following (overloaded) functions:
 
 Node construction is routed through `LayerManager`: `ModuleEffects::addNode()` calls `layerMgr.getSelectedLayer()` and `layerP.ensureLayer(index)` to target the currently active layer — never hard-code `layers[0]` in a new module. Modules that host layers must also override `onNodeRemoved()` and `onBeforeStateLoad()` to delegate to `layerMgr.onNodeRemoved()` and `layerMgr.prepareForPresetLoad()` respectively; `ModuleEffects` is the reference implementation for both.
 
+## Shared Audio Data
+
+Audio effects access microphone or network audio data via shared global fields. Both **FastLED Audio** (`D_FastLEDAudio.h`) and **WLED Audio** (`D_WLEDAudio.h`) drivers populate the same fields — effects should not depend on which driver is active.
+
+### Audio fields and normalization
+
+| Field | Type | Range | Source | Notes |
+|-------|------|-------|--------|-------|
+| `bands[16]` | `uint8_t[]` | 0–255 | FastLED FFT or WLED FFT_Magnitude | 16-band graphic EQ; 0–3 (bass) to 12–15 (treble) |
+| `volume` | `float` | 0–255 | FastLED sampleAvg or WLED volumeSmth | Smoothed volume; direct use in effects |
+| `volumeRaw` | `uint8_t` | 0–255 | FastLED sampleRaw or WLED volumeRaw | Unsmoothed sample; for peak detection |
+| `majorPeak` | `float` | ~64–8183 Hz | FastLED getEqDominantFreqHz() or WLED FFT_MajorPeak | Dominant frequency; compare to bass/treble thresholds |
+| `magnitude` | `float` | 0–unbounded | FastLED or WLED FFT_Magnitude | Peak frequency strength; **no guaranteed upper bound** |
+
+### Using magnitude safely
+
+`magnitude` has no clamped upper bound from FastLED's FFT. Effects should clamp or normalize before using it as an intensity scalar or bar height:
+
+```cpp
+// Bad: magnitude can exceed 255 and overflow
+uint8_t barHeight = magnitude;
+
+// Good: clamp to 0–255 range
+uint8_t barHeight = (magnitude > 255) ? 255 : (uint8_t)magnitude;
+
+// Or: normalize to 0.0–1.0 before scaling
+float normalized = magnitude / 256.0f;  // arbitrary normalisation
+```
+
+### Field synchronization
+
+Both drivers call the same `updateSharedAudioData()` function from their `loop()`. If neither driver is active, all fields remain at their previous value (do not auto-reset). Effects depending on audio should check driver presence via the Drivers module state before applying audio logic.
+
 ## Drivers
 
 ### Initless drivers

@@ -31,6 +31,7 @@ Part 1:
 * If one of the controls is changed for a device in the devices overview, it sends a message to that device updating to update its controls
 * Every module receives these messages and updates them in the devices overview
 
+**Network isolation:** MoonLight uses separate UDP ports for device discovery (65506) and control (65507). This keeps MoonLight control commands isolated from WLED devices on the same network, preventing interference while still allowing device discovery.
 
 Part 2:
 
