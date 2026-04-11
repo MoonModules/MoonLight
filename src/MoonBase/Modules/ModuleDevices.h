@@ -133,8 +133,11 @@ class ModuleDevices : public Module {
 
     if (!deviceUDPConnected) {
       deviceUDPConnected = deviceUDP.begin(deviceUDPPort);
-      deviceControlUDP.begin(deviceControlUDPPort);  // Initialize control UDP on separate port
-      EXT_LOGD(MB_TAG, "deviceUDPConnected %d i:%d p:%d, control on p:%d", deviceUDPConnected, deviceUDP.remoteIP()[3], deviceUDPPort, deviceControlUDPPort);
+      bool controlConnected = deviceControlUDP.begin(deviceControlUDPPort);  // Initialize control UDP on separate port
+      EXT_LOGD(MB_TAG, "deviceUDPConnected %d i:%d p:%d, control on p:%d (%d)", deviceUDPConnected, deviceUDP.remoteIP()[3], deviceUDPPort, deviceControlUDPPort, controlConnected);
+      if (!controlConnected) {
+        EXT_LOGW(MB_TAG, "Failed to bind control UDP socket on port %d", deviceControlUDPPort);
+      }
     }
 
     if (!deviceUDPConnected) return;
@@ -237,40 +240,57 @@ class ModuleDevices : public Module {
     // }
   }
 
-  void receiveUDP() {
-    while (size_t packetSize = deviceUDP.parsePacket()) {
-      if (packetSize < 38 || packetSize > sizeof(UDPMessage)) {  // UDP message is smaller then 256 for the foreseable future
-        EXT_LOGW(MB_TAG, "Invalid UDP packet size: %d (expected %d-%d)", packetSize, 38, sizeof(UDPMessage));
-        deviceUDP.clear();  // Discard invalid packet (flush (deprecated) is now clear)
-        continue;
-      }
+  void processUDPMessage(NetworkUDP& udp, const UDPMessage& message, bool isControlPort) {
+    if (isControlPort) {
+      // Unicast control: only process if addressed to this device
+      if (!message.isControlCommand || esp32sveltekit.getSystemHostname() != message.name.c_str()) return;
 
-      char buffer[sizeof(UDPMessage)];
-      UDPMessage message{};
-      deviceUDP.read(buffer, packetSize);
-      memcpy(&message, buffer, packetSize);
+      JsonDocument doc;
+      JsonObject newState = doc.to<JsonObject>();
+      messageToControlState(message, newState);
 
-      // if a controlmessage is received (from another device), and this device is part of its group update this device.
-      // this can be both a broadcast or a unicast (then partofgroup will also be true)
-      if (packetSize == sizeof(UDPMessage) && message.isControlCommand && partOfGroup(esp32sveltekit.getSystemHostname(), message.name.c_str())) {
+      EXT_LOGD(MB_TAG, "UDP unicast control from %s : bri=%d pal=%d preset=%d", udp.remoteIP().toString().c_str(), message.brightness, message.palette, message.preset);
+      _moduleControl->update(newState, ModuleState::update, _moduleName);
+    } else {
+      // Broadcast discovery: handle group control or device update
+      if (message.isControlCommand && partOfGroup(esp32sveltekit.getSystemHostname(), message.name.c_str())) {
         JsonDocument doc;
         JsonObject newState = doc.to<JsonObject>();
-
         messageToControlState(message, newState);
 
         EXT_LOGD(MB_TAG, "UDP control message from group via %s : bri=%d pal=%d preset=%d", message.name.c_str(), message.brightness, message.palette, message.preset);
 
         if (esp32sveltekit.getSystemHostname() == message.name.c_str()) {
-          _moduleControl->update(newState, ModuleState::update, _moduleName);  // addUpdateHandler will send a message with control status
-        } else
-          _moduleControl->update(newState, ModuleState::update, "group");  // addUpdateHandler will send a message without control status (to avoid infinite loops)
-      } else
-
-        // EXT_LOGD(MB_TAG, "UDP message %s : bri=%d pal=%d preset=%d control:%d", message.name.c_str(), message.brightness, message.palette, message.preset, message.isControlCommand);
-
-        // also update if control command as it can be another device
-        updateDevices(message, deviceUDP.remoteIP());
+          _moduleControl->update(newState, ModuleState::update, _moduleName);
+        } else {
+          _moduleControl->update(newState, ModuleState::update, "group");
+        }
+      } else {
+        updateDevices(message, udp.remoteIP());
+      }
     }
+  }
+
+  void receiveUDP() {
+    // Parse and process UDP packets on both ports
+    auto processUdpSocket = [this](NetworkUDP& udp, bool isControlPort) {
+      while (size_t packetSize = udp.parsePacket()) {
+        if (packetSize < 38 || packetSize > sizeof(UDPMessage)) {
+          EXT_LOGW(MB_TAG, "Invalid UDP packet size: %d (expected %d-%d)", packetSize, 38, sizeof(UDPMessage));
+          udp.clear();
+          continue;
+        }
+
+        char buffer[sizeof(UDPMessage)];
+        UDPMessage message{};
+        udp.read(buffer, packetSize);
+        memcpy(&message, buffer, packetSize);
+        processUDPMessage(udp, message, isControlPort);
+      }
+    };
+
+    processUdpSocket(deviceUDP, false);      // Discovery port (65506)
+    processUdpSocket(deviceControlUDP, true); // Control port (65507)
   }
 
   // from addUpdateHandler (!group) and loop10s (false)

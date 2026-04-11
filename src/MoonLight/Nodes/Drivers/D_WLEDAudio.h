@@ -50,6 +50,7 @@ class WLEDAudioDriver : public Node {
         sharedData.volume = 0;
         sharedData.volumeRaw = 0;
         sharedData.majorPeak = 0;
+        sharedData.magnitude = 0;
         init = false;
         EXT_LOGI(ML_TAG, "WLED Audio Sync: stopped");
       }

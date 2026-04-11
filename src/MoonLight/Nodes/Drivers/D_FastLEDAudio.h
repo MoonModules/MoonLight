@@ -217,8 +217,8 @@ class FastLEDAudioDriver : public Node {
     sharedData.volume = audioProcessor.getEqVolume() * 255.0;// normalised volume (   * 255 * 2560.0f; // WLED correction!)
     sharedData.volumeRaw = (int16_t)sharedData.volume;
     // sharedData.volumeRaw = audioProcessor.getEqVolumeDb() * 255;
-    sharedData.majorPeak = audioProcessor.getPeakLevel() * 11025.0; // we need Dominant frequency ...
-    sharedData.magnitude = audioProcessor.getPeakLevel() * 4096.0; // 4096 is WLED max
+    sharedData.majorPeak = audioProcessor.getEqDominantFreqHz();
+    sharedData.magnitude = audioProcessor.getEqDominantMagnitude(); // * 4096.0; // 4096 is WLED max
 
     sharedData.fl_bassLevel = audioProcessor.getEqBass();
     sharedData.fl_midLevel = audioProcessor.getEqMid();
