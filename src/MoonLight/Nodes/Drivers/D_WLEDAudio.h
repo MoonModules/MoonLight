@@ -50,6 +50,7 @@ class WLEDAudioDriver : public Node {
         sharedData.volume = 0;
         sharedData.volumeRaw = 0;
         sharedData.majorPeak = 0;
+        sharedData.magnitude = 0;
         init = false;
         EXT_LOGI(ML_TAG, "WLED Audio Sync: stopped");
       }
@@ -76,6 +77,7 @@ class WLEDAudioDriver : public Node {
       sharedData.volume = sync.volumeSmth;
       sharedData.volumeRaw = sync.volumeRaw;
       sharedData.majorPeak = sync.FFT_MajorPeak;
+      sharedData.magnitude = sync.FFT_Magnitude;
 
       moduleControl->read(
           [&](const ModuleState& state) {
