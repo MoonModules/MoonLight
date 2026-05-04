@@ -53,7 +53,7 @@ For each device you can see:
 
 MoonLight devices broadcast their state every 10 seconds (and on every control change). The Devices module listens for these broadcasts and updates the table in real time.
 
-Devices can be **grouped by hostname** using hyphens — for example `studio-left-1` and `studio-left-2` belong to the same group. When a grouped device receives a control update, it forwards the change to other devices in its group, keeping them in sync without manual coordination.
+Devices are **grouped by hostname prefix at a hyphen boundary** — for example `studio-left-1` and `studio-left-2` belong to the same group (`studio-left`), but `studio` and `studioLeft-1` do not. When any group member's lights change, all other members update automatically. See [Devices — Group sync](https://moonmodules.org/MoonLight/moonbase/devices/#group-sync) for the full naming rules.
 
 Distributed effects and synchronised clocks are planned for a future release.
 

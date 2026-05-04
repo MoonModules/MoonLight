@@ -2,46 +2,70 @@
 
 <img width="320" height="441" src="../devices.png" />
 
-Overview of MoonLight (and WLED) devices in your local network. MoonLight devices can also be controlled.
+Shows all MoonLight and WLED devices discovered on your local network. MoonLight devices can also be controlled from this view.
 
-* Devices:
-    * **Name**: name of this device (set the name in the [WiFi station module](https://moonmodules.org/MoonLight/network/sta/))
-        * Click on the name to go to the device via mDNS
-        * Devices are grouped if the name contains hyphens, see below.
-    * Light controls: change values found in the [Light controls module](../moonlight/lightscontrol.md)
-        * **Lights On**: set the device on or off
-        * **Brightness**: control the brightness of a device
-        * **Palette**: Palette used
-        * **Preset**: Selected preset
-    * **Last Sync**: how long ago a device update has been received (normally every 10s for a MoonLight device or when a control updated, WLED every 30s)
-    * **IP**: click on the IP to go to the device via its IP address
-    * **Version**: Firmware version installed (see [releases](https://github.com/MoonModules/MoonLight/releases))
-    * **Build**: Date of the installed firmware
-    * **Uptime**: How long the device is running
-    * **Package** size: For debugging
+## Device table columns
 
-## Supersync
+* **Name** — hostname of the device (set in [WiFi station](https://moonmodules.org/MoonLight/network/sta/))
+    * Click the name to open the device via mDNS
+    * Devices with matching hostname prefixes are treated as a group — see [Group sync](#group-sync) below
+* Light controls — mirror the values from the [Light controls module](../moonlight/lightscontrol.md); editing them sends the change to that device
+    * **Lights On** — turn the device on or off
+    * **Brightness** — brightness level
+    * **Palette** — active palette
+    * **Preset** — selected preset
+* **Last Sync** — how long ago a status update was received (MoonLight devices update every 10 s or immediately on a control change; WLED devices update every 30 s or on a sync)
+* **IP** — click to open the device web UI by IP address
+* **Version** — firmware version (see [releases](https://github.com/MoonModules/MoonLight/releases))
+* **Build** — build date of the installed firmware
+* **Uptime** — time since last boot
+* **Package size** — size of the last received UDP packet; useful for diagnosing protocol mismatches
 
-The Devices module will also implement Supersync. An approach to sync multiple MoonLight devices in the network.
+!!! note "WLED devices show limited information"
+    WLED's discovery packet does not include brightness, palette, or preset — those appear as 0. Name, IP, and lights-on state are available. Full control of WLED devices from this panel is not supported.
 
-Part 1:
+---
 
-* Every device broadcasts a message every 10 seconds containing general information and the values in the [Control Module](../moonlight/lightscontrol.md).
-* If one of the values in the Control Module is updated, it broadcasts the updated values.
-* If one of the controls is changed for a device in the devices overview, it sends a message to that device updating to update its controls
-* Every module receives these messages and updates them in the devices overview
+## Group sync
 
-**Network isolation:** MoonLight uses separate UDP ports for device discovery (65506) and control (65507). This keeps MoonLight control commands isolated from WLED devices on the same network, preventing interference while still allowing device discovery.
+Devices are automatically grouped by their hostname. Use hyphens to define a group:
 
-Part 2:
+| Hostnames | Group |
+|-----------|-------|
+| `kitchen-1`, `kitchen-2`, `kitchen-3` | `kitchen` |
+| `stage-left-1`, `stage-left-2` | `stage-left` |
+| `moonlight` (no hyphen) | no group — stands alone |
 
-* Devices can be grouped via the hostname (see [WiFi](../network/sta.md)). Using hyphens to group them. E.g. x-y-z1 belongs to the same group as x-y-z2.
-* If a message is received from a device within its group, the device will also update its own controls.
-* It will notify other devices on its update, but the message is not a control message to avoid infinite sending loops
+The match is at a **hyphen boundary**: `living-room-1` and `living-room-2` share the prefix `living-room` and are in the same group, but `living` (no hyphen) and `livingroom-1` (different spelling) are **not** in that group.
 
-Part 3 (to be done):
+Set the hostname in [WiFi → Station](https://moonmodules.org/MoonLight/network/sta/).
 
-* Synchronized clocks
-* Distributed effects
+**How it works:**
 
-Note: The functionality of this module will also be available in [ESP32 Devices](https://github.com/ewowi/ESP32Devices). ESP32 Devices is a MacOS and Windows application.  🚧
+1. Every device broadcasts its status every 10 seconds, and immediately when a control value changes.
+2. When you edit a light control for a device **in the same group as your device**, a single broadcast is sent and all group members receive and apply it simultaneously.
+3. When you edit a device **in a different group**, a direct message is sent to that specific device, which then re-broadcasts the change to its own group members.
+4. Updates propagate without looping — a device that receives and applies a group broadcast does not re-broadcast it further.
+
+This means changing brightness on one group member updates all members. You can also reach devices in other groups from any device's table — the change will propagate to their group too.
+
+---
+
+## WLED coexistence
+
+MoonLight and WLED can share the same network without interfering with each other:
+
+* **Discovery (port 65506)** is shared. MoonLight broadcasts its status in a WLED-compatible format, so both firmware types appear in each other's device lists.
+* **Control (port 65507)** is MoonLight-only. WLED does not listen on this port, so MoonLight control commands never affect WLED devices unintentionally.
+
+---
+
+## Planned features
+
+* Synchronized clocks across devices
+* Distributed effects (Part 3)
+* Full readback of WLED brightness/palette/preset via the WLED sync port
+
+For developer details on the UDP protocol and packet formats, see [develop/devices](https://moonmodules.org/MoonLight/develop/devices/).
+
+Note: This module's functionality will also be available in [ESP32 Devices](https://github.com/ewowi/ESP32Devices), a macOS and Windows companion application. 🚧

@@ -18,27 +18,58 @@
   #include "MoonBase/utilities/PlatformFunctions.h"
   #include "MoonBase/utilities/pal.h"
 
+// WLED-compatible 44-byte discovery header. Matches UDPWLEDMessage in WLED / StarLight exactly.
+// WLED validates: token==255, id==1, ip0==localIP[0] (subnet check).
+// type byte: low 7 bits = board type (32=ESP32, 33=S2, 34=S3, 35=C3), bit 7 = lights on.
+struct UDPWLEDHeader {
+  uint8_t  token;    // 0:   255 — required by WLED
+  uint8_t  id;       // 1:   1   — required by WLED
+  uint8_t  ip0;      // 2-5: sender IP address
+  uint8_t  ip1;
+  uint8_t  ip2;
+  uint8_t  ip3;
+  char     name[32]; // 6-37: null-padded hostname
+  uint8_t  type;     // 38: board type | 0x80 if lights on
+  uint8_t  insId;    // 39: last IP octet (WLED uses as instance index)
+  uint32_t version;  // 40-43: numeric build date (YYYYMMDD from APP_DATE)
+} __attribute__((packed));
+static_assert(sizeof(UDPWLEDHeader) == 44, "UDPWLEDHeader must be exactly 44 bytes");
+
+// Full MoonLight status/discovery message broadcast on port 65506.
+// First 44 bytes match UDPWLEDHeader so WLED can read name, type, and lights-on state.
+// MoonLight receivers distinguish this from a WLED packet by size (sizeof(UDPMessage) != 44).
 struct UDPMessage {
-  uint8_t rommel[6];
-  Char<32> name;
-  Char<32> version;
-  char build[16];
+  UDPWLEDHeader header; // 44 bytes — WLED-compatible
+  char versionStr[32];  // human-readable version string
+  char build[16];       // build date string
   uint32_t uptime;
-  uint16_t packageSize;
-  bool lightsOn;
+  uint16_t packageSize; // sizeof(UDPMessage) — used by receiver to validate packet type
   uint8_t brightness;
   uint8_t palette;
   uint8_t preset;
-  bool isControlCommand;
 } __attribute__((packed));  // Force no padding
+static_assert(sizeof(UDPMessage) == 101, "UDPMessage must be exactly 101 bytes");
+
+// MoonLight-only control message sent exclusively on port 65507.
+// WLED does not listen on port 65507, so it never receives these packets.
+struct UDPControlMessage {
+  UDPWLEDHeader header; // 44 bytes: sender identification
+  char targetName[32];  // unicast: receiver hostname; group broadcast: empty string
+  uint8_t brightness;
+  uint8_t lightsOn;
+  uint8_t palette;
+  uint8_t preset;
+} __attribute__((packed));  // Force no padding
+static_assert(sizeof(UDPControlMessage) == 80, "UDPControlMessage must be exactly 80 bytes");
 
 class ModuleDevices : public Module {
  public:
-  NetworkUDP deviceUDP;  // Listen for discovery messages from other devices (port 65506)
-  NetworkUDP deviceControlUDP;  // Send control messages to other devices (port 65507)
-  uint16_t deviceUDPPort = 65506;  // Discovery: receive WLED device info and MoonLight broadcasts
-  uint16_t deviceControlUDPPort = 65507;  // Control: send control commands (isolated from WLED discovery)
+  NetworkUDP deviceUDP;         // Discovery: port 65506 — WLED-compatible broadcasts
+  NetworkUDP deviceControlUDP;  // Control:   port 65507 — MoonLight only, WLED never sees this
+  uint16_t deviceUDPPort = 65506;
+  uint16_t deviceControlUDPPort = 65507;
   bool deviceUDPConnected = false;
+  bool deviceControlUDPConnected = false;
   Module* _moduleControl;
 
   ModuleDevices(PsychicHttpServer* server, ESP32SvelteKit* sveltekit, Module* moduleControl) : Module("devices", server, sveltekit) {
@@ -48,7 +79,8 @@ class ModuleDevices : public Module {
     _moduleControl->addUpdateHandler(
         [this](const String& originId) {
           // EXT_LOGD(MB_TAG, "control update %s", originId.c_str());
-          sendUDP(originId != "group");  // sendUDP control yes / no
+          if (originId != "group") sendUDP(true);  // broadcast control change to group; "group" suppresses re-broadcast to break the loop
+          sendUDP(false);  // always broadcast own status so remote device tables update immediately
         },
         false);
   }
@@ -89,30 +121,51 @@ class ModuleDevices : public Module {
         return;  // Invalid IP
       }
 
-      UDPMessage message{};
-      infoToMessage(message, true);  // isControlCommand
-
-      message.name = device["name"].as<const char*>();  // send the name of the device in the table, not this device
-      deviceToMessage(device, message);
+      UDPControlMessage msg{};
+      infoToControlMessage(msg);
+      deviceToControlMessage(device, msg);
 
       IPAddress activeIP = networkLocalIP();
       if (targetIP == activeIP) {
         // this device, only update light controls
         JsonDocument doc;
         JsonObject newState = doc.to<JsonObject>();
-
-        messageToControlState(message, newState);
-
-        _moduleControl->update(newState, ModuleState::update, _moduleName);  // Do not add server in the originID as that blocks updates, see execOnUpdate
-
-        EXT_LOGD(MB_TAG, "Applied UDP control from originator: bri=%d pal=%d preset=%d", message.brightness, message.palette, message.preset);
+        messageToControlState(msg, newState);
+        _moduleControl->update(newState, ModuleState::update, "unicast");  // fires addUpdateHandler → sendUDP(true) propagates to group
+        EXT_LOGD(MB_TAG, "Applied UDP control from originator: bri=%d pal=%d preset=%d", msg.brightness, msg.palette, msg.preset);
       } else {
-        // if a device is updated in the UI, send that update to that device via control port
-        if (deviceControlUDP.beginPacket(targetIP, deviceControlUDPPort)) {
-          deviceControlUDP.write(reinterpret_cast<uint8_t*>(&message), sizeof(message));
-          deviceControlUDP.endPacket();
-          EXT_LOGD(MB_TAG, "UDP control from %s update sent to ...%d / %s on=%d bri=%d pal=%d preset=%d", updatedItem.originId->c_str(), targetIP[3], message.name.c_str(), message.lightsOn, message.brightness, message.palette, message.preset);
-          // need to add the targetip?
+        // if a device is updated in the UI, send that update to that device via control port (WLED does not listen there)
+        if (!deviceControlUDPConnected) {
+          EXT_LOGW(MB_TAG, "Control UDP not ready, cannot send to ...%d", targetIP[3]);
+          return;
+        }
+
+        String myName = esp32sveltekit.getSystemHostname();
+        String targetName = device["name"].as<String>();
+        bool sameGroup = partOfGroup(targetName, myName) || partOfGroup(myName, targetName);
+
+        if (sameGroup) {
+          // same group: broadcast directly so all members receive it in one packet
+          // targetName stays empty (group broadcast); receivers use partOfGroup(myName, senderName)
+          if (deviceControlUDP.beginPacket(IPAddress(255, 255, 255, 255), deviceControlUDPPort)) {
+            deviceControlUDP.write(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+            deviceControlUDP.endPacket();
+            EXT_LOGD(MB_TAG, "UDP group control sent for %s: on=%d bri=%d pal=%d preset=%d",
+                     targetName.c_str(), msg.lightsOn, msg.brightness, msg.palette, msg.preset);
+          } else {
+            EXT_LOGW(MB_TAG, "beginPacket failed for group control");
+          }
+        } else {
+          // different group: unicast to target; target will re-broadcast to its own group
+          strlcpy(msg.targetName, targetName.c_str(), sizeof(msg.targetName));
+          if (deviceControlUDP.beginPacket(targetIP, deviceControlUDPPort)) {
+            deviceControlUDP.write(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+            deviceControlUDP.endPacket();
+            EXT_LOGD(MB_TAG, "UDP unicast control sent to ...%d / %s on=%d bri=%d pal=%d preset=%d",
+                     targetIP[3], msg.targetName, msg.lightsOn, msg.brightness, msg.palette, msg.preset);
+          } else {
+            EXT_LOGW(MB_TAG, "beginPacket failed for unicast control to ...%d", targetIP[3]);
+          }
         }
       }
     }
@@ -120,24 +173,30 @@ class ModuleDevices : public Module {
 
   void loop20ms() override {
     Module::loop20ms();
-    
+
     if (!networkIsConnected()) return;
 
-    if (!deviceUDPConnected) return;
-
-    receiveUDP();  // and updateDevices
+    // Each socket is polled independently — a failed bind on one does not block the other
+    if (deviceUDPConnected || deviceControlUDPConnected) receiveUDP();
   }
 
   void loop10s() override {
     if (!networkIsConnected()) return;
 
+    // Bind each socket independently so a failure on one does not prevent the other from retrying
     if (!deviceUDPConnected) {
       deviceUDPConnected = deviceUDP.begin(deviceUDPPort);
-      bool controlConnected = deviceControlUDP.begin(deviceControlUDPPort);  // Initialize control UDP on separate port
-      EXT_LOGD(MB_TAG, "deviceUDPConnected %d i:%d p:%d, control on p:%d (%d)", deviceUDPConnected, deviceUDP.remoteIP()[3], deviceUDPPort, deviceControlUDPPort, controlConnected);
-      if (!controlConnected) {
-        EXT_LOGW(MB_TAG, "Failed to bind control UDP socket on port %d", deviceControlUDPPort);
-      }
+      if (deviceUDPConnected)
+        EXT_LOGD(MB_TAG, "deviceUDP bound on port %d", deviceUDPPort);
+      else
+        EXT_LOGW(MB_TAG, "Failed to bind discovery UDP on port %d", deviceUDPPort);
+    }
+    if (!deviceControlUDPConnected) {
+      deviceControlUDPConnected = deviceControlUDP.begin(deviceControlUDPPort);
+      if (deviceControlUDPConnected)
+        EXT_LOGD(MB_TAG, "deviceControlUDP bound on port %d", deviceControlUDPPort);
+      else
+        EXT_LOGW(MB_TAG, "Failed to bind control UDP on port %d", deviceControlUDPPort);
     }
 
     if (!deviceUDPConnected) return;
@@ -145,8 +204,9 @@ class ModuleDevices : public Module {
     sendUDP(false);  // send this device update to all devices. No control message
   }
 
+  // Update device table from a full MoonLight discovery packet
   void updateDevices(const UDPMessage& message, IPAddress ip) {
-    // EXT_LOGD(MB_TAG, "updateDevices ...%d %s", ip[3], name);
+    // EXT_LOGD(MB_TAG, "updateDevices ...%d %s", ip[3], message.header.name);
     if (_state.data["devices"].isNull()) _state.data["devices"].to<JsonArray>();
 
     // set the doc
@@ -158,56 +218,279 @@ class ModuleDevices : public Module {
     }
 
     // set the devices array
-    JsonArray devices;
-    devices = doc["devices"];
+    JsonArray devices = doc["devices"];
 
     // find out if we have a new device
     JsonObject device = JsonObject();
     bool newDevice = true;
     for (JsonObject dev : devices) {
-      if (dev["name"] == message.name.c_str()) {  // check on name as IP can come from another device
+      if (dev["name"] == message.header.name) {  // check on name as IP can come from another device
         device = dev;
         newDevice = false;
         break;  // found so leave for loop
-        // EXT_LOGD(MB_TAG, "updated ...%d %s", ip[3], name);
+        // EXT_LOGD(MB_TAG, "updated ...%d %s", ip[3], message.header.name);
       }
     }
 
     // if an update for a device is received, set the device object so it is shown in the UI
     if (newDevice) {
       device = devices.add<JsonObject>();
-      EXT_LOGD(MB_TAG, "added ...%d %s", ip[3], message.name.c_str());
+      EXT_LOGD(MB_TAG, "added MoonLight ...%d %s", ip[3], message.header.name);
     }
 
     device["ip"] = ip.toString();
     device["lastSync"] = time(nullptr);  // time will change, triggering update
-    device["name"] = message.name.c_str();
-    device["version"] = message.version.c_str();
+    device["name"] = message.header.name;
+    device["version"] = message.versionStr;
     device["build"] = message.build;
     device["uptime"] = message.uptime;
     device["packageSize"] = message.packageSize;
-    messageToDevice(message, device);
+    device["lightsOn"] = (message.header.type & 0x80) != 0;
+    device["brightness"] = message.brightness;
+    device["palette"] = message.palette;
+    device["preset"] = message.preset;
 
+    finaliseDeviceUpdate(doc, devices, newDevice);
+  }
+
+  // Update device table from a WLED 44-byte discovery packet (limited fields available)
+  void updateDevicesWLED(const UDPWLEDHeader& header, IPAddress ip) {
+    if (_state.data["devices"].isNull()) _state.data["devices"].to<JsonArray>();
+
+    // set the doc
+    JsonDocument doc;
+    if (_sveltekit->getSocket()->getActiveClients()) {  // rebuild the devices array
+      doc.set(_state.data);             // copy
+    } else {
+      doc = _state.data;  // reference
+    }
+
+    // set the devices array
+    JsonArray devices = doc["devices"];
+
+    // find out if we have a new device
+    JsonObject device = JsonObject();
+    bool newDevice = true;
+    for (JsonObject dev : devices) {
+      if (dev["name"] == header.name) {  // check on name as IP can come from another device
+        device = dev;
+        newDevice = false;
+        break;  // found so leave for loop
+      }
+    }
+
+    // if an update for a device is received, set the device object so it is shown in the UI
+    if (newDevice) {
+      device = devices.add<JsonObject>();
+      EXT_LOGD(MB_TAG, "added WLED ...%d %s", ip[3], header.name);
+    }
+
+    device["ip"] = ip.toString();
+    device["lastSync"] = time(nullptr);  // time will change, triggering update
+    device["name"] = header.name;
+    char verBuf[12];
+    snprintf(verBuf, sizeof(verBuf), "%lu", (unsigned long)header.version);
+    device["version"] = verBuf;
+    device["build"] = "";
+    device["uptime"] = 0;
+    device["packageSize"] = (uint16_t)sizeof(UDPWLEDHeader);
+    device["lightsOn"] = (header.type & 0x80) != 0;
+    device["brightness"] = 0;  // not available in WLED discovery packet
+    device["palette"] = 0;
+    device["preset"] = 0;
+
+    finaliseDeviceUpdate(doc, devices, newDevice);
+  }
+
+  // Apply an incoming control message from port 65507
+  void processControlMessage(const UDPControlMessage& msg) {
+    const char* senderName = msg.header.name;
+    // getSystemHostname() returns String by value; store it before calling c_str() to avoid dangling pointer
+    String myName = esp32sveltekit.getSystemHostname();
+
+    if (myName == senderName) return;  // ignore own broadcast echo
+
+    bool isUnicast = (msg.targetName[0] != '\0') && (myName == msg.targetName);
+    bool isGroupBroadcast = (msg.targetName[0] == '\0') && partOfGroup(myName, senderName);
+
+    if (!isUnicast && !isGroupBroadcast) return;
+
+    JsonDocument doc;
+    JsonObject newState = doc.to<JsonObject>();
+    messageToControlState(msg, newState);
+
+    EXT_LOGD(MB_TAG, "UDP control from %s (%s): bri=%d pal=%d preset=%d",
+             senderName, isGroupBroadcast ? "group" : "unicast", msg.brightness, msg.palette, msg.preset);
+    // "group" suppresses re-broadcast; "unicast" suppresses group re-broadcast but still sends status
+    _moduleControl->update(newState, ModuleState::update, isGroupBroadcast ? "group" : "unicast");
+  }
+
+  void receiveUDP() {
+    // Discovery port 65506: accept WLED (44-byte) and MoonLight (sizeof(UDPMessage)) packets
+    while (size_t packetSize = deviceUDP.parsePacket()) {
+      if (packetSize == sizeof(UDPWLEDHeader)) {
+        UDPWLEDHeader header{};
+        deviceUDP.read(reinterpret_cast<uint8_t*>(&header), packetSize);
+        header.name[sizeof(header.name) - 1] = '\0';
+        if (header.token == 255 && header.id == 1)
+          updateDevicesWLED(header, deviceUDP.remoteIP());
+        else
+          EXT_LOGW(MB_TAG, "Bad WLED header from ...%d (token=%d id=%d)", deviceUDP.remoteIP()[3], header.token, header.id);
+      } else if (packetSize == sizeof(UDPMessage)) {
+        UDPMessage message{};
+        deviceUDP.read(reinterpret_cast<uint8_t*>(&message), packetSize);
+        message.header.name[sizeof(message.header.name) - 1] = '\0';
+        message.versionStr[sizeof(message.versionStr) - 1] = '\0';
+        message.build[sizeof(message.build) - 1] = '\0';
+        if (message.header.token == 255 && message.header.id == 1)
+          updateDevices(message, deviceUDP.remoteIP());
+        else
+          EXT_LOGW(MB_TAG, "Bad MoonLight header from ...%d", deviceUDP.remoteIP()[3]);
+      } else {
+        EXT_LOGW(MB_TAG, "Unknown packet size on port %d: %d (WLED=%d ML=%d)",
+                 deviceUDPPort, packetSize, sizeof(UDPWLEDHeader), sizeof(UDPMessage));
+        deviceUDP.clear();
+      }
+    }
+
+    // Control port 65507: MoonLight-only control messages
+    if (!deviceControlUDPConnected) return;
+    while (size_t packetSize = deviceControlUDP.parsePacket()) {
+      if (packetSize != sizeof(UDPControlMessage)) {
+        EXT_LOGW(MB_TAG, "Bad control packet size: %d (expected %d)", packetSize, sizeof(UDPControlMessage));
+        deviceControlUDP.clear();
+        continue;
+      }
+      UDPControlMessage msg{};
+      deviceControlUDP.read(reinterpret_cast<uint8_t*>(&msg), packetSize);
+      msg.header.name[sizeof(msg.header.name) - 1] = '\0';
+      msg.targetName[sizeof(msg.targetName) - 1] = '\0';
+      if (msg.header.token == 255 && msg.header.id == 1)
+        processControlMessage(msg);
+    }
+  }
+
+  // from addUpdateHandler (!group) and loop10s (false)
+  void sendUDP(bool isControlCommand) {
+    if (isControlCommand) {
+      // Group control broadcast on port 65507 — WLED does not listen here
+      if (!deviceControlUDPConnected) return;
+      UDPControlMessage msg{};
+      infoToControlMessage(msg);
+      // targetName empty = group broadcast; receivers use partOfGroup(myName, senderName)
+      _moduleControl->read([&](ModuleState& state) { controlStateToControlMessage(state.data, msg); }, _moduleName);
+
+      if (deviceControlUDP.beginPacket(IPAddress(255, 255, 255, 255), deviceControlUDPPort)) {
+        deviceControlUDP.write(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+        deviceControlUDP.endPacket();
+        // EXT_LOGD(MB_TAG, "UDP control sent: bri=%d pal=%d preset=%d", msg.brightness, msg.palette, msg.preset);
+      }
+    } else {
+      // broadcast own status to all devices
+      UDPMessage message{};
+      _moduleControl->read([&](ModuleState& state) {
+        infoToMessage(message, state.data["lightsOn"]);
+        message.brightness = state.data["brightness"];
+        message.palette = state.data["palette"];
+        message.preset = state.data["preset"]["selected"];
+      }, _moduleName);
+
+      if (deviceUDP.beginPacket(IPAddress(255, 255, 255, 255), deviceUDPPort)) {
+        deviceUDP.write(reinterpret_cast<uint8_t*>(&message), sizeof(message));
+        deviceUDP.endPacket();
+        // EXT_LOGD(MB_TAG, "UDP update sent: bri=%d pal=%d preset=%d", message.brightness, message.palette, message.preset);
+
+        // there is no udp received from itself so update manually
+        IPAddress activeIP = networkLocalIP();
+        // EXT_LOGD(MB_TAG, "UDP packet written (%s -> %d)", message.header.name, activeIP[3]);
+        updateDevices(message, activeIP);
+      }
+    }
+  }
+
+ private:
+  // Fill the 44-byte WLED-compatible header from local device info
+  void infoToHeader(UDPWLEDHeader& header, bool lightsOn) {
+    IPAddress localIP = networkLocalIP();
+    header.token = 255;
+    header.id = 1;
+    header.ip0 = localIP[0];
+    header.ip1 = localIP[1];
+    header.ip2 = localIP[2];
+    header.ip3 = localIP[3];
+    memset(header.name, 0, sizeof(header.name));
+    strlcpy(header.name, esp32sveltekit.getSystemHostname().c_str(), sizeof(header.name));
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
+    header.type = 34;
+#elif defined(CONFIG_IDF_TARGET_ESP32S2)
+    header.type = 33;
+#elif defined(CONFIG_IDF_TARGET_ESP32C3)
+    header.type = 35;
+#elif defined(CONFIG_IDF_TARGET_ESP32P4)
+    header.type = 36;
+#else
+    header.type = 32;  // ESP32
+#endif
+    if (lightsOn) header.type |= 0x80;
+    header.insId = localIP[3];
+    header.version = strtoul(APP_DATE, nullptr, 10);  // YYYYMMDD numeric build date
+  }
+
+  void infoToMessage(UDPMessage& message, bool lightsOn) {
+    infoToHeader(message.header, lightsOn);
+    strlcpy(message.versionStr, APP_VERSION, sizeof(message.versionStr));
+    memset(message.build, 0, sizeof(message.build));  // init with 0
+    strlcpy(message.build, APP_DATE, sizeof(message.build));
+    message.uptime = time(nullptr) ? time(nullptr) - pal::millis() / 1000 : pal::millis() / 1000;
+    message.packageSize = sizeof(message);
+  }
+
+  void infoToControlMessage(UDPControlMessage& msg) {
+    infoToHeader(msg.header, false);  // lightsOn not encoded in control sender header
+    memset(msg.targetName, 0, sizeof(msg.targetName));
+  }
+
+  // Copy control fields from control message to control state (for applying updates)
+  void messageToControlState(const UDPControlMessage& msg, JsonObject& newState) {
+    newState["lightsOn"] = (bool)msg.lightsOn;
+    newState["brightness"] = msg.brightness;
+    newState["palette"] = msg.palette;
+    _moduleControl->read([&](ModuleState& state) { newState["preset"] = state.data["preset"]; }, String(_moduleName) + __FUNCTION__);
+    newState["preset"]["action"] = "click";
+    newState["preset"]["select"] = msg.preset;
+  }
+
+  // Copy control fields from control state to control message (for broadcasting)
+  void controlStateToControlMessage(const JsonObject& state, UDPControlMessage& msg) {
+    msg.lightsOn = state["lightsOn"];
+    msg.brightness = state["brightness"];
+    msg.palette = state["palette"];
+    msg.preset = state["preset"]["selected"];
+  }
+
+  // Copy control fields from device object to control message (for sending control)
+  void deviceToControlMessage(const JsonObject& device, UDPControlMessage& msg) {
+    msg.lightsOn = device["lightsOn"];
+    msg.brightness = device["brightness"];
+    msg.palette = device["palette"];
+    msg.preset = device["preset"];
+  }
+
+  void finaliseDeviceUpdate(JsonDocument& doc, JsonArray& devices, bool newDevice) {
     if (newDevice) {  // sort devices in vector and add to a new document and update
-      JsonDocument doc2;
-
       std::vector<JsonObject> devicesVector;
       for (JsonObject dev : devices) {
         if (time(nullptr) - dev["lastSync"].as<time_t>() < 86400) devicesVector.push_back(dev);  // max 1 day
       }
-
       std::sort(devicesVector.begin(), devicesVector.end(), [](JsonObject a, JsonObject b) {
         // Primary sort: by name
         if (a["name"] != b["name"]) return a["name"] < b["name"];
-
         // Tie-breaker: by IP address (ensures stable sort)
         return a["ip"] < b["ip"];
       });
-
+      JsonDocument doc2;
       doc2["devices"].to<JsonArray>();
-      for (JsonObject device : devicesVector) {
-        doc2["devices"].add(device);
-      }
+      for (JsonObject device : devicesVector) doc2["devices"].add(device);
       JsonObject newState = doc2.as<JsonObject>();
       update(newState, ModuleState::update, _moduleName);
     } else {
@@ -215,162 +498,24 @@ class ModuleDevices : public Module {
       JsonObject newState = doc.as<JsonObject>();
       update(newState, ModuleState::update, _moduleName);
     }
-
-    // JsonDocument doc2;
-
-    // // Build deduplication map: key = "name|ip", value = device
-    // // std::map automatically keeps entries sorted by key (name|ip)
-    // std::map<String, JsonObject> uniqueDevices;
-
-    // for (JsonObject dev : devices) {
-    //   if (time(nullptr) - dev["lastSync"].as<time_t>() < 86400) {  // max 1 day
-    //     String key = String(dev["name"].as<const char*>()) + "|" + String(dev["ip"].as<const char*>());
-
-    //     // Only keep the most recent entry for each name+ip combination
-    //     if (uniqueDevices.find(key) == uniqueDevices.end() || dev["lastSync"].as<time_t>() > uniqueDevices[key]["lastSync"].as<time_t>()) {
-    //       uniqueDevices[key] = dev;
-    //     }
-    //   }
-    // }
-
-    // // Map is already sorted by key (name|ip), just iterate and add
-    // doc2["devices"].to<JsonArray>();
-    // for (const auto& pair : uniqueDevices) {
-    //   doc2["devices"].add(pair.second);
-    // }
-  }
-
-  void processUDPMessage(NetworkUDP& udp, const UDPMessage& message, bool isControlPort) {
-    if (isControlPort) {
-      // Unicast control: only process if addressed to this device
-      if (!message.isControlCommand || esp32sveltekit.getSystemHostname() != message.name.c_str()) return;
-
-      JsonDocument doc;
-      JsonObject newState = doc.to<JsonObject>();
-      messageToControlState(message, newState);
-
-      EXT_LOGD(MB_TAG, "UDP unicast control from %s : bri=%d pal=%d preset=%d", udp.remoteIP().toString().c_str(), message.brightness, message.palette, message.preset);
-      _moduleControl->update(newState, ModuleState::update, _moduleName);
-    } else {
-      // Broadcast discovery: handle group control or device update
-      if (message.isControlCommand && partOfGroup(esp32sveltekit.getSystemHostname(), message.name.c_str())) {
-        JsonDocument doc;
-        JsonObject newState = doc.to<JsonObject>();
-        messageToControlState(message, newState);
-
-        EXT_LOGD(MB_TAG, "UDP control message from group via %s : bri=%d pal=%d preset=%d", message.name.c_str(), message.brightness, message.palette, message.preset);
-
-        if (esp32sveltekit.getSystemHostname() == message.name.c_str()) {
-          _moduleControl->update(newState, ModuleState::update, _moduleName);
-        } else {
-          _moduleControl->update(newState, ModuleState::update, "group");
-        }
-      } else {
-        updateDevices(message, udp.remoteIP());
-      }
-    }
-  }
-
-  void receiveUDP() {
-    // Parse and process UDP packets on both ports
-    auto processUdpSocket = [this](NetworkUDP& udp, bool isControlPort) {
-      while (size_t packetSize = udp.parsePacket()) {
-        if (packetSize < 38 || packetSize > sizeof(UDPMessage)) {
-          EXT_LOGW(MB_TAG, "Invalid UDP packet size: %d (expected %d-%d)", packetSize, 38, sizeof(UDPMessage));
-          udp.clear();
-          continue;
-        }
-
-        char buffer[sizeof(UDPMessage)];
-        UDPMessage message{};
-        udp.read(buffer, packetSize);
-        memcpy(&message, buffer, packetSize);
-        processUDPMessage(udp, message, isControlPort);
-      }
-    };
-
-    processUdpSocket(deviceUDP, false);      // Discovery port (65506)
-    processUdpSocket(deviceControlUDP, true); // Control port (65507)
-  }
-
-  // from addUpdateHandler (!group) and loop10s (false)
-  void sendUDP(bool isControlCommand) {
-    // broadcast own status to all devices
-    if (deviceUDP.beginPacket(IPAddress(255, 255, 255, 255), deviceUDPPort)) {
-      UDPMessage message{};  // Zero-initialize
-      infoToMessage(message, isControlCommand);
-
-      _moduleControl->read([&](ModuleState& state) { controlStateToMessage(state.data, message); }, _moduleName);
-
-      deviceUDP.write(reinterpret_cast<uint8_t*>(&message), sizeof(message));
-      deviceUDP.endPacket();
-      // EXT_LOGD(MB_TAG, "UDP update sent: bri=%d pal=%d preset=%d control: %d", message.brightness, message.palette, message.preset, isControlCommand);
-
-      // there is no udp received from itself so update manually
-      IPAddress activeIP = networkLocalIP();
-      // EXT_LOGD(MB_TAG, "UDP packet written (%s -> %d)", message.name.c_str(), activeIP[3]);
-      updateDevices(message, activeIP);
-    }
-  }
-
- private:
-  void infoToMessage(UDPMessage& message, bool isControlCommand) {
-    message.name = esp32sveltekit.getSystemHostname().c_str();
-    message.version = APP_VERSION;
-    memset(message.build, 0, sizeof(message.build));  // init with 0
-    strlcpy(message.build, APP_DATE, sizeof(message.build));
-    message.packageSize = sizeof(message);
-    message.uptime = time(nullptr) ? time(nullptr) - pal::millis() / 1000 : pal::millis() / 1000;
-    message.isControlCommand = isControlCommand;
-  }
-
-  // Copy control fields from message to control state (for applying updates)
-  void messageToControlState(const UDPMessage& message, JsonObject& newState) {
-    newState["lightsOn"] = message.lightsOn;
-    newState["brightness"] = message.brightness;
-    newState["palette"] = message.palette;
-    _moduleControl->read([&](ModuleState& state) { newState["preset"] = state.data["preset"]; }, String(_moduleName) + __FUNCTION__);
-    newState["preset"]["action"] = "click";
-    newState["preset"]["select"] = message.preset;
-  }
-
-  // Copy control fields from control state to message (for broadcasting)
-  void controlStateToMessage(const JsonObject& state, UDPMessage& message) {
-    message.lightsOn = state["lightsOn"];
-    message.brightness = state["brightness"];
-    message.palette = state["palette"];
-    message.preset = state["preset"]["selected"];
-  }
-
-  // Copy all fields from message to device object (for UI display)
-  void messageToDevice(const UDPMessage& message, JsonObject& device) {
-    device["lightsOn"] = message.lightsOn;
-    device["brightness"] = message.brightness;
-    device["palette"] = message.palette;
-    device["preset"] = message.preset;
-  }
-
-  // Copy control fields from device to message (for sending control)
-  void deviceToMessage(const JsonObject& device, UDPMessage& message) {
-    message.lightsOn = device["lightsOn"];
-    message.brightness = device["brightness"];
-    message.palette = device["palette"];
-    message.preset = device["preset"];
   }
 
   bool partOfGroup(const String& base, const String& device, int level = 0) {
     EXT_LOGV(MB_TAG, "partOfGroup %s %s level:%d", base.c_str(), device.c_str(), level);
 
-    // Count dots from the end: level 0 = last dot, level 1 = second-last, etc.
+    // Count hyphens from the end: level 0 = last hyphen, level 1 = second-last, etc.
     int pos = base.length();
     for (int i = 0; i <= level; i++) {
       pos = base.lastIndexOf('-', pos - 1);
       if (pos == -1) {
-        return base == device;  // Not enough dots at this level - only exact match (no group)
+        return base == device;  // Not enough hyphens at this level - only exact match (no group)
       }
     }
 
-    return device.startsWith(base.substring(0, pos));
+    // Require the character at pos to be '-' so "kitchenette" does not match the "kitchen" group
+    return device.startsWith(base.substring(0, pos)) &&
+           device.length() > (size_t)pos &&
+           device.charAt(pos) == '-';
   }
 };
 

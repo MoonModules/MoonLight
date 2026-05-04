@@ -2,7 +2,7 @@
 
 <img width="320" src="../../media/network/MB-WiFi1.png" />
 
-* **Hostname**: The hostname you set here is used as the device name everywhere in MoonLight: mDNS (for `.local` access), the Access Point name, and the name shown in the Devices module. Configure it once here and it applies across all network interfaces.
+* **Hostname**: The hostname you set here is used as the device name everywhere in MoonLight: mDNS (for `.local` access), the Access Point name, and the name shown in the Devices module. Configure it once here and it applies across all network interfaces. To place a device in a sync group, use a shared prefix followed by a hyphen and a number — for example `kitchen-1`, `kitchen-2` (see [Devices — Group sync](https://moonmodules.org/MoonLight/moonbase/devices/#group-sync)).
 
 * **Reconnection**: When a connection attempt is in progress, MoonLight waits for the result before starting another attempt, preventing duplicate connection requests if the access point is slow to respond. No user action is required.
 
