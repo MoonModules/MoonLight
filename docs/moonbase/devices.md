@@ -36,6 +36,8 @@ Devices are automatically grouped by their hostname. Use hyphens to define a gro
 | `stage-left-1`, `stage-left-2` | `stage-left` |
 | `moonlight` (no hyphen) | no group — stands alone |
 
+The match is at a **hyphen boundary**: `living-room-1` and `living-room-2` share the prefix `living-room` and are in the same group, but `living` (no hyphen) and `livingroom-1` (different spelling) are **not** in that group.
+
 Set the hostname in [WiFi → Station](https://moonmodules.org/MoonLight/network/sta/).
 
 **How it works:**

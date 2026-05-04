@@ -140,6 +140,8 @@ sendUDP(false);                          // always broadcast status so all devic
 
 A device that applies a group broadcast uses origin `"group"`, suppressing `sendUDP(true)` and stopping propagation after one hop.
 
+**Hostname constraint**: the string `"group"` is a reserved origin sentinel. A device whose hostname starts with `group` followed by a hyphen (e.g. `group-1`) would create an ambiguity only if `"group"` were passed as a hostname in a `partOfGroup` call — which it never is. The actual risk is more subtle: if any future code path emits origin `"group"` for a non-broadcast reason, loop prevention breaks silently. The sentinel must remain unique; do not reuse it for any other purpose.
+
 ---
 
 ## Group Naming
@@ -150,6 +152,18 @@ A device that applies a group broadcast uses origin `"group"`, suppressing `send
 - Devices without a hyphen only match themselves exactly.
 
 This is the sole mechanism for group membership — no configuration required beyond the hostname set in the WiFi STA module.
+
+**Regression risk**: the matching logic has easy-to-introduce edge cases. Before changing `partOfGroup`, verify these cases:
+
+| `base` | `device` | Expected |
+|--------|----------|----------|
+| `kitchen-1` | `kitchen-2` | same group ✓ |
+| `kitchen` | `kitchen-1` | different — `kitchen` has no hyphen, stands alone |
+| `kitchen-1` | `kitchenette-1` | different — prefix `kitchen` ≠ `kitchenette` |
+| `a-b-1` | `a-b-2` | same group — prefix is `a-b` |
+| `a-b` | `a-bc-1` | different — `a-b` has no hyphen after `b`, stands alone |
+
+The existing unit tests in `test/test_native/` cover `partOfGroup`. Any change to the matching logic must update those tests; the cases above are the ones most likely to regress.
 
 ---
 
@@ -170,15 +184,29 @@ deviceControlUDPConnected = deviceControlUDP.begin(65507);
 
 ## Protocol Versioning / Breaking Changes
 
-The `packageSize` field in `UDPMessage` carries `sizeof(UDPMessage)`, and `receiveUDP()` uses exact size matching to identify packet types. This means changing the `UDPMessage` layout is a **breaking protocol change**: devices running different firmware versions will not recognise each other's discovery packets until all are updated.
+### Struct size contract
+
+The `packageSize` field in `UDPMessage` carries `sizeof(UDPMessage)`, and `receiveUDP()` dispatches on **exact size matches** — any packet whose size does not equal a known struct size is logged as unknown and discarded. This means adding, removing, or reordering any field in any of the three structs is a **breaking protocol change**.
 
 Current sizes (as of the WLED-compatibility rewrite):
 
-| Struct | Size |
-|--------|------|
-| `UDPWLEDHeader` | 44 bytes (static_assert enforced) |
-| `UDPMessage` | 101 bytes |
-| `UDPControlMessage` | 80 bytes |
+| Struct | Size | Enforced by |
+|--------|------|-------------|
+| `UDPWLEDHeader` | 44 bytes | `static_assert(sizeof(UDPWLEDHeader) == 44)` |
+| `UDPMessage` | 101 bytes | must add assert if changed |
+| `UDPControlMessage` | 80 bytes | must add assert if changed |
+
+**Rule**: every struct that participates in size-based dispatch must have a `static_assert` on its size. If you change any field in `UDPMessage` or `UDPControlMessage`, add a `static_assert(sizeof(...) == N)` immediately after the struct definition to catch future accidental size changes at compile time. The assert for `UDPWLEDHeader` already exists and is the model to follow.
+
+### Mixed-version network behaviour
+
+When devices on the same network run different firmware versions with different struct sizes, they **silently ignore each other's packets** — there is no error message, no fallback, and no partial decode. The size simply does not match any known case, so `receiveUDP()` logs a warning and discards the packet.
+
+Consequences:
+- Discovery (port 65506): mixed-version MoonLight devices stop seeing each other in the device table. WLED discovery still works because WLED packets are always 44 bytes and that branch is independent.
+- Control (port 65507): control packets from the old version are discarded by the new, and vice versa. Groups appear to stop syncing with no visible error.
+
+**Coordinated OTA is required** when struct sizes change. Flash all devices in the network before relying on device discovery or group sync.
 
 Previous `UDPMessage` (before WLED-compatibility rewrite) was **97 bytes**. Mixed networks with old and new firmware lose MoonLight-to-MoonLight discovery until all devices are updated. WLED compatibility was broken in the old format (`token=0` caused WLED to reject packets immediately).
 
