@@ -37,7 +37,7 @@ A `static_assert(sizeof(UDPWLEDHeader) == 44)` enforces this at build time. This
 
 ```text
 [UDPWLEDHeader — 44 bytes]  ← WLED reads only this portion
-[Char<32> versionStr    ]   ← human-readable version, e.g. "0.9.1"
+[char versionStr[32]    ]   ← human-readable version, e.g. "0.9.1"
 [char build[16]         ]   ← build date string, e.g. "20260411"
 [uint32_t uptime        ]
 [uint16_t packageSize   ]   ← sizeof(UDPMessage); receiver uses for size-based dispatch
@@ -89,42 +89,56 @@ WLED's 44-byte discovery packet does not include brightness, palette, or preset 
 
 ## Control Flow (port 65507)
 
-### Unicast control — from the device table UI
+### From the device table UI (`onUpdate()`)
 
-When a user edits a row in the devices table, `onUpdate()` fires:
+When a user edits a row in the devices table, `onUpdate()` fires and dispatches on three cases:
 
-- If the target IP is **this device** → apply directly via `_moduleControl->update()`.
-- If the target IP is **another device** → send `UDPControlMessage` unicast to `targetIP:65507` with `targetName` set to the receiver's hostname.
+**This device (`targetIP == activeIP`):**
+Apply directly via `_moduleControl->update(..., "unicast")`. The `addUpdateHandler` then broadcasts to the group and sends a status update.
 
-The receiver's `processControlMessage()` accepts the packet if `strcmp(myName, msg.targetName) == 0`.
+**Remote device, same group** (`partOfGroup` matches in either direction between sender and target hostnames):
+Send a `UDPControlMessage` group broadcast to `255.255.255.255:65507` with **empty `targetName`**. All group members receive it in one packet and apply it via `processControlMessage()`.
 
-After applying, the receiver re-broadcasts to its own group on port 65507 (origin `_moduleName` triggers `sendUDP(true)` in `addUpdateHandler`), propagating the change to any other devices in the same group. The re-broadcast uses empty `targetName` so other devices apply it as a group broadcast but do not re-broadcast again (origin `"group"` suppresses the next `sendUDP`).
+**Remote device, different group:**
+Send a `UDPControlMessage` unicast to `targetIP:65507` with `targetName` set to the receiver's hostname. The receiver applies the change and then re-broadcasts to its own group (see loop prevention below).
 
-### Group broadcast control — from the addUpdateHandler
+### Receiving a control packet (`processControlMessage()`)
 
-When local light controls change (via UI or any other mechanism), `addUpdateHandler` fires `sendUDP(true)`, which:
-
-1. Builds a `UDPControlMessage` with empty `targetName`.
-2. Broadcasts to `255.255.255.255:65507`.
-
-Receivers call `processControlMessage()`:
+`processControlMessage()` is called for every 80-byte packet arriving on port 65507:
 
 ```cpp
-bool isUnicast       = targetName != "" && targetName == myName;
-bool isGroupBroadcast = targetName == "" && partOfGroup(myName, senderName);
+// getSystemHostname() returns String by value — stored to avoid a dangling char* pointer
+String myName = esp32sveltekit.getSystemHostname();
+if (myName == senderName) return;   // ignore own echo
+
+bool isUnicast        = (targetName[0] != '\0') && (myName == targetName);
+bool isGroupBroadcast = (targetName[0] == '\0') && partOfGroup(myName, senderName);
 ```
 
-Group members apply the control with origin `"group"` — this fires `addUpdateHandler` again but `sendUDP(false)` (no re-broadcast), breaking the loop.
+- `isUnicast` → apply with origin `"unicast"`.
+- `isGroupBroadcast` → apply with origin `"group"`.
+- Neither → discard silently.
+
+### Group broadcast control — from `addUpdateHandler`
+
+Any local light control change fires `addUpdateHandler`:
+
+```cpp
+if (originId != "group") sendUDP(true);  // broadcast control to group; suppressed only when change arrived via group broadcast
+sendUDP(false);                          // always broadcast status so all device tables update immediately
+```
+
+`sendUDP(true)` builds a `UDPControlMessage` with empty `targetName` and broadcasts to `255.255.255.255:65507`.
 
 ### Loop prevention
 
-`addUpdateHandler` receives the `originId` string:
+| Origin when applying | Source | `sendUDP(true)` fired? |
+|---|---|---|
+| numeric (WebSocket client ID) | UI change on control panel | yes → group broadcast |
+| `"unicast"` | received unicast from different group, or self-targeted device table edit | yes → re-broadcasts to own group |
+| `"group"` | received group broadcast | **no** — loop stops here |
 
-```cpp
-sendUDP(originId != "group");   // true = control broadcast, false = discovery only
-```
-
-Anything that arrives via group broadcast is applied with `originId = "group"`, so it never re-triggers a control broadcast.
+A device that applies a group broadcast uses origin `"group"`, suppressing `sendUDP(true)` and stopping propagation after one hop.
 
 ---
 
@@ -148,9 +162,9 @@ deviceUDPConnected        = deviceUDP.begin(65506);
 deviceControlUDPConnected = deviceControlUDP.begin(65507);
 ```
 
-`loop20ms()` guards on `deviceUDPConnected` before calling `receiveUDP()`. `receiveUDP()` polls both sockets regardless, so control packets are processed whenever the discovery socket is up (the control socket `parsePacket()` is a no-op if unbound).
+`loop20ms()` guards on `deviceUDPConnected || deviceControlUDPConnected` before calling `receiveUDP()`. Inside `receiveUDP()`, the discovery section (port 65506) runs unconditionally, but the control section (port 65507) returns early if `deviceControlUDPConnected` is false — so a failed control socket bind does not block discovery processing.
 
-`sendUDP(true)` guards on `deviceControlUDPConnected` — if port 65507 fails to bind, group control broadcasts are silently skipped (a `LOGW` in `loop10s` covers the bind failure).
+`sendUDP(true)` guards on `deviceControlUDPConnected` — if port 65507 fails to bind, group control broadcasts are skipped with a `LOGW`.
 
 ---
 

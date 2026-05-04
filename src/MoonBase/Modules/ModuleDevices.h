@@ -79,7 +79,7 @@ class ModuleDevices : public Module {
     _moduleControl->addUpdateHandler(
         [this](const String& originId) {
           // EXT_LOGD(MB_TAG, "control update %s", originId.c_str());
-          if (originId != "group" && originId != "unicast") sendUDP(true);  // broadcast control change to group members; skip for received unicast (already targeted)
+          if (originId != "group") sendUDP(true);  // broadcast control change to group; "group" suppresses re-broadcast to break the loop
           sendUDP(false);  // always broadcast own status so remote device tables update immediately
         },
         false);
@@ -131,7 +131,7 @@ class ModuleDevices : public Module {
         JsonDocument doc;
         JsonObject newState = doc.to<JsonObject>();
         messageToControlState(msg, newState);
-        _moduleControl->update(newState, ModuleState::update, _moduleName);  // Do not add server in the originID as that blocks updates, see execOnUpdate
+        _moduleControl->update(newState, ModuleState::update, "unicast");  // fires addUpdateHandler → sendUDP(true) propagates to group
         EXT_LOGD(MB_TAG, "Applied UDP control from originator: bri=%d pal=%d preset=%d", msg.brightness, msg.palette, msg.preset);
       } else {
         // if a device is updated in the UI, send that update to that device via control port (WLED does not listen there)
@@ -139,14 +139,33 @@ class ModuleDevices : public Module {
           EXT_LOGW(MB_TAG, "Control UDP not ready, cannot send to ...%d", targetIP[3]);
           return;
         }
-        strlcpy(msg.targetName, device["name"].as<const char*>(), sizeof(msg.targetName));
-        if (deviceControlUDP.beginPacket(targetIP, deviceControlUDPPort)) {
-          deviceControlUDP.write(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
-          deviceControlUDP.endPacket();
-          EXT_LOGD(MB_TAG, "UDP control from %s update sent to ...%d / %s on=%d bri=%d pal=%d preset=%d",
-                   updatedItem.originId->c_str(), targetIP[3], msg.targetName, msg.lightsOn, msg.brightness, msg.palette, msg.preset);
+
+        String myName = esp32sveltekit.getSystemHostname();
+        String targetName = device["name"].as<String>();
+        bool sameGroup = partOfGroup(targetName, myName) || partOfGroup(myName, targetName);
+
+        if (sameGroup) {
+          // same group: broadcast directly so all members receive it in one packet
+          // targetName stays empty (group broadcast); receivers use partOfGroup(myName, senderName)
+          if (deviceControlUDP.beginPacket(IPAddress(255, 255, 255, 255), deviceControlUDPPort)) {
+            deviceControlUDP.write(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+            deviceControlUDP.endPacket();
+            EXT_LOGD(MB_TAG, "UDP group control sent for %s: on=%d bri=%d pal=%d preset=%d",
+                     targetName.c_str(), msg.lightsOn, msg.brightness, msg.palette, msg.preset);
+          } else {
+            EXT_LOGW(MB_TAG, "beginPacket failed for group control");
+          }
         } else {
-          EXT_LOGW(MB_TAG, "beginPacket failed for control to ...%d", targetIP[3]);
+          // different group: unicast to target; target will re-broadcast to its own group
+          strlcpy(msg.targetName, targetName.c_str(), sizeof(msg.targetName));
+          if (deviceControlUDP.beginPacket(targetIP, deviceControlUDPPort)) {
+            deviceControlUDP.write(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+            deviceControlUDP.endPacket();
+            EXT_LOGD(MB_TAG, "UDP unicast control sent to ...%d / %s on=%d bri=%d pal=%d preset=%d",
+                     targetIP[3], msg.targetName, msg.lightsOn, msg.brightness, msg.palette, msg.preset);
+          } else {
+            EXT_LOGW(MB_TAG, "beginPacket failed for unicast control to ...%d", targetIP[3]);
+          }
         }
       }
     }

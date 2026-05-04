@@ -40,12 +40,12 @@ Set the hostname in [WiFi → Station](https://moonmodules.org/MoonLight/network
 
 **How it works:**
 
-1. Every device broadcasts its status (including light control values) every 10 seconds.
-2. When a light control value changes on any device, that device immediately broadcasts the update.
-3. Devices that belong to the same group apply received updates to their own lights.
-4. Updates propagate without looping — a device that applies a group update does not re-broadcast it as a control change.
+1. Every device broadcasts its status every 10 seconds, and immediately when a control value changes.
+2. When you edit a light control for a device **in the same group as your device**, a single broadcast is sent and all group members receive and apply it simultaneously.
+3. When you edit a device **in a different group**, a direct message is sent to that specific device, which then re-broadcasts the change to its own group members.
+4. Updates propagate without looping — a device that receives and applies a group broadcast does not re-broadcast it further.
 
-This means changing brightness on one group member will change it on all members within one broadcast cycle.
+This means changing brightness on one group member updates all members. You can also reach devices in other groups from any device's table — the change will propagate to their group too.
 
 ---
 
