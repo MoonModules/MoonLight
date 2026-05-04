@@ -21,7 +21,7 @@ The key invariant: **control commands never go on port 65506**. WLED listens on 
 
 ### `UDPWLEDHeader` — 44 bytes, WLED-compatible
 
-```
+```text
 byte 0:    token   — must be 255 (WLED validates this)
 byte 1:    id      — must be 1   (WLED validates this)
 byte 2–5:  ip0–ip3 — sender IP (WLED checks ip0 == localIP[0] as subnet check)
@@ -35,7 +35,7 @@ A `static_assert(sizeof(UDPWLEDHeader) == 44)` enforces this at build time. This
 
 ### `UDPMessage` — full MoonLight discovery packet (port 65506)
 
-```
+```text
 [UDPWLEDHeader — 44 bytes]  ← WLED reads only this portion
 [Char<32> versionStr    ]   ← human-readable version, e.g. "0.9.1"
 [char build[16]         ]   ← build date string, e.g. "20260411"
@@ -50,7 +50,7 @@ Total: **101 bytes** with `__attribute__((packed))`. WLED receives all 101 bytes
 
 ### `UDPControlMessage` — MoonLight-only control (port 65507)
 
-```
+```text
 [UDPWLEDHeader — 44 bytes]  ← sender identification
 [char targetName[32]     ]  ← unicast: receiver hostname; group broadcast: empty string
 [uint8_t brightness      ]

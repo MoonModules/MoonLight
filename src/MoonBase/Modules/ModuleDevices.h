@@ -48,6 +48,7 @@ struct UDPMessage {
   uint8_t palette;
   uint8_t preset;
 } __attribute__((packed));  // Force no padding
+static_assert(sizeof(UDPMessage) == 101, "UDPMessage must be exactly 101 bytes");
 
 // MoonLight-only control message sent exclusively on port 65507.
 // WLED does not listen on port 65507, so it never receives these packets.
@@ -59,6 +60,7 @@ struct UDPControlMessage {
   uint8_t palette;
   uint8_t preset;
 } __attribute__((packed));  // Force no padding
+static_assert(sizeof(UDPControlMessage) == 80, "UDPControlMessage must be exactly 80 bytes");
 
 class ModuleDevices : public Module {
  public:
@@ -148,20 +150,26 @@ class ModuleDevices : public Module {
 
     if (!networkIsConnected()) return;
 
-    if (!deviceUDPConnected) return;
-
-    receiveUDP();  // and updateDevices
+    // Each socket is polled independently — a failed bind on one does not block the other
+    if (deviceUDPConnected || deviceControlUDPConnected) receiveUDP();
   }
 
   void loop10s() override {
     if (!networkIsConnected()) return;
 
+    // Bind each socket independently so a failure on one does not prevent the other from retrying
     if (!deviceUDPConnected) {
       deviceUDPConnected = deviceUDP.begin(deviceUDPPort);
-      deviceControlUDPConnected = deviceControlUDP.begin(deviceControlUDPPort);  // Initialize control UDP on separate port
-      EXT_LOGD(MB_TAG, "deviceUDP:%d p:%d, controlUDP:%d p:%d",
-               deviceUDPConnected, deviceUDPPort, deviceControlUDPConnected, deviceControlUDPPort);
-      if (!deviceControlUDPConnected)
+      if (deviceUDPConnected)
+        EXT_LOGD(MB_TAG, "deviceUDP bound on port %d", deviceUDPPort);
+      else
+        EXT_LOGW(MB_TAG, "Failed to bind discovery UDP on port %d", deviceUDPPort);
+    }
+    if (!deviceControlUDPConnected) {
+      deviceControlUDPConnected = deviceControlUDP.begin(deviceControlUDPPort);
+      if (deviceControlUDPConnected)
+        EXT_LOGD(MB_TAG, "deviceControlUDP bound on port %d", deviceControlUDPPort);
+      else
         EXT_LOGW(MB_TAG, "Failed to bind control UDP on port %d", deviceControlUDPPort);
     }
 
@@ -296,6 +304,7 @@ class ModuleDevices : public Module {
       if (packetSize == sizeof(UDPWLEDHeader)) {
         UDPWLEDHeader header{};
         deviceUDP.read(reinterpret_cast<uint8_t*>(&header), packetSize);
+        header.name[sizeof(header.name) - 1] = '\0';
         if (header.token == 255 && header.id == 1)
           updateDevicesWLED(header, deviceUDP.remoteIP());
         else
@@ -303,6 +312,9 @@ class ModuleDevices : public Module {
       } else if (packetSize == sizeof(UDPMessage)) {
         UDPMessage message{};
         deviceUDP.read(reinterpret_cast<uint8_t*>(&message), packetSize);
+        message.header.name[sizeof(message.header.name) - 1] = '\0';
+        message.versionStr.s[sizeof(message.versionStr.s) - 1] = '\0';
+        message.build[sizeof(message.build) - 1] = '\0';
         if (message.header.token == 255 && message.header.id == 1)
           updateDevices(message, deviceUDP.remoteIP());
         else
@@ -323,6 +335,8 @@ class ModuleDevices : public Module {
       }
       UDPControlMessage msg{};
       deviceControlUDP.read(reinterpret_cast<uint8_t*>(&msg), packetSize);
+      msg.header.name[sizeof(msg.header.name) - 1] = '\0';
+      msg.targetName[sizeof(msg.targetName) - 1] = '\0';
       if (msg.header.token == 255 && msg.header.id == 1)
         processControlMessage(msg);
     }
@@ -470,7 +484,10 @@ class ModuleDevices : public Module {
       }
     }
 
-    return device.startsWith(base.substring(0, pos));
+    // Require the character at pos to be '-' so "kitchenette" does not match the "kitchen" group
+    return device.startsWith(base.substring(0, pos)) &&
+           device.length() > (size_t)pos &&
+           device.charAt(pos) == '-';
   }
 };
 
