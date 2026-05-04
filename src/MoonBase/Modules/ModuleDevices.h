@@ -40,7 +40,7 @@ static_assert(sizeof(UDPWLEDHeader) == 44, "UDPWLEDHeader must be exactly 44 byt
 // MoonLight receivers distinguish this from a WLED packet by size (sizeof(UDPMessage) != 44).
 struct UDPMessage {
   UDPWLEDHeader header; // 44 bytes — WLED-compatible
-  Char<32> versionStr;  // human-readable version string
+  char versionStr[32];  // human-readable version string
   char build[16];       // build date string
   uint32_t uptime;
   uint16_t packageSize; // sizeof(UDPMessage) — used by receiver to validate packet type
@@ -79,7 +79,8 @@ class ModuleDevices : public Module {
     _moduleControl->addUpdateHandler(
         [this](const String& originId) {
           // EXT_LOGD(MB_TAG, "control update %s", originId.c_str());
-          sendUDP(originId != "group");  // sendUDP control yes / no
+          if (originId != "group" && originId != "unicast") sendUDP(true);  // broadcast control change to group members; skip for received unicast (already targeted)
+          sendUDP(false);  // always broadcast own status so remote device tables update immediately
         },
         false);
   }
@@ -134,12 +135,18 @@ class ModuleDevices : public Module {
         EXT_LOGD(MB_TAG, "Applied UDP control from originator: bri=%d pal=%d preset=%d", msg.brightness, msg.palette, msg.preset);
       } else {
         // if a device is updated in the UI, send that update to that device via control port (WLED does not listen there)
+        if (!deviceControlUDPConnected) {
+          EXT_LOGW(MB_TAG, "Control UDP not ready, cannot send to ...%d", targetIP[3]);
+          return;
+        }
         strlcpy(msg.targetName, device["name"].as<const char*>(), sizeof(msg.targetName));
         if (deviceControlUDP.beginPacket(targetIP, deviceControlUDPPort)) {
           deviceControlUDP.write(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
           deviceControlUDP.endPacket();
           EXT_LOGD(MB_TAG, "UDP control from %s update sent to ...%d / %s on=%d bri=%d pal=%d preset=%d",
                    updatedItem.originId->c_str(), targetIP[3], msg.targetName, msg.lightsOn, msg.brightness, msg.palette, msg.preset);
+        } else {
+          EXT_LOGW(MB_TAG, "beginPacket failed for control to ...%d", targetIP[3]);
         }
       }
     }
@@ -215,7 +222,7 @@ class ModuleDevices : public Module {
     device["ip"] = ip.toString();
     device["lastSync"] = time(nullptr);  // time will change, triggering update
     device["name"] = message.header.name;
-    device["version"] = message.versionStr.c_str();
+    device["version"] = message.versionStr;
     device["build"] = message.build;
     device["uptime"] = message.uptime;
     device["packageSize"] = message.packageSize;
@@ -279,11 +286,12 @@ class ModuleDevices : public Module {
   // Apply an incoming control message from port 65507
   void processControlMessage(const UDPControlMessage& msg) {
     const char* senderName = msg.header.name;
-    const char* myName = esp32sveltekit.getSystemHostname().c_str();
+    // getSystemHostname() returns String by value; store it before calling c_str() to avoid dangling pointer
+    String myName = esp32sveltekit.getSystemHostname();
 
-    if (strcmp(senderName, myName) == 0) return;  // ignore own broadcast echo
+    if (myName == senderName) return;  // ignore own broadcast echo
 
-    bool isUnicast = (msg.targetName[0] != '\0') && (strcmp(myName, msg.targetName) == 0);
+    bool isUnicast = (msg.targetName[0] != '\0') && (myName == msg.targetName);
     bool isGroupBroadcast = (msg.targetName[0] == '\0') && partOfGroup(myName, senderName);
 
     if (!isUnicast && !isGroupBroadcast) return;
@@ -294,8 +302,8 @@ class ModuleDevices : public Module {
 
     EXT_LOGD(MB_TAG, "UDP control from %s (%s): bri=%d pal=%d preset=%d",
              senderName, isGroupBroadcast ? "group" : "unicast", msg.brightness, msg.palette, msg.preset);
-    // "group" origin suppresses re-broadcast in addUpdateHandler to prevent loops
-    _moduleControl->update(newState, ModuleState::update, isGroupBroadcast ? "group" : _moduleName);
+    // "group" suppresses re-broadcast; "unicast" suppresses group re-broadcast but still sends status
+    _moduleControl->update(newState, ModuleState::update, isGroupBroadcast ? "group" : "unicast");
   }
 
   void receiveUDP() {
@@ -313,7 +321,7 @@ class ModuleDevices : public Module {
         UDPMessage message{};
         deviceUDP.read(reinterpret_cast<uint8_t*>(&message), packetSize);
         message.header.name[sizeof(message.header.name) - 1] = '\0';
-        message.versionStr.s[sizeof(message.versionStr.s) - 1] = '\0';
+        message.versionStr[sizeof(message.versionStr) - 1] = '\0';
         message.build[sizeof(message.build) - 1] = '\0';
         if (message.header.token == 255 && message.header.id == 1)
           updateDevices(message, deviceUDP.remoteIP());
@@ -327,6 +335,7 @@ class ModuleDevices : public Module {
     }
 
     // Control port 65507: MoonLight-only control messages
+    if (!deviceControlUDPConnected) return;
     while (size_t packetSize = deviceControlUDP.parsePacket()) {
       if (packetSize != sizeof(UDPControlMessage)) {
         EXT_LOGW(MB_TAG, "Bad control packet size: %d (expected %d)", packetSize, sizeof(UDPControlMessage));
@@ -410,7 +419,7 @@ class ModuleDevices : public Module {
 
   void infoToMessage(UDPMessage& message, bool lightsOn) {
     infoToHeader(message.header, lightsOn);
-    message.versionStr = APP_VERSION;
+    strlcpy(message.versionStr, APP_VERSION, sizeof(message.versionStr));
     memset(message.build, 0, sizeof(message.build));  // init with 0
     strlcpy(message.build, APP_DATE, sizeof(message.build));
     message.uptime = time(nullptr) ? time(nullptr) - pal::millis() / 1000 : pal::millis() / 1000;
