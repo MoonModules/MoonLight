@@ -214,17 +214,8 @@ class ModuleDevices : public Module {
 
   // Update device table from a full MoonLight discovery packet
   void updateDevices(const UDPMessage& message, IPAddress ip) {
-    // Validate hostname: [a-zA-Z0-9-] only, must not be empty.
-    // Checked here (not just in receiveUDP) so the sendUDP(false) self-update path is also guarded.
-    // isprint() is NOT used — ESP32 newlib treats 0xA0-0xFF as printable (ISO-8859-1 locale),
-    // so garbled high-byte chars like ò/ô/ñ would pass an isprint() check.
-    bool nameOk = message.header.name[0] != '\0';
-    for (size_t j = 0; nameOk && j < sizeof(message.header.name) - 1 && message.header.name[j]; j++) {
-      uint8_t c = (uint8_t)message.header.name[j];
-      if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-'))
-        nameOk = false;
-    }
-    if (!nameOk) {
+    // Validate here (not just in receiveUDP) so the sendUDP(false) self-update path is also guarded.
+    if (!isValidHostname(message.header.name, sizeof(message.header.name))) {
       EXT_LOGW(MB_TAG, "Skipping device update with invalid name from ...%d", ip[3]);
       return;
     }
@@ -366,20 +357,10 @@ class ModuleDevices : public Module {
           // packageSize is a self-describing field: rejects foreign devices that happen to send
           // exactly 101 bytes but with a different struct layout (wrong field at bytes 96-97)
           EXT_LOGW(MB_TAG, "Struct mismatch from ...%d: got packageSize=%d, expected %d", deviceUDP.remoteIP()[3], message.packageSize, sizeof(UDPMessage));
+        } else if (isValidHostname(message.header.name, sizeof(message.header.name))) {
+          updateDevices(message, deviceUDP.remoteIP());
         } else {
-          // Validate name is a legal hostname: [a-zA-Z0-9-] only.
-          // isprint() is NOT used — ESP32 newlib treats 0xA0-0xFF as printable (ISO-8859-1),
-          // so garbled high-byte characters like ò/ô/ñ would pass an isprint() check.
-          bool nameOk = message.header.name[0] != '\0';
-          for (size_t j = 0; nameOk && j < sizeof(message.header.name) - 1 && message.header.name[j]; j++) {
-            uint8_t c = (uint8_t)message.header.name[j];
-            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-'))
-              nameOk = false;
-          }
-          if (nameOk)
-            updateDevices(message, deviceUDP.remoteIP());
-          else
-            EXT_LOGW(MB_TAG, "Garbled name in packet from ...%d, rejecting", deviceUDP.remoteIP()[3]);
+          EXT_LOGW(MB_TAG, "Garbled name in packet from ...%d, rejecting", deviceUDP.remoteIP()[3]);
         }
       } else {
         EXT_LOGW(MB_TAG, "Unknown packet size on port %d: %d (WLED=%d ML=%d)",
@@ -444,6 +425,19 @@ class ModuleDevices : public Module {
   }
 
  private:
+  // Validate hostname: non-empty, [a-zA-Z0-9-] only.
+  // isprint() is NOT used — ESP32 newlib treats 0xA0-0xFF as printable (ISO-8859-1 locale),
+  // so garbled high-byte chars like ò/ô/ñ would pass an isprint() check.
+  static bool isValidHostname(const char* name, size_t maxLen) {
+    if (name[0] == '\0') return false;
+    for (size_t j = 0; j < maxLen - 1 && name[j]; j++) {
+      uint8_t c = (uint8_t)name[j];
+      if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-'))
+        return false;
+    }
+    return true;
+  }
+
   // Fill the 44-byte WLED-compatible header from local device info
   void infoToHeader(UDPWLEDHeader& header, bool lightsOn) {
     IPAddress localIP = networkLocalIP();
