@@ -85,6 +85,14 @@ class ModuleDevices : public Module {
         false);
   }
 
+  void begin() override {
+    Module::begin();  // loads state from filesystem
+    // Device list is dynamic — rebuilt from UDP every 10 s.
+    // Clear any stale or garbled entries that may have been persisted.
+    _state.data["devices"].to<JsonArray>();
+    EXT_LOGD(MB_TAG, "cleared persisted device list — will rebuild from UDP");
+  }
+
   void setupDefinition(const JsonArray& controls) override {
     EXT_LOGV(MB_TAG, "");
     JsonObject control;  // state.data has one or more properties
@@ -206,16 +214,27 @@ class ModuleDevices : public Module {
 
   // Update device table from a full MoonLight discovery packet
   void updateDevices(const UDPMessage& message, IPAddress ip) {
+    // Validate hostname: [a-zA-Z0-9-] only, must not be empty.
+    // Checked here (not just in receiveUDP) so the sendUDP(false) self-update path is also guarded.
+    // isprint() is NOT used — ESP32 newlib treats 0xA0-0xFF as printable (ISO-8859-1 locale),
+    // so garbled high-byte chars like ò/ô/ñ would pass an isprint() check.
+    bool nameOk = message.header.name[0] != '\0';
+    for (size_t j = 0; nameOk && j < sizeof(message.header.name) - 1 && message.header.name[j]; j++) {
+      uint8_t c = (uint8_t)message.header.name[j];
+      if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-'))
+        nameOk = false;
+    }
+    if (!nameOk) {
+      EXT_LOGW(MB_TAG, "Skipping device update with invalid name from ...%d", ip[3]);
+      return;
+    }
+
     // EXT_LOGD(MB_TAG, "updateDevices ...%d %s", ip[3], message.header.name);
     if (_state.data["devices"].isNull()) _state.data["devices"].to<JsonArray>();
 
-    // set the doc
+    // deep-copy current state so we can modify it independently of _state.data
     JsonDocument doc;
-    if (_sveltekit->getSocket()->getActiveClients()) {  // rebuild the devices array
-      doc.set(_state.data);             // copy
-    } else {
-      doc = _state.data;  // reference
-    }
+    doc.set(_state.data);
 
     // set the devices array
     JsonArray devices = doc["devices"];
@@ -240,9 +259,12 @@ class ModuleDevices : public Module {
 
     device["ip"] = ip.toString();
     device["lastSync"] = time(nullptr);  // time will change, triggering update
-    device["name"] = message.header.name;
-    device["version"] = message.versionStr;
-    device["build"] = message.build;
+    // String() forces ArduinoJson to copy bytes into its pool rather than linking a const char*
+    // pointer to the stack-allocated message struct. A linked pointer becomes dangling after
+    // updateDevices() returns, causing compareRecursive() to read garbage on the next update cycle.
+    device["name"] = String(message.header.name);
+    device["version"] = String(message.versionStr);
+    device["build"] = String(message.build);
     device["uptime"] = message.uptime;
     device["packageSize"] = message.packageSize;
     device["lightsOn"] = (message.header.type & 0x80) != 0;
@@ -257,13 +279,9 @@ class ModuleDevices : public Module {
   void updateDevicesWLED(const UDPWLEDHeader& header, IPAddress ip) {
     if (_state.data["devices"].isNull()) _state.data["devices"].to<JsonArray>();
 
-    // set the doc
+    // deep-copy current state so we can modify it independently of _state.data
     JsonDocument doc;
-    if (_sveltekit->getSocket()->getActiveClients()) {  // rebuild the devices array
-      doc.set(_state.data);             // copy
-    } else {
-      doc = _state.data;  // reference
-    }
+    doc.set(_state.data);
 
     // set the devices array
     JsonArray devices = doc["devices"];
@@ -287,7 +305,7 @@ class ModuleDevices : public Module {
 
     device["ip"] = ip.toString();
     device["lastSync"] = time(nullptr);  // time will change, triggering update
-    device["name"] = header.name;
+    device["name"] = String(header.name);  // force copy — same reason as updateDevices()
     char verBuf[12];
     snprintf(verBuf, sizeof(verBuf), "%lu", (unsigned long)header.version);
     device["version"] = verBuf;
@@ -342,10 +360,27 @@ class ModuleDevices : public Module {
         message.header.name[sizeof(message.header.name) - 1] = '\0';
         message.versionStr[sizeof(message.versionStr) - 1] = '\0';
         message.build[sizeof(message.build) - 1] = '\0';
-        if (message.header.token == 255 && message.header.id == 1)
-          updateDevices(message, deviceUDP.remoteIP());
-        else
-          EXT_LOGW(MB_TAG, "Bad MoonLight header from ...%d", deviceUDP.remoteIP()[3]);
+        if (message.header.token != 255 || message.header.id != 1) {
+          EXT_LOGW(MB_TAG, "Bad MoonLight header from ...%d (token=%d id=%d)", deviceUDP.remoteIP()[3], message.header.token, message.header.id);
+        } else if (message.packageSize != sizeof(UDPMessage)) {
+          // packageSize is a self-describing field: rejects foreign devices that happen to send
+          // exactly 101 bytes but with a different struct layout (wrong field at bytes 96-97)
+          EXT_LOGW(MB_TAG, "Struct mismatch from ...%d: got packageSize=%d, expected %d", deviceUDP.remoteIP()[3], message.packageSize, sizeof(UDPMessage));
+        } else {
+          // Validate name is a legal hostname: [a-zA-Z0-9-] only.
+          // isprint() is NOT used — ESP32 newlib treats 0xA0-0xFF as printable (ISO-8859-1),
+          // so garbled high-byte characters like ò/ô/ñ would pass an isprint() check.
+          bool nameOk = message.header.name[0] != '\0';
+          for (size_t j = 0; nameOk && j < sizeof(message.header.name) - 1 && message.header.name[j]; j++) {
+            uint8_t c = (uint8_t)message.header.name[j];
+            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-'))
+              nameOk = false;
+          }
+          if (nameOk)
+            updateDevices(message, deviceUDP.remoteIP());
+          else
+            EXT_LOGW(MB_TAG, "Garbled name in packet from ...%d, rejecting", deviceUDP.remoteIP()[3]);
+        }
       } else {
         EXT_LOGW(MB_TAG, "Unknown packet size on port %d: %d (WLED=%d ML=%d)",
                  deviceUDPPort, packetSize, sizeof(UDPWLEDHeader), sizeof(UDPMessage));
