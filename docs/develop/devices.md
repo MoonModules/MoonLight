@@ -37,7 +37,7 @@ A `static_assert(sizeof(UDPWLEDHeader) == 44)` enforces this at build time. This
 
 ```text
 [UDPWLEDHeader — 44 bytes]  ← WLED reads only this portion
-[char versionStr[32]    ]   ← human-readable version, e.g. "0.9.1"
+[char versionStr[32]    ]   ← human-readable version, e.g. "10.0.1"
 [char build[16]         ]   ← build date string, e.g. "20260411"
 [uint32_t uptime        ]
 [uint16_t packageSize   ]   ← sizeof(UDPMessage); receiver uses for size-based dispatch

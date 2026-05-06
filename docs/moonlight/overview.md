@@ -197,7 +197,7 @@ API output:
 
 - System status 
 ```text
-{"esp_platform":"ESP32-S3","firmware_version":"0.9.1","firmware_date":"20260406","firmware_target":"esp32-s3-n8r8v","platform_version":"pioarduino-55.03.37","ma...}
+{"esp_platform":"ESP32-S3","firmware_version":"10.0.1","firmware_date":"20260406","firmware_target":"esp32-s3-n8r8v","platform_version":"pioarduino-55.03.37","ma...}
 ```
 
 - MoonLight info
