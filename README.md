@@ -1,3 +1,9 @@
+---
+hide:
+  - navigation
+  - toc
+---
+
 # 🌙 MoonLight
 
 <p align="center">
@@ -70,6 +76,12 @@
 </a>
 
 **[▶️ Watch the introduction](https://www.youtube.com/watch?v=Z70zDhpqY8o)**
+
+---
+
+## ⚠️ v1.0.0 is the final MoonLight release
+
+As of May 2026, active development is moving to [ProjectMM](https://github.com/ewowi/projectMM). MoonLight v1.0.0 remains fully usable — see [MoonLight v1.0.0 and Beyond](https://moonmodules.org/MoonLight/moonlight/future/) for the full story.
 
 ---
 
@@ -151,8 +163,8 @@ Start creating stunning effects immediately on both mobile and desktop.
 **16K LEDs and more**
 ### Version 0.9.0 - March 2026
 **FastLED Channels API, FastLED Audio, sensors and palettes**
-
-See [v1.0.0 Kanban board](https://github.com/users/MoonModules/projects/4) or log an [Issue](https://github.com/MoonModules/MoonLight/issues/new/choose) to report issues or request enhancements.
+### Version 1.0.0 - May 2026
+**Final MoonLight release.** See [MoonLight v1.0.0 and Beyond](https://moonmodules.org/MoonLight/moonlight/future/) for what comes next.
 
 ---
 

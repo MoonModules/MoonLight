@@ -67,7 +67,7 @@ If you choose to use Claude Code or Mistral Vibe, see [AI Context for contributi
 1. **CodeRabbit's recommendations** — address in subsequent commits
     - Use icons in commit title/description to identify the source: 🐰 (CodeRabbit), ✴️ (Claude), 🐱 (Mistral Vibe)
     - Example: `🐰 issues solved by ✴️` (CodeRabbit issues fixed by Claude Code)
-    - CodeRabbit provides [ready-to-use prompts for AI agents](standardsguidelines.md#using-coderabbit-s-ai-prompts) if you'd like help addressing its recommendations
+    - CodeRabbit provides [ready-to-use prompts for AI agents](standardsguidelines.md#using-coderabbits-ai-prompts) if you'd like help addressing its recommendations
     - Commit description: if you use AI to fix issues, you can use its summary — it provides a clear summary of the changes
 2. **Code review feedback** — address per reviewer comments
 3. **Ensure docs are updated** in your commits, AI can help here.
@@ -111,7 +111,7 @@ Instructions for editing and committing code (used while [updating an open PR](#
 ### Frontend (UI)
 
 - Files live in `interface/src/routes/moonbase/` (MoonBase and MoonLight modules)
-- See [Prepare for development](installation.md#prepare-for-development) for Node.js setup
+- See [Prepare for development](installation.md#install-nodejs) for Node.js setup
 
 ```bash
 npm install
@@ -121,10 +121,10 @@ npm run dev
 See [Troubleshooting](installation.md#troubleshooting) for common issues.
 
 **UI development server:** Deploy backend to an ESP32 and proxy API calls through the local dev server — no reflashing needed for UI changes. After setup, open [localhost:5173](http://localhost:5173/).  
-See [Setup Proxy for Development](installation.md#prepare-for-development) for details.
+See [Setup Proxy for Development](installation.md#install-nodejs) for details.
 
 !!! tip "Node.js"
-    If Node.js is not installed: see [Prepare for development](installation.md#prepare-for-development).
+    If Node.js is not installed: see [Prepare for development](installation.md#install-nodejs).
 
 ### Backend (Server)
 

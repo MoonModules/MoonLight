@@ -7,6 +7,7 @@ nav:
     - gettingstarted/hardware.md
   - "MoonLight":
     - moonlight/overview.md
+    - moonlight/future.md
     - moonlight/lightscontrol.md
     - moonlight/effects.md
     - moonlight/modifiers.md
