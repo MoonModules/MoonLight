@@ -29,6 +29,7 @@ namespace mm {
 /// @card RmtLedDriver.png
 class RmtLedDriver : public DriverBase {
 public:
+    /// This driver prices its own frame, so the shared path leaves the limiter to it.
     bool limitsCurrent() const override { return true; }
 
     /// Default to the GRB preset, which is how WS2812 and SK6812 strips are physically wired.

@@ -448,10 +448,7 @@ TEST_CASE("I80Peripheral gives the host bus two distinct buffers when asked") {
 }
 
 // --- Current limiting ---------------------------------------------------------------------------
-// measureFrame() has to walk exactly the lights the encode will touch. laneStart_ is a running sum
-// of laneCounts_, so the lanes tile the window and one flat pass covers them, but only if the
-// total is the SUM of the lanes rather than the buffer size or the longest lane. Under-counting is
-// the dangerous direction: the limiter would report a frame safe while the supply sagged.
+// measureFrame() has to walk exactly the lights the encode will touch, so the total must be the SUM of the lanes rather than the buffer size or the longest lane. Under-counting is the dangerous direction.
 TEST_CASE("ParallelLedDriver prices every lane, not just the longest") {
     mm::I80Peripheral peripheral;
     mm::ParallelLedDriver d;
@@ -465,8 +462,7 @@ TEST_CASE("ParallelLedDriver prices every lane, not just the longest") {
     d.correctionForTest().budgetMa = 1080;
     d.tick();
 
-    // Halved. Sizing the pass by the longest lane (50) would price it at 1200 mA and set limit to
-    // 230: the under-counting direction, which reports a frame safe while the supply sags.
+    // Halved. Sizing the pass by the longest lane would price it at 1200 mA and set limit to 230, the under-counting direction that reports a frame safe while the supply sags.
     CHECK(d.correctionForTest().limit == 128);
 }
 

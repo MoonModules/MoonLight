@@ -143,11 +143,7 @@ constexpr bool hasI2sMic = true;
 constexpr bool hasI2sMic = false;
 #endif
 
-// USB video needs a High-Speed USB PHY (the S3 has USB, but only the slow kind: too slow to carry
-// video) and a hardware JPEG decoder. The target test is not redundant with the capability tests:
-// platform_esp32_usbvideo.cpp compiles its implementation for the P4 alone and the UVC component is
-// pulled in for the P4 alone, so a future chip meeting the capabilities would otherwise be offered
-// a source backed by the always-failing stub. Widen all three together or none.
+// USB video needs a High-Speed USB PHY, which the S3 lacks, and a hardware JPEG decoder. Only the P4 compiles an implementation, so widen all three together or none.
 #if defined(CONFIG_IDF_TARGET_ESP32P4) && defined(CONFIG_SOC_USB_UTMI_PHY_NUM) && \
     defined(CONFIG_SOC_JPEG_DECODE_SUPPORTED)
 constexpr bool hasUsbVideo = true;

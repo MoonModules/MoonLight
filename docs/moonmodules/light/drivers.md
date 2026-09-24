@@ -10,7 +10,7 @@ Several drivers can share one buffer, each driving its own slice. Every driver s
 
 ### Shared 💫 · every driver
 
-The block every driver card opens with, shown here on RMT LED. Added once by [`DriverBase`](moxygen/DriverBase.md) so no driver re-implements it: a per-driver **output correction** (how this driver's slice looks) and a **source window** (which slice of the shared buffer it reads). A driver card leads with whichever half applies, and its own controls follow. Hue and Preview correct nothing, since the fixture and the browser do it; HUB75, Preview, NDI and HLS take the whole buffer rather than a window.
+The block every driver card opens with, shown here on RMT LED. Added once by [`DriverBase`](moxygen/DriverBase.md): a per-driver **output correction** and a **source window**. Which half applies, and the current limiter: ⌄ [details](#shared-details).
 
 <img src="../../assets/light/drivers/RmtLedDriver.png" width="300" alt="The shared block at the top of a driver card, here on RMT LED">
 
@@ -18,12 +18,11 @@ The block every driver card opens with, shown here on RMT LED. Added once by [`D
 - `curve`: brightness to output: `CIE 1931`, `gamma 2.2`, `gamma 2.8`, or `linear`.
 - `lightPreset`: the [light preset](supporting.md) applied per light, for order and white.
 - `whiteMode`: how W is derived, shown when the preset carries a W channel.
-- `balanceRed` / `balanceGreen` / `balanceBlue`: per-channel white balance (0 to 255, `255` = untouched). Trim **down** to pull a white point neutral: leave the weakest channel at 255 and lower the other two to match. There is no headroom above 255, so raising clips rather than balances. On an RGBW fixture the trims also feed the synthesized W, so the white channel cannot carry a cast the trim just removed.
-- `whiteLevel`: the white die's own trim (0 to 255, `255` = untouched). The RGB trims above cannot reach it: on an RGBW strip the white die is separate hardware, often brighter than the RGB trio, so whites blow out while colors look right. Trim it down like the others; 0 gives the output `whiteMode: None` gives. Shown only where the referenced preset carries a white channel.
-- `maxCurrentMa`: cap the current a frame may draw, in milliamps. 0 (default) is off. The driver prices each frame before emitting it and scales the whole frame down if it is over budget, so a white screen cannot brown out the supply whatever the brightness. Set it to the supply's rating less what the board itself uses.
-- `mAPerColorChannel` / `mAPerWhiteChannel`: what one channel draws at full, for that estimate. Per **channel**, not per light: a white die draws about twice a color one, so a single per-light figure under-reports white-heavy frames, which is the direction that browns out a supply. Defaults (8 and 16) are measured on a 5 m SK6812 RGBW strip. WLED carries the per-light version of this as an open issue, [#3707](https://github.com/wled/WLED/issues/3707).
-- `mAPerYellowChannel` / `mAPerUvChannel`: the same for the two emitters a 6-channel lightbar adds, shown only on a fixture that carries them. Both default to 8 by assumption rather than measurement: amber sits near red, while a UV die usually draws more.
-Only drivers whose lights run off **this board's supply** offer these at all: the LED drivers do, while [Network Send](#networksend), [Panel Card](#panelcard) and [Hue](#hue) feed fixtures with their own power and so have nothing to cap. A master dimmer is not counted: on the fixtures that declare one it is a control value drawing nothing from this rail, like the motion channels beside it.
+- `balanceRed` / `balanceGreen` / `balanceBlue`: per-channel trim, `255` = untouched.
+- `whiteLevel`: the white die's own trim (0 to 255, `255` = untouched).
+- `maxCurrentMa`: cap the current a frame may draw, in milliamps. 0 (default) is off.
+- `mAPerColorChannel` / `mAPerWhiteChannel`: what one channel draws at full, for that estimate.
+- `mAPerYellowChannel` / `mAPerUvChannel`: the same for a 6-channel lightbar's two extra emitters.
 - `start`: first light of the shared buffer this driver reads (default `0`).
 - `count`: how many lights from `start`. **Blank drives all of them.**
 
@@ -226,6 +225,24 @@ Detail: [technical](moxygen/RtspDriver.md) · [the RTP packetiser](moxygen/RtpH2
 <a id="shared-details"></a>
 
 ## Shared, details
+
+#### What each half is for
+
+Output correction is how this driver's slice looks; the source window is which slice of the shared buffer it reads. A driver card leads with whichever half applies, and its own controls follow. Hue and Preview correct nothing, since the fixture and the browser do it; HUB75, Preview, NDI and HLS take the whole buffer rather than a window.
+
+#### White balance and the white die
+
+Trim the balances **down** to pull a white point neutral: leave the weakest channel at 255 and lower the other two to match. There is no headroom above 255, so raising clips rather than balances.
+
+`whiteLevel` is separate, because the RGB trims cannot reach the W die: on an RGBW strip the white phosphor is its own hardware, often brighter than the RGB trio, so whites blow out while colors look right. It trims the white channel alone and leaves RGB untouched. 0 gives the same output as `whiteMode: None`. Shown only where the referenced preset carries a white channel.
+
+#### The current limiter
+
+The driver prices each frame before emitting it and scales the whole frame down if it is over budget, so a white screen cannot brown out the supply whatever the brightness. Set `maxCurrentMa` to the supply's rating less what the board itself uses.
+
+The per-channel figures are per **channel**, not per light: a white die draws about twice a color one, so a single per-light figure under-reports white-heavy frames, which is the direction that browns out a supply. Defaults (8 and 16) are measured on a 5 m SK6812 RGBW strip. WLED carries the per-light version of this as an open issue, [#3707](https://github.com/wled/WLED/issues/3707). The lightbar figures default to 8 by assumption rather than measurement: amber sits near red, while a UV die usually draws more.
+
+Only drivers whose lights run off **this board's supply** offer these at all: the LED drivers do, while [Network Send](#networksend), [Panel Card](#panelcard) and [Hue](#hue) feed fixtures with their own power and so have nothing to cap. A master dimmer is not counted: on the fixtures that declare one it is a control value drawing nothing from this rail, like the motion channels beside it.
 **A `lightPreset` reference survives some changes and not others.** The driver holds the preset's stable id at runtime, so **reordering** presets never disturbs it, and the reference **survives a reboot** because the preset's name is persisted and re-resolved on load. The caveat is **renaming**: within a session the id keeps the link, but after a reboot a renamed preset no longer matches the persisted name and the driver falls back to the default. Re-pick it if you rename a preset a driver uses.
 
 **`start` and `count` are how several drivers share one buffer.** Blank `count` drives every light; a number drives only that slice. An onboard status LED takes `start 0, count 1` while the main strip runs from `start 1`, both reading the same buffer.

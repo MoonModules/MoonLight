@@ -373,9 +373,7 @@ struct ScenarioContext {
                 if (props.has("height")) grid->height = static_cast<mm::lengthType>(props["height"].num);
                 if (props.has("depth"))  grid->depth  = static_cast<mm::lengthType>(props["depth"].num);
             } else if (std::strcmp(type, "RectangleLayout") == 0) {
-                // Same construct-time apply: the perimeter is computed from these, so a fixture
-                // that could not set them would silently measure the 32x18 default instead of the
-                // border it names. The wiring controls stay on set_control, which works post-start.
+                // Same construct-time apply, since the perimeter is computed from these. The wiring controls stay on set_control, which works post-start.
                 auto* rect = static_cast<mm::RectangleLayout*>(mod);
                 if (props.has("width"))  rect->width  = static_cast<uint16_t>(props["width"].num);
                 if (props.has("height")) rect->height = static_cast<uint16_t>(props["height"].num);

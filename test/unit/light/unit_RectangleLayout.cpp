@@ -1,4 +1,10 @@
-// @module RectangleLayout
+/// @module RectangleLayout
+///
+/// Pins the hollow-rectangle perimeter walk: the corner-counted-once light count, the reference clockwise-from-top-left order, the degenerate line cases, and the eight wiring permutations.
+///
+/// @moreinfo
+///
+/// The wiring controls must reorder INDICES only, since the set of emitted coordinates is a property of the box and must be byte-identical however the strip is wired.
 
 #include "doctest.h"
 #include "light/layouts/RectangleLayout.h"
@@ -7,12 +13,6 @@
 #include <set>
 #include <utility>
 #include <vector>
-
-// Pins the hollow-rectangle perimeter walk: the corner-counted-once light count, the reference
-// clockwise-from-top-left order, the degenerate line cases, and the eight wiring permutations
-// (4 start corners × 2 directions). The wiring controls must reorder INDICES only: the set of
-// emitted coordinates is a property of the box and must be byte-identical however the strip is
-// wired, which is the invariant these tests exist to hold.
 
 using mm::RectangleLayout;
 
@@ -32,9 +32,7 @@ std::vector<std::pair<int, int>> walk(const RectangleLayout& r) {
 
 }  // namespace
 
-// A rectangle is FLAT: every light sits at z = 0. Nothing in the x/y checks below would notice a
-// stray depth, but a non-zero z inflates the layout's bounding box, so the Layer allocates a buffer
-// `depth` times larger for one plane of lights: a silent 10x memory cost, not a visible fault.
+// A rectangle is FLAT, with every light at z = 0. Nothing in the x/y checks below would notice a stray depth, but a non-zero z inflates the bounding box, so the Layer allocates `depth` times over.
 TEST_CASE("RectangleLayout: every light is emitted flat at z = 0") {
     RectangleLayout r;
     r.width = 7; r.height = 5;
@@ -49,8 +47,7 @@ TEST_CASE("RectangleLayout: every light is emitted flat at z = 0") {
     CHECK(maxZ == 0);
 }
 
-// The perimeter of a w×h box counts each corner once: 2·(w+h) − 4. A strip bent around a frame has
-// exactly one LED in each corner, even though that corner belongs to two edges.
+// The perimeter of a w×h box counts each corner once: 2·(w+h) − 4. A strip bent around a frame has exactly one LED in each corner, even though that corner belongs to two edges.
 TEST_CASE("RectangleLayout: light count is the perimeter with corners counted once") {
     RectangleLayout r;
     r.width = 4; r.height = 3;
@@ -61,8 +58,7 @@ TEST_CASE("RectangleLayout: light count is the perimeter with corners counted on
     CHECK(r.lightCount() == 4);       // the smallest real rectangle
 }
 
-// lightCount() must agree with what placeLights() actually emits, or the Layer allocates a buffer
-// of one size and the LUT build walks another.
+// lightCount() must agree with what placeLights() actually emits, or the Layer allocates a buffer of one size and the LUT build walks another.
 TEST_CASE("RectangleLayout: emitted light count matches lightCount()") {
     RectangleLayout r;
     r.width = 7; r.height = 5;
@@ -91,8 +87,7 @@ TEST_CASE("RectangleLayout: default walk runs clockwise from the top-left corner
     CHECK(p[9] == std::pair{0, 1});
 }
 
-// Every light lands on its own cell: the walk goes round the frame exactly once. A duplicate would
-// mean two LEDs mapped to one logical position (one of them dark), a gap would mean an unlit LED.
+// Every light lands on its own cell: the walk goes round the frame exactly once. A duplicate would mean two LEDs mapped to one logical position (one of them dark), a gap would mean an unlit LED.
 TEST_CASE("RectangleLayout: every light occupies a distinct perimeter cell") {
     RectangleLayout r;
     r.width = 9; r.height = 6;
@@ -104,13 +99,7 @@ TEST_CASE("RectangleLayout: every light occupies a distinct perimeter cell") {
         CHECK((x == 0 || x == r.width - 1 || y == 0 || y == r.height - 1));
 }
 
-// startCorner and clockwise change the WIRING, not the shape. Whatever corner the strip enters at
-// and whichever way it runs, the same cells light up: only the index order differs. This is what
-// lets an effect's "top edge" be the physical top edge on any build.
-//
-// Every position is compared, not the set of them: a set has no order, so it passes on a walk that
-// visits the right cells in the wrong sequence, which is the one thing these controls choose. Each
-// wiring is the reference rotated to the chosen corner, counter-clockwise traversed backwards.
+// startCorner and clockwise change the WIRING rather than the shape, so only the index order differs. Every position is compared rather than the set, since a set has no order.
 TEST_CASE("RectangleLayout: each of the eight wirings emits the reference walk in its own order") {
     const int w = 6, h = 4;
     RectangleLayout ref;
@@ -143,8 +132,7 @@ TEST_CASE("RectangleLayout: each of the eight wirings emits the reference walk i
     }
 }
 
-// Light 0 lands on the corner the user named: the control's whole purpose. (x, y) origin is
-// top-left, so "bottom" is y = height − 1.
+// Light 0 lands on the corner the user named: the control's whole purpose. (x, y) origin is top-left, so "bottom" is y = height − 1.
 TEST_CASE("RectangleLayout: light 0 sits on the chosen start corner") {
     const int w = 6, h = 4;
     const std::pair<int, int> corners[4] = {
@@ -157,8 +145,7 @@ TEST_CASE("RectangleLayout: light 0 sits on the chosen start corner") {
     }
 }
 
-// Counter-clockwise reverses the direction of travel while keeping the same first light: from the
-// top-left corner it heads DOWN the left edge instead of right along the top.
+// Counter-clockwise reverses the direction of travel while keeping the same first light: from the top-left corner it heads DOWN the left edge instead of right along the top.
 TEST_CASE("RectangleLayout: counter-clockwise reverses travel from the same corner") {
     RectangleLayout r;
     r.width = 4; r.height = 3;
@@ -171,8 +158,7 @@ TEST_CASE("RectangleLayout: counter-clockwise reverses travel from the same corn
     CHECK(p[3] == std::pair{1, 2});   // then right along the bottom
 }
 
-// A box one light thick has no interior to go around, so it degenerates to a plain line. The
-// rectangle formula would walk those cells twice and light phantom positions, so it is not used.
+// A box one light thick has no interior to go around, so it degenerates to a plain line. The rectangle formula would walk those cells twice and light phantom positions, so it is not used.
 TEST_CASE("RectangleLayout: a one-light-thick box degenerates to a line, not a doubled-back frame") {
     RectangleLayout row;
     row.width = 5; row.height = 1;
@@ -200,8 +186,7 @@ TEST_CASE("RectangleLayout: a zero-sided box emits no lights") {
 }
 
 // --- Four separate strips (sharedCorners off) ---------------------------------------------------
-// One strip bent around a frame has ONE light in each corner. Four strips have their own end there,
-// so the count is the plain sum of the edges and two lights share each corner coordinate.
+// One strip bent around a frame has ONE light in each corner. Four strips have their own end there, so the count is the plain sum of the edges and two lights share each corner coordinate.
 
 TEST_CASE("RectangleLayout: unshared corners count every edge in full") {
     RectangleLayout r;
@@ -214,8 +199,7 @@ TEST_CASE("RectangleLayout: unshared corners count every edge in full") {
     CHECK(r.lightCount() == 56);   // the same box, four corners folded away
 }
 
-// The extra lights must land ON the corners, not past them: an edge running its full length is one
-// step from walking outside the box, which would inflate the Layer's bounding box.
+// The extra lights must land ON the corners rather than past them, since an edge running its full length is one step from walking outside the box.
 TEST_CASE("RectangleLayout: unshared corners double the corner cells and stay in the box") {
     RectangleLayout r;
     r.width = 4; r.height = 3;
@@ -250,8 +234,7 @@ TEST_CASE("RectangleLayout: unshared corners still honor the chosen start corner
 }
 
 // --- offset --------------------------------------------------------------------------------------
-// A strip rarely starts exactly at a corner. offset slides where index 0 sits WITHOUT moving any
-// light: the same coordinates come out, rotated in the wiring order.
+// A strip rarely starts exactly at a corner. offset slides where index 0 sits WITHOUT moving any light: the same coordinates come out, rotated in the wiring order.
 
 TEST_CASE("RectangleLayout: offset rotates the wiring and emits the same coordinates") {
     RectangleLayout plain, shifted;
@@ -268,8 +251,7 @@ TEST_CASE("RectangleLayout: offset rotates the wiring and emits the same coordin
           std::set<std::pair<int, int>>(b.begin(), b.end()));   // the shape did not
 }
 
-// A full lap is a no-op, and anything beyond it wraps: the walk is modular, so an offset larger
-// than the perimeter must not run off the end of it.
+// A full lap is a no-op, and anything beyond it wraps: the walk is modular, so an offset larger than the perimeter must not run off the end of it.
 TEST_CASE("RectangleLayout: an offset of a full lap or more wraps") {
     RectangleLayout plain, lap;
     plain.width = lap.width = 7;

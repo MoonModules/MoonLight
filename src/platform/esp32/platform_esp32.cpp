@@ -522,10 +522,7 @@ static esp_netif_t* staNetif_ = nullptr;
 static esp_netif_t* apNetif_ = nullptr;
 static std::atomic<bool> wifiInitDone_{false};   // atomic: the radio poller reads it from its own task
 
-// Radio telemetry, read on the render tick and refreshed off it. With a co-processor radio (P4)
-// every esp_wifi query is a synchronous RPC over the host link, 55-90 ms measured, and the
-// once-a-second WLED state push made one, so the render loop froze every second a browser was open.
-// A low-priority task polls, the connect event fills what it carries, the getters return the cache.
+// Radio telemetry, read on the render tick and refreshed off it. With a co-processor radio every esp_wifi query is a blocking RPC, 55-90 ms measured, and the state push made one a second. A task polls instead.
 static std::atomic<int8_t> radioRssi_{0};
 static std::atomic<int8_t> radioTxPowerQ_{0};  // quarter dBm, the unit the stack uses
 static std::atomic<uint64_t> radioAp_{0};      // BSSID << 8 | channel, one word so a reader never sees half a connect

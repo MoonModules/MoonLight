@@ -9,36 +9,45 @@
 
 namespace mm {
 
-// Screen-follow ambient light: paints the layer with the live video frame, so lights around a
-// display glow the color of the picture nearest them (the Ambilight / Hyperion behavior).
-//
-// TWO SPACES, and every name below says which one it is in:
-//
-//   SOURCE       the video frame, counted in PIXELS           frame.width x frame.height
-//   DESTINATION  the layer's logical box, counted in          lightsX x lightsY
-//                LIGHT POSITIONS
-//
-// The source is far the bigger (e.g. a 640x480 picture onto a strip of 60 positions) so each
-// light position owns a whole rectangle of pixels and shows their average.
-//
-// The layout decides the shape: on a RectangleLayout the interior maps to no LED, so a border
-// strip shows the frame's border for free; on a GridLayout the same effect is a video wall. The
-// effect asks the mapping only ONE question (does this position light anything) and skips the
-// averaging where the answer is no. On a border layout that is most of the box.
-
-/// Effect that paints the layer with the live video frame (screen-follow ambient light).
+/// Screen-follow ambient light: paints the layer with the live video frame, so lights around a display glow the color of the picture nearest them.
+///
+/// @moreinfo
+///
+/// The Ambilight / Hyperion behavior. Two spaces are in play, and every name below says which one it is in.
+///
+/// | Space | Counted in | Extent |
+/// |---|---|---|
+/// | SOURCE | pixels | frame.width x frame.height |
+/// | DESTINATION | light positions | lightsX x lightsY |
+///
+/// The source is far the bigger, a 640x480 picture onto a strip of 60 positions, so each light position owns a whole rectangle of pixels and shows their average.
+///
+/// ## The layout decides the shape
+///
+/// On a RectangleLayout the interior maps to no LED, so a border strip shows the frame's border for free, and on a GridLayout the same effect is a video wall.
+/// The effect asks the mapping only ONE question, whether this position lights anything, and skips the averaging where the answer is no.
+/// On a border layout that is most of the box.
 class AmbilightEffect : public EffectBase {
 public:
-    Dim dimensions() const override { return Dim::D2; } // a frame is flat; the Layer extrudes z
+    /// Flat, because a frame is; the Layer extrudes z.
+    Dim dimensions() const override { return Dim::D2; }
 
-    uint8_t brightness = 255;     // dims THE VIDEO; the driver's brightness dims everything
-    uint8_t saturation = 130;     // percent of the distance from gray; 100 = the mean untouched
-    uint8_t smoothing = 0;        // 0 = follow the frame exactly; higher = slower to move
-    uint8_t snapAbove = 80;       // jump rather than smooth when a channel moves further than this; 0 = never
-    uint8_t edgeDepth = 0;        // percent of the frame the OUTERMOST positions look in; 0 = their own share
-    bool detectBlackBars = false; // find the letterbox and map the lights across the picture
-    uint8_t barLevel = 12;        // a channel at or below this counts as bar; ~5%, for compression noise
+    /// Dims THE VIDEO, where the driver's brightness dims everything.
+    uint8_t brightness = 255;
+    /// Percent of the distance from gray, so 100 leaves the mean untouched.
+    uint8_t saturation = 130;
+    /// How slowly a light moves toward the frame; 0 follows it exactly.
+    uint8_t smoothing = 0;
+    /// Jump rather than smooth when a channel moves further than this; 0 never jumps.
+    uint8_t snapAbove = 80;
+    /// Percent of the frame the OUTERMOST positions look in; 0 gives them their own share.
+    uint8_t edgeDepth = 0;
+    /// Find the letterbox and map the lights across the picture inside it.
+    bool detectBlackBars = false;
+    /// A channel at or below this counts as bar, ~5%, which clears compression noise.
+    uint8_t barLevel = 12;
 
+    /// The video's own brightness and saturation, how fast a light follows it, and the two bar controls.
     void defineControls() override {
         controls_.addControl("brightness", brightness, 0, 255);
         controls_.addControl("saturation", saturation, 0, 200);
@@ -47,21 +56,17 @@ public:
         controls_.addControl("snapAbove", snapAbove, 0, 255);
         controls_.setHidden(controls_.count() - 1, smoothing == 0);
         controls_.addControl("edgeDepth", edgeDepth, 0, 50); // Hyperion samples ~8%
-        // - a letterboxed film puts bars where the top and bottom lights look, so they go dark
-        // - edgeDepth cannot help: it widens a zone from the edge, so the bar stays inside it
-        // - this moves the zones instead, mapping the lights across the picture it finds
+        // A letterboxed film puts bars where the top and bottom lights look, and edgeDepth cannot help since it widens a zone from the edge. This moves the zones instead.
         controls_.addControl("detectBlackBars", detectBlackBars);
         // Raise it if bars are missed, lower it if dark scenes get cropped; the doc page has why.
         controls_.addControl("barLevel", barLevel, 0, 64);
         controls_.setHidden(controls_.count() - 1, !detectBlackBars);
     }
 
-    /// Turning smoothing on or off allocates or frees the accumulators, so it has to re-run
-    /// prepare(): without this the buffer stays empty and the setting does nothing.
+    /// Turning smoothing on or off allocates or frees the accumulators, so it has to re-run prepare(): without this the buffer stays empty and the setting does nothing.
     bool affectsPrepare(const char* name) const override { return std::strcmp(name, "smoothing") == 0; }
 
-    /// Cold path. applyState() prepares a parent before its children, so the Layer's mapping is
-    /// already built when buildLitList() reads it.
+    /// Cold path. applyState() prepares a parent before its children, so the Layer's mapping is already built when buildLitList() reads it.
     void prepare() override {
         // lengthType is signed: a stray negative would cast to a colossal size_t, not to nothing.
         const lengthType w = width(), h = height();
@@ -73,20 +78,17 @@ public:
         buildLitList(positions);
     }
 
-    /// The positions that reach an LED, packed y<<16|x, so tick() walks only those: a few hundred
-    /// of tens of thousands on a border layout.
+    /// The positions that reach an LED, packed y<<16|x, so tick() walks a few hundred of tens of thousands on a border layout.
     void buildLitList(size_t positions) {
         litCount_ = 0;
         const MappingLUT& lut = layer()->lut();
-        // A table-free (identity) mapping lights every position, so the list would be 0,1,2,3...
-        //: 4 bytes a position to say "all of them", where the plain loop needs none.
+        // A table-free (identity) mapping lights every position, so the list would be 0,1,2,3, four bytes a position to say "all of them" where the plain loop needs none.
         allLit_ = !lut.hasLUT();
         if (allLit_ || positions == 0) {
             lit_.resize(0);
             return;
         }
-        // Count first, then size to the count: sizing by the box reserves 156 KB on a 200x200
-        // rectangle to hold the 3 KB its perimeter needs, the waste this list exists to remove.
+        // Count first, then size to the count. Sizing by the box reserves 156 KB on a 200x200 rectangle to hold the 3 KB its perimeter needs.
         size_t lit = 0;
         for (size_t i = 0; i < positions; i++)
             if (columnLit(lut, i, positions)) lit++;
@@ -97,9 +99,8 @@ public:
                 lit_[litCount_++] = static_cast<uint32_t>((i / w) << 16 | (i % w));
     }
 
-    /// Whether front-face position `i` reaches an LED in ANY z plane. This effect is D2, and
-    /// Layer::extrude() copies what it paints at z=0 across the depth, so on a sparse 3D layout (a
-    /// sphere) a column with its only LED at z > 0 is still lit from here. `slice` = width*height.
+    // This effect is D2 and Layer::extrude() copies z=0 across the depth. On a sparse 3D layout a column whose only LED sits at z > 0 is still lit from here.
+    /// Whether front-face position `i` reaches an LED in ANY z plane, where `slice` is width*height.
     bool columnLit(const MappingLUT& lut, size_t i, size_t slice) const MM_NONBLOCKING {
         const lengthType d = depth();
         for (lengthType z = 0; z < d; z++)
@@ -108,20 +109,19 @@ public:
         return false;
     }
 
+    /// Average each lit position's share of the frame and paint it, or paint black when no source is publishing.
     void tick() MM_NONBLOCKING override {
         const VideoFrame* frame = VideoService::latestFrame();
         const draw::Canvas out = canvas();
 
-        // No source: paint black rather than return, or the PREVIOUS effect's picture stays frozen
-        // on the strip. A merely dropped frame never lands here: VideoService keeps its buffer.
+        // No source: paint black rather than return, or the PREVIOUS effect's picture stays frozen on the strip. A merely dropped frame never lands here.
         if (!frame->rgb || frame->width == 0 || frame->height == 0) {
             draw::fill(out, {0, 0, 0});
             primed_ = false; // so the next frame lands whole instead of creeping up out of black
             return;
         }
 
-        // The frame already on the strip. `primed_` is what makes that true: prepare() clears the
-        // layer and resets it, so without it a rebuild against a frozen frame stays black.
+        // The frame already on the strip, which `primed_` is what makes true: prepare() clears the layer and resets it, so a rebuild against a frozen frame would stay black.
         if (primed_ && frame->seq == lastSeq_) return;
         lastSeq_ = frame->seq;
 
@@ -140,15 +140,12 @@ public:
                 for (lengthType x = 0; x < lightsX; x++)
                     paint(out, *frame, region, x, y, lightsX, lightsY, canSmooth);
         } else if (lit_) {
-            // The list. Unlit positions are never written, so they keep the black
-            // Layer::prepare() left on the rebuild this effect's prepare() rode in on, BlendMap
-            // never reads them, but PreviewDriver shows the raw buffer and must not see a ghost.
+            // The list. Unlit positions are never written, so they keep the black Layer::prepare() left. BlendMap never reads them, but PreviewDriver shows the raw buffer and must not see a ghost.
             for (size_t i = 0; i < litCount_; i++)
                 paint(out, *frame, region, static_cast<lengthType>(lit_[i] & 0xFFFF),
                       static_cast<lengthType>(lit_[i] >> 16), lightsX, lightsY, canSmooth);
         } else {
-            // The list could not be allocated. Same output, asking the mapping per position -
-            // which is the cost the list exists to avoid.
+            // The list could not be allocated. Same output, asking the mapping per position - which is the cost the list exists to avoid.
             const MappingLUT& lut = layer()->lut();
             const size_t slice = static_cast<size_t>(lightsX) * lightsY;
             draw::fill(out, {0, 0, 0});
@@ -167,15 +164,13 @@ private:
         Span shifted(int by) const { return {begin + by, end + by}; }
     };
 
-    // The actual region of the source frame that the lights cover.
-    // Could be smaller than the full frame if black bars are detected.
+    // The actual region of the source frame that the lights cover. Could be smaller than the full frame if black bars are detected.
     struct Region {
         int left = 0, top = 0; // where the picture starts inside the frame
         int width = 0, height = 0;
         int deepX = 0, deepY = 0; // edgeDepth in pixels, so the divide is not per position
 
-        /// Which source pixels one light position covers: its share of the picture, shifted back
-        /// into frame coordinates. Every input lives here, so the loop only asks.
+        /// Which source pixels one light position covers: its share of the picture, shifted back into frame coordinates. Every input lives here, so the loop only asks.
         Span cols(int x, int lightsX) const { return spanFor(x, lightsX, width, deepX).shifted(left); }
         Span rows(int y, int lightsY) const { return spanFor(y, lightsY, height, deepY).shifted(top); }
     };
@@ -195,8 +190,7 @@ private:
         r.top = bars.top;
         r.width = frame.width - bars.left - bars.right;
         r.height = frame.height - bars.top - bars.bottom;
-        // Rounded UP, so any non-zero percentage is at least one pixel. Flooring would let a small
-        // setting on a small frame land on 0, which is the off value: the control would go quiet.
+        // Rounded UP, so any non-zero percentage is at least one pixel. Flooring would let a small setting on a small frame land on 0, which is the off value: the control would go quiet.
         r.deepX = (r.width * edgeDepth + 99) / 100;
         r.deepY = (r.height * edgeDepth + 99) / 100;
         return r;
@@ -226,8 +220,7 @@ private:
     static bool scansRows(Edge e) MM_NONBLOCKING { return e == Edge::Top || e == Edge::Bottom; }
     static bool scansFromEnd(Edge e) MM_NONBLOCKING { return e == Edge::Bottom || e == Edge::Right; }
 
-    /// Is this line dark all the way across? Sampled at a few evenly spaced points rather than
-    /// every pixel: a bar is uniform, so a handful of probes settles it for a fraction of the cost.
+    /// Is this line dark all the way across? Sampled at a few evenly spaced points rather than every pixel: a bar is uniform, so a handful of probes settles it for a fraction of the cost.
     bool lineIsDark(const VideoFrame& frame, int line, Edge edge) const MM_NONBLOCKING {
         const bool horizontal = scansRows(edge);
         const int along = horizontal ? frame.width : frame.height;
@@ -241,9 +234,8 @@ private:
         return true;
     }
 
-    /// How many dark lines run inward from one edge. Reaching the ceiling reports NO bar: darkness
-    /// that deep is a dark SCENE, where a real letterbox is about 12% an edge. Returning the ceiling
-    /// cropped a dark frame to its middle and kStableFrames held that into the next scene.
+    // Returning the ceiling cropped a dark frame to its middle, and kStableFrames then held that into the next scene.
+    /// How many dark lines run inward from one edge, where reaching the ceiling reports NO bar: darkness that deep is a dark SCENE rather than a letterbox.
     int barFrom(const VideoFrame& frame, Edge edge) const MM_NONBLOCKING {
         const int extent = scansRows(edge) ? frame.height : frame.width;
         const int limit = extent * kMaxBarPercent / 100;
@@ -254,15 +246,11 @@ private:
         return 0;
     }
 
-    /// Scan this frame and return the bars IN EFFECT, which is not necessarily what was just
-    /// seen. A reading is adopted only once kStableFrames of them agree: bars come and go at scene
-    /// changes, and a mapping that follows every dark frame twitches worse than one that ignores
-    /// them. Hence the state; the return value is what the caller should actually map across.
+    // Bars come and go at scene changes, and a mapping that follows every dark frame twitches worse than one that ignores them. Hence the state.
+    /// Scan this frame and return the bars IN EFFECT, which is what the caller maps across: a reading is adopted only once kStableFrames of them agree.
     Bars trackBars(const VideoFrame& frame) MM_NONBLOCKING {
         if (!detectBlackBars) {
-            // All of it, not just the adopted value: a surviving candidate_ with a saturated
-            // stable_ makes the next enable agree with itself immediately and never re-adopt, so
-            // the setting would look dead until the picture's geometry changed.
+            // All of it, not just the adopted value. A surviving candidate_ with a saturated stable_ would make the next enable agree with itself at once and never re-adopt.
             bars_ = candidate_ = Bars{};
             stable_ = 0;
             return bars_;
@@ -283,9 +271,8 @@ private:
 
     /// Which source pixels light position `lightId` covers along one axis.
     /// - `pixels` shared evenly among `lightsSize` positions, cut at the edges so ranges meet exactly
-    /// - a position ON an edge takes exactly `deep` instead of its share: deeper OR shallower, so
-    ///   the control sets the depth rather than raising a floor under it
-    /// - `deep` of 0 leaves the plain division; interior positions are on no edge either way
+    /// - a position ON an edge takes exactly `deep` instead of its share, deeper OR shallower, so the control sets the depth rather than raising a floor under it
+    /// - `deep` of 0 leaves the plain division, and interior positions are on no edge either way
     /// - an empty range widens to one pixel, so a strip finer than the picture still lights up
     static Span spanFor(int lightId, int lightsSize, int pixels, int deep) {
         int begin = static_cast<int>((static_cast<long>(lightId) * pixels) / lightsSize);
@@ -303,8 +290,7 @@ private:
         return {begin, end};
     }
 
-    /// Linear light back to a display byte (sRGB OETF). Built on first use, which prepare() makes
-    /// a cold path: 4096 pow() calls have no place in a tick.
+    /// Linear light back to a display byte (sRGB OETF). Built on first use, which prepare() makes a cold path: 4096 pow() calls have no place in a tick.
     static const uint8_t* encodeTable() {
         static const auto table = [] {
             std::array<uint8_t, VideoFrame::kLinearMax + 1> t{};
@@ -318,9 +304,8 @@ private:
         return table.data();
     }
 
-    /// Mean of one light position's pixels: the box filter Hyperion uses, taken in linear light and
-    /// encoded once per LIGHT. uint32 accumulators: 640x480 onto 32x18 is ~520 pixels each, and
-    /// 520 x 4095 overflows 16 bits many times over.
+    // uint32 accumulators, because 640x480 onto 32x18 is ~520 pixels each and 520 x 4095 overflows 16 bits many times over.
+    /// Mean of one light position's pixels: the box filter Hyperion uses, taken in linear light and encoded once per LIGHT.
     static RGB meanOf(const VideoFrame& frame, Span cols, Span rows) {
         uint32_t sr = 0, sg = 0, sb = 0;
         for (int py = rows.begin; py < rows.end; py++) {
@@ -345,12 +330,10 @@ private:
         return static_cast<uint8_t>(out < 0 ? 0 : (out > 255 ? 255 : out));
     }
 
-    /// Saturation runs on the RAW mean, before brightness: stretching around an already-dimmed luma
-    /// would shrink the boost as the lights were turned down.
+    /// Saturation runs on the RAW mean, before brightness: stretching around an already-dimmed luma would shrink the boost as the lights were turned down.
     RGB adjust(RGB c) const {
         if (saturation != 100) {
-            // Rec.601 weights (77/150/29 of 256). A flat (r+g+b)/3 would brighten greens and dim
-            // blues as saturation rose, because it is not what the eye does.
+            // Rec.601 weights (77/150/29 of 256). A flat (r+g+b)/3 would brighten greens and dim blues as saturation rose, because it is not what the eye does.
             const int luma = static_cast<int>((77 * c.r + 150 * c.g + 29 * c.b) >> 8);
             c = {stretch(c.r, luma), stretch(c.g, luma), stretch(c.b, luma)};
         }
@@ -362,8 +345,7 @@ private:
         return c;
     }
 
-    /// Walk each channel a fraction of the way toward `color`. The state is 8.8 so the fraction of
-    /// a step survives between frames: in whole bytes a slow setting rounds every step to zero.
+    /// Walk each channel a fraction of the way toward `color`. The state is 8.8 so the fraction of a step survives between frames: in whole bytes a slow setting rounds every step to zero.
     RGB smooth(size_t lightId, RGB color) MM_NONBLOCKING {
         const uint8_t target[3] = {color.r, color.g, color.b};
         const int32_t step = 256 - smoothing;                      // gap closed per frame, of 256
@@ -376,8 +358,7 @@ private:
             const int32_t delta = want - held;
             // The first frame after a gap, and any move big enough to be a cut, land whole.
             const bool jump = !primed_ || (snapAbove && (delta > snap || delta < -snap));
-            // >> floors, so without the nudge a rising channel stalls one count short for ever
-            // (white would render as 254) while a falling one arrives.
+            // >> floors, so without the nudge a rising channel stalls one count short for ever, rendering white as 254, while a falling one arrives.
             int32_t move = (delta * step) >> 8;
             if (move == 0 && delta != 0) move = delta > 0 ? 1 : -1;
             state_[slot] = static_cast<uint16_t>(jump ? want : held + move);

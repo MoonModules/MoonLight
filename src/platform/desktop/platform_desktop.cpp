@@ -2316,8 +2316,7 @@ RmtLoopbackResult parlioWs2812Loopback(const uint16_t* /*dataPins*/, uint8_t /*l
 
 // The codec and capture live in their own file: the codec succeeds with nothing to bring up, and the microphone reads the system capture device.
 
-// USB video capture: no USB host on desktop, so init fails and VideoService's usb
-// source reports "no capture device" while its other sources keep working.
+// USB video capture: no USB host on desktop, so init fails and VideoService's usb source reports "no capture device" while its other sources keep working.
 bool videoCaptureInit(VideoCaptureHandle& /*h*/, uint16_t /*width*/, uint16_t /*height*/,
                       uint8_t /*fps*/) {
     return false;

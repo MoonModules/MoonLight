@@ -209,8 +209,7 @@ protected:
         controls_.addControl("balanceRed", balRed_, 0, 255);
         controls_.addControl("balanceGreen", balGreen_, 0, 255);
         controls_.addControl("balanceBlue", balBlue_, 0, 255);
-        // Narrower than whiteMode's gate, which also counts amber and UV: this trims the white
-        // dies alone, so on a fixture with only those the slider would reach nothing.
+        // Narrower than whiteMode's gate, which also counts amber and UV: this trims the white dies alone, so on a fixture with only those the slider would reach nothing.
         const bool hasWhite = lib && (lib->presetHasRole(presetId_, ChannelRole::White) ||
                                       lib->presetHasRole(presetId_, ChannelRole::WarmWhite));
         controls_.addControl("whiteLevel", whiteLevel_, 0, 255);

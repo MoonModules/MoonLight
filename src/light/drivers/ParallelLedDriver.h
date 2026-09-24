@@ -32,6 +32,7 @@ namespace mm {
 /// The source holds each light's bytes together; the wire needs each bus WORD to carry one bit of EVERY strand at once. The encoder turns 8 lights on their side, an 8x8 bit matrix transpose, writing one word per slot fused with the correction. A Parlio bus word and an i80 bus word have the same meaning.
 class ParallelLedDriver : public DriverBase {
 public:
+    /// This driver prices its own frame, so the shared path leaves the limiter to it.
     bool limitsCurrent() const override { return true; }
 
     /// Test-only: borrow a mock backend, dropping any existing one. The caller keeps ownership.
@@ -290,8 +291,7 @@ public:
         else                           tickSync(outCh);    // synchronous (doubleBuffer OFF / no 2nd buf)
     }
 
-    /// Price the frame against the budget before encodeRows forks across both cores, so both
-    /// halves read a `limit` that is already settled.
+    /// Price the frame against the budget before encodeRows forks across both cores, so both halves read a `limit` that is already settled.
     void measureFrame() {
         if (!sourceBuffer_ || !sourceBuffer_->data()) return;
         const uint8_t* src = encodeSrc_ ? encodeSrc_ : sourceBuffer_->data();

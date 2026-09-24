@@ -21,7 +21,9 @@ namespace mm {
 /// More than one algorithm is accepted, so white derivation is a mode rather than a formula.
 enum class WhiteMode : uint8_t { None, Min, Accurate };
 
+/// Dropdown labels for WhiteMode, in enum order.
 inline constexpr const char* kWhiteModeOptions[] = {"None", "Min", "Accurate"};
+/// How many modes are on offer.
 inline constexpr uint8_t kWhiteModeCount =
     sizeof(kWhiteModeOptions) / sizeof(kWhiteModeOptions[0]);
 
@@ -44,15 +46,16 @@ struct Correction {
     }
 
 
-    // White, amber and UV are their own dies, so an RGB trim must not reach them; the white dies
-    // carry a trim of their own.
-    static constexpr uint8_t kNeutral = 3, kWhite = 4;
-    uint8_t briLut[5][256] = {};    // briLut[ch][v] = curve(v * brightness * balance[ch]); ch 0=R 1=G 2=B, 3=untrimmed, 4=white
-    /// Per-channel white balance, 255 = untouched. Trim DOWN only: there is no headroom above 255,
-    /// so raising clips instead of balancing.
+    // White, amber and UV are their own dies, so an RGB trim must not reach them; the white dies carry a trim of their own.
+    /// Row of `briLut` carrying no trim, for a channel no RGB balance may reach.
+    static constexpr uint8_t kNeutral = 3;
+    /// Row of `briLut` carrying the white die's own trim.
+    static constexpr uint8_t kWhite = 4;
+    /// briLut[ch][v] = curve(v * brightness * balance[ch]), with rows 0=R, 1=G, 2=B, 3=untrimmed, 4=white.
+    uint8_t briLut[5][256] = {};
+    /// Per-channel white balance, 255 = untouched. Trim DOWN only: there is no headroom above 255, so raising clips instead of balancing.
     uint8_t balRed = 255, balGreen = 255, balBlue = 255;
-    /// The white die's trim, 255 = untouched: a separate emitter, often brighter than the RGB trio,
-    /// that the three trims above cannot reach. Pre-scales like them, so the curve still lands last.
+    /// The white die's trim, 255 = untouched: a separate emitter, often brighter than the RGB trio, that the three trims above cannot reach. Pre-scales like them, so the curve still lands last.
     uint8_t whiteLevel = 255;
     /// Which curve the brightness rebuild fills through; a driver's setting, not a global one.
     Curve curve = Curve::Cie;
@@ -63,7 +66,8 @@ struct Correction {
     uint8_t offGreen = 0;
     /// Output byte position of the blue role.
     uint8_t offBlue = 2;
-    uint8_t offWhite = kAbsent;     // derived white at this offset (kAbsent = light has no white)
+    /// Output byte position of the derived white, or kAbsent when the light has none.
+    uint8_t offWhite = kAbsent;
     // Warm white has a real achromatic basis; amber and UV are eyeball approximations, honestly so.
     /// Output byte positions of the extra emitters beside cold white.
     uint8_t offWarmWhite = kAbsent;
@@ -85,15 +89,21 @@ struct Correction {
     uint8_t offYellow = kAbsent;
     /// Output byte position of the UV emitter.
     uint8_t offUV = kAbsent;
-    uint8_t outChannels = 3;        // bytes emitted per light (= channelsPerLight of the wiring)
-    WhiteMode whiteMode = WhiteMode::Min;   // how white is synthesized from RGB (white lights only)
+    /// Bytes emitted per light, which is the wiring's channelsPerLight.
+    uint8_t outChannels = 3;
+    /// How white is synthesized from RGB, on lights that carry a white die.
+    WhiteMode whiteMode = WhiteMode::Min;
 
-    /// The current budget a frame is priced against, and the per-channel draw it is priced with. Per
-    /// CHANNEL: a white die draws about twice a color one, and under-reporting browns out a supply.
-    uint16_t budgetMa = 0;  // 0 disables the limiter
-    uint8_t mAColor = 8;    // one R/G/B channel at 255
-    uint8_t mAWhite = 16;   // one W channel at 255
-    uint8_t mAYellow = 8;  // assumed, not measured
+    // Priced per CHANNEL rather than per light, since under-reporting the draw browns out a supply.
+    /// The supply budget a frame is priced against, in milliamps; 0 disables the limiter.
+    uint16_t budgetMa = 0;
+    /// Draw of one R/G/B channel at 255, in milliamps.
+    uint8_t mAColor = 8;
+    /// Draw of one white channel at 255, which is about twice a color one.
+    uint8_t mAWhite = 16;
+    /// Draw of one amber channel at 255, assumed rather than measured.
+    uint8_t mAYellow = 8;
+    /// Draw of one UV channel at 255, assumed rather than measured.
     uint8_t mAUV = 8;
     /// What measure() set; 256 = unity, so an unlimited frame is bit-exact.
     uint16_t limit = 256;
@@ -153,8 +163,7 @@ struct Correction {
         outChannels = nChannels;
     }
 
-    /// The white component of a source triple, min(r,g,b); 0 when nothing is synthesized. Shared by
-    /// measure() and apply(), so the estimate cannot drift from what is emitted.
+    /// The white component of a source triple, min(r,g,b); 0 when nothing is synthesized. Shared by measure() and apply(), so the estimate cannot drift from what is emitted.
     uint8_t whiteOf(uint8_t r, uint8_t g, uint8_t b) const {
         if (whiteMode == WhiteMode::None) return 0;
         return r < g ? (r < b ? r : b) : (g < b ? g : b);

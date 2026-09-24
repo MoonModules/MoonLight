@@ -489,9 +489,8 @@ void wifiStaGetIPv4(uint8_t out[4]);
 /// Tear the station down.
 void wifiStaStop();
 
-/// Station RSSI in dBm, a negative number; 0 when the station is not associated. A cached reading,
-/// refreshed off the render task every few seconds: on a co-processor radio the query is a blocking
-/// RPC, so no caller pays for it, and every reading below shares that contract.
+// Refreshed off the render task every few seconds, since on a co-processor radio the query is a blocking RPC, and every reading below shares that contract.
+/// Station RSSI in dBm, a negative number, and 0 when the station is not associated.
 int wifiStaRssi();
 
 /// The associated access point's BSSID, zeroed when the station is not associated.
@@ -1036,68 +1035,63 @@ void audioMicDeinit(AudioMicHandle& h);
 /// Fill `outMag` with the magnitude bins of `n` windowed samples, `n` being a power of two.
 void audioFft(const float* windowed, size_t n, float* outMag);
 
-// ---------------------------------------------------------------------------
-// USB video capture (UVC): an HDMI grabber presenting itself as a webcam. MJPEG
-// off the wire, decoded by the target's JPEG hardware, so the RGB888 read back here
-// never passed through a software decoder. ESP32-P4 only; every other target links a
-// stub whose init fails, which VideoService reports as a status, not an error.
-// ---------------------------------------------------------------------------
+// --- USB video capture (UVC): an HDMI grabber presenting itself as a webcam ---------------------
+// MJPEG off the wire, decoded by the target's JPEG hardware, and ESP32-P4 only: every other target links a stub whose init fails, which VideoService reports as a status.
 
+/// Opaque per-device state, owned by the platform between init and deinit.
 struct VideoCaptureHandle { void* impl = nullptr; };
 
-// One row of what the attached device advertises, so the UI offers real choices rather than asking
-// the user to guess. MJPEG only: nothing else is decodable here, so there is no format field.
+// MJPEG only, since nothing else is decodable here, so there is no format field.
+/// One row of what the attached device advertises, so the UI offers real choices rather than guesses.
 struct VideoCaptureFormat {
+    /// Frame width in pixels.
     uint16_t width = 0;
+    /// Frame height in pixels.
     uint16_t height = 0;
+    /// Frames per second the device offers at that size.
     uint8_t fps = 0;
 };
 
-// Rows kept per device. A grabber lists its modes largest first, so a cap that is too low hides
-// exactly the cheap ones.
+// A grabber lists its modes largest first, so a cap that is too low hides exactly the cheap ones.
+/// Rows kept per device.
 constexpr size_t kVideoCaptureMaxFormats = 64;
 
-// Fills `out` with up to `max` of those rows and returns how many were written. Learned when a
-// device enumerates, so it survives a failed videoCaptureInit, which is exactly when it is worth
-// reading. 0 means no device has been seen yet.
+// Learned when a device enumerates, so it survives a failed videoCaptureInit, which is exactly when it is worth reading.
+/// Fill `out` with up to `max` of those rows and return how many were written; 0 means no device has been seen yet.
 size_t videoCaptureFormats(VideoCaptureFormat* out, size_t max);
 
-// Bumped whenever that list is rewritten, which is when a device enumerates. A consumer caching
-// the list compares this instead of copying, so noticing a hotplug costs one load. 0 until then.
+// A consumer caching the list compares this instead of copying, so noticing a hotplug costs one load.
+/// Bumped whenever that list is rewritten, which is when a device enumerates; 0 until then.
 uint32_t videoCaptureFormatGeneration();
 
-// Claim the first UVC device on the bus and stream MJPEG. All three of width,
-// height and fps are requests rather than promises: the device negotiates what it
-// can, and videoCaptureFrame reports what actually arrived. False when nothing is
-// attached, the target has no USB host, or no MJPEG format matches.
-//
-// One open is one device at one negotiated format. A device that goes away is not followed: a
-// (re)connect bumps videoCaptureFormatGeneration(), and the caller answers it with a
-// deinit/init pair on its own thread. That rule is what keeps the buffers below stable.
+// Width, height and fps are requests rather than promises. A device that goes away is not followed: a reconnect bumps the generation, and the caller answers with a deinit/init pair.
+/// Claim the first UVC device on the bus and stream MJPEG, false when nothing is attached or no MJPEG format matches.
 bool videoCaptureInit(VideoCaptureHandle& h, uint16_t width, uint16_t height, uint8_t fps);
 
-// Newest decoded frame as RGB888, or nullptr when none arrived since the last call.
-//
-// The buffer belongs to the platform (the JPEG decoder writes it by DMA, with its own alignment).
-// It is allocated in videoCaptureInit and freed in videoCaptureDeinit, never in between, and the
-// decoder never writes into the one most recently returned. So both the pointer and its pixels
-// hold until the next call that RETURNS A FRAME: a caller may keep showing it across ticks that
-// return nullptr, which is what lets a dropped frame leave the picture up. It MUST drop it before
-// calling videoCaptureDeinit().
+// The buffer belongs to the platform, allocated in init and freed in deinit, and the decoder never writes into the one most recently returned. See videoCaptureInit's appendix.
+/// Newest decoded frame as RGB888, held until the next call that RETURNS A FRAME, or nullptr when none arrived.
 const uint8_t* videoCaptureFrame(VideoCaptureHandle& h, uint16_t& width, uint16_t& height) MM_NONBLOCKING;
 
+/// Release the device and free its buffers. The caller drops the frame it borrowed first.
 void videoCaptureDeinit(VideoCaptureHandle& h);
 
-// Why frames did not reach the renderer, cumulative since boot. A drop in ones is normal; a
-// climbing count is a fault worth naming, since in the picture it is only a stutter.
+// A drop in ones is normal, and a climbing count is a fault worth naming, since in the picture it is only a stutter.
+/// Why frames did not reach the renderer, cumulative since boot.
 struct VideoCaptureStats {
-    uint32_t decoded = 0;    // frames that reached a slot
-    uint32_t busy = 0;       // arrived while the previous frame was still waiting to be decoded
-    uint32_t noSlot = 0;     // every decode buffer still held by the renderer
-    uint32_t infoFail = 0;   // not a readable JPEG: a mis-detected payload stride lands here
-    uint32_t oversize = 0;   // larger than the buffers sized at open
-    uint32_t decodeFail = 0; // the decoder refused a bitstream whose header it had accepted
+    /// Frames that reached a slot.
+    uint32_t decoded = 0;
+    /// Arrived while the previous frame was still waiting to be decoded.
+    uint32_t busy = 0;
+    /// Every decode buffer still held by the renderer.
+    uint32_t noSlot = 0;
+    /// Not a readable JPEG: a mis-detected payload stride lands here.
+    uint32_t infoFail = 0;
+    /// Larger than the buffers sized at open.
+    uint32_t oversize = 0;
+    /// The decoder refused a bitstream whose header it had accepted.
+    uint32_t decodeFail = 0;
 };
+/// The counters above, read atomically enough for a once-a-second status line.
 VideoCaptureStats videoCaptureStats();
 
 // I2C bus diagnostics: the standard i2cdetect operation, domain-neutral rather than audio-specific.

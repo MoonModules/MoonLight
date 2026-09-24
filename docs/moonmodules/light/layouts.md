@@ -260,17 +260,15 @@ Detail: [technical](moxygen/GridBlacksLayout.md)
 
 ### Rectangle
 
+<img src="../../assets/light/layouts/RectangleLayout.gif" width="300" alt="Rectangle layout preview">
+
 Lights around the **perimeter** of a `width` x `height` box, nothing inside it: the strip-around-a-frame primitive. A box one light thick degenerates to a plain line. Use [Grid](#grid) when the interior has LEDs too.
 
-- `width` / `height`: box extent in lights along each edge (1 to 500); 32x18 default is 16:9.
-- `startCorner`: which corner light 0 sits at, top-left / top-right / bottom-right / bottom-left.
-- `offset`: lights past that corner where the strip actually begins, for a run that starts partway along an edge.
+- `width` / `height`: box extent in lights along each edge (1 to 500).
+- `startCorner`: which corner light 0 sits at.
+- `offset`: lights past that corner where the strip begins.
 - `clockwise`: direction the indices run from that corner.
-- `sharedCorners`: on (default), one light sits in each corner and the count is `2·(width + height) − 4`, a single strip bent around a frame. Off, each edge keeps its own end and the count is the plain sum `2·(width + height)`: four separate strips, two lights on each corner coordinate. A 20x10 box is 56 lights shared, 60 unshared.
-
-`startCorner`, `offset` and `clockwise` describe the **wiring, not the shape**: they reorder indices while every coordinate stays identical, so set them to match your build and an effect's "top edge" lights the physical top edge. Same split [Single Row](#singlerow) draws with `reversed order` and [Grid](#grid) with `serpentine`. `sharedCorners` is the exception, since it changes how many lights there are.
-
-Origin: projectMM
+- `sharedCorners`: on (default), one light per corner: `2·(width + height) − 4`.
 
 Detail: [technical](moxygen/RectangleLayout.md)
 
@@ -330,3 +328,9 @@ A script calling `random16` breaks that determinism. The passes disagree on the 
 `t` is the one system variable a layout reads, and it is always 0: the script runs twice per rebuild and must agree with itself. `width`, `height` and `depth` read 0, since a layout is upstream of the grid it defines.
 
 A script names its own size controls, such as `cols` and `rows`. The pipeline derives the bounding box from the coordinates actually placed, so a size passed in from outside would be a second answer that could disagree with the first.
+
+## Rectangle, details
+
+`startCorner`, `offset` and `clockwise` describe the **wiring, not the shape**: they reorder indices while every coordinate stays identical, so set them to match your build and an effect's "top edge" lights the physical top edge. Same split [Single Row](#singlerow) draws with `reversed order` and [Grid](#grid) with `serpentine`. `sharedCorners` is the exception, since it changes how many lights there are.
+
+Origin: projectMM

@@ -465,8 +465,7 @@ TEST_CASE("A driver referencing a missing preset falls back to the default built
     CHECK(c.outChannels == 3);
 }
 
-// whiteLevel reaches the White and WarmWhite dies only, so its gate is narrower than whiteMode's:
-// a preset carrying amber or UV but no white would otherwise show a slider that changes nothing.
+// whiteLevel reaches the White and WarmWhite dies only, so its gate is narrower than whiteMode's. A preset carrying amber but no white would otherwise show a slider that changes nothing.
 TEST_CASE("whiteLevel is shown for a white preset and hidden for a no-white one") {
     LightPresetsModule lib;
     lib.defineControls(); // seeds RGB(0) GRB(1) BGR(2) RGBW(3) GRBW(4)

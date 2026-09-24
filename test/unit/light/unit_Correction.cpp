@@ -345,8 +345,7 @@ TEST_CASE("Correction: the curve and white balance compose into the one table") 
 }
 
 // --- Current limiting ------------------------------------------------------------------------
-// These check the NUMBERS, not just that something got smaller: the arithmetic is what stands
-// between a white frame and a browned-out supply.
+// These check the NUMBERS, not just that something got smaller: the arithmetic is what stands between a white frame and a browned-out supply.
 
 // An unset budget must leave every channel bit-exact, or the feature would dim existing installs.
 TEST_CASE("Correction: no budget leaves the frame untouched") {
@@ -386,9 +385,7 @@ TEST_CASE("Correction: an over-budget frame is scaled to fit") {
     CHECK(out[0] == 127);                     // (255 * 128) >> 8
 }
 
-// Why a per-LIGHT figure cannot describe RGBW: Accurate moves the draw off R/G/B and onto W,
-// which is cheaper for the same color (16 mA a light against 40) so one budget halves a Min
-// frame and leaves an Accurate one alone.
+// Why a per-LIGHT figure cannot describe RGBW. Accurate moves the draw off R/G/B and onto W, which is cheaper for the same color, so one budget halves a Min frame and leaves an Accurate one alone.
 TEST_CASE("Correction: the estimate follows whiteMode, not a per-light constant") {
     uint8_t frame[100 * 3];
     std::memset(frame, 255, sizeof(frame));
@@ -408,10 +405,7 @@ TEST_CASE("Correction: the estimate follows whiteMode, not a per-light constant"
     CHECK(acc.limit == 256);                  // inside budget, so untouched
 }
 
-// A fixture with a master dimmer channel must actually be LIT. The dimmer is a real output, not
-// a motion role: a moving head whose preset maps Pan/Tilt/Dimmer/RGBW stayed completely dark on
-// the bench with a perfectly correct color map, because nothing ever wrote its dimmer and a
-// linear dimmer at 0 emits nothing. The pre-existing "IRGB" preset had the same defect.
+// A fixture with a master dimmer channel must actually be LIT, since the dimmer is a real output rather than a motion role. A moving head mapping Pan/Tilt/Dimmer/RGBW stayed dark on the bench with a correct color map, because nothing wrote its dimmer.
 
 // A fixture with a master dimmer channel must actually be LIT. The dimmer is a real output, not a motion role: a moving head whose preset maps Pan/Tilt/Dimmer/RGBW stayed completely dark on the bench with a perfectly correct color map, because nothing ever wrote its dimmer and a linear dimmer at 0 emits nothing. The pre-existing "IRGB" preset had the same defect.
 TEST_CASE("A preset's master dimmer channel is driven, so the fixture actually lights") {
@@ -576,9 +570,7 @@ TEST_CASE("Correction: the current estimate counts Yellow and UV channels") {
     CHECK(c.limit < 256);
 }
 
-// A dimmer costs the estimate NOTHING: on every fixture that declares one it is a DMX control value
-// drawing nothing from this rail, like the motion roles beside it. Pricing it squeezed the colors to
-// make room for draw that does not exist.
+// A dimmer costs the estimate NOTHING: on every fixture that declares one it is a DMX control value drawing nothing from this rail, like the motion roles beside it. Pricing it squeezed the colors to make room for draw that does not exist.
 TEST_CASE("Correction: a master dimmer costs the current estimate nothing") {
     uint8_t frame[10 * 3];
     std::memset(frame, 255, sizeof(frame));   // 10 white lights, 3 x 8 mA = 240 mA
@@ -597,16 +589,14 @@ TEST_CASE("Correction: a master dimmer costs the current estimate nothing") {
     CHECK(plain.limit == 213);                 // 200/240 of unity: the colors, and only those
     CHECK(dimmed.limit == plain.limit);        // declaring a dimmer changed nothing
 
-    // And a black frame draws nothing whether or not a dimmer is declared. Priced, this tripped
-    // the limiter on a strip showing no light at all.
+    // And a black frame draws nothing whether or not a dimmer is declared. Priced, this tripped the limiter on a strip showing no light at all.
     const uint8_t black[3] = {0, 0, 0};
     dimmed.budgetMa = 1;
     dimmed.measure(black, 3, 1);
     CHECK(dimmed.limit == 256);
 }
 
-// Yellow and UV are emitted from the same corrected RGB as everything else, so a fixture carrying
-// them draws more than an RGB one on the same frame. Uncounted, an RGBY preset would exceed its cap.
+// Yellow and UV are emitted from the same corrected RGB as everything else, so a fixture carrying them draws more than an RGB one on the same frame. Uncounted, an RGBY preset would exceed its cap.
 TEST_CASE("Correction: the estimate counts the Yellow and UV emitters") {
     uint8_t frame[10 * 3];
     std::memset(frame, 255, sizeof(frame));
@@ -624,8 +614,7 @@ TEST_CASE("Correction: the estimate counts the Yellow and UV emitters") {
 
     CHECK(wide.limit < plain.limit);   // the same frame costs more, so it is trimmed harder
 
-    // And each emitter carries its own figure: a UV die usually draws more than a visible one, so
-    // pricing it as a color channel would under-report, the direction that browns out a supply.
+    // And each emitter carries its own figure. A UV die usually draws more than a visible one, so pricing it as a color channel would under-report, the direction that browns out a supply.
     Correction thirsty;
     thirsty.budgetMa = 100;
     mm::test::rebuildFromPreset(thirsty, 255, mm::test::PresetOrder::RGB);
@@ -635,8 +624,7 @@ TEST_CASE("Correction: the estimate counts the Yellow and UV emitters") {
     CHECK(thirsty.limit < wide.limit);
 }
 
-// A cap that understates is not a cap: flooring the modelled draw lets a frame sit fractionally
-// over the budget with no limit applied.
+// A cap that understates is not a cap: flooring the modelled draw lets a frame sit fractionally over the budget with no limit applied.
 TEST_CASE("Correction: the modelled draw is rounded up, so the cap stays an upper bound") {
     const uint8_t frame[3] = {254, 0, 0};   // one channel at 254: 7.97 mA at 8 mA full scale
 
@@ -726,8 +714,7 @@ TEST_CASE("RGBW white is derived in linear light, then curved once") {
     CHECK(out[2] == ref.briLut[0][0]);
 }
 
-// The W die is separate hardware the RGB trims say nothing about, so it has a trim of its own that
-// pre-scales like theirs: the white channel moves through the curve, RGB does not move at all.
+// The W die is separate hardware the RGB trims say nothing about, so it has a trim of its own that pre-scales like theirs. The white channel moves through the curve, RGB not at all.
 TEST_CASE("Correction whiteLevel: trims the white die without touching RGB") {
     const uint8_t src[3] = {200, 160, 120}; // white component = min = 120
 
@@ -749,14 +736,12 @@ TEST_CASE("Correction whiteLevel: trims the white die without touching RGB") {
     CHECK(b[2] == a[2]);
 }
 
-// The limiter prices what is EMITTED, so a trimmed white must cost less: otherwise the budget is
-// spent on current the strip never draws, squeezing the colors for nothing.
+// The limiter prices what is EMITTED, so a trimmed white must cost less: otherwise the budget is spent on current the strip never draws, squeezing the colors for nothing.
 TEST_CASE("Correction whiteLevel: a trimmed white is priced at what it draws") {
     uint8_t frame[10 * 3];
     std::memset(frame, 255, sizeof(frame)); // 10 white lights
 
-    // White everywhere costs 400 mA at these defaults (10 x (3x255x8 + 255x16) / 255); with no
-    // white emitted it is 240. A budget between the two is what makes the difference visible.
+    // White everywhere costs 400 mA at these defaults (10 x (3x255x8 + 255x16) / 255); with no white emitted it is 240. A budget between the two is what makes the difference visible.
     Correction full;
     full.budgetMa = 300;
     mm::test::rebuildFromPreset(full, 255, mm::test::PresetOrder::RGBW);
