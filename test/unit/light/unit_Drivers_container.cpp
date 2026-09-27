@@ -78,19 +78,19 @@ TEST_CASE("Drivers::on gates the correction LUT without clobbering brightness") 
     drivers.on = true;
     drivers.onControlChanged("brightness");        // rebuild LUT at full power
     CHECK(drivers.effectiveBrightness() == 200);
-    CHECK(drv.correctionForTest().briLut[255] == 200);   // (255 * 200) / 255 == 200
+    CHECK(drv.correctionForTest().briLut[0][255] == 200);   // (255 * 200) / 255 == 200
 
     // Turn off → LUT scales to black, but the brightness value is untouched.
     drivers.on = false;
     drivers.onControlChanged("on");
     CHECK(drivers.brightness == 200);            // value preserved
     CHECK(drivers.effectiveBrightness() == 0);
-    CHECK(drv.correctionForTest().briLut[255] == 0);     // output black
+    CHECK(drv.correctionForTest().briLut[0][255] == 0);     // output black
 
     // Turn back on → the exact level returns, no stored-value juggling.
     drivers.on = true;
     drivers.onControlChanged("on");
-    CHECK(drv.correctionForTest().briLut[255] == 200);
+    CHECK(drv.correctionForTest().briLut[0][255] == 200);
 }
 
 // Regression (the localBrightness bug): a per-driver localBrightness change must RE-SCALE that driver's correction LUT, global × local, just like a global brightness change does. The bug was that localBrightness edits didn't reach the LUT (only global did). Both sliders must reach output.
@@ -104,17 +104,17 @@ TEST_CASE("Drivers: a localBrightness change re-scales the driver's correction L
     // LINEAR, so the arithmetic below reads as the multiplication it is testing. What this pins is that BOTH sliders reach the LUT, which a perceptual curve would leave true but express as table lookups nobody can check by eye. The curve has its own tests.
     mm::test::setControlValue<uint8_t>(drv, "curve", 3);   // 3 = linear
     drivers.setup();                                // seeds the driver's correction (global 200, local 255)
-    CHECK(drv.correctionForTest().briLut[255] == 200);   // global 200 × local 255/255 = 200
+    CHECK(drv.correctionForTest().briLut[0][255] == 200);   // global 200 × local 255/255 = 200
 
     // Halve the driver's LOCAL brightness, its own control change must re-bake the LUT to global × local = 200 × 128/255 ≈ 100. This is the path the bug missed.
     mm::test::setControlValue<uint8_t>(drv, "localBrightness", 128);
     drv.onControlChanged("localBrightness");
-    CHECK(drv.correctionForTest().briLut[255] == 100);   // (200 * 128) / 255 == 100
+    CHECK(drv.correctionForTest().briLut[0][255] == 100);   // (200 * 128) / 255 == 100
 
     // And the global slider still composes on top: raising global to 255 with local 128 → 128.
     drivers.brightness = 255;
     drivers.onControlChanged("brightness");
-    CHECK(drv.correctionForTest().briLut[255] == 128);   // (255 * 128) / 255 == 128
+    CHECK(drv.correctionForTest().briLut[0][255] == 128);   // (255 * 128) / 255 == 128
 }
 
 // Disabled child drivers don't tick: toggling `enabled` flips whether that driver's tick() runs.

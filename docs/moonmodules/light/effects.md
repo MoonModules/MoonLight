@@ -367,7 +367,6 @@ Shapes placed between pixels rather than on them. A clock hand drawn on whole pi
 - `drift`: how far the scene wanders from center, in pixels; 0 pins it.
 - `zoom`: the camera pushes in and settles back; 0 holds it fixed.
 
-
 Origin: MoonLight (Sutaburosu)
 
 Detail: [technical](moxygen/FixedPointEffect.md)
@@ -1174,7 +1173,21 @@ Detail: [technical](moxygen/NoiseEffect.md)
 
 ## MoonLight-native effects
 
-<a id="moonlive"></a>
+<a id="ambilight"></a>
+
+### Ambilight 📺
+
+<img src="../../assets/light/effects/AmbilightEffect.gif" width="300" alt="Ambilight effect preview">
+
+Paints the layer with the live frame from the [Video](../core/services.md#video) service, so lights around a display glow the color of the picture nearest them. Each light shows the **mean** of the rectangle mapping to it. Sampling, black bars and the layout's part: ⌄ details.
+
+- `brightness`: scales the sampled color, dimming the video not the output.
+- `saturation`: how far each channel is pushed from its zone's luma.
+- `smoothing`: how much of the gap to a new color closes per frame.
+- `snapAbove`: a channel moving further than this jumps instead of easing.
+- `edgeDepth`: how far into the picture the outermost lights look.
+- `detectBlackBars`: map the lights across the picture, not the frame.
+- `barLevel`: how dark a pixel counts as bar (0 to 64).
 
 ### MoonLive 📝 · any
 
@@ -1336,3 +1349,33 @@ Origin: MoonLight (Sinus, AI-generated) · via [MoonLight](https://github.com/Mo
 Detail: [technical](moxygen/SineEffect.md)
 
 [Tests](../../reference/tests/unit-tests.md#sineeffect)
+
+## Ambilight, details
+
+#### Why the mean
+
+A single sampled pixel flickers on film grain and moving edges. The mean of the whole rectangle is steady, which is what makes the light read as belonging to the picture rather than chasing it. This is the box filter Hyperion uses.
+
+#### Sampling depth
+
+`edgeDepth` **sets** the depth rather than raising a floor, so a value below a position's own share makes its zone thinner instead. The outermost lights' own share is 1/height of the frame, a sliver at the very edge where compression is worst; Hyperion samples about 8%.
+
+#### Black bars
+
+`barLevel` defaults to 12, about 5%, which matches Hyperion and suits MJPEG: that is conventionally full-range, so black arrives near 0. **If bars are never detected**, suspect a grabber passing limited range through: black then sits at 16 and nothing below 12 ever matches, so raise this above 16. Lower it if dark scenes get cropped instead.
+
+`edgeDepth` cannot substitute for detection: it widens a zone from the edge, so a bar stays inside it. Detection resists a dark *scene* two ways: a reading is adopted only after 30 agreeing frames, and anything deeper than 40% of an axis is refused as a scene rather than a bar.
+
+#### The layout decides the shape
+
+The effect fills a logical box and knows nothing else. On a [Rectangle](layouts.md#rectangle) the interior maps to no LED, so a border strip shows the frame's border; on a [Grid](layouts.md#grid) the same effect is a video wall. Where your strip starts and which way it runs are `startCorner`, `offset` and `clockwise` on the layout, not settings here.
+
+With no video source it paints black. Every effect owns its background, so returning early would leave the previous effect's picture frozen on the strip.
+
+Origin: MoonLight
+
+Detail: [technical](moxygen/AmbilightEffect.md)
+
+[Tests](../../reference/tests/unit-tests.md#ambilighteffect)
+
+<a id="moonlive"></a>

@@ -464,3 +464,32 @@ TEST_CASE("A driver referencing a missing preset falls back to the default built
     CHECK(lib.deriveCorrection(lib.defaultId(), 255, c));  // …and the default always does
     CHECK(c.outChannels == 3);
 }
+
+// whiteLevel reaches the White and WarmWhite dies only, so its gate is narrower than whiteMode's. A preset carrying amber but no white would otherwise show a slider that changes nothing.
+TEST_CASE("whiteLevel is shown for a white preset and hidden for a no-white one") {
+    LightPresetsModule lib;
+    lib.defineControls(); // seeds RGB(0) GRB(1) BGR(2) RGBW(3) GRBW(4)
+
+    mm::NetworkSendDriver drv;
+    auto whiteLevelHidden = [&]() -> int {
+        drv.rebuildControls();
+        for (uint8_t i = 0; i < drv.controls().count(); i++)
+            if (std::strcmp(drv.controls()[i].name, "whiteLevel") == 0)
+                return drv.controls()[i].hidden ? 1 : 0;
+        return -1;
+    };
+    auto pickPreset = [&](uint8_t idx) {
+        for (uint8_t i = 0; i < drv.controls().count(); i++)
+            if (std::strcmp(drv.controls()[i].name, "lightPreset") == 0)
+                *static_cast<uint8_t*>(drv.controls()[i].ptr) = idx;
+        drv.rebuildControls();
+        drv.onControlChanged("lightPreset");
+    };
+    drv.defineControls();
+
+    pickPreset(1); // GRB - no white die
+    CHECK(whiteLevelHidden() == 1);
+
+    pickPreset(4); // GRBW - carries White
+    CHECK(whiteLevelHidden() == 0);
+}

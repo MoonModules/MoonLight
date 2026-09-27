@@ -520,7 +520,35 @@ static uint8_t staStaticMask_[4] = {};
 static uint8_t staStaticDns_[4]  = {};
 static esp_netif_t* staNetif_ = nullptr;
 static esp_netif_t* apNetif_ = nullptr;
-static bool wifiInitDone_ = false;
+static std::atomic<bool> wifiInitDone_{false};   // atomic: the radio poller reads it from its own task
+
+// Radio telemetry, read on the render tick and refreshed off it. With a co-processor radio every esp_wifi query is a blocking RPC, 55-90 ms measured, and the state push made one a second. A task polls instead.
+static std::atomic<int8_t> radioRssi_{0};
+static std::atomic<int8_t> radioTxPowerQ_{0};  // quarter dBm, the unit the stack uses
+static std::atomic<uint64_t> radioAp_{0};      // BSSID << 8 | channel, one word so a reader never sees half a connect
+constexpr uint32_t kRadioPollMs = 2000;        // a signal-strength readout, not an instrument
+
+static void radioPollTask(void*) {
+    for (;;) {
+        vTaskDelay(pdMS_TO_TICKS(kRadioPollMs));
+        if (!wifiInitDone_.load(std::memory_order_relaxed)) continue;
+        if (wifiStaConnected_.load(std::memory_order_relaxed)) {
+            int rssi = 0;
+            if (esp_wifi_sta_get_rssi(&rssi) == ESP_OK) radioRssi_.store(static_cast<int8_t>(rssi), std::memory_order_relaxed);
+        }
+        int8_t power = 0;
+        if (esp_wifi_get_max_tx_power(&power) == ESP_OK) radioTxPowerQ_.store(power, std::memory_order_relaxed);
+    }
+}
+
+// Spawned once, on the first WiFi init, and kept across a deinit: wifiInitDone_ gates the asking.
+static void ensureRadioPoller() {
+    static bool started = false;
+    if (started) return;
+    // 4 KB: the hosted RPC path serializes through protobuf below this call.
+    started = xTaskCreate(&radioPollTask, "mmradio", 4096, nullptr, tskIDLE_PRIORITY + 1, nullptr) == pdPASS;
+    if (!started) ESP_LOGW(NET_TAG, "no radio poller task: RSSI and TX power will read 0");
+}
 #endif
 
 static void ensureNetifInit() {
@@ -1060,12 +1088,20 @@ static void wifiEventHandler(void* /*arg*/, esp_event_base_t base,
         if (id == WIFI_EVENT_STA_CONNECTED) {
             // L2 association complete (before DHCP). In Static mode, pin the stored config now and mark connected, a DHCP-less network never fires GOT_IP, so waiting for it would strand a static STA. Mirrors the eth CONNECTED handler's ethStatic_ re-pin. DHCP mode is a no-op here (the DHCP client runs and GOT_IP sets wifiStaConnected_ as before).
             wifiStaAssociated_.store(true, std::memory_order_relaxed);
+            // The event carries the AP's identity, so nobody ever has to ask the radio for it.
+            if (const auto* ev = static_cast<wifi_event_sta_connected_t*>(data)) {
+                uint64_t ap = 0;
+                for (int i = 0; i < 6; i++) ap = (ap << 8) | ev->bssid[i];
+                radioAp_.store((ap << 8) | ev->channel, std::memory_order_relaxed);
+            }
             if (staStatic_.load(std::memory_order_acquire)) {
                 netSetStaticIPv4(NetIface::Sta, staStaticIp_, staStaticGw_, staStaticMask_, staStaticDns_);
             }
         } else if (id == WIFI_EVENT_STA_DISCONNECTED) {
             wifiStaConnected_.store(false, std::memory_order_relaxed);
             wifiStaAssociated_.store(false, std::memory_order_relaxed);
+            radioAp_.store(0, std::memory_order_relaxed);
+            radioRssi_.store(0, std::memory_order_relaxed);
             // The reconnect is ours to make, and unbounded: @xref{the-reconnect-is-ours-to-make-and-unbounded|why}.
             if (!wifiStaStopping_.load(std::memory_order_relaxed)) {
                 // Immediately, and without sleeping to pace it: the pacing is free and blocking here would stall the whole stack. The counter is diagnostic and does not gate the retry.
@@ -1139,6 +1175,7 @@ static bool ensureWifiInit() {
     }
 
     wifiInitDone_ = true;
+    ensureRadioPoller();
     return true;
 }
 
@@ -1224,25 +1261,19 @@ void wifiStaStop() {
     ESP_LOGI(NET_TAG, "WiFi STA stopped + deinit");
 }
 
+// Cached, see radioPollTask: none of the readouts below asks the radio.
 int wifiStaRssi() {
     if (!wifiStaConnected_.load(std::memory_order_relaxed)) return 0;
-    wifi_ap_record_t info{};
-    if (esp_wifi_sta_get_ap_info(&info) != ESP_OK) return 0;
-    return info.rssi;
+    return radioRssi_.load(std::memory_order_relaxed);
 }
 
 void wifiStaBssid(uint8_t out[6]) {
-    std::memset(out, 0, 6);
-    if (!wifiStaConnected_.load(std::memory_order_relaxed)) return;
-    wifi_ap_record_t info{};
-    if (esp_wifi_sta_get_ap_info(&info) == ESP_OK) std::memcpy(out, info.bssid, 6);
+    const uint64_t ap = radioAp_.load(std::memory_order_relaxed) >> 8;
+    for (int i = 0; i < 6; i++) out[i] = static_cast<uint8_t>(ap >> (8 * (5 - i)));
 }
 
 int wifiStaChannel() {
-    if (!wifiStaConnected_.load(std::memory_order_relaxed)) return 0;
-    wifi_ap_record_t info{};
-    if (esp_wifi_sta_get_ap_info(&info) != ESP_OK) return 0;
-    return info.primary;
+    return static_cast<int>(radioAp_.load(std::memory_order_relaxed) & 0xFF);
 }
 
 bool wifiApInit(const char* apName, const char* ip) {
@@ -1321,10 +1352,8 @@ void wifiApStop() {
 
 int wifiTxPower() {
     if (!wifiInitDone_) return 0;
-    int8_t power = 0;
-    if (esp_wifi_get_max_tx_power(&power) != ESP_OK) return 0;
-    // ESP-IDF returns TX power in units of 0.25 dBm; round to nearest whole dBm.
-    return (power + 2) / 4;
+    // ESP-IDF reports TX power in units of 0.25 dBm; round to nearest whole dBm.
+    return (radioTxPowerQ_.load(std::memory_order_relaxed) + 2) / 4;
 }
 
 bool wifiSetTxPower(int8_t quarterDbm) {
@@ -1338,6 +1367,7 @@ bool wifiSetTxPower(int8_t quarterDbm) {
         ESP_LOGW(NET_TAG, "WiFi set TX power %d (q-dBm) failed: %s", quarterDbm, esp_err_to_name(err));
         return false;
     }
+    radioTxPowerQ_.store(quarterDbm, std::memory_order_relaxed);   // so the readout follows the set at once
     ESP_LOGI(NET_TAG, "WiFi TX power capped to %d (q-dBm) ≈ %d dBm", quarterDbm, (quarterDbm + 2) / 4);
     return true;
 }

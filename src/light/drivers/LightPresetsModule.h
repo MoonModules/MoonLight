@@ -65,6 +65,16 @@ public:
         return 0;   // a dangling id renders at the first preset; rebuildCorrection falls back to it too
     }
 
+    /// Whether the preset carries `role`, for a caller that needs one emitter rather than any.
+    bool presetHasRole(uint32_t id, ChannelRole role) const {
+        const Preset* p = find(id);
+        if (!p) return false;
+        const uint8_t* r = roleAt(*p);
+        for (uint8_t c = 0; c < p->channelCount; c++)
+            if (static_cast<ChannelRole>(r[c]) == role) return true;
+        return false;
+    }
+
     // Any channel apply() synthesises from RGB counts, since one control governs them all.
     /// Whether the preset carries a channel the white mode would synthesise.
     bool presetHasSynthChannel(uint32_t id) const {

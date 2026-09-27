@@ -32,6 +32,9 @@ namespace mm {
 /// The source holds each light's bytes together; the wire needs each bus WORD to carry one bit of EVERY strand at once. The encoder turns 8 lights on their side, an 8x8 bit matrix transpose, writing one word per slot fused with the correction. A Parlio bus word and an i80 bus word have the same meaning.
 class ParallelLedDriver : public DriverBase {
 public:
+    /// This driver prices its own frame, so the shared path leaves the limiter to it.
+    bool limitsCurrent() const override { return true; }
+
     /// Test-only: borrow a mock backend, dropping any existing one. The caller keeps ownership.
     void setPeripheralForTest(LedPeripheral* p) {
         if (peripheral_ && peripheralOwned_) { peripheral_->busDeinit(); delete peripheral_; }
@@ -288,6 +291,16 @@ public:
         else                           tickSync(outCh);    // synchronous (doubleBuffer OFF / no 2nd buf)
     }
 
+    /// Price the frame against the budget before encodeRows forks across both cores, so both halves read a `limit` that is already settled.
+    void measureFrame() {
+        if (!sourceBuffer_ || !sourceBuffer_->data()) return;
+        const uint8_t* src = encodeSrc_ ? encodeSrc_ : sourceBuffer_->data();
+        const uint8_t srcCh = sourceBuffer_->channelsPerLight();
+        nrOfLightsType lights = 0;
+        for (uint8_t lane = 0; lane < laneCount_; lane++) lights += laneCounts_[lane];
+        correction_.measure(src + static_cast<size_t>(winStart_) * srcCh, srcCh, lights);
+    }
+
     // One DMA buffer, no alternation, no deferred-wait bookkeeping, zero added latency.
     /// Blocking path: encode, send, wait out the wire, so a tick costs encode plus wire.
     void tickSync(uint8_t outCh) {
@@ -296,6 +309,7 @@ public:
         if (!busWaitIfBusy(0)) return;
         uint8_t* buf = peripheral_->busBuffer(0);
         if (!buf) return;
+        measureFrame();
         // Branch on the BUS WIDTH, not the strand count: 48 strands on 6 pins is still 8-bit.
         if (slotBytes() == 1) encodeRows<uint8_t>(outCh, buf);
         else                  encodeRows<uint16_t>(outCh, buf);
@@ -317,6 +331,7 @@ public:
         // 2. Fused per-ROW encode into buffer `active_`, one branch on the bus width (see encodeRows).
         uint8_t* buf = peripheral_->busBuffer(active_);
         if (!buf) return;
+        measureFrame();
         // Branch on the BUS WIDTH, not the strand count: 48 strands on 6 pins is still 8-bit.
         if (slotBytes() == 1) encodeRows<uint8_t>(outCh, buf);
         else                  encodeRows<uint16_t>(outCh, buf);
@@ -342,6 +357,7 @@ public:
         if (ringSnapshot) { if (!snapshotSourceForRing()) return; }
         else              encodeSrc_ = nullptr;   // OFF: encodeRows reads the live sourceBuffer_
         const uint32_t tkW2 = platform::cycleCount();
+        measureFrame();
         if (peripheral_->busTransmitRing()) {
             inFlight_[0] = true;   // kicked; DO NOT wait here: the next tick waits, freeing the core now
         } else if (deadFrames_ < kDeadFramesBeforeGiveUp) {

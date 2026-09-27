@@ -143,7 +143,15 @@ constexpr bool hasI2sMic = true;
 constexpr bool hasI2sMic = false;
 #endif
 
-/// False: capture devices are a host concept, and a board uses the wired microphone above.
+// USB video needs a High-Speed USB PHY, which the S3 lacks, and a hardware JPEG decoder. Only the P4 compiles an implementation, so widen all three together or none.
+#if defined(CONFIG_IDF_TARGET_ESP32P4) && defined(CONFIG_SOC_USB_UTMI_PHY_NUM) && \
+    defined(CONFIG_SOC_JPEG_DECODE_SUPPORTED)
+constexpr bool hasUsbVideo = true;
+#else
+constexpr bool hasUsbVideo = false;
+#endif
+
+// OS capture devices are a desktop concept; boards use the pin-wired I2S mic above.
 constexpr bool hasAudioCapture = false;
 
 

@@ -58,6 +58,9 @@ constexpr uint8_t i2sLanes = 0;
 /// No pin-wired microphone on a host; live audio arrives through capture devices instead.
 constexpr bool hasI2sMic = false;
 
+// No USB host on desktop; VideoService keeps its test-pattern and file sources.
+constexpr bool hasUsbVideo = false;
+
 /// OS capture devices, reaching the same audioMicRead seam a wired microphone would.
 constexpr bool hasAudioCapture = true;
 

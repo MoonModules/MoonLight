@@ -173,6 +173,7 @@
 #include "core/util/JsonSink.h"
 #include "light/layouts/GridLayout.h"
 #include "light/layouts/GridBlacksLayout.h"
+#include "light/layouts/RectangleLayout.h"
 #include "light/layouts/Layouts.h"
 #include "light/layers/Layer.h"
 #include "light/layers/Effects.h"
@@ -463,6 +464,11 @@ struct ScenarioContext {
                 if (props.has("width"))  grid->width  = static_cast<mm::lengthType>(props["width"].num);
                 if (props.has("height")) grid->height = static_cast<mm::lengthType>(props["height"].num);
                 if (props.has("depth"))  grid->depth  = static_cast<mm::lengthType>(props["depth"].num);
+            } else if (std::strcmp(type, "RectangleLayout") == 0) {
+                // The perimeter is computed from these, so they apply at construct time too, and the wiring controls stay on set_control: @xref{why-fixtures-wire-props-at-construct-time}.
+                auto* rect = static_cast<mm::RectangleLayout*>(mod);
+                if (props.has("width"))  rect->width  = static_cast<uint16_t>(props["width"].num);
+                if (props.has("height")) rect->height = static_cast<uint16_t>(props["height"].num);
             }
         }
 

@@ -2316,6 +2316,20 @@ RmtLoopbackResult parlioWs2812Loopback(const uint16_t* /*dataPins*/, uint8_t /*l
 
 // The codec and capture live in their own file: the codec succeeds with nothing to bring up, and the microphone reads the system capture device.
 
+// USB video capture: no USB host on desktop, so init fails and VideoService's usb source reports "no capture device" while its other sources keep working.
+bool videoCaptureInit(VideoCaptureHandle& /*h*/, uint16_t /*width*/, uint16_t /*height*/,
+                      uint8_t /*fps*/) {
+    return false;
+}
+size_t videoCaptureFormats(VideoCaptureFormat* /*out*/, size_t /*max*/) { return 0; }
+uint32_t videoCaptureFormatGeneration() { return 0; }
+const uint8_t* videoCaptureFrame(VideoCaptureHandle& /*h*/, uint16_t& /*width*/,
+                                 uint16_t& /*height*/) MM_NONBLOCKING {
+    return nullptr;
+}
+void videoCaptureDeinit(VideoCaptureHandle& /*h*/) {}
+VideoCaptureStats videoCaptureStats() { return {}; }
+
 // The textbook in-place radix-2 transform, the production kernel now that live capture runs blocks dozens of times a second on the render tick. The contract is unchanged and it is numerically equivalent to the direct form, pinned against one by a test.
 void audioFft(const float* windowed, size_t n, float* outMag) {
     if (!windowed || !outMag || n == 0 || (n & (n - 1)) != 0) return;

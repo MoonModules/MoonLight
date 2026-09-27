@@ -139,7 +139,7 @@ TEST_CASE("MoonLive control: a declared control reads the arena live (no recompi
     arena[0] = 5;  std::fill(buf.begin(), buf.end(), 0); fn(buf.data(), 16, 3, 0, arena);
     CHECK(firstLit(buf) == 5);                       // control value selects the pixel
     arena[0] = 9;  std::fill(buf.begin(), buf.end(), 0); fn(buf.data(), 16, 3, 0, arena);
-    CHECK(firstLit(buf) == 9);                       // changed the arena slot only — NO recompile
+    CHECK(firstLit(buf) == 9);                       // changed the arena slot only, NO recompile
     arena[0] = 0;  std::fill(buf.begin(), buf.end(), 0); fn(buf.data(), 16, 3, 0, arena);
     CHECK(firstLit(buf) == 0);
     platform::freeExec(blk, r.len);

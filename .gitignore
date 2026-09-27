@@ -147,6 +147,9 @@ __pycache__/
 # nested path of that name anywhere in the tree.
 /.snapshots/
 
+# Knowledge-graph output (the /graphify skill)
+graphify-out/
+
 # Video-production OUTPUT: the music a cut is scored against, the raw takes, the
 # finished videos, and the intermediates between them. Nothing here is redistributable
 # (licensed music, large binaries), and a repository is not a media library: what ships

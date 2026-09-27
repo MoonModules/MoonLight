@@ -77,6 +77,15 @@ public:
             static_cast<uint8_t>((globalBrightness * localBrightness_) / 255);
         correction_.whiteMode = static_cast<WhiteMode>(whiteMode_);
         correction_.curve = static_cast<Correction::Curve>(curveSel_);
+        correction_.balRed = balRed_;
+        correction_.balGreen = balGreen_;
+        correction_.balBlue = balBlue_;
+        correction_.whiteLevel = whiteLevel_;
+        correction_.budgetMa = budgetMa_;
+        correction_.mAColor = mAColor_;
+        correction_.mAWhite = mAWhite_;
+        correction_.mAYellow = mAYellow_;
+        correction_.mAUV = mAUV_;
         // A missing id falls back to the default, so a driver degrades rather than crashing.
         if (auto* lib = LightPresetsModule::active()) {
             if (presetId_ == 0) presetId_ = lib->defaultId();
@@ -160,6 +169,19 @@ protected:
     uint8_t presetSel_ = 0;          // the preset Select's chosen INDEX (mapped to an id in onControlChanged)
     uint8_t whiteMode_ = static_cast<uint8_t>(WhiteMode::Min);  // index into kWhiteModeOptions
     uint8_t localBrightness_ = 255;  // per-driver dim, multiplied with the global brightness
+    /// Per-channel white balance; trims the stronger dies DOWN to match the weakest.
+    uint8_t balRed_ = 255, balGreen_ = 255, balBlue_ = 255;
+    /// The white die's own trim; the RGB trims do not reach it.
+    uint8_t whiteLevel_ = 255;
+    /// The current budget and the per-channel draw it is priced with.
+    uint16_t budgetMa_ = 0;   // 0 = no current limiting
+    uint8_t mAColor_ = 8;     // measured on SK6812 RGBW: R 7.98, G 8.11, B 7.98
+    uint8_t mAWhite_ = 16;    // measured: W 16.11
+    uint8_t mAYellow_ = 8;    // assumed: an amber die sits near red
+    uint8_t mAUV_ = 8;        // assumed: a UV die usually draws more
+    /// Whether this driver calls Correction::measure() before its emit loop.
+    virtual bool limitsCurrent() const { return false; }
+
     /// Which perceptual curve the output LUT is built through; CIE lightness by default.
     uint8_t curveSel_ = 0;           // index into kCurveOptions; 0 = CIE
     static constexpr uint8_t kCurveCount = 4;
@@ -184,6 +206,29 @@ protected:
         // Hidden unless the referenced preset carries a channel there is something to synthesise for.
         auto* lib = LightPresetsModule::active();
         controls_.setHidden(controls_.count() - 1, !(lib && lib->presetHasSynthChannel(presetId_)));
+        controls_.addControl("balanceRed", balRed_, 0, 255);
+        controls_.addControl("balanceGreen", balGreen_, 0, 255);
+        controls_.addControl("balanceBlue", balBlue_, 0, 255);
+        // Narrower than whiteMode's gate, which also counts amber and UV: this trims the white dies alone, so on a fixture with only those the slider would reach nothing.
+        const bool hasWhite = lib && (lib->presetHasRole(presetId_, ChannelRole::White) ||
+                                      lib->presetHasRole(presetId_, ChannelRole::WarmWhite));
+        controls_.addControl("whiteLevel", whiteLevel_, 0, 255);
+        controls_.setHidden(controls_.count() - 1, !hasWhite);
+        // Only offered by the drivers that measure: a network sender feeds another board's supply.
+        const bool limits = limitsCurrent();
+        controls_.addControl("maxCurrentMa", budgetMa_, 0, 60000);
+        controls_.setHidden(controls_.count() - 1, !limits);
+        controls_.addControl("mAPerColorChannel", mAColor_, 1, 60);
+        controls_.setHidden(controls_.count() - 1, !limits);
+        controls_.addControl("mAPerWhiteChannel", mAWhite_, 1, 60);
+        controls_.setHidden(controls_.count() - 1, !limits);
+        // Only where the fixture carries them.
+        const bool wide = lib && (lib->presetHasRole(presetId_, ChannelRole::Yellow) ||
+                                  lib->presetHasRole(presetId_, ChannelRole::UV));
+        controls_.addControl("mAPerYellowChannel", mAYellow_, 1, 60);
+        controls_.setHidden(controls_.count() - 1, !(limits && wide));
+        controls_.addControl("mAPerUvChannel", mAUV_, 1, 60);
+        controls_.setHidden(controls_.count() - 1, !(limits && wide));
         // Persisted but not shown: the selector above is what the user sees.
         controls_.addText("presetRef", presetRef_, sizeof(presetRef_));
         controls_.setHidden(controls_.count() - 1, true);
@@ -194,8 +239,13 @@ protected:
 
     /// Whether `name` is one of the correction controls, for a driver's own prepare test.
     static bool isCorrectionControl(const char* name) {
-        return std::strcmp(name, "lightPreset") == 0 || std::strcmp(name, "localBrightness") == 0
-            || std::strcmp(name, "whiteMode") == 0 || std::strcmp(name, "curve") == 0;
+        return std::strcmp(name, "lightPreset") == 0 || std::strcmp(name, "localBrightness") == 0 ||
+               std::strcmp(name, "whiteMode") == 0 || std::strcmp(name, "curve") == 0 ||
+               std::strcmp(name, "balanceRed") == 0 || std::strcmp(name, "balanceGreen") == 0 ||
+               std::strcmp(name, "balanceBlue") == 0 || std::strcmp(name, "whiteLevel") == 0 ||
+               std::strcmp(name, "maxCurrentMa") == 0 || std::strcmp(name, "mAPerColorChannel") == 0 ||
+               std::strcmp(name, "mAPerWhiteChannel") == 0 || std::strcmp(name, "mAPerYellowChannel") == 0 ||
+               std::strcmp(name, "mAPerUvChannel") == 0;
     }
 
 private:

@@ -1,5 +1,7 @@
 # Core services
 
+![services controls](../../assets/core/Services.png)
+
 The user-added **Service** modules — capability bridges the device provides or consumes, added and removed at runtime in the `Services` container (the core-domain twin of the light domain's `Effects`/`Drivers`). Fixed device infrastructure (identity, network, inspection tools) lives under **System** — see [core/system.md](system.md). Every row links to its generated technical page (the full API, from the `.h`) and its tests.
 
 <a id="services"></a>
@@ -37,6 +39,28 @@ A user-added Service: the audio source the audio-reactive effects consume. `mode
 Detail: [technical](moxygen/AudioService.md) · [the sync packet](../light/moxygen/WLEDAudioSyncPacket.md) · [the lock-free ring](moxygen/SpscRing.md)
 
 [Tests](../../reference/tests/unit-tests.md#audioservice)
+
+<a id="video"></a>
+
+### Video
+
+<img src="../../assets/core/VideoService.png" width="300" alt="Video service card">
+
+A user-added Service: the video source screen-follow effects read. The counterpart of [Audio](#audio) for a picture, decoded once per tick however many effects want it. `source` decides which controls show. Sources, HDR and staleness: ⌄ details.
+
+- `source`: `test pattern` needs no hardware, `file` reads a PPM, `usb` captures from an HDMI grabber.
+- `patternSpeed`: (test pattern) sweep rate of the white block, in pixels per second. 0 parks it.
+- `file`: (file) path to a binary PPM (P6, maxval 255), uploaded through the File Manager.
+- `reload`: (file) re-read the file in place, without rebuilding the pipeline.
+- `offered`: (usb) the resolution and frame rate to request, from what the device advertises.
+- `staleMs`: (usb) how long a gap in frames is tolerated before the lights go dark.
+- `hdr`: (usb) the source's transfer curve: `off`, `HDR10 (PQ)` or `HLG`. Declared, not detected.
+- `hdrNits`: (usb, PQ only) the reference white PQ's absolute luminance is scaled to.
+- status: the live frame's dimensions (`640x480`), or the reason there is no frame.
+
+Detail: [technical](moxygen/VideoService.md)
+
+[Tests](../../reference/tests/unit-tests.md#videoservice)
 
 <a id="osc"></a>
 
@@ -258,3 +282,35 @@ One key binds to one row. Learning a key that another row already holds moves th
 
 The status line reports setup state ("set pin to receive" / "ready"), the learn prompt, a binding ("learned 0x..."), what a press did or why it did not, and an unbound code ("received 0x...
 (unassigned)").
+
+## Video, details
+
+**The test pattern is a diagnostic, not decoration.** Four colored border bands (red top, green right, blue bottom, yellow left) and a white block sweeping along the top edge. On a border-mounted strip that makes orientation self-evident: a mis-set `startCorner` or `clockwise` on the [Rectangle](../light/layouts.md#rectangle) layout shows as the wrong physical edge lighting, rather than a subtly wrong picture. The sweeping block shows liveness and which way "forward" runs.
+
+**The USB source needs an ESP32-P4.** It wants two things at once and only that chip has both: a High-Speed USB PHY (the S3 has USB, but too slow to carry video) and a hardware JPEG decoder. Elsewhere the option is not offered and the two software sources still work. Choosing a format:
+
+- **MJPEG only.** It is what the JPEG hardware decodes, so other encodings the device advertises are filtered out of `offered` rather than listed and then refused.
+- **Pick 16:9.** A 4:3 capture makes a 16:9 source letterbox into it, putting black bars where the top and bottom lights look. For bars that are in the source itself, see [Ambilight](../light/effects.md#ambilight)'s `detectBlackBars`.
+- **Then prefer frame rate over resolution.** A border light averages a few hundred pixels whatever the capture size, so resolution buys nothing and bandwidth is the scarce thing.
+
+**Why PPM for the file source.** The capture path decodes MJPEG in hardware, behind the platform layer. There is no software JPEG decoder in this codebase, and adding one so the desktop build could open a `.jpg` would buy a dependency for a development convenience. PPM is a raw RGB dump behind a three-line ASCII header, so it needs no decoder and is one command from any source material:
+
+```sh
+ffmpeg -i clip.mp4 -frames:v 1 -vf scale=64:36 -pix_fmt rgb24 frame.ppm
+```
+
+#### The sources
+
+`test pattern` synthesizes a frame, so it needs no hardware and no files: four colored border bands and a white block sweeping the top edge. `file` reads a binary PPM off the filesystem. `usb` captures from an HDMI grabber, and is offered only on a target with a High-Speed USB host and a JPEG decoder.
+
+Parking the sweep with `patternSpeed` 0 turns the pattern into a still reference: a border light can be compared against a known color without the block passing through its zone mid-read.
+
+#### HDR
+
+MJPEG carries no HDR metadata and a grabber strips what the console sends, so the curve is declared rather than detected. With an HDR source left at `off` the lights read washed out and hue-shifted, green lifted against red being the usual sign, because the bytes are averaged on the HDR curve rather than the display's.
+
+`hdrNits` sets the reference white PQ's absolute luminance is scaled to. Too low and bright channels clamp, dragging saturated hues toward their neighbors; too high and the picture reads dim. HLG is relative and does not use it.
+
+#### Staleness
+
+A UVC device streams continuously whatever is on the wire, so a gap in frames means the grabber stopped rather than that the content paused. `staleMs` is how long a gap is tolerated before the lights go dark.

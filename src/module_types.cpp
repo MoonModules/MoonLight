@@ -55,6 +55,7 @@
 #include "light/layouts/RingLayout.h"
 #include "light/layouts/Rings241Layout.h"
 #include "light/layouts/SpiralLayout.h"
+#include "light/layouts/RectangleLayout.h"
 #include "light/layouts/PanelsLayout.h"
 #include "light/layouts/HumanSizedCubeLayout.h"
 #include "light/layouts/TorontoBarGourdsLayout.h"
@@ -84,6 +85,7 @@
 #include "light/effects/RadialSpectrumEffect.h"
 #include "light/effects/VuMetersEffect.h"
 #include "light/effects/BeatRipplesEffect.h"
+#include "light/effects/AmbilightEffect.h"
 #include "light/effects/AudioSpectrumEffect.h"
 #include "light/effects/SineEffect.h"
 #include "light/effects/DistortionWavesEffect.h"
@@ -175,6 +177,7 @@
 #include "core/system/ControlModule.h"
 #include "core/services/Services.h"
 #include "core/services/AudioService.h"
+#include "core/services/VideoService.h"
 #include "core/services/OscModule.h"
 #include "core/system/I2cScanModule.h"
 #include "core/system/TasksModule.h"
@@ -219,6 +222,7 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::GridLayout>("GridLayout", "light/layouts.md#grid");
     mm::ModuleFactory::registerType<mm::GridBlacksLayout>("GridBlacksLayout", "light/layouts.md#gridblacks");
     mm::ModuleFactory::registerType<mm::PanelLayout>("PanelLayout", "light/layouts.md#panel");
+    mm::ModuleFactory::registerType<mm::RectangleLayout>("RectangleLayout", "light/layouts.md#rectangle");
     mm::ModuleFactory::registerType<mm::RingLayout>("RingLayout", "light/layouts.md#ring");
     mm::ModuleFactory::registerType<mm::Rings241Layout>("Rings241Layout", "light/layouts.md#rings241");
     mm::ModuleFactory::registerType<mm::SingleColumnLayout>("SingleColumnLayout", "light/layouts.md#singlecolumn");
@@ -228,6 +232,7 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::TubesLayout>("TubesLayout", "light/layouts.md#tubes");
     mm::ModuleFactory::registerType<mm::WheelLayout>("WheelLayout", "light/layouts.md#wheel");
     // Effects, registered alphabetically by display name: @xref{what-registertype-captures}.
+    mm::ModuleFactory::registerType<mm::AmbilightEffect>("AmbilightEffect", "light/effects.md#ambilight");
     mm::ModuleFactory::registerType<mm::AudioSpectrumEffect>("AudioSpectrumEffect", "light/effects.md#audiospectrum");
     mm::ModuleFactory::registerType<mm::RadialSpectrumEffect>("RadialSpectrumEffect", "light/effects.md#radialspectrum");
     mm::ModuleFactory::registerType<mm::VuMetersEffect>("VuMetersEffect", "light/effects.md#vumeters");
@@ -344,6 +349,7 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::ControlModule>("ControlModule", "core/system.md#control");
     mm::ModuleFactory::registerType<mm::Services>("Services", "core/services.md#services");
     mm::ModuleFactory::registerType<mm::AudioService>("AudioService", "core/services.md#audio");
+    mm::ModuleFactory::registerType<mm::VideoService>("VideoService", "core/services.md#video");
     mm::ModuleFactory::registerType<mm::OscModule>("OscModule", "core/services.md#osc");
     mm::ModuleFactory::registerType<mm::I2cScanModule>("I2cScanModule", "core/system.md#i2c-scan");
     mm::ModuleFactory::registerType<mm::TasksModule>("TasksModule", "core/system.md#tasks");

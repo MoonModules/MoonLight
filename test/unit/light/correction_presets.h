@@ -18,11 +18,9 @@ namespace mm::test {
 /// The curated wire orders a test drives, mapped to role arrays in one place below.
 enum class PresetOrder : uint8_t { RGB, GRB, BGR, RGBW, GRBW };
 
-// Fill a Correction from a named order at `brightness`, via the production role-array rebuild.
-inline void rebuildFromPreset(mm::Correction& c, uint8_t brightness, PresetOrder order) {
+// Fill a Correction from a named order at `brightness`, leaving `curve` as the caller set it.
+inline void rebuildFromPresetKeepingCurve(mm::Correction& c, uint8_t brightness, PresetOrder order) {
     using R = mm::ChannelRole;
-    // Linear: the ordering and white-maths tests are not about the curve, which has its own.
-    c.curve = mm::Correction::Curve::Linear;
     switch (order) {
         case PresetOrder::RGB:  { R r[] = {R::Red, R::Green, R::Blue};            c.rebuild(brightness, r, 3); break; }
         case PresetOrder::GRB:  { R r[] = {R::Green, R::Red, R::Blue};            c.rebuild(brightness, r, 3); break; }
@@ -30,6 +28,13 @@ inline void rebuildFromPreset(mm::Correction& c, uint8_t brightness, PresetOrder
         case PresetOrder::RGBW: { R r[] = {R::Red, R::Green, R::Blue, R::White};  c.rebuild(brightness, r, 4); break; }
         case PresetOrder::GRBW: { R r[] = {R::Green, R::Red, R::Blue, R::White};  c.rebuild(brightness, r, 4); break; }
     }
+}
+
+// Fill a Correction from a named order at `brightness`, via the production role-array rebuild.
+inline void rebuildFromPreset(mm::Correction& c, uint8_t brightness, PresetOrder order) {
+    // Linear: the ordering and white-maths tests are not about the curve, which has its own.
+    c.curve = mm::Correction::Curve::Linear;
+    rebuildFromPresetKeepingCurve(c, brightness, order);
 }
 
 /// @}

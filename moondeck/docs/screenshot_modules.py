@@ -98,11 +98,17 @@ def asset_dir_for(type_name: str) -> Path:
 MODULES = [
     # Layouts
     ("GridLayout",          "Layouts",  {}, True),
+    # The border layout the screen-follow effect is built for: a ring with the corners shared, so
+    # the preview shows the perimeter rather than a filled box.
+    ("RectangleLayout",     "Layouts",  {"width": 24, "height": 16}, True),
     # The scripted layout, whose preview is the shape a script places rather than a control
     # panel: it runs `rose.mll`, a rhodonea curve whose petals no compiled layout defines,
     # so the capture shows what a script buys that a C++ class does not.
     ("MoonLiveLayout",      "Layouts",  {"script": "rose.mll"}, True),
     # Effects
+    # Paints the live video frame, so with no source it photographs black. The capture points it
+    # at the test pattern, whose four coloured bands and sweeping block are what the effect is for.
+    ("AmbilightEffect",     "Layer",    {}, True),
     ("RainbowEffect",       "Layer",    {}, True),
     ("NoiseEffect",         "Layer",    {}, True),
     # The generative-fields showcases: each is Dim::D3, so the preview shows a volume.
@@ -178,6 +184,7 @@ CORE_MODULES = [
     # (not in state); capture these against a board when needed.
     "ImprovProvisioningModule",
     "AudioService",
+    "VideoService",
     "AnalogService",
     "I2cScanModule",
     "InfraredService",
@@ -203,6 +210,7 @@ CORE_NAV_ROOT = {
     # the desktop tree — so they're captured against an ESP32, where these entries route the
     # shot to the right nav root.
     "AudioService": "Services",
+    "VideoService": "Services",
     "AnalogService": "Services",
     "InfraredService": "Services",
     "ButtonService": "Services",

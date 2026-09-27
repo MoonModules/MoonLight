@@ -1,0 +1,15 @@
+# ESP32 platform sources are compiled by the ESP-IDF build, not the desktop one, so the root
+# .clangd's build/macos database has no entry for them: clangd guesses flags and reports
+# `'sdkconfig.h' file not found` on every file here. Point this directory at a firmware build
+# instead, and the real flags come with it: CONFIG_IDF_TARGET_*, the managed-component include
+# paths, and the generated config/sdkconfig.h that defines the target macro the #if reads.
+#
+# Needs that firmware built at least once (`uv run moondeck/build/build_esp32.py --firmware
+# esp32p4rev1-eth-wifi`); the database is a build product. Pointing at ONE variant means files here
+# are shown as that chip sees them, so a file with per-target branches has the others grayed
+# out, so change the path when working on a different one.
+#
+# Scoped to this directory on purpose: the P4 database carries no entry for test/ or
+# platform/desktop, so making it the root would cost IntelliSense on all 142 test files.
+CompileFlags:
+  CompilationDatabase: ../../../build/esp32-esp32p4rev1-eth-wifi

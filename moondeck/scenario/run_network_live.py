@@ -51,16 +51,20 @@ from _net_probe import (  # noqa: E402
 ROUND_COLORS = [(255, 128, 0), (0, 255, 128), (128, 0, 255),
                  (255, 0, 128), (128, 255, 0), (0, 128, 255)]
 
-# Mirrors src/light/drivers/Correction.h (briLut scale + order[] reorder) — a
-# listener sees the sender's corrected bytes, so the expected color replicates
-# that transform. 3-channel presets only; RGBW senders emit 4 bytes/light which
-# misaligns a 3-channel listener buffer, so those legs are skipped. Keep in sync.
+# 3-channel presets only: an RGBW sender emits 4 bytes/light, which misaligns a
+# 3-channel listener buffer, so those legs are skipped.
 PRESET_ORDER = {"RGB": (0, 1, 2), "RBG": (0, 2, 1), "GRB": (1, 0, 2),
                 "GBR": (1, 2, 0), "BRG": (2, 0, 1), "BGR": (2, 1, 0)}
 PRESET_NAMES = ["RGB", "RBG", "GRB", "GBR", "BRG", "BGR", "RGBW", "GRBW"]
 
 
 def corrected(rgb, brightness, preset):
+    """Mirror src/light/drivers/Correction.h so a listener's expected color matches the
+    sender's corrected bytes. Keep in sync.
+
+    Models the plain brightness scale only: `curve` Linear and white-balance trims at 255.
+    A sender on another curve or with a trim set would have to be modeled here too.
+    """
     scaled = [(v * int(brightness)) // 255 for v in rgb]
     order = PRESET_ORDER[preset]
     return tuple(scaled[order[i]] for i in range(3))

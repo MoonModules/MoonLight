@@ -29,6 +29,9 @@ namespace mm {
 /// @card RmtLedDriver.png
 class RmtLedDriver : public DriverBase {
 public:
+    /// This driver prices its own frame, so the shared path leaves the limiter to it.
+    bool limitsCurrent() const override { return true; }
+
     /// Default to the GRB preset, which is how WS2812 and SK6812 strips are physically wired.
     RmtLedDriver() { setDefaultPresetName("GRB"); }
 
@@ -200,6 +203,8 @@ public:
         // One pass: correct a light into wire bytes and encode them straight into the buffer.
         const uint8_t* src = sourceBuffer_->data();
         const uint8_t srcCh = sourceBuffer_->channelsPerLight();
+        // Price the window first, so the whole frame scales together.
+        correction_.measure(src + winStart_ * srcCh, srcCh, n);
         // The bit expansion happens on the way out, so this buffer is outCh bytes per light.
         for (nrOfLightsType i = 0; i < n; i++) {
             correction_.apply(src + (winStart_ + i) * srcCh, frame_ + static_cast<size_t>(i) * outCh, srcCh);
