@@ -44,7 +44,7 @@ Detail: [technical](moxygen/AudioService.md) · [the sync packet](../light/moxyg
 
 ### Video
 
-<img src="../assets/core/VideoService.png" width="300" alt="Video service card">
+<img src="../../assets/core/VideoService.png" width="300" alt="Video service card">
 
 A user-added Service: the video source screen-follow effects read. The counterpart of [Audio](#audio) for a picture, decoded once per tick however many effects want it. `source` decides which controls show. Sources, HDR and staleness: ⌄ details.
 

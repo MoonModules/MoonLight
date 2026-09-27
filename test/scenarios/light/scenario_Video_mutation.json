@@ -102,6 +102,19 @@
         "fps": {
           "min": 1
         }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 20,
+            "p95": 20,
+            "min": 20,
+            "max": 20,
+            "n": 1,
+            "samples": [20]
+          },
+          "last_updated": "2026-09-27"
+        }
       }
     },
     {
@@ -120,6 +133,19 @@
       "bounds": {
         "fps": {
           "min": 1
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 20,
+            "p95": 20,
+            "min": 20,
+            "max": 20,
+            "n": 1,
+            "samples": [20]
+          },
+          "last_updated": "2026-09-27"
         }
       }
     },
@@ -148,6 +174,19 @@
         "fps": {
           "min": 1
         }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 20,
+            "p95": 20,
+            "min": 20,
+            "max": 20,
+            "n": 1,
+            "samples": [20]
+          },
+          "last_updated": "2026-09-27"
+        }
       }
     },
     {
@@ -166,6 +205,19 @@
       "bounds": {
         "fps": {
           "min": 1
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 25,
+            "p95": 25,
+            "min": 25,
+            "max": 25,
+            "n": 1,
+            "samples": [25]
+          },
+          "last_updated": "2026-09-27"
         }
       }
     },
@@ -194,6 +246,19 @@
         "fps": {
           "min": 1
         }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 30,
+            "p95": 30,
+            "min": 30,
+            "max": 30,
+            "n": 1,
+            "samples": [30]
+          },
+          "last_updated": "2026-09-27"
+        }
       }
     },
     {
@@ -211,6 +276,19 @@
         "fps": {
           "min": 1
         }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 28,
+            "p95": 28,
+            "min": 28,
+            "max": 28,
+            "n": 1,
+            "samples": [28]
+          },
+          "last_updated": "2026-09-27"
+        }
       }
     },
     {
@@ -227,6 +305,19 @@
       "bounds": {
         "fps": {
           "min": 1
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 24,
+            "p95": 24,
+            "min": 24,
+            "max": 24,
+            "n": 1,
+            "samples": [24]
+          },
+          "last_updated": "2026-09-27"
         }
       }
     }

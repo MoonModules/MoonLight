@@ -84,7 +84,7 @@ dependencies:
     rules:
       - if: "$CONFIG{MM_P4_WIFI} == True"
   # usb_host_uvc — UVC (webcam) host, allows to read video from USB device. P4 only: no other
-  # ESP32 has a High-Speed USB host, and at Full Speed (~1 MB/s) MJPEG starves. 
+  # ESP32 has a High-Speed USB host, and at Full Speed (~1 MB/s) MJPEG starves.
   espressif/usb_host_uvc:
     version: "^2.5.2"
     rules:

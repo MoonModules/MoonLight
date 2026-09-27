@@ -1372,7 +1372,7 @@ The effect fills a logical box and knows nothing else. On a [Rectangle](layouts.
 
 With no video source it paints black. Every effect owns its background, so returning early would leave the previous effect's picture frozen on the strip.
 
-Origin: projectMM
+Origin: MoonLight
 
 Detail: [technical](moxygen/AmbilightEffect.md)
 

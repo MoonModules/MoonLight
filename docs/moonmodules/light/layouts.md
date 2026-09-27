@@ -333,4 +333,4 @@ A script names its own size controls, such as `cols` and `rows`. The pipeline de
 
 `startCorner`, `offset` and `clockwise` describe the **wiring, not the shape**: they reorder indices while every coordinate stays identical, so set them to match your build and an effect's "top edge" lights the physical top edge. Same split [Single Row](#singlerow) draws with `reversed order` and [Grid](#grid) with `serpentine`. `sharedCorners` is the exception, since it changes how many lights there are.
 
-Origin: projectMM
+Origin: MoonLight
