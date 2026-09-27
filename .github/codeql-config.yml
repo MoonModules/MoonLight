@@ -1,4 +1,4 @@
-name: "projectMM CodeQL config"
+name: "MoonLight CodeQL config"
 
 # Code we did not write and will not change is not a finding we can act on. doctest.h is the
 # vendored single-header test framework (test/doctest.h) and the only third-party source in the

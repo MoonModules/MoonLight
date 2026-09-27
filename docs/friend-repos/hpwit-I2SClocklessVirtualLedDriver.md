@@ -1,8 +1,8 @@
 # hpwit/I2SClocklessVirtualLedDriver: monthly activity digest
 
-What landed on [hpwit/I2SClocklessVirtualLedDriver](https://github.com/hpwit/I2SClocklessVirtualLedDriver), month by month. External-context reference, a factual log of a friend repo's activity, not projectMM's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md).
+What landed on [hpwit/I2SClocklessVirtualLedDriver](https://github.com/hpwit/I2SClocklessVirtualLedDriver), month by month. External-context reference, a factual log of a friend repo's activity, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md).
 
-The library: Yves Bazin's (hpwit) "virtual pins" variant of the I2S clockless driver, drives far more strips than the chip has usable pins by fanning the I2S output through external shift registers. This multiplex technique is the load-bearing idea projectMM's LED-driver analysis singles out (factoring the shift-register multiplex out of the I2S/LCD peripheral code). Summarised via the GitHub commits API, read across all branches (`main`, `integration`, `int2`, `variable`, `hpwit-patch-1`, `dev`, `optomize`), not just `main`.
+The library: Yves Bazin's (hpwit) "virtual pins" variant of the I2S clockless driver, drives far more strips than the chip has usable pins by fanning the I2S output through external shift registers. This multiplex technique is the load-bearing idea MoonLight's LED-driver analysis singles out (factoring the shift-register multiplex out of the I2S/LCD peripheral code). Summarised via the GitHub commits API, read across all branches (`main`, `integration`, `int2`, `variable`, `hpwit-patch-1`, `dev`, `optomize`), not just `main`.
 
 ## August 2026
 

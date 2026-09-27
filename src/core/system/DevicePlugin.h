@@ -1,14 +1,14 @@
 #pragma once
 
 #include "core/system/DeviceIdentify.h"   // DevType
-#include "core/system/WledPacket.h"       // the 65506 presence packet projectMM + WLED both use
+#include "core/system/WledPacket.h"       // the 65506 presence packet MoonLight + WLED both use
 
 #include <cstdio>
 #include <cstring>
 
 /// @defgroup DevicePlugin The device-interop plugin seam
 /// @{
-/// How a foreign lighting or IoT system hooks into projectMM's device discovery.
+/// How a foreign lighting or IoT system hooks into MoonLight's device discovery.
 ///
 /// @moreinfo
 ///
@@ -29,9 +29,9 @@
 /// It is sized to also carry a control half, a per-plugin command that translates something like setting brightness into a system's own protocol, without reshaping.
 /// That is why the discovered device stays plain data and the iteration is generic.
 ///
-/// ## Why the projectMM plugin is listed first
+/// ## Why the MoonLight plugin is listed first
 ///
-/// A projectMM device broadcasts a WLED-valid packet, so the WLED apps list it, stamped with a sentinel in the version field.
+/// A MoonLight device broadcasts a WLED-valid packet, so the WLED apps list it, stamped with a sentinel in the version field.
 /// Its plugin claims a packet only when that marker is present, and the WLED plugin declines a packet that carries it.
 /// Order gives the more specific plugin its chance first.
 
@@ -68,18 +68,18 @@ public:
     // Reserved for the control half: a command translated into this system's own protocol.
 };
 
-/// Claims a presence packet that carries the projectMM marker, so a peer is typed as one.
+/// Claims a presence packet that carries the MoonLight marker, so a peer is typed as one.
 class MmPlugin : public DevicePlugin {
 public:
     /// Names this plugin in logs and the UI.
-    const char* label() const override { return "projectMM"; }
+    const char* label() const override { return "MoonLight"; }
     /// The shared presence port.
     uint16_t discoveryPort() const override { return WledPacket::kPort; }
 
     bool classifyPacket(const uint8_t* data, size_t len, const uint8_t /*srcIp*/[4],
                         DiscoveredDevice& out) const override {
         if (!WledPacket::isValid(data, len) || !WledPacket::hasMmMarker(data, len)) return false;
-        out.type = DevType::ProjectMM;
+        out.type = DevType::MoonLight;
         char name[24];
         WledPacket::readName(data, name, sizeof(name));
         setDeviceName(out, name);
@@ -87,7 +87,7 @@ public:
     }
 };
 
-/// Claims any valid WLED presence packet that carries no projectMM marker.
+/// Claims any valid WLED presence packet that carries no MoonLight marker.
 class WledPlugin : public DevicePlugin {
 public:
     /// Names this plugin in logs and the UI.
@@ -98,7 +98,7 @@ public:
     bool classifyPacket(const uint8_t* data, size_t len, const uint8_t /*srcIp*/[4],
                         DiscoveredDevice& out) const override {
         if (!WledPacket::isValid(data, len)) return false;
-        if (WledPacket::hasMmMarker(data, len)) return false;   // that's a projectMM peer
+        if (WledPacket::hasMmMarker(data, len)) return false;   // that's a MoonLight peer
         out.type = DevType::Wled;
         char name[24];
         WledPacket::readName(data, name, sizeof(name));

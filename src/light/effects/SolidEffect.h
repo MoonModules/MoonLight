@@ -6,7 +6,6 @@ namespace mm {
 
 /// Effect that fills the whole layer with one palette color.
 /// @card SolidEffect.gif
-/// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 ///
 /// Five color modes: a flat color, the palette across the lights, its RMS average, or banded.
 /// Brightness scales the flat and spread results.

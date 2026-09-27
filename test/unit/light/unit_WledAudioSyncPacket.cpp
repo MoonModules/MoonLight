@@ -1,6 +1,6 @@
 /// @module WledAudioSyncPacket
 
-/// Pins the WLED audio-sync wire format, the 44-byte v2 packet projectMM broadcasts on UDP 11988 and that WLED / MoonLight (D_WLEDAudio.h) receive. A wire format breaks silently, so build → parse is round-tripped AND a golden byte vector fixes the exact offsets: the packet is a fixed compatibility contract (netmindz/WLED-sync), not ours to drift. (Same rigor as the Improv frame golden vector.)
+/// Pins the WLED audio-sync wire format, the 44-byte v2 packet MoonLight broadcasts on UDP 11988 and that WLED / MoonLight (D_WLEDAudio.h) receive. A wire format breaks silently, so build → parse is round-tripped AND a golden byte vector fixes the exact offsets: the packet is a fixed compatibility contract (netmindz/WLED-sync), not ours to drift. (Same rigor as the Improv frame golden vector.)
 
 #include "doctest.h"
 #include "light/util/WLEDAudioSyncPacket.h"
@@ -51,7 +51,7 @@ TEST_CASE("build produces a 44-byte v2 packet with the exact WLED layout") {
     CHECK(wledGetFloatLE(pkt + 40) == doctest::Approx(440.0f));
 }
 
-// WLED clamps every band to 254 on send (constrain(fftResult[i], 0, 254)), so 255 never appears on the wire. A receiver written against WLED may treat 255 as a value real data cannot carry. The magnitude crosses in WLED's units and comes back in ours, so a projectMM pair round-trips exactly while a WLED peer reads the value its own effects expect.
+// WLED clamps every band to 254 on send (constrain(fftResult[i], 0, 254)), so 255 never appears on the wire. A receiver written against WLED may treat 255 as a value real data cannot carry. The magnitude crosses in WLED's units and comes back in ours, so a MoonLight pair round-trips exactly while a WLED peer reads the value its own effects expect.
 TEST_CASE("FFT_Magnitude carries WLED units and round-trips back to ours") {
     AudioFrame f{};
     f.peakMag = 144;                     // WLED's "full brightness" threshold after its /16

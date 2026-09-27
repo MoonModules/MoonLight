@@ -26,12 +26,12 @@
 ///
 /// ## Why the WLED shim reports a sentinel version
 ///
-/// The `ver` field is a sentinel, not the projectMM version.
+/// The `ver` field is a sentinel, not the MoonLight version.
 /// Home Assistant's WLED integration parses WLED tags as CalVer, reading `16.0.1` as year 16 rather than `0.16.1`.
-/// A projectMM version like `2.1.0-dev` therefore compares lower, and HA offers an update whose `.bin` would brick the device.
+/// A MoonLight version like `2.1.0-dev` therefore compares lower, and HA offers an update whose `.bin` would brick the device.
 /// Under CalVer `99.0.0` outranks any WLED tag, so HA's update check stays silent.
 /// Using the real version was tried first, on the assumption of SemVer parsing, and a bench P4 showed HA still offering 16.0.1 because the CalVer branch is the one taken.
-/// The real version belongs on the MQTT update topic, where "did projectMM ship a release" is the question being answered: the WLED shim exists for the light entity.
+/// The real version belongs on the MQTT update topic, where "did MoonLight ship a release" is the question being answered: the WLED shim exists for the light entity.
 ///
 /// ## Why an Ethernet device sends no wifi object
 ///
@@ -300,7 +300,7 @@ void HttpServerModule::handleConnection(platform::TcpConnection& conn) {
         else if (std::strcmp(path, "/api/file") == 0) serveFileContents(conn, queryStart ? queryStart + 1 : "");
         // HLS: GET /hls/<file> → the segments the HlsDriver's ffmpeg writes under /.hls/, with video MIME types and no-cache (the playlist mutates every second).
         else if (std::strncmp(path, "/hls/", 5) == 0) serveHlsFile(conn, path + 5);
-        // WLED-compatibility shim: the native WLED apps (and Home Assistant's WLED integration) discover a device via mDNS `_wled._tcp` then VALIDATE it by GETting /json/info and checking it's WLED-shaped. Serving a minimal WLED-compatible info makes a projectMM device appear in those apps: and is a useful independent cross-check that our mDNS advertise resolves.
+        // WLED-compatibility shim: the native WLED apps (and Home Assistant's WLED integration) discover a device via mDNS `_wled._tcp` then VALIDATE it by GETting /json/info and checking it's WLED-shaped. Serving a minimal WLED-compatible info makes a MoonLight device appear in those apps: and is a useful independent cross-check that our mDNS advertise resolves.
         else if (std::strcmp(path, "/json/info") == 0) serveWledInfo(conn);
         // WLED state + the combined state+info (`/json/si`) the app reads for its device card. On/off, brightness, and the segment's primary color (which the app uses as the card tint). serveWledState reads live brightness from the Drivers module.
         else if (std::strcmp(path, "/json/state") == 0) serveWledState(conn);
@@ -1455,7 +1455,7 @@ void HttpServerModule::serveWledInfo(platform::TcpConnection& conn) {
     // So this is the minimal object the native app accepts: name + leds{} + wifi{} + a non-empty mac.
     // The inner Leds/Wifi fields are themselves all nullable, so empty `{}` objects parse: we send a real `mac` and otherwise the smallest shapes that satisfy the parser.
     // `brand`/ `product` identify us as the MoonModules WLED-compatible product (interoperate, not impersonate).
-    // Confirmed on the bench: projectMM devices list in the WLED native app.
+    // Confirmed on the bench: MoonLight devices list in the WLED native app.
     JsonSink sink(conn);
     writeWledInfoBody(sink, name, mac);
     sink.flush();
@@ -1508,8 +1508,8 @@ void HttpServerModule::resolveWledIdentity(const char*& name, uint8_t mac[6], ui
 
 // The WLED info object, written into an open sink (no HTTP header).
 // Shared by /json/info and the `info` half of /json/si.
-// Emit the WLED `name` field with the 💫 projectMM marker prefixed.
-// A projectMM board stands out among plain WLED devices in Home Assistant's device list (which keys everything off the WLED integration).
+// Emit the WLED `name` field with the 💫 MoonLight marker prefixed.
+// A MoonLight board stands out among plain WLED devices in Home Assistant's device list (which keys everything off the WLED integration).
 // The marker lives ONLY in the WLED-compat name HA reads: the real deviceName (UI, mDNS hostname, MQTT topics) stays unprefixed.
 // Identity/hostnames carry no emoji. writeJsonString owns the quotes + escaping; the marker is a plain UTF-8 literal that passes through unescaped.
 void HttpServerModule::writeWledName(JsonSink& sink, const char* name) {
@@ -1604,7 +1604,7 @@ void HttpServerModule::serveWledDeviceJson(platform::TcpConnection& conn) {
     // state: writeWledStateBody emits the {on,bri,seg,...} block reused by /json/state and /json/si; wrap it under "state":. Keeping one authoritative writer avoids the two paths drifting on which seg[0] fields HA actually reads.
     sink.appendf("{\"state\":");
     writeWledStateBody(sink);
-    // `ver` is a sentinel, not the projectMM version: HA reads WLED tags as CalVer and would otherwise offer an update whose .bin bricks the device.
+    // `ver` is a sentinel, not the MoonLight version: HA reads WLED tags as CalVer and would otherwise offer an update whose .bin bricks the device.
     // @xref{why-the-wled-shim-reports-a-sentinel-version}
     // `arch`/`brand`/`product`/`mac`/`ip` populate HA's device card; `leds`/`wifi`/`fs` are what python-wled's Info dataclass wants for the sensor entities.
     // An Ethernet device omits the whole `wifi` object rather than sending a zeroed one.
@@ -1658,7 +1658,7 @@ void HttpServerModule::serveWledDeviceJson(platform::TcpConnection& conn) {
                  "\"freeheap\":%u,\"uptime\":%u,\"udpport\":21324,\"live\":false,"
                  // ws=-1 tells python-wled (HA's WLED integration lib) that WebSocket updates are unsupported in this build.
                  // Its __post_deserialize__ maps -1 to None, and its coordinator falls back to HTTP polling.
-                 // Sending 0 (the WLED convention for "supported, no clients yet") makes HA open a WS to our own /ws endpoint, which serves projectMM-native state frames.
+                 // Sending 0 (the WLED convention for "supported, no clients yet") makes HA open a WS to our own /ws endpoint, which serves MoonLight-native state frames.
                  // Not the WLED-shaped Info+State updates the python-wled parser requires: and floods HA's log with `MissingField: filesystem` on every frame.
                  // Fix pinned on the bench with `sudo docker logs homeassistant`.
                  "\"lm\":\"\",\"lip\":\"\",\"ws\":-1,"

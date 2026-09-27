@@ -1,8 +1,8 @@
 # Update the firmware
 
-Install a newer projectMM on a device that is already running one. Over the network, from the device's own interface, with no cable.
+Install a newer MoonLight on a device that is already running one. Over the network, from the device's own interface, with no cable.
 
-Your settings survive: a firmware update replaces the program, not the configuration. The one thing it costs is a reboot, which is what makes it different from every other change in projectMM.
+Your settings survive: a firmware update replaces the program, not the configuration. The one thing it costs is a reboot, which is what makes it different from every other change in MoonLight.
 
 ## The normal route
 

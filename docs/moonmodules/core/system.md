@@ -47,7 +47,7 @@ Detail: [technical](moxygen/NetworkModule.md)
 
 ### Improv provisioning
 
-Serial/BLE Improv Wi-Fi provisioning: the web installer hands credentials to a fresh device over this protocol during the flash-and-connect flow. [Improv Wi-Fi](https://github.com/improv-wifi) is an open standard, and its [sdk-cpp](https://github.com/improv-wifi/sdk-cpp) / [sdk-js](https://github.com/improv-wifi/sdk-js) are the specification this implements, so any Improv-capable installer can provision a projectMM device.
+Serial/BLE Improv Wi-Fi provisioning: the web installer hands credentials to a fresh device over this protocol during the flash-and-connect flow. [Improv Wi-Fi](https://github.com/improv-wifi) is an open standard, and its [sdk-cpp](https://github.com/improv-wifi/sdk-cpp) / [sdk-js](https://github.com/improv-wifi/sdk-js) are the specification this implements, so any Improv-capable installer can provision a MoonLight device.
 
 <img src="../../assets/core/ImprovProvisioningModule.png" width="300" alt="Improv provisioning module controls">
 
@@ -59,14 +59,14 @@ Detail: [technical](moxygen/ImprovProvisioningModule.md) · [frame format](moxyg
 
 ### Devices
 
-Discovers other projectMM devices on the LAN and lists them, persisting the last-known list across a reboot. A wired-by-code child of Network.
+Discovers other MoonLight devices on the LAN and lists them, persisting the last-known list across a reboot. A wired-by-code child of Network.
 
 <img src="../../assets/core/DevicesModule.png" width="300" alt="Devices module, discovered LAN devices">
 
 - `devices`: a List of discovered devices; each row expands to a detail panel. Persistable.
 - `wledCompatible`: also announce on WLED's broadcast address, off by default.
 
-WLED apps browse on broadcast, so a device appears in them only with this on. Off is the better neighbour, since a broadcast wakes every device on the LAN to parse a packet none of them want. Presence always goes to the projectMM group regardless, so peers find each other either way. See [multicast and IGMP snooping](../../explanation/architecture/moonlight.md#multicast-and-igmp-snooping).
+WLED apps browse on broadcast, so a device appears in them only with this on. Off is the better neighbour, since a broadcast wakes every device on the LAN to parse a packet none of them want. Presence always goes to the MoonLight group regardless, so peers find each other either way. See [multicast and IGMP snooping](../../explanation/architecture/moonlight.md#multicast-and-igmp-snooping).
 
 Detail: [technical](moxygen/DevicesModule.md)
 
@@ -114,7 +114,7 @@ Detail: [technical](moxygen/FirmwareUpdateModule.md) · [image vetting](moxygen/
 
 ### MoonCloud
 
-The container for everything projectMM does with a server MoonModules runs. It holds no settings of its own: each thing it does is a child with its own consent, because a user who wants one has not thereby agreed to the other.
+The container for everything MoonLight does with a server MoonModules runs. It holds no settings of its own: each thing it does is a child with its own consent, because a user who wants one has not thereby agreed to the other.
 
 <img src="../../assets/core/MoonCloudModule.png" width="300" alt="MoonCloud module card">
 
@@ -148,7 +148,7 @@ Detail: [technical](moxygen/MoonStatsModule.md)
 
 ### Talk
 
-A public message board between projectMM devices, in the shape Meshtastic's channel chat has. Off until you turn it on, and a message is sent because you typed one: nothing posts on its own.
+A public message board between MoonLight devices, in the shape Meshtastic's channel chat has. Off until you turn it on, and a message is sent because you typed one: nothing posts on its own.
 
 <img src="../../assets/core/MoonTalkModule.png" width="300" alt="Talk module controls">
 
@@ -347,41 +347,41 @@ sudo uv run moondeck/run/run_desktop.py --port 80
 The discovery buffers are sized to the looks this device actually has, and grow or shrink as presets are added and removed. There is no cap on the number: a fixed one would either reserve memory a small setup never uses, or silently publish nothing once the list outgrew it.
 
 ## MQTT, details
-The topic prefix is `projectMM/<mac>`, a **stable** identifier (the last 6 hex of the device's MAC), fixed for the device's life. Renaming the device does **not** change its topics, so a hub's config never breaks on a rename (the WLED/Tasmota/Home-Assistant convention). It's derived, not a stored control.
+The topic prefix is `MoonLight/<mac>`, a **stable** identifier (the last 6 hex of the device's MAC), fixed for the device's life. Renaming the device does **not** change its topics, so a hub's config never breaks on a rename (the WLED/Tasmota/Home-Assistant convention). It's derived, not a stored control.
 
 **Topics** (for a device whose MAC ends `563cfe`): the device SUBSCRIBEs to the `set` topics and PUBLISHes the `get` topics on change (and on connect, so a controller never reads "No Response"). It also publishes its friendly `deviceName` on the retained `name` topic, so a hub can show the human name while the topics stay MAC-stable:
 
 | direction | topic | payload |
 |---|---|---|
-| set → device | `projectMM/563cfe/on/set` | `true` / `false` |
-| device → get | `projectMM/563cfe/on/get` | `true` / `false` |
-| set → device | `projectMM/563cfe/brightness/set` | `0`–`100` |
-| device → get | `projectMM/563cfe/brightness/get` | `0`–`100` |
-| set → device | `projectMM/563cfe/hsv/set` | `h,s,v` (hue `0`–`359`, sat/val `0`–`100`) |
-| device → get | `projectMM/563cfe/hsv/get` | `h,s,v` |
-| device → get | `projectMM/563cfe/name` | the friendly `deviceName` (retained) |
-| device → get | `projectMM/563cfe/update/state` | `{"installed_version":…,"latest_version":…,"release_url":…,"title":…}` (retained; HA update entity) |
-| set → device | `projectMM/563cfe/update/set` | target version string (empty = install latest); triggers OTA against the matching GitHub release asset |
+| set → device | `MoonLight/563cfe/on/set` | `true` / `false` |
+| device → get | `MoonLight/563cfe/on/get` | `true` / `false` |
+| set → device | `MoonLight/563cfe/brightness/set` | `0`–`100` |
+| device → get | `MoonLight/563cfe/brightness/get` | `0`–`100` |
+| set → device | `MoonLight/563cfe/hsv/set` | `h,s,v` (hue `0`–`359`, sat/val `0`–`100`) |
+| device → get | `MoonLight/563cfe/hsv/get` | `h,s,v` |
+| device → get | `MoonLight/563cfe/name` | the friendly `deviceName` (retained) |
+| device → get | `MoonLight/563cfe/update/state` | `{"installed_version":…,"latest_version":…,"release_url":…,"title":…}` (retained; HA update entity) |
+| set → device | `MoonLight/563cfe/update/set` | target version string (empty = install latest); triggers OTA against the matching GitHub release asset |
 
 The HomeKit color wheel has no "palette" concept, so `hsv/set`'s hue+saturation pick the **nearest palette** (each built-in palette has a representative color; the closest one is selected) and the value drives brightness, the color wheel becomes a natural palette selector.
 
-**Homebridge**, install [`homebridge-mqttthing`](https://github.com/arachnetech/homebridge-mqttthing) and add a `lightbulb` accessory. Use the device's own MAC suffix (read it from the `mqtt_status`/topics, or `mosquitto_sub -t 'projectMM/#'`) in place of `563cfe`:
+**Homebridge**, install [`homebridge-mqttthing`](https://github.com/arachnetech/homebridge-mqttthing) and add a `lightbulb` accessory. Use the device's own MAC suffix (read it from the `mqtt_status`/topics, or `mosquitto_sub -t 'MoonLight/#'`) in place of `563cfe`:
 
 ```json
 {
   "accessory": "mqttthing",
   "type": "lightbulb",
-  "name": "projectMM",
+  "name": "MoonLight",
   "url": "mqtt://<broker>:1883",
   "username": "<user>",
   "password": "<pass>",
   "topics": {
-    "getOn": "projectMM/563cfe/on/get",
-    "setOn": "projectMM/563cfe/on/set",
-    "getBrightness": "projectMM/563cfe/brightness/get",
-    "setBrightness": "projectMM/563cfe/brightness/set",
-    "getHSV": "projectMM/563cfe/hsv/get",
-    "setHSV": "projectMM/563cfe/hsv/set"
+    "getOn": "MoonLight/563cfe/on/get",
+    "setOn": "MoonLight/563cfe/on/set",
+    "getBrightness": "MoonLight/563cfe/brightness/get",
+    "setBrightness": "MoonLight/563cfe/brightness/set",
+    "getHSV": "MoonLight/563cfe/hsv/get",
+    "setHSV": "MoonLight/563cfe/hsv/set"
   },
   "onValue": "true",
   "offValue": "false"
@@ -389,8 +389,8 @@ The HomeKit color wheel has no "palette" concept, so `hsv/set`'s hue+saturation 
 ```
 
 Home Assistant adopts the device two ways, both zero-config:
-- **MQTT auto-discovery**: with `haDiscovery` on (opt-in; off by default) and a broker set, the device announces itself on `homeassistant/light/projectMM_<mac6>/config` and HA auto-creates a wired entity with **on/off + brightness** (the config declares `brightness` only; color isn't in it, so the entity has no color control). Retained across reboots. Color/palette stays on the separate `hsv/set` topic above, not this entity. Off by default because the WLED `/json` shim already gives HA a richer light (color + palette + sensors) over mDNS with no broker, leaving both on lists the device twice; enable this only for broker-only / cross-subnet setups.
-- **WLED integration**: HA's built-in WLED integration discovers the device over the WLED `/json` API projectMM already serves; on/off + brightness work with no broker.
+- **MQTT auto-discovery**: with `haDiscovery` on (opt-in; off by default) and a broker set, the device announces itself on `homeassistant/light/MoonLight_<mac6>/config` and HA auto-creates a wired entity with **on/off + brightness** (the config declares `brightness` only; color isn't in it, so the entity has no color control). Retained across reboots. Color/palette stays on the separate `hsv/set` topic above, not this entity. Off by default because the WLED `/json` shim already gives HA a richer light (color + palette + sensors) over mDNS with no broker, leaving both on lists the device twice; enable this only for broker-only / cross-subnet setups.
+- **WLED integration**: HA's built-in WLED integration discovers the device over the WLED `/json` API MoonLight already serves; on/off + brightness work with no broker.
 
 Both can be on at once. Setup walkthrough (including exposing HA to Apple Home via HA's HomeKit Bridge, no Homebridge needed) in the [Home Assistant recipe](../../how-to/home-automation.md#adopt-in-home-assistant).
 

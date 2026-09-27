@@ -124,8 +124,9 @@ private:
     char lastLook_[32] = "";        ///< the look last published, part of the change gate
 
     // constexpr so the compiler can prove the buffer bounds a runtime pointer would not.
-    static constexpr const char* kPrefixRoot = "projectMM";
-    static constexpr size_t kPrefixLen = 9 + 1 + 6 + 1;   ///< sized from its parts
+    static constexpr const char kPrefixRoot[] = "MoonLight";
+    /// Derived from the root rather than counted from it, so a renamed root cannot silently truncate every topic.
+    static constexpr size_t kPrefixLen = sizeof(kPrefixRoot) + 1 + 6;
     /// Write the topic prefix for this device.
     void topicPrefix(char* out, size_t cap) const;
     /// Write one full topic from its suffix.

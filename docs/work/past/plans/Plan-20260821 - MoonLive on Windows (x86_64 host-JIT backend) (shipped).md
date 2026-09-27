@@ -2,7 +2,7 @@
 
 ## Context
 
-MoonLive is projectMM's on-device JIT: user-authored effect / modifier / layout scripts compile to native code and run in the pipeline. Today only `__aarch64__` desktops have a working host backend — `MM_MOONLIVE_HAS_HOST_JIT` is 0 on x86-64 Windows, x86-64 Linux, and Intel macOS. On those targets `MoonLiveCompiler::compileSource` fails cleanly and scripted modules render dark: no crash, no MoonLive.
+MoonLive is MoonLight's on-device JIT: user-authored effect / modifier / layout scripts compile to native code and run in the pipeline. Today only `__aarch64__` desktops have a working host backend — `MM_MOONLIVE_HAS_HOST_JIT` is 0 on x86-64 Windows, x86-64 Linux, and Intel macOS. On those targets `MoonLiveCompiler::compileSource` fails cleanly and scripted modules render dark: no crash, no MoonLive.
 
 The PO's dev machine is Windows-x86_64, so the entire scripting subsystem is dormant for them. This branch closes `docs/backlog/backlog-light.md:295-307` ("MoonLive has no x86-64 backend"). It also unlocks two free wins as side effects — SysV x86_64 covers Linux and Intel macOS.
 

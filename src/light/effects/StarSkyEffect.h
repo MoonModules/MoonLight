@@ -6,7 +6,7 @@ namespace mm {
 
 /// Night-sky effect: twinkling stars over a dark field.
 /// @card StarSkyEffect.gif
-/// Author: limpkin (MoonLight), https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
+/// Author: limpkin (MoonLight), https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 ///
 /// A pool of stars, sized from the light count, each taking a random cell and brightness.
 /// Every frame a star steps toward full and reverses, or toward zero and respawns elsewhere.

@@ -24,7 +24,7 @@ That is a DIFFERENT model: this one is 11/13 channels with a plain linear dimmer
 | DMX modes | 11 or 13 channels |
 | Display | `d001` address (001-512), `CH11` mode, `Au01` auto, `Snon` sound, `rPAN`/`rTIL` axis reverse |
 
-### 11-channel mode (the projectMM preset)
+### 11-channel mode (the MoonLight preset)
 
 | CH | Value | Function | Preset role |
 |---|---|---|---|
@@ -46,13 +46,13 @@ Two things matter when driving it by hand. Every channel at 255 makes the fixtur
 
 ### 13-channel mode (the alternative)
 
-The same first 11 channels, plus CH12 (0-249 auto run, 250-255 sound mode) and CH13 (150-200 reset). Both are program modes that take control away from DMX, so the 11-channel mode is the one worth driving from projectMM.
+The same first 11 channels, plus CH12 (0-249 auto run, 250-255 sound mode) and CH13 (150-200 reset). Both are program modes that take control away from DMX, so the 11-channel mode is the one worth driving from MoonLight.
 
 ## P-Knight Art-Net2 CR021R
 
 ![P-Knight Art-Net2 CR021R](../../assets/light/fixtures/pknight-artnet2-cr021r.jpg){ width="280" }
 
-A two-universe Art-Net to DMX512 node: Ethernet in, XLR DMX out. It is how projectMM drives a wired fixture, the counterpart to the LED drivers that speak to addressable strips directly.
+A two-universe Art-Net to DMX512 node: Ethernet in, XLR DMX out. It is how MoonLight drives a wired fixture, the counterpart to the LED drivers that speak to addressable strips directly.
 
 | | |
 |---|---|

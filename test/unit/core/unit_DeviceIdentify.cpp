@@ -1,7 +1,14 @@
 /// @module DevicePlugin
 /// @also DevicesModule
-
-/// Pins the device-interop plugin classification: each plugin claims the UDP presence port and turns a received datagram into a Device kind. Pure host logic, feed a synthetic presence packet (the 44-byte WLED-compatible header), assert the classification, no network. The plugins are the "second caller" that makes the seam testable.
+///
+/// Pins the plugin classification: each plugin claims the presence port and types a datagram it receives.
+///
+/// @moreinfo
+///
+/// ## How a packet reaches a verdict
+///
+/// A synthetic presence packet goes in, the 44-byte WLED-compatible header, and a classification comes out.
+/// Pure host logic with no network, because the plugins are the second caller that makes the seam testable.
 
 #include "doctest.h"
 #include "core/system/DevicePlugin.h"
@@ -15,14 +22,14 @@ using namespace mm;
 namespace {
 const uint8_t kSrcIp[4] = {192, 168, 1, 50};
 
-// Build a WLED-valid presence packet; `mm` stamps the projectMM marker (a projectMM peer).
+// Build a WLED-valid presence packet; `mm` stamps the MoonLight marker (a MoonLight peer).
 void packet(uint8_t out[WledPacket::kSize], const char* name, bool mm) {
     WledPacket::build(out, kSrcIp, name, /*boardType=*/34, /*lightsOn=*/true);
     if (mm) WledPacket::stampMmMarker(out);
 }
 }  // namespace
 
-TEST_CASE("MmPlugin claims a presence packet carrying the projectMM marker") {
+TEST_CASE("MmPlugin claims a presence packet carrying the MoonLight marker") {
     MmPlugin p;
     CHECK(p.discoveryPort() == WledPacket::kPort);
 
@@ -30,11 +37,11 @@ TEST_CASE("MmPlugin claims a presence packet carrying the projectMM marker") {
     packet(pkt, "Bench-P4", /*mm=*/true);
     DiscoveredDevice d;
     REQUIRE(p.classifyPacket(pkt, sizeof(pkt), kSrcIp, d));
-    CHECK(d.type == DevType::ProjectMM);
+    CHECK(d.type == DevType::MoonLight);
     CHECK(std::strcmp(d.name, "Bench-P4") == 0);
 }
 
-TEST_CASE("MmPlugin declines a plain WLED packet (no projectMM marker)") {
+TEST_CASE("MmPlugin declines a plain WLED packet (no MoonLight marker)") {
     MmPlugin p;
     uint8_t pkt[WledPacket::kSize];
     packet(pkt, "wled-desk", /*mm=*/false);
@@ -54,8 +61,8 @@ TEST_CASE("WledPlugin claims a plain WLED packet as WLED") {
     CHECK(std::strcmp(d.name, "wled-desk") == 0);
 }
 
-TEST_CASE("WledPlugin declines a projectMM-marked packet (that's a peer, not a WLED)") {
-    // A projectMM peer broadcasts a WLED-VALID packet, so without the marker check WledPlugin would mis-claim it. The marker keeps the projectMM/WLED kinds distinct.
+TEST_CASE("WledPlugin declines a MoonLight-marked packet (that's a peer, not a WLED)") {
+    // A MoonLight peer broadcasts a WLED-VALID packet, so without the marker check WledPlugin would mis-claim it. The marker keeps the MoonLight/WLED kinds distinct.
     WledPlugin p;
     uint8_t pkt[WledPacket::kSize];
     packet(pkt, "Bench-P4", /*mm=*/true);

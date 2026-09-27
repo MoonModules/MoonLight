@@ -5,7 +5,7 @@
 namespace mm {
 
 /// Modifier that collapses one axis of the box to a single plane.
-/// Author: @Troy (WLEDMM Art-Net), https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
+/// Author: @Troy (WLEDMM Art-Net), https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
 ///
 /// @moreinfo
 ///

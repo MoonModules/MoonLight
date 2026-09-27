@@ -5,7 +5,7 @@
 namespace mm {
 
 /// Modifier masking the layer in a checkerboard pattern.
-/// Author: WildCats08 / @Brandon502 (MoonLight), https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
+/// Author: WildCats08 / @Brandon502 (MoonLight), https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
 /// @card CheckerboardModifier.gif
 ///
 /// @moreinfo

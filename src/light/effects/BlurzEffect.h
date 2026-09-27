@@ -6,7 +6,7 @@ namespace mm {
 
 /// Audio-reactive effect: blurred dots positioned by frequency band.
 /// @card BlurzEffect.gif
-/// Author: Andrew Tuline (WLED-SR), with enhancements by @softhack007, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
+/// Author: Andrew Tuline (WLED-SR), with enhancements by @softhack007, via the predecessor, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
 ///
 /// Each frame lights one dot colored by a band's magnitude, then blurs the whole strip.
 /// The dot bleeds into a soft smear that drifts and fades.

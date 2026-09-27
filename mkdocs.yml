@@ -6,12 +6,12 @@
 # Built in CI (release.yml deploy-pages job) into pages/ root; the web
 # installer keeps its /install/ path untouched. Build locally with
 #   uv run moondeck/docs/build_docs.py --strict
-site_name: projectMM
+site_name: MoonLight
 site_description: High-performance LED & DMX lighting control for ESP32 and beyond.
-# Canonical deployed URL: the custom domain, with the /projectMM/ repo subpath
+# Canonical deployed URL: the custom domain, with the /MoonLight/ repo subpath
 # kept (GitHub Pages serves the project site under that path even on the custom
 # domain — every existing link uses moonmodules.org/projectMM/…, e.g. the
-# installer at /projectMM/install/). Drives the sitemap, canonical <link> tags,
+# installer at /MoonLight/install/). Drives the sitemap, canonical <link> tags,
 # and the base for absolute URLs.
 site_url: https://moonmodules.org/projectMM/
 repo_url: https://github.com/MoonModules/projectMM
@@ -154,9 +154,9 @@ nav:
   # and legal/ sit outside the grid on purpose — see contributing/documentation-standards.md.
   # ONE learning path, in the order a reader walks it: what it is, then building a show,
   # then making it beautiful, then writing your own. The install pages left for how-to/:
-  # putting projectMM on a machine is a task somebody already has, not a lesson.
+  # putting MoonLight on a machine is a task somebody already has, not a lesson.
   - Tutorials:
-      - How projectMM works: tutorials/how-projectmm-works.md
+      - How MoonLight works: tutorials/how-projectmm-works.md
       - Build your first light show: tutorials/first-light-show.md
       - Write your first script: tutorials/first-script.md
       - Making beautiful effects: tutorials/generative-effects.md
@@ -171,7 +171,7 @@ nav:
       - Building, running, flashing: how-to/building.md
       - Driving LED panels with a receiving card: how-to/panel-cards.md
       - LED signal integrity: how-to/led-signal-integrity.md
-      - Driving projectMM from a phone or tablet: how-to/control-surface.md
+      - Driving MoonLight from a phone or tablet: how-to/control-surface.md
       - Home automation: how-to/home-automation.md
       - Save and recall presets: how-to/presets.md
       - Updating firmware: how-to/updating-firmware.md

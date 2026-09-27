@@ -1,0 +1,49 @@
+{
+  "name": "97-write-an-effect",
+  "description": "Type an effect in the browser, save it, and the lights change: compiled to native code on the device.",
+  "speed": 1.4,
+  "steps": [
+    {
+      "action": "chapter",
+      "title": "Write an effect",
+      "description": "In the browser, on the device",
+      "seconds": 2.0
+    },
+    {
+      "action": "open_card",
+      "module": "Effects",
+      "hold": 0.6
+    },
+    {
+      "action": "clear_children",
+      "module": "Layer"
+    },
+    {
+      "action": "add_module",
+      "parent": "Layer",
+      "type": "MoonLiveEffect",
+      "as": "live",
+      "caption": "A MoonLive effect is a script the device compiles itself.",
+      "hold": 1.2
+    },
+    {
+      "action": "pick_file",
+      "module": "{live}",
+      "control": "script",
+      "value": "balls.mle",
+      "caption": "Start from one of the scripts that ship with it.",
+      "hold": 1.6
+    },
+    {
+      "action": "type_script",
+      "text": "class MyEffect {\n  byte bpm = 90;\n\n  void defineControls() {\n    addControl(\"bpm\", bpm, 1, 255);\n  }\n\n  void tick() {\n    fill(beatsin(bpm, 0, 255), 200, 255);\n  }\n}\n",
+      "delay": 38,
+      "caption": "Write your own. This is C-like source, typed in the browser.",
+      "hold": 2.0
+    },
+    {
+      "action": "delete_module",
+      "module": "{live}"
+    }
+  ]
+}

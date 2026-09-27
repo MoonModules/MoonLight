@@ -4,15 +4,15 @@
 
 > **`app.js` is completely module-independent.** It supports only the **generic** UI: module cards, the generic control widgets (number, text, pin, bool, select, list, …), creating / deleting / replacing / reordering cards, the tick / memory / status emoji header — the self-describing-controls machinery. **No module specifics live in it — none.** A core module's UI specifics live in **core** (next to that module), a light-domain module's UI specifics live in **light**. app.js knows *control types*, never *module names*.
 
-This is a **rule, not a direction** — it's enforceable (grep app.js for a module name; there should be zero) and it's the acceptance test for the refactor. This study surveys how the field achieves it, measures projectMM's current distance from it, and extracts the mechanism. The top-down companion (design from the goal, not consulting this) follows.
+This is a **rule, not a direction** — it's enforceable (grep app.js for a module name; there should be zero) and it's the acceptance test for the refactor. This study surveys how the field achieves it, measures MoonLight's current distance from it, and extracts the mechanism. The top-down companion (design from the goal, not consulting this) follows.
 
 The trigger: app.js has grown to **~3,200 lines** with module-specific content baked in (a hardcoded `renderFileManager` and `if (mod.type === …)` branches), and while building TasksModule we **hit the wall** — the generic list-detail renderer couldn't display a new module's data shape, forcing a workaround. That's the smell; the statement above is the fix.
 
 ## The goal (what "generic" means here)
 
-projectMM's core UI strength is that it renders **any** module's controls generically from the `/api/state` control list — one code path draws an effect, a driver, or a system service (the same self-describing-controls model the architecture is built on). A module that needs *more* than the 9 generic control types (a file tree + editor, a task table, a memory-by-type chart, a pin board diagram) should **plug that in** without app.js knowing the module exists by name. Generic core, module-owned specifics.
+MoonLight's core UI strength is that it renders **any** module's controls generically from the `/api/state` control list — one code path draws an effect, a driver, or a system service (the same self-describing-controls model the architecture is built on). A module that needs *more* than the 9 generic control types (a file tree + editor, a task table, a memory-by-type chart, a pin board diagram) should **plug that in** without app.js knowing the module exists by name. Generic core, module-owned specifics.
 
-## Where projectMM is today — a split personality
+## Where MoonLight is today — a split personality
 
 The codebase already does this **two opposite ways**, which is the tell:
 
@@ -44,7 +44,7 @@ The `ctrl.type === "bool"/"text"/…` checks (app.js:2029-2030) are **generic co
 
 ### Home Assistant — Lovelace custom cards (the direct analog)
 
-HA is exactly projectMM's situation: a generic dashboard rendering entities, with an extension path for custom UI ([developers.home-assistant.io/docs/frontend/custom-ui/custom-card](https://developers.home-assistant.io/docs/frontend/custom-ui/custom-card/)):
+HA is exactly MoonLight's situation: a generic dashboard rendering entities, with an extension path for custom UI ([developers.home-assistant.io/docs/frontend/custom-ui/custom-card](https://developers.home-assistant.io/docs/frontend/custom-ui/custom-card/)):
 
 - **A card is a Custom Element** — `customElements.define('my-card', MyCard)`. The dashboard doesn't know the card's internals; it instantiates the tag.
 - **A lifecycle contract** the core calls: `setConfig(config)` on setup/config-change (throw → the core renders an error card), and it **sets the `hass` property** on every state change (the card re-renders from it). One-way data in, event out.
@@ -62,13 +62,13 @@ The browser-native mechanism HA builds on ([MDN Web Components](https://develope
 - **Scoped registries** (emerging) let independently-built widgets avoid tag-name collisions — relevant only if third-party UI is ever a goal; overkill for first-party modules.
 - **Manual vs auto registration** — a module can *export* its element class and let the app register it, or self-register on import. Either fits.
 
-**Take:** Custom Elements are the **zero-framework, standards-based** substrate — matches projectMM's no-build-step, no-framework UI (plain ES modules today). No dependency added; it's a browser API.
+**Take:** Custom Elements are the **zero-framework, standards-based** substrate — matches MoonLight's no-build-step, no-framework UI (plain ES modules today). No dependency added; it's a browser API.
 
 ### The registry/dispatch idea (generalised)
 
 Across HA, VS Code (contribution points), Grafana (panel plugins), the shape is identical: **a core that dispatches by a key to a registered handler, never a switch over known names.** The core holds a `Map<key, renderer>`; a module registers `registry.set('FileManagerModule', FileManagerWidget)`; the core does `registry.get(mod.type)?.(mod, host)` with a generic fallback. Adding a module's UI = registering an entry, touching zero core code.
 
-## What projectMM already has going for it
+## What MoonLight already has going for it
 
 - **Self-describing controls** — the generic `switch (ctrl.type)` renderer is the 90% path and already works; most modules need *no* custom UI. The extension point is only for the few that exceed the 9 control types.
 - **ES modules, no build step** — `import { preview } from "/preview3d.js"` already works; Custom Elements are a browser primitive needing no tooling. The substrate is present.
@@ -77,7 +77,7 @@ Across HA, VS Code (contribution points), Grafana (panel plugins), the shape is 
 
 ## Ideas extracted (for the top-down to design against)
 
-| Idea | Source | projectMM shape |
+| Idea | Source | MoonLight shape |
 |---|---|---|
 | **Registry dispatch, not a name switch** | HA `customCards`, VS Code, Grafana | app.js holds `Map<moduleType, renderer>`; `registry.get(mod.type)` with the generic fallback. No `if (mod.type === "X")` in core. |
 | **Custom Element per module widget** | HA cards, Web Components | Each special module ships `<mm-tasks>` etc. as a Custom Element in its own file; app.js instantiates the tag, knows nothing inside. |
@@ -89,7 +89,7 @@ Across HA, VS Code (contribution points), Grafana (panel plugins), the shape is 
 
 ## Scope signal for the top-down
 
-The convergent answer is **a small registry + a per-module widget contract, both dead-standard (Custom Elements + a `Map` dispatch)** — projectMM needs no framework, no build step, and already has the substrate (ES modules) and one worked example (preview3d). The work is: (1) define the widget contract (how a module widget receives state + emits changes), (2) a registry app.js consults instead of the hardcoded branches, (3) migrate FileManager out of app.js as the first citizen (proving the contract on the hardest existing case), (4) a middle tier — richer generic list-detail — so not every custom need forces a full widget. Then Tasks/Memory/Pins each add a file + a registry entry, and app.js stops growing per-module.
+The convergent answer is **a small registry + a per-module widget contract, both dead-standard (Custom Elements + a `Map` dispatch)** — MoonLight needs no framework, no build step, and already has the substrate (ES modules) and one worked example (preview3d). The work is: (1) define the widget contract (how a module widget receives state + emits changes), (2) a registry app.js consults instead of the hardcoded branches, (3) migrate FileManager out of app.js as the first citizen (proving the contract on the hardest existing case), (4) a middle tier — richer generic list-detail — so not every custom need forces a full widget. Then Tasks/Memory/Pins each add a file + a registry entry, and app.js stops growing per-module.
 
 There are **three tiers** the top-down should name, so a module reaches for the lightest that fits (minimalism): (a) **generic controls** — no custom UI, the default; (b) **generic-with-richer-list-detail** — a module whose need is just nested/tabular detail; (c) **full custom widget** — a Custom Element for genuinely bespoke UI (file tree, board diagram). FileManager is (c); TasksModule today is (a)-with-a-workaround that (b) would fix; Memory/Pins are likely (b) or (c).
 

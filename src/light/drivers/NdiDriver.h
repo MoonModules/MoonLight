@@ -23,7 +23,7 @@ namespace mm {
 ///
 /// ## The runtime is the user's
 ///
-/// projectMM is GPL-3.0 and the runtime is proprietary, so it is never bundled or linked. The platform layer resolves it on demand. A machine without it runs normally and says so in the status, and no NDI type appears in this header.
+/// MoonLight is GPL-3.0 and the runtime is proprietary, so it is never bundled or linked. The platform layer resolves it on demand. A machine without it runs normally and says so in the status, and no NDI type appears in this header.
 ///
 /// @card NdiDriver.png
 class NdiDriver : public DriverBase {

@@ -6,7 +6,7 @@ namespace mm {
 
 /// Audio-reactive effect: colors the layer from the 16-band FFT spectrum.
 /// @card AudioSpectrumEffect.gif
-/// Author: projectMM original, on the WLED-SR GEQ / spectrum-analyzer concept (Andrew Tuline), https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
+/// Author: projectMM original, on the WLED-SR GEQ / spectrum-analyzer concept (Andrew Tuline), via the predecessor, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
 ///
 /// The classic equalizer display: sixteen bands across x, each column lit from the bottom up.
 /// The bands scale to any width, so a wide grid gives each several columns and a narrow one samples.

@@ -6,7 +6,7 @@ namespace mm {
 
 /// Effect that paints moving brush-stroke lines across the layer.
 /// @card PaintBrushEffect.gif
-/// Author: @TroyHacks (WLED MoonModules, GPLv3), https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h
+/// Author: @TroyHacks (WLED MoonModules, GPLv3), https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h
 ///
 /// Lines whose endpoints oscillate in 3D on the beat, each shortened by a band's magnitude.
 /// That shortening is what makes the strokes curve and sweep.

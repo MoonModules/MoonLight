@@ -25,7 +25,7 @@ namespace mm {
 ///
 /// Sparse layouts: the permutation is over box indices, so a real light can map to a non-light cell (dropped → dark).
 /// Acceptable for v1.
-/// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
+/// Author: MoonLight, https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
 class RandomMapModifier : public ModifierBase {
 public:
     /// The catalog tags this modifier carries.

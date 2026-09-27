@@ -2,7 +2,7 @@
 
 The MoonLive language: what a script may declare, what the engine hands it, and what it can call.
 A script compiles to native code on the device, so it runs at the speed of a compiled module.
-The library that ships with projectMM is [moonlive/](https://github.com/MoonModules/projectMM/tree/main/moonlive), and the shortest way in is [Write your first script](../../tutorials/first-script.md).
+The library that ships with MoonLight is [moonlive/](https://github.com/MoonModules/projectMM/tree/main/moonlive), and the shortest way in is [Write your first script](../../tutorials/first-script.md).
 
 ## A script is a class
 

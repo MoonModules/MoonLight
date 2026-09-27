@@ -1,5 +1,5 @@
 #pragma once
-// Author: projectMM original
+// Author: MoonLight original
 /// @defgroup SpriteCast The shared sprite cast
 /// @{
 /// Every pixel-art character the effects share, behind one draw call.

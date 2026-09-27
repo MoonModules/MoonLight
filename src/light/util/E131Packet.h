@@ -52,7 +52,7 @@ inline size_t buildE131Packet(uint8_t* outBuf, uint16_t universe, uint8_t sequen
     // Framing layer
     detail::putU16(outBuf + 38, static_cast<uint16_t>(0x7000 | (totalLen - 38)));
     outBuf[43] = 0x02;                                        // vector 0x00000002
-    std::memcpy(outBuf + 44, "projectMM", 9);                 // source name (NUL-padded)
+    std::memcpy(outBuf + 44, "MoonLight", 9);                 // source name (NUL-padded)
     outBuf[108] = 100;                                        // priority (spec default)
     // sync address stays 0
     outBuf[111] = sequence;

@@ -9,7 +9,7 @@ constexpr lengthType defaultGridSize = 16;
 
 /// Layout of a dense row-major 3D grid.
 /// @card GridLayout.png
-/// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
+/// Author: MoonLight, https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
 class GridLayout : public LayoutBase {
 public:
     /// The catalog tags this layout carries.

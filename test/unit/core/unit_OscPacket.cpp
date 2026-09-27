@@ -41,7 +41,7 @@ std::vector<uint8_t> withInt(const char* addr, int32_t v) {
 
 }  // namespace
 
-// The exact bytes a controller puts on the wire. If this changes, every TouchOSC layout and Resolume patch built against projectMM breaks, so the golden vector is the alarm.
+// The exact bytes a controller puts on the wire. If this changes, every TouchOSC layout and Resolume patch built against MoonLight breaks, so the golden vector is the alarm.
 TEST_CASE("golden vector: the exact bytes of an OSC message with a float") {
     const auto p = withFloat("/mm/fader/1", 1.0f);
 

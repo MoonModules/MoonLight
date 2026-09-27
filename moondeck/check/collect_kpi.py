@@ -93,7 +93,10 @@ def _pick_first_existing(*paths):
 # These two build a bare pipeline and instantiate none of the optional modules (no OSC, NDI, HLS
 # or Preview), so they measure the same thing before and after a cycle that adds modules. New
 # modules belong in the advanced scenarios, which keep their own numbers.
-HEADLINE_SCENARIOS = ("scenario_Layer_base_pipeline", "scenario_Layer_memory_1to1")
+# The two the trend is read from: one walks the render path, one reallocates on a resize.
+# They are named rather than derived, so a scenario leaving the suite shows up as a gap here
+# instead of silently emptying the per-commit tick history.
+HEADLINE_SCENARIOS = ("scenario_Effects_pipeline_builds_and_renders", "scenario_Layouts_resize_reallocates_live")
 
 
 def scenario_observed(target: str) -> dict:
@@ -151,9 +154,9 @@ def collect_desktop():
     # Located by build_desktop.desktop_binary(), which repo_health.py also calls: the two had
     # separate copies of the candidate list in OPPOSITE order, so one run of this script could
     # take binary_kb from one file and flash.desktop from another.
-    projectMM = desktop_binary(BUILD_DIR)
-    if projectMM:
-        kpi["binary_kb"] = projectMM.stat().st_size // 1024
+    MoonLight = desktop_binary(BUILD_DIR)
+    if MoonLight:
+        kpi["binary_kb"] = MoonLight.stat().st_size // 1024
 
     test_exe = _pick_first_existing(
         BUILD_DIR / "test" / "mm_tests",
@@ -534,7 +537,7 @@ def main():
     else:
         # Full interactive report
         print("=" * 50)
-        print("  projectMM KPI Report")
+        print("  MoonLight KPI Report")
         print("=" * 50)
         print()
         print(format_oneliner(desktop, esp32, code))

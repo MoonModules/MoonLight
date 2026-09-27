@@ -1,5 +1,5 @@
 #pragma once
-// Author: projectMM original
+// Author: MoonLight original
 
 #include "core/services/AudioService.h"   // latestFrame: the spectrum the audio-reactive mode reads
 #include "core/util/math16.h"         // sin16, BeatPhase: the sweep clocks

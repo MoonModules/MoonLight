@@ -22,7 +22,7 @@ class Scheduler;
 /// This is core infrastructure held to a light-include-free contract, with one accepted exception.
 /// The WLED-compatibility shim's color path uses the pure hue and palette-index conversions in `light/Palette.h`, `Palettes::nearestForRgb` and `Palettes::representativeRgb`.
 /// `MqttModule` documents the same sanctioned exception at its own top.
-/// Routing a HomeKit or Home Assistant WLED color to a projectMM palette needs the palette set, which is inherently light-domain, and a format conversion is the least-coupling bridge.
+/// Routing a HomeKit or Home Assistant WLED color to a MoonLight palette needs the palette set, which is inherently light-domain, and a format conversion is the least-coupling bridge.
 /// This module still drives the palette through `Scheduler::setControl` rather than a light object, and no other light-domain include is permitted.
 ///
 /// The implementation lives in the `.cpp`, and this header is the interface alone.
@@ -111,14 +111,14 @@ class Scheduler;
 ///
 /// ## The WLED-compatibility shim
 ///
-/// A small set of WLED-shaped messages make a projectMM device appear in the native WLED apps and Home Assistant's WLED integration, and be controlled from them.
+/// A small set of WLED-shaped messages make a MoonLight device appear in the native WLED apps and Home Assistant's WLED integration, and be controlled from them.
 ///
 /// Discovery is over mDNS.
 /// Validation is a minimal `GET /json/info` carrying a name, a MAC, LED and WiFi objects, and the brand and product fields.
 /// The app keys on the brand to accept a device: we interoperate rather than impersonate, and this is no full WLED emulation.
 ///
 /// Live state is pushed over `/ws` as a state-and-info frame.
-/// The state mirrors the Drivers brightness control and the live first-LED color, falling back to projectMM purple when the first LED is off.
+/// The state mirrors the Drivers brightness control and the live first-LED color, falling back to MoonLight purple when the first LED is off.
 ///
 /// Control is bidirectional over that same socket.
 /// The app's slider and toggle send a frame that is read and applied to Drivers brightness through the shared apply core, the path REST and Improv also use.
@@ -487,7 +487,7 @@ private:
     void writeWledStateBody(JsonSink& sink);
     /// The device's name, MAC and live address, resolved once for every WLED handler to share.
     void resolveWledIdentity(const char*& name, uint8_t mac[6], uint8_t ip[4],
-                             const char* nameFallback = "projectMM");
+                             const char* nameFallback = "MoonLight");
     void writeModuleMetricsJson(JsonSink& sink, MoonModule* mod, bool& first);
 
     // Module CRUD

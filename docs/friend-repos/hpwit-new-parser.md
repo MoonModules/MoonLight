@@ -1,6 +1,6 @@
 # hpwit/new-parser (ESPLiveScript2): monthly activity digest
 
-What landed on [hpwit/new-parser](https://github.com/hpwit/new-parser), month by month. External-context reference, a factual log of a friend repo's activity, not projectMM's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md).
+What landed on [hpwit/new-parser](https://github.com/hpwit/new-parser), month by month. External-context reference, a factual log of a friend repo's activity, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md).
 
 The library: **ESPLiveScript2**, Yves Bazin's (hpwit) from-scratch C++ rewrite of [ESPLiveScript](https://github.com/hpwit/ESPLiveScript), the same idea (a small C-like language compiled on-device to real Xtensa machine code, no interpreter, so a script runs at near-native speed) reimplemented independently rather than refactored. The library ships inside the repo as `asmparser2/` (PlatformIO name `ESPLiveScript2`, at v1.3.0). Summarised via the GitHub commits API.
 

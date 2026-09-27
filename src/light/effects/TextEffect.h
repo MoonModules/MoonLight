@@ -6,7 +6,7 @@
 
 namespace mm {
 
-// Author: projectMM original, on MoonLight's Scrolling Text, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
+// Author: MoonLight original, on the predecessor's Scrolling Text, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 /// Effect rendering a scrolling multi-line string in a bitmap font.
 /// @card TextEffect.gif
 ///
@@ -23,7 +23,7 @@ public:
     Dim dimensions() const override { return Dim::D2; }
 
     /// The string to show, where the text area preserves its newlines.
-    char    text_[128] = "projectMM";
+    char    text_[128] = "MoonLight";
     /// March the block leftward as a marquee rather than holding it still.
     bool    scroll = false;
     /// Which bitmap font renders it.

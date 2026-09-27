@@ -17,7 +17,7 @@ namespace mm {
 ///
 /// Prior art: MoonLight's Multiply modifier (M_MoonLight.h), same tile+mirror fold (`position % modifierSize`, odd tiles reflected).
 /// We expose per-axis mirror bools (3) instead of MoonLight's single mirror flag, and per-axis multipliers, so X/Y/Z can fold and tile independently.
-/// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
+/// Author: MoonLight, https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
 class MultiplyModifier : public ModifierBase {
 public:
     /// The catalog tags this modifier carries.

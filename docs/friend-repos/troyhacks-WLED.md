@@ -1,6 +1,6 @@
 # troyhacks/WLED: monthly activity digest
 
-What landed on [troyhacks/WLED](https://github.com/troyhacks/WLED)'s `mdev` branch, month by month. External-context reference, a factual log of a friend repo's activity, not projectMM's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md).
+What landed on [troyhacks/WLED](https://github.com/troyhacks/WLED)'s `mdev` branch, month by month. External-context reference, a factual log of a friend repo's activity, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md).
 
 This is a personal fork of [MoonModules/WLED-MM](https://github.com/MoonModules/WLED-MM) (the `mdev` branch), so much of the `mdev` traffic is merges from and alignments with the MM and upstream WLED lines; the bullets below pick out what a *user* of this fork would notice. Summarised via the GitHub commits API (all commits on `mdev`, not first-parent merges), filtering out build-number bumps, merge commits, typo/comment churn, and pure refactors. No versioned release is cut from this branch (it tracks `mdev` and ships nightly `mdev` builds), so months are kept whole.
 

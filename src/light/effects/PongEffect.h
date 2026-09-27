@@ -1,5 +1,5 @@
 #pragma once
-// Author: projectMM original
+// Author: MoonLight original
 
 #include "core/services/AudioService.h"   // latestFrame: the beat the audio-reactive mode volleys on
 #include "core/util/math16.h"

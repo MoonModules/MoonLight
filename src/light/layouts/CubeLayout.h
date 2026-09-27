@@ -5,7 +5,7 @@
 namespace mm {
 
 /// Layout of a 3D cube volume (width×height×depth).
-/// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
+/// Author: MoonLight, https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
 ///
 /// @moreinfo
 ///
@@ -15,12 +15,12 @@ namespace mm {
 /// The interesting geometry is the WIRING ORDER, the sequence in which the LEDs are addressed.
 /// A physical cube is built from a strip that snakes through the volume.
 /// Which axis the strip runs along fastest (plus whether it reverses direction on alternate passes, boustrophedon / "snake") determines the index→position mapping.
-/// This layout reproduces MoonLight's Cube: a 6-way axis-order select, a per-axis increasing-direction flag, and a per-axis snake toggle.
+/// This layout reproduces the predecessor MoonLight's Cube: a 6-way axis-order select, a per-axis increasing-direction flag, and a per-axis snake toggle.
 /// The emitted COORDINATE is always the true (x,y,z); only the ORDER of emission (the driver index) changes with these controls, the same principle as GridLayout's serpentine, generalised to three axes.
 ///
-/// Prior art: MoonLight CubeLayout (github.com/MoonModules/MoonLight).
-/// MoonLight drives a `Wiring` helper with per-plane pins (nextPin() per plane).
-/// ProjectMM layouts emit coordinates only, the driver owns pins, so that plumbing is dropped and only the geometry is kept.
+/// Prior art: CubeLayout in the predecessor MoonLight, github.com/ewowi/MoonLight, which keeps its own name now that it is ours too.
+/// It drives a `Wiring` helper with per-plane pins (nextPin() per plane).
+/// Ours emit coordinates only, the driver owns pins, so that plumbing is dropped and only the geometry is kept.
 ///
 /// ## The wiring walk is reconstructed
 ///

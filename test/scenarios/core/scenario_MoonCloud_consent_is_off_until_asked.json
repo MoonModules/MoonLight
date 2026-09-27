@@ -1,0 +1,93 @@
+{
+  "name": "scenario_MoonCloud_consent_is_off_until_asked",
+  "module": "MoonCloudModule",
+  "mode": "mutate",
+  "also": [
+    "MoonStatsModule",
+    "MoonTalkModule"
+  ],
+  "description": "Nothing leaves the device until someone says so. Both MoonCloud children carry their own consent, because wanting a joint light show is not agreeing to usage reporting, and each is proven off by default and durable once set.",
+  "fixture": [
+    {
+      "name": "fix-MoonCloud",
+      "op": "add_module",
+      "id": "MoonCloud",
+      "type": "MoonCloudModule"
+    },
+    {
+      "name": "fix-Stats",
+      "op": "add_module",
+      "id": "Stats",
+      "type": "MoonStatsModule",
+      "parent_id": "MoonCloud"
+    },
+    {
+      "name": "fix-Talk",
+      "op": "add_module",
+      "id": "Talk",
+      "type": "MoonTalkModule",
+      "parent_id": "MoonCloud"
+    }
+  ],
+  "steps": [
+    {
+      "name": "stats-consent-is-off",
+      "description": "A fresh device reports nothing. This is the assertion that matters most on this card.",
+      "op": "expect_control",
+      "id": "Stats",
+      "key": "consent",
+      "equals": "false"
+    },
+    {
+      "name": "talk-consent-is-off",
+      "description": "And the same for Talk, which is a separate decision rather than the same one.",
+      "op": "expect_control",
+      "id": "Talk",
+      "key": "consent",
+      "equals": "false"
+    },
+    {
+      "name": "opt-in",
+      "description": "Someone switches it on, which is the only way it ever becomes true.",
+      "op": "set_control",
+      "id": "Stats",
+      "key": "consent",
+      "value": true
+    },
+    {
+      "name": "talk-is-still-off",
+      "op": "expect_control",
+      "id": "Talk",
+      "key": "consent",
+      "equals": "false"
+    },
+    {
+      "name": "restart",
+      "description": "Restart: a consent that quietly reverts would report without asking twice.",
+      "op": "reboot",
+      "timeout": 60
+    },
+    {
+      "name": "consent-survived",
+      "op": "expect_control",
+      "id": "Stats",
+      "key": "consent",
+      "equals": "true"
+    },
+    {
+      "name": "opt-out-again",
+      "description": "And off again, because withdrawing has to work as well as granting.",
+      "op": "set_control",
+      "id": "Stats",
+      "key": "consent",
+      "value": false
+    },
+    {
+      "name": "it-is-off",
+      "op": "expect_control",
+      "id": "Stats",
+      "key": "consent",
+      "equals": "false"
+    }
+  ]
+}

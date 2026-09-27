@@ -1,4 +1,4 @@
-// projectMM install picker — shared by the on-device UI (OTA flash) and the
+// MoonLight install picker — shared by the on-device UI (OTA flash) and the
 // GitHub Pages installer (first flash via Web Serial). Renders Release +
 // Board + Firmware dropdowns and an Install button; the caller wires the
 // onInstall callback to the right install transport.
@@ -41,16 +41,28 @@
 // ---------------------------------------------------------------------------
 
 const API_URL = "https://api.github.com/repos/MoonModules/projectMM/releases?per_page=10";
-const CACHE_KEY = "projectMM.releases.v1";
+const CACHE_KEY = "MoonLight.releases.v1";
 const CACHE_TTL_MS = 5 * 60 * 1000;  // 5 min — short enough to surface new RCs, long enough to avoid rate-limit thrash
 
 // Persisted user selection — survives page reloads and full browser restarts,
 // so a returning user doesn't have to re-pick their firmware every time. Keyed
 // separately from the API cache (which is sessionStorage with a TTL); these
 // are intent, not data, and never expire on their own.
-const PREF_RELEASE_KEY  = "projectMM.picker.releaseTag";
-const PREF_FIRMWARE_KEY = "projectMM.picker.firmware";
-const PREF_BOARD_KEY    = "projectMM.picker.board";
+const PREF_RELEASE_KEY  = "MoonLight.picker.releaseTag";
+const PREF_FIRMWARE_KEY = "MoonLight.picker.firmware";
+const PREF_BOARD_KEY    = "MoonLight.picker.board";
+
+// A link may name what to preselect: `?release=v5.0.0&firmware=esp32s3-n16r8&board=...`.
+// It outranks the saved preference, since a link is the sender's intent and the preference
+// is the visitor's habit, and a support link that lands on the wrong board helps nobody.
+// An unknown value falls through to the saved preference rather than selecting nothing.
+function urlParam(name) {
+    try {
+        return new URLSearchParams(window.location.search).get(name);
+    } catch {
+        return null;   // a document with no location, such as a test harness
+    }
+}
 
 // Firmware variants published but NEVER RUN ON HARDWARE — flagged in the dropdown so a
 // user knows before flashing. The P4 rev3 images are built for the current v3.x silicon,
@@ -278,7 +290,7 @@ function mergeFirmwares(published, extras) {
 // 4. Compatibility filter (OTA only)
 // ---------------------------------------------------------------------------
 
-// Bespoke rule for projectMM's firmware keys: strip the `-eth*` suffix from
+// Bespoke rule for MoonLight's firmware keys: strip the `-eth*` suffix from
 // both sides; equal identities are mutually OTA-compatible. So `esp32` and
 // `esp32-eth` can flash each other (same physical ESP32 silicon; the variant
 // decides which radios are compiled in) — as can the legacy `esp32-eth-wifi`
@@ -464,9 +476,9 @@ function render(state) {
         // Restore the user's last picked board if it's still in the catalog
         // (the catalog may have changed since their last visit; falling
         // through to "(any board)" if their pick is gone is the safe shape).
-        const savedBoard = safeLocalGet(PREF_BOARD_KEY);
-        if (savedBoard && state.boards.find(b => b.name === savedBoard)) {
-            state.selectedBoard = savedBoard;
+        const wantedBoard = urlParam("board") || safeLocalGet(PREF_BOARD_KEY);
+        if (wantedBoard && state.boards.find(b => b.name === wantedBoard)) {
+            state.selectedBoard = wantedBoard;
         }
         boardEl.value = state.selectedBoard || "";
     }
@@ -496,8 +508,8 @@ function render(state) {
     //   1. Last release tag the user picked, if it's still in the list.
     //   2. Newest stable.
     //   3. Newest prerelease (falls through when no stable exists yet).
-    const savedTag = safeLocalGet(PREF_RELEASE_KEY);
-    const savedIdx = savedTag ? sorted.findIndex(r => r.tag_name === savedTag) : -1;
+    const wantedTag = urlParam("release") || safeLocalGet(PREF_RELEASE_KEY);
+    const savedIdx = wantedTag ? sorted.findIndex(r => r.tag_name === wantedTag) : -1;
     const firstStable = sorted.findIndex(r => !r.prerelease);
     state.releaseIdx = savedIdx >= 0 ? savedIdx
                      : firstStable >= 0 ? firstStable
@@ -636,8 +648,14 @@ function render(state) {
         //   4. First option in the narrowed list — last-resort fallback.
         const savedFirmware = safeLocalGet(PREF_FIRMWARE_KEY);
         const savedHere = savedFirmware && compatible.find(f => f.firmware === savedFirmware);
+        // A link naming a firmware outranks every default below it, including the running
+        // one: the sender knows which image they mean.
+        const linkFirmware = urlParam("firmware");
+        const linkHere = linkFirmware && compatible.find(f => f.firmware === linkFirmware);
         let preferred = null;
-        if (state.ownFirmwareKey && compatible.find(f => f.firmware === state.ownFirmwareKey)) {
+        if (linkHere) {
+            preferred = linkFirmware;
+        } else if (state.ownFirmwareKey && compatible.find(f => f.firmware === state.ownFirmwareKey)) {
             preferred = state.ownFirmwareKey;
         } else if (savedHere) {
             preferred = savedFirmware;

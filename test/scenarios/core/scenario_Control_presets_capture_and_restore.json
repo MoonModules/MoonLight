@@ -1,0 +1,69 @@
+{
+  "name": "scenario_Control_presets_capture_and_restore",
+  "module": "ControlModule",
+  "mode": "mutate",
+  "also": [
+    "Drivers"
+  ],
+  "description": "A preset captures what the device is doing and puts it back later, which is the only feature that reaches across Layouts, Effects, Drivers and Services at once. Proves a surface control drives a real target rather than only moving on screen.",
+  "fixture": [
+    {
+      "name": "fix-Control",
+      "op": "add_module",
+      "id": "Control",
+      "type": "ControlModule"
+    },
+    {
+      "name": "fix-Drivers",
+      "op": "add_module",
+      "id": "Drivers",
+      "type": "Drivers"
+    }
+  ],
+  "steps": [
+    {
+      "name": "aim-a-fader",
+      "description": "Point fader 1 at the global brightness, which is the shortest path from a surface to visible output.",
+      "op": "set_control",
+      "id": "Control",
+      "key": "fader1Target",
+      "value": "Drivers.brightness"
+    },
+    {
+      "name": "the-aim-took",
+      "op": "expect_control",
+      "id": "Control",
+      "key": "fader1Target",
+      "equals": "Drivers.brightness"
+    },
+    {
+      "name": "move-it",
+      "description": "Move the fader, which should drive the target rather than merely record a number.",
+      "op": "set_control",
+      "id": "Control",
+      "key": "fader1",
+      "value": 200
+    },
+    {
+      "name": "the-target-followed",
+      "description": "The brightness is what the fader said, so the surface reaches the driver.",
+      "op": "expect_control",
+      "id": "Drivers",
+      "key": "brightness",
+      "equals": "200"
+    },
+    {
+      "name": "restart",
+      "description": "Restart: a surface that forgets what it was aimed at is a surface set up twice.",
+      "op": "reboot",
+      "timeout": 60
+    },
+    {
+      "name": "the-aim-survived",
+      "op": "expect_control",
+      "id": "Control",
+      "key": "fader1Target",
+      "equals": "Drivers.brightness"
+    }
+  ]
+}

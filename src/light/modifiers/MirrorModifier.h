@@ -24,7 +24,7 @@ namespace mm {
 ///
 /// Prior art: MoonLight's Mirror modifier, with the same halving, the same reflection and the same per-axis flags.
 /// Written fresh against our fold interface, the box stashed for the const fold as the base class documents.
-/// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
+/// Author: MoonLight, https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
 class MirrorModifier : public ModifierBase {
 public:
     /// The catalog tags this modifier carries.

@@ -1,6 +1,6 @@
 # MoonDeck Script Reference
 
-MoonDeck is projectMM's browser-based developer console: one page that builds, flashes, runs, tests, monitors, and checks the project across every target, and discovers and drives devices on the network. Every action it offers is a thin wrapper around a script under `moondeck/`, so the CLI (`uv run moondeck/<group>/<name>.py`) and MoonDeck run exactly the same code: agents typically use the CLI, humans use MoonDeck. For what MoonDeck *is* and where it sits in the workflow see [docs/how-to/building.md § MoonDeck](../docs/how-to/building.md#moondeck--the-dev-console). What follows is the per-script reference.
+MoonDeck is MoonLight's browser-based developer console: one page that builds, flashes, runs, tests, monitors, and checks the project across every target, and discovers and drives devices on the network. Every action it offers is a thin wrapper around a script under `moondeck/`, so the CLI (`uv run moondeck/<group>/<name>.py`) and MoonDeck run exactly the same code: agents typically use the CLI, humans use MoonDeck. For what MoonDeck *is* and where it sits in the workflow see [docs/how-to/building.md § MoonDeck](../docs/how-to/building.md#moondeck--the-dev-console). What follows is the per-script reference.
 
 Launch it with `uv run moondeck/moondeck.py` and open <http://localhost:8420>. The console has three tabs — **Desktop** (build build / run / test), **ESP32** (chip + port, build / flash / monitor), and **Live** (discovery and live runs against networked devices) — above a network bar and per-device deviceModel pickers. Script definitions live in `moondeck/moondeck_config.json` (committed); runtime state (selected network, devices, ports) persists in `moondeck/moondeck.json` (gitignored).
 
@@ -16,7 +16,7 @@ Below: the UI behaviours common to every card, described once, then one section 
 - **Group headers** in the sidebar (setup, build, flash, run, test, check, scenario).
 - **Destructive-action confirm** — scripts flagged `destructive: true` (e.g. Erase Flash) pop a native confirm dialog before running.
 - **Tab persistence** — selected tab survives page refresh.
-- **Process detection** — on page load, checks if projectMM or idf.py is already running and shows Stop button.
+- **Process detection** — on page load, checks if MoonLight or idf.py is already running and shows Stop button.
 - **Network bar** (top of the sidebar): switch between known networks. Each network holds its own device list, last-used serial port, and WiFi credentials (consumed by Improv). On startup, MoonDeck auto-selects the network whose subnet matches the host's current LAN — moving the laptop between networks usually requires no clicks. Manual override (the dropdown) pins the selection until the pinned network's subnet stops matching the host. Add / Rename buttons next to the dropdown manage the catalog. State persisted in `moondeck/moondeck.json` under `networks` + `active_network`.
 - **Device-model picker** on each device row: dropdown of device models from [mooninstaller/deviceModels.json](../mooninstaller/deviceModels.json) — the same catalog the web installer uses. When the device's firmware uniquely identifies one deviceModel (e.g. `esp32-eth` → Olimex Gateway), MoonDeck auto-deduces and mirrors the value to the device's `deviceModel` control on [SystemModule](../docs/moonmodules/core/SystemModule.md) via `POST /api/control` on next discover. For firmwares with no unique deviceModel (`esp32` runs on multiple), the user picks; MoonDeck pushes that value too. A device-reported deviceModel not in the catalog still shows up as `<key> (unknown)` so the value survives. MoonDeck's picker is a **text dropdown for an already-running device** — distinct from the web installer's flash-time *picture* deviceModel picker; both read the same catalog, but MoonDeck doesn't need the per-deviceModel `image`/`url` fields (those are installer-picker UX). Selecting a deviceModel pushes its full catalog config — each entry is a list of `{type, id, parent_id?, controls?}` module units (the [nested catalog schema](../mooninstaller/README.md), add-then-configure), so MoonDeck adds the deviceModel's modules (`POST /api/modules`) then sets their controls (`POST /api/control`); see `_push_device` in [moondeck.py](moondeck.py).
 ## Desktop Tab
@@ -32,7 +32,7 @@ Build the desktop firmware binary using CMake.
 uv run moondeck/build/build_desktop.py
 ```
 
-Runs `cmake -B build/<host> -DCMAKE_BUILD_TYPE=Release` then `cmake --build build/<host> --target projectMM`, where `<host>` is `macos`, `linux`, or `windows` depending on the OS this script runs on. It builds ONLY the firmware binary — not the ~130-file test suite — so the "just give me the binary to run" path stays fast; compile the tests separately (see `compile_tests`). The per-host directory keeps an experimental Linux build from clobbering a macOS one on the same machine, and mirrors the ESP32 side's `build/esp32-<board>/` shape.
+Runs `cmake -B build/<host> -DCMAKE_BUILD_TYPE=Release` then `cmake --build build/<host> --target MoonLight`, where `<host>` is `macos`, `linux`, or `windows` depending on the OS this script runs on. It builds ONLY the firmware binary — not the ~130-file test suite — so the "just give me the binary to run" path stays fast; compile the tests separately (see `compile_tests`). The per-host directory keeps an experimental Linux build from clobbering a macOS one on the same machine, and mirrors the ESP32 side's `build/esp32-<board>/` shape.
 
 ### compile_tests
 
@@ -72,7 +72,7 @@ real compiler). The commit gate and CI run the same two commands; this is the ca
 JS reports SKIP rather than failing when node is absent, since a Python-only bench is a normal setup.
 
 `--ui` is the odd one and is OPT-IN, which is why a bare run leaves it out. It drives a real browser
-against a running projectMM with [pytest-playwright](https://playwright.dev/python/docs/test-runners),
+against a running MoonLight with [pytest-playwright](https://playwright.dev/python/docs/test-runners),
 performing a [run file](uiscenario/RUNS.md) from `test/uiscenarios/clips/` through the interface and checking each step against the
 device over REST. The run files are the same ones `moondeck/uiscenario/uivideo.py` records the videos from, so a
 failure means the UI no longer does what the video shows. It skips rather than fails when nothing
@@ -89,7 +89,7 @@ uv run moondeck/run/run_desktop.py
 
 Re-running is idempotent: any existing `projectMM` instance is stopped first, then a fresh one is launched. Output goes to `build/<host>/projectMM.log`. Build first.
 
-While the app is running, MoonDeck shows the button as **Stop** (a 5-second poll on `/api/running` detects the live process via `process_name`). Pressing Stop terminates the app; pressing Run again restarts it. From the CLI: `pkill -f build/<host>/projectMM` (or `pkill projectMM` if you don't have multiple host builds active).
+While the app is running, MoonDeck shows the button as **Stop** (a 5-second poll on `/api/running` detects the live process via `process_name`). Pressing Stop terminates the app; pressing Run again restarts it. From the CLI: `pkill -f build/<host>/MoonLight` (or `pkill MoonLight` if you don't have multiple host builds active).
 
 ### run_open_stage_control
 
@@ -826,7 +826,7 @@ Capture UI screenshots of every module that has controls and save them to `docs/
 
 ```bash
 uv run moondeck/docs/install_playwright.py    # one-time (or use Install Playwright button in MoonDeck)
-uv run moondeck/docs/screenshot_modules.py    # requires projectMM running on localhost:8080
+uv run moondeck/docs/screenshot_modules.py    # requires MoonLight running on localhost:8080
 uv run moondeck/docs/screenshot_modules.py --host 192.168.1.210:8080
 uv run moondeck/docs/screenshot_modules.py --gif    # also record 3-second GIF previews
 uv run moondeck/docs/screenshot_modules.py --force  # re-capture and overwrite existing screenshots
@@ -841,11 +841,11 @@ have no preview.
 
 The **GIF** and **Force** checkboxes in MoonDeck toggle these flags.
 
-Connects to a running projectMM server, builds a minimal pipeline scaffold (Layouts → Grid, Layer, Drivers), adds each module, screenshots its card, then removes it. Saves:
+Connects to a running MoonLight server, builds a minimal pipeline scaffold (Layouts → Grid, Layer, Drivers), adds each module, screenshots its card, then removes it. Saves:
 
 - `<TypeName>.png` — module card screenshot for every module in the catalogue
 - `<TypeName>.gif` — 3-second preview animation for effects and modifiers (requires `--gif`)
-- `ui_overview.png` — full-page screenshot of the projectMM UI
+- `ui_overview.png` — full-page screenshot of the MoonLight UI
 - `moondeck_desktop.png`, `moondeck_esp32.png`, `moondeck_live.png` — MoonDeck tab screenshots (requires MoonDeck running on port 8420)
 - `installer.png` — web installer preview (requires `preview_installer` running on port 8421)
 
@@ -875,7 +875,7 @@ Reports unreferenced screenshots — any PNG or GIF in `docs/assets/` not mentio
 **Preview Docs Site** — serve the documentation site (Material for MkDocs) from the `docs/` tree with live-reload, so you can view and iterate on it. Long-running: MoonDeck shows **Stop** while the server is up (like Installer Preview); a stray `mkdocs serve` is killed before a new one starts. The button passes `--serve`.
 
 ```bash
-uv run moondeck/docs/build_docs.py --serve     # what the button runs → http://localhost:8422/projectMM/ (auto-reload)
+uv run moondeck/docs/build_docs.py --serve     # what the button runs → http://localhost:8422/MoonLight/ (auto-reload)
 uv run moondeck/docs/build_docs.py            # one-shot build to site/ (CI parity; no server)
 uv run moondeck/docs/build_docs.py --strict    # promote every warning to an error (local anchor audit)
 ```
@@ -908,7 +908,7 @@ For a full description of each scenario, see the [scenario inventory](/api/docs/
 Record one UI clip: perform a run file against the interface while Playwright records, then publish a compressed clip for the docs.
 
 ```bash
-uv run moondeck/uiscenario/uivideo.py --run test/uiscenarios/clips/add-a-layer.json
+uv run moondeck/uiscenario/uivideo.py --run test/uiscenarios/clips/95-add-a-layer.json
 ```
 
 The dropdown lists every run under `test/uiscenarios/clips/`. A run drives the interface and nothing else: the `+` tab, the type picker, the card's own buttons, the real inputs. REST is read-only, and is what each step's `expect` block checks against, which lets the same file be a UI test (`test_host.py --ui`) as well as a video source. The raw take lands in `media/video/` (ignored). The published clip lands in `docs/assets/uiscenarios/` (tracked, embed this one) only when the run was clean: a take whose steps failed, or that left modules behind, is refused so it cannot overwrite a good clip. Format and actions: [RUNS.md](uiscenario/RUNS.md).
@@ -1138,7 +1138,7 @@ Two things to know when reading a QEMU run: the guest clock is emulated, so **ti
 
 ### improv_provision
 
-Push WiFi credentials to a running projectMM device over USB-serial. Uses the [Improv-WiFi](https://www.improv-wifi.com/serial/) protocol — the same wire format the browser flow at improv-wifi.com uses. Device must be running a firmware that includes the Improv listener.
+Push WiFi credentials to a running MoonLight device over USB-serial. Uses the [Improv-WiFi](https://www.improv-wifi.com/serial/) protocol — the same wire format the browser flow at improv-wifi.com uses. Device must be running a firmware that includes the Improv listener.
 
 **One-click flow**: pick the device's port in MoonDeck, hit **Improv WiFi**. The script reads SSID + password from the **active network's WiFi block in `moondeck/moondeck.json`** (the one shown in the network bar at the top of the sidebar). If that block is empty, it falls back to detecting the host machine's currently-joined WiFi (macOS Keychain / Linux NetworkManager / Windows `netsh`). The device replies with its new URL when STA comes up — typically 5-10 s end to end.
 
@@ -1186,7 +1186,7 @@ Non-destructive Improv health check. Sends `GET_DEVICE_INFO` + `GET_CURRENT_STAT
 ```text
 ==> probing /dev/tty.usbserial-XXXX
     → GET_DEVICE_INFO
-      firmware: 'projectMM'
+      firmware: 'MoonLight'
       version: '1.0.0-rc2'
       chip: 'ESP32'
       name: 'MM-BD3C'
@@ -1237,7 +1237,7 @@ Pair with `preview_installer`'s flash-ready mode (above) for a complete dev-envi
 
 ### show_crash_log
 
-Print the most recent projectMM crash report and run log.
+Print the most recent MoonLight crash report and run log.
 
 ```bash
 uv run moondeck/run/show_crash_log.py
@@ -1248,7 +1248,7 @@ On macOS, finds the newest `projectMM-*.ips` in `~/Library/Logs/DiagnosticReport
 Typical output (crash present):
 
 ```text
-=== macOS crash report: projectMM-2026-05-27-120000.ips ===
+=== macOS crash report: MoonLight-2026-05-27-120000.ips ===
 Type    : EXC_BAD_ACCESS — SIGSEGV
 Subtype : KERN_INVALID_ADDRESS
 PID     : 12345  uptime: 4321 ms
@@ -1263,7 +1263,7 @@ Faulting thread 0 (com.apple.main-thread):
 Typical output (no crash, log tail):
 
 ```text
-No projectMM crash reports found in DiagnosticReports.
+No MoonLight crash reports found in DiagnosticReports.
 
 === Last 40 lines of projectMM.log ===
 tick: 1234us (FPS: 800)  free: 0  ...

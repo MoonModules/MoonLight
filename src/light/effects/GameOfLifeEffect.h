@@ -6,7 +6,7 @@ namespace mm {
 
 /// Conway's Game of Life cellular-automaton effect.
 /// @card GameOfLifeEffect.gif
-/// Author: Ewoud Wijma (2022), modifications by Brandon Butler / @Brandon502 / wildcats08, https://natureofcode.com/book/chapter-7-cellular-automata/ , https://github.com/DougHaber/nlife-color , https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h
+/// Author: Ewoud Wijma (2022), modifications by Brandon Butler / @Brandon502 / wildcats08, https://natureofcode.com/book/chapter-7-cellular-automata/ , https://github.com/DougHaber/nlife-color , https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h
 ///
 /// A live cell survives when its live-neighbor count is in the ruleset's survive set.
 /// A dead cell is born when its count is in the birth set.

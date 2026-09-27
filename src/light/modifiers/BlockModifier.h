@@ -19,7 +19,7 @@ namespace mm {
 /// Prior art: MoonLight's BlockModifier (M_MoonLight.h), same center formula ((n+1)/2 - 1, a floor-biased middle), same dx/dy abs deltas, same distance = max(dx, dy), same {0, distance, 0} output.
 /// The same box transform (fold the box through the position map, then grow each axis by one).
 /// Written fresh against our fold interface: modifySize() -> modifyLogicalSize (stashing the incoming box), modifyPosition() -> the const modifyLogical fold that reads the stash.
-/// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
+/// Author: MoonLight, https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
 class BlockModifier : public ModifierBase {
 public:
     /// The catalog tags this modifier carries.

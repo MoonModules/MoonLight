@@ -1,0 +1,306 @@
+{
+  "name": "scenario_modifier_chain",
+  "module": "Layer",
+  "mode": "mutate",
+  "also": [
+    "RegionModifier",
+    "MultiplyModifier",
+    "CheckerboardModifier",
+    "RotateModifier",
+    "NoiseEffect",
+    "Layouts",
+    "GridLayout",
+    "Drivers",
+    "PreviewDriver"
+  ],
+  "description": "Stack TWO modifiers on one Layer (Region then Multiply) and verify the chain composes live end-to-end, the capability the old single-modifier engine couldn't do. Prepares its own canvas: Layout(Grid 32x32) + Layer + NoiseEffect + Region(0..50) + Multiply(2x), measures the composite, then adds a third (Checkerboard mask) and measures again, then removes the middle modifier and measures, exercising add/remove on a multi-modifier chain. A broken fold (null buffer, wrong light count, crash on a disabled/removed stage) shows up as a failed measure. The fold composition + order semantics are pinned by unit_Layer_modifier_chain; this is the live end-to-end gate.",
+  "fixture": [
+    {
+      "name": "fix-layouts",
+      "op": "add_module",
+      "id": "Layouts",
+      "type": "Layouts"
+    },
+    {
+      "name": "fix-grid",
+      "op": "add_module",
+      "id": "Grid",
+      "type": "GridLayout",
+      "parent_id": "Layouts",
+      "props": {
+        "width": 32,
+        "height": 32
+      }
+    },
+    {
+      "name": "fix-layers",
+      "op": "add_module",
+      "id": "Effects",
+      "type": "Effects",
+      "props": {
+        "layouts": "Layouts"
+      }
+    },
+    {
+      "name": "fix-layer",
+      "op": "add_module",
+      "id": "Layer",
+      "type": "Layer",
+      "parent_id": "Effects",
+      "props": {
+        "channelsPerLight": 3
+      }
+    },
+    {
+      "name": "fix-fx",
+      "op": "add_module",
+      "id": "FX",
+      "type": "NoiseEffect",
+      "parent_id": "Layer"
+    },
+    {
+      "name": "fix-region",
+      "op": "add_module",
+      "id": "REGION",
+      "type": "RegionModifier",
+      "parent_id": "Layer",
+      "props": {
+        "endX": 50,
+        "endY": 50
+      }
+    },
+    {
+      "name": "fix-mult",
+      "op": "add_module",
+      "id": "MULT",
+      "type": "MultiplyModifier",
+      "parent_id": "Layer"
+    },
+    {
+      "name": "fix-drivers",
+      "op": "add_module",
+      "id": "Drivers",
+      "type": "Drivers",
+      "props": {
+        "effects": "Effects"
+      }
+    },
+    {
+      "name": "fix-artnet",
+      "op": "add_module",
+      "id": "Preview",
+      "type": "PreviewDriver",
+      "parent_id": "Drivers",
+      "description": "An in-process sink, not a network one: this scenario is about how a modifier CHAIN folds, and routing it through NetworkSendDriver pulled socket behavior into a test that is not about the network (CodeRabbit #29). PreviewDriver consumes the composite in memory."
+    }
+  ],
+  "steps": [
+    {
+      "name": "region-then-multiply",
+      "description": "Two stacked modifiers: Region(top-left quarter) then Multiply(2x mirror) compose into one mapping. Measure the live composite.",
+      "op": "measure",
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 10,
+            "p95": 27,
+            "min": 8,
+            "max": 28,
+            "n": 32,
+            "samples": [10, 10, 10, 9, 10, 8, 10, 27, 9, 10, 10, 8, 10, 10, 10, 8, 8, 10, 10, 10, 10, 10, 14, 8, 9, 25, 28, 8, 10, 9, 8, 10]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 13,
+            "p95": 13,
+            "min": 13,
+            "max": 13,
+            "n": 1,
+            "samples": [13]
+          },
+          "last_updated": "2026-08-21"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 11525,
+            "p95": 12976,
+            "min": 237,
+            "max": 12976,
+            "n": 5,
+            "samples": [12976, 11139, 11552, 11525, 237]
+          },
+          "free_heap": {
+            "p50": 47812,
+            "p95": 82480,
+            "min": 35572,
+            "max": 82480,
+            "n": 5,
+            "samples": [49160, 36400, 35572, 47812, 82480]
+          },
+          "max_alloc_block": {
+            "p50": 26624,
+            "p95": 38912,
+            "min": 26624,
+            "max": 38912,
+            "n": 5,
+            "samples": [38912, 26624, 26624, 26624, 38912]
+          },
+          "last_updated": "2026-09-01"
+        }
+      }
+    },
+    {
+      "name": "add-mask",
+      "description": "Add a third modifier (Checkerboard mask) on top of the chain, a 3-deep fold. Measure that the deeper chain still renders.",
+      "op": "add_module",
+      "id": "MASK",
+      "type": "CheckerboardModifier",
+      "parent_id": "Layer",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 9,
+            "p95": 14,
+            "min": 7,
+            "max": 17,
+            "n": 32,
+            "samples": [9, 9, 9, 8, 9, 7, 9, 11, 9, 9, 9, 9, 8, 9, 10, 7, 9, 8, 9, 9, 10, 9, 9, 7, 7, 14, 17, 7, 9, 9, 9, 9]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 12,
+            "p95": 12,
+            "min": 12,
+            "max": 12,
+            "n": 1,
+            "samples": [12]
+          },
+          "last_updated": "2026-08-21"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 12164,
+            "p95": 15455,
+            "min": 11731,
+            "max": 15455,
+            "n": 5,
+            "samples": [15455, 13563, 11731, 12048, 12164]
+          },
+          "free_heap": {
+            "p50": 47564,
+            "p95": 48192,
+            "min": 35072,
+            "max": 48192,
+            "n": 5,
+            "samples": [48192, 35072, 35572, 47804, 47564]
+          },
+          "max_alloc_block": {
+            "p50": 26624,
+            "p95": 38912,
+            "min": 26624,
+            "max": 38912,
+            "n": 5,
+            "samples": [38912, 26624, 26624, 26624, 29696]
+          },
+          "last_updated": "2026-09-01"
+        }
+      }
+    },
+    {
+      "name": "remove-middle",
+      "description": "Remove the middle modifier (Multiply), the chain re-folds with Region then Checkerboard, no stale state. Measure.",
+      "op": "remove_module",
+      "id": "MULT",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 24,
+            "p95": 26,
+            "min": 21,
+            "max": 35,
+            "n": 32,
+            "samples": [24, 24, 24, 24, 24, 21, 24, 24, 25, 25, 25, 24, 24, 24, 25, 21, 23, 24, 24, 24, 24, 25, 22, 24, 26, 21, 25, 35, 24, 23, 24, 24]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 42,
+            "p95": 42,
+            "min": 42,
+            "max": 42,
+            "n": 1,
+            "samples": [42]
+          },
+          "last_updated": "2026-08-22"
+        }
+      }
+    },
+    {
+      "name": "add-live-rotate",
+      "description": "Add a DYNAMIC Rotate on top of the static chain, its modifyLive runs the per-frame remap pass over the composed buffer. Verifies a static chain + a live modifier coexist (the buffer is remapped each frame on top of the baked Region/Checkerboard mapping) without a crash or null buffer.",
+      "op": "add_module",
+      "id": "ROT",
+      "type": "RotateModifier",
+      "parent_id": "Layer",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 44,
+            "p95": 46,
+            "min": 35,
+            "max": 47,
+            "n": 32,
+            "samples": [43, 43, 42, 44, 45, 37, 44, 44, 41, 43, 43, 44, 39, 45, 45, 36, 35, 46, 44, 42, 44, 47, 37, 44, 44, 44, 38, 43, 44, 37, 45, 44]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 69,
+            "p95": 69,
+            "min": 69,
+            "max": 69,
+            "n": 1,
+            "samples": [69]
+          },
+          "last_updated": "2026-08-23"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 13337,
+            "p95": 14326,
+            "min": 11727,
+            "max": 14326,
+            "n": 5,
+            "samples": [13613, 11727, 12186, 13337, 14326]
+          },
+          "free_heap": {
+            "p50": 44404,
+            "p95": 47180,
+            "min": 33524,
+            "max": 47180,
+            "n": 5,
+            "samples": [47180, 34496, 33524, 45912, 44404]
+          },
+          "max_alloc_block": {
+            "p50": 26624,
+            "p95": 38912,
+            "min": 26624,
+            "max": 38912,
+            "n": 5,
+            "samples": [38912, 26624, 26624, 26624, 29696]
+          },
+          "last_updated": "2026-09-01"
+        }
+      }
+    }
+  ]
+}

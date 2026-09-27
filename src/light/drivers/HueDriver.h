@@ -298,7 +298,7 @@ private:
         // Headers and body share one buffer, and the bridge's headers alone run ~700 bytes.
         char resp[1024];
         int st = platform::httpRequest("POST", host, 80, "/api",
-                                       "{\"devicetype\":\"projectMM#device\"}", kSlowTimeoutMs,
+                                       "{\"devicetype\":\"MoonLight#device\"}", kSlowTimeoutMs,
                                        resp, sizeof(resp));
         if (st == 200 && std::strstr(resp, "\"username\"")) {
             // [{"success":{"username":"<key>"}}]: extract the username.

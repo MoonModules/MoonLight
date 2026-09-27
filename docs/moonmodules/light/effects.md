@@ -4,7 +4,7 @@ Every effect, one block each: its preview, what it does, and what each control m
 
 Effects are built from the shared [power functions](power-functions.md): the drawing, field and motion routines every effect composes; that page lists each one with its callers.
 
-**Jump to:** [MoonLight](#moonlight-effects) · [MoonModules](#moonmodules-effects) · [WLED](#wled-effects) · [FastLED](#fastled-effects) · [projectMM-native](#projectmm-native-effects)
+**Jump to:** [MoonLight](#moonlight-effects) · [MoonModules](#moonmodules-effects) · [WLED](#wled-effects) · [FastLED](#fastled-effects) · [MoonLight-native](#moonlight-native-effects)
 
 > Some WLED-origin effects show a preview gif from [WLED-Utils](https://github.com/scottrbailey/WLED-Utils) by scottrbailey (the canonical WLED effect gif set, cross-linked with credit); these show WLED's rendering. Effects with a local `../../assets/…` gif show our own output.
 
@@ -30,7 +30,7 @@ Emitters pouring color into a flow that carries and folds it. There is no veloci
 
 Compare with [Fluid](#fluid): the solver when the medium is the subject, this when the color is.
 
-Origin: MoonLight · concept by [Stefan Petrick](https://github.com/StefanPetrick), composition by Jeff (mindful_stone / [4wheeljive](https://github.com/4wheeljive)) in [FlowFields](https://github.com/4wheeljive/FlowFields/blob/main/src/flows/flow_noise.h) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_FastLED.h)
+Origin: MoonLight · concept by [Stefan Petrick](https://github.com/StefanPetrick), composition by Jeff (mindful_stone / [4wheeljive](https://github.com/4wheeljive)) in [FlowFields](https://github.com/4wheeljive/FlowFields/blob/main/src/flows/flow_noise.h) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_FastLED.h)
 
 Detail: [technical](moxygen/ColorTrailsEffect.md)
 
@@ -45,7 +45,7 @@ Two interfering sine waves beat against each other into a moiré color field.
 - `freq_x` / `freq_y`: horizontal/vertical wave frequency (1–8).
 - `speed`: animation rate (0 = frozen).
 
-Origin: WLED · by ldirko & blazoncek (WLED port) · [gallery](https://editor.soulmatelights.com/gallery/1089-distorsion-waves) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
+Origin: WLED · by ldirko & blazoncek (WLED port) · [gallery](https://editor.soulmatelights.com/gallery/1089-distorsion-waves) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
 
 Detail: [technical](moxygen/DistortionWavesEffect.md)
 
@@ -64,7 +64,7 @@ A solid color filling a positioned box within the grid, with an optional alterna
 - `Rectangle width` / `height` / `depth`: the box extent on each axis.
 - `alternateWhite`: alternate box pixels to white in a checker pattern.
 
-Origin: MoonLight · by [limpkin](https://github.com/limpkin) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · by [limpkin](https://github.com/limpkin) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/FixedRectangleEffect.md)
 
@@ -86,7 +86,7 @@ Audio-reactive sawtooth waves: each column maps to a frequency band whose magnit
 - `keepOn`: keep oscillating even when a band is silent.
 - `method`: phase model (`Chaos`, `Chaos fix`, `BandPhases`).
 
-Origin: MoonLight (audio) · by [@TroyHacks](https://github.com/troyhacks) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight (audio) · by [@TroyHacks](https://github.com/troyhacks) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/FreqSawsEffect.md)
 
@@ -104,7 +104,7 @@ Three slow blobs through a black→red→orange→yellow→white ramp: atmospher
 - `radius`: blob influence radius.
 - `intensity`: field gain into the black→red→orange→yellow→white ramp.
 
-Origin: projectMM original (metaball lava lamp)
+Origin: MoonLight original (metaball lava lamp)
 
 Detail: [technical](moxygen/LavaLampEffect.md)
 
@@ -123,7 +123,7 @@ Sweeps axis-aligned planes in sync; red/green/blue name the X/Y/Z axis: a previe
 - `axis`: which plane sweeps: `all`, `x`, `y` or `z`, in `lines`.
 - `panelW` / `panelH`: the panel the dot walks, in `panel dots`.
 
-Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/LinesEffect.md)
 
@@ -140,7 +140,7 @@ Detail: [technical](moxygen/LinesEffect.md)
 - `count`: number of orbiting balls (1–8).
 - `hue_shift`: rotate the palette index.
 
-Origin: projectMM original (metaballs)
+Origin: MoonLight original (metaballs)
 
 Detail: [technical](moxygen/MetaballsEffect.md)
 
@@ -159,7 +159,7 @@ A swarm of drifting particles with persistent fading trails.
 - `fade`: trail persistence (higher = longer tails).
 - `hue_shift`: rotate every particle's hue.
 
-Origin: MoonLight · by WildCats08 / [@Brandon502](https://github.com/Brandon502) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · by WildCats08 / [@Brandon502](https://github.com/Brandon502) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/ParticlesEffect.md)
 
@@ -195,7 +195,7 @@ An algorithmic palette pattern driven by two beat oscillators (a macro and a mic
 - `macroMutatorFreq` / `Min` / `Max`: the coarse mutator's beat rate and range.
 - `microMutatorFreq` / `Min` / `Max`: the fine mutator's beat rate and range.
 
-Origin: MoonLight · by MONSOONO / @Flavourdynamics · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · by MONSOONO / @Flavourdynamics · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/PraxisEffect.md)
 
@@ -211,7 +211,7 @@ Diagonal animated rainbow: always-visible default/test effect.
 
 - `speed`: animation BPM (one full hue cycle per beat).
 
-Origin: FastLED · Mark Kriegsman (rainbow) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_FastLED.h)
+Origin: FastLED · Mark Kriegsman (rainbow) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_FastLED.h)
 
 Detail: [technical](moxygen/RainbowEffect.md)
 
@@ -227,7 +227,7 @@ Lights one random light per frame in a random palette color over a fading backgr
 
 - `fade`: how fast prior sparkles fade to black.
 
-Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/RandomEffect.md)
 
@@ -246,7 +246,7 @@ Expanding concentric rings from random centers, additive overlap (calm defaults)
 - `thickness`: ring band width.
 - `hue_shift`: rotate every ring's hue.
 
-Origin: projectMM original (concentric rings)
+Origin: MoonLight original (concentric rings)
 
 Detail: [technical](moxygen/RingsEffect.md)
 
@@ -263,7 +263,7 @@ Distance-from-center sets a per-column wave phase; the lit surface ripples like 
 - `speed`: wave animation rate (0 = frozen, 99 = fast).
 - `interval`: wavefront spacing (low = tight rings, high = wide).
 
-Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/RipplesEffect.md)
 
@@ -282,7 +282,7 @@ A 3D Rubik's Cube projected onto the volume: it scrambles, then plays its soluti
 - `randomTurning`: turn endlessly at random instead of scramble-then-solve.
 - `usePalette`: color the faces from the palette, not the classic colors.
 
-Origin: MoonLight · by WildCats08 / [@Brandon502](https://github.com/Brandon502) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · by WildCats08 / [@Brandon502](https://github.com/Brandon502) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/RubiksCubeEffect.md)
 
@@ -306,7 +306,7 @@ Shells rise, stall, and burst into sparks that arc over and fall. Nothing schedu
 
 Physics runs on elapsed time, so the same settings behave identically at any frame rate.
 
-Origin: projectMM original, on the WLED Particle System's firework family by Damian Schneider / [@DedeHai](https://github.com/DedeHai)
+Origin: MoonLight original, on the WLED Particle System's firework family by Damian Schneider / [@DedeHai](https://github.com/DedeHai)
 
 Detail: [technical](moxygen/FireworksEffect.md)
 
@@ -327,7 +327,7 @@ An aquarium on a light wall: fish of three shapes swim across a dark tank, each 
 
 Uses the global palette, each fish's band a paler version of its own body color.
 
-Origin: projectMM original; inspired by the aquarium screensavers of the After Dark era, the pixel art drawn fresh for this effect
+Origin: MoonLight original; inspired by the aquarium screensavers of the After Dark era, the pixel art drawn fresh for this effect
 
 Detail: [technical](moxygen/FishTankEffect.md)
 
@@ -347,7 +347,7 @@ The classic screensaver on a light wall: chrome toasters with flapping wings and
 
 The sprites carry their own colors (chrome, wing, crust), so the global palette does not apply. Needs a grid at least the toaster's size (12×9).
 
-Origin: projectMM original; inspired by After Dark's Flying Toasters (Berkeley Systems, 1989), suggested by Frank ([softhack007](https://github.com/softhack007)): the pixel art here is drawn fresh for this effect
+Origin: MoonLight original; inspired by After Dark's Flying Toasters (Berkeley Systems, 1989), suggested by Frank ([softhack007](https://github.com/softhack007)): the pixel art here is drawn fresh for this effect
 
 Detail: [technical](moxygen/FlyingToastersEffect.md)
 
@@ -394,7 +394,7 @@ The first effect that aims a fixture rather than only coloring it.
 
 A fixture chain is one-dimensional, so lay the rig out as a **1 x N** grid.
 
-Origin: projectMM original
+Origin: MoonLight original
 
 Detail: [technical](moxygen/MovingHeadEffect.md)
 
@@ -416,7 +416,7 @@ The characters travel independently, each on its own path.
 
 Pacman keeps his yellow; the ghosts take their colors from the active palette.
 
-Origin: projectMM original; inspired by Namco's Pac-Man (1980), the pixel art drawn fresh for this effect
+Origin: MoonLight original; inspired by Namco's Pac-Man (1980), the pixel art drawn fresh for this effect
 
 Detail: [technical](moxygen/PacmanEffect.md)
 
@@ -436,7 +436,7 @@ The 1978 formation marching down the wall: five ranks stepping sideways in the t
 
 The invaders take their body color from the active palette.
 
-Origin: projectMM original, after Taito's Space Invaders (1978)
+Origin: MoonLight original, after Taito's Space Invaders (1978)
 
 Detail: [technical](moxygen/SpaceInvadersEffect.md)
 
@@ -457,7 +457,7 @@ A fountain that throws the project's whole sprite cast: fish, Pacman and his gho
 
 Colors come from the active palette, one per sprite, held for its whole flight.
 
-Origin: projectMM original
+Origin: MoonLight original
 
 Detail: [technical](moxygen/SpriteFountainEffect.md)
 
@@ -478,7 +478,7 @@ Two paddles rallying a ball, the attract mode of the 1972 original where both pl
 
 Uses the global palette.
 
-Origin: projectMM original, after Atari's Pong (1972)
+Origin: MoonLight original, after Atari's Pong (1972)
 
 Detail: [technical](moxygen/PongEffect.md)
 
@@ -500,7 +500,8 @@ Several noise fields, each on its own clock, read in polar coordinates and compo
 - `octaves`: detail within each layer, multiplying the cost knob.
 - `polarTable`, `polarTable16`: as PolarNoise above.
 
-Origin: projectMM original, in the shader vocabulary Stefan Petrick made recognizable in the LED world
+
+Origin: MoonLight original, in the shader vocabulary Stefan Petrick made recognizable in the LED world
 
 Detail: [technical](moxygen/AuroraEffect.md)
 
@@ -521,7 +522,7 @@ Falling balls that pile up and shove each other aside. The heap is emergent: gra
 
 Collisions are the one non-linear part of the particle kernel, so the pool is small.
 
-Origin: projectMM original, on the WLED Particle System's ballpit family by Damian Schneider / [@DedeHai](https://github.com/DedeHai)
+Origin: MoonLight original, on the WLED Particle System's ballpit family by Damian Schneider / [@DedeHai](https://github.com/DedeHai)
 
 Detail: [technical](moxygen/BallpitEffect.md)
 
@@ -538,7 +539,7 @@ Two color fields trade places pixel by pixel in an order that looks random but i
 - `eased`: ease the progress instead of sweeping linearly.
 - `scatter`: random order; off gives a positional wipe from the same code.
 
-Origin: projectMM original, on the classic dissolve transition in its position-addressed (shader) form
+Origin: MoonLight original, on the classic dissolve transition in its position-addressed (shader) form
 
 Detail: [technical](moxygen/DissolveEffect.md)
 
@@ -558,7 +559,7 @@ The previous frame fed back through a zoom and rotation, dimmed, with a bright s
 
 Shows that feedback is not a primitive: once the grid can be read as a texture (`sampleWrap`), the whole family of trails, zoom blur and smear is a few lines.
 
-Origin: projectMM original, on video feedback and the standard texture-feedback shader shape
+Origin: MoonLight original, on video feedback and the standard texture-feedback shader shape
 
 Detail: [technical](moxygen/EchoEffect.md)
 
@@ -578,7 +579,7 @@ An audio analyser with real meter ballistics: bars rise fast enough to catch a t
 
 The asymmetry is the whole point; a symmetric follower either misses the hit or flickers.
 
-Origin: projectMM original, on standard VU/PPM meter ballistics and WLED's GEQ band mapping
+Origin: MoonLight original, on standard VU/PPM meter ballistics and WLED's GEQ band mapping
 
 Detail: [technical](moxygen/SpectrumEffect.md)
 
@@ -599,7 +600,7 @@ A maze of interlocking arcs that never repeats, drawn without storing a single t
 
 **The representative 2D shader**: no 3D, no rays, no float, and cheap on any target.
 
-Origin: projectMM original, on Sébastien Truchet's 1704 tiling and the standard shader fract/hash/smoothstep idiom
+Origin: MoonLight original, on Sébastien Truchet's 1704 tiling and the standard shader fract/hash/smoothstep idiom
 
 Detail: [technical](moxygen/TruchetEffect.md)
 
@@ -620,7 +621,7 @@ Light poured into a simulated medium and carried by it. Every other flow here is
 
 On a cube every depth slice is its own medium, so the slices differ. Sized for the desktop and the P4.
 
-Origin: projectMM original, after Stam 1999 "Stable Fluids"
+Origin: MoonLight original, after Stam 1999 "Stable Fluids"
 
 Detail: [technical](moxygen/FluidEffect.md)
 
@@ -642,7 +643,7 @@ A noise field decides where light is born, a curl flow decides where it goes, an
 
 Held at 16 bits and dithered on the way out, which keeps a slow fade smooth.
 
-Origin: projectMM original, composing the noise-field and curl-flow kernels: the contrast window is Aurora's, in the shader vocabulary Stefan Petrick made recognizable in the LED world, and the flow is Bridson's curl noise (SIGGRAPH 2007)
+Origin: MoonLight original, composing the noise-field and curl-flow kernels: the contrast window is Aurora's, in the shader vocabulary Stefan Petrick made recognizable in the LED world, and the flow is Bridson's curl noise (SIGGRAPH 2007)
 
 Detail: [technical](moxygen/NebulaEffect.md)
 
@@ -662,7 +663,7 @@ Dots thrown into a moving medium, leaving tails the flow carries and bends. Noth
 
 The trail plane is 16-bit, which is what lets a tail fade smoothly rather than stepping.
 
-Origin: projectMM original, in the flow-field idiom (4wheeljive's FlowFields, from a Stefan Petrick concept), with Stam's backward advection for the transport
+Origin: MoonLight original, in the flow-field idiom (4wheeljive's FlowFields, from a Stefan Petrick concept), with Stam's backward advection for the transport
 
 Detail: [technical](moxygen/TrailsEffect.md)
 
@@ -681,7 +682,7 @@ A texture mapped onto the inside of an infinite tube, so the viewer appears to f
 - `octaves`: wall texture detail, and the cost knob.
 - `vignette`: darken toward the vanishing point so it reads as receding.
 
-Origin: projectMM original, on the standard demoscene tunnel
+Origin: MoonLight original, on the standard demoscene tunnel
 
 Detail: [technical](moxygen/TunnelEffect.md)
 
@@ -701,7 +702,7 @@ A rotating 3D object drawn as shaded spheres, the demoscene classic that named t
 
 Without painter's ordering a far ball paints over a near one and the object turns inside out.
 
-Origin: projectMM original, on the Amiga-era demoscene vector-ball effect
+Origin: MoonLight original, on the Amiga-era demoscene vector-ball effect
 
 Detail: [technical](moxygen/VectorBallsEffect.md)
 
@@ -722,7 +723,7 @@ A propagating wave simulation: drops land, their rings spread outward, reflect o
 
 Distinct from [Ripples](#ripples), which draws clean concentric circles; this behaves like water.
 
-Origin: projectMM original, on Hugo Elias's water surface algorithm
+Origin: MoonLight original, on Hugo Elias's water surface algorithm
 
 Detail: [technical](moxygen/WaterRippleEffect.md)
 
@@ -742,7 +743,7 @@ A lit 3D scene rendered by marching a ray through a distance field, one ray per 
 
 Compiled only where the chip has a hardware FPU. Cost is per pixel, so `steps` trades quality against it.
 
-Origin: projectMM original, on Iñigo Quilez's raymarching and distance-function articles
+Origin: MoonLight original, on Iñigo Quilez's raymarching and distance-function articles
 
 Detail: [technical](moxygen/RaymarchEffect.md)
 
@@ -765,7 +766,7 @@ A warped noise field addressed by angle and radius, folded into a kaleidoscope. 
 
 Cost scales with `octaves` and `warp`: at `warp` > 0 and `octaves` 2 it is roughly 4 noise samples per pixel. On a large wall set `octaves` to 1 or `warp` to 0, which degrades to a plain polar noise that still reads well.
 
-Origin: projectMM original, after Stefan Petrick's polar/noise vocabulary and Iñigo Quilez's domain warping
+Origin: MoonLight original, after Stefan Petrick's polar/noise vocabulary and Iñigo Quilez's domain warping
 
 Detail: [technical](moxygen/PolarNoiseEffect.md)
 
@@ -786,7 +787,7 @@ A circle and a box orbit and melt into each other, drawn as signed distance fiel
 
 Measured on an ESP32-S3 at 128×128: 20 fps, 728 cycles/pixel using the true-distance form, alongside StarSky (692) and Metaballs (647) at the same size.
 
-Origin: projectMM original, after Iñigo Quilez's distance-function catalogue and polynomial smooth-minimum (iquilezles.org)
+Origin: MoonLight original, after Iñigo Quilez's distance-function catalogue and polynomial smooth-minimum (iquilezles.org)
 
 Detail: [technical](moxygen/SdfShapesEffect.md)
 
@@ -804,7 +805,7 @@ A flat fill with five color modes: a plain RGB(W) color, the active palette spre
 - `minRGB`: in the band modes, drop palette entries darker than this floor.
 - `randomColors`: in the band modes, shuffle the surviving palette entries.
 
-Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/SolidEffect.md)
 
@@ -820,7 +821,7 @@ A hollow spherical shell that bounces through the 3D volume, its surface colored
 
 - `speed`: how fast the sphere moves through the volume.
 
-Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/SphereMoveEffect.md)
 
@@ -838,7 +839,7 @@ Rotating spiral from angle + distance (`atan2_8`/`dist8`).
 - `twist`: how tightly the arm winds (hue gain per unit of distance).
 - `hue_shift`: rotate the palette index.
 
-Origin: projectMM original (rotating spiral)
+Origin: MoonLight original (rotating spiral)
 
 Detail: [technical](moxygen/SpiralEffect.md)
 
@@ -857,7 +858,7 @@ A perspective starfield: stars approach the viewer from a vanishing point, brigh
 - `blur`: motion-trail fade per frame.
 - `usePalette`: color the stars from the palette instead of white.
 
-Origin: MoonLight · by [@Brandon502](https://github.com/Brandon502), inspired by Daniel Shiffman / [Coding Train](https://www.youtube.com/watch?v=17WoOqgXsRM) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · by [@Brandon502](https://github.com/Brandon502), inspired by Daniel Shiffman / [Coding Train](https://www.youtube.com/watch?v=17WoOqgXsRM) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/StarFieldEffect.md)
 
@@ -875,7 +876,7 @@ Twinkling stars at random light positions, each fading in and out independently 
 - `star_fill_ratio`: how many stars (as a fraction of the light count).
 - `usePalette`: color the stars from the active palette instead of white.
 
-Origin: MoonLight · by [limpkin](https://github.com/limpkin) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · by [limpkin](https://github.com/limpkin) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/StarSkyEffect.md)
 
@@ -895,7 +896,7 @@ Renders a multi-line string in a bitmap font. Static by default (laid out top-le
 - `speed`: marquee speed (only used when `scroll` is on).
 - `hue`: palette index for the text color.
 
-Origin: projectMM original, on MoonLight's Scrolling Text · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight original, on MoonLight's Scrolling Text · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/TextEffect.md)
 
@@ -923,7 +924,7 @@ Conway's cellular automaton generalized to 2D and 3D, with selectable rulesets a
 - `infinite`: respawn on stasis (R-pentomino/glider) instead of resetting.
 - `blur`: dead-cell fade strength toward the background color.
 
-Origin: MoonModules · by Ewoud Wijma (2022), mods by Brandon Butler / [@Brandon502](https://github.com/Brandon502) · [natureofcode](https://natureofcode.com/book/chapter-7-cellular-automata/) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h)
+Origin: MoonModules · by Ewoud Wijma (2022), mods by Brandon Butler / [@Brandon502](https://github.com/Brandon502) · [natureofcode](https://natureofcode.com/book/chapter-7-cellular-automata/) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h)
 
 Detail: [technical](moxygen/GameOfLifeEffect.md)
 
@@ -944,7 +945,7 @@ A flat graphic equaliser: the 16 audio bands rise as vertical bars from the bott
 - `colorBars`: color each bar from the palette by band instead of by row.
 - `smoothBars`: blend neighboring bands for smoother bar heights.
 
-Origin: WLED (audio) · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
+Origin: WLED (audio) · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
 
 Detail: [technical](moxygen/GEQEffect.md)
 
@@ -965,7 +966,7 @@ A 3D-perspective graphic equaliser: audio bands rise as bars with faked depth, t
 - `numBands`: bands shown (2–16, fewer = wider bars).
 - `borders`: outline each bar.
 
-Origin: MoonModules (audio) · by [@TroyHacks](https://github.com/troyhacks) (GPLv3) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h)
+Origin: MoonModules (audio) · by [@TroyHacks](https://github.com/troyhacks) (GPLv3) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h)
 
 Detail: [technical](moxygen/GEQ3DEffect.md)
 
@@ -986,7 +987,7 @@ Audio-reactive brush strokes: lines whose 3D endpoints oscillate on the beat (`b
 - `color_chaos`: per-line random hue vs a per-band gradient.
 - `phase_chaos`: random per-frame phase jitter.
 
-Origin: MoonModules (audio) · by [@TroyHacks](https://github.com/troyhacks) (GPLv3) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h)
+Origin: MoonModules (audio) · by [@TroyHacks](https://github.com/troyhacks) (GPLv3) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h)
 
 Detail: [technical](moxygen/PaintBrushEffect.md)
 
@@ -1004,7 +1005,7 @@ Falling Tetris-style blocks: each column drops a brick that lands on the growing
 - `width`: brick height (0 = randomised).
 - `oneColor`: one advancing palette color for every brick, not one each.
 
-Origin: WLED · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
+Origin: WLED · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
 
 Detail: [technical](moxygen/TetrixEffect.md)
 
@@ -1027,7 +1028,7 @@ Audio-reactive blurred dots: one frequency band per frame lights a dot whose pos
 - `freqMap`: place the dot by the major-peak frequency, not by scanning.
 - `geqScanner`: scan the dot across the strip in a GEQ-like sweep.
 
-Origin: WLED (audio) · by Andrew Tuline (WLED-SR), enhancements by [@softhack007](https://github.com/softhack007) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
+Origin: WLED (audio) · by Andrew Tuline (WLED-SR), enhancements by [@softhack007](https://github.com/softhack007) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
 
 Detail: [technical](moxygen/BlurzEffect.md)
 
@@ -1046,7 +1047,7 @@ A row of balls per column bounce under gravity, each losing energy on impact and
 - `grav`: gravity strength (higher = faster fall, snappier bounce).
 - `numBalls`: balls per column (1–16).
 
-Origin: WLED · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
+Origin: WLED · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
 
 Detail: [technical](moxygen/BouncingBallsEffect.md)
 
@@ -1068,7 +1069,7 @@ A 1D scrolling frequency display: each frame shifts the strip and injects a new 
 - `sensitivity`: input gain (10–100).
 - `audioSpeed`: let the volume modulate the scroll speed.
 
-Origin: WLED (audio) · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
+Origin: WLED (audio) · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
 
 Detail: [technical](moxygen/FreqMatrixEffect.md)
 
@@ -1088,7 +1089,7 @@ A Lissajous curve traced across the grid from two phase-shifted `sin8`/`cos8` sw
 - `fadeRate`: trail fade per frame.
 - `speed`: how fast the curve's phase advances.
 
-Origin: WLED · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
+Origin: WLED · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
 
 Detail: [technical](moxygen/LissajousEffect.md)
 
@@ -1107,7 +1108,7 @@ An audio VU meter rendered as a noise bar: the volume sets how many rows light f
 - `fadeRate`: trail decay per frame (200–254).
 - `width`: how strongly the volume drives the bar height.
 
-Origin: WLED (audio) · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
+Origin: WLED (audio) · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
 
 Detail: [technical](moxygen/NoiseMeterEffect.md)
 
@@ -1125,7 +1126,7 @@ An oscilloscope waveform scrolls across the grid with a fading trail; six select
 - `fade`: trail fade per frame (0 = instant clear, 255 = long tail).
 - `type`: waveform shape: sawtooth, triangle, sine, square, sin3 or noise.
 
-Origin: MoonLight · by Ewoud Wijma · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · by Ewoud Wijma · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/WaveEffect.md)
 
@@ -1164,13 +1165,13 @@ A gradient-noise field indexed straight into the palette: the plainest way to tu
 - `scale`: spatial frequency: low is broad blobs, high is fine detail.
 - `bpm`: how fast it moves.
 
-Origin: FastLED · inoise field (Mark Kriegsman); the `morph` form from WLED via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
+Origin: FastLED · inoise field (Mark Kriegsman); the `morph` form from WLED via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
 
 Detail: [technical](moxygen/NoiseEffect.md)
 
 [Tests](../../reference/tests/unit-tests.md#noiseeffect)
 
-## projectMM-native effects
+## MoonLight-native effects
 
 <a id="ambilight"></a>
 
@@ -1197,7 +1198,7 @@ An effect you write as text on the running device, compiled to native code on th
 - `script`: which `.mle` file runs, picked from the library and edited here.
 - Every control the script declares, editable live without a recompile.
 
-Origin: projectMM original, on the native-codegen approach of [ESPLiveScript](https://github.com/hpwit/ESPLiveScript) by Yves Bazin
+Origin: MoonLight original, on the native-codegen approach of [ESPLiveScript](https://github.com/hpwit/ESPLiveScript) by Yves Bazin
 
 Detail: [technical](moxygen/MoonLiveEffect.md)
 
@@ -1213,7 +1214,7 @@ The 16 mic frequency bands spread across X, each column lit bottom-up by its mag
 
 - `colorMode`: bars colored by `height`, the VU look, or `per-band`, a rainbow.
 
-Origin: projectMM original, on the WLED-SR GEQ / spectrum concept (Andrew Tuline) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
+Origin: MoonLight original, on the WLED-SR GEQ / spectrum concept (Andrew Tuline) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
 
 Detail: [technical](moxygen/AudioSpectrumEffect.md)
 
@@ -1232,9 +1233,29 @@ Every beat is a stone dropped in water. A real wave simulation, which gives what
 - `rain`: idle drops when there is no music, so the surface is alive in silence.
 - `shine`: how strongly the slope lights the surface.
 
-Origin: projectMM original, the two-buffer water simulation (Gomez 2000) driven by the onset detector
+Origin: MoonLight original, the two-buffer water simulation (Gomez 2000) driven by the onset detector
 
 Detail: [technical](moxygen/BeatRipplesEffect.md)
+
+<a id="pulse"></a>
+
+### Pulse 💫🎶 · 3D
+
+<img src="../../assets/light/effects/PulseEffect.gif" width="300" alt="Pulse effect preview">
+
+Shells expanding from a drifting origin, one per beat: a pair of fronts on a strip, a ring on a panel, a sphere in a volume. Sound fires one and its pitch colors it, and an idle clock keeps them arriving in a silent room. The effect a device boots with.
+
+- `bpm`: pulses a minute while nothing is heard, where 0 waits for sound alone.
+- `speed`: how fast a shell crosses the layout, at any layout size.
+- `thickness`: the shell's width, as a share of the layout rather than in lights.
+- `audioGain`: how strongly sound fires a pulse, where 0 ignores it.
+- `drift`: how far the origin wanders from the center, where 0 pins it there.
+
+Compare with [BeatRipples](#beatripples), which simulates water on a plane. This one draws a moving front, which carries it into 1D and 3D.
+
+Origin: MoonLight original
+
+Detail: [technical](moxygen/PulseEffect.md)
 
 <a id="vumeters"></a>
 
@@ -1251,7 +1272,7 @@ The bass needles are heavier than the treble ones, so the low end swings and the
 - `peakHold`: how long the peak marker stays up, as a half-life.
 - `smooth`: drive from the meter ballistic rather than the raw band.
 
-Origin: projectMM original, on the VU ballistics of IEC 60268-17
+Origin: MoonLight original, on the VU ballistics of IEC 60268-17
 
 Detail: [technical](moxygen/VuMetersEffect.md)
 
@@ -1269,7 +1290,7 @@ The spectrum as ripples. Each band owns a sector around the center, mirrored lef
 - `beat`: a white shockwave born at the center on every onset.
 - `polarTable`, `polarTable16`, `mapping`: the polar address, and its shape.
 
-Origin: projectMM original, the radial spectrogram on `PolarLut` and the onset detector
+Origin: MoonLight original, the radial spectrogram on `PolarLut` and the onset detector
 
 Detail: [technical](moxygen/RadialSpectrumEffect.md)
 
@@ -1286,7 +1307,7 @@ Plays every other registered effect in turn, auto-advancing on a timer, so one L
 - `randomPalette`: pick a random palette on each cycle; on by default.
 - `showName`: overlay the playing effect's name in a small font; default on.
 
-Origin: FastLED · Mark Kriegsman's [DemoReel100](https://github.com/FastLED/FastLED/blob/master/examples/DemoReel100/DemoReel100.ino); projectMM reel
+Origin: FastLED · Mark Kriegsman's [DemoReel100](https://github.com/FastLED/FastLED/blob/master/examples/DemoReel100/DemoReel100.ino); MoonLight reel
 
 Detail: [technical](moxygen/DemoReelEffect.md)
 
@@ -1303,7 +1324,7 @@ Receives lights over UDP and writes them into the layer: the receive side for Re
 - `universe_start`: the first incoming universe to map, mirroring the sender.
 - `channels_per_universe`: bytes each universe maps to; 510 or 512.
 
-Origin: projectMM original (E1.31 / Art-Net receive)
+Origin: MoonLight original (E1.31 / Art-Net receive)
 
 Detail: [technical](moxygen/NetworkReceiveEffect.md)
 
@@ -1323,7 +1344,7 @@ R/G/B each follow a sine along one axis at 120° phase offset: a glowing, scroll
 - `amplitude`: peak brightness (0–255, 255 = full).
 - `bpm`: scroll speed.
 
-Origin: MoonLight (Sinus, AI-generated) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight (Sinus, AI-generated) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/SineEffect.md)
 

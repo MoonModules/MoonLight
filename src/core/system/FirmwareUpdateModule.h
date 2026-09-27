@@ -32,17 +32,17 @@
 namespace mm {
 
 /// Where this project's releases will live, tried FIRST so a renamed repository needs no redirect.
-constexpr const char* kReleaseRepo = "MoonModules/MoonLight";
+constexpr const char* kReleaseRepo = "MoonModules/MoonLight";   // rename-keep: our own future path, which the predecessor occupies until it vacates
 
 /// Where they live today, tried where the address above does not answer.
-constexpr const char* kFallbackRepo = "MoonModules/projectMM";
+constexpr const char* kFallbackRepo = "MoonModules/projectMM";   // rename-keep: one repository in both constants leaves a device nowhere to look
 
 /// The release-asset URL a device updates itself from: repository, version, firmware variant, version.
 constexpr const char* kReleaseAssetUrlFormat =
     "https://github.com/%s/releases/download/v%s/firmware-%s-v%s.bin";
 
-/// The name this project's app image carries in its ESP-IDF descriptor, which is the CMake `project()` name.
-constexpr const char* kProjectImageName = "projectMM";
+/// The name this project's app image carries in its ESP-IDF descriptor, which is the CMake `project()` name and changes only with it.
+constexpr const char* kProjectImageName = "projectMM";   // a device refuses every firmware if this and CMake disagree, and no build error says so
 
 inline char     g_otaStatus[64]     = "idle";   ///< the phase the install is in, shared by every unit
 inline uint32_t g_otaBytesRead      = 0;        ///< how much has been written

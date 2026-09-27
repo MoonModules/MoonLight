@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Send one OSC message to a projectMM device: the bench tool for the OSC ingest module.
+"""Send one OSC message to a MoonLight device: the bench tool for the OSC ingest module.
 
 No dependency on purpose: OSC 1.0 is a dozen lines to emit, and a pip install would be a build
 requirement for everyone to run one bench check.

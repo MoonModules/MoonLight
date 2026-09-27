@@ -1,6 +1,6 @@
 # ESP32-S31 Function-CoreBoard-1 hardware reference
 
-Pin maps and onboard features for the Espressif **ESP32-S31 Function-CoreBoard-1**, read from the official schematic so projectMM work (Ethernet, audio, SD, USB-host) reads this instead of re-scraping the PDF. The board is the bench S31 (`esp32s31` firmware).
+Pin maps and onboard features for the Espressif **ESP32-S31 Function-CoreBoard-1**, read from the official schematic so MoonLight work (Ethernet, audio, SD, USB-host) reads this instead of re-scraping the PDF. The board is the bench S31 (`esp32s31` firmware).
 
 **Sources**
 - Schematic (rev C, 2026-05-13): <https://dl.espressif.com/schematics/esp32-s31-function-coreboard-1-schematics.pdf>
@@ -57,7 +57,7 @@ Pin map, **bench-verified** (link + DHCP confirmed on the CoreBoard). The RGMII 
 | | | | ETH_RXD1 | 18 |
 | | | | ETH_RXD0 | 19 |
 
-> **RGMII, not RMII.** projectMM's classic/P4 Ethernet is RMII (fewer data lines, 50 MHz ref clock);
+> **RGMII, not RMII.** MoonLight's classic/P4 Ethernet is RMII (fewer data lines, 50 MHz ref clock);
 > the S31's 1 Gbps EMAC is RGMII (4-bit data each way + TX/RX clocks). The shared `ethInitEmac()` in
 > `src/platform/esp32/platform_esp32.cpp` drives both: an `#ifdef CONFIG_IDF_TARGET_ESP32S31` block
 > selects the RGMII interface and sets the CoreBoard's data/clock pins from the table above, then

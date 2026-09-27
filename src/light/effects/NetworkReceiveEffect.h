@@ -10,7 +10,7 @@
 
 namespace mm {
 
-// Author: projectMM original (E1.31 / Art-Net receive)
+// Author: MoonLight original (E1.31 / Art-Net receive)
 /// Effect that paints the layer from received Art-Net/E1.31/DDP pixels.
 /// @card NetworkReceiveEffect.gif
 ///
@@ -18,7 +18,7 @@ namespace mm {
 /// So it composes with modifiers and blending like any generated effect.
 /// This is the end-to-end pair with NetworkSendDriver, and the receive side for industry senders.
 ///
-/// Prior art: MoonLight's D_NetworkIn, WLED's realtime UDP input, and projectMM v1's ArtNetInModule.
+/// Prior art: MoonLight's D_NetworkIn, WLED's realtime UDP input, and MoonLight v1's ArtNetInModule.
 ///
 /// @moreinfo
 ///
@@ -191,7 +191,7 @@ private:
         uint8_t mac[6];
         platform::getMacAddress(mac);
         uint8_t reply[ARTNET_POLL_REPLY_SIZE];
-        buildArtPollReply(reply, myIp, mac, "projectMM", "projectMM NetworkReceive",
+        buildArtPollReply(reply, myIp, mac, "MoonLight", "MoonLight NetworkReceive",
                           universeStart);
         artnetSocket_.sendToAddr(pollerIp, ARTNET_PORT, reply, sizeof(reply));
     }

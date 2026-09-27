@@ -157,7 +157,7 @@ def main() -> int:
         p["path"] = f"{base_url}/{p['path']}"
 
     manifest = {
-        "name": "projectMM",
+        "name": "MoonLight",
         "version": args.version,
         "home_assistant_domain": "projectMM",
         # Wipe-first on flash. Right default while config schemas are

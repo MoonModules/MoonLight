@@ -6,7 +6,7 @@
 #     "pymdown-extensions>=10",
 # ]
 # ///
-"""Build (or serve) the projectMM docs site with MkDocs Material.
+"""Build (or serve) the MoonLight docs site with MkDocs Material.
 
 Renders the docs/ tree as a navigable site, config in mkdocs.yml. Dependencies are
 declared inline (PEP 723) so `uv run` provisions them — same pattern as the other
@@ -62,7 +62,7 @@ def _kill_stray_serve() -> None:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Build the projectMM docs site.")
+    ap = argparse.ArgumentParser(description="Build the MoonLight docs site.")
     ap.add_argument("--strict", action="store_true",
                     help=("Promote EVERY mkdocs warning to fatal — a local anchor audit, NOT the "
                           "CI gate. The plain build is what CI runs; it already fails on a missing "

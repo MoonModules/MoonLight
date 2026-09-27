@@ -1,0 +1,49 @@
+{
+  "name": "scenario_System_identity_survives_reboot",
+  "module": "SystemModule",
+  "mode": "mutate",
+  "also": [
+    "FilesystemModule"
+  ],
+  "description": "A device's own identity survives a restart. Names it, restarts, and reads it back: the round trip nothing else proves, because a control that reads correctly while the process still holds it says nothing about what reached the filesystem. This is also the shape every rename risk is checked with, since the sweep is exactly the event that could break a read-back without breaking a write.",
+  "fixture": [
+    {
+      "name": "fix-System",
+      "op": "add_module",
+      "id": "System",
+      "type": "SystemModule"
+    }
+  ],
+  "steps": [
+    {
+      "name": "name-it",
+      "description": "Set the name a user would set, which is also what mDNS and the access point advertise.",
+      "op": "set_control",
+      "id": "System",
+      "key": "deviceName",
+      "value": "MM-ScenarioProof"
+    },
+    {
+      "name": "reads-back-live",
+      "description": "It reads back immediately, which only proves the control was written in memory.",
+      "op": "expect_control",
+      "id": "System",
+      "key": "deviceName",
+      "equals": "MM-ScenarioProof"
+    },
+    {
+      "name": "restart",
+      "description": "Restart, and wait for the device to answer again.",
+      "op": "reboot",
+      "timeout": 60
+    },
+    {
+      "name": "survived",
+      "description": "The name is still there, so it reached the filesystem and was read back at boot.",
+      "op": "expect_control",
+      "id": "System",
+      "key": "deviceName",
+      "equals": "MM-ScenarioProof"
+    }
+  ]
+}

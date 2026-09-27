@@ -227,7 +227,9 @@ set_tests_properties(unit_tests PROPERTIES
     ENVIRONMENT "MM_DATA_DIR=${CMAKE_CURRENT_BINARY_DIR}/fs-root")
 
 # Scenario runner (replays scenario JSON files in-process)
-add_executable(mm_scenarios scenario_runner.cpp)
+# The same shared type registry the app compiles, so a scenario can name any module the
+# firmware has: src/module_types.cpp carries the reason.
+add_executable(mm_scenarios scenario_runner.cpp ${CMAKE_SOURCE_DIR}/src/module_types.cpp)
 target_link_libraries(mm_scenarios PRIVATE mm_core mm_platform)
 
 # Kernel micro-bench: ns per call for the power-function kernels, on the host. A report, not a

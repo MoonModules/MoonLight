@@ -269,7 +269,7 @@ def test_attribution_is_not_linked_in_the_second_column():
     page = ('### Thing 💫 · kind\n\nShort.\n\n- `a` — one.\n'
             '[Tests](../../reference/tests/unit-tests.md#thing)\n'
             'Detail: [technical](moxygen/Thing.md)\n'
-            'Origin: projectMM, by somebody\n')
+            'Origin: MoonLight, by somebody\n')
     out = _row(page)
     assert "**Source:**" not in out
     assert "by somebody" not in out
@@ -1049,14 +1049,14 @@ def test_a_provenance_marker_above_the_lead_is_not_the_lead():
         return [w for _, w in check_docgen._header_rules("src/core/x.h", src) if "lead" in w]
 
     for marker in ("// SPDX-License-Identifier: GPL-3.0-or-later",
-                   "// Author: projectMM original"):
+                   "// Author: MoonLight original"):
         src = f"{marker}\n#pragma once\n/// One thing.\nclass Thing {{\npublic:\n    /// Go.\n    void go();\n}};\n"
         assert not whys(src), marker
 
     fwd = "#pragma once\nclass Other;\n/// One thing.\nclass Thing {\npublic:\n    /// Go.\n    void go();\n};\n"
     assert not whys(fwd), "a forward declaration is not a lead"
 
-    bare = "// Author: projectMM original\n#pragma once\nclass Thing {\npublic:\n    void go();\n};\n"
+    bare = "// Author: MoonLight original\n#pragma once\nclass Thing {\npublic:\n    void go();\n};\n"
     assert whys(bare), "a marker must not stand in for a missing lead"
 
 

@@ -7,7 +7,7 @@ namespace mm {
 
 /// Audio-reactive effect: scrolls the dominant frequency as a color column.
 /// @card FreqMatrixEffect.gif
-/// Author: Andrew Tuline (WLED-SR), https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
+/// Author: Andrew Tuline (WLED-SR), via the predecessor, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
 ///
 /// A vertical shift register driven by the music's major peak frequency.
 /// Each scroll moves the column one pixel and paints a new one at the source end.

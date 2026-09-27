@@ -1,6 +1,6 @@
 # Partition table for ESP32-S3-N8R8 (8 MB flash, 8 MB PSRAM).
 # Half the flash of N16R8, so app0/app1 shrink to 3 MB each (still ample for the
-# full projectMM binary + FastLED headroom — the app is ~1.6 MB) and spiffs
+# full MoonLight binary + FastLED headroom — the app is ~1.6 MB) and spiffs
 # takes the remaining ~1.9 MB for LittleFS state. PSRAM is identical to N16R8
 # (8 MB octal); only the flash-bound partition layout differs.
 #

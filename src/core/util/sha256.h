@@ -9,7 +9,7 @@
 ///
 /// ## Why a copy rather than a library
 ///
-/// This is the only cryptographic primitive projectMM needs, and it needs it on all five targets.
+/// This is the only cryptographic primitive MoonLight needs, and it needs it on all five targets.
 /// OpenSSL does not exist on ESP32, where ESP-IDF ships mbedtls, so linking it would mean an mbedtls path for devices and an OpenSSL path for the desktop.
 /// That is two implementations of one function that must agree byte for byte, and a divergence produces identifiers that silently differ between platforms.
 /// One vendored file is the smaller thing to own, and the algorithm is frozen.

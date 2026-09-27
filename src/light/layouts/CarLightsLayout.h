@@ -6,27 +6,27 @@ namespace mm {
 
 /// Layout mapping automotive light-strip coordinates.
 /// @card CarLightsLayout.gif
-/// Author: Eric Marciniak (Discord), custom car-lights fixture, reconstructed for projectMM
+/// Author: Eric Marciniak (Discord), custom car-lights fixture, reconstructed for MoonLight
 ///
 /// @moreinfo
 ///
 /// A stylised pair of car headlights: four concentric-ring "lamps" (inner/outer left, inner/outer right) plus two side strips joined by 90° arcs, all scaled by a single `scale` control.
 /// A 2D layout emitting each LED's (x, y, 0) in physical wiring order.
 ///
-/// Prior art: MoonLight's CarLightsLayout (Node "Car Lights", tags 🚥; MoonModules/MoonLight, src light layout nodes).
+/// Prior art: MoonLight's CarLightsLayout (Node "Car Lights", tags 🚥; MoonModules/projectMM, src light layout nodes).
 /// MoonLight builds this by instantiating a RingLayout object and calling its onLayout() repeatedly with different ringCenter / nrOfLEDs / angle settings.
 /// Every ring and both strips' coordinates are reproduced here EXACTLY, in the same wiring order. tags 💫 marks the MoonLight lineage.
 ///
 /// ## What had to be reconstructed
 ///
-/// RECONSTRUCTED: projectMM's RingLayout is a standalone module, it has no onLayout()/addLight() and derives its ring center INTERNALLY from nrOfLEDs.
+/// RECONSTRUCTED: MoonLight's RingLayout is a standalone module, it has no onLayout()/addLight() and derives its ring center INTERNALLY from nrOfLEDs.
 /// It cannot be driven the way MoonLight drives its RingLayout (which takes an EXTERNALLY set ringCenter per headlight).
 /// The ring-emitting trig is therefore inlined below, reproducing the source's own ring placement verbatim.
 /// That covers its radius, its placement angle, its partial-arc inclusion filter and its integer truncation of each coordinate.
 /// The external-ringCenter form is the one CarLights needs, which is why we don't delegate to RingLayout.h.
 ///
 /// Float trig runs on the cold build path (placeLights / lightCount, called from a rebuild), never the hot render loop, so it's allowed here.
-/// MoonLight's pin/wiring plumbing (nextPin / doNextPin) is dropped, a projectMM layout emits coordinates only; the driver owns pins.
+/// MoonLight's pin/wiring plumbing (nextPin / doNextPin) is dropped, a MoonLight layout emits coordinates only; the driver owns pins.
 class CarLightsLayout : public LayoutBase {
 public:
     // MoonLight's default and range, its inactive spoke controls dropped.

@@ -1,4 +1,4 @@
-// "Your devices" — a localStorage-backed list of projectMM devices the user
+// "Your devices" — a localStorage-backed list of MoonLight devices the user
 // has provisioned from this install page. Surface so a returning user can
 // jump to their device UI without re-typing the IP / re-running Improv.
 //

@@ -2,6 +2,9 @@ idf_component_register(
     SRCS
         "main.cpp"
         "../../src/main.cpp"
+        # The shared type registry, compiled beside main.cpp here and beside the scenario runner on
+        # desktop, so one list serves both: src/module_types.cpp carries the reason.
+        "../../src/module_types.cpp"
         "../../src/core/module/Control.cpp"
         "../../src/core/util/JsonUtil.cpp"
         "../../src/core/util/ScratchBuffer.cpp"

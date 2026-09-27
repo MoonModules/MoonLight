@@ -4,7 +4,7 @@
 
 namespace mm {
 
-// Author: projectMM original (concentric rings)
+// Author: MoonLight original (concentric rings)
 /// Effect of expanding concentric rings from random centers.
 /// @card RingsEffect.gif
 ///

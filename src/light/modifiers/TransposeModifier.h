@@ -17,7 +17,7 @@ namespace mm {
 /// Prior art: MoonLight's Transpose modifier (M_MoonLight.h), same pairwise axis swap on both the box and the coordinate, plus per-axis inverse.
 /// The inverse reads the box AFTER the swaps (MoonLight's modifyPosition reads the transposed `layer->size`), reproduced here by inverting against the stashed box.
 /// Written fresh against our fold interface.
-/// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
+/// Author: MoonLight, https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
 class TransposeModifier : public ModifierBase {
 public:
     /// The catalog tags this modifier carries.

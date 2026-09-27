@@ -5,7 +5,6 @@
 
 namespace mm {
 
-// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 /// Effect that fills the layer with animated random colors.
 /// @card RandomEffect.gif
 ///

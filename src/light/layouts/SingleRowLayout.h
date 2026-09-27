@@ -5,7 +5,7 @@
 namespace mm {
 
 /// Layout of one horizontal LED row (1D).
-/// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
+/// Author: MoonLight, https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
 ///
 /// @moreinfo
 ///
@@ -15,7 +15,7 @@ namespace mm {
 /// The emitted coordinates are identical either way and only the index-to-position order changes, the same distinction `GridLayout` draws for serpentine wiring.
 ///
 /// Prior art: MoonLight's SingleRowLayout (L_MoonLight.h), the same start, width, y-position and reversed fields.
-/// We drop MoonLight's per-strip pin plumbing (the ledPinDIO select, its "LED NN" pin menu, and nextPin()): a projectMM layout emits coordinates only, the driver owns pin assignment.
+/// We drop MoonLight's per-strip pin plumbing (the ledPinDIO select, its "LED NN" pin menu, and nextPin()): a MoonLight layout emits coordinates only, the driver owns pin assignment.
 class SingleRowLayout : public LayoutBase {
 public:
     /// The catalog tags this layout carries.

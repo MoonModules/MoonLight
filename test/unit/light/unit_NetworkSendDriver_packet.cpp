@@ -110,7 +110,7 @@ TEST_CASE("E1.31 packet header format") {
     // Framing layer: flags+length (129-38=91), vector, source name, priority 100, sequence, universe big-endian.
     CHECK(pkt[38] == 0x70); CHECK(pkt[39] == 91);
     CHECK(pkt[43] == 0x02);
-    CHECK(std::strcmp(reinterpret_cast<const char*>(pkt + 44), "projectMM") == 0);
+    CHECK(std::strcmp(reinterpret_cast<const char*>(pkt + 44), "MoonLight") == 0);
     CHECK(pkt[108] == 100);
     CHECK(pkt[111] == 42);
     CHECK(pkt[113] == 0x01); CHECK(pkt[114] == 0x03);

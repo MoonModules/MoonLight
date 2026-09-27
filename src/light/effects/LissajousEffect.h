@@ -7,7 +7,7 @@ namespace mm {
 
 /// Parametric effect tracing a Lissajous curve across the layer.
 /// @card LissajousEffect.gif
-/// Author: Andrew Tuline (WLED-SR), https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
+/// Author: Andrew Tuline (WLED-SR), via the predecessor, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
 ///
 /// Sample points sweep an x and a y oscillator whose frequencies and shared phase drift.
 /// So the closed curve continuously morphs and rotates, leaving a fading trail.

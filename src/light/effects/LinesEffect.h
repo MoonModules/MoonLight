@@ -4,7 +4,6 @@
 
 namespace mm {
 
-// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 /// Test effect: axis-aligned planes sweeping in sync, where red, green and blue name x, y and z.
 /// @card LinesEffect.gif
 ///

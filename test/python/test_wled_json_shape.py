@@ -29,11 +29,11 @@ from wled.models import Device
 GOLDEN_JSON = (
     '{"state":{"on":true,"bri":20,"transition":7,"ps":-1,"pl":-1,"nl":{},"udpn":{},"lor":0,"mainseg":0,'
     '"seg":[{"id":0,"on":true,"bri":255,"col":[[255,255,255]]}]},'
-    # ver is the sentinel "99.0.0", NOT the projectMM semver. Reason: HA's WLED integration
-    # parses WLED tags as CalVer (`16.0.1` is year-16, not `0.16.1`), so a projectMM semver
+    # ver is the sentinel "99.0.0", NOT the MoonLight semver. Reason: HA's WLED integration
+    # parses WLED tags as CalVer (`16.0.1` is year-16, not `0.16.1`), so a MoonLight semver
     # like `2.1.0-dev` compares LOWER (2 < 16) and HA nagged "update to WLED 16.0.1" on the
     # bench P4 even after the flash. `99.0.0` beats every WLED tag in the CalVer regime; the
-    # real projectMM version lives on the MQTT update entity's `installed_version`.
+    # real MoonLight version lives on the MQTT update entity's `installed_version`.
     '"info":{"ver":"99.0.0","vid":2410150,"name":"MM-CAFE","mac":"deadbeefcafe","ip":"192.168.1.246",'
     '"arch":"esp32","brand":"WLED","product":"MoonModules","release":"MoonModules",'
     '"leds":{"count":1,"fps":60,"rgbw":false,"wv":false,"cct":false,"maxpwr":0,"maxseg":1,"pwr":0,"lc":1,"seglc":[1]},'

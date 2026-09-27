@@ -97,6 +97,17 @@ export const CONTROL_RENAMES = {
 // Old control VALUE → new, keyed by the control's (post-rename) name. Same honesty levels:
 // `value` when the move is deterministic, `review` when only the user (or the chip) can decide.
 export const CONTROL_VALUE_RENAMES = {
+    // Audio modes reordered simple-to-advanced, so the default is what works with nothing
+    // attached. The indices are persisted, so every saved value moves: 0 was local audio and
+    // is now simulate, 2 was simulate and is now local audio. A device without a network has
+    // only two of them, where local audio is 1, which this map cannot tell apart from a
+    // networked device's receive: hence the review on that one.
+    "mode": { onTypes: ["AudioService"], values: {
+        0: { value: 2, date: "2026-09-23" },
+        2: { value: 0, date: "2026-09-23" },
+        1: { date: "2026-09-23",
+             review: "audio mode 1 was 'receive network' on a networked device and 'simulate' on one without: re-pick it" },
+    } },
     // Peripheral options renamed to name the silicon block, not the bus protocol.
     "peripheral": { onTypes: ["ParallelLedDriver"], values: {
         "MoonI80": { value: "LCD-MM", date: "2026-07-30" },

@@ -1,10 +1,10 @@
 # hpwit/I2SClocklessLedDriver: monthly activity digest
 
-What landed on [hpwit/I2SClocklessLedDriver](https://github.com/hpwit/I2SClocklessLedDriver)'s `main` branch, month by month. External-context reference, a factual log of a friend repo's activity, not projectMM's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md).
+What landed on [hpwit/I2SClocklessLedDriver](https://github.com/hpwit/I2SClocklessLedDriver)'s `main` branch, month by month. External-context reference, a factual log of a friend repo's activity, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md).
 
-The library: Yves Bazin's (hpwit) clockless-LED driver that clocks WS2812-class strips out over the ESP32's I2S/LCD peripheral with DMA, the parallel-output technique projectMM's LED-driver analysis studies. Summarised via the GitHub commits API (all commits on `main`), filtering out merge commits, lint/format churn, and 🐰-review fixups. No versioned release is cut from `main` in this window (latest tag is 1.4), so months are kept whole.
+The library: Yves Bazin's (hpwit) clockless-LED driver that clocks WS2812-class strips out over the ESP32's I2S/LCD peripheral with DMA, the parallel-output technique MoonLight's LED-driver analysis studies. Summarised via the GitHub commits API (all commits on `main`), filtering out merge commits, lint/format churn, and 🐰-review fixups. No versioned release is cut from `main` in this window (latest tag is 1.4), so months are kept whole.
 
-> **Authorship note.** Most of the activity in this window is projectMM's own, `ewowi` authored ~53 of the in-window commits, with the rest from the maintainer (Yves Bazin / hpwit) and a couple of others. The IDF 5.5 / arduino-less ESP-IDF / RGBCCT / >65K-LED work below is largely projectMM upstreaming its driver needs into hpwit's library, then tracking the result here.
+> **Authorship note.** Most of the activity in this window is MoonLight's own, `ewowi` authored ~53 of the in-window commits, with the rest from the maintainer (Yves Bazin / hpwit) and a couple of others. The IDF 5.5 / arduino-less ESP-IDF / RGBCCT / >65K-LED work below is largely MoonLight upstreaming its driver needs into hpwit's library, then tracking the result here.
 
 ## August 2026
 

@@ -60,7 +60,7 @@ public:
     void setup() override {
         if constexpr (platform::hasImprov) {
             // Borrowed: the task copies them on init, so these locals may expire.
-            const char* deviceName = systemModule_ ? systemModule_->deviceName() : "projectMM";
+            const char* deviceName = systemModule_ ? systemModule_->deviceName() : "MoonLight";
             platform::ImprovDeviceInfo info{
                 deviceName,
                 platform::chipModel(),

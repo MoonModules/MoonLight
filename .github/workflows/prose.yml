@@ -1,6 +1,6 @@
 name: Prose
 
-# Vale over the lines a PR ADDS or changes, with the rules in .vale/styles/projectMM/. Diff-scoped
+# Vale over the lines a PR ADDS or changes, with the rules in .vale/styles/MoonLight/. Diff-scoped
 # on purpose: the tree still holds pre-existing violations, and a contributor is answerable for
 # what they wrote, not for inherited prose. An `error` (em-dash, British spelling, "e.g.") fails
 # the check; warnings and suggestions land as inline annotations only.

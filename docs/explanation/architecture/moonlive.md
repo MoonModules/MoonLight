@@ -70,10 +70,10 @@ The engine stays target-agnostic because all three live behind the platform boun
 
 Compiling a small language straight to machine code, so a live-authored effect runs at the speed of a compiled one, was pioneered by Yves Bazin in [ESPLiveScript](https://github.com/hpwit/ESPLiveScript).
 That work drives a 12,288-light panel at around 85 fps where interpreted languages managed 3 to 10, which is what makes native codegen the right call here.
-MoonLive is written fresh against projectMM's architecture, with ESPLiveScript as the reference it is checked against.
+MoonLive is written fresh against MoonLight's architecture, with ESPLiveScript as the reference it is checked against.
 
 The live-scripting idea in this ecosystem descends from ARTI, the interpreted-effects runtime in WLED MoonModules, which proved the load-and-run loop end to end.
-The host-binding surface follows the [MoonLight effects tutorial](https://moonmodules.org/MoonLight/moonlight/effects-tutorial/).
+The host-binding surface follows the [MoonLight effects tutorial](https://moonmodules.org/projectMM/moonlight/effects-tutorial/).
 
 ## A scripted module is still a module
 

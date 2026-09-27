@@ -8,14 +8,14 @@
 ## Prior art studied (credit by name)
 
 Audio-reactive lighting is a long-standing idea in the LED-controller world (WLED-MM and MoonLight
-are the closest lineage). projectMM's audio path is its own implementation, designed from the INMP441
+are the closest lineage). MoonLight's audio path is its own implementation, designed from the INMP441
 datasheet and standard DSP — not traced from any one project — but three people's thinking is studied
 here with respect and credited by name (the *Industry standards, our own code* principle: study hard,
 write fresh).
 
 **Frank (softhack007)** — main author of the WLED-MM audioreactive usermod (the most-used open-source
 audio-reactive LED implementation), a direct ancestor of the ideas this module learns from. The
-product owner worked alongside Frank for years on WLED-SR / WLED-MM before MoonLight and projectMM.
+product owner worked alongside Frank for years on WLED-SR / WLED-MM before MoonLight and MoonLight.
 His concept is the worked example in the *Adaptive noise gate* section below: his idea, our analysis,
 written fresh against our architecture.
 
@@ -23,7 +23,7 @@ written fresh against our architecture.
 onto Espressif's **esp-dsp** library ("stupid fast compared to ArduinoFFT"), very low latency on S3/P4.
 His contribution has two parts:
 - *esp-dsp FFT.* Troy uses esp-dsp's **radix-4** real FFT (`dsps_fft4r_fc32`) with a Blackman-Harris
-  window. This validates the path projectMM is already on — **we use esp-dsp too**, the **radix-2**
+  window. This validates the path MoonLight is already on — **we use esp-dsp too**, the **radix-2**
   float real FFT (`dsps_fft2r_fc32`) in `platform_esp32_i2s.cpp`. Same library; the one open
   optimisation is **radix-4 vs radix-2** (fewer butterfly stages, log₄N vs log₂N — a measure-then-
   maybe tune-up, not a gap; today the float FFT on the FPU is well inside one tick). Two adjacent,
@@ -52,7 +52,7 @@ WLED lineage above, and its own source comments are unusually candid about which
 
 **Damian Schneider (DedeHai)** — WLED core dev; WLED's audioreactive usermod carries an integer /
 fixed-point FFT path (~1.5 ms on a C3, >10× ArduinoFFT on FPU-less chips). The consensus (Troy + Frank)
-is that with esp-dsp FFT + biquads, **fixed-point is not necessary on FPU chips** (S3/P4) — projectMM's
+is that with esp-dsp FFT + biquads, **fixed-point is not necessary on FPU chips** (S3/P4) — MoonLight's
 exact position: float on FPU targets, the int16 / `dl_fft` hardware path reserved for low-power chips.
 DedeHai's current audio experiment is a PoC MSGEQ7-based path (offloading the spectrum to a dedicated
 analyser chip) — a different point in the same space, noted for completeness.
@@ -71,7 +71,7 @@ All of the following widen the **source seam** — what feeds the pipeline — l
 - **Analog line-in.** DedeHai got analog input working on the S3; Troy got it working in ParrotRadio.
   Troy's testing-confidence nuance worth recording: he considers his ParrotRadio analog path
   better-exercised (he actually recorded + played back through it), whereas an unlistened-to analog
-  path "may not be as accurate as it looks." **If projectMM adopts analog line-in, validate by
+  path "may not be as accurate as it looks." **If MoonLight adopts analog line-in, validate by
   listening**, not just by watching the level meter.
 - **I²C-configured codecs (e.g. ES8311).** Do **not** hand-roll each codec's register config — pull in
   Espressif's **`esp_codec_dev`** component (carries option tables for many codecs), supporting "a

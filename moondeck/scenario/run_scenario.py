@@ -157,6 +157,12 @@ def _host_target() -> str:
     )
 
 
+# What mm_scenarios returns for a scenario that did not run: test/scenario_runner.cpp's kSkipped.
+# A skip is neither a pass nor a failure, and counting it as either is how a suite that stopped
+# testing reads as green.
+SKIPPED = 2
+
+
 def _run_one(path: Path, update_contract: bool, update_reason: str | None,
              no_write: bool = False) -> int:
     """Run one scenario. Always parses MEASURE lines and writes
@@ -165,27 +171,14 @@ def _run_one(path: Path, update_contract: bool, update_reason: str | None,
 
     Symmetric with the live runner's behaviour — observations persist always,
     contracts only when renegotiated."""
-    # Honour a scenario-level `skip_on` allowlist of host targets that lack a
-    # capability the scenario exercises (today: MoonLive scenarios opt out on
-    # desktop-windows / desktop-linux — the desktop JIT backend is arm64-only, so an
-    # x86_64 host renders dark and the "buffer non-zero" check would fail for
-    # a platform-capability reason the scenario isn't the right vehicle to
-    # assert. The C++ ctest suite gates the same tests on MM_MOONLIVE_HAS_HOST_JIT.
-    # An absent or empty `skip_on` runs everywhere, the existing default.
-    try:
-        with open(path, encoding="utf-8") as f:
-            scenario_meta = json.load(f)
-    except Exception:
-        scenario_meta = {}
-    target = _host_target()
-    if target in scenario_meta.get("skip_on", []):
-        print(f"  SKIP  {path.name} (skip_on {target})")
-        return 0
+    # `skip_on` is the runner's rule, not this wrapper's: mm_scenarios reads the same field and
+    # returns SKIPPED for it. A copy here returned 0 instead, so a skipped scenario was counted as a
+    # pass and the binary's own skip path was never reached.
     # Capture + tee: stream to stdout while collecting MEASURE lines.
     # Pin the runner's filesystem root into the build tree. The runner performs real writes, and
     # its default root is the OS per-user data directory unless the working directory happens to be
     # a checkout. Relying on cwd for that would put a test one wrong directory away from
-    # overwriting a developer's own installed-projectMM settings.
+    # overwriting a developer's own installed-MoonLight settings.
     env = {**os.environ, "MM_DATA_DIR": str(ROOT / "build" / "scenario-fs")}
     proc = subprocess.Popen([str(RUNNER), str(path)], cwd=ROOT, env=env,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -206,8 +199,8 @@ def _run_one(path: Path, update_contract: bool, update_reason: str | None,
             }
     proc.wait()
     if proc.returncode != 0:
-        # Scenario failed — don't persist observations from a failing run
-        # (would record garbage as the latest reading).
+        # Scenario failed or skipped — don't persist observations either way: a failing run would
+        # record garbage as the latest reading, and a skipped one produced no measurement at all.
         return proc.returncode
 
     if not observations:
@@ -288,6 +281,16 @@ def _run_one(path: Path, update_contract: bool, update_reason: str | None,
     return 0
 
 
+def _run_many(paths, args) -> int:
+    """Run every scenario and print the same pass/fail/skip summary mm_scenarios prints."""
+    codes = [_run_one(p, args.update_contract, args.reason, args.no_write) for p in paths]
+    skipped = sum(1 for c in codes if c == SKIPPED)
+    failed = sum(1 for c in codes if c not in (0, SKIPPED))
+    print(f"=== {len(codes)} scenario(s), {len(codes) - failed - skipped} passed, "
+          f"{failed} failed, {skipped} skipped ===")
+    return 1 if failed else 0
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--name", default=None,
@@ -336,17 +339,13 @@ def main():
             print(f"No scenarios found for module: {module_filter}")
             sys.exit(1)
         print(f"Module filter: {module_filter} ({len(paths)} scenario(s))")
-        failed = sum(1 for p in paths if _run_one(p, args.update_contract, args.reason,
-                                          args.no_write) != 0)
-        sys.exit(1 if failed else 0)
+        sys.exit(_run_many(paths, args))
 
     # Run all scenarios. We iterate per-file (instead of letting the C++ runner
     # auto-discover) because _run_one captures MEASURE lines and writes
     # observed.<target> blocks back into each scenario JSON on every run.
     paths = sorted((ROOT / "test" / "scenarios").rglob("scenario_*.json"))
-    failed = sum(1 for p in paths if _run_one(p, args.update_contract, args.reason,
-                                          args.no_write) != 0)
-    sys.exit(1 if failed else 0)
+    sys.exit(_run_many(paths, args))
 
 
 if __name__ == "__main__":

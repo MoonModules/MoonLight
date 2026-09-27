@@ -28,7 +28,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 CATALOG = ROOT / "mooninstaller" / "deviceModels.json"
-MAIN_CPP = ROOT / "src" / "main.cpp"
+MODULE_TYPES_CPP = ROOT / "src" / "module_types.cpp"
 NETWORK_MODULE = ROOT / "src" / "core" / "system" / "NetworkModule.h"
 PLATFORM_CONFIG = ROOT / "src" / "platform" / "esp32" / "platform_config.h"
 DOCS = ROOT / "docs"
@@ -119,8 +119,13 @@ def eth_preset_drift():
 
 
 def registered_types():
-    """The set of factory type names from main.cpp's registerType<T>("Name") calls."""
-    text = MAIN_CPP.read_text(encoding="utf-8")
+    """The set of factory type names, read from the one file that registers them.
+
+    `module_types.cpp` rather than main.cpp: the registry moved there so the firmware, the
+    scenario runner and the ESP32 build share one list instead of drifting apart, and a checker
+    reading the old home would report every type as missing.
+    """
+    text = MODULE_TYPES_CPP.read_text(encoding="utf-8")
     return set(re.findall(r'registerType<[^>]+>\("([^"]+)"', text))
 
 

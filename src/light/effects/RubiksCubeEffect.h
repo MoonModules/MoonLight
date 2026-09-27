@@ -6,7 +6,7 @@ namespace mm {
 
 /// Effect rendering a rotating Rubik's cube on a 3D layout.
 /// @card RubiksCubeEffect.gif
-/// Author: WildCats08 / @Brandon502 (MoonLight), https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
+/// Author: WildCats08 / @Brandon502 (MoonLight), https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 ///
 /// The cube scrambles itself, then plays the scramble back one slice at a time.
 /// Every voxel takes the color of the nearest face, which is what makes a solid read as a cube.
@@ -24,7 +24,7 @@ namespace mm {
 ///
 /// ## One difference from the source
 ///
-/// projectMM has no per-cell mapping mask, so every in-bounds voxel counts as mapped.
+/// MoonLight has no per-cell mapping mask, so every in-bounds voxel counts as mapped.
 /// The source's mapping-driven size adjustments are therefore dropped.
 /// The projection uses the extent less one instead, floored at 1.
 class RubiksCubeEffect : public EffectBase {

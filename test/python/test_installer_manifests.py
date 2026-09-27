@@ -39,7 +39,7 @@ STAGED_GLOBS = ["firmware-*.bin", "shared-*.bin", "partition-table-*.bin"]
 # shared-ota-data-slot0.bin); the same glob appears in release.yml's upload files and the
 # Pages self-host download patterns, which is exactly the sync this test guards.
 
-# A minimal but realistic IDF flasher_args.json — the four files every projectMM build emits.
+# A minimal but realistic IDF flasher_args.json — the four files every MoonLight build emits.
 # generate_manifest.py maps these to the bundle names (firmware-<F>-v<ver>.bin, etc.).
 FLASHER_ARGS = {
     "flash_settings": {"flash_size": "4MB"},

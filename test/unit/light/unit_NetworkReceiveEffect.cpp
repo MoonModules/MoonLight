@@ -212,7 +212,7 @@ TEST_CASE("NetworkReceiveEffect staging buffer lifecycle") {
 // A real packet sent over localhost UDP lands in the layer buffer, the end-to-end proof of the platform receive path.
 TEST_CASE("NetworkReceiveEffect receives over localhost UDP") {
     Rig r;
-    // The effect binds the three well-known protocol ports (constants by design). A running projectMM desktop app would hold them, don't run the app and ctest at once; CI runners have the ports free.
+    // The effect binds the three well-known protocol ports (constants by design). A running MoonLight desktop app would hold them, don't run the app and ctest at once; CI runners have the ports free.
     r.fx.setup();
     REQUIRE(r.fx.status() == nullptr);   // binds succeeded
 

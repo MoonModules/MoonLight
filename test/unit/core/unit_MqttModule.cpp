@@ -1,11 +1,55 @@
 /// @module MqttModule
 /// @also Scheduler
-
-/// Pins MqttModule's inbound routing.
-/// A PUBLISH arriving on a <prefix>/…/set topic drives the matching Drivers control through the shared Scheduler::setControl primitive, the same seam IR and the WLED bridge use.
-/// The socket is not involved.
-/// FeedForTest() injects raw MQTT bytes (built with the tested MqttPacket builders) exactly as the broker would deliver them, so the routing is provable with no broker (mirrors InfraredService::injectCodeForTest).
-/// A FakeDrivers stands in for the real Drivers with the on / brightness / palette controls MQTT targets.
+///
+/// Pins MqttModule's inbound routing: a PUBLISH on a set topic drives the matching Drivers control.
+///
+/// @moreinfo
+///
+/// ## Delivering a PUBLISH
+///
+/// A suffix such as "on/set" is sent under the derived prefix, as the broker socket would deliver it.
+/// A leading slash sends an absolute topic instead, which is what the wrong-prefix case needs.
+///
+/// ## The two command topics
+///
+/// Home Assistant drives the JSON-schema light with a state and an optional brightness on the ha/set topic.
+/// Its brightness is already 0-255, where the mqttthing brightness/set topic carries 0-100 and is rescaled.
+///
+/// ## Why a preset change re-announces
+///
+/// Home Assistant re-reads the effect list only when the retained discovery message changes, so a mid-session preset would never appear without this.
+/// All three mutations funnel through one revision, pinned in unit_ControlModule, so one path proves the mechanism.
+///
+/// ## The fake carries the real ranges
+///
+/// Drivers.palette binds 0..kCount-1, so the fake declares a Uint8 with the full 0..255 range, a superset of the sixty built-ins.
+/// An artificially small Select would clamp away a nearest-palette index the MQTT map returns, and the test would pass for the wrong reason.
+///
+/// ## The MAC is derived, never written out
+///
+/// The desktop MAC is a per-install stored identity from platform_desktop.cpp's getMacAddress, so a literal would pin whatever this machine happened to generate.
+/// The derivation is what these cases check: the topic identity is the MAC, not the device name, so a rename cannot move the topics.
+/// A command on the MAC-based topic keeps working after a rename, where one on a name-based topic never matched at all.
+///
+/// ## Why a test reads the fixed header
+///
+/// Asserting the RETAIN bit, bit 0 of the PUBLISH fixed header per MQTT 3.1.1 section 3.3.1.3, catches what string-matching cannot.
+/// A regression dropping retain=true flips that bit and leaves every substring in the payload intact.
+///
+/// ## The guard that stranded a buffer
+///
+/// The original guard bailed on a state other than Connected before reaching the free.
+/// So a discovery-off toggle during a reconnect stranded 768 bytes until release, breaking the promise of no memory when discovery is off.
+///
+/// ## Why the state gate includes the look
+///
+/// Home Assistant otherwise keeps showing the previous effect after a look-only change, including one made on the device's own pad grid.
+///
+/// ## The routing is provable without a broker
+///
+/// A control is driven through Scheduler::setControl, the shared primitive IR and the WLED bridge also use, so the socket is never involved.
+/// feedForTest() injects raw MQTT bytes built with the tested MqttPacket builders, exactly as a broker would deliver them, mirroring InfraredService::injectCodeForTest.
+/// A FakeDrivers stands in for the real one, carrying the on, brightness and palette controls MQTT targets.
 
 #include "doctest.h"
 #include "core/system/MqttModule.h"
@@ -40,15 +84,12 @@ struct FakeDrivers : public MoonModule {
     void defineControls() override {
         controls_.addControl("on", on);
         controls_.addControl("brightness", brightness, 0, 255);
-        // A Uint8 palette with the real built-in range (0..255 is a superset of the ~60 built-ins), so a nearest-palette index the MQTT map returns isn't clamped away by an artificially small Select, the real Drivers.palette binds 0..kCount-1.
+        // The real 0..255 range, so a nearest-palette index is not clamped away by an artificially small Select: @xref{the-fake-carries-the-real-ranges}.
         controls_.addControl("palette", palette, 0, 255);
     }
 };
 
-// Build a scheduler with FakeDrivers + a SystemModule + an MqttModule, run setup so Scheduler::instance() is live and controls are bound.
-// The topic prefix is STABLE + MAC-derived (projectMM/<last6-of-MAC>), NOT from deviceName, so it is rename-proof.
-//
-// DERIVED here rather than written out, because the desktop MAC is a per-install stored identity (platform_desktop.cpp, getMacAddress): a literal would pin whatever this machine happens to generate, and it is the rename-proof DERIVATION these cases exist to check.
+// A scheduler with FakeDrivers, a SystemModule and an MqttModule, set up so controls are bound: @xref{the-mac-is-derived-never-written-out}.
 /// The last six MAC hex digits alone, which is what the Home Assistant discovery topic and its unique_id are built from.
 inline const char* macId() {
     static char buf[16] = {};
@@ -65,7 +106,7 @@ inline const char* macPrefix() {
     if (!buf[0]) {
         uint8_t mac[6] = {};
         mm::platform::getMacAddress(mac);
-        std::snprintf(buf, sizeof(buf), "projectMM/%02x%02x%02x", mac[3], mac[4], mac[5]);
+        std::snprintf(buf, sizeof(buf), "MoonLight/%02x%02x%02x", mac[3], mac[4], mac[5]);
     }
     return buf;
 }
@@ -88,9 +129,7 @@ struct Rig {
     }
     ~Rig() { scheduler.release(); }
 
-    // Deliver a PUBLISH to `suffix` (under the derived prefix, e.g.
-    // "on/set") with a string payload, as the broker socket would.
-    // Pass a leading "/" to send an ABSOLUTE topic (for the wrong-prefix test); otherwise the derived prefix is prepended.
+        // A PUBLISH to `suffix` under the derived prefix, or to an absolute topic when it starts with a slash: @xref{delivering-a-publish}.
     void publish(const char* suffix, const char* payload) {
         char topic[128];
         if (suffix[0] == '/') std::snprintf(topic, sizeof(topic), "%s", suffix + 1);   // absolute
@@ -103,7 +142,7 @@ struct Rig {
     }
 };
 
-// Walk the concatenated MQTT packet stream the capture holds and return the fixed-header first byte (type nibble + flags) of the first PUBLISH whose topic equals `wantTopic`, or -1 if none. Lets a test assert the RETAIN bit (bit 0, §3.3.1.3) rather than only string-matching the payload, a regression dropping retain=true flips this bit but leaves every substring intact.
+// The fixed-header first byte of the first PUBLISH on `wantTopic`, or -1, so a test can assert the RETAIN bit: @xref{why-a-test-reads-the-fixed-header}.
 int publishFlagsForTopic(const uint8_t* buf, size_t len, const char* wantTopic) {
     size_t i = 0;
     while (i < len) {
@@ -167,9 +206,7 @@ TEST_CASE("MqttModule: hsv/set maps a hue to the nearest palette + value to brig
     CHECK(r.drivers->brightness == (40 * 255) / 100);   // value → brightness
 }
 
-// --- Home Assistant MQTT Discovery: the HA-native ha/set command topic ---
-// HA drives the JSON-schema light with {"state":"ON"|"OFF"[,"brightness":0-255]} on <prefix>/ha/set.
-// Unlike the mqttthing brightness/set (0-100), HA brightness is already 0-255, no rescale.
+    // The HA-native ha/set topic, whose brightness needs no rescale: @xref{the-two-command-topics}.
 
 TEST_CASE("MqttModule: ha/set {state} drives Drivers.on") {
     Rig r;
@@ -209,7 +246,7 @@ TEST_CASE("MqttModule: ha/set with only state leaves brightness untouched") {
     CHECK(r.drivers->brightness == 200);          // unchanged (hasKey guard)
 }
 
-// The discovery announce: on CONNACK the module publishes a RETAINED config to homeassistant/light/projectMM_<mac6>/config. Assert via the outbound-capture seam (no live socket).
+// The discovery announce: on CONNACK the module publishes a RETAINED config to homeassistant/light/MoonLight_<mac6>/config. Assert via the outbound-capture seam (no live socket).
 TEST_CASE("MqttModule: CONNACK publishes a retained HA discovery config") {
     Rig r;
     uint8_t cap[1024];
@@ -223,25 +260,23 @@ TEST_CASE("MqttModule: CONNACK publishes a retained HA discovery config") {
     REQUIRE(len > 0);
     // The captured stream must contain the discovery topic + the key config fields.
     std::string sent(reinterpret_cast<const char*>(cap), len);
-    CHECK(sent.find(std::string("homeassistant/light/projectMM_") + macId() + "/config") != std::string::npos);
+    CHECK(sent.find(std::string("homeassistant/light/MoonLight_") + macId() + "/config") != std::string::npos);
     CHECK(sent.find("\"schema\":\"json\"") != std::string::npos);
-    CHECK(sent.find(std::string("\"uniq_id\":\"projectMM_") + macId() + "\"") != std::string::npos);
-    CHECK(sent.find(std::string("projectMM/") + macId() + "/ha/set") != std::string::npos);    // cmd_t
-    CHECK(sent.find(std::string("projectMM/") + macId() + "/ha/state") != std::string::npos);  // stat_t
-    CHECK(sent.find(std::string("projectMM/") + macId() + "/status") != std::string::npos);    // avty_t
+    CHECK(sent.find(std::string("\"uniq_id\":\"MoonLight_") + macId() + "\"") != std::string::npos);
+    CHECK(sent.find(std::string("MoonLight/") + macId() + "/ha/set") != std::string::npos);    // cmd_t
+    CHECK(sent.find(std::string("MoonLight/") + macId() + "/ha/state") != std::string::npos);  // stat_t
+    CHECK(sent.find(std::string("MoonLight/") + macId() + "/status") != std::string::npos);    // avty_t
     CHECK(sent.find("online") != std::string::npos);                     // the retained availability publish
-    // The discovery config AND the availability publish must carry the RETAIN bit (bit 0 of the PUBLISH fixed header), a late-joining HA reads the retained config/state, so dropping retain breaks it.
-    const int cfgFlags = publishFlagsForTopic(cap, len, (std::string("homeassistant/light/projectMM_") + macId() + "/config").c_str());
+    // Both publishes must carry RETAIN, since a late-joining Home Assistant reads the retained config and state.
+    const int cfgFlags = publishFlagsForTopic(cap, len, (std::string("homeassistant/light/MoonLight_") + macId() + "/config").c_str());
     REQUIRE(cfgFlags >= 0);
     CHECK((cfgFlags & 0x01) == 0x01);                                    // discovery config retained
-    const int avtyFlags = publishFlagsForTopic(cap, len, (std::string("projectMM/") + macId() + "/status").c_str());
+    const int avtyFlags = publishFlagsForTopic(cap, len, (std::string("MoonLight/") + macId() + "/status").c_str());
     REQUIRE(avtyFlags >= 0);
     CHECK((avtyFlags & 0x01) == 0x01);                                   // availability "online" retained
 }
 
-// Regression (found live on P4/S31 hardware): turning haDiscovery OFF must free the discovery buffers EVEN when the socket is not currently Connected (mid-reconnect).
-// The original guard bailed on `state_ != Connected` before reaching the free, so a discovery-off toggle during a reconnect stranded the 768 B until release, breaking "no memory when discovery is off".
-// Freeing local memory needs no socket, so the retract path frees unconditionally; only the empty-retained PUBLISH needs a live link.
+    // Regression from P4 and S31 hardware: turning discovery off frees its buffers even with the socket down: @xref{the-guard-that-stranded-a-buffer}.
 TEST_CASE("MqttModule: retract frees the discovery buffers even while disconnected") {
     Rig r;
     uint8_t cap[1024];
@@ -275,7 +310,7 @@ TEST_CASE("MqttModule: a PUBLISH split across feeds still routes (fragment reass
     r.drivers->on = true;
     uint8_t buf[128];
     const char* payload = "false";
-    const size_t n = buildMqttPublish((std::string("projectMM/") + macId() + "/on/set").c_str(), reinterpret_cast<const uint8_t*>(payload),
+    const size_t n = buildMqttPublish((std::string("MoonLight/") + macId() + "/on/set").c_str(), reinterpret_cast<const uint8_t*>(payload),
                                       std::strlen(payload), buf, sizeof(buf));
     REQUIRE(n > 0);
     // Feed one byte at a time, the parser holds partial state until the packet completes.
@@ -283,7 +318,7 @@ TEST_CASE("MqttModule: a PUBLISH split across feeds still routes (fragment reass
     CHECK(r.drivers->on == false);
 }
 
-// Regression (reviewer): the topic identity is the STABLE MAC (projectMM/<last6>), NOT the device name, so renaming the device must NOT change which topics the module listens on. A command on the MAC-based topic keeps working after a rename; a command on a name-based topic never matched.
+// Regression: the topic identity is the MAC rather than the device name, so a rename cannot move the topics: @xref{the-mac-is-derived-never-written-out}.
 TEST_CASE("MqttModule: topic identity is MAC-stable, not affected by a device rename") {
     Rig r;
     r.drivers->on = true;
@@ -297,7 +332,7 @@ TEST_CASE("MqttModule: topic identity is MAC-stable, not affected by a device re
     CHECK(r.drivers->on == false);                // rename didn't break routing
     // A command on a name-derived topic never matches (proves identity isn't the name).
     r.drivers->on = true;
-    r.publish("/projectMM/LivingRoom/on/set", "false");   // absolute, name-based
+    r.publish("/MoonLight/LivingRoom/on/set", "false");   // absolute, name-based
     CHECK(r.drivers->on == true);                 // ignored — not our (MAC) prefix
 }
 
@@ -359,9 +394,7 @@ struct PresetRig : Rig {
 
 }  // namespace
 
-// A preset saved, renamed or deleted while the broker is CONNECTED must re-announce the retained discovery config.
-// Home Assistant only re-reads the effect list when that message changes, so without this a mid-session preset never appears in the dropdown until the next reconnect.
-// All three mutations funnel through one revision (pinned in unit_ControlModule), so one path proves the announce mechanism for all of them.
+    // A preset change while connected re-announces the retained config: @xref{why-a-preset-change-re-announces}.
 TEST_CASE("MqttModule re-announces the effect list when a preset appears mid-session") {
     PresetRig r;
     static uint8_t cap[8192];
@@ -382,7 +415,7 @@ TEST_CASE("MqttModule re-announces the effect list when a preset appears mid-ses
     CHECK(sent.find("nightlook") != std::string::npos);
 }
 
-// Applying a look changes neither on, brightness nor palette, so the ha/state change gate must include the look itself, without that signature Home Assistant keeps showing the previous effect after a look-only change (including one made on the device's own pad grid).
+// A look changes none of on, brightness or palette, so the state gate must include the look itself: @xref{why-the-state-gate-includes-the-look}.
 TEST_CASE("MqttModule publishes state when only the applied look changed") {
     PresetRig r;
     r.addLook("only-look");

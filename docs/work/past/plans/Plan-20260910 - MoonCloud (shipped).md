@@ -2,7 +2,7 @@
 
 ## MoonCloud
 
-**MoonCloud** is the family name for everything projectMM does with a server we run. One Worker, one database, one deploy, and one container module in the UI holding a child per member.
+**MoonCloud** is the family name for everything MoonLight does with a server we run. One Worker, one database, one deploy, and one container module in the UI holding a child per member.
 
 Each member is a separate feature with its own consent, because agreeing to share a chip model says nothing about wanting to publish messages. Each gets its own prompt, its own consent control, and its own paragraph in the privacy policy.
 
@@ -16,7 +16,7 @@ Each member is a separate feature with its own consent, because agreeing to shar
 
 ### Stats
 
-We want to know what projectMM runs on, so effort goes where the users are. Today that is guesswork from Discord and issue reports, which over-represent whoever is loudest and miss everyone quietly running a board that works.
+We want to know what MoonLight runs on, so effort goes where the users are. Today that is guesswork from Discord and issue reports, which over-represent whoever is loudest and miss everyone quietly running a board that works.
 
 One report per install or upgrade, sent only after the user says yes, describing hardware and configuration: chip, flash, PSRAM, SDK, board, and which modules are enabled. The aggregates come back to the card that asked for consent, so contributing earns the answer.
 

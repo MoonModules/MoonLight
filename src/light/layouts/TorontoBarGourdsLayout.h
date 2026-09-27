@@ -6,7 +6,7 @@ namespace mm {
 
 /// Layout for the Toronto bar decorative-gourd installation.
 /// @card TorontoBarGourdsLayout.gif
-/// Author: troyhacks, reconstructed for projectMM, https://github.com/troyhacks/WLED
+/// Author: troyhacks, reconstructed for MoonLight, https://github.com/troyhacks/WLED
 ///
 /// @moreinfo
 ///
@@ -21,7 +21,7 @@ namespace mm {
 ///
 /// Prior art: MoonLight's TorontoBarGourdsLayout (Node "Toronto Bar Gourds", tags 🚥).
 /// The gourd grid, all three per-mode Coord3D tables, the gourdLength constants (3 and 7), and every +offset are reproduced verbatim; the geometry IS the spec.
-/// MoonLight's pin plumbing (nextPin() every 10 gourds) is dropped, a projectMM layout emits coordinates only; the driver owns pins. tags 💫 marks the MoonLight lineage.
+/// MoonLight's pin plumbing (nextPin() every 10 gourds) is dropped, a MoonLight layout emits coordinates only; the driver owns pins. tags 💫 marks the MoonLight lineage.
 ///
 /// A single walk() is the one source of truth for the geometry: lightCount() runs it with a no-op callback to tally, placeLights() runs it to emit.
 /// The count and the emitted set can never disagree (the RingLayout/SphereLayout pattern).

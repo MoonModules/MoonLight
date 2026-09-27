@@ -5,7 +5,7 @@
 namespace mm {
 
 /// Layout of a walk-in cube built from five LED-curtain faces.
-/// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
+/// Author: MoonLight, https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
 ///
 /// @moreinfo
 ///
@@ -18,7 +18,7 @@ namespace mm {
 /// Prior art: MoonLight's HumanSizedCubeLayout (Node "Human Sized Cube", tags 🚥).
 /// The geometry is reproduced exactly: the five face loops, their nested axis order, and every offset match the source's own emit sequence.
 /// The emitted coordinates and their wiring order are therefore identical.
-/// MoonLight's per-curtain pin calls are dropped, since a projectMM layout emits coordinates only and the driver owns pins.
+/// MoonLight's per-curtain pin calls are dropped, since a MoonLight layout emits coordinates only and the driver owns pins.
 /// Its sixth face is dropped too, being disabled in the source itself.
 class HumanSizedCubeLayout : public LayoutBase {
 public:

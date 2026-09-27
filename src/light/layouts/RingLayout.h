@@ -5,7 +5,7 @@
 namespace mm {
 
 /// Layout of a single ring of evenly-spaced LEDs.
-/// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
+/// Author: MoonLight, https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
 ///
 /// @moreinfo
 ///
@@ -13,9 +13,9 @@ namespace mm {
 /// Every light sits at an integer (x, y, 0).
 /// The circle center is placed at ~1.1× the ring radius on both axes so the whole ring lands in the positive quadrant.
 ///
-/// Prior art: MoonLight's RingLayout (MoonModules/MoonLight, src light layout nodes).
+/// Prior art: MoonLight's RingLayout (MoonModules/projectMM, src light layout nodes).
 /// The geometry is reproduced exactly: the radius, the placement angle, the center offset, the partial-arc filter and the integer truncation of every coordinate.
-/// MoonLight's pin/wiring plumbing (doNextPin/nextPin) is dropped, a projectMM layout emits coordinates only; the driver owns pins.
+/// MoonLight's pin/wiring plumbing (doNextPin/nextPin) is dropped, a MoonLight layout emits coordinates only; the driver owns pins.
 ///
 /// Float trig runs on the cold build path (placeLights / lightCount, called from a rebuild), never the hot render loop, so it's allowed here.
 class RingLayout : public LayoutBase {

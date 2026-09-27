@@ -15,6 +15,10 @@ Three test categories, each with a clear purpose:
 - **In-process scenarios** (desktop, `test/scenarios/{core,light}/scenario_*.json`), exercise the system as an integrated pipeline. Each scenario is a declarative JSON file with a sequence of steps (`add_module`, `set_control`, `measure`) and optional performance bounds. The scenario runner (`test/scenario_runner.cpp`) replays the steps in-process and reports tick + heap per `measure` step. Same JSON files run against a live device through the HTTP API, that's the next tier.
 - **Live scenarios**: the same scenarios driven against a running device over REST. See [Live scenarios](#live-scenarios) below.
 
+A live run is worth watching once, because it is the tier that proves the device rather than a model of it. The suite walks the cards in the order the interface lists them, and every step happens through the same API the page uses:
+
+<video src="../assets/uiscenarios/04-scenario-testing.webm" autoplay loop muted playsinline width="720" title="The scenario suite driving a running device, card by card, while the interface shows it happening"></video>
+
 **Picking a tier for a new test.** When the behavior you want to pin only makes sense with modules wired together (e.g. "the pipeline reallocates cleanly when the grid resizes," "Drivers correctly hands the source buffer through after a child swap"), reach for a scenario first: that is what scenarios are *for*. When the behavior lives inside a single module (one function's contract, one edge case, one bug regression on a small surface), a unit test is the cheaper and faster fit. Don't extend the scenario runner with new predicates just to migrate an existing unit test, which is adding abstraction without an active need. Add predicates when a *new* scenario you're writing needs them.
 
 **Regression rule:** when a bug is found, the fix includes a new unit test or scenario that reproduces the bug. A comment in the test references the root cause so the connection stays traceable.
@@ -82,9 +86,23 @@ A test written to pin a fix is shaped by that fix, so it agrees with the fix whe
 
 **The check is mechanical: after a test passes, break the thing it tests and confirm it fails.** Not for every test, but for any test written to pin a fix.
 
+### A suite that stopped testing looks exactly like one that works
+
+Both scenario runners report a scenario that did not run and one that ran clean, and for a while they reported them the same way.
+A skip returned the pass code, so ten of eleven scenarios skipped for a missing fixture while the summary read `11 passed`.
+The three assertion bugs they would have caught stayed in for a commit.
+
+Two rules close that, and they are properties of the runner rather than of any scenario:
+
+- **A skip is counted as a skip.** The summary reads `N scenario(s), P passed, F failed, S skipped`, so a suite that stopped covering something says so.
+- **A scenario that asserts nothing fails.** Zero checks is indistinguishable from every step silently doing nothing, so the runner fails it and names the step count.
+
 ### A test that does not reproduce the user's conditions proves nothing
 
-A green result means something only if the test could have gone red, and an agent's shell is a bad witness: it routinely runs with policies, permissions and paths no user has. A PowerShell script tested fine and would have shipped broken, because the agent's own shell had set `Process: Bypass` over the `RemoteSigned` a user actually has. A Defender false positive was declared cleared because a download succeeded, using a different client than the one still being blocked.
+A green result means something only if the test could have gone red.
+An agent's shell is a bad witness: it routinely runs with policies, permissions and paths no user has.
+A PowerShell script tested fine and would have shipped broken, because the agent's own shell had set `Process: Bypass` over the `RemoteSigned` a user has.
+A Defender false positive was declared cleared because a download succeeded, using a different client than the one still being blocked.
 
 **Name what would have to be true for the test to fail, and confirm that condition is present.** Print the setting the test depends on rather than inferring it from the outcome.
 
@@ -196,12 +214,51 @@ Per-`TEST_CASE` description rules:
 - **One physical line above the `TEST_CASE`**, no hard-wrapping; the generator and MoonDeck handle layout. A second line is allowed only when the case does something genuinely non-obvious.
 - **Missing description** → the generator italicises the raw `TEST_CASE("…")` name in its place.
 
+### Asserting a value, and what survives a restart
+
+Two ops exist for the things a measurement cannot see.
+
+**`expect_control`** asserts a control reads what the scenario says it must, and is the only op that fails a scenario on a value rather than on a timing contract:
+
+```json
+{ "name": "the-prefix-is-what-ships", "op": "expect_control", "id": "Mqtt", "key": "topicPrefix", "equals": "MoonLight/563cfe" }
+```
+
+It exists for a string some other system keys on, where a change breaks a contract no compiler and no timing measurement can see.
+
+`not_equals` is the same assertion negated, for a value that moves every release where the only stable claim is a negative one:
+
+```json
+{ "name": "a-version-is-reported", "op": "expect_control", "id": "Firmware", "key": "version", "not_equals": "" }
+```
+
+An empty string is what a read-only control renders when its source is missing.
+So `not_equals: ""` asserts that a card reports anything at all, and it holds on every target and every release.
+
+Both tiers compare against the value as the API renders it, so `"equals": 180`, `"180"` and `true` all read the way a client would see them.
+They reach it differently, which is worth knowing before asserting an unusual type.
+In-process the runner calls `writeControlValue`, the serializer the HTTP layer uses; the live runner reads the parsed JSON back from `/api/modules/<id>`.
+The two agree on every scalar a control holds.
+A `List` or a long `TextArea` is where they would part company, since the in-process render goes through a fixed buffer.
+Assert those through a scalar the list drives rather than through the list itself.
+
+**`reboot`** restarts the device and waits for it to answer, so a later `expect_control` proves what survived rather than what is merely still in memory:
+
+```json
+{ "name": "restart", "op": "reboot", "timeout": 60 },
+{ "name": "it-survived", "op": "expect_control", "id": "System", "key": "deviceName", "equals": "MM-Bench" }
+```
+
+On a board that is the reboot the endpoint performs. On a desktop the endpoint exits the process and nothing restarts it, so the live runner relaunches the binary with the data directory the exiting instance was using: a restart that came back on different files would prove nothing. In-process the op skips, because the scheduler is the process and exiting it would end the run.
+
 ### Scenario modes (construct vs mutate)
 
 Every scenario carries a top-level `mode` field that says what shape the scenario expects the world to be in. Two values:
 
 - **`"mode": "construct"`**: the scenario builds the pipeline from an empty scheduler. Lots of `add_module` steps; the first `measure` happens after everything is wired. **Runs in-process only.** The live device's top-level shape is policy-fixed in `main.cpp` (see [src/core/HttpServerModule.cpp:639](../src/core/HttpServerModule.cpp#L639), `/api/modules` rejects top-level adds), so "build from scratch" can't happen on a live device without re-flashing. The live runner skips construct scenarios with a clear note.
-- **`"mode": "mutate"`**: the scenario assumes a wired pipeline and tweaks it (`set_control` heavy). Runs in both tiers. The in-process runner replays an embedded **`fixture`** array (same shape as `steps`, but all `add_module`) that builds the same pipeline `main.cpp` does, then runs the actual steps. The live runner skips the fixture (device is its own fixture) and pre-flights that every id the steps touch is actually present on the device, a missing id is a hard fail, not a silent skip.
+- **`"mode": "mutate"`**: the scenario assumes a wired pipeline and tweaks it (`set_control` heavy), and runs in both tiers.
+  The in-process runner replays an embedded **`fixture`** array (same shape as `steps`, but all `add_module`) that builds the same pipeline `main.cpp` does, then runs the steps.
+  The live runner skips the fixture (device is its own fixture) and pre-flights every id the steps touch: a missing id is a hard fail, not a silent skip.
 
 Picking the right mode:
 - If your scenario starts with empty Layouts/Layer/Drivers wiring, it's **construct**. It will not run live.
@@ -209,7 +266,10 @@ Picking the right mode:
 
 A `mutate` scenario that needs platform-bound modules (Network mDNS, WiFi, OTA) the in-process runner can't honestly stand up should add `"live_only": true`.
 
-**Bespoke convention.** The `mode` + `fixture` + `reset` trinity is projectMM-specific: no off-the-shelf BDD or scenario framework was borrowed wholesale. It exists because the same JSON has to serve both an in-process runner that owns the scheduler and a live runner that does not (main.cpp does). The closest analogs from widely recognized testing patterns: `fixture` ≈ xUnit fixtures (setup-once, replayed per scenario); `reset` ≈ SQL `BEGIN`/`ROLLBACK` (idempotent state restoration); `mode` ≈ pytest's parameterized execution modes (one test runs in different worlds). A future contributor who finds an off-the-shelf framework capturing this construct/mutate asymmetry is worth migrating to.
+**Bespoke convention.** The `mode` + `fixture` + `reset` trinity is MoonLight-specific: no off-the-shelf BDD or scenario framework was borrowed wholesale.
+It exists because the same JSON has to serve both an in-process runner that owns the scheduler and a live runner that does not (main.cpp does).
+The closest analogs from widely recognized testing patterns: `fixture` ≈ xUnit fixtures (setup-once, replayed per scenario); `reset` ≈ SQL `BEGIN`/`ROLLBACK` (idempotent state restoration); `mode` ≈ pytest's parameterized execution modes.
+A future contributor who finds an off-the-shelf framework capturing this construct/mutate asymmetry is worth migrating to.
 
 ### Reset block: idempotent scenarios
 
@@ -228,7 +288,8 @@ Convention: reset every control your scenario writes, plus any production-defaul
 
 ### Performance contracts (`contract[<target>]`)
 
-Every measurable step carries a per-target `contract` block, the **performance contract** projectMM commits to delivering on that platform. The runner compares each measurement to the contract and fails if the device misses it.
+Every measurable step carries a per-target `contract` block, the **performance contract** MoonLight commits to on that platform.
+The runner compares each measurement to the contract and fails if the device misses it.
 
 ```json
 "contract": {
@@ -323,7 +384,7 @@ Every `scenario_*.json` carries top-level metadata plus a `description` per step
   "fixture": [
     { "name": "fix-layouts", "op": "add_module", "id": "Layouts", "type": "Layouts" },
     { "name": "fix-grid", "op": "add_module", "id": "Grid", "type": "GridLayout", "parent_id": "Layouts", "props": {"width": 16, "height": 16} },
-    { "name": "fix-layer", "op": "add_module", "id": "Layer", "type": "Layer", "props": {"layouts": "Layouts", "channelsPerLight": 3} },
+    { "name": "fix-layer", "op": "add_module", "id": "Layer", "type": "Layer" },
     { "name": "fix-noise", "op": "add_module", "id": "Noise", "type": "NoiseEffect", "parent_id": "Layer" },
     { "name": "fix-mirror", "op": "add_module", "id": "Multiply", "type": "MultiplyModifier", "parent_id": "Layer" },
     { "name": "fix-drivers", "op": "add_module", "id": "Drivers", "type": "Drivers", "props": {"layer": "Layer"} },
@@ -468,7 +529,7 @@ UI scenarios drive the web interface itself: a run file lists what a person does
 
 ```bash
 uv run moondeck/test/test_host.py --ui                     # the whole lane
-uv run moondeck/uiscenario/uivideo.py --run test/uiscenarios/clips/add-a-layer.json
+uv run moondeck/uiscenario/uivideo.py --run test/uiscenarios/clips/95-add-a-layer.json
 ```
 
 The runs live in `test/uiscenarios/clips/`, the engine in `moondeck/uiscenario/`. Data under `test/`, runner under `moondeck/`: the same split the pipeline scenarios use. Tests are parameterized over the directory, so a new run file is a new test with nothing to wire up. Format and actions: [RUNS.md](../../moondeck/uiscenario/RUNS.md).

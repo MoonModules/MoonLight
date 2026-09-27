@@ -1,4 +1,4 @@
-// projectMM Web UI: all logic in one hand-maintained file per CLAUDE.md.
+// MoonLight Web UI: all logic in one hand-maintained file per CLAUDE.md.
 // Loaded as <script type="module"> so it can import the shared install-picker
 // component used by both the device UI (here, OTA flash) and the GitHub Pages
 // installer (first flash via Web Serial). Module loading is deferred by
@@ -897,7 +897,7 @@ function buildNavFooter() {
             // doesn't include the name field.
             const devName = (systemJson && systemJson.deviceName)
                 || location.hostname || "device";
-            const fname = `projectMM-diag-${devName}-${Date.now()}.json`;
+            const fname = `MoonLight-diag-${devName}-${Date.now()}.json`;
             const a = document.createElement("a");
             const blobUrl = URL.createObjectURL(blob);
             a.href = blobUrl;
@@ -1881,7 +1881,7 @@ function createCard(mod, depth) {
     // "core/services.md#audio" or "light/effects.md#fire"); omitted if none.
     // The site is Material for MkDocs at moonmodules.org/projectMM/ (flat URLs, so
     // foo.md → foo.html; the MkDocs heading slugs match these #anchors), reached
-    // via the same /projectMM/ subpath the installer uses. Convert only the `.md`
+    // via the same /MoonLight/ subpath the installer uses. Convert only the `.md`
     // extension that sits right before the optional `#anchor` (suffix-anchored),
     // so a docPath that ever contained ".md" mid-string wouldn't be mangled.
     const docPath = docPathForType(mod.type);
@@ -2012,7 +2012,7 @@ function createCard(mod, depth) {
         if (statsConsent === false) {
             const nudge = document.createElement("div");
             nudge.className = "mooncloud-nudge";
-            nudge.textContent = "Turn on MoonCloud stats to share and see what everyone else is running. ";
+            nudge.textContent = "Turn on MoonCloud stats: see what everyone else is running for ideas, so we know what to build next. ";
             // The reasons live in one place, and it is a page rather than a paragraph here: a nudge
             // long enough to make the case stops being a nudge.
             const why = document.createElement("a");
@@ -2021,7 +2021,7 @@ function createCard(mod, depth) {
             why.rel = "noopener";
             why.textContent = "Why you might like this";
             nudge.appendChild(why);
-            host.appendChild(nudge);
+            controlsHost.appendChild(nudge);
         }
 
         // TWO IMAGES, ONE PANEL. A device installs the app it runs and MoonBase the recovery
@@ -4184,7 +4184,7 @@ function fillListDetail(panel, detail) {
     for (const [k, v] of Object.entries(detail)) {
         const isScalarArray = Array.isArray(v) && v.every(e => typeof e !== "object");
         if (typeof v === "object" && !isScalarArray) continue;
-        // `cached` and `ageSec` both render as "last seen"; a projectMM device emits
+        // `cached` and `ageSec` both render as "last seen"; a MoonLight device emits
         // exactly one (mutually exclusive in DevicesModule), but skip ageSec when a
         // `cached` key is also present so any other source can't produce two conflicting
         // "last seen" rows. Match the cached branch's render condition, which fires on
@@ -5062,7 +5062,7 @@ const EMOJI_LABEL = {
     "\u{1F7E6}": "2D: a picture",
     "\u{1F9CA}": "3D: a volume",
     // where it came from
-    "\u{1F4AB}": "projectMM / MoonLight",
+    "\u{1F4AB}": "MoonLight",
     "\u{1F319}": "MoonModules",
     "\u{1F419}": "WLED",
     "\u26A1\uFE0F": "FastLED",
@@ -5738,8 +5738,8 @@ function updateStatusBar() {
     const nameSpan = document.getElementById("device-name");
     if (nameCtrl && nameSpan && nameCtrl.value) {
         setText(nameSpan, String(nameCtrl.value ?? ""));
-        if (document.title !== "projectMM: " + nameCtrl.value) {
-            document.title = "projectMM: " + nameCtrl.value;
+        if (document.title !== "MoonLight: " + nameCtrl.value) {
+            document.title = "MoonLight: " + nameCtrl.value;
         }
     }
 
@@ -5827,7 +5827,7 @@ function updateStatusBar() {
 
 const RELEASES_API = "https://api.github.com/repos/MoonModules/projectMM/releases";
 const UPDATE_TTL_MS = 60 * 60 * 1000;                     // 1 h: best-effort, well under GitHub's rate limit
-const PICKER_RELEASE_KEY = "projectMM.picker.releaseTag"; // install-picker restores from this on init
+const PICKER_RELEASE_KEY = "MoonLight.picker.releaseTag"; // install-picker restores from this on init
 
 function safeLocalGet(key) { try { return localStorage.getItem(key); } catch (_) { return null; } }
 function safeLocalSet(key, v) { try { localStorage.setItem(key, v); } catch (_) { /* ignore */ } }
@@ -5958,7 +5958,7 @@ function moonbaseAssetKeyFrom(fw) {
 // Is there a newer STABLE release than the device's version, with a compatible .bin?
 // Returns the stable tag (e.g. "v2.1.0") or null. /latest excludes prereleases.
 async function stableUpdate(dev, force) {
-    const rel = await cachedJson(`${RELEASES_API}/latest`, "projectMM.update.latest.v1", force);
+    const rel = await cachedJson(`${RELEASES_API}/latest`, "MoonLight.update.latest.v1", force);
     if (!rel || !rel.tag_name) return null;
     const assetNames = (rel.assets || []).map(a => a.name);
     const prefix = dev.isDesktop ? desktopAssetPrefix() : null;
@@ -5980,7 +5980,7 @@ async function stableUpdate(dev, force) {
 // device can't install.
 async function devUpdate(dev, force) {
     if (!dev.firmware && !dev.isDesktop) return null;        // can't match an asset without the key
-    const rel = await cachedJson(`${RELEASES_API}/tags/latest`, "projectMM.update.dev.v1", force);
+    const rel = await cachedJson(`${RELEASES_API}/tags/latest`, "MoonLight.update.dev.v1", force);
     const v = rel && rel.name;
     if (!v) return null;
     // Assets are versioned, not tagged: the `latest` release ships
@@ -7008,7 +7008,7 @@ async function fmBackupConfig() {
         }})(st.modules);
     } catch (_) {}
     const bundle = {
-        format: "projectMM-config-backup", version: 1,
+        format: "MoonLight-config-backup", version: 1,
         capturedAt: new Date().toISOString(), origin: location.origin,
         device, firmware, build, files,
     };
@@ -7018,7 +7018,7 @@ async function fmBackupConfig() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `projectMM-config-${device}-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `MoonLight-config-${device}-${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -7030,8 +7030,10 @@ async function fmBackupConfig() {
 
 async function fmRestoreConfig(file, refresh) {
     const bundle = JSON.parse(await file.text());
-    if (bundle.format !== "projectMM-config-backup" || !bundle.files) {
-        throw new Error("not a projectMM config backup");
+    // Restore is the one supported upgrade path, so it reads the format the previous name wrote as well as its own.
+    const kBackupFormats = ["MoonLight-config-backup", "projectMM-config-backup"];   // rename-keep: a bundle already saved carries the name it was saved under
+    if (!kBackupFormats.includes(bundle.format) || !bundle.files) {
+        throw new Error("not a config backup");
     }
     if (bundle.version !== 1) {
         throw new Error(`backup version ${bundle.version} is newer than this firmware understands`);

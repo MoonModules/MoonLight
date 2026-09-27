@@ -1,6 +1,6 @@
 # Performance & Memory
 
-projectMM's per-step **performance contracts** live in the scenario JSONs: each `test/scenarios/*.json` step carries a per-target `contract` block (`tick_us` ceiling + `free_heap` floor) and an `observed` block (the latest reading per target). The scenarios are the source of truth and the assertion surface: every PR runs against them. See [testing.md § Performance contracts](testing.md#performance-contracts-contracttarget) for the contract semantics and renegotiation workflow. The headline numbers users care about are in [README.md § Performance](../README.md#performance).
+MoonLight's per-step **performance contracts** live in the scenario JSONs: each `test/scenarios/*.json` step carries a per-target `contract` block (`tick_us` ceiling + `free_heap` floor) and an `observed` block (the latest reading per target). The scenarios are the source of truth and the assertion surface: every PR runs against them. See [testing.md § Performance contracts](testing.md#performance-contracts-contracttarget) for the contract semantics and renegotiation workflow. The headline numbers users care about are in [README.md § Performance](../README.md#performance).
 
 This document holds what scenarios can't carry: structural sizes (`sizeof`), build-variant deltas, and the WiFi/Ethernet physics that explain *why* a contract comes out where it does.
 
@@ -447,4 +447,4 @@ So the modifier roughly **halves** the heavy tick at every grid (¼ logical area
 
 Per-target image size, capacity and headroom are generated every commit into [repo-health](metrics/repo-health.md#firmware-size), across all 14 firmware variants.
 
-What that table cannot show is where the bytes go. On the default `esp32`, roughly a third of the image is the WiFi stack (`esp_wifi`, `wpa_supplicant`, `esp_phy`), then lwIP at ~180 KB, mbedTLS plus the Mozilla root bundle at ~170 KB, FreeRTOS and the IDF core at ~150 KB, and projectMM's own code at ~120 KB, about a tenth of the binary. That is why `esp32-eth` is the smaller build: excluding WiFi is the single largest saving available. Proportions shift with the IDF version and sdkconfig; measure with `idf.py -B build/esp32-esp32 size-components`.
+What that table cannot show is where the bytes go. On the default `esp32`, roughly a third of the image is the WiFi stack (`esp_wifi`, `wpa_supplicant`, `esp_phy`), then lwIP at ~180 KB, mbedTLS plus the Mozilla root bundle at ~170 KB, FreeRTOS and the IDF core at ~150 KB, and MoonLight's own code at ~120 KB, about a tenth of the binary. That is why `esp32-eth` is the smaller build: excluding WiFi is the single largest saving available. Proportions shift with the IDF version and sdkconfig; measure with `idf.py -B build/esp32-esp32 size-components`.

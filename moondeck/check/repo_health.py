@@ -223,7 +223,7 @@ def measure_flash():
         MEASURED_THIS_RUN.add(firmware)
         MEASURED_DATES[firmware] = _dt.date.today().isoformat()
     # The desktop binary, located by build_desktop.desktop_binary() so this and collect_kpi.py
-    # cannot name different files in the same run. A bare build/projectMM matched nothing off
+    # cannot name different files in the same run. A bare build/MoonLight matched nothing off
     # macOS, so this metric silently carried a foreign machine's number forward while reading as
     # a measurement: the same defect the firmware freshness rule above exists to prevent.
     #

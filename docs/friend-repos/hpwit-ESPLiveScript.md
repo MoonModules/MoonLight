@@ -1,6 +1,6 @@
 # hpwit/ESPLiveScript: monthly activity digest
 
-What landed on [hpwit/ESPLiveScript](https://github.com/hpwit/ESPLiveScript), month by month. External-context reference, a factual log of a friend repo's activity, not projectMM's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md).
+What landed on [hpwit/ESPLiveScript](https://github.com/hpwit/ESPLiveScript), month by month. External-context reference, a factual log of a friend repo's activity, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md).
 
 The library: Yves Bazin's (hpwit) C-like compiler/interpreter for the ESP32, small scripts (e.g. LED effects) compiled and run live on-device without a full recompile-and-flash cycle. Summarised via the GitHub commits API.
 

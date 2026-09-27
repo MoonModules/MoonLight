@@ -1,6 +1,6 @@
 # WLED (upstream): monthly activity digest
 
-What landed on [wled/WLED](https://github.com/wled/WLED)'s `main` branch, month by month. External-context reference, a factual log of a friend repo's releases, not projectMM's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md).
+What landed on [wled/WLED](https://github.com/wled/WLED)'s `main` branch, month by month. External-context reference, a factual log of a friend repo's releases, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md).
 
 Months are **not** split at release dates: upstream WLED cuts releases from separate release branches (`0_15`, `16_x`), so the version tags aren't on `main`, `main` is the development trunk that feeds future releases. Each month notes which release shipped, as context.
 

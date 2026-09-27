@@ -9,7 +9,7 @@ namespace mm {
 
 /// Showcase effect: cycles through other effects with a name overlay.
 /// @card DemoReelEffect.gif
-/// Author: projectMM original, on Mark Kriegsman's FastLED DemoReel100 pattern, https://github.com/FastLED/FastLED/blob/master/examples/DemoReel100/DemoReel100.ino
+/// Author: MoonLight original, on Mark Kriegsman's FastLED DemoReel100 pattern, https://github.com/FastLED/FastLED/blob/master/examples/DemoReel100/DemoReel100.ino
 ///
 /// Cycles through every other registered effect, advancing every `interval` seconds.
 /// It hosts one live child at a time, created from the registry and parented to this Layer.

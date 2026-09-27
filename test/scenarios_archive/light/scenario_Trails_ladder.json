@@ -1,0 +1,323 @@
+{
+  "name": "scenario_Trails_ladder",
+  "module": "TrailsEffect",
+  "mode": "mutate",
+  "also": [
+    "draw",
+    "OscillatorBank",
+    "GridLayout",
+    "Layer"
+  ],
+  "description": "What a flow costs as a fixture grows, and what it costs to become a volume. Trails runs three passes over its own plane every frame (advect it along the flow, decay it by a half-life, write the emitters), so its cost is per light and the ladder is what proves that: 16x16, 32x32, 64x64 and then a 20x20x20 cube, which has roughly twice the lights of the 64x64 panel and must cost roughly twice as much rather than something worse. The last two steps hold the geometry still and move the controls instead, because a control that changes the cost would be the thing an author has to know about: persistence must not (the decay is a multiply per sample whatever the half-life) and dots must barely (an emitter is one write). The plane is 16-bit and there are two of them, so the memory each step reports is 6 bytes per light, which is the honest price of a tail that fades smoothly.",
+  "fixture": [
+    {
+      "name": "fix-layouts",
+      "op": "add_module",
+      "id": "Layouts",
+      "type": "Layouts"
+    },
+    {
+      "name": "fix-layers",
+      "op": "add_module",
+      "id": "Effects",
+      "type": "Effects",
+      "props": {
+        "layouts": "Layouts"
+      }
+    },
+    {
+      "name": "fix-drivers",
+      "op": "add_module",
+      "id": "Drivers",
+      "type": "Drivers",
+      "props": {
+        "effects": "Effects"
+      }
+    }
+  ],
+  "steps": [
+    {
+      "name": "canvas-clear-layers",
+      "description": "Self-canvas: clear and rebuild the pipeline this scenario assumes, so it runs from any device state.",
+      "op": "clear_children",
+      "id": "Effects"
+    },
+    {
+      "name": "canvas-clear-layouts",
+      "op": "clear_children",
+      "id": "Layouts"
+    },
+    {
+      "name": "canvas-grid",
+      "description": "A 16x16 panel to start the ladder: the smallest size a trail reads on, and the one every larger step is compared against per light.",
+      "op": "add_module",
+      "id": "Grid",
+      "type": "GridLayout",
+      "parent_id": "Layouts",
+      "props": {
+        "width": 16,
+        "height": 16,
+        "depth": 1
+      }
+    },
+    {
+      "name": "canvas-layer",
+      "op": "add_module",
+      "id": "Layer",
+      "type": "Layer",
+      "parent_id": "Effects"
+    },
+    {
+      "name": "trails-16",
+      "description": "Trails as it ships, on 16x16. The tick is one advect plus one decay over the whole plane, plus a noise sample per light for the flow, so the per-light cost here is what every step below multiplies.",
+      "op": "add_module",
+      "id": "Trails",
+      "type": "TrailsEffect",
+      "parent_id": "Layer",
+      "measure": true,
+      "contract": {
+        "desktop-macos": {
+          "tick_us": 40,
+          "free_heap": 0,
+          "set_by": "2026-09-04",
+          "reason": "measured 2026-09-04, budget ~3x p50: Trails at 16x16, 3 dots, curl off"
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 11,
+            "p95": 13,
+            "min": 11,
+            "max": 14,
+            "n": 32,
+            "samples": [11, 11, 13, 12, 12, 11, 11, 11, 11, 13, 11, 11, 11, 12, 11, 11, 12, 11, 11, 11, 11, 11, 11, 11, 12, 11, 14, 12, 11, 12, 12, 11]
+          },
+          "last_updated": "2026-09-24"
+        }
+      }
+    },
+    {
+      "name": "grid-32",
+      "description": "Four times the lights. Transport and decay are both per light, so this step and the next are what show the cost is linear rather than hiding a per-frame constant.",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 32
+    },
+    {
+      "name": "grid-32-h",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 32,
+      "measure": true,
+      "contract": {
+        "desktop-macos": {
+          "tick_us": 180,
+          "free_heap": 0,
+          "set_by": "2026-09-04",
+          "reason": "measured 2026-09-04, budget ~3x p50: 32x32, four times 16x16"
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 45,
+            "p95": 55,
+            "min": 44,
+            "max": 55,
+            "n": 32,
+            "samples": [45, 46, 47, 47, 46, 47, 45, 44, 46, 47, 44, 46, 44, 46, 45, 45, 55, 46, 44, 45, 44, 44, 45, 45, 46, 45, 48, 48, 45, 55, 48, 45]
+          },
+          "last_updated": "2026-09-24"
+        }
+      }
+    },
+    {
+      "name": "grid-64",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 64
+    },
+    {
+      "name": "grid-64-h",
+      "description": "64x64: the size a panel user actually runs, and the one the catalog card's fps claim is read from.",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 64,
+      "measure": true,
+      "contract": {
+        "desktop-macos": {
+          "tick_us": 650,
+          "free_heap": 0,
+          "set_by": "2026-09-04",
+          "reason": "measured 2026-09-04, budget ~3x p50: 64x64, the panel size the card quotes"
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 179,
+            "p95": 314,
+            "min": 171,
+            "max": 482,
+            "n": 32,
+            "samples": [177, 189, 189, 187, 180, 184, 176, 176, 185, 191, 178, 189, 178, 191, 176, 176, 274, 188, 178, 198, 171, 176, 176, 178, 181, 179, 314, 177, 178, 482, 184, 176]
+          },
+          "last_updated": "2026-09-24"
+        }
+      }
+    },
+    {
+      "name": "cube-20",
+      "description": "The volumetric case, and the bench fixture: a 20x20x20 cube is 8000 lights against the panel's 4096, and every slice is carried by the same flow. What this pins is that 3D is the same cost per light, not a different algorithm.",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 20
+    },
+    {
+      "name": "cube-20-h",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 20
+    },
+    {
+      "name": "cube-20-d",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "depth",
+      "value": 20,
+      "measure": true,
+      "contract": {
+        "desktop-macos": {
+          "tick_us": 1000,
+          "free_heap": 0,
+          "set_by": "2026-09-04",
+          "reason": "measured 2026-09-04, budget ~3x p50: the 20-cube, 8000 lights"
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 351,
+            "p95": 421,
+            "min": 335,
+            "max": 532,
+            "n": 32,
+            "samples": [347, 351, 358, 348, 399, 362, 348, 346, 358, 365, 346, 361, 345, 359, 346, 347, 421, 355, 346, 362, 335, 347, 347, 347, 357, 353, 400, 362, 366, 532, 351, 343]
+          },
+          "last_updated": "2026-09-24"
+        }
+      }
+    },
+    {
+      "name": "long-tail",
+      "description": "Persistence at its top. The decay is a multiply per sample whatever the half-life is, so a long tail must cost the same as a short one: a step that moved here would mean the decay had become conditional on its own result.",
+      "op": "set_control",
+      "id": "Trails",
+      "key": "persistence",
+      "value": 255,
+      "measure": true,
+      "contract": {
+        "desktop-macos": {
+          "tick_us": 1000,
+          "free_heap": 0,
+          "set_by": "2026-09-04",
+          "reason": "measured 2026-09-04, budget ~3x p50: a long tail costs what a short one costs"
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 362,
+            "p95": 742,
+            "min": 348,
+            "max": 978,
+            "n": 32,
+            "samples": [352, 359, 523, 376, 365, 368, 658, 362, 367, 371, 354, 370, 354, 369, 355, 358, 488, 359, 354, 742, 348, 355, 355, 357, 364, 384, 978, 360, 360, 378, 373, 353]
+          },
+          "last_updated": "2026-09-24"
+        }
+      }
+    },
+    {
+      "name": "more-dots",
+      "description": "Eight emitters rather than three. A dot is one write, so this is the cheapest control on the effect and the step proves it: the emitters are not what a large fixture pays for.",
+      "op": "set_control",
+      "id": "Trails",
+      "key": "dots",
+      "value": 8,
+      "measure": true,
+      "contract": {
+        "desktop-macos": {
+          "tick_us": 1000,
+          "free_heap": 0,
+          "set_by": "2026-09-04",
+          "reason": "measured 2026-09-04, budget ~3x p50: emitters are nearly free next to the per-light passes"
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 351,
+            "p95": 442,
+            "min": 344,
+            "max": 813,
+            "n": 32,
+            "samples": [346, 351, 426, 347, 357, 349, 350, 354, 364, 360, 346, 358, 346, 370, 351, 349, 393, 352, 345, 349, 345, 347, 347, 360, 353, 365, 442, 813, 347, 396, 352, 344]
+          },
+          "last_updated": "2026-09-24"
+        }
+      }
+    },
+    {
+      "name": "back-to-panel",
+      "description": "Back to a flat 64x64, which frees the cube's planes. Returning near the earlier 64x64 number is what shows the effect carries no state that accumulates across a resize: the planes are rebuilt for the new geometry rather than reused.",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "depth",
+      "value": 1
+    },
+    {
+      "name": "back-to-panel-w",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 64
+    },
+    {
+      "name": "back-to-panel-h",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 64,
+      "measure": true,
+      "contract": {
+        "desktop-macos": {
+          "tick_us": 520,
+          "free_heap": 0,
+          "set_by": "2026-09-04",
+          "reason": "measured 2026-09-04, budget ~3x p50: back to the 64x64 number above"
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 178,
+            "p95": 224,
+            "min": 176,
+            "max": 229,
+            "n": 32,
+            "samples": [176, 179, 186, 176, 178, 177, 182, 176, 184, 179, 177, 183, 177, 185, 176, 177, 177, 178, 176, 176, 176, 177, 176, 184, 180, 194, 229, 224, 177, 195, 183, 178]
+          },
+          "last_updated": "2026-09-24"
+        }
+      }
+    }
+  ]
+}

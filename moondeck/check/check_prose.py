@@ -149,7 +149,7 @@ def main():
     print(f"Prose check: {len(findings)} finding(s) in ADDED lines.\n")
     for f in findings:
         print("  " + f)
-    print("\nRules: docs/contributing/documentation-standards.md, enforced by .vale/styles/projectMM/.")
+    print("\nRules: docs/contributing/documentation-standards.md, enforced by .vale/styles/MoonLight/.")
     # Only an ERROR blocks; warnings and suggestions inform.
     return 1 if errors else 0
 

@@ -1,0 +1,123 @@
+{
+  "name": "scenario_Effects_swap_while_running",
+  "module": "Effects",
+  "mode": "mutate",
+  "also": [
+    "Layer",
+    "PulseEffect"
+  ],
+  "description": "Changing what the lights show without stopping them. A control on the running effect applies on the next frame, and a swap puts a different type in the same slot. The swap is measured on the way out, so the two effects' costs are the difference between two steps. It stops at the swap rather than swapping back, because the two tiers name the new slot differently: in-process it keeps the id the scenario gave it, and a device renames it after the type it now holds.",
+  "fixture": [
+    {
+      "name": "fix-layouts",
+      "op": "add_module",
+      "id": "Layouts",
+      "type": "Layouts"
+    },
+    {
+      "name": "fix-grid",
+      "op": "add_module",
+      "id": "Grid",
+      "type": "GridLayout",
+      "parent_id": "Layouts",
+      "props": {
+        "width": 16,
+        "height": 16
+      }
+    },
+    {
+      "name": "fix-layer",
+      "op": "add_module",
+      "id": "Layer",
+      "type": "Layer",
+      "props": {
+        "layouts": "Layouts"
+      }
+    },
+    {
+      "name": "fix-pulse",
+      "op": "add_module",
+      "id": "Pulse",
+      "type": "PulseEffect",
+      "parent_id": "Layer"
+    }
+  ],
+  "steps": [
+    {
+      "name": "the-boot-effect-is-there",
+      "description": "A device boots on Pulse, so that is what a scenario finds unless something changed it.",
+      "op": "expect_control",
+      "id": "Pulse",
+      "key": "bpm",
+      "equals": "40"
+    },
+    {
+      "name": "drive-it",
+      "description": "Change a control on the running effect, which applies on the next frame.",
+      "op": "set_control",
+      "id": "Pulse",
+      "key": "bpm",
+      "value": 120
+    },
+    {
+      "name": "it-took",
+      "op": "expect_control",
+      "id": "Pulse",
+      "key": "bpm",
+      "equals": "120"
+    },
+    {
+      "name": "measure-pulse",
+      "op": "measure",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 48,
+            "p95": 100,
+            "min": 23,
+            "max": 100,
+            "n": 8,
+            "samples": [51, 43, 48, 25, 69, 68, 23, 100]
+          },
+          "last_updated": "2026-09-24"
+        }
+      }
+    },
+    {
+      "name": "swap-it",
+      "description": "Replace the effect in its slot with another type, which is what the card's pencil does.",
+      "op": "replace_module",
+      "id": "Pulse",
+      "type": "RainbowEffect"
+    },
+    {
+      "name": "measure-rainbow",
+      "description": "The difference against the measure above is what the two effects cost relative to each other.",
+      "op": "measure",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 1,
+            "p95": 78,
+            "min": 1,
+            "max": 81,
+            "n": 30,
+            "samples": [35, 25, 40, 18, 53, 78, 14, 81, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1]
+          },
+          "last_updated": "2026-09-25"
+        }
+      }
+    }
+  ],
+  "reset": [
+    {
+      "name": "restore-the-effect",
+      "description": "Swap the slot back, so a live device is left with the effect it started with rather than this scenario's replacement. replace_module keeps the scenario id, so the slot is still Pulse.",
+      "op": "replace_module",
+      "id": "Pulse",
+      "type": "PulseEffect"
+    }
+  ]
+}

@@ -5,7 +5,7 @@
 namespace mm {
 
 /// Layout of a single 2D LED panel.
-/// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
+/// Author: MoonLight, https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
 ///
 /// @moreinfo
 ///
@@ -13,7 +13,7 @@ namespace mm {
 /// The general matrix layout: GridLayout is the simple row-major/serpentine case; this adds a configurable axis order (walk X-major or Y-major), a per-axis increment direction, and a snake toggle.
 ///
 /// Prior art: MoonLight PanelLayout (Node "Panel", tags 🚥), which drives the panel off a `Wiring{size, count, inc[], snake[]}` helper and an `iterate()` walk.
-/// We reproduce the geometry (axis-order table, snake-on-odd-outer serpentine) and the control set, but drop MoonLight's pin/wiring plumbing (the Wiring struct's pin count, nextPin()), a projectMM layout emits coordinates only.
+/// We reproduce the geometry (axis-order table, snake-on-odd-outer serpentine) and the control set, but drop MoonLight's pin/wiring plumbing (the Wiring struct's pin count, nextPin()), a MoonLight layout emits coordinates only.
 /// The driver owns pins. tags 💫 marks the MoonLight lineage.
 ///
 /// The MoonLight `Wiring`/`iterate` implementation is not in the ported source (only the Panel usage site is), so the iteration is reconstructed from that usage plus the control labels/defaults.

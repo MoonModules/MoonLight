@@ -13,9 +13,9 @@ namespace mm {
 /// It goes to the broadcast address on UDP 65506, and it is discovery rather than sync.
 /// A WLED that receives one lists the sender rather than mirroring its state; sync and control are a separate protocol on a port WLED never shares.
 ///
-/// projectMM uses it in both directions, both discovery-only.
+/// MoonLight uses it in both directions, both discovery-only.
 /// It parses inbound packets to find real WLED devices on the LAN.
-/// It builds outbound ones so projectMM devices find each other, and so a WLED app browsing that port lists us too.
+/// It builds outbound ones so MoonLight devices find each other, and so a WLED app browsing that port lists us too.
 ///
 /// ## The wire layout
 ///
@@ -35,9 +35,9 @@ namespace mm {
 ///
 /// WLED validates the token, the id, and that the first octet is in its own subnet.
 ///
-/// ## How a projectMM peer is recognized
+/// ## How a MoonLight peer is recognized
 ///
-/// A projectMM device broadcasts a WLED-valid packet so the WLED apps list it, but a peer must be able to tell a projectMM device from a generic WLED.
+/// A MoonLight device broadcasts a WLED-valid packet so the WLED apps list it, but a peer must be able to tell a MoonLight device from a generic WLED.
 /// A sentinel is stamped into the version field, which no WLED validator reads, so the packet stays valid while marking us uniquely.
 /// It is ASCII `MM` with a small protocol version, little-endian.
 ///
@@ -90,10 +90,10 @@ struct WledPacket {
         // version (40..43) left 0 — informational only, no validator reads it.
     }
 
-    static constexpr size_t  kMarkerOff = 40;            ///< where the projectMM sentinel is stamped
+    static constexpr size_t  kMarkerOff = 40;            ///< where the MoonLight sentinel is stamped
     static constexpr uint32_t kMmMarker = 0x014d4d00u;   ///< the sentinel itself, ASCII MM and a version
 
-    /// Stamp the sentinel that marks this packet as a projectMM peer's.
+    /// Stamp the sentinel that marks this packet as a MoonLight peer's.
     static void stampMmMarker(uint8_t* out) {
         out[kMarkerOff + 0] = (kMmMarker >> 0) & 0xff;
         out[kMarkerOff + 1] = (kMmMarker >> 8) & 0xff;
@@ -101,7 +101,7 @@ struct WledPacket {
         out[kMarkerOff + 3] = (kMmMarker >> 24) & 0xff;
     }
 
-    /// Whether this packet carries the projectMM sentinel.
+    /// Whether this packet carries the MoonLight sentinel.
     static bool hasMmMarker(const uint8_t* data, size_t len) {
         if (len < kSize) return false;
         uint32_t v = uint32_t(data[kMarkerOff]) | (uint32_t(data[kMarkerOff + 1]) << 8)

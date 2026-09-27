@@ -1,6 +1,6 @@
 # Pin manager — bottom-up analysis
 
-A design study for a projectMM **PinsModule**, built the bottom-up way: survey how the field solves GPIO assignment, ownership, conflict, MCU-validity, and display — then extract the *ideas* to write our own fresh against projectMM's `ControlType::Pin` model, per [*Industry standards, our own code*](../../CLAUDE.md#principles) (learn from the prior art, credit it here, don't depend on or trace any one tool). The top-down companion (design from the goal, written after and not consulting this) will follow at `pins-analysis-top-down.md`.
+A design study for a MoonLight **PinsModule**, built the bottom-up way: survey how the field solves GPIO assignment, ownership, conflict, MCU-validity, and display — then extract the *ideas* to write our own fresh against MoonLight's `ControlType::Pin` model, per [*Industry standards, our own code*](../../CLAUDE.md#principles) (learn from the prior art, credit it here, don't depend on or trace any one tool). The top-down companion (design from the goal, written after and not consulting this) will follow at `pins-analysis-top-down.md`.
 
 The question the module answers: **which module owns each GPIO, for what role, and is that assignment valid + conflict-free** — the *ownership/coordination* map. A separate, optional *live-state* view ("is GPIO18 high right now") is a different axis (see GPIOViewer below); this study is primarily about ownership, with live-state noted as a distinct future layer.
 
@@ -8,7 +8,7 @@ The question the module answers: **which module owns each GPIO, for what role, a
 
 ### MoonLight — `ModuleIO.h` (the direct lineage, the richest prior art)
 
-MoonModules' own predecessor ([MoonLight/src/MoonBase/Modules/ModuleIO.h](https://github.com/MoonModules/MoonLight/blob/main/src/MoonBase/Modules/ModuleIO.h)) — the closest prior art by far, and the one to study hardest since projectMM descends from it. It is **board-preset-centric**, not runtime-allocation-centric, and it already unifies *both* axes this study separates (ownership + live state) in one module:
+MoonModules' own predecessor ([MoonLight/src/MoonBase/Modules/ModuleIO.h](https://github.com/MoonModules/projectMM/blob/main/src/MoonBase/Modules/ModuleIO.h)) — the closest prior art by far, and the one to study hardest since MoonLight descends from it. It is **board-preset-centric**, not runtime-allocation-centric, and it already unifies *both* axes this study separates (ownership + live state) in one module:
 
 - **A pin is a row in a JSON pin table**, one per physical GPIO (`0..GPIO_PIN_COUNT-1`, all pre-populated), with fields `{GPIO, usage, index, summary, Level, DriveCap}`. Not a C++ struct — a `JsonObject`. The **`usage`** field is an `enum IO_PinUsageEnum` (~56 values: `pin_LED`, `pin_I2C_SDA`, `pin_ETH_MDC`, `pin_PIR`, `pin_Relay_LightsOn`, …) — a **central role vocabulary** that both names what the pin does *and* implicitly encodes its owner (one usage = one feature). Multiple pins may share a usage (`pin_LED` ×N); `PinAssigner` auto-increments the `index` field to disambiguate them.
 - **Ownership = the `usage` enum**, read back into cached members (`_pinI2CSDA = pinObject["GPIO"]` when `usage == pin_I2C_SDA`). No separate owner-tag table — the role vocabulary *is* the ownership model.
@@ -16,9 +16,9 @@ MoonModules' own predecessor ([MoonLight/src/MoonBase/Modules/ModuleIO.h](https:
 - **Rich live-state telemetry (the second axis, already built):** `readPins()` + `loop1s()` read `gpio_get_level()` → "HIGH"/"LOW", `gpio_get_drive_capability()` → "WEAK…STRONGEST", validity via `GPIO_IS_VALID_GPIO`/`GPIO_IS_VALID_OUTPUT_GPIO`/`rtc_gpio_is_valid_gpio`, and **ADC** (`analogReadMilliVolts` with dynamic attenuation for battery/voltage/current). Capability emojis: ✅ valid, 💡 output, ⏰ RTC, 🔌 I2C.
 - **`readPins()` is also a hardware-init hub** — it brings up I2C (`Wire.begin`), Ethernet (`ETH.begin` via a settings service, with `ethernetType`/`ethPhyAddr`/`ethClkMode`), RS485 (`uart_*`), and ADC from the assigned pins. So the module *applies* the pin map, not just displays it.
 - **UI:** a **board-preset selector** (`selectFile`), the **editable pin table** (`rows`: GPIO read-only, `usage` dropdown, `index`, and read-only `summary`/`Level`/`DriveCap`), an **I2C bus-scanner** table, and `switch1`/`switch2` toggles for alternate configs (e.g. Ethernet-vs-IR on a shared pin).
-- **Deferred-apply pattern:** a UI edit sets `_newBoardPresetPending`; `loop20ms()` applies it next tick (avoids reentrancy) — the same off-the-edit-path discipline projectMM uses.
+- **Deferred-apply pattern:** a UI edit sets `_newBoardPresetPending`; `loop20ms()` applies it next tick (avoids reentrancy) — the same off-the-edit-path discipline MoonLight uses.
 
-**Take — the most reusable thing is WHAT ModuleIO reports per pin.** Independent of its central-manager structure, ModuleIO's **per-pin report is a ready-made field list for projectMM's map** — the columns worth surfacing for every GPIO:
+**Take — the most reusable thing is WHAT ModuleIO reports per pin.** Independent of its central-manager structure, ModuleIO's **per-pin report is a ready-made field list for MoonLight's map** — the columns worth surfacing for every GPIO:
 
 | ModuleIO field | What it reports | Source call |
 |---|---|---|
@@ -30,7 +30,7 @@ MoonModules' own predecessor ([MoonLight/src/MoonBase/Modules/ModuleIO.h](https:
 | **capability flags** | ✅ valid GPIO · 💡 output-capable · ⏰ RTC · 🔌 I2C | `GPIO_IS_VALID_GPIO` / `GPIO_IS_VALID_OUTPUT_GPIO` / `rtc_gpio_is_valid_gpio` |
 | **ADC (mV)** | analog reading for sense pins (battery/voltage/current) | `analogReadMilliVolts()` + dynamic attenuation |
 
-That set — **role + live level + drive strength + per-pin capability flags + optional ADC** — is exactly what a projectMM pin map should show per GPIO, and it's the concrete lesson to carry (the *validity/capability flags* especially: they'd have named the GPIO-46-is-a-strap loopback problem instantly). ModuleIO's other traits — a **central JSON pin table**, `assignPin`/**board-preset assignment**, **hardware-init from the map** (I2C/Eth/RS485/ADC brought up in `readPins()`), and a `modded`/user-edited flag — are the *central-manager* mechanism, and ModuleIO has **no runtime conflict detection** (safety rests on preset curation). **Whether projectMM adopts that central-manager structure or inverts it (each module owning its own pins, a central module only coordinating) is the top-down's call, not this survey's** — flagged as the key design fork, since projectMM's `ControlType::Pin` controls + deviceModel catalog already model pins and presets differently.
+That set — **role + live level + drive strength + per-pin capability flags + optional ADC** — is exactly what a MoonLight pin map should show per GPIO, and it's the concrete lesson to carry (the *validity/capability flags* especially: they'd have named the GPIO-46-is-a-strap loopback problem instantly). ModuleIO's other traits — a **central JSON pin table**, `assignPin`/**board-preset assignment**, **hardware-init from the map** (I2C/Eth/RS485/ADC brought up in `readPins()`), and a `modded`/user-edited flag — are the *central-manager* mechanism, and ModuleIO has **no runtime conflict detection** (safety rests on preset curation). **Whether MoonLight adopts that central-manager structure or inverts it (each module owning its own pins, a central module only coordinating) is the top-down's call, not this survey's** — flagged as the key design fork, since MoonLight's `ControlType::Pin` controls + deviceModel catalog already model pins and presets differently.
 
 ### WLED — `PinManager` (the runtime-authority prior art)
 
@@ -76,7 +76,7 @@ ESPHome ([pin schema](https://esphome.io/guides/configuration-types/), [pin-reus
 
 **Take:** this is the **dynamic view**, orthogonal to ownership. Two ideas: (1) the **board-diagram visualisation** (pin position on the physical header, not just a list) is the most intuitive display when it matters; (2) polling live state is cheap and off-hot-path. But it doesn't answer ownership, and its external-asset + board-image-per-model model is heavy — reverse-engineer the *idea* (live per-pin state), write our own.
 
-**Live pin state is a TESTING tool, not just a UI toy — this is the projectMM-specific reframe.** projectMM already leans hard on hardware self-verification, and live pin state feeds directly into two existing mechanisms:
+**Live pin state is a TESTING tool, not just a UI toy — this is the MoonLight-specific reframe.** MoonLight already leans hard on hardware self-verification, and live pin state feeds directly into two existing mechanisms:
 
 - **HAL / loopback driver tests.** The LED drivers already do an on-board RMT-RX loopback to prove the output byte-stream (see [backlog-light § LED drivers](backlog-light.md)); a live pin-state view is the *human-facing* counterpart — watch a GPIO actually toggle while a driver runs, confirm the lane is wired where the config says, catch a dead/mis-wired lane a green unit test can't. The [leddriver top-down](../../work/future/leddriver-analysis-top-down.md) argues the real flicker/correctness proof is watching the *actual pin* under load; live pin state is that, surfaced.
 - **The mic-health diagnostic** (shipped today: "no samples" = clocks dead / "data line silent" = SD dead). That diagnosis is *inferred* from the sample stream. Live pin state on the mic's SCK/WS/SD would let a user *see* which line is toggling — the exact "which wire is at fault" answer, made direct rather than inferred. The mic debug that cost an afternoon (a strap-pin misread) would have been a glance: SD not toggling → wrong pin.
@@ -87,21 +87,21 @@ So live pin state is **shared infrastructure for the test framework**, not a cos
 
 Arduino-ESP32 / ESP-IDF give **no central pin registry** — `pinMode`/`gpio_config` claim a pin with no arbitration; last-writer-wins, conflicts are silent. This is *why* WLED built PinManager and ESPHome built reuse-validation on top: the platform doesn't coordinate, so the framework must.
 
-## What projectMM already has
+## What MoonLight already has
 
-- **`ControlType::Pin`** ([Control.h](../../src/core/module/Control.h)) — a pin *is* its own control type, clamped to the chip's real GPIO ceiling (`MM_MAX_GPIO`, build-injected per target from `CONFIG_SOC_GPIO_PIN_COUNT`). So projectMM already models a pin as a first-class, per-chip-bounded value — ahead of "just an int."
+- **`ControlType::Pin`** ([Control.h](../../src/core/module/Control.h)) — a pin *is* its own control type, clamped to the chip's real GPIO ceiling (`MM_MAX_GPIO`, build-injected per target from `CONFIG_SOC_GPIO_PIN_COUNT`). So MoonLight already models a pin as a first-class, per-chip-bounded value — ahead of "just an int."
 - **[gpio-usage.md](../../reference/hardware/gpio-usage.md)** — the per-MCU reserved / strap / role-conflict knowledge, hand-curated. The *data* ESPHome's reserved-pin validation would need; not yet wired to any check.
 - **The pin-uniqueness backlog item** ([backlog-core § Pin-uniqueness](backlog-core.md#pin-uniqueness-check-across-modules-prevents-conflicts-replaces-a-singleton-hack)) — already specs *enumerate every `Pin` control, a value seen twice is a conflict*. That's the WLED allocate-check re-expressed against our control model.
 - **No central authority today** — no `allocatePin`, no owner tracking, no conflict gate, no reserved-pin check. Each module sets its `Pin` controls independently; nothing arbitrates. **This is the gap.**
 
 ## Ideas extracted (for the top-down to design against)
 
-| Idea | Source | projectMM shape |
+| Idea | Source | MoonLight shape |
 |---|---|---|
 | **A role vocabulary per pin** (named `usage`, owner-implied) | MoonLight ModuleIO `IO_PinUsageEnum` | Derive the role from the owning control's *name* (`sckPin`→BCLK, `pins`→LED lane) — the same "one usage names role + owner" idea, but read from our controls, no separate enum table. |
 | **Live-state telemetry is worth building** (level, drive-cap, validity, ADC) | MoonLight ModuleIO `readPins`/`loop1s` | The live-state axis (§6 of the top-down): `gpio_get_level`, `gpio_get_drive_capability`, `GPIO_IS_VALID_*`, ADC — behind a `platform::` seam. ModuleIO proves it's mainstream, not gold-plating. |
-| **The pin module can double as the hardware-init hub** | MoonLight ModuleIO `readPins()` brings up I2C/Eth/RS485/ADC | Possible later convergence: projectMM inits per-module today, but a map that *applies* claims (not just shows them) is the ModuleIO end-state to weigh. |
-| **Board presets over runtime allocation** (curated non-conflicting sets) | MoonLight ModuleIO `setBoardPresetDefaults` + `modded` flag | projectMM's deviceModel **catalog** already IS the preset; the `modded`/preset-reload idea maps to "catalog inject vs. user edits." |
+| **The pin module can double as the hardware-init hub** | MoonLight ModuleIO `readPins()` brings up I2C/Eth/RS485/ADC | Possible later convergence: MoonLight inits per-module today, but a map that *applies* claims (not just shows them) is the ModuleIO end-state to weigh. |
+| **Board presets over runtime allocation** (curated non-conflicting sets) | MoonLight ModuleIO `setBoardPresetDefaults` + `modded` flag | MoonLight's deviceModel **catalog** already IS the preset; the `modded`/preset-reload idea maps to "catalog inject vs. user edits." |
 | **Single source of truth for pin ownership** | WLED PinManager | Enumerate the tree's `ControlType::Pin` values — the controls *are* the registry; no parallel allocation table. |
 | **UI pin-picker reads the same source** | WLED bug #4070 | The pin dropdown/validation and the ownership map must both read the live `Pin` controls — never diverge. |
 | **Owner + role, not just used/free** | Tasmota component-per-pin, WLED owner tag | Each claimed pin shows *owning module* + *role* (from the control's name: `sckPin`→BCLK, `pins`→LED lane). |
@@ -110,10 +110,10 @@ Arduino-ESP32 / ESP-IDF give **no central pin registry** — `pinMode`/`gpio_con
 | **Reserved/strap validation + per-board override** | ESPHome `ignore_pin_validation_error` | Cross-check a claim against gpio-usage.md; flag a strap/reserved pin, board can override. |
 | **A pin is a small struct** (mode/inverted), not an int | ESPHome pin schema | Future: `ControlType::Pin` could carry mode/invert if a consumer needs it; today number-only is enough. |
 | **Live electrical state — a HAL-testing tool** | GPIOViewer | A separate axis from ownership, but *not* mere polish: feeds the loopback/HAL driver tests and the mic-health diagnostic (see-the-wire-toggle). Poll + optional board diagram, built as its own effort, wired into the test framework. |
-| **The platform won't coordinate — the framework must** | native APIs | projectMM owns arbitration; don't expect the ESP-IDF to. |
+| **The platform won't coordinate — the framework must** | native APIs | MoonLight owns arbitration; don't expect the ESP-IDF to. |
 
 ## Scope signal for the top-down
 
-The convergent core across every serious tool is **one authority that knows who owns each pin, validates it against the chip, and flags conflicts — and that the UI pin-picker consults the same authority.** projectMM is well-placed: the `Pin` controls already *are* the registry (no parallel table to keep in sync — the WLED bug can't happen if the map reads the controls directly), and gpio-usage.md is the validity data. The module is therefore mostly a **reader + validator over the existing `Pin` controls**, plus the conflict gate the pin-uniqueness item already scoped — not a new allocation subsystem. The live-state (GPIOViewer-style) view is explicitly a separate, later, optional axis.
+The convergent core across every serious tool is **one authority that knows who owns each pin, validates it against the chip, and flags conflicts — and that the UI pin-picker consults the same authority.** MoonLight is well-placed: the `Pin` controls already *are* the registry (no parallel table to keep in sync — the WLED bug can't happen if the map reads the controls directly), and gpio-usage.md is the validity data. The module is therefore mostly a **reader + validator over the existing `Pin` controls**, plus the conflict gate the pin-uniqueness item already scoped — not a new allocation subsystem. The live-state (GPIOViewer-style) view is explicitly a separate, later, optional axis.
 
 The top-down study will design from the goal — *coordinate GPIO assignment across a live, user-editable module tree* — and decide the reader/validator/authority shape and the conflict UX (reject-on-add vs soft-flag-on-edit, already an open question in the pin-uniqueness item). It should treat **live pin state as a first-class sibling axis** (built separately, but designed in) because of its testing value: it plugs into the HAL/loopback driver tests and the mic-health diagnostic as a *see-the-wire* verification tool, not just a display. Two axes, one module theme: *what owns each pin* (ownership map) and *what is each pin doing* (live state, for testing + bring-up).

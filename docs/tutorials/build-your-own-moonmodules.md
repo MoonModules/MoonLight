@@ -1,6 +1,6 @@
 # Build your own MoonModules
 
-A hands-on guide to writing your own light **effects** (and later layouts, modifiers, and drivers) for projectMM. It's written for developers new to the codebase, including as a practical class in a school or workshop. If you can write a `for` loop in C++, you can write an effect.
+A hands-on guide to writing your own light **effects** (and later layouts, modifiers, and drivers) for MoonLight. It's written for developers new to the codebase, including as a practical class in a school or workshop. If you can write a `for` loop in C++, you can write an effect.
 
 By the end you'll understand the one idea that makes modules easy here: **you write *what* your module does; the core decides *when* to run it.** You fill in a few functions; the engine handles lifecycle, threading, and memory timing, and calls your functions at the right moment.
 
@@ -19,7 +19,7 @@ Each base just pre-fills the hooks specific to that job, so you fill in even les
 
 ## The big picture in one minute
 
-A projectMM light show is a small tree of MoonModules:
+A MoonLight light show is a small tree of MoonModules:
 
 ```
 Layouts   →  where the LEDs are in space (a Grid, a sphere, a strip)

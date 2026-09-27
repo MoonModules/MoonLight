@@ -1,6 +1,6 @@
 # Architecture
 
-The agreed-up-front **architecture contract**: what projectMM is designed to be. A design described here is committed, meaning this is the intended behavior and code is written toward it, rather than optional or undecided.
+The agreed-up-front **architecture contract**: what MoonLight is designed to be. A design described here is committed, meaning this is the intended behavior and code is written toward it, rather than optional or undecided.
 
 Coding conventions live in [coding-standards.md](../../contributing/coding-standards.md); how to build and run lives in [building.md](../../how-to/building.md); what is tested lives in [testing.md](../../reference/testing.md).
 
@@ -12,7 +12,7 @@ Driving a large LED installation sets three constraints at once.
 - **Variety**: strips, panels, DMX fixtures and moving heads, each with its own wire protocol and its own definition of a pixel.
 - **Change**: you rearrange the show while it runs, with no reboot and no recompile.
 
-A fixed pipeline holds the frame rate but cannot be rearranged. A scriptable one rearranges but cannot hold the frame rate. projectMM meets all three with one uniform building block on a known lifecycle, a domain-neutral core that owns the hard constructs once, and a light domain that stays simple on top of it.
+A fixed pipeline holds the frame rate but cannot be rearranged. A scriptable one rearranges but cannot hold the frame rate. MoonLight meets all three with one uniform building block on a known lifecycle, a domain-neutral core that owns the hard constructs once, and a light domain that stays simple on top of it.
 
 ## The parts, and how they sit
 

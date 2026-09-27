@@ -5,7 +5,7 @@
 namespace mm {
 
 /// Modifier rotating the 2D image about its center over time.
-/// Author: WildCats08 / @Brandon502 (MoonLight), https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
+/// Author: WildCats08 / @Brandon502 (MoonLight), https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
 ///
 /// @moreinfo
 ///

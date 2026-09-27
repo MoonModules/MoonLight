@@ -14,7 +14,7 @@ started at "fill a buffer with a colour" and grew a feature at a time. This docu
 list of what to grow next, and why that order.
 
 **The bar is a corpus, not one effect.** MoonLight publishes a body of live scripts at
-[MoonModules/MoonLight/livescripts](https://github.com/MoonModules/MoonLight/tree/main/livescripts),
+[MoonModules/projectMM/livescripts](https://github.com/MoonModules/projectMM/tree/main/livescripts),
 and the goal is that MoonLive can **run them** — not that we migrate them into this repo. They are
 written against a language with floats, structs and a wide builtin surface, so they are an honest
 external measure of how far the subset still has to grow: each one that compiles unchanged is a
@@ -565,7 +565,7 @@ fractional velocities on a full-size grid, at a frame rate the bench can measure
 language carries a real simulation.
 
 **External, and the harder bar:** take the
-[MoonLight livescripts corpus](https://github.com/MoonModules/MoonLight/tree/main/livescripts) and
+[MoonLight livescripts corpus](https://github.com/MoonModules/projectMM/tree/main/livescripts) and
 count how many compile and run unchanged. That number is the honest progress metric, because those
 scripts were written without regard for our subset. Track it per step; a feature that moves it is
 worth more than one that does not, whatever this document guesses.

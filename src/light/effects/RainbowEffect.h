@@ -6,7 +6,7 @@ namespace mm {
 
 /// Palette-cycling diagonal rainbow effect, and the default the tests reach for.
 /// @card RainbowEffect.gif
-/// Author: FastLED rainbow (Mark Kriegsman), https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_FastLED.h
+/// Author: FastLED rainbow (Mark Kriegsman), via the predecessor, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_FastLED.h
 ///
 /// A pixel's hue comes from its own x plus y, walked by the clock, so the bands run diagonally.
 class RainbowEffect : public EffectBase {

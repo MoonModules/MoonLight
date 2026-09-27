@@ -5,7 +5,7 @@
 namespace mm {
 
 /// Layout of parallel LED tubes.
-/// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
+/// Author: MoonLight, https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
 ///
 /// @moreinfo
 ///
@@ -13,7 +13,7 @@ namespace mm {
 /// Tube t sits at x = t * tubeDistance; within a tube y runs 0..ledsPerTube-1, or reversed when `reversed` is set (the strip enters the column from the top).
 /// Wiring order is tube-major: all of tube 0's lights, then tube 1's, and so on, matching MoonLight's outer tube loop over an inner single-column emit.
 ///
-/// Prior art: MoonLight TubesLayout (github.com/MoonModules/MoonLight), which composes SingleColumnLayout per tube. projectMM emits coordinates only; the driver owns pin assignment, so MoonLight's per-column nextPin() plumbing is dropped.
+/// Prior art: MoonLight TubesLayout (github.com/MoonModules/projectMM), which composes SingleColumnLayout per tube. MoonLight emits coordinates only; the driver owns pin assignment, so MoonLight's per-column nextPin() plumbing is dropped.
 class TubesLayout : public LayoutBase {
 public:
     /// The catalog tags this layout carries.

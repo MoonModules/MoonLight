@@ -5,7 +5,7 @@
 
 namespace mm {
 
-// Author: projectMM original (metaballs)
+// Author: MoonLight original (metaballs)
 /// Metaballs effect: smooth merging blobs via a scalar field.
 /// @card MetaballsEffect.gif
 ///

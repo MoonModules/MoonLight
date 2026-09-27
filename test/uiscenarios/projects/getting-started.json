@@ -1,7 +1,7 @@
 {
   "name": "getting-started",
-  "title": "projectMM \u2014 getting started",
-  "description": "Install it, shape the lights, write an effect. The first ten minutes with projectMM.",
+  "title": "MoonLight — getting started",
+  "description": "Install it, shape the lights, write an effect. The first ten minutes with MoonLight.",
   "audio": "media/audio/Norse Constellations (Original Mix).mp3",
   "bpm": 112.35,
   "first_beat": 8.78,
@@ -9,50 +9,50 @@
   "width": 1280,
   "clips": [
     {
-      "clip": "show-the-preview",
-      "title": "projectMM",
+      "clip": "91-show-the-preview",
+      "title": "MoonLight",
       "subtitle": "One board. Thousands of lights.",
       "bars": 6
     },
     {
-      "clip": "install-firmware",
+      "clip": "01-install-esp32",
       "title": "Install it",
       "subtitle": "A browser and a USB cable",
       "bars": 12
     },
     {
-      "clip": "change-layout",
+      "clip": "92-change-layout",
       "title": "Say where the lights are",
       "bars": 6
     },
     {
-      "clip": "add-an-effect",
+      "clip": "93-add-an-effect",
       "title": "Paint them",
       "bars": 8
     },
     {
-      "clip": "add-a-modifier",
+      "clip": "94-add-a-modifier",
       "title": "Reshape the result",
       "bars": 6
     },
     {
-      "clip": "add-a-layer",
+      "clip": "95-add-a-layer",
       "title": "Stack and blend",
       "bars": 8
     },
     {
-      "clip": "swap-an-effect",
+      "clip": "96-swap-an-effect",
       "title": "Change your mind freely",
       "bars": 6
     },
     {
-      "clip": "write-an-effect",
+      "clip": "97-write-an-effect",
       "title": "Write your own",
       "subtitle": "Compiled on the device, no reflash",
       "bars": 12
     },
     {
-      "clip": "react-to-sound",
+      "clip": "98-react-to-sound",
       "title": "React to sound",
       "subtitle": "A microphone on the board",
       "bars": 8

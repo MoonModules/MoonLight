@@ -30,7 +30,7 @@ plausible feature from being planned twice:
   it over sACN or Art-Net, which `NetworkReceiveEffect` already does. Nobody expects to plug a fader
   wing into a third-party controller.
 
-So an X-Touch driving projectMM is a genuinely novel capability, and this plan does not pretend it
+So an X-Touch driving MoonLight is a genuinely novel capability, and this plan does not pretend it
 meets an industry expectation, because there is not one. What IS industry standard is the shape:
 one internal surface model with swappable transports, which is how every host that speaks to both a
 Mackie desk and an OSC app is built.
@@ -43,7 +43,7 @@ implementation, both directions.
 **Out, with reasons:**
 
 - **Lighting-vendor OSC profiles** (Eos, grandMA3, MagicQ, ONYX address maps). They would let
-  projectMM DRIVE a console, which is backwards: a console already drives us over sACN. Each needs
+  MoonLight DRIVE a console, which is backwards: a console already drives us over sACN. Each needs
   its own hardware to test, and Avolites cannot be reached at all. Revisit only if a user asks.
 - **RTP-MIDI and the MCU semantic layer.** The seam is designed for it and the test strategy
   rehearses it, but the transport is its own plan.
@@ -184,7 +184,7 @@ The survey's own conclusion, and it is ordered by value per unit of work rather 
 **A GPIO surface belongs early, not late.** It needs no transport, no USB and no network; `addPin`
 and `PinsModule` already exist; and it is the only entry that works on an ESP32 with no new platform
 capability. Slot it beside step 2 rather than after step 5. It is also the honest answer for a
-purpose-built projectMM box, where a MIDI controller is the wrong shape entirely.
+purpose-built MoonLight box, where a MIDI controller is the wrong shape entirely.
 
 Steps 2 and 3 together make every controller on the survey usable. That is a better second step than
 MCU, which serves fewer devices for more work.
@@ -214,7 +214,7 @@ at all**, so on ESP32 the motorised desk may be REACHABLE SOONER than a cheap US
 | GPIO (below) | not applicable | native |
 | DMX-512 in over RS-485 | needs a USB-DMX widget | needs the transceiver already backlogged for DMX out |
 
-**GPIO is the surface with no protocol, and it may be the most valuable one.** A dedicated projectMM
+**GPIO is the surface with no protocol, and it may be the most valuable one.** A dedicated MoonLight
 box with four knobs, a few switches and a foot switch needs no MIDI, no USB and no network. It is
 also the case the existing infrastructure already fits: `addPin` declares the pins and `PinsModule`
 handles claiming and conflicts, so a GPIO surface is a small module implementing `ControlSurface`

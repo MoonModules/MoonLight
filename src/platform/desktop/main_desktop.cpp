@@ -103,7 +103,7 @@ static void openLocalUi(uint16_t port) {
 
 int main(int argc, char** argv) {
     // --port N: the HTTP port. Defaults to 8080 because ports below 1024 need root on POSIX, but
-    // Home Assistant's WLED integration hardcodes port 80 with no way to specify another, so testing that path on desktop needs `sudo projectMM --port 80`.
+    // Home Assistant's WLED integration hardcodes port 80 with no way to specify another, so testing that path on desktop needs `sudo MoonLight --port 80`.
     uint16_t httpPort = 8080;
     bool openBrowser = true;
     for (int i = 1; i < argc; i++) {
@@ -122,7 +122,7 @@ int main(int argc, char** argv) {
         } else if (std::strcmp(argv[i], "--no-browser") == 0) {
             openBrowser = false;
         } else if (std::strcmp(argv[i], "--help") == 0) {
-            std::printf("usage: projectMM [--port N] [--no-browser]\n"
+            std::printf("usage: MoonLight [--port N] [--no-browser]\n"
                         "  --port N       HTTP port (default 8080; 80 needs root)\n"
                         "  --no-browser   do not open the UI on start\n");
             return 0;
@@ -132,7 +132,7 @@ int main(int argc, char** argv) {
             return 1;
         }
     }
-    // Unbuffer so every line lands in projectMM.log before a crash.
+    // Unbuffer so every line lands in MoonLight.log before a crash.
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     std::setvbuf(stderr, nullptr, _IONBF, 0);
 
@@ -177,8 +177,8 @@ int main(int argc, char** argv) {
     // The banner, then the URL, then how to stop.
     // This window IS the app on a desktop: there is no tray icon and no GUI, so it has to say what it is and how to end it.
     // The tick lines that follow print for the first 60 s and then go quiet unless the log level asks for them, so this stays readable once the machine settles.
-    std::printf("projectMM started at %s\n", tbuf);
-    std::printf("\n  projectMM is running: http://localhost:%u/\n", static_cast<unsigned>(httpPort));
+    std::printf("MoonLight started at %s\n", tbuf);
+    std::printf("\n  MoonLight is running: http://localhost:%u/\n", static_cast<unsigned>(httpPort));
     std::printf("  Close this window (or press Ctrl-C) to stop.\n\n");
 
     if (openBrowser) openLocalUi(httpPort);
@@ -187,6 +187,6 @@ int main(int argc, char** argv) {
 
     cleanExit = true;
     isoTimestamp(tbuf, sizeof(tbuf));
-    std::printf("projectMM exited cleanly at %s\n", tbuf);
+    std::printf("MoonLight exited cleanly at %s\n", tbuf);
     return 0;
 }

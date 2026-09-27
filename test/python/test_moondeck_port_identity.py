@@ -80,7 +80,7 @@ def test_port_serial_extracts_stable_key():
 _DEVS = [
     {"deviceName": "MM-LC16", "mac": "10:B4:1D:E1:A5:8C", "ip": "192.168.1.107",
      "firmware": "esp32s3-n8r8", "usbSerial": "20213240"},
-    {"deviceName": "projectMM-testbench-S3", "mac": "CC:BA:97:0A:F3:F8",
+    {"deviceName": "MoonLight-testbench-S3", "mac": "CC:BA:97:0A:F3:F8",
      "ip": "192.168.1.159", "firmware": "esp32s3-n16r8"},   # native USB, no usbSerial
     {"deviceName": "MM-P4", "mac": "80:F1:B2:D0:AC:F7", "ip": "192.168.1.133",
      "firmware": "esp32p4rev1-eth", "usbSerial": "5ABA0767221"},
@@ -94,7 +94,7 @@ def test_resolve_native_usb_matches_by_mac_and_reveals_chip():
     usb = {"vid": 0x303A, "pid": 0x1001, "product": "USB JTAG/serial debug unit",
            "serial": "CC:BA:97:0A:F3:F8"}
     got = _resolve_port("/dev/cu.usbmodem2021401", usb, _DEVS)
-    assert got["board"] == "projectMM-testbench-S3"
+    assert got["board"] == "MoonLight-testbench-S3"
     assert got["chip"] == "esp32-s3"
     assert got["ip"] == "192.168.1.159"
 
@@ -152,7 +152,7 @@ def test_already_labeled_esp_port_stays_probeable():
     usb = {"vid": 0x303A, "pid": 0x1001, "product": "USB JTAG/serial debug unit",
            "serial": "CC:BA:97:0A:F3:F8"}
     got = _resolve_port("/dev/cu.usbmodem2021401", usb, _DEVS)
-    assert got["board"] == "projectMM-testbench-S3"   # labeled
+    assert got["board"] == "MoonLight-testbench-S3"   # labeled
     assert got["probeable"] is True                   # ...and still re-probeable
 
 

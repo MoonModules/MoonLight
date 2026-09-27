@@ -4,7 +4,6 @@
 
 namespace mm {
 
-// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 /// Effect moving a lit sphere through a 3D layout.
 /// @card SphereMoveEffect.gif
 ///

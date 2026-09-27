@@ -4,9 +4,9 @@ Answers [issue #102](https://github.com/MoonModules/projectMM/issues/102). Phase
 
 ## The gap
 
-projectMM drives HUB75 panels one way: [PanelCardDriver](../../../src/light/drivers/PanelCardDriver.h) emits ColorLight frames over raw Ethernet to a 5A-75B/E receiving card, which does the HUB75 driving. That path is excellent above roughly 16,384 pixels and it is what the [panel-cards guide](../../how-to/panel-cards.md) documents.
+MoonLight drives HUB75 panels one way: [PanelCardDriver](../../../src/light/drivers/PanelCardDriver.h) emits ColorLight frames over raw Ethernet to a 5A-75B/E receiving card, which does the HUB75 driving. That path is excellent above roughly 16,384 pixels and it is what the [panel-cards guide](../../how-to/panel-cards.md) documents.
 
-Below that size it is the wrong shape. The user buys a receiving card, configures it with LEDvision (a Windows tool, not ours), and runs a dedicated Ethernet link, all to light one 64×64 panel that a $10 board could drive from its own pins. WLED does this natively; projectMM does not. That is the gap, and it is the whole of Phase 1.
+Below that size it is the wrong shape. The user buys a receiving card, configures it with LEDvision (a Windows tool, not ours), and runs a dedicated Ethernet link, all to light one 64×64 panel that a $10 board could drive from its own pins. WLED does this natively; MoonLight does not. That is the gap, and it is the whole of Phase 1.
 
 ## What decides the design: two hardware ceilings
 
@@ -16,7 +16,7 @@ A HUB75 panel is **scanned, not addressed**. One frame is `rows/2` scan lines (R
 frame bytes = (height / 2) × width × bitDepth
 ```
 
-Measured against the peripherals projectMM already has:
+Measured against the peripherals MoonLight already has:
 
 Measured from the encoder's own formula (`Hub75Geometry::frameBytes`, pinned by [unit_Hub75Slots.cpp](../../../test/unit/light/unit_Hub75Slots.cpp)), at 1/32 scan:
 
@@ -101,7 +101,7 @@ Controls, all defaulting to unset because a soldered pin must never be guessed (
 | `sPWM` | The [WLED-MM sPWM commit](https://github.com/MoonModules/WLED-MM/commit/778ae558) case |
 | `peripheral` | Which silicon block drives the panel, where the chip has more than one |
 
-**Geometry is not a driver control.** [PanelLayout](../../../src/light/layouts/PanelLayout.h) and [PanelsLayout](../../../src/light/layouts/PanelsLayout.h) already model a serpentine panel and an M×N tiling of them, with configurable axis order and per-axis direction. A layout emits coordinates and the driver owns pins: that separation is the architecture, and HUB75 must not re-litigate it. The issue asks for "UI features to set panel dimensions and arrangement", and the honest answer is that projectMM already has them.
+**Geometry is not a driver control.** [PanelLayout](../../../src/light/layouts/PanelLayout.h) and [PanelsLayout](../../../src/light/layouts/PanelsLayout.h) already model a serpentine panel and an M×N tiling of them, with configurable axis order and per-axis direction. A layout emits coordinates and the driver owns pins: that separation is the architecture, and HUB75 must not re-litigate it. The issue asks for "UI features to set panel dimensions and arrangement", and the honest answer is that MoonLight already has them.
 
 ### The platform seam
 

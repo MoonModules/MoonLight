@@ -181,7 +181,7 @@ TEST_CASE("buildArtPollReply lays out the reply controllers parse") {
     const uint8_t ip[4] = {192, 168, 1, 230};
     const uint8_t mac[6] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF};
     uint8_t reply[mm::ARTNET_POLL_REPLY_SIZE];
-    const size_t len = mm::buildArtPollReply(reply, ip, mac, "projectMM", "projectMM node", 0x0123);
+    const size_t len = mm::buildArtPollReply(reply, ip, mac, "MoonLight", "MoonLight node", 0x0123);
 
     CHECK(len == mm::ARTNET_POLL_REPLY_SIZE);
     CHECK(std::memcmp(reply, "Art-Net", 8) == 0);
@@ -193,8 +193,8 @@ TEST_CASE("buildArtPollReply lays out the reply controllers parse") {
     CHECK(reply[18] == 0x01);                         // NetSwitch = universe bits 14-8
     CHECK(reply[19] == 0x02);                         // SubSwitch = bits 7-4
     CHECK(reply[190] == 0x03);                        // SwOut[0] = bits 3-0
-    CHECK(std::strcmp(reinterpret_cast<const char*>(reply + 26), "projectMM") == 0);
-    CHECK(std::strcmp(reinterpret_cast<const char*>(reply + 44), "projectMM node") == 0);
+    CHECK(std::strcmp(reinterpret_cast<const char*>(reply + 26), "MoonLight") == 0);
+    CHECK(std::strcmp(reinterpret_cast<const char*>(reply + 44), "MoonLight node") == 0);
     CHECK(std::memcmp(reply + 201, mac, 6) == 0);
 }
 

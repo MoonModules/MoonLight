@@ -116,7 +116,7 @@ def _doxyfile(headers: list[str], xml_out: str) -> str:
     # into separate INPUT entries — Doxygen treats a quoted path as one argument.
     inputs = " ".join(f'"{ROOT / h}"' for h in headers)
     return (
-        f'PROJECT_NAME="projectMM API"\n'
+        f'PROJECT_NAME="MoonLight API"\n'
         f"INPUT = {inputs}\n"
         # XML only — moxygen's input. Doxygen defaults GENERATE_HTML *and*
         # GENERATE_LATEX to YES; leaving LaTeX on drops a stray latex/ dir of

@@ -7,7 +7,7 @@ namespace mm {
 
 /// Audio-reactive 3D graphic-equalizer effect.
 /// @card GEQ3DEffect.gif
-/// Author: @TroyHacks (MoonModules, GPLv3), https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h
+/// Author: @TroyHacks (MoonModules, GPLv3), https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h
 ///
 /// The 16 bands rise as bars on a 2D grid, drawn with faked depth.
 /// GEQEffect in this folder draws the same data flat instead.

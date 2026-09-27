@@ -2,14 +2,14 @@
 
 ## Context
 
-projectMM has a control surface but no way for a physical desk to reach it. `ControlModule` is
+MoonLight has a control surface but no way for a physical desk to reach it. `ControlModule` is
 already shaped like one: an 8x8 pad grid, `encoder1`..`encoder8`, `fader1`..`fader8`, and a `driveFader()`
 that routes a fader to whatever it targets via `Scheduler::setControl`. What is missing is the
 transport that turns a knob move on someone's desk into one of those control writes.
 
 **OSC is the right first transport**, and the reason is reach rather than elegance: it is what
 Resolume, TouchDesigner, TouchOSC, Chataigne, QLab and most DIY Arduino/Teensy-over-Ethernet rigs
-already speak. One implementation opens projectMM to all of them. It is also small: UDP, a
+already speak. One implementation opens MoonLight to all of them. It is also small: UDP, a
 big-endian address string, a type-tag string, and 32-bit aligned arguments.
 
 **A correction worth recording, because it shaped this plan.** The premise that reached us was
@@ -48,7 +48,7 @@ the pads, encoders and faders already exist, and duplicating them would be the s
 architecture forbids.
 
 **Address scheme.** Map onto the surface that exists, with the module's own name as the root so the
-namespace stays projectMM's:
+namespace stays MoonLight's:
 
 ```
 /mm/fader/1   f 0.0..1.0     ->  ControlModule fader1   (or i 0..255)
@@ -56,7 +56,7 @@ namespace stays projectMM's:
 /mm/pad/12    i 1            ->  apply preset in slot 12 (nonzero = press)
 ```
 
-A second, deliberately narrow form reaches any control directly, which is what makes projectMM
+A second, deliberately narrow form reaches any control directly, which is what makes MoonLight
 useful to TouchDesigner without waiting for a surface binding:
 
 ```

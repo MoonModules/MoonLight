@@ -116,9 +116,39 @@ def collect_unit_files() -> list[dict]:
     return [parse_unit_file(p) for p in sorted(UNIT_DIR.rglob("unit_*.cpp"))]
 
 
+def _nav_order() -> list[str]:
+    """The nav order the device UI draws, read from the one place that defines it.
+
+    A scenario suite that ran alphabetically told its story out of order, so the run follows the
+    interface instead. The order lives in app.js NAV_GROUPS, and is read rather than restated:
+    a second copy is a list that drifts the first time someone reorders the nav and looks here.
+    A card app.js does not name sorts after these, so adding one is visible rather than silently last.
+    """
+    try:
+        block = (ROOT / "src" / "ui" / "app.js").read_text().split("const NAV_GROUPS = [", 1)[1]
+    except (OSError, IndexError):
+        return []           # no nav to read: fall back to the alphabetical order below
+    return re.findall(r'"([^"]+)"', block.split("];", 1)[0])
+
+
+NAV_ORDER = _nav_order()
+
+
+def _nav_rank(scenario: dict) -> tuple[int, str]:
+    """Where a scenario sits in the nav, by the card its module belongs to."""
+    name = scenario["path"].name
+    for i, card in enumerate(NAV_ORDER):
+        # The file is named for its card: scenario_<Card>_<what it proves>.json, where a card
+        # with a space is written without one.
+        if name.lower().startswith(f"scenario_{card.replace(' ', '').lower()}"):
+            return (i, name)
+    return (len(NAV_ORDER), name)
+
+
 def collect_scenario_files() -> list[dict]:
-    """All test/scenarios/**/scenario_*.json, parsed and sorted by path."""
-    return [parse_scenario_file(p) for p in sorted(SCENARIO_DIR.rglob("scenario_*.json"))]
+    """All test/scenarios/**/scenario_*.json, parsed and ordered the way the nav lists the cards."""
+    found = [parse_scenario_file(p) for p in sorted(SCENARIO_DIR.rglob("scenario_*.json"))]
+    return sorted(found, key=_nav_rank)
 
 
 def list_test_modules() -> list[str]:

@@ -50,7 +50,7 @@ def main() -> int:
     only.add_argument("--js", action="store_true", help="run only the JS suite")
     only.add_argument("--ui", action="store_true", help="run only the UI suite (needs a device)")
     args = ap.parse_args()
-    # The UI lane is OPT-IN: it needs a projectMM listening, so a bare run stays the
+    # The UI lane is OPT-IN: it needs a MoonLight listening, so a bare run stays the
     # pure suites that work on any machine. It skips rather than fails when asked for
     # without a device, which is what the tests themselves decide.
     both = not (args.python or args.js or args.ui)

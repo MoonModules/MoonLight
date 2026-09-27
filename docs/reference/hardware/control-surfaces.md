@@ -1,6 +1,6 @@
 # Control surfaces: hardware reference
 
-What projectMM needs to know about the physical desks on the bench, so a control-ingest plan can be written from facts rather than from a product page. A desk here is a candidate source for [ControlModule](../../moonmodules/core/system.md#control)'s pads, encoders and faders, which were laid out to match this class of hardware in the first place.
+What MoonLight needs to know about the physical desks on the bench, so a control-ingest plan can be written from facts rather than from a product page. A desk here is a candidate source for [ControlModule](../../moonmodules/core/system.md#control)'s pads, encoders and faders, which were laid out to match this class of hardware in the first place.
 
 **The headline, because it contradicts the obvious assumption:** neither desk speaks OSC. Both are
 **Mackie Control** surfaces. OSC is the right protocol for the wider ecosystem (Resolume,
@@ -57,9 +57,9 @@ Enough to judge the size of the job. MCU is ordinary MIDI carrying agreed meanin
 | Scribble strips | SysEx, `0x12` after the header, then the text |
 
 **It is bidirectional by nature, and that is the point of the hardware.** The motors only move
-because the host sends fader positions back; the scribble strips only show anything because the host writes them. A projectMM implementation that only *reads* the desk would work, but would waste what makes these desks worth owning: a preset change should move the faders and relabel the strips.
+because the host sends fader positions back; the scribble strips only show anything because the host writes them. A MoonLight implementation that only *reads* the desk would work, but would waste what makes these desks worth owning: a preset change should move the faders and relabel the strips.
 
-## What this means for projectMM
+## What this means for MoonLight
 
 Three routes, in increasing cost:
 
@@ -68,4 +68,4 @@ Three routes, in increasing cost:
 2. **A bridge.** An existing MCU-to-OSC translator on a laptop turns either desk into an OSC
    source. No firmware work; costs a machine in the rack, which a festival podium may already have.
 3. **RTP-MIDI + MCU in firmware.** Reaches the X-Touch over Ethernet with no host machine, and is
-   the only route that drives the motors from projectMM directly. Needs RFC 6295 (session handshake, journalling) plus the MCU semantics above, both directions. Does not help the QCon, which has no network port.
+   the only route that drives the motors from MoonLight directly. Needs RFC 6295 (session handshake, journalling) plus the MCU semantics above, both directions. Does not help the QCon, which has no network port.

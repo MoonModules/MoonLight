@@ -500,11 +500,11 @@ public:
         const char* name = deviceName();
         // Two holds after the change: the product, then the device. Beyond that, nothing to do.
         if (age < kStripHoldMs * 2)
-            std::snprintf(display_, sizeof(display_), "projectMM");
+            std::snprintf(display_, sizeof(display_), "MoonLight");
         else if (name && name[0])
             std::snprintf(display_, sizeof(display_), "%s", name);
         else
-            std::snprintf(display_, sizeof(display_), "projectMM");
+            std::snprintf(display_, sizeof(display_), "MoonLight");
     }
 
     /// The device's name, read through the control system rather than by reaching into SystemModule:
@@ -937,7 +937,7 @@ private:
 
     static constexpr const char* kSwitchNames[kSwitchCount] =
         {"switch1", "switch2", "switch3", "switch4", "switch5", "switch6", "switch7", "switch8"};
-    char     display_[32] = "projectMM";   ///< the strip: what the surface last touched, in words
+    char     display_[32] = "MoonLight";   ///< the strip: what the surface last touched, in words
     /// WHEN the strip was last written.
     uint32_t stripWrittenMs_ = 0;
     /// Whether a settle sequence is running.

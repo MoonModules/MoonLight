@@ -39,7 +39,7 @@ the UI says "keep this file private" at download.
 app.js:4935 area): recursive walk via fmFetchDir(path, hidden=true) (app.js:4773), serial fetches
 (the device serves one connection at a time; Connection: close per request), then the
 diagnostics-download tail verbatim (Blob → objectURL → a.download → revoke-after-4s Safari
-workaround). Filename: projectMM-config-<deviceName>-<date>.json.
+workaround). Filename: MoonLight-config-<deviceName>-<date>.json.
 
 **Restore** (toolbar button ⟲ with the destructive styling + armPressTwice pattern of 🗑): hidden
 <input type=file accept=.json> like the upload button (app.js:4941). Steps:

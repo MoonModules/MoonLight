@@ -7,7 +7,7 @@ namespace mm {
 
 /// Audio-reactive effect: sawtooth bands driven by the frequency spectrum.
 /// @card FreqSawsEffect.gif
-/// Author: @TroyHacks (MoonLight / WLED MoonModules), https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
+/// Author: @TroyHacks (MoonLight / WLED MoonModules), https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 ///
 /// One vertical saw per band, each running at a rate its own loudness drives.
 /// A band's speed rises instantly to a loud hit and decays slowly once the sound stops.

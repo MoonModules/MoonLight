@@ -140,7 +140,7 @@ BallpitEffect is the template (prepare's alloc-all-then-check ScratchBuffer wiri
 - main.cpp: include + `registerType<FlyingToastersEffect>("FlyingToastersEffect",
   "light/effects.md#flyingtoasters")` in the alphabetical list (~:234).
 - docs/moonmodules/light/effects.md: the Ballpit-shaped card (anchor `flyingtoasters`,
-  🔬 · 2D, controls list, Origin: projectMM original; inspired by After Dark's Flying
+  🔬 · 2D, controls list, Origin: MoonLight original; inspired by After Dark's Flying
   Toasters (Berkeley Systems), art drawn fresh for this effect).
 - power-functions.md (docs/moonmodules/light/): the `draw::sprite` entry beside glyph/text.
 

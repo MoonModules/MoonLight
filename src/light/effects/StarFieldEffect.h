@@ -8,7 +8,7 @@ namespace mm {
 
 /// Star-field effect: drifting points like flying through stars.
 /// @card StarFieldEffect.gif
-/// Author: @Brandon502 (MoonLight), inspired by Daniel Shiffman / Coding Train, https://www.youtube.com/watch?v=17WoOqgXsRM , https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
+/// Author: @Brandon502 (MoonLight), inspired by Daniel Shiffman / Coding Train, https://www.youtube.com/watch?v=17WoOqgXsRM , https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 ///
 /// Each star is a 3D point drifting toward the viewer, re-projected onto the panel every advance.
 /// So a near star splays outward and flies off the edge while a distant one sits near the center.

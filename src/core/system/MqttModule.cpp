@@ -1,18 +1,129 @@
+/// Drives the MQTT client: the socket lifecycle, the topic tree, Home Assistant discovery and the inbound command routing.
+///
+/// @moreinfo
+///
+/// ## The topic identity is the MAC
+///
+/// The prefix is derived live from a stable hardware id, `MoonLight/<last6-of-MAC>` in lowercase hex, so nothing is stored in a buffer.
+/// The MAC is fixed for the chip's life, so a rename never changes the topics and Homebridge or Home Assistant stay pinned.
+/// This is the WLED, Tasmota and HA-discovery convention, and the last 6 hex is the same short id WLED uses in `wled/<last6>`.
+/// The friendly display name is a separate concern, published retained on the `name` topic and read from `deviceName()`.
+/// That retained topic is the human-facing label a hub reads for its accessory title, the WLED `serverDescription` role, published on connect and on a rename.
+/// SystemModule guarantees the name non-empty and per-device unique, falling back to `MM-<last4MAC>` rather than a shared literal, so N devices never collide as one name.
+/// A missing `systemModule_` is a wiring bug, so the publish is skipped rather than inventing a non-unique fallback.
+/// A rename is change-detected by a rolling djb2 signature, so no name buffer is stored.
+/// The clientId is `MoonLight-<last6-of-MAC>`, slash-free because MQTT-3.1.3-5 allows only `[0-9a-zA-Z]` and a broker may reject a `/`.
+///
+/// ## The discovery topics
+///
+/// The config topic is independent of `topicPrefix()`: the discovery prefix is HA's `homeassistant`, not our `MoonLight` root.
+/// The object id carries the `MoonLight_` prefix so the id is unique across vendors on a shared broker.
+/// The update entity uses the same object id, so both components register under one HA device card: one device, two entities.
+/// Diverging the id would produce a second device card reading as "two MoonLights", which is the wrong grouping.
+///
+/// ## The discovery payload
+///
+/// The light is a JSON-schema MQTT light with HA's documented abbreviated keys. Brightness sits at the default 0-255 scale, so no scale key is needed, and `dev{}` groups the entity under a device card.
+/// The entity's own `name` is null, HA's documented convention for "this entity IS the device, no sub-label", so the slug is `light.<device>` rather than the doubled `light.<device>_<device>`.
+/// Rename the device and `dev.name` follows on the next publish, `uniq_id` stays MAC-pinned, and the slug locked at creation is unchanged.
+/// Documented at https://www.home-assistant.io/integrations/mqtt/#name, where `name: null` is the recommended way.
+/// The `deviceName` is user-editable, so a quote or backslash would produce invalid JSON: the shared `jsonEscape` doubles the 32-char name worst case.
+/// The update entity's `device_class:"firmware"` makes HA render the label as `<device> Firmware` rather than the bare device name. The bare name collided visually with the light in HA's entity list, which the "two MM-P4 rows" bench symptom pinned.
+/// It also picks the correct icon and the up-to-date versus update-available wording, and `entity_category:"diagnostic"` parks it in the diagnostic section of the device card, matching ESPHome and Tasmota.
+///
+/// ## The effect list is looks only
+///
+/// The `effect_list` is the light's menu of LOOKS, and only look-only presets appear (`ControlModule::isLookOnly`).
+/// One that also carries Drivers or Layouts would rewire pins or geometry. That must not be reachable from an automation or a voice command that believes it is choosing a color scheme.
+/// `applyLookByName` re-checks look-only, so a crafted message naming a hardware-carrying preset is refused at the entry point rather than merely hidden from the list.
+/// The applied look rides the published state too, so HA's dropdown shows the look that is on, including a change made from the device's own pad grid.
+/// It is therefore part of the change gate: applying a preset moves neither on, brightness nor palette, so without its signature a look-only change would never publish.
+///
+/// ## The discovery scratch buffers
+///
+/// Both buffers are allocated from the heap the first time discovery publishes and reported via `setDynamicBytes`, so the UI's per-module memory line accounts for them.
+/// A device that never enables discovery never calls this, so it costs zero bytes; OOM returns false and the caller skips the publish rather than dereferencing a null.
+/// They are sized to what THIS device publishes: the fixed config plus the measured effect list.
+/// No cap on the preset count, because a cap would either reserve RAM a three-preset device never uses, or silently publish nothing once the list outgrew it.
+/// Saving or deleting a preset changes the required size, so they are reallocated when the revision moves rather than held at whatever the first announce needed.
+/// The light and update announces share the pair (448 + 320 bytes) because they run serially and are never in flight simultaneously.
+/// The update announce needs them at all because its ~300-byte payload plus framing exceeds the on-stack `kSendBufLen`.
+/// The effect list is built into `discoveryBuf_` as scratch, untouched until `buildMqttPublish` by which time the list is already consumed into the payload.
+/// It must NOT be a region of `discoveryPayload_`. Snprintf writing the payload while reading the list from inside its own destination tramples the list once the fixed prefix grows past the scratch offset.
+///
+/// ## Availability and retract
+///
+/// The Last Will is declared at CONNECT: retained "offline" on `<prefix>/status`, which the broker publishes on an ungraceful drop so HA's `avty_t` greys the entity out.
+/// The retained "online" counterpart is published by the module itself once CONNACK lands, and must precede the discovery announce so HA sees the entity available the instant its config arrives.
+/// A retract is an empty retained payload to the config topic, which removes the HA entity. It frames into a small LOCAL buffer, because a tombstone is topic plus empty body.
+/// That local buffer matters because `discoveryBuf_` may already be freed, and the OFF path must not allocate under the "no memory when discovery is off" rule.
+/// Disconnected there is nothing to send, so the retract is deferred to the next CONNACK, where the broker keeps the last retained config until then; freeing always runs either way.
+/// CONNACK retracts when `haDiscovery_` is false, because a config retained from a session that turned discovery off while offline would otherwise keep HA's entity alive across the reconnect.
+/// Both components are announced or retracted together by one gate, so HA sees both or neither, never a device card with a light beside a dangling stale update entity.
+///
+/// ## The update entity
+///
+/// `installed_version` is the compile-time `MM_VERSION`, and `latest_version` equals it today since there is no on-device release check yet, so HA shows up-to-date and disables Install.
+/// When the release-check component lands it becomes the caller of `publishUpdateState` with a fresher `latest_version`, and the wire shape does not change.
+/// `release_url` is the GitHub releases page, which HA renders as a "Release notes" link. It is retained and read by a person, so a card left behind by a rename is a dead link.
+/// The state block is written once at CONNACK and on a mid-session discovery turn-on: nothing is per-tick, because both versions are compile-time constants.
+/// The install payload is the target version string via HA's `payload_install_template`, whose default `{{ latest_version }}` renders empty when no newer version is known.
+/// An empty payload therefore means "install latest", falling back to this build's own version so the command re-installs the current release rather than silently doing nothing.
+/// A leading `v` is stripped because the template can send either shape, and the URL is built from `kReleaseAssetUrlFormat` naming both repositories so a rename cannot strand it.
+/// It hands off to `platform::http_fetch_to_ota`, the same OTA path `POST /api/firmware/url` takes, and `otaInFlight()` guards a second install mid-flash rather than corrupting the running task.
+/// On desktop that platform call is a stub returning false, so the install safely reports failure via `g_otaStatus`, and HA polls the retained state rather than any reply.
+///
+/// ## Sending never blocks the render loop
+///
+/// `sendPacket` uses non-blocking `writeSome`: a control packet is at most 256 bytes, far under the socket send buffer, so a healthy socket accepts it all in one call.
+/// A partial or zero write means the buffer is backing up (a zero-window or stalled broker), so it returns false and the caller resets rather than spin-retrying forever inside `tick1s`.
+/// That is the hot-path violation a blocking `write()` would commit, and every path (ping, subscribe, state, discovery) shares the same "reset on a failed send" contract.
+/// A partial write means a wedged socket, so dropping the connection beats leaving a truncated frame on the stream.
+/// `resetConnection` is the single reset path, so every caller (reconfig, disable, timeout, protocol error, peer close) leaves the same clean Idle state.
+/// State is stamped only on a SUCCESSFUL send, so `last*` and `havePublished_` are committed after every send succeeded. A failure then republishes after the reconnect, rather than leaving the hub stale forever.
+/// The name signature follows the same rule, so a failed name publish is retried on the next tick rather than lost until the next reconnect.
+/// A test seam mirrors the outbound bytes into a capture buffer, null in production, because ctest has no live socket and `writeSome` returns -1 there.
+/// Capture mode always reports success so the connect and publish flow proceeds in tests.
+///
+/// ## Reconnect, keepalive and protocol errors
+///
+/// Connecting is non-blocking throughout: `connectStart` kicks off getaddrinfo and connect and returns, and `tick1s` polls it in `ConnectingTcp` so an unreachable broker never stalls the render loop.
+/// Failure is assumed until a full connect succeeds, and cleared only in the CONNACK-accepted path. Every failure route resets to Idle without clearing it, so the next attempt uses the longer backoff.
+/// Backoff keeps a down broker from being hammered every tick. A prior failure, an unreachable broker or a bad hostname costing a synchronous getaddrinfo each try, backs off harder to keep that DNS stall rare.
+/// A broker that accepts TCP but never CONNACKs, the silent-broker wedge, is bounded by the same connect timeout.
+/// PINGREQ goes out at half the keepalive, and a broker silent past 1.5 times the keepalive is dropped.
+/// A malformed or oversize packet desyncs the byte stream for the connection's life, and MQTT 3.1.1 section 4.8 requires closing on a protocol violation. So it reconnects, rather than reading mid-body garbage as fixed headers.
+/// A CONNACK body is `[session-present][return-code]` per section 3.2, so a short body is a violation treated as a failed connect rather than falling through and subscribing on a malformed accept.
+/// A non-zero return code means the broker refused: bad auth, unavailable, and the rest.
+///
+/// ## Inbound command routing
+///
+/// The mqttthing set-topics are three explicit filters under `<prefix>/+/set`, one SUBSCRIBE each because that is simpler than a wildcard.
+/// `update/set` is checked before `ha/set` so the shared prefix parse fires exactly once.
+/// The HA-native JSON command is `{"state":"ON"|"OFF"[,"brightness":0-255]}`, parsed with the same flat `mm::json` helpers `HttpServerModule::applyWledState` uses: key-order-independent and whitespace-safe.
+/// It needs a bigger NUL-terminated buffer than the scalar `value[32]`, and its brightness is already 0-255 so no rescale, unlike the mqttthing `brightness/set` 0-100 path.
+/// HA sends exactly "ON" or "OFF" and only those are acted on. A malformed or truncated value is ignored rather than treated as OFF, so a bad payload never turns the light off.
+/// A short fixed payload is copied NUL-terminated so the `strcmp` and `atoi` parsers are safe on the non-terminated socket slice, and a malformed or oversized one is refused.
+/// `hsv/set` is the mqttthing HSV shape `"h,s,v"`, hue 0-359 with sat and value 0-100. Hue and sat pick the nearest palette, and value maps to brightness so the color wheel's brightness ring still dims.
+/// `hsv/get` publishes the chosen palette's representative hue, full sat, and value as brightness percent.
+/// Subscriptions otherwise happen only at CONNACK, so a mid-session discovery turn-on subscribes as well as announcing.
+///
+/// ## The one reach into the light domain
+///
+/// `Palettes::nearestForHue` is a pure hue-and-saturation to index CONVERSION with no light state or objects, the one narrow reach this core module makes into the light domain.
+/// PO-accepted: routing a HomeKit color to a palette needs the palette set, which is inherently light-domain.
+/// A format conversion is the least-coupling way to bridge it, since the module still drives the palette via `Scheduler::setControl` rather than a light object.
+/// This is a deliberate divergence from the plan's "no light include" line, made with the trade-off understood rather than by precedent.
+///
 #include "core/system/MqttModule.h"
 
-#include "core/module/Scheduler.h"     // setControl — the shared apply-core
-#include "core/util/JsonUtil.h"      // json::hasKey/parseBool/parseInt/parseString — the inbound ha/set parse
+#include "core/module/Scheduler.h"     // setControl: the shared apply-core
+#include "core/util/JsonUtil.h"      // json::hasKey/parseBool/parseInt/parseString: the inbound ha/set parse
 #include "core/system/ControlModule.h"  // look-only presets -> the HA effect list
-#include "core/util/JsonSink.h"      // jsonEscape — escape the editable deviceName into the discovery JSON
-                                /// (same flat helpers HttpServerModule::applyWledState uses; no arena)
-#include "core/util/build_info.h"    // kVersion / kFirmwareName — reported to HA's update entity
-#include "core/system/FirmwareUpdateModule.h"  // g_otaStatus / g_otaBytesTotal / otaInFlight — shared with
-                                        // the OTA task the update entity's install command triggers
-#include "light/util/Palette.h"      // Palettes::nearestForHue — a pure hue/sat→index CONVERSION with no
-                                // light state or objects, the one narrow reach this core module makes into the light domain.
-                                // PO-accepted: routing a HomeKit color to a palette needs the palette set, which is inherently light-domain.
-                                // A format conversion is the least-coupling way to bridge it (the module still drives the palette via Scheduler::setControl, not a light object).
-                                // Deliberate divergence from the plan's "no light include" line, made with the trade-off understood, not by precedent.
+#include "core/util/JsonSink.h"      // jsonEscape: escape the editable deviceName into the discovery JSON
+#include "core/util/build_info.h"    // kVersion / kFirmwareName: reported to HA's update entity
+#include "core/system/FirmwareUpdateModule.h"  // g_otaStatus / g_otaBytesTotal / otaInFlight: shared with the OTA task
+#include "light/util/Palette.h"      // Palettes::nearestForHue: the one reach into the light domain, @xref{the-one-reach-into-the-light-domain}
 
 #include <cstdio>
 #include <cstdlib>
@@ -25,28 +136,21 @@ namespace {
 constexpr size_t kSendBufLen = 256;
 }  // namespace
 
-// The topic prefix, derived live from a STABLE hardware id: projectMM/<last6-of-MAC> (lowercase hex), e.g. projectMM/563cfe.
-// Not stored (no buffer).
-// The MAC is fixed for the chip's life, so a device RENAME never changes the topics, external integrations (Homebridge, Home Assistant) stay pinned.
-// This is the WLED / Tasmota / HA-discovery convention.
-// The MQTT identity is the hardware id, and the friendly *display* name is a separate concern (published on the `name` topic, read from deviceName()).
-// The last 6 hex is the same short-id WLED uses (`wled/<last6>`).
+// The topic prefix, derived live from a STABLE hardware id: MoonLight/<last6-of-MAC> (lowercase hex), e.g. MoonLight/563cfe. @xref{the-topic-identity-is-the-mac}
 void MqttModule::topicPrefix(char* out, size_t cap) const {
     uint8_t mac[6] = {};
     platform::getMacAddress(mac);
     std::snprintf(out, cap, "%s/%02x%02x%02x", kPrefixRoot, mac[3], mac[4], mac[5]);
 }
 
-// A full topic: <prefix>/<suffix>, e.g. projectMM/563cfe/on/set.
+// A full topic: <prefix>/<suffix>, e.g. MoonLight/563cfe/on/set.
 void MqttModule::buildTopic(char* out, size_t cap, const char* suffix) const {
-    char prefix[kPrefixLen];              // exactly what topicPrefix can produce — no slack to truncate into
+    char prefix[kPrefixLen];              // exactly what topicPrefix can produce, no slack to truncate into
     topicPrefix(prefix, sizeof(prefix));
     std::snprintf(out, cap, "%s/%s", prefix, suffix);
 }
 
-// The HA MQTT-discovery config topic: homeassistant/light/projectMM_<mac6>/config.
-// Independent of topicPrefix(), the discovery prefix is HA's `homeassistant`, not our `projectMM` root.
-// The object id carries the projectMM_ prefix so the id is unique across vendors on a shared broker.
+// The HA MQTT-discovery config topic: homeassistant/light/MoonLight_<mac6>/config. @xref{the-discovery-topics}
 void MqttModule::buildDiscoveryTopic(char* out, size_t cap) const {
     uint8_t mac[6] = {};
     platform::getMacAddress(mac);
@@ -54,19 +158,12 @@ void MqttModule::buildDiscoveryTopic(char* out, size_t cap) const {
                   kPrefixRoot, mac[3], mac[4], mac[5]);
 }
 
-// The availability (LWT) topic: <prefix>/status.
-// The broker publishes the retained "offline" Will here on an ungraceful drop; the module publishes retained "online" on connect.
-// HA's avty_t points at it, so the entity greys out when the device disappears.
+// The availability (LWT) topic: <prefix>/status, which HA's avty_t points at so the entity greys out. @xref{availability-and-retract}
 void MqttModule::buildStatusTopic(char* out, size_t cap) const {
     buildTopic(out, cap, "status");
 }
 
-// Lazily allocate the two discovery scratch buffers from the heap the first time discovery publishes, and report them via setDynamicBytes so the UI's per-module memory line accounts for them.
-// A device that never enables HA discovery never calls this → zero bytes.
-// Returns false on OOM (the caller then skips the publish rather than deref a null, the module keeps running, discovery just doesn't announce).
-// Sized to what THIS device actually publishes: the fixed config plus the measured effect list.
-// No cap on the preset count -- a cap would either reserve RAM a three-preset device never uses, or silently publish nothing once the list outgrew it (a truncated config is refused, not sent).
-// Saving or deleting a preset changes the required size, so the buffers are reallocated when it moves rather than held at whatever the first announce needed.
+// Lazily allocate the two discovery scratch buffers, sized to what this device publishes, and report them via setDynamicBytes. @xref{the-discovery-scratch-buffers}
 bool MqttModule::ensureDiscoveryBuffers() {
     const size_t effects = haEffectListBytes();
     const size_t wantPayload = kDiscoveryPayloadBase + effects;
@@ -83,7 +180,7 @@ bool MqttModule::ensureDiscoveryBuffers() {
     return true;
 }
 
-// The effect_list is the light's menu of LOOKS. Only look-only presets appear: one that also carries Drivers or Layouts would rewire pins or geometry, which must not be reachable from an automation or a voice command that believes it is choosing a color scheme (ControlModule::isLookOnly).
+// The bytes the effect_list needs, counting only look-only presets. @xref{the-effect-list-is-looks-only}
 size_t MqttModule::haEffectListBytes() const {
     if (!controlModule_) return 0;
     size_t n = 0, count = 0;
@@ -122,12 +219,7 @@ void MqttModule::freeDiscoveryBuffers() {
 }
 
 void MqttModule::publishDiscovery(bool announce) {
-    // Retract (OFF): send an empty retained payload to the config topic so HA removes the entity, then free the buffers.
-    // The retract frames into a small LOCAL buffer (a tombstone is topic + empty payload, well under kSendBufLen), NOT the on-use discoveryBuf_, which may already be freed.
-    // Which we must not allocate on the OFF path (the "no memory when discovery is off" rule).
-    // When connected the tombstone goes out immediately.
-    // When disconnected we can't send, so it is deferred to the next CONNACK (which retracts when haDiscovery_ is false), the broker keeps the last retained config until then.
-    // Freeing always runs, connected or not.
+    // Retract (OFF): an empty retained payload to the config topic, framed into a small LOCAL buffer, then free. @xref{availability-and-retract}
     if (!announce) {
         if (state_ == Conn::Connected) {
             char topic[96];
@@ -147,17 +239,14 @@ void MqttModule::publishDiscovery(bool announce) {
     char topic[96];
     buildDiscoveryTopic(topic, sizeof(topic));
 
-    // Identity + display name. uniq_id/object_id derive from the stable MAC; the friendly deviceName rides only on `dev.name`.
-    // The entity's own `name` is null, HA's documented convention "this entity IS the device, no sub-label", so the auto-created entity slug is `light.<device>` rather than the doubled `light.<device>_<device>` HA produces when the light and the device carry the same name string.
-    // Rename the device → `dev.name` follows on the next discovery publish, uniq_id stays MAC-pinned, the slug (locked at creation) is unchanged.
-    // Documented at https://www.home-assistant.io/integrations/mqtt/#name, `name: null` is the recommended way.
+    // Identity + display name: uniq_id/object_id derive from the stable MAC, the friendly deviceName rides only on `dev.name`. @xref{the-discovery-payload}
     uint8_t mac[6] = {};
     platform::getMacAddress(mac);
     char id[24];
     std::snprintf(id, sizeof(id), "%s_%02x%02x%02x", kPrefixRoot, mac[3], mac[4], mac[5]);
     const char* dn = systemModule_ ? systemModule_->deviceName() : nullptr;
     if (!dn || !dn[0]) dn = id;
-    // The deviceName is user-editable: a quote/backslash in it would produce invalid JSON. Escape it (used for dev.name only now) with the shared jsonEscape, worst case doubles the 32-char name.
+    // The deviceName is user-editable, so escape it (dev.name only) with the shared jsonEscape.
     char dnEsc[72];
     jsonEscape(dn, dnEsc, sizeof(dnEsc));
 
@@ -166,21 +255,17 @@ void MqttModule::publishDiscovery(bool announce) {
     buildTopic(stat, sizeof(stat), "ha/state");
     buildStatusTopic(avty, sizeof(avty));
 
-    // JSON-schema MQTT light.
-    // Abbreviated keys (HA's documented short forms). brightness at the default 0-255 scale (no scale key needed). dev{} groups the entity under a device card in HA.
-    // `name:null` (see comment above) collapses the entity slug so `light.<device>` isn't doubled.
-    // The looks this device offers, as HA's effect list.
-    // Built into discoveryBuf_ as scratch: that buffer is untouched until buildMqttPublish below, by which time the list is already consumed into the payload.
-    // It must NOT be a region of discoveryPayload_, snprintf writing the payload while reading the list from inside its own destination tramples the list once the fixed prefix (uniq_id plus three topics) grows past the scratch offset.
+    // The looks this device offers, built into discoveryBuf_ as scratch, which must NOT be a region of discoveryPayload_. @xref{the-discovery-scratch-buffers}
     char* fxScratch = reinterpret_cast<char*>(discoveryBuf_);
     const size_t fxLen = writeHaEffectList(fxScratch, discoveryBufLen_);
     char fxKey[24] = "";
     if (fxLen) std::snprintf(fxKey, sizeof(fxKey), "\"effect\":true,");
 
+    // A JSON-schema MQTT light in HA's abbreviated keys, with `name:null` collapsing the entity slug. @xref{the-discovery-payload}
     const int pn = std::snprintf(discoveryPayload_, discoveryPayloadLen_,
         "{\"schema\":\"json\",\"name\":null,\"uniq_id\":\"%s\",\"cmd_t\":\"%s\","
         "\"stat_t\":\"%s\",\"avty_t\":\"%s\",\"brightness\":true,%s%s%s%s"
-        "\"dev\":{\"ids\":[\"%s\"],\"name\":\"%s\",\"mf\":\"MoonModules\",\"mdl\":\"projectMM\"}}",
+        "\"dev\":{\"ids\":[\"%s\"],\"name\":\"%s\",\"mf\":\"MoonModules\",\"mdl\":\"MoonLight\"}}",
         id, cmd, stat, avty,
         fxKey,
         fxLen ? "\"fx_list\":[" : "", fxLen ? fxScratch : "", fxLen ? "]," : "",
@@ -191,11 +276,11 @@ void MqttModule::publishDiscovery(bool announce) {
                                       static_cast<size_t>(pn), discoveryBuf_, discoveryBufLen_,
                                       /*retain=*/true);
     if (n == 0) { setStatusLine("error: discovery config too large"); return; }
-    // Same "reset on a failed send" contract as the ping / subscribe / state paths. A partial write means a wedged socket, so drop the connection rather than leave a truncated frame on the stream.
+    // The same "reset on a failed send" contract as the ping / subscribe / state paths. @xref{sending-never-blocks-the-render-loop}
     if (!sendPacket(discoveryBuf_, n)) resetConnection("error: discovery publish failed");
 }
 
-// SUBSCRIBE to <prefix>/ha/set, the HA-native JSON command topic. Called at CONNACK (with the mqttthing set-topics) and on a mid-session haDiscovery turn-on (subscriptions otherwise only happen once at CONNACK).
+// SUBSCRIBE to <prefix>/ha/set, the HA-native JSON command topic, at CONNACK and on a mid-session haDiscovery turn-on. @xref{inbound-command-routing}
 void MqttModule::subscribeHaSet() {
     if (state_ != Conn::Connected) return;
     char topic[96];
@@ -205,15 +290,9 @@ void MqttModule::subscribeHaSet() {
     if (n == 0 || !sendPacket(buf, n)) resetConnection("error: ha subscribe failed");
 }
 
-// ----------------------------------------------------------------------------
-// HA update entity, the second HA-discovery component alongside the light.
-// Same announce/retract shape (both gated on haDiscovery_), same MAC-stable uniq_id, same broker connection.
-// The state block is written once at CONNACK and on haDiscovery-on-mid-session; there is nothing per-tick to refresh because installed_version and latest_version are compile-time constants.
-// ----------------------------------------------------------------------------
+// The HA update entity, the second HA-discovery component alongside the light. @xref{the-update-entity}
 
-// Mirror of buildDiscoveryTopic but for the `update` component type.
-// Same object id (`projectMM_<mac6>`) so the update entity registers under the SAME HA device card as the light, one device, two entities.
-// Diverging the id would produce a second device card in HA, which reads as "two projectMMs" and is the wrong grouping.
+// Mirror of buildDiscoveryTopic for the `update` component type, with the SAME object id. @xref{the-discovery-topics}
 void MqttModule::buildUpdateDiscoveryTopic(char* out, size_t cap) const {
     uint8_t mac[6] = {};
     platform::getMacAddress(mac);
@@ -221,17 +300,14 @@ void MqttModule::buildUpdateDiscoveryTopic(char* out, size_t cap) const {
                   kPrefixRoot, mac[3], mac[4], mac[5]);
 }
 
-// Announce/retract the update entity.
-// The announcement payload is ~300 bytes (short id + three topic paths + escaped deviceName), so the framed MQTT PUBLISH exceeds the on-stack kSendBufLen (256).
-// Reuses the same lazily-allocated discoveryBuf_/discoveryPayload_ pair the light-discovery uses (448 + 320 bytes): the two announces run serially inside publishDiscovery/publishUpdateDiscovery, never in flight simultaneously, so a shared scratch is safe.
-// Retract fits in the on-stack kSendBufLen because the payload is empty (a tombstone is topic + zero-byte body).
+// Announce or retract the update entity, reusing the light's scratch pair for the announce. @xref{the-discovery-scratch-buffers}
 void MqttModule::publishUpdateDiscovery(bool announce) {
     if (state_ != Conn::Connected) return;
 
     char topic[96];
     buildUpdateDiscoveryTopic(topic, sizeof(topic));
 
-    // Retract path: empty retained payload = HA removes the entity. Fits easily in kSendBufLen; deferred to the next CONNACK if we're offline (broker keeps the last retained config until then, same pattern as the light retract).
+    // Retract: an empty retained payload removes the entity, and fits in kSendBufLen because a tombstone has no body. @xref{availability-and-retract}
     if (!announce) {
         uint8_t tomb[kSendBufLen];
         const size_t n = buildMqttPublish(topic, nullptr, 0, tomb, sizeof(tomb), /*retain=*/true);
@@ -255,13 +331,11 @@ void MqttModule::publishUpdateDiscovery(bool announce) {
     buildTopic(cmd,  sizeof(cmd),  "update/set");
     buildStatusTopic(avty, sizeof(avty));
 
-    // device_class:"firmware" is what makes HA render the friendly name as "<device> Firmware" instead of the bare device name (which collides visually with the light entity in HA's entity list, the "two MM-P4 rows" bench symptom pinned this).
-    // It also picks the correct icon and the "up-to-date / update available" wording. entity_category:"diagnostic" parks it in HA's diagnostic section of the device card, matching how ESPHome and Tasmota surface firmware info.
-    // `name:null` still applies, with device_class set, HA composes the label itself (`<device_name> Firmware`), which is exactly what we want.
+    // device_class:"firmware" and entity_category:"diagnostic" are what shape HA's label, icon and placement. @xref{the-discovery-payload}
     const int pn = std::snprintf(discoveryPayload_, discoveryPayloadLen_,
         "{\"name\":null,\"uniq_id\":\"%s_update\",\"stat_t\":\"%s\",\"cmd_t\":\"%s\","
         "\"avty_t\":\"%s\",\"entity_category\":\"diagnostic\",\"device_class\":\"firmware\","
-        "\"dev\":{\"ids\":[\"%s\"],\"name\":\"%s\",\"mf\":\"MoonModules\",\"mdl\":\"projectMM\"}}",
+        "\"dev\":{\"ids\":[\"%s\"],\"name\":\"%s\",\"mf\":\"MoonModules\",\"mdl\":\"MoonLight\"}}",
         id, stat, cmd, avty, id, dnEsc);
     if (pn <= 0 || static_cast<size_t>(pn) >= discoveryPayloadLen_) return;   // truncated → don't send
 
@@ -272,15 +346,13 @@ void MqttModule::publishUpdateDiscovery(bool announce) {
     if (!sendPacket(discoveryBuf_, n)) resetConnection("error: update discovery publish failed");
 }
 
-// Retained state on <prefix>/update/state. installed_version = compile-time MM_VERSION; latest_version equals it today (no release check on-device yet, see the backlog item under "HA update entity via MQTT discovery"), so HA shows the entity as up-to-date and disables the Install button.
-// When the release-check component lands, it becomes the caller of this method with a fresher latest_version.
-// The wire shape doesn't change. release_url is the GitHub releases page, HA renders it as a "Release notes" link.
+// Retained state on <prefix>/update/state, carrying the two versions and the release URL. @xref{the-update-entity}
 void MqttModule::publishUpdateState() {
     if (state_ != Conn::Connected) return;
     char topic[128];
     buildTopic(topic, sizeof(topic), "update/state");
     char payload[256];
-    // RETAINED on the broker and read by a person, so it names where releases will live: a card left behind by a rename is a dead link.
+    // RETAINED and read by a person, so it names where releases will live: a card left behind by a rename is a dead link.
     const int pn = std::snprintf(payload, sizeof(payload),
         "{\"installed_version\":\"%s\",\"latest_version\":\"%s\","
         "\"release_url\":\"https://github.com/%s/releases\","
@@ -302,22 +374,18 @@ void MqttModule::subscribeUpdateSet() {
     if (n == 0 || !sendPacket(buf, n)) resetConnection("error: update subscribe failed");
 }
 
-// HA's install command.
-// The payload is the target version string (via HA's payload_install_template, defaults to `{{ latest_version }}`); an empty payload means "install latest".
-// The device builds the download URL from the release-artifact convention (`kReleaseAssetUrlFormat`) and hands it to platform::http_fetch_to_ota, the same OTA path POST /api/firmware/url takes, naming both repositories so a rename cannot strand it.
-// Guarded by otaInFlight() so a second install command mid-flash returns silently rather than corrupting the running OTA task.
-// On desktop platform::http_fetch_to_ota is a stub returning false; the install command safely reports failure via g_otaStatus.
+// HA's install command: the payload is the target version, and the device builds the release URL from it. @xref{the-update-entity}
 void MqttModule::handleUpdateInstall(const char* payload, size_t payloadLen) {
     if (otaInFlight()) return;   // matches the /api/firmware/url 409 guard's intent
 
-    // Copy the payload into a bounded local buffer for null-termination + shape checks. A malformed / oversized payload is refused; no partial URL reaches http_fetch_to_ota.
+    // Copy the payload into a bounded local buffer for null-termination and shape checks, refusing a malformed or oversized one. @xref{inbound-command-routing}
     char version[32] = {};
     const size_t vlen = payloadLen < sizeof(version) - 1 ? payloadLen : sizeof(version) - 1;
     std::memcpy(version, payload, vlen);
     version[vlen] = '\0';
     // Strip an optional leading 'v', HA's payload_install_template can send either shape.
     const char* v = (version[0] == 'v') ? version + 1 : version;
-    // Empty payload means "install latest" (HA's default payload_install_template is `{{ latest_version }}`, which a device with no known newer version renders empty). Fall back to this build's own version string, so an empty command re-installs the current release rather than silently doing nothing, as the header contract states.
+    // Empty payload means "install latest", so fall back to this build's own version rather than doing nothing. @xref{the-update-entity}
     if (v[0] == '\0') v = (kVersion[0] == 'v') ? kVersion + 1 : kVersion;
 
     char url[256];
@@ -338,7 +406,7 @@ void MqttModule::handleUpdateInstall(const char* payload, size_t payloadLen) {
     (void)platform::http_fetch_to_ota(url, g_otaStatus, sizeof(g_otaStatus),
                                       &g_otaBytesRead, &g_otaBytesTotal,
                                       haveAlt ? altUrl : nullptr);
-    // No response to publish, HA polls the retained update/state (which the OTA success path implicitly renegotiates on reboot, or a future release-check refreshes).
+    // No response to publish, HA polls the retained update/state. @xref{the-update-entity}
 }
 
 void MqttModule::setup() {
@@ -346,9 +414,7 @@ void MqttModule::setup() {
     MoonModule::setup();
 }
 
-// Release the lazily-allocated discovery buffers when the module is torn down (deleted from the tree, or on device shutdown).
-// The socket is closed via the normal reset path; MoonModule::release() recurses to children (this module has none).
-// No memory outlives the module.
+// Release the lazily-allocated discovery buffers on teardown, so no memory outlives the module. @xref{the-discovery-scratch-buffers}
 void MqttModule::release() {
     freeDiscoveryBuffers();
     MoonModule::release();
@@ -364,18 +430,13 @@ void MqttModule::defineControls() {
     MoonModule::defineControls();
 }
 
-// A broker/port/credentials change re-homes the connection: drop the socket so tick1s reconnects with the new settings on the next tick.
-// Scoped to THIS module's controls via onControlChanged (not the whole-tree prepare sweep), so an unrelated change, a grid resize, a layout edit, never drops the MQTT connection.
-// Live, no reboot.
+// A broker/port/credentials change re-homes the connection, so drop the socket and let tick1s reconnect live on the next tick. @xref{reconnect-keepalive-and-protocol-errors}
 void MqttModule::onControlChanged(const char* controlName) {
     if (std::strcmp(controlName, "broker") == 0 || std::strcmp(controlName, "port") == 0 ||
         std::strcmp(controlName, "username") == 0 || std::strcmp(controlName, "password") == 0) {
         resetConnection(enabled() ? "reconnecting" : "disabled");
     } else if (std::strcmp(controlName, "haDiscovery") == 0) {
-        // Announce or retract live, NO reset (bouncing the socket to change a discovery flag is needless).
-        // On a turn-ON mid-session also SUBSCRIBE (subscriptions otherwise only fire at CONNACK); on turn-OFF the retract clears the HA entity.
-        // Publishes only when connected.
-        // Same announce/retract shape for the update entity, one gate, two components on the same device card.
+        // Announce or retract live and only when connected, with NO reset, one gate driving both components. @xref{availability-and-retract}
         publishDiscovery(haDiscovery_);
         publishUpdateDiscovery(haDiscovery_);
         if (haDiscovery_) {
@@ -385,9 +446,7 @@ void MqttModule::onControlChanged(const char* controlName) {
     }
 }
 
-// Enable/disable transition.
-// On disable we send a clean DISCONNECT + close (rather than leaving a dangling socket for the broker to time out), tick1s stops being called once disabled.
-// This transition hook is the only place a disable can act.
+// The enable/disable transition, the only place a disable can act: a clean DISCONNECT beats a dangling socket the broker must time out.
 void MqttModule::onEnabled(bool enabled) {
     if (!enabled && conn_.valid()) {
         uint8_t buf[4];
@@ -398,12 +457,10 @@ void MqttModule::onEnabled(bool enabled) {
     resetConnection(enabled ? "idle" : "disabled");
 }
 
-// Send a whole MQTT packet without EVER blocking the render loop.
-// Uses writeSome (non-blocking): a control packet is ≤256 B, far under the socket send buffer, so a healthy socket accepts it all in one call.
-// A partial or zero write means the buffer is backing up (a zero-window / stalled broker), return false so the caller resets the connection rather than spin-retrying forever, which is what the blocking write() would do inside tick1s (the hot-path violation this avoids).
+// Send a whole MQTT packet without EVER blocking the render loop, returning false so the caller resets on a partial write. @xref{sending-never-blocks-the-render-loop}
 bool MqttModule::sendPacket(const uint8_t* data, size_t len) {
     if (len == 0) return true;
-    // Test seam: mirror the outbound bytes into the capture buffer (null in production) so a unit test can assert what the module emits, there's no live socket in ctest. WriteSome returns -1.
+    // Test seam: mirror the outbound bytes into the capture buffer, null in production. @xref{sending-never-blocks-the-render-loop}
     if (sendCapture_) {
         if (sendCaptureLen_ + len <= sendCaptureCap_) {
             std::memcpy(sendCapture_ + sendCaptureLen_, data, len);
@@ -419,7 +476,7 @@ void MqttModule::enableSendCaptureForTest(uint8_t* buf, size_t cap) {
     sendCapture_ = buf; sendCaptureCap_ = cap; sendCaptureLen_ = 0;
 }
 
-// Close the socket and return to Idle with a status line, the single reset path so every caller (reconfig, disable, timeout, protocol error, peer close) leaves the same clean state.
+// Close the socket and return to Idle with a status line, the single reset path every caller shares. @xref{sending-never-blocks-the-render-loop}
 void MqttModule::resetConnection(const char* status) {
     conn_.close();
     state_ = Conn::Idle;
@@ -437,7 +494,7 @@ void MqttModule::tick1s() MM_NONBLOCKING {
     }
     if (!platform::networkReady()) { MoonModule::tick1s(); return; }
 
-    // Presets changed while connected: re-announce so the retained discovery config carries the current effect list (Home Assistant only re-reads it when the retained message changes). Revision-driven, so a save, rename or delete lands within a second; buffers resize inside publishDiscovery via ensureDiscoveryBuffers.
+    // Presets changed while connected: re-announce so the retained config carries the current effect list, since HA only re-reads it when the message changes. @xref{the-effect-list-is-looks-only}
     if (haDiscovery_ && state_ == Conn::Connected && controlModule_) {
         const uint32_t rev = controlModule_->presetsRevision();
         if (rev != lastPresetsRev_) {
@@ -449,7 +506,7 @@ void MqttModule::tick1s() MM_NONBLOCKING {
     const uint32_t now = platform::millis();
     switch (state_) {
         case Conn::Idle: {
-            // Backoff between connect attempts so a down broker isn't hammered every tick. A prior FAILURE (unreachable broker, bad hostname → a synchronous getaddrinfo each try) backs off harder to keep the recurring DNS stall rare.
+            // Backoff between connect attempts, harder after a prior failure. @xref{reconnect-keepalive-and-protocol-errors}
             const uint32_t backoff = lastConnectFailed_ ? kFailedBackoffMs : kReconnectBackoffMs;
             if (now - lastConnectTry_ >= backoff || lastConnectTry_ == 0) {
                 lastConnectTry_ = now;
@@ -466,7 +523,7 @@ void MqttModule::tick1s() MM_NONBLOCKING {
             break;
         }
         case Conn::Connecting:
-            // TCP up, CONNECT sent, waiting for CONNACK. A broker that accepts TCP but never CONNACKs (finding: the silent-broker wedge) is bounded by the same connect timeout.
+            // TCP up, CONNECT sent, waiting for CONNACK, and the silent-broker wedge is bounded by the same timeout. @xref{reconnect-keepalive-and-protocol-errors}
             serviceConnected();
             if (state_ == Conn::Connecting && now - connectStartedMs_ >= kConnectTimeoutMs)
                 resetConnection("error: no CONNACK");
@@ -478,10 +535,10 @@ void MqttModule::tick1s() MM_NONBLOCKING {
     MoonModule::tick1s();
 }
 
-// Begin a NON-BLOCKING TCP connect (getaddrinfo + connect kicked off, returns immediately). tick1s polls it in ConnectingTcp so the render loop never stalls on an unreachable broker.
+// Begin a NON-BLOCKING TCP connect, which tick1s polls in ConnectingTcp. @xref{reconnect-keepalive-and-protocol-errors}
 void MqttModule::startConnect() {
     setStatusLine("connecting");
-    // Assume failure until a full connect succeeds (cleared in the CONNACK-accepted path). Every failure route resets to Idle without clearing this, so the next Idle uses the longer backoff.
+    // Assume failure until a full connect succeeds, so every failure route leaves the longer backoff armed. @xref{reconnect-keepalive-and-protocol-errors}
     lastConnectFailed_ = true;
     if (!conn_.connectStart(broker_, port_)) {   // immediate failure (DNS / socket)
         resetConnection("error: connect failed");
@@ -496,16 +553,12 @@ void MqttModule::sendConnectPacket() {
     uint8_t buf[kSendBufLen];
     const char* user = username_[0] ? username_ : nullptr;
     const char* pass = password_[0] ? password_ : nullptr;
-    // A stable, slash-free clientId (MQTT-3.1.3-5 allows only [0-9a-zA-Z], and a broker may reject a '/'): "projectMM-<last6-of-MAC>", alphanumeric + one hyphen.
-    // NOT topicPrefix(), that carries a slash.
-    // Same MAC identity as the topics, just without the path separator.
+    // A stable, slash-free clientId: "MoonLight-<last6-of-MAC>", NOT topicPrefix() which carries a slash. @xref{the-topic-identity-is-the-mac}
     uint8_t mac[6] = {};
     platform::getMacAddress(mac);
     char clientId[32];
-    std::snprintf(clientId, sizeof(clientId), "projectMM-%02x%02x%02x", mac[3], mac[4], mac[5]);
-    // Last Will: retained "offline" on <prefix>/status.
-    // The broker publishes it if we drop ungracefully (power cut, WiFi loss), so HA's avty_t greys the entity out.
-    // Declared here at CONNECT; we publish the retained "online" ourselves once CONNACK lands (handleInboundByte).
+    std::snprintf(clientId, sizeof(clientId), "%s-%02x%02x%02x", kPrefixRoot, mac[3], mac[4], mac[5]);
+    // Last Will, declared here at CONNECT: retained "offline" on <prefix>/status. @xref{availability-and-retract}
     char willTopic[96];
     buildStatusTopic(willTopic, sizeof(willTopic));
     const size_t n = buildMqttConnect(clientId, user, pass, kKeepaliveSec, buf, sizeof(buf),
@@ -540,10 +593,10 @@ void MqttModule::serviceConnected() {
 
     if (state_ == Conn::Connected) {
         publishState(false);                 // emit any changed get topics
-        // Re-publish the friendly name if the device was renamed while connected (topics are stable, but the display label should follow). Cheap change-detect via a rolling signature, no stored name buffer. publishName is a no-op if unchanged.
+        // Re-publish the friendly name if the device was renamed while connected, change-detected without a stored name buffer. @xref{the-topic-identity-is-the-mac}
         maybeRepublishName();
 
-        // Keepalive: PINGREQ at keepalive/2. If the broker goes silent past ~keepalive*1.5, drop.
+        // Keepalive: PINGREQ at keepalive/2, and a broker silent past ~keepalive*1.5 is dropped. @xref{reconnect-keepalive-and-protocol-errors}
         const uint32_t now = platform::millis();
         if (now - lastPingSent_ >= (kKeepaliveSec * 1000u) / 2) {
             uint8_t ping[2];
@@ -558,20 +611,20 @@ void MqttModule::serviceConnected() {
 
 void MqttModule::handleInboundByte(uint8_t byte) {
     const MqttFeedResult r = parser_.feed(byte);
-    // A malformed / oversize packet desyncs the byte stream for the connection's life (MQTT 3.1.1 §4.8: a protocol violation MUST close the connection). Drop and reconnect rather than reinterpret mid-body garbage as fixed headers.
+    // A malformed or oversize packet desyncs the stream for the connection's life, so drop and reconnect. @xref{reconnect-keepalive-and-protocol-errors}
     if (r == MqttFeedResult::Malformed) { resetConnection("error: bad packet"); return; }
     if (r != MqttFeedResult::PacketReady) return;
 
     const uint8_t type = parser_.lastType();
     if (type == static_cast<uint8_t>(MqttPacketType::Connack)) {
-        // CONNACK body is [session-present][return-code] (§3.2). A short body is a protocol violation, treat as a failed connect, don't fall through and subscribe on a malformed accept.
+        // A CONNACK body shorter than [session-present][return-code] is a protocol violation, not a malformed accept to subscribe on. @xref{reconnect-keepalive-and-protocol-errors}
         if (parser_.bodyLen() < 2) { resetConnection("error: bad CONNACK"); return; }
         // Non-zero return code = the broker refused (bad auth, unavailable, …).
         if (parser_.body()[1] != 0) {
             resetConnection("error: broker refused");
             return;
         }
-        // Subscribe to <prefix>/+/set with three explicit filters (one SUBSCRIBE each, simple).
+        // Subscribe to <prefix>/+/set with three explicit filters, one SUBSCRIBE each. @xref{inbound-command-routing}
         static const char* kSets[] = {"on/set", "brightness/set", "hsv/set"};
         char topic[128];
         for (const char* suffix : kSets) {
@@ -585,7 +638,7 @@ void MqttModule::handleInboundByte(uint8_t byte) {
         setStatusLine("connected");
         havePublished_ = false;
         publishName();                       // retained friendly name so a hub shows the display name
-        // Availability: publish retained "online" to <prefix>/status (the LWT's counterpart, the broker publishes "offline" if we drop). Must precede the discovery announce so HA sees the entity available the instant its config lands.
+        // Availability: retained "online" on <prefix>/status, which must precede the discovery announce. @xref{availability-and-retract}
         {
             char st[96]; buildStatusTopic(st, sizeof(st));
             uint8_t sb[kSendBufLen];
@@ -593,10 +646,7 @@ void MqttModule::handleInboundByte(uint8_t byte) {
                                                sb, sizeof(sb), /*retain=*/true);
             if (sn == 0 || !sendPacket(sb, sn)) { resetConnection("error: availability publish failed"); return; }
         }
-        // On connect: announce + subscribe when discovery is on.
-        // When it's OFF, retract instead, a config retained from a previous session (discovery was on, then turned off while offline) would otherwise keep HA's entity alive across this reconnect.
-        // The update entity mirrors this, one gate, both components announced/retracted together.
-        // HA either sees both or neither (never a device card with a light but a dangling stale update entity).
+        // On connect: announce and subscribe when discovery is on, and retract when it is off. @xref{availability-and-retract}
         if (haDiscovery_) {
             publishDiscovery(true);       subscribeHaSet();
             publishUpdateDiscovery(true); subscribeUpdateSet();
@@ -614,24 +664,20 @@ void MqttModule::handleInboundByte(uint8_t byte) {
 }
 
 void MqttModule::routePublish(const char* topic, const uint8_t* payload, size_t payloadLen) {
-    // Match the topic suffix after our (derived) prefix. A short fixed payload is copied NUL-terminated so the parsers below (strcmp / atoi) are safe on the non-terminated socket slice.
-    char prefix[kPrefixLen];              // exactly what topicPrefix can produce — no slack to truncate into
+    // Match the topic suffix after our derived prefix, copying a short payload NUL-terminated for the parsers below. @xref{inbound-command-routing}
+    char prefix[kPrefixLen];              // exactly what topicPrefix can produce, no slack to truncate into
     topicPrefix(prefix, sizeof(prefix));
     const size_t prefixLen = std::strlen(prefix);
     if (std::strncmp(topic, prefix, prefixLen) != 0 || topic[prefixLen] != '/') return;
     const char* suffix = topic + prefixLen + 1;
 
-    // HA update-entity install command, the payload is the target version string (HA's payload_install_template default is `{{ latest_version }}`, an empty payload means "install latest").
-    // Routed to handleUpdateInstall which builds the GitHub-release URL and hands off to the same platform::http_fetch_to_ota the /api/firmware/url route uses.
-    // Checked BEFORE ha/set so the shared prefix parse fires exactly once.
+    // The HA update-entity install command, checked BEFORE ha/set so the shared prefix parse fires exactly once. @xref{the-update-entity}
     if (std::strcmp(suffix, "update/set") == 0) {
         handleUpdateInstall(reinterpret_cast<const char*>(payload), payloadLen);
         return;
     }
 
-    // HA-native JSON command: {"state":"ON"|"OFF"[,"brightness":0-255]}.
-    // Parsed with the same flat mm::json helpers HttpServerModule::applyWledState uses (key-order-independent, whitespace-safe); needs a bigger NUL-terminated buffer than the scalar `value[32]` below.
-    // HA brightness is already 0-255, so no rescale (unlike the mqttthing brightness/set 0-100 path).
+    // The HA-native JSON command, parsed with the same flat mm::json helpers the WLED state route uses. @xref{inbound-command-routing}
     if (std::strcmp(suffix, "ha/set") == 0) {
         char body[128];
         const size_t blen = payloadLen < sizeof(body) - 1 ? payloadLen : sizeof(body) - 1;
@@ -640,7 +686,7 @@ void MqttModule::routePublish(const char* topic, const uint8_t* payload, size_t 
         if (json::hasKey(body, "state")) {
             char st[8] = "";
             json::parseString(body, "state", st, sizeof(st));
-            // HA sends exactly "ON"/"OFF"; act only on those. A malformed or truncated value is ignored (not silently treated as OFF), so a bad payload never turns the light off.
+            // Act only on the exact "ON"/"OFF" HA sends, so a bad payload never turns the light off. @xref{inbound-command-routing}
             if (std::strcmp(st, "ON") == 0)       setControlValue("on", "{\"value\":true}");
             else if (std::strcmp(st, "OFF") == 0) setControlValue("on", "{\"value\":false}");
         }
@@ -652,7 +698,7 @@ void MqttModule::routePublish(const char* topic, const uint8_t* payload, size_t 
             std::snprintf(json, sizeof(json), "{\"value\":%d}", bri);
             setControlValue("brightness", json);
         }
-        // A look chosen from the effect dropdown. applyLookByName re-checks look-only, so a crafted message naming a hardware-carrying preset is refused at the entry point, not just hidden from the list.
+        // A look chosen from the effect dropdown, re-checked for look-only at the entry point. @xref{the-effect-list-is-looks-only}
         if (controlModule_ && json::hasKey(body, "effect")) {
             char fx[40] = {};
             json::parseString(body, "effect", fx, sizeof(fx));
@@ -679,7 +725,7 @@ void MqttModule::routePublish(const char* topic, const uint8_t* payload, size_t 
         std::snprintf(json, sizeof(json), "{\"value\":%d}", bri);
         setControlValue("brightness", json);
     } else if (std::strcmp(suffix, "hsv/set") == 0) {
-        // "h,s,v", hue 0..359, sat 0..100, val 0..100 (mqttthing HSV). Hue+sat pick the nearest palette; value maps to brightness so the color wheel's brightness ring still dims.
+        // The mqttthing HSV triple: hue and sat pick the nearest palette, value maps to brightness. @xref{inbound-command-routing}
         int h = 0, s = 0, v = -1;
         std::sscanf(value, "%d,%d,%d", &h, &s, &v);
         const uint8_t idx = Palettes::nearestForHue(static_cast<uint16_t>(h < 0 ? 0 : h),
@@ -695,20 +741,17 @@ void MqttModule::routePublish(const char* topic, const uint8_t* payload, size_t 
     }
 }
 
-// Publish the friendly display name (deviceName) on the retained `<prefix>/name` topic.
-// The topic identity is the stable MAC (rename-proof); this is the separate human-facing label a hub reads for its accessory title (the WLED serverDescription / HA discovery `name` role).
-// Retained so a hub connecting later still gets it.
-// Published on connect + on a deviceName change.
-// A cheap rolling signature of the current deviceName (djb2), so a rename can be detected without storing the name string.
+// A cheap rolling signature of the current deviceName (djb2), so a rename is detected without storing the name. @xref{the-topic-identity-is-the-mac}
 static uint32_t nameSignature(const char* s) {
     uint32_t h = 5381;
     for (; s && *s; s++) h = h * 33u + static_cast<uint8_t>(*s);
     return h;
 }
 
+// Publish the friendly display name on the retained `<prefix>/name` topic, on connect and on a rename. @xref{the-topic-identity-is-the-mac}
 void MqttModule::publishName() {
     if (state_ != Conn::Connected) return;
-    // Always the device's own name, SystemModule guarantees it non-empty and per-device unique (it falls back to MM-<last4MAC>, never a shared literal), so N devices never collide as one name in the hub. No systemModule_ (a wiring bug) → skip; don't invent a non-unique fallback.
+    // Always the device's own name, which SystemModule guarantees non-empty and per-device unique. @xref{the-topic-identity-is-the-mac}
     const char* dn = systemModule_ ? systemModule_->deviceName() : nullptr;
     if (!dn || !dn[0]) return;
     char topic[128];
@@ -716,7 +759,7 @@ void MqttModule::publishName() {
     uint8_t buf[kSendBufLen];
     const size_t n = buildMqttPublish(topic, reinterpret_cast<const uint8_t*>(dn), std::strlen(dn),
                                       buf, sizeof(buf), /*retain=*/true);
-    // Stamp the signature only on a SUCCESSFUL send, else a failed name publish is retried next tick (maybeRepublishName sees the mismatch) rather than being lost until the next reconnect.
+    // Stamp the signature only on a SUCCESSFUL send, so a failed publish is retried next tick. @xref{sending-never-blocks-the-render-loop}
     if (n && sendPacket(buf, n)) nameSig_ = nameSignature(dn);
 }
 
@@ -732,7 +775,7 @@ void MqttModule::publishState(bool force) {
     const bool on = driversOn(s);
     const uint8_t bri = driversBrightness(s);
     const uint8_t pal = driversPalette(s);
-    // The applied look is part of the published state (the ha/state `effect` field), so it is part of the change gate. Applying a preset changes neither on, bri nor palette, and without this signature a look-only change would never publish.
+    // The applied look is published state, so it is part of the change gate. @xref{the-effect-list-is-looks-only}
     const char* lookNow = controlModule_ ? controlModule_->currentLook() : "";
     if (!force && havePublished_ && on == lastOn_ && bri == lastBri_ && pal == lastPalette_ &&
         std::strncmp(lookNow, lastLook_, sizeof(lastLook_) - 1) == 0) return;
@@ -740,9 +783,7 @@ void MqttModule::publishState(bool force) {
     char topic[128];
     uint8_t buf[kSendBufLen];
 
-    // A publish here is one of the three get-topics.
-    // On ANY send failure, reset the connection and DON'T commit last*/havePublished_, so after the reconnect the change is republished, not lost (a committed-but-unsent state would leave the hub showing stale values forever).
-    // Same "stamp only on success" rule as publishName / the ping path.
+    // One of the three get-topics, where any send failure resets without committing last*/havePublished_. @xref{sending-never-blocks-the-render-loop}
     auto publish = [&](const char* suffix, const char* payload) -> bool {
         buildTopic(topic, sizeof(topic), suffix);
         const size_t n = buildMqttPublish(topic, reinterpret_cast<const uint8_t*>(payload),
@@ -752,7 +793,7 @@ void MqttModule::publishState(bool force) {
 
     char briStr[8];
     std::snprintf(briStr, sizeof(briStr), "%d", (bri * 100) / 255);
-    // hsv/get, the chosen palette's representative hue, full sat, value = brightness%.
+    // hsv/get: the chosen palette's representative hue, full sat, value = brightness%. @xref{inbound-command-routing}
     char hsvStr[16];
     std::snprintf(hsvStr, sizeof(hsvStr), "%u,100,%d",
                   static_cast<unsigned>(Palettes::representativeHue(pal)), (bri * 100) / 255);
@@ -764,11 +805,9 @@ void MqttModule::publishState(bool force) {
         return;
     }
 
-    // HA-native state on <prefix>/ha/state (retained, so a late-joining HA gets current state).
-    // One JSON message with 0-255 brightness (no rescale, unlike brightness/get's 0-100).
-    // Only when discovery is on, and inside this change-gated block so it emits once per change, not per tick.
+    // HA-native state on <prefix>/ha/state: retained, 0-255 brightness, and inside this change-gated block. @xref{inbound-command-routing}
     if (haDiscovery_) {
-        // The applied look rides along, so HA's dropdown shows what is actually on -- including when the change came from the device's own pad grid rather than from HA.
+        // The applied look rides along, so HA's dropdown shows the look that is on. @xref{the-effect-list-is-looks-only}
         char fxEsc[72] = "";
         const char* look = controlModule_ ? controlModule_->currentLook() : nullptr;
         if (look && look[0]) jsonEscape(look, fxEsc, sizeof(fxEsc));

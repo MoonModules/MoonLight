@@ -20,7 +20,7 @@ A user-added Service: the audio source the audio-reactive effects consume. `mode
 
 <img src="../../assets/core/AudioService.png" width="300" alt="Audio module controls">
 
-<video src="../../assets/uiscenarios/react-to-sound.webm" autoplay loop muted playsinline width="720" title="An audio-reactive effect following the room through the board's own microphone"></video>
+<video src="../../assets/uiscenarios/98-react-to-sound.webm" autoplay loop muted playsinline width="720" title="An audio-reactive effect following the room through the board's own microphone"></video>
 
 - `mode` — Local audio, Receive network or Simulate, each showing only its own controls below.
 - `micMode`: (Local, I²S targets) `I2S` for a three-wire part, `PDM` for a two-wire one.
@@ -68,7 +68,7 @@ Detail: [technical](moxygen/VideoService.md)
 
 <img src="../../assets/core/OscModule.png" width="300" alt="OSC module controls: listen, port, status">
 
-Receives [OSC](https://opensoundcontrol.stanford.edu/) over UDP and writes it onto this device's controls, so a fader in Resolume, TouchDesigner or TouchOSC drives projectMM directly. It owns no surface of its own: everything lands in the same control writes the HTTP API and the UI use, so every validator still runs. Addresses, feedback and setup: ⌄ details.
+Receives [OSC](https://opensoundcontrol.stanford.edu/) over UDP and writes it onto this device's controls, so a fader in Resolume, TouchDesigner or TouchOSC drives MoonLight directly. It owns no surface of its own: everything lands in the same control writes the HTTP API and the UI use, so every validator still runs. Addresses, feedback and setup: ⌄ details.
 
 - `listen` — receive OSC (default **off**). This opens an unauthenticated UDP port that writes
   controls, on the same LAN-trust basis as the Art-Net and audio-sync receivers, so it is a capability you turn on rather than one every device carries.
@@ -184,13 +184,13 @@ A desktop device is picked by list position, so re-pick if the OS reorders them;
 Sending and receiving both use the **multicast address 239.0.0.1**, which is what WLED's own usermod does (`beginMulticast` on both ends). It never uses broadcast, so a broadcast sender is inaudible to WLED and a receiver that only binds the port never hears WLED. This is a network-layer address, unrelated to any device grouping.
 
 **Port 11988 is the WLED contract**, and `syncPort` defaults to it. The port is configurable for
-projectMM peers that want a private stream, but a custom port is no longer WLED-compatible: the endpoint WLED speaks is 239.0.0.1:11988 specifically.
+MoonLight peers that want a private stream, but a custom port is no longer WLED-compatible: the endpoint WLED speaks is 239.0.0.1:11988 specifically.
 
 Multicast is also the better neighbor, with a caveat worth knowing: a switch or access point that does **IGMP snooping** forwards the group only to the ports that joined it, so the other hosts never see the traffic at all. Without snooping the switch floods it exactly like broadcast, and on WiFi it goes out at the lowest basic rate to every station. So multicast can reduce how many hosts have to process ~40 packets a second, but it does not guarantee it. See [multicast and IGMP snooping](../../explanation/architecture/moonlight.md#multicast-and-igmp-snooping).
 
 The 44-byte v2 packet is byte-compatible with WLED, with one field that is not yet equivalent:
 
-| field | projectMM | WLED | status |
+| field | MoonLight | WLED | status |
 |---|---|---|---|
 | `sampleRaw` / `sampleSmth` | level / smoothed level | same | compatible |
 | `samplePeak` | latched beat, 80 ms refractory | same rule | compatible |
@@ -200,9 +200,9 @@ The 44-byte v2 packet is byte-compatible with WLED, with one field that is not y
 | `FFT_Magnitude` | 0..255 internally, x16 on the wire | ~0..4096 | compatible |
 
 **The magnitude scale differs, so it is converted at the wire.** WLED sends the raw magnitude of
-its FFT's dominant bin, scaled so that "the end result is linear and ~4096 max" (its own comment where it divides the input samples by 16). Its effects then divide that by 4, 8 or 16 depending on the effect and treat the result as a byte, which is why their thresholds read `< 48` squelch and `> 144` full brightness. projectMM byte-scales the peak magnitude to 0..255 instead, through the same noise floor and gain conditioning as the 16 bands, so one pair of knobs governs the whole spectrum.
+its FFT's dominant bin, scaled so that "the end result is linear and ~4096 max" (its own comment where it divides the input samples by 16). Its effects then divide that by 4, 8 or 16 depending on the effect and treat the result as a byte, which is why their thresholds read `< 48` squelch and `> 144` full brightness. MoonLight byte-scales the peak magnitude to 0..255 instead, through the same noise floor and gain conditioning as the 16 bands, so one pair of knobs governs the whole spectrum.
 
-projectMM keeps its own units internally and multiplies by 16 on send, dividing by 16 on receive.
+MoonLight keeps its own units internally and multiplies by 16 on send, dividing by 16 on receive.
 The factor is exact rather than a fudge: it is the divisor WLED's effects apply, so our full-scale 255 arrives as 4080, right on WLED's own ~4096 design target, and every effect's thresholds land where they were tuned to. Adopting WLED's range internally was the alternative, and was rejected because that range is an artifact of FFT size and input scaling rather than a specification (WLED's own fallback path admits "no idea if 10000 is a good value"), and importing it would cost the property that one floor/gain pair conditions every value the service publishes, in exchange for resolution the receiving effects discard anyway when they divide back down to a byte.
 
 A received magnitude is clamped to 255, since a real WLED source reaches ~9500 and an unclamped value would drive effects harder than locally analyzed audio ever could.
@@ -217,7 +217,7 @@ A client learns the current state three ways: when it first writes to us from a 
 The shipped session has a `sync from device` button for exactly this.
 
 **Setting one up**, from installing the app to using it from a phone, is its own page:
-[Driving projectMM from a phone or tablet](../../how-to/control-surface.md). It needs no checkout and no tooling, just the app and the session file from the latest release.
+[Driving MoonLight from a phone or tablet](../../how-to/control-surface.md). It needs no checkout and no tooling, just the app and the session file from the latest release.
 
 **Addresses.** These are a public contract: a TouchOSC layout built against them keeps working, so
 they stay small and boring.
@@ -234,7 +234,7 @@ Both argument forms are accepted because controllers disagree: apps send a float
 
 Send one from the bench with `uv run moondeck/check/send_osc.py <ip> /mm/fader/1 0.75`.
 
-Origin: projectMM original
+Origin: MoonLight original
 
 **One command to a working surface** (with the repo checked out). Install
 [Open Stage Control](https://openstagecontrol.ammd.net/) (free, macOS / Windows / Linux), then:
@@ -252,17 +252,17 @@ It runs **headless**: a web server rather than a desktop window. That is deliber
 |---|---|
 | `--host` / `--port` | the device and its OSC `port` (default `127.0.0.1:9000`) |
 | `--listen` | where we receive feedback, the device's `feedbackPort` (default 9001) |
-| `--ui-port` | the surface's web UI (default 8088; 8080 is projectMM's own) |
+| `--ui-port` | the surface's web UI (default 8088; 8080 is MoonLight's own) |
 | `--app` | the Open Stage Control binary, when it is not on PATH or in the usual place |
 | `--gui` | also open the desktop window; by default it is the server alone |
 
 The launcher looks on PATH first, then in each platform's default install location. **Windows and Linux are untested**: the paths are the ones those installers use, but only macOS has been run. If it cannot find the app, `--app` takes the full path and that always works.
 
 **A ready-made control surface.** A session of the switches, encoders and faders ships as a release
-asset (`projectMM-control-surface.json`) and lives in the repo at [`docs/reference/examples/open-stage-control.json`](../../reference/examples/open-stage-control.json).
+asset (`MoonLight-control-surface.json`) and lives in the repo at [`docs/reference/examples/open-stage-control.json`](../../reference/examples/open-stage-control.json).
 Editing the layout needs `read-only` off in the launcher.
 
-<img src="../../assets/core/OscModule-open-stage-control.png" width="600" alt="The shipped Open Stage Control session beside projectMM's own Control card: eight switches, eight encoders and eight faders in both">
+<img src="../../assets/core/OscModule-open-stage-control.png" width="600" alt="The shipped Open Stage Control session beside MoonLight's own Control card: eight switches, eight encoders and eight faders in both">
 
 Driving the device from that session, beside the Control card it mirrors.
 

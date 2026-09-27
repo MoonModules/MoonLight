@@ -7,7 +7,7 @@ namespace mm {
 
 /// Physics effect: gravity-bounced balls trailing along the layer.
 /// @card BouncingBallsEffect.gif
-/// Author: Andrew Tuline (WLED-SR), https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
+/// Author: Andrew Tuline (WLED-SR), via the predecessor, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
 ///
 /// One column of balls per x, each launched upward and bouncing with energy loss.
 /// A ball is relaunched once its velocity dies out.

@@ -1,11 +1,11 @@
 # Home automation
 
-Bring a projectMM device into your smart home — controlled alongside your lights, scenes, and automations — using the [MQTT module](../moonmodules/core/system.md#mqtt) (or, for some hubs, the built-in WLED compatibility). The device exposes on/off, brightness, and color; a home-automation platform adopts it and drives those from its own app, voice assistant, and automations.
+Bring a MoonLight device into your smart home — controlled alongside your lights, scenes, and automations — using the [MQTT module](../moonmodules/core/system.md#mqtt) (or, for some hubs, the built-in WLED compatibility). The device exposes on/off, brightness, and color; a home-automation platform adopts it and drives those from its own app, voice assistant, and automations.
 
 Integration goes **both directions**, and this page covers both:
 
-- **Your smart home controlling the device** — a hub (Home Assistant, Homebridge, …) adopts the projectMM device and drives its on/off, brightness, and color from its own app, voice assistant, and automations.
-- **The device controlling smart-home lights** — projectMM drives **Philips Hue** bulbs as effect pixels, so your existing smart bulbs become part of a show.
+- **Your smart home controlling the device** — a hub (Home Assistant, Homebridge, …) adopts the MoonLight device and drives its on/off, brightness, and color from its own app, voice assistant, and automations.
+- **The device controlling smart-home lights** — MoonLight drives **Philips Hue** bulbs as effect pixels, so your existing smart bulbs become part of a show.
 
 The device-side recipes below assume the hub and (where relevant) an MQTT broker are already running. If any of that infrastructure isn't there yet, jump to [Set up the infrastructure](#set-up-the-infrastructure) at the end for HA-with-Mosquitto and standalone-Homebridge walkthroughs, then come back.
 
@@ -18,8 +18,8 @@ The control surface these integrations drive — the MQTT controls, topics, and 
 
 ## Prerequisites
 
-- A projectMM device on your WiFi/Ethernet. For the MQTT-based paths (HA MQTT-discovery, Homebridge) the [MQTT module](../moonmodules/core/system.md#mqtt) must be present (it ships on boards whose catalog entry includes it; the Shelly model does); for the WLED-only HA path it isn't needed — HA reaches the device over its always-present `/json` endpoint.
-- The device's **MAC suffix** — the last 6 hex of its MAC, which is its stable topic id on MQTT (`projectMM/<suffix>`) and identifies the device to HA on the WLED path too. Read it from the MQTT module's `mqtt_status`, or once the device is talking to the broker, `mosquitto_sub -t 'projectMM/#'`. The examples below use `563cfe`; substitute yours.
+- A MoonLight device on your WiFi/Ethernet. For the MQTT-based paths (HA MQTT-discovery, Homebridge) the [MQTT module](../moonmodules/core/system.md#mqtt) must be present (it ships on boards whose catalog entry includes it; the Shelly model does); for the WLED-only HA path it isn't needed — HA reaches the device over its always-present `/json` endpoint.
+- The device's **MAC suffix** — the last 6 hex of its MAC, which is its stable topic id on MQTT (`MoonLight/<suffix>`) and identifies the device to HA on the WLED path too. Read it from the MQTT module's `mqtt_status`, or once the device is talking to the broker, `mosquitto_sub -t 'MoonLight/#'`. The examples below use `563cfe`; substitute yours.
 - A running hub — with per-path infra:
   - **HA + Mosquitto broker add-on** — for MQTT auto-discovery (richer state + HomeKit Bridge). [Set up HA + Mosquitto](#set-up-home-assistant-mosquitto).
   - **HA alone (no broker)** — for the WLED-integration path. Same HA install, just skip the Mosquitto add-on.
@@ -27,14 +27,14 @@ The control surface these integrations drive — the MQTT controls, topics, and 
 
 ## Adopt in Home Assistant
 
-<img src="../assets/core/ha-integration.png" width="600" alt="projectMM devices as 💫-marked lights in a Home Assistant dashboard">
+<img src="../assets/core/ha-integration.png" width="600" alt="MoonLight devices as 💫-marked lights in a Home Assistant dashboard">
 
-HA discovers a projectMM device automatically over the WLED path — no broker, nothing to configure — and lists it as a light with color, palette, and brightness. The 💫 in each name marks it as projectMM among any plain WLED devices. An optional step brings that entity into Apple Home via HA's own HomeKit Bridge — no Homebridge needed. Turn the `haDiscovery` control on only for the MQTT path (broker-only or cross-subnet setups); see [Let HA auto-create the entity](#2-let-ha-auto-create-the-entity) below.
+HA discovers a MoonLight device automatically over the WLED path — no broker, nothing to configure — and lists it as a light with color, palette, and brightness. The 💫 in each name marks it as MoonLight among any plain WLED devices. An optional step brings that entity into Apple Home via HA's own HomeKit Bridge — no Homebridge needed. Turn the `haDiscovery` control on only for the MQTT path (broker-only or cross-subnet setups); see [Let HA auto-create the entity](#2-let-ha-auto-create-the-entity) below.
 
 The chain:
 
 ```
-Apple Home ──HAP──▶ HA (HomeKit Bridge) ──MQTT──▶ Mosquitto ◀──MQTT── projectMM device
+Apple Home ──HAP──▶ HA (HomeKit Bridge) ──MQTT──▶ Mosquitto ◀──MQTT── MoonLight device
                              └── HA app / voice / automations
 ```
 
@@ -47,16 +47,16 @@ The default WLED path needs none of this — skip to step 2. Do step 1 **only if
 - `username` / `password` — the HA user you created for MQTT (a plain HA user with local-network access; see the [broker add-on setup](#install-the-mosquitto-broker-add-on) if you haven't).
 - `haDiscovery` — turn **on** (it's off by default). This is what makes HA auto-create the MQTT entity in the next step; leave it off if you're on the WLED path.
 
-`mqtt_status` turns to `connected` when it reaches the broker. Confirm from HA with the built-in **MQTT integration → Configure → Listen to topic → `projectMM/#`** — the device's `.../on/get`, `.../brightness/get`, `.../hsv/get`, and retained `.../name` appear.
+`mqtt_status` turns to `connected` when it reaches the broker. Confirm from HA with the built-in **MQTT integration → Configure → Listen to topic → `MoonLight/#`** — the device's `.../on/get`, `.../brightness/get`, `.../hsv/get`, and retained `.../name` appear.
 
 ### 2. Let HA auto-create the entity
 
 Nothing to configure — HA discovers the device automatically over the WLED path. Two paths exist; the WLED one is the default and the richer of the two, so a device appears in HA **once** out of the box:
 
-- **WLED integration** (the default, no MQTT at all): HA's built-in WLED integration discovers the device over zeroconf and reads the WLED-compatible `/json` API projectMM already serves — **color, palette, brightness, and diagnostic sensors**, no broker. This is the recommended path.
+- **WLED integration** (the default, no MQTT at all): HA's built-in WLED integration discovers the device over zeroconf and reads the WLED-compatible `/json` API MoonLight already serves — **color, palette, brightness, and diagnostic sensors**, no broker. This is the recommended path.
 - **MQTT auto-discovery** (opt-in, uses the Mosquitto add-on): turn `haDiscovery` on for a broker-only or cross-subnet setup where zeroconf can't reach HA. The device then also announces itself on the retained `homeassistant/light/…/config` topic, and HA **auto-creates a light entity** named after the device with **on/off + brightness** (the discovery config declares `brightness` only, so this entity has no color control); it greys out when the device drops offline. Color/palette control stays on the separate `hsv/set` topic — not the auto-created entity.
 
-**Why is MQTT discovery off by default?** Because the WLED path alone already gives HA a richer light (color, palette, sensors) with zero infrastructure, and running both lists the device **twice** (one WLED entity, one MQTT entity). So WLED is the default and MQTT discovery is opt-in, reserved for what WLED's zeroconf can't do: reach across VLANs/guest nets or a broker-only network, sit next to other MQTT devices (Tasmota, ESPHome, Zigbee2MQTT) under one convention, or push state with retained-across-offline latency. On a flat LAN with only projectMM devices, WLED alone is the whole story; a segmented network or an existing MQTT estate is where turning `haDiscovery` on earns its slot. The two never announce the same device to the same hub by default, so HA never double-lists it, and toggling `haDiscovery` re-announces or retracts live: an empty retained config removes the MQTT entity, with no reconnect. A device that wants both cards can still have them, deliberately.
+**Why is MQTT discovery off by default?** Because the WLED path alone already gives HA a richer light (color, palette, sensors) with zero infrastructure, and running both lists the device **twice** (one WLED entity, one MQTT entity). So WLED is the default and MQTT discovery is opt-in, reserved for what WLED's zeroconf can't do: reach across VLANs/guest nets or a broker-only network, sit next to other MQTT devices (Tasmota, ESPHome, Zigbee2MQTT) under one convention, or push state with retained-across-offline latency. On a flat LAN with only MoonLight devices, WLED alone is the whole story; a segmented network or an existing MQTT estate is where turning `haDiscovery` on earns its slot. The two never announce the same device to the same hub by default, so HA never double-lists it, and toggling `haDiscovery` re-announces or retracts live: an empty retained config removes the MQTT entity, with no reconnect. A device that wants both cards can still have them, deliberately.
 
 The MQTT control surface (topics, HSV → palette mapping, retained state) is in [Core › System › MQTT](../moonmodules/core/system.md#mqtt); nothing here restates it.
 
@@ -64,14 +64,14 @@ The MQTT control surface (topics, HSV → palette mapping, retained state) is in
 
 ### 3. Optional: expose to Apple Home via HomeKit Bridge
 
-HA can act as its own HomeKit bridge. **Settings → Devices & Services → Add Integration → HomeKit Bridge**, pick **Include selected entities**, and tick the projectMM light entity created above. HA prints a QR code and PIN; in the iOS **Home** app, **Add Accessory → More options → HA HomeKit Bridge** and scan / enter the PIN. The light shows up as a HomeKit accessory driven end-to-end through HA — same outcome as the standalone Homebridge recipe, one fewer service to run.
+HA can act as its own HomeKit bridge. **Settings → Devices & Services → Add Integration → HomeKit Bridge**, pick **Include selected entities**, and tick the MoonLight light entity created above. HA prints a QR code and PIN; in the iOS **Home** app, **Add Accessory → More options → HA HomeKit Bridge** and scan / enter the PIN. The light shows up as a HomeKit accessory driven end-to-end through HA — same outcome as the standalone Homebridge recipe, one fewer service to run.
 
 ## Adopt in Homebridge
 
 Standalone Apple-Home-only path, for when HA isn't wanted. Assumes Homebridge + a Mosquitto broker are already running (both together on a Pi is the usual permanent setup; a Mac or PC works for a quick test — see [Set up standalone Homebridge + Mosquitto](#set-up-standalone-homebridge-mosquitto) below if not). Two steps: **point the device at the broker**, then **add one accessory to Homebridge**.
 
 ```
-Apple Home ──HAP──▶ Homebridge ──MQTT──▶ Mosquitto ◀──MQTT── projectMM device
+Apple Home ──HAP──▶ Homebridge ──MQTT──▶ Mosquitto ◀──MQTT── MoonLight device
 ```
 
 ### 1. Point the device at the broker
@@ -82,7 +82,7 @@ In the device's web UI, open the **MQTT** module and set:
 - `port` — usually `1883`.
 - `username` / `password` — only if your broker requires auth.
 
-`mqtt_status` turns to `connected` once it reaches the broker, and `mosquitto_sub -t 'projectMM/#' -v` shows the device's `.../on/get`, `.../brightness/get`, `.../hsv/get`, and retained `.../name`.
+`mqtt_status` turns to `connected` once it reaches the broker, and `mosquitto_sub -t 'MoonLight/#' -v` shows the device's `.../on/get`, `.../brightness/get`, `.../hsv/get`, and retained `.../name`.
 
 ### 2. Add the accessory to Homebridge
 
@@ -100,7 +100,7 @@ Once the broker, device, and Homebridge are all talking (the `mosquitto_sub` win
 
 ## Drive Hue lights
 
-The other direction: instead of a hub controlling the device, the **device controls your Philips Hue bulbs**, treating each color bulb as a pixel of an effect. Your existing smart lights join the show — an effect's colors glide across them alongside (or instead of) an LED strip. This is a projectMM **output driver**, not a hub integration, so there's no broker and no Homebridge — the device talks straight to the Hue bridge over its LAN HTTP API.
+The other direction: instead of a hub controlling the device, the **device controls your Philips Hue bulbs**, treating each color bulb as a pixel of an effect. Your existing smart lights join the show — an effect's colors glide across them alongside (or instead of) an LED strip. This is a MoonLight **output driver**, not a hub integration, so there's no broker and no Homebridge — the device talks straight to the Hue bridge over its LAN HTTP API.
 
 Because Hue is a rate-limited HTTP hub (~10 commands/s), this is **smooth ambient color**, not fast strobing: the driver paces itself to the bridge and lets it fade between colors. Full behavior, controls, and the wire contract are in the driver reference: [Drivers › Hue](../moonmodules/light/drivers.md#hue).
 
@@ -147,7 +147,7 @@ Windows 10/11 **Pro** or **Enterprise** ships Hyper-V; the Home editions don't. 
 4. **Create the VM.** **Hyper-V Manager → New → Virtual Machine**. Name it `HomeAssistant`; **Generation 2**; assign at least **2 GB RAM** (2 GB is fine for a home LAN, 4 GB is comfortable); attach the network to the external switch you just made; **Use an existing virtual hard disk** and point at the unzipped `.vhdx`; finish.
 5. **Disable Secure Boot.** Right-click the new VM → **Settings → Security** → untick **Enable Secure Boot** (HAOS's shim isn't in the Microsoft template).
 6. **Start the VM.** It boots to a text console — wait ~2 minutes for the first-run "Preparing Home Assistant" to finish. When the console shows `homeassistant login:`, open a browser on the host at **[http://homeassistant.local:8123](http://homeassistant.local:8123)** (or the LAN IP the console prints) and complete the onboarding wizard.
-7. **Keep the host awake and the VM auto-managed.** An always-on HA host must not sleep — an S3 or hibernate suspend pauses Hyper-V, and every projectMM device / HA entity flips to "unavailable" until it wakes. In an admin PowerShell:
+7. **Keep the host awake and the VM auto-managed.** An always-on HA host must not sleep — an S3 or hibernate suspend pauses Hyper-V, and every MoonLight device / HA entity flips to "unavailable" until it wakes. In an admin PowerShell:
 
    ```powershell
    # what sleep states this host actually supports (tells you what to disable)
@@ -230,7 +230,7 @@ For an Apple-Home-only setup without HA. A **Raspberry Pi** is the natural perma
 Wherever the broker runs, the device reaches it over the LAN, so the broker must listen on all interfaces, not just loopback — noted per platform below. Confirm the broker sees the device at any point with:
 
 ```
-mosquitto_sub -t 'projectMM/#' -v
+mosquitto_sub -t 'MoonLight/#' -v
 ```
 
 #### Raspberry Pi
@@ -297,7 +297,7 @@ Now jump back to [Adopt in Homebridge](#adopt-in-homebridge).
 - **HA entities flap "unavailable" every few minutes** — the VM's network is dropping. Almost always the WiFi-bridge symptom noted in the HA install section: the HA VM is on a WiFi-bridged NIC that re-associates periodically. Move the HA VM to a wired external switch (Hyper-V / ProxMox / ESXi all support this), or run HAOS on a wired Pi. This is also what a battery of Zigbee / Wi-Fi routers with a bad channel plan looks like — worth checking the HA host's own connectivity first.
 - **Every Zigbee entity is `unavailable` and Zigbee2MQTT will not start**: work down the chain instead of restarting things. If `binary_sensor.zigbee2mqtt_bridge_connection_state` reads **`off`** rather than `unavailable`, MQTT is healthy and Home Assistant is receiving Zigbee2MQTT's own offline message, so neither the broker nor the integration is at fault. On a network coordinator (see [reach a USB Zigbee coordinator from the VM](#optional-reach-a-usb-zigbee-coordinator-from-the-vm)), read the bridge's log next: a connection logged as `to-serial 16 B / from-serial 0 B` means the bridge faithfully wrote Zigbee2MQTT's init and the coordinator answered nothing. That is a hung coordinator, not a software fault, and restarting the add-on, the bridge, or Windows will not clear it. **Unplug the coordinator, wait ten seconds, plug it back in, then restart the bridge service** with `Restart-Service ZigbeeBridge -Force` from an elevated PowerShell. That last step is not optional: a bridge that opens its serial port once at startup is still holding a handle to the device that was unplugged, and it will keep failing every connection until it is restarted. **Then restart the Zigbee2MQTT add-on as well.** While the bridge was unreachable the add-on will have failed its own adapter initialization and dropped into an error state, and its watchdog does not reliably bring it back, so it sits there stopped even once the bridge is healthy again. Turning off USB selective suspend is what stops the whole sequence recurring.
 - **Devices report briefly after each Zigbee2MQTT restart, then go quiet, and commands never arrive**: a different fault from the one above, and the one most often misread as a software problem. The coordinator powers up, starts its network, and then loses power again a short while later, typically once its radio begins transmitting. It stays enumerated as a serial port the whole time and still answers simple queries, so nothing in the operating system, the bridge or Zigbee2MQTT reports an error. The only visible symptom is that incoming reports stop and every outgoing command fails. **Move the coordinator to a different USB socket, or onto a powered hub that supplies its own current, before considering a re-flash.** Moving it counts as an unplug, so restart the bridge service and then the add-on afterwards, exactly as above, or the bridge keeps serving a handle to the socket the coordinator just left and nothing appears to improve. A socket whose power delivery has degraded can no longer hold a transmitting radio up, and that is far more common than a corrupted coordinator. If the devices then keep their pairings and the mesh reforms on its own, nothing was ever corrupted, which is also the sign that re-flashing would have been wasted effort.
-- **HA created two light entities with the same slug (`light.<slug>_<slug>`)** — a stale MQTT-discovery config is still retained on the broker. Delete the retained topic (`mosquitto_pub -h <broker> -t 'homeassistant/light/projectMM_<mac6>/config' -r -n`) and let the device republish; HA cleans up the entity within a few seconds.
+- **HA created two light entities with the same slug (`light.<slug>_<slug>`)** — a stale MQTT-discovery config is still retained on the broker. Delete the retained topic (`mosquitto_pub -h <broker> -t 'homeassistant/light/MoonLight_<mac6>/config' -r -n`) and let the device republish; HA cleans up the entity within a few seconds.
 - **HA WLED integration fails with "Cannot connect", or the entity shows partial state** — HA reads two endpoints, both on the device's HTTP port (default **80** on ESP32, **8080** on desktop builds), so probe both:
 
   ```bash
@@ -306,5 +306,5 @@ Now jump back to [Adopt in Homebridge](#adopt-in-homebridge).
   ```
 
   A **404 on `/json`** means an old firmware that predates the WLED-compatibility shim → reflash. A **404 on `/presets.json`** with `/json` working means the presets route is missing → HA's coordinator retry-storms trying to fetch presets and the entity ends up stuck on "unavailable" even though the light responds; also a firmware reflash. A `/json` response that parses but is missing `info.fs`, `state.nl`, `state.udpn`, or `state.lor` fails python-wled's dataclass parse and HA reports HTTP-500 on `light.turn_on` — again a firmware version older than the current WLED shim.
-- **Homebridge shows "No Response"** — the accessory's topics don't match the device's MAC suffix, or the `url` points at the wrong broker. Confirm the suffix with `mosquitto_sub -t 'projectMM/#'` and that the same broker appears in both the device's `broker` control and the accessory `url`.
+- **Homebridge shows "No Response"** — the accessory's topics don't match the device's MAC suffix, or the `url` points at the wrong broker. Confirm the suffix with `mosquitto_sub -t 'MoonLight/#'` and that the same broker appears in both the device's `broker` control and the accessory `url`.
 - **HomeKit color wheel doesn't match a specific color.** Expected: HomeKit sends a full-precision hue, and the device snaps it to the *nearest* built-in palette (there's no arbitrary-color mode). Same behavior whether the bridge is HA's HomeKit Bridge or standalone Homebridge. See the palette note in the [MQTT reference](../moonmodules/core/system.md#mqtt).

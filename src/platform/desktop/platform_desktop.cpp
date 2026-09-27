@@ -633,7 +633,7 @@ bool httpsPost(const char* url, const char* body, uint32_t timeoutMs) {
     if (parts.nScheme != INTERNET_SCHEME_HTTPS) return false;
     const std::wstring target = std::wstring(path) + query;
 
-    HINTERNET session = WinHttpOpen(L"projectMM", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+    HINTERNET session = WinHttpOpen(L"MoonLight", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
                                     WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!session) return false;
 
@@ -2460,7 +2460,7 @@ struct NdiSendCreate {
     bool        clock_video, clock_audio;
 };
 
-// NDI_LIB_FOURCC('B','G','R','X'), X, not A: projectMM has no alpha to send, and an ignored alpha channel is exactly what the X variants mean. Little-endian packing, as the macro builds it.
+// NDI_LIB_FOURCC('B','G','R','X'), X, not A: MoonLight has no alpha to send, and an ignored alpha channel is exactly what the X variants mean. Little-endian packing, as the macro builds it.
 constexpr int kFourCCBgrx = 'B' | ('G' << 8) | ('R' << 16) | (static_cast<int>('X') << 24);
 constexpr int kFrameFormatProgressive = 1;   // NDIlib_frame_format_type_progressive
 
@@ -2548,10 +2548,10 @@ bool ndiAvailable() {
 
 bool ndiSenderOpen(const char* name) {
     if (ndiTestMode_ == NdiTestMode::ForceMissing) return false;
-    if (ndiTestMode_ == NdiTestMode::ForceAvailable) { ndiCapturedName_ = (name && name[0]) ? name : "projectMM"; return true; }
+    if (ndiTestMode_ == NdiTestMode::ForceAvailable) { ndiCapturedName_ = (name && name[0]) ? name : "MoonLight"; return true; }
     if (!ndiLoad()) return false;
     ndiSenderClose();
-    ndiName_ = (name && name[0]) ? name : "projectMM";
+    ndiName_ = (name && name[0]) ? name : "MoonLight";
     NdiSendCreate create{};
     create.p_ndi_name = ndiName_.c_str();   // the string must outlive the sender, hence ndiName_
     create.p_groups   = nullptr;

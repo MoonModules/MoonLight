@@ -1,0 +1,1047 @@
+{
+  "name": "scenario_MoonLiveEffect_livescript",
+  "module": "MoonLiveEffect",
+  "mode": "mutate",
+  "skip_on": [
+    "desktop-windows",
+    "desktop-linux"
+  ],
+  "also": [
+    "Layouts",
+    "GridLayout",
+    "Effects",
+    "Layer",
+    "Drivers",
+    "NetworkSendDriver"
+  ],
+  "description": "Exercise a scripted MoonLiveEffect as a wired MoonModule end-to-end, the integration layer the unit tests can't reach. The effect compiles its `source` text to native code on-device and renders it into the Layer buffer each tick. Prepares its own canvas: Layout(Grid 16x16) + Layer + MoonLiveEffect, measures the default compile, then edits `source` live (a new fill color recompiles and keeps rendering), pushes a BROKEN script (compile fails, the previous code is freed, the effect renders dark and the parse error surfaces in status, no crash), recovers with a valid script, and finally removes + re-adds the effect (add/remove robustness in any order). A crash in the JIT/emit path, a failed recompile that wedges the tick, or a buffer overrun on an odd grid all show up as a failed measure. The compiler + emit golden bytes are pinned by unit_moonlive_compiler / unit_moonlive_fill; this is the live wired-module gate.",
+  "fixture": [
+    {
+      "name": "fix-layouts",
+      "op": "add_module",
+      "id": "Layouts",
+      "type": "Layouts"
+    },
+    {
+      "name": "fix-grid",
+      "op": "add_module",
+      "id": "Grid",
+      "type": "GridLayout",
+      "parent_id": "Layouts",
+      "props": {
+        "width": 16,
+        "height": 16
+      }
+    },
+    {
+      "name": "fix-layers",
+      "op": "add_module",
+      "id": "Effects",
+      "type": "Effects",
+      "props": {
+        "layouts": "Layouts"
+      }
+    },
+    {
+      "name": "fix-layer",
+      "op": "add_module",
+      "id": "Layer",
+      "type": "Layer",
+      "parent_id": "Effects",
+      "props": {
+        "channelsPerLight": 3
+      }
+    },
+    {
+      "name": "fix-drivers",
+      "op": "add_module",
+      "id": "Drivers",
+      "type": "Drivers",
+      "props": {
+        "effects": "Effects"
+      }
+    },
+    {
+      "name": "fix-artnet",
+      "op": "add_module",
+      "id": "ArtNet",
+      "type": "NetworkSendDriver",
+      "parent_id": "Drivers"
+    }
+  ],
+  "steps": [
+    {
+      "name": "stage-initial-script",
+      "description": "Stage the script the effect starts on, before it is added.",
+      "op": "write_file",
+      "path": "/moonlive/sc-live.mle",
+      "value": "class E { void tick() { setRGB(random16(256), 200, 60, 255); } }\n"
+    },
+    {
+      "name": "add-moonlive",
+      "description": "Add a MoonLiveEffect to the Layer. Its default source (random pixels) compiles on-device to native code; measure that the wired effect renders.",
+      "op": "add_module",
+      "id": "ML",
+      "type": "MoonLiveEffect",
+      "parent_id": "Layer",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 5,
+            "p95": 6,
+            "min": 5,
+            "max": 19,
+            "n": 32,
+            "samples": [6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 5, 5, 5, 6, 5, 5, 6, 5, 5, 5, 5, 5, 6, 5, 5, 5, 19, 5, 5]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 4013,
+            "p95": 4013,
+            "min": 4013,
+            "max": 4013,
+            "n": 1,
+            "samples": [4013]
+          },
+          "free_heap": {
+            "p50": 7626803,
+            "p95": 7626803,
+            "min": 7626803,
+            "max": 7626803,
+            "n": 1,
+            "samples": [7626803]
+          },
+          "max_alloc_block": {
+            "p50": 63488,
+            "p95": 63488,
+            "min": 63488,
+            "max": 63488,
+            "n": 1,
+            "samples": [63488]
+          },
+          "last_updated": "2026-07-24"
+        },
+        "esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 11291,
+            "p95": 11291,
+            "min": 11291,
+            "max": 11291,
+            "n": 1,
+            "samples": [11291]
+          },
+          "free_heap": {
+            "p50": 34007695,
+            "p95": 34007695,
+            "min": 34007695,
+            "max": 34007695,
+            "n": 1,
+            "samples": [34007695]
+          },
+          "max_alloc_block": {
+            "p50": 385024,
+            "p95": 385024,
+            "min": 385024,
+            "max": 385024,
+            "n": 1,
+            "samples": [385024]
+          },
+          "last_updated": "2026-06-27"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 13313,
+            "p95": 13983,
+            "min": 945,
+            "max": 13983,
+            "n": 4,
+            "samples": [945, 13494, 13313, 13983]
+          },
+          "free_heap": {
+            "p50": 35216,
+            "p95": 97128,
+            "min": 33476,
+            "max": 97128,
+            "n": 4,
+            "samples": [97128, 48356, 35216, 33476]
+          },
+          "max_alloc_block": {
+            "p50": 26624,
+            "p95": 94208,
+            "min": 26624,
+            "max": 94208,
+            "n": 4,
+            "samples": [94208, 38912, 26624, 26624]
+          },
+          "last_updated": "2026-09-01"
+        }
+      }
+    },
+    {
+      "name": "select-initial-script",
+      "description": "Point the card at its script file.",
+      "op": "set_control",
+      "id": "ML",
+      "key": "script",
+      "value": "sc-live.mle"
+    },
+    {
+      "name": "edit-source-red-save",
+      "description": "Save the script file, the way the card editor writes it.",
+      "op": "write_file",
+      "path": "/moonlive/sc-live.mle",
+      "value": "class E { void tick() { fill(255, 0, 0); } }\n"
+    },
+    {
+      "name": "edit-source-red",
+      "description": "Live-edit the script source to a new color. A script edit triggers a recompile (affectsPrepare gates on `script`); the new native code swaps in and keeps rendering.",
+      "op": "set_control",
+      "id": "ML",
+      "key": "script",
+      "value": "sc-live.mle",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 5,
+            "p95": 6,
+            "min": 4,
+            "max": 17,
+            "n": 32,
+            "samples": [5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 5, 5, 4, 5, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 4, 5, 5, 17, 5, 5]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 4450,
+            "p95": 4450,
+            "min": 4450,
+            "max": 4450,
+            "n": 1,
+            "samples": [4450]
+          },
+          "free_heap": {
+            "p50": 7644499,
+            "p95": 7644499,
+            "min": 7644499,
+            "max": 7644499,
+            "n": 1,
+            "samples": [7644499]
+          },
+          "max_alloc_block": {
+            "p50": 86016,
+            "p95": 86016,
+            "min": 86016,
+            "max": 86016,
+            "n": 1,
+            "samples": [86016]
+          },
+          "last_updated": "2026-07-24"
+        },
+        "esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 10167,
+            "p95": 10167,
+            "min": 10167,
+            "max": 10167,
+            "n": 1,
+            "samples": [10167]
+          },
+          "free_heap": {
+            "p50": 34010179,
+            "p95": 34010179,
+            "min": 34010179,
+            "max": 34010179,
+            "n": 1,
+            "samples": [34010179]
+          },
+          "max_alloc_block": {
+            "p50": 385024,
+            "p95": 385024,
+            "min": 385024,
+            "max": 385024,
+            "n": 1,
+            "samples": [385024]
+          },
+          "last_updated": "2026-06-27"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 11621,
+            "p95": 13659,
+            "min": 1245,
+            "max": 13659,
+            "n": 4,
+            "samples": [1245, 13659, 11621, 12031]
+          },
+          "free_heap": {
+            "p50": 35032,
+            "p95": 97040,
+            "min": 31796,
+            "max": 97040,
+            "n": 4,
+            "samples": [97040, 47852, 35032, 31796]
+          },
+          "max_alloc_block": {
+            "p50": 26624,
+            "p95": 94208,
+            "min": 26624,
+            "max": 94208,
+            "n": 4,
+            "samples": [94208, 38912, 26624, 26624]
+          },
+          "last_updated": "2026-09-01"
+        }
+      }
+    },
+    {
+      "name": "edit-source-broken-save",
+      "description": "Save the script file, the way the card editor writes it.",
+      "op": "write_file",
+      "path": "/moonlive/sc-live.mle",
+      "value": "class E { void tick() { fill(nope); } }\n"
+    },
+    {
+      "name": "edit-source-broken",
+      "description": "Push a script that fails to parse. The compile fails, the engine reports the diagnostic in the module status and renders dark, but the device keeps running (robust, no reboot), the script-editor failure path. The measure passes because the pipeline still ticks.",
+      "op": "set_control",
+      "id": "ML",
+      "key": "script",
+      "value": "sc-live.mle",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 5,
+            "p95": 6,
+            "min": 4,
+            "max": 19,
+            "n": 32,
+            "samples": [5, 5, 5, 5, 5, 4, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 5, 5, 5, 5, 5, 5, 5, 5, 6, 5, 5, 5, 19, 5, 5]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 4366,
+            "p95": 4366,
+            "min": 4366,
+            "max": 4366,
+            "n": 1,
+            "samples": [4366]
+          },
+          "free_heap": {
+            "p50": 7646319,
+            "p95": 7646319,
+            "min": 7646319,
+            "max": 7646319,
+            "n": 1,
+            "samples": [7646319]
+          },
+          "max_alloc_block": {
+            "p50": 86016,
+            "p95": 86016,
+            "min": 86016,
+            "max": 86016,
+            "n": 1,
+            "samples": [86016]
+          },
+          "last_updated": "2026-07-24"
+        },
+        "esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 10572,
+            "p95": 10572,
+            "min": 10572,
+            "max": 10572,
+            "n": 1,
+            "samples": [10572]
+          },
+          "free_heap": {
+            "p50": 34006131,
+            "p95": 34006131,
+            "min": 34006131,
+            "max": 34006131,
+            "n": 1,
+            "samples": [34006131]
+          },
+          "max_alloc_block": {
+            "p50": 385024,
+            "p95": 385024,
+            "min": 385024,
+            "max": 385024,
+            "n": 1,
+            "samples": [385024]
+          },
+          "last_updated": "2026-06-27"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 11635,
+            "p95": 15271,
+            "min": 1126,
+            "max": 15271,
+            "n": 4,
+            "samples": [1126, 15271, 11635, 11668]
+          },
+          "free_heap": {
+            "p50": 35200,
+            "p95": 97464,
+            "min": 31780,
+            "max": 97464,
+            "n": 4,
+            "samples": [97464, 48052, 35200, 31780]
+          },
+          "max_alloc_block": {
+            "p50": 26624,
+            "p95": 94208,
+            "min": 26624,
+            "max": 94208,
+            "n": 4,
+            "samples": [94208, 38912, 26624, 26624]
+          },
+          "last_updated": "2026-09-01"
+        }
+      }
+    },
+    {
+      "name": "edit-source-recover-save",
+      "description": "Save the script file, the way the card editor writes it.",
+      "op": "write_file",
+      "path": "/moonlive/sc-live.mle",
+      "value": "class E { void tick() { fill(0, 255, 0); } }\n"
+    },
+    {
+      "name": "edit-source-recover",
+      "description": "Push a valid script again. The engine recompiles cleanly and rendering resumes, a broken edit is fully recoverable.",
+      "op": "set_control",
+      "id": "ML",
+      "key": "script",
+      "value": "sc-live.mle",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 5,
+            "p95": 7,
+            "min": 5,
+            "max": 15,
+            "n": 32,
+            "samples": [5, 6, 5, 5, 5, 7, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 5, 5, 5, 5, 5, 7, 5, 6, 5, 5, 5, 5, 15, 5, 5]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 4040,
+            "p95": 4040,
+            "min": 4040,
+            "max": 4040,
+            "n": 1,
+            "samples": [4040]
+          },
+          "free_heap": {
+            "p50": 7644291,
+            "p95": 7644291,
+            "min": 7644291,
+            "max": 7644291,
+            "n": 1,
+            "samples": [7644291]
+          },
+          "max_alloc_block": {
+            "p50": 86016,
+            "p95": 86016,
+            "min": 86016,
+            "max": 86016,
+            "n": 1,
+            "samples": [86016]
+          },
+          "last_updated": "2026-07-24"
+        },
+        "esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 10708,
+            "p95": 10708,
+            "min": 10708,
+            "max": 10708,
+            "n": 1,
+            "samples": [10708]
+          },
+          "free_heap": {
+            "p50": 34009331,
+            "p95": 34009331,
+            "min": 34009331,
+            "max": 34009331,
+            "n": 1,
+            "samples": [34009331]
+          },
+          "max_alloc_block": {
+            "p50": 385024,
+            "p95": 385024,
+            "min": 385024,
+            "max": 385024,
+            "n": 1,
+            "samples": [385024]
+          },
+          "last_updated": "2026-06-27"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 12974,
+            "p95": 13609,
+            "min": 1223,
+            "max": 13609,
+            "n": 4,
+            "samples": [1223, 13488, 12974, 13609]
+          },
+          "free_heap": {
+            "p50": 34696,
+            "p95": 97456,
+            "min": 34108,
+            "max": 97456,
+            "n": 4,
+            "samples": [97456, 46056, 34696, 34108]
+          },
+          "max_alloc_block": {
+            "p50": 26624,
+            "p95": 94208,
+            "min": 26624,
+            "max": 94208,
+            "n": 4,
+            "samples": [94208, 38912, 26624, 26624]
+          },
+          "last_updated": "2026-09-01"
+        }
+      }
+    },
+    {
+      "name": "shrink-grid-1x1",
+      "description": "Resize the canvas to 1x1 while the scripted effect renders, the smallest non-empty grid. The native fill loops over a single light; the run guards (non-null buffer, cpl>=3) keep it in-bounds. Pins the 'runs at every grid size' hard rule for the JIT'd routine.",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 1,
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 5,
+            "p95": 6,
+            "min": 4,
+            "max": 18,
+            "n": 32,
+            "samples": [6, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 5, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 18, 5, 5]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 1152,
+            "p95": 1152,
+            "min": 1152,
+            "max": 1152,
+            "n": 1,
+            "samples": [1152]
+          },
+          "free_heap": {
+            "p50": 7716035,
+            "p95": 7716035,
+            "min": 7716035,
+            "max": 7716035,
+            "n": 1,
+            "samples": [7716035]
+          },
+          "max_alloc_block": {
+            "p50": 86016,
+            "p95": 86016,
+            "min": 86016,
+            "max": 86016,
+            "n": 1,
+            "samples": [86016]
+          },
+          "last_updated": "2026-07-24"
+        },
+        "esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 1160,
+            "p95": 1160,
+            "min": 1160,
+            "max": 1160,
+            "n": 1,
+            "samples": [1160]
+          },
+          "free_heap": {
+            "p50": 34012203,
+            "p95": 34012203,
+            "min": 34012203,
+            "max": 34012203,
+            "n": 1,
+            "samples": [34012203]
+          },
+          "max_alloc_block": {
+            "p50": 385024,
+            "p95": 385024,
+            "min": 385024,
+            "max": 385024,
+            "n": 1,
+            "samples": [385024]
+          },
+          "last_updated": "2026-06-27"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 1414,
+            "p95": 2471,
+            "min": 1144,
+            "max": 2471,
+            "n": 4,
+            "samples": [2471, 1537, 1144, 1414]
+          },
+          "free_heap": {
+            "p50": 36140,
+            "p95": 115448,
+            "min": 35316,
+            "max": 115448,
+            "n": 4,
+            "samples": [115448, 49388, 36140, 35316]
+          },
+          "max_alloc_block": {
+            "p50": 26624,
+            "p95": 94208,
+            "min": 26624,
+            "max": 94208,
+            "n": 4,
+            "samples": [94208, 38912, 26624, 26624]
+          },
+          "last_updated": "2026-09-01"
+        }
+      }
+    },
+    {
+      "name": "grow-grid-back",
+      "description": "Resize back to a wider grid; the effect keeps rendering across the live dimension change (the no-reboot reconfiguration contract applied to scripted code).",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 16,
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 5,
+            "p95": 10,
+            "min": 4,
+            "max": 19,
+            "n": 32,
+            "samples": [5, 5, 5, 5, 10, 4, 6, 7, 7, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 4, 5, 5, 6, 5, 5, 5, 5, 5, 5, 19, 5, 5]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 7329,
+            "p95": 7329,
+            "min": 7329,
+            "max": 7329,
+            "n": 1,
+            "samples": [7329]
+          },
+          "free_heap": {
+            "p50": 7695303,
+            "p95": 7695303,
+            "min": 7695303,
+            "max": 7695303,
+            "n": 1,
+            "samples": [7695303]
+          },
+          "max_alloc_block": {
+            "p50": 81920,
+            "p95": 81920,
+            "min": 81920,
+            "max": 81920,
+            "n": 1,
+            "samples": [81920]
+          },
+          "last_updated": "2026-07-24"
+        },
+        "esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 10310,
+            "p95": 10310,
+            "min": 10310,
+            "max": 10310,
+            "n": 1,
+            "samples": [10310]
+          },
+          "free_heap": {
+            "p50": 34005655,
+            "p95": 34005655,
+            "min": 34005655,
+            "max": 34005655,
+            "n": 1,
+            "samples": [34005655]
+          },
+          "max_alloc_block": {
+            "p50": 385024,
+            "p95": 385024,
+            "min": 385024,
+            "max": 385024,
+            "n": 1,
+            "samples": [385024]
+          },
+          "last_updated": "2026-06-27"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 11757,
+            "p95": 13465,
+            "min": 506,
+            "max": 13465,
+            "n": 4,
+            "samples": [506, 13465, 11757, 12255]
+          },
+          "free_heap": {
+            "p50": 35016,
+            "p95": 115840,
+            "min": 34084,
+            "max": 115840,
+            "n": 4,
+            "samples": [115840, 47804, 35016, 34084]
+          },
+          "max_alloc_block": {
+            "p50": 26624,
+            "p95": 94208,
+            "min": 26624,
+            "max": 94208,
+            "n": 4,
+            "samples": [94208, 38912, 26624, 26624]
+          },
+          "last_updated": "2026-09-01"
+        }
+      }
+    },
+    {
+      "name": "transpose-grid-h",
+      "description": "Make it 16x8, then 8x16 below: the SAME sample count in a different shape. resize() keeps the buffer and its contents, which are laid out for the old geometry, so a scripted trail must clear both of its planes or the previous picture smears across the new one. The compiled effects each carry this guard; the binding does it on the script's behalf.",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 8,
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 5,
+            "p95": 8,
+            "min": 4,
+            "max": 19,
+            "n": 32,
+            "samples": [5, 6, 5, 5, 6, 4, 6, 6, 5, 5, 5, 5, 5, 5, 5, 5, 6, 5, 5, 5, 5, 5, 8, 6, 4, 5, 5, 5, 5, 19, 5, 4]
+          },
+          "last_updated": "2026-09-24"
+        }
+      }
+    },
+    {
+      "name": "transpose-grid-w",
+      "description": "And the transpose: 8 wide by 16 high, the same count again. The pair proves the clear fires on a reshape rather than only on a size change, in both directions.",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 8,
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 5,
+            "p95": 8,
+            "min": 4,
+            "max": 18,
+            "n": 32,
+            "samples": [5, 5, 5, 5, 6, 5, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 5, 6, 5, 5, 5, 8, 5, 4, 5, 5, 5, 4, 18, 5, 5]
+          },
+          "last_updated": "2026-09-24"
+        }
+      }
+    },
+    {
+      "name": "transpose-restore",
+      "description": "Back to the square the rest of the scenario assumes.",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 16,
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 5,
+            "p95": 8,
+            "min": 5,
+            "max": 18,
+            "n": 32,
+            "samples": [5, 5, 5, 5, 6, 5, 5, 5, 5, 6, 5, 5, 6, 5, 5, 5, 8, 5, 5, 5, 6, 5, 6, 5, 5, 5, 5, 6, 5, 18, 5, 5]
+          },
+          "last_updated": "2026-09-24"
+        }
+      }
+    },
+    {
+      "name": "remove-moonlive",
+      "description": "Remove the scripted effect. release frees the exec block; the Layer keeps rendering (now empty). Measures add/remove robustness.",
+      "op": "remove_module",
+      "id": "ML",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 5,
+            "p95": 6,
+            "min": 5,
+            "max": 13,
+            "n": 32,
+            "samples": [6, 5, 5, 5, 6, 5, 5, 5, 5, 5, 5, 5, 6, 5, 5, 5, 6, 5, 5, 5, 5, 5, 6, 5, 5, 5, 5, 5, 5, 13, 5, 5]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 7387,
+            "p95": 7387,
+            "min": 7387,
+            "max": 7387,
+            "n": 1,
+            "samples": [7387]
+          },
+          "free_heap": {
+            "p50": 7696391,
+            "p95": 7696391,
+            "min": 7696391,
+            "max": 7696391,
+            "n": 1,
+            "samples": [7696391]
+          },
+          "max_alloc_block": {
+            "p50": 81920,
+            "p95": 81920,
+            "min": 81920,
+            "max": 81920,
+            "n": 1,
+            "samples": [81920]
+          },
+          "last_updated": "2026-07-24"
+        },
+        "esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 11336,
+            "p95": 11336,
+            "min": 11336,
+            "max": 11336,
+            "n": 1,
+            "samples": [11336]
+          },
+          "free_heap": {
+            "p50": 34006231,
+            "p95": 34006231,
+            "min": 34006231,
+            "max": 34006231,
+            "n": 1,
+            "samples": [34006231]
+          },
+          "max_alloc_block": {
+            "p50": 385024,
+            "p95": 385024,
+            "min": 385024,
+            "max": 385024,
+            "n": 1,
+            "samples": [385024]
+          },
+          "last_updated": "2026-06-27"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 13226,
+            "p95": 13588,
+            "min": 436,
+            "max": 13588,
+            "n": 4,
+            "samples": [436, 13588, 13226, 13551]
+          },
+          "free_heap": {
+            "p50": 36644,
+            "p95": 116904,
+            "min": 34252,
+            "max": 116904,
+            "n": 4,
+            "samples": [116904, 49676, 36644, 34252]
+          },
+          "max_alloc_block": {
+            "p50": 26624,
+            "p95": 94208,
+            "min": 26624,
+            "max": 94208,
+            "n": 4,
+            "samples": [94208, 38912, 26624, 26624]
+          },
+          "last_updated": "2026-09-01"
+        }
+      }
+    },
+    {
+      "name": "re-add-moonlive",
+      "description": "Re-add a MoonLiveEffect after removal, the exec memory is re-acquired fresh, no leak, no stale pointer. The scripted effect renders again.",
+      "op": "add_module",
+      "id": "ML2",
+      "type": "MoonLiveEffect",
+      "parent_id": "Layer",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 5,
+            "p95": 9,
+            "min": 4,
+            "max": 11,
+            "n": 32,
+            "samples": [5, 5, 5, 5, 5, 9, 5, 5, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 11, 5, 5]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 8255,
+            "p95": 8255,
+            "min": 8255,
+            "max": 8255,
+            "n": 1,
+            "samples": [8255]
+          },
+          "free_heap": {
+            "p50": 7701291,
+            "p95": 7701291,
+            "min": 7701291,
+            "max": 7701291,
+            "n": 1,
+            "samples": [7701291]
+          },
+          "max_alloc_block": {
+            "p50": 86016,
+            "p95": 86016,
+            "min": 86016,
+            "max": 86016,
+            "n": 1,
+            "samples": [86016]
+          },
+          "last_updated": "2026-07-24"
+        },
+        "esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 10997,
+            "p95": 10997,
+            "min": 10997,
+            "max": 10997,
+            "n": 1,
+            "samples": [10997]
+          },
+          "free_heap": {
+            "p50": 34005655,
+            "p95": 34005655,
+            "min": 34005655,
+            "max": 34005655,
+            "n": 1,
+            "samples": [34005655]
+          },
+          "max_alloc_block": {
+            "p50": 385024,
+            "p95": 385024,
+            "min": 385024,
+            "max": 385024,
+            "n": 1,
+            "samples": [385024]
+          },
+          "last_updated": "2026-06-27"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 11675,
+            "p95": 16139,
+            "min": 540,
+            "max": 16139,
+            "n": 4,
+            "samples": [540, 16139, 11675, 12141]
+          },
+          "free_heap": {
+            "p50": 35240,
+            "p95": 115836,
+            "min": 34328,
+            "max": 115836,
+            "n": 4,
+            "samples": [115836, 48248, 35240, 34328]
+          },
+          "max_alloc_block": {
+            "p50": 26624,
+            "p95": 94208,
+            "min": 26624,
+            "max": 94208,
+            "n": 4,
+            "samples": [94208, 38912, 26624, 26624]
+          },
+          "last_updated": "2026-09-01"
+        }
+      }
+    },
+    {
+      "name": "re-select-script",
+      "description": "Point the re-added card at the same script file, then TICK. Without a render after the select the buffer still holds what the removed card left, so this is what proves the re-added one draws.",
+      "op": "set_control",
+      "id": "ML2",
+      "key": "script",
+      "value": "sc-live.mle",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 5,
+            "p95": 6,
+            "min": 4,
+            "max": 13,
+            "n": 32,
+            "samples": [5, 6, 5, 5, 6, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 13, 5, 5]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 13433,
+            "p95": 13470,
+            "min": 12927,
+            "max": 13470,
+            "n": 3,
+            "samples": [13470, 12927, 13433]
+          },
+          "free_heap": {
+            "p50": 35232,
+            "p95": 47960,
+            "min": 34324,
+            "max": 47960,
+            "n": 3,
+            "samples": [47960, 35232, 34324]
+          },
+          "max_alloc_block": {
+            "p50": 26624,
+            "p95": 38912,
+            "min": 26624,
+            "max": 38912,
+            "n": 3,
+            "samples": [38912, 26624, 26624]
+          },
+          "last_updated": "2026-09-01"
+        }
+      }
+    }
+  ]
+}

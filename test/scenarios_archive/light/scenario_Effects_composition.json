@@ -1,0 +1,132 @@
+{
+  "name": "scenario_Effects_composition",
+  "module": "Effects",
+  "mode": "construct",
+  "also": [
+    "Layer",
+    "GridLayout",
+    "RainbowEffect",
+    "SpiralEffect",
+    "Drivers",
+    "NetworkSendDriver"
+  ],
+  "description": "Multi-layer composition end-to-end: Layouts→Grid, TWO Layers under one Effects container (bottom Spiral, top Rainbow), Drivers→NetworkSendDriver. Proves the Drivers composite loop builds, allocates its output buffer, blends both enabled layers and feeds the result to the driver without crashing, and gates the bounded FPS so the N-pass composite cost is tracked. The exact alpha/additive blend math and the disable-drops-to-single-layer path are pinned by the unit tests (unit_BlendMap, unit_Effects_container); construct-mode set_control can't apply controls (built post-scheduler), so this scenario uses each Layer's default blend (additive, full opacity) and asserts wired liveness + tick, not per-byte blend output.",
+  "steps": [
+    {
+      "name": "add-layout-group",
+      "description": "Top-level Layouts container.",
+      "op": "add_module",
+      "id": "Layouts",
+      "type": "Layouts"
+    },
+    {
+      "name": "add-grid",
+      "description": "128x128 GridLayout under Layouts (above host clock resolution so the composite tick is measurable).",
+      "op": "add_module",
+      "id": "Grid",
+      "type": "GridLayout",
+      "parent_id": "Layouts",
+      "props": {
+        "width": 128,
+        "height": 128
+      }
+    },
+    {
+      "name": "add-layers-group",
+      "description": "Top-level Effects container, the multi-layer composition host.",
+      "op": "add_module",
+      "id": "Effects",
+      "type": "Effects",
+      "props": {
+        "layouts": "Layouts"
+      }
+    },
+    {
+      "name": "add-bottom-layer",
+      "description": "Bottom Layer (composited first, clears + overwrites the output buffer). RGB.",
+      "op": "add_module",
+      "id": "LayerBottom",
+      "type": "Layer",
+      "parent_id": "Effects",
+      "props": {
+        "channelsPerLight": 3
+      }
+    },
+    {
+      "name": "add-bottom-effect",
+      "description": "A Spiral base as the bottom layer's effect.",
+      "op": "add_module",
+      "id": "Spiral",
+      "type": "SpiralEffect",
+      "parent_id": "LayerBottom"
+    },
+    {
+      "name": "add-top-layer",
+      "description": "Top Layer (composited second, blends onto the bottom with its default blend). RGB.",
+      "op": "add_module",
+      "id": "LayerTop",
+      "type": "Layer",
+      "parent_id": "Effects",
+      "props": {
+        "channelsPerLight": 3
+      }
+    },
+    {
+      "name": "add-top-effect",
+      "description": "Rainbow as the top layer's effect, composited over the Spiral base.",
+      "op": "add_module",
+      "id": "Rainbow",
+      "type": "RainbowEffect",
+      "parent_id": "LayerTop"
+    },
+    {
+      "name": "add-driver-group",
+      "description": "Top-level Drivers container wired to the Effects container (composites all enabled layers into its output buffer).",
+      "op": "add_module",
+      "id": "Drivers",
+      "type": "Drivers",
+      "props": {
+        "effects": "Effects"
+      }
+    },
+    {
+      "name": "add-artnet",
+      "description": "Add NetworkSendDriver and run the bounded FPS measurement over the two-layer composite (min_pct gates on hardware; skipped with a WARN in the desktop runner).",
+      "op": "add_module",
+      "id": "ArtNet",
+      "type": "NetworkSendDriver",
+      "parent_id": "Drivers",
+      "measure": true,
+      "bounds": {
+        "fps": {
+          "min_pct": 80,
+          "min_fps_led_product": 294912
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 145,
+            "p95": 160,
+            "min": 141,
+            "max": 184,
+            "n": 32,
+            "samples": [144, 143, 148, 150, 144, 142, 147, 146, 152, 143, 149, 160, 145, 142, 144, 145, 142, 141, 143, 143, 144, 148, 184, 145, 147, 145, 157, 144, 145, 147, 146, 145]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 549,
+            "p95": 549,
+            "min": 549,
+            "max": 549,
+            "n": 1,
+            "samples": [549]
+          },
+          "last_updated": "2026-07-08"
+        }
+      }
+    }
+  ]
+}

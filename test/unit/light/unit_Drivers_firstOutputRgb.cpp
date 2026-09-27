@@ -52,11 +52,11 @@ TEST_CASE("Drivers::firstOutputRgb reports black pixel 0 as-is (caller substitut
     buf[0] = 0; buf[1] = 0; buf[2] = 0;       // black — firstOutputRgb returns true with 0,0,0
 
     uint8_t rgb[3] = {1, 2, 3};
-    REQUIRE(r.drivers.firstOutputRgb(rgb));      // true: there IS an output, it's just black
+    REQUIRE(r.drivers.firstOutputRgb(rgb));      // true: there IS an output, and it is black
     CHECK(rgb[0] == 0);
     CHECK(rgb[1] == 0);
     CHECK(rgb[2] == 0);
-    // (The WLED shim is what maps an all-black read to projectMM purple, pinned in the HTTP shim's own logic, not here; this seam just reports the raw pixel.)
+    // (The WLED shim is what maps an all-black read to MoonLight purple, pinned in the HTTP shim's own logic, not here; this seam reports the raw pixel.)
 }
 
 TEST_CASE("Drivers::firstOutputRgb returns false when there is no driven buffer") {

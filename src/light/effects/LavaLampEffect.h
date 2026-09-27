@@ -5,7 +5,7 @@
 
 namespace mm {
 
-// Author: projectMM original (metaball lava lamp)
+// Author: MoonLight original (metaball lava lamp)
 /// Lava-lamp effect: slow rising and merging palette blobs.
 /// @card LavaLampEffect.gif
 ///

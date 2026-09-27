@@ -1,10 +1,10 @@
-# Running projectMM on a Linux machine
+# Running MoonLight on a Linux machine
 
-projectMM runs as an ordinary Linux application: the same effect pipeline, web UI and network drivers as on a board, with a real CPU behind them. A small always-on machine makes a good installation controller, whether a server, a Raspberry Pi or a NanoPi.
+MoonLight runs as an ordinary Linux application: the same effect pipeline, web UI and network drivers as on a board, with a real CPU behind them. A small always-on machine makes a good installation controller, whether a server, a Raspberry Pi or a NanoPi.
 
 Deploying is covered here. Building and developing on Linux is in [building.md](../how-to/building.md).
 
-> Windows, with screenshots: [Installing projectMM on a desktop](installing-to-desktop.md). Flashing a board: [Install & first light](../gettingstarted.md).
+> Windows, with screenshots: [Installing MoonLight on a desktop](installing-to-desktop.md). Flashing a board: [Install & first light](../gettingstarted.md).
 
 ## Which route applies to your machine
 
@@ -19,7 +19,7 @@ uname -m
 | `x86_64` | Intel or AMD PC, server or VM | Install the package |
 | `aarch64` | arm64 board: Pi, NanoPi, most SBCs | Install the package |
 
-Both architectures get a released binary, so the route below is the same one and only the filename differs. Building from source is still there for a distribution the package does not suit, and for developing. A Pi 4 or 5 has ample headroom. A NanoPi R28S has two Gigabit ports, so it can sit between the house network and the lighting network, and 1 GB of RAM, which runs projectMM comfortably. Everything here assumes a Debian-based system (Debian, Ubuntu, Raspberry Pi OS, Armbian); on another distribution, translate the package names.
+Both architectures get a released binary, so the route below is the same one and only the filename differs. Building from source is still there for a distribution the package does not suit, and for developing. A Pi 4 or 5 has ample headroom. A NanoPi R28S has two Gigabit ports, so it can sit between the house network and the lighting network, and 1 GB of RAM, which runs MoonLight comfortably. Everything here assumes a Debian-based system (Debian, Ubuntu, Raspberry Pi OS, Armbian); on another distribution, translate the package names.
 
 > `x64` and `amd64` are two names for the same thing. `arm64` is different machine code.
 
@@ -31,7 +31,7 @@ On a machine with a browser, download it and install:
 
 ```sh
 sudo apt install ./projectmm_X.Y.Z_arm64.deb
-projectMM
+MoonLight
 ```
 
 On a headless board, fetch it over ssh instead. This picks the right file for the architecture it runs on, so the same two lines work on a Pi, a NanoPi and a server:
@@ -41,7 +41,7 @@ arch=$(dpkg --print-architecture)
 url=$(curl -fsSL https://api.github.com/repos/MoonModules/projectMM/releases/tags/latest \
       | grep -o "https://[^\"]*_${arch}\.deb" | head -1)
 curl -fsSL -o projectmm.deb "$url" && sudo apt install -y ./projectmm.deb
-projectMM
+MoonLight
 ```
 
 `latest` is the rolling build from `main`, which is what the web installer offers too. For the newest tagged release, replace `tags/latest` with `latest` in that URL.
@@ -131,7 +131,7 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc
 
 ```sh
 git clone https://github.com/MoonModules/projectMM.git
-cd projectMM
+cd MoonLight
 uv run moondeck/build/build_desktop.py
 uv run moondeck/run/run_desktop.py
 ```
@@ -150,12 +150,12 @@ Give it a systemd unit at `/etc/systemd/system/projectmm.service`:
 
 ```ini
 [Unit]
-Description=projectMM
+Description=MoonLight
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=/home/pi/projectMM/build/projectMM
+ExecStart=/home/pi/MoonLight/build/MoonLight
 Restart=always
 RestartSec=5
 User=pi
@@ -169,7 +169,7 @@ sudo systemctl enable --now projectmm
 systemctl status projectmm
 ```
 
-`Restart=always` covers a crash as well as a reboot. Adjust `User` and the path: `/usr/bin/projectMM` for the package, or where you built for a source build.
+`Restart=always` covers a crash as well as a reboot. Adjust `User` and the path: `/usr/bin/MoonLight` for the package, or where you built for a source build.
 
 ## Shutting down
 
@@ -179,7 +179,7 @@ Shut down cleanly; an SD card interrupted mid-write can corrupt the filesystem:
 sudo shutdown now     # or: sudo reboot
 ```
 
-projectMM writes to disk only when settings change, so the card is a fine home for it. The risk is the operating system's own writes.
+MoonLight writes to disk only when settings change, so the card is a fine home for it. The risk is the operating system's own writes.
 
 ## Docker
 
@@ -244,5 +244,5 @@ The realistic limits are architecture and memory, not the kind of device. It nee
 ## Where to go next
 
 - [Install & first light](../gettingstarted.md): the same program on an ESP32.
-- [How projectMM works](../tutorials/how-projectmm-works.md): layouts, layers, effects and drivers.
+- [How MoonLight works](../tutorials/how-projectmm-works.md): layouts, layers, effects and drivers.
 - [building.md](../how-to/building.md): building, testing and packaging in depth.

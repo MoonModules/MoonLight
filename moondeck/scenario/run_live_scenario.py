@@ -7,6 +7,8 @@ and collects per-step performance measurements.
 
 import argparse
 import json
+import os
+import subprocess
 import sys
 import time
 import urllib.request
@@ -70,6 +72,13 @@ class Client:
         return self._send(urllib.request.Request(
             f"{self.base}{path}", data=body,
             headers={"Content-Type": "application/json"}))
+
+    def get_text(self, path: str) -> str:
+        """GET a raw body. /api/file returns the file's CONTENTS, not JSON, so it cannot go
+        through get() which parses what it reads."""
+        req = urllib.request.Request(f"{self.base}{path}")
+        with urllib.request.urlopen(req, timeout=self.TIMEOUT_S) as resp:
+            return resp.read().decode("utf-8", "replace")
 
     def post_text(self, path: str, text: str):
         """POST a raw text body. /api/file takes the file's CONTENTS, not JSON — the body IS
@@ -162,6 +171,91 @@ def _detect_target(state: dict) -> str:
     # Desktop fallback
     osmap = {"Darwin": "desktop-macos", "Linux": "desktop-linux", "Windows": "desktop-windows"}
     return osmap.get(platform.system(), "desktop-unknown")
+
+
+def _uptime_seconds(client):
+    """The System card's uptime as seconds, or None when it cannot be read.
+
+    The value is `H:MM:SS`, and its only use here is comparing two readings across a restart.
+    """
+    try:
+        mod = client.get(_mod_path("System"))
+    except Exception:
+        return None
+    for c in (mod.get("controls") or []):
+        if c.get("name") == "uptime":
+            parts = str(c.get("value") or "").split(":")
+            if len(parts) != 3:
+                return None
+            try:
+                h, m, sec = (int(x) for x in parts)
+            except ValueError:
+                return None
+            return h * 3600 + m * 60 + sec
+    return None
+
+
+def _reboot_and_wait(client, target: str, timeout_s: float = 60.0) -> str:
+    """Restart the device and wait for it to answer again, so a scenario can prove what survives.
+
+    On a board this is the reboot the endpoint performs. On a desktop the same endpoint EXITS the
+    process and nothing restarts it, so the runner relaunches the binary itself, with the data
+    directory the exiting instance was using: a restart that came back on different files would
+    prove nothing about persistence. Returns "" on success, or the reason it did not come back.
+    """
+    data_dir = os.environ.get("MM_DATA_DIR")
+    is_desktop = target.startswith("desktop-")
+
+    # Uptime before the restart, so the recovered instance can be told from the one still running.
+    # Without it the first answering /api/state is accepted, which on a board is routinely the OLD
+    # instance replying before it goes down: every persistence assertion after that proves nothing.
+    before = _uptime_seconds(client)
+
+    try:
+        client.post("/api/reboot", {})
+    except urllib.error.HTTPError as re_:
+        # A refused reboot is a failed step: the device is up, so the poll below would pass at once.
+        return f"/api/reboot returned HTTP {re_.code}"
+    except Exception:
+        pass                  # the device goes away mid-response, which is the expected shape
+
+    if is_desktop:
+        # The same resolver run_desktop.py uses, which picks the NEWEST candidate rather than the
+        # first that exists: picking by existence served a stale build whose changes read as no-ops,
+        # and it names the per-host directory, so this works on Linux and Windows too.
+        sys.path.insert(0, str(ROOT / "moondeck" / "run"))
+        from run_desktop import _resolve_executable            # noqa: E402
+        binary = _resolve_executable()
+        if not binary.exists():
+            return f"no desktop binary to relaunch (looked for {binary})"
+        time.sleep(1.0)       # let the old process release the port before the new one binds it
+        env = dict(os.environ)
+        if data_dir:
+            env["MM_DATA_DIR"] = data_dir
+        subprocess.Popen([str(binary)], cwd=str(ROOT), env=env,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    # Evidence of a restart, not merely of an answer: either the device went away and came back, or
+    # it answers with an uptime lower than before. One of the two must hold before this reports success.
+    deadline = time.time() + timeout_s
+    went_away = False
+    while time.time() < deadline:
+        try:
+            client.get("/api/state")
+        except Exception:
+            went_away = True          # the old instance is gone, so the next answer is the new one
+            time.sleep(1.0)
+            continue
+        if went_away:
+            return ""
+        now = _uptime_seconds(client)
+        if before is not None and now is not None and now < before:
+            return ""                 # the clock restarted, which only a reboot does
+        time.sleep(1.0)
+    if not went_away:
+        return (f"still answering after {timeout_s:.0f}s with no uptime reset: "
+                "the reboot did not take effect")
+    return f"did not answer within {timeout_s:.0f}s"
 
 
 def _sum_dynamic_bytes(state: dict) -> int:
@@ -539,6 +633,88 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                         step_result["error"] = str(we)
                         print(f"  WRITE {path_} — FAILED: {we}")
                         results["passed"] = False
+
+            elif op == "reboot":
+                # Restart and wait, so a later expect_control proves what SURVIVED rather than what
+                # is merely still in memory. The one op that can tell a written setting from a kept one.
+                why = _reboot_and_wait(client, target, float(step.get("timeout", 60)))
+                if why:
+                    step_result["status"] = "error"
+                    print(f"  REBOOT — {why}")
+                    results["passed"] = False
+                else:
+                    step_result["status"] = "ok"
+                    print("  REBOOT — back up")
+
+            elif op == "expect_file":
+                # Read a file back, which is the only way to prove a write reached the filesystem
+                # rather than a cache: the card that owns the filesystem is proven by its contents.
+                path_ = step["path"]
+                # `contains` matches a substring, `equals` the whole file: the two tiers agree, and
+                # neither accepts a step that names neither, which would pass on any file at all.
+                exact = "equals" in step
+                if not exact and "contains" not in step:
+                    step_result["status"] = "error"
+                    print(f"  EXPECT {path_} — needs `contains` or `equals`")
+                    results["passed"] = False
+                    continue
+                want = str(step["equals"] if exact else step["contains"])
+                try:
+                    raw = client.get_text(f"/api/file?path={urllib.parse.quote(path_, safe='/')}")
+                except Exception as fe:
+                    step_result["status"] = "error"
+                    print(f"  EXPECT {path_} — could not read ({fe})")
+                    results["passed"] = False
+                else:
+                    holds = (raw == want) if exact else (bool(want) and want in raw)
+                    step_result["status"] = "ok" if holds else "error"
+                    verb = "is" if exact else "holds"
+                    print(f"  EXPECT {path_} {verb if holds else 'does not ' + verb} {want!r}")
+                    if not holds:
+                        results["passed"] = False
+
+            elif op == "expect_control":
+                # Assert a control reads what the scenario says it must, the only op that fails a
+                # scenario on a VALUE rather than on a timing contract. It exists for the strings a
+                # rename would change silently, where nothing else can see the break.
+                # Read through /api/modules/<id>, the same view a client gets, so an assertion can
+                # never pass against a value the device would report differently.
+                mod_id, key = step["id"], step["key"]
+                # JSON spells a boolean `true`, Python spells it `True`, and the in-process runner
+                # renders the JSON form: comparing str() of either would make one tier disagree
+                # with the other about the same scenario.
+                def _as_written(v):
+                    return {True: "true", False: "false"}.get(v, str(v)) if isinstance(v, bool) else str(v)
+                # `not_equals` pins a value that moves per release, where the only stable claim is
+                # that it is not the empty string a missing source would render. Both tiers agree.
+                negated = "equals" not in step and "not_equals" in step
+                if "equals" not in step and not negated:
+                    step_result["status"] = "error"
+                    print(f"  EXPECT {mod_id}.{key} — needs `equals` or `not_equals`")
+                    results["passed"] = False
+                    continue
+                want = _as_written(step["not_equals" if negated else "equals"])
+                try:
+                    mod = client.get(_mod_path(mod_id))
+                    got = next((c.get("value") for c in (mod.get("controls") or [])
+                                if c.get("name") == key), None)
+                except Exception as ce:
+                    step_result["status"] = "error"
+                    print(f"  EXPECT {mod_id}.{key} — could not read ({ce})")
+                    results["passed"] = False
+                    continue
+                if got is None:
+                    step_result["status"] = "error"
+                    print(f"  EXPECT {mod_id}.{key} — no such control")
+                    results["passed"] = False
+                elif (_as_written(got) != want) if negated else (_as_written(got) == want):
+                    step_result["status"] = "ok"
+                    print(f"  EXPECT {mod_id}.{key} {'!=' if negated else '=='} {want}")
+                else:
+                    step_result["status"] = "error"
+                    print(f'  EXPECT {mod_id}.{key} is "{_as_written(got)}", '
+                          f'expected {"not " if negated else ""}"{want}"')
+                    results["passed"] = False
 
             elif op == "set_control":
                 data = {"module": step["id"], "control": step["key"],

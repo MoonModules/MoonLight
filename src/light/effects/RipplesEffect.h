@@ -4,7 +4,6 @@
 
 namespace mm {
 
-// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 /// Water-ripple effect: distance from the center drives a wave phase.
 /// @card RipplesEffect.gif
 ///

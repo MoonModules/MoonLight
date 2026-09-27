@@ -1,4 +1,4 @@
-# projectMM in a container: the desktop firmware, which is the whole system without an ESP32.
+# MoonLight in a container: the desktop firmware, which is the whole system without an ESP32.
 #
 #   docker compose up -d          start it, in the background
 #   docker compose logs -f        watch it
@@ -24,13 +24,13 @@ services:
 
     ports:
       # CHANGE ME: the port YOU open in the browser is the left one. 8081 rather than 8080 so a
-      # container never fights a projectMM already installed on the machine. The right side is the
+      # container never fights a MoonLight already installed on the machine. The right side is the
       # port inside the container and does not change: containers do not share a port space, so
       # several instances can all listen on 8080 internally with different left-hand numbers.
       - "8081:8080"
 
     volumes:
-      # Config, presets and scripts. Everything the app writes lands in /data/projectMM, so this one
+      # Config, presets and scripts. Everything the app writes lands in /data/MoonLight, so this one
       # mount is the whole of its state: remove it and a restart comes up factory-fresh.
       - projectmm-data:/data
 

@@ -31,7 +31,7 @@ namespace mm {
 ///
 /// Fast path: the cheapest carve is *no modifier*, then Layer::rebuildLUT takes its identity/memcpy path with zero carving cost.
 /// Adding a full-region (0/100) RegionModifier is correct but not free; the default is to not add one.
-/// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
+/// Author: MoonLight, https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
 class RegionModifier : public ModifierBase {
 public:
     /// The catalog tags this modifier carries.

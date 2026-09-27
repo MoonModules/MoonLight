@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 """One fact, one wording: the platform list must read identically wherever it appears.
 
-README.md, docs/index.md and CLAUDE.md each open by saying what projectMM runs on, for three
+README.md, docs/index.md and CLAUDE.md each open by saying what MoonLight runs on, for three
 different readers: someone deciding whether to try it, someone already on the docs site, and an
 agent about to change the code. Three audiences is a reason for three PAGES, not for three
 different answers to the same question, and they had drifted into four orderings of the same six
@@ -48,7 +48,7 @@ def main():
         print(f"  canonical: {TAGLINE}\n")
         for rel, why in missing:
             print(f"  {rel}: {why}")
-        print("\nEvery front page states what projectMM runs on. Say it the same way in each, or")
+        print("\nEvery front page states what MoonLight runs on. Say it the same way in each, or")
         print("change TAGLINE in this script and update them together.")
         return 1
 

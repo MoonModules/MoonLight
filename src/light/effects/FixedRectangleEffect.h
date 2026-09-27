@@ -6,7 +6,7 @@ namespace mm {
 
 /// Test effect: draws a fixed rectangle at set coordinates.
 /// @card FixedRectangleEffect.gif
-/// Author: limpkin (MoonLight), https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
+/// Author: limpkin (MoonLight), https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 ///
 /// A solid box at a dialed-in position and extent, over a slow motion-trail fade.
 /// So it serves as a static fixture, an alignment aid, or a painted region.

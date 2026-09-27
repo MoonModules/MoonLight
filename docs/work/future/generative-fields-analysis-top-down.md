@@ -24,7 +24,7 @@ An unmarked line is context or rationale.
 
 ## 0. Inputs and the decisions taken
 
-From the bottom-up: two techniques over one block set; every block named from its primary source; the cost model; projectMM's three missing blocks (previous-frame resampler, color state above 8 bits, gradient noise) plus the LUT, the bank and the kernels that compose them; the per-target headroom table with the P4 and S31 as the MCU home of the family. From the power-functions top-down, carried unchanged: dimension-generic; one contract everywhere with per-target acceleration; fixed point invisible to the writer; the 16-bit contract (`angle16`, `frac16`, `pos_t` 24.8); particles as the stateful precedent; determinism (pure function of position, time, seed; stateful kernels declare a resync point); golden frames as hashes; the `Canvas` descriptor.
+From the bottom-up: two techniques over one block set; every block named from its primary source; the cost model; MoonLight's three missing blocks (previous-frame resampler, color state above 8 bits, gradient noise) plus the LUT, the bank and the kernels that compose them; the per-target headroom table with the P4 and S31 as the MCU home of the family. From the power-functions top-down, carried unchanged: dimension-generic; one contract everywhere with per-target acceleration; fixed point invisible to the writer; the 16-bit contract (`angle16`, `frac16`, `pos_t` 24.8); particles as the stateful precedent; determinism (pure function of position, time, seed; stateful kernels declare a resync point); golden frames as hashes; the `Canvas` descriptor.
 
 Product-owner decisions, 2026-09-03:
 

@@ -702,7 +702,7 @@ async function runScriptOnce(script, btn, extraParams) {
                     const data = JSON.parse(e.data);
                     resetBtn(data.exitCode);
                     // The script may launch a detached process (e.g. run_desktop
-                    // spawns projectMM and exits). Refresh the running state now
+                    // spawns MoonLight and exits). Refresh the running state now
                     // instead of waiting up to 5s for the poll, so the button
                     // flips back to "Stop" without a visible blink.
                     if (script.long_running) updateRunningState();

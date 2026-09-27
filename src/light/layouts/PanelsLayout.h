@@ -5,7 +5,7 @@
 namespace mm {
 
 /// Layout tiling multiple panels into one grid.
-/// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
+/// Author: MoonLight, https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
 ///
 /// @moreinfo
 ///
@@ -19,7 +19,7 @@ namespace mm {
 ///
 /// Prior art: MoonLight PanelsLayout (Node "Panels", tags 🚥), which nests a `panel` Wiring inside a `panels` Wiring and walks both with `iterate()`.
 /// We reproduce the geometry, the two-level nesting, the axis-order table shared by both levels, the snake-on-odd-outer serpentine.
-/// The per-panel offset (coordsP[axis]·panel.size[axis]), and the control set, but drop MoonLight's pin/wiring plumbing (the Wiring pin count, panelsPerPin, nextPin()): a projectMM layout emits coordinates only.
+/// The per-panel offset (coordsP[axis]·panel.size[axis]), and the control set, but drop MoonLight's pin/wiring plumbing (the Wiring pin count, panelsPerPin, nextPin()): a MoonLight layout emits coordinates only.
 /// The driver owns pins. tags 💫 marks the MoonLight lineage.
 /// The single-panel case is the sibling PanelLayout (Node "Panel"); this module tiles that panel across a grid.
 ///

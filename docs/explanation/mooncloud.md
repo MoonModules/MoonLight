@@ -1,6 +1,6 @@
 # MoonCloud
 
-MoonCloud is everything projectMM does with a server MoonModules runs. It is off until you switch it on, and it is one self-contained part of the software: its members are the only code that talks to a server of ours.
+MoonCloud is everything MoonLight does with a server MoonModules runs. It is off until you switch it on, and it is one self-contained part of the software: its members are the only code that talks to a server of ours.
 
 It is deliberately small. Each member is a separate choice with its own checkbox, because wanting one is not agreeing to the other, and each says on its own card what it exchanges before you decide. What every member sends, what never leaves your network, and how the installation id works: [privacy policy](../legal/privacy-policy.md). The controls, per member: [core system catalog](../moonmodules/core/system.md#mooncloud).
 
@@ -29,7 +29,7 @@ The totals are shown on the same card that asks: contributing earns the answer b
 
 ## Talk
 
-A public message board between projectMM devices. Off until you turn it on, and a message is sent only because you typed one and pressed send.
+A public message board between MoonLight devices. Off until you turn it on, and a message is sent only because you typed one and pressed send.
 
 Everything posted is public and permanent: no private message, no recipient, no delete. Your device name rides along only if you separately switch that on; otherwise messages show the first 8 characters of your installation id, which groups them without naming you, the way a Meshtastic node id does.
 

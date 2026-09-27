@@ -505,16 +505,20 @@ def get_types(host: str) -> set[str]:
 
 
 def source_registered_types() -> set[str]:
-    """The module type names main.cpp registers, parsed from registerType<...>("Name", ...).
+    """The module type names the firmware registers, parsed from registerType<...>("Name", ...).
+
+    Read from module_types.cpp, the one file that registers them: the registry moved out of
+    main.cpp so the firmware, the scenario runner and the ESP32 build share one list. Reading the
+    old home returns nothing and silently disables the check below rather than failing loudly.
 
     Used to detect a STALE server binary: if the running server is missing a type
-    the source registers, it's an old build (or a different binary) — the cause of
+    the source registers, it's an old build (or a different binary), the cause of
     a hard-to-spot bug where screenshots capture the previous version of an effect.
-    Returns an empty set if main.cpp can't be read (then the check is skipped).
+    Returns an empty set if the file can't be read (then the check is skipped).
     """
-    main_cpp = ROOT / "src" / "main.cpp"
+    registry = ROOT / "src" / "module_types.cpp"
     try:
-        text = main_cpp.read_text()
+        text = registry.read_text()
     except OSError:
         return set()
     # registerType<mm::FooEffect>("FooEffect", "...") — capture the quoted name.

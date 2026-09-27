@@ -5,7 +5,7 @@
 namespace mm {
 
 /// Layout of LEDs around a wheel/disc.
-/// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
+/// Author: MoonLight, https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
 ///
 /// @moreinfo
 ///
@@ -18,7 +18,7 @@ namespace mm {
 /// A radius-r offset is (r*(val-128))>>7 (÷128 → back to unit scale).
 /// The whole wheel is shifted by +maxRadius so every coordinate is ≥ 0 (the physical address space starts at 0), giving a (2R+1)-wide bounding box.
 ///
-/// Prior art: MoonLight ring/spoke layouts (L_MoonLight.h); projectMM v2 WheelLayoutModule (those used double cos/sin/round, this is the integer-LUT equivalent).
+/// Prior art: MoonLight ring/spoke layouts (L_MoonLight.h); MoonLight v2 WheelLayoutModule (those used double cos/sin/round, this is the integer-LUT equivalent).
 class WheelLayout : public LayoutBase {
 public:
     /// The catalog tags this layout carries.

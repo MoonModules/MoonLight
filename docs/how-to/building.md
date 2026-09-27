@@ -13,7 +13,7 @@ The scripts have two front ends with the same code and arguments:
 
 Use whichever fits. Neither path is "more official" than the other; the scripts are the source of truth and the front ends are interfaces. New work adds a script first; both interfaces follow.
 
-**Why our own scripts, not PlatformIO:** the ESP32 build is ESP-IDF-native — projectMM tracks IDF pre-releases against a pinned commit for chips like the P4 and S31, a level of version control PlatformIO's packaged platforms don't offer, and the hot-path drivers (LCD_CAM, Parlio, GDMA) use the vendor APIs first-class rather than through an Arduino-core abstraction. The tooling surface is also far wider than compile-upload-monitor: desktop builds, unit and scenario runs, spec and boundary checks, KPI collection, the web installer, provisioning, multi-board bench orchestration. A wrapper toolchain would cover one of those tasks and still need all the scripts around it; one script per task, two front ends, keeps humans, agents, and CI on the identical path.
+**Why our own scripts, not PlatformIO:** the ESP32 build is ESP-IDF-native — MoonLight tracks IDF pre-releases against a pinned commit for chips like the P4 and S31, a level of version control PlatformIO's packaged platforms don't offer, and the hot-path drivers (LCD_CAM, Parlio, GDMA) use the vendor APIs first-class rather than through an Arduino-core abstraction. The tooling surface is also far wider than compile-upload-monitor: desktop builds, unit and scenario runs, spec and boundary checks, KPI collection, the web installer, provisioning, multi-board bench orchestration. A wrapper toolchain would cover one of those tasks and still need all the scripts around it; one script per task, two front ends, keeps humans, agents, and CI on the identical path.
 
 MoonDeck has three tabs:
 
@@ -68,7 +68,7 @@ Two things worth knowing:
 
 ### Packaging
 
-`uv run moondeck/ci/package_desktop.py` builds and packages for the host it runs on: a `.dmg` with a `.app` on macOS, a `.tar.gz` plus a `.deb` on Linux, and a `.zip` plus an NSIS `-setup.exe` on Windows. The Windows installer puts the program in `%LOCALAPPDATA%\Programs\projectMM` with a Start-menu shortcut and an uninstaller; it needs no elevation, and it never touches the settings directory, so an upgrade keeps the user's configuration.
+`uv run moondeck/ci/package_desktop.py` builds and packages for the host it runs on: a `.dmg` with a `.app` on macOS, a `.tar.gz` plus a `.deb` on Linux, and a `.zip` plus an NSIS `-setup.exe` on Windows. The Windows installer puts the program in `%LOCALAPPDATA%\Programs\MoonLight` with a Start-menu shortcut and an uninstaller; it needs no elevation, and it never touches the settings directory, so an upgrade keeps the user's configuration.
 
 Both the Windows icon and the macOS `.icns` derive from `mooninstaller/favicon.png`, so the mark has one source. The `.ico` is generated during the CMake build (`moondeck/ci/make_ico.py`, which pulls Pillow on demand through uv) and embedded in the executable, so the binary carries its icon whether it was installed or just unzipped.
 
@@ -115,8 +115,8 @@ volume, so an upgrade keeps settings, presets, scripts and the device's identity
 
 | | |
 |---|---|
-| **Config** | `/data/projectMM/.config/` in the volume, `XDG_DATA_HOME=/data` |
-| **Identity** | `/data/projectMM/.config/identity`, generated on first run |
+| **Config** | `/data/MoonLight/.config/` in the volume, `XDG_DATA_HOME=/data` |
+| **Identity** | `/data/MoonLight/.config/identity`, generated on first run |
 | **Logs** | stdout, so `docker logs` |
 | **UI** | container port 8080; the compose file publishes it on 8081 so it never fights a native install |
 | **Output** | Art-Net UDP 6454, DDP 4048, E1.31 5568, all outbound |
@@ -187,7 +187,7 @@ The ESP32 tab in MoonDeck wraps the same steps as cards (Setup → Firmware → 
 
 ### Windows: USB-serial drivers
 
-Windows ships no drivers for the two USB-serial chips almost every ESP32 dev board uses (WCH CH340/CH341, Silicon Labs CP2102/CP2102N). macOS and Linux do — so a board that Just Works on your Mac may show up on Windows as an `Unknown` device with no `COM*` port allocated at all, in which case both MoonDeck's port dropdown and the web installer's Chrome Web Serial picker come up **empty**. This isn't a projectMM bug; it's the OS.
+Windows ships no drivers for the two USB-serial chips almost every ESP32 dev board uses (WCH CH340/CH341, Silicon Labs CP2102/CP2102N). macOS and Linux do — so a board that Just Works on your Mac may show up on Windows as an `Unknown` device with no `COM*` port allocated at all, in which case both MoonDeck's port dropdown and the web installer's Chrome Web Serial picker come up **empty**. This isn't a MoonLight bug; it's the OS.
 
 **How to tell what you're dealing with:**
 

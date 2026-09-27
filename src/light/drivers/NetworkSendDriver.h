@@ -88,7 +88,7 @@ public:
 
     /// Derive the stable component id from the MAC, which needs no UUID machinery.
     void setup() override {
-        std::memcpy(cid_, "projectMM\0", 10);
+        std::memcpy(cid_, "MoonLight\0", 10);
         platform::getMacAddress(cid_ + 10);
     }
 

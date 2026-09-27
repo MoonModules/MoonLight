@@ -1,4 +1,4 @@
-"""Drive the projectMM UI from a run file: one engine, for tests and for video.
+"""Drive the MoonLight UI from a run file: one engine, for tests and for video.
 
 Every step goes through the INTERFACE. A step that POSTs its way to the outcome
 proves nothing about the UI and, on camera, shows an effect with no visible cause:
@@ -24,11 +24,17 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
+import subprocess
+from urllib.parse import urljoin
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import requests
+
+# The repo root, so a command a run file starts resolves its paths the way a person would.
+ROOT = Path(__file__).resolve().parents[2]
 
 # The attribute app.js names a module's card AND its nav button by, offered to
 # get_by_test_id as the test-id contract. ONE attribute, not a list: the
@@ -69,7 +75,7 @@ class Run:
     width: int = 960
     # Which app this run drives, and what it needs from the device it drives.
     #
-    # `host` is for another projectMM SURFACE on a known port (the web installer's
+    # `host` is for another MoonLight SURFACE on a known port (the web installer's
     # preview), not for a device: an IP written into a tracked run file is a second
     # bench registry that goes stale the moment a board changes network, and
     # moondeck.json is the one that exists. A run needing particular hardware says so
@@ -212,7 +218,7 @@ def device_for(requirement: str) -> str | None:
 
 
 def _find_by_mac(macs: set) -> str | None:
-    """Sweep the local subnet for a projectMM device with one of these MACs."""
+    """Sweep the local subnet for a MoonLight device with one of these MACs."""
     import concurrent.futures as cf
     import socket
 
@@ -285,6 +291,15 @@ class Driver:
         self.paced = screencast is not None
         self.bindings: dict[str, str] = {}
         self.failures: list[str] = []
+        # Every text a watched element has shown, so a wait arriving after a brief state
+        # is still satisfied by it: @xref{wait_for}.
+        self._seen_text: dict[str, set[str]] = {}
+        # The page may own the clock (a test's does), so a timing rule is testable without a
+        # real sleep and without patching `time` for everything else in the process.
+        self._now = getattr(page, "now", time.time)
+        self._watched: set[str] = set()
+        # Commands started by the run, collected by wait_process: @xref{start_process}.
+        self._processes: dict[str, subprocess.Popen] = {}
 
     VIEWPORT = {"width": 1280, "height": 720}
 
@@ -374,9 +389,25 @@ class Driver:
     # -- primitives ---------------------------------------------------------
 
     def _settle(self, seconds: float) -> None:
-        """Dwell, so the eye can follow. Skipped when nothing is recording."""
-        if seconds > 0 and self.paced:
+        """Dwell, so the eye can follow. Skipped when nothing is recording.
+
+        A watched progress element is sampled throughout the dwell whether or not the run is
+        paced, since a state that comes and goes between two steps is lost otherwise: @xref{wait_for}.
+        """
+        for sel in tuple(self._watched):
+            self._note_text(sel)          # correctness, so it happens whether or not anyone is watching
+        if seconds <= 0 or not self.paced:
+            return
+        if not self._watched:
             self.page.wait_for_timeout(int(seconds * 1000))
+            return
+        # Sliced, so a watched element is read several times across a long dwell rather than
+        # once at each end, which is where a short-lived state hides.
+        end = self._now() + seconds
+        while self._now() < end:
+            self.page.wait_for_timeout(120)
+            for sel in tuple(self._watched):
+                self._note_text(sel)
 
     def _ready(self, locator, timeout: int = 4000) -> bool:
         """Wait for ATTACHMENT, then scroll into view.
@@ -861,11 +892,127 @@ class Driver:
         """Click any element, by CSS selector."""
         return self.tap(self.page.locator(selector))
 
+    def follow_link(self, selector: str, seconds: float = 2.5) -> bool:
+        """Point at a link, open where it leads in this page, dwell, then come back.
+
+        A link that opens a new tab cannot be filmed: the recorder captures one page, so the
+        destination a viewer is being told about never appears. Following it in place shows the
+        real page at the real URL, which is the whole point of demonstrating the button, and the
+        viewer sees the same content either way. The pointer still travels to the link first, so
+        the cause of the navigation is visible rather than a page that simply changes.
+        """
+        # The match that actually carries a link. `data-module` sits on the nav entry as well as
+        # the card, so a card-scoped selector can still resolve to a nav button with no href.
+        all_matches = self.page.locator(selector)
+        el = next((m for m in (all_matches.nth(i) for i in range(all_matches.count()))
+                   if m.get_attribute("href")), None)
+        if el is None or not self._ready(el):
+            return False
+        box = el.bounding_box()
+        if box:                      # point at it, so the navigation has a visible cause
+            self.page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+            self._settle(0.5)
+        # Resolved against the page: the `{ }` link is relative, so it follows whatever host the
+        # UI is served from, and `goto` needs the absolute form.
+        href = urljoin(self.page.url, el.get_attribute("href"))
+        back = self.page.url
+        try:
+            # `commit` rather than `domcontentloaded`: a JSON response has no DOM to wait on, and
+            # the `{ }` button leads to exactly that. The dwell below is what the viewer sees.
+            resp = self.page.goto(href, wait_until="commit", timeout=20000)
+            # A 404 renders as a page and films as success, so the status is what decides.
+            reached = resp is None or resp.ok
+            if not reached:
+                self.failures.append(f"follow_link: {href} answered {resp.status}")
+            self._settle(seconds)
+        except Exception:
+            reached = False          # an offline docs host is a bad take, not a crash
+        finally:
+            # Unconditional: a step that leaves the driver on another page makes every step after
+            # it fail against the wrong document, which reads as a broken UI rather than a bad link.
+            try:
+                self.page.goto(back, wait_until="domcontentloaded", timeout=20000)
+                self.open_app_wait()
+            except Exception:
+                reached = False
+        return reached
+
+    def start_process(self, command: str, name: str = "") -> bool:
+        """Start a command alongside the run, so the interface can be filmed while it is driven.
+
+        A scenario drives the device over REST while this drives the browser, which is the only way
+        to film what a scenario does: the run file cannot perform those mutations itself without
+        becoming a second copy of the scenario, and the two would then drift.
+        The process is left running; `wait_process` collects it.
+        """
+        # `{host}` is the device this run is recording, so a command drives the same device the
+        # camera is pointed at rather than whatever it would default to.
+        command = command.replace("{host}", self.host)
+        try:
+            # Discarded rather than piped: nothing here reads it, and a full pipe buffer blocks the
+            # child forever. A live scenario run is exactly the chatty case that would hit it.
+            proc = subprocess.Popen(shlex.split(command), cwd=str(ROOT),
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            self.failures.append(f"start_process: {command!r} did not start ({e})")
+            return False
+        # One key for both actions, so a command started without a name is still findable.
+        key = name or command
+        running = self._processes.get(key)
+        if running is not None and running.poll() is None:
+            # Overwriting would orphan the live one, and wait_process could never account for it.
+            proc.kill()
+            self.failures.append(f"start_process: {key!r} is already running")
+            return False
+        self._processes[key] = proc
+        return True
+
+    def wait_process(self, name: str = "", timeout: float = 600.0) -> bool:
+        """Wait for a started command to finish, so a take cannot end mid-scenario.
+
+        A non-zero exit is a failed take rather than an exception: the run reports it the way it
+        reports a step that did not complete, and the recording is refused.
+        """
+        proc = self._processes.get(name)
+        if proc is None:
+            self.failures.append(f"wait_process: nothing named {name!r} was started")
+            return False
+        end = self._now() + timeout
+        while proc.poll() is None and self._now() < end:
+            self._settle(1.0)        # paced, so the wait is the shot rather than dead air
+            if not self.paced:
+                # _settle returns at once when nothing is recording, so without this the loop spins
+                # at full speed and the timeout is the only thing that ever ends it.
+                time.sleep(1.0)
+        if proc.poll() is None:
+            proc.kill()
+            self.failures.append(f"wait_process: {name!r} ran past {timeout}s")
+            return False
+        return proc.returncode == 0
+
+    def open_app_wait(self) -> None:
+        """Wait for the device UI to be driveable again after a navigation."""
+        try:
+            self.page.wait_for_selector(".card", state="attached", timeout=20000)
+        except Exception:
+            pass
+        self.page.wait_for_timeout(700)
+
     def type_into(self, selector: str, text: str, delay: int = 180) -> bool:
-        """Type into any field, slowly enough to watch a list narrow as it filters."""
+        """Type into any field, slowly enough to watch a list narrow as it filters.
+
+        The field is emptied first, so what it holds afterwards is what the run asked for.
+        A field can arrive already filled: the installer prefills the SSID from the last
+        install, and typing on top of that provisioned a device for "MoonModulesMoonModules",
+        which joins nothing. Selecting what is there means the first keystroke replaces it,
+        the way typing into a focused field does for a person.
+        """
         el = self.page.locator(selector)
         if not self.tap(el):
             return False
+        # Select-all rather than fill(): the keystrokes still happen, so a field that filters
+        # a list as it is typed still shows that, which is the point of typing slowly here.
+        self.page.keyboard.press("ControlOrMeta+a")
         self.page.keyboard.type(text, delay=delay if self.paced else 0)
         self.page.wait_for_timeout(420)
         return True
@@ -1070,6 +1217,8 @@ class Driver:
         "chapter":        lambda a: (a.get("title", ""), a.get("description"),
                                      float(a.get("seconds", 2.0))),
         "wait":           lambda a: (float(a.get("seconds", 1.0)),),
+        "wait_for":       lambda a: (a["selector"], a.get("text"),
+                                     float(a.get("timeout", 120.0))),
         "open_card":      lambda a: (a["module"],),
         "add_module":     lambda a: (a["parent"], a["type"]),
         "replace_module": lambda a: (a["module"], a["type"]),
@@ -1082,6 +1231,9 @@ class Driver:
         "choose":         lambda a: (a["module"], a["control"], a["value"]),
         "click_control":  lambda a: (a["module"], a["control"]),
         "click":          lambda a: (a["selector"],),
+        "follow_link":    lambda a: (a["selector"], float(a.get("seconds", 2.5))),
+        "start_process":  lambda a: (a["command"], a.get("name", "")),
+        "wait_process":   lambda a: (a.get("name", ""), float(a.get("timeout", 600.0))),
         "type_into":      lambda a: (a["selector"], a["text"],
                                      int(a.get("delay", 180))),
         "choose_option":  lambda a: (a["selector"], a["value"]),
@@ -1102,6 +1254,68 @@ class Driver:
         # but a caption cannot. _settle already no-ops when nothing is recording.
         self._settle(seconds)
         return True
+
+    def wait_for(self, selector: str, text: str | None = None, timeout: float = 120.0) -> bool:
+        """Hold until the page says so, rather than for a guessed number of seconds.
+
+        A step whose length the device decides (a flash, a reboot, a network join) has no
+        honest fixed duration: too short cuts the shot, too long pads every take. This waits
+        on the page's own evidence, so the same run file works on a fast link and a slow one.
+
+        A state already passed counts as seen. A progress element reports a sequence, and a
+        step polling it starts after the step before it finished, so a state shorter than that
+        gap is over before anyone looks: the erase on an S3 lasts about twelve seconds and the
+        step waiting for it begins later than that. Every text this element shows is therefore
+        remembered as it goes by, and the wait is satisfied by the history as well as by the
+        present. Otherwise a run file would have to name a timeout per state that is really a
+        guess about the hardware, which is the guesswork this action exists to remove.
+        """
+        self._watch(selector)
+        end = self._now() + timeout
+        while self._now() < end:
+            seen = self._note_text(selector)
+            if text is None:
+                # Non-empty, because the installer blanks this element before it fills it in:
+                # an attached-but-empty element is the state before the thing being waited for.
+                if seen:
+                    return True
+            elif any(text.lower() in s for s in self._seen_text.get(selector, ())):
+                return True
+            # Paced, the dwell IS the poll and the wait is visible in the recording. Unpaced,
+            # _settle returns at once, so the sleep has to come from here or this spins a core.
+            if self.paced:
+                self._settle(0.5)
+            else:
+                self.page.wait_for_timeout(100)
+                self._note_text(selector)
+        raise TimeoutError(f"wait_for: {selector!r} never showed {text!r} within {timeout}s"
+                           + (f" (it showed: {sorted(self._seen_text.get(selector, ()))})"
+                              if self._seen_text.get(selector) else ""))
+
+    def _watch(self, selector: str) -> None:
+        """Sample a progress element from now on, including between steps.
+
+        A state is missed in the gap between one step finishing and the next starting, which no
+        amount of remembering inside a wait can recover. So a watched selector is sampled by
+        every paced dwell in the run, which is what makes the record continuous.
+        """
+        self._watched.add(selector)
+        self._note_text(selector)
+
+    def _note_text(self, selector: str) -> str | None:
+        """Read an element and remember what it said, for a wait that arrives late."""
+        try:
+            el = self.page.query_selector(selector)
+        except Exception:
+            return None         # an element mid-render, or a page mid-navigation
+        if el is None:
+            return None
+        try:
+            txt = (el.text_content() or "").strip()
+        except Exception:
+            return None
+        self._seen_text.setdefault(selector, set()).add(txt.lower())
+        return txt
 
     def _act(self, a: str, args: dict) -> tuple[bool, str | None]:
         """Perform one action. Returns (completed, name-of-anything-created)."""
@@ -1210,6 +1424,7 @@ class Driver:
 ACTIONS: dict[str, str] = {
     "chapter":        "_do_chapter",
     "wait":           "_do_wait",
+    "wait_for":       "wait_for",
     "open_card":      "open_card",
     "add_module":     "add_module",
     "replace_module": "replace_module",
@@ -1220,8 +1435,11 @@ ACTIONS: dict[str, str] = {
     "drag_slider":    "drag_slider",
     "choose":         "choose",
     "click_control":  "click_control",
-    # Selector actions: another projectMM surface, with no module contract of its own.
+    # Selector actions: another MoonLight surface, with no module contract of its own.
     "click":          "click",
+    "follow_link":    "follow_link",
+    "start_process":  "start_process",
+    "wait_process":   "wait_process",
     "type_into":      "type_into",
     "choose_option":  "choose_option",
     "goto":           "goto",

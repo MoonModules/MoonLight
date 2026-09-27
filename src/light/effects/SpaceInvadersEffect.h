@@ -1,5 +1,5 @@
 #pragma once
-// Author: projectMM original (Space Invaders, Taito 1978, is the inspiration)
+// Author: MoonLight original (Space Invaders, Taito 1978, is the inspiration)
 
 #include "core/services/AudioService.h"   // latestFrame: the beat the march steps on
 #include "core/util/math16.h"

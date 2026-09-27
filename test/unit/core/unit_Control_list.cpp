@@ -27,7 +27,7 @@ struct StubDevices : mm::ListSource {
         else          s.append("{\"name\":\"WLED-1\",\"ip\":\"192.168.1.50\"}");
     }
     void writeListRowDetail(mm::JsonSink& s, uint8_t row) const override {
-        if (row == 0) s.append("{\"name\":\"self\",\"ip\":\"192.168.1.10\",\"type\":\"projectMM\",\"self\":true}");
+        if (row == 0) s.append("{\"name\":\"self\",\"ip\":\"192.168.1.10\",\"type\":\"MoonLight\",\"self\":true}");
         else          s.append("{\"name\":\"WLED-1\",\"ip\":\"192.168.1.50\",\"type\":\"WLED\"}");
     }
     // Restore: parse the persisted array with the recursive reader; record the count and the first row's name so a test can prove the round-trip took.
@@ -170,7 +170,7 @@ TEST_CASE("ControlType::List metadata carries a parallel detail array") {
     CHECK(std::strcmp(sink.data(),
         ",\"optionSets\":{}"
         ",\"detail\":["
-        "{\"name\":\"self\",\"ip\":\"192.168.1.10\",\"type\":\"projectMM\",\"self\":true},"
+        "{\"name\":\"self\",\"ip\":\"192.168.1.10\",\"type\":\"MoonLight\",\"self\":true},"
         "{\"name\":\"WLED-1\",\"ip\":\"192.168.1.50\",\"type\":\"WLED\"}]") == 0);
 }
 
@@ -195,7 +195,7 @@ TEST_CASE("ControlType::List type identity + persistable + restore round-trip") 
     controls.addList("devices", src);
     const char* saved =
         "{\"devices\":[{\"name\":\"WLED-1\",\"ip\":\"192.168.1.50\",\"type\":\"WLED\"},"
-        "{\"name\":\"MM-AB\",\"ip\":\"192.168.1.9\",\"type\":\"projectMM\"}]}";
+        "{\"name\":\"MM-AB\",\"ip\":\"192.168.1.9\",\"type\":\"MoonLight\"}]}";
     auto r = mm::applyControlValue(controls[0], saved, "devices", mm::ApplyPolicy::Clamp);
     CHECK(r == mm::ApplyResult::Ok);
     CHECK(src.restoredCount == 2);                       // parsed both rows

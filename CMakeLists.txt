@@ -307,7 +307,9 @@ if(WIN32)
 endif()
 
 # Application
-add_executable(projectMM src/main.cpp src/platform/desktop/main_desktop.cpp ${MM_WIN_RESOURCES})
+# module_types.cpp is the shared type registry, compiled into the app and the scenario runner
+# alike so one list serves both: src/module_types.cpp carries the reason.
+add_executable(projectMM src/main.cpp src/module_types.cpp src/platform/desktop/main_desktop.cpp ${MM_WIN_RESOURCES})
 target_link_libraries(projectMM PRIVATE mm_core mm_platform)
 add_dependencies(projectMM ui_embed build_info_gen moonlive_catalog)
 

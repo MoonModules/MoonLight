@@ -1,6 +1,6 @@
 # MHC-WLED ESP32-P4 shield — hardware reference
 
-Terminal pinout and onboard features for the **MHC-WLED ESP32-P4 shield** (myhome-control), the P4-NANO carrier used on the bench (catalog `deviceModel: "MHC-WLED ESP32-P4 shield"`, `esp32p4rev1-eth` firmware). Read from the board silkscreen + the builder's schematics so projectMM work reads this instead of the marketing render. The shield sits on a **Waveshare ESP32-P4-NANO**; GPIO numbers are the P4's.
+Terminal pinout and onboard features for the **MHC-WLED ESP32-P4 shield** (myhome-control), the P4-NANO carrier used on the bench (catalog `deviceModel: "MHC-WLED ESP32-P4 shield"`, `esp32p4rev1-eth` firmware). Read from the board silkscreen + the builder's schematics so MoonLight work reads this instead of the marketing render. The shield sits on a **Waveshare ESP32-P4-NANO**; GPIO numbers are the P4's.
 
 > **Board revision:** the terminal map and RS-485 wiring below are transcribed from a **V1** board (the builder's labeled V1 photos + schematics). The overview render is a **V2** render. Whether V2 keeps the identical GPIO↔terminal wiring is **not confirmed here**, so treat the map as V1-specific and verify against your own board's silkscreen if you have a different revision.
 
@@ -90,4 +90,4 @@ The loopback self-test drives a WS2812 frame out one pin and reads it back on a 
 
 ## Cross-reference
 
-Chip-level GPIO constraints (straps, flash/PSRAM) for the P4 are in [gpio-usage.md § ESP32-P4](gpio-usage.md#esp32-p4); this page is the *board* wiring. The catalog entry is [`mooninstaller/deviceModels.json`](../../mooninstaller/deviceModels.json) (`MHC-WLED ESP32-P4 shield`). RS-485 / DMX-512 as a first-class projectMM output is tracked in the [RS-485 / DMX-512 wired-output backlog item](../../work/future/backlog-light.md#rs-485-dmx-512-wired-output-future-the-physical-dmx-driver).
+Chip-level GPIO constraints (straps, flash/PSRAM) for the P4 are in [gpio-usage.md § ESP32-P4](gpio-usage.md#esp32-p4); this page is the *board* wiring. The catalog entry is [`mooninstaller/deviceModels.json`](../../mooninstaller/deviceModels.json) (`MHC-WLED ESP32-P4 shield`). RS-485 / DMX-512 as a first-class MoonLight output is tracked in the [RS-485 / DMX-512 wired-output backlog item](../../work/future/backlog-light.md#rs-485-dmx-512-wired-output-future-the-physical-dmx-driver).

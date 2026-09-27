@@ -1,0 +1,146 @@
+{
+  "name": "scenario_Layouts_resize_reallocates_live",
+  "module": "GridLayout",
+  "mode": "mutate",
+  "also": [
+    "Layouts",
+    "Layer"
+  ],
+  "description": "Changing where the lights are, while they are running. Every control applies on the next frame, so a resize reallocates the buffer mid-render rather than asking for a reboot: this walks the grid up and back down, measuring each, so the cost of a size is the difference between two steps.",
+  "fixture": [
+    {
+      "name": "fix-Layouts",
+      "op": "add_module",
+      "id": "Layouts",
+      "type": "Layouts"
+    },
+    {
+      "name": "fix-Grid",
+      "op": "add_module",
+      "id": "Grid",
+      "type": "GridLayout",
+      "parent_id": "Layouts"
+    }
+  ],
+  "steps": [
+    {
+      "name": "small",
+      "description": "A 16x16 panel, the size a device boots with.",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 16
+    },
+    {
+      "name": "small-height",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 16
+    },
+    {
+      "name": "measure-small",
+      "op": "measure",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 41,
+            "p95": 65,
+            "min": 17,
+            "max": 65,
+            "n": 8,
+            "samples": [43, 47, 65, 17, 55, 27, 19, 41]
+          },
+          "last_updated": "2026-09-24"
+        }
+      }
+    },
+    {
+      "name": "grow",
+      "description": "Four times the lights, which is where a reallocation would fail if one were going to.",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 32
+    },
+    {
+      "name": "grow-height",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 32
+    },
+    {
+      "name": "measure-grown",
+      "op": "measure",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 66,
+            "p95": 94,
+            "min": 33,
+            "max": 94,
+            "n": 8,
+            "samples": [71, 77, 94, 42, 92, 64, 33, 66]
+          },
+          "last_updated": "2026-09-24"
+        }
+      }
+    },
+    {
+      "name": "it-grew",
+      "op": "expect_control",
+      "id": "Grid",
+      "key": "width",
+      "equals": "32"
+    },
+    {
+      "name": "shrink-back",
+      "description": "Down again, because releasing memory is the half that leaks when it is wrong.",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 16
+    },
+    {
+      "name": "shrink-height",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 16
+    },
+    {
+      "name": "measure-shrunk",
+      "op": "measure",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 32,
+            "p95": 58,
+            "min": 18,
+            "max": 58,
+            "n": 8,
+            "samples": [43, 45, 58, 18, 57, 32, 22, 32]
+          },
+          "last_updated": "2026-09-24"
+        }
+      }
+    },
+    {
+      "name": "restart",
+      "description": "Restart: a layout that does not survive one is entered again on every power cut.",
+      "op": "reboot",
+      "timeout": 60
+    },
+    {
+      "name": "the-size-survived",
+      "op": "expect_control",
+      "id": "Grid",
+      "key": "width",
+      "equals": "16"
+    }
+  ]
+}

@@ -948,7 +948,7 @@ jobs:
         run: |
           set -euo pipefail
           # Render the docs/ tree (Material for MkDocs) as the Pages ROOT
-          # (moonmodules.github.io/projectMM/) — the project's front door.
+          # (moonmodules.github.io/MoonLight/) — the project's front door.
           # Config: mkdocs.yml; deps declared inline in the build script (uv
           # provisions them). Build to a temp dir, then copy INTO pages/ so the
           # installer staged above under pages/install/ survives (a plain

@@ -4,7 +4,7 @@ title: Why we write our own code
 
 # Why we write our own code
 
-projectMM pulls in no third-party libraries: no FastLED, no ESPAsyncWebServer, no ArduinoJson. A library that is genuinely needed lives behind the platform boundary in `src/platform/`, never in core or the light domain. The *what*, with the replacement for each, is [below](#third-party-libraries). The *why* comes first.
+MoonLight pulls in no third-party libraries: no FastLED, no ESPAsyncWebServer, no ArduinoJson. A library that is genuinely needed lives behind the platform boundary in `src/platform/`, never in core or the light domain. The *what*, with the replacement for each, is [below](#third-party-libraries). The *why* comes first.
 
 ## A dependency is a hole in the test coverage
 
@@ -26,11 +26,11 @@ What changed is the effort of writing code, and what changed it is AI agents. Th
 
 ## Why agents at all
 
-Using agents to build open-source software is contested, and a page that credits them with making this project possible cannot reasonably skip past that. So, briefly and once: where we stand.
+Using agents to build open-source software is contested, and a page that credits them with making this project possible cannot reasonably skip past that.
 
-We use AI agents because the technology is not going away, and the only way to learn what a tool does, where it is strong and where it quietly fails, is to run a real project on it.
+AI agents are a new way of working, and a genuinely different one rather than a faster version of what came before. We have worries about AI as it stands, and it is also not going away. Having followed it since the eighties, we would rather understand it than pretend it is absent.
 
-The two objections we hear most are that agents take developers' jobs, and that the energy they burn is not worth it. On both we have a position rather than an argument: we think AI changes jobs rather than takes them, the way computers changed office work from the 1990s onward, and we think the energy cost is defensible. We are not going to argue either here, and neither is a claim that everyone should work this way.
+So the position is neither enthusiasm nor resignation. A tool this consequential is better understood by using it seriously than by arguing about it from outside. Learning what one does, where it is strong and where it quietly fails, means running a real project on it. It also means holding that project to a standard that would expose the failures. What follows is that standard, and what it costs.
 
 ## The limits of this argument
 
@@ -48,7 +48,7 @@ Writing your own implementation of a known idea can land in either column, and w
 
 **Study, not skim.** This is the row that AI agents genuinely threaten, and it is worth naming rather than glossing. An agent can reproduce a working pattern without anyone involved understanding why it works, which is skimming with better output. The countermeasure is structural: each feature is spec'd from the primary source, the datasheet, the standard, the textbook algorithm, before it is written, and every line and every spec is reviewed. If the reasoning behind a piece of code cannot be stated, it does not go in. That standard is more work, not less.
 
-**Ideas, not code.** We are not trying to acquire anyone's implementation. What travels is the idea: an approach to a problem, a technique someone proved works on real hardware, a mistake worth not repeating. Most of what projectMM implements is publicly defined. Art-Net, E1.31/sACN, DDP, WS2812 timing, the peripheral datasheets, textbook DSP: those are industry standards, not anyone's property, and we implement them from the primary source. Textbook algorithm, textbook name, our implementation.
+**Ideas, not code.** We are not trying to acquire anyone's implementation. What travels is the idea: an approach to a problem, a technique someone proved works on real hardware, a mistake worth not repeating. Most of what MoonLight implements is publicly defined. Art-Net, E1.31/sACN, DDP, WS2812 timing, the peripheral datasheets, textbook DSP: those are industry standards, not anyone's property, and we implement them from the primary source. Textbook algorithm, textbook name, our implementation.
 
 **Steal from many, not one.** A rewrite that is one library with the names changed is a rip-off, whoever or whatever typed it. What is here comes from several sources, from the standards themselves, from what this hardware forces on you, and from years of our own prior work.
 

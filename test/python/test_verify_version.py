@@ -23,7 +23,7 @@ SCRIPT = ROOT / "moondeck" / "ci" / "verify_version.py"
 def run(tag, version, tmp_path):
     """Run verify_version against a throwaway library.json holding `version`."""
     lib = tmp_path / "library.json"
-    lib.write_text(json.dumps({"name": "projectMM", "version": version}))
+    lib.write_text(json.dumps({"name": "MoonLight", "version": version}))
     # verify_version reads ROOT/library.json; point it at the temp copy via cwd is not enough
     # (it resolves ROOT from __file__), so patch by running a tiny wrapper that swaps the path.
     code = (

@@ -2,7 +2,7 @@
 # /// script
 # dependencies = ["pyserial"]
 # ///
-"""Send WiFi credentials to a projectMM device over USB-serial using the
+"""Send WiFi credentials to a MoonLight device over USB-serial using the
 Improv-WiFi protocol — the same protocol the browser flow at
 https://www.improv-wifi.com/ uses, just driven from Python.
 
@@ -13,7 +13,7 @@ The script:
      device's new URL), "provisioning fail", or `--timeout` expires.
   4. Prints the device URL on success; non-zero exit on failure.
 
-The device must be running a projectMM firmware that includes the Improv
+The device must be running a MoonLight firmware that includes the Improv
 listener (Track 3 of plan-18 onwards). On the ESP32-S3-DevKitC-1, connect
 via the silkscreen-labelled UART USB port — the native USB-Serial-JTAG
 port is unsupported by the Improv path.

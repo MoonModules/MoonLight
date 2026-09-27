@@ -4,7 +4,7 @@
 
 namespace mm {
 
-// Author: projectMM original (rotating spiral)
+// Author: MoonLight original (rotating spiral)
 /// Effect winding a lit spiral up a conical layout.
 /// @card SpiralEffect.gif
 ///

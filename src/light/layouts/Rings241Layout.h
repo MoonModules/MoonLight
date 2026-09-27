@@ -6,7 +6,7 @@
 namespace mm {
 
 /// Layout of the 241-LED concentric-rings disc.
-/// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
+/// Author: MoonLight, https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
 ///
 /// @moreinfo
 ///
@@ -15,7 +15,7 @@ namespace mm {
 /// Prior art: MoonLight's Rings241Layout, which composes MoonLight's RingLayout once per ring.
 /// RingLayout places `n` LEDs evenly on a circle of radius n / (2π), starting at the bottom (angleRad = π at i=0) and stepping by 2π/n.
 /// This port reproduces that exact per-LED math but emits coordinates only.
-/// MoonLight's pin/wiring plumbing (doNextPin/nextPin, and RingLayout's angleFirst/rotation/clockwise/nrOfLEDs UI controls) has no place here, since a projectMM layout hands positions to the driver and the driver owns pins.
+/// MoonLight's pin/wiring plumbing (doNextPin/nextPin, and RingLayout's angleFirst/rotation/clockwise/nrOfLEDs UI controls) has no place here, since a MoonLight layout hands positions to the driver and the driver owns pins.
 /// The one geometry control that survives is `scale`, RingLayout's spacing multiplier.
 /// Every ring is a full circle (MoonLight's rotation = 360), so every LED is emitted; that makes lightCount() the fixed constant 241.
 ///

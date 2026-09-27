@@ -15,11 +15,11 @@
 namespace mm {
 
 /// What a discovered device is.
-enum class DevType : uint8_t { Generic = 0, ProjectMM = 1, Wled = 2, Hue = 3 };
+enum class DevType : uint8_t { Generic = 0, MoonLight = 1, Wled = 2, Hue = 3 };
 
 inline const char* devTypeStr(DevType t) {
     switch (t) {
-        case DevType::ProjectMM: return "projectMM";
+        case DevType::MoonLight: return "MoonLight";
         case DevType::Wled:      return "WLED";
         case DevType::Hue:       return "Hue bridge";
         case DevType::Generic:   return "generic";

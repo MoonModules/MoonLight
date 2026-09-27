@@ -1,0 +1,46 @@
+{
+  "name": "scenario_FileManager_writes_and_reads_back",
+  "module": "FileManagerModule",
+  "mode": "mutate",
+  "also": [
+    "FilesystemModule"
+  ],
+  "description": "A file written to the device is still there after a restart, which is the property every preset, script and configuration depends on. The one card whose whole job is the filesystem, so it is the one that proves the filesystem.",
+  "fixture": [
+    {
+      "name": "fix-File Manager",
+      "op": "add_module",
+      "id": "File Manager",
+      "type": "FileManagerModule"
+    }
+  ],
+  "steps": [
+    {
+      "name": "write-a-file",
+      "description": "Write through the same path the editor uses, so this exercises what a user's save does.",
+      "op": "write_file",
+      "path": "/scenario-proof.txt",
+      "value": "written by a scenario"
+    },
+    {
+      "name": "it-is-there",
+      "description": "Read it straight back, which proves the write returned rather than merely reported.",
+      "op": "expect_file",
+      "path": "/scenario-proof.txt",
+      "contains": "written by a scenario"
+    },
+    {
+      "name": "restart",
+      "description": "Restart, because a write that only reached a cache is not a write.",
+      "op": "reboot",
+      "timeout": 60
+    },
+    {
+      "name": "it-survived",
+      "description": "Still there, so the bytes reached the filesystem and came back at boot.",
+      "op": "expect_file",
+      "path": "/scenario-proof.txt",
+      "contains": "written by a scenario"
+    }
+  ]
+}

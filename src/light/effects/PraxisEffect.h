@@ -6,7 +6,7 @@ namespace mm {
 
 /// Algorithmic palette-pattern effect driven by two beat oscillators.
 /// @card PraxisEffect.gif
-/// Author: MONSOONO / @Flavourdynamics (MoonLight), https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
+/// Author: MONSOONO / @Flavourdynamics (MoonLight), https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 ///
 /// Each pixel's hue comes from two oscillating mutators combined with its own position.
 /// So the pattern continually stretches, shears and rolls across the grid.

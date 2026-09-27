@@ -3,7 +3,7 @@
 > **Superseded on 2026-09-22** by [Plan-20260922 - MoonLight, from v5.0.0 to the rename](../../present/Plan-20260922%20-%20MoonLight,%20from%20v5.0.0%20to%20the%20rename.md), which consolidates the five MoonLight files into one. Kept for the reasoning behind decisions already taken.
 
 A running log of places where **strict fidelity to MoonLight's behaviour** (the migration mandate:
-end users must see the same effect they always have) collides with a **projectMM principle**
+end users must see the same effect they always have) collides with a **MoonLight principle**
 (robustness / no-crash-at-any-grid-size, correctness, hot-path discipline, *common patterns first*).
 
 For each: what MoonLight does, what the principle wants, what was shipped, and the **decision needed**.
@@ -34,7 +34,7 @@ renders the same sweep more smoothly, a slow one choppier. Once-per-frame, no pe
 
 - **MoonLight:** brightness in several effects is plain integer `channel * brightness / 255`
   (truncating), not FastLED's `scale8` (which has a +1 video-rounding so `scale8(x,255)==x`).
-- **Principle in tension:** projectMM's standard channel-scale op is `scale8`. Using it would be the
+- **Principle in tension:** MoonLight's standard channel-scale op is `scale8`. Using it would be the
   "common patterns first" choice, but it rounds ~1 LSB higher than MoonLight at non-255 brightness.
 - **Shipped:** kept faithful — used MoonLight's exact `* bri / 255` where the source does (the 3a
   verifier caught and corrected a `scale8` slip in SolidEffect). At brightness=255 (default) both
@@ -44,7 +44,7 @@ renders the same sweep more smoothly, a slow one choppier. Once-per-frame, no pe
 ## 4. 🟡 Audio effects — `volume` normalization scale (0..1 float vs our 0..255 `level`)
 
 - **MoonLight:** audio effects read `sharedData.volume` as a normalized float (roughly 0.0..1.0+),
-  e.g. FreqMatrix's gate `volume > 0.25`. projectMM's `AudioFrame::level` is a small integer
+  e.g. FreqMatrix's gate `volume > 0.25`. MoonLight's `AudioFrame::level` is a small integer
   (~0..255, the VU value).
 - **Principle in tension:** fidelity needs the *same trigger points* (a beat that lights MoonLight
   must light ours), but the units differ, so a literal `> 0.25` is wrong against `level`.

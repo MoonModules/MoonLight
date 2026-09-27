@@ -568,7 +568,7 @@ static void ethEventHandler(void* /*arg*/, esp_event_base_t base,
     if (base == ETH_EVENT) {
         if (id == ETHERNET_EVENT_CONNECTED) {
             ethLinkUp_.store(true, std::memory_order_relaxed);
-            // The NEGOTIATED speed, not just "up". A gigabit PHY that fell back to 100M behaves differently enough to matter (the S31's RGMII Tx-clock skew is speed-dependent), and "link up" alone sent one debug session hunting DHCP when the question was the speed.
+            // The NEGOTIATED speed rather than "up". A gigabit PHY that fell back to 100M behaves differently enough to matter (the S31's RGMII Tx-clock skew is speed-dependent), and "link up" alone sent one debug session hunting DHCP when the question was the speed.
             ESP_LOGI(NET_TAG, "Ethernet link up (%u Mbps)", ethLinkSpeedMbps());
             if (ethStatic_.load(std::memory_order_acquire)) {
                 // Static mode: do NOT let the DHCP client restart on this link-up (applyHostname would), that is what made a re-plugged cable grab a DHCP lease instead of the configured static IP. Re-pin the stored static config directly so the interface returns to its static address immediately (netSetStaticIPv4 stops dhcpc + sets it).
@@ -719,7 +719,7 @@ static bool ethInitEmac() {
     }
     // From here the driver owns mac+phy (driver_uninstall frees them); the remaining failure paths uninstall the driver instead of del-ing mac/phy.
 #ifdef CONFIG_IDF_TARGET_ESP32S31
-    // The YT8531 needs a vendor-specific auto-nego re-enable (+ RGMII delays) the generic driver can't do, without it the RGMII link never negotiates. Run right after install (driver/PHY exist, before start), the same order IDF's example uses. Non-fatal: a failed register write logs a warning and continues (the link just may not come up) rather than dropping Ethernet.
+    // The YT8531 needs a vendor-specific auto-nego re-enable (+ RGMII delays) the generic driver can't do, without it the RGMII link never negotiates. Run right after install (driver/PHY exist, before start), the same order IDF's example uses. Non-fatal: a failed register write logs a warning and continues (the link may not come up) rather than dropping Ethernet.
     {
         esp_err_t yterr = ethYt8531BoardInit(eth_handle);
         if (yterr != ESP_OK) ESP_LOGW(NET_TAG, "YT8531 RGMII init failed: %s (link may not come up)",
@@ -1222,7 +1222,7 @@ bool wifiStaInit(const char* ssid, const char* password) {
     err = esp_wifi_connect();
     if (err != ESP_OK) {
         ESP_LOGE(NET_TAG, "WiFi STA connect failed: %s", esp_err_to_name(err));
-        wifiStaStop();   // tear down the driver/netif we just stood up
+        wifiStaStop();   // tear down the driver/netif stood up above
         return false;
     }
 
@@ -1542,11 +1542,11 @@ bool mdnsInit(const char* deviceName) {
         ESP_LOGE(NET_TAG, "mDNS _http._tcp advertise failed: %s", esp_err_to_name(httpErr));
         return false;
     }
-    // `mm=1` TXT so a browsing projectMM peer tells us apart from a generic `_http._tcp` box without an HTTP probe, DevicesModule classifies us projectMM straight from the announcement. Non-fatal (advertising still works without it).
+    // `mm=1` TXT so a browsing MoonLight peer tells us apart from a generic `_http._tcp` box without an HTTP probe, DevicesModule classifies us MoonLight straight from the announcement. Non-fatal (advertising still works without it).
     esp_err_t txtErr = mdns_service_txt_item_set("_http", "_tcp", "mm", "1");
     ESP_LOGI(NET_TAG, "mDNS _http._tcp TXT mm=1 set: %s", esp_err_to_name(txtErr));
 
-    // `_wled._tcp`: the service the native WLED apps + Home Assistant browse for, how a projectMM device appears in the WLED ecosystem without speaking WLED's UDP protocol (the HTTP server on :80 answers their /json/info probe). Non-fatal: a failure just means we don't show in those apps; the rest of discovery still works.
+    // `_wled._tcp`: the service the native WLED apps + Home Assistant browse for, how a MoonLight device appears in the WLED ecosystem without speaking WLED's UDP protocol (the HTTP server on :80 answers their /json/info probe). Non-fatal: a failure means we don't show in those apps; the rest of discovery still works.
     esp_err_t wledErr = mdns_service_add(deviceName, "_wled", "_tcp", 80, nullptr, 0);
     ESP_LOGI(NET_TAG, "mDNS _wled._tcp add: %s", esp_err_to_name(wledErr));
     // `mac=` TXT, a real WLED carries `mac=<12 hex>` on its _wled._tcp record, and the native apps key the discovered device on it (without it the record is discarded, so the device never lists). Lowercase hex, no separators, matching WLED's format.
@@ -1653,7 +1653,7 @@ int httpRequest(const char* method, const char* host, uint16_t port, const char*
         else return 0;
     }
 
-    // Read the response. When the caller wants the body, read into THEIR buffer (so they size it, a Hue /lights body runs several KB) and shift the body to the front. When they don't (body==null, e.g. a fire-and-forget PUT), read into a small local scratch just far enough to get the status line, the request still executes.
+    // Read the response. When the caller wants the body, read into THEIR buffer (so they size it, a Hue /lights body runs several KB) and shift the body to the front. When they don't (body==null, e.g. a fire-and-forget PUT), read into a small local scratch far enough to get the status line, the request still executes.
     char scratch[256];
     char* buf = body ? body : scratch;
     const size_t cap = body ? bodyLen : sizeof(scratch);
@@ -1669,7 +1669,7 @@ int httpRequest(const char* method, const char* host, uint16_t port, const char*
     int status = std::atoi(buf + 9);   // "HTTP/1.1 NNN ..."
     if (body) {
         char* b = std::strstr(body, "\r\n\r\n");
-        if (b) std::memmove(body, b + 4, std::strlen(b + 4) + 1);   // drop headers, keep just the body
+        if (b) std::memmove(body, b + 4, std::strlen(b + 4) + 1);   // drop headers, keep the body
         else body[0] = '\0';
     }
     return status;

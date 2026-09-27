@@ -1,0 +1,80 @@
+{
+  "name": "scenario_Services_audio_drives_the_effects",
+  "module": "AudioService",
+  "mode": "mutate",
+  "also": [
+    "Services"
+  ],
+  "description": "Audio arrives wired on every device and synthesized by default, so the effects react before a microphone is attached to anything. Proves the default is what ships, that a source change takes, and that the choice survives a restart.",
+  "fixture": [
+    {
+      "name": "fix-Services",
+      "op": "add_module",
+      "id": "Services",
+      "type": "Services"
+    },
+    {
+      "name": "fix-Audio",
+      "op": "add_module",
+      "id": "Audio",
+      "type": "AudioService",
+      "parent_id": "Services"
+    }
+  ],
+  "steps": [
+    {
+      "name": "simulate-is-the-default",
+      "description": "A device demonstrates sound with nothing attached, which is why this mode is first.",
+      "op": "expect_control",
+      "id": "Audio",
+      "key": "mode",
+      "equals": "0"
+    },
+    {
+      "name": "pick-the-microphone",
+      "description": "A board with a real microphone selects local audio, the way its catalog entry does.",
+      "op": "set_control",
+      "id": "Audio",
+      "key": "mode",
+      "value": 2
+    },
+    {
+      "name": "it-took",
+      "op": "expect_control",
+      "id": "Audio",
+      "key": "mode",
+      "equals": "2"
+    },
+    {
+      "name": "restart",
+      "description": "Restart, because a source that reverts leaves a mic board silently synthesizing.",
+      "op": "reboot",
+      "timeout": 60
+    },
+    {
+      "name": "the-source-survived",
+      "op": "expect_control",
+      "id": "Audio",
+      "key": "mode",
+      "equals": "2"
+    },
+    {
+      "name": "back-to-simulate",
+      "description": "Back to the default, so the scenario leaves the device as it found it.",
+      "op": "set_control",
+      "id": "Audio",
+      "key": "mode",
+      "value": 0
+    }
+  ],
+  "reset": [
+    {
+      "name": "reset-audio-mode",
+      "description": "Put the source back to simulate, so the default assertion below reads a known state rather than whatever ran before.",
+      "op": "set_control",
+      "id": "Audio",
+      "key": "mode",
+      "value": 0
+    }
+  ]
+}

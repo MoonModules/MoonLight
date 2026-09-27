@@ -6,7 +6,7 @@ namespace mm {
 
 /// Audio-reactive effect: a noise field modulated by sound level.
 /// @card NoiseMeterEffect.gif
-/// Author: Andrew Tuline (WLED-SR), https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
+/// Author: Andrew Tuline (WLED-SR), via the predecessor, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
 ///
 /// A vertical meter whose height tracks the sound level and whose color is a scrolling noise field.
 /// So a loud moment fills the panel bottom-up with a drifting gradient rather than a flat bar.

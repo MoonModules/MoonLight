@@ -67,6 +67,7 @@ test("the bookmarklet downloads a complete bundle the Restore button accepts", a
     assert.match(captured.alerts[0], /skipped \(not text\): \/scripts\/fw\.bin/);
     assert.match(captured.alerts[0], /private/);
     const bundle = JSON.parse(await captured.blob.text());
+    // The OLD name on purpose: this tool targets old firmware, whose Restore accepts only this value.
     assert.equal(bundle.format, "projectMM-config-backup");
     assert.equal(bundle.version, 1);
     assert.equal(bundle.device, "schelpje");
@@ -75,7 +76,7 @@ test("the bookmarklet downloads a complete bundle the Restore button accepts", a
         ["/.config/Network.json", "/.config/presets/p1.json", "/scripts/a.mle", "/scripts/bom.mle"]);
     assert.equal(bundle.files["/scripts/bom.mle"], "\uFEFFlet y=2");   // BOM preserved byte-exact
     assert.equal(bundle.files["/scripts/a.mle"], "let x=1");
-    assert.match(captured.download, /^projectMM-config-schelpje-\d{4}-\d{2}-\d{2}\.json$/);
+    assert.match(captured.download, /^MoonLight-config-schelpje-\d{4}-\d{2}-\d{2}\.json$/);
 });
 
 test("a truncated read fails the backup loudly instead of archiving an incomplete file", async () => {

@@ -28,7 +28,7 @@ class MyEffect {
 
 Click away from the editor, or press Ctrl/Cmd+S. The lights turn dim blue.
 
-<video src="../assets/uiscenarios/write-an-effect.webm" autoplay loop muted playsinline width="720" title="Adding a MoonLive effect, picking a script, and typing one of your own"></video>
+<video src="../assets/uiscenarios/97-write-an-effect.webm" autoplay loop muted playsinline width="720" title="Adding a MoonLive effect, picking a script, and typing one of your own"></video>
 
 
 That is the whole loop. `tick()` runs once per frame, `fill(r, g, b)` writes every light, and the numbers are 0 to 255.

@@ -18,7 +18,7 @@ Two things then hide the failure rather than reporting it. `FilesystemModule::se
 
 **Windows is the only platform with no install experience.** `moondeck/ci/package_desktop.py` builds a signed `.app` with an icon for macOS and a `.deb` with an icon and menu entry for Linux. Windows gets a bare `.exe` and a `README.txt` in a zip: no icon, no Start-menu entry, no uninstaller.
 
-Outcome: a Windows user installs projectMM the way a macOS user does, and their settings survive both a restart and an update.
+Outcome: a Windows user installs MoonLight the way a macOS user does, and their settings survive both a restart and an update.
 
 ## Approach
 
@@ -28,9 +28,9 @@ Default the desktop filesystem root to a per-user data directory, created at mou
 
 | Platform | Data directory |
 |---|---|
-| Windows | `%LOCALAPPDATA%\projectMM` |
-| macOS | `~/Library/Application Support/projectMM` |
-| Linux | `$XDG_DATA_HOME/projectMM`, else `~/.local/share/projectMM` |
+| Windows | `%LOCALAPPDATA%\MoonLight` |
+| macOS | `~/Library/Application Support/MoonLight` |
+| Linux | `$XDG_DATA_HOME/MoonLight`, else `~/.local/share/MoonLight` |
 
 **A repo checkout keeps using `build/`**, detected by `CMakeLists.txt` AND `moondeck/` both being present in the working directory (`CMakeLists.txt` alone is true in the root of every CMake project). This is the non-destructive half of the change: the dev workflow, every gate script, and the existing tests are untouched, and nobody's local config silently relocates. `MM_DATA_DIR` overrides both cases, for tests and for anyone who wants the data somewhere specific.
 
@@ -40,19 +40,19 @@ Reuse what exists rather than adding seams: `fsMkdir` ([platform_desktop.cpp:526
 
 ### Part 2: the installer
 
-**NSIS**, producing `projectMM-windows-x64-vX.Y.Z-setup.exe` beside the existing zip, which stays for portable use.
+**NSIS**, producing `MoonLight-windows-x64-vX.Y.Z-setup.exe` beside the existing zip, which stays for portable use.
 
-- **Program** installs to `%LOCALAPPDATA%\Programs\projectMM`, per-user, so no elevation prompt.
+- **Program** installs to `%LOCALAPPDATA%\Programs\MoonLight`, per-user, so no elevation prompt.
 - **Start-menu shortcut** with the icon, plus an uninstaller and an Add/Remove Programs entry.
 - **Icon**: generate a `.ico` from the existing `web-installer/favicon.png` (the macOS path already derives its `.icns` from the same source), and embed it in the exe through a Windows `.rc` resource so the binary carries its icon even outside the installer.
 - **Skip when `makensis` is absent on a dev machine, fail outright under CI**, matching the pattern the `.deb` path already uses for a missing `dpkg-deb`. The asymmetry is the point: the release uploads with `fail_on_unmatched_files`, so a silent skip there would fail the whole release, ESP32 firmware and all, with an error naming a glob rather than the absent tool.
-- **Close a running instance before overwriting.** A running `projectMM.exe` holds a lock on the file, which is exactly how three build attempts failed during this session's bench work. The installer must detect and stop it, or the upgrade fails with a file-in-use error.
+- **Close a running instance before overwriting.** A running `MoonLight.exe` holds a lock on the file, which is exactly how three build attempts failed during this session's bench work. The installer must detect and stop it, or the upgrade fails with a file-in-use error.
 
 **Settings survive an update by construction**, because the program and the data live in separate directories:
 
 ```text
-%LOCALAPPDATA%\Programs\projectMM\    program   - replaced on update, removed on uninstall
-%LOCALAPPDATA%\projectMM\.config\     settings  - never touched by the installer
+%LOCALAPPDATA%\Programs\MoonLight\    program   - replaced on update, removed on uninstall
+%LOCALAPPDATA%\MoonLight\.config\     settings  - never touched by the installer
 ```
 
 The uninstaller removes the program only and leaves settings in place, which is standard Windows behavior and means a reinstall or an upgrade finds the user's configuration exactly where it was.

@@ -1,4 +1,4 @@
-# Plan: projectMM writes British English
+# Plan: MoonLight writes British English
 
 ## Context
 

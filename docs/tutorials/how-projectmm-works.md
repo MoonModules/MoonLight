@@ -1,21 +1,21 @@
-# How projectMM works
+# How MoonLight works
 
 You have lights running. This page explains what you were actually looking at.
 
-There is really only **one idea** in projectMM, and everything else follows from it. Ten minutes here and the rest of the interface stops being a wall of settings and becomes a place you know your way around.
+There is really only **one idea** in MoonLight, and everything else follows from it. Ten minutes here and the rest of the interface stops being a wall of settings and becomes a place you know your way around.
 
 > New here? Start with **[Install & first light](../gettingstarted.md)** and come
 > back once something is lit.
 
-![The projectMM interface: navigation on the left, live preview in the middle, module cards on the right](../assets/gettingstarted/02-01-UI-large.png)
+![The MoonLight interface: navigation on the left, live preview in the middle, module cards on the right](../assets/gettingstarted/02-01-UI-large.png)
 
-<video src="../assets/uiscenarios/show-the-preview.webm" autoplay loop muted playsinline width="720" title="The 3D preview filling the frame: what the device is rendering, live"></video>
+<video src="../assets/uiscenarios/91-show-the-preview.webm" autoplay loop muted playsinline width="720" title="The 3D preview filling the frame: what the device is rendering, live"></video>
 
 ---
 
 ## 1. Everything is a card
 
-Every single thing in projectMM, the WiFi settings, an effect, an LED driver, the file manager, is a **MoonModule**. And every MoonModule is a **card**.
+Every single thing in MoonLight, the WiFi settings, an effect, an LED driver, the file manager, is a **MoonModule**. And every MoonModule is a **card**.
 
 There is no second kind of thing. Learn to read one card and you can read them all.
 
@@ -38,7 +38,7 @@ Look at that picture again, because every card has the same parts:
 Two of those are unusual and worth pausing on.
 
 **The timing and memory are per module, and they are live.** Most software hides
-this. projectMM shows you exactly what each part costs, so when something feels slow you can see which card is responsible instead of guessing.
+this. MoonLight shows you exactly what each part costs, so when something feels slow you can see which card is responsible instead of guessing.
 
 **The nesting is the structure.** A child card is drawn *inside* its parent's
 border. When you see `Grid` inside `Layouts`, that is not decoration, the Grid really does belong to Layouts. The box is the truth.
@@ -126,7 +126,7 @@ fold it, tile it. An effect written for one strip can drive a whole wall without
 
 Move a slider and the next frame uses it. Change the WiFi credentials, add an effect, resize a grid, all of it takes effect immediately, on a running device.
 
-<video src="../assets/uiscenarios/swap-an-effect.webm" autoplay loop muted playsinline width="720" title="Replacing an effect with another type; the slot keeps its place and the lights never stop"></video>
+<video src="../assets/uiscenarios/96-swap-an-effect.webm" autoplay loop muted playsinline width="720" title="Replacing an effect with another type; the slot keeps its place and the lights never stop"></video>
 
 **Files are the one exception, and only because typing is different.** A script
 you are editing is saved when you click away, press Ctrl/Cmd+S, or press Save, a half-typed line should not be compiled onto your fixture mid-word. The moment it is saved it recompiles and swaps in live, same as everything else.
@@ -152,7 +152,7 @@ The rest the module declares about itself:
 
 | | |
 |---|---|
-| 💫 projectMM / MoonLight · 🌙 MoonModules · 🐙 WLED · ⚡️ FastLED | where it came from |
+| 💫 MoonLight / MoonLight · 🌙 MoonModules · 🐙 WLED · ⚡️ FastLED | where it came from |
 | 🦅 | a named contributor, credited on the module |
 | 🎵 volume · 🎶 frequency | it listens: one note reacts to how LOUD the room is, two to WHICH notes are playing |
 | 📡 | it takes its picture from the network |

@@ -148,7 +148,7 @@ static void improvSendError(improv::Error err) {
 static void improvSendDeviceInfo() {
     // RPC response: [type=GET_DEVICE_INFO][len][n strings].
     std::vector<std::string> data = {
-        "projectMM",                            // firmware name
+        "MoonLight",                            // firmware name
         g_improv.firmwareVersion,
         g_improv.chipFamily,
         g_improv.name,

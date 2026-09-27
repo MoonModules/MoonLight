@@ -7,7 +7,7 @@ namespace mm {
 
 /// Effect of a traveling wave across the layer.
 /// @card WaveEffect.gif
-/// Author: Ewoud Wijma (MoonLight), https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
+/// Author: Ewoud Wijma (MoonLight), https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 ///
 /// Each column plots one point of a moving wave, so the lit points trace a scrolling curve.
 /// A fading trail follows it, which is the classic oscilloscope look.

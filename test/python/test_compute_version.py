@@ -21,7 +21,7 @@ import compute_version as cv  # noqa: E402
 def _lib(tmp_path, version):
     """Write a throwaway library.json holding `version`, return its path."""
     f = tmp_path / "library.json"
-    f.write_text(json.dumps({"name": "projectMM", "version": version}))
+    f.write_text(json.dumps({"name": "MoonLight", "version": version}))
     return f
 
 

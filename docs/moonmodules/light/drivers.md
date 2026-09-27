@@ -180,7 +180,7 @@ Detail: [technical](moxygen/PreviewDriver.md)
 
 <img src="../../assets/light/drivers/NdiDriver.png" width="300" alt="NDI driver controls">
 
-Publishes the layer as an **NDI video source**, so OBS, Resolume, TouchDesigner or any other NDI receiver picks projectMM up by name, on this machine or another on the network. Where the Preview driver draws the lights for a person, this hands the same frame to a production tool as video.
+Publishes the layer as an **NDI video source**, so OBS, Resolume, TouchDesigner or any other NDI receiver picks MoonLight up by name, on this machine or another on the network. Where the Preview driver draws the lights for a person, this hands the same frame to a production tool as video.
 
 The grid becomes the frame, one light per pixel, output correction applied, so a receiver sees what the wall sees. **Desktop only, and you install the NDI runtime yourself**; without it the driver says so and nothing else changes. See [the details below](#ndi-details).
 
@@ -326,7 +326,7 @@ Read the write-up with its comments: a reader supplied the controller-number fie
 <a id="hls-details"></a>
 
 ## HLS, details
-**On desktop you install ffmpeg yourself** (any 5.x+, on PATH), because projectMM never ships or links an encoder. Install it with `brew` on macOS, `winget` on Windows, or `apt` on Debian, Ubuntu and Raspberry Pi OS. Without it the driver reports `ffmpeg not found` and nothing else changes.
+**On desktop you install ffmpeg yourself** (any 5.x+, on PATH), because MoonLight never ships or links an encoder. Install it with `brew` on macOS, `winget` on Windows, or `apt` on Debian, Ubuntu and Raspberry Pi OS. Without it the driver reports `ffmpeg not found` and nothing else changes.
 
 The `encoder` control picks which one ffmpeg uses: `libx264` (the default, in practically every build) is software.
 
@@ -334,7 +334,7 @@ Three hardware encoders offload it instead, and are worth picking on large grids
 
 An encoder your ffmpeg lacks starts and exits immediately; the status then reads `encoder exited - check ffmpeg`.
 
-**On the ESP32-P4** there is no ffmpeg and no filesystem in the path: the chip's own H.264 block encodes and projectMM packages the MPEG-TS itself. Segments are served from a RAM ring rather than written to flash, which at one segment per second would wear it for nothing. The `encoder` control is absent, since the hardware offers only one.
+**On the ESP32-P4** there is no ffmpeg and no filesystem in the path: the chip's own H.264 block encodes and MoonLight packages the MPEG-TS itself. Segments are served from a RAM ring rather than written to flash, which at one segment per second would wear it for nothing. The `encoder` control is absent, since the hardware offers only one.
 
 **Sizing the picture.** The P4's encoder takes only EVEN dimensions between 80x80 and 1920x2032, so an odd wall has its scale doubled so both axes come out even. A wall whose scaled size exceeds the maximum is refused with a status rather than streaming something the hardware cannot encode. Desktop ffmpeg has none of these limits. The floor is what the auto scale exists for: the P4 will not accept a frame smaller than 80x80, and a small wall streamed 1:1 arrives as a postage stamp in the player. `scale` at 0 (the default) therefore picks the smallest whole factor that lifts *both* axes to 80: a 20x10 wall streams as 160x80 rather than being refused, and a wall already past 80 stays 1:1. One factor serves both axes, so the aspect ratio is preserved and each light stays a square block. Raising `scale` by hand on an already-large wall costs real time (a 128x128 wall at scale 4 measures about 60 ms per frame against 1 ms at 1:1) and buys nothing a player's own zoom does not.
 
@@ -384,15 +384,15 @@ ffplay -fflags nobuffer -flags low_delay -probesize 32 -analyzeduration 0 \
 <a id="ndi-details"></a>
 
 ## NDI, details
-**You install the NDI runtime yourself**, projectMM cannot ship it. Until you do, the driver reports `NDI runtime not installed` and everything else works normally.
+**You install the NDI runtime yourself**, MoonLight cannot ship it. Until you do, the driver reports `NDI runtime not installed` and everything else works normally.
 
 | OS | Where it comes from |
 |---|---|
-| macOS | [NDI Tools](https://ndi.video/tools/) (free). It puts the runtime inside its app bundles rather than system-wide, which projectMM knows to look for; a Resolume install also carries one. |
+| macOS | [NDI Tools](https://ndi.video/tools/) (free). It puts the runtime inside its app bundles rather than system-wide, which MoonLight knows to look for; a Resolume install also carries one. |
 | Windows | The [NDI Tools](https://ndi.video/tools/) or SDK installer puts `Processing.NDI.Lib.x64.dll` on the PATH. |
 | Linux | The NDI SDK. |
 
-**To see the output** you need a receiver. **NDI Video Monitor** (part of NDI Tools) is the simplest; OBS gains an "NDI Source" via the [DistroAV](https://github.com/DistroAV/DistroAV) plugin. projectMM appears by the name in `sourceName`, or the device's own name when that is blank.
+**To see the output** you need a receiver. **NDI Video Monitor** (part of NDI Tools) is the simplest; OBS gains an "NDI Source" via the [DistroAV](https://github.com/DistroAV/DistroAV) plugin. MoonLight appears by the name in `sourceName`, or the device's own name when that is blank.
 
 **Desktop only.** No NDI runtime exists for the ESP32 chips, so the driver is not offered there. An ESP32 reaches the same tools over Art-Net, sACN or DDP instead, send with the [Network Send](#networksend) driver, receive with the NetworkReceive effect.
 

@@ -14,7 +14,7 @@ A modifier folds coordinates rather than drawing, so it reaches for very little 
 
 Expands a 1D effect into concentric **square rings** (Chebyshev distance from the center): the effect's linear position becomes the ring index, so a gradient effect draws nested squares.
 
-Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
+Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
 
 Detail: [technical](moxygen/BlockModifier.md)
 
@@ -31,7 +31,7 @@ Masks the layer in a checkerboard: "off" squares are dropped, "on" squares pass 
 - `size` — checker square edge in lights (1–64).
 - `invert` — flip which squares pass through vs are masked.
 
-Origin: MoonLight · by WildCats08 / [@Brandon502](https://github.com/Brandon502) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
+Origin: MoonLight · by WildCats08 / [@Brandon502](https://github.com/Brandon502) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
 
 Detail: [technical](moxygen/CheckerboardModifier.md)
 
@@ -45,7 +45,7 @@ Detail: [technical](moxygen/CheckerboardModifier.md)
 
 Expands a 1D effect into concentric **circular rings** (Euclidean distance from the center): the effect's linear position becomes the radius, so a gradient effect draws nested circles. The circular counterpart to [Block](#block).
 
-Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
+Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
 
 Detail: [technical](moxygen/CircleModifier.md)
 
@@ -61,7 +61,7 @@ Folds the far half of the box back onto the near half per axis, mirroring the im
 
 - `mirrorX` / `mirrorY` / `mirrorZ` — mirror across the center on that axis.
 
-Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
+Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
 
 Detail: [technical](moxygen/MirrorModifier.md)
 
@@ -78,7 +78,7 @@ Tiles the logical image across the box `multiply` times per axis, optionally mir
 - `multiplyX` / `multiplyY` / `multiplyZ` — tiles per axis, `1` meaning none.
 - `mirrorX` / `mirrorY` / `mirrorZ` — reflect alternate tiles on that axis.
 
-Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
+Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
 
 Detail: [technical](moxygen/MultiplyModifier.md)
 
@@ -98,7 +98,7 @@ Remaps the grid into radial **petals** around the center — the angle to each p
 - `symmetry` — fold the petals into a factor-of-360 symmetry.
 - `zTwist` — twist the petals along z (3D).
 
-Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
+Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
 
 Detail: [technical](moxygen/PinwheelModifier.md)
 
@@ -115,7 +115,7 @@ Collapses an axis to a single plane so a higher-dimensional effect ripples along
 - `shrink` — collapse the selected axis (on = collapse).
 - `towardsX` / `towardsZ` — which axis collapses to a single line.
 
-Origin: MoonLight · by @Troy (WLEDMM Art-Net) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
+Origin: MoonLight · by @Troy (WLEDMM Art-Net) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
 
 Detail: [technical](moxygen/RippleXZModifier.md)
 
@@ -132,13 +132,13 @@ Swaps a pair of box axes (and every coordinate through them), then optionally in
 - `XY` / `XZ` / `YZ` — swap that pair of axes.
 - `inverse X` / `inverse Y` / `inverse Z` — flip that axis after the swap.
 
-Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
+Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
 
 Detail: [technical](moxygen/TransposeModifier.md)
 
 [Tests](../../reference/tests/unit-tests.md#transposemodifier)
 
-## projectMM-native modifiers
+## MoonLight-native modifiers
 
 <a id="moonlive"></a>
 
@@ -151,7 +151,7 @@ The coordinate transform written as text on the running device: mirror the patte
 - `script`: which `.mlm` file runs, picked from the library and edited here.
 - Everything the script declares appears as a real control.
 
-Origin: projectMM original
+Origin: MoonLight original
 
 Detail: [technical](moxygen/MoonLiveModifier.md) · [what a script transforms](#moonlive-details)
 
@@ -167,7 +167,7 @@ Remaps every light to another via a true 1:1 permutation, reshuffling to a fresh
 
 - `bpm` — reshuffles per minute, `0` freezing the permutation.
 
-Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
+Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
 
 Detail: [technical](moxygen/RandomMapModifier.md)
 
@@ -183,7 +183,7 @@ Carves the layer to a sub-rectangle given as percentages of the physical extent 
 
 - `startX` … `endZ` — the bounds as **percentages** of each axis.
 
-Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
+Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
 
 Detail: [technical](moxygen/RegionModifier.md)
 
@@ -199,7 +199,7 @@ Rotates the 2D image around its center, turning continuously over time (the code
 
 - `speed` — rotation speed (1–255; turns faster as it rises).
 
-Origin: MoonLight · by WildCats08 / [@Brandon502](https://github.com/Brandon502) · via [MoonLight](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
+Origin: MoonLight · by WildCats08 / [@Brandon502](https://github.com/Brandon502) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
 
 Detail: [technical](moxygen/RotateModifier.md)
 

@@ -1,6 +1,6 @@
 # The classic-ESP32 PSRAM ceiling — the refill-ring memory model
 
-> **Forward-looking research document — exception to the CLAUDE.md present-tense rule.** One question: **can PSRAM lift the classic-ESP32 LED ceiling projectMM measured at 2048 lights?** Researched 2026-07 against primary sources — hpwit's driver source read line-by-line, plus Espressif's own docs. Every load-bearing claim is cited in § 4.
+> **Forward-looking research document — exception to the CLAUDE.md present-tense rule.** One question: **can PSRAM lift the classic-ESP32 LED ceiling MoonLight measured at 2048 lights?** Researched 2026-07 against primary sources — hpwit's driver source read line-by-line, plus Espressif's own docs. Every load-bearing claim is cited in § 4.
 >
 > **Status: PARKED FINDING — not a queued task.** The answer is **yes, via a refill ring** — but that is a **second classic-ESP32 driver** (it cannot be a flag on the shipped i80 driver), and **nothing currently planned needs it**: the shift-register driver builds on the existing i80/Parlio base, S3/P4-first, where the DMA already reaches PSRAM. **§ 3 holds the verdict and the trigger that would un-park it.** Read § 3 before treating anything here as a plan.
 
@@ -18,7 +18,7 @@ hpwit's driver uses a **streaming refill ring** instead: a handful of tiny DMA b
 
 ### 2.1 Two memory models
 
-**Whole-frame (projectMM today, via `esp_lcd` i80).** The DMA buffer *is* the frame: every light's expanded WS2812 waveform — 3 slots per bit, one byte (8-lane) or two (16-lane) per slot — materialised in one contiguous DMA-capable block, handed to the peripheral in a single chained transfer. The CPU is out of the loop for the whole frame, which is why this model is **underrun-immune by construction**: nothing remains to refill, so no ISR storm can starve it. The price is linear scaling:
+**Whole-frame (MoonLight today, via `esp_lcd` i80).** The DMA buffer *is* the frame: every light's expanded WS2812 waveform — 3 slots per bit, one byte (8-lane) or two (16-lane) per slot — materialised in one contiguous DMA-capable block, handed to the peripheral in a single chained transfer. The CPU is out of the loop for the whole frame, which is why this model is **underrun-immune by construction**: nothing remains to refill, so no ISR storm can starve it. The price is linear scaling:
 
 ```text
 internalBytes(whole-frame) = maxLaneLights × channels × 3 slots × slotBytes
@@ -163,13 +163,13 @@ Keeping i80 is **not** legacy baggage: for a ≤2 K install on a WiFi-busy board
 - [I2SClocklessVirtualLedDriver](https://github.com/hpwit/I2SClocklessVirtualLedDriver) — "8 strips out of one single pin … 8x15=120 strips"; 74HC595 per virtual pin + 74HC245 level shifter; `__NB_DMA_BUFFER` default 2, buffers `(NUM_VIRT_PINS+1) * nb_components * 8 * 3 * 2` ≈ 1152 B; "Artifacts due to interrupts" → "calculate several buffers in advance"; `enableShowPixelsOnCore()`; 12,000-LED worked example; 75 → 129 fps second-core figures.
 - [I2SClockLessLedDriveresp32s3](https://github.com/hpwit/I2SClockLessLedDriveresp32s3) — the S3 lineage (PSRAM buffers; S3 EDMA can DMA from PSRAM).
 
-- [MoonLight](https://moonmodules.org/MoonLight/) / [WLED-MM](https://github.com/MoonModules/WLED-MM) — a prior firmware riding hpwit's ring on PSRAM: LEDs pre-allocated in PSRAM, light boundary **130 K** (vs **4096** non-PSRAM). The empirical demonstration that the ring's ceiling lift is real.
+- [MoonLight](https://moonmodules.org/projectMM/) / [WLED-MM](https://github.com/MoonModules/WLED-MM) — a prior firmware riding hpwit's ring on PSRAM: LEDs pre-allocated in PSRAM, light boundary **130 K** (vs **4096** non-PSRAM). The empirical demonstration that the ring's ceiling lift is real.
 
 **Espressif (the load-bearing hardware constraint):**
 - [`esp_lcd/i80/esp_lcd_panel_io_i2s.c`](https://github.com/espressif/esp-idf/blob/master/components/esp_lcd/i80/esp_lcd_panel_io_i2s.c) — `ESP_RETURN_ON_FALSE((caps & MALLOC_CAP_SPIRAM) == 0, NULL, TAG, "external memory is not supported");`
 - [Support for External RAM — ESP-IDF (ESP32)](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-guides/external-ram.html) — external RAM "cannot be used as a place to store DMA transaction descriptors or as a buffer for a DMA transfer to read from or write into"; prescribed workaround = internal DMA-able buffer + copy. **Confirms: no IDF API feeds PSRAM into classic-ESP32 I2S DMA.**
 - [Support for External RAM — ESP-IDF (ESP32-S3)](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-guides/external-ram.html) — the S3 *does* have hardware DMA-to-PSRAM (descriptors still internal): why our S3 i80 reaches 16 K and classic cannot.
 
-**projectMM's own measurements:**
+**MoonLight's own measurements:**
 - [performance.md § Multi-pin LED driving](../../reference/performance.md#multi-pin-led-driving-all-three-peripherals-128128-grid) — classic i80 2048-light ceiling + `esp_lcd_i80_alloc_draw_buffer` rejecting `MALLOC_CAP_SPIRAM`; S3 16,384 @ ~34 fps; P4 Parlio 4096, 139 fps @ 1024; the `multicore` +44 % table.
 - [backlog-light.md](backlog-light.md) — the superseded chunk-streaming-ring decision; the shift-register driver's **48 × 256 = 12,288** acceptance floor.

@@ -5,7 +5,7 @@
 
 namespace mm {
 
-// Author: MoonLight (Sinus, AI-generated), https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
+// Author: MoonLight (Sinus, AI-generated), https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 /// Effect of a moving sine wave across the layer.
 /// @card SineEffect.gif
 ///

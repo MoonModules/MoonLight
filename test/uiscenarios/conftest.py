@@ -1,4 +1,4 @@
-"""Fixtures for the UI tests: a browser pointed at a running projectMM.
+"""Fixtures for the UI tests: a browser pointed at a running MoonLight.
 
 These are the only tests that need a device. Everything in test/python is pure and
 runs anywhere; a UI test drives a real interface against real firmware, so it SKIPS
@@ -39,7 +39,7 @@ def _alive(host: str, path: str = "/api/state") -> bool:
 @pytest.fixture(scope="session")
 def host() -> str:
     if not _alive(HOST):
-        pytest.skip(f"no projectMM answering on {HOST} "
+        pytest.skip(f"no MoonLight answering on {HOST} "
                     f"(start one: uv run moondeck/run/run_desktop.py)")
     return HOST
 

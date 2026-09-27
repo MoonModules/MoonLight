@@ -1,5 +1,5 @@
 #pragma once
-// Author: projectMM original
+// Author: MoonLight original
 
 #include "core/util/math16.h"      // BeatPhase: the chomp / shuffle clock
 #include "core/util/math8.h"       // Random8: fixed-seed spawn variation, golden-reproducible

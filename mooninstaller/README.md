@@ -1,4 +1,4 @@
-# projectMM web installer
+# MoonLight web installer
 
 This directory holds the source for the **custom installer page** (driven by
 `install-orchestrator.js`, not ESP Web Tools) at

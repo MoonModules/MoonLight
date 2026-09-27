@@ -123,7 +123,7 @@ Every page serves one of four reader needs, and only one. This is [Diátaxis](ht
 | **Learning** | **Tutorial**: a lesson to follow. `gettingstarted.md`, `tutorials/`. | **Explanation**: why it is shaped this way. `explanation/`. |
 | **Working** | **How-to**: one task you already have. `how-to/`. | **Reference**: facts, fast. `reference/`, the generated technical pages, the catalog rows. |
 
-**The folder under `docs/` is the type.** A page's path says which cell it sits in. So `how-to/building.md` is a how-to by location, and a reader never has to be told. The nav labels stay reader-facing ("Understanding projectMM" over "Explanation"), because the type is a writer's tool.
+**The folder under `docs/` is the type.** A page's path says which cell it sits in. So `how-to/building.md` is a how-to by location, and a reader never has to be told. The nav labels stay reader-facing ("Understanding MoonLight" over "Explanation"), because the type is a writer's tool.
 
 The test for any page is the cell it sits in. A tutorial that stops to explain, or a reference that starts to teach, is two pages: move the other half to where it belongs.
 

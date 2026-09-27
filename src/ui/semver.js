@@ -1,4 +1,4 @@
-// projectMM semver — a tiny, dependency-free Semantic Versioning compare.
+// MoonLight semver — a tiny, dependency-free Semantic Versioning compare.
 //
 // One home for version comparison (the firmware-update check needs it; the install picker can adopt
 // it for its dropdown ordering later). Implements the parts of https://semver.org we use:

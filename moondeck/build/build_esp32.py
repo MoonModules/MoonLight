@@ -70,7 +70,7 @@ def check_idf_pin(idf_path: Path) -> None:
           f"pinned {PINNED_IDF_COMMIT[:12]} ({PINNED_IDF_VERSION}).", file=sys.stderr)
     print("The build was validated against the pinned commit; a drifted IDF is "
           "the most common source of ESP32 build failures that look like "
-          "projectMM bugs but are actually Espressif renaming a symbol.",
+          "MoonLight bugs but are actually Espressif renaming a symbol.",
           file=sys.stderr)
     print("Fix: re-run `uv run moondeck/build/setup_esp_idf.py` (it will offer "
           "to check out the pinned commit + resync submodules + reinstall "
@@ -335,7 +335,7 @@ FIRMWARES: dict[str, dict] = {
 #     same strings; install-orchestrator.js normalizes detected silicon to them).
 # (firmwares.json does NOT store a per-variant family — it's derivable from `chip`;
 # see generate_firmwares.py.)
-# projectMM aims to support every ESP32-family chip, so new SoCs are added HERE
+# MoonLight aims to support every ESP32-family chip, so new SoCs are added HERE
 # once (S2 / C3 / C6 / C5 / H2 / P4 variants) and every consumer follows.
 TARGET_TO_FAMILY = {
     "esp32":    "ESP32",

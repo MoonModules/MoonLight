@@ -122,7 +122,7 @@ State of the art on Pi 5 in 2026:
 | [niklasr22/rpi5-ws2812](https://github.com/niklasr22/rpi5-ws2812)                                                                                                                                | Bit-bang WS2812 timing through SPI MOSI at 2.4 MHz. Single channel, no kernel module needed, well-trodden hack.                                                                                                                                                       |
 | Bridge to an MCU                                                                                                                                                                                | Use the Pi 5 as the brains (HTTP, preview, scenes) and hand the strand timing to an ESP32 / Teensy / Pico over USB or SPI. **Cleanest path today.**                                                                                                                  |
 
-**Recommendation**: in projectMM, treat the Pi 5 as a desktop-class platform that delegates strand timing to an attached MCU. If single-strand-from-Pi-5 ever becomes a requirement, wrap Adafruit's PIO library behind a `WS2812Rp1Driver` and accept the single-strand limit.
+**Recommendation**: in MoonLight, treat the Pi 5 as a desktop-class platform that delegates strand timing to an attached MCU. If single-strand-from-Pi-5 ever becomes a requirement, wrap Adafruit's PIO library behind a `WS2812Rp1Driver` and accept the single-strand limit.
 
 ## 3. WiFi vs the driver — the failure that defines ESP32 driver design
 
@@ -147,7 +147,7 @@ Contributing factors, ranked:
 
 Diagnostic signature for WiFi-induced corruption (vs power or signal-integrity faults): first frames after boot look perfect; symptoms appear only after WiFi associates; pixels are shifted/stuck *from a position outward* (one bit slipped, everything downstream inherits it); color flashes correlate with traffic bursts. Compare against power-fault signature: brownout, whole-strip dim, first-pixel corruption.
 
-For projectMM, this means: **the LED driver task lives on core 1** (the quiet core, away from the WiFi stack and its interrupts) and **the effects / network path lives on core 0** (it can tolerate latency spikes — a late effect frame is invisible, a late driver bit is a corrupted pixel). This is the inverse of the WLED render-on-core-1 pattern, applied to a different observation about which task has the harder deadline; see § 7.2 for the full rationale and the projectMM-specific per-module core-affinity story.
+For MoonLight, this means: **the LED driver task lives on core 1** (the quiet core, away from the WiFi stack and its interrupts) and **the effects / network path lives on core 0** (it can tolerate latency spikes — a late effect frame is invisible, a late driver bit is a corrupted pixel). This is the inverse of the WLED render-on-core-1 pattern, applied to a different observation about which task has the harder deadline; see § 7.2 for the full rationale and the MoonLight-specific per-module core-affinity story.
 
 ## 4. Generic driver architecture
 
@@ -245,7 +245,7 @@ Putting 74HC595 (or similar) on the data lines is **not** a new driver layer —
 
 In the architecture above, an expander variant is a configuration of an existing driver (e.g. `TeensyFlexIoDriver` with `expanderChains = 32`), not a new class. The transpose step gets a wider stride; everything else is unchanged.
 
-For projectMM this is **third-priority** behind WS2812 and SK6812: design the interface so it could host it (the K-lane abstraction is already general enough), but don't ship it day one.
+For MoonLight this is **third-priority** behind WS2812 and SK6812: design the interface so it could host it (the K-lane abstraction is already general enough), but don't ship it day one.
 
 ### 4.6 Output correction (already shipped)
 
@@ -410,11 +410,11 @@ Default direction is **inverted from §3 of this doc**: the LED driver task runs
 - If the **driver task is interrupted**, the LED signal corrupts → visible flicker. The driver must be on the quiet core.
 - If the **effects task is interrupted**, the next frame is a few ms late → invisible at 30+ FPS. Effects can tolerate core 0.
 
-That is the inverse of what §3 of this doc proposes (which followed the WLED pattern of network-on-core-0, render-on-core-1 — same conclusion, applied to the *render* loop rather than the *driver* loop). In projectMM the driver and the render-of-effects are separate tasks, so the choice is about which one sits on the quiet core. The driver wins because its deadline is per-bit, not per-frame.
+That is the inverse of what §3 of this doc proposes (which followed the WLED pattern of network-on-core-0, render-on-core-1 — same conclusion, applied to the *render* loop rather than the *driver* loop). In MoonLight the driver and the render-of-effects are separate tasks, so the choice is about which one sits on the quiet core. The driver wins because its deadline is per-bit, not per-frame.
 
-This is also how MoonLight (v2 → projectMM's predecessor) is wired today: it works, the precedent matters.
+This is also how MoonLight (v2 → MoonLight's predecessor) is wired today: it works, the precedent matters.
 
-**Generalisation**: a single fixed default is ESP-classic-and-S3 sensible. P4 has no built-in WiFi so the choice is moot there. **Because projectMM already supports per-module core affinity** (the wider plan is to expose this as a control), the driver and effects task affinities become MoonModule-level controls with the defaults above. Other devices (Teensy, Pi 5) ignore the control.
+**Generalisation**: a single fixed default is ESP-classic-and-S3 sensible. P4 has no built-in WiFi so the choice is moot there. **Because MoonLight already supports per-module core affinity** (the wider plan is to expose this as a control), the driver and effects task affinities become MoonModule-level controls with the defaults above. Other devices (Teensy, Pi 5) ignore the control.
 
 Practical wiring rule for hello-world: in `main.cpp`, pin the LED driver task to core 1 and the effects/render task to core 0 on classic ESP32 + S3; leave it unset on P4 / Teensy / Pi 5. Make the values overridable via the existing core-affinity control.
 
@@ -463,38 +463,38 @@ This is the pattern the bottom-up doc calls "Backend × Multiplex" — confirmed
 
 ### 7.6 Pi 5 — accept "Pi 5 + attached MCU", defer firmware-shape decision
 
-Confirmed: projectMM does **not** commit to driving WS2812 directly from the Pi 5's own GPIO pins. Bridge to an MCU.
+Confirmed: MoonLight does **not** commit to driving WS2812 directly from the Pi 5's own GPIO pins. Bridge to an MCU.
 
 The shape of the firmware that runs on the bridged MCU is **deferred** until Pi 5 work actually starts. Two paths are on the table, both viable, both with trade-offs worth weighing at decision time rather than now:
 
-#### Path A — Stripped projectMM on the bridge MCU
+#### Path A — Stripped MoonLight on the bridge MCU
 
-The bridge MCU runs a thin projectMM build: no UI, no effects engine, no full network listener — just the `Drivers` + `LedDriver` pipeline plus a USB-serial input parser that pushes incoming RGB byte frames into the driver. Estimate: 50–150 KB build target.
+The bridge MCU runs a thin MoonLight build: no UI, no effects engine, no full network listener — just the `Drivers` + `LedDriver` pipeline plus a USB-serial input parser that pushes incoming RGB byte frames into the driver. Estimate: 50–150 KB build target.
 
 Pros:
-- Code reuse with the main projectMM tree. Driver fixes flow into the bridge automatically.
-- A bridge MCU is a regular projectMM build with three modules disabled — no second codebase.
+- Code reuse with the main MoonLight tree. Driver fixes flow into the bridge automatically.
+- A bridge MCU is a regular MoonLight build with three modules disabled — no second codebase.
 - The bridge can locally expose status/heartbeat/diagnostics via the existing MoonModule control surface.
 
 Cons:
 - Larger image. Slower to boot. More to flash.
-- Couples the bridge to projectMM's release cadence and IDF version pin — bridge upgrades become projectMM upgrades.
+- Couples the bridge to MoonLight's release cadence and IDF version pin — bridge upgrades become MoonLight upgrades.
 
 #### Path B — Dedicated minimal firmware
 
-Standalone firmware, no projectMM code reuse: `read N RGB bytes from USB serial → push to a vendored LedDriver implementation → repeat`. Estimate: under 30 KB.
+Standalone firmware, no MoonLight code reuse: `read N RGB bytes from USB serial → push to a vendored LedDriver implementation → repeat`. Estimate: under 30 KB.
 
 Pros:
 - Tiny, fast to boot, easy to flash from any laptop.
-- Independent release cadence; the bridge stays stable while projectMM iterates.
+- Independent release cadence; the bridge stays stable while MoonLight iterates.
 - No build-system overhead — single-file possibility.
 
 Cons:
-- Driver code diverges from projectMM's tree over time unless we vendor + sync deliberately.
+- Driver code diverges from MoonLight's tree over time unless we vendor + sync deliberately.
 - No diagnostic surface beyond what the protocol carries.
 - Two codebases to maintain in the longer run.
 
-**Decision deferred** until the Pi 5 bridge becomes a real task. When it does, the deciding factor is likely: how often will the bridge's driver be touched? If rarely, Path B. If it tracks projectMM's main-line driver work, Path A.
+**Decision deferred** until the Pi 5 bridge becomes a real task. When it does, the deciding factor is likely: how often will the bridge's driver be touched? If rarely, Path B. If it tracks MoonLight's main-line driver work, Path A.
 
 For *this* analysis it's enough to note: the `LedDriver` interface designed in §4 is the same in both paths — both reuse it. The choice between A and B is a *build target* decision, not an *interface* decision.
 

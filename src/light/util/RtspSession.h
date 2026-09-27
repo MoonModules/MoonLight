@@ -241,7 +241,7 @@ inline size_t buildSdp(char* out, size_t outLen, const char* ip, uint16_t width,
     const int n = std::snprintf(out, outLen,
         "v=0\r\n"
         "o=- 0 0 IN IP4 %s\r\n"
-        "s=projectMM\r\n"
+        "s=MoonLight\r\n"
         "c=IN IP4 0.0.0.0\r\n"
         "t=0 0\r\n"
         "m=video 0 RTP/AVP %u\r\n"

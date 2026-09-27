@@ -1,28 +1,28 @@
-# Driving projectMM from a phone or tablet
+# Driving MoonLight from a phone or tablet
 
 Eight switches, eight knobs and eight faders on a touchscreen, moving the device in real time and following it when something else moves it. It takes about five minutes to go from nothing to a working surface, using a free app and one file.
 
-> New here? Start with **[Install & first light](../gettingstarted.md)**. What follows assumes projectMM is running and you can find it in a browser.
+> New here? Start with **[Install & first light](../gettingstarted.md)**. What follows assumes MoonLight is running and you can find it in a browser.
 
 ---
 
 ## The short version
 
 1. Install **[Open Stage Control](https://openstagecontrol.ammd.net/)** (free; macOS, Windows, Linux)
-2. Download **[projectMM-control-surface.json](https://github.com/MoonModules/projectMM/releases/download/latest/projectMM-control-surface.json)**
+2. Download **[MoonLight-control-surface.json](https://github.com/MoonModules/projectMM/releases/download/latest/MoonLight-control-surface.json)**
 3. In its launcher set `send` to `<your-device-ip>:9000`, `osc-port` to `9001`, and `load` to the file
 4. On the device: **Services → OSC**, turn on `listen` and `feedback`
 5. Press start
 
-The faders move the device; moving something in the projectMM UI moves the faders back.
+The faders move the device; moving something in the MoonLight UI moves the faders back.
 
 ---
 
 ## 1. What this gives you
 
-projectMM's Control card is a surface: a row of switches, a row of encoders, a row of faders, each of which can drive something on the device. The web UI shows it, but a mouse can only touch one control at a time.
+MoonLight's Control card is a surface: a row of switches, a row of encoders, a row of faders, each of which can drive something on the device. The web UI shows it, but a mouse can only touch one control at a time.
 
-A **control surface** is that same row of controls on something you can put your hands on. Open Stage Control is a free app that draws one on any screen, including a phone or tablet browser, and speaks **OSC**, the protocol projectMM listens for.
+A **control surface** is that same row of controls on something you can put your hands on. Open Stage Control is a free app that draws one on any screen, including a phone or tablet browser, and speaks **OSC**, the protocol MoonLight listens for.
 
 Two things make this worth the five minutes:
 
@@ -37,7 +37,7 @@ Today `switch1` drives the master on/off and `fader1` drives the global brightne
 
 The surface sends to an address, so you need the one your device is on.
 
-It is in the projectMM UI on the **System** card, and it is the same address you typed into the browser to get there. On a desktop install talking to itself, it is `127.0.0.1`.
+It is in the MoonLight UI on the **System** card, and it is the same address you typed into the browser to get there. On a desktop install talking to itself, it is `127.0.0.1`.
 
 Write it down; it goes in step 5.
 
@@ -55,7 +55,7 @@ Download it from **[openstagecontrol.ammd.net](https://openstagecontrol.ammd.net
 
 A **session** is the layout: which knobs exist, what they look like, and what each one sends. You do not have to build one.
 
-**[Download projectMM-control-surface.json](https://github.com/MoonModules/projectMM/releases/download/latest/projectMM-control-surface.json)**
+**[Download MoonLight-control-surface.json](https://github.com/MoonModules/projectMM/releases/download/latest/MoonLight-control-surface.json)**
 
 That link always serves the newest session, built from the latest code, and it sits beside the firmware on the [releases page](https://github.com/MoonModules/projectMM/releases) if you would rather find it there.
 
@@ -69,7 +69,7 @@ Open Stage Control opens a **launcher** first, a settings window, before it draw
 
 | Field | Value | What it means |
 |---|---|---|
-| `send` | `<your-device-ip>:9000` | where the surface sends. `9000` is the port projectMM listens on |
+| `send` | `<your-device-ip>:9000` | where the surface sends. `9000` is the port MoonLight listens on |
 | `osc-port` | `9001` | where the surface LISTENS, so the device can answer |
 | `load` | the file from step 4 | the layout to draw |
 
@@ -85,7 +85,7 @@ Press the start button. The surface appears.
 
 ## 6. Turn the device's side on
 
-In projectMM: **Services → OSC**.
+In MoonLight: **Services → OSC**.
 
 | Control | Set to | Why |
 |---|---|---|
@@ -112,7 +112,7 @@ http://<the-computer-running-open-stage-control>:8080
 
 Same surface, on a touchscreen, with ten fingers instead of one pointer. The computer running Open Stage Control stays the middleman; the phone talks to it, and it talks to the device.
 
-> If projectMM's own UI is on port 8080 on that same machine, give Open Stage Control a different port in its launcher, or the two collide.
+> If MoonLight's own UI is on port 8080 on that same machine, give Open Stage Control a different port in its launcher, or the two collide.
 
 ---
 
@@ -180,4 +180,4 @@ The session also draws a **pad grid**. Those pads are inert for now: `/mm/pad/N`
 
 - **[OSC module reference](../moonmodules/core/services.md)**: every control, the feedback rules, `/mm/hello`
 - **[Control card](../moonmodules/core/system.md#control)**: the surface the device owns, and what each control drives
-- **[Control surfaces](../reference/hardware/control-surfaces.md)**: what it would take to drive projectMM from a Mackie desk or a MIDI controller
+- **[Control surfaces](../reference/hardware/control-surfaces.md)**: what it would take to drive MoonLight from a Mackie desk or a MIDI controller

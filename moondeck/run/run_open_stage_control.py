@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch Open Stage Control with projectMM's session, ready to use.
+"""Launch Open Stage Control with MoonLight's session, ready to use.
 
 Open Stage Control's settings panel wants a send address, a listen port, a session file and a custom
 module before it is useful, and getting one wrong is silent. All four are command-line options, so
@@ -86,7 +86,7 @@ def main() -> int:
     ap.add_argument("--listen", type=port, default=9001,
                     help="where WE listen, the device's `feedbackPort` control (default 9001)")
     ap.add_argument("--ui-port", type=port, default=8088,
-                    help="the Open Stage Control web UI (default 8088; 8080 is projectMM's)")
+                    help="the Open Stage Control web UI (default 8088; 8080 is MoonLight's)")
     ap.add_argument("--app", help="path to the open-stage-control binary, if it is not found")
     ap.add_argument("--gui", action="store_true",
                     help="also open the desktop window (default: server only, use a browser)")
@@ -116,7 +116,7 @@ def main() -> int:
     if not args.gui:
         cmd.append("--no-gui")
 
-    print(f"projectMM at {args.host}:{args.port}, feedback to us on {args.listen}")
+    print(f"MoonLight at {args.host}:{args.port}, feedback to us on {args.listen}")
     print(f"surface at http://127.0.0.1:{args.ui_port}")
     print(f"  {' '.join(cmd)}\n")
     print("On the device, the OSC module needs: listen on, feedback on, "

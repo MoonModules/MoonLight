@@ -1,0 +1,40 @@
+{
+  "name": "96-swap-an-effect",
+  "description": "Replace an effect in place; the slot keeps its position.",
+  "steps": [
+    {
+      "action": "chapter",
+      "title": "Swap an effect",
+      "description": "The slot keeps its place",
+      "seconds": 1.8
+    },
+    {
+      "action": "open_card",
+      "module": "Effects",
+      "hold": 0.6
+    },
+    {
+      "action": "clear_children",
+      "module": "Layer"
+    },
+    {
+      "action": "add_module",
+      "parent": "Layer",
+      "type": "RipplesEffect",
+      "as": "ripples",
+      "hold": 1.2
+    },
+    {
+      "action": "replace_module",
+      "module": "{ripples}",
+      "type": "FireEffect",
+      "as": "fire",
+      "caption": "Swap an effect and the slot keeps its place.",
+      "hold": 2.6
+    },
+    {
+      "action": "delete_module",
+      "module": "{fire}"
+    }
+  ]
+}

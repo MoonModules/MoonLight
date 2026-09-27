@@ -2,15 +2,15 @@
 
 **Last updated: 2026-09-10**
 
-Covers the projectMM software (firmware, desktop application and the web interface they serve), the [web installer](https://moonmodules.org/projectMM/install/), and this documentation site.
+Covers the MoonLight software (firmware, desktop application and the web interface they serve), the [web installer](https://moonmodules.org/projectMM/install/), and this documentation site.
 
 ## The rule
 
-**projectMM sends nothing to us unless you switch it on.** Every feature that transmits anything is opt-in, off by default, and asks in plain words before its first transmission. Declining is one click, is remembered, and sends nothing at all: not even a record that you declined. Some things do reach the internet without you switching anything on, and they are listed below: they go to GitHub, never to a server of ours.
+**MoonLight sends nothing to us unless you switch it on.** Every feature that transmits anything is opt-in, off by default, and asks in plain words before its first transmission. Declining is one click, is remembered, and sends nothing at all: not even a record that you declined. Some things do reach the internet without you switching anything on, and they are listed below: they go to GitHub, never to a server of ours.
 
-Everything else stays on the machine you run it on: your layouts, effects, drivers, pin assignments, device name, and any credentials you entered. `%LOCALAPPDATA%\projectMM` on Windows, `~/Library/Application Support/projectMM` on macOS, `$XDG_DATA_HOME/projectMM` on Linux, the device's own flash on a board. Nothing there is uploaded, synchronized or backed up by us.
+Everything else stays on the machine you run it on: your layouts, effects, drivers, pin assignments, device name, and any credentials you entered. `%LOCALAPPDATA%\MoonLight` on Windows, `~/Library/Application Support/MoonLight` on macOS, `$XDG_DATA_HOME/MoonLight` on Linux, the device's own flash on a board. Nothing there is uploaded, synchronized or backed up by us.
 
-Whatever you switch on, projectMM does not transmit **your name, email or postal address, your Wi-Fi or MQTT credentials, your IP or MAC address, or the contents of files you made**.
+Whatever you switch on, MoonLight does not transmit **your name, email or postal address, your Wi-Fi or MQTT credentials, your IP or MAC address, or the contents of files you made**.
 
 ## What reaches the internet before you opt in
 
@@ -43,7 +43,7 @@ Whatever the feature, now or later, these rules hold.
 
 **You can turn it off again at any time.** Nothing further is sent, and what was already published stays published: a message on a public board cannot be recalled, and a report already counted cannot be withdrawn. So the honest advice is the simple one: leave it off if you are unsure, turn it on when you want to take part, and turn it off if you change your mind.
 
-**MoonCloud** is the name for anything projectMM does with a server we run, and it is one self-contained part of the software rather than something woven through it. It sits on its own card, its members are the only code that talks to a server of ours, and nothing else in projectMM goes through it. So this is not a promise about scattered behavior you would have to take on trust: it is one place, and you can switch off what is in it.
+**MoonCloud** is the name for anything MoonLight does with a server we run, and it is one self-contained part of the software rather than something woven through it. It sits on its own card, its members are the only code that talks to a server of ours, and nothing else in MoonLight goes through it. So this is not a promise about scattered behavior you would have to take on trust: it is one place, and you can switch off what is in it.
 
 Each member is a separate setting on that card, off by default, and each says on the card what it exchanges. Members are added over time; the rules above apply to every one of them, including any added after you read this.
 
@@ -66,9 +66,9 @@ What follows from it being stable:
 
 Any server receiving a request sees the address it came from. Ours derives a country from it at the network edge and **never writes the address to storage**. What is stored is a country, never an address: beside the figures a report contributes, or beside the text of a message and the time it was sent.
 
-## Systems you connect projectMM to
+## Systems you connect MoonLight to
 
-An MQTT broker, Home Assistant, Art-Net or E1.31 consoles: projectMM speaks to these when you configure it to, and those connections go where you point them. **Whatever you connect it to is governed by that service's own privacy policy**, which is worth knowing if you point it at a cloud-hosted broker.
+An MQTT broker, Home Assistant, Art-Net or E1.31 consoles: MoonLight speaks to these when you configure it to, and those connections go where you point them. **Whatever you connect it to is governed by that service's own privacy policy**, which is worth knowing if you point it at a cloud-hosted broker.
 
 ## Changes to this policy
 
@@ -78,4 +78,4 @@ Revisions are made in the open: the policy lives in the [project repository](htt
 
 ## Contact
 
-Questions, or anything here you would like to verify: an [issue on the repository](https://github.com/MoonModules/projectMM/issues) or the [Discord](https://discord.gg/TC8NSUSCdV). projectMM is free and open-source software, and the network calls described above are the only ones in it.
+Questions, or anything here you would like to verify: an [issue on the repository](https://github.com/MoonModules/projectMM/issues) or the [Discord](https://discord.gg/TC8NSUSCdV). MoonLight is free and open-source software, and the network calls described above are the only ones in it.

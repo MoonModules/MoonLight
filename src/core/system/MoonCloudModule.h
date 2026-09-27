@@ -13,7 +13,7 @@
 
 namespace mm {
 
-/// The container for everything projectMM does with a server we run.
+/// The container for everything MoonLight does with a server we run.
 ///
 /// It holds no controls and does no work of its own.
 /// Each thing MoonCloud does is a child with its own consent: Stats, Talk, and Sync to come.
@@ -49,8 +49,8 @@ private:
 /// Characters written by `installationId`, excluding the terminator.
 inline constexpr size_t kInstallationIdChars = 32;
 
-/// Changing this re-identifies every installation in the world exactly once, so it is fixed.
-inline constexpr char kMoonCloudSalt[] = "projectMM/MoonStats/v1";
+/// Changing this re-identifies every installation in the world exactly once, so the line carries a marker the rename sweep honours.
+inline constexpr char kMoonCloudSalt[] = "projectMM/MoonStats/v1";   // rename-keep: a new salt orphans every installation's history
 
 /// Write the installation id into `out`, which must hold one more character than the id.
 inline void installationId(char* out) {

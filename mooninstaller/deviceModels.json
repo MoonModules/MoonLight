@@ -218,6 +218,7 @@
         "id": "Audio",
         "parent_id": "Services",
         "controls": {
+          "mode": 2,
           "micMode": 1,
           "wsPin": 8,
           "sdPin": 7
@@ -598,6 +599,7 @@
         "id": "Audio",
         "parent_id": "Services",
         "controls": {
+          "mode": 2,
           "sckPin": 47,
           "wsPin": 48,
           "sdPin": 21
@@ -643,16 +645,6 @@
         "type": "Layer",
         "id": "Layer",
         "parent_id": "Layers"
-      },
-      {
-        "type": "AudioSpectrumEffect",
-        "id": "AudioSpectrum",
-        "parent_id": "Layer"
-      },
-      {
-        "type": "RandomMapModifier",
-        "id": "RandomMap",
-        "parent_id": "Layer"
       },
       {
         "type": "NetworkSendDriver",
@@ -724,6 +716,7 @@
         "id": "Audio",
         "parent_id": "Services",
         "controls": {
+          "mode": 2,
           "sckPin": 32,
           "wsPin": 26,
           "sdPin": 33,
@@ -762,11 +755,6 @@
         "type": "Layer",
         "id": "Layer",
         "parent_id": "Layers"
-      },
-      {
-        "type": "AudioSpectrumEffect",
-        "id": "AudioSpectrum",
-        "parent_id": "Layer"
       },
       {
         "type": "NetworkModule",
@@ -831,11 +819,6 @@
         "type": "Layer",
         "id": "Layer",
         "parent_id": "Layers"
-      },
-      {
-        "type": "LissajousEffect",
-        "id": "Lissajous",
-        "parent_id": "Layer"
       }
     ],
     "flashBaud": 460800
@@ -1054,6 +1037,7 @@
         "id": "Audio",
         "parent_id": "Services",
         "controls": {
+          "mode": 2,
           "sckPin": 32,
           "wsPin": 26,
           "sdPin": 33,
@@ -1131,6 +1115,7 @@
         "id": "Audio",
         "parent_id": "Services",
         "controls": {
+          "mode": 2,
           "sckPin": 53,
           "wsPin": 55,
           "sdPin": 54
@@ -1182,11 +1167,6 @@
         "type": "Layer",
         "id": "Layer",
         "parent_id": "Layers"
-      },
-      {
-        "type": "RainbowEffect",
-        "id": "Rainbow",
-        "parent_id": "Layer"
       },
       {
         "type": "Drivers",

@@ -1,0 +1,99 @@
+{
+  "name": "01-install-esp32",
+  "description": "The web installer onto a board: erase, flash, join WiFi, and open the device that comes back.",
+  "speed": 1.6,
+  "host": "localhost:8421",
+  "steps": [
+    {
+      "action": "chapter",
+      "title": "Install it",
+      "description": "A browser, a USB cable, no toolchain",
+      "seconds": 2.0
+    },
+    {
+      "action": "goto",
+      "url": "http://localhost:8421/install/?board=MM%20testbench%20S3&firmware=esp32s3-n16r8&release=latest&autoport=1",
+      "caption": "Open the installer in Chrome and plug the board in.",
+      "hold": 1.6
+    },
+    {
+      "action": "click",
+      "selector": ".board-summary-left",
+      "caption": "Pick your board: the installer knows every pin on it.",
+      "hold": 1.6
+    },
+    {
+      "action": "click",
+      "selector": "#erase-before-flash",
+      "caption": "Erase first, for a device that starts clean.",
+      "hold": 1.4
+    },
+    {
+      "action": "click",
+      "selector": "#rp-install",
+      "caption": "One button. It erases, writes and verifies.",
+      "hold": 1.0
+    },
+    {
+      "action": "wait_for",
+      "selector": "#connecting-detail",
+      "text": "Detected",
+      "timeout": 90,
+      "caption": "It finds the chip on its own."
+    },
+    {
+      "action": "wait_for",
+      "selector": "#flashing-status",
+      "text": "Erasing flash",
+      "timeout": 120,
+      "caption": "Erasing the board, for a clean start."
+    },
+    {
+      "action": "wait_for",
+      "selector": "#flashing-status",
+      "text": "Writing firmware",
+      "timeout": 240,
+      "caption": "Flashing MoonLight."
+    },
+    {
+      "action": "wait_for",
+      "selector": "#wifi-connect",
+      "timeout": 300,
+      "caption": "Flash done. Now it asks for your WiFi, over the same cable.",
+      "text": "Connect"
+    },
+    {
+      "action": "type_into",
+      "selector": "#wifi-ssid",
+      "text": "MoonModules",
+      "delay": 90,
+      "caption": "Your network.",
+      "hold": 0.6
+    },
+    {
+      "action": "type_into",
+      "selector": "#wifi-password",
+      "text": "zonledmod",
+      "delay": 70,
+      "hold": 0.6
+    },
+    {
+      "action": "click",
+      "selector": "#wifi-connect",
+      "caption": "Connect.",
+      "hold": 1.0
+    },
+    {
+      "action": "wait_for",
+      "selector": "#done-url",
+      "text": "http",
+      "timeout": 180,
+      "caption": "It joins your network and reports its address."
+    },
+    {
+      "action": "wait",
+      "seconds": 2.5,
+      "caption": "One link, and the device is yours."
+    }
+  ]
+}

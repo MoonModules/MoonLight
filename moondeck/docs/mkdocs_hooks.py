@@ -533,7 +533,7 @@ def on_post_build(config):
     """LOCAL PREVIEW ONLY: stage the web installer into the built site under
     /install/, so the local docs preview mirrors the SINGLE-ORIGIN production
     layout (docs at /, installer at /install/). Without it the docs preview
-    (:8422) 404s on the Flash link's /projectMM/install/ target — the installer
+    (:8422) 404s on the Flash link's /MoonLight/install/ target — the installer
     preview is a separate server on :8421, and a production-relative link can't
     reach it. Copying it in makes every /install/ link resolve locally exactly
     as deployed.

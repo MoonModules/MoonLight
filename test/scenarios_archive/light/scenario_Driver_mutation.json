@@ -1,0 +1,540 @@
+{
+  "name": "scenario_Driver_mutation",
+  "module": "NetworkSendDriver",
+  "mode": "mutate",
+  "also": [
+    "GridLayout",
+    "Layer",
+    "RainbowEffect",
+    "Drivers",
+    "PreviewDriver"
+  ],
+  "description": "Add / remove output drivers under the Drivers container while the render pipeline runs, proving the robustness rule for driver deletion (the LED-driver delete path the product owner asked to cover; on the host RmtLed/I80Led/Parlio are inert via platform constants, so the portable NetworkSendDriver + PreviewDriver exercise the SAME generic add/remove lifecycle through the Scheduler that the hardware drivers use). Drivers are consumers of the Layer's output buffer, added/removed at runtime in any order. The checks assert the pipeline keeps RENDERING (buffer non-null, fps measurable) through each mutation: adding a second driver, removing it, and crucially removing a driver while the pipeline is still live (a driver teardown must release its resources without stranding the buffer or the other drivers, the same end-to-end Scheduler path the Audio producer/consumer scenario proves for peripherals, here for the output stage). Grid is 64x64 so the tick stays above the host microsecond clock at every step.",
+  "fixture": [
+    {
+      "name": "fix-layouts",
+      "op": "add_module",
+      "id": "Layouts",
+      "type": "Layouts"
+    },
+    {
+      "name": "fix-grid",
+      "op": "add_module",
+      "id": "Grid",
+      "type": "GridLayout",
+      "parent_id": "Layouts",
+      "props": {
+        "width": 64,
+        "height": 64
+      }
+    },
+    {
+      "name": "fix-layer",
+      "op": "add_module",
+      "id": "Layer",
+      "type": "Layer",
+      "props": {
+        "layouts": "Layouts",
+        "channelsPerLight": 3
+      }
+    },
+    {
+      "name": "fix-rainbow",
+      "op": "add_module",
+      "id": "Rainbow",
+      "type": "RainbowEffect",
+      "parent_id": "Layer"
+    },
+    {
+      "name": "fix-drivers",
+      "op": "add_module",
+      "id": "Drivers",
+      "type": "Drivers",
+      "props": {
+        "layer": "Layer"
+      }
+    },
+    {
+      "name": "fix-preview",
+      "op": "add_module",
+      "id": "Preview",
+      "type": "PreviewDriver",
+      "parent_id": "Drivers"
+    }
+  ],
+  "steps": [
+    {
+      "name": "measure-one-driver",
+      "description": "Baseline: the pipeline renders with one driver (Preview) wired.",
+      "op": "measure",
+      "measure": true,
+      "bounds": {
+        "fps": {
+          "min": 1
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 19,
+            "p95": 23,
+            "min": 16,
+            "max": 30,
+            "n": 32,
+            "samples": [20, 17, 17, 17, 17, 19, 19, 19, 19, 23, 21, 30, 17, 20, 17, 17, 20, 16, 20, 20, 20, 21, 17, 18, 17, 18, 17, 17, 20, 21, 19, 16]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 36,
+            "p95": 36,
+            "min": 36,
+            "max": 36,
+            "n": 1,
+            "samples": [36]
+          },
+          "last_updated": "2026-08-23"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 11133,
+            "p95": 12944,
+            "min": 31,
+            "max": 12944,
+            "n": 4,
+            "samples": [31, 12944, 11133, 11546]
+          },
+          "free_heap": {
+            "p50": 41412,
+            "p95": 98872,
+            "min": 40868,
+            "max": 98872,
+            "n": 4,
+            "samples": [98872, 48648, 41412, 40868]
+          },
+          "max_alloc_block": {
+            "p50": 26624,
+            "p95": 94208,
+            "min": 26624,
+            "max": 94208,
+            "n": 4,
+            "samples": [94208, 38912, 26624, 26624]
+          },
+          "last_updated": "2026-09-01"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 34,
+            "p95": 34,
+            "min": 34,
+            "max": 34,
+            "n": 1,
+            "samples": [34]
+          },
+          "free_heap": {
+            "p50": 7647399,
+            "p95": 7647399,
+            "min": 7647399,
+            "max": 7647399,
+            "n": 1,
+            "samples": [7647399]
+          },
+          "max_alloc_block": {
+            "p50": 86016,
+            "p95": 86016,
+            "min": 86016,
+            "max": 86016,
+            "n": 1,
+            "samples": [86016]
+          },
+          "last_updated": "2026-07-24"
+        }
+      }
+    },
+    {
+      "name": "add-second-driver",
+      "description": "Add a NetworkSendDriver beside the Preview driver, two consumers of the same Layer output buffer. The add must not disturb the running pipeline.",
+      "op": "add_module",
+      "id": "ArtNet",
+      "type": "NetworkSendDriver",
+      "parent_id": "Drivers"
+    },
+    {
+      "name": "measure-two-drivers",
+      "description": "Pipeline renders with both drivers wired.",
+      "op": "measure",
+      "measure": true,
+      "bounds": {
+        "fps": {
+          "min": 1
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 20,
+            "p95": 28,
+            "min": 16,
+            "max": 41,
+            "n": 32,
+            "samples": [21, 17, 19, 16, 19, 20, 20, 20, 20, 21, 21, 23, 20, 20, 17, 18, 20, 17, 20, 20, 20, 21, 41, 17, 18, 18, 17, 28, 20, 20, 21, 17]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 35,
+            "p95": 35,
+            "min": 35,
+            "max": 35,
+            "n": 1,
+            "samples": [35]
+          },
+          "last_updated": "2026-08-23"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 12269,
+            "p95": 14304,
+            "min": 38,
+            "max": 14304,
+            "n": 4,
+            "samples": [38, 14304, 12269, 12594]
+          },
+          "free_heap": {
+            "p50": 38832,
+            "p95": 84592,
+            "min": 37836,
+            "max": 84592,
+            "n": 4,
+            "samples": [84592, 49132, 38832, 37836]
+          },
+          "max_alloc_block": {
+            "p50": 26624,
+            "p95": 81920,
+            "min": 26624,
+            "max": 81920,
+            "n": 4,
+            "samples": [81920, 38912, 26624, 26624]
+          },
+          "last_updated": "2026-09-01"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 38,
+            "p95": 38,
+            "min": 38,
+            "max": 38,
+            "n": 1,
+            "samples": [38]
+          },
+          "free_heap": {
+            "p50": 7632103,
+            "p95": 7632103,
+            "min": 7632103,
+            "max": 7632103,
+            "n": 1,
+            "samples": [7632103]
+          },
+          "max_alloc_block": {
+            "p50": 61440,
+            "p95": 61440,
+            "min": 61440,
+            "max": 61440,
+            "n": 1,
+            "samples": [61440]
+          },
+          "last_updated": "2026-07-24"
+        }
+      }
+    },
+    {
+      "name": "add-third-driver",
+      "description": "Add a second NetworkSendDriver, three drivers now share the Layer output buffer (Preview + two ArtNet). Stacking editable drivers before tearing them down in sequence.",
+      "op": "add_module",
+      "id": "ArtNet2",
+      "type": "NetworkSendDriver",
+      "parent_id": "Drivers"
+    },
+    {
+      "name": "measure-three-drivers",
+      "description": "Pipeline renders with three drivers wired.",
+      "op": "measure",
+      "measure": true,
+      "bounds": {
+        "fps": {
+          "min": 1
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 20,
+            "p95": 28,
+            "min": 16,
+            "max": 40,
+            "n": 32,
+            "samples": [20, 16, 17, 17, 20, 20, 18, 19, 18, 17, 18, 16, 20, 20, 19, 21, 20, 20, 20, 20, 19, 21, 28, 21, 40, 17, 18, 20, 20, 23, 20, 17]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 42,
+            "p95": 42,
+            "min": 42,
+            "max": 42,
+            "n": 1,
+            "samples": [42]
+          },
+          "last_updated": "2026-08-23"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 12244,
+            "p95": 14285,
+            "min": 37,
+            "max": 14285,
+            "n": 4,
+            "samples": [37, 14285, 12244, 12881]
+          },
+          "free_heap": {
+            "p50": 37604,
+            "p95": 70784,
+            "min": 36224,
+            "max": 70784,
+            "n": 4,
+            "samples": [70784, 46240, 37604, 36224]
+          },
+          "max_alloc_block": {
+            "p50": 26624,
+            "p95": 65536,
+            "min": 26624,
+            "max": 65536,
+            "n": 4,
+            "samples": [65536, 38912, 26624, 26624]
+          },
+          "last_updated": "2026-09-01"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 39,
+            "p95": 39,
+            "min": 39,
+            "max": 39,
+            "n": 1,
+            "samples": [39]
+          },
+          "free_heap": {
+            "p50": 7620119,
+            "p95": 7620119,
+            "min": 7620119,
+            "max": 7620119,
+            "n": 1,
+            "samples": [7620119]
+          },
+          "max_alloc_block": {
+            "p50": 73728,
+            "p95": 73728,
+            "min": 73728,
+            "max": 73728,
+            "n": 1,
+            "samples": [73728]
+          },
+          "last_updated": "2026-07-24"
+        }
+      }
+    },
+    {
+      "name": "remove-first-added-driver",
+      "description": "Remove the FIRST-added NetworkSendDriver while the others (Preview + ArtNet2) are still live, delete a middle consumer, not the last. Its teardown must release its resources without stranding the buffer or the surviving drivers.",
+      "op": "remove_module",
+      "id": "ArtNet"
+    },
+    {
+      "name": "measure-after-first-remove",
+      "description": "One ArtNet gone, Preview + ArtNet2 remain: pipeline keeps rendering (buffer non-null, fps measurable). No crash from the mid-list teardown.",
+      "op": "measure",
+      "measure": true,
+      "bounds": {
+        "fps": {
+          "min": 1
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 20,
+            "p95": 21,
+            "min": 16,
+            "max": 22,
+            "n": 32,
+            "samples": [21, 16, 17, 17, 20, 20, 16, 19, 19, 18, 21, 17, 20, 20, 21, 19, 20, 20, 19, 20, 20, 21, 21, 20, 22, 21, 19, 21, 20, 21, 20, 20]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 42,
+            "p95": 42,
+            "min": 42,
+            "max": 42,
+            "n": 1,
+            "samples": [42]
+          },
+          "last_updated": "2026-07-08"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 12812,
+            "p95": 16772,
+            "min": 36,
+            "max": 16772,
+            "n": 4,
+            "samples": [36, 16772, 14283, 12812]
+          },
+          "free_heap": {
+            "p50": 39776,
+            "p95": 84568,
+            "min": 39004,
+            "max": 84568,
+            "n": 4,
+            "samples": [84568, 48868, 39776, 39004]
+          },
+          "max_alloc_block": {
+            "p50": 26624,
+            "p95": 69632,
+            "min": 26624,
+            "max": 69632,
+            "n": 4,
+            "samples": [69632, 38912, 26624, 26624]
+          },
+          "last_updated": "2026-09-01"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 36,
+            "p95": 36,
+            "min": 36,
+            "max": 36,
+            "n": 1,
+            "samples": [36]
+          },
+          "free_heap": {
+            "p50": 7634063,
+            "p95": 7634063,
+            "min": 7634063,
+            "max": 7634063,
+            "n": 1,
+            "samples": [7634063]
+          },
+          "max_alloc_block": {
+            "p50": 86016,
+            "p95": 86016,
+            "min": 86016,
+            "max": 86016,
+            "n": 1,
+            "samples": [86016]
+          },
+          "last_updated": "2026-07-24"
+        }
+      }
+    },
+    {
+      "name": "remove-second-added-driver",
+      "description": "Remove the remaining editable driver (ArtNet2) too, back to just the boot-wired Preview. Repeated driver teardown leaves no residue; the pipeline still renders. (PreviewDriver is userEditable=false, so it stays, drivers always have at least the wired output consumer; this mirrors the live API, which forbids deleting code-wired modules.)",
+      "op": "remove_module",
+      "id": "ArtNet2"
+    },
+    {
+      "name": "measure-back-to-one-driver",
+      "description": "Both added drivers gone, back to the single Preview baseline, still rendering, the add/remove cycle leaves the pipeline coherent.",
+      "op": "measure",
+      "measure": true,
+      "bounds": {
+        "fps": {
+          "min": 1
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 20,
+            "p95": 22,
+            "min": 16,
+            "max": 28,
+            "n": 32,
+            "samples": [20, 16, 17, 16, 20, 19, 17, 19, 19, 18, 19, 19, 20, 28, 21, 22, 20, 20, 20, 20, 20, 21, 21, 19, 21, 17, 21, 20, 20, 21, 20, 20]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 36,
+            "p95": 36,
+            "min": 36,
+            "max": 36,
+            "n": 1,
+            "samples": [36]
+          },
+          "last_updated": "2026-08-23"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 11975,
+            "p95": 14261,
+            "min": 35,
+            "max": 14261,
+            "n": 4,
+            "samples": [35, 14261, 11975, 12745]
+          },
+          "free_heap": {
+            "p50": 42472,
+            "p95": 98560,
+            "min": 41888,
+            "max": 98560,
+            "n": 4,
+            "samples": [98560, 51440, 42472, 41888]
+          },
+          "max_alloc_block": {
+            "p50": 26624,
+            "p95": 94208,
+            "min": 26624,
+            "max": 94208,
+            "n": 4,
+            "samples": [94208, 38912, 26624, 26624]
+          },
+          "last_updated": "2026-09-01"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 36,
+            "p95": 36,
+            "min": 36,
+            "max": 36,
+            "n": 1,
+            "samples": [36]
+          },
+          "free_heap": {
+            "p50": 7648471,
+            "p95": 7648471,
+            "min": 7648471,
+            "max": 7648471,
+            "n": 1,
+            "samples": [7648471]
+          },
+          "max_alloc_block": {
+            "p50": 86016,
+            "p95": 86016,
+            "min": 86016,
+            "max": 86016,
+            "n": 1,
+            "samples": [86016]
+          },
+          "last_updated": "2026-07-24"
+        }
+      }
+    }
+  ]
+}

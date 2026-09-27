@@ -1,4 +1,4 @@
-// projectMM install orchestrator — replaces ESP Web Tools' install button.
+// MoonLight install orchestrator — replaces ESP Web Tools' install button.
 //
 // Why a custom orchestrator: ESP Web Tools 10.x holds the SerialPort
 // exclusively (OS-level Web Serial exclusivity), and its post-PROVISIONED
@@ -81,7 +81,7 @@ import { planConfigOps } from "./config-ops.js";
 // missing builds[] or parts[] errors here rather than confusing
 // esptool-js with undefined data.
 //
-// Manifest shape (single build per file — projectMM generates one per
+// Manifest shape (single build per file — MoonLight generates one per
 // firmware variant; see moondeck/build/generate_manifest.py):
 //   { name, version, builds: [{ chipFamily, parts: [{ path, offset }] }] }
 async function fetchManifest(manifestUrl) {
@@ -232,7 +232,7 @@ async function sendConfigOverSerial(port, board, onLog) {
 }
 
 // Read the device's boot serial log for the two facts the browser can't get any other
-// way: the device's IP and its mDNS `<deviceName>.local` address. projectMM appends
+// way: the device's IP and its mDNS `<deviceName>.local` address. MoonLight appends
 // machine-parseable `MM_IP=<dotted-quad>` and `MM_DEVICE=<deviceName>.local` tokens to
 // its once-per-second tick log over USB (std::printf → reaches the USB-CDC console,
 // unlike ESP_LOGI) whenever Ethernet or WiFi-STA has an address — so a board that comes
@@ -350,7 +350,7 @@ function normalizeDeviceUrl(input) {
 // but the picker compares against deviceModels.json's coarse `chip` FAMILY — the same
 // vocabulary build_esp32's TARGET_TO_FAMILY defines and the ESP Web Tools manifest
 // carries as `chipFamily` ("ESP32", "ESP32-S3", "ESP32-P4", and any future
-// S2/C3/C6/… as projectMM grows to support every ESP32-family chip). Without
+// S2/C3/C6/… as MoonLight grows to support every ESP32-family chip). Without
 // normalising, a classic ESP32 matches NO board
 // (filter) and the flash guard false-warns on a correct flash.
 //

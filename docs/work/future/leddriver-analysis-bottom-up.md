@@ -10,13 +10,13 @@
 - **Identity-mapping fast path preserved.** When `MappingLUT::hasLUT()` is false, drivers receive a span pointing directly at `layer_->buffer()` — zero copy through the wire. This optimisation drove a major part of the architecture's shape.
 - **Feasibility on hpwit's code (read at HEAD, 2026-05-25).** Two-target paths interleaved through one file (30 `#ifdef CONFIG_IDF_TARGET_ESP32S3` blocks). The multiplex code isn't cleanly factored out today — refactoring it into a backend-agnostic `ShiftRegMultiplex` layer is real engineering work, not free composition. `Backend × ShiftReg` is high-confidence on classic ESP32 + S3 (hpwit's lib is the reference), medium-confidence on parlio + FlexIO (no reference, plausibly feasible), low-confidence on RP1 PIO (research-grade).
 - **What ESP-IDF gives us.** Peripheral plumbing (RMT5, parlio_tx_unit, esp_lcd_panel_io_i80, SPI master DMA, GDMA, GPIO LL) — yes. Anything LED-specific (WS2812 encoder, transposition helpers, multi-protocol abstraction) — no. The `led_strip` component is community, not first-party. Per-backend we'd write ~500-700 lines of new code; ~300-500 lines for the multiplex layer.
-- **Recommendation: walk Scenario B (build ourselves).** Reasons in priority order: the multiplex axis is our projectMM-defining value-add and doesn't compose cleanly onto FastLED; runtime driver switching aligns with our own contract; the identity-mapping fast path needs the driver reading `layer_->buffer()` directly; IDF gives us the plumbing for free; license + binary-size tax shrinks Scenario A's surplus. **Cost accepted:** 3 weeks → 3 months to first working driver, mitigated by spike-ordering.
+- **Recommendation: walk Scenario B (build ourselves).** Reasons in priority order: the multiplex axis is our MoonLight-defining value-add and doesn't compose cleanly onto FastLED; runtime driver switching aligns with our own contract; the identity-mapping fast path needs the driver reading `layer_->buffer()` directly; IDF gives us the plumbing for free; license + binary-size tax shrinks Scenario A's surplus. **Cost accepted:** 3 weeks → 3 months to first working driver, mitigated by spike-ordering.
 - **First two Stage-2 spikes (load-bearing).** (1) `LcdCamLedDriver (None)` on ESP32-S3 against the existing `Drivers::loop()` shape — ~1 week, proves the contract. (2) Refactor hpwit's S3 path into `LcdCamLedDriver (ShiftReg)` — ~2-3 weeks, validates that the multiplex can be factored out without losing performance. **If spike 2 fails, fall back to hybrid** (Scenario A for non-multiplex backends + Scenario B for multiplex). The architecture supports both.
 - **Out of scope for Stage 1.** Per-driver benchmarking on real hardware; PR-to-FastLED to expose its DMA buffer; final IDF version pin decision; license pick. Stage 2.
 
 ## Why this document exists
 
-projectMM's `src/light/drivers/` ships an ArtNet send driver and a WebSocket preview driver. There is **no LED-strip driver yet** — that's the gap this survey serves. The pipeline expects a `DriverBase` (`src/light/drivers/Drivers.h:11`) child that reads from the Drivers container's shared output buffer and pushes bytes to hardware. The requirements (1-10K LEDs must, 10-30K should, 30K+ interesting, 50 FPS, hot-reconfigurable pin/protocol/count, WiFi-coexistent) narrow but don't pick a library. This document characterises the candidates.
+MoonLight's `src/light/drivers/` ships an ArtNet send driver and a WebSocket preview driver. There is **no LED-strip driver yet** — that's the gap this survey serves. The pipeline expects a `DriverBase` (`src/light/drivers/Drivers.h:11`) child that reads from the Drivers container's shared output buffer and pushes bytes to hardware. The requirements (1-10K LEDs must, 10-30K should, 30K+ interesting, 50 FPS, hot-reconfigurable pin/protocol/count, WiFi-coexistent) narrow but don't pick a library. This document characterises the candidates.
 
 ## ESP32 — primary depth
 
@@ -40,7 +40,7 @@ projectMM's `src/light/drivers/` ships an ArtNet send driver and a WebSocket pre
 - **Notably absent**: WLED-MM does **not** integrate hpwit's I2SClocklessLedDriver or the virtual driver — its HUB75 path uses `ESP32-HUB75-MatrixPanel-DMA` directly; its WS281x path is still NeoPixelBus via PolyBus. The "more pins for big installs" benefit comes from the upstream LCD-parallel I2S, not from a swap-in driver.
 - **Channel allocation tweaks**: `bus_wrapper.h:776-786` shifts RMT/I2S channel assignment to accommodate the I2S0 split. Adds `WLEDMM_SLOWPATH` / `WLEDMM_TWOPATH` build options.
 - **Maintenance**: active, 102 open issues. Smaller maintainer pool than upstream; product owner is co-maintainer here.
-- **Field notes**: this fork's value-add is empirical tuning for installations beyond ~5K LEDs, not a fundamentally different driver architecture. If projectMM wants the WLED bus layer at all, the question is whether to take it from upstream or from MM.
+- **Field notes**: this fork's value-add is empirical tuning for installations beyond ~5K LEDs, not a fundamentally different driver architecture. If MoonLight wants the WLED bus layer at all, the question is whether to take it from upstream or from MM.
 
 ### I2SClocklessLedDriver (hpwit) — https://github.com/hpwit/I2SClocklessLedDriver
 
@@ -85,7 +85,7 @@ projectMM's `src/light/drivers/` ships an ArtNet send driver and a WebSocket pre
 - **Platforms**: ESP32 (classic, S2, S3) on a variety of dev boards (M5Stick, Heltec, LilyGo, plain DevKit). HUB75 via custom integration.
 - **Threading**: explicit multi-task design — render task pinned to core 1, networking and effects on core 0. The README's "core affinity" discipline is what makes the project recognisable. Documentation here is thin; the patterns live in the source.
 - **WiFi coexistence**: addressed by core pinning and explicit FreeRTOS task priorities, not by disabling WiFi.
-- **GPL-3.0** is the key gotcha — copyleft constraints make code reuse in projectMM (under whatever final licence) a deal-breaker for direct copy. Read it for **patterns**, not lines.
+- **GPL-3.0** is the key gotcha — copyleft constraints make code reuse in MoonLight (under whatever final licence) a deal-breaker for direct copy. Read it for **patterns**, not lines.
 - **Field notes**: the canonical example of "how to keep a multi-thousand-LED ESP32 install stable while WiFi is on". Worth studying, not vendoring.
 
 ### ESP-IDF `led_strip` — https://github.com/espressif/idf-extra-components/tree/master/led_strip
@@ -161,7 +161,7 @@ Product owner's question: "Is there any way to do something with GPIO pins? E.g.
 
 Most libraries (NeoPixelBus, FastLED legacy RMT, Adafruit_NeoPixel) don't address this and rely on the CPU staying responsive — which is exactly when WiFi storms cause visible glitches.
 
-**Hot reconfiguration.** A genuine differentiator. WLED's `BusManager::add()`/`removeAll()` supports runtime bus mutation but at the cost of full reallocation. hpwit's drivers require an `initled()` re-init for pin/count change. **FastLED master's runtime-driver-switch API** (May 2026) is the only library where switching the entire driver (RMT ↔ LCD) at runtime is a first-class supported operation. For projectMM, the requirement is GPIO/protocol/count via UI controls — that's "re-init on change" pattern, achievable with all of these but ergonomically cleanest with FastLED's new API.
+**Hot reconfiguration.** A genuine differentiator. WLED's `BusManager::add()`/`removeAll()` supports runtime bus mutation but at the cost of full reallocation. hpwit's drivers require an `initled()` re-init for pin/count change. **FastLED master's runtime-driver-switch API** (May 2026) is the only library where switching the entire driver (RMT ↔ LCD) at runtime is a first-class supported operation. For MoonLight, the requirement is GPIO/protocol/count via UI controls — that's "re-init on change" pattern, achievable with all of these but ergonomically cleanest with FastLED's new API.
 
 ## Research question — can the virtual driver be reused on Teensy / Pi?
 
@@ -182,9 +182,9 @@ The technique has **two components**: (a) parallel-clocked GPIO output via a per
 For the product owner to pick 2-3 from:
 
 1. **FastLED master — modular driver layer** — what we'd learn: whether the new runtime driver-switching API and per-peripheral driver subdirectories are mature enough to use directly, or if vendoring a snapshot makes more sense. Estimated cost: 1.5 days.
-2. **I2SClocklessVirtualLedDriver — fork-and-vendor scope** — what we'd learn: minimal API surface to wrap as a projectMM driver MoonModule; what config controls (pin map, brightness, gamma, virtual-pin count) need to be hot-reconfigurable; whether the init-time-only constraint is acceptable. Estimated cost: 1 day.
-3. **WLED-MM bus layer extraction** — what we'd learn: whether the bus layer can be lifted out of WLED-MM and embedded in projectMM cleanly (or if it's too entangled with WLED's segment/effect plumbing). The EUPL-1.2 licence interaction with projectMM's licence is part of this. Estimated cost: 1 day.
-4. **NeoPixelBus directly** — what we'd learn: bypass WLED entirely, use the underlying library as projectMM's WS281x backend. NeoPixelBus is what every WLED bus class wraps anyway. Estimated cost: 0.5 day.
+2. **I2SClocklessVirtualLedDriver — fork-and-vendor scope** — what we'd learn: minimal API surface to wrap as a MoonLight driver MoonModule; what config controls (pin map, brightness, gamma, virtual-pin count) need to be hot-reconfigurable; whether the init-time-only constraint is acceptable. Estimated cost: 1 day.
+3. **WLED-MM bus layer extraction** — what we'd learn: whether the bus layer can be lifted out of WLED-MM and embedded in MoonLight cleanly (or if it's too entangled with WLED's segment/effect plumbing). The EUPL-1.2 licence interaction with MoonLight's licence is part of this. Estimated cost: 1 day.
+4. **NeoPixelBus directly** — what we'd learn: bypass WLED entirely, use the underlying library as MoonLight's WS281x backend. NeoPixelBus is what every WLED bus class wraps anyway. Estimated cost: 0.5 day.
 5. **Hybrid: hpwit non-virtual + FastLED for non-WS281x** — what we'd learn: covers the 1-30K WS281x case with hpwit's I2S-LCD driver (no shift registers needed) and falls back to FastLED for APA102/SK9822/HD107S. Estimated cost: 1 day.
 6. **ObjectFLED + FastLED Teensy path** — what we'd learn: feasibility of Teensy 4.1 as a parallel target alongside ESP32, especially for installations where WiFi is replaced by 4.1's built-in Ethernet. Estimated cost: 1 day.
 
@@ -307,7 +307,7 @@ Below the line is **FastLED master** (the modular driver subdirectories `src/pla
 
 ```text
 +--------------------------------+--------------------------------------+
-| projectMM LedDriver (backend×Multiplex)|  External implementation       |
+| MoonLight LedDriver (backend×Multiplex)|  External implementation       |
 +--------------------------------+--------------------------------------+
 | RmtLedDriver (None)            → FastLED::add<WS2812, RMT_5_WORKER>     |
 | LcdCamLedDriver (None)         → FastLED::add<WS2812, LCD_I80_WORKER>   |
@@ -325,7 +325,7 @@ Below the line is **FastLED master** (the modular driver subdirectories `src/pla
 +--------------------------------+--------------------------------------+
 ```
 
-Pros: ride FastLED's runtime driver-switch API and per-backend maturity (matches requirement 4). FastLED owns the peripheral churn (RMT4 → RMT5 → parlio API revisions); we own the multiplex transposition and the projectMM-side wiring. Teensy support comes essentially free via ObjectFLED. The multiplex code we vendor is small (~200 lines from hpwit's lib — just the transposition + cascade-shift protocol, not the peripheral init). ~2-3 weeks to a working ESP32 + Teensy hybrid; +1 week for the multiplex layer on top of FastLED lcd_cam.
+Pros: ride FastLED's runtime driver-switch API and per-backend maturity (matches requirement 4). FastLED owns the peripheral churn (RMT4 → RMT5 → parlio API revisions); we own the multiplex transposition and the MoonLight-side wiring. Teensy support comes essentially free via ObjectFLED. The multiplex code we vendor is small (~200 lines from hpwit's lib — just the transposition + cascade-shift protocol, not the peripheral init). ~2-3 weeks to a working ESP32 + Teensy hybrid; +1 week for the multiplex layer on top of FastLED lcd_cam.
 
 Cons: FastLED master is in flux (May 2026 surface could shift), so we pin a commit SHA, not a version. The multiplex-on-top-of-FastLED-lcd_cam path needs FastLED to expose its DMA buffer for us to write into — its current API doesn't do that cleanly, so we either bypass FastLED for that one specific backend (effectively becoming Scenario B for it) or upstream a PR to FastLED adding the hook. **This is the brittle seam of Scenario A.**
 
@@ -335,7 +335,7 @@ Below the line is **our own peripheral backends + our own multiplex layer**, all
 
 ```text
 +--------------------------------------+--------------------------------+
-| projectMM LedDriver (backend×Multiplex)|  ESP-IDF / NXP HAL             |
+| MoonLight LedDriver (backend×Multiplex)|  ESP-IDF / NXP HAL             |
 +--------------------------------------+--------------------------------+
 | RmtLedDriver (None)                  → rmt_tx_channel + encoder        |
 | I2sLcdLedDriver (None)               → legacy I2S in LCD mode + DMA    |
@@ -435,25 +435,25 @@ Per backend: ~500-700 lines of new code. For ESP32 (RMT) + S3 (LCD-CAM) + P4 (pa
 
 Importing a library means you get a lot that wasn't built for your case. Specifically, what we'd give up by adopting FastLED master under the line:
 
-- **The pixel buffer layout is FastLED's, not ours.** Their CRGB struct, their channel ordering decisions, their gamma/brightness application points. We bridge — every `push()` call has to translate from projectMM's flat `std::span<const uint8_t>` (the existing `Buffer::data()` shape) into whatever FastLED's bus class expects. That bridge is a per-frame copy or a per-frame view rewrite; in either case it's hot-path overhead that disappears in Scenario B because we control both sides.
+- **The pixel buffer layout is FastLED's, not ours.** Their CRGB struct, their channel ordering decisions, their gamma/brightness application points. We bridge — every `push()` call has to translate from MoonLight's flat `std::span<const uint8_t>` (the existing `Buffer::data()` shape) into whatever FastLED's bus class expects. That bridge is a per-frame copy or a per-frame view rewrite; in either case it's hot-path overhead that disappears in Scenario B because we control both sides.
 - **Hot-reconfigure is FastLED-paced.** Their new `Channel::create<Bus B>()` API is the closest the field has to runtime driver-switching, but it's young (May 2026), the API surface is in flux, and "switch RMT to LCD-CAM mid-flight without dropping a frame" is something we'd have to verify works the way we need — not assume. In Scenario B the contract is ours; if a frame drop on driver switch is unacceptable, we engineer around it.
-- **No leverage on inner-loop optimisations specific to projectMM's MappingLUT / identity-mapping fast path.** FastLED knows nothing about our identity-mapping optimisation (`!hasLUT()` → direct Layer-buffer push). To use FastLED's bus path we either pre-compose into FastLED's CRGB buffer (defeating the identity path) or write a thin wrapper that exposes our raw buffer (possible but adds a coupling point we don't control). Scenario B keeps the identity path zero-copy through to the wire.
-- **The multiplex seam is brittle on FastLED.** This is the strongest finding from the feasibility check above. FastLED has no shift-register multiplex backend. To use FastLED's lcd_cam DMA path *with* our shift-register multiplex, we need FastLED to hand us its DMA buffer for direct writes — its current API doesn't, and either (a) we bypass FastLED for that backend (effectively Scenario B for the most projectMM-defining backend), (b) we upstream a PR (slow, library-author dependent), or (c) we accept a per-frame copy from FastLED's buffer into our transposed buffer (hot-path cost).
-- **No control over IDF version pinning.** FastLED master targets whatever IDF FastLED master targets. If our projectMM IDF version pin disagrees with FastLED's, we either bump them both in lockstep or carry a divergent fork. In Scenario B we own the IDF compatibility matrix.
+- **No leverage on inner-loop optimisations specific to MoonLight's MappingLUT / identity-mapping fast path.** FastLED knows nothing about our identity-mapping optimisation (`!hasLUT()` → direct Layer-buffer push). To use FastLED's bus path we either pre-compose into FastLED's CRGB buffer (defeating the identity path) or write a thin wrapper that exposes our raw buffer (possible but adds a coupling point we don't control). Scenario B keeps the identity path zero-copy through to the wire.
+- **The multiplex seam is brittle on FastLED.** This is the strongest finding from the feasibility check above. FastLED has no shift-register multiplex backend. To use FastLED's lcd_cam DMA path *with* our shift-register multiplex, we need FastLED to hand us its DMA buffer for direct writes — its current API doesn't, and either (a) we bypass FastLED for that backend (effectively Scenario B for the most MoonLight-defining backend), (b) we upstream a PR (slow, library-author dependent), or (c) we accept a per-frame copy from FastLED's buffer into our transposed buffer (hot-path cost).
+- **No control over IDF version pinning.** FastLED master targets whatever IDF FastLED master targets. If our MoonLight IDF version pin disagrees with FastLED's, we either bump them both in lockstep or carry a divergent fork. In Scenario B we own the IDF compatibility matrix.
 - **Carrying FastLED is binary size we don't fully use.** FastLED master ships drivers for ~20 protocols, ~6 ESP32 variants, Teensy, ARM M0/M0+, and AVR; gamma tables, palette helpers, FX layer, blur kernels. We use the bus driver and the bus driver only. Dead code elimination at link time helps, but FastLED's runtime driver-registry is the opposite of dead-code-eliminable (the whole point is that drivers are reachable from a string lookup). Realistic estimate: 80-150 KB of binary we'd carry without using.
-- **Profile-guided tuning is harder.** projectMM's hot path is unusual — most LED firmwares don't have a Layer/MappingLUT composition layer above the driver. Tuning the inner loop for projectMM's specific access patterns is straightforward if we own the inner loop; in Scenario A it's a sequence of conversations with the library maintainer.
+- **Profile-guided tuning is harder.** MoonLight's hot path is unusual — most LED firmwares don't have a Layer/MappingLUT composition layer above the driver. Tuning the inner loop for MoonLight's specific access patterns is straightforward if we own the inner loop; in Scenario A it's a sequence of conversations with the library maintainer.
 
 What we **lose by building everything ourselves**: speed-to-first-working-driver. Scenario A puts an ESP32 + Teensy hybrid in your hands in ~3 weeks. Scenario B is multi-month before parity, and during those months we own every IDF API surprise. That cost is real.
 
-What we **gain by building everything ourselves**: every byte of the hot path is ours, the multiplex axis is symmetric across backends without library-author cooperation, the binary stays focused on projectMM's actual needs, and the architecture stops being a negotiation between projectMM's design and FastLED's. **The architecture becomes a contract we own**, not a translation layer between two contracts.
+What we **gain by building everything ourselves**: every byte of the hot path is ours, the multiplex axis is symmetric across backends without library-author cooperation, the binary stays focused on MoonLight's actual needs, and the architecture stops being a negotiation between MoonLight's design and FastLED's. **The architecture becomes a contract we own**, not a translation layer between two contracts.
 
 ### Recommendation — walk Scenario B
 
 Reading the whole document honestly: **build everything ourselves.** Reasons, in priority order:
 
-1. **The multiplex axis is the projectMM-defining value-add for the >30K-LED case, and it doesn't compose cleanly onto FastLED.** Scenario A's "ride FastLED + vendor hpwit for the multiplex" framing was the first thing I wrote, and the feasibility check made it visibly worse. The cleanest path for the virtual driver is Scenario B; that's our heaviest single dependency on Scenario A, and it's the spot where Scenario A is structurally weakest.
+1. **The multiplex axis is the MoonLight-defining value-add for the >30K-LED case, and it doesn't compose cleanly onto FastLED.** Scenario A's "ride FastLED + vendor hpwit for the multiplex" framing was the first thing I wrote, and the feasibility check made it visibly worse. The cleanest path for the virtual driver is Scenario B; that's our heaviest single dependency on Scenario A, and it's the spot where Scenario A is structurally weakest.
 2. **Runtime driver switching as a first-class requirement aligns naturally with our own contract.** FastLED's API is moving toward this in May 2026 master, but it's young and we'd be downstream of their choices. Owning the contract means owning the semantics of "switch backend without dropping a frame" — the user-facing requirement.
-3. **The identity-mapping fast path needs the driver to read directly from `layer_->buffer()`.** That's a projectMM-specific optimisation that the rest of the architecture is built around (Drivers.h:90 already implements it for ArtNetSend / Preview). FastLED has no incentive to support it; we'd lose the optimisation or carry a coupling layer.
+3. **The identity-mapping fast path needs the driver to read directly from `layer_->buffer()`.** That's a MoonLight-specific optimisation that the rest of the architecture is built around (Drivers.h:90 already implements it for ArtNetSend / Preview). FastLED has no incentive to support it; we'd lose the optimisation or carry a coupling layer.
 4. **ESP-IDF gives us the peripheral plumbing for free.** As the previous section showed, `parlio_tx_unit`, `esp_lcd_panel_io_i80`, `rmt_tx_channel` are all production-ready. The LED-specific layer on top is small (300-700 lines per backend); we're not writing a peripheral driver from scratch.
 5. **License + binary-size tax shrink the surplus from Scenario A.** EUPL-1.2 / MIT / GPL-3.0 mixing is solvable but adds review burden; 80-150 KB of unused FastLED code is real on a 4 MB partition table.
 
@@ -577,7 +577,7 @@ Notes on the shape:
 Two real numbers worth noting:
 
 - **DMA transmission is asynchronous to `push()`.** Wire-level WS2812 transmission at 800 kHz takes ~30 µs per LED × 16K = ~500 ms in serial; on parallel hardware (16 pins) it's ~30 ms. Both of these are larger than the frame budget — which is why double-buffering + DMA chains exist. The driver's `push()` returns immediately after handing the buffer to DMA; the next frame's `push()` blocks (or yields) until DMA is free.
-- **`push()` budget shrinks fast at higher counts.** At 30K LEDs the effect compute alone is 20+ ms (linear in light count for most effects); the frame budget either grows (drop to 30 FPS) or moves to multi-core (effects on core 1, network on core 0). projectMM does not pin tasks today — the render runs on whichever core the scheduler task lands on.
+- **`push()` budget shrinks fast at higher counts.** At 30K LEDs the effect compute alone is 20+ ms (linear in light count for most effects); the frame budget either grows (drop to 30 FPS) or moves to multi-core (effects on core 1, network on core 0). MoonLight does not pin tasks today — the render runs on whichever core the scheduler task lands on.
 
 ## Hot-path do-and-don't checklist
 

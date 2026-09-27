@@ -1,8 +1,21 @@
 /// @module DevicesModule
-
-/// Pins the timestamp-based age-out: a device whose UDP presence packets stop arriving is dropped after its window (a cached/restored row has a short probation; a live-confirmed one gets the full kStaleMs), while a still-fresh device and the self row stay. Each presence packet stamps lastSeenMs, so the drop is an "unheard too long" check. Virtual time (platform::setTestNowMs) drives it deterministically, no network or wall clock.
 ///
-/// The module's age-out runs in tick1s(); the test restores a cached list (the public persistence entry point), advances virtual time, and ticks tick1s() to observe which rows survive via listRowCount(). The UDP listener tick1s() drains is inert here (no live packets on the host bind), and the self row is registered against the host's own IP, so the state the test exercises is the age-out path.
+/// Pins the age-out: a device whose presence packets stop arriving is dropped once its window passes.
+///
+/// @moreinfo
+///
+/// ## Two windows, because a restored row has not been heard
+///
+/// A cached or restored row is on a short probation, where a live-confirmed one gets the full kStaleMs.
+/// Each presence packet stamps lastSeenMs, so the drop is an unheard-too-long check rather than a timer.
+/// A still-fresh device and the self row stay, which is what says the check discriminates.
+///
+/// ## How the test reaches it
+///
+/// Virtual time through platform::setTestNowMs drives it deterministically, with no network and no wall clock.
+/// The age-out runs in tick1s(), so the test restores a cached list through the public persistence entry, advances time, and ticks.
+/// listRowCount() then says which rows survived.
+/// The UDP listener that tick1s() drains is inert here since nothing sends to the host bind, and the self row is registered against the host's own address.
 
 #include "doctest.h"
 #include "core/system/DevicesModule.h"
@@ -30,7 +43,7 @@ bool present(const DevicesModule& dev, const char* ip) {
     return false;
 }
 
-// Restore two CACHED devices at t0; optionally re-confirm A with a live packet (so it's promoted off `cached`); advance to t0+dt; tick once. Returns whether A (192.168.1.20) is still present. A cached device is on a short probation; a live-confirmed one gets 24 h.
+// Restore two cached devices, optionally re-confirm A with a live packet, advance to t0+dt and tick once, returning whether A survived.
 bool aPresentAfter(uint32_t t0, uint32_t dt, bool reconfirmA) {
     ClockGuard guard;   // real clock restored on return, even if a REQUIRE below fails
     platform::setTestNowMs(t0);
@@ -56,7 +69,7 @@ bool aPresentAfter(uint32_t t0, uint32_t dt, bool reconfirmA) {
 
 }  // namespace
 
-// A cached (restored-but-never-re-heard) device is on a short probation, NOT the full 24 h, else a long-gone persisted device would survive forever across reboots (its clock resets to "boot" each restore). It drops once past kCachedGraceMs.
+// A restored-but-never-re-heard device drops past kCachedGraceMs, since its clock resets each restore and it would otherwise outlive every reboot.
 TEST_CASE("DevicesModule: a cached device survives just under the probation window") {
     CHECK(aPresentAfter(1000, 50u * 1000u, /*reconfirmA=*/false) == true);   // 50s < 60s probation
 }
@@ -74,26 +87,26 @@ TEST_CASE("DevicesModule: a live-confirmed device drops once past kStaleMs (24h)
     CHECK(aPresentAfter(1000, 25u * 60u * 60u * 1000u, /*reconfirmA=*/true) == false);  // 25h > 24h
 }
 
-// A projectMM peer also answers as a plain WLED (its presence packet without our marker), so a later WLED-classified sighting must NOT relabel a restored projectMM row. This drives the downgrade-prevention in upsertDevice through the public path: restore the row as projectMM, inject a plain WLED packet from the same IP, confirm it stays projectMM.
-TEST_CASE("DevicesModule: a restored projectMM device is not downgraded by a WLED packet") {
+// A peer also answers as a plain WLED, so a later WLED sighting must not relabel a restored row: this drives upsertDevice's downgrade-prevention through the public path.
+TEST_CASE("DevicesModule: a restored MoonLight device is not downgraded by a WLED packet") {
     ClockGuard guard;
     platform::setTestNowMs(1);
     DevicesModule dev;
     const char* cached =
-        "{\"devices\":[{\"name\":\"MM-Bench\",\"ip\":\"192.168.1.30\",\"type\":\"projectMM\"}]}";
+        "{\"devices\":[{\"name\":\"MM-Bench\",\"ip\":\"192.168.1.30\",\"type\":\"MoonLight\"}]}";
     REQUIRE(dev.restoreList(cached, "devices"));
     REQUIRE(dev.listRowCount() == 1);
 
-    // A later plain WLED presence packet (no projectMM marker) from the SAME address.
+    // A later plain WLED presence packet (no MoonLight marker) from the SAME address.
     const uint8_t ip[4] = {192, 168, 1, 30};
     uint8_t pkt[WledPacket::kSize];
     WledPacket::build(pkt, ip, "MM-Bench", /*boardType=*/34, /*lightsOn=*/true);  // unmarked = WLED
     dev.injectPacketForTest(pkt, sizeof(pkt), ip);
 
-    // Still projectMM, upsertDevice only RAISES toward projectMM, never downgrades.
+    // Still MoonLight, upsertDevice only RAISES toward MoonLight, never downgrades.
     mm::JsonSink sink;
     dev.writeListRow(sink, 0);
-    CHECK(std::strstr(sink.data(), "\"type\":\"projectMM\"") != nullptr);
+    CHECK(std::strstr(sink.data(), "\"type\":\"MoonLight\"") != nullptr);
     CHECK(std::strstr(sink.data(), "\"type\":\"WLED\"") == nullptr);
 }
 

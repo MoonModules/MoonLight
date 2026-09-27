@@ -328,7 +328,7 @@ The shipped render↔encode split (Step 2a, `multicore` control) uses one `Drive
 
 ### Frame pacing — decided against (record)
 
-MoonLight targets a fixed 60 fps; projectMM deliberately does not (settled with the PO 2026-07-12). The architecture is *render-uncapped + time-aware effects* (`beatsin8`/`millis()`-driven, a CLAUDE.md hard rule), so a whole-engine fps cap is redundant with that rule and would only *reduce* quality below the hardware ceiling; the LED wire rate already paces render physically (30 µs/light), and UI/WiFi responsiveness comes from the per-tick `vTaskDelay(1)` yield, not frame-rate control. Parked as a ~15-line opt-in (`targetFps=0` = unlimited default) *only if* a genuinely CPU-starved device ever appears.
+MoonLight targets a fixed 60 fps; MoonLight deliberately does not (settled with the PO 2026-07-12). The architecture is *render-uncapped + time-aware effects* (`beatsin8`/`millis()`-driven, a CLAUDE.md hard rule), so a whole-engine fps cap is redundant with that rule and would only *reduce* quality below the hardware ceiling; the LED wire rate already paces render physically (30 µs/light), and UI/WiFi responsiveness comes from the per-tick `vTaskDelay(1)` yield, not frame-rate control. Parked as a ~15-line opt-in (`targetFps=0` = unlimited default) *only if* a genuinely CPU-starved device ever appears.
 
 ### Brightness belongs on a fixture's DIMMER channel, not only in the color values (WANTED)
 
@@ -449,7 +449,7 @@ Do it as its own increment. The multi-destination unicast it builds on has shipp
 
 ### RS-485 / DMX-512 wired output (future) — the physical-DMX driver
 
-projectMM already speaks DMX **over the network** (Art-Net / sACN via `NetworkReceiveEffect`). The missing half is **wired DMX-512 out**: driving DMX fixtures (moving heads, par cans, wired pixel controllers) directly over an RS-485 differential pair, which is what the RS-485 hardware on carrier boards like the [MHC-WLED ESP32-P4 shield](../../reference/hardware/mhc-wled-esp32-p4-shield.md) is *for*. DMX-512 is a 250 kbps async serial frame (a break + mark-after-break + 513 bytes: start code + 512 channels) shipped over RS-485 — the textbook fixture-control transport. A DMX driver would map the light buffer (or a fixture/attribute model — see the [Fixture model — moving heads, beams](#fixture-model-moving-heads-beams-long-term) item below) to DMX channels and clock the frame out a UART in RS-485 mode.
+MoonLight already speaks DMX **over the network** (Art-Net / sACN via `NetworkReceiveEffect`). The missing half is **wired DMX-512 out**: driving DMX fixtures (moving heads, par cans, wired pixel controllers) directly over an RS-485 differential pair, which is what the RS-485 hardware on carrier boards like the [MHC-WLED ESP32-P4 shield](../../reference/hardware/mhc-wled-esp32-p4-shield.md) is *for*. DMX-512 is a 250 kbps async serial frame (a break + mark-after-break + 513 bytes: start code + 512 channels) shipped over RS-485 — the textbook fixture-control transport. A DMX driver would map the light buffer (or a fixture/attribute model — see the [Fixture model — moving heads, beams](#fixture-model-moving-heads-beams-long-term) item below) to DMX channels and clock the frame out a UART in RS-485 mode.
 
 **What it needs that we don't have yet:**
 - **A `platform::` UART-RS485 seam.** The ESP32 UART has a hardware RS-485 half-duplex mode (`uart_set_mode(UART_MODE_RS485_HALF_DUPLEX)`) that auto-drives the transceiver's **DE/RE** (driver-enable / receiver-enable) line — the thing our current pin handling has no concept of (we drive pins as plain GPIO). A DMX driver is where DE/RE control first earns its place, and only for a **bidirectional** channel: firmware DE/RE toggling is what lets one channel switch Tx↔Rx without a hardware switch. A **fixed-transmit** channel needs none — its transceiver is hard-wired to drive. On the [MHC-WLED ESP32-P4 shield](../../reference/hardware/mhc-wled-esp32-p4-shield.md) that split is physical: GPIO 4, 22, 24 are fixed-transmit (no DE/RE control wanted), and only the switchable GPIO 3 channel is bidirectional — the shield handles it with a *mechanical* slide switch (which is how its loopback works). Firmware DE/RE control is what a board would need to make a channel bidirectional *without* such a switch.
@@ -464,7 +464,7 @@ Sequencing: it's a **driver** (`src/light/drivers/`) + a platform UART-RS485 sea
 
 ## Integration with other LED and visuals tools
 
-Distilled from a Discord thread with panel-card users (2026-08-24), where two people drove ColorLight walls from projectMM and described the pipelines they already run.
+Distilled from a Discord thread with panel-card users (2026-08-24), where two people drove ColorLight walls from MoonLight and described the pipelines they already run.
 
 ### Preview does not resume after a long tab hibernation (observed once, 2026-08-27)
 
@@ -512,17 +512,17 @@ signature (the 2D-DMA blitter the WLED-MM-P4 world uses via LovyanGFX; ours woul
 platform layer, no vendored GFX library), Porter-Duff alpha when a real consumer arrives, and
 MoonLive sprite data (needs the stage-3 builtin table + arrays).
 
-### projectMM as a video source — NDI first, Spout/Syphon only if proven (open)
+### MoonLight as a video source — NDI first, Spout/Syphon only if proven (open)
 
-Users asked for projectMM's rendered output to feed *their* tools, not the other way round. One runs OBS → Spout → his own VLAN-tagged card driver; he asked whether projectMM could be a Spout source. Input is not the gap: `NetworkReceiveEffect` already binds Art-Net, E1.31/sACN and DDP at once and answers ArtPoll, so any controller can already drive projectMM.
+Users asked for MoonLight's rendered output to feed *their* tools, not the other way round. One runs OBS → Spout → his own VLAN-tagged card driver; he asked whether MoonLight could be a Spout source. Input is not the gap: `NetworkReceiveEffect` already binds Art-Net, E1.31/sACN and DDP at once and answers ArtPoll, so any controller can already drive MoonLight.
 
 **NDI is the recommended first implementation.** It is the AV industry's standard for video over IP, one implementation covers Windows, macOS, Linux and ARM, it discovers by name, and it crosses machines. Spout (Windows, DirectX/OpenGL) and Syphon (macOS, Metal/OpenGL) share a GPU texture zero-copy, so they are lower latency and bit-exact, but they are **same-machine only**, are **two** platform implementations, and leave **Linux and the Pi with nothing**. At LED-wall pixel counts (a 256x256 wall is 65K pixels) the latency difference is far below one frame of the render loop, so it does not decide the choice; coverage does. A Spout user is also reachable through NDI in one hop, since OBS, Resolume and TouchDesigner all speak both.
 
-**The licence shapes the design, and the shape is already established here.** projectMM is GPL-3.0 and the NDI runtime is proprietary, so projectMM must not *redistribute* it: bundling would require projectMM's own licence to carry NDI's restrictions downstream, which GPL-3 forbids. The user installs the NDI runtime themselves, exactly as they already install **Npcap** for the panel-card driver, and projectMM calls whatever is present.
+**The licence shapes the design, and the shape is already established here.** MoonLight is GPL-3.0 and the NDI runtime is proprietary, so MoonLight must not *redistribute* it: bundling would require MoonLight's own licence to carry NDI's restrictions downstream, which GPL-3 forbids. The user installs the NDI runtime themselves, exactly as they already install **Npcap** for the panel-card driver, and MoonLight calls whatever is present.
 
 That is the arrangement `platform_desktop.cpp` uses for Npcap today: resolve the library with `LoadLibrary`/`dlopen` rather than linking it, declare the handful of functions with the library's own signatures rather than including its headers (so the SDK never becomes a build requirement for CI or contributors), and report the feature unavailable when it is absent instead of failing to link. Two independent installs that talk to each other, like Resolume on the same desktop.
 
-Also note projectMM renders into a CPU buffer, so a Spout/Syphon path would upload to the GPU purely to hand off, spending the zero-copy advantage it was chosen for.
+Also note MoonLight renders into a CPU buffer, so a Spout/Syphon path would upload to the GPU purely to hand off, spending the zero-copy advantage it was chosen for.
 
 ### M5Stack Tab5 as a display target — MIPI-DSI, not the H.264 path (open)
 
@@ -537,7 +537,7 @@ a codec. So the three things a Tab5 could be are separate pieces of work, and on
   panel is incidental, and this needs nothing beyond the P4 HLS work itself.
 - **A local wall preview or touch console** — the interesting one, and the real ask: a `platform::`
   MIPI-DSI display seam plus a UI on the panel. Related to the PPA acceleration noted under sprite
-  follow-ups above (same 2D-DMA block), and it is a display *output* seam projectMM does not have
+  follow-ups above (same 2D-DMA block), and it is a display *output* seam MoonLight does not have
   today; the nearest prior art is the WLED-MM-P4 world's LovyanGFX usage, which we would not vendor.
 - **An HLS/video player**, showing another device's stream: blocked on the missing hardware decoder,
   so not worth planning.
@@ -558,7 +558,7 @@ color-temperature feature below would key on.
 
 The industry-standard answer is **daisy-chaining** — a sending card's ports each drive a chain, and each card takes its region by position in the chain. That user works around it with per-card VLANs and a managed switch instead, which he built for throughput and for per-card color-temperature grouping across mixed panel batches; he described it as his own solution, not a standard.
 
-**Establish first whether a daisy chain already works with projectMM** (one contact has a 96K daisy-chained rig). If the cards self-assign by chain position, the standard multi-card case is already solved and nothing is needed. Only if it does not work is there a feature here, and it should follow the daisy-chain standard rather than the VLAN workaround. 802.1Q tagging is technically a clean fit for a raw-L2 sender (the tag is part of the Ethernet header, the switch strips it before the card, so card firmware is unaffected), but it serves one bespoke architecture.
+**Establish first whether a daisy chain already works with MoonLight** (one contact has a 96K daisy-chained rig). If the cards self-assign by chain position, the standard multi-card case is already solved and nothing is needed. Only if it does not work is there a feature here, and it should follow the daisy-chain standard rather than the VLAN workaround. 802.1Q tagging is technically a clean fit for a raw-L2 sender (the tag is part of the Ethernet header, the switch strips it before the card, so card firmware is unaffected), but it serves one bespoke architecture.
 
 ### Smaller asks from the same thread
 
@@ -613,9 +613,9 @@ not), and a module each.
 
 ### Read a vehicle's CAN bus and drive lights from it (2026-09-11)
 
-A projectMM device in a car, reading the vehicle's own bus and driving aftermarket lighting from what it sees: underglow that pulses with engine RPM, sweeps with the indicator, flares on the brake. The vehicle to develop against is a VW Transporter (the product owner's).
+A MoonLight device in a car, reading the vehicle's own bus and driving aftermarket lighting from what it sees: underglow that pulses with engine RPM, sweeps with the indicator, flares on the brake. The vehicle to develop against is a VW Transporter (the product owner's).
 
-**Read-only, and that is the design, not a limitation.** Writing to a vehicle's bus reaches systems that are mandated safety equipment (indicators and brake lights are UNECE R48), usually on a segment shared with ABS and airbags, and modifying them is illegal in most jurisdictions. Reading has none of that exposure and gets the interesting half anyway: the car reports its state, projectMM renders it. Anything the device drives is aftermarket lighting on its own output, untouched by the vehicle.
+**Read-only, and that is the design, not a limitation.** Writing to a vehicle's bus reaches systems that are mandated safety equipment (indicators and brake lights are UNECE R48), usually on a segment shared with ABS and airbags, and modifying them is illegal in most jurisdictions. Reading has none of that exposure and gets the interesting half anyway: the car reports its state, MoonLight renders it. Anything the device drives is aftermarket lighting on its own output, untouched by the vehicle.
 
 **A Service, not a driver.** It senses rather than renders, so it belongs under the core `Services` container beside AudioService and ButtonService, and it produces both shapes the sensors entry above describes: an EVENT (indicator on, brake pressed) drives a control through `Scheduler::setControl`, while a continuous VALUE (RPM, speed) is published as a shared frame the way `AudioService::latestFrame()` is. Effects then read it, the input-mapping layer routes it, and a MoonLive script reads it as a system variable, so "underglow sweeps with the indicator" is a script someone writes and shares rather than firmware.
 
@@ -626,13 +626,13 @@ A projectMM device in a car, reading the vehicle's own bus and driving aftermark
 | OBD-II / UDS | Yes, legally mandated (EU: 2001 petrol, 2004 diesel) | RPM, speed, coolant, throttle, engine load | Request/response against ID `0x7DF`, so polling, a few times a second |
 | Manufacturer body frames | No, proprietary per model and year | Indicators, brakes, doors, lights | Passive sniffing and reverse engineering |
 
-J1939 is NOT the answer here despite being the "CAN lighting standard" people reach for: it is the heavy-duty protocol (trucks, agricultural, marine), and a Transporter is passenger-car architecture running VW's own frames. J1939 would only apply if projectMM targeted commercial vehicle equipment.
+J1939 is NOT the answer here despite being the "CAN lighting standard" people reach for: it is the heavy-duty protocol (trucks, agricultural, marine), and a Transporter is passenger-car architecture running VW's own frames. J1939 would only apply if MoonLight targeted commercial vehicle equipment.
 
 So phase 1 is OBD-II only, which genuinely works on any car and needs no per-vehicle data. Phase 2 adds raw-frame sniffing, and there the frame IDs must be CONFIGURATION rather than compiled-in constants: a Transporter owner who discovers theirs shares a config file, and no firmware release is involved. That is what keeps a per-vehicle feature from becoming a per-vehicle maintenance burden.
 
 **What it needs:**
 
-- A `platform::twai*` seam (init, send, receive, stop). TWAI is the ESP32's CAN controller and is present on every chip projectMM ships: 1 controller on classic and S3, 3 on the P4.
+- A `platform::twai*` seam (init, send, receive, stop). TWAI is the ESP32's CAN controller and is present on every chip MoonLight ships: 1 controller on classic and S3, 3 on the P4.
 - **An external transceiver**: the ESP32 has the controller but no CAN PHY, and this is the only part that needs buying. An SN65HVD230 board (3.3V native, unlike the 5V TJA1050) plus an OBD-II pigtail to reach pins 6 (CAN-H) and 14 (CAN-L), so nothing on the vehicle is cut. Watch for a termination resistor fitted on the transceiver board: the vehicle bus is already terminated at both ends and a third resistor disturbs it. Power the device from USB while developing rather than OBD pin 16, so a crash cannot load the vehicle supply.
 - A `VehicleService` module, and a desktop stub so the logic is testable without a car.
 

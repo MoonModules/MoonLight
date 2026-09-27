@@ -242,7 +242,7 @@ The trade is deliberate: **a chain must be homogeneous**. Mixing fixture types o
 
 ## Multicast and IGMP snooping
 
-Three things projectMM sends to more than one listener, and they do not all use the same transport, because the protocol's owner decides it and not us:
+Three things MoonLight sends to more than one listener, and they do not all use the same transport, because the protocol's owner decides it and not us:
 
 | | transport | why |
 |---|---|---|

@@ -1,0 +1,79 @@
+{
+  "name": "scenario_Firmware_reports_what_is_running",
+  "module": "FirmwareUpdateModule",
+  "mode": "mutate",
+  "also": [
+    "SystemModule"
+  ],
+  "description": "The card that decides whether an update is offered, and therefore the one that must never guess. Its version comes from the binary rather than from a file, so a restart cannot change it and nothing persisted can edit it into something untrue. The value itself moves every release, so what is asserted is that it is the same before and after a restart rather than any particular string.",
+  "fixture": [
+    {
+      "name": "fix-Firmware",
+      "op": "add_module",
+      "id": "Firmware",
+      "type": "FirmwareUpdateModule"
+    }
+  ],
+  "steps": [
+    {
+      "name": "note-the-version",
+      "description": "Read what the running binary says it is, which the update check compares against a release.",
+      "op": "measure",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 32,
+            "p95": 168,
+            "min": 20,
+            "max": 168,
+            "n": 8,
+            "samples": [46, 32, 28, 41, 168, 33, 20, 28]
+          },
+          "last_updated": "2026-09-24"
+        }
+      }
+    },
+    {
+      "name": "a-version-is-reported",
+      "description": "An empty version is what a card reports when its source is missing, and it is the one value the update check must never compare against a release.",
+      "op": "expect_control",
+      "id": "Firmware",
+      "key": "version",
+      "not_equals": ""
+    },
+    {
+      "name": "restart",
+      "description": "Restart: the version must come from the image rather than from anything persisted.",
+      "op": "reboot",
+      "timeout": 60
+    },
+    {
+      "name": "still-reporting",
+      "description": "The card answers again after the restart, which is what the update check needs it to do. What it reports is not asserted: the version moves every release and the variant differs per target.",
+      "op": "measure",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 38,
+            "p95": 68,
+            "min": 22,
+            "max": 68,
+            "n": 8,
+            "samples": [49, 68, 41, 23, 48, 35, 22, 38]
+          },
+          "last_updated": "2026-09-24"
+        }
+      }
+    },
+    {
+      "name": "it-still-reports-one",
+      "description": "The same holds after the restart, since the version comes from the image rather than from anything persisted.",
+      "op": "expect_control",
+      "id": "Firmware",
+      "key": "version",
+      "not_equals": ""
+    }
+  ]
+}

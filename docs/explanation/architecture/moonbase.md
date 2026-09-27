@@ -9,7 +9,7 @@ flowchart LR
     subgraph flash["one flash, two images"]
         direction TB
         base["factory slot<br/>MoonBase, ~750 KB<br/>small and rarely changing"]
-        app["app slot<br/>projectMM<br/>one copy, not two"]
+        app["app slot<br/>MoonLight<br/>one copy, not two"]
         fs["filesystem<br/>the space the second<br/>app slot used to hold"]
     end
 

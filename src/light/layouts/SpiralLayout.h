@@ -6,7 +6,7 @@
 namespace mm {
 
 /// Layout winding LEDs up a conical spiral.
-/// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
+/// Author: MoonLight, https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
 ///
 /// @moreinfo
 ///
@@ -16,10 +16,10 @@ namespace mm {
 /// The angle therefore simply accumulates while the radius shrinks, so the spiral packs tightly near the base and opens out toward the tip.
 /// The whole shape is offset so its base sits at (bottomRadius, 0, bottomRadius), keeping every coordinate non-negative.
 ///
-/// Prior art: MoonLight SpiralLayout (MoonModules/MoonLight, src light nodes).
+/// Prior art: MoonLight SpiralLayout (MoonModules/projectMM, src light nodes).
 /// The geometry is reproduced exactly, its float trig running on the cold build path rather than the render loop.
 /// The source's own trig calls and its truncation of each coordinate are kept as they are.
-/// MoonLight's per-strip pin plumbing (nextPin) is dropped: a projectMM layout emits coordinates only; the driver owns wiring.
+/// MoonLight's per-strip pin plumbing (nextPin) is dropped: a MoonLight layout emits coordinates only; the driver owns wiring.
 class SpiralLayout : public LayoutBase {
 public:
     /// The catalog tags this layout carries.

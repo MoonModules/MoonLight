@@ -7,7 +7,7 @@ namespace mm {
 
 /// Audio-reactive graphic-equalizer effect: 16 bands as vertical bars.
 /// @card GEQEffect.gif
-/// Author: Andrew Tuline (WLED-SR), https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
+/// Author: Andrew Tuline (WLED-SR), via the predecessor, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
 ///
 /// The 16 audio bands spread across a panel's columns, each rising to its band's loudness.
 /// A peak dot sits at the highest the bar recently reached and falls back slowly.

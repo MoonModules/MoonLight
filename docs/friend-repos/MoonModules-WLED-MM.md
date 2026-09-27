@@ -1,6 +1,6 @@
 # WLED-MM: monthly activity digest
 
-What landed on [WLED-MM](https://github.com/MoonModules/WLED-MM)'s `mdev` (default) branch, month by month. External-context reference, a factual log of a friend repo's releases, not projectMM's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md). Months are split at versioned-release boundaries (the rolling `nightly` tag is not a release).
+What landed on [WLED-MM](https://github.com/MoonModules/WLED-MM)'s `mdev` (default) branch, month by month. External-context reference, a factual log of a friend repo's releases, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md). Months are split at versioned-release boundaries (the rolling `nightly` tag is not a release).
 
 ## August 2026
 

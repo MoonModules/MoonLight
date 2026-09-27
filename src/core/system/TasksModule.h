@@ -69,14 +69,14 @@ private:
             count_ = static_cast<uint8_t>(platform::taskSnapshot(rows_, kMaxTasks));
             // A task's row would otherwise shift with its state, so sort: ours first, then by name.
             std::sort(rows_, rows_ + count_, [](const platform::TaskInfo& a, const platform::TaskInfo& b) {
-                const bool oursA = isProjectMMTask(a.name), oursB = isProjectMMTask(b.name);
+                const bool oursA = isMoonLightTask(a.name), oursB = isMoonLightTask(b.name);
                 if (oursA != oursB) return oursA;                 // our tasks first
                 return std::strcmp(a.name, b.name) < 0;           // then alphabetical, stable
             });
         }
 
         /// Whether we created this task: the render task, or a worker under our own prefix.
-        static bool isProjectMMTask(const char* name) {
+        static bool isMoonLightTask(const char* name) {
             const char* render = platform::renderTaskName();
             return (render[0] && std::strcmp(name, render) == 0) || std::strncmp(name, "mm", 2) == 0;
         }

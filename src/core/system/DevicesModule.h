@@ -106,7 +106,7 @@ public:
                 Device& d = devices_[deviceCount_++];
                 std::memcpy(d.ip, octets, 4);
                 std::snprintf(d.name, sizeof(d.name), "%s", name);
-                d.type = (std::strcmp(typeStr, "projectMM") == 0)  ? DevType::ProjectMM
+                d.type = (std::strcmp(typeStr, "MoonLight") == 0)  ? DevType::MoonLight
                        : (std::strcmp(typeStr, "WLED") == 0)       ? DevType::Wled
                        : (std::strcmp(typeStr, "Hue bridge") == 0) ? DevType::Hue
                                                                    : DevType::Generic;
@@ -305,7 +305,7 @@ private:
     /// Announce ourselves: a compatible packet, stamped so a peer types us correctly.
     void broadcastPresence(const uint8_t ip[4]) {
         uint8_t pkt[WledPacket::kSize];
-        const char* n = (selfName_ && selfName_[0]) ? selfName_ : "projectMM";
+        const char* n = (selfName_ && selfName_[0]) ? selfName_ : "MoonLight";
         WledPacket::build(pkt, ip, n, boardTypeByte(), /*lightsOn=*/true);
         WledPacket::stampMmMarker(pkt);
         // The group always, since peers listen there and it costs the rest of the LAN nothing.
@@ -341,16 +341,16 @@ private:
             persistChanged = true;         // a new row changes the saved list
         }
         // The marker is definitive, so an established identity is raised toward, never downgraded.
-        const bool isMm = isSelf || found.type == DevType::ProjectMM;
-        const DevType newType = isMm ? DevType::ProjectMM
-                              : (d->type != DevType::ProjectMM ? found.type : d->type);
+        const bool isMm = isSelf || found.type == DevType::MoonLight;
+        const DevType newType = isMm ? DevType::MoonLight
+                              : (d->type != DevType::MoonLight ? found.type : d->type);
         if (d->type != newType) { d->type = newType; persistChanged = true; }
         if (d->self != isSelf) { d->self = isSelf; persistChanged = true; }
         d->lastSeenMs = platform::millis();    // transient — not persisted
         d->cached = false;                     // transient — not persisted
         // Only an authoritative packet renames a row, though an empty name is always filled.
         const bool authoritative =
-            (found.type == DevType::ProjectMM && d->type == DevType::ProjectMM) ||
+            (found.type == DevType::MoonLight && d->type == DevType::MoonLight) ||
             (found.type == DevType::Wled);
         if (found.name[0] && (!d->name[0] || isIpPlaceholder(d->name, ip) || authoritative)
             && std::strcmp(d->name, found.name) != 0) {
@@ -378,7 +378,7 @@ private:
             std::memcpy(d->ip, ip, 4);
             changed = true;            // a new row changes the saved list
         }
-        if (d->type != DevType::ProjectMM) { d->type = DevType::ProjectMM; changed = true; }
+        if (d->type != DevType::MoonLight) { d->type = DevType::MoonLight; changed = true; }
         if (!d->self) { d->self = true; changed = true; }
         d->cached = false;
         d->lastSeenMs = platform::millis();   // transient — not persisted

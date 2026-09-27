@@ -12,7 +12,7 @@ didn't. ASan catches use-after-free (a driver deleted while core 1 is inside its
 catches data races (two cores touching one field without synchronization).
 
 macOS toolchain reality (verified 2026-07-13, macOS 26.5 / arm64, with hello-world reproducers —
-these are runtime bugs, NOT anything in projectMM):
+these are runtime bugs, NOT anything in MoonLight):
   * **Apple clang's ASan HANGS** during its own startup, inside `dyld_shared_cache_iterate_text`;
     a hello-world never reaches main(). So Apple's toolchain is unusable and this script refuses it.
   * **Homebrew LLVM's ASan WORKS.** That is why the script requires it — a difference between

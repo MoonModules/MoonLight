@@ -6,15 +6,15 @@ These are System's **child modules**: fixed, always present, each inspecting (an
 
 ## The industry reference
 
-They are projectMM's **Task Manager / Activity Monitor / Device Manager** — the OS system-management surfaces. Those aren't read-only either (Task Manager ends a process, Device Manager disables a device), which is why "views" undersells them. The mapping (*Industry standards, our own code* — study the tools, build our own):
+They are MoonLight's **Task Manager / Activity Monitor / Device Manager** — the OS system-management surfaces. Those aren't read-only either (Task Manager ends a process, Device Manager disables a device), which is why "views" undersells them. The mapping (*Industry standards, our own code* — study the tools, build our own):
 
-| Windows Task Manager / macOS Activity Monitor / Device Manager | projectMM | State |
+| Windows Task Manager / macOS Activity Monitor / Device Manager | MoonLight | State |
 |---|---|---|
 | Processes / Details (per-process CPU, memory) | **Tasks** — RTOS tasks, modules nested, per-module cost | shipped |
 | Performance → Memory (`free`, `vmstat`: used/free by type, largest block) | **Memory** — internal vs PSRAM, used/free/largest, per-module `dynamicBytes` | proposed |
 | Device Manager (what hardware is present + how it's wired) | **Pins** — the GPIO map, who owns each pin | [backlogged](backlog-core.md#pinsmodule-strict-reject-on-add-mode-the-one-remaining-increment) |
 
-The load-bearing lesson from those tools: **they sample existing OS accounting cheaply and always-on; the heavy per-event tracking (UMDH, `malloc_history`, Valgrind, ESP-IDF `heap_trace`) is a separate opt-in profiler.** projectMM already learned this on TasksModule (CPU% is ~5% tick → build-flag opt-in; the task list is a cheap sample → always-on). The same tier applies to Memory (below).
+The load-bearing lesson from those tools: **they sample existing OS accounting cheaply and always-on; the heavy per-event tracking (UMDH, `malloc_history`, Valgrind, ESP-IDF `heap_trace`) is a separate opt-in profiler.** MoonLight already learned this on TasksModule (CPU% is ~5% tick → build-flag opt-in; the task list is a cheap sample → always-on). The same tier applies to Memory (below).
 
 ## The shared pattern (so the System modules are one shape, not three)
 
@@ -22,7 +22,7 @@ Every member is the **same recognizable shape** — the [TasksModule](../../moon
 
 - a **read-only** module presenting a `ControlType::List` via the `ListSource` adapter (DevicesModule/I2cScan shape);
 - refreshed on `loop1s()` (a periodic *sample*, never the hot path);
-- reading projectMM's **existing self-report** (`loopTimeUs`/`classSize`/`dynamicBytes`) + **existing platform getters** (`freeHeap`/`freeInternalHeap`/`maxAllocBlock`/`totalHeap`, and per-module seams behind the boundary like `platform::taskSnapshot`);
+- reading MoonLight's **existing self-report** (`loopTimeUs`/`classSize`/`dynamicBytes`) + **existing platform getters** (`freeHeap`/`freeInternalHeap`/`maxAllocBlock`/`totalHeap`, and per-module seams behind the boundary like `platform::taskSnapshot`);
 - **zero hot-path cost**, cross-platform (desktop shows what it can, stubs the rest).
 
 Memory and Pins **must** follow this shape. If a proposed feature can't fit it (e.g. "route every alloc through the module" — see below), that's the signal it's a different, heavier thing that needs its own opt-in mechanism, not a System Module.
@@ -80,10 +80,10 @@ The `main.cpp` `registerType` docPaths update accordingly (System children → `
 A Tasks sibling. **In scope** (cheap, always-on, from existing accounting):
 
 - **By heap type:** internal RAM and PSRAM each — total / used / free / largest contiguous block (`freeHeap`/`freeInternalHeap`/`totalHeap`/`maxAllocBlock`/`maxInternalAllocBlock`, `platform::hasPsram`).
-- **Per-module footprint:** each module's `classSize` (static) + `dynamicBytes` (heap from `onBuildState`), largest first — the "which module holds the big buffers" view. This is projectMM's **self-report**, already collected.
+- **Per-module footprint:** each module's `classSize` (static) + `dynamicBytes` (heap from `onBuildState`), largest first — the "which module holds the big buffers" view. This is MoonLight's **self-report**, already collected.
 - **Notable large allocations shown explicitly:** the big contiguous buffers (the layer buffer, LED DMA buffers, ArtNet handoff) — surfaced from the owning module's self-report, optionally tagged, so a 48 KB buffer at 128×128 is visible as itself, not just folded into a module total.
 
-**Explicitly out of scope — "route every alloc/free through the module":** this is per-event heap tracking, which (1) fights the hot-path *alloc-once, no per-frame allocation* rule — by design there is no stream of allocs to intercept in the render loop; (2) taxes *every* system allocation with hook overhead; (3) is how a leak-hunt profiler works, not a dashboard. OSes keep it as an opt-in tool (ESP-IDF `heap_trace`, UMDH), never always-on. projectMM's model is **self-report, not intercept**: a module *reports* its big buffers; malloc is not funneled through a UI module. If leak-hunting is ever wanted, that's a **separate, build-flag-gated `heap_trace` mode** (the CPU%-style opt-in), not part of this read-only Memory view.
+**Explicitly out of scope — "route every alloc/free through the module":** this is per-event heap tracking, which (1) fights the hot-path *alloc-once, no per-frame allocation* rule — by design there is no stream of allocs to intercept in the render loop; (2) taxes *every* system allocation with hook overhead; (3) is how a leak-hunt profiler works, not a dashboard. OSes keep it as an opt-in tool (ESP-IDF `heap_trace`, UMDH), never always-on. MoonLight's model is **self-report, not intercept**: a module *reports* its big buffers; malloc is not funneled through a UI module. If leak-hunting is ever wanted, that's a **separate, build-flag-gated `heap_trace` mode** (the CPU%-style opt-in), not part of this read-only Memory view.
 
 ## Open decisions (for the specs/plans that follow)
 

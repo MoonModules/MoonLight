@@ -1,6 +1,6 @@
 # The shift-register (74HCT595) LED driver — fan-out mechanics, memory ceiling, module shape
 
-> **Forward-looking research document — exception to the CLAUDE.md present-tense rule.** Researched 2026-07 against primary sources: hpwit's `I2SClocklessVirtualLedDriver` and `I2SClocklessLedDriver` read line-by-line at `main` HEAD, plus projectMM's own shipped `ParallelLedDriver` / `ParallelSlots` code and measured ceilings. Every load-bearing number is cited in § 7. Input for a `/plan`, not an approved plan.
+> **Forward-looking research document — exception to the CLAUDE.md present-tense rule.** Researched 2026-07 against primary sources: hpwit's `I2SClocklessVirtualLedDriver` and `I2SClocklessLedDriver` read line-by-line at `main` HEAD, plus MoonLight's own shipped `ParallelLedDriver` / `ParallelSlots` code and measured ceilings. Every load-bearing number is cited in § 7. Input for a `/plan`, not an approved plan.
 
 ## 1. Verdict
 
@@ -23,7 +23,7 @@ So the frame is **~145 KB** for *both* targets (§ 5), and that single figure is
 | **ESP32-P4** | i80 / LCD_CAM | ✅ *(untested)* | ✅ *(untested)* | P4 has LCD_CAM too; the i80 driver is already registered on it. **This is the P4's viable route** |
 | **any chip** | RMT | ❌ | ❌ | Structurally impossible (§ 6.2) |
 
-**Blunt version: classic ESP32 cannot do the shift-register driver at any useful size, and Parlio cannot do it at all.** The PO's 48×256 target is an **S3 feature** (and probably a P4-over-i80 feature). If the plan assumes StarLight's numbers, note those were achieved on hpwit's **PSRAM-fed refill ring**: a different memory model projectMM does not have and has deliberately [parked](led-driver-psram-ring-analysis.md).
+**Blunt version: classic ESP32 cannot do the shift-register driver at any useful size, and Parlio cannot do it at all.** The PO's 48×256 target is an **S3 feature** (and probably a P4-over-i80 feature). If the plan assumes StarLight's numbers, note those were achieved on hpwit's **PSRAM-fed refill ring**: a different memory model MoonLight does not have and has deliberately [parked](led-driver-psram-ring-analysis.md).
 
 **The good news, and it is genuinely good:** on the S3 this needs **no new memory model, no new peripheral, and no new driver class**. It is a fan-out *option on the drivers we already ship*, and the 48×256 floor lands inside a buffer size the S3 is measured to handle.
 
@@ -159,7 +159,7 @@ The one platform unknown was whether `esp_lcd` grants the ~8× pixel clock, sinc
 W mm_i80: CLOCK SPIKE: request 20000000 Hz -> GRANTED (prescale 4 -> granted 20000000 Hz)
 ```
 
-(`projectMM-testbench-S3`, esp32s3-n16r8, and `projectMM-testbench-P4`, esp32p4-eth. A throwaway IO device opened at the shift-mode rate before the real device claims the bus; probe reverted afterwards, both boards restored.)
+(`MoonLight-testbench-S3`, esp32s3-n16r8, and `MoonLight-testbench-P4`, esp32p4-eth. A throwaway IO device opened at the shift-mode rate before the real device claims the bus; probe reverted afterwards, both boards restored.)
 
 **Ask for 26.67 MHz, not hpwit's 19.2 MHz.** `esp_lcd` derives an **integer** prescale from the bus resolution and *silently rounds down* — it only errors when the prescale is 0 or > `LCD_LL_PCLK_DIV_MAX` (64). So a bad clock is not an error, it is a wrong waveform, and the rate must be chosen to divide exactly:
 
@@ -404,7 +404,7 @@ The module header reports the **tick** rate (252 fps) while `frameTime` reports 
 - **hpwit direct (Discord, 2026-07-17)** — *"the first version was only able to do 5:1 and I spent most of the time optimising the code to be able to do 8:1"*; *"mine takes 50 microseconds"* (against his own 30 µs slot); and the standing offer: *"If I can look at the code I could give you some hints."*
 - [`I2SClocklessLedDriver.h`](https://github.com/hpwit/I2SClocklessLedDriver/blob/main/src/I2SClocklessLedDriver.h) — `:575-577` `clkm_div_num=33, div_a=3, div_b=1` → **2.4 MHz**; the 144 B direct buffer.
 
-**projectMM's own code + measurements:**
+**MoonLight's own code + measurements:**
 - `src/light/drivers/ParallelLedDriver.h` — `frameBytesFor`, the CRTP base, `asyncTransmit`.
 - `src/light/drivers/ParallelSlots.h` — the 3-slot wire contract + SWAR transpose.
 - `src/platform/esp32/platform_esp32_i80.cpp` — PSRAM-first on LCD_CAM, internal-only on classic I2S (`SOC_LCDCAM_I80_LCD_SUPPORTED` gate).

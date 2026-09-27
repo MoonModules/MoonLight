@@ -4,14 +4,14 @@
 
 ## Goal & shape
 
-Bring MoonLight's full library of **effects, modifiers and layouts** into projectMM. This is large, so it is **staged**: each stage ships independently, builds on the previous, and is its own `/plan` + commit. This document is the *map* — the per-stage plans get written when we reach them. Stages 1–2 are specified enough to start; later stages are scoped, not detailed.
+Bring MoonLight's full library of **effects, modifiers and layouts** into MoonLight. This is large, so it is **staged**: each stage ships independently, builds on the previous, and is its own `/plan` + commit. This document is the *map* — the per-stage plans get written when we reach them. Stages 1–2 are specified enough to start; later stages are scoped, not detailed.
 
-**Why this matters beyond features:** this migration is the execution vehicle for the **effect-breadth parity gate** in the projectMM → MoonLight rename plan — taking the MoonLight name requires the library not to feel thin next to the predecessor's 60+ effects. The rename's bar is "enough batches landed," not "every stage done"; this plan is *how* that bar is reached. (The two docs stay in their folders — the rename is the forward-looking backlog item that sets the bar; this is the approved staged plan that meets it — linked, not duplicated.)
+**Why this matters beyond features:** this migration is the execution vehicle for the **effect-breadth parity gate** in the MoonLight → MoonLight rename plan — taking the MoonLight name requires the library not to feel thin next to the predecessor's 60+ effects. The rename's bar is "enough batches landed," not "every stage done"; this plan is *how* that bar is reached. (The two docs stay in their folders — the rename is the forward-looking backlog item that sets the bar; this is the approved staged plan that meets it — linked, not duplicated.)
 
 Two cross-cutting rules govern every stage, from [CLAUDE.md](../../../CLAUDE.md):
 
 - **Industry standards, our own code.** MoonLight effects are studied for *behaviour and algorithm*, then written **fresh** against our architecture (our `EffectBase`, our primitives, our names). We do **not** trace MoonLight/WLED/FastLED structure or copy code. For *effects specifically* the **visual behaviour is the spec** — we reproduce what the effect looks like faithfully (the product owner's clarification), but the implementation is ours. Prior art credited per-module + in `history/`.
-- **A shared light primitive library.** Effects need a common set of small math/color helpers (a beat/sine oscillator, integer noise, saturating add/subtract, scale, fade, a color blend, a fast PRNG, draw primitives). projectMM provides these, extending the `color.h` set (`scale8`, `sin8`, `cos8`, `hsvToRgb` already there): **hot-path-tuned** (integer-only, LUT-backed, no float in the per-light path) and **dimension-agnostic where it makes sense** (the product owner's steer: our 3D-native model means a primitive like `drawLine` works 1D→3D, written once, not re-implemented per effect).
+- **A shared light primitive library.** Effects need a common set of small math/color helpers (a beat/sine oscillator, integer noise, saturating add/subtract, scale, fade, a color blend, a fast PRNG, draw primitives). MoonLight provides these, extending the `color.h` set (`scale8`, `sin8`, `cos8`, `hsvToRgb` already there): **hot-path-tuned** (integer-only, LUT-backed, no float in the per-light path) and **dimension-agnostic where it makes sense** (the product owner's steer: our 3D-native model means a primitive like `drawLine` works 1D→3D, written once, not re-implemented per effect).
   - **Naming follows *Common patterns first* + *Industry standards, our own code*: the recognisable name AND our own implementation.** The LED-embedded world's canonical resource is FastLED, and its names (`beatsin8`, `inoise8`, `qadd8`, `nscale8`, `random8`/`random16`, `ColorFromPalette`) are exactly the ones a contributor recognises in 30 seconds — and consistent with the `scale8`/`sin8` we already ship. So **we use those names** (carrying the established convention), **write our own implementation** against our engine, and **credit FastLED as prior art** in each module's "Prior art" section. The point of the principle is independence-by-construction (own code, own architecture, behaviour pinned by tests), *not* a renamed copy — so the names stay recognisable; only the implementation is ours. Each primitive's design is justified at its introduction site, and we reorganise a borrowed concept when ours is genuinely cleaner (e.g. the dimension-agnostic draw set).
 
 ## What exists today (baseline)
@@ -20,7 +20,7 @@ Two cross-cutting rules govern every stage, from [CLAUDE.md](../../../CLAUDE.md)
 - **Palette:** none shared. `PlasmaPaletteEffect` hard-codes a 256-entry `RGB palette_[256]` in flash — the pattern to generalise.
 - **Effects:** ~21 already ported (Rainbow, Noise, Plasma, Fire, Particles, Metaballs, GameOfLife, Wave, …). GameOfLife (272 lines) is flagged by the product owner as **not faithful — re-port from the real algorithm**.
 - **Modifiers:** Multiply, Rotate, Region, Checkerboard, RandomMap. **Layouts:** Grid, Sphere, Wheel.
-- **Tags/emoji:** projectMM already has `tags()` + UI-derived role/dim emoji (architecture.md § Web UI). MoonLight's legend (🔥 effect, 💎 modifier, ♫ audio, 🧊 3D, …) becomes the **canonical basis** (product owner's choice).
+- **Tags/emoji:** MoonLight already has `tags()` + UI-derived role/dim emoji (architecture.md § Web UI). MoonLight's legend (🔥 effect, 💎 modifier, ♫ audio, 🧊 3D, …) becomes the **canonical basis** (product owner's choice).
 - **Docs:** one `.md` per module (21 effect specs already), enforced by `check_specs.py` (it `rglob`s each `.h` → a matching `.md`). Moving to **per-library pages** (`effects_<library>.md`, compact table rows) — see Stage 2 and the folder-structure decision. This requires changing the spec-check contract.
 - **Assets:** **already reorganised** to `docs/assets/{core, light/{effects,modifiers,layouts,drivers}, ui}/` (the per-module move done ahead of the migration). Stage 2's gif work is *adding* MoonLight previews into this structure, not re-homing.
 
@@ -41,7 +41,7 @@ Measured against both trees on 2026-09-07 (96 commits after the previous status)
 MoonLight's `name()` declarations against our registered modules and script library. Counts are
 what the trees say, not what the stages below predicted.
 
-| | MoonLight | projectMM | Gap |
+| | MoonLight | MoonLight | Gap |
 |---|---|---|---|
 | Effects | 88 | 66 compiled + 32 scripted | see below |
 | Modifiers | 9 (+1 template) | 11 | **none: complete, plus 2 of our own** |
@@ -65,7 +65,7 @@ what the trees say, not what the stages below predicted.
   Tracked in [backlog-light § RS-485](../../future/backlog-light.md), where the analysis notes the
   channel-mapping half is already solved and what remains is the transport (a UART in RS-485 mode,
   break/mark timing) plus a physical transceiver. **This is the one Must-class gap for the rename.**
-- ~~**HUB75.**~~ **Out of scope, decided 2026-09-07.** MoonLight drives these panels; projectMM
+- ~~**HUB75.**~~ **Out of scope, decided 2026-09-07.** MoonLight drives these panels; MoonLight
   will not. No longer a gap: a choice.
 - **IMU.** Sensor input beyond the microphone. The rename doc already files this as a Could.
 
@@ -163,7 +163,7 @@ Checkout note: the MoonLight tree read for this research was at `65869217` (2026
 ## What is left to replace MoonLight (the product owner's decision list)
 
 The question this plan now answers is not "how do we migrate" but "what is still missing before
-projectMM can take the name". Grouped by whether it BLOCKS the rename, on the evidence above.
+MoonLight can take the name". Grouped by whether it BLOCKS the rename, on the evidence above.
 
 **Blocking, in the sense that a predecessor user would notice it missing:**
 
@@ -172,7 +172,7 @@ projectMM can take the name". Grouped by whether it BLOCKS the rename, on the ev
    RS-485 transport and a board that carries a transceiver. This is also the item with a hardware
    dependency, so it has the longest lead time: worth starting before the smaller work.
 2. ~~A decision on HUB75.~~ **DECIDED 2026-09-07: OUT OF SCOPE.** MoonLight drives HUB75 panels and
-   projectMM will not. Recorded here so it stays a decision rather than resurfacing as an unknown.
+   MoonLight will not. Recorded here so it stays a decision rather than resurfacing as an unknown.
 
 **Not blocking, and mostly small:**
 
@@ -215,7 +215,7 @@ and fixture model, and the doc model (in a better shape than this plan proposed)
 
 The proving-ground stage: build the shared tools, prove them on one hard effect.
 
-- **Palette.** Take **MoonLight's palette set** (~80 gradient palettes, [palettes.h](https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Modules/palettes.h) — study + carry the gradient *data*, written into our own format). The definition format is the textbook **gradient-stop** one: a compact `{position, R, G, B, …}` list (position 0..255, terminating at 255), expanded off-loop into a 256-entry lookup. Our `Palette` type + `colorFromPalette(palette, index, brightness)`: the per-light lookup is an array index + one `scale8` (hot-path-tuned; the 256-entry table precomputed on selection, not per frame). Generalises `PlasmaPaletteEffect`'s hard-coded table.
+- **Palette.** Take **MoonLight's palette set** (~80 gradient palettes, [palettes.h](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Modules/palettes.h) — study + carry the gradient *data*, written into our own format). The definition format is the textbook **gradient-stop** one: a compact `{position, R, G, B, …}` list (position 0..255, terminating at 255), expanded off-loop into a 256-entry lookup. Our `Palette` type + `colorFromPalette(palette, index, brightness)`: the per-light lookup is an array index + one `scale8` (hot-path-tuned; the 256-entry table precomputed on selection, not per frame). Generalises `PlasmaPaletteEffect`'s hard-coded table.
   - **Ownership (decided 2026-06-30):** the **active palette is global**, owned by the **Drivers** container (already the home of global render params — brightness, lightPreset, the shared Correction) via a new `palette` select control. Effects read it through a static `Palettes::active()` seam (the `AudioModule::latestFrame()` pattern), so an effect just calls `colorFromPalette(Palettes::active(), idx)`. This mirrors MoonLight's global `layerP.palette` without needing MoonLight's `ModuleLightsControl` — which, with **presets** and the **external-controller hub** concept, is **backlogged** ([backlog-mixed.md](../../future/backlog-mixed.md)) and will absorb the palette control from Drivers when built. Presets are *not* a palette dependency — separate feature, backlogged.
   - Palettes are light-domain → live under `src/light/` (file split decided in the stage plan).
 - **The shared primitive library** (file split — one `light/Fx.h` vs focused `light/Beat.h`/`Noise.h`/`Blend.h` — decided in the stage plan; recognisable names, our implementation, FastLED credited as prior art). Hot-path-tuned, integer-only, LUT-backed:

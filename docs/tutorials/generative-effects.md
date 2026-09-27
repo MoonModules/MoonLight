@@ -2,11 +2,11 @@
 
 Most LED effects are written a light at a time: loop over the pixels, work out a color, write it. That works, and it takes a long time to get from "it lights up" to "I want to keep watching it".
 
-This page is about the other way. projectMM ships a set of **power functions**:
+This page is about the other way. MoonLight ships a set of **power functions**:
 the handful of algorithms that computer graphics has used for forty years to make things look alive. You do not implement them, you compose them. And because most of that vocabulary is reachable from **MoonLive** scripts as well as from compiled C++, a few dozen lines of script gets you an effect that would otherwise be a project.
 
 > Never opened the interface? Start with **[Install & first light](../gettingstarted.md)**
-> and **[How projectMM works](how-projectmm-works.md)**, then come back.
+> and **[How MoonLight works](how-projectmm-works.md)**, then come back.
 
 ---
 
@@ -27,7 +27,7 @@ Fields also compose. Add two, and you get a third. Use one to bend another's coo
 Random numbers look like static. **Noise** looks like nature, because a noise value is close to its neighbors: it wanders instead of jumping.
 
 **Ken Perlin** published it in 1985 (*An Image Synthesizer*), after developing it
-on the movie *Tron*; it later won him an Academy Award. projectMM uses his own revision, *improved noise* (SIGGRAPH 2002), which removes the directional bias of the original.
+on the movie *Tron*; it later won him an Academy Award. MoonLight uses his own revision, *improved noise* (SIGGRAPH 2002), which removes the directional bias of the original.
 
 ```
 int v = noise(x * 20, y * 20, div(t, 32));   // 0..255, smooth in every direction
@@ -68,7 +68,7 @@ int v = fbm(x * 20, y * 20, 2);   // 2 octaves: shape, plus texture on it
 
 Octaves are the **cost knob** of every field effect: doubling them doubles the work per light. Two is usually the sweet spot; four is for when the fixture is small enough to afford it.
 
-One measured detail worth knowing: octaves partly cancel, so their sum is narrower than one octave's range. Four octaves span roughly 54..199 of 0..255 rather than the full sweep. projectMM re-widens the result for you, so `fbm` at any octave count still uses the whole range and your thresholds keep working.
+One measured detail worth knowing: octaves partly cancel, so their sum is narrower than one octave's range. Four octaves span roughly 54..199 of 0..255 rather than the full sweep. MoonLight re-widens the result for you, so `fbm` at any octave count still uses the whole range and your thresholds keep working.
 
 ---
 
@@ -140,7 +140,7 @@ Much of the vocabulary above exists twice: as a C++ kernel, and as a MoonLive bu
 
 The noise family (`noise`, `fbm`, `warp`), `line`, `circle` and the palette calls are the same function under both names. The **transport** kernels are reached differently: `advect16`, `decay16`, `quantize`, `blit16`, `upscale16` and `halfLifeKeep` are compiled-only, and a script uses them through six builtins that wrap them, `trail(1)`, `flowNoise`, `flowCurl`, `trailDecay`, `emitTrail` and `fieldRate`. That is deliberate: a script names a wind and a persistence, and the binding owns the planes, the ping-pong and the narrowing, which is what keeps a whole-plane operation one host call rather than one per light. Compiled-only for now: `disc`, `sphere`, `text`, `sprite`, the SDF catalog and the fluid solver.
 
-**MoonLive** is projectMM's scripting language. Scripts are compiled to native
+**MoonLive** is MoonLight's scripting language. Scripts are compiled to native
 code on the device, so a script is not interpreted per pixel: it runs at machine speed. You edit one in the browser and the picture changes as you type.
 
 The interesting number is how little a script has to say:

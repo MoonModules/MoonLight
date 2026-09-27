@@ -1,0 +1,804 @@
+{
+  "name": "scenario_perf_light",
+  "module": "Layer",
+  "mode": "mutate",
+  "also": [
+    "Layouts",
+    "GridLayout",
+    "Drivers",
+    "PreviewDriver",
+    "SpiralEffect",
+    "NoiseEffect",
+    "MultiplyModifier"
+  ],
+  "description": "Fast incremental performance check: start from the bare minimum render pipeline and add one thing at a time, measuring the tick/heap delta each step, so a regression shows up as a per-step jump. The LIGHT companion to scenario_perf_full, it stays small (≤64²) and driver-free so it runs in seconds. Mutate mode + canvas-preparing: the steps clear_children whatever Layouts/Effects/Drivers the device already had (the pre-wired apparatus like PreviewDriver/Board survives, clear_children only drops user-editable children) and rebuild a known tree, so it runs from any starting state and always measures the same minimal pipeline. Order: (1) minimal = Grid(16²)+Layer+a LIGHT effect (Spiral, a light effect), no modifier/driver/audio/discovery; (2) +MultiplyModifier (adds the mapping LUT, the heavy memory path); (3) +PreviewDriver; (4) swap to a HEAVY effect (Noise) to bracket the compute range; (5) grid 16²→32²→64² to show the size scaling. Full 128²/16K sweep, real LED/network drivers, audio+discovery cost: see scenario_perf_full.",
+  "fixture": [
+    {
+      "name": "fix-layouts",
+      "op": "add_module",
+      "id": "Layouts",
+      "type": "Layouts"
+    },
+    {
+      "name": "fix-layers",
+      "op": "add_module",
+      "id": "Effects",
+      "type": "Effects",
+      "props": {
+        "layouts": "Layouts"
+      }
+    }
+  ],
+  "steps": [
+    {
+      "name": "disable-audio",
+      "description": "Quiet I2S sampling so it can't pollute the tick (optional, device only). Targets the mic by its runtime name 'Audio' (displayNameFor strips the 'Service' suffix; the catalog adds it with id 'Audio').",
+      "op": "set_control",
+      "id": "Audio",
+      "key": "enabled",
+      "value": false,
+      "optional": true
+    },
+    {
+      "name": "disable-devices",
+      "description": "Stop the blocking HTTP discovery sweep (optional, device only).",
+      "op": "set_control",
+      "id": "Devices",
+      "key": "enabled",
+      "value": false,
+      "optional": true
+    },
+    {
+      "name": "clear-layers",
+      "description": "Drop whatever effects/modifiers the device had, start clean.",
+      "op": "clear_children",
+      "id": "Effects"
+    },
+    {
+      "name": "clear-layouts",
+      "op": "clear_children",
+      "id": "Layouts"
+    },
+    {
+      "name": "clear-drivers",
+      "description": "Drop any output driver; the pre-wired PreviewDriver is non-deletable and survives.",
+      "op": "clear_children",
+      "id": "Drivers"
+    },
+    {
+      "name": "build-grid",
+      "op": "add_module",
+      "id": "Grid",
+      "type": "GridLayout",
+      "parent_id": "Layouts",
+      "props": {
+        "width": 16,
+        "height": 16
+      }
+    },
+    {
+      "name": "build-layer",
+      "op": "add_module",
+      "id": "Layer",
+      "type": "Layer",
+      "parent_id": "Effects",
+      "props": {
+        "channelsPerLight": 3
+      }
+    },
+    {
+      "name": "build-fx",
+      "op": "add_module",
+      "id": "FX",
+      "type": "SpiralEffect",
+      "parent_id": "Layer"
+    },
+    {
+      "name": "measure-minimal",
+      "description": "Bare minimum: Grid(16²) + Layer + Spiral (light effect). No modifier, no driver. The render floor everything else is measured against.",
+      "op": "measure",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 1,
+            "p95": 1,
+            "min": 1,
+            "max": 2,
+            "n": 32,
+            "samples": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 113,
+            "p95": 113,
+            "min": 113,
+            "max": 113,
+            "n": 1,
+            "samples": [113]
+          },
+          "free_heap": {
+            "p50": 8515895,
+            "p95": 8515895,
+            "min": 8515895,
+            "max": 8515895,
+            "n": 1,
+            "samples": [8515895]
+          },
+          "max_alloc_block": {
+            "p50": 81920,
+            "p95": 81920,
+            "min": 81920,
+            "max": 81920,
+            "n": 1,
+            "samples": [81920]
+          },
+          "last_updated": "2026-07-24"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 1030,
+            "p95": 1225,
+            "min": 113,
+            "max": 1225,
+            "n": 4,
+            "samples": [113, 1030, 1225, 1217]
+          },
+          "free_heap": {
+            "p50": 83604,
+            "p95": 121536,
+            "min": 83592,
+            "max": 121536,
+            "n": 4,
+            "samples": [121536, 83744, 83604, 83592]
+          },
+          "max_alloc_block": {
+            "p50": 38912,
+            "p95": 94208,
+            "min": 38912,
+            "max": 94208,
+            "n": 4,
+            "samples": [94208, 38912, 38912, 38912]
+          },
+          "last_updated": "2026-09-01"
+        },
+        "esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 54,
+            "p95": 54,
+            "min": 54,
+            "max": 54,
+            "n": 1,
+            "samples": [54]
+          },
+          "free_heap": {
+            "p50": 34024987,
+            "p95": 34024987,
+            "min": 34024987,
+            "max": 34024987,
+            "n": 1,
+            "samples": [34024987]
+          },
+          "max_alloc_block": {
+            "p50": 385024,
+            "p95": 385024,
+            "min": 385024,
+            "max": 385024,
+            "n": 1,
+            "samples": [385024]
+          },
+          "last_updated": "2026-06-25"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 3,
+            "p95": 3,
+            "min": 3,
+            "max": 3,
+            "n": 1,
+            "samples": [3]
+          },
+          "last_updated": "2026-08-22"
+        }
+      }
+    },
+    {
+      "name": "add-modifier",
+      "description": "+MultiplyModifier: allocates the mapping LUT (the heavy memory path vs the 1:1 no-LUT case).",
+      "op": "add_module",
+      "id": "Mod",
+      "type": "MultiplyModifier",
+      "parent_id": "Layer"
+    },
+    {
+      "name": "measure-with-modifier",
+      "description": "Cost of the modifier + LUT over the minimal pipeline. Heap delta vs measure-minimal is the LUT allocation.",
+      "op": "measure",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 1,
+            "p95": 4,
+            "min": 1,
+            "max": 5,
+            "n": 32,
+            "samples": [1, 1, 1, 1, 1, 1, 1, 2, 1, 5, 4, 1, 2, 1, 1, 1, 2, 3, 1, 3, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 1, 1]
+          },
+          "last_updated": "2026-09-03"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 120,
+            "p95": 120,
+            "min": 120,
+            "max": 120,
+            "n": 1,
+            "samples": [120]
+          },
+          "free_heap": {
+            "p50": 8530367,
+            "p95": 8530367,
+            "min": 8530367,
+            "max": 8530367,
+            "n": 1,
+            "samples": [8530367]
+          },
+          "max_alloc_block": {
+            "p50": 86016,
+            "p95": 86016,
+            "min": 86016,
+            "max": 86016,
+            "n": 1,
+            "samples": [86016]
+          },
+          "last_updated": "2026-07-24"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 296,
+            "p95": 457,
+            "min": 103,
+            "max": 457,
+            "n": 4,
+            "samples": [103, 296, 450, 457]
+          },
+          "free_heap": {
+            "p50": 80536,
+            "p95": 118096,
+            "min": 77392,
+            "max": 118096,
+            "n": 4,
+            "samples": [118096, 83292, 77392, 80536]
+          },
+          "max_alloc_block": {
+            "p50": 38912,
+            "p95": 94208,
+            "min": 38912,
+            "max": 94208,
+            "n": 4,
+            "samples": [94208, 38912, 38912, 38912]
+          },
+          "last_updated": "2026-09-01"
+        },
+        "esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 97,
+            "p95": 97,
+            "min": 97,
+            "max": 97,
+            "n": 1,
+            "samples": [97]
+          },
+          "free_heap": {
+            "p50": 34023155,
+            "p95": 34023155,
+            "min": 34023155,
+            "max": 34023155,
+            "n": 1,
+            "samples": [34023155]
+          },
+          "max_alloc_block": {
+            "p50": 385024,
+            "p95": 385024,
+            "min": 385024,
+            "max": 385024,
+            "n": 1,
+            "samples": [385024]
+          },
+          "last_updated": "2026-06-25"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 1,
+            "p95": 1,
+            "min": 1,
+            "max": 1,
+            "n": 1,
+            "samples": [1]
+          },
+          "last_updated": "2026-08-23"
+        }
+      }
+    },
+    {
+      "name": "measure-with-preview",
+      "description": "PreviewDriver is the pre-wired apparatus, it survives clear_children and is already attached, so the measures above already include it (no add step needed; adding a second Preview is rejected). This is a stable repeat of the effect+modifier config for run-to-run variance.",
+      "op": "measure",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 1,
+            "p95": 2,
+            "min": 1,
+            "max": 3,
+            "n": 32,
+            "samples": [1, 1, 1, 1, 1, 1, 2, 1, 1, 3, 2, 2, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1, 2, 2, 2, 1, 1, 1]
+          },
+          "last_updated": "2026-09-05"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 116,
+            "p95": 116,
+            "min": 116,
+            "max": 116,
+            "n": 1,
+            "samples": [116]
+          },
+          "free_heap": {
+            "p50": 8527727,
+            "p95": 8527727,
+            "min": 8527727,
+            "max": 8527727,
+            "n": 1,
+            "samples": [8527727]
+          },
+          "max_alloc_block": {
+            "p50": 86016,
+            "p95": 86016,
+            "min": 86016,
+            "max": 86016,
+            "n": 1,
+            "samples": [86016]
+          },
+          "last_updated": "2026-07-24"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 285,
+            "p95": 356,
+            "min": 102,
+            "max": 356,
+            "n": 4,
+            "samples": [102, 285, 356, 353]
+          },
+          "free_heap": {
+            "p50": 83912,
+            "p95": 120120,
+            "min": 83832,
+            "max": 120120,
+            "n": 4,
+            "samples": [120120, 84776, 83832, 83912]
+          },
+          "max_alloc_block": {
+            "p50": 38912,
+            "p95": 94208,
+            "min": 38912,
+            "max": 94208,
+            "n": 4,
+            "samples": [94208, 38912, 38912, 38912]
+          },
+          "last_updated": "2026-09-01"
+        },
+        "esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 93,
+            "p95": 93,
+            "min": 93,
+            "max": 93,
+            "n": 1,
+            "samples": [93]
+          },
+          "free_heap": {
+            "p50": 34023147,
+            "p95": 34023147,
+            "min": 34023147,
+            "max": 34023147,
+            "n": 1,
+            "samples": [34023147]
+          },
+          "max_alloc_block": {
+            "p50": 385024,
+            "p95": 385024,
+            "min": 385024,
+            "max": 385024,
+            "n": 1,
+            "samples": [385024]
+          },
+          "last_updated": "2026-06-25"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 1,
+            "p95": 1,
+            "min": 1,
+            "max": 1,
+            "n": 1,
+            "samples": [1]
+          },
+          "last_updated": "2026-08-22"
+        }
+      }
+    },
+    {
+      "name": "swap-heavy-fx",
+      "description": "Swap the light effect for a HEAVY one (Noise, simplex per pixel) to bracket the compute range at the same 16².",
+      "op": "replace_module",
+      "id": "FX",
+      "type": "NoiseEffect",
+      "parent_id": "Layer"
+    },
+    {
+      "name": "measure-heavy-16",
+      "op": "measure",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 1,
+            "p95": 1,
+            "min": 1,
+            "max": 1,
+            "n": 32,
+            "samples": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 147,
+            "p95": 147,
+            "min": 147,
+            "max": 147,
+            "n": 1,
+            "samples": [147]
+          },
+          "free_heap": {
+            "p50": 8531663,
+            "p95": 8531663,
+            "min": 8531663,
+            "max": 8531663,
+            "n": 1,
+            "samples": [8531663]
+          },
+          "max_alloc_block": {
+            "p50": 86016,
+            "p95": 86016,
+            "min": 86016,
+            "max": 86016,
+            "n": 1,
+            "samples": [86016]
+          },
+          "last_updated": "2026-07-24"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 223,
+            "p95": 266,
+            "min": 210,
+            "max": 266,
+            "n": 4,
+            "samples": [210, 223, 266, 265]
+          },
+          "free_heap": {
+            "p50": 84484,
+            "p95": 119376,
+            "min": 84128,
+            "max": 119376,
+            "n": 4,
+            "samples": [119376, 84752, 84128, 84484]
+          },
+          "max_alloc_block": {
+            "p50": 38912,
+            "p95": 94208,
+            "min": 38912,
+            "max": 94208,
+            "n": 4,
+            "samples": [94208, 38912, 38912, 38912]
+          },
+          "last_updated": "2026-09-01"
+        },
+        "esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 154,
+            "p95": 154,
+            "min": 154,
+            "max": 154,
+            "n": 1,
+            "samples": [154]
+          },
+          "free_heap": {
+            "p50": 34021587,
+            "p95": 34021587,
+            "min": 34021587,
+            "max": 34021587,
+            "n": 1,
+            "samples": [34021587]
+          },
+          "max_alloc_block": {
+            "p50": 385024,
+            "p95": 385024,
+            "min": 385024,
+            "max": 385024,
+            "n": 1,
+            "samples": [385024]
+          },
+          "last_updated": "2026-06-25"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 2,
+            "p95": 2,
+            "min": 2,
+            "max": 2,
+            "n": 1,
+            "samples": [2]
+          },
+          "last_updated": "2026-08-22"
+        }
+      }
+    },
+    {
+      "name": "grid-32-w",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 32
+    },
+    {
+      "name": "grid-32-h",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 32
+    },
+    {
+      "name": "measure-heavy-32",
+      "op": "measure",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 4,
+            "p95": 5,
+            "min": 4,
+            "max": 6,
+            "n": 32,
+            "samples": [4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 6, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 4, 4, 4, 4, 4]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 458,
+            "p95": 458,
+            "min": 458,
+            "max": 458,
+            "n": 1,
+            "samples": [458]
+          },
+          "free_heap": {
+            "p50": 8518903,
+            "p95": 8518903,
+            "min": 8518903,
+            "max": 8518903,
+            "n": 1,
+            "samples": [8518903]
+          },
+          "max_alloc_block": {
+            "p50": 86016,
+            "p95": 86016,
+            "min": 86016,
+            "max": 86016,
+            "n": 1,
+            "samples": [86016]
+          },
+          "last_updated": "2026-07-24"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 644,
+            "p95": 790,
+            "min": 531,
+            "max": 790,
+            "n": 4,
+            "samples": [531, 644, 781, 790]
+          },
+          "free_heap": {
+            "p50": 79512,
+            "p95": 114320,
+            "min": 77656,
+            "max": 114320,
+            "n": 4,
+            "samples": [114320, 80156, 77656, 79512]
+          },
+          "max_alloc_block": {
+            "p50": 38912,
+            "p95": 94208,
+            "min": 38912,
+            "max": 94208,
+            "n": 4,
+            "samples": [94208, 38912, 38912, 38912]
+          },
+          "last_updated": "2026-09-01"
+        },
+        "esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 532,
+            "p95": 532,
+            "min": 532,
+            "max": 532,
+            "n": 1,
+            "samples": [532]
+          },
+          "free_heap": {
+            "p50": 34018071,
+            "p95": 34018071,
+            "min": 34018071,
+            "max": 34018071,
+            "n": 1,
+            "samples": [34018071]
+          },
+          "max_alloc_block": {
+            "p50": 385024,
+            "p95": 385024,
+            "min": 385024,
+            "max": 385024,
+            "n": 1,
+            "samples": [385024]
+          },
+          "last_updated": "2026-06-25"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 9,
+            "p95": 9,
+            "min": 9,
+            "max": 9,
+            "n": 1,
+            "samples": [9]
+          },
+          "last_updated": "2026-08-21"
+        }
+      }
+    },
+    {
+      "name": "grid-64-w",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 64
+    },
+    {
+      "name": "grid-64-h",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 64
+    },
+    {
+      "name": "measure-heavy-64",
+      "op": "measure",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 16,
+            "p95": 21,
+            "min": 15,
+            "max": 25,
+            "n": 32,
+            "samples": [16, 18, 15, 16, 16, 15, 16, 15, 16, 17, 16, 16, 15, 15, 21, 17, 16, 15, 15, 15, 15, 16, 16, 15, 16, 25, 20, 17, 16, 16, 16, 15]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2485,
+            "p95": 2485,
+            "min": 2485,
+            "max": 2485,
+            "n": 1,
+            "samples": [2485]
+          },
+          "free_heap": {
+            "p50": 8475579,
+            "p95": 8475579,
+            "min": 8475579,
+            "max": 8475579,
+            "n": 1,
+            "samples": [8475579]
+          },
+          "max_alloc_block": {
+            "p50": 65536,
+            "p95": 65536,
+            "min": 65536,
+            "max": 65536,
+            "n": 1,
+            "samples": [65536]
+          },
+          "last_updated": "2026-07-24"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 2183,
+            "p95": 3671,
+            "min": 1958,
+            "max": 3671,
+            "n": 4,
+            "samples": [1958, 2183, 3671, 2918]
+          },
+          "free_heap": {
+            "p50": 58592,
+            "p95": 96268,
+            "min": 54796,
+            "max": 96268,
+            "n": 4,
+            "samples": [96268, 60328, 58592, 54796]
+          },
+          "max_alloc_block": {
+            "p50": 38912,
+            "p95": 73728,
+            "min": 38912,
+            "max": 73728,
+            "n": 4,
+            "samples": [73728, 38912, 38912, 38912]
+          },
+          "last_updated": "2026-09-01"
+        },
+        "esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2038,
+            "p95": 2038,
+            "min": 2038,
+            "max": 2038,
+            "n": 1,
+            "samples": [2038]
+          },
+          "free_heap": {
+            "p50": 33991263,
+            "p95": 33991263,
+            "min": 33991263,
+            "max": 33991263,
+            "n": 1,
+            "samples": [33991263]
+          },
+          "max_alloc_block": {
+            "p50": 385024,
+            "p95": 385024,
+            "min": 385024,
+            "max": 385024,
+            "n": 1,
+            "samples": [385024]
+          },
+          "last_updated": "2026-06-25"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 35,
+            "p95": 35,
+            "min": 35,
+            "max": 35,
+            "n": 1,
+            "samples": [35]
+          },
+          "last_updated": "2026-08-23"
+        }
+      }
+    }
+  ]
+}

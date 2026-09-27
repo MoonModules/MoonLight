@@ -7,7 +7,7 @@ namespace mm {
 
 /// Particle-system effect with spawned, moving points.
 /// @card ParticlesEffect.gif
-/// Author: WildCats08 / @Brandon502 (MoonLight), https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
+/// Author: WildCats08 / @Brandon502 (MoonLight), https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 ///
 /// Points drift, bounce off the walls and leave a fading trail behind them.
 /// The physics belong to `particles::Pool`, and what stays here is the drift rate and the hue map.

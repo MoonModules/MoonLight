@@ -1,4 +1,4 @@
-# projectMM
+# MoonLight
 
 Drive large LED installations and DMX fixtures. One source tree drives ESP32, Teensy, Raspberry Pi, macOS, Windows and Linux.
 
@@ -8,7 +8,7 @@ Drive large LED installations and DMX fixtures. One source tree drives ESP32, Te
 
 No hardware handy? The [desktop build](https://github.com/MoonModules/projectMM/releases/latest) runs the same UI and effect pipeline on macOS, Windows and Linux, driving fixtures over Art-Net, DDP or E1.31.
 
-If you like projectMM, give it a star, fork it, or open an issue. It helps the project get noticed.
+If you like MoonLight, give it a star, fork it, or open an issue. It helps the project get noticed.
 
 ## What you get
 
@@ -38,7 +38,7 @@ Written against ESP-IDF directly with no third-party libraries, and with our own
 
 ## The parts
 
-projectMM is one system in nine named parts. Each has a page that owns its detail.
+MoonLight is one system in nine named parts. Each has a page that owns its detail.
 
 ```mermaid
 flowchart TB
@@ -164,7 +164,7 @@ Per-grid and per-device tables, free-heap figures, and why WiFi costs what it do
 
 **ESP32**: open the [web installer](https://moonmodules.org/projectMM/install/) in Chrome or Edge ([MoonInstaller](#mooninstaller)). It walks you through device, firmware, flashing and network setup.
 
-**Desktop**: download your build from the [releases page](https://github.com/MoonModules/projectMM/releases), then open `http://localhost:8080/`. Step by step with screenshots: [Installing projectMM on a desktop](docs/how-to/installing-to-desktop.md).
+**Desktop**: download your build from the [releases page](https://github.com/MoonModules/projectMM/releases), then open `http://localhost:8080/`. Step by step with screenshots: [Installing MoonLight on a desktop](docs/how-to/installing-to-desktop.md).
 
 - **macOS arm64**: `.dmg`, drag to Applications. Ad-hoc signed, so right-click and Open the first time.
 - **Windows x64**: `-setup.exe` installs for your user without an admin prompt. Unsigned, so SmartScreen asks once.
@@ -194,7 +194,7 @@ Open `http://localhost:8420` to build, run, test, flash and discover devices. Fu
 
 ## How we work
 
-projectMM is built by AI agents under tight human direction. Everything in this repository is authored by agents; the **product owner** writes none of it directly. What the product owner authors is the [process](CLAUDE.md), the [architecture](docs/explanation/architecture/index.md), and the [module specifications](docs/moonmodules/), then decides what to build, reviews every line, runs the hardware tests, and controls every commit and release. Agents write; the product owner thinks.
+MoonLight is built by AI agents under tight human direction. Everything in this repository is authored by agents; the **product owner** writes none of it directly. What the product owner authors is the [process](CLAUDE.md), the [architecture](docs/explanation/architecture/index.md), and the [module specifications](docs/moonmodules/), then decides what to build, reviews every line, runs the hardware tests, and controls every commit and release. Agents write; the product owner thinks.
 
 The roles, the principles and the full process: [CLAUDE.md](CLAUDE.md).
 
@@ -209,20 +209,20 @@ This is the current iteration of years of LED and light-system development, and 
 | **StarLight** | Standalone LED firmware | [ewowi/StarLight](https://github.com/ewowi/StarLight) |
 | **MoonLight** | Ground-up build: 60+ effects, memory-optimized mapping, 11 driver types | [ewowi/MoonLight](https://github.com/ewowi/MoonLight) |
 
-We built and maintained these, so projectMM rests on our own hands-on experience. Their lessons are distilled in [`docs/work/past/`](docs/work/past/index.md). We carry the ideas forward and write our own code, crediting by name whoever inspired a feature.
+We built and maintained these, so MoonLight rests on our own hands-on experience. Their lessons are distilled in [`docs/work/past/`](docs/work/past/index.md). We carry the ideas forward and write our own code, crediting by name whoever inspired a feature.
 
 ## Credits
 
-People whose work directly shaped parts of projectMM. We study their thinking with respect and write our own code against our architecture:
+People whose work directly shaped parts of MoonLight. We study their thinking with respect and write our own code against our architecture:
 
-- **[WLED](https://github.com/wled/WLED) and [WLED-MM](https://github.com/MoonModules/WLED)**: projectMM is born out of WLED and takes the usermod idea further, where everything is a module. A projectMM device also acts as a WLED device and talks to WLED devices.
+- **[WLED](https://github.com/wled/WLED) and [WLED-MM](https://github.com/MoonModules/WLED)**: MoonLight is born out of WLED and takes the usermod idea further, where everything is a module. A MoonLight device also acts as a WLED device and talks to WLED devices.
 - **Frank ([softhack007](https://github.com/softhack007))**: main author of the WLED-MM audio-reactive usermod. The ideas behind [AudioService](docs/moonmodules/core/moxygen/AudioService.md), including the adaptive noise gate analyzed with his permission, descend from years of collaboration.
 - **[troyhacks](https://github.com/troyhacks/WLED)**: reworked the WLED-MM audio DSP onto Espressif's [esp-dsp](https://github.com/espressif/esp-dsp) FFT, the same choice AudioService makes.
 - **[Stefan Petrick](https://github.com/StefanPetrick)**: the generative-field vocabulary from [Animartrix](https://github.com/StefanPetrick/animartrix), [FunkyNoise](https://github.com/StefanPetrick/FunkyNoise) and [ColorTrails](https://github.com/StefanPetrick/ColorTrails). [Aurora](docs/moonmodules/light/effects.md#aurora), [PolarNoise](docs/moonmodules/light/effects.md#polarnoise), [Tunnel](docs/moonmodules/light/effects.md#tunnel) and [Trails](docs/moonmodules/light/effects.md#trails) sit in that tradition, written on the published algorithms underneath.
 - **[hpwit](https://github.com/hpwit) (Yves Bazin)**: the clockless I2S, RMT and Parlio driver techniques, and the [ESPLiveScript](https://github.com/hpwit/ESPLiveScript) engine behind MoonLive.
-- **Christophe Gagnier ([@Moustachauve](https://github.com/Moustachauve))**: author of the native [WLED-Android](https://github.com/Moustachauve/WLED-Android) and [WLED-iOS](https://github.com/Moustachauve/WLED-iOS) apps, whose source let projectMM devices appear in them.
+- **Christophe Gagnier ([@Moustachauve](https://github.com/Moustachauve))**: author of the native [WLED-Android](https://github.com/Moustachauve/WLED-Android) and [WLED-iOS](https://github.com/Moustachauve/WLED-iOS) apps, whose source let MoonLight devices appear in them.
 - **The [Improv Wi-Fi](https://github.com/improv-wifi) project**: the open serial provisioning standard the web installer uses.
-- **[FastLED](https://github.com/FastLED/FastLED)**: the canonical LED-effects library whose names and models projectMM carries forward (`scale8`, `sin8`, the gradient-palette model, the `beatsin8` family) so a contributor recognizes them on sight. The implementations are our own, integer-only and hot-path-tuned.
+- **[FastLED](https://github.com/FastLED/FastLED)**: the canonical LED-effects library whose names and models MoonLight carries forward (`scale8`, `sin8`, the gradient-palette model, the `beatsin8` family) so a contributor recognizes them on sight. The implementations are our own, integer-only and hot-path-tuned.
 - **[FPP](https://github.com/FalconChristmas/fpp) (Falcon Player)**: the show player that prompted [PanelCardDriver](docs/moonmodules/light/drivers.md#panelcard): if a Linux host can feed a wall of HUB75 panels, so can the board already rendering them.
 - **[Tasmota](https://github.com/arendst/Tasmota) and Mathieu Carbou's [MycilaSafeBoot](https://github.com/mathieucarbou/MycilaSafeBoot)**: the safeboot pattern behind [MoonBase](docs/explanation/architecture/moonbase.md), our from-scratch minimal take on it.
 - **Damian Schneider ([dedehai](https://github.com/DedeHai))**: author of the WLED Particle System, whose shape our [particle kernel](docs/moonmodules/light/power-functions.md#particles) follows in fixed point.
@@ -230,7 +230,7 @@ People whose work directly shaped parts of projectMM. We study their thinking wi
 
 ## Contributing
 
-projectMM is a community project, shaped by the people who use it:
+MoonLight is a community project, shaped by the people who use it:
 
 - **Ideas and requests**: an effect, a layout, a driver, a fixture you want supported? [Open an issue](https://github.com/MoonModules/projectMM/issues).
 - **Help build it**: pick something from the [issues](https://github.com/MoonModules/projectMM/issues), or propose a module. The process is in [CLAUDE.md](CLAUDE.md).

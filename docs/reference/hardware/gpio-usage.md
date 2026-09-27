@@ -1,6 +1,6 @@
 # GPIO usage per MCU — hardware reference
 
-Which GPIOs are safe to wire a mic, an LED strand, or an Ethernet PHY to on each MCU projectMM supports, so a bench build picks a pin from here instead of re-scraping the datasheet. This is **chip**-level (which GPIOs the silicon reserves or role-assigns); a specific product's *board* wiring is its catalog entry in [`mooninstaller/deviceModels.json`](../../mooninstaller/deviceModels.json), and the one fully-mapped board is the [ESP32-S31 coreboard](esp32-s31-coreboard.md).
+Which GPIOs are safe to wire a mic, an LED strand, or an Ethernet PHY to on each MCU MoonLight supports, so a bench build picks a pin from here instead of re-scraping the datasheet. This is **chip**-level (which GPIOs the silicon reserves or role-assigns); a specific product's *board* wiring is its catalog entry in [`mooninstaller/deviceModels.json`](../../mooninstaller/deviceModels.json), and the one fully-mapped board is the [ESP32-S31 coreboard](esp32-s31-coreboard.md).
 
 Each chip lists two kinds of pin to avoid:
 
@@ -86,4 +86,4 @@ For the S31 coreboard, take pins from the coreboard reference's "free" set rathe
 
 ## The rule behind the defaults
 
-projectMM leaves peripheral pins **unset** by default and lets the deviceModel catalog fix them only where the *product* wires them (the [Defaults rule](../../contributing/coding-standards.md#defaults)): a board-soldered PHY or codec defaults its pins; a user-soldered mic or LED strand stays unset so a guess can't drive a pin the user committed elsewhere. This table is what to consult when choosing that user pin, or when writing a new board's catalog entry.
+MoonLight leaves peripheral pins **unset** by default and lets the deviceModel catalog fix them only where the *product* wires them (the [Defaults rule](../../contributing/coding-standards.md#defaults)): a board-soldered PHY or codec defaults its pins; a user-soldered mic or LED strand stays unset so a guess can't drive a pin the user committed elsewhere. This table is what to consult when choosing that user pin, or when writing a new board's catalog entry.

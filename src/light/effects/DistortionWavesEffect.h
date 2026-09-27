@@ -7,7 +7,7 @@ namespace mm {
 
 /// Interference effect: overlaid moving waves distorting the field.
 /// @card DistortionWavesEffect.gif
-/// Author: ldirko & blazoncek (WLED port), https://editor.soulmatelights.com/gallery/1089-distorsion-waves , https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
+/// Author: ldirko & blazoncek (WLED port), https://editor.soulmatelights.com/gallery/1089-distorsion-waves , via the predecessor, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
 ///
 /// Two sine waves whose summed value drives the hue, giving a flowing moire field.
 /// They run at independent frequencies and slightly different time rates, so they beat.

@@ -46,7 +46,7 @@ public:
     /// Say what this setting exchanges, on the status slot rather than only in the policy.
     void refreshStatus() {
         if (consent_) clearStatus();
-        else setStatus("Off. Switch on to post to a public board shared by projectMM devices. "
+        else setStatus("Off. Switch on to post to a public board shared by MoonLight devices. "
                        "What you type is readable by anyone, permanently, and cannot be withdrawn. "
                        "Each message carries the country it came from and the time it was sent.");
     }

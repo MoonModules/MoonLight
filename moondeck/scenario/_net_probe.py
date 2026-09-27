@@ -51,7 +51,7 @@ def build_e131(universe: int, sequence: int, data: bytes) -> bytes:
     pkt[22:38] = b"run_network_live"                  # CID (any stable 16 bytes)
     pkt[38:40] = (0x7000 | (total - 38)).to_bytes(2, "big")
     pkt[43] = 0x02                                    # framing vector
-    pkt[44:53] = b"projectMM"                         # source name (NUL-padded)
+    pkt[44:53] = b"MoonLight"                         # source name (NUL-padded)
     pkt[108] = 100                                    # priority
     pkt[111] = sequence & 0xFF
     pkt[113:115] = universe.to_bytes(2, "big")

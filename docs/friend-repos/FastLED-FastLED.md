@@ -1,6 +1,6 @@
 # FastLED: monthly activity digest
 
-What landed on [FastLED](https://github.com/FastLED/FastLED)'s main branch, month by month. External-context reference (like the v1/v2/MoonLight inventories), a factual log of a friend repo's releases, not projectMM's own history or roadmap. Newest month on top. The reusable prompt that generates these digests lives in [README.md](index.md).
+What landed on [FastLED](https://github.com/FastLED/FastLED)'s main branch, month by month. External-context reference (like the v1/v2/MoonLight inventories), a factual log of a friend repo's releases, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these digests lives in [README.md](index.md).
 
 ## August 2026
 

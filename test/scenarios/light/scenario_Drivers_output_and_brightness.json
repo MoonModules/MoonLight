@@ -1,0 +1,135 @@
+{
+  "name": "scenario_Drivers_output_and_brightness",
+  "module": "Drivers",
+  "mode": "mutate",
+  "also": [
+    "PreviewDriver",
+    "LightPresetsModule"
+  ],
+  "description": "How a finished frame leaves the device. The global brightness and the master switch are the two controls every installation touches, and both must apply on the next frame rather than at the next boot. Brightness defaults low so a fresh board on USB cannot brown out at full white, which is a safety default worth pinning.",
+  "reset": [
+    {
+      "name": "reset-brightness",
+      "description": "The boot default, so this scenario measures from where a fresh device starts.",
+      "op": "set_control",
+      "id": "Drivers",
+      "key": "brightness",
+      "value": 20
+    },
+    {
+      "name": "reset-on",
+      "op": "set_control",
+      "id": "Drivers",
+      "key": "on",
+      "value": true
+    }
+  ],
+  "fixture": [
+    {
+      "name": "fix-Drivers",
+      "op": "add_module",
+      "id": "Drivers",
+      "type": "Drivers"
+    },
+    {
+      "name": "fix-LightPresets",
+      "op": "add_module",
+      "id": "LightPresets",
+      "type": "LightPresetsModule",
+      "parent_id": "Drivers"
+    },
+    {
+      "name": "fix-Preview",
+      "op": "add_module",
+      "id": "Preview",
+      "type": "PreviewDriver",
+      "parent_id": "Drivers"
+    }
+  ],
+  "steps": [
+    {
+      "name": "brightness-starts-low",
+      "description": "A fresh device is dim on purpose: full white on USB 5V browns a board out. The reset block above is what makes this readable after another scenario has run.",
+      "op": "expect_control",
+      "id": "Drivers",
+      "key": "brightness",
+      "equals": "20"
+    },
+    {
+      "name": "turn-it-up",
+      "description": "What a user does once the board is powered properly.",
+      "op": "set_control",
+      "id": "Drivers",
+      "key": "brightness",
+      "value": 180
+    },
+    {
+      "name": "it-took",
+      "op": "expect_control",
+      "id": "Drivers",
+      "key": "brightness",
+      "equals": "180"
+    },
+    {
+      "name": "measure-bright",
+      "op": "measure",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 48,
+            "p95": 62,
+            "min": 21,
+            "max": 62,
+            "n": 9,
+            "samples": [40, 43, 48, 48, 24, 62, 54, 21, 57]
+          },
+          "last_updated": "2026-09-24"
+        }
+      }
+    },
+    {
+      "name": "master-off",
+      "description": "The master switch blacks the output without touching brightness, so toggling back restores the level.",
+      "op": "set_control",
+      "id": "Drivers",
+      "key": "on",
+      "value": false
+    },
+    {
+      "name": "it-is-off",
+      "op": "expect_control",
+      "id": "Drivers",
+      "key": "on",
+      "equals": "false"
+    },
+    {
+      "name": "the-level-was-kept",
+      "description": "Brightness is untouched by the switch, which is why toggling back does not lose the setting.",
+      "op": "expect_control",
+      "id": "Drivers",
+      "key": "brightness",
+      "equals": "180"
+    },
+    {
+      "name": "master-on",
+      "op": "set_control",
+      "id": "Drivers",
+      "key": "on",
+      "value": true
+    },
+    {
+      "name": "restart",
+      "description": "Restart: an installation's brightness is set once and expected to stay.",
+      "op": "reboot",
+      "timeout": 60
+    },
+    {
+      "name": "brightness-survived",
+      "op": "expect_control",
+      "id": "Drivers",
+      "key": "brightness",
+      "equals": "180"
+    }
+  ]
+}

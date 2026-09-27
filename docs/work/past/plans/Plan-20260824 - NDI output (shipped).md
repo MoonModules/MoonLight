@@ -1,11 +1,11 @@
-# Plan — NDI output: projectMM as a video source
+# Plan — NDI output: MoonLight as a video source
 
 ## The licensing constraint, and what it dictates
 
-projectMM is GPL-3.0. The NDI runtime is proprietary and its licence requires a redistributor's own
-EULA to carry NDI's terms forward, which GPL-3 forbids. **So projectMM must not redistribute it.**
+MoonLight is GPL-3.0. The NDI runtime is proprietary and its licence requires a redistributor's own
+EULA to carry NDI's terms forward, which GPL-3 forbids. **So MoonLight must not redistribute it.**
 
-This is not a blocker; it is a design constraint projectMM has already met once. **Npcap** is the
+This is not a blocker; it is a design constraint MoonLight has already met once. **Npcap** is the
 precedent: proprietary, required for raw L2 on Windows, and
 [platform_desktop.cpp:814](../../../src/platform/desktop/platform_desktop.cpp) resolves `wpcap.dll`
 with `LoadLibrary` rather than linking it, declaring the five functions with pcap's own signatures
@@ -62,7 +62,7 @@ also turns the rendered buffer into a frame for a remote consumer:
 
 ### What this deliberately does not do
 
-- **No audio.** NDI carries it; projectMM has no video-audio pairing to send.
+- **No audio.** NDI carries it; MoonLight has no video-audio pairing to send.
 - **No NDI HX / compression choice.** Ship the default; add a control only if a user needs it.
 - **No receive.** Its own feature.
 
@@ -78,7 +78,7 @@ also turns the rendered buffer into a frame for a remote consumer:
 3. **Docs.** A driver card in `docs/moonmodules/light/drivers.md`, and a short section in the
    panel-cards tutorial's sibling — where to install the runtime per OS, exactly as §6.1 does for
    Npcap.
-4. **Bench.** Install the NDI runtime and OBS with the DistroAV plugin; confirm projectMM appears as
+4. **Bench.** Install the NDI runtime and OBS with the DistroAV plugin; confirm MoonLight appears as
    a source by name and that the wall's image arrives. **This is the gate: an output path is not
    verified until a receiver shows the frames.**
 

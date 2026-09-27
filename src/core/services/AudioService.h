@@ -23,11 +23,14 @@ namespace mm {
 ///
 /// @moreinfo
 ///
-/// ## Three modes
+/// ## The modes run simple to advanced
 ///
-/// Local runs its own input and analyzes it here. Receive is a sink a peer drives.
-/// Simulate synthesizes a signal for a demo or a test.
+/// Simulate synthesizes a signal for a demo or a test. Receive is a sink a peer drives.
+/// Local runs the device's own input and analyzes it here.
 /// A device is exactly one of these, and changing it acquires or releases hardware live.
+///
+/// They are ordered by what each one needs: simulate needs nothing, receive needs a network, local needs a part wired to pins.
+/// So the default is the first entry rather than an index that depended on the platform, and a device demonstrates sound before anything is attached to it.
 ///
 /// ## The pipeline
 ///
@@ -89,14 +92,19 @@ public:
     static constexpr uint8_t kMaxGainDb = 24;
     /// Which synthesized pattern to produce: a plausible song, or a deterministic march.
     uint8_t  simulate = 0;
-    /// The source: its own input, the network, or a synthesized signal.
+    /// The source: a synthesized signal, the network, or its own input.
     uint8_t  mode = 0;
-    /// Which index means simulate, the network mode existing only where the network does.
-    static constexpr uint8_t kSimMode = platform::hasNetwork ? 2 : 1;
+    /// A synthesized signal, so a device demonstrates sound before anything is wired to it.
+    static constexpr uint8_t kSimMode = 0;
+    /// Another device's analysis, over the network that has to exist to carry it.
+    static constexpr uint8_t kReceiveMode = 1;
+    /// This device's own microphone, which needs pins and a part to be connected to them.
+    static constexpr uint8_t kLocalMode = platform::hasNetwork ? 2 : 1;
     /// Whether to broadcast the local analysis, which only the local mode can do.
     bool     send = false;
     /// What the sync machinery does:
-    uint8_t  sync() const { return (platform::hasNetwork && mode == 1) ? 2 : (mode == 0 && send ? 1 : 0); }
+    uint8_t  sync() const { return (platform::hasNetwork && mode == kReceiveMode) ? 2
+                                 : (mode == kLocalMode && send ? 1 : 0); }
     /// The port both directions use, which must match on both ends.
     uint16_t syncPort = WLED_SYNC_PORT;
 
@@ -111,13 +119,14 @@ public:
     /// Declare the mode, then only the controls that mode needs.
     void defineControls() override {
         // The mode is the identity, so it comes first and everything else is its detail.
-        const bool localMode = (mode == 0);
+        const bool localMode = (mode == kLocalMode);
         const bool simMode = (mode == kSimMode);
+        // Ordered simple to advanced, so the default is the first entry rather than an index: @xref{the-modes-run-simple-to-advanced}.
         if constexpr (platform::hasNetwork) {
-            static constexpr const char* kModeOptions[] = {"local audio", "receive network", "simulate"};
+            static constexpr const char* kModeOptions[] = {"simulate", "receive network", "local audio"};
             controls_.addSelect("mode", mode, kModeOptions, 3);
         } else {
-            static constexpr const char* kModeOptions[] = {"local audio", "simulate"};
+            static constexpr const char* kModeOptions[] = {"simulate", "local audio"};
             controls_.addSelect("mode", mode, kModeOptions, 2);
         }
         // The input and its analysis, shown only in the local mode.
@@ -190,7 +199,7 @@ public:
     /// Claim the frame seat, then acquire only the hardware the current mode needs.
     void prepare() override {
         micSeat_.claim();       // the first live instance wins the seat, in any mode
-        if (mode == 0) {
+        if (mode == kLocalMode) {
             reinit();           // only this mode runs a peripheral
         } else {
             deinit();           // the others free the channel and its pins
@@ -214,6 +223,11 @@ public:
     // Read-only views of the socket lifecycle, so a test can assert it through the public tick.
     /// Whether the sync socket is open.
     bool syncOpenForTest() const { return syncOpen_; }
+
+    /// Whether a mic diagnosis is outstanding, which suppresses the sync line while it is.
+    bool micStatusStaleForTest() const { return micStatusStale_; }
+    /// Set the flag a local-mode diagnosis would have set, so leaving that mode can be tested anywhere.
+    void setMicStatusStaleForTest(bool stale) { micStatusStale_ = stale; }
     /// The sync state as the card shows it, which is the reported state itself.
     const char* syncStatusForTest() const { return status() ? status() : ""; }
     /// How often a send may go out.
@@ -345,7 +359,7 @@ public:
 
     void tick1s() MM_NONBLOCKING override {
         // The mirror of the LED driver's retry:
-        if (mode == 0 && !inited_
+        if (mode == kLocalMode && !inited_
             && platform::audioMicSharedBusFree(micMode == 1 ? platform::MicMode::Pdm
                                                             : platform::MicMode::I2sStd)) reinit();
         std::snprintf(levelStr_, sizeof(levelStr_), "%u", static_cast<unsigned>(levelPeak_));
@@ -356,7 +370,7 @@ public:
         levelPeak_ = 0;   // reset for the next window
 
         // Mic-health diagnosis from the 1 s tallies (see the read path).
-        const bool directMicLive = platform::hasI2sMic && inited_ && mode == 0
+        const bool directMicLive = platform::hasI2sMic && inited_ && mode == kLocalMode
                                    && platform::audioCodecType == platform::CodecType::None;
         if (directMicLive) {
             if (micSamples1s_ == 0)
@@ -368,7 +382,7 @@ public:
             else if (micStatusStale_)
                 setStatus("", Severity::Status);   // data flowing again, clear a prior diagnosis
             micStatusStale_ = (micSamples1s_ == 0 || micNonzero1s_ == 0);
-        } else if (mode != 0) {
+        } else if (mode != kLocalMode) {
             // No mic to diagnose on this path (Receive or Simulate), so no diagnosis may be OUTSTANDING.
             micStatusStale_ = false;
         }

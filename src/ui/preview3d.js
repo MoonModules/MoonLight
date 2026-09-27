@@ -389,7 +389,7 @@ function initWebGL() {
 // One canvas throughout — only the wrapper's class/position change, so the WebGL
 // context is never lost. Width drives the default mode; a manual toggle overrides.
 const PIP_BELOW = 960;           // px: auto-PiP under this width
-const LS_KEY = "projectMM.preview.v1";   // {corner, dismissed, forcePip}
+const LS_KEY = "MoonLight.preview.v1";   // {corner, dismissed, forcePip}
 
 // Hostile-storage guards (a 3-line idiom shared with the rest of the UI; localStorage
 // throws in private mode / when disabled, and may hold a hand-edited non-JSON value).

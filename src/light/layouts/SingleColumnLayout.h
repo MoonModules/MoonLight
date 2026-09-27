@@ -6,14 +6,14 @@
 namespace mm {
 
 /// Layout of one vertical LED column (1D).
-/// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
+/// Author: MoonLight, https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
 ///
 /// @moreinfo
 ///
 /// A vertical line of lights at a fixed x, running along y.
 /// The geometry is reproduced exactly: the source emits one light per y across the height, forward or reversed.
 ///
-/// MoonLight's pin and wiring controls are dropped, since a projectMM layout emits coordinates only and the driver owns pins.
+/// MoonLight's pin and wiring controls are dropped, since a MoonLight layout emits coordinates only and the driver owns pins.
 class SingleColumnLayout : public LayoutBase {
 public:
     /// The catalog tags this layout carries.

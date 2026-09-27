@@ -86,7 +86,7 @@ TEST_CASE("TasksModule: the tasks list renders the injected RTOS tasks with thei
     REQUIRE(src != nullptr);
     REQUIRE(src->listRowCount() == 2);
 
-    // Rows hold a STABLE order across refreshes (the RTOS snapshot order is unstable, it shifts as tasks change state, which made the once-a-second list jump). projectMM's own tasks float to the top (the render task "main" and "mm"-prefixed workers), RTOS system tasks sink below, alphabetical within each group. So "main" (ours) is row 0 and "IDLE1" (system) is row 1.
+    // Rows hold a STABLE order across refreshes (the RTOS snapshot order is unstable, it shifts as tasks change state, which made the once-a-second list jump). MoonLight's own tasks float to the top (the render task "main" and "mm"-prefixed workers), RTOS system tasks sink below, alphabetical within each group. So "main" (ours) is row 0 and "IDLE1" (system) is row 1.
     JsonSink r0; src->writeListRow(r0, 0);
     std::string row0(r0.data());
     CHECK(row0.find("\"name\":\"main\"") != std::string::npos);    // our render task, floated to the top
@@ -102,8 +102,8 @@ TEST_CASE("TasksModule: the tasks list renders the injected RTOS tasks with thei
     CHECK(row1.find("\"cpu\":") == std::string::npos);             // kTaskCpuUnmeasured → field omitted
 }
 
-// The row order: projectMM's OWN tasks (render "main" + "mm"-prefixed workers) float to the top so the user sees them first, RTOS system tasks sink below, alphabetical within each group, regardless of the (unstable) order the RTOS snapshot returns them in. Feed a deliberately-jumbled snapshot and pin the exact resulting order.
-TEST_CASE("TasksModule: projectMM tasks sort to the top, system tasks below, alphabetical within") {
+// The row order: MoonLight's OWN tasks (render "main" + "mm"-prefixed workers) float to the top so the user sees them first, RTOS system tasks sink below, alphabetical within each group, regardless of the (unstable) order the RTOS snapshot returns them in. Feed a deliberately-jumbled snapshot and pin the exact resulting order.
+TEST_CASE("TasksModule: MoonLight tasks sort to the top, system tasks below, alphabetical within") {
     // Input order is scrambled (system, ours, system, ours, ...), exactly the kind of shuffle the RTOS snapshot produces frame to frame.
     const platform::TaskInfo snap[] = {
         {"Tmr Svc", platform::TaskState::Blocked, -1, 1, 900, platform::kTaskCpuUnmeasured},
@@ -165,7 +165,7 @@ TEST_CASE("TasksModule: the render task's detail nests the modules + the ∑/tic
     const ListSource* src = tasksSource(tasks);
     REQUIRE(src != nullptr);
 
-    // projectMM's tasks float to the top: the render task "main" (ours) is row 0, "IDLE1" (system) is row 1. Row 0 ("main") = the render task → its detail nests the modules + the cross-check line.
+    // MoonLight's tasks float to the top: the render task "main" (ours) is row 0, "IDLE1" (system) is row 1. Row 0 ("main") = the render task → its detail nests the modules + the cross-check line.
     JsonSink d0; src->writeListRowDetail(d0, 0);
     std::string det0(d0.data());
     CHECK(det0.find("Alpha") != std::string::npos);

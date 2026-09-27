@@ -1,0 +1,149 @@
+{
+  "name": "03-second-look",
+  "description": "The parts of the interface every card shares, each one pressed so you see what it does.",
+  "speed": 1.5,
+  "steps": [
+    {
+      "action": "chapter",
+      "title": "The second look",
+      "description": "Five buttons, pressed",
+      "seconds": 2.0
+    },
+    {
+      "action": "open_card",
+      "module": "System",
+      "caption": "Every card is built the same way, so learning one teaches you all of them.",
+      "hold": 2.2
+    },
+    {
+      "action": "choose",
+      "module": "System",
+      "control": "mode",
+      "value": "expert",
+      "caption": "Mode decides how much you see. Expert adds controls, each marked with a stripe.",
+      "hold": 2.6
+    },
+    {
+      "action": "choose",
+      "module": "System",
+      "control": "mode",
+      "value": "developer",
+      "caption": "Developer shows the rest, so you can tell a setting is there before you need it.",
+      "hold": 2.6
+    },
+    {
+      "action": "choose",
+      "module": "System",
+      "control": "mode",
+      "value": "user",
+      "caption": "Back to user: the same device, with only what running it takes.",
+      "hold": 2.2
+    },
+    {
+      "action": "open_card",
+      "module": "Effects",
+      "caption": "Now the buttons in the corner. Every card has them, and each does something you can watch.",
+      "hold": 2.2
+    },
+    {
+      "action": "open_card",
+      "module": "Layer",
+      "caption": "A child module is a tab inside its parent, and it carries the same five.",
+      "hold": 2.2
+    },
+    {
+      "action": "follow_link",
+      "selector": ".card[data-module=\"Layer\"] .card-help",
+      "seconds": 3.2,
+      "caption": "? opens this module's own page, written per module rather than one manual for everything."
+    },
+    {
+      "action": "follow_link",
+      "selector": ".card[data-module=\"Layer\"] .card-api",
+      "seconds": 3.2,
+      "caption": "{ } opens this one card's JSON: every control, its value, its live telemetry."
+    },
+    {
+      "action": "open_card",
+      "module": "Layer",
+      "caption": "Paste that into an issue and the report carries what someone would have to ask you for.",
+      "hold": 2.2
+    },
+    {
+      "action": "click_control",
+      "module": "Layer",
+      "control": "enabled",
+      "caption": "⏻ turns a module off. The layer stops and the lights hold their last frame.",
+      "hold": 3.0
+    },
+    {
+      "action": "click_control",
+      "module": "Layer",
+      "control": "enabled",
+      "caption": "On again, and it picks up where it was.",
+      "hold": 2.4
+    },
+    {
+      "action": "replace_module",
+      "module": "Pulse",
+      "type": "RipplesEffect",
+      "caption": "✎ swaps the effect inside this layer for another type. Same slot in the pipeline.",
+      "hold": 3.0
+    },
+    {
+      "action": "replace_module",
+      "module": "Ripples",
+      "type": "PulseEffect",
+      "caption": "Swap it back. Nothing else in the tree noticed.",
+      "hold": 2.6
+    },
+    {
+      "action": "delete_module",
+      "module": "Layer",
+      "caption": "× deletes a module. These two appear only where a module is yours to change.",
+      "hold": 2.6
+    },
+    {
+      "action": "add_module",
+      "parent": "Effects",
+      "type": "Layer",
+      "caption": "And add one back, because a layer is a module like any other.",
+      "hold": 2.8
+    },
+    {
+      "action": "add_module",
+      "parent": "Layer",
+      "type": "PulseEffect",
+      "caption": "With its effect, and the lights are running again.",
+      "hold": 2.8
+    },
+    {
+      "action": "open_card",
+      "module": "Layouts",
+      "caption": "The same pattern everywhere: Layouts, and its Grid inside.",
+      "hold": 1.8
+    },
+    {
+      "action": "open_card",
+      "module": "Grid",
+      "caption": "Grid: the layout's own card, reached the same way.",
+      "hold": 2.0
+    },
+    {
+      "action": "set_number",
+      "module": "Grid",
+      "control": "width",
+      "value": 64,
+      "caption": "Every control applies on the next frame. No save button, no reboot.",
+      "hold": 1.2
+    },
+    {
+      "action": "set_number",
+      "module": "Grid",
+      "control": "height",
+      "value": 64,
+      "caption": "The lights answer while you are still typing.",
+      "hold": 2.6
+    }
+  ]
+}

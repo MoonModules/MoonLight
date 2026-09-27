@@ -22,7 +22,7 @@ namespace mm {
 /// The source gates on the effect's own dimensionality, which a modifier here cannot see, so the question becomes whether the incoming box is two-dimensional.
 /// Pins/wiring plumbing is dropped; this emits coordinates only.
 /// Float math (atan2/hypot/sqrt) runs on the build path (modifyLogical is called at rebuild, not in the hot render loop).
-/// Author: MoonLight, https://github.com/MoonModules/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
+/// Author: MoonLight, https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
 class PinwheelModifier : public ModifierBase {
 public:
     /// The catalog tags this modifier carries.

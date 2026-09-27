@@ -1,0 +1,40 @@
+{
+  "name": "01-install-desktop",
+  "description": "The same installer, pointed at this computer: pick a release and download the app.",
+  "speed": 1.6,
+  "host": "localhost:8421",
+  "steps": [
+    {
+      "action": "chapter",
+      "title": "Install it on your computer",
+      "description": "No board required",
+      "seconds": 2.0
+    },
+    {
+      "action": "goto",
+      "url": "http://localhost:8421/install/?release=latest",
+      "caption": "The same installer runs MoonLight on your computer, with no board at all.",
+      "hold": 1.8
+    },
+    {
+      "action": "choose_option",
+      "selector": "#port-select",
+      "value": "This computer*",
+      "caption": "Pick this computer instead of a USB port.",
+      "hold": 1.8
+    },
+    {
+      "action": "wait_for",
+      "selector": "#rp-firmware",
+      "text": "macOS",
+      "timeout": 30,
+      "caption": "It knows which build your machine needs."
+    },
+    {
+      "action": "click",
+      "selector": "#rp-install",
+      "caption": "One button, and the app downloads.",
+      "hold": 2.4
+    }
+  ]
+}

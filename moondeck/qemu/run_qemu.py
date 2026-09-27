@@ -95,7 +95,7 @@ def main() -> int:
                     help="run for N seconds, then exit (0 = run until interrupted)")
     ap.add_argument("--http-port", type=int, default=8410,
                     help="host port forwarded to the guest's HTTP server (default 8410). "
-                         "Deliberately not 8080: a desktop projectMM build listens there, and "
+                         "Deliberately not 8080: a desktop MoonLight build listens there, and "
                          "QEMU fails to start rather than sharing the port.")
     ap.add_argument("--rebuild-image", action="store_true",
                     help="re-merge the flash image even if it looks current")

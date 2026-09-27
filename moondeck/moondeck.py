@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MoonDeck — browser-based developer console for projectMM."""
+"""MoonDeck — browser-based developer console for MoonLight."""
 
 import http.server
 import json
@@ -199,7 +199,7 @@ def _device_sort_key(d):
 def _device_key(d):
     """The device's identity: its MAC (from SystemModule.mac), lower-cased. The MAC is per-chip and
     the only unchangeable identifier — an IP is a DHCP lease, not an identity, so it is NOT used as a
-    key. A device without a MAC (a WLED peer, or a projectMM device on firmware predating the `mac`
+    key. A device without a MAC (a WLED peer, or a MoonLight device on firmware predating the `mac`
     control) has NO stable identity: it's shown while online in a live scan but not persisted. Returns
     "" for such a device — callers persist/dedup only truthy keys."""
     return (d.get("mac") or "").strip().lower()
@@ -891,7 +891,7 @@ def kill_script(script_id: str):
             with suppress(OSError):
                 stream.close()
 
-    # Clean up any orphaned processes (e.g. projectMM after os.execv)
+    # Clean up any orphaned processes (e.g. MoonLight after os.execv)
     script_def = next((s for s in SCRIPTS if s["id"] == script_id), None)
     pname = script_def.get("process_name") if script_def else None
     if pname:
@@ -1609,7 +1609,7 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
                 for fresh in devices:
                     key = _device_key(fresh)
                     if not key:
-                        # No MAC → not a MoonDeck-manageable device (a WLED peer, or projectMM
+                        # No MAC → not a MoonDeck-manageable device (a WLED peer, or MoonLight
                         # firmware predating the `mac` control). Dropped from the list entirely — not
                         # shown, not persisted — since MoonDeck can't flash it anyway. This is
                         # deliberate (the product-owner "MAC or it's not a device" rule), not an omission.

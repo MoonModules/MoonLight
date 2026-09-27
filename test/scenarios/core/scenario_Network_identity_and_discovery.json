@@ -1,0 +1,92 @@
+{
+  "name": "scenario_Network_identity_and_discovery",
+  "module": "NetworkModule",
+  "mode": "mutate",
+  "also": [
+    "DevicesModule",
+    "SystemModule"
+  ],
+  "description": "The network card's own settings, and the one thing a rename could silently change: how this device is advertised and how it types the peers it finds. mDNS and the device list both key on names, so each is set, restarted, and read back rather than merely written.",
+  "fixture": [
+    {
+      "name": "fix-Network",
+      "op": "add_module",
+      "id": "Network",
+      "type": "NetworkModule"
+    },
+    {
+      "name": "fix-Devices",
+      "op": "add_module",
+      "id": "Devices",
+      "type": "DevicesModule",
+      "parent_id": "Network"
+    }
+  ],
+  "steps": [
+    {
+      "name": "mdns-off",
+      "description": "mDNS is what lets a browser reach the device by name rather than by address.",
+      "op": "set_control",
+      "id": "Network",
+      "key": "mDNS",
+      "value": false
+    },
+    {
+      "name": "mdns-is-off",
+      "op": "expect_control",
+      "id": "Network",
+      "key": "mDNS",
+      "equals": "false"
+    },
+    {
+      "name": "mdns-on",
+      "description": "Back on, because a device nobody can find by name is a support call.",
+      "op": "set_control",
+      "id": "Network",
+      "key": "mDNS",
+      "value": true
+    },
+    {
+      "name": "wled-compatible-off",
+      "description": "The WLED compatibility shim is what makes this device appear in the WLED apps.",
+      "op": "set_control",
+      "id": "Devices",
+      "key": "wledCompatible",
+      "value": false
+    },
+    {
+      "name": "shim-is-off",
+      "op": "expect_control",
+      "id": "Devices",
+      "key": "wledCompatible",
+      "equals": "false"
+    },
+    {
+      "name": "wled-compatible-on",
+      "op": "set_control",
+      "id": "Devices",
+      "key": "wledCompatible",
+      "value": true
+    },
+    {
+      "name": "restart",
+      "description": "Restart, because a network setting that does not survive one is a setting a user has to enter twice.",
+      "op": "reboot",
+      "timeout": 60
+    },
+    {
+      "name": "mdns-survived",
+      "op": "expect_control",
+      "id": "Network",
+      "key": "mDNS",
+      "equals": "true"
+    },
+    {
+      "name": "shim-survived",
+      "op": "expect_control",
+      "id": "Devices",
+      "key": "wledCompatible",
+      "equals": "true"
+    }
+  ]
+}

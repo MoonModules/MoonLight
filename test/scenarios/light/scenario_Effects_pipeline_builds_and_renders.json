@@ -1,0 +1,122 @@
+{
+  "name": "scenario_Effects_pipeline_builds_and_renders",
+  "module": "Effects",
+  "mode": "construct",
+  "also": [
+    "Layouts",
+    "GridLayout",
+    "Layer",
+    "Drivers",
+    "PreviewDriver"
+  ],
+  "description": "The whole light pipeline from nothing: a layout says where the lights are, a layer says what they show, a driver says how the frame leaves. Builds each in turn and measures after each, so the cost of one part is the difference between two steps rather than a number with nothing to compare it to. This is the path every other light scenario assumes, which is why it is the one that builds it explicitly.",
+  "steps": [
+    {
+      "name": "layouts",
+      "description": "The container the layouts live in, which the layer reads its coordinates from.",
+      "op": "add_module",
+      "id": "Layouts",
+      "type": "Layouts"
+    },
+    {
+      "name": "grid",
+      "description": "A 16x16 panel: small enough to run anywhere, big enough that a per-light cost is visible.",
+      "op": "add_module",
+      "id": "Grid",
+      "type": "GridLayout",
+      "parent_id": "Layouts",
+      "props": {
+        "width": 16,
+        "height": 16
+      }
+    },
+    {
+      "name": "layer",
+      "description": "One layer, wired to the layouts it takes coordinates from, which is what an effect renders into.",
+      "op": "add_module",
+      "id": "Layer",
+      "type": "Layer",
+      "props": {
+        "layouts": "Layouts"
+      }
+    },
+    {
+      "name": "measure-empty",
+      "description": "A layer with no effect: the floor every later measurement is read against.",
+      "op": "measure",
+      "measure": true
+    },
+    {
+      "name": "effect",
+      "description": "A gradient, chosen because it paints from the first frame: this scenario measures the pipeline rather than an effect, and an effect that needs time to develop would make a black buffer look like a broken pipeline.",
+      "op": "add_module",
+      "id": "FX",
+      "type": "RainbowEffect",
+      "parent_id": "Layer"
+    },
+    {
+      "name": "measure-rendering",
+      "description": "The difference against the empty layer is what one effect costs at this size.",
+      "op": "measure",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 1,
+            "p95": 2,
+            "min": 1,
+            "max": 2,
+            "n": 26,
+            "samples": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1]
+          },
+          "last_updated": "2026-09-25"
+        }
+      }
+    },
+    {
+      "name": "drivers",
+      "description": "The drivers container, wired to the effects whose buffer it reads, again mirroring boot.",
+      "op": "add_module",
+      "id": "Drivers",
+      "type": "Drivers",
+      "props": {
+        "layer": "Layer"
+      }
+    },
+    {
+      "name": "preview",
+      "description": "The preview is a driver like any other, and the one every target has.",
+      "op": "add_module",
+      "id": "Preview",
+      "type": "PreviewDriver",
+      "parent_id": "Drivers"
+    },
+    {
+      "name": "measure-complete",
+      "description": "The whole pipeline: layout, layer, effect, driver. The difference is what output costs.",
+      "op": "measure",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 8,
+            "p95": 19,
+            "min": 5,
+            "max": 21,
+            "n": 26,
+            "samples": [5, 5, 5, 5, 13, 8, 14, 17, 8, 13, 19, 6, 14, 5, 11, 12, 8, 6, 8, 7, 18, 21, 6, 9, 6, 13]
+          },
+          "last_updated": "2026-09-25"
+        }
+      }
+    },
+    {
+      "name": "the-grid-is-what-was-asked-for",
+      "description": "The layout reports the size it was built with, so a later resize has something to differ from.",
+      "op": "expect_control",
+      "id": "Grid",
+      "key": "width",
+      "equals": "16"
+    }
+  ]
+}

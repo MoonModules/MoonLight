@@ -1,6 +1,6 @@
 # Web UI
 
-The projectMM web UI as shipped, the render layer over the MoonModule tree. This page is the UI's own implementation spec (status bar, cards, control rendering, styling, the no-rebuild update contract). The **high-level architecture**, hand-maintained files, MoonModule-driven rendering, the light-domain plug-in points, lives in [MoonCore, the web UI](../../explanation/architecture/mooncore.md#web-ui); the **backend contract** it consumes (every `/api/*` endpoint, the `/ws` frame shape, the control descriptors) is owned by [HttpServerModule](moxygen/HttpServerModule.md); the **emoji legend** the cards and picker render is [the tag emoji legend](../../explanation/architecture/index.md#tag-emoji-legend).
+The MoonLight web UI as shipped, the render layer over the MoonModule tree. This page is the UI's own implementation spec (status bar, cards, control rendering, styling, the no-rebuild update contract). The **high-level architecture**, hand-maintained files, MoonModule-driven rendering, the light-domain plug-in points, lives in [MoonCore, the web UI](../../explanation/architecture/mooncore.md#web-ui); the **backend contract** it consumes (every `/api/*` endpoint, the `/ws` frame shape, the control descriptors) is owned by [HttpServerModule](moxygen/HttpServerModule.md); the **emoji legend** the cards and picker render is [the tag emoji legend](../../explanation/architecture/index.md#tag-emoji-legend).
 This page covers only what those don't: the browser-side rendering behavior.
 
 ## Interaction principles
@@ -43,7 +43,7 @@ Fixed top, 44 px, left-to-right:
 
 1. **Hamburger (☰)**, toggles the side nav (`body.nav-open`). See [§ Side navigation](#side-navigation).
 2. **MoonLight logo**, 28 px PNG from `/moonlight-logo.png`; the same image is the page favicon.
-3. **Brand wordmark**, "projectMM".
+3. **Brand wordmark**, "MoonLight".
 4. **Device name**, from the `System.deviceName` control.
 5. **System stats**, `uptime · NN K free` (uptime `Xd Yh Zm Ws`, free heap KB), read from the
    SystemModule controls in the WS state push; no separate polling endpoint.
