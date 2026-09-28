@@ -176,50 +176,50 @@
     }
     .control-row select { flex: 1; }
 
-    /* the shared picker still renders its own board <select>
-       (#rp-board) — we keep it (so its change-listener wires) but hide its row;
+    /* the shared picker still renders its own device <select>
+       (#rp-device), we keep it (so its change-listener wires) but hide its row;
        the picture grid above drives it. The row is the .control-row that
-       contains #rp-board. */
-    .control-row:has(#rp-board) { display: none; }
+       contains #rp-device. */
+    .control-row:has(#rp-device) { display: none; }
 
-    /* Picture board grid — collapsed by default (a control-row field), expands
+    /* Picture device grid: collapsed by default (a control-row field), expands
        on click. The summary button is the row's field, so it flexes like the
        selects (flex: 1) to line up with USB Port / Release / Firmware. */
-    #board-summary {
+    #device-summary {
       flex: 1; display: flex; align-items: center; justify-content: space-between;
       gap: 12px; padding: 10px 12px; background: var(--bg); color: var(--fg);
       border: 1px solid var(--border); border-radius: 6px; font: inherit;
       cursor: pointer; text-align: left;
     }
-    #board-summary:hover { border-color: var(--accent); }
-    .board-summary-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
-    .board-summary-thumb {
+    #device-summary:hover { border-color: var(--accent); }
+    .device-summary-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .device-summary-thumb {
       width: 36px; height: 24px; border-radius: 3px; flex-shrink: 0;
       background: #0e1020 center/contain no-repeat; border: 1px solid var(--border);
     }
-    #board-summary-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .board-summary-caret { color: var(--muted); transition: transform .15s; flex-shrink: 0; }
-    #board-summary[aria-expanded="true"] .board-summary-caret { transform: rotate(180deg); }
+    #device-summary-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .device-summary-caret { color: var(--muted); transition: transform .15s; flex-shrink: 0; }
+    #device-summary[aria-expanded="true"] .device-summary-caret { transform: rotate(180deg); }
     /* The expanded grid breaks out full-width below the row (aligns with the
        field column by offsetting the label width + gap). */
-    #board-expand { margin: 0 0 10px 92px; }
-    .board-grid-controls { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
-    #board-search {
+    #device-expand { margin: 0 0 10px 92px; }
+    .device-grid-controls { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+    #device-search {
       flex: 1; min-width: 160px; padding: 8px 10px; background: var(--bg);
       color: var(--fg); border: 1px solid var(--border); border-radius: 6px; font: inherit;
     }
-    .board-clear {
+    .device-clear {
       background: transparent; color: var(--muted); border: 1px solid var(--border);
       border-radius: 6px; padding: 8px 12px; font: inherit; font-size: 13px; cursor: pointer;
     }
-    .board-clear:hover { color: var(--fg); border-color: var(--accent); }
-    .board-filter-notice { color: var(--muted); font-size: 12px; margin-bottom: 10px; }
-    .board-filter-notice button {
+    .device-clear:hover { color: var(--fg); border-color: var(--accent); }
+    .device-filter-notice { color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+    .device-filter-notice button {
       background: none; border: none; color: var(--accent); font: inherit; font-size: 12px;
       cursor: pointer; padding: 0; text-decoration: underline;
     }
-    #board-grid { max-height: 420px; overflow-y: auto; }   /* expanded grid scrolls, not the page */
-    #board-grid {
+    #device-grid { max-height: 420px; overflow-y: auto; }   /* expanded grid scrolls, not the page */
+    #device-grid {
       display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px;
     }
     .bg-chip-label {
@@ -257,11 +257,11 @@
     .bg-link { color: var(--accent); font-size: 11px; text-decoration: none; }
     .bg-link:hover { text-decoration: underline; }
 
-    /* Board-details popup — native <dialog> (standard modal pattern: built-in
+    /* Device-details popup, a native <dialog> (standard modal pattern: built-in
        backdrop, ESC-to-close, focus trap; no bespoke modal JS). Shows the full
        deviceModels.json entry as a readable summary plus a collapsible raw-JSON block. */
-    #board-details::backdrop { background: rgba(0,0,0,0.6); }
-    #board-details {
+    #device-details::backdrop { background: rgba(0,0,0,0.6); }
+    #device-details {
       background: var(--card); color: var(--fg);
       border: 1px solid var(--border); border-radius: 10px;
       padding: 0; max-width: 560px; width: calc(100% - 32px);

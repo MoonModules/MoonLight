@@ -4,6 +4,8 @@ The MoonLive language: what a script may declare, what the engine hands it, and 
 A script compiles to native code on the device, so it runs at the speed of a compiled module.
 The library that ships with MoonLight is [moonlive/](https://github.com/MoonModules/projectMM/tree/main/moonlive), and the shortest way in is [Write your first script](../../tutorials/first-script.md).
 
+<video src="../../assets/uiscenarios/08-moonlive-effects.webm" controls playsinline width="720" title="A library effect downloaded and run, then one written from nothing: a line, a circle, loops, and particles."></video>
+
 ## A script is a class
 
 Each script declares a **class**, and the host calls its functions: `tick()` for an effect, `placeLights()` for a layout, `modifyLogical()` for a modifier. A function is called when it is present and its moment arrives, so which entry points a class defines is what decides what it does.
@@ -189,6 +191,7 @@ The core owns the grammar and a generic call mechanism, and nothing else.
 | `fill(r, g, b)` | write every light |
 | `addLight(x, y, z)` | place the next light, for a layout |
 | `line(x1, y1, x2, y2, r, g, b)` | a straight segment, via the shared `draw::line` |
+| `circle(cx, cy, radius, thickness, r, g, b)` | a circle outline of a given stroke width, via the shared `draw::ring` |
 | `random16(n)` | a value in `[0, n)` |
 | `mod(a, b)` | the wrap a cyclic animation needs |
 | `beat(bpm, t)` | a `0..65535` sawtooth at `bpm` |

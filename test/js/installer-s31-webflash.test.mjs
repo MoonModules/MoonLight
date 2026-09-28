@@ -65,7 +65,7 @@ test("the guard only fires on the connect-flash stage", () => {
 
 test("every flagged chip matches a real deviceModels.json board chip", () => {
     // A guard string with no board would be dead code; pin that each flagged chip
-    // is one a catalog board actually reports, so getSelectedBoardChip() can match it.
+    // is one a catalog board actually reports, so getSelectedDeviceChip() can match it.
     const boardChips = new Set(boards.map((b) => b.chip));
     for (const chip of unsupportedChips()) {
         assert.ok(

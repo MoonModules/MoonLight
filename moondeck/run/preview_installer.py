@@ -53,7 +53,7 @@ ASSETS_BOARDS_DIR = ROOT / "docs" / "assets" / "boards"
 PICKER_JS = ROOT / "src" / "ui" / "install-picker.js"
 # Board-catalog / chip-detection half of the picker — mooninstaller only (not
 # embedded in firmware), imported by index.html. Staged alongside PICKER_JS.
-PICKER_BOARDS_JS = ROOT / "src" / "ui" / "install-picker-boards.js"
+PICKER_DEVICES_JS = ROOT / "src" / "ui" / "install-picker-devices.js"
 STAGE_DIR = ROOT / "build" / "install-preview"
 # The preview mirrors the GitHub Pages layout: the installer at /install/,
 # board images under /install/assets/deviceModels/, and the releases tree under
@@ -140,8 +140,8 @@ def stage_install_page():
     if not PICKER_JS.exists():
         print(f"ERROR: install-picker.js not found at {PICKER_JS}", file=sys.stderr)
         sys.exit(1)
-    if not PICKER_BOARDS_JS.exists():
-        print(f"ERROR: install-picker-boards.js not found at {PICKER_BOARDS_JS}", file=sys.stderr)
+    if not PICKER_DEVICES_JS.exists():
+        print(f"ERROR: install-picker-devices.js not found at {PICKER_DEVICES_JS}", file=sys.stderr)
         sys.exit(1)
 
     library_json = ROOT / "library.json"
@@ -149,7 +149,7 @@ def stage_install_page():
     # --- installer → /install/ ---
     _stage_runtime_files(INSTALL_DIR, STAGE_INSTALL)
     shutil.copy(PICKER_JS, STAGE_INSTALL / "install-picker.js")
-    shutil.copy(PICKER_BOARDS_JS, STAGE_INSTALL / "install-picker-boards.js")
+    shutil.copy(PICKER_DEVICES_JS, STAGE_INSTALL / "install-picker-devices.js")
     if library_json.exists():
         shutil.copy(library_json, STAGE_INSTALL / "library.json")
     _stage_referenced_board_images(STAGE_INSTALL)

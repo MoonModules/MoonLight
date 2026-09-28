@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "light/drivers/DriverBase.h"
 
 #include "light/drivers/ColorLight5A75Packet.h"   // the first wire format (byte layout lives there)
@@ -278,7 +279,7 @@ public:
                 framesReported_ = framesSent_;
                 return;
             }
-            std::snprintf(statusBuf_, sizeof(statusBuf_), "transmit wedged (%u refused, link %u Mbit)",
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "transmit wedged (%u refused, link %u Mbit)",
                           static_cast<unsigned>(failStreak),
                           static_cast<unsigned>(platform::ethLinkSpeedMbps()));
             setStatus(statusBuf_, Severity::Error);
@@ -293,7 +294,7 @@ public:
                 if (!boundName) {
                     setStatus("no ethernet link - pick an 'interface' adapter", Severity::Warning);
                 } else {
-                    std::snprintf(statusBuf_, sizeof(statusBuf_),
+                    mm::formatTo(statusBuf_, sizeof(statusBuf_),
                                   "no ethernet link - cable, or no adapter matches '%s'", boundName);
                     setStatus(statusBuf_, Severity::Warning);
                 }
@@ -310,7 +311,7 @@ public:
         const uint32_t sent = framesSent_ - framesReported_;
         framesReported_ = framesSent_;
         if (mbps && mbps < 1000) {
-            std::snprintf(statusBuf_, sizeof(statusBuf_),
+            mm::formatTo(statusBuf_, sizeof(statusBuf_),
                           "%u Mbit (needs 1 Gbit) - %u packets/s",
                           static_cast<unsigned>(mbps), static_cast<unsigned>(sent));
             setStatus(statusBuf_, Severity::Warning);
@@ -323,13 +324,13 @@ public:
             // Split by cause: a flapping link and a full TX ring need different fixes.
             uint32_t linkDown = 0, ringFull = 0;
             platform::ethSendFailCounts(linkDown, ringFull);
-            std::snprintf(statusBuf_, sizeof(statusBuf_),
+            mm::formatTo(statusBuf_, sizeof(statusBuf_),
                           "%u Mbit - %u pkt/s, %u lost (%u link, %u ring)",
                           static_cast<unsigned>(mbps), static_cast<unsigned>(sent),
                           static_cast<unsigned>(dropped),
                           static_cast<unsigned>(linkDown), static_cast<unsigned>(ringFull));
         } else {
-            std::snprintf(statusBuf_, sizeof(statusBuf_), "%u Mbit - %u packets/s",
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "%u Mbit - %u packets/s",
                           static_cast<unsigned>(mbps), static_cast<unsigned>(sent));
         }
         setStatus(statusBuf_, Severity::Status);

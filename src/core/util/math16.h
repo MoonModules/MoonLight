@@ -126,6 +126,7 @@
 /// A quadratic core can swap in behind the same name if a field-heavy effect ever needs it.
 
 #include "core/util/math8.h"
+#include "platform/platform.h"   // MM_NONBLOCKING: the hot path calls halfLifeKeep every frame
 
 #include <cstdint>
 
@@ -377,8 +378,8 @@ constexpr uint16_t beat16(uint8_t bpm, uint32_t ms, uint32_t timebase = 0) {
     return static_cast<uint16_t>((pos * 65536u) / period);
 }
 
-/// Half-life decay: the fraction of a value that SURVIVES after `dtMs`, as a 0..65536 weight.
-inline uint32_t halfLifeKeep(uint32_t dtMs, uint32_t halfLifeMs) {
+/// Half-life decay: the fraction of a value that SURVIVES after `dtMs`, as a 0..65536 weight, annotated because `draw::decay` calls it every frame.
+inline uint32_t halfLifeKeep(uint32_t dtMs, uint32_t halfLifeMs) MM_NONBLOCKING {
     if (dtMs == 0 || halfLifeMs == 0) return 65536;
     // A table on the fraction and a shift for the whole halvings, held as the drop below full.
     static constexpr uint16_t kPow2Drop[33] = {

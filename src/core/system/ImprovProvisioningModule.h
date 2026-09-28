@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/module/MoonModule.h"
 #include "core/system/NetworkModule.h"
 #include "core/system/SystemModule.h"
@@ -110,7 +111,7 @@ public:
                 r != HttpServerModule::OpResult::AlreadyExists) {
                 std::printf("Improv APPLY_OP failed (result=%d): %s\n",
                             static_cast<int>(r), pendingOp_);
-                std::snprintf(statusStr_, sizeof(statusStr_), "error: apply failed (%d)",
+                mm::formatTo(statusStr_, sizeof(statusStr_), "error: apply failed (%d)",
                               static_cast<int>(r));
             }
             std::memset(pendingOp_, 0, sizeof(pendingOp_));

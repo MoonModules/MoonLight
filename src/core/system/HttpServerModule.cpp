@@ -286,7 +286,7 @@ void HttpServerModule::handleConnection(platform::TcpConnection& conn) {
         else if (std::strcmp(path, "/preview-adapt.js") == 0) serveFile(conn, "preview-adapt.js", "application/javascript");
         else if (std::strcmp(path, "/migrate.js") == 0) serveFile(conn, "migrate.js", "application/javascript");
         else if (std::strcmp(path, "/style.css") == 0) serveFile(conn, "style.css", "text/css");
-        else if (std::strcmp(path, "/moonlight-logo.png") == 0) serveFile(conn, "moonlight-logo.png", "image/png");
+        else if (std::strcmp(path, "/moonmodules-logo.png") == 0) serveFile(conn, "moonmodules-logo.png", "image/png");
         else if (std::strcmp(path, "/api/state") == 0) serveState(conn);
         else if (std::strcmp(path, "/api/system") == 0) serveSystem(conn);
         else if (std::strcmp(path, "/api/types") == 0) serveTypes(conn);
@@ -1047,7 +1047,7 @@ void HttpServerModule::serveFile(platform::TcpConnection& conn, const char* file
     else if (std::strcmp(filename, "preview-adapt.js") == 0) { data = ui::previewAdaptJs; dataLen = ui::previewAdaptJsLen; gzipped = true; }
     else if (std::strcmp(filename, "migrate.js") == 0) { data = ui::migrateJs; dataLen = ui::migrateJsLen; gzipped = true; }
     else if (std::strcmp(filename, "style.css") == 0) { data = ui::styleCss; dataLen = ui::styleCssLen; gzipped = true; }
-    else if (std::strcmp(filename, "moonlight-logo.png") == 0) { data = ui::logoPng; dataLen = ui::logoPngLen; }
+    else if (std::strcmp(filename, "moonmodules-logo.png") == 0) { data = ui::logoPng; dataLen = ui::logoPngLen; }
 
     if (!data) {
         sendResponse(conn, 404, "text/plain", "File not found");

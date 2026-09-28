@@ -6,9 +6,9 @@
   <title>MoonLight Installer</title>
   <link rel="icon" type="image/png" href="./favicon.png">
 
-  <!-- ESP Web Tools dropped in Step 3 of the board-injection plan. EWT 10.x
+  <!-- ESP Web Tools dropped in Step 3 of the device-injection plan. EWT 10.x
        held the SerialPort exclusively and didn't expose its internal
-       ImprovSerial client, which made post-PROVISIONED board injection
+       ImprovSerial client, which made post-PROVISIONED device injection
        impossible from this page (and silently broke "Your devices"
        auto-add since the state-changed event never escaped the dialog's
        shadow DOM). The install flow is now driven by
@@ -37,7 +37,7 @@
     <div class="card browser-warning" id="browser-warning">
       <strong>This browser can't flash an ESP32.</strong>
       Flashing needs Web Serial, which Firefox and Safari don't support. Open this page in
-      <strong>Chrome</strong> or <strong>Edge</strong> on a desktop to flash a board. The
+      <strong>Chrome</strong> or <strong>Edge</strong> on a desktop to flash a device. The
       release page on GitHub has the same binaries for manual flashing.
       Downloading the desktop build works in any browser, and is selected above.
     </div>
@@ -58,10 +58,10 @@
            user-gesture picker, so this is as close to a "live dropdown of
            plugged-in devices" as the platform allows. If the user clicks
            Install without picking, the orchestrator falls back to its own
-           requestPort() prompt — current behaviour preserved. -->
+           requestPort() prompt, current behavior preserved. -->
       <!-- Picking a port auto-detects the connected chip (ESP Web Tools /
            ESPHome model: connect and detect are one action) and narrows the
-           board dropdown below to that chip family — no separate Detect button.
+           device dropdown below to that chip family. No separate Detect button.
            #detect-status shows the result ("Detected ESP32-S3 — selected …")
            right under the port row; re-detect = "Pick another port…". This is
            mooninstaller only; the shared picker module (embedded in firmware,
@@ -80,11 +80,11 @@
            render() does NOT know about erase semantics. The picker hoists
            this element into its tree just above the Install button row via
            the `installRowExtras` option below; the picker re-attaches the
-           same node on every re-render (release-list reload, board pick),
+           same node on every re-render (release-list reload, device pick),
            so the listener wired on the checkbox in index.html keeps firing.
            Default off because a normal re-flash overwrites
            bootloader+partition-table+app in place (the regions writeFlash
-           touches) and preserves user state (WiFi credentials, board name)
+           touches) and preserves user state (WiFi credentials, device name)
            on LittleFS, which is what users usually want. Tick the box when:
              - switching firmware variants whose partition tables differ
                (esp32 1.3MB app vs esp32s3-n16r8 16MB flash)
@@ -97,7 +97,7 @@
         <label>
           <input type="checkbox" id="erase-before-flash">
           Erase chip first
-          <span class="note erase-note">wipes saved WiFi + board, adds ~12 s. Tick when switching firmware variant, starting clean, or <strong>when a normal update fails</strong> or the device comes back without its settings: the partition layout can change between releases, and only an erase install applies the new one cleanly. Back up first (see below), restore after.</span>
+          <span class="note erase-note">wipes saved WiFi + device, adds ~12 s. Tick when switching firmware variant, starting clean, or <strong>when a normal update fails</strong> or the device comes back without its settings: the partition layout can change between releases, and only an erase install applies the new one cleanly. Back up first (see below), restore after.</span>
         </label>
         <label>
           <input type="checkbox" id="apply-device-defaults">
@@ -106,44 +106,40 @@
         </label>
       </div>
 
-      <!-- picture board picker. Renders a visual card grid from
-           deviceModels.json (image + product link), and on select drives the shared
-           picker's own (hidden) board <select> so the existing flash flow is
-           reused unchanged. The shared install-picker.js + firmware UI are NOT
-           modified (board images are a Pages-only asset, never flashed). -->
-      <!-- Board picker: a control-row consistent with USB Port / Release /
-           Firmware (left "Device" label + a field). The field is a collapsed
-           summary button; clicking expands the search + card grid full-width
-           below the row. Picking a board collapses it back to the summary.
-           The shared install-picker.js + firmware UI are NOT modified
-           (board images are a Pages-only asset, never flashed). -->
-      <div id="board-grid-card">
+      <!-- Device picker: a control-row consistent with USB Port / Release / Firmware
+           (left "Device" label + a field). The field is a collapsed summary button;
+           clicking expands the search + card grid full-width below the row, rendered
+           from deviceModels.json (image + product link). Picking a device drives the
+           shared picker's own (hidden) device <select>, so the existing flash flow is
+           reused rather than reimplemented, and collapses back to the summary.
+           The device images are a Pages-only asset, never flashed. -->
+      <div id="device-grid-card">
         <div class="control-row">
           <span class="control-label">Device</span>
-          <button type="button" id="board-summary" aria-expanded="false">
-            <span class="board-summary-left">
-              <span id="board-summary-thumb" class="board-summary-thumb" hidden></span>
-              <span id="board-summary-label">Pick a device</span>
+          <button type="button" id="device-summary" aria-expanded="false">
+            <span class="device-summary-left">
+              <span id="device-summary-thumb" class="device-summary-thumb" hidden></span>
+              <span id="device-summary-label">Pick a device</span>
             </span>
-            <span class="board-summary-caret">▾</span>
+            <span class="device-summary-caret">▾</span>
           </button>
         </div>
-        <div id="board-expand" hidden>
-          <div class="board-grid-controls">
-            <input id="board-search" type="search" placeholder="Search devices…" autocomplete="off" aria-label="Search devices">
-            <button type="button" id="board-clear" class="board-clear">Generic / no device</button>
+        <div id="device-expand" hidden>
+          <div class="device-grid-controls">
+            <input id="device-search" type="search" placeholder="Search devices…" autocomplete="off" aria-label="Search devices">
+            <button type="button" id="device-clear" class="device-clear">Generic / no device</button>
           </div>
           <!-- Shown only when a Detect has narrowed the grid to one chip family;
-               the toggle is the escape hatch if detection was wrong or your board
+               the toggle is the escape hatch if detection was wrong or your device
                isn't in the detected family. -->
-          <div id="board-filter-notice" class="board-filter-notice" hidden></div>
-          <div id="board-grid"></div>
+          <div id="device-filter-notice" class="device-filter-notice" hidden></div>
+          <div id="device-grid"></div>
         </div>
       </div>
 
-      <!-- Board-details popup, filled by showBoardDetails() from the card's
+      <!-- Device-details popup, filled by showDeviceDetails() from the card's
            "details" link. Native <dialog>: backdrop, ESC, focus trap for free. -->
-      <dialog id="board-details">
+      <dialog id="device-details">
         <div class="bd-head">
           <span class="bd-title" id="bd-title"></span>
           <button type="button" class="bd-close" id="bd-close" aria-label="Close">✕</button>
@@ -151,8 +147,8 @@
         <div class="bd-body" id="bd-body"></div>
       </dialog>
 
-      <!-- Picker mounts here. Release (newest-first, RCs flagged) → Board (the
-           board <select> is CSS-hidden; the grid above drives it).
+      <!-- Picker mounts here. Release (newest-first, RCs flagged) → Device (the
+           device <select> is CSS-hidden; the grid above drives it).
            Same module the on-device OTA UI uses. The picker slots #erase-row into
            its tree at render time via the installRowExtras option below. -->
       <div id="picker-mount"></div>
@@ -177,7 +173,7 @@
 
       <p class="note">
         Ethernet works out of the box for the device you pick — its PHY type and
-        pins come from the catalog, no rebuild. Boards without Ethernet just use
+        pins come from the catalog, no rebuild. Devices without Ethernet just use
         WiFi.
       </p>
     </div>
@@ -207,7 +203,7 @@
         save it all first. Backup + restore is also the answer when an update misbehaves.
         An on-device update that fails, or a device that comes back without its settings,
         usually means the partition layout changed between releases (right now: 4&nbsp;MB
-        classic boards updating to v4.0+). Back up, erase install, restore. One <code>.json</code> bundle holds everything; keep it
+        classic devices updating to v4.0+). Back up, erase install, restore. One <code>.json</code> bundle holds everything; keep it
         private, it contains the WiFi password. Two ways to make one:
       </p>
       <ul>
@@ -306,13 +302,13 @@
              API can't tightly batch the two writes the way pyserial /
              native esptool can. Worse on Windows 11 than Windows 10. The
              official workaround is the manual BOOT/RST sequence the
-             Espressif docs recommend for any board where auto-reset
+             Espressif docs recommend for any device where auto-reset
              doesn't fire. Hidden on macOS/Linux. -->
         <p class="note windows-only" hidden>
           <strong>Windows users:</strong> if you see "Failed to connect with
           the device," it's a known Windows timing issue with browser-based
           flashing. Hold the <code>BOOT</code> (or <code>BUT1</code>) button
-          on the board, tap <code>RST</code> (reset) once, then release
+          on the device, tap <code>RST</code> (reset) once, then release
           <code>BOOT</code> — then click Install again.
         </p>
       </div>
@@ -368,7 +364,7 @@
            "Your devices". (No serial config push happens on this path — the
            device-model defaults are applied later via MoonDeck on the LAN.)
            Retry button: cheap second chance at Improv before falling back
-           to manual IP entry. Some boards (LOLIN S3 mini, slow-booting
+           to manual IP entry. Some devices (LOLIN S3 mini, slow-booting
            variants) lose the race against the post-flash 2 s reopen window;
            a click two seconds later usually catches the now-ready UART
            task. Unlimited clicks — user-driven, no policy. -->
@@ -423,7 +419,7 @@
           <strong>Windows users:</strong> if the stage was
           <code>connect-flash</code>, it's a known Windows timing issue
           with browser-based flashing. Hold the <code>BOOT</code> (or
-          <code>BUT1</code>) button on the board, tap <code>RST</code>
+          <code>BUT1</code>) button on the device, tap <code>RST</code>
           once, release <code>BOOT</code>, then click Install again.
         </p>
         <div class="install-actions">

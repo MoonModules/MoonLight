@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "light/drivers/DriverBase.h"
 
 #include "core/util/JsonUtil.h"          // parse the bridge's JSON responses
@@ -278,7 +279,7 @@ private:
 
     /// Format bridgeIp as a dotted quad into `out`, for the HTTP host argument.
     void bridgeStr(char out[16]) const {
-        std::snprintf(out, 16, "%u.%u.%u.%u", bridgeIp[0], bridgeIp[1], bridgeIp[2], bridgeIp[3]);
+        mm::formatTo(out, 16, "%u.%u.%u.%u", bridgeIp[0], bridgeIp[1], bridgeIp[2], bridgeIp[3]);
     }
 
     /// Rebuild the status line: the pairing state, and the light count as driven of total.
@@ -293,7 +294,7 @@ private:
 
     /// One pairing attempt, keeping the app key if the link button has been pressed.
     void pollPairing() {
-        if (!haveBridge()) { pairTicksLeft_ = 0; std::snprintf(statusBuf_, sizeof(statusBuf_), "set bridge IP first"); setStatus(statusBuf_); return; }
+        if (!haveBridge()) { pairTicksLeft_ = 0; mm::formatTo(statusBuf_, sizeof(statusBuf_), "set bridge IP first"); setStatus(statusBuf_); return; }
         char host[16]; bridgeStr(host);
         // Headers and body share one buffer, and the bridge's headers alone run ~700 bytes.
         char resp[1024];
@@ -358,7 +359,7 @@ private:
     /// --- Learn the bridge's light ids (window index → hue id, in id order).
     void fetchLights() {
         char host[16]; bridgeStr(host);
-        char path[80]; std::snprintf(path, sizeof(path), "/api/%s/lights", appKey);
+        char path[80]; mm::formatTo(path, sizeof(path), "/api/%s/lights", appKey);
         // Sized dynamically: a truncated read would silently drop the trailing lights.
         for (size_t cap = kLightsBufInitial; cap <= kLightsBufMax; cap *= 2) {
             char* buf = static_cast<char*>(platform::alloc(cap));
@@ -433,7 +434,7 @@ private:
     /// Learn the bridge's rooms, growing the read buffer until the response parses whole.
     void fetchGroups() {
         char host[16]; bridgeStr(host);
-        char path[80]; std::snprintf(path, sizeof(path), "/api/%s/groups", appKey);
+        char path[80]; mm::formatTo(path, sizeof(path), "/api/%s/groups", appKey);
         for (size_t cap = kLightsBufInitial; cap <= kLightsBufMax; cap *= 2) {
             char* buf = static_cast<char*>(platform::alloc(cap));
             if (!buf) return;
@@ -574,7 +575,7 @@ private:
             if (diffAndFormat(li, rgb[0], rgb[1], rgb[2], body, sizeof(body))) {
                 char host[16]; bridgeStr(host);
                 char path[96];
-                std::snprintf(path, sizeof(path), "/api/%s/lights/%u/state", appKey, hueId_[li]);
+                mm::formatTo(path, sizeof(path), "/api/%s/lights/%u/state", appKey, hueId_[li]);
                 const int st = platform::httpRequest("PUT", host, 80, path, body, kHttpTimeoutMs, nullptr, 0);
                 // Marked sent only on success, so the next lap retries a failed light.
                 if (st == 200) {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/util/ActiveInstance.h"   // the boot-registry seat, so a surface can find this module
 #include "core/util/ControlSurface.h"
 #include "core/module/MoonModule.h"
@@ -500,11 +501,11 @@ public:
         const char* name = deviceName();
         // Two holds after the change: the product, then the device. Beyond that, nothing to do.
         if (age < kStripHoldMs * 2)
-            std::snprintf(display_, sizeof(display_), "MoonLight");
+            mm::formatTo(display_, sizeof(display_), "MoonLight");
         else if (name && name[0])
-            std::snprintf(display_, sizeof(display_), "%s", name);
+            mm::formatTo(display_, sizeof(display_), "%s", name);
         else
-            std::snprintf(display_, sizeof(display_), "MoonLight");
+            mm::formatTo(display_, sizeof(display_), "MoonLight");
     }
 
     /// The device's name, read through the control system rather than by reaching into SystemModule:

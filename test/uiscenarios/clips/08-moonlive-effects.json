@@ -1,0 +1,130 @@
+{
+  "name": "08-moonlive-effects",
+  "description": "Scripting the lights in the browser: a library effect downloaded and run, then one written from nothing, from a single line to a particle system.",
+  "speed": 1.8,
+  "steps": [
+    {
+      "action": "chapter",
+      "title": "MoonLive effects",
+      "description": "Write the lights, in the browser",
+      "seconds": 4.6,
+      "caption": "MoonLive effects. Writing the lights, in the browser."
+    },
+    {
+      "action": "open_card",
+      "module": "Layouts",
+      "caption": "The grid here is two fifty six by two fifty six: sixty five thousand lights, so there is room to draw something.",
+      "speech": 8.6
+    },
+    {
+      "action": "open_card",
+      "module": "Effects",
+      "caption": "Everything that paints lives under a layer, and that is where this one is going.",
+      "speech": 5.3
+    },
+    {
+      "action": "clear_children",
+      "module": "Layer",
+      "caption": "Clearing what is there, so you see the effect arrive rather than replace something.",
+      "speech": 6.0
+    },
+    {
+      "action": "add_module",
+      "parent": "Layer",
+      "type": "MoonLiveEffect",
+      "as": "live",
+      "caption": "A MoonLive effect is a script the device compiles itself, into native code, on the chip.",
+      "speech": 7.5
+    },
+    {
+      "action": "pick_file",
+      "module": "{live}",
+      "control": "script",
+      "value": "nebula.mle",
+      "caption": "Pick one from the library and the device fetches it, compiles it and runs it, while you watch.",
+      "speech": 6.5
+    },
+    {
+      "action": "open_card",
+      "module": "Effects",
+      "caption": "Nebula: a noise field births the light, and a curl flow folds it into a cloud. Twenty lines of script.",
+      "speech": 8.6
+    },
+    {
+      "action": "delete_module",
+      "module": "{live}",
+      "caption": "That one ships with the device. The next one does not exist yet, so I am going to write it.",
+      "speech": 7.2
+    },
+    {
+      "action": "add_module",
+      "parent": "Layer",
+      "type": "MoonLiveEffect",
+      "as": "demo",
+      "caption": "A fresh effect, with no script behind it at all.",
+      "speech": 4.4
+    },
+    {
+      "action": "new_script",
+      "module": "{demo}",
+      "control": "script",
+      "value": "mle-demo.mle",
+      "caption": "The plus asks for a name and creates the file on the device. I am calling it m l e demo.",
+      "speech": 7.3
+    },
+    {
+      "action": "type_script",
+      "text": "class Demo {\n  void tick() {\n    fill(0, 0, 0);\n    line(0, 0, width - 1, height - 1, 255, 180, 40);\n  }\n}\n",
+      "delay": 38,
+      "caption": "Typed into the editor, character by character. One line, corner to corner, and the lights follow the moment I save.",
+      "speech": 8.7
+    },
+    {
+      "action": "type_script",
+      "text": "class Demo {\n  void tick() {\n    fill(0, 0, 0);\n    int r = height / 3;\n    circle(width / 2, height / 2, r, 9, 40, 200, 255);\n    circle(width / 2, height / 2, r / 2, 5, 255, 120, 40);\n  }\n}\n",
+      "delay": 38,
+      "caption": "One call draws a circle, and the fourth argument is how thick the stroke is. Two of them, one inside the other.",
+      "speech": 8.4
+    },
+    {
+      "action": "type_script",
+      "text": "class Demo {\n  byte bands = 8;\n\n  void defineControls() {\n    addControl(\"bands\", bands, 2, 32);\n  }\n\n  void tick() {\n    for (int y = 0; y < height; y = y + 1) {\n      int band = y * bands / height;\n      int wave = beatsin(20 + band * 4, t, 255);\n      for (int x = 0; x < width; x = x + 1) {\n        if (x * 255 / width < wave) {\n          setRGB(y * width + x, wave, 60 + band * 20, 255 - wave);\n        } else {\n          setRGB(y * width + x, 0, 0, 0);\n        }\n      }\n    }\n  }\n}\n",
+      "delay": 18,
+      "caption": "Now a for loop per axis, and an if. Every band fills to its own beat, sixty five thousand times a frame.",
+      "speech": 8.5
+    },
+    {
+      "action": "set_number",
+      "module": "{demo}",
+      "control": "bands",
+      "value": 16,
+      "caption": "A control the script declares appears on the card by itself, and changing it applies on the very next frame.",
+      "speech": 7.2
+    },
+    {
+      "action": "type_script",
+      "text": "class Demo {\n  byte lift = 120;\n  byte pull = 14;\n  byte sparks = 6;\n\n  int dimensions() { return 2; }\n\n  void defineControls() {\n    pool(600);\n    addControl(\"lift\", lift, 20, 200);\n    addControl(\"pull\", pull, 4, 60);\n    addControl(\"sparks\", sparks, 1, 12);\n  }\n\n  void tick() {\n    fade(36);\n    emit(width / 2, height - 1, 47152 + beatsin(9, t, 6000), lift * height / 4,\n         sparks, 170, scale(beat(4, t), 256));\n    gravity(pull * height / 16);\n    drag(2);\n    step();\n    age(1);\n    render(170);\n  }\n}\n",
+      "delay": 16,
+      "caption": "And the finish: the same power functions the built in effects use. A particle pool, gravity, drag and ageing.",
+      "speech": 9.9
+    },
+    {
+      "action": "open_card",
+      "module": "Effects",
+      "caption": "Six hundred sparks, thrown, pulled back and aged, over sixty five thousand lights. All of it written in the browser.",
+      "speech": 9.1
+    }
+  ],
+  "setup": [
+    {
+      "module": "Grid",
+      "control": "width",
+      "value": 256
+    },
+    {
+      "module": "Grid",
+      "control": "height",
+      "value": 256
+    }
+  ]
+}

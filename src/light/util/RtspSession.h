@@ -8,6 +8,7 @@
 /// So each alternative is judged as a unit and the first usable one wins.
 /// Usable means RTP/AVP, not the interleaved TCP profile, explicitly unicast, and carrying a port.
 
+#include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -161,7 +162,7 @@ public:
         case Request::Verb::Describe: {
             if (!sdp) return simple(out, outLen, 500, "Internal Server Error", req.cseq);
             char extra[160];
-            std::snprintf(extra, sizeof(extra),
+            mm::formatTo(extra, sizeof(extra),
                           "Content-Type: application/sdp\r\nContent-Base: %s\r\nContent-Length: %u\r\n",
                           url ? url : "", static_cast<unsigned>(std::strlen(sdp)));
             return header(out, outLen, 200, "OK", req.cseq, extra, sdp);
@@ -174,7 +175,7 @@ public:
             rtpPort_ = req.rtpPort;
             state_ = State::Ready;
             char extra[200];
-            std::snprintf(extra, sizeof(extra),
+            mm::formatTo(extra, sizeof(extra),
                           "Transport: RTP/AVP;unicast;client_port=%u-%u;server_port=%u-%u\r\n"
                           "Session: %u\r\n",
                           static_cast<unsigned>(rtpPort_), static_cast<unsigned>(rtpPort_ + 1),
@@ -190,7 +191,7 @@ public:
                 return simple(out, outLen, 455, "Method Not Valid In This State", req.cseq);
             state_ = State::Playing;
             char extra[120];
-            std::snprintf(extra, sizeof(extra), "Session: %u\r\nRange: npt=0.000-\r\n",
+            mm::formatTo(extra, sizeof(extra), "Session: %u\r\nRange: npt=0.000-\r\n",
                           static_cast<unsigned>(id_));
             return header(out, outLen, 200, "OK", req.cseq, extra, nullptr);
         }
@@ -199,7 +200,7 @@ public:
             state_ = State::Init;
             rtpPort_ = 0;
             char extra[64];
-            std::snprintf(extra, sizeof(extra), "Session: %u\r\n", static_cast<unsigned>(id_));
+            mm::formatTo(extra, sizeof(extra), "Session: %u\r\n", static_cast<unsigned>(id_));
             return header(out, outLen, 200, "OK", req.cseq, extra, nullptr);
         }
 
@@ -217,7 +218,7 @@ private:
     static size_t header(char* out, size_t outLen, int code, const char* reason, uint32_t cseq,
                          const char* extra, const char* body) {
         if (!out || outLen == 0) return 0;
-        const int n = std::snprintf(out, outLen,
+        const int n = mm::formatTo(out, outLen,
                                     "RTSP/1.0 %d %s\r\nCSeq: %u\r\n%s\r\n%s",
                                     code, reason, static_cast<unsigned>(cseq),
                                     extra ? extra : "", body ? body : "");
@@ -238,7 +239,7 @@ inline size_t buildSdp(char* out, size_t outLen, const char* ip, uint16_t width,
                        uint8_t fps, uint8_t payloadType) {
     if (!out || outLen == 0) return 0;
     // a=framesize and a=framerate are advisory, and a player that ignores them reads the same geometry out of the stream's own SPS.
-    const int n = std::snprintf(out, outLen,
+    const int n = mm::formatTo(out, outLen,
         "v=0\r\n"
         "o=- 0 0 IN IP4 %s\r\n"
         "s=MoonLight\r\n"

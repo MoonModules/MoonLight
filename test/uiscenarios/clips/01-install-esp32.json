@@ -1,6 +1,6 @@
 {
   "name": "01-install-esp32",
-  "description": "The web installer onto a board: erase, flash, join WiFi, and open the device that comes back.",
+  "description": "The web installer onto a device: erase, flash, join WiFi, and open the UI that comes back.",
   "speed": 1.6,
   "host": "localhost:8421",
   "steps": [
@@ -8,92 +8,92 @@
       "action": "chapter",
       "title": "Install it",
       "description": "A browser, a USB cable, no toolchain",
-      "seconds": 2.0
+      "seconds": 7.5,
+      "caption": "Install it. A browser, a USB cable, and no toolchain to set up."
     },
     {
       "action": "goto",
-      "url": "http://localhost:8421/install/?board=MM%20testbench%20S3&firmware=esp32s3-n16r8&release=latest&autoport=1",
-      "caption": "Open the installer in Chrome and plug the board in.",
-      "hold": 1.6
+      "url": "http://localhost:8421/install/?device=MM%20testbench%20S3&firmware=esp32s3-n16r8&release=latest&autoport=1",
+      "caption": "This is the web installer, and it runs entirely in the browser. There is no toolchain to install and nothing to download first: the page talks to the chip over USB by itself.",
+      "speech": 13.9
     },
     {
       "action": "click",
-      "selector": ".board-summary-left",
-      "caption": "Pick your board: the installer knows every pin on it.",
-      "hold": 1.6
+      "selector": ".device-summary-left",
+      "caption": "Pick your device. The installer knows every pin on it, so the right firmware and the right wiring come along with the choice, and you never look up a pin map.",
+      "speech": 11.3
     },
     {
       "action": "click",
       "selector": "#erase-before-flash",
-      "caption": "Erase first, for a device that starts clean.",
-      "hold": 1.4
+      "caption": "Erase first. That wipes whatever was on the chip before, so this install starts from nothing instead of sitting on top of an older one that might disagree with it.",
+      "speech": 12.2
     },
     {
       "action": "click",
       "selector": "#rp-install",
-      "caption": "One button. It erases, writes and verifies.",
-      "hold": 1.0
+      "caption": "Now one button, and it does the rest. It erases the flash, writes the firmware and verifies what it wrote, all over the same cable that is powering the device right now.",
+      "speech": 13.1
     },
     {
       "action": "wait_for",
       "selector": "#connecting-detail",
       "text": "Detected",
       "timeout": 90,
-      "caption": "It finds the chip on its own."
-    },
-    {
-      "action": "wait_for",
-      "selector": "#flashing-status",
-      "text": "Erasing flash",
-      "timeout": 120,
-      "caption": "Erasing the board, for a clean start."
+      "caption": "It finds the chip by itself. An S3 with eight megabytes of memory, detected over the serial link rather than something you had to tell it, so a wrong choice cannot brick the device.",
+      "speech": 13.8
     },
     {
       "action": "wait_for",
       "selector": "#flashing-status",
       "text": "Writing firmware",
       "timeout": 240,
-      "caption": "Flashing MoonLight."
+      "caption": "Erasing, and then writing. The erase clears the old contents and the write puts MoonLight there, and the whole interface you are about to use travels with the firmware.",
+      "speech": 12.1
     },
     {
       "action": "wait_for",
       "selector": "#wifi-connect",
       "timeout": 300,
-      "caption": "Flash done. Now it asks for your WiFi, over the same cable.",
-      "text": "Connect"
+      "caption": "The flash is done, so now it asks for your WiFi. It asks over the cable, which means the password goes straight to the chip and never crosses a network to get there.",
+      "text": "Connect",
+      "speech": 12.4
     },
     {
       "action": "type_into",
       "selector": "#wifi-ssid",
       "text": "MoonModules",
       "delay": 90,
-      "caption": "Your network.",
-      "hold": 0.6
+      "caption": "Your network name goes in first.",
+      "speech": 3.7
     },
     {
       "action": "type_into",
       "selector": "#wifi-password",
       "text": "zonledmod",
       "delay": 70,
-      "hold": 0.6
+      "caption": "And then its password, typed once, straight down the wire.",
+      "speech": 5.9
     },
     {
       "action": "click",
       "selector": "#wifi-connect",
-      "caption": "Connect.",
-      "hold": 1.0
+      "caption": "And connect.",
+      "speech": 2.3
     },
     {
       "action": "wait_for",
       "selector": "#done-url",
       "text": "http",
       "timeout": 180,
-      "caption": "It joins your network and reports its address."
+      "caption": "It joins the network and reports the address it was given, so you know exactly where to find it without hunting through your router's client list.",
+      "speech": 9.4
     },
     {
       "action": "wait",
       "seconds": 2.5,
-      "caption": "One link, and the device is yours."
+      "caption": "One link, and the device is yours. Everything from here happens in that interface, live, on the device itself, and nothing needs flashing again.",
+      "speech": 11.4
     }
   ]
 }

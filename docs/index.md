@@ -2,10 +2,17 @@
 
 High-performance LED &amp; DMX lighting control for ESP32 and beyond.
 
-[:material-flash: Flash an ESP32 from your browser](/MoonLight/install/){ .md-button .md-button--primary } &nbsp; [:material-github: GitHub](https://github.com/MoonModules/projectMM){ .md-button }
+[:material-flash: Flash an ESP32 from your browser](/projectMM/install/){ .md-button .md-button--primary } &nbsp; [:material-github: GitHub](https://github.com/MoonModules/projectMM){ .md-button }
 
 !!! tip "New here?"
     The [Getting started](gettingstarted.md) guide walks you from a blank ESP32 to your first running light show, step by step, with no build tools required.
+
+## The introduction
+
+Why MoonLight was rebuilt, who wrote it, and the principles it kept.
+The clips that follow it are the proof of what it claims.
+
+<video src="assets/uiscenarios/00-intro.webm" controls playsinline width="720" title="The spoken introduction: why MoonLight was rebuilt, who wrote it, and what it kept."></video>
 
 ## What it is
 
@@ -21,7 +28,7 @@ One source tree drives ESP32, Teensy, Raspberry Pi, macOS, Windows and Linux.
 
     Flash a board from your browser and light your first pixels.
 
-    [Getting started](gettingstarted.md) · [Web installer](/MoonLight/install/)
+    [Getting started](gettingstarted.md) · [Web installer](/projectMM/install/)
 
 -   :material-palette: **Build a show**
 
@@ -50,3 +57,15 @@ One source tree drives ESP32, Teensy, Raspberry Pi, macOS, Windows and Linux.
 </div>
 
 The web installer works in Chrome &amp; Edge (Web Serial), with no download required.
+
+## Getting involved
+
+How to start with no hardware at all, how to contribute, and what comes next.
+
+<video src="assets/uiscenarios/12-getting-involved.webm" controls playsinline width="720" title="How to start, how to contribute, and what is next."></video>
+
+## Standing on shoulders
+
+Almost none of this was invented here, and every borrowed idea is credited in the source file that carries it.
+
+<video src="assets/uiscenarios/13-attribution.webm" controls playsinline width="720" title="The people we learned from, and the algorithms we build on."></video>

@@ -1,7 +1,7 @@
 // MoonLight web installer logic. Extracted from index.html's inline module script.
 // A static GitHub Pages page, so an external module is free.
 
-// Shared install-picker (release → board → firmware). Same file as the
+// Shared install-picker (release → device → firmware). Same file as the
 // on-device OTA UI uses; only the onInstall callback differs:
 //   - Device UI: POST the chosen .bin URL to /api/firmware/url; device
 //     fetches the binary directly via esp_https_ota.
@@ -18,9 +18,9 @@
 import { installPicker } from "./install-picker.js";
 import { myDevices }    from "./devices.js";
 import { installer, ESPTOOL_JS_VERSION } from "./install-orchestrator.js";
-// Board catalog + chip detection — mooninstaller only, kept out of the
-// firmware-embedded install-picker.js and injected here via boardSupport.
-import * as boardSupport from "./install-picker-boards.js";
+// Device catalog + chip detection: mooninstaller only, kept out of the
+// firmware-embedded install-picker.js and injected here via deviceSupport.
+import * as deviceSupport from "./install-picker-devices.js";
 import { BACKUP_SNIPPET } from "./backup-snippet.js";
 
 // Windows-only hints (was a separate inline <script> in <head>): reveal .windows-only
@@ -91,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
     //   → ./releases/<TAG>/<file>
     function toLocalUrl(githubUrl) {
       const m = /\/releases\/download\/([^/]+)\/([^/]+)$/.exec(githubUrl);
-      if (!m) return githubUrl;  // unrecognised shape: pass through unchanged
+      if (!m) return githubUrl;  // unrecognized shape: pass through unchanged
       const [, tag, name] = m;
       //   https://github.com/.../releases/download/<TAG>/<file>
       //   → ./releases/<TAG>/<file>  (same-origin, served from this dir)
@@ -186,10 +186,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById("done-close").addEventListener("click", closeModal);
     document.getElementById("error-close").addEventListener("click", closeModal);
 
-    // Board-details popup close button. The <dialog> also closes on ESC and a
+    // Device-details popup close button. The <dialog> also closes on ESC and a
     // backdrop click (native); this wires the explicit ✕. A click on the dialog
     // backdrop (the element itself, outside .bd-body) closes it too.
-    const bd = document.getElementById("board-details");
+    const bd = document.getElementById("device-details");
     document.getElementById("bd-close").addEventListener("click", () => bd.close());
     bd.addEventListener("click", (e) => { if (e.target === bd) bd.close(); });
 
@@ -303,16 +303,16 @@ document.addEventListener('DOMContentLoaded', () => {
           document.getElementById("provisioning-status").textContent =
             "Connecting to your WiFi…";
           break;
-        case "set-board":
+        case "set-device":
           showSection("provisioning");
           document.getElementById("provisioning-status").textContent =
-            "Setting board identity…";
+            "Setting device identity…";
           break;
         case "apply-defaults":
           showSection("provisioning");
           document.getElementById("provisioning-status").textContent =
-            detail && detail.board
-              ? `Applying device defaults for ${detail.board}…`
+            detail && detail.device
+              ? `Applying device defaults for ${detail.device}…`
               : "Applying device defaults…";
           break;
         case "needs-ip":
@@ -429,7 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // Symmetric with uiWaitForCreds. Normalisation of the typed value lives
+    // Symmetric with uiWaitForCreds. Normalization of the typed value lives
     // in the orchestrator so the host page stays UI-only. The retry action
     // is the orchestrator's signal to re-run Improv `initialize()`; while
     // that's in flight the host re-shows the dialog via showNeedsIpRetrying()
@@ -499,7 +499,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (retrying) input.value = "";
     }
 
-    function handleSuccess({ url, mdns, board, applyDefaults = true, defaultsApplied = false, viaHttp, alreadyOnline, ethOnlyNoLink }) {
+    function handleSuccess({ url, mdns, device, applyDefaults = true, defaultsApplied = false, viaHttp, alreadyOnline, ethOnlyNoLink }) {
       disarmUnloadGuard();
       // Clear the amber notice styling from any prior install in this session — only the
       // eth-only-no-link branch re-adds it, so every other outcome shows the plain note.
@@ -525,8 +525,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // this eth-only path they normally DID apply — report that honestly. The only "next step" is
         // the network cable. Append a defaults caveat only when the push actually didn't run.
         const defaultsNote = defaultsApplied
-          ? ` ${board} defaults were applied.`
-          : (board && applyDefaults ? ` ${board} defaults weren't applied — apply them later from MoonDeck.` : "");
+          ? ` ${device} defaults were applied.`
+          : (device && applyDefaults ? ` ${device} defaults weren't applied: apply them later from MoonDeck.` : "");
         note.textContent =
           `Flashed. This is an Ethernet-only firmware — connect a network cable and the device comes online on its own (find it via its IP or <name>.local, or in MoonDeck).${defaultsNote}`;
         note.classList.add("install-done-note--notice");   // amber: flashed OK, action needed (plug in Ethernet)
@@ -537,7 +537,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // No device URL (user skipped the IP prompt, or an eth-only/no-Improv device).
         // On that path no serial config push happened. If a model was picked, say so —
         // it can be applied later from MoonDeck on the LAN — else just close.
-        if (board && applyDefaults) {
+        if (device && applyDefaults) {
           showSection("done");
           // No device address → not online; don't claim "Device is online!" (the
           // default header set above).
@@ -546,7 +546,7 @@ document.addEventListener('DOMContentLoaded', () => {
           document.getElementById("done-url").textContent = "";
           document.getElementById("done-url-mdns").hidden = true;
           document.getElementById("done-defaults").textContent =
-            `Flashed. ${board} defaults weren't applied (no device address) — apply them later from MoonDeck on your network.`;
+            `Flashed. ${device} defaults weren't applied (no device address): apply them later from MoonDeck on your network.`;
           document.getElementById("done-defaults").hidden = false;
           return;
         }
@@ -577,20 +577,20 @@ document.addEventListener('DOMContentLoaded', () => {
       // Improv-less path), or kept-config (unticked).
       const note = document.getElementById("done-defaults");
       if (defaultsApplied) {
-        note.textContent = `Applied ${board} defaults.`;
+        note.textContent = `Applied ${device} defaults.`;
         note.hidden = false;
-      } else if (board && applyDefaults) {
-        note.textContent = `Flashed, but ${board} defaults weren't applied — apply them from MoonDeck on your network.`;
+      } else if (device && applyDefaults) {
+        note.textContent = `Flashed, but ${device} defaults weren't applied: apply them from MoonDeck on your network.`;
         note.hidden = false;
-      } else if (board) {
+      } else if (device) {
         note.textContent = `Kept the device's existing config (device defaults not applied).`;
         note.hidden = false;
       } else {
         note.hidden = true;
       }
-      // Store no board unless the defaults actually applied, so the saved entry doesn't
+      // Store no device unless the defaults applied, so the saved entry doesn't
       // claim a model the device wasn't configured to.
-      myDevices.addProvisionedDevice(url, defaultsApplied ? board : "");
+      myDevices.addProvisionedDevice(url, defaultsApplied ? device : "");
     }
 
     // Every chip MoonLight ships is browser-flashable as of esptool-js 0.7.0, which added the
@@ -603,7 +603,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Map a firmware key to its chip family ("esp32s31" → "ESP32-S31", "esp32s3-n16r8"
     // → "ESP32-S3", "esp32p4rev1-eth" → "ESP32-P4", "esp32*" → "ESP32") — the same prefix
     // vocabulary build_esp32's TARGET_TO_FAMILY uses. Used as the chip fallback when no
-    // board is picked (OTA / generic flash). "" for an unrecognised key.
+    // device is picked (OTA / generic flash). "" for an unrecognized key.
     function firmwareToChip(firmware) {
       const m = String(firmware || "").match(/^esp32(s31|s3|s2|p4|c\d+|h\d+)/);
       return m ? (m[1] === "s31" ? "ESP32-S31" : "ESP32-" + m[1].toUpperCase()) : (firmware ? "ESP32" : "");
@@ -614,12 +614,12 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error("[install]", stage, error);
       showSection("error");
       // A connect-flash failure on a chip esptool-js can't identify reads as a
-      // bare "Timeout". If the picked board is one of those chips, say so and
+      // bare "Timeout". If the picked device is one of those chips, say so and
       // point at the CLI rather than leaving the user staring at a timeout.
-      // Prefer the picked board's chip; fall back to the chip the flashing
-      // firmware name implies (e.g. "esp32s31" → "ESP32-S31") when no board was
+      // Prefer the picked device's chip; fall back to the chip the flashing
+      // firmware name implies (e.g. "esp32s31" → "ESP32-S31") when no device was
       // picked, so the guidance still fires on the OTA / generic-flash path.
-      const chip = installPicker.getSelectedBoardChip() || firmwareToChip(_flashingFirmware);
+      const chip = installPicker.getSelectedDeviceChip() || firmwareToChip(_flashingFirmware);
       const webUnsupported = stage === "connect-flash"
         && WEB_FLASH_UNSUPPORTED_CHIPS.has(chip);
       document.getElementById("error-message").textContent = webUnsupported
@@ -657,12 +657,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // prompt if the user clicks Install without pre-picking.
     //
     // `?autoport=1` opts into the pre-select anyway, for a caller that knows the
-    // grant is fresh: a recorded walkthrough, or a rig flashing the same board
+    // grant is fresh: a recorded walkthrough, or a rig flashing the same device
     // repeatedly. It can only ever select a port this browser already granted, and
     // the stale-handle risk above is the opt-in's to carry: a failed open surfaces
     // as the same mid-flash error, with the same Try-again path out of it.
     let pickedPort = null;
-    // Desktop mode: the user is not flashing a board over USB, they are downloading the build
+    // Desktop mode: the user is not flashing a device over USB, they are downloading the build
     // for the computer viewing this page. Same picker, same release list; only the target
     // differs. Kept beside pickedPort because the two are mutually exclusive states of the
     // one "what am I installing onto" question the Port row asks.
@@ -692,7 +692,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // `change` when the chosen <option> changes; clicking the lone option
       // when it's already selected doesn't fire — handled by the click
       // listener below.
-      // The "this computer" option, offered in every state: a visitor with no board
+      // The "this computer" option, offered in every state: a visitor with no device
       // attached is the exact person who wants the desktop build, and they should not
       // have to grant a serial port to discover it exists.
       const desktopLabel = thisComputerLabel();
@@ -726,7 +726,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Picked state: name the selected port by the chip Detect read from it
       // ("Port selected — ESP32-S3") instead of a bare "Port selected", so the
       // user can see WHICH device is on the port. Empty until detect() lands (or
-      // if it failed); the separate detect-status line carries the matched board.
+      // if it failed); the separate detect-status line carries the matched device.
       const currentOpt = document.createElement("option");
       currentOpt.value = "current";
       const chip = installPicker.getDetectedChip();
@@ -768,10 +768,10 @@ document.addEventListener('DOMContentLoaded', () => {
       // The serial-only controls have no meaning when the target is this computer: there is
       // no chip to erase and no port to monitor. Hidden rather than disabled, because a
       // greyed "Erase chip first" next to a Mac download invites the wrong question.
-      // The board grid picks an ESP32 to flash; in desktop mode the target is this computer,
-      // and a stale board selection would also narrow the firmware list to ESP32 variants.
-      const boardCard = document.getElementById("board-grid-card");
-      if (boardCard) boardCard.hidden = desktopMode;
+      // The device grid picks an ESP32 to flash; in desktop mode the target is this computer,
+      // and a stale device selection would also narrow the firmware list to ESP32 variants.
+      const deviceCard = document.getElementById("device-grid-card");
+      if (deviceCard) deviceCard.hidden = desktopMode;
       const eraseRow = document.getElementById("erase-row");
       // The button's own control-row, so hiding it doesn't leave an empty row behind.
       const monitorRow = document.getElementById("monitor-btn")?.closest(".control-row");
@@ -797,13 +797,13 @@ document.addEventListener('DOMContentLoaded', () => {
         await installer.clearDetected();
         installPicker.clearDetectedChip();
       } catch (_) {
-        // User cancelled the picker — keep whatever was picked before.
+        // User canceled the picker, so keep whatever was picked before.
       } finally {
         portPromptOpen = false;
       }
       syncPortState();
       // Auto-detect right after a fresh grant — the ESP Web Tools / ESPHome
-      // model where picking the device detects it immediately, so the board
+      // model where picking the device detects it immediately, so the device
       // list narrows without a second click. Only on a genuine new grant (not
       // a dropdown re-select), and non-fatal: runDetect routes any failure to
       // the status line. Re-detect = pick another port (same path).
@@ -820,7 +820,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function applyPortChoice(value) {
       if (value === IDLE) return;   // the placeholder is not a choice
       if (value === DESKTOP) { desktopMode = true; syncPortState(); return; }
-      // Any other choice is about a board again. openPortPicker ends in its own
+      // Any other choice is about a device again. openPortPicker ends in its own
       // syncPortState, so only sync here when nothing else will.
       desktopMode = false;
       if (value === PICK_NEW) openPortPicker();
@@ -831,7 +831,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // `change` is the only listener here on purpose. A <select> fires `click` when the list
     // OPENS, so using that to catch a re-pick would launch the OS prompt on top of the list
     // the user just opened and hide every other option behind it. The IDLE placeholder is
-    // what makes a re-pick work instead: after a cancelled prompt the row returns to it, so
+    // what makes a re-pick work instead: after a canceled prompt the row returns to it, so
     // choosing the same option again is a real value change.
 
     // --- Serial monitor -------------------------------------------------
@@ -876,7 +876,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Trigger the port picker; openMonitor was called from a user
         // gesture (Monitor button click), so requestPort() is allowed.
         await openPortPicker();
-        if (!pickedPort) return;  // user cancelled
+        if (!pickedPort) return;  // user canceled
       }
       monitorOutput.textContent = "";
       setMonitorStatus("Opening port at 115200…");
@@ -979,7 +979,7 @@ document.addEventListener('DOMContentLoaded', () => {
       container: document.getElementById("picker-mount"),
       ownFirmwareKey: null,  // web installer flashes any firmware variant
       installRowExtras: document.getElementById("erase-row"),
-      boardSupport,  // board catalog + chip detection (mooninstaller-only module)
+      deviceSupport,  // device catalog + chip detection (mooninstaller-only module)
       extraFirmwaresByTag,
       // Gate Install on a picked USB port — the web installer requires the user
       // to choose the port in the dropdown before flashing. (notifyPortChanged()
@@ -997,7 +997,7 @@ document.addEventListener('DOMContentLoaded', () => {
       onInstall: async (firmware, manifestUrl, binaryUrl, entry) => {
         // A desktop archive is handed to the browser to download; there is no chip to flash
         // and no port to hold. Anchor-click rather than location.href so the Content-Disposition
-        // from GitHub is honoured and the page is not navigated away mid-session.
+        // from GitHub is honored and the page is not navigated away mid-session.
         if (entry && entry.isDesktop) {
           const a = document.createElement("a");
           a.href = binaryUrl;
@@ -1008,8 +1008,8 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
         // Remember the firmware being flashed so handleError can fall back to it
-        // for the unsupported-chip guidance when no board was picked (the on-device
-        // OTA path, or a generic flash) — getSelectedBoardChip() is empty there.
+        // for the unsupported-chip guidance when no device was picked (the on-device
+        // OTA path, or a generic flash): getSelectedDeviceChip() is empty there.
         _flashingFirmware = firmware;
         // If the monitor is open it holds the port — release it before
         // esptool tries to claim it. The reverse lock (monitor button
@@ -1017,9 +1017,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // closeModal so the user can't reopen the monitor mid-flash.
         if (_monitor.port) await closeMonitor();
         const localUrl = toLocalUrl(manifestUrl);
-        const board = installPicker.getSelectedBoard();
-        const txPower = installPicker.getSelectedBoardTxPower();
-        openModal(board ? `Installing MoonLight on ${board}` : `Installing ${firmware}`);
+        const device = installPicker.getSelectedDevice();
+        const txPower = installPicker.getSelectedDeviceTxPower();
+        openModal(device ? `Installing MoonLight on ${device}` : `Installing ${firmware}`);
         showSection("connecting");
         document.getElementById("connecting-detail").textContent = "";
         const eraseBefore = document.getElementById("erase-before-flash").checked;
@@ -1040,7 +1040,7 @@ document.addEventListener('DOMContentLoaded', () => {
           // pickedPort may be null — orchestrator falls back to requestPort.
           port: pickedPort,
           manifestUrl: localUrl,
-          board,         // names the install title + identifies the catalog entry
+          device,         // names the install title + identifies the catalog entry
           applyDefaults, // gates the APPLY_OP config push (not txPower, sent earlier)
           txPower,
           eraseBefore,
@@ -1117,30 +1117,36 @@ document.addEventListener('DOMContentLoaded', () => {
       if (thisComputerLabel()) { desktopMode = true; syncPortState(); }
     }
 
-    // --- picture board grid --------------------------------
+    // --- picture device grid --------------------------------
     // Renders deviceModels.json as a visual card grid; on select it drives the shared
-    // picker's own (hidden) #rp-board <select> via a dispatched change event, so
+    // picker's own (hidden) #rp-device <select> via a dispatched change event, so
     // the existing release/firmware narrowing + flash flow runs unchanged. The
     // shared install-picker.js is NOT modified.
-    (async function boardGrid() {
-      let boards = [];
+    (async function deviceGrid() {
+      let devices = [];
       try {
         const res = await fetch("./deviceModels.json");   // same catalog as the picker
-        boards = await res.json();
+        // CHECKED, not assumed: a 404 from a misconfigured deploy answers with an error page, and
+        // `res.json()` on it either throws or yields something that is not the array every line
+        // below iterates. Either way the grid should say so rather than render half a page.
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const parsed = await res.json();
+        if (!Array.isArray(parsed)) throw new Error("not a device list");
+        devices = parsed;
       } catch (e) {
-        document.getElementById("board-grid").textContent = "Could not load deviceModels.json: " + e;
+        document.getElementById("device-grid").textContent = "Could not load deviceModels.json: " + e;
         return;
       }
-      await _pickerReady;   // ensure the picker has mounted its (hidden) #rp-board
+      await _pickerReady;   // ensure the picker has mounted its (hidden) #rp-device
 
-      const gridEl    = document.getElementById("board-grid");
-      const searchEl  = document.getElementById("board-search");
-      const summaryEl = document.getElementById("board-summary");
-      const labelEl   = document.getElementById("board-summary-label");
-      const thumbEl   = document.getElementById("board-summary-thumb");
-      const expandEl  = document.getElementById("board-expand");
-      const clearEl   = document.getElementById("board-clear");
-      let selected = installPicker.getSelectedBoard() || "";   // honour a restored pick
+      const gridEl    = document.getElementById("device-grid");
+      const searchEl  = document.getElementById("device-search");
+      const summaryEl = document.getElementById("device-summary");
+      const labelEl   = document.getElementById("device-summary-label");
+      const thumbEl   = document.getElementById("device-summary-thumb");
+      const expandEl  = document.getElementById("device-expand");
+      const clearEl   = document.getElementById("device-clear");
+      let selected = installPicker.getSelectedDevice() || "";   // honor a restored pick
 
       function ledDriver(b) {
         const d = (b.modules || []).find(m => /LedDriver$/.test(m.type || ""));
@@ -1152,15 +1158,15 @@ document.addEventListener('DOMContentLoaded', () => {
       // no duplicated `active` field to drift). A capability with no entry here, or no
       // matching module, stays merely "supported". Each predicate gets the whole module
       // object so it can inspect controls — needed to tell Ethernet from WiFi: both ride
-      // NetworkModule, but Ethernet is only ACTUALLY wired when the board's NetworkModule
+      // NetworkModule, but Ethernet is wired only when the device's NetworkModule
       // carries an ethType control set to a real PHY (not absent / "None"/0). WiFi is
-      // active wherever NetworkModule exists (the radio is always available); a board
+      // active wherever NetworkModule exists (the radio is always available); a device
       // that lists WiFi as supported but ships no NetworkModule entry stays "supported".
       const ethConfigured = (m) => {
         const c = m.controls;
         if (!c) return false;
-        // A named board preset IS the configuration: it carries the PHY and the pins, so a
-        // board that picks one lists no ethType of its own. Custom is the escape hatch and
+        // A named device preset IS the configuration: it carries the PHY and the pins, so a
+        // device that picks one lists no ethType of its own. Custom is the escape hatch and
         // names no PHY, so it falls through to the ethType its entry must then carry.
         if (c.ethBoard !== undefined && c.ethBoard !== "Custom") return true;
         const t = c.ethType;
@@ -1183,7 +1189,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       // Reflect the current pick in the collapsed summary (label + thumbnail).
       function updateSummary() {
-        const b = boards.find(x => x.name === selected);
+        const b = devices.find(x => x.name === selected);
         if (b) {
           labelEl.textContent = b.name;
           if (b.image) { thumbEl.hidden = false; thumbEl.style.backgroundImage = `url("${b.image}")`; }
@@ -1193,64 +1199,64 @@ document.addEventListener('DOMContentLoaded', () => {
           thumbEl.hidden = true;
         }
       }
-      function pickBoard(name) {
+      function pickDevice(name) {
         selected = name;
         // Drive the shared picker's hidden <select>: set value + fire change so
-        // its listener updates state.selectedBoard and re-filters firmware.
-        const rpBoard = document.getElementById("rp-board");
-        if (rpBoard) {
-          // A Detect narrows #rp-board's options to one family. With "show all
-          // boards" the grid can pick a board from ANOTHER family — whose option
+        // its listener updates state.selectedDevice and re-filters firmware.
+        const rpDevice = document.getElementById("rp-device");
+        if (rpDevice) {
+          // A Detect narrows #rp-device's options to one family. With "show all
+          // devices" the grid can pick a device from ANOTHER family: whose option
           // isn't in the narrowed list, so `value = name` would silently no-op
           // (value stays "") and the firmware list wouldn't narrow. Ensure the
-          // option exists first so the assignment takes and selectedBoard is set.
-          if (name && !Array.from(rpBoard.options).some(o => o.value === name)) {
+          // option exists first so the assignment takes and selectedDevice is set.
+          if (name && !Array.from(rpDevice.options).some(o => o.value === name)) {
             const o = document.createElement("option");
             o.value = name; o.textContent = name;
-            rpBoard.appendChild(o);
+            rpDevice.appendChild(o);
           }
-          rpBoard.value = name;
-          rpBoard.dispatchEvent(new Event("change", { bubbles: true }));
+          rpDevice.value = name;
+          rpDevice.dispatchEvent(new Event("change", { bubbles: true }));
         }
         updateSummary();
         setExpanded(false);   // collapse back to the summary after a pick
         render();             // keep the grid's selected-card state in sync for next open
       }
-      // After a Detect, the shared picker narrows its hidden #rp-board <select>
-      // to the matching-family boards (applyDetectedChip → fillBoardOptions). The
-      // grid mirrors that: it shows only boards whose name is a current #rp-board
-      // option. Before any detect, #rp-board holds the FULL catalog (plus the
-      // "(any board)" / "Other…" pass-through, which has no value), so the grid
+      // After a Detect, the shared picker narrows its hidden #rp-device <select>
+      // to the matching-family devices (applyDetectedChip → fillDeviceOptions). The
+      // grid mirrors that: it shows only devices whose name is a current #rp-device
+      // option. Before any detect, #rp-device holds the FULL catalog (plus the
+      // "(any device)" / "Other…" pass-through, which has no value), so the grid
       // shows everything — only a detect narrows it. Returns null = no constraint.
-      // `showAll` is the user's escape hatch (the "show all boards" toggle) for a
+      // `showAll` is the user's escape hatch (the "show all devices" toggle) for a
       // wrong/unhelpful detection — when set, the filter is bypassed.
       let showAll = false;
       function narrowedNames() {
-        const sel = document.getElementById("rp-board");
+        const sel = document.getElementById("rp-device");
         if (!sel) return null;
         const names = Array.from(sel.options).map(o => o.value).filter(Boolean);
         // If the option set equals the full catalog, there's no narrowing.
-        return names.length && names.length < boards.length ? new Set(names) : null;
+        return names.length && names.length < devices.length ? new Set(names) : null;
       }
       function allowedNames() {
         return showAll ? null : narrowedNames();
       }
-      // The detected family label (from the narrowed boards' shared chip), for the
+      // The detected family label (from the narrowed devices' shared chip), for the
       // "Detected <family> · show all" notice. null when not narrowed.
       function detectedFamily() {
         const allow = narrowedNames();
         if (!allow) return null;
-        const fams = new Set(boards.filter(b => allow.has(b.name)).map(b => b.chip));
+        const fams = new Set(devices.filter(b => allow.has(b.name)).map(b => b.chip));
         return fams.size === 1 ? [...fams][0] : null;
       }
       function renderFilterNotice() {
-        const notice = document.getElementById("board-filter-notice");
+        const notice = document.getElementById("device-filter-notice");
         const fam = detectedFamily();
         if (!fam) { notice.hidden = true; notice.replaceChildren(); return; }
         notice.hidden = false;
         notice.replaceChildren();
         if (showAll) {
-          notice.append(`Showing all boards. `);
+          notice.append(`Showing all devices. `);
           const a = document.createElement("button");
           a.textContent = `Filter to detected ${fam}`;
           a.onclick = () => { showAll = false; render(); };
@@ -1258,8 +1264,8 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
           notice.append(`Detected ${fam}. `);
           const a = document.createElement("button");
-          a.textContent = "Show all boards";
-          a.title = "Detection wrong, or your board isn't in this family? Show the full catalog.";
+          a.textContent = "Show all devices";
+          a.title = "Detection wrong, or your device isn't in this family? Show the full catalog.";
           a.onclick = () => { showAll = true; render(); };
           notice.append(a);
         }
@@ -1267,7 +1273,7 @@ document.addEventListener('DOMContentLoaded', () => {
       function render() {
         const q = (searchEl.value || "").toLowerCase();
         const allow = allowedNames();
-        const shown = boards.filter(b =>
+        const shown = devices.filter(b =>
           (!q || b.name.toLowerCase().includes(q)) &&
           (!allow || allow.has(b.name)));
         renderFilterNotice();
@@ -1281,7 +1287,7 @@ document.addEventListener('DOMContentLoaded', () => {
           for (const b of byChip[chip]) gridEl.appendChild(card(b));
         }
         if (!shown.length) {
-          const e = document.createElement("p"); e.className = "note"; e.textContent = "No boards match.";
+          const e = document.createElement("p"); e.className = "note"; e.textContent = "No devices match.";
           gridEl.appendChild(e);
         }
       }
@@ -1293,15 +1299,15 @@ document.addEventListener('DOMContentLoaded', () => {
         el.tabIndex = 0;
         el.setAttribute("role", "option");
         el.setAttribute("aria-selected", selected === b.name ? "true" : "false");
-        el.onclick = (ev) => { if (!ev.target.classList.contains("bg-link")) pickBoard(b.name); };
+        el.onclick = (ev) => { if (!ev.target.classList.contains("bg-link")) pickDevice(b.name); };
         el.onkeydown = (ev) => {
-          if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pickBoard(b.name); }
+          if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pickDevice(b.name); }
         };
         const thumb = document.createElement("div");
         thumb.className = "bg-thumb" + (b.image ? "" : " noimg");
         // the deploy stages a copy of deviceModels.json
-        // + the referenced board images alongside this page, so an "image" path of
-        // "assets/deviceModels/<slug>.jpg" resolves same-origin from this page.
+        // + the referenced device images alongside the installer, so an "image" path of
+        // "assets/deviceModels/<slug>.jpg" resolves same-origin.
         if (b.image) thumb.style.backgroundImage = `url("${b.image}")`;
         el.appendChild(thumb);
         const body = document.createElement("div"); body.className = "bg-body";
@@ -1341,20 +1347,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const det = document.createElement("a");
         det.className = "bg-link bg-details"; det.textContent = "details ⓘ";
         det.setAttribute("role", "button"); det.tabIndex = 0;
-        det.onclick = (ev) => { ev.stopPropagation(); showBoardDetails(b); };
+        det.onclick = (ev) => { ev.stopPropagation(); showDeviceDetails(b); };
         det.onkeydown = (ev) => {
-          if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); ev.stopPropagation(); showBoardDetails(b); }
+          if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); ev.stopPropagation(); showDeviceDetails(b); }
         };
         body.appendChild(det);
         el.appendChild(body);
         return el;
       }
-      // Fill + open the board-details popup from a deviceModels.json entry: a readable
+      // Fill + open the device-details popup from a deviceModels.json entry: a readable
       // summary (chip, firmwares, capabilities, modules + their controls) plus a
       // collapsible raw-JSON block for the exact entry. Built with DOM nodes (not
-      // innerHTML) so board-supplied strings can't inject markup.
-      function showBoardDetails(b) {
-        const dlg = document.getElementById("board-details");
+      // innerHTML) so device-supplied strings can't inject markup.
+      function showDeviceDetails(b) {
+        const dlg = document.getElementById("device-details");
         document.getElementById("bd-title").textContent = b.name || "Device";
         const body = document.getElementById("bd-body");
         body.replaceChildren();
@@ -1365,7 +1371,7 @@ document.addEventListener('DOMContentLoaded', () => {
           r.append(k, v); body.appendChild(r);
         };
         // Same shape as row(), but the value is a clickable link. href + textContent
-        // only (no innerHTML), so a board-supplied URL can't inject markup. Opens in
+        // only (no innerHTML), so a device-supplied URL can't inject markup. Opens in
         // a new tab; only http(s) links are made clickable (else fall back to text).
         const rowLink = (key, url) => {
           const r = document.createElement("div"); r.className = "bd-row";
@@ -1418,25 +1424,25 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       searchEl.oninput = render;
       summaryEl.addEventListener("click", () => setExpanded(expandEl.hidden));
-      clearEl.addEventListener("click", () => pickBoard(""));   // generic / no board
+      clearEl.addEventListener("click", () => pickDevice(""));   // generic / no device
 
       // Re-render when a Detect narrows the picker: applyDetectedChip swaps out
-      // #rp-board's <option>s, so observe its child list. The grid then filters
+      // #rp-device's <option>s, so observe its child list. The grid then filters
       // to the detected family (allowedNames), and updateSummary picks up any
       // auto-selected single match.
-      // Observe the picker's CONTAINER, not #rp-board itself: the picker re-renders by
-      // replacing its whole innerHTML (switching install target does this), so a #rp-board
+      // Observe the picker's CONTAINER, not #rp-device itself: the picker re-renders by
+      // replacing its whole innerHTML (switching install target does this), so a #rp-device
       // captured once is detached by the first switch and its observer never fires again,
       // silently killing Detect narrowing. The container node is stable for the page's life,
-      // and `subtree` catches the option swaps inside whichever #rp-board currently exists.
+      // and `subtree` catches the option swaps inside whichever #rp-device currently exists.
       const pickerMount = document.getElementById("picker-mount");
       if (pickerMount) {
         new MutationObserver(() => {
           showAll = false;   // a fresh detect is a new context, so re-apply the filter
           // Take the picker's value verbatim: an empty string means it cleared the
           // selection (detected family with multiple matches, so generic mode), and
-          // `|| selected` would wrongly keep the stale board in the summary.
-          selected = installPicker.getSelectedBoard();
+          // `|| selected` would wrongly keep the stale device in the summary.
+          selected = installPicker.getSelectedDevice();
           updateSummary();
           render();
         }).observe(pickerMount, { childList: true, subtree: true });

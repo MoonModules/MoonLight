@@ -208,6 +208,8 @@ A header reaches Vale through a **View**, `.vale/styles/config/views/CComments.y
 
 ## Comments
 
+These rules cover every comment the project writes, in whatever language: a `///` in a header, a `//` beside a line of the web interface, a `#` in a MoonDeck script. The prose gate reads all three, by two different routes. A C-family file needs the `CComments` View, since Vale has no parser for C and skips the file without one. That View hands back the comment nodes alone, so an identifier is never read as prose. JavaScript and Python need no View: Vale reads those as plain text. Both routes report the same findings, measured by breaking a View on purpose and watching the count hold.
+
 - **Comments say WHY.** Restating what the line does is noise, and usually a naming failure: see [prefer naming over commenting](coding-standards.md#writing-a-line-of-code).
 - **One line, above the code it explains.** A second line is the author still talking. A class `///` gets about ten lines, and each `## ` section of an `@moreinfo` appendix about ten; over that, cut. A file whose comments outnumber its code has stopped being a header.
 - **Settle the `///` first, then the `//`.** The doc comment is what a reader sees on the generated page, so it is where the explanation belongs. A `//` block below one that repeats it is deleted rather than shortened, and most of them turn out to be exactly that. Working the other way round collapses a `//` into one careful line, then deletes it an hour later once the `///` above says the same thing.

@@ -69,10 +69,10 @@ An analyzer reporting "0 findings" is indistinguishable from one that read nothi
 | Defect | What it looked like |
 |---|---|
 | `#` inside a YAML `>-` folded scalar is not a comment | Every disable after the first was folded into the check string; `abseil-*` stayed on → 12,181 findings |
-| `run-clang-tidy` shells out to `clang-tidy` by name | Not on PATH → exits 0 having analysed nothing → "0 findings" |
+| `run-clang-tidy` shells out to `clang-tidy` by name | Not on PATH → exits 0 having analyzed nothing → "0 findings" |
 | `-extra-arg VALUE` (space form) is silently ignored | Only `-extra-arg=VALUE` works → 0 findings |
 | Same trap in `-checks` | The filter had never worked |
-| Compilation database records a different compiler than the tool runs | `'cstdint' file not found` on 129/129 files; unparsed files are never analysed |
+| Compilation database records a different compiler than the tool runs | `'cstdint' file not found` on 129/129 files; unparsed files are never analyzed |
 | Missing `-isysroot` | Under-report, not an error: 5 matches where there were 14 |
 | A baseline keyed on a name the tool no longer emits | Pins nothing while looking green (see backlog-core.md § lizard) |
 
@@ -111,7 +111,7 @@ A Defender false positive was declared cleared because a download succeeded, usi
 Two principles drive every standard below:
 
 1. **The test file is the source of truth.** Every fact about a test (which module, which scenario, what each case verifies, what each step does) lives in the test file itself. The generated docs and MoonDeck views read from there, they don't get edited by hand.
-2. **One pattern, easy to spot in 30 seconds.** Every unit test follows the same header shape. Every scenario follows the same JSON shape. A new contributor recognises an existing test, then writes the next one by analogy.
+2. **One pattern, easy to spot in 30 seconds.** Every unit test follows the same header shape. Every scenario follows the same JSON shape. A new contributor recognizes an existing test, then writes the next one by analogy.
 
 ### File layout
 
@@ -201,7 +201,7 @@ TEST_CASE("hsvToRgb white when saturation is zero") {
 }
 ```
 
-Header annotations recognised by the parser:
+Header annotations recognized by the parser:
 
 | Tag | Required? | Shape |
 |-----|-----------|-------|
@@ -359,7 +359,7 @@ Open any scenario JSON and the range tells you both the typical case (the value 
 A contract changes only when there's a reason: a code change improved performance and you want to commit to the new ceiling, or an accepted regression requires loosening it. Either way the diff records *what* changed and *why*:
 
 ```bash
-# After an optimisation: tighten the ceiling for desktop-*
+# After an optimization: tighten the ceiling for desktop-*
 uv run moondeck/scenario/run_scenario.py --update-contract \
     --reason "Layer LUT inline copy"
 
@@ -529,10 +529,10 @@ UI scenarios drive the web interface itself: a run file lists what a person does
 
 ```bash
 uv run moondeck/test/test_host.py --ui                     # the whole lane
-uv run moondeck/uiscenario/uivideo.py --run test/uiscenarios/clips/95-add-a-layer.json
+uv run moondeck/uiscenario/uivideo.py --run test/uiscenarios/clips/06-layers.json
 ```
 
-The runs live in `test/uiscenarios/clips/`, the engine in `moondeck/uiscenario/`. Data under `test/`, runner under `moondeck/`: the same split the pipeline scenarios use. Tests are parameterized over the directory, so a new run file is a new test with nothing to wire up. Format and actions: [RUNS.md](../../moondeck/uiscenario/RUNS.md).
+The runs live in `test/uiscenarios/clips/`, the engine in `moondeck/uiscenario/`. Data under `test/`, runner under `moondeck/`: the same split the pipeline scenarios use. Tests are parameterized over the directory, so a new run file is a new test with nothing to wire up. Format and actions: [uiscenario.md](../../moondeck/uiscenario/uiscenario.md).
 
 **REST is read-only here.** Every state change goes through the affordance a person uses, because a step that POSTs its way to the outcome proves nothing about the interface. The reads are what `expect` compares against. That lets one file be both a test and a documentation video: the same run recorded produces the clips under `docs/assets/uiscenarios/`. A failing test means the UI no longer does what a published video shows.
 

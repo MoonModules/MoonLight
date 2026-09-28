@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Validate the installer board catalog (mooninstaller/deviceModels.json).
+"""Validate the installer device catalog (mooninstaller/deviceModels.json).
 
 The catalog is hand-maintained data consumed identically by three clients (the
 web installer, the device UI's ?deviceModel= inject, and MoonDeck), so a typo drifts
-silently — a broken image path, a board name that no longer matches its
+silently: a broken image path, a device name that no longer matches its
 System.deviceModel control, a driver pin list on an entry that has no driver. This is the
 catalog's counterpart to check_specs.py for module docs: a fast, dependency-free
 gate that pins the invariants the clients assume.
@@ -142,11 +142,11 @@ def main():
     try:
         catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as e:
-        print(f"Board check: cannot read {CATALOG.relative_to(ROOT)}: {e}")
+        print(f"Device check: cannot read {CATALOG.relative_to(ROOT)}: {e}")
         sys.exit(1)
 
     if not isinstance(catalog, list):
-        print("Board check: deviceModels.json must be a JSON array")
+        print("Device check: deviceModels.json must be a JSON array")
         sys.exit(1)
 
     factory_types = registered_types()
@@ -169,7 +169,7 @@ def main():
 
         name = e.get("name")
         if name in names_seen:
-            errors.append(f"{where}: duplicate board name")
+            errors.append(f"{where}: duplicate device name")
         names_seen.add(name)
         # The name is injected into the device's SystemModule.deviceModel control, whose buffer is
         # deviceModel_[32] (31 chars + NUL). A longer name is silently truncated on-device, so it no
@@ -362,7 +362,7 @@ def main():
             errors.append(f"{where}: no System module sets the 'deviceModel' identity control")
 
     # Report (mirrors check_specs.py's shape).
-    print(f"Board check: {len(catalog)} boards, {len(errors)} issue(s)")
+    print(f"Device check: {len(catalog)} devices, {len(errors)} issue(s)")
     if errors:
         print()
         for err in errors:

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "light/effects/EffectBase.h"
 
 #include "light/util/ArtNetPacket.h"   // shared ArtNet wire formats (build + parse)
@@ -173,7 +174,7 @@ private:
         if (s == recvStatus_ && proto == lastProto_ && std::memcmp(ip, lastIp_, 4) == 0) return;
         lastProto_ = proto;
         std::memcpy(lastIp_, ip, 4);
-        std::snprintf(recvStatus_, sizeof(recvStatus_), "receiving %s from %u.%u.%u.%u", proto,
+        mm::formatTo(recvStatus_, sizeof(recvStatus_), "receiving %s from %u.%u.%u.%u", proto,
                       static_cast<unsigned>(ip[0]), static_cast<unsigned>(ip[1]),
                       static_cast<unsigned>(ip[2]), static_cast<unsigned>(ip[3]));
         setStatus(recvStatus_, Severity::Status);

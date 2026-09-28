@@ -1,0 +1,216 @@
+{
+  "name": "09-services",
+  "description": "Inputs: the compiled services that read a button, a pin or a remote, and a scripted one for anything with a condition in it.",
+  "speed": 1.7,
+  "setup": [
+    {
+      "module": "Grid",
+      "control": "width",
+      "value": 256
+    },
+    {
+      "module": "Grid",
+      "control": "height",
+      "value": 256
+    }
+  ],
+  "steps": [
+    {
+      "action": "chapter",
+      "title": "Services",
+      "description": "Everything that drives a control",
+      "caption": "Services. Everything that drives a control.",
+      "seconds": 5.1
+    },
+    {
+      "action": "open_card",
+      "module": "Services",
+      "caption": "Services are the inputs. An effect decides what the lights show, and a service is whatever reaches in from outside and changes it.",
+      "speech": 10.6
+    },
+    {
+      "action": "open_card",
+      "module": "Audio",
+      "caption": "Audio is here at boot, and it is the one you have already seen working: it acquires a source and publishes a level, sixteen bands and a peak, which every audio effect reads.",
+      "speech": 14.3
+    },
+    {
+      "action": "open_card",
+      "module": "Audio",
+      "caption": "On a computer it synthesizes that signal, so the audio effects react before anything is wired. On a device it reads the microphone or the line in on the board.",
+      "speech": 12.1
+    },
+    {
+      "action": "add_module",
+      "parent": "Services",
+      "type": "ButtonService",
+      "as": "button",
+      "caption": "Button is the physical twin of a click in this interface. A list of push buttons, each on its own pin, each pointed at a control.",
+      "speech": 10.7
+    },
+    {
+      "action": "open_card",
+      "module": "{button}",
+      "caption": "The card starts empty, because no firmware can guess your wiring. A row is the whole binding: this pin drives that control.",
+      "speech": 10.2
+    },
+    {
+      "action": "click",
+      "selector": "[data-module=\"Button\"] .list-add-btn",
+      "caption": "So you add one. Press Add, and there is the row: a pin to read and a control to drive when it closes.",
+      "speech": 8.6
+    },
+    {
+      "action": "delete_module",
+      "module": "{button}",
+      "caption": "Out again, because the next one is the same idea with a value instead of an event.",
+      "speech": 7.3
+    },
+    {
+      "action": "add_module",
+      "parent": "Services",
+      "type": "AnalogService",
+      "as": "analog",
+      "caption": "Analog reads a voltage rather than a contact, so a potentiometer or a sensor drives a control continuously instead of switching it.",
+      "speech": 10.8
+    },
+    {
+      "action": "open_card",
+      "module": "{analog}",
+      "caption": "Same shape: press Add for a row, and this one reads a pin rather than watching it.",
+      "speech": 6.4
+    },
+    {
+      "action": "click",
+      "selector": "[data-module=\"Analog\"] .list-add-btn",
+      "caption": "A potentiometer or a sensor on that pin now drives a control continuously, instead of switching it on and off.",
+      "speech": 9.3
+    },
+    {
+      "action": "delete_module",
+      "module": "{analog}",
+      "caption": "And away.",
+      "speech": 1.9
+    },
+    {
+      "action": "add_module",
+      "parent": "Services",
+      "type": "InfraredService",
+      "as": "ir",
+      "caption": "Infrared decodes a remote, and it ships with no codes at all: no firmware can carry a table for every handset in the world.",
+      "speech": 9.7
+    },
+    {
+      "action": "open_card",
+      "module": "{ir}",
+      "caption": "So a binding is taught rather than shipped. Here is the empty card, waiting for its first row.",
+      "speech": 7.8
+    },
+    {
+      "action": "click",
+      "selector": "[data-module=\"Infrared\"] .list-add-btn",
+      "caption": "Add one, and it starts out bound to nothing: no pin to guess, no code to assume.",
+      "speech": 7.4
+    },
+    {
+      "action": "open_card",
+      "module": "{ir}",
+      "caption": "Then press learn, and the row waits. The next code the receiver decodes binds to it, so you point the handset, press the key you want, and that key is yours.",
+      "speech": 12.1
+    },
+    {
+      "action": "delete_module",
+      "module": "{ir}",
+      "caption": "Twenty keys on the handset are twenty rows, each learned. All three of these are lists of mappings, which is exactly right until you want a condition.",
+      "speech": 12.0
+    },
+    {
+      "action": "add_module",
+      "parent": "Services",
+      "type": "MoonLiveService",
+      "as": "live",
+      "caption": "MoonLive service: the input twin of a scripted effect. Instead of rows it takes a script, which can hold state and decide between outcomes.",
+      "speech": 12.2
+    },
+    {
+      "action": "pick_file",
+      "module": "{live}",
+      "control": "script",
+      "value": "sweep.mls",
+      "caption": "This one sweeps four faders on a slow triangle, two of them inverted. It compiles on the device the moment it is chosen.",
+      "speech": 10.3
+    },
+    {
+      "action": "open_card",
+      "module": "Control",
+      "caption": "The script is driving the faders, and they are further down this card.",
+      "speech": 5.6
+    },
+    {
+      "action": "scroll_to",
+      "selector": "[data-module=\"Control\"] .control-row[data-key=\"fader5\"]",
+      "caption": "There they are, five to eight, sweeping. Nothing is wired to this computer: the script is moving them, and anything bound to them follows.",
+      "speech": 10.7
+    },
+    {
+      "action": "open_card",
+      "module": "Services",
+      "caption": "Back to the service itself, which is a tab inside Services.",
+      "speech": 5.9
+    },
+    {
+      "action": "open_card",
+      "module": "{live}",
+      "caption": "The script's own controls appear on its card, because it declared them. Its speed is a slider here rather than a number buried in the file.",
+      "speech": 10.7
+    },
+    {
+      "action": "pick_file",
+      "module": "{live}",
+      "control": "script",
+      "value": "button.mls",
+      "caption": "A different script, and the service is a different thing: this one watches a pin and flips a switch when it changes, which is the button service written out by hand.",
+      "speech": 12.5
+    },
+    {
+      "action": "pick_file",
+      "module": "{live}",
+      "control": "script",
+      "value": "power.mls",
+      "caption": "And this one reads supply voltage and current from two analog pins, into readouts you can watch. A condition in the middle, which no list of mappings could express.",
+      "speech": 12.7
+    },
+    {
+      "action": "open_card",
+      "module": "Services",
+      "caption": "Back to the service, for the one that makes the case.",
+      "speech": 4.6
+    },
+    {
+      "action": "pick_file",
+      "module": "{live}",
+      "control": "script",
+      "value": "chase.mls",
+      "caption": "And the last one is the point of the whole thing: a loop and a condition. This lights one fader at a time and steps on the beat.",
+      "speech": 9.9
+    },
+    {
+      "action": "open_card",
+      "module": "Control",
+      "caption": "And over to the faders again.",
+      "speech": 3.2
+    },
+    {
+      "action": "scroll_to",
+      "selector": "[data-module=\"Control\"] .control-row[data-key=\"fader5\"]",
+      "caption": "There it goes, one at a time. The script holds which step it is on between frames, and an if decides which fader that means: a row in a table has nowhere to keep either.",
+      "speech": 13.4
+    },
+    {
+      "action": "open_card",
+      "module": "Services",
+      "caption": "Four compiled services for the common shapes, and a scripted one for everything else: the same split as the layouts, and the same reason for it.",
+      "speech": 11.2
+    }
+  ]
+}

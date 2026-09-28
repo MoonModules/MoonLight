@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/module/Control.h"        // ListSource: a mapping list is a list like any other
 #include "core/util/JsonSink.h"       // writeListRow emits a row as JSON
 #include "core/util/JsonUtil.h"       // parsing a row field, and restoring the persisted list
@@ -132,13 +133,13 @@ inline bool runInputAction(const InputAction& a, bool pressed,
     // Split at the dot; a target without one is refused rather than half-applied against a module named for the whole string.
     const char* dot = std::strchr(a.target, '.');
     if (!dot || dot == a.target || !dot[1]) {
-        if (outStatus) std::snprintf(outStatus, statusLen, "%s: not Module.control", a.target);
+        if (outStatus) mm::formatTo(outStatus, statusLen, "%s: not Module.control", a.target);
         return false;
     }
     char module[24] = {};
     const size_t n = static_cast<size_t>(dot - a.target);
     if (n >= sizeof(module)) {
-        if (outStatus) std::snprintf(outStatus, statusLen, "module name too long");
+        if (outStatus) mm::formatTo(outStatus, statusLen, "module name too long");
         return false;
     }
     std::memcpy(module, a.target, n);
@@ -204,13 +205,13 @@ inline bool runInputLevel(const InputAction& a, uint8_t level,
     if (!a.assigned()) return false;
     const char* dot = std::strchr(a.target, '.');
     if (!dot || dot == a.target || !dot[1]) {
-        if (outStatus) std::snprintf(outStatus, statusLen, "%s: not Module.control", a.target);
+        if (outStatus) mm::formatTo(outStatus, statusLen, "%s: not Module.control", a.target);
         return false;
     }
     char module[24] = {};
     const size_t n = static_cast<size_t>(dot - a.target);
     if (n >= sizeof(module)) {
-        if (outStatus) std::snprintf(outStatus, statusLen, "module name too long");
+        if (outStatus) mm::formatTo(outStatus, statusLen, "module name too long");
         return false;
     }
     std::memcpy(module, a.target, n);

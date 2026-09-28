@@ -1,6 +1,6 @@
 {
   "name": "02-first-look-esp32",
-  "description": "The board that just came back: every module, and what sits inside each one.",
+  "description": "The device that just came back: every module, and what sits inside each one.",
   "requires": "audio",
   "speed": 1.5,
   "steps": [
@@ -8,145 +8,182 @@
       "action": "chapter",
       "title": "Your device",
       "description": "Every module, top to bottom",
-      "seconds": 2.0
+      "seconds": 5.0,
+      "caption": "Your device. Every module, top to bottom."
     },
     {
       "action": "open_card",
       "module": "Control",
       "caption": "Control: a remote, a button or a fader, pointed at anything on this page.",
-      "hold": 2.0
+      "speech": 7.5
     },
     {
       "action": "open_card",
       "module": "Layouts",
       "caption": "Layouts: where your lights physically are.",
-      "hold": 1.8
+      "speech": 4.2
     },
     {
       "action": "open_card",
       "module": "Grid",
-      "caption": "Grid: width, height and depth, applied while it runs.",
-      "hold": 2.0
+      "caption": "Grid: width, height and depth. This one is sixty four by sixty four, which is four thousand and ninety six lights on a device that costs a few euros.",
+      "speech": 12.7
     },
     {
       "action": "open_card",
       "module": "Effects",
       "caption": "Effects: what they show, stacked in layers.",
-      "hold": 1.8
+      "speech": 4.9
     },
     {
       "action": "open_card",
       "module": "Layer",
       "caption": "Layer: one effect and its modifiers, blended onto the ones below.",
-      "hold": 2.0
+      "speech": 6.3
     },
     {
       "action": "open_card",
       "module": "Drivers",
       "caption": "Drivers: how the finished frame reaches the lights.",
-      "hold": 1.8
+      "speech": 4.8
+    },
+    {
+      "action": "add_module",
+      "parent": "Drivers",
+      "type": "RmtLedDriver",
+      "as": "onboard",
+      "caption": "An output driver is added per device rather than built in, so here is one: RMT, the peripheral that clocks a LED strip on this chip.",
+      "speech": 12.2
     },
     {
       "action": "open_card",
-      "module": "OnboardLed",
-      "caption": "OnboardLed: the single light on the board itself.",
-      "hold": 1.8
+      "module": "{onboard}",
+      "caption": "It drives the single light on the device itself, which is the cheapest way to see that a frame is really being rendered.",
+      "speech": 8.8
+    },
+    {
+      "action": "add_module",
+      "parent": "Drivers",
+      "type": "RmtLedDriver",
+      "as": "strip",
+      "caption": "And a second one for the real strip. Each driver owns its own pin, so a device with several strips has several of these.",
+      "speech": 10.1
     },
     {
       "action": "open_card",
-      "module": "RmtLed",
-      "caption": "RmtLed: the real strip, on a pin, driven by the RMT peripheral.",
-      "hold": 2.2
+      "module": "{strip}",
+      "caption": "This is the one wired to the panel: a pin, a light count, and the preset that says which channel does what.",
+      "speech": 8.1
+    },
+    {
+      "action": "add_module",
+      "parent": "Drivers",
+      "type": "NetworkSendDriver",
+      "as": "netsend",
+      "caption": "A driver does not have to drive a wire at all. This one sends the finished frame over the network instead.",
+      "speech": 9.0
     },
     {
       "action": "open_card",
-      "module": "NetworkSend",
-      "caption": "NetworkSend: the same frame as ArtNet, E1.31 or DDP, to anything that listens.",
-      "hold": 2.0
+      "module": "{netsend}",
+      "caption": "ArtNet, E one point three one or DDP, to anything that listens: the same frame the strip gets, addressed to another device.",
+      "speech": 11.0
     },
     {
       "action": "open_card",
       "module": "System",
-      "caption": "System: the board itself, its chip, its uptime, how fast it renders.",
-      "hold": 2.0
+      "caption": "System: the device itself, its chip, its uptime, how fast it renders.",
+      "speech": 7.2
     },
     {
       "action": "open_card",
       "module": "Tasks",
       "caption": "Tasks: what runs each frame, and what each costs in microseconds.",
-      "hold": 2.0
+      "speech": 9.6
     },
     {
       "action": "open_card",
       "module": "I2cScan",
       "caption": "I2cScan: finds the chips on the I2C bus.",
-      "hold": 1.6
+      "speech": 5.4
     },
     {
       "action": "open_card",
       "module": "Pins",
       "caption": "Pins: which pin every module has claimed, so two never fight over one.",
-      "hold": 2.0
+      "speech": 6.8
     },
     {
       "action": "open_card",
       "module": "File Manager",
-      "caption": "File Manager: every file on the board, and one button that backs them all up.",
-      "hold": 2.0
+      "caption": "File Manager: every file on the device, and one button that backs them all up.",
+      "speech": 7.0
     },
     {
       "action": "open_card",
       "module": "Network",
       "caption": "Network: the WiFi it joined, and the other devices it can see.",
-      "hold": 1.8
+      "speech": 5.8
     },
     {
       "action": "open_card",
       "module": "Mqtt",
       "caption": "Mqtt: a broker, for a home automation system.",
-      "hold": 1.6
+      "speech": 6.4
     },
     {
       "action": "open_card",
       "module": "Devices",
       "caption": "Devices: every other MoonLight on the network, found on their own.",
-      "hold": 1.8
+      "speech": 6.8
     },
     {
       "action": "open_card",
       "module": "Services",
       "caption": "Services: the inputs.",
-      "hold": 1.6
+      "speech": 3.4
     },
     {
       "action": "open_card",
       "module": "Audio",
-      "caption": "Audio: this board has a microphone, so it is listening to the room.",
-      "hold": 2.6
+      "caption": "Audio: this device has a microphone, so it is listening to the room.",
+      "speech": 6.8
     },
     {
       "action": "open_card",
       "module": "Firmware",
       "caption": "Firmware: it finds the next release and installs it over the air.",
-      "hold": 2.0
+      "speech": 5.8
     },
     {
       "action": "open_card",
       "module": "MoonCloud",
       "caption": "MoonCloud: see what everyone else is running.",
-      "hold": 1.8
+      "speech": 5.0
     },
     {
       "action": "open_card",
       "module": "Stats",
       "caption": "Stats: what this device shares, and the totals it gets back.",
-      "hold": 1.8
+      "speech": 5.7
     },
     {
       "action": "open_card",
       "module": "Talk",
       "caption": "Talk: ask a question without leaving the page.",
-      "hold": 1.8
+      "speech": 4.8
+    }
+  ],
+  "setup": [
+    {
+      "module": "Grid",
+      "control": "width",
+      "value": 64
+    },
+    {
+      "module": "Grid",
+      "control": "height",
+      "value": 64
     }
   ]
 }

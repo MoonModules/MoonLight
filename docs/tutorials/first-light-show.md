@@ -12,7 +12,7 @@ Open **Layouts**. A fresh device has a **Grid**, which is the shape most rigs st
 
 Set **width** to 16 and **height** to 16. The preview reshapes as you type, and the light count under the card follows.
 
-<video src="../assets/uiscenarios/92-change-layout.webm" autoplay loop muted playsinline width="720" title="Typing a new width and height; the preview reshapes as the numbers change"></video>
+<video src="../assets/uiscenarios/05-layouts.webm" controls playsinline width="720" title="Resizing a grid while it renders, then the other layout shapes the same effect paints into."></video>
 
 
 That number is the whole point of a layout. Every effect downstream asks the layout how many lights there are and where each one sits, so this one card decides what the rest of the pipeline is painting on. Nothing else in the tree stores a size, which is why changing it here never leaves something stale behind.
@@ -25,8 +25,6 @@ Open **Effects**. Under the Layer, press **+ add module** and pick an effect. **
 
 Now change **numBalls** while it runs. Then **grav**. The lights respond as the slider moves, because an effect is not a rendered animation the device plays back: it is a function being run once per frame, reading its controls each time.
 
-<video src="../assets/uiscenarios/93-add-an-effect.webm" autoplay loop muted playsinline width="720" title="Adding an effect through the picker, then driving its controls while it runs"></video>
-
 
 Try a second effect. Press **+ add module** again and add **Ripples** beside the first.
 
@@ -34,7 +32,6 @@ Both now run into the same Layer, in order, each writing over what the one befor
 
 Blending happens between **layers**. Press **+ add module** on the Effects card to add a second Layer, give it its own effect, and the Layer card carries a **blendMode** and an **opacity**. The drivers composite the layers bottom to top, so lowering the top layer's opacity tints what is underneath instead of replacing it.
 
-<video src="../assets/uiscenarios/95-add-a-layer.webm" autoplay loop muted playsinline width="720" title="Adding a second Layer with its own effect, then lowering its opacity to blend"></video>
 
 This is the same model an image editor uses, and it is worth a minute of play. Layers compose; you are not picking one effect from a list.
 
@@ -44,10 +41,12 @@ Under the Layer, add a **modifier**: **Mirror**.
 
 The effect did not change. The modifier sits between the effect and the lights and folds the coordinates on the way through, so a pattern that ran across the whole grid now runs across half and reflects.
 
-<video src="../assets/uiscenarios/94-add-a-modifier.webm" autoplay loop muted playsinline width="720" title="Adding a Mirror modifier; the pattern folds while the effect is untouched"></video>
-
 
 That separation is why a modifier is worth having at all. Mirror, rotate and multiply are things you want on *any* effect, and writing them into each effect would be the same code many times over.
+
+All of it on one wall, start to finish: an effect in a layer, with its controls driven while it runs. Then a modifier reshaping it, and a second layer doing the same and blending over the first.
+
+<video src="../assets/uiscenarios/06-layers.webm" controls playsinline width="720" title="An effect, a modifier, and a second layer blended over the first."></video>
 
 ## 4. Send it somewhere real
 

@@ -1,4 +1,5 @@
 #pragma once
+#include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/module/Control.h"
 #include "core/util/ScratchBuffer.h"
 #include "light/drivers/DriverBase.h"
@@ -257,7 +258,7 @@ public:
         if (statusStale_ || droppedFrames_ != lastReportedDrops_) {
             statusStale_ = false;
             lastReportedDrops_ = droppedFrames_;
-            std::snprintf(statusBuf_, sizeof(statusBuf_), "streaming %ux%u, %u frames dropped",
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "streaming %ux%u, %u frames dropped",
                           static_cast<unsigned>(width_), static_cast<unsigned>(height_),
                           static_cast<unsigned>(droppedFrames_));
             setStatus(statusBuf_, Severity::Status);
@@ -313,7 +314,7 @@ private:
 
     bool startEncoder() {
         char outDir[192];
-        std::snprintf(outDir, sizeof(outDir), "%s%s", platform::fsRootPath(), kSegmentDir);
+        mm::formatTo(outDir, sizeof(outDir), "%s%s", platform::fsRootPath(), kSegmentDir);
         platform::EncoderConfig cfg{};
         cfg.width       = static_cast<uint16_t>(width_);
         cfg.height      = static_cast<uint16_t>(height_);

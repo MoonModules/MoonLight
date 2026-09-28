@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/module/MoonModule.h"
 #include "core/util/ActiveInstance.h"   // the boot-registry seat election (the seat + its RAII vacate)
 #include "core/module/Control.h"
@@ -384,7 +385,7 @@ private:
         d->lastSeenMs = platform::millis();   // transient — not persisted
         if (!d->name[0]) {
             const char* n = (selfName_ && selfName_[0]) ? selfName_ : "this device";
-            std::snprintf(d->name, sizeof(d->name), "%s", n);
+            mm::formatTo(d->name, sizeof(d->name), "%s", n);
             changed = true;
         }
         if (changed) {                 // only a real self-row change re-sorts + arms persistence
@@ -434,7 +435,7 @@ private:
 
     /// Report how many devices are listed, and arm the save.
     void refreshStatus() {
-        std::snprintf(statusBuf_, sizeof(statusBuf_), "%u device%s",
+        mm::formatTo(statusBuf_, sizeof(statusBuf_), "%u device%s",
                       deviceCount_, deviceCount_ == 1 ? "" : "s");
         setStatus(statusBuf_);
         // Persisted, so the next boot shows the set instantly.

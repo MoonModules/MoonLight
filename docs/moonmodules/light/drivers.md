@@ -2,9 +2,13 @@
 
 A driver sends lights somewhere. It reads its slice of the [Drivers](moxygen/Drivers.md) container's shared buffer and applies its own [output correction](moxygen/DriverBase.md). Where it sends them varies: over a wire (WS2812), to a HUB75 panel on the board's own pins, over the network (Art-Net / E1.31 / DDP), to a smart-light hub (Hue), or to the web UI (Preview).
 
-Several drivers can share one buffer, each driving its own slice. Every driver starts with the same [shared controls](#shared-driver-controls), then adds its own. Drivers are added per board through the catalog ([`deviceModels.json`](../../../mooninstaller/deviceModels.json)); `PreviewDriver` is the one boot-wired driver.
+Several drivers can share one buffer, each driving its own slice. Every driver starts with the same [shared controls](#shared-driver-controls), then adds its own. Drivers are added per device through the catalog ([`deviceModels.json`](../../../mooninstaller/deviceModels.json)); `PreviewDriver` is the one boot-wired driver.
 
 **Jump to:** [shared controls](#shared-driver-controls) · [LED](#led-drivers) · [HUB75](#hub75) · [Network](#network-drivers) · [Smart light](#smart-light-drivers) · [Preview](#preview-drivers)
+
+<video src="../../assets/uiscenarios/07-drivers-desktop.webm" controls playsinline width="720" title="Drivers on a desktop: preview, NDI, RTSP, HLS, network send and Hue."></video>
+
+<video src="../../assets/uiscenarios/07-drivers-esp32.webm" controls playsinline width="720" title="Drivers on a device: RMT and parallel LED pins, HUB75, panel cards, and the network senders."></video>
 
 ## Shared driver controls
 

@@ -4,6 +4,8 @@
 
 Every layout, one block each: what it does and what each control means — together. A layout maps light indices to physical `(x, y, z)` positions — it defines the *shape* an [effect](effects.md) draws onto and a [driver](drivers.md) sends out. The [Layouts](moxygen/Layouts.md) container holds one or more layout children and composes them into one coordinate space; a [Layer](moxygen/Layer.md) renders over that combined space. (For how this page maps to the source/asset folders, see the [folder-structure decision](../../contributing/documentation-standards.md#module-pages).)
 
+<video src="../../assets/uiscenarios/05-layouts.webm" controls playsinline width="720" title="Layouts: a grid, a ring, a spiral, a cube, tubes, and two written in MoonLive."></video>
+
 ## MoonLight layouts
 
 <a id="carlights"></a>

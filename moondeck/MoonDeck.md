@@ -4,7 +4,7 @@ MoonDeck is MoonLight's browser-based developer console: one page that builds, f
 
 Launch it with `uv run moondeck/moondeck.py` and open <http://localhost:8420>. The console has three tabs — **Desktop** (build build / run / test), **ESP32** (chip + port, build / flash / monitor), and **Live** (discovery and live runs against networked devices) — above a network bar and per-device deviceModel pickers. Script definitions live in `moondeck/moondeck_config.json` (committed); runtime state (selected network, devices, ports) persists in `moondeck/moondeck.json` (gitignored).
 
-Below: the UI behaviours common to every card, described once, then one section per script grouped by the tab it appears on. Each section gives the equivalent CLI invocation, so the page doubles as the command reference for running anything without the browser.
+Below: the UI behaviors common to every card, described once, then one section per script grouped by the tab it appears on. Each section gives the equivalent CLI invocation, so the page doubles as the command reference for running anything without the browser.
 
 ## UI Features
 
@@ -73,7 +73,7 @@ JS reports SKIP rather than failing when node is absent, since a Python-only ben
 
 `--ui` is the odd one and is OPT-IN, which is why a bare run leaves it out. It drives a real browser
 against a running MoonLight with [pytest-playwright](https://playwright.dev/python/docs/test-runners),
-performing a [run file](uiscenario/RUNS.md) from `test/uiscenarios/clips/` through the interface and checking each step against the
+performing a [run file](uiscenario/uiscenario.md) from `test/uiscenarios/clips/` through the interface and checking each step against the
 device over REST. The run files are the same ones `moondeck/uiscenario/uivideo.py` records the videos from, so a
 failure means the UI no longer does what the video shows. It skips rather than fails when nothing
 answers on `localhost:8080` (override with `PROJECTMM_HOST`), for the same reason the JS lane skips
@@ -155,7 +155,7 @@ uv run moondeck/check/check_prose.py
 
 Reads the added lines of the branch diff and the working tree, so pre-existing prose a rename
 merely touched is out of scope. Run by hand: the tree still holds instances that predate the
-check, so it is not in the gate table until those are swept.
+check, so it is not in the gate table until those are swept. It does two things beyond that report. An ERROR on a line the change added fails it. It also writes [prose.md](../docs/reference/metrics/prose.md), the whole tree's findings by rule, which ratchets against the committed copy exactly as docgen.md does.
 
 ### check_docgen
 
@@ -903,17 +903,49 @@ Executes scenario steps (add_module, set_control, delete_module) via REST API. C
 
 For a full description of each scenario, see the [scenario inventory](/api/docs/reference/tests/scenario-tests.md), auto-generated from the JSON files.
 
+### ui_measure
+
+Measure each caption's spoken length and write it into the run file, before anything is recorded.
+
+```bash
+uv run moondeck/uiscenario/uimeasure.py --run test/uiscenarios/clips/06-layers.json
+```
+
+The recording holds a shot until its narration has finished, which needs the length of a line nobody has spoken yet. Alba speaks each caption, ffprobe reads the result, and the number lands in the step as `speech`. Sizing the dwell by eye instead left captions vanishing mid-sentence and each line starting over the one before it.
+
+Run this FIRST of the three, and run it again whenever a caption changes. Alba is the default here and in `ui_voice`, which is what keeps the measurement and the narration in agreement: two voices do not speak a line at the same speed.
+
 ### ui_clip
 
 Record one UI clip: perform a run file against the interface while Playwright records, then publish a compressed clip for the docs.
 
 ```bash
-uv run moondeck/uiscenario/uivideo.py --run test/uiscenarios/clips/95-add-a-layer.json
+uv run moondeck/uiscenario/uivideo.py --run test/uiscenarios/clips/06-layers.json
 ```
 
-The dropdown lists every run under `test/uiscenarios/clips/`. A run drives the interface and nothing else: the `+` tab, the type picker, the card's own buttons, the real inputs. REST is read-only, and is what each step's `expect` block checks against, which lets the same file be a UI test (`test_host.py --ui`) as well as a video source. The raw take lands in `media/video/` (ignored). The published clip lands in `docs/assets/uiscenarios/` (tracked, embed this one) only when the run was clean: a take whose steps failed, or that left modules behind, is refused so it cannot overwrite a good clip. Format and actions: [RUNS.md](uiscenario/RUNS.md).
+The dropdown lists every run under `test/uiscenarios/clips/`. A run drives the interface and nothing else: the `+` tab, the type picker, the card's own buttons, the real inputs. REST is read-only, and is what each step's `expect` block checks against. That is what lets the same file be a UI test (`test_host.py --ui`) as well as a video source. The raw take lands in `media/video/` (ignored). The published clip lands in `docs/assets/uiscenarios/` (tracked, embed this one) only when the run was clean. A take whose steps failed, or that left modules behind, is refused, so it cannot overwrite a good clip. Format and actions: [uiscenario.md](uiscenario/uiscenario.md).
 
-A run names its own `host` when it drives something other than the desktop UI, so the installer clip records against the installer preview and the audio clip against a board with a microphone. Start what a run needs before recording it.
+A run names its own `host` when it drives something other than the desktop UI. The installer clip records against the installer preview, and the audio clip against a device with a microphone. Start what a run needs before recording it.
+
+### ui_voice
+
+Speak a clip's captions over the clip, so it is watched rather than read.
+
+```bash
+uv run moondeck/uiscenario/uivoiceover.py --run test/uiscenarios/clips/06-layers.json
+```
+
+The words are the captions themselves: a separate script would drift from what is on screen the first time either is edited. The offsets come from the recording rather than from the run file, written beside the take as `<clip>-raw.captions.json`. A hold says how long a step is ASKED to dwell, not how long the device took. A line that outlasts its shot is reported rather than overlapped, since the fix belongs in the run file.
+
+### ui_narrate
+
+Render a narrated slide video from a slide script: no device, no browser interaction.
+
+```bash
+uv run moondeck/uiscenario/uinarrate.py --script test/uiscenarios/slides/00-intro.json
+```
+
+A slide script carries `slides` rather than `steps`, so it lives in `test/uiscenarios/slides/` and nothing performs it against a device. Each slide is screenshotted through the same browser the clips use, alba narrates it, and the slide is held for exactly as long as its narration takes.
 
 ### ui_project
 

@@ -1,0 +1,37 @@
+// Chase: one fader lit at a time, stepping on the beat. A list of mappings has no step to hold.
+
+class Chase {
+  int bpm = 30;
+  int step = 0;
+  int last = 0;
+
+  void defineControls() {
+    addControl("bpm", bpm, 1, 120); // how fast the light travels
+  }
+
+  // Count how many of the four are lit, which only a loop can do.
+  int litCount() {
+    int n = 0;
+    for (int i = 0; i < 4; i = i + 1) {
+      if (i == step) { n = n + 1; }
+    }
+    return n;
+  }
+
+  void tick20ms() {
+    int phase = div(beat(bpm, t), 16384);
+    if (phase == last) { return; }
+    last = phase;
+    step = mod(step + 1, 4);
+
+    setControl("fader5", 0);
+    setControl("fader6", 0);
+    setControl("fader7", 0);
+    setControl("fader8", 0);
+
+    if (step == 0) { setControl("fader5", 255); }
+    if (step == 1) { setControl("fader6", 255); }
+    if (step == 2) { setControl("fader7", 255); }
+    if (step == 3) { setControl("fader8", 255); }
+  }
+}

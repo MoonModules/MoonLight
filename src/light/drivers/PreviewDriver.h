@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "light/drivers/DriverBase.h"
 
 #include "light/util/light_types.h"  // lengthType, nrOfLightsType
@@ -521,7 +522,7 @@ private:
                       Severity::Warning);
         } else if (lastClients_ > 0) {
             // Who is watching, and at what resolution they asked to be served.
-            std::snprintf(statusBuf_, sizeof(statusBuf_), "%d watching · 1/%u",
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "%d watching · 1/%u",
                           lastClients_, static_cast<unsigned>(downscale_));
             setStatus(statusBuf_, Severity::Status);
         } else {

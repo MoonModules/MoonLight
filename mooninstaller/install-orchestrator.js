@@ -4,7 +4,7 @@
 // exclusively (OS-level Web Serial exclusivity), and its post-PROVISIONED
 // state-changed event is fired inside the dialog's shadow DOM — invisible
 // to the host page. That made it impossible for Step 2 of the
-// board-injection plan to push the picked board to the device after WiFi
+// device-injection plan to push the picked device to the device after WiFi
 // provisioning (and silently broke devices.js's "Your devices" auto-add
 // for the same reason). Step 3 owns the SerialPort end-to-end so both
 // fixes can land.
@@ -20,7 +20,7 @@
 //      (the deviceModel name is just one of those controls). No HTTP, no browser pull,
 //      so it works identically on the HTTPS deployed installer and local preview
 //      (the old HTTP /api/control fan-out couldn't run HTTPS→http — mixed-content).
-//   7. callback with { url, board } so the host page populates
+//   7. callback with { url, device } so the host page populates
 //      "Your devices" + shows a "Visit device" link
 //
 // Dependencies via CDN ES modules. Pinned exact versions because version
@@ -39,7 +39,7 @@
 // same way esptool.py disambiguates, and ships its own stub_flasher/esp32s31.json.
 //
 // 0.6.0 was skipped for a DETERMINISTIC compressed-flash bug: a P4 web-flash aborted at a fixed
-// block ("failed with status 201,0") where 0.5.7 and the CLI flashed the same board cleanly.
+// block ("failed with status 201,0") where 0.5.7 and the CLI flashed the same device cleanly.
 // 0.6.1 named the fix (#245, retries on FLASH_DATA/FLASH_DEFL_DATA) and 0.7.0 adds #268, which
 // calls powerOnFlash() from postConnect(): on ECO6/ECO7 P4 silicon the flash is powered off by
 // default, so the flash-ID read returned garbage and the first flash command hung the stub.
@@ -121,7 +121,7 @@ async function fetchManifest(manifestUrl) {
 // needed. Fire-and-forget like APPLY_OP: the device acks with RpcResponse we don't
 // read. This must precede provisioning because the cap has to land before the radio
 // associates; the APPLY_OP config push later also carries Network.txPowerSetting, but
-// that arrives too late for the first association on a brown-out-prone board.
+// that arrives too late for the first association on a brown-out-prone device.
 async function sendSetTxPowerFrame(port, dBm) {
     const frame = buildImprovFrame(IMPROV_FRAME_TYPE_RPC,
                                    new Uint8Array([IMPROV_CMD_SET_TX_POWER, 1, dBm & 0xFF]));
@@ -170,50 +170,50 @@ async function sendApplyOpFrame(port, op) {
 // Gated by applyDefaults: when the "Apply device defaults" checkbox is unticked, push
 // nothing (keep the device's config). Returns true iff the catalog push actually ran (so
 // the success note can report honestly rather than always claiming "Applied").
-async function pushDefaultsOverSerial(port, board, applyDefaults, trackProgress, onLog) {
-    if (!(board && applyDefaults)) {
-        if (onLog) onLog(board
-            ? `[orchestrator] NOT applying ${board} defaults — "Apply device defaults" unticked; device config left as-is`
+async function pushDefaultsOverSerial(port, device, applyDefaults, trackProgress, onLog) {
+    if (!(device && applyDefaults)) {
+        if (onLog) onLog(device
+            ? `[orchestrator] NOT applying ${device} defaults: "Apply device defaults" unticked; device config left as-is`
             : `[orchestrator] no device model selected — no defaults to apply`);
         return false;
     }
-    trackProgress("apply-defaults", { board });
-    if (onLog) onLog(`[orchestrator] applying ${board} defaults over serial (APPLY_OP)`);
-    return await sendConfigOverSerial(port, board, onLog);
+    trackProgress("apply-defaults", { device });
+    if (onLog) onLog(`[orchestrator] applying ${device} defaults over serial (APPLY_OP)`);
+    return await sendConfigOverSerial(port, device, onLog);
 }
 
 // The installer's default esptool-js flash baud: SAFE, because the installer serves unknown
 // walk-up hardware (a cheap CH340 clone, a bad cable). A well-tested compromise across CH340 /
-// CP2102 / FT232 bridges. A board overrides it in deviceModels.json via `flashBaud` — today
+// CP2102 / FT232 bridges. A device overrides it in deviceModels.json via `flashBaud`: today
 // only down, for a bridge known to stall faster (the LOLIN D32's CH340 → 460800, already the
 // default here, so a no-op in the installer but a real opt-down for the CLI's fast default).
-// Native-USB boards (P4) ignore baud. (The CLI / MoonDeck path defaults FAST instead — see
+// Native-USB devices (P4) ignore baud. (The CLI / MoonDeck path defaults FAST instead: see
 // flash_esp32.py; same catalog field, opposite default, different audience.)
 const DEFAULT_FLASH_BAUD = 460800;
 
-// Fetch a board's deviceModels.json catalog entry by name, or null (unknown board, or any
+// Fetch a device's deviceModels.json catalog entry by name, or null (unknown device, or any
 // fetch/parse failure — callers decide how to fall back). The single catalog read both the
 // flash-baud lookup and the serial-config push share, so they can't diverge on how the
 // catalog is fetched or matched.
-async function fetchCatalogEntry(board, onLog) {
-    if (!board) return null;
+async function fetchCatalogEntry(device, onLog) {
+    if (!device) return null;
     try {
         const res = await fetch("./deviceModels.json", { signal: AbortSignal.timeout(5000) });
         if (!res.ok) return null;
         const catalog = await res.json();
-        return Array.isArray(catalog) ? catalog.find(b => b && b.name === board) || null : null;
+        return Array.isArray(catalog) ? catalog.find(b => b && b.name === device) || null : null;
     } catch (e) {
-        if (onLog) onLog(`[orchestrator] catalog lookup failed for ${board} (${e && e.message || e})`);
+        if (onLog) onLog(`[orchestrator] catalog lookup failed for ${device} (${e && e.message || e})`);
         return null;
     }
 }
 
-// Resolve a board's flash baud from the catalog: the entry's `flashBaud` when set,
-// else DEFAULT_FLASH_BAUD. Best-effort — any fetch/parse failure or unknown board
+// Resolve a device's flash baud from the catalog: the entry's `flashBaud` when set,
+// else DEFAULT_FLASH_BAUD. Best-effort: any fetch/parse failure or unknown device
 // falls back to the safe default, so a catalog hiccup never blocks a flash. Mirrors
 // the CLI's flash_esp32.py `_catalog_flash_baud`, keeping both flash paths in step.
-async function catalogFlashBaud(board, onLog) {
-    const entry = await fetchCatalogEntry(board, onLog);
+async function catalogFlashBaud(device, onLog) {
+    const entry = await fetchCatalogEntry(device, onLog);
     return entry && Number.isInteger(entry.flashBaud) ? entry.flashBaud : DEFAULT_FLASH_BAUD;
 }
 
@@ -221,13 +221,13 @@ async function catalogFlashBaud(board, onLog) {
 // deviceModels.json entry the HTTP path used (see planConfigOps) but emits APPLY_OP ops
 // instead of HTTP requests — so the defaults apply during provisioning with no HTTP and
 // no browser handoff. Returns true if the entry was found + pushed, false if none.
-async function sendConfigOverSerial(port, board, onLog) {
-    const entry = await fetchCatalogEntry(board, onLog);
+async function sendConfigOverSerial(port, device, onLog) {
+    const entry = await fetchCatalogEntry(device, onLog);
     if (!entry) return false;
     for (const op of planConfigOps(entry)) {
         await sendApplyOpFrame(port, op);
     }
-    if (onLog) onLog(`[orchestrator] applied ${board} defaults over serial`);
+    if (onLog) onLog(`[orchestrator] applied ${device} defaults over serial`);
     return true;
 }
 
@@ -235,7 +235,7 @@ async function sendConfigOverSerial(port, board, onLog) {
 // way: the device's IP and its mDNS `<deviceName>.local` address. MoonLight appends
 // machine-parseable `MM_IP=<dotted-quad>` and `MM_DEVICE=<deviceName>.local` tokens to
 // its once-per-second tick log over USB (std::printf → reaches the USB-CDC console,
-// unlike ESP_LOGI) whenever Ethernet or WiFi-STA has an address — so a board that comes
+// unlike ESP_LOGI) whenever Ethernet or WiFi-STA has an address: so a device that comes
 // up on Ethernet, or boots with saved WiFi credentials, announces its own address (works
 // on every OS). The deviceName is the device's single identity (mDNS name = AP name =
 // DHCP hostname), so `<deviceName>.local` is exactly what resolves on the LAN. The tokens
@@ -351,26 +351,26 @@ function normalizeDeviceUrl(input) {
 // vocabulary build_esp32's TARGET_TO_FAMILY defines and the ESP Web Tools manifest
 // carries as `chipFamily` ("ESP32", "ESP32-S3", "ESP32-P4", and any future
 // S2/C3/C6/… as MoonLight grows to support every ESP32-family chip). Without
-// normalising, a classic ESP32 matches NO board
+// normalizing, a classic ESP32 matches NO device
 // (filter) and the flash guard false-warns on a correct flash.
 //
-// Normalise by KEEPING the family token and dropping the package/revision tail —
+// Normalize by KEEPING the family token and dropping the package/revision tail:
 // not by collapsing distinct chips. A bare "ESP32-<X>…" keeps "ESP32-<X>"; classic
 // silicon (ESP32-D0WD*, ESP32-PICO-*, ESP32-U4WDH — no second family token) maps to
 // plain "ESP32". This is forward-proof: a new ESP32-C5 needs no code change here.
 //
 // The ESP32 token is matched ANYWHERE in the string, not anchored at the start:
-// esptool-js prefixes "unknown " when it doesn't fully recognise a chip (newer
+// esptool-js prefixes "unknown " when it doesn't fully recognize a chip (newer
 // silicon than the bundled esptool — observed: "unknown ESP32-P4 (revision v1.3)"),
 // and anchoring on ^ESP32 would let that prefix defeat the match and pass the raw
-// string through (→ no board matches, false "flash anyway?" warning).
+// string through (→ no device matches, false "flash anyway?" warning).
 function chipFamily(chipName) {
     const s = String(chipName || "").trim();
     // ESP32-<LETTER+DIGITS> is a sub-family (S3/P4/S2/C3/C6/C5/H2/…).
     const sub = s.match(/ESP32-([A-Z]\d+)\b/);
     if (sub) return "ESP32-" + sub[1];
     if (/ESP32\b/.test(s)) return "ESP32";   // classic — no sub-family token
-    return s;                                // truly unrecognised — pass through so it's visible
+    return s;                                // truly unrecognized: pass through so it's visible
 }
 
 // Hard-reset the chip after flashing by toggling DTR/RTS — the standard ESP32
@@ -451,21 +451,21 @@ export const installer = {
     /**
      * Drive the full install flow: request port, flash via esptool-js,
      * provision WiFi via Improv, push the device-model config over serial (APPLY_OP)
-     * if a board was picked, report success with the device URL.
+     * if a device was picked, report success with the device URL.
      *
      * @param {object} opts
      * @param {string} opts.manifestUrl - URL to an ESP Web Tools manifest
-     * @param {string} [opts.board] - device-model name from deviceModels.json whose
+     * @param {string} [opts.device] - device-model name from deviceModels.json whose
      *   defaults (incl. the deviceModel control) are pushed via APPLY_OP after
-     *   provisioning. Omit / empty for "(any board)".
+     *   provisioning. Omit / empty for "(any device)".
      * @param {number|null} [opts.txPower] - deviceModels.json
-     *   controls.Network.txPowerSetting for the picked board (whole dBm).
+     *   controls.Network.txPowerSetting for the picked device (whole dBm).
      *   When set, the SET_TX_POWER vendor RPC is pushed BEFORE provisioning
-     *   so brown-out-prone boards associate at the capped power. Omit /
-     *   null when the board has no cap.
+     *   so brown-out-prone devices associate at the capped power. Omit /
+     *   null when the device has no cap.
      * @param {boolean} [opts.eraseBefore=false] - when true, eraseFlash()
      *   before writeFlash. Wipes the entire chip including LittleFS (saved
-     *   WiFi credentials, board name). Adds ~12 s. Default false because
+     *   WiFi credentials, device name). Adds ~12 s. Default false because
      *   a normal re-flash overwrites in place and users usually want
      *   persistent state to survive a firmware bump.
      * @param {boolean} [opts.ethOnly=false] - the picked firmware has WiFi compiled
@@ -477,7 +477,7 @@ export const installer = {
      * @param {(stage: string, detail?: object) => void} opts.onProgress
      *   Stages: request-port, connect-flash, fetch-firmware, erase,
      *   flash, reboot, connect-improv, set-tx-power, wifi-creds-form,
-     *   provisioning, set-board, done. flash also carries { pct }. connect-flash carries
+     *   provisioning, set-device, done. flash also carries { pct }. connect-flash carries
      *   { chipName } once detection succeeds.
      * @param {() => Promise<{ssid: string, password: string}>} opts.uiWaitForCreds
      *   Host page resolves this when the user fills in the WiFi form.
@@ -492,7 +492,7 @@ export const installer = {
      *                 is not added.
      *     - "retry" — re-run Improv `initialize()` on a fresh client; on
      *                 success continue to the wifi-creds form, on failure
-     *                 re-prompt. Cheap second chance for slow-booting boards
+     *                 re-prompt. Cheap second chance for slow-booting devices
      *                 (LOLIN S3 mini etc.) that lost the post-flash race.
      * @param {(retrying: boolean) => void} [opts.uiShowNeedsIpRetrying]
      *   Host page toggles the dialog into "retry in flight" mode (inputs +
@@ -502,7 +502,7 @@ export const installer = {
      *   success doesn't call back — the host's next render takes over
      *   (the wifi-creds form section replaces the needs-ip section).
      *   Optional; degrade gracefully when omitted (older host pages still
-     *   get retry behaviour, just without the spinner).
+     *   get retry behavior, just without the spinner).
      * @param {() => Promise<void>} [opts.uiWaitForPortRetry]
      *   Host resolves this when the user clicks the Try-again button in
      *   the wrong-port section. Fires after the orchestrator's probe-open
@@ -512,7 +512,7 @@ export const installer = {
      *   guidance message — the OS picker is modal and covers the install
      *   modal. Optional; degrade gracefully to a silent re-prompt when
      *   omitted (older host pages just lose the guidance section).
-     * @param {(detail: {url: string, mdns?: string, board: string, applyDefaults?: boolean, viaHttp?: boolean, alreadyOnline?: boolean, ethOnlyNoLink?: boolean}) => void} opts.onSuccess
+     * @param {(detail: {url: string, mdns?: string, device: string, applyDefaults?: boolean, viaHttp?: boolean, alreadyOnline?: boolean, ethOnlyNoLink?: boolean}) => void} opts.onSuccess
      *   `mdns` is the device's `<deviceName>.local` address from the boot serial
      *   (deviceName is the single identity — mDNS = AP = DHCP hostname all follow
      *   it), or "" if the firmware predates the MM_DEVICE token. The host shows it
@@ -536,7 +536,7 @@ export const installer = {
      *   omitted/null OR when opening this handle fails (stale grant after
      *   the device was unplugged and replugged).
      */
-    async start({ manifestUrl, board, applyDefaults = true, txPower = null, eraseBefore = false,
+    async start({ manifestUrl, device, applyDefaults = true, txPower = null, eraseBefore = false,
                    ethOnly = false,
                    port: prePickedPort,
                    onProgress, uiWaitForCreds, uiWaitForIp, uiShowNeedsIpRetrying,
@@ -631,10 +631,10 @@ export const installer = {
                 ({ port, transport, esploader } = _detected);
                 const chipName = _detected.chipName;
                 _detected = null;
-                // detect() left the loader connected at its baudrate (before the board was
-                // known). If this board's catalog flashBaud differs, re-negotiate now, so a
-                // reused detect() connection honours the override like the fresh-connect branch.
-                const flashBaud = await catalogFlashBaud(board, onLog);
+                // detect() left the loader connected at its baudrate (before the device was
+                // known). If this device's catalog flashBaud differs, re-negotiate now, so a
+                // reused detect() connection honors the override like the fresh-connect branch.
+                const flashBaud = await catalogFlashBaud(device, onLog);
                 const priorBaud = esploader.baudrate;
                 if (flashBaud !== priorBaud) {
                     esploader.baudrate = flashBaud;
@@ -697,11 +697,11 @@ export const installer = {
 
             trackProgress("connect-flash");
             transport = new Transport(port, false);
-            // Flash baud: the board's catalog `flashBaud` if set, else the safe 460800
-            // default (a LOLIN-style CH340 pins 460800; native-USB boards ignore it).
+            // Flash baud: the device's catalog `flashBaud` if set, else the safe 460800
+            // default (a LOLIN-style CH340 pins 460800; native-USB devices ignore it).
             // Bootloader sync runs at 115200 first (romBaudrate); esptool-js negotiates
             // up to `baudrate` after.
-            const flashBaud = await catalogFlashBaud(board, onLog);
+            const flashBaud = await catalogFlashBaud(device, onLog);
             if (onLog) onLog(`[orchestrator] flash baud: ${flashBaud}`);
             esploader = new ESPLoader({
                 transport,
@@ -737,7 +737,7 @@ export const installer = {
             // Optional standalone eraseFlash() — opt-in via the "Erase chip
             // first" checkbox on the install page. Default off because a
             // normal install overwrites the regions writeFlash touches and
-            // preserves user state (WiFi credentials, board name on
+            // preserves user state (WiFi credentials, device name on
             // LittleFS), which is what most users want. Tick the box when
             // switching firmware variants whose partition tables differ, or
             // when wiping the device for a clean install. ~12 s on a 4 MB
@@ -869,7 +869,7 @@ export const installer = {
                 deviceMdns = bootMdns;
                 viaHttp = true;
                 alreadyOnline = true;
-                defaultsApplied = await pushDefaultsOverSerial(port, board, applyDefaults, trackProgress, onLog);
+                defaultsApplied = await pushDefaultsOverSerial(port, device, applyDefaults, trackProgress, onLog);
             } else if (ethOnly) {
                 // Ethernet-only firmware (WiFi compiled out: esp32-eth, esp32p4rev1-eth) that
                 // did NOT print an IP — i.e. no Ethernet cable was connected at boot. There
@@ -879,9 +879,9 @@ export const installer = {
                 // device-model defaults here, then report success telling the user to plug in
                 // Ethernet — the device comes online on its own once a cable is connected.
                 if (onLog) onLog(`[orchestrator] eth-only firmware, no IP from boot log — skipping WiFi provisioning (connect Ethernet)`);
-                defaultsApplied = await pushDefaultsOverSerial(port, board, applyDefaults, trackProgress, onLog);
+                defaultsApplied = await pushDefaultsOverSerial(port, device, applyDefaults, trackProgress, onLog);
                 trackProgress("done");
-                onSuccess({ url: "", board, applyDefaults, defaultsApplied, ethOnlyNoLink: true });
+                onSuccess({ url: "", device, applyDefaults, defaultsApplied, ethOnlyNoLink: true });
                 return;
             } else {
             // Pre-association TX-power cap (weak-power brown-out fix): push it
@@ -906,13 +906,13 @@ export const installer = {
             // Both share the same fallback path: skip provisioning + RPC
             // push, prompt the user for the device IP/hostname, and let
             // the post-flash flow (HTTP push in preview, query-param hand-
-            // off via Visit in production) handle the board injection.
+            // off via Visit in production) handle the device injection.
             // Try Improv `initialize()` once. On the "not detected" error
             // we drop into a retry loop: show the needs-ip dialog, let the
             // user choose retry / typed-IP / skip. Retry tears the SDK
             // down, re-opens the port, and runs `initialize()` again on
             // a fresh ImprovSerial. Cheap second chance for slow-booting
-            // boards (LOLIN S3 mini etc.) that lose the post-flash race —
+            // devices (LOLIN S3 mini etc.) that lose the post-flash race ,
             // the device-side Improv task isn't installed until after
             // NetworkModule::setup() completes (~1.8 s on ESP32-S3), and
             // the host's 2 s reopen wait can land before it's ready.
@@ -968,21 +968,21 @@ export const installer = {
                     // uiWaitForIp may be omitted on older host pages — degrade to the
                     // legacy empty-URL exit (no retry button without the dialog).
                     // This path never reached Improv-success, so no serial config push
-                    // happened; carry board + applyDefaults so the success note can tell
+                    // happened; carry device + applyDefaults so the success note can tell
                     // the user the defaults weren't applied (apply later via MoonDeck on
                     // the LAN). Defaults over serial only happen on the Improv path below.
                     trackProgress("done");
-                    onSuccess({ url: "", board, applyDefaults, alreadyOnline: true });
+                    onSuccess({ url: "", device, applyDefaults, alreadyOnline: true });
                     return;
                 }
                 trackProgress("needs-ip");
                 const ipResult = await uiWaitForIp();
                 if (!ipResult || ipResult.action === "skip") {
                     // User skipped the IP prompt. No serial config push on this path;
-                    // carry board + applyDefaults so the success note says the defaults
+                    // carry device + applyDefaults so the success note says the defaults
                     // weren't applied (apply later via MoonDeck on the LAN).
                     trackProgress("done");
-                    onSuccess({ url: "", board, applyDefaults, alreadyOnline });
+                    onSuccess({ url: "", device, applyDefaults, alreadyOnline });
                     return;
                 }
                 if (ipResult.action === "ip") {
@@ -1013,7 +1013,7 @@ export const installer = {
                 if (uiShowNeedsIpRetrying) uiShowNeedsIpRetrying(true);
                 await new Promise(r => setTimeout(r, 250));
                 // Re-push the TX-power cap on every retry: a slow-booting
-                // board may have missed the first frame entirely.
+                // device may have missed the first frame entirely.
                 if (txPower != null) {
                     try { await sendSetTxPowerFrame(port, txPower); } catch (_) { /* best-effort */ }
                     await new Promise(r => setTimeout(r, 200));
@@ -1062,10 +1062,10 @@ export const installer = {
                 // outcomes ("we got a URL" vs "we didn't"). Different
                 // shapes for different cardinalities, not drift.
                 if (!ssid) {
-                    // Empty SSID (Skip in the creds form). Keep board + applyDefaults
+                    // Empty SSID (Skip in the creds form). Keep device + applyDefaults
                     // so the success screen guides the user to apply defaults later.
                     trackProgress("done");
-                    onSuccess({ url: "", board, applyDefaults, alreadyOnline: false });
+                    onSuccess({ url: "", device, applyDefaults, alreadyOnline: false });
                     return;
                 }
 
@@ -1092,14 +1092,14 @@ export const installer = {
                 // (provision was the last standard command we need it for), then push.
                 await improvClient.close();
                 improvClient = null;
-                defaultsApplied = await pushDefaultsOverSerial(port, board, applyDefaults, trackProgress, onLog);
+                defaultsApplied = await pushDefaultsOverSerial(port, device, applyDefaults, trackProgress, onLog);
             }
 
             trackProgress("done");
             onSuccess({
                 url: deviceUrl,
                 mdns: deviceMdns,   // "<deviceName>.local" from the boot serial, "" if unknown
-                board: board || "",
+                device: device || "",
                 applyDefaults,      // the checkbox state (intent)
                 defaultsApplied,    // whether the serial config push actually ran (truth)
                 viaHttp,

@@ -42,7 +42,7 @@ This page covers only what those don't: the browser-side rendering behavior.
 Fixed top, 44 px, left-to-right:
 
 1. **Hamburger (☰)**, toggles the side nav (`body.nav-open`). See [§ Side navigation](#side-navigation).
-2. **MoonLight logo**, 28 px PNG from `/moonlight-logo.png`; the same image is the page favicon.
+2. **MoonLight logo**, 28 px PNG from `/moonmodules-logo.png`; the same image is the page favicon.
 3. **Brand wordmark**, "MoonLight".
 4. **Device name**, from the `System.deviceName` control.
 5. **System stats**, `uptime · NN K free` (uptime `Xd Yh Zm Ws`, free heap KB), read from the

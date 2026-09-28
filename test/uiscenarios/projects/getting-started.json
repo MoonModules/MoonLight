@@ -9,53 +9,38 @@
   "width": 1280,
   "clips": [
     {
-      "clip": "91-show-the-preview",
-      "title": "MoonLight",
-      "subtitle": "One board. Thousands of lights.",
-      "bars": 6
-    },
-    {
       "clip": "01-install-esp32",
       "title": "Install it",
       "subtitle": "A browser and a USB cable",
       "bars": 12
     },
     {
-      "clip": "92-change-layout",
+      "clip": "02-first-look-desktop",
+      "title": "Look around",
+      "subtitle": "One device. Thousands of lights.",
+      "bars": 6
+    },
+    {
+      "clip": "05-layouts",
       "title": "Say where the lights are",
       "bars": 6
     },
     {
-      "clip": "93-add-an-effect",
+      "clip": "06-layers",
       "title": "Paint them",
       "bars": 8
     },
     {
-      "clip": "94-add-a-modifier",
-      "title": "Reshape the result",
-      "bars": 6
-    },
-    {
-      "clip": "95-add-a-layer",
-      "title": "Stack and blend",
-      "bars": 8
-    },
-    {
-      "clip": "96-swap-an-effect",
+      "clip": "03-second-look",
       "title": "Change your mind freely",
       "bars": 6
     },
     {
-      "clip": "97-write-an-effect",
+      "clip": "08-moonlive-effects",
       "title": "Write your own",
       "subtitle": "Compiled on the device, no reflash",
       "bars": 12
-    },
-    {
-      "clip": "98-react-to-sound",
-      "title": "React to sound",
-      "subtitle": "A microphone on the board",
-      "bars": 8
     }
-  ]
+  ],
+  "note": "The clips are the narrated 00-08 series, replacing the short loops this cut was built from. `bars` still carries the loops' timing, and these clips run minutes rather than seconds, so re-time the cut against the track before rendering it."
 }

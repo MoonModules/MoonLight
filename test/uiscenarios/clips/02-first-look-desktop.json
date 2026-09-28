@@ -1,161 +1,172 @@
 {
   "name": "02-first-look-desktop",
   "description": "The same tour on a computer: every module, and what sits inside each one.",
-  "speed": 1.5,
+  "speed": 1.8,
   "steps": [
     {
       "action": "chapter",
       "title": "Your computer as a device",
-      "description": "The same interface, no board",
-      "seconds": 2.0
+      "description": "The same interface, no device",
+      "seconds": 6.4,
+      "caption": "Your computer as a device. The same interface, no device."
     },
     {
       "action": "open_card",
       "module": "Control",
       "caption": "Control: a remote, a button or a fader, pointed at anything on this page.",
-      "hold": 2.0
+      "speech": 7.4
     },
     {
       "action": "open_card",
       "module": "Layouts",
       "caption": "Layouts: where your lights are. Grid sets their shape.",
-      "hold": 1.8
+      "speech": 5.3
     },
     {
       "action": "open_card",
       "module": "Grid",
       "caption": "Grid: width, height and depth, applied while it runs.",
-      "hold": 2.0
+      "speech": 5.7
     },
     {
       "action": "set_number",
       "module": "Grid",
       "control": "width",
-      "value": 128,
-      "caption": "A computer is not a board: it has the memory and the bandwidth for a big one.",
-      "hold": 1.0
+      "value": 256,
+      "caption": "A computer is not a dedicated device: it has the memory and the bandwidth for a big grid, so I can push this one.",
+      "expect": {
+        "module": "Grid",
+        "control": "width",
+        "value": 256
+      },
+      "speech": 8.2
     },
     {
       "action": "set_number",
       "module": "Grid",
       "control": "height",
-      "value": 128,
-      "caption": "128 by 128 is 16,384 lights, resized while it renders.",
-      "hold": 2.6
+      "value": 256,
+      "caption": "Two fifty six by two fifty six. Sixty five thousand lights, resized while it renders.",
+      "expect": {
+        "module": "Grid",
+        "control": "height",
+        "value": 256
+      },
+      "speech": 8.9
     },
     {
       "action": "open_card",
       "module": "Effects",
       "caption": "Effects: what the lights show, stacked in layers.",
-      "hold": 1.8
+      "speech": 5.3
     },
     {
       "action": "open_card",
       "module": "Layer",
       "caption": "Layer: one effect and its modifiers, blended onto the ones below.",
-      "hold": 2.0
+      "speech": 6.1
     },
     {
       "action": "open_card",
       "module": "Drivers",
       "caption": "Drivers: how the finished frame leaves. A computer has no LED pins, so it previews and sends over the network.",
-      "hold": 2.0
+      "speech": 9.8
     },
     {
       "action": "open_card",
       "module": "LightPresets",
       "caption": "LightPresets: the named wirings every driver refers to.",
-      "hold": 1.8
+      "speech": 5.8
     },
     {
       "action": "open_card",
       "module": "Preview",
       "caption": "Preview: the picture on this page, which is a driver like any other.",
-      "hold": 1.8
+      "speech": 6.2
     },
     {
       "action": "open_card",
       "module": "System",
       "caption": "System: the device itself, its name, its uptime, how fast it renders.",
-      "hold": 2.0
+      "speech": 7.6
     },
     {
       "action": "open_card",
       "module": "Tasks",
       "caption": "Tasks: what runs each frame, and what each costs.",
-      "hold": 1.8
+      "speech": 5.8
     },
     {
       "action": "open_card",
       "module": "I2cScan",
       "caption": "I2cScan: finds the chips on the I2C bus.",
-      "hold": 1.6
+      "speech": 5.5
     },
     {
       "action": "open_card",
       "module": "Pins",
       "caption": "Pins: which pin every module has claimed.",
-      "hold": 1.8
+      "speech": 4.7
     },
     {
       "action": "open_card",
       "module": "File Manager",
       "caption": "File Manager: every file on the device, and one button that backs them all up.",
-      "hold": 2.0
+      "speech": 7.2
     },
     {
       "action": "open_card",
       "module": "Network",
       "caption": "Network: the connection, and the other devices it can see.",
-      "hold": 1.8
+      "speech": 5.6
     },
     {
       "action": "open_card",
       "module": "Mqtt",
       "caption": "Mqtt: a broker, for a home automation system.",
-      "hold": 1.6
+      "speech": 6.2
     },
     {
       "action": "open_card",
       "module": "Devices",
       "caption": "Devices: every other MoonLight on the network, found on their own.",
-      "hold": 1.8
+      "speech": 6.6
     },
     {
       "action": "open_card",
       "module": "Services",
       "caption": "Services: the inputs.",
-      "hold": 1.6
+      "speech": 3.5
     },
     {
       "action": "open_card",
       "module": "Audio",
       "caption": "Audio: synthesized out of the box, so the effects react before a microphone is wired.",
-      "hold": 2.4
+      "speech": 8.2
     },
     {
       "action": "open_card",
       "module": "Firmware",
       "caption": "Firmware: on a computer it downloads the next release for you.",
-      "hold": 2.0
+      "speech": 5.6
     },
     {
       "action": "open_card",
       "module": "MoonCloud",
       "caption": "MoonCloud: see what everyone else is running.",
-      "hold": 1.8
+      "speech": 5.0
     },
     {
       "action": "open_card",
       "module": "Stats",
       "caption": "Stats: what this device shares, and the totals it gets back.",
-      "hold": 1.8
+      "speech": 5.8
     },
     {
       "action": "open_card",
       "module": "Talk",
       "caption": "Talk: ask a question without leaving the page.",
-      "hold": 1.8
+      "speech": 4.7
     }
   ]
 }

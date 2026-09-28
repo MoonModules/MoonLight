@@ -57,7 +57,7 @@ gzip_file_hex("vendor/prism.js" PRISM_JS)
 gzip_file_hex("preview3d.js" PREVIEW3D_JS)
 gzip_file_hex("preview-adapt.js" PREVIEW_ADAPT_JS)
 gzip_file_hex("migrate.js" MIGRATE_JS)
-file(READ "${UI_DIR}/moonlight-logo.png" LOGO_PNG HEX)
+file(READ "${UI_DIR}/moonmodules-logo.png" LOGO_PNG HEX)
 
 # Convert hex string to C array initializer
 function(hex_to_c_array HEX_STR VAR_NAME OUT_VAR)

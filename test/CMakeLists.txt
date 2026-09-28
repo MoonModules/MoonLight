@@ -154,6 +154,7 @@ add_executable(mm_tests
     unit/light/unit_Effects_container.cpp
     unit/light/unit_MoonLivePalette.cpp
     unit/light/unit_MoonLiveModifier.cpp
+    unit/light/unit_MoonLiveDrawing.cpp
     unit/light/unit_MoonLiveParticles.cpp
     unit/light/unit_MoonLiveLayout.cpp
     unit/light/unit_MoonLiveScripts.cpp

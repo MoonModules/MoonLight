@@ -580,8 +580,8 @@ void sendAll(int sock, const char* data, size_t len) {
 }
 
 // The embedded logo (EMBED_FILES in CMakeLists; symbol names derive from the filename).
-extern const uint8_t logoStart[] asm("_binary_moonlight_logo_png_start");
-extern const uint8_t logoEnd[]   asm("_binary_moonlight_logo_png_end");
+extern const uint8_t logoStart[] asm("_binary_moonmodules_logo_png_start");
+extern const uint8_t logoEnd[]   asm("_binary_moonmodules_logo_png_end");
 
 void sendBinary(int sock, const char* type, const uint8_t* data, size_t len) {
     char head[192];

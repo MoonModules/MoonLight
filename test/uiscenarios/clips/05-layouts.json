@@ -1,0 +1,186 @@
+{
+  "name": "05-layouts",
+  "description": "Where the lights physically are: compiled layouts for the common shapes, and scripted ones for anything else.",
+  "speed": 1.8,
+  "steps": [
+    {
+      "action": "chapter",
+      "title": "Layouts",
+      "description": "Where the lights are",
+      "caption": "Layouts. Where the lights are.",
+      "seconds": 3.6
+    },
+    {
+      "action": "open_card",
+      "module": "Layouts",
+      "caption": "A layout says where the lights are. Whatever shape it makes, the effect paints into it.",
+      "speech": 7.7
+    },
+    {
+      "action": "open_card",
+      "module": "Grid",
+      "caption": "Here is a grid, sixteen by sixteen. Two hundred and fifty six lights, addressed by row and column.",
+      "speech": 9.8
+    },
+    {
+      "action": "set_number",
+      "module": "Grid",
+      "control": "width",
+      "value": 256,
+      "caption": "The size is just a control, so I can grow it while it runs. Width first, to two hundred and fifty six.",
+      "expect": {
+        "module": "Grid",
+        "control": "width",
+        "value": 256
+      },
+      "speech": 9.3
+    },
+    {
+      "action": "set_number",
+      "module": "Grid",
+      "control": "height",
+      "value": 256,
+      "caption": "And the height to match. Sixty five thousand lights now, and the effect never noticed the change.",
+      "expect": {
+        "module": "Grid",
+        "control": "height",
+        "value": 256
+      },
+      "speech": 8.4
+    },
+    {
+      "action": "clear_children",
+      "module": "Layouts",
+      "caption": "To show you another shape I take this one out first, so only one layout is on screen at a time.",
+      "speech": 7.9
+    },
+    {
+      "action": "add_module",
+      "parent": "Layouts",
+      "type": "RingLayout",
+      "as": "ring",
+      "caption": "A ring. The lights sit around a circle now, and the same effect follows them without being told.",
+      "speech": 8.0
+    },
+    {
+      "action": "set_number",
+      "module": "{ring}",
+      "control": "nrOfLEDs",
+      "value": 240,
+      "caption": "A ring counts lights rather than rows, so this one goes to two hundred and forty around the circle.",
+      "speech": 7.8
+    },
+    {
+      "action": "clear_children",
+      "module": "Layouts",
+      "caption": "Out it goes again. Every layout is a module, so adding and removing one is the same gesture throughout.",
+      "speech": 8.7
+    },
+    {
+      "action": "add_module",
+      "parent": "Layouts",
+      "type": "SpiralLayout",
+      "as": "spiral",
+      "caption": "A spiral, winding outward from the middle. I did not rewrite a single effect for it.",
+      "speech": 7.4
+    },
+    {
+      "action": "set_number",
+      "module": "{spiral}",
+      "control": "ledCount",
+      "value": 900,
+      "caption": "Nine hundred lights along the spiral, and it winds further out to hold them.",
+      "speech": 6.2
+    },
+    {
+      "action": "clear_children",
+      "module": "Layouts",
+      "caption": "And again, to make room. This is the whole point of keeping layout and effect apart.",
+      "speech": 7.8
+    },
+    {
+      "action": "add_module",
+      "parent": "Layouts",
+      "type": "CubeLayout",
+      "as": "cube",
+      "caption": "A cube. This one is three dimensional, so a three D effect fills its volume rather than a face.",
+      "speech": 8.7
+    },
+    {
+      "action": "set_number",
+      "module": "{cube}",
+      "control": "width",
+      "value": 24,
+      "caption": "A cube sizes on three axes. Twenty four wide, and the other two follow in a moment.",
+      "speech": 8.3
+    },
+    {
+      "action": "set_number",
+      "module": "{cube}",
+      "control": "height",
+      "value": 24,
+      "caption": "Twenty four high.",
+      "speech": 2.7
+    },
+    {
+      "action": "set_number",
+      "module": "{cube}",
+      "control": "depth",
+      "value": 24,
+      "caption": "And twenty four deep: nearly fourteen thousand lights in a solid block.",
+      "speech": 5.9
+    },
+    {
+      "action": "clear_children",
+      "module": "Layouts",
+      "caption": "Clearing once more. On a real installation you would leave one of these in place, matched to your lights.",
+      "speech": 8.5
+    },
+    {
+      "action": "add_module",
+      "parent": "Layouts",
+      "type": "TubesLayout",
+      "as": "tubes",
+      "caption": "Tubes: one column of lights each, standing side by side, the way many real installations are built.",
+      "speech": 8.7
+    },
+    {
+      "action": "set_number",
+      "module": "{tubes}",
+      "control": "nrOfTubes",
+      "value": 24,
+      "caption": "Twenty four tubes now, each still its own column.",
+      "speech": 5.2
+    },
+    {
+      "action": "clear_children",
+      "module": "Layouts",
+      "caption": "One last time. Everything so far ships compiled into the firmware, ready to pick from a list.",
+      "speech": 7.6
+    },
+    {
+      "action": "add_module",
+      "parent": "Layouts",
+      "type": "MoonLiveLayout",
+      "as": "live",
+      "caption": "But when the list does not have your shape, you write it yourself. This script runs on the device.",
+      "speech": 7.6
+    },
+    {
+      "action": "pick_file",
+      "module": "{live}",
+      "control": "script",
+      "value": "rose.mll",
+      "caption": "This is a rose curve, written in MoonLive and compiled on the device itself while you watch.",
+      "speech": 7.1
+    },
+    {
+      "action": "pick_file",
+      "module": "{live}",
+      "control": "script",
+      "value": "sixteen-rings.mll",
+      "caption": "And sixteen rings on a wall, from the same twenty lines. One effect, every shape.",
+      "speech": 7.3
+    }
+  ]
+}

@@ -156,6 +156,21 @@
 /// Letting it escape main is the correct outcome for a CLI test runner. It terminates with a diagnostic and a non-zero status, which is exactly what a harness needs to see.
 /// Discovery is recursive so the core/ and light/ split picks up every JSON without each subfolder needing its own loop.
 ///
+/// ## What a measurement covers
+///
+/// A measure step ticks for a span of wall time rather than a fixed frame count, and reports the average tick.
+/// The frame count measured the wrong thing: 200 back-to-back ticks span well under a millisecond.
+/// An effect whose animation arrives on a beat has nothing to do inside a window that short.
+/// A span is the clock the effects read, so a window of wall time holds that much animation on any host.
+///
+/// The window is sized to the slowest shipped default, which is PulseEffect at its default 40 bpm: it emits every 1500 ms and returns early on every tick in between.
+/// A window shorter than one of those intervals can fall entirely between two emissions and report an idle effect as the effect's cost.
+///
+/// The frame cap is the other half of the same rule, sized ABOVE what the window can reach rather than as a round number.
+/// An early-outing effect on a desktop ticks about three thousand times per millisecond, so a cap of 200k ended the loop after 65 ms of a 1600 ms window.
+/// Every sample then stopped short of the animation it was meant to cover.
+/// So reaching the cap before the clock is reported rather than passed off as a full span.
+///
 /// ## What a green run is allowed to mean
 ///
 /// A scenario that did not run returns `kSkipped` rather than 0, because a skip counted as a pass is how a suite that stopped testing reads as green.
@@ -471,7 +486,12 @@ struct ScenarioContext {
 };
 
 static constexpr int WARMUP_FRAMES = 10;
-static constexpr int MEASURE_FRAMES = 200;
+
+/// How long a measurement runs, in the wall clock the effects read, long enough to cover one whole interval of the slowest shipped default: @xref{what-a-measurement-covers}.
+static constexpr uint32_t MEASURE_WINDOW_MS = 1600;
+
+/// A ceiling on one window's frames, so a pathologically fast tick cannot spin without bound, sized above what the window can reach on the fastest host: @xref{what-a-measurement-covers}.
+static constexpr int MEASURE_FRAME_CAP = 8000000;
 
 struct Result {
     bool passed = true;
@@ -875,10 +895,29 @@ static int runScenario(const char* path) {
             for (int i = 0; i < WARMUP_FRAMES; i++) ctx.scheduler.tick();
             size_t heapBeforeMeasure = mm::platform::freeHeap();
             uint32_t startUs = mm::platform::micros();
-            for (int i = 0; i < MEASURE_FRAMES; i++) ctx.scheduler.tick();
-            uint32_t elapsedUs = mm::platform::micros() - startUs;
-            uint32_t tickTimeUs = MEASURE_FRAMES > 0 ? elapsedUs / MEASURE_FRAMES : 0;
-            uint32_t fps = tickTimeUs > 0 ? 1000000 / tickTimeUs : 0;
+            // Ticking for a SPAN rather than a count, so the window covers real animation: @xref{what-a-measurement-covers}.
+            const uint32_t windowUs = MEASURE_WINDOW_MS * 1000u;
+            int frames = 0;
+            uint32_t elapsedUs = 0;
+            while (elapsedUs < windowUs && frames < MEASURE_FRAME_CAP) {
+                ctx.scheduler.tick();
+                frames++;
+                elapsedUs = mm::platform::micros() - startUs;
+            }
+            // The cap ends the loop before the clock does, so the sample covers less animation than a window, and that is SAID rather than passed off as a full span.
+            if (frames >= MEASURE_FRAME_CAP && elapsedUs < windowUs) {
+                std::printf("  NOTE  frame cap reached after %ums of a %ums window\n",
+                            elapsedUs / 1000u, MEASURE_WINDOW_MS);
+            }
+            // Rounded rather than floored: a desktop tick is a fraction of a microsecond, and flooring reported 0 or 1 for everything, which is what made the trend unreadable.
+            uint32_t tickTimeUs = frames > 0
+                ? (elapsedUs + static_cast<uint32_t>(frames) / 2) / static_cast<uint32_t>(frames)
+                : 0;
+            // FPS from the undivided numbers, so it keeps its precision where the rounded tick has lost it.
+            const uint32_t fpsFromSpan = elapsedUs > 0
+                ? static_cast<uint32_t>((static_cast<uint64_t>(frames) * 1000000u) / elapsedUs)
+                : 0;
+            uint32_t fps = fpsFromSpan;
             size_t heapAfterMeasure = mm::platform::freeHeap();
             // Largest contiguous block in INTERNAL RAM, which diagnoses internal-heap fragmentation: @xref{why-the-block-size-is-internal-ram-only}.
             size_t maxBlock = mm::platform::maxInternalAllocBlock();

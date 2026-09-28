@@ -10,7 +10,7 @@ caller adds a camera. Playwright's own Screencast API draws the cursor, highligh
 what each action touches and renders the captions as overlays, so there is no second
 pass burning text into frames and no hand-drawn pointer to keep in sync.
 
-    uv run moondeck/uiscenario/uivideo.py --run test/uiscenarios/clips/95-add-a-layer.json
+    uv run moondeck/uiscenario/uivideo.py --run test/uiscenarios/clips/06-layers.json
 
 Prerequisites:
     1. A running MoonLight:   uv run moondeck/run/run_desktop.py
@@ -20,6 +20,7 @@ Prerequisites:
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import shutil
 import subprocess
@@ -101,13 +102,13 @@ def main() -> int:
 
     run = uirun.load_run(Path(args.run))
     # A run needing particular hardware resolves its address from the bench registry,
-    # so the run file states the need and moondeck.json states where that board is.
+    # so the run file states the need and moondeck.json states where that device is.
     explicit_host = args.host != ap.get_default("host")
     if run.requires and not explicit_host:
         found = uirun.device_for(run.requires)
         if not found:
             print(f"This run needs a device with {run.requires!r}, and none is "
-                  f"answering. Check moondeck.json and the board.", file=sys.stderr)
+                  f"answering. Check moondeck.json and the device.", file=sys.stderr)
             return 1
         host = found
 
@@ -125,10 +126,43 @@ def main() -> int:
     # One flat folder of clips, named after the run. A folder per run bought nothing:
     # a run produces ONE take, overwritten next time, so the folder only ever held a
     # single file. media/ splits by KIND instead (audio, video), which is the division
-    # that earns its keep once compositions cut video against a music track.
+    # that earns its keep once projects cut video against a music track.
     out_dir = Path(args.out) if args.out else ROOT / "media" / "video"
     out_dir.mkdir(parents=True, exist_ok=True)
-    out = out_dir / f"{run.name}.webm"
+    # `-raw` in the name, because the take and the published clip otherwise differ only by
+    # folder: the raw one is larger and newer, so it is the one that gets opened by mistake,
+    # and it has no audio at all. A voiced clip reading as silent was this file, twice.
+    out = out_dir / f"{run.name}-raw.webm"
+
+    # BACK TO BOOT STATE FIRST, always. A clip builds what it needs and leaves it standing, so the
+    # next take opens on the last one's ending: a layers clip recorded against three leftover layers
+    # from earlier takes, and every one of them composited into the shot. Doing this here rather
+    # than in each run file means no clip can forget it, and no clip spends screen time tidying.
+    if not run.host:
+        from reset_device import apply_setup, reset
+        # `host`, not args.host: discovery above may have resolved another device, and the
+        # scheme is stripped there. Resetting one device while recording another leaves the
+        # take opening on the previous ending, which is the whole thing this call prevents.
+        # A device that never answers raises rather than returning, and the message written for
+        # that case is here: without the catch it surfaced as a traceback instead.
+        try:
+            reached_boot_state = reset(host) == 0
+        except RuntimeError as e:
+            reached_boot_state = False
+            print(f"  {e}", file=sys.stderr)
+        if not reached_boot_state:
+            print("The device did not reach its boot state, so the take would open on the "
+                  "previous one's ending. Nothing recorded.", file=sys.stderr)
+            return 1
+        # Then whatever THIS clip needs on top of the boot state, also off camera. The count is
+        # CHECKED for the same reason the reset above is: a refused precondition records a clip
+        # that demonstrates the default instead of the thing it was written to show, and says so
+        # nowhere. The 256x256 grid the layouts clip is about is exactly such a precondition.
+        applied = apply_setup(host, run.setup)
+        if applied != len(run.setup):
+            print(f"{applied} of {len(run.setup)} setup control(s) applied, so the take would "
+                  f"show the wrong starting state. Nothing recorded.", file=sys.stderr)
+            return 1
 
     print(f"Recording [{run.name}]: {len(run.steps)} steps")
 
@@ -175,6 +209,8 @@ def main() -> int:
         driver.open_app(cards=not run.host)
 
         with page.screencast.start(path=str(out), size=VIEWPORT):
+            # The clock the caption marks are measured against, started where the recording does.
+            driver._recording_started = driver._now()
             # show_actions draws the pointer and names each action on screen: it
             # animates from the previous action's point to the next, which is the
             # continuity a viewer needs to see cause before effect.
@@ -186,12 +222,24 @@ def main() -> int:
             #
             # 620ms is the travel time for a pointer crossing the window between two
             # controls, which is the move a viewer has to FOLLOW to see what is being
-            # changed. Drags set their own, much shorter, duration for the samples
-            # along a slider's track, where the pointer is already where it belongs.
+            # changed. It is NOT the place to buy back time: a pointer that jumps leaves
+            # the viewer to work out what was pressed, which is the one thing the clip
+            # exists to show. Pace comes from the run's `speed` and from narrating the
+            # wait, never from hiding the travel. Drags set their own, much shorter,
+            # duration for the samples along a slider's track, where the pointer is
+            # already where it belongs.
             with page.screencast.show_actions(cursor="pointer", duration=620,
                                               position="top-left", font_size=20):
                 failures = driver.run_all(run)
                 page.wait_for_timeout(1500)
+
+        # WHEN each caption was on screen, written beside the take. A voice track laid on later
+        # reads these rather than recomputing the timeline from the run file's holds, which say how
+        # long a step should dwell and not how long the device took: on one clip the two differed by
+        # two minutes, and every spoken line landed further behind the picture than the last.
+        marks = out.with_suffix(".captions.json")
+        marks.write_text(json.dumps(
+            [{"at": round(at, 3), "text": text} for at, text in driver.caption_marks], indent=1))
 
         context.close()
         browser.close()

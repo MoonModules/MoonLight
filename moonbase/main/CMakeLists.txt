@@ -7,7 +7,7 @@ idf_component_register(
     # in two hand-written copies is how they drift.
     INCLUDE_DIRS "../../src"
     # The app's own logo, embedded IDF-natively; served as /logo.png (header + favicon).
-    EMBED_FILES "../../src/ui/moonlight-logo.png"
+    EMBED_FILES "../../src/ui/moonmodules-logo.png"
     # esp_https_ota brings esp_http_client and esp-tls with it, so neither is listed separately.
     # esp_eth: the RMII bring-up for boards whose config wires a PHY (ethStart).
     REQUIRES nvs_flash esp_netif esp_event esp_wifi esp_eth app_update esp_https_ota

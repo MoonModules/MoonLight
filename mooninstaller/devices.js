@@ -124,7 +124,9 @@ function render() {
         info.append(nameEl, urlEl);
         // Device-model line (between URL and last-seen) renders only when set.
         // Read `board` as a fallback so bookmarks saved before the board→deviceModel
-        // rename keep their label without a migration. "(any device)" provisions skip it.
+        // rename keep their label without a migration: `board` is the key those entries carry,
+        // and a visitor's localStorage is not ours to rewrite.
+        // "(any device)" provisions skip the line entirely.
         const deviceModel = device.deviceModel || device.board;
         if (deviceModel) {
             const modelEl = document.createElement("div");

@@ -9,7 +9,7 @@ There is really only **one idea** in MoonLight, and everything else follows from
 
 ![The MoonLight interface: navigation on the left, live preview in the middle, module cards on the right](../assets/gettingstarted/02-01-UI-large.png)
 
-<video src="../assets/uiscenarios/91-show-the-preview.webm" autoplay loop muted playsinline width="720" title="The 3D preview filling the frame: what the device is rendering, live"></video>
+<video src="../assets/uiscenarios/02-first-look-desktop.webm" controls playsinline width="720" title="A tour of the interface: every module, and what sits inside each one."></video>
 
 ---
 
@@ -126,7 +126,7 @@ fold it, tile it. An effect written for one strip can drive a whole wall without
 
 Move a slider and the next frame uses it. Change the WiFi credentials, add an effect, resize a grid, all of it takes effect immediately, on a running device.
 
-<video src="../assets/uiscenarios/96-swap-an-effect.webm" autoplay loop muted playsinline width="720" title="Replacing an effect with another type; the slot keeps its place and the lights never stop"></video>
+<video src="../assets/uiscenarios/03-second-look.webm" controls playsinline width="720" title="Every control a card carries, pressed in turn: each one applies on the next frame."></video>
 
 **Files are the one exception, and only because typing is different.** A script
 you are editing is saved when you click away, press Ctrl/Cmd+S, or press Save, a half-typed line should not be compiled onto your fixture mid-word. The moment it is saved it recompiles and swaps in live, same as everything else.

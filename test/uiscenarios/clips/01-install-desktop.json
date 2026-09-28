@@ -7,34 +7,36 @@
     {
       "action": "chapter",
       "title": "Install it on your computer",
-      "description": "No board required",
-      "seconds": 2.0
+      "description": "No device required",
+      "seconds": 5.1,
+      "caption": "Install it on your computer. No device required."
     },
     {
       "action": "goto",
       "url": "http://localhost:8421/install/?release=latest",
-      "caption": "The same installer runs MoonLight on your computer, with no board at all.",
-      "hold": 1.8
+      "caption": "The same installer that flashes a device also runs MoonLight on your computer, with no hardware at all.",
+      "speech": 8.7
     },
     {
       "action": "choose_option",
       "selector": "#port-select",
       "value": "This computer*",
-      "caption": "Pick this computer instead of a USB port.",
-      "hold": 1.8
+      "caption": "Instead of picking a USB port, pick this computer.",
+      "speech": 5.2
     },
     {
       "action": "wait_for",
       "selector": "#rp-firmware",
       "text": "macOS",
       "timeout": 30,
-      "caption": "It knows which build your machine needs."
+      "caption": "It works out which build your machine needs by itself: this one is macOS.",
+      "speech": 7.0
     },
     {
       "action": "click",
       "selector": "#rp-install",
-      "caption": "One button, and the app downloads.",
-      "hold": 2.4
+      "caption": "One button, and the app downloads. That is the whole installation.",
+      "speech": 6.3
     }
   ]
 }

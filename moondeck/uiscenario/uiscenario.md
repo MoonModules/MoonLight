@@ -67,6 +67,7 @@ Only `action` and that action's own arguments are required.
 | `wait_process` | `name`, `timeout` | holds until that command finishes, and fails the take if it did not succeed |
 | `hero` | `seconds` | hides the chrome and fills the frame with the 3D preview |
 | `pick_file` | `module`, `control`, `value` | a filepath control's picker |
+| `new_script` | `module`, `control`, `value` | creates a script through the control's + button, then opens its editor |
 | `type_script` | `text`, `delay` | types into the MoonLive editor and saves |
 
 Another MoonLight surface has no module tree, so a run there names elements directly. These are the exception, not the default. A new surface earns a contract (data- attributes) the way the device UI has one, rather than growing this list.
@@ -101,24 +102,73 @@ Roles are not usable for the card buttons: they carry `title`, which contributes
 
 One structural fact drives the rest: **only one root's subtree is in the DOM at a time** (`renderCards`: "One root visible at a time"). A module in a closed root is not hidden, it is absent, so the engine opens a step's root before acting on it. A step naming a module in another root does not need to say so.
 
-## Clips and compositions
+## Narration and pace
 
-A **clip** is one topic, standing alone: it opens the card it needs, creates what it uses, and deletes it again. `95-add-a-layer.json` is a clip. Standing alone is what lets it be a test, a doc page's video, and one section of a longer cut without change.
+A clip is watched, not read, so Luna speaks it.
+Each rule below carries a short tag, so a review can say "boot state" or "every step speaks" rather than quoting a paragraph.
+They were learned by getting them wrong: a two-and-a-half-minute clip that was three quarters silence, and a layers clip recorded against three leftover layers.
 
-A **composition** stitches clips into a longer video (a get-started, a feature tour) and is where music alignment belongs, since a bar grid only means something across a whole cut. `bpm` and `first_beat` live on the composition, not the clip.
+### Before the camera rolls
 
-    uv run moondeck/uiscenario/uivideo.py --run test/uiscenarios/clips/95-add-a-layer.json
+- **Boot state.** `uivideo.py` resets the device before it records: Layouts holds one grid, the Layer runs Pulse, and Drivers holds the two modules boot wires. A clip builds what it needs and leaves it standing, so without this the next take opens on the last one's ending. It lives in the tool, so no clip can forget it and none spends screen time tidying on camera.
+- **Setup, not demonstration.** What one clip needs beyond the boot state goes in a `setup` block, applied over REST before recording. A precondition is not a demonstration: the MoonLive clip spent its first three shots typing a grid size into two boxes.
+
+```json
+"setup": [
+  { "module": "Grid", "control": "width",  "value": 256 },
+  { "module": "Grid", "control": "height", "value": 256 }
+]
+```
+
+### What is said
+
+- **Every step speaks.** The caption is the narration, so a step without one is a stretch of clip with nothing being said. Even the plumbing earns a line: an uncaptioned `clear_children` cost ten seconds of a viewer waiting to be told what they were looking at.
+- **Title card speaks.** A chapter card is the first thing a viewer sees and it sat in silence. Its caption is the title and its subtitle, and its `seconds` comes from that line.
+- **Two seconds of silence, at most.** Measure the gap between one line ending and the next beginning rather than guessing. Device work is not an excuse for silence, it is the thing to narrate while it happens.
+- **Captions stay burned in.** They survive editing and upload, where a sidecar subtitle file does not, and they serve the large share of viewers who watch muted.
+
+### How it is timed
+
+- **Voice leads, picture follows.** Each caption's spoken duration is measured once by `uimeasure.py` and written into the step as `speech`, and the recording holds that shot until the line has finished. **Alba speaks every clip**, and she is the default of all three scripts. Measuring with one voice and narrating with another drifts the words off their shots, so the way to avoid that is to pass no voice at all. Whatever the action already spent counts towards it, so a slow step adds nothing and a fast one waits. Sizing the dwell by eye left captions vanishing mid-sentence and each line starting over the one before it.
+- **`speech` is wall-clock.** The recorder multiplies it by `speed`, because the words are spoken at natural pace and the picture is sped up afterwards.
+- **Offsets are measured, not computed.** `uivideo` timestamps each caption as it reaches the screen and writes `<clip>-raw.captions.json` beside the take, and `uivoiceover` reads those. Summing the run file's holds does not work. A hold says how long a step is asked to dwell, not how long the device took, and on one clip the two differed by two minutes.
+- **Overruns are reported, not absorbed.** The voiceover names every line that outlasts its shot, which is the check that the measurement held.
+
+### Pace
+
+- **Pace comes from `speed` and from talking.** The run's `speed` shortens the device's own waiting without changing what it does. The voice offsets are divided by the same number, so the words stay on their shots.
+- **Never from the pointer.** Its travel time is the one thing that must not be trimmed. A cursor that jumps leaves the viewer to work out what was pressed, which is what the clip exists to show.
+
+## Clips and projects
+
+A **clip** is one topic, standing alone: it opens the card it needs, creates what it uses, and deletes it again. `06-layers.json` is a clip. Standing alone is what lets it be a test, a doc page's video, and one section of a longer cut without change.
+
+A **project** stitches clips into a longer video, a get-started or a feature tour.
+Music alignment belongs there, since a bar line is a property of the cut rather than of any one clip.
+Its own section is [below](#project-files-cutting-clips-together).
+
+Three commands make one voiced clip, in this order: the lines are measured, the take is recorded
+against those lengths, and the voice is laid over the published clip.
+
+    uv run moondeck/uiscenario/uimeasure.py   --run test/uiscenarios/clips/06-layers.json
+    uv run moondeck/uiscenario/uivideo.py     --run test/uiscenarios/clips/06-layers.json
+    uv run moondeck/uiscenario/uivoiceover.py --run test/uiscenarios/clips/06-layers.json
+
+No `--voice` on any of them: alba is the default of all three, which is what keeps the measurement
+and the narration in agreement. `--voice` exists for trying another one, and then it has to be
+given to the first and the third alike.
 
 Sources live under `test/uiscenarios/`, outputs under `media/`:
 
     test/uiscenarios/clips/<name>.json      a clip: what a person does    (tracked)
+    test/uiscenarios/slides/<name>.json     a slide script: uinarrate     (tracked)
     test/uiscenarios/projects/<name>.json   a project: how clips are cut  (tracked)
 
     media/video/<name>.webm                 the raw take, ignored
     media/video/<project>.mp4               the finished cut, ignored
     docs/assets/uiscenarios/<name>.webm     the published clip, TRACKED
 
-`media/` holds working output, split by kind (`video/`, `audio/` for the music a composition is cut against) and kept out of the repository. The published clip is re-encoded at 2x speed and 960px wide, which is what makes it small enough to track beside the effect GIFs it sits with. Measured on a 49-second take: 1280@1x is 3.3 MB, 960@2x is 872 KB, and speed and scale each take about a third off independently. The codec is nearly irrelevant, because a 3D preview is constantly-changing pixels.
+`media/` holds working output, split by kind (`video/`, `audio/` for the music a project is cut against) and kept out of the repository. The published clip is re-encoded at 2x speed and 960px wide, which is what makes it small enough to track beside the effect GIFs it sits with. Measured on a 49-second take: 1280@1x is 3.3 MB, 960@2x is 872 KB, and speed and scale each take about a third off independently. The codec is nearly irrelevant, because a 3D preview is constantly-changing pixels.
 
 Speeding the clip up changes the VIDEO, not the run: the test and the clip still describe the same interaction, and a UI demo at recording pace is slower than anyone wants to watch. `--speed`, `--width`, `--crf` tune it; `--no-publish` skips it.
 
@@ -134,9 +184,9 @@ A **project** (`test/uiscenarios/projects/<name>.json`) is the edit: which clips
   "audio": "media/audio/Norse Constellations (Original Mix).mp3",
   "bpm": 112.35, "first_beat": 8.78, "audio_gain": 0.5, "width": 1280,
   "clips": [
-    {"clip": "95-add-a-layer", "title": "Stack and blend", "bars": 8},
+    {"clip": "06-layers", "title": "Stack and blend", "bars": 8},
     {"source": "media/footage/wall.mp4",
-     "title": "Twelve thousand lights", "subtitle": "On one board", "bars": 12}
+     "title": "Twelve thousand lights", "subtitle": "On one device", "bars": 12}
   ]
 }
 ```

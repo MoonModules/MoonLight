@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/module/MoonModule.h"
 #include "core/util/InputMapping.h"        // InputAction: the target half, shared with the button service
 #include "core/system/FilesystemModule.h"    // noteDirty: schedule the debounced save on a learned bind
@@ -224,7 +225,7 @@ private:
             rows_[i].code = code;
             claimCode(code, &rows_[i]);     // one key, one row: the newest binding wins
             rows_[i].learn = false;
-            std::snprintf(statusBuf_, sizeof(statusBuf_), "learned 0x%08lX",
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "learned 0x%08lX",
                           static_cast<unsigned long>(code));
             setStatus(statusBuf_);
             // Written straight into the row, so it schedules its own save rather than waiting.

@@ -6,7 +6,7 @@ Everywhere the product name still appears as the CURRENT name, which is what the
 
 Committed so the reach is reviewable before the day. A file appearing here that should keep the old name needs a `rename-keep` marker, and the readiness check asserts the ones already found.
 
-**401 hits across 107 files.**
+**461 hits across 114 files.**
 
 ## By area
 
@@ -14,30 +14,31 @@ Committed so the reach is reviewable before the day. A file appearing here that 
 |---:|---|
 | 81 | `moondeck/ci` |
 | 56 | `docs/moonmodules/light` |
+| 31 | `docs/how-to` |
+| 30 | `moondeck/run` |
+| 24 | `moondeck/docs` |
 | 22 | `.` |
-| 21 | `moondeck/run` |
 | 19 | `docs/work/past` |
-| 17 | `docs/how-to` |
 | 17 | `src/light/layouts` |
 | 17 | `src/ui` |
 | 16 | `.github/workflows` |
+| 16 | `moondeck` |
 | 15 | `docs/work/past/plans` |
 | 13 | `docs/work/future` |
 | 13 | `moondeck/build` |
 | 12 | `src/light/effects` |
 | 11 | `src/light/modifiers` |
-| 10 | `moondeck` |
+| 10 | `docs/reference` |
 | 10 | `moondeck/check` |
-| 8 | `mooninstaller` |
-| 6 | `docs` |
+| 9 | `mooninstaller` |
+| 7 | `docs` |
 | 6 | `docs/work/present` |
-| 5 | `docs/reference` |
+| 5 | `docs/friend-repos` |
 | 4 | `moonbase/main` |
-| 4 | `moondeck/docs` |
-| 3 | `docs/friend-repos` |
 | 3 | `docs/legal` |
 | 3 | `moondeck/qemu` |
 | 2 | `mooncloud` |
+| 2 | `test/unit/core` |
 | 1 | `docs/explanation/architecture` |
 | 1 | `esp32` |
 | 1 | `moonbase` |
@@ -52,6 +53,7 @@ Committed so the reach is reviewable before the day. A file appearing here that 
 |---:|---|
 | 81 | `moondeck/ci/package_desktop.py` |
 | 30 | `docs/moonmodules/light/effects.md` |
+| 20 | `moondeck/docs/screenshot_modules.py` |
 | 19 | `docs/work/past/index.md` |
 | 16 | `.github/workflows/release.yml` |
 | 13 | `docs/moonmodules/light/layouts.md` |
@@ -59,15 +61,14 @@ Committed so the reach is reviewable before the day. A file appearing here that 
 | 13 | `src/ui/app.js` |
 | 11 | `docs/moonmodules/light/modifiers.md` |
 | 11 | `docs/work/past/plans/rename-to-moonlight (superseded).md` |
+| 11 | `moondeck/MoonDeck.md` |
+| 10 | `docs/how-to/installing-to-desktop.md` |
+| 9 | `moondeck/run/show_crash_log.py` |
+| 8 | `docs/reference/MIGRATING.md` |
 | 8 | `moondeck/build/build_desktop.py` |
 | 7 | `CMakeLists.txt` |
 | 7 | `README.md` |
+| 7 | `docs/how-to/building.md` |
 | 6 | `mkdocs.yml` |
-| 6 | `moondeck/MoonDeck.md` |
 | 6 | `mooninstaller/index.html` |
-| 5 | `docs/work/present/Plan-20260922 - MoonLight, from v5.0.0 to the rename.md` |
-| 5 | `moondeck/run/preview_installer.py` |
-| 4 | `moonbase/main/moonbase_main.cpp` |
-| 4 | `moondeck/moondeck.py` |
-| 4 | `src/ui/install-picker.js` |
 

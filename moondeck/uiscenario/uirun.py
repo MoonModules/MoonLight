@@ -17,7 +17,7 @@ drift without breaking the app. set_test_id_attribute points get_by_test_id at t
 which puts every lookup in the sanctioned test-id tier instead of raw CSS. Roles are
 not usable here: the buttons carry `title`, which contributes no accessible name.
 
-The mechanism lives here; the content lives in a run file. See moondeck/uiscenario/RUNS.md.
+The mechanism lives here; the content lives in a run file. See moondeck/uiscenario/uiscenario.md.
 """
 
 from __future__ import annotations
@@ -52,12 +52,18 @@ TEST_ID_ATTRS = "data-module"
 # The run file
 # ---------------------------------------------------------------------------
 
+# The playback rate a clip is rendered at when its run file names none. Read by uivoiceover
+# too, which divided a caption offset by its own copy of this: the two disagreed, so an
+# unspecified speed voiced a clip at half the rate it was filmed.
+DEFAULT_SPEED = 2.0
+
 @dataclass
 class Step:
     action: str
     args: dict = field(default_factory=dict)
     caption: str | None = None       # video: burned in over the step
     hold: float = 0.0                # video: extra dwell after the action
+    speech: float = 0.0              # video: how long the caption takes to say, measured not guessed
     expect: dict | None = None       # test: read back over REST
     bind: str | None = None          # name the created module for later steps
 
@@ -67,6 +73,10 @@ class Run:
     name: str
     description: str = ""
     steps: list[Step] = field(default_factory=list)
+    # Controls to set over REST before the camera rolls, as {"module": ..., "control": ..., "value": ...}.
+    # A clip that needs a particular grid, brightness or mode says so here rather than spending its
+    # opening shots typing it in: the subject is what the clip is about, not the preparation for it.
+    setup: list[dict] = field(default_factory=list)
     # How the published clip is encoded. Per-run because pace is editorial: a dense
     # sequence reads fine at 2x while a clip whose POINT is live responsiveness has to
     # run at 1x. Tunable after the fact without re-recording, since publishing is a
@@ -77,7 +87,7 @@ class Run:
     #
     # `host` is for another MoonLight SURFACE on a known port (the web installer's
     # preview), not for a device: an IP written into a tracked run file is a second
-    # bench registry that goes stale the moment a board changes network, and
+    # bench registry that goes stale the moment a device changes network, and
     # moondeck.json is the one that exists. A run needing particular hardware says so
     # with `requires` instead, and the caller resolves it.
     host: str | None = None
@@ -93,6 +103,7 @@ def load_run(path: Path) -> Run:
             action=s.pop("action"),
             caption=s.pop("caption", None),
             hold=float(s.pop("hold", 0.0)),
+            speech=float(s.pop("speech", 0.0)),
             expect=s.pop("expect", None),
             bind=s.pop("as", None),
             args=s,                 # whatever the action itself takes
@@ -101,7 +112,8 @@ def load_run(path: Path) -> Run:
         name=raw.get("name", Path(path).stem),
         description=raw.get("description", ""),
         steps=steps,
-        speed=float(raw.get("speed", 2.0)),
+        setup=raw.get("setup", []),
+        speed=float(raw.get("speed", DEFAULT_SPEED)),
         width=int(raw.get("width", 960)),
         host=raw.get("host"),
         requires=raw.get("requires"),
@@ -160,7 +172,7 @@ def display_name_for(host: str, type_name: str) -> str:
     into the search box is looked up here.
     """
     # CACHED per host. /api/types builds a throwaway instance of every registered type
-    # to read its controls, so it is a heavy GET to repeat once per add on a board.
+    # to read its controls, so it is a heavy GET to repeat once per add on a device.
     if host not in _DISPLAY_NAMES:
         try:
             payload = requests.get(f"http://{host}/api/types", timeout=5).json()
@@ -186,7 +198,7 @@ def all_names(modules: list) -> set:
 def device_for(requirement: str) -> str | None:
     """A bench device that satisfies a requirement, from moondeck.json.
 
-    The registry is the one place a board's address lives, so a run says what it needs
+    The registry is the one place a device's address lives, so a run says what it needs
     ("audio": a microphone) and the address is looked up. Addresses drift between
     networks; an identity does not.
     """
@@ -210,10 +222,10 @@ def device_for(requirement: str) -> str | None:
             if ip and _answers(ip):
                 return ip
 
-    # The recorded address is STALE whenever the board moved network, which is the
+    # The recorded address is STALE whenever the device moved network, which is the
     # normal case on a bench that follows a laptop between a router and a hotspot. The
     # MAC does not move, so the local subnet is swept for it: slower than a lookup, and
-    # still the only way to find a board whose address nobody wrote down.
+    # still the only way to find a device whose address nobody wrote down.
     return _find_by_mac(wanted_macs) if wanted_macs else None
 
 
@@ -289,7 +301,13 @@ class Driver:
         # for no benefit. The poll-based waits are NOT gated by this: those are
         # correctness (the device answering), not pace.
         self.paced = screencast is not None
-        self.bindings: dict[str, str] = {}
+        # How fast the clip is rendered, which a speech-driven hold has to account for. Set from
+        # the run in `run_all`; 1.0 until then, so a caller that never passes one is unaffected.
+        self.speed = 1.0
+        # `{host}` is bound from the start rather than by a step, because the device's address is
+        # what the driver was CONSTRUCTED with: a step that shells out to a script has no other way
+        # to name the device this run is driving, and discovery may have resolved it.
+        self.bindings: dict[str, str] = {"host": host}
         self.failures: list[str] = []
         # Every text a watched element has shown, so a wait arriving after a brief state
         # is still satisfied by it: @xref{wait_for}.
@@ -300,6 +318,9 @@ class Driver:
         self._watched: set[str] = set()
         # Commands started by the run, collected by wait_process: @xref{start_process}.
         self._processes: dict[str, subprocess.Popen] = {}
+        # (offset, text) per caption, in seconds from the moment recording began.
+        self.caption_marks: list[tuple[float, str]] = []
+        self._recording_started: float | None = None
 
     VIEWPORT = {"width": 1280, "height": 720}
 
@@ -443,6 +464,11 @@ class Driver:
         """
         if not self.screencast:
             return _NullOverlay()
+        # WHEN this caption reached the screen, against the recording's own clock. A voice track
+        # laid on afterwards needs the real offset: the run file's holds say how long a step is
+        # asked to dwell, not how long the device took to do it, and the two diverge by minutes.
+        if self._recording_started is not None:
+            self.caption_marks.append((self._now() - self._recording_started, text))
         safe = (text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
         return self.screencast.show_overlay(
             '<div style="position:fixed;left:50%;bottom:44px;transform:translateX(-50%);'
@@ -621,7 +647,7 @@ class Driver:
                  if r.strip()}
         # ONE fetch, used for both questions. /api/types builds a throwaway instance of
         # every registered type to read its controls, so asking twice is a heavy probe
-        # run twice on a board.
+        # run twice on a device.
         try:
             payload = requests.get(f"http://{self.host}/api/types", timeout=5).json()
         except requests.RequestException:
@@ -852,6 +878,53 @@ class Driver:
             return False
         return self._pick(filename)
 
+    def new_script(self, module: str, control: str, filename: str) -> bool:
+        """Create a script by name through the control's + button, the way a person does.
+
+        The button asks for the name with a native `prompt()`, which blocks the page until it is
+        answered, so the handler is armed BEFORE the tap rather than after: a dialog that opens
+        with nobody listening stalls the run at the click that opened it.
+        The page then selects the new file and focuses the editor, so a `type_script` follows.
+        """
+        btn = self.page.locator(
+            f'button.card-btn[data-mid="{self._css(module)}"][data-key="{self._css(control)}"]'
+            '[title="New script"]')
+        if not btn.count():
+            # The + carries no data-mid in every build, so fall back to the one beside this control.
+            btn = self.page.locator('button.card-btn[title="New script"]')
+        try:
+            btn.first.wait_for(state="visible", timeout=6000)
+        except Exception:
+            self.failures.append(f"new_script: no + button for {module}.{control}")
+            return False
+
+        answered = {"done": False}
+
+        def handle(dialog):
+            answered["done"] = True
+            dialog.accept(filename)
+
+        self.page.once("dialog", handle)
+        if not self.tap(btn.first):
+            # DISARM: `once` stays armed until a dialog fires, so a handler left behind here would
+            # accept the next unrelated prompt with THIS filename.
+            try:
+                self.page.remove_listener("dialog", handle)
+            except Exception:
+                pass
+            return False
+        self.page.wait_for_timeout(1200)
+        if not answered["done"]:
+            self.failures.append(f"new_script: the name prompt never opened for {filename!r}")
+            return False
+        # The editor is what the next step types into, so wait for it rather than assuming.
+        try:
+            self.page.locator("textarea.fm-editor-body").first.wait_for(state="visible", timeout=6000)
+        except Exception:
+            self.failures.append(f"new_script: {filename!r} did not open an editor")
+            return False
+        return True
+
     def type_script(self, text: str, delay: int = 45) -> bool:
         """Type into the MoonLive editor, character by character.
 
@@ -988,7 +1061,14 @@ class Driver:
             proc.kill()
             self.failures.append(f"wait_process: {name!r} ran past {timeout}s")
             return False
-        return proc.returncode == 0
+        if proc.returncode != 0:
+            # SAY which process failed and with what. A bare false reported "wait_process on '' did
+            # not complete", naming neither, and the output is discarded (see start_process), so the
+            # exit code is the whole signal there is: run the command by hand to see why.
+            self.failures.append(f"wait_process: {name!r} exited {proc.returncode}, "
+                                 f"so the take would claim a pass that did not happen")
+            return False
+        return True
 
     def open_app_wait(self) -> None:
         """Wait for the device UI to be driveable again after a navigation."""
@@ -1075,10 +1155,28 @@ class Driver:
     # -- controls -----------------------------------------------------------
 
     def set_number(self, module: str, control: str, value) -> bool:
-        """Type into a control's box, the way a person does."""
+        """Type into a control's box, the way a person does.
+
+        A control rendered as a SLIDER has no box to type in: an encoder is a knob and a fader is a
+        track, both `input[type=range]` underneath. Typing into one selects nothing and the keypress
+        goes nowhere, so a numeric target on a slider is dragged instead, which is also what a person
+        would do to it.
+        """
         el = self.control(module, control, "input")
         if not self._ready(el):
             return False
+        if el.first.get_attribute("type") == "range":
+            lo = float(el.first.get_attribute("min") or 0)
+            hi = float(el.first.get_attribute("max") or 100)
+            frac = (float(value) - lo) / (hi - lo) if hi > lo else 0.0
+            # An ENCODER's input is a 1x1 proxy behind the visual knob, so there is no track to
+            # press: the knob takes a wheel gesture instead, which is what a person does to it.
+            knob = self.page.locator(
+                f'[data-module="{self._css(module)}"] '
+                f'.control-row[data-key="{self._css(control)}"] .knob')
+            if knob.count():
+                return self._turn_knob(knob, el, float(value), lo, hi)
+            return self.drag_slider(module, control, frac)
         box = el.first.bounding_box()
         if box:                            # travel to the box before pressing in it
             self.page.mouse.move(box["x"] + box["width"] / 2,
@@ -1090,6 +1188,35 @@ class Driver:
         self.page.keyboard.press("Enter")
         self.page.wait_for_timeout(420)
         return True
+
+    def _turn_knob(self, knob, el, value: float, lo: float, hi: float) -> bool:
+        """Scroll a knob to `value`, one wheel notch at a time, with the pointer on it.
+
+        The page steps by a hundredth of the range per notch, so the count is derived from that
+        rather than guessed, and the loop stops early once the value arrives: a knob that has hit
+        its end must not spin forever.
+        """
+        if not self._ready(knob):
+            return False
+        box = knob.first.bounding_box()
+        if not box:
+            return False
+        x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+        self.page.mouse.move(x, y)          # the travel show_actions animates
+        self._settle(0.25)
+        # Tolerance RELATIVE to the range, with a floor that cannot swallow it. A flat `max(1.0, ...)`
+        # gave a 0-to-1 knob a tolerance of 1.0, so `abs(now - value) <= step` was true for every
+        # value in range and the walk below reported success without turning the knob at all.
+        span = abs(hi - lo) or 1.0
+        step = max(span / 200.0, min(1.0, span / 20.0))
+        for _ in range(140):                # a bounded walk, never an open loop
+            now = float(el.first.input_value())
+            if abs(now - value) < step:
+                break
+            self.page.mouse.wheel(0, -120 if value > now else 120)
+            self.page.wait_for_timeout(45 if self.paced else 5)
+        self.page.wait_for_timeout(300)
+        return abs(float(el.first.input_value()) - value) <= step
 
     def set_text(self, module: str, control: str, value: str) -> bool:
         for kind in ('input[type="text"]', "textarea"):
@@ -1121,7 +1248,11 @@ class Driver:
         box = el.first.bounding_box()
         if not box:
             return False
-        y = box["y"] + box["height"] / 2
+        # A range input can be VERTICAL, which the Control module's faders are: the browser reports
+        # it as a writing-mode rather than a type, and a horizontal drag across a 24-pixel-wide
+        # track moves nothing while reporting success. The axis is read rather than assumed.
+        vertical = bool(el.first.evaluate(
+            "e => (getComputedStyle(e).writingMode || '').startsWith('vertical')"))
         frac = float(el.first.evaluate("""e => {
             const min = Number(e.min || 0), max = Number(e.max || 100);
             return max > min ? (Number(e.value) - min) / (max - min) : 0;
@@ -1132,9 +1263,18 @@ class Driver:
         # nothing captured, and the value stayed put while the call reported success.
         # A click at the same x works, which is what proved the press was the problem.
         THUMB = 8.0
-        span = max(1.0, box["width"] - 2 * THUMB)
-        x0 = box["x"] + THUMB + span * frac
-        x1 = box["x"] + THUMB + span * max(0.0, min(1.0, to))
+        target = max(0.0, min(1.0, to))
+        if vertical:
+            # Zero sits at the BOTTOM of a vertical track, so the fraction counts upward from it.
+            span = max(1.0, box["height"] - 2 * THUMB)
+            x0 = x1 = box["x"] + box["width"] / 2
+            y0 = box["y"] + box["height"] - THUMB - span * frac
+            y1 = box["y"] + box["height"] - THUMB - span * target
+        else:
+            span = max(1.0, box["width"] - 2 * THUMB)
+            y0 = y1 = box["y"] + box["height"] / 2
+            x0 = box["x"] + THUMB + span * frac
+            x1 = box["x"] + THUMB + span * target
 
         # The travel is UNANNOTATED, and that is the whole reason a drag used to cost
         # 33 seconds instead of 2. show_actions animates EVERY mouse move, so a 40-step
@@ -1144,7 +1284,7 @@ class Driver:
         annotate = self.screencast.show_actions(cursor="pointer", duration=90) \
             if self.screencast else None
 
-        self.page.mouse.move(x0, y)
+        self.page.mouse.move(x0, y0)
         self.page.mouse.down()
         if annotate:
             annotate.__enter__()
@@ -1155,7 +1295,8 @@ class Driver:
             steps = 14
             per_ms = max(20, int(seconds * 1000 / steps))
             for i in range(1, steps + 1):
-                self.page.mouse.move(x0 + (x1 - x0) * i / steps, y)
+                self.page.mouse.move(x0 + (x1 - x0) * i / steps,
+                                     y0 + (y1 - y0) * i / steps)
                 self.page.wait_for_timeout(per_ms)
         finally:
             if annotate:
@@ -1174,7 +1315,7 @@ class Driver:
             want = lo + (hi - lo) * max(0.0, min(1.0, to))
             tolerance = max(2.0, (hi - lo) * 0.06)
             if abs(float(el.first.input_value()) - want) > tolerance:
-                self.page.mouse.click(x1, y)
+                self.page.mouse.click(x1, y1)
                 self.page.wait_for_timeout(420)
                 # REPORT a fallback that also missed. Returning True here made the one
                 # failure this check exists to catch invisible again: only a step with
@@ -1205,7 +1346,24 @@ class Driver:
         return True
 
     def click_control(self, module: str, control: str) -> bool:
-        return self.tap(self.control(module, control, "button"))
+        """Press a control that acts on a click: a button, or a switch's toggle.
+
+        A boolean is rendered as a styled toggle whose real `<input type="checkbox">` is transparent
+        and behind it, so a press aimed at the input is intercepted by its own skin and nothing
+        happens. The visible `label.switch` is what a person actually hits, so that is what is
+        pressed when the control turns out to be a checkbox.
+        """
+        button = self.control(module, control, "button")
+        if button.count():
+            return self.tap(button)
+        box = self.control(module, control)
+        if box.count() and box.first.get_attribute("type") == "checkbox":
+            skin = self.page.locator(
+                f'[data-module="{self._css(module)}"] '
+                f'.control-row[data-key="{self._css(control)}"] label.switch')
+            if skin.count():
+                return self.tap(skin)
+        return self.tap(button)
 
     # -- the dispatcher -----------------------------------------------------
 
@@ -1241,6 +1399,7 @@ class Driver:
         "scroll_to":      lambda a: (a["selector"],),
         "hero":           lambda a: (float(a.get("seconds", 6.0)),),
         "pick_file":      lambda a: (a["module"], a["control"], a["value"]),
+        "new_script":     lambda a: (a["module"], a["control"], a["value"]),
         "type_script":    lambda a: (a["text"], int(a.get("delay", 45))),
     }
     _CREATES = {"add_module", "replace_module"}
@@ -1366,8 +1525,21 @@ class Driver:
         # the words have to still be up during it.
         if step.caption:
             with self.caption(step.caption):
+                started = self._now()
                 ok, created = self._act(a, args)
-                self._settle(step.hold)
+                # THE SPEECH IS THE CLOCK. A step carrying a `speech` duration is held until the
+                # line narrating it has finished, however long its own work took: the caption was
+                # vanishing mid-sentence and the next line starting over the one before it, because
+                # the dwell was a number picked by eye and the voice was laid on afterwards.
+                # Whatever the action already spent counts towards it, so a slow step adds nothing.
+                remaining = step.hold
+                if step.speech:
+                    # `speech` is how long the line takes to SAY, and the clip is rendered at
+                    # `speed`, so the recording has to dwell that much longer for the words to
+                    # still fit once the video is sped up.
+                    spent = self._now() - started
+                    remaining = max(step.hold, step.speech * self.speed - spent)
+                self._settle(remaining)
         else:
             ok, created = self._act(a, args)
             self._settle(step.hold)        # video-only: _settle is a no-op unpaced
@@ -1393,17 +1565,24 @@ class Driver:
                 self.failures.append(
                     f'{e["module"]}.{e["control"]} is {got!r}, expected {e["value"]!r}')
 
-        self._settle(step.hold)        # video-only: _settle is a no-op unpaced
+        # The dwell already happened, in whichever branch above ran: a captioned step held for its
+        # spoken line, an uncaptioned one for its hold. A third settle here dwelt a SECOND time on
+        # every captioned step, so a clip ran longer than the sum of its lines and the pointer sat
+        # still between them.
         return ok
 
     def run_all(self, run: Run) -> list[str]:
         """Perform every step. Returns the failures, empty when the run was clean.
+
+        The run's `speed` is taken first: a step held for its narration needs it, because the words
+        are spoken at natural pace and the picture is sped up afterwards.
 
         STOPS at an unresolved binding. A step naming `{ripples}` when nothing bound it
         means the step that should have created it failed, so everything after is
         chasing a module that does not exist: the run cannot recover, and continuing
         only records minutes of a take nobody can use.
         """
+        self.speed = run.speed
         for step in run.steps:
             before = len(self.failures)
             self.perform(step)
@@ -1418,7 +1597,7 @@ class Driver:
 #
 # Hand-kept lists drifted twice while this was built (the dispatcher and the test's
 # KNOWN_ACTIONS), each time surfacing as a confusing mid-run failure. The dispatcher
-# calls through this, the test derives its vocabulary from it, and RUNS.md's table is
+# calls through this, the test derives its vocabulary from it, and uiscenario.md's table is
 # checked against it. No caption duration here: a caption lives exactly as long as the
 # `with` block around its step, so there is nothing to estimate.
 ACTIONS: dict[str, str] = {
@@ -1447,6 +1626,7 @@ ACTIONS: dict[str, str] = {
     # Shot actions: a framing, and the two halves of the MoonLive editor.
     "hero":           "hero",
     "pick_file":      "pick_file",
+    "new_script":     "new_script",
     "type_script":    "type_script",
 }
 

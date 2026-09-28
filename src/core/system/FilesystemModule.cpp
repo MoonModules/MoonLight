@@ -2,6 +2,7 @@
 /// The persistence engine: writes control values to `/.config/*.json` and restores them on boot.
 /// Public surface and class layout live in FilesystemModule.h.
 /// @{
+#include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/system/FilesystemModule.h"
 
 #include "core/module/Control.h"
@@ -71,18 +72,18 @@ void FilesystemModule::tick1s() MM_NONBLOCKING {
 // Refresh the "lastSaved" display string, "never" before the first save, otherwise how long ago the last successful write happened.
 void FilesystemModule::updateLastSavedStr() {
     if (!everSaved_) {
-        std::snprintf(lastSaveStr_, sizeof(lastSaveStr_), "never");
+        mm::formatTo(lastSaveStr_, sizeof(lastSaveStr_), "never");
         return;
     }
     uint32_t agoSec = (platform::millis() - lastSaveMs_) / 1000;
     if (agoSec < 60) {
-        std::snprintf(lastSaveStr_, sizeof(lastSaveStr_), "%us ago",
+        mm::formatTo(lastSaveStr_, sizeof(lastSaveStr_), "%us ago",
                       static_cast<unsigned>(agoSec));
     } else if (agoSec < 3600) {
-        std::snprintf(lastSaveStr_, sizeof(lastSaveStr_), "%um ago",
+        mm::formatTo(lastSaveStr_, sizeof(lastSaveStr_), "%um ago",
                       static_cast<unsigned>(agoSec / 60));
     } else {
-        std::snprintf(lastSaveStr_, sizeof(lastSaveStr_), "%uh ago",
+        mm::formatTo(lastSaveStr_, sizeof(lastSaveStr_), "%uh ago",
                       static_cast<unsigned>(agoSec / 3600));
     }
 }
@@ -520,7 +521,7 @@ void FilesystemModule::clearSubtreeDirty(MoonModule* m) {
 // Single instance assumed; multi-instance gets a .N suffix when that becomes a requirement (item 12, module switching).
 bool FilesystemModule::pathFor(MoonModule* m, char* out, size_t n) {
     if (!m || m->typeName()[0] == 0) return false;
-    int w = std::snprintf(out, n, "%s/%s.json", CONFIG_DIR, m->typeName());
+    int w = mm::formatTo(out, n, "%s/%s.json", CONFIG_DIR, m->typeName());
     return w > 0 && static_cast<size_t>(w) < n;
 }
 

@@ -85,7 +85,7 @@ jobs:
         # Pass the tag via --tag arg, not via an env var named GITHUB_REF_NAME.
         # The built-in GITHUB_REF_NAME is "main" on a push-to-main and would
         # shadow a step-level env override. Explicit CLI arg sidesteps the
-        # collision. Plumbed via env to avoid static-analyser template-injection
+        # collision. Plumbed via env to avoid static-analyzer template-injection
         # warning on the direct ${{ }} expansion inside a shell string.
         env:
           TAG: ${{ inputs.tag || github.ref_name }}
@@ -906,10 +906,10 @@ jobs:
           mkdir -p pages/install
           cp -r mooninstaller/. pages/install/
           cp src/ui/install-picker.js pages/install/
-          # The board-catalog / chip-detection half of the picker — mooninstaller
+          # The device-catalog / chip-detection half of the picker, mooninstaller
           # only (not embedded in firmware), imported by index.html. Must ship to
           # Pages alongside install-picker.js or the ES-module import 404s.
-          cp src/ui/install-picker-boards.js pages/install/
+          cp src/ui/install-picker-devices.js pages/install/
           # library.json — install page reads the project version from it.
           cp library.json pages/install/
           # Board picker images live in docs/assets/deviceModels/ (the project's asset
@@ -931,7 +931,7 @@ jobs:
       # (moonmodules/{core,light}/moxygen/*.md) from each `.h`'s /// comments at
       # MkDocs-build time. moxygen runs via `npx moxygen@2.1.10`, so Node must be
       # present; pin it explicitly (rather than lean on the runner image's default) so
-      # a future image change can't silently drop npx or shift its behaviour. Doxygen
+      # a future image change can't silently drop npx or shift its behavior. Doxygen
       # is the one apt binary we add — the justified non-uv dependency (like ESP-IDF's
       # Python). With the tools present, a moxygen/doxygen failure now RAISES (gen_api
       # GenApiError) and fails this build, rather than shipping a site with no API pages.
