@@ -18,7 +18,7 @@
 import { installPicker } from "./install-picker.js";
 import { myDevices }    from "./devices.js";
 import { installer, ESPTOOL_JS_VERSION } from "./install-orchestrator.js";
-// Device catalog + chip detection — mooninstaller only, kept out of the
+// Device catalog + chip detection: mooninstaller only, kept out of the
 // firmware-embedded install-picker.js and injected here via deviceSupport.
 import * as deviceSupport from "./install-picker-devices.js";
 import { BACKUP_SNIPPET } from "./backup-snippet.js";
@@ -91,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
     //   → ./releases/<TAG>/<file>
     function toLocalUrl(githubUrl) {
       const m = /\/releases\/download\/([^/]+)\/([^/]+)$/.exec(githubUrl);
-      if (!m) return githubUrl;  // unrecognised shape: pass through unchanged
+      if (!m) return githubUrl;  // unrecognized shape: pass through unchanged
       const [, tag, name] = m;
       //   https://github.com/.../releases/download/<TAG>/<file>
       //   → ./releases/<TAG>/<file>  (same-origin, served from this dir)
@@ -429,7 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // Symmetric with uiWaitForCreds. Normalisation of the typed value lives
+    // Symmetric with uiWaitForCreds. Normalization of the typed value lives
     // in the orchestrator so the host page stays UI-only. The retry action
     // is the orchestrator's signal to re-run Improv `initialize()`; while
     // that's in flight the host re-shows the dialog via showNeedsIpRetrying()
@@ -526,7 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // the network cable. Append a defaults caveat only when the push actually didn't run.
         const defaultsNote = defaultsApplied
           ? ` ${device} defaults were applied.`
-          : (device && applyDefaults ? ` ${device} defaults weren't applied — apply them later from MoonDeck.` : "");
+          : (device && applyDefaults ? ` ${device} defaults weren't applied: apply them later from MoonDeck.` : "");
         note.textContent =
           `Flashed. This is an Ethernet-only firmware — connect a network cable and the device comes online on its own (find it via its IP or <name>.local, or in MoonDeck).${defaultsNote}`;
         note.classList.add("install-done-note--notice");   // amber: flashed OK, action needed (plug in Ethernet)
@@ -546,7 +546,7 @@ document.addEventListener('DOMContentLoaded', () => {
           document.getElementById("done-url").textContent = "";
           document.getElementById("done-url-mdns").hidden = true;
           document.getElementById("done-defaults").textContent =
-            `Flashed. ${device} defaults weren't applied (no device address) — apply them later from MoonDeck on your network.`;
+            `Flashed. ${device} defaults weren't applied (no device address): apply them later from MoonDeck on your network.`;
           document.getElementById("done-defaults").hidden = false;
           return;
         }
@@ -580,7 +580,7 @@ document.addEventListener('DOMContentLoaded', () => {
         note.textContent = `Applied ${device} defaults.`;
         note.hidden = false;
       } else if (device && applyDefaults) {
-        note.textContent = `Flashed, but ${device} defaults weren't applied — apply them from MoonDeck on your network.`;
+        note.textContent = `Flashed, but ${device} defaults weren't applied: apply them from MoonDeck on your network.`;
         note.hidden = false;
       } else if (device) {
         note.textContent = `Kept the device's existing config (device defaults not applied).`;
@@ -588,7 +588,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         note.hidden = true;
       }
-      // Store no device unless the defaults actually applied, so the saved entry doesn't
+      // Store no device unless the defaults applied, so the saved entry doesn't
       // claim a model the device wasn't configured to.
       myDevices.addProvisionedDevice(url, defaultsApplied ? device : "");
     }
@@ -603,7 +603,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Map a firmware key to its chip family ("esp32s31" → "ESP32-S31", "esp32s3-n16r8"
     // → "ESP32-S3", "esp32p4rev1-eth" → "ESP32-P4", "esp32*" → "ESP32") — the same prefix
     // vocabulary build_esp32's TARGET_TO_FAMILY uses. Used as the chip fallback when no
-    // device is picked (OTA / generic flash). "" for an unrecognised key.
+    // device is picked (OTA / generic flash). "" for an unrecognized key.
     function firmwareToChip(firmware) {
       const m = String(firmware || "").match(/^esp32(s31|s3|s2|p4|c\d+|h\d+)/);
       return m ? (m[1] === "s31" ? "ESP32-S31" : "ESP32-" + m[1].toUpperCase()) : (firmware ? "ESP32" : "");
@@ -797,7 +797,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await installer.clearDetected();
         installPicker.clearDetectedChip();
       } catch (_) {
-        // User cancelled the picker — keep whatever was picked before.
+        // User canceled the picker, so keep whatever was picked before.
       } finally {
         portPromptOpen = false;
       }
@@ -831,7 +831,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // `change` is the only listener here on purpose. A <select> fires `click` when the list
     // OPENS, so using that to catch a re-pick would launch the OS prompt on top of the list
     // the user just opened and hide every other option behind it. The IDLE placeholder is
-    // what makes a re-pick work instead: after a cancelled prompt the row returns to it, so
+    // what makes a re-pick work instead: after a canceled prompt the row returns to it, so
     // choosing the same option again is a real value change.
 
     // --- Serial monitor -------------------------------------------------
@@ -876,7 +876,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Trigger the port picker; openMonitor was called from a user
         // gesture (Monitor button click), so requestPort() is allowed.
         await openPortPicker();
-        if (!pickedPort) return;  // user cancelled
+        if (!pickedPort) return;  // user canceled
       }
       monitorOutput.textContent = "";
       setMonitorStatus("Opening port at 115200…");
@@ -997,7 +997,7 @@ document.addEventListener('DOMContentLoaded', () => {
       onInstall: async (firmware, manifestUrl, binaryUrl, entry) => {
         // A desktop archive is handed to the browser to download; there is no chip to flash
         // and no port to hold. Anchor-click rather than location.href so the Content-Disposition
-        // from GitHub is honoured and the page is not navigated away mid-session.
+        // from GitHub is honored and the page is not navigated away mid-session.
         if (entry && entry.isDesktop) {
           const a = document.createElement("a");
           a.href = binaryUrl;
@@ -1009,7 +1009,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         // Remember the firmware being flashed so handleError can fall back to it
         // for the unsupported-chip guidance when no device was picked (the on-device
-        // OTA path, or a generic flash) — getSelectedDeviceChip() is empty there.
+        // OTA path, or a generic flash): getSelectedDeviceChip() is empty there.
         _flashingFirmware = firmware;
         // If the monitor is open it holds the port — release it before
         // esptool tries to claim it. The reverse lock (monitor button
@@ -1126,7 +1126,13 @@ document.addEventListener('DOMContentLoaded', () => {
       let devices = [];
       try {
         const res = await fetch("./deviceModels.json");   // same catalog as the picker
-        devices = await res.json();
+        // CHECKED, not assumed: a 404 from a misconfigured deploy answers with an error page, and
+        // `res.json()` on it either throws or yields something that is not the array every line
+        // below iterates. Either way the grid should say so rather than render half a page.
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const parsed = await res.json();
+        if (!Array.isArray(parsed)) throw new Error("not a device list");
+        devices = parsed;
       } catch (e) {
         document.getElementById("device-grid").textContent = "Could not load deviceModels.json: " + e;
         return;
@@ -1140,7 +1146,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const thumbEl   = document.getElementById("device-summary-thumb");
       const expandEl  = document.getElementById("device-expand");
       const clearEl   = document.getElementById("device-clear");
-      let selected = installPicker.getSelectedDevice() || "";   // honour a restored pick
+      let selected = installPicker.getSelectedDevice() || "";   // honor a restored pick
 
       function ledDriver(b) {
         const d = (b.modules || []).find(m => /LedDriver$/.test(m.type || ""));
@@ -1152,7 +1158,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // no duplicated `active` field to drift). A capability with no entry here, or no
       // matching module, stays merely "supported". Each predicate gets the whole module
       // object so it can inspect controls — needed to tell Ethernet from WiFi: both ride
-      // NetworkModule, but Ethernet is only ACTUALLY wired when the device's NetworkModule
+      // NetworkModule, but Ethernet is wired only when the device's NetworkModule
       // carries an ethType control set to a real PHY (not absent / "None"/0). WiFi is
       // active wherever NetworkModule exists (the radio is always available); a device
       // that lists WiFi as supported but ships no NetworkModule entry stays "supported".
@@ -1200,7 +1206,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const rpDevice = document.getElementById("rp-device");
         if (rpDevice) {
           // A Detect narrows #rp-device's options to one family. With "show all
-          // devices" the grid can pick a device from ANOTHER family — whose option
+          // devices" the grid can pick a device from ANOTHER family: whose option
           // isn't in the narrowed list, so `value = name` would silently no-op
           // (value stays "") and the firmware list wouldn't narrow. Ensure the
           // option exists first so the assignment takes and selectedDevice is set.
@@ -1300,8 +1306,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const thumb = document.createElement("div");
         thumb.className = "bg-thumb" + (b.image ? "" : " noimg");
         // the deploy stages a copy of deviceModels.json
-        // + the referenced device images alongside this page, so an "image" path of
-        // "assets/deviceModels/<slug>.jpg" resolves same-origin from this page.
+        // + the referenced device images alongside the installer, so an "image" path of
+        // "assets/deviceModels/<slug>.jpg" resolves same-origin.
         if (b.image) thumb.style.backgroundImage = `url("${b.image}")`;
         el.appendChild(thumb);
         const body = document.createElement("div"); body.className = "bg-body";

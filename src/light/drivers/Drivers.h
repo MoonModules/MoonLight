@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/util/PinList.h"        // parsePinList: the relay list, same parser the LED drivers use
 #include "light/drivers/DriverBase.h"  // DriverBase: the Drivers container casts its children to it
 #include "core/module/MoonModule.h"
@@ -259,7 +260,7 @@ public:
         if (std::strcmp(controlName, "palette") == 0) {
             if (LivePalettes::isLive(palette)) {
                 // The script fills the entries every frame, so there is nothing to expand here.
-                std::snprintf(paletteScript_, sizeof(paletteScript_), "%s",
+                mm::formatTo(paletteScript_, sizeof(paletteScript_), "%s",
                               LivePalettes::nameAt(LivePalettes::sourceIndex(palette)));
                 MoonLivePalette::setActiveInstance(&paletteScriptModule_);
                 paletteScriptModule_.setScript(paletteScript_);
@@ -354,9 +355,9 @@ public:
     // The PEAK over the second, not one sample: a lone sample reads ~0 even when core 0 idles.
     /// Refresh the read-only `renderWait` KPI once a second, off the hot path.
     void tick1s() MM_NONBLOCKING override {
-        if (renderSplitActive_) std::snprintf(renderWaitStr_, sizeof(renderWaitStr_), "%u µs",
+        if (renderSplitActive_) mm::formatTo(renderWaitStr_, sizeof(renderWaitStr_), "%u µs",
                                               static_cast<unsigned>(renderWaitPeakUs_));
-        else                    std::snprintf(renderWaitStr_, sizeof(renderWaitStr_), "—");
+        else                    mm::formatTo(renderWaitStr_, sizeof(renderWaitStr_), "—");
         renderWaitPeakUs_ = 0;   // start a fresh window
         updateMotionHold();
         MoonModule::tick1s();

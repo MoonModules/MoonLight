@@ -3,7 +3,7 @@
 
 The catalog is hand-maintained data consumed identically by three clients (the
 web installer, the device UI's ?deviceModel= inject, and MoonDeck), so a typo drifts
-silently — a broken image path, a device name that no longer matches its
+silently: a broken image path, a device name that no longer matches its
 System.deviceModel control, a driver pin list on an entry that has no driver. This is the
 catalog's counterpart to check_specs.py for module docs: a fast, dependency-free
 gate that pins the invariants the clients assume.

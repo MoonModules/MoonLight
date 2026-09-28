@@ -34,7 +34,7 @@ WIDTH, HEIGHT = 1280, 720
 # The MoonLight character, with the logo's paper background removed, and where it stands.
 PRESENTER = Path(__file__).resolve().parent / "presenter.png"
 FACE, FACE_X, FACE_Y = 200, 980, 360
-# The trace under it, in the slides' accent colour.
+# The trace under it, in the slides' accent color.
 WAVE_W, WAVE_H, WAVE_X, WAVE_Y = 300, 80, 930, 575
 ACCENT = "0xc9a5ff"
 
@@ -242,7 +242,7 @@ def build(slides: list[dict], shots: list[Path], audio: list[Path], work: Path, 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Render a narrated slide video from a script.")
     ap.add_argument("--script", required=True, help="the slides JSON")
-    ap.add_argument("--voice", default="prudence",
+    ap.add_argument("--voice", default="alba",
                     help="a Piper voice: " + ", ".join(VOICE_PATHS))
     ap.add_argument("--out", default="media/video", help="where the video lands")
     args = ap.parse_args()

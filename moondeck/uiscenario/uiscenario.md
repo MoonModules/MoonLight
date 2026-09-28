@@ -129,7 +129,7 @@ They were learned by getting them wrong: a two-and-a-half-minute clip that was t
 
 ### How it is timed
 
-- **Voice leads, picture follows.** Each caption's spoken duration is measured once and written into the step as `speech`, and the recording holds that shot until the line has finished. Whatever the action already spent counts towards it, so a slow step adds nothing and a fast one waits. Sizing the dwell by eye left captions vanishing mid-sentence and each line starting over the one before it.
+- **Voice leads, picture follows.** Each caption's spoken duration is measured once by `uimeasure.py` and written into the step as `speech`, and the recording holds that shot until the line has finished. **Alba speaks every clip**, and she is the default of all three scripts. Measuring with one voice and narrating with another drifts the words off their shots, so the way to avoid that is to pass no voice at all. Whatever the action already spent counts towards it, so a slow step adds nothing and a fast one waits. Sizing the dwell by eye left captions vanishing mid-sentence and each line starting over the one before it.
 - **`speech` is wall-clock.** The recorder multiplies it by `speed`, because the words are spoken at natural pace and the picture is sped up afterwards.
 - **Offsets are measured, not computed.** `uivideo` timestamps each caption as it reaches the screen and writes `<clip>-raw.captions.json` beside the take, and `uivoiceover` reads those. Summing the run file's holds does not work. A hold says how long a step is asked to dwell, not how long the device took, and on one clip the two differed by two minutes.
 - **Overruns are reported, not absorbed.** The voiceover names every line that outlasts its shot, which is the check that the measurement held.
@@ -147,11 +147,21 @@ A **project** stitches clips into a longer video, a get-started or a feature tou
 Music alignment belongs there, since a bar line is a property of the cut rather than of any one clip.
 Its own section is [below](#project-files-cutting-clips-together).
 
-    uv run moondeck/uiscenario/uivideo.py --run test/uiscenarios/clips/06-layers.json
+Three commands make one voiced clip, in this order: the lines are measured, the take is recorded
+against those lengths, and the voice is laid over the published clip.
+
+    uv run moondeck/uiscenario/uimeasure.py   --run test/uiscenarios/clips/06-layers.json
+    uv run moondeck/uiscenario/uivideo.py     --run test/uiscenarios/clips/06-layers.json
+    uv run moondeck/uiscenario/uivoiceover.py --run test/uiscenarios/clips/06-layers.json
+
+No `--voice` on any of them: alba is the default of all three, which is what keeps the measurement
+and the narration in agreement. `--voice` exists for trying another one, and then it has to be
+given to the first and the third alike.
 
 Sources live under `test/uiscenarios/`, outputs under `media/`:
 
     test/uiscenarios/clips/<name>.json      a clip: what a person does    (tracked)
+    test/uiscenarios/slides/<name>.json     a slide script: uinarrate     (tracked)
     test/uiscenarios/projects/<name>.json   a project: how clips are cut  (tracked)
 
     media/video/<name>.webm                 the raw take, ignored

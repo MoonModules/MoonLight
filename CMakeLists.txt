@@ -20,7 +20,7 @@ if(MSVC)
     # MSVC-only warnings have no GCC equivalent at -Wall -Wextra and are
     # suppressed below rather than fought at every call site:
     #   C4702 — "unreachable code" inside `if constexpr` early-return branches
-    #           (a well-known MSVC quirk: it analyses the discarded branch as
+    #           (a well-known MSVC quirk: it analyzes the discarded branch as
     #           live and flags everything after `return;`). GCC understands the
     #           constexpr discard and doesn't warn.
     #   C4244 / C4267 — implicit narrowing (int→smaller, size_t→smaller). GCC
@@ -81,7 +81,7 @@ else()
     # (platform.h); -Wfunction-effects then checks TRANSITIVELY that nothing they reach
     # allocates or blocks, through the whole call graph. Clang 20+ only; the flag does not
     # exist on GCC, so the ESP32 build gets no hot-path check — src/platform/esp32/ is
-    # analysed only where the desktop build reaches it (docs/reference/testing.md § Static analysis).
+    # analyzed only where the desktop build reaches it (docs/reference/testing.md § Static analysis).
     # Probe for the flag instead of inferring it from a version: AppleClang reports its own
     # version line (the CI macos-14 runner reads >= 20 while predating the warning), so a version
     # comparison enables -Wfunction-effects on toolchains that reject it — and it is -Werror.

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/system/ControlModule.h"
 #include "core/util/ControlSurface.h"
 #include "core/module/MoonModule.h"
@@ -134,7 +135,7 @@ public:
                 peerWasFresh_ = false;   // a new address: let the next tick1s say so
                 // Persisted, so a rig survives a reboot; only an empty field is filled.
                 if (!feedbackTo_[0]) {
-                    std::snprintf(feedbackTo_, sizeof(feedbackTo_), "%u.%u.%u.%u",
+                    mm::formatTo(feedbackTo_, sizeof(feedbackTo_), "%u.%u.%u.%u",
                                   src[0], src[1], src[2], src[3]);
                     markDirty();
                     FilesystemModule::noteDirty();
@@ -186,7 +187,7 @@ private:
         if (end == indexText || *end != '\0') return;
         if (idx < 1 || idx > kSurfaceWidth) return;  // anything wider is not ours
         char control[16];
-        std::snprintf(control, sizeof(control), "%s%ld", prefix, idx);
+        mm::formatTo(control, sizeof(control), "%s%ld", prefix, idx);
         // The raw value, since scaling would round a small positive one down to off.
         if (asBool) setBool("Control", control, osc::isTruthy(m));
         else        setValue("Control", control, osc::toByte(m));
@@ -218,7 +219,7 @@ private:
         auto* sched = Scheduler::instance();
         if (!sched) return;
         char body[32];
-        std::snprintf(body, sizeof(body), "{\"value\":%u}", static_cast<unsigned>(value));
+        mm::formatTo(body, sizeof(body), "{\"value\":%u}", static_cast<unsigned>(value));
         sched->setControl(module, control, body);
     }
 

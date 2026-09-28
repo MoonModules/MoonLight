@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/module/MoonModule.h"
 #include "core/module/Scheduler.h"
 #include "core/system/SystemModule.h"
@@ -54,8 +55,8 @@ public:
     void setWifiCredentials(const char* ssid, const char* password) {
         if (!ssid) return;
         // snprintf rather than a copy needing a second line to terminate, the classic bug.
-        std::snprintf(ssid_, sizeof(ssid_), "%s", ssid);
-        std::snprintf(password_, sizeof(password_), "%s", password ? password : "");
+        mm::formatTo(ssid_, sizeof(ssid_), "%s", ssid);
+        mm::formatTo(password_, sizeof(password_), "%s", password ? password : "");
         markDirty();
         // Marking alone only sets the bit, so the save needs arming too.
         FilesystemModule::noteDirty();
@@ -270,7 +271,7 @@ public:
                         writeEthDegradedStatus();
                     } else {
                         ethDegraded_ = false;
-                        std::snprintf(statusBuf_, sizeof(statusBuf_), "Ethernet not detected: no cable/link");
+                        mm::formatTo(statusBuf_, sizeof(statusBuf_), "Ethernet not detected: no cable/link");
                         setStatus(statusBuf_, Severity::Warning);
                     }
                     if constexpr (platform::hasWiFi) {
@@ -286,7 +287,7 @@ public:
                         }
                     } else {
                         // No fallback here, so keep polling for a cable.
-                        std::snprintf(statusBuf_, sizeof(statusBuf_), "No network (Ethernet only)"); setStatus(statusBuf_, Severity::Error);
+                        mm::formatTo(statusBuf_, sizeof(statusBuf_), "No network (Ethernet only)"); setStatus(statusBuf_, Severity::Error);
                         stateChangeTime_ = now;
                     }
                 }
@@ -324,7 +325,7 @@ public:
                         // Drop back to polling for the cable.
                         std::printf("NetworkModule: Ethernet dropped\n");
                         platform::mdnsStop();
-                        std::snprintf(statusBuf_, sizeof(statusBuf_), "No network (Ethernet only)"); setStatus(statusBuf_, Severity::Error);
+                        mm::formatTo(statusBuf_, sizeof(statusBuf_), "No network (Ethernet only)"); setStatus(statusBuf_, Severity::Error);
                         state_ = State::WaitingEth;
                         stateChangeTime_ = now;
                     }
@@ -353,7 +354,7 @@ public:
                         if (staLostTime_ == 0) {
                             staLostTime_ = now;
                             std::printf("NetworkModule: WiFi STA dropped, reconnecting\n");
-                            std::snprintf(statusBuf_, sizeof(statusBuf_), "WiFi reconnecting…");
+                            mm::formatTo(statusBuf_, sizeof(statusBuf_), "WiFi reconnecting…");
                             setStatus(statusBuf_, Severity::Warning);
                         } else if (now - staLostTime_ > kStaGraceMs) {
                             std::printf("NetworkModule: WiFi STA gone for %us, starting AP\n",
@@ -820,7 +821,7 @@ private:
     void writeEthDegradedStatus() {
         // A driver addressing the wire directly wants no address, so that is not a fault.
         if (platform::ethRawL2Claimed()) {
-            std::snprintf(statusBuf_, sizeof(statusBuf_), "Ethernet: link up, no IP (L2 in use)");
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "Ethernet: link up, no IP (L2 in use)");
             setStatus(statusBuf_, Severity::Status);
             return;
         }
@@ -828,9 +829,9 @@ private:
         platform::ethGetIPv4(ip);
         if (ip[0] || ip[1] || ip[2] || ip[3]) {
             char ipStr[16]; formatDottedQuad(ipStr, ip);
-            std::snprintf(statusBuf_, sizeof(statusBuf_), "Ethernet detected (%s): no lease", ipStr);
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "Ethernet detected (%s): no lease", ipStr);
         } else {
-            std::snprintf(statusBuf_, sizeof(statusBuf_), "Ethernet detected: no address assigned");
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "Ethernet detected: no address assigned");
         }
         setStatus(statusBuf_, Severity::Warning);
     }
@@ -847,11 +848,11 @@ private:
         if (state_ == State::ConnectedEth) {
             // The negotiated speed too, since a link that fell back looks identical without it.
             const uint16_t mbps = platform::ethLinkSpeedMbps();
-            if (mbps > 0) std::snprintf(statusBuf_, sizeof(statusBuf_), "Eth: %s (%u Mbit)",
+            if (mbps > 0) mm::formatTo(statusBuf_, sizeof(statusBuf_), "Eth: %s (%u Mbit)",
                                         ipStr, static_cast<unsigned>(mbps));
-            else          std::snprintf(statusBuf_, sizeof(statusBuf_), "Eth: %s", ipStr);
+            else          mm::formatTo(statusBuf_, sizeof(statusBuf_), "Eth: %s", ipStr);
         } else {
-            std::snprintf(statusBuf_, sizeof(statusBuf_), "WiFi: %s", ipStr);
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "WiFi: %s", ipStr);
         }
         setStatus(statusBuf_, Severity::Status);
     }
@@ -919,7 +920,7 @@ private:
 
     /// Refresh the mode label and the radio readings.
     void updateMetrics() {
-        std::snprintf(modeStr_, sizeof(modeStr_), "%s", modeLabel());
+        mm::formatTo(modeStr_, sizeof(modeStr_), "%s", modeLabel());
         if constexpr (platform::hasWiFi) {
             // Refreshed even while hidden, so a return to a radio state shows no stale value.
             rssi_ = (state_ == State::ConnectedSta)

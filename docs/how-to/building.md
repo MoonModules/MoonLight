@@ -255,7 +255,7 @@ Moving to a different release is never automatic: bump `PINNED_IDF_COMMIT` / `PI
 
 #### Adopting the v6.x ecosystem changes
 
-v6.0 introduced ecosystem-level changes beyond the API surface. The stance, under [§ Principles → Industry standards](../CLAUDE.md#principles), is to **embrace these as the ESP32 standard** — if the IDF makes something the recognised way to build, install, provision, or ship, that's the path we want, not a bespoke one we maintain alone. We adopt them **step by step** (each its own commit + hardware re-test) rather than all at once, and only after they clear the **v6.0-floor rule** above, but the default is *yes, adopt*, with the burden on *why not* — not the reverse.
+v6.0 introduced ecosystem-level changes beyond the API surface. The stance, under [§ Principles → Industry standards](../CLAUDE.md#principles), is to **embrace these as the ESP32 standard**. If the IDF makes something the recognized way to build, install, provision, or ship, that is the path we want rather than a bespoke one we maintain alone. We adopt them **step by step**, each its own commit and hardware re-test, rather than all at once, and only after they clear the **v6.0-floor rule** above. The default is *yes, adopt*, with the burden of argument on *why not*.
 
 Two guardrails bound the "embrace everything" stance:
 

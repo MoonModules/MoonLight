@@ -1,4 +1,5 @@
 #pragma once
+#include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/module/Control.h"
 #include "core/util/ScratchBuffer.h"
 #include "light/drivers/DriverBase.h"
@@ -226,7 +227,7 @@ private:
             rtp_ = mm::rtp::Packetiser(platform::millis(), 0);
             // Where the packets go, read off the control socket: a client names a port it can receive on, and an address it cannot.
             client_.peerIPv4(peerIp_);
-            std::snprintf(statusBuf_, sizeof(statusBuf_), "streaming %ux%u at %u fps to a viewer",
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "streaming %ux%u at %u fps to a viewer",
                           static_cast<unsigned>(width_), static_cast<unsigned>(height_),
                           static_cast<unsigned>(targetFps));
             setStatus(statusBuf_, Severity::Status);
@@ -240,7 +241,7 @@ private:
         client_.close();
         playing_ = false;
         reqLen_  = 0;
-        std::snprintf(statusBuf_, sizeof(statusBuf_), "ready at %ux%u, waiting for a viewer",
+        mm::formatTo(statusBuf_, sizeof(statusBuf_), "ready at %ux%u, waiting for a viewer",
                       static_cast<unsigned>(width_), static_cast<unsigned>(height_));
         setStatus(statusBuf_, Severity::Status);
     }

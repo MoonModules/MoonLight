@@ -9,6 +9,7 @@ test with nothing to wire up: dropping `add-a-driver.json` into this folder is t
 whole change.
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -25,7 +26,9 @@ import uirun  # noqa: E402
 #
 # CLIPS only. A project in projects/ is an edit list, not something performed against
 # a device: it names clips and durations, so running it as a UI scenario would find
-# no actions at all.
+# no actions at all. A slide script in slides/ is the same case for the same reason:
+# uinarrate renders it from `slides`, nothing performs it, and three of them sat here
+# being loaded as runs with zero steps and passing vacuously.
 RUNS_DIR = Path(__file__).resolve().parent / "clips"
 RUNS = sorted(RUNS_DIR.glob("*.json"))
 PROJECTS_DIR = Path(__file__).resolve().parent / "projects"
@@ -93,6 +96,17 @@ def test_run_performs_through_the_ui(ui_for, clean_pipeline, run_path):
     # snapshotting before that read whichever machine the lane defaulted to.
     if not run.host:                   # only a device run owns a module tree
         clean_pipeline.take(driver.host)
+        # The SAME preconditions the recorder applies. A run file is documented as being both a UI
+        # test and a video source, which only holds if both start the run from the same state: the
+        # recorder applied `setup` and this lane did not, so a step depending on one would pass here
+        # and fail on camera, or the reverse.
+        if run.setup:
+            sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent
+                                   / "moondeck" / "uiscenario"))
+            from reset_device import apply_setup
+            applied = apply_setup(driver.host, run.setup)
+            assert applied == len(run.setup), (
+                f"{run_path.name}: {applied} of {len(run.setup)} setup control(s) applied")
     failures = driver.run_all(run)
     assert not failures, f"{run_path.name} failed:\n  " + "\n  ".join(failures)
     if not run.host:
@@ -117,6 +131,22 @@ def test_project_clips_exist(project_path):
     missing = [c["clip"] for c in proj.get("clips", [])
                if "clip" in c and c["clip"] not in names]
     assert not missing, f"{project_path.name} names clips with no run file: {missing}"
+
+
+def test_clips_are_runs_not_slide_scripts():
+    """A file in clips/ is performed against a device, so it carries `steps`.
+
+    A slide script carries `slides` and is rendered by uinarrate instead. Dropped in here it is
+    globbed as a run, loads with zero steps, and every run test passes without performing anything
+    which is a green tick that means nothing, the one failure a test suite must not have.
+    """
+    wrong = []
+    for p in RUNS:
+        d = json.loads(p.read_text())
+        if "slides" in d or not d.get("steps"):
+            wrong.append(p.name)
+    assert not wrong, (f"slide scripts in clips/: {wrong}. They belong in "
+                       f"test/uiscenarios/slides/, which uinarrate reads.")
 
 
 def test_every_action_is_documented():

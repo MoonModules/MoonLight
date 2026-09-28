@@ -44,13 +44,6 @@
 ///
 /// Its only caller is the test runner's bridge, which stores numerics that way so it does not lose precision parsing fixtures.
 /// A double runs in software emulation on one architecture, far slower than the single-precision type, so production paths use the typed serializers instead.
-// Format checking, where the compiler offers it: one toolchain parses the attribute as an unknown specifier and fails the whole class downstream.
-#if defined(__GNUC__) || defined(__clang__)
-  #define MM_PRINTF_FORMAT(fmt_arg, va_arg) __attribute__((format(printf, fmt_arg, va_arg)))
-#else
-  #define MM_PRINTF_FORMAT(fmt_arg, va_arg)
-#endif
-
 namespace mm {
 
 class JsonSink {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/module/MoonModule.h"
 #include "core/module/Scheduler.h"
 #include "core/system/FilesystemModule.h"   // setDeviceModel() arms the debounced save (noteDirty)
@@ -157,7 +158,7 @@ public:
         if (deviceName_[0] == 0) {        // cleared or all-invalid, so fall back to the MAC
             uint8_t mac[6];
             platform::getMacAddress(mac);
-            std::snprintf(deviceName_, sizeof(deviceName_), "MM-%02X%02X", mac[4], mac[5]);
+            mm::formatTo(deviceName_, sizeof(deviceName_), "MM-%02X%02X", mac[4], mac[5]);
         }
 
         // Update dynamic values
@@ -165,16 +166,16 @@ public:
         uint32_t hours = uptimeSec / 3600;
         uint32_t mins = (uptimeSec % 3600) / 60;
         uint32_t secs = uptimeSec % 60;
-        std::snprintf(uptimeStr_, sizeof(uptimeStr_), "%u:%02u:%02u",
+        mm::formatTo(uptimeStr_, sizeof(uptimeStr_), "%u:%02u:%02u",
                       static_cast<unsigned>(hours),
                       static_cast<unsigned>(mins),
                       static_cast<unsigned>(secs));
 
         uint32_t fps = scheduler_ ? scheduler_->fps() : 0;
-        std::snprintf(fpsStr_, sizeof(fpsStr_), "%u", static_cast<unsigned>(fps));
+        mm::formatTo(fpsStr_, sizeof(fpsStr_), "%u", static_cast<unsigned>(fps));
 
         uint32_t tickUs = scheduler_ ? scheduler_->tickTimeUs() : 0;
-        std::snprintf(tickStr_, sizeof(tickStr_), "%u", static_cast<unsigned>(tickUs));
+        mm::formatTo(tickStr_, sizeof(tickStr_), "%u", static_cast<unsigned>(tickUs));
 
         uint32_t freeTotal = static_cast<uint32_t>(platform::freeHeap());
         uint32_t freeInternal = static_cast<uint32_t>(platform::freeInternalHeap());
@@ -184,7 +185,7 @@ public:
         psramUsedVal_ = totalPsram > freePsram ? totalPsram - freePsram : 0;
 
         // The internal block, not the all-memory one, which reads as megabytes on a PSRAM board.
-        std::snprintf(maxBlockStr_, sizeof(maxBlockStr_), "%uKB",
+        mm::formatTo(maxBlockStr_, sizeof(maxBlockStr_), "%uKB",
                       static_cast<unsigned>(platform::maxInternalAllocBlock() / 1024));
 
         // The control points straight at the platform's buffer, so calling it is the refresh.

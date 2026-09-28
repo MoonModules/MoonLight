@@ -56,7 +56,9 @@ BOOT_CONTROLS = {
 # the memory. That arrives here as a dropped connection rather than a status, and it says nothing
 # about whether the device is healthy: the retry below costs a second and turns a failed recording
 # session into a completed one.
-_TRANSIENT = (urllib.error.URLError, ConnectionError, OSError, http.client.HTTPException)
+# `URLError` and `ConnectionError` are both OSError subclasses, so OSError alone covers them and
+# naming all three only suggested they were different things.
+_TRANSIENT = (OSError, http.client.HTTPException)
 
 
 def _attempt(what: str, send, tries: int = 4):

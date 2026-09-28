@@ -74,6 +74,22 @@ with the loop sleeping the remainder of each frame. The tick path already measur
 running MoonLight permanently on a NAS or a Pi.
 
 
+## The prose sweep, now counted and ratcheted (2026-09-28)
+
+`check_prose.py` already named `.js` and `.py` among the files it checks, but `.vale.ini` gave Vale
+no parser for either, so both were skipped in silence: the intent was there and the mechanism was
+not. A tree-sitter view per language closes that, and the count is written to
+[prose.md](../../reference/metrics/prose.md) on every run, beside the other metrics.
+
+The gate stays scoped to ADDED lines, so a change is held to the rules on what it writes.
+The report is the debt behind it, and it ratchets: a rise fails the check.
+
+The em-dashes dominate and are the mechanical part: a comma, a colon or a full stop replaces each,
+and the same sweep already ran once over `src/**/*.h` when `CComments` was added. The rest is
+judgment per line. Do it as its own change with its own review, a directory at a time, rather than
+inside a branch about something else: a blanket find-and-replace over comments is how a code
+identifier gets rewritten by accident.
+
 ## Distribution
 
 ### The arm64 `.deb` is untested on Raspberry Pi OS bookworm (2026-09-13)

@@ -19,6 +19,12 @@
 ///
 /// @moreinfo
 ///
+/// ## Why the box is clipped
+///
+/// `addPixel` already rejects an out-of-bounds pixel, but only AFTER the distance function has run for it, which leaves two faults the clip removes.
+/// A radius the caller chose makes the walk cost r squared however small the grid is, so one large number stalls the render thread.
+/// And `lengthType` is 16 bits, so a radius near its ceiling puts `x1` at INT16_MAX, the increment wraps to negative, and the loop never ends at all.
+///
 /// ## Addressing
 ///
 /// Index order matches the engine, and a pixel outside the grid is silently clipped, so a line running off the edge stops drawing.
@@ -947,13 +953,25 @@ inline uint8_t coverage(int32_t d, pos_t edge = kSubOne) {
 }
 
 
+/// Clip an SDF shape's bounding box to the canvas, so the walk covers only pixels that can be lit: @xref{why-the-box-is-clipped}.
+inline void clipBox(const Canvas& cv, lengthType& x0, lengthType& x1,
+                    lengthType& y0, lengthType& y1) {
+    // An EMPTY canvas is stated rather than left to arithmetic, which would reach the same answer by accident.
+    if (cv.dims.x <= 0 || cv.dims.y <= 0) { x1 = -1; y1 = -1; return; }
+    if (x0 < 0) x0 = 0;
+    if (y0 < 0) y0 = 0;
+    if (x1 > static_cast<lengthType>(cv.dims.x - 1)) x1 = static_cast<lengthType>(cv.dims.x - 1);
+    if (y1 > static_cast<lengthType>(cv.dims.y - 1)) y1 = static_cast<lengthType>(cv.dims.y - 1);
+}
+
 // --- Filled shapes with soft edges: the SDF forms, shading the boundary by coverage ---------------
 
 /// A filled disc with an anti-aliased edge, additive so overlapping discs brighten.
 inline void disc(const Canvas& cv, pos_t cx, pos_t cy, pos_t r, RGB c, lengthType z = 0) {
     if (r <= 0) return;
-    const lengthType x0 = toPixel(cx - r) - 1, x1 = toPixel(cx + r) + 1;
-    const lengthType y0 = toPixel(cy - r) - 1, y1 = toPixel(cy + r) + 1;
+    lengthType x0 = toPixel(cx - r) - 1, x1 = toPixel(cx + r) + 1;
+    lengthType y0 = toPixel(cy - r) - 1, y1 = toPixel(cy + r) + 1;
+    clipBox(cv, x0, x1, y0, y1);
     for (lengthType y = y0; y <= y1; y++) {
         for (lengthType x = x0; x <= x1; x++) {
             // The pixel's center against the edge: sampling the corner drifts the shape as it grows.
@@ -970,8 +988,9 @@ inline void ring(const Canvas& cv, pos_t cx, pos_t cy, pos_t r, pos_t thickness,
                  lengthType z = 0) {
     if (r <= 0 || thickness <= 0) return;
     const pos_t half = thickness / 2;
-    const lengthType x0 = toPixel(cx - r - half) - 1, x1 = toPixel(cx + r + half) + 1;
-    const lengthType y0 = toPixel(cy - r - half) - 1, y1 = toPixel(cy + r + half) + 1;
+    lengthType x0 = toPixel(cx - r - half) - 1, x1 = toPixel(cx + r + half) + 1;
+    lengthType y0 = toPixel(cy - r - half) - 1, y1 = toPixel(cy + r + half) + 1;
+    clipBox(cv, x0, x1, y0, y1);
     for (lengthType y = y0; y <= y1; y++) {
         for (lengthType x = x0; x <= x1; x++) {
             // The ring is the band around the circle's line, so the distance is taken absolute.

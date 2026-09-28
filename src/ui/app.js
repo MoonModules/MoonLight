@@ -393,7 +393,7 @@ async function init() {
 // The device streams only to clients on this channel, so CLOSING this socket stops the work at the
 // source: a dismissed preview costs the device nothing.
 let wsPreview = null;
-let wspRetryTimer = null;   // pending preview reconnect, cancelled on close/hide
+let wspRetryTimer = null;   // pending preview reconnect, canceled on close/hide
 let previewWanted = false;              // does the pane currently want frames?
 const WSP_RETRY_MIN_MS = 1000, WSP_RETRY_MAX_MS = 15000;
 let wspRetryMs = WSP_RETRY_MIN_MS;
@@ -1081,7 +1081,7 @@ function startSurfaceDemo(root, moduleName) {
             livePads().forEach(p => p.classList.remove("list-pad-demo"));
             return;
         }
-        // A travelling wave rather than every control moving together: the phase offset per column is
+        // A traveling wave rather than every control moving together: the phase offset per column is
         // what makes it read as a sweep across the desk.
         liveInputs().forEach((el, i) => {
             const lo = Number(el.min) || 0, hi = Number(el.max) || 255;
@@ -1850,7 +1850,7 @@ function createCard(mod, depth) {
         stats.addEventListener("mouseleave", hide);
         stats.addEventListener("touchstart", (e) => { e.preventDefault(); show(); });
         stats.addEventListener("touchend", hide);
-        // A cancelled touch (a scroll takes over, a call arrives) fires no touchend, which left
+        // A canceled touch (a scroll takes over, a call arrives) fires no touchend, which left
         // the peek latched until the next gesture.
         stats.addEventListener("touchcancel", hide);
         title.appendChild(stats);
@@ -2011,7 +2011,7 @@ function createCard(mod, depth) {
     // card-build. The picker reads SystemModule.firmware (already in
     // /api/state) to filter to OTA-compatible releases. On install, the
     // device fetches the binary via /api/firmware/url: no browser CORS in
-    // the data path. See docs/explanation/architecture/mooninstaller.md § Firmware vs board.
+    // the data path. See docs/explanation/architecture/mooninstaller.md § The three words.
     if (mod.type === "FirmwareUpdateModule") {
         // A nudge where someone has just thought about versions, which is the moment the aggregate
         // is worth something to them. Shown only while Stats consent is off, so it disappears the
@@ -2978,7 +2978,7 @@ function createControl(moduleName, moduleType, ctrl) {
             peek.addEventListener("mouseleave", hide);
             peek.addEventListener("touchstart", (e) => { e.preventDefault(); show(); });
             peek.addEventListener("touchend", hide);
-            peek.addEventListener("touchcancel", hide);   // a cancelled touch fires no touchend
+            peek.addEventListener("touchcancel", hide);   // a canceled touch fires no touchend
             row.appendChild(peek);
             break;
         }
@@ -3195,7 +3195,7 @@ function listRowKey(item, labelText) {
 // Uniform size on purpose: sizing each pad to its label (as MoonLight does) makes a ragged grid that
 // is harder to scan and to hit; a fixed pad with a truncated label is what a MIDI deck looks like.
 // Long-press as the touch equivalent of a right-click: a touch device has no second button, so the
-// configure gesture has to come from somewhere. 500ms, cancelled by movement so it never fires
+// configure gesture has to come from somewhere. 500ms, canceled by movement so it never fires
 // during a drag.
 function attachLongPress(el, fn) {
     let timer = 0;
@@ -3883,7 +3883,7 @@ function buildListPads(container, rows, opts) {
             e.preventDefault();
             openPadEditor(pad, moduleName, ctrlName, item, (item && item.slot) | 0);
         });
-        // Touch has no right button, so a long press opens the same editor. Cancelled by movement so
+        // Touch has no right button, so a long press opens the same editor. Canceled by movement so
         // a drag to reorder is not mistaken for a press-and-hold.
         attachLongPress(pad, () => openPadEditor(pad, moduleName, ctrlName, item, (item && item.slot) | 0));
         // Drag to reorder, so a grid can be arranged to match a physical control surface. Same
@@ -6341,7 +6341,7 @@ function renderMoonCloudStats(host, mod) {
         // took the whole card down with it.
         for (const [label, key, param] of [["Version", "versions", "version"],
                                            ["Chip", "chips", "chip"],
-                                           ["Board", "deviceModels", "deviceModel"],
+                                           ["Device", "deviceModels", "deviceModel"],
                                            ["Flash", "flash", "flash"],
                                            ["PSRAM", "psram", "psram"],
                                            ["SDK", "sdk", "sdk"],
@@ -7193,7 +7193,7 @@ async function fmLoadInto(textarea, relPath, expectedSize, signal) {
         textarea.value = fmPrettify(text, relPath);
         return { readOnly: false, message: "" };
     } catch (err) {
-        // A superseded load was cancelled on purpose (the caller has already moved to another
+        // A superseded load was canceled on purpose (the caller has already moved to another
         // file): leave the pane alone and say so, so the newer load owns what is on screen.
         if (err && err.name === "AbortError") return { aborted: true, readOnly: false, message: "" };
         textarea.value = "";

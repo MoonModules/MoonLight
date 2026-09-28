@@ -143,12 +143,26 @@ def main() -> int:
         # `host`, not args.host: discovery above may have resolved another device, and the
         # scheme is stripped there. Resetting one device while recording another leaves the
         # take opening on the previous ending, which is the whole thing this call prevents.
-        if reset(host) != 0:
+        # A device that never answers raises rather than returning, and the message written for
+        # that case is here: without the catch it surfaced as a traceback instead.
+        try:
+            reached_boot_state = reset(host) == 0
+        except RuntimeError as e:
+            reached_boot_state = False
+            print(f"  {e}", file=sys.stderr)
+        if not reached_boot_state:
             print("The device did not reach its boot state, so the take would open on the "
                   "previous one's ending. Nothing recorded.", file=sys.stderr)
             return 1
-        # Then whatever THIS clip needs on top of the boot state, also off camera.
-        apply_setup(host, run.setup)
+        # Then whatever THIS clip needs on top of the boot state, also off camera. The count is
+        # CHECKED for the same reason the reset above is: a refused precondition records a clip
+        # that demonstrates the default instead of the thing it was written to show, and says so
+        # nowhere. The 256x256 grid the layouts clip is about is exactly such a precondition.
+        applied = apply_setup(host, run.setup)
+        if applied != len(run.setup):
+            print(f"{applied} of {len(run.setup)} setup control(s) applied, so the take would "
+                  f"show the wrong starting state. Nothing recorded.", file=sys.stderr)
+            return 1
 
     print(f"Recording [{run.name}]: {len(run.steps)} steps")
 

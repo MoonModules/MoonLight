@@ -242,7 +242,7 @@ def _slug(text: str) -> str:
 
 def _emit_row(b: dict, details_names: set) -> str:
     """One 2-column table row for a parsed ### block: module (preview, name,
-    description) and details (controls, then the labelled links)."""
+    description) and details (controls, then the labeled links)."""
     # Col 1: anchored name (so a help #anchor lands on the row) + description. A
     # merged card (e.g. the LED-output drivers) carries several ids so each old
     # per-driver anchor still resolves onto the one row.

@@ -52,6 +52,11 @@ TEST_ID_ATTRS = "data-module"
 # The run file
 # ---------------------------------------------------------------------------
 
+# The playback rate a clip is rendered at when its run file names none. Read by uivoiceover
+# too, which divided a caption offset by its own copy of this: the two disagreed, so an
+# unspecified speed voiced a clip at half the rate it was filmed.
+DEFAULT_SPEED = 2.0
+
 @dataclass
 class Step:
     action: str
@@ -108,7 +113,7 @@ def load_run(path: Path) -> Run:
         description=raw.get("description", ""),
         steps=steps,
         setup=raw.get("setup", []),
-        speed=float(raw.get("speed", 2.0)),
+        speed=float(raw.get("speed", DEFAULT_SPEED)),
         width=int(raw.get("width", 960)),
         host=raw.get("host"),
         requires=raw.get("requires"),
@@ -1550,7 +1555,10 @@ class Driver:
                 self.failures.append(
                     f'{e["module"]}.{e["control"]} is {got!r}, expected {e["value"]!r}')
 
-        self._settle(step.hold)        # video-only: _settle is a no-op unpaced
+        # The dwell already happened, in whichever branch above ran: a captioned step held for its
+        # spoken line, an uncaptioned one for its hold. A third settle here dwelt a SECOND time on
+        # every captioned step, so a clip ran longer than the sum of its lines and the pointer sat
+        # still between them.
         return ok
 
     def run_all(self, run: Run) -> list[str]:

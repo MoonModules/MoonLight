@@ -6,6 +6,8 @@
 #include "doctest.h"
 #include "light/powerfunctions/draw.h"
 
+#include <chrono>
+
 using namespace mm;
 
 namespace {
@@ -102,6 +104,25 @@ TEST_CASE("a circle larger than the grid clips instead of overflowing") {
     Surface disc(5, 5);
     draw::fillCircle(disc.cv, 2, 2, 50, kRed);
     CHECK(disc.litCount() == 25);    // the disc covers every cell, and none beyond
+}
+
+// At a radius near the 16-bit ceiling the box's far edge lands on INT16_MAX, the counter wraps negative, and the walk never ends: this asserts termination.
+TEST_CASE("a circle larger than the coordinate type terminates") {
+    Surface s(16, 16);
+    draw::ring(s.cv, draw::toSub(8), draw::toSub(8), draw::toSub(32758), draw::kSubOne, RGB{255, 0, 0});
+    draw::disc(s.cv, draw::toSub(8), draw::toSub(8), draw::toSub(32758), RGB{0, 255, 0});
+    CHECK(true);   // reaching this line IS the assertion: the calls above returned
+}
+
+// The same clip keeps the cost proportional to the GRID rather than the radius: unclipped, one typo in a script stalls a frame.
+TEST_CASE("a circle far larger than the grid costs the grid, not the radius") {
+    Surface s(16, 16);
+    const auto start = std::chrono::steady_clock::now();
+    for (int i = 0; i < 200; i++)
+        draw::ring(s.cv, draw::toSub(8), draw::toSub(8), draw::toSub(4000), draw::kSubOne, RGB{255, 0, 0});
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start).count();
+    CHECK(ms < 500);   // unclipped this is ~3.2 billion distance evaluations
 }
 
 TEST_CASE("a negative radius draws nothing") {

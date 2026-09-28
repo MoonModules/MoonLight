@@ -32,21 +32,19 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from uinarrate import VOICE_PATHS, speak, voice_model            # noqa: E402
+from uinarrate import VOICE_PATHS, _duration, speak, voice_model   # noqa: E402
+import uirun                                                       # noqa: E402  DEFAULT_SPEED: one home for the run format's defaults
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
 
-def _duration(path: Path) -> float:
-    out = subprocess.run(
-        ["ffprobe", "-v", "quiet", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)],
-        capture_output=True, text=True).stdout.strip()
-    return float(out) if out else 0.0
-
-
 def _speed(run: dict) -> float:
-    """The clip is rendered at this playback rate, so a step's seconds are divided by it."""
-    return float(run.get("speed", 1.0)) or 1.0
+    """The clip is rendered at this playback rate, so a step's seconds are divided by it.
+
+    The default comes from `uirun`, which owns the run format: a second copy here read 1.0 where the
+    recorder read 2.0, so a run file that named no speed was voiced at half the rate it was filmed.
+    """
+    return float(run.get("speed", uirun.DEFAULT_SPEED)) or 1.0
 
 
 def timeline(run: dict, voice: str, work: Path, clip: Path) -> list[tuple[float, Path, str]]:
@@ -125,7 +123,8 @@ def mix(clip: Path, lines: list[tuple[float, Path, str]], work: Path, out: Path)
     # The recorded video's first frame lands a few milliseconds after zero, and a track starting at
     # zero beside it is written on a NEGATIVE timestamp: ffmpeg decodes it, VLC reports no audio.
     # Offsetting the track by that much puts both streams on the positive side of the timeline.
-    offset = max(0.0, -_start_time(clip, "v")) if _start_time(clip, "v") < 0 else 0.007
+    video_start = _start_time(clip, "v")
+    offset = max(0.0, -video_start) if video_start < 0 else 0.007
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(clip),
                     "-itsoffset", f"{offset:.3f}", "-i", str(track),
                     "-map", "0:v", "-map", "1:a",
@@ -144,7 +143,7 @@ def mix(clip: Path, lines: list[tuple[float, Path, str]], work: Path, out: Path)
 def main() -> int:
     ap = argparse.ArgumentParser(description="Speak a clip's captions over the clip.")
     ap.add_argument("--run", required=True, help="the run file the clip was recorded from")
-    ap.add_argument("--voice", default="prudence",
+    ap.add_argument("--voice", default="alba",
                     help="a Piper voice: " + ", ".join(VOICE_PATHS))
     ap.add_argument("--clip", help="the clip to narrate (default: the tracked one for this run)")
     ap.add_argument("--out", help="where the narrated clip lands (default: over the tracked one)")
@@ -179,7 +178,7 @@ def main() -> int:
     for n, (offset, aiff, text) in enumerate(lines):
         spoken = _duration(aiff)
         nxt = lines[n + 1][0] if n + 1 < len(lines) else _duration(clip)
-        room = (nxt - offset) * 1.0
+        room = nxt - offset
         flag = ""
         if spoken > room:
             over += 1

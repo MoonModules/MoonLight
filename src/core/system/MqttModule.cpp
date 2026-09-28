@@ -115,6 +115,7 @@
 /// A format conversion is the least-coupling way to bridge it, since the module still drives the palette via `Scheduler::setControl` rather than a light object.
 /// This is a deliberate divergence from the plan's "no light include" line, made with the trade-off understood rather than by precedent.
 ///
+#include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/system/MqttModule.h"
 
 #include "core/module/Scheduler.h"     // setControl: the shared apply-core
@@ -836,7 +837,7 @@ void MqttModule::feedForTest(const uint8_t* bytes, size_t len) {
 }
 
 void MqttModule::setStatusLine(const char* msg) {
-    std::snprintf(statusStr_, sizeof(statusStr_), "%s", msg);
+    mm::formatTo(statusStr_, sizeof(statusStr_), "%s", msg);
 }
 
 } // namespace mm

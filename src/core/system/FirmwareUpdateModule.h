@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/module/MoonModule.h"
 #include "core/util/build_info.h"   // kVersion / kRelease / kBuildDate / kFirmwareName
 #include "platform/platform.h" // firmwareSize / firmwarePartition
@@ -165,7 +166,7 @@ public:
     /// Poll the install task's progress and phase into the bound buffers.
     void tick1s() MM_NONBLOCKING override {
         // No locks: one writer, and a torn read shows as a brief glimpse.
-        std::snprintf(statusStr_, sizeof(statusStr_), "%s", g_otaStatus);   // always NUL-terminates
+        mm::formatTo(statusStr_, sizeof(statusStr_), "%s", g_otaStatus);   // always NUL-terminates
         publishStatus();
         // A recovery install ends with no reboot, so watching the phase is what notices.
         const bool installing = std::strcmp(statusStr_, "checking") == 0 ||

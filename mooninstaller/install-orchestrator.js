@@ -173,7 +173,7 @@ async function sendApplyOpFrame(port, op) {
 async function pushDefaultsOverSerial(port, device, applyDefaults, trackProgress, onLog) {
     if (!(device && applyDefaults)) {
         if (onLog) onLog(device
-            ? `[orchestrator] NOT applying ${device} defaults — "Apply device defaults" unticked; device config left as-is`
+            ? `[orchestrator] NOT applying ${device} defaults: "Apply device defaults" unticked; device config left as-is`
             : `[orchestrator] no device model selected — no defaults to apply`);
         return false;
     }
@@ -184,10 +184,10 @@ async function pushDefaultsOverSerial(port, device, applyDefaults, trackProgress
 
 // The installer's default esptool-js flash baud: SAFE, because the installer serves unknown
 // walk-up hardware (a cheap CH340 clone, a bad cable). A well-tested compromise across CH340 /
-// CP2102 / FT232 bridges. A device overrides it in deviceModels.json via `flashBaud` — today
+// CP2102 / FT232 bridges. A device overrides it in deviceModels.json via `flashBaud`: today
 // only down, for a bridge known to stall faster (the LOLIN D32's CH340 → 460800, already the
 // default here, so a no-op in the installer but a real opt-down for the CLI's fast default).
-// Native-USB devices (P4) ignore baud. (The CLI / MoonDeck path defaults FAST instead — see
+// Native-USB devices (P4) ignore baud. (The CLI / MoonDeck path defaults FAST instead: see
 // flash_esp32.py; same catalog field, opposite default, different audience.)
 const DEFAULT_FLASH_BAUD = 460800;
 
@@ -209,7 +209,7 @@ async function fetchCatalogEntry(device, onLog) {
 }
 
 // Resolve a device's flash baud from the catalog: the entry's `flashBaud` when set,
-// else DEFAULT_FLASH_BAUD. Best-effort — any fetch/parse failure or unknown device
+// else DEFAULT_FLASH_BAUD. Best-effort: any fetch/parse failure or unknown device
 // falls back to the safe default, so a catalog hiccup never blocks a flash. Mirrors
 // the CLI's flash_esp32.py `_catalog_flash_baud`, keeping both flash paths in step.
 async function catalogFlashBaud(device, onLog) {
@@ -235,7 +235,7 @@ async function sendConfigOverSerial(port, device, onLog) {
 // way: the device's IP and its mDNS `<deviceName>.local` address. MoonLight appends
 // machine-parseable `MM_IP=<dotted-quad>` and `MM_DEVICE=<deviceName>.local` tokens to
 // its once-per-second tick log over USB (std::printf → reaches the USB-CDC console,
-// unlike ESP_LOGI) whenever Ethernet or WiFi-STA has an address — so a device that comes
+// unlike ESP_LOGI) whenever Ethernet or WiFi-STA has an address: so a device that comes
 // up on Ethernet, or boots with saved WiFi credentials, announces its own address (works
 // on every OS). The deviceName is the device's single identity (mDNS name = AP name =
 // DHCP hostname), so `<deviceName>.local` is exactly what resolves on the LAN. The tokens
@@ -351,16 +351,16 @@ function normalizeDeviceUrl(input) {
 // vocabulary build_esp32's TARGET_TO_FAMILY defines and the ESP Web Tools manifest
 // carries as `chipFamily` ("ESP32", "ESP32-S3", "ESP32-P4", and any future
 // S2/C3/C6/… as MoonLight grows to support every ESP32-family chip). Without
-// normalising, a classic ESP32 matches NO device
+// normalizing, a classic ESP32 matches NO device
 // (filter) and the flash guard false-warns on a correct flash.
 //
-// Normalise by KEEPING the family token and dropping the package/revision tail —
+// Normalize by KEEPING the family token and dropping the package/revision tail:
 // not by collapsing distinct chips. A bare "ESP32-<X>…" keeps "ESP32-<X>"; classic
 // silicon (ESP32-D0WD*, ESP32-PICO-*, ESP32-U4WDH — no second family token) maps to
 // plain "ESP32". This is forward-proof: a new ESP32-C5 needs no code change here.
 //
 // The ESP32 token is matched ANYWHERE in the string, not anchored at the start:
-// esptool-js prefixes "unknown " when it doesn't fully recognise a chip (newer
+// esptool-js prefixes "unknown " when it doesn't fully recognize a chip (newer
 // silicon than the bundled esptool — observed: "unknown ESP32-P4 (revision v1.3)"),
 // and anchoring on ^ESP32 would let that prefix defeat the match and pass the raw
 // string through (→ no device matches, false "flash anyway?" warning).
@@ -370,7 +370,7 @@ function chipFamily(chipName) {
     const sub = s.match(/ESP32-([A-Z]\d+)\b/);
     if (sub) return "ESP32-" + sub[1];
     if (/ESP32\b/.test(s)) return "ESP32";   // classic — no sub-family token
-    return s;                                // truly unrecognised — pass through so it's visible
+    return s;                                // truly unrecognized: pass through so it's visible
 }
 
 // Hard-reset the chip after flashing by toggling DTR/RTS — the standard ESP32
@@ -502,7 +502,7 @@ export const installer = {
      *   success doesn't call back — the host's next render takes over
      *   (the wifi-creds form section replaces the needs-ip section).
      *   Optional; degrade gracefully when omitted (older host pages still
-     *   get retry behaviour, just without the spinner).
+     *   get retry behavior, just without the spinner).
      * @param {() => Promise<void>} [opts.uiWaitForPortRetry]
      *   Host resolves this when the user clicks the Try-again button in
      *   the wrong-port section. Fires after the orchestrator's probe-open
@@ -633,7 +633,7 @@ export const installer = {
                 _detected = null;
                 // detect() left the loader connected at its baudrate (before the device was
                 // known). If this device's catalog flashBaud differs, re-negotiate now, so a
-                // reused detect() connection honours the override like the fresh-connect branch.
+                // reused detect() connection honors the override like the fresh-connect branch.
                 const flashBaud = await catalogFlashBaud(device, onLog);
                 const priorBaud = esploader.baudrate;
                 if (flashBaud !== priorBaud) {
@@ -912,7 +912,7 @@ export const installer = {
             // user choose retry / typed-IP / skip. Retry tears the SDK
             // down, re-opens the port, and runs `initialize()` again on
             // a fresh ImprovSerial. Cheap second chance for slow-booting
-            // devices (LOLIN S3 mini etc.) that lose the post-flash race —
+            // devices (LOLIN S3 mini etc.) that lose the post-flash race ,
             // the device-side Improv task isn't installed until after
             // NetworkModule::setup() completes (~1.8 s on ESP32-S3), and
             // the host's 2 s reopen wait can land before it's ready.

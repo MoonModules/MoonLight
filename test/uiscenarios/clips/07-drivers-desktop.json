@@ -7,26 +7,26 @@
       "action": "chapter",
       "title": "Drivers",
       "description": "Getting the frame out, on a desktop",
-      "seconds": 4.7,
+      "seconds": 5.0,
       "caption": "Drivers. Getting the finished frame out of the device."
     },
     {
       "action": "open_card",
       "module": "Drivers",
       "caption": "A driver carries the finished frame out of the device. One frame, and as many drivers as you like carrying it at once.",
-      "speech": 7.8
+      "speech": 9.5
     },
     {
       "action": "open_card",
       "module": "Drivers",
       "caption": "This is a computer, so the ones worth showing here are the ones that send the frame somewhere rather than clocking it onto a pin.",
-      "speech": 7.5
+      "speech": 9.2
     },
     {
       "action": "open_card",
       "module": "Preview",
       "caption": "Preview draws the frame in your browser, which is what you have been watching in every one of these clips.",
-      "speech": 6.7
+      "speech": 7.2
     },
     {
       "action": "add_module",
@@ -34,13 +34,13 @@
       "type": "NdiDriver",
       "as": "ndi",
       "caption": "N D I sends the frame onto the network as video, so O B S or Resolume can pick it up as a source like any camera.",
-      "speech": 8.1
+      "speech": 9.7
     },
     {
       "action": "delete_module",
       "module": "{ndi}",
       "caption": "Taking it out again. A driver is a module like any other, so adding and removing one is the same gesture throughout.",
-      "speech": 8.7
+      "speech": 9.3
     },
     {
       "action": "add_module",
@@ -48,13 +48,13 @@
       "type": "RtspDriver",
       "as": "rtsp",
       "caption": "R T S P serves the same frame as a stream, which a player opens by U R L over the network.",
-      "speech": 7.8
+      "speech": 8.3
     },
     {
       "action": "delete_module",
       "module": "{rtsp}",
       "caption": "Out it goes. Several of these can run at once, each driving its own slice of the same buffer.",
-      "speech": 7.8
+      "speech": 8.5
     },
     {
       "action": "add_module",
@@ -62,13 +62,13 @@
       "type": "HlsDriver",
       "as": "hls",
       "caption": "H L S writes the frame out as segments any player opens, V L C on a laptop or on the television.",
-      "speech": 9.5
+      "speech": 8.8
     },
     {
       "action": "delete_module",
       "module": "{hls}",
       "caption": "And away. Notice the lights never stop while I do this: a driver comes and goes on the next frame.",
-      "speech": 7.7
+      "speech": 8.1
     },
     {
       "action": "add_module",
@@ -76,25 +76,27 @@
       "type": "NetworkSendDriver",
       "as": "netsend",
       "caption": "Network send speaks Art Net, s A C N and D D P, so real fixtures on a real rig listen to this one.",
-      "speech": 9.1
+      "speech": 9.6
     },
     {
       "action": "delete_module",
       "module": "{netsend}",
       "caption": "Removing it again, because the next one goes lower than I P.",
-      "speech": 5.6
+      "speech": 5.5
     },
     {
       "action": "add_module",
       "parent": "Drivers",
       "type": "PanelCardDriver",
       "as": "card",
-      "caption": "Panel card talks to the receiving cards a professional rig is built from, over raw Ethernet frames below I P, the way a sender card does."
+      "caption": "Panel card talks to the receiving cards a professional rig is built from, over raw Ethernet frames below I P, the way a sender card does.",
+      "speech": 11.9
     },
     {
       "action": "delete_module",
       "module": "{card}",
-      "caption": "And out, because the last one is the most domestic of the set."
+      "caption": "And out, because the last one is the most domestic of the set.",
+      "speech": 5.2
     },
     {
       "action": "add_module",
@@ -102,19 +104,19 @@
       "type": "HueDriver",
       "as": "hue",
       "caption": "Hue drives the bulbs in the room through their own bridge, so the same effect lands on the lamps you already own.",
-      "speech": 7.6
+      "speech": 7.9
     },
     {
       "action": "delete_module",
       "module": "{hue}",
       "caption": "And that one goes too, leaving the device the way we found it.",
-      "speech": 4.7
+      "speech": 5.3
     },
     {
       "action": "open_card",
       "module": "Drivers",
       "caption": "One frame, and any of these carries it. The pin drivers are in this same list, and they come into their own on a device that has pins to clock.",
-      "speech": 9.0
+      "speech": 11.6
     }
   ]
 }

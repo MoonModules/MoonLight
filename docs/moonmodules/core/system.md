@@ -66,7 +66,7 @@ Discovers other MoonLight devices on the LAN and lists them, persisting the last
 - `devices`: a List of discovered devices; each row expands to a detail panel. Persistable.
 - `wledCompatible`: also announce on WLED's broadcast address, off by default.
 
-WLED apps browse on broadcast, so a device appears in them only with this on. Off is the better neighbour, since a broadcast wakes every device on the LAN to parse a packet none of them want. Presence always goes to the MoonLight group regardless, so peers find each other either way. See [multicast and IGMP snooping](../../explanation/architecture/moonlight.md#multicast-and-igmp-snooping).
+WLED apps browse on broadcast, so a device appears in them only with this on. Off is the better neighbor, since a broadcast wakes every device on the LAN to parse a packet none of them want. Presence always goes to the MoonLight group regardless, so peers find each other either way. See [multicast and IGMP snooping](../../explanation/architecture/moonlight.md#multicast-and-igmp-snooping).
 
 Detail: [technical](moxygen/DevicesModule.md)
 
@@ -76,7 +76,7 @@ Detail: [technical](moxygen/DevicesModule.md)
 
 ### MQTT
 
-Bridges the light to an MQTT broker so a home-automation hub can control it, as a transport over the shared apply-core rather than new control logic. Our own dependency-free MQTT 3.1.1 client, disabled until a broker is set. A wired-by-code child of Network. Topics, colour-wheel mapping and the Homebridge config: ⌄ details.
+Bridges the light to an MQTT broker so a home-automation hub can control it, as a transport over the shared apply-core rather than new control logic. Our own dependency-free MQTT 3.1.1 client, disabled until a broker is set. A wired-by-code child of Network. Topics, color-wheel mapping and the Homebridge config: ⌄ details.
 
 <img src="../../assets/core/MqttModule.png" width="300" alt="MQTT module controls">
 
@@ -169,7 +169,7 @@ Detail: [technical](moxygen/MoonTalkModule.md)
 
 ### File Manager
 
-Browse and manage the device filesystem: a folder tree with an inline text editor. Distinct from Filesystem, the persistence engine. Behaviour: ⌄ details.
+Browse and manage the device filesystem: a folder tree with an inline text editor. Distinct from Filesystem, the persistence engine. Behavior: ⌄ details.
 
 <img src="../../assets/core/FileManagerModule.png" width="300" alt="File Manager panel, folder tree + toolbar">
 
@@ -206,7 +206,7 @@ Detail: [technical](moxygen/I2cScanModule.md)
 
 ### Tasks
 
-A read-only diagnostic showing **what runs where**: you cannot optimise which module runs on which core until you can see it. A fixed System module, wired-by-code, with each task's MoonModules nested beneath it.
+A read-only diagnostic showing **what runs where**: you cannot optimize which module runs on which core until you can see it. A fixed System module, wired-by-code, with each task's MoonModules nested beneath it.
 
 <img src="../../assets/core/TasksModule.png" width="300" alt="Tasks module, a row per FreeRTOS task">
 
@@ -231,7 +231,7 @@ It walks the live tree for every claimed pin, holding no state, and flags double
 
 - read-only: `pins`, a row per claimed GPIO.
 
-Each row carries `gpio`, `owner` and `role`, plus live `dir`, `level` and `drive`. A row takes a coloured edge when unsafe: red for a reserved or double-claimed pin, yellow for a driven role on a strap, per [gpio-usage.md](../../reference/hardware/gpio-usage.md).
+Each row carries `gpio`, `owner` and `role`, plus live `dir`, `level` and `drive`. A row takes a colored edge when unsafe: red for a reserved or double-claimed pin, yellow for a driven role on a strap, per [gpio-usage.md](../../reference/hardware/gpio-usage.md).
 
 Detail: [technical](moxygen/PinsModule.md)
 

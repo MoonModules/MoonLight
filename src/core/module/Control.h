@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -33,7 +34,7 @@ inline bool parseDottedQuad(const char* s, uint8_t out[4]) {
 
 /// Format four octets as "A.B.C.D", which sixteen bytes always fits.
 inline void formatDottedQuad(char out[16], const uint8_t ip[4]) {
-    std::snprintf(out, 16, "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
+    mm::formatTo(out, 16, "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
 }
 
 /// Coerce a string in place into a valid hostname label, which the device name must be.

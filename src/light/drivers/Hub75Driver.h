@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "light/drivers/DriverBase.h"
 #include "light/drivers/Hub75Slots.h"
 #include "light/layers/Layer.h"
@@ -262,7 +263,7 @@ public:
         const uint16_t hz = platform::hub75RefreshHz(hub_);
         if (hz == lastRefresh_) return;      // never re-serialize an unchanged value on the 1 Hz tick
         lastRefresh_ = hz;
-        std::snprintf(refreshStr_, sizeof(refreshStr_), "%u Hz", hz);
+        mm::formatTo(refreshStr_, sizeof(refreshStr_), "%u Hz", hz);
     }
 
 private:

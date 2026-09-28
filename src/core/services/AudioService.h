@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/module/MoonModule.h"
 #include "core/util/ActiveInstance.h"   // the one-active-mic election (the seat + its RAII vacate)
 #include "core/util/AudioFrame.h"
@@ -362,11 +363,11 @@ public:
         if (mode == kLocalMode && !inited_
             && platform::audioMicSharedBusFree(micMode == 1 ? platform::MicMode::Pdm
                                                             : platform::MicMode::I2sStd)) reinit();
-        std::snprintf(levelStr_, sizeof(levelStr_), "%u", static_cast<unsigned>(levelPeak_));
-        std::snprintf(onsetStr_, sizeof(onsetStr_), "%u/s, flux %u",
+        mm::formatTo(levelStr_, sizeof(levelStr_), "%u", static_cast<unsigned>(levelPeak_));
+        mm::formatTo(onsetStr_, sizeof(onsetStr_), "%u/s, flux %u",
                       static_cast<unsigned>(onsetCount_), static_cast<unsigned>(fluxPeak_));
         onsetCount_ = 0; fluxPeak_ = 0;
-        std::snprintf(peakStr_, sizeof(peakStr_), "%u Hz", static_cast<unsigned>(frame_.peakHz));
+        mm::formatTo(peakStr_, sizeof(peakStr_), "%u Hz", static_cast<unsigned>(frame_.peakHz));
         levelPeak_ = 0;   // reset for the next window
 
         // Mic-health diagnosis from the 1 s tallies (see the read path).
@@ -396,7 +397,7 @@ public:
                 else if (lastSyncRecv_ != 0
                          && platform::millis() - lastSyncRecv_ < kSyncFallbackMs) {
                     // Named, because "receiving" alone cannot tell a rig taking the right source from one locked.
-                    std::snprintf(syncStr_, sizeof(syncStr_), "receiving from %u.%u.%u.%u",
+                    mm::formatTo(syncStr_, sizeof(syncStr_), "receiving from %u.%u.%u.%u",
                                   syncPeer_[0], syncPeer_[1], syncPeer_[2], syncPeer_[3]);
                     setStatus(syncStr_);
                 } else {

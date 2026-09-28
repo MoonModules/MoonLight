@@ -67,7 +67,7 @@ TEST_CASE("a scripted circle draws its rim and leaves the middle dark") {
     CHECK(s.lit() > 0);
 }
 
-// THE bug this file exists for: through the unsigned ABI word, -3 read as 4,294,967,293 and passed a `> 0` test.
+// A script's arguments arrive as unsigned ABI words, so a negative width is 4,294,967,293 to a `> 0` test: read signed, it is the thinnest line instead.
 TEST_CASE("a scripted circle with a negative stroke width draws a thin rim, not a filled grid") {
     const int thin     = litAfter("circle(8, 8, 5, 1, 255, 0, 0);");
     const int negative = litAfter("circle(8, 8, 5, -3, 255, 0, 0);");
@@ -85,9 +85,9 @@ TEST_CASE("a thicker scripted circle covers more lights than a thin one") {
     CHECK(litAfter("circle(8, 8, 5, 3, 255, 0, 0);") > litAfter("circle(8, 8, 5, 1, 255, 0, 0);"));
 }
 
-TEST_CASE("a scripted circle outside the grid clips instead of overflowing") {
-    // The guarantee is that it returns at all.
-    CHECK(litAfter("circle(200, 200, 40, 2, 255, 0, 0);") >= 0);
+TEST_CASE("a scripted circle outside the grid lights nothing") {
+    // Wholly off a 16x16 grid, so the count is ZERO rather than merely bounded: `>= 0` is vacuously true of an unsigned count.
+    CHECK(litAfter("circle(200, 200, 40, 2, 255, 0, 0);") == 0);
 }
 
 TEST_CASE("a scripted line reaches both of its endpoints") {

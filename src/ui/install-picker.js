@@ -57,7 +57,6 @@ const PREF_DEVICE_KEY   = "MoonLight.picker.device";
 const PREF_DEVICE_KEY_LEGACY = "MoonLight.picker.board";
 
 // A link may name what to preselect: `?release=v5.0.0&firmware=esp32s3-n16r8&device=...`
-// (`?board=` is still honoured, for links sent before the rename).
 // It outranks the saved preference, since a link is the sender's intent and the preference
 // is the visitor's habit, and a support link that lands on the wrong device helps nobody.
 // An unknown value falls through to the saved preference rather than selecting nothing.
@@ -107,7 +106,7 @@ function makeState() {
         installRowExtras: null,
         extrasAfterInstall: false,
         moonbaseOnly: false,
-        releases: [],          // normalised release records from the API
+        releases: [],          // normalized release records from the API
         sortedReleases: [],    // releases sorted newest-first; render() fills this
         releaseIdx: 0,         // index into sortedReleases
         firmware: null,        // selected firmware key
@@ -360,7 +359,7 @@ function relativeTime(iso) {
 
 // The device catalog + chip-detection logic (loadDevices / fillDeviceOptions /
 // applyDetectedChip) lives in install-picker-devices.js and is injected via
-// init({ deviceSupport }) — WEB INSTALLER ONLY. This file embeds into the device
+// init({ deviceSupport }): WEB INSTALLER ONLY. This file embeds into the device
 // firmware (embed_ui.cmake), and the device's OTA picker passes no deviceSupport,
 // so none of that code ships on the device. render() reaches the injected
 // functions through state.deviceSupport; every use is guarded by it being set.
@@ -378,7 +377,7 @@ function relativeTime(iso) {
 // pops into Release/Device/Firmware on a slow connection. Each <select> is
 // disabled and shows a spinning "Loading…" placeholder until render() swaps in
 // the real options. Same row markup as render() so the swap is seamless. The
-// Device row is included whenever the picker is in device-picker mode — if the
+// Device row is included whenever the picker is in device-picker mode. If the
 // catalog ends up empty, render() simply omits it (the skeleton row vanishes on
 // the swap, which on a fast same-origin deviceModels.json fetch is imperceptible).
 function renderSkeleton(state) {
@@ -408,21 +407,9 @@ function render(state) {
     });
     state.sortedReleases = sorted;
 
-    // Row order: Release → Device → Firmware. Release first because it's the
-    // version the user wants to flash (the picker's primary identity);
-    // Device second so the firmware narrowing happens in front of Firmware;
-    // Firmware last so it shows the narrowed list immediately below the
-    // device that filtered it. The device row only renders when (a) the
-    // caller didn't opt out and (b) the catalog actually loaded —
-    // on-device OTA passes enableDevicePicker:false (the device already
-    // knows its device); catalog-missing on the web installer (rare) falls
-    // back to a two-row Release+Firmware layout with no device narrowing.
-    // In desktop mode the device is not a device being flashed, it is the computer viewing the
-    // page, so the row names it instead of offering a catalog to narrow.
-    // In desktop mode the target is the computer viewing the page, not a device: no catalog to
-    // narrow by. The web installer draws its own Device row (a picture grid it hides in this
-    // mode), so naming the computer here would be a second one; only the on-device card, which
-    // has no device row of its own, gets the static label.
+    // Row order: Release → Device → Firmware. Release first because it's the version the user wants to flash (the picker's primary identity); Device second so the firmware narrowing happens in front of Firmware; Firmware last so it shows the narrowed list immediately below the device that filtered it.
+    // The device row only renders when (a) the caller didn't opt out and (b) the catalog loaded: on-device OTA passes enableDevicePicker:false, since a device flashing itself already knows what it is, and a catalog that failed to load on the web installer (rare) falls back to a two-row Release+Firmware layout with no narrowing.
+    // In desktop mode the target is the computer viewing the page rather than a device, so there is no catalog to narrow by. The web installer draws its own Device row (a picture grid it hides in this mode), so naming the computer here would be a second one; only the on-device card, which has no device row of its own, gets the static label.
     const desktopMode = state.ownFirmwareKey === "unknown";
     const deviceRow = (desktopMode && !state.enableDevicePicker) ? `
         <div class="control-row">
@@ -481,9 +468,10 @@ function render(state) {
         // Restore the user's last picked device if it's still in the catalog
         // (the catalog may have changed since their last visit; falling
         // through to "(any device)" if their pick is gone is the safe shape).
-        // `?board=` is read too: support links naming it are already out there, and a link that
-        // lands on the wrong device helps nobody.
-        const wantedDevice = urlParam("device") || urlParam("board")
+        // The parameter is ours to name, so there is one spelling of it. The storage key below is
+        // NOT ours: it sits in a visitor's browser under the name it was written with, which is why
+        // that one keeps a fallback and this one does not.
+        const wantedDevice = urlParam("device")
             || safeLocalGet(PREF_DEVICE_KEY) || safeLocalGet(PREF_DEVICE_KEY_LEGACY);
         if (wantedDevice && state.devices.find(b => b.name === wantedDevice)) {
             state.selectedDevice = wantedDevice;
@@ -565,7 +553,7 @@ function render(state) {
             // exists to refuse.
             .filter(f => state.moonbaseOnly ? f.firmware === state.ownFirmwareKey
                                             : isCompatible(state.ownFirmwareKey, f.firmware));
-        // Narrow by selected device (web installer only — selectedDevice stays
+        // Narrow by selected device (web installer only, since selectedDevice stays
         // null on the on-device picker since the device <select> isn't rendered).
         // Defensive: a device the user picked that isn't in the catalog (e.g.
         // catalog edited mid-session) skips the narrow — better than rejecting
@@ -602,7 +590,7 @@ function render(state) {
                     idx !== state.releaseIdx
                     && (rel.firmwares || []).some(f => wanted.includes(f.firmware)));
                 reason = elsewhere
-                    ? `${state.selectedDevice} needs a newer release — select ${elsewhere.tag_name}${elsewhere.prerelease ? " (beta)" : ""} above`
+                    ? `${state.selectedDevice} needs a newer release, select ${elsewhere.tag_name}${elsewhere.prerelease ? " (beta)" : ""} above`
                     : `no compatible firmware for ${state.selectedDevice} in this release`;
             } else {
                 reason = "no compatible firmwares in this release";
@@ -628,7 +616,7 @@ function render(state) {
             opt.textContent = f.isDesktop
                 ? DESKTOP_LABEL[f.firmware] || f.firmware
                 : EXPERIMENTAL_FIRMWARES.has(f.firmware)
-                    ? `⚠️ ${f.firmware} (untested — no device to verify on)`
+                    ? `⚠️ ${f.firmware} (untested: no device to verify on)`
                     : f.firmware;
             firmwareEl.appendChild(opt);
         });
@@ -650,7 +638,7 @@ function render(state) {
         //      on Olimex, whose default is esp32). Filtered through `compatible`
         //      so a stale saved value (release dropped that firmware) falls
         //      through harmlessly.
-        //   3. The device's default firmware — the FIRST entry in its `firmwares`
+        //   3. The device's default firmware: the FIRST entry in its `firmwares`
         //      array (firmwares[0] is the default by convention). Fallback for
         //      first-time visitors.
         //   4. First option in the narrowed list — last-resort fallback.
@@ -707,9 +695,9 @@ function render(state) {
         // Picking a device narrows the firmware dropdown and may pre-select
         // the device's default firmware (firmwares[0]). Persisted to localStorage so a
         // returning user (who usually flashes the same device over and over)
-        // doesn't have to re-pick. Same rationale as PREF_FIRMWARE_KEY; if a
-        // user is actually flashing a different device, they pick from the
-        // dropdown and the new choice persists.
+        // doesn't have to re-pick. Same rationale as PREF_FIRMWARE_KEY; a user
+        // flashing a different device picks from the dropdown, and the new
+        // choice persists.
         deviceEl.addEventListener("change", () => {
             state.selectedDevice = deviceEl.value;
             safeLocalSet(PREF_DEVICE_KEY, state.selectedDevice);
@@ -739,17 +727,17 @@ function render(state) {
                 state.detectedChip = await state.onDetect();   // "ESP32" | "ESP32-S3" | ...
                 status = state.deviceSupport.applyDetectedChip(state, deviceEl);
             } catch (e) {
-                // Restore the full, unfiltered device list — detection didn't land,
+                // Restore the full, unfiltered device list, since detection did not land,
                 // so don't keep any narrowing from a previous attempt.
                 state.deviceSupport.fillDeviceOptions(deviceEl, state.devices, "(any device)");
                 state.selectedDevice = "";
                 deviceEl.value = "";
                 // Detect is optional: the full catalog is still shown, so the user can
-                // pick their device and flash regardless. Say so — a bare "Detect
+                // pick their device and flash regardless. Say so, because a bare "Detect
                 // failed" reads like a dead end. (A brand-new chip whose esptool-js /
                 // device chip DB predates it can't be auto-identified yet, but its
                 // firmware flashes fine once picked manually.)
-                status = `Detect failed: ${e && e.message ? e.message : e} — pick your device below and flash anyway`;
+                status = `Detect failed: ${e && e.message ? e.message : e}: pick your device below and flash anyway`;
             }
             safeLocalSet(PREF_DEVICE_KEY, state.selectedDevice || "");
             refreshFirmwareDropdown();
@@ -863,7 +851,7 @@ export const installPicker = {
      *   listeners the caller wired on the element keep firing.
      * @param {object} [opts.deviceSupport] - the device-catalog + chip-detection
      *   helpers ({ loadDevices, fillDeviceOptions, applyDetectedChip }) from
-     *   install-picker-devices.js. WEB INSTALLER ONLY — the Pages page imports
+     *   install-picker-devices.js. WEB INSTALLER ONLY: the Pages page imports
      *   that module and passes it here. Omitted on the on-device OTA picker, so
      *   the device code never has to ship in the firmware (this file embeds into
      *   the device; install-picker-devices.js does not). With no deviceSupport the
@@ -873,7 +861,7 @@ export const installPicker = {
      *   capability supplies it, and this shared file never imports the device
      *   module itself. That keeps the dependency pointing the right way (the
      *   embedded-everywhere picker knows nothing installer-specific) AND keeps the
-     *   device code physically out of the firmware — an `import` can't, since the
+     *   device code physically out of the firmware, since an `import` cannot, since the
      *   device would then have to embed the imported file too (no bundler /
      *   tree-shaking here; embed_ui.cmake gzips this file verbatim).
      */
@@ -903,7 +891,7 @@ export const installPicker = {
         const bypass = new URLSearchParams(location.search).get("nocache") === "1";
         // Parallel: GitHub Releases API (slow, ~200ms) + local deviceModels.json
         // (fast, ~5ms). The devices fetch only runs when the device picker is on AND
-        // the host injected deviceSupport (web installer) — the on-device OTA picker
+        // the host injected deviceSupport (web installer): the on-device OTA picker
         // does neither, so it skips the fetch and ships no device code.
         const [data, devices] = await Promise.all([
             loadReleases({ bypassCache: bypass }),
@@ -922,7 +910,7 @@ export const installPicker = {
                 `<span class="rp-status">Couldn't reach GitHub — refresh to retry.</span></div>`;
             return;
         }
-        // Normalise: enrich each release with its parsed firmwares list, then
+        // Normalize: enrich each release with its parsed firmwares list, then
         // merge in any locally-staged firmwares for that tag (preview only — the
         // host injects extraFirmwaresByTag so a brand-new firmware that isn't in
         // the published release's assets yet is still flashable from local bins;
@@ -985,7 +973,7 @@ export const installPicker = {
      * The picked device's deviceModels.json TX-power cap
      * (controls.Network.txPowerSetting), or null when the device has none /
      * no device is picked. The orchestrator pushes it over Improv BEFORE
-     * provisioning — brown-out-prone devices (a weak LDO / marginal supply) fail their first
+     * provisioning: brown-out-prone devices (a weak LDO / marginal supply) fail their first
      * association at full power, so the cap can't wait for the post-online
      * HTTP fan-out.
      */

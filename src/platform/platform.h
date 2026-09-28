@@ -31,6 +31,13 @@
 /// A PSRAM-resident encode source measured about 595 microseconds per slice refill against a 151 microsecond drain budget.
 /// So a buffer an interrupt reads per byte comes from `allocInternal` rather than the PSRAM-first `alloc`.
 
+// Format checking, where the compiler offers it: one toolchain parses the attribute as an unknown specifier and fails the whole class downstream.
+#if defined(__GNUC__) || defined(__clang__)
+  #define MM_PRINTF_FORMAT(fmt_arg, va_arg) __attribute__((format(printf, fmt_arg, va_arg)))
+#else
+  #define MM_PRINTF_FORMAT(fmt_arg, va_arg)
+#endif
+
 // The render path must not allocate or block, which clang checks transitively through overrides.
 #if defined(__clang__) && defined(__has_cpp_attribute) && __has_cpp_attribute(clang::nonblocking)
   // noexcept is part of the contract, since unwinding allocates and clang warns without it.

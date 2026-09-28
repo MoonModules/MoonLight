@@ -12,7 +12,7 @@
 //   [I][M][P][R][O][V][version=1][type][length][payload×length][checksum]
 //   checksum = sum-mod-256 of the first 9+length bytes.
 
-// SET_TX_POWER vendor RPC command ID — the pre-association TX-power cap for devices
+// SET_TX_POWER vendor RPC command ID: the pre-association TX-power cap for devices
 // whose LDO browns out at full power. Sent BEFORE provisioning so the very first
 // association runs capped. Matches the device-side handler.
 export const IMPROV_CMD_SET_TX_POWER = 0xFD;

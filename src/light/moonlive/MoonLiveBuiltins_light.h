@@ -728,7 +728,8 @@ extern "C" inline uint32_t mm_light_pool(const uintptr_t* args, uint32_t, const 
 // Atomic for the reason random16 is: a lost update hands two emissions the same pattern.
 /// A moving seed for the emitters, since a fixed one throws identical sparks every frame.
 inline uint32_t nextEmitSeed() MM_NONBLOCKING {
-    static std::atomic<uint32_t> seed{0x9E3779B9u};
+    // `constinit` ASSERTS the constant initialization rather than creating it: the constructor is already constexpr, and this fails the build if an edit ever changes that.
+    static constinit std::atomic<uint32_t> seed{0x9E3779B9u};
     return seed.fetch_add(0x9E3779B9u, std::memory_order_relaxed);
 }
 

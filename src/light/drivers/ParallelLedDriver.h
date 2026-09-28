@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "light/drivers/DriverBase.h"        // DriverBase, Correction
 #include "light/drivers/LedPeripheral.h"     // runtime peripheral strategy (Parlio / i80 / MoonI80)
 #include "light/drivers/ParallelSlots.h"        // encodeWs2812ParallelSlots (shared encoder)
@@ -368,8 +369,8 @@ public:
         // A bus refused to a sibling comes back on its own, retried at most once per second.
         if (!inited_ && laneCount_ > 0 && peripheral_->busContentionCleared()) reinit();
         const uint32_t us = peripheral_->busLastTransmitUs();
-        if (us == 0) std::snprintf(frameTimeStr_, sizeof(frameTimeStr_), "—");
-        else std::snprintf(frameTimeStr_, sizeof(frameTimeStr_), "%u µs (%u fps max)",
+        if (us == 0) mm::formatTo(frameTimeStr_, sizeof(frameTimeStr_), "—");
+        else mm::formatTo(frameTimeStr_, sizeof(frameTimeStr_), "%u µs (%u fps max)",
                            static_cast<unsigned>(us), static_cast<unsigned>(1000000u / us));
         peripheral_->refreshBusKpi();   // per-backend extra read-only KPIs (MoonI80's ring diagnostic); base no-op
     }

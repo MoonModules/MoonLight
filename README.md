@@ -94,7 +94,7 @@ The domain-neutral runtime: the module base class, controls, scheduling, persist
 
 ![The Services card, built from declared controls](docs/assets/core/Services.png)
 
-Architecture: [MoonCore](docs/explanation/architecture/mooncore.md) · [MoonModule](docs/explanation/architecture/moonmodule.md) · Use it: [System](docs/moonmodules/core/system.md) · [Control](docs/moonmodules/core/control.md) · [Services](docs/moonmodules/core/services.md)
+Architecture: [MoonCore](docs/explanation/architecture/mooncore.md) · [MoonModule](docs/explanation/architecture/moonmodule.md) · Use it: [System](docs/moonmodules/core/system.md) · [Control](docs/moonmodules/core/system.md#control) · [Services](docs/moonmodules/core/services.md)
 
 ### MoonLight
 
@@ -110,7 +110,7 @@ Scripts compiled to native machine code on the device. Write an effect in the br
 
 ![A MoonLive effect running](docs/assets/light/effects/MoonLiveEffect.gif)
 
-Architecture: [MoonLive](docs/explanation/architecture/moonlive.md) · Use it: [MoonLiveEffect](docs/moonmodules/light/MoonLiveEffect.md) · [the script language](moonlive/README.md)
+Architecture: [MoonLive](docs/explanation/architecture/moonlive.md) · Use it: [MoonLiveEffect](docs/moonmodules/light/moonlive.md) · [the script language](moonlive/README.md)
 
 ### MoonI80
 
