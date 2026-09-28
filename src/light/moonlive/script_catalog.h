@@ -194,18 +194,21 @@ constexpr const char* kModifierFolder = "modifiers";   ///< its directory upstre
 /// Every factory service by file name, from `moonlive/services/` upstream.
 constexpr const char* kServiceCatalog[] = {
     "button.mls",
+    "chase.mls",
     "power.mls",
     "sweep.mls",
 };
-constexpr size_t kServiceCatalogCount = 3;
+constexpr size_t kServiceCatalogCount = 4;
 /// What each service above declares about itself, in the same order, 0 meaning it says nothing and the device decides.
 constexpr unsigned char kServiceCatalogDim[] = {
+    0,
     0,
     0,
     0,
 };
 /// The emoji each declares, "" when it declares none.
 constexpr const char* kServiceCatalogTags[] = {
+    "",
     "",
     "",
     "",
@@ -239,7 +242,7 @@ constexpr const char* kPaletteCatalogTags[] = {
 };
 constexpr const char* kPaletteFolder = "palettes";   ///< its directory upstream
 
-constexpr size_t kCatalogCount = 54;   ///< every factory script, all roles
+constexpr size_t kCatalogCount = 55;   ///< every factory script, all roles
 
 /// @}
 } // namespace mm::moonlive

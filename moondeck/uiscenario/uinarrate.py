@@ -60,6 +60,9 @@ def _duration(path: Path) -> float:
 def slide_html(slide: dict, index: int, total: int) -> str:
     """One slide, styled like the app so the intro sits beside the UI clips rather than beside a deck."""
     bullets = "".join(f"<li>{b}</li>" for b in slide.get("bullets", []))
+    # `credits` is a two-column name/contribution list, for a slide whose job is to BE the list.
+    credits = "".join(f"<div><b>{n}</b> <span>{w}</span></div>"
+                      for n, w in slide.get("credits", []))
     kicker = slide.get("kicker", "")
     return f"""<!doctype html><html><head><meta charset="utf-8"><style>
   :root {{ --bg:#141a2e; --card:#1b2340; --ink:#e8ecff; --dim:#8b95bf; --accent:#c9a5ff; }}
@@ -76,6 +79,10 @@ def slide_html(slide: dict, index: int, total: int) -> str:
   li {{ font-size:27px; color:var(--ink); padding:11px 0 11px 30px; position:relative; }}
   li::before {{ content:""; position:absolute; left:0; top:23px; width:10px; height:10px;
                 border-radius:50%; background:var(--accent); }}
+  .credits {{ margin-top:26px; column-count:2; column-gap:48px; }}
+  .credits div {{ break-inside:avoid; font-size:19px; line-height:1.42; padding:3px 0; }}
+  .credits b {{ color:var(--accent); font-weight:600; }}
+  .credits span {{ color:var(--dim); }}
   .foot {{ position:fixed; left:110px; bottom:44px; color:var(--dim); font-size:15px; }}
   .num {{ position:fixed; right:110px; bottom:44px; color:var(--dim); font-size:15px;
           font-variant-numeric:tabular-nums; }}
@@ -84,6 +91,7 @@ def slide_html(slide: dict, index: int, total: int) -> str:
     {f'<div class="kicker">{kicker}</div>' if kicker else ''}
     <h1>{slide.get("title","")}</h1>
     {f'<ul>{bullets}</ul>' if bullets else ''}
+    {f'<div class="credits">{credits}</div>' if credits else ''}
   </div>
   <div class="foot">MoonLight</div>
   <div class="num">{index} / {total}</div>

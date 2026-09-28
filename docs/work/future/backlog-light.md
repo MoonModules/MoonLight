@@ -149,6 +149,18 @@ Record before and after in performance.md per target.
 
 ## Drivers
 
+### DNS names as NetworkSend destinations (2026-09-27)
+
+Tracked as [issue #115](https://github.com/MoonModules/projectMM/issues/115), asked for by someone running many panels: a list of addresses is hard to keep straight, and DHCP moving one means editing the driver.
+
+[`NetworkSendDriver`](../../../src/light/drivers/NetworkSendDriver.h)'s `ips` control is already free text, so the UI accepts a name today; [`parseIpList`](../../../src/core/util/IpList.h) rejects it. A rig of many panels is exactly the case where names beat numbers, and it is the case that also wants the list shorthand the parser already gives: `192.168.1.10-20` expands a range, and `192.168.1.10, 11, 12` extends the last octet.
+
+**The open question is WHEN a name is resolved**, and it decides the shape of everything else. At `prepare()` a control change costs a blocking lookup on the render thread's own path; per frame is not an option at all. So a cache with a policy: how long an answer is held, what happens when a name stops resolving mid-show (keep sending to the last address, or go dark and say so), and whether a failed lookup idles that one destination or the whole driver.
+
+Two more decisions ride on it. **mDNS or DNS**: `panel-01.local` needs the mDNS responder the device already carries, a plain name needs the resolver, and they are different paths with different failure modes. **Mixed lists**: `192.168.1.10-20, panel-01.local` has to keep working, which means the range and last-octet shorthand stay numeric-only and the parser grows a second entry kind rather than becoming a string list.
+
+Worth doing, and worth designing rather than squeezing in: the parser is a core primitive with its own tests, and the resolve-timing choice is the part that can quietly put a network round trip on a path that must not block.
+
 ### Logarithmic brightness, and a power budget the device knows about (2026-09-02)
 
 `Drivers.brightness` scales the output linearly, and perceived lightness is not linear: the eye is

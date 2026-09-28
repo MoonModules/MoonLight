@@ -7,87 +7,90 @@
       "action": "chapter",
       "title": "Tested the way you use it",
       "description": "Eleven scenarios, one real device",
-      "seconds": 2.0
+      "seconds": 7.0,
+      "caption": "Tested the way you use it. Eleven scenarios, one real device."
     },
     {
       "action": "open_card",
       "module": "Control",
       "caption": "A scenario is a JSON file of steps, performed against a running device over the same API this page uses.",
-      "hold": 2.0
+      "speech": 11.4
     },
     {
       "action": "start_process",
       "name": "suite",
       "command": "uv run moondeck/scenario/run_live_scenario.py --host {host}",
       "caption": "The suite starts, and runs the cards in the order they are listed here.",
-      "hold": 2.0
+      "speech": 7.2
     },
     {
       "action": "open_card",
       "module": "Control",
       "caption": "Control: a fader is aimed at the brightness, moved, and proven to drive it.",
-      "hold": 4.0
+      "speech": 6.7
     },
     {
       "action": "open_card",
       "module": "Layouts",
       "caption": "Layouts: the grid grows and shrinks while it renders, reallocating mid-frame.",
-      "hold": 5.0
+      "speech": 7.3
     },
     {
       "action": "open_card",
       "module": "Effects",
       "caption": "Effects: the pipeline is built from nothing, then an effect is swapped in its slot.",
-      "hold": 6.0
+      "speech": 7.2
     },
     {
       "action": "open_card",
       "module": "Drivers",
       "caption": "Drivers: the master switch blacks the output without losing the brightness behind it.",
-      "hold": 5.0
+      "speech": 7.1
     },
     {
       "action": "wait_for",
       "selector": "#device-name",
       "text": "MM-ScenarioProof",
       "timeout": 90,
-      "caption": "System: it names the device, restarts it, and checks the name came back."
+      "caption": "System: it names the device, restarts it, and checks the name came back.",
+      "speech": 6.4
     },
     {
       "action": "open_card",
       "module": "File Manager",
       "caption": "File Manager: a file is written, the device restarts, and the file is read back.",
-      "hold": 5.0
+      "speech": 7.5
     },
     {
       "action": "open_card",
       "module": "Network",
       "caption": "Network: mDNS and the WLED shim, each proven to survive a restart.",
-      "hold": 5.0
+      "speech": 7.2
     },
     {
       "action": "open_card",
       "module": "Services",
       "caption": "Services: audio is synthesized by default, so the effects react with nothing attached.",
-      "hold": 5.0
+      "speech": 8.1
     },
     {
       "action": "open_card",
       "module": "MoonCloud",
       "caption": "MoonCloud: consent is off until someone says otherwise, which is what this one asserts.",
-      "hold": 4.0
+      "speech": 7.7
     },
     {
       "action": "wait_process",
       "name": "suite",
       "timeout": 240,
-      "caption": "Every scenario runs against the device rather than a mock, so a pass means it worked here."
+      "caption": "Every scenario runs against the device rather than a mock, so a pass means it worked here.",
+      "speech": 6.9
     },
     {
       "action": "open_card",
       "module": "System",
       "caption": "Eleven scenarios, all passed, on the device still running in front of you.",
-      "hold": 3.0
+      "speech": 6.5
     }
   ]
 }

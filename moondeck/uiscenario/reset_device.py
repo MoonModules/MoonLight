@@ -33,10 +33,23 @@ BOOT_CHILDREN = {
     "Effects": ["Layer"],
     "Layer": ["PulseEffect"],
     "Drivers": ["LightPresetsModule", "PreviewDriver"],
+    # Services holds ONE AudioService at boot, which main.cpp wires. Everything else under it is a
+    # take's leftover: the services clip opened on an Analog and a MoonLive service it had added
+    # itself on an earlier run, so its first shot showed the state it was about to demonstrate.
+    "Services": ["AudioService"],
 }
 
 # The grid a fresh GridLayout self-initializes to, `defaultGridSize` in src/light/layouts/GridLayout.h.
 DEFAULT_GRID = 16
+
+# Controls whose value is part of the boot state, because a take can leave one set and the next one
+# then opens on it. Consent is the case that found this: nothing leaves the device until someone
+# says so, so it is off at boot, and a take that turned it on made the scenario suite fail on the
+# NEXT recording with a state no run file had asked for.
+BOOT_CONTROLS = {
+    "Stats": {"consent": False},
+    "Talk":  {"consent": False},
+}
 
 
 # A device serves from a small embedded stack, and it closes a kept-alive socket whenever it needs
@@ -198,6 +211,22 @@ def reset(host: str) -> int:
                     print(f"  = Grid.{key} -> {DEFAULT_GRID}")
                 else:
                     failed += 1
+
+    # Controls that boot in a known state, set the same way the grid is rather than recreated.
+    state = _get(host, "/api/state")
+    for name, wanted in BOOT_CONTROLS.items():
+        node = next((m for m, _ in _walk(state.get("modules", [])) if m.get("name") == name), None)
+        if not node:
+            continue
+        for key, value in wanted.items():
+            cur = next((c.get("value") for c in (node.get("controls") or [])
+                        if c.get("name") == key), None)
+            if cur is None or cur == value:
+                continue
+            if _post(host, "/api/control", {"module": name, "control": key, "value": value}):
+                print(f"  = {name}.{key} -> {value}")
+            else:
+                failed += 1
 
     if removed or added:
         time.sleep(1.0)       # let the tree settle before a run starts driving it

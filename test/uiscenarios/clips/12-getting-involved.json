@@ -1,0 +1,46 @@
+{
+  "name": "12-getting-involved",
+  "description": "How to start, how to contribute, and what comes next.",
+  "slides": [
+    {
+      "kicker": "How to start",
+      "title": "A browser is all you need",
+      "bullets": [
+        "No board: download the desktop build and open it",
+        "A board: the web installer flashes it over USB",
+        "Then everything happens in the device's own interface"
+      ],
+      "say": "So how do you start? If you have no hardware at all, download the desktop build and open it: the same interface, the same effects, running on your computer. If you do have a board, the web installer flashes it from the browser, with no toolchain to set up, and the clips you have just seen show both routes end to end. Either way, from that point on everything happens in the device's own interface, live, with nothing to reflash."
+    },
+    {
+      "kicker": "How to contribute",
+      "title": "A community project",
+      "bullets": [
+        "Ideas and requests: open an issue",
+        "Test on your own panels, and say what breaks",
+        "Build something: an effect, a layout, a driver",
+        "Talk to us on Discord, Reddit, YouTube and GitHub"
+      ],
+      "say": "MoonLight is shaped by the people who use it. The most useful thing you can do is run it on your own fixtures and say what breaks, because hardware we do not own is where the surprises live. Beyond that: open an issue for an effect or a driver or a board you want supported, or build one, and the process is written down for agents and people alike. And come and talk to us: Discord, Reddit, YouTube and GitHub."
+    },
+    {
+      "kicker": "What is next",
+      "title": "Where this goes",
+      "bullets": [
+        "More drivers, more boards, more fixtures",
+        "More inputs: game controllers, surfaces, pedals",
+        "The backlog is public, and so is the reasoning"
+      ],
+      "say": "What comes next is mostly more of what you have seen: more drivers and more boards, more ways in through the services, from game controllers to the pedal under your foot. The backlog is in the repository, and so is the reasoning behind every item, because a plan you can read is a plan you can argue with. And the whole thing is open source, which is the point: whatever we build, you can take."
+    },
+    {
+      "kicker": "Before you go",
+      "title": "Two slides of thanks",
+      "bullets": [
+        "The people we learned from",
+        "The algorithms we build on"
+      ],
+      "say": "One last thing before you go, and it is the part that matters most. Almost nothing here was invented by us. The next two slides are the people whose work MoonLight is built on, and the standard algorithms underneath it, every one of them credited in the source file that carries their idea. Thank you for watching."
+    }
+  ]
+}

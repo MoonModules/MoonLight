@@ -154,13 +154,24 @@ let theme      = lsRead(LS_THEME, "dark");
 // 2. WebSocket
 // ---------------------------------------------------------------------------
 
+/// The WebSocket URL for `path`, following the page's own scheme.
+///
+/// A browser refuses an insecure WebSocket opened from an HTTPS page, so a device behind a TLS
+/// proxy served its interface and then showed a black preview: the outputs kept running, because
+/// the block is in the browser rather than on the device. Served over plain HTTP this is `ws:` as
+/// before, so it costs the direct case nothing.
+function wsUrl(path) {
+    const scheme = location.protocol === "https:" ? "wss:" : "ws:";
+    return `${scheme}//${location.host}${path}`;
+}
+
 function connectWs() {
     if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
     if (ws) {
         try { ws.close(); } catch {}
         ws = null;
     }
-    const url = `ws://${location.host}/ws`;
+    const url = wsUrl("/ws");
     ws = new WebSocket(url);
     const sock = ws;   // captured so a stale socket's late callback (after a reconnect swapped `ws`) is a no-op
     ws.binaryType = "arraybuffer";
@@ -401,7 +412,7 @@ function selectIndex(ctrl) {
 function connectPreview() {
     if (wsPreview && (wsPreview.readyState === WebSocket.OPEN ||
                       wsPreview.readyState === WebSocket.CONNECTING)) return;
-    const p = new WebSocket(`ws://${location.host}/wsp`);
+    const p = new WebSocket(wsUrl("/wsp"));
     wsPreview = p;
     p.binaryType = "arraybuffer";
     p.onmessage = (e) => {

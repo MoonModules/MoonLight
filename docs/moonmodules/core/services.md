@@ -2,6 +2,8 @@
 
 The user-added **Service** modules — capability bridges the device provides or consumes, added and removed at runtime in the `Services` container (the core-domain twin of the light domain's `Effects`/`Drivers`). Fixed device infrastructure (identity, network, inspection tools) lives under **System** — see [core/system.md](system.md). Every row links to its generated technical page (the full API, from the `.h`) and its tests.
 
+<video src="../../assets/uiscenarios/09-services.webm" controls playsinline width="720" title="Every service in turn: audio, button, analog, infrared, and a scripted one."></video>
+
 <a id="services"></a>
 
 ## Services
@@ -17,8 +19,6 @@ Detail: [technical](moxygen/Services.md)
 A user-added Service: the audio source the audio-reactive effects consume. `mode` is its identity, and each mode shows only its own controls. Wire, modes and loopback: ⌄ details.
 
 <img src="../../assets/core/AudioService.png" width="300" alt="Audio module controls">
-
-<video src="../../assets/uiscenarios/02-first-look-desktop.webm" controls playsinline width="720" title="The Audio card in the interface tour: synthesized by default, so effects react with nothing wired."></video>
 
 - `mode` — Local audio, Receive network or Simulate, each showing only its own controls below.
 - `micMode`: (Local, I²S targets) `I2S` for a three-wire part, `PDM` for a two-wire one.

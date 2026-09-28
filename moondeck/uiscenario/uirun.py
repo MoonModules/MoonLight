@@ -299,7 +299,10 @@ class Driver:
         # How fast the clip is rendered, which a speech-driven hold has to account for. Set from
         # the run in `run_all`; 1.0 until then, so a caller that never passes one is unaffected.
         self.speed = 1.0
-        self.bindings: dict[str, str] = {}
+        # `{host}` is bound from the start rather than by a step, because the device's address is
+        # what the driver was CONSTRUCTED with: a step that shells out to a script has no other way
+        # to name the device this run is driving, and discovery may have resolved it.
+        self.bindings: dict[str, str] = {"host": host}
         self.failures: list[str] = []
         # Every text a watched element has shown, so a wait arriving after a brief state
         # is still satisfied by it: @xref{wait_for}.
@@ -1047,7 +1050,14 @@ class Driver:
             proc.kill()
             self.failures.append(f"wait_process: {name!r} ran past {timeout}s")
             return False
-        return proc.returncode == 0
+        if proc.returncode != 0:
+            # SAY which process failed and with what. A bare false reported "wait_process on '' did
+            # not complete", naming neither, and the output is discarded (see start_process), so the
+            # exit code is the whole signal there is: run the command by hand to see why.
+            self.failures.append(f"wait_process: {name!r} exited {proc.returncode}, "
+                                 f"so the take would claim a pass that did not happen")
+            return False
+        return True
 
     def open_app_wait(self) -> None:
         """Wait for the device UI to be driveable again after a navigation."""
@@ -1134,10 +1144,28 @@ class Driver:
     # -- controls -----------------------------------------------------------
 
     def set_number(self, module: str, control: str, value) -> bool:
-        """Type into a control's box, the way a person does."""
+        """Type into a control's box, the way a person does.
+
+        A control rendered as a SLIDER has no box to type in: an encoder is a knob and a fader is a
+        track, both `input[type=range]` underneath. Typing into one selects nothing and the keypress
+        goes nowhere, so a numeric target on a slider is dragged instead, which is also what a person
+        would do to it.
+        """
         el = self.control(module, control, "input")
         if not self._ready(el):
             return False
+        if el.first.get_attribute("type") == "range":
+            lo = float(el.first.get_attribute("min") or 0)
+            hi = float(el.first.get_attribute("max") or 100)
+            frac = (float(value) - lo) / (hi - lo) if hi > lo else 0.0
+            # An ENCODER's input is a 1x1 proxy behind the visual knob, so there is no track to
+            # press: the knob takes a wheel gesture instead, which is what a person does to it.
+            knob = self.page.locator(
+                f'[data-module="{self._css(module)}"] '
+                f'.control-row[data-key="{self._css(control)}"] .knob')
+            if knob.count():
+                return self._turn_knob(knob, el, float(value), lo, hi)
+            return self.drag_slider(module, control, frac)
         box = el.first.bounding_box()
         if box:                            # travel to the box before pressing in it
             self.page.mouse.move(box["x"] + box["width"] / 2,
@@ -1149,6 +1177,31 @@ class Driver:
         self.page.keyboard.press("Enter")
         self.page.wait_for_timeout(420)
         return True
+
+    def _turn_knob(self, knob, el, value: float, lo: float, hi: float) -> bool:
+        """Scroll a knob to `value`, one wheel notch at a time, with the pointer on it.
+
+        The page steps by a hundredth of the range per notch, so the count is derived from that
+        rather than guessed, and the loop stops early once the value arrives: a knob that has hit
+        its end must not spin forever.
+        """
+        if not self._ready(knob):
+            return False
+        box = knob.first.bounding_box()
+        if not box:
+            return False
+        x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+        self.page.mouse.move(x, y)          # the travel show_actions animates
+        self._settle(0.25)
+        step = max(1.0, round((hi - lo) / 100))
+        for _ in range(140):                # a bounded walk, never an open loop
+            now = float(el.first.input_value())
+            if abs(now - value) < step:
+                break
+            self.page.mouse.wheel(0, -120 if value > now else 120)
+            self.page.wait_for_timeout(45 if self.paced else 5)
+        self.page.wait_for_timeout(300)
+        return abs(float(el.first.input_value()) - value) <= step
 
     def set_text(self, module: str, control: str, value: str) -> bool:
         for kind in ('input[type="text"]', "textarea"):
@@ -1180,7 +1233,11 @@ class Driver:
         box = el.first.bounding_box()
         if not box:
             return False
-        y = box["y"] + box["height"] / 2
+        # A range input can be VERTICAL, which the Control module's faders are: the browser reports
+        # it as a writing-mode rather than a type, and a horizontal drag across a 24-pixel-wide
+        # track moves nothing while reporting success. The axis is read rather than assumed.
+        vertical = bool(el.first.evaluate(
+            "e => (getComputedStyle(e).writingMode || '').startsWith('vertical')"))
         frac = float(el.first.evaluate("""e => {
             const min = Number(e.min || 0), max = Number(e.max || 100);
             return max > min ? (Number(e.value) - min) / (max - min) : 0;
@@ -1191,9 +1248,18 @@ class Driver:
         # nothing captured, and the value stayed put while the call reported success.
         # A click at the same x works, which is what proved the press was the problem.
         THUMB = 8.0
-        span = max(1.0, box["width"] - 2 * THUMB)
-        x0 = box["x"] + THUMB + span * frac
-        x1 = box["x"] + THUMB + span * max(0.0, min(1.0, to))
+        target = max(0.0, min(1.0, to))
+        if vertical:
+            # Zero sits at the BOTTOM of a vertical track, so the fraction counts upward from it.
+            span = max(1.0, box["height"] - 2 * THUMB)
+            x0 = x1 = box["x"] + box["width"] / 2
+            y0 = box["y"] + box["height"] - THUMB - span * frac
+            y1 = box["y"] + box["height"] - THUMB - span * target
+        else:
+            span = max(1.0, box["width"] - 2 * THUMB)
+            y0 = y1 = box["y"] + box["height"] / 2
+            x0 = box["x"] + THUMB + span * frac
+            x1 = box["x"] + THUMB + span * target
 
         # The travel is UNANNOTATED, and that is the whole reason a drag used to cost
         # 33 seconds instead of 2. show_actions animates EVERY mouse move, so a 40-step
@@ -1203,7 +1269,7 @@ class Driver:
         annotate = self.screencast.show_actions(cursor="pointer", duration=90) \
             if self.screencast else None
 
-        self.page.mouse.move(x0, y)
+        self.page.mouse.move(x0, y0)
         self.page.mouse.down()
         if annotate:
             annotate.__enter__()
@@ -1214,7 +1280,8 @@ class Driver:
             steps = 14
             per_ms = max(20, int(seconds * 1000 / steps))
             for i in range(1, steps + 1):
-                self.page.mouse.move(x0 + (x1 - x0) * i / steps, y)
+                self.page.mouse.move(x0 + (x1 - x0) * i / steps,
+                                     y0 + (y1 - y0) * i / steps)
                 self.page.wait_for_timeout(per_ms)
         finally:
             if annotate:
@@ -1233,7 +1300,7 @@ class Driver:
             want = lo + (hi - lo) * max(0.0, min(1.0, to))
             tolerance = max(2.0, (hi - lo) * 0.06)
             if abs(float(el.first.input_value()) - want) > tolerance:
-                self.page.mouse.click(x1, y)
+                self.page.mouse.click(x1, y1)
                 self.page.wait_for_timeout(420)
                 # REPORT a fallback that also missed. Returning True here made the one
                 # failure this check exists to catch invisible again: only a step with
@@ -1264,7 +1331,24 @@ class Driver:
         return True
 
     def click_control(self, module: str, control: str) -> bool:
-        return self.tap(self.control(module, control, "button"))
+        """Press a control that acts on a click: a button, or a switch's toggle.
+
+        A boolean is rendered as a styled toggle whose real `<input type="checkbox">` is transparent
+        and behind it, so a press aimed at the input is intercepted by its own skin and nothing
+        happens. The visible `label.switch` is what a person actually hits, so that is what is
+        pressed when the control turns out to be a checkbox.
+        """
+        button = self.control(module, control, "button")
+        if button.count():
+            return self.tap(button)
+        box = self.control(module, control)
+        if box.count() and box.first.get_attribute("type") == "checkbox":
+            skin = self.page.locator(
+                f'[data-module="{self._css(module)}"] '
+                f'.control-row[data-key="{self._css(control)}"] label.switch')
+            if skin.count():
+                return self.tap(skin)
+        return self.tap(button)
 
     # -- the dispatcher -----------------------------------------------------
 

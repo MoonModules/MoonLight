@@ -243,6 +243,8 @@ A grid of preset pads, a row of rotary encoders above them, a row of on/off swit
 
 <img src="../../assets/core/ControlModule.png" width="300" alt="Control module surface: encoders, preset pads, faders">
 
+<video src="../../assets/uiscenarios/10-control.webm" controls playsinline width="720" title="The surface: the mapped controls, assigning your own, and OSC arriving from outside."></video>
+
 - `presets`: one pad per preset file. Click applies, right-click names, drag rearranges.
 - `switch1` … `switch8`, the switch row. `switch1` drives `Drivers.on`, the rest unbound.
 - `encoder1` … `encoder8`, rotary encoders. Drag or scroll to turn, right-click to see the binding.
