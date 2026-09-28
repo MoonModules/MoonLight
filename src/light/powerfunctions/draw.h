@@ -25,6 +25,9 @@
 /// A radius the caller chose makes the walk cost r squared however small the grid is, so one large number stalls the render thread.
 /// And `lengthType` is 16 bits, so a radius near its ceiling puts `x1` at INT16_MAX, the increment wraps to negative, and the loop never ends at all.
 ///
+/// An empty canvas is emptied at BOTH ends for the same reason: the walk is inclusive.
+/// Setting only `x1 = -1` left `x0` at whatever negative value the caller computed, and -2 to -1 is a two-iteration range writing outside the buffer.
+///
 /// ## Addressing
 ///
 /// Index order matches the engine, and a pixel outside the grid is silently clipped, so a line running off the edge stops drawing.
@@ -956,8 +959,8 @@ inline uint8_t coverage(int32_t d, pos_t edge = kSubOne) {
 /// Clip an SDF shape's bounding box to the canvas, so the walk covers only pixels that can be lit: @xref{why-the-box-is-clipped}.
 inline void clipBox(const Canvas& cv, lengthType& x0, lengthType& x1,
                     lengthType& y0, lengthType& y1) {
-    // An EMPTY canvas is stated rather than left to arithmetic, which would reach the same answer by accident.
-    if (cv.dims.x <= 0 || cv.dims.y <= 0) { x1 = -1; y1 = -1; return; }
+    // An EMPTY canvas is stated at BOTH ends, because the callers walk `x0 <= x1` inclusively: @xref{why-the-box-is-clipped}.
+    if (cv.dims.x <= 0 || cv.dims.y <= 0) { x0 = 0; x1 = -1; y0 = 0; y1 = -1; return; }
     if (x0 < 0) x0 = 0;
     if (y0 < 0) y0 = 0;
     if (x1 > static_cast<lengthType>(cv.dims.x - 1)) x1 = static_cast<lengthType>(cv.dims.x - 1);

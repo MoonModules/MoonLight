@@ -906,6 +906,12 @@ class Driver:
 
         self.page.once("dialog", handle)
         if not self.tap(btn.first):
+            # DISARM: `once` stays armed until a dialog fires, so a handler left behind here would
+            # accept the next unrelated prompt with THIS filename.
+            try:
+                self.page.remove_listener("dialog", handle)
+            except Exception:
+                pass
             return False
         self.page.wait_for_timeout(1200)
         if not answered["done"]:
@@ -1198,7 +1204,11 @@ class Driver:
         x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
         self.page.mouse.move(x, y)          # the travel show_actions animates
         self._settle(0.25)
-        step = max(1.0, round((hi - lo) / 100))
+        # Tolerance RELATIVE to the range, with a floor that cannot swallow it. A flat `max(1.0, ...)`
+        # gave a 0-to-1 knob a tolerance of 1.0, so `abs(now - value) <= step` was true for every
+        # value in range and the walk below reported success without turning the knob at all.
+        span = abs(hi - lo) or 1.0
+        step = max(span / 200.0, min(1.0, span / 20.0))
         for _ in range(140):                # a bounded walk, never an open loop
             now = float(el.first.input_value())
             if abs(now - value) < step:

@@ -119,11 +119,19 @@ def write_report():
     """
     r = subprocess.run(["vale", "--output=JSON", "--no-exit", *REPORT_ROOTS],
                        capture_output=True, text=True, cwd=ROOT)
+    # VALIDATE BEFORE PARSING. `--no-exit` makes Vale exit 0 on findings, so a non-zero status here
+    # is a real failure (a bad config, a missing style) and its stdout is empty or partial. Treating
+    # an empty stdout as `{}` wrote a report of ZERO findings and the ratchet read that as the debt
+    # being swept, which is the silent-zero this file guards against everywhere else.
+    if r.returncode != 0 or not r.stdout.strip():
+        return None
     try:
-        report = json.loads(r.stdout or "{}")
+        report = json.loads(r.stdout)
     except json.JSONDecodeError:
         # A broken run must not overwrite a good report, and must not read as one either: the
         # caller fails on None rather than skipping the comparison.
+        return None
+    if not isinstance(report, dict):
         return None
 
     by_rule, by_file, total = {}, {}, 0

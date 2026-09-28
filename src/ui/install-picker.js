@@ -112,6 +112,9 @@ function makeState() {
         firmware: null,        // selected firmware key
         devices: [],            // parsed mooninstaller/deviceModels.json, [] if unavailable
         selectedDevice: null,   // user pick from device <select>; "" for (any device)
+        deviceResolved: false,  // has the link/preference default been applied yet? render()
+                                // runs on every setDesktopMode toggle, and re-resolving there
+                                // threw away the pick the visitor made after the first one.
         hasPort: null,         // web installer only: () => bool, "is a USB port
                                // picked?". When set, Install is disabled until it
                                // returns true (the host re-evaluates via
@@ -471,10 +474,22 @@ function render(state) {
         // The parameter is ours to name, so there is one spelling of it. The storage key below is
         // NOT ours: it sits in a visitor's browser under the name it was written with, which is why
         // that one keeps a fallback and this one does not.
-        const wantedDevice = urlParam("device")
-            || safeLocalGet(PREF_DEVICE_KEY) || safeLocalGet(PREF_DEVICE_KEY_LEGACY);
-        if (wantedDevice && state.devices.find(b => b.name === wantedDevice)) {
-            state.selectedDevice = wantedDevice;
+        //
+        // ONCE PER MOUNT. render() runs again on every setDesktopMode() toggle, so resolving here
+        // each time re-applied `?device=` over a device the visitor picked afterwards: open a
+        // device link, pick another, switch to the desktop target and back, and the link's device
+        // returned. The flag makes the link a default rather than a standing instruction.
+        if (!state.deviceResolved) {
+            state.deviceResolved = true;
+            // `??`, not `||`: an explicit "(any device)" is stored as "", which is falsy, so `||`
+            // read a deliberate "no device" as "nothing saved" and fell through to the legacy key.
+            const saved = safeLocalGet(PREF_DEVICE_KEY) ?? safeLocalGet(PREF_DEVICE_KEY_LEGACY);
+            const wantedDevice = urlParam("device") ?? saved;
+            if (wantedDevice === "") {
+                state.selectedDevice = "";
+            } else if (wantedDevice && state.devices.find(b => b.name === wantedDevice)) {
+                state.selectedDevice = wantedDevice;
+            }
         }
         deviceEl.value = state.selectedDevice || "";
     }

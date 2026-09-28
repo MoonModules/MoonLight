@@ -518,13 +518,28 @@ def float_conversions_on_the_hot_path():
 
     The annotation on `formatTo` promises it neither blocks nor allocates, and that promise rests on the conversions its callers use: an integer or a string writes through the buffer, while a `%f` reaches `_dtoa_r` and then `_malloc_r` on the ESP32's newlib.
     The appendix in format.h states that; this is what holds it, because a reader checking by eye is not a guarantee.
+
+    Reads the whole CALL rather than the call's first line. Seven sites in this tree put the format
+    string on the line below `formatTo(`, so a line-by-line scan could not see their conversions at
+    all: a `%f` there would have passed a gate that reported itself clean.
     """
     bad = []
     for path in sorted((ROOT / "src").rglob("*.h")) + sorted((ROOT / "src").rglob("*.cpp")):
         if "vendor" in path.parts:
             continue
-        for n, line in enumerate(path.read_text(errors="replace").splitlines(), 1):
-            if "formatTo(" in line and re.search(r"%[-+ #0-9.*]*[aAeEfFgG]", line):
+        lines = path.read_text(errors="replace").splitlines()
+        for n, line in enumerate(lines, 1):
+            if "formatTo(" not in line:
+                continue
+            # The call's text, to its closing `;` or a short lookahead: a format string is split
+            # across adjacent string literals often enough that the argument list, not the line,
+            # is the unit to search.
+            call = line
+            for extra in lines[n:n + 8]:
+                if ";" in call:
+                    break
+                call += extra
+            if re.search(r"%[-+ #0-9.*]*[aAeEfFgG]", call):
                 bad.append(f"{path.relative_to(ROOT)}:{n}")
     return bad
 
@@ -632,7 +647,9 @@ def main():
     if not rows:
         print("\nNone. \u2713  (If that seems wrong, confirm the build actually recompiled \u2014 a "
               "cached TU prints no warnings.)")
-        return 0
+        # The float verdict survives an empty report: a clean -Wfunction-effects run says nothing
+        # about a `%f`, which the compiler cannot see through the annotation at all.
+        return 1 if floats else 0
 
     # Split by tick tier: tick() runs every frame, tick1s() once a second, so the same blocking
     # call costs roughly two orders of magnitude more in one than the other (50/s vs 1/s).

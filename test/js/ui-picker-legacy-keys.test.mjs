@@ -29,7 +29,9 @@ test("the URL parameter has exactly one spelling", () => {
 test("the old storage key is still read", () => {
     assert.match(src, /PREF_DEVICE_KEY_LEGACY\s*=\s*"MoonLight\.picker\.board"/,
         "the pre-rename key is what a returning visitor's pick is saved under");
-    assert.match(src, /safeLocalGet\(PREF_DEVICE_KEY\)\s*\|\|\s*safeLocalGet\(PREF_DEVICE_KEY_LEGACY\)/,
+    // `??`, not `||`: an explicit "(any device)" is stored as "", and `||` read that falsy value
+    // as "nothing saved" and fell through to the legacy key, undoing a deliberate choice.
+    assert.match(src, /safeLocalGet\(PREF_DEVICE_KEY\)\s*\?\?\s*safeLocalGet\(PREF_DEVICE_KEY_LEGACY\)/,
         "the new key is preferred and the old one is the fallback");
 });
 
@@ -45,7 +47,12 @@ test("the resolution order prefers the explicit link over the saved habit", () =
     // support link that lands on the wrong device helps nobody. The whole order is one `||` chain
     // in the source, so it is asserted there rather than re-typed here, where a copy would pass
     // whatever install-picker.js went on to do.
-    assert.match(src,
-        /urlParam\("device"\)\s*\|\|\s*safeLocalGet\(PREF_DEVICE_KEY\)\s*\|\|\s*safeLocalGet\(PREF_DEVICE_KEY_LEGACY\)/,
-        "?device= first, then the new key, then the pre-rename key");
+    assert.match(src, /const saved = safeLocalGet\(PREF_DEVICE_KEY\)\s*\?\?\s*safeLocalGet\(PREF_DEVICE_KEY_LEGACY\)/,
+        "the new key is preferred over the pre-rename one");
+    assert.match(src, /urlParam\("device"\)\s*\?\?\s*saved/,
+        "?device= outranks both saved keys");
+    // Resolved ONCE per mount: render() runs again on every setDesktopMode() toggle, and
+    // re-resolving there re-applied the link over a device the visitor picked afterwards.
+    assert.match(src, /if \(!state\.deviceResolved\)/,
+        "the link is a default applied once, not a standing instruction on every render");
 });

@@ -16,8 +16,14 @@
 ///
 /// The promise is about the FORMATS this project uses rather than about `snprintf` in general.
 /// An integer or string conversion writes through the caller's buffer and allocates nowhere.
-/// A floating-point one can allocate in glibc for a wide conversion, so a `%f` does not belong on a tick.
-/// This is the one place that has to be checked when one appears.
+/// A floating-point one reaches `_dtoa_r` and then `_malloc_r` on the ESP32's newlib, so a `%f` does not belong on a tick.
+///
+/// ## What enforces it
+///
+/// The signature cannot: a C varargs function accepts any conversion, and no C++ type system reaches into a format string.
+/// So the annotation is held by `check_nonblocking.py`, which reads every `formatTo` call in `src/` and fails the run on a float conversion.
+/// It reads the whole call rather than its first line, because seven sites here put the format string on the line below.
+/// A control test plants a `%f` and confirms the check fires, since a checker that reads nothing looks exactly like a clean tree.
 
 #include "platform/platform.h"   // MM_NONBLOCKING
 

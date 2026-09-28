@@ -81,6 +81,14 @@ TEST_CASE("a scripted circle with a zero stroke width still draws") {
     CHECK(litAfter("circle(8, 8, 5, 0, 255, 0, 0);") == litAfter("circle(8, 8, 5, 1, 255, 0, 0);"));
 }
 
+TEST_CASE("a scripted circle stroke wider than a length still draws a rim") {
+    // Above 32767 the signed guard and the narrowing disagreed: 40000 reached `ring` as -25536, and 65536 as 0.
+    const int thick = litAfter("circle(8, 8, 5, 3, 255, 0, 0);");
+    CHECK(litAfter("circle(8, 8, 5, 40000, 255, 0, 0);") >= thick);
+    CHECK(litAfter("circle(8, 8, 5, 65536, 255, 0, 0);") >= thick);
+    CHECK(litAfter("circle(8, 8, 5, 65537, 255, 0, 0);") >= thick);
+}
+
 TEST_CASE("a thicker scripted circle covers more lights than a thin one") {
     CHECK(litAfter("circle(8, 8, 5, 3, 255, 0, 0);") > litAfter("circle(8, 8, 5, 1, 255, 0, 0);"));
 }

@@ -16,8 +16,8 @@
 // `projectMM.devices.v1` in localStorage. `deviceModel` is a bookmark label only —
 // the model's defaults are applied to the device during the install over serial
 // ("Improv = REST over serial"), not from this list. It's optional; the render path
-// treats an absent value as no model line. Entries saved before the device→deviceModel
-// rename carry the old `device` field; the render reads it as a fallback (no migration
+// treats an absent value as no model line. Entries saved before the board→deviceModel
+// rename carry the old `board` field; the render reads it as a fallback (no migration
 // needed). A schema bump (v2, …) is how future migrations land; additive/renamed
 // fields read with a fallback don't need one.
 
@@ -123,9 +123,11 @@ function render() {
         seenEl.textContent = `Provisioned ${relativeTime(device.lastSeen)}`;
         info.append(nameEl, urlEl);
         // Device-model line (between URL and last-seen) renders only when set.
-        // Read `device` as a fallback so bookmarks saved before the device→deviceModel
-        // rename keep their label without a migration. "(any device)" provisions skip it.
-        const deviceModel = device.deviceModel || device.device;
+        // Read `board` as a fallback so bookmarks saved before the board→deviceModel
+        // rename keep their label without a migration: `board` is the key those entries carry,
+        // and a visitor's localStorage is not ours to rewrite.
+        // "(any device)" provisions skip the line entirely.
+        const deviceModel = device.deviceModel || device.board;
         if (deviceModel) {
             const modelEl = document.createElement("div");
             modelEl.className = "device-model-name";

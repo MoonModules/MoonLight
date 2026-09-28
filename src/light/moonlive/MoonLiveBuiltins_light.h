@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <limits>   // numeric_limits<lengthType>: the clamp in mm_light_circle
 
 #include "core/util/math8.h"    // beatsin16: the shared time vocabulary
 #include "core/util/math16.h"   // beat16 / triwave16: full-range waveforms
@@ -24,6 +25,15 @@
 /// The only place the LED vocabulary lives: the function names, their argument counts, and each inline opcode's meaning.
 ///
 /// The core compiler sees only the neutral table and the tags this file hands it, so a different host writes its own registration and leaves core unchanged.
+///
+/// @moreinfo
+///
+/// ## Stroke width
+///
+/// A script's numbers arrive as unsigned ABI words and are read back signed, then narrowed to the drawing layer's `lengthType`.
+/// The guard and the narrowing have to read the SAME number, or they disagree above 32767.
+/// A width of 40000 passes `> 0` as an int32 and arrives at `ring` as -25536; 65536 arrives as 0, and 65537 as the thinnest line.
+/// So the clamp happens before the cast, and an absurd width behaves as the widest a length can hold.
 
 namespace mm::moonlive {
 
@@ -844,9 +854,11 @@ extern "C" inline uint32_t mm_light_circle(const uintptr_t* args, uint32_t, cons
     const draw::Canvas& cv = drawCanvas();
     if (!cv.data) return 0;
     const auto sub = [](uintptr_t v) { return draw::toSub(static_cast<lengthType>(static_cast<int32_t>(v))); };
-    // Read SIGNED, and zero or less means the thinnest line: through the unsigned ABI word a negative stroke passed `> 0` and became a width of billions.
+    // Read SIGNED, and clamp before narrowing, so the guard and the conversion read the same number: @xref{stroke-width|More info → Stroke width}.
     const int32_t width = signedArg(args[3]);
-    const draw::pos_t thick = width > 0 ? sub(args[3]) : draw::kSubOne;
+    constexpr int32_t kWidest = std::numeric_limits<lengthType>::max();
+    const int32_t clamped = width > kWidest ? kWidest : width;
+    const draw::pos_t thick = clamped > 0 ? draw::toSub(static_cast<lengthType>(clamped)) : draw::kSubOne;
     draw::ring(cv, sub(args[0]), sub(args[1]), sub(args[2]), thick,
                RGB{uint8_t(args[4]), uint8_t(args[5]), uint8_t(args[6])});
     return 0;
