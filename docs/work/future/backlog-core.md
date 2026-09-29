@@ -1547,9 +1547,9 @@ File Manager always sends a length, so this does not affect it — an API caller
 
 Pin with a test that a length-less upload does not report success and does not truncate the target.
 
-## MoonDeck scripts crash on Windows when run BY HAND (2026-08-22)
+## MoonDeck scripts crash on Windows whenever their output is redirected (2026-08-22)
 
-62 of the ~64 scripts print `→ ✓ ⚠ —` or box-drawing characters. Run from a Windows terminal their stdout takes `locale.getpreferredencoding()`, cp1252, and the first such character raises UnicodeEncodeError, *after* the real work has succeeded: `collect_kpi.py` measures everything, writes the metrics, then dies printing the summary arrow. Every path is now exposed: the gate runner that handed children `PYTHONIOENCODING=utf-8` is gone, so a Windows agent run hits it too, not only the human path MoonDeck exists for.
+62 of the ~64 scripts print `→ ✓ ⚠ —` or box-drawing characters. A REDIRECTED Windows stdout takes `locale.getpreferredencoding()`, cp1252, and the first such character raises UnicodeEncodeError, *after* the real work has succeeded: `collect_kpi.py` measures everything, writes the metrics, then dies printing the summary arrow. An ATTACHED console has been UTF-8 since Python 3.6 (PEP 528), measured on this bench: `utf-8 isatty=True` from a console against `cp1252` through a pipe. So the entry's original framing was backwards. A human at a Windows terminal is the one case that works, and every redirected path fails: a pipe, a tee, a CI log, an agent's captured output. The gate runner that handed children `PYTHONIOENCODING=utf-8` is gone, which is why this surfaces now.
 
 The READ side breaks too, and that half is worse because `PYTHONIOENCODING` does not mask it: `Path.read_text()` and `open()` without an encoding decode as cp1252. A sweep found 43 unqualified `read_text`/`write_text` plus 47 bare `open()` across `moondeck/`.
 

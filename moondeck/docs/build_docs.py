@@ -36,8 +36,10 @@ import sys
 from pathlib import Path
 
 # Force stdout/stderr to UTF-8 on Windows, the same reason setup_esp_idf.py does: the success
-# line below carries a "→", and cp1252 cannot encode it, so the build SUCCEEDS and then dies
-# printing that it did. reconfigure() is a no-op on POSIX, where stdio is already UTF-8.
+# line below carries a "→", and a REDIRECTED Windows stdout takes the locale encoding, cp1252,
+# which cannot encode it, so the build SUCCEEDS and then dies printing that it did. An attached
+# console is already UTF-8 since Python 3.6 (PEP 528), so this bites a pipe, a tee or a CI log
+# rather than a human at a terminal. reconfigure() is a no-op on POSIX, where stdio is UTF-8.
 if sys.stdout is not None:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 if sys.stderr is not None:

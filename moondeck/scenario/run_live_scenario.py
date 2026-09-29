@@ -36,9 +36,11 @@ sys.path.insert(0, str(ROOT / "moondeck" / "scenario"))
 import _observed  # noqa: E402
 
 
-# Windows gives stdout the locale encoding (cp1252), and this runner prints an arrow per
-# step, so a scenario that passed would be recorded as FAILED by the print rather than by
-# the device. errors=replace so a stray glyph can never cost a result.
+# A REDIRECTED Windows stdout takes the locale encoding, cp1252, and this runner prints an arrow
+# per step, so a scenario that passed would be recorded as FAILED by the print rather than by the
+# device. An attached console is UTF-8 since Python 3.6 (PEP 528), so the failing mode is a pipe
+# or a CI log, which is exactly how a gate runs it. errors=replace so a stray glyph never costs
+# a result.
 if sys.stdout is not None:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 if sys.stderr is not None:
