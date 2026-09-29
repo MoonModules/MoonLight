@@ -360,7 +360,7 @@
       "label": "Record UI Clip",
       "speed": "medium",
       "help": "ui_clip",
-      "script": "uiscenario/uivideo.py",
+      "script": "moontube/mtvideo.py",
       "needs_uiclip": true
     },
     {
@@ -370,7 +370,7 @@
       "label": "Cut Video Project",
       "speed": "slow",
       "help": "ui_project",
-      "script": "uiscenario/uicompose.py",
+      "script": "moontube/mtcompose.py",
       "needs_uiproject": true
     },
     {

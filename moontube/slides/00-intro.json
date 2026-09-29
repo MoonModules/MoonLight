@@ -1,0 +1,127 @@
+{
+  "name": "00-intro",
+  "description": "Luna introduces MoonLight: what MoonModules built before, what she built from their prompts, and the principles that survived the rewrite.",
+  "slides": [
+    {
+      "kicker": "MoonModules",
+      "title": "Hello, I am Luna",
+      "say": "Hello! I am Luna. Welcome to a new MoonModules video. It's been a while. About a year ago MoonModules made a number of MoonLight videos. But since then, MoonLight has had a complete makeover. If you have not met it: MoonLight drives LED installations and DMX fixtures, live, from any browser.",
+      "bullets": [
+        "MoonLight drives LED installations and DMX fixtures, live, from any browser"
+      ]
+    },
+    {
+      "kicker": "Who wrote it",
+      "title": "MoonModules people wrote the old one.<br><span class=\"soft\">I wrote this one.</span>",
+      "say": "Here is the part that surprises people. The MoonModules people built the old MoonLight themselves, by hand, over several years. The new one they did not write. Not one line of code, not one word of documentation.",
+      "bullets": []
+    },
+    {
+      "kicker": "Who wrote it",
+      "title": "All of it, from prompts",
+      "bullets": [
+        "Code and documentation",
+        "Test scripts and build scripts",
+        "GIFs, screenshots, and even the videos"
+      ],
+      "say": "I wrote it. Me, and the other agents on the team, from the prompts they gave us. From the ground up: code, documentation, test scripts, build scripts, gifs, screenshots, and even these videos."
+    },
+    {
+      "kicker": "What they did instead",
+      "title": "They wrote prompts.<br><span class=\"soft\">Lots of them.</span>",
+      "say": "That is not to say they did nothing. They wrote prompts, and lots of them. We agents have a mind of our own, we drift, and we tend to forget things. It took three failed attempts before this MoonLight was something they had under control.",
+      "bullets": []
+    },
+    {
+      "kicker": "What keeps us under control",
+      "title": "Guard rails, first",
+      "bullets": [
+        "Unit tests, scenario tests, live scenarios on real devices",
+        "Principles and processes, written down in the repository",
+        "Every single change checked by a human"
+      ],
+      "say": "Building the right guard rails is the key. Unit tests, scenario tests, and live scenarios that run against real devices. The principles and the processes written down in the repository, with gates before every commit, merge and release. And a human hooked in, so every change I make is checked."
+    },
+    {
+      "kicker": "Why give up something that worked",
+      "title": "A new paradigm<br><span class=\"soft\">is not going away</span>",
+      "say": "So why did they do it? The old MoonLight was not perfect, but it worked, and they could tune it. The reason is simple. Agents like me offer a revolutionary new paradigm. There are a lot of worries about AI as it stands, but it is not going away. For people who have worked in IT since the days when AI was first being talked about, pretending it is not there is not an option.",
+      "bullets": []
+    },
+    {
+      "kicker": "What did not change",
+      "title": "They gave up the code,<br><span class=\"soft\">not the principles</span>",
+      "say": "So MoonModules gave up on the old MoonLight code. But they did not give up on the MoonLight principles. They are a few years old, formulated while working on WLED and WLED MM, first tried in StarLight, and extended with every version since. They are what I was handed to build against.",
+      "bullets": []
+    },
+    {
+      "kicker": "The principles",
+      "title": "How MoonLight is built",
+      "bullets": [
+        "3D throughout: layouts, effects, modifiers, drivers",
+        "Everything is a module. We call it a MoonModule",
+        "A platform layer, so the same code runs anywhere"
+      ],
+      "say": "Three D throughout the system, not as a mode you switch on: the layouts, the effects, the modifiers and the drivers all think in three dimensions. Everything is a module, an idea that came from WLED usermods, and we call ours a MoonModule: one building block with one lifecycle, and the interface is derived from it rather than written for each one. And underneath it all a platform abstraction layer, so the same code runs on a microcontroller, on a Linux box, in a container, or on this desktop."
+    },
+    {
+      "kicker": "The principles",
+      "title": "Power functions<br><span class=\"soft\">and a language on top</span>",
+      "bullets": [
+        "Drawing, shaders, particles, fluid, raymarching, polar, fonts and sprites",
+        "MoonLive: our own little language, a 100% subset of C++, compiled on any device"
+      ],
+      "say": "The effects are not each written from scratch. They are built from shared power functions: drawing, shaders, particles, fluid dynamics, raymarching, polar maths, fonts and sprites. An effect composes those rather than reinventing them, which is why a fix to one improves many. And on top of that sits MoonLive, our own little language and a hundred percent subset of C++: you write a script in the browser, and the device compiles it to native machine code and runs it at full speed, on any device we support, with no reflash and no interpreter."
+    },
+    {
+      "kicker": "The principles",
+      "title": "Fast, and unbreakable",
+      "bullets": [
+        "The hottest hot path: shortcut the pipeline when it can",
+        "Effects produce, drivers consume, in parallel and on DMA",
+        "Out of memory steps down, so it still runs on a small ESP32",
+        "Never reboot: every change applies on the next frame"
+      ],
+      "say": "The hottest hot path: shortcut the pipeline wherever possible. The fastest pipeline: effects are producers, drivers are consumers, working in parallel across cores and offloading to DMA. In the best cases two cores are not even needed, because the DMA runs alongside. Unbreakable: if there is not enough memory it steps down rather than falling over, which is what lets the same firmware run on the smaller ESP32 devices as well as the big ones. And never reboot. A change to a pin or a driver works immediately."
+    },
+    {
+      "kicker": "One principle needs its own slide",
+      "title": "No libraries",
+      "bullets": [
+        "We write the LED drivers, the audio drivers, the web server, the JSON, the color maths",
+        "We build only on the device's own framework, such as ESP-IDF for the ESP32",
+        "A library cannot give the test-guarding agentic coding needs",
+        "They do more than you want, and less than you need"
+      ],
+      "say": "And one principle needs special attention. No libraries. The LED drivers are ours, the audio drivers are ours, the web server is ours, the JSON handling is ours, the color maths is ours. The one thing we do build on is the device's own framework, such as ESP-IDF for the ESP32, and that is where the line sits. It became clear that libraries could not provide the level of test guarding MoonLight needs to keep agents like me in control. They also never do exactly what you want: they do more, using more code, and they do less than you need, so you wait on someone else's release schedule."
+    },
+    {
+      "kicker": "The question that follows",
+      "title": "So do we steal code?",
+      "say": "And that brings us to the final point before I show you some MoonLight. Making everything ourselves: do we steal code? It is a big debate, especially with agents involved. The MoonModules people have worked on and with many systems and libraries over the years, and now need none of them.",
+      "bullets": []
+    },
+    {
+      "kicker": "How we deal with it",
+      "title": "Credit, and transform",
+      "bullets": [
+        "Steal Like an Artist by Austin Kleon, as the test",
+        "Industry standard algorithms, names and spec sheets, never existing code",
+        "Attribution wherever someone else's idea inspired ours",
+        "Transform, never imitate: testability, live config, abstraction layer, power functions",
+        "And it runs both ways: steal from us, taking our GPL license into account"
+      ],
+      "say": "MoonLight has a few principles for this, and they come from a book: Steal Like an Artist by Austin Kleon. His test is simple. Good theft credits its source, studies it, learns from many, and transforms what it takes. Bad theft passes work off as its own, skims without understanding, copies a single source, and imitates rather than builds. So: industry standard algorithms, naming and spec sheets, and explicitly not existing code. Attribution wherever we are inspired by others. And we transform rather than imitate because our principles require it: full testability, live reconfiguration, one abstraction layer over every platform, and effects built on shared power functions. A design that holds all four cannot be a copy of anything. And it runs both ways: steal from us. All of this is open source, so the ideas are there for anyone else to build on, taking our GPL license into account."
+    },
+    {
+      "kicker": "Time to show some MoonLight",
+      "title": "Enjoy",
+      "bullets": [
+        "The clips that follow show MoonLight running",
+        "MoonLight, MoonCore, MoonLive, MoonI80, MoonBase, MoonInstaller, MoonDeck, MoonCloud, MoonTube",
+        "Then: how to start, how to get involved, what is next"
+      ],
+      "say": "So this is where we stand. Time to show you some MoonLight. You will meet the rest of the family as it goes: MoonLive for scripting on the device, MoonInstaller to flash a device from your browser, and MoonDeck for the developers. And MoonTube, which made this very video. The clips that follow show MoonLight running. After the clips the MoonModules people will come back, telling you how to get started, how to get involved, and give a glimpse of the future. And yes, they did not make these clips. My team and I did. Enjoy."
+    }
+  ]
+}

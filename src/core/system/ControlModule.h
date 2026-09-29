@@ -27,6 +27,12 @@ namespace mm {
 ///
 /// @moreinfo
 ///
+/// ## The three banks read as one desk
+///
+/// Switches, encoders and faders are declared in that order, and the declaration order is the render order.
+/// The preset grid sits after them rather than between.
+/// Eight rows of pads pushed the faders off the bottom of the card, so reaching them meant scrolling past the bank they belong with.
+///
 /// ## What a preset captures
 ///
 /// One top-level subtree, recorded in the file, so applying one is never a surprise.
@@ -146,7 +152,7 @@ public:
         settleStrip();
     }
 
-    /// Declare the strip, the switches, the encoders, the pads, the faders and the save form.
+    /// Declare the strip, the switches, the encoders, the faders, the pads and the save form, in that order: the declaration order is the render order.
     void defineControls() override {
         // The display strip, ABOVE everything:
         controls_.addReadOnly("display", display_, sizeof(display_));
@@ -182,13 +188,13 @@ public:
             controls_.addText(targetNames_[n], faderTargets_[i], kTargetLen);
             controls_.setHidden(controls_.count() - 1, true);
         }
-        controls_.addList("presets", *this);
-        // The fader bank.
+        // The fader bank, ABOVE the presets list, so the three surface banks read as one desk: @xref{the-three-banks-read-as-one-desk}.
         for (uint8_t i = 0; i < kFaderCount; i++) {
             controls_.addControl(kFaderNames[i], faders_[i]);
             controls_.setFader(controls_.count() - 1, true, surfaceTarget(i));
             controls_.setLive(controls_.count() - 1);
         }
+        controls_.addList("presets", *this);
         // The save form.
         controls_.addText("name", name_, sizeof(name_), validPresetName);
         controls_.setHidden(controls_.count() - 1, true);

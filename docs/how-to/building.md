@@ -6,7 +6,7 @@ How to get the system running on a desktop, an ESP32, a Teensy, or a Raspberry P
 
 Everything that builds, flashes, runs, tests, monitors, or checks the project — for every target — lives as a script under `moondeck/`. The full per-script reference is [moondeck/MoonDeck.md](../moondeck/MoonDeck.md).
 
-<video src="../assets/uiscenarios/11-moondeck.webm" controls playsinline width="720" title="A tour of MoonDeck: why it exists, and what the three tabs hold."></video>
+<video src="../assets/moontube/11-moondeck.webm" controls playsinline width="720" title="A tour of MoonDeck: why it exists, and what the three tabs hold."></video>
 
 The scripts have two front ends with the same code and arguments:
 

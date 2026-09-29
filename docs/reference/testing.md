@@ -17,7 +17,7 @@ Three test categories, each with a clear purpose:
 
 A live run is worth watching once, because it is the tier that proves the device rather than a model of it. The suite walks the cards in the order the interface lists them, and every step happens through the same API the page uses:
 
-<video src="../assets/uiscenarios/04-scenario-testing.webm" autoplay loop muted playsinline width="720" title="The scenario suite driving a running device, card by card, while the interface shows it happening"></video>
+<video src="../assets/moontube/04-scenario-testing.webm" autoplay loop muted playsinline width="720" title="The scenario suite driving a running device, card by card, while the interface shows it happening"></video>
 
 **Picking a tier for a new test.** When the behavior you want to pin only makes sense with modules wired together (e.g. "the pipeline reallocates cleanly when the grid resizes," "Drivers correctly hands the source buffer through after a child swap"), reach for a scenario first: that is what scenarios are *for*. When the behavior lives inside a single module (one function's contract, one edge case, one bug regression on a small surface), a unit test is the cheaper and faster fit. Don't extend the scenario runner with new predicates just to migrate an existing unit test, which is adding abstraction without an active need. Add predicates when a *new* scenario you're writing needs them.
 
@@ -529,12 +529,12 @@ UI scenarios drive the web interface itself: a run file lists what a person does
 
 ```bash
 uv run moondeck/test/test_host.py --ui                     # the whole lane
-uv run moondeck/uiscenario/uivideo.py --run test/uiscenarios/clips/06-layers.json
+uv run moondeck/moontube/mtvideo.py --run moontube/clips/06-layers.json
 ```
 
-The runs live in `test/uiscenarios/clips/`, the engine in `moondeck/uiscenario/`. Data under `test/`, runner under `moondeck/`: the same split the pipeline scenarios use. Tests are parameterized over the directory, so a new run file is a new test with nothing to wire up. Format and actions: [uiscenario.md](../../moondeck/uiscenario/uiscenario.md).
+The runs live in `moontube/clips/`, the engine in `moondeck/moontube/`. MoonTube sits at the root rather than under `test/`, which every other test family follows. A run file is the source of a published video as much as it is a test, and the series is what someone looks for. Tests are parameterized over the directory, so a new run file is a new test with nothing to wire up. Format and actions: [moontube.md](../../moondeck/moontube/moontube.md).
 
-**REST is read-only here.** Every state change goes through the affordance a person uses, because a step that POSTs its way to the outcome proves nothing about the interface. The reads are what `expect` compares against. That lets one file be both a test and a documentation video: the same run recorded produces the clips under `docs/assets/uiscenarios/`. A failing test means the UI no longer does what a published video shows.
+**REST is read-only here.** Every state change goes through the affordance a person uses, because a step that POSTs its way to the outcome proves nothing about the interface. The reads are what `expect` compares against. That lets one file be both a test and a documentation video: the same run recorded produces the clips under `docs/assets/moontube/`. A failing test means the UI no longer does what a published video shows.
 
 **Opt-in, because it needs something running.** A bare `test_host.py` leaves this lane out, and it is never a gate: it runs on request only. `--ui` skips rather than fails when nothing answers, the same way the JS lane skips without node. A run that drives another surface names its own `host` (the installer's preview server). One that needs particular hardware names a `requires` capability resolved against the bench registry.
 

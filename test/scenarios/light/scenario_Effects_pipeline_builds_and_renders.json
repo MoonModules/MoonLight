@@ -44,7 +44,20 @@
       "name": "measure-empty",
       "description": "A layer with no effect: the floor every later measurement is read against.",
       "op": "measure",
-      "measure": true
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 1,
+            "p95": 1,
+            "min": 1,
+            "max": 1,
+            "n": 1,
+            "samples": [1]
+          },
+          "last_updated": "2026-09-29"
+        }
+      }
     },
     {
       "name": "effect",
@@ -65,11 +78,11 @@
             "p50": 1,
             "p95": 2,
             "min": 1,
-            "max": 2,
+            "max": 4,
             "n": 32,
-            "samples": [1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+            "samples": [2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4]
           },
-          "last_updated": "2026-09-28"
+          "last_updated": "2026-09-29"
         }
       }
     },
@@ -100,13 +113,13 @@
         "desktop-macos": {
           "tick_us": {
             "p50": 7,
-            "p95": 18,
+            "p95": 21,
             "min": 5,
-            "max": 21,
+            "max": 41,
             "n": 32,
-            "samples": [6, 14, 5, 11, 12, 8, 6, 8, 7, 18, 21, 6, 9, 6, 13, 6, 8, 8, 7, 6, 7, 6, 8, 7, 7, 7, 6, 6, 6, 8, 6, 7]
+            "samples": [14, 5, 11, 12, 8, 6, 8, 7, 18, 21, 6, 9, 6, 13, 6, 8, 8, 7, 6, 7, 6, 8, 7, 7, 7, 6, 6, 6, 8, 6, 7, 41]
           },
-          "last_updated": "2026-09-28"
+          "last_updated": "2026-09-29"
         }
       }
     },

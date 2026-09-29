@@ -153,8 +153,8 @@ __pycache__/
 # to a viewer lives on the video platform.
 #
 # The whole folder, because /media/ is output ONLY. The sources live elsewhere by
-# design: the run files under test/uiscenarios/, the published doc clips under
-# docs/assets/uiscenarios/, the tooling under moondeck/uiscenario/. An earlier version
+# design: the run files under moontube/, the published doc clips under
+# docs/assets/moontube/, the tooling under moondeck/moontube/. An earlier version
 # listed media types one by one, to protect run files that used to live here; they no
 # longer do, so the rule can say what it means.
 /media/

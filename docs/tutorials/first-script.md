@@ -28,7 +28,7 @@ class MyEffect {
 
 Click away from the editor, or press Ctrl/Cmd+S. The lights turn dim blue.
 
-<video src="../assets/uiscenarios/08-moonlive-effects.webm" controls playsinline width="720" title="A library script run on the device, then one written in the browser and compiled live."></video>
+<video src="../assets/moontube/08-moonlive-effects.webm" controls playsinline width="720" title="A library script run on the device, then one written in the browser and compiled live."></video>
 
 
 That is the whole loop. `tick()` runs once per frame, `fill(r, g, b)` writes every light, and the numbers are 0 to 255.

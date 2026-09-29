@@ -1785,7 +1785,7 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
             if name not in {r["name"] for r in self._list_ui_runs(kind)}:
                 self._send_json({"error": f"unknown {kind[:-1]}: {name}"}, 400)
                 return
-            cmd.extend([arg, f"test/uiscenarios/{kind}/{name}.json"])
+            cmd.extend([arg, f"moontube/{kind}/{name}.json"])
         if script_def.get("needs_module") and params.get("module"):
             cmd.extend(["--module", params["module"]])
         # pass_device_model: forward the deviceModel picked in the UI's provisioning
@@ -1994,12 +1994,12 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
     def _list_ui_runs(self, kind: str):
         """Return [{name, description}] for every UI clip or project.
 
-        Both live under test/uiscenarios/, the same split the tooling uses: a CLIP is
+        Both live under moontube/, the same split the tooling uses: a CLIP is
         performed against a device and recorded, a PROJECT cuts clips together. The
         description rides along so the dropdown can say what each one does rather than
         only naming a file.
         """
-        folder = SCRIPTS_DIR.parent / "test" / "uiscenarios" / kind
+        folder = SCRIPTS_DIR.parent / "moontube" / kind
         out = []
         for path in sorted(folder.glob("*.json")):
             try:

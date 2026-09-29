@@ -12,7 +12,7 @@ High-performance LED &amp; DMX lighting control for ESP32 and beyond.
 Why MoonLight was rebuilt, who wrote it, and the principles it kept.
 The clips that follow it are the proof of what it claims.
 
-<video src="assets/uiscenarios/00-intro.webm" controls playsinline width="720" title="The spoken introduction: why MoonLight was rebuilt, who wrote it, and what it kept."></video>
+<video src="assets/moontube/00-intro.webm" controls playsinline width="720" title="The spoken introduction: why MoonLight was rebuilt, who wrote it, and what it kept."></video>
 
 ## What it is
 
@@ -62,10 +62,10 @@ The web installer works in Chrome &amp; Edge (Web Serial), with no download requ
 
 How to start with no hardware at all, how to contribute, and what comes next.
 
-<video src="assets/uiscenarios/12-getting-involved.webm" controls playsinline width="720" title="How to start, how to contribute, and what is next."></video>
+<video src="assets/moontube/12-getting-involved.webm" controls playsinline width="720" title="How to start, how to contribute, and what is next."></video>
 
 ## Standing on shoulders
 
 Almost none of this was invented here, and every borrowed idea is credited in the source file that carries it.
 
-<video src="assets/uiscenarios/13-attribution.webm" controls playsinline width="720" title="The people we learned from, and the algorithms we build on."></video>
+<video src="assets/moontube/13-attribution.webm" controls playsinline width="720" title="The people we learned from, and the algorithms we build on."></video>
