@@ -24,6 +24,7 @@ ESP32_DIR = ROOT / "esp32"
 # Shared moondeck.json + logLevel-toggle helpers (one level up, reachable from check/ and run/).
 sys.path.insert(0, str(ROOT / "moondeck"))
 from _moondeck_config import active_device_ips, raised_log_level, LOG_INFO  # noqa: E402
+from _host import desktop_target  # noqa: E402
 
 # Same directory; imported by path so this needs no PYTHONPATH tweak (the pattern the
 # other cross-script imports here use).
@@ -164,7 +165,11 @@ def collect_desktop():
         BUILD_DIR / "test" / "Release" / "mm_tests.exe",
     )
     if test_exe:
-        out, rc = run([str(test_exe)], cwd=BUILD_DIR)
+        # The whole suite, not a quick probe: 2000+ cases and 120k assertions, which the default
+        # 30s covers on a fast host and does not on a slower one (71s on this Windows bench). A
+        # timeout here reports a KPI run as broken when nothing is, so it is sized to catch a hang
+        # rather than to police the runtime, which repo-health already tracks as a number.
+        out, rc = run([str(test_exe)], cwd=BUILD_DIR, timeout=600)
         for line in out.splitlines():
             if "test cases:" in line:
                 kpi["tests"] = line.strip()
@@ -216,8 +221,7 @@ def collect_desktop():
             kpi["tick_us"] = per_scenario_max
             kpi["fps"] = [1000000 // t if t > 0 else 0 for t in per_scenario_max]
         # Named, module-isolated p50s beside the raw series: what repo-health tracks per commit.
-        obs = scenario_observed("desktop-" + ("macos" if sys.platform == "darwin"
-                                              else "windows" if os.name == "nt" else "linux"))
+        obs = scenario_observed(desktop_target())
         if obs:
             kpi["scenario_p50"] = obs
         # The whole matrix, every scenario x every target, for the repo-health table.
@@ -564,12 +568,13 @@ def main():
         print()
         perf = {}
         if desktop.get("tick_us"):
-            perf["desktop"] = {"tick_us": desktop["tick_us"][0],
-                               "fps": desktop.get("fps", [None])[0]}
+            host = desktop_target()  # keyed per host (moondeck/_host.py)
+            perf[host] = {"tick_us": desktop["tick_us"][0],
+                          "fps": desktop.get("fps", [None])[0]}
             # The isolated-scenario p50s ride along, so repo-health can report a figure that
             # compares across commits beside the run's own summary tick.
             if desktop.get("scenario_p50"):
-                perf["desktop"]["scenario_p50"] = desktop["scenario_p50"]
+                perf[host]["scenario_p50"] = desktop["scenario_p50"]
         if desktop.get("scenario_matrix"):
             perf["scenario_matrix"] = desktop["scenario_matrix"]
         if esp32.get("tick_us"):

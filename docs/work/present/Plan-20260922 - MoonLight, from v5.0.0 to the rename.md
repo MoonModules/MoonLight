@@ -191,7 +191,7 @@ Two rules hold all week. **Anything found before Tuesday is fixed under the old 
 
 ### Sept 29: Windows day
 
-The desktop build runs on Windows and is packaged by CI, but **no test has ever run there**. [release.yml:318](../../../.github/workflows/release.yml) has the only Windows runner in the repository and it compiles and packages without invoking `mm_tests`, the scenarios, or anything else. Every item below is therefore unverified rather than lightly verified.
+Windows works, and has been tested here by hand before. What it does not have is anything that notices when it stops working: [release.yml:318](../../../.github/workflows/release.yml) is the only Windows runner in the repository and it compiles and packages without invoking `mm_tests`, the scenarios, or anything else. So between hand sessions the platform drifts unobserved, and the gap since the last one is about three weeks. That is what this day is for: not proving Windows works, but catching what has rotted since anyone last looked.
 
 Four features are a genuinely different program on Windows rather than a thin shim, and they come first:
 

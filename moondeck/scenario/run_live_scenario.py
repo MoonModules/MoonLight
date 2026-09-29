@@ -28,10 +28,23 @@ SCENARIOS_DIR = ROOT / "test" / "scenarios"
 BASELINE_FILE = ROOT / "test" / "scenario-baseline.json"
 
 # Reuse the shared test-metadata parser so scenario discovery stays in one place.
+sys.path.insert(0, str(ROOT / "moondeck"))
+from _host import desktop_target  # noqa: E402
 sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 import _test_metadata as test_meta  # noqa: E402
 sys.path.insert(0, str(ROOT / "moondeck" / "scenario"))
 import _observed  # noqa: E402
+
+
+# A REDIRECTED Windows stdout takes the locale encoding, cp1252, and this runner prints an arrow
+# per step, so a scenario that passed would be recorded as FAILED by the print rather than by the
+# device. An attached console is UTF-8 since Python 3.6 (PEP 528), so the failing mode is a pipe
+# or a CI log, which is exactly how a gate runs it. errors=replace so a stray glyph never costs
+# a result.
+if sys.stdout is not None:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if sys.stderr is not None:
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 
 class Client:
@@ -156,7 +169,6 @@ def _detect_target(state: dict) -> str:
     distinguishes macOS vs Linux vs Windows builds, which can differ in tick
     noticeably). See docs/explanation/architecture/index.md § Firmware vs board.
     """
-    import platform
     firmware = None
     for m in state.get("modules", []):
         if m.get("type") != "FirmwareUpdateModule":
@@ -168,9 +180,8 @@ def _detect_target(state: dict) -> str:
         break
     if firmware and firmware != "unknown":
         return firmware
-    # Desktop fallback
-    osmap = {"Darwin": "desktop-macos", "Linux": "desktop-linux", "Windows": "desktop-windows"}
-    return osmap.get(platform.system(), "desktop-unknown")
+    # Desktop fallback, from the one home every script shares (moondeck/_host.py).
+    return desktop_target()
 
 
 def _uptime_seconds(client):

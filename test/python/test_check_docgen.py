@@ -482,7 +482,7 @@ def test_the_catalog_pages_actually_yield_cards():
     for rel in check_docgen._pages():
         path = ROOT / "docs" / rel
         if path.exists():
-            total += len(list(_cards(path.read_text())))
+            total += len(list(_cards(path.read_text(encoding="utf-8"))))
     assert total > 100, f"only {total} cards found across the catalog pages"
 
 
@@ -1113,10 +1113,10 @@ def test_two_headers_claiming_one_group_id_are_reported(tmp_path, monkeypatch):
     rather than the header, since the header owns the page."""
     import check_docgen
     from pathlib import Path
-    (tmp_path / "a.h").write_text("/// @defgroup Shared A\n/// @{\n/// A.\n/// @}\n")
-    (tmp_path / "b.h").write_text("/// @defgroup Shared B\n/// @{\n/// B.\n/// @}\n")
-    (tmp_path / "c.h").write_text("/// @defgroup Own C\n/// @{\n/// C.\n/// @}\n")
-    (tmp_path / "c.cpp").write_text("/// @defgroup Own C\n/// @{\n/// C.\n/// @}\n")
+    (tmp_path / "a.h").write_text("/// @defgroup Shared A\n/// @{\n/// A.\n/// @}\n", encoding="utf-8")
+    (tmp_path / "b.h").write_text("/// @defgroup Shared B\n/// @{\n/// B.\n/// @}\n", encoding="utf-8")
+    (tmp_path / "c.h").write_text("/// @defgroup Own C\n/// @{\n/// C.\n/// @}\n", encoding="utf-8")
+    (tmp_path / "c.cpp").write_text("/// @defgroup Own C\n/// @{\n/// C.\n/// @}\n", encoding="utf-8")
     monkeypatch.setattr(check_docgen, "ROOT", tmp_path)
     monkeypatch.setattr(check_docgen, "_headers",
                         lambda: [Path(n) for n in ("a.h", "b.h", "c.h", "c.cpp")])
@@ -1291,7 +1291,7 @@ def test_the_scan_reaches_beyond_src():
     alone, and were exempt for that reason rather than by decision. Pinned by root so a
     dropped one fails here instead of quietly shrinking the measured surface."""
     import check_docgen
-    scanned = {str(p) for p in check_docgen._headers()}
+    scanned = {p.as_posix() for p in check_docgen._headers()}
     for expected in ("esp32/main/main.cpp",
                      "moonbase/main/moonbase_main.cpp",
                      "moondeck/moonlive/emit_isa.cpp"):
@@ -1459,7 +1459,7 @@ def test_the_scan_includes_tests():
     gets published, so `test/` is in scope like any other source. Pinned because excluding it
     is the easy mistake: nothing generates a page from a test, which looks like a reason."""
     import check_docgen
-    assert [p for p in check_docgen._headers() if str(p).startswith("test/")]
+    assert [p for p in check_docgen._headers() if p.as_posix().startswith("test/")]
 
 
 def test_the_real_pages_obey_the_structure_rules():
@@ -1470,4 +1470,4 @@ def test_the_real_pages_obey_the_structure_rules():
     for rel in check_docgen._pages():
         path = ROOT / "docs" / rel
         if path.exists():
-            assert _structure(path.read_text(), rel) == [], rel
+            assert _structure(path.read_text(encoding="utf-8"), rel) == [], rel

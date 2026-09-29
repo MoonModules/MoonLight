@@ -88,7 +88,7 @@ def main():
     proc = subprocess.Popen(
         cmd, cwd=build_dir,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        bufsize=1, text=True,
+        bufsize=1, text=True, encoding="utf-8", errors="replace",
     )
     for line in proc.stdout:
         sys.stdout.write(line)

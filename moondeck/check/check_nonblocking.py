@@ -570,6 +570,33 @@ def main():
               f"`uv run moondeck/build/build_desktop.py` first.", file=sys.stderr)
         return 2
 
+    # NOT APPLICABLE is not the same as FAILED. -Wfunction-effects is Clang 20+ only, and
+    # CMakeLists probes for it (`check_cxx_compiler_flag`) inside the non-MSVC branch, so an MSVC
+    # cache carries no MM_HAS_WFUNCTION_EFFECTS at all. Without the warning this check can never
+    # produce a finding, and building to discover that wastes a full rebuild and then reports a
+    # failure the toolchain guarantees. Reading the cache says the same thing for free.
+    #
+    # Skipping is safe here in a way it would not be for a normal gate: the desktop build that
+    # DOES carry the flag is the one every contributor and CI runs, so the tree is still measured,
+    # just not from this host. Say so loudly rather than printing a number, because this script's
+    # standing rule is that a comfortable zero from a check that never ran is the worst outcome.
+    #
+    # ONLY the compiler half is skipped. The float-conversion grep above needs no compiler, so it
+    # has already run and printed on this host, and its verdict rides out on the same
+    # `1 if floats else 0` every other exit uses. Returning a bare 0 here would print a broken
+    # promise and then report success, which is the silent zero this script exists to refuse.
+    cache = (build_dir / "CMakeCache.txt").read_text(encoding="utf-8", errors="replace")
+    if not re.search(r"^MM_HAS_WFUNCTION_EFFECTS:.*=(1|ON|TRUE|YES)\s*$", cache,
+                     re.IGNORECASE | re.MULTILINE):
+        # The cache, not the compiler: a Clang below 20, or a cache written before the probe
+        # existed, lands here too, and naming MSVC alone would misdescribe both.
+        print(f"SKIP: the build cache in {build_dir.relative_to(ROOT)} carries no "
+              f"MM_HAS_WFUNCTION_EFFECTS=1\n(MSVC, a Clang below 20, or a cache older than the "
+              f"probe), so the transitive hot-path\ncheck cannot run here. Reconfigure on a Clang "
+              f"20+ host to run it, or read the\nclang-hotpath card, which CI keeps current. The "
+              f"float-conversion findings above DID run.")
+        return 1 if floats else 0
+
     out = build_output(build_dir, clean=not args.incremental)
     if out is None:
         return 2

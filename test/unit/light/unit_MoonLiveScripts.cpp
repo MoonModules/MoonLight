@@ -64,7 +64,8 @@ std::string read(const std::filesystem::path& p) {
 
 TEST_CASE("every script in moonlive/ compiles") {
     int checked = 0;
-    for (const char* sub : {"layouts", "effects", "modifiers", "drivers", "palettes"}) {
+    // services included: it compiles against its own table, which the isService branch below picks.
+    for (const char* sub : {"layouts", "effects", "modifiers", "drivers", "palettes", "services"}) {
         for (const auto& file : scriptsIn(sub)) {
             const std::string src = read(file);
             const std::string label = std::string(sub) + "/" + file.filename().string();

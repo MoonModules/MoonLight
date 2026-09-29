@@ -19,7 +19,6 @@ import argparse
 import datetime
 import json
 import os
-import platform
 import re
 import subprocess
 import sys
@@ -27,19 +26,23 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 # Reuse the shared test-metadata parser so scenario discovery stays in one place.
+sys.path.insert(0, str(ROOT / "moondeck"))
+from _host import desktop_target  # noqa: E402
+sys.path.insert(0, str(ROOT / "moondeck" / "build"))
+from build_desktop import host_build_dir  # noqa: E402 (one home for the build-dir name)
 sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 import _test_metadata as test_meta  # noqa: E402
 sys.path.insert(0, str(ROOT / "moondeck" / "scenario"))
 import _observed  # noqa: E402
 
-_HOST = {"darwin": "macos", "win32": "windows"}.get(sys.platform, "linux")
+
 
 
 def _resolve_runner() -> Path:
     """Find mm_scenarios. MSVC multi-config drops it in test/Release/; Ninja and
     single-config generators drop it in test/. Check both so the script works
     with either layout."""
-    base = ROOT / "build" / _HOST / "test" / "mm_scenarios"
+    base = ROOT / host_build_dir() / "test" / "mm_scenarios"
     suffix = ".exe" if sys.platform == "win32" else ""
     candidates = [base.with_suffix(suffix)]
     if sys.platform == "win32":
@@ -150,13 +153,6 @@ _MEASURE_RE = re.compile(
 )
 
 
-def _host_target() -> str:
-    """Same shape run_live_scenario.py's _detect_target falls back to on desktop."""
-    return {"Darwin": "desktop-macos", "Linux": "desktop-linux", "Windows": "desktop-windows"}.get(
-        platform.system(), "desktop-unknown"
-    )
-
-
 # What mm_scenarios returns for a scenario that did not run: test/scenario_runner.cpp's kSkipped.
 # A skip is neither a pass nor a failure, and counting it as either is how a suite that stopped
 # testing reads as green.
@@ -210,7 +206,7 @@ def _run_one(path: Path, update_contract: bool, update_reason: str | None,
     # Windows the default encoding is cp1252 and would mojibake those.
     with open(path, encoding="utf-8") as f:
         scenario = json.load(f)
-    target = _host_target()
+    target = desktop_target()
     today = datetime.date.today().isoformat()
     touched_observed = 0
     touched_contract = 0

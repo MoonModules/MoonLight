@@ -17,7 +17,7 @@ import _test_metadata as meta  # noqa: E402
 
 def test_the_order_comes_from_the_interface():
     """Every card app.js names is read back, in the order it names them."""
-    js = (ROOT / "src" / "ui" / "app.js").read_text()
+    js = (ROOT / "src" / "ui" / "app.js").read_text(encoding="utf-8")
     assert "const NAV_GROUPS = [" in js, "the nav order moved; this reader needs updating with it"
     assert meta.NAV_ORDER, "nothing was read from app.js"
     assert meta.NAV_ORDER[0] == "Control", "Control opens the nav, so it opens the suite"

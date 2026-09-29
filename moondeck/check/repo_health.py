@@ -34,10 +34,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
+# This host's metrics key, spelled in one place (moondeck/_host.py).
+sys.path.insert(0, str(ROOT / "moondeck"))
+from _host import desktop_target  # noqa: E402
 # The firmware registry, so carry-forward can drop rows for variants that no longer exist
 # (see merge_carry_forward). Same single source of truth check_firmwares.py reads.
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
-from build_esp32 import FIRMWARES  # noqa: E402
+from build_esp32 import FIRMWARES, table_from_fragments  # noqa: E402
 from build_desktop import desktop_binary  # noqa: E402 (one definition of where it lands)
 HEALTH_FILE = ROOT / "docs" / "reference" / "metrics" / "repo-health.json"
 # The same snapshot as a table a human reads: units applied, ratios as percentages, areas
@@ -149,19 +152,21 @@ def app_partition_bytes(firmware):
 
     The ceiling a firmware is measured against is not a constant: the variants use different
     tables (4 MB classic, 8 MB S3, 16 MB OTA), so a raw KB number says nothing about how close
-    to full a target is. Read from the GENERATED sdkconfig rather than the defaults fragments,
-    because that is what the build resolved after layering them. Returns 0 when it cannot be
-    determined, and the caller then simply omits the capacity rather than guessing one.
+    to full a target is. Returns 0 when it cannot be determined, and the caller then simply omits
+    the capacity rather than guessing one.
+
+    Resolved from the firmware REGISTRY, not from a generated sdkconfig in the local build dir.
+    The build dir version answered "what did this machine last configure", which is a different
+    question: a stale dir here named a pre-MoonBase table and reported `esp32` at 111% of a slot
+    it sits comfortably inside, while four targets with no build dir on this host lost their
+    capacity entirely. Two hosts now write this file, so a number that depends on which build
+    dirs happen to exist locally cannot hold. `table_from_fragments` applies the same
+    last-fragment-wins layering the build does, so the answer is the one the build would reach.
     """
-    cfg = ROOT / "build" / f"esp32-{firmware}" / "sdkconfig"
-    if not cfg.exists():
+    entry = FIRMWARES.get(firmware)
+    if not entry:
         return 0
-    name = ""
-    for line in cfg.read_text(errors="ignore").splitlines():
-        if line.startswith("CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="):
-            name = line.split("=", 1)[1].strip().strip('"')
-            break
-    csv = ROOT / "esp32" / name if name else None
+    csv = table_from_fragments(entry.get("fragments") or [])
     if not csv or not csv.exists():
         return 0
     # The OTA slot, not merely the first app row: the MoonBase tables put a small `factory`
@@ -234,9 +239,10 @@ def measure_flash():
     if desktop:
         st = desktop.stat()
         if (_time.time() - st.st_mtime) <= MEASURED_WITHIN_HOURS * 3600:
-            flash["desktop"] = st.st_size
-            MEASURED_THIS_RUN.add("desktop")
-            MEASURED_DATES["desktop"] = _dt.date.today().isoformat()
+            host = desktop_target()  # keyed per host (moondeck/_host.py)
+            flash[host] = st.st_size
+            MEASURED_THIS_RUN.add(host)
+            MEASURED_DATES[host] = _dt.date.today().isoformat()
     return flash
 
 
@@ -426,7 +432,7 @@ def merge_carry_forward(new, old):
     `complexity` are keyed by platform/metric and are carried forward as they were.
     """
     # Drop rows for ESP32 variants that no longer exist, but keep everything else: `flash`
-    # also holds non-firmware targets (`desktop`), which are not in FIRMWARES and must not be
+    # also holds non-firmware targets (`desktop-*`), which are not in FIRMWARES and must not be
     # filtered out. So the rule is "an esp32* key that is not a known firmware is a ghost",
     # which is exactly what a rename leaves behind and nothing else.
     known = set(FIRMWARES)
