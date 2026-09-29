@@ -102,7 +102,7 @@ def _stage_referenced_board_images(dst_dir: Path):
     if not boards_json.exists():
         return
     try:
-        boards = json.loads(boards_json.read_text())
+        boards = json.loads(boards_json.read_text(encoding="utf-8"))
     except (ValueError, OSError):
         return
     for b in boards:
@@ -157,8 +157,8 @@ def stage_install_page():
     # --- root redirect / → /install/ (keeps the old entry point working) ---
     (STAGE_DIR / "index.html").write_text(
         '<!doctype html><meta http-equiv="refresh" content="0; url=./install/">'
-        '<a href="./install/">MoonLight installer →</a>\n'
-    )
+        '<a href="./install/">MoonLight installer →</a>\n',
+        encoding="utf-8")
 
 
 def find_local_builds() -> list[Path]:
@@ -202,7 +202,7 @@ def stage_local_builds(builds: list[Path]) -> list[str]:
         # globally, partition-table once per flash-size group), matching the names
         # generate_manifest.py emits so the preview's manifests resolve them.
         try:
-            flasher = json.loads((build_dir / "flasher_args.json").read_text())
+            flasher = json.loads((build_dir / "flasher_args.json").read_text(encoding="utf-8"))
             size = str(flasher.get("flash_settings", {}).get("flash_size", "")).lower()
             shutil.copy(build_dir / "projectMM.bin",
                         releases_dir / f"{prefix}.bin")

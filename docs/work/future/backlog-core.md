@@ -1633,17 +1633,92 @@ File Manager always sends a length, so this does not affect it — an API caller
 
 Pin with a test that a length-less upload does not report success and does not truncate the target.
 
-## repo-health compares numbers from different machines (2026-08-22)
+## MoonDeck scripts crash on Windows whenever their output is redirected (2026-08-22)
 
-`repo-health.json` records one value per metric with no note of which host produced it, so running the KPI gate on a second machine rewrites the baseline with figures that were never comparable. Measured on the same commit: desktop flash reads 1,060 KB on a Windows/MSVC bench against 1,165 KB recorded on macOS/clang, printed as "−105 KB ✓"; desktop tick reads 368 µs against 179 µs, printed as "+189 µs ⚠". Neither is a change in the code. The firmware rows are now guarded by a freshness rule, which stops a stale binary being re-measured, but freshness cannot detect a different compiler or a different CPU.
+62 of the ~64 scripts print `→ ✓ ⚠ —` or box-drawing characters. A REDIRECTED Windows stdout takes `locale.getpreferredencoding()`, cp1252, and the first such character raises UnicodeEncodeError, *after* the real work has succeeded: `collect_kpi.py` measures everything, writes the metrics, then dies printing the summary arrow. An ATTACHED console has been UTF-8 since Python 3.6 (PEP 528), measured on this bench: `utf-8 isatty=True` from a console against `cp1252` through a pipe. So the entry's original framing was backwards. A human at a Windows terminal is the one case that works, and every redirected path fails: a pipe, a tee, a CI log, an agent's captured output. The gate runner that handed children `PYTHONIOENCODING=utf-8` is gone, which is why this surfaces now.
 
-The file's own docstring states the property this breaks: "two machines agree and a number never moves for a reason nobody can explain". Two ways out, and it is a design call rather than a bug fix: key the host-dependent metrics by platform (`flash.desktop.windows`, `perf.desktop.macos`) so each machine tracks its own trend, or declare one canonical machine (CI) the only writer and have every other run print the delta without saving it. The second is less data and less honest about a Windows contributor's numbers; the first grows the file, which its "never grows" design resists. Until then, read a cross-host delta as noise.
+The READ side breaks too, and that half is worse because `PYTHONIOENCODING` does not mask it: `Path.read_text()` and `open()` without an encoding decode as cp1252. A sweep found 43 unqualified `read_text`/`write_text` plus 47 bare `open()` across `moondeck/`.
 
-## MoonDeck scripts crash on Windows when run BY HAND (2026-08-22)
+One Windows day (2026-09-29) hit it FOUR times in four different files, each fixed separately at its own call site: `_test_metadata.py` stopped the test runner starting, `test_desktop.py` would have killed a run on one non-ASCII byte from the test binary, `run_live_scenario.py` printed an arrow per step and so recorded a scenario the device PASSED as FAILED, and `preview_installer.py` died writing a staged page, leaving the web installer preview unusable on Windows. Four site fixes in one day is the argument for one home, made by the defect itself.
 
-62 of the ~64 scripts print `→ ✓ ⚠ —` or box-drawing characters. Run from a Windows terminal their stdout takes `locale.getpreferredencoding()` — cp1252 — and the first such character raises UnicodeEncodeError, *after* the real work has succeeded: `collect_kpi.py` measures everything, writes the metrics, then dies printing the summary arrow. Every path is now exposed: the gate runner that handed children `PYTHONIOENCODING=utf-8` is gone, so a Windows agent run hits it too, not only the human path MoonDeck exists for.
+The preamble is now copied into four scripts (`setup_esp_idf.py`, `ci/verify_version.py`, `docs/build_docs.py`, `scenario/run_live_scenario.py`), each carrying its own comment explaining the same fact. Per-script `sys.stdout.reconfigure()` is the wrong shape at 62 files: every new script would have to remember, and the one that forgets fails in the field. It wants ONE home, and the two candidates do not cover the same ground. `PYTHONUTF8=1` in whatever env MoonDeck's front ends already establish settles BOTH halves, because UTF-8 mode changes the default for `open()` and `Path.read_text()` as well as for stdio. A shared `moondeck/_stdio.py` imported by the entry points settles only the stdio half, since `reconfigure()` touches the standard streams and nothing else, so it leaves every unqualified `read_text`/`open` exactly as broken and those sites still need `encoding="utf-8"` written out. Pick when someone next runs a check by hand and it dies on a tick mark.
 
-Per-script `sys.stdout.reconfigure()` is the wrong shape at 62 files: every new script would have to remember, and the one that forgets fails in the field. It wants ONE home — the candidates are a `PYTHONUTF8=1` in whatever env MoonDeck's front ends already establish, or a shared `moondeck/_stdio.py` imported by the handful of scripts that are entry points. Pick when someone next runs a check by hand and it dies on a tick mark.
+## Changing a live MoonLiveEffect's script does not rebind it (2026-09-29)
+
+**Being worked on the macOS bench; this entry is measurement for whoever has it.** Rewriting the `script` control on an existing `MoonLiveEffect` leaves the module largely rendering what the previous script rendered. The card reports a clean status, the byte count updates, frames keep animating, so nothing in `/api/state` says anything is wrong. Only the pixels do.
+
+Measured on Windows over the 33 shipped `.mle` effects, same scripts and same instrument, changing only the route. Each script ran 3 s while its preview frames were sampled, then scripts were compared on mean level and on frame-to-frame motion; a pair matching closely on both is a pair that cannot be telling the pixels apart:
+
+- Reusing one module and rewriting its `script` control: **59 indistinct pairs**, in groups. Nine scripts (noise, octopus, plasma, rain, ripples, sparkle, spectrum, stadbeest-eyes, stadbeest-legs) all sat at mean 27.2 and motion 0.16, and six more (fountain, fractal, gradient, lines, metal, mh-ambient) at mean 42.9 and motion 0.33.
+- A fresh module per script, which is what the UI's picker does: **1 indistinct pair**, and the values separate as you would expect, with fractal at 108.2, noise at 127.2, mh-aim at 255.0 and stadbeest-eyes at 151.5.
+
+The picker works because it does two things rather than one: `replacePickedType` in `src/ui/app.js` calls `replaceModule` to put a NEW module in the slot and only then `setCardScript`. A user who switches scripts from the dropdown on an existing card gets the broken path; a user who picks from the module picker does not, which is why the same library looks fine one way and stale the other.
+
+Two scripts render nothing that changes even by the working route, and may simply be correct: `gradient.mle` produces one distinct frame at mean 104.8 with zero motion, and `mh-aim.mle` one distinct frame with every sampled channel at 255. `mh-aim` aims a moving head rather than painting a grid, so full white may be the honest answer. Worth an eye rather than an assumption.
+
+The check itself is worth keeping. Frame distinctness plus cross-script comparison catches exactly what compiling cannot, and it is what the existing test suite has no view of: `unit_MoonLiveScripts.cpp` proves all 55 scripts COMPILE, and every one of them passed while the pixels were telling this story.
+
+## Desktop audio cannot capture what the machine is playing (2026-09-29)
+
+An audio-reactive light show usually wants the music the computer is playing, and there is no way to get it. `platform_desktop_audio.cpp` calls `ma_context_get_devices(&ctx_, nullptr, nullptr, &infos, &count)`, passing null for the playback list and count, so only capture devices are ever enumerated; the device then opens as `ma_device_config_init(ma_device_type_capture)`. Measured on a Windows bench: the OS offers `Microphone (Realtek)` and `Speakers (Realtek)`, the picker offers `default` and the microphone, and the speakers are absent. There is no Stereo Mix on that machine, not even disabled, so no zero-install workaround exists either.
+
+miniaudio already supports this as `ma_device_type_loopback`, which is WASAPI-only and takes a PLAYBACK device as its target. Closing it is three pieces: enumerate playback devices as well, mark them in the picker so a user can tell a microphone from "what is playing", and open loopback rather than capture when one is chosen. macOS has no equivalent and needs a virtual device such as BlackHole, so the picker should offer what the platform can actually do rather than a row that fails.
+
+Worth pairing with a status the user can read. A microphone input with nothing plugged into it reports a plausible-looking level (RMS around 20 to 30 at 40 to 170 Hz, which is mains hum), so "audio is working" and "audio is hearing silence on a disconnected jack" are indistinguishable from the card today.
+
+## The noise floor defaults high enough to look broken (2026-09-29)
+
+With `floor` at 100 a quiet room reports `level RMS 0`, `flux 0`, `peakHz 0 Hz` on every axis, which reads as a dead audio path rather than a working one below the gate. Dropping the floor to 0 on the same device produced live values immediately. The gate is doing its job, and the default may well be right for a wall in a noisy venue, but the card gives a user nothing to distinguish "gated" from "broken". A status line naming the gate when the raw level is non-zero but the gated level is not would cost one line and save the wrong bug report.
+
+## RTSP refuses TCP transport, so a player that asks for it gets nothing (2026-09-29)
+
+Verified on Windows with a real client: `ffprobe rtsp://127.0.0.1:554/` pulls `h264 128x128 30fps yuv444p` over UDP, and the same probe with `-rtsp_transport tcp` fails at `method SETUP failed: 461 (Unsupported Transport)`. Nothing in `RtspDriver.h` or the desktop platform layer mentions interleaved transport or `RTP/AVP/TCP`, so UDP-only reads as an omission rather than a decision.
+
+It matters because forcing TCP is the ordinary remedy for the two things RTSP over UDP is bad at, a firewall in the way and packet loss on a busy network, and several players try it first or are configured to. The docs point the reader at VLC without saying which transport works. Either implement interleaved transport or say plainly in the driver docs that the stream is UDP only, so the person whose player sits there timing out knows why.
+
+## A second instance says it is serving, serves nothing, and shares the first one's config (2026-09-29)
+
+Launching the desktop binary twice leaves a silent zombie. The second process prints `MoonLight is running: http://localhost:8080/` and `HTTP server -> http://<ip>:8080`, then listens on no TCP or UDP port at all, logs no bind failure, no error and no warning, and carries on rendering at about 14% of a core. Measured on Windows with a 128x128 layout: the first instance kept the port and kept serving throughout, so the deliberate omission of `SO_REUSEADDR` does its job and the port is never stolen. What is missing is the report.
+
+The sharper half is the filesystem. The second instance mounts the SAME data root and writes to it: `saved /.config/NetworkModule.json` landed while the first instance was live and serving. Two processes owning one config directory is a corruption waiting for the right interleaving, and neither of them knows the other exists.
+
+A bind that fails is a startup failure and wants to read as one: report it, and either exit or say plainly that another instance holds the port. The banner should follow what actually bound rather than what was intended. Whether a second instance should be refused outright is the open design question, since the data root is per user rather than per process and two of them cannot both own it.
+
+## A Windows scenario run recorded tick averages 250x its own repeat, cause unknown (2026-09-29)
+
+A Windows run of `scenario_Layouts_resize_reallocates_live` recorded 245 ms, 564 ms and 458 ms for its three measure steps, against 41 to 89 us for the same steps on macOS. `tickTimeUs` is a one-second average (`src/core/module/Scheduler.cpp:127`), so those figures describe a second containing roughly one tick, which reads as a blocking call rather than slow rendering. The blocks were reverted rather than committed, since an observation filed at 245 ms teaches a future reader that Windows costs that.
+
+An immediate repeat on the same machine and binary did not reproduce it. The three steps came back at 913 us, 1097 us and 768 us, and the tick log showed `PanelCard:0us`, `Network:1us` and `Drivers:30us` throughout, with the tick dominated by `MoonLive:3000us`. Nothing was blocking during the repeat, so the first reading stands unexplained. The candidate that fits the shape is `ethBindRawInterface()` calling `pcap_findalldevs` (`src/platform/desktop/platform_desktop.cpp:1299`), measured separately at about 2.3 seconds on Windows against milliseconds on macOS and reached through driver `prepare()` on a resize, but the repeat neither confirms nor kills it: no raw interface was bound on either run.
+
+Two things are worth doing whatever the mystery turns out to be. The enumeration cost is real and independently measured, so caching it or keeping it off any path a resize can reach earns its place on its own. And a one-second average cannot distinguish one blocked tick from a uniformly slow second, which is precisely what made this ambiguous: a max-tick recorded beside the average would have answered it on the first run, for a scalar the observation block already has room for.
+
+## MoonLight hangs when a USB network adapter is re-plugged (2026-09-28)
+
+Unplugging and re-plugging a USB Ethernet adapter while PanelCardDriver is active wedges the whole application. Measured: the render task stops logging entirely (0 bytes in 8 s), one thread spins at 74% of a core while the other two sit in `Wait`, the listener still accepts so connections pile up unanswered (11 of them), and HTTP never returns, tested to 45 s. The last line written is always `NetworkModule: Ethernet up (recovered from Idle)`, so it enters the spin somewhere in the Ethernet-recovery path on the render thread rather than blocking on a lock.
+
+Reproduced once, on a bench with a Realtek USB GbE adapter feeding a ColorLight card. The trigger is ordinary: anyone driving panels from a USB dongle does this. The suspects are the pcap calls that recovery reaches, since `ethBindRawInterface` runs `pcap_findalldevs` and `pcap_open_live` on an adapter that has just re-enumerated, and both are called from `prepare()` on the render task. Worth a second reproduction with a debugger attached before guessing further: a spinning thread with a live listener is a loop, not a deadlock, and the loop has a home.
+
+## The interface picker re-enumerates adapters on every control rebuild (2026-09-28)
+
+`rawInterfaces()` caches nothing, and `defineDriverControls()` calls it on every rebuild of a driver that owns an interface Select. On Windows `pcap_findalldevs` opens each adapter in turn and measures ~2.3 s, so every control change on PanelCardDriver, every `/api/types` that builds the type catalog, and every UI refresh paid it. Measured with a panel driver present: `POST lightPreset` 2.2 to 6.7 s, `/api/types` 2.3 to 4.4 s, `/api/state` 2.2 s. The same payloads on a config with no panel driver: 23 to 36 ms. POSIX is not affected, since it enumerates with `getifaddrs`.
+
+A cache with a 60 s window took those to 8 to 35 ms and was reverted before the release as too much risk for hardware-critical code. Two things learned from doing it: the window has to outlast a person pausing to think, because a 3 s one leaves every deliberate control change paying full price; and skipping the rebind needs `ethLinkUp()` in the condition, because an open pcap handle whose link is down still wants rebinding and guarding on "already bound" alone removes the only recovery a user has. Scope any cache to Windows, since it buys POSIX nothing and costs it hot-plug latency.
+
+## NetworkModule treats a panel-output NIC as the device's uplink (2026-09-28)
+
+A NIC claimed for raw L2 panel output carries no LAN, but NetworkModule enumerates it anyway and reports `Connected via Ethernet` on it. When the panel link renegotiates, every flap runs the full cascade, which drops the browser's WebSocket and makes the UI look dead while the server is healthy. Seven flaps were logged in one bench session. The driver already announces itself through `ethClaimRawL2(true)`, so the claim is there to honor; the change is for NetworkModule to skip a claimed adapter. Crosses two modules, so it wants a decision rather than a patch.
+
+## The persisted interface label carries the negotiated link speed (2026-09-28)
+
+PanelCardDriver saves its adapter as `Realtek USB GbE Family Controller, 1 Gb`, speed included. A renegotiation to 100 Mbit rewrites that string, which dirties the config and rewrites `Drivers.json`. Matching already strips the suffix and compares the stable head, so the binding survives, but an identifier that changes when a cable renegotiates is the wrong thing to persist. Store the adapter's stable identity and render the speed for display only.
+
+## `build_esp32.py` reports success without building, under Git Bash (2026-09-28)
+
+Run from Git Bash it prints `MSys/Mingw is no longer supported`, stops after `Setting target to esp32s3...`, and **exits 0** ten seconds later with no binary. Run from PowerShell the same command builds correctly. A green exit code for a build that never ran is the worst shape a failure can take, and on a runner it would publish a stale binary while every gate stayed green. Either detect the MSYS environment and fail loudly, or re-exec through the shell the IDF tools expect.
+
+## `build_desktop.py` cannot relink while the app is running (2026-09-28)
+
+Windows holds an executable open while it runs, so a rebuild fails with `LNK1104: cannot open file ... projectMM.exe` where POSIX would replace it. `run_desktop.py` already stops a running instance before launching; `build_desktop.py` could reuse that and remove a papercut that costs a confusing error every time someone edits code with the app open.
 
 ## `disasm.py` cannot run on Windows (2026-08-21)
 

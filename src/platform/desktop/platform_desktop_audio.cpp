@@ -175,7 +175,8 @@ void audioMicDeinit(AudioMicHandle& h) {
 
 // The pin-based I2S init cannot exist on a desktop host; capture goes through audioCaptureInit. Kept failing (not asserting) so shared code degrades.
 bool audioMicInit(AudioMicHandle& /*h*/, uint16_t /*wsPin*/, uint16_t /*sdPin*/,
-                  uint16_t /*sckPin*/, int16_t /*mclkPin*/, uint32_t /*sampleRate*/) {
+                  uint16_t /*sckPin*/, int16_t /*mclkPin*/, uint32_t /*sampleRate*/,
+                  MicMode /*mode*/) {
     return false;
 }
 

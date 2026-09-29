@@ -667,11 +667,15 @@ def stale_feature_cache(build_dir: Path, extra: list[str], chip: str) -> str | N
     wanted_table = None
     if wanted_frags:
         resolved = table_from_fragments(wanted_frags.split(";"))
-        wanted_table = str(resolved.relative_to(ESP32_DIR))
+        # as_posix, not str: IDF writes this path into the generated sdkconfig with forward
+        # slashes on every platform. str() spells it with backslashes on Windows, so the two
+        # never compared equal there and the dir was judged stale on EVERY build: a forced
+        # clean reconfigure each time, 14 minutes where an incremental build wanted seconds.
+        wanted_table = resolved.relative_to(ESP32_DIR).as_posix()
     gen = build_dir / "sdkconfig"
     if wanted_table and gen.exists():
         m2 = re.search(r'^CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="([^"]+)"',
-                       gen.read_text(), re.MULTILINE)
+                       gen.read_text(encoding="utf-8"), re.MULTILINE)
         have_table = m2.group(1) if m2 else None
         if have_table != wanted_table:
             return (f"generated sdkconfig uses partition table {have_table!r} but the "
@@ -851,7 +855,7 @@ def table_from_fragments(fragments) -> Path:
         if not fp.exists():
             continue
         m = re.search(r'^CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="([^"]+)"',
-                      fp.read_text(), re.MULTILINE)
+                      fp.read_text(encoding="utf-8"), re.MULTILINE)
         if m:
             csv = ESP32_DIR / m.group(1)
     return csv
@@ -866,7 +870,7 @@ def partition_offsets(csv_path: Path) -> dict:
     'ota_0' and 'ota' (the otadata bookkeeping partition)."""
     import csv as _csv
     out = {}
-    for row in _csv.reader(csv_path.read_text().splitlines()):
+    for row in _csv.reader(csv_path.read_text(encoding="utf-8").splitlines()):
         if not row or row[0].strip().startswith("#") or len(row) < 5:
             continue
         subtype = row[2].strip()
@@ -903,7 +907,7 @@ def moonbase_flash_files(firmware: str, build_dir: Path) -> list[tuple[str, Path
             f"(run build_esp32.py first; missing: {moonbase_bin})")
     otadata = build_dir / "ota_data_slot0.bin"
     otadata.write_bytes(otadata_slot0_bytes())
-    fa = _json.loads((build_dir / "flasher_args.json").read_text())
+    fa = _json.loads((build_dir / "flasher_args.json").read_text(encoding="utf-8"))
     writes: list[tuple[str, Path]] = []
     for off, rel in fa["flash_files"].items():
         name = Path(rel).name

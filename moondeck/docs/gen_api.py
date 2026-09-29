@@ -111,6 +111,18 @@ def available() -> bool:
     return shutil.which("doxygen") is not None and shutil.which("npx") is not None
 
 
+def _npx() -> str:
+    """The npx executable, as a full path.
+
+    Windows ships npx as `npx.cmd`, and CreateProcess does not apply PATHEXT to a bare name in an
+    argv list, so `["npx", ...]` raises FileNotFoundError there while working everywhere else.
+    `shutil.which` DOES apply PATHEXT, which is why `available()` above is satisfied on the very
+    machine the spawn then fails on. Resolving first keeps one spelling for every platform and
+    avoids shell=True, which would need the arguments quoted by hand.
+    """
+    return shutil.which("npx") or "npx"
+
+
 def _doxyfile(headers: list[str], xml_out: str) -> str:
     # Quote each path so a ROOT (or any parent) containing spaces doesn't get split
     # into separate INPUT entries — Doxygen treats a quoted path as one argument.
@@ -559,7 +571,7 @@ def generate() -> dict[str, str]:
 
         # One moxygen call, class-per-file (output name = fully-qualified class, ::→-).
         m = subprocess.run(
-            ["npx", "--yes", "moxygen@2.1.10",
+            [_npx(), "--yes", "moxygen@2.1.10",
              "--templates", str(TEMPLATES), "--classes", "--noindex",
              "--output", str(tdp / "cls_%s.md"), str(xml_dir)],
             cwd=tdp, capture_output=True, text=True, check=False,
@@ -575,7 +587,7 @@ def generate() -> dict[str, str]:
         # for "these free functions are one unit", and moxygen renders a group per file the
         # same way it renders a class, so the recombine below treats both alike.
         g = subprocess.run(
-            ["npx", "--yes", "moxygen@2.1.10",
+            [_npx(), "--yes", "moxygen@2.1.10",
              "--templates", str(TEMPLATES), "--groups", "--noindex",
              "--output", str(tdp / "grp_%s.md"), str(xml_dir)],
             cwd=tdp, capture_output=True, text=True, check=False,

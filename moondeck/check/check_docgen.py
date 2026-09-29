@@ -468,7 +468,7 @@ def _headers():
         for suffix in HEADER_SUFFIXES:
             for p in sorted((ROOT / root).rglob(suffix)):
                 rel = p.relative_to(ROOT)
-                if str(rel).startswith(HEADER_EXEMPT) or rel in seen:
+                if rel.as_posix().startswith(HEADER_EXEMPT) or rel in seen:
                     continue
                 seen.add(rel)
                 yield rel
@@ -1332,8 +1332,8 @@ def _duplicate_group_ids():
     """
     seen: dict[str, list[str]] = {}
     for rel in _headers():
-        s = str(rel)
-        for ln in (ROOT / rel).read_text().splitlines():
+        s = rel.as_posix()
+        for ln in (ROOT / rel).read_text(encoding="utf-8").splitlines():
             st = ln.strip()
             if st.startswith("/// @defgroup"):
                 parts = st.split(None, 2)
@@ -1409,7 +1409,7 @@ def _violations():
         path = ROOT / "docs" / rel
         if not path.exists():
             continue
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         out.extend(_structure(text, rel))
         out.extend(_rendered_links(rel, text))
         out.extend(_details_tables(rel, text))
@@ -1423,10 +1423,10 @@ def _violations():
             continue
         # DOCS-relative, the key catalog findings use: a repo-relative one listed the same
         # page twice in the report, once per spelling.
-        out.extend(_md_hard_wraps(rel.relative_to(ROOT / "docs").as_posix(), rel.read_text()))
+        out.extend(_md_hard_wraps(rel.relative_to(ROOT / "docs").as_posix(), rel.read_text(encoding="utf-8")))
 
     for rel in _headers():
-        out.extend(_header_rules(str(rel), (ROOT / rel).read_text()))
+        out.extend(_header_rules(rel.as_posix(), (ROOT / rel).read_text(encoding="utf-8")))
     out.extend(_duplicate_group_ids())
     out.extend(_orphan_pages())
     return out
@@ -1627,7 +1627,7 @@ def _write_report(found) -> None:
             out += ["By rule, warnings: "
                     + ", ".join(f"{n} {_rule_label(r)}" for r, n in mix_w.most_common()) + ".", ""]
     REPORT.parent.mkdir(parents=True, exist_ok=True)
-    REPORT.write_text("\n".join(out) + "\n")
+    REPORT.write_text("\n".join(out) + "\n", encoding="utf-8")
     print(f"Docgen report: {len(found)} finding(s) written to {REPORT.relative_to(ROOT)}")
 
 

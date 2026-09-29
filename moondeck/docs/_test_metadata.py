@@ -125,7 +125,8 @@ def _nav_order() -> list[str]:
     A card app.js does not name sorts after these, so adding one is visible rather than silently last.
     """
     try:
-        block = (ROOT / "src" / "ui" / "app.js").read_text().split("const NAV_GROUPS = [", 1)[1]
+        block = (ROOT / "src" / "ui" / "app.js").read_text(
+            encoding="utf-8").split("const NAV_GROUPS = [", 1)[1]
     except (OSError, IndexError):
         return []           # no nav to read: fall back to the alphabetical order below
     return re.findall(r'"([^"]+)"', block.split("];", 1)[0])

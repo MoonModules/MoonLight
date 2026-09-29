@@ -348,7 +348,9 @@ private:
             // A desktop is none of the three chips and offers every row; silicon sees its own.
             constexpr bool anyKnownChip =
                 platform::isEsp32S3 || platform::isEsp32P4 || platform::isEsp32S31;
-            if (anyKnownChip && kBoards[i].onThisChip && !kBoards[i].onThisChip()) continue;
+            if constexpr (anyKnownChip) {
+                if (kBoards[i].onThisChip && !kBoards[i].onThisChip()) continue;
+            }
             boardOptions_[boardOptionCount_] = kBoards[i].label;
             boardIndex_[boardOptionCount_] = i;
             boardOptionCount_++;
