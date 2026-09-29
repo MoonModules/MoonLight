@@ -45,6 +45,12 @@ def test_the_measurement_itself_is_written_under_the_host_key(monkeypatch, tmp_p
     """
     import repo_health
 
+    # A tmp ROOT with a `build` dir, because measure_flash returns early when none exists. Pointing
+    # it at the repo would make the test pass or fail on whether this machine happens to have built
+    # anything, which is how the first version of this test passed on Windows and failed on CI.
+    (tmp_path / "build").mkdir()
+    monkeypatch.setattr(repo_health, "ROOT", tmp_path)
+
     binary = tmp_path / "projectMM.exe"
     binary.write_bytes(b"x" * 1024)
     monkeypatch.setattr(repo_health, "desktop_binary", lambda: binary)
