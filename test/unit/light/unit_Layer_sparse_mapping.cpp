@@ -245,7 +245,7 @@ TEST_CASE("Layer: GridBlacks black columns build a gap-dropping LUT") {
     CHECK(rig.layer.physicalLightCount() == 32);
 }
 
-// The LUT checks above pass just as well against a blit that writes nothing, which is a dark wall with every assertion green.
+// The LUT checks above pass equally against a blit that writes nothing, which is a dark wall with every assertion green.
 TEST_CASE("Layer: an effect renders through a gapped GridBlacks layer") {
     mm::GridBlacksLayout g;
     g.width = 8; g.height = 4; g.depth = 1;

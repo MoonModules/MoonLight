@@ -1,5 +1,6 @@
 {
   "name": "scenario_Network_hardware_reconfigures_live",
+  "mode": "mutate",
   "description": "The network settings a desktop cannot answer for: an Ethernet PHY cycled on real silicon, mDNS announcing over a real radio, and Home Assistant discovery announced and retracted against a real broker. The render loop has to survive every one of them.",
   "also": [
     "NetworkModule",
@@ -67,7 +68,36 @@
     {
       "name": "measure-baseline",
       "description": "The render loop before anything is reconfigured, which every later measurement is read against.",
-      "op": "measure"
+      "op": "measure",
+      "observed": {
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 8721,
+            "p95": 8721,
+            "min": 8721,
+            "max": 8721,
+            "n": 1,
+            "samples": [8721]
+          },
+          "free_heap": {
+            "p50": 8320683,
+            "p95": 8320683,
+            "min": 8320683,
+            "max": 8320683,
+            "n": 1,
+            "samples": [8320683]
+          },
+          "max_alloc_block": {
+            "p50": 61440,
+            "p95": 61440,
+            "min": 61440,
+            "max": 61440,
+            "n": 1,
+            "samples": [61440]
+          },
+          "last_updated": "2026-09-30"
+        }
+      }
     },
     {
       "name": "mdns-off",
@@ -95,7 +125,36 @@
     {
       "name": "measure-mdns-cycled",
       "description": "The render loop after a full off-on cycle. A responder that leaks a socket or a task shows here rather than in a unit test.",
-      "op": "measure"
+      "op": "measure",
+      "observed": {
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 8692,
+            "p95": 8692,
+            "min": 8692,
+            "max": 8692,
+            "n": 1,
+            "samples": [8692]
+          },
+          "free_heap": {
+            "p50": 8320031,
+            "p95": 8320031,
+            "min": 8320031,
+            "max": 8320031,
+            "n": 1,
+            "samples": [8320031]
+          },
+          "max_alloc_block": {
+            "p50": 61440,
+            "p95": 61440,
+            "min": 61440,
+            "max": 61440,
+            "n": 1,
+            "samples": [61440]
+          },
+          "last_updated": "2026-09-30"
+        }
+      }
     },
     {
       "name": "ha-discovery-on",
@@ -123,7 +182,36 @@
     {
       "name": "measure-mqtt-cycled",
       "description": "Announce and retract cost, recorded rather than asserted: with a broker the publish is real work, without one the announce is a local no-op, and neither is a number to promise.",
-      "op": "measure"
+      "op": "measure",
+      "observed": {
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 10223,
+            "p95": 10223,
+            "min": 10223,
+            "max": 10223,
+            "n": 1,
+            "samples": [10223]
+          },
+          "free_heap": {
+            "p50": 8319411,
+            "p95": 8319411,
+            "min": 8319411,
+            "max": 8319411,
+            "n": 1,
+            "samples": [8319411]
+          },
+          "max_alloc_block": {
+            "p50": 61440,
+            "p95": 61440,
+            "min": 61440,
+            "max": 61440,
+            "n": 1,
+            "samples": [61440]
+          },
+          "last_updated": "2026-09-30"
+        }
+      }
     },
     {
       "name": "eth-lan8720",
@@ -167,7 +255,36 @@
     {
       "name": "measure-eth-cycled",
       "description": "The render loop after the interface came up and went away. A reconfigure that stalls the loop is the fault this exists to catch.",
-      "op": "measure"
+      "op": "measure",
+      "observed": {
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 9091,
+            "p95": 9091,
+            "min": 9091,
+            "max": 9091,
+            "n": 1,
+            "samples": [9091]
+          },
+          "free_heap": {
+            "p50": 8318987,
+            "p95": 8318987,
+            "min": 8318987,
+            "max": 8318987,
+            "n": 1,
+            "samples": [8318987]
+          },
+          "max_alloc_block": {
+            "p50": 61440,
+            "p95": 61440,
+            "min": 61440,
+            "max": 61440,
+            "n": 1,
+            "samples": [61440]
+          },
+          "last_updated": "2026-09-30"
+        }
+      }
     },
     {
       "name": "restart",

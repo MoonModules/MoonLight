@@ -1,5 +1,6 @@
 {
   "name": "scenario_Effects_teardown_under_a_running_pipeline",
+  "mode": "mutate",
   "description": "Removing modules while the lights are still rendering. A module that is taken away mid-frame must leave the pipeline running on whatever it can still reach, rather than following a pointer to something that is gone.",
   "also": [
     "Effects",
@@ -79,13 +80,40 @@
         "desktop-macos": {
           "tick_us": {
             "p50": 9,
-            "p95": 67,
+            "p95": 55,
             "min": 6,
             "max": 67,
-            "n": 19,
-            "samples": [42, 45, 55, 67, 52, 8, 7, 6, 9, 7, 7, 8, 12, 7, 8, 7, 22, 12, 11]
+            "n": 24,
+            "samples": [42, 45, 55, 67, 52, 8, 7, 6, 9, 7, 7, 8, 12, 7, 8, 7, 22, 12, 11, 12, 10, 12, 7, 7]
           },
-          "last_updated": "2026-09-29"
+          "last_updated": "2026-09-30"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 8735,
+            "p95": 8746,
+            "min": 8620,
+            "max": 8746,
+            "n": 3,
+            "samples": [8620, 8746, 8735]
+          },
+          "free_heap": {
+            "p50": 8320711,
+            "p95": 8360799,
+            "min": 8320687,
+            "max": 8360799,
+            "n": 3,
+            "samples": [8360799, 8320711, 8320687]
+          },
+          "max_alloc_block": {
+            "p50": 61440,
+            "p95": 102400,
+            "min": 59392,
+            "max": 102400,
+            "n": 3,
+            "samples": [102400, 61440, 59392]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -113,13 +141,40 @@
         "desktop-macos": {
           "tick_us": {
             "p50": 5,
-            "p95": 70,
+            "p95": 50,
             "min": 3,
             "max": 70,
-            "n": 19,
-            "samples": [30, 39, 70, 50, 44, 3, 4, 4, 4, 4, 4, 4, 6, 5, 5, 4, 22, 6, 7]
+            "n": 24,
+            "samples": [30, 39, 70, 50, 44, 3, 4, 4, 4, 4, 4, 4, 6, 5, 5, 4, 22, 6, 7, 6, 6, 7, 4, 5]
           },
-          "last_updated": "2026-09-29"
+          "last_updated": "2026-09-30"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 9130,
+            "p95": 9202,
+            "min": 9001,
+            "max": 9202,
+            "n": 3,
+            "samples": [9001, 9130, 9202]
+          },
+          "free_heap": {
+            "p50": 8319583,
+            "p95": 8360007,
+            "min": 8319551,
+            "max": 8360007,
+            "n": 3,
+            "samples": [8360007, 8319583, 8319551]
+          },
+          "max_alloc_block": {
+            "p50": 61440,
+            "p95": 102400,
+            "min": 61440,
+            "max": 102400,
+            "n": 3,
+            "samples": [102400, 61440, 61440]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -137,13 +192,40 @@
         "desktop-macos": {
           "tick_us": {
             "p50": 8,
-            "p95": 62,
-            "min": 7,
+            "p95": 55,
+            "min": 6,
             "max": 62,
-            "n": 19,
-            "samples": [36, 36, 55, 62, 52, 7, 7, 8, 7, 7, 7, 7, 11, 7, 7, 7, 19, 11, 12]
+            "n": 24,
+            "samples": [36, 36, 55, 62, 52, 7, 7, 8, 7, 7, 7, 7, 11, 7, 7, 7, 19, 11, 12, 9, 8, 12, 7, 6]
           },
-          "last_updated": "2026-09-29"
+          "last_updated": "2026-09-30"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 9812,
+            "p95": 9938,
+            "min": 8959,
+            "max": 9938,
+            "n": 3,
+            "samples": [8959, 9812, 9938]
+          },
+          "free_heap": {
+            "p50": 8333095,
+            "p95": 8365699,
+            "min": 8333067,
+            "max": 8365699,
+            "n": 3,
+            "samples": [8365699, 8333095, 8333067]
+          },
+          "max_alloc_block": {
+            "p50": 61440,
+            "p95": 102400,
+            "min": 61440,
+            "max": 102400,
+            "n": 3,
+            "samples": [102400, 61440, 61440]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -169,21 +251,56 @@
         "desktop-macos": {
           "tick_us": {
             "p50": 9,
-            "p95": 77,
+            "p95": 57,
             "min": 6,
             "max": 77,
-            "n": 19,
-            "samples": [39, 29, 77, 57, 40, 7, 7, 9, 7, 7, 7, 7, 13, 7, 6, 7, 15, 10, 9]
+            "n": 24,
+            "samples": [39, 29, 77, 57, 40, 7, 7, 9, 7, 7, 7, 7, 13, 7, 6, 7, 15, 10, 9, 9, 9, 12, 8, 6]
           },
-          "last_updated": "2026-09-29"
+          "last_updated": "2026-09-30"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 8987,
+            "p95": 9683,
+            "min": 8870,
+            "max": 9683,
+            "n": 3,
+            "samples": [9683, 8987, 8870]
+          },
+          "free_heap": {
+            "p50": 8332979,
+            "p95": 8365727,
+            "min": 8332955,
+            "max": 8365727,
+            "n": 3,
+            "samples": [8365727, 8332955, 8332979]
+          },
+          "max_alloc_block": {
+            "p50": 61440,
+            "p95": 102400,
+            "min": 61440,
+            "max": 102400,
+            "n": 3,
+            "samples": [102400, 61440, 61440]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
     {
+      "name": "add-an-effect-to-remove",
+      "description": "An effect this scenario owns, since the one the fixture wires exists in-process and never on a device: live, the board is its own fixture and that id was never created here.",
+      "op": "add_module",
+      "id": "FXOwn",
+      "type": "RainbowEffect",
+      "parent_id": "Layer"
+    },
+    {
       "name": "remove-the-rendering-effect",
-      "description": "The last effect under the layer, so the layer is left with a buffer and nothing to paint into it. An empty layer is a state the pipeline has to hold rather than a reason to stop.",
+      "description": "The last effect this scenario added, so the layer is left with a buffer and whatever the board wired itself. An empty layer is a state the pipeline holds rather than a reason to stop.",
       "op": "remove_module",
-      "id": "FX"
+      "id": "FXOwn"
     },
     {
       "name": "measure-empty-layer",
@@ -193,13 +310,40 @@
         "desktop-macos": {
           "tick_us": {
             "p50": 7,
-            "p95": 61,
+            "p95": 37,
             "min": 6,
             "max": 61,
-            "n": 19,
-            "samples": [34, 26, 37, 61, 36, 6, 6, 6, 6, 6, 6, 8, 10, 6, 6, 6, 12, 8, 7]
+            "n": 24,
+            "samples": [34, 26, 37, 61, 36, 6, 6, 6, 6, 6, 6, 8, 10, 6, 6, 6, 12, 8, 7, 7, 9, 37, 9, 6]
           },
-          "last_updated": "2026-09-29"
+          "last_updated": "2026-09-30"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 8610,
+            "p95": 8988,
+            "min": 8610,
+            "max": 8988,
+            "n": 3,
+            "samples": [8610, 8610, 8988]
+          },
+          "free_heap": {
+            "p50": 8333167,
+            "p95": 8365951,
+            "min": 8332959,
+            "max": 8365951,
+            "n": 3,
+            "samples": [8365951, 8333167, 8332959]
+          },
+          "max_alloc_block": {
+            "p50": 61440,
+            "p95": 102400,
+            "min": 61440,
+            "max": 102400,
+            "n": 3,
+            "samples": [102400, 61440, 61440]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -226,14 +370,41 @@
       "observed": {
         "desktop-macos": {
           "tick_us": {
-            "p50": 9,
-            "p95": 59,
-            "min": 6,
+            "p50": 8,
+            "p95": 46,
+            "min": 4,
             "max": 59,
-            "n": 19,
-            "samples": [43, 46, 42, 59, 45, 8, 7, 7, 7, 7, 7, 10, 12, 9, 6, 8, 13, 10, 8]
+            "n": 24,
+            "samples": [43, 46, 42, 59, 45, 8, 7, 7, 7, 7, 7, 10, 12, 9, 6, 8, 13, 10, 8, 8, 17, 28, 4, 5]
           },
-          "last_updated": "2026-09-29"
+          "last_updated": "2026-09-30"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 8951,
+            "p95": 9068,
+            "min": 8911,
+            "max": 9068,
+            "n": 3,
+            "samples": [8911, 8951, 9068]
+          },
+          "free_heap": {
+            "p50": 8332671,
+            "p95": 8365467,
+            "min": 8332451,
+            "max": 8365467,
+            "n": 3,
+            "samples": [8365467, 8332671, 8332451]
+          },
+          "max_alloc_block": {
+            "p50": 61440,
+            "p95": 102400,
+            "min": 61440,
+            "max": 102400,
+            "n": 3,
+            "samples": [102400, 61440, 61440]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -275,13 +446,40 @@
         "desktop-macos": {
           "tick_us": {
             "p50": 7,
-            "p95": 64,
-            "min": 7,
+            "p95": 54,
+            "min": 4,
             "max": 64,
-            "n": 16,
-            "samples": [64, 54, 7, 7, 7, 7, 7, 7, 7, 10, 7, 7, 7, 14, 11, 8]
+            "n": 21,
+            "samples": [64, 54, 7, 7, 7, 7, 7, 7, 7, 10, 7, 7, 7, 14, 11, 8, 8, 15, 13, 4, 5]
           },
-          "last_updated": "2026-09-29"
+          "last_updated": "2026-09-30"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 385,
+            "p95": 462,
+            "min": 384,
+            "max": 462,
+            "n": 3,
+            "samples": [385, 384, 462]
+          },
+          "free_heap": {
+            "p50": 8342935,
+            "p95": 8375711,
+            "min": 8342731,
+            "max": 8375711,
+            "n": 3,
+            "samples": [8375711, 8342935, 8342731]
+          },
+          "max_alloc_block": {
+            "p50": 61440,
+            "p95": 102400,
+            "min": 61440,
+            "max": 102400,
+            "n": 3,
+            "samples": [102400, 61440, 61440]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     }

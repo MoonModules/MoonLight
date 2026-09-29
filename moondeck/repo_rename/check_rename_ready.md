@@ -6,7 +6,7 @@ What the sweep would rewrite today, and whether every line that must keep the ol
 
 Committed so a change between two runs is a diff. A count that moves says which area moved it, and a line that loses its protection says so before the switch.
 
-**464 lines** across the tree, **+0** against the rehearsed 464.
+**467 lines** across the tree, **+3** against the rehearsed 464.
 
 ## Protected lines
 
@@ -25,7 +25,7 @@ Committed so a change between two runs is a diff. A count that moves says which 
 | 81 | `moondeck/ci` |
 | 56 | `docs/moonmodules/light` |
 | 31 | `docs/how-to` |
-| 30 | `moondeck/run` |
+| 31 | `moondeck/run` |
 | 24 | `moondeck/docs` |
 | 22 | `.` |
 | 19 | `docs/work/past` |
@@ -33,8 +33,8 @@ Committed so a change between two runs is a diff. A count that moves says which 
 | 17 | `src/ui` |
 | 16 | `.github/workflows` |
 | 16 | `moondeck` |
+| 15 | `docs/work/future` |
 | 15 | `docs/work/past/plans` |
-| 14 | `docs/work/future` |
 | 13 | `moondeck/build` |
 | 12 | `src/light/effects` |
 | 11 | `src/light/modifiers` |

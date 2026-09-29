@@ -206,13 +206,24 @@ Smaller checks to make while the above runs: the browser opens on first launch, 
 
 **Anything found here is fixed before the rename**, not after: a Windows defect discovered in v6.0.0 costs a patch release under a brand-new name.
 
+**✅ What the day found, on both machines at once.** Windows and macOS ran in parallel and met in a merge, so the record below is one day's work from two benches.
+
+On Windows, the rot was in the tooling rather than in the firmware. A path compared with `str()` instead of `as_posix()` meant the sdkconfig path never matched on Windows, so **every ESP32 build was judged stale**: fourteen minutes where an incremental build wanted seconds. Redirected stdout takes cp1252, and four scripts died on a tick mark in their own output, one of them reporting a scenario the device had PASSED as failed. Repo-health recorded a single flat `desktop` number, so whoever ran the gate last silently overwrote the other machine's figures; the desktop metrics are now keyed per host the way scenario observations always were, and both machines show side by side. Firmware capacity was read from whatever sdkconfig sat in a local build dir rather than from the registry, which had `esp32` reporting 111% of a slot it fits inside.
+
+On macOS, the day went to the boards. **ESP-IDF moved from the v6.1 release candidate to v6.1 final**, and CI moved with it: the workflow still named the candidate, so every shipped binary would have been built against an IDF no bench run had used. All four variants were rebuilt, flashed, and swept: **28 scenario runs across a classic, an S3, an S31 and a P4, all passing**. Two Ethernet defaults only a real board could expose came out of that. A chip offering exactly one preset opened on Custom rather than on its own board, and the preset's pin map never reached the fields on a virgin board at all, so a freshly erased P4 selected P4-NANO and still booted with its interface at none.
+
+**The P4's WiFi co-processor is measured rather than described now.** Over Ethernet the WiFi-capable build costs 51 ms per request against the Ethernet-only build's 14, and over WiFi the tail reaches 870 ms: usable on a wired link, unreliable on a wireless one. Three explanations died on the bench that day, and the measurement that survives was taken in August and says the render task burns 2.6x the CPU while the SDIO tasks sit idle, which is memory contention rather than anything a scheduler can reach. The eth-only build is what to run when a P4 has to be dependable, and both variants still ship.
+
+**One gap closed the next morning**, before it could cost anything: `run_scenario.py` never got the UTF-8 preamble its sibling did, and it relays output from a binary that prints arrows. The in-process tier had only ever run on macOS, so nothing had caught it. A Windows run would have read the encoding failure as a scenario failure.
+
 ### Sept 30: MoonLight v6.0.0
 
 One repository transfer, one sweep commit, one release. The installer manifest, the release asset names and the in-firmware URL builder are a lockstep set, so a half-applied rename leaves devices unable to update. `namespace mm::` stays throughout: it is not the product name, and renaming it would touch every file for nothing.
 
 **The name is occupied, so the transfer is two moves in one moment.** `MoonModules/MoonLight` is the predecessor, a fork serving twelve releases, and GitHub refuses a rename onto a name that exists. So it vacates to `ewowi/MoonLight` and `projectMM` renames into the space it leaves, back to back. Between those two clicks `MoonModules/MoonLight` does not exist, and a device asking there falls through to `MoonModules/projectMM`, which redirects throughout: the gap is safe because the firmware already names both.
 
-**✅ Done on 2026-09-29, so tomorrow starts here rather than at step 1**: the readiness gate reads Ready at 464 lines re-baselined, the `MM-` prefix is decided (it stays), and two backups are on disk. `MoonLight-config-MM-testbench-S3-2026-09-29.json` is a device with configuration only; `MoonLight-config-MM-ScenarioProof-2026-09-29.json` carries 63 files including 50 MoonLive scripts and two presets, which is the one that exercises the renamed-and-mapped restore path.
+**✅ Done on 2026-09-29, so the day starts here rather than at step 1**: the readiness gate reads Ready at 464 lines re-baselined, the `MM-` prefix is decided (it stays), and two backups are on disk.
+Step 3 below is also most of the way there: both benches ran their gates, the device sweep passed 28 of 28 across four chips, and the two branches met in a merge that builds and tests clean on macOS. What it still wants is the same set run on Windows once this branch reaches main, which is the one platform the matrix has no scenario column for. `MoonLight-config-MM-testbench-S3-2026-09-29.json` is a device with configuration only; `MoonLight-config-MM-ScenarioProof-2026-09-29.json` carries 63 files including 50 MoonLive scripts and two presets, which is the one that exercises the renamed-and-mapped restore path.
 
 #### Before the moment
 
