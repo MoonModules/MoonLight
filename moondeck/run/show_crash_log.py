@@ -79,13 +79,23 @@ def _print_windows_faults() -> tuple[bool, bool]:
     says where it died. Read through PowerShell rather than a dependency: Get-WinEvent
     ships with the OS and needs no elevation for the Application log.
     """
+    # `-ErrorAction Stop` plus an explicit catch, rather than SilentlyContinue: an empty result and
+    # a refused read are BOTH non-zero exits with empty stdout under SilentlyContinue, so the exit
+    # status alone cannot tell "this machine has never crashed" from "the log could not be read",
+    # and Ignore behaves the same. Only the terminating error carries the distinction, in
+    # NoMatchingEventsFound, so the query separates them here and the exit status then means what
+    # the caller reads it to mean.
     ps = (
-        "Get-WinEvent -FilterHashtable @{LogName='Application';"
-        "ProviderName='Application Error'} -MaxEvents 200 -ErrorAction SilentlyContinue |"
+        "try {"
+        " Get-WinEvent -FilterHashtable @{LogName='Application';"
+        "ProviderName='Application Error'} -MaxEvents 200 -ErrorAction Stop |"
         " Where-Object { $_.Message -match 'projectMM|MoonLight' } |"
         " Select-Object -First 3 |"
         " ForEach-Object { $_.TimeCreated.ToString('s') + ' :: ' +"
         " ($_.Message -replace \"`r`n\", ' ') }"
+        " } catch {"
+        " if ($_.FullyQualifiedErrorId -like 'NoMatchingEventsFound*') { exit 0 }"
+        " Write-Error $_; exit 1 }"
     )
     try:
         out = subprocess.run(["powershell", "-NoProfile", "-Command", ps],
@@ -93,6 +103,16 @@ def _print_windows_faults() -> tuple[bool, bool]:
                              errors="replace", timeout=60)
     except Exception as e:
         print(f"(could not read the Application event log: {e})")
+        return False, False
+    # The exit status is the only signal a failed query gives. `-ErrorAction SilentlyContinue`
+    # is there so an empty log is not an error, but it also swallows a real one, so a refused
+    # read reaches here looking exactly like a clean log: no output, no stderr. Without this,
+    # "could not read" would be reported to the reader as "nothing crashed".
+    if out.returncode != 0:
+        err = (out.stderr or "").strip().splitlines()
+        detail = f": {err[0][:200]}" if err else ""
+        print(f"(could not read the Application event log, powershell exited "
+              f"{out.returncode}{detail})")
         return False, False
     lines = [line.strip() for line in (out.stdout or "").splitlines() if line.strip()]
     if not lines:

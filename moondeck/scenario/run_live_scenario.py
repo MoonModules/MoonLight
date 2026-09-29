@@ -28,6 +28,8 @@ SCENARIOS_DIR = ROOT / "test" / "scenarios"
 BASELINE_FILE = ROOT / "test" / "scenario-baseline.json"
 
 # Reuse the shared test-metadata parser so scenario discovery stays in one place.
+sys.path.insert(0, str(ROOT / "moondeck"))
+from _host import desktop_target  # noqa: E402
 sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 import _test_metadata as test_meta  # noqa: E402
 sys.path.insert(0, str(ROOT / "moondeck" / "scenario"))
@@ -165,7 +167,6 @@ def _detect_target(state: dict) -> str:
     distinguishes macOS vs Linux vs Windows builds, which can differ in tick
     noticeably). See docs/explanation/architecture/index.md § Firmware vs board.
     """
-    import platform
     firmware = None
     for m in state.get("modules", []):
         if m.get("type") != "FirmwareUpdateModule":
@@ -177,9 +178,8 @@ def _detect_target(state: dict) -> str:
         break
     if firmware and firmware != "unknown":
         return firmware
-    # Desktop fallback
-    osmap = {"Darwin": "desktop-macos", "Linux": "desktop-linux", "Windows": "desktop-windows"}
-    return osmap.get(platform.system(), "desktop-unknown")
+    # Desktop fallback, from the one home every script shares (moondeck/_host.py).
+    return desktop_target()
 
 
 def _uptime_seconds(client):

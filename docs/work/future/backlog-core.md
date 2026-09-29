@@ -1547,21 +1547,15 @@ File Manager always sends a length, so this does not affect it — an API caller
 
 Pin with a test that a length-less upload does not report success and does not truncate the target.
 
-## repo-health compares numbers from different machines (2026-08-22)
-
-`repo-health.json` records one value per metric with no note of which host produced it, so running the KPI gate on a second machine rewrites the baseline with figures that were never comparable. Measured on the same commit: desktop flash reads 1,060 KB on a Windows/MSVC bench against 1,165 KB recorded on macOS/clang, printed as "−105 KB ✓"; desktop tick reads 368 µs against 179 µs, printed as "+189 µs ⚠". Neither is a change in the code. The firmware rows are now guarded by a freshness rule, which stops a stale binary being re-measured, but freshness cannot detect a different compiler or a different CPU.
-
-The file's own docstring states the property this breaks: "two machines agree and a number never moves for a reason nobody can explain". Two ways out, and it is a design call rather than a bug fix: key the host-dependent metrics by platform (`flash.desktop.windows`, `perf.desktop.macos`) so each machine tracks its own trend, or declare one canonical machine (CI) the only writer and have every other run print the delta without saving it. The second is less data and less honest about a Windows contributor's numbers; the first grows the file, which its "never grows" design resists. Until then, read a cross-host delta as noise.
-
 ## MoonDeck scripts crash on Windows when run BY HAND (2026-08-22)
 
-62 of the ~64 scripts print `→ ✓ ⚠ —` or box-drawing characters. Run from a Windows terminal their stdout takes `locale.getpreferredencoding()` — cp1252 — and the first such character raises UnicodeEncodeError, *after* the real work has succeeded: `collect_kpi.py` measures everything, writes the metrics, then dies printing the summary arrow. Every path is now exposed: the gate runner that handed children `PYTHONIOENCODING=utf-8` is gone, so a Windows agent run hits it too, not only the human path MoonDeck exists for.
+62 of the ~64 scripts print `→ ✓ ⚠ —` or box-drawing characters. Run from a Windows terminal their stdout takes `locale.getpreferredencoding()`, cp1252, and the first such character raises UnicodeEncodeError, *after* the real work has succeeded: `collect_kpi.py` measures everything, writes the metrics, then dies printing the summary arrow. Every path is now exposed: the gate runner that handed children `PYTHONIOENCODING=utf-8` is gone, so a Windows agent run hits it too, not only the human path MoonDeck exists for.
 
 The READ side breaks too, and that half is worse because `PYTHONIOENCODING` does not mask it: `Path.read_text()` and `open()` without an encoding decode as cp1252. A sweep found 43 unqualified `read_text`/`write_text` plus 47 bare `open()` across `moondeck/`.
 
 One Windows day (2026-09-29) hit it FOUR times in four different files, each fixed separately at its own call site: `_test_metadata.py` stopped the test runner starting, `test_desktop.py` would have killed a run on one non-ASCII byte from the test binary, `run_live_scenario.py` printed an arrow per step and so recorded a scenario the device PASSED as FAILED, and `preview_installer.py` died writing a staged page, leaving the web installer preview unusable on Windows. Four site fixes in one day is the argument for one home, made by the defect itself.
 
-Per-script `sys.stdout.reconfigure()` is the wrong shape at 62 files: every new script would have to remember, and the one that forgets fails in the field. It wants ONE home — the candidates are a `PYTHONUTF8=1` in whatever env MoonDeck's front ends already establish, or a shared `moondeck/_stdio.py` imported by the handful of scripts that are entry points. Pick when someone next runs a check by hand and it dies on a tick mark.
+The preamble is now copied into four scripts (`setup_esp_idf.py`, `ci/verify_version.py`, `docs/build_docs.py`, `scenario/run_live_scenario.py`), each carrying its own comment explaining the same fact. Per-script `sys.stdout.reconfigure()` is the wrong shape at 62 files: every new script would have to remember, and the one that forgets fails in the field. It wants ONE home, and the two candidates do not cover the same ground. `PYTHONUTF8=1` in whatever env MoonDeck's front ends already establish settles BOTH halves, because UTF-8 mode changes the default for `open()` and `Path.read_text()` as well as for stdio. A shared `moondeck/_stdio.py` imported by the entry points settles only the stdio half, since `reconfigure()` touches the standard streams and nothing else, so it leaves every unqualified `read_text`/`open` exactly as broken and those sites still need `encoding="utf-8"` written out. Pick when someone next runs a check by hand and it dies on a tick mark.
 
 ## Changing a live MoonLiveEffect's script does not rebind it (2026-09-29)
 
@@ -1611,14 +1605,6 @@ A Windows run of `scenario_Layouts_resize_reallocates_live` recorded 245 ms, 564
 An immediate repeat on the same machine and binary did not reproduce it. The three steps came back at 913 us, 1097 us and 768 us, and the tick log showed `PanelCard:0us`, `Network:1us` and `Drivers:30us` throughout, with the tick dominated by `MoonLive:3000us`. Nothing was blocking during the repeat, so the first reading stands unexplained. The candidate that fits the shape is `ethBindRawInterface()` calling `pcap_findalldevs` (`src/platform/desktop/platform_desktop.cpp:1299`), measured separately at about 2.3 seconds on Windows against milliseconds on macOS and reached through driver `prepare()` on a resize, but the repeat neither confirms nor kills it: no raw interface was bound on either run.
 
 Two things are worth doing whatever the mystery turns out to be. The enumeration cost is real and independently measured, so caching it or keeping it off any path a resize can reach earns its place on its own. And a one-second average cannot distinguish one blocked tick from a uniformly slow second, which is precisely what made this ambiguous: a max-tick recorded beside the average would have answered it on the first run, for a scalar the observation block already has room for.
-
-## The UTF-8 stdio preamble is copied into four scripts (2026-09-29)
-
-`sys.stdout.reconfigure(encoding="utf-8", errors="replace")` and its stderr twin now open four scripts: `moondeck/build/setup_esp_idf.py`, `moondeck/ci/verify_version.py`, `moondeck/docs/build_docs.py` and `moondeck/scenario/run_live_scenario.py`. Each copy carries its own comment explaining the same fact, which is the shape principle 1 refuses: one fact, one home.
-
-It spread because the trigger is per script rather than per project. A script earns the block the first time someone runs it on Windows and watches it die printing its own success line, so the copies arrive one at a time and each looks local. The count only goes up as more of MoonDeck gets exercised there.
-
-The subtraction is a `moondeck/_stdio.py` that every entry point imports, or the same four lines behind one helper call. Worth doing as its own change with its own review rather than inside a feature branch, because it touches every script's first executable statement and a mistake there is silent: the script still runs, it just encodes wrongly again.
 
 ## MoonLight hangs when a USB network adapter is re-plugged (2026-09-28)
 

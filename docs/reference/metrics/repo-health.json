@@ -1,8 +1,7 @@
 {
-  "commit": "1c451b06",
+  "commit": "bfa5c2ac",
   "flash": {
     "esp32s3-n16r8": 2160304,
-    "desktop": 1924096,
     "esp32": 2109632,
     "esp32p4rev1-eth": 2045840,
     "esp32p4rev1-eth-wifi": 2331904,
@@ -14,7 +13,9 @@
     "qemu": 1383648,
     "esp32p4rev3-eth": 2073888,
     "esp32s3-zero": 2024192,
-    "esp32-pico": 2107168
+    "esp32-pico": 2107168,
+    "desktop-macos": 2010104,
+    "desktop-windows": 1924096
   },
   "measured": {
     "esp32p4rev1-eth": "2026-09-22",
@@ -22,19 +23,16 @@
     "esp32": "2026-09-28",
     "esp32-pico": "2026-09-09",
     "esp32s3-n16r8": "2026-09-29",
-    "desktop": "2026-09-29",
     "esp32s3-n8r8": "2026-09-08",
     "esp32s3-zero": "2026-09-08",
     "esp32-16mb": "2026-09-09",
     "esp32p4rev1-eth-wifi": "2026-09-22",
     "esp32-eth": "2026-09-11",
-    "esp32p4rev3-eth": "2026-09-29"
+    "esp32p4rev3-eth": "2026-09-29",
+    "desktop-macos": "2026-09-28",
+    "desktop-windows": "2026-09-29"
   },
   "perf": {
-    "desktop": {
-      "tick_us": 5,
-      "fps": 200000
-    },
     "esp32": {
       "tick_us": 8354,
       "fps": 119
@@ -80,6 +78,28 @@
           "last": "2026-09-26"
         }
       }
+    },
+    "desktop-macos": {
+      "tick_us": 2,
+      "fps": 500000,
+      "scenario_p50": {
+        "Effects_pipeline_builds_and_renders": {
+          "p50": 7,
+          "p95": 19,
+          "n": 32,
+          "last": "2026-09-28"
+        },
+        "Layouts_resize_reallocates_live": {
+          "p50": 89,
+          "p95": 1358,
+          "n": 13,
+          "last": "2026-09-26"
+        }
+      }
+    },
+    "desktop-windows": {
+      "tick_us": 4,
+      "fps": 250000
     }
   },
   "loc": {
@@ -87,8 +107,8 @@
     "light": 31044,
     "platform": 16784,
     "ui": 11382,
-    "test": 57554,
-    "moondeck": 29348
+    "test": 57614,
+    "moondeck": 29401
   },
   "comments": {
     "core": {
@@ -112,7 +132,7 @@
       "ratio": 0.136
     },
     "moondeck": {
-      "lines": 4911,
+      "lines": 4922,
       "ratio": 0.191
     }
   },
@@ -122,9 +142,9 @@
   },
   "docs": {
     "md_files": 135,
-    "md_lines": 28268,
+    "md_lines": 28256,
     "plans_files": 37,
-    "backlog_lines": 3227,
+    "backlog_lines": 3213,
     "lessons_lines": 532,
     "claude_md_lines": 283
   },
