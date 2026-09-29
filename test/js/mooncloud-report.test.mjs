@@ -109,6 +109,27 @@ test("the module list is bounded and flattened", () => {
   assert.ok(row.modules.startsWith("System,Network"));
 });
 
+test("a numeric suffix inside a script path is left alone, being a folder the user named", () => {
+  // The suffix rule belongs to the TYPE, which is the text before the first slash. Applied to the
+  // whole string it renames a directory: `folder-2` is one a user made, not a second instance.
+  const row = clean(
+    {
+      installationId: "x".repeat(32),
+      modules: [
+        "effect:MoonLive/folder-2/aurora.mle",
+        "effect:MoonLive/folder-2",
+        "service:MoonLive-3/deep-2/button.mls",
+      ],
+    },
+    "NL"
+  );
+  assert.deepEqual(row.modules.split(","), [
+    "effect:MoonLive/folder-2/aurora.mle",
+    "effect:MoonLive/folder-2",
+    "service:MoonLive/deep-2/button.mls",
+  ], "only the type loses its suffix; every path segment survives");
+});
+
 test("an instance suffix is folded into its type, so one driver counts once", () => {
   // A device names a second module of a type `NetworkSend-2`, and firmware before the type fix
   // reported that instance name: the statistics then showed one driver as four.

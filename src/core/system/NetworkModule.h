@@ -27,6 +27,18 @@ namespace mm {
 /// Each is tried unconditionally, the platform failing fast where hardware is absent.
 /// A state machine drives this from the slow tick, and a late interface is promoted live.
 ///
+/// ## Why one preset defaults to itself
+///
+/// The preset list is filtered per chip, and the default is Custom rather than row 0.
+/// A real preset writes a pin map, which on the wrong board overwrites the chip's own defaults.
+/// Where the filter leaves exactly ONE real preset that reasoning inverts, because the single survivor IS this chip's board.
+/// A P4 offers P4-NANO and an S31 offers S31 CoreBoard, so Custom there ships an unconfigured interface on a board whose wiring is known.
+/// A classic keeps Custom, where several survive and only the catalog knows the board: an Olimex takes Classic RMII, a QuinLED Dig-Octa the no-reset variant.
+///
+/// The applied-tracker starts on a sentinel rather than row 0 for the same reason.
+/// Zero would claim row 0 is already applied, and on a single-preset chip that row is now the board's own preset.
+/// Its map then never reached the pin fields, so a virgin P4 selected P4-NANO and still booted with the interface at ethNone.
+///
 /// ## Configuration
 ///
 /// Which driver is compiled in is per chip; which interface a board uses is runtime config.
@@ -545,7 +557,9 @@ private:
     const char* ethPresetOptions_[kEthPresetCount] = {};
     uint8_t ethPresetIndex_[kEthPresetCount] = {};
     uint8_t ethPresetCount_ = 0;
-    uint8_t ethPresetApplied_ = 0;
+    // Never a valid row, so the first build applies whatever the selection resolved to: @xref{why-one-preset-defaults-to-itself}.
+    static constexpr uint8_t kEthPresetNone = 0xFF;
+    uint8_t ethPresetApplied_ = kEthPresetNone;
 
 
     // A preset naming a PHY this build cannot drive would offer pins that reach nothing.
@@ -554,7 +568,7 @@ private:
         if (p.type == 0) return true;                       // Custom, which names no PHY
         if (p.type == 3) return platform::hasEthW5500;      // SPI, a separate driver
         if (!platform::hasEthW5500) {
-            // A preset carries a PIN MAP as well as a PHY, so one the chip cannot wire persists pins that reach nothing. The desktop previews the catalog and sees them all.
+            // A preset carries a PIN MAP as well as a PHY, so one the chip cannot wire persists pins reaching nothing; the desktop previews all.
             constexpr bool knownChip = platform::isEsp32P4 || platform::isEsp32S31;
             if (p.type == 2) return !knownChip || platform::isEsp32P4;    // IP101: the P4's
             if (p.type == 4) return !knownChip || platform::isEsp32S31;   // YT8531 RGMII: the S31's
@@ -578,6 +592,12 @@ private:
         for (uint8_t k = 0; k < ethPresetCount_; k++) {
             if (kEthPresets[ethPresetIndex_[k]].editable) { sel = k; break; }
         }
+        // Unless the chip's filter left exactly ONE real preset: @xref{why-one-preset-defaults-to-itself}.
+        uint8_t real = 0, onlyReal = 0;
+        for (uint8_t k = 0; k < ethPresetCount_; k++) {
+            if (!kEthPresets[ethPresetIndex_[k]].editable) { real++; onlyReal = k; }
+        }
+        if (real == 1) sel = onlyReal;
         if (current) {
             for (uint8_t k = 0; k < ethPresetCount_; k++) {
                 if (std::strcmp(ethPresetOptions_[k], current) == 0) { sel = k; break; }

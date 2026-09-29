@@ -103,6 +103,21 @@
       "id": "Audio",
       "key": "mode",
       "value": 0
+    },
+    {
+      "name": "back-to-the-default-rate",
+      "description": "And the capture rate, which a later scenario would otherwise inherit as though a user had chosen it.",
+      "op": "set_control",
+      "id": "Audio",
+      "key": "sampleRate",
+      "value": 2
+    },
+    {
+      "name": "back-to-the-default-gain",
+      "op": "set_control",
+      "id": "Audio",
+      "key": "gain",
+      "value": 128
     }
   ],
   "reset": [
@@ -113,6 +128,21 @@
       "id": "Audio",
       "key": "mode",
       "value": 0
+    },
+    {
+      "name": "reset-audio-rate",
+      "description": "The rate back to its default too, so the steps below read a known capture rather than the last run's.",
+      "op": "set_control",
+      "id": "Audio",
+      "key": "sampleRate",
+      "value": 2
+    },
+    {
+      "name": "reset-audio-gain",
+      "op": "set_control",
+      "id": "Audio",
+      "key": "gain",
+      "value": 128
     }
   ]
 }

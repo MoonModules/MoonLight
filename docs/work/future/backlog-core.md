@@ -823,14 +823,17 @@ Once both land, add a `ReleaseCheckModule` (or a small extension inside NetworkM
 
 ### The restructured scenarios lost four things the archive asserted (2026-09-29)
 
-The 27 scenarios moved to `test/scenarios_archive/` and 11 new ones took their place, one per top-level module.
+The 27 scenarios moved to an archive and 11 new ones took their place, one per top-level module.
+The archive is now empty: 13 files were deleted as covered by unit tests, 3 more once tests were written for them, and the 7 whose subject only exists on hardware live in `test/scenarios/device/` marked `live_only`.
 The structure is better and the new set asserts things the old one could not: 29 `expect_control` value checks where the old set had none, 9 `reboot` round-trips proving a setting reached the filesystem, and consent defaults pinned as a shipped privacy guarantee.
 Four things did not survive the move, and nothing else in the tree covers them.
 
 **Every performance contract and bound is gone**, measured rather than estimated: `contract` 40 to 0, `bounds` 20 to 0.
 Both mechanisms are still implemented in the runner (`scenario_runner.cpp` enforces a `tick_us` ceiling and a `free_heap` floor, and the `bounds.fps` gate below it).
 The new set records `observed` numbers, which is a trend rather than an assertion, so nothing fails on a tick or heap regression.
-Two documents now state otherwise and should be corrected when this is: `docs/reference/performance.md` says each scenario step carries an enforced contract, and `moondeck/check/collect_kpi.py` anchors its ESP32 FPS floor to `scenario_GridLayout_grid_sizes.json`, a file that exists nowhere in the repo.
+One document still states otherwise and should be corrected when this is: `docs/reference/performance.md` says each scenario step carries an enforced contract.
+The `collect_kpi.py` half is FIXED on 2026-09-29: its anchor named a file that exists nowhere in the repo, and now states the measurement instead.
+The `device/` set carries `observed` blocks from a real ESP32-S3 as of 2026-09-29, which is the window a contract would be set from; none is set yet, since one run per step is not a baseline.
 
 **The light scenarios render nothing.** FIXED on 2026-09-29 for the two that did not: `scenario_Layouts_resize_reallocates_live` and `scenario_Drivers_output_and_brightness` now build the whole pipeline, so the runner's buffer checks fire and they report 5 and 8 checks rather than 2 and 5.
 Control-tested by removing the effect, which fails `buffer non-zero after render`.
@@ -838,13 +841,14 @@ Control-tested by removing the effect, which fails `buffer non-zero after render
 What remains is the framework half, already filed under per-step assertions above: the buffer checks run ONCE at the end of a scenario, so a resize can still only assert that the control changed.
 Nothing can say the buffer grew to 1024 lights at 32x32 and shrank back, which is the claim the scenario's own name makes.
 
-**Teardown under a live pipeline is untested.** `remove_module` and `clear_children` went from 25 and 29 uses to zero.
-The hardest case was removing the microphone while a consumer still held it, which is the shape of a dangling-pointer fault that has bitten before; only 4 of the light unit tests touch the Scheduler at all, so the unit tier does not reach it.
+**Teardown under a live pipeline is untested.** FIXED on 2026-09-29. `scenario_Effects_teardown_under_a_running_pipeline` removes an audio producer while its consumer still renders, then the orphan, then the last effect, then rebuilds, and it clears the Drivers container to prove the non-editable preview survives a clear that takes the driver beside it.
+That last was the only `clear_children` on Drivers anywhere, and the skip rule it pins is control-tested.
 
 **`HttpServerModule` has no scenario**, though it is a scheduler root on every networked target and the transport the live tier itself runs over.
 
-**Nothing is marked `live_only` any more**, where the archive had three. A scenario runs in two modes, in-process as a test and against a real device through `run_live_scenario.py`, and `live_only` is how a scenario says the desktop cannot answer its question: `scenario_NetworkModule_eth_reconfigure` cycled `ethType` through None, LAN8720, IP101 and W5500 with a live `ethStop` and `ethInit`, which on the desktop is a no-op seam.
-The new set asks nothing that needs hardware to be true, so a device sweep runs eleven scenarios that would all pass on a laptop.
+**Nothing is marked `live_only` any more.** FIXED on 2026-09-29: eight scenarios carry it.
+`scenario_Network_hardware_reconfigures_live` took over what `scenario_NetworkModule_eth_reconfigure` did, cycling `ethType` through None, LAN8720, IP101 and W5500 with a live `ethStop` and `ethInit` where the desktop has only a no-op seam, and adds mDNS and Home Assistant discovery.
+The seven in `test/scenarios/device/` are the rest: real peripheral silicon and its DMA budgets, internal-heap fragmentation behind `max_alloc_block`, and float cost on an Xtensa with no FPU.
 
 Most of the rest moved to a tier that holds it: modifier chains, peripherals and MoonLive are covered at unit level, and the MoonI80 no-freeze guard in particular is pinned by `unit_ParallelLedDriver_doublebuffer`.
 What no unit test can reproduce is the cross-board comparative number set the peripheral sweep produced.
@@ -854,9 +858,9 @@ What no unit test can reproduce is the cross-board comparative number set the pe
 The scenarios are the pre-cutover hardware check: a set that passes in-process proves the logic, and the same set against each board proves the platform layer under it.
 That is the point of getting the static set solid first, and it is what the device sweep on cutover day reads from.
 
-Needs three things the set does not have yet. The gaps above closed, since a sweep is only as good as what the scenarios assert, and the light ones currently render nothing.
-A scenario per hardware question, marked `live_only`, since the eleven as written would all pass on a laptop and prove nothing about a board.
-And a runner that takes the device list rather than one host, so the answer is a matrix across the chips we ship rather than a pass on whichever board was plugged in.
+Two of the three things it needed are now in place: the light scenarios render, and eight scenarios are marked `live_only` so a sweep asks a board something a laptop cannot answer.
+What remains is a runner that takes the device list rather than one host, so the answer is a matrix across the chips we ship rather than a pass on whichever board was plugged in.
+The first S3 run on 2026-09-29 found two defects the set had been hiding: a `channelsPerLight` prop that stopped being a control, and peripheral names renamed out from under the scenarios, where `optional: true` turned every wrong name into a silent skip and still reported a pass.
 
 `moondeck/moondeck.json` carries 24 registered devices and `run_live_scenario.py` takes a `--host`, so the missing piece is the loop and the per-device report, not the transport.
 
@@ -1214,6 +1218,32 @@ Rounds 1 (board + Ethernet-only) and 2 (Parlio LED driver) have landed. Remainin
      **What this refutes.** Not a busy WiFi task: every SDIO/RPC task sits at 0.0-0.1%. Not periodic WiFi scanning, and not a blocking call in our render path either, since `main` is not *waiting* — it is *running*, and burning 2.6x the cycles for identical work. Not `ipc1` (priority 24, preempts everything), which is present on the eth-only build too. There is no WiFi *activity* to stop, so a "compile it in but don't run it" variant would likely change nothing; the cost is already there with the link idle.
 
      **What this supports.** The same instruction stream executing 2.6x slower with no extra runnable work is the signature of **memory contention**, consistent with the L2-cache theory above: esp_hosted's footprint evicts application code from the shared 128 KB L2, so ordinary code stalls on flash/PSRAM fetches. Cycles are spent *inside* `main`, which is why every module slowed proportionally and why the DMA-bound drivers (bandwidth-bound, not cache-resident) got faster.
+
+     **Three more theories died on the bench (2026-09-29, IDF v6.1 final).** Each was tested against 30 consecutive `/api/system` fetches over Ethernet, so the radio carried nothing in any of them.
+     The FreeRTOS tick warning esp_hosted prints at boot (`CONFIG_FREERTOS_HZ is 100, ESP-Hosted recommended 1000`) is an unconditional nag rather than a measurement, and the arithmetic runs the wrong way: IDF's `usleep` busy-waits sub-tick intervals exactly, so the first eight TX retries cost 14.4 ms at 100 Hz against 17.2 ms at 1000 Hz.
+     Priority inversion is refuted by its own null result: raising our task from 1 to 10 changed nothing measurable, and IDF's own `esp_http_server` runs at priority 5, which would be equally starved if six tasks at 23 were the mechanism.
+     Nagle with delayed ACK looked compelling, since responses are written as a header then a body with no `TCP_NODELAY` and the median penalty is close to a 40 ms delayed-ACK timer, but setting it moved neither build: eth-wifi stayed at ~55 ms and eth-only was already 8-44 ms.
+     `CONFIG_LWIP_TCPIP_TASK_PRIO=23` is kept, on the grounds that level-with rather than below is defensible, NOT because it is proven: one run lost its 230-270 ms tail spikes and a later run saw them return.
+
+     **What the penalty actually costs a user, measured per interface (2026-09-29, both fixes in, 30 fetches of `/api/system` each).**
+
+     | build and link | median | spikes |
+     |---|---|---|
+     | eth-only, Ethernet | **14 ms** | none |
+     | eth-wifi, Ethernet | 51 ms | 3 of 30 at ~200 ms |
+     | eth-wifi, WiFi (RSSI -44) | 57 ms | 4 of 30 at 280-870 ms |
+
+     Over Ethernet the eth-wifi build is DEGRADED rather than unstable, and an earlier note here calling it unstable on every interface was wrong.
+     A click lands in 51 ms where a person notices around 100, so the interface feels fine and the 3.6x is invisible for single actions.
+     It surfaces in two places: the ~200 ms outlier roughly once in ten requests, which a page load of eight parallel requests will usually hit, and any client that issues hundreds of requests, which is why the live scenario sweep failed 4 of 6 on this build over Ethernet while a human clicking around noticed nothing.
+     Over WiFi the median barely moves but the tail doubles and reaches 870 ms, and under scenario load it reaches multi-second timeouts.
+     So the honest split is: usable on a wired link, unreliable on a wireless one, and the eth-only build is the one to run when a P4 has to be dependable.
+
+     **The interface is noticeably quicker than it was (PO observation, 2026-09-29).** Changing an effect over WiFi went from a visible hang to something that responds, which a fetch loop cannot measure: that gesture is a POST plus a tree rebuild plus a state resync, so it pays the tail several times over where a single GET pays it once.
+     THREE things changed together and no single one is credited: `TCP_NODELAY` on accepted connections, `CONFIG_LWIP_TCPIP_TASK_PRIO=23`, and a board no longer carrying a failed scenario's leftover driver.
+     That last one also taints the earlier "20-second timeouts on WiFi" figure recorded here, which was measured on a board in that state; the 4x penalty over Ethernet is clean and reproducible, the WiFi instability was not measured as carefully.
+
+     **Why the co-processor board and not the others.** A native-radio chip carries its WiFi stack in the image the cache was sized around; the P4 has no radio, so WiFi arrives as an additional resident subsystem (six tasks, an SDIO driver, RPC machinery, DMA buffers) on a chip whose 128 KB L2 is shared by everything. The difference is not silicon quality but whether WiFi is extra code competing for that cache.
 
      **Still unexplained: the visible ~1 s LED hiccup.** Cache contention predicts the steady 2.6x, not a stall. Per-task CPU is cumulative-since-boot and cannot show a spike either. So the hiccup remains unmeasured, and the worst-case instrumentation below is still the next step for it specifically.
 

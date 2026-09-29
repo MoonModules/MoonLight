@@ -137,7 +137,7 @@ server the compose file's `platform: linux/amd64` runs it under emulation, which
 
 The ESP32 target uses ESP-IDF directly, not the Arduino framework.
 
-**Tested IDF version:** **v6.1-rc1** (commit `44f0c59f`). CI builds against the `v6.1-rc1` Docker tag and local builds should match (clone command below). The why, the alternatives, and how to check for a newer one are in [ESP-IDF version](#esp-idf-version) below.
+**Tested IDF version:** **v6.1** (commit `fff9895c`). CI builds against the `v6.1` Docker tag and local builds should match (clone command below). The why, the alternatives, and how to check for a newer one are in [ESP-IDF version](#esp-idf-version) below.
 
 ### Prerequisites
 
@@ -146,16 +146,16 @@ You need [uv](https://docs.astral.sh/uv/) (Python launcher), CMake 3.20+, and a 
 **macOS / Linux:**
 
 ```sh
-git clone --depth 1 --branch v6.1-rc1 https://github.com/espressif/esp-idf.git ~/esp/esp-idf
+git clone --depth 1 --branch v6.1 https://github.com/espressif/esp-idf.git ~/esp/esp-idf
 ```
 
 **Windows** (PowerShell — run once with admin to enable long paths if you haven't already):
 
 ```powershell
 # IDF and its tooling have deeply nested paths; without longpaths the clone
-# trips MAX_PATH (260 chars) inside the v6.1-rc1 tree.
+# trips MAX_PATH (260 chars) inside the v6.1 tree.
 git config --global core.longpaths true
-git clone --depth 1 --branch v6.1-rc1 https://github.com/espressif/esp-idf.git "$env:USERPROFILE\esp\esp-idf"
+git clone --depth 1 --branch v6.1 https://github.com/espressif/esp-idf.git "$env:USERPROFILE\esp\esp-idf"
 ```
 
 Then run the one-time Python environment setup — either open MoonDeck (`uv run moondeck/moondeck.py`), go to the ESP32 tab, and click **Setup ESP-IDF**, or run it directly:
@@ -230,9 +230,9 @@ After the driver installs and Windows finishes binding (a few seconds), the boar
 
 ### ESP-IDF version
 
-**Pinned to `v6.1-rc1`** (commit `44f0c59f`, a signed pre-release tag). `setup_esp_idf.py` holds the exact commit in `PINNED_IDF_VERSION`, warns loudly when the installed tree differs, and by default offers to check the pin out so a stray `git pull` or a fresh shallow clone landing on a newer commit converges back rather than silently building against the wrong tree (`--no-checkout` keeps it warn-only). Minimum is ESP-IDF v5.1 (C++20 needs GCC 12+); the project uses v6.x APIs (`esp_eth_phy_new_generic`, the component manager for mDNS, the modern RMT/parlio/LCD drivers) so v5.x would need adjustments.
+**Pinned to `v6.1`** (commit `fff9895c`, the GA tag). `setup_esp_idf.py` holds the exact commit in `PINNED_IDF_VERSION`, warns loudly when the installed tree differs, and by default offers to check the pin out so a stray `git pull` or a fresh shallow clone landing on a newer commit converges back rather than silently building against the wrong tree (`--no-checkout` keeps it warn-only). Minimum is ESP-IDF v5.1 (C++20 needs GCC 12+); the project uses v6.x APIs (`esp_eth_phy_new_generic`, the component manager for mDNS, the modern RMT/parlio/LCD drivers) so v5.x would need adjustments.
 
-**Why a v6.1 pre-release and not a stable tag.** The v6.x line is: **v6.0 is the current stable** (GA 2026-02-27); **v6.1 is pre-release** (beta1 2026-06-24, rc1 2026-08-14, GA to follow). We pin the `v6.1-rc1` *tag* (a fixed, signed pre-release, not the rolling `release/v6.1` branch) because it carries driver fixes for the newer SoCs (P4 parlio, RMT v2 on every chip) **and is on the earliest IDF line that carries the `esp32s31` preview target**, and because v6.0 vs v6.1 is a small delta. Riding the betas toward GA means breakage from the v6.1 delta surfaces incrementally, not all at once at the GA re-pin. The trade-off is honest: a pre-release gets **no support guarantee**, which is why the pin is a fixed tag, not a floating branch. The clean inflection point is **v6.1 GA**: re-pin to the `v6.1` tag then, which starts the 30-month support clock (see below). Each pin move (beta1 → RC → GA) is a deliberate re-test pass, not a routine pull. Tracked in [backlog](../work/future/index.md).
+**Why v6.1 and not v6.0.** The v6.x line is: **v6.0** (GA 2026-02-27) and **v6.1** (GA 2026-08-25), which is what we pin. v6.1 carries driver fixes for the newer SoCs (P4 parlio, RMT v2 on every chip) and is the earliest line carrying the `esp32s31` preview target, so v6.0 is not an option for that board. The pin is a fixed, signed tag rather than the rolling `release/v6.1` branch, so a `git pull` cannot move it under a build. Each pin move is a deliberate re-test pass, not a routine pull: the move to GA was validated by building all four ESP32 variants and running the full device scenario set on a classic, an S3, an S31 and a P4 (2026-09-29). Being on a GA tag also starts the 30-month support clock, where a pre-release carried no support guarantee at all. Tracked in [backlog](../work/future/index.md).
 
 **v6.0 is the floor — don't depend on anything newer than it.** Because **v6.0 stable is our fallback** if the v6.1 line proves troublesome, the firmware and build tooling must stay buildable on v6.0. The rule is generic: **use no IDF API, component, Kconfig symbol, or tool that isn't present in v6.0.** A feature that exists only on the v6.1-dev branch (or arrives in a later minor) is off-limits until v6.0 is no longer the fallback. When adopting anything new from the IDF, confirm it shipped in v6.0 first (check the v6.0 docs / release notes, not `latest`); if it's v6.1-only, it waits.
 

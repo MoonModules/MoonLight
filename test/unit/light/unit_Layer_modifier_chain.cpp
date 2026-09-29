@@ -9,6 +9,7 @@
 #include "light/modifiers/MultiplyModifier.h"
 #include "light/modifiers/CheckerboardModifier.h"
 
+#include <algorithm>
 #include <vector>
 #include <initializer_list>
 
@@ -141,14 +142,20 @@ TEST_CASE("Layer swaps a box-resizing modifier for one that does not, and back, 
     CHECK(rig.layer.lut().logicalCount() == folded);   // the size it started at, not a residue of the round-trip
     CHECK(rig.layer.lut().hasLUT());                   // still a real mapping, not the identity fast path
 
-    // Every logical cell is fed, which is what says the rebuilt LUT covers the box rather than a strip of it.
+    // Reached exactly once, not merely counted: a total alone passes on a mapping that doubled one light and dropped another.
+    std::vector<int> seen(32 * 32, 0);
     std::size_t cellsHit = 0, total = 0;
     for (mm::nrOfLightsType li = 0; li < rig.layer.lut().logicalCount(); li++) {
         std::size_t here = 0;
-        rig.layer.lut().forEachDestination(li, [&](mm::nrOfLightsType) { here++; });
+        rig.layer.lut().forEachDestination(li, [&](mm::nrOfLightsType d) {
+            here++;
+            if (d < seen.size()) seen[d]++;
+        });
         total += here;
         if (here) cellsHit++;
     }
     CHECK(cellsHit == rig.layer.lut().logicalCount());
-    CHECK(total == 32 * 32);                           // all 1024 physical lights, each mapped once
+    CHECK(total == 32 * 32);                           // all 1024 physical lights
+    const bool eachOnce = std::all_of(seen.begin(), seen.end(), [](int n) { return n == 1; });
+    CHECK(eachOnce);                                   // and none of them twice, none missed
 }

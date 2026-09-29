@@ -16,6 +16,8 @@
 
 #include <cstring>
 #include <cstdio>
+#include <algorithm>
+#include <vector>
 #include <string>
 
 using namespace mm;
@@ -403,12 +405,16 @@ TEST_CASE("a scripted layout that changes its light count under a scripted modif
         group.applyState();
         layer.applyState();
         CHECK(layout.lightCount() == cols);   // the layout answers with the new count
-
-        // Every light the layout placed has a destination, and no more than that: a fold against a stale extent loses the ones past the old end.
+        // Reached EXACTLY once: a stale extent doubles one light and drops another for the same total, which is the dark-row bug.
+        std::vector<int> seen(static_cast<std::size_t>(cols), 0);
         std::size_t total = 0;
         for (nrOfLightsType li = 0; li < layer.lut().logicalCount(); li++)
-            layer.lut().forEachDestination(li, [&](nrOfLightsType) { total++; });
-        CHECK(total == cols);
+            layer.lut().forEachDestination(li, [&](nrOfLightsType d) {
+                total++;
+                if (d < seen.size()) seen[d]++;
+            });
+        CHECK(total == static_cast<std::size_t>(cols));
+        CHECK(std::all_of(seen.begin(), seen.end(), [](int n) { return n == 1; }));
     }
 }
 

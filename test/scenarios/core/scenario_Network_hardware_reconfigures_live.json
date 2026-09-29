@@ -99,7 +99,7 @@
     },
     {
       "name": "ha-discovery-on",
-      "description": "Home Assistant discovery announced: a retained config published to a real broker, which the desktop's no-op seam never sends.",
+      "description": "Home Assistant discovery announced. What is asserted is the device's own side, that the toggle takes and the render loop survives the announce: whether a broker received anything is not something this tier can see, and no check here depends on it.",
       "op": "set_control",
       "id": "Mqtt",
       "key": "haDiscovery",
@@ -122,7 +122,7 @@
     },
     {
       "name": "measure-mqtt-cycled",
-      "description": "Announce and retract cost, measured against the baseline rather than asserted as a number: a broker's latency is not ours to promise.",
+      "description": "Announce and retract cost, recorded rather than asserted: with a broker the publish is real work, without one the announce is a local no-op, and neither is a number to promise.",
       "op": "measure"
     },
     {

@@ -18,50 +18,33 @@ uint64_t litTotal(const Layer& layer) {
     return sum;
 }
 
-/// Render a panel for 40 frames at 20 ms, on a hand-driven clock: the decay is on elapsed time, so a real clock would measure the host.
-uint64_t renderWith(uint8_t persistence) {
-    golden::ScopedTestClock clock(1000);
-    Layouts layouts; GridLayout grid; Layer layer; TrailsEffect effect;
-    grid.width = 16; grid.height = 16; grid.depth = 1;
-    layouts.addChild(&grid);
-    layer.setLayouts(&layouts);
-    layer.setChannelsPerLight(3);
-    effect.persistence = persistence;   // the knob under test
-    layer.addChild(&effect);
-    layer.applyState();
-    for (uint16_t i = 0; i < 40; i++) { platform::setTestNowMs(1000 + i * 20u); layer.tick(); }
-    return litTotal(layer);
-}
 }  // namespace
 
 TEST_CASE("a longer persistence leaves more of the tail behind, so the control buys reach") {
-    // Same heads, same flow, same clock: the whole difference is how much of each tail survived.
-    const uint64_t shortTail = renderWith(20);
-    const uint64_t longTail  = renderWith(220);
-    CHECK(longTail > shortTail);
-}
-
-TEST_CASE("a trail decays on elapsed time, so a slower device shows the same tail") {
-    // 20 frames of 40 ms must leave the tail where 40 frames of 20 ms leaves it, or the decay is per frame.
-    auto run = [](uint16_t frames, uint32_t stepMs) {
+    // The MEAN over the run, since one frame is dominated by where the heads sit at that instant. Cadence cannot be compared instead: a per-frame decay makes two cadences CONVERGE, and unit_Effects_framerate pins that property where it measures cleanly.
+    auto meanOver = [](uint8_t persistence) {
         golden::ScopedTestClock clock(1000);
         Layouts layouts; GridLayout grid; Layer layer; TrailsEffect effect;
         grid.width = 16; grid.height = 16; grid.depth = 1;
         layouts.addChild(&grid);
         layer.setLayouts(&layouts);
         layer.setChannelsPerLight(3);
+        effect.persistence = persistence;
         layer.addChild(&effect);
         layer.applyState();
-        for (uint16_t i = 0; i < frames; i++) { platform::setTestNowMs(1000 + i * stepMs); layer.tick(); }
-        return litTotal(layer);
+        uint64_t sum = 0;
+        for (uint16_t i = 1; i <= 40; i++) {
+            platform::setTestNowMs(1000 + i * 20u);
+            layer.tick();
+            sum += litTotal(layer);
+        }
+        return static_cast<double>(sum) / 40.0;
     };
-    const uint64_t fast = run(40, 20);        // 800 ms in 40 frames
-    const uint64_t slow = run(20, 40);        // the same 800 ms in half the frames
-    REQUIRE(fast > 0);
-    // Not equality, since the heads land on different pixels: the claim is the tail's WEIGHT follows elapsed time.
-    const uint64_t larger = fast > slow ? fast : slow;
-    const uint64_t smaller = fast > slow ? slow : fast;
-    CHECK(larger < smaller * 2);
+    const double brief = meanOver(20);
+    const double lasting = meanOver(220);
+    CAPTURE(brief); CAPTURE(lasting);
+    REQUIRE(brief > 0.0);
+    CHECK(lasting > brief * 1.5);   // a half-life an order apart is not a few percent of tail
 }
 
 TEST_CASE("Trails reshaped to the same light count starts from black rather than the old layout's tail") {

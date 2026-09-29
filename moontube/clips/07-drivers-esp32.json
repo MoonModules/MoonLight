@@ -106,8 +106,8 @@
     {
       "action": "open_card",
       "module": "{par}",
-      "caption": "Sixteen lanes in parallel is what a wall of twelve thousand lights needs; this one uses two of them. It is the same effect output, cut into strands and sent out at once.",
-      "speech": 13.7
+      "caption": "Sixteen lanes in parallel is what a wall of twelve thousand lights needs, each lane its own strand fed from the same buffer. This device is wired for one strand, so one lane is what it drives.",
+      "speech": 12.4
     },
     {
       "action": "delete_module",

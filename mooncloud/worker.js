@@ -53,10 +53,17 @@ function clean(report, country) {
       // statistics then counted one driver as three. The suffix is stripped here rather than
       // only in the firmware, because the reports that produce it come from devices already in
       // the field, which is exactly where a fix cannot reach.
+      // The suffix belongs to the TYPE, which is the text before any script path: a scripted entry
+      // reads `effect:MoonLive/folder-2/x.mle`, and stripping anywhere in that string renames a
+      // directory the user chose. Split once, strip the type, put the path back untouched.
       const seen = new Set();
       row.modules = value
         .filter((m) => typeof m === "string" && m.length <= MAX_STRING)
-        .map((m) => m.replace(/-\d+(?=\/|$)/, ""))
+        .map((m) => {
+          const cut = m.indexOf("/");
+          const type = cut < 0 ? m : m.slice(0, cut);
+          return type.replace(/-\d+$/, "") + (cut < 0 ? "" : m.slice(cut));
+        })
         .filter((m) => !seen.has(m) && seen.add(m))
         .slice(0, MAX_MODULES)
         .join(",");

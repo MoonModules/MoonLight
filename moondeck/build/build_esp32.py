@@ -34,8 +34,8 @@ IDF_SEARCH_PATHS = [
 # failure, so the check runs on every build_esp32 invocation, not just when the
 # user remembers to re-run setup_esp_idf.py. setup_esp_idf.py imports these
 # two constants.
-PINNED_IDF_COMMIT = "44f0c59f7c81a72a5868a52d5f6dfbbf88829704"
-PINNED_IDF_VERSION = "v6.1-rc1"
+PINNED_IDF_COMMIT = "fff9895c82d744c7237be8847347bdd1b07c6643"
+PINNED_IDF_VERSION = "v6.1"
 
 
 def installed_idf_commit(idf_path: Path) -> str:

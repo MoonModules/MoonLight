@@ -133,7 +133,7 @@ jobs:
             ~/.espressif
             ~/esp/esp-idf
           # Bump the suffix when changing the IDF version to invalidate.
-          key: esp-idf-v6.1-rc1-${{ runner.os }}-v1
+          key: esp-idf-v6.1-${{ runner.os }}-v1
 
       # The staging step's MoonBase block runs `uv run python` on the RUNNER (the ESP-IDF
       # docker action only provides Python inside its container), so uv must exist there.
@@ -188,7 +188,7 @@ jobs:
           # rolling `release-v6.1` branch tag), so CI and local build the exact
           # same tree. This tracks the v6.1 line toward GA; re-pin to the `v6.1`
           # tag once it ships (a deliberate re-test pass, see docs/how-to/building.md).
-          esp_idf_version: v6.1-rc1
+          esp_idf_version: v6.1
           # The IDF target follows the firmware-key prefix: esp32s31* → esp32s31
           # (checked BEFORE esp32s3 — esp32s31 also startsWith 'esp32s3'),
           # esp32s3* → esp32s3, esp32p4* → esp32p4 (the only target that pulls

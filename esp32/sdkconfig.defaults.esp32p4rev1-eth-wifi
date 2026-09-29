@@ -79,3 +79,21 @@ CONFIG_WIFI_RMT_RX_BA_WIN=16
 # (the render loop runs continuously), so the feature buys us nothing and its allocation is pure
 # cost. Revisit if power management is ever enabled here.
 CONFIG_PM_SLEEP_CLK_ICG_ENABLE=n
+
+# lwIP level with esp_hosted's own tasks, rather than five priorities below them.
+#
+# The P4 has no radio: WiFi arrives from the on-board C6 over SDIO, and esp_hosted creates six
+# unpinned tasks to service that link, all at priority 23 and none configurable from Kconfig on the
+# host side. lwIP sat at 18, so TCP processing queued behind every burst of SDIO work.
+#
+# HONEST ABOUT THE EVIDENCE: this was tried against a measured 4x per-request latency penalty that
+# esp_hosted imposes even over Ethernet, with the radio carrying nothing. One 30-fetch run had its
+# 230-270 ms tail spikes disappear; a later run saw them return, so the improvement is NOT
+# established. The median never moved. It is kept because level-with rather than below is the
+# defensible arrangement either way, not because it is proven to fix anything.
+#
+# The 4x itself is UNEXPLAINED. Three theories died on measurement: the FreeRTOS tick warning
+# (arithmetic from esp_hosted's own source runs the wrong way), priority inversion (raising our own
+# task 1 to 10 changed nothing, and IDF's esp_http_server runs at priority 5 anyway), and Nagle
+# with delayed ACK (TCP_NODELAY changed neither build). See docs/backlog for what would settle it.
+CONFIG_LWIP_TCPIP_TASK_PRIO=23
