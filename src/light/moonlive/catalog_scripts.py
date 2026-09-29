@@ -146,7 +146,30 @@ def main() -> int:
     # Python falls back to the platform encoding when none is named, which on Windows is
     # cp1252 and cannot encode them. The build failed there with UnicodeEncodeError while
     # every POSIX host passed, because their default already is UTF-8.
-    out.write_text("".join(parts), encoding="utf-8")
+    #
+    # WRITE ONLY WHEN THE CONTENT CHANGES. This header is tracked, and it feeds the dependency
+    # graph of everything that includes it, so an unconditional write bumps its mtime on every
+    # single build even when not one script moved. Two things followed: check_esp32_built
+    # compares each binary against it and declared every OTHER variant stale the moment one was
+    # built, so a multi-variant sweep could never converge, each build re-staling the one before
+    # it; and every dependent translation unit recompiled for a file whose bytes were identical.
+    # A changed script still changes the content, so the rebuild it should trigger still happens.
+    # newline="\n": the header is tracked and the repo stores it with LF, but write_text translates
+    # "\n" to the platform terminator, so a Windows host would commit the whole file as CRLF the
+    # first time a script really changes. The compare below reads with universal newlines and would
+    # not notice, since it sees LF either way.
+    #
+    # An unreadable or non-UTF-8 existing file means "cannot prove it matches", not "fail the
+    # build": before this compare existed such a file was simply overwritten, and cmake turns any
+    # non-zero exit here into FATAL_ERROR, so letting the decode escape would trade a spurious
+    # rebuild for a broken one.
+    text = "".join(parts)
+    try:
+        unchanged = out.read_text(encoding="utf-8") == text
+    except (OSError, UnicodeDecodeError):
+        unchanged = False
+    if not unchanged:
+        out.write_text(text, encoding="utf-8", newline="\n")
     print(f"catalog: {len(paths)} scripts")
     return 0
 

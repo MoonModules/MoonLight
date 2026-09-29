@@ -35,6 +35,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Force stdout/stderr to UTF-8 on Windows, the same reason setup_esp_idf.py does: the success
+# line below carries a "→", and cp1252 cannot encode it, so the build SUCCEEDS and then dies
+# printing that it did. reconfigure() is a no-op on POSIX, where stdio is already UTF-8.
+if sys.stdout is not None:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if sys.stderr is not None:
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 ROOT = Path(__file__).resolve().parent.parent.parent
 CONFIG = ROOT / "mkdocs.yml"
 # :8422 (mkdocs' own default is :8000) — adjacent to MoonDeck :8420 and the

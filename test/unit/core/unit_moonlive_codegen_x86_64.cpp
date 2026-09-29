@@ -385,15 +385,19 @@ TEST_CASE("x86_64: spillStore(R0, 0) writes to slot 0 through rbp with disp32") 
     A.prologue(1);                            // slot 0 exists after prologue(1)
     const size_t after = A.size();
     A.spillStore(R0, 0);
-    // Slots ASCEND with the index (the arg-block contract, see slotOffsetFromRbp). Slot 0 is the bottom of the fixed kTotalSlots(21)-slot region: -(kNonvolSaveBytes 56 + 8*21) = -224. Encoding: mov [rbp - 224], rcx = 48 89 8D 20 FF FF FF 48 = REX.W 89 = MOV r/m64, r64 8D = ModR/M mod=10 (disp32), reg=RCX(1), rm=RBP(5) → 10 001 101 = 0x8D 20 FF FF FF = disp32 = -224 (0xFFFFFF20)
+    // Slots ASCEND with the index (the arg-block contract, see slotOffsetFromRbp). Slot 0 sits at the bottom of the fixed slot region: -(kNonvolSaveBytes + 8 * kMaxSpillSlots). The 56 is the Win64 nonvolatile save area (rbx+rdi+rsi+r12..r15, 7x8), a property of this ABI, so it stays written out here. The SLOT COUNT is derived rather than written out, because it has already moved once (kTotalSlots went 21 to 37) and this Windows-only test was the only thing reading it, so it went stale unnoticed until the next Windows run.
+    constexpr int32_t kNonvolSaveBytes = 56;
+    constexpr int32_t kSlot0Disp = -(kNonvolSaveBytes + 8 * int32_t(HostAssembler::kMaxSpillSlots));
+    const uint32_t disp = uint32_t(kSlot0Disp);
+    // mov [rbp + kSlot0Disp], rcx = 48 89 8D <disp32>. 48 = REX.W, 89 = MOV r/m64 r64, 8D = ModR/M mod=10 (disp32), reg=RCX(1), rm=RBP(5) -> 10 001 101.
     REQUIRE(A.size() - after == 7);
     CHECK(A.bytes()[after]     == 0x48);
     CHECK(A.bytes()[after + 1] == 0x89);
     CHECK(A.bytes()[after + 2] == 0x8D);
-    CHECK(A.bytes()[after + 3] == 0x20);
-    CHECK(A.bytes()[after + 4] == 0xFF);
-    CHECK(A.bytes()[after + 5] == 0xFF);
-    CHECK(A.bytes()[after + 6] == 0xFF);
+    CHECK(A.bytes()[after + 3] == uint8_t(disp & 0xFF));
+    CHECK(A.bytes()[after + 4] == uint8_t((disp >> 8) & 0xFF));
+    CHECK(A.bytes()[after + 5] == uint8_t((disp >> 16) & 0xFF));
+    CHECK(A.bytes()[after + 6] == uint8_t((disp >> 24) & 0xFF));
 }
 #endif
 

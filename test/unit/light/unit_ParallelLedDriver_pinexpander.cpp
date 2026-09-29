@@ -557,7 +557,7 @@ TEST_CASE("pinExpander degrades to direct on a peripheral that can't host it, ke
 TEST_CASE("the i80 clock and DC defaults never land on a chip's flash pins") {
     mm::I80Peripheral p;
     // Classic ESP32 reserves 6-11 for flash; every other supported chip has 10/11 free. Whichever build this is, the defaults must sit outside that range on the classic path.
-    if (mm::platform::i2sLanes > 0) {
+    if constexpr (mm::platform::i2sLanes > 0) {  // compiles out on every desktop build; flash pins are a classic-ESP32 property
         CHECK(p.clockPin != 10);
         CHECK(p.dcPin != 11);
         CHECK((p.clockPin < 6 || p.clockPin > 11));

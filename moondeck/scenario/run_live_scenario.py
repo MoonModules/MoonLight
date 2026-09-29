@@ -34,6 +34,15 @@ sys.path.insert(0, str(ROOT / "moondeck" / "scenario"))
 import _observed  # noqa: E402
 
 
+# Windows gives stdout the locale encoding (cp1252), and this runner prints an arrow per
+# step, so a scenario that passed would be recorded as FAILED by the print rather than by
+# the device. errors=replace so a stray glyph can never cost a result.
+if sys.stdout is not None:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if sys.stderr is not None:
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+
 class Client:
     # Mutating ops (add/delete/replace/control) trigger a full prepareTree on the
     # device — at 128x128 that frees/reallocates a large buffer + LUT and can

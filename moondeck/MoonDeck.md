@@ -1275,7 +1275,7 @@ Print the most recent MoonLight crash report and run log.
 uv run moondeck/run/show_crash_log.py
 ```
 
-On macOS, finds the newest `projectMM-*.ips` in `~/Library/Logs/DiagnosticReports/`, parses the JSON crash report, and prints the exception type, signal, faulting thread, and top 20 stack frames. If no crash report exists it falls back to the last 40 lines of `build/<host>/projectMM.log` so the run log is always reachable from one place.
+On Windows, reads the Application event log for `Application Error` entries naming the binary, which is where Windows records a fault. There is no crash FILE unless WER LocalDumps is enabled, which it is not by default; registering the binary under `HKCU\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps\` would leave a dump worth loading in a debugger. On macOS, finds the newest `projectMM-*.ips` in `~/Library/Logs/DiagnosticReports/`, parses the JSON crash report, and prints the exception type, signal, faulting thread, and top 20 stack frames. If no crash report exists it falls back to the last 40 lines of `build/<host>/projectMM.log` so the run log is always reachable from one place.
 
 Typical output (crash present):
 

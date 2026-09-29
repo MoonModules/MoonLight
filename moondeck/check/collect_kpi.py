@@ -164,7 +164,11 @@ def collect_desktop():
         BUILD_DIR / "test" / "Release" / "mm_tests.exe",
     )
     if test_exe:
-        out, rc = run([str(test_exe)], cwd=BUILD_DIR)
+        # The whole suite, not a quick probe: 2000+ cases and 120k assertions, which the default
+        # 30s covers on a fast host and does not on a slower one (71s on this Windows bench). A
+        # timeout here reports a KPI run as broken when nothing is, so it is sized to catch a hang
+        # rather than to police the runtime, which repo-health already tracks as a number.
+        out, rc = run([str(test_exe)], cwd=BUILD_DIR, timeout=600)
         for line in out.splitlines():
             if "test cases:" in line:
                 kpi["tests"] = line.strip()
