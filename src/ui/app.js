@@ -8216,14 +8216,21 @@ function buildFilePathControl(row, label, key, moduleName, ctrl) {
             // calls, and its docstring says it runs first on both paths: this one had its own
             // download-and-select logic instead, and that copy is what left the module pointing
             // at the previous script with nothing reported.
-            const ok = await mlEnsureLocal({ remote: true, script: chosen, group: mlGroupForExt(ext) });
-            picker.disabled = false;
-            if (!ok) {                   // it has already said why
-                picker.value = previous;
-                return;
+            // DISABLED THROUGHOUT, including the refresh: fillPicker re-reads the device and
+            // rebuilds the options, so a click landing in that window picks from a list being
+            // replaced. `finally` re-enables it on the failure path too.
+            try {
+                const ok = await mlEnsureLocal({ remote: true, script: chosen,
+                                                 group: mlGroupForExt(ext) });
+                if (!ok) {               // it has already said why
+                    picker.value = previous;
+                    return;
+                }
+                await fillPicker();      // it is local now, so it loses its marker
+                picker.value = chosen;
+            } finally {
+                picker.disabled = false;
             }
-            await fillPicker();          // it is local now, so it loses its marker
-            picker.value = chosen;
         }
         refreshDelLabel();
         dragTs[key] = Date.now();

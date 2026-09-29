@@ -226,6 +226,7 @@ People whose work directly shaped parts of MoonLight. We study their thinking wi
 - **[FPP](https://github.com/FalconChristmas/fpp) (Falcon Player)**: the show player that prompted [PanelCardDriver](docs/moonmodules/light/drivers.md#panelcard): if a Linux host can feed a wall of HUB75 panels, so can the board already rendering them.
 - **[Tasmota](https://github.com/arendst/Tasmota) and Mathieu Carbou's [MycilaSafeBoot](https://github.com/mathieucarbou/MycilaSafeBoot)**: the safeboot pattern behind [MoonBase](docs/explanation/architecture/moonbase.md), our from-scratch minimal take on it.
 - **Damian Schneider ([dedehai](https://github.com/DedeHai))**: author of the WLED Particle System, whose shape our [particle kernel](docs/moonmodules/light/power-functions.md#particles) follows in fixed point.
+- **[Piper](https://github.com/OHF-Voice/piper1-gpl) (OHF-Voice)**: the offline text-to-speech that narrates the documentation clips, with voice models from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices). GPL, and used as a tool rather than linked: MoonTube calls it to render an audio track.
 - **wladi ([myhome-control](https://shop.myhome-control.de))**: designer of the [MHC-WLED ESP32-P4 shield](https://shop.myhome-control.de/en/ABC-WLED-ESP32-P4-shield/HW10027), and the source of the pinout details that got its line-in audio working.
 
 ## Contributing

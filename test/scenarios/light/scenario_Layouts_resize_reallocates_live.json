@@ -6,20 +6,62 @@
     "Layouts",
     "Layer"
   ],
-  "description": "Changing where the lights are, while they are running. Every control applies on the next frame, so a resize reallocates the buffer mid-render rather than asking for a reboot: this walks the grid up and back down, measuring each, so the cost of a size is the difference between two steps.",
+  "description": "Changing where the lights are, while they are running. Every control applies on the next frame, so a resize reallocates the buffer under a rendering pipeline rather than after a reboot.",
   "fixture": [
     {
-      "name": "fix-Layouts",
+      "name": "layouts",
+      "description": "The container the layouts live in, which the layer reads its coordinates from.",
       "op": "add_module",
       "id": "Layouts",
       "type": "Layouts"
     },
     {
-      "name": "fix-Grid",
+      "name": "grid",
+      "description": "The panel this scenario resizes, at the size a fresh one starts on.",
       "op": "add_module",
       "id": "Grid",
       "type": "GridLayout",
-      "parent_id": "Layouts"
+      "parent_id": "Layouts",
+      "props": {
+        "width": 16,
+        "height": 16
+      }
+    },
+    {
+      "name": "layer",
+      "description": "One layer over those layouts, which is what owns the buffer a resize has to reallocate.",
+      "op": "add_module",
+      "id": "Layer",
+      "type": "Layer",
+      "props": {
+        "layouts": "Layouts"
+      }
+    },
+    {
+      "name": "effect",
+      "description": "An effect that paints from the first frame, so the buffer carries light rather than zeros.",
+      "op": "add_module",
+      "id": "FX",
+      "type": "RainbowEffect",
+      "parent_id": "Layer"
+    },
+    {
+      "name": "drivers",
+      "description": "The drivers container, wired to the effects whose buffer it reads.",
+      "op": "add_module",
+      "id": "Drivers",
+      "type": "Drivers",
+      "props": {
+        "layer": "Layer"
+      }
+    },
+    {
+      "name": "preview",
+      "description": "The preview is a driver like any other, and the one every target has.",
+      "op": "add_module",
+      "id": "Preview",
+      "type": "PreviewDriver",
+      "parent_id": "Drivers"
     }
   ],
   "steps": [
@@ -45,12 +87,12 @@
       "observed": {
         "desktop-macos": {
           "tick_us": {
-            "p50": 26,
+            "p50": 20,
             "p95": 148,
             "min": 1,
             "max": 207,
-            "n": 24,
-            "samples": [43, 47, 65, 17, 55, 27, 19, 41, 27, 55, 45, 20, 15, 21, 148, 207, 21, 28, 23, 22, 22, 21, 26, 1]
+            "n": 32,
+            "samples": [45, 20, 15, 21, 148, 207, 21, 28, 23, 22, 22, 21, 26, 1, 12, 56, 48, 31, 53, 38, 7, 7, 6, 7, 8, 7, 9, 19, 7, 10, 7, 19]
           },
           "last_updated": "2026-09-29"
         }
@@ -78,12 +120,12 @@
       "observed": {
         "desktop-macos": {
           "tick_us": {
-            "p50": 66,
-            "p95": 229,
-            "min": 33,
-            "max": 1358,
-            "n": 23,
-            "samples": [71, 77, 94, 42, 92, 64, 33, 66, 1358, 97, 89, 91, 106, 53, 147, 229, 36, 44, 44, 44, 33, 36, 34]
+            "p50": 34,
+            "p95": 147,
+            "min": 10,
+            "max": 229,
+            "n": 32,
+            "samples": [97, 89, 91, 106, 53, 147, 229, 36, 44, 44, 44, 33, 36, 34, 20, 63, 45, 25, 47, 40, 11, 10, 10, 11, 11, 10, 11, 14, 11, 11, 10, 25]
           },
           "last_updated": "2026-09-29"
         }
@@ -118,12 +160,12 @@
       "observed": {
         "desktop-macos": {
           "tick_us": {
-            "p50": 32,
+            "p50": 25,
             "p95": 136,
-            "min": 18,
+            "min": 6,
             "max": 238,
-            "n": 23,
-            "samples": [43, 45, 58, 18, 57, 32, 22, 32, 20, 53, 44, 20, 60, 32, 136, 238, 28, 25, 29, 26, 20, 19, 25]
+            "n": 32,
+            "samples": [53, 44, 20, 60, 32, 136, 238, 28, 25, 29, 26, 20, 19, 25, 13, 61, 39, 33, 51, 41, 7, 7, 7, 7, 6, 7, 6, 9, 7, 7, 7, 25]
           },
           "last_updated": "2026-09-29"
         }

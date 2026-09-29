@@ -14,6 +14,7 @@
     "Drivers",
     "PreviewDriver"
   ],
+  "live_only": true,
   "description": "Switch a live ParallelLedDriver between its DMA peripherals (i80 / MoonI80 / Parlio) and verify the device keeps running clean across every swap, and that the peripheral-dependent controls (doubleBuffer, pinExpander) behave per backend. Builds one Layout(Grid 16x16) + one Layer + one NoiseEffect + one ParallelLedDriver on lane-0 (64 LEDs), then set_control cycles `peripheral` and toggles `doubleBuffer`/`pinExpander`, measuring after each. The peripheral steps are `optional` so a board that lacks a given peripheral (a classic ESP32 offers only i80/I2S; a P4 adds Parlio; an S3 offers i80+MoonI80) skips them without failing. Guards the runtime-peripheral-strategy consolidation (ADR-0016): a swap that crashes, wedges, or leaves the driver in a bad state shows up here. Specifically pins the MoonI80 double-buffer fix: with doubleBuffer ON, MoonI80 must run single-buffer and NOT freeze (its own-GDMA whole-frame two-buffer handshake races); the measure after switching to MoonI80 with doubleBuffer ON is the regression guard (a freeze shows as a ~200 ms tick).",
   "fixture": [
     {
@@ -47,10 +48,7 @@
       "op": "add_module",
       "id": "Layer",
       "type": "Layer",
-      "parent_id": "Effects",
-      "props": {
-        "channelsPerLight": 3
-      }
+      "parent_id": "Effects"
     },
     {
       "name": "fix-fx",
@@ -103,10 +101,7 @@
       "op": "add_module",
       "id": "Layer",
       "type": "Layer",
-      "parent_id": "Effects",
-      "props": {
-        "channelsPerLight": 3
-      }
+      "parent_id": "Effects"
     },
     {
       "name": "rebuild-fx",
@@ -129,11 +124,11 @@
     },
     {
       "name": "switch-i80",
-      "description": "Select the i80 peripheral (esp_lcd: LCD_CAM on S3/P4/S31, I2S on classic).",
+      "description": "Select the IDF-backed peripheral, named LCD-IDF on a chip whose esp_lcd backend is LCD_CAM (S3, P4, S31). A classic ESP32 names the same backend I2S-IDF and skips this ladder, since one unavailable value takes the module out of the run: covering classic needs its own scenario rather than a step here.",
       "op": "set_control",
       "id": "ParallelLed",
       "key": "peripheral",
-      "value": "i80",
+      "value": "LCD-IDF",
       "optional": true
     },
     {
@@ -145,30 +140,30 @@
       "observed": {
         "esp32s3-n16r8": {
           "tick_us": {
-            "p50": 42,
-            "p95": 42,
+            "p50": 2126,
+            "p95": 2695,
             "min": 42,
-            "max": 42,
-            "n": 1,
-            "samples": [42]
+            "max": 2695,
+            "n": 6,
+            "samples": [42, 2611, 2307, 2099, 2126, 2695]
           },
           "free_heap": {
-            "p50": 8490863,
+            "p50": 8322907,
             "p95": 8490863,
-            "min": 8490863,
+            "min": 8321635,
             "max": 8490863,
-            "n": 1,
-            "samples": [8490863]
+            "n": 6,
+            "samples": [8490863, 8326119, 8326071, 8322855, 8321635, 8322907]
           },
           "max_alloc_block": {
-            "p50": 81920,
+            "p50": 73728,
             "p95": 81920,
-            "min": 81920,
+            "min": 73728,
             "max": 81920,
-            "n": 1,
-            "samples": [81920]
+            "n": 6,
+            "samples": [81920, 77824, 81920, 73728, 73728, 73728]
           },
-          "last_updated": "2026-07-24"
+          "last_updated": "2026-09-29"
         },
         "desktop-macos": {
           "tick_us": {
@@ -266,30 +261,30 @@
       "observed": {
         "esp32s3-n16r8": {
           "tick_us": {
-            "p50": 46,
-            "p95": 46,
+            "p50": 2087,
+            "p95": 2122,
             "min": 46,
-            "max": 46,
-            "n": 1,
-            "samples": [46]
+            "max": 2122,
+            "n": 6,
+            "samples": [46, 2087, 2078, 2122, 2108, 2116]
           },
           "free_heap": {
-            "p50": 8413619,
+            "p50": 8326027,
             "p95": 8413619,
-            "min": 8413619,
+            "min": 8322667,
             "max": 8413619,
-            "n": 1,
-            "samples": [8413619]
+            "n": 6,
+            "samples": [8413619, 8326119, 8326071, 8322855, 8322667, 8326027]
           },
           "max_alloc_block": {
-            "p50": 81920,
+            "p50": 73728,
             "p95": 81920,
-            "min": 81920,
+            "min": 73728,
             "max": 81920,
-            "n": 1,
-            "samples": [81920]
+            "n": 6,
+            "samples": [81920, 77824, 81920, 73728, 73728, 73728]
           },
-          "last_updated": "2026-07-24"
+          "last_updated": "2026-09-29"
         },
         "desktop-macos": {
           "tick_us": {
@@ -375,7 +370,7 @@
       "op": "set_control",
       "id": "ParallelLed",
       "key": "peripheral",
-      "value": "MoonI80",
+      "value": "LCD-MM",
       "optional": true
     },
     {
@@ -387,30 +382,30 @@
       "observed": {
         "esp32s3-n16r8": {
           "tick_us": {
-            "p50": 42,
-            "p95": 42,
+            "p50": 2105,
+            "p95": 3572,
             "min": 42,
-            "max": 42,
-            "n": 1,
-            "samples": [42]
+            "max": 3572,
+            "n": 6,
+            "samples": [42, 2079, 3043, 2106, 2105, 3572]
           },
           "free_heap": {
-            "p50": 8497787,
+            "p50": 8327679,
             "p95": 8497787,
-            "min": 8497787,
+            "min": 8324583,
             "max": 8497787,
-            "n": 1,
-            "samples": [8497787]
+            "n": 6,
+            "samples": [8497787, 8327275, 8341251, 8327679, 8324583, 8337339]
           },
           "max_alloc_block": {
-            "p50": 81920,
-            "p95": 81920,
-            "min": 81920,
-            "max": 81920,
-            "n": 1,
-            "samples": [81920]
+            "p50": 73728,
+            "p95": 90112,
+            "min": 73728,
+            "max": 90112,
+            "n": 6,
+            "samples": [81920, 77824, 90112, 73728, 73728, 73728]
           },
-          "last_updated": "2026-07-24"
+          "last_updated": "2026-09-29"
         },
         "desktop-macos": {
           "tick_us": {
@@ -507,30 +502,30 @@
       "observed": {
         "esp32s3-n16r8": {
           "tick_us": {
-            "p50": 44,
-            "p95": 44,
+            "p50": 2106,
+            "p95": 2993,
             "min": 44,
-            "max": 44,
-            "n": 1,
-            "samples": [44]
+            "max": 2993,
+            "n": 6,
+            "samples": [44, 2079, 2768, 2110, 2106, 2993]
           },
           "free_heap": {
-            "p50": 8490871,
+            "p50": 8327819,
             "p95": 8490871,
-            "min": 8490871,
+            "min": 8324123,
             "max": 8490871,
-            "n": 1,
-            "samples": [8490871]
+            "n": 6,
+            "samples": [8490871, 8327819, 8332911, 8324123, 8324171, 8329187]
           },
           "max_alloc_block": {
-            "p50": 81920,
+            "p50": 73728,
             "p95": 81920,
-            "min": 81920,
+            "min": 73728,
             "max": 81920,
-            "n": 1,
-            "samples": [81920]
+            "n": 6,
+            "samples": [81920, 77824, 81920, 73728, 73728, 73728]
           },
-          "last_updated": "2026-07-24"
+          "last_updated": "2026-09-29"
         },
         "desktop-macos": {
           "tick_us": {
@@ -628,30 +623,30 @@
       "observed": {
         "esp32s3-n16r8": {
           "tick_us": {
-            "p50": 44,
-            "p95": 44,
+            "p50": 432,
+            "p95": 2113,
             "min": 44,
-            "max": 44,
-            "n": 1,
-            "samples": [44]
+            "max": 2113,
+            "n": 6,
+            "samples": [44, 2079, 368, 2111, 2113, 432]
           },
           "free_heap": {
-            "p50": 8489355,
+            "p50": 8327815,
             "p95": 8489355,
-            "min": 8489355,
+            "min": 8324119,
             "max": 8489355,
-            "n": 1,
-            "samples": [8489355]
+            "n": 6,
+            "samples": [8489355, 8327815, 8339783, 8324119, 8324171, 8339195]
           },
           "max_alloc_block": {
-            "p50": 81920,
+            "p50": 73728,
             "p95": 81920,
-            "min": 81920,
+            "min": 73728,
             "max": 81920,
-            "n": 1,
-            "samples": [81920]
+            "n": 6,
+            "samples": [81920, 77824, 81920, 73728, 73728, 73728]
           },
-          "last_updated": "2026-07-24"
+          "last_updated": "2026-09-29"
         },
         "desktop-macos": {
           "tick_us": {
@@ -754,7 +749,7 @@
       "op": "set_control",
       "id": "ParallelLed",
       "key": "peripheral",
-      "value": "i80",
+      "value": "LCD-IDF",
       "optional": true
     },
     {
@@ -765,30 +760,30 @@
       "observed": {
         "esp32s3-n16r8": {
           "tick_us": {
-            "p50": 42,
-            "p95": 42,
+            "p50": 2104,
+            "p95": 2839,
             "min": 42,
-            "max": 42,
-            "n": 1,
-            "samples": [42]
+            "max": 2839,
+            "n": 6,
+            "samples": [42, 2079, 2667, 2104, 2114, 2839]
           },
           "free_heap": {
-            "p50": 8477667,
+            "p50": 8327407,
             "p95": 8477667,
-            "min": 8477667,
+            "min": 8325739,
             "max": 8477667,
-            "n": 1,
-            "samples": [8477667]
+            "n": 6,
+            "samples": [8477667, 8327815, 8332911, 8327251, 8325739, 8327407]
           },
           "max_alloc_block": {
-            "p50": 81920,
+            "p50": 73728,
             "p95": 81920,
-            "min": 81920,
+            "min": 73728,
             "max": 81920,
-            "n": 1,
-            "samples": [81920]
+            "n": 6,
+            "samples": [81920, 77824, 81920, 73728, 73728, 73728]
           },
-          "last_updated": "2026-07-24"
+          "last_updated": "2026-09-29"
         },
         "desktop-macos": {
           "tick_us": {

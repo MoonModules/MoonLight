@@ -48,8 +48,16 @@ function clean(report, country) {
 
     if (key === "modules") {
       if (!Array.isArray(value)) continue;
+      // BY TYPE, not by instance. A device adds `NetworkSend-2` when a second one of the same
+      // type is created, and firmware before the type fix reported that name verbatim: the
+      // statistics then counted one driver as three. The suffix is stripped here rather than
+      // only in the firmware, because the reports that produce it come from devices already in
+      // the field, which is exactly where a fix cannot reach.
+      const seen = new Set();
       row.modules = value
         .filter((m) => typeof m === "string" && m.length <= MAX_STRING)
+        .map((m) => m.replace(/-\d+(?=\/|$)/, ""))
+        .filter((m) => !seen.has(m) && seen.add(m))
         .slice(0, MAX_MODULES)
         .join(",");
       continue;

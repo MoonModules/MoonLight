@@ -6,7 +6,7 @@ Everywhere the product name still appears as the CURRENT name, which is what the
 
 Committed so the reach is reviewable before the day. A file appearing here that should keep the old name needs a `rename-keep` marker, and the readiness check asserts the ones already found.
 
-**461 hits across 114 files.**
+**464 hits across 115 files.**
 
 ## By area
 
@@ -24,14 +24,14 @@ Committed so the reach is reviewable before the day. A file appearing here that 
 | 16 | `.github/workflows` |
 | 16 | `moondeck` |
 | 15 | `docs/work/past/plans` |
-| 13 | `docs/work/future` |
+| 14 | `docs/work/future` |
 | 13 | `moondeck/build` |
 | 12 | `src/light/effects` |
 | 11 | `src/light/modifiers` |
 | 10 | `docs/reference` |
 | 10 | `moondeck/check` |
+| 9 | `docs` |
 | 9 | `mooninstaller` |
-| 7 | `docs` |
 | 6 | `docs/work/present` |
 | 5 | `docs/friend-repos` |
 | 4 | `moonbase/main` |

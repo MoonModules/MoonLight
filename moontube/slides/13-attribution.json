@@ -36,7 +36,7 @@
         ],
         [
           "Delphium",
-          "HUB75, the OSC, HLS, RTSP and NDI work, and the Windows deployments"
+          "HUB75, OSC, HLS, RTSP, NDI, and Windows"
         ],
         [
           "ESPHome",
@@ -75,20 +75,20 @@
           "WLED audio sync, and the statistics work"
         ],
         [
+          "Piper and rhasspy",
+          "the voice you are hearing"
+        ],
+        [
           "QuinLED",
           "the devices much of this runs on"
         ],
         [
           "RobWomp",
-          "HUB75 driver work, and the Linux deployments including NanoPi and Pi 5"
+          "HUB75 drivers, and Linux on NanoPi and Pi 5"
         ],
         [
           "softhack007",
           "audio reactive, AI principles, code quality"
-        ],
-        [
-          "Sören",
-          "the MoonHub75 board, and the web installer"
         ],
         [
           "Stefan Petrick",
@@ -97,6 +97,10 @@
         [
           "Sutaburosu",
           "the fixed-point canvas demos"
+        ],
+        [
+          "Sören",
+          "the MoonHub75 board, and the web installer"
         ],
         [
           "troyhacks",

@@ -15,6 +15,7 @@
     "Drivers",
     "PreviewDriver"
   ],
+  "live_only": true,
   "description": "Cross-product benchmark: for EACH output peripheral (RMT, i80, MoonI80, Parlio), sweep the grid 16x16 -> 32x32 -> 64x64 -> 128x128 and measure the tick/heap at each size, driving the FULL grid out that peripheral (16 lanes so 128x128=16384 lights distribute ~1024/lane). This is the apples-to-apples per-board number set: run it identically on any board and the per-peripheral, per-size ticks compare directly (an S31 vs a P4, say). Each peripheral block is optional:true, so a board that lacks one (a classic ESP32 has no MoonI80/Parlio; a P4 has all three) skips it without failing, and the observed blocks record only where the peripheral is real. A NoiseEffect fills every cell so the render cost is non-trivial at every size. Pins are the S3/P4/S31 clean 16-lane set; a board whose pins differ records a driver that failed to init (a small bailout tick, not an encode) for that peripheral. NOTE the driver drives the full grid, so at 128x128 (16384 lights) a whole-frame path may exceed its DMA budget and idle with a status (a clean degrade, captured as a fast bail tick) while the streaming ring / PSRAM path keeps driving; that contrast IS the measurement.",
   "fixture": [
     {
@@ -70,10 +71,7 @@
       "op": "add_module",
       "id": "Layer",
       "type": "Layer",
-      "parent_id": "Effects",
-      "props": {
-        "channelsPerLight": 3
-      }
+      "parent_id": "Effects"
     },
     {
       "name": "build-fx",
@@ -219,6 +217,33 @@
             "samples": [26624, 38912, 38912]
           },
           "last_updated": "2026-09-01"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 8151,
+            "p95": 8151,
+            "min": 8151,
+            "max": 8151,
+            "n": 1,
+            "samples": [8151]
+          },
+          "free_heap": {
+            "p50": 8338151,
+            "p95": 8338151,
+            "min": 8338151,
+            "max": 8338151,
+            "n": 1,
+            "samples": [8338151]
+          },
+          "max_alloc_block": {
+            "p50": 81920,
+            "p95": 81920,
+            "min": 81920,
+            "max": 81920,
+            "n": 1,
+            "samples": [81920]
+          },
+          "last_updated": "2026-09-29"
         }
       }
     },
@@ -346,6 +371,33 @@
             "samples": [38912, 38912, 38912]
           },
           "last_updated": "2026-09-01"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 30868,
+            "p95": 30868,
+            "min": 30868,
+            "max": 30868,
+            "n": 1,
+            "samples": [30868]
+          },
+          "free_heap": {
+            "p50": 8331247,
+            "p95": 8331247,
+            "min": 8331247,
+            "max": 8331247,
+            "n": 1,
+            "samples": [8331247]
+          },
+          "max_alloc_block": {
+            "p50": 77824,
+            "p95": 77824,
+            "min": 77824,
+            "max": 77824,
+            "n": 1,
+            "samples": [77824]
+          },
+          "last_updated": "2026-09-29"
         }
       }
     },
@@ -473,6 +525,33 @@
             "samples": [38912, 26624, 25600]
           },
           "last_updated": "2026-09-01"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 66429,
+            "p95": 66429,
+            "min": 66429,
+            "max": 66429,
+            "n": 1,
+            "samples": [66429]
+          },
+          "free_heap": {
+            "p50": 8311015,
+            "p95": 8311015,
+            "min": 8311015,
+            "max": 8311015,
+            "n": 1,
+            "samples": [8311015]
+          },
+          "max_alloc_block": {
+            "p50": 73728,
+            "p95": 73728,
+            "min": 73728,
+            "max": 73728,
+            "n": 1,
+            "samples": [73728]
+          },
+          "last_updated": "2026-09-29"
         }
       }
     },
@@ -600,6 +679,33 @@
             "samples": [38912, 38912, 38912]
           },
           "last_updated": "2026-09-01"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 85509,
+            "p95": 85509,
+            "min": 85509,
+            "max": 85509,
+            "n": 1,
+            "samples": [85509]
+          },
+          "free_heap": {
+            "p50": 8237291,
+            "p95": 8237291,
+            "min": 8237291,
+            "max": 8237291,
+            "n": 1,
+            "samples": [8237291]
+          },
+          "max_alloc_block": {
+            "p50": 73728,
+            "p95": 73728,
+            "min": 73728,
+            "max": 73728,
+            "n": 1,
+            "samples": [73728]
+          },
+          "last_updated": "2026-09-29"
         }
       }
     },
@@ -611,7 +717,7 @@
     },
     {
       "name": "add-i80",
-      "description": "i80 (esp_lcd): LCD_CAM on S3/P4/S31, I2S on classic. 16 lanes so 128x128=16384 distributes ~1024/lane.",
+      "description": "The IDF-backed peripheral on a chip whose esp_lcd backend is LCD_CAM (S3, P4, S31); a classic ESP32 names it I2S-IDF and skips here. 16 lanes so 128x128=16384 distributes ~1024/lane.",
       "op": "add_module",
       "id": "Out",
       "type": "ParallelLedDriver",
@@ -620,7 +726,7 @@
         "pins": "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16"
       },
       "controls": {
-        "peripheral": "i80"
+        "peripheral": "LCD-IDF"
       },
       "optional": true
     },
@@ -748,6 +854,33 @@
             "samples": [38912, 34816, 34816]
           },
           "last_updated": "2026-09-01"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 785,
+            "p95": 785,
+            "min": 785,
+            "max": 785,
+            "n": 1,
+            "samples": [785]
+          },
+          "free_heap": {
+            "p50": 8329775,
+            "p95": 8329775,
+            "min": 8329775,
+            "max": 8329775,
+            "n": 1,
+            "samples": [8329775]
+          },
+          "max_alloc_block": {
+            "p50": 81920,
+            "p95": 81920,
+            "min": 81920,
+            "max": 81920,
+            "n": 1,
+            "samples": [81920]
+          },
+          "last_updated": "2026-09-29"
         }
       }
     },
@@ -875,6 +1008,33 @@
             "samples": [38912, 34816, 34816]
           },
           "last_updated": "2026-09-01"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2162,
+            "p95": 2162,
+            "min": 2162,
+            "max": 2162,
+            "n": 1,
+            "samples": [2162]
+          },
+          "free_heap": {
+            "p50": 8311319,
+            "p95": 8311319,
+            "min": 8311319,
+            "max": 8311319,
+            "n": 1,
+            "samples": [8311319]
+          },
+          "max_alloc_block": {
+            "p50": 81920,
+            "p95": 81920,
+            "min": 81920,
+            "max": 81920,
+            "n": 1,
+            "samples": [81920]
+          },
+          "last_updated": "2026-09-29"
         }
       }
     },
@@ -1002,6 +1162,33 @@
             "samples": [38912, 22528, 22528]
           },
           "last_updated": "2026-09-01"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 9026,
+            "p95": 9026,
+            "min": 9026,
+            "max": 9026,
+            "n": 1,
+            "samples": [9026]
+          },
+          "free_heap": {
+            "p50": 8238135,
+            "p95": 8238135,
+            "min": 8238135,
+            "max": 8238135,
+            "n": 1,
+            "samples": [8238135]
+          },
+          "max_alloc_block": {
+            "p50": 81920,
+            "p95": 81920,
+            "min": 81920,
+            "max": 81920,
+            "n": 1,
+            "samples": [81920]
+          },
+          "last_updated": "2026-09-29"
         }
       }
     },
@@ -1129,6 +1316,33 @@
             "samples": [38912, 34816, 34816]
           },
           "last_updated": "2026-09-01"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 43482,
+            "p95": 43482,
+            "min": 43482,
+            "max": 43482,
+            "n": 1,
+            "samples": [43482]
+          },
+          "free_heap": {
+            "p50": 7942887,
+            "p95": 7942887,
+            "min": 7942887,
+            "max": 7942887,
+            "n": 1,
+            "samples": [7942887]
+          },
+          "max_alloc_block": {
+            "p50": 81920,
+            "p95": 81920,
+            "min": 81920,
+            "max": 81920,
+            "n": 1,
+            "samples": [81920]
+          },
+          "last_updated": "2026-09-29"
         }
       }
     },
@@ -1149,7 +1363,7 @@
         "pins": "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16"
       },
       "controls": {
-        "peripheral": "MoonI80"
+        "peripheral": "LCD-MM"
       },
       "optional": true
     },
@@ -1277,6 +1491,33 @@
             "samples": [38912, 34816, 34816]
           },
           "last_updated": "2026-09-01"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 825,
+            "p95": 825,
+            "min": 825,
+            "max": 825,
+            "n": 1,
+            "samples": [825]
+          },
+          "free_heap": {
+            "p50": 8329767,
+            "p95": 8329767,
+            "min": 8329767,
+            "max": 8329767,
+            "n": 1,
+            "samples": [8329767]
+          },
+          "max_alloc_block": {
+            "p50": 81920,
+            "p95": 81920,
+            "min": 81920,
+            "max": 81920,
+            "n": 1,
+            "samples": [81920]
+          },
+          "last_updated": "2026-09-29"
         }
       }
     },
@@ -1404,6 +1645,33 @@
             "samples": [38912, 34816, 34816]
           },
           "last_updated": "2026-09-01"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2153,
+            "p95": 2153,
+            "min": 2153,
+            "max": 2153,
+            "n": 1,
+            "samples": [2153]
+          },
+          "free_heap": {
+            "p50": 8311335,
+            "p95": 8311335,
+            "min": 8311335,
+            "max": 8311335,
+            "n": 1,
+            "samples": [8311335]
+          },
+          "max_alloc_block": {
+            "p50": 81920,
+            "p95": 81920,
+            "min": 81920,
+            "max": 81920,
+            "n": 1,
+            "samples": [81920]
+          },
+          "last_updated": "2026-09-29"
         }
       }
     },
@@ -1531,6 +1799,33 @@
             "samples": [38912, 22528, 34816]
           },
           "last_updated": "2026-09-01"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 8606,
+            "p95": 8606,
+            "min": 8606,
+            "max": 8606,
+            "n": 1,
+            "samples": [8606]
+          },
+          "free_heap": {
+            "p50": 8238151,
+            "p95": 8238151,
+            "min": 8238151,
+            "max": 8238151,
+            "n": 1,
+            "samples": [8238151]
+          },
+          "max_alloc_block": {
+            "p50": 81920,
+            "p95": 81920,
+            "min": 81920,
+            "max": 81920,
+            "n": 1,
+            "samples": [81920]
+          },
+          "last_updated": "2026-09-29"
         }
       }
     },
@@ -1658,6 +1953,33 @@
             "samples": [38912, 38912, 38912]
           },
           "last_updated": "2026-09-01"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 34980,
+            "p95": 34980,
+            "min": 34980,
+            "max": 34980,
+            "n": 1,
+            "samples": [34980]
+          },
+          "free_heap": {
+            "p50": 7942899,
+            "p95": 7942899,
+            "min": 7942899,
+            "max": 7942899,
+            "n": 1,
+            "samples": [7942899]
+          },
+          "max_alloc_block": {
+            "p50": 81920,
+            "p95": 81920,
+            "min": 81920,
+            "max": 81920,
+            "n": 1,
+            "samples": [81920]
+          },
+          "last_updated": "2026-09-29"
         }
       }
     },
@@ -1806,6 +2128,33 @@
             "samples": [38912, 34816, 34816]
           },
           "last_updated": "2026-09-01"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 827,
+            "p95": 827,
+            "min": 827,
+            "max": 827,
+            "n": 1,
+            "samples": [827]
+          },
+          "free_heap": {
+            "p50": 8329751,
+            "p95": 8329751,
+            "min": 8329751,
+            "max": 8329751,
+            "n": 1,
+            "samples": [8329751]
+          },
+          "max_alloc_block": {
+            "p50": 81920,
+            "p95": 81920,
+            "min": 81920,
+            "max": 81920,
+            "n": 1,
+            "samples": [81920]
+          },
+          "last_updated": "2026-09-29"
         }
       }
     },
@@ -1933,6 +2282,33 @@
             "samples": [38912, 34816, 34816]
           },
           "last_updated": "2026-09-01"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2083,
+            "p95": 2083,
+            "min": 2083,
+            "max": 2083,
+            "n": 1,
+            "samples": [2083]
+          },
+          "free_heap": {
+            "p50": 8307923,
+            "p95": 8307923,
+            "min": 8307923,
+            "max": 8307923,
+            "n": 1,
+            "samples": [8307923]
+          },
+          "max_alloc_block": {
+            "p50": 81920,
+            "p95": 81920,
+            "min": 81920,
+            "max": 81920,
+            "n": 1,
+            "samples": [81920]
+          },
+          "last_updated": "2026-09-29"
         }
       }
     },
@@ -2060,6 +2436,33 @@
             "samples": [38912, 22528, 22528]
           },
           "last_updated": "2026-09-01"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 8591,
+            "p95": 8591,
+            "min": 8591,
+            "max": 8591,
+            "n": 1,
+            "samples": [8591]
+          },
+          "free_heap": {
+            "p50": 8238127,
+            "p95": 8238127,
+            "min": 8238127,
+            "max": 8238127,
+            "n": 1,
+            "samples": [8238127]
+          },
+          "max_alloc_block": {
+            "p50": 81920,
+            "p95": 81920,
+            "min": 81920,
+            "max": 81920,
+            "n": 1,
+            "samples": [81920]
+          },
+          "last_updated": "2026-09-29"
         }
       }
     },
@@ -2187,6 +2590,33 @@
             "samples": [38912, 34816, 34816]
           },
           "last_updated": "2026-09-01"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 34415,
+            "p95": 34415,
+            "min": 34415,
+            "max": 34415,
+            "n": 1,
+            "samples": [34415]
+          },
+          "free_heap": {
+            "p50": 7942863,
+            "p95": 7942863,
+            "min": 7942863,
+            "max": 7942863,
+            "n": 1,
+            "samples": [7942863]
+          },
+          "max_alloc_block": {
+            "p50": 81920,
+            "p95": 81920,
+            "min": 81920,
+            "max": 81920,
+            "n": 1,
+            "samples": [81920]
+          },
+          "last_updated": "2026-09-29"
         }
       }
     },

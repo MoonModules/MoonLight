@@ -3,6 +3,8 @@
 #include "doctest.h"
 #include "light/drivers/Drivers.h"
 #include "light/drivers/LightPresetsModule.h"   // the non-deletable boot-wired preset library
+#include "light/drivers/NetworkSendDriver.h"     // a real driver, for the sibling-instance cases
+#include "correction_presets.h"                  // mm::test::rebuildFromPreset
 #include "../core/conditional_controls.h"   // mm::test::setControlValue
 #include "platform/platform.h"                 // gpioRead: the desktop reads back what gpioWrite put there
 
@@ -227,4 +229,48 @@ TEST_CASE("a typo in the relay list releases the relays it used to hold") {
     CHECK(mm::platform::gpioRead(13));
     CHECK_FALSE(mm::platform::gpioRead(12));
     mm::platform::clearTestGpioLevel();
+}
+
+// Removing the MIDDLE of three is what separates a real teardown from a truncation, since removeChild compacts in place.
+TEST_CASE("Drivers: three sibling NetworkSendDrivers each own their buffer, and removing the middle one leaves the others driving") {
+    mm::Buffer source;
+    REQUIRE(source.allocate(64, 3));
+
+    mm::Drivers drivers;
+    mm::NetworkSendDriver first, middle, last;
+    drivers.addChild(&first);
+    drivers.addChild(&middle);
+    drivers.addChild(&last);
+    for (auto* d : {&first, &middle, &last}) {
+        d->setSourceBuffer(&source);
+        mm::test::rebuildFromPreset(d->correctionForTest(), 255, mm::test::PresetOrder::RGB);
+        d->applyState();
+    }
+
+    // Three buffers, not one shared between them: a container that handed out one would show three equal pointers here.
+    REQUIRE(first.correctedBuffer().data() != nullptr);
+    REQUIRE(middle.correctedBuffer().data() != nullptr);
+    REQUIRE(last.correctedBuffer().data() != nullptr);
+    CHECK(first.correctedBuffer().data() != middle.correctedBuffer().data());
+    CHECK(middle.correctedBuffer().data() != last.correctedBuffer().data());
+    CHECK(first.correctedBuffer().data() != last.correctedBuffer().data());
+    CHECK(drivers.childCount() == 3);
+
+    const uint8_t* firstBefore = first.correctedBuffer().data();
+    const uint8_t* lastBefore  = last.correctedBuffer().data();
+
+    REQUIRE(drivers.removeChild(&middle));
+    middle.release();
+
+    // The survivors keep the buffers they were already sending from: the removal freed the one that went and touched neither of the others.
+    CHECK(drivers.childCount() == 2);
+    CHECK(first.correctedBuffer().data() == firstBefore);
+    CHECK(last.correctedBuffer().data() == lastBefore);
+    CHECK(first.correctedBuffer().count() == 64);
+    CHECK(last.correctedBuffer().count() == 64);
+
+    // The container's view is what a truncation breaks: reading the objects alone passes against a dropped LAST child.
+    CHECK(drivers.child(0) == &first);
+    CHECK(drivers.child(1) == &last);
+    for (uint8_t i = 0; i < drivers.childCount(); i++) CHECK(drivers.child(i) != &middle);
 }

@@ -3,7 +3,7 @@
 What we test and how. The detailed inventory of every test lives in two auto-generated files:
 
 - **[Unit tests](tests/unit-tests.md)**: one row per `TEST_CASE`, grouped by module. Generated from `test/unit/{core,light}/unit_*.cpp`.
-- **[Scenario tests](tests/scenario-tests.md)**: one section per scenario JSON, grouped by module. Generated from `test/scenarios/{core,light}/scenario_*.json`. Each scenario runs in two tiers (in-process + live) unless flagged `live_only` (construct-mode scenarios are also skipped on live, since `main.cpp` owns the live shape).
+- **[Scenario tests](tests/scenario-tests.md)**: one section per scenario JSON, grouped by module. Generated from `test/scenarios/{core,light,device}/scenario_*.json`. Each scenario runs in two tiers (in-process + live) unless flagged `live_only` (construct-mode scenarios are also skipped on live, since `main.cpp` owns the live shape).
 
 Both are produced by `moondeck/docs/generate_test_docs.py`; the source of truth is the test files themselves (see [Adding Tests](#adding-tests) below).
 
@@ -176,7 +176,7 @@ MoonDeck's pure logic (catalog reverse-lookup, state migration) and the installe
 
 - **Unit tests:** `unit_<ExactModuleName>[_<topic>].cpp`, `<ExactModuleName>` is the **CamelCase** class name as it appears in `// @module` (and in the source: `Layer`, `MoonModule`, `MultiplyModifier`, `NetworkSendDriver`). The optional `<topic>` collapses when the file's the only test for its module (`unit_Color.cpp` is fine if `@module Color`); add it when one module has several test files (`unit_Layer_extrude.cpp`, `unit_Layer_zero_grid.cpp`, …) or when the topic genuinely clarifies what the file covers (`unit_FilesystemModule_persistence.cpp`).
 - **Scenarios:** `scenario_<ExactModuleName>_<topic>.json`, same module-naming rule; the topic is always present because scenarios always cross multiple modules and the topic distinguishes the focus.
-- The **`"name"` field inside each scenario JSON** matches the filename stem exactly (e.g. `"name": "scenario_Layer_base_pipeline"`). The runner, the MoonDeck dropdown, the generated docs and `--name` on the CLI all use this single identifier.
+- The **`"name"` field inside each scenario JSON** matches the filename stem exactly (e.g. `"name": "scenario_Effects_pipeline_builds_and_renders"`). The runner, the MoonDeck dropdown, the generated docs and `--name` on the CLI all use this single identifier.
 
 ### Unit-test file shape
 
@@ -265,6 +265,10 @@ Picking the right mode:
 - If your scenario tweaks an existing pipeline (resize the grid, toggle mirror, change preset), it's **mutate**. Provide a `fixture` so in-process tests can run too.
 
 A `mutate` scenario that needs platform-bound modules (Network mDNS, WiFi, OTA) the in-process runner can't honestly stand up should add `"live_only": true`.
+
+**Where a scenario lives.** `core/` and `light/` follow the source domain, the way unit tests do. `device/` is the exception, and it groups by tier instead: a scenario there carries `"live_only": true` because what it measures does not exist on the host. That is real peripheral silicon (RMT, i80, Parlio, and the DMA budgets that read as zero off-target).
+It is also internal-heap fragmentation behind `max_alloc_block`, and the cost of float maths on an Xtensa with no FPU. A host run of one of these would report a number that means nothing, which is worse than reporting none, so the in-process runner skips the folder wholesale.
+Their logic belongs in a unit test rather than here: what a `device/` scenario adds is the measurement on the hardware, not the behavior.
 
 **Bespoke convention.** The `mode` + `fixture` + `reset` trinity is MoonLight-specific: no off-the-shelf BDD or scenario framework was borrowed wholesale.
 It exists because the same JSON has to serve both an in-process runner that owns the scheduler and a live runner that does not (main.cpp does).
@@ -481,7 +485,7 @@ Run them with:
 
 ```bash
 uv run moondeck/scenario/run_scenario.py                                      # all
-uv run moondeck/scenario/run_scenario.py --name scenario_Layer_base_pipeline  # one by stem
+uv run moondeck/scenario/run_scenario.py --name scenario_Effects_pipeline_builds_and_renders  # one by stem
 uv run moondeck/scenario/run_scenario.py --module Layer                       # all for one module
 ```
 
@@ -517,7 +521,7 @@ MoonDeck's Live tab wraps the same workflow: the Network bar at the top selects 
 
 All scenarios use relative FPS bounds (`min_pct`) so they pass on any device, desktop at 10K FPS or ESP32 at 17 FPS. Settle time is 3 seconds to let the pipeline stabilise after rebuilds.
 
-Scenarios that add modules (e.g. `scenario_Layer_base_pipeline`, `scenario_Layer_memory_1to1`) create temporary modules on the running device and clean them up at the end (`- Rainbow (cleanup)`). Modules that already exist show `=` instead of `+`.
+Scenarios that add modules (e.g. `scenario_Effects_pipeline_builds_and_renders`, `scenario_Modifiers_reshape_the_mapping`) create temporary modules on the running device and clean them up at the end (`- Rainbow (cleanup)`). Modules that already exist show `=` instead of `+`.
 
 Memory tracking works on ESP32: `freeHeap` and `freeInternalHeap` report real values. Desktop returns 0 (unlimited). The control-change scenario verifies no memory leaks by checking that heap returns to baseline after a mirror toggle.
 
@@ -553,7 +557,7 @@ All live scenarios pass on both desktop and ESP32 with `min_pct: 80` relative bo
 
 **Unit test:** add a `TEST_CASE` to the appropriate `test/unit/{core,light}/unit_<ExactModuleName>[_<topic>].cpp` file. Each file carries `// @module <ExactCamelCaseName>` at the top, plus a single `//` description line above each `TEST_CASE`. Add a new file when no existing test covers your module, pick the subfolder matching the module's `src/` domain. After adding cases, run `uv run moondeck/docs/generate_test_docs.py` so the generated inventory matches.
 
-**Scenario test:** create a JSON file under `test/scenarios/{core,light}/` named `scenario_<ExactModuleName>_<topic>.json`. The top-level needs `name` (matching the filename stem), `module`, optional `also`, `description`, `mode` (`construct` or `mutate`), and optional `"live_only": true` if the scenario can only run against a real device. Each `steps[]` entry has an `op` (`add_module`, `set_control`, `measure`), a `name`, a `description` field that the doc generator picks up, optional `"measure": true` to run a measurement after the op, and optional `bounds` (`fps` and/or `heap`). The scenario runner auto-discovers all `.json` files under `test/scenarios/` recursively.
+**Scenario test:** create a JSON file under `test/scenarios/{core,light}/` named `scenario_<ExactModuleName>_<topic>.json`, or under `test/scenarios/device/` when it can only run on real hardware. The top-level needs `name` (matching the filename stem), `module`, optional `also`, `description`, `mode` (`construct` or `mutate`), and optional `"live_only": true` if the scenario can only run against a real device. Each `steps[]` entry has an `op` (`add_module`, `set_control`, `measure`), a `name`, a `description` field that the doc generator picks up, optional `"measure": true` to run a measurement after the op, and optional `bounds` (`fps` and/or `heap`). The scenario runner auto-discovers all `.json` files under `test/scenarios/` recursively.
 
 **Regression test:** when fixing a bug, add a test that reproduces it. The test's description (the `//` line for unit tests, the `description` JSON field for scenarios) should mention the root cause so the connection stays traceable in the generated inventory.
 

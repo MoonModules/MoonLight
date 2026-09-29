@@ -6,6 +6,7 @@
 #include "light/layouts/GridLayout.h"
 #include "light/layouts/GridBlacksLayout.h"
 #include "light/layouts/SphereLayout.h"
+#include "light/effects/RainbowEffect.h"
 #include "light/modifiers/MultiplyModifier.h"
 #include "light/modifiers/RegionModifier.h"
 
@@ -242,6 +243,25 @@ TEST_CASE("Layer: GridBlacks black columns build a gap-dropping LUT") {
     rig.layer.applyState();
     CHECK_FALSE(rig.layer.lut().hasLUT());
     CHECK(rig.layer.physicalLightCount() == 32);
+}
+
+// The LUT checks above pass just as well against a blit that writes nothing, which is a dark wall with every assertion green.
+TEST_CASE("Layer: an effect renders through a gapped GridBlacks layer") {
+    mm::GridBlacksLayout g;
+    g.width = 8; g.height = 4; g.depth = 1;
+    g.blackStart = 3; g.blackCount = 2;
+    LayerRig rig(&g);
+    mm::RainbowEffect fx;
+    rig.layer.addChild(&fx);
+    rig.layer.applyState();
+    REQUIRE(rig.layer.lut().hasLUT());
+
+    rig.layer.tick();
+
+    const mm::Buffer& buf = rig.layer.buffer();
+    std::size_t lit = 0;
+    for (std::size_t b = 0; b < buf.bytes(); b++) if (buf.data()[b]) lit++;
+    CHECK(lit > 0);                        // the frame reached the buffer rather than stopping at the table
 }
 
 // Robustness: an ALL-black grid (every column dark) is a valid degenerate config, every physical slot is a real wire position the driver still clocks, but NO cell maps to a light, so the LUT has zero destinations. Must build and run (buffer stays black), never crash.

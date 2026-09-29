@@ -821,6 +821,62 @@ Once both land, add a `ReleaseCheckModule` (or a small extension inside NetworkM
 
 ### Additional test coverage (pending)
 
+### The restructured scenarios lost four things the archive asserted (2026-09-29)
+
+The 27 scenarios moved to `test/scenarios_archive/` and 11 new ones took their place, one per top-level module.
+The structure is better and the new set asserts things the old one could not: 29 `expect_control` value checks where the old set had none, 9 `reboot` round-trips proving a setting reached the filesystem, and consent defaults pinned as a shipped privacy guarantee.
+Four things did not survive the move, and nothing else in the tree covers them.
+
+**Every performance contract and bound is gone**, measured rather than estimated: `contract` 40 to 0, `bounds` 20 to 0.
+Both mechanisms are still implemented in the runner (`scenario_runner.cpp` enforces a `tick_us` ceiling and a `free_heap` floor, and the `bounds.fps` gate below it).
+The new set records `observed` numbers, which is a trend rather than an assertion, so nothing fails on a tick or heap regression.
+Two documents now state otherwise and should be corrected when this is: `docs/reference/performance.md` says each scenario step carries an enforced contract, and `moondeck/check/collect_kpi.py` anchors its ESP32 FPS floor to `scenario_GridLayout_grid_sizes.json`, a file that exists nowhere in the repo.
+
+**The light scenarios render nothing.** FIXED on 2026-09-29 for the two that did not: `scenario_Layouts_resize_reallocates_live` and `scenario_Drivers_output_and_brightness` now build the whole pipeline, so the runner's buffer checks fire and they report 5 and 8 checks rather than 2 and 5.
+Control-tested by removing the effect, which fails `buffer non-zero after render`.
+
+What remains is the framework half, already filed under per-step assertions above: the buffer checks run ONCE at the end of a scenario, so a resize can still only assert that the control changed.
+Nothing can say the buffer grew to 1024 lights at 32x32 and shrank back, which is the claim the scenario's own name makes.
+
+**Teardown under a live pipeline is untested.** `remove_module` and `clear_children` went from 25 and 29 uses to zero.
+The hardest case was removing the microphone while a consumer still held it, which is the shape of a dangling-pointer fault that has bitten before; only 4 of the light unit tests touch the Scheduler at all, so the unit tier does not reach it.
+
+**`HttpServerModule` has no scenario**, though it is a scheduler root on every networked target and the transport the live tier itself runs over.
+
+**Nothing is marked `live_only` any more**, where the archive had three. A scenario runs in two modes, in-process as a test and against a real device through `run_live_scenario.py`, and `live_only` is how a scenario says the desktop cannot answer its question: `scenario_NetworkModule_eth_reconfigure` cycled `ethType` through None, LAN8720, IP101 and W5500 with a live `ethStop` and `ethInit`, which on the desktop is a no-op seam.
+The new set asks nothing that needs hardware to be true, so a device sweep runs eleven scenarios that would all pass on a laptop.
+
+Most of the rest moved to a tier that holds it: modifier chains, peripherals and MoonLive are covered at unit level, and the MoonI80 no-freeze guard in particular is pinned by `unit_ParallelLedDriver_doublebuffer`.
+What no unit test can reproduce is the cross-board comparative number set the peripheral sweep produced.
+
+### The static set runs on every supported device before the rename (2026-09-29)
+
+The scenarios are the pre-cutover hardware check: a set that passes in-process proves the logic, and the same set against each board proves the platform layer under it.
+That is the point of getting the static set solid first, and it is what the device sweep on cutover day reads from.
+
+Needs three things the set does not have yet. The gaps above closed, since a sweep is only as good as what the scenarios assert, and the light ones currently render nothing.
+A scenario per hardware question, marked `live_only`, since the eleven as written would all pass on a laptop and prove nothing about a board.
+And a runner that takes the device list rather than one host, so the answer is a matrix across the chips we ship rather than a pass on whichever board was plugged in.
+
+`moondeck/moondeck.json` carries 24 registered devices and `run_live_scenario.py` takes a `--host`, so the missing piece is the loop and the per-device report, not the transport.
+
+### A scenario that runs until something breaks (2026-09-29)
+
+A static scenario proves a sequence works once. What it cannot find is the fault that needs a thousand random module additions, or a leak that takes an hour: the runner sets up, asserts and exits, so the long tail of lifecycle bugs has no test that reaches it.
+A fuzz mode would run until killed on a device left on a bench, doing randomly chosen legal things and stopping the moment one fails.
+
+The runner already carries most of it: a step vocabulary, module add, remove and replace, control setting, measurement, and per-step failure reporting.
+What it needs is a mode that generates steps rather than reading them, and four things that make a failure worth acting on.
+
+A **seed**, so a run is reproducible: a failure reprints the seed and the step index, and the same seed replays the same sequence.
+A **legal-move set** the scenario names rather than the generator guessing, since a random string in a filepath control proves nothing about the pipeline.
+**Halt on the first failure**, keeping the device in its broken state for inspection rather than tidying it away.
+And a **floor under heap and tick**, because the faults this is for announce themselves as a slow drift rather than an assertion.
+
+Worth most where the gaps above are: random add and remove under a live pipeline is exactly what the archived `remove_module` steps covered, and a long run on a Raspberry Pi finds the leak a thirty-second scenario cannot.
+Build it after the static set is solid, since a fuzz run is only as trustworthy as the assertions it fires.
+
+
 - **Memory degradation cascade** — the output-buffer *allocation* decision (no buffer for a lone identity layer; a buffer for ≥2 layers or any LUT layer) is unit-pinned (`unit_Layers_container` "Drivers allocates the output buffer only when…"), and LUT-vs-identity is pinned by `unit_Layer_sparse_mapping`. What's **not** pinned is the *low-heap* half of [architecture.md § Degradation cascade](../../reference/hardware/firmware-variants.md#degradation-cascade): under heap pressure the LUT + driver buffer are skipped *together* (`lutSkipped()` true, forced 1:1), and below that the layer buffer *reduces dimensions* (halving to a 8×8 floor) rather than failing. The hook exists — `unit_BlendMap` already uses `platform::setTestMaxAllocBlock` to force allocation failure for the paging test — so a test could cap the block size and assert: (1) LUT+output buffer both skip and `lutSkipped()` flips, (2) the layer buffer shrinks to fit and never goes null. Pre-existing gap (predates multi-layer); the *happy-path* allocation contract is covered, only the OOM-degrade branch isn't.
 - **Per-step assertions in scenarios (a framework gap, not a scenario gap).** A scenario step can
   assert TIMING and HEAP (`bounds`, `contract`) and the run asserts the final buffer, but it cannot

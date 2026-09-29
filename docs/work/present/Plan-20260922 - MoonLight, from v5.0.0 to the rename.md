@@ -16,11 +16,11 @@ MoonLight becomes MoonLight. **v5.0.0 is the last release under the old name and
 
 ## Where we stand
 
-Verified against the tree on 2026-09-22 rather than read from the plans, because several of their status lines had gone stale.
+Verified against the tree on 2026-09-29 rather than read from the plans, because several of their status lines had gone stale.
 
 | | Count | Note |
 |---|---|---|
-| Effects | 67 headers, ~64 registered | Migration complete by decision |
+| Effects | 68 headers, ~64 registered | Migration complete by decision |
 | Modifiers | 12 | All 9 predecessor ones plus three of ours |
 | Layouts | 18, 17 registered | Three install-specific ones absent, and staying so |
 | MoonLive | 33 `.mle` scripts, 5 `.mlp` palettes | Palettes shipped |
@@ -50,7 +50,7 @@ This was worth checking rather than believing: reading the URL construction alon
 Two things the sweep changes that a user feels, neither needing code:
 
 - **The sACN source name** at [E131Packet.h:55](../../../src/light/util/E131Packet.h) is a fixed nine-byte literal a receiving console displays, so it changes with the product rather than staying. Peer discovery does not: it classifies on the numeric marker and already reads `"MoonLight"`, so a mixed network keeps working.
-- **The `MM-` device prefix** in [SystemModule.h:57](../../../src/core/system/SystemModule.h) is every device's mDNS name and Home Assistant entity id. Changing it to `ML-` renames all of that, and unlike the configuration it is not something Restore carries back. Keeping `MM-` costs an odd prefix forever; changing it costs every user their bookmarks and automations once. Product owner's call, in the same sweep commit either way.
+- **The `MM-` device prefix** in [SystemModule.h:57](../../../src/core/system/SystemModule.h) is every device's mDNS name and Home Assistant entity id. **It stays** (decided 2026-09-29): `MM` is MoonModules, the organisation does not change at the rename, so the prefix keeps naming the thing it always named. Changing it to `ML-` would rename every mDNS name and entity id, which Restore does not carry back, for a prefix that was never wrong.
 
 ## The cutover
 
@@ -133,59 +133,48 @@ What makes this safe is that the sweep is idempotent and its own report is commi
 
 ### The week, day by day
 
-**The script is the deliverable.** It says what MoonLight is, in the order a newcomer needs it, and everything else is a rendering of it: the run files perform it, `uivideo.py` films it, the tutorials follow the same sequence in prose. Written once, so a change lands in all three. [The scenario](#the-introduction-a-draft-scenario) below is the draft to work from.
+**The script is the deliverable.** It says what MoonLight is, in the order a newcomer needs it, and everything else is a rendering of it: the run files perform it, `mtvideo.py` films it, the tutorials follow the same sequence in prose. Written once, so a change lands in all three. [The scenario](#the-introduction-a-draft-scenario) below is the draft to work from.
 
-**Every shot is a script, so filming is repeatable.** A run file names the steps and their captions, and `uivideo.py` performs them against a live device. Re-shooting is re-running, which is what makes the schedule below possible: the takes are cheap and the thinking is not. Footage is ready by Sept 30.
+**Every shot is a script, so filming is repeatable.** A run file names the steps and their captions, and `mtvideo.py` performs them against a live device. Re-shooting is re-running, which is what makes the schedule below possible: the takes are cheap and the thinking is not. Footage is ready by Sept 30.
 
 Two rules hold all week. **Anything found before Tuesday is fixed under the old name**, since a defect discovered after the rename is a defect in two releases. And **the published cut is filmed after the switch**: the UI carries the product name in its page title and header, so an earlier take says MoonLight in the pixels. Earlier takes still earn their place as rehearsal, because re-running is cheap.
 
-**Sept 22 and 23: the script.** Thinking, and it decides everything after it.
+**✅ Sept 22 and 23: the script.** Thinking, and it decides everything after it.
 
 - Write what MoonLight is, in the order a newcomer meets it.
 - Name each beat, what it shows, and what it says.
 - Check each beat against what exists today, so the script is shootable now.
 - Done when the scenario below is revised into the one you want.
 
-**Thu 24: the scenario suite, and the rename brought forward.** Hands on, and it went somewhere the plan had not put it.
+**✅ Thu 24: the scenario suite, and the rename brought forward.** Hands on, and it went somewhere the plan had not put it.
 
 - Rebuilt the scenario suite: 27 archived, 11 written, one per top-level card plus the reboot-persistence one.
 - Closed the hole that made them look green: a skip returned the pass code, so ten of eleven asserted nothing while the gate said `11 passed`. A skip is now counted as a skip, and a scenario that asserts nothing fails.
 - Swept the free renames in `src/` and `test/`, taking cutover day from 1277 lines to 1206. Documentation prose is the next batch and the largest.
-- The fourteen run files in `test/uiscenarios/clips/` are numbered and current; matching them to the script is Friday's work, alongside the first cut.
+- The fourteen run files in `moontube/clips/` are numbered and current; matching them to the script is Friday's work, alongside the first cut.
 
-**Fri 25: the first cut, filmed.** Hands on, and the rehearsal that finds what reads badly.
+**✅ Fri 25 to Mon 28: the cut, and what filming exposed.** The footage came, and so did a week of defects the camera found.
 
-- Record every run file with `uivideo.py` against a v5.0.0 device.
-- Cut it with `uicompose.py`: music, order, beats.
-- Watch it. A beat that drags or confuses is a script problem, so fix the script.
-- Done when a watchable cut exists, old name and all.
+- Every clip recorded and narrated, and the numbered series settled at seventeen: fourteen clips and three slide decks, about forty-eight minutes.
+- Filming is a test pass. It found a scripted `circle` that hung the render thread at the 16-bit edge, a black preview behind a TLS proxy, three hot-path checks that reported numbers nobody could act on, and three UI controls the recorder could not drive at all.
+- An ESP32 is a **device**, not a board, through the installer and the scripts: a board is a bare PCB and a device is that board in an enclosure with whatever is wired to it.
 
-**Sat 26: what the first cut taught.** Hands on.
+**✅ Tue 29: MoonTube, and the recorder's silent failure.** Not on the plan, and it had to come first.
 
-- Revise the script and the run files against what Friday showed.
-- Re-record what changed, which is a re-run rather than a re-shoot.
-- Done when the cut says what the script meant.
+- The series is a product with a home: `moontube/` at the root rather than under `test/`, since a run file is the source of a published video as much as it is a test.
+- **The recorder had been broken silently.** It resolved cards and nav entries by a test id this interface has never carried, so every `open_card` on a top-level module failed. `test_host --ui` is never a gate, so nothing ran often enough to notice. Two one-line fixes took the desktop suite from broken to nine of nine.
+- Four more defects the recording found: a five-second REST timeout that suits the desktop app and strands a real device, `clear_children` that never checked its own claim, preset pads that accumulated across every take, and nine clips published silent because nothing said a voiceover pass remained.
+- All seventeen videos re-recorded and voiced against the fixes.
 
-**Sun 27: the tutorials.** Thinking, which suits a short day.
+**🚧 Tue 29: [Windows day](#sept-29-windows-day), in parallel.** In progress on the Windows machine, and its findings merge in from there: the first time anything has been tested on that platform. The MoonTube work above ran on the Mac the same day.
 
-- Follow the same sequence in prose, since the script already settled the order.
-- Decide which beats are a page and which are a paragraph.
-- Done when the documentation and the film tell one story.
+**🚧 Wed 30: [the switch](#sept-30-moonlight-v600), then the final take.** The rename lands, and the footage is re-recorded against it the same day.
 
-**Mon 28: slack.** Whatever the week turned up.
-
-- Fix what testing found, and re-run anything a fix touched.
-- Done when the tree is releasable under the old name.
-
-**Tue 29: [Windows day](#sept-29-windows-day).** A full day, the first time anything has been tested there.
-
-**Wed 30: [the switch](#sept-30-moonlight-v600), then the final take.** The rename lands, and the footage is re-recorded against it the same day.
-
-- Re-run every run file with `uivideo.py` against a v6.0.0 device.
-- Re-cut with `uicompose.py`, which consumes the same project file.
+- Re-run every run file with `mtvideo.py` against a v6.0.0 device, then `mtvoiceover.py` over each: a clip is three passes and the middle one publishes silent.
+- Re-cut with `mtcompose.py`, which consumes the same project file.
 - Done when the published cut says MoonLight in every frame.
 
-**Thu 1 Oct: publish.** The announcement, the video, and the tutorials together.
+**🚧 Thu 1 Oct: publish.** The announcement, the video, and the tutorials together.
 
 **Testing rides along.** Every run file is a UI test, so Thursday and Friday exercise the newcomer's path harder than a test pass would, and the boards get theirs on Monday's slack. What that covers is in [the two threads](#the-two-threads-behind-the-week).
 
@@ -221,20 +210,32 @@ Smaller checks to make while the above runs: the browser opens on first launch, 
 
 One repository transfer, one sweep commit, one release. The installer manifest, the release asset names and the in-firmware URL builder are a lockstep set, so a half-applied rename leaves devices unable to update. `namespace mm::` stays throughout: it is not the product name, and renaming it would touch every file for nothing.
 
-One day, in order, with a stop at each gate:
+**The name is occupied, so the transfer is two moves in one moment.** `MoonModules/MoonLight` is the predecessor, a fork serving twelve releases, and GitHub refuses a rename onto a name that exists. So it vacates to `ewowi/MoonLight` and `projectMM` renames into the space it leaves, back to back. Between those two clicks `MoonModules/MoonLight` does not exist, and a device asking there falls through to `MoonModules/projectMM`, which redirects throughout: the gap is safe because the firmware already names both.
 
-1. **`uv run moondeck/repo_rename/check_rename_ready.py`**, which dry-runs the sweep and asserts what the rehearsal established: the reach is near the last measured pass, every `rename-keep` line survives, and the OTA still names two different repositories. Exit 0 means proceed. The rehearsal already ran the gate set over a swept tree, so this is a check rather than an investigation, and it is worth running any day before the switch to see the drift early.
-2. **Back up a configured v5.0.0 device** and keep the bundle. This is the evidence for the migration claim, and it has to be taken before anything moves.
-3. **Transfer the repository**, which leaves the old URLs redirecting.
-4. **Run `uv run moondeck/repo_rename/rename_to_moonlight.py --apply`** on a branch off the renamed repo, read the diff in full, commit it as one change. Then check the four the rehearsal found: `kFallbackRepo` still names the old repository, the MoonBase image check still reads `projectMM-moonbase`, MIGRATING's v5.0.0 heading still says projectMM, and `TextEffect`'s golden moves with its new default text rather than failing.
-5. **Flip the identity set in that same commit**: binary name, release asset names, the manifest `name` and `home_assistant_domain`, the docs domain, and the `MM-` prefix if it changes.
-   - The documentation path follows the repository name on its own: GitHub Pages serves a project site under `/<repo>/` even on the custom domain, so `moonmodules.org/projectMM/…` becomes `moonmodules.org/projectMM/…` at the transfer, and the sweep updates `site_url`, `repo_url` and `site_name` to match. Check the web installer at `/MoonLight/install/` first, since it is the link a newcomer follows.
-   - **Check the OLD installer path too, and do not assume it redirects.** GitHub's permanent redirect for a transferred repository covers `github.com` URLs, which is what the OTA client follows; a Pages path on a custom domain is a different mechanism and is not covered by that promise. Every board already shipped carries `/MoonLight/install/` on its QR code and in its documentation, so a 404 there strands the people most likely to be upgrading. Open it right after the transfer: if it does not land on the installer, publish a redirect from the old path before announcing anything.
-6. **Run the full gate set again** on the swept tree, then tag and release v6.0.0.
-7. **Verify the two claims**: a v5.0.0 device finds and installs v6.0.0 over OTA, and the backup from step 2 restores onto it with layouts, effects and scripts intact.
-8. **Hand-edit `moondeck/moondeck.json`**, which is gitignored and outside the sweep.
+**✅ Done on 2026-09-29, so tomorrow starts here rather than at step 1**: the readiness gate reads Ready at 464 lines re-baselined, the `MM-` prefix is decided (it stays), and two backups are on disk. `MoonLight-config-MM-testbench-S3-2026-09-29.json` is a device with configuration only; `MoonLight-config-MM-ScenarioProof-2026-09-29.json` carries 63 files including 50 MoonLive scripts and two presets, which is the one that exercises the renamed-and-mapped restore path.
 
-If step 7 fails, the release stays and the fix is a v6.0.1: the repository has already moved by then, so rolling back is not on the table. That is why steps 1 and 2 happen first.
+#### Before the moment
+
+1. 🚧 **`uv run moondeck/repo_rename/check_rename_ready.py`** must print Ready. It dry-runs the sweep and asserts the reach is as rehearsed, every `rename-keep` line survives, and the OTA still names two different repositories. A drift that fails the gate is a prompt to read the new hits, not to re-baseline past them.
+2. 🚧 **Confirm both backup bundles open** and name the device you expect. They are the evidence for the migration claim and cannot be taken once the repository has moved.
+3. 🚧 **Run the full gate set on main**, so the sweep lands on a tree that was already green. A failure found after the sweep is two problems wearing one diff.
+
+#### The moment
+
+4. 🚧 **Move `MoonModules/MoonLight` to `ewowi/MoonLight`.** This frees the name and leaves `MoonModules/MoonLight` redirecting to `ewowi`.
+5. 🚧 **Rename `MoonModules/projectMM` to `MoonModules/MoonLight`**, immediately. This overwrites the redirect from step 4, which is intended: the name is ours again and the predecessor keeps its content under `ewowi`.
+6. 🚧 **Open `moonmodules.org/projectMM/install/` and do not assume it redirects.** GitHub's permanent redirect covers `github.com` URLs, which is what the OTA client follows; a Pages path on a custom domain is a different mechanism with no such promise. Every shipped board carries that URL on its QR code, so a 404 there strands the people most likely to be upgrading. If it does not land on the installer, publish a redirect from the old path before announcing anything.
+
+#### After the moment
+
+7. 🚧 **Run `uv run moondeck/repo_rename/rename_to_moonlight.py --apply`** on a branch off the renamed repository, read the diff in full, and commit it as one change. Then check the four the rehearsal found: `kFallbackRepo` still names the old repository, the MoonBase image check still reads `projectMM-moonbase`, MIGRATING's v5.0.0 heading still says projectMM, and `TextEffect`'s golden moves with its new default text rather than failing.
+8. 🚧 **Flip the identity set in that same commit**: binary name, release asset names, the manifest `name` and `home_assistant_domain`, and the docs domain. The `MM-` prefix stays, decided on 2026-09-29.
+   - The documentation path follows the repository name on its own: GitHub Pages serves a project site under `/<repo>/` even on the custom domain, so the sweep updates `site_url`, `repo_url` and `site_name` to match. Check the web installer at its new path first, since it is the link a newcomer follows.
+9. 🚧 **Run the full gate set again** on the swept tree, then tag and release v6.0.0.
+10. 🚧 **Verify the two claims**: a v5.0.0 device finds and installs v6.0.0 over OTA, and the rich backup restores onto it with layouts, effects, presets and scripts intact. The firmware asset name carries no product name (`firmware-<variant>-v<version>.bin`), so a v5 device's URL survives the rename unchanged.
+11. 🚧 **Hand-edit `moondeck/moondeck.json`**, which is gitignored and outside the sweep.
+
+If step 10 fails, the release stays and the fix is a v6.0.1: the repository has already moved by then, so rolling back is not on the table. That is why the checks and the backups come first.
 
 ### After: the week following
 
@@ -389,7 +390,7 @@ MoonBase, backup and restore, MoonCloud, control surfaces, the driver catalog, a
 
 - **The beats keep their order**, audio at 5 and scripting at 6. Scripting is the more surprising claim, so it closes the build section where the stronger position is.
 - **Every shot is a screen capture.** Beat 8 keeps its place without footage of a physical panel, so the whole film is reproducible from run files and a re-shoot stays a re-run. Beats 7 and 8 still need run files the repo lacks.
-- **Captions carry it, with no voice track.** That is the three-minute pacing the draft assumes, and it keeps a re-shoot cheap. It is also what the tooling does: [uicompose.py](../../../moondeck/uiscenario/uicompose.py) mixes one music bed cut to the beat, so narration would need a second track and ducking beneath it, which is a change to the tool rather than to the script.
+- **Captions carry it, with no voice track.** That is the three-minute pacing the draft assumes, and it keeps a re-shoot cheap. It is also what the tooling does: [mtcompose.py](../../../moondeck/moontube/mtcompose.py) mixes one music bed cut to the beat, so narration would need a second track and ducking beneath it, which is a change to the tool rather than to the script.
 
 ## The two threads behind the week
 
@@ -397,11 +398,11 @@ MoonBase, backup and restore, MoonCloud, control surfaces, the driver catalog, a
 
 A newcomer arriving after the rename meets everything at once, and every part of it is equally new to them. So the week covers the path they take: install, provision, add a layout and an effect, drive it, save a preset, write a script, stream it somewhere. A defect in a three-release-old path costs a first impression exactly as much as one in the video drivers.
 
-The ten run files in `test/uiscenarios/clips/` describe precisely that path, numbered in the order a newcomer meets them, which is why they lead the week. `test_host --ui` performs every step and checks its `expect` blocks. They run on request rather than as a gate, by design, which leaves them the largest untested surface in the tree that a laptop can reach.
+The ten run files in `moontube/clips/` describe precisely that path, numbered in the order a newcomer meets them, which is why they lead the week. `test_host --ui` performs every step and checks its `expect` blocks. They run on request rather than as a gate, by design, which leaves them the largest untested surface in the tree that a laptop can reach.
 
 ### The introduction is written this week and filmed after the switch
 
-[uivideo.py](../../../moondeck/uiscenario/uivideo.py) records a run file with Playwright, captions and a cursor; [uicompose.py](../../../moondeck/uiscenario/uicompose.py) cuts published clips into one video on the beat with a music track. The ten clips and the `getting-started` project are the raw material, so the writing, the rehearsing and the edit all happen before the switch, and the recording follows it.
+[mtvideo.py](../../../moondeck/moontube/mtvideo.py) records a run file with Playwright, captions and a cursor; [mtcompose.py](../../../moondeck/moontube/mtcompose.py) cuts published clips into one video on the beat with a music track. The ten clips and the `getting-started` project are the raw material, so the writing, the rehearsing and the edit all happen before the switch, and the recording follows it.
 
 ## After v6.0.0
 

@@ -163,6 +163,9 @@ def clear_presets(host: str) -> int:
     A preset is a saved look on a pad, so a clip that demonstrates SAVING one has to open on an
     empty grid: the control clip's first save landed on pad two once an earlier take had taken pad
     one, and the captions then described a pad the viewer could not see being filled.
+
+    Returns how many were cleared, or -1 when a delete was refused. A refusal leaves pads behind,
+    which is exactly the half-reset state the caller must report rather than record a clip against.
     """
     removed = 0
     for _ in range(80):
@@ -190,9 +193,10 @@ def clear_presets(host: str) -> int:
                 return 200 <= r.status < 300
         try:
             if not _attempt(f"DELETE preset {row_id}", send):
-                break
-        except urllib.error.HTTPError:
-            break
+                return -1
+        except urllib.error.HTTPError as e:
+            print(f"  ! DELETE preset {row_id} -> HTTP {e.code}")
+            return -1
         removed += 1
     if removed:
         print(f"  - {removed} preset(s) cleared")
@@ -280,7 +284,8 @@ def reset(host: str) -> int:
             else:
                 failed += 1
 
-    clear_presets(host)
+    if clear_presets(host) < 0:
+        failed += 1        # pads left behind is a half-reset, same as a refused write
 
     if removed or added:
         time.sleep(1.0)       # let the tree settle before a run starts driving it

@@ -6,6 +6,7 @@
     "MultiplyModifier",
     "Layer"
   ],
+  "live_only": true,
   "description": "Resize the grid while the pipeline is running and verify it reallocates cleanly under memory pressure. Lowers to 128x64 (release memory), increases to 128x128 (heaviest config: mirror + LUT). Each measured step captures tick/FPS/heap so the runner reports the degrade behaviour.",
   "fixture": [
     {
@@ -66,10 +67,7 @@
       "op": "add_module",
       "id": "Layer",
       "type": "Layer",
-      "parent_id": "Effects",
-      "props": {
-        "channelsPerLight": 3
-      }
+      "parent_id": "Effects"
     },
     {
       "name": "canvas-noise",
@@ -248,29 +246,29 @@
         "esp32s3-n16r8": {
           "tick_us": {
             "p50": 1011,
-            "p95": 1011,
+            "p95": 18414,
             "min": 1011,
-            "max": 1011,
-            "n": 1,
-            "samples": [1011]
+            "max": 18414,
+            "n": 2,
+            "samples": [1011, 18414]
           },
           "free_heap": {
-            "p50": 8492479,
+            "p50": 8148131,
             "p95": 8492479,
-            "min": 8492479,
+            "min": 8148131,
             "max": 8492479,
-            "n": 1,
-            "samples": [8492479]
+            "n": 2,
+            "samples": [8492479, 8148131]
           },
           "max_alloc_block": {
             "p50": 77824,
             "p95": 77824,
             "min": 77824,
             "max": 77824,
-            "n": 1,
-            "samples": [77824]
+            "n": 2,
+            "samples": [77824, 77824]
           },
-          "last_updated": "2026-07-24"
+          "last_updated": "2026-09-29"
         }
       }
     },
@@ -430,29 +428,29 @@
         "esp32s3-n16r8": {
           "tick_us": {
             "p50": 478,
-            "p95": 478,
+            "p95": 7092,
             "min": 478,
-            "max": 478,
-            "n": 1,
-            "samples": [478]
+            "max": 7092,
+            "n": 2,
+            "samples": [478, 7092]
           },
           "free_heap": {
-            "p50": 8509019,
+            "p50": 8220067,
             "p95": 8509019,
-            "min": 8509019,
+            "min": 8220067,
             "max": 8509019,
-            "n": 1,
-            "samples": [8509019]
+            "n": 2,
+            "samples": [8509019, 8220067]
           },
           "max_alloc_block": {
-            "p50": 86016,
+            "p50": 77824,
             "p95": 86016,
-            "min": 86016,
+            "min": 77824,
             "max": 86016,
-            "n": 1,
-            "samples": [86016]
+            "n": 2,
+            "samples": [86016, 77824]
           },
-          "last_updated": "2026-07-24"
+          "last_updated": "2026-09-29"
         }
       }
     },
@@ -612,29 +610,29 @@
         "esp32s3-n16r8": {
           "tick_us": {
             "p50": 904,
-            "p95": 904,
+            "p95": 17038,
             "min": 904,
-            "max": 904,
-            "n": 1,
-            "samples": [904]
+            "max": 17038,
+            "n": 2,
+            "samples": [904, 17038]
           },
           "free_heap": {
-            "p50": 8490699,
+            "p50": 8148131,
             "p95": 8490699,
-            "min": 8490699,
+            "min": 8148131,
             "max": 8490699,
-            "n": 1,
-            "samples": [8490699]
+            "n": 2,
+            "samples": [8490699, 8148131]
           },
           "max_alloc_block": {
             "p50": 77824,
             "p95": 77824,
             "min": 77824,
             "max": 77824,
-            "n": 1,
-            "samples": [77824]
+            "n": 2,
+            "samples": [77824, 77824]
           },
-          "last_updated": "2026-07-24"
+          "last_updated": "2026-09-29"
         }
       }
     }

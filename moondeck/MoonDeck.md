@@ -796,7 +796,7 @@ Run scenario tests. Replays JSON scenario files in-process.
 
 ```bash
 uv run moondeck/scenario/run_scenario.py                       # run all
-uv run moondeck/scenario/run_scenario.py --name scenario_Layer_base_pipeline   # run one
+uv run moondeck/scenario/run_scenario.py --name scenario_Effects_pipeline_builds_and_renders   # run one
 ```
 
 Scenarios are JSON files in `test/scenarios/`. Use the dropdown to run a single scenario or leave it on **all** to run the full suite.
@@ -894,7 +894,7 @@ Run scenario tests against a live running device via HTTP.
 ```bash
 uv run moondeck/scenario/run_live_scenario.py                                    # all scenarios vs localhost:8080
 uv run moondeck/scenario/run_live_scenario.py --host 192.168.1.210               # vs ESP32
-uv run moondeck/scenario/run_live_scenario.py --name scenario_MoonModule_control_change   # one scenario
+uv run moondeck/scenario/run_live_scenario.py --name scenario_Network_hardware_reconfigures_live   # one scenario
 uv run moondeck/scenario/run_live_scenario.py --update-baseline                  # save baseline
 uv run moondeck/scenario/run_live_scenario.py --compare-baseline                 # detect regressions
 ```

@@ -1,0 +1,193 @@
+{
+  "name": "scenario_Network_hardware_reconfigures_live",
+  "description": "The network settings a desktop cannot answer for: an Ethernet PHY cycled on real silicon, mDNS announcing over a real radio, and Home Assistant discovery announced and retracted against a real broker. The render loop has to survive every one of them.",
+  "also": [
+    "NetworkModule",
+    "MqttModule"
+  ],
+  "live_only": true,
+  "fixture": [
+    {
+      "name": "layouts",
+      "description": "Where the lights are, which the layer reads its coordinates from.",
+      "op": "add_module",
+      "id": "Layouts",
+      "type": "Layouts"
+    },
+    {
+      "name": "grid",
+      "description": "A 16x16 panel: small enough for any board, big enough that a stall in the render loop shows.",
+      "op": "add_module",
+      "id": "Grid",
+      "type": "GridLayout",
+      "parent_id": "Layouts",
+      "props": {
+        "width": 16,
+        "height": 16
+      }
+    },
+    {
+      "name": "layer",
+      "description": "One layer over those layouts. This is what the checks read, so a reconfigure that stops the render is visible rather than silent.",
+      "op": "add_module",
+      "id": "Layer",
+      "type": "Layer",
+      "props": {
+        "layouts": "Layouts"
+      }
+    },
+    {
+      "name": "effect",
+      "description": "An effect that paints from the first frame, so the buffer carries light throughout.",
+      "op": "add_module",
+      "id": "FX",
+      "type": "RainbowEffect",
+      "parent_id": "Layer"
+    },
+    {
+      "name": "drivers",
+      "description": "The drivers container, wired to the effects whose buffer it reads.",
+      "op": "add_module",
+      "id": "Drivers",
+      "type": "Drivers",
+      "props": {
+        "layer": "Layer"
+      }
+    },
+    {
+      "name": "preview",
+      "description": "The preview is a driver like any other, and the one every target has.",
+      "op": "add_module",
+      "id": "Preview",
+      "type": "PreviewDriver",
+      "parent_id": "Drivers"
+    }
+  ],
+  "steps": [
+    {
+      "name": "measure-baseline",
+      "description": "The render loop before anything is reconfigured, which every later measurement is read against.",
+      "op": "measure"
+    },
+    {
+      "name": "mdns-off",
+      "description": "The responder off. On a device this stops real announcement traffic on a real radio, where the desktop advertises nothing at all.",
+      "op": "set_control",
+      "id": "Network",
+      "key": "mDNS",
+      "value": false
+    },
+    {
+      "name": "mdns-off-took",
+      "op": "expect_control",
+      "id": "Network",
+      "key": "mDNS",
+      "equals": false
+    },
+    {
+      "name": "mdns-on",
+      "description": "And back on, which re-registers the service. The cost of that registration is what a desktop cannot show.",
+      "op": "set_control",
+      "id": "Network",
+      "key": "mDNS",
+      "value": true
+    },
+    {
+      "name": "measure-mdns-cycled",
+      "description": "The render loop after a full off-on cycle. A responder that leaks a socket or a task shows here rather than in a unit test.",
+      "op": "measure"
+    },
+    {
+      "name": "ha-discovery-on",
+      "description": "Home Assistant discovery announced: a retained config published to a real broker, which the desktop's no-op seam never sends.",
+      "op": "set_control",
+      "id": "Mqtt",
+      "key": "haDiscovery",
+      "value": true
+    },
+    {
+      "name": "ha-discovery-off",
+      "description": "And retracted, which frees the buffers the announce allocated. The pair is the leak test.",
+      "op": "set_control",
+      "id": "Mqtt",
+      "key": "haDiscovery",
+      "value": false
+    },
+    {
+      "name": "ha-discovery-off-took",
+      "op": "expect_control",
+      "id": "Mqtt",
+      "key": "haDiscovery",
+      "equals": false
+    },
+    {
+      "name": "measure-mqtt-cycled",
+      "description": "Announce and retract cost, measured against the baseline rather than asserted as a number: a broker's latency is not ours to promise.",
+      "op": "measure"
+    },
+    {
+      "name": "eth-lan8720",
+      "description": "An Ethernet PHY named on a running device, which calls ethStop and ethInit for real. On the desktop this is a seam that returns immediately.",
+      "op": "set_control",
+      "id": "Network",
+      "key": "ethType",
+      "value": 1
+    },
+    {
+      "name": "eth-ip101",
+      "description": "A second RMII PHY, which shares the EMAC path but not its pin map.",
+      "op": "set_control",
+      "id": "Network",
+      "key": "ethType",
+      "value": 3
+    },
+    {
+      "name": "eth-w5500",
+      "description": "The SPI-attached one, a different driver entirely: it tears down the bus rather than the EMAC.",
+      "op": "set_control",
+      "id": "Network",
+      "key": "ethType",
+      "value": 2
+    },
+    {
+      "name": "eth-none",
+      "description": "Back to none, tearing the interface down again. Cycling is what finds a driver that survives one init but not two.",
+      "op": "set_control",
+      "id": "Network",
+      "key": "ethType",
+      "value": 0
+    },
+    {
+      "name": "eth-back-to-none",
+      "op": "expect_control",
+      "id": "Network",
+      "key": "ethType",
+      "equals": 0
+    },
+    {
+      "name": "measure-eth-cycled",
+      "description": "The render loop after the interface came up and went away. A reconfigure that stalls the loop is the fault this exists to catch.",
+      "op": "measure"
+    },
+    {
+      "name": "restart",
+      "description": "A device that forgets its network settings is one somebody has to set up twice.",
+      "op": "reboot",
+      "timeout": 60
+    },
+    {
+      "name": "mdns-survived",
+      "op": "expect_control",
+      "id": "Network",
+      "key": "mDNS",
+      "equals": true
+    },
+    {
+      "name": "eth-survived",
+      "op": "expect_control",
+      "id": "Network",
+      "key": "ethType",
+      "equals": 0
+    }
+  ]
+}

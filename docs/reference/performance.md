@@ -165,7 +165,7 @@ The default `esp32` build carries both the WiFi and Ethernet stacks, and `sdkcon
 | Drivers | 48 KB | output buffer (128×128×3) |
 | System + Network | 0 | char buffers in class, no heap |
 
-LUT is half desktop size (uint16_t vs uint32_t per entry). The 1:1 (no-modifier) path skips the LUT entirely; see `scenario_Layer_memory_1to1` vs `scenario_MultiplyModifier_memory_lut`.
+LUT is half desktop size (uint16_t vs uint32_t per entry). The 1:1 (no-modifier) path skips the LUT entirely, which `unit_Layer_sparse_mapping` pins as the identity path against a serpentine grid that does build one.
 
 ### Heap breakdown (128×128, mirror, RainbowEffect, Ethernet + mDNS)
 
@@ -407,7 +407,10 @@ Absolute tick at each step (the diff vs the prior row is that subsystem's cost):
 
 **Multi-layer composition** (the `Drivers` composite loop): a single enabled Layer is the pass-through fast path (the driver reads the Layer's buffer directly — zero composite cost, the figures above). Each *additional* enabled Layer adds one `blendMap` pass over the physical buffer (integer alpha-over or additive, branch-resolved once per layer), so N enabled layers cost ≈ N × the per-layer write — linear in layer count, same shape as the per-effect sweep. The RegionModifier adds nothing unless present (no modifier = the identity fast path).
 
-**Branch re-verification (2026-06-25, multi-layer + RegionModifier):** the live perf scenarios (`scenario_perf_light` / `_full` / `_modifier_swap`) were re-run on all three boards on this branch's firmware. The per-effect and per-modifier numbers match the tables here within run-to-run variance — the new composite/RegionModifier code does not regress the single-layer pipeline (it's opt-in: a one-layer tree runs the same path as before).
+**Branch re-verification (2026-06-25, multi-layer + RegionModifier):** the live perf scenarios were re-run on all three boards on this branch's firmware.
+Those are `scenario_perf_light` and `_full`, plus a modifier-swap scenario since replaced by `unit_Layer_modifier_chain`.
+The per-effect and per-modifier numbers match the tables here within run-to-run variance.
+The new composite/RegionModifier code does not regress the single-layer pipeline, being opt-in: a one-layer tree runs the same path as before.
 
 ### Effect compute — light vs heavy bracket, across grid sizes (render-only)
 

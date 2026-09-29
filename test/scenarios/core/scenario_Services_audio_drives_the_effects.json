@@ -46,6 +46,36 @@
       "equals": "2"
     },
     {
+      "name": "pick-a-rate",
+      "description": "The sample rate rebuilds the capture, on a computer and on a device's I2S alike.",
+      "op": "set_control",
+      "id": "Audio",
+      "key": "sampleRate",
+      "value": 3
+    },
+    {
+      "name": "the-rate-took",
+      "op": "expect_control",
+      "id": "Audio",
+      "key": "sampleRate",
+      "equals": 3
+    },
+    {
+      "name": "set-the-gain",
+      "description": "Gain is a plain write rather than a rebuild: the contrast with the rate above is the point.",
+      "op": "set_control",
+      "id": "Audio",
+      "key": "gain",
+      "value": 200
+    },
+    {
+      "name": "the-gain-took",
+      "op": "expect_control",
+      "id": "Audio",
+      "key": "gain",
+      "equals": 200
+    },
+    {
       "name": "restart",
       "description": "Restart, because a source that reverts leaves a mic board silently synthesizing.",
       "op": "reboot",
@@ -57,6 +87,14 @@
       "id": "Audio",
       "key": "mode",
       "equals": "2"
+    },
+    {
+      "name": "the-rate-survived",
+      "description": "A capture setting a user picked once should not need picking again.",
+      "op": "expect_control",
+      "id": "Audio",
+      "key": "sampleRate",
+      "equals": 3
     },
     {
       "name": "back-to-simulate",

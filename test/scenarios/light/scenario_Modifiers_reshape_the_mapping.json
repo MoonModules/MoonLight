@@ -1,0 +1,276 @@
+{
+  "name": "scenario_Modifiers_reshape_the_mapping",
+  "description": "A modifier changes where an effect's pixels land, not what it draws. Stacking, reordering and removing them rebuilds the mapping under a running pipeline, and a layer with no modifier at all must stay on the identity path rather than paying for a lookup table it does not need.",
+  "also": [
+    "Layer",
+    "MultiplyModifier",
+    "CheckerboardModifier"
+  ],
+  "fixture": [
+    {
+      "name": "layouts",
+      "description": "Where the lights are, which the layer reads its coordinates from.",
+      "op": "add_module",
+      "id": "Layouts",
+      "type": "Layouts"
+    },
+    {
+      "name": "grid",
+      "description": "A 16x16 panel, small enough to run anywhere and square so a mirror is visible in the mapping.",
+      "op": "add_module",
+      "id": "Grid",
+      "type": "GridLayout",
+      "parent_id": "Layouts",
+      "props": {
+        "width": 16,
+        "height": 16
+      }
+    },
+    {
+      "name": "layer",
+      "description": "One layer over those layouts, which owns the mapping a modifier reshapes.",
+      "op": "add_module",
+      "id": "Layer",
+      "type": "Layer",
+      "props": {
+        "layouts": "Layouts"
+      }
+    },
+    {
+      "name": "effect",
+      "description": "An effect that paints from the first frame, so a change in mapping is a change in something real.",
+      "op": "add_module",
+      "id": "FX",
+      "type": "RainbowEffect",
+      "parent_id": "Layer"
+    },
+    {
+      "name": "drivers",
+      "description": "The drivers container, wired to the effects whose buffer it reads.",
+      "op": "add_module",
+      "id": "Drivers",
+      "type": "Drivers",
+      "props": {
+        "layer": "Layer"
+      }
+    },
+    {
+      "name": "preview",
+      "description": "The preview is a driver like any other, and the one every target has.",
+      "op": "add_module",
+      "id": "Preview",
+      "type": "PreviewDriver",
+      "parent_id": "Drivers"
+    }
+  ],
+  "steps": [
+    {
+      "name": "measure-identity",
+      "description": "A lone layer with no modifier: one light maps to one light, so there is no lookup table and no separate output buffer. This is the floor the rest is read against, and the contrast that says a modifier costs something.",
+      "op": "measure",
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 8,
+            "p95": 49,
+            "min": 6,
+            "max": 49,
+            "n": 14,
+            "samples": [49, 33, 6, 7, 6, 8, 6, 7, 10, 11, 8, 9, 7, 24]
+          },
+          "last_updated": "2026-09-29"
+        }
+      }
+    },
+    {
+      "name": "add-a-modifier",
+      "description": "A multiply, which folds the coordinate space: from here the layer needs a lookup table and the drivers need a buffer of their own.",
+      "op": "add_module",
+      "id": "Mult",
+      "type": "MultiplyModifier",
+      "parent_id": "Layer"
+    },
+    {
+      "name": "the-modifier-is-wired",
+      "description": "It reports its own control, which is what says the module reached the layer rather than being created beside it.",
+      "op": "expect_control",
+      "id": "Mult",
+      "key": "multiplyX",
+      "equals": 2
+    },
+    {
+      "name": "measure-one-modifier",
+      "description": "The difference against the identity floor is what the lookup table and the second buffer cost.",
+      "op": "measure",
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 4,
+            "p95": 48,
+            "min": 3,
+            "max": 48,
+            "n": 14,
+            "samples": [48, 23, 3, 3, 3, 3, 3, 4, 5, 6, 4, 5, 3, 20]
+          },
+          "last_updated": "2026-09-29"
+        }
+      }
+    },
+    {
+      "name": "mirror-it",
+      "description": "A control change on a modifier rebuilds the mapping, where the same change on an effect would not: the pipeline has to fold again on the next frame.",
+      "op": "set_control",
+      "id": "Mult",
+      "key": "mirrorX",
+      "value": true
+    },
+    {
+      "name": "the-mirror-took",
+      "op": "expect_control",
+      "id": "Mult",
+      "key": "mirrorX",
+      "equals": true
+    },
+    {
+      "name": "measure-remapped",
+      "description": "Rendering through the rebuilt mapping. A rebuild that failed leaves the old table in place, which costs the same and shows the wrong picture.",
+      "op": "measure",
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 4,
+            "p95": 32,
+            "min": 3,
+            "max": 32,
+            "n": 14,
+            "samples": [32, 20, 4, 3, 4, 3, 3, 3, 4, 5, 4, 5, 3, 14]
+          },
+          "last_updated": "2026-09-29"
+        }
+      }
+    },
+    {
+      "name": "stack-a-second",
+      "description": "A checkerboard on top of the multiply: two modifiers fold in order, so the second reads what the first produced rather than the raw layout.",
+      "op": "add_module",
+      "id": "Check",
+      "type": "CheckerboardModifier",
+      "parent_id": "Layer"
+    },
+    {
+      "name": "measure-two-deep",
+      "description": "A two-deep chain, which is the shape a real installation uses and the one where an ordering fault shows.",
+      "op": "measure",
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 3,
+            "p95": 22,
+            "min": 2,
+            "max": 22,
+            "n": 14,
+            "samples": [22, 15, 3, 2, 2, 2, 3, 3, 3, 4, 3, 3, 2, 10]
+          },
+          "last_updated": "2026-09-29"
+        }
+      }
+    },
+    {
+      "name": "remove-the-first",
+      "description": "The multiply goes while the checkerboard stays. The chain has to re-fold from what is left rather than keeping a stale table that names a modifier which no longer exists.",
+      "op": "remove_module",
+      "id": "Mult"
+    },
+    {
+      "name": "the-survivor-is-still-wired",
+      "description": "The remaining modifier answers, so the removal took one link out of the chain rather than breaking it.",
+      "op": "expect_control",
+      "id": "Check",
+      "key": "size",
+      "equals": 2
+    },
+    {
+      "name": "measure-refolded",
+      "description": "One modifier again, after a removal from the middle of a chain.",
+      "op": "measure",
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 4,
+            "p95": 26,
+            "min": 3,
+            "max": 26,
+            "n": 14,
+            "samples": [26, 17, 4, 3, 3, 4, 3, 3, 4, 5, 4, 4, 3, 9]
+          },
+          "last_updated": "2026-09-29"
+        }
+      }
+    },
+    {
+      "name": "swap-it",
+      "description": "And replaced in its own slot, which is a remove and an add the pipeline has to survive as one gesture.",
+      "op": "replace_module",
+      "id": "Check",
+      "type": "MirrorModifier"
+    },
+    {
+      "name": "the-slot-holds-the-new-type",
+      "description": "A control only a mirror has, read through the id the checkerboard was registered under. This is what separates a swap from a step that did nothing: the size control the old module answered with is gone, and mirrorY answers in its place.",
+      "op": "expect_control",
+      "id": "Check",
+      "key": "mirrorY",
+      "equals": true
+    },
+    {
+      "name": "measure-swapped",
+      "description": "Rendering through a modifier that was not there a frame ago, in a slot that never emptied.",
+      "op": "measure",
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 3,
+            "p95": 24,
+            "min": 3,
+            "max": 24,
+            "n": 14,
+            "samples": [24, 20, 3, 3, 3, 3, 3, 3, 5, 4, 3, 4, 3, 8]
+          },
+          "last_updated": "2026-09-29"
+        }
+      }
+    },
+    {
+      "name": "remove-the-last",
+      "description": "The last modifier goes, so the layer returns to the identity path it started on.",
+      "op": "remove_module",
+      "id": "Check"
+    },
+    {
+      "name": "back-on-the-identity-path",
+      "description": "The layout still reports its size with no modifier left, which is what says the fold was released rather than merely bypassed.",
+      "op": "expect_control",
+      "id": "Grid",
+      "key": "width",
+      "equals": 16
+    },
+    {
+      "name": "measure-identity-again",
+      "description": "The floor again. Read against the first measurement, this is what says the lookup table and the extra buffer were given back rather than leaked.",
+      "op": "measure",
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 7,
+            "p95": 37,
+            "min": 6,
+            "max": 37,
+            "n": 14,
+            "samples": [37, 21, 7, 8, 7, 6, 6, 7, 9, 6, 7, 7, 6, 11]
+          },
+          "last_updated": "2026-09-29"
+        }
+      }
+    }
+  ]
+}

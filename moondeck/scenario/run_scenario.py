@@ -2,7 +2,7 @@
 """Run scenario tests. Replays scenario JSON files via the in-process runner.
 
 Filters compose:
-  --name <stem>     run that one scenario file (the JSON stem, e.g. scenario_Layer_base_pipeline)
+  --name <stem>     run that one scenario file (the JSON stem, e.g. scenario_Effects_pipeline_builds_and_renders)
   --module <Name>   run every scenario whose top-level `module` (or `also`) matches
   --name + --module the named scenario must also match the module (otherwise refused)
   (neither)         run every scenario the runner discovers

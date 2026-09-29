@@ -21,7 +21,7 @@
       "title": "Drivers on a device",
       "description": "Real pins, real panels",
       "caption": "Drivers on a device. Real pins, real panels.",
-      "seconds": 6.1
+      "seconds": 6.4
     },
     {
       "action": "open_card",
@@ -35,7 +35,7 @@
       "type": "RmtLedDriver",
       "as": "rmt",
       "caption": "This is the one most rigs start with. R M T is a peripheral on the chip that was built for infrared remotes, and it turns out to clock addressable LEDs exactly as well.",
-      "speech": 13.9
+      "speech": 13.1
     },
     {
       "action": "set_text",
@@ -43,14 +43,15 @@
       "control": "pins",
       "value": "18",
       "caption": "Pin eighteen, where the strip is wired on this device. That one field is the whole answer to how a frame reaches a light.",
-      "speech": 9.6
+      "speech": 9.4
     },
     {
       "action": "set_number",
       "module": "{rmt}",
       "control": "count",
       "value": 1,
-      "caption": "Start and count are the slice of the buffer this driver takes. A count of one is the smallest job there is: the first light of the strip, and nothing else."
+      "caption": "Start and count are the slice of the buffer this driver takes. A count of one is the smallest job there is: the first light of the strip, and nothing else.",
+      "speech": 12.2
     },
     {
       "action": "set_number",
@@ -58,13 +59,13 @@
       "control": "count",
       "value": 65535,
       "caption": "Back to everything, and now the card objects. One pin clocks about two thousand lights before the refresh becomes a slideshow, and this wall is four thousand of them.",
-      "speech": 12.8
+      "speech": 13.3
     },
     {
       "action": "open_card",
       "module": "{rmt}",
       "caption": "There it is in the status line, in the driver's own words: some lights are not driven, add pins or use start and count.",
-      "speech": 9.9
+      "speech": 9.8
     },
     {
       "action": "set_text",
@@ -72,7 +73,7 @@
       "control": "pins",
       "value": "18,38",
       "caption": "So give it a second pin. Eighteen and thirty eight, the two LED pins this device brings out, and the warning clears: two thousand lights each, and the buffer split between them.",
-      "speech": 14.1
+      "speech": 14.6
     },
     {
       "action": "open_card",
@@ -84,7 +85,7 @@
       "action": "delete_module",
       "module": "{rmt}",
       "caption": "Out again. A driver is a module like any other, so it comes and goes on the next frame and the lights never stop.",
-      "speech": 9.4
+      "speech": 9.6
     },
     {
       "action": "add_module",
@@ -99,13 +100,14 @@
       "module": "{par}",
       "control": "pins",
       "value": "18",
-      "caption": "Pin eighteen again, clocked side by side with the others rather than one after the next: that is what parallel means here."
+      "caption": "Pin eighteen again, clocked side by side with the others rather than one after the next: that is what parallel means here.",
+      "speech": 9.6
     },
     {
       "action": "open_card",
       "module": "{par}",
       "caption": "Sixteen lanes in parallel is what a wall of twelve thousand lights needs; this one uses two of them. It is the same effect output, cut into strands and sent out at once.",
-      "speech": 13.5
+      "speech": 13.7
     },
     {
       "action": "delete_module",
@@ -119,13 +121,13 @@
       "type": "Hub75Driver",
       "as": "hub",
       "caption": "H U B seventy five is a different animal. These are the panels you see on a stage backdrop, and this drives them straight from the chip's own pins with no receiving card in between.",
-      "speech": 13.3
+      "speech": 13.1
     },
     {
       "action": "open_card",
       "module": "{hub}",
       "caption": "Bit depth is the trade it asks you to make: more bits is a smoother gradient, fewer bits is a faster refresh.",
-      "speech": 9.4
+      "speech": 9.2
     },
     {
       "action": "delete_module",
@@ -139,13 +141,13 @@
       "type": "PanelCardDriver",
       "as": "card",
       "caption": "And this one talks to the receiving cards a professional rig is built from, over raw Ethernet frames below I P, the way a sender card does.",
-      "speech": 11.3
+      "speech": 11.5
     },
     {
       "action": "delete_module",
       "module": "{card}",
       "caption": "Removing it, so what is left is the set a computer has too.",
-      "speech": 5.7
+      "speech": 5.6
     },
     {
       "action": "add_module",
@@ -153,19 +155,19 @@
       "type": "NetworkSendDriver",
       "as": "net",
       "caption": "The network senders work here exactly as they do on a computer. Art Net, s A C N and D D P, out to fixtures that listen on the network rather than on a pin.",
-      "speech": 13.7
+      "speech": 13.6
     },
     {
       "action": "delete_module",
       "module": "{net}",
       "caption": "Those, and the video senders and the Hue bridge, all behave the same on a device as on a desktop, so the drivers clip on the computer shows them in full.",
-      "speech": 12.4
+      "speech": 13.1
     },
     {
       "action": "open_card",
       "module": "Drivers",
       "caption": "One frame, and any of these carries it. What a device adds is not more drivers, it is hardware for the ones that need it.",
-      "speech": 10.5
+      "speech": 10.6
     }
   ]
 }
