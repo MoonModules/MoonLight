@@ -393,7 +393,7 @@ void MqttModule::handleUpdateInstall(const char* payload, size_t payloadLen) {
     const int un = std::snprintf(url, sizeof(url), kReleaseAssetUrlFormat,
                                  kReleaseRepo, v, kFirmwareName, v);
     if (un <= 0 || static_cast<size_t>(un) >= sizeof(url)) return;
-    // Today's repository, tried where the address above does not answer (FirmwareUpdateModule names why both).
+    // The repository's earlier name, tried where the address above does not answer (FirmwareUpdateModule names why both).
     char altUrl[256];
     const int an = std::snprintf(altUrl, sizeof(altUrl), kReleaseAssetUrlFormat,
                                  kFallbackRepo, v, kFirmwareName, v);

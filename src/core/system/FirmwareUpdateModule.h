@@ -21,7 +21,7 @@
 ///
 /// ## Two addresses, because a rename has to survive in the field
 ///
-/// A device flashed under the repository's earlier name asks that address forever, and GitHub's rename redirect is what carries it across.
+/// A device flashed before v5.0.0 asks the repository's earlier name forever, and GitHub's rename redirect is what carries it across.
 /// The update path names both addresses and takes whichever answers, so an in-field update rests on more than that redirect.
 /// The current name comes first: every device reaches it directly, and the earlier one is a second chance when that request fails.
 /// Fetching another project's firmware is prevented separately.

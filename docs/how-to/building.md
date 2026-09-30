@@ -110,7 +110,7 @@ docker run -d --name moonlight -p 8081:8080 -v moonlight:/data \
 
 `--no-browser` because a container has no browser to open: without it the start prints a line saying it could not open one, which is noise rather than a failure. The Compose service passes it already.
 
-`:latest` follows the rolling prerelease, the same build the installer page offers; a version tag such as `:5.0.0` pins one. Images are published by the release workflow from the same `.deb` that release ships, so the image and the binary are the same build.
+`:latest` follows the rolling prerelease, the same build the installer page offers; a version tag such as `:6.0.0` pins one. Images are published by the release workflow from the same `.deb` that release ships, so the image and the binary are the same build.
 
 **Upgrading preserves everything.** The image holds only the binary and all state lives in the
 volume, so an upgrade keeps settings, presets, scripts and the device's identity. Which command depends on which source the compose file names: `docker compose pull && docker compose up -d` for a published `image:`, and `docker compose build --pull && docker compose up -d` for the shipped `build: .`, where `pull` alone would fetch nothing and `up` would rebuild from the checkout. Only `docker compose down -v` wipes it, and only a mounted volume is preserved at all: a bare `docker run` with no `-v` loses its state when the container goes.

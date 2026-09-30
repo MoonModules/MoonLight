@@ -26,7 +26,7 @@ MoonLight ships **no migration code**: the persistence layer is robust by defaul
 
 ### The desktop settings folder and the installer's device list carry the new name
 
-**Action: *re-set a control*, on a desktop install, plus re-adding bookmarks on the installer page.**
+**Action: *update a file*, on a desktop install: copy the settings folder across. Bookmarks on the installer page are added again.**
 
 A desktop install keeps its config, presets and scripts in a folder named after the product, and that folder is now `MoonLight` where it was `projectMM`:
 
@@ -38,7 +38,7 @@ A desktop install keeps its config, presets and scripts in a folder named after 
 The old folder is left alone rather than read, so the app starts on its defaults.
 The app itself installs beside an existing projectMM on every desktop platform, and the two compete for port 8080, so uninstall projectMM first.
 Copy the contents across to keep what you had.
-A Backup from the old install, restored into the new one, also carries the WiFi credentials.
+A Backup taken in the old install and restored into the new one carries it across too.
 
 The installer page's saved device list moves the same way, from `projectMM.devices.v1` to `MoonLight.devices.v1` in the browser's local storage.
 The page opens with no remembered devices, and each one is added again by address.
@@ -53,7 +53,7 @@ A systemd unit written from the install guide names the old binary: point its `E
 
 The container image is `ghcr.io/moonmodules/moonlight`, and the compose file's service, container and volume are named `moonlight` and `moonlight-data`.
 A deployment pulling the old image name stays on v5.0.0, so change the image name.
-Then rename the existing volume, or Restore a Backup into the new one.
+Then copy `/data/projectMM` to `/data/MoonLight` inside the existing volume, or Restore a Backup into a new one.
 
 The macOS bundle identifier is `org.moonmodules.moonlight`, which macOS reads as a new app.
 A permission granted to the old one, such as the microphone, is asked for again.
