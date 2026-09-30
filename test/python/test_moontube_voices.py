@@ -58,6 +58,7 @@ def test_the_slides_are_lunas():
 def test_no_clip_shares_a_voice_with_its_neighbor_in_the_series():
     series = json.loads((PROJECTS / "full-series.json").read_text(encoding="utf-8"))
     voices = []
+    series["clips"] = [entry for entry in series["clips"] if "clip" in entry]   # a loose source file has no narrator
     for entry in series["clips"]:
         for folder in ("clips", "slides"):
             path = ROOT / "moontube" / folder / f"{entry['clip']}.json"

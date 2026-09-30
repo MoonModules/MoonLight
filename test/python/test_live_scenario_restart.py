@@ -59,5 +59,8 @@ def test_a_desktop_build_on_this_machine_is_named_after_this_host():
 def test_only_a_host_on_this_machine_counts_as_local():
     assert runner.Client("localhost:8080").local
     assert runner.Client("127.0.0.1:8080").local
+    assert runner.Client("[::1]:8080").local
+    assert runner.Client("[::1]").local
+    assert runner.Client("::1").local
     assert not runner.Client("192.168.1.156:8080").local
     assert not runner.Client("192.168.1.158").local

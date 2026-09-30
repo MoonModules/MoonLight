@@ -3,6 +3,13 @@
   "description": "Luna introduces MoonLight: what MoonModules built before, what she built from their prompts, and the principles that survived the rewrite.",
   "slides": [
     {
+      "cover": true,
+      "kicker": "MoonModules presents",
+      "title": "MoonLight",
+      "tagline": "Thousands of lights, live from any browser, on any device, over any protocol.<b>Better · Faster · Safer · Unbreakable · Open</b>",
+      "hold": 2
+    },
+    {
       "kicker": "MoonModules",
       "title": "Hello, I am Luna",
       "say": "Hello! I am Luna. Welcome to a new MoonModules video. It's been a while. About a year ago MoonModules made a number of MoonLight videos. But since then, MoonLight has had a complete makeover. If you have not met it: MoonLight drives LED installations and DMX fixtures, live, from any browser.",

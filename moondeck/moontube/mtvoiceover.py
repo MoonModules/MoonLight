@@ -60,7 +60,7 @@ def timeline(run: dict, voice: str, work: Path, clip: Path) -> list[tuple[float,
         raise SystemExit(
             f"no caption marks beside {clip.name}: record it again so the offsets are measured "
             f"rather than assumed (expected {marks_file.name})")
-    marks = json.loads(marks_file.read_text())
+    marks = json.loads(marks_file.read_text(encoding="utf-8"))
 
     model = voice_model(voice)
     _, speaker = VOICE_PATHS[voice]
@@ -149,7 +149,7 @@ def main() -> int:
     ap.add_argument("--out", help="where the narrated clip lands (default: over the tracked one)")
     args = ap.parse_args()
 
-    run = json.loads(Path(args.run).read_text())
+    run = json.loads(Path(args.run).read_text(encoding="utf-8"))
     name = run.get("name", Path(args.run).stem)
     clip = Path(args.clip) if args.clip else ROOT / "docs" / "assets" / "moontube" / f"{name}.webm"
     if not clip.exists():

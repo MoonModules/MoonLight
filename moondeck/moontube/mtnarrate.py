@@ -80,8 +80,10 @@ def overview_rows(project: dict, own: str) -> list[list[str]]:
     Read from the project file because that is where the series is written down once: a slide that
     retyped the titles would name last month's clips.
     """
-    names = [c["clip"] for c in project["clips"]]
-    after = project["clips"][names.index(own) + 1:] if own in names else project["clips"]
+    # Only the named clips: an entry that is a loose `source` file is footage, not a chapter.
+    clips = [c for c in project["clips"] if "clip" in c]
+    names = [c["clip"] for c in clips]
+    after = clips[names.index(own) + 1:] if own in names else clips
     return [[f"{n}. {c.get('title', c['clip'])}", c.get("subtitle", "")]
             for n, c in enumerate(after, 1)]
 
@@ -119,13 +121,17 @@ def slide_html(slide: dict, index: int, total: int) -> str:
   .credits div {{ break-inside:avoid; font-size:19px; line-height:1.42; padding:3px 0; }}
   .credits b {{ color:var(--accent); font-weight:600; }}
   .credits span {{ color:var(--dim); }}
+  .cover h1 {{ font-size:132px; letter-spacing:-.03em; }}
+  .cover .tagline {{ margin-top:26px; font-size:34px; line-height:1.3; color:var(--dim); max-width:780px; }}
+  .cover .tagline b {{ display:block; margin-top:22px; color:var(--accent); font-weight:600; letter-spacing:.02em; }}
   .foot {{ position:fixed; left:110px; bottom:44px; color:var(--dim); font-size:15px; }}
   .num {{ position:fixed; right:110px; bottom:44px; color:var(--dim); font-size:15px;
           font-variant-numeric:tabular-nums; }}
 </style></head><body>
-  <div class="slide">
+  <div class="slide{' cover' if slide.get("cover") else ''}">
     {f'<div class="kicker">{kicker}</div>' if kicker else ''}
     <h1>{slide.get("title","")}</h1>
+    {f'<div class="tagline">{slide["tagline"]}</div>' if slide.get("tagline") else ''}
     {f'<ul>{bullets}</ul>' if bullets else ''}
     {f'<div class="credits">{credits}</div>' if credits else ''}
   </div>
@@ -145,7 +151,7 @@ def render_slides(slides: list[dict], work: Path) -> list[Path]:
                                 device_scale_factor=2)
         for i, slide in enumerate(slides, 1):
             html = work / f"slide{i:02d}.html"
-            html.write_text(slide_html(slide, i, len(slides)))
+            html.write_text(slide_html(slide, i, len(slides)), encoding="utf-8")
             page.goto(html.as_uri())
             page.wait_for_timeout(120)          # let the font land before the shot
             shot = work / f"slide{i:02d}.png"
@@ -218,6 +224,14 @@ def narrate(slides: list[dict], voice: str, work: Path) -> list[Path]:
     audio: list[Path] = []
     for i, slide in enumerate(slides, 1):
         wav = work / f"say{i:02d}.wav"
+        if not slide.get("say"):
+            # A slide with nothing to say is held in silence for its `hold`: a cover, or a beat.
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i",
+                            "anullsrc=r=22050:cl=mono", "-t", f"{float(slide.get('hold', 3)):.2f}",
+                            str(wav)], check=True)
+            audio.append(wav)
+            print(f"  audio {i:02d}  {_duration(wav):5.1f}s  (silent)")
+            continue
         # Piper reads the line on stdin, which keeps punctuation out of the argument list.
         speak(model, speaker, slide.get("say", ""), wav)
         audio.append(wav)
@@ -230,7 +244,8 @@ def build(slides: list[dict], shots: list[Path], audio: list[Path], work: Path, 
     parts: list[Path] = []
     for i, (shot, aiff) in enumerate(zip(shots, audio), 1):
         # A beat of silence after the words, so a slide does not cut on the last syllable.
-        seconds = _duration(aiff) + 0.9
+        # A silent slide is held for exactly its `hold`.
+        seconds = _duration(aiff) + (0.9 if slides[i - 1].get("say") else 0.0)
         part = work / f"part{i:02d}.webm"
 
         # The waveform is rendered first, as its own file: composing it inside the slide's filter
@@ -269,7 +284,7 @@ def build(slides: list[dict], shots: list[Path], audio: list[Path], work: Path, 
         parts.append(part)
 
     listing = work / "parts.txt"
-    listing.write_text("".join(f"file '{p}'\n" for p in parts))
+    listing.write_text("".join(f"file '{p}'\n" for p in parts), encoding="utf-8")
     out.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0",
                     "-i", str(listing), "-c", "copy", str(out)], check=True)
@@ -284,14 +299,14 @@ def main() -> int:
     ap.add_argument("--out", default="media/video", help="where the video lands")
     args = ap.parse_args()
 
-    script = json.loads(Path(args.script).read_text())
+    script = json.loads(Path(args.script).read_text(encoding="utf-8"))
     slides = script["slides"]
     name = script.get("name", Path(args.script).stem)
     voice = voice_of(script, args.voice)
     # A slide naming a project lists the clips that project plays after this one.
     for slide in slides:
         if "overview" in slide:
-            project = json.loads((ROOT / "moontube" / "projects" / f"{slide['overview']}.json").read_text())
+            project = json.loads((ROOT / "moontube" / "projects" / f"{slide['overview']}.json").read_text(encoding="utf-8"))
             slide["credits"] = overview_rows(project, name)
 
     work = ROOT / "build" / "narrate" / name
@@ -303,6 +318,15 @@ def main() -> int:
     shots = render_slides(slides, work)
     audio = narrate(slides, voice, work)
     out = build(slides, shots, audio, work, ROOT / args.out / f"{name}.webm")
+    if slides and slides[0].get("cover"):
+        # The cover as a still, presenter included: the frame a video site shows before anyone presses play.
+        thumb = out.with_name(f"{name}-thumbnail.png")
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(shots[0]), "-i", str(PRESENTER),
+                        "-filter_complex",
+                        f"[0:v]scale={WIDTH}:{HEIGHT}[s];[1:v]scale={FACE}:{FACE}[f];"
+                        f"[s][f]overlay=x={FACE_X}:y={FACE_Y}",
+                        "-frames:v", "1", str(thumb)], check=True)
+        print(f"  thumbnail  {thumb}")
 
     total = _duration(out)
     size = out.stat().st_size // 1024

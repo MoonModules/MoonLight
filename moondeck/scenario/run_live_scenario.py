@@ -61,7 +61,8 @@ class Client:
         # its own platform and restarts itself, where a local one is named after this host and is
         # relaunched from here. Decided by name alone, so this machine reached by its own LAN
         # address or hostname counts as another one.
-        self.local = host.rsplit(":", 1)[0].strip("[]") in ("localhost", "127.0.0.1", "::1")
+        name = urllib.parse.urlsplit(f"//{host}").hostname or host
+        self.local = name in ("localhost", "127.0.0.1", "::1")
 
     def _send(self, req):
         # A mutating call triggers prepareTree; while the device is mid-rebuild it

@@ -47,7 +47,7 @@ def _duration(path: Path) -> float:
 
 
 def measure(run_path: Path, override: str | None) -> int:
-    run = json.loads(run_path.read_text())
+    run = json.loads(run_path.read_text(encoding="utf-8"))
     voice = voice_of(run, override)
     steps = run.get("steps")
     if not steps:
@@ -80,7 +80,7 @@ def measure(run_path: Path, override: str | None) -> int:
                 # both invites the two to disagree.
                 step.pop("hold", None)
             measured.append(seconds)
-        run_path.write_text(json.dumps(run, indent=2, ensure_ascii=False) + "\n")
+        run_path.write_text(json.dumps(run, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         print(f"{len(measured)} line(s) measured with {voice}: {measured}")
         return 0
     finally:
