@@ -2,6 +2,7 @@
   "name": "06-layers",
   "description": "An effect, a modifier reshaping it, and a second layer doing the same, blended over the first.",
   "speed": 1.8,
+  "voice": "jenny",
   "steps": [
     {
       "action": "chapter",

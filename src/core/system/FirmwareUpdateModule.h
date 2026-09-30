@@ -25,7 +25,8 @@
 /// The update path names both addresses and takes whichever answers, so an in-field update rests on more than that redirect.
 /// The current name comes first: every device reaches it directly, and the earlier one is a second chance when that request fails.
 /// Fetching another project's firmware is prevented separately.
-/// The OTA compares an incoming image's own ESP-IDF descriptor against `kProjectImageName` before a byte is written, so an address answering with a stranger's release is refused rather than flashed.
+/// The OTA compares an incoming image's own ESP-IDF descriptor against the names in `FirmwareImage.h` before a byte is written.
+/// An address answering with a stranger's release is refused rather than flashed.
 
 namespace mm {
 
@@ -38,9 +39,6 @@ constexpr const char* kFallbackRepo = "MoonModules/projectMM";
 /// The release-asset URL a device updates itself from: repository, version, firmware variant, version.
 constexpr const char* kReleaseAssetUrlFormat =
     "https://github.com/%s/releases/download/v%s/firmware-%s-v%s.bin";
-
-/// The name this project's app image carries in its ESP-IDF descriptor, which is the CMake `project()` name and changes only with it.
-constexpr const char* kProjectImageName = "projectMM";   // the name a SHIPPED device compares against, so it outlives the product name
 
 inline char     g_otaStatus[64]     = "idle";   ///< the phase the install is in, shared by every unit
 inline uint32_t g_otaBytesRead      = 0;        ///< how much has been written

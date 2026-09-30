@@ -19,7 +19,7 @@ The split is the point: a step's truth is written once, and whether it is being 
 }
 ```
 
-A run also carries its own settings. `speed` and `width` shape the published clip, and are tunable afterwards without re-recording, since publishing is a separate pass over the raw take. `host` names another MoonLight surface. `requires` names hardware a run needs, resolved against the bench registry rather than written in as an address.
+A run also carries its own settings. `speed` and `width` shape the published clip, and are tunable afterwards without re-recording, since publishing is a separate pass over the raw take. `voice` names who speaks the captions, read by both the measure and the voice pass. `host` names another MoonLight surface. `requires` names hardware a run needs, resolved against the bench registry rather than written in as an address.
 
 ## A step
 
@@ -154,9 +154,10 @@ against those lengths, and the voice is laid over the published clip.
     uv run moondeck/moontube/mtvideo.py     --run moontube/clips/06-layers.json
     uv run moondeck/moontube/mtvoiceover.py --run moontube/clips/06-layers.json
 
-No `--voice` on any of them: alba is the default of all three, which is what keeps the measurement
-and the narration in agreement. `--voice` exists for trying another one, and then it has to be
-given to the first and the third alike.
+No `--voice` on any of them: the run file names its own `voice`. The measure and voice passes both read it, which keeps the measurement and the narration in agreement.
+A run file that names none is spoken by Alba, who is Luna, so the slide decks are hers.
+The clips alternate a male and a female voice, so no two neighbors sound alike and the series sounds like a team.
+`--voice` exists for trying another one, and then it has to be given to the first and the third alike.
 
 Sources live under `moontube/`, outputs under `media/`:
 

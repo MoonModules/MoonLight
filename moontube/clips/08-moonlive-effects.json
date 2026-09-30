@@ -2,6 +2,7 @@
   "name": "08-moonlive-effects",
   "description": "Scripting the lights in the browser: a library effect downloaded and run, then one written from nothing, from a single line to a particle system.",
   "speed": 1.8,
+  "voice": "obadiah",
   "steps": [
     {
       "action": "chapter",

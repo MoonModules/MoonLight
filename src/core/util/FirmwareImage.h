@@ -22,6 +22,18 @@
 /// | not an image | a 404 body, an HTML error page, a `.zip` |
 /// | the wrong chip | one MoonBase per chip, one paste apart, and a checksum will not catch it |
 /// | not MoonBase | an app image, which sits beside it on the releases page |
+///
+/// ## Two names, because a device refuses a name it does not know
+///
+/// An image carries its ESP-IDF project name in its descriptor, and every install path checks it before a byte is written.
+/// A device accepts only the names compiled into it, so a build that ships under a new name is refused by everything in the field.
+/// The name therefore changes in two releases: this one knows both and still ships under the first, and the next one ships under the second.
+/// `kAppImageNames` and `kMoonBaseImageNames` hold the pair, first the name a build carries today.
+///
+/// ## A download that goes silent
+///
+/// ESP-IDF's OTA read reports a timeout as "still in progress", so a connection that stops delivering bytes without closing keeps an install waiting for good.
+/// Both install loops, the app's and MoonBase's, therefore abort once no byte has arrived for `kDownloadStallMs`.
 
 #include <cstddef>
 #include <cstdint>
@@ -61,7 +73,7 @@ struct ImageInfo {
     bool   valid       = false;   ///< begins with the image magic
     bool   described   = false;   ///< carries a readable app descriptor
     ChipId chip        = ChipId::Invalid;  ///< which chip the image header names
-    char   project[32] = {};      ///< "projectMM" or "projectMM-moonbase"
+    char   project[32] = {};      ///< one of `kAppImageNames` or `kMoonBaseImageNames`
     char   version[32] = {};      ///< the app version string the descriptor carries
 };
 
@@ -87,12 +99,35 @@ inline ImageInfo identify(const uint8_t* buf, size_t len) {
     return out;
 }
 
+/// The names this project's app image carries: @xref{two-names-because-a-device-refuses-a-name-it-does-not-know}.
+inline constexpr const char* kAppImageNames[]      = {"projectMM", "MoonLight"};
+/// The same pair for the recovery image, which an app slot must never receive.
+inline constexpr const char* kMoonBaseImageNames[] = {"projectMM-moonbase", "MoonLight-moonbase"};
+
+/// How long an install waits on a download delivering no bytes: @xref{a-download-that-goes-silent}.
+inline constexpr uint32_t kDownloadStallMs = 60000;
+
+/// Whether the descriptor field `name`, `cap` bytes that IDF may leave unterminated, is one of `names`.
+template <size_t N>
+inline bool namedAmong(const char* name, size_t cap, const char* const (&names)[N]) {
+    for (const char* known : names) {
+        if (std::strncmp(name, known, cap) == 0) return true;
+    }
+    return false;
+}
+
+/// Whether `name` is this project's app image.
+inline bool isAppImage(const char* name, size_t cap = 32) { return namedAmong(name, cap, kAppImageNames); }
+
+/// Whether `name` is this project's recovery image.
+inline bool isMoonBaseImage(const char* name, size_t cap = 32) { return namedAmong(name, cap, kMoonBaseImageNames); }
+
 /// The reason this is not a MoonBase image for `chip`, or null when it is.
 inline const char* moonBaseRejection(const ImageInfo& info, ChipId chip) {
     if (!info.valid)     return "not a firmware image";
     if (info.chip != chip) return "image is for another chip";
     if (!info.described) return "image carries no description";
-    if (std::strcmp(info.project, "projectMM-moonbase") != 0) return "not a MoonBase image";
+    if (!isMoonBaseImage(info.project)) return "not a MoonBase image";
     return nullptr;
 }
 

@@ -45,7 +45,7 @@ running from `ota_0`, exactly as MoonBase writes the app slot while running from
 
 Two things make that safe enough to offer. `esp_ota_*` refuses a factory partition, so this is a raw `esp_partition_erase_range` + `esp_partition_write`, which also forfeits the validation `esp_ota_end` performs: `esp_image_verify` replaces it after the write. A 4 MB board also has nowhere to stage 743 KB before erasing, so the image streams straight in.
 Everything that can reject it is therefore decided from its FIRST CHUNK, before a byte is erased:
-the image magic, the chip id, and the descriptor naming `projectMM-moonbase` rather than the app.
+the image magic, the chip id, and the descriptor naming the recovery image (one of `kMoonBaseImageNames`) rather than the app.
 The chip id matters because there is one MoonBase per chip, one paste apart, and a checksum does not catch a swap. Those rules live in `src/core/util/FirmwareImage.h` so a host test can drive them. What remains is a window, during the write, in which the device holds no recovery image; the app keeps running throughout, so the answer to a failure is to retry.
 
 ## Telling the two images apart

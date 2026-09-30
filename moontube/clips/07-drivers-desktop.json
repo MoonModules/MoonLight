@@ -2,6 +2,7 @@
   "name": "07-drivers-desktop",
   "description": "What carries the frame out of the device, on a desktop: a preview, the video senders, and the network protocols a fixture listens on.",
   "speed": 1.8,
+  "voice": "northern",
   "steps": [
     {
       "action": "chapter",

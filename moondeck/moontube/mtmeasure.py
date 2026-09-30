@@ -13,11 +13,11 @@ Sizing the dwell by eye instead left captions vanishing mid-sentence and each li
 one before it, because the hold was a guess and the voice was laid on afterwards.
 
 The voice MATTERS: two voices do not speak a line at the same speed, so a clip measured with one and
-voiced with another drifts. Alba is the default here and in `mtvoiceover`, which is what keeps the
+voiced with another drifts. Both passes read the run file's own `voice`, which is what keeps the
 two in agreement without anyone having to remember.
 
 Usage:
-  uv run moondeck/moontube/mtmeasure.py --run moontube/clips/05-layouts.json [--voice alba]
+  uv run moondeck/moontube/mtmeasure.py --run moontube/clips/05-layouts.json [--voice alan]
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from mtnarrate import VOICE_PATHS, speak, voice_model            # noqa: E402
+from mtnarrate import VOICE_PATHS, speak, voice_model, voice_of   # noqa: E402
 
 # A beat after the words, so a shot does not cut on the last syllable, plus margin for the
 # synthesiser's own variance between runs of the same line.
@@ -46,8 +46,9 @@ def _duration(path: Path) -> float:
     return float(out) if out else 0.0
 
 
-def measure(run_path: Path, voice: str) -> int:
+def measure(run_path: Path, override: str | None) -> int:
     run = json.loads(run_path.read_text())
+    voice = voice_of(run, override)
     steps = run.get("steps")
     if not steps:
         print(f"{run_path.name} has no steps: a slide script is rendered by mtnarrate instead.",
@@ -89,8 +90,8 @@ def measure(run_path: Path, voice: str) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Write measured caption durations into a run file.")
     ap.add_argument("--run", required=True, help="the run file to measure")
-    ap.add_argument("--voice", default="alba",
-                    help="the voice the clip will be narrated with: " + ", ".join(VOICE_PATHS))
+    ap.add_argument("--voice",
+                    help="override the run file's own voice, one of: " + ", ".join(VOICE_PATHS))
     args = ap.parse_args()
     return measure(Path(args.run), args.voice)
 

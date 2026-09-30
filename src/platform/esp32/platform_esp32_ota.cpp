@@ -99,7 +99,7 @@
 
 #include "platform/platform.h"
 
-#include "core/util/FirmwareImage.h"  // identify/moonBaseRejection: vetting a MoonBase image
+#include "core/util/FirmwareImage.h"  // identify, the image names and the stall limit: vetting what arrives
 
 #include "esp_https_ota.h"
 #include "esp_ota_ops.h"
@@ -122,7 +122,6 @@
 #include <memory>        // unique_ptr — frees the upload buffer on every exit path
 #include <new>           // std::nothrow for the OtaTaskParams alloc below
 
-#include "core/system/FirmwareUpdateModule.h"   // kProjectImageName: whose firmware arrived
 
 namespace mm::platform {
 
@@ -211,8 +210,7 @@ void otaTask(void* arg) {
     // Refuse a recovery image here: @xref{writing-the-wrong-image-is-the-unrecoverable-direction|why this direction is the worse one}.
     esp_app_desc_t incoming = {};
     const bool haveDesc = esp_https_ota_get_img_desc(handle, &incoming) == ESP_OK;
-    if (haveDesc && std::strncmp(incoming.project_name, "projectMM-moonbase",
-                                 sizeof(incoming.project_name)) == 0) {
+    if (haveDesc && firmware::isMoonBaseImage(incoming.project_name, sizeof(incoming.project_name))) {
         otaSetStatus(p, "error: that is a MoonBase image, not an app");
         esp_https_ota_abort(handle);
         delete p;
@@ -220,8 +218,7 @@ void otaTask(void* arg) {
         return;
     }
     // And refuse an image that is not this project: a URL can name another repository's release, and the descriptor is what says whose firmware arrived.
-    if (haveDesc && std::strncmp(incoming.project_name, mm::kProjectImageName,
-                                 sizeof(incoming.project_name)) != 0) {
+    if (haveDesc && !firmware::isAppImage(incoming.project_name, sizeof(incoming.project_name))) {
         otaSetStatus(p, "error: that image is %.*s, not this project",
                      static_cast<int>(sizeof(incoming.project_name)), incoming.project_name);
         esp_https_ota_abort(handle);
@@ -237,9 +234,22 @@ void otaTask(void* arg) {
     }
     otaSetStatus(p, "flashing");
 
+    int lastGot = -1;
+    TickType_t movedAt = xTaskGetTickCount();
     while ((err = esp_https_ota_perform(handle)) == ESP_ERR_HTTPS_OTA_IN_PROGRESS) {
         int got = esp_https_ota_get_image_len_read(handle);
         if (got >= 0) *p->bytesReadOut = static_cast<uint32_t>(got);
+        // Give up on a connection that stopped delivering, which ESP-IDF reports as still in progress: FirmwareImage.h names why.
+        if (got != lastGot) {
+            lastGot = got;
+            movedAt = xTaskGetTickCount();
+        } else if (pdTICKS_TO_MS(xTaskGetTickCount() - movedAt) > firmware::kDownloadStallMs) {
+            otaSetStatus(p, "error: the download stalled");
+            esp_https_ota_abort(handle);
+            delete p;
+            vTaskDelete(nullptr);
+            return;
+        }
         // The counts ride the status: @xref{progress-rides-the-status-string|why, and what the padding is excluded from}.
         if (total > 0) {
             otaSetStatus(p, "flashing: %u of %u bytes",
@@ -391,14 +401,13 @@ bool otaWriteStream(FsWriteSrc src, void* user, size_t contentLen,
                 return false;
             }
             vetted = true;
-            if (info.described &&
-                std::strcmp(info.project, "projectMM-moonbase") == 0) {
+            if (info.described && firmware::isMoonBaseImage(info.project)) {
                 setStatus("error: that is a MoonBase image, not an app");
                 esp_ota_abort(handle);
                 return false;
             }
             // And whose firmware this is, the same question the URL path asks, before the first write rather than after the slot is spent.
-            if (!info.described || std::strcmp(info.project, mm::kProjectImageName) != 0) {
+            if (!info.described || !firmware::isAppImage(info.project)) {
                 setStatus("error: that image is not this project");
                 esp_ota_abort(handle);
                 return false;

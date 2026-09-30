@@ -2,6 +2,7 @@
   "name": "01-install-esp32",
   "description": "The web installer onto a device: erase, flash, join WiFi, and open the UI that comes back.",
   "speed": 1.6,
+  "voice": "jenny",
   "host": "localhost:8421",
   "steps": [
     {

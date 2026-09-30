@@ -41,6 +41,7 @@
   "note": "The clips run WHOLE: `bars: 0` keeps each one's own length and its narration, because the voice carries the point and a bar count would cut it mid-sentence. No music track, for the same reason. The inset window cycles the example footage top right, so a viewer watching the interface also sees what it does to real lights. That footage is rough and carries near-duplicates: picking and trimming it is an edit for this file, not a change to the tooling.",
   "inset": {
     "folder": "media/examplevideos",
+    "caption": "made with MoonLight",
     "width": 320,
     "margin": 24
   }

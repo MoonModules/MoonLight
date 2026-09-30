@@ -275,12 +275,20 @@ def main() -> int:
         if not strip:
             return 1
         framed = work / "picture-inset.webm"
+        # A caption inside the window, bottom right, saying what the footage is: real lights
+        # rather than another part of the interface. From a file, for the reason `fit` gives.
+        label = ""
+        if inset.get("caption"):
+            c_file = work / "inset-caption.txt"
+            c_file.write_text(inset["caption"])
+            label = (f",drawtext=textfile='{c_file}':fontsize=13:fontcolor=white@0.92:"
+                     f"x=w-text_w-10:y=h-text_h-9:box=1:boxcolor=black@0.5:boxborderw=5")
         # TOP RIGHT, with a hairline so the window reads as a window rather than as part of
         # the interface behind it. `shortest=0`: the cut decides the length, not the loop.
         if not run_ffmpeg([
                 "-i", str(joined), "-i", str(strip),
                 "-filter_complex",
-                f"[1:v]pad=iw+4:ih+4:2:2:white@0.65[ins];"
+                f"[1:v]pad=iw+4:ih+4:2:2:white@0.65{label}[ins];"
                 f"[0:v][ins]overlay=W-w-{margin}:{margin}:shortest=0[v]",
                 "-map", "[v]", "-map", "0:a?",
                 "-c:v", "libvpx-vp9", "-crf", "34", "-b:v", "0", "-row-mt", "1",

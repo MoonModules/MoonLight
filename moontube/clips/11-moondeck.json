@@ -2,6 +2,7 @@
   "name": "11-moondeck",
   "description": "The developer console: one page that builds, flashes, tests and checks the project, and why it is ours rather than PlatformIO.",
   "speed": 1.6,
+  "voice": "jenny",
   "host": "localhost:8420",
   "steps": [
     {
