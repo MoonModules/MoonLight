@@ -222,6 +222,17 @@
             "samples": [258048]
           },
           "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 6950405,
+            "p95": 6950405,
+            "min": 6950405,
+            "max": 6950405,
+            "n": 1,
+            "samples": [6950405]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -379,6 +390,17 @@
             "samples": [258048]
           },
           "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 1202,
+            "p95": 1202,
+            "min": 1202,
+            "max": 1202,
+            "n": 1,
+            "samples": [1202]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -536,6 +558,17 @@
             "samples": [258048]
           },
           "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 1940,
+            "p95": 1940,
+            "min": 1940,
+            "max": 1940,
+            "n": 1,
+            "samples": [1940]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -693,6 +726,17 @@
             "samples": [258048]
           },
           "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 1223,
+            "p95": 1223,
+            "min": 1223,
+            "max": 1223,
+            "n": 1,
+            "samples": [1223]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -850,6 +894,17 @@
             "samples": [258048]
           },
           "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 1043,
+            "p95": 1043,
+            "min": 1043,
+            "max": 1043,
+            "n": 1,
+            "samples": [1043]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -1006,6 +1061,17 @@
             "samples": [258048]
           },
           "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 2351,
+            "p95": 2351,
+            "min": 2351,
+            "max": 2351,
+            "n": 1,
+            "samples": [2351]
+          },
+          "last_updated": "2026-09-30"
         }
       },
       "description": "And the height, making it 64x64: four times the cells of the 32x32 the pair started from. Reallocating on each axis separately is the shape a UI resize actually takes."
@@ -1164,6 +1230,17 @@
             "samples": [258048]
           },
           "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 3144,
+            "p95": 3144,
+            "min": 3144,
+            "max": 3144,
+            "n": 1,
+            "samples": [3144]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -1321,6 +1398,17 @@
             "samples": [258048]
           },
           "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 4242,
+            "p95": 4242,
+            "min": 4242,
+            "max": 4242,
+            "n": 1,
+            "samples": [4242]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -1478,6 +1566,17 @@
             "samples": [258048]
           },
           "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 2293,
+            "p95": 2293,
+            "min": 2293,
+            "max": 2293,
+            "n": 1,
+            "samples": [2293]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -1634,6 +1733,17 @@
             "samples": [258048]
           },
           "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 614972,
+            "p95": 614972,
+            "min": 614972,
+            "max": 614972,
+            "n": 1,
+            "samples": [614972]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -1790,6 +1900,17 @@
             "samples": [258048]
           },
           "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 1763,
+            "p95": 1763,
+            "min": 1763,
+            "max": 1763,
+            "n": 1,
+            "samples": [1763]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -1947,6 +2068,17 @@
             "samples": [258048]
           },
           "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 37798,
+            "p95": 37798,
+            "min": 37798,
+            "max": 37798,
+            "n": 1,
+            "samples": [37798]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -2104,6 +2236,17 @@
             "samples": [258048]
           },
           "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 685902,
+            "p95": 685902,
+            "min": 685902,
+            "max": 685902,
+            "n": 1,
+            "samples": [685902]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -2260,6 +2403,17 @@
             "samples": [258048]
           },
           "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 151864,
+            "p95": 151864,
+            "min": 151864,
+            "max": 151864,
+            "n": 1,
+            "samples": [151864]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     }

@@ -228,6 +228,17 @@
             "samples": [286720, 258048]
           },
           "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 6661,
+            "p95": 6661,
+            "min": 6661,
+            "max": 6661,
+            "n": 1,
+            "samples": [6661]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -393,6 +404,17 @@
             "samples": [278528, 258048]
           },
           "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 5934,
+            "p95": 5934,
+            "min": 5934,
+            "max": 5934,
+            "n": 1,
+            "samples": [5934]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -558,6 +580,17 @@
             "samples": [278528, 258048]
           },
           "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 3639,
+            "p95": 3639,
+            "min": 3639,
+            "max": 3639,
+            "n": 1,
+            "samples": [3639]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -723,6 +756,17 @@
             "samples": [270336, 258048]
           },
           "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 5896,
+            "p95": 5896,
+            "min": 5896,
+            "max": 5896,
+            "n": 1,
+            "samples": [5896]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -888,6 +932,17 @@
             "samples": [294912, 258048]
           },
           "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 5699,
+            "p95": 5699,
+            "min": 5699,
+            "max": 5699,
+            "n": 1,
+            "samples": [5699]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -1053,6 +1108,17 @@
             "samples": [294912, 258048]
           },
           "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 5634,
+            "p95": 5634,
+            "min": 5634,
+            "max": 5634,
+            "n": 1,
+            "samples": [5634]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -1218,6 +1284,17 @@
             "samples": [258048]
           },
           "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 6015,
+            "p95": 6015,
+            "min": 6015,
+            "max": 6015,
+            "n": 1,
+            "samples": [6015]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -1383,6 +1460,17 @@
             "samples": [258048]
           },
           "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 5628,
+            "p95": 5628,
+            "min": 5628,
+            "max": 5628,
+            "n": 1,
+            "samples": [5628]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     }

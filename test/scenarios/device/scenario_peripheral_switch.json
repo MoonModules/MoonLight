@@ -206,13 +206,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 9,
-            "p95": 9,
+            "p95": 1847,
             "min": 9,
-            "max": 9,
-            "n": 1,
-            "samples": [9]
+            "max": 1847,
+            "n": 2,
+            "samples": [9, 1847]
           },
-          "last_updated": "2026-08-22"
+          "last_updated": "2026-09-30"
         },
         "esp32": {
           "tick_us": {
@@ -381,13 +381,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 9,
-            "p95": 9,
+            "p95": 1547,
             "min": 9,
-            "max": 9,
-            "n": 1,
-            "samples": [9]
+            "max": 1547,
+            "n": 2,
+            "samples": [9, 1547]
           },
-          "last_updated": "2026-08-22"
+          "last_updated": "2026-09-30"
         },
         "esp32": {
           "tick_us": {
@@ -583,13 +583,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 9,
-            "p95": 9,
+            "p95": 1619,
             "min": 9,
-            "max": 9,
-            "n": 1,
-            "samples": [9]
+            "max": 1619,
+            "n": 2,
+            "samples": [9, 1619]
           },
-          "last_updated": "2026-08-22"
+          "last_updated": "2026-09-30"
         },
         "esp32s31": {
           "tick_us": {
@@ -757,13 +757,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 9,
-            "p95": 9,
+            "p95": 2186,
             "min": 9,
-            "max": 9,
-            "n": 1,
-            "samples": [9]
+            "max": 2186,
+            "n": 2,
+            "samples": [9, 2186]
           },
-          "last_updated": "2026-08-22"
+          "last_updated": "2026-09-30"
         },
         "esp32s31": {
           "tick_us": {
@@ -932,13 +932,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 9,
-            "p95": 9,
+            "p95": 1586,
             "min": 9,
-            "max": 9,
-            "n": 1,
-            "samples": [9]
+            "max": 1586,
+            "n": 2,
+            "samples": [9, 1586]
           },
-          "last_updated": "2026-08-23"
+          "last_updated": "2026-09-30"
         },
         "esp32s31": {
           "tick_us": {
@@ -1096,13 +1096,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 9,
-            "p95": 9,
+            "p95": 1479,
             "min": 9,
-            "max": 9,
-            "n": 1,
-            "samples": [9]
+            "max": 1479,
+            "n": 2,
+            "samples": [9, 1479]
           },
-          "last_updated": "2026-08-22"
+          "last_updated": "2026-09-30"
         },
         "esp32": {
           "tick_us": {

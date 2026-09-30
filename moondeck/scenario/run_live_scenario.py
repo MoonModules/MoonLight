@@ -405,7 +405,11 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                    of the old WARN-and-continue which silently produced
                    meaningless passes).
     """
-    with open(scenario_path) as f:
+    # encoding="utf-8" EXPLICITLY, and it is not cosmetic here: _observed.py writes this file back
+    # with the observation block appended, so reading it as cp1252 on Windows and writing it as
+    # UTF-8 double-encodes every non-ASCII character in the scenario's own prose. One run turned
+    # "16²→32²" into "16Â²â†→32Â²" in every file it touched.
+    with open(scenario_path, encoding="utf-8") as f:
         scenario = json.load(f)
 
     name = scenario.get("name", scenario_path.stem)
@@ -1146,13 +1150,13 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
 
 def load_baseline() -> dict:
     if BASELINE_FILE.exists():
-        with open(BASELINE_FILE) as f:
+        with open(BASELINE_FILE, encoding="utf-8") as f:
             return json.load(f)
     return {}
 
 
 def save_baseline(data: dict):
-    with open(BASELINE_FILE, "w") as f:
+    with open(BASELINE_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
 
