@@ -166,7 +166,7 @@ Two rules hold all week. **Anything found before Tuesday is fixed under the old 
 - Four more defects the recording found: a five-second REST timeout that suits the desktop app and strands a real device, `clear_children` that never checked its own claim, preset pads that accumulated across every take, and nine clips published silent because nothing said a voiceover pass remained.
 - All seventeen videos re-recorded and voiced against the fixes.
 
-**🚧 Tue 29: [Windows day](#sept-29-windows-day), in parallel.** In progress on the Windows machine, and its findings merge in from there: the first time anything has been tested on that platform. The MoonTube work above ran on the Mac the same day.
+**✅ Tue 29: [Windows day](#sept-29-windows-day), in parallel.** Ran on the Windows machine and merged in as PR #117, the first time anything had been tested on that platform. The MoonTube work above ran on the Mac the same day.
 
 **🚧 Wed 30: [the switch](#sept-30-moonlight-v600), then the final take.** The rename lands, and the footage is re-recorded against it the same day.
 
@@ -227,9 +227,15 @@ Step 3 below is also most of the way there: both benches ran their gates, the de
 
 #### Before the moment
 
-1. 🚧 **`uv run moondeck/repo_rename/check_rename_ready.py`** must print Ready. It dry-runs the sweep and asserts the reach is as rehearsed, every `rename-keep` line survives, and the OTA still names two different repositories. A drift that fails the gate is a prompt to read the new hits, not to re-baseline past them.
-2. 🚧 **Confirm both backup bundles open** and name the device you expect. They are the evidence for the migration claim and cannot be taken once the repository has moved.
-3. 🚧 **Run the full gate set on main**, so the sweep lands on a tree that was already green. A failure found after the sweep is two problems wearing one diff.
+1. ✅ **`uv run moondeck/repo_rename/check_rename_ready.py`** prints Ready, at 467 lines against the rehearsed 464. It dry-runs the sweep and asserts the reach is as rehearsed, every `rename-keep` line survives, and the OTA still names two different repositories. The three new hits are prose naming the old repository, which is what the sweep is for, and all six protected lines survive. A drift that fails the gate is a prompt to read the new hits rather than to re-baseline past them.
+2. ✅ **Both backup bundles open** and name the device expected. They are the evidence for the migration claim and cannot be taken once the repository has moved.
+   They are BROWSER downloads: `src/ui/app.js` builds the name and hands it to `a[download]`, so each sits in the download folder of whichever machine had the interface open, rather than anywhere the device or a script wrote.
+   ✅ Both open and name their device. `MoonLight-config-MM-testbench-P4-2026-09-30.json` is the configuration-only half, six files with the firmware and build stamped in. `MoonLight-config-MM-S31-2026-09-30.json` is the rich one, 23 files: nine of configuration and fourteen MoonLive scripts.
+   Two things the S31 bundle does NOT carry, both worth knowing before it is the evidence for anything. Its scripts are the FACTORY catalog under `/.moonlive`, since that device's own `/moonlive` was empty, so a restore proves the path rather than a user's work surviving it. And it holds no preset, so the preset half of the restore claim rests on a device that has one.
+   Its `firmware` field is empty where the P4's names a variant. Restore reads `version` alone, so the bundle restores regardless: the gap is in the record, not in the file.
+3. ✅ **The full gate set on main is green** (2026-09-30): 2016 unit tests, 294 Python, 170 JS, 21 scenarios, and all eight checks. The sweep lands on a tree that was already good, so a failure after it belongs to the sweep.
+
+Between step 3 and step 4 sits the ordinary rhythm: whatever is in flight is committed on a branch and merged, so main carries no uncommitted work when the repository moves. The Windows scenario run merges here too. A sweep diff that also contains a day's edits is two changes wearing one commit, and the sweep is the one that has to be readable.
 
 #### The moment
 

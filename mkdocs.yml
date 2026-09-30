@@ -211,6 +211,9 @@ nav:
       - MoonDeck: explanation/architecture/moondeck.md
       - Why we write our own code: explanation/why-we-write-our-own.md
   - Reference:
+      # First in Reference because it answers the question a user arrives with:
+      # how do I drive this from my own code rather than from the page.
+      - Integrating: reference/integrating.md
       - Testing strategy: reference/testing.md
       - Performance: reference/performance.md
       # The CMake layout, moved out of the how-to: a tree to look up, not a step to follow.
