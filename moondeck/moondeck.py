@@ -48,6 +48,9 @@ import _test_metadata as test_meta  # noqa: E402
 # and the generated scenario-tests.md show the same shape per step (single
 # source of truth — adding/changing a metric updates both surfaces at once).
 import generate_test_docs as test_doc_gen  # noqa: E402
+# The name ESP-IDF gives a build's app image has one home, beside the firmware list.
+sys.path.insert(0, str(SCRIPTS_DIR / "build"))
+from build_esp32 import APP_BIN  # noqa: E402
 
 
 def _app_version():
@@ -1506,7 +1509,7 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
                              "probed": probed})
 
         elif self.path == "/api/ota":
-            # Wireless flash of a LOCAL build: MoonDeck serves build/esp32-<fw>/projectMM.bin over
+            # Wireless flash of a LOCAL build: MoonDeck serves the app image in build/esp32-<fw>/ over
             # its own HTTP (the GET /firmware/<fw>.bin route) and hands the device that URL via the
             # device's POST /api/firmware/url — the device pulls + flashes it (esp_https_ota accepts
             # the plain-http LAN URL). Same "flash my local build" as USB, over WiFi. Body: {ip, firmware}.
@@ -1530,7 +1533,7 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
             if not re.fullmatch(r"[A-Za-z0-9.\-]{1,253}", ip):
                 self._send_json({"error": "bad ip/host"}, 400)
                 return
-            bin_path = ROOT / "build" / f"esp32-{firmware}" / "projectMM.bin"
+            bin_path = ROOT / "build" / f"esp32-{firmware}" / APP_BIN
             if not bin_path.exists():
                 self._send_json({"error": f"no build for {firmware!r} — run Build first"}, 404)
                 return
@@ -2267,14 +2270,14 @@ code {{ background: transparent; color: #c0c0c0; padding: 0; }}
 
     def _serve_firmware_bin(self):
         """Serve a local firmware image for a device OTA: GET /firmware/<fw>.bin →
-        build/esp32-<fw>/projectMM.bin. The device (handed this URL by /api/ota) fetches it over
+        the app image in build/esp32-<fw>/. The device (handed this URL by /api/ota) fetches it over
         the LAN and flashes it. Only the exact <fw>.bin shape is served, mapped to the known build
         dir — no arbitrary path, so this can't read outside build/esp32-*/."""
         fw = self.path[len("/firmware/"):-len(".bin")]
         if not fw or "/" in fw or ".." in fw:
             self.send_error(400, "bad firmware name")
             return
-        bin_path = ROOT / "build" / f"esp32-{fw}" / "projectMM.bin"
+        bin_path = ROOT / "build" / f"esp32-{fw}" / APP_BIN
         if not bin_path.exists():
             self.send_error(404, f"no build for {fw}")
             return

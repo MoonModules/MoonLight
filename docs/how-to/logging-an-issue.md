@@ -2,7 +2,7 @@
 
 Something not working? Tell us. You do not need to diagnose it, describe what you saw, and hand us the state of the device it happened on. The **`{ }`** link on every module card gives you that in one click, and it is the single most useful thing you can attach.
 
-👉 **[Open an issue on GitHub](https://github.com/MoonModules/projectMM/issues)**
+👉 **[Open an issue on GitHub](https://github.com/MoonModules/MoonLight/issues)**
 
 Not sure it's a bug, or want to talk it through first?
 **[Discord](https://discord.gg/TC8NSUSCdV)** is the right place for "is this
@@ -12,7 +12,7 @@ supposed to work like this?".
 
 ## Checklist
 
-- Search the [existing issues](https://github.com/MoonModules/projectMM/issues)
+- Search the [existing issues](https://github.com/MoonModules/MoonLight/issues)
   first, it may already be reported, or already fixed
 - Check the Firmware card: are you on the current version?
 - For bugs, include the `{ }` output (below)

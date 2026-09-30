@@ -19,7 +19,7 @@ services:
     platform: linux/amd64
     # Or, once images are published, drop `build:` and use one of these instead:
     #   image: ghcr.io/moonmodules/moonlight:latest    # the rolling prerelease
-    #   image: ghcr.io/moonmodules/moonlight:5.0.0     # a fixed version
+    #   image: ghcr.io/moonmodules/moonlight:6.0.0     # a fixed version
     container_name: moonlight
 
     ports:

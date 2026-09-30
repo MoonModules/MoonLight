@@ -163,7 +163,7 @@ Keeping i80 is **not** legacy baggage: for a ≤2 K install on a WiFi-busy board
 - [I2SClocklessVirtualLedDriver](https://github.com/hpwit/I2SClocklessVirtualLedDriver) — "8 strips out of one single pin … 8x15=120 strips"; 74HC595 per virtual pin + 74HC245 level shifter; `__NB_DMA_BUFFER` default 2, buffers `(NUM_VIRT_PINS+1) * nb_components * 8 * 3 * 2` ≈ 1152 B; "Artifacts due to interrupts" → "calculate several buffers in advance"; `enableShowPixelsOnCore()`; 12,000-LED worked example; 75 → 129 fps second-core figures.
 - [I2SClockLessLedDriveresp32s3](https://github.com/hpwit/I2SClockLessLedDriveresp32s3) — the S3 lineage (PSRAM buffers; S3 EDMA can DMA from PSRAM).
 
-- [MoonLight](https://moonmodules.org/projectMM/) / [WLED-MM](https://github.com/MoonModules/WLED-MM) — a prior firmware riding hpwit's ring on PSRAM: LEDs pre-allocated in PSRAM, light boundary **130 K** (vs **4096** non-PSRAM). The empirical demonstration that the ring's ceiling lift is real.
+- [The predecessor MoonLight](https://github.com/ewowi/MoonLight) / [WLED-MM](https://github.com/MoonModules/WLED-MM): a prior firmware riding hpwit's ring on PSRAM: LEDs pre-allocated in PSRAM, light boundary **130 K** (vs **4096** non-PSRAM). The empirical demonstration that the ring's ceiling lift is real.
 
 **Espressif (the load-bearing hardware constraint):**
 - [`esp_lcd/i80/esp_lcd_panel_io_i2s.c`](https://github.com/espressif/esp-idf/blob/master/components/esp_lcd/i80/esp_lcd_panel_io_i2s.c) — `ESP_RETURN_ON_FALSE((caps & MALLOC_CAP_SPIRAM) == 0, NULL, TAG, "external memory is not supported");`

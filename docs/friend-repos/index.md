@@ -6,7 +6,7 @@ Monthly logs of what shipped on related open-source LED projects, the live lands
 - [wled-WLED.md](wled-WLED.md): upstream WLED firmware.
 - [MoonModules-WLED-MM.md](MoonModules-WLED-MM.md): MoonModules' WLED fork (the direct lineage).
 - [troyhacks-WLED.md](troyhacks-WLED.md): troyhacks' personal fork of WLED-MM (PixelForge, RMTHI, audio-reactive hardening).
-- [Funkelfetisch-projectMM.md](Funkelfetisch-projectMM.md): a fork of THIS project building a commercial product on it (HELIO, a physical infinity-sphere lamp); the work lives in feature branches, not on its default branch.
+- [Funkelfetisch-MoonLight.md](Funkelfetisch-MoonLight.md): a fork of THIS project building a commercial product on it (HELIO, a physical infinity-sphere lamp); the work lives in feature branches, not on its default branch.
 - [PlummersSoftwareLLC-NightDriverStrip.md](PlummersSoftwareLLC-NightDriverStrip.md): Dave Plummer's LED matrix/strip firmware.
 - [hpwit-I2SClocklessLedDriver.md](hpwit-I2SClocklessLedDriver.md): hpwit's I2S/LCD DMA clockless LED driver (parallel multi-strip output).
 - [hpwit-I2SClocklessVirtualLedDriver.md](hpwit-I2SClocklessVirtualLedDriver.md): the shift-register "virtual pins" variant of the above (dormant since 2024).

@@ -9,7 +9,7 @@ Eight switches, eight knobs and eight faders on a touchscreen, moving the device
 ## The short version
 
 1. Install **[Open Stage Control](https://openstagecontrol.ammd.net/)** (free; macOS, Windows, Linux)
-2. Download **[MoonLight-control-surface.json](https://github.com/MoonModules/projectMM/releases/download/latest/MoonLight-control-surface.json)**
+2. Download **[MoonLight-control-surface.json](https://github.com/MoonModules/MoonLight/releases/download/latest/MoonLight-control-surface.json)**
 3. In its launcher set `send` to `<your-device-ip>:9000`, `osc-port` to `9001`, and `load` to the file
 4. On the device: **Services → OSC**, turn on `listen` and `feedback`
 5. Press start
@@ -55,9 +55,9 @@ Download it from **[openstagecontrol.ammd.net](https://openstagecontrol.ammd.net
 
 A **session** is the layout: which knobs exist, what they look like, and what each one sends. You do not have to build one.
 
-**[Download MoonLight-control-surface.json](https://github.com/MoonModules/projectMM/releases/download/latest/MoonLight-control-surface.json)**
+**[Download MoonLight-control-surface.json](https://github.com/MoonModules/MoonLight/releases/download/latest/MoonLight-control-surface.json)**
 
-That link always serves the newest session, built from the latest code, and it sits beside the firmware on the [releases page](https://github.com/MoonModules/projectMM/releases) if you would rather find it there.
+That link always serves the newest session, built from the latest code, and it sits beside the firmware on the [releases page](https://github.com/MoonModules/MoonLight/releases) if you would rather find it there.
 
 Save it somewhere you can find again. The file does not contain your device's address, so the same file works for every device you own.
 

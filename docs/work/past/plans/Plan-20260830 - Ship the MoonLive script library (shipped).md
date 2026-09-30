@@ -84,7 +84,7 @@ way, which is a further reason the content comes per file from the repo rather t
 ### Where a script comes from
 
 ```text
-https://raw.githubusercontent.com/MoonModules/projectMM/<tag>/moonlive/<role>/<name>
+https://raw.githubusercontent.com/MoonModules/MoonLight/<tag>/moonlive/<role>/<name>
 ```
 
 `<tag>` is the firmware's own release tag, falling back to `main` for a development build. **Pinned

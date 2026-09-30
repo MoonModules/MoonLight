@@ -35,7 +35,7 @@ Most of a restore applies live, module by module, as each file lands. Two things
 
 The device never runs migration code. Its loader is robust by design: an absent key keeps the control's default, a stale value clamps to the new bounds, and an unknown key is ignored.
 
-So the rename maps live in the browser, in [migrate.js](https://github.com/MoonModules/projectMM/blob/main/src/ui/migrate.js), and apply to the bundle *before* it is uploaded. Each firmware release embeds the map as of that release, which is what lets any older backup restore correctly onto it with no version stamps anywhere.
+So the rename maps live in the browser, in [migrate.js](https://github.com/MoonModules/MoonLight/blob/main/src/ui/migrate.js), and apply to the bundle *before* it is uploaded. Each firmware release embeds the map as of that release, which is what lets any older backup restore correctly onto it with no version stamps anywhere.
 
 The breaks a map cannot express are written down instead, in [MIGRATING](../reference/MIGRATING.md).
 
@@ -47,7 +47,7 @@ Join the device's `MM-XXXX` access point, open `http://4.3.2.1`, restore there, 
 
 ## From firmware older than the Backup button
 
-The [installer page](https://moonmodules.org/projectMM/install/) offers the same backup as a bookmarklet, so a device too old to have the button can still be captured before you update it.
+The [installer page](https://moonmodules.org/MoonLight/install/) offers the same backup as a bookmarklet, so a device too old to have the button can still be captured before you update it.
 
 ## Moving a setup to another device
 

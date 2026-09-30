@@ -40,7 +40,7 @@ from pathlib import Path
 # script never holds a second hand-maintained variant list — same cross-script
 # import collect_kpi.py already uses.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_esp32 import FIRMWARES, TARGET_TO_FAMILY  # noqa: E402
+from build_esp32 import APP_BIN, FIRMWARES, TARGET_TO_FAMILY  # noqa: E402
 
 # ESP-IDF writes a number of `<name>.bin` references in flasher_args.json,
 # each keyed by hex offset. We map IDF's output names to the firmware-bundle
@@ -55,7 +55,7 @@ from build_esp32 import FIRMWARES, TARGET_TO_FAMILY  # noqa: E402
 #     filled from flasher_args' flash_settings.flash_size (see resolve below).
 # App + bootloader stay per-firmware ({prefix}), as both differ per variant.
 PART_NAME_MAP = {
-    "projectMM.bin": "{prefix}.bin",
+    APP_BIN: "{prefix}.bin",
     "bootloader.bin": "{prefix}-bootloader.bin",
     "partition-table.bin": "partition-table-{size}.bin",
     "ota_data_initial.bin": "shared-ota-data.bin",

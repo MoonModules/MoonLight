@@ -62,6 +62,7 @@ MIN_ESP32_FPS_LED_PRODUCT = 10 * 16384  # 163840
 
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 from build_desktop import desktop_binary  # noqa: E402 (one definition of where the binary lands)
+from build_esp32 import APP_BIN  # noqa: E402 (one definition of what ESP-IDF names the app image)
 
 
 def run(cmd, cwd=None, timeout=30):
@@ -253,14 +254,14 @@ def collect_desktop():
 def collect_esp32():
     kpi = {}
     # Per-firmware build dirs under build/esp32-*/ (plan-19.1). Pick the dir
-    # whose projectMM.bin was written most recently, which is the binary
+    # whose app image was written most recently, which is the binary
     # the developer most recently rebuilt and would consider the current
     # KPI source. Sort by the firmware mtime, not the dir mtime, because
     # a sdkconfig save or stray touch can bump the dir mtime without a
     # rebuild — picking by dir mtime would surface stale binaries.
     candidates = [p for p in (ROOT / "build").glob("esp32-*")
-                  if (p / "projectMM.bin").exists()]
-    candidates.sort(key=lambda p: (p / "projectMM.bin").stat().st_mtime,
+                  if (p / APP_BIN).exists()]
+    candidates.sort(key=lambda p: (p / APP_BIN).stat().st_mtime,
                     reverse=True)
     if not candidates:
         return kpi

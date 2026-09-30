@@ -7046,7 +7046,7 @@ async function fmBackupConfig() {
 async function fmRestoreConfig(file, refresh) {
     const bundle = JSON.parse(await file.text());
     // Restore is the one supported upgrade path, so it reads the format the previous name wrote as well as its own.
-    const kBackupFormats = ["MoonLight-config-backup", "projectMM-config-backup"];   // rename-keep: a bundle already saved carries the name it was saved under
+    const kBackupFormats = ["MoonLight-config-backup", "projectMM-config-backup"];   // a bundle already saved carries the name it was saved under
     if (!kBackupFormats.includes(bundle.format) || !bundle.files) {
         throw new Error("not a config backup");
     }

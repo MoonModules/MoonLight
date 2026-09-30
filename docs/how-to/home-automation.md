@@ -242,7 +242,7 @@ On Raspberry Pi OS (or any Debian-based distro):
 sudo apt update && sudo apt install -y mosquitto mosquitto-clients
 ```
 
-The package starts a `mosquitto` **systemd service**. Mosquitto 2.x listens only on `localhost` by default, so open the LAN listener with a drop-in config — create `/etc/mosquitto/conf.d/projectmm.conf` containing:
+The package starts a `mosquitto` **systemd service**. Mosquitto 2.x listens only on `localhost` by default, so open the LAN listener with a drop-in config: create `/etc/mosquitto/conf.d/moonlight.conf` containing:
 
 ```
 listener 1883 0.0.0.0

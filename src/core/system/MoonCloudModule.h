@@ -49,8 +49,8 @@ private:
 /// Characters written by `installationId`, excluding the terminator.
 inline constexpr size_t kInstallationIdChars = 32;
 
-/// Changing this re-identifies every installation in the world exactly once, so the line carries a marker the rename sweep honours.
-inline constexpr char kMoonCloudSalt[] = "projectMM/MoonStats/v1";   // rename-keep: a new salt orphans every installation's history
+/// Changing this re-identifies every installation in the world exactly once, so it keeps the spelling it shipped with.
+inline constexpr char kMoonCloudSalt[] = "projectMM/MoonStats/v1";
 
 /// Write the installation id into `out`, which must hold one more character than the id.
 inline void installationId(char* out) {

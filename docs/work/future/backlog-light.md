@@ -151,7 +151,7 @@ Record before and after in performance.md per target.
 
 ### DNS names as NetworkSend destinations (2026-09-27)
 
-Tracked as [issue #115](https://github.com/MoonModules/projectMM/issues/115), asked for by someone running many panels: a list of addresses is hard to keep straight, and DHCP moving one means editing the driver.
+Tracked as [issue #115](https://github.com/MoonModules/MoonLight/issues/115), asked for by someone running many panels: a list of addresses is hard to keep straight, and DHCP moving one means editing the driver.
 
 [`NetworkSendDriver`](../../../src/light/drivers/NetworkSendDriver.h)'s `ips` control is already free text, so the UI accepts a name today; [`parseIpList`](../../../src/core/util/IpList.h) rejects it. A rig of many panels is exactly the case where names beat numbers, and it is the case that also wants the list shorthand the parser already gives: `192.168.1.10-20` expands a range, and `192.168.1.10, 11, 12` extends the last octet.
 

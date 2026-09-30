@@ -18,7 +18,7 @@ and a **Chromium-based browser** on a computer (Google Chrome, Microsoft Edge, o
 
 ### 1. Open the installer and plug in
 
-Open the **[web installer](https://moonmodules.org/projectMM/install/)** in Chrome or Edge, then plug your ESP32 into a USB port.
+Open the **[web installer](https://moonmodules.org/MoonLight/install/)** in Chrome or Edge, then plug your ESP32 into a USB port.
 
 ![The web installer](assets/gettingstarted/01-01-installer-start.png)
 
@@ -192,7 +192,7 @@ address others reach it at. The **Devices** section underneath finds other MoonL
 
 The device's own web UI works on a phone, but for quick on/off and brightness from your pocket there's a nicer option: **WLED Native**, the open-source mobile app for the WLED ecosystem. MoonLight speaks the WLED JSON API and announces itself over the network the same way a WLED device does, so the app finds your MoonLight controllers automatically, no setup, no pairing. Each one shows up as a card with a power toggle and a brightness slider, so a roomful of controllers is a scroll and a tap away.
 
-![MoonLight devices discovered in WLED Native](assets/core/WLED%20Native%20discovers%20projectMM.jpeg){ width="300" }
+![MoonLight devices discovered in WLED Native](assets/core/WLED%20Native%20discovers%20MoonLight.jpeg){ width="300" }
 
 Get it free for your phone:
 
@@ -251,7 +251,7 @@ is interrupted, or an installed firmware does not start, your device boots MoonB
 - **Boot the app** puts you straight back if the firmware is still fine. Try this
   first: it changes nothing on the device.
 - **From a file** installs a firmware you have already downloaded. Get the
-  `firmware-...bin` matching your device from the [releases page](https://github.com/MoonModules/projectMM/releases).
+  `firmware-...bin` matching your device from the [releases page](https://github.com/MoonModules/MoonLight/releases).
 - **From a URL** downloads and installs in one step. The releases page gives you a
   link to each file; paste it here and your device fetches it directly.
 
@@ -288,4 +288,4 @@ Useful for trying an idea before you wire anything, for driving a board over the
   developer tool: [MoonDeck guide](../moondeck/MoonDeck.md).
 - **Build from source** or target Teensy / Raspberry Pi: [building.md](how-to/building.md).
 
-Stuck, or something didn't work? Open an [issue](https://github.com/MoonModules/projectMM/issues), and tell us what device you used and where it stopped.
+Stuck, or something didn't work? Open an [issue](https://github.com/MoonModules/MoonLight/issues), and tell us what device you used and where it stopped.

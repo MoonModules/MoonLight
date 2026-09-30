@@ -47,9 +47,9 @@ A **source checkout writes to `build/fs/`** (its config under `build/fs/.config/
 
 | Platform | Directory |
 |---|---|
-| Windows | `%LOCALAPPDATA%\projectMM` |
-| macOS | `~/Library/Application Support/projectMM` |
-| Linux | `$XDG_DATA_HOME/projectMM`, else `~/.local/share/projectMM` |
+| Windows | `%LOCALAPPDATA%\MoonLight` |
+| macOS | `~/Library/Application Support/MoonLight` |
+| Linux | `$XDG_DATA_HOME/MoonLight`, else `~/.local/share/MoonLight` |
 
 `MM_DATA_DIR` overrides both, which is how the test suite pins its root into the build tree rather than touching a developer's real settings.
 
@@ -89,7 +89,7 @@ Every host needs [uv](https://docs.astral.sh/uv/), CMake 3.20+, and a C++20 comp
   winget install Microsoft.VisualStudio.2022.BuildTools --override "--passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
   ```
 
-  Build and test from a **Developer PowerShell for VS 2022** (Start Menu → "x64 Native Tools…") so `cl.exe` and the SDK paths are on `PATH`. The default CMake generator on Windows is Visual Studio multi-config, so `projectMM.exe` lands at `build/windows/Release/projectMM.exe` and `mm_scenarios.exe` at `build/windows/test/Release/`. `build_desktop.py` and `run_scenario.py` look in both the `Release/` subdir and the build root, so Ninja (single-config) also works if preferred.
+  Build and test from a **Developer PowerShell for VS 2022** (Start Menu → "x64 Native Tools…") so `cl.exe` and the SDK paths are on `PATH`. The default CMake generator on Windows is Visual Studio multi-config, so `MoonLight.exe` lands at `build/windows/Release/MoonLight.exe` and `mm_scenarios.exe` at `build/windows/test/Release/`. `build_desktop.py` and `run_scenario.py` look in both the `Release/` subdir and the build root, so Ninja (single-config) also works if preferred.
 
 ### Docker
 
@@ -104,8 +104,8 @@ docker compose down       # stops it; the volume, and your config, survive
 Or from the published image, one per release:
 
 ```sh
-docker run -d --name projectmm -p 8081:8080 -v projectmm:/data \
-  ghcr.io/moonmodules/projectmm:latest --no-browser
+docker run -d --name moonlight -p 8081:8080 -v moonlight:/data \
+  ghcr.io/moonmodules/moonlight:latest --no-browser
 ```
 
 `--no-browser` because a container has no browser to open: without it the start prints a line saying it could not open one, which is noise rather than a failure. The Compose service passes it already.
@@ -304,9 +304,11 @@ builds MoonBase alongside), it is two requests:
 curl -X POST http://<device>/api/firmware/moonbase
 
 # 2. MoonBase writes the app slot and reboots into it
-curl --http1.1 -H "Expect:" --data-binary @build/esp32-<firmware>/projectMM.bin \
+curl --http1.1 -H "Expect:" --data-binary @build/esp32-<firmware>/<app>.bin \
      http://<device>/api/firmware/upload
 ```
+
+`<app>.bin` is the app image in that build directory; [flash_esp32](../moondeck/MoonDeck.md#flash_esp32) names it.
 
 The second request ends with **no HTTP status** (curl reports 000): the device reboots into the new image as the write completes, so the socket closes before a response arrives. That is success, not failure. Confirm by reading the build back:
 

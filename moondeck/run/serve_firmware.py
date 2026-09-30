@@ -25,6 +25,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
+sys.path.insert(0, str(ROOT / "moondeck" / "build"))
+from build_esp32 import APP_BIN  # noqa: E402
+
 
 def _lan_ip() -> str:
     """The address a board on the LAN can reach, not 127.0.0.1.
@@ -58,7 +61,7 @@ def main() -> int:
 
     binary = Path(args.firmware)
     if not binary.is_file():
-        binary = ROOT / f"build/esp32-{args.firmware}/projectMM.bin"
+        binary = ROOT / "build" / f"esp32-{args.firmware}" / APP_BIN
     if not binary.is_file():
         print(f"no firmware at {binary}", file=sys.stderr)
         return 1

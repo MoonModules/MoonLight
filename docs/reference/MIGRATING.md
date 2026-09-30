@@ -22,7 +22,7 @@ MoonLight ships **no migration code**: the persistence layer is robust by defaul
 
 ---
 
-## Unreleased
+## v6.0.0
 
 ### The desktop settings folder and the installer's device list carry the new name
 
@@ -36,6 +36,7 @@ A desktop install keeps its config, presets and scripts in a folder named after 
 - the container: `/data/MoonLight`
 
 The old folder is left alone rather than read, so the app starts on its defaults.
+The app itself installs beside an existing projectMM on every desktop platform, and the two compete for port 8080, so uninstall projectMM first.
 Copy the contents across to keep what you had.
 A Backup from the old install, restored into the new one, also carries the WiFi credentials.
 
@@ -78,7 +79,7 @@ The mode options are reordered to run simple to advanced: **simulate, receive ne
 
 ## v5.0.0
 
-The last release under the projectMM name. Its [release notes](https://github.com/MoonModules/projectMM/releases) summarise what these entries ask of you. <!-- rename-keep: this records what shipped, and the sweep would rewrite it into a claim that was never true. -->
+The last release under the projectMM name. Its [release notes](https://github.com/MoonModules/projectMM/releases) summarise what these entries ask of you.
 
 ### Renames Restore carries for you
 

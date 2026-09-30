@@ -38,6 +38,9 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check_clang_query  # noqa: E402  — the module→files resolver, one owner
 
+sys.path.insert(0, str(ROOT / "moondeck" / "build"))
+from build_esp32 import APP_ELF  # noqa: E402
+
 DEFAULT_FW = "esp32s3-n16r8"
 MAX_ROWS = 40
 
@@ -77,7 +80,7 @@ def _tool(name, firmware):
 
 
 def elf_path(firmware):
-    return ROOT / "build" / f"esp32-{firmware}" / "projectMM.elf"
+    return ROOT / "build" / f"esp32-{firmware}" / APP_ELF
 
 
 def collect(elf, nm):

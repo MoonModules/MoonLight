@@ -25,12 +25,12 @@ Both architectures get a released binary, so the route below is the same one and
 
 ## Install the package
 
-The [releases page](https://github.com/MoonModules/projectMM/releases/latest) carries one `.deb` per architecture: `_amd64.deb` for `x86_64`, `_arm64.deb` for `aarch64`.
+The [releases page](https://github.com/MoonModules/MoonLight/releases/latest) carries one `.deb` per architecture: `_amd64.deb` for `x86_64`, `_arm64.deb` for `aarch64`.
 
 On a machine with a browser, download it and install:
 
 ```sh
-sudo apt install ./projectmm_X.Y.Z_arm64.deb
+sudo apt install ./moonlight_X.Y.Z_arm64.deb
 MoonLight
 ```
 
@@ -38,9 +38,9 @@ On a headless board, fetch it over ssh instead. This picks the right file for th
 
 ```sh
 arch=$(dpkg --print-architecture)
-url=$(curl -fsSL https://api.github.com/repos/MoonModules/projectMM/releases/tags/latest \
+url=$(curl -fsSL https://api.github.com/repos/MoonModules/MoonLight/releases/tags/latest \
       | grep -o "https://[^\"]*_${arch}\.deb" | head -1)
-curl -fsSL -o projectmm.deb "$url" && sudo apt install -y ./projectmm.deb
+curl -fsSL -o moonlight.deb "$url" && sudo apt install -y ./moonlight.deb
 MoonLight
 ```
 
@@ -130,7 +130,7 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc
 ### 6. Build and run
 
 ```sh
-git clone https://github.com/MoonModules/projectMM.git
+git clone https://github.com/MoonModules/MoonLight.git
 cd MoonLight
 uv run moondeck/build/build_desktop.py
 uv run moondeck/run/run_desktop.py
@@ -146,7 +146,7 @@ That is a running system. Everything below is optional.
 
 For the package or a source build. A container does this with `--restart unless-stopped` instead, see [Docker](#docker).
 
-Give it a systemd unit at `/etc/systemd/system/projectmm.service`:
+Give it a systemd unit at `/etc/systemd/system/moonlight.service`:
 
 ```ini
 [Unit]
@@ -165,8 +165,8 @@ WantedBy=multi-user.target
 ```
 
 ```sh
-sudo systemctl enable --now projectmm
-systemctl status projectmm
+sudo systemctl enable --now moonlight
+systemctl status moonlight
 ```
 
 `Restart=always` covers a crash as well as a reboot. Adjust `User` and the path: `/usr/bin/MoonLight` for the package, or where you built for a source build.
@@ -186,9 +186,9 @@ MoonLight writes to disk only when settings change, so the card is a fine home f
 The same program, installed as a container rather than a package. One published image carries amd64 and arm64, so a board and a server pull the same tag and each gets native instructions.
 
 ```sh
-docker run -d --name projectmm --network host \
-  -v projectmm-data:/data --restart unless-stopped \
-  ghcr.io/moonmodules/projectmm:latest
+docker run -d --name moonlight --network host \
+  -v moonlight-data:/data --restart unless-stopped \
+  ghcr.io/moonmodules/moonlight:latest
 ```
 
 Open `http://<machine>:8080`. `--restart unless-stopped` is what brings it back after a reboot, so Docker replaces the systemd unit above rather than needing one of its own.
@@ -216,7 +216,7 @@ sudo systemctl restart docker
 
 | | Package (`.deb`) | Docker |
 |---|---|---|
-| Install | `apt install ./projectmm_*.deb` | one `docker run` |
+| Install | `apt install ./moonlight_*.deb` | one `docker run` |
 | Updates | download the new `.deb` | `docker pull` and recreate |
 | Survives a reboot | needs a systemd unit | `--restart unless-stopped` |
 | Runs on | Debian family, glibc 2.35+ | any Linux with Docker |
@@ -244,5 +244,5 @@ The realistic limits are architecture and memory, not the kind of device. It nee
 ## Where to go next
 
 - [Install & first light](../gettingstarted.md): the same program on an ESP32.
-- [How MoonLight works](../tutorials/how-projectmm-works.md): layouts, layers, effects and drivers.
+- [How MoonLight works](../tutorials/how-moonlight-works.md): layouts, layers, effects and drivers.
 - [building.md](../how-to/building.md): building, testing and packaging in depth.

@@ -27,6 +27,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
+sys.path.insert(0, str(ROOT / "moondeck" / "build"))
+from build_esp32 import APP_BIN, FIRMWARES, MOONBASE_BIN  # noqa: E402
+
 # What feeds an ESP32 image. Kept in step with this check's trigger in
 # CLAUDE.md § Commit: both answer "could this change alter the firmware?".
 SOURCE_DIRS = ("src", "esp32")
@@ -129,7 +132,7 @@ def main():
                              "source freshness is the check that matters.")
     args = parser.parse_args()
 
-    binary = ROOT / "build" / f"esp32-{args.firmware}" / "projectMM.bin"
+    binary = ROOT / "build" / f"esp32-{args.firmware}" / APP_BIN
     build_cmd = f"uv run moondeck/build/build_esp32.py --firmware {args.firmware}"
 
     if not binary.exists():
@@ -153,12 +156,9 @@ def main():
     # MoonBase firmwares carry a second image (built into build/moonbase-<chip>/ by the same
     # build run): it must exist and be newer than every moonbase/ source, by the same
     # sources-not-clock rule as the app image.
-    import importlib
-    sys.path.insert(0, str(ROOT / "moondeck" / "build"))
-    FIRMWARES = importlib.import_module("build_esp32").FIRMWARES
     spec = FIRMWARES.get(args.firmware, {})
     if spec.get("moonbase"):
-        mb_bin = ROOT / "build" / f"moonbase-{spec['chip']}" / "projectMM-moonbase.bin"
+        mb_bin = ROOT / "build" / f"moonbase-{spec['chip']}" / MOONBASE_BIN
         if not mb_bin.exists():
             print(f"No MoonBase image for {args.firmware}.")
             print(f"  expected: {mb_bin.relative_to(ROOT)}")

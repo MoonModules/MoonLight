@@ -2,7 +2,7 @@
 
 High-performance LED &amp; DMX lighting control for ESP32 and beyond.
 
-[:material-flash: Flash an ESP32 from your browser](/projectMM/install/){ .md-button .md-button--primary } &nbsp; [:material-github: GitHub](https://github.com/MoonModules/projectMM){ .md-button }
+[:material-flash: Flash an ESP32 from your browser](/MoonLight/install/){ .md-button .md-button--primary } &nbsp; [:material-github: GitHub](https://github.com/MoonModules/MoonLight){ .md-button }
 
 !!! tip "New here?"
     The [Getting started](gettingstarted.md) guide walks you from a blank ESP32 to your first running light show, step by step, with no build tools required.
@@ -28,7 +28,7 @@ One source tree drives ESP32, Teensy, Raspberry Pi, macOS, Windows and Linux.
 
     Flash a board from your browser and light your first pixels.
 
-    [Getting started](gettingstarted.md) · [Web installer](/projectMM/install/)
+    [Getting started](gettingstarted.md) · [Web installer](/MoonLight/install/)
 
 -   :material-palette: **Build a show**
 
@@ -52,7 +52,7 @@ One source tree drives ESP32, Teensy, Raspberry Pi, macOS, Windows and Linux.
 
     Measured frame rates per device, how the project works, why the code is ours, and who inspired what.
 
-    [Performance](reference/performance.md) · [Why our own code](explanation/why-we-write-our-own.md) · [How we work](https://github.com/MoonModules/projectMM#how-we-work) · [Credits](https://github.com/MoonModules/projectMM#credits)
+    [Performance](reference/performance.md) · [Why our own code](explanation/why-we-write-our-own.md) · [How we work](https://github.com/MoonModules/MoonLight#how-we-work) · [Credits](https://github.com/MoonModules/MoonLight#credits)
 
 </div>
 

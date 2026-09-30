@@ -73,7 +73,7 @@ That work drives a 12,288-light panel at around 85 fps where interpreted languag
 MoonLive is written fresh against MoonLight's architecture, with ESPLiveScript as the reference it is checked against.
 
 The live-scripting idea in this ecosystem descends from ARTI, the interpreted-effects runtime in WLED MoonModules, which proved the load-and-run loop end to end.
-The host-binding surface follows the [MoonLight effects tutorial](https://moonmodules.org/projectMM/moonlight/effects-tutorial/).
+The host-binding surface follows the [MoonLight effects tutorial](https://ewowi.github.io/MoonLight/moonlight/effects-tutorial/).
 
 ## A scripted module is still a module
 

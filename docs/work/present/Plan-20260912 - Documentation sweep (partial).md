@@ -172,7 +172,7 @@ Reading the section before the first file of a batch is cheaper than rewriting t
 | 26 | `docs/reference/hardware/gpio-usage.md` |
 | 26 | `docs/moonmodules/core/services.md` |
 | 25 | `docs/reference/hardware/esp32-s31-coreboard.md` |
-| 24 | `docs/tutorials/how-projectmm-works.md` |
+| 24 | `docs/tutorials/how-moonlight-works.md` |
 | 21 | `docs/tutorials/generative-effects.md` |
 | 21 | `docs/moonmodules/light/supporting.md` |
 | 20 | `docs/reference/hardware/mhc-wled-esp32-p4-shield.md` |

@@ -1395,7 +1395,7 @@ function renderDevices() {
         });
 
         // "OTA" — wireless flash of the local build for this device's firmware. MoonDeck serves
-        // build/esp32-<fw>/projectMM.bin and hands the device its URL (POST /api/ota); the device
+        // the app image in build/esp32-<fw>/ and hands the device its URL (POST /api/ota); the device
         // pulls + flashes over WiFi. No USB. Needs a local build for the device's firmware.
         const otaBtn = document.createElement("button");
         otaBtn.className = "device-inject";       // same compact style as inject
