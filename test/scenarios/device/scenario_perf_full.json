@@ -176,13 +176,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 3,
-            "p95": 3,
+            "p95": 1947,
             "min": 3,
-            "max": 3,
-            "n": 1,
-            "samples": [3]
+            "max": 1947,
+            "n": 2,
+            "samples": [3, 1947]
           },
-          "last_updated": "2026-08-21"
+          "last_updated": "2026-09-30"
         },
         "esp32s31": {
           "tick_us": {
@@ -350,13 +350,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 3,
-            "p95": 3,
+            "p95": 1981,
             "min": 3,
-            "max": 3,
-            "n": 1,
-            "samples": [3]
+            "max": 1981,
+            "n": 2,
+            "samples": [3, 1981]
           },
-          "last_updated": "2026-08-23"
+          "last_updated": "2026-09-30"
         },
         "esp32s31": {
           "tick_us": {
@@ -524,13 +524,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 3,
-            "p95": 3,
+            "p95": 1730,
             "min": 3,
-            "max": 3,
-            "n": 1,
-            "samples": [3]
+            "max": 1730,
+            "n": 2,
+            "samples": [3, 1730]
           },
-          "last_updated": "2026-08-22"
+          "last_updated": "2026-09-30"
         },
         "esp32s31": {
           "tick_us": {
@@ -696,13 +696,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 1,
-            "p95": 1,
+            "p95": 1663,
             "min": 1,
-            "max": 1,
-            "n": 1,
-            "samples": [1]
+            "max": 1663,
+            "n": 2,
+            "samples": [1, 1663]
           },
-          "last_updated": "2026-08-22"
+          "last_updated": "2026-09-30"
         },
         "esp32s31": {
           "tick_us": {
@@ -875,13 +875,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 3,
-            "p95": 3,
+            "p95": 1545,
             "min": 3,
-            "max": 3,
-            "n": 1,
-            "samples": [3]
+            "max": 1545,
+            "n": 2,
+            "samples": [3, 1545]
           },
-          "last_updated": "2026-08-23"
+          "last_updated": "2026-09-30"
         },
         "esp32s31": {
           "tick_us": {
@@ -1047,13 +1047,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 3,
-            "p95": 3,
+            "p95": 1782,
             "min": 3,
-            "max": 3,
-            "n": 1,
-            "samples": [3]
+            "max": 1782,
+            "n": 2,
+            "samples": [3, 1782]
           },
-          "last_updated": "2026-08-22"
+          "last_updated": "2026-09-30"
         },
         "esp32s31": {
           "tick_us": {
@@ -1230,13 +1230,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 3,
-            "p95": 3,
+            "p95": 11199,
             "min": 3,
-            "max": 3,
-            "n": 1,
-            "samples": [3]
+            "max": 11199,
+            "n": 2,
+            "samples": [3, 11199]
           },
-          "last_updated": "2026-08-23"
+          "last_updated": "2026-09-30"
         },
         "esp32s31": {
           "tick_us": {
@@ -1363,13 +1363,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 3,
-            "p95": 3,
+            "p95": 1976,
             "min": 3,
-            "max": 3,
-            "n": 1,
-            "samples": [3]
+            "max": 1976,
+            "n": 2,
+            "samples": [3, 1976]
           },
-          "last_updated": "2026-08-23"
+          "last_updated": "2026-09-30"
         },
         "esp32": {
           "tick_us": {
@@ -1551,13 +1551,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 3,
-            "p95": 3,
+            "p95": 1590,
             "min": 3,
-            "max": 3,
-            "n": 1,
-            "samples": [3]
+            "max": 1590,
+            "n": 2,
+            "samples": [3, 1590]
           },
-          "last_updated": "2026-08-23"
+          "last_updated": "2026-09-30"
         },
         "esp32": {
           "tick_us": {
@@ -1799,13 +1799,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 3,
-            "p95": 3,
+            "p95": 2027,
             "min": 3,
-            "max": 3,
-            "n": 1,
-            "samples": [3]
+            "max": 2027,
+            "n": 2,
+            "samples": [3, 2027]
           },
-          "last_updated": "2026-08-22"
+          "last_updated": "2026-09-30"
         },
         "esp32s31": {
           "tick_us": {
@@ -1977,13 +1977,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 12,
-            "p95": 12,
+            "p95": 1923,
             "min": 12,
-            "max": 12,
-            "n": 1,
-            "samples": [12]
+            "max": 1923,
+            "n": 2,
+            "samples": [12, 1923]
           },
-          "last_updated": "2026-07-08"
+          "last_updated": "2026-09-30"
         },
         "esp32s31": {
           "tick_us": {
@@ -2155,13 +2155,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 49,
-            "p95": 49,
+            "p95": 1839,
             "min": 49,
-            "max": 49,
-            "n": 1,
-            "samples": [49]
+            "max": 1839,
+            "n": 2,
+            "samples": [49, 1839]
           },
-          "last_updated": "2026-08-22"
+          "last_updated": "2026-09-30"
         },
         "esp32s31": {
           "tick_us": {
@@ -2333,13 +2333,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 196,
-            "p95": 196,
+            "p95": 2966,
             "min": 196,
-            "max": 196,
-            "n": 1,
-            "samples": [196]
+            "max": 2966,
+            "n": 2,
+            "samples": [196, 2966]
           },
-          "last_updated": "2026-08-23"
+          "last_updated": "2026-09-30"
         },
         "esp32s31": {
           "tick_us": {
@@ -2519,13 +2519,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 9,
-            "p95": 9,
+            "p95": 1933,
             "min": 9,
-            "max": 9,
-            "n": 1,
-            "samples": [9]
+            "max": 1933,
+            "n": 2,
+            "samples": [9, 1933]
           },
-          "last_updated": "2026-08-23"
+          "last_updated": "2026-09-30"
         },
         "esp32s31": {
           "tick_us": {
@@ -2697,13 +2697,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 36,
-            "p95": 36,
+            "p95": 2201,
             "min": 36,
-            "max": 36,
-            "n": 1,
-            "samples": [36]
+            "max": 2201,
+            "n": 2,
+            "samples": [36, 2201]
           },
-          "last_updated": "2026-08-22"
+          "last_updated": "2026-09-30"
         },
         "esp32s31": {
           "tick_us": {
@@ -2875,13 +2875,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 145,
-            "p95": 145,
+            "p95": 2409,
             "min": 145,
-            "max": 145,
-            "n": 1,
-            "samples": [145]
+            "max": 2409,
+            "n": 2,
+            "samples": [145, 2409]
           },
-          "last_updated": "2026-08-22"
+          "last_updated": "2026-09-30"
         },
         "esp32s31": {
           "tick_us": {
@@ -3053,13 +3053,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 592,
-            "p95": 592,
+            "p95": 4121,
             "min": 592,
-            "max": 592,
-            "n": 1,
-            "samples": [592]
+            "max": 4121,
+            "n": 2,
+            "samples": [592, 4121]
           },
-          "last_updated": "2026-08-23"
+          "last_updated": "2026-09-30"
         },
         "esp32s31": {
           "tick_us": {
@@ -3239,13 +3239,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 2,
-            "p95": 2,
+            "p95": 1758,
             "min": 2,
-            "max": 2,
-            "n": 1,
-            "samples": [2]
+            "max": 1758,
+            "n": 2,
+            "samples": [2, 1758]
           },
-          "last_updated": "2026-07-08"
+          "last_updated": "2026-09-30"
         },
         "esp32s31": {
           "tick_us": {
@@ -3417,13 +3417,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 9,
-            "p95": 9,
+            "p95": 1929,
             "min": 9,
-            "max": 9,
-            "n": 1,
-            "samples": [9]
+            "max": 1929,
+            "n": 2,
+            "samples": [9, 1929]
           },
-          "last_updated": "2026-07-08"
+          "last_updated": "2026-09-30"
         },
         "esp32s31": {
           "tick_us": {
@@ -3595,13 +3595,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 36,
-            "p95": 36,
+            "p95": 584,
             "min": 36,
-            "max": 36,
-            "n": 1,
-            "samples": [36]
+            "max": 584,
+            "n": 2,
+            "samples": [36, 584]
           },
-          "last_updated": "2026-08-21"
+          "last_updated": "2026-09-30"
         },
         "esp32s31": {
           "tick_us": {
@@ -3773,13 +3773,13 @@
         "desktop-windows": {
           "tick_us": {
             "p50": 145,
-            "p95": 145,
+            "p95": 2324,
             "min": 145,
-            "max": 145,
-            "n": 1,
-            "samples": [145]
+            "max": 2324,
+            "n": 2,
+            "samples": [145, 2324]
           },
-          "last_updated": "2026-07-08"
+          "last_updated": "2026-09-30"
         },
         "esp32s31": {
           "tick_us": {

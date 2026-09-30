@@ -187,9 +187,14 @@ def _run_one(path: Path, update_contract: bool, update_reason: str | None,
     # a checkout. Relying on cwd for that would put a test one wrong directory away from
     # overwriting a developer's own installed-MoonLight settings.
     env = {**os.environ, "MM_DATA_DIR": str(ROOT / "build" / "scenario-fs")}
+    # encoding="utf-8" EXPLICITLY: text=True alone decodes with the locale codec, which is cp1252
+    # on Windows, and the runner writes UTF-8. An em-dash came back as "â€”" in every REBOOT line,
+    # a display fault rather than a parsing one, since the MEASURE regex only reads ASCII. Same
+    # site and same fix as test_desktop.py's reader; a subprocess read is the half a stdout
+    # reconfigure preamble cannot reach.
     proc = subprocess.Popen([str(RUNNER), str(path)], cwd=ROOT, env=env,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            text=True, bufsize=1)
+                            text=True, encoding="utf-8", errors="replace", bufsize=1)
     observations: dict[str, dict] = {}  # step-name → {tick_us, free_heap, max_alloc_block}
     for line in proc.stdout:
         sys.stdout.write(line)

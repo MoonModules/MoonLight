@@ -107,6 +107,17 @@
             "samples": [59392]
           },
           "last_updated": "2026-09-30"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 29,
+            "p95": 1505,
+            "min": 4,
+            "max": 1505,
+            "n": 3,
+            "samples": [1505, 29, 4]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -166,6 +177,17 @@
             "max": 61440,
             "n": 1,
             "samples": [61440]
+          },
+          "last_updated": "2026-09-30"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 23,
+            "p95": 1858,
+            "min": 3,
+            "max": 1858,
+            "n": 3,
+            "samples": [1858, 23, 3]
           },
           "last_updated": "2026-09-30"
         }
@@ -228,6 +250,17 @@
             "samples": [61440]
           },
           "last_updated": "2026-09-30"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 4,
+            "p95": 2105,
+            "min": 3,
+            "max": 2105,
+            "n": 3,
+            "samples": [2105, 4, 3]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -279,6 +312,17 @@
             "max": 61440,
             "n": 1,
             "samples": [61440]
+          },
+          "last_updated": "2026-09-30"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 14,
+            "p95": 2746,
+            "min": 3,
+            "max": 2746,
+            "n": 3,
+            "samples": [2746, 14, 3]
           },
           "last_updated": "2026-09-30"
         }
@@ -338,6 +382,17 @@
             "max": 61440,
             "n": 1,
             "samples": [61440]
+          },
+          "last_updated": "2026-09-30"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 12,
+            "p95": 2536,
+            "min": 6,
+            "max": 2536,
+            "n": 3,
+            "samples": [2536, 12, 6]
           },
           "last_updated": "2026-09-30"
         }
@@ -400,6 +455,17 @@
             "samples": [61440]
           },
           "last_updated": "2026-09-30"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 14,
+            "p95": 2117,
+            "min": 4,
+            "max": 2117,
+            "n": 3,
+            "samples": [2117, 14, 4]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -457,6 +523,17 @@
             "max": 61440,
             "n": 1,
             "samples": [61440]
+          },
+          "last_updated": "2026-09-30"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 7,
+            "p95": 1705,
+            "min": 4,
+            "max": 1705,
+            "n": 3,
+            "samples": [1705, 7, 4]
           },
           "last_updated": "2026-09-30"
         }
