@@ -75,8 +75,8 @@
       "parent": "Drivers",
       "type": "NetworkSendDriver",
       "as": "netsend",
-      "caption": "Network send speaks Art Net, s A C N and D D P, so real fixtures on a real rig listen to this one.",
-      "speech": 9.6
+      "caption": "Network send speaks Art Net, s A C N and D D P, so real fixtures on a real rig listen to this one. Moving heads and par cans take the same universes a strip does: a fixture is lights and a few channels of pan, tilt and color, which is a layout like any other.",
+      "speech": 17.2
     },
     {
       "action": "delete_module",
