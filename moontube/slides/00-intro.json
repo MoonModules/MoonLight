@@ -3,6 +3,13 @@
   "description": "Luna introduces MoonLight: what MoonModules built before, what she built from their prompts, and the principles that survived the rewrite.",
   "slides": [
     {
+      "cover": true,
+      "kicker": "MoonModules presents",
+      "title": "MoonLight",
+      "tagline": "Thousands of lights, live from any browser, on any device, over any protocol.<b>Better · Faster · Safer · Unbreakable · Open</b>",
+      "hold": 2
+    },
+    {
       "kicker": "MoonModules",
       "title": "Hello, I am Luna",
       "say": "Hello! I am Luna. Welcome to a new MoonModules video. It's been a while. About a year ago MoonModules made a number of MoonLight videos. But since then, MoonLight has had a complete makeover. If you have not met it: MoonLight drives LED installations and DMX fixtures, live, from any browser.",
@@ -112,6 +119,12 @@
         "And it runs both ways: steal from us, taking our GPL license into account"
       ],
       "say": "MoonLight has a few principles for this, and they come from a book: Steal Like an Artist by Austin Kleon. His test is simple. Good theft credits its source, studies it, learns from many, and transforms what it takes. Bad theft passes work off as its own, skims without understanding, copies a single source, and imitates rather than builds. So: industry standard algorithms, naming and spec sheets, and explicitly not existing code. Attribution wherever we are inspired by others. And we transform rather than imitate because our principles require it: full testability, live reconfiguration, one abstraction layer over every platform, and effects built on shared power functions. A design that holds all four cannot be a copy of anything. And it runs both ways: steal from us. All of this is open source, so the ideas are there for anyone else to build on, taking our GPL license into account."
+    },
+    {
+      "kicker": "What is coming",
+      "title": "Sixteen clips, in the order you meet them",
+      "overview": "full-series",
+      "say": "Here is what is coming. Sixteen short clips, in the order you would meet them. First you install it, on a computer or on a device, and look around. Then the pipeline itself: layouts, layers and drivers. Then writing your own effects, the services, and the control surface. After that the console it is all built with, how to get involved, and who we learned from. And you will meet the team as you watch: each clip is presented by someone else, so you will hear more voices than mine."
     },
     {
       "kicker": "Time to show some MoonLight",

@@ -533,23 +533,33 @@ bool installFromUrl(const char* url) {
     // Only a cable gets it back, and the two images sit one paste apart on the releases page.
     esp_app_desc_t incoming = {};
     if (esp_https_ota_get_img_desc(handle, &incoming) == ESP_OK &&
-        std::strncmp(incoming.project_name, "projectMM-moonbase",
-                     sizeof(incoming.project_name)) == 0) {
+        mm::firmware::isMoonBaseImage(incoming.project_name, sizeof(incoming.project_name))) {
         std::snprintf(status_, sizeof(status_), "error: that is a MoonBase image, not an app");
         esp_https_ota_abort(handle);
         return false;
     }
 
     esp_err_t err;
+    int lastGot = -1;
+    TickType_t movedAt = xTaskGetTickCount();
     while ((err = esp_https_ota_perform(handle)) == ESP_ERR_HTTPS_OTA_IN_PROGRESS) {
         if (cancelRequested_) {
             esp_https_ota_abort(handle);
             std::snprintf(status_, sizeof(status_), "canceled");
             return false;
         }
+        // Give up on a connection that stopped delivering, which ESP-IDF reports as still in progress: FirmwareImage.h names why.
+        const int got = esp_https_ota_get_image_len_read(handle);
+        if (got != lastGot) {
+            lastGot = got;
+            movedAt = xTaskGetTickCount();
+        } else if (pdTICKS_TO_MS(xTaskGetTickCount() - movedAt) > mm::firmware::kDownloadStallMs) {
+            esp_https_ota_abort(handle);
+            std::snprintf(status_, sizeof(status_), "error: the download stalled");
+            return false;
+        }
         std::snprintf(status_, sizeof(status_), "downloading: %d of %d bytes",
-                      esp_https_ota_get_image_len_read(handle),
-                      esp_https_ota_get_image_size(handle));
+                      got, esp_https_ota_get_image_size(handle));
     }
     if (err != ESP_OK) {
         esp_https_ota_abort(handle);   // finish() is for a COMPLETE download; abort frees this one
@@ -637,8 +647,7 @@ bool installFromSocketLocked(int sock, const char* prefix, size_t prefixLen, siz
     }
     const auto incomingUp = mm::firmware::identify(
         reinterpret_cast<const uint8_t*>(prefix), prefixLen);
-    if (incomingUp.described &&
-        std::strcmp(incomingUp.project, "projectMM-moonbase") == 0) {
+    if (incomingUp.described && mm::firmware::isMoonBaseImage(incomingUp.project)) {
         esp_ota_abort(handle);
         std::snprintf(status_, sizeof(status_), "error: that is a MoonBase image, not an app");
         return false;

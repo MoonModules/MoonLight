@@ -2,6 +2,7 @@
   "name": "09-services",
   "description": "Inputs: the compiled services that read a button, a pin or a remote, and a scripted one for anything with a condition in it.",
   "speed": 1.7,
+  "voice": "prudence",
   "setup": [
     {
       "module": "Grid",

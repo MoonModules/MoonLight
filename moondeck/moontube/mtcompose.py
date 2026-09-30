@@ -115,13 +115,13 @@ def fit(src: Path, dst: Path, want: float, width: int, title: str | None,
         # as syntax, and hand-escaping them covered two of the four: a title carrying
         # a percentage silently became something else. textfile has no such parsing.
         t_file = dst.with_suffix(".title.txt")
-        t_file.write_text(title)
+        t_file.write_text(title, encoding="utf-8")
         vf.append(f"drawtext=textfile='{t_file}':fontsize=44:fontcolor=white:"
                   f"x=(w-text_w)/2:y=h*0.80:box=1:boxcolor=black@0.55:boxborderw=18:"
                   f"enable='between(t,0.4,3.4)'")
         if subtitle:
             s_file = dst.with_suffix(".subtitle.txt")
-            s_file.write_text(subtitle)
+            s_file.write_text(subtitle, encoding="utf-8")
             vf.append(f"drawtext=textfile='{s_file}':fontsize=26:fontcolor=white@0.85:"
                       f"x=(w-text_w)/2:y=h*0.80+62:box=1:boxcolor=black@0.45:"
                       f"boxborderw=12:enable='between(t,0.6,3.4)'")
@@ -130,6 +130,31 @@ def fit(src: Path, dst: Path, want: float, width: int, title: str | None,
                        seconds=None if whole else want,
                        what=f"{'keeping' if whole else 'fitting'} {src.name}",
                        keep_audio=whole)
+
+
+def has_audio(path: Path) -> bool:
+    out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries",
+                          "stream=index", "-of", "csv=p=0", str(path)],
+                         capture_output=True, text=True).stdout.strip()
+    return bool(out)
+
+
+def crossfade(a: Path, b: Path, dst: Path, seconds: float) -> bool:
+    """Blend the end of `a` into the start of `b`: picture and sound, over `seconds`.
+
+    The two overlap, so the second one is already speaking while the first is still on screen.
+    That is the point of it: a hand-over between two presenters reads as one interrupting the
+    other, where a cut reads as two separate videos.
+    """
+    offset = max(0.0, probe_duration(a) - seconds)
+    graph = f"[0:v][1:v]xfade=transition=fade:duration={seconds}:offset={offset:.3f},format=yuv420p[v]"
+    maps = ["-map", "[v]"]
+    if has_audio(a) and has_audio(b):
+        graph += f";[0:a][1:a]acrossfade=d={seconds}[a]"
+        maps += ["-map", "[a]", "-c:a", "libopus", "-b:a", "96k"]
+    return run_ffmpeg(["-i", str(a), "-i", str(b), "-filter_complex", graph, *maps,
+                       "-c:v", "libvpx-vp9", "-crf", "34", "-b:v", "0", "-row-mt", "1",
+                       str(dst)], f"crossfade into {b.name}")
 
 
 def build_inset(folder: Path, work: Path, total: float, width: int,
@@ -165,7 +190,7 @@ def build_inset(folder: Path, work: Path, total: float, width: int,
     if not parts:
         return None
     listing = work / "inset.txt"
-    listing.write_text("".join(f"file '{q.name}'\n" for q in parts))
+    listing.write_text("".join(f"file '{q.name}'\n" for q in parts), encoding="utf-8")
     joined = work / "inset.webm"
     if not run_ffmpeg(["-f", "concat", "-safe", "0", "-i", str(listing),
                        "-c", "copy", str(joined)], "inset concat"):
@@ -206,7 +231,7 @@ def main() -> int:
             print(f"{tool} is not on PATH (brew install ffmpeg)", file=sys.stderr)
             return 1
 
-    proj = json.loads(Path(args.project).read_text())
+    proj = json.loads(Path(args.project).read_text(encoding="utf-8"))
     bpm = float(proj.get("bpm", 120.0))
     if not math.isfinite(bpm) or bpm <= 0:
         print(f"bpm must be a positive number, got {bpm}", file=sys.stderr)
@@ -223,6 +248,7 @@ def main() -> int:
 
     print(f"{proj['name']}: {bpm} BPM, bar = {bar:.3f}s")
     segments: list[Path] = []
+    fades: dict[int, float] = {}       # segment index -> seconds it blends into the next one
     t = 0.0
     for i, entry in enumerate(proj.get("clips", [])):
         src = resolve_source(entry)
@@ -247,6 +273,8 @@ def main() -> int:
             print(f"  failed to fit {label}; not cutting a partial video",
                   file=sys.stderr)
             return 1
+        if entry.get("crossfade"):
+            fades[len(segments)] = float(entry["crossfade"])
         segments.append(dst)
         t += probe_duration(dst) if bars <= 0 else want
 
@@ -254,8 +282,19 @@ def main() -> int:
         print("nothing to cut", file=sys.stderr)
         return 1
 
+    # A clip that names a `crossfade` blends into the one after it, and the pair becomes one segment.
+    # Back to front, so an index found earlier still names the same segment.
+    for k in sorted(fades, reverse=True):
+        if k + 1 >= len(segments):
+            continue
+        blended = work / f"{k:02d}-blend.webm"
+        if not crossfade(segments[k], segments[k + 1], blended, fades[k]):
+            return 1
+        segments[k:k + 2] = [blended]
+        t -= fades[k]
+
     listing = work / "concat.txt"
-    listing.write_text("".join(f"file '{p.name}'\n" for p in segments))
+    listing.write_text("".join(f"file '{p.name}'\n" for p in segments), encoding="utf-8")
 
     joined = work / "picture.webm"
     if not run_ffmpeg(["-f", "concat", "-safe", "0", "-i", str(listing),
@@ -275,12 +314,20 @@ def main() -> int:
         if not strip:
             return 1
         framed = work / "picture-inset.webm"
+        # A caption inside the window, bottom right, saying what the footage is: real lights
+        # rather than another part of the interface. From a file, for the reason `fit` gives.
+        label = ""
+        if inset.get("caption"):
+            c_file = work / "inset-caption.txt"
+            c_file.write_text(inset["caption"], encoding="utf-8")
+            label = (f",drawtext=textfile='{c_file}':fontsize=13:fontcolor=white@0.92:"
+                     f"x=w-text_w-10:y=h-text_h-9:box=1:boxcolor=black@0.5:boxborderw=5")
         # TOP RIGHT, with a hairline so the window reads as a window rather than as part of
         # the interface behind it. `shortest=0`: the cut decides the length, not the loop.
         if not run_ffmpeg([
                 "-i", str(joined), "-i", str(strip),
                 "-filter_complex",
-                f"[1:v]pad=iw+4:ih+4:2:2:white@0.65[ins];"
+                f"[1:v]pad=iw+4:ih+4:2:2:white@0.65{label}[ins];"
                 f"[0:v][ins]overlay=W-w-{margin}:{margin}:shortest=0[v]",
                 "-map", "[v]", "-map", "0:a?",
                 "-c:v", "libvpx-vp9", "-crf", "34", "-b:v", "0", "-row-mt", "1",

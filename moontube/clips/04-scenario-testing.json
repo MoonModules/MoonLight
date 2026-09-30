@@ -2,6 +2,7 @@
   "name": "04-scenario-testing",
   "description": "The scenario suite driving the real device while you watch, card by card in the order the interface lists them.",
   "speed": 1.4,
+  "voice": "prudence",
   "steps": [
     {
       "action": "chapter",

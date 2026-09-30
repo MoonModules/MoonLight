@@ -57,6 +57,12 @@ class Client:
 
     def __init__(self, host: str):
         self.base = f"http://{host}"
+        # Whether the device is a process on THIS machine. A desktop build elsewhere is named after
+        # its own platform and restarts itself, where a local one is named after this host and is
+        # relaunched from here. Decided by name alone, so this machine reached by its own LAN
+        # address or hostname counts as another one.
+        name = urllib.parse.urlsplit(f"//{host}").hostname or host
+        self.local = name in ("localhost", "127.0.0.1", "::1")
 
     def _send(self, req):
         # A mutating call triggers prepareTree; while the device is mid-rebuild it
@@ -159,7 +165,7 @@ def count_lights(client: Client) -> int:
     return sum(walk(m) for m in state.get("modules", []))
 
 
-def _detect_target(state: dict) -> str:
+def _detect_target(state: dict, local: bool = True) -> str:
     """Identify the build target so per-step contract values can be looked up.
 
     ESP32: read FirmwareUpdateModule.firmware (`esp32`, `esp32-eth`, `esp32-eth-wifi`,
@@ -168,18 +174,22 @@ def _detect_target(state: dict) -> str:
     `unknown`, so we substitute desktop-<host-os> using the runtime os name (still
     distinguishes macOS vs Linux vs Windows builds, which can differ in tick
     noticeably). See docs/explanation/architecture/index.md § Firmware vs board.
+
+    A desktop build on ANOTHER machine is named after the platform it reports about itself
+    (`desktop-docker-arm64`), because this host's name says nothing about it: a NanoPi measured
+    from a Mac was recorded as `desktop-macos`, into the Mac's own figures.
     """
-    firmware = None
+    firmware = model = None
     for m in state.get("modules", []):
-        if m.get("type") != "FirmwareUpdateModule":
-            continue
         for c in m.get("controls", []):
-            if c.get("name") == "firmware":
+            if m.get("type") == "FirmwareUpdateModule" and c.get("name") == "firmware":
                 firmware = c.get("value")
-                break
-        break
+            elif m.get("type") == "SystemModule" and c.get("name") == "deviceModel":
+                model = c.get("value")
     if firmware and firmware != "unknown":
         return firmware
+    if not local:
+        return "desktop-" + str(model or "remote").strip().lower().replace(" ", "-")
     # Desktop fallback, from the one home every script shares (moondeck/_host.py).
     return desktop_target()
 
@@ -206,6 +216,19 @@ def _uptime_seconds(client):
     return None
 
 
+def _restarted(before: int, now: int, elapsed: float) -> bool:
+    """Whether an uptime reading proves a restart happened since `before` was read, `elapsed` seconds ago.
+
+    A device that kept running has gained as many seconds of uptime as the wall clock has, so one
+    that gained fewer restarted in between. Comparing against the wall clock rather than against
+    `before` alone is what makes this hold when the device booted moments ago: `now < before` reads
+    a fresh boot as "did not restart" whenever the new uptime has already passed the old one, which
+    is every time two scenarios restart a board back to back. The two seconds cover the uptime being
+    whole seconds on both readings.
+    """
+    return now + 2 < before + elapsed
+
+
 def _reboot_and_wait(client, target: str, timeout_s: float = 60.0) -> str:
     """Restart the device and wait for it to answer again, so a scenario can prove what survives.
 
@@ -215,12 +238,16 @@ def _reboot_and_wait(client, target: str, timeout_s: float = 60.0) -> str:
     prove nothing about persistence. Returns "" on success, or the reason it did not come back.
     """
     data_dir = os.environ.get("MM_DATA_DIR")
-    is_desktop = target.startswith("desktop-")
+    # Only a desktop build on THIS machine is relaunched from here. One on another host is brought
+    # back by whatever runs it there, a container's restart policy or a service manager, and
+    # launching a local binary for it would start a second, unrelated device on this machine.
+    is_desktop = target.startswith("desktop-") and client.local
 
     # Uptime before the restart, so the recovered instance can be told from the one still running.
     # Without it the first answering /api/state is accepted, which on a board is routinely the OLD
     # instance replying before it goes down: every persistence assertion after that proves nothing.
     before = _uptime_seconds(client)
+    read_at = time.time()
 
     try:
         client.post("/api/reboot", {})
@@ -260,10 +287,13 @@ def _reboot_and_wait(client, target: str, timeout_s: float = 60.0) -> str:
         if went_away:
             return ""
         now = _uptime_seconds(client)
-        if before is not None and now is not None and now < before:
-            return ""                 # the clock restarted, which only a reboot does
+        if before is not None and now is not None and _restarted(before, now, time.time() - read_at):
+            return ""                 # the clock fell behind the wall, which only a reboot does
         time.sleep(1.0)
     if not went_away:
+        if before is None:
+            return (f"still answering after {timeout_s:.0f}s, and the uptime could not be read before "
+                    "the restart, so nothing here can tell whether it happened")
         return (f"still answering after {timeout_s:.0f}s with no uptime reset: "
                 "the reboot did not take effect")
     return f"did not answer within {timeout_s:.0f}s"
@@ -445,7 +475,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
     live_state = None   # bound before the try so the snapshot below can't NameError if /api/state fails
     try:
         live_state = client.get("/api/state")
-        target = _detect_target(live_state)
+        target = _detect_target(live_state, client.local)
         # Walk the steps in order, growing the reachable set as add_module steps
         # create ids. The containers (Layouts/Effects/Drivers) are always present.
         reachable = _collect_module_names(live_state)

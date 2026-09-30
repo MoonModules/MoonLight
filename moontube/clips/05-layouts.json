@@ -2,6 +2,7 @@
   "name": "05-layouts",
   "description": "Where the lights physically are: compiled layouts for the common shapes, and scripted ones for anything else.",
   "speed": 1.8,
+  "voice": "alan",
   "steps": [
     {
       "action": "chapter",

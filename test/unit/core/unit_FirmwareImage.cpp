@@ -147,3 +147,41 @@ TEST_CASE("a 32-character project name that fills its field stays terminated") {
     CHECK(std::strlen(info.project) == 31);                  // truncated, and NUL-terminated
     CHECK(moonBaseRejection(info, ChipId::Esp32S3) == std::string("not a MoonBase image"));
 }
+
+TEST_CASE("an app image is accepted under the name it ships with and the name it takes next") {
+    // A device refuses an image by any name it does not know, so a release has to know the next name before any image carries it.
+    CHECK(isAppImage("projectMM"));
+    CHECK(isAppImage("MoonLight"));
+}
+
+TEST_CASE("a stranger's image is refused, however close its name") {
+    CHECK_FALSE(isAppImage("WLED"));
+    CHECK_FALSE(isAppImage(""));
+    CHECK_FALSE(isAppImage("projectMM2"));        // a longer name that merely begins the same
+    CHECK_FALSE(isAppImage("MoonLigh"));          // and a shorter one
+    CHECK_FALSE(isAppImage("moonlight"));         // the descriptor is case-sensitive
+}
+
+TEST_CASE("a recovery image is recognized under both names and never passes as an app") {
+    // The guard that keeps a recovery image out of the app slot has to know the next name too: one it does not recognize is written over the app.
+    for (const char* name : {"projectMM-moonbase", "MoonLight-moonbase"}) {
+        CAPTURE(name);
+        CHECK(isMoonBaseImage(name));
+        CHECK_FALSE(isAppImage(name));
+        const auto image = makeImage(kImageMagic, 0x0009, name);
+        CHECK(moonBaseRejection(identify(image.data(), image.size()), ChipId::Esp32S3) == nullptr);
+    }
+    for (const char* name : {"projectMM", "MoonLight"}) {
+        CAPTURE(name);
+        CHECK_FALSE(isMoonBaseImage(name));
+    }
+}
+
+TEST_CASE("a name that fills its descriptor field unterminated is still compared within the field") {
+    // ESP-IDF's own descriptor field is 32 bytes and may carry no terminator, so the compare is bounded by the field.
+    char field[32];
+    std::memset(field, 'x', sizeof(field));
+    CHECK_FALSE(isAppImage(field, sizeof(field)));
+    std::memcpy(field, "MoonLight", 10);          // terminated inside the field, junk after it
+    CHECK(isAppImage(field, sizeof(field)));
+}

@@ -2,6 +2,7 @@
   "name": "07-drivers-esp32",
   "description": "What carries the frame out of a device: the LED pins only real hardware has, the panel protocols, and the network senders it shares with a desktop.",
   "speed": 1.8,
+  "voice": "cori",
   "requires": "audio",
   "setup": [
     {

@@ -2,6 +2,7 @@
   "name": "10-control",
   "description": "The surface: eight switches, encoders and faders, each pointed at any control on the device, and the one place external control arrives.",
   "speed": 1.7,
+  "voice": "alan",
   "setup": [
     {
       "module": "Grid",

@@ -19,7 +19,7 @@ The split is the point: a step's truth is written once, and whether it is being 
 }
 ```
 
-A run also carries its own settings. `speed` and `width` shape the published clip, and are tunable afterwards without re-recording, since publishing is a separate pass over the raw take. `host` names another MoonLight surface. `requires` names hardware a run needs, resolved against the bench registry rather than written in as an address.
+A run also carries its own settings. `speed` and `width` shape the published clip, and are tunable afterwards without re-recording, since publishing is a separate pass over the raw take. `voice` names who speaks the captions, read by both the measure and the voice pass. `host` names another MoonLight surface. `requires` names hardware a run needs, resolved against the bench registry rather than written in as an address.
 
 ## A step
 
@@ -129,7 +129,7 @@ They were learned by getting them wrong: a two-and-a-half-minute clip that was t
 
 ### How it is timed
 
-- **Voice leads, picture follows.** Each caption's spoken duration is measured once by `mtmeasure.py` and written into the step as `speech`, and the recording holds that shot until the line has finished. **Alba speaks every clip**, and she is the default of all three scripts. Measuring with one voice and narrating with another drifts the words off their shots, so the way to avoid that is to pass no voice at all. Whatever the action already spent counts towards it, so a slow step adds nothing and a fast one waits. Sizing the dwell by eye left captions vanishing mid-sentence and each line starting over the one before it.
+- **Voice leads, picture follows.** Each caption's spoken duration is measured once by `mtmeasure.py` and written into the step as `speech`, and the recording holds that shot until the line has finished. **Each clip's run file names its voice**, and `mtmeasure.py` and `mtvoiceover.py` both read it. Measuring with one voice and narrating with another drifts the words off their shots, so the way to avoid that is to pass no `--voice` at all. Whatever the action already spent counts towards it, so a slow step adds nothing and a fast one waits. Sizing the dwell by eye left captions vanishing mid-sentence and each line starting over the one before it.
 - **`speech` is wall-clock.** The recorder multiplies it by `speed`, because the words are spoken at natural pace and the picture is sped up afterwards.
 - **Offsets are measured, not computed.** `mtvideo` timestamps each caption as it reaches the screen and writes `<clip>-raw.captions.json` beside the take, and `mtvoiceover` reads those. Summing the run file's holds does not work. A hold says how long a step is asked to dwell, not how long the device took, and on one clip the two differed by two minutes.
 - **Overruns are reported, not absorbed.** The voiceover names every line that outlasts its shot, which is the check that the measurement held.
@@ -154,9 +154,10 @@ against those lengths, and the voice is laid over the published clip.
     uv run moondeck/moontube/mtvideo.py     --run moontube/clips/06-layers.json
     uv run moondeck/moontube/mtvoiceover.py --run moontube/clips/06-layers.json
 
-No `--voice` on any of them: alba is the default of all three, which is what keeps the measurement
-and the narration in agreement. `--voice` exists for trying another one, and then it has to be
-given to the first and the third alike.
+No `--voice` on any of them: the run file names its own `voice`. The measure and voice passes both read it, which keeps the measurement and the narration in agreement.
+A run file that names none is spoken by Alba, who is Luna, so the slide decks are hers.
+The clips alternate a male and a female voice, so no two neighbors sound alike and the series sounds like a team.
+`--voice` exists for trying another one, and then it has to be given to the first and the third alike.
 
 Sources live under `moontube/`, outputs under `media/`:
 

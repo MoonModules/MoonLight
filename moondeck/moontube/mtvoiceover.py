@@ -14,12 +14,12 @@ of seconds, so a line starts when its caption appears and the silence between li
 that shot. A line longer than its hold is reported rather than overlapped, because the fix belongs
 in the run file (hold the shot longer) and not in the mix.
 
-Piper speaks the lines, the same neural voice `mtnarrate` gives Luna, so a clip and the
-introduction sound like one person rather than two.
+Piper speaks the lines, in the voice the run file names. Luna presents the slides as Alba, and each
+clip is spoken by one of her team, so the series sounds like the several agents that made it.
 
 Usage:
   uv run moondeck/moontube/mtvoiceover.py --run moontube/clips/05-layouts.json \\
-      [--voice Serena] [--clip docs/assets/moontube/05-layouts.webm]
+      [--voice alan] [--clip docs/assets/moontube/05-layouts.webm]
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from mtnarrate import VOICE_PATHS, _duration, speak, voice_model   # noqa: E402
+from mtnarrate import VOICE_PATHS, _duration, speak, voice_model, voice_of   # noqa: E402
 import mtrun                                                       # noqa: E402  DEFAULT_SPEED: one home for the run format's defaults
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -60,7 +60,7 @@ def timeline(run: dict, voice: str, work: Path, clip: Path) -> list[tuple[float,
         raise SystemExit(
             f"no caption marks beside {clip.name}: record it again so the offsets are measured "
             f"rather than assumed (expected {marks_file.name})")
-    marks = json.loads(marks_file.read_text())
+    marks = json.loads(marks_file.read_text(encoding="utf-8"))
 
     model = voice_model(voice)
     _, speaker = VOICE_PATHS[voice]
@@ -143,13 +143,13 @@ def mix(clip: Path, lines: list[tuple[float, Path, str]], work: Path, out: Path)
 def main() -> int:
     ap = argparse.ArgumentParser(description="Speak a clip's captions over the clip.")
     ap.add_argument("--run", required=True, help="the run file the clip was recorded from")
-    ap.add_argument("--voice", default="alba",
-                    help="a Piper voice: " + ", ".join(VOICE_PATHS))
+    ap.add_argument("--voice",
+                    help="override the run file's own voice, one of: " + ", ".join(VOICE_PATHS))
     ap.add_argument("--clip", help="the clip to narrate (default: the tracked one for this run)")
     ap.add_argument("--out", help="where the narrated clip lands (default: over the tracked one)")
     args = ap.parse_args()
 
-    run = json.loads(Path(args.run).read_text())
+    run = json.loads(Path(args.run).read_text(encoding="utf-8"))
     name = run.get("name", Path(args.run).stem)
     clip = Path(args.clip) if args.clip else ROOT / "docs" / "assets" / "moontube" / f"{name}.webm"
     if not clip.exists():
@@ -165,8 +165,9 @@ def main() -> int:
         shutil.rmtree(work)
     work.mkdir(parents=True)
 
-    print(f"Voicing [{name}]: {clip.name}, voice {args.voice}")
-    lines = timeline(run, args.voice, work, raw)
+    voice = voice_of(run, args.voice)
+    print(f"Voicing [{name}]: {clip.name}, voice {voice}")
+    lines = timeline(run, voice, work, raw)
     if not lines:
         print("no captions to speak")
         return 1

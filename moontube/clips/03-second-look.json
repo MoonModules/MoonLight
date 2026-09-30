@@ -2,6 +2,7 @@
   "name": "03-second-look",
   "description": "The parts of the interface every card shares, each one pressed so you see what it does.",
   "speed": 1.5,
+  "voice": "obadiah",
   "steps": [
     {
       "action": "chapter",

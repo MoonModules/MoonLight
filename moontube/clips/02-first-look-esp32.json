@@ -3,6 +3,7 @@
   "description": "The same tree on real hardware: what a device adds that a computer cannot, from LED pins to a microphone.",
   "requires": "audio",
   "speed": 1.5,
+  "voice": "cori",
   "steps": [
     {
       "action": "chapter",
