@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "moondeck" / "moont
 
 import mtrun  # noqa: E402  (after the path insert)
 
-HOST = os.environ.get("PROJECTMM_HOST", "localhost:8080")
+HOST = os.environ.get("MOONLIGHT_HOST", "localhost:8080")
 
 
 def _alive(host: str, path: str = "/api/state") -> bool:

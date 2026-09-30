@@ -2,7 +2,7 @@
 
 You bought a panel receiving card, most likely a **ColorLight** one, which is the family MoonLight supports today. This page takes you from a box of parts to a lit wall, on an ESP32 or from a desktop.
 
-> New here? Start with **[Install & first light](../gettingstarted.md)**, then **[How MoonLight works](../tutorials/how-projectmm-works.md)**. What follows assumes you can find a card and change a control.
+> New here? Start with **[Install & first light](../gettingstarted.md)**, then **[How MoonLight works](../tutorials/how-moonlight-works.md)**. What follows assumes you can find a card and change a control.
 
 ---
 
@@ -121,7 +121,7 @@ The S3 needs a **W5500 Ethernet module** wired to its SPI pins, which the S3 fir
 
 ### 5.2 Flash it
 
-Use the [web installer](https://moonmodules.org/projectMM/install/), or from a checkout:
+Use the [web installer](https://moonmodules.org/MoonLight/install/), or from a checkout:
 
 ```sh
 uv run moondeck/build/flash_esp32.py --firmware <esp32s31|esp32p4rev1-eth-wifi|esp32s3-n16r8> --port <port>
@@ -318,7 +318,7 @@ The mismatch is not subtle in one direction: leave a downgraded card on `v13 and
 | Panels in the wrong places | Same: the chain order is set on the card. |
 | Right image, wrong colors | `lightPreset` on the driver, which is where channel order and RGBW synthesis live for every driver. There is no separate color-order control here. |
 | Works on ESP32, not on desktop | Permission ([§6](#6-from-a-desktop)). The driver shows a warning that says so. |
-| **PanelCard is not in the Drivers list** | The driver is compiled only into firmwares for boards with Ethernet (S3, P4, S31), so a classic-ESP32 build does not offer it. Only the S31 is gigabit; the S3 and P4 are 100 Mbit. Check the **Firmware** page for the variant and version you are actually running: an OTA upgrade keeps the installed variant, so a device first flashed with a different one keeps that one. Re-flash from the [web installer](https://moonmodules.org/projectMM/install/) to change variant. |
+| **PanelCard is not in the Drivers list** | The driver is compiled only into firmwares for boards with Ethernet (S3, P4, S31), so a classic-ESP32 build does not offer it. Only the S31 is gigabit; the S3 and P4 are 100 Mbit. Check the **Firmware** page for the variant and version you are running: an OTA upgrade keeps the installed variant, so a device first flashed with a different one keeps that one. Re-flash from the [web installer](https://moonmodules.org/MoonLight/install/) to change variant. |
 | **Link is up and packets are on the wire, but the wall stays dark** | The frames are leaving correctly, so the fault is downstream of the send. Check, in order: global **brightness** *and* the driver's own `localBrightness`, both of which must be up; a **layout** actually configured and an **effect** selected, since an empty layer sends valid black frames; and `format` / `firmware` matching the card ([§7](#7-card-firmware-and-the-flicker)). If all of that is right, remove the PanelCard driver and add it again: a re-add re-runs the bind and the geometry from scratch. |
 
 ---

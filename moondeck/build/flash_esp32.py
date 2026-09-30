@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Flash a built ESP32 firmware to a device.
 
-Reads ``build/esp32-<firmware>/projectMM.bin``. The per-firmware build dir
+Reads the app image in ``build/esp32-<firmware>/``. The per-firmware build dir
 (written by ``build_esp32.py``) makes "which firmware am I flashing" an
 on-disk fact rather than an in-memory marker — switching firmwares is a
 ``--firmware`` change, not a clean-rebuild.
@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 ESP32_DIR = ROOT / "esp32"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_esp32 import find_idf, idf_env, idf_cmd, FIRMWARES, build_dir_for
+from build_esp32 import find_idf, idf_env, idf_cmd, FIRMWARES, build_dir_for, APP_BIN
 
 
 CATALOG = ROOT / "mooninstaller" / "deviceModels.json"
@@ -139,7 +139,7 @@ def main():
         sys.exit(1)
 
     build_dir = build_dir_for(args.firmware)
-    image = build_dir / "projectMM.bin"
+    image = build_dir / APP_BIN
 
     if not image.exists():
         print(f"ERROR: no build for {args.firmware!r} at "

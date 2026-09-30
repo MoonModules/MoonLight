@@ -6,7 +6,7 @@ namespace mm {
 
 /// Effect rendering a rotating Rubik's cube on a 3D layout.
 /// @card RubiksCubeEffect.gif
-/// Author: WildCats08 / @Brandon502 (MoonLight), https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
+/// Author: WildCats08 / @Brandon502 (MoonLight), https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 ///
 /// The cube scrambles itself, then plays the scramble back one slice at a time.
 /// Every voxel takes the color of the nearest face, which is what makes a solid read as a cube.

@@ -15,7 +15,7 @@ Where to get an image:
 - **`latest`** is the rolling build from `main`: every merged change, published continuously. What to use if you want the newest fixes and can live with the occasional rough edge.
 - **A tagged release** is a version somebody decided was worth naming. Slower moving, and what to use on a rig that has to keep working.
 
-Both are on the [releases page](https://github.com/MoonModules/projectMM/releases), one file per firmware variant. The filename names the variant, and the variant must match your device: an `esp32s3-n16r8` image on a classic ESP32 refuses to boot.
+Both are on the [releases page](https://github.com/MoonModules/MoonLight/releases), one file per firmware variant. The filename names the variant, and the variant must match your device: an `esp32s3-n16r8` image on a classic ESP32 refuses to boot.
 
 The card checks for both channels and tells you when one is newer, and a stable release always wins. A device already on a `-dev` build is the only one offered the moving channel, so a stable device is never nudged toward an unreleased build.
 
@@ -51,4 +51,4 @@ Take a backup. The Firmware card does not touch your configuration, but a varian
 
 ## Serial, when the network cannot help
 
-A device that will not boot far enough to serve a page needs the [web installer](https://moonmodules.org/projectMM/install/) and a USB cable. That is the same path as a first install, and it is covered in [Install & first light](../gettingstarted.md).
+A device that will not boot far enough to serve a page needs the [web installer](https://moonmodules.org/MoonLight/install/) and a USB cable. That is the same path as a first install, and it is covered in [Install & first light](../gettingstarted.md).

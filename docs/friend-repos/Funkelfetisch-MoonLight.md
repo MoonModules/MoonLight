@@ -16,7 +16,7 @@ This is a **fork of this project** building a commercial product on it: **HELIO*
 
 - **Branches:** only `codex/helio-private-wip` moved (2026-08-20). The other seven have been dormant since July.
 
-_Checked: commits on `main` for 2026-08-01..2026-09-01 (0; `main` last moved 2026-07-09); commits on all 9 branches for the same window, filtered to fork-authored work (1: `a649bd47` on `codex/helio-private-wip`, 2026-08-20, 139 files; the branch's other August commits are upstream `MoonModules/projectMM` carry-forward); no commit on any branch between 2026-08-21 and 2026-09-01; releases published (none); issue search `repo:Funkelfetisch/MoonLight is:issue created:2026-08-01..2026-08-31` and the same with `closed:` (0 results each, the repository has no issue tracker activity)._
+_Checked: commits on `main` for 2026-08-01..2026-09-01 (0; `main` last moved 2026-07-09); commits on all 9 branches for the same window, filtered to fork-authored work (1: `a649bd47` on `codex/helio-private-wip`, 2026-08-20, 139 files; the branch's other August commits are upstream `MoonModules/MoonLight` carry-forward); no commit on any branch between 2026-08-21 and 2026-09-01; releases published (none); issue search `repo:Funkelfetisch/MoonLight is:issue created:2026-08-01..2026-08-31` and the same with `closed:` (0 results each, the repository has no issue tracker activity)._
 
 ## July 2026
 
@@ -31,7 +31,7 @@ Six feature branches opened, none merged to the fork's `main`, alongside a carry
 
 - **Branches:** `codex/upstream-auto-update-manifest` (07-11), `codex/upstream-network-sta-reconnect` (07-10), `codex/upstream-rmt-rgbw-performance` (07-10), `codex/performance-frame-pacing` (07-11), `codex/universal-ble-provisioning` (07-13), `codex/helio-private-wip` (07-10, initial WIP), `next-iteration` (07-10, a carry-forward of our upstream branch). `main` last moved 2026-07-09.
 
-_Checked: commits on `main` for author-date 2026-07-01..2026-08-01 (2, both upstream carry-forward); commits on all branches vs `MoonModules/projectMM@main` for the same window (11); releases published (none); issue search `repo:Funkelfetisch/MoonLight is:issue created:2026-07-01..2026-07-31` and the same with `closed:` (0 results each)._
+_Checked: commits on `main` for author-date 2026-07-01..2026-08-01 (2, both upstream carry-forward); commits on all branches vs `MoonModules/MoonLight@main` for the same window (11); releases published (none); issue search `repo:Funkelfetisch/MoonLight is:issue created:2026-07-01..2026-07-31` and the same with `closed:` (0 results each)._
 
 ## June 2026
 
@@ -39,4 +39,4 @@ _Checked: commits on `main` for author-date 2026-07-01..2026-08-01 (2, both upst
 
 - **Branches:** `feature/gyro_module` (06-05). No other branch activity.
 
-_Checked: commits on all branches vs `MoonModules/projectMM@main` for author-date 2026-06-01..2026-07-01 (1); releases published (none); issue search `repo:Funkelfetisch/MoonLight is:issue created:2026-06-01..2026-06-30` and the same with `closed:` (0 results each)._
+_Checked: commits on all branches vs `MoonModules/MoonLight@main` for author-date 2026-06-01..2026-07-01 (1); releases published (none); issue search `repo:Funkelfetisch/MoonLight is:issue created:2026-06-01..2026-06-30` and the same with `closed:` (0 results each)._

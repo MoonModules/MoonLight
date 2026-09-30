@@ -15,7 +15,7 @@ and browser drive it exactly as they drive hardware.
     uv run moondeck/qemu/run_qemu.py --seconds 20     # run a while, print the log, exit
 
 With --gdb, attach from another terminal:
-    xtensa-esp32-elf-gdb build/esp32-qemu/projectMM.elf -ex 'target remote :1234'
+    xtensa-esp32-elf-gdb build/esp32-qemu/<app>.elf -ex 'target remote :1234'
 """
 
 import argparse
@@ -32,7 +32,7 @@ BUILD = os.path.join(ROOT, "build", "esp32-qemu")
 # knows how to find the right one (there can be several IDF versions installed), so reuse that rather
 # than re-deriving the path here.
 sys.path.insert(0, os.path.join(ROOT, "moondeck", "build"))
-from build_esp32 import find_idf_python  # noqa: E402
+from build_esp32 import APP_BIN, APP_ELF, MOONBASE_BIN, find_idf_python  # noqa: E402
 
 
 def qemu_binary() -> str:
@@ -55,8 +55,8 @@ def merged_flash(force: bool) -> str:
     # CMake configures the build dir and never touched again, so it is always older than the image ,
     # which made this cache never expire: after a rebuild the emulator kept booting the PREVIOUS
     # app, and code that was plainly in the .bin appeared not to run at all.
-    app = os.path.join(BUILD, "projectMM.bin")
-    moonbase = os.path.join(os.path.dirname(BUILD), "moonbase-esp32", "projectMM-moonbase.bin")
+    app = os.path.join(BUILD, APP_BIN)
+    moonbase = os.path.join(os.path.dirname(BUILD), "moonbase-esp32", MOONBASE_BIN)
     newest_input = max((os.path.getmtime(p) for p in (args, app, moonbase)
                         if os.path.exists(p)), default=0)
     if os.path.exists(out) and not force and os.path.getmtime(out) > newest_input:
@@ -157,7 +157,7 @@ def main() -> int:
     print(f"  web UI  → http://localhost:{args.http_port}/   (once the guest has a DHCP lease)")
     if args.gdb:
         print("  debugger→ frozen at reset, waiting on :1234")
-        print(f"            xtensa-esp32-elf-gdb {BUILD}/projectMM.elf -ex 'target remote :1234'")
+        print(f"            xtensa-esp32-elf-gdb {BUILD}/{APP_ELF} -ex 'target remote :1234'")
     print()
 
     if args.background:

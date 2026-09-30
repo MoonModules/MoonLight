@@ -39,7 +39,7 @@ def find_addr2line(firmware: str):
     Returns (tool, elf) or (None, None) when either is missing — decoding is then skipped and the
     monitor still runs, because a missing toolchain must not cost you the serial output.
     """
-    elf = ROOT / "build" / f"esp32-{firmware}" / "projectMM.elf"
+    elf = ROOT / "build" / f"esp32-{firmware}" / APP_ELF
     if not elf.exists():
         return None, None
     # P4 is RISC-V; every other supported target is Xtensa.
@@ -61,6 +61,8 @@ def decode(tool: str, elf: str, addrs: list[str]) -> list[str]:
 # Shared moondeck.json + logLevel-toggle helpers (one level up, reachable from check/ and run/).
 sys.path.insert(0, str(ROOT / "moondeck"))
 from _moondeck_config import active_device_ips, raised_log_level, LOG_INFO  # noqa: E402
+sys.path.insert(0, str(ROOT / "moondeck" / "build"))
+from build_esp32 import APP_ELF  # noqa: E402
 
 def main():
     parser = argparse.ArgumentParser()
@@ -83,7 +85,7 @@ def main():
             # failure here drops to raw addresses rather than ending the session.
             try:
                 elf_sha = hashlib.sha256(Path(elf).read_bytes()).hexdigest()
-                print(f"Decoding backtraces against build/esp32-{args.firmware}/projectMM.elf "
+                print(f"Decoding backtraces against build/esp32-{args.firmware}/{APP_ELF} "
                       f"({elf_sha[:9]})")
             except OSError as e:
                 tool = elf = elf_sha = None

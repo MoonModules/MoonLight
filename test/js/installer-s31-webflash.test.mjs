@@ -4,7 +4,7 @@
 // string must match the `chip` a board in deviceModels.json actually reports, or it never fires.
 //
 // The set is EMPTY today: esptool-js 0.7.0 added the ESP32-S31 target and chip-id detection
-// (GET_SECURITY_INFO), so every chip projectMM ships is browser-flashable. The guard stays because
+// (GET_SECURITY_INFO), so every chip MoonLight ships is browser-flashable. The guard stays because
 // a new chip lands here before esptool-js knows it, and these tests pin the MECHANISM rather than
 // any one entry: whatever the set holds must be a chip a catalog board reports, and the guidance
 // must stay scoped to the connect-flash stage.

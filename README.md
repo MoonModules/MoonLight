@@ -4,9 +4,9 @@ Drive large LED installations and DMX fixtures. One source tree drives ESP32, Te
 
 ![A 128x128 light wall rendering the ColorTrails effect](docs/assets/light/effects/ColorTrailsEffect.gif)
 
-**Flash an ESP32 from your browser and see lights in under a minute:** open the [web installer](https://moonmodules.org/projectMM/install/) in Chrome or Edge, plug in your device, and follow it. No toolchain, no recompile. The [Getting started guide](docs/gettingstarted.md) takes you from a blank board to a running light show.
+**Flash an ESP32 from your browser and see lights in under a minute:** open the [web installer](https://moonmodules.org/MoonLight/install/) in Chrome or Edge, plug in your device, and follow it. No toolchain, no recompile. The [Getting started guide](docs/gettingstarted.md) takes you from a blank board to a running light show.
 
-No hardware handy? The [desktop build](https://github.com/MoonModules/projectMM/releases/latest) runs the same UI and effect pipeline on macOS, Windows and Linux, driving fixtures over Art-Net, DDP or E1.31.
+No hardware handy? The [desktop build](https://github.com/MoonModules/MoonLight/releases/latest) runs the same UI and effect pipeline on macOS, Windows and Linux, driving fixtures over Art-Net, DDP or E1.31.
 
 If you like MoonLight, give it a star, fork it, or open an issue. It helps the project get noticed.
 
@@ -136,7 +136,7 @@ The browser installer: it picks your device, flashes the matching firmware, and 
 
 ![The installer picking a device](docs/assets/ui/installer.png)
 
-Architecture: [MoonInstaller](docs/explanation/architecture/mooninstaller.md) · Use it: [Web installer](https://moonmodules.org/projectMM/install/) · [Getting started](docs/gettingstarted.md) · [source](mooninstaller/README.md)
+Architecture: [MoonInstaller](docs/explanation/architecture/mooninstaller.md) · Use it: [Web installer](https://moonmodules.org/MoonLight/install/) · [Getting started](docs/gettingstarted.md) · [source](mooninstaller/README.md)
 
 ### MoonDeck
 
@@ -162,9 +162,9 @@ Per-grid and per-device tables, free-heap figures, and why WiFi costs what it do
 
 ## Getting started
 
-**ESP32**: open the [web installer](https://moonmodules.org/projectMM/install/) in Chrome or Edge ([MoonInstaller](#mooninstaller)). It walks you through device, firmware, flashing and network setup.
+**ESP32**: open the [web installer](https://moonmodules.org/MoonLight/install/) in Chrome or Edge ([MoonInstaller](#mooninstaller)). It walks you through device, firmware, flashing and network setup.
 
-**Desktop**: download your build from the [releases page](https://github.com/MoonModules/projectMM/releases), then open `http://localhost:8080/`. Step by step with screenshots: [Installing MoonLight on a desktop](docs/how-to/installing-to-desktop.md).
+**Desktop**: download your build from the [releases page](https://github.com/MoonModules/MoonLight/releases), then open `http://localhost:8080/`. Step by step with screenshots: [Installing MoonLight on a desktop](docs/how-to/installing-to-desktop.md).
 
 - **macOS arm64**: `.dmg`, drag to Applications. Ad-hoc signed, so right-click and Open the first time.
 - **Windows x64**: `-setup.exe` installs for your user without an admin prompt. Unsigned, so SmartScreen asks once.
@@ -233,8 +233,8 @@ People whose work directly shaped parts of MoonLight. We study their thinking wi
 
 MoonLight is a community project, shaped by the people who use it:
 
-- **Ideas and requests**: an effect, a layout, a driver, a fixture you want supported? [Open an issue](https://github.com/MoonModules/projectMM/issues).
-- **Help build it**: pick something from the [issues](https://github.com/MoonModules/projectMM/issues), or propose a module. The process is in [CLAUDE.md](CLAUDE.md).
+- **Ideas and requests**: an effect, a layout, a driver, a fixture you want supported? [Open an issue](https://github.com/MoonModules/MoonLight/issues).
+- **Help build it**: pick something from the [issues](https://github.com/MoonModules/MoonLight/issues), or propose a module. The process is in [CLAUDE.md](CLAUDE.md).
 - **Test on hardware**: run it on your panels and fixtures, and report what works.
 - **Talk to us**: [Discord](https://discord.gg/TC8NSUSCdV), [Reddit](https://reddit.com/r/moonmodules), [YouTube](https://www.youtube.com/@MoonModulesLighting), [GitHub](https://github.com/MoonModules).
 

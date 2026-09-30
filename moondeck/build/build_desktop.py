@@ -6,7 +6,7 @@ on Windows — so a single machine could (in principle) build multiple host
 flavours without one wiping the other, and so the layout matches the
 ESP32 side (``build/esp32-<board>/``, one dir per target).
 
-Builds ONE target, not the whole project: the firmware binary (``projectMM``) by
+Builds ONE target, not the whole project: the firmware binary (``MoonLight``) by
 default, or the test binaries (``--tests`` → ``mm_tests`` + ``mm_scenarios``).
 Keeping them separate means the "just give me the binary" build doesn't wait on
 the ~130-file test suite (and vice-versa).
@@ -56,8 +56,8 @@ def desktop_binary(build_dir=None):
     `collect_kpi --commit` could take `binary_kb` from one file and `flash.desktop` from another.
     """
     root = Path(build_dir) if build_dir else ROOT / host_build_dir()
-    found = [p for p in (root / "projectMM", root / "projectMM.exe",
-                         root / "Release" / "projectMM", root / "Release" / "projectMM.exe")
+    found = [p for p in (root / "MoonLight", root / "MoonLight.exe",
+                         root / "Release" / "MoonLight", root / "Release" / "MoonLight.exe")
              if p.exists()]
     return max(found, key=lambda p: p.stat().st_mtime) if found else None
 
@@ -91,7 +91,7 @@ def main():
                          "suite the way those hosts see it.")
     ap.add_argument("--tests", action="store_true",
                     help="compile the test binaries (mm_tests + mm_scenarios) instead of the firmware. "
-                         "The default build makes only projectMM; the ~130 test units are a separate, "
+                         "The default build makes only MoonLight; the ~130 test units are a separate, "
                          "slower compile, run afterwards by test_desktop.py / run_scenario.py.")
     args = ap.parse_args()
 
@@ -127,10 +127,10 @@ def main():
         sys.exit(r.returncode)
 
     # Build a SPECIFIC target, never the whole "all" — the firmware and the ~130 test translation units are
-    # separate concerns. Default builds only projectMM (the "just give me the desktop binary" path stays
+    # separate concerns. Default builds only MoonLight (the "give me the desktop binary" path stays
     # fast; a header edit no longer drags the test suite through the compiler). `--tests` builds the test
     # binaries instead, which test_desktop.py runs (mm_tests) and run_scenario.py runs (mm_scenarios).
-    targets = ["mm_tests", "mm_scenarios"] if args.tests else ["projectMM"]
+    targets = ["mm_tests", "mm_scenarios"] if args.tests else ["MoonLight"]
     build_cmd = ["cmake", "--build", bdir, "--target", *targets]
     if is_windows:
         build_cmd += ["--config", "Release"]

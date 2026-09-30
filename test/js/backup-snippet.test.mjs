@@ -67,8 +67,7 @@ test("the bookmarklet downloads a complete bundle the Restore button accepts", a
     assert.match(captured.alerts[0], /skipped \(not text\): \/scripts\/fw\.bin/);
     assert.match(captured.alerts[0], /private/);
     const bundle = JSON.parse(await captured.blob.text());
-    // The OLD name on purpose: this tool targets old firmware, whose Restore accepts only this value.
-    assert.equal(bundle.format, "projectMM-config-backup");
+    assert.equal(bundle.format, "MoonLight-config-backup");
     assert.equal(bundle.version, 1);
     assert.equal(bundle.device, "schelpje");
     assert.equal(bundle.firmware, "esp32-4mb");

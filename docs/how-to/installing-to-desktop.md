@@ -5,7 +5,7 @@ MoonLight does not need an ESP32. The same code runs as an ordinary application 
 The steps below cover **Windows**. macOS and Linux differ only in the download and the first run:
 
 - **macOS**: open the `.dmg` and drag MoonLight to Applications. The build is ad-hoc signed rather than notarized, so Gatekeeper says it cannot verify the developer: right-click the app and choose **Open** to accept it once, or clear the flag with `xattr -dr com.apple.quarantine /Applications/MoonLight.app`.
-- **Linux**: unpack the `.tar.gz` and run the binary, or install the `.deb` on Debian, Ubuntu and Raspberry Pi OS with `sudo apt install ./projectmm_X.Y.Z_amd64.deb`, which puts it on your PATH.
+- **Linux**: unpack the `.tar.gz` and run the binary, or install the `.deb` on Debian, Ubuntu and Raspberry Pi OS with `sudo apt install ./moonlight_X.Y.Z_amd64.deb`, which puts it on your PATH.
 
 Both then open `http://localhost:8080/`, and §5 onward applies unchanged.
 
@@ -17,11 +17,11 @@ Five steps, one of which is Windows asking whether you trust an unsigned applica
 
 ## 1. Download it
 
-Open the [web installer](https://moonmodules.org/projectMM/install/) and set **Install to** to `This computer (Windows x64)`. The Release picker offers stable releases and `latest`, a build published on every merge to main; pick a stable one unless you want the newest unreleased changes.
+Open the [web installer](https://moonmodules.org/MoonLight/install/) and set **Install to** to `This computer (Windows x64)`. The Release picker offers stable releases and `latest`, a build published on every merge to main; pick a stable one unless you want the newest unreleased changes.
 
 ![The web installer with Windows x64 selected, and the downloaded setup.exe in the browser's Downloads panel carrying a SmartScreen warning](../assets/tutorials/windows-01-download.png)
 
-**Download** gives you `projectMM-windows-x64-vX.Y.Z-setup.exe`.
+**Download** gives you `MoonLight-windows-x64-vX.Y.Z-setup.exe`.
 
 Your browser will most likely flag it straight away: *"isn't commonly downloaded. Make sure you trust … before you open it."* That is step 2, and it is expected.
 
@@ -43,7 +43,7 @@ Occasionally Defender goes a step further and removes the file outright, naming 
 
 **If the download itself fails**, which shows as *"Couldn't download - Download error"*, Defender is stopping it mid-transfer and there is no file to rescue. Re-downloading only repeats it. **Use the zip instead** (§8): it is a different file with a different fingerprint, so the verdict on the setup does not apply to it, and it carries a script that installs MoonLight exactly as the setup would.
 
-**If the file did land and was then quarantined**, delete it (**Windows Security → Virus & threat protection → Protection history**) and download again from the [releases page](https://github.com/MoonModules/projectMM/releases) over HTTPS, which re-establishes what you are running rather than trusting a file out of quarantine. Restoring from Protection history works too, but only for a file you downloaded yourself moments before. An exclusion on the install directory would not help, since the flagged file is in **Downloads**, and a broad Downloads exclusion costs more protection than it is worth.
+**If the file did land and was then quarantined**, delete it (**Windows Security → Virus & threat protection → Protection history**) and download again from the [releases page](https://github.com/MoonModules/MoonLight/releases) over HTTPS, which re-establishes what you are running rather than trusting a file out of quarantine. Restoring from Protection history works too, but only for a file you downloaded yourself moments before. An exclusion on the install directory would not help, since the flagged file is in **Downloads**, and a broad Downloads exclusion costs more protection than it is worth.
 
 Either way the durable route is reporting it as a false positive at [microsoft.com/wdsi/filesubmission](https://www.microsoft.com/wdsi/filesubmission). Microsoft typically clears these within days, and it fixes it for everyone. The verdict attaches to that one build's fingerprint, so a later release is judged afresh.
 
@@ -75,7 +75,7 @@ The console window **is** the application. It shows the log, and closing it stop
 
 On a first install you get a default grid and a running effect, enough to confirm everything works. The screenshot above is not a first install: that machine already had MoonLight configured with a Game of Life layer, and the setup left it exactly as it was. That is §6.
 
-From here, [How MoonLight works](../tutorials/how-projectmm-works.md) explains the Layouts, Effects and Drivers down the left-hand side.
+From here, [How MoonLight works](../tutorials/how-moonlight-works.md) explains the Layouts, Effects and Drivers down the left-hand side.
 
 Two options worth knowing: `--no-browser` stops it opening a browser (for a headless machine), and `--port <n>` serves somewhere other than 8080.
 
@@ -84,15 +84,15 @@ Two options worth knowing: `--no-browser` stops it opening a browser (for a head
 Everything you change is saved automatically, in a folder that belongs to **your Windows user** rather than to the application:
 
 ```text
-%LOCALAPPDATA%\projectMM
+%LOCALAPPDATA%\MoonLight
 ```
 
 Note that this is *not* where the program went. The program sits under `Programs\MoonLight`; your settings live beside it in a separate folder, and that separation is what makes upgrades safe:
 
 - **Installing a new version keeps your settings.** The installer replaces the program and never touches the settings folder.
-- **Uninstalling keeps them too.** Delete `%LOCALAPPDATA%\projectMM` by hand if you want a genuinely clean slate.
+- **Uninstalling keeps them too.** Delete `%LOCALAPPDATA%\MoonLight` by hand if you want a genuinely clean slate.
 
-Paste `%LOCALAPPDATA%\projectMM` into the Explorer address bar to open it.
+Paste `%LOCALAPPDATA%\MoonLight` into the Explorer address bar to open it.
 
 ## 7. Updating
 
@@ -102,15 +102,15 @@ On a desktop the badge opens the **release page**, not the Firmware card. A devi
 
 The badge only appears when a release actually ships a build for your OS, and it tracks **stable releases**. If you are running a `latest` build, it will point you at the newest stable one rather than at newer `latest` builds.
 
-**Nothing is lost.** Running the new setup replaces the program and leaves `%LOCALAPPDATA%\projectMM` untouched, so your layouts, effects and drivers come back exactly as you left them.
+**Nothing is lost.** Running the new setup replaces the program and leaves `%LOCALAPPDATA%\MoonLight` untouched, so your layouts, effects and drivers come back exactly as you left them.
 
 ## 8. The zip: run it, or install it without the setup
 
-The [releases page](https://github.com/MoonModules/projectMM/releases) also carries `projectMM-windows-x64-vX.Y.Z.zip`. **Extract it first**, rather than opening the executable from inside the zip, because Windows unpacks a zip-launched program into a temporary folder it may clear at any time.
+The [releases page](https://github.com/MoonModules/MoonLight/releases) also carries `MoonLight-windows-x64-vX.Y.Z.zip`. **Extract it first**, rather than opening the executable from inside the zip, because Windows unpacks a zip-launched program into a temporary folder it may clear at any time.
 
 It holds the same application plus three files, so it serves two purposes:
 
-**Run it in place.** Double-click `projectMM.exe` wherever you extracted it. No Start-menu entry, no uninstaller, nothing written outside your settings folder. This is the one to take on a USB stick.
+**Run it in place.** Double-click `MoonLight.exe` wherever you extracted it. No Start-menu entry, no uninstaller, nothing written outside your settings folder. This is the one to take on a USB stick.
 
 **Or install it properly.** Double-click **`Install-MoonLight.cmd`**. It does exactly what the setup does: copies the program to `%LOCALAPPDATA%\Programs\MoonLight`, adds the Start-menu entry with its icon, registers an uninstaller in Add/Remove Programs, and stops a running copy first so it can replace a locked executable. No administrator rights, because everything stays under your own user profile.
 
@@ -138,6 +138,6 @@ Settings live in the same per-user folder whichever route you take, so the three
 
 ## Where to go next
 
-- **[How MoonLight works](../tutorials/how-projectmm-works.md)**: the interface, and the Layouts / Effects / Drivers model.
+- **[How MoonLight works](../tutorials/how-moonlight-works.md)**: the interface, and the Layouts / Effects / Drivers model.
 - **[Driving LED panels with a receiving card](panel-cards.md)**: turn this desktop into the sending card for an LED wall.
 - **[Install & first light](../gettingstarted.md)**: flashing an ESP32, if you want the same thing on a device.

@@ -21,29 +21,26 @@
 ///
 /// ## Two addresses, because a rename has to survive in the field
 ///
-/// A device flashed before a rename asks its old repository forever, and GitHub's rename redirect is normally what carries it across.
-/// That redirect is the only thing making an in-field update survive the move.
-/// This rename vacates a name and re-takes it in one session, which is worth a belt as well as braces.
-/// So the update path names both addresses and takes whichever answers.
-/// The successor comes first deliberately: once it exists every device reaches it directly, and the redirect stops mattering rather than being depended on forever.
-/// Before it exists that request costs one 404, since the predecessor occupying the name publishes no `firmware-*` asset.
+/// A device flashed before v5.0.0 asks the repository's earlier name forever, and GitHub's rename redirect is what carries it across.
+/// The update path names both addresses and takes whichever answers, so an in-field update rests on more than that redirect.
+/// The current name comes first: every device reaches it directly, and the earlier one is a second chance when that request fails.
 /// Fetching another project's firmware is prevented separately.
 /// The OTA compares an incoming image's own ESP-IDF descriptor against `kProjectImageName` before a byte is written, so an address answering with a stranger's release is refused rather than flashed.
 
 namespace mm {
 
-/// Where this project's releases will live, tried FIRST so a renamed repository needs no redirect.
-constexpr const char* kReleaseRepo = "MoonModules/MoonLight";   // rename-keep: our own future path, which the predecessor occupies until it vacates
+/// Where this project's releases live, tried FIRST so a device needs no redirect.
+constexpr const char* kReleaseRepo = "MoonModules/MoonLight";
 
-/// Where they live today, tried where the address above does not answer.
-constexpr const char* kFallbackRepo = "MoonModules/projectMM";   // rename-keep: one repository in both constants leaves a device nowhere to look
+/// The repository's earlier name, which GitHub redirects, tried where the address above does not answer: one repository in both constants leaves a device nowhere to look.
+constexpr const char* kFallbackRepo = "MoonModules/projectMM";
 
 /// The release-asset URL a device updates itself from: repository, version, firmware variant, version.
 constexpr const char* kReleaseAssetUrlFormat =
     "https://github.com/%s/releases/download/v%s/firmware-%s-v%s.bin";
 
 /// The name this project's app image carries in its ESP-IDF descriptor, which is the CMake `project()` name and changes only with it.
-constexpr const char* kProjectImageName = "projectMM";   // a device refuses every firmware if this and CMake disagree, and no build error says so
+constexpr const char* kProjectImageName = "projectMM";   // the name a SHIPPED device compares against, so it outlives the product name
 
 inline char     g_otaStatus[64]     = "idle";   ///< the phase the install is in, shared by every unit
 inline uint32_t g_otaBytesRead      = 0;        ///< how much has been written

@@ -42,7 +42,7 @@ namespace mm {
 /// The cold path folds the box through the static modifiers, then builds the table.
 /// The hot path runs each effect, extrudes, then applies the live modifiers.
 ///
-/// Details: [the supporting page](https://moonmodules.org/projectMM/moonmodules/light/supporting.html#layer-details).
+/// Details: [the supporting page](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#layer-details).
 class Layer : public MoonModule {
 public:
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Layer; }

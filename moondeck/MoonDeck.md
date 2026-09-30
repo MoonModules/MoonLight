@@ -76,7 +76,7 @@ against a running MoonLight with [pytest-playwright](https://playwright.dev/pyth
 performing a [run file](moontube/moontube.md) from `moontube/clips/` through the interface and checking each step against the
 device over REST. The run files are the same ones `moondeck/moontube/mtvideo.py` records the videos from, so a
 failure means the UI no longer does what the video shows. It skips rather than fails when nothing
-answers on `localhost:8080` (override with `PROJECTMM_HOST`), for the same reason the JS lane skips
+answers on `localhost:8080` (override with `MOONLIGHT_HOST`), for the same reason the JS lane skips
 without node.
 
 ### run_desktop
@@ -87,7 +87,7 @@ Launch the desktop executable as a detached background process and exit. The app
 uv run moondeck/run/run_desktop.py
 ```
 
-Re-running is idempotent: any existing `projectMM` instance is stopped first, then a fresh one is launched. Output goes to `build/<host>/projectMM.log`. Build first.
+Re-running is idempotent: any existing `MoonLight` instance is stopped first, then a fresh one is launched. Output goes to `build/<host>/MoonLight.log`. Build first.
 
 While the app is running, MoonDeck shows the button as **Stop** (a 5-second poll on `/api/running` detects the live process via `process_name`). Pressing Stop terminates the app; pressing Run again restarts it. From the CLI: `pkill -f build/<host>/MoonLight` (or `pkill MoonLight` if you don't have multiple host builds active).
 
@@ -121,7 +121,7 @@ first; it is a free download.
 ![Installer2](../docs/assets/ui/installer2.png)
 ![Installer3](../docs/assets/ui/installer3.png)
 
-Locally preview the web installer page at <https://moonmodules.org/projectMM/install/> without tagging a release. Stages `mooninstaller/index.html` + `src/ui/install-picker.js` into `build/install-preview/` and serves them via Python's `http.server` on port 8421.
+Locally preview the web installer page at <https://moonmodules.org/MoonLight/install/> without tagging a release. Stages `mooninstaller/index.html` + `src/ui/install-picker.js` into `build/install-preview/` and serves them via Python's `http.server` on port 8421.
 
 ```bash
 uv run moondeck/run/preview_installer.py
@@ -130,8 +130,8 @@ uv run moondeck/run/preview_installer.py
 
 Long-running — MoonDeck shows **Stop** while the server is up. Two modes, picked automatically:
 
-- **Render-only.** When no `build/esp32-*/projectMM.bin` is present, the picker populates against the real GitHub Releases API and dropdowns work, but clicking **Install** fails because the local server has no `releases/` tree. Useful for iterating on HTML / CSS / JS without burning a build. Equivalent to "Recipe A" in [mooninstaller/README.md](../mooninstaller/README.md).
-- **Flash-ready.** When at least one ESP32 build exists, the script additionally stages every `build/esp32-*/projectMM.bin` it finds into `releases/local-dev/` and generates matching Pages-relative manifests via the same `generate_manifest.py` the release workflow uses. The picker shows `local-dev` as the newest tag; clicking **Install** flashes a USB-connected ESP32 and hands off to the repository's custom orchestrator UI (Improv-Serial provisioning + the APPLY_OP config push of the device model's modules and controls, all in `install-orchestrator.js`, not ESP Web Tools). End-to-end, same code paths as the public installer. This is the developer's test ground for the install flow before deploying to GitHub Pages: Web Serial works on `http://localhost` without the secure-origin requirement that gates the public site.
+- **Render-only.** With no app image under `build/esp32-*/`, the picker populates against the real GitHub Releases API and the dropdowns work. Clicking **Install** fails, because the local server has no `releases/` tree. Useful for iterating on HTML / CSS / JS without burning a build. Equivalent to "Recipe A" in [mooninstaller/README.md](../mooninstaller/README.md).
+- **Flash-ready.** When at least one ESP32 build exists, the script also stages every app image it finds under `build/esp32-*/` into `releases/local-dev/`. It generates matching Pages-relative manifests with the same `generate_manifest.py` the release workflow uses. The picker shows `local-dev` as the newest tag. Clicking **Install** flashes a USB-connected ESP32 and hands off to the repository's own orchestrator UI in `install-orchestrator.js`. That does the Improv-Serial provisioning and the APPLY_OP push of the device model's modules and controls, in place of ESP Web Tools. End-to-end, same code paths as the public installer. This is the developer's test ground for the install flow before deploying to GitHub Pages: Web Serial works on `http://localhost` without the secure-origin requirement that gates the public site.
 
 Add `?nocache=1` to the URL to bypass the picker's 5-minute sessionStorage cache while editing.
 
@@ -1061,7 +1061,7 @@ Each ESP32-S3 SKU has its own firmware key because the sdkconfig fragment encode
 
 ### flash_esp32
 
-Flash firmware to an ESP32 device. Reads `build/esp32-<firmware>/projectMM.bin` — each firmware lives in its own dir (plan-19.1), so multiple firmwares can coexist on disk and switching firmwares is free.
+Flash firmware to an ESP32 device. Reads the app image in `build/esp32-<firmware>/`, which ESP-IDF names `projectMM.bin` after the project. Scripts read that name from `APP_BIN` in `build_esp32.py`. Each firmware lives in its own directory, so several coexist on disk and switching between them is free.
 
 The MoonDeck button forwards the Firmware dropdown as `--firmware`. Flash exits cleanly with a "no build for <firmware> — run Build first" message when that dir doesn't exist. The log line up front confirms which build is being flashed and how old it is, e.g.:
 
@@ -1102,7 +1102,7 @@ uv run moondeck/run/serve_firmware.py esp32 --port 8099
 uv run moondeck/run/serve_firmware.py build/moonbase-esp32/projectMM-moonbase.bin --port 8098
 ```
 
-Takes a firmware name (resolved to `build/esp32-<name>/projectMM.bin`) or a path to any `.bin`, and
+Takes a firmware name (resolved to the app image in `build/esp32-<name>/`) or a path to any `.bin`, and
 prints the LAN URL to paste into the Firmware card or MoonBase's own page. The file is re-read per
 request, so a rebuild needs no restart.
 
@@ -1131,7 +1131,7 @@ Backtrace: 0x4210b93b:0x3fcc8fa0 0x4200fbf8:0x3fcc8fc0
   #1 src/light/moonlive/MoonLiveBuiltins_light.h:82
 ```
 
-So a panic names its source line in the monitor rather than starting a separate addr2line session. Same purpose as PlatformIO's `esp32_exception_decoder` monitor filter; here it is the toolchain's own `addr2line` against `build/esp32-<firmware>/projectMM.elf`, picking the Xtensa or RISC-V tool from the firmware name. Without `--firmware`, or when that build has no ELF, addresses print raw and the monitor runs as before — decoding must never cost you the serial output.
+So a panic names its source line in the monitor rather than starting a separate addr2line session. Same purpose as PlatformIO's `esp32_exception_decoder` monitor filter; here it is the toolchain's own `addr2line` against the app's `.elf` in `build/esp32-<firmware>/`, picking the Xtensa or RISC-V tool from the firmware name. Without `--firmware`, or when that build has no ELF, addresses print raw and the monitor runs as before: decoding must never cost you the serial output.
 
 ### check_encodings
 
@@ -1275,7 +1275,7 @@ Print the most recent MoonLight crash report and run log.
 uv run moondeck/run/show_crash_log.py
 ```
 
-On Windows, reads the Application event log for `Application Error` entries naming the binary, which is where Windows records a fault. There is no crash FILE unless WER LocalDumps is enabled, which it is not by default; registering the binary under `HKCU\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps\` would leave a dump worth loading in a debugger. On macOS, finds the newest `projectMM-*.ips` in `~/Library/Logs/DiagnosticReports/`, parses the JSON crash report, and prints the exception type, signal, faulting thread, and top 20 stack frames. If no crash report exists it falls back to the last 40 lines of `build/<host>/projectMM.log` so the run log is always reachable from one place.
+On Windows, reads the Application event log for `Application Error` entries naming the binary, which is where Windows records a fault. There is no crash FILE unless WER LocalDumps is enabled, which it is not by default; registering the binary under `HKCU\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps\` would leave a dump worth loading in a debugger. On macOS, finds the newest `MoonLight-*.ips` in `~/Library/Logs/DiagnosticReports/`, parses the JSON crash report, and prints the exception type, signal, faulting thread, and top 20 stack frames. If no crash report exists it falls back to the last 40 lines of `build/<host>/MoonLight.log` so the run log is always reachable from one place.
 
 Typical output (crash present):
 
@@ -1297,6 +1297,6 @@ Typical output (no crash, log tail):
 ```text
 No MoonLight crash reports found in DiagnosticReports.
 
-=== Last 40 lines of projectMM.log ===
+=== Last 40 lines of MoonLight.log ===
 tick: 1234us (FPS: 800)  free: 0  ...
 ```

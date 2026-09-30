@@ -8,7 +8,7 @@ The question the module answers: **which module owns each GPIO, for what role, a
 
 ### MoonLight — `ModuleIO.h` (the direct lineage, the richest prior art)
 
-MoonModules' own predecessor ([MoonLight/src/MoonBase/Modules/ModuleIO.h](https://github.com/MoonModules/projectMM/blob/main/src/MoonBase/Modules/ModuleIO.h)) — the closest prior art by far, and the one to study hardest since MoonLight descends from it. It is **board-preset-centric**, not runtime-allocation-centric, and it already unifies *both* axes this study separates (ownership + live state) in one module:
+MoonModules' own predecessor ([MoonLight/src/MoonBase/Modules/ModuleIO.h](https://github.com/ewowi/MoonLight/blob/main/src/MoonBase/Modules/ModuleIO.h)), the closest prior art by far, and the one to study hardest since MoonLight descends from it. It is **board-preset-centric**, not runtime-allocation-centric, and it already unifies *both* axes this study separates (ownership + live state) in one module:
 
 - **A pin is a row in a JSON pin table**, one per physical GPIO (`0..GPIO_PIN_COUNT-1`, all pre-populated), with fields `{GPIO, usage, index, summary, Level, DriveCap}`. Not a C++ struct — a `JsonObject`. The **`usage`** field is an `enum IO_PinUsageEnum` (~56 values: `pin_LED`, `pin_I2C_SDA`, `pin_ETH_MDC`, `pin_PIR`, `pin_Relay_LightsOn`, …) — a **central role vocabulary** that both names what the pin does *and* implicitly encodes its owner (one usage = one feature). Multiple pins may share a usage (`pin_LED` ×N); `PinAssigner` auto-increments the `index` field to disambiguate them.
 - **Ownership = the `usage` enum**, read back into cached members (`_pinI2CSDA = pinObject["GPIO"]` when `usage == pin_I2C_SDA`). No separate owner-tag table — the role vocabulary *is* the ownership model.

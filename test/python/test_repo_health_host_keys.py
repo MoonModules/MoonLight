@@ -51,7 +51,7 @@ def test_the_measurement_itself_is_written_under_the_host_key(monkeypatch, tmp_p
     (tmp_path / "build").mkdir()
     monkeypatch.setattr(repo_health, "ROOT", tmp_path)
 
-    binary = tmp_path / "projectMM.exe"
+    binary = tmp_path / "MoonLight.exe"
     binary.write_bytes(b"x" * 1024)
     monkeypatch.setattr(repo_health, "desktop_binary", lambda: binary)
     monkeypatch.setattr(repo_health, "desktop_target", lambda: "desktop-windows")

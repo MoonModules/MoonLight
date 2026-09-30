@@ -2,7 +2,7 @@
 
 This directory holds the source for the **custom installer page** (driven by
 `install-orchestrator.js`, not ESP Web Tools) at
-<https://moonmodules.org/projectMM/install/>.
+<https://moonmodules.org/MoonLight/install/>.
 
 End users land here, pick a channel + device, click Install. The browser flashes
 the device over USB (Web Serial → ESP32), runs Improv-Serial provisioning, then

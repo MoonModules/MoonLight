@@ -2,7 +2,7 @@
 
 **Last updated: 2026-09-10**
 
-Covers the MoonLight software (firmware, desktop application and the web interface they serve), the [web installer](https://moonmodules.org/projectMM/install/), and this documentation site.
+Covers the MoonLight software (firmware, desktop application and the web interface they serve), the [web installer](https://moonmodules.org/MoonLight/install/), and this documentation site.
 
 ## The rule
 
@@ -74,8 +74,8 @@ An MQTT broker, Home Assistant, Art-Net or E1.31 consoles: MoonLight speaks to t
 
 **A new feature that transmits anything is documented here before it ships, and asks for its own consent.** We may later offer to collect things this policy does not describe today, such as which effects are used or automatic crash reports. Each would be a separate opt-in choice, described here first, and switched off until you turn it on.
 
-Revisions are made in the open: the policy lives in the [project repository](https://github.com/MoonModules/projectMM/blob/main/docs/legal/privacy-policy.md), so every change is a commit you can read.
+Revisions are made in the open: the policy lives in the [project repository](https://github.com/MoonModules/MoonLight/blob/main/docs/legal/privacy-policy.md), so every change is a commit you can read.
 
 ## Contact
 
-Questions, or anything here you would like to verify: an [issue on the repository](https://github.com/MoonModules/projectMM/issues) or the [Discord](https://discord.gg/TC8NSUSCdV). MoonLight is free and open-source software, and the network calls described above are the only ones in it.
+Questions, or anything here you would like to verify: an [issue on the repository](https://github.com/MoonModules/MoonLight/issues) or the [Discord](https://discord.gg/TC8NSUSCdV). MoonLight is free and open-source software, and the network calls described above are the only ones in it.

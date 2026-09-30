@@ -40,7 +40,7 @@
 // 1. Constants + module state
 // ---------------------------------------------------------------------------
 
-const API_URL = "https://api.github.com/repos/MoonModules/projectMM/releases?per_page=10";
+const API_URL = "https://api.github.com/repos/MoonModules/MoonLight/releases?per_page=10";
 const CACHE_KEY = "MoonLight.releases.v1";
 const CACHE_TTL_MS = 5 * 60 * 1000;  // 5 min — short enough to surface new RCs, long enough to avoid rate-limit thrash
 
@@ -212,19 +212,19 @@ function parseFirmwaresFromAssets(assets, tag, moonbaseOnly = false) {
             firmwares.set(firmware, entry);
         }
     }
-    // A DESKTOP build ships an archive, not a .bin: projectMM-<os>-<arch>-v<ver>.{dmg,tar.gz,zip,deb}.
+    // A DESKTOP build ships an archive, not a .bin: MoonLight-<os>-<arch>-v<ver>.{dmg,tar.gz,zip,deb}.
     // The device cannot flash itself over the air, so these are offered as a DOWNLOAD instead, and
     // the caller decides what that means. Keyed by the platform so the picker can show "macOS
     // arm64" rather than a filename.
     // The version carries dots, so the platform group has to be anchored on the -v rather than on
     // "everything up to a dot". A .deb names its arch, not the platform, so it maps to linux-x64.
     //
-    // The Windows INSTALLER carries a suffix AFTER the version — projectMM-windows-x64-v1.2.3
-    // -setup.exe — so the extension alternation alone could not match it and the installer never
+    // The Windows INSTALLER carries a suffix AFTER the version (MoonLight-windows-x64-v1.2.3
+    // -setup.exe), so the extension alternation alone could not match it and the installer never
     // reached the dropdown: a Windows user was offered the bare .zip while setup.exe sat in the
     // release. `.+` before the extension covers both shapes.
-    const desktopRe = /^projectMM-(macos-arm64|windows-x64|linux-x64)-v.+\.(dmg|tar\.gz|zip|exe)$/;
-    const debRe = /^projectmm_.+_amd64\.deb$/;
+    const desktopRe = /^MoonLight-(macos-arm64|windows-x64|linux-x64)-v.+\.(dmg|tar\.gz|zip|exe)$/;
+    const debRe = /^moonlight_.+_amd64\.deb$/;
     for (const a of assets) {
         const d = desktopRe.exec(a.name);
         const plat = d ? d[1] : (debRe.test(a.name) ? "linux-x64" : null);

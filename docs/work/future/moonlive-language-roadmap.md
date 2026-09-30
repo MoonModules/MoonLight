@@ -13,8 +13,8 @@ MoonLive compiles a C-subset to native code on the device. The subset is deliber
 started at "fill a buffer with a colour" and grew a feature at a time. This document is the ordered
 list of what to grow next, and why that order.
 
-**The bar is a corpus, not one effect.** MoonLight publishes a body of live scripts at
-[MoonModules/projectMM/livescripts](https://github.com/MoonModules/projectMM/tree/main/livescripts),
+**The bar is a corpus, not one effect.** The predecessor MoonLight publishes a body of live scripts at
+[ewowi/MoonLight/livescripts](https://github.com/ewowi/MoonLight/tree/main/livescripts),
 and the goal is that MoonLive can **run them** — not that we migrate them into this repo. They are
 written against a language with floats, structs and a wide builtin surface, so they are an honest
 external measure of how far the subset still has to grow: each one that compiles unchanged is a
@@ -186,7 +186,7 @@ and escape() are integer/fixed already; math16.h supplies sin/atan/dist/sqrt; th
 float promotion a fatal warning. The FPU story splits the boards (LX6/LX7/P4 have one, the RISC-V
 line does not), so JIT float either runs wildly differently per board or softfloats, against the
 one-language-four-ISAs-identical rule. Fixed-point is bit-identical everywhere, which is also what
-makes an effect reproducible. If the MoonLight corpus (written with floats) ever forces the issue,
+makes an effect reproducible. If the predecessor's corpus (written with floats) ever forces the issue,
 the answer is compile-time float-literal-to-fixed translation, not runtime float.
 
 **Per-type notes:**
@@ -565,7 +565,7 @@ fractional velocities on a full-size grid, at a frame rate the bench can measure
 language carries a real simulation.
 
 **External, and the harder bar:** take the
-[MoonLight livescripts corpus](https://github.com/MoonModules/projectMM/tree/main/livescripts) and
+[predecessor's livescripts corpus](https://github.com/ewowi/MoonLight/tree/main/livescripts) and
 count how many compile and run unchanged. That number is the honest progress metric, because those
 scripts were written without regard for our subset. Track it per step; a feature that moves it is
 worth more than one that does not, whatever this document guesses.

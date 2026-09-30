@@ -358,7 +358,7 @@ void MqttModule::publishUpdateState() {
         "{\"installed_version\":\"%s\",\"latest_version\":\"%s\","
         "\"release_url\":\"https://github.com/%s/releases\","
         "\"title\":\"%s firmware\"}",
-        kVersion, kVersion, kReleaseRepo, kProjectImageName);
+        kVersion, kVersion, kReleaseRepo, kPrefixRoot);
     if (pn <= 0 || static_cast<size_t>(pn) >= sizeof(payload)) return;
     uint8_t buf[kSendBufLen];
     const size_t n = buildMqttPublish(topic, reinterpret_cast<const uint8_t*>(payload),
@@ -393,7 +393,7 @@ void MqttModule::handleUpdateInstall(const char* payload, size_t payloadLen) {
     const int un = std::snprintf(url, sizeof(url), kReleaseAssetUrlFormat,
                                  kReleaseRepo, v, kFirmwareName, v);
     if (un <= 0 || static_cast<size_t>(un) >= sizeof(url)) return;
-    // Today's repository, tried where the address above does not answer (FirmwareUpdateModule names why both).
+    // The repository's earlier name, tried where the address above does not answer (FirmwareUpdateModule names why both).
     char altUrl[256];
     const int an = std::snprintf(altUrl, sizeof(altUrl), kReleaseAssetUrlFormat,
                                  kFallbackRepo, v, kFirmwareName, v);

@@ -1,6 +1,6 @@
 # Plan — Native HUB75 output: drive panels directly, without a receiving card
 
-Answers [issue #102](https://github.com/MoonModules/projectMM/issues/102). Phase 1 only; Phase 2 (PWM panels) is deliberately out of scope and § "What this plan does not do" says why.
+Answers [issue #102](https://github.com/MoonModules/MoonLight/issues/102). Phase 1 only; Phase 2 (PWM panels) is deliberately out of scope and § "What this plan does not do" says why.
 
 ## The gap
 

@@ -1,6 +1,6 @@
 # Plan: MoonLight, from v5.0.0 to the rename
 
-MoonLight becomes MoonLight. **v5.0.0 is the last release under the old name and v6.0.0 is the first under the new one.** This file is the whole record: what ships before the switch, what happens at it, what follows, and the decisions already taken along the way. It replaces the five files that held pieces of it.
+projectMM becomes MoonLight. **v5.0.0 is the last release under the old name and v6.0.0 is the first under the new one.** This file is the whole record: what ships before the switch, what happens at it, what follows, and the decisions already taken along the way. It replaces the five files that held pieces of it.
 
 ## The three decisions that shape everything
 
@@ -8,11 +8,11 @@ MoonLight becomes MoonLight. **v5.0.0 is the last release under the old name and
 
 **A user's configuration survives both releases.** v5.0.0 upgrades in place, subject only to the breaks [MIGRATING](../../reference/MIGRATING.md) already records. v6.0.0 carries configuration across too, by Backup on v5 and Restore on v6, because **nothing persisted carries the product name**: config files are named after module types (`Effects.json`, `Drivers.json`) and the sweep leaves every type and `namespace mm::` untouched. The migration engine in [migrate.js](../../../src/ui/migrate.js) therefore has no rename to apply for the rename itself, which is the easiest case it can be handed.
 
-**No compatibility code ships with MoonLight**, which is [the standing rule](../../../CLAUDE.md#principles) applied to the rename: nothing translates a MoonLight identity into a MoonLight one, no alias for a renamed key, no shim reading a predecessor's file, no branch asking which name a device was flashed under.
+**No compatibility code ships with MoonLight**, which is [the standing rule](../../../CLAUDE.md#principles) applied to the rename: nothing translates a projectMM identity into a MoonLight one, no alias for a renamed key, no shim reading a predecessor's file, no branch asking which name a device was flashed under.
 
 **Backup on v5, Restore on v6 is the one supported path**, and every upgrade question is answered with it. Where something does not carry, the answer is to erase the flash and install clean. A Home Assistant entity re-appearing under a new identity is the same trade: the alternative is a permanent pin to the old name, and a new product does not inherit one.
 
-**Live interoperation survives**, which the rehearsal got wrong: a peer is classified by the numeric marker `0x014d4d00` rather than by any name, so a MoonLight device and a MoonLight device still see each other. What goes stale is a saved device list, whose rows re-type themselves on the next discovery sweep.
+**Live interoperation survives**, which the rehearsal got wrong: a peer is classified by the numeric marker `0x014d4d00` rather than by any name, so a projectMM device and a MoonLight device still see each other. What goes stale is a saved device list, whose rows re-type themselves on the next discovery sweep.
 
 ## Where we stand
 
@@ -31,7 +31,7 @@ Verified against the tree on 2026-09-29 rather than read from the plans, because
 
 The sweep script measures **1405 occurrences across 242 tracked files** (dry run, 2026-09-22), against the 542 across 113 recorded when it was written: the documentation sweep and the effect library both grew the prose that names the product. The categories still matter more than the count, and the growth is spread across the tree rather than concentrated, so it is real rather than an exclude-list gap.
 
-[rename_to_moonlight.py](../../../moondeck/repo_rename/rename_to_moonlight.py) handles almost all of it and runs dry by default. It replaces two tokens, `ProjectMM` then `MoonLight`, which is correct for every form because `MoonLight` is never a substring of another token. Its file list comes from `git ls-files`, so build output is excluded without a blocklist. `MoonLive`, the predecessor's own name, and `namespace mm` are provably never touched.
+`rename_to_moonlight.py` (deleted once the sweep had run) handles almost all of it and runs dry by default. It replaces two tokens, `ProjectMM` then `projectMM`, which is correct for every form because `projectMM` is never a substring of another token. Its file list comes from `git ls-files`, so build output is excluded without a blocklist. `MoonLive`, the predecessor's own name, and `namespace mm` are provably never touched.
 
 ### The device builds its own OTA URL, and that turns out to be safe
 
@@ -99,7 +99,7 @@ Cutover day went from 1376 lines to 1206, in two passes. The first moved 99, the
 
 More useful than the count is what moving them taught, because every one of these was a thing the rehearsal had reported as safe.
 
-**A hand-counted length survives a rename by luck.** MQTT sized its topic buffer as `9 + 1 + 6 + 1`, counted from `MoonLight`. MoonLight is nine characters too, so the sweep would have passed and any other name would have truncated every topic silently. The length now derives from the string with `sizeof`, which is the general form: a literal's length belongs to the literal, never to a comment that counts it.
+**A hand-counted length survives a rename by luck.** MQTT sized its topic buffer as `9 + 1 + 6 + 1`, counted from `projectMM`. MoonLight is nine characters too, so the sweep would have passed and any other name would have truncated every topic silently. The length now derives from the string with `sizeof`, which is the general form: a literal's length belongs to the literal, never to a comment that counts it.
 
 **A round trip has as many ends as it has, and the tests know.** The device-type label looked like a pair, one plugin writing it and one comparison reading it. It was three: `devTypeStr` emits the string that gets persisted. Renaming two of the three broke four tests, which is the guardrail working exactly as intended. Assume a third end exists until the suite says otherwise.
 
@@ -109,11 +109,11 @@ More useful than the count is what moving them taught, because every one of thes
 
 **The sweep broke the one supported upgrade path.** Restore compares a bundle's `format` against a literal carrying the product name, so a swept reader rejects every backup a user already saved, with "not a config backup". The reader now accepts both spellings behind a `rename-keep` marker while the writer emits the new one. This is the case the whole migration promise rests on, and a blanket token replace inverted it.
 
-**The sweep orphaned every desktop user's configuration.** The desktop data directory is built from the product name, so a renamed build reads an empty profile and loses presets, layouts and scripts, silently and with no error. Devices have Backup and Restore; the desktop had nothing, and the plan had not noticed because its migration section is written entirely about devices. Now held by a `KEEP_PATH_KEYS` list, control-tested so an ordinary comment still sweeps.
+**The sweep orphaned every desktop user's configuration.** The desktop data directory is built from the product name, so a renamed build reads an empty profile and loses presets, layouts and scripts, silently and with no error. Devices have Backup and Restore; the desktop had nothing, and the plan had not noticed because its migration section is written entirely about devices. Resolved by letting the directory take the new name and documenting the move in MIGRATING: principle 3 weighs what a user loses, which here is copying one folder across or a Backup and Restore.
 
 **The sweep blinded the prose checker.** `.vale.ini` names its style and vocabulary by directory, so renaming the references while the directories kept the old name left Vale reading no rules at all and reporting zero findings for every header. The directories moved with the config, and the proof is Vale reporting `.cpp` findings again, which is the control the file's own comment asks for.
 
-**A blanket replace edits quotations.** The product owner's own words inside a block quote were rewritten, turning "MoonLight V1, V2 and V3" into a sentence they never wrote. A quote is evidence rather than prose, so the sweep has no business inside one.
+**A blanket replace edits quotations.** The product owner's own words inside a block quote were rewritten, turning "projectMM V1, V2 and V3" into a sentence they never wrote. A quote is evidence rather than prose, so the sweep has no business inside one.
 
 **What genuinely cannot move early**, checked rather than assumed: the OTA project guard, where `moonbase/CMakeLists.txt` stamps the image and `FirmwareImage.h` checks that exact string, so moving either early makes every v5 device refuse the new MoonBase image. And the repository URLs, which resolve only once the repo itself is renamed.
 
@@ -129,7 +129,7 @@ A branch over roughly 100 files loses its external review layer, and the free re
 
 The order is by risk, cheapest first. `src/` and `test/` went first, because the compiler and 2000 tests judge them: a mistake there fails rather than ships. Documentation prose is next and carries no executable risk. The identities that outside systems key on go last, on the day, and they are now a short enough list to read in one sitting.
 
-What makes this safe is that the sweep is idempotent and its own report is committed, so a batch can be regenerated at any time and the remaining reach is always visible in [rename_to_moonlight.md](../../../moondeck/repo_rename/rename_to_moonlight.md).
+What makes this safe is that the sweep is idempotent and its own report is committed, so a batch can be regenerated at any time and the remaining reach was always visible in the report beside the script, both deleted once the sweep had run.
 
 ### The week, day by day
 
@@ -242,24 +242,63 @@ Between step 3 and step 4 sits the ordinary rhythm: whatever is in flight is com
 
 #### The moment
 
-4. 🚧 **Move `MoonModules/MoonLight` to `ewowi/MoonLight`.** This frees the name and leaves `MoonModules/MoonLight` redirecting to `ewowi`.
-5. 🚧 **Rename `MoonModules/projectMM` to `MoonModules/MoonLight`**, immediately. This overwrites the redirect from step 4, which is intended: the name is ours again and the predecessor keeps its content under `ewowi`.
-6. 🚧 **Open `moonmodules.org/projectMM/install/` and do not assume it redirects.** GitHub's permanent redirect covers `github.com` URLs, which is what the OTA client follows; a Pages path on a custom domain is a different mechanism with no such promise. Every shipped board carries that URL on its QR code, so a 404 there strands the people most likely to be upgrading. If it does not land on the installer, publish a redirect from the old path before announcing anything.
+4. ✅ **`MoonModules/MoonLight` moved to `ewowi/MoonLight`**, freeing the name and leaving a redirect behind it.
+5. ✅ **`MoonModules/projectMM` renamed to `MoonModules/MoonLight`**, immediately after, which overwrites that redirect as intended: the name is ours and the predecessor keeps its content under `ewowi`.
+   The release workflow was mid-run when step 4 finished and was allowed to complete first, since it publishes assets into the repository the rename was about to move. It also built all twelve ESP32 variants against IDF v6.1 for the first time in CI, which was the last untested consequence of the pin move.
+6. ✅ **The old documentation path 404'd, exactly as this step warned.** Two stub pages now serve it from `MoonModules/moonmodules.github.io`, which is the repository owning the domain: `docs/projectMM/install/index.html` and `docs/projectMM/index.html`, each a meta refresh with a canonical link and visible text for whatever ignores the refresh. Pages serves static files and has no rewrite rules, so a meta refresh is the mechanism available. Both verified live at 200.
+   **The domain repository stays where it is.** It carries the `CNAME` that makes `moonmodules.org` resolve at all, so moving it would take down the MoonLight site along with the path this step fixed. The 404 was a path inside a working site rather than a question of ownership.
+   Still to do there, and not urgent: `products/projectmm.md` sits in that site's navigation and names the old product. It is content rather than a broken link, so it can wait for the announcement.
 
 #### After the moment
 
-7. 🚧 **Run `uv run moondeck/repo_rename/rename_to_moonlight.py --apply`** on a branch off the renamed repository, read the diff in full, and commit it as one change. Then check the four the rehearsal found: `kFallbackRepo` still names the old repository, the MoonBase image check still reads `projectMM-moonbase`, MIGRATING's v5.0.0 heading still says projectMM, and `TextEffect`'s golden moves with its new default text rather than failing.
-8. 🚧 **Flip the identity set in that same commit**: binary name, release asset names, the manifest `name` and `home_assistant_domain`, and the docs domain. The `MM-` prefix stays, decided on 2026-09-29.
+7. ✅ **`uv run moondeck/repo_rename/rename_to_moonlight.py --apply` ran** on `rename-sweep`, off the renamed repository: 468 hits across 116 files, and the diff was read in full. The four the rehearsal found all hold: `kFallbackRepo` still names the old repository, the MoonBase image check still reads `projectMM-moonbase`, MIGRATING's v5.0.0 heading still says projectMM, and `TextEffect` already carried its new default text and golden from an earlier batch.
+   **The sweep found a fifth, and it was the worst of them.** It flipped `kProjectImageName`, the string a RUNNING v5 device compares an incoming image's ESP-IDF descriptor against, so every v5 device would have refused the v6 image before writing a byte. The constant and `project()` in `esp32/CMakeLists.txt` keep the old name behind `rename-keep`, and the Home Assistant card title that had borrowed the constant reads the MQTT root `kPrefixRoot` instead, which is the product name already.
+   **The sweep rewrites contents and cannot rename files**, so every reader it flipped pointed at a file still carrying the old name: the three Windows installer scripts, which broke the package build, two images, the friend-repos page and the first tutorial. All seven moved with `git mv`.
+   **It lands as two commits in one PR**, code first and prose second, since the tree is 140 files and the external review declines past 100.
+8. ✅ **The identity set is flipped in the same change**: binary name, release asset names, the manifest `name` and `home_assistant_domain`, and the docs domain. The `MM-` prefix stays, decided on 2026-09-29.
+   **The set was larger than this step listed**, and the ruling on the day was that everything takes the new name unless a shipped device compares the old one. So the desktop data directories, the installer's saved device list, the Debian package, the container image and its compose names, the macOS bundle identifier, the backup bookmarklet's format and the host override variable all moved, each with its [MIGRATING](../../reference/MIGRATING.md) entry where a user feels it.
+   **What keeps the old name, and why**: the OTA image name and the MoonBase image name, which a v5 device checks; `kFallbackRepo`, which has to differ from the primary; the MoonCloud salt; and the second format the Restore reader accepts, which is what the two backups from step 2 carry. The product owner wants these gone in time, so each is a candidate once no v5 device is left to upgrade.
+   **The rename tooling is gone.** `moondeck/repo_rename/` held the sweep, its readiness check and their reports, and a tool that has run once and cannot run again is weight. The `rename-keep` markers went with it, leaving each kept string its plain reason. The scripts reading an ESP32 build take the image's filename from three constants in `build_esp32.py`, so the old spelling has one home there instead of twelve.
+   **The ESP32 build artifact keeps the old name with them.** ESP-IDF names `projectMM.bin` and `projectMM.elf` after `project()`, so every script reading the build output reads that name: the release workflow, the manifest generator, the merged-image builder, flash, monitor, QEMU and the checks. The sweep flipped those readers and left the writer, which would have failed the release job on its first firmware and shipped a manifest with no app part. Nobody outside the build sees the name, since a release asset is `firmware-<variant>-v<version>.bin`.
+   **When the image names flip, which is an open decision.** The gate is one-sided: a device refuses any image whose name differs from its own. So the flip takes two releases. First a bridge, whose gate accepts both `projectMM` and `MoonLight` while its own image still says `projectMM`. Then a release whose `project()` and `kProjectImageName` say `MoonLight`, at which point the artifact name and every reader flip in the same commit. A device has to pass through the bridge, and a v5 device updating straight to the second release is refused. The cheapest bridge is v6.0.0 itself, as one extra compare in `platform_esp32_ota.cpp`, because every release shipped with the single-name gate adds devices that need a stepping stone later. That is compatibility code, which the third decision at the top rules out, so it is the product owner's call between a bridge now and a stepping stone later.
+   **`projectMM-moonbase` follows the same two steps, and is slower to finish.** Five places compare it, doing two jobs. The app's OTA and upload paths and MoonBase's own install path refuse an image by that name as an app, because a recovery image in the app slot leaves both partitions holding it and only a cable recovers that. And `moonBaseRejection` admits only that name into the factory slot. Flipped in one step, a v5 app refuses the renamed MoonBase safely, but a v5 MoonBase offered it as an app no longer recognises it, so its guard stays silent and it writes the recovery image over the app. The bridge therefore accepts both names in all five places before any image carries the new one. OTA replaces only the app, so a device upgraded over the air keeps its v5 MoonBase, and that exposure ends per device only when its MoonBase is reinstalled.
    - The documentation path follows the repository name on its own: GitHub Pages serves a project site under `/<repo>/` even on the custom domain, so the sweep updates `site_url`, `repo_url` and `site_name` to match. Check the web installer at its new path first, since it is the link a newcomer follows.
-9. 🚧 **Run the full gate set again** on the swept tree, then tag and release v6.0.0.
+9. 🚧 **Run the full gate set again** on the swept tree, then tag and release v6.0.0. The release preparation rides in the rename PR: `library.json` says `6.0.0`, MIGRATING's entries sit under `## v6.0.0`, and the compose example pins `6.0.0`.
+   - **The NanoPi runs the scenarios between the merge and the tag.** It is the one Linux arm64 machine on the bench and runs the container, on `4.0.0-dev.134` from 13 September. The image matching this tree exists only once main has built it, as `ghcr.io/moonmodules/moonlight:latest`, so the order is: merge, let CI publish `latest`, update the NanoPi under the new image, service and volume names, then run the live scenarios against `192.168.1.156:8080`. Pulling it under the new name is itself the test of the container entry in MIGRATING. The recorded observations land in a commit of their own, as the Windows run did, and before the tag, so an arm64 failure is fixed in v6.0.0 rather than in a v6.0.1. The machine jumps two major versions, so every MIGRATING entry for v5.0.0 and v6.0.0 applies to its configuration at once.
 10. 🚧 **Verify the two claims**: a v5.0.0 device finds and installs v6.0.0 over OTA, and the rich backup restores onto it with layouts, effects, presets and scripts intact. The firmware asset name carries no product name (`firmware-<variant>-v<version>.bin`), so a v5 device's URL survives the rename unchanged.
+    - ✅ **The first claim was rehearsed before the merge, on 2026-09-30**, because after the release a failure cannot be rolled back. MM-testbench-S3 (`esp32s3-n16r8`) was sent to the published v5.0.0 over OTA, by the asset URL under the old repository name, and reported `5.0.0`, build `21319a09`. It then installed this branch's build from `serve_firmware.py` and came back on `6.0.0`, with the same 27 modules in the same order and only runtime readings differing. So the image-name gate in a real v5.0.0 accepts the v6 image, and the redirect from the old repository name serves a device.
+    - Still open: the same install on a MoonBase variant such as the classic `esp32`, where MoonBase writes the app slot; a device finding v6.0.0 by itself, which needs the release to exist; and the restore of a v5 backup.
 11. 🚧 **Hand-edit `moondeck/moondeck.json`**, which is gitignored and outside the sweep.
+    Each local checkout wants the same treatment, and none of it is urgent because GitHub redirects the old remote: `git remote set-url origin https://github.com/MoonModules/MoonLight.git` so the address is named rather than inferred, then rename the working folder, whose path now says the old name. The predecessor's own checkout sits beside it under the name the project is taking, so that one is renamed out of the way first and repointed at `ewowi` or retired, depending on whether anything uncommitted in it still matters. Contributor forks keep their own names, which are their owners' to change.
 12. 🚧 **Re-record the clips the rename is visible in**, which is every clip showing the interface, since the title bar carries the product name. Each is a three-pass run: `mtmeasure.py` sizes the holds from the spoken length, `mtvideo.py` records, `mtvoiceover.py` speaks the captions. Recording alone is what published nine silent clips before.
+    - **Each clip gets its own voice, so the series sounds like the team that made it.** Built on its own branch after the rename merges, since it is about twenty files and the rename is already past the review limit.
+      - **The voice lives in the run file.** A clip's JSON names its `voice`, and `mtmeasure`, `mtvoiceover` and `mtnarrate` read it, with `--voice` as an override and Alba as the fallback. Today the voice is a command-line flag on each pass, so nothing keeps the measure pass and the voice pass on the same one, and a clip measured with one voice and spoken with another drifts.
+      - **Luna is Alba**, and the three slide decks stay hers by carrying no `voice` at all.
+      - **The fourteen clips alternate between a male and a female voice**, no two neighbours the same. The Piper models that exist at medium quality: `alan` and `northern_english_male` on one side, `jenny_dioco`, `cori` and Prudence from `semaine` on the other. `semaine` also holds Spike, Obadiah and Poppy, and `aru` holds twelve speakers, so the third male voice and any extras are picked by ear when it is built. `southern_english_female` is left out: it exists only at low quality.
+      - A changed voice needs all three passes again, which this step runs anyway.
+    - **The intro ends on an overview of the clips to come.** One more slide in `00-intro`, listing the sixteen that follow. The list is already written down once, as the clip titles in `moontube/projects/full-series.json`, so the slide reads it from there.
     - Two clips carry edits made since their last take and want re-recording whatever the rename did: `07-drivers-desktop` names moving heads and par cans on the network-sender step, and `07-drivers-esp32` describes a single parallel lane rather than two.
 13. 🚧 **Render the full series** with `mtcompose.py --project moontube/projects/full-series.json`. The corner window cycles whatever sits in `media/examplevideos/`, which now carries ten effect clips beside the nineteen rough cuts, so the finished film shows the effects as well as the interface driving them.
 14. 🚧 **Publish to YouTube**, one video with the seventeen clips as chapters. The description names the new repository, the documentation site at its new path, and the installer URL, all of which only exist after step 5. Publishing before the rename would hand every viewer a link that dies within the hour.
 
 If step 10 fails, the release stays and the fix is a v6.0.1: the repository has already moved by then, so rolling back is not on the table. That is why the checks and the backups come first.
+
+#### What still says projectMM, and whether it will change
+
+Counted on 2026-09-30 over the tracked tree, in either letter case: 58 lines in 18 files, down from 122 in 36 before the rename tooling was deleted and the image filenames got one home.
+
+| What | Where | Lines | Will it be renamed? |
+|---|---|---|---|
+| The app image name | `project()` in `esp32/CMakeLists.txt`, `kProjectImageName`, the descriptor comment in `FirmwareImage.h`, one pair in `unit_FirmwareImage.cpp` | 4 | **Yes**, at the two-release flip described under step 8 |
+| The app image filenames | `APP_BIN` and `APP_ELF` in `build_esp32.py`, one `cp` in `release.yml`, the manifest test's fixture, one sentence in `MoonDeck.md` | 5 | **Yes**, in the same commit as the app image name, since ESP-IDF derives them from it |
+| The MoonBase image name | `project()` in `moonbase/CMakeLists.txt`, the checks in `moonbase_main.cpp`, `platform_esp32_ota.cpp` and `FirmwareImage.h`, five lines of `unit_FirmwareImage.cpp`, `MOONBASE_BIN`, one glob in `release.yml`, one line each in `MoonDeck.md` and `moonbase.md` | 15 | **Yes**, by the same two-release path, once a MoonBase under the new name ships |
+| `kFallbackRepo` | `FirmwareUpdateModule.h` | 1 | **No.** It names the old repository on purpose, and it is removed rather than renamed when the fallback goes |
+| The second backup format | `kBackupFormats` in `src/ui/app.js` | 1 | **No.** It is removed once no v5 backup is left to restore |
+| The MoonCloud salt | `MoonCloudModule.h` | 1 | **No, never.** A new salt re-identifies every installation |
+| What each break replaced | `MIGRATING.md` | 8 | **No.** Naming the old value is what the entry is for |
+| History | This plan, and one line in each of two older plans | 23 | **No.** `docs/work` records what was |
+
+The first three rows are 24 lines that one decision unlocks. Everything below them either goes away on its own schedule or stays for good.
 
 ### After: the week following
 
@@ -285,7 +324,7 @@ What is said to camera before the clips run, in the product owner's own words an
 > So why did I do this? The old MoonLight was not perfect but it worked and was highly tuned. So why give up on all of this?
 > The reason is simple: because AI agents offer a revolutionary new paradigm and although I have a lot of worries about AI in its current context, it is not going away, so as an IT guy talking about AI already back in the 80s, I cannot pretend it is not there or that it will blow over.
 >
-> I did give up on MoonLight code, but I did not give up on the MoonLight principles! They are a few years old, formulated when I was working on WLED and WLED-MM, first tried in StarLight, then MoonLight, then MoonLight V1, V2 and V3 and now the new MoonLight, and the principles were extended over time:
+> I did give up on MoonLight code, but I did not give up on the MoonLight principles! They are a few years old, formulated when I was working on WLED and WLED-MM, first tried in StarLight, then MoonLight, then projectMM V1, V2 and V3 and now the new MoonLight, and the principles were extended over time:
 > - 3D from the ground up
 > - Everything is a module, this was inspired by WLED usermods, now a MoonModule
 > - UI is derived from the MoonModule, not written for each

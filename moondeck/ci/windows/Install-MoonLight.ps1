@@ -1,4 +1,4 @@
-# Install projectMM for the current user.
+# Install MoonLight for the current user.
 #
 # This does exactly what the setup.exe does, in plain text you can read before running it. That is
 # the point of it existing: Microsoft Defender occasionally flags a freshly built, unsigned
@@ -6,7 +6,7 @@
 # download leaves no file to rescue. A script gives its scoring model nothing to judge, and gives
 # you something you can audit line by line instead of trusting.
 #
-# Run it by double-clicking Install-projectMM.cmd beside this file, which is a wrapper around it.
+# Run it by double-clicking Install-MoonLight.cmd beside this file, which is a wrapper around it.
 # Right-clicking this script and choosing "Run with PowerShell" does NOT work on a stock machine:
 # Windows marks everything extracted from a downloaded zip as internet-sourced, and the default
 # RemoteSigned policy refuses to run an unsigned script carrying that mark. That is what the
@@ -22,23 +22,23 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$AppName   = "projectMM"
-$Source    = Join-Path $PSScriptRoot "projectMM.exe"
-$InstallTo = Join-Path $env:LOCALAPPDATA "Programs\projectMM"
-$StartMenu = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\projectMM"
-$RegKey    = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\projectMM"
+$AppName   = "MoonLight"
+$Source    = Join-Path $PSScriptRoot "MoonLight.exe"
+$InstallTo = Join-Path $env:LOCALAPPDATA "Programs\MoonLight"
+$StartMenu = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\MoonLight"
+$RegKey    = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\MoonLight"
 
 if (-not (Test-Path $Source)) {
-    Write-Host "Cannot find projectMM.exe beside this script." -ForegroundColor Red
+    Write-Host "Cannot find MoonLight.exe beside this script." -ForegroundColor Red
     Write-Host "Extract the whole zip first, then run this from the extracted folder."
     exit 1
 }
 
 # A running copy holds a lock on its own executable, so the copy below would fail part-way.
-# projectMM is a local server you restart from the Start menu, so stopping it costs a reconnect.
-$running = Get-Process -Name projectMM -ErrorAction SilentlyContinue
+# MoonLight is a local server you restart from the Start menu, so stopping it costs a reconnect.
+$running = Get-Process -Name MoonLight -ErrorAction SilentlyContinue
 if ($running) {
-    Write-Host "Stopping the running projectMM..."
+    Write-Host "Stopping the running MoonLight..."
     # SilentlyContinue because $ErrorActionPreference is Stop: Stop-Process raises on a process
     # that exited between the two calls, or one owned by another user, and neither is a reason to
     # abandon the install. A lock that genuinely survives fails loudly at the copy below instead.
@@ -50,7 +50,7 @@ if ($running) {
 
 Write-Host "Installing to $InstallTo"
 New-Item -ItemType Directory -Path $InstallTo -Force | Out-Null
-$destExe = Join-Path $InstallTo "projectMM.exe"
+$destExe = Join-Path $InstallTo "MoonLight.exe"
 # Someone who extracted the zip straight into the install directory would otherwise copy the file
 # onto itself, which throws under $ErrorActionPreference = "Stop" AFTER the running copy was
 # stopped: app killed, nothing installed.
@@ -59,7 +59,7 @@ if ([IO.Path]::GetFullPath($Source) -ne [IO.Path]::GetFullPath($destExe)) {
 } else {
     Write-Host "  already in the install directory, keeping it in place"
 }
-foreach ($extra in @("README.txt", "Uninstall-projectMM.ps1")) {
+foreach ($extra in @("README.txt", "Uninstall-MoonLight.ps1")) {
     $p = Join-Path $PSScriptRoot $extra
     if (Test-Path $p) {
         $dest = Join-Path $InstallTo $extra
@@ -76,17 +76,17 @@ foreach ($extra in @("README.txt", "Uninstall-projectMM.ps1")) {
 Write-Host "Adding the Start-menu entry"
 New-Item -ItemType Directory -Path $StartMenu -Force | Out-Null
 $shell = New-Object -ComObject WScript.Shell
-$lnk = $shell.CreateShortcut((Join-Path $StartMenu "projectMM.lnk"))
-$lnk.TargetPath       = Join-Path $InstallTo "projectMM.exe"
+$lnk = $shell.CreateShortcut((Join-Path $StartMenu "MoonLight.lnk"))
+$lnk.TargetPath       = Join-Path $InstallTo "MoonLight.exe"
 $lnk.WorkingDirectory = $InstallTo
 $lnk.Description      = "Drive large LED installations and DMX fixtures"
 $lnk.Save()
 
-$un = $shell.CreateShortcut((Join-Path $StartMenu "Uninstall projectMM.lnk"))
+$un = $shell.CreateShortcut((Join-Path $StartMenu "Uninstall MoonLight.lnk"))
 $un.TargetPath       = "powershell.exe"
-$un.Arguments        = "-NoProfile -ExecutionPolicy Bypass -File `"$InstallTo\Uninstall-projectMM.ps1`""
+$un.Arguments        = "-NoProfile -ExecutionPolicy Bypass -File `"$InstallTo\Uninstall-MoonLight.ps1`""
 $un.WorkingDirectory = $InstallTo
-$un.Description      = "Remove projectMM, keeping your settings"
+$un.Description      = "Remove MoonLight, keeping your settings"
 $un.Save()
 
 # HKCU rather than HKLM, to match the per-user install: an HKLM entry would need administrator
@@ -95,10 +95,10 @@ Write-Host "Registering in Add/Remove Programs"
 New-Item -Path $RegKey -Force | Out-Null
 New-ItemProperty -Path $RegKey -Name "DisplayName"     -Value $AppName -PropertyType String -Force | Out-Null
 New-ItemProperty -Path $RegKey -Name "Publisher"       -Value "MoonModules" -PropertyType String -Force | Out-Null
-New-ItemProperty -Path $RegKey -Name "URLInfoAbout"    -Value "https://github.com/MoonModules/projectMM" -PropertyType String -Force | Out-Null
-New-ItemProperty -Path $RegKey -Name "DisplayIcon"     -Value (Join-Path $InstallTo "projectMM.exe") -PropertyType String -Force | Out-Null
+New-ItemProperty -Path $RegKey -Name "URLInfoAbout"    -Value "https://github.com/MoonModules/MoonLight" -PropertyType String -Force | Out-Null
+New-ItemProperty -Path $RegKey -Name "DisplayIcon"     -Value (Join-Path $InstallTo "MoonLight.exe") -PropertyType String -Force | Out-Null
 New-ItemProperty -Path $RegKey -Name "InstallLocation" -Value $InstallTo -PropertyType String -Force | Out-Null
-New-ItemProperty -Path $RegKey -Name "UninstallString" -Value "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$InstallTo\Uninstall-projectMM.ps1`"" -PropertyType String -Force | Out-Null
+New-ItemProperty -Path $RegKey -Name "UninstallString" -Value "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$InstallTo\Uninstall-MoonLight.ps1`"" -PropertyType String -Force | Out-Null
 New-ItemProperty -Path $RegKey -Name "NoModify"        -Value 1 -PropertyType DWord -Force | Out-Null
 New-ItemProperty -Path $RegKey -Name "NoRepair"        -Value 1 -PropertyType DWord -Force | Out-Null
 if ($Version -and $Version -notmatch "@") {
@@ -106,5 +106,5 @@ if ($Version -and $Version -notmatch "@") {
 }
 
 Write-Host ""
-Write-Host "Done. projectMM is in your Start menu." -ForegroundColor Green
-Write-Host "Your settings live in $env:LOCALAPPDATA\projectMM and are untouched by installing or removing the program."
+Write-Host "Done. MoonLight is in your Start menu." -ForegroundColor Green
+Write-Host "Your settings live in $env:LOCALAPPDATA\MoonLight and are untouched by installing or removing the program."

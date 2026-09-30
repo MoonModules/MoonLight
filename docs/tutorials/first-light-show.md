@@ -1,6 +1,6 @@
 # Build your first light show
 
-You have lights running and you know [what the cards are](how-projectmm-works.md). Now you build something deliberately, instead of accepting what the defaults gave you: a shape you chose, an effect on top of it, a second effect blended into the first, and the whole thing going out to real lights.
+You have lights running and you know [what the cards are](how-moonlight-works.md). Now you build something deliberately, instead of accepting what the defaults gave you: a shape you chose, an effect on top of it, a second effect blended into the first, and the whole thing going out to real lights.
 
 Everything here happens in the device's own web interface, live. Nothing is compiled, nothing is saved and applied, nothing reboots. You change a number and the lights change while you are still holding the mouse.
 

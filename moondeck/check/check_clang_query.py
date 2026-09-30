@@ -44,6 +44,7 @@ Usage:
 
 import argparse
 import collections
+import functools
 import hashlib
 import json
 import os
@@ -466,7 +467,7 @@ def _run_rule(rule, tus, build_dir, tool):
         # to the REAL, unmarked header. Only first-level quoted includes hit the shadow, so
         # `//` counts were a systematic undercount — a silent zero for most shared headers.
         cmd += [f"--extra-arg-before=-I{shadow / 'src'}"]
-        tus = [str(shadow / Path(tu).relative_to(ROOT)) for tu in tus]
+        tus = [str(shadow / Path(tu).resolve().relative_to(ROOT)) for tu in tus]
 
     def one(tu):
         p = subprocess.run(cmd + [tu], cwd=ROOT, capture_output=True, text=True)
@@ -480,12 +481,18 @@ def _run_rule(rule, tus, build_dir, tool):
     return out
 
 
+@functools.lru_cache(maxsize=None)
 def _rel(path):
     """Repo-relative path, or None for anything outside src/ (SDK and vendored headers)."""
-    p = path.replace("\\", "/")
-    if "projectMM/src/" in p:
-        return p.split("projectMM/")[-1]
-    return p if p.startswith("src/") else None
+    p = Path(path)
+    if p.is_absolute():
+        # Resolved like ROOT, so a symlinked checkout or a drive letter in another case still matches.
+        try:
+            p = p.resolve().relative_to(ROOT)
+        except ValueError:
+            return None
+    rel = p.as_posix()
+    return rel if rel.startswith("src/") else None
 
 
 def _truncate(rows, max_rows):

@@ -151,7 +151,7 @@ Record before and after in performance.md per target.
 
 ### DNS names as NetworkSend destinations (2026-09-27)
 
-Tracked as [issue #115](https://github.com/MoonModules/projectMM/issues/115), asked for by someone running many panels: a list of addresses is hard to keep straight, and DHCP moving one means editing the driver.
+Tracked as [issue #115](https://github.com/MoonModules/MoonLight/issues/115), asked for by someone running many panels: a list of addresses is hard to keep straight, and DHCP moving one means editing the driver.
 
 [`NetworkSendDriver`](../../../src/light/drivers/NetworkSendDriver.h)'s `ips` control is already free text, so the UI accepts a name today; [`parseIpList`](../../../src/core/util/IpList.h) rejects it. A rig of many panels is exactly the case where names beat numbers, and it is the case that also wants the list shorthand the parser already gives: `192.168.1.10-20` expands a range, and `192.168.1.10, 11, 12` extends the last octet.
 
@@ -327,7 +327,7 @@ ESP32-PICO-V3-02.
 1. **Match him (moderate):** chunk our Parlio DMA the way he does (bounded PSRAM staging + 64 KB bursts) instead of one contiguous encoded frame — this alone lifts our P4 Parlio ceiling to his ~16–21K. Our Parlio path already uses PSRAM; the change is the chunked-DMA transfer shape, not a new architecture.
 2. **Beat him (the ring):** run our MoonI80 **streaming ring** on P4 Parlio — small internal buffers, refilled per drain from a PSRAM source, holding internal RAM *constant* regardless of light count (the hpwit model our ring already implements). troyhacks' 512 KB buffer is still *bounded*; the ring is not, so this goes past ~21K to light-count-independent. It reuses the ring mechanics we already have (linear self-terminating chain, per-drain refill, drain-count termination); the P4 Parlio backend gets a ring variant beside its whole-frame path, the way MoonI80 has both.
 
-**Prerequisite / sequencing:** tier 2 wants the **ISR-refill + `MM_HOT`** work done first (same as the classic ring above), since a high-rate Parlio refill benefits from the ISR-grade determinism. Confirm the CURRENT P4 Parlio tested ceiling first (re-measure on the P4 bench) before claiming a head-to-head — the ~21K figure is troyhacks' *buffer-fit* limit, not a verified-on-wire number, and his code steps the clock down at 256/512 LEDs per lane (signal integrity at long strands), which our own measurement must account for. Reference: the parlio source is `src/MoonLight/Nodes/Drivers/parlio.cpp` in MoonLight; our Parlio backend is `platform_esp32_parlio.cpp` + `ParlioLedDriver.h`.
+**Prerequisite / sequencing:** tier 2 wants the **ISR-refill + `MM_HOT`** work done first (same as the classic ring above), since a high-rate Parlio refill benefits from the ISR-grade determinism. Confirm the CURRENT P4 Parlio tested ceiling first (re-measure on the P4 bench) before claiming a head-to-head — the ~21K figure is troyhacks' *buffer-fit* limit, not a verified-on-wire number, and his code steps the clock down at 256/512 LEDs per lane (signal integrity at long strands), which our own measurement must account for. Reference: the parlio source is `src/MoonLight/Nodes/Drivers/parlio.cpp` in the predecessor; our Parlio backend is `platform_esp32_parlio.cpp` + `ParlioLedDriver.h`.
 
 
 ### Extract shared lane-driver scaffolding when the 3rd parallel backend lands (deferred)

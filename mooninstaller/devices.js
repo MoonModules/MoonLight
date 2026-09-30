@@ -13,7 +13,7 @@
 // app.js) does the same job from the right side of the security boundary.
 //
 // State shape: `[{ name, url, lastSeen, deviceModel? }]` keyed under
-// `projectMM.devices.v1` in localStorage. `deviceModel` is a bookmark label only —
+// `MoonLight.devices.v1` in localStorage. `deviceModel` is a bookmark label only:
 // the model's defaults are applied to the device during the install over serial
 // ("Improv = REST over serial"), not from this list. It's optional; the render path
 // treats an absent value as no model line. Entries saved before the board→deviceModel
@@ -21,7 +21,7 @@
 // needed). A schema bump (v2, …) is how future migrations land; additive/renamed
 // fields read with a fallback don't need one.
 
-const STORAGE_KEY = "projectMM.devices.v1";
+const STORAGE_KEY = "MoonLight.devices.v1";
 
 // Same hostile-storage guard install-picker.js uses. Duplicated for v1;
 // extract to a shared helper module if a third consumer lands.

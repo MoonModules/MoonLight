@@ -9,7 +9,7 @@
 # Everything worth changing is one line, marked CHANGE ME.
 
 services:
-  projectmm:
+  moonlight:
     build: .
     # The released binary is amd64 only, so this line is REQUIRED on an arm64 host (an Apple-silicon
     # Mac, an ARM server). Without it compose builds for the host's own architecture and the
@@ -18,9 +18,9 @@ services:
     # an arm64 Linux build.
     platform: linux/amd64
     # Or, once images are published, drop `build:` and use one of these instead:
-    #   image: ghcr.io/moonmodules/projectmm:latest    # the rolling prerelease
-    #   image: ghcr.io/moonmodules/projectmm:5.0.0     # a fixed version
-    container_name: projectmm
+    #   image: ghcr.io/moonmodules/moonlight:latest    # the rolling prerelease
+    #   image: ghcr.io/moonmodules/moonlight:6.0.0     # a fixed version
+    container_name: moonlight
 
     ports:
       # CHANGE ME: the port YOU open in the browser is the left one. 8081 rather than 8080 so a
@@ -32,7 +32,7 @@ services:
     volumes:
       # Config, presets and scripts. Everything the app writes lands in /data/MoonLight, so this one
       # mount is the whole of its state: remove it and a restart comes up factory-fresh.
-      - projectmm-data:/data
+      - moonlight-data:/data
 
     # The container has no browser to open, and an unknown argument is a hard error rather than
     # something ignored, so this is the one flag worth passing by default. The other is --port,
@@ -66,4 +66,4 @@ services:
     # keep clear of anything already on 8080.
 
 volumes:
-  projectmm-data:
+  moonlight-data:

@@ -6,7 +6,7 @@
 namespace mm {
 
 /// Layout of the 241-LED concentric-rings disc.
-/// Author: MoonLight, https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
+/// Author: MoonLight, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
 ///
 /// @moreinfo
 ///

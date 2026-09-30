@@ -829,15 +829,15 @@ std::filesystem::path userDataDir() {
 #ifdef _WIN32
     // LOCALAPPDATA, not APPDATA: this is machine-local state and has no business roaming.
     if (const char* base = std::getenv("LOCALAPPDATA"); base && *base)
-        return std::filesystem::path(base) / "projectMM";
+        return std::filesystem::path(base) / "MoonLight";
 #elif defined(__APPLE__)
     if (const char* home = std::getenv("HOME"); home && *home)
-        return std::filesystem::path(home) / "Library" / "Application Support" / "projectMM";
+        return std::filesystem::path(home) / "Library" / "Application Support" / "MoonLight";
 #else
     if (const char* xdg = std::getenv("XDG_DATA_HOME"); xdg && *xdg)
-        return std::filesystem::path(xdg) / "projectMM";
+        return std::filesystem::path(xdg) / "MoonLight";
     if (const char* home = std::getenv("HOME"); home && *home)
-        return std::filesystem::path(home) / ".local" / "share" / "projectMM";
+        return std::filesystem::path(home) / ".local" / "share" / "MoonLight";
 #endif
     return {};
 }

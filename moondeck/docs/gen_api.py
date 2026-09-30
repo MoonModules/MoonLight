@@ -173,7 +173,7 @@ def _blob_base() -> str:
             branch = name
     except (OSError, subprocess.SubprocessError):
         pass
-    return f"https://github.com/MoonModules/projectMM/blob/{branch}"
+    return f"https://github.com/MoonModules/MoonLight/blob/{branch}"
 
 
 _BLOB_BASE = _blob_base()

@@ -10,12 +10,12 @@ site_name: MoonLight
 site_description: High-performance LED & DMX lighting control for ESP32 and beyond.
 # Canonical deployed URL: the custom domain, with the /MoonLight/ repo subpath
 # kept (GitHub Pages serves the project site under that path even on the custom
-# domain — every existing link uses moonmodules.org/projectMM/…, e.g. the
+# domain: every existing link uses moonmodules.org/MoonLight/…, e.g. the
 # installer at /MoonLight/install/). Drives the sitemap, canonical <link> tags,
 # and the base for absolute URLs.
-site_url: https://moonmodules.org/projectMM/
-repo_url: https://github.com/MoonModules/projectMM
-repo_name: MoonModules/projectMM
+site_url: https://moonmodules.org/MoonLight/
+repo_url: https://github.com/MoonModules/MoonLight
+repo_name: MoonModules/MoonLight
 edit_uri: edit/main/docs/
 
 # Flat output (foo.md → foo.html), NOT MkDocs' default directory URLs
@@ -132,14 +132,14 @@ validation:
 nav:
   - Home: index.md
   # A top-level tab, and the FILE stays at docs/gettingstarted.md: the web installer's Help
-  # link is a hard-coded https://moonmodules.org/projectMM/gettingstarted.html, shipped
+  # link is a hard-coded https://moonmodules.org/MoonLight/gettingstarted.html, shipped
   # outside MkDocs, so the root URL is a contract rather than a layout choice.
   - Getting started:
       - Install & first light: gettingstarted.md
       # The web installer is a separate app deployed at /install/ (staged verbatim by the
       # release workflow, not built by MkDocs). A full URL (not a site-relative path) so
       # MkDocs treats it as the external resource it is.
-      - Web installer: https://moonmodules.org/projectMM/install/
+      - Web installer: https://moonmodules.org/MoonLight/install/
       # What MoonCloud IS to a user, kept apart from how it is built (Architecture > MoonCloud).
       # Two pages, two audiences: the device card deep-links this one from its consent prompt
       # (app.js, mooncloud.html#why-you-might-like-this), so its URL is a shipped contract.
@@ -156,7 +156,7 @@ nav:
   # then making it beautiful, then writing your own. The install pages left for how-to/:
   # putting MoonLight on a machine is a task somebody already has, not a lesson.
   - Tutorials:
-      - How MoonLight works: tutorials/how-projectmm-works.md
+      - How MoonLight works: tutorials/how-moonlight-works.md
       - Build your first light show: tutorials/first-light-show.md
       - Write your first script: tutorials/first-script.md
       - Making beautiful effects: tutorials/generative-effects.md

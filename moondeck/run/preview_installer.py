@@ -9,14 +9,14 @@ static assets by default — needed so the device UI's
 deviceModels.json the same way it would fetch the production one. Two modes
 depending on what's been built locally:
 
-  - **render-only** (no `build/esp32-*/projectMM.bin` present): the
+  - **render-only** (no app image under `build/esp32-*/`): the
     picker populates against the real GitHub Releases API, dropdowns
     work, but clicking Install fails because the local server has no
     `releases/` tree. Equivalent to "Recipe A" in mooninstaller/README.md.
     Useful for iterating on HTML/CSS/JS without tagging a release.
 
   - **flash-ready** (at least one local ESP32 build exists): the
-    script additionally stages every `build/esp32-*/projectMM.bin` it
+    script additionally stages every `build/esp32-*/` app image it
     finds into `releases/local-dev/` and generates matching Pages-
     relative manifests via generate_manifest.py — the same code path
     .github/workflows/release.yml uses. The picker shows `local-dev`
@@ -47,7 +47,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 # build_esp32.py is the single source of truth for firmware variants (same import
 # generate_manifest.py and collect_kpi.py use).
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
-from build_esp32 import FIRMWARES  # noqa: E402
+from build_esp32 import APP_BIN, FIRMWARES, MOONBASE_BIN  # noqa: E402
 INSTALL_DIR = ROOT / "mooninstaller"
 ASSETS_BOARDS_DIR = ROOT / "docs" / "assets" / "boards"
 PICKER_JS = ROOT / "src" / "ui" / "install-picker.js"
@@ -162,7 +162,7 @@ def stage_install_page():
 
 
 def find_local_builds() -> list[Path]:
-    """Return every `build/esp32-*/` dir that has a flashable projectMM.bin.
+    """Return every `build/esp32-*/` dir that has a flashable app image.
 
     Multiple firmware variants can coexist on disk (each in its own
     `build/esp32-<firmware>/` dir per build_esp32.py). We stage them all
@@ -174,7 +174,7 @@ def find_local_builds() -> list[Path]:
         return []
     return sorted(
         p for p in BUILD_ROOT.glob("esp32-*")
-        if (p / "projectMM.bin").exists()
+        if (p / APP_BIN).exists()
     )
 
 
@@ -204,7 +204,7 @@ def stage_local_builds(builds: list[Path]) -> list[str]:
         try:
             flasher = json.loads((build_dir / "flasher_args.json").read_text(encoding="utf-8"))
             size = str(flasher.get("flash_settings", {}).get("flash_size", "")).lower()
-            shutil.copy(build_dir / "projectMM.bin",
+            shutil.copy(build_dir / APP_BIN,
                         releases_dir / f"{prefix}.bin")
             shutil.copy(build_dir / "bootloader" / "bootloader.bin",
                         releases_dir / f"{prefix}-bootloader.bin")
@@ -217,7 +217,7 @@ def stage_local_builds(builds: list[Path]) -> list[str]:
             if FIRMWARES.get(firmware, {}).get("moonbase"):
                 from build_esp32 import otadata_slot0_bytes
                 chip = FIRMWARES[firmware]["chip"]
-                shutil.copy(build_dir.parent / f"moonbase-{chip}" / "projectMM-moonbase.bin",
+                shutil.copy(build_dir.parent / f"moonbase-{chip}" / MOONBASE_BIN,
                             releases_dir / f"shared-moonbase-{chip}.bin")
                 (releases_dir / "shared-ota-data-slot0.bin").write_bytes(otadata_slot0_bytes())
         except FileNotFoundError as e:

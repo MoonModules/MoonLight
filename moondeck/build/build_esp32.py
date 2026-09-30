@@ -19,6 +19,11 @@ import compute_version   # sibling: the one place a version string is derived
 ROOT = Path(__file__).resolve().parent.parent.parent
 ESP32_DIR = ROOT / "esp32"
 
+# What ESP-IDF names each build's output, which is the `project()` name in esp32/CMakeLists.txt and moonbase/CMakeLists.txt. It is also stamped into the image descriptor a shipped device compares on OTA, which is why it keeps the spelling from before the product was renamed. Every script reading a build imports these.
+APP_BIN = "projectMM.bin"
+APP_ELF = "projectMM.elf"
+MOONBASE_BIN = "projectMM-moonbase.bin"
+
 # Common ESP-IDF install locations
 IDF_SEARCH_PATHS = [
     Path.home() / "esp" / "esp-idf",
@@ -900,7 +905,7 @@ def moonbase_flash_files(firmware: str, build_dir: Path) -> list[tuple[str, Path
     import json as _json
     offs = partition_offsets(moonbase_table_csv(firmware))
     chip = FIRMWARES[firmware]["chip"]
-    moonbase_bin = build_dir.parent / f"moonbase-{chip}" / "projectMM-moonbase.bin"
+    moonbase_bin = build_dir.parent / f"moonbase-{chip}" / MOONBASE_BIN
     if not all(k in offs for k in ("factory", "ota_0", "ota")) or not moonbase_bin.exists():
         raise FileNotFoundError(
             f"MoonBase layout needs factory/ota_0/otadata offsets and a built image "
@@ -911,7 +916,7 @@ def moonbase_flash_files(firmware: str, build_dir: Path) -> list[tuple[str, Path
     writes: list[tuple[str, Path]] = []
     for off, rel in fa["flash_files"].items():
         name = Path(rel).name
-        if name == "projectMM.bin":
+        if name == APP_BIN:
             writes.append((offs["ota_0"], build_dir / rel))
         elif name == "ota_data_initial.bin":
             writes.append((offs["ota"], otadata))
@@ -965,7 +970,7 @@ def build_moonbase(cmd: list[str], env: dict, chip: str, version: str = "") -> N
     r = subprocess.run(cmd + b_arg + ["build"], cwd=moonbase_dir, env=env)
     if r.returncode != 0:
         sys.exit(r.returncode)
-    binp = build_dir / "projectMM-moonbase.bin"
+    binp = build_dir / MOONBASE_BIN
     if binp.exists():
         kb = binp.stat().st_size / 1024
         # Slot fit is printed by IDF itself ("Smallest app partition ... free"); repeating a

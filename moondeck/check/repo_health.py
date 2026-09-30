@@ -40,7 +40,7 @@ from _host import desktop_target  # noqa: E402
 # The firmware registry, so carry-forward can drop rows for variants that no longer exist
 # (see merge_carry_forward). Same single source of truth check_firmwares.py reads.
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
-from build_esp32 import FIRMWARES, table_from_fragments  # noqa: E402
+from build_esp32 import APP_BIN, FIRMWARES, table_from_fragments  # noqa: E402
 from build_desktop import desktop_binary  # noqa: E402 (one definition of where it lands)
 HEALTH_FILE = ROOT / "docs" / "reference" / "metrics" / "repo-health.json"
 # The same snapshot as a table a human reads: units applied, ratios as percentages, areas
@@ -210,7 +210,7 @@ def measure_flash():
     if not build.exists():
         return flash
     for d in sorted(build.glob("esp32-*")):
-        binary = d / "projectMM.bin"
+        binary = d / APP_BIN
         if not binary.exists():
             continue                       # never built here: carry the previous number forward
         firmware = d.name.replace("esp32-", "", 1)
