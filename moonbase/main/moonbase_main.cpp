@@ -377,7 +377,7 @@ const char kPage[] =
     "<div id=hdr><img src=/logo.png alt=''><h1>MoonBase</h1>"
     // The (?) module cards carry, pointing at the published MoonBase doc.
     "<a id=hlp target=_blank rel=noopener title='MoonBase documentation' "
-    "href='https://moonmodules.org/projectMM/gettingstarted.html#if-your-device-shows-moonbase'>?</a></div>"
+    "href='https://moonmodules.org/MoonLight/gettingstarted.html#if-your-device-shows-moonbase'>?</a></div>"
     "<p class=sub>Install firmware to return this device to normal operation."
     // WHICH MoonBase this is.
     // Filled by the boot script below rather than baked into this literal.
@@ -386,8 +386,8 @@ const char kPage[] =
     "<section><b>From a file</b><br><input type=file id=f accept=.bin>"
     "<button onclick=up()>Install</button>"
     // The last resort when no URL is at hand: name where the firmware-<variant>-v*.bin files live. A plain link, so it works from any device that can reach the internet.
-    "<br><small>Firmware files: <a href='https://github.com/MoonModules/projectMM/releases' "
-    "target=_blank rel=noopener>github.com/MoonModules/projectMM/releases</a> "
+    "<br><small>Firmware files: <a href='https://github.com/MoonModules/MoonLight/releases' "
+    "target=_blank rel=noopener>github.com/MoonModules/MoonLight/releases</a> "
     "(the firmware-...bin matching this board)</small></section>"
     // Installing from a release without typing a URL.
     // The browser fetches the release list itself, so this image gains no network code and still only receives a URL.
@@ -455,7 +455,7 @@ const char kPage[] =
     "const l=fwList(document.getElementById('rel').selectedIndex);"
     "for(const n of l){const o=document.createElement('option');o.textContent=n;f.appendChild(o);}"
     "document.getElementById('rs').textContent=l.length?'':'no firmware for this chip in that release';}"
-    "fetch('https://api.github.com/repos/MoonModules/projectMM/releases?per_page=10')"
+    "fetch('https://api.github.com/repos/MoonModules/MoonLight/releases?per_page=10')"
     ".then(r=>r.json()).then(j=>{RELS=j;const s=document.getElementById('rel');"
     "for(const r of RELS){const o=document.createElement('option');"
     "o.textContent=(r.name||r.tag_name)+(r.prerelease?' (pre)':'');s.appendChild(o);}"

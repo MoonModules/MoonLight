@@ -87,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Map a GitHub release-asset URL to its Pages-hosted mirror.
-    //   https://github.com/MoonModules/projectMM/releases/download/<TAG>/<file>
+    //   https://github.com/MoonModules/MoonLight/releases/download/<TAG>/<file>
     //   → ./releases/<TAG>/<file>
     function toLocalUrl(githubUrl) {
       const m = /\/releases\/download\/([^/]+)\/([^/]+)$/.exec(githubUrl);

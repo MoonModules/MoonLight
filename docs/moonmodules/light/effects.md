@@ -30,7 +30,7 @@ Emitters pouring color into a flow that carries and folds it. There is no veloci
 
 Compare with [Fluid](#fluid): the solver when the medium is the subject, this when the color is.
 
-Origin: MoonLight · concept by [Stefan Petrick](https://github.com/StefanPetrick), composition by Jeff (mindful_stone / [4wheeljive](https://github.com/4wheeljive)) in [FlowFields](https://github.com/4wheeljive/FlowFields/blob/main/src/flows/flow_noise.h) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_FastLED.h)
+Origin: MoonLight · concept by [Stefan Petrick](https://github.com/StefanPetrick), composition by Jeff (mindful_stone / [4wheeljive](https://github.com/4wheeljive)) in [FlowFields](https://github.com/4wheeljive/FlowFields/blob/main/src/flows/flow_noise.h) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_FastLED.h)
 
 Detail: [technical](moxygen/ColorTrailsEffect.md)
 
@@ -45,7 +45,7 @@ Two interfering sine waves beat against each other into a moiré color field.
 - `freq_x` / `freq_y`: horizontal/vertical wave frequency (1–8).
 - `speed`: animation rate (0 = frozen).
 
-Origin: WLED · by ldirko & blazoncek (WLED port) · [gallery](https://editor.soulmatelights.com/gallery/1089-distorsion-waves) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
+Origin: WLED · by ldirko & blazoncek (WLED port) · [gallery](https://editor.soulmatelights.com/gallery/1089-distorsion-waves) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
 
 Detail: [technical](moxygen/DistortionWavesEffect.md)
 
@@ -64,7 +64,7 @@ A solid color filling a positioned box within the grid, with an optional alterna
 - `Rectangle width` / `height` / `depth`: the box extent on each axis.
 - `alternateWhite`: alternate box pixels to white in a checker pattern.
 
-Origin: MoonLight · by [limpkin](https://github.com/limpkin) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · by [limpkin](https://github.com/limpkin) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/FixedRectangleEffect.md)
 
@@ -86,7 +86,7 @@ Audio-reactive sawtooth waves: each column maps to a frequency band whose magnit
 - `keepOn`: keep oscillating even when a band is silent.
 - `method`: phase model (`Chaos`, `Chaos fix`, `BandPhases`).
 
-Origin: MoonLight (audio) · by [@TroyHacks](https://github.com/troyhacks) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight (audio) · by [@TroyHacks](https://github.com/troyhacks) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/FreqSawsEffect.md)
 
@@ -123,7 +123,7 @@ Sweeps axis-aligned planes in sync; red/green/blue name the X/Y/Z axis: a previe
 - `axis`: which plane sweeps: `all`, `x`, `y` or `z`, in `lines`.
 - `panelW` / `panelH`: the panel the dot walks, in `panel dots`.
 
-Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/LinesEffect.md)
 
@@ -159,7 +159,7 @@ A swarm of drifting particles with persistent fading trails.
 - `fade`: trail persistence (higher = longer tails).
 - `hue_shift`: rotate every particle's hue.
 
-Origin: MoonLight · by WildCats08 / [@Brandon502](https://github.com/Brandon502) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · by WildCats08 / [@Brandon502](https://github.com/Brandon502) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/ParticlesEffect.md)
 
@@ -195,7 +195,7 @@ An algorithmic palette pattern driven by two beat oscillators (a macro and a mic
 - `macroMutatorFreq` / `Min` / `Max`: the coarse mutator's beat rate and range.
 - `microMutatorFreq` / `Min` / `Max`: the fine mutator's beat rate and range.
 
-Origin: MoonLight · by MONSOONO / @Flavourdynamics · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · by MONSOONO / @Flavourdynamics · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/PraxisEffect.md)
 
@@ -211,7 +211,7 @@ Diagonal animated rainbow: always-visible default/test effect.
 
 - `speed`: animation BPM (one full hue cycle per beat).
 
-Origin: FastLED · Mark Kriegsman (rainbow) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_FastLED.h)
+Origin: FastLED · Mark Kriegsman (rainbow) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_FastLED.h)
 
 Detail: [technical](moxygen/RainbowEffect.md)
 
@@ -227,7 +227,7 @@ Lights one random light per frame in a random palette color over a fading backgr
 
 - `fade`: how fast prior sparkles fade to black.
 
-Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/RandomEffect.md)
 
@@ -263,7 +263,7 @@ Distance-from-center sets a per-column wave phase; the lit surface ripples like 
 - `speed`: wave animation rate (0 = frozen, 99 = fast).
 - `interval`: wavefront spacing (low = tight rings, high = wide).
 
-Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/RipplesEffect.md)
 
@@ -282,7 +282,7 @@ A 3D Rubik's Cube projected onto the volume: it scrambles, then plays its soluti
 - `randomTurning`: turn endlessly at random instead of scramble-then-solve.
 - `usePalette`: color the faces from the palette, not the classic colors.
 
-Origin: MoonLight · by WildCats08 / [@Brandon502](https://github.com/Brandon502) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · by WildCats08 / [@Brandon502](https://github.com/Brandon502) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/RubiksCubeEffect.md)
 
@@ -806,7 +806,7 @@ A flat fill with five color modes: a plain RGB(W) color, the active palette spre
 - `minRGB`: in the band modes, drop palette entries darker than this floor.
 - `randomColors`: in the band modes, shuffle the surviving palette entries.
 
-Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/SolidEffect.md)
 
@@ -822,7 +822,7 @@ A hollow spherical shell that bounces through the 3D volume, its surface colored
 
 - `speed`: how fast the sphere moves through the volume.
 
-Origin: MoonLight · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/SphereMoveEffect.md)
 
@@ -859,7 +859,7 @@ A perspective starfield: stars approach the viewer from a vanishing point, brigh
 - `blur`: motion-trail fade per frame.
 - `usePalette`: color the stars from the palette instead of white.
 
-Origin: MoonLight · by [@Brandon502](https://github.com/Brandon502), inspired by Daniel Shiffman / [Coding Train](https://www.youtube.com/watch?v=17WoOqgXsRM) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · by [@Brandon502](https://github.com/Brandon502), inspired by Daniel Shiffman / [Coding Train](https://www.youtube.com/watch?v=17WoOqgXsRM) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/StarFieldEffect.md)
 
@@ -877,7 +877,7 @@ Twinkling stars at random light positions, each fading in and out independently 
 - `star_fill_ratio`: how many stars (as a fraction of the light count).
 - `usePalette`: color the stars from the active palette instead of white.
 
-Origin: MoonLight · by [limpkin](https://github.com/limpkin) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · by [limpkin](https://github.com/limpkin) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/StarSkyEffect.md)
 
@@ -897,7 +897,7 @@ Renders a multi-line string in a bitmap font. Static by default (laid out top-le
 - `speed`: marquee speed (only used when `scroll` is on).
 - `hue`: palette index for the text color.
 
-Origin: MoonLight original, on MoonLight's Scrolling Text · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight original, on MoonLight's Scrolling Text · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/TextEffect.md)
 
@@ -925,7 +925,7 @@ Conway's cellular automaton generalized to 2D and 3D, with selectable rulesets a
 - `infinite`: respawn on stasis (R-pentomino/glider) instead of resetting.
 - `blur`: dead-cell fade strength toward the background color.
 
-Origin: MoonModules · by Ewoud Wijma (2022), mods by Brandon Butler / [@Brandon502](https://github.com/Brandon502) · [natureofcode](https://natureofcode.com/book/chapter-7-cellular-automata/) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h)
+Origin: MoonModules · by Ewoud Wijma (2022), mods by Brandon Butler / [@Brandon502](https://github.com/Brandon502) · [natureofcode](https://natureofcode.com/book/chapter-7-cellular-automata/) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h)
 
 Detail: [technical](moxygen/GameOfLifeEffect.md)
 
@@ -946,7 +946,7 @@ A flat graphic equaliser: the 16 audio bands rise as vertical bars from the bott
 - `colorBars`: color each bar from the palette by band instead of by row.
 - `smoothBars`: blend neighboring bands for smoother bar heights.
 
-Origin: WLED (audio) · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
+Origin: WLED (audio) · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
 
 Detail: [technical](moxygen/GEQEffect.md)
 
@@ -967,7 +967,7 @@ A 3D-perspective graphic equaliser: audio bands rise as bars with faked depth, t
 - `numBands`: bands shown (2–16, fewer = wider bars).
 - `borders`: outline each bar.
 
-Origin: MoonModules (audio) · by [@TroyHacks](https://github.com/troyhacks) (GPLv3) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h)
+Origin: MoonModules (audio) · by [@TroyHacks](https://github.com/troyhacks) (GPLv3) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h)
 
 Detail: [technical](moxygen/GEQ3DEffect.md)
 
@@ -988,7 +988,7 @@ Audio-reactive brush strokes: lines whose 3D endpoints oscillate on the beat (`b
 - `color_chaos`: per-line random hue vs a per-band gradient.
 - `phase_chaos`: random per-frame phase jitter.
 
-Origin: MoonModules (audio) · by [@TroyHacks](https://github.com/troyhacks) (GPLv3) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h)
+Origin: MoonModules (audio) · by [@TroyHacks](https://github.com/troyhacks) (GPLv3) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h)
 
 Detail: [technical](moxygen/PaintBrushEffect.md)
 
@@ -1006,7 +1006,7 @@ Falling Tetris-style blocks: each column drops a brick that lands on the growing
 - `width`: brick height (0 = randomised).
 - `oneColor`: one advancing palette color for every brick, not one each.
 
-Origin: WLED · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
+Origin: WLED · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
 
 Detail: [technical](moxygen/TetrixEffect.md)
 
@@ -1029,7 +1029,7 @@ Audio-reactive blurred dots: one frequency band per frame lights a dot whose pos
 - `freqMap`: place the dot by the major-peak frequency, not by scanning.
 - `geqScanner`: scan the dot across the strip in a GEQ-like sweep.
 
-Origin: WLED (audio) · by Andrew Tuline (WLED-SR), enhancements by [@softhack007](https://github.com/softhack007) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
+Origin: WLED (audio) · by Andrew Tuline (WLED-SR), enhancements by [@softhack007](https://github.com/softhack007) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
 
 Detail: [technical](moxygen/BlurzEffect.md)
 
@@ -1048,7 +1048,7 @@ A row of balls per column bounce under gravity, each losing energy on impact and
 - `grav`: gravity strength (higher = faster fall, snappier bounce).
 - `numBalls`: balls per column (1–16).
 
-Origin: WLED · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
+Origin: WLED · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
 
 Detail: [technical](moxygen/BouncingBallsEffect.md)
 
@@ -1070,7 +1070,7 @@ A 1D scrolling frequency display: each frame shifts the strip and injects a new 
 - `sensitivity`: input gain (10–100).
 - `audioSpeed`: let the volume modulate the scroll speed.
 
-Origin: WLED (audio) · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
+Origin: WLED (audio) · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
 
 Detail: [technical](moxygen/FreqMatrixEffect.md)
 
@@ -1090,7 +1090,7 @@ A Lissajous curve traced across the grid from two phase-shifted `sin8`/`cos8` sw
 - `fadeRate`: trail fade per frame.
 - `speed`: how fast the curve's phase advances.
 
-Origin: WLED · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
+Origin: WLED · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
 
 Detail: [technical](moxygen/LissajousEffect.md)
 
@@ -1109,7 +1109,7 @@ An audio VU meter rendered as a noise bar: the volume sets how many rows light f
 - `fadeRate`: trail decay per frame (200–254).
 - `width`: how strongly the volume drives the bar height.
 
-Origin: WLED (audio) · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
+Origin: WLED (audio) · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
 
 Detail: [technical](moxygen/NoiseMeterEffect.md)
 
@@ -1127,7 +1127,7 @@ An oscilloscope waveform scrolls across the grid with a fading trail; six select
 - `fade`: trail fade per frame (0 = instant clear, 255 = long tail).
 - `type`: waveform shape: sawtooth, triangle, sine, square, sin3 or noise.
 
-Origin: MoonLight · by Ewoud Wijma · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight · by Ewoud Wijma · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/WaveEffect.md)
 
@@ -1166,7 +1166,7 @@ A gradient-noise field indexed straight into the palette: the plainest way to tu
 - `scale`: spatial frequency: low is broad blobs, high is fine detail.
 - `bpm`: how fast it moves.
 
-Origin: FastLED · inoise field (Mark Kriegsman); the `morph` form from WLED via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
+Origin: FastLED · inoise field (Mark Kriegsman); the `morph` form from WLED via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
 
 Detail: [technical](moxygen/NoiseEffect.md)
 
@@ -1201,7 +1201,7 @@ The 16 mic frequency bands spread across X, each column lit bottom-up by its mag
 
 - `colorMode`: bars colored by `height`, the VU look, or `per-band`, a rainbow.
 
-Origin: MoonLight original, on the WLED-SR GEQ / spectrum concept (Andrew Tuline) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
+Origin: MoonLight original, on the WLED-SR GEQ / spectrum concept (Andrew Tuline) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
 
 Detail: [technical](moxygen/AudioSpectrumEffect.md)
 
@@ -1331,7 +1331,7 @@ R/G/B each follow a sine along one axis at 120° phase offset: a glowing, scroll
 - `amplitude`: peak brightness (0–255, 255 = full).
 - `bpm`: scroll speed.
 
-Origin: MoonLight (Sinus, AI-generated) · via [MoonLight](https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: MoonLight (Sinus, AI-generated) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 
 Detail: [technical](moxygen/SineEffect.md)
 

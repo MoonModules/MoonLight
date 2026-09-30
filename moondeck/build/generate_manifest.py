@@ -159,7 +159,7 @@ def main() -> int:
     manifest = {
         "name": "MoonLight",
         "version": args.version,
-        "home_assistant_domain": "projectMM",
+        "home_assistant_domain": "MoonLight",
         # Wipe-first on flash. Right default while config schemas are
         # unstable (avoids stale-state bugs across versions). Revisit when
         # the schema is locked.

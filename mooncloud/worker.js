@@ -542,8 +542,8 @@ const PAGE = `<!doctype html>
 <footer>
   Opt-in, one report per install or upgrade, plus one whenever a user presses send update on the
   device. No addresses are stored and the country is resolved at
-  the edge. <a href="https://moonmodules.org/projectMM/privacy-policy.html">Privacy policy</a> &middot;
-  <a href="https://github.com/MoonModules/projectMM/tree/main/mooncloud">Source</a> &middot;
+  the edge. <a href="https://moonmodules.org/MoonLight/privacy-policy.html">Privacy policy</a> &middot;
+  <a href="https://github.com/MoonModules/MoonLight/tree/main/mooncloud">Source</a> &middot;
   <a href="/api/stats">Raw JSON</a>
 </footer>
 <script>

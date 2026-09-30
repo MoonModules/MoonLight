@@ -2,9 +2,7 @@
 // src/ui/migrate.js, because it targets firmware that PREDATES the File Manager's
 // Backup button, it runs same-origin on the old device's own page (no CORS, no mixed
 // content), walks the filesystem over the file API served since v3.0.0 (July 2026), and
-// downloads the same bundle the new Restore button accepts. The format field below keeps the
-// OLD product name because this tool's own audience is old firmware, whose Restore accepts only
-// that value, while the current Restore accepts both. Exported as a string so the
+// downloads the same bundle the new Restore button accepts. Exported as a string so the
 // installer page renders it (bookmarklet link + copyable console snippet) and a node test
 // executes it against a mocked device.
 export const BACKUP_SNIPPET = "javascript:" + `(async()=>{let ui;try{
@@ -16,7 +14,7 @@ const skipped=[];const sz=t=>new TextEncoder().encode(t).length;const walk=async
 await walk('/');
 let device=location.hostname||'device',firmware='',build='';
 try{const st=await(await fetch('/api/state')).json();const w=ms=>{for(const m of ms||[]){for(const c of m.controls||[]){if(c.name==='deviceName'&&c.value)device=c.value;if(c.name==='firmware')firmware=c.value||'';if(c.name==='build')build=c.value||''}w(m.children)}};w(st.modules)}catch(_){}
-const b={format:'projectMM-config-backup',version:1,capturedAt:new Date().toISOString(),origin:location.origin,device:device,firmware:firmware,build:build,files:files};
+const b={format:'MoonLight-config-backup',version:1,capturedAt:new Date().toISOString(),origin:location.origin,device:device,firmware:firmware,build:build,files:files};
 ui.remove();const u=URL.createObjectURL(new Blob([JSON.stringify(b,null,1)],{type:'application/json'}));
 const a=document.createElement('a');a.href=u;a.download='MoonLight-config-'+device+'-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);
 alert('Backup downloaded: '+Object.keys(files).length+' files'+(skipped.length?', skipped (not text): '+skipped.join(', '):'')+'. Keep the file private: it contains the WiFi password.');

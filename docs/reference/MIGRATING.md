@@ -4,7 +4,7 @@ The log of **breaking changes**, what changed between versions, and the action t
 
 MoonLight ships **no migration code**: the persistence layer is robust by default (an absent key keeps the control's default, a stale value clamps to the new bounds, an unknown key is ignored), which absorbs almost all schema drift with zero migration-specific code. The rare change that a robust reader *cannot* absorb is **documented here instead of migrated**. A patching framework is deferred rather than rejected: it becomes the right tool if breaking format changes get frequent enough that ad-hoc losses pile up (a rough bar: more than five across a few releases) and users hold persisted state too valuable to re-derive. At that point build the recognizable version-stamp plus ordered-patch-chain pattern, not a bespoke one and its rationale.
 
-**The File Manager's Backup (⤓) / Restore (⟲) carries config across these breaks.** [src/ui/migrate.js](https://github.com/MoonModules/projectMM/blob/main/src/ui/migrate.js) is the **authoritative, dated log of every machine-mappable break** (file, type, control, and value renames): Restore applies it in the browser and reports what did not carry over, so entries below describe only what a map cannot express, behavior changes, semantics to re-check, and erase-flash moves. It works even on a freshly erased device: join its `MM-XXXX` SoftAP, open `http://4.3.2.1`, restore there, and take the offered restart; the bundle carries the WiFi credentials, so the device comes back on your network. For a device still on old firmware (no Backup button yet), the [installer page](https://moonmodules.org/projectMM/install/) offers the same backup as a bookmarklet.
+**The File Manager's Backup (⤓) / Restore (⟲) carries config across these breaks.** [src/ui/migrate.js](https://github.com/MoonModules/MoonLight/blob/main/src/ui/migrate.js) is the **authoritative, dated log of every machine-mappable break** (file, type, control, and value renames): Restore applies it in the browser and reports what did not carry over, so entries below describe only what a map cannot express, behavior changes, semantics to re-check, and erase-flash moves. It works even on a freshly erased device: join its `MM-XXXX` SoftAP, open `http://4.3.2.1`, restore there, and take the offered restart; the bundle carries the WiFi credentials, so the device comes back on your network. For a device still on old firmware (no Backup button yet), the [installer page](https://moonmodules.org/MoonLight/install/) offers the same backup as a bookmarklet.
 
 **Read this when upgrading a device that already holds persisted state.** Entries are newest first. Each says what changed and what to do; most need nothing at all, because the lost value re-populates on next use.
 
@@ -24,11 +24,45 @@ MoonLight ships **no migration code**: the persistence layer is robust by defaul
 
 ## Unreleased
 
+### The desktop settings folder and the installer's device list carry the new name
+
+**Action: *re-set a control*, on a desktop install, plus re-adding bookmarks on the installer page.**
+
+A desktop install keeps its config, presets and scripts in a folder named after the product, and that folder is now `MoonLight` where it was `projectMM`:
+
+- Windows: `%LOCALAPPDATA%\MoonLight`
+- macOS: `~/Library/Application Support/MoonLight`
+- Linux: `$XDG_DATA_HOME/MoonLight` or `~/.local/share/MoonLight`
+- the container: `/data/MoonLight`
+
+The old folder is left alone rather than read, so the app starts on its defaults.
+Copy the contents across to keep what you had.
+A Backup from the old install, restored into the new one, also carries the WiFi credentials.
+
+The installer page's saved device list moves the same way, from `projectMM.devices.v1` to `MoonLight.devices.v1` in the browser's local storage.
+The page opens with no remembered devices, and each one is added again by address.
+
+### The Debian package, the container image and the macOS bundle carry the new name
+
+**Action: *update a file*, on a Linux install from the `.deb` or a container deployment.**
+
+The Debian package is now `moonlight` where it was `projectmm`, so `apt` treats it as a different package and installs it beside the old one.
+Remove the old one first with `sudo apt remove projectmm`, then install `moonlight_X.Y.Z_<arch>.deb`.
+A systemd unit written from the install guide names the old binary: point its `ExecStart` at `/usr/bin/MoonLight`.
+
+The container image is `ghcr.io/moonmodules/moonlight`, and the compose file's service, container and volume are named `moonlight` and `moonlight-data`.
+A deployment pulling the old image name stays on v5.0.0, so change the image name.
+Then rename the existing volume, or Restore a Backup into the new one.
+
+The macOS bundle identifier is `org.moonmodules.moonlight`, which macOS reads as a new app.
+A permission granted to the old one, such as the microphone, is asked for again.
+
 ### MQTT topics and the Home Assistant entity carry the product's new name
 
 **Action: *update an automation*, on a device you drive over MQTT or through Home Assistant.**
 
-The topic root is now `MoonLight/<last6-of-MAC>` where it was `projectMM/<last6-of-MAC>`, and the Home Assistant discovery object, its unique id and the client id follow the same root.
+The topic root is now `MoonLight/<last6-of-MAC>` where it was `projectMM/<last6-of-MAC>`.
+The Home Assistant discovery object, its unique id and the client id follow the same root.
 A broker subscription or an automation written against the old root stops matching, and Home Assistant keeps the old retained config, so the previous entity goes unavailable while a new one appears alongside it.
 
 Delete the stale entity in Home Assistant and repoint any automation or dashboard at the new one, then rewrite subscriptions and publishes to the new root.
@@ -48,7 +82,7 @@ The last release under the projectMM name. Its [release notes](https://github.co
 
 ### Renames Restore carries for you
 
-[migrate.js](https://github.com/MoonModules/projectMM/blob/main/src/ui/migrate.js) maps each of these, so a Backup taken on an older firmware restores onto this one with the value intact. Restore reports what it could not carry. They are listed rather than described, because the map is the description.
+[migrate.js](https://github.com/MoonModules/MoonLight/blob/main/src/ui/migrate.js) maps each of these, so a Backup taken on an older firmware restores onto this one with the value intact. Restore reports what it could not carry. They are listed rather than described, because the map is the description.
 
 | Was | Is now |
 |---|---|
@@ -160,7 +194,7 @@ Nothing is deleted if you skip this: the old directories stay where they are, an
 
 The desktop build wrote its configuration to `build/.config`, resolved against whatever directory the process happened to start in. That is a source-checkout layout, and it shipped: a downloaded binary either could not write there at all, failing every save and logging one line per save, or it wrote settings that belonged to that *folder* rather than to the user, so moving the executable lost them.
 
-Settings now live with the user: `%LOCALAPPDATA%\projectMM` on Windows, `~/Library/Application Support/projectMM` on macOS, and `$XDG_DATA_HOME/projectMM` on Linux, falling back to `~/.local/share/projectMM` when that is unset. `MM_DATA_DIR` overrides it. **A source checkout stays in the tree**, under `build/fs` since the entry above moved it there, so its settings are at `build/fs/.config` and every gate script behaves as before.
+Settings now live with the user: `%LOCALAPPDATA%\MoonLight` on Windows, `~/Library/Application Support/MoonLight` on macOS, and `$XDG_DATA_HOME/MoonLight` on Linux, falling back to `~/.local/share/MoonLight` when that is unset. `MM_DATA_DIR` overrides it. **A source checkout stays in the tree**, under `build/fs` since the entry above moved it there, so its settings are at `build/fs/.config` and every gate script behaves as before.
 
 **Action: *nothing*, unless your settings persisted before.** The old behavior had two modes, and only one of them leaves anything to move:
 

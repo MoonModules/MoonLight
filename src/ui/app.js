@@ -853,7 +853,7 @@ function buildNavFooter() {
     const links = document.createElement("div");
     links.className = "nav-social";
     const SOCIAL = [
-        ["GitHub",  "https://github.com/MoonModules/projectMM",
+        ["GitHub",  "https://github.com/MoonModules/MoonLight",
          "M12 .5C5.65.5.5 5.65.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.54-3.88-1.54-.53-1.34-1.3-1.7-1.3-1.7-1.06-.72.08-.71.08-.71 1.17.08 1.79 1.2 1.79 1.2 1.04 1.79 2.73 1.27 3.4.97.1-.76.41-1.27.74-1.56-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.42.36.8 1.08.8 2.18v3.23c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"],
         ["Discord", "https://discord.gg/TC8NSUSCdV",
          "M20.32 4.37A19.8 19.8 0 0 0 15.45 2.9a13.6 13.6 0 0 0-.62 1.27 18.3 18.3 0 0 0-5.67 0A13 13 0 0 0 8.54 2.9 19.7 19.7 0 0 0 3.67 4.37C.57 8.96-.27 13.44.15 17.85a19.9 19.9 0 0 0 6 3.03c.49-.66.92-1.36 1.29-2.1-.71-.27-1.39-.6-2.03-.99.17-.12.34-.25.5-.38a14.2 14.2 0 0 0 12.18 0c.16.13.33.26.5.38-.64.39-1.32.72-2.03.99.37.74.8 1.44 1.29 2.1a19.8 19.8 0 0 0 6-3.03c.5-5.1-.85-9.55-3.58-13.48ZM8.02 15.13c-1.18 0-2.15-1.08-2.15-2.41 0-1.33.95-2.42 2.15-2.42 1.2 0 2.17 1.1 2.15 2.42 0 1.33-.95 2.41-2.15 2.41Zm7.96 0c-1.18 0-2.15-1.08-2.15-2.41 0-1.33.95-2.42 2.15-2.42 1.2 0 2.17 1.1 2.15 2.42 0 1.33-.95 2.41-2.15 2.41Z"],
@@ -1890,7 +1890,7 @@ function createCard(mod, depth) {
     // Help link → the module's spec page on the rendered docs site, far right of
     // the row. docPath comes from /api/types (relative to docs/moonmodules/, e.g.
     // "core/services.md#audio" or "light/effects.md#fire"); omitted if none.
-    // The site is Material for MkDocs at moonmodules.org/projectMM/ (flat URLs, so
+    // The site is Material for MkDocs at moonmodules.org/MoonLight/ (flat URLs, so
     // foo.md → foo.html; the MkDocs heading slugs match these #anchors), reached
     // via the same /MoonLight/ subpath the installer uses. Convert only the `.md`
     // extension that sits right before the optional `#anchor` (suffix-anchored),
@@ -1904,7 +1904,7 @@ function createCard(mod, depth) {
         help.target = "_blank";
         help.rel = "noopener";
         const htmlPath = docPath.replace(/\.md(#.*)?$/, ".html$1");
-        help.href = "https://moonmodules.org/projectMM/moonmodules/" + htmlPath;
+        help.href = "https://moonmodules.org/MoonLight/moonmodules/" + htmlPath;
         title.appendChild(help);
     }
 
@@ -2027,7 +2027,7 @@ function createCard(mod, depth) {
             // The reasons live in one place, and it is a page rather than a paragraph here: a nudge
             // long enough to make the case stops being a nudge.
             const why = document.createElement("a");
-            why.href = "https://moonmodules.org/projectMM/mooncloud.html#why-you-might-like-this";
+            why.href = "https://moonmodules.org/MoonLight/mooncloud.html#why-you-might-like-this";
             why.target = "_blank";
             why.rel = "noopener";
             why.textContent = "Why you might like this";
@@ -4982,7 +4982,7 @@ function paletteGradientCss(colors) {
 // merged with the module's own tags() in emojiTagsFor().
 //
 // What each emoji MEANS is documented once, for the people who read the chips:
-// docs/tutorials/how-projectmm-works.md, "The emoji on every card". Re-listing the vocabulary here
+// docs/tutorials/how-moonlight-works.md, "The emoji on every card". Re-listing the vocabulary here
 // is how this comment came to name four emoji no module carries any more.
 const ROLE_EMOJI = {
     effect:     "🔥",
@@ -5056,7 +5056,7 @@ const KERNEL_EMOJI = ["🖌️", "✨", "🌊", "💨", "🌫️", "🎡"];   //
 // What each chip MEANS, as a tooltip. The chips are a filter, so a reader who does not yet know the
 // vocabulary has to guess what narrows the list; the title makes each one self-describing without
 // spending any screen space. Wording follows the legend that documents them for people reading a
-// card: docs/tutorials/how-projectmm-works.md, "The emoji on every card".
+// card: docs/tutorials/how-moonlight-works.md, "The emoji on every card".
 const EMOJI_LABEL = {
     // what the module IS
     "\u{1F525}": "effect",
@@ -5840,7 +5840,7 @@ function updateStatusBar() {
 // slow page load; a fresh check is forced when the Firmware card opens. Best-effort: any
 // failure hides the badge, never throws.
 
-const RELEASES_API = "https://api.github.com/repos/MoonModules/projectMM/releases";
+const RELEASES_API = "https://api.github.com/repos/MoonModules/MoonLight/releases";
 const UPDATE_TTL_MS = 60 * 60 * 1000;                     // 1 h: best-effort, well under GitHub's rate limit
 const PICKER_RELEASE_KEY = "MoonLight.picker.releaseTag"; // install-picker restores from this on init
 
@@ -5915,9 +5915,9 @@ async function cachedJson(url, key, force) {
 // no release has ever contained, so a desktop user was never told anything.
 function desktopAssetPrefix() {
     const p = (navigator.platform || "") + " " + (navigator.userAgent || "");
-    if (/Win/i.test(p)) return "projectMM-windows-x64-v";
-    if (/Mac/i.test(p)) return "projectMM-macos-arm64-v";
-    if (/Linux|X11/i.test(p)) return "projectMM-linux-x64-v";
+    if (/Win/i.test(p)) return "MoonLight-windows-x64-v";
+    if (/Mac/i.test(p)) return "MoonLight-macos-arm64-v";
+    if (/Linux|X11/i.test(p)) return "MoonLight-linux-x64-v";
     return null;                                   // an OS we do not package: say nothing
 }
 
@@ -6036,7 +6036,7 @@ function setupUpdateBadge() {
     badge.addEventListener("click", () => {
         if (badge.dataset.desktop) {
             const tag = badge.dataset.tag || "latest";
-            window.open(`https://github.com/MoonModules/projectMM/releases/tag/${tag}`, "_blank",
+            window.open(`https://github.com/MoonModules/MoonLight/releases/tag/${tag}`, "_blank",
                         "noopener");
             return;
         }
@@ -6096,7 +6096,7 @@ async function mlDownloadScript(name, group) {
     const cat = await mlFetchCatalog();
     const folder = (cat[group] || {}).folder;
     if (!folder) throw new Error("unknown script kind");
-    const url = "https://raw.githubusercontent.com/MoonModules/projectMM/"
+    const url = "https://raw.githubusercontent.com/MoonModules/MoonLight/"
               + encodeURIComponent(cat.tag) + "/moonlive/" + folder + "/" + encodeURIComponent(name);
     const res = await fetch(url);
     // A 404 has two causes now. A RELEASE build fetches from its tag, so a missing script means the
@@ -8065,9 +8065,9 @@ function buildFilePathControl(row, label, key, moduleName, ctrl) {
         // propose the change, so neither needs write access to this repo.
         const repoPath = "moonlive/" + folder + "/" + name;
         const url = catalogNames.has(name)
-            ? "https://github.com/MoonModules/projectMM/edit/main/" + repoPath
+            ? "https://github.com/MoonModules/MoonLight/edit/main/" + repoPath
               + "?value=" + encodeURIComponent(text)
-            : "https://github.com/MoonModules/projectMM/new/main"
+            : "https://github.com/MoonModules/MoonLight/new/main"
               + "?filename=" + encodeURIComponent(repoPath)
               + "&value=" + encodeURIComponent(text);
         // The script rides in the query string, and browsers stop honoring a URL somewhere
@@ -8077,7 +8077,7 @@ function buildFilePathControl(row, label, key, moduleName, ctrl) {
             await navigator.clipboard.writeText(text).catch(() => {});
             alert("This script is too long to send through a link.\n\n"
                 + "It has been copied to your clipboard: open\n"
-                + "github.com/MoonModules/projectMM, add a file under moonlive/" + folder
+                + "github.com/MoonModules/MoonLight, add a file under moonlive/" + folder
                 + "/ and paste it there.");
             return;
         }

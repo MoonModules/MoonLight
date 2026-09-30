@@ -278,6 +278,6 @@ The rest is the product owner's judgment: merge gates passed on the tagged commi
 
 ## Documentation
 
-Published at [moonmodules.org/projectMM](https://moonmodules.org/projectMM/); sources under `docs/`, laid out in [the documentation hierarchy](docs/contributing/documentation-standards.md#the-hierarchy). Docs describe the system as it is; git is the history; specs precede implementation.
+Published at [moonmodules.org/MoonLight](https://moonmodules.org/MoonLight/); sources under `docs/`, laid out in [the documentation hierarchy](docs/contributing/documentation-standards.md#the-hierarchy). Docs describe the system as it is; git is the history; specs precede implementation.
 
 `docs/work/` is the exemption to present tense: `future` is what does not exist yet, `present` is being built, `past` is what shipped and the lessons it taught. Agents read it when planning, on request, and it shrinks under mandatory subtraction like everything else.

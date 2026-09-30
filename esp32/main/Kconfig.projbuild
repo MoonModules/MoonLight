@@ -1,4 +1,4 @@
-# projectMM build-time options.
+# MoonLight build-time options.
 #
 # These exist so the IDF Component Manager's dependency `rules` (in
 # main/idf_component.yml) can branch on them: a rule's `if:` clause can test a
@@ -6,7 +6,7 @@
 # MissingKconfigError and fails the solve), so a plain sdkconfig.defaults line is
 # not enough — the option must be declared here too.
 
-menu "projectMM"
+menu "MoonLight"
 
     config MM_P4_WIFI
         bool "ESP32-P4: include WiFi via the on-board ESP32-C6 (esp_hosted)"

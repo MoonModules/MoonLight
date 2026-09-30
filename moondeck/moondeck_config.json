@@ -60,7 +60,7 @@
       "help": "run_desktop",
       "script": "run/run_desktop.py",
       "long_running": true,
-      "process_name": "projectMM"
+      "process_name": "MoonLight"
     },
     {
       "id": "show_crash_log",

@@ -13,7 +13,7 @@ namespace mm {
 /// A stylised pair of car headlights: four concentric-ring "lamps" (inner/outer left, inner/outer right) plus two side strips joined by 90° arcs, all scaled by a single `scale` control.
 /// A 2D layout emitting each LED's (x, y, 0) in physical wiring order.
 ///
-/// Prior art: MoonLight's CarLightsLayout (Node "Car Lights", tags 🚥; MoonModules/projectMM, src light layout nodes).
+/// Prior art: MoonLight's CarLightsLayout (Node "Car Lights", tags 🚥; ewowi/MoonLight, src light layout nodes).
 /// MoonLight builds this by instantiating a RingLayout object and calling its onLayout() repeatedly with different ringCenter / nrOfLEDs / angle settings.
 /// Every ring and both strips' coordinates are reproduced here EXACTLY, in the same wiring order. tags 💫 marks the MoonLight lineage.
 ///

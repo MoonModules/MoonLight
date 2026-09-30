@@ -20,12 +20,12 @@ const asset = (name) => ({ name, browser_download_url: `https://gh/${name}` });
 const RELEASE = [
     asset("manifest-esp32s3-n16r8.json"),
     asset("firmware-esp32s3-n16r8-v3.0.0.bin"),
-    asset("projectMM-macos-arm64-v3.0.0.tar.gz"),
-    asset("projectMM-macos-arm64-v3.0.0.dmg"),
-    asset("projectMM-windows-x64-v3.0.0.zip"),
-    asset("projectMM-windows-x64-v3.0.0-setup.exe"),
-    asset("projectMM-linux-x64-v3.0.0.tar.gz"),
-    asset("projectmm_3.0.0_amd64.deb"),
+    asset("MoonLight-macos-arm64-v3.0.0.tar.gz"),
+    asset("MoonLight-macos-arm64-v3.0.0.dmg"),
+    asset("MoonLight-windows-x64-v3.0.0.zip"),
+    asset("MoonLight-windows-x64-v3.0.0-setup.exe"),
+    asset("MoonLight-linux-x64-v3.0.0.tar.gz"),
+    asset("moonlight_3.0.0_amd64.deb"),
 ];
 
 test("a desktop archive is offered for download even though it has no manifest", () => {
@@ -57,7 +57,7 @@ test("a platform shipping both an installer and a tarball offers the installer",
 });
 
 test("a windows installer whose name carries a suffix after the version is still matched", () => {
-    // projectMM-windows-x64-v3.0.0-setup.exe puts `-setup` AFTER the version, where every other
+    // MoonLight-windows-x64-v3.0.0-setup.exe puts `-setup` AFTER the version, where every other
     // asset ends at its extension. A pattern anchored on "version then extension" silently
     // dropped it, and the release page had an installer the install page never offered.
     const got = parseFirmwaresFromAssets(RELEASE, "v3.0.0");
@@ -70,7 +70,7 @@ test("a windows installer whose name carries a suffix after the version is still
 test("a version with dots does not break the platform match", () => {
     // The platform group is anchored on the "-v", not on "everything up to a dot": the
     // version's own dots would otherwise end the match and the archive would vanish.
-    const got = parseFirmwaresFromAssets([asset("projectMM-macos-arm64-v10.20.30-rc1.dmg")], "x");
+    const got = parseFirmwaresFromAssets([asset("MoonLight-macos-arm64-v10.20.30-rc1.dmg")], "x");
     assert.equal(got.length, 1);
     assert.equal(got[0].firmware, "desktop-macos-arm64");
 });
@@ -115,8 +115,8 @@ test("an ESP32 firmware and its ethernet variant remain mutually flashable", () 
 // option said only "macOS arm64". The form now rides the label.
 test("a release with only an archive still offers it, for every platform it has", () => {
     const OLD_RELEASE = [
-        asset("projectMM-macos-arm64-v3.0.0.tar.gz"),
-        asset("projectMM-windows-x64-v3.0.0.zip"),
+        asset("MoonLight-macos-arm64-v3.0.0.tar.gz"),
+        asset("MoonLight-windows-x64-v3.0.0.zip"),
     ];
     const got = parseFirmwaresFromAssets(OLD_RELEASE, "v3.0.0");
     assert.match(got.find(f => f.firmware === "desktop-macos-arm64").binaryUrl, /\.tar\.gz$/);

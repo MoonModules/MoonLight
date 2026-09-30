@@ -19,7 +19,7 @@ namespace mm {
 /// Prior art: MoonLight's Circle modifier (M_MoonLight.h), same center-offset + Euclidean-distance fold and the same +1-per-axis size bump.
 /// MoonLight tags it 💎; the 💫 here marks the MoonLight origin per MoonLight convention.
 /// Written fresh against our ModifierBase fold interface (modifyLogicalSize / modifyLogical) rather than MoonLight's modifySize / modifyPosition Node API.
-/// Author: MoonLight, https://github.com/MoonModules/projectMM/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
+/// Author: MoonLight, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
 class CircleModifier : public ModifierBase {
 public:
     /// The catalog tags this modifier carries.

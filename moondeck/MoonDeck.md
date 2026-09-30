@@ -76,7 +76,7 @@ against a running MoonLight with [pytest-playwright](https://playwright.dev/pyth
 performing a [run file](moontube/moontube.md) from `moontube/clips/` through the interface and checking each step against the
 device over REST. The run files are the same ones `moondeck/moontube/mtvideo.py` records the videos from, so a
 failure means the UI no longer does what the video shows. It skips rather than fails when nothing
-answers on `localhost:8080` (override with `PROJECTMM_HOST`), for the same reason the JS lane skips
+answers on `localhost:8080` (override with `MOONLIGHT_HOST`), for the same reason the JS lane skips
 without node.
 
 ### run_desktop
@@ -87,7 +87,7 @@ Launch the desktop executable as a detached background process and exit. The app
 uv run moondeck/run/run_desktop.py
 ```
 
-Re-running is idempotent: any existing `projectMM` instance is stopped first, then a fresh one is launched. Output goes to `build/<host>/projectMM.log`. Build first.
+Re-running is idempotent: any existing `MoonLight` instance is stopped first, then a fresh one is launched. Output goes to `build/<host>/MoonLight.log`. Build first.
 
 While the app is running, MoonDeck shows the button as **Stop** (a 5-second poll on `/api/running` detects the live process via `process_name`). Pressing Stop terminates the app; pressing Run again restarts it. From the CLI: `pkill -f build/<host>/MoonLight` (or `pkill MoonLight` if you don't have multiple host builds active).
 
@@ -121,7 +121,7 @@ first; it is a free download.
 ![Installer2](../docs/assets/ui/installer2.png)
 ![Installer3](../docs/assets/ui/installer3.png)
 
-Locally preview the web installer page at <https://moonmodules.org/projectMM/install/> without tagging a release. Stages `mooninstaller/index.html` + `src/ui/install-picker.js` into `build/install-preview/` and serves them via Python's `http.server` on port 8421.
+Locally preview the web installer page at <https://moonmodules.org/MoonLight/install/> without tagging a release. Stages `mooninstaller/index.html` + `src/ui/install-picker.js` into `build/install-preview/` and serves them via Python's `http.server` on port 8421.
 
 ```bash
 uv run moondeck/run/preview_installer.py
@@ -1061,7 +1061,7 @@ Each ESP32-S3 SKU has its own firmware key because the sdkconfig fragment encode
 
 ### flash_esp32
 
-Flash firmware to an ESP32 device. Reads `build/esp32-<firmware>/projectMM.bin` — each firmware lives in its own dir (plan-19.1), so multiple firmwares can coexist on disk and switching firmwares is free.
+Flash firmware to an ESP32 device. Reads `build/esp32-<firmware>/projectMM.bin`: each firmware lives in its own dir (plan-19.1), so multiple firmwares can coexist on disk and switching firmwares is free.
 
 The MoonDeck button forwards the Firmware dropdown as `--firmware`. Flash exits cleanly with a "no build for <firmware> — run Build first" message when that dir doesn't exist. The log line up front confirms which build is being flashed and how old it is, e.g.:
 
@@ -1275,7 +1275,7 @@ Print the most recent MoonLight crash report and run log.
 uv run moondeck/run/show_crash_log.py
 ```
 
-On Windows, reads the Application event log for `Application Error` entries naming the binary, which is where Windows records a fault. There is no crash FILE unless WER LocalDumps is enabled, which it is not by default; registering the binary under `HKCU\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps\` would leave a dump worth loading in a debugger. On macOS, finds the newest `projectMM-*.ips` in `~/Library/Logs/DiagnosticReports/`, parses the JSON crash report, and prints the exception type, signal, faulting thread, and top 20 stack frames. If no crash report exists it falls back to the last 40 lines of `build/<host>/projectMM.log` so the run log is always reachable from one place.
+On Windows, reads the Application event log for `Application Error` entries naming the binary, which is where Windows records a fault. There is no crash FILE unless WER LocalDumps is enabled, which it is not by default; registering the binary under `HKCU\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps\` would leave a dump worth loading in a debugger. On macOS, finds the newest `MoonLight-*.ips` in `~/Library/Logs/DiagnosticReports/`, parses the JSON crash report, and prints the exception type, signal, faulting thread, and top 20 stack frames. If no crash report exists it falls back to the last 40 lines of `build/<host>/MoonLight.log` so the run log is always reachable from one place.
 
 Typical output (crash present):
 
@@ -1297,6 +1297,6 @@ Typical output (no crash, log tail):
 ```text
 No MoonLight crash reports found in DiagnosticReports.
 
-=== Last 40 lines of projectMM.log ===
+=== Last 40 lines of MoonLight.log ===
 tick: 1234us (FPS: 800)  free: 0  ...
 ```

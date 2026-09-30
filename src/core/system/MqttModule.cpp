@@ -358,7 +358,7 @@ void MqttModule::publishUpdateState() {
         "{\"installed_version\":\"%s\",\"latest_version\":\"%s\","
         "\"release_url\":\"https://github.com/%s/releases\","
         "\"title\":\"%s firmware\"}",
-        kVersion, kVersion, kReleaseRepo, kProjectImageName);
+        kVersion, kVersion, kReleaseRepo, kPrefixRoot);
     if (pn <= 0 || static_cast<size_t>(pn) >= sizeof(payload)) return;
     uint8_t buf[kSendBufLen];
     const size_t n = buildMqttPublish(topic, reinterpret_cast<const uint8_t*>(payload),

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(projectMM LANGUAGES CXX)
+project(MoonLight LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -288,8 +288,8 @@ add_dependencies(mm_core ui_embed build_info_gen moonlive_catalog)
 # platform. Nothing here runs on macOS or Linux, which carry their icon in the .app and the .deb.
 set(MM_WIN_RESOURCES "")
 if(WIN32)
-    set(MM_ICON "${CMAKE_BINARY_DIR}/projectMM.ico")
-    set(MM_RC   "${CMAKE_BINARY_DIR}/projectMM.rc")
+    set(MM_ICON "${CMAKE_BINARY_DIR}/MoonLight.ico")
+    set(MM_RC   "${CMAKE_BINARY_DIR}/MoonLight.rc")
     add_custom_command(
         OUTPUT "${MM_ICON}"
         # `uv run <script>` rather than the usual `uv run python <script>`: make_ico.py declares
@@ -298,7 +298,7 @@ if(WIN32)
                 "${CMAKE_SOURCE_DIR}/mooninstaller/favicon.png" "${MM_ICON}"
         DEPENDS "${CMAKE_SOURCE_DIR}/mooninstaller/favicon.png"
                 "${CMAKE_SOURCE_DIR}/moondeck/ci/make_ico.py"
-        COMMENT "Generating projectMM.ico from favicon.png"
+        COMMENT "Generating MoonLight.ico from favicon.png"
         VERBATIM)
     # Forward slashes: rc.exe accepts them, and a backslash here would be an escape.
     file(WRITE "${MM_RC}"
@@ -314,9 +314,9 @@ endif()
 # Application
 # module_types.cpp is the shared type registry, compiled into the app and the scenario runner
 # alike so one list serves both: src/module_types.cpp carries the reason.
-add_executable(projectMM src/main.cpp src/module_types.cpp src/platform/desktop/main_desktop.cpp ${MM_WIN_RESOURCES})
-target_link_libraries(projectMM PRIVATE mm_core mm_platform)
-add_dependencies(projectMM ui_embed build_info_gen moonlive_catalog)
+add_executable(MoonLight src/main.cpp src/module_types.cpp src/platform/desktop/main_desktop.cpp ${MM_WIN_RESOURCES})
+target_link_libraries(MoonLight PRIVATE mm_core mm_platform)
+add_dependencies(MoonLight ui_embed build_info_gen moonlive_catalog)
 
 # Tests
 enable_testing()

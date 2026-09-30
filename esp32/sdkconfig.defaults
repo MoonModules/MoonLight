@@ -96,7 +96,7 @@ CONFIG_COMPILER_OPTIMIZATION_PERF=y
 # the cache was off — `Guru Meditation Error: Core 0 panic'ed (Cache error)` inside
 # pxPortGetCoprocArea, reproduced on the P4 bench by resizing a Parlio-driven layout. Our own done
 # callback was already IRAM_ATTR; the IDF driver's handler around it was not.
-# (github.com/MoonModules/projectMM/issues/44)
+# (github.com/MoonModules/MoonLight/issues/44)
 CONFIG_PARLIO_TX_ISR_CACHE_SAFE=y
 CONFIG_PARLIO_RX_ISR_CACHE_SAFE=y
 # ...and the driver's own objects with it. The TX option above places the HANDLER in IRAM but,

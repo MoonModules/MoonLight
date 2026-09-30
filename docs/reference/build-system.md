@@ -30,4 +30,4 @@ Which script runs which build: [MoonDeck.md](../../moondeck/MoonDeck.md). Why th
 
 ## Source
 
-[CMakeLists.txt](https://github.com/MoonModules/projectMM/blob/main/CMakeLists.txt) is the desktop and test build; [esp32/CMakeLists.txt](https://github.com/MoonModules/projectMM/blob/main/esp32/CMakeLists.txt) is the ESP-IDF project root.
+[CMakeLists.txt](https://github.com/MoonModules/MoonLight/blob/main/CMakeLists.txt) is the desktop and test build; [esp32/CMakeLists.txt](https://github.com/MoonModules/MoonLight/blob/main/esp32/CMakeLists.txt) is the ESP-IDF project root.

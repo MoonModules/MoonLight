@@ -253,7 +253,7 @@ def collect_desktop():
 def collect_esp32():
     kpi = {}
     # Per-firmware build dirs under build/esp32-*/ (plan-19.1). Pick the dir
-    # whose projectMM.bin was written most recently — that's the binary
+    # whose projectMM.bin was written most recently, which is the binary
     # the developer most recently rebuilt and would consider the current
     # KPI source. Sort by the firmware mtime, not the dir mtime, because
     # a sdkconfig save or stray touch can bump the dir mtime without a

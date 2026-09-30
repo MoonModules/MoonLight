@@ -3,10 +3,10 @@
 
 Runs under CI on macOS, Windows and Linux runners. The output lands in `dist/`:
 
-  macOS arm64:  dist/projectMM-macos-arm64-vX.Y.Z.tar.gz + .dmg
-  Windows x64:  dist/projectMM-windows-x64-vX.Y.Z.zip
-  Linux x64:    dist/projectMM-linux-x64-vX.Y.Z.tar.gz + dist/projectmm_X.Y.Z_amd64.deb
-  Linux arm64:  dist/projectMM-linux-arm64-vX.Y.Z.tar.gz + dist/projectmm_X.Y.Z_arm64.deb
+  macOS arm64:  dist/MoonLight-macos-arm64-vX.Y.Z.tar.gz + .dmg
+  Windows x64:  dist/MoonLight-windows-x64-vX.Y.Z.zip
+  Linux x64:    dist/MoonLight-linux-x64-vX.Y.Z.tar.gz + dist/moonlight_X.Y.Z_amd64.deb
+  Linux arm64:  dist/MoonLight-linux-arm64-vX.Y.Z.tar.gz + dist/moonlight_X.Y.Z_arm64.deb
 
 Each archive carries the executable + a short README.txt with run instructions.
 
@@ -65,10 +65,10 @@ def configure_and_build_macos(version: str = "") -> Path:
         "-DCMAKE_BUILD_TYPE=Release",
         "-DCMAKE_OSX_ARCHITECTURES=arm64",
     ] + version_args(version))
-    # --target projectMM: packaging ships one binary; the test suite builds and runs in the
+    # --target MoonLight: packaging ships one binary; the test suite builds and runs in the
     # test workflow, and compiling its ~200 files here roughly doubled the packaging build.
-    run(["cmake", "--build", bdir, "--config", "Release", "-j", "--target", "projectMM"])
-    binary = BUILD_DIR_MACOS / "projectMM"
+    run(["cmake", "--build", bdir, "--config", "Release", "-j", "--target", "MoonLight"])
+    binary = BUILD_DIR_MACOS / "MoonLight"
     if not binary.exists():
         print(f"package_desktop: expected binary not found at {binary}")
         sys.exit(1)
@@ -92,8 +92,8 @@ def configure_and_build_linux(version: str = "") -> Path:
     """Configure + build for Linux. Returns the built binary path."""
     bdir = str(BUILD_DIR_LINUX.relative_to(ROOT))
     run(["cmake", "-B", bdir, "-DCMAKE_BUILD_TYPE=Release"] + version_args(version))
-    run(["cmake", "--build", bdir, "--config", "Release", "-j", "--target", "projectMM"])
-    binary = BUILD_DIR_LINUX / "projectMM"
+    run(["cmake", "--build", bdir, "--config", "Release", "-j", "--target", "MoonLight"])
+    binary = BUILD_DIR_LINUX / "MoonLight"
     if not binary.exists():
         print(f"package_desktop: expected binary not found at {binary}")
         sys.exit(1)
@@ -112,12 +112,12 @@ def package_linux(binary: Path, version: str) -> Path:
     """
     DIST_DIR.mkdir(exist_ok=True)
     _, tar_label, readme_label = linux_arch()
-    out = DIST_DIR / f"projectMM-linux-{tar_label}-v{version}.tar.gz"
+    out = DIST_DIR / f"MoonLight-linux-{tar_label}-v{version}.tar.gz"
     readme = DIST_DIR / "_README.txt"
     readme.write_text(readme_text(version, readme_label), encoding="utf-8")
     try:
         with tarfile.open(out, "w:gz") as tar:
-            tar.add(binary, arcname="projectMM")
+            tar.add(binary, arcname="MoonLight")
             tar.add(readme, arcname="README.txt")
     finally:
         readme.unlink(missing_ok=True)
@@ -134,7 +134,7 @@ def package_deb(binary: Path, version: str) -> Path | None:
     this project needs exactly once.
     """
     if shutil.which("dpkg-deb") is None:
-        # Under CI this is fatal: the release uploads dist/projectmm_*.deb with
+        # Under CI this is fatal: the release uploads dist/moonlight_*.deb with
         # fail_on_unmatched_files, so skipping here would fail the entire release (ESP32
         # firmware and all) with an error naming the glob rather than the missing tool.
         # On a dev machine it stays a skip, which is what the tarball beside it is for.
@@ -152,28 +152,28 @@ def package_deb(binary: Path, version: str) -> Path | None:
     shutil.rmtree(stage, ignore_errors=True)
     (stage / "DEBIAN").mkdir(parents=True)
     (stage / "usr" / "bin").mkdir(parents=True)
-    shutil.copy2(binary, stage / "usr" / "bin" / "projectMM")
+    shutil.copy2(binary, stage / "usr" / "bin" / "MoonLight")
     # A menu entry, so a Linux user launches it the way a macOS user opens the .app: Terminal=true
     # gives the same visible, closeable window that shows the log and stops the server when closed.
     apps = stage / "usr" / "share" / "applications"
     apps.mkdir(parents=True)
-    (apps / "projectmm.desktop").write_text(
+    (apps / "moonlight.desktop").write_text(
         "[Desktop Entry]\n"
         "Type=Application\n"
-        "Name=projectMM\n"
+        "Name=MoonLight\n"
         "Comment=Drive large LED installations and DMX fixtures\n"
-        "Exec=projectMM\n"
-        "Icon=projectmm\n"
+        "Exec=MoonLight\n"
+        "Icon=moonlight\n"
         "Terminal=true\n"
         "Categories=Graphics;Utility;\n", encoding="utf-8")
     icons = stage / "usr" / "share" / "icons" / "hicolor" / "256x256" / "apps"
     icons.mkdir(parents=True)
     fav = ROOT / "mooninstaller" / "favicon.png"
     if fav.exists():
-        shutil.copy2(fav, icons / "projectmm.png")
+        shutil.copy2(fav, icons / "moonlight.png")
 
     (stage / "DEBIAN" / "control").write_text(
-        "Package: projectmm\n"
+        "Package: moonlight\n"
         f"Version: {version}\n"
         "Section: misc\n"
         "Priority: optional\n"
@@ -184,12 +184,12 @@ def package_deb(binary: Path, version: str) -> Path | None:
         # OS call it libcurl4, trixie renamed it libcurl4t64 in the 64-bit-time_t transition, and
         # the alternation satisfies whichever the target has.
         "Depends: libcurl4 | libcurl4t64\n"
-        "Maintainer: MoonModules <https://github.com/MoonModules/projectMM>\n"
+        "Maintainer: MoonModules <https://github.com/MoonModules/MoonLight>\n"
         "Description: Drive large LED installations and DMX fixtures\n"
-        " projectMM renders effects to LED fixtures and DMX, controlled from a\n"
-        " browser. This is the desktop build; run projectMM and open\n"
+        " MoonLight renders effects to LED fixtures and DMX, controlled from a\n"
+        " browser. This is the desktop build; run MoonLight and open\n"
         " http://localhost:8080/.\n", encoding="utf-8")
-    out = DIST_DIR / f"projectmm_{version}_{deb_arch}.deb"
+    out = DIST_DIR / f"moonlight_{version}_{deb_arch}.deb"
     run(["dpkg-deb", "--build", "--root-owner-group", str(stage), str(out)])
     shutil.rmtree(stage, ignore_errors=True)
     print(f"package_desktop: wrote {out}")
@@ -206,12 +206,12 @@ def configure_and_build_windows(version: str = "") -> Path:
         "cmake", "-B", bdir,
         "-DCMAKE_BUILD_TYPE=Release",
     ] + version_args(version))
-    run(["cmake", "--build", bdir, "--config", "Release", "--target", "projectMM"])
+    run(["cmake", "--build", bdir, "--config", "Release", "--target", "MoonLight"])
     # MSVC multi-config places binaries under <build-dir>/Release/.
-    binary = BUILD_DIR_WIN / "Release" / "projectMM.exe"
+    binary = BUILD_DIR_WIN / "Release" / "MoonLight.exe"
     if not binary.exists():
         # Some generators drop it directly under the build dir.
-        fallback = BUILD_DIR_WIN / "projectMM.exe"
+        fallback = BUILD_DIR_WIN / "MoonLight.exe"
         if fallback.exists():
             return fallback
         print(f"package_desktop: expected binary not found at {binary}")
@@ -221,29 +221,29 @@ def configure_and_build_windows(version: str = "") -> Path:
 
 def readme_text(version: str, platform_label: str) -> str:
     return (
-        f"projectMM v{version} ({platform_label})\n"
+        f"MoonLight v{version} ({platform_label})\n"
         f"\n"
-        f"Run: ./projectMM (macOS) or projectMM.exe (Windows)\n"
+        f"Run: ./MoonLight (macOS) or MoonLight.exe (Windows)\n"
         f"Open: http://localhost:8080/\n"
         f"\n"
         f"Windows: to INSTALL rather than just run it (Start-menu entry, an\n"
         f"uninstaller, and an upgrade that keeps your settings), double-click\n"
-        f"Install-projectMM.cmd. No administrator rights are needed; it installs\n"
-        f"only under your own user profile. It runs Install-projectMM.ps1, which\n"
+        f"Install-MoonLight.cmd. No administrator rights are needed; it installs\n"
+        f"only under your own user profile. It runs Install-MoonLight.ps1, which\n"
         f"is plain text you can read first. Windows blocks a downloaded .ps1 from\n"
         f"running on its own, which is why the .cmd is there.\n"
         f"The setup.exe on the releases page does the same thing in one click.\n"
         f"\n"
         f"macOS first run: the app is ad-hoc signed, not notarized, so macOS\n"
-        f"refuses it with 'Apple could not verify projectMM is free of malware'.\n"
+        f"refuses it with 'Apple could not verify MoonLight is free of malware'.\n"
         f"That dialog has no way through on macOS 15 and later, so clear the\n"
         f"download flag in Terminal and open it again:\n"
         f"\n"
-        f"  xattr -dr com.apple.quarantine /Applications/projectMM.app\n"
+        f"  xattr -dr com.apple.quarantine /Applications/MoonLight.app\n"
         f"\n"
-        f"(for the tarball, point it at ./projectMM instead). One time only.\n"
+        f"(for the tarball, point it at ./MoonLight instead). One time only.\n"
         f"\n"
-        f"Source: https://github.com/MoonModules/projectMM\n"
+        f"Source: https://github.com/MoonModules/MoonLight\n"
     )
 
 
@@ -282,7 +282,7 @@ def make_icns(dest: Path) -> Path | None:
     if not src.exists() or shutil.which("iconutil") is None:
         print("package_desktop: no favicon or no iconutil, the app will use the default icon")
         return None
-    iconset = dest / "projectMM.iconset"
+    iconset = dest / "MoonLight.iconset"
     shutil.rmtree(iconset, ignore_errors=True)
     iconset.mkdir(parents=True)
     # (size, filename) pairs iconutil expects; @2x is the Retina variant of the size below it.
@@ -290,7 +290,7 @@ def make_icns(dest: Path) -> Path | None:
                      (64, "icon_32x32@2x.png"), (128, "icon_128x128.png"),
                      (256, "icon_128x128@2x.png"), (256, "icon_256x256.png")):
         run(["sips", "-z", str(px), str(px), str(src), "--out", str(iconset / name)])
-    out = dest / "projectMM.icns"
+    out = dest / "MoonLight.icns"
     run(["iconutil", "-c", "icns", str(iconset), "-o", str(out)])
     shutil.rmtree(iconset, ignore_errors=True)
     return out
@@ -299,47 +299,47 @@ def make_icns(dest: Path) -> Path | None:
 def make_app_bundle(binary: Path, version: str, dest: Path) -> Path:
     """A double-clickable .app around the console binary.
 
-    projectMM is a terminal program that serves a web UI, and that IS the shape a user wants: the
+    MoonLight is a terminal program that serves a web UI, and that IS the shape a user wants: the
     window shows it is alive, the log is right there, and closing it stops the server. What Finder
     will not do is open a terminal for a bare binary, so the bundle's executable is a stub that asks
     Terminal to run the real one.
 
-    The CLI lives INSIDE the bundle (Contents/MacOS/projectMM), so the disk image holds exactly one
+    The CLI lives INSIDE the bundle (Contents/MacOS/MoonLight), so the disk image holds exactly one
     draggable item while `--port` and `--no-browser` stay reachable at
-    /Applications/projectMM.app/Contents/MacOS/projectMM.
+    /Applications/MoonLight.app/Contents/MacOS/MoonLight.
     """
-    app = dest / "projectMM.app"
+    app = dest / "MoonLight.app"
     shutil.rmtree(app, ignore_errors=True)
     macos = app / "Contents" / "MacOS"
     res = app / "Contents" / "Resources"
     macos.mkdir(parents=True)
     res.mkdir(parents=True)
 
-    shutil.copy2(binary, macos / "projectMM")
+    shutil.copy2(binary, macos / "MoonLight")
     icns = make_icns(dest)
     if icns:
-        shutil.move(str(icns), res / "projectMM.icns")
+        shutil.move(str(icns), res / "MoonLight.icns")
 
     # The stub Finder launches. `open -a Terminal` gives the user the window the app lives in.
-    launcher = macos / "projectMM-launcher"
+    launcher = macos / "MoonLight-launcher"
     launcher.write_text(
         "#!/bin/sh\n"
         "# Finder runs this; it opens a Terminal window on the real binary beside it. The window is\n"
         "# the app's presence: it shows the log, and closing it stops the server.\n"
-        'exec open -a Terminal "$(dirname "$0")/projectMM"\n', encoding="utf-8")
+        'exec open -a Terminal "$(dirname "$0")/MoonLight"\n', encoding="utf-8")
     launcher.chmod(0o755)
 
     (app / "Contents" / "Info.plist").write_text(f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>projectMM</string>
-  <key>CFBundleDisplayName</key><string>projectMM</string>
-  <key>CFBundleIdentifier</key><string>org.moonmodules.projectmm</string>
+  <key>CFBundleName</key><string>MoonLight</string>
+  <key>CFBundleDisplayName</key><string>MoonLight</string>
+  <key>CFBundleIdentifier</key><string>org.moonmodules.moonlight</string>
   <key>CFBundleVersion</key><string>{version}</string>
   <key>CFBundleShortVersionString</key><string>{version}</string>
-  <key>CFBundleExecutable</key><string>projectMM-launcher</string>
-  <key>CFBundleIconFile</key><string>projectMM</string>
+  <key>CFBundleExecutable</key><string>MoonLight-launcher</string>
+  <key>CFBundleIconFile</key><string>MoonLight</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>LSMinimumSystemVersion</key><string>11.0</string>
   <key>NSMicrophoneUsageDescription</key><string>Audio-reactive effects can follow a microphone or loopback input you pick in the Audio module.</string>
@@ -351,7 +351,7 @@ def make_app_bundle(binary: Path, version: str, dest: Path) -> Path:
 
 
 def package_dmg(binary: Path, version: str) -> Path | None:
-    """A disk image holding one item: drag projectMM to Applications and it is installed.
+    """A disk image holding one item: drag MoonLight to Applications and it is installed.
 
     hdiutil ships with macOS. A .tar.gz still ships beside this for anyone scripting a deploy.
     """
@@ -367,9 +367,9 @@ def package_dmg(binary: Path, version: str) -> Path | None:
     make_app_bundle(binary, version, stage)
     # The Applications symlink is what makes the window a drag-and-drop target.
     (stage / "Applications").symlink_to("/Applications")
-    out = DIST_DIR / f"projectMM-macos-arm64-v{version}.dmg"
+    out = DIST_DIR / f"MoonLight-macos-arm64-v{version}.dmg"
     out.unlink(missing_ok=True)
-    run(["hdiutil", "create", "-volname", f"projectMM {version}",
+    run(["hdiutil", "create", "-volname", f"MoonLight {version}",
          "-srcfolder", str(stage), "-ov", "-format", "UDZO", str(out)])
     shutil.rmtree(stage, ignore_errors=True)
     print(f"package_desktop: wrote {out}")
@@ -379,7 +379,7 @@ def package_dmg(binary: Path, version: str) -> Path | None:
 def package_macos(binary: Path, version: str) -> Path:
     adhoc_sign(binary)
     DIST_DIR.mkdir(exist_ok=True)
-    out = DIST_DIR / f"projectMM-macos-arm64-v{version}.tar.gz"
+    out = DIST_DIR / f"MoonLight-macos-arm64-v{version}.tar.gz"
     readme = DIST_DIR / "_README.txt"
     # encoding="utf-8" explicitly: Windows' default write_text encoding is cp1252, so a
     # non-ASCII character added to readme_text later would raise there and nowhere else.
@@ -387,7 +387,7 @@ def package_macos(binary: Path, version: str) -> Path:
     readme.write_text(readme_text(version, "macOS arm64"), encoding="utf-8")
     try:
         with tarfile.open(out, "w:gz") as tar:
-            tar.add(binary, arcname="projectMM")
+            tar.add(binary, arcname="MoonLight")
             tar.add(readme, arcname="README.txt")
     finally:
         readme.unlink(missing_ok=True)
@@ -397,17 +397,17 @@ def package_macos(binary: Path, version: str) -> Path:
 
 
 NSI_TEMPLATE = r'''Unicode true
-!define APPNAME "projectMM"
+!define APPNAME "MoonLight"
 !define PUBLISHER "MoonModules"
-!define HOMEPAGE "https://github.com/MoonModules/projectMM"
-!define UNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\projectMM"
+!define HOMEPAGE "https://github.com/MoonModules/MoonLight"
+!define UNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\MoonLight"
 
 Name "${APPNAME} @VERSION@"
 OutFile "@OUT@"
 ; Per-user, under Programs: no elevation prompt, and no chance of landing in a directory the user
-; cannot write to. The SETTINGS live in $LOCALAPPDATA\projectMM, deliberately NOT under here, so an
+; cannot write to. The SETTINGS live in $LOCALAPPDATA\MoonLight, deliberately NOT under here, so an
 ; upgrade replaces the program and leaves the configuration untouched.
-InstallDir "$LOCALAPPDATA\Programs\projectMM"
+InstallDir "$LOCALAPPDATA\Programs\MoonLight"
 InstallDirRegKey HKCU "${UNINSTKEY}" "InstallLocation"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
@@ -421,21 +421,21 @@ SetCompressor /SOLID lzma
 !insertmacro MUI_LANGUAGE "English"
 
 Section "install"
-  ; A running projectMM.exe holds a lock on the file and the install would fail with a
+  ; A running MoonLight.exe holds a lock on the file and the install would fail with a
   ; file-in-use error. taskkill is a Windows built-in, so this needs no NSIS plugin; it is
-  ; harmless when nothing is running. projectMM is a local server the user restarts from the
+  ; harmless when nothing is running. MoonLight is a local server the user restarts from the
   ; Start menu, so stopping it costs a reconnect, not work.
   DetailPrint "Stopping any running ${APPNAME}..."
-  nsExec::Exec 'taskkill /F /IM projectMM.exe'
+  nsExec::Exec 'taskkill /F /IM MoonLight.exe'
   Pop $0
 
   SetOutPath "$INSTDIR"
   File "@BINARY@"
-  File /oname=projectMM.ico "@ICON@"
+  File /oname=MoonLight.ico "@ICON@"
   File /oname=README.txt "@README@"
 
   CreateDirectory "$SMPROGRAMS\${APPNAME}"
-  CreateShortcut "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk" "$INSTDIR\projectMM.exe" "" "$INSTDIR\projectMM.ico"
+  CreateShortcut "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk" "$INSTDIR\MoonLight.exe" "" "$INSTDIR\MoonLight.ico"
   CreateShortcut "$SMPROGRAMS\${APPNAME}\Uninstall ${APPNAME}.lnk" "$INSTDIR\uninstall.exe"
 
   WriteUninstaller "$INSTDIR\uninstall.exe"
@@ -445,7 +445,7 @@ Section "install"
   WriteRegStr   HKCU "${UNINSTKEY}" "DisplayVersion"  "@VERSION@"
   WriteRegStr   HKCU "${UNINSTKEY}" "Publisher"       "${PUBLISHER}"
   WriteRegStr   HKCU "${UNINSTKEY}" "URLInfoAbout"    "${HOMEPAGE}"
-  WriteRegStr   HKCU "${UNINSTKEY}" "DisplayIcon"     "$INSTDIR\projectMM.ico"
+  WriteRegStr   HKCU "${UNINSTKEY}" "DisplayIcon"     "$INSTDIR\MoonLight.ico"
   WriteRegStr   HKCU "${UNINSTKEY}" "InstallLocation" "$INSTDIR"
   WriteRegStr   HKCU "${UNINSTKEY}" "UninstallString" "$INSTDIR\uninstall.exe"
   WriteRegDWORD HKCU "${UNINSTKEY}" "NoModify" 1
@@ -453,21 +453,21 @@ Section "install"
 SectionEnd
 
 Section "uninstall"
-  nsExec::Exec 'taskkill /F /IM projectMM.exe'
+  nsExec::Exec 'taskkill /F /IM MoonLight.exe'
   Pop $0
-  Delete "$INSTDIR\projectMM.exe"
-  Delete "$INSTDIR\projectMM.ico"
+  Delete "$INSTDIR\MoonLight.exe"
+  Delete "$INSTDIR\MoonLight.ico"
   Delete "$INSTDIR\README.txt"
   Delete "$INSTDIR\uninstall.exe"
   ; The zip's script route installs to the same directory and leaves this behind. Without it the
   ; RMDir below fails silently and the folder survives an uninstall.
-  Delete "$INSTDIR\Uninstall-projectMM.ps1"
+  Delete "$INSTDIR\Uninstall-MoonLight.ps1"
   RMDir "$INSTDIR"
   Delete "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk"
   Delete "$SMPROGRAMS\${APPNAME}\Uninstall ${APPNAME}.lnk"
   RMDir "$SMPROGRAMS\${APPNAME}"
   DeleteRegKey HKCU "${UNINSTKEY}"
-  ; $LOCALAPPDATA\projectMM is NOT removed. Settings outlive the program on purpose: an uninstall
+  ; $LOCALAPPDATA\MoonLight is NOT removed. Settings outlive the program on purpose: an uninstall
   ; is often a step in a reinstall, and silently discarding a user's configuration is the kind of
   ; thing they only discover afterwards. Removing that folder by hand is the documented way out.
 SectionEnd
@@ -480,10 +480,10 @@ def windows_icon(version: str) -> Path | None:
     Prefers the one CMake already generated beside the binary, so the installer and the exe carry
     the identical icon; regenerates it only when packaging a build that did not produce one.
     """
-    built = BUILD_DIR_WIN / "projectMM.ico"
+    built = BUILD_DIR_WIN / "MoonLight.ico"
     if built.exists():
         return built
-    out = DIST_DIR / "projectMM.ico"
+    out = DIST_DIR / "MoonLight.ico"
     src = ROOT / "mooninstaller" / "favicon.png"
     if not src.exists():
         print("package_desktop: no favicon to generate an icon from")
@@ -540,10 +540,10 @@ def package_windows_installer(binary: Path, version: str) -> Path | None:
         print("package_desktop: no icon, skipping the installer")
         return None
 
-    out = DIST_DIR / f"projectMM-windows-x64-v{version}-setup.exe"
+    out = DIST_DIR / f"MoonLight-windows-x64-v{version}-setup.exe"
     readme = DIST_DIR / "_README.txt"
     readme.write_text(readme_text(version, "Windows x64"), encoding="utf-8")
-    script = DIST_DIR / "projectMM.nsi"
+    script = DIST_DIR / "MoonLight.nsi"
     script.write_text(
         NSI_TEMPLATE
         .replace("@VERSION@", version)
@@ -564,33 +564,33 @@ def package_windows_installer(binary: Path, version: str) -> Path | None:
 def package_windows(binary: Path, version: str) -> Path:
     """The zip: a portable copy, and the second route to an installed one.
 
-    It carries Install-projectMM.ps1 alongside the executable, which does what the setup.exe does
+    It carries Install-MoonLight.ps1 alongside the executable, which does what the setup.exe does
     in plain text. That is not redundancy for its own sake: Defender occasionally flags a freshly
     built, unsigned installer on a machine-learning guess and blocks the download outright, which
     leaves no file to rescue and no way in. A script gives the scoring model nothing to judge, and
     gives the user something they can read before running. The setup.exe stays the primary path.
     """
     DIST_DIR.mkdir(exist_ok=True)
-    out = DIST_DIR / f"projectMM-windows-x64-v{version}.zip"
+    out = DIST_DIR / f"MoonLight-windows-x64-v{version}.zip"
     readme = DIST_DIR / "_README.txt"
     readme.write_text(readme_text(version, "Windows x64"), encoding="utf-8")
     scripts = ROOT / "moondeck" / "ci" / "windows"
     try:
         with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
-            zf.write(binary, arcname="projectMM.exe")
+            zf.write(binary, arcname="MoonLight.exe")
             zf.write(readme, arcname="README.txt")
             # Stamp the version in, so the Add/Remove Programs entry carries one. The repo copy
             # keeps the @VERSION@ placeholder, which the script treats as "unknown" if it is ever
             # run straight from a checkout.
-            install = (scripts / "Install-projectMM.ps1").read_text(encoding="utf-8")
-            zf.writestr("Install-projectMM.ps1", install.replace("@VERSION@", version))
-            zf.write(scripts / "Uninstall-projectMM.ps1", arcname="Uninstall-projectMM.ps1")
+            install = (scripts / "Install-MoonLight.ps1").read_text(encoding="utf-8")
+            zf.writestr("Install-MoonLight.ps1", install.replace("@VERSION@", version))
+            zf.write(scripts / "Uninstall-MoonLight.ps1", arcname="Uninstall-MoonLight.ps1")
             # The .cmd is not a convenience: Windows marks everything extracted from a downloaded
             # zip as internet-sourced, and the default RemoteSigned policy then REFUSES to run an
             # unsigned .ps1 carrying that mark ("is not digitally signed"). Measured on a stock
             # machine. So the double-clickable wrapper is the only route that works out of the box,
             # and the .ps1 beside it stays the thing a careful user reads first.
-            zf.write(scripts / "Install-projectMM.cmd", arcname="Install-projectMM.cmd")
+            zf.write(scripts / "Install-MoonLight.cmd", arcname="Install-MoonLight.cmd")
     finally:
         readme.unlink(missing_ok=True)
     print(f"package_desktop: wrote {out}")
@@ -626,7 +626,7 @@ def main() -> int:
     if system == "Darwin":
         if machine not in ("arm64", "aarch64"):
             print(f"package_desktop: unsupported macOS arch '{machine}'. "
-                  f"projectMM 1.0 ships macOS arm64 only.")
+                  f"MoonLight 1.0 ships macOS arm64 only.")
             return 2
         binary = configure_and_build_macos(args.version)
         package_macos(binary, version)
@@ -647,7 +647,7 @@ def main() -> int:
         return 0
 
     print(f"package_desktop: host '{system}' not supported. "
-          f"projectMM ships macOS arm64, Windows x64 and Linux x64/arm64.")
+          f"MoonLight ships macOS arm64, Windows x64 and Linux x64/arm64.")
     return 2
 
 

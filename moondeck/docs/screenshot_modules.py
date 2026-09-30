@@ -3,9 +3,9 @@
 # requires-python = ">=3.11"
 # dependencies = ["playwright", "requests"]
 # ///
-"""Capture UI screenshots and preview GIFs of every projectMM module.
+"""Capture UI screenshots and preview GIFs of every MoonLight module.
 
-Connects to a running projectMM server, adds each module to a minimal
+Connects to a running MoonLight server, adds each module to a minimal
 pipeline via REST, screenshots its card in the web UI, then removes it.
 For effects and modifiers also captures a 3-second GIF of the preview canvas.
 
@@ -16,7 +16,7 @@ Saves to (by domain/type, mirroring src):
   docs/assets/light/effects/<TypeName>.png/.gif   — effect card + preview
   docs/assets/light/{modifiers,layouts,drivers}/  — other light modules
   docs/assets/core/<TypeName>.png                 — core modules
-  docs/assets/ui/ui_overview.png                  — projectMM full-page screenshot
+  docs/assets/ui/ui_overview.png                  : MoonLight full-page screenshot
   docs/assets/ui/moondeck_{desktop,esp32,live}.png     — MoonDeck tabs
   docs/assets/ui/installer.png                    — web installer page
 
@@ -46,13 +46,13 @@ Prerequisites (one-time, machine-local — NOT in the repo or the venv):
        and repo transfers — if it's "missing" it was simply never installed here.
 
 Running server: the script captures against whatever is on --host (default
-:8080). Start ONE fresh server:  uv run moondeck/build/build_desktop.py && ./build/<host>/projectMM
+:8080). Start ONE fresh server:  uv run moondeck/build/build_desktop.py && ./build/<host>/MoonLight
 (or via MoonDeck's Desktop tab — same per-host build dir, so they share the binary). GOTCHA: a leftover binary on :8080 captures the WRONG
-images silently — e.g. a `build/macos/projectMM` from a MoonDeck run still bound
+images silently, e.g. a `build/macos/MoonLight` from a MoonDeck run still bound
 to the port serves the OLD code, so a renamed/changed effect screenshots as its
 previous version no matter how often you rebuild. The script now prints a STALE
 SERVER warning when the running types don't match src/main.cpp; if you see it,
-`pkill -f projectMM` and start exactly one server. GIFs need --gif (PNG-only
+`pkill -f MoonLight` and start exactly one server. GIFs need --gif (PNG-only
 otherwise). Always eyeball the output PNG — the card title + controls should
 match the effect you captured.
 """
@@ -521,7 +521,7 @@ def check_server_freshness(host: str) -> None:
     """Warn loudly if the running server looks like a stale binary.
 
     Compares the server's registered types against what src/main.cpp registers.
-    The classic failure (seen 2026-06): a leftover `build/macos/projectMM` from a
+    The classic failure (seen 2026-06): a leftover `build/macos/MoonLight` from a
     MoonDeck run was still bound to :8080, so captures showed the PRE-rename effect
     no matter how many times the dev binary was rebuilt. A missing type is the
     tell — surface it with the fix instead of silently capturing wrong images.
@@ -536,9 +536,9 @@ def check_server_freshness(host: str) -> None:
               f"source registers: {', '.join(missing[:6])}"
               + (" …" if len(missing) > 6 else ""))
         print("      The running binary is older than the current source. Most likely a")
-        print("      second projectMM (a stale build/<host>/projectMM) is still on :8080.")
-        print("      Fix:  pkill -f projectMM  then rebuild + run ONE server:")
-        print("        uv run moondeck/build/build_desktop.py && ./build/<host>/projectMM")
+        print("      second MoonLight (a stale build/<host>/MoonLight) is still on :8080.")
+        print("      Fix:  pkill -f MoonLight  then rebuild + run ONE server:")
+        print("        uv run moondeck/build/build_desktop.py && ./build/<host>/MoonLight")
 
 
 # ---------------------------------------------------------------------------
@@ -805,7 +805,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--host", default="localhost:8080",
-                        help="projectMM server host:port (default: localhost:8080)")
+                        help="MoonLight server host:port (default: localhost:8080)")
     parser.add_argument("--force", action="store_true",
                         help="Re-capture even if screenshot already exists")
     parser.add_argument("--gif", action="store_true",
@@ -823,23 +823,23 @@ def main() -> int:
                              "entry, on a Layer with default controls. Fixes the list going stale "
                              "the moment a module is added.")
     parser.add_argument("--extras-only", action="store_true",
-                        help="Skip projectMM module captures; only run the extra shots "
+                        help="Skip MoonLight module captures; only run the extra shots "
                              "(MoonDeck tabs, installer). Useful for recapturing the "
-                             "MoonDeck UI without needing a built+running projectMM.")
+                             "MoonDeck UI without needing a built+running MoonLight.")
     args = parser.parse_args()
 
     if not args.extras_only:
         try:
             _get(f"http://{args.host}/api/state", timeout=3)
         except Exception as e:
-            print(f"Cannot reach projectMM at {args.host}: {e}")
+            print(f"Cannot reach MoonLight at {args.host}: {e}")
             print("Start the server first: uv run moondeck/moondeck.py  (then build+run from Desktop tab)")
             return 1
 
-    # Module-related state — only meaningful when projectMM is reachable.
+    # Module-related state, only meaningful when MoonLight is reachable.
     # In --extras-only mode we skip the discovery/orphan-sweep so the script
     # can run with only MoonDeck up (recapturing MoonDeck tab screenshots
-    # shouldn't require a built+running projectMM).
+    # shouldn't require a built+running MoonLight).
     parents: dict[str, str] = {}
     nav_roots: dict[str, str] = {}
     container_names: dict[str, str] = {}
@@ -917,7 +917,7 @@ def main() -> int:
         missing = [r for r in ("Layer", "Drivers", "Layouts") if r not in parents]
         if missing:
             print(f"Pipeline containers not found: {missing}")
-            print("Build and run projectMM first (Desktop tab → Build → Run).")
+            print("Build and run MoonLight first (Desktop tab → Build → Run).")
             return 1
         print(f"  Layer={parents['Layer']!r} (nav={nav_roots['Layer']!r})")
         print(f"  Drivers={parents['Drivers']!r} (nav={nav_roots['Drivers']!r})")
@@ -945,7 +945,7 @@ def main() -> int:
         displaced_layout: dict | None = None
 
         try:
-            # --- Full-page UI overview screenshot --- (needs projectMM)
+            # --- Full-page UI overview screenshot --- (needs MoonLight)
             if not args.extras_only:
                 overview_path = UI_DIR / "ui_overview.png"
                 filter_allows = (not filt or filt in "ui_overview")
@@ -987,7 +987,7 @@ def main() -> int:
                     print("failed (is the server running?)")
                     failed.append((filename, "screenshot failed"))
 
-            # Module-card captures all require projectMM. In --extras-only
+            # Module-card captures all require MoonLight. In --extras-only
             # mode we're done after the EXTRA_SHOTS loop above.
             if args.extras_only:
                 raise _ExtrasOnlyDone()

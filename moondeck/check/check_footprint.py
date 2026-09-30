@@ -57,7 +57,7 @@ _AREA = {"T": "code", "t": "code", "W": "code", "V": "code",
          "B": "bss", "b": "bss"}
 
 # `<addr> <size> <type> <name>\t<abs path>:<line>` — the DWARF file is what credits the bytes.
-_SRC = re.compile(r"projectMM/(src/[^:\t]+):\d+\s*$")
+_SRC = re.compile(re.escape(ROOT.as_posix()) + r"/(src/[^:\t]+):\d+\s*$")
 
 
 def _tool(name, firmware):
@@ -186,7 +186,7 @@ def defining_site(elf, nm):
     p = subprocess.run([nm, "--line-numbers", str(elf)], capture_output=True, text=True, check=False)
     out = {}
     for ln in p.stdout.splitlines():
-        m = re.match(r"\S+\s+\S+\s+(\S+)\t.*?projectMM/(src/[^:]+):(\d+)", ln)
+        m = re.match(r"\S+\s+\S+\s+(\S+)\t" + re.escape(ROOT.as_posix()) + r"/(src/[^:]+):(\d+)", ln)
         if m:
             out.setdefault(m.group(1), f"{m.group(2)}:{m.group(3)}")
     return out

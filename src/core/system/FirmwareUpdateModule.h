@@ -43,7 +43,7 @@ constexpr const char* kReleaseAssetUrlFormat =
     "https://github.com/%s/releases/download/v%s/firmware-%s-v%s.bin";
 
 /// The name this project's app image carries in its ESP-IDF descriptor, which is the CMake `project()` name and changes only with it.
-constexpr const char* kProjectImageName = "projectMM";   // a device refuses every firmware if this and CMake disagree, and no build error says so
+constexpr const char* kProjectImageName = "projectMM";   // rename-keep: the name a SHIPPED device compares against, so it outlives the product name
 
 inline char     g_otaStatus[64]     = "idle";   ///< the phase the install is in, shared by every unit
 inline uint32_t g_otaBytesRead      = 0;        ///< how much has been written

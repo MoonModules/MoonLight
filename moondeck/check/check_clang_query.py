@@ -483,8 +483,9 @@ def _run_rule(rule, tus, build_dir, tool):
 def _rel(path):
     """Repo-relative path, or None for anything outside src/ (SDK and vendored headers)."""
     p = path.replace("\\", "/")
-    if "projectMM/src/" in p:
-        return p.split("projectMM/")[-1]
+    root = ROOT.as_posix() + "/"
+    if p.startswith(root):
+        p = p[len(root):]
     return p if p.startswith("src/") else None
 
 

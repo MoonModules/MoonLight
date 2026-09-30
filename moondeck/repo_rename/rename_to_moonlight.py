@@ -133,30 +133,18 @@ KEEP_MARKER = "rename-keep"
 KEEP_SUBSTRINGS = [
     # A v5 device's recovery image is stamped projectMM-moonbase, so renaming the check makes the new firmware reject the image already in flash, leaving no recovery path. It changes when a MoonBase built under the new name ships.
     "projectMM-moonbase",
+    # The ESP-IDF build names its image after `project()`, which stays projectMM for the OTA gate, so every script reading that image keeps the name too.
+    "projectMM.bin",
+    "projectMM.elf",
     # The predecessor repository, which keeps its own name.
     "ewowi/MoonLight",
-    # The backup bookmarklet targets OLD firmware, whose Restore accepts only this value, and it sits inside a template literal where a trailing marker cannot go.
-    "projectMM-config-backup",
 ]
 
 # Where an existing installation's own data is addressed by a path or key carrying the product name, so a rewrite reads an empty location rather than failing: @see the rename plan's migration section.
 # These are listed here rather than marked in place because each is a path built from segments, where a marker would sit on the wrong line.
-KEEP_PATH_KEYS = [
-    # A desktop user's config, presets and scripts live under a directory named after the product, and nothing carries them across: renaming this boots into an empty profile with no error.
-    'std::filesystem::path(base) / "projectMM"',
-    'Library" / "Application Support" / "projectMM"',
-    'std::filesystem::path(xdg) / "projectMM"',
-    '".local" / "share" / "projectMM"',
-    # The web installer's saved device list, which is the user's own bookmark set.
-    '"projectMM.devices.v1"',
-]
-
-
 def keeps_old_name(line: str) -> bool:
     """True where a line opts out of the sweep, by marker or by known content."""
     if KEEP_MARKER in line:
-        return True
-    if any(k in line for k in KEEP_PATH_KEYS):
         return True
     return any(k in line for k in KEEP_SUBSTRINGS)
 
