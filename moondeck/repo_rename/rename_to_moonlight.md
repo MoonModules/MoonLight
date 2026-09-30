@@ -6,7 +6,7 @@ Everywhere the product name still appears as the CURRENT name, which is what the
 
 Committed so the reach is reviewable before the day. A file appearing here that should keep the old name needs a `rename-keep` marker, and the readiness check asserts the ones already found.
 
-**461 hits across 114 files.**
+**467 hits across 116 files.**
 
 ## By area
 
@@ -15,7 +15,7 @@ Committed so the reach is reviewable before the day. A file appearing here that 
 | 81 | `moondeck/ci` |
 | 56 | `docs/moonmodules/light` |
 | 31 | `docs/how-to` |
-| 30 | `moondeck/run` |
+| 31 | `moondeck/run` |
 | 24 | `moondeck/docs` |
 | 22 | `.` |
 | 19 | `docs/work/past` |
@@ -23,21 +23,22 @@ Committed so the reach is reviewable before the day. A file appearing here that 
 | 17 | `src/ui` |
 | 16 | `.github/workflows` |
 | 16 | `moondeck` |
+| 15 | `docs/work/future` |
 | 15 | `docs/work/past/plans` |
-| 13 | `docs/work/future` |
 | 13 | `moondeck/build` |
 | 12 | `src/light/effects` |
 | 11 | `src/light/modifiers` |
 | 10 | `docs/reference` |
 | 10 | `moondeck/check` |
+| 9 | `docs` |
 | 9 | `mooninstaller` |
-| 7 | `docs` |
 | 6 | `docs/work/present` |
 | 5 | `docs/friend-repos` |
 | 4 | `moonbase/main` |
 | 3 | `docs/legal` |
 | 3 | `moondeck/qemu` |
 | 2 | `mooncloud` |
+| 2 | `test/python` |
 | 2 | `test/unit/core` |
 | 1 | `docs/explanation/architecture` |
 | 1 | `esp32` |
@@ -45,7 +46,6 @@ Committed so the reach is reviewable before the day. A file appearing here that 
 | 1 | `moondeck/moondeck_ui` |
 | 1 | `src/core/system` |
 | 1 | `src/light/layers` |
-| 1 | `test/python` |
 
 ## The twenty widest files
 
@@ -63,7 +63,7 @@ Committed so the reach is reviewable before the day. A file appearing here that 
 | 11 | `docs/work/past/plans/rename-to-moonlight (superseded).md` |
 | 11 | `moondeck/MoonDeck.md` |
 | 10 | `docs/how-to/installing-to-desktop.md` |
-| 9 | `moondeck/run/show_crash_log.py` |
+| 10 | `moondeck/run/show_crash_log.py` |
 | 8 | `docs/reference/MIGRATING.md` |
 | 8 | `moondeck/build/build_desktop.py` |
 | 7 | `CMakeLists.txt` |

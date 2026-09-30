@@ -26,10 +26,50 @@
   ],
   "fixture": [
     {
+      "name": "layouts",
+      "description": "Where the lights are, which the layer reads its coordinates from.",
+      "op": "add_module",
+      "id": "Layouts",
+      "type": "Layouts"
+    },
+    {
+      "name": "grid",
+      "description": "A 16x16 panel, small enough to run anywhere.",
+      "op": "add_module",
+      "id": "Grid",
+      "type": "GridLayout",
+      "parent_id": "Layouts",
+      "props": {
+        "width": 16,
+        "height": 16
+      }
+    },
+    {
+      "name": "layer",
+      "description": "One layer over those layouts: what the drivers read, and what carries the light brightness scales.",
+      "op": "add_module",
+      "id": "Layer",
+      "type": "Layer",
+      "props": {
+        "layouts": "Layouts"
+      }
+    },
+    {
+      "name": "effect",
+      "description": "An effect that paints from the first frame, so there is output to dim.",
+      "op": "add_module",
+      "id": "FX",
+      "type": "RainbowEffect",
+      "parent_id": "Layer"
+    },
+    {
       "name": "fix-Drivers",
       "op": "add_module",
       "id": "Drivers",
-      "type": "Drivers"
+      "type": "Drivers",
+      "props": {
+        "layer": "Layer"
+      }
     },
     {
       "name": "fix-LightPresets",
@@ -77,14 +117,14 @@
       "observed": {
         "desktop-macos": {
           "tick_us": {
-            "p50": 42,
-            "p95": 82,
-            "min": 21,
-            "max": 82,
-            "n": 14,
-            "samples": [40, 43, 48, 48, 24, 62, 54, 21, 57, 25, 42, 82, 26, 42]
+            "p50": 11,
+            "p95": 396,
+            "min": 1,
+            "max": 958,
+            "n": 32,
+            "samples": [32, 29, 34, 29, 26, 396, 958, 1, 26, 86, 41, 34, 40, 45, 8, 7, 7, 7, 7, 8, 10, 9, 7, 7, 7, 13, 9, 10, 9, 19, 11, 11]
           },
-          "last_updated": "2026-09-26"
+          "last_updated": "2026-09-30"
         }
       }
     },

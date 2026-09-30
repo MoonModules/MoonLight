@@ -84,8 +84,8 @@ def main() -> int:
         cmd = ["uv", "run"]
         for d in UI_DEPS:
             cmd += ["--with", d]
-        cmd += ["pytest", "test/uiscenarios", "-q"]
-        rc |= run(cmd, "UI (test/uiscenarios)")
+        cmd += ["pytest", "moontube", "-q"]
+        rc |= run(cmd, "UI (moontube)")
 
     print("\nDONE" if rc == 0 else "\nFAILED", flush=True)
     return rc

@@ -30,8 +30,7 @@
 #include <cstdarg>
 #include <cstdio>
 
-// Ask the compiler whether it HAS the warning rather than inferring it from `__clang__`: Apple clang defines that macro and predates this group, where naming it is an unknown-warning-option, and that is an error under our settings.
-// The same guard `platform_desktop.cpp` carries, whose comment records this reaching the main branch once already. It did so again here.
+// Ask the compiler whether it HAS the warning rather than inferring it from `__clang__`: Apple clang defines that macro and predates this group. The same guard `platform_desktop.cpp` carries.
 #if defined(__clang__) && defined(__has_warning)
 #  if __has_warning("-Wfunction-effects")
 #    define MM_SUPPRESS_FUNCTION_EFFECTS 1

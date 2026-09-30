@@ -4,6 +4,26 @@ Forward-looking items whose work genuinely spans **both** the core and light dom
 
 ## Cross-domain
 
+### Switching a MoonLive script from the card fails intermittently (2026-09-29)
+
+Picking a second script for a `MoonLiveEffect` leaves the module running the first one, with nothing reported: the card shows the new name, the effect keeps rendering the old one.
+Measured over six consecutive picks on the desktop: two switched, four did not, and the fourth failure recovered on its own.
+
+**What is established.** The file is on the device and complete (`noise.mle`, 560 bytes, `/.moonlive`).
+The first pick after the card opens usually works, and later ones fail in runs rather than randomly.
+The picker dialog opens on a failing attempt, so the failure is inside row selection rather than in reaching the widget.
+No alert fires, which is why the UI looks like it simply did nothing.
+
+**The strongest lead.** An editor pane is present after the first pick, and the change handler does `await editor.save()` and refuses to switch while the pane is still dirty.
+That path is unproven: the next step is to instrument the handler and read `editor.isDirty()` on a failing pick.
+
+**Ruled out.** The duplicated download logic in the dropdown, which called `mlDownloadScript` directly instead of the shared `mlEnsureLocal`.
+That was a real defect and is fixed, pinned by `test/js/ui-script-picker-download.test.mjs`, and it did not change this symptom.
+
+**Worth deciding alongside the fix**: whether the script control should be editable at all, or whether a scripted module's script is chosen once through the module picker.
+The module picker path works reliably, so a read-only control would remove the failing surface rather than repair it.
+
+
 ### LightsControl: not building it (decided 2026-09-01)
 
 The idea was one module owning global light state (master on/off, brightness, palette, bpm) and

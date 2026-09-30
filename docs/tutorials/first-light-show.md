@@ -12,7 +12,7 @@ Open **Layouts**. A fresh device has a **Grid**, which is the shape most rigs st
 
 Set **width** to 16 and **height** to 16. The preview reshapes as you type, and the light count under the card follows.
 
-<video src="../assets/uiscenarios/05-layouts.webm" controls playsinline width="720" title="Resizing a grid while it renders, then the other layout shapes the same effect paints into."></video>
+<video src="../assets/moontube/05-layouts.webm" controls playsinline width="720" title="Resizing a grid while it renders, then the other layout shapes the same effect paints into."></video>
 
 
 That number is the whole point of a layout. Every effect downstream asks the layout how many lights there are and where each one sits, so this one card decides what the rest of the pipeline is painting on. Nothing else in the tree stores a size, which is why changing it here never leaves something stale behind.
@@ -46,7 +46,7 @@ That separation is why a modifier is worth having at all. Mirror, rotate and mul
 
 All of it on one wall, start to finish: an effect in a layer, with its controls driven while it runs. Then a modifier reshaping it, and a second layer doing the same and blending over the first.
 
-<video src="../assets/uiscenarios/06-layers.webm" controls playsinline width="720" title="An effect, a modifier, and a second layer blended over the first."></video>
+<video src="../assets/moontube/06-layers.webm" controls playsinline width="720" title="An effect, a modifier, and a second layer blended over the first."></video>
 
 ## 4. Send it somewhere real
 

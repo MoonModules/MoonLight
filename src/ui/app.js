@@ -5172,8 +5172,12 @@ async function mlScriptItems(roles) {
 /// proceed; it has already told the user why.
 async function mlEnsureLocal(item) {
     if (!item.remote) return true;
+    // A caller knows EITHER a role (the module picker, from a catalog row) or a group (a file
+    // picker, from the extension). Both name the same folder, so the helper takes whichever is
+    // offered rather than making one caller translate into the other's vocabulary.
+    const group = item.group || (item.role + "s");
     try {
-        await mlDownloadScript(item.script, item.role + "s");
+        await mlDownloadScript(item.script, group);
         return true;
     } catch (e) {
         alert("could not download " + item.script + ": " + (e && e.message ? e.message : e));
@@ -8208,17 +8212,25 @@ function buildFilePathControl(row, label, key, moduleName, ctrl) {
         if (remote.includes(chosen)) {
             const previous = String(ctrl.value ?? "");
             picker.disabled = true;
+            // THE SHARED RULE, not a second copy of it. mlEnsureLocal is what the module picker
+            // calls, and its docstring says it runs first on both paths: this one had its own
+            // download-and-select logic instead, and that copy is what left the module pointing
+            // at the previous script with nothing reported.
+            // DISABLED THROUGHOUT, including the refresh: fillPicker re-reads the device and
+            // rebuilds the options, so a click landing in that window picks from a list being
+            // replaced. `finally` re-enables it on the failure path too.
             try {
-                await mlDownloadScript(chosen, mlGroupForExt(ext));
-            } catch (e) {
+                const ok = await mlEnsureLocal({ remote: true, script: chosen,
+                                                 group: mlGroupForExt(ext) });
+                if (!ok) {               // it has already said why
+                    picker.value = previous;
+                    return;
+                }
+                await fillPicker();      // it is local now, so it loses its marker
+                picker.value = chosen;
+            } finally {
                 picker.disabled = false;
-                alert("could not download " + chosen + ": " + (e && e.message ? e.message : e));
-                picker.value = previous;
-                return;
             }
-            picker.disabled = false;
-            await fillPicker();          // it is local now, so it loses its marker
-            picker.value = chosen;
         }
         refreshDelLabel();
         dragTs[key] = Date.now();

@@ -2,7 +2,7 @@
 
 The user-added **Service** modules — capability bridges the device provides or consumes, added and removed at runtime in the `Services` container (the core-domain twin of the light domain's `Effects`/`Drivers`). Fixed device infrastructure (identity, network, inspection tools) lives under **System** — see [core/system.md](system.md). Every row links to its generated technical page (the full API, from the `.h`) and its tests.
 
-<video src="../../assets/uiscenarios/09-services.webm" controls playsinline width="720" title="Every service in turn: audio, button, analog, infrared, and a scripted one."></video>
+<video src="../../assets/moontube/09-services.webm" controls playsinline width="720" title="Every service in turn: audio, button, analog, infrared, and a scripted one."></video>
 
 <a id="services"></a>
 

@@ -156,11 +156,11 @@ def main() -> int:
     # A changed script still changes the content, so the rebuild it should trigger still happens.
     # newline="\n": the header is tracked and the repo stores it with LF, but write_text translates
     # "\n" to the platform terminator, so a Windows host would commit the whole file as CRLF the
-    # first time a script really changes. The compare below reads with universal newlines and would
+    # first time a script changes. The compare below reads with universal newlines and would
     # not notice, since it sees LF either way.
     #
     # An unreadable or non-UTF-8 existing file means "cannot prove it matches", not "fail the
-    # build": before this compare existed such a file was simply overwritten, and cmake turns any
+    # build": before this compare existed such a file was overwritten outright, and cmake turns any
     # non-zero exit here into FATAL_ERROR, so letting the decode escape would trade a spurious
     # rebuild for a broken one.
     text = "".join(parts)

@@ -1,0 +1,47 @@
+{
+  "name": "getting-started",
+  "title": "MoonLight — getting started",
+  "description": "Install it, shape the lights, write an effect. The first ten minutes with MoonLight.",
+  "width": 1280,
+  "clips": [
+    {
+      "clip": "01-install-esp32",
+      "title": "Install it",
+      "subtitle": "A browser and a USB cable",
+      "bars": 0
+    },
+    {
+      "clip": "02-first-look-desktop",
+      "title": "Look around",
+      "subtitle": "One device. Thousands of lights.",
+      "bars": 0
+    },
+    {
+      "clip": "05-layouts",
+      "title": "Say where the lights are",
+      "bars": 0
+    },
+    {
+      "clip": "06-layers",
+      "title": "Paint them",
+      "bars": 0
+    },
+    {
+      "clip": "03-second-look",
+      "title": "Change your mind freely",
+      "bars": 0
+    },
+    {
+      "clip": "08-moonlive-effects",
+      "title": "Write your own",
+      "subtitle": "Compiled on the device, no reflash",
+      "bars": 0
+    }
+  ],
+  "note": "The clips run WHOLE: `bars: 0` keeps each one's own length and its narration, because the voice carries the point and a bar count would cut it mid-sentence. No music track, for the same reason. The inset window cycles the example footage top right, so a viewer watching the interface also sees what it does to real lights. That footage is rough and carries near-duplicates: picking and trimming it is an edit for this file, not a change to the tooling.",
+  "inset": {
+    "folder": "media/examplevideos",
+    "width": 320,
+    "margin": 24
+  }
+}

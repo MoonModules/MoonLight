@@ -1,0 +1,129 @@
+{
+  "name": "11-moondeck",
+  "description": "The developer console: one page that builds, flashes, tests and checks the project, and why it is ours rather than PlatformIO.",
+  "speed": 1.6,
+  "host": "localhost:8420",
+  "steps": [
+    {
+      "action": "chapter",
+      "title": "MoonDeck",
+      "description": "One console, every target",
+      "caption": "MoonDeck. One console, every target.",
+      "seconds": 5.5
+    },
+    {
+      "action": "goto",
+      "url": "http://localhost:8420/",
+      "caption": "This is MoonDeck, the console the project is developed from. It runs in a browser on your own machine, and every button on it is a script in the repository. One command starts it: uv run moondeck slash moondeck dot py.",
+      "speech": 17.9
+    },
+    {
+      "action": "click",
+      "selector": "[data-tab=\"desktop\"]",
+      "caption": "The obvious question first: why not PlatformIO. The ESP32 build here is native to Espressif's own framework, tracking pre-release versions against a pinned commit for chips like the P4, which a packaged platform does not let you do.",
+      "speech": 18.5
+    },
+    {
+      "action": "click",
+      "selector": "[data-tab=\"desktop\"]",
+      "caption": "And the drivers reach for the vendor's own peripherals directly, rather than through an Arduino layer that would sit between the code and the hardware it is timing.",
+      "speech": 11.4
+    },
+    {
+      "action": "click",
+      "selector": "[data-tab=\"desktop\"]",
+      "caption": "But the real reason is the size of the job. Compile, upload and monitor is three of these buttons. The rest is everything else a day's work needs.",
+      "speech": 12.1
+    },
+    {
+      "action": "click",
+      "selector": "[data-tab=\"desktop\"]",
+      "caption": "Desktop is the first tab, and the one used most. MoonLight runs on this computer as a real device, so almost everything is proven here before any hardware is touched.",
+      "speech": 13.9
+    },
+    {
+      "action": "click",
+      "selector": ".status-dot[data-id=\"build_desktop\"]",
+      "caption": "Build compiles the firmware for this machine, in seconds rather than the minutes a chip build takes.",
+      "speech": 7.5
+    },
+    {
+      "action": "click",
+      "selector": ".status-dot[data-id=\"run_desktop\"]",
+      "caption": "Run starts it, and the interface you have seen in the other clips is then live on this computer, with no device plugged in anywhere.",
+      "speech": 9.6
+    },
+    {
+      "action": "click",
+      "selector": ".status-dot[data-id=\"test_desktop\"]",
+      "caption": "Test is the group that keeps the agents honest. Two thousand unit tests, the scenario suite that drives a whole pipeline, and the host tests for the scripts themselves.",
+      "speech": 13.7
+    },
+    {
+      "action": "click",
+      "selector": ".status-dot[data-id=\"check_specs\"]",
+      "caption": "Check is the group that reads the repository rather than running it: specs against code, documentation against what generates it, the platform boundary, the catalogs.",
+      "speech": 12.7
+    },
+    {
+      "action": "click",
+      "selector": ".status-dot[data-id=\"repo_health\"]",
+      "caption": "Repo health is the one worth knowing about. It measures flash, memory and speed every commit, so a regression shows up as a number rather than as a feeling months later.",
+      "speech": 14.2
+    },
+    {
+      "action": "click",
+      "selector": ".status-dot[data-id=\"check_clang_tidy\"]",
+      "caption": "Tools is the deeper analysis: static analysis, the hot path, complexity. Slower, so they are run when something is being changed rather than on every commit.",
+      "speech": 13.7
+    },
+    {
+      "action": "click",
+      "selector": ".status-dot[data-id=\"build_docs\"]",
+      "caption": "And docs builds the documentation site and the screenshots in it, from the same repository, so the published pages cannot drift from the code.",
+      "speech": 10.5
+    },
+    {
+      "action": "click",
+      "selector": "[data-tab=\"esp32\"]",
+      "caption": "The second tab is the chip itself. Setup fetches the framework, build compiles the firmware, flash writes it over USB, and monitor shows the serial output.",
+      "speech": 13.3
+    },
+    {
+      "action": "click",
+      "selector": ".status-dot[data-id=\"flash_esp32\"]",
+      "caption": "That is the compile, upload and monitor a normal tool gives you, and it is one group of one tab here. Erase sits beside it, and asks before it runs.",
+      "speech": 12.2
+    },
+    {
+      "action": "click",
+      "selector": ".status-dot[data-id=\"qemu_run\"]",
+      "caption": "There is also an emulator, which runs the firmware with no chip attached at all: useful for the boot path when the device is not on the desk.",
+      "speech": 11.1
+    },
+    {
+      "action": "click",
+      "selector": "[data-tab=\"live\"]",
+      "caption": "The third tab is live, and it drives real devices over the network rather than building anything.",
+      "speech": 8.0
+    },
+    {
+      "action": "click",
+      "selector": ".status-dot[data-id=\"live_scenario\"]",
+      "caption": "Live scenarios are the same tests the scenario clip ran, run against hardware on your bench instead of against this computer.",
+      "speech": 10.2
+    },
+    {
+      "action": "click",
+      "selector": ".status-dot[data-id=\"ui_clip\"]",
+      "caption": "And video records these clips. The one you are watching was made by a button on this page, driving the interface the way a person would.",
+      "speech": 10.1
+    },
+    {
+      "action": "click",
+      "selector": "[data-tab=\"desktop\"]",
+      "caption": "Forty six of them, across three tabs. Every one is a script that runs the same way from a terminal, so a person, an agent and the build server all take the identical path.",
+      "speech": 14.3
+    }
+  ]
+}

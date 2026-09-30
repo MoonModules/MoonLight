@@ -1,0 +1,270 @@
+{
+  "name": "10-control",
+  "description": "The surface: eight switches, encoders and faders, each pointed at any control on the device, and the one place external control arrives.",
+  "speed": 1.7,
+  "setup": [
+    {
+      "module": "Grid",
+      "control": "width",
+      "value": 256
+    },
+    {
+      "module": "Grid",
+      "control": "height",
+      "value": 256
+    }
+  ],
+  "steps": [
+    {
+      "action": "chapter",
+      "title": "Control",
+      "description": "One surface, pointed anywhere",
+      "caption": "Control. One surface, pointed anywhere.",
+      "seconds": 4.8
+    },
+    {
+      "action": "open_card",
+      "module": "Control",
+      "caption": "This is the Control module, and it is not an effect or a driver. It is a surface: eight switches, eight encoders and eight faders, and each one can be pointed at any control on this device, and sixty four pads for presets.",
+      "speech": 19.1
+    },
+    {
+      "action": "click_control",
+      "module": "Control",
+      "control": "switch1",
+      "caption": "Three of them are already mapped, because a device with nothing wired is no use. Switch one is the master on and off: the lights stop, and nothing else in the tree changed.",
+      "speech": 13.6
+    },
+    {
+      "action": "click_control",
+      "module": "Control",
+      "control": "switch1",
+      "caption": "And back on again.",
+      "speech": 2.8
+    },
+    {
+      "action": "scroll_to",
+      "selector": "[data-module=\"Control\"] .control-row[data-key=\"fader1\"]",
+      "caption": "The faders sit right under the encoders, so the whole desk reads at a glance.",
+      "speech": 6.4
+    },
+    {
+      "action": "drag_slider",
+      "module": "Control",
+      "control": "fader1",
+      "to": 0.22,
+      "caption": "Fader one is the brightness, and it is pointed at Drivers dot brightness. Pulling it down here is the same as pulling it down on the Drivers card.",
+      "speech": 11.2
+    },
+    {
+      "action": "drag_slider",
+      "module": "Control",
+      "control": "fader1",
+      "to": 0.85,
+      "caption": "Back up. Every one of these applies on the next frame, like everything else.",
+      "speech": 6.8
+    },
+    {
+      "action": "set_number",
+      "module": "Control",
+      "control": "encoder1",
+      "value": 40,
+      "caption": "And encoder one is a knob: scroll it, and it steps through the palettes. Switch, fader, encoder: on and off, a value, and a choice from a list.",
+      "speech": 12.3
+    },
+    {
+      "action": "open_card",
+      "module": "Control",
+      "caption": "What makes those three special is only that someone pointed them somewhere. The link button turns the card into assign mode, and then every control here is a question: what should this one drive?",
+      "speech": 14.0
+    },
+    {
+      "action": "click",
+      "selector": "[data-module=\"Control\"] .assign-toggle",
+      "caption": "So press it, and the surface is ready to be wired.",
+      "speech": 5.4
+    },
+    {
+      "action": "click",
+      "selector": "[data-module=\"Control\"] .control-row[data-key=\"fader2\"]",
+      "caption": "Click the control you want to assign, and it asks where to point it: every module on the device, and every control inside the one you pick.",
+      "speech": 10.5
+    },
+    {
+      "action": "choose_option",
+      "selector": ".surface-popup-row select",
+      "value": "Pulse",
+      "caption": "The effect, say.",
+      "speech": 2.5
+    },
+    {
+      "action": "choose_option",
+      "selector": ".surface-popup-row select >> nth=1",
+      "value": "bpm",
+      "caption": "and the control on it: the pulse rate.",
+      "speech": 3.9
+    },
+    {
+      "action": "click",
+      "selector": ".surface-popup-row button",
+      "caption": "And assign. Fader two now drives how fast the effect pulses, from a fader that knew nothing about effects a moment ago.",
+      "speech": 10.0
+    },
+    {
+      "action": "click",
+      "selector": "[data-module=\"Control\"] .assign-toggle",
+      "caption": "Done assigning, and the card is a surface again.",
+      "speech": 4.7
+    },
+    {
+      "action": "drag_slider",
+      "module": "Control",
+      "control": "fader2",
+      "to": 0.85,
+      "caption": "And there it goes: the pulse speeds up under the fader. Which is the point: you build the surface you want, rather than the one someone shipped.",
+      "speech": 10.3
+    },
+    {
+      "action": "open_card",
+      "module": "Services",
+      "caption": "Now the part that makes this more than a page of sliders. The surface is where external control arrives, and the services are how it gets in.",
+      "speech": 11.3
+    },
+    {
+      "action": "add_module",
+      "parent": "Services",
+      "type": "OscModule",
+      "as": "osc",
+      "caption": "O S C is the clearest example: the protocol lighting desks and touch surfaces speak. It is off until you turn it on, because the port takes writes without a password.",
+      "speech": 13.6
+    },
+    {
+      "action": "click",
+      "caption": "Listening now, on port nine thousand. An address like slash m m slash fader slash one reaches that fader directly.",
+      "speech": 10.8,
+      "selector": "[data-module=\"OscModule\"] .control-row[data-key=\"listen\"] label.switch"
+    },
+    {
+      "action": "start_process",
+      "name": "osc",
+      "command": "uv run moondeck/check/send_osc.py 127.0.0.1 /mm/fader/2 0.25",
+      "caption": "So here is a message sent from the command line, the way a desk or a phone app would send it: fader two, a quarter of the way up.",
+      "speech": 10.3
+    },
+    {
+      "action": "open_card",
+      "module": "Control",
+      "caption": "Back to the surface, to see what that did.",
+      "speech": 4.2
+    },
+    {
+      "action": "scroll_to",
+      "selector": "[data-module=\"Control\"] .control-row[data-key=\"fader2\"]",
+      "caption": "There it is: fader two moved on its own, and the effect slowed with it, because that fader is pointed at the pulse rate.",
+      "speech": 9.4
+    },
+    {
+      "action": "start_process",
+      "name": "osc2",
+      "command": "uv run moondeck/check/send_osc.py 127.0.0.1 /mm/fader/2 0.9",
+      "caption": "And back up, fast again. The surface is synced either way, whoever moved it.",
+      "speech": 7.0
+    },
+    {
+      "action": "delete_module",
+      "module": "{osc}",
+      "caption": "O S C is one way in. Because these are services, the others work the same: Home Assistant over M Q T T, a wired switch on a pin, a pedal, an analog dial.",
+      "speech": 14.5
+    },
+    {
+      "action": "open_card",
+      "module": "Control",
+      "caption": "Under the faders is the preset pad, and a preset is a whole look saved onto one of them.",
+      "speech": 7.2
+    },
+    {
+      "action": "replace_module",
+      "module": "Pulse",
+      "type": "BouncingBallsEffect",
+      "as": "balls",
+      "caption": "So: a look worth keeping. Bouncing balls, on the Party palette.",
+      "speech": 6.1
+    },
+    {
+      "action": "open_card",
+      "module": "Control",
+      "caption": "Back to the surface, where the pads are.",
+      "speech": 3.8
+    },
+    {
+      "action": "click",
+      "selector": "[data-module=\"Control\"] .list-pad-empty >> nth=0",
+      "caption": "Click an empty pad, and it offers to save what is running right now.",
+      "speech": 5.5
+    },
+    {
+      "action": "type_into",
+      "selector": ".surface-popup-row .list-field-input",
+      "text": "balls",
+      "caption": "Give it a name.",
+      "speech": 2.2
+    },
+    {
+      "action": "click",
+      "selector": ".surface-popup-primary",
+      "caption": "Saved: that pad now holds the effect and the palette together.",
+      "speech": 5.7
+    },
+    {
+      "action": "replace_module",
+      "module": "{balls}",
+      "type": "RipplesEffect",
+      "as": "ripples",
+      "caption": "Now a different look entirely: ripples, which is nothing like bouncing balls.",
+      "speech": 6.1
+    },
+    {
+      "action": "open_card",
+      "module": "Control",
+      "caption": "Back to the pads.",
+      "speech": 2.6
+    },
+    {
+      "action": "click",
+      "selector": "[data-module=\"Control\"] .list-pad-empty >> nth=0",
+      "caption": "The next empty pad.",
+      "speech": 3.0
+    },
+    {
+      "action": "type_into",
+      "selector": ".surface-popup-row .list-field-input",
+      "text": "ripples",
+      "caption": "Name this one too.",
+      "speech": 2.6
+    },
+    {
+      "action": "click",
+      "selector": ".surface-popup-primary",
+      "caption": "Saved. Two looks now, one on each pad.",
+      "speech": 5.1
+    },
+    {
+      "action": "click",
+      "selector": "[data-module=\"Control\"] .list-pad:not(.list-pad-empty) >> nth=0",
+      "caption": "Press the first, and the bouncing balls come back: effect and palette together.",
+      "speech": 6.7
+    },
+    {
+      "action": "click",
+      "selector": "[data-module=\"Control\"] .list-pad:not(.list-pad-empty) >> nth=1",
+      "caption": "Press the second, and it is ripples again. Which is what a pad is for: a show is a row of these, one press apart.",
+      "speech": 10.9
+    },
+    {
+      "action": "open_card",
+      "module": "Control",
+      "caption": "And what arrives is always the same eight switches, encoders and faders, and the same sixty four pads. Which means a game controller, a U S B surface, an Akai pad, whatever comes next, is a service to write rather than a rewrite of anything else.",
+      "speech": 20.3
+    }
+  ]
+}

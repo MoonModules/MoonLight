@@ -2,7 +2,7 @@
 """Run scenario tests. Replays scenario JSON files via the in-process runner.
 
 Filters compose:
-  --name <stem>     run that one scenario file (the JSON stem, e.g. scenario_Layer_base_pipeline)
+  --name <stem>     run that one scenario file (the JSON stem, e.g. scenario_Effects_pipeline_builds_and_renders)
   --module <Name>   run every scenario whose top-level `module` (or `also`) matches
   --name + --module the named scenario must also match the module (otherwise refused)
   (neither)         run every scenario the runner discovers
@@ -23,6 +23,17 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+
+# A REDIRECTED Windows stdout takes the locale encoding, cp1252, and this runner relays the output
+# of `mm_scenarios`, which prints an arrow and an em-dash of its own. A scenario the runner PASSED
+# would be reported as failed by the print rather than by the run, which is the misdiagnosis the
+# live runner's own preamble exists to prevent. An attached console has been UTF-8 since Python 3.6
+# (PEP 528), so the failing mode is a pipe or a CI log, which is exactly how a gate runs this.
+# errors=replace, so a stray glyph never costs a result.
+if sys.stdout is not None:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if sys.stderr is not None:
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 # Reuse the shared test-metadata parser so scenario discovery stays in one place.

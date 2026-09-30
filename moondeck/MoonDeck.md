@@ -73,8 +73,8 @@ JS reports SKIP rather than failing when node is absent, since a Python-only ben
 
 `--ui` is the odd one and is OPT-IN, which is why a bare run leaves it out. It drives a real browser
 against a running MoonLight with [pytest-playwright](https://playwright.dev/python/docs/test-runners),
-performing a [run file](uiscenario/uiscenario.md) from `test/uiscenarios/clips/` through the interface and checking each step against the
-device over REST. The run files are the same ones `moondeck/uiscenario/uivideo.py` records the videos from, so a
+performing a [run file](moontube/moontube.md) from `moontube/clips/` through the interface and checking each step against the
+device over REST. The run files are the same ones `moondeck/moontube/mtvideo.py` records the videos from, so a
 failure means the UI no longer does what the video shows. It skips rather than fails when nothing
 answers on `localhost:8080` (override with `PROJECTMM_HOST`), for the same reason the JS lane skips
 without node.
@@ -796,7 +796,7 @@ Run scenario tests. Replays JSON scenario files in-process.
 
 ```bash
 uv run moondeck/scenario/run_scenario.py                       # run all
-uv run moondeck/scenario/run_scenario.py --name scenario_Layer_base_pipeline   # run one
+uv run moondeck/scenario/run_scenario.py --name scenario_Effects_pipeline_builds_and_renders   # run one
 ```
 
 Scenarios are JSON files in `test/scenarios/`. Use the dropdown to run a single scenario or leave it on **all** to run the full suite.
@@ -894,7 +894,7 @@ Run scenario tests against a live running device via HTTP.
 ```bash
 uv run moondeck/scenario/run_live_scenario.py                                    # all scenarios vs localhost:8080
 uv run moondeck/scenario/run_live_scenario.py --host 192.168.1.210               # vs ESP32
-uv run moondeck/scenario/run_live_scenario.py --name scenario_MoonModule_control_change   # one scenario
+uv run moondeck/scenario/run_live_scenario.py --name scenario_Network_hardware_reconfigures_live   # one scenario
 uv run moondeck/scenario/run_live_scenario.py --update-baseline                  # save baseline
 uv run moondeck/scenario/run_live_scenario.py --compare-baseline                 # detect regressions
 ```
@@ -908,7 +908,7 @@ For a full description of each scenario, see the [scenario inventory](/api/docs/
 Measure each caption's spoken length and write it into the run file, before anything is recorded.
 
 ```bash
-uv run moondeck/uiscenario/uimeasure.py --run test/uiscenarios/clips/06-layers.json
+uv run moondeck/moontube/mtmeasure.py --run moontube/clips/06-layers.json
 ```
 
 The recording holds a shot until its narration has finished, which needs the length of a line nobody has spoken yet. Alba speaks each caption, ffprobe reads the result, and the number lands in the step as `speech`. Sizing the dwell by eye instead left captions vanishing mid-sentence and each line starting over the one before it.
@@ -920,10 +920,10 @@ Run this FIRST of the three, and run it again whenever a caption changes. Alba i
 Record one UI clip: perform a run file against the interface while Playwright records, then publish a compressed clip for the docs.
 
 ```bash
-uv run moondeck/uiscenario/uivideo.py --run test/uiscenarios/clips/06-layers.json
+uv run moondeck/moontube/mtvideo.py --run moontube/clips/06-layers.json
 ```
 
-The dropdown lists every run under `test/uiscenarios/clips/`. A run drives the interface and nothing else: the `+` tab, the type picker, the card's own buttons, the real inputs. REST is read-only, and is what each step's `expect` block checks against. That is what lets the same file be a UI test (`test_host.py --ui`) as well as a video source. The raw take lands in `media/video/` (ignored). The published clip lands in `docs/assets/uiscenarios/` (tracked, embed this one) only when the run was clean. A take whose steps failed, or that left modules behind, is refused, so it cannot overwrite a good clip. Format and actions: [uiscenario.md](uiscenario/uiscenario.md).
+The dropdown lists every run under `moontube/clips/`. A run drives the interface and nothing else: the `+` tab, the type picker, the card's own buttons, the real inputs. REST is read-only, and is what each step's `expect` block checks against. That is what lets the same file be a UI test (`test_host.py --ui`) as well as a video source. The raw take lands in `media/video/` (ignored). The published clip lands in `docs/assets/moontube/` (tracked, embed this one) only when the run was clean. A take whose steps failed, or that left modules behind, is refused, so it cannot overwrite a good clip. Format and actions: [moontube.md](moontube/moontube.md).
 
 A run names its own `host` when it drives something other than the desktop UI. The installer clip records against the installer preview, and the audio clip against a device with a microphone. Start what a run needs before recording it.
 
@@ -932,7 +932,7 @@ A run names its own `host` when it drives something other than the desktop UI. T
 Speak a clip's captions over the clip, so it is watched rather than read.
 
 ```bash
-uv run moondeck/uiscenario/uivoiceover.py --run test/uiscenarios/clips/06-layers.json
+uv run moondeck/moontube/mtvoiceover.py --run moontube/clips/06-layers.json
 ```
 
 The words are the captions themselves: a separate script would drift from what is on screen the first time either is edited. The offsets come from the recording rather than from the run file, written beside the take as `<clip>-raw.captions.json`. A hold says how long a step is ASKED to dwell, not how long the device took. A line that outlasts its shot is reported rather than overlapped, since the fix belongs in the run file.
@@ -942,20 +942,20 @@ The words are the captions themselves: a separate script would drift from what i
 Render a narrated slide video from a slide script: no device, no browser interaction.
 
 ```bash
-uv run moondeck/uiscenario/uinarrate.py --script test/uiscenarios/slides/00-intro.json
+uv run moondeck/moontube/mtnarrate.py --script moontube/slides/00-intro.json
 ```
 
-A slide script carries `slides` rather than `steps`, so it lives in `test/uiscenarios/slides/` and nothing performs it against a device. Each slide is screenshotted through the same browser the clips use, alba narrates it, and the slide is held for exactly as long as its narration takes.
+A slide script carries `slides` rather than `steps`, so it lives in `moontube/slides/` and nothing performs it against a device. Each slide is screenshotted through the same browser the clips use, alba narrates it, and the slide is held for exactly as long as its narration takes.
 
 ### ui_project
 
 Cut published clips into one video, on the beat, with a music track.
 
 ```bash
-uv run moondeck/uiscenario/uicompose.py --project test/uiscenarios/projects/getting-started.json
+uv run moondeck/moontube/mtcompose.py --project moontube/projects/getting-started.json
 ```
 
-The dropdown lists every project under `test/uiscenarios/projects/`. A project is the edit: which clips, in what order, how many BARS each gets, and the audio underneath. Bars rather than seconds, because a cut lands on the music or it does not, and changing the track re-times the whole edit from one number. The finished cut lands in `media/video/<project>.mp4`; the per-segment intermediates are deleted once it exists, and kept only when a cut fails.
+The dropdown lists every project under `moontube/projects/`. A project is the edit: which clips, in what order, how many BARS each gets, and the audio underneath. Bars rather than seconds, because a cut lands on the music or it does not, and changing the track re-times the whole edit from one number. The finished cut lands in `media/video/<project>.mp4`; the per-segment intermediates are deleted once it exists, and kept only when a cut fails.
 
 ### run_network_live
 

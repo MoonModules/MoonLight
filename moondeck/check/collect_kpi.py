@@ -51,12 +51,13 @@ BUILD_DIR = ROOT / "build" / _HOST
 #   max_tick_us = lights × 1e6 / MIN_ESP32_FPS_LED_PRODUCT
 # Enforced in --commit mode so a regression fails pre-commit.
 #
-# Anchor: this floor matches what `contract.esp32-eth-wifi.tick_us` promises in
-# test/scenarios/light/scenario_GridLayout_grid_sizes.json `size-128x128` —
-# 100,000 µs = 10 FPS with the default NoiseEffect workload. The historic 18
-# FPS reference (RainbowEffect) is higher because Rainbow is cheaper than Noise;
-# reaching 18 FPS on Noise needs algorithmic work on the effect (the Xtensa has
-# no FPU, so the simplex float math dominates).
+# Anchor: 100,000 µs at 128x128 on an ESP32-S3 over Ethernet, which is 10 FPS
+# with the default NoiseEffect workload. The number is a measurement rather than
+# a scenario's promise: no scenario carries it as a contract, so raising this
+# floor means re-measuring on hardware. The historic 18 FPS reference
+# (RainbowEffect) is higher because Rainbow is cheaper than Noise; reaching 18
+# FPS on Noise needs algorithmic work on the effect (the Xtensa has no FPU, so
+# the simplex float math dominates).
 MIN_ESP32_FPS_LED_PRODUCT = 10 * 16384  # 163840
 
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
@@ -181,7 +182,10 @@ def collect_desktop():
         BUILD_DIR / "test" / "Release" / "mm_scenarios.exe",
     )
     if scenarios:
-        out, rc = run([str(scenarios)], cwd=ROOT)
+        # The whole scenario suite, which runs every measure step in every file, so it outgrows
+        # the default that fits a quick command. A timeout here is reported as a crashed check
+        # rather than a slow one, so the budget tracks the suite rather than the other way round.
+        out, rc = run([str(scenarios)], cwd=ROOT, timeout=300)
         # One tick per scenario — the slowest MEASURE step (the contract-
         # relevant worst-case timing). The KPI one-liner becomes a
         # 10-number-ish series that maps 1:1 to the scenario list, so a

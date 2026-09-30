@@ -11,8 +11,8 @@ const MOONDECK_MD = "/api/help";
 let scripts = [];
 let firmwares = [];
 let scenarios = [];   // [{name, module, also}]
-let uiClips = [];     // [{name, description}] from test/uiscenarios/clips/*.json
-let uiProjects = [];  // [{name, description}] from test/uiscenarios/projects/*.json
+let uiClips = [];     // [{name, description}] from moontube/clips/*.json
+let uiProjects = [];  // [{name, description}] from moontube/projects/*.json
 let testModules = []; // ["CamelCaseName", ...]
 // Device-model catalog loaded from /api/device-models (served by moondeck.py from
 // mooninstaller/deviceModels.json) — the same file the web installer fetches. Empty until
@@ -422,7 +422,7 @@ function renderScripts() {
                     <button class="steps-btn" title="Show the selected scenario's steps">Steps</button>
                 </div>` : ""}
                 ${needsUiRun ? `<div class="scenario-row">
-                    <select class="uirun-select" aria-label="${script.needs_uiclip ? "Clip to record" : "Project to cut"}" title="${script.needs_uiclip ? "Which UI clip to record" : "Which video project to cut"}"></select>
+                    <select class="mtrun-select" aria-label="${script.needs_uiclip ? "Clip to record" : "Project to cut"}" title="${script.needs_uiclip ? "Which UI clip to record" : "Which video project to cut"}"></select>
                 </div>` : ""}
                 ${script.flags && script.flags.length > 0 ? `<div class="flag-row"></div>` : ""}
             `;
@@ -475,7 +475,7 @@ function renderScripts() {
             };
 
             if (needsUiRun) {
-                const sel = card.querySelector(".uirun-select");
+                const sel = card.querySelector(".mtrun-select");
                 const kind = script.needs_uiclip ? "uiclip" : "uiproject";
                 const list = script.needs_uiclip ? uiClips : uiProjects;
                 const stateKey = kind;              // one choice per kind, shared by cards

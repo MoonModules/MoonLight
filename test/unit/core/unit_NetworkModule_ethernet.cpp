@@ -208,3 +208,38 @@ TEST_CASE("ethBoard seeds from the pins after a restore, not once before it") {
     net.rebuildControls();
     CHECK(std::strcmp(boardOf(net), "Classic RMII") == 0);
 }
+
+// A chip whose filter leaves exactly ONE real preset opens on it, not on Custom: on a P4-NANO that is a configured interface versus none.
+TEST_CASE("a chip with one buildable preset defaults to it, not to Custom") {
+    if constexpr (!mm::platform::hasEthernet && !mm::platform::previewsEthernetControls) return;
+
+    mm::NetworkModule net;
+    net.rebuildControls();
+
+    const char* board = nullptr;
+    uint8_t options = 0;
+    for (uint8_t i = 0; i < net.controls().count(); i++) {
+        const auto& c = net.controls()[i];
+        if (std::strcmp(c.name, "ethBoard") != 0) continue;
+        auto* opts = reinterpret_cast<const char* const*>(c.aux);
+        const uint8_t sel = *static_cast<const uint8_t*>(c.ptr);
+        options = c.max;
+        board = (opts && sel < c.max) ? opts[sel] : "";
+        break;
+    }
+    REQUIRE(board != nullptr);
+
+    // The option count tells the two builds apart: a desktop previews the whole catalog, so Custom is right there.
+    if (options == 2) CHECK(std::strcmp(board, "Custom") != 0);
+    else CHECK(std::strcmp(board, "Custom") == 0);
+
+    // And the preset's MAP reached the fields, which the selection alone does not prove: a virgin P4 selected P4-NANO and still booted with ethType at None, because the applied-tracker started on row 0 and saw no move to apply.
+    if (options == 2) {
+        for (uint8_t i = 0; i < net.controls().count(); i++) {
+            const auto& c = net.controls()[i];
+            if (std::strcmp(c.name, "ethType") != 0) continue;
+            CHECK(*static_cast<const uint8_t*>(c.ptr) != 0);   // not ethNone
+            break;
+        }
+    }
+}

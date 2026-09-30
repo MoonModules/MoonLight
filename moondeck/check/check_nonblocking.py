@@ -137,7 +137,7 @@ TIERS = ("tick", "tick20ms", "tick1s")
 
 # ---------------------------------------------------------------- guard form (COND)
 #
-# Whether a flagged call actually runs every time its tick does. `-Wfunction-effects` answers
+# Whether a flagged call runs every time its tick does. `-Wfunction-effects` answers
 # "can this block", never "is it reached" — so a report without this column ranks a call behind
 # `if (++n >= 50)` (fires twice a second) level with one that runs unconditionally every frame.
 #
@@ -578,7 +578,7 @@ def main():
     #
     # Skipping is safe here in a way it would not be for a normal gate: the desktop build that
     # DOES carry the flag is the one every contributor and CI runs, so the tree is still measured,
-    # just not from this host. Say so loudly rather than printing a number, because this script's
+    # though not from this host. Say so loudly rather than printing a number, because this script's
     # standing rule is that a comfortable zero from a check that never ran is the worst outcome.
     #
     # ONLY the compiler half is skipped. The float-conversion grep above needs no compiler, so it

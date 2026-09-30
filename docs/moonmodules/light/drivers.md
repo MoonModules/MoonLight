@@ -6,9 +6,9 @@ Several drivers can share one buffer, each driving its own slice. Every driver s
 
 **Jump to:** [shared controls](#shared-driver-controls) · [LED](#led-drivers) · [HUB75](#hub75) · [Network](#network-drivers) · [Smart light](#smart-light-drivers) · [Preview](#preview-drivers)
 
-<video src="../../assets/uiscenarios/07-drivers-desktop.webm" controls playsinline width="720" title="Drivers on a desktop: preview, NDI, RTSP, HLS, network send and Hue."></video>
+<video src="../../assets/moontube/07-drivers-desktop.webm" controls playsinline width="720" title="Drivers on a desktop: preview, NDI, RTSP, HLS, network send and Hue."></video>
 
-<video src="../../assets/uiscenarios/07-drivers-esp32.webm" controls playsinline width="720" title="Drivers on a device: RMT and parallel LED pins, HUB75, panel cards, and the network senders."></video>
+<video src="../../assets/moontube/07-drivers-esp32.webm" controls playsinline width="720" title="Drivers on a device: RMT and parallel LED pins, HUB75, panel cards, and the network senders."></video>
 
 ## Shared driver controls
 

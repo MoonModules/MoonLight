@@ -8,7 +8,7 @@ overwrite each other silently, in both directions.
 
 The carry-forward half is already pinned in `test_repo_health_baseline.py`, which asserts that a
 non-`esp32*` key survives both the merge and the ghost-row prune. What was missing, and what these
-add, is the half that was actually wrong: the spelling of the key at the point it is written.
+add, is the half that was wrong: the spelling of the key at the point it is written.
 """
 
 import sys

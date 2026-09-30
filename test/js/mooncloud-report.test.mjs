@@ -96,15 +96,62 @@ test("oversized values are dropped rather than truncated into storage", () => {
 });
 
 test("the module list is bounded and flattened", () => {
+  // DISTINCT fillers: the list is de-duplicated now, so two hundred copies of one name collapse
+  // to one and could not show the cap working at all.
   const row = clean(
     {
       installationId: "x".repeat(32),
-      modules: ["System", "Network", ...Array(200).fill("Filler")],
+      modules: ["System", "Network", ...Array.from({ length: 200 }, (_, i) => `Filler${i}`)],
     },
     "NL"
   );
   assert.equal(row.modules.split(",").length, 64);
   assert.ok(row.modules.startsWith("System,Network"));
+});
+
+test("a numeric suffix inside a script path is left alone, being a folder the user named", () => {
+  // The suffix rule belongs to the TYPE, which is the text before the first slash. Applied to the
+  // whole string it renames a directory: `folder-2` is one a user made, not a second instance.
+  const row = clean(
+    {
+      installationId: "x".repeat(32),
+      modules: [
+        "effect:MoonLive/folder-2/aurora.mle",
+        "effect:MoonLive/folder-2",
+        "service:MoonLive-3/deep-2/button.mls",
+      ],
+    },
+    "NL"
+  );
+  assert.deepEqual(row.modules.split(","), [
+    "effect:MoonLive/folder-2/aurora.mle",
+    "effect:MoonLive/folder-2",
+    "service:MoonLive/deep-2/button.mls",
+  ], "only the type loses its suffix; every path segment survives");
+});
+
+test("an instance suffix is folded into its type, so one driver counts once", () => {
+  // A device names a second module of a type `NetworkSend-2`, and firmware before the type fix
+  // reported that instance name: the statistics then showed one driver as four.
+  const row = clean(
+    {
+      installationId: "x".repeat(32),
+      modules: [
+        "driver:NetworkSend",
+        "driver:NetworkSend-2",
+        "driver:NetworkSend-3",
+        "effect:MoonLive-2/nebula.mle",
+        "effect:MoonLive/comet-trail.mle",
+      ],
+    },
+    "NL"
+  );
+  const names = row.modules.split(",");
+  assert.deepEqual(names, [
+    "driver:NetworkSend",
+    "effect:MoonLive/nebula.mle",
+    "effect:MoonLive/comet-trail.mle",
+  ], "the suffix goes whether it ends the entry or precedes a script, and a hyphenated script name stays whole");
 });
 
 test("a non-string sneaking into the module list is dropped", () => {

@@ -1,0 +1,196 @@
+{
+  "name": "13-attribution",
+  "description": "Who we learned from, and the standard algorithms MoonLight is built on.",
+  "slides": [
+    {
+      "kicker": "Standing on shoulders",
+      "title": "The people we learned from and worked with",
+      "credits": [
+        [
+          "4wheeljive",
+          "flow fields, from a Petrick concept"
+        ],
+        [
+          "Adafruit",
+          "the LCD_CAM discovery behind the S3 driver"
+        ],
+        [
+          "Aircoookie",
+          "WLED"
+        ],
+        [
+          "Andrew Tuline",
+          "the WLED-SR audio-reactive effects"
+        ],
+        [
+          "blazoncek",
+          "WLED effects, and their ports"
+        ],
+        [
+          "Christophe Gagnier",
+          "the WLED Android and iOS apps"
+        ],
+        [
+          "Damian Schneider (DedeHai)",
+          "the WLED Particle System"
+        ],
+        [
+          "Delphium",
+          "HUB75, OSC, HLS, RTSP, NDI, and Windows"
+        ],
+        [
+          "ESPHome",
+          "Home Assistant discovery, and HUB75"
+        ],
+        [
+          "ewowi",
+          "MoonLight, StarLight, WLED 2D, LED preview"
+        ],
+        [
+          "FastLED",
+          "color maths and the basic power functions"
+        ],
+        [
+          "FPP / Falcon Player",
+          "receiving-card protocols"
+        ],
+        [
+          "hzeller",
+          "the HUB75 lineage on the Pi"
+        ],
+        [
+          "Improv Wi-Fi",
+          "the open serial provisioning standard"
+        ],
+        [
+          "Limpkin",
+          "the SE16 and LightCrafter boards, RGBW tuning"
+        ],
+        [
+          "mrcodetastic",
+          "ESP32 HUB75 DMA"
+        ],
+        [
+          "NetMindz",
+          "WLED audio sync, and the statistics work"
+        ],
+        [
+          "Piper and rhasspy",
+          "the voice you are hearing"
+        ],
+        [
+          "QuinLED",
+          "the devices much of this runs on"
+        ],
+        [
+          "RobWomp",
+          "HUB75 drivers, and Linux on NanoPi and Pi 5"
+        ],
+        [
+          "softhack007",
+          "audio reactive, AI principles, code quality"
+        ],
+        [
+          "Stefan Petrick",
+          "the shader vocabulary of the LED world"
+        ],
+        [
+          "Sutaburosu",
+          "the fixed-point canvas demos"
+        ],
+        [
+          "Sören",
+          "the MoonHub75 board, and the web installer"
+        ],
+        [
+          "troyhacks",
+          "WLED effects, Art-Net, and P4 tuning"
+        ],
+        [
+          "WildCats08",
+          "modifiers, particles, and Game of Life"
+        ],
+        [
+          "Yves Bazin",
+          "clockless drivers, and ESPLiveScript"
+        ]
+      ],
+      "say": "Before the clips, the part that matters most. None of this was invented here. MoonLight is built on the work of the people on this slide, some of whom we learned from and some of whom we worked with directly: the WLED and FastLED communities, the driver authors who worked out how to clock thousands of lights from one chip, and the artists whose shader and effect vocabulary the whole LED world now speaks. Every one of them is credited in the source file that carries their idea, next to the code it shaped. Take a moment if you want to read it."
+    },
+    {
+      "kicker": "Standing on shoulders",
+      "title": "The algorithms we use",
+      "credits": [
+        [
+          "Bresenham",
+          "lines and circles on integer grids"
+        ],
+        [
+          "Xiaolin Wu",
+          "anti-aliased lines"
+        ],
+        [
+          "Ken Perlin",
+          "gradient noise, the field behind fire and clouds"
+        ],
+        [
+          "Jos Stam",
+          "Stable Fluids, the solver behind the fluid effect"
+        ],
+        [
+          "Robert Bridson",
+          "curl noise, SIGGRAPH 2007"
+        ],
+        [
+          "John Hart",
+          "sphere tracing, the basis of raymarching"
+        ],
+        [
+          "Iñigo Quilez",
+          "distance functions and their operators, smooth minimum, cosine palettes"
+        ],
+        [
+          "Hugo Elias",
+          "the water surface algorithm"
+        ],
+        [
+          "Gomez",
+          "the demoscene water effect, 2000"
+        ],
+        [
+          "Sébastien Truchet",
+          "the tiling, revived by Cyril Smith in 1987"
+        ],
+        [
+          "Bill Reeves",
+          "particle systems, as a technique"
+        ],
+        [
+          "Verlet",
+          "the integration the particle kernel runs on"
+        ],
+        [
+          "IEC 60268-17",
+          "VU meter ballistics, to the millisecond"
+        ],
+        [
+          "WS2812, WS2811, SK6812",
+          "the LED timing specs, from the datasheets"
+        ],
+        [
+          "NDI (NewTek & Vizrt)",
+          "the video-over-network protocol"
+        ],
+        [
+          "Art-Net, E1.31, DDP",
+          "the lighting-network protocols"
+        ],
+        [
+          "NEC",
+          "the infrared protocol consumer remotes speak"
+        ]
+      ],
+      "say": "And the algorithms. These are the textbook ones, by name, because using the standard solution under its standard name is a principle here rather than an accident: anyone who knows the field recognizes what the code is doing, and can check whether we got it right. Drawing, noise, fluids, raymarching, particle physics, meter ballistics, the network protocols. Not one of them is ours. What is ours is the way they fit together."
+    }
+  ]
+}

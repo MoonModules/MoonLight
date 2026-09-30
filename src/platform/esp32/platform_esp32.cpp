@@ -70,6 +70,7 @@
 /// Since renaming does not reliably re-announce on the current interface while a remove and add drives it back through the state machine.
 
 #include "platform/platform.h"
+#include <netinet/tcp.h>   // TCP_NODELAY on an accepted connection
 
 #include "esp_timer.h"
 #include "esp_heap_caps.h"
@@ -1889,6 +1890,10 @@ TcpConnection TcpServer::accept() {
 
     int flags = fcntl(clientFd, F_GETFL, 0);
     fcntl(clientFd, F_SETFL, flags | O_NONBLOCK);
+
+    // Nagle OFF: a header write then a body write, and the second would wait on a delayed ACK.
+    int nodelay = 1;
+    setsockopt(clientFd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
 
     return TcpConnection(clientFd);
 }

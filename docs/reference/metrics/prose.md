@@ -9,38 +9,38 @@ This number is the debt behind that gate, and it RATCHETS: a rise fails the chec
 docgen.md does. A comment is prose wherever it lives, so a `//` in the web interface and a
 `#` in a script are counted beside a `///` in a header.
 
-**4339 finding(s)** across 369 file(s).
+**3701 finding(s)** across 366 file(s).
 
 | rule | findings |
 |---|---|
-| `MoonLight.EmDash` | 2139 |
-| `MoonLight.SentenceLength` | 1195 |
-| `MoonLight.Weasel` | 882 |
-| `MoonLight.Spelling` | 55 |
+| `MoonLight.EmDash` | 2075 |
+| `MoonLight.Weasel` | 800 |
+| `MoonLight.SentenceLength` | 716 |
+| `MoonLight.Spelling` | 52 |
 | `MoonLight.SelfReference` | 41 |
-| `MoonLight.NegatedHeading` | 27 |
+| `MoonLight.NegatedHeading` | 17 |
 
 ## Worst files
 
 | file | findings |
 |---|---|
-| `docs/reference/tests/unit-tests.md` | 567 |
 | `moondeck/MoonDeck.md` | 275 |
 | `moondeck/moondeck.py` | 165 |
-| `docs/reference/performance.md` | 135 |
+| `docs/reference/performance.md` | 133 |
 | `docs/how-to/home-automation.md` | 116 |
 | `docs/moonmodules/light/power-functions.md` | 105 |
 | `mooninstaller/install-orchestrator.js` | 94 |
 | `docs/tutorials/build-your-own-moonmodules.md` | 92 |
 | `moondeck/moondeck_ui/app.js` | 85 |
-| `docs/how-to/building.md` | 83 |
+| `docs/how-to/building.md` | 82 |
 | `mooninstaller/README.md` | 75 |
 | `moondeck/check/check_clang_query.py` | 72 |
 | `mooninstaller/install.js` | 70 |
 | `docs/moonmodules/light/layouts.md` | 67 |
-| `docs/reference/tests/scenario-tests.md` | 65 |
 | `src/ui/app.js` | 57 |
-| `moondeck/check/check_nonblocking.py` | 55 |
+| `moondeck/check/check_nonblocking.py` | 54 |
 | `src/ui/install-picker.js` | 52 |
 | `moondeck/scenario/run_live_scenario.py` | 50 |
-| `moondeck/docs/gen_api.py` | 48 |
+| `moondeck/docs/gen_api.py` | 49 |
+| `moondeck/build/build_esp32.py` | 47 |
+| `src/ui/preview3d.js` | 47 |

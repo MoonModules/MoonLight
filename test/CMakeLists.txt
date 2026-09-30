@@ -101,6 +101,7 @@ add_executable(mm_tests
     unit/light/unit_BlendMap.cpp
     unit/light/unit_BeatRipples.cpp
     unit/light/unit_ColorTrailsEffect.cpp
+    unit/light/unit_TrailsEffect.cpp
     unit/light/unit_fluid.cpp
     unit/light/unit_draw.cpp
     unit/light/unit_GameOfLifeEffect.cpp

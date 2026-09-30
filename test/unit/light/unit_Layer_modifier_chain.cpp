@@ -9,6 +9,7 @@
 #include "light/modifiers/MultiplyModifier.h"
 #include "light/modifiers/CheckerboardModifier.h"
 
+#include <algorithm>
 #include <vector>
 #include <initializer_list>
 
@@ -110,4 +111,51 @@ TEST_CASE("Layer skips a disabled modifier in the chain") {
         rig.layer.lut().forEachDestination(li, [&](mm::nrOfLightsType) { withMask++; });
 
     CHECK(withMask < withoutMask);   // the mask now drops some physical lights
+}
+
+// Multiply folds the box and Checkerboard does not, so a round-trip is shrink, grow, shrink, each needing its own LUT.
+TEST_CASE("Layer swaps a box-resizing modifier for one that does not, and back, resizing the mapping each time") {
+    mm::MultiplyModifier mult;
+    ChainRig rig(32, 32, {&mult});
+
+    // Multiply's default is a 2x mirror fold on every axis, so the logical box is half the grid per axis.
+    REQUIRE(rig.layer.width() == 16);
+    REQUIRE(rig.layer.height() == 16);
+    const mm::nrOfLightsType folded = rig.layer.lut().logicalCount();
+    CHECK(folded == 16 * 16);
+
+    // Swap in a Checkerboard at the same slot, which masks rather than folds: the box returns to the grid's own size.
+    mm::CheckerboardModifier check;
+    mm::MoonModule* out = rig.layer.replaceChildAt(0, &check);
+    REQUIRE(out == &mult);
+    rig.layer.applyState();
+    CHECK(rig.layer.width() == 32);
+    CHECK(rig.layer.height() == 32);
+    CHECK(rig.layer.lut().logicalCount() == 32 * 32);
+
+    // And back to the Multiply, which must fold again rather than keep the box the Checkerboard left behind.
+    mm::MoonModule* out2 = rig.layer.replaceChildAt(0, &mult);
+    REQUIRE(out2 == &check);
+    rig.layer.applyState();
+    CHECK(rig.layer.width() == 16);
+    CHECK(rig.layer.height() == 16);
+    CHECK(rig.layer.lut().logicalCount() == folded);   // the size it started at, not a residue of the round-trip
+    CHECK(rig.layer.lut().hasLUT());                   // still a real mapping, not the identity fast path
+
+    // Reached exactly once, not merely counted: a total alone passes on a mapping that doubled one light and dropped another.
+    std::vector<int> seen(32 * 32, 0);
+    std::size_t cellsHit = 0, total = 0;
+    for (mm::nrOfLightsType li = 0; li < rig.layer.lut().logicalCount(); li++) {
+        std::size_t here = 0;
+        rig.layer.lut().forEachDestination(li, [&](mm::nrOfLightsType d) {
+            here++;
+            if (d < seen.size()) seen[d]++;
+        });
+        total += here;
+        if (here) cellsHit++;
+    }
+    CHECK(cellsHit == rig.layer.lut().logicalCount());
+    CHECK(total == 32 * 32);                           // all 1024 physical lights
+    const bool eachOnce = std::all_of(seen.begin(), seen.end(), [](int n) { return n == 1; });
+    CHECK(eachOnce);                                   // and none of them twice, none missed
 }

@@ -129,6 +129,16 @@ public:
         draw::blit16(canvas(), moved.data(), w, h, d, carry_ ? carry_.data() : nullptr);
     }
 
+    /// Test seam: how many trail samples both planes hold, since a rendered frame cannot show a stale plane.
+    std::size_t trailSamples() const { return plane_.count() + scratch_.count(); }
+    /// Test seam: read one trail sample across both planes, where past the end reads 0.
+    uint16_t trailAt(std::size_t i) const {
+        const std::size_t n = plane_.count();
+        if (i < n) return plane_.data()[i];
+        const std::size_t j = i - n;
+        return j < scratch_.count() ? scratch_.data()[j] : 0;   // past the end reads 0, never off it
+    }
+
 private:
     /// The persistence control as a half-life in milliseconds, squared so the short range gets the travel.
     uint32_t halfLifeMs() const {

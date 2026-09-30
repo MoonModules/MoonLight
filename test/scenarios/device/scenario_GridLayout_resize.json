@@ -1,0 +1,802 @@
+{
+  "name": "scenario_GridLayout_resize",
+  "module": "GridLayout",
+  "mode": "mutate",
+  "also": [
+    "MultiplyModifier",
+    "Layer"
+  ],
+  "live_only": true,
+  "description": "Resize the grid while the pipeline is running and verify it reallocates cleanly under memory pressure. Lowers to 128x64 (release memory), increases to 128x128 (heaviest config: mirror + LUT). Each measured step captures tick/FPS/heap so the runner reports the degrade behaviour.",
+  "fixture": [
+    {
+      "name": "fix-layouts",
+      "op": "add_module",
+      "id": "Layouts",
+      "type": "Layouts"
+    },
+    {
+      "name": "fix-layers",
+      "op": "add_module",
+      "id": "Effects",
+      "type": "Effects",
+      "props": {
+        "layouts": "Layouts"
+      }
+    },
+    {
+      "name": "fix-drivers",
+      "op": "add_module",
+      "id": "Drivers",
+      "type": "Drivers",
+      "props": {
+        "effects": "Effects"
+      }
+    }
+  ],
+  "steps": [
+    {
+      "name": "canvas-clear-layers",
+      "description": "Self-canvas: clear+rebuild the pipeline this scenario assumes, so it runs from any device state (the perf scenarios' pattern). Pre-wired apparatus (Preview/Board) survives clear_children. On the in-process runner the fixture already built the tree; clearing then rebuilding is harmless there and makes the live run order-independent.",
+      "op": "clear_children",
+      "id": "Effects"
+    },
+    {
+      "name": "canvas-clear-layouts",
+      "op": "clear_children",
+      "id": "Layouts"
+    },
+    {
+      "name": "canvas-clear-drivers",
+      "op": "clear_children",
+      "id": "Drivers"
+    },
+    {
+      "name": "canvas-grid",
+      "op": "add_module",
+      "id": "Grid",
+      "type": "GridLayout",
+      "parent_id": "Layouts",
+      "props": {
+        "width": 128,
+        "height": 128
+      }
+    },
+    {
+      "name": "canvas-layer",
+      "op": "add_module",
+      "id": "Layer",
+      "type": "Layer",
+      "parent_id": "Effects"
+    },
+    {
+      "name": "canvas-noise",
+      "op": "add_module",
+      "id": "Noise",
+      "type": "NoiseEffect",
+      "parent_id": "Layer"
+    },
+    {
+      "name": "canvas-mirror",
+      "op": "add_module",
+      "id": "Multiply",
+      "type": "MultiplyModifier",
+      "parent_id": "Layer"
+    },
+    {
+      "name": "canvas-artnet",
+      "op": "add_module",
+      "id": "ArtNet",
+      "type": "NetworkSendDriver",
+      "parent_id": "Drivers"
+    },
+    {
+      "name": "size-128x128",
+      "description": "Set grid height to 128 (alongside default width 128). Measures the heaviest config as the baseline for the next two steps.",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 128,
+      "measure": true,
+      "contract": {
+        "desktop-macos": {
+          "tick_us": 120,
+          "free_heap": 0,
+          "set_by": "2026-06-02",
+          "reason": "initial contract"
+        },
+        "esp32-eth-wifi": {
+          "tick_us": 100000,
+          "free_heap": 105000,
+          "set_by": "2026-06-02",
+          "reason": "initial contract"
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 120,
+            "p95": 155,
+            "min": 117,
+            "max": 158,
+            "n": 32,
+            "samples": [124, 126, 132, 120, 142, 128, 119, 118, 124, 118, 119, 129, 121, 126, 117, 119, 158, 122, 120, 117, 118, 120, 119, 119, 123, 119, 119, 130, 120, 155, 126, 120]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "esp32-eth-wifi": {
+          "tick_us": {
+            "p50": 80649,
+            "p95": 80649,
+            "min": 80649,
+            "max": 80649,
+            "n": 1,
+            "samples": [80649]
+          },
+          "free_heap": {
+            "p50": 95528,
+            "p95": 95528,
+            "min": 95528,
+            "max": 95528,
+            "n": 1,
+            "samples": [95528]
+          },
+          "max_alloc_block": {
+            "p50": 49152,
+            "p95": 49152,
+            "min": 49152,
+            "max": 49152,
+            "n": 1,
+            "samples": [49152]
+          },
+          "last_updated": "2026-06-02"
+        },
+        "esp32-eth": {
+          "tick_us": {
+            "p50": 92905,
+            "p95": 92905,
+            "min": 92905,
+            "max": 92905,
+            "n": 1,
+            "samples": [92905]
+          },
+          "free_heap": {
+            "p50": 135188,
+            "p95": 135188,
+            "min": 135188,
+            "max": 135188,
+            "n": 1,
+            "samples": [135188]
+          },
+          "max_alloc_block": {
+            "p50": 49152,
+            "p95": 49152,
+            "min": 49152,
+            "max": 49152,
+            "n": 1,
+            "samples": [49152]
+          },
+          "last_updated": "2026-06-02"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 1352,
+            "p95": 8075,
+            "min": 274,
+            "max": 8075,
+            "n": 3,
+            "samples": [1352, 8075, 274]
+          },
+          "free_heap": {
+            "p50": 57940,
+            "p95": 85252,
+            "min": 30684,
+            "max": 85252,
+            "n": 3,
+            "samples": [85252, 57940, 30684]
+          },
+          "max_alloc_block": {
+            "p50": 22528,
+            "p95": 49152,
+            "min": 10240,
+            "max": 49152,
+            "n": 3,
+            "samples": [49152, 22528, 10240]
+          },
+          "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 219,
+            "p95": 219,
+            "min": 219,
+            "max": 219,
+            "n": 1,
+            "samples": [219]
+          },
+          "last_updated": "2026-07-08"
+        },
+        "esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 7218,
+            "p95": 7767,
+            "min": 1136,
+            "max": 7767,
+            "n": 3,
+            "samples": [1136, 7218, 7767]
+          },
+          "free_heap": {
+            "p50": 33605415,
+            "p95": 34002551,
+            "min": 33590315,
+            "max": 34002551,
+            "n": 3,
+            "samples": [34002551, 33605415, 33590315]
+          },
+          "max_alloc_block": {
+            "p50": 286720,
+            "p95": 385024,
+            "min": 258048,
+            "max": 385024,
+            "n": 3,
+            "samples": [385024, 286720, 258048]
+          },
+          "last_updated": "2026-09-29"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 1011,
+            "p95": 18414,
+            "min": 1011,
+            "max": 18414,
+            "n": 2,
+            "samples": [1011, 18414]
+          },
+          "free_heap": {
+            "p50": 8148131,
+            "p95": 8492479,
+            "min": 8148131,
+            "max": 8492479,
+            "n": 2,
+            "samples": [8492479, 8148131]
+          },
+          "max_alloc_block": {
+            "p50": 77824,
+            "p95": 77824,
+            "min": 77824,
+            "max": 77824,
+            "n": 2,
+            "samples": [77824, 77824]
+          },
+          "last_updated": "2026-09-29"
+        },
+        "esp32p4rev1-eth-wifi": {
+          "tick_us": {
+            "p50": 6735719,
+            "p95": 6735719,
+            "min": 6735719,
+            "max": 6735719,
+            "n": 1,
+            "samples": [6735719]
+          },
+          "free_heap": {
+            "p50": 33415679,
+            "p95": 33415679,
+            "min": 33415679,
+            "max": 33415679,
+            "n": 1,
+            "samples": [33415679]
+          },
+          "max_alloc_block": {
+            "p50": 253952,
+            "p95": 253952,
+            "min": 253952,
+            "max": 253952,
+            "n": 1,
+            "samples": [253952]
+          },
+          "last_updated": "2026-09-29"
+        },
+        "esp32s31": {
+          "tick_us": {
+            "p50": 8919,
+            "p95": 8919,
+            "min": 8919,
+            "max": 8919,
+            "n": 1,
+            "samples": [8919]
+          },
+          "free_heap": {
+            "p50": 16568451,
+            "p95": 16568451,
+            "min": 16568451,
+            "max": 16568451,
+            "n": 1,
+            "samples": [16568451]
+          },
+          "max_alloc_block": {
+            "p50": 124928,
+            "p95": 124928,
+            "min": 124928,
+            "max": 124928,
+            "n": 1,
+            "samples": [124928]
+          },
+          "last_updated": "2026-09-29"
+        }
+      }
+    },
+    {
+      "name": "shrink-to-128x64",
+      "description": "Shrink to 128x64. Measured: tick/heap captured so the runner reports the realloc behaviour against each target's contract. (The old relative-to-baseline FPS bound was removed, it compared against the runner's idle pre-scenario baseline, not the prior render step, so it false-failed on fast boards like the P4 where idle FPS dwarfs render FPS.)",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 64,
+      "measure": true,
+      "contract": {
+        "desktop-macos": {
+          "tick_us": 60,
+          "free_heap": 0,
+          "set_by": "2026-06-02",
+          "reason": "initial contract"
+        },
+        "esp32-eth-wifi": {
+          "tick_us": 45000,
+          "free_heap": 85000,
+          "set_by": "2026-06-02",
+          "reason": "initial contract"
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 64,
+            "p95": 76,
+            "min": 59,
+            "max": 86,
+            "n": 32,
+            "samples": [68, 66, 64, 64, 76, 86, 74, 65, 60, 60, 64, 66, 64, 61, 64, 65, 65, 64, 64, 59, 64, 64, 64, 65, 67, 66, 66, 72, 64, 73, 65, 64]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "esp32-eth-wifi": {
+          "tick_us": {
+            "p50": 31476,
+            "p95": 31476,
+            "min": 31476,
+            "max": 31476,
+            "n": 1,
+            "samples": [31476]
+          },
+          "free_heap": {
+            "p50": 76828,
+            "p95": 76828,
+            "min": 76828,
+            "max": 76828,
+            "n": 1,
+            "samples": [76828]
+          },
+          "max_alloc_block": {
+            "p50": 24576,
+            "p95": 24576,
+            "min": 24576,
+            "max": 24576,
+            "n": 1,
+            "samples": [24576]
+          },
+          "last_updated": "2026-06-02"
+        },
+        "esp32-eth": {
+          "tick_us": {
+            "p50": 37745,
+            "p95": 37745,
+            "min": 37745,
+            "max": 37745,
+            "n": 1,
+            "samples": [37745]
+          },
+          "free_heap": {
+            "p50": 116488,
+            "p95": 116488,
+            "min": 116488,
+            "max": 116488,
+            "n": 1,
+            "samples": [116488]
+          },
+          "max_alloc_block": {
+            "p50": 49152,
+            "p95": 49152,
+            "min": 49152,
+            "max": 49152,
+            "n": 1,
+            "samples": [49152]
+          },
+          "last_updated": "2026-06-02"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 573,
+            "p95": 2971,
+            "min": 152,
+            "max": 2971,
+            "n": 3,
+            "samples": [573, 2971, 152]
+          },
+          "free_heap": {
+            "p50": 64992,
+            "p95": 65644,
+            "min": 30856,
+            "max": 65644,
+            "n": 3,
+            "samples": [64992, 65644, 30856]
+          },
+          "max_alloc_block": {
+            "p50": 17408,
+            "p95": 22528,
+            "min": 10240,
+            "max": 22528,
+            "n": 3,
+            "samples": [17408, 22528, 10240]
+          },
+          "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 94,
+            "p95": 94,
+            "min": 94,
+            "max": 94,
+            "n": 1,
+            "samples": [94]
+          },
+          "last_updated": "2026-08-21"
+        },
+        "esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2256,
+            "p95": 2774,
+            "min": 575,
+            "max": 2774,
+            "n": 3,
+            "samples": [575, 2774, 2256]
+          },
+          "free_heap": {
+            "p50": 33674439,
+            "p95": 34011543,
+            "min": 33662251,
+            "max": 34011543,
+            "n": 3,
+            "samples": [34011543, 33674439, 33662251]
+          },
+          "max_alloc_block": {
+            "p50": 278528,
+            "p95": 385024,
+            "min": 258048,
+            "max": 385024,
+            "n": 3,
+            "samples": [385024, 278528, 258048]
+          },
+          "last_updated": "2026-09-29"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 478,
+            "p95": 7092,
+            "min": 478,
+            "max": 7092,
+            "n": 2,
+            "samples": [478, 7092]
+          },
+          "free_heap": {
+            "p50": 8220067,
+            "p95": 8509019,
+            "min": 8220067,
+            "max": 8509019,
+            "n": 2,
+            "samples": [8509019, 8220067]
+          },
+          "max_alloc_block": {
+            "p50": 77824,
+            "p95": 86016,
+            "min": 77824,
+            "max": 86016,
+            "n": 2,
+            "samples": [86016, 77824]
+          },
+          "last_updated": "2026-09-29"
+        },
+        "esp32p4rev1-eth-wifi": {
+          "tick_us": {
+            "p50": 604409,
+            "p95": 604409,
+            "min": 604409,
+            "max": 604409,
+            "n": 1,
+            "samples": [604409]
+          },
+          "free_heap": {
+            "p50": 33567179,
+            "p95": 33567179,
+            "min": 33567179,
+            "max": 33567179,
+            "n": 1,
+            "samples": [33567179]
+          },
+          "max_alloc_block": {
+            "p50": 253952,
+            "p95": 253952,
+            "min": 253952,
+            "max": 253952,
+            "n": 1,
+            "samples": [253952]
+          },
+          "last_updated": "2026-09-29"
+        },
+        "esp32s31": {
+          "tick_us": {
+            "p50": 3327,
+            "p95": 3327,
+            "min": 3327,
+            "max": 3327,
+            "n": 1,
+            "samples": [3327]
+          },
+          "free_heap": {
+            "p50": 16663367,
+            "p95": 16663367,
+            "min": 16663367,
+            "max": 16663367,
+            "n": 1,
+            "samples": [16663367]
+          },
+          "max_alloc_block": {
+            "p50": 143360,
+            "p95": 143360,
+            "min": 143360,
+            "max": 143360,
+            "n": 1,
+            "samples": [143360]
+          },
+          "last_updated": "2026-09-29"
+        }
+      }
+    },
+    {
+      "name": "grow-to-128x128",
+      "description": "Grow back to 128x128. Measured: confirms the heap can return to the heavy baseline after a shrink.",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 128,
+      "measure": true,
+      "contract": {
+        "desktop-macos": {
+          "tick_us": 120,
+          "free_heap": 0,
+          "set_by": "2026-06-02",
+          "reason": "initial contract"
+        },
+        "esp32-eth-wifi": {
+          "tick_us": 100000,
+          "free_heap": 105000,
+          "set_by": "2026-06-02",
+          "reason": "initial contract"
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 120,
+            "p95": 143,
+            "min": 116,
+            "max": 263,
+            "n": 32,
+            "samples": [125, 121, 120, 119, 128, 263, 119, 119, 126, 118, 120, 126, 122, 124, 120, 120, 123, 119, 120, 116, 119, 120, 119, 119, 123, 121, 133, 127, 121, 143, 124, 119]
+          },
+          "last_updated": "2026-09-24"
+        },
+        "esp32-eth-wifi": {
+          "tick_us": {
+            "p50": 82231,
+            "p95": 82231,
+            "min": 82231,
+            "max": 82231,
+            "n": 1,
+            "samples": [82231]
+          },
+          "free_heap": {
+            "p50": 95528,
+            "p95": 95528,
+            "min": 95528,
+            "max": 95528,
+            "n": 1,
+            "samples": [95528]
+          },
+          "max_alloc_block": {
+            "p50": 53248,
+            "p95": 53248,
+            "min": 53248,
+            "max": 53248,
+            "n": 1,
+            "samples": [53248]
+          },
+          "last_updated": "2026-06-02"
+        },
+        "esp32-eth": {
+          "tick_us": {
+            "p50": 95771,
+            "p95": 95771,
+            "min": 95771,
+            "max": 95771,
+            "n": 1,
+            "samples": [95771]
+          },
+          "free_heap": {
+            "p50": 135188,
+            "p95": 135188,
+            "min": 135188,
+            "max": 135188,
+            "n": 1,
+            "samples": [135188]
+          },
+          "max_alloc_block": {
+            "p50": 49152,
+            "p95": 49152,
+            "min": 49152,
+            "max": 49152,
+            "n": 1,
+            "samples": [49152]
+          },
+          "last_updated": "2026-06-02"
+        },
+        "esp32": {
+          "tick_us": {
+            "p50": 1192,
+            "p95": 6000,
+            "min": 214,
+            "max": 6000,
+            "n": 3,
+            "samples": [1192, 6000, 214]
+          },
+          "free_heap": {
+            "p50": 63408,
+            "p95": 85252,
+            "min": 59712,
+            "max": 85252,
+            "n": 3,
+            "samples": [85252, 59712, 63408]
+          },
+          "max_alloc_block": {
+            "p50": 24576,
+            "p95": 53248,
+            "min": 22528,
+            "max": 53248,
+            "n": 3,
+            "samples": [53248, 22528, 24576]
+          },
+          "last_updated": "2026-09-29"
+        },
+        "desktop-windows": {
+          "tick_us": {
+            "p50": 217,
+            "p95": 217,
+            "min": 217,
+            "max": 217,
+            "n": 1,
+            "samples": [217]
+          },
+          "last_updated": "2026-07-08"
+        },
+        "esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 6059,
+            "p95": 7981,
+            "min": 1143,
+            "max": 7981,
+            "n": 3,
+            "samples": [1143, 7981, 6059]
+          },
+          "free_heap": {
+            "p50": 33604703,
+            "p95": 34002551,
+            "min": 33590315,
+            "max": 34002551,
+            "n": 3,
+            "samples": [34002551, 33604703, 33590315]
+          },
+          "max_alloc_block": {
+            "p50": 286720,
+            "p95": 385024,
+            "min": 258048,
+            "max": 385024,
+            "n": 3,
+            "samples": [385024, 286720, 258048]
+          },
+          "last_updated": "2026-09-29"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 904,
+            "p95": 17038,
+            "min": 904,
+            "max": 17038,
+            "n": 2,
+            "samples": [904, 17038]
+          },
+          "free_heap": {
+            "p50": 8148131,
+            "p95": 8490699,
+            "min": 8148131,
+            "max": 8490699,
+            "n": 2,
+            "samples": [8490699, 8148131]
+          },
+          "max_alloc_block": {
+            "p50": 77824,
+            "p95": 77824,
+            "min": 77824,
+            "max": 77824,
+            "n": 2,
+            "samples": [77824, 77824]
+          },
+          "last_updated": "2026-09-29"
+        },
+        "esp32p4rev1-eth-wifi": {
+          "tick_us": {
+            "p50": 394187,
+            "p95": 394187,
+            "min": 394187,
+            "max": 394187,
+            "n": 1,
+            "samples": [394187]
+          },
+          "free_heap": {
+            "p50": 33494847,
+            "p95": 33494847,
+            "min": 33494847,
+            "max": 33494847,
+            "n": 1,
+            "samples": [33494847]
+          },
+          "max_alloc_block": {
+            "p50": 253952,
+            "p95": 253952,
+            "min": 253952,
+            "max": 253952,
+            "n": 1,
+            "samples": [253952]
+          },
+          "last_updated": "2026-09-29"
+        },
+        "esp32s31": {
+          "tick_us": {
+            "p50": 8091,
+            "p95": 8091,
+            "min": 8091,
+            "max": 8091,
+            "n": 1,
+            "samples": [8091]
+          },
+          "free_heap": {
+            "p50": 16570031,
+            "p95": 16570031,
+            "min": 16570031,
+            "max": 16570031,
+            "n": 1,
+            "samples": [16570031]
+          },
+          "max_alloc_block": {
+            "p50": 126976,
+            "p95": 126976,
+            "min": 126976,
+            "max": 126976,
+            "n": 1,
+            "samples": [126976]
+          },
+          "last_updated": "2026-09-29"
+        }
+      }
+    }
+  ]
+}

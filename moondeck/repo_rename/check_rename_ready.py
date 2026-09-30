@@ -35,7 +35,10 @@ REPORT = ROOT / "moondeck" / "repo_rename" / "check_rename_ready.md"
 # The band is wide on purpose: prose grows, and a hundred more hits in documentation says
 # nothing. A jump past it says something landed that the markers may not cover.
 # Re-baselined as each batch of free renames lands, since the reach falls with every one.
-REHEARSED_HITS = 1206
+# 2026-09-29: 1206 -> 464, the documentation sweep landing. Traced before re-baselining:
+# the fall is docs/work/future 247->14, docs/how-to 146->31, docs/work/past/plans 90->15,
+# every one of those files still tracked, and the source areas steady or larger.
+REHEARSED_HITS = 464
 DRIFT_ALLOWED = 400
 
 # Lines that must survive the sweep, as (file, the text that must still be there).

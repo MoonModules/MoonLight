@@ -8,6 +8,7 @@
 #include "../core/moonlive_script_wrap.h"
 #include "light/moonlive/MoonLiveModifier.h"
 #include "light/moonlive/MoonLiveEffect.h"
+#include "light/moonlive/MoonLiveLayout.h"
 #include "platform/platform.h"
 #include "light/layouts/GridLayout.h"
 #include "light/layouts/Layouts.h"
@@ -15,6 +16,8 @@
 
 #include <cstring>
 #include <cstdio>
+#include <algorithm>
+#include <vector>
 #include <string>
 
 using namespace mm;
@@ -351,6 +354,67 @@ TEST_CASE("a loop in an effect script paints every light it walks") {
     for (int i = 0; i < 8; i++) {
         CAPTURE(i);
         CHECK(static_cast<int>(buf[i * 3]) == i);
+    }
+}
+
+
+// The layout's count sets the extent the modifier folds within, so a stale one folds wrong and drops lights, dark with no error.
+TEST_CASE("a scripted layout that changes its light count under a scripted modifier rebuilds the mapping to the new count") {
+    MoonLiveLayout layout;
+    layout.defineControls();
+    // A row whose length is one of the script's OWN controls, which is how a user resizes a scripted fixture.
+    layout.setScript(mmWriteScript(
+        "class layoutScript {\n"
+        "  int cols = 8;\n"
+        "  void defineControls() { addControl(\"cols\", cols, 1, 64); }\n"
+        "  void placeLights() { for (int i = 0; i < cols; i = i + 1) { addLight(i, 0, 0); } }\n"
+        "}\n"));
+    layout.prepare();
+    layout.rebuildControls();      // the script's own controls exist only once it has compiled
+
+    Layouts group;
+    group.addChild(&layout);
+    Layer layer;
+    layer.setLayouts(&group);
+    layer.setChannelsPerLight(3);
+
+    // A scripted mirror over that row: it folds within the extent the LAYOUT reports, not a constant.
+    MoonLiveModifier mod;
+    mod.defineControls();
+    mod.setScript(mmWriteScript(mmScriptAs("modifyLogical", "setXYZ(width - 1 - xPos, yPos, zPos);")));
+    layer.addChild(&mod);
+    layer.defineControls();
+    group.applyState();
+    layer.applyState();
+
+    // A script's `int` binds as Int32, so the slot is four bytes: a uint8_t write would touch the low one alone.
+    auto setCols = [&](int32_t v) {
+        const auto& cs = layout.controls();
+        for (uint8_t i = 0; i < cs.count(); i++)
+            if (cs[i].name && std::strcmp(cs[i].name, "cols") == 0)
+                *static_cast<int32_t*>(cs[i].ptr) = v;
+    };
+
+    REQUIRE(layout.lightCount() == 8);
+    REQUIRE(layer.lut().hasLUT());            // a scripted modifier is a real mapping, not the identity path
+
+    // Grow, shrink, grow: each count is the extent the mirror folds within, so each needs its own mapping.
+    for (int32_t cols : {24, 4, 40, 8}) {
+        INFO("cols = " << cols);
+        setCols(cols);
+        group.applyState();
+        layer.applyState();
+        CHECK(layout.lightCount() == cols);   // the layout answers with the new count
+        // Reached EXACTLY once: a stale extent doubles one light and drops another for the same total, which is the dark-row bug.
+        std::vector<int> seen(static_cast<std::size_t>(cols), 0);
+        std::size_t total = 0;
+        for (nrOfLightsType li = 0; li < layer.lut().logicalCount(); li++)
+            layer.lut().forEachDestination(li, [&](nrOfLightsType d) {
+                total++;
+                if (d < seen.size()) seen[d]++;
+            });
+        CHECK(total == static_cast<std::size_t>(cols));
+        CHECK(std::all_of(seen.begin(), seen.end(), [](int n) { return n == 1; }));
     }
 }
 
