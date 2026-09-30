@@ -170,6 +170,8 @@ Two rules hold all week. **Anything found before Tuesday is fixed under the old 
 
 **🚧 Wed 30: [the switch](#sept-30-moonlight-v600), then the final take.** The rename lands, and the footage is re-recorded against it the same day.
 
+- **The scenarios run on Windows, in parallel, and merge before the move.** That machine is the only platform with no scenario column in the matrix, and the in-process tier has never run there at all: the UTF-8 preamble that makes it possible was added this morning, after the Windows day had already shipped its own four sites. Two things to read in what comes back. Whether the in-process tier runs clean, since a fifth encoding site would surface as a scenario failure rather than as an encoding one. And whether the 245 ms, 564 ms and 458 ms tick averages from the 29th reproduce: the observation block now carries `max` and the raw samples, so a single blocked tick inside a good second is finally distinguishable from a uniformly slow one, which is what that entry asked for and could not answer.
+
 - Re-run every run file with `mtvideo.py` against a v6.0.0 device, then `mtvoiceover.py` over each: a clip is three passes and the middle one publishes silent.
 - Re-cut with `mtcompose.py`, which consumes the same project file.
 - Done when the published cut says MoonLight in every frame.
@@ -223,7 +225,8 @@ One repository transfer, one sweep commit, one release. The installer manifest, 
 **The name is occupied, so the transfer is two moves in one moment.** `MoonModules/MoonLight` is the predecessor, a fork serving twelve releases, and GitHub refuses a rename onto a name that exists. So it vacates to `ewowi/MoonLight` and `projectMM` renames into the space it leaves, back to back. Between those two clicks `MoonModules/MoonLight` does not exist, and a device asking there falls through to `MoonModules/projectMM`, which redirects throughout: the gap is safe because the firmware already names both.
 
 **✅ Done on 2026-09-29, so the day starts here rather than at step 1**: the readiness gate reads Ready at 464 lines re-baselined, the `MM-` prefix is decided (it stays), and two backups are on disk.
-Step 3 below is also most of the way there: both benches ran their gates, the device sweep passed 28 of 28 across four chips, and the two branches met in a merge that builds and tests clean on macOS. What it still wants is the same set run on Windows once this branch reaches main, which is the one platform the matrix has no scenario column for. `MoonLight-config-MM-testbench-S3-2026-09-29.json` is a device with configuration only; `MoonLight-config-MM-ScenarioProof-2026-09-29.json` carries 63 files including 50 MoonLive scripts and two presets, which is the one that exercises the renamed-and-mapped restore path.
+Step 3 is done on macOS: both benches ran their gates, the device sweep passed 28 of 28 across four chips, and the two branches met in a merge that builds and tests clean. The Windows half runs on that machine and merges before the move.
+The two backups are `MoonLight-config-MM-testbench-P4-2026-09-30.json`, a device with configuration only, and `MoonLight-config-MM-S31-2026-09-30.json`, which carries 23 files including 14 MoonLive scripts and is the one that exercises the renamed-and-mapped restore path.
 
 #### Before the moment
 
@@ -251,6 +254,10 @@ Between step 3 and step 4 sits the ordinary rhythm: whatever is in flight is com
 9. 🚧 **Run the full gate set again** on the swept tree, then tag and release v6.0.0.
 10. 🚧 **Verify the two claims**: a v5.0.0 device finds and installs v6.0.0 over OTA, and the rich backup restores onto it with layouts, effects, presets and scripts intact. The firmware asset name carries no product name (`firmware-<variant>-v<version>.bin`), so a v5 device's URL survives the rename unchanged.
 11. 🚧 **Hand-edit `moondeck/moondeck.json`**, which is gitignored and outside the sweep.
+12. 🚧 **Re-record the clips the rename is visible in**, which is every clip showing the interface, since the title bar carries the product name. Each is a three-pass run: `mtmeasure.py` sizes the holds from the spoken length, `mtvideo.py` records, `mtvoiceover.py` speaks the captions. Recording alone is what published nine silent clips before.
+    - Two clips carry edits made since their last take and want re-recording whatever the rename did: `07-drivers-desktop` names moving heads and par cans on the network-sender step, and `07-drivers-esp32` describes a single parallel lane rather than two.
+13. 🚧 **Render the full series** with `mtcompose.py --project moontube/projects/full-series.json`. The corner window cycles whatever sits in `media/examplevideos/`, which now carries ten effect clips beside the nineteen rough cuts, so the finished film shows the effects as well as the interface driving them.
+14. 🚧 **Publish to YouTube**, one video with the seventeen clips as chapters. The description names the new repository, the documentation site at its new path, and the installer URL, all of which only exist after step 5. Publishing before the rename would hand every viewer a link that dies within the hour.
 
 If step 10 fails, the release stays and the fix is a v6.0.1: the repository has already moved by then, so rolling back is not on the table. That is why the checks and the backups come first.
 

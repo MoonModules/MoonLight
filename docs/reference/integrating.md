@@ -175,7 +175,7 @@ curl -X POST http://<device>/api/firmware/url -d '{"url":"https://…/firmware-e
 curl -X POST http://<device>/api/firmware/upload --data-binary @firmware.bin
 ```
 
-The MoonBase partition has its own three endpoints in the same shape (`/api/firmware/moonbase`, `-update-url`, `-update`), for the web interface rather than the firmware.
+The MoonBase partition has its own three, in the same shape, for the web interface rather than the firmware: `/api/firmware/moonbase`, `/api/firmware/moonbase-update-url` and `/api/firmware/moonbase-update`.
 
 ## Finding devices
 
