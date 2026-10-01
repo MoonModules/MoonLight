@@ -12,7 +12,7 @@ namespace mm {
 /// @card TetrixEffect.gif
 ///
 /// Each column drops a brick of light that falls at its own speed onto a growing stack.
-/// Once the stack fills a column, that column blanks to black and the cycle restarts.
+/// Once the stack fills a column, that column fades to black and the cycle restarts.
 /// Every column runs its own state machine, so they desync into a rain of stacking bricks.
 ///
 /// Prior art: MoonLight's Tetrix, descended from the WLED effect by Aircoookie and blazoncek.
@@ -27,8 +27,8 @@ namespace mm {
 /// With `oneColor` a column's bricks share one slowly-advancing palette index, else each is random.
 class TetrixEffect : public EffectBase {
 public:
-    /// Catalog tags: MoonLight origin, MoonModules.
-    const char* tags() const override { return "💫🌙✨"; }
+    /// Catalog tags: WLED origin, a game.
+    const char* tags() const override { return "🐙👾"; }
     /// Writes the z=0 slice only, iterating x and y.
     Dim dimensions() const override { return Dim::D2; }
 
@@ -57,16 +57,21 @@ public:
         float    roll  = 0.0f;  ///< start-roll carry, paced at the reference frame rate
     };
 
-    /// Size one drop per column and give each a 2 s start delay.
+    /// Size one drop per column and give each its own start delay, up to 2 s.
     void prepare() override {
         // resize() reallocs only when the column count changes, and frees on 0.
         const size_t cols = (width() > 0) ? static_cast<size_t>(width()) : 0;
         drops_.resize(cols);
+        // The landed bricks' colors, one per row of every column, redrawn each frame since the frame is cleared.
+        stackCol_.resize(cols * static_cast<size_t>(height() > 0 ? height() : 0));
         if (drops_) {
             // resize() already zeroed the block, so only the non-zero fields need setting.
             const uint32_t now = platform::millis();
+            // Seeded by the start time, so each run plays a new rain; a frozen test clock keeps it reproducible.
+            rng_.seed(hashInt(now, 0x7E7) | 1u);
             for (size_t i = 0; i < drops_.count(); i++) {
-                drops_[i].step = now + 2000;
+                // Staggered, or every column starts its first brick in the same frame.
+                drops_[i].step = now + 500 + rng_.below(0, 250) * 6;
                 if (oneColor) drops_[i].col = 0;
             }
         }
@@ -85,8 +90,12 @@ public:
 
         const uint32_t now = platform::millis();
         const RGB black{0, 0, 0};
-        // The Layer holds last frame, and this effect writes only its own columns, so own the ground.
+        // The Layer holds last frame, so own the ground and redraw the stacks from memory.
         draw::fill(cv, black);
+        const bool hasStacks = stackCol_ && stackCol_.count() >= static_cast<size_t>(w) * static_cast<size_t>(h);
+        // Brick colors are multiples of 8, so 32 palette lookups a frame color every stacked cell.
+        RGB lut[32];
+        for (uint8_t k = 0; k < 32; k++) lut[k] = colorFromPalette(*Palettes::active(), static_cast<uint8_t>(k * 8));
 
         // The live column count, never the allocated max, so a shrink before prepare is safe.
         const nrOfLightsType dropCount = static_cast<nrOfLightsType>(drops_.count());
@@ -95,6 +104,21 @@ public:
 
         for (nrOfLightsType x = 0; x < nrOfDrops; x++) {
             Tetris& d = drops_[x];
+
+            // A full column fades out over its blank delay, which is the wipe before it restarts.
+            if (hasStacks) {
+                uint8_t dim = 0;
+                if (d.step > 2) {
+                    const int32_t left = static_cast<int32_t>(d.step - now);
+                    dim = left <= 0 ? 255 : static_cast<uint8_t>(255 - (left > 2000 ? 2000 : left) * 255 / 2000);
+                }
+                const lengthType top = d.stack < static_cast<uint16_t>(h) ? static_cast<lengthType>(d.stack) : h;
+                for (lengthType i = 0; i < top; i++) {
+                    const RGB c = lut[stackCol_[static_cast<size_t>(x) * h + i] >> 3];
+                    draw::pixel(cv, {static_cast<lengthType>(x), static_cast<lengthType>(h - 1 - i), 0},
+                                dim ? blend(c, black, dim) : c);
+                }
+            }
 
             if (d.step == 0) {
                 // Idle, so spawn a brick at the control's speed, or a random one when 0.
@@ -124,27 +148,23 @@ public:
                     // `speed` is calibrated against a 25 ms frame, so scale it by the elapsed fraction.
                     d.pos -= d.speed * frameScale_;
                     if (d.pos < static_cast<float>(d.stack)) d.pos = static_cast<float>(d.stack);
-                    // Rows [pos, pos+brick) take the column's color, and everything above is black.
-                    for (lengthType i = static_cast<lengthType>(d.pos); i < h; i++) {
-                        const RGB c = (i < static_cast<lengthType>(d.pos) + static_cast<lengthType>(d.brick))
-                                          ? colorFromPalette(*Palettes::active(), d.col)
-                                          : black;
-                        draw::pixel(cv, {static_cast<lengthType>(x),
-                                                static_cast<lengthType>(h - 1 - i), 0}, c);
-                    }
+                    // Rows [pos, pos+brick) take the column's color.
+                    const lengthType end = static_cast<lengthType>(d.pos) + static_cast<lengthType>(d.brick);
+                    for (lengthType i = static_cast<lengthType>(d.pos); i < h && i < end; i++)
+                        draw::pixel(cv, {static_cast<lengthType>(x), static_cast<lengthType>(h - 1 - i), 0}, lut[d.col >> 3]);
                 } else {
-                    // Landed: grow the stack, then blank-delay a full column or idle for the next brick.
+                    // Landed: remember the brick's color, grow the stack, then blank-delay a full column or idle.
+                    if (hasStacks)
+                        for (uint16_t i = d.stack; i < d.stack + d.brick && i < static_cast<uint16_t>(h); i++)
+                            stackCol_[static_cast<size_t>(x) * h + i] = d.col;
                     d.step = 0;
                     d.stack = static_cast<uint16_t>(d.stack + d.brick);
                     if (d.stack >= static_cast<uint16_t>(h)) d.step = now + 2000;
                 }
             } else {
-                // Full and waiting to blank, the compare being the wrap-safe signed difference.
+                // Full and waiting to blank, the compare being the wrap-safe signed difference; the fade is drawn above.
                 d.brick = 0;
-                if (static_cast<int32_t>(d.step - now) > 0) {
-                    for (lengthType i = 0; i < h; i++)
-                        draw::blendPixel(cv, {static_cast<lengthType>(x), i, 0}, black, 25);
-                } else {
+                if (static_cast<int32_t>(d.step - now) <= 0) {
                     d.stack = 0;
                     d.step  = 0;
                     if (oneColor) d.col = static_cast<uint8_t>(d.col + 8);
@@ -166,6 +186,7 @@ private:
 
     // The *Control suffix keeps these from shadowing the inherited width() and depth() accessors.
     ScratchBuffer<Tetris> drops_{*this};   ///< one drop per X column
+    ScratchBuffer<uint8_t> stackCol_{*this};   ///< each landed row's palette index, column by column
     Random8        rng_;
 
     particles::FrameTime fallTime_{40};   ///< MoonLight's reference rate

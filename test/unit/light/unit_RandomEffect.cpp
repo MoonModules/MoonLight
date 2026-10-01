@@ -4,6 +4,7 @@
 #include "light/layouts/Layouts.h"
 #include "light/effects/RandomEffect.h"
 #include "light/layouts/GridLayout.h"
+#include "platform/platform.h"   // setTestNowMs: the spawn is counted in elapsed time
 
 // A single frame on a fresh black buffer lights exactly ONE light (one setRGB per frame).
 TEST_CASE("RandomEffect lights exactly one light per frame") {
@@ -42,6 +43,7 @@ TEST_CASE("RandomEffect lights exactly one light per frame") {
 
 // Over many frames with light fade the sparkle field fills, more than one light ends up lit.
 TEST_CASE("RandomEffect scatters color across many lights over many frames") {
+    struct ClockGuard { ~ClockGuard() { mm::platform::setTestNowMs(0); } } guard;
     mm::Layouts layouts;
     mm::GridLayout grid;
     grid.width = 8;
@@ -59,8 +61,11 @@ TEST_CASE("RandomEffect scatters color across many lights over many frames") {
 
     layer.applyState();
 
-    // 200 frames each add one sparkle; with almost no fade the field accumulates well past one light.
-    for (int f = 0; f < 200; f++) layer.tick();
+    // 200 frames of virtual time, since the spawn follows elapsed time rather than the frame count.
+    for (uint32_t f = 0; f < 200; f++) {
+        mm::platform::setTestNowMs(1000 + f * 17);
+        layer.tick();
+    }
 
     auto& buf = layer.buffer();
     const uint8_t cpl = buf.channelsPerLight();

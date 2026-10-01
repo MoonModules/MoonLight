@@ -128,6 +128,23 @@ TEST_CASE("Static mode pins the static IP during STA bring-up (WaitingSta)") {
 }
 
 namespace {
+// Frozen time, so the cascade's timeouts cannot fire on a slow machine; restored when the test ends.
+struct FrozenClock {
+    FrozenClock() { mm::platform::setTestNowMs(1000); }
+    ~FrozenClock() { mm::platform::setTestNowMs(0); }
+};
+
+// Switch to Static with this address through the normal control-apply path.
+void setStatic(mm::NetworkModule& net, const char* ipJson) {
+    for (uint8_t i = 0; i < net.controls().count(); i++) {
+        auto& c = net.controls()[i];
+        if (std::strcmp(c.name, "addressing") == 0)
+            mm::applyControlValue(c, "{\"addressing\":1}", "addressing", mm::ApplyPolicy::Clamp);
+        else if (std::strcmp(c.name, "ip") == 0)
+            mm::applyControlValue(c, ipJson, "ip", mm::ApplyPolicy::Clamp);
+    }
+}
+
 const char* networkMode(mm::NetworkModule& net) {
     for (uint8_t i = 0; i < net.controls().count(); i++)
         if (std::strcmp(net.controls()[i].name, "mode") == 0) return static_cast<const char*>(net.controls()[i].ptr);
@@ -139,6 +156,7 @@ const char* networkMode(mm::NetworkModule& net) {
 TEST_CASE("a self-assigned Ethernet address keeps the cascade waiting on a WiFi build, and a lease ends it") {
     const uint8_t linkLocal[4] = {169, 254, 7, 9};
     const uint8_t leased[4]    = {192, 168, 1, 20};
+    FrozenClock clock;
     mm::platform::setTestEthIPv4(linkLocal);
     {
         mm::NetworkModule net;
@@ -156,22 +174,38 @@ TEST_CASE("a self-assigned Ethernet address keeps the cascade waiting on a WiFi 
 // Static mode must still pin the user's address over a self-assigned one, or a leaseless cable keeps 169.254 until reboot.
 TEST_CASE("Static mode pins its address over a self-assigned Ethernet one") {
     const uint8_t linkLocal[4] = {169, 254, 7, 9};
+    FrozenClock clock;
     mm::platform::setTestEthIPv4(linkLocal);
     {
         mm::NetworkModule net;
         net.setup();
         net.rebuildControls();   // the scheduler builds them in the running system
-        for (uint8_t i = 0; i < net.controls().count(); i++) {
-            auto& c = net.controls()[i];
-            if (std::strcmp(c.name, "addressing") == 0)
-                mm::applyControlValue(c, "{\"addressing\":1}", "addressing", mm::ApplyPolicy::Clamp);
-            else if (std::strcmp(c.name, "ip") == 0)
-                mm::applyControlValue(c, "{\"ip\":\"192.168.1.250\"}", "ip", mm::ApplyPolicy::Clamp);
-        }
+        setStatic(net, "{\"ip\":\"192.168.1.250\"}");
         uint32_t before = mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Eth);
         net.tick1s();   // WaitingEth: Static, link up, and the address on the wire is not the configured one
         CHECK(mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Eth) > before);
-        CHECK(std::string(networkMode(net)) == "Ethernet (waiting)");
+        CHECK(std::string(networkMode(net)) == "Ethernet");   // connected on the user's address
+    }
+    mm::platform::setTestEthIPv4(nullptr);
+}
+
+// Editing a static link-local address applies before the cascade judges the link, or the old address reads as lost and the device drops to its access point.
+TEST_CASE("changing a static link-local address keeps Ethernet connected") {
+    const uint8_t linkLocal[4] = {169, 254, 7, 9};
+    FrozenClock clock;
+    mm::platform::setTestEthIPv4(linkLocal);
+    {
+        mm::NetworkModule net;   // no WiFi credentials, so a drop would land on the access point
+        net.setup();
+        net.rebuildControls();
+        setStatic(net, "{\"ip\":\"169.254.7.9\"}");
+        net.tick1s();
+        REQUIRE(std::string(networkMode(net)) == "Ethernet");
+        setStatic(net, "{\"ip\":\"169.254.7.10\"}");
+        uint32_t before = mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Eth);
+        net.tick1s();
+        CHECK(mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Eth) > before);
+        CHECK(std::string(networkMode(net)) == "Ethernet");
     }
     mm::platform::setTestEthIPv4(nullptr);
 }

@@ -483,7 +483,7 @@ def _appendix_lines(text: str) -> int:
             inside = False
         elif inside:
             n += 1
-        elif re.match(r"///\s*@moreinfo\b", s):
+        elif "@moreinfo" in s:   # anywhere on the line, as _header_rules reads it
             inside = True
     return n
 

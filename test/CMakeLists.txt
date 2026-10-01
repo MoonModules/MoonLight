@@ -105,6 +105,33 @@ add_executable(mm_tests
     unit/light/unit_fluid.cpp
     unit/light/unit_draw.cpp
     unit/light/unit_GameOfLifeEffect.cpp
+    unit/light/unit_BreakoutEffect.cpp
+    unit/light/unit_PongEffect.cpp
+    unit/light/unit_SpaceInvadersEffect.cpp
+    unit/light/unit_BlockModifier.cpp
+    unit/light/unit_BlurzEffect.cpp
+    unit/light/unit_BouncingBallsEffect.cpp
+    unit/light/unit_CircleModifier.cpp
+    unit/light/unit_FixedRectangleEffect.cpp
+    unit/light/unit_FreqMatrixEffect.cpp
+    unit/light/unit_FreqSawsEffect.cpp
+    unit/light/unit_GEQ3DEffect.cpp
+    unit/light/unit_GEQEffect.cpp
+    unit/light/unit_GridBlacksLayout.cpp
+    unit/light/unit_LissajousEffect.cpp
+    unit/light/unit_MirrorModifier.cpp
+    unit/light/unit_NoiseMeterEffect.cpp
+    unit/light/unit_PaintBrushEffect.cpp
+    unit/light/unit_PraxisEffect.cpp
+    unit/light/unit_RandomEffect.cpp
+    unit/light/unit_RippleXZModifier.cpp
+    unit/light/unit_RubiksCubeEffect.cpp
+    unit/light/unit_SolidEffect.cpp
+    unit/light/unit_SphereMoveEffect.cpp
+    unit/light/unit_StarFieldEffect.cpp
+    unit/light/unit_StarSkyEffect.cpp
+    unit/light/unit_TetrixEffect.cpp
+    unit/light/unit_TransposeModifier.cpp
     unit/light/unit_DemoReelEffect.cpp
     unit/light/unit_TextEffect.cpp
     unit/light/unit_Coord3D.cpp

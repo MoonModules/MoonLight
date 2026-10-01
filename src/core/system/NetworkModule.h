@@ -285,6 +285,9 @@ public:
             }
         }
 
+        // Before the cascade judges the link, or a new static address reads as a lost one.
+        syncAddressingLive();
+
         switch (state_) {
             case State::WaitingEth:
                 // A static address needs no lease, so pin it as soon as the link is up.
@@ -443,7 +446,6 @@ public:
         syncMdns();
         syncTxPower();
         syncEthLive();          // apply an interface change live where possible
-        syncAddressingLive();   // and an addressing change likewise
 
         // Writing the same storage is enough, since the UI polls for these.
         updateMetrics();

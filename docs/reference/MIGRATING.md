@@ -24,6 +24,13 @@ MoonLight ships **no migration code**: the persistence layer is robust by defaul
 
 ## Unreleased
 
+### Pong keeps its own clock
+
+**Action: *nothing*.**
+
+Pong's `audioReactive` is gone, since a ball that moved only on the beat read as a stalled game.
+The rally always runs on its clock, and a saved value is ignored.
+
 ### A v5 device updates through v6.0.0
 
 **Action: *nothing* on a device already on v6.0.0. A device on v5 installs v6.0.0 first, then this release.**

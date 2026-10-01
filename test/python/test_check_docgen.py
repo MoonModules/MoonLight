@@ -958,6 +958,8 @@ def test_the_appendix_is_measured_from_moreinfo_to_the_end_of_its_run():
             "#include <x>\n/// A member comment, not appendix.\nint x;\n")
     assert check_docgen._appendix_lines(text) == 4
     assert check_docgen._appendix_lines("/// Lead only.\nint x;\n") == 0
+    # A marker after the summary text opens the appendix too, as it does for the lead rules.
+    assert check_docgen._appendix_lines("/// Lead. @moreinfo\n/// ## Why\n/// One fact.\nint x;\n") == 2
 
 
 def test_the_ratchet_refuses_an_appendix_that_grew(monkeypatch):

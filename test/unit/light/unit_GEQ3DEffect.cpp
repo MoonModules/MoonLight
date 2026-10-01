@@ -8,8 +8,8 @@
 #include "core/services/AudioService.h"
 #include "platform/platform.h"
 
-// GEQ3D is audio-driven: it renders 16 bars from AudioService::latestFrame()->bands. These cases pin its behavior deterministically by freezing the clock (platform::setTestNowMs) and driving a synthesized frame through an active AudioService in "sweep (always)" simulate mode. Restore the real clock and vacate the process-wide active mic on release so cases stay order-independent.
-struct ClockGuard { ~ClockGuard() { platform::setTestNowMs(0); } };
+// A frozen clock and a sweep-simulating AudioService make the bars deterministic; both are restored when a case ends.
+struct ClockGuard { ~ClockGuard() { mm::platform::setTestNowMs(0); } };
 
 // Vacates the process-wide active-mic seat on scope exit (even if an assertion aborts the case), so a failed REQUIRE can't leak AudioService::active_ into a later test.
 struct AudioGuard {
@@ -47,7 +47,7 @@ TEST_CASE("GEQ3DEffect renders black on silence") {
 TEST_CASE("GEQ3DEffect draws a bar where the audio band is energised") {
     ClockGuard guard;
     // Sweep mode: pos = (t/250)%16, env = triwave8((t%250)*255/250). At t=125 → pos 0, env ≈ 254, so only bands[0] is high, the leftmost bar rises, the rest stay flat.
-    platform::setTestNowMs(125);
+    mm::platform::setTestNowMs(125);
 
     mm::AudioService mic;
     AudioGuard micGuard{mic};  // vacate the active mic on scope exit (even if a REQUIRE aborts)
@@ -116,7 +116,7 @@ TEST_CASE("GEQ3DEffect survives a zero-size grid") {
 // A narrow grid with fewer columns than bands still spreads bars (numBands is clamped to the column count, so no divide-by-zero, no bar pile-up at x=0) and never crashes.
 TEST_CASE("GEQ3DEffect handles a grid narrower than numBands") {
     ClockGuard guard;
-    platform::setTestNowMs(125);   // sweep → bands[0] high
+    mm::platform::setTestNowMs(125);   // sweep → bands[0] high
 
     mm::AudioService mic;
     AudioGuard micGuard{mic};  // vacate the active mic on scope exit (even if a REQUIRE aborts)

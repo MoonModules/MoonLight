@@ -25,8 +25,8 @@ namespace mm {
 /// A volumetric fixture has no axis left for depth, so every slice shows the same field.
 class NoiseEffect : public EffectBase {
 public:
-    /// Catalog tags: FastLED and MoonLight lineage.
-    const char* tags() const override { return "⚡️💫🌙🐙🌫️"; }
+    /// Catalog tags: FastLED origin, the noise kernel.
+    const char* tags() const override { return "⚡️🌫️"; }
     /// Volumetric under drift, where morph shows one field in every slice.
     Dim dimensions() const override { return Dim::D3; }
 

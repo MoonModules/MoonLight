@@ -107,6 +107,7 @@
 #include "light/effects/FishTankEffect.h"
 #include "light/effects/FlyingToastersEffect.h"
 #include "light/effects/PongEffect.h"
+#include "light/effects/BreakoutEffect.h"
 #include "light/effects/SpaceInvadersEffect.h"
 #include "light/effects/SpriteFountainEffect.h"
 #include "light/effects/TruchetEffect.h"
@@ -284,6 +285,7 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::SpaceInvadersEffect>("SpaceInvadersEffect", "light/effects.md#spaceinvaders");
     mm::ModuleFactory::registerType<mm::SpriteFountainEffect>("SpriteFountainEffect", "light/effects.md#spritefountain");
     mm::ModuleFactory::registerType<mm::PongEffect>("PongEffect", "light/effects.md#pong");
+    mm::ModuleFactory::registerType<mm::BreakoutEffect>("BreakoutEffect", "light/effects.md#breakout");
     mm::ModuleFactory::registerType<mm::BallpitEffect>("BallpitEffect", "light/effects.md#ballpit");
     mm::ModuleFactory::registerType<mm::TruchetEffect>("TruchetEffect", "light/effects.md#truchet");
     mm::ModuleFactory::registerType<mm::VectorBallsEffect>("VectorBallsEffect", "light/effects.md#vectorballs");

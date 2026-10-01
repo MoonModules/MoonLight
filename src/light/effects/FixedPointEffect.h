@@ -23,7 +23,7 @@ class FixedPointEffect : public EffectBase {
 public:
     // Every shape is computed from a position rather than accumulated.
     /// The catalog tags shown on this effect's card.
-    const char* tags() const override { return "💫🖌️"; }
+    const char* tags() const override { return "⚡️🖌️"; }
     /// This effect draws in two dimensions.
     Dim dimensions() const override { return Dim::D2; }
 

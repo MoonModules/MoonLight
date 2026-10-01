@@ -27,8 +27,8 @@ namespace mm {
 /// MoonLight's anti-alias toggle is dropped, since `draw::line` is a crisp Bresenham.
 class GEQ3DEffect : public EffectBase {
 public:
-    /// Catalog tags: MoonLight origin, MoonModules, audio-reactive.
-    const char* tags() const override { return "💫🌙🎶"; }
+    /// Catalog tags: MoonModules origin, audio-reactive.
+    const char* tags() const override { return "🌙🎶"; }
     /// The perspective is faked on a plane, so this is a 2D effect.
     Dim dimensions() const override { return Dim::D2; }
 

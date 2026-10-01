@@ -26,8 +26,8 @@ namespace mm {
 /// Each new game opens with a 1.5 second settle pause, unless `disablePause` is set.
 class GameOfLifeEffect : public EffectBase {
 public:
-    /// Catalog tags: MoonLight origin, MoonModules.
-    const char* tags() const override { return "💫🌙🧬"; }
+    /// Catalog tags: MoonModules origin.
+    const char* tags() const override { return "🌙🧬"; }
     /// Volumetric: a 3D board uses the 26-cell neighborhood.
     Dim dimensions() const override { return Dim::D3; }
 

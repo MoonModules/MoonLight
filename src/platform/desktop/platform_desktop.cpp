@@ -1614,11 +1614,12 @@ bool wifiStaInit(const char* /*ssid*/, const char* /*password*/) {
 }
 bool wifiStaConnected() MM_NONBLOCKING { return false; }
 void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING { out[0] = out[1] = out[2] = out[3] = 0; }
-// Addressing is managed by the system here, so the setters are inert; the per-interface counter is what a host test pins the path on.
+// Addressing is managed by the system here, so the setters reach only the test seams: a per-interface counter, and the faked cable's address.
 static std::atomic<uint32_t> testStaticApplies[2] = {};   // indexed by NetIface
-void netSetStaticIPv4(NetIface iface, const uint8_t[4], const uint8_t[4],
+void netSetStaticIPv4(NetIface iface, const uint8_t ip[4], const uint8_t[4],
                       const uint8_t[4], const uint8_t[4]) {
     testStaticApplies[static_cast<uint8_t>(iface)].fetch_add(1, std::memory_order_relaxed);
+    if (iface == NetIface::Eth && testEthFaked()) setTestEthIPv4(ip);   // a faked cable takes the address, as a real one does
 }
 uint32_t testNetStaticApplyCount(NetIface iface) {
     return testStaticApplies[static_cast<uint8_t>(iface)].load(std::memory_order_relaxed);

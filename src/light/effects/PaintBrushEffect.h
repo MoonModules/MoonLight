@@ -25,8 +25,8 @@ namespace mm {
 /// The soft anti-alias control is omitted, since `draw::line` is crisp and has no Xiaolin-Wu form.
 class PaintBrushEffect : public EffectBase {
 public:
-    /// Catalog tags: MoonLight origin, MoonModules, audio-reactive.
-    const char* tags() const override { return "💫🌙🎶"; }
+    /// Catalog tags: MoonModules origin, audio-reactive.
+    const char* tags() const override { return "🌙🎶"; }
     /// Volumetric: the endpoints oscillate on all three axes.
     Dim dimensions() const override { return Dim::D3; }
 

@@ -26,8 +26,8 @@ namespace mm {
 /// Reproduced from the source: its gravity, time scale, dampening, kick and palette spacing.
 class BouncingBallsEffect : public EffectBase {
 public:
-    /// Catalog tags: MoonLight origin, WLED lineage.
-    const char* tags() const override { return "💫🐙"; }
+    /// Catalog tags: WLED origin.
+    const char* tags() const override { return "🐙"; }
     /// Writes the z=0 slice, one ball column per x, which extrude duplicates through a volume.
     Dim dimensions() const override { return Dim::D2; }
 

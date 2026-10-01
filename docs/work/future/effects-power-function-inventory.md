@@ -13,6 +13,7 @@
 | Ballpit | N | particles scratch rnd pal | on `particles` already | 16-bit `splat`, `decay` | |
 | Blurz | N | fade blur rnd pal audio **float** | `disc` via `coverage`, `blur` | `decay` by half-life, `disc`, `Oscillators`; float to fixed | |
 | BouncingBalls | N | fade scratch rnd pal **float** | `particles` (mandated: gains inter-ball collisions), `splat` | `decay` | the power-functions top-down's "worth converging" is now "converge"; writes raw bytes |
+| Breakout | **A** | beat rnd pal audio | `fillRect` | | game |
 | DemoReel | U | rnd | | | orchestration, not rendering |
 | Dissolve | N | beat rnd pal | `hashInt`, `easeInOutQuad` already | `Oscillators` for the timing | |
 | DistortionWaves | N | beat sin pal **float** | `sin16`, `warp8` | `PolarLut`, `Oscillators`, `warp16`; float to fixed | a Family A shader in all but name |

@@ -34,23 +34,6 @@ Origin: MoonLight · concept by [Stefan Petrick](https://github.com/StefanPetric
 
 Detail: [technical](moxygen/ColorTrailsEffect.md)
 
-<a id="distortionwaves"></a>
-
-### DistortionWaves 💫 · 2D
-
-<img src="../../assets/light/effects/DistortionWavesEffect.gif" width="300" alt="DistortionWaves effect preview">
-
-Two interfering sine waves beat against each other into a moiré color field.
-
-- `freq_x` / `freq_y`: horizontal/vertical wave frequency (1–8).
-- `speed`: animation rate (0 = frozen).
-
-Origin: WLED · by ldirko & blazoncek (WLED port) · [gallery](https://editor.soulmatelights.com/gallery/1089-distorsion-waves) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
-
-Detail: [technical](moxygen/DistortionWavesEffect.md)
-
-[Tests](../../reference/tests/unit-tests.md#distortionwaveseffect)
-
 <a id="fixedrectangle"></a>
 
 ### FixedRectangle 💫 · 3D
@@ -201,22 +184,6 @@ Detail: [technical](moxygen/PraxisEffect.md)
 
 [Tests](../../reference/tests/unit-tests.md#praxiseffect)
 
-<a id="rainbow"></a>
-
-### Rainbow 💫 · 2D
-
-<img src="../../assets/light/effects/RainbowEffect.gif" width="300" alt="Rainbow effect preview">
-
-Diagonal animated rainbow: always-visible default/test effect.
-
-- `speed`: animation BPM (one full hue cycle per beat).
-
-Origin: FastLED · Mark Kriegsman (rainbow) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_FastLED.h)
-
-Detail: [technical](moxygen/RainbowEffect.md)
-
-[Tests](../../reference/tests/unit-tests.md#rainboweffect)
-
 <a id="random"></a>
 
 ### Random 💫✨ · 3D
@@ -351,29 +318,6 @@ Origin: MoonLight original; inspired by After Dark's Flying Toasters (Berkeley S
 
 Detail: [technical](moxygen/FlyingToastersEffect.md)
 
-<a id="fixedpoint"></a>
-
-### FixedPoint 💫🖌️ · 2D
-
-<img src="../../assets/light/effects/FixedPointEffect.gif" width="300" alt="FixedPoint effect preview">
-
-Shapes placed between pixels rather than on them. A clock hand drawn on whole pixels jumps a pixel at a time and reads as broken; the same hand at a fractional position moves smoothly, because a pixel's brightness carries the fraction its position cannot.
-
-- `demo`: which figure, or `all` to cycle them.
-    Eleven figures, from a geared clock through a spirograph to boids and a swaying tree.
-- `bpm`: how fast the orbits and curves run; the clock keeps its own.
-- `fade`: how much of the previous frame survives, which leaves the trail.
-- `dwell`: seconds each demo holds before `all` moves on.
-- `drift`: how far the scene wanders from center, in pixels; 0 pins it.
-- `zoom`: the camera pushes in and settles back; 0 holds it fixed.
-
-
-Origin: MoonLight (Sutaburosu)
-
-Detail: [technical](moxygen/FixedPointEffect.md)
-
-[Tests](../../reference/tests/unit-tests.md#fixedpointeffect)
-
 <a id="movinghead"></a>
 
 ### MovingHead 💫🎶🎯 · 1D
@@ -434,6 +378,8 @@ The 1978 formation marching down the wall: five ranks stepping sideways in the t
 - `dropY`: how far a wall turn drops it, in pixels.
 - `size`: magnification per art pixel; 1 on a matrix, 2 or more on a wall.
 - `audioReactive`: the formation steps on transients, locking to the track.
+- `player`: the cannon, for a fader or an input; idle 10 s, the game plays it.
+- `fire`: a button that fires the cannon, one shot in the air at a time.
 
 The invaders take their body color from the active palette.
 
@@ -464,24 +410,47 @@ Detail: [technical](moxygen/SpriteFountainEffect.md)
 
 <a id="pong"></a>
 
-### Pong 💫🎵👾 · 2D
+### Pong 💫👾 · 2D
 
 <img src="../../assets/light/effects/PongEffect.gif" width="300" alt="Pong effect preview">
 
-Two paddles rallying a ball, the attract mode of the 1972 original where both players are the machine. A perfect tracker would rally forever and never look like a game, so each paddle has a reaction delay and a small aiming error, re-rolled every exchange. That is what produces the occasional point.
+Two paddles rallying a ball, the attract mode of the 1972 original where both players are the machine. A perfect tracker would rally forever and never look like a game, so each paddle has a reaction delay and a small aiming error, re-rolled every exchange. That is what produces the occasional point. The score shows at the top, and the first to 11 starts a new game.
 
 - `rallyBpm`: ball crossings per minute, the same time on any grid.
 - `paddle`: length as a percentage of the court; short paddles miss more.
 - `reflex`: how sharply a paddle chases. Below full it lags a fast ball.
-- `size`: integer magnification, when the ball is a sprite.
 - `spriteBall`: swap the square for a sprite, re-picked on every hit.
-- `audioReactive`: the ball advances only on the beat, in time with the track.
+- `size`: integer magnification of the sprite ball, shown while it is on.
+- `player1`: the left paddle, for a fader or input; idle 10 s, the game plays it.
+- `player2`: the right paddle, the same way.
 
 Uses the global palette.
 
 Origin: MoonLight original, after Atari's Pong (1972)
 
 Detail: [technical](moxygen/PongEffect.md)
+
+<a id="breakout"></a>
+
+### Breakout 💫🎵👾 · 2D
+
+<img src="../../assets/light/effects/BreakoutEffect.gif" width="300" alt="Breakout effect preview">
+
+A paddle knocking down a wall of bricks, the attract mode of the 1976 original where the machine plays itself. The paddle waits out a reaction delay and aims slightly off, so steep balls outrun it. The ball speeds up as bricks fall, and the paddle halves once the ball reaches the back wall. Three misses, or a cleared wall, deal a fresh one.
+
+- `speedBpm`: court crossings per minute at the serve, the same time on any grid.
+- `rows`: rows of bricks, fewer where the grid has no room.
+- `paddle`: width as a percentage of the court.
+- `reflex`: how sharply the paddle chases. Below full it lags a steep ball.
+- `descend`: the wall creeps down and new rows enter at the top.
+- `audioReactive`: columns glow with their bands, the palette follows the volume.
+- `player`: the paddle, for a fader or an input; idle 10 s, the game plays it.
+
+The brick rows take their colors from the active palette.
+
+Origin: MoonLight original, after Atari's Breakout (1976)
+
+Detail: [technical](moxygen/BreakoutEffect.md)
 
 <a id="aurora"></a>
 
@@ -570,7 +539,7 @@ Detail: [technical](moxygen/EchoEffect.md)
 
 <img src="../../assets/light/effects/SpectrumEffect.gif" width="300" alt="Spectrum effect preview">
 
-An audio analyser with real meter ballistics: bars rise fast enough to catch a transient and fall slowly enough to read, and a peak dot marks the recent maximum and drifts down.
+An audio analyzer with real meter ballistics: bars rise fast enough to catch a transient and fall slowly enough to read, and a peak dot marks the recent maximum and drifts down.
 
 - `attack`: how fast a bar rises toward a new level.
 - `release`: how fast it falls back.
@@ -788,7 +757,7 @@ A circle and a box orbit and melt into each other, drawn as signed distance fiel
 
 Measured on an ESP32-S3 at 128×128: 20 fps, 728 cycles/pixel using the true-distance form, alongside StarSky (692) and Metaballs (647) at the same size.
 
-Origin: MoonLight original, after Iñigo Quilez's distance-function catalogue and polynomial smooth-minimum (iquilezles.org)
+Origin: MoonLight original, after Iñigo Quilez's distance-function catalog and polynomial smooth-minimum (iquilezles.org)
 
 Detail: [technical](moxygen/SdfShapesEffect.md)
 
@@ -903,11 +872,29 @@ Detail: [technical](moxygen/TextEffect.md)
 
 [Tests](../../reference/tests/unit-tests.md#texteffect)
 
+<a id="wave"></a>
+
+### Wave 💫🌫️ · 2D
+
+<img src="../../assets/light/effects/WaveEffect.gif" width="300" alt="Wave effect preview">
+
+An oscilloscope waveform scrolls across the grid with a fading trail; six selectable shapes.
+
+- `bpm`: travel speed (phase advance per minute).
+- `fade`: trail fade per frame (0 = instant clear, 255 = long tail).
+- `type`: waveform shape: sawtooth, triangle, sine, square, sin3 or noise.
+
+Origin: MoonLight · by Ewoud Wijma · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+
+Detail: [technical](moxygen/WaveEffect.md)
+
+[Tests](../../reference/tests/unit-tests.md#waveeffect)
+
 ## MoonModules effects
 
 <a id="gameoflife"></a>
 
-### GameOfLife 💫🌙🧬 · 2D/3D
+### GameOfLife 🌙🧬 · 2D/3D
 
 <img src="../../assets/light/effects/GameOfLifeEffect.gif" width="300" alt="GameOfLife effect preview">
 
@@ -931,30 +918,9 @@ Detail: [technical](moxygen/GameOfLifeEffect.md)
 
 [Tests](../../reference/tests/unit-tests.md#gameoflifeeffect)
 
-<a id="geq"></a>
-
-### GEQ 💫🐙🎶 · 2D
-
-<img src="../../assets/light/effects/GEQEffect.gif" width="300" alt="GEQ effect preview">
-
-<img src="https://raw.githubusercontent.com/scottrbailey/WLED-Utils/master/gifs/FX_139.gif" width="300" alt="GEQ effect preview" title="WLED effect preview: WLED-Utils by scottrbailey"> <!-- preview: WLED-Utils (scottrbailey), WLED FX 139; replace with our own capture once bench-verified -->
-
-A flat graphic equaliser: the 16 audio bands rise as vertical bars from the bottom, with optional smoothing between bars, per-bar palette coloring, and falling peak markers.
-
-- `fadeOut`: how fast bars fade each frame.
-- `ripple`: falling-peak marker decay.
-- `colorBars`: color each bar from the palette by band instead of by row.
-- `smoothBars`: blend neighboring bands for smoother bar heights.
-
-Origin: WLED (audio) · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
-
-Detail: [technical](moxygen/GEQEffect.md)
-
-[Tests](../../reference/tests/unit-tests.md#geqeffect)
-
 <a id="geq3d"></a>
 
-### GEQ3D 💫🌙🎶 · 2D
+### GEQ3D 🌙🎶 · 2D
 
 <img src="../../assets/light/effects/GEQ3DEffect.gif" width="300" alt="GEQ3D effect preview">
 
@@ -975,7 +941,7 @@ Detail: [technical](moxygen/GEQ3DEffect.md)
 
 <a id="paintbrush"></a>
 
-### PaintBrush 💫🌙🎶 · 3D
+### PaintBrush 🌙🎶 · 3D
 
 <img src="../../assets/light/effects/PaintBrushEffect.gif" width="300" alt="PaintBrush effect preview">
 
@@ -993,24 +959,6 @@ Origin: MoonModules (audio) · by [@TroyHacks](https://github.com/troyhacks) (GP
 Detail: [technical](moxygen/PaintBrushEffect.md)
 
 [Tests](../../reference/tests/unit-tests.md#paintbrusheffect)
-
-<a id="tetrix"></a>
-
-### Tetrix 💫🌙✨ · 2D
-
-<img src="../../assets/light/effects/TetrixEffect.gif" width="300" alt="Tetrix effect preview">
-
-Falling Tetris-style blocks: each column drops a brick that lands on the growing stack, fills the column, then clears and restarts.
-
-- `speed`: fall speed (0 = randomised per brick).
-- `width`: brick height (0 = randomised).
-- `oneColor`: one advancing palette color for every brick, not one each.
-
-Origin: WLED · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
-
-Detail: [technical](moxygen/TetrixEffect.md)
-
-[Tests](../../reference/tests/unit-tests.md#tetrixeffect)
 
 ## WLED effects
 
@@ -1037,7 +985,7 @@ Detail: [technical](moxygen/BlurzEffect.md)
 
 <a id="bouncingballs"></a>
 
-### BouncingBalls 💫🐙 · 2D
+### BouncingBalls 🐙 · 2D
 
 <img src="../../assets/light/effects/BouncingBallsEffect.gif" width="300" alt="BouncingBalls effect preview">
 
@@ -1053,6 +1001,23 @@ Origin: WLED · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com
 Detail: [technical](moxygen/BouncingBallsEffect.md)
 
 [Tests](../../reference/tests/unit-tests.md#bouncingballseffect)
+
+<a id="distortionwaves"></a>
+
+### DistortionWaves 🐙 · 2D
+
+<img src="../../assets/light/effects/DistortionWavesEffect.gif" width="300" alt="DistortionWaves effect preview">
+
+Two interfering sine waves beat against each other into a moiré color field.
+
+- `freq_x` / `freq_y`: horizontal/vertical wave frequency (1–8).
+- `speed`: animation rate (0 = frozen).
+
+Origin: WLED · by ldirko & blazoncek (WLED port) · [gallery](https://editor.soulmatelights.com/gallery/1089-distorsion-waves) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
+
+Detail: [technical](moxygen/DistortionWavesEffect.md)
+
+[Tests](../../reference/tests/unit-tests.md#distortionwaveseffect)
 
 <a id="freqmatrix"></a>
 
@@ -1075,6 +1040,27 @@ Origin: WLED (audio) · by Andrew Tuline (WLED-SR) · via [MoonLight](https://gi
 Detail: [technical](moxygen/FreqMatrixEffect.md)
 
 [Tests](../../reference/tests/unit-tests.md#freqmatrixeffect)
+
+<a id="geq"></a>
+
+### GEQ 🐙🎶 · 2D
+
+<img src="../../assets/light/effects/GEQEffect.gif" width="300" alt="GEQ effect preview">
+
+<img src="https://raw.githubusercontent.com/scottrbailey/WLED-Utils/master/gifs/FX_139.gif" width="300" alt="GEQ effect preview" title="WLED effect preview: WLED-Utils by scottrbailey"> <!-- preview: WLED-Utils (scottrbailey), WLED FX 139; replace with our own capture once bench-verified -->
+
+A flat graphic equaliser: the 16 audio bands rise as vertical bars from the bottom, with optional smoothing between bars, per-bar palette coloring, and falling peak markers.
+
+- `fadeOut`: how fast bars fade each frame.
+- `ripple`: falling-peak marker decay.
+- `colorBars`: color each bar from the palette by band instead of by row.
+- `smoothBars`: blend neighboring bands for smoother bar heights.
+
+Origin: WLED (audio) · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
+
+Detail: [technical](moxygen/GEQEffect.md)
+
+[Tests](../../reference/tests/unit-tests.md#geqeffect)
 
 <a id="lissajous"></a>
 
@@ -1115,23 +1101,23 @@ Detail: [technical](moxygen/NoiseMeterEffect.md)
 
 [Tests](../../reference/tests/unit-tests.md#noisemetereffect)
 
-<a id="wave"></a>
+<a id="tetrix"></a>
 
-### Wave 💫🌫️ · 2D
+### Tetrix 🐙👾 · 2D
 
-<img src="../../assets/light/effects/WaveEffect.gif" width="300" alt="Wave effect preview">
+<img src="../../assets/light/effects/TetrixEffect.gif" width="300" alt="Tetrix effect preview">
 
-An oscilloscope waveform scrolls across the grid with a fading trail; six selectable shapes.
+Falling Tetris-style blocks: each column drops a brick that lands on the growing stack, fills the column, then clears and restarts.
 
-- `bpm`: travel speed (phase advance per minute).
-- `fade`: trail fade per frame (0 = instant clear, 255 = long tail).
-- `type`: waveform shape: sawtooth, triangle, sine, square, sin3 or noise.
+- `speed`: fall speed (0 = randomised per brick).
+- `width`: brick height (0 = randomised).
+- `oneColor`: one advancing palette color for every brick, not one each.
 
-Origin: MoonLight · by Ewoud Wijma · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
+Origin: WLED · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
 
-Detail: [technical](moxygen/WaveEffect.md)
+Detail: [technical](moxygen/TetrixEffect.md)
 
-[Tests](../../reference/tests/unit-tests.md#waveeffect)
+[Tests](../../reference/tests/unit-tests.md#tetrixeffect)
 
 ## FastLED effects
 
@@ -1154,9 +1140,32 @@ Detail: [technical](moxygen/FireEffect.md)
 
 [Tests](../../reference/tests/unit-tests.md#fireeffect)
 
+<a id="fixedpoint"></a>
+
+### FixedPoint ⚡️🖌️ · 2D
+
+<img src="../../assets/light/effects/FixedPointEffect.gif" width="300" alt="FixedPoint effect preview">
+
+Shapes placed between pixels rather than on them. A clock hand drawn on whole pixels jumps a pixel at a time and reads as broken; the same hand at a fractional position moves smoothly, because a pixel's brightness carries the fraction its position cannot.
+
+- `demo`: which figure, or `all` to cycle them.
+    Eleven figures, from a geared clock through a spirograph to boids and a swaying tree.
+- `bpm`: how fast the orbits and curves run; the clock keeps its own.
+- `fade`: how much of the previous frame survives, which leaves the trail.
+- `dwell`: seconds each demo holds before `all` moves on.
+- `drift`: how far the scene wanders from center, in pixels; 0 pins it.
+- `zoom`: the camera pushes in and settles back; 0 holds it fixed.
+
+
+Origin: MoonLight (Sutaburosu)
+
+Detail: [technical](moxygen/FixedPointEffect.md)
+
+[Tests](../../reference/tests/unit-tests.md#fixedpointeffect)
+
 <a id="noise"></a>
 
-### Noise ⚡️💫🌙🐙🌫️ · 1D/2D/3D
+### Noise ⚡️🌫️ · 1D/2D/3D
 
 <img src="../../assets/light/effects/NoiseEffect.gif" width="300" alt="Noise effect preview">
 
@@ -1171,6 +1180,22 @@ Origin: FastLED · inoise field (Mark Kriegsman); the `morph` form from WLED via
 Detail: [technical](moxygen/NoiseEffect.md)
 
 [Tests](../../reference/tests/unit-tests.md#noiseeffect)
+
+<a id="rainbow"></a>
+
+### Rainbow ⚡️ · 2D
+
+<img src="../../assets/light/effects/RainbowEffect.gif" width="300" alt="Rainbow effect preview">
+
+Diagonal animated rainbow: always-visible default/test effect.
+
+- `speed`: animation BPM (one full hue cycle per beat).
+
+Origin: FastLED · Mark Kriegsman (rainbow) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_FastLED.h)
+
+Detail: [technical](moxygen/RainbowEffect.md)
+
+[Tests](../../reference/tests/unit-tests.md#rainboweffect)
 
 ## MoonLight-native effects
 

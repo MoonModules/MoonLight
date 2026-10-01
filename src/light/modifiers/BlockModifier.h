@@ -33,11 +33,11 @@ public:
         // Stashed so the const per-light fold can read the center from it.
         modifierSize_ = size;
 
-        // The box folds into block-distance space, inlined because the fold is const.
+        // The farthest light folds the box, the last index rather than one past it, or an empty ring is added.
         const int centerX = (modifierSize_.x + 1) / 2 - 1;
         const int centerY = (modifierSize_.y + 1) / 2 - 1;
-        const int dx = std::abs(static_cast<int>(size.x) - centerX);
-        const int dy = std::abs(static_cast<int>(size.y) - centerY);
+        const int dx = std::abs(static_cast<int>(size.x) - 1 - centerX);
+        const int dy = std::abs(static_cast<int>(size.y) - 1 - centerY);
         const int distance = std::max(dx, dy);
 
         size.x = 0;

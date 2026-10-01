@@ -2,6 +2,7 @@
 /// @also AudioService
 
 #include "doctest.h"
+#include "platform/platform.h"   // setTestNowMs
 #include "light/layouts/Layouts.h"
 #include "light/effects/GEQEffect.h"
 #include "light/layouts/GridLayout.h"
@@ -9,7 +10,7 @@
 
 #include <array>
 
-// GEQ is an audio-reactive 2D effect: the 16 bands spread across the columns and each column rises as a bar from the floor (bottom row) up to a height set by its band's loudness. The frame comes from AudioService::latestFrame() (a process-wide static). To feed a signal on the host (no I2S mic) we run a live AudioService with `simulate` set to an "always" mode, synthesizeFrame() fills the bands each tick(). Every case that needs audio brackets its own AudioService setup()/release() so it never leaks the active-mic pointer into another test file. Buffer index = (y*width + x)*3, y=0 is the TOP row so y=height-1 is the floor the bars grow up from.
+// The 16 bands spread across the columns, each a bar rising from the floor (the last row); a simulating AudioService feeds the bands.
 
 // With no live audio source every band is silent, so no bar rises and the buffer stays black.
 TEST_CASE("GEQEffect stays black without an audio frame") {
@@ -41,12 +42,11 @@ TEST_CASE("GEQEffect stays black without an audio frame") {
     CHECK_FALSE(anyLit);
 }
 
-// A bar grows from the floor up: when a column's band is loud, its bottom (floor) pixel is lit while a pixel above the bar's top stays dark, bars fill upward from the bottom row, not top-down or floating.
+// A loud column lights its floor pixel while the pixel above its bar stays dark: bars fill upward, never floating.
 TEST_CASE("GEQEffect fills columns from the floor upward") {
     mm::AudioService audio;
     audio.defineControls();
-    audio.simulate = 4;   // sweep (always): one band lit at a time, deterministic — column 0 maps to
-                          // band 0 (bass), so we can drive a known column loud.
+    audio.simulate = 4;   // sweep (always): one band lit at a time, and column 0 is band 0, so a known column goes loud
     audio.setup();
 
     const int W = 16, H = 8;
@@ -79,7 +79,7 @@ TEST_CASE("GEQEffect fills columns from the floor upward") {
         return d[idx] || d[idx + 1] || d[idx + 2];
     };
 
-    // Sweep steps a lit band every ~250 ms; run frames until some column's floor lights, then assert the invariant on that column: if the floor is dark, the top must be dark too (a bar never floats).
+    // Run until some floor lights, then check that column: a dark floor means a dark top.
     bool sawBar = false;
     for (int i = 0; i < 64; i++) {
         audio.tick();
@@ -97,6 +97,9 @@ TEST_CASE("GEQEffect fills columns from the floor upward") {
 
 // colorBars colors each bar by its column index, so two well-separated lit columns take different hues rather than sharing the row-height gradient, the toggle changes what color a bar is.
 TEST_CASE("GEQEffect colorBars colors bars per column") {
+    // Virtual time, since the simulated music follows the clock and another test's state must not decide the bands.
+    struct ClockGuard { ~ClockGuard() { mm::platform::setTestNowMs(0); } } guard;
+    mm::platform::setTestNowMs(1000);
     mm::AudioService audio;
     audio.defineControls();
     audio.simulate = 3;   // music (always): keeps every band non-zero so many columns rise together
@@ -124,7 +127,7 @@ TEST_CASE("GEQEffect colorBars colors bars per column") {
     mm::Palettes::setActive(0);   // Rainbow: index maps to a spread of hues, order-independent
 
     // Advance until both an early and a late column have a lit floor, then compare their colors.
-    const int xa = 0, xb = W - 1;
+    const int xa = 0, xb = W / 2;   // the top band can stay silent, so the middle column is the far one
     auto color = [&](int x) {
         auto* d = layer.buffer().data();
         size_t idx = (static_cast<size_t>(H - 1) * W + x) * 3;
@@ -133,12 +136,13 @@ TEST_CASE("GEQEffect colorBars colors bars per column") {
     auto lit = [](const std::array<uint8_t, 3>& c) { return c[0] || c[1] || c[2]; };
 
     bool compared = false;
-    for (int i = 0; i < 64 && !compared; i++) {
+    for (uint32_t i = 0; i < 64 && !compared; i++) {
+        mm::platform::setTestNowMs(1000 + i * 25);
         audio.tick();
         layer.tick();
         auto ca = color(xa), cb = color(xb);
         if (lit(ca) && lit(cb)) {
-            // Column 0 (hue 0) and column 15 (hue 255) are opposite ends of the palette: their bar colors differ, confirming the color is driven by column, not by shared row height.
+            // Column 0 (hue 0) and column 8 (hue 136) sit far apart on the palette: their bar colors differ, so the color follows the column, not the shared row height.
             CHECK((ca[0] != cb[0] || ca[1] != cb[1] || ca[2] != cb[2]));
             compared = true;
         }
