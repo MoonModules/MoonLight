@@ -22,7 +22,7 @@ Open the **[web installer](https://moonmodules.org/MoonLight/install/)** in Chro
 
 ![The web installer](assets/gettingstarted/01-01-installer-start.png)
 
-<video src="assets/moontube/01-install-esp32.webm" autoplay loop muted playsinline width="720" title="The installer: picking a release, a firmware, and a board from the gallery"></video>
+<video src="assets/moontube/01-install-esp32.webm" autoplay loop muted controls playsinline width="720" title="The installer: picking a release, a firmware, and a board from the gallery"></video>
 
 ### 2. Pick the USB port
 
@@ -103,9 +103,9 @@ That's it, MoonLight is installed and on your network. The link opens the device
 
 Everything below runs **in your browser, live from the device**. There's no app, no account, no cloud, the ESP32 itself serves this page, and every change you make takes effect on the lights immediately. Open the link from step 6 and follow along; you can't break anything by exploring.
 
-Here is the whole tour in half a minute, on a board that was flashed a moment earlier:
+Here is what a device adds to the interface, on a board that was flashed a moment earlier:
 
-<video src="assets/moontube/02-first-look-esp32.webm" autoplay loop muted playsinline width="720" title="Opening each part of a freshly flashed board: layouts, effects, drivers, services with its microphone, and the system itself"></video>
+<video src="assets/moontube/02-first-look-esp32.webm" autoplay loop muted controls playsinline width="720" title="Each part of a freshly flashed board and what a device adds: an LED driver on a pin, the I2C bus, the pins, a microphone, and updates over the air"></video>
 
 ### The layout: list, preview, controls
 
@@ -146,7 +146,7 @@ Drag to rotate, scroll to zoom. Each dot is one light at its real position, lit 
 
 Learning one card teaches you all of them. Each carries the same five buttons in its corner, and the mode selector decides how many controls you see at all.
 
-<video src="assets/moontube/03-second-look.webm" autoplay loop muted playsinline width="720" title="The five buttons on every card, each pressed: power, replace, delete, help and the card's own JSON"></video>
+<video src="assets/moontube/03-second-look.webm" autoplay loop muted controls playsinline width="720" title="The five buttons on every card, each pressed: power, replace, delete, help and the card's own JSON"></video>
 
 ⏻ turns a module off, ✎ swaps it for another type, × deletes it, ? opens that module's page in this documentation, and { } opens the card's own JSON, which is what to paste into an issue when something misbehaves.
 
@@ -272,11 +272,11 @@ That update runs from the app, because only the running app can write the partit
 
 MoonLight runs on macOS, Windows and Linux as well, with no board attached. The installer offers it from the same page: pick **This computer** instead of a USB port, and the Install button becomes a Download.
 
-<video src="assets/moontube/01-install-desktop.webm" autoplay loop muted playsinline width="720" title="The installer pointed at this computer: picking a release, then downloading the app"></video>
+<video src="assets/moontube/01-install-desktop.webm" autoplay loop muted controls playsinline width="720" title="The installer pointed at this computer: picking a release, then downloading the app"></video>
 
 What you get is the same interface, the same modules and the same effects. A computer has no LED pins, so it previews and sends the frame over the network instead of driving a strip, and it has the memory for a far larger grid than a board does.
 
-<video src="assets/moontube/02-first-look-desktop.webm" autoplay loop muted playsinline width="720" title="The same tour on a computer: every module and every tab inside it, on a 128 by 128 grid"></video>
+<video src="assets/moontube/02-first-look-desktop.webm" autoplay loop muted controls playsinline width="720" title="The tour on a computer: every module and the tabs inside it, on a 256 by 256 grid"></video>
 
 Useful for trying an idea before you wire anything, for driving a board over the network from a machine with real processing power, or for developing effects without a flash cycle.
 

@@ -380,6 +380,13 @@ static bool applySetControl(mm::Scheduler& scheduler,
                             const char* controlName,
                             const JsonVal& value) {
     if (!target || !controlName) return false;
+    // The `enabled` pseudo-control, as Scheduler::setControl applies it, but rebuilt now: setControl defers the rebuild a next step needs.
+    if (std::strcmp(controlName, "enabled") == 0) {
+        if (value.type != JsonVal::Bool) return false;
+        target->setEnabled(value.boolean);
+        scheduler.prepareTree();
+        return true;
+    }
     auto& controls = target->controls();
     for (uint8_t i = 0; i < controls.count(); i++) {
         const auto& c = controls[i];

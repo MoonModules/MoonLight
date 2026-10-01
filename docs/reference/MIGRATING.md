@@ -22,6 +22,28 @@ MoonLight ships **no migration code**: the persistence layer is robust by defaul
 
 ---
 
+## Unreleased
+
+### A v5 device updates through v6.0.0
+
+**Action: *nothing* on a device already on v6.0.0. A device on v5 installs v6.0.0 first, then this release.**
+
+The firmware image now carries the name `MoonLight` where it carried `projectMM`, and a device checks that name before it installs anything.
+v5 knows only the old name, so it refuses this release with "that image is MoonLight, not this project"; v6.0.0 knows both, which is what it shipped for.
+Update a v5 device to v6.0.0 from the Firmware card first, then to this release, or install this release over USB from the [installer page](https://moonmodules.org/MoonLight/install/).
+
+### The recovery image carries the new name too
+
+**Action: *nothing*, unless a device came from v5 over the air: install MoonBase images only from the Firmware card or the installer page, never from MoonBase's own page.**
+
+MoonBase, the recovery image on 4 MB devices, is now `MoonLight-moonbase` where it was `projectMM-moonbase`.
+An update over the air replaces only the app.
+A device that went from v5 to v6 that way still carries the v5 MoonBase, which knows only the old name.
+Its own install page refuses a recovery image by that old name, but it takes the new one for an app and writes it over the app.
+After that, only a USB cable brings the device back.
+The Firmware card's MoonBase update and the installer page both recognize the new name.
+Either one also replaces the old MoonBase, which closes this for good on that device.
+
 ## v6.0.0
 
 ### The desktop settings folder and the installer's device list carry the new name

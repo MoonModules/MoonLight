@@ -137,6 +137,9 @@ def write_report():
     by_rule, by_file, total = {}, {}, 0
     for path, alerts in report.items():
         rel = os.path.relpath(path, ROOT) if os.path.isabs(path) else path
+        # The same exemptions as the gate: a generated page present on disk after a docs build counted its source's prose a second time.
+        if rel.startswith(EXEMPT):
+            continue
         if alerts:
             by_file[rel] = len(alerts)
         for a in alerts:

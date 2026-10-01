@@ -132,7 +132,12 @@ def collect_metrics(client: Client, settle_s: float = 1.5) -> dict:
 
 
 def _control_value(module: dict, name: str):
-    """Return the value of a named control on a module, or None."""
+    """Return the value of a named control on a module, or None.
+
+    `enabled` is a field of the module itself rather than one of its controls, so it is read from there.
+    """
+    if name == "enabled":
+        return module.get("enabled")
     for ctrl in module.get("controls", []):
         if ctrl.get("name") == name:
             return ctrl.get("value")
@@ -227,6 +232,85 @@ def _restarted(before: int, now: int, elapsed: float) -> bool:
     whole seconds on both readings.
     """
     return now + 2 < before + elapsed
+
+
+def _remember_control(prior: dict, client, mod_id: str, key: str) -> None:
+    """Note what a control held before a scenario first writes it, so the run can put it back.
+
+    Only the first write counts: a later one would record the scenario's own value.
+    A control that cannot be read is left out, and the scenario's value then stays.
+    A password is left out too: the module read returns it obfuscated, and writing that back would set the obfuscated text as the password.
+    """
+    if (mod_id, key) in prior:
+        return
+    try:
+        module = client.get(_mod_path(mod_id))
+    except Exception:
+        return
+    if any(c.get("name") == key and c.get("type") == "Password" for c in module.get("controls", [])):
+        return
+    value = _control_value(module, key)
+    if value is not None:
+        prior[(mod_id, key)] = value
+
+
+def _remember_type(replaced: dict, client, mod_id: str) -> None:
+    """Note what type a slot held before a scenario first replaces it, so the run can swap it back.
+
+    Only the first replace counts, as with controls. A slot that cannot be read is left out.
+    """
+    if mod_id in replaced:
+        return
+    try:
+        typ = client.get(_mod_path(mod_id)).get("type")
+    except Exception:
+        return
+    if typ:
+        replaced[mod_id] = typ
+
+
+def _restore_types(client, replaced: dict) -> int:
+    """Swap every slot a scenario replaced back to the type it held, keeping its name.
+
+    The re-created tree cannot do this: a replaced slot still exists under its name, so the snapshot restore sees it as present and leaves the scenario's type standing.
+    A slot the scenario itself created is gone by now, and that 404 stays quiet; any other failure is reported, as `_restore_tree` reports one.
+    Returns how many the device confirmed.
+    """
+    done = 0
+    for mod_id, typ in reversed(list(replaced.items())):
+        try:
+            if client.post(_mod_path(mod_id) + "/replace", {"type": typ, "name": mod_id}).get("ok"):
+                done += 1
+            else:
+                print(f"  WARN  restore: the device declined to swap {mod_id} back to {typ}")
+        except urllib.error.HTTPError as e:
+            if e.code != 404:
+                print(f"  WARN  restore: could not swap {mod_id} back to {typ}: {e}")
+        except Exception as e:
+            print(f"  WARN  restore: could not swap {mod_id} back to {typ}: {e}")
+    return done
+
+
+def _restore_controls(client, prior: dict) -> int:
+    """Set every control a scenario wrote back to what it held before, newest write first.
+
+    A scenario that names a device to prove the name survives a restart otherwise leaves that name on every device it runs on, and two bench devices answering to one name is how a restore landed on the wrong one.
+    A control whose module the scenario itself created is gone by now, and that 404 stays quiet; any other failure is reported, as `_restore_tree` reports one.
+    Returns how many the device confirmed.
+    """
+    done = 0
+    for (mod_id, key), value in reversed(list(prior.items())):
+        try:
+            if client.post("/api/control", {"module": mod_id, "control": key, "value": value}).get("ok"):
+                done += 1
+            else:
+                print(f"  WARN  restore: the device declined {mod_id}.{key}={value!r}")
+        except urllib.error.HTTPError as e:
+            if e.code != 404:
+                print(f"  WARN  restore: could not set {mod_id}.{key}={value!r}: {e}")
+        except Exception as e:
+            print(f"  WARN  restore: could not set {mod_id}.{key}={value!r}: {e}")
+    return done
 
 
 def _reboot_and_wait(client, target: str, timeout_s: float = 60.0) -> str:
@@ -357,15 +441,11 @@ _SNAPSHOT_CONTAINERS = {"Layouts", "Effects", "Drivers", "Services", "Layer"}
 
 
 def _snapshot_tree(state: dict) -> list:
-    """Capture the user-added modules a scenario might clear or replace, in tree order
-    (parents before children), so they can be re-created after the scenario runs.
+    """Capture the user-added modules a scenario might clear or remove, in tree order (parents before children), so they can be re-created after the scenario runs.
 
-    Each entry is {type, id, parent_id, controls} — everything /api/state exposes to
-    reconstruct a module via POST /api/modules + /api/control. Boot-wired singletons
-    (the containers themselves, Preview, LightPresets) are NOT captured: the device
-    re-creates them itself and re-adding is a no-op or an error. We snapshot the
-    CHILDREN of the snapshot containers (and their descendants) — the modules a
-    scenario's clear_children / replace actually removes."""
+    Each entry is {type, id, parent_id, controls}: everything /api/state exposes to reconstruct a module via POST /api/modules + /api/control.
+    Boot-wired singletons (the containers themselves, Preview, LightPresets) are not captured: the device re-creates them itself, and re-adding is a no-op or an error.
+    The snapshot holds the children of the snapshot containers and their descendants, which are the modules a scenario's clear_children or remove takes away."""
     snap = []
 
     def controls_of(m: dict) -> dict:
@@ -406,7 +486,7 @@ def _restore_tree(client, snapshot: list, current_state: dict) -> None:
             client.post("/api/modules", {"type": entry["type"], "id": entry["id"],
                                          "parent_id": entry["parent_id"]})
         except Exception as e:
-            print(f"  WARN — restore: could not re-create {entry['id']} "
+            print(f"  WARN  restore: could not re-create {entry['id']} "
                   f"({entry['type']} under {entry['parent_id']}): {e}")
             continue
         for cname, val in entry["controls"].items():
@@ -414,7 +494,7 @@ def _restore_tree(client, snapshot: list, current_state: dict) -> None:
                 client.post("/api/control", {"module": entry["id"],
                                              "control": cname, "value": val})
             except Exception as e:
-                print(f"  WARN — restore: could not set {entry['id']}.{cname}={val!r}: {e}")
+                print(f"  WARN  restore: could not set {entry['id']}.{cname}={val!r}: {e}")
         restored += 1
     if restored:
         print(f"  restored {restored} module(s) the scenario had cleared")
@@ -517,6 +597,8 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
     # a scenario that clear_children's a container (to get a known canvas) destroys the
     # board's real config, and the created_modules cleanup only removes what the scenario
     # ADDED, not what it CLEARED. Restoring the snapshot leaves the bench board as found.
+    prior_controls: dict = {}   # (module, control) -> the value it held before this scenario wrote it
+    replaced_types: dict = {}   # slot name -> the type it held before this scenario replaced it
     tree_snapshot = []
     if live_state is not None:   # skip restore if the pre-flight /api/state fetch failed (nothing to snapshot)
         try:
@@ -764,6 +846,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
             elif op == "set_control":
                 data = {"module": step["id"], "control": step["key"],
                         "value": step["value"]}
+                _remember_control(prior_controls, client, step["id"], step["key"])
                 try:
                     resp = client.post("/api/control", data)
                     step_result["status"] = "ok" if resp.get("ok") else "error"
@@ -862,11 +945,11 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 time.sleep(0.5)  # let prepareTree settle before the next add
 
             elif op == "replace_module":
-                # Swap a child for a fresh module of another type at the same
-                # slot, keeping its name — mirrors the in-process op and the
-                # device's POST /api/modules/<name>/replace endpoint.
+                # Swap a child for a fresh module of another type at the same slot.
+                # The name is passed explicitly: the device otherwise renames a slot that carried its old type's default name, and the scenario, like the in-process op, keeps addressing the slot by its id.
+                _remember_type(replaced_types, client, step["id"])
                 resp = client.post(_mod_path(step["id"]) + "/replace",
-                                   {"type": step["type"]})
+                                   {"type": step["type"], "name": step["id"]})
                 step_result["status"] = "ok" if resp.get("ok") else "error"
                 print(f"  ~     {step.get('id', '?')} → {step.get('type', '?')}")
                 time.sleep(0.5)
@@ -1126,15 +1209,23 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
         except Exception:
             pass
 
-    # Restore: re-create any pre-existing module the scenario removed (a clear_children
-    # of a real container, or a replace). Combined with the created-module cleanup above,
-    # the board ends the run in the tree it started with — no residue, no lost config.
+    # Swap every replaced slot back to its type before the tree restore, which only re-creates what is missing.
+    swapped_back = _restore_types(client, replaced_types)
+    if swapped_back:
+        print(f"  restored {swapped_back} module(s) the scenario had replaced")
+
+    # Restore: re-create any pre-existing module the scenario removed (a clear_children of a real container, or a remove).
+    # Combined with the cleanup and the swap-back above, the board ends the run in the tree it started with: no residue, no lost config.
     if tree_snapshot:
         try:
             after_state = client.get("/api/state")
             _restore_tree(client, tree_snapshot, after_state)
         except Exception as e:
             print(f"  WARN — couldn't restore snapshot: {e}")
+    # And the controls it wrote, after the tree, so a module the restore re-created takes its values.
+    put_back = _restore_controls(client, prior_controls)
+    if put_back:
+        print(f"  restored {put_back} control(s) the scenario had set")
 
     # Write the scenario JSON back if anything changed:
     #   - observed.<target> was updated by any measure step (every run); OR
@@ -1233,7 +1324,7 @@ def main():
     parser.add_argument("--host", default="localhost:8080",
                         help="Device host:port (default: localhost:8080)")
     parser.add_argument("--name", default=None,
-                        help="Scenario name (without .json). Runs all if omitted.")
+                        help="Scenario name (without .json), or several separated by commas. Runs all if omitted.")
     parser.add_argument("--module", default=None,
                         help="Filter to scenarios whose top-level module / also matches.")
     parser.add_argument("--settle", type=float, default=3.0,
@@ -1271,11 +1362,13 @@ def main():
 
     # Find scenarios via the shared metadata module (recursive: scenarios live under core/, light/, …)
     if args.name:
-        match = test_meta.find_scenario_path(args.name)
-        if not match:
-            print(f"Scenario not found: {args.name}.json under {test_meta.SCENARIO_DIR}")
-            sys.exit(1)
-        paths = [match]
+        paths = []
+        for name in (n.strip() for n in args.name.split(",") if n.strip()):
+            match = test_meta.find_scenario_path(name)
+            if not match:
+                print(f"Scenario not found: {name}.json under {test_meta.SCENARIO_DIR}")
+                sys.exit(1)
+            paths.append(match)
     else:
         paths = [s["path"] for s in test_meta.collect_scenario_files()]
 

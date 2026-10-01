@@ -1,9 +1,21 @@
 /// Reading a firmware image's own header, which is what stands between a mistyped URL and a board with no recovery image.
+///
+/// @moreinfo
+///
 /// The MoonBase update ERASES the factory partition before it can know whether a stream is any good, so everything that can reject an image is decided from its first chunk.
 /// These tests are that decision.
 ///
+/// ## Real binaries, not only synthetic ones
+///
 /// The offsets are pinned against REAL binaries wherever the build tree has them.
 /// The layout comes from the ESP32 toolchain, not from us, and a test that only checks our own synthetic bytes would agree with itself while disagreeing with every actual image.
+/// Every image found is checked, and a found image that cannot be parsed FAILS rather than being skipped: skipping the unparseable ones is skipping exactly what this catches.
+///
+/// ## Empty means not built, not passed
+///
+/// A checkout that has not built for ESP32 has no images to check.
+/// That case has to stay distinguishable from "present but not checked".
+/// A loop that skips missing files and asserts nothing reports green either way, which looks exactly like a test that ran.
 
 #include "doctest.h"
 
@@ -53,8 +65,7 @@ std::vector<uint8_t> readHead(const std::filesystem::path& p) {
 
 namespace {
 
-/// The built images present in the tree, as (path, expected project name) pairs.
-/// Empty on a checkout that has not built for ESP32, which is the case these tests have to tell apart from "present but not checked": a loop that skips missing files and asserts nothing reports green either way, which is indistinguishable from a test that ran.
+/// The built images present in the tree, as (path, expected project name) pairs: @xref{empty-means-not-built-not-passed}.
 std::vector<std::pair<std::filesystem::path, std::string>> builtImages() {
     std::vector<std::pair<std::filesystem::path, std::string>> out;
     const auto build = repoRoot() / "build";
@@ -62,8 +73,8 @@ std::vector<std::pair<std::filesystem::path, std::string>> builtImages() {
     for (const auto& e : std::filesystem::directory_iterator(build)) {
         if (!e.is_directory()) continue;
         for (const auto& [file, project] :
-             {std::pair<const char*, const char*>{"projectMM-moonbase.bin", "projectMM-moonbase"},
-              std::pair<const char*, const char*>{"projectMM.bin", "projectMM"}}) {
+             {std::pair<const char*, const char*>{"MoonLight-moonbase.bin", "MoonLight-moonbase"},
+              std::pair<const char*, const char*>{"MoonLight.bin", "MoonLight"}}) {
             const auto p = e.path() / file;
             if (std::filesystem::exists(p)) out.emplace_back(p, project);
         }
@@ -74,10 +85,7 @@ std::vector<std::pair<std::filesystem::path, std::string>> builtImages() {
 } // namespace
 
 TEST_CASE("every built image identifies as what it is") {
-    // THE PIN THAT MATTERS: our offsets against images the ESP32 toolchain actually produced.
-    // A synthetic-only test would agree with itself while disagreeing with every real image.
-    //
-    // Every image found is checked, and a found image that cannot be parsed FAILS rather than being skipped: skipping the unparseable ones is skipping exactly what this catches.
+    // THE PIN THAT MATTERS: our offsets against images the ESP32 toolchain actually produced: @xref{real-binaries-not-only-synthetic-ones}.
     const auto images = builtImages();
     if (images.empty()) {
         MESSAGE("no built ESP32 images in the tree; run build_esp32.py to exercise this");
@@ -94,7 +102,7 @@ TEST_CASE("every built image identifies as what it is") {
         CHECK(std::string(info.project) == project);
         // And the rule the install path runs: a MoonBase image is accepted for its own chip, an app image is refused whatever the chip. Both directions, against real binaries.
         const char* verdict = moonBaseRejection(info, info.chip);
-        if (project == "projectMM-moonbase") CHECK(verdict == nullptr);
+        if (project == "MoonLight-moonbase") CHECK(verdict == nullptr);
         else CHECK(verdict == std::string("not a MoonBase image"));
     }
     MESSAGE("checked ", images.size(), " built image(s)");
@@ -110,7 +118,7 @@ TEST_CASE("an HTML error page is refused before anything is erased") {
 
 TEST_CASE("an image for the wrong chip is refused") {
     // There is one MoonBase per chip and they are one paste apart. A checksum does NOT catch this: the image is perfectly valid, it just cannot execute on this silicon.
-    const auto classic = makeImage(kImageMagic, 0x0000, "projectMM-moonbase");
+    const auto classic = makeImage(kImageMagic, 0x0000, "MoonLight-moonbase");
     const auto info = identify(classic.data(), classic.size());
     CHECK(info.valid);
     CHECK(info.chip == ChipId::Esp32);
@@ -128,7 +136,7 @@ TEST_CASE("an image with no description is refused") {
 
 TEST_CASE("a truncated stream reports what it can rather than reading past its buffer") {
     // The first chunk can arrive short. Reading a fixed 128 bytes from a 40-byte buffer is how a vetting check becomes the vulnerability it was added to prevent.
-    const auto full = makeImage(kImageMagic, 0x0009, "projectMM-moonbase");
+    const auto full = makeImage(kImageMagic, 0x0009, "MoonLight-moonbase");
     for (size_t n : {size_t{0}, size_t{1}, size_t{12}, size_t{13}, size_t{31}, size_t{40},
                      kDescOffset + 95}) {
         const auto info = identify(full.data(), n);         // must not read past n
@@ -141,23 +149,24 @@ TEST_CASE("a truncated stream reports what it can rather than reading past its b
 
 TEST_CASE("a 32-character project name that fills its field stays terminated") {
     // IDF leaves a name that exactly fills its 32 bytes unterminated. Copying all 32 into a 32-byte buffer would leave no NUL, and every later strcmp would run off the end.
-    auto b = makeImage(kImageMagic, 0x0009, "projectMM-moonbase");
+    auto b = makeImage(kImageMagic, 0x0009, "MoonLight-moonbase");
     std::memset(b.data() + kDescOffset + 48, 'x', 32);       // no terminator in the field
     const auto info = identify(b.data(), b.size());
     CHECK(std::strlen(info.project) == 31);                  // truncated, and NUL-terminated
     CHECK(moonBaseRejection(info, ChipId::Esp32S3) == std::string("not a MoonBase image"));
 }
 
-TEST_CASE("an app image is accepted under the name it ships with and the name it takes next") {
-    // A device refuses an image by any name it does not know, so a release has to know the next name before any image carries it.
-    CHECK(isAppImage("projectMM"));
+TEST_CASE("an app image is accepted under the name it ships with and the name v6.0.0 shipped with") {
+    // The new name ships, and the old one stays accepted so a device can still go back to the release that bridged them.
     CHECK(isAppImage("MoonLight"));
+    CHECK(isAppImage("projectMM"));
+    CHECK(std::string(kAppImageNames[0]) == "MoonLight");
 }
 
 TEST_CASE("a stranger's image is refused, however close its name") {
     CHECK_FALSE(isAppImage("WLED"));
     CHECK_FALSE(isAppImage(""));
-    CHECK_FALSE(isAppImage("projectMM2"));        // a longer name that merely begins the same
+    CHECK_FALSE(isAppImage("MoonLight2"));        // a longer name that merely begins the same
     CHECK_FALSE(isAppImage("MoonLigh"));          // and a shorter one
     CHECK_FALSE(isAppImage("moonlight"));         // the descriptor is case-sensitive
 }

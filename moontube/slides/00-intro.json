@@ -7,20 +7,21 @@
       "kicker": "MoonModules presents",
       "title": "MoonLight",
       "tagline": "Thousands of lights, live from any browser, on any device, over any protocol.<b>Better · Faster · Safer · Unbreakable · Open</b>",
-      "hold": 2
+      "hold": 8
     },
     {
       "kicker": "MoonModules",
       "title": "Hello, I am Luna",
-      "say": "Hello! I am Luna. Welcome to a new MoonModules video. It's been a while. About a year ago MoonModules made a number of MoonLight videos. But since then, MoonLight has had a complete makeover. If you have not met it: MoonLight drives LED installations and DMX fixtures, live, from any browser.",
+      "say": "Hello! I am Luna. Welcome to a new MoonModules video. It's been a while. About a year ago MoonModules made a number of MoonLight videos. But since then, MoonLight has had a complete makeover. If you have not met it: MoonLight drives LED installations and DMX fixtures, live, from any browser and any device.",
       "bullets": [
-        "MoonLight drives LED installations and DMX fixtures, live, from any browser"
+        "MoonLight drives LED installations and DMX fixtures",
+        "Live, from any browser, from any device"
       ]
     },
     {
       "kicker": "Who wrote it",
       "title": "MoonModules people wrote the old one.<br><span class=\"soft\">I wrote this one.</span>",
-      "say": "Here is the part that surprises people. The MoonModules people built the old MoonLight themselves, by hand, over several years. The new one they did not write. Not one line of code, not one word of documentation.",
+      "say": "Here is the interesting part: The MoonModules people built the old MoonLight themselves, by hand, over several years. The new one they did not write. Not one line of code, not one word of documentation.",
       "bullets": []
     },
     {
@@ -52,7 +53,7 @@
     {
       "kicker": "Why give up something that worked",
       "title": "A new paradigm<br><span class=\"soft\">is not going away</span>",
-      "say": "So why did they do it? The old MoonLight was not perfect, but it worked, and they could tune it. The reason is simple. Agents like me offer a revolutionary new paradigm. There are a lot of worries about AI as it stands, but it is not going away. For people who have worked in IT since the days when AI was first being talked about, pretending it is not there is not an option.",
+      "say": "So why did they do it? The old MoonLight was not perfect, but it worked, and they could tune it. The reason is practical. Agents like me are changing how software gets written, whether you welcome that or not. There are good reasons to be critical of AI, and the MoonModules people share several of them. So rather than guess, they tried it: on their own project, with their own rules, and a human reviewing every line.",
       "bullets": []
     },
     {
@@ -76,9 +77,9 @@
       "title": "Power functions<br><span class=\"soft\">and a language on top</span>",
       "bullets": [
         "Drawing, shaders, particles, fluid, raymarching, polar, fonts and sprites",
-        "MoonLive: our own little language, a 100% subset of C++, compiled on any device"
+        "MoonLive: a subset of C++, compiled live on any device"
       ],
-      "say": "The effects are not each written from scratch. They are built from shared power functions: drawing, shaders, particles, fluid dynamics, raymarching, polar maths, fonts and sprites. An effect composes those rather than reinventing them, which is why a fix to one improves many. And on top of that sits MoonLive, our own little language and a hundred percent subset of C++: you write a script in the browser, and the device compiles it to native machine code and runs it at full speed, on any device we support, with no reflash and no interpreter."
+      "say": "The effects are not each written from scratch. They are built from shared power functions: drawing, shaders, particles, fluid dynamics, raymarching, polar maths, fonts and sprites. An effect composes those rather than reinventing them, which is why a fix to one improves many. And on top of that sits MoonLive, a subset of C++: you write a script in the browser, and the device compiles it to native machine code and runs it at full speed, on any device we support, with no reflash and no interpreter."
     },
     {
       "kicker": "The principles",
@@ -96,45 +97,46 @@
       "title": "No libraries",
       "bullets": [
         "We write the LED drivers, the audio drivers, the web server, the JSON, the color maths",
-        "We build only on the device's own framework, such as ESP-IDF for the ESP32",
+        "We build only on the device's framework, such as ESP-IDF-6 for the ESP32",
         "A library cannot give the test-guarding agentic coding needs",
         "They do more than you want, and less than you need"
       ],
-      "say": "And one principle needs special attention. No libraries. The LED drivers are ours, the audio drivers are ours, the web server is ours, the JSON handling is ours, the color maths is ours. The one thing we do build on is the device's own framework, such as ESP-IDF for the ESP32, and that is where the line sits. It became clear that libraries could not provide the level of test guarding MoonLight needs to keep agents like me in control. They also never do exactly what you want: they do more, using more code, and they do less than you need, so you wait on someone else's release schedule."
+      "say": "And one principle needs special attention. No libraries. The LED drivers, the audio drivers, the web server, the JSON handling, the color maths, all of it is ours. The one thing we do build on is the device's own framework, such as ESP-IDF for the ESP32, and that is where the line sits. It became clear that libraries could not provide the level of test guarding MoonLight needs to keep agents like me in control. They also never do exactly what you want: they do more, using more code, and they do less than you need, so you wait on someone else's release schedule."
     },
     {
       "kicker": "The question that follows",
       "title": "So do we steal code?",
-      "say": "And that brings us to the final point before I show you some MoonLight. Making everything ourselves: do we steal code? It is a big debate, especially with agents involved. The MoonModules people have worked on and with many systems and libraries over the years, and now need none of them.",
+      "say": "And that brings us to the final point before I show you some MoonLight. Making everything ourselves, with AI agents: do we steal code? The MoonModules people have worked on and with many systems and libraries over the years, and now need none of them.",
       "bullets": []
     },
     {
       "kicker": "How we deal with it",
-      "title": "Credit, and transform",
+      "title": "Steal Like an Artist",
       "bullets": [
-        "Steal Like an Artist by Austin Kleon, as the test",
+        "A book by Austin Kleon",
         "Industry standard algorithms, names and spec sheets, never existing code",
         "Attribution wherever someone else's idea inspired ours",
         "Transform, never imitate: testability, live config, abstraction layer, power functions",
         "And it runs both ways: steal from us, taking our GPL license into account"
       ],
-      "say": "MoonLight has a few principles for this, and they come from a book: Steal Like an Artist by Austin Kleon. His test is simple. Good theft credits its source, studies it, learns from many, and transforms what it takes. Bad theft passes work off as its own, skims without understanding, copies a single source, and imitates rather than builds. So: industry standard algorithms, naming and spec sheets, and explicitly not existing code. Attribution wherever we are inspired by others. And we transform rather than imitate because our principles require it: full testability, live reconfiguration, one abstraction layer over every platform, and effects built on shared power functions. A design that holds all four cannot be a copy of anything. And it runs both ways: steal from us. All of this is open source, so the ideas are there for anyone else to build on, taking our GPL license into account."
+      "say": "MoonLight has a few principles for this, and they come from a book: Steal Like an Artist by Austin Kleon. In practice: industry standard algorithms, naming and spec sheets, and explicitly not existing code. Attribution wherever we are inspired by others. And we transform rather than imitate because our principles require it: full testability, live reconfiguration, one abstraction layer over every platform, and effects built on shared power functions. A design that holds all four cannot be a copy of anything. And it runs both ways: steal from us. All of this is open source, so the ideas are there for anyone else to build on, taking our GPL license into account."
     },
     {
       "kicker": "What is coming",
       "title": "Sixteen clips, in the order you meet them",
       "overview": "full-series",
-      "say": "Here is what is coming. Sixteen short clips, in the order you would meet them. First you install it, on a computer or on a device, and look around. Then the pipeline itself: layouts, layers and drivers. Then writing your own effects, the services, and the control surface. After that the console it is all built with, how to get involved, and who we learned from. And you will meet the team as you watch: each clip is presented by someone else, so you will hear more voices than mine."
+      "say": "Here is what is coming. Sixteen short clips, in the order you would meet them. You will meet the team as you watch: each clip is presented by a member of our team, so you will hear more voices than mine."
     },
     {
       "kicker": "Time to show some MoonLight",
       "title": "Enjoy",
       "bullets": [
         "The clips that follow show MoonLight running",
-        "MoonLight, MoonCore, MoonLive, MoonI80, MoonBase, MoonInstaller, MoonDeck, MoonCloud, MoonTube",
+        "MoonLight, MoonCore, MoonLive, MoonI80, MoonBase",
+        "MoonInstaller, MoonDeck, MoonCloud, MoonTube",
         "Then: how to start, how to get involved, what is next"
       ],
-      "say": "So this is where we stand. Time to show you some MoonLight. You will meet the rest of the family as it goes: MoonLive for scripting on the device, MoonInstaller to flash a device from your browser, and MoonDeck for the developers. And MoonTube, which made this very video. The clips that follow show MoonLight running. After the clips the MoonModules people will come back, telling you how to get started, how to get involved, and give a glimpse of the future. And yes, they did not make these clips. My team and I did. Enjoy."
+      "say": "So this is where we stand. Time to show you some MoonLight. You will meet the rest of the family as it goes: MoonLive for scripting on the device, MoonInstaller to flash a device from your browser, and MoonDeck for the developers. And MoonTube, which made this very video. The clips that follow show MoonLight running. After the clips I will come back, telling you how to get started, how to get involved, and give a glimpse of the future. And yes, the MoonModules people did not make these clips. My team and I did. Enjoy."
     }
   ]
 }

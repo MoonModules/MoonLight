@@ -27,8 +27,13 @@
 ///
 /// An image carries its ESP-IDF project name in its descriptor, and every install path checks it before a byte is written.
 /// A device accepts only the names compiled into it, so a build that ships under a new name is refused by everything in the field.
-/// The name therefore changes in two releases: this one knows both and still ships under the first, and the next one ships under the second.
+/// The name therefore changes in two releases: v6.0.0 knows both and ships under the old one, and the release after it ships under the new one.
 /// `kAppImageNames` and `kMoonBaseImageNames` hold the pair, first the name a build carries today.
+/// The old name stays accepted, so a device can go back to v6.0.0 and the app slot keeps refusing an old recovery image.
+///
+/// One gap stays open, and MIGRATING names it: a device updated over the air from v5 keeps its v5 recovery image, which knows only the old recovery name.
+/// Offered the new recovery image as an app, that one does not recognize it and writes it over the app, so only a cable recovers the device.
+/// It closes per device once its recovery image is reinstalled.
 ///
 /// ## A download that goes silent
 ///
@@ -100,9 +105,9 @@ inline ImageInfo identify(const uint8_t* buf, size_t len) {
 }
 
 /// The names this project's app image carries: @xref{two-names-because-a-device-refuses-a-name-it-does-not-know}.
-inline constexpr const char* kAppImageNames[]      = {"projectMM", "MoonLight"};
+inline constexpr const char* kAppImageNames[]      = {"MoonLight", "projectMM"};
 /// The same pair for the recovery image, which an app slot must never receive.
-inline constexpr const char* kMoonBaseImageNames[] = {"projectMM-moonbase", "MoonLight-moonbase"};
+inline constexpr const char* kMoonBaseImageNames[] = {"MoonLight-moonbase", "projectMM-moonbase"};
 
 /// How long an install waits on a download delivering no bytes: @xref{a-download-that-goes-silent}.
 inline constexpr uint32_t kDownloadStallMs = 60000;

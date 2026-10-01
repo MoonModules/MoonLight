@@ -23,10 +23,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
-# Named here rather than in a requirements file: each is a test's own dependency (pyserial for the
-# flash tests, wled for the /json shim, markdown for the docs checks), and `uv run --with` is how
-# every other script in MoonDeck reaches one.
-PY_DEPS = ("pytest", "pyserial", "markdown", "wled")
+# Named here rather than in a requirements file: each is a test's own dependency (pyserial for the flash tests, wled for the /json shim, markdown for the docs checks, requests for the MoonTube recorder), and `uv run --with` is how every other script in MoonDeck reaches one.
+PY_DEPS = ("pytest", "pyserial", "markdown", "wled", "requests")
 
 # The UI suite's own deps. Separate because it is the only lane that drives a browser
 # against a RUNNING device: pytest-playwright is Playwright's documented Python runner

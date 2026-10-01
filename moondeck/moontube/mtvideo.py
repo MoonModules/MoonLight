@@ -192,15 +192,18 @@ def main() -> int:
         # device paths, so there is nothing a command line could name. `.playwright-profile`
         # holds one granted once by a human, which every later take reuses with nothing to
         # click. Runs that touch no hardware are unaffected by using it.
+        #
+        # Downloads are refused: a take films the click, and Chrome under this profile closes the tab two seconds after the desktop installer hands it a download, which ends the recording.
         profile = ROOT / ".playwright-profile"
         if profile.is_dir():
             context = p.chromium.launch_persistent_context(
-                str(profile), headless=True, channel="chrome", viewport=VIEWPORT)
+                str(profile), headless=True, channel="chrome", viewport=VIEWPORT,
+                accept_downloads=False)
             browser = context.browser
             page = context.pages[0] if context.pages else context.new_page()
         else:
             browser = p.chromium.launch()
-            context = browser.new_context(viewport=VIEWPORT)
+            context = browser.new_context(viewport=VIEWPORT, accept_downloads=False)
             page = context.new_page()
         driver = mtrun.Driver(page, host, screencast=page.screencast)
         # `requires` resolves to a real DEVICE, which renders cards like any other; only

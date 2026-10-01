@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import random
 import shutil
 import subprocess
 import sys
@@ -139,26 +140,32 @@ def has_audio(path: Path) -> bool:
     return bool(out)
 
 
-def crossfade(a: Path, b: Path, dst: Path, seconds: float) -> bool:
-    """Blend the end of `a` into the start of `b`: picture and sound, over `seconds`.
+def overlay_window(seg: Path, src: Path, dst: Path, box_w: int, margin: int) -> bool:
+    """Play `src` in a window over the start of `seg`, picture and sound, until `src` ends.
 
-    The two overlap, so the second one is already speaking while the first is still on screen.
-    That is the point of it: a hand-over between two presenters reads as one interrupting the
-    other, where a cut reads as two separate videos.
+    A hand-over between two presenters: the one in the window opens, the segment's own presenter takes over, and for a moment both are on screen.
+    A cut or a fade reads as two separate videos.
+    TOP LEFT, because the example window owns the top right and a slide's presenter the right edge.
+    Both voices at full level: amix would otherwise halve each one.
+    The sound never outlasts the segment, since the segment is what the cut times.
     """
-    offset = max(0.0, probe_duration(a) - seconds)
-    graph = f"[0:v][1:v]xfade=transition=fade:duration={seconds}:offset={offset:.3f},format=yuv420p[v]"
+    graph = (f"[1:v]scale={box_w}:-2,fps=24,pad=iw+4:ih+4:2:2:white@0.65[win];"
+             f"[0:v][win]overlay={margin}:{margin}:eof_action=pass,format=yuv420p[v]")
     maps = ["-map", "[v]"]
-    if has_audio(a) and has_audio(b):
-        graph += f";[0:a][1:a]acrossfade=d={seconds}[a]"
+    if has_audio(src):
+        seconds = probe_duration(seg)
+        graph += (";[0:a][1:a]amix=inputs=2:duration=first:normalize=0[a]" if has_audio(seg)
+                  else f";[1:a]apad=whole_dur={seconds:.3f},atrim=0:{seconds:.3f}[a]")
         maps += ["-map", "[a]", "-c:a", "libopus", "-b:a", "96k"]
-    return run_ffmpeg(["-i", str(a), "-i", str(b), "-filter_complex", graph, *maps,
+    else:
+        maps += ["-map", "0:a?", "-c:a", "copy"]
+    return run_ffmpeg(["-i", str(seg), "-i", str(src), "-filter_complex", graph, *maps,
                        "-c:v", "libvpx-vp9", "-crf", "34", "-b:v", "0", "-row-mt", "1",
-                       str(dst)], f"crossfade into {b.name}")
+                       str(dst)], f"window over {seg.name}")
 
 
 def build_inset(folder: Path, work: Path, total: float, width: int,
-                box_w: int) -> Path | None:
+                box_w: int, seed: int) -> Path | None:
     """One video of the example footage, cycling, long enough to sit over the whole cut.
 
     The cut shows the INTERFACE, and a viewer watching someone set a pin has no idea what it
@@ -166,9 +173,10 @@ def build_inset(folder: Path, work: Path, total: float, width: int,
 
     The sources are rough: 640x480 to 2048x1536, three seconds to a minute, and some of them
     are near-duplicates of each other. So each is letterboxed into one box rather than cropped,
-    which keeps a tall phone clip whole instead of slicing its middle out, and they are
-    concatenated in name order and looped to reach the cut's length. Picking and trimming them
-    is an edit, and an edit belongs in the project file rather than in a folder listing.
+    which keeps a tall phone clip whole instead of slicing its middle out.
+    They play in shuffled rounds until the cut's length is reached, each round in a new order, so the corner never repeats one sequence.
+    The shuffle is seeded from the project, so cutting the same project twice gives the same film.
+    Picking and trimming them is an edit, and an edit belongs in the project file rather than in a folder listing.
     """
     srcs = sorted(f for f in folder.iterdir()
                   if f.suffix.lower() in (".mp4", ".mov", ".m4v", ".webm"))
@@ -189,19 +197,28 @@ def build_inset(folder: Path, work: Path, total: float, width: int,
         parts.append(d)
     if not parts:
         return None
+    # Rounds until the cut's length: the footage is minutes and the cut is longer, so one pass runs out partway through and the corner would go black for the rest.
+    lengths = {p: probe_duration(p) for p in parts}
+    if sum(lengths.values()) <= 0:
+        return None
+    rng = random.Random(seed)
+    order: list[Path] = []
+    have = 0.0
+    while have < total:
+        rnd = parts[:]
+        rng.shuffle(rnd)
+        # A round that opens on the clip the previous one ended with would show it twice in a row.
+        if order and len(rnd) > 1 and rnd[0] == order[-1]:
+            rnd[0], rnd[1] = rnd[1], rnd[0]
+        order += rnd
+        have += sum(lengths[p] for p in rnd)
     listing = work / "inset.txt"
-    listing.write_text("".join(f"file '{q.name}'\n" for q in parts), encoding="utf-8")
+    listing.write_text("".join(f"file '{q.name}'\n" for q in order), encoding="utf-8")
     joined = work / "inset.webm"
-    if not run_ffmpeg(["-f", "concat", "-safe", "0", "-i", str(listing),
+    if not run_ffmpeg(["-f", "concat", "-safe", "0", "-i", str(listing), "-t", f"{total:.3f}",
                        "-c", "copy", str(joined)], "inset concat"):
         return None
-    # LOOPED to the cut's length: the footage is minutes and the cut is longer, so it runs out
-    # partway through and the corner would go black for the rest.
-    looped = work / "inset-loop.webm"
-    if not run_ffmpeg(["-stream_loop", "-1", "-i", str(joined), "-t", f"{total:.3f}",
-                       "-c", "copy", str(looped)], "inset loop"):
-        return None
-    return looped
+    return joined
 
 
 def clean_work(work: Path, keep: bool) -> None:
@@ -220,7 +237,7 @@ def clean_work(work: Path, keep: bool) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--project", required=True, help="the project file to cut")
-    ap.add_argument("--out", default=None, help="output file (default: media/<name>.mp4)")
+    ap.add_argument("--out", default=None, help="output file (default: media/video/<name>.mp4)")
     ap.add_argument("--no-audio", action="store_true", help="cut the picture only")
     ap.add_argument("--keep-work", action="store_true",
                     help="keep the per-segment intermediates (to inspect a bad cut)")
@@ -248,7 +265,6 @@ def main() -> int:
 
     print(f"{proj['name']}: {bpm} BPM, bar = {bar:.3f}s")
     segments: list[Path] = []
-    fades: dict[int, float] = {}       # segment index -> seconds it blends into the next one
     t = 0.0
     for i, entry in enumerate(proj.get("clips", [])):
         src = resolve_source(entry)
@@ -273,25 +289,24 @@ def main() -> int:
             print(f"  failed to fit {label}; not cutting a partial video",
                   file=sys.stderr)
             return 1
-        if entry.get("crossfade"):
-            fades[len(segments)] = float(entry["crossfade"])
+        # A clip that names an `overlay` gets that video in a window over its opening.
+        window = entry.get("overlay")
+        if window:
+            wsrc = resolve_source(window)
+            if not wsrc or not wsrc.exists():
+                print(f"  MISSING overlay: {window.get('source')}", file=sys.stderr)
+                return 1
+            windowed = work / f"{i:02d}-window.webm"
+            if not overlay_window(dst, wsrc, windowed, int(window.get("width", width // 3)) // 2 * 2,
+                                  int(window.get("margin", 24))):
+                return 1
+            dst = windowed
         segments.append(dst)
         t += probe_duration(dst) if bars <= 0 else want
 
     if not segments:
         print("nothing to cut", file=sys.stderr)
         return 1
-
-    # A clip that names a `crossfade` blends into the one after it, and the pair becomes one segment.
-    # Back to front, so an index found earlier still names the same segment.
-    for k in sorted(fades, reverse=True):
-        if k + 1 >= len(segments):
-            continue
-        blended = work / f"{k:02d}-blend.webm"
-        if not crossfade(segments[k], segments[k + 1], blended, fades[k]):
-            return 1
-        segments[k:k + 2] = [blended]
-        t -= fades[k]
 
     listing = work / "concat.txt"
     listing.write_text("".join(f"file '{p.name}'\n" for p in segments), encoding="utf-8")
@@ -310,7 +325,7 @@ def main() -> int:
         if not folder.is_dir():
             print(f"  inset folder not found: {folder}", file=sys.stderr)
             return 1
-        strip = build_inset(folder, work, t, width, box_w)
+        strip = build_inset(folder, work, t, width, box_w, int(inset.get("seed", 0)))
         if not strip:
             return 1
         framed = work / "picture-inset.webm"
@@ -335,41 +350,43 @@ def main() -> int:
             return 1
         joined = framed
 
-    if args.no_audio or not proj.get("audio"):
-        dst = out.with_suffix(".webm")
-        shutil.copy(joined, dst)
-        clean_work(work, args.keep_work)
-        print(f"\n{dst}  ({t:.0f}s, no music track)")
-        return 0
-
-    audio = ROOT / proj["audio"] if not Path(proj["audio"]).is_absolute() \
-        else Path(proj["audio"])
-    if not audio.exists():
-        print(f"audio not found: {audio}", file=sys.stderr)
-        return 1
-
-    # The music starts at its FIRST BEAT, so bar 1 of the cut is bar 1 of the track.
-    # Faded at both ends: a hard cut into music reads as a mistake, and a track that
-    # stops dead at the last frame reads as a file that ran out.
-    gain = float(proj.get("audio_gain", 0.6))
-    fade = 2.5
-    ok = run_ffmpeg([
-        "-i", str(joined),
-        "-ss", str(proj.get("first_beat", 0.0)), "-i", str(audio),
-        "-filter_complex",
-        f"[1:a]volume={gain},afade=t=in:st=0:d=1.5,"
-        f"afade=t=out:st={max(0.0, t - fade):.2f}:d={fade}[a]",
-        "-map", "0:v", "-map", "[a]",
-        "-c:v", "libx264", "-preset", "medium", "-crf", "21", "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-b:a", "192k", "-shortest", str(out)], "scoring")
-    if not ok:
+    # The cut always ends as H.264 and AAC in an MP4: it is the deliverable, for a video site or an editor, and both read that pair where VP9 and Opus are only partly supported.
+    # The WebM segments before this are the working format.
+    cmd = ["-i", str(joined)]
+    music = None if args.no_audio else proj.get("audio")
+    if music:
+        audio = ROOT / music if not Path(music).is_absolute() else Path(music)
+        if not audio.exists():
+            print(f"audio not found: {audio}", file=sys.stderr)
+            return 1
+        # The music starts at its FIRST BEAT, so bar 1 of the cut is bar 1 of the track.
+        # Faded at both ends: a hard cut into music reads as a mistake, and a track that
+        # stops dead at the last frame reads as a file that ran out.
+        gain = float(proj.get("audio_gain", 0.6))
+        fade = 2.5
+        cmd += ["-ss", str(proj.get("first_beat", 0.0)), "-i", str(audio),
+                "-filter_complex",
+                f"[1:a]volume={gain},afade=t=in:st=0:d=1.5,"
+                f"afade=t=out:st={max(0.0, t - fade):.2f}:d={fade}[a]",
+                "-map", "0:v", "-map", "[a]", "-shortest"]
+        sound = "scored"
+    elif args.no_audio:
+        cmd += ["-map", "0:v", "-an"]
+        sound = "no sound"
+    else:
+        # The clips' own narration, on both channels: a mono track sits on one side in an editor.
+        cmd += ["-map", "0:v", "-map", "0:a?", "-ac", "2"]
+        sound = "narrated"
+    cmd += ["-c:v", "libx264", "-preset", "medium", "-crf", "21", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(out)]
+    if not run_ffmpeg(cmd, "final encode"):
         print(f"the intermediates are in {work} for inspection", file=sys.stderr)
         return 1
 
     clean_work(work, args.keep_work)
     size = out.stat().st_size // 1024
     mins, secs = divmod(int(t), 60)
-    print(f"\n{out}  ({mins}:{secs:02d}, {size} KB, scored)")
+    print(f"\n{out}  ({mins}:{secs:02d}, {size} KB, {sound})")
     return 0
 
 

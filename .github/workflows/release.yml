@@ -209,15 +209,15 @@ jobs:
           V="${{ steps.ver.outputs.version }}"   # computed once above; matches the binary's MM_VERSION
           # Per-firmware build dir under build/esp32-<firmware>/ (plan-19.1).
           # build_esp32.py points idf.py at this dir via -B, so the build
-          # tree lives outside esp32/ and multiple firmwares can coexist —
+          # tree lives outside esp32/ and multiple firmwares can coexist:
           # CI uses one per matrix job, dev machines use as many as built.
           B=build/esp32-${{ matrix.firmware }}
           PREFIX="firmware-${{ matrix.firmware }}-v$V"
-          # App + bootloader are unique per firmware — staged with the prefix.
-          cp "$B/projectMM.bin"             "dist/${PREFIX}.bin"
+          # App + bootloader are unique per firmware, so staged with the prefix.
+          cp "$B/MoonLight.bin"             "dist/${PREFIX}.bin"
           cp "$B/bootloader/bootloader.bin" "dist/${PREFIX}-bootloader.bin"
           # ota-data is byte-identical for ALL firmwares, and partition-table is
-          # identical within a flash-size group — staged under SHARED names so the
+          # identical within a flash-size group, so both are staged under SHARED names and the
           # release uploads each once instead of one-per-firmware. Every matrix job
           # writes the same shared filename(s); the flatten step keeps one copy
           # (byte-identical, so last-writer-wins is correct). The generated
@@ -225,7 +225,7 @@ jobs:
           SIZE=$(jq -r .flash_settings.flash_size "$B/flasher_args.json" | tr 'A-Z' 'a-z')
           cp "$B/partition_table/partition-table.bin" "dist/partition-table-$SIZE.bin"
           cp "$B/ota_data_initial.bin"                "dist/shared-ota-data.bin"
-          # Per-firmware flasher_args.json — the release job feeds it to
+          # Per-firmware flasher_args.json: the release job feeds it to
           # generate_manifest.py so offsets come from the real build.
           cp "$B/flasher_args.json"                   "dist/flasher-${{ matrix.firmware }}.json"
           # MoonBase, the second boot image on the 4 MB tables (built alongside those firmwares
@@ -233,7 +233,7 @@ jobs:
           # table. The slot-0 otadata is what makes a fresh install boot the APP with MoonBase
           # standing by: blank otadata would boot MoonBase. Their manifests reference both
           # (generate_manifest.py), and install-picker.js excludes them from OTA offers.
-          for MB in build/moonbase-*/projectMM-moonbase.bin; do
+          for MB in build/moonbase-*/MoonLight-moonbase.bin; do
             [ -f "$MB" ] || continue
             CHIP=$(basename "$(dirname "$MB")"); CHIP=${CHIP#moonbase-}
             cp "$MB" "dist/shared-moonbase-$CHIP.bin"
