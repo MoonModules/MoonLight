@@ -19,10 +19,10 @@ import compute_version   # sibling: the one place a version string is derived
 ROOT = Path(__file__).resolve().parent.parent.parent
 ESP32_DIR = ROOT / "esp32"
 
-# What ESP-IDF names each build's output, which is the `project()` name in esp32/CMakeLists.txt and moonbase/CMakeLists.txt. It is also stamped into the image descriptor a shipped device compares on OTA, which is why it keeps the spelling from before the product was renamed. Every script reading a build imports these.
-APP_BIN = "projectMM.bin"
-APP_ELF = "projectMM.elf"
-MOONBASE_BIN = "projectMM-moonbase.bin"
+# What ESP-IDF names each build's output, which is the `project()` name in esp32/CMakeLists.txt and moonbase/CMakeLists.txt. It is also stamped into the image descriptor a shipped device compares before it installs anything, so a rename is decided in src/core/util/FirmwareImage.h first. Every script reading a build imports these.
+APP_BIN = "MoonLight.bin"
+APP_ELF = "MoonLight.elf"
+MOONBASE_BIN = "MoonLight-moonbase.bin"
 
 # Common ESP-IDF install locations
 IDF_SEARCH_PATHS = [

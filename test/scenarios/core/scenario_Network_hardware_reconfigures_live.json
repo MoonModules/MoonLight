@@ -118,6 +118,17 @@
             "samples": [212]
           },
           "last_updated": "2026-09-30"
+        },
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 20,
+            "p95": 20,
+            "min": 20,
+            "max": 20,
+            "n": 1,
+            "samples": [20]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -197,6 +208,17 @@
             "samples": [237]
           },
           "last_updated": "2026-09-30"
+        },
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 19,
+            "p95": 19,
+            "min": 19,
+            "max": 19,
+            "n": 1,
+            "samples": [19]
+          },
+          "last_updated": "2026-09-30"
         }
       }
     },
@@ -274,6 +296,17 @@
             "max": 210,
             "n": 1,
             "samples": [210]
+          },
+          "last_updated": "2026-09-30"
+        },
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 21,
+            "p95": 21,
+            "min": 21,
+            "max": 21,
+            "n": 1,
+            "samples": [21]
           },
           "last_updated": "2026-09-30"
         }
@@ -369,6 +402,17 @@
             "max": 232,
             "n": 1,
             "samples": [232]
+          },
+          "last_updated": "2026-09-30"
+        },
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 20,
+            "p95": 20,
+            "min": 20,
+            "max": 20,
+            "n": 1,
+            "samples": [20]
           },
           "last_updated": "2026-09-30"
         }

@@ -11,7 +11,7 @@
         "Then everything happens in the device's own interface",
         "Coming from WLED: audio, devices, sync, Home Assistant and Native all work"
       ],
-      "say": "So how do you start? If you have no hardware at all, download the desktop build and open it: the same interface, the same effects, running on your computer. If you do have a device, the web installer flashes it from the browser, with no toolchain to set up, and the clips you have just seen show both routes end to end. Either way, from that point on everything happens in the device's own interface, live, with nothing to reflash. And if you are coming from WLED, you are not starting over: WLED audio, WLED devices, WLED sync, Home Assistant and WLED Native all work with this."
+      "say": "Hi, Luna here again. Now that you have seen MoonLight at work, how do you start? If you have no hardware at all, download the desktop build and open it: the same interface, the same effects, running on your computer. If you do have a device, the web installer flashes it from the browser, with no toolchain to set up, and the clips you have just seen show both routes end to end. Either way, from that point on everything happens in the device's own interface, live, with nothing to reflash. And if you are coming from WLED, you are not starting over: WLED audio, WLED devices, WLED sync, Home Assistant and WLED Native all work with this."
     },
     {
       "kicker": "How to contribute",

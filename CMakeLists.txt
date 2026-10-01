@@ -266,13 +266,18 @@ file(GLOB MOONLIVE_SCRIPTS CONFIGURE_DEPENDS
 string(REPLACE ";" "\n" MOONLIVE_SCRIPT_LIST "${MOONLIVE_SCRIPTS}")
 set(MOONLIVE_STAMP ${CMAKE_BINARY_DIR}/moonlive_scripts.stamp)
 file(CONFIGURE OUTPUT ${MOONLIVE_STAMP} CONTENT "${MOONLIVE_SCRIPT_LIST}\n")
+# The rule's OUTPUT is a stamp in the build tree, not the header: a clean deletes every OUTPUT, and the header is a tracked source.
+# Deleted and rewritten, it took a new timestamp with the same bytes, and check_esp32_built then called every ESP32 build stale.
+# The generator writes the header only when its content changes, so an unchanged catalog keeps its timestamp.
+set(MOONLIVE_CATALOG_STAMP ${CMAKE_BINARY_DIR}/moonlive_catalog.stamp)
 add_custom_command(
-    OUTPUT ${CMAKE_SOURCE_DIR}/src/light/moonlive/script_catalog.h
+    OUTPUT ${MOONLIVE_CATALOG_STAMP}
     COMMAND ${CMAKE_COMMAND} -DSCRIPT_DIR=${CMAKE_SOURCE_DIR}/moonlive -DOUT=${CMAKE_SOURCE_DIR}/src/light/moonlive/script_catalog.h -DUV_EXECUTABLE=${UV_EXECUTABLE} -P ${CMAKE_SOURCE_DIR}/src/light/moonlive/catalog_scripts.cmake
+    COMMAND ${CMAKE_COMMAND} -E touch ${MOONLIVE_CATALOG_STAMP}
     DEPENDS ${MOONLIVE_SCRIPTS} ${MOONLIVE_STAMP} ${CMAKE_SOURCE_DIR}/src/light/moonlive/catalog_scripts.cmake ${CMAKE_SOURCE_DIR}/src/light/moonlive/catalog_scripts.py
     COMMENT "Generating MoonLive script catalog"
 )
-add_custom_target(moonlive_catalog DEPENDS ${CMAKE_SOURCE_DIR}/src/light/moonlive/script_catalog.h)
+add_custom_target(moonlive_catalog DEPENDS ${MOONLIVE_CATALOG_STAMP})
 
 # mm_core's HttpServerModule.cpp consumes ui_embedded.h and SystemModule.h
 # (a mm_core public header) consumes build_info.h. Anything that links mm_core

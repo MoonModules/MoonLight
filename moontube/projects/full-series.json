@@ -1,19 +1,16 @@
 {
-  "name": "full-series",
-  "title": "MoonLight: the whole series",
+  "name": "MoonLight-v6",
+  "title": "MoonLight",
   "description": "All seventeen clips in the order a newcomer meets them, from why it was rebuilt to who it was learned from.",
   "width": 1280,
   "clips": [
     {
-      "source": "media/video/introewowi.mov",
-      "bars": 0,
-      "crossfade": 3.0
-    },
-    {
       "clip": "00-intro",
-      "title": "Why it was rebuilt",
       "bars": 0,
-      "subtitle": "Luna introduces MoonLight"
+      "overlay": {
+        "source": "media/video/introewowi.mov",
+        "width": 320
+      }
     },
     {
       "clip": "01-install-desktop",

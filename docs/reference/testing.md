@@ -15,9 +15,9 @@ Three test categories, each with a clear purpose:
 - **In-process scenarios** (desktop, `test/scenarios/{core,light}/scenario_*.json`), exercise the system as an integrated pipeline. Each scenario is a declarative JSON file with a sequence of steps (`add_module`, `set_control`, `measure`) and optional performance bounds. The scenario runner (`test/scenario_runner.cpp`) replays the steps in-process and reports tick + heap per `measure` step. Same JSON files run against a live device through the HTTP API, that's the next tier.
 - **Live scenarios**: the same scenarios driven against a running device over REST. See [Live scenarios](#live-scenarios) below.
 
-A live run is worth watching once, because it is the tier that proves the device rather than a model of it. The suite walks the cards in the order the interface lists them, and every step happens through the same API the page uses:
+A live run is worth watching once, because it is the tier that proves the device rather than a model of it. This one stacks three layers, blends them, swaps an effect, resizes the grid and takes the stack apart again, and every step happens through the same API the page uses:
 
-<video src="../assets/moontube/04-scenario-testing.webm" autoplay loop muted playsinline width="720" title="The scenario suite driving a running device, card by card, while the interface shows it happening"></video>
+<video src="../assets/moontube/04-scenario-testing.webm" autoplay loop muted controls playsinline width="720" title="A scenario stacking three layers on a running device, while the interface and the preview show it happening"></video>
 
 **Picking a tier for a new test.** When the behavior you want to pin only makes sense with modules wired together (e.g. "the pipeline reallocates cleanly when the grid resizes," "Drivers correctly hands the source buffer through after a child swap"), reach for a scenario first: that is what scenarios are *for*. When the behavior lives inside a single module (one function's contract, one edge case, one bug regression on a small surface), a unit test is the cheaper and faster fit. Don't extend the scenario runner with new predicates just to migrate an existing unit test, which is adding abstraction without an active need. Add predicates when a *new* scenario you're writing needs them.
 

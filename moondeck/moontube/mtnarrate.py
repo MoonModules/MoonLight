@@ -121,9 +121,11 @@ def slide_html(slide: dict, index: int, total: int) -> str:
   .credits div {{ break-inside:avoid; font-size:19px; line-height:1.42; padding:3px 0; }}
   .credits b {{ color:var(--accent); font-weight:600; }}
   .credits span {{ color:var(--dim); }}
+  /* Lower than centered: a series cut puts a presenter window over the top left corner, and the kicker sat under it. */
+  .cover {{ padding-top:64px; }}
   .cover h1 {{ font-size:132px; letter-spacing:-.03em; }}
-  .cover .tagline {{ margin-top:26px; font-size:34px; line-height:1.3; color:var(--dim); max-width:780px; }}
-  .cover .tagline b {{ display:block; margin-top:22px; color:var(--accent); font-weight:600; letter-spacing:.02em; }}
+  .cover .tagline {{ margin-top:16px; font-size:34px; line-height:1.3; color:var(--dim); max-width:780px; }}
+  .cover .tagline b {{ display:block; margin-top:12px; color:var(--accent); font-weight:600; letter-spacing:.02em; }}
   .foot {{ position:fixed; left:110px; bottom:44px; color:var(--dim); font-size:15px; }}
   .num {{ position:fixed; right:110px; bottom:44px; color:var(--dim); font-size:15px;
           font-variant-numeric:tabular-nums; }}

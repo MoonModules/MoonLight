@@ -187,10 +187,13 @@ def display_name_for(host: str, type_name: str) -> str:
     """
     # CACHED per host. /api/types builds a throwaway instance of every registered type
     # to read its controls, so it is a heavy GET to repeat once per add on a device.
+    # The timeout is generous because a board still serving the page it has only now loaded answers late,
+    # and a miss types the type name, which the picker's search does not match.
     if host not in _DISPLAY_NAMES:
         try:
-            payload = requests.get(f"http://{host}/api/types", timeout=5).json()
-        except requests.RequestException:
+            payload = requests.get(f"http://{host}/api/types", timeout=30).json()
+        except requests.RequestException as e:
+            print(f"  WARN  no display name for {type_name} ({e}); the picker search may not match it")
             return type_name
         _DISPLAY_NAMES[host] = {t.get("name"): (t.get("displayName") or t.get("name"))
                                 for t in payload.get("types", [])}
@@ -512,9 +515,10 @@ class Driver:
     def chapter(self, title: str, description: str | None = None,
                 seconds: float = 2.0) -> None:
         if self.screencast:
+            # show_chapter holds the card for its duration, so it is the dwell: a settle after it held every card twice.
+            # Scaled by the clip's speed, so the card still lasts `seconds` once the recording is sped up.
             self.screencast.show_chapter(title, description=description,
-                                         duration=int(seconds * 1000))
-            self._settle(seconds)
+                                         duration=int(seconds * self.speed * 1000))
 
     # -- actions ------------------------------------------------------------
 
@@ -1369,7 +1373,7 @@ class Driver:
         # A drag that silently changes nothing is the failure this whole format exists
         # to catch: it returned True, the caption claimed a blend, and the value was
         # untouched. The click path is a real user gesture too (a range input jumps to
-        # a clicked position), so the shot survives; it just loses the travel.
+        # a clicked position), so the shot survives and only loses the travel.
         try:
             lo = float(el.first.get_attribute("min") or 0)
             hi = float(el.first.get_attribute("max") or 100)

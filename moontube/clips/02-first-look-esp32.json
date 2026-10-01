@@ -8,45 +8,33 @@
     {
       "action": "chapter",
       "title": "Your device",
-      "description": "Every module, top to bottom",
-      "seconds": 4.7,
-      "caption": "Your device. Every module, top to bottom."
+      "description": "What a device adds",
+      "seconds": 7.2,
+      "caption": "Your device. The same tree as on a computer, and what a device adds to it."
     },
     {
       "action": "open_card",
       "module": "Control",
-      "caption": "The same tree as on a computer, card for card. What changes is what is behind it: this one has pins, a radio and a microphone.",
-      "speech": 11.3
+      "caption": "Every card you just saw on a computer is here too. What changes is what is behind it: this one has pins, a radio and a microphone.",
+      "speech": 13.1
     },
     {
       "action": "open_card",
       "module": "Layouts",
-      "caption": "Layouts: where your lights physically are.",
-      "speech": 4.2
-    },
-    {
-      "action": "open_card",
-      "module": "Grid",
-      "caption": "Grid: width, height and depth. This one is sixty four by sixty four, which is four thousand and ninety six lights on a device that costs a few euros.",
-      "speech": 13.7
+      "caption": "Layouts: the same grid, here sixty four by sixty four. Four thousand and ninety six lights, on a device that costs a few euros.",
+      "speech": 12.7
     },
     {
       "action": "open_card",
       "module": "Effects",
-      "caption": "Effects: what they show, stacked in layers.",
-      "speech": 4.7
-    },
-    {
-      "action": "open_card",
-      "module": "Layer",
-      "caption": "Layer: one effect and its modifiers, blended onto the ones below. The one running here is Pulse, which is what you have been watching.",
-      "speech": 11.2
+      "caption": "Effects: the same Pulse you have been watching, now rendered on the chip itself.",
+      "speech": 6.3
     },
     {
       "action": "open_card",
       "module": "Drivers",
-      "caption": "Drivers: how the finished frame reaches the lights. The palette lives here too, which is where every effect takes its colors from.",
-      "speech": 9.7
+      "caption": "Drivers: this is where a device differs. It has pins, so the frame can leave on a wire.",
+      "speech": 8.1
     },
     {
       "action": "add_module",
@@ -54,131 +42,73 @@
       "type": "RmtLedDriver",
       "as": "onboard",
       "caption": "An output driver is added per device rather than built in, so here is one: the R M T driver, which clocks a strip from a single pin.",
-      "speech": 11.5
+      "speech": 11.0
     },
     {
       "action": "open_card",
       "module": "{onboard}",
       "caption": "A pin, a light count, and the preset that says which channel does what. That is the whole contract between a frame and a wire.",
-      "speech": 10.2
-    },
-    {
-      "action": "add_module",
-      "parent": "Drivers",
-      "type": "NetworkSendDriver",
-      "as": "netsend",
-      "caption": "A driver does not have to drive a wire at all. This one sends the finished frame over the network instead.",
-      "speech": 8.3
-    },
-    {
-      "action": "open_card",
-      "module": "{netsend}",
-      "caption": "Art Net, s A C N or DDP, to anything that listens: the same frame the strip gets, addressed to another device.",
-      "speech": 10.5
+      "speech": 10.9
     },
     {
       "action": "open_card",
       "module": "System",
-      "caption": "System: the device itself, its chip, its uptime, how fast it renders.",
-      "speech": 7.1
-    },
-    {
-      "action": "open_card",
-      "module": "Tasks",
-      "caption": "Tasks: what runs each frame, and what each costs in microseconds.",
-      "speech": 6.3
+      "caption": "System: the same card, now reporting the chip it runs on. Two of its parts only mean something on hardware.",
+      "speech": 9.3
     },
     {
       "action": "open_card",
       "module": "I2cScan",
       "caption": "I2cScan: on real hardware it finds the chips actually wired to the bus.",
-      "speech": 6.8
+      "speech": 6.5
     },
     {
       "action": "open_card",
       "module": "Pins",
       "caption": "Pins: which pin every module has claimed, so two never fight over one.",
-      "speech": 6.8
+      "speech": 6.2
     },
     {
       "action": "open_card",
       "module": "File Manager",
       "caption": "File Manager: this is the device's own flash, so a backup here is worth taking.",
-      "speech": 7.6
+      "speech": 7.0
     },
     {
       "action": "open_card",
       "module": "Network",
-      "caption": "Network: the WiFi it joined, and the other devices it can see.",
-      "speech": 6.3
-    },
-    {
-      "action": "open_card",
-      "module": "Mqtt",
-      "caption": "Mqtt: a broker, so the device answers to a home automation system on its own.",
-      "speech": 7.6
-    },
-    {
-      "action": "open_card",
-      "module": "Devices",
-      "caption": "Devices: now that this one is on the network, it finds the others and they find it.",
-      "speech": 6.9
+      "caption": "Network: the WiFi it joined. Mqtt and Devices work as they do on a computer.",
+      "speech": 8.1
     },
     {
       "action": "open_card",
       "module": "Services",
       "caption": "Services: the inputs, and on a device they read real pins.",
-      "speech": 6.2
+      "speech": 6.1
     },
     {
       "action": "open_card",
       "module": "Audio",
       "caption": "Audio: this device has a microphone, so it is listening to the room.",
-      "speech": 6.3
+      "speech": 7.1
     },
     {
       "action": "open_card",
       "module": "Firmware",
       "caption": "Firmware: it finds the next release and installs it over the air. This one is an S3.",
-      "speech": 9.4
+      "speech": 7.9
     },
     {
       "action": "open_card",
       "module": "Firmware",
       "caption": "Behind it sits MoonBase, a second boot image that ships on the four megabyte devices. It is what brings a classic ESP32 back when an update goes wrong.",
-      "speech": 13.0
+      "speech": 12.6
     },
     {
       "action": "open_card",
       "module": "MoonCloud",
-      "caption": "MoonCloud: what everyone else is running, which this device can now join.",
-      "speech": 7.1
-    },
-    {
-      "action": "open_card",
-      "module": "Stats",
-      "caption": "Stats: what this device would share, and the totals it gets back.",
-      "speech": 5.9
-    },
-    {
-      "action": "click_control",
-      "module": "Stats",
-      "control": "consent",
-      "caption": "Consent is off until someone turns it on. On it goes, and this device starts reporting into those totals.",
-      "speech": 9.4
-    },
-    {
-      "action": "open_card",
-      "module": "Talk",
-      "caption": "Talk: ask a question from the device itself, without leaving the page.",
-      "speech": 6.4
-    },
-    {
-      "action": "click_control",
-      "module": "Talk",
-      "control": "consent",
-      "caption": "And Talk, so a question asked here reaches everyone running the same firmware.",
-      "speech": 6.3
+      "caption": "MoonCloud: the same Stats and Talk, and this device joins them with the same consent.",
+      "speech": 7.4
     }
   ],
   "setup": [

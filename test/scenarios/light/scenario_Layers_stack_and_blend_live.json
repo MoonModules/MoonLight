@@ -1,0 +1,383 @@
+{
+  "name": "scenario_Layers_stack_and_blend_live",
+  "module": "Effects",
+  "mode": "mutate",
+  "also": [
+    "Layer",
+    "Layouts",
+    "GridLayout",
+    "WheelLayout",
+    "PlasmaEffect",
+    "MetaballsEffect",
+    "FireworksEffect",
+    "NebulaEffect",
+    "MirrorModifier"
+  ],
+  "description": "Several layers render at once and Drivers blends them into one frame. The stack is built one layer at a time on a cleared canvas, blended, reshaped, resized, moved to another layout and taken apart again, all while it renders, and every step is measured so the cost of a layer is the difference between two readings. A pipeline that only ever ran one layer would pass every other scenario, which is why this one stacks three.",
+  "fixture": [
+    {
+      "name": "layouts",
+      "description": "Where the lights are, which every layer reads its coordinates from.",
+      "op": "add_module",
+      "id": "Layouts",
+      "type": "Layouts"
+    },
+    {
+      "name": "effects",
+      "description": "The container every layer lives in, wired to the layouts it hands each of them.",
+      "op": "add_module",
+      "id": "Effects",
+      "type": "Effects",
+      "props": {
+        "layouts": "Layouts"
+      }
+    },
+    {
+      "name": "drivers",
+      "description": "The drivers container, bound to the whole Effects container rather than one layer, which is what makes it blend.",
+      "op": "add_module",
+      "id": "Drivers",
+      "type": "Drivers",
+      "props": {
+        "effects": "Effects"
+      }
+    },
+    {
+      "name": "preview",
+      "description": "The preview is a driver like any other, and the one every target has.",
+      "op": "add_module",
+      "id": "Preview",
+      "type": "PreviewDriver",
+      "parent_id": "Drivers"
+    }
+  ],
+  "steps": [
+    {
+      "name": "clear-the-layers",
+      "description": "Whatever layers the device had go, so the stack is built from nothing and every layer in it is one this scenario placed.",
+      "op": "clear_children",
+      "id": "Effects"
+    },
+    {
+      "name": "clear-the-layouts",
+      "description": "The same for the layouts, so the grid below is the only one.",
+      "op": "clear_children",
+      "id": "Layouts"
+    },
+    {
+      "name": "grid",
+      "description": "A 32x32 panel: big enough that three layers blending show as three different pictures.",
+      "op": "add_module",
+      "id": "Grid",
+      "type": "GridLayout",
+      "parent_id": "Layouts",
+      "props": {
+        "width": 32,
+        "height": 32
+      }
+    },
+    {
+      "name": "base-layer",
+      "description": "The first layer, which everything later is blended onto.",
+      "op": "add_module",
+      "id": "Base",
+      "type": "Layer",
+      "parent_id": "Effects"
+    },
+    {
+      "name": "base-effect",
+      "description": "A plasma, which fills every light from the first frame, so the layers above have something to blend with.",
+      "op": "add_module",
+      "id": "BaseFX",
+      "type": "PlasmaEffect",
+      "parent_id": "Base"
+    },
+    {
+      "name": "measure-one-layer",
+      "description": "One layer: Drivers hands its buffer over without blending. The floor the stack is read against.",
+      "op": "measure",
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 19,
+            "p95": 52,
+            "min": 8,
+            "max": 52,
+            "n": 8,
+            "samples": [8, 12, 33, 24, 22, 52, 19, 9]
+          },
+          "last_updated": "2026-10-01"
+        }
+      }
+    },
+    {
+      "name": "second-layer",
+      "description": "A second layer on top, which turns the hand-over into a blend.",
+      "op": "add_module",
+      "id": "Top",
+      "type": "Layer",
+      "parent_id": "Effects"
+    },
+    {
+      "name": "second-effect",
+      "description": "Metaballs, which leave most lights dark, so the plasma shows through where they are not.",
+      "op": "add_module",
+      "id": "TopFX",
+      "type": "MetaballsEffect",
+      "parent_id": "Top"
+    },
+    {
+      "name": "measure-two-layers",
+      "description": "Two layers blended: the difference against one layer is what the blend costs.",
+      "op": "measure",
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 36,
+            "p95": 91,
+            "min": 15,
+            "max": 91,
+            "n": 8,
+            "samples": [15, 22, 53, 36, 37, 91, 37, 15]
+          },
+          "last_updated": "2026-10-01"
+        }
+      }
+    },
+    {
+      "name": "add-light",
+      "description": "Additive rather than alpha: the top layer's light is added to the plasma instead of covering it.",
+      "op": "set_control",
+      "id": "Top",
+      "key": "blendMode",
+      "value": 1
+    },
+    {
+      "name": "the-blend-mode-took",
+      "op": "expect_control",
+      "id": "Top",
+      "key": "blendMode",
+      "equals": 1
+    },
+    {
+      "name": "half-strength",
+      "description": "And at a little over half strength, so the two pictures mix rather than one winning.",
+      "op": "set_control",
+      "id": "Top",
+      "key": "opacity",
+      "value": 160
+    },
+    {
+      "name": "the-opacity-took",
+      "op": "expect_control",
+      "id": "Top",
+      "key": "opacity",
+      "equals": 160
+    },
+    {
+      "name": "third-layer",
+      "description": "A third layer, the depth where an ordering fault in the blend would show.",
+      "op": "add_module",
+      "id": "Sparks",
+      "type": "Layer",
+      "parent_id": "Effects"
+    },
+    {
+      "name": "third-effect",
+      "description": "Fireworks, which move fast and fade, so the third layer is visibly its own.",
+      "op": "add_module",
+      "id": "SparksFX",
+      "type": "FireworksEffect",
+      "parent_id": "Sparks"
+    },
+    {
+      "name": "mirror-the-sparks",
+      "description": "A mirror on this layer alone: a modifier reshapes its own layer and leaves the two below untouched.",
+      "op": "add_module",
+      "id": "SparksMirror",
+      "type": "MirrorModifier",
+      "parent_id": "Sparks"
+    },
+    {
+      "name": "measure-three-layers",
+      "description": "Three layers, one of them through a lookup table: the shape of a real installation.",
+      "op": "measure",
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 44,
+            "p95": 88,
+            "min": 20,
+            "max": 88,
+            "n": 8,
+            "samples": [21, 24, 62, 44, 44, 88, 44, 20]
+          },
+          "last_updated": "2026-10-01"
+        }
+      }
+    },
+    {
+      "name": "swap-the-base",
+      "description": "The base effect is swapped for a nebula while the two layers above keep rendering on top of it.",
+      "op": "replace_module",
+      "id": "BaseFX",
+      "type": "NebulaEffect"
+    },
+    {
+      "name": "the-base-holds-the-new-effect",
+      "description": "A control only a nebula has, read through the slot's own id, which separates a swap from a step that did nothing.",
+      "op": "expect_control",
+      "id": "BaseFX",
+      "key": "octaves",
+      "equals": 2
+    },
+    {
+      "name": "measure-swapped-base",
+      "description": "Three layers again, with the bottom one replaced under a running stack.",
+      "op": "measure",
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 149,
+            "p95": 396,
+            "min": 123,
+            "max": 396,
+            "n": 8,
+            "samples": [123, 124, 346, 152, 149, 396, 253, 123]
+          },
+          "last_updated": "2026-10-01"
+        }
+      }
+    },
+    {
+      "name": "grow-the-grid-wide",
+      "description": "The grid grows while all three layers render, and every layer reallocates its buffer to the new size.",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 48
+    },
+    {
+      "name": "grow-the-grid-tall",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 48
+    },
+    {
+      "name": "the-grid-grew",
+      "op": "expect_control",
+      "id": "Grid",
+      "key": "width",
+      "equals": 48
+    },
+    {
+      "name": "measure-bigger-grid",
+      "description": "The same stack over more than twice the lights: the difference is what the size costs.",
+      "op": "measure",
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 298,
+            "p95": 1045,
+            "min": 266,
+            "max": 1045,
+            "n": 8,
+            "samples": [266, 276, 1045, 302, 298, 862, 697, 291]
+          },
+          "last_updated": "2026-10-01"
+        }
+      }
+    },
+    {
+      "name": "another-shape",
+      "description": "The grid becomes a wheel of spokes: a different layout under the same three layers, which re-map without being rebuilt.",
+      "op": "replace_module",
+      "id": "Grid",
+      "type": "WheelLayout"
+    },
+    {
+      "name": "the-layout-is-a-wheel",
+      "op": "expect_control",
+      "id": "Grid",
+      "key": "spokes",
+      "equals": 8
+    },
+    {
+      "name": "measure-wheel",
+      "description": "The stack on a wheel, a layout with far fewer lights than the grid it replaced.",
+      "op": "measure",
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 80,
+            "p95": 297,
+            "min": 55,
+            "max": 297,
+            "n": 8,
+            "samples": [56, 55, 297, 85, 80, 199, 143, 60]
+          },
+          "last_updated": "2026-10-01"
+        }
+      }
+    },
+    {
+      "name": "switch-a-layer-off",
+      "description": "The middle layer is switched off rather than removed: it stops blending and keeps its place and settings.",
+      "op": "set_control",
+      "id": "Top",
+      "key": "enabled",
+      "value": false
+    },
+    {
+      "name": "measure-one-layer-off",
+      "description": "Two of three layers rendering: an off layer costs nothing.",
+      "op": "measure",
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 79,
+            "p95": 224,
+            "min": 55,
+            "max": 224,
+            "n": 8,
+            "samples": [57, 55, 224, 79, 79, 146, 127, 64]
+          },
+          "last_updated": "2026-10-01"
+        }
+      }
+    },
+    {
+      "name": "remove-the-top-layer",
+      "description": "The top layer goes, effect and modifier with it, while the base keeps rendering.",
+      "op": "remove_module",
+      "id": "Sparks"
+    },
+    {
+      "name": "the-base-survived",
+      "description": "The base still answers through its own control, so taking a layer away left the rest of the stack whole.",
+      "op": "expect_control",
+      "id": "BaseFX",
+      "key": "octaves",
+      "equals": 2
+    },
+    {
+      "name": "measure-taken-apart",
+      "description": "Back to one enabled layer: read against the first measurement, what is left of the stack costs what it cost before.",
+      "op": "measure",
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 77,
+            "p95": 237,
+            "min": 50,
+            "max": 237,
+            "n": 8,
+            "samples": [56, 52, 237, 77, 78, 149, 140, 50]
+          },
+          "last_updated": "2026-10-01"
+        }
+      }
+    }
+  ]
+}

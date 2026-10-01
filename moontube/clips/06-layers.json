@@ -8,20 +8,20 @@
       "action": "chapter",
       "title": "Layers",
       "description": "Effects, modifiers, and what blends between them",
-      "seconds": 4.8,
+      "seconds": 5.9,
       "caption": "Layers. Blending, and what sits between the effect and the lights."
     },
     {
       "action": "open_card",
       "module": "Effects",
       "caption": "Everything that paints lives here, under a layer. An effect, and anything that reshapes what it draws.",
-      "speech": 9.7
+      "speech": 8.6
     },
     {
       "action": "clear_children",
       "module": "Layer",
       "caption": "Clearing what is there first, so we start from an empty layer and build it up in front of you.",
-      "speech": 5.9
+      "speech": 7.0
     },
     {
       "action": "add_module",
@@ -29,7 +29,7 @@
       "type": "BouncingBallsEffect",
       "as": "balls",
       "caption": "An effect paints into its layer's own buffer. This one is bouncing balls, and it knows nothing about the shape it lands on.",
-      "speech": 8.4
+      "speech": 9.0
     },
     {
       "action": "add_module",
@@ -37,13 +37,13 @@
       "type": "MirrorModifier",
       "as": "mirror",
       "caption": "Now a modifier. It reshapes what the effect drew, on the way to the lights, and the effect never knows it happened.",
-      "speech": 7.6
+      "speech": 9.3
     },
     {
       "action": "open_card",
       "module": "Effects",
       "caption": "Same balls, folded down the middle. I changed the mapping, not the effect: the two are kept apart on purpose.",
-      "speech": 7.6
+      "speech": 9.0
     },
     {
       "action": "add_module",
@@ -51,7 +51,7 @@
       "type": "Layer",
       "as": "layer2",
       "caption": "Blending happens between layers rather than inside one, so here is a second layer stacked on the first.",
-      "speech": 6.1
+      "speech": 8.9
     },
     {
       "action": "add_module",
@@ -59,7 +59,7 @@
       "type": "RipplesEffect",
       "as": "ripples",
       "caption": "It gets its own effect, painting into its own buffer, completely independent of the one below it.",
-      "speech": 6.8
+      "speech": 8.5
     },
     {
       "action": "add_module",
@@ -67,7 +67,7 @@
       "type": "CircleModifier",
       "as": "circle",
       "caption": "And its own modifier, because each layer is reshaped on its own terms rather than sharing one setting.",
-      "speech": 6.8
+      "speech": 7.9
     },
     {
       "action": "drag_slider",
@@ -76,13 +76,13 @@
       "to": 0.45,
       "seconds": 7.7,
       "caption": "The drivers composite the layers from the bottom up, and opacity says how much of this one lands on top of the other.",
-      "speech": 7.0
+      "speech": 9.1
     },
     {
       "action": "open_card",
       "module": "Effects",
       "caption": "Two effects, two modifiers, one wall. Every piece of that is a module you can add, remove or swap while it runs.",
-      "speech": 8.1
+      "speech": 9.6
     }
   ]
 }

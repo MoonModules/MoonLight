@@ -1026,10 +1026,14 @@ Finds the ESP-IDF installation and runs `install.sh` to create the Python venv. 
 Clean the ESP32 build directory.
 
 ```bash
-uv run moondeck/build/clean_esp32.py
+uv run moondeck/build/clean_esp32.py --firmware esp32   # one variant
+uv run moondeck/build/clean_esp32.py --all              # every variant
 ```
 
-Removes one ESP32 per-firmware build dir (`--firmware <name>`) or every `build/esp32-*/` plus a leftover `esp32/build/` if present (`--all`). Run a per-firmware clean after ESP-IDF updates, Python version changes, or anything else that should force a from-scratch build of that variant. Other firmwares' build dirs aren't touched.
+`--firmware <name>` removes that variant's `build/esp32-<name>/`, and its chip's `build/moonbase-<chip>/` when the variant carries MoonBase.
+`--all` removes every `build/esp32-*/` and `build/moonbase-*/`, plus a leftover `esp32/build/` if present.
+Run a clean after an ESP-IDF update, a Python version change, a moved checkout, or anything else that should force a from-scratch build.
+A per-firmware clean leaves the other variants' directories alone, except that variants of one chip share its MoonBase directory, so they rebuild MoonBase on their next build.
 
 ### build_esp32
 
@@ -1061,7 +1065,7 @@ Each ESP32-S3 SKU has its own firmware key because the sdkconfig fragment encode
 
 ### flash_esp32
 
-Flash firmware to an ESP32 device. Reads the app image in `build/esp32-<firmware>/`, which ESP-IDF names `projectMM.bin` after the project. Scripts read that name from `APP_BIN` in `build_esp32.py`. Each firmware lives in its own directory, so several coexist on disk and switching between them is free.
+Flash firmware to an ESP32 device. Reads the app image in `build/esp32-<firmware>/`, which ESP-IDF names `MoonLight.bin` after the project. Scripts read that name from `APP_BIN` in `build_esp32.py`. Each firmware lives in its own directory, so several coexist on disk and switching between them is free.
 
 The MoonDeck button forwards the Firmware dropdown as `--firmware`. Flash exits cleanly with a "no build for <firmware> — run Build first" message when that dir doesn't exist. The log line up front confirms which build is being flashed and how old it is, e.g.:
 
@@ -1099,7 +1103,7 @@ Serve a built firmware over HTTP so a board can install it by URL. Long-running.
 
 ```bash
 uv run moondeck/run/serve_firmware.py esp32 --port 8099
-uv run moondeck/run/serve_firmware.py build/moonbase-esp32/projectMM-moonbase.bin --port 8098
+uv run moondeck/run/serve_firmware.py build/moonbase-esp32/MoonLight-moonbase.bin --port 8098
 ```
 
 Takes a firmware name (resolved to the app image in `build/esp32-<name>/`) or a path to any `.bin`, and
