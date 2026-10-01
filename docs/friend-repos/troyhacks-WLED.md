@@ -6,6 +6,14 @@ This is a personal fork of [MoonModules/WLED-MM](https://github.com/MoonModules/
 
 **Branch note, the experiments live off `mdev`.** troyhacks branches heavily: `mdev` is the merge/alignment stream, but the distinctive work happens in named experimental branches (HDMI output, ESP32-P4, W5500 Ethernet, hardware-panel ports, voice control, a pure-IDFv5 port, a new settings subsystem). Those are *experiments*, not necessarily destined for `mdev`, so each month below carries a separate **Experimental branches** line for what moved on them, the frontier of what this fork is probing.
 
+## September 2026
+
+No activity on `mdev`: the branch tip is still the 2026-08-24 merge of `MoonModules:mdev`, so there are 0 commits in the window. No versioned release was published, so the month is kept whole.
+
+- **Experimental branches:** `troy/hdmi-on-p4-experimental` is the active frontier, with 5 commits between 2026-09-08 and 2026-09-12. It adds HDMI output on the ESP32-P4 (a new `wled_hdmi` module of about 800 lines plus changes to the serial, pin and core files); the commit messages go from "First merge commit, not working" to "HDMI mostly working", "HDMI init fixes" and a safety commit, and also carry 16-bit fixes for the Paintbrush effect. `FLow-toys` (1 commit, 2026-09-26) adds a FlowToys usermod, and also touches the MPU6050 IMU and games usermods. `M5Stack_Core_S3_Display` (2026-09-04 and 2026-09-15) picks up a fix for an unsigned wrap-around in `getLastActiveSegmentId` and a merge of `mdev`. `Olimex_HDMI_Output` has one housekeeping commit and `P4_experimental` has a merge of a build-config update (`platformio.ini`) from a contributor.
+
+_Checked: commits on `mdev` for author-date 2026-09-01..2026-09-30 (0 commits, tip b537e0c9 dated 2026-08-24), via `git log --first-parent origin/mdev` after `git fetch --all --tags`. Remote branches with September commits: `troy/hdmi-on-p4-experimental` (5), `FLow-toys` (1), `M5Stack_Core_S3_Display` (2), `Olimex_HDMI_Output` (1), `P4_experimental` (1). Releases published in September 2026: none (`repos/troyhacks/WLED/releases`). Issue search `repo:troyhacks/WLED+is:issue+created:2026-09-01..2026-09-30` and `closed:2026-09-01..2026-09-30` both return 0, the issue tracker is disabled on this fork._
+
 ## August 2026
 
 No independent work on `mdev`: the 2 commits in the window are an alignment with the MoonModules line (a merge of `MoonModules:mdev` on 2026-08-24, bringing in the audio-reactive dependency pin plus the ARTI scripting robustness work and the Waveshare S3 Matrix Driver board profile that had accumulated upstream since June), and the MM commit itself. Nothing user-facing originates in this fork on `mdev`. No versioned release was published, so the month is kept whole.

@@ -176,7 +176,7 @@ Two rules hold all week. **Anything found before Tuesday is fixed under the old 
 - Re-cut with `mtcompose.py`, which consumes the same project file.
 - Done when the published cut says MoonLight in every frame.
 
-**✅ Thu 1 Oct: publish.** The announcement, the video, and the tutorials together. The video is on YouTube, and the Discord and Reddit announcements are written to link it.
+**✅ Thu 1 Oct: publish.** The announcement, the video, and the tutorials together. The video is on [YouTube](https://youtu.be/F_YgmiUyWVQ), announced on Discord, on [r/MoonModules](https://www.reddit.com/r/MoonModules/comments/1wuvwsx/moonlight_v600_aka_projectmm/) and on [r/esp32](https://www.reddit.com/r/esp32/comments/1wuwncn/moonlight_v600_led_and_dmx_controller_on_espidf/), where the post tells the ESP32 engineering story the subreddit asks for.
 
 **Testing rides along.** Every run file is a UI test, so Thursday and Friday exercise the newcomer's path harder than a test pass would, and the boards get theirs on Monday's slack. What that covers is in [the two threads](#the-two-threads-behind-the-week).
 
@@ -309,7 +309,7 @@ Between step 3 and step 4 sits the ordinary rhythm: whatever is in flight is com
     - ✅ **The scenario clip films one scenario that moves.** `scenario_Layers_stack_and_blend_live` is new: it stacks three layers with their own effects and a modifier, blends them, swaps the base effect, grows the grid, turns it into a wheel, and takes the stack apart, measuring after each step. No scenario stacked more than one layer before, so the clip's showpiece also closes a test gap. The clip says the suite is a library, and that developers start it from MoonDeck.
     - ✅ **What the takes uncovered, fixed in the tools.** A chapter card was held twice and ignored the clip's speed, so every clip opened on seconds of silence. The picker's name lookup gave up after five seconds on a busy board and typed a name the search does not match. Chrome under the recording profile closed the tab when the desktop installer handed it a download, so the recorder refuses downloads. The live scenario runner left a replaced module standing beside the one it restored, and now swaps the slot back under its own name.
 13. ✅ **Render the full series** with `mtcompose.py --project moontube/projects/full-series.json`. ✅ The corner window carries the caption "made with MoonLight", set per project as `inset.caption`. The corner window cycles whatever sits in `media/examplevideos/`, which now carries ten effect clips beside the nineteen rough cuts, so the finished film shows the effects as well as the interface driving them. ✅ They play in shuffled rounds, a new order each round and seeded from the project, so a re-cut gives the same film. ✅ The cover's text sits lower so the presenter window clears it, and the intro carries no title banner, since the cover already is one. ✅ Rendered on 2026-10-01 as `media/video/MoonLight-v6.mp4`, 49:12, H.264 and AAC.
-14. ✅ **Publish to YouTube**, one video with the seventeen clips as chapters. The description names the new repository, the documentation site at its new path, and the installer URL, all of which only exist after step 5. Publishing before the rename would hand every viewer a link that dies within the hour.
+14. ✅ **Publish to YouTube**, one video with the seventeen clips as chapters, at https://youtu.be/F_YgmiUyWVQ. The description names the new repository, the documentation site at its new path, and the installer URL, all of which only exist after step 5. Publishing before the rename would hand every viewer a link that dies within the hour.
     - **The description**, below. The chapter times are the clip lengths summed in `full-series.json` order (2026-10-01, 49:12 in all), so a re-recorded clip moves every chapter after it; recompute them from the published clips before pasting. YouTube needs the first chapter at 0:00 and each one ten seconds or longer, which all of these are.
 
       ```text
@@ -330,23 +330,23 @@ Between step 3 and step 4 sits the ordinary rhythm: whatever is in flight is com
       Issues and ideas: https://github.com/MoonModules/MoonLight/issues
 
       Chapters
-      0:00 Why it was rebuilt: Luna introduces MoonLight
-      6:00 No hardware needed
-      6:38 Install it: a browser and a USB cable
-      8:53 Look around: every module, on a computer
-      11:32 On real hardware: what a device adds
-      14:02 Change your mind freely
-      16:48 Tested the way you use it
-      18:24 Say where the lights are
-      21:21 Paint them
-      22:56 Get the frame out: on a computer
-      25:19 And out of a device: the pins only hardware has
-      29:05 Write your own: compiled on the device, no reflash
-      31:35 Everything that drives a control
-      36:30 One surface, pointed anywhere
-      42:18 The console it is built from
-      46:21 How to start, and how to help
-      48:14 Standing on shoulders
+      0:00 Why MoonLight was rebuilt: Luna introduces it
+      6:00 Install on your computer: the desktop build
+      6:38 Install on an ESP32 with the web installer
+      8:53 The interface, module by module, on a computer
+      11:32 What an ESP32 adds: LED pins, I2C, microphone, updates over the air
+      14:02 Every card works the same: power, replace, delete, help, JSON
+      16:48 Scenario testing: three layers on a live device
+      18:24 Layouts: grid, ring, spiral, cube, tubes and MoonLive layouts
+      21:21 Layers: effects, modifiers and blending
+      22:56 Drivers on a computer: preview, NDI, RTSP, HLS, Art-Net, Hue
+      25:19 Drivers on an ESP32: RMT, parallel LED output, HUB75 panels
+      29:05 MoonLive: write your own effects, compiled on the device
+      31:35 Services: audio, buttons, analog inputs, infrared
+      36:30 Control: switches, encoders and faders pointed at any setting
+      42:18 MoonDeck: the developer console that builds, flashes and tests
+      46:21 Getting started, and how to get involved
+      48:14 Attribution: who we learned from
 
       MoonLight is open source under the GPL v3. Made by MoonModules.
       ```

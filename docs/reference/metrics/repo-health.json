@@ -1,9 +1,9 @@
 {
-  "commit": "d584579b",
+  "commit": "1b0e1d68",
   "flash": {
-    "esp32s3-n16r8": 2162160,
-    "esp32": 2110656,
-    "esp32p4rev1-eth": 2070480,
+    "esp32s3-n16r8": 2164320,
+    "esp32": 2112784,
+    "esp32p4rev1-eth": 2072208,
     "esp32p4rev1-eth-wifi": 2358896,
     "esp32s3-n8r8": 2087168,
     "esp32s31": 2452896,
@@ -14,7 +14,7 @@
     "esp32p4rev3-eth": 2073888,
     "esp32s3-zero": 2024192,
     "esp32-pico": 2107168,
-    "desktop-macos": 2010136,
+    "desktop-macos": 2010152,
     "desktop-windows": 1925120
   },
   "measured": {
@@ -480,8 +480,8 @@
       },
       "Effects_pipeline_builds_and_renders": {
         "desktop-macos": {
-          "p50": 8,
-          "p95": 42,
+          "p50": 7,
+          "p95": 40,
           "n": 32,
           "last": "2026-10-01"
         },
@@ -521,7 +521,7 @@
       "Effects_teardown_under_a_running_pipeline": {
         "desktop-macos": {
           "p50": 8,
-          "p95": 55,
+          "p95": 28,
           "n": 32,
           "last": "2026-10-01"
         },
@@ -546,16 +546,16 @@
       },
       "Layers_stack_and_blend_live": {
         "desktop-macos": {
-          "p50": 293,
+          "p50": 291,
           "p95": 1045,
-          "n": 10,
+          "n": 12,
           "last": "2026-10-01"
         }
       },
       "Layouts_resize_reallocates_live": {
         "desktop-macos": {
           "p50": 11,
-          "p95": 45,
+          "p95": 41,
           "n": 32,
           "last": "2026-10-01"
         },
@@ -580,9 +580,9 @@
       },
       "Modifiers_reshape_the_mapping": {
         "desktop-macos": {
-          "p50": 9,
+          "p50": 8,
           "p95": 49,
-          "n": 29,
+          "n": 31,
           "last": "2026-10-01"
         },
         "esp32s3-n16r8": {
@@ -606,18 +606,18 @@
       }
     },
     "desktop-macos": {
-      "tick_us": 8,
-      "fps": 125000,
+      "tick_us": 6,
+      "fps": 166666,
       "scenario_p50": {
         "Effects_pipeline_builds_and_renders": {
-          "p50": 8,
-          "p95": 42,
+          "p50": 7,
+          "p95": 40,
           "n": 32,
           "last": "2026-10-01"
         },
         "Layouts_resize_reallocates_live": {
           "p50": 11,
-          "p95": 45,
+          "p95": 41,
           "n": 32,
           "last": "2026-10-01"
         }
@@ -643,16 +643,16 @@
     }
   },
   "loc": {
-    "core": 22304,
+    "core": 22352,
     "light": 31054,
-    "platform": 16798,
+    "platform": 16768,
     "ui": 11394,
-    "test": 57954,
-    "moondeck": 29516
+    "test": 58029,
+    "moondeck": 29563
   },
   "comments": {
     "core": {
-      "lines": 5725,
+      "lines": 5739,
       "ratio": 0.283
     },
     "light": {
@@ -660,37 +660,37 @@
       "ratio": 0.271
     },
     "platform": {
-      "lines": 3608,
-      "ratio": 0.24
+      "lines": 3573,
+      "ratio": 0.238
     },
     "ui": {
       "lines": 3415,
       "ratio": 0.316
     },
     "test": {
-      "lines": 6745,
+      "lines": 6727,
       "ratio": 0.135
     },
     "moondeck": {
-      "lines": 4963,
+      "lines": 4962,
       "ratio": 0.191
     }
   },
   "tests": {
-    "cases": 2120,
+    "cases": 2125,
     "scenarios": 22
   },
   "docs": {
     "md_files": 135,
-    "md_lines": 28676,
+    "md_lines": 28849,
     "plans_files": 36,
     "backlog_lines": 3330,
     "lessons_lines": 532,
     "claude_md_lines": 283
   },
   "complexity": {
-    "functions": 3711,
-    "over_threshold": 278,
+    "functions": 3718,
+    "over_threshold": 279,
     "worst_ccn": 128
   }
 }

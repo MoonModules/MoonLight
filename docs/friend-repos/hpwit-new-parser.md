@@ -6,6 +6,29 @@ The library: **ESPLiveScript2**, Yves Bazin's (hpwit) from-scratch C++ rewrite o
 
 **Repo note:** the repository name is `new-parser`, but the library and its README call it **ESPLiveScript2**, the name to search for. Sibling digest for v1: [hpwit-ESPLiveScript.md](hpwit-ESPLiveScript.md).
 
+## September 2026
+
+A short month after August's heavy push: three commits on `main`, all on 2026-09-02 and 2026-09-05, adding built-in dynamic memory for scripts and fixing three compiler bugs found by a new test.
+
+**What script authors gain**
+
+- `alloc()`, `free()`, `writeInt()` and `readInt()` are built into the language, like `printf()`, with no `bindFunction()` needed. The language has no pointer-dereference syntax, so a script holds the address returned by `alloc()` as a `uint32_t` and reads and writes it through these accessors. A new `MemoryAllocator` example shows the pattern.
+
+**Fixed**
+
+- A bare pointer declaration such as `uint16_t *arrayf;` reserved storage for the pointee (2 bytes) instead of the pointer (4 bytes).
+- A `for` loop whose variable was declared before the loop (`int i; for (i = 0; ...)`) freed that variable's register when the loop ended, so a later declaration could reuse a register still in use.
+- The size estimate for a call to an external function counted one instruction instead of two, which on a short script heavy in external calls could cut off the compiled binary's final return.
+- The register-copy optimization could drop the only definition of a register that was read again later, silently losing a stored return value (found with an `alloc()`/`writeInt()`/`readInt()`/`free()` script). The optimizer now runs a single pass, which avoids the case and was confirmed on a real ESP32; a few extra optimizations that only a second pass found are given up.
+
+**Verification**
+
+- A new QEMU regression test exercises the allocator design and found the first three bugs above; the full host suite (40 tests), the sanitizer build and the optimized build all pass.
+
+No issues were opened or closed. No release; the library stays at v1.3.0.
+
+_Checked: `git log --first-parent origin/main` (after `git fetch --all --tags`) for author-date 2026-09-01..2026-09-30 = 3 commits (`9d3d28b`, `1c745d6`, `53671f1`, a documentation and allocator follow-up); `main` is the only remote branch; releases published (none); issue search `repo:hpwit/new-parser is:issue created:2026-09-01..2026-09-30` and the same with `closed:` (0 results each)._
+
 ## August 2026
 
 The rewrite's first full month of work, and a heavy one: the compiler goes from a fresh port that mostly parses to something that compiles and correctly runs real scripts on real ESP32 hardware, with the QEMU test suite growing to catch the bugs that only show up when the compiled bytes actually execute.

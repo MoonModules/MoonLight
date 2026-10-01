@@ -4,6 +4,16 @@ What landed on [NightDriverStrip](https://github.com/PlummersSoftwareLLC/NightDr
 
 Summarised via the GitHub commits API (no local clone), so counts are all commits on `main`, not first-parent merges, the bullets filter out dependency bumps, whitespace, and pure refactors. Releases are noted as context rather than used as month boundaries: **v1.3.0** (published 2026-01-10) was tagged from a late-November commit, and the latest are **v2.0.0** and **v2.0.1**, both published 2026-06-14. v1.3.0 is not a clean month boundary so its month is kept whole; June IS split at v2.0.0, which was cut from `main` mid-month (see the two June sections below).
 
+## September 2026
+
+Dormant month: no commits landed on `main`. The one user-facing event is an issue.
+
+- **Reported: Mesmerizer back plate screw holes.** A builder found that the vertical mounting holes on their HUB75 panel are 2 inches apart, while the 3D-printable back plate model spaces them 2 5/16 inches apart, so panels from different suppliers may not fit the printed plate (issue #909, open with one comment).
+
+No versioned release in September; the most recent is v2.0.1 from June 2026.
+
+_Checked: `repos/PlummersSoftwareLLC/NightDriverStrip/commits?sha=main` for 2026-09-01..2026-10-01 (0 commits); releases published in the window (none); issue search `repo:PlummersSoftwareLLC/NightDriverStrip is:issue created:2026-09-01..2026-09-30` (1, #909) and the same with `closed:` (0)._
+
 ## August 2026
 
 - **M5Stack Tab5 support**, a new build target for the Tab5's 1280x720 DSI display. Effects render into a logical canvas that the backend then scales up by a whole-number factor onto the panel, so the existing effect library runs on a screen far larger than the 64x32 matrix it was written for.

@@ -2,6 +2,14 @@
 
 What landed on [WLED-MM](https://github.com/MoonModules/WLED-MM)'s `mdev` (default) branch, month by month. External-context reference, a factual log of a friend repo's releases, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md). Months are split at versioned-release boundaries (the rolling `nightly` tag is not a release).
 
+## September 2026
+
+*Summarised from 1 commit on `mdev` (no versioned release cut this month; the rolling `nightly` prerelease republished on 2026-09-05).*
+
+Dormant month. The single commit is a crash guard: the lookup of the last active segment no longer wraps around to a huge number when a device has no segments, which prevents an out-of-range access in that case.
+
+_Auditability: 1 commit on `mdev`, author-date 2026-09-01..2026-09-30 (272dab59, "Prevent unsigned wrap-around in getLastActiveSegmentId", 2026-09-04), via `git log origin/mdev --first-parent` after `git fetch --all --tags`. Issues checked: `search/issues?q=repo:MoonModules/WLED-MM+is:issue+created:2026-09-01..2026-09-30` (0) and `closed:2026-09-01..2026-09-30` (0), no issues opened or closed all month. Releases checked (`repos/MoonModules/WLED-MM/releases`): only the rolling `nightly` prerelease (2026-09-05), which is not a versioned release, so no month split._
+
 ## August 2026
 
 *Summarised from 1 commit on `mdev` (no versioned release cut this month; the rolling `nightly` prerelease republished on 2026-08-13).*

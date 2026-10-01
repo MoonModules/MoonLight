@@ -4,6 +4,44 @@ What landed on [wled/WLED](https://github.com/wled/WLED)'s `main` branch, month 
 
 Months are **not** split at release dates: upstream WLED cuts releases from separate release branches (`0_15`, `16_x`), so the version tags aren't on `main`, `main` is the development trunk that feeds future releases. Each month notes which release shipped, as context.
 
+## September 2026
+
+A modest month on `main`: new effect and usermod options, a handful of preset, WiFi and Ethernet fixes, and many maintainer updates on how AI-assisted contributions are handled. No versioned release was published in September (v16.0.1, 2026-07-07, is the latest, cut from a release branch), so the month is not split.
+
+**New**
+- Sparse LED maps can now be followed by a trailing strip, a request open since early 2026 (#5529, #5745).
+- A new "Dissolve Plus" user effect extends Dissolve with separate fill speed, a "last one stays lit" mode, and a fade rate.
+- The timers page gets a "remove" button for each timer.
+- The relay's post-switching delay is now a setting instead of a fixed value.
+- HUB75 gains a pinout for the Seengreat RGB Matrix HUB75 S3 board.
+- The WizLights usermod supports controlling each light individually, and then moves out of the main tree.
+- The SD card usermod's SPI setup is adjusted to work on ESP32-S3.
+- The log warns when more effects are registered than the effect list can hold (#5827).
+
+**Fixed**
+- HUB75 matrices of 128x128 are handled correctly and a divide-by-zero in the automatic brightness limiter is gone (#5826).
+- The active preset is no longer cleared by JSON requests that arrive during a brightness transition (#5856).
+- The device now reconnects when the access-point name changes, and no longer restarts the AP when the name is unchanged after saving WiFi settings (#5866).
+- A crash when comparing Ethernet IP addresses before an address exists is fixed (#5796).
+- The Stream effect misbehaved after about an hour at its highest speed (a 32-bit versus 16-bit comparison) and is fixed (#5739).
+- Audio-reactive documentation now correctly lists the volume value as an integer, not a float.
+
+**Fixed (reported by users)**
+- Peek preview no longer shows as 32x32 on a 64x64 matrix (#5852).
+- The MQTT topic length limit is raised (#5854).
+- Uploading `cfg.json` and `presets.json` through PlatformIO's filesystem image upload works (#5839).
+- Several long-running reports were closed: ESP8266 Wemos D1 mini unable to join the router on 14.1 (#3690), the "WLED-AP" network not appearing on NodeMCU (#5100), flicker on the second output (#2268), and Alexa sync problems on 0.15.1 (#4875).
+
+**Watching**
+- A "Version 17, key features" discussion (#5867) is gathering what the community wants from the next major version.
+- The Presets UI sorting and the Time Controlled Presets dropdowns are both reported as confusing or empty on some devices (#5841, #5840, #5836).
+- ESP-NOW toggling freezes the CPU on 16.0 after the peer list is populated (#5871).
+- Ethernet DHCP hostname sometimes advertises as "tasmota" after upgrading to 16.x (#5831).
+- Feature requests include a Morse SOS effect (#5876), applying a preset to one segment via the JSON API (#5868), I2C LED drivers (#5865), and AirPlay 2 for audio reactive (#5842).
+- WS2805 RGBCCT strips flicker at specific brightness and color combinations (#5877).
+
+_Auditability: 35 commits on `main` with author-date 2026-09-01..2026-09-30 via `git log --first-parent origin/main` (37 by committer date; newest 35948831, oldest f49e541c). Issues via `search/issues` for `repo:wled/WLED+is:issue+created:2026-09-01..2026-09-30` (21 opened) and `repo:wled/WLED+is:issue+closed:2026-09-01..2026-09-30` (24 closed); only user-facing ones surfaced. No versioned release published in September 2026 (`repos/wled/WLED/releases`; the `v16.0.1` tag is not an ancestor of `main`), so no month split. Contributor-guide, agent-instruction and template edits, the `netmindz` and `willmmiles` internal refactors, and dependency pins are omitted._
+
 ## August 2026
 
 A quieter, consolidation month on `main` after July's V5 platform switch: the toolchain moved forward again, drawing and segment bugs got fixed, and a set of long-open field reports were finally closed. No versioned release was published in August, so the month is not split.

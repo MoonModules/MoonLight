@@ -481,6 +481,8 @@ void ethTestClearFrames();
 void setTestEthSendFails(bool fail);
 /// Override the reported link speed, so a test can exercise the too-slow-link status.
 void setTestEthLinkSpeed(uint16_t mbps);
+/// Fake a cabled interface holding `ip`, null removing it, so a host test can drive the Ethernet cascade.
+void setTestEthIPv4(const uint8_t* ip);
 /// Make ethRestartTx fail, so a test can exercise the recovery-failed path.
 void setTestEthRestartFails(bool fail);
 /// How many times ethRestartTx has run, which pins the once-per-wedge bound.
@@ -492,7 +494,7 @@ bool wifiStaInit(const char* ssid, const char* password);
 /// Whether the station is associated and holds an IP.
 bool wifiStaConnected() MM_NONBLOCKING;
 /// The station's IP as raw octets, on ethGetIPv4's contract.
-void wifiStaGetIPv4(uint8_t out[4]);
+void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING;
 /// Tear the station down.
 void wifiStaStop();
 

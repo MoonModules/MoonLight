@@ -6,6 +6,14 @@ The library: Yves Bazin's (hpwit) C-like compiler/interpreter for the ESP32, sma
 
 **Branch note:** `main` is quiet (last touched June 2025), but this repo develops on a long series of **version branches** (`v2`…`v4.3`, plus `vjson`/`vjson2`/`vdrop`/`memory*`), and that's where the recent work is. The activity below is read across those branches, not just `main`.
 
+## September 2026
+
+No activity. Nothing landed on `main` in September 2026, and nothing moved on any of the 37 other branches either, including the version branches where the work normally happens. The newest of those, `vjson2`, last moved on 2026-02-15; `main` last moved in June 2025.
+
+No issues were opened or closed. No release; the most recent is 1.3.2 from February 2025.
+
+_Checked: `repos/hpwit/ESPLiveScript/commits?sha=<branch>` for 2026-09-01..2026-09-30 on all 38 branches individually, `main` and version branches included (0 on every one); releases published (none); issue search `repo:hpwit/ESPLiveScript is:issue created:2026-09-01..2026-09-30` and the same with `closed:` (0 results each)._
+
 ## August 2026
 
 No activity. Nothing landed on `main` in August 2026, and nothing moved on any of the 37 other branches either, including the version branches where the work normally happens. The newest of those, `vjson2`, last moved on 2026-02-15; `main` last moved in June 2025.

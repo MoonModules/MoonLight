@@ -12,6 +12,15 @@
 
 namespace mm {
 
+/// Whether an IPv4 address is link-local (169.254.0.0/16), the one a device gives itself when no DHCP server answers.
+inline bool isLinkLocalIPv4(const uint8_t ip[4]) { return ip[0] == 169 && ip[1] == 254; }
+
+/// Whether an interface's address lets the cascade use it, `configured` being the user's static address or null: @xref{a-link-local-address-is-a-last-resort}.
+inline bool addressCounts(const uint8_t ip[4], bool buildHasWiFi, const uint8_t* configured) {
+    if (!isLinkLocalIPv4(ip) || !buildHasWiFi) return true;
+    return configured && std::memcmp(ip, configured, 4) == 0;
+}
+
 /// All device connectivity, cascading from Ethernet through WiFi to an access point.
 ///
 /// One module and one card: the user sees a network, not three technologies.
@@ -44,6 +53,13 @@ namespace mm {
 /// Which driver is compiled in is per chip; which interface a board uses is runtime config.
 /// An SPI change applies live, while the built-in controller applies at the next boot.
 /// The addressing selector pins a static address or runs the client, live either way.
+///
+/// ## A link-local address is a last resort
+///
+/// With no DHCP server the client gives itself a 169.254.x.y address (RFC 3927), so a laptop on the same cable still reaches the device by name.
+/// It counts as connected only on a build without WiFi, where it is the one way in.
+/// Where WiFi exists it never displaces the cascade: a cable on a network without DHCP would otherwise switch off a working WiFi path or the access point.
+/// A 169.254 address the user set as static is a choice, not a fallback, so it counts everywhere, while a self-assigned one beside a static setting still does not.
 ///
 /// The device name belongs to the system module, and is the one identity behind every name.
 /// It registers before the light pipeline, which then sees the real remaining heap.
@@ -272,9 +288,9 @@ public:
         switch (state_) {
             case State::WaitingEth:
                 // A static address needs no lease, so pin it as soon as the link is up.
-                if (addressing_ == kAddressingStatic && platform::ethLinkUp() && !platform::ethConnected())
+                if (addressing_ == kAddressingStatic && platform::ethLinkUp() && !ethUp())
                     applyStaticIfConfigured(platform::NetIface::Eth);
-                if (platform::ethConnected()) {
+                if (ethUp()) {
                     onConnected("Ethernet");
                 } else if ((elapsed > 3000 && !platform::ethLinkUp()) || elapsed > kEthDhcpWaitMs) {
                     // No link at all, or a link with no address, the second being remembered.
@@ -308,9 +324,9 @@ public:
             case State::WaitingSta:
                 if constexpr (platform::hasWiFi) {
                     // Pinned during bring-up, since a network without a server fires no event.
-                    if (addressing_ == kAddressingStatic && !platform::wifiStaConnected())
+                    if (addressing_ == kAddressingStatic && !staUp())
                         applyStaticIfConfigured(platform::NetIface::Sta);
-                    if (platform::wifiStaConnected()) {
+                    if (staUp()) {
                         onConnected("WiFi STA");
                     } else if (elapsed > kStaGraceMs) {
                         // It did not connect in time, so fall back.
@@ -322,7 +338,7 @@ public:
                 break;
 
             case State::ConnectedEth:
-                if (!platform::ethConnected()) {
+                if (!ethUp()) {
                     if constexpr (platform::hasWiFi) {
                         std::printf("NetworkModule: Ethernet dropped, cascading\n");
                         platform::mdnsStop();
@@ -348,20 +364,24 @@ public:
             case State::ConnectedSta:
                 if constexpr (platform::hasWiFi) {
                     // Ethernet outranks WiFi, but only once it works.
-                    if (addressing_ == kAddressingStatic && platform::ethLinkUp() && !platform::ethConnected())
+                    if (addressing_ == kAddressingStatic && platform::ethLinkUp() && !ethUp())
                         applyStaticIfConfigured(platform::NetIface::Eth);
-                    if (platform::ethConnected()) {
+                    if (ethUp()) {
                         std::printf("NetworkModule: Ethernet up, switching from WiFi STA\n");
                         platform::mdnsStop();
                         onConnected("Ethernet");
-                    } else if (platform::ethLinkUp()) {
+                        break;
+                    }
+                    if (platform::ethLinkUp()) {
                         // Already being retried, so only a persistently addressless link is flagged.
                         if (ethLinkUpAt_ == 0) ethLinkUpAt_ = now;   // link just (re)appeared: start the clock
                         if (!ethDegraded_ && now - ethLinkUpAt_ > kEthDhcpWaitMs) {
                             ethDegraded_ = true;
                             writeEthDegradedStatus();
                         }
-                    } else if (!platform::wifiStaConnected()) {
+                    }
+                    // Checked whatever the cable does, since the station is what carries the device here.
+                    if (!staUp()) {
                         // A dropout is not a divorce: the radio reconnects itself within seconds.
                         if (staLostTime_ == 0) {
                             staLostTime_ = now;
@@ -387,14 +407,14 @@ public:
             case State::AP:
                 if constexpr (platform::hasWiFi) {
                     // Promote as soon as something better appears.
-                    if (platform::ethConnected()) {
+                    if (ethUp()) {
                         onConnected("Ethernet");
-                    } else if (ssid_[0] != 0 && platform::wifiStaConnected()) {
+                    } else if (ssid_[0] != 0 && staUp()) {
                         onConnected("WiFi STA");
                     } else if (ssid_[0] != 0 && now - stateChangeTime_ > kApRetryStaMs
                                && platform::wifiApClientCount() == 0) {
                         // A fallback, not a destination, so look periodically when nobody is on it.
-                        std::printf("NetworkModule: AP — retrying WiFi STA (%s)\n", ssid_);
+                        std::printf("NetworkModule: AP, retrying WiFi STA (%s)\n", ssid_);
                         if (platform::wifiStaInit(ssid_, password_)) {
                             state_ = State::WaitingSta;
                             stateChangeTime_ = now;
@@ -408,11 +428,11 @@ public:
 
             case State::Idle:
                 // Every path failed, but the stack runs on, so a late interface still promotes.
-                if (platform::ethConnected()) {
+                if (ethUp()) {
                     std::printf("NetworkModule: Ethernet up (recovered from Idle)\n");
                     onConnected("Ethernet");
                 } else if constexpr (platform::hasWiFi) {
-                    if (platform::wifiStaConnected()) {
+                    if (staUp()) {
                         std::printf("NetworkModule: WiFi STA up (recovered from Idle)\n");
                         onConnected("WiFi STA");
                     }
@@ -486,7 +506,7 @@ private:
     uint8_t addressing_ = kAddressingDhcp;   ///< which addressing mode is selected
     bool mdnsEnabled_ = true;                ///< whether to advertise the local name
     // The storage behind the inherited status slot, which holds only a pointer into it.
-    char statusBuf_[48] = {};
+    char statusBuf_[80] = {};   // 62 needed by the longest line, the link-local one: a 15-character address, a 23-character device name and .local
 
     // Octets rather than strings, always bound, with only their visibility conditional.
     uint8_t staticIp_[4]      = {0, 0, 0, 0};
@@ -712,13 +732,13 @@ private:
                     std::printf("NetworkModule: W5500 re-init (live config change)\n");
                 } else {
                     std::snprintf(statusBuf_, sizeof(statusBuf_),
-                                  "W5500 re-init failed — check pins"); setStatus(statusBuf_, Severity::Error);
+                                  "W5500 re-init failed, check pins"); setStatus(statusBuf_, Severity::Error);
                 }
             } else {
                 // Record it for the next boot without disturbing the running interface.
                 syncEthConfig();
                 std::snprintf(statusBuf_, sizeof(statusBuf_),
-                              "Ethernet config saved — restart to apply"); setStatus(statusBuf_);
+                              "Ethernet config saved, restart to apply"); setStatus(statusBuf_);
             }
         }
     }
@@ -783,7 +803,7 @@ private:
     void onConnected(const char* via) {
         if (std::strcmp(via, "Ethernet") == 0) {
             state_ = State::ConnectedEth;
-            ethDegraded_ = false;   // Ethernet itself got a lease — no longer degraded
+            ethDegraded_ = false;   // Ethernet itself has a usable address, so it is no longer degraded
         } else {
             state_ = State::ConnectedSta;
             // Associated, but the address comes from us, so pin it before the status reads it.
@@ -807,7 +827,7 @@ private:
         }
 
         updateStatusIP();
-        std::printf("NetworkModule: Connected via %s — %s\n", via, statusBuf_);
+        std::printf("NetworkModule: Connected via %s: %s\n", via, statusBuf_);
 
         syncMdns();
 
@@ -827,6 +847,28 @@ public:
     }
 
 private:
+    /// Ethernet has an address the cascade may use: @xref{a-link-local-address-is-a-last-resort}.
+    bool ethUp() const MM_NONBLOCKING {
+        if (!platform::ethConnected()) return false;
+        uint8_t ip[4];
+        platform::ethGetIPv4(ip);
+        return addressCounts(ip, platform::hasWiFi, configuredIp());
+    }
+
+    /// The address the user set, or null where a DHCP client runs.
+    const uint8_t* configuredIp() const MM_NONBLOCKING {
+        return addressing_ == kAddressingStatic ? staticIp_ : nullptr;
+    }
+
+    /// The station has an address the cascade may use, by the same rule as Ethernet.
+    bool staUp() const MM_NONBLOCKING {
+        if constexpr (!platform::hasWiFi) return false;
+        if (!platform::wifiStaConnected()) return false;
+        uint8_t ip[4];
+        platform::wifiStaGetIPv4(ip);
+        return addressCounts(ip, platform::hasWiFi, configuredIp());
+    }
+
     /// Pin the configured address onto this interface, or do nothing where a client runs.
     void applyStaticIfConfigured(platform::NetIface iface) {
         if (addressing_ != kAddressingStatic) return;   // leave the client running
@@ -865,6 +907,12 @@ private:
         if (!ip[0] && !ip[1] && !ip[2] && !ip[3]) return;   // not connected, so keep what stands
         char ipStr[16];
         formatDottedQuad(ipStr, ip);
+        if (state_ == State::ConnectedEth && isLinkLocalIPv4(ip)) {
+            // Working, but the address says why it is unusual and the name says how to reach it: @xref{a-link-local-address-is-a-last-resort}.
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "Eth: %s (no DHCP), %s.local", ipStr, readDeviceName());
+            setStatus(statusBuf_, Severity::Warning);
+            return;
+        }
         if (state_ == State::ConnectedEth) {
             // The negotiated speed too, since a link that fell back looks identical without it.
             const uint16_t mbps = platform::ethLinkSpeedMbps();

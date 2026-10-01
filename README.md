@@ -16,7 +16,7 @@ If you like MoonLight, give it a star, fork it, or open an issue. It helps the p
 
 🎛️ **A pipeline you build visually**: layouts, then layers of effects and modifiers, then drivers. Every change applies on the next frame, and settings persist across power cycles. Editing a pin map, a strand length or an output protocol on a running device needs no reboot.
 
-🔵 **16,384 lights on a classic ESP32**, not only on an S3 or P4. Memory adapts from a 16x16 panel up to 128x128, degrading rather than crashing on tight devices.
+🔵 **Large installations on a classic ESP32 too**, not only on an S3 or P4. Memory adapts to the size of the installation, degrading rather than crashing on tight devices.
 
 🧊 **Native 3D throughout**: 2D and 1D are the cases where a dimension is size 1, so an effect never picks a mode.
 

@@ -125,11 +125,27 @@
 /// Whether it is a hardware interface is what separates them from an adapter with a socket on it.
 /// A radio fails the type test instead, which is the right answer for a card that needs a wire.
 ///
-/// ## The link query used to be a stub
+/// ## The effect-warning guard
 ///
-/// It returned false on every host but one, which made the driver report no link while it drove a card perfectly.
-/// The send path was implemented and only the state query was missing, so the health check contradicted the driver's own output.
-/// Reported by a user driving a card from a small board.
+/// The clock read allocates nothing and takes no lock, but the library does not say so, so the effect warning assumes the worst.
+/// The guard asks the compiler whether it HAS the warning, since one vendor's compiler reports a high major version while predating it.
+///
+/// ## The raw-frame capture ring
+///
+/// Sending a real frame needs privileges no test should ask for, so the host records what the driver emitted, up to a fixed cap past which frames are counted.
+/// It is allocated on first capture, since a static array costs a fifth of a megabyte. It is never freed, which keeps allocation off the per-frame path.
+///
+/// ## Raw send and the link query
+///
+/// A bound adapter sends for real, batched, since one call per packet measured a fivefold spread the panels show as stutter. Unbound, as in every test, it captures.
+/// The link query reports the bound adapter's real speed, because the slow-link warning is what explains a torn panel, and a hardcoded rate would silence it.
+///
+/// ## The stream encoder
+///
+/// A writer thread does the blocking writes while callers only enqueue whole frames, so a stalled encoder costs dropped frames, never a stalled tick.
+/// Stop TERMs the child BEFORE joining, since a writer blocked in write() unblocks reliably only when the read side dies (EPIPE).
+/// The child comes from posix_spawn, since fork in a threaded process can deadlock on the allocator lock. Every fd but stdin is closed, or a leaked HTTP socket outlives a restart.
+/// A restart stops the old writer BEFORE resizing, because the writer reads a slot's data pointer without encMutex_.
 
 #include "platform/platform.h"
 #include "core/util/FirmwareImage.h"  // identify/moonBaseRejection: shared image vetting
@@ -151,9 +167,9 @@
 #include <filesystem>
 #include <string>
 #ifndef _WIN32
-#include <dlfcn.h>   // dlopen/dlsym — the NDI runtime is resolved on demand, never linked
+#include <dlfcn.h>   // dlopen/dlsym: the NDI runtime is resolved on demand, never linked
 #endif
-#include <vector>   // HostBus frame buffers — the memory-backed parallel bus
+#include <vector>   // HostBus frame buffers: the memory-backed parallel bus
 #include <thread>
 #include <deque>     // encoder frame queue between the render tick and the writer thread
 #include <mutex>
@@ -166,14 +182,14 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <io.h>     // _fileno, _commit (POSIX fileno/fsync equivalents)
-#include <iphlpapi.h>   // GetIfTable2 — real link state + negotiated speed (ethLinkUp)
+#include <iphlpapi.h>   // GetIfTable2: real link state + negotiated speed (ethLinkUp)
 #include <netioapi.h>   // MIB_IF_ROW2: sees a NIC a Hyper-V vSwitch hides from GetAdaptersAddresses
 #include <winhttp.h>    // https POST: Windows' own TLS, so the .exe needs no bundled library
 #else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <netdb.h>      // getaddrinfo — hostname resolution for TcpConnection::connect
+#include <netdb.h>      // getaddrinfo: hostname resolution for TcpConnection::connect
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/wait.h>   // waitpid: reaping the spawned ffmpeg (encoderRunning/Stop)
@@ -181,16 +197,16 @@
 extern char** environ;   // posix_spawnp wants the environment explicitly
 #include <csignal>      // SIGPIPE ignore + SIGKILL: the encoder pipe's failure surface
 #include <sys/mman.h>   // mmap/munmap for allocExec (executable pages)
-#include <net/if.h>     // if_nametoindex / ifreq — naming the NIC for raw L2 send
+#include <net/if.h>     // if_nametoindex / ifreq: naming the NIC for raw L2 send
 #include <ifaddrs.h>    // getifaddrs: the raw-interface Select enumerates the host NICs
 #ifdef __linux__
-#include <netpacket/packet.h>   // sockaddr_ll — AF_PACKET raw frames (ethSendRaw)
+#include <netpacket/packet.h>   // sockaddr_ll: AF_PACKET raw frames (ethSendRaw)
 #include <net/ethernet.h>       // ETH_P_ALL
 #endif
 #ifdef __APPLE__
 #include <net/if_media.h>   // SIOCGIFMEDIA: the negotiated link rate, for the interface labels
-#include <pthread.h>    // pthread_jit_write_protect_np — macOS arm64 W^X JIT toggle
-#include <sys/ioctl.h>  // BIOCSETIF — binding a BPF device to an interface (ethSendRaw)
+#include <pthread.h>    // pthread_jit_write_protect_np: macOS arm64 W^X JIT toggle
+#include <sys/ioctl.h>  // BIOCSETIF: binding a BPF device to an interface (ethSendRaw)
 #include <net/bpf.h>
 #endif
 #endif
@@ -271,10 +287,7 @@ static std::atomic<uint32_t> testNowMs{0};
 
 void setTestNowMs(uint32_t ms) { testNowMs.store(ms, std::memory_order_relaxed); }
 
-// The clock read allocates nothing and takes no lock, but the library does not say so, so the effect warning must assume the worst.
-// Ask the compiler whether it HAS the warning rather than inferring it from a version number: an unknown pragma and an unknown warning group are both errors under our settings.
-// A version test does not work here, since one vendor's compiler carries its own version line and reported a high major while predating the warning.
-// Which is exactly how this reached the main branch.
+// Clang gains the effect-warning suppression only where it has the warning: probed with __has_warning, not a version number. @xref{the-effect-warning-guard|why}.
 #if defined(__clang__) && defined(__has_warning)
 #  if __has_warning("-Wfunction-effects")
 #    define MM_SUPPRESS_FUNCTION_EFFECTS 1
@@ -293,7 +306,7 @@ uint32_t millis() MM_NONBLOCKING {
     );
 }
 
-// The OS thread identity as an integer. std::this_thread::get_id() is the portable spelling but is not convertible to an integer, so each platform's own call is used: GetCurrentThreadId on Windows, pthread_self elsewhere. The +1 guarantees a non-zero result so callers can treat 0 as "none".
+// The OS thread id as an integer, from each platform's own call since std::this_thread::get_id() does not convert. The +1 keeps it non-zero so callers can treat 0 as none.
 uintptr_t currentThreadId() MM_NONBLOCKING {
 #ifdef _WIN32
     return static_cast<uintptr_t>(GetCurrentThreadId()) + 1;
@@ -434,7 +447,7 @@ size_t freeInternalHeap() {
     return 0; // Not meaningful on desktop (0 = unlimited)
 }
 
-// Test-only cap on the reported largest free block, so a test can force the paged fallback without an actually fragmented heap.
+// Test-only cap on the reported largest free block, so a test can force the paged fallback without a fragmented heap.
 static std::atomic<size_t> testMaxBlock{0};
 void setTestMaxAllocBlock(size_t bytes) { testMaxBlock.store(bytes, std::memory_order_relaxed); }
 
@@ -466,9 +479,7 @@ size_t taskSnapshot(TaskInfo* out, size_t maxTasks) {
 void currentTaskOnCore(int, char* out, size_t cap) { if (out && cap) out[0] = '\0'; }
 const char* renderTaskName() { return g_testRenderTask; }
 
-// The worker seam, backed by a thread and a condition variable.
-// The core pin is ignored, but the handoff is real, so the render and encode invariants are testable on an actual second thread.
-// The wake is a single-slot latch, matching the device notification's one-pending-count semantics so a host test sees the same behavior.
+// The worker seam is a thread and a condition variable, the core pin ignored. The wake is a single-slot latch, matching the device notification's one-pending-count semantics.
 namespace {
 struct DesktopWorker {
     std::thread thread;
@@ -585,7 +596,7 @@ const char* macString() {
 }
 
 const char* chipModel() {
-    // The real instruction set rather than the word desktop, since on a device this names the silicon and a category would leave every host indistinguishable. Compile-time, because a binary is built for one architecture; an emulated one reports what is actually running, which is the truthful answer.
+    // The real instruction set, not a category, so hosts stay distinguishable. Compile-time, since a binary is built for one architecture; an emulated one reports what runs.
 #if defined(__aarch64__) || defined(_M_ARM64)
     return "arm64";
 #elif defined(__x86_64__) || defined(_M_X64)
@@ -719,7 +730,7 @@ bool httpsPost(const char* url, const char* body, uint32_t timeoutMs) {
 }
 
 const char* hostPlatform() {
-    // The same names the release packaging uses, so a breakdown lines up with the downloads it came from rather than inventing a second vocabulary. A container reports as one rather than as its host system, since being a container is what changes how it behaves, and the system underneath is already visible elsewhere.
+    // The release packaging's names, so a breakdown lines up with the downloads. A container reports as one, since that changes how it behaves.
 #if defined(__linux__)
     // The marker the runtime itself creates, checked once, since a process cannot move in or out of a container while it runs.
     static const bool inContainer = std::filesystem::exists("/.dockerenv");
@@ -849,7 +860,7 @@ std::filesystem::path defaultRoot() {
     std::error_code ec;
     if (std::filesystem::exists("CMakeLists.txt", ec) && !ec
         && std::filesystem::is_directory("moondeck", ec) && !ec)
-        // A subfolder rather than the build tree itself, since rooting it there listed caches and archives beside the few directories a device actually has.
+        // A subfolder rather than the build tree itself, since rooting it there listed caches and archives beside the few directories a device has.
         return std::filesystem::path("build") / "fs";
     std::filesystem::path user = userDataDir();
     return user.empty() ? std::filesystem::path("build") : user;
@@ -902,7 +913,7 @@ bool fsMount() {
     std::error_code ec;
     std::filesystem::create_directories(fsRoot_, ec);
     if (!std::filesystem::is_directory(fsRoot_, ec)) return false;
-    // Existence does not imply writability, and creating a directory is silent about all three ways it can fail, so probe with the operation that actually matters. Owner-only through the same helper the config writes use, since a file this code creates should not be the loosest thing in the directory.
+    // Probe with the operation that matters: existence does not imply writability, and a failed mkdir says nothing about why. Owner-only through the config-write helper.
     const auto probe = fsRoot_ / ".mm-write-probe";
     std::error_code rm;
     std::filesystem::remove(probe, rm);
@@ -1068,13 +1079,15 @@ size_t filesystemTotal() {
 
 void setEthConfig(const EthPinConfig&) {}   // no eth on desktop; ethInit stubs false
 void ethStop() {}                           // no eth on desktop
-bool ethInit() { return false; }
+// Test seam: a faked cable and address, all zero meaning none, so a host test can drive the Ethernet cascade.
+static uint8_t testEthIp_[4] = {};
+static bool testEthFaked() MM_NONBLOCKING { return testEthIp_[0] || testEthIp_[1] || testEthIp_[2] || testEthIp_[3]; }
+void setTestEthIPv4(const uint8_t* ip) { for (int i = 0; i < 4; i++) testEthIp_[i] = ip ? ip[i] : 0; }
+bool ethInit() { return testEthFaked(); }
 
-// Raw-frame capture, the host half of the send seam: sending a real frame needs privileges no test should ask for, so the host records what the driver emitted instead. Fixed capacity and no allocation, since an unbounded recorder would turn a long run into unbounded memory; frames past the cap are counted rather than stored.
+// Raw-frame capture, the host half of the send seam: the host records what the driver emitted, with fixed capacity and counted overflow. @xref{the-raw-frame-capture-ring|why}.
 namespace {
-// Sized for the largest frame sequence a test asserts over, and allocated on first capture rather than from boot.
-// As a static array it cost a fifth of a megabyte in a shipped binary that may never record a frame.
-// Never freed, since freeing would put the allocation back on a path that runs per frame.
+// Sized for the largest sequence a test asserts over, allocated on first capture and never freed. @xref{the-raw-frame-capture-ring|why}.
 constexpr size_t kEthTestMaxFrames = 132;
 uint8_t (*ethTestFrames_)[kEthTestFrameMax] = nullptr;
 size_t  ethTestLens_[kEthTestMaxFrames] = {};
@@ -1255,7 +1268,7 @@ void getMacAddress(uint8_t mac[6]) {
             }
         }
         if (!loaded) {
-            // No stored identity, so this is a fresh install or one predating the file; they are told apart by whether the tree already holds config. Reading that here is safe because this runs before the config load, so a fresh tree genuinely has none at this instant.
+            // No stored identity: a fresh install, or one predating the file, told apart by whether the tree already holds config. Safe to read here, since this runs before the config load.
             bool existing = false;
             if (std::filesystem::is_directory(fsRoot_ / ".config", ec) && !ec) {
                 for (const auto& e : std::filesystem::directory_iterator(fsRoot_ / ".config", ec)) {
@@ -1291,9 +1304,7 @@ bool ethBindRawInterface(const char* ifName) {
     if (!ifName || !ifName[0]) return true;   // explicit return to capture mode, as on POSIX
     if (!wpcapLoad()) return false;           // no Npcap installed: the driver reports it
 
-    // Match the user's string against the device name and both descriptions, first hit wins.
-    // A device name far outruns the control's width, so a substring of a description is the only spelling that fits.
-    // The extra lookup is not a nicety, since some adapters report no description at all and nothing a user could type would match them.
+    // Match the string against the device name and both descriptions, first hit wins. The extra lookup matters since some adapters report no description and a name outruns the control's width.
     PcapIf* devs = nullptr;
     char err[256] = {};
     if (pcapFindAllDevs_(&devs, err) != 0 || !devs) return false;
@@ -1341,7 +1352,7 @@ bool ethBindRawInterface(const char* ifName) {
         char dev[24];
         std::snprintf(dev, sizeof(dev), "/dev/bpf%d", i);
         const int fd = ::open(dev, O_RDWR);
-        if (fd < 0) continue;              // busy or no permission — try the next
+        if (fd < 0) continue;              // busy or no permission, try the next
         ifreq ifr = {};
         std::snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "%s", ifName);
         if (::ioctl(fd, BIOCSETIF, &ifr) < 0) { ::close(fd); return false; }
@@ -1366,9 +1377,7 @@ bool ethSendRaw(const uint8_t* frame, size_t len) MM_NONBLOCKING {
     if (ethTestSendFails_) { ethSendFails_++; ethFailTotal_++; return false; }   // simulated link-down / full ring
 
 #ifdef _WIN32
-    // A bound adapter sends for real; unbound, which every test is, falls through to the capture ring, so sending changes nothing a test observes.
-    // Batched where the queue exists.
-    // A wall frame is over a hundred packets that must land inside one window, and one call per packet measured a fivefold spread the cards show as stutter.
+    // A bound adapter sends for real; unbound, as in every test, falls to the capture ring. Batched where the queue exists. @xref{raw-send-and-the-link-query|why}.
     if (pcapHandle_ && pcapQueue_ && pcapQQueue_) {
         PcapPktHdr hdr = {};
         hdr.caplen = static_cast<unsigned>(len);
@@ -1402,7 +1411,7 @@ bool ethSendRaw(const uint8_t* frame, size_t len) MM_NONBLOCKING {
 #else
         const ssize_t n = ::write(ethRawFd_, frame, len);
 #endif
-        // Track failures on the real send path too, since a bound host is where frames actually reach a wire.
+        // Track failures on the real send path too, since a bound host is where frames reach a wire.
         if (n != static_cast<ssize_t>(len)) { ethSendFails_++; ethFailTotal_++; return false; }
         ethSendFails_ = 0;
         return true;
@@ -1467,9 +1476,7 @@ void ethClaimRawL2(bool claim) {
 
 bool ethRawL2Claimed() MM_NONBLOCKING { return ethRawClaims_ > 0; }
 
-// Link state and negotiated speed, describing the bound adapter where there is one.
-// That matters rather than being a nicety: a card with no buffering tears the panel on a slow link while every frame still sends successfully.
-// A hardcoded rate would make that warning inert, which is worse than absent. Elsewhere there is no peripheral to describe, so a test chooses what the driver sees.
+// Link state and negotiated speed of the bound adapter; elsewhere a test chooses them. @xref{raw-send-and-the-link-query|why}.
 #ifdef _WIN32
 namespace {
 /// The link state and speed for the bound adapter, matched through the interface table: @xref{the-interface-table-not-the-address-list|why not the address list}.
@@ -1495,7 +1502,7 @@ bool winAdapterLink(uint16_t& mbps) {
 }
 }  // namespace
 
-bool ethLinkUp() MM_NONBLOCKING { uint16_t m = 0; return winAdapterLink(m); }
+bool ethLinkUp() MM_NONBLOCKING { if (testEthFaked()) return true; uint16_t m = 0; return winAdapterLink(m); }
 bool ethConnected() MM_NONBLOCKING { return ethLinkUp(); }
 uint16_t ethLinkSpeedMbps() MM_NONBLOCKING {
     uint16_t m = 0;
@@ -1504,7 +1511,7 @@ uint16_t ethLinkSpeedMbps() MM_NONBLOCKING {
 }
 #else
 namespace {
-/// The carrier state and speed for a named interface, the one place either question is asked of the system: @xref{the-link-query-used-to-be-a-stub|why both callers share it}.
+/// The carrier state and speed for a named interface, the one place either question is asked of the system.
 bool posixIfLink(const char* ifname, uint16_t& mbps) MM_NONBLOCKING {
     mbps = 0;
     if (!ifname || !*ifname) return false;
@@ -1555,7 +1562,7 @@ bool posixIfLink(const char* ifname, uint16_t& mbps) MM_NONBLOCKING {
 #endif
 }
 
-/// The link state and speed for the interface the raw sender bound to, or nothing when none is: @xref{the-link-query-used-to-be-a-stub|what it used to report}.
+/// The link state and speed for the interface the raw sender bound to, or nothing when none is.
 bool posixAdapterLink(uint16_t& mbps) MM_NONBLOCKING {
     mbps = 0;
     if (!ethRawIfName_[0]) return false;   // capture mode, or a bind that failed
@@ -1563,7 +1570,7 @@ bool posixAdapterLink(uint16_t& mbps) MM_NONBLOCKING {
 }
 }  // namespace
 
-bool ethLinkUp() MM_NONBLOCKING { uint16_t m = 0; return posixAdapterLink(m); }
+bool ethLinkUp() MM_NONBLOCKING { if (testEthFaked()) return true; uint16_t m = 0; return posixAdapterLink(m); }
 bool ethConnected() MM_NONBLOCKING { return ethLinkUp(); }
 uint16_t ethLinkSpeedMbps() MM_NONBLOCKING {
     uint16_t m = 0;
@@ -1583,6 +1590,7 @@ void setTestEthSendFails(bool fail) { ethTestSendFails_ = fail; }
 void setTestEthLinkSpeed(uint16_t mbps) { ethTestLinkSpeed_ = mbps; }
 void ethGetIPv4(uint8_t out[4]) MM_NONBLOCKING {
     // No real interface state, but the discovery module needs this host's address to scan from, so the outbound-route answer is reported as the wired one it reads first.
+    if (testEthFaked()) { for (int i = 0; i < 4; i++) out[i] = testEthIp_[i]; return; }
     out[0] = out[1] = out[2] = out[3] = 0;
     const char* ip = hostIp();
     if (ip && ip[0]) {
@@ -1605,7 +1613,7 @@ bool wifiStaInit(const char* /*ssid*/, const char* /*password*/) {
     return testWifiStaAvailable.load(std::memory_order_relaxed);
 }
 bool wifiStaConnected() MM_NONBLOCKING { return false; }
-void wifiStaGetIPv4(uint8_t out[4]) { out[0] = out[1] = out[2] = out[3] = 0; }
+void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING { out[0] = out[1] = out[2] = out[3] = 0; }
 // Addressing is managed by the system here, so the setters are inert; the per-interface counter is what a host test pins the path on.
 static std::atomic<uint32_t> testStaticApplies[2] = {};   // indexed by NetIface
 void netSetStaticIPv4(NetIface iface, const uint8_t[4], const uint8_t[4],
@@ -1676,9 +1684,7 @@ bool otaFetchMoonBaseUrl(const char*, char* statusBuf, size_t statusBufLen,
     return false;
 }
 
-// No recovery partition here, so this installs nothing and consumes nothing.
-// An earlier version read the caller's first chunk for a check whose real coverage is a unit test driving the vetting directly.
-// Refusing without touching the source is the honest stub.
+// No recovery partition here, so this installs nothing and consumes nothing, and refuses without touching the source.
 bool otaWriteMoonBase(FsWriteSrc, void*, size_t, char* statusBuf, size_t statusBufLen,
                       uint32_t* bytesReadOut) {
     if (statusBuf && statusBufLen > 0) std::snprintf(statusBuf, statusBufLen, "unsupported on desktop");
@@ -1695,7 +1701,7 @@ int httpRequest(const char* method, const char* host, uint16_t port, const char*
     if (body && bodyLen) body[0] = '\0';
     if (!method || !host || !path) return 0;
 
-    // One shared budget for every phase rather than a fresh one each, which let the total reach three times the caller's timeout. The remainder is floored above zero, since zero means block forever, and it is tracked as elapsed time, which stays correct across the counter's rollover.
+    // One budget shared by every phase, so the total cannot exceed the caller's timeout. The remainder is floored above zero (zero blocks forever) and tracked as elapsed time, which survives counter rollover.
     const uint32_t start = millis();
     auto remainingMs = [&]() -> uint32_t {
         const uint32_t elapsed = millis() - start;
@@ -1721,7 +1727,7 @@ int httpRequest(const char* method, const char* host, uint16_t port, const char*
     const bool inProgress = (cr != 0 && errno == EINPROGRESS);
 #endif
     if (cr != 0 && !inProgress) return 0;          // immediate hard failure
-    if (cr != 0) {                                 // connect in progress — wait for writable
+    if (cr != 0) {                                 // connect in progress: wait for writable
         fd_set wf; FD_ZERO(&wf); FD_SET(sock(fd), &wf);
         const uint32_t cms = remainingMs();
         timeval ctv{};
@@ -1808,7 +1814,7 @@ bool improvProvisioningInit(const ImprovDeviceInfo& /*info*/,
 
 void reboot() {
     // The device is the host process, so exit cleanly and let the supervisor restart it, which matches what the browser's reconnect expects.
-    std::printf("platform::reboot() — exiting\n");
+    std::printf("platform::reboot(): exiting\n");
     std::fflush(stdout);
     // Exiting is the reboot here, there being no firmware to restart into; the thread-safety warning describes exactly the abrupt teardown a reboot models. NOLINTNEXTLINE(concurrency-mt-unsafe)
     std::exit(0);
@@ -1944,7 +1950,7 @@ bool TcpConnection::peerIPv4(uint8_t out[4]) const {
 
 bool TcpConnection::write(const uint8_t* data, size_t len) {
     if (fd_ < 0) return false;
-    // Send every byte, since a response must arrive complete, bounded because this runs on the render thread and a stalled peer would otherwise block it forever. Two bounds, as on a device: progress resets the stall one so a slow but steady transfer finishes, while the total one keeps a trickling peer from holding the loop.
+    // Send every byte, bounded because this runs on the render thread. Two bounds as on a device: progress resets the stall one so a slow steady transfer finishes, the total one stops a trickling peer holding the loop.
     constexpr uint32_t kWriteStallMs = 2000;
     constexpr uint32_t kWriteTotalMs = 8000;
     const uint32_t start = millis();
@@ -1979,9 +1985,9 @@ int TcpConnection::writeSome(const uint8_t* data, size_t len) {
     auto n = ::send(sock(fd_), reinterpret_cast<const char*>(data), static_cast<int>(len), 0);
     if (n > 0) return static_cast<int>(n);
     if (n == 0) return 0;
-    if (sockWouldBlock()) return 0;         // buffer full — try later
+    if (sockWouldBlock()) return 0;         // buffer full, try later
 #ifndef _WIN32
-    if (errno == EINTR) return 0;           // interrupted — try later
+    if (errno == EINTR) return 0;           // interrupted, try later
 #endif
     return -1;                              // real socket error
 }
@@ -2011,7 +2017,7 @@ bool TcpConnection::connectStart(const char* host, uint16_t port) {
     const bool inProgress = (cr != 0 && errno == EINPROGRESS);
 #endif
     if (cr != 0 && !inProgress) { close_sock(fd); return false; }   // immediate hard failure
-    fd_ = fd;   // in flight (or already connected) — connectPoll() resolves which
+    fd_ = fd;   // in flight (or already connected): connectPoll() resolves which
     return true;
 }
 
@@ -2086,9 +2092,7 @@ TcpConnection TcpServer::accept() {
 #else
     int clientFd = ::accept(fd_, nullptr, nullptr);
     if (clientFd < 0) return TcpConnection();
-    // A non-blocking client socket, the server running from the single render loop.
-    // A blocking read's timeout froze the whole loop whenever a request's bytes had not landed the instant it was accepted.
-    // The request lands within about a millisecond and is read across a few rapid retries instead.
+    // A non-blocking client socket, since a blocking read's timeout froze the loop when the bytes had not landed on accept. The request is read across a few rapid retries.
     make_nonblocking(clientFd);
 #endif
     return TcpConnection(clientFd);
@@ -2101,7 +2105,7 @@ void TcpServer::close() {
     }
 }
 
-// The symbol-based output on the host: accepted and counted rather than refused, since refusing made that driver inert off device. There is nothing to hand back, the driver owning the symbols, and the resolution is echoed so its timing arithmetic works on real numbers.
+// The symbol-based output on the host is accepted and counted, since refusing left that driver inert off device. The resolution is echoed so its timing arithmetic works on real numbers.
 namespace {
 struct HostRmt { uint32_t resolutionHz = 0; };
 HostRmt* hostRmt(void*& impl) {
@@ -2359,9 +2363,7 @@ size_t i2cScan(uint16_t /*sda*/, uint16_t /*scl*/, uint8_t* /*out*/, size_t /*ma
     return kI2cBusUnavailable;
 }
 
-// No receiver here, so the seam is a no-op and the service still runs with its buttons working through the control path.
-// A host has no pins either, so reads come from what a test injected.
-// The button logic is ordinary code and gets tested here, leaving only the electrical half for the bench.
+// No receiver or pins here, so the seam is a no-op and reads come from what a test injected. The button logic is ordinary code, leaving only the electrical half for the bench.
 namespace {
 // A flat table rather than a map: a pin number IS the index, there are at most 48 of them, and this allocates nothing.
 constexpr uint8_t kMaxGpio = 48;
@@ -2370,7 +2372,7 @@ bool g_gpioLevel[kMaxGpio] = {};
 
 bool gpioInputBegin(uint8_t gpio, GpioPull pull) {
     if (gpio >= kMaxGpio) return false;
-    // The PULL sets the resting level, as it does on a board: a pull-up idles HIGH, a pull-down idles LOW. Without this every pin idled LOW, which an active-low button reads as HELD, so a desktop with no hardware reported a phantom press the moment a row named a pin. A test that wants a different level still calls setTestGpioLevel after this.
+    // The PULL sets the resting level as on a board: pull-up idles HIGH, pull-down LOW. Otherwise an active-low button reads as HELD. A test wanting another level calls setTestGpioLevel after.
     g_gpioLevel[gpio] = (pull == GpioPull::Up);
     return true;
 }
@@ -2388,10 +2390,10 @@ void setTestGpioLevel(uint8_t gpio, bool level) { if (gpio < kMaxGpio) g_gpioLev
 void clearTestGpioLevel() { for (bool& b : g_gpioLevel) b = false; }
 
 // --- ADC ---
-// The desktop has no converter, so a read reports whatever a test injected. Same arrangement as the GPIO level above: a pedal's mapping, its min/max/invert and its smoothing are ordinary logic, and this is what lets all of it be pinned on the host with no hardware attached.
+// The desktop has no converter, so a read reports what a test injected, as with the GPIO level. That pins a pedal's mapping, min/max/invert and smoothing on the host.
 namespace {
 uint16_t g_adcValue[kMaxGpio] = {};
-// Millivolts are injected SEPARATELY from the raw count rather than derived from it. On a board the two are related by the chip's own eFuse curve, which a host cannot reproduce, so deriving one here would let a test pass against an arithmetic relationship that does not hold on hardware.
+// Millivolts are injected SEPARATELY from the raw count. The chip's eFuse curve relates them on a board, and deriving one here would pass against a relation hardware lacks.
 uint16_t g_adcMv[kMaxGpio] = {};
 }
 
@@ -2401,7 +2403,7 @@ bool adcRead(uint8_t gpio, uint16_t& raw) {
     return true;
 }
 
-// The ESP32's 12-bit full scale, reported here too so a host test scales exactly as the board does: a mapping verified against 4095 on the desktop cannot then behave differently on a device.
+// The ESP32's 12-bit full scale, so a mapping verified against 4095 on the desktop behaves the same on a device.
 uint16_t adcMaxCount() { return 4095; }
 
 void setTestAdcValue(uint8_t gpio, uint16_t raw) { if (gpio < kMaxGpio) g_adcValue[gpio] = raw; }
@@ -2428,7 +2430,7 @@ using NdiSendInstance = void*;
 // Processing.NDI.structs.h, NDIlib_video_frame_v2_t, verbatim field order.
 struct NdiVideoFrameV2 {
     int         xres, yres;
-    int         FourCC;                 // NDIlib_FourCC_video_type_e — an int-sized enum
+    int         FourCC;                 // NDIlib_FourCC_video_type_e, an int-sized enum
     int         frame_rate_N, frame_rate_D;
     float       picture_aspect_ratio;
     int         frame_format_type;      // NDIlib_frame_format_type_e
@@ -2478,7 +2480,7 @@ const char* const kNdiLibNames[] = {
 #if defined(_WIN32)
     "Processing.NDI.Lib.x64.dll", "Processing.NDI.Lib.x86.dll",
 #elif defined(__APPLE__)
-    // NDI Tools for macOS ships the runtime INSIDE its app bundles rather than installing a system-wide dylib, so a plain name resolves nothing however complete the install is. The bundle paths are tried by name (verified to export the send API on a real NDI Tools install); `libndi_advanced` is the file NDI Tools ships, `libndi` the one bundled with Resolume.
+    // NDI Tools for macOS bundles the runtime INSIDE its apps, so a plain name resolves nothing. Bundle paths are tried by name: `libndi_advanced` ships with NDI Tools, `libndi` with Resolume.
     "libndi.dylib", "/usr/local/lib/libndi.dylib", "/opt/homebrew/lib/libndi.dylib",
     "/Applications/NDI Video Monitor.app/Contents/Frameworks/libndi_advanced.dylib",
     "/Applications/NDI Studio Monitor.app/Contents/Frameworks/libndi_advanced.dylib",
@@ -2604,16 +2606,13 @@ const char* ndiTestSenderName() { return ndiCapturedName_.c_str(); }
 void ndiTestClearFrames() { ndiCaptured_.clear(); }
 
 
-// The stream encoder: one spawned process with its input piped, its arguments from the driver.
-// A writer thread does the blocking writes on every system while callers only enqueue whole frames into a fixed ring.
-// So the render tick never touches the pipe and no per-system trickery is needed.
-// A test seam mirrors the video one, so continuous integration never needs the encoder installed.
+// The stream encoder: one spawned process with piped input. A writer thread does the blocking writes while callers enqueue whole frames, and a test seam mirrors the video one. @xref{the-stream-encoder|why}.
 
 namespace {
-// Threading model: encoderStart/Stop/Running are LIFECYCLE calls, made only from the render task (prepare/release/tick1s), so they need no lock among themselves. encoderWrite crosses threads (the encode worker) and the writer thread consumes: those three share encMutex_, which guards only the queue and the dead/stop flags, never a blocking write.
+// Lifecycle calls come only from the render task and need no lock. encoderWrite and the writer thread share encMutex_, which guards only the queue and flags, never a blocking write.
 std::mutex encMutex_;
 std::condition_variable encCv_;
-// A fixed ring of REUSED frame slots, whole frames only (tearing is structurally out): the enqueue path must not heap-allocate per frame (assign() reuses each slot's capacity after the first lap), and 3 slots of burst absorption is the drop-newest boundary.
+// A fixed ring of REUSED frame slots, whole frames only, so enqueue never heap-allocates after the first lap. Three slots absorb a burst, and the newest is dropped past that.
 constexpr size_t kEncQueueMax = 3;
 std::vector<uint8_t> encSlots_[kEncQueueMax];
 size_t encHead_ = 0;    // slot the writer consumes next
@@ -2653,13 +2652,13 @@ constexpr uint32_t kRtpVideoClockHz = 90000;   // the RTP video clock the timest
 }  // namespace
 
 
-// Stop the child and the writer, deadlock-free: signal stop, TERM the child FIRST (a writer blocked in write() only reliably unblocks when the read side dies: EPIPE), join, then close stdin and reap with a short grace before SIGKILL. Called only from the render task.
+// Stop the child and the writer without deadlock: TERM the child FIRST, since a blocked write() only unblocks reliably when the read side dies. Called only from the render task. @xref{the-stream-encoder|why}.
 static void stopEncoderProcess() {
     if (encTestMode_ != EncoderTestMode::Off) return;
     {
         std::lock_guard<std::mutex> lk(encMutex_);
         encWriterStop_ = true;
-        // The ring counters are NOT reset here: the writer may be mid-write on the head slot, and a producer racing this stop must keep seeing that slot as occupied. encoderStart resets the ring under the lock after the join, when nothing can touch it.
+        // The ring counters are NOT reset here, so a mid-write head slot stays occupied for a racing producer. encoderStart resets the ring under the lock after the join.
         encCv_.notify_all();
     }
     esStop_ = true;
@@ -2772,7 +2771,7 @@ static bool spawnEncoderProcess(const char* const argv[], bool captureStdout = f
     encStdin_ = writeEnd;
     encStdout_ = outRead;
 #else
-    // posix_spawn, not fork/exec: fork in a threaded process can deadlock on the allocator lock before exec, and a plain exec would leak every parent fd (the HTTP listen socket, the Art-Net/DDP ports) into a child that outlives a restart. Everything except the dup2'd stdin is closed in the child: CLOEXEC_DEFAULT on macOS, closefrom on glibc.
+    // posix_spawn, not fork/exec: fork in a threaded process can deadlock on the allocator lock, and a plain exec leaks parent fds into the child. All but the dup2'd stdin are closed in the child. @xref{the-stream-encoder|why}.
     int fds[2];
     if (::pipe(fds) != 0) return false;
     int outFds[2] = {-1, -1};
@@ -2806,7 +2805,7 @@ static bool spawnEncoderProcess(const char* const argv[], bool captureStdout = f
     encStdin_ = fds[1];
     encStdout_ = outFds[0];
 #endif
-    // The writer thread does the BLOCKING writes: the render tick only ever enqueues, so an encoder that stops reading for a while (scheduler starvation under a free-running render loop stalled it >250 ms on the bench) costs queued-then-dropped frames, never a stalled tick, never a torn frame, and never a false death.
+    // The writer thread does the BLOCKING writes, so a stalled encoder costs dropped frames, never a stalled tick, torn frame or false death. @xref{the-stream-encoder|why}.
     {
         std::lock_guard<std::mutex> lk(encMutex_);   // producers may race this restart
         encWriterStop_ = false;
@@ -2918,7 +2917,7 @@ static bool spawnEncoderProcess(const char* const argv[], bool captureStdout = f
     return true;
 }
 
-// The ffmpeg invocation IS the desktop encode contract: raw RGB in at the grid size and rate, zerolatency x264 out, 1 s segments on a short rolling playlist (the live tuning that puts glass-to-glass at 2-5 s), segments deleted as they fall off it.
+// The ffmpeg invocation is the desktop encode contract: raw RGB in, zerolatency x264 out as 1 s segments on a short rolling playlist (glass-to-glass 2-5 s).
 bool encoderStart(const EncoderConfig& cfg) {
     char geo[16], rate[8], gop[8], bv[12], out[192];
     std::snprintf(geo, sizeof(geo), "%ux%u", static_cast<unsigned>(cfg.width),
@@ -2931,11 +2930,9 @@ bool encoderStart(const EncoderConfig& cfg) {
     if (!elementary) std::snprintf(out, sizeof(out), "%s/stream.m3u8", cfg.outDir);
     esFps_ = cfg.fps ? cfg.fps : 30;
 
-    // Assembled by index so the software encoder's tuning flags stay off the hardware ones, which reject them, without duplicated slots.
-    // The frame slots are sized HERE, off the render tick, since the write path would otherwise allocate on its first lap and must not allocate at all.
-    // A failure here fails the start, where the driver already reports it, rather than throwing from a later write.
+    // Assembled by index so the software tuning flags stay off the hardware encoders, which reject them. Frame slots are sized HERE, off the tick, and a failure fails the start.
     const size_t frameBytes = static_cast<size_t>(cfg.width) * cfg.height * 3;
-    // Stop FIRST, then resize. The previous writer thread reads a slot's data pointer in its blocking write loop WITHOUT encMutex_ held, so reserving under it is both a data race and, once a geometry or scale change grows frameBytes, a reallocation that frees the buffer the writer is still reading. spawnEncoderProcess stops again below; that call is then a no-op.
+    // Stop FIRST, then resize: the old writer reads a slot's data without encMutex_, so growing frameBytes under it frees a buffer in use. spawnEncoderProcess stops again, a no-op. @xref{the-stream-encoder|why}.
     stopEncoderProcess();
     try {
         for (auto& slot : encSlots_) slot.reserve(frameBytes);
@@ -3051,10 +3048,10 @@ const char* encoderTestArgs() { return encCapturedArgs_.c_str(); }
 void encoderTestClearFrames() { encCaptured_.clear(); }
 
 
-// Raw-interface enumeration for the driver's selection: labels for humans, bind names for the binder, the first entry always the capture-only row. One system lists through the capture library and labels by the adapter's friendly description, its device name being an identifier nobody recognizes; on the other the name IS the label.
+// Raw-interface enumeration for the driver's selection: human labels, bind names, and the capture-only row first. One system labels by the adapter's friendly description, the other by its name.
 
 namespace {
-// FIXED storage, refilled in place: a Select's aux keeps pointing at these arrays across re-enumerations, so two panel-card instances rebuilding in one sweep can never dangle each other's option pointers (rows update under a stale aux, which is harmless; freed rows would not be). 16 NICs + the capture row cover any sane host.
+// FIXED storage refilled in place, so a Select's aux never dangles across re-enumerations. 16 NICs plus the capture row cover any sane host.
 constexpr size_t kRawIfMax = 17;
 char rawIfLabels_[kRawIfMax][64];
 char rawIfNames_[kRawIfMax][64];
@@ -3064,7 +3061,7 @@ std::vector<std::string> rawIfTest_;   // test seam: label == bind name
 
 void rawIfPush(const char* label, const char* name) {
     if (rawIfCount_ >= kRawIfMax) return;
-    // 63 not 64: the Select apply path rejects labels that FILL its 64-byte buffer as overlong, so a row must persist at <= 62 chars or the pick dies on reboot.
+    // 63 not 64: the Select apply path rejects a label filling its 64-byte buffer, so a row must persist at 62 chars or the pick dies on reboot.
     std::snprintf(rawIfLabels_[rawIfCount_], 63, "%s", label);
     std::snprintf(rawIfNames_[rawIfCount_], sizeof(rawIfNames_[0]), "%s", name);
     rawIfCount_++;
@@ -3072,7 +3069,7 @@ void rawIfPush(const char* label, const char* name) {
 }  // namespace
 
 void setTestRawInterfaces(const char* const* names, size_t count) {
-    // The documented reset is (nullptr, 0), and `names + count` on a null pointer is undefined even when count is zero, so the reset is its own path rather than a degenerate range.
+    // The documented reset is (nullptr, 0) and `names + count` on null is undefined, so the reset is its own path.
     if (!names || count == 0) { rawIfTest_.clear(); return; }
     rawIfTest_.assign(names, names + count);
 }
@@ -3091,7 +3088,7 @@ size_t rawInterfaces(const char* const** optionsOut) {
                 MIB_IF_TABLE2* table = nullptr;
                 if (::GetIfTable2(&table) != NO_ERROR) table = nullptr;
                 for (const PcapIf* d = devs; d; d = d->next) {
-                    // Show only what could carry panel frames, which the other branch does with a name blocklist while here the interface table answers it. Skipped only when that table could not be read, since otherwise every row would be filtered out and the picker would be an empty dead end on perfectly usable hardware.
+                    // Show only what could carry panel frames, which the interface table answers here. Skipped when that table is unreadable, since every row would otherwise be filtered out.
                     if (table && !winIsPanelCapableNic(winRowForPcapName(table, d->name))) continue;
                     char desc[256] = {};
                     const char* label = nullptr;
@@ -3115,14 +3112,12 @@ size_t rawInterfaces(const char* const** optionsOut) {
             }
         }
 #else
-        // The OS's virtual plumbing can never reach a panel card and only buries the real NICs: loopback plus the well-known virtual prefixes (macOS: VPN tunnels, the AirDrop/AirPlay radios, Apple-silicon debug, bridges; Linux: container veths).
+        // Loopback and the known virtual prefixes (VPN tunnels, AirDrop/AirPlay radios, debug, bridges, container veths) never reach a panel card and only bury the real NICs.
         static constexpr const char* kVirtualPrefixes[] = {
             "lo", "utun", "awdl", "llw", "anpi", "bridge", "gif", "stf", "ap", "pktap",
             "veth", "docker", "br-", "virbr",
         };
-            // The negotiated speed, or nothing when the system will not state one, riding in the label for the same reason as the other branch.
-            // The name alone does not say which entry is the fast adapter and which a tunnel.
-            // The shared helper is the one place either the carrier or the rate is asked, and the label wants only the rate, so it discards the carrier.
+            // The negotiated speed rides in the label, or nothing when unstated, so the fast adapter is distinguishable from a tunnel. The shared helper discards the carrier.
             auto linkMbps = [](const char* ifname) -> unsigned {
                 uint16_t mbps = 0;
                 posixIfLink(ifname, mbps);

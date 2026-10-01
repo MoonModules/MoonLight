@@ -507,8 +507,7 @@ def _hdr(text: str):
 
 
 def test_a_class_comment_past_ten_lines_is_flagged():
-    """The class `///` is the module's summary, not its manual: a deep dive goes after
-    `@moreinfo`, where a post-process moves it below the member lists."""
+    """The class `///` is the module's summary, not its manual: cut it, and only a fact the code does not say goes after `@moreinfo`."""
     doc = "\n".join(f"/// line {i}" for i in range(12))
     issues = _hdr(doc + "\nclass Foo : public Bar {")
     assert issues and "class comment 12 lines" in issues[0][1]
@@ -949,6 +948,28 @@ def test_the_ratchet_refuses_a_rule_that_rose_against_the_committed_report(monke
     assert counts is None or "(total)" in counts, counts
     # Only the `## By rule` table feeds the baseline: an area row would be a rule that never appears.
     assert counts is None or not any(k.startswith("`") for k in counts), counts
+
+
+def test_the_appendix_is_measured_from_moreinfo_to_the_end_of_its_run():
+    """The appendix is what a file holds outside its code: every `///` line after `@moreinfo`, up to the
+    first line that is not `///`. A lead without one measures zero, so a file with no appendix is not counted."""
+    import check_docgen
+    text = ("/// Lead.\n///\n/// @moreinfo\n///\n/// ## Why\n///\n/// One fact.\n"
+            "#include <x>\n/// A member comment, not appendix.\nint x;\n")
+    assert check_docgen._appendix_lines(text) == 4
+    assert check_docgen._appendix_lines("/// Lead only.\nint x;\n") == 0
+
+
+def test_the_ratchet_refuses_an_appendix_that_grew(monkeypatch):
+    """Warnings that fall while the appendix grows were moved, not cut, so the appendix only shrinks too.
+    A baseline written before the number existed carries no row, and a first run must not fail on that."""
+    import check_docgen
+    monkeypatch.setattr(check_docgen, "_committed_counts", lambda: {"(total)": 10, "(appendix lines)": 100})
+    assert check_docgen._ratchet([], 100) == [], "held: silent"
+    assert check_docgen._ratchet([], 90) == [], "cut: silent"
+    assert check_docgen._ratchet([], 120) == [("(appendix lines)", 100, 120)]
+    monkeypatch.setattr(check_docgen, "_committed_counts", lambda: {"(total)": 10})
+    assert check_docgen._ratchet([], 120) == [], "no baseline yet: the first run records it"
 
 
 def test_the_ratchet_catches_a_rule_the_baseline_never_had(monkeypatch):

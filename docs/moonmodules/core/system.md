@@ -39,6 +39,8 @@ WiFi / Ethernet connectivity, static-IP configuration, RSSI and TX-power reporti
 - `txPowerSetting`: caps the radio's transmit power for a board that browns out; 0 lifts it.
 - read-only: `mode`, the interface in use, with `rssi` / `txPower` (dBm) on a live radio.
 
+**No DHCP server on an Ethernet-only build?** After about 20 seconds without a lease the device gives itself a `169.254.x.y` address (link-local). A computer on the same network without DHCP does the same, so open `<name>.local` in its browser and set a static address under `addressing`. A DHCP server that appears later still wins. Builds with WiFi try WiFi next, then their own access point.
+
 Detail: [technical](moxygen/NetworkModule.md)
 
 [Tests](../../reference/tests/unit-tests.md#networkmodule)

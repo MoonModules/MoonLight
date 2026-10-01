@@ -19,7 +19,7 @@ column into a ribbon: at the worst, 3,416 characters of description in a cell 44
 page wide. The rule and its limits are in documentation-standards.md § The card; this
 script owns the measuring.
 
-Where the overflow goes is the point, and there are exactly two homes:
+Over a limit, cut first. What survives the cut, and only that, has exactly two homes:
 
   * Behavior of the module itself -> the `///` comments in its .h, which reach the reader
     through the generated technical page the card already links. Free, and it cannot drift
@@ -88,8 +88,8 @@ PREVIEWLESS_PAGES = _hooks.PREVIEWLESS_PAGES
 #
 # A card is read across a row; a member comment is read beside the thing it describes,
 # and the generated page shows its first sentence as the summary. So the budget is one
-# line, and a deep dive goes after `@moreinfo` where a post-process moves it below the
-# member lists. The word cap is 30: a sentence is one thought and past twenty it is
+# line: cut first, and only a fact neither the code nor the spec says goes after `@moreinfo`.
+# The word cap is 30: a sentence is one thought and past twenty it is
 # usually two, but that is writing advice, and a gate stops a commit only on a real
 # ramble. Measured over the tree, 20 fired on the median sentence and 30 leaves the
 # outliers alone. Vale's SentenceLength carries the same 30 as a suggestion.
@@ -472,6 +472,42 @@ def _headers():
                     continue
                 seen.add(rel)
                 yield rel
+
+
+def _appendix_lines(text: str) -> int:
+    """How many `///` lines follow an `@moreinfo` in one file: the depth its comments hold outside the code."""
+    n, inside = 0, False
+    for line in text.split("\n"):
+        s = line.strip()
+        if not s.startswith("///"):
+            inside = False
+        elif inside:
+            n += 1
+        elif re.match(r"///\s*@moreinfo\b", s):
+            inside = True
+    return n
+
+
+def _appendix_total() -> int:
+    """The tree's appendix size, ratcheted so a cleanup cannot pass by moving comments rather than cutting them."""
+    return sum(_appendix_lines((ROOT / rel).read_text(encoding="utf-8")) for rel in _headers())
+
+
+def _appendix_growth() -> list:
+    """The changed files whose appendix grew against HEAD, so a rise names where it came from."""
+    import subprocess
+    r = subprocess.run(["git", "diff", "--name-only", "HEAD"], cwd=ROOT, capture_output=True, text=True)
+    covered = {rel.as_posix() for rel in _headers()}
+    out = []
+    for rel in r.stdout.split():
+        if rel not in covered:
+            continue
+        old = subprocess.run(["git", "show", f"HEAD:{rel}"], cwd=ROOT, capture_output=True, text=True)
+        was = _appendix_lines(old.stdout) if old.returncode == 0 else 0
+        now = _appendix_lines((ROOT / rel).read_text(encoding="utf-8"))
+        if now > was:
+            out.append((rel, was, now))
+    return out
 
 
 def _sentences(text: str):
@@ -987,9 +1023,7 @@ def _header_rules(rel: str, text: str):
                 out.append((f"{rel}::line {start + 1}",
                             f"lead {chars} chars > {MAX_RUN_CHARS}"))
         else:
-            # Both kinds of file. A `.cpp` carries a file lead with its own `@moreinfo` appendix
-            # exactly as a header does, so "move the deep dive after @moreinfo" names a place
-            # that exists there too: the rule was scoped away on a reason that does not hold.
+            # Both kinds of file: a `.cpp` carries a file lead with its own `@moreinfo` appendix exactly as a header does.
             #
             # Structure discounts here exactly as it does on the `//` cap. Without that, one
             # marker exempted a bulleted list and the other did not, so the same six lines were
@@ -999,7 +1033,7 @@ def _header_rules(rel: str, text: str):
             if prose > MAX_MEMBER_DOC:
                 out.append((f"{rel}::{_declared_key(nxt, start)}",
                             f"member comment {prose} lines > {MAX_MEMBER_DOC}: "
-                            f"a deep dive goes after @moreinfo"))
+                            f"cut it to one line"))
         for k in range(start, end):
             # PER SENTENCE, not per line. The no-wrap rule makes a line a paragraph, so a line
             # holding three short sentences is correct and a single rambling one is not: counting
@@ -1493,7 +1527,7 @@ def _doc_area(path: str) -> str:
     return "(unassigned)"
 
 
-def _write_report(found) -> None:
+def _write_report(found, appendix=None) -> None:
     """The current state as a tracked page, so its git history is the trend.
 
     The baseline records WHICH cards are tolerated. This records HOW MUCH is left, per page
@@ -1519,6 +1553,9 @@ def _write_report(found) -> None:
            "the trend is this file's git history. The list only shrinks.", "",
            f"**{len(errs)} error(s)** and **{len(warns)} warning(s)** "
            f"across {len(by_page)} page(s).", "",
+           *([f"**{appendix} appendix line(s)** after `@moreinfo`. This only falls as well: a cleanup "
+              "cuts first, and moves only what neither the code, the test name nor the spec says.", ""]
+             if appendix is not None else []),
            "An error is in a file that generates a documentation page, a header or a catalog page, "
            "so the finding is a defect in what gets published and it fails the gate. A warning is "
            "in an implementation file, which publishes nothing: its comments are a note to the "
@@ -1677,10 +1714,13 @@ def _committed_counts():
         m = re.match(r"^\*\*\d+ error\(s\)\*\* and \*\*(\d+) warning\(s\)\*\* across", line.strip())
         if m and "(total)" not in counts:
             counts["(total)"] = int(m.group(1))
+        m = re.match(r"^\*\*(\d+) appendix line\(s\)\*\*", line.strip())
+        if m:
+            counts["(appendix lines)"] = int(m.group(1))
     return counts or None
 
 
-def _ratchet(found) -> list:
+def _ratchet(found, appendix=None) -> list:
     """Which rules rose against the committed report. The list only shrinks.
 
     A warning is staged work, and staged work that grows is not a sweep. Per RULE rather than on
@@ -1700,8 +1740,12 @@ def _ratchet(found) -> list:
     # The UNION, not the baseline alone: the report lists only rules the run found, so a rule at
     # zero is absent from `base` and iterating it let that rule rise silently while the total fell.
     # A rule the baseline never saw starts at zero, which is what "only shrinks" means for it too.
-    return [(rule, base.get(rule, 0), now.get(rule, 0))
-            for rule in sorted(set(base) | set(now)) if now.get(rule, 0) > base.get(rule, 0)]
+    risen = [(rule, base.get(rule, 0), now.get(rule, 0))
+             for rule in sorted((set(base) | set(now)) - {"(appendix lines)"}) if now.get(rule, 0) > base.get(rule, 0)]
+    # Its own line, because warnings that fall while the appendix grows were moved, not cut.
+    if appendix is not None and "(appendix lines)" in base and appendix > base["(appendix lines)"]:
+        risen.append(("(appendix lines)", base["(appendix lines)"], appendix))
+    return risen
 
 
 def main() -> int:
@@ -1714,24 +1758,28 @@ def main() -> int:
     # reviewer reads, and its git history is the only record of the sweep's trend. Written on
     # every run with no way to suppress it: the run still prints and still returns its exit
     # code, so writing it costs a caller nothing and a skipped write loses the number to beat.
-    _write_report(found)
+    appendix = _appendix_total()
+    _write_report(found, appendix)
 
     errors = [f for f in found if _blocks(f[0], f[1])]
     warnings = [f for f in found if not _blocks(f[0], f[1])]
 
-    if not found:
+    risen = _ratchet(found, appendix)
+    if not found and not risen:
         print(f"Docgen check: clean. Limits: description {MAX_DESC} "
               f"({MAX_DESC_VISUAL} visual), one control {MAX_CONTROL} "
               f"({MAX_CONTROL_VISUAL} visual), one comment line, "
               f"{MAX_DOC_WORDS} words.")
         return 0
 
-    risen = _ratchet(found)
     print(f"Docgen check: {len(errors)} error(s), {len(warnings)} warning(s).\n")
     if risen:
-        print("WARNINGS ROSE against the committed report. The list only shrinks:")
+        print("ROSE against the committed report. These only shrink:")
         for rule, was, now in risen:
             print(f"  {rule}: {was} -> {now}")
+            if rule == "(appendix lines)":
+                for rel, a, b in _appendix_growth():
+                    print(f"    {rel}: {a} -> {b}")
         print("  Fix them, or say in the commit why the rule itself changed.\n")
     if errors:
         _report(errors, "ERRORS, in files that generate a page. These fail the gate.")
@@ -1740,9 +1788,8 @@ def main() -> int:
             print()
         _report(warnings, "WARNINGS, in files that generate no page. Worth fixing, "
                           "not worth blocking a commit.")
-    print("\nMove the overflow, do not trim it: module behavior into the header's ///"
-          "\n(the technical page the card links), cross-module rationale into a"
-          "\n`## <Name>, details` section on the same page."
+    print("\nCut first. Move only what neither the code, the test name nor the spec says,"
+          "\nand prefer an existing home over a new appendix section."
           "\nRules: docs/contributing/documentation-standards.md § The card.")
     return 1 if (errors or risen) else 0
 
