@@ -33,7 +33,7 @@ A modest month on `main`: new effect and usermod options, a handful of preset, W
 - Several long-running reports were closed: ESP8266 Wemos D1 mini unable to join the router on 14.1 (#3690), the "WLED-AP" network not appearing on NodeMCU (#5100), flicker on the second output (#2268), and Alexa sync problems on 0.15.1 (#4875).
 
 **Watching**
-- A "Version 17 - key features" issue (#5867) is gathering what the community wants from the next major version.
+- A maintainer's "Version 17 - key features" issue (#5867) lists the topics proposed for the next major version: a realtime review, a new audio-reactive model, the LED bus, and a new settings UI.
 - The Presets UI sorting and the Time Controlled Presets dropdowns are both reported as confusing or empty on some devices (#5841, #5840, #5836).
 - ESP-NOW toggling freezes the CPU on 16.0 after the peer list is populated (#5871).
 - Ethernet DHCP hostname sometimes advertises as "tasmota" after upgrading to 16.x (#5831).

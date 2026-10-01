@@ -378,7 +378,7 @@ The 1978 formation marching down the wall: five ranks stepping sideways in the t
 - `dropY`: how far a wall turn drops it, in pixels.
 - `size`: magnification per art pixel; 1 on a matrix, 2 or more on a wall.
 - `audioReactive`: the formation steps on transients, locking to the track.
-- `player`: the cannon, for a fader or an input; idle 10 s, the game plays it.
+- `player`: the cannon, for a fader or an input; idle, the game plays it.
 - `fire`: a button that fires the cannon, one shot in the air at a time.
 
 The invaders take their body color from the active palette.
@@ -421,7 +421,7 @@ Two paddles rallying a ball, the attract mode of the 1972 original where both pl
 - `reflex`: how sharply a paddle chases. Below full it lags a fast ball.
 - `spriteBall`: swap the square for a sprite, re-picked on every hit.
 - `size`: integer magnification of the sprite ball, shown while it is on.
-- `player1`: the left paddle, for a fader or input; idle 10 s, the game plays it.
+- `player1`: the left paddle's height, for a fader or input; idle, the game plays.
 - `player2`: the right paddle, the same way.
 
 Uses the global palette.
@@ -444,7 +444,7 @@ A paddle knocking down a wall of bricks, the attract mode of the 1976 original w
 - `reflex`: how sharply the paddle chases. Below full it lags a steep ball.
 - `descend`: the wall creeps down and new rows enter at the top.
 - `audioReactive`: columns glow with their bands, the palette follows the volume.
-- `player`: the paddle, for a fader or an input; idle 10 s, the game plays it.
+- `player`: the paddle, for a fader or an input; idle, the game plays it.
 
 The brick rows take their colors from the active palette.
 

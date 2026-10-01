@@ -101,6 +101,32 @@ The travel is mapped into **the control's own range**, so a pedal is configured 
 
 Detail: [technical](moxygen/AnalogService.md)
 
+<a id="gamepad"></a>
+
+### Gamepad
+
+A Service added per board: **a gamepad's buttons and sticks**, each driving a control through the same rows the other input services use. The pad plugs into the computer showing the interface, over USB or Bluetooth, and the browser reports it, so it works on every chip.
+
+<img src="../../assets/core/GamepadService.png" width="300" alt="Gamepad service controls">
+
+- `inputs`: the rows, each a button or stick of the standard layout, a `learn` and a target.
+
+A fresh service starts with rows onto the surface: the left stick's Y onto fader 1, the right stick's Y onto fader 2, the left stick's X onto fader 3, and A onto switch 1. Assign those on the [Control](system.md#control) card to play a game. ⌄ details.
+
+Detail: [technical](moxygen/GamepadService.md)
+
+<a id="midi"></a>
+
+### MIDI
+
+A Service added per board: **a MIDI control desk** driving the control surface, decoded as Mackie Control. The desk plugs into the computer showing the interface and the browser reports it, so it works on every chip; a Mackie desk such as the iCON QCon or the Behringer X-Touch in MC mode works without setup.
+
+<img src="../../assets/core/MidiService.png" width="300" alt="MIDI service controls">
+
+Faders move the surface's faders, the knobs turn its encoders, and each channel's SELECT button flips its switch. A hand on a motorized fader holds the surface's push for it, so a motor never fights the hand. ⌄ details.
+
+Detail: [technical](moxygen/MidiService.md)
+
 ### MoonLiveService
 
 A Service added per board: **a MoonLive script that reads hardware and drives controls**. The flexible half of the input story, and the twin of a scripted effect.
@@ -131,6 +157,12 @@ Both input services share three row fields, because what happens after an input 
 - `value`: what `set` writes, or the signed nudge `delta` applies. Unused by `toggle`.
 
 Only a `set` row acts on the release. A toggle or a delta acting on both edges would fire twice for one push.
+
+## Gamepad, details
+A browser lists a pad only once one of its buttons is pressed with the page open, a rule against fingerprinting a visitor's hardware. Chrome, Firefox and every browser built on Chrome list a pad only on a secure origin. The desktop app's page on `localhost` is one; a device's plain `http://` page is not, unless its address is added under the browser's `unsafely-treat-insecure-origin-as-secure` flag. Safari lists a pad on any page, and so does every browser on an iPhone or iPad, since they all run on Safari's engine. So a pad paired with a phone or tablet plays on any board's page with no computer involved. To check that the browser sees a pad, and which standard button or axis each control reports, open [hardwaretester.com/gamepad](https://hardwaretester.com/gamepad) in the same browser: if a button lights there, it reaches MoonLight too. The inputs are named as SDL's GameController API names them (`a`, `b`, `dpup`, `leftx`). That is the vocabulary GameControllerDB maps hundreds of controllers onto, so one set of rows works with any pad the browser reports in the standard mapping; a pad it does not recognize reports its own order, and learn binds it all the same. A button runs as a press, and a `set` row clears again on the release. A stick follows the surface's convention, up and right being more, so a stick, a fader and a paddle point the same way; the service flips the browser's Y, which counts down the screen. It writes its position rescaled into the target's range, and only once it moves past a small deadband. A pad's first stick positions are taken as rest, so plugging one in with a stick off-center moves nothing, while the button press that makes the browser show the pad still counts. A switch on the surface driving a button control, such as Space Invaders' `fire`, presses it on the way down only.
+
+## MIDI, details
+The browser reads the desk with the Web MIDI API, which Chrome, Edge and Firefox offer on a secure origin only, so it works on the desktop app's page on `localhost`; Safari has no Web MIDI. The first time, the browser asks permission to use MIDI devices. The decoding follows Mackie Control: a fader is 14-bit pitch bend on its own channel, its touch sensor a note from 0x68, a knob a relative turn on a control change from 0x10, and SELECT a note from 0x18. The master fader has no slot on the surface and is ignored.
 
 ## Audio, details
 #### Microphone wiring

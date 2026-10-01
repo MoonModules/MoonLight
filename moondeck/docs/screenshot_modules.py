@@ -182,6 +182,8 @@ CORE_MODULES = [
     "I2cScanModule",
     "InfraredService",
     "ButtonService",
+    "GamepadService",
+    "MidiService",
     "MoonLiveService",
 ]
 
@@ -206,6 +208,8 @@ CORE_NAV_ROOT = {
     "AnalogService": "Services",
     "InfraredService": "Services",
     "ButtonService": "Services",
+    "GamepadService": "Services",
+    "MidiService": "Services",
     "MoonLiveService": "Services",
     "I2cScanModule": "SystemModule",
 }

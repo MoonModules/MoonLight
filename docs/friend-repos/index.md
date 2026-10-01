@@ -41,7 +41,7 @@ Concrete ideas the digests surfaced, waiting for a decision. Each leaves this li
 - **Test MoonLive against hpwit's three compiler bug patterns** ([hpwit-new-parser](hpwit-new-parser.md), September 2026): a loop variable declared before its `for` freed too early, a short script heavy in external calls whose size estimate drops the final return, and an optimizer pass that removes the only definition of a register read later.
 - **Run every effect with the clock started near a wraparound** ([wled-WLED](wled-WLED.md), September 2026): WLED's Stream effect broke after an hour at top speed from a 32-bit time compared against a 16-bit one.
 - **Temporal dithering and RGBW gamut mapping at output** ([FastLED-FastLED](FastLED-FastLED.md), September 2026): applied at show time, with a power limiter that charges for the extra white diode; overlaps the parked 16-bit Layer work.
-- **Read WLED's "Version 17 - key features" issue (#5867)** ([wled-WLED](wled-WLED.md), September 2026): a ready-made list of what LED users ask for next.
+- **Read WLED's "Version 17 - key features" issue (#5867)** ([wled-WLED](wled-WLED.md), September 2026): the topics a maintainer proposes for WLED's next major version, worth comparing against our own.
 
 ## Refreshing
 

@@ -44,9 +44,9 @@ public:
     bool spriteBall = false;
     /// Pixels per art pixel, when the ball is a sprite.
     uint8_t size = 1;
-    /// The left paddle's position, top to bottom; follows the game until an input writes it.
+    /// The left paddle's height, bottom to top as a fader reads; follows the game until an input writes it.
     uint8_t player1 = 128;
-    /// The right paddle's position, the same way.
+    /// The right paddle's height, the same way.
     uint8_t player2 = 128;
 
     /// Publish the rally speed, the paddles and the ball's look, its size only while it is a sprite.
@@ -91,11 +91,12 @@ public:
         uint8_t* players[2] = {&player1, &player2};
         for (uint8_t p = 0; p < 2; p++) {
             human_[p] = seat_[p].held(elapsed());
-            if (human_[p]) py_[p] = static_cast<int32_t>(*players[p]) * kCourtScale / 255;
+            // The court counts down from the top, a fader up from the bottom.
+            if (human_[p]) py_[p] = static_cast<int32_t>(255 - *players[p]) * kCourtScale / 255;
         }
         step(rally_.phase(kCourtScale));
         for (uint8_t p = 0; p < 2; p++)
-            if (!human_[p]) *players[p] = static_cast<uint8_t>(py_[p] * 255 / kCourtScale);
+            if (!human_[p]) *players[p] = static_cast<uint8_t>(255 - py_[p] * 255 / kCourtScale);
         render(cv);
     }
 

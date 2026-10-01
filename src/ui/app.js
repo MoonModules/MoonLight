@@ -8302,3 +8302,90 @@ function buildFilePathControl(row, label, key, moduleName, ctrl) {
     });
     return row;
 }
+
+// ---- Gamepad bridge ------------------------------------------------------------------------------
+// The browser reads a pad with the standard Gamepad API and writes its state into every
+// GamepadService's hidden `pad` control, so a pad the computer knows (USB or Bluetooth) plays on any
+// chip. The device does the mapping; this only reports the state, on change and at a person's rate.
+// Chrome shows a pad only after one of its buttons is pressed with the page open.
+const GAMEPAD_SEND_MS = 33;   // 30 Hz: faster than a hand, slower than the screen
+
+// "buttons,leftx,lefty,rightx,righty": the 17 standard buttons as bits, each axis 0..255 with 128 at rest.
+function encodePad(buttons, axes) {
+    let bits = 0;
+    for (let i = 0; i < 17 && i < buttons.length; i++) if (buttons[i]) bits |= (1 << i);
+    const axis = i => Math.max(0, Math.min(255, Math.round(((axes[i] ?? 0) + 1) * 127.5)));
+    return [bits >>> 0, axis(0), axis(1), axis(2), axis(3)].join(",");
+}
+
+let gamepadLast = "";
+let gamepadSentAt = 0;
+// A hidden tab stops the loop with the last state sent, so the pad is released first, or a held button would stay down.
+document.addEventListener("visibilitychange", () => {
+    if (!document.hidden || !gamepadLast || gamepadLast === "0,128,128,128,128") return;
+    gamepadLast = "0,128,128,128,128";
+    for (const m of allModules().filter(m => m.type === "GamepadService")) sendControl(m.name, "pad", gamepadLast);
+});
+function gamepadLoop(now) {
+    requestAnimationFrame(gamepadLoop);
+    if (now - gamepadSentAt < GAMEPAD_SEND_MS || !navigator.getGamepads) return;
+    if (!state || !Array.isArray(state.modules)) return;
+    const services = allModules().filter(m => m.type === "GamepadService");
+    if (!services.length) return;
+    const pad = Array.from(navigator.getGamepads()).find(p => p && p.connected);
+    if (!pad) return;
+    const encoded = encodePad(pad.buttons.map(b => b.pressed), pad.axes);
+    if (encoded === gamepadLast) return;
+    gamepadLast = encoded;
+    gamepadSentAt = now;
+    for (const m of services) sendControl(m.name, "pad", encoded);
+}
+requestAnimationFrame(gamepadLoop);
+
+// ---- MIDI bridge ---------------------------------------------------------------------------------
+// The browser reads a MIDI desk with the Web MIDI API and writes each batch of messages into every
+// MidiService's hidden `midi` control, the same path the gamepad takes. Chrome, Edge and Firefox
+// offer Web MIDI on a secure origin (localhost); Safari has none. Access is requested only once a
+// MidiService exists, since asking shows the user a permission prompt.
+const MIDI_SEND_MS = 33;
+const MIDI_BATCH_MAX = 60;   // messages per write, well inside the service's text buffer
+
+// "hex hex...": each message in hex; the device decodes every write, so two identical batches both count.
+function encodeMidi(messages) {
+    const hex = m => Array.from(m, b => b.toString(16).padStart(2, "0")).join("");
+    return messages.map(hex).join(" ");
+}
+
+let midiAsked = false;
+let midiSentAt = 0;
+const midiQueue = [];
+function midiListen(access) {
+    for (const input of access.inputs.values())
+        // System messages (clock, active sensing) carry nothing a surface uses.
+        input.onmidimessage = e => {
+            if (e.data[0] >= 0xF0) return;
+            midiQueue.push(e.data);
+            // A hidden tab stops the drain, so the oldest messages go rather than the queue growing.
+            if (midiQueue.length > 4 * MIDI_BATCH_MAX) midiQueue.splice(0, midiQueue.length - 4 * MIDI_BATCH_MAX);
+        };
+}
+function midiLoop(now) {
+    requestAnimationFrame(midiLoop);
+    if (!state || !Array.isArray(state.modules) || !navigator.requestMIDIAccess) return;
+    const services = allModules().filter(m => m.type === "MidiService");
+    if (!services.length) return;
+    if (!midiAsked) {
+        midiAsked = true;
+        navigator.requestMIDIAccess().then(access => {
+            midiListen(access);
+            access.onstatechange = () => midiListen(access);   // a desk plugged in later
+        }).catch(err => console.warn("[midi] access refused", err));
+    }
+    if (!midiQueue.length || now - midiSentAt < MIDI_SEND_MS) return;
+    const batch = midiQueue.splice(0, MIDI_BATCH_MAX);
+    midiSentAt = now;
+    const encoded = encodeMidi(batch);
+    for (const m of services) sendControl(m.name, "midi", encoded);
+}
+requestAnimationFrame(midiLoop);
+

@@ -1,10 +1,10 @@
 /// @module ControlModule
 /// @also FilesystemModule, Scheduler
 
-/// Presets end to end: a preset is a file, saving writes one, selecting reads it back.
-/// These pin the behavior a user would describe, save a look, change it, get it back, plus the ways a preset file can be wrong, since a device that loses its state to a bad file is worse than one with no presets at all.
+/// Presets end to end: a preset is a file, saving writes one, selecting reads it back, and a bad file must not cost the device its state.
 
 #include "doctest.h"
+#include "core/services/MidiService.h"
 
 #include <vector>
 #include "core/system/ControlModule.h"
@@ -61,7 +61,8 @@ struct Device {
         scheduler.setup();
     }
 
-    ~Device() { std::filesystem::remove_all(root_); }   // don't leave a directory per test behind
+    // The surface seat is static: freeing this ControlModule vacates it, or the first test's would answer active() for every later one.
+    ~Device() { delete control; std::filesystem::remove_all(root_); }
 
     mm::MoonModule* add(mm::MoonModule* parent, const char* type) {
         auto* m = mm::ModuleFactory::create(type);
@@ -72,8 +73,7 @@ struct Device {
         return m;
     }
 
-    /// Set a control's text value.
-    /// The change hook is NOT fired here, a test that needs it calls press() explicitly, which is what the UI does as a second step.
+    /// Set a control's text value without firing the change hook, which a test fires with press() as the UI does.
     void setText(const char* controlName, const char* value) {
         auto& cs = control->controls();
         for (uint8_t i = 0; i < cs.count(); i++) {
@@ -197,9 +197,7 @@ TEST_CASE("ControlModule refuses to save a preset with no name") {
     CHECK(std::string(d.status()).find("name") != std::string::npos);
 }
 
-// A preset carries exactly ONE role, so a file written by an older build that names several is listed but not applied.
-// Applying it would do something other than what its name suggests.
-// It stays on the grid (and on disk) so it can be seen and deleted, rather than silently disappearing.
+// A preset carries exactly one role, so a file from an older build naming several is listed and deletable but never applied.
 TEST_CASE("ControlModule refuses to apply a preset carrying several roles") {
     Device d;
     auto* layer = d.add(d.layers, "Layer");
@@ -259,7 +257,7 @@ TEST_CASE("ControlModule survives a corrupt preset file") {
 
     d.control->setup();
     REQUIRE(d.control->listRowCount() == 1);                         // the file IS listed
-    // Apply returns false: the row exists and was attempted, but nothing in it was usable. Asserting the return as well as the tree is what separates "rejected the bad file" from "silently did nothing at all", which an unchanged tree alone cannot tell apart.
+    // Apply returns false: the row was attempted but nothing was usable. Asserting the return as well as the tree tells a rejected bad file from doing nothing.
     CHECK_FALSE(d.control->setListRowField(d.firstRowId(), "apply", "{}"));
 
     CHECK(d.layers->childCount() == 1);                              // the tree is untouched
@@ -334,7 +332,7 @@ TEST_CASE("ControlModule applies a preset from either the pad or the row button"
     CHECK(std::strcmp(d.effectType(), "NoiseEffect") == 0);
 }
 
-// Pads can be dragged into the order the user wants, so a grid can be arranged to match a physical control surface, and that arrangement survives a rescan, the filesystem's own file order is not the order anyone chose.
+// Pads can be dragged into the user's order, and that order survives a rescan because it lives in the files, not in the filesystem's order.
 TEST_CASE("ControlModule keeps the pad order the user arranged") {
     Device d;
     d.add(d.layers, "Layer");
@@ -365,7 +363,7 @@ TEST_CASE("ControlModule keeps the pad order the user arranged") {
     CHECK(nameAt(0) == last);
 }
 
-// A preset says which roles it covers, so a pad can show the same emoji the module cards use and a user can tell a portable look from one that carries the hardware.
+// A preset says which roles it covers, so a pad shows the matching emoji and a user can tell a portable look from a device snapshot.
 TEST_CASE("ControlModule reports the roles a preset covers") {
     Device d;
     d.add(d.layers, "Layer");
@@ -378,7 +376,7 @@ TEST_CASE("ControlModule reports the roles a preset covers") {
     CHECK(row.find("\"roles\":[\"effects\"]") != std::string::npos);   // Effects is captured by default
 }
 
-// Fader 1 rides the global brightness every driver scales by, through the same setControl primitive IR and the network bridges use, so a hardware surface bound to it later drives the device the same way the on-screen fader does.
+// Fader 1 rides the global brightness through the same setControl primitive IR and the network bridges use.
 TEST_CASE("ControlModule fader 1 drives the global brightness") {
     Device d;
     auto brightness = [&] {
@@ -444,16 +442,14 @@ TEST_CASE("ControlModule saves a preset onto the chosen pad") {
     CHECK(row.find("\"slot\":20") != std::string::npos);
 }
 
-// encoder1 selects the palette; the rest are unbound until the assignment UI lands, so they must be inert rather than driving something by accident.
-// Brightness is the canary: it belongs to fader1, and no encoder may touch it.
-// A surface control's own name, not the hidden assignment beside it.
-// Every fader, switch and encoder now has a "<name>Target" control holding what it drives, and a prefix match counts both.
+// A surface control's own name, not the "<name>Target" assignment control beside it.
 static bool isSurfaceControl(const char* name, const char* prefix) {
     const size_t plen = std::strlen(prefix);
     if (std::strncmp(name, prefix, plen) != 0) return false;
     return std::strstr(name, "Target") == nullptr;
 }
 
+// encoder1 selects the palette and the rest are unbound, so they are inert; brightness belongs to fader1 and no encoder may touch it.
 TEST_CASE("only the bound encoder drives anything") {
     Device d;
     auto brightness = [&] {
@@ -477,7 +473,7 @@ TEST_CASE("only the bound encoder drives anything") {
 }
 
 
-// Presets hold their roles independently, which is what lets a surface show a layout choice and a look choice lit at the same time. Applying a layer preset replaces the layer holder and leaves the layout one alone, so both pads stay lit and the grid says what is on across all four roles.
+// Presets hold their roles independently, so a layout pad and a look pad stay lit together and applying a layer preset leaves the layout role alone.
 TEST_CASE("ControlModule keeps one active preset per captured role") {
     Device d;
     auto* layer = d.add(d.layers, "Layer");
@@ -554,7 +550,7 @@ TEST_CASE("ControlModule renames a preset by renaming its file") {
     CHECK(std::strcmp(d.effectType(), "NoiseEffect") == 0);
 }
 
-// A preset that captures nothing the device has still leaves a usable surface: the row exists, and applying it reports failure rather than silently claiming success. Pins the distinction the status line depends on, "applied" and "nothing applied" must not look the same to the caller.
+// A preset capturing nothing the device has still lists, and applying it reports failure, so "applied" and "nothing applied" differ for the status line.
 TEST_CASE("ControlModule reports an apply that changed nothing") {
     Device d;
     d.add(d.layers, "Layer");
@@ -579,9 +575,7 @@ TEST_CASE("ControlModule reports an apply that changed nothing") {
 }
 
 
-// A preset name becomes a file name, so it must not be able to steer the path out of the preset folder.
-// ESP32's filesystem layer does no path normalization (the desktop one does), so a name carrying `..` would escape on device while looking clean on a developer's machine, and delete and rename write through the same path.
-// The name control's validator is what closes that.
+// A preset name becomes a file name, and ESP32's filesystem does no path normalization, so the name validator must refuse anything that could escape the folder.
 TEST_CASE("ControlModule refuses a preset name that could escape its folder") {
     Device d;
     d.add(d.layers, "Layer");
@@ -616,9 +610,7 @@ TEST_CASE("ControlModule refuses a preset name that could escape its folder") {
 }
 
 
-// Renaming onto a name that already exists must refuse rather than overwrite.
-// The write would clobber the other preset and the follow-up remove would delete the source, losing a preset the user never named.
-// Same refuse-on-collision stance the pad move takes.
+// Renaming onto an existing name refuses, since the write would clobber the other preset and the remove would then delete the source.
 TEST_CASE("ControlModule refuses to rename a preset over an existing one") {
     Device d;
     auto* layer = d.add(d.layers, "Layer");
@@ -641,7 +633,7 @@ TEST_CASE("ControlModule refuses to rename a preset over an existing one") {
 }
 
 
-// The saved file must be valid JSON, not merely readable by our own first-match key helpers: a preset is downloaded, edited and re-uploaded by users and tools. The separator between the header and each namespaced subtree is easy to get wrong in a way our lenient reader would not notice.
+// The saved file is valid JSON, not merely readable by our lenient helpers, because users download, edit and re-upload presets.
 TEST_CASE("ControlModule writes a preset that is well-formed JSON") {
     Device d;
     auto* layer = d.add(d.layers, "Layer");
@@ -671,7 +663,7 @@ TEST_CASE("ControlModule writes a preset that is well-formed JSON") {
 }
 
 
-// An applied preset must SURVIVE a reboot. Applying rebuilds the live tree, but the boot loader restores from the config file -- so without marking the tree dirty the device renders the preset now and comes back to the previous look after a restart, which reads as "the preset did not save".
+// An applied preset survives a reboot: applying marks the tree dirty, else the boot loader restores the previous look from the config file.
 TEST_CASE("ControlModule persists the look a preset applied") {
     Device d;
     auto* layer = d.add(d.layers, "Layer");
@@ -704,7 +696,7 @@ TEST_CASE("ControlModule persists the look a preset applied") {
 }
 
 
-// Only a pure look may be reachable from outside. A preset that also carries Drivers or Layouts rewires pins or geometry, and an external surface (a voice assistant, an automation) must not be able to do that while it thinks it is picking a color scheme.
+// Only a pure look is reachable from outside: a preset carrying Drivers or Layouts rewires pins or geometry, which a voice assistant must not do.
 TEST_CASE("ControlModule exposes only look-only presets to external surfaces") {
     Device d;
     auto* layer = d.add(d.layers, "Layer");
@@ -735,7 +727,7 @@ TEST_CASE("ControlModule exposes only look-only presets to external surfaces") {
 }
 
 
-// The Home Assistant effect list is sized from what the device actually has, not from a fixed cap: a cap would either reserve RAM a small setup never uses, or silently publish nothing once the list outgrew it (a truncated config is refused, never sent, so the entity would just vanish).
+// The Home Assistant look list is sized from the presets that exist, since a fixed cap wastes RAM or silently publishes nothing once outgrown.
 TEST_CASE("ControlModule sizes the Home Assistant look list to the presets that exist") {
     Device d;
     auto* layer = d.add(d.layers, "Layer");
@@ -772,9 +764,7 @@ TEST_CASE("ControlModule sizes the Home Assistant look list to the presets that 
 }
 
 
-// Home Assistant caches the preset list and only re-fetches when the device's reported revision changes.
-// A value that can stand still across a mutation means a preset saved, renamed or deleted after HA set the device up never appears in its dropdown, the endpoint stays correct while HA shows a stale copy forever.
-// The revision is a COUNTER, not a timestamp, precisely so two mutations inside the same second still read as two changes, which also makes this test deterministic, with no clock involved.
+// HA re-fetches the preset list only when the reported revision changes, so the revision is a counter that moves on every mutation, even within one second.
 TEST_CASE("ControlModule bumps its revision on every preset-set change") {
     Device d;
     d.add(d.layers, "Layer");
@@ -796,9 +786,7 @@ TEST_CASE("ControlModule bumps its revision on every preset-set change") {
 }
 
 
-// A pad holds one preset.
-// Saving a DIFFERENT name onto an occupied pad would leave two files claiming the same cell, of which the grid can render only one, so the save refuses and says who holds the pad.
-// Saving the SAME name on its own pad is the normal save-over flow and still works.
+// A pad holds one preset: a different name onto an occupied pad refuses and names the holder, while the holder saving over its own pad works.
 TEST_CASE("ControlModule refuses to save a new preset onto an occupied pad") {
     Device d;
     auto* layer = d.add(d.layers, "Layer");
@@ -833,7 +821,7 @@ TEST_CASE("ControlModule refuses to save a new preset onto an occupied pad") {
 }
 
 
-// A pad must go dark when its preset is deleted. The active-role slots refer to a preset BY NAME, so without clearing them the grid keeps lighting a pad for a file that no longer exists, and a new preset saved under the reused name would inherit the lit state.
+// A deleted preset's pad goes dark: active-role slots refer to a name, so they are cleared, else a reused name inherits the lit state.
 TEST_CASE("ControlModule stops showing a deleted preset as active") {
     Device d;
     auto* layer = d.add(d.layers, "Layer");
@@ -865,9 +853,7 @@ TEST_CASE("ControlModule keeps a renamed preset active under its new name") {
     CHECK(std::string(d.control->currentLook()) == "after");
 }
 
-// The switch row: a desk's channel buttons, and the control type an on/off target needs.
-// A fader can only say `on` as 0 or 255, which is a switch pretending to be a slider, so these are their own bank.
-// They sit FIRST because control order is render order and a channel's buttons are above its knob and fader on the surfaces this mirrors.
+// The switch row comes first, above the encoders and faders, because control order is render order and a fader can only say on as 0 or 255.
 TEST_CASE("ControlModule exposes eight switches, ahead of the encoders and faders") {
     Device d;
 
@@ -901,10 +887,7 @@ TEST_CASE("ControlModule exposes eight switches, ahead of the encoders and fader
     REQUIRE(found);   // else a rename makes this test pass by never running its check
 }
 
-// --- Control surfaces -----------------------------------------------------------------------
-//
-// A surface MIRRORS ControlModule's state rather than owning any, which is what lets two attach at once and stay in step.
-// These pin the four properties that make the mirror safe, each of which is a way this class of feature usually fails.
+// A surface mirrors ControlModule's state rather than owning any, so two can attach at once and stay in step.
 
 namespace {
 /// Records what a surface was told, so a test can assert the mirror's decisions rather than a wire.
@@ -935,12 +918,7 @@ void setFader(Device& d, uint8_t index, uint8_t value) {
 }
 }  // namespace
 
-// A surface that attaches mid-show is correct immediately.
-// Without the seed it would show whatever its own defaults were until something happened to change, which on a quiet rig is never.
-//
-// Seeded from the TARGET, not from the mirror's own last value: fader 1 rides Drivers.brightness, so what a connecting surface must be told is what the rig is running at.
-// Setting the mirror byte directly (what this test used to do) asserted the stale reading instead.
-// A surface connecting between ticks was sent the boot default while the rig was at another level.
+// A surface that attaches mid-show is seeded from the target, not the mirror's last value, so it is correct before anything changes.
 TEST_CASE("attaching a surface seeds it with the current state") {
     Device d;
     REQUIRE(d.scheduler.setControl("Drivers", "brightness", "{\"value\":200}")
@@ -953,9 +931,7 @@ TEST_CASE("attaching a surface seeds it with the current state") {
     d.control->removeSurface(&s);
 }
 
-// THE two-way half.
-// A surface that only writes drifts from what it drives, and starts out of step.
-// Switch1 read `off` at boot on a device whose Drivers.on was on, because the surface's own default had never met the target's value.
+// The two-way half: a surface that only writes drifts, so switch1 follows Drivers.on and reads the rig's state at boot.
 TEST_CASE("a switch follows the control it drives, including at startup") {
     Device d;
     RecordingSurface s;
@@ -1021,30 +997,7 @@ TEST_CASE("the mirror sends a control only when its value changed") {
     d.control->removeSurface(&s);
 }
 
-// THE echo guard, and the reason feedback is sampled rather than sent from the write path: a value that came FROM a surface must not be sent back to it. Without this, a fader dragged over two seconds gets last second's position pushed back under the user's finger mid-drag.
-TEST_CASE("a value written through the control path is not echoed back to the surfaces") {
-    Device d;
-    RecordingSurface s;
-    d.control->addSurface(&s);
-    s.clear();
-
-    // The write a surface makes: through setControl, the same primitive the OSC module and the HTTP API use, which is what makes the surface unprivileged.
-    const auto r = d.scheduler.setControl("Control", "fader4", "{\"value\":77}");
-    CHECK(r == mm::Scheduler::SetControlResult::Ok);
-
-    d.control->mirrorToSurfaces();
-    CHECK(s.countFor(mm::SurfaceControl::Fader, 4) == 0);   // it already knows: no echo
-
-    // A change from the DEVICE side still goes out, so suppressing the echo has not gone too far and made the mirror deaf.
-    setFader(d, 4, 200);
-    d.control->mirrorToSurfaces();
-    CHECK(s.countFor(mm::SurfaceControl::Fader, 4) == 1);
-    d.control->removeSurface(&s);
-}
-
-// A hand on a control suppresses feedback to it.
-// Drive a motorised fader while someone is moving it and the device fights the user, which is why a desk reports touch at all.
-// On release it resyncs, rather than the missed value being lost.
+// A hand on a control suppresses feedback so the device does not fight the user, and on release the control resyncs.
 TEST_CASE("a touched control is not driven, and resyncs when released") {
     Device d;
     RecordingSurface s;
@@ -1062,7 +1015,7 @@ TEST_CASE("a touched control is not driven, and resyncs when released") {
     d.control->removeSurface(&s);
 }
 
-// An endless encoder reports MOVEMENT, not position: a detent goes straight to whatever the encoder targets, and the TARGET's own type and bounds decide the result. The surface holds no copy, which is what removed the mirroring the absolute form needed (pull every second, push changes back, remember what each surface was told).
+// An endless encoder reports movement, so a detent steps whatever it targets and the target's own type and bounds decide the result.
 TEST_CASE("an encoder detent steps its target, which owns the value and its bounds") {
     Device d;
     // encoder1 targets Drivers.palette. Reading the TARGET, not the encoder: the encoder has no value to read, and a test asserting on one would be asserting the old contract.
@@ -1086,16 +1039,14 @@ TEST_CASE("an encoder detent steps its target, which owns the value and its boun
     d.control->applyEncoderDelta(0, -2);
     CHECK(palette() == start + 1);
 
-    // The bound is the CONTROL's, not the knob's.
-    // A knob turns forever, and the target stops where its own range does rather than wrapping into a palette that does not exist.
-    // `max` on a Select or a Palette is the option COUNT, so the last valid index is one below it.
+    // The bound is the control's, so the target stops at its range rather than wrapping. `max` on a Select or Palette is the option count, so the last index is one below.
     for (int i = 0; i < 200; i++) d.control->applyEncoderDelta(0, 5);
     CHECK(palette() == max - 1);
     for (int i = 0; i < 200; i++) d.control->applyEncoderDelta(0, -5);
     CHECK(palette() == 0);
 }
 
-// Switch 1 is the master on/off every driver honours, the natural partner to fader 1's brightness: the two controls a lighting desk expects to find first. It sends a BOOL body rather than a number, because the target is a bool control and parseBool reads `true`/`1` but not the 255 a byte path would produce, which is exactly how the OSC switches failed before.
+// Switch 1 is the master on/off every driver honours. It sends a BOOL body, because parseBool reads `true`/`1` but not the 255 a byte path produces, which is how the OSC switches failed.
 TEST_CASE("ControlModule switch 1 drives the global on/off") {
     Device d;
     auto driversOn = [&] {
@@ -1122,7 +1073,7 @@ TEST_CASE("ControlModule switch 1 drives the global on/off") {
 }
 
 
-// The display strip: a knob that selects a palette has to read as the palette, not as a number. The name lives in the light domain and ControlModule is core, so this also pins that the seam carrying it (JsonSink::requestName into the PaletteOptionsFn) actually works end to end.
+// The display strip names what a knob selected, not its number. The name lives in the light domain, so this also pins the JsonSink::requestName seam end to end.
 TEST_CASE("the display strip names what an encoder selected, not its number") {
     Device d;
 
@@ -1157,7 +1108,7 @@ TEST_CASE("the display strip names what an encoder selected, not its number") {
     CHECK(hasLetter);
 }
 
-// The surface's bindings were three hardcoded names (fader1 to brightness, switch1 to on, encoder1 to palette). They are assignments now: a string per control, settable like any other control, persisted with the module, and reaching anything the REST API can set.
+// Surface bindings are assignments: a string per control, settable like any control, persisted, and reaching anything the REST API can set.
 TEST_CASE("a surface control drives whatever it is assigned to") {
     Device d;
     auto palette = [&] {
@@ -1200,7 +1151,7 @@ TEST_CASE("a surface control drives whatever it is assigned to") {
 }
 
 TEST_CASE("a surface control follows the control it drives, so the two never disagree") {
-    // Two-way: something else moving the target (the web UI, MQTT, a preset recall) has to move the fader, or the surface shows a value the rig is not running. This ran only when a MIDI or OSC surface was attached, so on a device with just the web UI the fader sat at its old value.
+    // Two-way: something else moving the target (web UI, MQTT, preset recall) must move the fader, or the surface shows a value the rig is not running.
     Device d;
     auto& dcs = d.drivers->controls();
     uint8_t* palettePtr = nullptr;
@@ -1225,6 +1176,156 @@ TEST_CASE("a surface control follows the control it drives, so the two never dis
 
     assign("fader4Target", "Drivers.palette");
     *palettePtr = 17;                 // moved from somewhere that is not the surface
-    d.control->tick1s();              // the sampling tick that mirrors and follows
+    d.control->tick20ms();            // the sampling tick that mirrors and follows
     CHECK(faderValue("fader4") == 17);
 }
+
+// A button treats every write as a press, so a switch driving one fires on the way down only, or one press of a pad button fires twice.
+TEST_CASE("a switch drives a button on the press alone") {
+    struct ButtonGame : mm::MoonModule {
+        int presses = 0;
+        void defineControls() override { controls_.addButton("fire"); }
+        void onControlChanged(const char* name) override { if (std::strcmp(name, "fire") == 0) presses++; }
+    };
+    Device d;
+    auto* game = new ButtonGame();
+    game->setName("Game");
+    d.scheduler.addModule(game);
+    game->defineControls();
+
+    auto set = [&](const char* which, auto apply) {
+        auto& cs = d.control->controls();
+        for (uint8_t i = 0; i < cs.count(); i++)
+            if (std::strcmp(cs[i].name, which) == 0) { apply(cs[i].ptr); d.control->onControlChanged(which); }
+    };
+    set("switch1Target", [](void* p) { std::snprintf(static_cast<char*>(p), 40, "%s", "Game.fire"); });
+    set("switch1", [](void* p) { *static_cast<bool*>(p) = true; });
+    CHECK(game->presses == 1);
+    set("switch1", [](void* p) { *static_cast<bool*>(p) = false; });
+    CHECK(game->presses == 1);   // the release drives nothing
+}
+
+// A written surface control reaches the attached surfaces at once, not at the next once-a-second pass, so a forwarded move is not a second late.
+TEST_CASE("a written fader reaches the surfaces without waiting for the mirror pass") {
+    Device d;
+    RecordingSurface s;
+    d.control->addSurface(&s);
+    s.clear();
+    REQUIRE(d.scheduler.setControl("Control", "fader3", "{\"value\":77}") == mm::Scheduler::SetControlResult::Ok);
+    REQUIRE(s.countFor(mm::SurfaceControl::Fader, 2) == 1);   // no mirrorToSurfaces() call in between
+    for (const auto& c : s.calls)
+        if (c.kind == mm::SurfaceControl::Fader && c.index == 2) CHECK(c.value == 77);
+    d.control->removeSurface(&s);
+}
+
+// A target changing underneath, such as a self-playing game moving its own paddle, reaches the surfaces on the next 20 ms tick.
+TEST_CASE("a target changing underneath reaches the surfaces within a 20 ms tick") {
+    Device d;
+    RecordingSurface s;
+    d.control->addSurface(&s);
+    s.clear();
+    // fader1 follows Drivers.brightness; write the target directly, the way an effect writes its own control.
+    auto& cs = d.drivers->controls();
+    for (uint8_t i = 0; i < cs.count(); i++)
+        if (std::strcmp(cs[i].name, "brightness") == 0) *static_cast<uint8_t*>(cs[i].ptr) = 123;
+    d.control->tick20ms();
+    REQUIRE(s.countFor(mm::SurfaceControl::Fader, 0) == 1);
+    for (const auto& c : s.calls)
+        if (c.kind == mm::SurfaceControl::Fader && c.index == 0) CHECK(c.value == 123);
+    d.control->removeSurface(&s);
+}
+
+namespace {
+/// A surface control's current byte, read the way a surface sees it.
+uint8_t surfaceValue(Device& d, const char* name) {
+    uint8_t v = 0;
+    d.scheduler.getControl("Control", name, v);
+    return v;
+}
+}  // namespace
+
+// Mackie Control: a fader is 14-bit pitch bend on its own channel, landing on the surface's fader of that number.
+TEST_CASE("a MIDI desk's fader moves the surface's fader") {
+    Device d;
+    mm::MidiService midi;
+    const uint8_t top[3] = {0xE2, 0x7F, 0x7F}, middle[3] = {0xE2, 0x00, 0x40}, bottom[3] = {0xE2, 0x00, 0x00};
+    midi.decode(top, 3);
+    CHECK(surfaceValue(d, "fader3") == 255);
+    midi.decode(middle, 3);
+    CHECK(surfaceValue(d, "fader3") == 128);
+    midi.decode(bottom, 3);
+    CHECK(surfaceValue(d, "fader3") == 0);
+}
+
+// A knob turn is relative: bit 6 is the direction and the low six bits the steps.
+TEST_CASE("a MIDI desk's knob turns the surface's encoder by its steps") {
+    Device d;
+    mm::MidiService midi;
+    const uint8_t start = surfaceValue(d, "encoder1");
+    const uint8_t up3[3] = {0xB0, 0x10, 0x03}, down1[3] = {0xB0, 0x10, 0x41};
+    midi.decode(up3, 3);
+    midi.decode(down1, 3);
+    CHECK(surfaceValue(d, "encoder1") == start + 2);
+}
+
+// A channel's SELECT button is momentary, so each press flips its switch and the release does nothing.
+TEST_CASE("a MIDI desk's SELECT button flips the surface's switch") {
+    Device d;
+    mm::MidiService midi;
+    const uint8_t before = surfaceValue(d, "switch2");
+    const uint8_t press[3] = {0x90, 0x19, 0x7F}, release[3] = {0x90, 0x19, 0x00};
+    midi.decode(press, 3);
+    midi.decode(release, 3);
+    CHECK(surfaceValue(d, "switch2") != before);
+    midi.decode(press, 3);
+    CHECK(surfaceValue(d, "switch2") == before);
+}
+
+// A hand on a fader holds the surface's push for that fader back, so a motor never fights it, and letting go releases it.
+TEST_CASE("a MIDI desk's fader touch holds the surface's push for that fader") {
+    Device d;
+    RecordingSurface s;
+    d.control->addSurface(&s);
+    mm::MidiService midi;
+    const uint8_t touch[3] = {0x90, 0x68, 0x7F}, letGo[3] = {0x90, 0x68, 0x00};
+    midi.decode(touch, 3);
+    s.clear();
+    REQUIRE(d.scheduler.setControl("Control", "fader1", "{\"value\":42}") == mm::Scheduler::SetControlResult::Ok);
+    CHECK(s.countFor(mm::SurfaceControl::Fader, 0) == 0);
+    midi.decode(letGo, 3);
+    d.control->tick20ms();
+    CHECK(s.countFor(mm::SurfaceControl::Fader, 0) == 1);
+    d.control->removeSurface(&s);
+}
+
+// The browser writes a batch, each message in hex, and the service decodes it as it is written.
+TEST_CASE("a MIDI batch written by the browser is decoded on the next tick") {
+    Device d;
+    auto* midi = new mm::MidiService();
+    midi->setName("Midi");
+    d.scheduler.addModule(midi);
+    midi->defineControls();
+    REQUIRE(d.scheduler.setControl("Midi", "midi", "{\"value\":\"e47f7f\"}") == mm::Scheduler::SetControlResult::Ok);
+    CHECK(surfaceValue(d, "fader5") == 255);
+}
+
+// An echo of a value the target already holds is not written again, so a self-playing game never reads it as a player.
+TEST_CASE("a surface does not rewrite a target that already holds the value") {
+    struct Game : mm::MoonModule {
+        uint8_t level = 50;
+        int writes = 0;
+        void defineControls() override { controls_.addControl("level", level, 0, 255); }
+        void onControlChanged(const char* name) override { if (std::strcmp(name, "level") == 0) writes++; }
+    };
+    Device d;
+    auto* game = new Game();
+    game->setName("Game");
+    d.scheduler.addModule(game);
+    game->defineControls();
+    REQUIRE(d.scheduler.setControl("Control", "fader6Target", "{\"value\":\"Game.level\"}") == mm::Scheduler::SetControlResult::Ok);
+    REQUIRE(d.scheduler.setControl("Control", "fader6", "{\"value\":50}") == mm::Scheduler::SetControlResult::Ok);
+    CHECK(game->writes == 0);   // the echo of what it holds
+    REQUIRE(d.scheduler.setControl("Control", "fader6", "{\"value\":51}") == mm::Scheduler::SetControlResult::Ok);
+    CHECK(game->writes == 1);   // a real move still lands
+}
+

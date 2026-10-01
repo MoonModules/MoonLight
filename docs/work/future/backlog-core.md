@@ -359,6 +359,13 @@ Estimates, not measurements, so they live here rather than in [performance.md](.
 | Static IPv6 | +20 KB | lwIP IPv6 component (off by default). Only if a deployment needs it. |
 | WebSocket TLS (`wss://`) | ~0 KB | Reuses linked mbedTLS; certificate handling adds <5 KB. |
 
+### `ListSource` methods compile twice: ~8.6 KB of thunks (2026-10-01)
+
+Every module that is `MoonModule` and `ListSource` gets its list methods emitted twice on ESP32: once as the method, once as a "non-virtual thunk" for the second base, and GCC copies the whole body into the thunk instead of a jump.
+Measured on the S3 image with `xtensa-esp32s3-elf-nm -S`: 8.6 KB in all, the largest `GamepadService` 1.6 KB, `ButtonService` 1.3 KB, `LightPresetsModule` 1.2 KB, `ControlModule` 1.1 KB, `InfraredService` 0.9 KB, `AnalogService` 0.9 KB.
+Candidates, to measure rather than assume: a `ListSource` that is a member the module hands out (no second base, so no thunk), or keeping the bodies out of line so the thunk can only jump.
+Done when the thunk total in the S3 symbol table is near zero, with the delta in repo-health.
+
 ### E1.31 multicast receive (IGMP join)
 
 NetworkReceiveEffect accepts E1.31 via unicast only — the same scope MoonLight ships. Multicast senders address the per-universe group `239.255.{universe_hi}.{universe_lo}`, which a receiver must join via IGMP. **The platform half of this now exists**: `UdpSocket::joinMulticast()` shipped with the WLED audio-sync work (2026-08-29) and is used in anger there, on both desktop and ESP32. What is left for E1.31 is the join-per-accepted-universe bookkeeping, not the socket support. Add when a multicast-only sender actually shows up on a bench; until then the spec documents "point sACN senders at the device's IP".

@@ -59,7 +59,7 @@ TEST_CASE("Pong hands a written paddle to the player, and takes it back when the
     layer.addChild(&fx);
     layer.applyState();
 
-    fx.player1 = 0;
+    fx.player1 = 255;   // a fader at the top: the paddle at the top of the court
     fx.onControlChanged("player1");
     uint32_t t = 1000;
     for (; t < 10000; t += 20) {
@@ -75,6 +75,6 @@ TEST_CASE("Pong hands a written paddle to the player, and takes it back when the
         if (fx.paddleForTest(0) != 0) moved = true;
     }
     CHECK(moved);
-    CHECK(fx.player1 == static_cast<uint8_t>(fx.paddleForTest(0) * 255 / 4096));
+    CHECK(fx.player1 == static_cast<uint8_t>(255 - fx.paddleForTest(0) * 255 / 4096));
 }
 
