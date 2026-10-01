@@ -193,8 +193,7 @@ def main() -> int:
         # holds one granted once by a human, which every later take reuses with nothing to
         # click. Runs that touch no hardware are unaffected by using it.
         #
-        # Downloads are refused: a take films the click, and Chrome under this profile CLOSED the tab
-        # two seconds after the desktop installer handed it a download, which killed the recording.
+        # Downloads are refused: a take films the click, and Chrome under this profile closes the tab two seconds after the desktop installer hands it a download, which ends the recording.
         profile = ROOT / ".playwright-profile"
         if profile.is_dir():
             context = p.chromium.launch_persistent_context(

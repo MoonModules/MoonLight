@@ -239,13 +239,17 @@ def _remember_control(prior: dict, client, mod_id: str, key: str) -> None:
 
     Only the first write counts: a later one would record the scenario's own value.
     A control that cannot be read is left out, and the scenario's value then stays.
+    A password is left out too: the module read returns it obfuscated, and writing that back would set the obfuscated text as the password.
     """
     if (mod_id, key) in prior:
         return
     try:
-        value = _control_value(client.get(_mod_path(mod_id)), key)
+        module = client.get(_mod_path(mod_id))
     except Exception:
         return
+    if any(c.get("name") == key and c.get("type") == "Password" for c in module.get("controls", [])):
+        return
+    value = _control_value(module, key)
     if value is not None:
         prior[(mod_id, key)] = value
 
@@ -269,6 +273,7 @@ def _restore_types(client, replaced: dict) -> int:
     """Swap every slot a scenario replaced back to the type it held, keeping its name.
 
     The re-created tree cannot do this: a replaced slot still exists under its name, so the snapshot restore sees it as present and leaves the scenario's type standing.
+    A slot the scenario itself created is gone by now, and that 404 stays quiet; any other failure is reported, as `_restore_tree` reports one.
     Returns how many the device confirmed.
     """
     done = 0
@@ -276,8 +281,13 @@ def _restore_types(client, replaced: dict) -> int:
         try:
             if client.post(_mod_path(mod_id) + "/replace", {"type": typ, "name": mod_id}).get("ok"):
                 done += 1
-        except Exception:
-            pass
+            else:
+                print(f"  WARN  restore: the device declined to swap {mod_id} back to {typ}")
+        except urllib.error.HTTPError as e:
+            if e.code != 404:
+                print(f"  WARN  restore: could not swap {mod_id} back to {typ}: {e}")
+        except Exception as e:
+            print(f"  WARN  restore: could not swap {mod_id} back to {typ}: {e}")
     return done
 
 
@@ -285,7 +295,7 @@ def _restore_controls(client, prior: dict) -> int:
     """Set every control a scenario wrote back to what it held before, newest write first.
 
     A scenario that names a device to prove the name survives a restart otherwise leaves that name on every device it runs on, and two bench devices answering to one name is how a restore landed on the wrong one.
-    A control whose module the scenario itself created is gone by now, and that write fails quietly.
+    A control whose module the scenario itself created is gone by now, and that 404 stays quiet; any other failure is reported, as `_restore_tree` reports one.
     Returns how many the device confirmed.
     """
     done = 0
@@ -293,8 +303,13 @@ def _restore_controls(client, prior: dict) -> int:
         try:
             if client.post("/api/control", {"module": mod_id, "control": key, "value": value}).get("ok"):
                 done += 1
-        except Exception:
-            pass
+            else:
+                print(f"  WARN  restore: the device declined {mod_id}.{key}={value!r}")
+        except urllib.error.HTTPError as e:
+            if e.code != 404:
+                print(f"  WARN  restore: could not set {mod_id}.{key}={value!r}: {e}")
+        except Exception as e:
+            print(f"  WARN  restore: could not set {mod_id}.{key}={value!r}: {e}")
     return done
 
 
@@ -471,7 +486,7 @@ def _restore_tree(client, snapshot: list, current_state: dict) -> None:
             client.post("/api/modules", {"type": entry["type"], "id": entry["id"],
                                          "parent_id": entry["parent_id"]})
         except Exception as e:
-            print(f"  WARN — restore: could not re-create {entry['id']} "
+            print(f"  WARN  restore: could not re-create {entry['id']} "
                   f"({entry['type']} under {entry['parent_id']}): {e}")
             continue
         for cname, val in entry["controls"].items():
@@ -479,7 +494,7 @@ def _restore_tree(client, snapshot: list, current_state: dict) -> None:
                 client.post("/api/control", {"module": entry["id"],
                                              "control": cname, "value": val})
             except Exception as e:
-                print(f"  WARN — restore: could not set {entry['id']}.{cname}={val!r}: {e}")
+                print(f"  WARN  restore: could not set {entry['id']}.{cname}={val!r}: {e}")
         restored += 1
     if restored:
         print(f"  restored {restored} module(s) the scenario had cleared")

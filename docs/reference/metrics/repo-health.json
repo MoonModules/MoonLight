@@ -1,5 +1,5 @@
 {
-  "commit": "f4051497",
+  "commit": "d584579b",
   "flash": {
     "esp32s3-n16r8": 2162160,
     "esp32": 2110656,
@@ -454,8 +454,8 @@
       },
       "Drivers_output_and_brightness": {
         "desktop-macos": {
-          "p50": 10,
-          "p95": 86,
+          "p50": 9,
+          "p95": 45,
           "n": 32,
           "last": "2026-10-01"
         },
@@ -494,8 +494,8 @@
       },
       "Effects_swap_while_running": {
         "desktop-macos": {
-          "p50": 2,
-          "p95": 16,
+          "p50": 1,
+          "p95": 29,
           "n": 32,
           "last": "2026-10-01"
         },
@@ -520,7 +520,7 @@
       },
       "Effects_teardown_under_a_running_pipeline": {
         "desktop-macos": {
-          "p50": 10,
+          "p50": 8,
           "p95": 55,
           "n": 32,
           "last": "2026-10-01"
@@ -546,16 +546,16 @@
       },
       "Layers_stack_and_blend_live": {
         "desktop-macos": {
-          "p50": 298,
+          "p50": 293,
           "p95": 1045,
-          "n": 8,
+          "n": 10,
           "last": "2026-10-01"
         }
       },
       "Layouts_resize_reallocates_live": {
         "desktop-macos": {
           "p50": 11,
-          "p95": 53,
+          "p95": 45,
           "n": 32,
           "last": "2026-10-01"
         },
@@ -582,7 +582,7 @@
         "desktop-macos": {
           "p50": 9,
           "p95": 49,
-          "n": 27,
+          "n": 29,
           "last": "2026-10-01"
         },
         "esp32s3-n16r8": {
@@ -606,8 +606,8 @@
       }
     },
     "desktop-macos": {
-      "tick_us": 7,
-      "fps": 142857,
+      "tick_us": 8,
+      "fps": 125000,
       "scenario_p50": {
         "Effects_pipeline_builds_and_renders": {
           "p50": 8,
@@ -617,7 +617,7 @@
         },
         "Layouts_resize_reallocates_live": {
           "p50": 11,
-          "p95": 53,
+          "p95": 45,
           "n": 32,
           "last": "2026-10-01"
         }
@@ -647,8 +647,8 @@
     "light": 31054,
     "platform": 16798,
     "ui": 11394,
-    "test": 57931,
-    "moondeck": 29501
+    "test": 57954,
+    "moondeck": 29516
   },
   "comments": {
     "core": {
@@ -672,7 +672,7 @@
       "ratio": 0.135
     },
     "moondeck": {
-      "lines": 4962,
+      "lines": 4963,
       "ratio": 0.191
     }
   },

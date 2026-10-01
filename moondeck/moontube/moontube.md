@@ -194,8 +194,13 @@ A **project** (`moontube/projects/<name>.json`) is the edit: which clips, in wha
 
 `clip` names a published clip; `source` is any video file, which is how footage no run can produce (a camera shot of a real rig) joins the cut. Prefer `clip`: a `source` is outside the tooling, so nothing regenerates or checks it.
 
-**Durations are in BARS, not seconds.** A cut lands on the music or it does not, and
-the bar is the unit that makes that true: 8 bars at 112.35 BPM is 17.1 seconds, and changing the track re-times the whole edit from one number. A clip is stretched or compressed to fill its slot rather than truncated, because these are whole interactions and cutting one mid-gesture leaves an action that never completes.
+**Durations are in BARS, not seconds.** A cut lands on the music or it does not, and the bar is the unit that makes that true. 8 bars at 112.35 BPM is 17.1 seconds, and changing the track re-times the whole edit from one number. A clip is stretched or compressed to fill its slot rather than truncated. These are whole interactions, and cutting one mid-gesture leaves an action that never completes. `bars: 0` keeps a clip WHOLE, at its own length and with its narration, for an edit that is not timed to music.
+
+**`overlay` puts a second video in a window over a clip's opening**, top left, picture and sound, until that video ends: `{"source": "media/video/introewowi.mov", "width": 320, "margin": 24}` on a clip entry. It is how one presenter hands over to another with both on screen.
+
+**`inset` runs example footage in a corner window for the whole cut**, top right: `{"folder": "media/examplevideos", "caption": "made with MoonLight", "width": 320, "margin": 24, "seed": 0}` at the top level. Every video in the folder plays in shuffled rounds, a new order each round, and the `seed` fixes that order, so the same project always cuts the same film.
+
+**The cut is an MP4 with H.264 and AAC**, at `media/video/<name>.mp4`, the pair a video site and an editor both read. A project that names a music track has it replace the narration; without one, the clips keep their own.
 
 ffmpeg's **concat demuxer** does the joining, which is its standard mechanism for this. There is no richer project format inside ffmpeg (EDL and OTIO belong to other tools), so the JSON generates the listing it consumes.
 

@@ -164,3 +164,26 @@ def test_a_restore_the_device_declines_is_not_counted():
             return {"ok": False}
     device = _Declines({"gain": 128})
     assert runner._restore_controls(device, {("Audio", "gain"): 128}) == 0
+
+
+def test_a_password_is_not_remembered_because_the_device_returns_it_obfuscated():
+    class _Secret:
+        def get(self, path):
+            return {"controls": [{"name": "password", "type": "Password", "value": "b2JmdXNjYXRlZA=="}]}
+    prior = {}
+    runner._remember_control(prior, _Secret(), "Network", "password")
+    assert prior == {}
+
+
+def test_a_restore_that_fails_unexpectedly_is_reported_and_a_vanished_module_is_not(capsys):
+    import urllib.error
+
+    class _Mixed:
+        def post(self, path, data):
+            if data["module"] == "Created":
+                raise urllib.error.HTTPError(path, 404, "module not found", {}, None)
+            raise urllib.error.HTTPError(path, 500, "server error", {}, None)
+    runner._restore_controls(_Mixed(), {("Created", "speed"): 5, ("Audio", "gain"): 128})
+    out = capsys.readouterr().out
+    assert "Audio.gain" in out
+    assert "Created" not in out

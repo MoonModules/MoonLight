@@ -197,8 +197,7 @@ def build_inset(folder: Path, work: Path, total: float, width: int,
         parts.append(d)
     if not parts:
         return None
-    # Rounds until the cut's length: the footage is minutes and the cut is longer, so one pass runs out
-    # partway through and the corner would go black for the rest.
+    # Rounds until the cut's length: the footage is minutes and the cut is longer, so one pass runs out partway through and the corner would go black for the rest.
     lengths = {p: probe_duration(p) for p in parts}
     if sum(lengths.values()) <= 0:
         return None

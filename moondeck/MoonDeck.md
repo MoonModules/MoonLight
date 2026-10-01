@@ -895,11 +895,14 @@ Run scenario tests against a live running device via HTTP.
 uv run moondeck/scenario/run_live_scenario.py                                    # all scenarios vs localhost:8080
 uv run moondeck/scenario/run_live_scenario.py --host 192.168.1.210               # vs ESP32
 uv run moondeck/scenario/run_live_scenario.py --name scenario_Network_hardware_reconfigures_live   # one scenario
+uv run moondeck/scenario/run_live_scenario.py --name scenario_perf_light,scenario_Fluid_solver      # several, comma-separated
 uv run moondeck/scenario/run_live_scenario.py --update-baseline                  # save baseline
 uv run moondeck/scenario/run_live_scenario.py --compare-baseline                 # detect regressions
 ```
 
 Executes scenario steps (add_module, set_control, delete_module) via REST API. Collects per-step FPS and heap measurements. Compares against stored baselines to detect performance regressions. Use the dropdown to run a single scenario or leave it on **all** to run the full suite.
+
+A run leaves the device as it found it. Modules a scenario cleared come back, a replaced module is swapped back to its type under its own name, and every control it wrote is put back, `enabled` included. Passwords are the exception, because the device returns them obfuscated.
 
 For a full description of each scenario, see the [scenario inventory](/api/docs/reference/tests/scenario-tests.md), auto-generated from the JSON files.
 
