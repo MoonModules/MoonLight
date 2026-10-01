@@ -77,6 +77,12 @@ class Scheduler;
 /// A value the device mutates itself, telemetry or a status or a driver, is therefore caught exactly like a `setControl` write.
 /// No per-write instrumentation is needed.
 ///
+/// ## A value someone watches move
+///
+/// A module whose value moves in front of someone, a desk's motorized faders, calls `notifyValuesChanged()`.
+/// Its changed leaves then go out on the next 20 ms tick in a patch of their own, at most every 40 ms, rather than on the next second.
+/// Only that module is walked, and the hashes update as it goes, so the second's patch does not send the values again.
+///
 /// ## How a leaf is named
 ///
 /// A leaf path is the module name and the control name, or an `@`-prefixed field for live per-card header telemetry.
@@ -358,10 +364,14 @@ public:
     /// The port the live server is actually bound to, or 0 when none is up.
     static uint16_t servedPort() { return instance_ ? instance_->boundPort_ : 0; }
 
-    /// Install the schema-changed hook without opening the listener, which a unit test needs.
-    void installSchemaHookForTest() {
+    /// Build the early patch of the modules that asked for one, for a test.
+    uint16_t buildSoonPatchForTest(JsonSink& sink) { return buildSoonPatch(sink); }
+
+    /// Install the schema-changed and values-changed hooks without opening the listener, which a unit test needs.
+    void installHooksForTest() {
         instance_ = this;
         MoonModule::setSchemaChangedHook(&HttpServerModule::onSchemaChanged);
+        MoonModule::setValuesChangedHook(&HttpServerModule::onValuesChanged);
     }
 
 private:
@@ -420,6 +430,24 @@ private:
     bool fullResyncPending_ = true;    // send a full state next push (set on connect / structural change)
     // Emit only the leaves whose value hash moved, returning how many there were.
     uint16_t buildStatePatch(JsonSink& sink);
+    // The same, over the leaves `walk` visits, which is the whole tree or the modules that asked early.
+    template <class Walk> uint16_t buildPatch(JsonSink& sink, Walk&& walk);
+    // Send one patch frame to every control-channel client.
+    void sendPatch(const JsonSink& sink);
+
+    // Modules whose changed values go out ahead of the periodic patch, by name since one may be deleted before the tick.
+    static constexpr uint8_t kSoonModules = 4;
+    // At most 25 early patches a second: smooth for a motor, and half the frames of one per tick.
+    static constexpr uint32_t kSoonMs = 40;
+    char soon_[kSoonModules][16] = {};   // a module name's own size
+    uint8_t soonCount_ = 0;
+    uint32_t soonSentMs_ = 0;
+    // Patch the modules that asked, and forget them.
+    uint16_t buildSoonPatch(JsonSink& sink);
+    // Send the early patch, held while a full state drains and paced by kSoonMs.
+    void pushSoonPatch();
+    // Routes a module's request to the live instance.
+    static void onValuesChanged(MoonModule* mod);
     // Re-hash every leaf without emitting, so the next patch reports only changes since now.
     void baselineLeafHashes();
     // Visit every UI leaf in the state's own order, templated so the lambda inlines.

@@ -155,7 +155,8 @@ public:
     bool restoreList(const char* json, const char* key) override {
         count_ = 0;
         restored_ = true;
-        return mm::json::forEachListElement(json, key,
+        unsigned dropped = 0;
+        const bool ok = mm::json::forEachListElement(json, key,
             [&](const mm::json::JsonDoc& doc, const mm::json::JsonNode* el) {
                 if (count_ >= kMaxRows) return;
                 Row& r = rows_[count_++];
@@ -165,16 +166,10 @@ public:
                 mm::json::readString(mm::json::member(doc, el, "input"), input, sizeof(input));
                 const int idx = inputIndex(input);
                 r.input = static_cast<uint8_t>(idx < 0 ? kGamepadInputCount : idx);   // an unknown name binds nothing
-                mm::json::readString(mm::json::member(doc, el, "target"),
-                                     r.action.target, sizeof(r.action.target));
-                char kind[16] = {};
-                mm::json::readString(mm::json::member(doc, el, "kind"), kind, sizeof(kind));
-                r.action.kind = std::strcmp(kind, "set") == 0   ? InputAction::Kind::Set
-                              : std::strcmp(kind, "delta") == 0 ? InputAction::Kind::Delta
-                                                                : InputAction::Kind::Toggle;
-                r.action.value =
-                    static_cast<int16_t>(mm::json::readInt(mm::json::member(doc, el, "value")));
+                if (!readInputAction(doc, el, r.action)) dropped++;
             });
+        reportOffSurface(*this, statusBuf_, sizeof(statusBuf_), dropped);
+        return ok;
     }
 
     /// Where an input's name sits in the standard layout, or -1 for a name it does not have.
@@ -283,7 +278,7 @@ private:
             if (!addListRow(id)) return;
             Row& r = rows_[count_ - 1];
             r.input = static_cast<uint8_t>(inputIndex(s.input));
-            std::snprintf(r.action.target, sizeof(r.action.target), "%s", s.target);
+            parseTarget(s.target, r.action.type, r.action.number);
             r.action.kind = s.kind;
             r.action.value = s.value;
         }

@@ -171,7 +171,7 @@ nav:
       - Building, running, flashing: how-to/building.md
       - Driving LED panels with a receiving card: how-to/panel-cards.md
       - LED signal integrity: how-to/led-signal-integrity.md
-      - Driving MoonLight from a phone or tablet: how-to/control-surface.md
+      - Connecting a control surface: how-to/control-surface.md
       - Home automation: how-to/home-automation.md
       - Save and recall presets: how-to/presets.md
       - Updating firmware: how-to/updating-firmware.md

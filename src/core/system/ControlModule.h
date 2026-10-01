@@ -8,7 +8,7 @@
 #include "core/util/JsonSink.h"
 #include "core/module/Scheduler.h"
 #include "core/util/JsonUtil.h"
-#include "core/util/InputMapping.h"   // runInputAction: an encoder detent is a delta like any other
+#include "core/util/InputMapping.h"   // kTargetTypeMaxNumber: the bank sizes an input row may name
 #include "platform/platform.h"
 
 #include <cstdarg>   // setStatusf
@@ -77,6 +77,8 @@ public:
 
     /// The switch row.
     static constexpr uint8_t kSwitchCount = 8;
+    static_assert(kTargetTypeMaxNumber[1] == kSwitchCount && kTargetTypeMaxNumber[2] == kEncoderCount
+                  && kTargetTypeMaxNumber[3] == kFaderCount, "an input row names exactly the surface's banks");
 
     /// The boot ControlModule (exactly one exists).
     static ControlModule* active() { return ActiveInstance<ControlModule>::active(); }

@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 /// @defgroup InputMapping What a physical input does
@@ -19,15 +20,12 @@
 ///
 /// @moreinfo
 ///
-/// ## The target is a string, and the surface is the recommended one
+/// ## The target is the surface
 ///
-/// A row names `Module.control`, so an input can drive the control surface or a module control directly.
-/// Both are the same mechanism with no special case: the surface is a recommendation rather than a rule.
-/// Driving the surface is the better path, since one place then shows what the device's controls do and every transport reaches the same switch.
-///
-/// The editor offers only the surface. An earlier draft also offered a few module controls directly, which was a second path to the same place.
-/// Two ways to say one thing is the split brain the two-step model exists to avoid, and it left a user wondering which a given row used.
-/// A row can still name any control through the interface, which is the escape hatch for anything the surface does not carry yet.
+/// A row names a surface control, a switch, an encoder, a fader or a pad, and the surface decides what that control drives.
+/// One place then shows what the device's controls do, and every transport reaches the same switch.
+/// A row stores the bank and the number rather than a name, so it cannot point anywhere else.
+/// The name, such as `Control.switch1`, exists only at the edges: the wire, the persisted list and the interface.
 ///
 /// ## A pad is a row, not a control
 ///
@@ -49,13 +47,7 @@
 ///
 /// ## Reading and writing in the control's own units
 ///
-/// A value is read through the scheduler, which answers at the control's declared width.
-/// Reading the raw pointer as a byte was wrong, a wider control holding a large value reading back truncated.
-/// The surface's own byte reader clamps too, so a positive delta wrote the wrong number and a negative one could never move a control down.
-/// A mapping nudges the CONTROL rather than the surface, so it reads in the control's units and clamps to the control's own bounds.
-///
-/// A select and a palette store their option COUNT, so the last valid index is one below it.
-/// Clamping to the count produced a value the writer clamped again, and a delta that overshot stopped short of the end instead of landing on it.
+/// A value is read through the scheduler at the control's declared width, and a delta clamps to the control's own bounds rather than wrapping.
 ///
 /// ## A Set needs a release to clear it
 ///
@@ -63,14 +55,12 @@
 /// So a Set is offered only where a release exists to clear it, or it would write its value and latch forever.
 /// An input without one offers toggle and delta, which are both complete in one event.
 ///
-/// ## A target the vocabulary cannot express does nothing
+/// ## A name the surface does not have is refused
 ///
-/// The whole suffix of a name must parse, and the number must be in that type's own range.
+/// The whole suffix of a name must parse, and the number must be in that bank's own range.
 /// A trailing character would otherwise fire the wrong pad, and a number past the range would wrap through the cast and fire another one entirely.
-/// One shared bound would let a number past the surface's count through: it parses, it is stored, and it dispatches to nothing.
-///
-/// A target set through the interface to something the editor cannot represent reads back as unassigned, so the dropdown shows nothing while the row keeps working.
-/// That is the honest reading, and silently rewriting it would be worse.
+/// A name set through the interface that is not a surface control is refused.
+/// A persisted one leaves its row unassigned and the service says so on its status, so a row never points somewhere the editor cannot show.
 namespace mm {
 
 /// What a row's value may hold, stated once and used by both the editor's bounds and the field that parses an edit.
@@ -81,8 +71,8 @@ inline constexpr int kMaxActionValue = 32767;
 inline constexpr unsigned long kMaxPadNumber = 64;
 
 
-/// What one physical input does: a target control, and how the input changes it.
-/// @xref{the-target-is-a-string-and-the-surface-is-the-recommended-one|what a target may name}.
+/// What one physical input does: a surface control, and how the input changes it.
+/// @xref{the-target-is-the-surface|what a target may name}.
 struct InputAction {
     /// How the input changes its target; a toggle is its own kind because a delta cannot express it.
     enum class Kind : uint8_t {
@@ -91,13 +81,71 @@ struct InputAction {
         Delta,        ///< add `value` to the target, clamped to its declared bounds. A nudge.
     };
 
-    char    target[32] = "";      ///< "Module.control", empty for an unassigned row
+    uint8_t type = 0;             ///< the surface bank, an index into kTargetTypes; 0 for an unassigned row
+    uint8_t number = 1;           ///< which control of that bank, from 1
     Kind    kind = Kind::Toggle;   ///< which of the three this row does
     int16_t value = 0;            ///< Set: what to write. Delta: the signed nudge. Toggle: unused.
 
     /// Whether this row names a target at all.
-    bool assigned() const { return target[0] != 0; }
+    bool assigned() const { return type != 0; }
 };
+
+/// The surface banks an input can point at, a type plus a number: @xref{the-target-is-the-surface|why only the surface}.
+inline constexpr const char* kTargetTypes[] = {
+    "",           // unassigned: a row that drives nothing yet
+    "switch",     // Control.switchN, toggled
+    "encoder",    // Control.encoderN, nudged
+    "fader",      // Control.faderN, nudged
+    "pad",        // Control.padN, fired: a preset slot, resolved through ControlModule::firePad
+};
+/// The bank a pad lives in, fired through its list rather than written.
+inline constexpr uint8_t kPadType = 4;
+/// The module that owns the surface.
+inline constexpr const char* kSurfaceModule = "Control";
+inline constexpr uint8_t kTargetTypeCount = sizeof(kTargetTypes) / sizeof(kTargetTypes[0]);
+
+/// The highest number each target type has, indexed by type, so a parse cannot accept a control that does not exist.
+inline constexpr unsigned long kTargetTypeMaxNumber[kTargetTypeCount] = {
+    0,               // unassigned
+    8,               // switch
+    8,               // encoder
+    8,               // fader
+    kMaxPadNumber,   // pad
+};
+
+/// Whether a target type is numbered; a named test, so a future unnumbered type reads clearly.
+inline bool targetTypeIsNumbered(uint8_t type) { return type >= 1 && type < kTargetTypeCount; }
+
+/// A target's name, such as `Control.switch1`, or the empty string for an unassigned row.
+inline void targetName(char* out, size_t outLen, uint8_t type, uint8_t number) {
+    if (type == 0 || type >= kTargetTypeCount) { out[0] = 0; return; }
+    mm::formatTo(out, outLen, "%s.%s%u", kSurfaceModule, kTargetTypes[type], static_cast<unsigned>(number));
+}
+
+/// Read a name into a type and a number, false when it is not a surface control: @xref{a-name-the-surface-does-not-have-is-refused|what is refused}.
+inline bool parseTarget(const char* target, uint8_t& type, uint8_t& number) {
+    type = 0;
+    number = 1;
+    if (!target || !target[0]) return true;   // unassigned is a valid row
+    const size_t prefix = std::strlen(kSurfaceModule);
+    if (std::strncmp(target, kSurfaceModule, prefix) != 0 || target[prefix] != '.') return false;
+    const char* name = target + prefix + 1;
+    for (uint8_t i = 1; i < kTargetTypeCount; i++) {
+        const size_t len = std::strlen(kTargetTypes[i]);
+        if (std::strncmp(name, kTargetTypes[i], len) != 0) continue;
+        const char* digits = name + len;
+        // Digits rather than merely something, or a letter reports index zero.
+        if (*digits < '0' || *digits > '9') continue;
+        char* end = nullptr;
+        const unsigned long n = std::strtoul(digits, &end, 10);
+        // Bounded by THIS type's count, not by the largest of them: see kTargetTypeMaxNumber.
+        if (*end != 0 || n < 1 || n > kTargetTypeMaxNumber[i]) continue;
+        type = i;
+        number = static_cast<uint8_t>(n);
+        return true;
+    }
+    return false;
+}
 
 /// Fire the pad in a grid position, false when there is nothing there: @xref{a-pad-is-a-row-not-a-control|why through the list}.
 inline bool firePadRow(MoonModule& mod, uint8_t slot, const char* label,
@@ -125,202 +173,95 @@ inline bool firePadRow(MoonModule& mod, uint8_t slot, const char* label,
     return false;
 }
 
-/// Apply an action to its target through the one primitive every transport uses, false when the row is unassigned or names something absent.
+/// The surface control a row names, its descriptor found on the surface module, or null with a status saying why.
+inline const ControlDescriptor* surfaceControl(const InputAction& a, MoonModule*& surface, char* control, size_t controlLen,
+                                               char* outStatus, size_t statusLen) {
+    mm::formatTo(control, controlLen, "%s%u", kTargetTypes[a.type], static_cast<unsigned>(a.number));
+    Scheduler* sched = Scheduler::instance();
+    surface = sched ? sched->firstByName(kSurfaceModule) : nullptr;
+    if (!surface) {
+        if (outStatus) mm::formatTo(outStatus, statusLen, "no %s module", kSurfaceModule);
+        return nullptr;
+    }
+    const ControlList& ctrls = surface->controls();
+    for (uint8_t i = 0; i < ctrls.count(); i++)
+        if (std::strcmp(ctrls[i].name, control) == 0) return &ctrls[i];
+    if (outStatus) mm::formatTo(outStatus, statusLen, "%s has no %s", kSurfaceModule, control);
+    return nullptr;
+}
+
+/// Write a surface control through the one primitive every transport uses, clamped to its bounds.
+inline void writeSurfaceControl(const ControlDescriptor& c, const char* control, int next,
+                                char* outStatus, size_t statusLen) {
+    if (next < c.min) next = static_cast<int>(c.min);
+    if (next > c.max) next = static_cast<int>(c.max);
+    char valueJson[32];
+    // A boolean takes true or false and everything else a number.
+    if (c.type == ControlType::Bool) mm::formatTo(valueJson, sizeof(valueJson), "{\"value\":%s}", next ? "true" : "false");
+    else                             mm::formatTo(valueJson, sizeof(valueJson), "{\"value\":%d}", next);
+    if (Scheduler* sched = Scheduler::instance()) sched->setControl(kSurfaceModule, control, valueJson);
+    if (outStatus) mm::formatTo(outStatus, statusLen, "%s -> %d", control, next);
+}
+
+/// Apply an action to its surface control, false when the row is unassigned or the surface lacks the control.
 inline bool runInputAction(const InputAction& a, bool pressed,
                            char* outStatus, size_t statusLen) {
     if (!a.assigned()) return false;
-
-    // Split at the dot; a target without one is refused rather than half-applied against a module named for the whole string.
-    const char* dot = std::strchr(a.target, '.');
-    if (!dot || dot == a.target || !dot[1]) {
-        if (outStatus) mm::formatTo(outStatus, statusLen, "%s: not Module.control", a.target);
-        return false;
-    }
-    char module[24] = {};
-    const size_t n = static_cast<size_t>(dot - a.target);
-    if (n >= sizeof(module)) {
-        if (outStatus) mm::formatTo(outStatus, statusLen, "module name too long");
-        return false;
-    }
-    std::memcpy(module, a.target, n);
-    const char* control = dot + 1;
-
-    Scheduler* sched = Scheduler::instance();
-    if (!sched) return false;
-    MoonModule* target = sched->firstByName(module);
-    if (!target) {
-        if (outStatus) std::snprintf(outStatus, statusLen, "no %s module", module);
-        return false;
-    }
-
+    char control[16];
+    MoonModule* surface = nullptr;
     // A pad is a row rather than a control: @xref{a-pad-is-a-row-not-a-control|how it resolves}.
-    if (std::strncmp(control, "pad", 3) == 0 && control[3] >= '0' && control[3] <= '9') {
+    if (a.type == kPadType) {
         // On the press alone, a pad firing once.
         if (!pressed) return false;
-        // The whole suffix must parse and be in range: @xref{a-target-the-vocabulary-cannot-express-does-nothing|what a trailing character would fire}.
-        char* end = nullptr;
-        const unsigned long padNr = std::strtoul(control + 3, &end, 10);
-        if (*end != 0 || padNr < 1 || padNr > kMaxPadNumber) return false;
-        return firePadRow(*target, static_cast<uint8_t>(padNr - 1), a.target, outStatus, statusLen);
+        surfaceControl(a, surface, control, sizeof(control), nullptr, 0);
+        if (!surface) return false;
+        return firePadRow(*surface, static_cast<uint8_t>(a.number - 1), control, outStatus, statusLen);
     }
-
-    // The descriptor, for the current value and the bounds a delta clamps to and a toggle inverts.
-    const ControlList& ctrls = target->controls();
-    for (uint8_t i = 0; i < ctrls.count(); i++) {
-        const ControlDescriptor& c = ctrls[i];
-        if (std::strcmp(c.name, control) != 0) continue;
-
-        char valueJson[32];
-        // Read at the control's own declared width: @xref{reading-and-writing-in-the-controls-own-units|what a byte read got wrong}.
-        int32_t current = 0;
-        if (!sched->getControlWide(module, control, current)) return false;
-        int next = 0;
-        switch (a.kind) {
-            case InputAction::Kind::Toggle: next = current == 0 ? 1 : 0; break;
-            case InputAction::Kind::Set:    next = pressed ? a.value : 0; break;
-            case InputAction::Kind::Delta:  next = current + a.value; break;
-        }
-        // A select and a palette store their option COUNT, so the last valid index is one below it.
-        const int hi = (c.type == ControlType::Select || c.type == ControlType::Palette)
-                           ? static_cast<int>(c.max) - 1 : static_cast<int>(c.max);
-        if (next < c.min) next = c.min;
-        if (next > hi) next = hi;
-
-        // A boolean takes true or false and everything else a number, both through the one primitive.
-        if (c.type == ControlType::Bool)
-            std::snprintf(valueJson, sizeof(valueJson), "{\"value\":%s}", next ? "true" : "false");
-        else
-            std::snprintf(valueJson, sizeof(valueJson), "{\"value\":%d}", next);
-        sched->setControl(module, control, valueJson);
-        if (outStatus) std::snprintf(outStatus, statusLen, "%s -> %d", a.target, next);
-        return true;
+    const ControlDescriptor* c = surfaceControl(a, surface, control, sizeof(control), outStatus, statusLen);
+    if (!c) return false;
+    // Read at the control's own declared width: @xref{reading-and-writing-in-the-controls-own-units|why}.
+    int32_t current = 0;
+    if (!Scheduler::instance()->getControlWide(kSurfaceModule, control, current)) return false;
+    int next = 0;
+    switch (a.kind) {
+        case InputAction::Kind::Toggle: next = current == 0 ? 1 : 0; break;
+        case InputAction::Kind::Set:    next = pressed ? a.value : 0; break;
+        case InputAction::Kind::Delta:  next = static_cast<int>(current) + a.value; break;
     }
-    if (outStatus) std::snprintf(outStatus, statusLen, "%s has no %s", module, control);
-    return false;
+    writeSurfaceControl(*c, control, next, outStatus, statusLen);
+    return true;
 }
 
-/// Drive a target with a continuous value, rescaled into the control's own range: @xref{an-event-and-a-reading-are-different-shapes|why this is separate from the event path}.
+/// Drive a surface control with a continuous value, rescaled into its range: @xref{an-event-and-a-reading-are-different-shapes|why this is separate from the event path}.
 inline bool runInputLevel(const InputAction& a, uint8_t level,
                           char* outStatus, size_t statusLen) {
     if (!a.assigned()) return false;
-    const char* dot = std::strchr(a.target, '.');
-    if (!dot || dot == a.target || !dot[1]) {
-        if (outStatus) mm::formatTo(outStatus, statusLen, "%s: not Module.control", a.target);
-        return false;
-    }
-    char module[24] = {};
-    const size_t n = static_cast<size_t>(dot - a.target);
-    if (n >= sizeof(module)) {
-        if (outStatus) mm::formatTo(outStatus, statusLen, "module name too long");
-        return false;
-    }
-    std::memcpy(module, a.target, n);
-    const char* control = dot + 1;
-
-    Scheduler* sched = Scheduler::instance();
-    if (!sched) return false;
-    MoonModule* target = sched->firstByName(module);
-    if (!target) {
-        if (outStatus) std::snprintf(outStatus, statusLen, "no %s module", module);
-        return false;
-    }
     // A pad is momentary, so an analog row pointed at one does nothing rather than firing repeatedly on the way past.
-    if (std::strncmp(control, "pad", 3) == 0) {
-        if (outStatus) std::snprintf(outStatus, statusLen, "%s: a pad takes a press", a.target);
+    if (a.type == kPadType) {
+        if (outStatus) mm::formatTo(outStatus, statusLen, "pad%u: a pad takes a press", static_cast<unsigned>(a.number));
         return false;
     }
-
-    const ControlList& ctrls = target->controls();
-    for (uint8_t i = 0; i < ctrls.count(); i++) {
-        const ControlDescriptor& c = ctrls[i];
-        if (std::strcmp(c.name, control) != 0) continue;
-        // The control's own range, the same bound the event path applies.
-        const int hi = (c.type == ControlType::Select || c.type == ControlType::Palette)
-                           ? static_cast<int>(c.max) - 1 : static_cast<int>(c.max);
-        const int lo = static_cast<int>(c.min);
-        int next = lo;
-        if (hi > lo) {
-            // Rounded rather than truncated, or a pedal pushed all the way lands one short of the maximum.
-            const int32_t span = static_cast<int32_t>(hi) - lo;
-            next = lo + static_cast<int>((static_cast<int32_t>(level) * span + 127) / 255);
-        }
-        if (next < lo) next = lo;
-        if (next > hi) next = hi;
-
-        char valueJson[32];
-        if (c.type == ControlType::Bool)
-            std::snprintf(valueJson, sizeof(valueJson), "{\"value\":%s}", next ? "true" : "false");
-        else
-            std::snprintf(valueJson, sizeof(valueJson), "{\"value\":%d}", next);
-        sched->setControl(module, control, valueJson);
-        if (outStatus) std::snprintf(outStatus, statusLen, "%s -> %d", a.target, next);
-        return true;
-    }
-    if (outStatus) std::snprintf(outStatus, statusLen, "%s has no %s", module, control);
-    return false;
+    char control[16];
+    MoonModule* surface = nullptr;
+    const ControlDescriptor* c = surfaceControl(a, surface, control, sizeof(control), outStatus, statusLen);
+    if (!c) return false;
+    const int lo = static_cast<int>(c->min), hi = static_cast<int>(c->max);
+    // Rounded rather than truncated, or a pedal pushed all the way lands one short of the maximum.
+    const int next = hi > lo ? lo + static_cast<int>((static_cast<int32_t>(level) * (hi - lo) + 127) / 255) : lo;
+    writeSurfaceControl(*c, control, next, outStatus, statusLen);
+    return true;
 }
 
 /// The action half of a row as a document, emitted by every service so one row shape renders wherever it came from.
 inline void writeInputActionFields(JsonSink& sink, const InputAction& a) {
+    char name[24];
+    targetName(name, sizeof(name), a.type, a.number);
     sink.append(",\"target\":");
-    sink.writeJsonString(a.target);
+    sink.writeJsonString(name);
     sink.append(",\"kind\":");
     sink.writeJsonString(a.kind == InputAction::Kind::Toggle ? "toggle"
                        : a.kind == InputAction::Kind::Set    ? "set" : "delta");
     sink.appendf(",\"value\":%d", static_cast<int>(a.value));
-}
-
-/// The target types an input can point at, a type plus a number: @xref{the-target-is-a-string-and-the-surface-is-the-recommended-one|why only the surface}.
-inline constexpr const char* kTargetTypes[] = {
-    "",           // unassigned: a row that drives nothing yet
-    "switch",     // Control.switchN, toggled
-    "encoder",    // Control.encoderN, nudged
-    "fader",      // Control.faderN, nudged
-    "pad",        // Control.padN, fired: a preset slot, resolved through ControlModule::firePad
-};
-inline constexpr uint8_t kTargetTypeCount = sizeof(kTargetTypes) / sizeof(kTargetTypes[0]);
-
-/// The highest number each target type has, indexed by type, so a parse cannot accept a control that does not exist.
-inline constexpr unsigned long kTargetTypeMaxNumber[kTargetTypeCount] = {
-    0,               // unassigned
-    8,               // switch
-    8,               // encoder
-    8,               // fader
-    kMaxPadNumber,   // pad
-};
-
-/// Whether a target type is numbered; a named test, so a future unnumbered type reads clearly.
-inline bool targetTypeIsNumbered(uint8_t type) { return type >= 1 && type < kTargetTypeCount; }
-
-/// Build the stored target string from a type and a number, the two being how a user edits it rather than how it is kept.
-inline void composeTarget(char* out, size_t outLen, uint8_t type, uint8_t number) {
-    if (type == 0 || type >= kTargetTypeCount) { out[0] = 0; return; }
-    std::snprintf(out, outLen, "Control.%s%u", kTargetTypes[type], static_cast<unsigned>(number));
-}
-
-/// Read a stored target back into a type and a number for the editor: @xref{a-target-the-vocabulary-cannot-express-does-nothing|what an unrepresentable one reads as}.
-inline void decomposeTarget(const char* target, uint8_t& type, uint8_t& number) {
-    type = 0;
-    number = 1;
-    if (!target || !target[0]) return;
-    // Anything the editor cannot represent reads back as unassigned while the row keeps working.
-    if (std::strncmp(target, "Control.", 8) != 0) return;
-    const char* name = target + 8;
-    for (uint8_t i = 1; i < kTargetTypeCount; i++) {
-        const size_t len = std::strlen(kTargetTypes[i]);
-        if (std::strncmp(name, kTargetTypes[i], len) != 0) continue;
-        const char* digits = name + len;
-        // Digits rather than merely something, or a letter reports index zero and re-composes to a control that does not exist.
-        if (*digits < '0' || *digits > '9') continue;
-        // The whole suffix, or a trailing character silently retargets a row the editor touched.
-        char* end = nullptr;
-        const unsigned long n = std::strtoul(digits, &end, 10);
-        // Bounded by THIS type's count, not by the largest of them: see kTargetTypeMaxNumber.
-        if (*end != 0 || n < 1 || n > kTargetTypeMaxNumber[i]) continue;
-        type = i;
-        number = static_cast<uint8_t>(n);
-        return;
-    }
 }
 
 /// The target-type options as a shared set, emitted once per list rather than per row.
@@ -336,22 +277,18 @@ inline void writeInputTargetOptions(JsonSink& sink) {
 
 /// The target half alone, for an input whose value is the reading: a kind and a value would be stored, shown and ignored.
 inline void writeInputTargetDetailField(JsonSink& sink, const InputAction& a) {
-    uint8_t type = 0, number = 1;
-    decomposeTarget(a.target, type, number);
     sink.appendf("{\"name\":\"target\",\"type\":\"select\",\"optionsRef\":\"targets\",\"value\":%d},"
                  "{\"name\":\"number\",\"type\":\"uint8\",\"value\":%d}",
-                 static_cast<int>(type), static_cast<int>(number));
+                 static_cast<int>(a.type), static_cast<int>(a.number));
 }
 
 /// The action half as editable fields, so a user retargets an input without the interface: @xref{a-set-needs-a-release-to-clear-it|why a Set is not always offered}.
 inline void writeInputActionDetailFields(JsonSink& sink, const InputAction& a,
                                          bool hasRelease = true) {
     // A dropdown and a number rather than a text box, a typo otherwise being invisible until the input does nothing.
-    uint8_t type = 0, number = 1;
-    decomposeTarget(a.target, type, number);
     sink.appendf("{\"name\":\"target\",\"type\":\"select\",\"optionsRef\":\"targets\",\"value\":%d},"
                  "{\"name\":\"number\",\"type\":\"uint8\",\"value\":%d},",
-                 static_cast<int>(type), static_cast<int>(number));
+                 static_cast<int>(a.type), static_cast<int>(a.number));
     // All three positions stay whatever is usable, the parser mapping an index straight onto the kind; dropping one would make a delta arrive as the latch this prevents.
     const int kindValue = static_cast<int>(a.kind);
     sink.appendf("{\"name\":\"kind\",\"type\":\"select\",\"value\":%d,"
@@ -369,26 +306,30 @@ inline void writeInputActionDetailFields(JsonSink& sink, const InputAction& a,
 /// Set one action field from a row edit; false for a field this does not own, so a module can try its own afterwards.
 inline bool setInputActionField(InputAction& a, const char* field, const char* valueJson) {
     if (std::strcmp(field, "target") == 0) {
-        // A string from the interface or an index from the dropdown, both writing the one stored format.
-        char buf[sizeof(a.target)] = {};
+        // A name from the interface or an index from the dropdown, both landing on a bank and a number.
+        char buf[24] = {};
         json::parseString(valueJson, "value", buf, sizeof(buf));
-        if (buf[0]) { std::snprintf(a.target, sizeof(a.target), "%s", buf); return true; }
-        uint8_t oldType = 0, number = 1;
-        decomposeTarget(a.target, oldType, number);   // keep the number the row already had
+        if (buf[0]) {
+            // Parsed aside, so a refused name leaves the row as it was.
+            uint8_t type = 0, number = 1;
+            if (!parseTarget(buf, type, number)) return false;
+            a.type = type;
+            a.number = number;
+            return true;
+        }
         const int type = json::parseInt(valueJson, "value");
         if (type < 0 || type >= kTargetTypeCount) return false;
-        composeTarget(a.target, sizeof(a.target), static_cast<uint8_t>(type), number);
+        a.type = static_cast<uint8_t>(type);
+        // The number the row already had, within the new bank.
+        if (a.number > kTargetTypeMaxNumber[a.type]) a.number = static_cast<uint8_t>(kTargetTypeMaxNumber[a.type] ? kTargetTypeMaxNumber[a.type] : 1);
         return true;
     }
     if (std::strcmp(field, "number") == 0) {
-        // Editing the number re-composes the target, so there is no separate stored number to drift from the string.
-        uint8_t type = 0, oldNr = 1;
-        decomposeTarget(a.target, type, oldNr);
-        // Re-composing from an unrepresentable target would clear the string, and the spinner renders for every row.
-        if (type == 0) return false;
+        // An unassigned row has no bank to number, and the spinner renders for every row.
+        if (a.type == 0) return false;
         const int number = json::parseInt(valueJson, "value");
-        if (number < 1 || number > 64) return false;   // the surface's banks are 8; a pad grid is 64
-        composeTarget(a.target, sizeof(a.target), type, static_cast<uint8_t>(number));
+        if (number < 1 || number > static_cast<int>(kTargetTypeMaxNumber[a.type])) return false;
+        a.number = static_cast<uint8_t>(number);
         return true;
     }
     if (std::strcmp(field, "kind") == 0) {
@@ -415,6 +356,27 @@ inline bool setInputActionField(InputAction& a, const char* field, const char* v
         return true;
     }
     return false;
+}
+
+/// Read a persisted row's action, false when its target is not a surface control and the row was left unassigned.
+inline bool readInputAction(const json::JsonDoc& doc, const json::JsonNode* el, InputAction& a) {
+    char target[32] = {};
+    json::readString(json::member(doc, el, "target"), target, sizeof(target));
+    const bool onSurface = parseTarget(target, a.type, a.number);
+    char kind[16] = {};
+    json::readString(json::member(doc, el, "kind"), kind, sizeof(kind));
+    a.kind = std::strcmp(kind, "set") == 0   ? InputAction::Kind::Set
+           : std::strcmp(kind, "delta") == 0 ? InputAction::Kind::Delta
+                                             : InputAction::Kind::Toggle;
+    a.value = static_cast<int16_t>(json::readInt(json::member(doc, el, "value")));
+    return onSurface;
+}
+
+/// Say on a service's status how many restored rows lost a target that was not on the surface.
+inline void reportOffSurface(MoonModule& service, char* buf, size_t len, unsigned dropped) {
+    if (!dropped) return;
+    mm::formatTo(buf, len, "%u row%s unassigned: not on the surface", dropped, dropped == 1 ? "" : "s");
+    service.setStatus(buf, MoonModule::Severity::Warning);
 }
 
 /// @}

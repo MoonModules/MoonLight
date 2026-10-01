@@ -1,7 +1,7 @@
 /// @module AnalogService
 /// @also InputMapping, Scheduler
 
-/// The analog input path end to end: an ADC reading, through the row's travel mapping and filter, into a control. The platform seam is a host stub whose value the test injects (platform::setTestAdcValue), so "the pedal is halfway" is expressed exactly as the module sees it on a board.
+/// An injected ADC reading, through the row's travel and filter, into a surface control.
 
 #include "doctest.h"
 #include "core/services/AnalogService.h"
@@ -16,13 +16,13 @@ using namespace mm;
 
 namespace {
 
-/// Stands in for the control surface: one fader a row can drive.
+/// Stands in for the control surface: a fader and a switch a row can drive.
 struct FakeSurface : public MoonModule {
     uint8_t fader1 = 0;
-    bool    on = false;
+    bool    switch1 = false;
     void defineControls() override {
         controls_.addControl("fader1", fader1, 0, 255);
-        controls_.addControl("on", on);
+        controls_.addControl("switch1", switch1);
     }
 };
 
@@ -85,7 +85,7 @@ TEST_CASE("an analog input drives a control across its travel") {
 }
 
 TEST_CASE("a pedal's usable travel is what maps, not the full sweep") {
-    // The reason a row carries inMin/inMax: a real pedal rests well above 0 and tops out well below full scale, so a raw mapping would give a control that never reaches either end.
+    // A real pedal rests above 0 and tops out below full scale, so a raw mapping never reaches either end.
     Rig rig;
     rig.set("inMin", 1000);
     rig.set("inMax", 3000);
@@ -124,7 +124,7 @@ TEST_CASE("a reversed min/max pair means inverted, rather than being an error") 
 }
 
 TEST_CASE("a resting input stops writing, so jitter does not flood the control") {
-    // The deadband's whole purpose. An ADC wobbles a count or two at rest, and without this the row would write its target fifty times a second forever, which on a persisted control also means a save every time.
+    // An ADC wobbles a count or two at rest; without a deadband the row writes its target fifty times a second.
     Rig rig;
     rig.hold(2000);
     const uint8_t settled = rig.surface->fader1;
@@ -142,21 +142,21 @@ TEST_CASE("a resting input stops writing, so jitter does not flood the control")
 }
 
 TEST_CASE("the first reading is taken whole, so a pedal does not sweep up from zero on boot") {
-    // Seeding the filter with 0 would make every input ramp from the bottom at startup, writing its target the whole way: a light that fades up on boot because a pedal is plugged in.
+    // A filter seeded with 0 would ramp every input up from the bottom at startup, fading a light up on boot.
     Rig rig;
     platform::setTestAdcValue(kPin, platform::adcMaxCount());
     rig.svc->tick20ms();                          // ONE poll
     CHECK(rig.surface->fader1 == 255);            // already there, not on its way
 }
 
-TEST_CASE("an analog row scales into whatever range its target actually holds") {
-    // A pedal is configured once and works on any target: the 0..255 travel is rescaled to the control's own bounds, so a bool gets on/off and a narrower control gets its own maximum.
+TEST_CASE("an analog row scales into whatever range its surface control holds") {
+    // The 0..255 travel is rescaled to the control's own bounds, so a switch gets off and on.
     Rig rig;
-    rig.set("target", "\"Control.on\"");
+    rig.set("target", "\"Control.switch1\"");
     rig.hold(0);
-    CHECK(rig.surface->on == false);
+    CHECK(rig.surface->switch1 == false);
     rig.hold(platform::adcMaxCount());
-    CHECK(rig.surface->on == true);
+    CHECK(rig.surface->switch1 == true);
 }
 
 TEST_CASE("an analog row refuses a field it would silently ignore") {
@@ -169,7 +169,7 @@ TEST_CASE("an analog row refuses a field it would silently ignore") {
 }
 
 TEST_CASE("an out-of-range pin is refused rather than narrowed into a different pin") {
-    // parseInt answers an int and the row stores an int8_t, so 300 would become 44 and point the row at a pin nobody named. -1 stays valid: it is the unconfigured state the poll checks for.
+    // 300 would narrow to 44, a pin nobody named; -1 stays valid as the unconfigured state.
     Rig rig;
     CHECK_FALSE(rig.svc->setListRowField(rig.rowId, "pin", "{\"value\":300}"));
     CHECK_FALSE(rig.svc->setListRowField(rig.rowId, "pin", "{\"value\":-2}"));
@@ -178,7 +178,7 @@ TEST_CASE("an out-of-range pin is refused rather than narrowed into a different 
 }
 
 TEST_CASE("an analog row pointed at a pad refuses, rather than firing it every tick") {
-    // A pad is a momentary thing, so "a pedal held at 40% of a preset" has no reading. The refusal has to be REPORTED as well as silent-at-the-target: a row that quietly did nothing would look like a broken pot, and one that fired on every poll would re-apply the preset 50 times a second for as long as the input sat there.
+    // A pedal at 40% of a preset means nothing, and a silent refusal would look like a broken pot, so it is reported.
     Rig rig;
     rig.set("target", "\"Control.pad1\"");
     rig.hold(2000);

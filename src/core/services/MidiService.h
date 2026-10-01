@@ -3,6 +3,8 @@
 #include "core/module/MoonModule.h"
 #include "core/module/Scheduler.h"
 #include "core/system/ControlModule.h"   // the surface a desk's faders, knobs and buttons land on
+#include "core/util/ControlSurface.h"      // the way back: motors, rings and button lights
+#include "core/util/format.h"              // formatTo: nonblocking formatting into a fixed buffer
 
 #include <cctype>
 #include <cstdint>
@@ -17,21 +19,77 @@ namespace mm {
 ///
 /// The desk plugs into the computer showing the interface; the browser reads it with the Web MIDI API and writes each batch of messages into the hidden, live `midi` control.
 /// A batch is each message in hex, decoded as it is written, so two identical batches, such as two equal knob turns, both count.
-class MidiService : public MoonModule {
+///
+/// The way back is a surface: the hidden `desk` control holds what the desk shows, one message per fader motor, button light and knob ring.
+/// It is state rather than a log, so the browser sends only the slots that changed, and a page opened later still finds the motors' positions.
+class MidiService : public MoonModule, public ControlSurface {
 public:
     /// A service, so the container accepts it as a child.
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Service; }
 
-    /// Declare the inbound batch.
+    /// Declare the inbound batch and the desk's state.
     void defineControls() override {
         controls_.addText("midi", midi_, sizeof(midi_));
         controls_.setHidden(controls_.count() - 1, true);
         controls_.setLive(controls_.count() - 1);
+        controls_.addText("desk", desk_, sizeof(desk_));
+        controls_.setHidden(controls_.count() - 1, true);
+        controls_.setReadOnly(controls_.count() - 1, true);
+        controls_.setLive(controls_.count() - 1);
         MoonModule::defineControls();
     }
 
-    /// Decode each batch the interface writes.
+    /// Attach to the surface once it exists, which seeds every slot of the desk.
+    void tick20ms() MM_NONBLOCKING override {
+        if (attached_) return;
+        if (auto* c = ControlModule::active()) { attached_ = true; c->addSurface(this); }
+    }
+
+    /// Detach, since the surface list is walked from the render thread.
+    void release() override {
+        if (auto* c = ControlModule::active()) c->removeSurface(this);
+        attached_ = false;
+        MoonModule::release();
+    }
+
+    /// Show one surface control on the desk: a fader's motor, a switch's SELECT light, an encoder's ring.
+    void sendValue(SurfaceControl kind, uint8_t index, uint8_t value) override {
+        uint8_t m[3];
+        uint8_t slot;
+        if (kind == SurfaceControl::Fader && index < ControlModule::kFaderCount) {
+            // The byte back to 14 bits, so the desk's own pitch bend decodes to this byte again.
+            const uint16_t v14 = static_cast<uint16_t>((value << 6) | (value >> 2));
+            m[0] = static_cast<uint8_t>(0xE0 | index); m[1] = v14 & 0x7F; m[2] = static_cast<uint8_t>(v14 >> 7);
+            slot = index;
+        } else if (kind == SurfaceControl::Switch && index < ControlModule::kSwitchCount) {
+            m[0] = 0x90; m[1] = static_cast<uint8_t>(kSelectNote + index); m[2] = value ? 0x7F : 0x00;
+            slot = static_cast<uint8_t>(kDeskFaders + index);
+        } else if (kind == SurfaceControl::Encoder && index < ControlModule::kEncoderCount) {
+            // The ring fills from the left, its eleven lights showing the 0..255 position.
+            m[0] = 0xB0; m[1] = static_cast<uint8_t>(kRingCC + index); m[2] = static_cast<uint8_t>(kRingFill | (1 + value * 10 / 255));
+            slot = static_cast<uint8_t>(kDeskFaders + ControlModule::kSwitchCount + index);
+        } else {
+            return;
+        }
+        if (!desk_[0]) {
+            // Every slot is written in the same call that attaches, before the state is read, so no placeholder reaches a desk.
+            for (uint8_t i = 0; i < kDeskSlots; i++) std::memcpy(desk_ + i * kSlotChars, "000000 ", kSlotChars);
+            desk_[kDeskSlots * kSlotChars - 1] = 0;
+        }
+        char hex[7];
+        mm::formatTo(hex, sizeof(hex), "%02x%02x%02x", m[0], m[1], m[2]);
+        std::memcpy(desk_ + slot * kSlotChars, hex, 6);
+        // A motor following a moving value steps once a second on the periodic patch, so the desk asks to go out now.
+        notifyValuesChanged();
+    }
+
+    /// Decode each batch the interface writes, and rebuild the desk's state if a client overwrote it.
     void onControlChanged(const char* name) override {
+        if (std::strcmp(name, "desk") == 0) {
+            desk_[0] = 0;
+            if (auto* c = ControlModule::active(); c && attached_) c->resendTo(this);
+            return;
+        }
         if (std::strcmp(name, "midi") != 0) return;
         statusBuf_[0] = 0;
         decodeBatch(midi_);
@@ -77,6 +135,11 @@ private:
     static constexpr uint8_t kTouchNote = 0x68;    ///< the first fader's touch sensor
     static constexpr uint8_t kSelectNote = 0x18;   ///< the first channel's SELECT button
     static constexpr uint8_t kVPotCC = 0x10;       ///< the first knob's rotation
+    static constexpr uint8_t kRingCC = 0x30;       ///< the first knob's light ring
+    static constexpr uint8_t kRingFill = 0x20;     ///< the ring mode that fills up to the position
+    static constexpr uint8_t kDeskFaders = ControlModule::kFaderCount;
+    static constexpr uint8_t kDeskSlots = ControlModule::kFaderCount + ControlModule::kSwitchCount + ControlModule::kEncoderCount;
+    static constexpr uint8_t kSlotChars = 7;       ///< "e07f7f " per message
 
     /// Read "hex hex...", each token one message; a malformed token ends the batch.
     void decodeBatch(const char* s) {
@@ -120,7 +183,9 @@ private:
     }
 
     char midi_[512] = {};     ///< the newest batch the interface wrote
+    char desk_[kDeskSlots * kSlotChars] = {};   ///< the faders, then the switches, then the encoders, as the desk should show them
     char statusBuf_[40] = {}; ///< what the last message did
+    bool attached_ = false;
 };
 
 }  // namespace mm

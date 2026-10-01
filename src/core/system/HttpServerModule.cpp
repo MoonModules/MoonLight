@@ -47,6 +47,7 @@
 #include "core/util/ModuleFactory.h"
 #include "core/util/JsonUtil.h"
 #include "core/util/JsonSink.h"
+#include "core/util/format.h"            // formatTo: nonblocking formatting into a fixed buffer
 #include "core/system/Sha1.h"
 #include "core/system/Base64.h"
 #include "core/system/ControlModule.h"   // look presets on /presets.json (HA WLED integration)
@@ -89,11 +90,23 @@ void HttpServerModule::setup() {
     }
     // Any module's rebuildControls() flips the WS full-resync flag through this static hook. A schema change carries hidden flags and option sets, which the value-patch cannot, so the resync is what reaches every client with them.
     MoonModule::setSchemaChangedHook(&HttpServerModule::onSchemaChanged);
+    // A module whose values someone watches move, a desk's motors, asks for them ahead of the second.
+    MoonModule::setValuesChangedHook(&HttpServerModule::onValuesChanged);
 }
 
 // Static schema-changed sink (see setup): route a module's rebuildControls() signal to the one live HttpServerModule's resync flag. instance_ mirrors the FilesystemModule::noteDirty pattern.
 void HttpServerModule::onSchemaChanged() {
     if (instance_) instance_->requestFullResync();
+}
+
+void HttpServerModule::onValuesChanged(MoonModule* mod) {
+    if (!instance_ || !mod || !mod->name()) return;
+    HttpServerModule& self = *instance_;
+    for (uint8_t i = 0; i < self.soonCount_; i++)
+        if (std::strcmp(self.soon_[i], mod->name()) == 0) return;
+    // A full list leaves the rest to the periodic patch, which carries every change anyway.
+    if (self.soonCount_ >= kSoonModules) return;
+    mm::formatTo(self.soon_[self.soonCount_++], sizeof(self.soon_[0]), "%s", mod->name());
 }
 
 void HttpServerModule::release() {
@@ -112,7 +125,11 @@ void HttpServerModule::release() {
     }
     server_.close();
     boundPort_ = 0;
-    if (instance_ == this) { MoonModule::setSchemaChangedHook(nullptr); instance_ = nullptr; }
+    if (instance_ == this) {
+        MoonModule::setSchemaChangedHook(nullptr);
+        MoonModule::setValuesChangedHook(nullptr);
+        instance_ = nullptr;
+    }
     MoonModule::release();   // chain: uniform override-and-chain (no buffers/children today, but the convention holds)
 }
 
@@ -132,6 +149,8 @@ void HttpServerModule::tick20ms() MM_NONBLOCKING {
     // Cuts connect→first-preview latency from up to ~1 s + drain down to a few tens of ms.
     // No-op in the common (no-resync) case.
     if (fullResyncPending_) pushStateToWebSockets();
+    // A module that asked goes out now rather than on the next second.
+    if (soonCount_) pushSoonPatch();
     // Read inbound WS frames, because the socket carries state in both directions.
     // The native WLED app sets its on/off and brightness by sending a {on,bri} text frame over /ws, so a push-only socket would drop them.
     // Cheap (non-blocking, usually nothing pending).
@@ -1193,9 +1212,42 @@ void HttpServerModule::baselineLeafHashes() {
 }
 
 uint16_t HttpServerModule::buildStatePatch(JsonSink& sink) {
+    return buildPatch(sink, [&](auto&& fn) { forEachStateLeaf(fn); });
+}
+
+uint16_t HttpServerModule::buildSoonPatch(JsonSink& sink) {
+    const uint16_t changed = buildPatch(sink, [&](auto&& fn) {
+        for (uint8_t i = 0; i < soonCount_; i++)
+            // No appearsInUi test: the interface drops a patch for a module it never saw.
+            if (MoonModule* mod = scheduler_ ? scheduler_->firstByName(soon_[i]) : nullptr) visitModuleLeaves(mod, fn);
+    });
+    soonCount_ = 0;
+    return changed;
+}
+
+void HttpServerModule::pushSoonPatch() {
+    // A small frame written into a full state mid-drain would land inside that message, so it waits.
+    if (fullResyncPending_ || stateSend_.active) return;
+    const uint32_t now = platform::millis();
+    if (now - soonSentMs_ < kSoonMs) return;
+    soonSentMs_ = now;
+    JsonSink sink;
+    // The leaves' hashes update as they go, so the second's patch does not send them again.
+    if (buildSoonPatch(sink) > 0) sendPatch(sink);
+}
+
+void HttpServerModule::sendPatch(const JsonSink& sink) {
+    for (auto& ws : wsClients_) {
+        if (!ws.valid()) continue;
+        if (!sendWsTextFrame(ws, sink.data(), static_cast<int>(sink.size()))) ws.close();
+    }
+}
+
+template <class Walk>
+uint16_t HttpServerModule::buildPatch(JsonSink& sink, Walk&& walk) {
     sink.append("{\"patch\":[");
     uint16_t changed = 0;
-    forEachStateLeaf([&](uint32_t ph, uint32_t vh, const char* path, JsonSink& vs) {
+    walk([&](uint32_t ph, uint32_t vh, const char* path, JsonSink& vs) {
         LeafHash* h = findLeaf(ph);
         if (h && h->value == vh) return;              // unchanged: the common case, emit nothing
         if (h) h->value = vh;                          // known leaf, value changed → update cache
@@ -2658,13 +2710,7 @@ void HttpServerModule::pushStateToWebSockets() {
         // One skipped second of telemetry; the drained full state carries the fresh values anyway.
         if (stateSend_.active) return;
         JsonSink sink;
-        const uint16_t changed = buildStatePatch(sink);
-        if (changed > 0) {
-            for (auto& ws : wsClients_) {
-                if (!ws.valid()) continue;
-                if (!sendWsTextFrame(ws, sink.data(), static_cast<int>(sink.size()))) ws.close();
-            }
-        }
+        if (buildStatePatch(sink) > 0) sendPatch(sink);
         // changed == 0 → nothing to send this second (an idle device); the common quiet case.
     }
 

@@ -8347,6 +8347,8 @@ requestAnimationFrame(gamepadLoop);
 // MidiService's hidden `midi` control, the same path the gamepad takes. Chrome, Edge and Firefox
 // offer Web MIDI on a secure origin (localhost); Safari has none. Access is requested only once a
 // MidiService exists, since asking shows the user a permission prompt.
+// The way back: the service's hidden `desk` control is what the desk shows, one message per slot,
+// and the bridge sends the desk the slots that changed since it last sent them.
 const MIDI_SEND_MS = 33;
 const MIDI_BATCH_MAX = 60;   // messages per write, well inside the service's text buffer
 
@@ -8356,8 +8358,22 @@ function encodeMidi(messages) {
     return messages.map(hex).join(" ");
 }
 
+// The slots of `desk` that differ from what was sent, as messages, remembering them as sent.
+// A slot that is not a channel message (0x80..0xEF) is skipped, so nothing malformed reaches a desk.
+function deskChanges(sent, desk) {
+    const out = [];
+    desk.split(" ").forEach((tok, i) => {
+        if (tok === sent[i] || !/^[89a-e][0-9a-f]{5}$/.test(tok)) return;
+        sent[i] = tok;
+        out.push(Uint8Array.from(tok.match(/../g), h => parseInt(h, 16)));
+    });
+    return out;
+}
+
 let midiAsked = false;
+let midiAccess = null;
 let midiSentAt = 0;
+let midiDeskSent = [];   // per slot, what the desk was last sent
 const midiQueue = [];
 function midiListen(access) {
     for (const input of access.inputs.values())
@@ -8377,10 +8393,16 @@ function midiLoop(now) {
     if (!midiAsked) {
         midiAsked = true;
         navigator.requestMIDIAccess().then(access => {
+            midiAccess = access;
             midiListen(access);
-            access.onstatechange = () => midiListen(access);   // a desk plugged in later
+            // A desk plugged in later is listened to, and sent every slot.
+            access.onstatechange = () => { midiListen(access); midiDeskSent = []; };
         }).catch(err => console.warn("[midi] access refused", err));
     }
+    const desk = midiAccess && services[0].controls?.find(c => c.name === "desk")?.value;
+    if (desk)
+        for (const msg of deskChanges(midiDeskSent, desk))
+            for (const output of midiAccess.outputs.values()) output.send(msg);
     if (!midiQueue.length || now - midiSentAt < MIDI_SEND_MS) return;
     const batch = midiQueue.splice(0, MIDI_BATCH_MAX);
     midiSentAt = now;

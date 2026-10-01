@@ -366,6 +366,12 @@ Measured on the S3 image with `xtensa-esp32s3-elf-nm -S`: 8.6 KB in all, the lar
 Candidates, to measure rather than assume: a `ListSource` that is a member the module hands out (no second base, so no thunk), or keeping the bodies out of line so the thunk can only jump.
 Done when the thunk total in the S3 symbol table is near zero, with the delta in repo-health.
 
+### An early state push costs 3 to 5 ms on the S3 (2026-10-01)
+
+`notifyValuesChanged()` patches one module on the next 20 ms tick, at most 25 times a second; with a MIDI desk following a self-playing Pong it took the S3 from about 325 to 295 fps, 3 to 5 ms per push.
+Building that patch walks one module, so the time is most likely the WebSocket write on the render thread, but the split is unmeasured: one write per frame instead of two saved nothing.
+Time the build and the send separately on the S3, then decide between moving the write off the render thread and a lower cap.
+
 ### E1.31 multicast receive (IGMP join)
 
 NetworkReceiveEffect accepts E1.31 via unicast only — the same scope MoonLight ships. Multicast senders address the per-universe group `239.255.{universe_hi}.{universe_lo}`, which a receiver must join via IGMP. **The platform half of this now exists**: `UdpSocket::joinMulticast()` shipped with the WLED audio-sync work (2026-08-29) and is used in anger there, on both desktop and ESP32. What is left for E1.31 is the join-per-accepted-universe bookkeeping, not the socket support. Add when a multicast-only sender actually shows up on a bench; until then the spec documents "point sACN senders at the device's IP".
@@ -1599,7 +1605,7 @@ Two gaps found wiring a real control surface to the [OSC module](../../moonmodul
 
 **`/mm/pad/N` has no handler.** The [OSC plan](../past/plans/Plan-20260829%20-%20OSC%20control%20ingest%20(shipped).md)
 lists it (`i 1 -> apply preset in slot 12`), and `OscModule::handle` routes `/mm/fader/`,
-`/mm/encoder/`, `/mm/switch/` and `/mm/control/` but not pads. So a surface can drive every
+`/mm/encoder/` and `/mm/switch/` but not pads. So a surface can drive every
 continuous control and every switch, but cannot fire a preset, which is the one thing a pad grid
 exists for. The route is small; what needs deciding is what a pad press means when the slot is
 empty, and whether a nonzero value is a press or a press-and-hold.

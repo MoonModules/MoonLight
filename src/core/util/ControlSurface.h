@@ -33,7 +33,7 @@
 ///
 /// Everything past `sendValue` has a default, so a transport implements only what its hardware can do.
 /// OSC overrides one method, a GPIO surface lights an LED, and an APC transport overrides the color verbs.
-/// OSC is the only transport today, so the other three have no implementer yet.
+/// OSC and MIDI are the transports today, and both override the value verb only, so the other three have no implementer yet.
 /// They are kept because their shapes come from the hardware rather than a guess, and a default each means a transport that cannot do one writes no code for it.
 
 #include <cstdint>

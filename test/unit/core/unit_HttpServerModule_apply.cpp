@@ -353,7 +353,7 @@ TEST_CASE("schema-changed hook: rebuildControls() resyncs ONLY on a real schema 
     s.addModule(root);
     s.setup();
     mm::HttpServerModule http; http.setScheduler(&s);
-    http.installSchemaHookForTest();                // hook only, no TCP listener (a port bind is flaky)
+    http.installHooksForTest();                     // hooks only, no TCP listener (a port bind is flaky)
 
     // A value-only rebuild (same control set) must NOT resync, that's the common slider-drag path, carried by the per-leaf value patch, not a full metadata resend.
     http.clearFullResyncForTest();
@@ -400,6 +400,41 @@ TEST_CASE("buildStatePatch: a changed control value yields a one-entry patch") {
     mm::JsonSink sink2;
     CHECK(http.buildStatePatchForTest(sink2) == 0);
 
+    s.deleteTree(root);
+}
+
+// A value someone watches move, a desk's motorized fader, goes out on the next 20 ms tick in a patch of its own module rather than waiting for the second.
+TEST_CASE("a module that notifies its values changed is patched alone, ahead of the second") {
+    registerTestTypes();
+    mm::Scheduler s;
+    auto* root = new Box(); root->setName("Root");
+    auto* k = new Knob(); k->setName("K");
+    auto* l = new Knob(); l->setName("L");
+    root->addChild(k);
+    root->addChild(l);
+    s.addModule(root);
+    s.setup();
+    mm::HttpServerModule http; http.setScheduler(&s);
+    http.installHooksForTest();
+    http.baselineLeafHashesForTest();
+
+    k->value = 77;
+    l->value = 5;
+    k->notifyValuesChanged();
+    k->notifyValuesChanged();                     // asking twice is one entry
+    mm::JsonSink early;
+    CHECK(http.buildSoonPatchForTest(early) == 1);
+    CHECK(std::strstr(early.data(), "\"path\":\"K/value\"") != nullptr);
+    CHECK(std::strstr(early.data(), "L/value") == nullptr);   // a module that did not ask waits for the second
+
+    // The second's patch carries what the early one did not, and nothing twice.
+    mm::JsonSink second;
+    CHECK(http.buildStatePatchForTest(second) == 1);
+    CHECK(std::strstr(second.data(), "\"path\":\"L/value\"") != nullptr);
+    mm::JsonSink none;
+    CHECK(http.buildSoonPatchForTest(none) == 0);   // the request was served and forgotten
+
+    http.release();
     s.deleteTree(root);
 }
 

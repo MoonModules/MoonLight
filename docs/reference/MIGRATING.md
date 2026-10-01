@@ -24,6 +24,15 @@ MoonLight ships **no migration code**: the persistence layer is robust by defaul
 
 ## Unreleased
 
+### Inputs target the control surface only
+
+**Action: *re-set a control*.**
+
+A button, analog, infrared or gamepad row names a surface control (`Control.switch1`, `encoder3`, `fader2`, `pad5`); the [Control](../moonmodules/core/system.md#control) card decides what that control drives.
+A saved row that named another control directly, such as `Drivers.on`, comes back unassigned, and the service's status says how many.
+Point the row at a surface control and give that control the target the row had.
+OSC's `/mm/control/<Module>/<control>` address is gone for the same reason; send to `/mm/fader/N`, `/mm/encoder/N` or `/mm/switch/N`.
+
 ### Pong keeps its own clock
 
 **Action: *nothing*.**

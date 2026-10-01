@@ -167,6 +167,13 @@ public:
     /// Fire the resync directly, for a change the control rebuild does not cover.
     static void notifySchemaChanged() { if (schemaChangedHook_) schemaChangedHook_(); }
 
+    /// The values-changed hook's type, the same decoupling as the schema hook.
+    using ValuesChangedFn = void (*)(MoonModule*);
+    /// Install the hook that pushes a module's changed values ahead of the periodic patch.
+    static void setValuesChangedHook(ValuesChangedFn fn) { valuesChangedHook_ = fn; }
+    /// Send this module's changed values on the next transport tick rather than the next second, for a value someone watches move.
+    void notifyValuesChanged() { if (valuesChangedHook_) valuesChangedHook_(this); }
+
     /// Stop the render worker directly, for a mutation that frees memory outside the child array.
     static void notifyQuiesceRender() { if (quiesceRenderHook_) quiesceRenderHook_(); }
     /// Clear this module's controls and every descendant's.
@@ -456,6 +463,7 @@ private:
 
     // One function pointer for the whole process, as with the persistence hook.
     static inline SchemaChangedFn schemaChangedHook_ = nullptr;
+    static inline ValuesChangedFn valuesChangedHook_ = nullptr;
     static inline QuiesceRenderFn quiesceRenderHook_ = nullptr;
 };
 

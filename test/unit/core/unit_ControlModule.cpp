@@ -1309,6 +1309,52 @@ TEST_CASE("a MIDI batch written by the browser is decoded on the next tick") {
     CHECK(surfaceValue(d, "fader5") == 255);
 }
 
+namespace {
+/// One slot of the MIDI service's `desk` control, the message the desk is sent for it.
+std::string deskSlot(mm::MidiService& midi, uint8_t slot) {
+    auto& cs = midi.controls();
+    for (uint8_t i = 0; i < cs.count(); i++)
+        if (std::strcmp(cs[i].name, "desk") == 0)
+            return std::string(static_cast<const char*>(cs[i].ptr)).substr(slot * 7u, 6);
+    return {};
+}
+}  // namespace
+
+// The way back: the desk is sent where the surface is, a fader's motor as pitch bend, a switch as its SELECT light, an encoder as its ring.
+TEST_CASE("a MIDI desk shows the surface: fader motors, SELECT lights and knob rings") {
+    Device d;
+    mm::MidiService midi;
+    midi.defineControls();
+    REQUIRE(d.scheduler.setControl("Control", "fader1", "{\"value\":255}") == mm::Scheduler::SetControlResult::Ok);
+    REQUIRE(d.scheduler.setControl("Control", "switch2", "{\"value\":true}") == mm::Scheduler::SetControlResult::Ok);
+    REQUIRE(d.scheduler.setControl("Control", "encoder1", "{\"value\":0}") == mm::Scheduler::SetControlResult::Ok);
+    midi.tick20ms();   // attaching seeds every slot
+    CHECK(deskSlot(midi, 0) == "e07f7f");    // fader1 at the top
+    CHECK(deskSlot(midi, 9) == "90197f");    // switch2's light on
+    CHECK(deskSlot(midi, 16) == "b03021");   // encoder1's ring, filled to its first light
+    REQUIRE(d.scheduler.setControl("Control", "fader1", "{\"value\":0}") == mm::Scheduler::SetControlResult::Ok);
+    CHECK(deskSlot(midi, 0) == "e00000");    // the motor follows at once
+    midi.release();
+}
+
+// A desk that reports its motorized fader's position back must land on the value it was sent, or the two would chase each other.
+TEST_CASE("a fader position sent to a MIDI desk decodes back to the same value") {
+    Device d;
+    mm::MidiService midi;
+    midi.defineControls();
+    midi.tick20ms();
+    for (const int v : {0, 1, 127, 128, 254, 255}) {
+        midi.sendValue(mm::SurfaceControl::Fader, 3, static_cast<uint8_t>(v));
+        const std::string hex = deskSlot(midi, 3);
+        const uint8_t m[3] = {static_cast<uint8_t>(std::stoul(hex.substr(0, 2), nullptr, 16)),
+                              static_cast<uint8_t>(std::stoul(hex.substr(2, 2), nullptr, 16)),
+                              static_cast<uint8_t>(std::stoul(hex.substr(4, 2), nullptr, 16))};
+        midi.decode(m, 3);
+        CHECK(surfaceValue(d, "fader4") == v);
+    }
+    midi.release();
+}
+
 // An echo of a value the target already holds is not written again, so a self-playing game never reads it as a player.
 TEST_CASE("a surface does not rewrite a target that already holds the value") {
     struct Game : mm::MoonModule {

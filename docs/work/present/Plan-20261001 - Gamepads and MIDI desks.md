@@ -162,11 +162,13 @@ Checked against the tools a lighting or VJ operator already knows. The shape mat
 - ✅ Inbound: the MCU profile maps fader pitch bend onto the surface's faders, touch notes onto `setTouched`, relative knob turns onto `applyEncoderDelta`, and SELECT onto the switches.
 - ✅ The browser bridge gains Web MIDI inbound, on a secure origin; each write is decoded as it lands.
 - ✅ Verified with the QCon in Chrome on `localhost`: its faders drive the surface and, through it, Pong's paddles.
-- Outbound: the service attaches as a `ControlSurface`, and motors, rings, button lights and scribble strips go back to the desk through the bridge, SysEx included.
+- ✅ Outbound: the service attaches as a `ControlSurface` and keeps the desk's state in the hidden `desk` control, one message per motor, SELECT light and ring; the bridge sends the slots that changed.
+- ✅ The desk's state goes out within 40 ms: a module calls `notifyValuesChanged()` and the server patches that module alone on the next 20 ms tick, at most 25 times a second.
+- Outbound, open: scribble strips over SysEx.
 - Learn for a desk without a profile, and the OpenLamp convention as the generic fallback mapping where it fits.
 - Verify the outbound half with the X-Touch and the QCon: a preset change moves the faders, and a touched fader is not fought.
 
-### 3. Surface-only input targets
+### 3. Surface-only input targets ✅
 
 - `ButtonService`, `AnalogService`, `InfraredService`, `GamepadService` and OSC's `/mm/control/<Module>/<control>` path lose their direct `Module.control` targets; every input reaches a control through the surface.
 - A persisted row with a direct target is reported rather than silently dropped, and MIGRATING records the change.

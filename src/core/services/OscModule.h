@@ -16,8 +16,7 @@ namespace mm {
 
 /// Receives OSC over the network and writes it onto this device's controls.
 ///
-/// A surface addresses the surface: the faders, encoders and switches the control module owns.
-/// One address form reaches any control directly, which is what makes this useful on day one.
+/// A surface addresses the surface: the faders, encoders and switches the control module owns, which decides what each one drives.
 /// @card OscModule.png
 ///
 /// @moreinfo
@@ -172,8 +171,6 @@ private:
         } else if (std::strcmp(a, "/mm/hello") == 0) {
             // A client restarting on the same address is invisible to the checks above.
             resendAll_ = true;
-        } else if (std::strncmp(a, "/mm/control/", 12) == 0) {
-            writeControl(a + 12, m);
         }
         received_++;
     }
@@ -189,38 +186,26 @@ private:
         char control[16];
         mm::formatTo(control, sizeof(control), "%s%ld", prefix, idx);
         // The raw value, since scaling would round a small positive one down to off.
-        if (asBool) setBool("Control", control, osc::isTruthy(m));
-        else        setValue("Control", control, osc::toByte(m));
+        if (asBool) setBool(control, osc::isTruthy(m));
+        else        setValue(control, osc::toByte(m));
     }
 
-    /// Reach any control directly, the names taken verbatim so a typo does not resolve.
-    void writeControl(const char* rest, const osc::Message& m) {
-        const char* slash = std::strchr(rest, '/');
-        if (!slash || slash == rest || !slash[1]) return;
-        char module[24];
-        const size_t n = static_cast<size_t>(slash - rest);
-        if (n >= sizeof(module)) return;
-        std::memcpy(module, rest, n);
-        module[n] = '\0';
-        setValue(module, slash + 1, osc::toByte(m));
-    }
-
-    /// Write a boolean control, whose body is the literal rather than a number.
-    void setBool(const char* module, const char* control, bool on) {
+    /// Write a boolean surface control, whose body is the literal rather than a number.
+    void setBool(const char* control, bool on) {
         auto* sched = Scheduler::instance();
         if (!sched) return;
         char body[32];
         std::snprintf(body, sizeof(body), "{\"value\":%s}", on ? "true" : "false");
-        sched->setControl(module, control, body);
+        sched->setControl(kSurfaceModule, control, body);
     }
 
-    /// Write a numeric control through the shared primitive.
-    void setValue(const char* module, const char* control, uint8_t value) {
+    /// Write a numeric surface control through the shared primitive.
+    void setValue(const char* control, uint8_t value) {
         auto* sched = Scheduler::instance();
         if (!sched) return;
         char body[32];
         mm::formatTo(body, sizeof(body), "{\"value\":%u}", static_cast<unsigned>(value));
-        sched->setControl(module, control, body);
+        sched->setControl(kSurfaceModule, control, body);
     }
 
     /// Open and bind, deferred to the tick and throttled, so a busy port costs one socket.

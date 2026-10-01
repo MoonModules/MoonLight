@@ -5,7 +5,7 @@ No dependency on purpose: OSC 1.0 is a dozen lines to emit, and a pip install wo
 requirement for everyone to run one bench check.
 
     uv run moondeck/check/send_osc.py 192.168.1.164 /mm/fader/1 0.75
-    uv run moondeck/check/send_osc.py 192.168.1.164 /mm/control/Drivers/brightness 128
+    uv run moondeck/check/send_osc.py 192.168.1.164 /mm/fader/1 192
 
 A value containing '.' is sent as an OSC float (what TouchOSC and Resolume send, 0..1); anything
 else as an int (what a hardware bridge sends, 0..255). Both reach the same control value.

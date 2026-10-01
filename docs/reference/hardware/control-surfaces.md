@@ -1,10 +1,8 @@
 # Control surfaces: hardware reference
 
-What MoonLight needs to know about the physical desks on the bench, so a control-ingest plan can be written from facts rather than from a product page. A desk here is a candidate source for [ControlModule](../../moonmodules/core/system.md#control)'s pads, encoders and faders, which were laid out to match this class of hardware in the first place.
+The physical desks on the bench, and Mackie Control as it travels on the wire. A desk here drives [ControlModule](../../moonmodules/core/system.md#control)'s encoders, faders and switches, which were laid out to match this class of hardware. How to connect one: [Connecting a control surface](../../how-to/control-surface.md).
 
-**The headline, because it contradicts the obvious assumption:** neither desk speaks OSC. Both are
-**Mackie Control** surfaces. OSC is the right protocol for the wider ecosystem (Resolume,
-TouchDesigner, TouchOSC, DIY Arduino rigs) and is planned on that basis, but it does not reach these two. See [the OSC plan](../../work/past/plans/Plan-20260829%20-%20OSC%20control%20ingest%20(shipped).md).
+**Neither desk speaks OSC.** Both are **Mackie Control** surfaces over MIDI, which MoonLight reads through its [MIDI service](../../moonmodules/core/services.md#midi).
 
 ## Behringer X-Touch (Universal)
 
@@ -40,12 +38,11 @@ tunnelled over a network with a session layer: an invitation handshake, synchron
 | Connectivity | **USB 2.0 only** (class-compliant) |
 | Not supported | OSC, Ethernet |
 
-**No network port at all.** Reaching this desk means a USB-MIDI host, so an ESP32 would need USB
-host support and a machine in the rack is the practical answer today.
+**No network port at all.** It reaches MoonLight through a computer's USB port and the browser.
 
 ## What Mackie Control looks like on the wire
 
-Enough to judge the size of the job. MCU is ordinary MIDI carrying agreed meanings, so a parser is small; the work is in the semantics and the feedback, not the bytes.
+MCU is ordinary MIDI carrying agreed meanings, so a parser is small; the work is in the semantics and the feedback, not the bytes.
 
 | element | encoding |
 |---|---|
@@ -56,16 +53,4 @@ Enough to judge the size of the job. MCU is ordinary MIDI carrying agreed meanin
 | Buttons and LEDs | note on/off, the same note number in both directions |
 | Scribble strips | SysEx, `0x12` after the header, then the text |
 
-**It is bidirectional by nature, and that is the point of the hardware.** The motors only move
-because the host sends fader positions back; the scribble strips only show anything because the host writes them. A MoonLight implementation that only *reads* the desk would work, but would waste what makes these desks worth owning: a preset change should move the faders and relabel the strips.
-
-## What this means for MoonLight
-
-Three routes, in increasing cost:
-
-1. **OSC, for everything else.** Does not reach either desk, reaches the whole app ecosystem and
-   any DIY controller. Planned first because it is small and broad.
-2. **A bridge.** An existing MCU-to-OSC translator on a laptop turns either desk into an OSC
-   source. No firmware work; costs a machine in the rack, which a festival podium may already have.
-3. **RTP-MIDI + MCU in firmware.** Reaches the X-Touch over Ethernet with no host machine, and is
-   the only route that drives the motors from MoonLight directly. Needs RFC 6295 (session handshake, journalling) plus the MCU semantics above, both directions. Does not help the QCon, which has no network port.
+**It is bidirectional by nature, and that is the point of the hardware.** The motors move only because the host sends fader positions back, and the scribble strips show only what the host writes. MoonLight's [MIDI service](../../moonmodules/core/services.md#midi) sends the positions, the button lights and the rings, so a preset change moves the faders.
