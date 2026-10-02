@@ -11,8 +11,8 @@ namespace mm {
 /// A pixel's hue comes from its own x plus y, walked by the clock, so the bands run diagonally.
 class RainbowEffect : public EffectBase {
 public:
-    /// Catalog tags: MoonLight origin.
-    const char* tags() const override { return "💫"; }
+    /// Catalog tags: FastLED origin.
+    const char* tags() const override { return "⚡️"; }
     /// Writes the z=0 slice, which extrude duplicates through a volume.
     Dim dimensions() const override { return Dim::D2; }
 

@@ -100,6 +100,8 @@ public:
         // Clamped, since the frequency map can land outside the strip.
         if (segLoc < 0) segLoc = 0;
         if (segLoc > maxLen - 1) segLoc = maxLen - 1;
+        // A silent band places no dot, so silence leaves only the fading trail while the sweep moves on.
+        if (f->bands[freqBand_] == 0) { draw::blur(cv, blur); return; }
 
         // Colored by the band's magnitude, where a value past 255 wraps the palette rather than clamping.
         const int denom = (maxLen - 1) > 1 ? (maxLen - 1) : 1;   // max(1, maxLen-1)

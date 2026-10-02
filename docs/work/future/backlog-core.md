@@ -90,6 +90,13 @@ judgment per line. Do it as its own change with its own review, a directory at a
 inside a branch about something else: a blanket find-and-replace over comments is how a code
 identifier gets rewritten by accident.
 
+## Test hooks appear in the generated API pages (2026-10-02)
+
+check_docgen requires a `///` on every public function, so a test hook gets one, and Doxygen then publishes it: 69 `*ForTest` functions across 21 API pages, plus `HostResolver::TestScope`.
+One rule fixes the class: a test hook's name ends in `ForTest`, `gen_api.py` sets `EXCLUDE_SYMBOLS = *ForTest`, and check_docgen exempts those names from the `///` rule, a `//` line serving the source reader.
+The stragglers get renamed to fit, such as `TestScope` and `platform::setTestNowMs`, and documentation-standards.md gains the rule in one sentence.
+A change of its own, since it renames symbols across the repo and moves the docgen counts.
+
 ## Distribution
 
 ### The arm64 `.deb` is untested on Raspberry Pi OS bookworm (2026-09-13)
@@ -359,6 +366,19 @@ Estimates, not measurements, so they live here rather than in [performance.md](.
 | Static IPv6 | +20 KB | lwIP IPv6 component (off by default). Only if a deployment needs it. |
 | WebSocket TLS (`wss://`) | ~0 KB | Reuses linked mbedTLS; certificate handling adds <5 KB. |
 
+### `ListSource` methods compile twice: ~8.6 KB of thunks (2026-10-01)
+
+Every module that is `MoonModule` and `ListSource` gets its list methods emitted twice on ESP32: once as the method, once as a "non-virtual thunk" for the second base, and GCC copies the whole body into the thunk instead of a jump.
+Measured on the S3 image with `xtensa-esp32s3-elf-nm -S`: 8.6 KB in all, the largest `GamepadService` 1.6 KB, `ButtonService` 1.3 KB, `LightPresetsModule` 1.2 KB, `ControlModule` 1.1 KB, `InfraredService` 0.9 KB, `AnalogService` 0.9 KB.
+Candidates, to measure rather than assume: a `ListSource` that is a member the module hands out (no second base, so no thunk), or keeping the bodies out of line so the thunk can only jump.
+Done when the thunk total in the S3 symbol table is near zero, with the delta in repo-health.
+
+### An early state push costs 3 to 5 ms on the S3 (2026-10-01)
+
+`notifyValuesChanged()` patches one module on the next 20 ms tick, at most 25 times a second; with a MIDI desk following a self-playing Pong it took the S3 from about 325 to 295 fps, 3 to 5 ms per push.
+Building that patch walks one module, so the time is most likely the WebSocket write on the render thread, but the split is unmeasured: one write per frame instead of two saved nothing.
+Time the build and the send separately on the S3, then decide between moving the write off the render thread and a lower cap.
+
 ### E1.31 multicast receive (IGMP join)
 
 NetworkReceiveEffect accepts E1.31 via unicast only — the same scope MoonLight ships. Multicast senders address the per-universe group `239.255.{universe_hi}.{universe_lo}`, which a receiver must join via IGMP. **The platform half of this now exists**: `UdpSocket::joinMulticast()` shipped with the WLED audio-sync work (2026-08-29) and is used in anger there, on both desktop and ESP32. What is left for E1.31 is the join-per-accepted-universe bookkeeping, not the socket support. Add when a multicast-only sender actually shows up on a bench; until then the spec documents "point sACN senders at the device's IP".
@@ -410,73 +430,6 @@ highest-value case.
 **Now caught going forward for scripts too**: `.mle`/`.mll`/`.mlm` joined the checker's SUFFIXES
 (they were unchecked, which is how `colour` reached ten shipped scripts), so the library cannot
 drift again.
-
-### Multicast discovery has no fallback when the group never arrives
-
-`DevicesModule` announces presence on the multicast group and every device always joins it, so peers
-find each other whatever each has set `wledCompatible` to. The docstring states the worst case as
-"without IGMP snooping a switch floods multicast exactly like broadcast", i.e. it degrades to the
-thing it was avoiding. **Field reports from other projects say the real worst case is stronger:
-multicast sometimes does not arrive at all**, most often when the path bridges physical media
-(a WiFi client talking to a wired one), where consumer access points and switches handle group
-membership least well. Bursty delivery is reported too, packets arriving in clumps rather than at
-the send cadence.
-
-That failure is silent here: peers simply never appear, and the card shows an empty list that looks
-exactly like a healthy single-device setup.
-
-**A periodic broadcast probe is the obvious fix and it is the wrong one.** The trigger would be
-"no peer seen for N seconds", which is the PERMANENT state of every device that has no company,
-and most installs are a single device. Every one of them would broadcast forever, which is the
-chatter multicast was chosen to avoid, and worst on exactly the WiFi networks already struggling.
-A device cannot tell "the group is broken" from "I am alone" by listening: both are silence.
-
-So the fallback needs a trigger that is not silence.
-
-**The shape that works: try broadcast because it is cheap, rather than waiting for silence to mean
-something.** Announce on multicast, listen on BOTH, and let evidence decide. What is detectable is
-not "I heard nothing" but an ASYMMETRY: a peer heard over broadcast that never arrived over
-multicast proves the group is broken, where silence proves nothing. A device that sees that adds
-the broadcast copy to its own announcements and keeps it.
-
-That needs a bootstrap, because two devices both waiting for evidence never produce any: each is
-quiet on broadcast, so neither gives the other the packet that would settle it. **Announce on both
-for a bounded window after boot, then settle to multicast alone unless broadcast proved necessary.**
-The chatter is one-time and bounded rather than permanent, which is what makes it affordable on the
-WiFi networks this exists for.
-
-The control that follows is a mode rather than a compatibility flag: `multicast` (quiet, today's
-default), `multicast + broadcast` (what `wledCompatible = true` does now, and what WLED apps need),
-and `auto` (the rule above). Unicast is deliberately absent: discovery is one-to-many, and there is
-no address to unicast to before anything has been discovered. Document broadcast as the
-WLED-compatible mode rather than naming the flag after WLED.
-
-**It stays on DevicesModule rather than moving up to NetworkModule.** Three places in the codebase
-send to a group, and only one of them is ours to choose: discovery uses MoonLight's own
-`239.255.x.x`, audio sync uses WLED's `239.0.0.1`, and sACN send uses the universe-derived
-`239.255.{hi}.{lo}` that E1.31 mandates. A network-level "prefer broadcast" switch could not move
-the latter two without breaking the protocols they speak, so a control there would imply an
-authority it does not have.
-
-**Can a device self-test by hearing its own multicast? Mostly no, and the reason is worth writing
-down.** `IP_MULTICAST_LOOP` is never set anywhere in the platform layer, so it sits at the stack
-default, which is ON for both lwIP and BSD sockets. A device therefore hears its own multicast
-delivered internally, before the packet ever reaches the wire, so the test passes on a network where
-multicast is entirely broken. Turning loopback off makes hearing yourself meaningful, but then the
-test demands that the switch or AP reflect group traffic back to the sending port, which plenty
-deliberately do not do, so healthy networks would fail it.
-
-What the self-test IS good for is the negative case: with loopback on, NOT hearing your own
-multicast means the local join or socket is broken, which is a real and actionable fault. It
-diagnoses the device, not the network. The network half still needs a peer, because "did my packet
-cross this switch" cannot be answered with nothing on the other side.
-
-**Unverified:** the lwIP loopback default above is read from the socket semantics and our own code,
-not measured on a board. Confirm on an ESP32 before building on it.
-
-**Land the diagnosis whatever else happens.** Reporting "joined the group, no peers seen" on the
-card costs almost nothing and turns a silent failure into a legible state, and it is useful even if
-the auto mode is never built.
 
 ### ESP32 UDP receive is bounded by PACKET COUNT, not bytes
 
@@ -1592,7 +1545,7 @@ Two gaps found wiring a real control surface to the [OSC module](../../moonmodul
 
 **`/mm/pad/N` has no handler.** The [OSC plan](../past/plans/Plan-20260829%20-%20OSC%20control%20ingest%20(shipped).md)
 lists it (`i 1 -> apply preset in slot 12`), and `OscModule::handle` routes `/mm/fader/`,
-`/mm/encoder/`, `/mm/switch/` and `/mm/control/` but not pads. So a surface can drive every
+`/mm/encoder/` and `/mm/switch/` but not pads. So a surface can drive every
 continuous control and every switch, but cannot fire a preset, which is the one thing a pad grid
 exists for. The route is small; what needs deciding is what a pad press means when the slot is
 empty, and whether a nonzero value is a press or a press-and-hold.

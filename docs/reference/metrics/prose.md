@@ -9,16 +9,16 @@ This number is the debt behind that gate, and it RATCHETS: a rise fails the chec
 docgen.md does. A comment is prose wherever it lives, so a `//` in the web interface and a
 `#` in a script are counted beside a `///` in a header.
 
-**3339 finding(s)** across 351 file(s).
+**3136 finding(s)** across 342 file(s).
 
 | rule | findings |
 |---|---|
-| `MoonLight.EmDash` | 1891 |
-| `MoonLight.Weasel` | 785 |
-| `MoonLight.SentenceLength` | 569 |
-| `MoonLight.Spelling` | 45 |
-| `MoonLight.SelfReference` | 35 |
-| `MoonLight.NegatedHeading` | 14 |
+| `MoonLight.EmDash` | 1796 |
+| `MoonLight.Weasel` | 754 |
+| `MoonLight.SentenceLength` | 496 |
+| `MoonLight.Spelling` | 44 |
+| `MoonLight.SelfReference` | 33 |
+| `MoonLight.NegatedHeading` | 13 |
 
 ## Worst files
 
@@ -26,7 +26,6 @@ docgen.md does. A comment is prose wherever it lives, so a `//` in the web inter
 |---|---|
 | `moondeck/MoonDeck.md` | 273 |
 | `moondeck/moondeck.py` | 165 |
-| `docs/reference/performance.md` | 133 |
 | `docs/how-to/home-automation.md` | 115 |
 | `mooninstaller/install-orchestrator.js` | 94 |
 | `docs/tutorials/build-your-own-moonmodules.md` | 92 |
@@ -41,6 +40,7 @@ docgen.md does. A comment is prose wherever it lives, so a `//` in the web inter
 | `moondeck/docs/gen_api.py` | 49 |
 | `moondeck/build/build_esp32.py` | 47 |
 | `src/ui/preview3d.js` | 47 |
-| `docs/explanation/architecture/moonlight.md` | 46 |
+| `docs/explanation/architecture/moonlight.md` | 45 |
 | `moondeck/scenario/run_live_scenario.py` | 45 |
 | `moondeck/docs/mkdocs_hooks.py` | 40 |
+| `docs/reference/hardware/gpio-usage.md` | 36 |

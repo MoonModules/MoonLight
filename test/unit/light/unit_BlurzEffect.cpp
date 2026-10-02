@@ -6,8 +6,9 @@
 #include "light/effects/BlurzEffect.h"
 #include "light/layouts/GridLayout.h"
 #include "core/services/AudioService.h"
+#include "platform/platform.h"   // setTestNowMs: the simulated music follows the clock
 
-// Blurz is an audio-reactive effect: its dot is colored by the current band's magnitude and only appears when there is a signal. The frame comes from AudioService::latestFrame() (a process-wide static). To feed a signal on the host (no I2S mic) we run a live AudioService with `simulate` set to an "always" mode, synthesizeFrame() then fills the bands each tick(). Every case brackets its own AudioService setup()/release() so it never leaks the active-mic pointer into another test file.
+// Blurz places one dot a frame, colored by a band, and blurs the strip; a simulating AudioService feeds the bands, and each case releases it.
 
 // With no live audio source the buffer stays black: the dot is audio-gated, so silence renders nothing.
 TEST_CASE("BlurzEffect stays black without an audio frame") {
@@ -78,6 +79,8 @@ TEST_CASE("BlurzEffect lights the buffer when fed a signal") {
 
 // geqScanner sweeps the dot steadily across the strip: one pixel per frame, so consecutive frames land the lit dot at different linear positions rather than the same spot.
 TEST_CASE("BlurzEffect geqScanner sweeps the dot to a new position each frame") {
+    struct ClockGuard { ~ClockGuard() { mm::platform::setTestNowMs(0); } } guard;
+    mm::platform::setTestNowMs(1000);
     mm::AudioService audio;
     audio.defineControls();
     audio.simulate = 3;   // music (always): keeps the bands non-zero so the dot has color
@@ -102,10 +105,11 @@ TEST_CASE("BlurzEffect geqScanner sweeps the dot to a new position each frame") 
 
     layer.applyState();
 
+    // The brightest pixel, or -1 on a black frame, which a silent band leaves.
     auto brightestIndex = [&]() {
         auto& buf = layer.buffer();
         auto* d = buf.data();
-        int best = -1, bestSum = -1;
+        int best = -1, bestSum = 0;
         for (size_t p = 0; p < buf.count(); p++) {
             int sum = d[p * 3] + d[p * 3 + 1] + d[p * 3 + 2];
             if (sum > bestSum) { bestSum = sum; best = static_cast<int>(p); }
@@ -113,13 +117,18 @@ TEST_CASE("BlurzEffect geqScanner sweeps the dot to a new position each frame") 
         return best;
     };
 
-    audio.tick(); layer.tick();
-    const int pos1 = brightestIndex();
-    audio.tick(); layer.tick();
-    const int pos2 = brightestIndex();
-
-    // The scanner advances the dot one pixel per frame, so the brightest pixel moves between frames.
-    CHECK(pos1 != pos2);
+    // The scanner advances one pixel per frame, so over a few lit frames the dot shows up in more than one place.
+    int first = -1;
+    bool moved = false;
+    for (uint32_t i = 0; i < 8 && !moved; i++) {
+        mm::platform::setTestNowMs(1000 + i * 25);
+        audio.tick(); layer.tick();
+        const int pos = brightestIndex();
+        if (pos < 0) continue;
+        if (first < 0) first = pos;
+        else if (pos != first) moved = true;
+    }
+    CHECK(moved);
 
     audio.release();
 }

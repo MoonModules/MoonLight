@@ -165,6 +165,7 @@ public:
     /// Rebuild the rows from the persisted list.
     bool restoreList(const char* json, const char* key) override {
         count_ = 0;
+        unsigned dropped = 0;
         const bool ok = mm::json::forEachListElement(json, key,
             [&](const mm::json::JsonDoc& doc, const mm::json::JsonNode* el) {
                 if (count_ >= kMaxRows) return;
@@ -177,17 +178,9 @@ public:
                 const auto* mx = mm::json::member(doc, el, "inMax");
                 r.inMax = mx ? clampCount(mm::json::readInt(mx)) : platform::adcMaxCount();
                 r.invert = mm::json::readBool(mm::json::member(doc, el, "invert"));
-                mm::json::readString(mm::json::member(doc, el, "target"),
-                                     r.action.target, sizeof(r.action.target));
-                char kind[16] = {};
-                mm::json::readString(mm::json::member(doc, el, "kind"), kind, sizeof(kind));
-                // A value rather than a toggle, which would fire on every reading.
-                r.action.kind = std::strcmp(kind, "toggle") == 0 ? InputAction::Kind::Toggle
-                              : std::strcmp(kind, "delta") == 0  ? InputAction::Kind::Delta
-                                                                 : InputAction::Kind::Set;
-                r.action.value =
-                    static_cast<int16_t>(mm::json::readInt(mm::json::member(doc, el, "value")));
+                if (!readInputAction(doc, el, r.action)) dropped++;
             });
+        reportOffSurface(*this, statusBuf_, sizeof(statusBuf_), dropped);
         return ok;
     }
 

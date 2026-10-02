@@ -9,6 +9,7 @@
 
 #include <cstring>
 #include <string>    // std::string: named explicitly, GCC does not pull it in transitively
+#include <vector>    // the client frames the /ws tests build
 
 // Pins the transport-free apply-core that HttpServerModule exposes, applyAddModule / applySetControl / applyClearChildren / applyOp. These are the operations the HTTP /api/modules + /api/control handlers do, factored out of the TcpConnection so BOTH the HTTP path and the Improv-serial APPLY_OP path drive one shared implementation ("Improv = REST over serial"). Testing them directly here, without a socket, is the unit-test win of the extraction: the apply logic is now provable in isolation. Also exercises the robustness rule (the apply-core tolerates bad input, unknown module, unknown type, malformed op, without crashing, returning a typed result instead).
 
@@ -353,7 +354,7 @@ TEST_CASE("schema-changed hook: rebuildControls() resyncs ONLY on a real schema 
     s.addModule(root);
     s.setup();
     mm::HttpServerModule http; http.setScheduler(&s);
-    http.installSchemaHookForTest();                // hook only, no TCP listener (a port bind is flaky)
+    http.installHooksForTest();                     // hooks only, no TCP listener (a port bind is flaky)
 
     // A value-only rebuild (same control set) must NOT resync, that's the common slider-drag path, carried by the per-leaf value patch, not a full metadata resend.
     http.clearFullResyncForTest();
@@ -400,6 +401,41 @@ TEST_CASE("buildStatePatch: a changed control value yields a one-entry patch") {
     mm::JsonSink sink2;
     CHECK(http.buildStatePatchForTest(sink2) == 0);
 
+    s.deleteTree(root);
+}
+
+// A value someone watches move, a desk's motorized fader, goes out on the next 20 ms tick in a patch of its own module rather than waiting for the second.
+TEST_CASE("a module that notifies its values changed is patched alone, ahead of the second") {
+    registerTestTypes();
+    mm::Scheduler s;
+    auto* root = new Box(); root->setName("Root");
+    auto* k = new Knob(); k->setName("K");
+    auto* l = new Knob(); l->setName("L");
+    root->addChild(k);
+    root->addChild(l);
+    s.addModule(root);
+    s.setup();
+    mm::HttpServerModule http; http.setScheduler(&s);
+    http.installHooksForTest();
+    http.baselineLeafHashesForTest();
+
+    k->value = 77;
+    l->value = 5;
+    k->notifyValuesChanged();
+    k->notifyValuesChanged();                     // asking twice is one entry
+    mm::JsonSink early;
+    CHECK(http.buildSoonPatchForTest(early) == 1);
+    CHECK(std::strstr(early.data(), "\"path\":\"K/value\"") != nullptr);
+    CHECK(std::strstr(early.data(), "L/value") == nullptr);   // a module that did not ask waits for the second
+
+    // The second's patch carries what the early one did not, and nothing twice.
+    mm::JsonSink second;
+    CHECK(http.buildStatePatchForTest(second) == 1);
+    CHECK(std::strstr(second.data(), "\"path\":\"L/value\"") != nullptr);
+    mm::JsonSink none;
+    CHECK(http.buildSoonPatchForTest(none) == 0);   // the request was served and forgotten
+
+    http.release();
     s.deleteTree(root);
 }
 
@@ -614,4 +650,40 @@ TEST_CASE("the preview uplink parser refuses oversized and extended-length frame
     used = 7;
     CHECK(mm::HttpServerModule::parsePreviewUplink(ext64, sizeof(ext64), out, &used) == -1);
     CHECK(used == 0);
+}
+
+namespace {
+/// A client text frame, masked as RFC 6455 requires.
+std::vector<uint8_t> clientTextFrame(const std::string& text) {
+    std::vector<uint8_t> f;
+    f.push_back(0x81);
+    if (text.size() < 126) f.push_back(static_cast<uint8_t>(0x80 | text.size()));
+    else { f.push_back(0x80 | 126); f.push_back(static_cast<uint8_t>(text.size() >> 8)); f.push_back(static_cast<uint8_t>(text.size() & 0xff)); }
+    const uint8_t mask[4] = {0x12, 0x34, 0x56, 0x78};
+    f.insert(f.end(), mask, mask + 4);
+    for (size_t i = 0; i < text.size(); i++) f.push_back(static_cast<uint8_t>(text[i] ^ mask[i & 3]));
+    return f;
+}
+}  // namespace
+
+// The input bridges write over the open socket, so several writes can share one read and the last one can arrive cut in half.
+TEST_CASE("control writes over /ws: frames sharing a read all apply, and a cut frame waits for the rest") {
+    const std::string a = "{\"module\":\"Midi\",\"control\":\"midi\",\"value\":\"e07f7f\"}";
+    const std::string b = "{\"module\":\"Gamepad\",\"control\":\"pad\",\"value\":\"1,128,128,128,128\"}";
+    std::vector<uint8_t> buf = clientTextFrame(a);
+    const std::vector<uint8_t> second = clientTextFrame(b);
+    buf.insert(buf.end(), second.begin(), second.end());
+    std::vector<std::string> seen;
+    const size_t whole = mm::HttpServerModule::walkWsTextFrames(buf.data(), buf.size(), [&](const char* t) { seen.emplace_back(t); });
+    CHECK(whole == buf.size());
+    REQUIRE(seen.size() == 2);
+    CHECK(seen[0] == a);
+    CHECK(seen[1] == b);
+
+    // Cut the second frame short: the first applies, the cut one is left for the next read.
+    seen.clear();
+    const size_t cut = buf.size() - 10;
+    const size_t used = mm::HttpServerModule::walkWsTextFrames(buf.data(), cut, [&](const char* t) { seen.emplace_back(t); });
+    CHECK(seen.size() == 1);
+    CHECK(used == buf.size() - second.size());
 }

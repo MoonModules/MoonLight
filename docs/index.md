@@ -14,6 +14,8 @@ The clips that follow it are the proof of what it claims.
 
 <video src="assets/moontube/00-intro.webm" controls playsinline width="720" title="The spoken introduction: why MoonLight was rebuilt, who wrote it, and what it kept."></video>
 
+The whole series, all seventeen clips in one chaptered video, is on YouTube: [MoonLight v6.0.0, the full tour](https://youtu.be/F_YgmiUyWVQ).
+
 ## What it is
 
 MoonLight drives large LED installations and DMX fixtures. You build a light show by stacking simple blocks: a **layout** (how the LEDs are arranged), one or more **effects** (what they animate), **modifiers** (mirror, rotate, mask…), and a **driver** (how the pixels reach the hardware). Every setting takes effect live; there is no reboot to apply a change.

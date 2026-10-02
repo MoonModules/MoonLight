@@ -188,7 +188,7 @@ TEST_CASE("The address contract: what a controller can send") {
         {"/mm/fader/1", 1.0f, 255},
         {"/mm/fader/8", 0.0f, 0},
         {"/mm/encoder/3", 0.5f, 128},
-        {"/mm/control/Drivers/brightness", 1.0f, 255},
+        {"/mm/switch/2", 1.0f, 255},
     };
     for (const auto& c : cases) {
         const auto p = withFloat(c.addr, c.value);

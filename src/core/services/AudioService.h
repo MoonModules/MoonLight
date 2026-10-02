@@ -1,6 +1,9 @@
 #pragma once
 
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
+#include "core/util/Addressing.h"   // sendAddressed: the multicast rule every sender shares
+#include "core/util/HostList.h"     // the boards a unicast send goes to
+#include "core/util/HostResolver.h" // a named board's address, looked up off the render thread
 #include "core/module/MoonModule.h"
 #include "core/util/ActiveInstance.h"   // the one-active-mic election (the seat + its RAII vacate)
 #include "core/util/AudioFrame.h"
@@ -108,6 +111,10 @@ public:
                                  : (mode == kLocalMode && send ? 1 : 0); }
     /// The port both directions use, which must match on both ends.
     uint16_t syncPort = WLED_SYNC_PORT;
+    /// How the analysis travels: 0 the WLED multicast group, which WLED devices hear too; 1 unicast to `hosts`, retried by WiFi.
+    uint8_t  addressing = 0;
+    /// The boards a unicast send reaches, addresses or names.
+    char     hosts[64] = {};
 
     /// The rates the selector offers.
     static constexpr uint16_t kSampleRates[] = {8000, 16000, 22050, 44100};
@@ -165,6 +172,12 @@ public:
         if constexpr (platform::hasNetwork) {
             controls_.addControl("send audio", send);
             controls_.setHidden(controls_.count() - 1, !localMode);
+            // Multicast first, the WLED-compatible default; unicast reaches a few MoonLight boards faster on WiFi.
+            static constexpr const char* kSyncModeNames[] = {"multicast", "unicast"};
+            controls_.addSelect("addressing", addressing, kSyncModeNames, 2);
+            controls_.setHidden(controls_.count() - 1, !localMode || !send);
+            controls_.addText("hosts", hosts, sizeof(hosts));
+            controls_.setHidden(controls_.count() - 1, !localMode || !send || addressing != 1);
         }
         // The pattern picker, shown only in the synthesized mode.
         static constexpr const char* kSimulateOptions[] = {"music", "sweep"};
@@ -193,6 +206,7 @@ public:
             || std::strcmp(name, "device") == 0
             || std::strcmp(name, "sampleRate") == 0 || std::strcmp(name, "mode") == 0
             || std::strcmp(name, "send audio") == 0 || std::strcmp(name, "syncPort") == 0
+            || std::strcmp(name, "addressing") == 0 || std::strcmp(name, "hosts") == 0
             // This swaps which sliders are shown, so it toggles rows as the mode does.
             || std::strcmp(name, "levels") == 0;
     }
@@ -207,6 +221,7 @@ public:
             clearStatus();      // a mic diagnosis would otherwise linger in a mode with no mic
         }
         syncReinit();
+        parseSyncHosts();
     }
     /// One-time wiring only: the acquire and the election live in the build.
     void setup() override {}
@@ -369,6 +384,7 @@ public:
         onsetCount_ = 0; fluxPeak_ = 0;
         mm::formatTo(peakStr_, sizeof(peakStr_), "%u Hz", static_cast<unsigned>(frame_.peakHz));
         levelPeak_ = 0;   // reset for the next window
+        refreshSyncHosts();
 
         // Mic-health diagnosis from the 1 s tallies (see the read path).
         const bool directMicLive = platform::hasI2sMic && inited_ && mode == kLocalMode
@@ -548,11 +564,12 @@ private:
         // Back off between failed bring-ups:
         const uint32_t now = platform::millis();
         if (lastSyncOpenFailMs_ != 0 && now - lastSyncOpenFailMs_ < kSyncOpenRetryMs) return false;
-        if (s == 1) {                      // send → the WLED multicast group (configurable port)
-            char grp[16]; formatDottedQuad(grp, kSyncMulticastAddr_);
-            if (syncSock_.open() && syncSock_.connect(grp, syncPort)) {
+        if (s == 1) {                      // send → the WLED multicast group, or the hosts (configurable port)
+            if (syncSock_.open()) {
                 syncOpen_ = true;
-                setStatus("sending");
+                if (addressing == 1 && syncHostsError_) setStatus(syncHostsError_, Severity::Error);
+                else if (addressing == 1 && syncHostCount_ == 0) setStatus("set hosts to send to", Severity::Warning);
+                else setStatus("sending");
             } else {
                 syncSock_.close();
                 setStatus("send: socket failed", Severity::Error);
@@ -584,7 +601,10 @@ private:
         syncPeakLatched_ = false;
         uint8_t pkt[WLED_SYNC_PACKET_SIZE];
         buildWledAudioSync(pkt, frame_, peak);
-        syncSock_.sendTo(pkt, WLED_SYNC_PACKET_SIZE);
+        // A steady 40 frames a second is a stream, so no broadcast copy on any network.
+        sendAddressed(addressing == 1 ? Addressing::Unicast : Addressing::Multicast, Traffic::FrameRate,
+                      syncHosts_, syncHostCount_, kSyncMulticastAddr_,
+                      [&](const uint8_t ip[4]) { syncSock_.sendToAddr(ip, syncPort, pkt, WLED_SYNC_PACKET_SIZE); });
         syncSendCount_++;
     }
 
@@ -623,6 +643,33 @@ private:
     static constexpr uint32_t kSyncPeakRefractoryMs = 80;
     // The IP MULTICAST ADDRESS WLED audio sync uses:
     static constexpr uint8_t kSyncMulticastAddr_[4] = {239, 0, 0, 1};
+
+    /// How many boards a unicast audio send reaches.
+    static constexpr uint8_t kMaxSyncHosts = 8;
+    Host     syncHosts_[kMaxSyncHosts] = {};
+    uint8_t  syncHostCount_ = 0;
+    const char* syncHostsError_ = nullptr;   ///< why the host list was refused, shown on the status
+
+    /// Parse the hosts, starting the name lookups here where allocating is allowed.
+    void parseSyncHosts() {
+        syncHostsError_ = parseHostList(hosts, syncHosts_, kMaxSyncHosts, syncHostCount_);
+        if (syncHostsError_) { syncHostCount_ = 0; return; }
+        for (uint8_t i = 0; i < syncHostCount_; i++)
+            if (syncHosts_[i].isName()) { HostResolver::ensureStarted(); break; }
+        refreshSyncHosts();
+    }
+
+    /// Copy each named host's latest address in from the resolver, keeping the last one while it is busy or failing.
+    void refreshSyncHosts() {
+        for (uint8_t i = 0; i < syncHostCount_; i++) {
+            if (!syncHosts_[i].isName()) continue;
+            char name[kMaxHostName + 1];
+            hostName(hosts, syncHosts_[i], name);
+            uint8_t ip[4];
+            const HostResolver::State st = HostResolver::lookup(name, ip);
+            if (st == HostResolver::State::Resolved || st == HostResolver::State::Stale) std::memcpy(syncHosts_[i].ip, ip, 4);
+        }
+    }
 };
 
 } // namespace mm

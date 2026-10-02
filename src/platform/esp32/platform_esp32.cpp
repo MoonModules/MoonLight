@@ -34,6 +34,7 @@
 /// No dedicated driver exists for this part, so both go through the standard register interface, mirroring the vendor's own example for this board.
 /// Without the first the link never negotiates, which is why the activity indicator stays dark: the part disables auto-negotiation on reset, undocumented behavior the generic reset leaves alone.
 /// The second configures the interface's internal clock delays through the extended-register window, at the values that example uses; a board whose trace lengths need a different skew tunes them there.
+/// The coarse receive-clock enable in the first register is separate from the receive data delay, which sits in bits 13:10 of the RGMII config register.
 ///
 /// ## Why the hostname is applied at link-up
 ///
@@ -68,17 +69,27 @@
 ///
 /// A re-advertise removes the service record and adds it back rather than renaming it.
 /// Since renaming does not reliably re-announce on the current interface while a remove and add drives it back through the state machine.
+///
+/// ## Raw frames to the controller
+///
+/// A raw frame bypasses the address stack, so it is gated on the link, not on a lease: a board without an address still drives its panels.
+/// It is synchronous, so the caller may reuse its buffer at once, and an error means the frame did not go out.
+///
+/// ## Why the TCP write is bounded twice
+///
+/// A write retries on a full buffer, but it runs on the render thread, where an unbounded retry against a stalled peer ends in a watchdog reboot.
+/// The stall bound, reset by progress, lets a slow but steady transfer finish; the total bound stops a one-byte trickle from holding the thread, a remotely triggerable reboot.
 
 #include "platform/platform.h"
 #include <netinet/tcp.h>   // TCP_NODELAY on an accepted connection
 
 #include "esp_timer.h"
 #include "esp_heap_caps.h"
-#include "esp_memory_utils.h"   // esp_ptr_external_ram — the ptrIsPsram residency probe
-#include "esp_cache.h"        // esp_cache_msync — I-cache sync after writing MoonLive code to IRAM
+#include "esp_memory_utils.h"   // esp_ptr_external_ram: the ptrIsPsram residency probe
+#include "esp_cache.h"        // esp_cache_msync: I-cache sync after writing MoonLive code to IRAM
 #include "esp_system.h"
 #include "esp_chip_info.h"
-#include "esp_cpu.h"       // esp_cpu_get_cycle_count — the cycleCount() seam
+#include "esp_cpu.h"       // esp_cpu_get_cycle_count: the cycleCount() seam
 #include "esp_mac.h"
 #include "esp_idf_version.h"
 #include "esp_partition.h"
@@ -89,16 +100,13 @@
 #include "esp_netif.h"
 #include "esp_eth.h"
 #ifdef CONFIG_IDF_TARGET_ESP32P4
-#include "esp_eth_phy_ip101.h"   // P4-NANO PHY — managed component espressif/ip101
+#include "esp_eth_phy_ip101.h"   // P4-NANO PHY, managed component espressif/ip101
 #endif
-// The external controller over the serial bus, on a chip with no internal controller and the driver enabled.
-// The vendor moved these out of the core into managed components, so the headers come from one gated to that chip.
-// Not under emulation, which turns the internal one off for want of emulated silicon and would otherwise pull in a component that variant does not carry.
-// The marker below keeps the rest of the file from repeating this compound condition.
+// The external serial-bus controller: a chip with no internal one, the driver enabled, and not under emulation, whose variant lacks the managed component that carries these headers. The marker below spares repeating the condition.
 #if defined(CONFIG_ETH_USE_SPI_ETHERNET) && !defined(CONFIG_ETH_USE_ESP32_EMAC) && \
     !defined(CONFIG_ETH_USE_OPENETH)
 #define MM_ETH_W5500 1
-#include "driver/spi_master.h"   // W5500 SPI Ethernet (S3 boards) — bus + device config
+#include "driver/spi_master.h"   // W5500 SPI Ethernet (S3 boards): bus + device config
 #include "esp_eth_mac_w5500.h"   // espressif/eth_w5500 managed component
 #include "esp_eth_phy_w5500.h"
 #endif
@@ -117,19 +125,21 @@
 #include "freertos/task.h"
 #include "lwip/sockets.h"
 #include "lwip/inet.h"
-#include "lwip/netdb.h"   // getaddrinfo — hostname resolution for TcpConnection::connect
+#include "lwip/netdb.h"   // getaddrinfo: hostname resolution for TcpConnection::connect
 
 #include <atomic>
 #include <cstdarg>
 #include <cstdlib>
 #include <cstdio>
+#include <algorithm>   // std::min
 #include <cstring>
+#include <strings.h>   // strcasecmp: a .local suffix in any case
 #include <mutex>     // hostname store: writer (config apply) and reader (link-up events) race
 #include <unistd.h>
 
 namespace mm::platform {
 
-// Test-only override for millis(); 0 means "use the real clock". Honoured on ESP32 too so a hardware scenario run can freeze time the same way unit tests do (no separate desktop-vs-ESP32 mocking surface).
+// Test-only override for millis(); 0 means "use the real clock". Honored on ESP32 too, so a hardware scenario run freezes time the same way unit tests do.
 static std::atomic<uint32_t> testNowMs{0};
 
 void setTestNowMs(uint32_t ms) { testNowMs.store(ms, std::memory_order_relaxed); }
@@ -174,9 +184,7 @@ void free(void* ptr) {
     heap_caps_free(ptr);
 }
 
-// Executable memory for emitted code, from instruction-fetchable memory.
-// Null when that is exhausted, which a busy device really does hit, so the caller degrades rather than asserting.
-// The request rounds up to a word, since both the final store and the cache sync round up and the block must hold that whole word.
+// Executable memory for emitted code; null when exhausted, which a busy device hits, so the caller degrades. The request rounds up to a word, since the final store and the cache sync both round up.
 void* allocExec(size_t bytes) {
     if (bytes == 0) return nullptr;
     size_t padded = (bytes + 3) & ~size_t(3);
@@ -189,7 +197,7 @@ void freeExec(void* ptr, size_t /*bytes*/) {
 
 void writeExec(void* dst, const void* src, size_t len) {
     if (!dst || !src || !len) return;
-    // IRAM is writable only by 32-bit-aligned WORD stores (a byte/halfword store to IRAM faults), so copy word-by-word, padding the final partial word with the bytes already there, never a sub-word store. allocExec returns 4-byte-aligned IRAM, so dst is aligned; src may not be, so read it bytewise into the word.
+    // IRAM faults on byte and halfword stores. Copy by 32-bit words, padding the final partial word with the bytes already there. dst is 4-aligned from allocExec; src may not be, so it is read bytewise.
     auto* d = static_cast<volatile uint32_t*>(dst);
     auto* s = static_cast<const uint8_t*>(src);
     size_t words = len / 4;
@@ -238,7 +246,7 @@ void reboot() {
     esp_restart();
 }
 
-// The same three numbers the desktop counts by hand, from the allocator that already tracks them. A scenario reads one metric on both platforms: how much the system has taken, its high-water mark, and how many blocks are live. USED rather than free, so the figure means the same thing on a board with 320 KB and a laptop with gigabytes.
+// The same three numbers the desktop counts by hand, from the allocator that already tracks them. USED rather than free, so the figure means the same on a 320 KB board and a laptop.
 size_t allocatedBytes() {
     multi_heap_info_t info = {};
     heap_caps_get_info(&info, MALLOC_CAP_8BIT);
@@ -264,7 +272,7 @@ size_t freeInternalHeap() {
     return heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 }
 
-// Test-only cap on the reported largest-free block; 0 = no cap. atomic to match the desktop seam's cross-thread contract. It only ever LOWERS the reported value (min with the real block), a cap can't claim more contiguous heap than the device actually has, so a forced-paging test stays honest.
+// Test-only cap on the largest-free block, 0 = none. It only lowers the reported value (min with the real block), so a forced-paging test stays honest. Atomic to match the desktop seam's cross-thread contract.
 static std::atomic<size_t> testMaxBlock{0};
 void setTestMaxAllocBlock(size_t bytes) { testMaxBlock.store(bytes, std::memory_order_relaxed); }
 
@@ -280,7 +288,7 @@ size_t maxInternalAllocBlock() {
 }
 
 size_t maxExecAllocBlock() {
-    // The pool allocExec draws from. On a classic ESP32 that is IRAM, tens of KB rather than the hundreds the data heap has, and it is not visible in freeInternalHeap: a script whose compiled code does not fit reported "codegen failed" with 80 KB of DRAM free, which is what made this worth reporting rather than inferring.
+    // The pool allocExec draws from: IRAM on a classic ESP32, tens of KB and invisible in freeInternalHeap. A script that did not fit reported "codegen failed" with 80 KB of DRAM free.
     return heap_caps_get_largest_free_block(MALLOC_CAP_EXEC | MALLOC_CAP_32BIT);
 }
 
@@ -349,7 +357,7 @@ const char* hostIp() {
     return "";
 }
 
-// Read a netif's current IPv4 as raw octets (out[0..3]); all-zero on no IP / null netif. esp_ip4_addr_t.addr is little-endian-packed (octet i = byte i), matching IP2STR's `(addr >> (8*i)) & 0xff`, so this is the byte-form of the same value the old IPSTR getters printed. Shared by ethGetIPv4/wifiStaGetIPv4.
+// Read a netif's IPv4 as raw octets out[0..3], all-zero on no IP or a null netif. esp_ip4_addr_t.addr is little-endian-packed, matching IP2STR's `(addr >> (8*i)) & 0xff`. Shared by ethGetIPv4 and wifiStaGetIPv4.
 static void netifIPv4(esp_netif_t* netif, uint8_t out[4]) {
     out[0] = out[1] = out[2] = out[3] = 0;
     if (!netif) return;
@@ -367,7 +375,7 @@ const char* sdkVersion() {
 }
 
 const char* psramType() {
-    // The PSRAM interface mode is a compile-time choice (IDF has no runtime getter). CONFIG_SPIRAM_MODE_OCT is set only for octal parts (S3/S2 -R8); classic-ESP32 quad PSRAM (WROVER) leaves it unset. Report "" when PSRAM isn't compiled in at all, so a non-PSRAM board naturally shows nothing.
+    // The PSRAM interface mode is compile-time (IDF has no runtime getter): CONFIG_SPIRAM_MODE_OCT is set only for octal parts (S3/S2 -R8), not classic quad WROVER. Empty when PSRAM is not compiled in.
 #if !defined(CONFIG_SPIRAM)
     return "";
 #elif defined(CONFIG_SPIRAM_MODE_OCT)
@@ -379,7 +387,7 @@ const char* psramType() {
 
 const char* coprocessorWifi() {
 #if defined(CONFIG_IDF_TARGET_ESP32P4) && !defined(MM_NO_WIFI)
-    // What firmware version the companion chip reported over the link; an empty answer means it never completed its handshake, which is the case worth surfacing rather than inferring. Asked a bounded number of times and then never again: @xref{the-coprocessor-version-query-is-asked-twice-then-never-again|the measurement behind that}.
+    // The firmware version the companion chip reported; empty means it never completed its handshake. Asked twice, then never again: @xref{the-coprocessor-version-query-is-asked-twice-then-never-again|the measurement}.
     static char buf[24] = "querying…";
     static uint8_t attemptsLeft = 2;
     if (attemptsLeft == 0) return buf;
@@ -457,16 +465,14 @@ static const char* NET_TAG = "mm_net";
 #ifndef MM_NO_ETH
 static std::atomic<bool> ethLinkUp_{false};
 static std::atomic<bool> ethConnected_{false};
-// Fixed-addressing state, so the connected handler restores the address on a re-plug rather than letting the client pull a lease.
-// Written on the render task and read on the event task; the octets are published before the flag's release store.
-// So a handler that sees it set reads a complete config.
+// Fixed-addressing state, so a re-plug restores the address instead of pulling a lease. Octets are published before the flag's release store, so the event task sees a complete config when it reads the flag set.
 static std::atomic<bool> ethStatic_{false};
 static uint8_t ethStaticIp_[4]   = {};
 static uint8_t ethStaticGw_[4]   = {};
 static uint8_t ethStaticMask_[4] = {};
 static uint8_t ethStaticDns_[4]  = {};
 static esp_netif_t* ethNetif_ = nullptr;
-// Retained so a live reconfigure can tear the driver down cleanly: the running driver, and whether the serial bus was initialized so the stop frees it. The second exists only where that bus does, keeping the other builds free of an unused-variable warning.
+// Retained so a live reconfigure can tear the driver down: the running driver, and whether the serial bus was initialized. The second exists only where that bus does, avoiding an unused-variable warning elsewhere.
 static esp_eth_handle_t ethHandle_ = nullptr;
 #ifdef MM_ETH_W5500
 static bool ethSpiActive_ = false;
@@ -474,9 +480,7 @@ static bool ethSpiActive_ = false;
 #endif
 static bool netifInitDone_ = false;
 
-// The hostname pushed before bring-up and applied to each interface before its address client starts; empty leaves the default.
-// Writer and reader run on different tasks once live, so both sides copy under a lock.
-// And the reader takes a snapshot first because stack calls inside it would nest into the event loop.
+// The hostname applied to each interface before its address client starts; empty leaves the default. A lock guards writer and reader on different tasks, and the reader snapshots first because stack calls inside it nest into the event loop.
 static char hostname_[32] = {};
 static std::mutex hostnameMutex_;
 
@@ -487,9 +491,7 @@ void setHostname(const char* name) {
     hostname_[sizeof(hostname_) - 1] = 0;
 }
 
-// Apply the stored hostname to an interface so it rides the address request; call after the interface is started.
-// The order is the crux: @xref{why-the-hostname-is-applied-at-link-up|stop, set, start}.
-// Stopping an already-stopped client is benign and ignored, and this is a no-op when no name is set.
+// Apply the stored hostname to a started interface so it rides the address request: @xref{why-the-hostname-is-applied-at-link-up|stop, set, start}. Stopping a stopped client is benign, and no name set is a no-op.
 static void applyHostname(esp_netif_t* netif) {
     char name[sizeof(hostname_)];
     {
@@ -501,7 +503,7 @@ static void applyHostname(esp_netif_t* netif) {
     esp_err_t e = esp_netif_set_hostname(netif, name);
     if (e != ESP_OK) ESP_LOGW(NET_TAG, "set_hostname('%s') failed: %s", name, esp_err_to_name(e));
     else ESP_LOGI(NET_TAG, "DHCP hostname: %s", name);
-    // Restart the DHCP client and check the result, if it fails, the interface has no DHCP client and will never acquire an IP, so surface it rather than silently leaving the device offline. (Don't return on stop/set failure above: we still must restart the client we stopped.)
+    // Restart the DHCP client and report failure, since an interface without one never acquires an IP. No early return on a stop or set failure above: the client we stopped must restart.
     esp_err_t se = esp_netif_dhcpc_start(netif);
     if (se != ESP_OK)
         ESP_LOGW(NET_TAG, "dhcpc_start after set_hostname failed: %s", esp_err_to_name(se));
@@ -511,9 +513,9 @@ static void applyHostname(esp_netif_t* netif) {
 // WiFi-only state, absent in the Ethernet-only build. Atomic for the same reason as the eth pair: written by the IDF event loop, read from the render task.
 static std::atomic<bool> wifiStaConnected_{false};
 static bool wifiApActive_ = false;
-// Association state, distinct from having an address: a fixed-address station is reachable once associated, so this is the signal the apply keys off. Atomic for the same reason as the flag above, being written by the event handler and read on the caller's thread.
+// Association state, distinct from having an address: a fixed-address station is reachable once associated, so the apply keys off this. Atomic, written by the event handler and read on the caller's thread.
 static std::atomic<bool> wifiStaAssociated_{false};
-// Static-addressing state for WiFi STA, mirroring the eth pair. `wifiStaConnected_` normally means "has a DHCP IP" (set on GOT_IP), which never fires on a DHCP-less network, so for a static STA the address is pinned at L2 association (WIFI_EVENT_STA_CONNECTED) and connected is marked there. std::atomic with the same cross-task publish contract as ethStatic_ (octets before flag).
+// Static addressing for WiFi STA, mirroring the eth pair: DHCP-less networks never fire GOT_IP, so the address is pinned at association (WIFI_EVENT_STA_CONNECTED) and connected is marked there. Same publish contract as ethStatic_.
 static std::atomic<bool> staStatic_{false};
 static uint8_t staStaticIp_[4]   = {};
 static uint8_t staStaticGw_[4]   = {};
@@ -541,10 +543,10 @@ static void ethEventHandler(void* /*arg*/, esp_event_base_t base,
     if (base == ETH_EVENT) {
         if (id == ETHERNET_EVENT_CONNECTED) {
             ethLinkUp_.store(true, std::memory_order_relaxed);
-            // The NEGOTIATED speed rather than "up". A gigabit PHY that fell back to 100M behaves differently enough to matter (the S31's RGMII Tx-clock skew is speed-dependent), and "link up" alone sent one debug session hunting DHCP when the question was the speed.
+            // The NEGOTIATED speed rather than "up": a gigabit PHY that fell back to 100M behaves differently, and the S31's RGMII Tx-clock skew is speed-dependent.
             ESP_LOGI(NET_TAG, "Ethernet link up (%u Mbps)", ethLinkSpeedMbps());
             if (ethStatic_.load(std::memory_order_acquire)) {
-                // Static mode: do NOT let the DHCP client restart on this link-up (applyHostname would), that is what made a re-plugged cable grab a DHCP lease instead of the configured static IP. Re-pin the stored static config directly so the interface returns to its static address immediately (netSetStaticIPv4 stops dhcpc + sets it).
+                // Static mode: do NOT let the DHCP client restart on link-up (applyHostname would), or a re-plugged cable grabs a lease instead of the static IP. Re-pin the stored config directly via netSetStaticIPv4.
                 netSetStaticIPv4(NetIface::Eth, ethStaticIp_, ethStaticGw_, ethStaticMask_, ethStaticDns_);
             } else {
                 // The name is set here rather than at init: @xref{why-the-hostname-is-applied-at-link-up|why the earlier one is clobbered}.
@@ -564,18 +566,16 @@ static void ethEventHandler(void* /*arg*/, esp_event_base_t base,
     }
 }
 
-// The runtime pin and PHY config, seeded with the per-chip default so an unprovisioned board still comes up on its historical pins. The module overrides it with the board's own values before init; which driver exists is a per-chip build choice, and this only selects pins and which to use.
+// The runtime pin and PHY config, seeded with the per-chip default so an unprovisioned board comes up on its historical pins. The module overrides it before init; the driver is a per-chip build choice, this only selects pins.
 static EthPinConfig ethConfig_ = ethConfigDefault;
 
 void setEthConfig(const EthPinConfig& cfg) { ethConfig_ = cfg; }
 
-// The internal-controller path, only on chips that have one, so the guard keeps this function out of the build where the external one is used instead.
-// The two interface kinds share the same constructor and the driver and event tail, only their clock and data-pin block differing.
-// So they live in one function branched at compile time rather than two near-identical copies.
+// The internal-controller path, only on chips that have one. Both interface kinds share the constructor and the driver and event tail, differing in clock and data pins, so one compile-time-branched function serves both.
 #ifdef CONFIG_ETH_USE_ESP32_EMAC
 
 #ifdef CONFIG_IDF_TARGET_ESP32S31
-// The vendor PHY's board init, two steps through the standard register interface: @xref{the-vendor-phy-needs-two-steps-the-generic-driver-cannot-do|what each one does}. A remaining clock fix for one link rate is backlogged; this init is what brings the link up.
+// The vendor PHY's board init, two register steps: @xref{the-vendor-phy-needs-two-steps-the-generic-driver-cannot-do|what each one does}. A remaining clock fix for one link rate is backlogged.
 static esp_err_t ethYt8531BoardInit(esp_eth_handle_t eth_handle) {
     bool autoNegoEn = true;
     esp_err_t err = esp_eth_ioctl(eth_handle, ETH_CMD_S_AUTONEGO, &autoNegoEn);
@@ -593,7 +593,7 @@ static esp_err_t ethYt8531BoardInit(esp_eth_handle_t eth_handle) {
     regVal |= (1U << 8);
     if ((err = esp_eth_ioctl(eth_handle, ETH_CMD_WRITE_PHY_REG, &phyReg)) != ESP_OK) return err;
 
-    // TX + RX delays: EXT_RGMII_CONFIG1 (0xA003). Bits [3:0] ge_tx_delay, [7:4] fe_tx_delay, [13:10] rx_delay, each 0..15 = 0.000..2.250 ns in 0.150 ns steps (Motorcomm YT8521/YT8531 map). TX = 13 (1.95 ns). RX data delay [13:10] is set here (the 0xA001 bit-8 above is only the coarse RXC enable). MM_YT8531_{RX,TX}_DELAY are per-board tuning knobs; the defaults match IDF's example.
+    // TX + RX delays in EXT_RGMII_CONFIG1 (0xA003): [3:0] ge_tx, [7:4] fe_tx, [13:10] rx, each 0..15 = 0..2.250 ns in 0.150 ns steps (Motorcomm YT8521/YT8531). TX = 13 (1.95 ns). MM_YT8531_{RX,TX}_DELAY tune per board, defaults match IDF's example.
 #ifndef MM_YT8531_RX_DELAY
 #define MM_YT8531_RX_DELAY 0
 #endif
@@ -619,15 +619,12 @@ static bool ethInitEmac() {
     esp_netif_config_t netif_cfg = ESP_NETIF_DEFAULT_ETH();
     ethNetif_ = esp_netif_new(&netif_cfg);
 
-    // Pins from the runtime config: a per-board default map, or an override pushed from the device model. The default config macro is chip-fixed, so the interface-specific block below branches at compile time and the union member that exists is the one the macro set.
+    // Pins from the runtime config: a per-board default map, or an override from the device model. The default config macro is chip-fixed, so the interface-specific block below branches at compile time.
     eth_mac_config_t mac_config = ETH_MAC_DEFAULT_CONFIG();
     eth_esp32_emac_config_t emac_config = ETH_ESP32_EMAC_DEFAULT_CONFIG();
     // A preprocessor branch rather than a compile-time one, because those union members exist only in the header on chips that have the wider interface. A constant-condition branch would still fail to compile where they are absent.
 #ifdef CONFIG_IDF_TARGET_ESP32S31
-    // The gigabit path's fixed pads, the only pins the controller accepts for each signal.
-    // Validated against the IO_MUX table in the vendor's own esp32s31/emac_periph.c, and matching the board schematic.
-    // Listed explicitly for clarity though the defaults would pick the same.
-    // A name not in the list returns the not-found sentinel, which the driver rejects at init rather than silently wiring the first pad.
+    // The gigabit path's fixed pads, validated against the vendor's esp32s31/emac_periph.c IO_MUX table and the schematic. A name not in the list returns the sentinel, which the driver rejects at init rather than wiring the first pad.
     constexpr auto rgmiiPad = [](const char* want) -> int {
         for (uint8_t i = 0; i < ethFixedPadCount; i++) {
             const char* n = ethFixedPads[i].name;
@@ -637,7 +634,7 @@ static bool ethInitEmac() {
         }
         return -1;   // not found: IDF rejects it loudly at eth init
     };
-    // Looked up BY NAME out of platform::ethFixedPads, the ONE list of these pads: NetworkModule reports the same entries through fixedPins() so the pin map can show what the MAC holds. By name rather than by index so reordering that list cannot silently rewire the MAC, and a typo is a refused init rather than a scrambled bus.
+    // Looked up BY NAME from platform::ethFixedPads, the ONE list of these pads (NetworkModule reports the same entries through fixedPins()). By name so reordering cannot silently rewire the MAC, and a typo is a refused init.
     emac_config.clock_config.rgmii.clock_tx_gpio = rgmiiPad("ethTxClk");
     emac_config.clock_config.rgmii.clock_rx_gpio = rgmiiPad("ethRxClk");
     emac_config.emac_dataif_gpio.rgmii = eth_mac_rgmii_gpio_config_t{
@@ -662,7 +659,7 @@ static bool ethInitEmac() {
     phy_config.phy_addr = ethConfig_.phyAddr;
     phy_config.reset_gpio_num = ethConfig_.rstGpio;
 
-    // Helper to unwind whatever was created so far on any failure, ethInit runs once at boot, but a clean release means a broken PHY/cable degrades (returns false → the WiFi/AP cascade takes over) instead of leaking the netif + MAC/PHY drivers.
+    // Unwind whatever was created on any failure. A clean release lets a broken PHY or cable degrade to the WiFi/AP cascade instead of leaking the netif and drivers.
     auto fail = [&](const char* what, esp_eth_mac_t* m, esp_eth_phy_t* p) -> bool {
         ESP_LOGE(NET_TAG, "Ethernet %s", what);
         if (p) p->del(p);
@@ -692,7 +689,7 @@ static bool ethInitEmac() {
     }
     // From here the driver owns mac+phy (driver_uninstall frees them); the remaining failure paths uninstall the driver instead of del-ing mac/phy.
 #ifdef CONFIG_IDF_TARGET_ESP32S31
-    // The YT8531 needs a vendor-specific auto-nego re-enable (+ RGMII delays) the generic driver can't do, without it the RGMII link never negotiates. Run right after install (driver/PHY exist, before start), the same order IDF's example uses. Non-fatal: a failed register write logs a warning and continues (the link may not come up) rather than dropping Ethernet.
+    // The YT8531 needs a vendor-specific auto-nego re-enable plus RGMII delays the generic driver cannot do, or the link never negotiates. Run right after install, as IDF's example does. Non-fatal: a failed write logs a warning and continues.
     {
         esp_err_t yterr = ethYt8531BoardInit(eth_handle);
         if (yterr != ESP_OK) ESP_LOGW(NET_TAG, "YT8531 RGMII init failed: %s (link may not come up)",
@@ -715,7 +712,7 @@ static bool ethInitEmac() {
         if (ethNetif_) { esp_netif_destroy(ethNetif_); ethNetif_ = nullptr; }
         return false;
     }
-    // DHCP hostname is set in the ETHERNET_EVENT_CONNECTED handler, not here, see the comment there (IDF starts the eth DHCP client on link-up, which would clobber a name set at init time).
+    // The DHCP hostname is set in the ETHERNET_EVENT_CONNECTED handler, not here: @xref{why-the-hostname-is-applied-at-link-up|why}.
 
     ethHandle_ = eth_handle;   // retained (ethStop is W5500-only today, but keep it set)
     ESP_LOGI(NET_TAG, "Ethernet init done (%s, non-blocking)", isEsp32S31 ? "RGMII, S31" : "RMII");
@@ -723,14 +720,12 @@ static bool ethInitEmac() {
 }
 #endif // CONFIG_ETH_USE_ESP32_EMAC
 
-// The external controller path, compiled only where that driver is enabled and no internal one exists, its constructors coming from a managed component.
-// Pins come from the runtime config, which such a board must set, there being no universal default.
-// It returns false on any failure including no module present, so a build with the driver in but nothing attached cascades to the radio cleanly.
+// The external controller path, only where its driver is enabled and no internal one exists. Its pins come from the runtime config, which such a board must set. Any failure, including no module, returns false so the cascade reaches the radio.
 #ifdef MM_ETH_W5500
 static bool ethInitSpi() {
     if (ethConfig_.spiMiso < 0 || ethConfig_.spiMosi < 0 ||
         ethConfig_.spiSck < 0 || ethConfig_.spiCs < 0) {
-        ESP_LOGW(NET_TAG, "W5500 selected but SPI pins unset — skipping (set them in deviceModels.json)");
+        ESP_LOGW(NET_TAG, "W5500 selected but SPI pins unset, skipping (set them in deviceModels.json)");
         return false;
     }
     esp_netif_config_t netif_cfg = ESP_NETIF_DEFAULT_ETH();
@@ -751,17 +746,17 @@ static bool ethInitSpi() {
 
     spi_device_interface_config_t devcfg = {};
     devcfg.mode = 0;
-    devcfg.clock_speed_hz = 20 * 1000 * 1000;   // 20 MHz — W5500 spec ceiling for stable SPI
+    devcfg.clock_speed_hz = 20 * 1000 * 1000;   // 20 MHz, W5500 spec ceiling for stable SPI
     devcfg.spics_io_num = ethConfig_.spiCs;
     devcfg.queue_size = 20;
 
     eth_w5500_config_t w5500_config = ETH_W5500_DEFAULT_CONFIG(kSpiHost, &devcfg);
     w5500_config.int_gpio_num = ethConfig_.spiIrq;   // wired INT pin (interrupt), or -1 for polling
     if (ethConfig_.spiIrq >= 0) {
-        // Interrupt-driven RX: the W5500 driver registers its handler with gpio_isr_handler_add(), which requires the per-pin ISR service to be installed first. Install it once here; ESP_ERR_INVALID_STATE means another driver already installed it, which is fine.
+        // Interrupt-driven RX: the W5500 driver registers via gpio_isr_handler_add(), which needs the per-pin ISR service installed first. ESP_ERR_INVALID_STATE means another driver installed it, which is fine.
         esp_err_t isr = gpio_install_isr_service(0);
         if (isr != ESP_OK && isr != ESP_ERR_INVALID_STATE) {
-            ESP_LOGW(NET_TAG, "gpio_install_isr_service failed (%s) — W5500 INT may not fire",
+            ESP_LOGW(NET_TAG, "gpio_install_isr_service failed (%s), W5500 INT may not fire",
                      esp_err_to_name(isr));
         }
     } else {
@@ -833,11 +828,9 @@ void ethStop() {
 }
 
 #ifdef CONFIG_ETH_USE_OPENETH
-// The emulated controller: no pins, no clock and no register access, the emulator presenting a ready one, so this path is a fraction of the real setup.
-// It exists because an emulated device with no address stack can only be watched on the console.
-// While with one the interface and the tests drive it exactly as on hardware.
+// The emulated controller: no pins, clock or register access, the emulator presenting a ready one, so this path is a fraction of the real setup. Without an address stack an emulated device can only be watched on the console.
 static bool ethInitOpeneth() {
-    // STEP-BY-STEP LOGGED, deliberately. Bringing this up is a chain of six calls where any one can fail quietly, and a silent failure looks identical to a working stack with no cable: the device simply never gets an address. Logging each step means the serial log ALONE says which link of the chain broke, instead of the failure having to be re-derived from a missing IP.
+    // Logged step by step, deliberately: a chain of six calls where any can fail quietly, and a silent failure looks like a working stack with no cable. The serial log alone then names the broken link.
     std::printf("mm_net: openeth 1/6: creating netif\n");
     esp_netif_config_t netif_cfg = ESP_NETIF_DEFAULT_ETH();
     ethNetif_ = esp_netif_new(&netif_cfg);
@@ -871,14 +864,14 @@ static bool ethInitOpeneth() {
         return false;
     }
 
-    // PROMISCUOUS: QEMU's MAC implements no multicast filter, so esp_netif's attach logs an error registering one for IPv4. Accepting every frame is the emulator's stand-in for the filter it does not model, and costs nothing here, there is no real wire to be flooded from.
+    // PROMISCUOUS: QEMU's MAC has no multicast filter, so esp_netif's attach logs an error registering one for IPv4. Accepting every frame stands in for the filter, at no cost with no real wire to flood from.
     std::printf("mm_net: openeth 4/6: promiscuous mode\n");
     bool promiscuous = true;
     err = esp_eth_ioctl(eth_handle, ETH_CMD_S_PROMISCUOUS, &promiscuous);
     if (err != ESP_OK) ESP_LOGW(NET_TAG, "openeth 4/6: promiscuous not set (%s), continuing",
                                 esp_err_to_name(err));
 
-    // From here the driver owns mac+phy, so every failure unwinds through driver_uninstall rather than del-ing them, exactly as ethInitEmac and ethInitSpi do. Written once as a lambda because three exits share it, and a half-cleaned failure leaks a netif and a driver on a device that then has no network to report the problem over.
+    // From here the driver owns mac+phy, so every failure unwinds through driver_uninstall, as in ethInitEmac and ethInitSpi. A lambda because three exits share it, and a half-cleaned failure leaks a netif and a driver.
     auto fail = [&](const char* what) -> bool {
         std::printf("mm_net: openeth FAILED: %s\n", what);
         esp_event_handler_unregister(ETH_EVENT, ESP_EVENT_ANY_ID, &ethEventHandler);
@@ -894,7 +887,7 @@ static bool ethInitOpeneth() {
     err = esp_netif_attach(ethNetif_, glue);
     if (err != ESP_OK) return fail(esp_err_to_name(err));
 
-    // The handlers before the start: link-up is what kicks the address client and the address event is what lets the module proceed. Registering them after would race the first event the emulator raises immediately, and omitting them leaves an interface that is up and never asks for an address.
+    // Handlers before the start: link-up kicks the address client and the address event lets the module proceed. Registering later would race the emulator's immediate first event.
     std::printf("mm_net: openeth 6/6: registering event handlers + starting driver\n");
     err = esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, &ethEventHandler, nullptr);
     if (err != ESP_OK) return fail(esp_err_to_name(err));
@@ -913,9 +906,7 @@ static bool ethInitOpeneth() {
 
 bool ethInit() {
     ensureNetifInit();
-    // Dispatch on the board's PHY type at run time, each path returning false on any failure including none present, so the module cascades to the radio.
-    // A build with a driver in but nothing wired falls through without grabbing pins or hanging.
-    // And a PHY whose driver is not in this firmware returns false the same way.
+    // Dispatch on the board's PHY type at run time. Each path returns false on any failure, including none present or a PHY whose driver is not in this firmware. The module then cascades to the radio without grabbing pins or hanging.
     switch (ethConfig_.phyType) {
 #ifdef MM_ETH_W5500
         case ethW5500:   return ethInitSpi();
@@ -944,10 +935,7 @@ void ethGetIPv4(uint8_t out[4]) MM_NONBLOCKING {
     netifIPv4(ethNetif_, out);
 }
 
-// One raw frame straight to the controller, handed to the transfer engine with no address stack, route lookup or lease involved.
-// Gated on the LINK rather than on having an address, since that stack is a layer above and requiring one would stop a board driving panels it can drive.
-// Synchronous by contract, so the caller may reuse its buffer at once, and any error means the frame did not go out.
-// The count below is how many drivers have claimed the link.
+// How many drivers have claimed the raw link: @xref{raw-frames-to-the-controller|how a raw frame is sent}.
 static std::atomic<int> ethRawClaims_{0};
 
 void ethClaimRawL2(bool claim) {
@@ -971,7 +959,7 @@ static std::atomic<uint32_t> ethFailRingFull_{0};
 bool ethSendRaw(const uint8_t* frame, size_t len) MM_NONBLOCKING {
     if (!ethHandle_ || !frame || len == 0) return false;
     if (!ethLinkUp_.load(std::memory_order_relaxed)) {
-        // Counted, not silent: the driver counts every false into its own total, so skipping this one would make `dropped` and the per-cause totals describe different sets of frames. Deliberately NOT part of the streak: the streak drives wedge detection and re-arming, and a link genuinely down is the case a restart cannot fix.
+        // Counted so `dropped` and the per-cause totals describe the same frames. Kept out of the streak, which drives wedge detection and re-arming, since a restart cannot fix a link that is down.
         ethFailLinkDown_.fetch_add(1, std::memory_order_relaxed);
         return false;
     }
@@ -998,22 +986,19 @@ uint32_t ethSendFailStreak() MM_NONBLOCKING {
     return ethSendFails_.load(std::memory_order_relaxed);
 }
 
-// One MAC per chip, so there is no interface to choose: ethSendRaw always uses it. Accepting the call (rather than failing) keeps the driver's control identical on every target, the field is simply ignored here, which is what the driver's own comment tells the user.
+// One MAC per chip, so there is no interface to choose and ethSendRaw always uses it. Accepting the call keeps the driver's control identical on every target; the field is ignored here, as the driver's own comment tells the user.
 bool ethBindRawInterface(const char*) { return true; }
 
 bool ethRestartTx() {
     if (!ethHandle_) return false;
-    // Clear our own flag first, since the restart re-runs negotiation and the event sets it again if the link really returns.
-    // Leaving it true keeps the send trying against a driver mid-restart.
-    // A failed stop leaves a state we did not establish, so report rather than starting on top of it.
-    // Nothing is cleared before this point: clearing and then failing would refuse transmit permanently with no event able to set the flag again.
+    // Stop first and report a failure, since clearing before a failed stop would refuse transmit permanently. Then clear our flag so no send hits a driver mid-restart; the event sets it again if the link returns.
     if (esp_eth_stop(ethHandle_) != ESP_OK) return false;
     ethLinkUp_.store(false, std::memory_order_relaxed);
     ethSendFails_.store(0, std::memory_order_relaxed);
     return esp_eth_start(ethHandle_) == ESP_OK;
 }
 
-// Negotiated link speed, asked of the driver rather than assumed from the PHY type: a gigabit PHY on a 100 Mbit switch (or a bad cable) negotiates down, and that is precisely the case worth reporting. 0 when there is no link to describe.
+// Negotiated link speed, asked of the driver rather than assumed from the PHY type. A gigabit PHY on a 100 Mbit switch or a bad cable negotiates down. 0 when there is no link.
 uint16_t ethLinkSpeedMbps() MM_NONBLOCKING {
     if (!ethHandle_ || !ethLinkUp_.load(std::memory_order_relaxed)) return 0;
     eth_speed_t speed = ETH_SPEED_10M;
@@ -1025,8 +1010,7 @@ uint16_t ethLinkSpeedMbps() MM_NONBLOCKING {
     }
 }
 
-#else // MM_NO_ETH — firmware excludes EMAC support (chip-side or sdkconfig fragment
-      // wasn't layered. Provide stubs matching the desktop platform's no-eth behavior so NetworkModule's cascade falls straight to WiFi (or AP).
+#else // MM_NO_ETH: no EMAC support (chip-side, or the sdkconfig fragment was not layered). These stubs match the desktop no-eth behavior, so the cascade falls straight to WiFi or AP.
 
 void setEthConfig(const EthPinConfig&)  {}
 void ethStop()                          {}
@@ -1048,7 +1032,7 @@ bool ethBindRawInterface(const char*)                  { return true; }    // no
 
 #ifndef MM_NO_WIFI
 
-// Set while a deliberate teardown (wifiStaStop) is in progress, so the disconnect it provokes is not answered with a reconnect, that would race esp_wifi_deinit() with an in-flight connect. Atomic, not volatile: it is written from a task and read from IDF's event-loop task, and volatile carries no atomicity or ordering guarantee, only the compiler's promise not to elide the access.
+// Set during a deliberate teardown (wifiStaStop), so its disconnect is not answered with a reconnect that races esp_wifi_deinit(). Atomic, not volatile: it crosses a task and IDF's event-loop task, and volatile gives no atomicity or ordering.
 static std::atomic<bool> wifiStaStopping_{false};
 
 // How many stations are associated with our SoftAP right now. Written from IDF's event-loop task, read from the render task, so it is atomic.
@@ -1059,7 +1043,7 @@ static void wifiEventHandler(void* /*arg*/, esp_event_base_t base,
                              int32_t id, void* data) {
     if (base == WIFI_EVENT) {
         if (id == WIFI_EVENT_STA_CONNECTED) {
-            // L2 association complete (before DHCP). In Static mode, pin the stored config now and mark connected, a DHCP-less network never fires GOT_IP, so waiting for it would strand a static STA. Mirrors the eth CONNECTED handler's ethStatic_ re-pin. DHCP mode is a no-op here (the DHCP client runs and GOT_IP sets wifiStaConnected_ as before).
+            // L2 association complete, before DHCP. Static mode pins the stored config now and marks connected, since a DHCP-less network never fires GOT_IP. Mirrors the eth CONNECTED handler's re-pin; DHCP mode is a no-op here.
             wifiStaAssociated_.store(true, std::memory_order_relaxed);
             if (staStatic_.load(std::memory_order_acquire)) {
                 netSetStaticIPv4(NetIface::Sta, staStaticIp_, staStaticGw_, staStaticMask_, staStaticDns_);
@@ -1076,12 +1060,12 @@ static void wifiEventHandler(void* /*arg*/, esp_event_base_t base,
                 const auto* ev = static_cast<wifi_event_sta_disconnected_t*>(data);
                 const uint8_t why = ev ? ev->reason : 0;
                 const char* whyText =
-                    why == WIFI_REASON_NO_AP_FOUND        ? " (no AP with that SSID — wrong name, or a 5 GHz-only network: ESP32 is 2.4 GHz)"
-                  : why == WIFI_REASON_AUTH_FAIL          ? " (auth failed — wrong password)"
-                  : why == WIFI_REASON_HANDSHAKE_TIMEOUT  ? " (handshake timeout — usually a wrong password)"
-                  : why == WIFI_REASON_BEACON_TIMEOUT     ? " (beacon timeout — out of range or the AP went away)"
+                    why == WIFI_REASON_NO_AP_FOUND        ? " (no AP with that SSID: wrong name, or a 5 GHz-only network: ESP32 is 2.4 GHz)"
+                  : why == WIFI_REASON_AUTH_FAIL          ? " (auth failed: wrong password)"
+                  : why == WIFI_REASON_HANDSHAKE_TIMEOUT  ? " (handshake timeout: usually a wrong password)"
+                  : why == WIFI_REASON_BEACON_TIMEOUT     ? " (beacon timeout: out of range or the AP went away)"
                   : "";
-                ESP_LOGI(NET_TAG, "WiFi STA disconnected, reason %u%s — reconnecting (attempt %u)",
+                ESP_LOGI(NET_TAG, "WiFi STA disconnected, reason %u%s, reconnecting (attempt %u)",
                          (unsigned)why, whyText, (unsigned)attempts);
                 esp_wifi_connect();
             } else {
@@ -1103,9 +1087,7 @@ static void wifiEventHandler(void* /*arg*/, esp_event_base_t base,
     }
 }
 
-// True on success, failures propagating up so the module's state machine can fall back to a path that needs no radio.
-// This once aborted the device on any failure.
-// Fatal exactly when the heap was too fragmented for the radio to claim its buffers, which is the case the fallback existed for.
+// True on success, failures propagating so the module's state machine can fall back to a path needing no radio. Fatal only when the heap was too fragmented for the radio's buffers, the case the fallback exists for.
 static bool ensureWifiInit() {
     if (wifiInitDone_) return true;
 
@@ -1178,7 +1160,7 @@ bool wifiStaInit(const char* ssid, const char* password) {
     // DHCP hostname (option 12), after esp_wifi_start: the STA netif isn't "ready" (set_hostname returns IF_NOT_READY) until the WiFi driver glue starts it. Association + DHCP happen later still, so the name lands in the lease request.
     applyHostname(staNetif_);
 
-    // Disable modem power saving, whose default sleeps the radio between beacons and causes intermittent stalls in socket handling and the pause class of glitch. The whole lineage turns it off for the same reason, a wall-powered controller having no battery to save; non-fatal if it fails.
+    // Disable modem power saving, whose default sleeps the radio between beacons and stalls socket handling. The whole lineage turns it off, a wall-powered controller having no battery to save. Non-fatal if it fails.
     if ((err = esp_wifi_set_ps(WIFI_PS_NONE)) != ESP_OK) {
         ESP_LOGW(NET_TAG, "WiFi power-save disable failed: %s", esp_err_to_name(err));
     }
@@ -1198,7 +1180,7 @@ bool wifiStaConnected() MM_NONBLOCKING {
     return wifiStaConnected_.load(std::memory_order_relaxed);
 }
 
-void wifiStaGetIPv4(uint8_t out[4]) {
+void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING {
     netifIPv4(staNetif_, out);
 }
 
@@ -1343,12 +1325,12 @@ bool wifiSetTxPower(int8_t quarterDbm) {
     return true;
 }
 
-#else // MM_NO_WIFI — Ethernet-only build: WiFi compiled out.
+#else // MM_NO_WIFI: Ethernet-only build: WiFi compiled out.
 
-// Stub definitions so the linker is satisfied (platform.h declares these and NetworkModule's discarded `if constexpr (hasWiFi)` branch still ODR-uses them). With hasWiFi==false the calls are not code-generated, so --gc-sections drops these stubs from the final image.
+// Stubs so the linker is satisfied: platform.h declares these and NetworkModule's discarded `if constexpr (hasWiFi)` branch still ODR-uses them. With hasWiFi false the calls are not generated, so --gc-sections drops the stubs.
 bool wifiStaInit(const char* /*ssid*/, const char* /*password*/) { return false; }
 bool wifiStaConnected() MM_NONBLOCKING { return false; }
-void wifiStaGetIPv4(uint8_t out[4])      { out[0] = out[1] = out[2] = out[3] = 0; }
+void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING { out[0] = out[1] = out[2] = out[3] = 0; }
 void wifiStaStop() {}
 int wifiStaRssi() { return 0; }
 void wifiStaBssid(uint8_t out[6]) { std::memset(out, 0, 6); }
@@ -1363,12 +1345,12 @@ bool wifiSetTxPower(int8_t quarterDbm) { return quarterDbm == 0; }
 
 #endif // MM_NO_WIFI
 
-// Socket-safe once any interface has an IP: at that point esp_netif_init() has run and the lwip core mutex exists, so opening a socket won't assert. Each predicate is stubbed to false in the build that lacks its interface, so this OR compiles and answers correctly on every firmware.
+// Socket-safe once any interface has an IP: esp_netif_init() has run and the lwip core mutex exists, so opening a socket won't assert. Each predicate is stubbed false in a build lacking its interface, so this OR is right on every firmware.
 bool networkReady() {
     return ethConnected() || wifiStaConnected() || wifiApConnected();
 }
 
-// Resolve a NetIface to its netif pointer. Each arm is compiled out on a build that lacks that interface (MM_NO_ETH / MM_NO_WIFI), so the static-addressing setters below compile everywhere and simply no-op for an absent interface (null netif → the callers return early).
+// Resolve a NetIface to its netif pointer. Each arm compiles out where that interface is absent, so the setters below compile everywhere and no-op for an absent interface (null netif, callers return early).
 static esp_netif_t* resolveNetif(NetIface iface) {
     switch (iface) {
         case NetIface::Eth:
@@ -1387,14 +1369,12 @@ static esp_netif_t* resolveNetif(NetIface iface) {
     return nullptr;
 }
 
-// Pin a fixed address onto a client interface, stopping its address client so a lease cannot overwrite it.
-// Then set the address, gateway and mask, plus a name server when one is given.
-// The mirror of the access-point block in client form; an all-zero address is a no-op guard, and this is idempotent.
+// Pin a fixed address on a client interface: stop its address client, then set address, gateway, mask and, when given, a name server. An all-zero address is a no-op, and the call is idempotent.
 void netSetStaticIPv4(NetIface iface, const uint8_t ip[4], const uint8_t gw[4],
                       const uint8_t mask[4], const uint8_t dns[4]) {
     esp_netif_t* netif = resolveNetif(iface);
     if (!netif) return;
-    if (!ip || (!ip[0] && !ip[1] && !ip[2] && !ip[3])) return;   // no static IP set — leave DHCP
+    if (!ip || (!ip[0] && !ip[1] && !ip[2] && !ip[3])) return;   // no static IP set, leave DHCP
 
     esp_netif_dhcpc_stop(netif);   // ignore ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED
 
@@ -1411,7 +1391,7 @@ void netSetStaticIPv4(NetIface iface, const uint8_t ip[4], const uint8_t gw[4],
         esp_netif_set_dns_info(netif, ESP_NETIF_DNS_MAIN, &dnsInfo);
     }
 
-    // Applying a static IP IS the "interface now has an address" moment, there is no DHCP GOT_IP event to wait for. Both interfaces' "connected" flags key off that DHCP event, so a static apply must set them itself (symmetric with how GOT_IP would). Record the config + flag too, so each interface's link-up handler re-pins static on a reconnect instead of restarting DHCP.
+    // Applying a static IP is the moment the interface has an address, and no DHCP GOT_IP will mark it connected. Set the flags here, and record the config so each link-up handler re-pins static instead of restarting DHCP.
 #ifndef MM_NO_ETH
     if (iface == NetIface::Eth) {
         // Octets first, flag last (release): the event task's link-up re-pin acquires the flag, so a true flag guarantees a fully-written config.
@@ -1420,7 +1400,7 @@ void netSetStaticIPv4(NetIface iface, const uint8_t ip[4], const uint8_t gw[4],
             ethStaticMask_[i] = mask[i]; ethStaticDns_[i] = dns ? dns[i] : 0;
         }
         ethStatic_.store(true, std::memory_order_release);
-        // Mark connected only if the link is actually up, else a static apply racing a cable pull would leave ethConnected() true on a dead link (the state machine would sit in ConnectedEth instead of cascading). On a genuine link-up the CONNECTED handler re-applies + sets it.
+        // Mark connected only if the link is up: a static apply racing a cable pull would leave ethConnected() true on a dead link, stalling the cascade. A real link-up re-applies and sets it in the CONNECTED handler.
         if (ethLinkUp_.load(std::memory_order_relaxed)) ethConnected_.store(true, std::memory_order_relaxed);
     }
 #endif
@@ -1432,7 +1412,7 @@ void netSetStaticIPv4(NetIface iface, const uint8_t ip[4], const uint8_t gw[4],
             staStaticMask_[i] = mask[i]; staStaticDns_[i] = dns ? dns[i] : 0;
         }
         staStatic_.store(true, std::memory_order_release);
-        // wifiStaConnected_ normally means "got a DHCP IP", which never fires on a DHCP-less network, the very case static addressing exists for. So mark connected here (the IP is applied); WIFI_EVENT_STA_CONNECTED re-applies on a reconnect. Only when the STA is actually associated, so a static apply while the radio is down doesn't fake a connection.
+        // wifiStaConnected_ normally means a DHCP IP, which never fires on DHCP-less networks, the case static addressing exists for. Mark connected here, only when associated, so a static apply with the radio down fakes no connection.
         if (wifiStaAssociated_.load(std::memory_order_relaxed)) wifiStaConnected_.store(true, std::memory_order_relaxed);
     }
 #endif
@@ -1461,10 +1441,10 @@ void netSetDhcp(NetIface iface) {
     ESP_LOGI(NET_TAG, "DHCP restarted on %s", iface == NetIface::Eth ? "eth" : "sta");
 }
 
-// Bring the discovery stack up and advertise this device by name, gated on the user's toggle while the stack itself stays up.
-// So toggling back on re-advertises without a full restart.
-// Advertise-only: peer discovery is datagram presence elsewhere.
-static bool mdnsStackUp_ = false;
+// The discovery stack, brought up once and kept up. Advertising is gated on the user's toggle, so toggling back on re-advertises without a full restart.
+static std::atomic<bool> mdnsStackUp_{false};
+// Held across a name query and the stack's release, since mdns_free deletes the semaphore an in-flight query waits on.
+static std::mutex mdnsQueryMutex_;
 
 static bool ensureMdnsStack() {
     if (mdnsStackUp_) return true;
@@ -1517,10 +1497,10 @@ bool mdnsInit(const char* deviceName) {
     esp_err_t txtErr = mdns_service_txt_item_set("_http", "_tcp", "mm", "1");
     ESP_LOGI(NET_TAG, "mDNS _http._tcp TXT mm=1 set: %s", esp_err_to_name(txtErr));
 
-    // `_wled._tcp`: the service the native WLED apps + Home Assistant browse for, how a MoonLight device appears in the WLED ecosystem without speaking WLED's UDP protocol (the HTTP server on :80 answers their /json/info probe). Non-fatal: a failure means we don't show in those apps; the rest of discovery still works.
+    // `_wled._tcp`: the service the WLED apps and Home Assistant browse for. The HTTP server on :80 answers their /json/info probe, so no WLED UDP protocol is needed. Non-fatal: a failure only hides us from those apps.
     esp_err_t wledErr = mdns_service_add(deviceName, "_wled", "_tcp", 80, nullptr, 0);
     ESP_LOGI(NET_TAG, "mDNS _wled._tcp add: %s", esp_err_to_name(wledErr));
-    // `mac=` TXT, a real WLED carries `mac=<12 hex>` on its _wled._tcp record, and the native apps key the discovered device on it (without it the record is discarded, so the device never lists). Lowercase hex, no separators, matching WLED's format.
+    // `mac=` TXT: a real WLED carries `mac=<12 hex>` on its _wled._tcp record and the native apps key the device on it, discarding the record without it. Lowercase hex, no separators, as WLED formats it.
     uint8_t mac[6] = {};
     esp_efuse_mac_get_default(mac);
     char macStr[13];
@@ -1529,7 +1509,7 @@ bool mdnsInit(const char* deviceName) {
     esp_err_t wledTxtErr = mdns_service_txt_item_set("_wled", "_tcp", "mac", macStr);
     ESP_LOGI(NET_TAG, "mDNS _wled._tcp TXT mac=%s set: %s", macStr, esp_err_to_name(wledTxtErr));
 
-    // Summary reflects the ACTUAL per-step results (each logged above): _http._tcp is up (we returned early on its failure), the TXT / _wled additions are non-fatal so report ok/fail rather than claiming success unconditionally.
+    // The summary reflects the actual per-step results: _http._tcp is up (we returned early otherwise), and the TXT and _wled additions are non-fatal, so each reports ok or fail.
     ESP_LOGI(NET_TAG, "mDNS started: %s.local (_http._tcp:80 mm=1:%s, _wled._tcp:80:%s mac=%s:%s)",
              deviceName,
              txtErr == ESP_OK ? "ok" : "fail",
@@ -1540,7 +1520,7 @@ bool mdnsInit(const char* deviceName) {
 }
 
 void mdnsStop() {
-    // Stop advertising but keep the stack up, so a re-init re-advertises cheaply; freeing it entirely is the release path's job. Both services and the hostname go, matching what the init adds, or a stale record survives an interface switch and confuses the next announcement.
+    // Stop advertising but keep the stack up, so a re-init re-advertises cheaply; the release path frees it. Both services and the hostname go, matching the init, or a stale record survives an interface switch and confuses the next announcement.
     if (mdnsStackUp_) {
         esp_err_t httpRm = mdns_service_remove("_http", "_tcp");
         esp_err_t wledRm = mdns_service_remove("_wled", "_tcp");
@@ -1552,18 +1532,45 @@ void mdnsStop() {
 
 // Full stack release (mdns_free), only at module release.
 void mdnsShutdown() {
-    if (mdnsStackUp_) { mdns_free(); mdnsStackUp_ = false; }
+    std::lock_guard<std::mutex> lock(mdnsQueryMutex_);   // waits out a query, at most its 2 s timeout
+    if (mdnsStackUp_) { mdnsStackUp_ = false; mdns_free(); }
 }
 
-// Advertise-only: discovery is datagram presence, each device broadcasting and listening for a small packet on its own port. Keeping discovery off this protocol also keeps the advertisement stable, since a query for a service this device hosts destabilizes its own.
+bool resolveHost(const char* name, uint8_t ip[4]) {
+    const size_t len = std::strlen(name);
+    constexpr size_t kLocal = 6;   // ".local"
+    if (len > kLocal && strcasecmp(name + len - kLocal, ".local") == 0) {
+        // lwIP's DNS client does not speak mDNS, so a .local name goes to the mDNS stack, only while the network module keeps it up.
+        std::lock_guard<std::mutex> lock(mdnsQueryMutex_);
+        if (!mdnsStackUp_) return false;
+        char host[64];
+        const size_t n = std::min(len - kLocal, sizeof(host) - 1);
+        std::memcpy(host, name, n);
+        host[n] = 0;
+        esp_ip4_addr_t addr = {};
+        if (mdns_query_a(host, 2000, &addr) != ESP_OK) return false;
+        std::memcpy(ip, &addr.addr, 4);
+        return true;
+    }
+    struct addrinfo hints = {};
+    hints.ai_family = AF_INET;
+    struct addrinfo* res = nullptr;
+    if (lwip_getaddrinfo(name, nullptr, &hints, &res) != 0 || !res) return false;
+    const auto* in = reinterpret_cast<const struct sockaddr_in*>(res->ai_addr);
+    std::memcpy(ip, &in->sin_addr.s_addr, 4);
+    lwip_freeaddrinfo(res);
+    return true;
+}
 
-// Outbound HTTP request (plain HTTP, LAN, no TLS), see platform.h. A bounded blocking lwIP socket call; the caller (HueDriver) runs it off the render path on tick1s. Mirrors the desktop impl: build request → connect → send → read response → return status + body.
+// Advertise-only: discovery is datagram presence, each device broadcasting and listening on its own port. Keeping it off this protocol keeps the advertisement stable, since a query for a service this device hosts destabilizes its own.
+
+// Outbound HTTP request (plain HTTP, LAN, no TLS), see platform.h. A bounded blocking lwIP call, which the caller (HueDriver) runs off the render path on tick1s. Mirrors the desktop impl.
 int httpRequest(const char* method, const char* host, uint16_t port, const char* path,
                 const char* reqBody, uint32_t timeoutMs, char* body, size_t bodyLen) {
     if (body && bodyLen) body[0] = '\0';
     if (!method || !host || !path) return 0;
 
-    // One shared budget for every phase rather than a fresh one each, which let the total reach three times the caller's timeout. The remainder is floored above zero, since zero means block forever, and it is tracked as elapsed time, which stays correct across the counter's rollover.
+    // One shared budget for every phase, not a fresh one each, which let the total reach three times the caller's timeout. The remainder is floored above zero (zero blocks forever) and tracked as elapsed time, which survives the counter's rollover.
     const uint32_t start = millis();
     auto remainingMs = [&]() -> uint32_t {
         const uint32_t elapsed = millis() - start;
@@ -1579,12 +1586,12 @@ int httpRequest(const char* method, const char* host, uint16_t port, const char*
     addr.sin_port = htons(port);
     if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) return 0;
 
-    // Bound the CONNECT by timeoutMs: a blocking connect to an unreachable host hangs for the OS default, and this runs on the driver's tick1s (shared with the render loop), so it must not stall. Connect non-blocking, wait writable via select() up to timeoutMs, then restore blocking for the bounded send/recv (which use SO_*TIMEO below).
+    // Bound the CONNECT by timeoutMs, since a blocking connect to an unreachable host hangs for the OS default on the shared tick1s. Connect non-blocking, wait writable via select(), then restore blocking for send/recv.
     const int flags = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
     int cr = ::connect(fd, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr));
     if (cr != 0 && errno != EINPROGRESS) return 0;   // immediate hard failure
-    if (cr != 0) {                                    // connect in progress — wait for writable
+    if (cr != 0) {                                    // connect in progress, wait for writable
         fd_set wf; FD_ZERO(&wf); FD_SET(fd, &wf);
         const uint32_t cms = remainingMs();
         timeval ctv{};
@@ -1598,7 +1605,7 @@ int httpRequest(const char* method, const char* host, uint16_t port, const char*
     }
     fcntl(fd, F_SETFL, flags);                         // back to blocking
 
-    // Bound the request send + response recv with SO_RCVTIMEO/SO_SNDTIMEO, using the time LEFT on the shared deadline (not a fresh timeoutMs) so connect + send + recv together stay within the caller's budget.
+    // Bound the send and recv with SO_RCVTIMEO/SO_SNDTIMEO using the time LEFT on the shared deadline, so connect, send and recv together stay within the caller's budget.
     const uint32_t sms = remainingMs();
     timeval tv{};
     tv.tv_sec = static_cast<time_t>(sms / 1000);
@@ -1617,14 +1624,14 @@ int httpRequest(const char* method, const char* host, uint16_t port, const char*
               "%s %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n",
               method, path, host);
     if (n <= 0 || n >= static_cast<int>(sizeof(req))) return 0;
-    // Send the whole request, a blocking send can return short under backpressure, so loop until all n bytes are out (retry on a positive partial, fail only on 0 / error).
+    // Send the whole request. A blocking send can return short under backpressure, so loop until all n bytes are out, failing only on 0 or error.
     for (int off = 0; off < n;) {
         int w = ::send(fd, req + off, n - off, 0);
         if (w > 0) off += w;
         else return 0;
     }
 
-    // Read the response. When the caller wants the body, read into THEIR buffer (so they size it, a Hue /lights body runs several KB) and shift the body to the front. When they don't (body==null, e.g. a fire-and-forget PUT), read into a small local scratch far enough to get the status line, the request still executes.
+    // Read the response into the caller's buffer (they size it, a Hue /lights body runs several KB), then shift the body to the front. With no buffer (a fire-and-forget PUT), a small local scratch is enough for the status line.
     char scratch[256];
     char* buf = body ? body : scratch;
     const size_t cap = body ? bodyLen : sizeof(scratch);
@@ -1662,20 +1669,6 @@ bool UdpSocket::open() {
     return true;
 }
 
-bool UdpSocket::connect(const char* ip, uint16_t port) {
-    if (fd_ < 0) return false;
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    if (inet_pton(AF_INET, ip, &addr.sin_addr) != 1) return false;
-    return ::connect(fd_, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) == 0;
-}
-
-bool UdpSocket::sendTo(const uint8_t* data, size_t len) {
-    if (fd_ < 0) return false;
-    return ::send(fd_, data, len, 0) >= 0;
-}
-
 bool UdpSocket::bind(uint16_t port) {
     if (fd_ < 0) return false;
     int reuse = 1;
@@ -1703,12 +1696,15 @@ int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4]) {
     return static_cast<int>(n);
 }
 
-// Join an IPv4 multicast group so the bound socket receives datagrams sent to it. WLED audio sync multicasts to 239.0.0.1; without this membership the datagrams never reach the socket. INADDR_ANY as the interface lets lwip pick the default route's netif.
+// Join an IPv4 multicast group so the bound socket receives datagrams sent to it (WLED audio sync multicasts to 239.0.0.1). INADDR_ANY as the interface lets lwip pick the default route's netif.
 bool UdpSocket::joinMulticast(const char* group) {
     if (fd_ < 0 || !group) return false;
     ip_mreq mreq{};
     if (inet_pton(AF_INET, group, &mreq.imr_multiaddr) != 1) return false;
     mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+    // A socket that joins a group and also sends to it must not hear its own sends back.
+    const uint8_t loop = 0;
+    setsockopt(fd_, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop));
     return setsockopt(fd_, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) == 0;
 }
 
@@ -1762,10 +1758,7 @@ bool TcpConnection::peerIPv4(uint8_t out[4]) const {
 
 bool TcpConnection::write(const uint8_t* data, size_t len) {
     if (fd_ < 0) return false;
-    // Send every byte, retrying on a full buffer, since a response must arrive complete and a healthy interface drains in microseconds.
-    // This runs on the render thread, though, and a stalled peer would make an unbounded retry hang it until the watchdog reboots the device.
-    // Two bounds, therefore: the stall bound, which progress resets, lets a slow but steady transfer finish where a total-only bound truncated large assets mid-body.
-    // The total bound keeps a peer trickling one byte per window from holding the thread indefinitely, which would be a remotely triggerable reboot.
+    // Send every byte, retrying on a full buffer. This runs on the render thread, so the retry is bounded twice: @xref{why-the-tcp-write-is-bounded-twice|the stall and total bounds}.
     constexpr uint32_t kWriteStallMs = 2000;
     constexpr uint32_t kWriteTotalMs = 8000;
     const uint32_t start = millis();
@@ -1794,7 +1787,7 @@ int TcpConnection::writeSome(const uint8_t* data, size_t len) {
     ssize_t n = lwip_write(fd_, data, len);
     if (n > 0) return static_cast<int>(n);
     if (n == 0) return 0;
-    if (errno == EAGAIN || errno == EWOULDBLOCK) return 0;  // buffer full — try later
+    if (errno == EAGAIN || errno == EWOULDBLOCK) return 0;  // buffer full, try later
     return -1;                                              // real socket error
 }
 
@@ -1820,14 +1813,14 @@ bool TcpConnection::connectStart(const char* host, uint16_t port) {
     int cr = lwip_connect(fd, res->ai_addr, res->ai_addrlen);
     const bool inProgress = (cr != 0 && errno == EINPROGRESS);
     if (cr != 0 && !inProgress) { lwip_close(fd); return false; }   // immediate hard failure
-    fd_ = fd;   // in flight — connectPoll() resolves which
+    fd_ = fd;   // in flight, connectPoll() resolves which
     return true;
 }
 
 TcpConnection::ConnectResult TcpConnection::connectPoll() {
     if (fd_ < 0) return ConnectResult::Failed;
     fd_set wf; FD_ZERO(&wf); FD_SET(fd_, &wf);
-    struct timeval zero = {};   // 0s / 0us — never blocks
+    struct timeval zero = {};   // 0s / 0us, never blocks
     const int r = lwip_select(fd_ + 1, nullptr, &wf, nullptr, &zero);
     if (r == 0) return ConnectResult::Pending;
     if (r < 0)  { close(); return ConnectResult::Failed; }

@@ -47,26 +47,26 @@
       "value": true
     },
     {
-      "name": "wled-compatible-off",
-      "description": "The WLED compatibility shim is what makes this device appear in the WLED apps.",
+      "name": "multicast-only",
+      "description": "The broadcast copy is what makes this device appear in the WLED apps.",
       "op": "set_control",
       "id": "Devices",
-      "key": "wledCompatible",
-      "value": false
+      "key": "addressing",
+      "value": 0
     },
     {
-      "name": "shim-is-off",
+      "name": "broadcast-is-off",
       "op": "expect_control",
       "id": "Devices",
-      "key": "wledCompatible",
-      "equals": "false"
+      "key": "addressing",
+      "equals": "0"
     },
     {
-      "name": "wled-compatible-on",
+      "name": "broadcast-on",
       "op": "set_control",
       "id": "Devices",
-      "key": "wledCompatible",
-      "value": true
+      "key": "addressing",
+      "value": 1
     },
     {
       "name": "restart",
@@ -82,11 +82,11 @@
       "equals": "true"
     },
     {
-      "name": "shim-survived",
+      "name": "broadcast-survived",
       "op": "expect_control",
       "id": "Devices",
-      "key": "wledCompatible",
-      "equals": "true"
+      "key": "addressing",
+      "equals": "1"
     }
   ]
 }

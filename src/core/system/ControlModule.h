@@ -8,7 +8,7 @@
 #include "core/util/JsonSink.h"
 #include "core/module/Scheduler.h"
 #include "core/util/JsonUtil.h"
-#include "core/util/InputMapping.h"   // runInputAction: an encoder detent is a delta like any other
+#include "core/util/InputMapping.h"   // kTargetTypeMaxNumber: the bank sizes an input row may name
 #include "platform/platform.h"
 
 #include <cstdarg>   // setStatusf
@@ -77,6 +77,8 @@ public:
 
     /// The switch row.
     static constexpr uint8_t kSwitchCount = 8;
+    static_assert(kTargetTypeMaxNumber[1] == kSwitchCount && kTargetTypeMaxNumber[2] == kEncoderCount
+                  && kTargetTypeMaxNumber[3] == kFaderCount, "an input row names exactly the surface's banks");
 
     /// The boot ControlModule (exactly one exists).
     static ControlModule* active() { return ActiveInstance<ControlModule>::active(); }
@@ -89,6 +91,7 @@ public:
         for (uint8_t i = 0; i < surfaceCount_; i++)
             if (surfaces_[i] == s) return;
         if (surfaceCount_ >= kMaxSurfaces) return;
+        touched_[surfaceCount_] = Touch{};
         surfaces_[surfaceCount_++] = s;
         // Read the targets BEFORE seeding:
         followTargets();
@@ -108,7 +111,9 @@ public:
     void removeSurface(ControlSurface* s) {
         for (uint8_t i = 0; i < surfaceCount_; i++) {
             if (surfaces_[i] != s) continue;
-            surfaces_[i] = surfaces_[--surfaceCount_];
+            --surfaceCount_;
+            surfaces_[i] = surfaces_[surfaceCount_];
+            touched_[i] = touched_[surfaceCount_];
             surfaces_[surfaceCount_] = nullptr;
             return;
         }
@@ -124,12 +129,18 @@ public:
         driveEncoder(index);
     }
 
-    /// A hand is on this control.
-    void setTouched(SurfaceControl kind, uint8_t index, bool held) {
-        uint32_t* mask = touchMask(kind);
-        if (!mask || index >= 32) return;
-        if (held) *mask |= (1u << index);
-        else      *mask &= ~(1u << index);
+    /// A hand is on this control of surface `by`, which holds back only `by`'s own motor or light; every other surface keeps following.
+    void setTouched(ControlSurface* by, SurfaceControl kind, uint8_t index, bool held) {
+        for (uint8_t s = 0; s < surfaceCount_; s++) {
+            if (surfaces_[s] != by) continue;
+            uint32_t* mask = touchMask(s, kind);
+            if (!mask || index >= 32) return;
+            if (held) { *mask |= (1u << index); return; }
+            *mask &= ~(1u << index);
+            // Let go: the value moved on while the hand was there, so the surface lands where it ended.
+            by->sendValue(kind, index, currentValue(kind, index));
+            return;
+        }
     }
 
     /// Push changed values to every attached surface.
@@ -145,9 +156,14 @@ public:
             mirrorOne(SurfaceControl::Fader, i, faders_[i], sentFaders_[i]);
     }
 
+    /// Follow every assignment and push what moved, so a value changing underneath, such as a self-playing game, reaches a desk at once. A pass costs about 1.3 us with all 24 assigned, on a desktop.
+    void tick20ms() MM_NONBLOCKING override {
+        MoonModule::tick20ms();
+        mirrorToSurfaces();
+    }
+
     void tick1s() MM_NONBLOCKING override {
         MoonModule::tick1s();
-        mirrorToSurfaces();
         // The strip falls back to the device's name once what it was showing has gone stale.
         settleStrip();
     }
@@ -231,20 +247,24 @@ public:
         }
         for (uint8_t i = 0; i < kFaderCount; i++) {
             if (std::strcmp(controlName, kFaderNames[i]) != 0) continue;
-            // NOT marked as already-sent here.
+            // Every writer reaches the surfaces, so nothing is marked sent beforehand; a touched control is held back only on the surface touching it.
             driveFader(i);
+            // Pushed now rather than at the next 20 ms pass, so a forwarded move arrives at once.
+            mirrorOne(SurfaceControl::Fader, i, faders_[i], sentFaders_[i]);
             return;
         }
         for (uint8_t i = 0; i < kEncoderCount; i++) {
             if (std::strcmp(controlName, kEncoderNames[i]) != 0) continue;
             // A transport writes a POSITION, exactly as it does for a fader, and the MOVEMENT is what.
             driveEncoder(i);
+            mirrorOne(SurfaceControl::Encoder, i, encoders_[i], sentEncoders_[i]);
             return;
         }
         for (uint8_t i = 0; i < kSwitchCount; i++) {
             if (std::strcmp(controlName, kSwitchNames[i]) != 0) continue;
             // Not marked as already-sent, for the reason the fader branch above gives.
             driveSwitch(i);
+            mirrorOne(SurfaceControl::Switch, i, switches_[i] ? 255 : 0, sentSwitches_[i]);
             return;
         }
     }
@@ -401,6 +421,13 @@ public:
         const size_t n = std::min(static_cast<size_t>(dot - target), sizeof(module) - 1);
         std::memcpy(module, target, n);
         module[n] = '\0';
+        // A button takes every write as a press, so a switch drives one on the way down only.
+        const ControlDescriptor* tc = findControl(module, dot + 1);
+        if (tc && tc->type == ControlType::Button && !switches_[index]) return;
+        // An unchanged target is not rewritten, as in driveSurface.
+        int32_t current = 0;
+        if (tc && tc->type != ControlType::Button && sched->getControlWide(module, dot + 1, current)
+            && (current != 0) == switches_[index]) return;
         char body[32];
         std::snprintf(body, sizeof(body), "{\"value\":%s}", switches_[index] ? "true" : "false");
         sched->setControl(module, dot + 1, body);
@@ -474,13 +501,16 @@ public:
             if (value > hi) value = static_cast<uint8_t>(hi < 0 ? 0 : hi);
             if (value < tc->min) value = tc->min;
         }
-        // And the control itself holds what it just wrote, so the next read agrees with the target.
+        // And the control itself holds what it wrote, so the next read agrees with the target.
         if (kind == SurfaceControl::Encoder) encoders_[index] = value; else faders_[index] = value;
+        // An unchanged target is not rewritten: an OSC echo of a sent value would otherwise read as a player taking a self-playing game's control.
+        int32_t current = 0;
+        if (sched->getControlWide(module, dot + 1, current) && current == value) return;
         char body[32];
         std::snprintf(body, sizeof(body), "{\"value\":%u}", static_cast<unsigned>(value));
         sched->setControl(module, dot + 1, body);
         showOnStrip(module, dot + 1, value);
-        followTargets();   // siblings on the same target update now, not at the next 1 Hz sample
+        followTargets();   // siblings on the same target update now, not at the next pass
     }
 
     /// Write one fader's value onto whatever it targets.
@@ -688,7 +718,7 @@ private:
         return true;
     }
 
-    /// Read just the `captures` header so a row can say what it carries without loading the body.
+    /// Read only the `captures` header, so a row can say what it carries without loading the body.
     void readCaptures(Preset& p) {
         char path[128];
         pathFor(p.name, path, sizeof(path));
@@ -921,24 +951,38 @@ private:
     /// The last value KNOWN to a surface, so only changes go out.
     uint8_t sentSwitches_[kSwitchCount] = {};
     uint8_t sentFaders_[kFaderCount] = {};
-    /// One bit per control, per bank: a hand is on it. See setTouched.
-    uint32_t touchedSwitches_ = 0, touchedEncoders_ = 0, touchedFaders_ = 0;
+    /// One bit per control, per bank, per attached surface: a hand is on it there. See setTouched.
+    struct Touch { uint32_t switches = 0, encoders = 0, faders = 0; };
+    Touch touched_[kMaxSurfaces] = {};
 
-    uint32_t* touchMask(SurfaceControl kind) {
+    uint32_t* touchMask(uint8_t surface, SurfaceControl kind) {
+        Touch& t = touched_[surface];
         switch (kind) {
-            case SurfaceControl::Switch:  return &touchedSwitches_;
-            case SurfaceControl::Encoder: return &touchedEncoders_;
-            case SurfaceControl::Fader:   return &touchedFaders_;
+            case SurfaceControl::Switch:  return &t.switches;
+            case SurfaceControl::Encoder: return &t.encoders;
+            case SurfaceControl::Fader:   return &t.faders;
             default: return nullptr;   // a pad has no travel to fight over
         }
     }
 
-    /// Push one control if it changed and no hand is on it.
+    /// The value a surface control holds now, as surfaces are sent it.
+    uint8_t currentValue(SurfaceControl kind, uint8_t index) const {
+        switch (kind) {
+            case SurfaceControl::Switch:  return index < kSwitchCount && switches_[index] ? 255 : 0;
+            case SurfaceControl::Encoder: return index < kEncoderCount ? encoders_[index] : 0;
+            case SurfaceControl::Fader:   return index < kFaderCount ? faders_[index] : 0;
+            default: return 0;
+        }
+    }
+
+    /// Push one control if it changed, to every surface without a hand on it.
     void mirrorOne(SurfaceControl kind, uint8_t index, uint8_t value, uint8_t& sent) {
         if (value == sent) return;
-        const uint32_t* mask = touchMask(kind);
-        if (mask && index < 32 && (*mask & (1u << index))) return;
-        for (uint8_t s = 0; s < surfaceCount_; s++) surfaces_[s]->sendValue(kind, index, value);
+        for (uint8_t s = 0; s < surfaceCount_; s++) {
+            const uint32_t* mask = touchMask(s, kind);
+            if (mask && index < 32 && (*mask & (1u << index))) continue;
+            surfaces_[s]->sendValue(kind, index, value);
+        }
         sent = value;
     }
 

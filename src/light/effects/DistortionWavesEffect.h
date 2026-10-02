@@ -23,8 +23,8 @@ namespace mm {
 /// That hue then indexes the active palette, where the source swept hue directly.
 class DistortionWavesEffect : public EffectBase {
 public:
-    /// Catalog tags: MoonLight and WLED origin.
-    const char* tags() const override { return "💫"; }
+    /// Catalog tags: WLED origin.
+    const char* tags() const override { return "🐙"; }
     /// A plane, which extrude lifts through a volume.
     Dim dimensions() const override { return Dim::D2; }
 

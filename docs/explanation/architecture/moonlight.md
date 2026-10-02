@@ -242,21 +242,24 @@ The trade is deliberate: **a chain must be homogeneous**. Mixing fixture types o
 
 ## Multicast and IGMP snooping
 
-Three things MoonLight sends to more than one listener, and they do not all use the same transport, because the protocol's owner decides it and not us:
+Four things MoonLight sends to more than one listener. Every one goes through one helper, `sendAddressed` in [Addressing](../../moonmodules/core/moxygen/Addressing.md), and a service offers the modes its protocol allows under one control, `addressing`, with `hosts` as its unicast list:
 
-| | transport | why |
+| | modes | why |
 |---|---|---|
-| WLED audio sync | multicast `239.0.0.1` | WLED's usermod both sends and receives there, never on broadcast |
-| Device discovery | multicast `239.255.77.77`, plus broadcast when `wledCompatible` | WLED apps browse the discovery port on broadcast |
-| E1.31 / sACN output | unicast by default, multicast opt-in | multicast is the spec's native mode, but see below |
+| WLED audio sync | multicast `239.0.0.1`, or unicast to `hosts` | WLED's usermod sends and receives on the group; unicast reaches a few MoonLight boards faster on WiFi |
+| Device discovery | multicast `239.255.77.77` plus broadcast by default | WLED announces and listens on the discovery port by broadcast |
+| OSC feedback | unicast to `hosts`, multicast, multicast plus broadcast | one desk driving several boards |
+| Art-Net, E1.31, DDP output | unicast; E1.31 multicast; Art-Net broadcast | multicast is sACN's native mode, broadcast Art-Net's legacy one |
+
+**Unicast to a list** is N separate copies, each retried by WiFi at full speed. It works on every network, and it is the cheapest way to reach a handful of known receivers. A host may be a name, resolved in the background so the render thread never waits on DNS.
 
 **Broadcast** reaches every device on the subnet. Each one takes the interrupt, walks up the stack, finds nothing listening on the port and discards the packet. At LED frame rates that is real work imposed on every phone, laptop and printer on the LAN.
 
-**Multicast** is addressed to a group, and only the devices that joined it (via IGMP) accept the packet. The rest never see it, which is what makes it the better neighbour in principle.
+**Multicast** is addressed to a group, and only the devices that joined it (via IGMP) accept the packet. The rest never see it, which is what makes it the better neighbor in principle.
 
 **In principle**, because the win depends on the switch. A switch with **IGMP snooping** watches those join messages and learns which of its ports want the group, then forwards the traffic only there: the saving is real and happens in hardware. A switch **without** snooping cannot know, so it does the safe thing and floods the group out of every port, exactly like broadcast. WiFi is worse than that: multicast and broadcast alike go out at the lowest basic rate so every station can hear them, which is far slower than a unicast frame to one associated station.
 
-Firmware cannot detect which kind of network it is on. That is why **multicast is never an automatic upgrade here**. sACN multicast and dropping the discovery broadcast are both opt-in choices for someone who knows their switch. Unicast, or broadcast where a protocol demands it, stays the portable default.
+Firmware cannot detect whether a switch snoops, so **multicast is never an automatic upgrade here**. sACN multicast is an opt-in for someone who knows their switch, and unicast stays the portable default. What firmware can detect is a network that drops multicast altogether, the access point or switch that forgets a group. Discovery is the probe, since every device both sends and receives there. For two minutes after boot, presence goes out both ways with each copy marked. Three broadcast copies in a row from one peer, with no multicast copy between, prove the group does not arrive, even where it once did. That sets one flag, and from then every occasional multicast send adds a broadcast copy: presence and OSC feedback. A steady stream never does, light or audio, since a broadcast copy per packet would load every device on the LAN. An E1.31 multicast output says so on its card instead. A multicast copy arriving from any peer clears the flag again.
 
 Network-based drivers (ArtNet, E1.31, DDP) pace their output with a **non-blocking elapsed-time gate**, never a blocking wait (no `delay`/`vTaskDelay`, that would stall the single-threaded tick, the hot-path rule). The gate is the `lastSendTime`/`millis()` pattern: `if (now − lastSendTime < interval) return;` early-exits the tick so every other module's loop keeps running, exactly how FPS limiting works (`NetworkSendDriver`, `fps` control). **Frame-rate pacing is required** and implemented this way. **Inter-packet pacing**, spacing the universes within one frame, uses the same non-blocking gate where a receiver drops packets under a burst. It is off by default, since the bench ArtNet matrix test runs clean while bursting the universes, so it is added only when a target requires it, never as a busy-wait between packets.
 ## Multi-device sync

@@ -1,23 +1,5 @@
 /// @module NetworkModule
-
-/// Unit tests for the runtime Ethernet PHY/pin config seam.
-///
-/// The per-PHY bring-up (RMII EMAC, W5500 SPI) lives in platform_esp32.cpp and is ESP32-only, so it isn't reachable on the desktop host. What IS host-testable, and what these tests pin, are the two contracts the rest of the system is built on:
-///
-///   1. The EthPhyType enum *ordering*. NetworkModule's `ethType` Select dropdown
-///      stores the option index, and platform_esp32.cpp's ethInit() switches on
-///      the same values; both assume None=0, LAN8720=1, IP101=2, W5500=3. A silent
-///      reorder of the enum would desync the dropdown labels from the dispatch and
-///      from every deviceModels.json `ethType` value, caught here, not on hardware.
-///
-///   2. The desktop platform seam (setEthConfig / ethStop / ethInit) is a safe
-///      no-op. NetworkModule::setup() calls setEthConfig() then ethInit() on every
-///      platform; the desktop stubs must accept any config and report "no Ethernet"
-///      (ethInit()==false) so the WiFi/AP cascade always takes over. This guards
-///      the platform.h contract that lets the shared NetworkModule code compile and
-///      run unchanged on the host.
-///
-/// The conditional-visibility of the eth pin controls (RMII rows vs SPI rows by ethType) is gated behind `if constexpr (platform::hasEthernet)`, which is false on desktop, so it can't be exercised here; it's verified on real ESP32 hardware (Olimex RMII, S3 W5500) instead.
+/// Unit tests for the Ethernet config seam and the cascade around it; the per-PHY bring-up is ESP32-only and verified on hardware.
 
 #include "doctest.h"
 #include "platform_config.h"   // EthPhyType, EthPinConfig, hasEthernet, ethConfigDefault
@@ -40,12 +22,12 @@ TEST_CASE("Desktop ethConfigDefault is ethNone (no Ethernet)") {
     CHECK(mm::platform::ethConfigDefault.phyType == mm::platform::ethNone);
 }
 
-// Ethernet is OPT-IN: NetworkModule's `ethType` control defaults to ethNone(0), so a board whose deviceModels.json entry has no `ethType` brings up NO PHY (a WiFi-only board like Shelly, or the QuinLED Dig-Uno/Quad with optional-only eth, must not waste an RMII/SPI init on a PHY it lacks). A board with real Ethernet sets `ethType` explicitly in its catalog eth block. On ESP32 the control default seeds ethType_ = 0; the platform's ethConfigDefault (whose phyType is the chip's historical PHY) still seeds the PINS so an opt-in board gets them without re-listing, but the PHY *selection* is off until the catalog turns it on. ethNone==0 is what makes "unset → off" work.
+// Ethernet is opt-in: an unset ethType resolves to ethNone, so a board without a catalog eth block brings up no PHY.
 TEST_CASE("Ethernet is opt-in: ethNone is the zero value (unset ethType → no PHY)") {
     CHECK(mm::platform::ethNone == 0);   // an absent/zero ethType control resolves to None
 }
 
-// The platform seam must accept any runtime config and never bring Ethernet up on desktop, ethInit() returns false so NetworkModule cascades to WiFi/AP. Pushing a fully-populated W5500 config and an RMII config both leave ethInit() false and ethConnected() false; ethStop() is safe to call when nothing is running.
+// ethInit() returns false on desktop for any config, so NetworkModule cascades to WiFi/AP, and ethStop() is safe when nothing runs.
 TEST_CASE("Desktop Ethernet seam is a safe no-op") {
     mm::platform::EthPinConfig w5500{ mm::platform::ethW5500, 1,
                                       -1, -1, -1, -1, false,
@@ -64,14 +46,14 @@ TEST_CASE("Desktop Ethernet seam is a safe no-op") {
     mm::platform::ethStop();   // safe even though nothing came up
     CHECK_FALSE(mm::platform::ethConnected());
 
-    // Restore the platform default so this test leaves no shared eth-config state for later tests (setEthConfig writes a static on ESP32; a no-op on desktop, but keep the test order-independent regardless of platform).
+    // Restore the platform default so later tests inherit no shared eth-config state.
     mm::platform::setEthConfig(mm::platform::ethConfigDefault);
 }
 
-// Regression: the `ethPhyAddr` control MUST be a SIGNED int16 whose range starts at -1 and which renders as a number field (not a slider). -1 is ESP_ETH_PHY_ADDR_AUTO (scan the MDIO bus, the RGMII default). It was once a uint8 control: the uint8 mangled the platform's -1 default to 255 and the 0..31 control clamped it to 31, a fixed address no PHY answered, so the S31's RGMII never linked. This pins the control-metadata contract that fixed it, signed storage so -1 round-trips, min == -1 so the sentinel is in-range, and numberField because an MDIO address is an identity, not a magnitude. Tests the int16 control + setNumberField seam directly (the NetworkModule control is `if constexpr (hasEthernet)`-gated, absent on desktop), so a future edit that reverts to a slider or an unsigned type fails here, off-hardware.
+// Regression: ethPhyAddr is a signed int16 with min -1 (auto-detect), rendered as a number field; as a uint8 it clamped to 31 and the S31 RGMII never linked.
 TEST_CASE("ethPhyAddr-style control: signed int16, -1 sentinel in range, number field") {
     mm::ControlList controls;
-    int16_t phyAddr = -1;   // ESP_ETH_PHY_ADDR_AUTO — must survive as -1, not become 255/31
+    int16_t phyAddr = -1;   // ESP_ETH_PHY_ADDR_AUTO, which must survive as -1, not become 255/31
     controls.addControl("ethPhyAddr", phyAddr, -1, 31);
     controls.setNumberField(controls.count() - 1);
 
@@ -84,7 +66,7 @@ TEST_CASE("ethPhyAddr-style control: signed int16, -1 sentinel in range, number 
     CHECK(phyAddr == -1);                        // the bound value still reads -1 through the int16 control
 }
 
-// Static-IP addressing contract. The `addressing` Select (DHCP=0 / Static=1) and the four IPv4 controls (ip/gateway/subnet/dns) are what platform::netSetStaticIPv4 applies to the active interface. Pin the control shape a future edit could break: the Select stores the mode index and defaults to DHCP, the static fields exist with their documented defaults, and they are HIDDEN in DHCP mode (visible only when addressing==Static). These are always bound (not hasEthernet-gated), so the contract is testable on the desktop host.
+// The addressing Select defaults to DHCP and the static-IP fields start hidden; they are always bound, so the host can test them.
 TEST_CASE("addressing Select + static-IP controls: DHCP default, Static reveals the fields") {
     mm::NetworkModule net;
     net.setup();
@@ -109,7 +91,7 @@ TEST_CASE("addressing Select + static-IP controls: DHCP default, Static reveals 
     CHECK(subnet->hidden);
 }
 
-// The desktop platform's static/DHCP setters are inert no-ops: addressing is OS-managed on the host, so netSetStaticIPv4 / netSetDhcp must accept any input and change nothing (no crash, no interface brought up). Mirrors the "desktop net seam is a safe no-op" guarantee for ethInit etc.
+// Desktop addressing is OS-managed, so netSetStaticIPv4 and netSetDhcp accept any input and change nothing.
 TEST_CASE("Desktop static-addressing seam is a safe no-op") {
     const uint8_t ip[4]   = {192, 168, 1, 50};
     const uint8_t gw[4]   = {192, 168, 1, 1};
@@ -123,7 +105,7 @@ TEST_CASE("Desktop static-addressing seam is a safe no-op") {
     CHECK_FALSE(mm::platform::ethConnected());
 }
 
-// Static addressing on WiFi STA is applied during BRING-UP (WaitingSta), not only after a lease event: a DHCP-less network never fires one, so waiting for "connected" before pinning the static IP would strand a static STA into the AP fallback (the WaitingEth static poll's mirror). The test seam fakes an STA radio so the host can drive the cascade into WaitingSta; the platform apply counter pins that tick1s invoked netSetStaticIPv4(Sta).
+// Static mode pins the static IP during STA bring-up, since a DHCP-less network never fires a lease event.
 TEST_CASE("Static mode pins the static IP during STA bring-up (WaitingSta)") {
     mm::platform::setTestWifiStaAvailable(true);
     {
@@ -142,13 +124,93 @@ TEST_CASE("Static mode pins the static IP during STA bring-up (WaitingSta)") {
         net.tick1s();   // WaitingSta: Static + not connected → applyStaticIfConfigured(Sta)
         CHECK(mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Sta) > before);
     }
-    mm::platform::setTestWifiStaAvailable(false);   // reset — cases stay independent
+    mm::platform::setTestWifiStaAvailable(false);   // reset, so cases stay independent
 }
 
+namespace {
+// Frozen time, so the cascade's timeouts cannot fire on a slow machine; restored when the test ends.
+struct FrozenClock {
+    FrozenClock() { mm::platform::setTestNowMs(1000); }
+    ~FrozenClock() { mm::platform::setTestNowMs(0); }
+};
 
-// The pin map must report what the HARDWARE holds, not what the control says. On an RMII/RGMII board a type change is saved and applied on the NEXT BOOT (syncEthLive hot-reinits only W5500), so the EMAC keeps driving its pads after the user selects None. Reading the pending control there frees those pins in the map while the MAC still drives them, and an LED lane could then take one with nothing flagging the collision, which is the failure this whole mechanism exists to prevent.
-//
-// Only the CAPACITY half is checkable here: `hasEthernet` is false on the desktop, so fixedPins returns 0 on both sides of the applied-vs-pending distinction and a host test cannot tell them apart. The distinction is exercised on hardware (an S31 keeps its twelve pads listed while the interface runs) and by the esp32s31/esp32p4rev1-eth firmware builds.
+// Switch to Static with this address through the normal control-apply path.
+void setStatic(mm::NetworkModule& net, const char* ipJson) {
+    for (uint8_t i = 0; i < net.controls().count(); i++) {
+        auto& c = net.controls()[i];
+        if (std::strcmp(c.name, "addressing") == 0)
+            mm::applyControlValue(c, "{\"addressing\":1}", "addressing", mm::ApplyPolicy::Clamp);
+        else if (std::strcmp(c.name, "ip") == 0)
+            mm::applyControlValue(c, ipJson, "ip", mm::ApplyPolicy::Clamp);
+    }
+}
+
+const char* networkMode(mm::NetworkModule& net) {
+    for (uint8_t i = 0; i < net.controls().count(); i++)
+        if (std::strcmp(net.controls()[i].name, "mode") == 0) return static_cast<const char*>(net.controls()[i].ptr);
+    return "";
+}
+}  // namespace
+
+// A cable on a network without DHCP gives itself 169.254.x.y. The desktop declares WiFi, so it plays the WiFi build: there that address must not end the cascade, and a lease that lands later must.
+TEST_CASE("a self-assigned Ethernet address keeps the cascade waiting on a WiFi build, and a lease ends it") {
+    const uint8_t linkLocal[4] = {169, 254, 7, 9};
+    const uint8_t leased[4]    = {192, 168, 1, 20};
+    FrozenClock clock;
+    mm::platform::setTestEthIPv4(linkLocal);
+    {
+        mm::NetworkModule net;
+        net.setup();
+        net.rebuildControls();   // the scheduler builds them in the running system
+        net.tick1s();
+        CHECK(std::string(networkMode(net)) == "Ethernet (waiting)");
+        mm::platform::setTestEthIPv4(leased);
+        net.tick1s();
+        CHECK(std::string(networkMode(net)) == "Ethernet");
+    }
+    mm::platform::setTestEthIPv4(nullptr);   // reset, so cases stay independent
+}
+
+// Static mode must still pin the user's address over a self-assigned one, or a leaseless cable keeps 169.254 until reboot.
+TEST_CASE("Static mode pins its address over a self-assigned Ethernet one") {
+    const uint8_t linkLocal[4] = {169, 254, 7, 9};
+    FrozenClock clock;
+    mm::platform::setTestEthIPv4(linkLocal);
+    {
+        mm::NetworkModule net;
+        net.setup();
+        net.rebuildControls();   // the scheduler builds them in the running system
+        setStatic(net, "{\"ip\":\"192.168.1.250\"}");
+        uint32_t before = mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Eth);
+        net.tick1s();   // WaitingEth: Static, link up, and the address on the wire is not the configured one
+        CHECK(mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Eth) > before);
+        CHECK(std::string(networkMode(net)) == "Ethernet");   // connected on the user's address
+    }
+    mm::platform::setTestEthIPv4(nullptr);
+}
+
+// Editing a static link-local address applies before the cascade judges the link, or the old address reads as lost and the device drops to its access point.
+TEST_CASE("changing a static link-local address keeps Ethernet connected") {
+    const uint8_t linkLocal[4] = {169, 254, 7, 9};
+    FrozenClock clock;
+    mm::platform::setTestEthIPv4(linkLocal);
+    {
+        mm::NetworkModule net;   // no WiFi credentials, so a drop would land on the access point
+        net.setup();
+        net.rebuildControls();
+        setStatic(net, "{\"ip\":\"169.254.7.9\"}");
+        net.tick1s();
+        REQUIRE(std::string(networkMode(net)) == "Ethernet");
+        setStatic(net, "{\"ip\":\"169.254.7.10\"}");
+        uint32_t before = mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Eth);
+        net.tick1s();
+        CHECK(mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Eth) > before);
+        CHECK(std::string(networkMode(net)) == "Ethernet");
+    }
+    mm::platform::setTestEthIPv4(nullptr);
+}
+
+// fixedPins stays inside its capacity; the applied-versus-pending half needs hardware, since hasEthernet is false here.
 TEST_CASE("fixedPins never writes past the capacity it is given") {
     mm::NetworkModule net;
     net.setup();
@@ -233,7 +295,7 @@ TEST_CASE("a chip with one buildable preset defaults to it, not to Custom") {
     if (options == 2) CHECK(std::strcmp(board, "Custom") != 0);
     else CHECK(std::strcmp(board, "Custom") == 0);
 
-    // And the preset's MAP reached the fields, which the selection alone does not prove: a virgin P4 selected P4-NANO and still booted with ethType at None, because the applied-tracker started on row 0 and saw no move to apply.
+    // The preset's map must reach the fields, which the selection alone does not prove.
     if (options == 2) {
         for (uint8_t i = 0; i < net.controls().count(); i++) {
             const auto& c = net.controls()[i];

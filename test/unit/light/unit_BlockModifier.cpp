@@ -3,7 +3,7 @@
 #include "doctest.h"
 #include "light/modifiers/BlockModifier.h"
 
-// BlockModifier is a 1D->2D remap: every physical light folds to its CHEBYSHEV (block) distance from the floor-biased box center, max(|dx|,|dy|), written into y (pos becomes {0, distance, 0}), so a 1D effect painted along y draws concentric SQUARE rings. Z plays no part. modifyLogicalSize folds the box itself the same way and grows each axis by one, yielding the {1, maxDistance + 1, 1} logical box.
+// Each light folds to its Chebyshev distance from the box center, written into y, so a 1D effect along y draws square rings.
 
 // The logical box a BlockModifier produces for a given physical box.
 static mm::Coord3D blockSize(mm::BlockModifier& b, mm::Coord3D box) {
@@ -16,12 +16,12 @@ static mm::Coord3D fold(mm::BlockModifier& b, mm::lengthType x, mm::lengthType y
                         mm::lengthType z, mm::Coord3D box) {
     b.modifyLogicalSize(box);   // stashes the physical box
     mm::Coord3D p{x, y, z};
-    b.modifyLogical(p);         // never rejects — returns true, we assert the coord
+    b.modifyLogical(p);         // never rejects: returns true, we assert the coord
     return p;
 }
 
 // The center light of the box folds to distance 0 (the innermost ring, y=0); a corner folds to the largest distance, and z is always cleared to 0.
-TEST_CASE("BlockModifier folds to Chebyshev distance from the box centre") {
+TEST_CASE("BlockModifier folds to Chebyshev distance from the box center") {
     mm::BlockModifier b;
     // On a 4x4 box the floor-biased center is (1,1). The center light maps to y=0.
     CHECK(fold(b, 1, 1, 0, {4, 4, 1}) == mm::Coord3D{0, 0, 0});
@@ -31,7 +31,7 @@ TEST_CASE("BlockModifier folds to Chebyshev distance from the box centre") {
     CHECK(fold(b, 3, 3, 0, {4, 4, 1}) == mm::Coord3D{0, 2, 0});
 }
 
-// The distance is the MAXIMUM of |dx| and |dy| (a square ring), not the sum or the Euclidean length: an off-diagonal light sits on the ring of its larger axis delta.
+// The distance is max(|dx|, |dy|), not the sum or the Euclidean length, which is what makes the rings square.
 TEST_CASE("BlockModifier uses max(|dx|,|dy|) so rings are axis-aligned squares") {
     mm::BlockModifier b;
     // 5x5 box, center (2,2). Light (4,2): dx=2, dy=0 -> distance 2.
@@ -42,15 +42,15 @@ TEST_CASE("BlockModifier uses max(|dx|,|dy|) so rings are axis-aligned squares")
     CHECK(fold(b, 4, 2, 3, {5, 5, 4}) == mm::Coord3D{0, 2, 0});
 }
 
-// modifyLogicalSize collapses the box to one column, its height = the max block distance + 1 (rings from center to the far corner, inclusive), depth 1.
+// modifyLogicalSize collapses the box to one column, its height the farthest light's block distance + 1 (every ring a light lands on, no empty one), depth 1.
 TEST_CASE("BlockModifier logical box is {1, maxDistance + 1, 1}") {
     mm::BlockModifier b;
-    // 4x4: center (1,1), far corner distance max(|4-1|,|4-1|)=3 -> height 3+1=4.
-    CHECK(blockSize(b, {4, 4, 1}) == mm::Coord3D{1, 4, 1});
-    // 3x3: center (1,1), distance max(|3-1|,|3-1|)=2 -> height 3.
-    CHECK(blockSize(b, {3, 3, 1}) == mm::Coord3D{1, 3, 1});
-    // A wide box takes its larger axis: 8x2 -> center (3,0), distance max(5,2)=5 -> 6.
-    CHECK(blockSize(b, {8, 2, 1}) == mm::Coord3D{1, 6, 1});
+    // 4x4: center (1,1), farthest light (3,3) at distance 2 -> height 3.
+    CHECK(blockSize(b, {4, 4, 1}) == mm::Coord3D{1, 3, 1});
+    // 3x3: center (1,1), farthest light (2,2) at distance 1 -> height 2.
+    CHECK(blockSize(b, {3, 3, 1}) == mm::Coord3D{1, 2, 1});
+    // A wide box takes its larger axis: 8x2 -> center (3,0), farthest light (7,1) at max(4,1)=4 -> 5.
+    CHECK(blockSize(b, {8, 2, 1}) == mm::Coord3D{1, 5, 1});
 }
 
 // Degenerate grids never crash and stay well-formed: 0x0x0 and 1x1x1 both fold and size without dividing by zero or producing a zero-height box (the Effects hard rule).

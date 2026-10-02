@@ -1,20 +1,20 @@
 # Common defaults
 # Main-task stack. The HTTP server runs on this task, and its deepest path stacks a 2 KB request buffer
 # (handleConnection) UNDER a recursive module-tree JSON serialize (writeModuleJson recurses per tree level)
-# UNDER a ~1 KB stack JsonSink — a UI refresh fires a page-load burst that drives this path repeatedly.
+# UNDER a ~1 KB stack JsonSink; a UI refresh fires a page-load burst that drives this path repeatedly.
 # 8 KB overflowed it on the classic ESP32 (smallest stack of the targets) with a "stack overflow in task
 # main" panic-reboot on refresh. 12 KB gives the serialize path comfortable headroom; the classic has ~170
 # KB free RAM, so the extra 4 KB is cheap, and the S3/P4 have even more.
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=12288
 
-# CPU at 240 MHz (IDF defaults to 160) — the render loop and the ring ISR's encode deadline are
+# CPU at 240 MHz (IDF defaults to 160): the render loop and the ring ISR's encode deadline are
 # compute-bound. This is the rated maximum for the classic/S3 chips; a target whose silicon goes
 # higher overrides it in its own fragment (the S31 at 320), and the P4 ignores this symbol
 # entirely (its own 360 MHz default applies).
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 
 # GDMA control functions in IRAM: the streaming ring's EOF ISR is registered cache-safe (it keeps
-# refilling during SPI-flash writes) and calls gdma_stop at frame end — a flash-resident gdma_stop
+# refilling during SPI-flash writes) and calls gdma_stop at frame end, and a flash-resident gdma_stop
 # would fault exactly then. The IDF option that exists for this case.
 CONFIG_GDMA_CTRL_FUNC_IN_IRAM=y
 CONFIG_COMPILER_CXX_EXCEPTIONS=n
@@ -29,11 +29,11 @@ CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
 
 # Task watchdog: PANIC on a wedged task so the device self-heals (reboot + backtrace) instead of hanging
-# SILENTLY forever — a silent hang looks dead and needs a physical power-cycle, the worst failure mode
+# SILENTLY forever: a silent hang looks dead and needs a physical power-cycle, the worst failure mode
 # (it cost a whole debugging session). A reboot-and-recover is strictly better (robustness: restarting >
 # wedged). Idle-task checking is deliberately OFF: at a large grid a core can be legitimately SATURATED
 # (the 48×256 engage runs the render + encode flat-out for a few frames), and checking idle would panic a
-# HEALTHY-but-busy core — the very false positive that surfaced this setting. So the WDT watches only that
+# HEALTHY-but-busy core, the very false positive that surfaced this setting. So the WDT watches only that
 # subscribed tasks aren't wedged, not that a core has spare time. 12 s is well above any real frame/engage.
 CONFIG_ESP_TASK_WDT_EN=y
 CONFIG_ESP_TASK_WDT_INIT=y
@@ -42,23 +42,29 @@ CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=n
 CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=n
 CONFIG_ESP_TASK_WDT_PANIC=y
 
-# lwIP core locking — socket calls take the TCP/IP core mutex and run inline
+# lwIP core locking: socket calls take the TCP/IP core mutex and run inline
 # instead of context-switching to the tcpip_thread per call. Large win for the
 # ArtNet send path (97 UDP packets per frame).
 CONFIG_LWIP_TCPIP_CORE_LOCKING=y
 
+# Link-local fallback (RFC 3927): when no DHCP server answers, the interface gives itself a 169.254.x.y address, so a laptop on the same cable (which does the same) still reaches the device, by name over mDNS.
+# Four DHCP probes first, about 14 s, so a slow but present server always wins; DHCP keeps running and a late lease replaces the address.
+# Where such an address counts: NetworkModule.h, "A link-local address is a last resort".
+CONFIG_LWIP_AUTOIP=y
+CONFIG_LWIP_AUTOIP_TRIES=4
+
 # Larger TCP send buffer so the preview WebSocket frame (up to ~5.5 KB at the
-# finest detail level) fits in one non-blocking write with comfortable headroom
-# — avoids partial sends that would drop and reconnect the preview connection.
+# finest detail level) fits in one non-blocking write with comfortable headroom,
+# avoiding partial sends that would drop and reconnect the preview connection.
 CONFIG_LWIP_TCP_SND_BUF_DEFAULT=11520
 
 # A browser page-load opens the HTML + several JS/CSS files + the persistent WebSocket all at once, and
 # every refresh churns that whole set. The default 10-socket ceiling can't hold one burst (6 files + WS +
 # the listen socket + WiFi/mDNS internals) once a few closed sockets sit in TIME_WAIT, so lwIP RSTs the
-# excess connections BEFORE the app's accept() ever sees them — the "load it a few times before the UI
+# excess connections BEFORE the app's accept() ever sees them: the "load it a few times before the UI
 # shows / the socket connects" symptom, with no server-side log because the app never got the connection.
 # Raise the ceiling to lwIP's max (16) so a full burst fits, and cut TCP_MSL from 60 s to 5 s so a closed
-# socket frees its slot in seconds instead of a minute — TIME_WAIT from rapid refreshes no longer piles up
+# socket frees its slot in seconds instead of a minute, so TIME_WAIT from rapid refreshes no longer piles up
 # to the ceiling. (5 s is ample on a trusted LAN; the 2×MSL wait only guards against delayed duplicate
 # segments, which a LAN doesn't produce.)
 CONFIG_LWIP_MAX_SOCKETS=16
@@ -73,7 +79,7 @@ CONFIG_ESP_WIFI_ENABLED=y
 # allocate Ethernet DMA buffers it can't use.
 
 # FreeRTOS task introspection for TasksModule (uxTaskGetSystemState): the trace facility is
-# cheap — a bit of RAM/flash, no per-context-switch cost. The per-task CPU% counter
+# cheap, a bit of RAM/flash, no per-context-switch cost. The per-task CPU% counter
 # (GENERATE_RUN_TIME_STATS) is NOT enabled here: it costs ~5% tick (measured) and is gated
 # behind the MM_TASK_CPU_STATS build flag for profiling builds only.
 CONFIG_FREERTOS_USE_TRACE_FACILITY=y
@@ -81,8 +87,8 @@ CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID=y
 
 # Optimize for performance (-O2). IDF's default is COMPILER_OPTIMIZATION_DEBUG (-Og), which is the wrong
 # trade for this firmware: the WS2812 shift encoder is SWAR bit-twiddling (delta-swaps, inlined templates)
-# on a 32-bit Xtensa — code whose whole performance is register allocation across inlined calls, which -Og
-# does not do — and it carries the tightest deadline in the system, since the streaming ring's EOF ISR must
+# on a 32-bit Xtensa, code whose whole performance is register allocation across inlined calls, which -Og
+# does not do, and it carries the tightest deadline in the system, since the streaming ring's EOF ISR must
 # re-encode a slice before the DMA drains the next buffer. Measured on an S3: -O2 is 1.5x on that encode.
 #
 # The trade is the usual one: -O2 is harder to step through in a debugger and grows flash somewhat.
@@ -93,14 +99,14 @@ CONFIG_COMPILER_OPTIMIZATION_PERF=y
 
 # Parlio's completion ISR must run with the flash cache DISABLED. A control change writes the
 # config to flash, and a DMA completion landing in that window fetched the handler from flash while
-# the cache was off — `Guru Meditation Error: Core 0 panic'ed (Cache error)` inside
+# the cache was off: `Guru Meditation Error: Core 0 panic'ed (Cache error)` inside
 # pxPortGetCoprocArea, reproduced on the P4 bench by resizing a Parlio-driven layout. Our own done
 # callback was already IRAM_ATTR; the IDF driver's handler around it was not.
 # (github.com/MoonModules/MoonLight/issues/44)
 CONFIG_PARLIO_TX_ISR_CACHE_SAFE=y
 CONFIG_PARLIO_RX_ISR_CACHE_SAFE=y
 # ...and the driver's own objects with it. The TX option above places the HANDLER in IRAM but,
-# unlike its RX twin, does not select PARLIO_OBJ_CACHE_SAFE — so IDF's transaction queues keep
+# unlike its RX twin, does not select PARLIO_OBJ_CACHE_SAFE, so IDF's transaction queues keep
 # MALLOC_CAP_DEFAULT and stay PSRAM-eligible, which the same ISR dereferences the moment our
 # callback returns. An IRAM handler reading a PSRAM queue is the same fault one frame later.
 CONFIG_PARLIO_OBJ_CACHE_SAFE=y

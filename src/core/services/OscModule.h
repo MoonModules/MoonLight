@@ -5,6 +5,9 @@
 #include "core/util/ControlSurface.h"
 #include "core/module/MoonModule.h"
 #include "core/services/OscPacket.h"
+#include "core/util/Addressing.h"      // sendAddressed: feedback to hosts, a group, or everyone
+#include "core/util/HostList.h"        // parseHostList: the feedback hosts
+#include "core/util/HostResolver.h"    // a named host's address, looked up off the render thread
 #include "core/module/Scheduler.h"
 #include "platform/platform.h"
 
@@ -16,16 +19,15 @@ namespace mm {
 
 /// Receives OSC over the network and writes it onto this device's controls.
 ///
-/// A surface addresses the surface: the faders, encoders and switches the control module owns.
-/// One address form reaches any control directly, which is what makes this useful on day one.
+/// A surface addresses the surface: the faders, encoders and switches the control module owns, which decides what each one drives.
 /// @card OscModule.png
 ///
 /// @moreinfo
 ///
 /// ## Feedback
 ///
-/// With it on, a control that changes anywhere is mirrored back to the surface.
-/// That is what keeps a client honest, and what moves a motorised fader.
+/// With it on, a control that changes anywhere is mirrored back to the surface, which keeps a client honest and moves a motorized fader.
+/// `addressing` picks where it goes: `unicast` to each of `hosts`, or to whoever last wrote when the list is empty; `multicast` to `group`, which every board listening on it joins.
 /// A client learns the state three ways: on its first write, on an address change, and on asking.
 /// The last exists because a restart on the same address is invisible to the other two.
 /// Most controllers send nothing on load, so every widget would otherwise show its own defaults.
@@ -55,6 +57,8 @@ public:
 
     /// Whether to mirror changes back, which is what makes this a surface rather than a remote.
     bool feedback = false;
+    /// How feedback travels, an Addressing value up to multicast + broadcast.
+    uint8_t addressing = 0;
     /// Where the client listens, which is not where we do.
     uint16_t feedbackPort = 9001;
 
@@ -64,19 +68,33 @@ public:
         controls_.addControl("listen", enabledOsc);
         controls_.addControl("port", port, 1, 65535);
         controls_.addControl("feedback", feedback);
-        controls_.addText("feedbackTo", feedbackTo_, sizeof(feedbackTo_));
+        controls_.addSelect("addressing", addressing, kAddressingNames, kModeCount);
+        controls_.addText("hosts", hosts_, sizeof(hosts_));
+        controls_.setHidden(controls_.count() - 1, addressing != 0);
+        controls_.addText("group", group_, sizeof(group_));
         controls_.addControl("feedbackPort", feedbackPort, 1, 65535);
     }
 
     /// Reopen the socket on a receive change, and re-seed the client on a feedback change.
     void onControlChanged(const char* name) override {
-        // The setting applies live, so the socket reopens rather than waiting for a reboot.
-        if (std::strcmp(name, "port") == 0 || std::strcmp(name, "listen") == 0) closeSocket();
+        // The setting applies live: the socket reopens, joining a new group, rather than waiting for a reboot.
+        if (std::strcmp(name, "port") == 0 || std::strcmp(name, "listen") == 0 || std::strcmp(name, "group") == 0)
+            closeSocket();
+        if (std::strcmp(name, "hosts") == 0) parseHosts(/*mayStart=*/true);
+        if (std::strcmp(name, "group") == 0) parseGroup();
+        if (std::strcmp(name, "addressing") == 0 || std::strcmp(name, "group") == 0 || std::strcmp(name, "hosts") == 0)
+            reportPeer();
         // A receiver pointed here anew knows nothing, and would stay wrong until something moved.
-        if (std::strcmp(name, "feedback") == 0 || std::strcmp(name, "feedbackTo") == 0
-            || std::strcmp(name, "feedbackPort") == 0) {
+        if (std::strcmp(name, "feedback") == 0 || std::strcmp(name, "addressing") == 0 || std::strcmp(name, "hosts") == 0
+            || std::strcmp(name, "group") == 0 || std::strcmp(name, "feedbackPort") == 0) {
             if (feedback) resendAll_ = true;
         }
+    }
+
+    /// Parse the saved hosts and group, starting the name lookups here where allocating is allowed.
+    void prepare() override {
+        parseHosts(/*mayStart=*/true);
+        parseGroup();
     }
 
     /// Detach from the surface list before closing, since it is walked from the render thread.
@@ -101,9 +119,16 @@ public:
         // The inverse of what the read path does.
         const size_t len = osc::encodeFloat(pkt, sizeof(pkt), addr, static_cast<float>(value) / 255.0f);
         if (len == 0) return;
-        uint8_t dest[4];
-        if (!feedbackDest(dest)) return;
-        sock_.sendToAddr(dest, feedbackPort, pkt, len);
+        if (!hostsParsed_) parseHosts(/*mayStart=*/false);
+        const auto send = [&](const uint8_t ip[4]) { sock_.sendToAddr(ip, feedbackPort, pkt, len); };
+        const Addressing mode = static_cast<Addressing>(addressing < kModeCount ? addressing : 0);
+        if (mode == Addressing::Unicast && hostCount_ == 0) {
+            // No hosts: answer whoever wrote last.
+            if (peer_[0] || peer_[1] || peer_[2] || peer_[3]) send(peer_);
+            return;
+        }
+        if (mode != Addressing::Unicast && !groupValid_) return;   // no group, nowhere to send; the status says so
+        sendAddressed(mode, Traffic::Occasional, hostList_, hostCount_, groupIp_, send);
     }
 
     /// Refresh the status, which is time-dependent because a peer goes stale.
@@ -111,6 +136,7 @@ public:
         MoonModule::tick1s();
         // Only when the answer changes, since the string is identical in between.
         if (!enabledOsc) return;
+        refreshNamedHosts();
         const bool fresh = peerFresh();
         if (fresh != peerWasFresh_) { peerWasFresh_ = fresh; reportPeer(); }
     }
@@ -133,13 +159,6 @@ public:
                 std::memcpy(peer_, src, 4);
                 resendAll_ = true;
                 peerWasFresh_ = false;   // a new address: let the next tick1s say so
-                // Persisted, so a rig survives a reboot; only an empty field is filled.
-                if (!feedbackTo_[0]) {
-                    mm::formatTo(feedbackTo_, sizeof(feedbackTo_), "%u.%u.%u.%u",
-                                  src[0], src[1], src[2], src[3]);
-                    markDirty();
-                    FilesystemModule::noteDirty();
-                }
             }
             handle(pkt, static_cast<size_t>(n));
         }
@@ -172,8 +191,6 @@ private:
         } else if (std::strcmp(a, "/mm/hello") == 0) {
             // A client restarting on the same address is invisible to the checks above.
             resendAll_ = true;
-        } else if (std::strncmp(a, "/mm/control/", 12) == 0) {
-            writeControl(a + 12, m);
         }
         received_++;
     }
@@ -189,38 +206,26 @@ private:
         char control[16];
         mm::formatTo(control, sizeof(control), "%s%ld", prefix, idx);
         // The raw value, since scaling would round a small positive one down to off.
-        if (asBool) setBool("Control", control, osc::isTruthy(m));
-        else        setValue("Control", control, osc::toByte(m));
+        if (asBool) setBool(control, osc::isTruthy(m));
+        else        setValue(control, osc::toByte(m));
     }
 
-    /// Reach any control directly, the names taken verbatim so a typo does not resolve.
-    void writeControl(const char* rest, const osc::Message& m) {
-        const char* slash = std::strchr(rest, '/');
-        if (!slash || slash == rest || !slash[1]) return;
-        char module[24];
-        const size_t n = static_cast<size_t>(slash - rest);
-        if (n >= sizeof(module)) return;
-        std::memcpy(module, rest, n);
-        module[n] = '\0';
-        setValue(module, slash + 1, osc::toByte(m));
-    }
-
-    /// Write a boolean control, whose body is the literal rather than a number.
-    void setBool(const char* module, const char* control, bool on) {
+    /// Write a boolean surface control, whose body is the literal rather than a number.
+    void setBool(const char* control, bool on) {
         auto* sched = Scheduler::instance();
         if (!sched) return;
         char body[32];
         std::snprintf(body, sizeof(body), "{\"value\":%s}", on ? "true" : "false");
-        sched->setControl(module, control, body);
+        sched->setControl(kSurfaceModule, control, body);
     }
 
-    /// Write a numeric control through the shared primitive.
-    void setValue(const char* module, const char* control, uint8_t value) {
+    /// Write a numeric surface control through the shared primitive.
+    void setValue(const char* control, uint8_t value) {
         auto* sched = Scheduler::instance();
         if (!sched) return;
         char body[32];
         mm::formatTo(body, sizeof(body), "{\"value\":%u}", static_cast<unsigned>(value));
-        sched->setControl(module, control, body);
+        sched->setControl(kSurfaceModule, control, body);
     }
 
     /// Open and bind, deferred to the tick and throttled, so a busy port costs one socket.
@@ -231,6 +236,8 @@ private:
         if (lastFailMs_ != 0 && now - lastFailMs_ < kOpenRetryMs) return false;
         if (sock_.open() && sock_.bind(port)) {
             open_ = true;
+            // Join the group a sender multicasts feedback to; a failed join leaves unicast working.
+            if (groupValid_) sock_.joinMulticast(group_);
             if (!attached_) {
                 if (auto* c = ControlModule::active()) { c->addSurface(this); attached_ = true; }
             }
@@ -253,28 +260,53 @@ private:
         setStatus(enabledOsc ? "opening" : "off");
     }
 
-    /// Where feedback goes: the configured address, else the last peer, else nowhere.
-    bool feedbackDest(uint8_t out[4]) const {
-        unsigned a, b, c, d;
-        int used = 0;
-        // Trailing junk is rejected, since sending to a mistyped host is worse than falling back.
-        if (feedbackTo_[0]
-            && std::sscanf(feedbackTo_, "%u.%u.%u.%u%n", &a, &b, &c, &d, &used) == 4
-            && feedbackTo_[used] == '\0'
-            && a < 256 && b < 256 && c < 256 && d < 256) {
-            out[0] = static_cast<uint8_t>(a); out[1] = static_cast<uint8_t>(b);
-            out[2] = static_cast<uint8_t>(c); out[3] = static_cast<uint8_t>(d);
-            return true;
-        }
-        if (peer_[0] || peer_[1] || peer_[2] || peer_[3]) { std::memcpy(out, peer_, 4); return true; }
-        return false;
+    /// The modes OSC offers, the first three of Addressing.
+    static constexpr uint8_t kModeCount = 3;
+    /// How many hosts feedback reaches by unicast: a few boards, not a wall.
+    static constexpr uint8_t kMaxHosts = 8;
+
+    /// Parse the host list, an invalid one sending to nobody rather than to a guess, with the parser's reason on the status.
+    void parseHosts(bool mayStart) {
+        hostsParsed_ = true;
+        hostsError_ = parseHostList(hosts_, hostList_, kMaxHosts, hostCount_);
+        if (hostsError_) { hostCount_ = 0; return; }
+        if (!mayStart) return;
+        for (uint8_t i = 0; i < hostCount_; i++)
+            if (hostList_[i].isName()) { HostResolver::ensureStarted(); break; }
+        refreshNamedHosts();
     }
 
-    char     feedbackTo_[16] = {};   ///< an override, empty meaning answer whoever wrote to us
+    /// Parse the group once, rather than on every feedback message.
+    void parseGroup() { groupValid_ = parseDottedQuad(group_, groupIp_); }
 
-    /// Report the port and who last reached us, a quiet peer being no peer at all.
+    /// Copy each named host's latest address in from the resolver, keeping the last one while it is busy or failing.
+    void refreshNamedHosts() {
+        for (uint8_t i = 0; i < hostCount_; i++) {
+            if (!hostList_[i].isName()) continue;
+            char name[kMaxHostName + 1];
+            hostName(hosts_, hostList_[i], name);
+            uint8_t ip[4];
+            const HostResolver::State st = HostResolver::lookup(name, ip);
+            if (st == HostResolver::State::Resolved || st == HostResolver::State::Stale) std::memcpy(hostList_[i].ip, ip, 4);
+        }
+    }
+
+    char     hosts_[64] = {};         ///< where unicast feedback goes, empty meaning whoever wrote to us
+    char     group_[16] = "239.255.77.78";   ///< the multicast group feedback goes to and this board joins, beside discovery's 239.255.77.77
+    Host     hostList_[kMaxHosts] = {};
+    uint8_t  hostCount_ = 0;
+    bool     hostsParsed_ = false;    ///< the list is parsed on first use and after every edit
+    const char* hostsError_ = nullptr;   ///< why the host list was refused, shown on the status
+    uint8_t  groupIp_[4] = {};
+    bool     groupValid_ = false;
+
+    /// Report the port and who last reached us, a quiet peer being no peer at all, or the group multicast feedback lacks.
     void reportPeer() {
-        if (peerFresh())
+        if (feedback && addressing == 0 && hostsError_)
+            setStatusf(Severity::Error, "hosts: %s", hostsError_);
+        else if (feedback && addressing != 0 && !groupValid_)
+            setStatusf(Severity::Warning, "multicast needs a group address");
+        else if (peerFresh())
             setStatusf(Severity::Status, "%u from %u.%u.%u.%u", static_cast<unsigned>(port),
                        peer_[0], peer_[1], peer_[2], peer_[3]);
         else

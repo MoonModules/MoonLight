@@ -1,11 +1,12 @@
 #pragma once
 // Author: MoonLight original
 
-#include "core/services/AudioService.h"   // latestFrame: the beat the audio-reactive mode volleys on
-#include "core/util/math16.h"
+#include "core/util/format.h"   // formatTo: the score digits
 #include "light/powerfunctions/draw.h"
 #include "light/effects/EffectBase.h"
 #include "light/effects/SpriteCast.h"   // the shared cast, when the ball is a sprite
+#include "light/effects/PlayerSeat.h"   // a person takes a paddle, the game plays it again later
+#include "light/powerfunctions/fonts.h"     // the score digits
 
 namespace mm {
 
@@ -16,6 +17,8 @@ namespace mm {
 /// A perfect tracker would rally forever and never look like a game.
 /// So each paddle waits out a reaction delay and aims slightly off center.
 /// That is what produces the near-misses, edge hits and occasional points.
+/// The score shows at the top, and the first to 11 starts a new game, as the original played.
+/// `player1` and `player2` are the paddles as controls, held through `PlayerSeat`.
 ///
 /// @moreinfo
 ///
@@ -26,8 +29,8 @@ namespace mm {
 /// That is why the cast lives in its own header rather than in either effect.
 class PongEffect : public EffectBase {
 public:
-    /// Catalog tags: the audio glyph applies when `audioReactive` is set.
-    const char* tags() const override { return "💫🎵👾"; }
+    /// Catalog tags: MoonLight origin, a game.
+    const char* tags() const override { return "💫👾"; }
     /// A court needs a width and a height, so it is a 2D effect.
     Dim dimensions() const override { return Dim::D2; }
 
@@ -37,26 +40,42 @@ public:
     uint8_t paddle = 30;
     /// How sharply a paddle chases the ball, from sluggish to instant.
     uint8_t reflex = 150;
-    /// Pixels per art pixel, when the ball is a sprite.
-    uint8_t size = 1;
     /// Swap the square ball for a member of the shared sprite cast, re-picked on every hit.
     bool spriteBall = false;
-    /// Advance the ball only on the beat, so it stands still in silence.
-    bool audioReactive = false;
+    /// Pixels per art pixel, when the ball is a sprite.
+    uint8_t size = 1;
+    /// The left paddle's height, bottom to top as a fader reads; follows the game until an input writes it.
+    uint8_t player1 = 128;
+    /// The right paddle's height, the same way.
+    uint8_t player2 = 128;
 
-    /// Publish the rally speed, the paddles, the ball's look and the audio switch.
+    /// Publish the rally speed, the paddles and the ball's look, its size only while it is a sprite.
     void defineControls() override {
         controls_.addControl("rallyBpm", rallyBpm, 5, 200);
         controls_.addControl("paddle", paddle, 10, 60);
         controls_.addControl("reflex", reflex, 40, 255);
-        controls_.addControl("size", size, 1, 4);
         controls_.addControl("spriteBall", spriteBall);
-        controls_.addControl("audioReactive", audioReactive);
+        controls_.addControl("size", size, 1, 4);
+        // defineControls reruns on every control change, so toggling `spriteBall` re-hides it.
+        controls_.setHidden(controls_.count() - 1, !spriteBall);
+        // Live state a fader or an input drives, never written to flash.
+        controls_.addControl("player1", player1, 0, 255);
+        controls_.setLive(controls_.count() - 1);
+        controls_.addControl("player2", player2, 0, 255);
+        controls_.setLive(controls_.count() - 1);
     }
 
-    /// Serve the opening ball once the module is built.
+    /// A write to a paddle control is a person playing it.
+    void onControlChanged(const char* name) override {
+        const uint32_t now = layer() ? elapsed() : 0;
+        if (std::strcmp(name, "player1") == 0) seat_[0].touch(now);
+        else if (std::strcmp(name, "player2") == 0) seat_[1].touch(now);
+    }
+
+    /// Serve the opening ball of a fresh game once the module is built.
     void setup() override {
         EffectBase::setup();
+        score_[0] = score_[1] = 0;
         serve(true);
     }
 
@@ -66,38 +85,34 @@ public:
         if (width() == 0 || height() == 0) return;
         draw::fill(cv, RGB{0, 0, 0});
 
-        const AudioFrame* audio = audioReactive ? AudioService::latestFrame() : nullptr;
-        // The project's own beat test: level against its smoothed average, read once a frame.
-        const bool live = audio && audio->levelSmoothed >= kSilence;
-        const bool beat = live && audio->level > audio->levelSmoothed + kBeatMargin;
-
         // Motion by elapsed time, so the ball crosses in the same wall-clock time at any frame rate.
         rally_.advanceTo(elapsed(), rallyBpm);
-        const uint32_t travel = rally_.phase(kCourtScale);
-        // Two clocks: a switch mid-rally teleports the ball one way and underflows the other.
-        if (audioReactive != wasReactive_) {
-            wasReactive_ = audioReactive;
-            lastTravel_ = travelAt_;
+        // A held paddle sits where its control says; a free one is played, and its control follows it.
+        uint8_t* players[2] = {&player1, &player2};
+        for (uint8_t p = 0; p < 2; p++) {
+            human_[p] = seat_[p].held(elapsed());
+            // The court counts down from the top, a fader up from the bottom.
+            if (human_[p]) py_[p] = static_cast<int32_t>(255 - *players[p]) * kCourtScale / 255;
         }
-        if (audioReactive) {
-            // The ball jumps a slice of the court on each beat, and silence holds it still.
-            if (beat) travelAt_ += kCourtScale / kBeatSteps;
-        } else {
-            // The baseline moves with the clock, so step() sees this frame's travel alone.
-            travelAt_ += travel - lastFreeTravel_;
-        }
-        lastFreeTravel_ = travel;
-        step();
+        step(rally_.phase(kCourtScale));
+        for (uint8_t p = 0; p < 2; p++)
+            if (!human_[p]) *players[p] = static_cast<uint8_t>(255 - py_[p] * 255 / kCourtScale);
         render(cv);
     }
 
+    /// A paddle's center in court units, for tests.
+    int32_t paddleForTest(uint8_t side) const { return py_[side < 2 ? side : 1]; }
+    /// One side's points this game, for tests.
+    uint8_t scoreForTest(uint8_t side) const { return score_[side < 2 ? side : 1]; }
+    /// Score one point for a side, as a miss would, for tests.
+    void pointForTest(uint8_t side) { point(side < 2 ? side : 1); }
+
 private:
     /// One update of the ball and both paddles, in fixed point across a court of kCourtScale units.
-    void step() {
-        const uint32_t now = travelAt_;
-        const uint32_t moved = now - lastTravel_;
-        if (moved == 0) return;                  // no time passed, or the beat has not landed yet
-        lastTravel_ = now;
+    void step(uint32_t travel) {
+        const uint32_t moved = travel - lastTravel_;
+        if (moved == 0) return;                  // no time passed
+        lastTravel_ = travel;
 
         // Both are fractions of the court, so the trajectory is identical whatever the grid.
         bx_ += static_cast<int32_t>(moved) * dirX_;
@@ -107,23 +122,25 @@ private:
         if (by_ < 0) { by_ = -by_; driftY_ = static_cast<int16_t>(-driftY_); }
         if (by_ > kCourtScale) { by_ = 2 * kCourtScale - by_; driftY_ = static_cast<int16_t>(-driftY_); }
 
-        chase(0, moved);
-        chase(1, moved);
+        if (!human_[0]) chase(0, moved);
+        if (!human_[1]) chase(1, moved);
 
-        // A hit sends the ball back with a new drift, and a miss is a point and a fresh serve.
+        // A hit sends the ball back with a new drift, and a miss is a point for the other side.
         if (dirX_ < 0 && bx_ <= kPaddleX) {
-            if (hits(0)) bounce(0); else serve(false);
+            if (hits(0)) bounce(0); else point(1);
         } else if (dirX_ > 0 && bx_ >= kCourtScale - kPaddleX) {
-            if (hits(1)) bounce(1); else serve(true);
+            if (hits(1)) bounce(1); else point(0);
         }
     }
 
-    /// A paddle chases the ball once its delay runs out, as fast as `reflex` allows.
+    /// The receiving paddle chases the ball once its delay runs out; the other drifts back to its own spot.
     void chase(uint8_t p, uint32_t moved) {
         if (delay_[p] > moved) { delay_[p] = static_cast<uint16_t>(delay_[p] - moved); return; }
         delay_[p] = 0;
+        // Both tracking the ball would mirror each other, so only the side it is heading for follows it.
+        const bool receiving = (p == 0) == (dirX_ < 0);
         // The ball plus this paddle's error, since one aiming true would never miss.
-        const int32_t target = by_ + aim_[p];
+        const int32_t target = receiving ? by_ + aim_[p] : home_[p];
         const int32_t gap = target - py_[p];
         const int32_t stepBy = static_cast<int32_t>(moved) * reflex / 255;
         if (gap > stepBy)       py_[p] += stepBy;
@@ -160,22 +177,32 @@ private:
         entry_ = static_cast<uint8_t>(hashInt(seed_, 9, 13) & 0xFF);
     }
 
-    /// A point: the ball restarts from the middle, heading at whoever conceded it.
+    /// Score a point for `side`, starting a new game at 11, then serve at whoever conceded it.
+    void point(uint8_t side) {
+        if (++score_[side] >= kWinScore) score_[0] = score_[1] = 0;
+        serve(side == 0);
+    }
+
+    /// The ball restarts from the middle, heading at whoever conceded it.
     void serve(bool toRight) {
         bx_ = kCourtScale / 2;
         by_ = kCourtScale / 2;
         dirX_ = toRight ? 1 : -1;
         driftY_ = static_cast<int16_t>(static_cast<int32_t>(hashInt(seed_, 3, 7) % (2 * kMaxDrift)) - kMaxDrift);
-        py_[0] = py_[1] = kCourtScale / 2;
+        // A played paddle re-centers for the serve; a held one stays where its player put it.
+        for (uint8_t p = 0; p < 2; p++)
+            if (!human_[p]) py_[p] = kCourtScale / 2;
         delay_[0] = react(0);
         delay_[1] = react(1);
         pickBall();
         seed_++;
     }
 
-    /// This paddle's delay and aim for the coming exchange, re-rolled so neither stays the weaker.
+    /// This paddle's delay, aim and resting spot for the coming exchange, re-rolled so neither stays the weaker.
     uint16_t react(uint8_t p) {
         aim_[p] = static_cast<int16_t>(static_cast<int32_t>(hashInt(seed_, p, 17) % (2 * kMaxAim)) - kMaxAim);
+        // Somewhere in the middle half of the court, so the waiting paddle settles on its own line.
+        home_[p] = kCourtScale / 4 + static_cast<int32_t>(hashInt(seed_, p + 4, 23) % (kCourtScale / 2));
         return static_cast<uint16_t>(hashInt(seed_, p + 2, 19) % kMaxDelay);
     }
 
@@ -190,6 +217,18 @@ private:
         const lengthType netX = static_cast<lengthType>(w / 2);
         const RGB net = blend(fg, RGB{0, 0, 0}, 170);
         for (lengthType y = 0; y < h; y += 3) draw::pixel(cv, {netX, y, 0}, net);
+
+        // Each side's score centered in its half, where the court has room for the digits.
+        const fonts::Font& font = fonts::kFont4x6;
+        if (h >= 3 * font.height && w >= 4 * 2 * font.width) {
+            for (uint8_t p = 0; p < 2; p++) {
+                char digits[4];
+                mm::formatTo(digits, sizeof(digits), "%u", static_cast<unsigned>(score_[p]));
+                const lengthType tw = static_cast<lengthType>(std::strlen(digits) * font.width);
+                const lengthType cx = static_cast<lengthType>(p == 0 ? w / 4 : w * 3 / 4);
+                draw::text(cv, font, digits, static_cast<lengthType>(cx - tw / 2), 1, net);
+            }
+        }
 
         // A column at each end, `paddle` percent of the court tall.
         const int32_t half = courtH * paddle / 200;
@@ -218,21 +257,20 @@ private:
     static constexpr int32_t  kMaxDrift   = 320;    ///< the steepest angle a bounce can produce
     static constexpr int32_t  kMaxAim     = 220;    ///< how far off center a paddle aims
     static constexpr uint16_t kMaxDelay   = 260;    ///< the longest reaction delay, in court units
-    static constexpr uint8_t  kBeatSteps  = 12;     ///< beats to cross the court in reactive mode
-    static constexpr uint16_t kSilence    = 8;      ///< below this the room is quiet, not playing
-    static constexpr uint16_t kBeatMargin = 24;     ///< a transient this far over the average is a beat
+    static constexpr uint8_t  kWinScore   = 11;     ///< the original's game length
 
     BeatPhase rally_;            ///< the rally clock, in crossings per minute
-    uint32_t  travelAt_ = 0;     ///< how far the rally has traveled, in court units
-    uint32_t  lastTravel_ = 0;   ///< the reading step() last consumed
-    uint32_t  lastFreeTravel_ = 0;   ///< last free-running reading, so a toggle costs no distance
-    bool      wasReactive_ = false;  ///< which clock ran last frame; a change rebases the baseline
+    uint32_t  lastTravel_ = 0;   ///< the clock reading step() last consumed, in court units
+    uint8_t   score_[2] = {0, 0};   ///< left and right points this game
+    PlayerSeat seat_[2];            ///< who holds each paddle
+    bool      human_[2] = {false, false};   ///< this frame's answer, read once so a hand-back mid-frame cannot split it
     int32_t   bx_ = kCourtScale / 2, by_ = kCourtScale / 2;   ///< the ball, in court units
     int8_t    dirX_ = 1;                 ///< which paddle the ball is heading for
     int16_t   driftY_ = 90;              ///< its drift across the court
     int32_t   py_[2] = {kCourtScale / 2, kCourtScale / 2};   ///< each paddle's center
     uint16_t  delay_[2] = {0, 0};        ///< each paddle's remaining reaction delay
     int16_t   aim_[2] = {0, 0};          ///< each paddle's aiming error this exchange
+    int32_t   home_[2] = {kCourtScale / 2, kCourtScale / 2};   ///< where each paddle waits while the ball is away
     uint8_t   kind_ = 0, entry_ = 0;     ///< the sprite ball's character and color
     uint32_t  seed_ = 1;                 ///< walked on every serve and hit
 };

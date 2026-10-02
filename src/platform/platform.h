@@ -481,6 +481,8 @@ void ethTestClearFrames();
 void setTestEthSendFails(bool fail);
 /// Override the reported link speed, so a test can exercise the too-slow-link status.
 void setTestEthLinkSpeed(uint16_t mbps);
+/// Fake a cabled interface holding `ip`, null removing it, so a host test can drive the Ethernet cascade.
+void setTestEthIPv4(const uint8_t* ip);
 /// Make ethRestartTx fail, so a test can exercise the recovery-failed path.
 void setTestEthRestartFails(bool fail);
 /// How many times ethRestartTx has run, which pins the once-per-wedge bound.
@@ -492,7 +494,12 @@ bool wifiStaInit(const char* ssid, const char* password);
 /// Whether the station is associated and holds an IP.
 bool wifiStaConnected() MM_NONBLOCKING;
 /// The station's IP as raw octets, on ethGetIPv4's contract.
-void wifiStaGetIPv4(uint8_t out[4]);
+void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING;
+/// This device's IP from whichever interface is up, Ethernet first, all-zero before either is.
+inline void localIPv4(uint8_t out[4]) {
+    ethGetIPv4(out);
+    if (!out[0] && !out[1] && !out[2] && !out[3]) wifiStaGetIPv4(out);
+}
 /// Tear the station down.
 void wifiStaStop();
 
@@ -540,6 +547,8 @@ bool mdnsInit(const char* deviceName);
 void mdnsStop();
 /// Free the mDNS stack, at release.
 void mdnsShutdown();
+/// Resolve a host name to its IPv4 address, `.local` by mDNS and any other by DNS; it blocks, so only a background task calls it.
+bool resolveHost(const char* name, uint8_t ip[4]);
 
 /// Store the DHCP hostname the next bring-up advertises; call it before ethInit or wifiStaInit.
 void setHostname(const char* name);
@@ -621,22 +630,16 @@ public:
 
     /// Open the socket, answering whether it came up.
     bool open();
-    // A fixed destination lets each send skip the address parse and route lookup.
-    /// Bind a fixed destination; false on a bad address.
-    bool connect(const char* ip, uint16_t port);
-    /// Send to the connected destination.
-    bool sendTo(const uint8_t* data, size_t len);
     // Listening flips the whole socket non-blocking, sends included.
     /// Listen on a port on any interface; false when it is taken.
     bool bind(uint16_t port);
     // A datagram longer than `maxLen` is truncated; `srcIp` also answers who sent it.
     /// Receive one datagram without blocking: bytes copied, or -1 when nothing is pending.
     int recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4] = nullptr);
-    // For replying on a bound, unconnected socket; a connected one keeps using sendTo.
     /// Send once to an explicit address.
     bool sendToAddr(const uint8_t ip[4], uint16_t port, const uint8_t* data, size_t len);
     // Without the membership the OS never delivers those datagrams, however correct the port.
-    /// Join a multicast group on a bound socket; false is retried rather than fatal.
+    /// Join a multicast group on a bound socket, its own sends no longer looping back; false is retried rather than fatal.
     bool joinMulticast(const char* group);
     /// Close it, which the destructor also does.
     void close();

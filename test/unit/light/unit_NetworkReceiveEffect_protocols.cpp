@@ -12,7 +12,7 @@
 
 #include <cstring>
 
-// These tests pin the E1.31 and DDP halves of the multi-protocol receive: each wire format round-trips build→parse, malformed and cross-protocol datagrams are rejected, DDP's byte-direct placement clamps safely, ArtPoll is recognized, and one real localhost round-trip drives all three protocol sockets at once. (The ArtNet half is pinned by unit_NetworkReceiveEffect.cpp.)
+// The E1.31 and DDP receive: round trips, rejected malformed and cross-protocol datagrams, DDP clamping, ArtPoll, and one loopback trip over all three sockets.
 
 namespace {
 
@@ -158,7 +158,7 @@ TEST_CASE("cross-protocol datagrams are rejected") {
     CHECK_FALSE(mm::parseE131Packet(art, artLen, universe, data, dataLen));
     CHECK_FALSE(mm::parseE131Packet(ddp, ddpLen, universe, data, dataLen));
     CHECK_FALSE(mm::parseDdpPacket(e131, e131Len, offset, data, dataLen));
-    // An ArtNet datagram CAN slip past DDP's thin 2-bit version check when its payload is large ('A' = 0x41 has the right version bits), the dedicated port, not the header, is DDP's real discriminator, and the garbage offset it yields is absorbed by applyBytes' bound check. With a small payload the lying length still rejects it:
+    // A small Art-Net datagram fails DDP's length check; a large one can pass its version bits, which the dedicated port and the bound check absorb.
     CHECK_FALSE(mm::parseDdpPacket(art, artLen, offset, data, dataLen));
 }
 
@@ -250,16 +250,15 @@ TEST_CASE("NetworkReceiveEffect receives all three protocols at once over localh
     cidFill(cid);
 
     mm::platform::UdpSocket artTx, e131Tx, ddpTx;
-    REQUIRE((artTx.open() && artTx.connect("127.0.0.1", mm::ARTNET_PORT)));
-    REQUIRE((e131Tx.open() && e131Tx.connect("127.0.0.1", mm::E131_PORT)));
-    REQUIRE((ddpTx.open() && ddpTx.connect("127.0.0.1", mm::DDP_PORT)));
+    REQUIRE((artTx.open() && e131Tx.open() && ddpTx.open()));
+    const uint8_t loopback[4] = {127, 0, 0, 1};
 
     // Three distinct payloads at three distinct buffer positions: ArtNet → universe 0 (offset 0), E1.31 → universe 1 (offset 510), DDP → byte 600.
     uint8_t a[3] = {11, 12, 13}, e[3] = {21, 22, 23}, d[3] = {31, 32, 33};
     uint8_t pkt[mm::E131_HEADER_SIZE + 3];
-    artTx.sendTo(pkt, mm::buildArtDmxPacket(pkt, 0, 0, a, 3));
-    e131Tx.sendTo(pkt, mm::buildE131Packet(pkt, 1, 0, cid, e, 3));
-    ddpTx.sendTo(pkt, mm::buildDdpPacket(pkt, 600, true, d, 3));
+    artTx.sendToAddr(loopback, mm::ARTNET_PORT, pkt, mm::buildArtDmxPacket(pkt, 0, 0, a, 3));
+    e131Tx.sendToAddr(loopback, mm::E131_PORT, pkt, mm::buildE131Packet(pkt, 1, 0, cid, e, 3));
+    ddpTx.sendToAddr(loopback, mm::DDP_PORT, pkt, mm::buildDdpPacket(pkt, 600, true, d, 3));
 
     bool landed = false;
     for (int i = 0; i < 100 && !landed; i++) {
@@ -269,7 +268,7 @@ TEST_CASE("NetworkReceiveEffect receives all three protocols at once over localh
         if (!landed) mm::platform::delayMs(1);
     }
     CHECK(landed);
-    // The "receiving <protocol> from <ip>" diagnostic carries the sender's IP. This test's packets travel over loopback (the same round-trip `landed` above already relies on), so the source is 127.0.0.1 and the status names it, the direct check that the source IP surfaces in the status.
+    // The status names the sender, 127.0.0.1 over loopback.
     REQUIRE(r.fx.status() != nullptr);
     CHECK(std::strstr(r.fx.status(), "receiving ") != nullptr);
     CHECK(std::strstr(r.fx.status(), "from 127.0.0.1") != nullptr);

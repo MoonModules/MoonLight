@@ -40,7 +40,8 @@ A flat parser returns zero for a missing key, which is indistinguishable from a 
 | [`ImprovFrame`](moxygen/ImprovFrame.md) | The serial provisioning protocol's framing, with no platform dependencies, so the host tests it without hardware. |
 | [`ImprovOpReassembler`](moxygen/ImprovOpReassembler.md) | The state machine that reassembles a chunked operation into one buffer, with the duplicate and out-of-order guard. The platform layer owns the serial side around it. |
 | [`FirmwareImage`](moxygen/FirmwareImage.md) | Reads an image's header without the vendor framework. The layout is a fixed on-disk format, so the same bytes parse on a device and in a test. |
-| [`PinList`](moxygen/util_PinList.md) · [`IpList`](moxygen/IpList.md) | The two list parsers a board configuration needs: a pin list and a destination list, both typed by a human into one text control. |
+| [`PinList`](moxygen/util_PinList.md) · [`HostList`](moxygen/HostList.md) | The two list parsers a board configuration needs: a pin list and a host list of addresses and names, both typed by a human into one text control. |
+| [`Addressing`](moxygen/Addressing.md) · [`HostResolver`](moxygen/HostResolver.md) | One rule for sending to many receivers, unicast, multicast or broadcast, and the cache that turns a host name into an address off the render thread. |
 | [`sha256`](moxygen/sha256.md) · [`crc`](moxygen/crc.md) | A cryptographic digest for update verification and identity, and a cheap checksum used as a fingerprint of a block of state. |
 | [`Sha1`](moxygen/Sha1.md) · [`Base64`](moxygen/Base64.md) | The two codecs the WebSocket handshake needs, the digest that standard mandates and the encoding that carries it. |
 

@@ -4,9 +4,9 @@
 #include "light/layouts/Layouts.h"
 #include "light/effects/TetrixEffect.h"
 #include "light/layouts/GridLayout.h"
-#include "platform/platform.h"   // setTestNowMs — deterministic virtual time
+#include "platform/platform.h"   // setTestNowMs: deterministic virtual time
 
-// TetrixEffect runs one falling-brick state machine per X column. Every column is seeded with a 2 s start delay (step = millis()+2000) in prepare(), so nothing renders until that delay elapses; once it does the column spawns a brick that falls and stacks. The per-effect Random8 has a fixed default seed, so with the clock frozen via setTestNowMs the whole effect is deterministic, the cases below freeze/advance virtual time so the state machine crosses its delays predictably. Each case restores the real clock through the guard so a frozen clock never leaks into another test file.
+// Each column runs a falling-brick state machine that starts after its own delay of up to 2 s; a frozen clock makes the seed, and so the run, deterministic.
 
 namespace {
 
@@ -37,30 +37,30 @@ bool anyLit(mm::Layer& layer) {
 
 } // namespace
 
-// During the initial 2 s start delay every column is idle-waiting, so the very first frame renders nothing: the buffer is entirely black even though the effect is enabled and built.
+// The first frame falls inside the start delay, so the buffer stays black.
 TEST_CASE("TetrixEffect renders black during the start delay") {
     ClockGuard guard;
-    mm::platform::setTestNowMs(1000);   // freeze; prepare seeds step = 1000+2000
+    mm::platform::setTestNowMs(1000);   // freeze; every column waits at least 500 ms
 
     TetrixRig rig(8, 8);
     rig.layer.applyState();
 
-    // Still inside the 2 s start window (3000 > 1000), so the state machine only waits.
+    // Still inside every column's start delay, so the state machine only waits.
     rig.layer.tick();
 
     CHECK(rig.grid.width * rig.grid.height == 64);
     CHECK_FALSE(anyLit(rig.layer));
 }
 
-// Once virtual time advances past the start delay, columns spawn bricks that fall and render: after a span of frames at least one light is lit, and every lit light carries a real (non-black) RGB color pulled from the palette rather than partial/garbage channels.
+// Past the start delay, bricks fall and light the grid in palette colors.
 TEST_CASE("TetrixEffect lights up with palette color after the start delay") {
     ClockGuard guard;
-    mm::platform::setTestNowMs(0);
+    mm::platform::setTestNowMs(1);   // 0 would restore the real clock, not freeze it at zero
 
     TetrixRig rig(8, 8);
-    rig.layer.applyState();   // step = 2000 for every column
+    rig.layer.applyState();   // each column starts between 501 and 1995 ms
 
-    // Advance well past the 2 s start delay, then run many frames so the start-roll (step 1→2) fires and bricks descend into the visible region. Step time forward each frame like a real tick loop.
+    // Advance well past every start delay, then run many frames so the start-roll (step 1→2) fires and bricks descend into the visible region. Step time forward each frame like a real tick loop.
     bool lit = false;
     for (uint32_t t = 3000; t <= 8000 && !lit; t += 25) {
         mm::platform::setTestNowMs(t);
@@ -69,7 +69,7 @@ TEST_CASE("TetrixEffect lights up with palette color after the start delay") {
     }
     REQUIRE(lit);
 
-    // Every non-black light is a full RGB triple from colorFromPalette, assert no lit light is a single stray channel (a lit light means at least one channel > 0; the brick color is a palette entry written across all three channels, so a lit pixel is a genuine color, not noise).
+    // A lit light is a full palette color, not a stray channel.
     auto& buf = rig.layer.buffer();
     bool foundColored = false;
     for (size_t p = 0; p + 2 < buf.bytes(); p += 3) {
@@ -79,7 +79,36 @@ TEST_CASE("TetrixEffect lights up with palette color after the start delay") {
     CHECK(foundColored);
 }
 
-// Effects must run at every grid size: a degenerate 0×0×0 grid and a 1×1 grid both survive a build + several frames across advancing time without crashing (no allocation, no out-of-range write).
+// A landed brick stays on screen: the frame is cleared every tick, so the stack is redrawn from memory, not left behind.
+TEST_CASE("TetrixEffect keeps its landed stack visible") {
+    ClockGuard guard;
+    mm::platform::setTestNowMs(1);
+    // One column and the fastest fall, so after the first landing only the stack can light the floor.
+    TetrixRig rig(1, 8);
+    rig.fx.speedControl = 255;
+    rig.layer.applyState();
+
+    auto bottomLit = [&]() {
+        const uint8_t* p = rig.layer.buffer().data() + static_cast<size_t>(7) * 3;
+        return p[0] || p[1] || p[2];
+    };
+
+    uint32_t t = 3000;
+    for (; t <= 20000 && !bottomLit(); t += 25) {
+        mm::platform::setTestNowMs(t);
+        rig.layer.tick();
+    }
+    REQUIRE(bottomLit());
+    // Twenty frames on, while the next brick spawns and falls, the floor is still lit.
+    for (int i = 0; i < 20; i++) {
+        t += 25;
+        mm::platform::setTestNowMs(t);
+        rig.layer.tick();
+    }
+    CHECK(bottomLit());
+}
+
+// A 0x0x0 and a 1x1 grid both survive several frames of advancing time.
 TEST_CASE("TetrixEffect survives degenerate and minimal grids") {
     ClockGuard guard;
 

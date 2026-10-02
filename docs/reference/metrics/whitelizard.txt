@@ -59,7 +59,7 @@ src/light/effects/GameOfLifeEffect.h:mm::GameOfLifeEffect::placePentomino   # CC
 src/light/layouts/HumanSizedCubeLayout.h:mm::HumanSizedCubeLayout::forEachCoord   # CCN 21, NLOC 26
 src/platform/esp32/platform_esp32_moon_i80.cpp:mm::platform::moonI80EofCb   # CCN 20, NLOC 83
 src/light/effects/FireEffect.h:mm::FireEffect::tick   # CCN 20, NLOC 46
-src/core/IpList.h:mm::parseIpList   # CCN 20, NLOC 42
+src/core/util/HostList.h:mm::parseHostList   # CCN 20, NLOC 42
 src/light/drivers/Correction.h:mm::Correction::apply   # CCN 20, NLOC 26
 src/core/HttpServerModule.cpp:mm::HttpServerModule::resolveEditableList   # CCN 19, NLOC 48
 src/light/effects/BlurzEffect.h:mm::BlurzEffect::tick   # CCN 19, NLOC 44
@@ -126,7 +126,7 @@ src/core/HttpServerModule.cpp:mm::HttpServerModule::writeControls   # CCN 13, NL
 src/core/HttpServerModule.cpp:mm::HttpServerModule::pushStateToWebSockets   # CCN 13, NLOC 31
 src/light/drivers/HueDriver.h:mm::HueDriver::parseGroups   # CCN 13, NLOC 31
 src/core/JsonUtil.h:mm::json::detail::JsonParser::parseStringLiteral   # CCN 13, NLOC 27
-src/core/IpList.h:mm::detail::parseOneIp   # CCN 13, NLOC 26
+src/core/util/HostList.h:mm::detail::parseOneIp   # CCN 13, NLOC 26
 src/light/drivers/ParallelLedDriver.h:mm::ParallelLedDriver::onControlChanged   # CCN 13, NLOC 25
 src/platform/desktop/platform_desktop.cpp:mm::platform::TcpConnection::connectStart   # CCN 13, NLOC 21
 src/platform/esp32/platform_esp32_moon_i80.cpp:mm::platform::moonI80Ws2812Wait   # CCN 13, NLOC 20

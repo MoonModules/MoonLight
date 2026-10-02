@@ -130,3 +130,89 @@ TEST_CASE("DevicesModule: a DISABLED module does not claim the active_ seat at b
     CHECK(DevicesModule::active() != &dis);
     CHECK(DevicesModule::active() != &live);
 }
+
+namespace {
+// Inject one marked MoonLight presence copy from 192.168.1.d, as the broadcast or the multicast copy.
+void injectCopy(DevicesModule& dev, uint8_t d, bool broadcast) {
+    const uint8_t ip[4] = {192, 168, 1, d};
+    uint8_t pkt[WledPacket::kSize];
+    WledPacket::build(pkt, ip, "peer", /*boardType=*/34, /*lightsOn=*/true);
+    WledPacket::stampMmMarker(pkt);
+    WledPacket::stampVia(pkt, broadcast);
+    dev.injectPacketForTest(pkt, sizeof(pkt), ip);
+}
+}  // namespace
+
+// A peer heard only over broadcast proves the group does not reach this device, so every multicast send adds a broadcast copy.
+TEST_CASE("DevicesModule: a peer heard only over broadcast proves the network drops multicast, and its multicast copy clears it") {
+    NetworkPath::multicastDropped = false;
+    DevicesModule dev;
+    for (int i = 0; i < 3; i++) injectCopy(dev, 61, /*broadcast=*/true);
+    const bool proven = NetworkPath::multicastDropped;
+    // A multicast copy turning up later means the group arrives after all, a slow join being the likelier story.
+    injectCopy(dev, 61, /*broadcast=*/false);
+    const bool cleared = !NetworkPath::multicastDropped;
+    NetworkPath::multicastDropped = false;   // reset before asserting, so a failure leaks into no later test
+    CHECK(proven);
+    CHECK(cleared);
+}
+
+TEST_CASE("DevicesModule: a peer heard both ways, or not at all, proves nothing") {
+    NetworkPath::multicastDropped = false;
+    DevicesModule other;
+    for (int i = 0; i < 5; i++) {
+        injectCopy(other, 63, /*broadcast=*/false);
+        injectCopy(other, 63, /*broadcast=*/true);
+    }
+    const bool bothWays = NetworkPath::multicastDropped;
+    // Silence is what a device alone on the network hears too.
+    DevicesModule alone;
+    const bool silence = NetworkPath::multicastDropped;
+    NetworkPath::multicastDropped = false;
+    CHECK_FALSE(bothWays);
+    CHECK_FALSE(silence);
+}
+
+// A switch that forgets the group minutes in is the classic snooping failure, so multicast copies heard earlier must not hide it.
+TEST_CASE("DevicesModule: a group that stops arriving after it worked is caught") {
+    NetworkPath::multicastDropped = false;
+    DevicesModule dev;
+    for (int i = 0; i < 10; i++) {
+        injectCopy(dev, 65, /*broadcast=*/false);
+        injectCopy(dev, 65, /*broadcast=*/true);
+    }
+    const bool whileWorking = NetworkPath::multicastDropped;
+    for (int i = 0; i < 3; i++) injectCopy(dev, 65, /*broadcast=*/true);
+    const bool afterOutage = NetworkPath::multicastDropped;
+    NetworkPath::multicastDropped = false;
+    CHECK_FALSE(whileWorking);
+    CHECK(afterOutage);
+}
+
+// One peer whose group never arrives must not flip the flag back after every multicast copy from another, a status write each time.
+TEST_CASE("DevicesModule: a peer without multicast does not undo another peer's multicast every round") {
+    NetworkPath::multicastDropped = false;
+    DevicesModule dev;
+    for (int i = 0; i < 3; i++) injectCopy(dev, 66, /*broadcast=*/true);
+    const bool proven = NetworkPath::multicastDropped;
+    injectCopy(dev, 67, /*broadcast=*/false);   // another peer's multicast arrives: the group does reach us
+    for (int i = 0; i < 5; i++) injectCopy(dev, 66, /*broadcast=*/true);
+    const bool stillCleared = !NetworkPath::multicastDropped;
+    NetworkPath::multicastDropped = false;
+    CHECK(proven);
+    CHECK(stillCleared);
+}
+
+// The copy flag sits in the marker's low byte, so a peer still recognizes us whichever copy arrives.
+TEST_CASE("WledPacket: either copy of a MoonLight packet carries the marker") {
+    const uint8_t ip[4] = {192, 168, 1, 64};
+    uint8_t pkt[WledPacket::kSize];
+    WledPacket::build(pkt, ip, "peer", 34, true);
+    WledPacket::stampMmMarker(pkt);
+    WledPacket::stampVia(pkt, true);
+    CHECK(WledPacket::hasMmMarker(pkt, sizeof(pkt)));
+    CHECK(WledPacket::viaBroadcast(pkt));
+    WledPacket::stampVia(pkt, false);
+    CHECK(WledPacket::hasMmMarker(pkt, sizeof(pkt)));
+    CHECK_FALSE(WledPacket::viaBroadcast(pkt));
+}

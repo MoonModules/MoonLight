@@ -176,7 +176,7 @@ Reads the pages the docs build renders as card tables and reports, per card:
 And per file, over every `.h` and `.cpp` under `src/`, `test/`, `esp32/main`, `moonbase/main` and `moondeck/moonlive`, excluding the two vendored trees and the bundled test framework:
 
 - a class comment past 10 lines, or any `## ` section of its `@moreinfo` appendix past 10
-- a member comment past one line: a deep dive goes after `@moreinfo`
+- a member comment past one line
 - one sentence in a comment past 30 words
 - a public function or variable with no `///` at all
 
@@ -184,7 +184,7 @@ And per file, over every `.h` and `.cpp` under `src/`, `test/`, `esp32/main`, `m
 
 Every run writes [docs/reference/metrics/docgen.md](../docs/reference/metrics/docgen.md), the tracked state of the sweep: errors and warnings per rule and per page, then the files ranked within each area. Current state only, so its git history is the trend, the same shape repo-health.md uses. Every erroring file also carries its own findings in full, since an error blocks a commit and its reader needs to know what to fix; warnings stay counted rather than listed, which keeps the page a report rather than a log. The file is the artifact to read, because stdout scrolls away and truncates.
 
-**A ratchet, not a snapshot.** The committed `docs/reference/metrics/docgen.md` is the baseline: the run rewrites the file, then compares what it found against the copy in `HEAD`. An error fails the run, and so does any rule whose warning count ROSE, the total included. Warnings are staged work, and staged work that grows is not a sweep.
+**A ratchet, not a snapshot.** The committed `docs/reference/metrics/docgen.md` is the baseline: the run rewrites the file, then compares what it found against the copy in `HEAD`. An error fails the run, and so does any rule whose warning count ROSE, the total included, and so does the total of `///` lines after `@moreinfo`. Warnings are staged work, and staged work that grows is not a sweep. The appendix total catches the other way to fake a sweep: warnings that fall because their comments moved into an appendix rather than being cut. A rise names the changed files whose appendix grew.
 
 The comparison is per rule as well as on the total, because each hides a different move. A total alone hides one rule paying for another: splitting an over-wide line lowers the width count and raises the block count, which is the trade the block cap exists to refuse. Per rule alone misses a rule sitting under its own baseline while the total climbs. A rule whose limit itself changed is the one case where a rise is right, and the commit message is where that is said.
 

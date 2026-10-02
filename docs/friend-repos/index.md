@@ -6,7 +6,7 @@ Monthly logs of what shipped on related open-source LED projects, the live lands
 - [wled-WLED.md](wled-WLED.md): upstream WLED firmware.
 - [MoonModules-WLED-MM.md](MoonModules-WLED-MM.md): MoonModules' WLED fork (the direct lineage).
 - [troyhacks-WLED.md](troyhacks-WLED.md): troyhacks' personal fork of WLED-MM (PixelForge, RMTHI, audio-reactive hardening).
-- [Funkelfetisch-MoonLight.md](Funkelfetisch-MoonLight.md): a fork of THIS project building a commercial product on it (HELIO, a physical infinity-sphere lamp); the work lives in feature branches, not on its default branch.
+- [Funkelfetisch-MoonLight.md](Funkelfetisch-MoonLight.md): a fork of THIS project building a commercial product on it (HELIO, a physical infinity-sphere lamp), now at `Funkelfetisch/projectMM` on GitHub; the work lives in feature branches, not on its default branch.
 - [PlummersSoftwareLLC-NightDriverStrip.md](PlummersSoftwareLLC-NightDriverStrip.md): Dave Plummer's LED matrix/strip firmware.
 - [hpwit-I2SClocklessLedDriver.md](hpwit-I2SClocklessLedDriver.md): hpwit's I2S/LCD DMA clockless LED driver (parallel multi-strip output).
 - [hpwit-I2SClocklessVirtualLedDriver.md](hpwit-I2SClocklessVirtualLedDriver.md): the shift-register "virtual pins" variant of the above (dormant since 2024).
@@ -30,11 +30,18 @@ Reading across the friend-repo digests, the themes the wider ESP32-LED ecosystem
 
 Observational: where the landscape is ahead of MoonLight. These are *not* commitments; real adoption decisions live in the [`../backlog/`](../work/future/index.md), cross-referenced where one already exists.
 
-- **Parallel multi-strip output on S3/P4** (PARLIO/LCD_CAM, and hpwit's I2S/shift-register drivers), the direct parallel drivers ship (MultiPin/Moon on LCD_CAM, Parlio on P4, driving up to 16 strands and 12,288+ lights). The shift-register/'595 expander path also ships but is dormant: it works at prime-only geometries yet has a known lapping-ring sparkle at the largest configs, so it stays off by default. See the [LED-driver analysis](../work/future/leddriver-analysis-top-down.md).
-- **Audio-reactive input**: none of MoonLight's effects are audio- or motion-reactive yet. The Peripheral role + the Pi-sensor backlog entry are the foundation; the producer→effect wiring is backlog.
 - **A guided setup/installer wizard on-device** (NightDriverStrip's Setup Wizard, WLED's installer), MoonLight has the web installer + Improv, but no on-device first-run wizard.
 - **A large built-in effect library**: MoonLight ships a focused set (concrete-first); the WLED family ships dozens. Breadth is a deliberate non-goal until the core is proven.
-- **On-device live effect scripting** (hpwit's ESPLiveScript), MoonLight effects are compiled C++; there's no runtime script path. Not a goal today, noted as a landscape contrast.
+
+## Candidates for MoonLight
+
+Concrete ideas the digests surfaced, waiting for a decision. Each leaves this list when it is decided: into the [backlog](../work/future/index.md), or dropped. Study to think, write fresh, never copy.
+
+- **Run compiled MoonLive code under QEMU in CI** ([hpwit-new-parser](hpwit-new-parser.md), September 2026): a tier that executes the compiled Xtensa bytes found three compiler bugs in its first week, the class host tests cannot see.
+- **Test MoonLive against hpwit's three compiler bug patterns** ([hpwit-new-parser](hpwit-new-parser.md), September 2026): a loop variable declared before its `for` freed too early, a short script heavy in external calls whose size estimate drops the final return, and an optimizer pass that removes the only definition of a register read later.
+- **Run every effect with the clock started near a wraparound** ([wled-WLED](wled-WLED.md), September 2026): WLED's Stream effect broke after an hour at top speed from a 32-bit time compared against a 16-bit one.
+- **Temporal dithering and RGBW gamut mapping at output** ([FastLED-FastLED](FastLED-FastLED.md), September 2026): applied at show time, with a power limiter that charges for the extra white diode; overlaps the parked 16-bit Layer work.
+- **Read WLED's "Version 17 - key features" issue (#5867)** ([wled-WLED](wled-WLED.md), September 2026): the topics a maintainer proposes for WLED's next major version, worth comparing against our own.
 
 ## Refreshing
 
@@ -52,5 +59,6 @@ Adding a month or a new friend repo is the [friend-repos](index.md) workflow, an
 > 4b. Follow [the documentation standards](../contributing/documentation-standards.md): American spelling, **no em-dashes** (use a comma, colon, parentheses or a full stop), and one line per paragraph with no hard wraps, since `check_docgen` reports all three as errors on the file you write.
 > 5. Add it as a `## <MONTH YEAR>` section to `docs/friend-repos/<NAME>.md`, newest month on top. Don't editorialise or compare to MoonLight, just report what they shipped.
 > 6. State the commit range / count **and the issue query** summarised so the digest is auditable.
+> 7. Then add any idea worth deciding on to **Candidates for MoonLight** in [index.md](index.md): one line each, naming the friend repo and month, linked to its digest. Here, and only here, the comparison with MoonLight belongs.
 >
 > When backfilling several months (e.g. since the last release), run this once per month for a consistent timeline, then optionally add a `## Since v<last-release>, overview` intro at the top with 3–5 bullets naming the multi-month threads the per-month slices can't show on their own.

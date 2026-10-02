@@ -39,7 +39,7 @@ namespace mm {
 ///
 /// A MoonLight device broadcasts a WLED-valid packet so the WLED apps list it, but a peer must be able to tell a MoonLight device from a generic WLED.
 /// A sentinel is stamped into the version field, which no WLED validator reads, so the packet stays valid while marking us uniquely.
-/// It is ASCII `MM` with a small protocol version, little-endian.
+/// Its top three bytes are ASCII `MM` and a small protocol version; the low byte says which copy this is, multicast or broadcast.
 ///
 /// ## Prior art
 ///
@@ -93,7 +93,7 @@ struct WledPacket {
     static constexpr size_t  kMarkerOff = 40;            ///< where the MoonLight sentinel is stamped
     static constexpr uint32_t kMmMarker = 0x014d4d00u;   ///< the sentinel itself, ASCII MM and a version
 
-    /// Stamp the sentinel that marks this packet as a MoonLight peer's.
+    /// Stamp the sentinel that marks this packet as a MoonLight peer's, as the multicast copy.
     static void stampMmMarker(uint8_t* out) {
         out[kMarkerOff + 0] = (kMmMarker >> 0) & 0xff;
         out[kMarkerOff + 1] = (kMmMarker >> 8) & 0xff;
@@ -101,12 +101,18 @@ struct WledPacket {
         out[kMarkerOff + 3] = (kMmMarker >> 24) & 0xff;
     }
 
-    /// Whether this packet carries the MoonLight sentinel.
+    /// Mark which copy this is, the one sent to the broadcast address or the one sent to the group.
+    static void stampVia(uint8_t* out, bool broadcast) { out[kMarkerOff] = broadcast ? 1 : 0; }
+
+    /// Whether a marked packet is the broadcast copy.
+    static bool viaBroadcast(const uint8_t* data) { return data[kMarkerOff] == 1; }
+
+    /// Whether this packet carries the MoonLight sentinel, whichever copy it is.
     static bool hasMmMarker(const uint8_t* data, size_t len) {
         if (len < kSize) return false;
-        uint32_t v = uint32_t(data[kMarkerOff]) | (uint32_t(data[kMarkerOff + 1]) << 8)
-                   | (uint32_t(data[kMarkerOff + 2]) << 16) | (uint32_t(data[kMarkerOff + 3]) << 24);
-        return v == kMmMarker;
+        const uint32_t v = (uint32_t(data[kMarkerOff + 1]) << 8)
+                         | (uint32_t(data[kMarkerOff + 2]) << 16) | (uint32_t(data[kMarkerOff + 3]) << 24);
+        return v == (kMmMarker & 0xffffff00u);
     }
 };
 

@@ -178,3 +178,25 @@ test("soundReactive is left alone on a module outside its scope", () => {
     assert.equal(cfg["0.soundReactive"], true);
     assert.ok(!("0.audioReactive" in cfg));
 });
+
+test("the receiver lists become hosts, and discovery's WLED switch becomes its addressing", () => {
+    const drivers = { "0.type": "NetworkSendDriver", "0.ips": "192.168.1.70-74", "0.lightsPerIp": "100" };
+    const network = { "2.type": "DevicesModule", "2.wledCompatible": true, "3.type": "OscModule", "3.feedbackTo": "192.168.1.147" };
+    const { files } = applyMigrations({
+        "/.config/Drivers.json": JSON.stringify(drivers),
+        "/.config/Network.json": JSON.stringify(network),
+    });
+    const d = JSON.parse(files["/.config/Drivers.json"]);
+    assert.equal(d["0.hosts"], "192.168.1.70-74");
+    assert.equal(d["0.lightsPerHost"], "100");
+    const n = JSON.parse(files["/.config/Network.json"]);
+    assert.equal(n["2.addressing"], 1);                // multicast + broadcast
+    assert.equal(n["3.hosts"], "192.168.1.147");
+});
+
+test("an E1.31 multicast output becomes E1.31, flagged to set its addressing", () => {
+    const drivers = { "0.type": "NetworkSendDriver", "0.protocol": 3 };
+    const { files, report } = applyMigrations({ "/.config/Drivers.json": JSON.stringify(drivers) });
+    assert.equal(JSON.parse(files["/.config/Drivers.json"])["0.protocol"], 1);
+    assert.ok(report.some(r => r.kind === "review" && r.detail.includes("addressing")));
+});

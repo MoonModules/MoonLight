@@ -5,7 +5,10 @@
 #include "light/util/ArtNetPacket.h"   // shared ArtNet wire formats (build + parse)
 #include "light/util/DdpPacket.h"      // shared DDP wire format
 #include "light/util/E131Packet.h"     // shared E1.31/sACN wire format
-#include "core/util/IpList.h"          // parseIpList: the destination-list parser (core primitive)
+#include "core/util/Addressing.h"      // sendAddressed: unicast, multicast or broadcast, one rule for every sender
+#include "core/util/HostList.h"        // parseHostList: the host-list parser (core primitive)
+#include "core/util/HostResolver.h"    // a named host's address, looked up off the render thread
+#include "core/util/format.h"          // formatTo: the unresolved-names status
 #include "light/drivers/PinList.h"  // assignCounts: the same window-split idiom as ledsPerPin
 #include "platform/platform.h"
 
@@ -37,12 +40,24 @@ public:
     NetworkSendDriver() { setDefaultPresetName("RGB"); }
 
     /// The protocol names, index-aligned with the constants the send switch uses.
-    static constexpr const char* kProtocolOptions[] = {"ArtNet", "E1.31", "DDP",
-                                                       "E1.31 multicast"};
+    static constexpr const char* kProtocolOptions[] = {"ArtNet", "E1.31", "DDP"};
     /// How many protocols the selector offers.
-    static constexpr uint8_t kProtocolCount = 4;
-    /// The protocol index that sends E1.31 to its native multicast group.
-    static constexpr uint8_t kProtoE131Multicast = 3;
+    static constexpr uint8_t kProtocolCount = 3;
+    /// The E1.31 protocol index, the one with a multicast group per universe.
+    static constexpr uint8_t kProtoE131 = 1;
+
+    /// The modes each protocol allows, by protocol index: Art-Net's legacy broadcast, E1.31's native multicast, DDP unicast only, its row padded to the table's width.
+    static constexpr Addressing kModes[kProtocolCount][2] = {
+        {Addressing::Unicast, Addressing::Broadcast},
+        {Addressing::Unicast, Addressing::Multicast},
+        {Addressing::Unicast, Addressing::Unicast},
+    };
+    /// How many modes each protocol offers.
+    static constexpr uint8_t kModeCount[kProtocolCount] = {2, 2, 1};
+    /// The mode names each protocol's `addressing` select shows.
+    static constexpr const char* kModeNames[kProtocolCount][2] = {
+        {"unicast", "broadcast"}, {"unicast", "multicast"}, {"unicast", "unicast"},
+    };
 
     // The universe is IN the address, which lets a snooping switch filter in hardware.
     /// The sACN multicast group for a universe.
@@ -55,10 +70,12 @@ public:
 
     /// How many receivers one driver can feed: a wall of tubes, not a subnet scan.
     static constexpr uint8_t kMaxDestinations = 32;
-    /// Receiver addresses, comma-separated; the list order is the fan-out order.
-    char ips[64] = {};
-    /// Lights per destination; blank splits the window evenly, as an LED driver's list does.
-    char lightsPerIp[64] = {};
+    /// Receiver addresses or names, comma-separated; the list order is the fan-out order.
+    char hosts[64] = {};
+    /// Lights per host; blank splits the window evenly, as an LED driver's list does.
+    char lightsPerHost[64] = {};
+    /// How the packets travel, an index into the protocol's own modes.
+    uint8_t addressing = 0;
     // Per-packet cost dominates wire time, so the larger DDP chunk is the fast path.
     /// The wire protocol, which selects both the packet layout and the chunking.
     uint8_t protocol = 0;
@@ -71,8 +88,16 @@ public:
     /// Bind the protocol, the destinations, the universe offset, the window and the rate cap.
     void defineDriverControls() override {
         controls_.addSelect("protocol", protocol, kProtocolOptions, kProtocolCount);
-        controls_.addText("ips", ips, sizeof(ips));
-        controls_.addText("lightsPerIp", lightsPerIp, sizeof(lightsPerIp));
+        const uint8_t p = protocol < kProtocolCount ? protocol : 0;
+        // Every write rebuilds the controls, so a protocol without the chosen mode falls back to unicast here.
+        if (addressing >= kModeCount[p]) addressing = 0;
+        controls_.addSelect("addressing", addressing, kModeNames[p], kModeCount[p]);
+        controls_.setHidden(controls_.count() - 1, kModeCount[p] < 2);
+        const bool unicast = mode() == Addressing::Unicast;
+        controls_.addText("hosts", hosts, sizeof(hosts));
+        controls_.setHidden(controls_.count() - 1, !unicast);
+        controls_.addText("lightsPerHost", lightsPerHost, sizeof(lightsPerHost));
+        controls_.setHidden(controls_.count() - 1, !unicast);
         controls_.addControl("universe_start", universeStart);
         addWindowControls();   // start / count: the slice of the shared buffer this sink sends
         controls_.addControl("fps", fps, 1, 120);
@@ -81,8 +106,21 @@ public:
     /// Which controls route through the prepare sweep, so the corrected buffer is re-sized.
     bool affectsPrepare(const char* name) const override {
         // Both are PARSED in prepare, so a change must re-run the sweep to re-derive the table.
-        return std::strcmp(name, "ips") == 0 || std::strcmp(name, "lightsPerIp") == 0
+        return std::strcmp(name, "hosts") == 0 || std::strcmp(name, "lightsPerHost") == 0
+               || std::strcmp(name, "protocol") == 0 || std::strcmp(name, "addressing") == 0
                || isWindowControl(name) || isCorrectionControl(name);
+    }
+
+    /// The mode the packets travel by, read through the protocol's own list.
+    Addressing mode() const {
+        const uint8_t p = protocol < kProtocolCount ? protocol : 0;
+        return kModes[p][addressing < kModeCount[p] ? addressing : 0];
+    }
+
+    /// Refresh the named hosts' addresses from the resolver, which never blocks, and the status they drive.
+    void tick1s() MM_NONBLOCKING override {
+        DriverBase::tick1s();
+        refreshHosts();
     }
 
 
@@ -112,15 +150,21 @@ public:
         resizeCorrected();
 
         // Published only once EVERYTHING validates: wrong output is worse than none at all.
-        uint8_t dest[kMaxDestinations][4] = {};
+        Host dest[kMaxDestinations] = {};
         uint8_t n = 0;
-        const char* err = parseIpList(ips, dest, kMaxDestinations, n);
-        if (err) { nDest_ = 0; setStatus(err, Severity::Error); return; }
-        if (n == 0) {
-            // A Warning, not an Error: an unset destination is unfinished, not faulty.
-            nDest_ = 0;
-            setStatus("set a destination ip", Severity::Warning);
-            return;
+        if (mode() == Addressing::Unicast) {
+            const char* err = parseHostList(hosts, dest, kMaxDestinations, n);
+            if (err) { nDest_ = 0; setStatus(err, Severity::Error); return; }
+            for (uint8_t d = 0; d < n; d++)
+                if (dest[d].isName()) { HostResolver::ensureStarted(); break; }   // here, where allocating is allowed
+            if (n == 0) {
+                // A Warning, not an Error: an unset host is unfinished, not faulty.
+                nDest_ = 0;
+                setStatus("set a host", Severity::Warning);
+                return;
+            }
+        } else {
+            n = 1;   // one stream of universes, to the group or to everyone, owning the whole window
         }
 
         // The identical rule, and helper, an LED driver uses to split its window across pins.
@@ -128,14 +172,15 @@ public:
         if (sourceBuffer_) windowSlice(sourceBuffer_->count(), winStart, winLen);
         nrOfLightsType counts[kMaxDestinations] = {};
         const char* warn = nullptr;
-        err = assignCounts(lightsPerIp, n, winLen, counts, 0, &warn);
+        const char* err = assignCounts(mode() == Addressing::Unicast ? lightsPerHost : "", n, winLen, counts, 0, &warn);
         if (err) { nDest_ = 0; setStatus(err, Severity::Error); return; }
 
         // Everything validated: publish as one unit.
-        std::memcpy(dest_, dest, sizeof(uint8_t) * 4 * n);
+        std::memcpy(dest_, dest, sizeof(Host) * n);
         std::memcpy(destCounts_, counts, sizeof(nrOfLightsType) * n);
         nDest_ = n;
-        setStatus(warn, warn ? Severity::Warning : Severity::Status);
+        prepareWarn_ = warn;
+        refreshHosts();
     }
 
     /// Re-size the corrected buffer when the preset changes the output channel count.
@@ -197,6 +242,7 @@ public:
             if (whole > 0) chunk = whole;
         }
 
+        const Addressing sendMode = mode();
         size_t offset = 0;   // byte cursor into `data`, walking destination by destination
         for (uint8_t d = 0; d < nDest_ && offset < totalBytes; d++) {
             // This destination's run: its light count × the wire stride, clipped to what's left.
@@ -211,8 +257,7 @@ public:
                 const uint8_t* src = data + offset + sent;
                 size_t packetLen;
                 switch (protocol) {
-                    case kProtoE131Multicast:   // same packet as E1.31, only the destination differs
-                    case 1:
+                    case kProtoE131:
                         packetLen = buildE131Packet(packet, universe, sequence_, cid_,
                                                     src, static_cast<uint16_t>(n));
                         break;
@@ -229,9 +274,9 @@ public:
                 }
                 // A failed send drops that packet and continues: one dark tube stalls no other.
                 uint8_t grp[4];
-                const uint8_t* to = dest_[d];
-                if (protocol == kProtoE131Multicast) { e131MulticastAddr(universe, grp); to = grp; }
-                socket_.sendToAddr(to, port, packet, packetLen);
+                e131MulticastAddr(universe, grp);
+                sendAddressed(sendMode, Traffic::FrameRate, &dest_[d], 1, grp,
+                              [&](const uint8_t ip[4]) { socket_.sendToAddr(ip, port, packet, packetLen); });
                 sent += n;
                 universe++;
             }
@@ -248,8 +293,8 @@ public:
 
     /// How many receivers the parse derived, for a test pinning the fan-out arithmetic.
     uint8_t destinationCount() const { return nDest_; }
-    /// The address of destination `i`.
-    const uint8_t* destinationAt(uint8_t i) const { return dest_[i]; }
+    /// The address of destination `i`, 0.0.0.0 for a name not resolved yet.
+    const uint8_t* destinationAt(uint8_t i) const { return dest_[i].ip; }
     /// How many lights of the window destination `i` owns.
     nrOfLightsType lightsAt(uint8_t i) const { return destCounts_[i]; }
 
@@ -266,17 +311,45 @@ private:
     uint32_t lastSendTime_ = 0;
     /// E1.31 component id, built once in setup() from the MAC so it is stable per device.
     uint8_t cid_[E131_CID_LENGTH] = {};
-    /// Destination addresses, derived in prepare() (never in tick()).
-    uint8_t dest_[kMaxDestinations][4] = {};
+    /// Destination hosts, derived in prepare() (never in tick()); a name's address is refreshed each second.
+    Host dest_[kMaxDestinations] = {};
     /// Each destination's slice of the window, index-aligned with `dest_`.
     nrOfLightsType destCounts_[kMaxDestinations] = {};
     /// How many entries of `dest_` / `destCounts_` are live.
     uint8_t nDest_ = 0;
+    /// The unresolved-names warning, which the status points at.
+    char statusBuf_[32] = {};
+    /// The light-count warning prepare found, restored once the names resolve.
+    const char* prepareWarn_ = nullptr;
 
     /// The UDP port for a protocol index: each wire format has its own registered port.
     static uint16_t protocolPort(uint8_t p) {
-        return (p == 1 || p == kProtoE131Multicast) ? E131_PORT
-             : p == 2 ? DDP_PORT : ARTNET_PORT;
+        return p == kProtoE131 ? E131_PORT : p == 2 ? DDP_PORT : ARTNET_PORT;
+    }
+
+    /// Copy each named host's latest address in from the resolver, keeping the last one while it is busy or failing, then report.
+    void refreshHosts() {
+        if (nDest_ == 0) return;   // idle or refused: prepare's own status stands
+        uint8_t waiting = 0;
+        for (uint8_t d = 0; d < nDest_; d++) {
+            if (!dest_[d].isName()) continue;
+            char name[kMaxHostName + 1];
+            hostName(hosts, dest_[d], name);
+            uint8_t ip[4];
+            const HostResolver::State st = HostResolver::lookup(name, ip);
+            if (st == HostResolver::State::Busy) return;   // the lookup task held the cache this instant: keep the status as it is
+            if (st == HostResolver::State::Resolved || st == HostResolver::State::Stale) std::memcpy(dest_[d].ip, ip, 4);
+            if (st == HostResolver::State::Waiting || st == HostResolver::State::Full) waiting++;
+        }
+        if (waiting) {
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "%u host%s not resolved yet", waiting, waiting == 1 ? "" : "s");
+            setStatus(statusBuf_, Severity::Warning);
+        } else if (mode() == Addressing::Multicast && NetworkPath::multicastDropped) {
+            // A light stream never falls back to broadcast, which would flood every device on the LAN.
+            setStatus("multicast blocked here: use unicast", Severity::Warning);
+        } else {
+            setStatus(prepareWarn_, prepareWarn_ ? Severity::Warning : Severity::Status);
+        }
     }
 
     /// Size the corrected buffer, off the hot path, which is the no-allocation contract.

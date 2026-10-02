@@ -107,6 +107,7 @@
 #include "light/effects/FishTankEffect.h"
 #include "light/effects/FlyingToastersEffect.h"
 #include "light/effects/PongEffect.h"
+#include "light/effects/BreakoutEffect.h"
 #include "light/effects/SpaceInvadersEffect.h"
 #include "light/effects/SpriteFountainEffect.h"
 #include "light/effects/TruchetEffect.h"
@@ -181,6 +182,8 @@
 #include "core/system/PinsModule.h"
 #include "core/services/AnalogService.h"
 #include "core/services/ButtonService.h"
+#include "core/services/GamepadService.h"
+#include "core/services/MidiService.h"
 #include "core/services/InfraredService.h"
 #include "core/services/MoonLiveService.h"
 #include "core/system/FileManagerModule.h"
@@ -284,6 +287,7 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::SpaceInvadersEffect>("SpaceInvadersEffect", "light/effects.md#spaceinvaders");
     mm::ModuleFactory::registerType<mm::SpriteFountainEffect>("SpriteFountainEffect", "light/effects.md#spritefountain");
     mm::ModuleFactory::registerType<mm::PongEffect>("PongEffect", "light/effects.md#pong");
+    mm::ModuleFactory::registerType<mm::BreakoutEffect>("BreakoutEffect", "light/effects.md#breakout");
     mm::ModuleFactory::registerType<mm::BallpitEffect>("BallpitEffect", "light/effects.md#ballpit");
     mm::ModuleFactory::registerType<mm::TruchetEffect>("TruchetEffect", "light/effects.md#truchet");
     mm::ModuleFactory::registerType<mm::VectorBallsEffect>("VectorBallsEffect", "light/effects.md#vectorballs");
@@ -349,6 +353,8 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::TasksModule>("TasksModule", "core/system.md#tasks");
     mm::ModuleFactory::registerType<mm::PinsModule>("PinsModule", "core/system.md#pins");
     mm::ModuleFactory::registerType<mm::ButtonService>("ButtonService", "core/services.md#button");
+    mm::ModuleFactory::registerType<mm::GamepadService>("GamepadService", "core/services.md#gamepad");
+    mm::ModuleFactory::registerType<mm::MidiService>("MidiService", "core/services.md#midi");
     mm::ModuleFactory::registerType<mm::AnalogService>("AnalogService", "core/services.md#analog");
     mm::ModuleFactory::registerType<mm::InfraredService>("InfraredService", "core/services.md#infrared");
     mm::ModuleFactory::registerType<mm::MoonLiveService>("MoonLiveService", "core/services.md#moonliveservice");

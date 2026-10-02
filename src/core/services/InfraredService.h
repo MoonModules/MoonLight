@@ -172,6 +172,7 @@ public:
     /// Rebuild the rows from the persisted list.
     bool restoreList(const char* json, const char* key) override {
         count_ = 0;
+        unsigned dropped = 0;
         const bool ok = mm::json::forEachListElement(json, key,
             [&](const mm::json::JsonDoc& doc, const mm::json::JsonNode* el) {
                 if (count_ >= kMaxRows) return;
@@ -181,16 +182,10 @@ public:
                 char codeStr[16] = {};
                 mm::json::readString(mm::json::member(doc, el, "code"), codeStr, sizeof(codeStr));
                 r.code = static_cast<uint32_t>(std::strtoul(codeStr, nullptr, 0));
-                mm::json::readString(mm::json::member(doc, el, "target"),
-                                     r.action.target, sizeof(r.action.target));
-                char kind[16] = {};
-                mm::json::readString(mm::json::member(doc, el, "kind"), kind, sizeof(kind));
-                r.action.kind = std::strcmp(kind, "set") == 0   ? InputAction::Kind::Set
-                              : std::strcmp(kind, "delta") == 0 ? InputAction::Kind::Delta
-                                                                : InputAction::Kind::Toggle;
-                r.action.value =
-                    static_cast<int16_t>(mm::json::readInt(mm::json::member(doc, el, "value")));
+                if (!readInputAction(doc, el, r.action)) dropped++;
             });
+        offSurface_ = static_cast<uint8_t>(dropped);
+        reportOffSurface(*this, statusBuf_, sizeof(statusBuf_), dropped);
         return ok;
     }
 
@@ -258,7 +253,9 @@ private:
     void reportReady() {
         // An unset pin releases the channel, which would otherwise stay armed on a cleared pin.
         if (pin_ < 0) { platform::irStop(); setStatus("set pin to receive", Severity::Warning); return; }
-        if (platform::irChannelReady(static_cast<uint16_t>(pin_))) setStatus("ready");
+        // A restore that unassigned rows says so rather than "ready", or the warning would last one tick.
+        if (platform::irChannelReady(static_cast<uint16_t>(pin_)))
+            offSurface_ ? reportOffSurface(*this, statusBuf_, sizeof(statusBuf_), offSurface_) : setStatus("ready");
         else setStatus("infrared channel failed to open, pin busy or invalid?", Severity::Error);
     }
 
@@ -266,6 +263,7 @@ private:
     static constexpr uint8_t kMaxRows = 24;
 
     int8_t   pin_ = -1;              ///< receiver GPIO, -1 until a board or user sets it
+    uint8_t  offSurface_ = 0;        ///< rows the last restore unassigned, reported until the next one
     Row      rows_[kMaxRows];
     uint8_t  count_ = 0;
     uint32_t nextId_ = 1;

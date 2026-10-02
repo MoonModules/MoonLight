@@ -152,7 +152,7 @@ The rest the module declares about itself:
 
 | | |
 |---|---|
-| 💫 MoonLight / MoonLight · 🌙 MoonModules · 🐙 WLED · ⚡️ FastLED | where it came from |
+| 💫 MoonLight · 🌙 MoonModules · 🐙 WLED · ⚡️ FastLED | where it came from |
 | 🦅 | a named contributor, credited on the module |
 | 🎵 volume · 🎶 frequency | it listens: one note reacts to how LOUD the room is, two to WHICH notes are playing |
 | 📡 | it takes its picture from the network |

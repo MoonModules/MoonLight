@@ -61,6 +61,11 @@ export const TYPE_RENAMES = {
 // the bench: a blanket fps → targetFps corrupted NetworkSendDriver's own `fps`). `review` marks
 // a value-semantics change: the name maps, the value needs the user's eye.
 export const CONTROL_RENAMES = {
+    // One rule for reaching many receivers: a list is `hosts`, and how packets travel is `addressing`.
+    "ips": { name: "hosts", date: "2026-10-02", onTypes: ["NetworkSendDriver"] },
+    "lightsPerIp": { name: "lightsPerHost", date: "2026-10-02", onTypes: ["NetworkSendDriver"] },
+    "feedbackTo": { name: "hosts", date: "2026-10-02", onTypes: ["OscModule"] },
+    "wledCompatible": { name: "addressing", date: "2026-10-02", onTypes: ["DevicesModule"] },
     // One name for one thing: the service is AudioService, the frame is AudioFrame, so the control
     // that makes a sprite effect follow the music is audioReactive. Scoped to the seven effects that
     // declare it, per the rule above.
@@ -97,6 +102,15 @@ export const CONTROL_RENAMES = {
 // Old control VALUE → new, keyed by the control's (post-rename) name. Same honesty levels:
 // `value` when the move is deterministic, `review` when only the user (or the chip) can decide.
 export const CONTROL_VALUE_RENAMES = {
+    // wledCompatible's switch becomes addressing's index: multicast, or multicast + broadcast.
+    "addressing": { onTypes: ["DevicesModule"], values: {
+        false: { value: 0, date: "2026-10-02" },
+        true: { value: 1, date: "2026-10-02" },
+    } },
+    // "E1.31 multicast" left the protocol list; E1.31 with addressing multicast replaces it.
+    "protocol": { onTypes: ["NetworkSendDriver"], values: {
+        3: { value: 1, date: "2026-10-02", review: "protocol was 'E1.31 multicast': now E1.31, set addressing to multicast" },
+    } },
     // Audio modes reordered simple-to-advanced, so the default is what works with nothing
     // attached. The indices are persisted, so every saved value moves: 0 was local audio and
     // is now simulate, 2 was simulate and is now local audio. A device without a network has

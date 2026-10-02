@@ -20,6 +20,7 @@ add_executable(mm_tests
     unit/core/unit_crc.cpp
     unit/core/unit_AudioService_sync.cpp
     unit/core/unit_ButtonService.cpp
+    unit/core/unit_GamepadService.cpp
     unit/core/unit_MoonLiveService.cpp
     unit/core/unit_InfraredService.cpp
     unit/core/unit_TcpConnect.cpp
@@ -74,7 +75,10 @@ add_executable(mm_tests
     unit/core/unit_sanitizeHostname.cpp
     unit/core/unit_platform_clock.cpp
     unit/core/unit_platform_worker.cpp
-    unit/core/unit_IpList.cpp
+    unit/core/unit_HostList.cpp
+    unit/core/unit_Addressing.cpp
+    unit/core/unit_HostResolver.cpp
+    unit/core/unit_OscModule.cpp
     unit/core/unit_Scheduler_unique_names.cpp
     unit/core/unit_MoonStatsModule.cpp
     unit/core/unit_MoonTalkModule.cpp
@@ -105,6 +109,33 @@ add_executable(mm_tests
     unit/light/unit_fluid.cpp
     unit/light/unit_draw.cpp
     unit/light/unit_GameOfLifeEffect.cpp
+    unit/light/unit_BreakoutEffect.cpp
+    unit/light/unit_PongEffect.cpp
+    unit/light/unit_SpaceInvadersEffect.cpp
+    unit/light/unit_BlockModifier.cpp
+    unit/light/unit_BlurzEffect.cpp
+    unit/light/unit_BouncingBallsEffect.cpp
+    unit/light/unit_CircleModifier.cpp
+    unit/light/unit_FixedRectangleEffect.cpp
+    unit/light/unit_FreqMatrixEffect.cpp
+    unit/light/unit_FreqSawsEffect.cpp
+    unit/light/unit_GEQ3DEffect.cpp
+    unit/light/unit_GEQEffect.cpp
+    unit/light/unit_GridBlacksLayout.cpp
+    unit/light/unit_LissajousEffect.cpp
+    unit/light/unit_MirrorModifier.cpp
+    unit/light/unit_NoiseMeterEffect.cpp
+    unit/light/unit_PaintBrushEffect.cpp
+    unit/light/unit_PraxisEffect.cpp
+    unit/light/unit_RandomEffect.cpp
+    unit/light/unit_RippleXZModifier.cpp
+    unit/light/unit_RubiksCubeEffect.cpp
+    unit/light/unit_SolidEffect.cpp
+    unit/light/unit_SphereMoveEffect.cpp
+    unit/light/unit_StarFieldEffect.cpp
+    unit/light/unit_StarSkyEffect.cpp
+    unit/light/unit_TetrixEffect.cpp
+    unit/light/unit_TransposeModifier.cpp
     unit/light/unit_DemoReelEffect.cpp
     unit/light/unit_TextEffect.cpp
     unit/light/unit_Coord3D.cpp

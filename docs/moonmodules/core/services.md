@@ -1,6 +1,6 @@
 # Core services
 
-The user-added **Service** modules — capability bridges the device provides or consumes, added and removed at runtime in the `Services` container (the core-domain twin of the light domain's `Effects`/`Drivers`). Fixed device infrastructure (identity, network, inspection tools) lives under **System** — see [core/system.md](system.md). Every row links to its generated technical page (the full API, from the `.h`) and its tests.
+The user-added **Service** modules are capability bridges the device provides or consumes, added and removed at runtime in the `Services` container (the core-domain twin of the light domain's `Effects`/`Drivers`). Fixed device infrastructure (identity, network, inspection tools) lives under **System**: see [core/system.md](system.md). Every row links to its generated technical page (the full API, from the `.h`) and its tests.
 
 <video src="../../assets/moontube/09-services.webm" controls playsinline width="720" title="Every service in turn: audio, button, analog, infrared, and a scripted one."></video>
 
@@ -8,7 +8,7 @@ The user-added **Service** modules — capability bridges the device provides or
 
 ## Services
 
-The top-level container the Service modules hang under — a grouping node with no controls of its own, the same shape as `Effects`/`Drivers` in the light domain. Adds/removes its children (Audio, OSC, Infrared, Button, Analog, MoonLiveService) at runtime via the generic module machinery.
+The top-level container the Service modules hang under: a grouping node with no controls of its own, the same shape as `Effects`/`Drivers` in the light domain. Adds/removes its children (Audio, OSC, Infrared, Button, Analog, MoonLiveService) at runtime via the generic module machinery.
 
 Detail: [technical](moxygen/Services.md)
 
@@ -20,19 +20,21 @@ A user-added Service: the audio source the audio-reactive effects consume. `mode
 
 <img src="../../assets/core/AudioService.png" width="300" alt="Audio module controls">
 
-- `mode` — Local audio, Receive network or Simulate, each showing only its own controls below.
+- `mode`: Local audio, Receive network or Simulate, each showing only its own controls below.
 - `micMode`: (Local, I²S targets) `I2S` for a three-wire part, `PDM` for a two-wire one.
 - `sckPin` / `wsPin` / `sdPin`: (Local, I²S targets) the bus GPIOs, unset until entered.
 - `mclkPin`: (Local, I²S targets) the master clock a line-in ADC may need; unset for a plain mic.
 - `device`: (Local, desktop) the OS capture input, `default` following the system setting.
-- `sampleRate` — (Local) mic/ADC sample rate.
-- `levels` — (Local) who sets the display window: `manual`'s two sliders, or `automatic`, a learner.
+- `sampleRate`: (Local) mic/ADC sample rate.
+- `levels`: (Local) who sets the display window: `manual`'s two sliders, or `automatic`, a learner.
 - `floor`: (Local) the **silence threshold**: below it a band reads zero, and the learner ignores it.
 - `gain`: (Local, manual) the width of the display window: higher is narrower, so it runs hotter.
-- `send audio` — (Local, network build) send the local analysis as audio-sync packets.
-- `simulate` — (Simulate) the pattern: `music`, a plausible song, or `sweep`, a test march.
-- `syncPort` — (network build) the UDP port, 11988 by default; `sync status` reports the state.
-- read-only — `level` (RMS), `peakHz` (the audio driving effects, from any source).
+- `send audio`: (Local, network build) send the local analysis as audio-sync packets.
+- `addressing`: (sending) `multicast`, which WLED hears, or `unicast` to `hosts`, faster on WiFi.
+- `hosts`: (unicast) the boards that follow this audio, addresses or names.
+- `simulate`: (Simulate) the pattern: `music`, a plausible song, or `sweep`, a test march.
+- `syncPort`: (network build) the UDP port, 11988 by default; `sync status` reports the state.
+- read-only: `level` (RMS), `peakHz` (the audio driving effects, from any source).
 
 Detail: [technical](moxygen/AudioService.md) · [the sync packet](../light/moxygen/WLEDAudioSyncPacket.md) · [the lock-free ring](moxygen/SpscRing.md)
 
@@ -46,10 +48,9 @@ Detail: [technical](moxygen/AudioService.md) · [the sync packet](../light/moxyg
 
 Receives [OSC](https://opensoundcontrol.stanford.edu/) over UDP and writes it onto this device's controls, so a fader in Resolume, TouchDesigner or TouchOSC drives MoonLight directly. It owns no surface of its own: everything lands in the same control writes the HTTP API and the UI use, so every validator still runs. Addresses, feedback and setup: ⌄ details.
 
-- `listen` — receive OSC (default **off**). This opens an unauthenticated UDP port that writes
-  controls, on the same LAN-trust basis as the Art-Net and audio-sync receivers, so it is a capability you turn on rather than one every device carries.
-- `port` — the UDP port (default 9000, what TouchOSC uses). Applies live.
-- `status` — listening, off, or why the port could not be opened.
+- `listen`: receive OSC, off by default since the port is unauthenticated and writes controls.
+- `port`: the UDP port (default 9000, what TouchOSC uses). Applies live.
+- `status`: listening, off, or why the port could not be opened.
 
 Detail: [technical](moxygen/OscModule.md)
 
@@ -101,6 +102,32 @@ The travel is mapped into **the control's own range**, so a pedal is configured 
 
 Detail: [technical](moxygen/AnalogService.md)
 
+<a id="gamepad"></a>
+
+### Gamepad
+
+A Service added per board: **a gamepad's buttons and sticks**, each driving a control through the same rows the other input services use. The pad plugs into the computer showing the interface, over USB or Bluetooth, and the browser reports it, so it works on every chip.
+
+<img src="../../assets/core/GamepadService.png" width="300" alt="Gamepad service controls">
+
+- `inputs`: the rows, each a button or stick of the standard layout, a `learn` and a target.
+
+A fresh service starts with rows onto the surface: the left stick's Y onto fader 1, the right stick's Y onto fader 2, the left stick's X onto fader 3, and A onto switch 1. Assign those on the [Control](system.md#control) card to play a game. ⌄ details.
+
+Detail: [technical](moxygen/GamepadService.md)
+
+<a id="midi"></a>
+
+### MIDI
+
+A Service added per board: **a MIDI control desk** driving the control surface, decoded as Mackie Control. The desk plugs into the computer showing the interface and the browser reports it, so it works on every chip; a Mackie desk such as the iCON QCon or the Behringer X-Touch in MC mode works without setup.
+
+<img src="../../assets/core/MidiService.png" width="300" alt="MIDI service controls">
+
+Faders move the surface's faders, the knobs turn its encoders, and each channel's SELECT button flips its switch. The desk follows the surface back: motors, SELECT lights and knob rings. A hand on a fader holds its motor still. ⌄ details.
+
+Detail: [technical](moxygen/MidiService.md)
+
 ### MoonLiveService
 
 A Service added per board: **a MoonLive script that reads hardware and drives controls**. The flexible half of the input story, and the twin of a scripted effect.
@@ -124,13 +151,27 @@ The travel maps into the control's own range: a Select with five options takes 0
 ## Button, details
 Debouncing happens here rather than in the platform layer, because a bouncing contact is a property of the switch. Rows are polled at 50 Hz, since a contact closes for tens of milliseconds.
 
-Both input services share three row fields, because what happens after an input fires is the same whichever input fired it.
+The input services share three row fields, because what happens after an input fires is the same whichever input fired it.
 
-- `target`: `Module.control`. Pointing at `Control.switch1` puts the input on the control surface, where OSC, MQTT and the web UI reach the same switch; pointing at `Drivers.on` drives that control directly. The surface is the recommended path, not a rule.
+- `target`: a surface control, a switch, encoder, fader or pad with its number, such as `Control.switch1`. The [Control](system.md#control) card decides what that control drives, and OSC, MQTT and the web UI reach the same switch. A saved row that names any other control is left unassigned, and the service's status says how many.
 - `kind`: `toggle` reads the target and writes its inverse (a light switch); `set` writes `value` while held and 0 on release (hold-to-activate, a pedal); `delta` adds `value`, clamped to the control's own bounds (a brightness nudge, a palette step). **`set` is Button-only**: it needs a release to write the 0, and a remote reports a press with no release.
 - `value`: what `set` writes, or the signed nudge `delta` applies. Unused by `toggle`.
 
 Only a `set` row acts on the release. A toggle or a delta acting on both edges would fire twice for one push.
+
+## Gamepad, details
+A browser lists a pad only once one of its buttons is pressed with the page open, a rule against fingerprinting a visitor's hardware. Chrome, Firefox and every browser built on Chrome list a pad only on a secure origin. The desktop app's page on `localhost` is one; a device's plain `http://` page is not, until its address is added the way [MIDI, details](#midi-details) shows. Safari lists a pad on any page, and so does every browser on an iPhone or iPad, since they all run on Safari's engine. So a pad paired with a phone or tablet plays on any board's page with no computer involved. To check that the browser sees a pad, and which standard button or axis each control reports, open [hardwaretester.com/gamepad](https://hardwaretester.com/gamepad) in the same browser: if a button lights there, it reaches MoonLight too. The inputs are named as SDL's GameController API names them (`a`, `b`, `dpup`, `leftx`). That is the vocabulary GameControllerDB maps hundreds of controllers onto, so one set of rows works with any pad the browser reports in the standard mapping; a pad it does not recognize reports its own order, and learn binds it all the same. A stick follows the surface's convention, up and right being more, so a stick, a fader and a paddle point the same way; the service flips the browser's Y, which counts down the screen. It writes its position rescaled into the target's range, and only once it moves past a small deadband. A pad's first stick positions are taken as rest, so plugging one in with a stick off-center moves nothing, while the button press that makes the browser show the pad still counts. A switch on the surface driving a button control, such as Space Invaders' `fire`, presses it on the way down only.
+
+## MIDI, details
+The browser reads the desk with the Web MIDI API, which Chrome, Edge and Firefox offer on a secure origin only, so it works on the desktop app's page on `localhost`; Safari has no Web MIDI. The first time, the browser asks permission to use MIDI devices.
+
+A device's own page, such as `http://192.168.1.158`, is not a secure origin, so Chrome asks nothing and the desk stays silent. To use a desk or a gamepad there, mark that address as secure once:
+
+1. Open `chrome://flags/#unsafely-treat-insecure-origin-as-secure`.
+2. Enter the device's address, such as `http://192.168.1.158`, set the flag to Enabled, and click Relaunch.
+3. Reload the device's page: Chrome now asks to use MIDI devices.
+
+The decoding follows Mackie Control: a fader is 14-bit pitch bend on its own channel, its touch sensor a note from 0x68, a knob a relative turn on a control change from 0x10, and SELECT a note from 0x18. The master fader has no slot on the surface and is ignored. The way back uses the same messages: pitch bend moves a motor, a SELECT note at full velocity lights its button, and a control change from 0x30 fills a knob's ring. The device keeps what the desk should show and pushes it up to 25 times a second; the browser sends only what changed, so a page opened later moves the motors to where the surface already is.
 
 ## Audio, details
 #### Microphone wiring
@@ -187,13 +228,13 @@ Prior art: the WLED-MM audio-reactive usermod by **Frank ([@softhack007](https:/
 
 ## OSC, details
 **Feedback: the device answers.** With `feedback` on, a control that changes anywhere (the web UI, a
-preset recall, an audio-reactive effect) is mirrored back to the surface, which is what keeps a client honest and what moves a motorised fader. `feedbackTo` names the receiver, or is left empty to answer whoever last wrote to us; `feedbackPort` is where that client LISTENS, which is not the port we listen on (Open Stage Control calls its own `osc-port`).
+preset recall, an audio-reactive effect) is mirrored back to the surface, which is what keeps a client honest and what moves a motorized fader. `addressing` picks where it goes: `unicast` to each of `hosts`, addresses or names, or to whoever last wrote when `hosts` is empty; `multicast` to `group`, which every listening board with the same `group` joins; the default, `239.255.77.78`, sits beside discovery's own group, so multicast works with nothing to fill in, and a second rig on the same network picks another. `feedbackPort` is where that client LISTENS, which is not the port we listen on (Open Stage Control calls its own `osc-port`).
 
 A client learns the current state three ways: when it first writes to us from a new address, when its address changes, and whenever it sends **`/mm/hello`**. The last one exists because a client restarting on the SAME address is invisible to the other two, and most controllers send nothing of their own on load, so every widget would show its layout file's defaults until the user moved one.
 The shipped session has a `sync from device` button for exactly this.
 
 **Setting one up**, from installing the app to using it from a phone, is its own page:
-[Driving MoonLight from a phone or tablet](../../how-to/control-surface.md). It needs no checkout and no tooling, just the app and the session file from the latest release.
+[Connecting a control surface](../../how-to/control-surface.md). It needs no checkout and no tooling, just the app and the session file from the latest release.
 
 **Addresses.** These are a public contract: a TouchOSC layout built against them keeps working, so
 they stay small and boring.
@@ -204,7 +245,6 @@ they stay small and boring.
 | `/mm/encoder/1` .. `/mm/encoder/8` | float 0..1 or int 0..255 | its rotary encoders |
 | `/mm/switch/1` .. `/mm/switch/8` | float 0..1 or int 0..255 | its on/off switch row (nonzero = on) |
 | `/mm/hello` | anything, or nothing | resend every value to the sender |
-| `/mm/control/<Module>/<control>` | float 0..1 or int 0..255 | any control directly |
 
 Both argument forms are accepted because controllers disagree: apps send a float in 0..1, hardware bridges send an int in the target's range. Out-of-range values are clamped rather than ignored, so a controller sending 0..127 does something sensible instead of appearing dead.
 
@@ -242,12 +282,11 @@ Editing the layout needs `read-only` off in the launcher.
 
 Driving the device from that session, beside the Control card it mirrors.
 
-It binds only to `/mm/switch/N`, `/mm/encoder/N` and `/mm/fader/N`, N being 1 to 8, on purpose. A surface should address the SURFACE, and [Control](system.md#control) decides what each one drives, so one layout keeps working as assignments change and a hardware desk lands on the same bindings. Reaching past it to `/mm/control/<Module>/<control>` also works and is the right answer for a one-off, but it hard-codes into the layout a mapping that belongs on the device. Two have targets today, `switch1` (`Drivers.on`) and `fader1` (`Drivers.brightness`); the rest wait for a target picker.
+It binds only to `/mm/switch/N`, `/mm/encoder/N` and `/mm/fader/N`, N being 1 to 8, on purpose. A surface addresses the SURFACE, and [Control](system.md#control) decides what each one drives, so one layout keeps working as assignments change and a hardware desk lands on the same bindings. By default `switch1` drives `Drivers.on` and `fader1` drives `Drivers.brightness`; the Control card assigns the rest.
 
 The session also carries a **pad grid**, and those pads are inert: `/mm/pad/N` has no route in the OSC module yet, so pressing one sends a message nothing reads. It ships anyway because the grid is the layout a preset launcher wants and the addresses are the ones it will use; treat it as a placeholder rather than as part of the contract above.
 
-**It does not reach a Mackie desk.** The X-Touch and QCon Pro G2 speak Mackie Control over MIDI,
-not OSC: see [control surfaces](../../reference/hardware/control-surfaces.md) for what would.
+**A Mackie desk reaches the surface through the [MIDI service](#midi)**, since the X-Touch and QCon Pro G2 speak Mackie Control over MIDI rather than OSC.
 
 ## Infrared, details
 Set a row's `learn` and the next code received binds to it, which is how any remote works without a shipped code table. Arming one row disarms any other, so a code cannot bind twice. A fresh service starts with no rows: add one, learn a key, pick a target. The status line reports whether the channel actually opened, not merely that a pin is set; on some boards the receiver shares its pin with another peripheral through a board switch.

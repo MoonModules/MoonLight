@@ -5,6 +5,7 @@
 #include "core/util/math16.h"
 #include "light/powerfunctions/draw.h"
 #include "light/effects/EffectBase.h"
+#include "light/effects/PlayerSeat.h"   // a person takes the cannon, the game plays it again later
 
 namespace mm {
 
@@ -107,6 +108,7 @@ static_assert(sizeof(kCannon) == static_cast<size_t>(GW) * GH * GF, "cannon: one
 ///
 /// The arcade's attract mode is the model: a game playing itself is what reads across a room.
 /// The cannon tracks and fires on its own, the ranks march and drop, and a hit thins the formation.
+/// `player` and `fire` are the cannon as controls, held through `PlayerSeat`.
 ///
 /// @moreinfo
 ///
@@ -134,6 +136,8 @@ public:
 
     /// March on the beat and fire on a transient. Silence holds the invasion still.
     bool audioReactive = false;
+    /// The cannon's position, left to right; follows the game until an input writes it.
+    uint8_t player = 0;
 
     /// Publish the tempo, the step and drop distances, the sprite scale and the audio switch.
     void defineControls() override {
@@ -142,6 +146,29 @@ public:
         controls_.addControl("dropY", dropY, 1, 12);
         controls_.addControl("size", size, 1, 4);
         controls_.addControl("audioReactive", audioReactive);
+        // Live state a fader, a button or an input drives, never written to flash.
+        controls_.addControl("player", player, 0, 255);
+        controls_.setLive(controls_.count() - 1);
+        // A button: a press is the event, so nothing stays set to clear.
+        controls_.addButton("fire");
+    }
+
+    /// A write to `player` or a press of `fire` is a person playing; the press queues a shot for the next frame.
+    void onControlChanged(const char* name) override {
+        const bool isFire = std::strcmp(name, "fire") == 0;
+        if (!isFire && std::strcmp(name, "player") != 0) return;
+        seat_.touch(layer() ? elapsed() : 0);
+        if (isFire) firePending_ = true;
+    }
+
+    /// The cannon's left edge in pixels, for tests.
+    int16_t cannonForTest() const { return cannonX_; }
+    /// How many cannon shots are in the air, for tests.
+    uint8_t cannonShotsForTest() const {
+        uint8_t n = 0;
+        for (uint8_t i = 0; i < kShots; i++)
+            if (shotTtl_[i] != 0 && shotDir_[i] < 0) n++;
+        return n;
     }
 
     /// Reset the march clock and deal a fresh formation.
@@ -161,7 +188,19 @@ public:
         // `level` against its own smoothed average: the same beat test the moving-head effect uses.
         const bool beat = live && audio->level > audio->levelSmoothed + kBeatMargin;
 
+        // A held cannon sits where its control says and fires on request; a free one is played, and its control follows it.
+        human_ = seat_.held(elapsed());
+        const int16_t maxX = static_cast<int16_t>(width() - invart::GW * scale());
+        if (human_) {
+            cannonX_ = maxX > 0 ? static_cast<int16_t>(static_cast<int32_t>(player) * maxX / 255) : 0;
+            if (firePending_ && !cannonShotInFlight())
+                spawnShot(static_cast<int16_t>(cannonX_ + (invart::GW * scale()) / 2),
+                          static_cast<int16_t>(height() - invart::GH * scale()), -1);
+        }
+        firePending_ = false;
+
         advance(beat, audio != nullptr, live);
+        if (!human_ && maxX > 0) player = static_cast<uint8_t>(static_cast<int32_t>(cannonX_) * 255 / maxX);
         drawFormation(cv);
         drawShots(cv);
         drawCannon(cv);
@@ -239,7 +278,14 @@ private:
             ox_ = nx;
         }
         fireInvaderShot();
-        aimCannon();
+        if (!human_) aimCannon();
+    }
+
+    /// Whether the cannon already has a shot in the air, the arcade's one-at-a-time rule.
+    bool cannonShotInFlight() const {
+        for (uint8_t i = 0; i < kShots; i++)
+            if (shotTtl_[i] != 0 && shotDir_[i] < 0) return true;
+        return false;
     }
 
     // Cell size comes from the widest sprite, so the ranks line up however their art differs.
@@ -409,6 +455,9 @@ private:
     uint8_t  shotTtl_[kShots] = {};
     uint32_t tickSeed_ = 0;
     BeatPhase formation_;
+    PlayerSeat seat_;              ///< who holds the cannon
+    bool     human_ = false;       ///< this frame's answer, read once
+    bool     firePending_ = false; ///< a press of `fire` waiting for the next frame
 };
 
 }  // namespace mm

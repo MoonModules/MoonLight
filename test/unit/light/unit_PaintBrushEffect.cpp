@@ -6,9 +6,9 @@
 #include "light/effects/PaintBrushEffect.h"
 #include "light/layouts/GridLayout.h"
 #include "core/services/AudioService.h"
-#include "platform/platform.h"   // setTestNowMs — deterministic virtual time
+#include "platform/platform.h"   // setTestNowMs: deterministic virtual time
 
-// PaintBrushEffect is audio-driven: it draws a set of oscillating lines whose length is scaled by an audio band's magnitude (bands from AudioService::latestFrame(), a process-wide static), fading the field a little each frame so the moving strokes leave trails. A line only draws when it is longer than minLength, and a band of 0 yields length 0, so silence draws nothing and fades to dark. To feed a signal on the host (no I2S mic) a live AudioService runs in a simulate "always" mode, synthesizeFrame() fills the bands each tick() off platform::millis(). The clock is frozen with setTestNowMs so the frame (and the effect's own oscillators, which read elapsed()==millis()) are deterministic. Each case that needs audio brackets its own AudioService setup()/release() via the guard so it never leaks the active-mic pointer or the frozen clock into another test file.
+// Lines oscillate with a length scaled by their band, so silence draws nothing; a frozen clock makes the frame and the oscillators deterministic.
 
 namespace {
 
@@ -24,7 +24,7 @@ struct AudioGuard {
 // Bring the mic up in "music (always)" at a frozen time so every band carries a magnitude and the synthesized frame is deterministic; several loops let the levelSmoothed EMA settle.
 void driveMusic(mm::AudioService& mic, uint32_t ms) {
     mic.defineControls();
-    mic.simulate = 3;   // music, always — keeps every band non-zero (loud, broadband)
+    mic.simulate = 3;   // music, always: keeps every band non-zero (loud, broadband)
     mm::platform::setTestNowMs(ms);
     mic.setup();
     for (int i = 0; i < 8; i++) mic.tick();   // fill the frame off the frozen clock
@@ -59,7 +59,11 @@ TEST_CASE("PaintBrushEffect draws lit strokes from a live audio frame") {
     layer.addChild(&fx);
     layer.applyState();
 
-    layer.tick();   // draws the oscillating lines for the current (frozen) frame
+    // Several frames of virtual time: at the first, every oscillator reads the same phase and each line has no length.
+    for (uint32_t i = 1; i <= 10; i++) {
+        mm::platform::setTestNowMs(500 + i * 100);
+        layer.tick();
+    }
 
     auto& buf = layer.buffer();
     REQUIRE(buf.count() == 256);
@@ -104,7 +108,7 @@ TEST_CASE("PaintBrushEffect stays black on silence") {
     CHECK_FALSE(anyLit);
 }
 
-// The minLength gate suppresses strokes: raised to its maximum, no line is ever long enough to draw, so even a loud broadband frame leaves the buffer black, the gate, not the audio, decides.
+// Raised to its maximum, minLength suppresses every stroke, so even a loud frame leaves the buffer black.
 TEST_CASE("PaintBrushEffect minLength gate suppresses all strokes") {
     mm::AudioService mic;
     AudioGuard guard{mic};

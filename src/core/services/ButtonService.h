@@ -22,9 +22,7 @@ namespace mm {
 ///
 /// Through the one control-set primitive every transport uses.
 /// So a press and a message are indistinguishable to whatever they drive.
-/// A row names its target as a module and a control.
-/// Pointing one at the surface puts the button where every transport reaches it.
-/// Pointing it at a driver drives that control directly, by the same mechanism.
+/// A row names a surface control, so the button lands where every transport reaches it.
 ///
 /// ## Momentary against latching
 ///
@@ -141,6 +139,7 @@ public:
     /// Rebuild the rows from the persisted list, then open every pin they name.
     bool restoreList(const char* json, const char* key) override {
         count_ = 0;
+        unsigned dropped = 0;
         const bool ok = mm::json::forEachListElement(json, key,
             [&](const mm::json::JsonDoc& doc, const mm::json::JsonNode* el) {
                 if (count_ >= kMaxRows) return;
@@ -149,16 +148,9 @@ public:
                 r.id = nextId_++;
                 r.pin = static_cast<int8_t>(mm::json::readInt(mm::json::member(doc, el, "pin")));
                 r.activeLow = mm::json::readBool(mm::json::member(doc, el, "activeLow"));
-                mm::json::readString(mm::json::member(doc, el, "target"),
-                                     r.action.target, sizeof(r.action.target));
-                char kind[16] = {};
-                mm::json::readString(mm::json::member(doc, el, "kind"), kind, sizeof(kind));
-                r.action.kind = std::strcmp(kind, "set") == 0   ? InputAction::Kind::Set
-                              : std::strcmp(kind, "delta") == 0 ? InputAction::Kind::Delta
-                                                                : InputAction::Kind::Toggle;
-                r.action.value =
-                    static_cast<int16_t>(mm::json::readInt(mm::json::member(doc, el, "value")));
+                if (!readInputAction(doc, el, r.action)) dropped++;
             });
+        reportOffSurface(*this, statusBuf_, sizeof(statusBuf_), dropped);
         beginPins();   // a restored row is only a row until its pin is opened
         return ok;
     }

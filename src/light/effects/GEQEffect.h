@@ -29,8 +29,8 @@ namespace mm {
 /// Silence flattens the bars and the peaks fall away.
 class GEQEffect : public EffectBase {
 public:
-    /// Catalog tags: MoonLight origin, WLED lineage, audio-reactive.
-    const char* tags() const override { return "💫🐙🎶"; }
+    /// Catalog tags: WLED origin, audio-reactive.
+    const char* tags() const override { return "🐙🎶"; }
     /// Writes the z=0 slice, which extrude fills through a volume.
     Dim dimensions() const override { return Dim::D2; }
 

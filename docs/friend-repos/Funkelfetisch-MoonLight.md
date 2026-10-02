@@ -1,10 +1,18 @@
 # Funkelfetisch/MoonLight: monthly activity digest
 
-What landed on [Funkelfetisch/MoonLight](https://github.com/Funkelfetisch/MoonLight), month by month. External-context reference, a factual log of a friend repo's activity, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md).
+What landed on [Funkelfetisch/projectMM](https://github.com/Funkelfetisch/projectMM) (earlier named Funkelfetisch/MoonLight), month by month. External-context reference, a factual log of a friend repo's activity, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md).
 
 This is a **fork of this project** building a commercial product on it: **HELIO**, a physical "infinity sphere" lamp (a warm-white 3000 K RGBW strip inside a clear acrylic shell). The fork's own plan documents describe matching a browser preview to "the transmitted LED frame, warm-white output, clear acrylic, internal reflections, and optional wall bounce", and its firmware carries a `helio1` sdkconfig variant, a curated preset player, and a branded update channel. The README is unchanged from ours, so this is MoonLight plus a product layer rather than a rebrand.
 
 **Branch note: the work is not on the default branch.** `main` tracks our upstream and has not moved since 2026-07-09; every change lives in named branches, so each month below carries a **Branches** line for what moved on them. The repository has no issues and publishes no releases.
+
+## September 2026
+
+Dormant month: no commit on any branch.
+
+- **Branches:** none moved. The most recent activity anywhere is `codex/helio-private-wip` on 2026-08-21, and `main` last moved 2026-07-09.
+
+_Checked: after `git fetch --all --tags`, commits on `origin/main` and on all 9 remote branches for 2026-09-01..2026-10-01 (0); releases published (none); issue search `repo:Funkelfetisch/projectMM is:issue created:2026-09-01..2026-09-30` and the same with `closed:` (0 results each). The repository now answers to `Funkelfetisch/projectMM`, and `Funkelfetisch/MoonLight` no longer resolves through the API._
 
 ## August 2026
 

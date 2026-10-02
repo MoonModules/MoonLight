@@ -2,6 +2,46 @@
 
 What landed on [FastLED](https://github.com/FastLED/FastLED)'s main branch, month by month. External-context reference (like the v1/v2/MoonLight inventories), a factual log of a friend repo's releases, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these digests lives in [README.md](index.md).
 
+## September 2026
+
+No release cut this month (3.10.4, 2026-06-16, remains the published release; master's manifest and the unreleased 3.10.5 tag are unchanged in meaning), so the month is not split. The month is dominated by the color pipeline reaching the output path, a family of "slim bridge" driver conversions across many boards, and the Raspberry Pi Pico family being hardened on real hardware.
+
+**New**
+- The profiled color pipeline now runs when a strip is shown: a channel bound to a color profile gets datasheet-aware color, gamut mapping for RGB, RGBW and two-white (RGBWW) strips, and an RGBW target-white override.
+- Managed strips get temporal dithering and chipset-aware quantization: APA102 and SK9822 solve their 5-bit brightness field and color together, LPD8806 and LPD6803 quantize once at wire width, and HD108 and the 16-bit encoders now take the full device drive instead of an 8-bit value widened by a gamma table.
+- The power limiter understands the new pipeline: it charges for the drive actually solved, for the extra white diode on RGBW strips, and can report when it lowers brightness.
+- `.fled` files can declare their source color, and the video builder can write it.
+- Clocked `addLeds<>` strips on SAMD21/SAMD51, Teensy 4 (ObjectFLED), and ESP32 RMT4 and clockless SPI go through the shared "slim bridge" controller, with similar conversions tracked for STM32, nRF52, AVR, LPC and others.
+- New chipsets: TM1908 and OSTW2020C1E (both long-standing requests).
+- A libm-free `fl::exp` accurate to 1 ulp on every target, a float-free fixed-point cube root and 3x3 inverse, and a faster Q16.16 divide on cores with a hardware divider.
+- ARMv8-A builds now dispatch to the existing NEON SIMD backend.
+- MoodRing example is rebuilt as a listener plus painter with continuous blending.
+- MP3: the fixed-point minimp3 decoder gets a faster IMDCT, is verified on real hardware, and no longer clamps samples to 1.0.
+- Browser/WASM preview shows real loop and render frame rates, and falls back to main-thread rendering when the browser lacks WebGL2 offscreen canvas.
+- `fl::getEmbeddedFs()` can be backed by a real directory on the host.
+- Native `fetch()` sends the request's method, headers and body.
+- An opt-in boot-loop escape for the ESP32 bootloader.
+- A `bash release` workflow tags and publishes releases on merge.
+
+**Fixed**
+- 1-D Perlin noise now has a gradient in every hash bucket (open since 2018, #1114).
+- Raspberry Pi Pico: strips on independent PIO blocks transmit concurrently, data pins idle low, PIO/DMA/pin contention is reported rather than failing silently, resources are released when a controller is destroyed (open since 2020, #1471), and the UART baud ceiling follows the real peripheral clock.
+- Pico 2 W: the hang in WiFi connect on the 7th peer cycle (#4173) and several steps of the over-the-air update flow (#3956) are fixed.
+- The bit-bang driver no longer stretches every WS2812 bit with a constant per-byte overhead (#4203).
+- HD-class chipset encoders no longer halve the strip (#4321), and the rgb16 adapter yields the pixel rather than the correction.
+- Screenmap files no longer publish an unset-diameter sentinel or write a made-up pin into every v2 segment (#3322).
+- Large floats no longer print as -21474836.48.
+- Palette cross-fade at zero budget or zero opacity, JSON writer nesting depth, and frame-timer overflow are all bounded.
+- Windows builds of the new `fetch()` compile cleanly, and STM32 register names no longer collide with CMSIS macros.
+- The ATmega8/8A are put in the tiny-memory tier, and ATtiny85 builds compile out the dither power reserve.
+
+**Watching**
+- The proposed MIT to "FastLED Reciprocal License" change (#4046) is still open; the `LICENSE` file on master is still MIT.
+- The color pipeline phases are largely closed out this month (P1, P6, P7, P8, P9 issues #4035, #4040 through #4043 all closed), with a review burndown (#4156) closed too.
+- CI cost is under study: a 20-minute Linux unit job (#4529) and cutting routine Actions usage (#4543) are open, and the full example sweep moved to nightly.
+
+_Auditability: 375 commits on `origin/master` with author-date 2026-09-01..2026-09-30 via `git log --first-parent` (range 4c3c3e9... newest ec0a0f35ef, oldest a530181a8f; the first-parent view counts 386 by committer date). Issues via `search/issues` for `repo:FastLED/FastLED+is:issue+created:2026-09-01..2026-09-30` (172 opened) and `repo:FastLED/FastLED+is:issue+closed:2026-09-01..2026-09-30` (201 closed); only user-facing ones surfaced, and many are the project's own tracking issues. No versioned release published in September (`repos/FastLED/FastLED/releases`, latest 3.10.4). Internal study/CI/test/lint/refactor commits are omitted._
+
 ## August 2026
 
 No release cut this month (3.10.4, 2026-06-16, remains the published release, with the 3.10.5 tag on master unreleased), so the month is not split. Three threads dominate: filling in long-standing chipset and board gaps from very old issues, bringing the Raspberry Pi Pico 2 W online with WiFi and Bluetooth, and replacing the MP3 decoder.

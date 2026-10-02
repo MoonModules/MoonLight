@@ -24,6 +24,33 @@ MoonLight ships **no migration code**: the persistence layer is robust by defaul
 
 ## Unreleased
 
+### Network services share `addressing` and `hosts`
+
+**Action: *re-set a control*.**
+
+Every service that sends to many receivers names the choice the same way: `addressing` (unicast, multicast, broadcast, as the protocol allows) and `hosts`, a list of addresses and names such as `panel-01.local`.
+The Network Send driver's `ips` and `lightsPerIp` become `hosts` and `lightsPerHost`; OSC's `feedbackTo` becomes `hosts`; Devices' `wledCompatible` becomes `addressing` (on is `multicast + broadcast`).
+A backup restored through the File Manager carries all of these over; on a device updated in place, enter the hosts and the addressing again.
+The `E1.31 multicast` protocol option is gone: such an output comes back as `E1.31`, so set its `addressing` to `multicast`.
+Presence packets now mark which copy they are. A device on an older firmware therefore lists a newer one as MoonLight and as WLED in turn, so update every board in one go.
+Devices' `addressing` defaults to `multicast + broadcast`, so WLED devices list MoonLight devices without a setting.
+
+### Inputs target the control surface only
+
+**Action: *re-set a control*.**
+
+A button, analog, infrared or gamepad row names a surface control (`Control.switch1`, `encoder3`, `fader2`, `pad5`); the [Control](../moonmodules/core/system.md#control) card decides what that control drives.
+A saved row that named another control directly, such as `Drivers.on`, comes back unassigned, and the service's status says how many.
+Point the row at a surface control and give that control the target the row had.
+OSC's `/mm/control/<Module>/<control>` address is gone for the same reason; send to `/mm/fader/N`, `/mm/encoder/N` or `/mm/switch/N`.
+
+### Pong keeps its own clock
+
+**Action: *nothing*.**
+
+Pong's `audioReactive` is gone, since a ball that moved only on the beat read as a stalled game.
+The rally always runs on its clock, and a saved value is ignored.
+
 ### A v5 device updates through v6.0.0
 
 **Action: *nothing* on a device already on v6.0.0. A device on v5 installs v6.0.0 first, then this release.**
