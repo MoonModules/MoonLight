@@ -9,6 +9,7 @@
 
 #include <cstring>
 #include <string>    // std::string: named explicitly, GCC does not pull it in transitively
+#include <vector>    // the client frames the /ws tests build
 
 // Pins the transport-free apply-core that HttpServerModule exposes, applyAddModule / applySetControl / applyClearChildren / applyOp. These are the operations the HTTP /api/modules + /api/control handlers do, factored out of the TcpConnection so BOTH the HTTP path and the Improv-serial APPLY_OP path drive one shared implementation ("Improv = REST over serial"). Testing them directly here, without a socket, is the unit-test win of the extraction: the apply logic is now provable in isolation. Also exercises the robustness rule (the apply-core tolerates bad input, unknown module, unknown type, malformed op, without crashing, returning a typed result instead).
 
@@ -649,4 +650,40 @@ TEST_CASE("the preview uplink parser refuses oversized and extended-length frame
     used = 7;
     CHECK(mm::HttpServerModule::parsePreviewUplink(ext64, sizeof(ext64), out, &used) == -1);
     CHECK(used == 0);
+}
+
+namespace {
+/// A client text frame, masked as RFC 6455 requires.
+std::vector<uint8_t> clientTextFrame(const std::string& text) {
+    std::vector<uint8_t> f;
+    f.push_back(0x81);
+    if (text.size() < 126) f.push_back(static_cast<uint8_t>(0x80 | text.size()));
+    else { f.push_back(0x80 | 126); f.push_back(static_cast<uint8_t>(text.size() >> 8)); f.push_back(static_cast<uint8_t>(text.size() & 0xff)); }
+    const uint8_t mask[4] = {0x12, 0x34, 0x56, 0x78};
+    f.insert(f.end(), mask, mask + 4);
+    for (size_t i = 0; i < text.size(); i++) f.push_back(static_cast<uint8_t>(text[i] ^ mask[i & 3]));
+    return f;
+}
+}  // namespace
+
+// The input bridges write over the open socket, so several writes can share one read and the last one can arrive cut in half.
+TEST_CASE("control writes over /ws: frames sharing a read all apply, and a cut frame waits for the rest") {
+    const std::string a = "{\"module\":\"Midi\",\"control\":\"midi\",\"value\":\"e07f7f\"}";
+    const std::string b = "{\"module\":\"Gamepad\",\"control\":\"pad\",\"value\":\"1,128,128,128,128\"}";
+    std::vector<uint8_t> buf = clientTextFrame(a);
+    const std::vector<uint8_t> second = clientTextFrame(b);
+    buf.insert(buf.end(), second.begin(), second.end());
+    std::vector<std::string> seen;
+    const size_t whole = mm::HttpServerModule::walkWsTextFrames(buf.data(), buf.size(), [&](const char* t) { seen.emplace_back(t); });
+    CHECK(whole == buf.size());
+    REQUIRE(seen.size() == 2);
+    CHECK(seen[0] == a);
+    CHECK(seen[1] == b);
+
+    // Cut the second frame short: the first applies, the cut one is left for the next read.
+    seen.clear();
+    const size_t cut = buf.size() - 10;
+    const size_t used = mm::HttpServerModule::walkWsTextFrames(buf.data(), cut, [&](const char* t) { seen.emplace_back(t); });
+    CHECK(seen.size() == 1);
+    CHECK(used == buf.size() - second.size());
 }

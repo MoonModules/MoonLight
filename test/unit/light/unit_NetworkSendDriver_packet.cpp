@@ -322,7 +322,7 @@ bool panelAt80(const char* name, uint8_t* ip) {
 
 // A name is looked up off the render thread, so it sends nothing until it resolves while the addresses beside it keep sending.
 TEST_CASE("NetworkSendDriver: a named host waits for its address while the others send") {
-    mm::HostResolver::useForTest(&panelAt80);
+    const mm::HostResolver::TestScope resolver(&panelAt80);
     mm::Buffer src;
     src.allocate(300, 3);
     mm::NetworkSendDriver d;

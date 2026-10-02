@@ -154,9 +154,11 @@ public:
                         draw::pixel(cv, {static_cast<lengthType>(x), static_cast<lengthType>(h - 1 - i), 0}, lut[d.col >> 3]);
                 } else {
                     // Landed: remember the brick's color, grow the stack, then blank-delay a full column or idle.
-                    if (hasStacks)
-                        for (uint16_t i = d.stack; i < d.stack + d.brick && i < static_cast<uint16_t>(h); i++)
-                            stackCol_[static_cast<size_t>(x) * h + i] = d.col;
+                    if (hasStacks) {
+                        // One wide bound, so the loop index never compares against a sum it cannot hold.
+                        const int top = d.stack + d.brick < static_cast<int>(h) ? d.stack + d.brick : static_cast<int>(h);
+                        for (int i = d.stack; i < top; i++) stackCol_[static_cast<size_t>(x) * h + static_cast<size_t>(i)] = d.col;
+                    }
                     d.step = 0;
                     d.stack = static_cast<uint16_t>(d.stack + d.brick);
                     if (d.stack >= static_cast<uint16_t>(h)) d.step = now + 2000;

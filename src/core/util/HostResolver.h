@@ -2,7 +2,7 @@
 
 #include "core/util/HostList.h"   // kMaxHostName
 #include "core/util/TryLock.h"    // the cache is shared between the asking thread and the lookup task
-#include "platform/platform.h"    // resolveHost, millis, and the worker task seam
+#include "platform/platform.h"    // resolveHost, millis, yield, and the worker task seam
 
 #include <atomic>
 #include <cstdint>
@@ -61,14 +61,24 @@ public:
         return State::Waiting;
     }
 
-    /// Replace the platform lookup and keep the task from starting, so a test drives the passes itself.
-    static void useForTest(bool (*resolve)(const char*, uint8_t*)) {
-        Self& s = self();
-        s.resolve = resolve;
-        s.testMode = true;
-        ensureStarted();
-        for (uint8_t i = 0; i < kSlots; i++) s.slots[i] = Slot{};
-    }
+    /// For a test's scope, replace the platform lookup with an empty cache and no task, so the test drives the passes itself.
+    struct TestScope {
+        /// Install the fake lookup.
+        explicit TestScope(bool (*resolve)(const char*, uint8_t*)) { use(resolve); }
+        /// Restore the platform lookup, so no later test inherits the fake.
+        ~TestScope() { use(&platform::resolveHost); }
+        /// Not copyable, since one scope owns the swap.
+        TestScope(const TestScope&) = delete;
+        TestScope& operator=(const TestScope&) = delete;
+    private:
+        static void use(bool (*resolve)(const char*, uint8_t*)) {
+            Self& s = self();
+            s.resolve = resolve;
+            s.testMode = true;
+            ensureStarted();
+            for (uint8_t i = 0; i < kSlots; i++) s.slots[i] = Slot{};
+        }
+    };
 
     /// Run one lookup pass on the calling thread, as the task would.
     static void passForTest() { pass(self()); }
@@ -113,7 +123,7 @@ private:
         for (uint8_t i = 0; i < kSlots; i++) {
             char name[kMaxHostName + 1];
             {
-                while (!s.lock.tryAcquire()) {}   // the asking side holds it for microseconds
+                while (!s.lock.tryAcquire()) platform::yield();   // the asking side holds it for microseconds
                 Slot& slot = s.slots[i];
                 const uint32_t now = platform::millis();
                 // A name nobody asked for in ten minutes is freed rather than looked up forever.
@@ -126,7 +136,7 @@ private:
             }
             uint8_t ip[4] = {};
             const bool ok = s.resolve(name, ip);   // blocking, with the cache free
-            while (!s.lock.tryAcquire()) {}
+            while (!s.lock.tryAcquire()) platform::yield();
             Slot& slot = s.slots[i];
             if (std::strcmp(slot.name, name) == 0) {   // the slot may have been reused meanwhile
                 slot.looked = true;

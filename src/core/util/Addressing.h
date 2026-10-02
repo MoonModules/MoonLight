@@ -1,7 +1,6 @@
 #pragma once
 
 #include "core/util/HostList.h"   // Host: a unicast send goes to each parsed host
-#include "platform/platform.h"       // this device's own address
 
 #include <cstdint>
 
@@ -28,7 +27,7 @@ inline constexpr uint8_t kBroadcastAddress[4] = {255, 255, 255, 255};
 
 /// What the network has proven about multicast, set by discovery's evidence.
 struct NetworkPath {
-    /// A peer arrived over broadcast and never over multicast, so the group does not reach this device.
+    /// A peer's presence kept arriving over broadcast with no multicast copy, so the group does not reach this device.
     static inline bool multicastDropped = false;
 };
 
@@ -42,12 +41,6 @@ enum class Traffic : uint8_t {
 inline bool alsoBroadcast(Addressing mode, Traffic traffic) {
     return mode == Addressing::MulticastBroadcast
         || (mode == Addressing::Multicast && traffic == Traffic::Occasional && NetworkPath::multicastDropped);
-}
-
-/// This device's own address, from whichever interface is up, or 0.0.0.0 before either is.
-inline void localIPv4(uint8_t out[4]) {
-    platform::ethGetIPv4(out);
-    if (!out[0] && !out[1] && !out[2] && !out[3]) platform::wifiStaGetIPv4(out);
 }
 
 /// Send one packet where `mode` says through `send(ip)`, skipping a named host not resolved yet.

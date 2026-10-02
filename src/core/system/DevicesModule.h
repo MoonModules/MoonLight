@@ -190,7 +190,7 @@ public:
     void tick1s() MM_NONBLOCKING override {
         MoonModule::tick1s();
         uint8_t local[4] = {};
-        localIPv4(local);
+        platform::localIPv4(local);
         const bool online = local[0] || local[1] || local[2] || local[3];
         if (!online) return;   // no network yet — nothing to discover
 
@@ -238,8 +238,7 @@ private:
                                  ///< Age-out drops a non-self device unheard for kStaleMs.
         uint8_t  colorCount = 0; ///< Hue bridge only: how many of its lights are color-capable
                                     ///< (the figure for sizing a layout). 0 for non-bridge rows.
-        uint8_t  viaMulticast = 0;   ///< presence copies heard on the group, saturating
-        uint8_t  viaBroadcast = 0;   ///< presence copies heard on the broadcast address, saturating
+        uint8_t  broadcastRun = 0;   ///< broadcast copies since this peer's last multicast one, saturating
     };
 
     /// The seat behind `active()`, claimed on build and vacated on release.
@@ -256,7 +255,7 @@ private:
     static constexpr int      kMaxDrainPerTick = 16;
     /// How long after the listener opens presence goes out both ways, the bootstrap for the evidence.
     static constexpr uint32_t kBothWaysMs = 2u * 60u * 1000u;
-    /// How many broadcast copies with no multicast one prove the group does not arrive.
+    /// How many broadcast copies in a row, with no multicast one between them, prove the group does not arrive.
     static constexpr uint8_t  kEvidence = 3;
 
     // Order matters: ours is first, so a peer's marked packet is typed before the fallback.
@@ -329,15 +328,19 @@ private:
                       });
     }
 
-    /// Count which way a MoonLight peer's presence arrived, and prove the network drops multicast when only broadcast does.
+    /// Track which way a MoonLight peer's presence arrives, and prove the network drops multicast when only broadcast keeps arriving.
     void noteCopy(const uint8_t ip[4], bool broadcast) {
         Device* d = findByIp(ip);
         if (!d || d->self) return;   // our own copies loop back and prove nothing
-        uint8_t& count = broadcast ? d->viaBroadcast : d->viaMulticast;
-        if (count < 255) count++;
-        // A multicast copy from any peer proves the group arrives after all, a slow join being the likelier story.
-        const bool dropped = broadcast ? NetworkPath::multicastDropped || (d->viaBroadcast >= kEvidence && d->viaMulticast == 0)
-                                       : false;
+        bool dropped = NetworkPath::multicastDropped;
+        if (!broadcast) {
+            // A multicast copy from any peer proves the group arrives, a slow join being the likelier story.
+            d->broadcastRun = 0;
+            dropped = false;
+        } else if (d->broadcastRun < 255 && ++d->broadcastRun == kEvidence) {
+            // Only the run reaching the threshold sets it, so a peer whose group never arrives cannot undo another's multicast every ten seconds.
+            dropped = true;
+        }
         if (dropped != NetworkPath::multicastDropped) {
             NetworkPath::multicastDropped = dropped;
             refreshStatus();
@@ -357,7 +360,7 @@ private:
     /// Find or insert a classified device, arming persistence only when a saved field changes.
     void upsertDevice(const uint8_t ip[4], const DiscoveredDevice& found) {
         uint8_t local[4] = {};
-        localIPv4(local);
+        platform::localIPv4(local);
         const bool isSelf = ipEq(ip, local);
         Device* d = findByIp(ip);
         bool persistChanged = false;

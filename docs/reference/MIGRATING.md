@@ -32,7 +32,7 @@ Every service that sends to many receivers names the choice the same way: `addre
 The Network Send driver's `ips` and `lightsPerIp` become `hosts` and `lightsPerHost`; OSC's `feedbackTo` becomes `hosts`; Devices' `wledCompatible` becomes `addressing` (on is `multicast + broadcast`).
 A backup restored through the File Manager carries all of these over; on a device updated in place, enter the hosts and the addressing again.
 The `E1.31 multicast` protocol option is gone: such an output comes back as `E1.31`, so set its `addressing` to `multicast`.
-Presence packets now mark which copy they are, so a device on an older firmware lists a newer one's broadcast copy as a WLED device until both are updated.
+Presence packets now mark which copy they are. A device on an older firmware therefore lists a newer one as MoonLight and as WLED in turn, so update every board in one go.
 Devices' `addressing` defaults to `multicast + broadcast`, so WLED devices list MoonLight devices without a setting.
 
 ### Inputs target the control surface only

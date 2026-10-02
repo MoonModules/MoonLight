@@ -337,6 +337,7 @@ private:
             hostName(hosts, dest_[d], name);
             uint8_t ip[4];
             const HostResolver::State st = HostResolver::lookup(name, ip);
+            if (st == HostResolver::State::Busy) return;   // the lookup task held the cache this instant: keep the status as it is
             if (st == HostResolver::State::Resolved || st == HostResolver::State::Stale) std::memcpy(dest_[d].ip, ip, 4);
             if (st == HostResolver::State::Waiting || st == HostResolver::State::Full) waiting++;
         }

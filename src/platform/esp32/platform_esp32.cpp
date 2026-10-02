@@ -1442,7 +1442,9 @@ void netSetDhcp(NetIface iface) {
 }
 
 // The discovery stack, brought up once and kept up. Advertising is gated on the user's toggle, so toggling back on re-advertises without a full restart.
-static bool mdnsStackUp_ = false;
+static std::atomic<bool> mdnsStackUp_{false};
+// Held across a name query and the stack's release, since mdns_free deletes the semaphore an in-flight query waits on.
+static std::mutex mdnsQueryMutex_;
 
 static bool ensureMdnsStack() {
     if (mdnsStackUp_) return true;
@@ -1530,7 +1532,8 @@ void mdnsStop() {
 
 // Full stack release (mdns_free), only at module release.
 void mdnsShutdown() {
-    if (mdnsStackUp_) { mdns_free(); mdnsStackUp_ = false; }
+    std::lock_guard<std::mutex> lock(mdnsQueryMutex_);   // waits out a query, at most its 2 s timeout
+    if (mdnsStackUp_) { mdnsStackUp_ = false; mdns_free(); }
 }
 
 bool resolveHost(const char* name, uint8_t ip[4]) {
@@ -1538,6 +1541,7 @@ bool resolveHost(const char* name, uint8_t ip[4]) {
     constexpr size_t kLocal = 6;   // ".local"
     if (len > kLocal && strcasecmp(name + len - kLocal, ".local") == 0) {
         // lwIP's DNS client does not speak mDNS, so a .local name goes to the mDNS stack, only while the network module keeps it up.
+        std::lock_guard<std::mutex> lock(mdnsQueryMutex_);
         if (!mdnsStackUp_) return false;
         char host[64];
         const size_t n = std::min(len - kLocal, sizeof(host) - 1);

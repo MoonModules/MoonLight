@@ -495,6 +495,11 @@ bool wifiStaInit(const char* ssid, const char* password);
 bool wifiStaConnected() MM_NONBLOCKING;
 /// The station's IP as raw octets, on ethGetIPv4's contract.
 void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING;
+/// This device's IP from whichever interface is up, Ethernet first, all-zero before either is.
+inline void localIPv4(uint8_t out[4]) {
+    ethGetIPv4(out);
+    if (!out[0] && !out[1] && !out[2] && !out[3]) wifiStaGetIPv4(out);
+}
 /// Tear the station down.
 void wifiStaStop();
 

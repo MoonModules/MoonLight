@@ -166,7 +166,8 @@ Checked against the tools a lighting or VJ operator already knows. The shape mat
 - ✅ The desk's state goes out within 40 ms: a module calls `notifyValuesChanged()` and the server patches that module alone on the next 20 ms tick, at most 25 times a second.
 - Outbound, open: scribble strips over SysEx.
 - Learn for a desk without a profile, and the OpenLamp convention as the generic fallback mapping where it fits.
-- Verify the outbound half with the X-Touch and the QCon: a preset change moves the faders, and a touched fader is not fought.
+- ✅ Verified the outbound half with the QCon: the motors follow the surface, a self-playing Pong included, and a touched fader holds only the desk's own motor while OSC boards keep following.
+- Verify the outbound half with the X-Touch, and a preset change moving the faders.
 
 ### 3. Surface-only input targets ✅
 

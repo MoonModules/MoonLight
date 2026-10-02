@@ -159,13 +159,6 @@ public:
                 std::memcpy(peer_, src, 4);
                 resendAll_ = true;
                 peerWasFresh_ = false;   // a new address: let the next tick1s say so
-                // Persisted, so a rig survives a reboot; only an empty list is filled.
-                if (!hosts_[0]) {
-                    formatDottedQuad(hosts_, src);
-                    hostsParsed_ = false;
-                    markDirty();
-                    FilesystemModule::noteDirty();
-                }
             }
             handle(pkt, static_cast<size_t>(n));
         }

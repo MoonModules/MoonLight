@@ -518,6 +518,16 @@ async function errorMessage(res) {
     return `HTTP ${res.status}`;
 }
 
+// A write over the open /ws socket rather than a POST: the input bridges write up to 30 times a second, and a board
+// accepts and closes a TCP connection per POST on its render thread. Falls back to a POST while the socket is down.
+function sendControlLive(moduleName, controlName, value) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({module: moduleName, control: controlName, value: value}));
+        return;
+    }
+    sendControl(moduleName, controlName, value);
+}
+
 async function sendControl(moduleName, controlName, value) {
     // Eagerly update the local `state` to what we just sent: the standard controlled-input
     // pattern. Without this, `state` keeps the OLD value until the device echoes the change back in a
@@ -8325,7 +8335,7 @@ let gamepadSentAt = 0;
 document.addEventListener("visibilitychange", () => {
     if (!document.hidden || !gamepadLast || gamepadLast === "0,128,128,128,128") return;
     gamepadLast = "0,128,128,128,128";
-    for (const m of allModules().filter(m => m.type === "GamepadService")) sendControl(m.name, "pad", gamepadLast);
+    for (const m of allModules().filter(m => m.type === "GamepadService")) sendControlLive(m.name, "pad", gamepadLast);
 });
 function gamepadLoop(now) {
     requestAnimationFrame(gamepadLoop);
@@ -8339,7 +8349,7 @@ function gamepadLoop(now) {
     if (encoded === gamepadLast) return;
     gamepadLast = encoded;
     gamepadSentAt = now;
-    for (const m of services) sendControl(m.name, "pad", encoded);
+    for (const m of services) sendControlLive(m.name, "pad", encoded);
 }
 requestAnimationFrame(gamepadLoop);
 
@@ -8351,7 +8361,7 @@ requestAnimationFrame(gamepadLoop);
 // The way back: the service's hidden `desk` control is what the desk shows, one message per slot,
 // and the bridge sends the desk the slots that changed since it last sent them.
 const MIDI_SEND_MS = 33;
-const MIDI_BATCH_MAX = 60;   // messages per write, well inside the service's text buffer
+const MIDI_BATCH_MAX = 40;   // messages per write, inside the device's 400-byte frame limit
 
 // "hex hex...": each message in hex; the device decodes every write, so two identical batches both count.
 function encodeMidi(messages) {
@@ -8408,7 +8418,7 @@ function midiLoop(now) {
     const batch = midiQueue.splice(0, MIDI_BATCH_MAX);
     midiSentAt = now;
     const encoded = encodeMidi(batch);
-    for (const m of services) sendControl(m.name, "midi", encoded);
+    for (const m of services) sendControlLive(m.name, "midi", encoded);
 }
 requestAnimationFrame(midiLoop);
 

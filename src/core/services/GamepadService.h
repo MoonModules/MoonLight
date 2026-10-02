@@ -83,8 +83,9 @@ public:
     void writeListRowDetail(JsonSink& sink, uint8_t row) const override {
         if (row >= count_) { sink.append("{}"); return; }
         const Row& r = rows_[row];
+        // The last option is "(none)", which is what a row with an unknown input name binds.
         sink.appendf("{\"fields\":[{\"name\":\"input\",\"type\":\"select\",\"optionsRef\":\"inputs\",\"value\":%d},",
-                     static_cast<int>(r.input < kGamepadInputCount ? r.input : 0));
+                     static_cast<int>(r.input < kGamepadInputCount ? r.input : kGamepadInputCount));
         sink.appendf("{\"name\":\"learn\",\"type\":\"button\",\"label\":\"%s\"},",
                      r.learn ? "waiting..." : "learn");
         if (isAxis(r.input)) writeInputTargetDetailField(sink, r.action);
@@ -97,10 +98,10 @@ public:
         writeInputTargetOptions(sink);
         sink.append(",\"inputs\":[");
         for (uint8_t i = 0; i < kGamepadInputCount; i++) {
-            if (i) sink.append(",");
             sink.writeJsonString(kGamepadInputs[i]);
+            sink.append(",");
         }
-        sink.append("]");
+        sink.append("\"(none)\"]");
     }
 
     /// Append a row on the first button, ready to learn.
@@ -136,7 +137,7 @@ public:
             char buf[16] = {};
             json::parseString(valueJson, "value", buf, sizeof(buf));
             const int idx = buf[0] ? inputIndex(buf) : json::parseInt(valueJson, "value");
-            if (idx < 0 || idx >= kGamepadInputCount) return false;
+            if (idx < 0 || idx > kGamepadInputCount) return false;   // kGamepadInputCount is "(none)"
             r->input = static_cast<uint8_t>(idx);
             markDirty();
             return true;

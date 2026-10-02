@@ -62,7 +62,7 @@ class Scheduler;
 /// ## What a preview client may send back
 ///
 /// Inbound `/wsp` payloads are unmasked and handed opaquely to the registered producer sink, whose vocabulary is a standing frame request and a one-shot table request.
-/// Every other mutation goes through REST.
+/// On `/ws` a client may write a control as `{"module","control","value"}`, which the input bridges use at up to 30 writes a second; every other mutation goes through REST.
 ///
 /// ## State push: a diff on the wire
 ///
@@ -294,6 +294,40 @@ public:
 
     /// Parse and unmask one client frame from a `/wsp` read, returning its payload length or -1.
     static int parsePreviewUplink(const uint8_t* buf, int n, uint8_t out[8], int* consumed);
+    /// The longest text frame a client writes, a MIDI batch included.
+    static constexpr size_t kWsTextMax = 400;
+    /// Hand each complete masked text frame in `buf` to `onText`, returning how many bytes it consumed; a frame cut off at the end is left unconsumed.
+    template <class OnText>
+    static size_t walkWsTextFrames(const uint8_t* buf, size_t total, OnText&& onText) {
+        size_t off = 0;
+        while (off + 6 <= total) {
+            const uint8_t* fr = buf + off;
+            const uint8_t opcode = fr[0] & 0x0f;
+            const bool masked = fr[1] & 0x80;
+            size_t len = fr[1] & 0x7f;
+            size_t hdr = 2;
+            if (len == 126) {
+                if (off + 4 > total) break;
+                len = (size_t(fr[2]) << 8) | fr[3];
+                hdr = 4;
+            } else if (len == 127) {
+                return total;                             // a frame over 64 KB is not ours: drop the read
+            }
+            if (!masked) return total;                    // a client frame must be masked (RFC 6455): drop the read
+            const size_t frameLen = hdr + 4 + len;        // header, mask key, payload
+            if (off + frameLen > total) break;            // the rest arrives in a later read
+            if (opcode == 0x1 && len < kWsTextMax) {
+                const uint8_t* mask = fr + hdr;
+                char body[kWsTextMax];
+                for (size_t i = 0; i < len; i++) body[i] = static_cast<char>(fr[hdr + 4 + i] ^ mask[i & 3]);
+                body[len] = 0;
+                onText(body);
+            }
+            off += frameLen;
+        }
+        return off;
+    }
+
 
     /// Take the sender lease, guarding the send state against this module's own drain and push.
     bool tryAcquireSend() override { return wsLock_.tryAcquire(); }
@@ -460,6 +494,10 @@ private:
     // Routes any module's schema change to the live instance's resync request.
     static void onSchemaChanged();
     static inline HttpServerModule* instance_ = nullptr;
+    // One frame cut in half by a read waits here for the rest, for one client at a time: the bridges' writes are small.
+    uint8_t  carry_[kWsTextMax + 16] = {};
+    size_t   carryLen_ = 0;
+    int      carryClient_ = -1;
     uint16_t boundPort_ = 0;   // the port open() actually bound; 0 when no server is live
 
     // Obfuscation, not a secret: it only stops a password being plainly readable in a response.

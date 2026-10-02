@@ -90,6 +90,13 @@ judgment per line. Do it as its own change with its own review, a directory at a
 inside a branch about something else: a blanket find-and-replace over comments is how a code
 identifier gets rewritten by accident.
 
+## Test hooks appear in the generated API pages (2026-10-02)
+
+check_docgen requires a `///` on every public function, so a test hook gets one, and Doxygen then publishes it: 69 `*ForTest` functions across 21 API pages, plus `HostResolver::TestScope`.
+One rule fixes the class: a test hook's name ends in `ForTest`, `gen_api.py` sets `EXCLUDE_SYMBOLS = *ForTest`, and check_docgen exempts those names from the `///` rule, a `//` line serving the source reader.
+The stragglers get renamed to fit, such as `TestScope` and `platform::setTestNowMs`, and documentation-standards.md gains the rule in one sentence.
+A change of its own, since it renames symbols across the repo and moves the docgen counts.
+
 ## Distribution
 
 ### The arm64 `.deb` is untested on Raspberry Pi OS bookworm (2026-09-13)

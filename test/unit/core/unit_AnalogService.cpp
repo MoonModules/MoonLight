@@ -208,3 +208,10 @@ TEST_CASE("an unconfigured or unassigned row does nothing, quietly") {
 
     sched.release();
 }
+
+TEST_CASE("a saved analog row naming a control off the surface is left unassigned, and the status says so") {
+    Rig rig;
+    REQUIRE(rig.svc->restoreList("{\"inputs\":[{\"pin\":4,\"target\":\"Drivers.brightness\"}]}", "inputs"));
+    REQUIRE(rig.svc->status() != nullptr);
+    CHECK(std::strstr(rig.svc->status(), "1 row unassigned") != nullptr);
+}

@@ -1554,8 +1554,7 @@ void HttpServerModule::resolveWledIdentity(const char*& name, uint8_t mac[6], ui
     for (int i = 0; i < 6; i++) mac[i] = 0;
     platform::getMacAddress(mac);
     for (int i = 0; i < 4; i++) ip[i] = 0;
-    platform::ethGetIPv4(ip);
-    if (!ip[0] && !ip[1] && !ip[2] && !ip[3]) platform::wifiStaGetIPv4(ip);
+    platform::localIPv4(ip);
 }
 
 // The WLED info object, written into an open sink (no HTTP header).
@@ -2780,43 +2779,33 @@ void HttpServerModule::pollWledStateFromWebSockets() {
         }
     }
 
-    for (auto& ws : wsClients_) {
-        if (!ws.valid()) continue;
-        uint8_t f[512];
-        int n = ws.read(f, sizeof(f));             // non-blocking (read() returns -1 if nothing)
-        // read() == 0 is a clean peer close (FIN): reap the slot NOW so it frees for a new client. Without this the dead slot lingers until the next SEND fails (up to a tick1s later), and a rapid refresh/reconnect burst could find every slot still "valid" and be rejected ("WebSocket closed before the connection is established"). read() == -1 (nothing pending) leaves a live client alone.
+    for (int c = 0; c < MAX_WS_CLIENTS; c++) {
+        auto& ws = wsClients_[c];
+        if (!ws.valid()) { if (carryClient_ == c) carryLen_ = 0; continue; }
+        uint8_t f[768];
+        size_t have = 0;
+        // A frame the last read cut in half starts this one, so the stream never loses its framing.
+        if (carryClient_ == c && carryLen_) { std::memcpy(f, carry_, carryLen_); have = carryLen_; carryLen_ = 0; }
+        const int n = ws.read(f + have, sizeof(f) - have);   // non-blocking: -1 when nothing is pending
+        // A clean peer close (FIN) frees the slot now, so a reconnect burst finds it free.
         if (n == 0) { ws.close(); continue; }
-        if (n < 6) continue;                       // a masked text frame is ≥6 bytes
-        // A fast slider drag can land MULTIPLE small {on,bri} frames in one read.
-        // Walk every complete masked text frame in the chunk so none is dropped (apply each in order → the last value wins, matching the drag).
-        // The app's frames are tiny single-segment text frames, so partial-frame reassembly across reads isn't needed; a trailing partial frame is simply left for the next poll.
-        size_t off = 0;
-        const size_t total = static_cast<size_t>(n);
-        while (off + 6 <= total) {
-            const uint8_t* fr = f + off;
-            const uint8_t opcode = fr[0] & 0x0f;
-            const bool masked = fr[1] & 0x80;
-            size_t len = fr[1] & 0x7f;
-            size_t hdr = 2;
-            if (len == 126) {
-                if (off + 4 > total) break;
-                len = (size_t(fr[2]) << 8) | fr[3]; hdr = 4;
-            } else if (len == 127) {
-                break;                              // >64 KB control message: not ours, stop
+        const size_t total = have + static_cast<size_t>(n > 0 ? n : 0);
+        if (total == 0) continue;
+        const size_t used = walkWsTextFrames(f, total, [&](const char* body) {
+            // A control write from the interface's input bridges, which keeps them off a TCP connection per write.
+            if (mm::json::hasKey(body, "module") && mm::json::hasKey(body, "control")) {
+                char moduleName[32] = {}, controlName[32] = {};
+                mm::json::parseString(body, "module", moduleName, sizeof(moduleName));
+                mm::json::parseString(body, "control", controlName, sizeof(controlName));
+                applySetControl(moduleName, controlName, body);
+            } else if (mm::json::hasKey(body, "on") || mm::json::hasKey(body, "bri") || mm::json::hasKey(body, "ps")) {
+                applyWledState(body);   // the WLED app's {on, bri, ps}
             }
-            const size_t frameLen = hdr + 4 + len;  // header + mask key + payload (client = masked)
-            if (!masked || off + frameLen > total) break;   // incomplete/unmasked: leave for later
-            if (opcode == 0x1 && len < 200) {       // a text frame small enough to be a state-set
-                const uint8_t* mask = fr + hdr;
-                char body[200];
-                for (size_t i = 0; i < len; i++) body[i] = static_cast<char>(fr[hdr + 4 + i] ^ mask[i & 3]);
-                body[len] = 0;
-                // `ps` belongs here alongside on/bri: applyWledState handles a preset selection, but a WebSocket frame carrying ONLY ps was dropped by this gate. Choosing a preset from a WLED-native client did nothing over the socket while the same command worked over HTTP.
-                if (mm::json::hasKey(body, "on") || mm::json::hasKey(body, "bri") ||
-                    mm::json::hasKey(body, "ps"))
-                    applyWledState(body);
-            }
-            off += frameLen;
+        });
+        if (used < total && total - used <= sizeof(carry_)) {
+            std::memcpy(carry_, f + used, total - used);
+            carryLen_ = total - used;
+            carryClient_ = c;
         }
     }
 }

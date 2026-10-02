@@ -387,6 +387,8 @@ Origin: MoonLight original, after Taito's Space Invaders (1978)
 
 Detail: [technical](moxygen/SpaceInvadersEffect.md)
 
+[Tests](../../reference/tests/unit-tests.md#spaceinvaderseffect)
+
 <a id="spritefountain"></a>
 
 ### Sprite Fountain 💫🎶✨👾 · 2D
@@ -430,6 +432,8 @@ Origin: MoonLight original, after Atari's Pong (1972)
 
 Detail: [technical](moxygen/PongEffect.md)
 
+[Tests](../../reference/tests/unit-tests.md#pongeffect)
+
 <a id="breakout"></a>
 
 ### Breakout 💫🎵👾 · 2D
@@ -451,6 +455,8 @@ The brick rows take their colors from the active palette.
 Origin: MoonLight original, after Atari's Breakout (1976)
 
 Detail: [technical](moxygen/BreakoutEffect.md)
+
+[Tests](../../reference/tests/unit-tests.md#breakouteffect)
 
 <a id="aurora"></a>
 

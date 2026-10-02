@@ -183,8 +183,7 @@ private:
     /// Answer an ArtPoll with our address and name, so controllers list the device.
     void replyToPoll(const uint8_t pollerIp[4]) {
         uint8_t myIp[4];
-        platform::ethGetIPv4(myIp);
-        if (!myIp[0] && !myIp[1] && !myIp[2] && !myIp[3]) platform::wifiStaGetIPv4(myIp);
+        platform::localIPv4(myIp);
         // The desktop has no netif, so parse hostIp()'s string as the last resort.
         if (!myIp[0] && !myIp[1] && !myIp[2] && !myIp[3]) {
             if (!parseDottedQuad(platform::hostIp(), myIp)) return;  // no usable IP, so stay silent

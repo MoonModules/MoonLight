@@ -1,8 +1,6 @@
 #pragma once
 // Author: MoonLight original (Breakout, Atari 1976, is the inspiration)
 
-#include "core/services/AudioService.h"   // latestFrame: the bands the audio-reactive wall glows with
-#include "light/powerfunctions/draw.h"
 #include "light/effects/EffectBase.h"
 #include "light/effects/PlayerSeat.h"   // a person takes the paddle, the game plays it again later
 

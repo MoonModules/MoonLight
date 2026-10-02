@@ -160,8 +160,10 @@ TEST_CASE("DevicesModule: a peer heard only over broadcast proves the network dr
 TEST_CASE("DevicesModule: a peer heard both ways, or not at all, proves nothing") {
     NetworkPath::multicastDropped = false;
     DevicesModule other;
-    injectCopy(other, 63, /*broadcast=*/false);
-    for (int i = 0; i < 5; i++) injectCopy(other, 63, /*broadcast=*/true);
+    for (int i = 0; i < 5; i++) {
+        injectCopy(other, 63, /*broadcast=*/false);
+        injectCopy(other, 63, /*broadcast=*/true);
+    }
     const bool bothWays = NetworkPath::multicastDropped;
     // Silence is what a device alone on the network hears too.
     DevicesModule alone;
@@ -169,6 +171,36 @@ TEST_CASE("DevicesModule: a peer heard both ways, or not at all, proves nothing"
     NetworkPath::multicastDropped = false;
     CHECK_FALSE(bothWays);
     CHECK_FALSE(silence);
+}
+
+// A switch that forgets the group minutes in is the classic snooping failure, so multicast copies heard earlier must not hide it.
+TEST_CASE("DevicesModule: a group that stops arriving after it worked is caught") {
+    NetworkPath::multicastDropped = false;
+    DevicesModule dev;
+    for (int i = 0; i < 10; i++) {
+        injectCopy(dev, 65, /*broadcast=*/false);
+        injectCopy(dev, 65, /*broadcast=*/true);
+    }
+    const bool whileWorking = NetworkPath::multicastDropped;
+    for (int i = 0; i < 3; i++) injectCopy(dev, 65, /*broadcast=*/true);
+    const bool afterOutage = NetworkPath::multicastDropped;
+    NetworkPath::multicastDropped = false;
+    CHECK_FALSE(whileWorking);
+    CHECK(afterOutage);
+}
+
+// One peer whose group never arrives must not flip the flag back after every multicast copy from another, a status write each time.
+TEST_CASE("DevicesModule: a peer without multicast does not undo another peer's multicast every round") {
+    NetworkPath::multicastDropped = false;
+    DevicesModule dev;
+    for (int i = 0; i < 3; i++) injectCopy(dev, 66, /*broadcast=*/true);
+    const bool proven = NetworkPath::multicastDropped;
+    injectCopy(dev, 67, /*broadcast=*/false);   // another peer's multicast arrives: the group does reach us
+    for (int i = 0; i < 5; i++) injectCopy(dev, 66, /*broadcast=*/true);
+    const bool stillCleared = !NetworkPath::multicastDropped;
+    NetworkPath::multicastDropped = false;
+    CHECK(proven);
+    CHECK(stillCleared);
 }
 
 // The copy flag sits in the marker's low byte, so a peer still recognizes us whichever copy arrives.

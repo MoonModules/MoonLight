@@ -41,10 +41,10 @@ Each service then offers:
 
 | Service | Allowed modes | Default | Note |
 |---|---|---|---|
-| Device discovery | `multicast`, `multicast + broadcast` | `multicast` | replaces `wledCompatible`; the help explains that broadcast is what WLED apps listen to |
+| Device discovery | `multicast`, `multicast + broadcast` | `multicast + broadcast` | replaces `wledCompatible`; the broadcast copy is what WLED listens to |
 | OSC feedback | `the sender`, `unicast`, `multicast`, `multicast + broadcast` | `the sender` | `the sender` is today's empty `feedbackTo`; `unicast` with two addresses is one desk driving two boards |
 | Network output | `unicast` for every protocol, `multicast` for E1.31, `broadcast` for Art-Net | `unicast` | `protocol` loses its `E1.31 multicast` option and keeps the three protocols; the group is computed per universe as today |
-| WLED audio sync | `multicast` only, to `239.0.0.1` | | WLED's protocol fixes it, so no control shows |
+| WLED audio sync | `multicast` to `239.0.0.1`, `unicast` to `hosts` | `multicast` | multicast is WLED-compatible; a stream, so never a broadcast copy |
 
 **What comes out:** `wledCompatible`, `feedbackTo`, the `E1.31 multicast` protocol option, discovery's own broadcast branch, the network driver's own group sending, and audio sync's own group join and send, all replaced by the helper and one control name. The backlog items on the missing multicast fallback and on names in the host list are deleted.
 
@@ -92,7 +92,7 @@ The design from the backlog item on the missing multicast fallback, now deleted,
 
 - **After boot, discovery announces on both** multicast and broadcast for a bounded window, since two devices that each wait for evidence never produce any.
 - **Every device listens on both**, and notes for each peer which way its presence arrived.
-- **A peer heard over broadcast and never over multicast** sets the core flag: this network drops multicast. From then the helper adds a broadcast copy to every `multicast` send, and discovery keeps announcing on both.
+- **Three broadcast copies in a row from one peer, with no multicast copy between,** set the core flag: this network drops multicast. From then the helper adds a broadcast copy to every occasional `multicast` send (`Traffic::Occasional`), never to a frame-rate stream, and discovery keeps announcing on both.
 - **Otherwise the window ends** and discovery settles to multicast alone.
 - **The Network card says** which way the device sends once the flag is set, so a user can see why their LAN carries broadcast.
 - Unit tests of the evidence logic: the asymmetry sets the flag, silence never does, a peer heard both ways never does. A simulated drop on the desktop, discarding received multicast, stands in for a network that drops it.

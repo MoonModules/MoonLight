@@ -21,7 +21,7 @@ bool fakeResolve(const char* name, uint8_t* ip) {
 }  // namespace
 
 TEST_CASE("a host name waits for its first lookup, then answers its address") {
-    mm::HostResolver::useForTest(&fakeResolve);
+    const mm::HostResolver::TestScope resolver(&fakeResolve);
     gUp = true; gLast = 40;
     uint8_t ip[4] = {};
     CHECK(mm::HostResolver::lookup("panel.local", ip) == mm::HostResolver::State::Waiting);
@@ -31,7 +31,7 @@ TEST_CASE("a host name waits for its first lookup, then answers its address") {
 }
 
 TEST_CASE("a host name that stops resolving keeps its last known address") {
-    mm::HostResolver::useForTest(&fakeResolve);
+    const mm::HostResolver::TestScope resolver(&fakeResolve);
     gUp = true; gLast = 41;
     mm::platform::setTestNowMs(1000);
     uint8_t ip[4] = {};
@@ -47,7 +47,7 @@ TEST_CASE("a host name that stops resolving keeps its last known address") {
 }
 
 TEST_CASE("a host name that never resolves stays waiting, and costs no lookup until it is due") {
-    mm::HostResolver::useForTest(&fakeResolve);
+    const mm::HostResolver::TestScope resolver(&fakeResolve);
     mm::platform::setTestNowMs(1000);
     uint8_t ip[4] = {};
     mm::HostResolver::lookup("nowhere.lan", ip);
