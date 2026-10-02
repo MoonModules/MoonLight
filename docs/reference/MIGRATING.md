@@ -24,6 +24,17 @@ MoonLight ships **no migration code**: the persistence layer is robust by defaul
 
 ## Unreleased
 
+### Network services share `addressing` and `hosts`
+
+**Action: *re-set a control*.**
+
+Every service that sends to many receivers names the choice the same way: `addressing` (unicast, multicast, broadcast, as the protocol allows) and `hosts`, a list of addresses and names such as `panel-01.local`.
+The Network Send driver's `ips` and `lightsPerIp` become `hosts` and `lightsPerHost`; OSC's `feedbackTo` becomes `hosts`; Devices' `wledCompatible` becomes `addressing` (on is `multicast + broadcast`).
+A backup restored through the File Manager carries all of these over; on a device updated in place, enter the hosts and the addressing again.
+The `E1.31 multicast` protocol option is gone: such an output comes back as `E1.31`, so set its `addressing` to `multicast`.
+Presence packets now mark which copy they are, so a device on an older firmware lists a newer one's broadcast copy as a WLED device until both are updated.
+Devices' `addressing` defaults to `multicast + broadcast`, so WLED devices list MoonLight devices without a setting.
+
 ### Inputs target the control surface only
 
 **Action: *re-set a control*.**

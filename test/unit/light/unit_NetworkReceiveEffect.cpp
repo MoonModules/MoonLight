@@ -10,11 +10,11 @@
 
 #include <cstring>
 
-// These tests pin the receive side of the shared OpDmx wire format: parser accept/reject, universe→buffer placement and clamping (via the public applyDmx test surface, no sockets needed), the staging-buffer lifecycle (sized off the hot path, never reallocated by loop, freed on release), and one real localhost UDP round-trip that exercises the platform bind/recvFrom path end to end on desktop CI.
+// The Art-Net receive side: parsing, universe placement and clamping, the staging buffer's lifecycle, and one real loopback round trip.
 
 namespace {
 
-// The standard rig from the effect tests (unit_NoiseEffect.cpp shape): a grid layout + layer with the effect as child. 16×16 RGB = 768 bytes = universes {0: bytes 0..509, 1: bytes 510..767} at universe_start 0.
+// A 16×16 RGB grid is 768 bytes: universe 0 holds bytes 0..509 and universe 1 bytes 510..767.
 struct Rig {
     mm::Layouts layouts;
     mm::GridLayout grid;
@@ -115,7 +115,7 @@ TEST_CASE("NetworkReceiveEffect holds the last frame across ticks without new pa
     CHECK(buf[2] == 30);
 }
 
-// A tick with no new packet must not re-copy staging over the layer buffer: the Layer does not clear between frames, so the copy would be identical bytes at real cost (3.5 ms per tick at 12288 lights on an S3). Another effect writing the shared buffer after us proves the copy was skipped.
+// A tick with no new packet skips the copy, which costs 3.5 ms at 12288 lights on an S3; a later writer's bytes surviving proves it.
 TEST_CASE("NetworkReceiveEffect does not touch the layer buffer on a tick with no packet") {
     Rig r;
     uint8_t u0[3] = {10, 20, 30};
@@ -132,7 +132,7 @@ TEST_CASE("NetworkReceiveEffect does not touch the layer buffer on a tick with n
     CHECK(buf[0] == 10);
 }
 
-// Hold-last-frame must survive a sibling effect fading the shared layer buffer. The Layer runs the collected fade BEFORE the effect pass, so a fading sibling darkens the held frame every tick; if the receiver only re-copies when a packet arrived, an idle stream fades to black instead of holding. This is the contract the module documents, and it is what a real installation looks like: a receiver on the same layer as any of the 30 effects that call fadeToBlackBy.
+// The held frame survives a fading sibling effect on the same layer, rather than an idle stream fading to black.
 TEST_CASE("a held frame survives a sibling effect fading the layer") {
     Rig r;
     uint8_t u0[3] = {200, 200, 200};
@@ -218,11 +218,11 @@ TEST_CASE("NetworkReceiveEffect receives over localhost UDP") {
 
     mm::platform::UdpSocket tx;
     REQUIRE(tx.open());
-    REQUIRE(tx.connect("127.0.0.1", mm::ARTNET_PORT));
     uint8_t payload[3] = {42, 43, 44};
     uint8_t pkt[mm::ARTNET_HEADER_SIZE + 3];
     const size_t len = mm::buildArtDmxPacket(pkt, 0, 0, payload, 3);
-    REQUIRE(tx.sendTo(pkt, len));
+    const uint8_t loopback[4] = {127, 0, 0, 1};
+    REQUIRE(tx.sendToAddr(loopback, mm::ARTNET_PORT, pkt, len));
 
     // UDP on loopback is reliable but asynchronous, poll the frame loop with a bounded retry (≤100 ms) so CI stays deterministic.
     bool landed = false;

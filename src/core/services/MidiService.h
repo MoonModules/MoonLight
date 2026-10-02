@@ -113,7 +113,7 @@ public:
             if (note >= kTouchNote && note < kTouchNote + ControlModule::kFaderCount) {
                 // A hand on a fader, so its motor holds off.
                 if (auto* c = ControlModule::active())
-                    c->setTouched(SurfaceControl::Fader, static_cast<uint8_t>(note - kTouchNote), noteOn);
+                    c->setTouched(this, SurfaceControl::Fader, static_cast<uint8_t>(note - kTouchNote), noteOn);
                 return;
             }
             if (noteOn && note >= kSelectNote && note < kSelectNote + ControlModule::kSwitchCount) {

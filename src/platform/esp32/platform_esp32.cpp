@@ -131,7 +131,9 @@
 #include <cstdarg>
 #include <cstdlib>
 #include <cstdio>
+#include <algorithm>   // std::min
 #include <cstring>
+#include <strings.h>   // strcasecmp: a .local suffix in any case
 #include <mutex>     // hostname store: writer (config apply) and reader (link-up events) race
 #include <unistd.h>
 
@@ -1531,6 +1533,31 @@ void mdnsShutdown() {
     if (mdnsStackUp_) { mdns_free(); mdnsStackUp_ = false; }
 }
 
+bool resolveHost(const char* name, uint8_t ip[4]) {
+    const size_t len = std::strlen(name);
+    constexpr size_t kLocal = 6;   // ".local"
+    if (len > kLocal && strcasecmp(name + len - kLocal, ".local") == 0) {
+        // lwIP's DNS client does not speak mDNS, so a .local name goes to the mDNS stack, only while the network module keeps it up.
+        if (!mdnsStackUp_) return false;
+        char host[64];
+        const size_t n = std::min(len - kLocal, sizeof(host) - 1);
+        std::memcpy(host, name, n);
+        host[n] = 0;
+        esp_ip4_addr_t addr = {};
+        if (mdns_query_a(host, 2000, &addr) != ESP_OK) return false;
+        std::memcpy(ip, &addr.addr, 4);
+        return true;
+    }
+    struct addrinfo hints = {};
+    hints.ai_family = AF_INET;
+    struct addrinfo* res = nullptr;
+    if (lwip_getaddrinfo(name, nullptr, &hints, &res) != 0 || !res) return false;
+    const auto* in = reinterpret_cast<const struct sockaddr_in*>(res->ai_addr);
+    std::memcpy(ip, &in->sin_addr.s_addr, 4);
+    lwip_freeaddrinfo(res);
+    return true;
+}
+
 // Advertise-only: discovery is datagram presence, each device broadcasting and listening on its own port. Keeping it off this protocol keeps the advertisement stable, since a query for a service this device hosts destabilizes its own.
 
 // Outbound HTTP request (plain HTTP, LAN, no TLS), see platform.h. A bounded blocking lwIP call, which the caller (HueDriver) runs off the render path on tick1s. Mirrors the desktop impl.
@@ -1638,20 +1665,6 @@ bool UdpSocket::open() {
     return true;
 }
 
-bool UdpSocket::connect(const char* ip, uint16_t port) {
-    if (fd_ < 0) return false;
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    if (inet_pton(AF_INET, ip, &addr.sin_addr) != 1) return false;
-    return ::connect(fd_, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) == 0;
-}
-
-bool UdpSocket::sendTo(const uint8_t* data, size_t len) {
-    if (fd_ < 0) return false;
-    return ::send(fd_, data, len, 0) >= 0;
-}
-
 bool UdpSocket::bind(uint16_t port) {
     if (fd_ < 0) return false;
     int reuse = 1;
@@ -1685,6 +1698,9 @@ bool UdpSocket::joinMulticast(const char* group) {
     ip_mreq mreq{};
     if (inet_pton(AF_INET, group, &mreq.imr_multiaddr) != 1) return false;
     mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+    // A socket that joins a group and also sends to it must not hear its own sends back.
+    const uint8_t loop = 0;
+    setsockopt(fd_, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop));
     return setsockopt(fd_, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) == 0;
 }
 

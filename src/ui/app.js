@@ -2909,6 +2909,7 @@ function createControl(moduleName, moduleType, ctrl) {
                 });
             }
             row.appendChild(input);
+            if (!ctrl.readonly) appendResetButton(row, moduleName, ctrl, def, () => { input.value = def; });
             break;
         }
         case "textarea": {

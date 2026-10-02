@@ -46,17 +46,17 @@ Each service then offers:
 | Network output | `unicast` for every protocol, `multicast` for E1.31, `broadcast` for Art-Net | `unicast` | `protocol` loses its `E1.31 multicast` option and keeps the three protocols; the group is computed per universe as today |
 | WLED audio sync | `multicast` only, to `239.0.0.1` | | WLED's protocol fixes it, so no control shows |
 
-**What comes out:** `wledCompatible`, `feedbackTo`, the `E1.31 multicast` protocol option, discovery's own broadcast branch, the network driver's own group sending, and audio sync's own group join and send, all replaced by the helper and one control name. The backlog item on the missing multicast fallback is deleted when step 6 ships.
+**What comes out:** `wledCompatible`, `feedbackTo`, the `E1.31 multicast` protocol option, discovery's own broadcast branch, the network driver's own group sending, and audio sync's own group join and send, all replaced by the helper and one control name. The backlog items on the missing multicast fallback and on names in the host list are deleted.
 
 ## Steps
 
-### 1. The helper in core
+### 1. The helper in core ✅
 
 - An `Addressing` mode, a service's allowed set, and a function that sends one packet the way the mode says: each entry in `hosts`, the group, the group plus the broadcast address, or the broadcast address.
 - The receive half: bind and join the group when the service allows multicast.
 - Unit tests: each mode reaches exactly the addresses it names; an empty or malformed list sends nothing and says so; a list with a range expands.
 
-### 2. Names in the unicast list (issue #115)
+### 2. Names in the unicast list (issue #115) ✅
 
 The design is the one worked out in [the issue's comment](https://github.com/MoonModules/MoonLight/issues/115); in short:
 
@@ -68,27 +68,27 @@ The design is the one worked out in [the issue's comment](https://github.com/Moo
 - **Re-resolved about once a minute**, on a fixed schedule rather than a TTL, to catch a DHCP move between shows.
 - **Each destination's state on the card**: resolved, waiting, or stale.
 
-### 3. Device discovery and audio sync
+### 3. Device discovery and audio sync ✅
 
 - `addressing` replaces `wledCompatible`, and the help page explains the WLED case.
 - A `migrate.js` map entry (`wledCompatible: true` becomes `multicast + broadcast`) and a MIGRATING entry.
 - Audio sync sends and joins through the helper, with `multicast` as its only mode; nothing changes on the wire or on the card.
 
-### 4. OSC feedback
+### 4. OSC feedback ✅
 
 - `addressing` and `hosts` replace `feedbackTo`; a `group` text sets the group address for `multicast`, and a receiving board joins the same group.
 - A `migrate.js` map entry (a non-empty `feedbackTo` becomes `unicast` with that address) and a MIGRATING entry.
 - The how-to's "One desk for a board elsewhere" becomes "one desk for several boards", with `unicast` and two addresses as the first example.
 
-### 5. Network output
+### 5. Network output ✅
 
 - `addressing` beside `protocol`, its options following the protocol: the group address computed per universe as today, broadcast offered for Art-Net only.
 - `ips` becomes `hosts` and `lightsPerIp` becomes `lightsPerHost`.
 - `migrate.js` map entries (`protocol: E1.31 multicast` becomes `E1.31` with `addressing: multicast`, and the two renames) and a MIGRATING entry.
 
-### 6. The multicast fallback
+### 6. The multicast fallback ✅
 
-The design from [backlog-core § Multicast discovery has no fallback when the group never arrives](../future/backlog-core.md), placed in core so every service gains it:
+The design from the backlog item on the missing multicast fallback, now deleted, placed in core so every service gains it:
 
 - **After boot, discovery announces on both** multicast and broadcast for a bounded window, since two devices that each wait for evidence never produce any.
 - **Every device listens on both**, and notes for each peer which way its presence arrived.

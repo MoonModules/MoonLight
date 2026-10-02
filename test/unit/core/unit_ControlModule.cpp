@@ -997,22 +997,41 @@ TEST_CASE("the mirror sends a control only when its value changed") {
     d.control->removeSurface(&s);
 }
 
-// A hand on a control suppresses feedback so the device does not fight the user, and on release the control resyncs.
-TEST_CASE("a touched control is not driven, and resyncs when released") {
+// A hand on a control holds back that surface's own feedback so its motor does not fight the user, and on release it lands where the value ended.
+TEST_CASE("a touched control is not driven on that surface, and resyncs when released") {
     Device d;
     RecordingSurface s;
     d.control->addSurface(&s);
     s.clear();
 
-    d.control->setTouched(mm::SurfaceControl::Fader, 3, true);
+    d.control->setTouched(&s, mm::SurfaceControl::Fader, 3, true);
     setFader(d, 3, 90);
     d.control->mirrorToSurfaces();
     CHECK(s.countFor(mm::SurfaceControl::Fader, 3) == 0);   // hands off
 
-    d.control->setTouched(mm::SurfaceControl::Fader, 3, false);
-    d.control->mirrorToSurfaces();
-    CHECK(s.countFor(mm::SurfaceControl::Fader, 3) == 1);   // and it catches up
+    d.control->setTouched(&s, mm::SurfaceControl::Fader, 3, false);
+    REQUIRE(s.countFor(mm::SurfaceControl::Fader, 3) == 1);   // and it catches up at once
+    for (const auto& c : s.calls)
+        if (c.kind == mm::SurfaceControl::Fader && c.index == 3) CHECK(c.value == 90);
     d.control->removeSurface(&s);
+}
+
+// The hand is on one desk, so every other surface, such as the OSC link to other boards, keeps following the fader as it moves.
+TEST_CASE("a control touched on one surface still reaches the others as it moves") {
+    Device d;
+    RecordingSurface desk, boards;
+    d.control->addSurface(&desk);
+    d.control->addSurface(&boards);
+    desk.clear();
+    boards.clear();
+
+    d.control->setTouched(&desk, mm::SurfaceControl::Fader, 2, true);
+    REQUIRE(d.scheduler.setControl("Control", "fader3", "{\"value\":40}") == mm::Scheduler::SetControlResult::Ok);
+    REQUIRE(d.scheduler.setControl("Control", "fader3", "{\"value\":41}") == mm::Scheduler::SetControlResult::Ok);
+    CHECK(desk.countFor(mm::SurfaceControl::Fader, 2) == 0);
+    CHECK(boards.countFor(mm::SurfaceControl::Fader, 2) == 2);   // every step, not only the last
+    d.control->removeSurface(&desk);
+    d.control->removeSurface(&boards);
 }
 
 // An endless encoder reports movement, so a detent steps whatever it targets and the target's own type and bounds decide the result.
@@ -1281,20 +1300,50 @@ TEST_CASE("a MIDI desk's SELECT button flips the surface's switch") {
     CHECK(surfaceValue(d, "switch2") == before);
 }
 
-// A hand on a fader holds the surface's push for that fader back, so a motor never fights it, and letting go releases it.
-TEST_CASE("a MIDI desk's fader touch holds the surface's push for that fader") {
+namespace {
+/// One slot of the MIDI service's `desk` control, the message the desk is sent for it.
+std::string deskSlot(mm::MidiService& midi, uint8_t slot) {
+    auto& cs = midi.controls();
+    for (uint8_t i = 0; i < cs.count(); i++)
+        if (std::strcmp(cs[i].name, "desk") == 0)
+            return std::string(static_cast<const char*>(cs[i].ptr)).substr(slot * 7u, 6);
+    return {};
+}
+}  // namespace
+
+// A desk not attached yet has no motor to hold, so its touch holds nothing back from the surfaces that are.
+TEST_CASE("a MIDI desk's touch before it attaches holds back no surface") {
+    Device d;
+    RecordingSurface s;
+    d.control->addSurface(&s);
+    mm::MidiService midi;            // never ticked, so not attached
+    const uint8_t touch[3] = {0x90, 0x68, 0x7F};
+    midi.decode(touch, 3);
+    s.clear();
+    REQUIRE(d.scheduler.setControl("Control", "fader1", "{\"value\":200}") == mm::Scheduler::SetControlResult::Ok);
+    CHECK(s.countFor(mm::SurfaceControl::Fader, 0) == 1);
+    d.control->removeSurface(&s);
+}
+
+// A hand on a desk's fader holds that desk's motor still, while the other surfaces keep following, and letting go moves the motor to where the value ended.
+TEST_CASE("a MIDI desk's fader touch holds its own motor, not the other surfaces") {
     Device d;
     RecordingSurface s;
     d.control->addSurface(&s);
     mm::MidiService midi;
+    midi.defineControls();
+    midi.tick20ms();                     // attached, so the touch is the desk's own
     const uint8_t touch[3] = {0x90, 0x68, 0x7F}, letGo[3] = {0x90, 0x68, 0x00};
+    REQUIRE(d.scheduler.setControl("Control", "fader1", "{\"value\":100}") == mm::Scheduler::SetControlResult::Ok);
+    const std::string before = deskSlot(midi, 0);
     midi.decode(touch, 3);
     s.clear();
-    REQUIRE(d.scheduler.setControl("Control", "fader1", "{\"value\":42}") == mm::Scheduler::SetControlResult::Ok);
-    CHECK(s.countFor(mm::SurfaceControl::Fader, 0) == 0);
+    REQUIRE(d.scheduler.setControl("Control", "fader1", "{\"value\":255}") == mm::Scheduler::SetControlResult::Ok);
+    CHECK(s.countFor(mm::SurfaceControl::Fader, 0) == 1);   // the other surface follows
+    CHECK(deskSlot(midi, 0) == before);                     // the motor under the hand does not
     midi.decode(letGo, 3);
-    d.control->tick20ms();
-    CHECK(s.countFor(mm::SurfaceControl::Fader, 0) == 1);
+    CHECK(deskSlot(midi, 0) == "e07f7f");                   // let go: it lands where the value ended
+    midi.release();
     d.control->removeSurface(&s);
 }
 
@@ -1309,16 +1358,6 @@ TEST_CASE("a MIDI batch written by the browser is decoded on the next tick") {
     CHECK(surfaceValue(d, "fader5") == 255);
 }
 
-namespace {
-/// One slot of the MIDI service's `desk` control, the message the desk is sent for it.
-std::string deskSlot(mm::MidiService& midi, uint8_t slot) {
-    auto& cs = midi.controls();
-    for (uint8_t i = 0; i < cs.count(); i++)
-        if (std::strcmp(cs[i].name, "desk") == 0)
-            return std::string(static_cast<const char*>(cs[i].ptr)).substr(slot * 7u, 6);
-    return {};
-}
-}  // namespace
 
 // The way back: the desk is sent where the surface is, a fader's motor as pitch bend, a switch as its SELECT light, an encoder as its ring.
 TEST_CASE("a MIDI desk shows the surface: fader motors, SELECT lights and knob rings") {

@@ -5,6 +5,7 @@
 
 #include <cstring>
 #include <cstdio>
+#include <string>
 
 // The built packet contains the exact header layout the Art-Net spec mandates: ID, OpCode, version, sequence, physical, universe, length, data.
 TEST_CASE("ArtNet packet header format") {
@@ -144,52 +145,52 @@ TEST_CASE("DDP packet header format") {
     CHECK(pkt[0] == 0x41);                    // push set on the frame's last packet
 }
 
-// The destination list is EMPTY by default, so an unconfigured driver idles instead of falling back to the 255.255.255.255 broadcast. Broadcast does not scale and its failure lands on the NETWORK, not the device: an ArtNet universe id sits in the payload, so every host on the segment must receive and parse every packet before it can discard it (~4,850 pkt/s on a 128x128 grid, measured starving an ESP32 until its HTTP stopped answering). Art-Net 4 forbids broadcast ArtDmx outright.
-TEST_CASE("NetworkSendDriver: no destination by default — it idles, and says why") {
+// No hosts by default, so an unconfigured driver idles rather than broadcasting: a 128x128 grid's broadcast starved an ESP32 on the bench.
+TEST_CASE("NetworkSendDriver: no destination by default: it idles, and says why") {
     mm::NetworkSendDriver d;
-    CHECK(d.ips[0] == '\0');            // blank, NOT an inherited broadcast address
+    CHECK(d.hosts[0] == '\0');            // blank, NOT an inherited broadcast address
     d.defineControls();
     d.prepare();
     CHECK(d.status() != nullptr);        // explains itself rather than idling silently
 }
 
-// The multi-destination fan-out: ONE driver feeds N tubes, each with its own IP and its own contiguous run of the window. This is the Art-Net-conformant shape (ArtDmx must be unicast to the node owning each universe), and it costs the same total packets as a single broadcast stream while keeping every packet off the other nodes' NICs.
+// One driver feeds N tubes, each its own host and its own run of the window, the unicast shape Art-Net 4 requires.
 TEST_CASE("NetworkSendDriver: a range fans the window out over its tubes, one slice each") {
     mm::Buffer src;
     src.allocate(300, 3);                     // 300 lights to spread over the tubes
     mm::NetworkSendDriver d;
     d.defineControls();
-    std::snprintf(d.ips, sizeof(d.ips), "%s", "192.168.1.70-74");    // 5 tubes: .70 .71 .72 .73 .74
+    std::snprintf(d.hosts, sizeof(d.hosts), "%s", "192.168.1.70-74");    // 5 tubes: .70 .71 .72 .73 .74
     d.setSourceBuffer(&src);
     d.prepare();
 
     REQUIRE(d.destinationCount() == 5);
     CHECK(d.destinationAt(0)[3] == 70);
-    CHECK(d.destinationAt(4)[3] == 74);       // inclusive at BOTH ends — 70-74 is five tubes
+    CHECK(d.destinationAt(4)[3] == 74);       // inclusive at BOTH ends: 70-74 is five tubes
     CHECK(d.destinationAt(2)[0] == 192);      // the typed-once subnet carries across the range
     CHECK(d.destinationAt(2)[2] == 1);
 
-    // Blank lightsPerIp → the window splits evenly across the tubes (the ledsPerPin idiom).
+    // Blank lightsPerHost → the window splits evenly across the tubes (the ledsPerPin idiom).
     for (uint8_t i = 0; i < 5; i++) CHECK(d.lightsAt(i) == 60);   // 300 / 5
 }
 
-TEST_CASE("NetworkSendDriver: lightsPerIp follows the ledsPerPin idiom") {
+TEST_CASE("NetworkSendDriver: lightsPerHost follows the ledsPerPin idiom") {
     mm::Buffer src;
     src.allocate(300, 3);
     mm::NetworkSendDriver d;
     d.defineControls();
-    std::snprintf(d.ips, sizeof(d.ips), "%s", "192.168.1.70,71,72");
+    std::snprintf(d.hosts, sizeof(d.hosts), "%s", "192.168.1.70,71,72");
     d.setSourceBuffer(&src);
 
     SUBCASE("one number = that many to EVERY tube") {
-        std::snprintf(d.lightsPerIp, sizeof(d.lightsPerIp), "%s", "100");
+        std::snprintf(d.lightsPerHost, sizeof(d.lightsPerHost), "%s", "100");
         d.prepare();
         CHECK(d.lightsAt(0) == 100);
         CHECK(d.lightsAt(1) == 100);
         CHECK(d.lightsAt(2) == 100);
     }
     SUBCASE("a list = one per tube, by position") {
-        std::snprintf(d.lightsPerIp, sizeof(d.lightsPerIp), "%s", "150,100,50");
+        std::snprintf(d.lightsPerHost, sizeof(d.lightsPerHost), "%s", "150,100,50");
         d.prepare();
         CHECK(d.lightsAt(0) == 150);          // tubes may differ in length
         CHECK(d.lightsAt(1) == 100);
@@ -197,8 +198,8 @@ TEST_CASE("NetworkSendDriver: lightsPerIp follows the ledsPerPin idiom") {
     }
 }
 
-// A malformed entry must leave the driver IDLE, not half-configured. parseIpList fills its output as it goes, so a bad address AFTER good ones (a typo in tube 3 of 5) yields a partial list; publishing that would send real packets to a real subset of hosts while the card shows an error. Wrong output is worse than no output, so prepare() parses into locals and publishes only when everything validates.
-TEST_CASE("NetworkSendDriver: a malformed ips entry idles the driver — no partial destination list") {
+// A typo in tube 3 of 5 idles the driver rather than sending to the valid prefix while the card shows an error.
+TEST_CASE("NetworkSendDriver: a malformed hosts entry idles the driver, publishing no partial destination list") {
     mm::Buffer src;
     src.allocate(300, 3);
     mm::NetworkSendDriver d;
@@ -206,53 +207,53 @@ TEST_CASE("NetworkSendDriver: a malformed ips entry idles the driver — no part
     d.setSourceBuffer(&src);
 
     // A good run, so there IS prior state to leak.
-    std::snprintf(d.ips, sizeof(d.ips), "%s", "192.168.1.70-74");
+    std::snprintf(d.hosts, sizeof(d.hosts), "%s", "192.168.1.70-74");
     d.prepare();
     REQUIRE(d.destinationCount() == 5);
 
     SUBCASE("a bad address after good ones publishes NOTHING") {
-        std::snprintf(d.ips, sizeof(d.ips), "%s", "192.168.1.70,71,999,73");
+        std::snprintf(d.hosts, sizeof(d.hosts), "%s", "192.168.1.70,71,999,73");
         d.prepare();
-        CHECK(d.destinationCount() == 0);          // not 2 — the valid prefix must not go live
+        CHECK(d.destinationCount() == 0);          // not 2: the valid prefix must not go live
         CHECK(d.status() != nullptr);              // and the user is told
     }
-    SUBCASE("a bad lightsPerIp publishes NOTHING either") {
-        std::snprintf(d.ips, sizeof(d.ips), "%s", "192.168.1.70-74");
-        std::snprintf(d.lightsPerIp, sizeof(d.lightsPerIp), "%s", "abc");
+    SUBCASE("a bad lightsPerHost publishes NOTHING either") {
+        std::snprintf(d.hosts, sizeof(d.hosts), "%s", "192.168.1.70-74");
+        std::snprintf(d.lightsPerHost, sizeof(d.lightsPerHost), "%s", "abc");
         d.prepare();
-        CHECK(d.destinationCount() == 0);          // the ips parsed fine, but the split didn't
+        CHECK(d.destinationCount() == 0);          // the hosts parsed fine, but the split did not
         CHECK(d.status() != nullptr);
     }
 }
 
-// A hand-typed lightsPerIp list will sometimes not match the destination count, the likeliest real typo. It must not silently mis-slice: a SHORT list even-splits the remainder across the rest (the documented ledsPerPin broadcasting rule), and a LONG list simply ignores the extras.
-TEST_CASE("NetworkSendDriver: a lightsPerIp list that doesn't match the tube count still slices sanely") {
+// A short lightsPerHost list splits the rest evenly, as ledsPerPin does, and a long one ignores the extras.
+TEST_CASE("NetworkSendDriver: a lightsPerHost list that doesn't match the tube count still slices sanely") {
     mm::Buffer src;
     src.allocate(300, 3);
     mm::NetworkSendDriver d;
     d.defineControls();
     d.setSourceBuffer(&src);
-    std::snprintf(d.ips, sizeof(d.ips), "%s", "192.168.1.70,71,72");   // 3 tubes
+    std::snprintf(d.hosts, sizeof(d.hosts), "%s", "192.168.1.70,71,72");   // 3 tubes
 
     SUBCASE("a SHORT list: the named tubes take their counts, the rest split the remainder") {
-        std::snprintf(d.lightsPerIp, sizeof(d.lightsPerIp), "%s", "150");   // one value = every tube
+        std::snprintf(d.lightsPerHost, sizeof(d.lightsPerHost), "%s", "150");   // one value = every tube
         d.prepare();
         REQUIRE(d.destinationCount() == 3);
         CHECK(d.lightsAt(0) == 150);
         CHECK(d.lightsAt(1) == 150);
-        CHECK(d.lightsAt(2) == 0);     // the 300-light window is exhausted — clamped, not wrapped
+        CHECK(d.lightsAt(2) == 0);     // the 300-light window is exhausted: clamped, not wrapped
     }
     SUBCASE("a LONGER list than there are tubes: the extras are ignored, no overrun") {
-        std::snprintf(d.lightsPerIp, sizeof(d.lightsPerIp), "%s", "50,60,70,80,90");
+        std::snprintf(d.lightsPerHost, sizeof(d.lightsPerHost), "%s", "50,60,70,80,90");
         d.prepare();
-        REQUIRE(d.destinationCount() == 3);   // still 3 tubes — the list doesn't invent destinations
+        REQUIRE(d.destinationCount() == 3);   // still 3 tubes: the list does not invent destinations
         CHECK(d.lightsAt(0) == 50);
         CHECK(d.lightsAt(1) == 60);
         CHECK(d.lightsAt(2) == 70);
     }
 }
 
-// sACN's native addressing: the universe is IN the destination group, 239.255.{hi}.{lo} (E1.31 section 9.3.1). That is what lets a switch with IGMP snooping filter per universe in hardware, so a node's NIC sees only the universes it joined. Unicast E1.31 stays the default because multicast floods exactly like broadcast on a switch that does NOT snoop.
+// sACN's group carries the universe, 239.255.{hi}.{lo} (E1.31 section 9.3.1), so a snooping switch filters per universe.
 TEST_CASE("sACN multicast puts the universe number in the destination address") {
     uint8_t addr[4];
     mm::NetworkSendDriver::e131MulticastAddr(1, addr);
@@ -266,12 +267,10 @@ TEST_CASE("sACN multicast puts the universe number in the destination address") 
     CHECK(addr[2] == 1); CHECK(addr[3] == 44);  // 300 = 0x012C
 }
 
-// A fixture must not straddle two DMX universes. At 512 channels per universe an 11-channel moving head divides 46 times with 6 bytes left over, so an unrounded chunk would put fixture 47 half in one packet and half in the next, and that fixture would read a neighbor's channels as its own pan and tilt. Harmless on a 3-channel strip (a partial pixel is just a pixel), which is why it only surfaced once fixtures had more than color in them.
+// A fixture never straddles two universes, or an 11-channel moving head would read a neighbor's channels as its pan and tilt.
 TEST_CASE("A DMX universe carries whole fixtures, never a split one") {
     constexpr size_t kUniverse = 512;
-    // The rounding the driver applies: floor the universe to a whole number of fixtures.
-    //
-    // A RESTATEMENT of NetworkSendDriver's arithmetic, not a call into it: the real rounding is inline in the send path (NetworkSendDriver.h, the `whole` line), which has no seam a unit test can reach without a socket. So this pins the RULE and would not catch the driver drifting away from it. Driving the real path needs a capture harness around the send seam.
+    // The driver's rounding restated, since its send path has no seam without a socket: floor the universe to whole fixtures.
     auto wholeFixtures = [](size_t chunk, uint8_t bytesPerLight) {
         const size_t whole = (chunk / bytesPerLight) * bytesPerLight;
         return whole > 0 ? whole : chunk;
@@ -285,4 +284,74 @@ TEST_CASE("A DMX universe carries whole fixtures, never a split one") {
 
     // A fixture wider than a universe cannot be served: keep the full universe rather than sending zero bytes forever, so it fails visibly instead of going silently dead.
     CHECK(wholeFixtures(kUniverse, 255) == 510);
+}
+
+// E1.31's multicast and Art-Net's broadcast are one stream of universes for the whole window, so the host list plays no part.
+TEST_CASE("NetworkSendDriver: E1.31 multicast sends the whole window as one stream, whatever the hosts say") {
+    mm::Buffer src;
+    src.allocate(300, 3);
+    mm::NetworkSendDriver d;
+    d.defineControls();
+    d.setSourceBuffer(&src);
+    d.protocol = mm::NetworkSendDriver::kProtoE131;
+    d.addressing = 1;
+    CHECK(d.mode() == mm::Addressing::Multicast);
+    d.prepare();
+    REQUIRE(d.destinationCount() == 1);
+    CHECK(d.lightsAt(0) == 300);
+}
+
+TEST_CASE("NetworkSendDriver: a protocol without the chosen mode falls back to unicast") {
+    mm::NetworkSendDriver d;
+    d.defineControls();
+    d.protocol = mm::NetworkSendDriver::kProtoE131;
+    d.addressing = 1;                         // multicast
+    d.protocol = 2;                           // DDP has unicast only
+    d.rebuildControls();                      // what every control write does
+    CHECK(d.addressing == 0);
+    CHECK(d.mode() == mm::Addressing::Unicast);
+}
+
+namespace {
+bool panelAt80(const char* name, uint8_t* ip) {
+    if (std::strcmp(name, "panel.local") != 0) return false;
+    ip[0] = 192; ip[1] = 168; ip[2] = 1; ip[3] = 80;
+    return true;
+}
+}  // namespace
+
+// A name is looked up off the render thread, so it sends nothing until it resolves while the addresses beside it keep sending.
+TEST_CASE("NetworkSendDriver: a named host waits for its address while the others send") {
+    mm::HostResolver::useForTest(&panelAt80);
+    mm::Buffer src;
+    src.allocate(300, 3);
+    mm::NetworkSendDriver d;
+    d.defineControls();
+    d.setSourceBuffer(&src);
+    std::snprintf(d.hosts, sizeof(d.hosts), "%s", "192.168.1.70, panel.local");
+    d.prepare();
+    REQUIRE(d.destinationCount() == 2);
+    CHECK(d.destinationAt(1)[3] == 0);                          // not resolved yet: skipped
+    REQUIRE(d.status() != nullptr);
+    CHECK(std::strstr(d.status(), "not resolved") != nullptr);  // and the card says so
+    mm::HostResolver::passForTest();
+    d.tick1s();
+    CHECK(d.destinationAt(1)[3] == 80);
+    CHECK(d.status() == nullptr);
+}
+
+// A light stream never falls back to broadcast on a network that drops multicast; the card says what to do instead.
+TEST_CASE("NetworkSendDriver: E1.31 multicast on a network that drops it says to use unicast") {
+    mm::Buffer src;
+    src.allocate(300, 3);
+    mm::NetworkSendDriver d;
+    d.defineControls();
+    d.setSourceBuffer(&src);
+    d.protocol = mm::NetworkSendDriver::kProtoE131;
+    d.addressing = 1;
+    mm::NetworkPath::multicastDropped = true;
+    d.prepare();
+    const std::string status = d.status() ? d.status() : "";
+    mm::NetworkPath::multicastDropped = false;
+    CHECK(status.find("use unicast") != std::string::npos);
 }

@@ -176,8 +176,8 @@ TEST_CASE("AudioService Receive: a localhost WLED packet drives frame_, then hol
 
     platform::UdpSocket tx;
     REQUIRE(tx.open());
-    REQUIRE(tx.connect("127.0.0.1", kTestSyncPort));
-    REQUIRE(tx.sendTo(pkt, WLED_SYNC_PACKET_SIZE));
+    const uint8_t loopback[4] = {127, 0, 0, 1};
+    REQUIRE(tx.sendToAddr(loopback, kTestSyncPort, pkt, WLED_SYNC_PACKET_SIZE));
 
     // Loopback delivery is async in real time, poll tick() until the peer frame lands (bounded, ≤100 iterations). Virtual time stays frozen, so the frame counts as fresh.
     bool landed = false;
@@ -192,7 +192,7 @@ TEST_CASE("AudioService Receive: a localhost WLED packet drives frame_, then hol
     CHECK(a.audioFrame()->bandsSmoothed[15] > 80);   // peer.bands[15] is 120; one block of rise
     AudioFrame quiet;                                  // then the peer goes silent
     buildWledAudioSync(pkt, quiet, /*peak=*/false);
-    REQUIRE(tx.sendTo(pkt, WLED_SYNC_PACKET_SIZE));
+    REQUIRE(tx.sendToAddr(loopback, kTestSyncPort, pkt, WLED_SYNC_PACKET_SIZE));
     bool fell = false;
     for (int i = 0; i < 100 && !fell; i++) {
         a.tick();
@@ -290,4 +290,29 @@ TEST_CASE("AudioService: leaving local clears an outstanding mic diagnosis, in e
         CHECK_FALSE(a.micStatusStaleForTest());
         a.release();
     }
+}
+
+// Unicast is the faster choice for a few MoonLight boards on WiFi, so it sends to the hosts, and says so when there are none.
+TEST_CASE("AudioService Local+send unicast: sends to its hosts, and asks for them when the list is empty") {
+    FrozenClock clk(1);
+    AudioService a;
+    a.mode = AudioService::kLocalMode;
+    a.send = true;
+    a.addressing = 1;   // unicast
+    a.syncPort = kTestSyncPort;
+    a.applyState();
+    a.tick();
+    CHECK(std::strstr(a.syncStatusForTest(), "set hosts") != nullptr);   // read before tick1s, whose mic retry rewrites the status
+    a.release();
+
+    AudioService b;
+    b.mode = AudioService::kLocalMode;
+    b.send = true;
+    b.addressing = 1;
+    std::snprintf(b.hosts, sizeof(b.hosts), "%s", "127.0.0.1");
+    b.syncPort = kTestSyncPort;
+    b.applyState();
+    b.tick();
+    CHECK(std::strcmp(b.syncStatusForTest(), "sending") == 0);
+    b.release();
 }

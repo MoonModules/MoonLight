@@ -1,6 +1,6 @@
 # Core services
 
-The user-added **Service** modules — capability bridges the device provides or consumes, added and removed at runtime in the `Services` container (the core-domain twin of the light domain's `Effects`/`Drivers`). Fixed device infrastructure (identity, network, inspection tools) lives under **System** — see [core/system.md](system.md). Every row links to its generated technical page (the full API, from the `.h`) and its tests.
+The user-added **Service** modules are capability bridges the device provides or consumes, added and removed at runtime in the `Services` container (the core-domain twin of the light domain's `Effects`/`Drivers`). Fixed device infrastructure (identity, network, inspection tools) lives under **System**: see [core/system.md](system.md). Every row links to its generated technical page (the full API, from the `.h`) and its tests.
 
 <video src="../../assets/moontube/09-services.webm" controls playsinline width="720" title="Every service in turn: audio, button, analog, infrared, and a scripted one."></video>
 
@@ -8,7 +8,7 @@ The user-added **Service** modules — capability bridges the device provides or
 
 ## Services
 
-The top-level container the Service modules hang under — a grouping node with no controls of its own, the same shape as `Effects`/`Drivers` in the light domain. Adds/removes its children (Audio, OSC, Infrared, Button, Analog, MoonLiveService) at runtime via the generic module machinery.
+The top-level container the Service modules hang under: a grouping node with no controls of its own, the same shape as `Effects`/`Drivers` in the light domain. Adds/removes its children (Audio, OSC, Infrared, Button, Analog, MoonLiveService) at runtime via the generic module machinery.
 
 Detail: [technical](moxygen/Services.md)
 
@@ -20,19 +20,21 @@ A user-added Service: the audio source the audio-reactive effects consume. `mode
 
 <img src="../../assets/core/AudioService.png" width="300" alt="Audio module controls">
 
-- `mode` — Local audio, Receive network or Simulate, each showing only its own controls below.
+- `mode`: Local audio, Receive network or Simulate, each showing only its own controls below.
 - `micMode`: (Local, I²S targets) `I2S` for a three-wire part, `PDM` for a two-wire one.
 - `sckPin` / `wsPin` / `sdPin`: (Local, I²S targets) the bus GPIOs, unset until entered.
 - `mclkPin`: (Local, I²S targets) the master clock a line-in ADC may need; unset for a plain mic.
 - `device`: (Local, desktop) the OS capture input, `default` following the system setting.
-- `sampleRate` — (Local) mic/ADC sample rate.
-- `levels` — (Local) who sets the display window: `manual`'s two sliders, or `automatic`, a learner.
+- `sampleRate`: (Local) mic/ADC sample rate.
+- `levels`: (Local) who sets the display window: `manual`'s two sliders, or `automatic`, a learner.
 - `floor`: (Local) the **silence threshold**: below it a band reads zero, and the learner ignores it.
 - `gain`: (Local, manual) the width of the display window: higher is narrower, so it runs hotter.
-- `send audio` — (Local, network build) send the local analysis as audio-sync packets.
-- `simulate` — (Simulate) the pattern: `music`, a plausible song, or `sweep`, a test march.
-- `syncPort` — (network build) the UDP port, 11988 by default; `sync status` reports the state.
-- read-only — `level` (RMS), `peakHz` (the audio driving effects, from any source).
+- `send audio`: (Local, network build) send the local analysis as audio-sync packets.
+- `addressing`: (sending) `multicast`, which WLED hears, or `unicast` to `hosts`, faster on WiFi.
+- `hosts`: (unicast) the boards that follow this audio, addresses or names.
+- `simulate`: (Simulate) the pattern: `music`, a plausible song, or `sweep`, a test march.
+- `syncPort`: (network build) the UDP port, 11988 by default; `sync status` reports the state.
+- read-only: `level` (RMS), `peakHz` (the audio driving effects, from any source).
 
 Detail: [technical](moxygen/AudioService.md) · [the sync packet](../light/moxygen/WLEDAudioSyncPacket.md) · [the lock-free ring](moxygen/SpscRing.md)
 
@@ -46,10 +48,10 @@ Detail: [technical](moxygen/AudioService.md) · [the sync packet](../light/moxyg
 
 Receives [OSC](https://opensoundcontrol.stanford.edu/) over UDP and writes it onto this device's controls, so a fader in Resolume, TouchDesigner or TouchOSC drives MoonLight directly. It owns no surface of its own: everything lands in the same control writes the HTTP API and the UI use, so every validator still runs. Addresses, feedback and setup: ⌄ details.
 
-- `listen` — receive OSC (default **off**). This opens an unauthenticated UDP port that writes
+- `listen`: receive OSC (default **off**). This opens an unauthenticated UDP port that writes
   controls, on the same LAN-trust basis as the Art-Net and audio-sync receivers, so it is a capability you turn on rather than one every device carries.
-- `port` — the UDP port (default 9000, what TouchOSC uses). Applies live.
-- `status` — listening, off, or why the port could not be opened.
+- `port`: the UDP port (default 9000, what TouchOSC uses). Applies live.
+- `status`: listening, off, or why the port could not be opened.
 
 Detail: [technical](moxygen/OscModule.md)
 
@@ -227,7 +229,7 @@ Prior art: the WLED-MM audio-reactive usermod by **Frank ([@softhack007](https:/
 
 ## OSC, details
 **Feedback: the device answers.** With `feedback` on, a control that changes anywhere (the web UI, a
-preset recall, an audio-reactive effect) is mirrored back to the surface, which is what keeps a client honest and what moves a motorised fader. `feedbackTo` names the receiver, or is left empty to answer whoever last wrote to us; `feedbackPort` is where that client LISTENS, which is not the port we listen on (Open Stage Control calls its own `osc-port`).
+preset recall, an audio-reactive effect) is mirrored back to the surface, which is what keeps a client honest and what moves a motorized fader. `addressing` picks where it goes: `unicast` to each of `hosts`, addresses or names, or to whoever last wrote when `hosts` is empty; `multicast` to `group`, which every listening board with the same `group` joins; the default, `239.255.77.78`, sits beside discovery's own group, so multicast works with nothing to fill in, and a second rig on the same network picks another. `feedbackPort` is where that client LISTENS, which is not the port we listen on (Open Stage Control calls its own `osc-port`).
 
 A client learns the current state three ways: when it first writes to us from a new address, when its address changes, and whenever it sends **`/mm/hello`**. The last one exists because a client restarting on the SAME address is invisible to the other two, and most controllers send nothing of their own on load, so every widget would show its layout file's defaults until the user moved one.
 The shipped session has a `sync from device` button for exactly this.

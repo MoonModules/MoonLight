@@ -32,7 +32,7 @@ namespace mm {
 /// The latch holds the row last strobed, which is the previous one. So while row r's color bits clock in, the address must still name row r - 1, or the previous row's data lights on row r's LEDs.
 /// The blanking word is where the address moves to r: dark, and latching r at the same time.
 /// Row 0's data words therefore name the LAST scan row, which is what lets the frame loop through the DMA wrap with every row lit exactly once.
-/// Addressing the data words to their own row displaced the whole picture one scan row down and put the last row on the first. On a wall that reads as one bright line.
+/// Sending the data words with their own row as the address displaced the whole picture one scan row down and put the last row on the first. On a wall that reads as one bright line.
 ///
 /// ## Address rides with the data
 ///

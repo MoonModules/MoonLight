@@ -1,8 +1,7 @@
 /// @module MoonLivePalette
 /// @also Palette, Effects
 
-/// A palette authored as a SCRIPT: sixteen entries recomputed every frame, so a palette can follow audio or drift where a gradient stop list is frozen.
-/// These pin what the binding guarantees to the effects that sample it, which is that the palette is either wholly old or wholly new, never both.
+/// A scripted palette's sixteen entries, recomputed every frame, are either wholly old or wholly new to the effects sampling them.
 
 #include "doctest.h"
 #include "light/moonlive/MoonLivePalette.h"
@@ -21,12 +20,11 @@ using namespace mm;
 
 namespace {
 /// A module for the binding to report status through, which is how a scripted palette's errors reach a card.
-struct Host : public MoonModule {};
+struct ScriptHost : public MoonModule {};
 
-/// Compile `src` as a palette and run one frame.
-/// Returns the resulting active palette.
+/// Compile `src` as a palette, run one frame, and return the active palette.
 Palette runPalette(const char* src) {
-    Host host;
+    ScriptHost host;
     MoonLivePalette pal;
     pal.setScript(mmWriteScript(src));
     pal.prepare(host);
@@ -67,12 +65,9 @@ TEST_CASE("an out-of-range entry index writes nothing at all") {
     for (int i = 0; i < 16; i++) seed.entry[i] = RGB{7, 7, 7};
     Palettes::setActiveDirect(seed);
 
-    Host host;
+    ScriptHost host;
     MoonLivePalette pal;
-    // HONEST LIMIT: this pins the CONTRACT (an out-of-range index changes no entry) but cannot prove the bound exists.
-    // Without it the write lands past the sixteen entries, on the scratch Palette's own stack storage, where no assertion here can see it.
-    // Removing the bound and re-running leaves this test green, which was checked rather than assumed.
-    // What actually catches a missing bound is ASan on the same case, which the CI sanitizer lane runs.
+    // Pins the contract only: a missing bound writes past the entries unseen here, which the CI ASan lane catches.
     pal.setScript(mmWriteScript("class P { void tick() { setPalEntry(16, 255, 255, 255); } }"));
     pal.prepare(host);
     REQUIRE(pal.ok());
@@ -90,7 +85,7 @@ TEST_CASE("entries the script does not write keep their previous color") {
     for (int i = 0; i < 16; i++) seed.entry[i] = RGB{3, 4, 5};
     Palettes::setActiveDirect(seed);
 
-    Host host;
+    ScriptHost host;
     MoonLivePalette pal;
     pal.setScript(mmWriteScript("class P { void tick() { setPalEntry(0, 200, 0, 0); } }"));
     pal.prepare(host);
@@ -110,7 +105,7 @@ TEST_CASE("a broken palette script leaves the last good palette, rather than goi
     for (int i = 0; i < 16; i++) seed.entry[i] = RGB{9, 9, 9};
     Palettes::setActiveDirect(seed);
 
-    Host host;
+    ScriptHost host;
     MoonLivePalette pal;
     pal.setScript(mmWriteScript("class P { void tick() { this is not a script } }"));
     pal.prepare(host);

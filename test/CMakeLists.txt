@@ -75,7 +75,10 @@ add_executable(mm_tests
     unit/core/unit_sanitizeHostname.cpp
     unit/core/unit_platform_clock.cpp
     unit/core/unit_platform_worker.cpp
-    unit/core/unit_IpList.cpp
+    unit/core/unit_HostList.cpp
+    unit/core/unit_Addressing.cpp
+    unit/core/unit_HostResolver.cpp
+    unit/core/unit_OscModule.cpp
     unit/core/unit_Scheduler_unique_names.cpp
     unit/core/unit_MoonStatsModule.cpp
     unit/core/unit_MoonTalkModule.cpp

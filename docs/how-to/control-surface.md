@@ -12,7 +12,7 @@ MoonLight's [Control](../moonmodules/core/system.md#control) card is a surface: 
 |---|---|---|
 | A phone, a tablet or another app | [OSC](#a-phone-or-tablet-over-osc) | Open Stage Control, TouchOSC, Resolume, TouchDesigner or QLC+ on the same network |
 | A MIDI desk (Mackie Control, such as the X-Touch or the QCon) or a gamepad | [The browser](#a-midi-desk-or-a-gamepad-through-the-browser) | The desk or pad plugged into the computer showing MoonLight's page |
-| One desk for a board elsewhere in the rig | [The desktop app plus OSC](#one-desk-for-a-board-elsewhere) | MoonLight running on the computer the desk is plugged into |
+| One desk for boards elsewhere in the rig | [The desktop app plus OSC](#one-desk-for-several-boards) | MoonLight running on the computer the desk is plugged into |
 | A script or program of your own | [The REST API](../reference/integrating.md) | Set `Control`'s `fader1`, `switch2` or any other surface control, as every other route does |
 
 Every route lands on the same surface, so a desk, a phone and the web UI stay in step: move a fader on one and the others follow.
@@ -32,15 +32,18 @@ The browser offers MIDI and gamepads on a secure origin only. The desktop app's 
 
 ---
 
-## One desk for a board elsewhere
+## One desk for several boards
 
-The desk plugs into a computer running the MoonLight desktop app, and the app passes its surface on to a board over OSC.
+The desk plugs into a computer running the MoonLight desktop app, and the app passes its surface on to the boards over OSC.
 
 1. On the desktop app, set up the desk as in the route above, on `localhost`.
-2. On the desktop app: **Services → OSC**, turn on `listen` and `feedback`, set `feedbackTo` to the board's address and `feedbackPort` to `9000`.
-3. On the board: **Services → OSC**, turn on `listen`.
+2. On the desktop app: **Services → OSC**, turn on `listen` and `feedback`, and set `feedbackPort` to `9000`.
+3. Pick how the surface travels:
+    - **A few known boards:** `addressing` `unicast`, with the boards in `hosts`: `192.168.1.139, MM-testbench-S3.local`. Every board gets its own copy, retried by WiFi.
+    - **Any number of boards:** `addressing` `multicast`. Every board listening on the default `group` hears it; a second rig on the same network gives its desktop and boards another `group`.
+4. On each board: **Services → OSC**, turn on `listen`.
 
-Every change on the desktop's surface now reaches the board's surface, a self-playing game's moving paddle included.
+Every change on the desktop's surface now reaches the boards' surfaces, a self-playing game's moving paddle included.
 
 ---
 
@@ -136,7 +139,7 @@ In MoonLight: **Services → OSC**.
 | `feedbackPort` | `9001` | where to answer. Must match the `osc-port` from step 5 |
 | `port` | `9000` | where the device listens. Matches the `send` port |
 
-Leave `feedbackTo` empty. Empty means "answer whoever last wrote to us", which finds your surface on its own. Fill it in only when you want feedback sent somewhere other than the thing driving it.
+Leave `hosts` empty, with `addressing` on `unicast`. Empty means "answer whoever last wrote to us", which finds your surface on its own. Fill it in only when you want feedback sent somewhere other than the thing driving it.
 
 Move a fader. The device should react immediately.
 

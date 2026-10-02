@@ -108,9 +108,10 @@ Detail: [technical](moxygen/Hub75Driver.md) · encoder: [Hub75Slots](moxygen/Hub
 
 Streams the buffer over UDP as **Art-Net**, **E1.31 / sACN** or **DDP**, one burst per frame, to Falcon/Advatek controllers, xLights and LedFx. Feeds several receivers from one driver, each its own slice. Mixed DMX fixtures and the addressing rules are in [the details below](#network-send-details).
 
-- `protocol`: Art-Net / E1.31 / DDP / E1.31 multicast (default Art-Net); the port follows.
-- `ips`: the receivers, a range or a list: `192.168.1.70-74`. **Blank idles** rather than sending.
-- `lightsPerIp`: lights per receiver. Blank splits evenly, one number to all, a list each.
+- `protocol`: Art-Net / E1.31 / DDP (default Art-Net); the port follows.
+- `addressing`: unicast for all three, multicast for E1.31, broadcast for Art-Net.
+- `hosts`: the receivers, such as `192.168.1.70-74, panel-01.local`. **Blank idles.**
+- `lightsPerHost`: lights per receiver. Blank splits evenly, one number to all, a list each.
 - `universe_start`: first universe for Art-Net / E1.31, restarting per receiver. DDP ignores it.
 - `fps`: frame-rate limit (default 50, 1–120).
 
@@ -270,9 +271,9 @@ How the frame is built, the DMA each peripheral programs, and the expert `ring*`
 <a id="network-send-details"></a>
 
 ## Network Send, details
-**Unicast is the default** because Art-Net 4 requires it and because broadcast makes every host on the LAN parse every packet. A broadcast address still works if you type one. **E1.31 multicast** sends to sACN's own per-universe group (`239.255.{universe_hi}.{universe_lo}`) rather than the configured address, so one send reaches every receiver that joined that universe. It is opt-in rather than the default, because the saving only materializes on a switch that does IGMP snooping and firmware cannot tell. See [multicast and IGMP snooping](../../explanation/architecture/moonlight.md#multicast-and-igmp-snooping).
+**Unicast is the default** because Art-Net 4 requires it and because broadcast makes every host on the LAN parse every packet; Art-Net's `broadcast` remains for legacy receivers. **E1.31 multicast** sends to sACN's own per-universe group (`239.255.{universe_hi}.{universe_lo}`) rather than to `hosts`, so one send reaches every receiver that joined that universe. It is opt-in rather than the default, because the saving only materializes on a switch that does IGMP snooping and firmware cannot tell. See [multicast and IGMP snooping](../../explanation/architecture/moonlight.md#multicast-and-igmp-snooping). On a network shown to drop multicast, the card says so rather than broadcasting every universe. A name in `hosts` resolves in the background, `.local` by mDNS and anything else by DNS: it sends nothing until it first resolves, keeps its last address while it stops answering, and the card says which names are still waiting.
 
-**A DMX chain of MIXED fixtures needs one driver per fixture type.** `lightsPerIp` splits a window between receivers that share one preset, so it cannot describe a chain where the fixtures differ. Add a driver per type instead, each reading its own `start`/`count` slice of the same buffer with its own `lightPreset`. Two moving-head types followed by RGBW pars is three drivers:
+**A DMX chain of MIXED fixtures needs one driver per fixture type.** `lightsPerHost` splits a window between receivers that share one preset, so it cannot describe a chain where the fixtures differ. Add a driver per type instead, each reading its own `start`/`count` slice of the same buffer with its own `lightPreset`. Two moving-head types followed by RGBW pars is three drivers:
 
 | driver | window | fixtures |
 |---|---|---|

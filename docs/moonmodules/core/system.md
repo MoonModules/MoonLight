@@ -66,9 +66,9 @@ Discovers other MoonLight devices on the LAN and lists them, persisting the last
 <img src="../../assets/core/DevicesModule.png" width="300" alt="Devices module, discovered LAN devices">
 
 - `devices`: a List of discovered devices; each row expands to a detail panel. Persistable.
-- `wledCompatible`: also announce on WLED's broadcast address, off by default.
+- `addressing`: `multicast + broadcast` (default), which WLED devices hear too, or `multicast`.
 
-WLED apps browse on broadcast, so a device appears in them only with this on. Off is the better neighbor, since a broadcast wakes every device on the LAN to parse a packet none of them want. Presence always goes to the MoonLight group regardless, so peers find each other either way. See [multicast and IGMP snooping](../../explanation/architecture/moonlight.md#multicast-and-igmp-snooping).
+WLED announces and listens on broadcast, so it lists a device only from the broadcast copy. Presence is one small packet every ten seconds, so the copy costs the rest of the LAN next to nothing. A network that drops multicast is detected here, and the status says so. See [multicast and IGMP snooping](../../explanation/architecture/moonlight.md#multicast-and-igmp-snooping).
 
 Detail: [technical](moxygen/DevicesModule.md)
 

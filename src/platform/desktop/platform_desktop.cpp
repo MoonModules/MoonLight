@@ -1645,6 +1645,18 @@ bool wifiSetTxPower(int8_t quarterDbm) { return quarterDbm == 0; }
 bool mdnsInit(const char* /*deviceName*/) { return false; }
 void mdnsStop() {}
 void mdnsShutdown() {}
+
+// The system resolver answers `.local` too on macOS and Windows, and on Linux with nss-mdns, so one call covers both kinds of name.
+bool resolveHost(const char* name, uint8_t ip[4]) {
+    struct addrinfo hints = {};
+    hints.ai_family = AF_INET;
+    struct addrinfo* res = nullptr;
+    if (::getaddrinfo(name, nullptr, &hints, &res) != 0 || !res) return false;
+    const auto* in = reinterpret_cast<const struct sockaddr_in*>(res->ai_addr);
+    std::memcpy(ip, &in->sin_addr.s_addr, 4);   // network order is the octets in order
+    ::freeaddrinfo(res);
+    return true;
+}
 // Advertising is a device concern, so these are stubs; discovery itself is datagram presence and runs here too, testable over real loopback.
 
 // No update partition here, and the route guards on the capability, so this stub exists for compile coverage only.
@@ -1838,20 +1850,6 @@ bool UdpSocket::open() {
     return true;
 }
 
-bool UdpSocket::connect(const char* ip, uint16_t port) {
-    if (fd_ < 0) return false;
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    if (inet_pton(AF_INET, ip, &addr.sin_addr) != 1) return false;
-    return ::connect(sock(fd_), reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) == 0;
-}
-
-bool UdpSocket::sendTo(const uint8_t* data, size_t len) {
-    if (fd_ < 0) return false;
-    return ::send(sock(fd_), reinterpret_cast<const char*>(data), static_cast<int>(len), 0) >= 0;
-}
-
 // Test override forcing a bind to fail, since relying on the system to refuse a port is not portable.
 static std::atomic<bool> testBindFails{false};
 void setTestBindFails(bool fail) { testBindFails.store(fail, std::memory_order_relaxed); }
@@ -1892,6 +1890,9 @@ bool UdpSocket::joinMulticast(const char* group) {
     ip_mreq mreq{};
     if (::inet_pton(AF_INET, group, &mreq.imr_multiaddr) != 1) return false;
     mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+    // A socket that joins a group and also sends to it must not hear its own sends back.
+    const unsigned char loop = 0;
+    ::setsockopt(sock(fd_), IPPROTO_IP, IP_MULTICAST_LOOP, reinterpret_cast<const char*>(&loop), sizeof(loop));
     return ::setsockopt(sock(fd_), IPPROTO_IP, IP_ADD_MEMBERSHIP,
                         reinterpret_cast<const char*>(&mreq), sizeof(mreq)) == 0;
 }

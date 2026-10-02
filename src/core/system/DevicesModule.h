@@ -10,6 +10,8 @@
 #include "core/system/DeviceIdentify.h"   // DevType, devTypeStr (the device-kind enum + its labels)
 #include "core/system/DevicePlugin.h"     // the interop plugin seam + the bundled plugins
 #include "core/system/FilesystemModule.h" // FilesystemModule::noteDirty — persist on list change
+#include "core/system/WledPacket.h"       // the presence packet and which copy it is
+#include "core/util/Addressing.h"         // sendAddressed, and the network's multicast evidence
 #include "platform/platform.h"
 
 #include <cstdint>
@@ -29,7 +31,7 @@ namespace mm {
 ///
 /// ## Discovery is passive
 ///
-/// Each device broadcasts a small presence packet, and this listens for them.
+/// Each device announces a small presence packet on the multicast group and, by default, the broadcast address WLED listens on; this listens for both.
 /// There is no subnet sweep: a device appears when heard, and ages out when it stops.
 /// We announce ourselves on a slow cadence, so peers discover us.
 ///
@@ -123,13 +125,13 @@ public:
         return ok;      // false on a malformed/missing file (list left empty)
     }
 
-    /// Whether to announce on the broadcast address as well as the multicast group.
-    bool wledCompatible = false;
+    /// How presence travels: 0 the multicast group, 1 the group plus the broadcast address WLED listens on, the default.
+    uint8_t addressing = 1;
 
-    /// Declare the compatibility toggle and the list of discovered devices.
+    /// Declare the addressing and the list of discovered devices.
     void defineControls() override {
         MoonModule::defineControls();
-        controls_.addControl("wledCompatible", wledCompatible);
+        controls_.addSelect("addressing", addressing, kAddressingNames + 1, 2);   // multicast, multicast + broadcast
         controls_.addList("devices", *this);   // this module is the ListSource
     }
 
@@ -188,7 +190,7 @@ public:
     void tick1s() MM_NONBLOCKING override {
         MoonModule::tick1s();
         uint8_t local[4] = {};
-        localIp(local);
+        localIPv4(local);
         const bool online = local[0] || local[1] || local[2] || local[3];
         if (!online) return;   // no network yet — nothing to discover
 
@@ -221,6 +223,8 @@ public:
         mergePacket(data, len, srcIp);
     }
 
+
+
 private:
     /// One discovered device, as the list serializes it.
     struct Device {
@@ -234,6 +238,8 @@ private:
                                  ///< Age-out drops a non-self device unheard for kStaleMs.
         uint8_t  colorCount = 0; ///< Hue bridge only: how many of its lights are color-capable
                                     ///< (the figure for sizing a layout). 0 for non-bridge rows.
+        uint8_t  viaMulticast = 0;   ///< presence copies heard on the group, saturating
+        uint8_t  viaBroadcast = 0;   ///< presence copies heard on the broadcast address, saturating
     };
 
     /// The seat behind `active()`, claimed on build and vacated on release.
@@ -248,6 +254,10 @@ private:
     static constexpr uint32_t kCachedGraceMs = 60u * 1000u;
     /// How many packets one tick will process, which bounds the work.
     static constexpr int      kMaxDrainPerTick = 16;
+    /// How long after the listener opens presence goes out both ways, the bootstrap for the evidence.
+    static constexpr uint32_t kBothWaysMs = 2u * 60u * 1000u;
+    /// How many broadcast copies with no multicast one prove the group does not arrive.
+    static constexpr uint8_t  kEvidence = 3;
 
     // Order matters: ours is first, so a peer's marked packet is typed before the fallback.
     MmPlugin   mmPlugin_;
@@ -257,25 +267,25 @@ private:
 
     platform::UdpSocket listener_;       // bound to the presence port; drained each tick
     bool     listenerBound_ = false;
+    uint32_t boundMs_ = 0;               // when the listener opened, which starts the both-ways window
     uint32_t broadcastTick_ = 0;         // counts tick1s ticks toward the next presence broadcast
 
     Device  devices_[kMaxDevices];
     uint8_t deviceCount_ = 0;
     const char* selfName_ = nullptr;   // this device's name (wired via setSelfName)
-    char    statusBuf_[40] = "idle";
+    char    statusBuf_[56] = "idle";
 
-    /// Our own address, from whichever interface is up.
-    void localIp(uint8_t out[4]) const {
-        platform::ethGetIPv4(out);
-        if (!out[0] && !out[1] && !out[2] && !out[3]) platform::wifiStaGetIPv4(out);
-    }
 
     /// Offer one datagram to each plugin, the first to claim it winning.
     void mergePacket(const uint8_t* data, size_t len, const uint8_t srcIp[4]) {
         if (!srcIp[0] && !srcIp[1] && !srcIp[2] && !srcIp[3]) return;  // no source
         for (const DevicePlugin* p : plugins_) {
             DiscoveredDevice found;
-            if (p->classifyPacket(data, len, srcIp, found)) { upsertDevice(srcIp, found); return; }
+            if (p->classifyPacket(data, len, srcIp, found)) {
+                upsertDevice(srcIp, found);
+                if (WledPacket::hasMmMarker(data, len)) noteCopy(srcIp, WledPacket::viaBroadcast(data));
+                return;
+            }
         }
         // No plugin claimed it — an unrecognized packet on a port we listen on; ignore.
     }
@@ -292,6 +302,7 @@ private:
         if (!listener_.open()) return;
         if (listener_.bind(port)) {
             listenerBound_ = true;
+            boundMs_ = platform::millis();
             // Best-effort: a stack without multicast still hears the broadcast half.
             char grp[16];
             std::snprintf(grp, sizeof(grp), "%u.%u.%u.%u", kDiscoveryGroup[0], kDiscoveryGroup[1],
@@ -309,11 +320,27 @@ private:
         const char* n = (selfName_ && selfName_[0]) ? selfName_ : "MoonLight";
         WledPacket::build(pkt, ip, n, boardTypeByte(), /*lightsOn=*/true);
         WledPacket::stampMmMarker(pkt);
-        // The group always, since peers listen there and it costs the rest of the LAN nothing.
-        listener_.sendToAddr(kDiscoveryGroup, WledPacket::kPort, pkt, sizeof(pkt));
-        if (wledCompatible) {
-            const uint8_t bcast[4] = {255, 255, 255, 255};
-            listener_.sendToAddr(bcast, WledPacket::kPort, pkt, sizeof(pkt));
+        // Both ways during the bootstrap window, so a peer can tell which way reaches it.
+        const bool bothWays = addressing == 1 || platform::millis() - boundMs_ < kBothWaysMs;
+        sendAddressed(bothWays ? Addressing::MulticastBroadcast : Addressing::Multicast, Traffic::Occasional, nullptr, 0,
+                      kDiscoveryGroup, [&](const uint8_t to[4]) {
+                          WledPacket::stampVia(pkt, std::memcmp(to, kBroadcastAddress, 4) == 0);
+                          listener_.sendToAddr(to, WledPacket::kPort, pkt, sizeof(pkt));
+                      });
+    }
+
+    /// Count which way a MoonLight peer's presence arrived, and prove the network drops multicast when only broadcast does.
+    void noteCopy(const uint8_t ip[4], bool broadcast) {
+        Device* d = findByIp(ip);
+        if (!d || d->self) return;   // our own copies loop back and prove nothing
+        uint8_t& count = broadcast ? d->viaBroadcast : d->viaMulticast;
+        if (count < 255) count++;
+        // A multicast copy from any peer proves the group arrives after all, a slow join being the likelier story.
+        const bool dropped = broadcast ? NetworkPath::multicastDropped || (d->viaBroadcast >= kEvidence && d->viaMulticast == 0)
+                                       : false;
+        if (dropped != NetworkPath::multicastDropped) {
+            NetworkPath::multicastDropped = dropped;
+            refreshStatus();
         }
     }
 
@@ -330,7 +357,7 @@ private:
     /// Find or insert a classified device, arming persistence only when a saved field changes.
     void upsertDevice(const uint8_t ip[4], const DiscoveredDevice& found) {
         uint8_t local[4] = {};
-        localIp(local);
+        localIPv4(local);
         const bool isSelf = ipEq(ip, local);
         Device* d = findByIp(ip);
         bool persistChanged = false;
@@ -435,8 +462,9 @@ private:
 
     /// Report how many devices are listed, and arm the save.
     void refreshStatus() {
-        mm::formatTo(statusBuf_, sizeof(statusBuf_), "%u device%s",
-                      deviceCount_, deviceCount_ == 1 ? "" : "s");
+        mm::formatTo(statusBuf_, sizeof(statusBuf_), "%u device%s%s",
+                      deviceCount_, deviceCount_ == 1 ? "" : "s",
+                      NetworkPath::multicastDropped ? ", multicast blocked: broadcasting too" : "");
         setStatus(statusBuf_);
         // Persisted, so the next boot shows the set instantly.
         markDirty();

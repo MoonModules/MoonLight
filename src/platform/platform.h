@@ -542,6 +542,8 @@ bool mdnsInit(const char* deviceName);
 void mdnsStop();
 /// Free the mDNS stack, at release.
 void mdnsShutdown();
+/// Resolve a host name to its IPv4 address, `.local` by mDNS and any other by DNS; it blocks, so only a background task calls it.
+bool resolveHost(const char* name, uint8_t ip[4]);
 
 /// Store the DHCP hostname the next bring-up advertises; call it before ethInit or wifiStaInit.
 void setHostname(const char* name);
@@ -623,22 +625,16 @@ public:
 
     /// Open the socket, answering whether it came up.
     bool open();
-    // A fixed destination lets each send skip the address parse and route lookup.
-    /// Bind a fixed destination; false on a bad address.
-    bool connect(const char* ip, uint16_t port);
-    /// Send to the connected destination.
-    bool sendTo(const uint8_t* data, size_t len);
     // Listening flips the whole socket non-blocking, sends included.
     /// Listen on a port on any interface; false when it is taken.
     bool bind(uint16_t port);
     // A datagram longer than `maxLen` is truncated; `srcIp` also answers who sent it.
     /// Receive one datagram without blocking: bytes copied, or -1 when nothing is pending.
     int recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4] = nullptr);
-    // For replying on a bound, unconnected socket; a connected one keeps using sendTo.
     /// Send once to an explicit address.
     bool sendToAddr(const uint8_t ip[4], uint16_t port, const uint8_t* data, size_t len);
     // Without the membership the OS never delivers those datagrams, however correct the port.
-    /// Join a multicast group on a bound socket; false is retried rather than fatal.
+    /// Join a multicast group on a bound socket, its own sends no longer looping back; false is retried rather than fatal.
     bool joinMulticast(const char* group);
     /// Close it, which the destructor also does.
     void close();
