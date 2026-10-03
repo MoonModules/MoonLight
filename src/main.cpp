@@ -121,7 +121,7 @@
 #include "light/layouts/Layouts.h"
 #include "light/layouts/GridLayout.h"
 #include "light/drivers/Drivers.h"
-#include "light/drivers/LightPresetsModule.h"
+#include "light/drivers/FixtureProfilesModule.h"
 #include "light/drivers/PreviewDriver.h"
 #include "core/system/HttpServerModule.h"
 #include "core/system/SystemModule.h"
@@ -140,6 +140,9 @@
 #include "core/system/MqttModule.h"
 #include "core/system/DevicesModule.h"
 #include "core/system/FilesystemModule.h"
+#include "core/system/EthernetModule.h"
+#include "core/system/WiFiModule.h"
+#include "core/system/AccessPointModule.h"
 #include "core/system/NetworkModule.h"
 #include "platform/platform.h"
 
@@ -234,6 +237,23 @@ void mm_main(volatile bool& keepRunning, uint16_t httpPort) {
     auto* networkModule = createOrDie<mm::NetworkModule>("NetworkModule");
     networkModule->setScheduler(&scheduler);
     networkModule->setSystemModule(systemModule);
+    // The interfaces come first among Network's children, in the order the cascade tries them; only where Ethernet is compiled in or previewed.
+    if constexpr (mm::platform::hasEthernet || mm::platform::previewsEthernetControls) {
+        auto* ethernetModule = createOrDie<mm::EthernetModule>("EthernetModule");
+        ethernetModule->markWiredByCode();
+        networkModule->addChild(ethernetModule);
+        networkModule->setEthernet(ethernetModule);
+    }
+    if constexpr (mm::platform::hasWiFi) {
+        auto* wifiModule = createOrDie<mm::WiFiModule>("WiFiModule");
+        wifiModule->markWiredByCode();
+        networkModule->addChild(wifiModule);
+        networkModule->setWiFi(wifiModule);
+        auto* accessPointModule = createOrDie<mm::AccessPointModule>("AccessPointModule");
+        accessPointModule->markWiredByCode();
+        networkModule->addChild(accessPointModule);
+        networkModule->setAccessPoint(accessPointModule);
+    }
 
     // Listens on the serial port for pushed WiFi credentials, compile-time gated: @xref{why-improv-is-compile-time-gated}.
     mm::ImprovProvisioningModule* improvModule = nullptr;
@@ -277,11 +297,11 @@ void mm_main(volatile bool& keepRunning, uint16_t httpPort) {
 
     // Output drivers are added per board through the catalog rather than boot-wired, the preview being the one exception: @xref{why-output-drivers-are-not-boot-wired}.
 
-    // The preset library, a boot-wired singleton owning the named channel-role wirings every driver references by id, resolved through its own seat since exactly one exists.
-    auto* lightPresets =
-        createOrDie<mm::LightPresetsModule>("LightPresetsModule");
-    drivers->addChild(lightPresets);
-    lightPresets->markWiredByCode();
+    // The fixture-profile library, a boot-wired singleton owning the named channel-role wirings every driver references by id, resolved through its own seat since exactly one exists.
+    auto* fixtureProfiles =
+        createOrDie<mm::FixtureProfilesModule>("FixtureProfilesModule");
+    drivers->addChild(fixtureProfiles);
+    fixtureProfiles->markWiredByCode();
 
     auto* preview = createOrDie<mm::PreviewDriver>("PreviewDriver");
     drivers->addChild(preview);

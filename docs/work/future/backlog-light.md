@@ -35,7 +35,7 @@ exist at all. It replaces the blocking `rmt_tx_wait_all_done` with `rmt_tx_regis
 (`on_trans_done`) plus a per-channel busy flag so the next tick skips while a frame is in flight,
 and reports `"RMT DMA"` in the driver status so a user can see which path is live. Files:
 `platform_esp32_rmt.cpp` (+105), `RmtLedDriver.h` (+75), `LedDriverConfig.h`, `Correction.h`
-(RGBW presets, a separate topic in the same branch), with unit tests.
+(RGBW profiles, a separate topic in the same branch), with unit tests.
 
 What it does NOT address: on the classic ESP32 the DMA half compiles to nothing, and nothing in it
 moves the channel's interrupt off core 0 (the root cause found on the Dig-Next-2, fixed by
@@ -332,7 +332,7 @@ MoonLight targets a fixed 60 fps; MoonLight deliberately does not (settled with 
 
 ### Brightness belongs on a fixture's DIMMER channel, not only in the color values (WANTED)
 
-`Correction::apply()` holds a preset's `Dimmer` channel wide open at 255 and puts brightness into
+`Correction::apply()` holds a profile's `Dimmer` channel wide open at 255 and puts brightness into
 the R/G/B/W values through `briLut`. That is correct output and it is the only rule that serves
 every fixture (an addressable strip has no dimmer channel), but it is not how a lighting console
 drives a fixture that HAS one, and it costs real quality:
@@ -346,7 +346,7 @@ drives a fixture that HAS one, and it costs real quality:
 - **Matching.** A PAR with a real dimmer and a strip without one, both at 20%, do not read as the
   same brightness: one dims in the LED driver, the other in integer arithmetic.
 
-**The rule to implement:** when a preset declares a `Dimmer` role, route the driver's brightness to
+**The rule to implement:** when a profile declares a `Dimmer` role, route the driver's brightness to
 that channel and drive the colors at full saturation; keep today's behavior (scale the colors)
 only where the fixture has no dimmer. The per-light color values still carry the effect's own
 shading, so an effect that paints one light dark stays dark. Watch the one case where fixture and
@@ -354,7 +354,7 @@ light are not 1:1: several light cells behind ONE master dimmer cannot express p
 through it, so those keep the color-scaling path.
 
 Found on the bench 2026-08-28 wiring the first moving head. Note the dimmer was not written AT ALL
-before that day (the shipped `IRGB` preset could never light a fixture); writing it at 255 is the
+before that day (the shipped `IRGB` profile could never light a fixture); writing it at 255 is the
 fix that made a fixture light, not the finished design.
 
 ### Blending adds motion channels, which is meaningless for aim (WANTED)
@@ -378,7 +378,7 @@ both need `FixtureChannels`' offsets on the blend path.
 
 Pan and tilt now have a writer: an effect sets them through `EffectBase::setPan`/`setTilt` and
 `Correction::apply()` maps the layer slots onto the fixture's channels (`MovingHeadEffect` is the
-worked example, bench-driven). **`Zoom`, `Rotate` and `Gobo` still have none**: a preset can map
+worked example, bench-driven). **`Zoom`, `Rotate` and `Gobo` still have none**: a profile can map
 them and `Correction` carries their offsets, but no effect writes them, so they sit at 0.
 
 This is the other half of driving a moving head, and it is a domain question, not a plumbing one: a
@@ -411,26 +411,26 @@ So the fix is scoped to the preview, and the open question is where travel is de
 - **`PreviewDriver` controls** (`panTravel`, `tiltTravel` in degrees, sent in the aim message) —
   small, live-reconfigurable like every other setting, and honest that travel is a property of the
   fixture someone plugged in. The leanest thing that stops the lie.
-- **The light preset** — correct once two different heads run at once, but a preset is a
-  *channel-role* layout today, and carrying physical travel widens what a preset means. Belongs
+- **The fixture profile**: correct once two different heads run at once, but a profile is a
+  *channel-role* layout today, and carrying physical travel widens what a profile means. Belongs
   with the [fixture model](#fixture-model-moving-heads-beams-long-term), not before it.
 
 **Positioning is 8-bit while the fixture offers 16.** The bench head has a fine channel for each
 axis ([light fixtures reference](../../reference/hardware/light-fixtures.md)); both sit unused, so pan resolves
 to 540/256 = about 2.1 degrees per step. Across a room that is a visible jump on a slow sweep, and
 it is the bigger fidelity win of the two. Needs a 16-bit path from the effect's sweep through
-`FixtureChannels` to the preset's fine-channel roles, so it is the larger job.
+`FixtureChannels` to the profile's fine-channel roles, so it is the larger job.
 
-### Built-in light presets never reach a device that has a saved config (WANTED)
+### Built-in fixture profiles never reach a device that has a saved config (WANTED)
 
-`LightPresetsModule` seeds its built-ins only when the preset list is empty
+`FixtureProfilesModule` seeds its built-ins only when the profile list is empty
 (`if (count_ == 0) seedBuiltins()`), and the persisted list replaces them wholesale. So a newly
-shipped built-in preset appears only on a device that has never saved one: every existing device
-keeps the older set forever. Adding the mini moving head's preset on 2026-08-28 needed a hand-patch
+shipped built-in profile appears only on a device that has never saved one: every existing device
+keeps the older set forever. Adding the mini moving head's profile on 2026-08-28 needed a hand-patch
 of the bench device's `Drivers.json`, which does not scale past one board.
 
 **The fix:** merge by name at boot, seeding any built-in the saved list does not already carry, so
-shipping a fixture preset reaches existing devices on their next update. A user's own presets and
+shipping a fixture profile reaches existing devices on their next update. A user's own profiles and
 their edits to a built-in must survive that merge untouched.
 
 ### ArtPoll discovery — know which tubes are alive (next increment on NetworkSendDriver)
@@ -787,8 +787,8 @@ The LED-driver increments **shipped**: increment 1 (RMT/WS2812B single-strand on
 - **`rmtWs2812Show` fuller error handling** (deferred from PR #17 / 🐇 CodeRabbit). The shipped path has a finite `rmt_tx_wait_all_done` timeout (1 s) so a wedged DMA can't hang the render tick forever, and a dropped frame self-heals (the driver re-encodes the whole frame next tick). The fuller version — `rmt_transmit` return check, `rmt_tx_stop` to cancel an in-flight transfer on timeout, `show()` returning failure so `loop()` won't reuse `symbols_` mid-transmit — belongs with the **core-1 driver-task** work, since that task owns the buffer lifetime and in-flight state the cancel logic needs.
 - **Auto-derived DMA buffer count** (7 / 30 / 75 per [analysis §7.4](../../work/future/leddriver-analysis-top-down.md)), **16-bit pipeline + dither** ([§7.3](../../work/future/leddriver-analysis-top-down.md)), **shift-register expander stubs** ([§7.5](../../work/future/leddriver-analysis-top-down.md)).
 - **IR RX live-reconfigure recovery — unconfirmed, park until it recurs** (bench 2026-07-13, SE16). IR reception on the SE16 (`IrService` pin 5) went dead mid-session and only a **hard reset** brought it back; a warm/API path did not. **Ruled out:** not hardware (hard reset fixed it, receiver+switch+wiring fine), not LED-count (IR survives the full 16384-light / 8 fps load — a received code still toggled a control at max load), not a regression from the i80 commit (`platform_esp32_ir.cpp` untouched, the 1250 ns glitch-filter fix intact). **Prime suspect (unproven):** the session's live pin churn — including transiently setting the i80 `clockPin` to **5, which IS the IR pin** — left GPIO 5 routed to the wrong peripheral, and the RMT-RX channel (a pin-keyed static behind `platform::irStop`/`ensureChannel`) didn't re-acquire cleanly on the next `irRead`; only a full GPIO re-init (hard reset) cleared it. This may be pure test artifact (nothing in a *normal* user flow points two live modules at GPIO 5). **To conclude:** from a fresh hard reset (IR working), in isolation set i80 `clockPin=5` then restore `clockPin=8` and check whether IR dies and whether it self-recovers *without* a hard reset — self-recovers → no bug (test artifact); stays dead → a real live-reconfigure gap in the IR channel re-acquire worth fixing (per *No reboot to apply a configuration change*). Small robustness/repro work; do it only if IR breaks again in real use.
-- **Moving-head preview = peer interpreter.** When moving heads land, the previewer must interpret channel semantics (pan/tilt/RGBW-at-arbitrary-indices) to render a moving fixture — the same light-preset model physical drivers use, interpreted to screen. This is *why* the increments named the abstraction "interpret the preset" rather than "apply correction / opt out": so Preview becomes a full peer here without a rename. Its own design plan when moving-head support starts.
-- **Sparse light-preset editor.** A LightPresets row currently shows one role Select per channel across the whole `channels` width — including the unmapped `—` gaps a wide moving head has between its functions. For a fixture you usually only care about the few channels you drive (rgb, pan, tilt). The refinement: show only the *mapped* channels + an "add channel" affordance (pick a role → fills the first gap or grows the fixture), over the unchanged dense `roles[]` storage. A first attempt shipped and was reverted for edit bugs; redo it cleanly (the dense editor is the reliable interim). Prior art: GDTF / QLC+ fixture profiles (a fixture is a sparse `{channel → function}` map, not a dense per-channel array).
+- **Moving-head preview = peer interpreter.** When moving heads land, the previewer must interpret channel semantics (pan/tilt/RGBW-at-arbitrary-indices) to render a moving fixture: the same fixture-profile model physical drivers use, interpreted to screen. This is *why* the increments named the abstraction "interpret the profile" rather than "apply correction / opt out": so Preview becomes a full peer here without a rename. Its own design plan when moving-head support starts.
+- **Sparse fixture-profile editor.** A FixtureProfiles row currently shows one role Select per channel across the whole `channels` width: including the unmapped `, ` gaps a wide moving head has between its functions. For a fixture you usually only care about the few channels you drive (rgb, pan, tilt). The refinement: show only the *mapped* channels + an "add channel" affordance (pick a role → fills the first gap or grows the fixture), over the unchanged dense `roles[]` storage. A first attempt shipped and was reverted for edit bugs; redo it cleanly (the dense editor is the reliable interim). Prior art: GDTF / QLC+ fixture profiles (a fixture is a sparse `{channel → function}` map, not a dense per-channel array).
 
 - **`worley` cellular noise, when an effect needs it** (deferred 2026-08-07, PO). The one power function the plan names that stayed unbuilt on purpose. Worley (cellular / Voronoi) noise measures the distance to the nearest of a set of scattered feature points, which is what produces the look nothing else does — cracked mud, scales, stained glass, a caustic. The fields we have cannot fake it: `fbm` and `warp` are smooth by construction, so their creases never form cells.
 

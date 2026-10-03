@@ -363,7 +363,7 @@ def main() -> int:
     ap.add_argument("--device-model", dest="device_model", default=None, metavar="NAME",
                     help="deviceModel name from mooninstaller/deviceModels.json (e.g. "
                          "'ESP32-S3 N16R8 Dev'). Resolves the deviceModel's TX-power cap "
-                         "(controls.Network.txPowerSetting) automatically and, after "
+                         "(the WiFi entry's txPowerSetting) automatically and, after "
                          "provisioning, applies the entry's modules and controls over "
                          "serial as APPLY_OP ops: the same config push the web installer "
                          "does. An explicit --tx-power overrides the lookup.")
@@ -432,7 +432,7 @@ def main() -> int:
             print(f"ERROR: deviceModel {args.device_model!r} not in deviceModels.json ({names})",
                   file=sys.stderr)
             return 2
-        # The cap lives on the NetworkModule entry inside the board's `modules` list — the same
+        # The cap lives on the WiFiModule entry inside the board's `modules` list, the same
         # shape the web installer and check_devices.py read. (It was looked up as a flat
         # entry["controls"]["Network"] dict, which no catalog entry has, so it silently resolved to
         # None and the cap was NEVER applied: a board needing a reduced TX power would associate at
@@ -440,7 +440,7 @@ def main() -> int:
         # hpwit shift-register board, 2026-07-14.)
         cap = next((m.get("controls", {}).get("txPowerSetting")
                     for m in entry.get("modules", [])
-                    if m.get("type") == "NetworkModule"), None)
+                    if m.get("type") == "WiFiModule"), None)
         if args.tx_power is None and isinstance(cap, int):
             args.tx_power = cap
             print(f"==> deviceModel {args.device_model!r}: TX-power cap {cap} dBm from deviceModels.json")

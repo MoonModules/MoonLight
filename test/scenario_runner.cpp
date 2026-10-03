@@ -551,11 +551,11 @@ static int runScenario(const char* path) {
     if (mode == "mutate") {
         // In-process replays the fixture before the scenario's actual steps: @xref{the-construct-and-mutate-modes}.
         if (!scenario.has("fixture") || scenario["fixture"].arr.empty()) {
-            std::printf("  SKIP (mutate scenario with no fixture — runs live only)\n");
+            std::printf("  SKIP (mutate scenario with no fixture: runs live only)\n");
             return kSkipped;
         }
     } else if (mode != "construct") {
-        std::printf("  FAIL — unknown mode: %s (expected construct or mutate)\n", mode.c_str());
+        std::printf("  FAIL: unknown mode: %s (expected construct or mutate)\n", mode.c_str());
         return 1;
     }
 
@@ -642,7 +642,7 @@ static int runScenario(const char* path) {
                     std::printf("  SKIP  %s (optional, type %s unavailable here)\n", name, type);
                     continue;
                 }
-                std::printf("  ADD   %s — unknown type: %s\n", name, type);
+                std::printf("  ADD   %s: unknown type: %s\n", name, type);
                 result.check(false, name);
                 continue;
             }
@@ -664,35 +664,35 @@ static int runScenario(const char* path) {
             std::printf("  +     %s (%s)\n", id, type);
         } else if (std::strcmp(op, "set_control") == 0) {
             if (!step.has("id") || !step.has("key")) {
-                std::printf("  SET   %s — missing id/key, skipped\n", name);
+                std::printf("  SET   %s: missing id/key, skipped\n", name);
                 continue;
             }
             const char* targetId = step["id"].c_str();
             const char* key = step["key"].c_str();
             auto* target = ctx.modules.count(targetId) ? ctx.modules[targetId] : nullptr;
             if (!target) {
-                std::printf("  SET   %s — module %s not found, skipped\n", name, targetId);
+                std::printf("  SET   %s: module %s not found, skipped\n", name, targetId);
                 continue;
             }
             if (!applySetControl(ctx.scheduler, target, key, step["value"])) {
-                std::printf("  SET   %s — control %s.%s not applied\n", name, targetId, key);
+                std::printf("  SET   %s: control %s.%s not applied\n", name, targetId, key);
             } else {
                 std::printf("  SET   %s (%s.%s)\n", name, targetId, key);
             }
         } else if (std::strcmp(op, "reboot") == 0) {
             // The scheduler IS the process here, so a restart belongs to the live tier and says so rather than pretending.
-            std::printf("  REBOOT %s — skipped (no process to restart in-process)\n", name);
+            std::printf("  REBOOT %s: skipped (no process to restart in-process)\n", name);
         } else if (step.has("optional") && step["optional"].boolean
                    && std::strcmp(op, "add_module") != 0 && std::strcmp(op, "set_control") != 0
                    && std::strcmp(op, "measure") != 0 && std::strcmp(op, "remove_module") != 0
                    && std::strcmp(op, "delete_module") != 0) {
             // `optional` is honoured by the ops above and nowhere else: @xref{why-an-unknown-module-type-fails}.
-            std::printf("  %s %s — `optional` does nothing on this op\n", op, name);
+            std::printf("  %s %s: `optional` does nothing on this op\n", op, name);
             result.check(false, name);
         } else if (std::strcmp(op, "expect_file") == 0) {
             // Read a file back, the only way to prove a write reached the filesystem rather than a cache.
             if (!step.has("path")) {
-                std::printf("  EXPECT %s — missing path\n", name);
+                std::printf("  EXPECT %s: missing path\n", name);
                 result.check(false, name);
                 continue;
             }
@@ -700,7 +700,7 @@ static int runScenario(const char* path) {
             // `contains` matches a substring and `equals` the whole file, since a step that meant one and got the other would pass on a file it never described.
             const bool exact = step.has("equals");
             if (!exact && !step.has("contains")) {
-                std::printf("  EXPECT %s — needs `contains` or `equals`\n", filePath);
+                std::printf("  EXPECT %s: needs `contains` or `equals`\n", filePath);
                 result.check(false, name);
                 continue;
             }
@@ -711,7 +711,7 @@ static int runScenario(const char* path) {
             const std::string have(buf, got > 0 ? static_cast<size_t>(got) : 0);
             // A truncated read cannot answer `equals`, which is about the whole file, so it fails as unevaluable rather than comparing a prefix.
             if (got >= static_cast<int>(sizeof(buf) - 1) && exact) {
-                std::printf("  EXPECT %s — file exceeds %u bytes, so `equals` cannot be evaluated\n",
+                std::printf("  EXPECT %s: file exceeds %u bytes, so `equals` cannot be evaluated\n",
                             filePath, static_cast<unsigned>(sizeof(buf) - 1));
                 result.check(false, name);
                 continue;
@@ -725,7 +725,7 @@ static int runScenario(const char* path) {
             // The only op that fails on a VALUE rather than a timing contract, and `not_equals` is its negation: @xref{what-a-green-run-is-allowed-to-mean}.
             const bool negated = !step.has("equals") && step.has("not_equals");
             if (!step.has("id") || !step.has("key") || (!step.has("equals") && !negated)) {
-                std::printf("  EXPECT %s — missing id/key/equals\n", name);
+                std::printf("  EXPECT %s: missing id/key/equals\n", name);
                 result.check(false, name);
                 continue;
             }
@@ -733,7 +733,7 @@ static int runScenario(const char* path) {
             const char* key = step["key"].c_str();
             auto* target = ctx.modules.count(targetId) ? ctx.modules[targetId] : nullptr;
             if (!target) {
-                std::printf("  EXPECT %s — module %s not found\n", name, targetId);
+                std::printf("  EXPECT %s: module %s not found\n", name, targetId);
                 result.check(false, name);
                 continue;
             }
@@ -742,7 +742,7 @@ static int runScenario(const char* path) {
                 if (std::strcmp(target->controls()[i].name, key) == 0) { found = &target->controls()[i]; break; }
             }
             if (!found) {
-                std::printf("  EXPECT %s — %s has no control %s\n", name, targetId, key);
+                std::printf("  EXPECT %s: %s has no control %s\n", name, targetId, key);
                 result.check(false, name);
                 continue;
             }
@@ -765,13 +765,13 @@ static int runScenario(const char* path) {
             const bool holds = negated ? !same : same;
             if (holds) std::printf("  EXPECT %s (%s.%s %s %s)\n", name, targetId, key,
                                    negated ? "!=" : "==", negated ? want.c_str() : actual);
-            else       std::printf("  EXPECT %s — %s.%s is \"%s\", expected %s\"%s\"\n",
+            else       std::printf("  EXPECT %s: %s.%s is \"%s\", expected %s\"%s\"\n",
                                    name, targetId, key, actual, negated ? "not " : "", want.c_str());
             result.check(holds, name);
         } else if (std::strcmp(op, "write_file") == 0) {
             // Stage a file the way the UI's editor does, a malformed step being a failed scenario: @xref{why-write-file-exists}.
             if (!step.has("path") || !step.has("value")) {
-                std::printf("  WRITE %s — missing path/value\n", name);
+                std::printf("  WRITE %s: missing path/value\n", name);
                 result.check(false, name);
                 continue;
             }
@@ -789,16 +789,32 @@ static int runScenario(const char* path) {
             if (wrote) {
                 std::printf("  WRITE %s (%s, %zu bytes)\n", name, filePath, body.size());
             } else {
-                std::printf("  WRITE %s — write to %s FAILED\n", name, filePath);
+                std::printf("  WRITE %s: write to %s FAILED\n", name, filePath);
             }
             result.check(wrote, name);
+            // The live API re-prepares the tree after a file changes, so a module deriving something from it (a scripted palette, a script) sees the change here too.
+            if (wrote && schedulerStarted) ctx.scheduler.prepareTree();
+        } else if (std::strcmp(op, "delete_file") == 0) {
+            // Remove a file the scenario staged, so a run leaves the device as it found it; one already gone counts as removed.
+            if (!step.has("path")) {
+                std::printf("  DELETE %s: missing path\n", name);
+                result.check(false, name);
+                continue;
+            }
+            const char* filePath = step["path"].c_str();
+            mm::platform::fsRemove(filePath);
+            const bool gone = !mm::platform::fsExists(filePath);
+            if (gone) std::printf("  DELETE %s (%s)\n", name, filePath);
+            else      std::printf("  DELETE %s: %s is still there\n", name, filePath);
+            result.check(gone, name);
+            if (schedulerStarted) ctx.scheduler.prepareTree();   // as after a write
         } else if (std::strcmp(op, "remove_module") == 0 || std::strcmp(op, "delete_module") == 0) {
             // `remove_module` and `delete_module` are aliases, and both remove a child from its parent: @xref{why-remove-module-and-delete-module-are-aliases}.
             const char* targetId = step["id"].c_str();
             auto* target = ctx.modules.count(targetId) ? ctx.modules[targetId] : nullptr;
             if (!target || !target->parent() || !target->userEditable()) {
                 // Mirror the live API: top-level and non-editable submodules stay: @xref{why-remove-module-and-delete-module-are-aliases}.
-                std::printf("  -     %s — %s not found / top-level / not editable, skipped\n", name, targetId);
+                std::printf("  -     %s: %s not found / top-level / not editable, skipped\n", name, targetId);
                 continue;
             }
             auto* parent = target->parent();
@@ -813,7 +829,7 @@ static int runScenario(const char* path) {
             const char* targetId = step["id"].c_str();
             auto* container = ctx.modules.count(targetId) ? ctx.modules[targetId] : nullptr;
             if (!container) {
-                std::printf("  clr     %s — container %s not found, skipped\n", name, targetId);
+                std::printf("  clr     %s: container %s not found, skipped\n", name, targetId);
                 continue;
             }
             int cleared = 0;
@@ -837,7 +853,7 @@ static int runScenario(const char* path) {
             auto* target = ctx.modules.count(targetId) ? ctx.modules[targetId] : nullptr;
             if (!target || !target->parent() || !target->userEditable()) {
                 // Mirror the live API: a top-level or non-editable submodule stays: @xref{why-remove-module-and-delete-module-are-aliases}.
-                std::printf("  ~     %s — %s not found / top-level / not editable, skipped\n", name, targetId);
+                std::printf("  ~     %s: %s not found / top-level / not editable, skipped\n", name, targetId);
                 continue;
             }
             auto* parent = target->parent();
@@ -848,7 +864,7 @@ static int runScenario(const char* path) {
             auto* fresh = ctx.createModule(newType);
             if (!found || !fresh) {
                 if (fresh) mm::Scheduler::deleteTree(fresh);
-                std::printf("  ~     %s — slot not found or unknown type %s, skipped\n", name, newType);
+                std::printf("  ~     %s: slot not found or unknown type %s, skipped\n", name, newType);
                 continue;
             }
             fresh->setName(targetId);
@@ -884,7 +900,7 @@ static int runScenario(const char* path) {
                     // min_pct needs a live baseline, so log a clear skip: @xref{why-a-measure-step-has-two-spellings}.
                     double pct = step["bounds"]["fps"]["min_pct"].num;
                     std::printf("  WARN  %s: bounds.fps.min_pct=%g requires a live "
-                                "baseline; in-process runner cannot enforce — skipped\n",
+                                "baseline; in-process runner cannot enforce: skipped\n",
                                 name, pct);
                     fpsBound = 0;
                 }

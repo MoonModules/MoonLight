@@ -15,7 +15,7 @@ namespace mm {
 ///
 /// @moreinfo
 ///
-/// A light's wire format is a `ChannelRole` array, resolved from the preset library into a `Correction` at rebuild time.
+/// A light's wire format is a `ChannelRole` array, resolved from the fixture-profile library into a `Correction` at rebuild time.
 /// The curated orders are seeded rows in that library rather than an enum here.
 
 /// More than one algorithm is accepted, so white derivation is a mode rather than a formula.
@@ -132,7 +132,7 @@ struct Correction {
     // A REMAP, not a copy: the layer's packed slots become the fixture's own offsets.
     /// Hot path: transform one source light into its output bytes, integer-only and allocation-free.
     inline void apply(const uint8_t* src, uint8_t* out, uint8_t srcChannels) const {
-        // Wide open, and written every frame, so a preset declaring one cannot be silently unlit.
+        // Wide open, and written every frame, so a profile declaring one cannot be silently unlit.
         if (offDimmer != kAbsent) out[offDimmer] = 255;
         // Unscaled and by ASSIGNMENT: additive semantics do not apply to positional signals.
         if (hasMotion && srcChannels != 0 && !motionHeld) {

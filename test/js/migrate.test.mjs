@@ -15,13 +15,72 @@ test("a user preset that shares a renamed filename is the user's, not migrated",
     assert.ok(!report.some(r => r.detail.includes("file →")));  // ...and no file rename reported
 });
 
-test("a driver's preset control migrates to lightPreset with its value", () => {
+test("Network's Ethernet controls move onto its Ethernet child, which starts with the shared IP settings", () => {
+    const cfg = { mDNS: true, ethBoard: "P4-NANO", ethType: 2, addressing: 1, ip: "192.168.1.9",
+                  "0.type": "ImprovProvisioningModule", "1.type": "DevicesModule" };
+    const { files, report } = applyMigrations({ "/.config/NetworkModule.json": JSON.stringify(cfg) });
+    const out = JSON.parse(files["/.config/NetworkModule.json"]);
+    // The backup predates the child, so it gets the next free index rather than displacing one.
+    assert.equal(out["2.type"], "EthernetModule");
+    assert.equal(out["2.ethBoard"], "P4-NANO");
+    assert.equal(out["2.ethType"], 2);
+    assert.equal(out.ethBoard, undefined);
+    // The wired interface starts with the IP settings the device had; with no network, Network keeps none.
+    assert.equal(out["2.ipSettings"], 1);
+    assert.equal(out["2.ip"], "192.168.1.9");
+    assert.equal(out.addressing, undefined);
+    assert.equal(out.mDNS, true);
+    assert.ok(report.some(r => r.detail.includes("moved to EthernetModule")));
+    // A backup without a network keeps no empty WiFi row.
+    assert.equal(out["3.type"], undefined);
+    // A WiFi-only backup gains no Ethernet entry from its IP settings alone.
+    const wifiOnly = applyMigrations({ "/.config/NetworkModule.json": JSON.stringify({ ssid: "home", addressing: 0 }) });
+    const w = JSON.parse(wifiOnly.files["/.config/NetworkModule.json"]);
+    assert.equal(w["0.type"], "WiFiModule");
+    assert.ok(!Object.values(w).includes("EthernetModule"));
+    // A backup without Ethernet settings is left exactly as it was.
+    const plain = applyMigrations({ "/.config/NetworkModule.json": JSON.stringify({ mDNS: false }) });
+    assert.deepEqual(JSON.parse(plain.files["/.config/NetworkModule.json"]), { mDNS: false });
+});
+
+test("Network's one WiFi network becomes the first known network of its WiFi child", () => {
+    const cfg = { ssid: "home", password: "pw", addressing: 1, ip: "10.0.0.7", txPowerSetting: 8, mDNS: true, ethBoard: "P4-NANO" };
+    const { files } = applyMigrations({ "/.config/NetworkModule.json": JSON.stringify(cfg) });
+    const out = JSON.parse(files["/.config/NetworkModule.json"]);
+    assert.equal(out["1.type"], "WiFiModule");
+    assert.deepEqual(out["1.known"], [{ id: 1, ssid: "home", password: "pw", ipSettings: 1, ip: "10.0.0.7" }]);
+    // The wired interface starts with the same IP settings, and Network keeps none of its own.
+    assert.equal(out["0.ipSettings"], 1);
+    assert.equal(out.addressing, undefined);
+    assert.equal(out.ip, undefined);
+    assert.equal(out["1.txPowerSetting"], 8);
+    assert.equal(out.ssid, undefined);
+    assert.equal(out.password, undefined);
+    assert.equal(out.mDNS, true);
+});
+
+test("a driver's preset control migrates to fixture with its value", () => {
     const cfg = { "0.type": "RmtLedDriver", "0.preset": 2, "0.enabled": true };
     const { files } = applyMigrations({ "/.config/Drivers.json": JSON.stringify(cfg) });
     const out = JSON.parse(files["/.config/Drivers.json"]);
-    assert.equal(out["0.lightPreset"], 2);
+    assert.equal(out["0.fixture"], 2);
     assert.equal(out["0.preset"], undefined);
     assert.equal(out["0.enabled"], true);
+});
+
+test("light presets are fixture profiles: type, list key and the driver's Select all map", () => {
+    const lib = { "0.type": "LightPresetsModule", "0.presets": [{ id: 1, name: "GRB" }] };
+    const out1 = applyMigrations({ "/.config/Drivers.json": JSON.stringify({ ...lib, "1.type": "RmtLedDriver", "1.lightPreset": 3, "1.presetRef": "RGBW" }) });
+    const out = JSON.parse(out1.files["/.config/Drivers.json"]);
+    assert.equal(out["0.type"], "FixtureProfilesModule");
+    assert.deepEqual(out["0.profiles"], [{ id: 1, name: "GRB" }]);
+    assert.equal(out["0.presets"], undefined);
+    assert.equal(out["1.fixture"], 3);
+    assert.equal(out["1.fixtureRef"], "RGBW");
+    assert.equal(out["1.lightPreset"], undefined);
+    // A `presets` key on any other module (ControlModule's own) is not touched.
+    const other = applyMigrations({ "/.config/Control.json": JSON.stringify({ presets: 1 }) });
+    assert.equal(JSON.parse(other.files["/.config/Control.json"]).presets, 1);
 });
 
 test("a bundle carrying both old and new names reports the collision, never silent", () => {

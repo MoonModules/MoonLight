@@ -90,13 +90,6 @@ judgment per line. Do it as its own change with its own review, a directory at a
 inside a branch about something else: a blanket find-and-replace over comments is how a code
 identifier gets rewritten by accident.
 
-## Test hooks appear in the generated API pages (2026-10-02)
-
-check_docgen requires a `///` on every public function, so a test hook gets one, and Doxygen then publishes it: 69 `*ForTest` functions across 21 API pages, plus `HostResolver::TestScope`.
-One rule fixes the class: a test hook's name ends in `ForTest`, `gen_api.py` sets `EXCLUDE_SYMBOLS = *ForTest`, and check_docgen exempts those names from the `///` rule, a `//` line serving the source reader.
-The stragglers get renamed to fit, such as `TestScope` and `platform::setTestNowMs`, and documentation-standards.md gains the rule in one sentence.
-A change of its own, since it renames symbols across the repo and moves the docgen counts.
-
 ## Distribution
 
 ### The arm64 `.deb` is untested on Raspberry Pi OS bookworm (2026-09-13)
@@ -162,7 +155,7 @@ declared rather than for a buffer to fill, and to time out on stall rather than 
 - **Live RMII Ethernet reconfigure** — runtime PHY/pin config shipped (`ethType` + pin controls in NetworkModule, per-board defaults in `deviceModels.json`, `platform::setEthConfig`/`ethInit` dispatch). W5500 (SPI) on S3 applies **live** — `ethStop()` tears down the SPI bus and `ethInit()` re-runs on the next `loop1s()` with no reboot. RMII (classic/P4 internal EMAC) still saves config and asks for a restart to apply, because the EMAC bring-up is fiddlier to hot-cycle cleanly. Make RMII live too: a hot `esp_eth_stop` + EMAC/netif teardown + re-init on config change, matching the W5500 path, so every interface honours the no-reboot principle.
 - **GCC below 16 needs four warnings demoted, and nothing exercises those versions** - `-Wnull-dereference`, `-Wrestrict`, `-Wstringop-overflow` and `-Wformat-truncation` fire on provably correct code from GCC 12 through 15 (five of the twelve inside libstdc++ and glibc headers, unreachable from our source), so CMakeLists demotes them to non-fatal there and keeps them fatal on 16+. That unblocks CI and from-source builds on Debian and Raspberry Pi OS alike, but it is a suppression, not an understanding: nobody routinely compiles with 12-15, so a REAL instance of one of these on those versions is now a warning nobody reads. Revisit when the runner's default GCC reaches 16, at which point the whole block can be deleted.
 - **Installer UX polish** — clear "Pre-release (beta)" warning on RC/latest picks, yank-by-asset-tag instead of yank-by-release-deletion.
-- **Offer MoonLight/MoonLight as a library** — a downstream sketch where another firmware/app consumes the light pipeline (or a subset) as an embeddable dependency rather than running the whole binary. `library.json` is already a PlatformIO *library* manifest, so the seed exists. When this is designed, give it a small public **identity surface**: one runtime constant the consumer reads (a `kProjectName`, likely a `ProjectInfo` bundle of name + version + url) that the network wire-strings (ArtNet/E1.31 source-name + CID), the UI banner, and any "About" string all *derive from* — the one place a consumer queries "what am I embedding." This is the genuine home for the name-centralisation that the rename ([the MoonLight plan](../present/Plan-20260922%20-%20MoonLight,%20from%20v5.0.0%20to%20the%20rename.md)) deliberately *didn't* do: the rename is a one-time sweep (a constant would just split it), but a library consumer references the identity ongoing and widely, which is the test a constant must pass. Build it *then*, against the real library API, not speculatively now.
+- **Offer MoonLight/MoonLight as a library**: a downstream sketch where another firmware/app consumes the light pipeline (or a subset) as an embeddable dependency rather than running the whole binary. `library.json` is already a PlatformIO *library* manifest, so the seed exists. When this is designed, give it a small public **identity surface**: one runtime constant the consumer reads (a `kProjectName`, likely a `ProjectInfo` bundle of name + version + url) that the network wire-strings (ArtNet/E1.31 source-name + CID), the UI banner, and any "About" string all *derive from*: the one place a consumer queries "what am I embedding." This is the genuine home for the name-centralisation that the rename ([the MoonLight plan](../past/plans/Plan-20260922%20-%20MoonLight,%20from%20v5.0.0%20to%20the%20rename%20(shipped).md)) deliberately *didn't* do: the rename is a one-time sweep (a constant would just split it), but a library consumer references the identity ongoing and widely, which is the test a constant must pass. Build it *then*, against the real library API, not speculatively now.
 - **HTTP: a request whose headers or body arrive a few ms late is dropped, intermittently
   (2026-08-20).** `handleConnection` runs SYNCHRONOUSLY inside `tick20ms`, so its waits are kept
   short to protect the render loop: a freshly accepted connection gets **~5 ms** for its request
@@ -369,7 +362,7 @@ Estimates, not measurements, so they live here rather than in [performance.md](.
 ### `ListSource` methods compile twice: ~8.6 KB of thunks (2026-10-01)
 
 Every module that is `MoonModule` and `ListSource` gets its list methods emitted twice on ESP32: once as the method, once as a "non-virtual thunk" for the second base, and GCC copies the whole body into the thunk instead of a jump.
-Measured on the S3 image with `xtensa-esp32s3-elf-nm -S`: 8.6 KB in all, the largest `GamepadService` 1.6 KB, `ButtonService` 1.3 KB, `LightPresetsModule` 1.2 KB, `ControlModule` 1.1 KB, `InfraredService` 0.9 KB, `AnalogService` 0.9 KB.
+Measured on the S3 image with `xtensa-esp32s3-elf-nm -S`: 8.6 KB in all, the largest `GamepadService` 1.6 KB, `ButtonService` 1.3 KB, `FixtureProfilesModule` 1.2 KB, `ControlModule` 1.1 KB, `InfraredService` 0.9 KB, `AnalogService` 0.9 KB.
 Candidates, to measure rather than assume: a `ListSource` that is a member the module hands out (no second base, so no thunk), or keeping the bodies out of line so the thunk can only jump.
 Done when the thunk total in the S3 symbol table is near zero, with the delta in repo-health.
 
@@ -569,7 +562,30 @@ The annoyance is purely that the device boots degraded and needs a poke to recov
 
 Related: this is the render/output-buffer face of the same non-PSRAM fragmentation cliff the paged `MappingLUT` already addressed for the *LUT*. The buffers themselves still allocate as single contiguous blocks.
 
+## Advanced network settings (2026-10-03)
+
+Left out of the plan that makes Ethernet, WiFi and the access point Network submodules, and expected to be asked for:
+
+- **Roaming** between access points of one network while connected, by signal threshold (802.11k/v/r where the chip supports it).
+- **Enterprise WiFi**: WPA2/WPA3-Enterprise with a username, a password or a certificate.
+- **Pinning a network to one access point** (BSSID) or one band.
+- **WiFi power save**: the modem-sleep mode, traded against latency for Art-Net and the UI.
+- **The country code**, set by hand where adopting the router's country is not enough.
+- **The access point's address**, fixed at 4.3.2.1.
+- **IPv6** on every interface.
+
 ## Architecture
+
+### An offline test run takes 16 minutes instead of one (2026-10-03)
+
+With the host's network down, `test_desktop` ran 16 minutes and the scenarios stalled past the gate's hour; online, no test takes over 4 seconds, so something waits out network timeouts.
+Next time the machine is offline, `build/macos/test/mm_tests --duration=true` names the test, which then gets a seam like `setTestJoinFails`.
+
+### `applyControlValue` should say whether the value changed (2026-10-03)
+
+The boot reapply in `FilesystemModule::reapplyNode` detects a changed value by serializing each control before and after the apply and comparing the bytes, a list control included.
+`applyControlValue` reports only whether the value parsed and applied. The proposed shape is the apply also reporting whether storage moved, an `ApplyResult::Unchanged` or a flag, so `Scheduler::setControl` can skip the reaction to a write that changes nothing.
+Cold path today, so a tidy-up rather than a cost.
 
 ### Group src/core into folders, the way src/light already is (2026-09-17)
 
@@ -1094,7 +1110,7 @@ The build IDF is `v6.1-dev-399-gd1b91b79b5`, a dev-branch snapshot (2025-11-05) 
 
 ### Clock sync — a shared monotonic clock across devices (committed design, unwired)
 
-The second half of the core [multi-device runtime](../../explanation/architecture/mooncore.md#multi-device-runtime); discovery ships, this does not. The design: one leader broadcasts its elapsed time (millis); followers compute their offset, targeting sub-millisecond accuracy. A shared monotonic clock is the foundation any cross-device coordination builds on, which is why it is core rather than light-domain.
+The second half of the core [multi-device runtime](../../explanation/architecture/mooncore.md#multi-device-runtime); discovery ships, this does not. The design: one leader sends its elapsed time over OSC, the protocol that already carries the shared controls, with the same `addressing`; followers compute their offset, targeting sub-millisecond accuracy. A shared monotonic clock is the foundation any cross-device coordination builds on, which is why it is core rather than light-domain.
 
 The light-domain payoff is a wall of controllers animating in lockstep: effects already animate off elapsed time, so feeding them the leader's synced clock instead of each device's local one is the whole change on the render side. Device-to-device light *distribution* is a separate topology question and rides the existing ArtNet / E1.31 / DDP standards rather than a bespoke protocol.
 
@@ -1664,7 +1680,7 @@ Reproduced once, on a bench with a Realtek USB GbE adapter feeding a ColorLight 
 
 ## The interface picker re-enumerates adapters on every control rebuild (2026-09-28)
 
-`rawInterfaces()` caches nothing, and `defineDriverControls()` calls it on every rebuild of a driver that owns an interface Select. On Windows `pcap_findalldevs` opens each adapter in turn and measures ~2.3 s, so every control change on PanelCardDriver, every `/api/types` that builds the type catalog, and every UI refresh paid it. Measured with a panel driver present: `POST lightPreset` 2.2 to 6.7 s, `/api/types` 2.3 to 4.4 s, `/api/state` 2.2 s. The same payloads on a config with no panel driver: 23 to 36 ms. POSIX is not affected, since it enumerates with `getifaddrs`.
+`rawInterfaces()` caches nothing, and `defineDriverControls()` calls it on every rebuild of a driver that owns an interface Select. On Windows `pcap_findalldevs` opens each adapter in turn and measures ~2.3 s, so every control change on PanelCardDriver, every `/api/types` that builds the type catalog, and every UI refresh paid it. Measured with a panel driver present: `POST fixture` 2.2 to 6.7 s, `/api/types` 2.3 to 4.4 s, `/api/state` 2.2 s. The same payloads on a config with no panel driver: 23 to 36 ms. POSIX is not affected, since it enumerates with `getifaddrs`.
 
 A cache with a 60 s window took those to 8 to 35 ms and was reverted before the release as too much risk for hardware-critical code. Two things learned from doing it: the window has to outlast a person pausing to think, because a 3 s one leaves every deliberate control change paying full price; and skipping the rebind needs `ethLinkUp()` in the condition, because an open pcap handle whose link is down still wants rebinding and guarding on "already bound" alone removes the only recovery a user has. Scope any cache to Windows, since it buys POSIX nothing and costs it hot-plug latency.
 

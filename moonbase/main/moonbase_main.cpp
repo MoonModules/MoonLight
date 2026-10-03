@@ -29,7 +29,8 @@
 #include "esp_event.h"
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
-#include "core/util/FirmwareImage.h"  // identify(): the one shared header, see main/CMakeLists.txt
+#include "core/util/FirmwareImage.h"  // identify(): shared with the app, see main/CMakeLists.txt
+#include "core/util/ConfigScrape.h"   // the keys this image reads out of the app's config, shared so the app's test runs the same scraper
 #include "esp_app_desc.h"    // esp_app_get_description: this image's own version
 #include "esp_https_ota.h"
 #include "esp_littlefs.h"
@@ -84,58 +85,6 @@ constexpr int kNetGotIp = BIT0;
 // Credentials
 // ---------------------------------------------------------------------------------------------
 
-// One top-level string out of the config, deliberately not a parser: two known keys from a file this project wrote, where linking one would cost more than the feature. Anchored at the top level, because the same file carries a child module's password a naive search would find.
-bool jsonFindString(const char* json, const char* key, char* out, size_t outLen) {
-    char needle[40];
-    const int n = std::snprintf(needle, sizeof(needle), "\"%s\":\"", key);
-    if (n <= 0 || static_cast<size_t>(n) >= sizeof(needle)) return false;
-    const char* p = std::strstr(json, needle);
-    if (!p) return false;
-    p += n;
-    size_t i = 0;
-    while (*p && *p != '"' && i + 1 < outLen) {
-        char c = *p++;
-        if (c == '\\' && *p) {
-            // The app's writer (JsonSink, RFC 8259) escapes with \" \\ \/ \n \r \t, and \uXXXX for other control bytes.
-            // All but \u are decoded here.
-            // A credential holding a raw control byte fails the join and lands on the access point, visible and recoverable, which is not worth a \u decoder in this image.
-            const char e = *p++;
-            switch (e) {
-                case 'n': c = '\n'; break;
-                case 'r': c = '\r'; break;
-                case 't': c = '\t'; break;
-                case 'u': return false;
-                default:  c = e;      // \" \\ \/ decode to the char itself
-            }
-        }
-        out[i++] = c;
-    }
-    out[i] = '\0';
-    return i > 0;
-}
-
-// Top-level numeric key: "key":123 or "key":-1 (same anchored scan as jsonFindString). Absent leaves `out` untouched, so callers pre-load their defaults.
-void jsonFindInt(const char* json, const char* key, int* out) {
-    char needle[40];
-    const int n = std::snprintf(needle, sizeof(needle), "\"%s\":", key);
-    if (n <= 0 || static_cast<size_t>(n) >= sizeof(needle)) return;
-    const char* v = std::strstr(json, needle);
-    if (!v) return;
-    v += n;
-    if (*v == '-' || (*v >= '0' && *v <= '9')) *out = std::atoi(v);
-}
-
-void jsonFindBool(const char* json, const char* key, bool* out) {
-    char needle[40];
-    const int n = std::snprintf(needle, sizeof(needle), "\"%s\":", key);
-    if (n <= 0 || static_cast<size_t>(n) >= sizeof(needle)) return;
-    const char* v = std::strstr(json, needle);
-    if (!v) return;
-    v += n;
-    if (std::strncmp(v, "true", 4) == 0)  *out = true;
-    if (std::strncmp(v, "false", 5) == 0) *out = false;
-}
-
 // The board's Ethernet wiring, from the same config file the credentials come from. ethType 1 is the app's LAN8720/RMII option, the only interface a 4 MB classic has.
 // 0 or absent means no Ethernet on this board.
 // Absent pin keys keep the silicon defaults (MDC 23 / MDIO 18; clock IN on GPIO0), the same rule the app applies.
@@ -165,7 +114,7 @@ void loadAppVariant() {
     const size_t got = std::fread(buf, 1, sizeof(buf) - 1, f);
     buf[got] = '\0';
     std::fclose(f);
-    jsonFindString(buf, "firmware", g_appVariant, sizeof(g_appVariant));
+    mm::configscrape::findString(buf, "firmware", g_appVariant, sizeof(g_appVariant));
 }
 
 // Read the stored WiFi credentials and Ethernet wiring, if there are any. Absent, unreadable or empty all mean the same thing to the caller: fall through the cascade.
@@ -188,16 +137,16 @@ void loadCredentials() {
         const size_t got = std::fread(buf, 1, sizeof(buf) - 1, f);
         buf[got] = '\0';
         std::fclose(f);
-        jsonFindString(buf, "ssid", ssid_, sizeof(ssid_));
-        jsonFindString(buf, "password", password_, sizeof(password_));
-        jsonFindInt(buf, "ethType",       &ethCfg_.type);
-        jsonFindInt(buf, "ethPhyAddr",    &ethCfg_.phyAddr);
-        jsonFindInt(buf, "ethRstGpio",    &ethCfg_.rstGpio);
-        jsonFindInt(buf, "ethMdcGpio",    &ethCfg_.mdcGpio);
-        jsonFindInt(buf, "ethMdioGpio",   &ethCfg_.mdioGpio);
-        jsonFindInt(buf, "ethClockGpio",  &ethCfg_.clockGpio);
-        jsonFindBool(buf, "ethClockExtIn", &ethCfg_.clockExtIn);
-        jsonFindInt(buf, "txPowerSetting", &txPowerDbm_);
+        // The app's preferred network, the first row of its WiFi child's known list.
+        mm::configscrape::findFirstNetwork(buf, ssid_, sizeof(ssid_), password_, sizeof(password_));
+        mm::configscrape::findInt(buf, "ethType",       &ethCfg_.type);
+        mm::configscrape::findInt(buf, "ethPhyAddr",    &ethCfg_.phyAddr);
+        mm::configscrape::findInt(buf, "ethRstGpio",    &ethCfg_.rstGpio);
+        mm::configscrape::findInt(buf, "ethMdcGpio",    &ethCfg_.mdcGpio);
+        mm::configscrape::findInt(buf, "ethMdioGpio",   &ethCfg_.mdioGpio);
+        mm::configscrape::findInt(buf, "ethClockGpio",  &ethCfg_.clockGpio);
+        mm::configscrape::findBool(buf, "ethClockExtIn", &ethCfg_.clockExtIn);
+        mm::configscrape::findInt(buf, "txPowerSetting", &txPowerDbm_);
     }
     // BEFORE THE UNMOUNT.
     // This function owns the only window in which the volume is mounted.

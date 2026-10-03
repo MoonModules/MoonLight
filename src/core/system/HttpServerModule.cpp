@@ -48,6 +48,8 @@
 #include "core/util/JsonUtil.h"
 #include "core/util/JsonSink.h"
 #include "core/util/format.h"            // formatTo: nonblocking formatting into a fixed buffer
+#include "core/util/CaptivePortal.h"     // the redirect a phone on the access point follows to the UI
+#include "core/util/fnv.h"               // fnv1a: the diff-on-the-wire cache's digest
 #include "core/system/Sha1.h"
 #include "core/system/Base64.h"
 #include "core/system/ControlModule.h"   // look presets on /presets.json (HA WLED integration)
@@ -293,6 +295,17 @@ void HttpServerModule::handleConnection(platform::TcpConnection& conn) {
 
     // Read POST body if present Body pointer (headerEnd already found above)
     char* body = headerEnd ? const_cast<char*>(headerEnd) + 4 : nullptr;
+
+    // A phone on the access point asking for its own captive-check page gets the UI, which is what shows it the sign-in screen.
+    if (std::strcmp(method, "GET") == 0) {
+        uint8_t local[4];
+        const char* host = findHeaderCI(req, "Host:");
+        if (host) { host += 5; while (*host == ' ') host++; }
+        if (conn.localIPv4(local) && captive::redirects(local, host)) {
+            conn.write(reinterpret_cast<const uint8_t*>(captive::kRedirect), std::strlen(captive::kRedirect));
+            return;
+        }
+    }
 
     // Route
     if (std::strcmp(method, "GET") == 0) {
@@ -1120,14 +1133,7 @@ void HttpServerModule::buildStateJson(JsonSink& sink) {
     sink.append("]}");
 }
 
-// FNV-1a 32-bit: a small, fast, recognizable string hash.
-// Used to digest a control's serialized value (and the leaf's path) for the diff-on-the-wire cache, so the cache holds an 8-byte {path,value} hash per leaf rather than the value string.
-// Not cryptographic; a hash collision (two different values, same 32-bit digest) at worst skips ONE update and self-heals on the next change.
-static uint32_t fnv1a(const char* s, size_t len) {
-    uint32_t h = 2166136261u;
-    for (size_t i = 0; i < len; i++) { h ^= static_cast<uint8_t>(s[i]); h *= 16777619u; }
-    return h;
-}
+// The diff-on-the-wire cache keeps an 8-byte FNV-1a {path,value} hash per leaf, not the value; a collision skips one update at worst.
 
 // The diff-on-the-wire core.
 // Visit every UI leaf the periodic push would send: each module's live header telemetry (tickTimeUs / dynamicBytes, which the UI shows per card) and each control's value - in the SAME order buildStateJson emits, so a leaf's path "<module>/<name>" is stable across ticks.
@@ -1373,6 +1379,7 @@ void HttpServerModule::writeControls(JsonSink& sink, MoonModule* mod) {
         if (c.type == ControlType::List) {
             const auto* ls = static_cast<const ListSource*>(c.ptr);
             if (ls && ls->isEditableList()) sink.append(",\"editable\":true");
+            if (ls && ls->listRowsFixed()) sink.append(",\"fixedRows\":true");
             if (ls && ls->listAsPads()) {
                 sink.append(",\"pads\":true");
                 const uint8_t gc = ls->listGridCols(), gr = ls->listGridRows();
@@ -2432,8 +2439,8 @@ void HttpServerModule::afterListMutation() {
     FilesystemModule::noteDirty();
     if (scheduler_) {
         // Rebuild EVERY module's controls.
-        // A list mutation can change what OTHER modules present - adding/removing a light preset changes the option set of every driver's `preset` Select (which is built from the library).
-        // Without this, a driver's Select keeps its stale option count and a just-added preset is unselectable ("value out of range").
+        // A list mutation can change what OTHER modules present - adding/removing a fixture profile changes the option set of every driver's `fixture` Select (which is built from the library).
+        // Without this, a driver's Select keeps its stale option count and a newly added profile is unselectable ("value out of range").
         // Mirrors the phase-2b tree-wide rebuild after persistence load.
         for (uint8_t i = 0; i < scheduler_->moduleCount(); i++)
             if (auto* m = scheduler_->module(i)) m->rebuildControls();

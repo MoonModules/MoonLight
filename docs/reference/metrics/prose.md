@@ -9,13 +9,13 @@ This number is the debt behind that gate, and it RATCHETS: a rise fails the chec
 docgen.md does. A comment is prose wherever it lives, so a `//` in the web interface and a
 `#` in a script are counted beside a `///` in a header.
 
-**3136 finding(s)** across 342 file(s).
+**3116 finding(s)** across 342 file(s).
 
 | rule | findings |
 |---|---|
-| `MoonLight.EmDash` | 1796 |
-| `MoonLight.Weasel` | 754 |
-| `MoonLight.SentenceLength` | 496 |
+| `MoonLight.EmDash` | 1783 |
+| `MoonLight.Weasel` | 751 |
+| `MoonLight.SentenceLength` | 492 |
 | `MoonLight.Spelling` | 44 |
 | `MoonLight.SelfReference` | 33 |
 | `MoonLight.NegatedHeading` | 13 |
@@ -33,14 +33,14 @@ docgen.md does. A comment is prose wherever it lives, so a `//` in the web inter
 | `docs/how-to/building.md` | 82 |
 | `mooninstaller/README.md` | 75 |
 | `moondeck/check/check_clang_query.py` | 72 |
-| `mooninstaller/install.js` | 70 |
+| `mooninstaller/install.js` | 67 |
 | `src/ui/app.js` | 57 |
 | `moondeck/check/check_nonblocking.py` | 54 |
 | `src/ui/install-picker.js` | 50 |
 | `moondeck/docs/gen_api.py` | 49 |
 | `moondeck/build/build_esp32.py` | 47 |
 | `src/ui/preview3d.js` | 47 |
-| `docs/explanation/architecture/moonlight.md` | 45 |
-| `moondeck/scenario/run_live_scenario.py` | 45 |
+| `moondeck/scenario/run_live_scenario.py` | 46 |
+| `docs/explanation/architecture/moonlight.md` | 42 |
 | `moondeck/docs/mkdocs_hooks.py` | 40 |
 | `docs/reference/hardware/gpio-usage.md` | 36 |

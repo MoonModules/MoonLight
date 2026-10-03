@@ -165,7 +165,7 @@ TEST_CASE("AudioService Receive: a localhost WLED packet drives frame_, then hol
     a.applyState();
     a.tick();                        // binds kTestSyncPort
     REQUIRE(a.syncOpenForTest());
-    CHECK(std::strcmp(status(a), "listening") == 0);
+    CHECK(std::strncmp(status(a), "listening", 9) == 0);   // with or without the group, which the host's network decides
 
     // Send a real WLED v2 packet to the bound port over loopback.
     AudioFrame peer;
@@ -207,7 +207,7 @@ TEST_CASE("AudioService Receive: a localhost WLED packet drives frame_, then hol
     // A pure sink with no packet goes stale and falls back to "listening", holding its last frame.
     clk.advance(AudioService::syncFallbackMsForTest() + 20);
     a.tick();
-    CHECK(std::strcmp(status(a), "listening") == 0);
+    CHECK(std::strncmp(status(a), "listening", 9) == 0);   // with or without the group, which the host's network decides
 
     tx.close();
     a.release();
@@ -237,8 +237,45 @@ TEST_CASE("AudioService Receive: a failed bind backs off instead of retrying eve
     clk.advance(AudioService::syncOpenRetryMsForTest() + 5);
     a.tick();
     CHECK(a.syncOpenForTest());
-    CHECK(std::strcmp(status(a), "listening") == 0);
+    CHECK(std::strncmp(status(a), "listening", 9) == 0);   // with or without the group, which the host's network decides
 
+    a.release();
+}
+
+// A network without multicast still delivers unicast, so the receiver listens and says what it is missing rather than refusing to open.
+TEST_CASE("AudioService Receive: a failed group join still listens for unicast, and says so") {
+    struct JoinGuard { ~JoinGuard() { platform::setTestJoinFails(false); } } guard;
+    platform::setTestJoinFails(true);
+    FrozenClock clk(1);
+    AudioService a;
+    a.mode = AudioService::kReceiveMode;
+    a.syncPort = kTestSyncPort;
+    a.applyState();
+    a.tick();
+    REQUIRE(a.syncOpenForTest());
+    CHECK(std::strcmp(status(a), "listening, unicast only: multicast unavailable") == 0);
+
+    AudioFrame peer;
+    peer.level = 77;
+    uint8_t pkt[WLED_SYNC_PACKET_SIZE];
+    buildWledAudioSync(pkt, peer, /*peak=*/false);
+    platform::UdpSocket tx;
+    REQUIRE(tx.open());
+    const uint8_t loopback[4] = {127, 0, 0, 1};
+    REQUIRE(tx.sendToAddr(loopback, kTestSyncPort, pkt, WLED_SYNC_PACKET_SIZE));
+    bool landed = false;
+    for (int i = 0; i < 100 && !landed; i++) {
+        a.tick();
+        landed = a.audioFrame()->level == 77;
+        if (!landed) platform::delayMs(1);
+    }
+    CHECK(landed);
+
+    // Gone stale, it falls back to the same warning rather than a plain "listening".
+    clk.advance(AudioService::syncFallbackMsForTest() + 20);
+    a.tick();
+    CHECK(std::strcmp(status(a), "listening, unicast only: multicast unavailable") == 0);
+    tx.close();
     a.release();
 }
 

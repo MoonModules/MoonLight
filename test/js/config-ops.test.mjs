@@ -82,7 +82,7 @@ test("S3 testbench entry adds Grid + Layer fresh and clears the pre-existing con
     const ops = planConfigOps(s3);
     const added = new Set(ops.filter(o => o.op === "add").map(o => o.id));
     const cleared = new Set(ops.filter(o => o.op === "clearChildren").map(o => o.parent));
-    // The fix for "Layouts/Layers don't get created without erase": the entry now adds
+    // The fix for "Layouts/Effects don't get created without erase": the entry now adds
     // Grid and Layer explicitly instead of assuming the boot defaults are present.
     for (const id of ["Grid", "Layer"]) {
         assert.ok(added.has(id), `S3 entry no longer adds "${id}" — a non-erased device without that boot default gets no ${id}`);
@@ -90,7 +90,7 @@ test("S3 testbench entry adds Grid + Layer fresh and clears the pre-existing con
     // Pre-existing containers the entry adds children into are cleared so stale children go.
     // Audio is a Service now (added under Services, not System) — System hosts no user-added
     // children, so the entry never touches it and emits no clearChildren for it.
-    for (const p of ["Services", "Drivers", "Layouts", "Layers"]) {
+    for (const p of ["Services", "Drivers", "Layouts", "Effects"]) {
         assert.ok(cleared.has(p), `S3 entry does not clear pre-existing "${p}"`);
     }
     assert.ok(!cleared.has("System"), `S3 entry clears "System" — but System has no user-added children to clear`);

@@ -1,6 +1,6 @@
 # MoonLight migration — fidelity tensions
 
-> **Superseded on 2026-09-22** by [Plan-20260922 - MoonLight, from v5.0.0 to the rename](../../present/Plan-20260922%20-%20MoonLight,%20from%20v5.0.0%20to%20the%20rename.md), which consolidates the five MoonLight files into one. Kept for the reasoning behind decisions already taken.
+> **Superseded on 2026-09-22** by [Plan-20260922 - MoonLight, from v5.0.0 to the rename (shipped)](Plan-20260922%20-%20MoonLight,%20from%20v5.0.0%20to%20the%20rename%20(shipped).md), which consolidates the five MoonLight files into one. Kept for the reasoning behind decisions already taken.
 
 A running log of places where **strict fidelity to MoonLight's behaviour** (the migration mandate:
 end users must see the same effect they always have) collides with a **MoonLight principle**

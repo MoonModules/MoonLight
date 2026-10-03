@@ -120,7 +120,7 @@ async function fetchManifest(manifestUrl) {
 // BEFORE ImprovSerial takes the port's locks, so no close/reopen dance is
 // needed. Fire-and-forget like APPLY_OP: the device acks with RpcResponse we don't
 // read. This must precede provisioning because the cap has to land before the radio
-// associates; the APPLY_OP config push later also carries Network.txPowerSetting, but
+// associates; the APPLY_OP config push later also carries WiFi.txPowerSetting, but
 // that arrives too late for the first association on a brown-out-prone device.
 async function sendSetTxPowerFrame(port, dBm) {
     const frame = buildImprovFrame(IMPROV_FRAME_TYPE_RPC,
@@ -459,7 +459,7 @@ export const installer = {
      *   defaults (incl. the deviceModel control) are pushed via APPLY_OP after
      *   provisioning. Omit / empty for "(any device)".
      * @param {number|null} [opts.txPower] - deviceModels.json
-     *   controls.Network.txPowerSetting for the picked device (whole dBm).
+     *   the WiFi entry's controls.txPowerSetting for the picked device (whole dBm).
      *   When set, the SET_TX_POWER vendor RPC is pushed BEFORE provisioning
      *   so brown-out-prone devices associate at the capped power. Omit /
      *   null when the device has no cap.

@@ -148,24 +148,36 @@ TEST_CASE("a Text control with no validator accepts anything that fits") {
     CHECK(std::strcmp(label, "hi") == 0);
 }
 
-// A Palette control's aux holds a PaletteOptionsFn (a FUNCTION POINTER), not an options array. The Select label-match path must therefore NOT run for Palette: reinterpreting a function pointer as a char* const* and walking it dereferences code bytes, undefined behavior, a near-certain crash on ESP32. The regression: a string value on a palette must fall to numeric-index apply (parseInt → 0), exactly the harmless behavior before the label-match feature existed. (Robust to any input.)
+// A Palette control's aux holds a PaletteOptionsFn, a function rather than an options array, so a name resolves through the function's name request and never by walking aux as an array, which would read code bytes and crash on ESP32.
 static void paletteOptions(mm::JsonSink& sink) {
-    sink.append("[\"Rainbow\",\"Ocean\",\"Forest\"]");   // a real fn body; never read via the aux cast
+    static const char* const names[] = {"Rainbow", "Ocean", "fire.mlp"};
+    if (sink.nameIndex() >= 0) {
+        if (sink.nameIndex() < 3) sink.append(names[sink.nameIndex()]);
+        return;
+    }
+    sink.append("{\"name\":\"Rainbow\"},{\"name\":\"Ocean\"},{\"name\":\"fire.mlp\"}");
 }
-TEST_CASE("applyControlValue: a string palette value does not crash and applies numerically") {
+TEST_CASE("applyControlValue: a palette takes a name as well as an index, and an unknown name changes nothing") {
     mm::ControlList controls;
     uint8_t palette = 1;
     controls.addPalette("palette", palette, paletteOptions, 3);
 
-    // A STRING value (as a hand-edited config or a mistaken client could send). Before the fix this walked the function pointer as an options array. After: string → parseInt → 0, clamped in range.
-    CHECK(mm::applyControlValue(controls[0], "{\"palette\":\"Rainbow\"}", "palette",
-                                mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
-    CHECK(palette == 0);   // numeric fallback, no function-pointer deref
-
-    // A numeric value still applies straight through.
-    CHECK(mm::applyControlValue(controls[0], "{\"palette\":2}", "palette",
+    // A scripted palette's index moves as files come and go, so its name is what a client can rely on.
+    CHECK(mm::applyControlValue(controls[0], "{\"palette\":\"fire.mlp\"}", "palette",
                                 mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
     CHECK(palette == 2);
+
+    // A name no palette carries leaves the choice alone, and Strict says so.
+    CHECK(mm::applyControlValue(controls[0], "{\"palette\":\"Nowhere\"}", "palette",
+                                mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
+    CHECK(palette == 2);
+    CHECK(mm::applyControlValue(controls[0], "{\"palette\":\"Nowhere\"}", "palette",
+                                mm::ApplyPolicy::Strict) == mm::ApplyResult::OutOfRange);
+
+    // A numeric value still applies straight through.
+    CHECK(mm::applyControlValue(controls[0], "{\"palette\":1}", "palette",
+                                mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
+    CHECK(palette == 1);
 }
 
 // The complement: a Select's aux IS the options array, so a string LABEL value matches an option by name (the board-portable catalog path, a peripheral label is stable while its filtered index is not). This keeps the label-match feature working where it is safe.
@@ -183,6 +195,26 @@ TEST_CASE("applyControlValue: a Select accepts an option label as a string value
     CHECK(mm::applyControlValue(controls[0], "{\"peripheral\":1}", "peripheral",
                                 mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
     CHECK(sel == 1);
+}
+
+// Saved by name, a scripted palette survives a script added before it, which shifts every index after it.
+TEST_CASE("writeControlValue: a palette saved by name round-trips, and an unflagged one stays an index") {
+    mm::ControlList controls;
+    uint8_t palette = 2;
+    controls.addPalette("palette", palette, paletteOptions, 3);
+    mm::JsonSink plain;
+    mm::writeControlValue(plain, controls[0]);
+    CHECK(std::string(plain.data(), plain.size()) == "2");
+
+    controls.setPersistLabel(0);
+    mm::JsonSink named;
+    mm::writeControlValue(named, controls[0]);
+    CHECK(std::string(named.data(), named.size()) == "\"fire.mlp\"");
+
+    palette = 0;
+    const std::string saved = std::string("{\"palette\":") + std::string(named.data(), named.size()) + "}";
+    CHECK(mm::applyControlValue(controls[0], saved.c_str(), "palette", mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
+    CHECK(palette == 2);
 }
 
 // An empty option list (max == 0) has no valid index, applying a value must not manufacture index 0. Strict rejects; Lenient (Clamp) leaves the bound value untouched. Guards a board-filtered Select that filtered down to zero options (e.g. a peripheral list on a chip that supports none).
@@ -236,30 +268,54 @@ TEST_CASE("applyControlValue: an overlong Select label does not prefix-match a r
                                 mm::ApplyPolicy::Strict) == mm::ApplyResult::OutOfRange);
 }
 
-// The exact boundary of the overlong guard. The Select label parses into a 64-byte buffer and a value that FILLS it (length >= 63, i.e. buffer_size - 1) is treated as overlong, it may have been truncated to the cap, so it cannot legitimately equal any option and the match is skipped. A value one shorter (62) is NOT overlong and matches normally. This pins the threshold so a future buffer-size change can't silently shift where a legitimate long label starts being rejected. Real option labels sit far below this (the longest peripheral/mode label is ~35 chars), so the boundary only ever fences off junk, but the test makes that contract explicit rather than incidental.
-TEST_CASE("applyControlValue: the Select overlong-label boundary is exactly the parse buffer") {
+// The exact boundary of the overlong guard: a label of the longest length a name is kept at (63) matches, and one longer was truncated by the parse, so it matches nothing even when an option shares its first 63 characters.
+TEST_CASE("applyControlValue: the Select overlong-label boundary is the longest name kept") {
     mm::ControlList controls;
     uint8_t sel = 0;
-    // Two options at the boundary lengths: one 62 chars (just under the cap), one 63 (at the cap).
-    static const std::string at62(62, 'a');
-    static const std::string at63(63, 'b');
-    static const char* const opts[] = {"i80", at62.c_str(), at63.c_str()};
+    static const std::string at63(63, 'a');
+    static const std::string at64(64, 'b');
+    static const char* const opts[] = {"i80", at63.c_str(), at64.c_str()};
     controls.addSelect("peripheral", sel, opts, 3);
 
-    // 62 chars: not overlong → matches option index 1.
-    const std::string j62 = "{\"peripheral\":\"" + at62 + "\"}";
-    CHECK(mm::applyControlValue(controls[0], j62.c_str(), "peripheral",
-                                mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
-    CHECK(sel == 1);
-
-    // 63 chars: fills the buffer → treated as overlong, the match is skipped even though an option of that exact text EXISTS. Lenient keeps the current value; Strict rejects.
-    sel = 0;
+    // 63 characters, the longest kept: matches option index 1.
     const std::string j63 = "{\"peripheral\":\"" + at63 + "\"}";
     CHECK(mm::applyControlValue(controls[0], j63.c_str(), "peripheral",
                                 mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
-    CHECK(sel == 0);   // NOT matched to index 2 — the cap fences it off
-    CHECK(mm::applyControlValue(controls[0], j63.c_str(), "peripheral",
+    CHECK(sel == 1);
+
+    // 64 characters: past the longest kept, so it is skipped even though an option of that exact text exists. Lenient keeps the current value; Strict rejects.
+    sel = 0;
+    const std::string j64 = "{\"peripheral\":\"" + at64 + "\"}";
+    CHECK(mm::applyControlValue(controls[0], j64.c_str(), "peripheral",
+                                mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
+    CHECK(sel == 0);
+    CHECK(mm::applyControlValue(controls[0], j64.c_str(), "peripheral",
                                 mm::ApplyPolicy::Strict) == mm::ApplyResult::OutOfRange);
+}
+
+// A palette name as long as a name is kept (63 characters) is saved by name and restores by it, so a long scripted palette's file name survives a restart.
+static void longPaletteOptions(mm::JsonSink& sink) {
+    static const std::string longest(63, 'p');
+    if (sink.nameIndex() >= 0) {
+        sink.append(sink.nameIndex() == 1 ? longest.c_str() : "Rainbow");
+        return;
+    }
+    sink.append("{\"name\":\"Rainbow\"},{\"name\":\"");
+    sink.append(longest.c_str());
+    sink.append("\"}");
+}
+TEST_CASE("a palette named with the longest name kept round-trips by name") {
+    mm::ControlList controls;
+    uint8_t palette = 1;
+    controls.addPalette("palette", palette, longPaletteOptions, 2);
+    controls.setPersistLabel(0);
+    mm::JsonSink named;
+    mm::writeControlValue(named, controls[0]);
+    REQUIRE(std::string(named.data(), named.size()) == "\"" + std::string(63, 'p') + "\"");
+    palette = 0;
+    const std::string saved = std::string("{\"palette\":") + std::string(named.data(), named.size()) + "}";
+    CHECK(mm::applyControlValue(controls[0], saved.c_str(), "palette", mm::ApplyPolicy::Strict) == mm::ApplyResult::Ok);
+    CHECK(palette == 1);
 }
 
 // A Select over ENUMERATED options (a NIC list, an audio device list) persists by LABEL when flagged: the index shifts when the machine's device list reorders, but the name is what the user chose. Both directions of robustness: a label round-trips, and an old index-persisted value still applies (the apply path always accepted both).

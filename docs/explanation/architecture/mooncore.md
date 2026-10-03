@@ -62,10 +62,11 @@ Treating a slow socket as a fault is the trap: it converts ordinary congestion i
 
 ## Multi-device runtime
 
-Two domain-neutral services let several controllers act as one installation. They're core because nothing about them is light-specific; any domain spanning multiple devices uses the same two.
+Three domain-neutral services let several controllers act as one installation. They're core because nothing about them is light-specific; any domain spanning multiple devices uses the same three.
 
-- **Discovery**: devices find each other via mDNS. `NetworkModule` advertises each device today; this is live.
-- **Clock sync**: a shared monotonic clock is the foundation any cross-device coordination builds on. The design is filed in [backlog-core](../../work/future/backlog-core.md).
+- **Discovery**: devices find each other by presence packets on a multicast group and the broadcast address WLED listens on, and `NetworkModule` advertises each over mDNS. Live.
+- **Shared controls**: boards follow each other's control surface over [OSC](../../moonmodules/core/services.md#osc), the industry-standard protocol for it. A surface change on one board goes to the others as feedback, by unicast to `hosts` or to a multicast group. Each writes it onto its own surface and may send it on once, back to its origin too. Only a changed value is sent, so the origin, already holding it, stops it there. Live.
+- **Clock sync**: a shared monotonic clock, so boards with the same controls also render the same moment. The design is filed in [backlog-core](../../work/future/backlog-core.md).
 
 What the synced clock is *for* is a domain question; the light domain's use of it (synced animation across a wall) is in [Multi-device sync](moonlight.md#multi-device-sync).
 

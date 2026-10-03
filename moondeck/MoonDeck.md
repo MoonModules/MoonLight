@@ -896,6 +896,7 @@ uv run moondeck/scenario/run_live_scenario.py                                   
 uv run moondeck/scenario/run_live_scenario.py --host 192.168.1.210               # vs ESP32
 uv run moondeck/scenario/run_live_scenario.py --name scenario_Network_hardware_reconfigures_live   # one scenario
 uv run moondeck/scenario/run_live_scenario.py --name scenario_perf_light,scenario_Fluid_solver      # several, comma-separated
+uv run moondeck/scenario/run_live_scenario.py --host MM-Bench.local --network Home --name scenario_AccessPoint_first_setup_from_its_own_network   # first setup, this computer as the phone
 uv run moondeck/scenario/run_live_scenario.py --update-baseline                  # save baseline
 uv run moondeck/scenario/run_live_scenario.py --compare-baseline                 # detect regressions
 ```

@@ -6,7 +6,7 @@
 #include "core/util/JsonSink.h"
 #include "core/util/JsonUtil.h"           // restoreList: recursive reader for the persisted array
 #include "light/drivers/ChannelRole.h"
-#include "light/drivers/Correction.h"  // LightPreset + fillRolesFromPreset + the derived offsets
+#include "light/drivers/Correction.h"  // the role-array rebuild and the derived offsets
 
 #include <cstdint>
 #include <cstdio>
@@ -16,59 +16,59 @@
 
 namespace mm {
 
-/// The reusable light-preset library, a Drivers submodule owning NAMED channel-role wirings, each editable in its own row and referenced by many drivers. A driver stores a preset's STABLE id and resolves it here into its own Correction, so a wiring is built once and reordering other presets disturbs no reference.
+/// The reusable fixture-profile library, a Drivers submodule owning NAMED channel-role wirings, each editable in its own row and referenced by many drivers. A driver stores a profile's STABLE id and resolves it here into its own Correction, so a wiring is built once and reordering other profiles disturbs no reference.
 ///
 /// A curated set of real fixtures is seeded read-only on first boot. A user adds custom named wirings alongside them. The render loop never reads this module.
 ///
 /// @moreinfo
 ///
-/// ## What a preset is
+/// ## What a profile is
 ///
 /// A channel-role layout: role `r` at channel `i` says channel `i` of a light carries role `r`.
 /// The color roles cover the strip orders, and the fixture roles cover pan, tilt and the rest.
 ///
 /// ## Storage is uncapped
 ///
-/// A preset is exactly as wide as its fixture. Role bytes live in one dynamic pool, each preset a slice, so a moving head declares as many channels as it has. The pool is touched on the cold path only, leaving it free to reallocate.
+/// A profile is exactly as wide as its fixture. Role bytes live in one dynamic pool, each profile a slice, so a moving head declares as many channels as it has. The pool is touched on the cold path only, leaving it free to reallocate.
 ///
 /// ## The editable-list primitive
 ///
 /// The first consumer of `EditableListSource`. The whole add, delete, reorder and edit surface is reused rather than rebuilt. The per-row fields are the name, the channel count, and one role picker per channel.
 ///
-/// @card lightpresets.png
-class LightPresetsModule : public MoonModule, public ListSource {
+/// @card fixtureprofiles.png
+class FixtureProfilesModule : public MoonModule, public ListSource {
 public:
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Generic; }
 
-    // A deleted library could never be re-added, and every driver resolves its preset through it.
-    /// Not user-editable: every driver resolves its preset through this one boot-wired library.
+    // A deleted library could never be re-added, and every driver resolves its profile through it.
+    /// Not user-editable: every driver resolves its profile through this one boot-wired library.
     bool userEditable() const override { return false; }
 
-    /// How many preset rows a device can hold.
-    static constexpr uint8_t kMaxPresets = 32;   // bounded row count; a device won't wire more light types
+    /// How many profile rows a device can hold.
+    static constexpr uint8_t kMaxProfiles = 32;   // bounded row count; a device won't wire more light types
 
-    /// The boot library, which a driver resolves its preset reference through.
-    static LightPresetsModule* active() { return ActiveInstance<LightPresetsModule>::active(); }
+    /// The boot library, which a driver resolves its profile reference through.
+    static FixtureProfilesModule* active() { return ActiveInstance<FixtureProfilesModule>::active(); }
 
-    /// The first preset's id: a safe default for a fresh driver or a dangling reference.
-    uint32_t defaultId() const { return count_ ? presets_[0].id : 0; }
+    /// The first profile's id: a safe default for a fresh driver or a dangling reference.
+    uint32_t defaultId() const { return count_ ? profiles_[0].id : 0; }
 
-    /// How many presets the library holds, for a driver building its preset selector.
-    uint8_t presetCount() const { return count_; }
-    /// The name of preset row `i`, for a driver building its selector.
-    const char* nameAt(uint8_t i) const { return i < count_ ? presets_[i].name : ""; }
-    /// The stable id of preset row `i`, which is what a driver stores.
-    uint32_t idAt(uint8_t i) const { return i < count_ ? presets_[i].id : 0; }
-    /// The row currently holding `id`, for rendering a selector at its referenced preset.
+    /// How many profiles the library holds, for a driver building its profile selector.
+    uint8_t profileCount() const { return count_; }
+    /// The name of profile row `i`, for a driver building its selector.
+    const char* nameAt(uint8_t i) const { return i < count_ ? profiles_[i].name : ""; }
+    /// The stable id of profile row `i`, which is what a driver stores.
+    uint32_t idAt(uint8_t i) const { return i < count_ ? profiles_[i].id : 0; }
+    /// The row currently holding `id`, for rendering a selector at its referenced profile.
     uint8_t indexOfId(uint32_t id) const {
-        for (uint8_t i = 0; i < count_; i++) if (presets_[i].id == id) return i;
-        return 0;   // a dangling id renders at the first preset; rebuildCorrection falls back to it too
+        for (uint8_t i = 0; i < count_; i++) if (profiles_[i].id == id) return i;
+        return 0;   // a dangling id renders at the first profile; rebuildCorrection falls back to it too
     }
 
-    // Any channel apply() synthesises from RGB counts, since one control governs them all.
-    /// Whether the preset carries a channel the white mode would synthesise.
-    bool presetHasSynthChannel(uint32_t id) const {
-        const Preset* p = find(id);
+    // Any channel apply() synthesizes from RGB counts, since one control governs them all.
+    /// Whether the profile carries a channel the white mode would synthesize.
+    bool profileHasSynthChannel(uint32_t id) const {
+        const Profile* p = find(id);
         if (!p) return false;
         const uint8_t* r = roleAt(*p);
         for (uint8_t c = 0; c < p->channelCount; c++) {
@@ -84,9 +84,9 @@ public:
         return false;
     }
 
-    /// Resolve a preset id into a driver's flat Correction; false leaves `out` untouched.
+    /// Resolve a profile id into a driver's flat Correction; false leaves `out` untouched.
     bool deriveCorrection(uint32_t id, uint8_t brightness, Correction& out) const {
-        const Preset* p = find(id);
+        const Profile* p = find(id);
         if (!p) return false;
         // The option indices are aligned with the enum, so a role byte IS a ChannelRole value.
         out.rebuild(brightness, reinterpret_cast<const ChannelRole*>(roleAt(*p)), p->channelCount);
@@ -95,7 +95,7 @@ public:
 
     // Claimed at CONSTRUCTION: a driver resolves the library while building its own controls.
     /// Claim the singleton seat at construction, before any driver builds its selector.
-    LightPresetsModule() { seat_.claim(); }
+    FixtureProfilesModule() { seat_.claim(); }
 
     /// Seed the curated built-ins when the set is empty.
     void setup() override {
@@ -109,24 +109,24 @@ public:
     /// Vacate the singleton seat, then release the base.
     void release() override { seat_.vacate(); MoonModule::release(); }
 
-    /// Bind the presets list, which the editable-list primitive renders.
+    /// Bind the profiles list, which the editable-list primitive renders.
     void defineControls() override {
         MoonModule::defineControls();
         // The persisted rows INCLUDE the built-ins, so restoring replaces rather than duplicates.
         if (count_ == 0) seedBuiltins();
-        controls_.addList("presets", *this);   // this module is the (editable) ListSource
+        controls_.addList("profiles", *this);   // this module is the (editable) ListSource
     }
 
     // --- ListSource (editable) ---------------------------------------------------------
-    /// How many preset rows the list holds.
+    /// How many profile rows the list holds.
     uint8_t listRowCount() const override { return count_; }
 
-    // This row IS the persisted form, so it must carry the preset's full wiring.
+    // This row IS the persisted form, so it must carry the profile's full wiring.
     /// Write one row, which is also the persisted form, so it carries the full wiring.
     void writeListRow(JsonSink& sink, uint8_t row) const override {
-        const Preset& p = presets_[row];
+        const Profile& p = profiles_[row];
         const uint8_t* roles = roleAt(p);
-        // Escaped, not raw: a quote in a name would produce JSON that wipes every custom preset.
+        // Escaped, not raw: a quote in a name would produce JSON that wipes every custom profile.
         sink.appendf("{\"id\":%lu,\"name\":", static_cast<unsigned long>(p.id));
         sink.writeJsonString(p.name);
         sink.appendf(",\"channels\":%u,\"roles\":[", static_cast<unsigned>(p.channelCount));
@@ -148,7 +148,7 @@ public:
 
     /// Write one row's editable fields: the name, the channel count, and a role per channel.
     void writeListRowDetail(JsonSink& sink, uint8_t row) const override {
-        const Preset& p = presets_[row];
+        const Profile& p = profiles_[row];
         const uint8_t* roles = roleAt(p);
         sink.append("{\"fields\":[");
         sink.append("{\"name\":\"name\",\"type\":\"text\",\"value\":");
@@ -167,18 +167,18 @@ public:
     /// The list is editable, so the UI offers add, delete and reorder.
     bool isEditableList() const override { return true; }
 
-    /// Add a preset, returning its new stable id.
+    /// Add a profile, returning its new stable id.
     bool addListRow(uint32_t& outId) override {
-        if (count_ >= kMaxPresets) return false;
-        Preset& p = presets_[count_];
-        p = Preset{};
+        if (count_ >= kMaxProfiles) return false;
+        Profile& p = profiles_[count_];
+        p = Profile{};
         p.id = nextId_++;
         p.channelCount = 3;
         // Modulo 10^5 so the name provably fits: it is a placeholder the user renames anyway.
-        std::snprintf(p.name, sizeof(p.name), "preset %u",
+        std::snprintf(p.name, sizeof(p.name), "profile %u",
                       static_cast<unsigned>(p.id % 100000u));
         count_++;
-        rebuildPool();                       // give the new preset its slice (defaults R,G,B)
+        rebuildPool();                       // give the new profile its slice (defaults R,G,B)
         uint8_t* r = roleAtMut(p);
         r[0] = static_cast<uint8_t>(ChannelRole::Red);
         r[1] = static_cast<uint8_t>(ChannelRole::Green);
@@ -188,39 +188,39 @@ public:
         return true;
     }
 
-    /// Delete a preset, refusing a locked built-in.
+    /// Delete a profile, refusing a locked built-in.
     bool deleteListRow(uint32_t id) override {
         int i = indexOf(id);
-        if (i < 0 || presets_[i].locked) return false;   // a seeded built-in is protected
-        for (uint8_t j = static_cast<uint8_t>(i); j + 1 < count_; j++) presets_[j] = presets_[j + 1];
+        if (i < 0 || profiles_[i].locked) return false;   // a seeded built-in is protected
+        for (uint8_t j = static_cast<uint8_t>(i); j + 1 < count_; j++) profiles_[j] = profiles_[j + 1];
         count_--;
         rebuildPool();
         refreshStatus();
         return true;
     }
 
-    /// Move a custom preset, which may not cross into the locked built-in block.
+    /// Move a custom profile, which may not cross into the locked built-in block.
     bool moveListRow(uint32_t id, uint8_t to) override {
         int i = indexOf(id);
         if (i < 0) return false;
         // The built-ins are a FIXED block at the top, so customs reorder only among themselves.
-        if (presets_[i].locked) return false;
+        if (profiles_[i].locked) return false;
         const uint8_t firstCustom = lockedCount();
         if (to < firstCustom) to = firstCustom;      // clamp a custom above the built-ins back down
         if (to >= count_) to = static_cast<uint8_t>(count_ - 1);
-        Preset moved = presets_[i];
-        if (to > i) for (int j = i; j < to; j++) presets_[j] = presets_[j + 1];
-        else        for (int j = i; j > to; j--) presets_[j] = presets_[j - 1];
-        presets_[to] = moved;
-        rebuildPool();                       // pool order follows preset order
+        Profile moved = profiles_[i];
+        if (to > i) for (int j = i; j < to; j++) profiles_[j] = profiles_[j + 1];
+        else        for (int j = i; j > to; j--) profiles_[j] = profiles_[j - 1];
+        profiles_[to] = moved;
+        rebuildPool();                       // pool order follows profile order
         return true;
     }
 
-    /// Edit one field of a preset: its name, its channel count, or one channel's role.
+    /// Edit one field of a profile: its name, its channel count, or one channel's role.
     bool setListRowField(uint32_t id, const char* field, const char* valueJson) override {
         int i = indexOf(id);
-        if (i < 0 || presets_[i].locked) return false;   // built-ins are read-only
-        Preset& p = presets_[i];
+        if (i < 0 || profiles_[i].locked) return false;   // built-ins are read-only
+        Profile& p = profiles_[i];
         if (std::strcmp(field, "name") == 0) {
             mm::json::parseString(valueJson, "value", p.name, sizeof(p.name));
             return true;
@@ -245,7 +245,7 @@ public:
         return false;
     }
 
-    /// Restore the presets and the role pool, so custom wirings survive a reboot.
+    /// Restore the profiles and the role pool, so custom wirings survive a reboot.
     bool restoreList(const char* json, const char* key) override {
         mm::json::JsonDoc doc;
         if (!mm::json::parse(json, doc)) return false;
@@ -253,10 +253,10 @@ public:
         if (!arr || arr->type != mm::json::JsonType::Array) return false;
         count_ = 0;
         const int n = mm::json::arraySize(doc, arr);
-        for (int r = 0; r < n && count_ < kMaxPresets; r++) {
+        for (int r = 0; r < n && count_ < kMaxProfiles; r++) {
             const mm::json::JsonNode* row = mm::json::element(doc, arr, r);
-            Preset& p = presets_[count_];
-            p = Preset{};
+            Profile& p = profiles_[count_];
+            p = Profile{};
             p.id = static_cast<uint32_t>(mm::json::readInt(mm::json::member(doc, row, "id"), 0));
             mm::json::readString(mm::json::member(doc, row, "name"), p.name, sizeof(p.name));
             int ch = mm::json::readInt(mm::json::member(doc, row, "channels"), 3);
@@ -268,15 +268,15 @@ public:
         rebuildPool();
         // Degrade to an empty list rather than writing roles through a null pool base.
         if (!rolePool_.data() && count_ > 0) { count_ = 0; return true; }
-        // Second pass: fill each preset's roles now that the pool is sized.
+        // Second pass: fill each profile's roles now that the pool is sized.
         for (int r = 0, idx = 0; r < n && idx < count_; r++, idx++) {
             const mm::json::JsonNode* row = mm::json::element(doc, arr, r);
             const mm::json::JsonNode* roles = mm::json::member(doc, row, "roles");
-            uint8_t* dst = roleAtMut(presets_[idx]);
+            uint8_t* dst = roleAtMut(profiles_[idx]);
             const int rn = (roles && roles->type == mm::json::JsonType::Array)
                                ? mm::json::arraySize(doc, roles) : 0;
             // Clamped: a corrupt file can carry a byte the UI mis-renders and the Correction drops.
-            for (uint8_t c = 0; c < presets_[idx].channelCount; c++) {
+            for (uint8_t c = 0; c < profiles_[idx].channelCount; c++) {
                 const long rv = (c < rn) ? mm::json::readInt(mm::json::element(doc, roles, c), 0) : 0;
                 dst[c] = (rv < 0 || rv >= kChannelRoleCount) ? 0 : static_cast<uint8_t>(rv);
             }
@@ -285,46 +285,46 @@ public:
     }
 
 private:
-    // A fixed small struct: the roles live in the shared pool, packed in preset order.
-    struct Preset {
+    // A fixed small struct: the roles live in the shared pool, packed in profile order.
+    struct Profile {
         uint32_t id = 0;
         char     name[16] = {};
         uint8_t  channelCount = 3;
-        uint32_t poolOffset = 0;   // start of this preset's roles in rolePool_ (set by rebuildPool)
+        uint32_t poolOffset = 0;   // start of this profile's roles in rolePool_ (set by rebuildPool)
         uint32_t poolLen = 0;      // the OLD slice size, distinct from channelCount mid-change
         bool     locked = false;
     };
 
-    Preset   presets_[kMaxPresets] = {};
+    Profile   profiles_[kMaxProfiles] = {};
     uint8_t  count_ = 0;
     uint32_t nextId_ = 1;
-    ScratchBuffer<uint8_t> rolePool_{*this};   // Σ channelCount role bytes, packed in preset order
+    ScratchBuffer<uint8_t> rolePool_{*this};   // Σ channelCount role bytes, packed in profile order
     char     statusBuf_[24] = {};
-    ActiveInstance<LightPresetsModule> seat_{*this};
+    ActiveInstance<FixtureProfilesModule> seat_{*this};
 
-    const Preset* find(uint32_t id) const {
-        for (uint8_t i = 0; i < count_; i++) if (presets_[i].id == id) return &presets_[i];
+    const Profile* find(uint32_t id) const {
+        for (uint8_t i = 0; i < count_; i++) if (profiles_[i].id == id) return &profiles_[i];
         return nullptr;
     }
     int indexOf(uint32_t id) const {
-        for (uint8_t i = 0; i < count_; i++) if (presets_[i].id == id) return i;
+        for (uint8_t i = 0; i < count_; i++) if (profiles_[i].id == id) return i;
         return -1;
     }
     // The built-ins never move, so the locked count is also the first custom row's index.
     uint8_t lockedCount() const {
         uint8_t n = 0;
-        while (n < count_ && presets_[n].locked) n++;
+        while (n < count_ && profiles_[n].locked) n++;
         return n;
     }
-    const uint8_t* roleAt(const Preset& p) const { return rolePool_.data() + p.poolOffset; }
-    uint8_t*       roleAtMut(const Preset& p)     { return rolePool_.data() + p.poolOffset; }
+    const uint8_t* roleAt(const Profile& p) const { return rolePool_.data() + p.poolOffset; }
+    uint8_t*       roleAtMut(const Profile& p)     { return rolePool_.data() + p.poolOffset; }
 
     // Preserves the role bytes across the re-pack, since resize reallocates and zero-fills.
     void rebuildPool() {
         const uint32_t oldPoolLen = static_cast<uint32_t>(rolePool_.count());
-        uint32_t newOff[kMaxPresets] = {};
+        uint32_t newOff[kMaxProfiles] = {};
         uint32_t total = 0;
-        for (uint8_t i = 0; i < count_; i++) { newOff[i] = total; total += presets_[i].channelCount; }
+        for (uint8_t i = 0; i < count_; i++) { newOff[i] = total; total += profiles_[i].channelCount; }
 
         // Tracked explicitly rather than inferred: channelCount may already hold the new value.
         uint8_t* keep = total ? static_cast<uint8_t*>(platform::alloc(total)) : nullptr;
@@ -332,9 +332,9 @@ private:
             std::memset(keep, 0, total);
             if (rolePool_.data()) {
                 for (uint8_t i = 0; i < count_; i++) {
-                    const uint32_t oldStart = presets_[i].poolOffset;
-                    const uint32_t oldLen   = presets_[i].poolLen;
-                    const uint32_t newLen   = presets_[i].channelCount;
+                    const uint32_t oldStart = profiles_[i].poolOffset;
+                    const uint32_t oldLen   = profiles_[i].poolLen;
+                    const uint32_t newLen   = profiles_[i].channelCount;
                     const uint32_t copy     = oldLen < newLen ? oldLen : newLen;   // surviving overlap
                     if (copy && oldStart + copy <= oldPoolLen)
                         std::memcpy(keep + newOff[i], rolePool_.data() + oldStart, copy);
@@ -343,8 +343,8 @@ private:
         }
         rolePool_.resize(total);
         for (uint8_t i = 0; i < count_; i++) {
-            presets_[i].poolOffset = newOff[i];
-            presets_[i].poolLen    = presets_[i].channelCount;   // slice now matches the channel count
+            profiles_[i].poolOffset = newOff[i];
+            profiles_[i].poolLen    = profiles_[i].channelCount;   // slice now matches the channel count
         }
         if (keep) {
             if (rolePool_.data()) std::memcpy(rolePool_.data(), keep, total);
@@ -353,16 +353,16 @@ private:
     }
 
     // Preserves the existing role picks; new channels default to R, G, B, W then None.
-    void setChannelCount(Preset& p, uint8_t n) {
+    void setChannelCount(Profile& p, uint8_t n) {
         const uint8_t was = p.channelCount;
         p.channelCount = n;
-        rebuildPool();                       // pool now holds n bytes for this preset (old kept, tail zeroed)
+        rebuildPool();                       // pool now holds n bytes for this profile (old kept, tail zeroed)
         uint8_t* r = roleAtMut(p);
         for (uint8_t c = was; c < n; c++)
             r[c] = c < 4 ? static_cast<uint8_t>(c + 1) : 0;   // 1=R,2=G,3=B,4=W, then None
     }
 
-    // Data, not code, so a preset of any width seeds directly: only real orders are listed.
+    // Data, not code, so a profile of any width seeds directly: only real orders are listed.
     void seedBuiltins() {
         using R = ChannelRole;
         static constexpr R kRGB[]    = {R::Red, R::Green, R::Blue};
@@ -405,16 +405,16 @@ private:
         constexpr auto namesFit = [](const Builtin* t, size_t n) {
             for (size_t i = 0; i < n; i++) {
                 size_t len = 0; while (t[i].name[len]) len++;
-                if (len >= sizeof(Preset::name)) return false;
+                if (len >= sizeof(Profile::name)) return false;
             }
             return true;
         };
         static_assert(namesFit(kBuiltins, sizeof(kBuiltins) / sizeof(kBuiltins[0])),
-                      "a built-in preset name exceeds Preset::name — shorten it");
+                      "a built-in profile name exceeds Profile::name: shorten it");
         for (const Builtin& b : kBuiltins) {
-            if (count_ >= kMaxPresets) break;
-            Preset& p = presets_[count_];
-            p = Preset{};
+            if (count_ >= kMaxProfiles) break;
+            Profile& p = profiles_[count_];
+            p = Profile{};
             p.id = nextId_++;
             p.locked = true;
             std::snprintf(p.name, sizeof(p.name), "%s", b.name);
@@ -427,7 +427,7 @@ private:
     }
 
     void refreshStatus() {
-        std::snprintf(statusBuf_, sizeof(statusBuf_), "%u preset%s", count_, count_ == 1 ? "" : "s");
+        std::snprintf(statusBuf_, sizeof(statusBuf_), "%u profile%s", count_, count_ == 1 ? "" : "s");
         setStatus(statusBuf_);
     }
 };

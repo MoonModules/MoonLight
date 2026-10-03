@@ -108,6 +108,9 @@ public:
     SetControlResult setControl(const char* moduleName, const char* controlName,
                                 const char* valueJson);
 
+    /// The reaction to a control that changed: visibility rebuilt, the module told, and the tree re-prepared when the control reshapes it.
+    void reactToControlChange(MoonModule* target, const char* controlName);
+
     /// Read one control as a byte, in the units a surface speaks, or false when there is none.
     bool getControl(const char* moduleName, const char* controlName, uint8_t& out) const;
 

@@ -1,0 +1,192 @@
+/// @module WiFiModule
+/// The known networks: remembered in priority order, edited from the card, and saved and restored with their passwords.
+
+#include "doctest.h"
+#include "core/system/WiFiModule.h"
+#include "core/util/JsonSink.h"
+
+#include <cstdio>
+#include <cstring>
+#include <string>
+
+namespace {
+/// The list as the device saves it (`saving`) or as the collapsed card shows it, `{"known":[...]}`.
+std::string known(mm::WiFiModule& w, bool saving) {
+    for (uint8_t i = 0; i < w.controls().count(); i++) {
+        const auto& c = w.controls()[i];
+        if (std::strcmp(c.name, "known") != 0) continue;
+        mm::JsonSink sink;
+        sink.append("{\"known\":");
+        mm::writeControlValue(sink, c, saving);
+        sink.append("}");
+        return std::string(sink.data(), sink.size());
+    }
+    return "";
+}
+std::string saved(mm::WiFiModule& w) { return known(w, /*saving=*/true); }
+}  // namespace
+
+TEST_CASE("known networks are added, edited, reordered and forgotten from the card") {
+    mm::WiFiModule w;
+    w.rebuildControls();
+    uint32_t a = 0, b = 0;
+    REQUIRE(w.addListRow(a));
+    REQUIRE(w.addListRow(b));
+    CHECK(w.setListRowField(a, "ssid", "{\"value\":\"workshop\"}"));
+    CHECK(w.setListRowField(a, "password", "{\"value\":\"pw1\"}"));
+    CHECK(w.setListRowField(b, "ssid", "{\"value\":\"venue\"}"));
+    CHECK(std::strcmp(w.ssidAt(0), "workshop") == 0);
+
+    // Moving a row up prefers it.
+    CHECK(w.moveListRow(b, 0));
+    CHECK(std::strcmp(w.ssidAt(0), "venue") == 0);
+    CHECK(std::strcmp(w.ssidAt(1), "workshop") == 0);
+
+    // Forget is the row delete.
+    CHECK(w.deleteListRow(b));
+    REQUIRE(w.knownCount() == 1);
+    CHECK(std::strcmp(w.ssidAt(0), "workshop") == 0);
+    CHECK_FALSE(w.setListRowField(b, "ssid", "{\"value\":\"x\"}"));   // a forgotten row takes no edit
+}
+
+// A network with no password is marked open, the warning a phone gives: the device joins any network of that name. The collapsed row never carries the password; the saved file does.
+TEST_CASE("an open known network is marked open, and only the saved file carries passwords") {
+    mm::WiFiModule w;
+    w.rebuildControls();
+    w.remember("cafe", "");
+    w.remember("home", "secret");
+    const std::string shown = known(w, /*saving=*/false);
+    CHECK(shown.find("\"ssid\":\"cafe\",\"security\":\"open\"") != std::string::npos);
+    CHECK(shown.find("secret") == std::string::npos);
+    const std::string file = saved(w);
+    CHECK(file.find("\"ssid\":\"home\",\"password\":\"secret\"") != std::string::npos);
+}
+
+// Each network carries its own IP settings, as a phone keeps them: DHCP by default, the static fields only under Static, and an address that does not parse refused.
+TEST_CASE("each known network has its own IP settings") {
+    mm::WiFiModule w;
+    w.rebuildControls();
+    w.remember("venue", "pw");
+    constexpr uint32_t kFirstRowId = 1;   // a fresh list numbers its first network 1
+    CHECK(w.staticIpAt(0) == nullptr);
+    mm::JsonSink dhcp;
+    w.writeListRowDetail(dhcp, 0);
+    CHECK(std::string(dhcp.data(), dhcp.size()).find("\"gateway\"") == std::string::npos);
+
+    REQUIRE(w.setListRowField(kFirstRowId, "ipSettings", "{\"value\":1}"));
+    REQUIRE(w.setListRowField(kFirstRowId, "ip", "{\"value\":\"10.0.0.7\"}"));
+    CHECK_FALSE(w.setListRowField(kFirstRowId, "gateway", "{\"value\":\"10.0.0\"}"));
+    REQUIRE(w.staticIpAt(0) != nullptr);
+    CHECK(w.staticIpAt(0)[3] == 7);
+    mm::JsonSink detail;
+    w.writeListRowDetail(detail, 0);
+    CHECK(std::string(detail.data(), detail.size()).find("\"gateway\"") != std::string::npos);
+    CHECK(known(w, false).find("static 10.0.0.7") != std::string::npos);
+
+    // The settings survive a save and a restore.
+    mm::WiFiModule r;
+    r.rebuildControls();
+    REQUIRE(r.restoreList(saved(w).c_str(), "known"));
+    REQUIRE(r.staticIpAt(0) != nullptr);
+    CHECK(r.staticIpAt(0)[0] == 10);
+}
+
+// What is saved comes back, passwords and order included, and ids are never reissued after a restore.
+TEST_CASE("known networks survive a save and a restore") {
+    mm::WiFiModule w;
+    w.rebuildControls();
+    w.remember("second", "pw2");
+    w.remember("first", "pw1");
+    const std::string json = saved(w);
+
+    mm::WiFiModule r;
+    r.rebuildControls();
+    REQUIRE(r.restoreList(json.c_str(), "known"));
+    REQUIRE(r.knownCount() == 2);
+    CHECK(std::strcmp(r.ssidAt(0), "first") == 0);
+    CHECK(std::strcmp(r.passwordAt(0), "pw1") == 0);
+    CHECK(std::strcmp(r.ssidAt(1), "second") == 0);
+    uint32_t fresh = 0;
+    REQUIRE(r.addListRow(fresh));
+    CHECK(json.find("\"id\":" + std::to_string(fresh) + ",") == std::string::npos);
+}
+
+// The list is bounded, since every row is RAM a board without PSRAM pays for.
+TEST_CASE("the known list stops at its cap rather than growing without bound") {
+    mm::WiFiModule w;
+    w.rebuildControls();
+    uint32_t id = 0;
+    int added = 0;
+    while (w.addListRow(id) && added < 100) added++;
+    CHECK(added == 8);
+    CHECK_FALSE(w.remember("one more", "pw"));
+    // Said on the card, since Improv and a join from the scan would otherwise lose the network without a word.
+    REQUIRE(w.status() != nullptr);
+    CHECK(std::string(w.status()).find("full") != std::string::npos);
+}
+
+namespace {
+/// A list control's source by name, the way the API reaches it.
+mm::ListSource* listOf(mm::WiFiModule& w, const char* name) {
+    for (uint8_t i = 0; i < w.controls().count(); i++)
+        if (std::strcmp(w.controls()[i].name, name) == 0) return static_cast<mm::ListSource*>(w.controls()[i].ptr);
+    return nullptr;
+}
+std::string rowText(mm::ListSource& l, uint8_t row) {
+    mm::JsonSink sink;
+    l.writeListRow(sink, row);
+    return std::string(sink.data(), sink.size());
+}
+mm::platform::WifiNetwork net(const char* ssid, int8_t rssi, bool secured) {
+    mm::platform::WifiNetwork n{};
+    std::snprintf(n.ssid, sizeof(n.ssid), "%s", ssid);
+    n.rssi = rssi;
+    n.secured = secured;
+    return n;
+}
+}  // namespace
+
+// The scan lists what a WiFi picker lists: named networks once each at their strongest, signal as bars, a lock on secured ones, and the known ones marked.
+TEST_CASE("a scan lists the networks in range as a WiFi picker shows them") {
+    const mm::platform::WifiNetwork found[] = {
+        net("home", -50, true), net("", -55, true), net("cafe", -70, false), net("home", -80, true)};
+    mm::platform::setTestWifiScan(found, 4);
+    mm::WiFiModule w;
+    w.rebuildControls();
+    w.remember("home", "pw");
+    w.onControlChanged("scan");
+    w.tick1s();   // starts the scan
+    w.tick1s();   // collects it
+    mm::ListSource* avail = listOf(w, "available");
+    REQUIRE(avail != nullptr);
+    REQUIRE(avail->listRowCount() == 2);   // the hidden one and the weaker duplicate are left out
+    const std::string home = rowText(*avail, 0);
+    CHECK(home.find("\"ssid\":\"home\"") != std::string::npos);
+    CHECK(home.find("▂▄▆█") != std::string::npos);
+    CHECK(home.find("🔒") != std::string::npos);
+    CHECK(home.find("known") != std::string::npos);
+    const std::string cafe = rowText(*avail, 1);
+    CHECK(cafe.find("🔒") == std::string::npos);
+    CHECK_FALSE(avail->persistsList());   // a scan is never saved
+    CHECK(avail->listRowsFixed());        // nothing adds, deletes or moves its rows
+    mm::platform::setTestWifiScan(nullptr, 0);
+}
+
+// A scan whose results never arrive here, because the radio stopped or Improv took them, ends after its time rather than reading "scanning" until a restart.
+TEST_CASE("a scan that never finishes ends after its time") {
+    struct ClockGuard { ~ClockGuard() { mm::platform::setTestNowMs(0); } } guard;
+    mm::platform::setTestNowMs(1000);
+    mm::platform::setTestWifiScan(nullptr, -1);   // the radio never reports this scan done
+    mm::WiFiModule w;
+    w.rebuildControls();
+    w.onControlChanged("scan");
+    w.tick1s();
+    mm::platform::setTestNowMs(5000);
+    w.tick1s();
+    REQUIRE(w.status() != nullptr);
+    CHECK(std::string(w.status()).find("scanning") != std::string::npos);
+    mm::platform::setTestNowMs(20000);
+    w.tick1s();
+    CHECK(std::string(w.status()).find("did not finish") != std::string::npos);
+    mm::platform::setTestWifiScan(nullptr, 0);
+}

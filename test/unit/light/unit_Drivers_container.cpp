@@ -2,7 +2,7 @@
 
 #include "doctest.h"
 #include "light/drivers/Drivers.h"
-#include "light/drivers/LightPresetsModule.h"   // the non-deletable boot-wired preset library
+#include "light/drivers/FixtureProfilesModule.h"   // the non-deletable boot-wired fixture-profile library
 #include "light/drivers/NetworkSendDriver.h"     // a real driver, for the sibling-instance cases
 #include "correction_presets.h"                  // mm::test::rebuildFromPreset
 #include "../core/conditional_controls.h"   // mm::test::setControlValue
@@ -27,7 +27,7 @@ public:
 
 } // namespace
 
-// A minimal driver so a test can read the resulting LUT. Each driver owns its Correction (DriverBase::correction_); the container fills it via rebuildCorrection(). Defines the correction controls (localBrightness / preset / whiteMode) so a test can drive them.
+// A minimal driver so a test can read the resulting LUT. Each driver owns its Correction (DriverBase::correction_); the container fills it via rebuildCorrection(). Defines the correction controls (localBrightness / fixture / whiteMode) so a test can drive them.
 class CorrectionCapturingDriver : public mm::DriverBase {
 public:
     void setSourceBuffer(mm::Buffer*) override {}
@@ -47,7 +47,7 @@ public:
     int correctionCalls = 0;
 };
 
-// Regression (the preset-edit LED-blank bug): editing a live light preset blanked the strip for ~½s, even on drivers NOT using that preset. Cause: the list-mutation handler re-ran a whole-tree prepareTree(), and a physical driver's prepare() reinits its output peripheral (an RMT channel teardown → dark for a tick). A preset edit changes correction DATA, not pipeline STRUCTURE, so the fix routes it through rebuildAllCorrections(), the tier-1 correction refresh, which must re-resolve each driver's correction WITHOUT calling its prepare(). This pins that split so the blank can't return: rebuildAllCorrections() bumps the correction path, never prepare().
+// Regression (the profile-edit LED-blank bug): editing a live fixture profile blanked the strip for ~½s, even on drivers NOT using that profile. Cause: the list-mutation handler re-ran a whole-tree prepareTree(), and a physical driver's prepare() reinits its output peripheral (an RMT channel teardown → dark for a tick). A preset edit changes correction DATA, not pipeline STRUCTURE, so the fix routes it through rebuildAllCorrections(), the tier-1 correction refresh, which must re-resolve each driver's correction WITHOUT calling its prepare(). This pins that split so the blank can't return: rebuildAllCorrections() bumps the correction path, never prepare().
 TEST_CASE("Drivers::rebuildAllCorrections re-resolves corrections without re-preparing drivers") {
     mm::Drivers drivers;
     RebuildTrackingDriver drv;
@@ -150,15 +150,15 @@ TEST_CASE("Drivers::tick() skips disabled child drivers") {
     CHECK(b.loopCalls == 2);
 }
 
-// The "+ add" picker under Drivers must offer ONLY drivers, not every generic system module, else the 6 drivers are buried under ~18 generics (Devices, Filesystem, …). acceptsChildRoles drives that picker, so it returns "driver" alone. The one non-driver child (the boot-wired LightPresets library) is added directly at boot, bypassing this check, and is non-deletable, so it needs no "generic" here. Pins the filter the product owner asked for.
+// The "+ add" picker under Drivers must offer ONLY drivers, not every generic system module, else the 6 drivers are buried under ~18 generics (Devices, Filesystem, …). acceptsChildRoles drives that picker, so it returns "driver" alone. The one non-driver child (the boot-wired FixtureProfiles library) is added directly at boot, bypassing this check, and is non-deletable, so it needs no "generic" here. Pins the filter the product owner asked for.
 TEST_CASE("Drivers accepts only driver-role children in the add picker") {
     mm::Drivers drivers;
     CHECK(std::strcmp(drivers.acceptsChildRoles(), "driver") == 0);
 }
 
-// The boot-wired light-preset library is a permanent singleton: not user-deletable (Drivers accepts only `driver`, so a deleted library could never be re-added, and every driver resolves its preset through it). Mirrors the boot-wired PreviewDriver's userEditable(false).
-TEST_CASE("LightPresets library is a non-deletable singleton") {
-    mm::LightPresetsModule lib;
+// The boot-wired fixture-profile library is a permanent singleton: not user-deletable (Drivers accepts only `driver`, so a deleted library could never be re-added, and every driver resolves its profile through it). Mirrors the boot-wired PreviewDriver's userEditable(false).
+TEST_CASE("FixtureProfiles library is a non-deletable singleton") {
+    mm::FixtureProfilesModule lib;
     CHECK_FALSE(lib.userEditable());
 }
 

@@ -1,0 +1,194 @@
+{
+  "name": "scenario_Palettes_a_script_drives_the_effects",
+  "module": "Drivers",
+  "mode": "mutate",
+  "also": [
+    "MoonLivePalette",
+    "RainbowEffect"
+  ],
+  "description": "A palette written as a MoonLive script, end to end: the file lands on the device, the picker offers it by name, it compiles and puts its own control on the Drivers card, every effect samples what it computes each frame, and a control turned on the card reaches the script. The scenario removes its file afterwards, so the device's picker is left as it was found.",
+  "reset": [
+    {
+      "name": "reset-palette",
+      "description": "A built-in, so the scenario starts from a palette that needs no script.",
+      "op": "set_control",
+      "id": "Drivers",
+      "key": "palette",
+      "value": "Rainbow"
+    }
+  ],
+  "fixture": [
+    {
+      "name": "layouts",
+      "op": "add_module",
+      "id": "Layouts",
+      "type": "Layouts"
+    },
+    {
+      "name": "grid",
+      "description": "A 16x16 panel, small enough to run anywhere.",
+      "op": "add_module",
+      "id": "Grid",
+      "type": "GridLayout",
+      "parent_id": "Layouts",
+      "props": {
+        "width": 16,
+        "height": 16
+      }
+    },
+    {
+      "name": "layer",
+      "op": "add_module",
+      "id": "Layer",
+      "type": "Layer",
+      "props": {
+        "layouts": "Layouts"
+      }
+    },
+    {
+      "name": "effect",
+      "description": "An effect that samples the palette for every light, so the script's colors are what it paints.",
+      "op": "add_module",
+      "id": "FX",
+      "type": "RainbowEffect",
+      "parent_id": "Layer"
+    },
+    {
+      "name": "drivers",
+      "description": "The owner of the palette choice, and the card a scripted palette's controls appear on.",
+      "op": "add_module",
+      "id": "Drivers",
+      "type": "Drivers",
+      "props": {
+        "layer": "Layer"
+      }
+    },
+    {
+      "name": "preview",
+      "description": "A driver to consume the frame, so the pipeline renders.",
+      "op": "add_module",
+      "id": "Preview",
+      "type": "PreviewDriver",
+      "parent_id": "Drivers"
+    }
+  ],
+  "steps": [
+    {
+      "name": "write-the-palette",
+      "description": "A palette script as a user would save it: one control, and sixteen entries computed from it every frame.",
+      "op": "write_file",
+      "path": "/moonlive/scenario-palette.mlp",
+      "value": "// A test palette: one shade, from red to blue, set by its control.\n\nclass ScenarioPalette {\n  byte shade = 100;\n\n  void defineControls() {\n    addControl(\"shade\", shade, 0, 255); // where between red and blue\n  }\n\n  void tick() {\n    for (int i = 0; i < 16; i = i + 1) {\n      setPalEntry(i, shade, 0, 255 - shade);\n    }\n  }\n}\n"
+    },
+    {
+      "name": "pick-it-by-name",
+      "description": "By name, since a scripted palette's index moves as files come and go.",
+      "op": "set_control",
+      "id": "Drivers",
+      "key": "palette",
+      "value": "scenario-palette.mlp"
+    },
+    {
+      "name": "the-script-runs-it",
+      "op": "expect_control",
+      "id": "Drivers",
+      "key": "paletteScript",
+      "equals": "scenario-palette.mlp"
+    },
+    {
+      "name": "its-control-is-on-the-card",
+      "description": "Only a compiled script publishes its controls, so this proves the compile as well.",
+      "op": "expect_control",
+      "id": "Drivers",
+      "key": "shade",
+      "equals": "100"
+    },
+    {
+      "name": "measure-scripted",
+      "description": "The frame cost with the script computing the palette, which is independent of the rig's size.",
+      "op": "measure",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 6,
+            "p95": 202,
+            "min": 6,
+            "max": 202,
+            "n": 14,
+            "samples": [6, 122, 6, 6, 53, 36, 6, 6, 6, 202, 11, 6, 74, 74]
+          },
+          "last_updated": "2026-10-03"
+        }
+      }
+    },
+    {
+      "name": "turn-its-control",
+      "op": "set_control",
+      "id": "Drivers",
+      "key": "shade",
+      "value": 200
+    },
+    {
+      "name": "the-script-sees-it",
+      "op": "expect_control",
+      "id": "Drivers",
+      "key": "shade",
+      "equals": "200"
+    },
+    {
+      "name": "restart",
+      "description": "A scripted palette chosen by name must come back running, not only listed.",
+      "op": "reboot",
+      "timeout": 60
+    },
+    {
+      "name": "the-script-came-back",
+      "description": "Its control exists only while its script runs, so this proves the script reattached after the restart.",
+      "op": "expect_control",
+      "id": "Drivers",
+      "key": "shade",
+      "equals": "200"
+    },
+    {
+      "name": "back-to-a-built-in",
+      "description": "Detach the script before its file goes, as a user switching palettes would.",
+      "op": "set_control",
+      "id": "Drivers",
+      "key": "palette",
+      "value": "Rainbow"
+    },
+    {
+      "name": "no-script-runs",
+      "op": "expect_control",
+      "id": "Drivers",
+      "key": "paletteScript",
+      "equals": ""
+    },
+    {
+      "name": "remove-the-palette",
+      "description": "Leave the device's picker as it was found.",
+      "op": "delete_file",
+      "path": "/moonlive/scenario-palette.mlp"
+    },
+    {
+      "name": "still-rendering",
+      "description": "The effects keep painting with the file gone.",
+      "op": "measure",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 7,
+            "p95": 205,
+            "min": 6,
+            "max": 205,
+            "n": 14,
+            "samples": [6, 204, 6, 6, 49, 37, 6, 6, 7, 205, 7, 7, 115, 108]
+          },
+          "last_updated": "2026-10-03"
+        }
+      }
+    }
+  ]
+}

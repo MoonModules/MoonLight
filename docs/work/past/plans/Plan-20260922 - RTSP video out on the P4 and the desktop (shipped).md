@@ -65,6 +65,6 @@ A card on the drivers page saying which boards carry it and what to point at it,
 
 ## Risks
 
-- **The send path runs on a nonblocking tick**, at RTP's packet rate. Where the send falls behind it drops whole frames at the source and the client sees fewer, the rule [the preview transport](../../moonmodules/light/drivers.md#preview) already follows.
+- **The send path runs on a nonblocking tick**, at RTP's packet rate. Where the send falls behind it drops whole frames at the source and the client sees fewer, the rule [the preview transport](../../../moonmodules/light/drivers.md#preview) already follows.
 - **UDP wants a reachable port pair.** A network that blocks it leaves the stream silent, which reads as a fault. The status line says a client is connected and how many packets have left the device, so the difference is visible.
 - **PSRAM.** The NAL buffer is 128 KB today and shared with the muxer, so a second reader releases it within the encoder's frame.

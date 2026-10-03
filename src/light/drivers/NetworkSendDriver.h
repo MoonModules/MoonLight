@@ -36,8 +36,8 @@ namespace mm {
 /// @card NetworkSendDriver.png
 class NetworkSendDriver : public DriverBase {
 public:
-    /// Default to the RGB preset: network fixtures are RGB by convention, unlike the strips.
-    NetworkSendDriver() { setDefaultPresetName("RGB"); }
+    /// Default to the RGB profile: network fixtures are RGB by convention, unlike the strips.
+    NetworkSendDriver() { setDefaultFixtureName("RGB"); }
 
     /// The protocol names, index-aligned with the constants the send switch uses.
     static constexpr const char* kProtocolOptions[] = {"ArtNet", "E1.31", "DDP"};
@@ -183,7 +183,7 @@ public:
         refreshHosts();
     }
 
-    /// Re-size the corrected buffer when the preset changes the output channel count.
+    /// Re-size the corrected buffer when the fixture profile changes the output channel count.
     void onCorrectionChanged() override {
         resizeCorrected();
     }

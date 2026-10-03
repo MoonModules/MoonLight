@@ -30,14 +30,26 @@ function fnSource(name) {
     assert.fail(`unbalanced braces in ${name}`);
 }
 
-/// restoreSelectedRoot, given a tree and what localStorage holds.
-function restore({ modules, saved, already = null }) {
-    const build = new Function("state", "lsRead", "LS_SELECTED", "selectedModuleIn", `
+/// restoreSelectedRoot, given a tree, what localStorage holds and the page's query; returns the root and the tabs it selected.
+function restoreWithTabs({ modules, saved, already = null, search = "" }) {
+    const tabs = {};
+    let replaced = null;
+    const build = new Function("state", "lsRead", "LS_SELECTED", "LS_TABS", "selectedModuleIn", "selectedTabs",
+                               "safeLocalSet", "location", "history", `
         let selectedModule = selectedModuleIn;
+        ${fnSource("findModule")}
+        ${fnSource("findParentOf")}
         ${fnSource("restoreSelectedRoot")}
         restoreSelectedRoot();
         return selectedModule;`);
-    return build({ modules }, () => saved, "mm_selectedRoot", already);
+    const root = build({ modules }, () => saved, "mm_selectedRoot", "mm_selectedTabs", already, tabs, () => {},
+                       { search, pathname: "/" }, { replaceState: (_s, _t, url) => { replaced = url; } });
+    return { root, tabs, replaced };
+}
+
+/// restoreSelectedRoot's root alone, for the cases without a link.
+function restore(args) {
+    return restoreWithTabs(args).root;
 }
 
 const TREE = [{ name: "Control" }, { name: "Layouts" }, { name: "File Manager" }, { name: "System" }];
@@ -56,6 +68,17 @@ test("a saved root that is no longer in the tree is ignored, leaving the fallbac
     // A module deleted since the last visit, or a config from another device.
     assert.equal(restore({ modules: TREE, saved: "Gone" }), null);
     assert.equal(restore({ modules: TREE, saved: null }), null);
+});
+
+test("a link naming a module opens it with its tab selected, over what was saved", () => {
+    // The captive portal sends a phone to `?open=WiFi`: the Network root, its WiFi tab open.
+    const tree = [{ name: "Control" }, { name: "Network", children: [{ name: "Ethernet" }, { name: "WiFi" }, { name: "AccessPoint" }] }];
+    const r = restoreWithTabs({ modules: tree, saved: "Control", already: "Control", search: "?open=WiFi" });
+    assert.equal(r.root, "Network");
+    assert.equal(r.tabs.Network, "WiFi");
+    assert.equal(r.replaced, "/", "the query is dropped, so a refresh shows what the user chose since");
+    // A name not in the tree is ignored, and the saved root restores as usual.
+    assert.equal(restore({ modules: tree, saved: "Control", search: "?open=Gone" }), "Control");
 });
 
 test("an empty or absent tree leaves the selection alone rather than guessing", () => {

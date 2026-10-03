@@ -18,7 +18,7 @@ The LED-driver and shift-register design analyses moved to [future](../future/in
 
 ## Plans and their PRs
 
-18 plans, each mapped to the merged pull request that carries the same design plus the diff that implemented it. The mapping is derived from title words and merge date, so it is a starting point rather than a record: a `?` means no confident match, and any row is worth checking before it is trusted. 4 need a hand.
+21 plans, each mapped to the merged pull request that carries the same design plus the diff that implemented it. The mapping is derived from title words and merge date, so it is a starting point rather than a record: a `?` means no confident match, and any row is worth checking before it is trusted. 4 need a hand.
 
 | Date | Plan | PR |
 |---|---|---|
@@ -40,3 +40,6 @@ The LED-driver and shift-register design analyses moved to [future](../future/in
 | 2026-08-27 | [Sprites and flying toasters](plans/Plan-20260827%20-%20Sprites%20and%20flying%20toasters%20%28shipped%29.md) | [#86](https://github.com/MoonModules/MoonLight/pull/86) |
 | 2026-08-30 | [Ship the MoonLive script library](plans/Plan-20260830%20-%20Ship%20the%20MoonLive%20script%20library%20%28shipped%29.md) | [#89](https://github.com/MoonModules/MoonLight/pull/89) |
 | 2026-08-31 | [Scripts declare dimensions and tags](plans/Plan-20260831%20-%20Scripts%20declare%20dimensions%20and%20tags%20%28shipped%29.md) | [#89](https://github.com/MoonModules/MoonLight/pull/89) |
+| 2026-09-22 | [MoonLight, from v5.0.0 to the rename](plans/Plan-20260922%20-%20MoonLight%2C%20from%20v5.0.0%20to%20the%20rename%20%28shipped%29.md) | [#119](https://github.com/MoonModules/MoonLight/pull/119) |
+| 2026-09-22 | [RTSP video out on the P4 and the desktop](plans/Plan-20260922%20-%20RTSP%20video%20out%20on%20the%20P4%20and%20the%20desktop%20%28shipped%29.md) | [#110](https://github.com/MoonModules/MoonLight/pull/110) |
+| 2026-10-02 | [One way to send to many receivers](plans/Plan-20261002%20-%20One%20way%20to%20send%20to%20many%20receivers%20%28shipped%29.md) | [#123](https://github.com/MoonModules/MoonLight/pull/123) |

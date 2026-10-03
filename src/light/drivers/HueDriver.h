@@ -36,8 +36,8 @@ namespace mm {
 /// @card HueDriver.png
 class HueDriver : public DriverBase {
 public:
-    /// Default to the RGB preset: this driver reads the output back as RGB to make an HSV.
-    HueDriver() { setDefaultPresetName("RGB"); }
+    /// Default to the RGB profile: this driver reads the output back as RGB to make an HSV.
+    HueDriver() { setDefaultFixtureName("RGB"); }
 
     /// The bridge's LAN IP, entered in the UI (4 octets).
     uint8_t  bridgeIp[4] = {};

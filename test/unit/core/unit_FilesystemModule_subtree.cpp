@@ -254,6 +254,47 @@ TEST_CASE("a restored value for a prepare-time control lands after the next prep
     CHECK(later == 42);
 }
 
+namespace {
+/// A module with one control present from the start and one that appears later, counting the changes it is told about.
+struct ChangeWatcher : mm::MoonModule {
+    uint8_t steady = 7;
+    uint8_t later = 0;
+    bool hasLater = false;   // stands in for a script declaring the control once it compiles
+    int laterChanges = 0;
+    int otherChanges = 0;
+    void defineControls() override {
+        MoonModule::defineControls();
+        controls_.addControl("steady", steady, 0, 100);
+        if (hasLater) controls_.addControl("laterControl", later, 0, 100);
+    }
+    void onControlChanged(const char* name) override {
+        if (std::strcmp(name, "laterControl") == 0) laterChanges++;
+        else otherChanges++;
+    }
+};
+}  // namespace
+
+// A value resolving only at the reapply gets the reaction any write gets, and one already in place gets none: a scripted palette's name resolves there.
+TEST_CASE("a value that lands at the reapply reaches the module, and an unchanged one does not") {
+    Tree t;
+    mm::ModuleFactory::registerType<ChangeWatcher>("ChangeWatcher");
+    auto* layer = t.add(t.layers, "Layer");
+    auto* w = static_cast<ChangeWatcher*>(t.add(layer, "ChangeWatcher"));
+
+    std::string json = serialize(t.fs, t.layers);
+    json.insert(json.rfind('}'), ",\"0.0.laterControl\":42");
+    REQUIRE(mm::platform::fsWriteAtomic("/.config/Effects.json", json.data(), json.size()));
+    REQUIRE(t.fs->applyConfigFile("/.config/Effects.json"));
+
+    w->hasLater = true;
+    w->rebuildControls();
+    t.scheduler.requestPrepareTree();
+    t.scheduler.tick();
+    CHECK(w->later == 42);
+    CHECK(w->laterChanges == 1);
+    CHECK(w->otherChanges == 0);   // `steady` was already in place, so boot side effects stay where a value moved
+}
+
 // The upload path queues, the render tick applies: nothing mutates the tree on the caller's task (re-running a system module's setup() on the web-server task crashed the ESP32), and a multi-file upload coalesces to one apply per module.
 TEST_CASE("a requested config apply lands on the next tick, not on the requesting task") {
     Tree t;

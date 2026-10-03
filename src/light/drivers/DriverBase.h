@@ -6,7 +6,7 @@
 #include "light/layers/Layer.h"
 #include "light/drivers/Correction.h"
 #include "light/drivers/LedPeripheral.h"         // LedHwBlock: the peripheral-block claim guard's vocabulary
-#include "light/drivers/LightPresetsModule.h"   // the shared preset library a driver references by id
+#include "light/drivers/FixtureProfilesModule.h"   // the shared fixture-profile library a driver references by id
 #include "platform/platform.h"
 
 #include <cstdio>       // std::snprintf for status strings
@@ -72,17 +72,17 @@ public:
     /// Rebuild this driver's correction, baking global times local brightness into one LUT.
     void rebuildCorrection(uint8_t globalBrightness) {
         lastGlobalBrightness_ = globalBrightness;   // remembered for self-triggered rebuilds
-        // Applied unconditionally, so brightness works even before the preset library is up.
+        // Applied unconditionally, so brightness works even before the fixture-profile library is up.
         const uint8_t effective =
             static_cast<uint8_t>((globalBrightness * localBrightness_) / 255);
         correction_.whiteMode = static_cast<WhiteMode>(whiteMode_);
         correction_.curve = static_cast<Correction::Curve>(curveSel_);
         // A missing id falls back to the default, so a driver degrades rather than crashing.
-        if (auto* lib = LightPresetsModule::active()) {
-            if (presetId_ == 0) presetId_ = lib->defaultId();
-            if (!lib->deriveCorrection(presetId_, effective, correction_)) {
-                presetId_ = lib->defaultId();                       // dangling → re-point to default
-                lib->deriveCorrection(presetId_, effective, correction_);
+        if (auto* lib = FixtureProfilesModule::active()) {
+            if (profileId_ == 0) profileId_ = lib->defaultId();
+            if (!lib->deriveCorrection(profileId_, effective, correction_)) {
+                profileId_ = lib->defaultId();                       // dangling → re-point to default
+                lib->deriveCorrection(profileId_, effective, correction_);
             }
         } else {
             // No library yet, so apply brightness here, as deriveCorrection would have.
@@ -94,10 +94,10 @@ public:
     /// Rebuild the correction when one of its own correction controls changed.
     void onControlChanged(const char* name) override {
         // The chosen INDEX maps to a stable id, so the reference survives a later reorder.
-        if (std::strcmp(name, "lightPreset") == 0) {
-            if (auto* lib = LightPresetsModule::active()) {
-                presetId_ = lib->idAt(presetSel_);
-                std::snprintf(presetRef_, sizeof(presetRef_), "%s", lib->nameAt(presetSel_));  // persist the name
+        if (std::strcmp(name, "fixture") == 0) {
+            if (auto* lib = FixtureProfilesModule::active()) {
+                profileId_ = lib->idAt(fixtureSel_);
+                std::snprintf(fixtureRef_, sizeof(fixtureRef_), "%s", lib->nameAt(fixtureSel_));  // persist the name
             }
         }
         if (isCorrectionControl(name)) rebuildCorrection(lastGlobalBrightness_);
@@ -154,10 +154,10 @@ protected:
     virtual size_t driverHeapBytes() const { return wireCap_; }
     void publishHeapBytes() { setDynamicBytes(driverHeapBytes()); }
 
-    // The wiring comes from a named preset by stable id; the render loop never reads the library.
+    // The wiring comes from a named profile by stable id; the render loop never reads the library.
     Correction correction_;
-    uint32_t presetId_ = 0;          // stable id into the LightPresets library (0 → resolve to default)
-    uint8_t presetSel_ = 0;          // the preset Select's chosen INDEX (mapped to an id in onControlChanged)
+    uint32_t profileId_ = 0;          // stable id into the FixtureProfiles library (0 → resolve to default)
+    uint8_t fixtureSel_ = 0;          // the fixture Select's chosen INDEX (mapped to an id in onControlChanged)
     uint8_t whiteMode_ = static_cast<uint8_t>(WhiteMode::Min);  // index into kWhiteModeOptions
     uint8_t localBrightness_ = 255;  // per-driver dim, multiplied with the global brightness
     /// Which perceptual curve the output LUT is built through; CIE lightness by default.
@@ -170,55 +170,55 @@ protected:
         "linear"           // no curve: for a downstream device that corrects its own output
     };
     uint8_t lastGlobalBrightness_ = 0;  // last global brightness the container pushed (for self-rebuilds)
-    // A preset id is a runtime handle, so what survives a reboot is the preset NAME.
-    char presetRef_[16] = {};        // referenced preset's name (the durable reference)
+    // A profile id is a runtime handle, so what survives a reboot is the profile NAME.
+    char fixtureRef_[16] = {};        // referenced profile's name (the durable reference)
 
-    /// Add the correction controls: brightness, the preset selector, the curve and the white mode.
+    /// Add the correction controls: brightness, the fixture selector, the curve and the white mode.
     void defineCorrectionControls() {
         controls_.addControl("localBrightness", localBrightness_, 0, 255);
         // Per driver, not global: a fixture that corrects its own pixels needs Linear here.
         controls_.addSelect("curve", curveSel_, kCurveOptions, kCurveCount);
-        buildPresetOptions();                        // fill presetOptions_ from the library, sync id/sel/ref
-        controls_.addSelect("lightPreset", presetSel_, presetOptions_, presetOptionCount_);
+        buildFixtureOptions();                        // fill fixtureOptions_ from the library, sync id/sel/ref
+        controls_.addSelect("fixture", fixtureSel_, fixtureOptions_, fixtureOptionCount_);
         controls_.addSelect("whiteMode", whiteMode_, kWhiteModeOptions, kWhiteModeCount);
-        // Hidden unless the referenced preset carries a channel there is something to synthesise for.
-        auto* lib = LightPresetsModule::active();
-        controls_.setHidden(controls_.count() - 1, !(lib && lib->presetHasSynthChannel(presetId_)));
+        // Hidden unless the referenced profile carries a channel there is something to synthesize for.
+        auto* lib = FixtureProfilesModule::active();
+        controls_.setHidden(controls_.count() - 1, !(lib && lib->profileHasSynthChannel(profileId_)));
         // Persisted but not shown: the selector above is what the user sees.
-        controls_.addText("presetRef", presetRef_, sizeof(presetRef_));
+        controls_.addText("fixtureRef", fixtureRef_, sizeof(fixtureRef_));
         controls_.setHidden(controls_.count() - 1, true);
     }
 
-    /// Set this driver's default referenced preset by name, from its constructor.
-    void setDefaultPresetName(const char* name) { std::snprintf(presetRef_, sizeof(presetRef_), "%s", name); }
+    /// Set this driver's default referenced profile by name, from its constructor.
+    void setDefaultFixtureName(const char* name) { std::snprintf(fixtureRef_, sizeof(fixtureRef_), "%s", name); }
 
     /// Whether `name` is one of the correction controls, for a driver's own prepare test.
     static bool isCorrectionControl(const char* name) {
-        return std::strcmp(name, "lightPreset") == 0 || std::strcmp(name, "localBrightness") == 0
+        return std::strcmp(name, "fixture") == 0 || std::strcmp(name, "localBrightness") == 0
             || std::strcmp(name, "whiteMode") == 0 || std::strcmp(name, "curve") == 0;
     }
 
 private:
     // Borrowed pointers into the library's own name storage, which outlives the control list.
-    const char* presetOptions_[LightPresetsModule::kMaxPresets] = {};
-    uint8_t presetOptionCount_ = 0;
-    void buildPresetOptions() {
-        presetOptionCount_ = 0;
-        auto* lib = LightPresetsModule::active();
-        if (!lib) { presetOptions_[0] = "(none)"; presetOptionCount_ = 1; presetSel_ = 0; return; }
-        const uint8_t n = lib->presetCount();
-        for (uint8_t i = 0; i < n; i++) presetOptions_[i] = lib->nameAt(i);
-        presetOptionCount_ = n;
+    const char* fixtureOptions_[FixtureProfilesModule::kMaxProfiles] = {};
+    uint8_t fixtureOptionCount_ = 0;
+    void buildFixtureOptions() {
+        fixtureOptionCount_ = 0;
+        auto* lib = FixtureProfilesModule::active();
+        if (!lib) { fixtureOptions_[0] = "(none)"; fixtureOptionCount_ = 1; fixtureSel_ = 0; return; }
+        const uint8_t n = lib->profileCount();
+        for (uint8_t i = 0; i < n; i++) fixtureOptions_[i] = lib->nameAt(i);
+        fixtureOptionCount_ = n;
         // Reconciled freshest-first: a user pick, then the persisted name, then the current id.
-        if (presetSel_ < n && presetId_ != 0 && lib->idAt(presetSel_) != presetId_) {
-            presetId_ = lib->idAt(presetSel_);                 // user picked a different preset
-        } else if (presetRef_[0]) {
+        if (fixtureSel_ < n && profileId_ != 0 && lib->idAt(fixtureSel_) != profileId_) {
+            profileId_ = lib->idAt(fixtureSel_);                 // user picked a different profile
+        } else if (fixtureRef_[0]) {
             for (uint8_t i = 0; i < n; i++)
-                if (std::strcmp(lib->nameAt(i), presetRef_) == 0) { presetId_ = lib->idAt(i); break; }
+                if (std::strcmp(lib->nameAt(i), fixtureRef_) == 0) { profileId_ = lib->idAt(i); break; }
         }
-        if (presetId_ == 0) presetId_ = lib->defaultId();
-        presetSel_ = lib->indexOfId(presetId_);
-        std::snprintf(presetRef_, sizeof(presetRef_), "%s", lib->nameAt(presetSel_));
+        if (profileId_ == 0) profileId_ = lib->defaultId();
+        fixtureSel_ = lib->indexOfId(profileId_);
+        std::snprintf(fixtureRef_, sizeof(fixtureRef_), "%s", lib->nameAt(fixtureSel_));
     }
 
 protected:

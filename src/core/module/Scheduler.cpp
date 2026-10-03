@@ -241,9 +241,7 @@ Scheduler::SetControlResult Scheduler::setControl(const char* moduleName,
             case ApplyResult::Malformed:  return SetControlResult::Malformed;
             case ApplyResult::ReadOnly:   return SetControlResult::ReadOnly;
         }
-        // Rebuild the control list so defineControls() re-evaluates conditional visibility for the new value; fire the three-tier change reaction (onControlChanged always, a tree-wide prepareTree only when the control reshapes dims/mapping); persist.
-        target->rebuildControls();
-        target->onControlChanged(controlName);
+        reactToControlChange(target, controlName);
         // LIVE STATE does not mark the tree dirty.
         // A control something drives continuously is not configuration (ControlDescriptor::live), and marking it re-stamped the debounce on every write: a 50 Hz writer kept the timer from ever expiring.
         // The module's file was never saved at all and a power cut lost everything in it, including the settings a person HAD chosen.
@@ -254,10 +252,16 @@ Scheduler::SetControlResult Scheduler::setControl(const char* moduleName,
             target->markDirty();
             if (noteDirtyHook_) noteDirtyHook_();
         }
-        if (target->affectsPrepare(controlName)) requestPrepareTree();
         return SetControlResult::Ok;
     }
     return SetControlResult::ControlNotFound;
+}
+
+void Scheduler::reactToControlChange(MoonModule* target, const char* controlName) {
+    // The list rebuilds first, so defineControls() re-evaluates conditional visibility for the new value.
+    target->rebuildControls();
+    target->onControlChanged(controlName);
+    if (target->affectsPrepare(controlName)) requestPrepareTree();
 }
 
 namespace {

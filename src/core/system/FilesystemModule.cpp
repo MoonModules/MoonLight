@@ -176,7 +176,20 @@ void FilesystemModule::reapplySubtree(MoonModule* m) {
 // Walk the same prefix scheme applyNode uses, overlaying values onto whatever controls exist NOW.
 void FilesystemModule::reapplyNode(MoonModule* m, const char* json, const char* prefix) {
     if (!m) return;
-    overlayControls(m, json, prefix);
+    // A late value gets the reaction any write gets, a scripted palette's name resolving only here; re-read per index, since the reaction rebuilds the list.
+    char key[MAX_KEY];
+    for (uint8_t i = 0; i < m->controls().count(); i++) {
+        auto& c = m->controls()[i];
+        if (!isPersistable(c)) continue;
+        std::snprintf(key, sizeof(key), "%s%s", prefix, c.name);
+        JsonSink before;
+        writeControlValue(before, c);
+        applyValue(c, json, key);
+        JsonSink after;
+        writeControlValue(after, c);
+        if (before.size() != after.size() || std::memcmp(before.data(), after.data(), before.size()) != 0)
+            if (scheduler_) scheduler_->reactToControlChange(m, c.name);
+    }
     char childPrefix[MAX_PATH];
     for (uint8_t i = 0; i < m->childCount(); i++) {
         MoonModule* c = m->child(i);
@@ -189,7 +202,7 @@ void FilesystemModule::reapplyNode(MoonModule* m, const char* json, const char* 
 // ---- Load ----
 
 // Read a WHOLE file into a heap buffer sized to it (caller frees), no fixed ceiling.
-// A large saved config (many light presets, a wide fixture) loads in full instead of being truncated to a fixed buffer and failing to parse.
+// A large saved config (many fixture profiles, a wide fixture) loads in full instead of being truncated to a fixed buffer and failing to parse.
 // Mirrors the streaming save (saveSubtree): both sides cap-free.
 static char* readWholeFileAlloc(const char* path) {
     const long size = platform::fsSize(path);
@@ -460,7 +473,7 @@ bool FilesystemModule::saveSubtreeTo(MoonModule* m, JsonSink& sink, const char* 
 bool FilesystemModule::saveSubtree(MoonModule* m) {
     char path[MAX_PATH];
     if (!pathFor(m, path, sizeof(path))) return false;
-    // Serialize the whole subtree into a buffer-mode JsonSink, a growable heap buffer with NO fixed ceiling (the same primitive /api/state streams through), so a large config (many light presets, a wide fixture wiring) persists in full instead of silently truncating. Written atomically once complete.
+    // Serialize the whole subtree into a buffer-mode JsonSink, a growable heap buffer with NO fixed ceiling (the same primitive /api/state streams through), so a large config (many fixture profiles, a wide fixture wiring) persists in full instead of silently truncating. Written atomically once complete.
     JsonSink sink;                       // heap/buffer mode: grows as needed, no cap
     if (!saveSubtreeTo(m, sink)) {
         std::printf("FilesystemModule: out of memory serializing %s\n", path);
@@ -485,7 +498,7 @@ void FilesystemModule::writeNode(MoonModule* m, JsonSink& sink, const char* pref
         auto& c = cs[i];
         if (!isPersistable(c)) continue;
         sink.appendf("%s\"%s%s\":", first ? "" : ",", prefix, c.name);
-        writeControlValue(sink, c);      // the shared value serializer (same as /api/state)
+        writeControlValue(sink, c, /*saving=*/true);   // the shared value serializer, in its saving form
         first = false;
     }
     sink.appendf("%s\"%senabled\":%s", first ? "" : ",", prefix, m->enabled() ? "true" : "false");

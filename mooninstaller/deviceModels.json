@@ -32,8 +32,9 @@
         "parent_id": "Drivers"
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "EthernetModule",
+        "id": "Ethernet",
+        "parent_id": "Network",
         "controls": {
           "ethBoard": "Classic RMII"
         }
@@ -168,7 +169,7 @@
         "parent_id": "Drivers",
         "controls": {
           "pins": "16",
-          "lightPreset": 4
+          "fixture": 4
         }
       }
     ]
@@ -323,8 +324,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "EthernetModule",
+        "id": "Ethernet",
+        "parent_id": "Network",
         "controls": {
           "ethBoard": "Classic RMII (no reset)"
         }
@@ -562,8 +564,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "WiFiModule",
+        "id": "WiFi",
+        "parent_id": "Network",
         "controls": {
           "txPowerSetting": 8
         }
@@ -626,8 +629,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "WiFiModule",
+        "id": "WiFi",
+        "parent_id": "Network",
         "controls": {
           "txPowerSetting": 8
         }
@@ -644,7 +648,7 @@
       {
         "type": "Layer",
         "id": "Layer",
-        "parent_id": "Layers"
+        "parent_id": "Effects"
       },
       {
         "type": "NetworkSendDriver",
@@ -754,11 +758,12 @@
       {
         "type": "Layer",
         "id": "Layer",
-        "parent_id": "Layers"
+        "parent_id": "Effects"
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "EthernetModule",
+        "id": "Ethernet",
+        "parent_id": "Network",
         "controls": {
           "ethBoard": "P4-NANO"
         }
@@ -809,8 +814,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "EthernetModule",
+        "id": "Ethernet",
+        "parent_id": "Network",
         "controls": {
           "ethBoard": "Classic RMII"
         }
@@ -818,7 +824,7 @@
       {
         "type": "Layer",
         "id": "Layer",
-        "parent_id": "Layers"
+        "parent_id": "Effects"
       }
     ],
     "flashBaud": 460800
@@ -858,8 +864,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "EthernetModule",
+        "id": "Ethernet",
+        "parent_id": "Network",
         "controls": {
           "ethBoard": "Custom",
           "ethType": 3,
@@ -918,8 +925,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "EthernetModule",
+        "id": "Ethernet",
+        "parent_id": "Network",
         "controls": {
           "ethBoard": "Custom",
           "ethType": 3,
@@ -988,8 +996,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "EthernetModule",
+        "id": "Ethernet",
+        "parent_id": "Network",
         "controls": {
           "ethBoard": "P4-NANO"
         }
@@ -1055,8 +1064,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "EthernetModule",
+        "id": "Ethernet",
+        "parent_id": "Network",
         "controls": {
           "ethBoard": "P4-NANO"
         }
@@ -1104,8 +1114,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "EthernetModule",
+        "id": "Ethernet",
+        "parent_id": "Network",
         "controls": {
           "ethBoard": "S31 CoreBoard"
         }
@@ -1166,14 +1177,11 @@
       {
         "type": "Layer",
         "id": "Layer",
-        "parent_id": "Layers"
+        "parent_id": "Effects"
       },
       {
         "type": "Drivers",
-        "id": "Drivers",
-        "controls": {
-          "lightPreset": 0
-        }
+        "id": "Drivers"
       },
       {
         "type": "RmtLedDriver",
@@ -1189,8 +1197,9 @@
         "parent_id": "Drivers"
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "WiFiModule",
+        "id": "WiFi",
+        "parent_id": "Network",
         "controls": {
           "txPowerSetting": 8
         }
@@ -1247,8 +1256,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "WiFiModule",
+        "id": "WiFi",
+        "parent_id": "Network",
         "controls": {
           "txPowerSetting": 8
         }
@@ -1304,8 +1314,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "WiFiModule",
+        "id": "WiFi",
+        "parent_id": "Network",
         "controls": {
           "txPowerSetting": 8
         }
@@ -1351,8 +1362,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "WiFiModule",
+        "id": "WiFi",
+        "parent_id": "Network",
         "controls": {
           "txPowerSetting": 8
         }

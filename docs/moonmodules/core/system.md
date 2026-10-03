@@ -28,22 +28,73 @@ Detail: [technical](moxygen/SystemModule.md)
 
 ### Network
 
-WiFi / Ethernet connectivity, static-IP configuration, RSSI and TX-power reporting. Brings the device onto the LAN before the HTTP and WebSocket servers start.
+Brings the device onto the LAN before the HTTP and WebSocket servers start, trying Ethernet, then WiFi, then its own access point. Each interface's settings are on its own card below it.
 
 <img src="../../assets/core/NetworkModule.png" width="300" alt="Network module controls">
 
-- `ssid` / `password`: WiFi credentials.
 - `mDNS`: the `<name>.local` hostname.
-- `addressing`: DHCP or static; static reveals `ip`, `gateway`, `subnet` and `dns`.
-- `ethBoard`: the board's Ethernet wiring by name; `Custom` exposes every pin.
-- `txPowerSetting`: caps the radio's transmit power for a board that browns out; 0 lifts it.
-- read-only: `mode`, the interface in use, with `rssi` / `txPower` (dBm) on a live radio.
+- read-only: `mode`, the interface in use.
 
-**No DHCP server on an Ethernet-only build?** After about 20 seconds without a lease the device gives itself a `169.254.x.y` address (link-local). A computer on the same network without DHCP does the same, so open `<name>.local` in its browser and set a static address under `addressing`. A DHCP server that appears later still wins. Builds with WiFi try WiFi next, then their own access point.
+**No DHCP server on an Ethernet-only build?** After about 20 seconds without a lease the device gives itself a `169.254.x.y` address (link-local). A computer on the same network without DHCP does the same, so open `<name>.local` in its browser and set a static address on the Ethernet card. A DHCP server that appears later still wins. Builds with WiFi try WiFi next, then their own access point.
 
 Detail: [technical](moxygen/NetworkModule.md)
 
 [Tests](../../reference/tests/unit-tests.md#networkmodule)
+
+<a id="ethernet"></a>
+
+### Ethernet
+
+The wired interface, a child of Network: which board's wiring it uses and how it gets an address. Present where Ethernet is compiled in, and as a developer preview on the desktop.
+
+<img src="../../assets/core/EthernetModule.png" width="300" alt="Ethernet module controls">
+
+- `ethBoard`: the board's Ethernet wiring by name; `Custom` exposes every pin.
+- `ipSettings`: DHCP or Static; Static reveals `ip`, `gateway`, `subnet` and `dns`.
+
+Detail: [technical](moxygen/EthernetModule.md)
+
+[Tests](../../reference/tests/unit-tests.md#ethernetmodule)
+
+<a id="wifi"></a>
+
+### WiFi
+
+The WiFi station, a child of Network: the networks the device knows, in the order it prefers them, and the radio's settings.
+
+<img src="../../assets/core/WiFiModule.png" width="300" alt="WiFi module controls">
+
+- `scan`: look for the networks in range; `scanned` says how long ago it last looked.
+- `available`: the networks in range, with signal bars and a lock; Connect joins one now.
+- `known`: the networks it joins, in priority order, each with its `ssid`, `password` and IP settings.
+- `txPowerSetting`: caps the radio's transmit power for a board that browns out; 0 lifts it.
+- read-only: `rssi` and `txPower` (dBm) on a live radio.
+- read-only after a join from the access point: `address` and `localName`, links to the device.
+
+Joining is connect-first, as on a phone: tap a network under `available`, type its password, Connect. ⌄ details.
+
+Detail: [technical](moxygen/WiFiModule.md)
+
+[Tests](../../reference/tests/unit-tests.md#wifimodule)
+
+<a id="access-point"></a>
+
+### Access point
+
+The device's own WiFi network, a child of Network, at 4.3.2.1 and named after the device. Joining it opens the UI, as a sign-in screen on a phone.
+
+<img src="../../assets/core/AccessPointModule.png" width="300" alt="Access point module controls">
+
+- `opens`: `on failure` (when nothing else joins), `always`, or `never (not recommended)`.
+- `password`: WPA2, 8 to 63 characters as the standard allows; empty keeps it open, the default.
+- `channel` (1 to 13) and `hidden` (no broadcast name), for experts.
+- read-only: `clients`, the devices on it.
+
+`never` applies only while Ethernet or a known WiFi network is configured, and the card says when it opens anyway. Joining it opens the WiFi card. ⌄ details.
+
+Detail: [technical](moxygen/AccessPointModule.md)
+
+[Tests](../../reference/tests/unit-tests.md#accesspointmodule)
 
 <a id="improv-provisioning"></a>
 
@@ -269,6 +320,16 @@ Calling `defineControls()` again at runtime, when a Select changes mode, clears 
 Detail: [technical](moxygen/FilesystemModule.md)
 
 [Tests](../../reference/tests/unit-tests.md#filesystemmodule)
+
+## WiFi, details
+The device tries the known networks in priority order, each for ten seconds, and opens its access point only after the last. Each network keeps its own `ipSettings`, DHCP or Static, as a phone does.
+
+Connect joins a network at once. A network picked from `available` is saved to `known` only once it joined, and "incorrect password" says why when it did not. A scan takes the radio off-channel for a few seconds, which drops incoming lights while connected, so the device scans by itself only when its access point opens, and otherwise when you press `scan`.
+
+## Access point, details
+A join asked for from a phone on the access point keeps the access point up beside the new network for two minutes, and the WiFi card shows `address` and `localName` to follow. A phone's sign-in screen has no address bar, so open a link in the browser. Joining moves the radio to the router's channel, which knocks the phone off, and a phone often lands back on its own network, where the sign-in screen is gone. So the network's row shows `afterJoining`, the device's `.local` link, before you press Connect.
+
+While the access point runs, its DNS answers every name with 4.3.2.1, and the web server sends any request through it for another name to the UI. That is what makes a phone show the sign-in screen.
 
 ## Control, details
 

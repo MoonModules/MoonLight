@@ -1,10 +1,10 @@
 idf_component_register(
     SRCS "moonbase_main.cpp"
-    # The app's src/ is NOT on the include path: MoonBase shares no sources with the application,
-    # which is the trade for an image that stays small and rarely changes. core/FirmwareImage.h is
-    # the one exception, and earns it: a header-only parser of the ESP32 image format that depends
-    # on nothing but <cstdint>. Both images must refuse to install the other, and that rule living
-    # in two hand-written copies is how they drift.
+    # MoonBase shares no sources with the application, which is the trade for an image that stays
+    # small and rarely changes. Two headers are the exceptions, and earn it by depending on nothing
+    # but the C library: core/util/FirmwareImage.h, since both images must refuse to install the
+    # other, and core/util/ConfigScrape.h, since this image reads the app's config file. A rule
+    # living in two hand-written copies is how they drift.
     INCLUDE_DIRS "../../src"
     # The app's own logo, embedded IDF-natively; served as /logo.png (header + favicon).
     EMBED_FILES "../../src/ui/moonmodules-logo.png"
