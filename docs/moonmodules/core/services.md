@@ -50,6 +50,11 @@ Receives [OSC](https://opensoundcontrol.stanford.edu/) over UDP and writes it on
 
 - `listen`: receive OSC, off by default since the port is unauthenticated and writes controls.
 - `port`: the UDP port (default 9000, what TouchOSC uses). Applies live.
+- `feedback`: mirror every change back to the surface, off by default.
+- `addressing`: where feedback goes, `unicast` to `hosts` or `multicast` to `group`.
+- `hosts`: (unicast) addresses or names; empty answers whoever wrote last.
+- `group`: (multicast) the group feedback goes to and this board joins, `239.255.77.78` by default.
+- `feedbackPort`: where the client listens, 9001 by default.
 - `status`: listening, off, or why the port could not be opened.
 
 Detail: [technical](moxygen/OscModule.md)
@@ -193,8 +198,6 @@ Local runs an input of its own, a microphone or line-in on a board and a capture
 #### Capturing what the machine plays (loopback), per OS
 
 macOS has no native loopback: install [BlackHole](https://existential.audio/blackhole/), create a **Multi-Output Device** in Audio MIDI Setup (your speakers first plus BlackHole, with drift correction on BlackHole) and set it as the system output; the speakers keep playing while an identical copy lands in BlackHole, which this control captures. The Mac's volume keys go dead on a multi-output device, so set volume in the player. Windows usually needs nothing: enable **Stereo Mix** in the Recording tab and pick it here (VB-Cable is the fallback where a driver lacks it). Linux PulseAudio and PipeWire expose a **Monitor of <output>** source natively.
-
-A desktop device is picked by list position, so re-pick if the OS reorders them; `default` is order-stable.
 
 #### WLED audio sync: what is on the wire
 

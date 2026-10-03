@@ -141,7 +141,7 @@
 #include "light/modifiers/PinwheelModifier.h"
 #include "light/modifiers/RippleXZModifier.h"
 #include "light/drivers/Drivers.h"   // the Drivers container (registered + wired below); driver subclasses include DriverBase.h directly
-#include "light/drivers/LightPresetsModule.h"  // the reusable light-preset library (Drivers submodule)
+#include "light/drivers/FixtureProfilesModule.h"  // the reusable fixture-profile library (Drivers submodule)
 #include "light/drivers/HueDriver.h"
 #include "light/drivers/NetworkSendDriver.h"
 #include "light/drivers/NdiDriver.h"
@@ -207,7 +207,7 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::Effects>("Effects", "light/supporting.md#effects");
     mm::ModuleFactory::registerType<mm::Layer>("Layer", "light/supporting.md#layer");
     mm::ModuleFactory::registerType<mm::Drivers>("Drivers", "light/supporting.md#drivers");
-    mm::ModuleFactory::registerType<mm::LightPresetsModule>("LightPresetsModule", "light/supporting.md#lightpresets");
+    mm::ModuleFactory::registerType<mm::FixtureProfilesModule>("FixtureProfilesModule", "light/supporting.md#fixtureprofiles");
 
     // Wire the core quiesce-render hook to the light domain's encode worker: @xref{why-the-quiesce-render-hook-is-a-function-pointer}.
     mm::MoonModule::setQuiesceRenderHook([] { if (auto* d = mm::Drivers::active()) d->quiesceRenderSplit(); });

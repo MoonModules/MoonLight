@@ -75,8 +75,8 @@
     },
     {
       "action": "open_card",
-      "module": "LightPresets",
-      "caption": "LightPresets: the named wirings every driver refers to.",
+      "module": "FixtureProfiles",
+      "caption": "FixtureProfiles: the named wirings every driver refers to.",
       "speech": 4.3
     },
     {

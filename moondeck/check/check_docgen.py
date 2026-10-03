@@ -1258,6 +1258,9 @@ def _header_rules(rel: str, text: str):
         prev = lines[j].lstrip() if j >= 0 else ""
         if prev.startswith("///") or "///" in ln:
             continue
+        # A test hook is named `...ForTest`, which gen_api excludes from every page, so a `///` on it has no reader.
+        if _declared_name(st, i).endswith("ForTest") or re.match(r"~\w+ForTest\s*\(", st):
+            continue
         # Header-only, and this is the ONE place that is a detector limit rather than a rule
         # difference. Everything else applies to both kinds of file; "public" here is read from a
         # declaration's SHAPE, which cannot see `namespace {` or a function body, and a `.cpp` is

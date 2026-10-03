@@ -121,7 +121,7 @@
 #include "light/layouts/Layouts.h"
 #include "light/layouts/GridLayout.h"
 #include "light/drivers/Drivers.h"
-#include "light/drivers/LightPresetsModule.h"
+#include "light/drivers/FixtureProfilesModule.h"
 #include "light/drivers/PreviewDriver.h"
 #include "core/system/HttpServerModule.h"
 #include "core/system/SystemModule.h"
@@ -277,11 +277,11 @@ void mm_main(volatile bool& keepRunning, uint16_t httpPort) {
 
     // Output drivers are added per board through the catalog rather than boot-wired, the preview being the one exception: @xref{why-output-drivers-are-not-boot-wired}.
 
-    // The preset library, a boot-wired singleton owning the named channel-role wirings every driver references by id, resolved through its own seat since exactly one exists.
-    auto* lightPresets =
-        createOrDie<mm::LightPresetsModule>("LightPresetsModule");
-    drivers->addChild(lightPresets);
-    lightPresets->markWiredByCode();
+    // The fixture-profile library, a boot-wired singleton owning the named channel-role wirings every driver references by id, resolved through its own seat since exactly one exists.
+    auto* fixtureProfiles =
+        createOrDie<mm::FixtureProfilesModule>("FixtureProfilesModule");
+    drivers->addChild(fixtureProfiles);
+    fixtureProfiles->markWiredByCode();
 
     auto* preview = createOrDie<mm::PreviewDriver>("PreviewDriver");
     drivers->addChild(preview);

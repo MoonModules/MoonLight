@@ -444,7 +444,7 @@ def _snapshot_tree(state: dict) -> list:
     """Capture the user-added modules a scenario might clear or remove, in tree order (parents before children), so they can be re-created after the scenario runs.
 
     Each entry is {type, id, parent_id, controls}: everything /api/state exposes to reconstruct a module via POST /api/modules + /api/control.
-    Boot-wired singletons (the containers themselves, Preview, LightPresets) are not captured: the device re-creates them itself, and re-adding is a no-op or an error.
+    Boot-wired singletons (the containers themselves, Preview, FixtureProfiles) are not captured: the device re-creates them itself, and re-adding is a no-op or an error.
     The snapshot holds the children of the snapshot containers and their descendants, which are the modules a scenario's clear_children or remove takes away."""
     snap = []
 
@@ -460,7 +460,7 @@ def _snapshot_tree(state: dict) -> list:
             # (a driver/effect/modifier/layout/service the scenario could clear). Skip the
             # boot-wired ones the device owns (userEditable false is not in /api/state, so
             # gate on the known singletons by name instead).
-            if inside_container and name and typ and name not in ("Preview", "LightPresets"):
+            if inside_container and name and typ and name not in ("Preview", "FixtureProfiles"):
                 snap.append({"type": typ, "id": name,
                              "parent_id": parent_name, "controls": controls_of(m)})
             walk(m.get("children", []), name,
@@ -737,7 +737,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 path_ = step.get("path")
                 body = step.get("value", "")
                 if not path_:
-                    print(f"  WRITE {step_name} — missing path")
+                    print(f"  WRITE {step_name}: missing path")
                     step_result["status"] = "skipped" if step.get("optional") else "error"
                     if not step.get("optional"):
                         step_result["error"] = "write_file step has no `path`"
@@ -753,12 +753,43 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                             print(f"  WRITE {path_} ({len(body)} bytes)")
                         else:
                             step_result["error"] = f"unexpected response: {resp!r}"
-                            print(f"  WRITE {path_} — FAILED: unexpected response {resp!r}")
+                            print(f"  WRITE {path_}: FAILED: unexpected response {resp!r}")
                             results["passed"] = False
                     except Exception as we:
                         step_result["status"] = "error"
                         step_result["error"] = str(we)
-                        print(f"  WRITE {path_} — FAILED: {we}")
+                        print(f"  WRITE {path_}: FAILED: {we}")
+                        results["passed"] = False
+
+            elif op == "delete_file":
+                # Remove a file the scenario staged, so a run leaves the device as it found it.
+                # A file already gone counts as removed, the same rule the desktop runner applies.
+                path_ = step.get("path")
+                if not path_:
+                    print(f"  DELETE {step_name}: missing path")
+                    step_result["status"] = "error"
+                    step_result["error"] = "delete_file step has no `path`"
+                    results["passed"] = False
+                else:
+                    try:
+                        client.delete(f"/api/dir?path={urllib.parse.quote(path_)}")
+                    except Exception:
+                        pass   # a 500 for a file that was never there is the case this tolerates
+                    # Only a 404 proves it gone: an existing file answers with its text, which is not JSON.
+                    gone = False
+                    try:
+                        client.get(f"/api/file?path={urllib.parse.quote(path_)}")
+                    except urllib.error.HTTPError as he:
+                        gone = he.code == 404
+                    except Exception:
+                        pass
+                    if gone:
+                        step_result["status"] = "ok"
+                        print(f"  DELETE {path_}")
+                    else:
+                        step_result["status"] = "error"
+                        step_result["error"] = f"{path_} is still there"
+                        print(f"  DELETE {path_}: FAILED: still there")
                         results["passed"] = False
 
             elif op == "reboot":

@@ -103,13 +103,13 @@ public:
         }
     }
 
-    /// Resolve every enabled driver's preset and fold their motion channels into one map.
+    /// Resolve every enabled driver's fixture profile and fold their motion channels into one map.
     FixtureChannels fixtureChannels() {
         FixtureChannels fc;   // every offset absent: a rig with no motion, the common case
         for (uint8_t i = 0; i < childCount(); i++) {
             if (child(i)->role() != ModuleRole::Driver || !child(i)->enabled()) continue;
             auto* d = static_cast<DriverBase*>(child(i));
-            d->rebuildCorrection(brightness);        // resolve the preset if it has not been yet
+            d->rebuildCorrection(brightness);        // resolve the profile if it has not been yet
             const Correction& c = d->correction();
             if (!c.hasMotion) continue;
             // Layer slots, not channel numbers: packed after RGBW so a pan write cannot collide.
@@ -235,6 +235,7 @@ public:
         // Sized from THIS instance's scan: defineControls also runs before prepare has published.
         controls_.addPalette("palette", palette, mm::paletteOptions,
                              static_cast<uint8_t>(liveCount_ + mm::palettes::kCount));
+        controls_.setPersistLabel(controls_.count() - 1);   // saved by name, which survives a script added before it
         // An EDITOR, not a second selector: `palette` owns the choice, so the two cannot disagree.
         controls_.addFilePath("paletteScript", paletteScript_, sizeof(paletteScript_),
                               moonlive::kPalettePick);
@@ -251,7 +252,7 @@ public:
         controls_.addReadOnly("renderWait", renderWaitStr_, sizeof(renderWaitStr_));
         controls_.setHidden(controls_.count() - 1, !multicore);
         controls_.setAdvanced(controls_.count() - 1);
-        MoonModule::defineControls();  // cascade to driver children (each owns its lightPreset/whiteMode)
+        MoonModule::defineControls();  // cascade to driver children (each owns its fixture/whiteMode)
     }
 
     // Re-baking a LUT needs no pipeline realloc, which keeps the brightness slider fluent.
@@ -590,7 +591,7 @@ private:
     bool anyDriver() const {
         for (uint8_t i = 0; i < childCount(); i++) {
             MoonModule* c = child(i);
-            if (c->role() != ModuleRole::Driver) continue;   // skips LightPresetsModule (Generic)
+            if (c->role() != ModuleRole::Driver) continue;   // skips FixtureProfilesModule (Generic)
             if (c->respectsEnabled() && !c->enabled()) continue;
             return true;
         }

@@ -20,7 +20,7 @@ namespace mm {
 ///
 /// ## The enum is append-only
 ///
-/// A persisted preset stores each channel's role as this enum's byte value, so a role is never renumbered.
+/// A persisted fixture profile stores each channel's role as this enum's byte value, so a role is never renumbered.
 /// A new one is appended within its group, color roles before fixture roles, and existing values keep their index.
 ///
 /// `White` is a normal or cold white and `WarmWhite` the second white a CCT fixture adds, while `Yellow` and `UV` are the extra par-can colors of a six-channel RGBWYP lightbar.

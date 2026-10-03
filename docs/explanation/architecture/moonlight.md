@@ -29,7 +29,7 @@ flowchart TB
     blend["<b>Blend + Map</b>"]
     a & b & c --> blend
 
-    drivers["<b>Drivers</b><br/><i>owns Correction:<br/>brightness + lightPreset</i>"]
+    drivers["<b>Drivers</b><br/><i>owns Correction:<br/>brightness + fixture</i>"]
     blend --> drivers
 
     led["<b>LED drivers</b><br/><i>WS2812 · RMT · Parlio</i><br/><i>apply Correction</i>"]
@@ -225,20 +225,20 @@ Each driver (a MoonModule) speaks one protocol:
 
 Each driver child reads from the Drivers container's output buffer. Everything before the Drivers container is platform-independent.
 
-**Output correction** turns logical RGB into the physical signal: **brightness** scaling, channel **reorder** (RGB→GRB via a *light preset*), and **white** derivation for RGBW. The Drivers container owns the global `brightness`; each driver picks its own light preset (its `preset` control) and applies the correction per-light into its own buffer/packet, so two strips on one device can be wired differently. Preview is exempt (it shows the raw logical buffer). The brightness LUT rebuilds on the cheap `onControlChanged` tier ([Event triggering](moonmodule.md#event-triggering-between-modules)), so the slider stays fluent.
+**Output correction** turns logical RGB into the physical signal: **brightness** scaling, channel **reorder** (RGB→GRB via a *fixture profile*), and **white** derivation for RGBW. The Drivers container owns the global `brightness`. Each driver picks its own fixture profile with its `fixture` control and applies the correction per light into its own buffer. So two strips on one device can be wired differently. Preview is exempt (it shows the raw logical buffer). The brightness LUT rebuilds on the cheap `onControlChanged` tier ([Event triggering](moonmodule.md#event-triggering-between-modules)), so the slider stays fluent.
 
-**An effect drives a fixture's non-color channels through role setters.** A light is as wide as its fixture ([Buffer types](#buffer-types)), with color at offset 0 and the fixture's other roles wherever its light preset puts them. `setPan()`, `setTilt()` and `setZoom()` write those, and each is a **no-op when the fixture has no such channel**. One effect is therefore valid on a moving head and on a strip alike: on the strip the pan write does not land, and the effect paints color.
+**An effect drives a fixture's non-color channels through role setters.** A light is as wide as its fixture ([Buffer types](#buffer-types)), with color at offset 0 and the fixture's other roles wherever its fixture profile puts them. `setPan()`, `setTilt()` and `setZoom()` write those, and each is a **no-op when the fixture has no such channel**. One effect is therefore valid on a moving head and on a strip alike: on the strip the pan write does not land, and the effect paints color.
 
 Two rules separate those channels from color, and both matter:
 
 - **Brightness never scales them.** Brightness is a light-output setting; scaling pan by it would swing a moving head toward 0/0 as the rig dims.
 - **They interpolate but never accumulate** (the rule; the additive half is NOT yet implemented, see below). A blend op that INTERPOLATES (opacity, a crossfade) is meaningful on any channel, and on pan it is a genuine feature: the head sweeps smoothly from the old aim to the new one as a layer fades in. A blend op that ACCUMULATES (additive) is meaningful only on emissive channels, where summing two lights models two sources lighting one surface. Summing two aims models nothing, since it points at neither and saturates at hard-over as soon as both layers are positioned, so an accumulating op should fall back to assignment on a motion channel with the topmost writer winning. **Today `blendMap` treats a light as opaque bytes and adds motion channels along with color**; it only bites with two enabled layers on a fixture that carries motion, and the fix is [backlogged](../../work/future/backlog-light.md).
 
-**DMX fixtures are addressed as a daisy chain of IDENTICAL fixtures**, the same model addressable LEDs already impose. A strip is N identical pixels at a fixed stride, and a DMX run is N identical fixtures at a fixed stride. One light preset describes one fixture, its channel count is the stride, and fixture *n* starts at `start + n x channelCount`. Twenty-five channels per fixture puts them at DMX 1, 26, 51, and so on, and the driver's `count` says how many are on the chain.
+**DMX fixtures are addressed as a daisy chain of IDENTICAL fixtures**, the same model addressable LEDs already impose. A strip is N identical pixels at a fixed stride, and a DMX run is N identical fixtures at a fixed stride. One fixture profile describes one fixture, its channel count is the stride, and fixture *n* starts at `start + n x channelCount`. Twenty-five channels per fixture puts them at DMX 1, 26, 51, and so on, and the driver's `count` says how many are on the chain.
 
-This is what makes a moving head reachable by the same pipeline as a pixel: the light domain produces one logical light per fixture, and the driver expands each into that fixture's channel block through the preset. It is also the cheapest thing to configure, since only the start address and the fixture type are needed, never a per-fixture address table.
+This is what makes a moving head reachable by the same pipeline as a pixel. The light domain produces one logical light per fixture, and the driver expands each into that fixture's channel block through the profile. It is also the cheapest thing to configure, since only the start address and the fixture type are needed, never a per-fixture address table.
 
-The trade is deliberate: **a chain must be homogeneous**. Mixing fixture types on one universe, or leaving gaps between fixtures, has no expression in this model, and neither does a fixture whose address does not sit on the stride. Those need a per-fixture address map, which is the fixture-model work ([backlog](../../work/future/backlog-light.md)); until then, a mixed rig is served by giving each fixture type its own driver instance with its own preset, start address and count.
+The trade is deliberate: **a chain must be homogeneous**. Mixing fixture types on one universe, or leaving gaps between fixtures, has no expression in this model, and neither does a fixture whose address does not sit on the stride. Those need a per-fixture address map, which is the fixture-model work ([backlog](../../work/future/backlog-light.md)). Until then, a mixed rig gives each fixture type its own driver instance with its own fixture profile, start address and count.
 
 ## Multicast and IGMP snooping
 
@@ -266,6 +266,7 @@ Network-based drivers (ArtNet, E1.31, DDP) pace their output with a **non-blocki
 
 How lighting uses the core [multi-device runtime](mooncore.md#multi-device-runtime) (discovery + clock sync) to drive an installation spanning multiple controllers:
 
+- **The same effect on every board.** [Shared controls](mooncore.md#multi-device-runtime) carry the surface, and whatever the Control card assigns it to, so several boards run one effect with one set of controls. This is the controls half of supersync; the clock is the other.
 - **Synced visuals from the shared clock.** Effects animate off elapsed time ([Effects](#effects)), so a synced clock is what makes a wall of controllers animate in lockstep regardless of each one's frame rate. This is the light-domain payoff of the core clock sync.
 - **Light distribution**: one device sending rendered light data to another uses the existing ArtNet / E1.31 / DDP standards. The ArtNet *driver* sends to fixtures; device-to-device distribution as a sync topology is filed in [backlog-core](../../work/future/backlog-core.md). No bespoke protocol.
 

@@ -18,6 +18,7 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <string>
 #include <vector>
 
 using namespace mm;
@@ -122,4 +123,56 @@ TEST_CASE("a palette added while running becomes selectable without a reboot") {
     drv.prepare();
 
     CHECK(paletteMax(drv) == before + 1);
+}
+
+namespace {
+/// The palette control's value as the device saves and reports it.
+std::string savedPalette(Drivers& drv) {
+    const int i = test::controlIndex(drv, "palette");
+    REQUIRE(i >= 0);
+    JsonSink out;
+    writeControlValue(out, drv.controls()[static_cast<uint8_t>(i)]);
+    return std::string(out.data(), out.size());
+}
+
+/// Apply a saved palette value the way the boot load does.
+void applyPalette(Drivers& drv, const std::string& value) {
+    const int i = test::controlIndex(drv, "palette");
+    REQUIRE(i >= 0);
+    const std::string json = "{\"palette\":" + value + "}";
+    CHECK(applyControlValue(drv.controls()[static_cast<uint8_t>(i)], json.c_str(), "palette",
+                            ApplyPolicy::Clamp) == ApplyResult::Ok);
+}
+}  // namespace
+
+TEST_CASE("the palette saves as its name, built in or scripted") {
+    IsolatedFs fs("byname");
+    writePalette(mm::moonlive::kFactoryScriptDir, "unit-named.mlp");
+    Drivers drv;
+    drv.defineControls();
+    drv.prepare();
+
+    CHECK(savedPalette(drv) == "\"Rainbow\"");   // the default, built in
+    applyPalette(drv, "\"unit-named.mlp\"");
+    CHECK(drv.palette == mm::palettes::kCount);   // the first scripted entry
+    CHECK(savedPalette(drv) == "\"unit-named.mlp\"");
+}
+
+// The reason the name is saved: a script added later that sorts before the chosen one moves its index.
+TEST_CASE("a scripted palette chosen by name survives a script added before it") {
+    IsolatedFs fs("shift");
+    writePalette(mm::moonlive::kFactoryScriptDir, "m-chosen.mlp");
+    Drivers drv;
+    drv.defineControls();
+    drv.prepare();
+    applyPalette(drv, "\"m-chosen.mlp\"");
+    const std::string saved = savedPalette(drv);
+    const uint8_t oldIndex = drv.palette;
+
+    writePalette(mm::moonlive::kFactoryScriptDir, "a-first.mlp");   // sorts ahead of m-chosen
+    drv.prepare();
+    applyPalette(drv, saved);
+
+    CHECK(savedPalette(drv) == "\"m-chosen.mlp\"");
+    CHECK(drv.palette == oldIndex + 1);   // the old index now names a-first
 }

@@ -148,24 +148,36 @@ TEST_CASE("a Text control with no validator accepts anything that fits") {
     CHECK(std::strcmp(label, "hi") == 0);
 }
 
-// A Palette control's aux holds a PaletteOptionsFn (a FUNCTION POINTER), not an options array. The Select label-match path must therefore NOT run for Palette: reinterpreting a function pointer as a char* const* and walking it dereferences code bytes, undefined behavior, a near-certain crash on ESP32. The regression: a string value on a palette must fall to numeric-index apply (parseInt → 0), exactly the harmless behavior before the label-match feature existed. (Robust to any input.)
+// A Palette control's aux holds a PaletteOptionsFn, a function rather than an options array, so a name resolves through the function's name request and never by walking aux as an array, which would read code bytes and crash on ESP32.
 static void paletteOptions(mm::JsonSink& sink) {
-    sink.append("[\"Rainbow\",\"Ocean\",\"Forest\"]");   // a real fn body; never read via the aux cast
+    static const char* const names[] = {"Rainbow", "Ocean", "fire.mlp"};
+    if (sink.nameIndex() >= 0) {
+        if (sink.nameIndex() < 3) sink.append(names[sink.nameIndex()]);
+        return;
+    }
+    sink.append("{\"name\":\"Rainbow\"},{\"name\":\"Ocean\"},{\"name\":\"fire.mlp\"}");
 }
-TEST_CASE("applyControlValue: a string palette value does not crash and applies numerically") {
+TEST_CASE("applyControlValue: a palette takes a name as well as an index, and an unknown name changes nothing") {
     mm::ControlList controls;
     uint8_t palette = 1;
     controls.addPalette("palette", palette, paletteOptions, 3);
 
-    // A STRING value (as a hand-edited config or a mistaken client could send). Before the fix this walked the function pointer as an options array. After: string → parseInt → 0, clamped in range.
-    CHECK(mm::applyControlValue(controls[0], "{\"palette\":\"Rainbow\"}", "palette",
-                                mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
-    CHECK(palette == 0);   // numeric fallback, no function-pointer deref
-
-    // A numeric value still applies straight through.
-    CHECK(mm::applyControlValue(controls[0], "{\"palette\":2}", "palette",
+    // A scripted palette's index moves as files come and go, so its name is what a client can rely on.
+    CHECK(mm::applyControlValue(controls[0], "{\"palette\":\"fire.mlp\"}", "palette",
                                 mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
     CHECK(palette == 2);
+
+    // A name no palette carries leaves the choice alone, and Strict says so.
+    CHECK(mm::applyControlValue(controls[0], "{\"palette\":\"Nowhere\"}", "palette",
+                                mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
+    CHECK(palette == 2);
+    CHECK(mm::applyControlValue(controls[0], "{\"palette\":\"Nowhere\"}", "palette",
+                                mm::ApplyPolicy::Strict) == mm::ApplyResult::OutOfRange);
+
+    // A numeric value still applies straight through.
+    CHECK(mm::applyControlValue(controls[0], "{\"palette\":1}", "palette",
+                                mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
+    CHECK(palette == 1);
 }
 
 // The complement: a Select's aux IS the options array, so a string LABEL value matches an option by name (the board-portable catalog path, a peripheral label is stable while its filtered index is not). This keeps the label-match feature working where it is safe.
@@ -183,6 +195,26 @@ TEST_CASE("applyControlValue: a Select accepts an option label as a string value
     CHECK(mm::applyControlValue(controls[0], "{\"peripheral\":1}", "peripheral",
                                 mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
     CHECK(sel == 1);
+}
+
+// Saved by name, a scripted palette survives a script added before it, which shifts every index after it.
+TEST_CASE("writeControlValue: a palette saved by name round-trips, and an unflagged one stays an index") {
+    mm::ControlList controls;
+    uint8_t palette = 2;
+    controls.addPalette("palette", palette, paletteOptions, 3);
+    mm::JsonSink plain;
+    mm::writeControlValue(plain, controls[0]);
+    CHECK(std::string(plain.data(), plain.size()) == "2");
+
+    controls.setPersistLabel(0);
+    mm::JsonSink named;
+    mm::writeControlValue(named, controls[0]);
+    CHECK(std::string(named.data(), named.size()) == "\"fire.mlp\"");
+
+    palette = 0;
+    const std::string saved = std::string("{\"palette\":") + std::string(named.data(), named.size()) + "}";
+    CHECK(mm::applyControlValue(controls[0], saved.c_str(), "palette", mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
+    CHECK(palette == 2);
 }
 
 // An empty option list (max == 0) has no valid index, applying a value must not manufacture index 0. Strict rejects; Lenient (Clamp) leaves the bound value untouched. Guards a board-filtered Select that filtered down to zero options (e.g. a peripheral list on a chip that supports none).

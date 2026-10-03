@@ -15,13 +15,28 @@ test("a user preset that shares a renamed filename is the user's, not migrated",
     assert.ok(!report.some(r => r.detail.includes("file →")));  // ...and no file rename reported
 });
 
-test("a driver's preset control migrates to lightPreset with its value", () => {
+test("a driver's preset control migrates to fixture with its value", () => {
     const cfg = { "0.type": "RmtLedDriver", "0.preset": 2, "0.enabled": true };
     const { files } = applyMigrations({ "/.config/Drivers.json": JSON.stringify(cfg) });
     const out = JSON.parse(files["/.config/Drivers.json"]);
-    assert.equal(out["0.lightPreset"], 2);
+    assert.equal(out["0.fixture"], 2);
     assert.equal(out["0.preset"], undefined);
     assert.equal(out["0.enabled"], true);
+});
+
+test("light presets are fixture profiles: type, list key and the driver's Select all map", () => {
+    const lib = { "0.type": "LightPresetsModule", "0.presets": [{ id: 1, name: "GRB" }] };
+    const out1 = applyMigrations({ "/.config/Drivers.json": JSON.stringify({ ...lib, "1.type": "RmtLedDriver", "1.lightPreset": 3, "1.presetRef": "RGBW" }) });
+    const out = JSON.parse(out1.files["/.config/Drivers.json"]);
+    assert.equal(out["0.type"], "FixtureProfilesModule");
+    assert.deepEqual(out["0.profiles"], [{ id: 1, name: "GRB" }]);
+    assert.equal(out["0.presets"], undefined);
+    assert.equal(out["1.fixture"], 3);
+    assert.equal(out["1.fixtureRef"], "RGBW");
+    assert.equal(out["1.lightPreset"], undefined);
+    // A `presets` key on any other module (ControlModule's own) is not touched.
+    const other = applyMigrations({ "/.config/Control.json": JSON.stringify({ presets: 1 }) });
+    assert.equal(JSON.parse(other.files["/.config/Control.json"]).presets, 1);
 });
 
 test("a bundle carrying both old and new names reports the collision, never silent", () => {

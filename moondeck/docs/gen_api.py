@@ -146,6 +146,8 @@ def _doxyfile(headers: list[str], xml_out: str) -> str:
         # build, the same way the widest target compiles it.
         "ENABLE_PREPROCESSING = YES\nMACRO_EXPANSION = YES\n"
         "PREDEFINED = MM_HEAVY_COMPUTE=1\n"
+        # A test hook is named `...ForTest`, so it stays off the page a user reads.
+        "EXCLUDE_SYMBOLS = *ForTest\n"
     )
 
 
@@ -445,6 +447,7 @@ def _class_to_header(xml_dir: Path) -> dict[str, str]:
     # tell `mm::Hub75Driver::BoardPins` (nested in a class) from `mm::json::JsonDoc` (in a
     # namespace): the qualified names are the same shape.
     class_nested: set[str] = set()
+    hidden_nested: set[str] = set()   # declared under private: or protected:, so never API
     for cx in list(xml_dir.glob("class*.xml")) + list(xml_dir.glob("struct*.xml")):
         try:
             cd = ET.parse(cx).getroot().find("compounddef")
@@ -455,6 +458,8 @@ def _class_to_header(xml_dir: Path) -> dict[str, str]:
         for inner in cd.findall("innerclass"):
             if inner.text:
                 class_nested.add(inner.text.strip())
+                if inner.get("prot") in ("private", "protected"):
+                    hidden_nested.add(inner.text.strip())
 
     mapping: dict[str, str] = {}
     for cx in list(xml_dir.glob("class*.xml")) + list(xml_dir.glob("struct*.xml")):
@@ -479,6 +484,9 @@ def _class_to_header(xml_dir: Path) -> dict[str, str]:
         # the `::` count: `mm::json::JsonDoc` has just as many and is a real page. A top-level
         # type documented with a file-level `//` block has no brief either, so filtering on the
         # brief alone dropped 22 real pages (AudioFrame, raymarch, crc...).
+        # A private nested type is implementation detail however well it is commented.
+        if name in hidden_nested:
+            continue
         if name in class_nested:
             brief = cd.find("briefdescription")
             if brief is None or not "".join(brief.itertext()).strip():

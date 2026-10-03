@@ -4,7 +4,7 @@ A preset is a saved state you can bring back with one click: a look you liked, a
 
 They live on the Control card as a grid of 64 pads. Click one to apply it.
 
-> **Two different things are called a preset.** The pads on the Control card are what people usually mean, and what follows is about those. The **light preset** under Drivers is a fixture profile, naming which channel carries red or pan: see [LightPresets](../moonmodules/light/supporting.md#lightpresets).
+> **Two different things are called a preset.** The pads on the Control card are what people usually mean, and what follows is about those. The **fixture profile** under Drivers names which channel carries red or pan: see [FixtureProfiles](../moonmodules/light/supporting.md#fixtureprofiles).
 
 ## Save one
 

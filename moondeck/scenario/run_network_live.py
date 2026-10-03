@@ -18,7 +18,7 @@ every other device LISTENS:
      order) — proves device → device over real firmware send + receive.
 
 With one online device only step 1 runs (the matrix needs ≥2 boards). All
-mutated state (grid size, NetworkSend ip/protocol/enabled, the added effects)
+mutated state (grid size, NetworkSend hosts/protocol/enabled, the added effects)
 is restored in a finally block. Exit codes follow improv_smoke_test.py: 0 =
 all legs passed, 1 = a leg failed, 2 = environment problem (no devices,
 moondeck.json missing).
@@ -51,19 +51,31 @@ from _net_probe import (  # noqa: E402
 ROUND_COLORS = [(255, 128, 0), (0, 255, 128), (128, 0, 255),
                  (255, 0, 128), (128, 255, 0), (0, 128, 255)]
 
-# Mirrors src/light/drivers/Correction.h (briLut scale + order[] reorder) — a
-# listener sees the sender's corrected bytes, so the expected color replicates
-# that transform. 3-channel presets only; RGBW senders emit 4 bytes/light which
-# misaligns a 3-channel listener buffer, so those legs are skipped. Keep in sync.
-PRESET_ORDER = {"RGB": (0, 1, 2), "RBG": (0, 2, 1), "GRB": (1, 0, 2),
-                "GBR": (1, 2, 0), "BRG": (2, 0, 1), "BGR": (2, 1, 0)}
-PRESET_NAMES = ["RGB", "RBG", "GRB", "GBR", "BRG", "BGR", "RGBW", "GRBW"]
+# The transform src/light/drivers/Correction.h applies (brightness scale, then the
+# fixture profile's channel order), since a listener sees the sender's corrected
+# bytes. Three-channel profiles only: an RGBW sender emits 4 bytes per light, which
+# misaligns a 3-channel listener buffer, so those legs are skipped.
+PROFILE_ORDER = {"RGB": (0, 1, 2), "RBG": (0, 2, 1), "GRB": (1, 0, 2),
+                 "GBR": (1, 2, 0), "BRG": (2, 0, 1), "BGR": (2, 1, 0)}
 
 
-def corrected(rgb, brightness, preset):
+def corrected(rgb, brightness, profile):
     scaled = [(v * int(brightness)) // 255 for v in rgb]
-    order = PRESET_ORDER[preset]
+    order = PROFILE_ORDER[profile]
     return tuple(scaled[order[i]] for i in range(3))
+
+
+def _control_label(module: dict, name: str):
+    """A Select's chosen option as its label, read from the options the device lists, or None."""
+    for ctrl in module.get("controls", []):
+        if ctrl.get("name") != name:
+            continue
+        value = ctrl.get("value")
+        if isinstance(value, str):
+            return value
+        options = ctrl.get("options") or []
+        return options[value] if isinstance(value, int) and 0 <= value < len(options) else None
+    return None
 
 
 # build_artdmx / build_e131 / build_ddp now live in _net_probe.py (imported
@@ -136,16 +148,16 @@ class Board:
         artnet = find_module(state, "NetworkSend") or {}
         self.orig_w = _control_value(grid, "width")
         self.orig_h = _control_value(grid, "height")
-        self.orig_ip = _control_value(artnet, "ip")
+        self.orig_hosts = _control_value(artnet, "hosts")
         self.orig_protocol = _control_value(artnet, "protocol")
         # The user may have NetworkSend disabled (e.g. while testing LED output);
         # relay legs need it on, so remember the original state to restore.
         self.artnet_enabled = bool(artnet.get("enabled", False))
         self.brightness = _control_value(drivers, "brightness") or 0
-        preset_idx = _control_value(drivers, "lightPreset") or 0
-        self.preset = PRESET_NAMES[int(preset_idx)] if int(preset_idx) < len(PRESET_NAMES) else "RGB"
+        # The sender driver's own fixture profile, by the label the device lists.
+        self.fixture = _control_label(artnet, "fixture") or "RGB"
         self.added_receiver = False
-        self.ip_changed = False
+        self.hosts_changed = False
         self.enable_changed = False
         self.protocol_changed = False
 
@@ -168,11 +180,11 @@ class Board:
                 self.client.delete("/api/modules/NetworkReceive")
             except Exception as e:
                 print(f"  WARN  {self.name}: could not remove NetworkReceive: {e}")
-        if self.ip_changed and self.orig_ip is not None:
+        if self.hosts_changed and self.orig_hosts is not None:
             try:
-                self.set_control("NetworkSend", "ip", self.orig_ip)
+                self.set_control("NetworkSend", "hosts", self.orig_hosts)
             except Exception as e:
-                print(f"  WARN  {self.name}: could not restore NetworkSend.ip: {e}")
+                print(f"  WARN  {self.name}: could not restore NetworkSend.hosts: {e}")
         if self.enable_changed:
             try:
                 self.set_control("NetworkSend", "enabled", self.artnet_enabled)
@@ -278,14 +290,14 @@ def main() -> int:
                     continue
                 relay_proto = relay_count % len(PROTOCOLS)
                 relay_count += 1
-                expected = corrected(color, sender.brightness, sender.preset)
+                expected = corrected(color, sender.brightness, sender.fixture)
                 if not sender.artnet_enabled and not sender.enable_changed:
                     sender.set_control("NetworkSend", "enabled", True)
                     sender.enable_changed = True
                 sender.set_control("NetworkSend", "protocol", relay_proto)
                 sender.protocol_changed = True
-                sender.set_control("NetworkSend", "ip", listener.host.partition(":")[0])
-                sender.ip_changed = True
+                sender.set_control("NetworkSend", "hosts", listener.host.partition(":")[0])
+                sender.hosts_changed = True
                 ok, pct, pts, detail = _preview_ws.wait_for_solid(
                     listener.host, expected, args.tolerance, 100.0, args.timeout)
                 if ok:
@@ -297,9 +309,9 @@ def main() -> int:
                           f"(expected {expected}, best {pct:.0f}% of {pts} points"
                           f"{', ' + detail if detail else ''})", flush=True)
                     failed += 1
-            if sender.ip_changed and sender.orig_ip is not None:
-                sender.set_control("NetworkSend", "ip", sender.orig_ip)
-                sender.ip_changed = False
+            if sender.hosts_changed and sender.orig_hosts is not None:
+                sender.set_control("NetworkSend", "hosts", sender.orig_hosts)
+                sender.hosts_changed = False
             if sender.protocol_changed and sender.orig_protocol is not None:
                 sender.set_control("NetworkSend", "protocol", sender.orig_protocol)
                 sender.protocol_changed = False
@@ -313,13 +325,13 @@ def main() -> int:
 
 def _relay_skip_reason(sender: "Board"):
     """A relay leg is meaningless when the sender's correction destroys the
-    signal: RGBW presets emit 4 bytes/light (misaligns a 3-channel listener),
+    signal: RGBW profiles emit 4 bytes/light (misaligns a 3-channel listener),
     and brightness 0 corrects every color to black — black also matches a
     listener that received NOTHING (staging zero-fill), a guaranteed false pass."""
-    if sender.preset not in PRESET_ORDER:
-        return f"sender preset {sender.preset} is 4-channel — relay assert supports 3-channel presets"
+    if sender.fixture not in PROFILE_ORDER:
+        return f"sender fixture {sender.fixture} is not 3-channel: the relay check supports 3-channel profiles"
     if all(c == 0 for c in corrected((255, 255, 255), sender.brightness, "RGB")):
-        return "sender Drivers.brightness too low — corrected color is black (raise brightness)"
+        return "sender Drivers.brightness too low: the corrected color is black (raise brightness)"
     return None
 
 

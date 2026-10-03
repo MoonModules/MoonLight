@@ -168,7 +168,7 @@
         "parent_id": "Drivers",
         "controls": {
           "pins": "16",
-          "lightPreset": 4
+          "fixture": 4
         }
       }
     ]
@@ -644,7 +644,7 @@
       {
         "type": "Layer",
         "id": "Layer",
-        "parent_id": "Layers"
+        "parent_id": "Effects"
       },
       {
         "type": "NetworkSendDriver",
@@ -754,7 +754,7 @@
       {
         "type": "Layer",
         "id": "Layer",
-        "parent_id": "Layers"
+        "parent_id": "Effects"
       },
       {
         "type": "NetworkModule",
@@ -818,7 +818,7 @@
       {
         "type": "Layer",
         "id": "Layer",
-        "parent_id": "Layers"
+        "parent_id": "Effects"
       }
     ],
     "flashBaud": 460800
@@ -1166,14 +1166,11 @@
       {
         "type": "Layer",
         "id": "Layer",
-        "parent_id": "Layers"
+        "parent_id": "Effects"
       },
       {
         "type": "Drivers",
-        "id": "Drivers",
-        "controls": {
-          "lightPreset": 0
-        }
+        "id": "Drivers"
       },
       {
         "type": "RmtLedDriver",

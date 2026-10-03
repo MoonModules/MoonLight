@@ -219,7 +219,7 @@ Verified against CLAUDE.md § Principles and [architecture.md § Hot path discip
 - **Complete construct, real consumer:** per architecture.md's surviving rule, each power function is built as the cleanest complete version (no crippled subsets) — and lands in the same PR as its first real consumer, so nothing ships speculatively: `beatPhase` is *extracted from* the nine effects that prove it.
 - **Subtraction closes the loop:** after stage 1, `math8.h` keeps only entries with remaining callers (palette/hue and internal fast paths); superseded 8-bit forms and the temporary `(Buffer&, dims)` overloads are removed, and the five converged effects' private state code is deleted, not deprecated.
 
-## 6b. Determinism ✅ 📖 *(the rule now lives in [the architecture](../../explanation/architecture/moonlight.md#effects); supersync itself is unbuilt)*
+## 6b. Determinism ✅ 📖 *(the rule now lives in [the architecture](../../explanation/architecture/moonlight.md#effects); supersync's controls ride OSC, its shared clock is unbuilt)*
 
 A planned capability — **supersync**, one effect rendered across several devices — constrains this API, and honoring it now is nearly free while retrofitting it later is not. The requirement: two devices given the same time and the same controls must produce the same frame, without exchanging pixels.
 

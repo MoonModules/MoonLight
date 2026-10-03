@@ -113,7 +113,14 @@ void writeControlValue(JsonSink& sink, const ControlDescriptor& c) {
             sink.appendf("%u", *static_cast<uint8_t*>(c.ptr));
             return;
         case ControlType::Palette:
-            // The selected index: the swatch colors go in the metadata block (writeControlMetadata) where the UI also wants them.
+            // persistLabel: the NAME, since a scripted palette's index moves as files come and go; the swatches ride in writeControlMetadata.
+            if (c.persistLabel && c.aux) {
+                char name[64] = {};
+                JsonSink names(name, sizeof(name));
+                names.requestName(*static_cast<uint8_t*>(c.ptr));
+                reinterpret_cast<PaletteOptionsFn>(c.aux)(names);
+                if (name[0] && !names.overflowed()) { sink.writeJsonString(name); return; }
+            }
             sink.appendf("%u", *static_cast<uint8_t*>(c.ptr));
             return;
         case ControlType::Progress:
@@ -369,11 +376,25 @@ ApplyResult applyControlValue(const ControlDescriptor& c,
             return clampInto(static_cast<uint8_t*>(c.ptr), v, 0, hi);
         }
         case ControlType::Palette: {
-            // Palette carries a PaletteOptionsFn in aux (not an options array), so it stays numeric-index only, no label match.
-            // A string value parses to 0 via parseInt, the harmless prior behavior.
             // An empty palette list (c.max == 0) has no valid index, reject/no-op like the Select above.
             if (c.max == 0) return policy == ApplyPolicy::Strict ? ApplyResult::OutOfRange : ApplyResult::Ok;
             const int hi = c.max - 1;
+            // A name as well as an index, resolved through the options function's name request since aux is a function, not an array.
+            char label[64] = {};
+            mm::json::parseString(json, key, label, sizeof(label));
+            if (label[0] && c.aux) {
+                if (std::strlen(label) < sizeof(label) - 1) {   // one that fills the buffer was truncated, so it names nothing
+                    for (int i = 0; i <= hi; i++) {
+                        char name[sizeof(label)] = {};
+                        JsonSink sink(name, sizeof(name));
+                        sink.requestName(static_cast<uint8_t>(i));
+                        reinterpret_cast<PaletteOptionsFn>(c.aux)(sink);
+                        if (!sink.overflowed() && std::strcmp(name, label) == 0)
+                            return clampInto(static_cast<uint8_t*>(c.ptr), i, 0, hi);
+                    }
+                }
+                return policy == ApplyPolicy::Strict ? ApplyResult::OutOfRange : ApplyResult::Ok;
+            }
             int v = mm::json::parseInt(json, key);
             if (policy == ApplyPolicy::Strict && (v < 0 || v > hi)) {
                 return ApplyResult::OutOfRange;

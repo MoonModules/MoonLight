@@ -7,7 +7,7 @@
 /// @moreinfo
 ///
 /// Test-only convenience for building a Correction from a named color order (RGB/GRB/BGR/RGBW/GRBW).
-/// The PRODUCTION Correction has one rebuild, rebuild(brightness, ChannelRole* roles, nChannels), because the real wirings come from the LightPresets library as role arrays. The curated-order enum + a rebuild(brightness, preset) overload used to live in Correction.h purely so tests could write `corr.rebuild(255, GRB)` tersely without hand-building a role array.
+/// The PRODUCTION Correction has one rebuild, rebuild(brightness, ChannelRole* roles, nChannels), because the real wirings come from the FixtureProfiles library as role arrays. The curated-order enum + a rebuild(brightness, preset) overload used to live in Correction.h purely so tests could write `corr.rebuild(255, GRB)` tersely without hand-building a role array.
 /// That was a test convenience sitting in production code (zero production callers, and it duplicated "what does GRB mean", which the library's seedBuiltins now owns). It lives here instead: the tests keep the terse form, and Correction.h carries only the one role-array rebuild the device actually uses.
 
 #include "light/drivers/Correction.h"

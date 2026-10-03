@@ -1,6 +1,6 @@
 # MoonLight effect inventory (migration reference)
 
-> **Superseded on 2026-09-22** by [Plan-20260922 - MoonLight, from v5.0.0 to the rename](../../present/Plan-20260922%20-%20MoonLight,%20from%20v5.0.0%20to%20the%20rename.md), which consolidates the five MoonLight files into one. Kept for the reasoning behind decisions already taken.
+> **Superseded on 2026-09-22** by [Plan-20260922 - MoonLight, from v5.0.0 to the rename (shipped)](../../present/Plan-20260922%20-%20MoonLight,%20from%20v5.0.0%20to%20the%20rename%20(shipped).md), which consolidates the five MoonLight files into one. Kept for the reasoning behind decisions already taken.
 
 The full set of MoonLight effects to migrate, grouped by **origin library** (a *section* within the shipped `effects.md` catalog page; a per-library page `effects_<library>.md` only when a section outgrows it, see the folder-structure decision), with audio/3D markers. Source: [MoonLight effects.md](https://github.com/ewowi/MoonLight/blob/main/docs/moonlight/effects.md) + the `E_*.h` source files, studied for *behaviour*, reimplemented fresh per the migration plan's *Industry standards, our own code* rule. This reference feeds the [migration plan's](Plan-20260630%20-%20MoonLight%20migration%20(multi-stage,%20superseded).md) Stage-3 batches; it is *what to build*, not a copy of how.
 

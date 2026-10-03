@@ -2432,8 +2432,8 @@ void HttpServerModule::afterListMutation() {
     FilesystemModule::noteDirty();
     if (scheduler_) {
         // Rebuild EVERY module's controls.
-        // A list mutation can change what OTHER modules present - adding/removing a light preset changes the option set of every driver's `preset` Select (which is built from the library).
-        // Without this, a driver's Select keeps its stale option count and a just-added preset is unselectable ("value out of range").
+        // A list mutation can change what OTHER modules present - adding/removing a fixture profile changes the option set of every driver's `fixture` Select (which is built from the library).
+        // Without this, a driver's Select keeps its stale option count and a newly added profile is unselectable ("value out of range").
         // Mirrors the phase-2b tree-wide rebuild after persistence load.
         for (uint8_t i = 0; i < scheduler_->moduleCount(); i++)
             if (auto* m = scheduler_->module(i)) m->rebuildControls();

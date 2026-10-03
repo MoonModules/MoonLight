@@ -24,6 +24,27 @@ MoonLight ships **no migration code**: the persistence layer is robust by defaul
 
 ## Unreleased
 
+### Light presets are fixture profiles
+
+**Action: *re-set a control*.**
+
+The library of named channel wirings (RGB, GRB, RGBW, a moving head's channels) takes the DMX industry term. It no longer shares a name with the Control card's presets, which keep theirs.
+The module `LightPresets` is `FixtureProfiles`, its list `presets` is `profiles`, and each driver's `lightPreset` control is `fixture`.
+A backup restored through the File Manager carries all of it.
+Updated in place without a restore, the saved `LightPresetsModule` entry names a type that no longer exists, so it is skipped.
+The built-in profiles are back and your custom rows are gone.
+Each driver's saved choice is ignored too, so it falls back to its default, GRB for strips and RGB for network sinks.
+Re-add the custom profiles and re-pick each driver's `fixture`.
+An API client or an automation that sets `lightPreset` sets `fixture`.
+
+### The palette is saved and reported by name
+
+**Action: *nothing*.**
+
+`Drivers.palette` is saved by its name, such as `Ocean` or `fire.mlp`, so adding a palette script no longer moves a scripted choice to its neighbor after a reboot.
+A saved number still loads, and a write takes a number or a name.
+A client reading the value through the API gets the name where it got a number.
+
 ### Network services share `addressing` and `hosts`
 
 **Action: *re-set a control*.**
@@ -140,7 +161,8 @@ The last release under the projectMM name. Its [release notes](https://github.co
 | `Noise2DEffect` | `NoiseEffect`, which renders the same field |
 | `IrService` | `InfraredService` |
 | `MultiPinLedDriver`, `MoonLedDriver`, `ParlioLedDriver`, `I80LedDriver`, `MoonI80LedDriver` | `ParallelLedDriver` with a `peripheral` select |
-| a driver's `preset` | `lightPreset` |
+| a driver's `preset` or `lightPreset`, and its `presetRef` | `fixture`, and `fixtureRef` |
+| `LightPresetsModule` and its `presets` list | `FixtureProfilesModule` and its `profiles` list |
 | `soundReactive` | `audioReactive` |
 | `forceRing` | `useRing` |
 | `sync` on AudioService | `mode`, beside a new `send audio` |
@@ -197,11 +219,11 @@ The break is between the two images on a device, not between a device and its co
 
 It drew one bar from the audio level, which every audio-reactive effect does as a side effect of what it draws. There is no successor to map it onto, so a restored config carrying an `AudioVolumeEffect` node finds no such type and the layer comes up without it. `GEQ` is the nearest thing if a literal meter is what you want.
 
-### A light preset's Dimmer channel is now driven
+### A fixture profile's Dimmer channel is now driven
 
-A preset that declares a `Dimmer` role previously left that channel at 0, because nothing ever wrote it: `Correction` resolved only the color roles. A fixture on such a preset therefore emitted nothing at all, whatever its color channels said. The shipped `IRGB` preset ("CH1 master intensity") could never light a fixture.
+A profile that declares a `Dimmer` role previously left that channel at 0, because nothing ever wrote it: `Correction` resolved only the color roles. A fixture on such a profile therefore emitted nothing at all, whatever its color channels said. The shipped `IRGB` preset ("CH1 master intensity") could never light a fixture.
 
-The dimmer is now held open (255) every frame, with per-light brightness staying in the color values as before. **If you drive a fixture on `IRGB` or another dimmer-carrying preset, it will light up where it previously stayed dark.** Nothing to change; the previous behavior was a defect.
+The dimmer is now held open (255) every frame, with per-light brightness staying in the color values as before. **If you drive a fixture on `IRGB` or another dimmer-carrying profile, it will light up where it previously stayed dark.** Nothing to change; the previous behavior was a defect.
 
 Routing brightness to the dimmer channel rather than holding it open is the better model and is [backlogged](../work/future/backlog-light.md), so this value will change again.
 

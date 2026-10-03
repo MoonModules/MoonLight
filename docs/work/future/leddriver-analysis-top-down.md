@@ -172,7 +172,7 @@ struct LedFrame {
                                      // reorder to GRB/…, RGBW white) per light during encode
     uint16_t lightCount;             // pixels (not bytes)
     uint8_t channelsPerLight;        // source channels (3 = RGB today); output channels come
-                                     // from the Correction's light-preset (3 or 4)
+                                     // from the Correction's fixture-profile (3 or 4)
 };
 
 struct LedDriverConfig {
@@ -251,8 +251,8 @@ For MoonLight this is **third-priority** behind WS2812 and SK6812: design the in
 
 The brightness / channel-reorder / RGBW-white stage is **not** specific to LED drivers and is **already implemented** — ArtNet uses it today. It is a per-driver stage shared by every *physical* driver, with the shared state owned by the `Drivers` container:
 
-- `Correction` (`src/light/drivers/Correction.h`) holds a 256-entry brightness LUT, a channel-order table (the `lightPreset`: RGB / GRB / … / RGBW / GRBW), an output-channel count (3 or 4), and a derive-white flag. `Correction::apply(src, out)` transforms one logical RGB light into the wire form: brightness via LUT, then reorder, then (for RGBW presets) `W = min(r,g,b)` of the brightness-scaled channels.
-- `Drivers` exposes `brightness` and `lightPreset` controls and rebuilds the LUT on the cheap `onUpdate` tier (no pipeline rebuild — the slider stays fluent). It hands each child a `const Correction*` via `DriverBase::setCorrection`; Preview ignores it (shows the raw logical buffer).
+- `Correction` (`src/light/drivers/Correction.h`) holds a 256-entry brightness LUT, a channel-order table (the `fixture`: RGB / GRB / … / RGBW / GRBW), an output-channel count (3 or 4), and a derive-white flag. `Correction::apply(src, out)` transforms one logical RGB light into the wire form: brightness via LUT, then reorder, then (for RGBW presets) `W = min(r,g,b)` of the brightness-scaled channels.
+- `Drivers` exposes `brightness` and `fixture` controls and rebuilds the LUT on the cheap `onUpdate` tier (no pipeline rebuild — the slider stays fluent). It hands each child a `const Correction*` via `DriverBase::setCorrection`; Preview ignores it (shows the raw logical buffer).
 - An LED driver consumes the *same* `const Correction*`. In the fused single-pass case (§ 4.3, identity / shuffle, no blend) it calls `correction_->apply(...)` per light and encodes the result straight into the DMA buffer — F/G/H and the WS2812 encode are one pass, never a second sweep over encoded bytes.
 
 So the LED driver does **not** re-invent brightness/reorder/white — it reuses the shipped `Correction`. Gamma and white-balance fold into the same LUT later as a per-channel R/G/B split (the field is `briLut`, not `gammaLut`, so that's a fill change, not a rename). See [MoonLight, drivers](../../explanation/architecture/moonlight.md#drivers) for the cross-driver picture.

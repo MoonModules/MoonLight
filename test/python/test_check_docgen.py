@@ -1494,3 +1494,40 @@ def test_the_real_pages_obey_the_structure_rules():
         path = ROOT / "docs" / rel
         if path.exists():
             assert _structure(path.read_text(encoding="utf-8"), rel) == [], rel
+
+
+def test_a_test_hook_needs_no_doc_and_stays_off_the_page():
+    """A test hook is named `...ForTest`, which Doxygen excludes from every page, so a `///` on it
+    has no reader. The exemption covers functions, a hook type's constructor and its destructor,
+    and stops there: an ordinary undocumented member beside them is still reported."""
+    src = ("class Foo {\npublic:\n"
+           "  void injectForTest();\n"
+           "  struct LookupForTest {\n"
+           "    explicit LookupForTest(int resolve);\n"
+           "    ~LookupForTest();\n"
+           "  };\n"
+           "  void other();\n};")
+    flagged = [i for i in _hdr(src) if "has no ///" in i[1]]
+    assert len(flagged) == 1, flagged   # only `other`
+    import gen_api
+    assert "EXCLUDE_SYMBOLS = *ForTest" in gen_api._doxyfile(["src/core/x.h"], "/tmp/xml")
+
+
+def test_a_private_nested_type_gets_no_page_however_well_documented(tmp_path):
+    """A type declared under `private:` is implementation detail, so a doc comment on it must not
+    publish it: the fields of DevicesModule's private Device struct once rendered as API. A public
+    nested type with a comment keeps its page."""
+    import gen_api
+    def compound(kind, name, inners="", brief=""):
+        return (f'<doxygen><compounddef kind="{kind}"><compoundname>{name}</compoundname>{inners}'
+                f'<briefdescription><para>{brief}</para></briefdescription>'
+                f'<location file="src/core/x.h"/></compounddef></doxygen>')
+    (tmp_path / "classmm_1_1Outer.xml").write_text(compound(
+        "class", "mm::Outer",
+        '<innerclass prot="private">mm::Outer::Hidden</innerclass>'
+        '<innerclass prot="public">mm::Outer::Shown</innerclass>', "the outer class"))
+    (tmp_path / "structmm_1_1Outer_1_1Hidden.xml").write_text(compound("struct", "mm::Outer::Hidden", brief="documented"))
+    (tmp_path / "structmm_1_1Outer_1_1Shown.xml").write_text(compound("struct", "mm::Outer::Shown", brief="documented"))
+    pages = gen_api._class_to_header(tmp_path)
+    assert "mm-Outer" in pages and "mm-Outer-Shown" in pages
+    assert "mm-Outer-Hidden" not in pages

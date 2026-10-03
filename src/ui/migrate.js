@@ -26,6 +26,8 @@ export const FILE_RENAMES = {
 // Old module type value (any "type" / "N.type" key) → new type. `set` writes a control the
 // merge made explicit when its value is deterministic; `review` flags what a map cannot decide.
 export const TYPE_RENAMES = {
+    // The library of named channel wirings takes the DMX industry term. Its list control follows (CONTROL_RENAMES).
+    "LightPresetsModule": { type: "FixtureProfilesModule", date: "2026-10-03" },
     "Layers": { type: "Effects", date: "2026-08-08" },
     // Noise2D folded into Noise, which is Dim::D3 and renders the same field on a panel. `scale`
     // carries; Noise2D's `speed` (a 0..15 divisor) has no equivalent, because Noise takes its rate
@@ -61,6 +63,10 @@ export const TYPE_RENAMES = {
 // the bench: a blanket fps → targetFps corrupted NetworkSendDriver's own `fps`). `review` marks
 // a value-semantics change: the name maps, the value needs the user's eye.
 export const CONTROL_RENAMES = {
+    // Light presets are fixture profiles: the library's row list, and the Select every driver uses to pick a row.
+    "presets": { name: "profiles", date: "2026-10-03", onTypes: ["FixtureProfilesModule"] },
+    "lightPreset": { name: "fixture", date: "2026-10-03", onTypes: ["*Driver"] },
+    "presetRef": { name: "fixtureRef", date: "2026-10-03", onTypes: ["*Driver"] },
     // One rule for reaching many receivers: a list is `hosts`, and how packets travel is `addressing`.
     "ips": { name: "hosts", date: "2026-10-02", onTypes: ["NetworkSendDriver"] },
     "lightsPerIp": { name: "lightsPerHost", date: "2026-10-02", onTypes: ["NetworkSendDriver"] },
@@ -87,7 +93,8 @@ export const CONTROL_RENAMES = {
     // PreviewDriver's fps → targetFps (now trades resolution for rate). Other drivers keep `fps`.
     "fps": { name: "targetFps", date: "2026-08-25", onTypes: ["PreviewDriver"] },
     // The correction Select every LED driver inherits from DriverBase.
-    "preset": { name: "lightPreset", date: "2026-07-23", onTypes: ["*Driver"] },
+    // Jumps straight to the end state (preset → lightPreset → fixture).
+    "preset": { name: "fixture", date: "2026-07-23", onTypes: ["*Driver"] },
     // AudioService's sync collapses into mode + a separate send-audio switch.
     "sync": { name: "mode", date: "2026-07-22", onTypes: ["AudioService"],
               review: "was off/send/receive; now mode (local/receive/simulate) plus a separate 'send audio' switch: review both" },

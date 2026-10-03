@@ -1,6 +1,6 @@
 # Effect improvements over MoonLight
 
-> **Superseded on 2026-09-22** by [Plan-20260922 - MoonLight, from v5.0.0 to the rename](../../present/Plan-20260922%20-%20MoonLight,%20from%20v5.0.0%20to%20the%20rename.md), which consolidates the five MoonLight files into one. Kept for the reasoning behind decisions already taken.
+> **Superseded on 2026-09-22** by [Plan-20260922 - MoonLight, from v5.0.0 to the rename (shipped)](../../present/Plan-20260922%20-%20MoonLight,%20from%20v5.0.0%20to%20the%20rename%20(shipped).md), which consolidates the five MoonLight files into one. Kept for the reasoning behind decisions already taken.
 
 Where a migrated MoonLight effect **deliberately behaves differently from the MoonLight original** — a
 change that *improves* the effect (more correct, smoother, works at more grid sizes, a control that

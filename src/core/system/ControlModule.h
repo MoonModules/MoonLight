@@ -22,8 +22,7 @@ namespace mm {
 ///
 /// Its first capability is presets: a preset is a file, saving writes one, selecting reads it.
 /// Top-level by necessity, since a preset reaches across the containers it captures from.
-/// Not to be confused with the light presets module, a library of fixture wirings.
-/// That is a profile, where this is a device state.
+/// Not to be confused with the fixture profiles module, a library of channel wirings, where this is a device state.
 ///
 /// @moreinfo
 ///

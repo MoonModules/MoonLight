@@ -11,7 +11,7 @@
 #include "light/modifiers/MultiplyModifier.h"
 #include "light/modifiers/RegionModifier.h"
 #include "light/layers/Layer.h"
-#include "light/drivers/LightPresetsModule.h"
+#include "light/drivers/FixtureProfilesModule.h"
 #include "platform/platform.h"
 
 #include <cstdio>
@@ -378,7 +378,7 @@ TEST_CASE("FilesystemModule writes valid JSON with children") {
 
 // No size cap: a config LARGER than the old fixed 2 KB save buffer round-trips in full.
 // The save serializes into a growable JsonSink and the load reads a file-sized heap buffer, so neither side truncates.
-// Built from a LightPresetsModule with many custom presets, its persisted array of role wirings comfortably exceeds 2048 bytes, which the old fixed buffer would have silently dropped (returning false → nothing written → config lost on reboot).
+// Built from a FixtureProfilesModule with many custom profiles, its persisted array of role wirings comfortably exceeds 2048 bytes, which the old fixed buffer would have silently dropped (returning false → nothing written → config lost on reboot).
 TEST_CASE("FilesystemModule round-trips a config larger than the old 2 KB cap") {
     char tmpRoot[256];
     std::snprintf(tmpRoot, sizeof(tmpRoot), "/tmp/mm_bigcfg_test_%u",
@@ -386,7 +386,7 @@ TEST_CASE("FilesystemModule round-trips a config larger than the old 2 KB cap") 
     std::filesystem::remove_all(tmpRoot);
     std::filesystem::create_directories(std::string(tmpRoot) + "/.config");
     mm::platform::fsSetRoot(tmpRoot);
-    mm::ModuleFactory::registerType<mm::LightPresetsModule>("LightPresetsModule");
+    mm::ModuleFactory::registerType<mm::FixtureProfilesModule>("FixtureProfilesModule");
 
     uint32_t markerId = 0;
     {
@@ -394,13 +394,13 @@ TEST_CASE("FilesystemModule round-trips a config larger than the old 2 KB cap") 
         auto* fs = new mm::FilesystemModule();
         fs->setTypeName("FilesystemModule");
         fs->setScheduler(&scheduler);
-        auto* lp = new mm::LightPresetsModule();
-        lp->setTypeName("LightPresetsModule");
+        auto* lp = new mm::FixtureProfilesModule();
+        lp->setTypeName("FixtureProfilesModule");
         scheduler.addModule(fs);
         scheduler.addModule(lp);
         scheduler.setup();   // seeds the 13 built-ins
 
-        // Add 15 wide (24-channel) custom presets, the serialized array is well over 2 KB. (15, not 20: the seeded built-ins now number 13, and 13 + 20 would exceed kMaxPresets=32; 13 + 15 = 28 fits, and 15 wide presets still serialize far past the old 2 KB cap being tested.)
+        // Add 15 wide (24-channel) custom profiles, the serialized array is well over 2 KB. (15, not 20: the seeded built-ins now number 13, and 13 + 20 would exceed kMaxProfiles=32; 13 + 15 = 28 fits, and 15 wide profiles still serialize far past the old 2 KB cap being tested.)
         for (int k = 0; k < 15; k++) {
             uint32_t id = 0;
             REQUIRE(lp->addListRow(id));
@@ -416,7 +416,7 @@ TEST_CASE("FilesystemModule round-trips a config larger than the old 2 KB cap") 
         fs->flush();
 
         // The saved file must exist AND be larger than the old 2048 cap (proving the cap is gone).
-        const std::string path = std::string(tmpRoot) + "/.config/LightPresetsModule.json";
+        const std::string path = std::string(tmpRoot) + "/.config/FixtureProfilesModule.json";
         REQUIRE(std::filesystem::exists(path));
         CHECK(std::filesystem::file_size(path) > 2048u);
         scheduler.release();
@@ -427,15 +427,15 @@ TEST_CASE("FilesystemModule round-trips a config larger than the old 2 KB cap") 
         auto* fs = new mm::FilesystemModule();
         fs->setTypeName("FilesystemModule");
         fs->setScheduler(&scheduler);
-        auto* lp = new mm::LightPresetsModule();
-        lp->setTypeName("LightPresetsModule");
+        auto* lp = new mm::FixtureProfilesModule();
+        lp->setTypeName("FixtureProfilesModule");
         scheduler.addModule(fs);
         scheduler.addModule(lp);
         scheduler.setup();
 
         CHECK(lp->listRowCount() == 29);   // 14 built-ins + 15 custom, all restored
         mm::Correction c;
-        REQUIRE(lp->deriveCorrection(markerId, 255, c));   // the marker preset resolves after reload
+        REQUIRE(lp->deriveCorrection(markerId, 255, c));   // the marker profile resolves after reload
         CHECK(c.outChannels == 24);                        // its 24-channel width survived
         scheduler.release();
     }
@@ -604,10 +604,10 @@ TEST_CASE("FilesystemModule restores a value-dependent control across reload (th
 }
 
 // Regression: a user-added module recorded AFTER two code-wired siblings must survive a load even when the code-wired siblings' boot order differs from the saved order.
-// This is shiffy's "spontaneously lost ParallelLedDriver" bug: the Drivers container boot-wires LightPresets then Preview, but the file was saved as Preview(0), LightPresets(1), ParallelLed(2).
-// The old positional reconciler hit index 0 (JSON: Preview, live: LightPresets, code-wired) and BROKE, dropping the ParallelLedDriver at index 2 on every reboot.
+// This is shiffy's "spontaneously lost ParallelLedDriver" bug: the Drivers container boot-wires FixtureProfiles then Preview, but the file was saved as Preview(0), FixtureProfiles(1), ParallelLed(2).
+// The old positional reconciler hit index 0 (JSON: Preview, live: FixtureProfiles, code-wired) and BROKE, dropping the ParallelLedDriver at index 2 on every reboot.
 // The align pass reorders the code-wired children to the saved indices first, so the user module is reached and restored.
-// Modeled with two code-wired effects (singletons per container, like Preview/LightPresets) swapped vs. the file, plus a user effect after them.
+// Modeled with two code-wired effects (singletons per container, like Preview/FixtureProfiles) swapped vs. the file, plus a user effect after them.
 TEST_CASE("FilesystemModule restores a user module recorded after reordered code-wired siblings") {
     char tmpRoot[256];
     std::snprintf(tmpRoot, sizeof(tmpRoot), "/tmp/mm_wired_reorder_%u",

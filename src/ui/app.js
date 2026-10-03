@@ -409,6 +409,15 @@ function selectIndex(ctrl) {
     return ctrl.value ?? 0;
 }
 
+// A palette's value is its index, or its NAME where the device saves it by name; -1 for a name the options do not hold yet.
+function paletteIndex(value, options) {
+    if (typeof value === "string") return (options || []).findIndex(o => o && o.name === value);
+    return value ?? 0;
+}
+
+// The options each palette control was built with, so a value patch that carries none can still resolve a name.
+const paletteOptionsOf = new WeakMap();
+
 function connectPreview() {
     if (wsPreview && (wsPreview.readyState === WebSocket.OPEN ||
                       wsPreview.readyState === WebSocket.CONNECTING)) return;
@@ -4804,16 +4813,19 @@ function updateModuleControls(mod) {
                 // Custom dropdown: patch the trigger (swatch + name) and the selected row, but not
                 // while the user has the list open (data-open === "true").
                 const wrap = queryByName(`.palette-control[data-mid="${cssEscape(mid)}"][data-key="${k}"]`, "data-mid", mid);
-                if (wrap && wrap.dataset.open !== "true" && Number(wrap.dataset.value) !== Number(ctrl.value)) {
-                    wrap.dataset.value = ctrl.value;
-                    const cols = ((ctrl.options || [])[ctrl.value] || {}).colors || "";
+                const popts = ctrl.options || (wrap && paletteOptionsOf.get(wrap)) || [];
+                const pidx = paletteIndex(ctrl.value, popts);
+                // A name these options do not hold yet keeps the current paint until a patch brings the new list.
+                if (wrap && wrap.dataset.open !== "true" && pidx >= 0 && Number(wrap.dataset.value) !== pidx) {
+                    wrap.dataset.value = pidx;
+                    const cols = (popts[pidx] || {}).colors || "";
                     const grad = paletteGradientCss(cols);
                     const triSwatch = wrap.querySelector(".palette-trigger .palette-swatch");
                     if (triSwatch) triSwatch.style.background = grad;
                     const triName = wrap.querySelector(".palette-trigger .palette-name");
-                    if (triName) setText(triName, ((ctrl.options || [])[ctrl.value] || {}).name || String(ctrl.value));
+                    if (triName) setText(triName, (popts[pidx] || {}).name || String(pidx));
                     wrap.querySelectorAll(".palette-item.selected").forEach(x => x.classList.remove("selected"));
-                    const row = wrap.querySelector(`.palette-item[data-idx="${ctrl.value}"]`);
+                    const row = wrap.querySelector(`.palette-item[data-idx="${pidx}"]`);
                     if (row) row.classList.add("selected");
                 }
                 break;
@@ -4948,6 +4960,8 @@ function controlValuesEqual(ctrl, def) {
         ctrl.type === "filepath" || ctrl.type === "password") {
         return String(ctrl.value ?? "") === String(def ?? "");
     }
+    // A control saved by name (a palette, a label-persisted Select) reports a string for both.
+    if (typeof ctrl.value === "string" || typeof def === "string") return String(ctrl.value ?? "") === String(def ?? "");
     return Number(ctrl.value) === Number(def);
 }
 
@@ -7635,11 +7649,13 @@ function buildPaletteControl(row, key, def, moduleName, ctrl) {
     // the option index. Prior art: MoonLight's palette control (same native-select limit).
     const opts = ctrl.options || [];
     const gradientFor = (i) => paletteGradientCss((opts[i] || {}).colors);
+    const selected = Math.max(0, paletteIndex(ctrl.value, opts));
     const wrap = document.createElement("div");
     wrap.className = "palette-control";
     wrap.dataset.mid = moduleName;
     wrap.dataset.key = ctrl.name;
-    wrap.dataset.value = ctrl.value;
+    wrap.dataset.value = selected;
+    paletteOptionsOf.set(wrap, opts);
 
     // Trigger: shows the currently-selected palette (swatch + name) and opens the list.
     const trigger = document.createElement("button");
@@ -7663,7 +7679,7 @@ function buildPaletteControl(row, key, def, moduleName, ctrl) {
         triEmoji.textContent = (o.live ? SCRIPTED_EMOJI : "") + (o.tags || "");
         triName.textContent = o.name || String(i);
     };
-    paintTrigger(ctrl.value);
+    paintTrigger(selected);
     trigger.append(triSwatch, triEmoji, triName, caret);
 
     // The LIST is the shared picker, the same widget the module and script pickers use, so a
@@ -7724,7 +7740,7 @@ function buildPaletteControl(row, key, def, moduleName, ctrl) {
             items,
             actionLabel: "use",
             keepOrder: true,          // index order: the knob and HA step through it
-            currentType: String(ctrl.value),
+            currentType: String(selected),
             commit: async (name) => {
                 // A remote row carries a filename, not an index: fetch it, then let the
                 // rebuilt control (the device re-lists its .mlp files) select it by index.
@@ -7800,8 +7816,9 @@ function buildPaletteControl(row, key, def, moduleName, ctrl) {
     // (sendControl is handled by appendResetButton). No list to re-mark: the picker builds
     // its rows fresh each time it opens, from the current value.
     appendResetButton(row, moduleName, ctrl, def, () => {
-        wrap.dataset.value = def;
-        paintTrigger(def);
+        const i = Math.max(0, paletteIndex(def, opts));
+        wrap.dataset.value = i;
+        paintTrigger(i);
     });
     return row;
 }
