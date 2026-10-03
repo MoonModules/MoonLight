@@ -38,6 +38,7 @@ The onboard electret mic (J6) and speaker connect through an **ES8311 mono codec
   needs **MCLK running before it answers I2C**, and `es8311_codec_cfg.mclk_div` must be set (256, the standard ratio) or `open` fails "unable to configure sample rate". So AudioService brings up the I2S channel (which drives MCLK on GPIO52) **before** the codec I2C config.
 - **Mic-only path** (audio-reactive input) needs MCLK/SCLK/LRCK + ASDOUT (record) + the I2C bus.
   The speaker path (DSDIN + PA_CTRL) is output, a separate capability.
+- **Two codec-bring-up bugs fixed 2026-10-03** (found bench-testing the [ESP32-P4-ETH](esp32-p4-eth.md), which shares this exact code path): `esp_codec_dev`'s I2C control layer right-shifts the address it's given by one bit, so the raw 7-bit `0x18` must be passed pre-shifted (`<<1`) — the bare 7-bit value silently targeted `0x0C` and every register write NACK'd even though a scan at `0x18` ACKs cleanly (that path doesn't shift). And `esp_codec_dev_new` requires a non-null `data_if`, which the code never set. Both are now fixed in `platform_esp32_es8311.cpp`, so a full codec-open bench pass on the S31 (not just the I2C scan referenced above) is worth re-running before the `Audio` capability stays under `planned`.
 
 ## Ethernet (YT8531 PHY, RGMII, 1 Gbps)
 

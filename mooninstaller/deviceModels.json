@@ -1005,6 +1005,69 @@
     ]
   },
   {
+    "name": "Waveshare ESP32-P4-ETH",
+    "chip": "ESP32-P4",
+    "firmwares": [
+      "esp32p4rev1-eth-es8311"
+    ],
+    "image": "assets/deviceModels/esp32-p4-eth.png",
+    "url": "https://www.waveshare.com/esp32-p4-eth.htm",
+    "supported": [
+      "LEDs",
+      "Ethernet",
+      "Audio"
+    ],
+    "planned": [
+      "WiFi",
+      "Camera",
+      "Speaker"
+    ],
+    "modules": [
+      {
+        "type": "System",
+        "id": "System",
+        "controls": {
+          "deviceModel": "Waveshare ESP32-P4-ETH"
+        }
+      },
+      {
+        "type": "ParallelLedDriver",
+        "id": "ParallelLed",
+        "parent_id": "Drivers",
+        "controls": {
+          "peripheral": "Parlio",
+          "pins": "20,21,22,23,24,25,26,27"
+        }
+      },
+      {
+        "type": "NetworkModule",
+        "id": "Network",
+        "controls": {
+          "ethBoard": "ESP32-P4-ETH"
+        }
+      },
+      {
+        "type": "AudioService",
+        "id": "Audio",
+        "parent_id": "Services",
+        "controls": {
+          "mode": 2,
+          "sckPin": 12,
+          "wsPin": 10,
+          "sdPin": 11
+        }
+      },
+      {
+        "type": "I2cScanModule",
+        "id": "I2cScan",
+        "controls": {
+          "sda": 7,
+          "scl": 8
+        }
+      }
+    ]
+  },
+  {
     "name": "MHC-WLED ESP32-P4 shield",
     "chip": "ESP32-P4",
     "firmwares": [

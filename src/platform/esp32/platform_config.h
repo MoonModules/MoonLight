@@ -163,6 +163,14 @@ struct AudioCodecPins {
 #ifdef CONFIG_IDF_TARGET_ESP32S31
 constexpr CodecType audioCodecType = CodecType::Es8311;
 constexpr AudioCodecPins audioCodecPins = { /*sda*/ 51, /*scl*/ 50, /*mclk*/ 52, /*addr*/ 0x18 };
+// The Waveshare ESP32-P4-ETH's onboard ES8311: its own compile-time gate (CONFIG_MM_P4_ES8311,
+// set only by the esp32p4rev1-eth-es8311 build), since most other P4 boards share this chip
+// target but have no codec on the bus — see Kconfig.projbuild's MM_P4_ES8311 help text. Pins
+// confirmed against the schematic (datasheet/ESP32-P4-ETH/) and the Waveshare wiki; a swapped
+// SDA/SCL (the S31's documented gotcha) was bench-tested and ruled out — same failure either way.
+#elif defined(CONFIG_MM_P4_ES8311)
+constexpr CodecType audioCodecType = CodecType::Es8311;
+constexpr AudioCodecPins audioCodecPins = { /*sda*/ 7, /*scl*/ 8, /*mclk*/ 13, /*addr*/ 0x18 };
 #else
 constexpr CodecType audioCodecType = CodecType::None;
 constexpr AudioCodecPins audioCodecPins = { 0, 0, 0, 0 };

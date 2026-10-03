@@ -8,7 +8,7 @@
 /// ## The domain code is unchanged
 ///
 /// It calls the codec init, a no-op on a board with a direct microphone, before the microphone init, and reads samples as always.
-/// The driver is the vendor's own managed component, gated to the one board that needs it.
+/// The driver is the vendor's own managed component, gated to the boards that need it.
 /// This is the layer's first master bus on that interface, owned here behind the boundary.
 /// Everything else gets an inert stub that reports success, having nothing to bring up, so the one call works everywhere.
 
@@ -17,7 +17,9 @@
 #include "sdkconfig.h"
 #include "soc/soc_caps.h"
 
-// esp_codec_dev is only pulled on the S31 (idf_component.yml rule). Gate the codec implementation on its presence so the file still compiles on every other target.
+// esp_codec_dev is pulled on the S31 (unconditionally) or on a P4 build with CONFIG_MM_P4_ES8311 set
+// (the Waveshare ESP32-P4-ETH; see idf_component.yml's esp_codec_dev rules). Gate the codec
+// implementation on its presence so the file still compiles on every other target.
 #if SOC_I2S_SUPPORTED && __has_include("esp_codec_dev.h")
 #define MM_HAS_ES8311 1
 #endif
@@ -42,6 +44,7 @@ struct CodecState {
     i2c_master_bus_handle_t   i2cBus  = nullptr;
     const audio_codec_ctrl_if_t* ctrl = nullptr;
     const audio_codec_if_t*   codec   = nullptr;
+    const audio_codec_data_if_t* data = nullptr;
     esp_codec_dev_handle_t    dev     = nullptr;
 };
 
@@ -52,6 +55,7 @@ void deinitState(CodecState* st) {
     if (!st) return;
     if (st->dev) { esp_codec_dev_close(st->dev); esp_codec_dev_delete(st->dev); }
     if (st->codec) audio_codec_delete_codec_if(st->codec);
+    if (st->data) audio_codec_delete_data_if(st->data);
     if (st->ctrl) audio_codec_delete_ctrl_if(st->ctrl);
     if (st->i2cBus) i2c_del_master_bus(st->i2cBus);
     delete st;
@@ -84,7 +88,15 @@ bool audioCodecInit(CodecType type, const AudioCodecPins& pins, uint32_t sampleR
     // ES8311 over I2C, the codec's control interface (the I2S *data* interface is ours: audioMicInit owns the RX channel, so we don't hand esp_codec_dev the I2S handles or use esp_codec_dev_read; the codec just needs its registers set so it streams the ADC onto the bus). The mic path is record-only.
     audio_codec_i2c_cfg_t i2cCtrlCfg = {};
     i2cCtrlCfg.port = I2C_NUM_0;
-    i2cCtrlCfg.addr = pins.i2cAddr;          // ES8311 default 0x18
+    // esp_codec_dev's I2C_If right-shifts this by 1 before handing it to the IDF i2c_master driver
+    // (audio_codec_ctrl_i2c.c: `.device_address = (i2c_cfg->addr >> 1)`), i.e. it wants the 8-bit
+    // write-address form, not the bare 7-bit address a scan/probe uses. Passing the bare 7-bit 0x18
+    // straight through silently targets 0x0C instead — every register write NACKs ("ES8311: Open
+    // fail") even though a raw i2c_master_probe at 0x18 ACKs cleanly, since that path doesn't shift.
+    // Bench-found on the P4-ETH 2026-10-03; pins.i2cAddr stays the natural 7-bit value everywhere
+    // else (AudioCodecPins, I2cScanModule's own probe), so the <<1 lives here at the one call site
+    // that needs it.
+    i2cCtrlCfg.addr = static_cast<uint8_t>(pins.i2cAddr << 1);
     i2cCtrlCfg.bus_handle = st->i2cBus;
     st->ctrl = audio_codec_new_i2c_ctrl(&i2cCtrlCfg);
     if (!st->ctrl) { ESP_LOGE(ES_TAG, "codec i2c ctrl failed"); deinitState(st); return false; }
@@ -99,8 +111,18 @@ bool audioCodecInit(CodecType type, const AudioCodecPins& pins, uint32_t sampleR
     st->codec = es8311_codec_new(&es8311Cfg);
     if (!st->codec) { ESP_LOGE(ES_TAG, "es8311_codec_new failed"); deinitState(st); return false; }
 
+    // esp_codec_dev_new requires a non-null data_if even though we never call esp_codec_dev_read:
+    // audioMicInit owns the real RX channel, so this one's rx/tx handles stay null (the I2S_If
+    // guards every call on the handle being set and the two calls esp_codec_dev_open makes through
+    // it — set_fmt/enable — both discard their return value), existing purely to satisfy that check.
+    audio_codec_i2s_cfg_t i2sDataCfg = {};
+    i2sDataCfg.port = 0;
+    st->data = audio_codec_new_i2s_data(&i2sDataCfg);
+    if (!st->data) { ESP_LOGE(ES_TAG, "codec i2s data_if failed"); deinitState(st); return false; }
+
     esp_codec_dev_cfg_t devCfg = {};
     devCfg.codec_if = st->codec;
+    devCfg.data_if = st->data;
     devCfg.dev_type = ESP_CODEC_DEV_TYPE_IN;              // input (mic) device
     st->dev = esp_codec_dev_new(&devCfg);
     if (!st->dev) { ESP_LOGE(ES_TAG, "esp_codec_dev_new failed"); deinitState(st); return false; }

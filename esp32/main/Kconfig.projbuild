@@ -37,4 +37,20 @@ menu "MoonLight"
             the same HlsDriver the desktop uses. Only the P4 has the encoder
             silicon; other chips keep this off and build nothing.
 
+    config MM_P4_ES8311
+        bool "ESP32-P4: onboard ES8311 audio codec (Waveshare ESP32-P4-ETH)"
+        default n
+        help
+            Pulls the esp_codec_dev managed component and enables the ES8311
+            codec bring-up (I2C on GPIO7/8, I2S on GPIO9-13) for a P4 board
+            that actually carries the codec, e.g. the Waveshare ESP32-P4-ETH.
+
+            OFF by default: most P4 boards (the P4-NANO, the MHC-WLED shield,
+            the MM testbench P4's direct bench mic) have no codec on that I2C
+            bus, and AudioService's codec bring-up is unconditional once
+            audioCodecType is non-None — it would probe for an ES8311 that
+            nothing answers and fail the whole mic path. Only the
+            esp32p4rev1-eth-es8311 build sets this, via
+            sdkconfig.defaults.esp32p4-es8311.
+
 endmenu

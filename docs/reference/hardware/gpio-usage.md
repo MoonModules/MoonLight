@@ -73,6 +73,8 @@ For **LED output** specifically — the pins a WS2812-class strand data line can
 
 **Clear on the P4-NANO:** 20-27, 32-33, 39-48 (the LED-driver default is `pins="20,21,22,23,24,25,26,27"`). Exact free set is board-specific; the NANO's is the reference. A carrier board changes what's exposed and how — the [MHC-WLED ESP32-P4 shield](mhc-wled-esp32-p4-shield.md) routes every terminal through level shifters / RS-485 transceivers / protected inputs (no bare GPIO), which is why a direct loopback jumper fails on it; its full terminal map is on that page.
 
+**The Waveshare ESP32-P4-ETH** follows the NANO's Ethernet wiring exactly (RMII 28-31/49-52) but additionally commits **GPIO 7-13** to its onboard ES8311 audio codec (I2C 7-8 + I2S 9-13), beyond the I2C-only use the NANO makes of 7-8. Full pin map: [esp32-p4-eth.md](esp32-p4-eth.md).
+
 ## ESP32-S31
 
 [Datasheet](https://documentation.espressif.com/esp32-s31_datasheet_en.pdf). RISC-V, Wi-Fi 6 + on-chip 1 Gbps EMAC; shares the MoonLive RISC-V backend with the P4. The bench board's full schematic pin map (Ethernet RGMII, ES8311 audio codec, SD, USB-host) is on its own page: [ESP32-S31 coreboard](esp32-s31-coreboard.md).

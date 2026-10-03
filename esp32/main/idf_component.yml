@@ -45,17 +45,34 @@ dependencies:
   espressif/esp-dsp:
     version: "^1.5.0"
   # esp_codec_dev — Espressif's audio-codec driver library; we use its ES8311 part
-  # (es8311_codec_new) to configure the ESP32-S31 CoreBoard's onboard mic, which is
-  # an analog mic behind an ES8311 I2S codec (I2C addr 0x18) rather than a direct
-  # I2S MEMS mic. Referenced only from platform_esp32_es8311.cpp, behind the codec
-  # gate. The `rules` gate scopes it to the S31 — the only board with the codec —
-  # so other targets don't resolve a component they never compile (same pattern as
-  # ip101/w5500 above). A managed component outside mainline v6.0, like the P4
-  # esp_hosted exception (docs/how-to/building.md § ESP-IDF version).
+  # (es8311_codec_new) to configure a board's onboard mic where it is an analog mic
+  # behind an ES8311 I2S codec (I2C addr 0x18) rather than a direct I2S MEMS mic.
+  # Referenced only from platform_esp32_es8311.cpp, behind the codec gate. Two
+  # boards carry the codec today: the ESP32-S31 CoreBoard (unconditionally, it is
+  # the only S31 board) and the Waveshare ESP32-P4-ETH (MM_P4_ES8311, since most P4
+  # boards have no codec on that bus — see Kconfig.projbuild). The `rules` gate
+  # scopes the dependency to those two cases so other targets/builds don't resolve
+  # a component they never compile (same pattern as ip101/w5500 above). ONE `if`
+  # with `||` — NOT two separate `rules` entries: the component manager ANDs
+  # multiple `rules` entries together (idf_component_tools/manifest/models.py,
+  # OptionalRequirement.version_spec_if_meet_conditions: "AND all the `rules`"),
+  # so `target == esp32s31` plus a separate `$CONFIG{...}` rule would require BOTH
+  # at once — impossible — and silently skip the dependency on every build
+  # ("NOTE: Skipping optional dependency: espressif/esp_codec_dev"), which is
+  # exactly what happened here first (bench-caught on the P4-ETH: the codec
+  # answered on the I2C scan but AudioService's own bring-up failed immediately,
+  # "codec init failed" — the real implementation never got linked in because
+  # `__has_include("esp_codec_dev.h")` was false, so platform_esp32_es8311.cpp
+  # built its inert stub, with no managed_components/espressif__esp_codec_dev/ in
+  # the build dir, and the "NOTE: Skipping" line confirmed it). `||` is the
+  # if-clause grammar's OR (idf_component_tools/manifest/if_parser.py uses `&&`/
+  # `||`, not `and`/`or`), combining both conditions in the one rule that must
+  # match. A managed component outside mainline v6.0, like the P4 esp_hosted
+  # exception (docs/how-to/building.md § ESP-IDF version).
   espressif/esp_codec_dev:
     version: "^1.3.0"
     rules:
-      - if: "target == esp32s31"
+      - if: "target == esp32s31 || $CONFIG{MM_P4_ES8311} == True"
   # esp_wifi_remote + esp_hosted — WiFi for the ESP32-P4 via the on-board ESP32-C6
   # co-processor over SDIO. The P4 has no native radio; these present the C6's
   # radio through the standard esp_wifi_* API (API-compatible, so the WiFi seam in

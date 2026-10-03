@@ -71,6 +71,13 @@
       "description": "Waveshare ESP32-P4-NANO — Ethernet + WiFi via the on-board ESP32-C6 over SDIO (esp_hosted), for P4 revisions 0.x/1.x ONLY. Boots and associates as of IDF v6.1-rc1 with CONFIG_PM_SLEEP_CLK_ICG_ENABLE=n, which sidesteps esp-idf #18759 (sleep_clock_icg_startup_init failing ESP_ERR_NO_MEM and aborting cpu_start)."
     },
     {
+      "name": "esp32p4rev1-eth-es8311",
+      "chip": "esp32p4",
+      "eth_only": true,
+      "ships": true,
+      "description": "Waveshare ESP32-P4-ETH — Ethernet only (IP101 PHY, same pins as the P4-NANO) plus the board's onboard ES8311 audio codec (I2C GPIO7/8, I2S GPIO9-13), for P4 revisions 0.x/1.x ONLY. No WiFi combo yet (no on-board C6 co-processor question has been resolved for this board); follows the same fragment-stacking pattern as esp32p4rev1-eth-wifi if one is added later."
+    },
+    {
       "name": "esp32p4rev3-eth",
       "chip": "esp32p4",
       "eth_only": true,

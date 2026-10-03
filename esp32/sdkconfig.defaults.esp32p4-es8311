@@ -1,0 +1,16 @@
+# Waveshare ESP32-P4-ETH: onboard ES8311 audio codec.
+#   Board: https://www.waveshare.com/esp32-p4-eth.htm
+#   Wiki:  http://www.waveshare.com/wiki/ESP32-P4-ETH
+#   Schematic: datasheet/ESP32-P4-ETH/ESP32-P4-ETH-datasheet.pdf
+#
+# Layered onto sdkconfig.defaults + sdkconfig.defaults.esp32p4rev1-eth by
+# moondeck/build/build_esp32.py. The eth fragment brings the EMAC / RMII / flash /
+# PSRAM / partition layout; this fragment adds the onboard codec.
+#
+# Sets the Kconfig symbol declared in main/Kconfig.projbuild, which
+# main/idf_component.yml reads to pull the esp_codec_dev managed component, and
+# which src/platform/esp32/platform_config.h reads to set audioCodecType/
+# audioCodecPins to the ES8311 on I2C GPIO7/8 + I2S GPIO9-13. See MM_P4_ES8311's
+# own help text for why this is a separate opt-in rather than a P4-wide default:
+# most other P4 boards have no codec on that bus.
+CONFIG_MM_P4_ES8311=y

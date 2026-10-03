@@ -546,6 +546,11 @@ private:
         {"Classic RMII (no reset)", 1,  0, 23, 18, -1, 17, false, -1, -1, -1, -1, -1, false},
         // Waveshare P4-NANO and the boards following its shield pinout: IP101, the clock fed in.
         {"P4-NANO",           2,  1, 31, 52, 51, 50, true,  -1, -1, -1, -1, -1, false},
+        // Waveshare ESP32-P4-ETH: same IP101 reference wiring as the P4-NANO (MDC/MDIO confirmed
+        // from the schematic netlist, reset/clock confirmed by direct schematic inspection), kept
+        // as its own entry rather than a silent alias so a future pin correction to one board
+        // can't also move the other.
+        {"ESP32-P4-ETH",      2,  1, 31, 52, 51, 50, true,  -1, -1, -1, -1, -1, false},
         // The S31's 1 Gb PHY, addressed by scan rather than by a fixed address.
         {"S31 CoreBoard",     4, -1,  5,  6,  7, -1, false, -1, -1, -1, -1, -1, false},
         {"Custom",            0, -1, -1, -1, -1, -1, false, -1, -1, -1, -1, -1, true},
