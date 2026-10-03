@@ -398,9 +398,9 @@ TEST_CASE("FilesystemModule round-trips a config larger than the old 2 KB cap") 
         lp->setTypeName("FixtureProfilesModule");
         scheduler.addModule(fs);
         scheduler.addModule(lp);
-        scheduler.setup();   // seeds the 13 built-ins
+        scheduler.setup();   // seeds the 14 built-ins
 
-        // Add 15 wide (24-channel) custom profiles, the serialized array is well over 2 KB. (15, not 20: the seeded built-ins now number 13, and 13 + 20 would exceed kMaxProfiles=32; 13 + 15 = 28 fits, and 15 wide profiles still serialize far past the old 2 KB cap being tested.)
+        // Add 15 wide (24-channel) custom profiles, the serialized array is well over 2 KB. (15: with the 14 seeded built-ins that is 29, inside kMaxProfiles=32, and 15 wide profiles still serialize far past the old 2 KB cap being tested.)
         for (int k = 0; k < 15; k++) {
             uint32_t id = 0;
             REQUIRE(lp->addListRow(id));

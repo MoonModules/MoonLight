@@ -71,6 +71,8 @@ add_executable(mm_tests
     unit/core/unit_MoonBaseContract.cpp
     unit/core/unit_NetworkModule.cpp
     unit/core/unit_NetworkModule_ethernet.cpp
+    unit/core/unit_WiFiModule.cpp
+    unit/core/unit_AccessPointModule.cpp
     unit/core/unit_Sort.cpp
     unit/core/unit_sanitizeHostname.cpp
     unit/core/unit_platform_clock.cpp

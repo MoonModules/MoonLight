@@ -498,7 +498,7 @@ void FilesystemModule::writeNode(MoonModule* m, JsonSink& sink, const char* pref
         auto& c = cs[i];
         if (!isPersistable(c)) continue;
         sink.appendf("%s\"%s%s\":", first ? "" : ",", prefix, c.name);
-        writeControlValue(sink, c);      // the shared value serializer (same as /api/state)
+        writeControlValue(sink, c, /*saving=*/true);   // the shared value serializer, in its saving form
         first = false;
     }
     sink.appendf("%s\"%senabled\":%s", first ? "" : ",", prefix, m->enabled() ? "true" : "false");

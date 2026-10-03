@@ -484,8 +484,9 @@ def _class_to_header(xml_dir: Path) -> dict[str, str]:
         # the `::` count: `mm::json::JsonDoc` has just as many and is a real page. A top-level
         # type documented with a file-level `//` block has no brief either, so filtering on the
         # brief alone dropped 22 real pages (AudioFrame, raymarch, crc...).
-        # A private nested type is implementation detail however well it is commented.
-        if name in hidden_nested:
+        # A private nested type is implementation detail however well it is commented, and so is anything nested inside one, public there or not.
+        parts = name.split("::")
+        if any("::".join(parts[:i]) in hidden_nested for i in range(2, len(parts) + 1)):
             continue
         if name in class_nested:
             brief = cd.find("briefdescription")

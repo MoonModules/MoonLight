@@ -1,10 +1,13 @@
-/// @module NetworkModule
+/// @module EthernetModule
+/// @also NetworkModule
 /// Unit tests for the Ethernet config seam and the cascade around it; the per-PHY bring-up is ESP32-only and verified on hardware.
 
 #include "doctest.h"
 #include "platform_config.h"   // EthPhyType, EthPinConfig, hasEthernet, ethConfigDefault
 #include "platform/platform.h" // setEthConfig / ethStop / ethInit / ethConnected
 #include "core/system/NetworkModule.h"
+#include "core/system/EthernetModule.h"
+#include "core/system/WiFiModule.h"
 #include <cstring>
 #include <string>
 
@@ -66,31 +69,6 @@ TEST_CASE("ethPhyAddr-style control: signed int16, -1 sentinel in range, number 
     CHECK(phyAddr == -1);                        // the bound value still reads -1 through the int16 control
 }
 
-// The addressing Select defaults to DHCP and the static-IP fields start hidden; they are always bound, so the host can test them.
-TEST_CASE("addressing Select + static-IP controls: DHCP default, Static reveals the fields") {
-    mm::NetworkModule net;
-    net.setup();
-    net.rebuildControls();   // single clean build (setup already built once via startAP); see mode test
-
-    const mm::ControlDescriptor* addressing = nullptr;
-    const mm::ControlDescriptor* ip = nullptr;
-    const mm::ControlDescriptor* subnet = nullptr;
-    for (uint8_t i = 0; i < net.controls().count(); i++) {
-        const auto& c = net.controls()[i];
-        if (std::strcmp(c.name, "addressing") == 0) addressing = &c;
-        else if (std::strcmp(c.name, "ip") == 0)     ip = &c;
-        else if (std::strcmp(c.name, "subnet") == 0) subnet = &c;
-    }
-    REQUIRE(addressing != nullptr);
-    CHECK(addressing->type == mm::ControlType::Select);
-    // Default is DHCP: the static fields are present but hidden until Static is selected.
-    REQUIRE(ip != nullptr);
-    REQUIRE(subnet != nullptr);
-    CHECK(ip->type == mm::ControlType::IPv4);
-    CHECK(ip->hidden);        // DHCP mode → static fields hidden
-    CHECK(subnet->hidden);
-}
-
 // Desktop addressing is OS-managed, so netSetStaticIPv4 and netSetDhcp accept any input and change nothing.
 TEST_CASE("Desktop static-addressing seam is a safe no-op") {
     const uint8_t ip[4]   = {192, 168, 1, 50};
@@ -105,24 +83,24 @@ TEST_CASE("Desktop static-addressing seam is a safe no-op") {
     CHECK_FALSE(mm::platform::ethConnected());
 }
 
-// Static mode pins the static IP during STA bring-up, since a DHCP-less network never fires a lease event.
+// A known network set to Static pins its address during bring-up, since a DHCP-less network never fires a lease event.
 TEST_CASE("Static mode pins the static IP during STA bring-up (WaitingSta)") {
     mm::platform::setTestWifiStaAvailable(true);
     {
         mm::NetworkModule net;
+        mm::WiFiModule wifi;
+        net.addChild(&wifi);
+        net.setWiFi(&wifi);
         net.setWifiCredentials("bench-ssid", "bench-pass");
+        // The network's own IP settings: Static, with a real address, as the card's row edit sets them.
+        constexpr uint32_t kFirstRowId = 1;   // a fresh list numbers its first network 1
+        REQUIRE(wifi.setListRowField(kFirstRowId, "ipSettings", "{\"value\":1}"));
+        REQUIRE(wifi.setListRowField(kFirstRowId, "ip", "{\"value\":\"192.168.1.250\"}"));
         net.setup();   // desktop ethInit() fails → cascades to STA; the seam lands it in WaitingSta
-        // Switch to Static with a real address via the normal control-apply path (the octets bind by reference, so the module reads them directly).
-        for (uint8_t i = 0; i < net.controls().count(); i++) {
-            auto& c = net.controls()[i];
-            if (std::strcmp(c.name, "addressing") == 0)
-                mm::applyControlValue(c, "{\"addressing\":1}", "addressing", mm::ApplyPolicy::Clamp);
-            else if (std::strcmp(c.name, "ip") == 0)
-                mm::applyControlValue(c, "{\"ip\":\"192.168.1.250\"}", "ip", mm::ApplyPolicy::Clamp);
-        }
         uint32_t before = mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Sta);
-        net.tick1s();   // WaitingSta: Static + not connected → applyStaticIfConfigured(Sta)
+        net.tick1s();   // WaitingSta: Static + not connected → applyStaStatic()
         CHECK(mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Sta) > before);
+        net.removeChild(&wifi);   // the child is a local, not the tree's to free
     }
     mm::platform::setTestWifiStaAvailable(false);   // reset, so cases stay independent
 }
@@ -134,16 +112,27 @@ struct FrozenClock {
     ~FrozenClock() { mm::platform::setTestNowMs(0); }
 };
 
-// Switch to Static with this address through the normal control-apply path.
-void setStatic(mm::NetworkModule& net, const char* ipJson) {
-    for (uint8_t i = 0; i < net.controls().count(); i++) {
-        auto& c = net.controls()[i];
-        if (std::strcmp(c.name, "addressing") == 0)
-            mm::applyControlValue(c, "{\"addressing\":1}", "addressing", mm::ApplyPolicy::Clamp);
+// Switch the wired interface to Static with this address through the normal control-apply path.
+void setStatic(mm::EthernetModule& eth, const char* ipJson) {
+    for (uint8_t i = 0; i < eth.controls().count(); i++) {
+        auto& c = eth.controls()[i];
+        if (std::strcmp(c.name, "ipSettings") == 0)
+            mm::applyControlValue(c, "{\"ipSettings\":1}", "ipSettings", mm::ApplyPolicy::Clamp);
         else if (std::strcmp(c.name, "ip") == 0)
             mm::applyControlValue(c, ipJson, "ip", mm::ApplyPolicy::Clamp);
     }
 }
+
+// A network module with its wired interface, as main wires them.
+struct WiredNetwork {
+    mm::NetworkModule net;
+    mm::EthernetModule eth;
+    WiredNetwork() {
+        net.addChild(&eth);
+        net.setEthernet(&eth);
+    }
+    ~WiredNetwork() { net.removeChild(&eth); }   // the child is a member, not the tree's to free
+};
 
 const char* networkMode(mm::NetworkModule& net) {
     for (uint8_t i = 0; i < net.controls().count(); i++)
@@ -151,6 +140,29 @@ const char* networkMode(mm::NetworkModule& net) {
     return "";
 }
 }  // namespace
+
+// The wired interface has its own IP settings, named as routers and phones name them, DHCP by default with the static fields hidden.
+TEST_CASE("Ethernet's IP settings: DHCP by default, Static reveals the fields") {
+    if constexpr (!mm::platform::hasEthernet && !mm::platform::previewsEthernetControls) return;
+    mm::EthernetModule eth;
+    eth.rebuildControls();
+    const mm::ControlDescriptor* ipSettings = nullptr;
+    const mm::ControlDescriptor* ip = nullptr;
+    for (uint8_t i = 0; i < eth.controls().count(); i++) {
+        const auto& c = eth.controls()[i];
+        if (std::strcmp(c.name, "ipSettings") == 0) ipSettings = &c;
+        else if (std::strcmp(c.name, "ip") == 0) ip = &c;
+    }
+    REQUIRE(ipSettings != nullptr);
+    REQUIRE(ip != nullptr);
+    CHECK(std::strcmp(reinterpret_cast<const char* const*>(ipSettings->aux)[0], "DHCP") == 0);
+    CHECK(ip->hidden);
+    CHECK(eth.configuredIp() == nullptr);
+    setStatic(eth, "{\"ip\":\"192.168.1.250\"}");
+    eth.rebuildControls();
+    CHECK(eth.isStatic());
+    CHECK(eth.configuredIp()[3] == 250);
+}
 
 // A cable on a network without DHCP gives itself 169.254.x.y. The desktop declares WiFi, so it plays the WiFi build: there that address must not end the cascade, and a lease that lands later must.
 TEST_CASE("a self-assigned Ethernet address keeps the cascade waiting on a WiFi build, and a lease ends it") {
@@ -177,10 +189,11 @@ TEST_CASE("Static mode pins its address over a self-assigned Ethernet one") {
     FrozenClock clock;
     mm::platform::setTestEthIPv4(linkLocal);
     {
-        mm::NetworkModule net;
+        WiredNetwork w;
+        auto& net = w.net;
         net.setup();
         net.rebuildControls();   // the scheduler builds them in the running system
-        setStatic(net, "{\"ip\":\"192.168.1.250\"}");
+        setStatic(w.eth, "{\"ip\":\"192.168.1.250\"}");
         uint32_t before = mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Eth);
         net.tick1s();   // WaitingEth: Static, link up, and the address on the wire is not the configured one
         CHECK(mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Eth) > before);
@@ -195,13 +208,14 @@ TEST_CASE("changing a static link-local address keeps Ethernet connected") {
     FrozenClock clock;
     mm::platform::setTestEthIPv4(linkLocal);
     {
-        mm::NetworkModule net;   // no WiFi credentials, so a drop would land on the access point
+        WiredNetwork w;   // no WiFi credentials, so a drop would land on the access point
+        auto& net = w.net;
         net.setup();
         net.rebuildControls();
-        setStatic(net, "{\"ip\":\"169.254.7.9\"}");
+        setStatic(w.eth, "{\"ip\":\"169.254.7.9\"}");
         net.tick1s();
         REQUIRE(std::string(networkMode(net)) == "Ethernet");
-        setStatic(net, "{\"ip\":\"169.254.7.10\"}");
+        setStatic(w.eth, "{\"ip\":\"169.254.7.10\"}");
         uint32_t before = mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Eth);
         net.tick1s();
         CHECK(mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Eth) > before);
@@ -212,21 +226,21 @@ TEST_CASE("changing a static link-local address keeps Ethernet connected") {
 
 // fixedPins stays inside its capacity; the applied-versus-pending half needs hardware, since hasEthernet is false here.
 TEST_CASE("fixedPins never writes past the capacity it is given") {
-    mm::NetworkModule net;
-    net.setup();
+    mm::EthernetModule eth;
+    eth.syncConfig();
     mm::MoonModule::FixedPin pads[16];
     // A sentinel past the capacity: the collector passes a real buffer size and a module that wrote beyond it would corrupt the stack frame above.
     pads[2].gpio = 0xEE;
-    CHECK(net.fixedPins(pads, 2) <= 2);
+    CHECK(eth.fixedPins(pads, 2) <= 2);
     CHECK(pads[2].gpio == 0xEE);
-    CHECK(net.fixedPins(nullptr, 16) == 0);   // a null sink is answered, not written through
+    CHECK(eth.fixedPins(nullptr, 16) == 0);   // a null sink is answered, not written through
 }
 
 // Two bugs an Olimex found: a board whose pins ARE a preset's map opens on it, and one that chose nothing adopts no preset.
 TEST_CASE("ethBoard seeds from the pins after a restore, not once before it") {
     if constexpr (!mm::platform::hasEthernet && !mm::platform::previewsEthernetControls) return;
 
-    auto boardOf = [](mm::NetworkModule& n) -> const char* {
+    auto boardOf = [](mm::EthernetModule& n) -> const char* {
         for (uint8_t i = 0; i < n.controls().count(); i++) {
             const auto& c = n.controls()[i];
             if (std::strcmp(c.name, "ethBoard") == 0) {
@@ -238,7 +252,7 @@ TEST_CASE("ethBoard seeds from the pins after a restore, not once before it") {
         return nullptr;
     };
 
-    mm::NetworkModule net;
+    mm::EthernetModule net;
     net.rebuildControls();
     REQUIRE(boardOf(net) != nullptr);
     // Nothing has chosen one and no type is set, so Custom is the honest answer rather than row 0, a real preset whose map would overwrite the chip's own defaults.
@@ -275,7 +289,7 @@ TEST_CASE("ethBoard seeds from the pins after a restore, not once before it") {
 TEST_CASE("a chip with one buildable preset defaults to it, not to Custom") {
     if constexpr (!mm::platform::hasEthernet && !mm::platform::previewsEthernetControls) return;
 
-    mm::NetworkModule net;
+    mm::EthernetModule net;
     net.rebuildControls();
 
     const char* board = nullptr;

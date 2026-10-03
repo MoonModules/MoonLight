@@ -162,26 +162,26 @@ static void improvSendDeviceInfo() {
 // these aren't offered (no STA to provision) and the esp_wifi_* calls aren't linked. ---
 
 static void improvSendWifiNetworks() {
-    // One network per frame as the protocol specifies, then an empty payload to end the list, bounded to keep the response set small.
-    // The scan needs the radio started, which on the chip whose radio lives on a companion happens only after its own prelude.
-    // A scan before that returns an error cleanly rather than scanning a cold link.
-    wifi_scan_config_t scan_cfg = {};
-    if (esp_wifi_scan_start(&scan_cfg, true /*block*/) != ESP_OK) {
+    // One network per frame as the protocol specifies, then an empty payload, the platform's scan waited for here since this is Improv's own task.
+    // A scan before the radio starts, which on a companion-radio chip follows its own prelude, fails cleanly rather than scanning a cold link.
+    if (!wifiScanStart()) {
         improvSendError(improv::ERROR_UNKNOWN);
         return;
     }
-    uint16_t n = 0;
-    esp_wifi_scan_get_ap_num(&n);
-    if (n > 10) n = 10;
-    wifi_ap_record_t records[10] = {};
-    esp_wifi_scan_get_ap_records(&n, records);
-    for (uint16_t i = 0; i < n; i++) {
+    WifiNetwork found[10] = {};
+    int n = -1;
+    for (int waited = 0; n < 0 && waited < 100; waited++) {   // up to 10 s @ 100 ms
+        vTaskDelay(pdMS_TO_TICKS(100));
+        n = wifiScanResults(found, 10);
+    }
+    if (n < 0) n = 0;
+    for (int i = 0; i < n; i++) {
         char rssi[8];
-        std::snprintf(rssi, sizeof(rssi), "%d", static_cast<int>(records[i].rssi));
+        std::snprintf(rssi, sizeof(rssi), "%d", static_cast<int>(found[i].rssi));
         std::vector<std::string> data = {
-            reinterpret_cast<const char*>(records[i].ssid),
+            found[i].ssid,
             rssi,
-            records[i].authmode == WIFI_AUTH_OPEN ? "NO" : "YES",
+            found[i].secured ? "YES" : "NO",
         };
         auto rpc = improv::build_rpc_response(improv::GET_WIFI_NETWORKS, data, false);
         improvSend(ImprovFrameType::RpcResponse, rpc);

@@ -6,6 +6,7 @@ and collects per-step performance measurements.
 """
 
 import argparse
+import atexit
 import json
 import os
 import subprocess
@@ -109,6 +110,11 @@ class Client:
     def delete(self, path: str):
         return self._send(urllib.request.Request(f"{self.base}{path}", method="DELETE"))
 
+    def patch(self, path: str, data: dict):
+        return self._send(urllib.request.Request(
+            f"{self.base}{path}", data=json.dumps(data).encode(), method="PATCH",
+            headers={"Content-Type": "application/json"}))
+
 
 def _today_iso() -> str:
     """ISO date stamp for set_by fields. Local timezone is fine — set_by is a
@@ -197,6 +203,101 @@ def _detect_target(state: dict, local: bool = True) -> str:
         return "desktop-" + str(model or "remote").strip().lower().replace(" ", "-")
     # Desktop fallback, from the one home every script shares (moondeck/_host.py).
     return desktop_target()
+
+
+# --- The host's own WiFi, for a scenario that walks a device's first setup from its access point. ---
+# The host joins the device's access point, loses its own network meanwhile, and is always put back:
+# a step does it, and atexit does it again for a run that stops in between.
+
+REGISTRY_FILE = ROOT / "moondeck" / "moondeck.json"
+# The access point's address, which the firmware's captive portal fixes (src/core/util/CaptivePortal.h).
+ACCESS_POINT_ADDRESS = "4.3.2.1"
+
+
+def _registry_network(name: str) -> dict:
+    """A network from the bench registry, `{name, ssid, password}`; the registry is not in git, so credentials stay local."""
+    with open(REGISTRY_FILE, encoding="utf-8") as f:
+        for net in json.load(f).get("networks", []):
+            if net.get("name") == name:
+                wifi = net.get("wifi") or {}
+                return {"name": name, "ssid": wifi.get("ssid", ""), "password": wifi.get("password", "")}
+    raise KeyError(f"no network named {name!r} in {REGISTRY_FILE.name}")
+
+
+def _wifi_device() -> str:
+    """The host's WiFi interface (en0 on most Macs), read rather than assumed."""
+    out = subprocess.run(["networksetup", "-listallhardwareports"], capture_output=True, text=True).stdout
+    lines = out.splitlines()
+    for i, line in enumerate(lines):
+        if line.strip() in ("Hardware Port: Wi-Fi", "Hardware Port: AirPort") and i + 1 < len(lines):
+            return lines[i + 1].split(":", 1)[1].strip()
+    raise RuntimeError("no WiFi interface found (this op needs macOS networksetup)")
+
+
+def _reachable(url: str, timeout_s: float) -> bool:
+    """Whether `url` answers within the time, polled, since a join takes a few seconds to route."""
+    end = time.time() + timeout_s
+    while time.time() < end:
+        try:
+            with urllib.request.urlopen(url, timeout=3):
+                return True
+        except urllib.error.HTTPError:
+            return True   # any HTTP answer is an answer
+        except Exception:
+            time.sleep(1)
+    return False
+
+
+def _host_join(ssid: str, password: str, probe_url: str, timeout_s: float) -> str:
+    """Join `ssid` and wait until `probe_url` answers: "" on success, else why. macOS hides network names, so the probe is the proof."""
+    device = _wifi_device()
+    end = time.time() + timeout_s
+    last = ""
+    while time.time() < end:
+        cmd = ["networksetup", "-setairportnetwork", device, ssid] + ([password] if password else [])
+        out = subprocess.run(cmd, capture_output=True, text=True)
+        last = (out.stdout + out.stderr).strip()
+        if _reachable(probe_url, 10):
+            return ""
+        time.sleep(2)   # an access point still starting is not in the scan yet
+    return f"could not reach {probe_url} after joining {ssid!r} ({last or 'no message'})"
+
+
+class HostWifi:
+    """Where the host's WiFi is, so a run that moved it to a device's access point always moves it back."""
+
+    def __init__(self):
+        self.home = None   # the registry network to return to, set once the host leaves it
+
+    def restore(self):
+        if not self.home:
+            return
+        home, self.home = self.home, None
+        print(f"  HOST  back to {home['ssid']}")
+        device = _wifi_device()
+        subprocess.run(["networksetup", "-setairportnetwork", device, home["ssid"], home["password"]],
+                       capture_output=True, text=True)
+
+
+def _fill(value, ctx: dict):
+    """Fill `{network.ssid}`, `{network.password}` and `{device}` in a step's strings, so a scenario names no credential."""
+    if isinstance(value, str):
+        for key, sub in ctx.items():
+            value = value.replace("{" + key + "}", sub)
+        return value
+    if isinstance(value, dict):
+        return {k: _fill(v, ctx) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_fill(v, ctx) for v in value]
+    return value
+
+
+def _list_rows(client, module_id: str, key: str) -> list:
+    mod = client.get(_mod_path(module_id))
+    for c in mod.get("controls") or []:
+        if c.get("name") == key:
+            return c.get("value") or []
+    raise KeyError(f"{module_id} has no list {key!r}")
 
 
 def _uptime_seconds(client):
@@ -502,7 +603,8 @@ def _restore_tree(client, snapshot: list, current_state: dict) -> None:
 
 def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                  update_contract: bool = False,
-                 update_reason: str | None = None) -> dict:
+                 update_reason: str | None = None, named: bool = True,
+                 network: str | None = None) -> dict:
     """Run a scenario against a live device and return results.
 
     Mode handling (see docs/reference/testing.md § Scenario modes):
@@ -529,6 +631,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
 
     results = {"name": name, "steps": [], "passed": True, "skipped": False}
     created_modules = []  # mutate scenarios rarely add modules but the existing cleanup path is still useful
+    created_files = []    # files a write_file step created, removed at the end even when a later step stopped the run
     wrote_observations = [False]  # sentinel; flipped by each measure step that runs
     # Keyed by (step, target): the original contract block before --update-contract
     # mutated it (or None if no prior block existed). Used by the post-run gate to
@@ -536,6 +639,10 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
     # lands on a clean run.
     pending_contract_originals: dict = {}
 
+    if scenario.get("on_request") and not named:
+        print("\n  SKIP (on_request: runs only when named, since it takes the host off its network)")
+        results["skipped"] = True
+        return results
     if mode == "construct":
         print("\n  SKIP (mode=construct — runs in-process only; the live device's "
               "main.cpp owns the top-level shape)")
@@ -592,6 +699,27 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
         print(f"\n  WARN — couldn't pre-flight live module names: {e}")
     print(f"  Target: {target}")
     results["target"] = target
+
+    # A scenario that moves the host's WiFi runs on a registry network the host and the device share, named by --network, and its steps fill in from it.
+    ctx: dict = {}
+    host = HostWifi()
+    home_base = client.base
+    net = None
+    if scenario.get("host_network"):
+        try:
+            if not network:
+                raise KeyError("this scenario moves the host's WiFi: name the network it returns to with --network")
+            net = _registry_network(network)
+        except Exception as e:
+            print(f"\n  FAIL — {e}")
+            results["passed"] = False
+            return results
+        ctx["network.ssid"], ctx["network.password"] = net["ssid"], net["password"]
+        for m in (live_state or {}).get("modules", []):
+            for c in m.get("controls", []):
+                if m.get("type") == "SystemModule" and c.get("name") == "deviceName":
+                    ctx["device"] = str(c.get("value") or "")
+        atexit.register(host.restore)   # a run that stops on the access point still puts the host back
 
     # Snapshot the board's user-added tree so we can restore it after the scenario:
     # a scenario that clear_children's a container (to get a known canvas) destroys the
@@ -652,6 +780,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
     for step_index, step in enumerate(scenario.get("steps", [])):
         step_name = step.get("name", "?")
         op = step.get("op", "")
+        fstep = _fill(step, ctx) if ctx else step   # a filled copy, so credentials never reach the file the run writes back
         step_result = {"name": step_name, "op": op}
 
         # An optional measure/control on a module whose optional add was skipped is a
@@ -744,10 +873,18 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                         results["passed"] = False
                 else:
                     try:
+                        # Only a file the scenario creates is removed at the end: one that was already there is the device's own.
+                        try:
+                            client.get_text(f"/api/file?path={urllib.parse.quote(path_)}")
+                            existed = True
+                        except urllib.error.HTTPError as he:
+                            existed = he.code != 404
                         resp = client.post_text(f"/api/file?path={urllib.parse.quote(path_)}", body)
                         # The device answers {"ok":true}; anything else is a failure, including a
                         # body that is not the JSON object this endpoint documents.
                         ok = isinstance(resp, dict) and resp.get("ok") is True
+                        if ok and not existed:
+                            created_files.append(path_)
                         step_result["status"] = "ok" if ok else "error"
                         if ok:
                             print(f"  WRITE {path_} ({len(body)} bytes)")
@@ -771,6 +908,8 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                     step_result["error"] = "delete_file step has no `path`"
                     results["passed"] = False
                 else:
+                    if path_ in created_files:
+                        created_files.remove(path_)   # removed here, so the end-of-run cleanup leaves it be
                     try:
                         client.delete(f"/api/dir?path={urllib.parse.quote(path_)}")
                     except Exception:
@@ -791,6 +930,26 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                         step_result["error"] = f"{path_} is still there"
                         print(f"  DELETE {path_}: FAILED: still there")
                         results["passed"] = False
+
+            elif op == "reboot" and step.get("wait") is False:
+                # Restart without waiting, for a device that comes back somewhere the host cannot reach yet, such as on its own access point.
+                # A refusal is retried, since an answering device is up; its own words are kept for the report.
+                refusal = ""
+                for _ in range(3):
+                    try:
+                        client.post("/api/reboot", {})
+                        refusal = ""
+                        break
+                    except urllib.error.HTTPError as re_:
+                        refusal = f"/api/reboot returned HTTP {re_.code}: {re_.read().decode('utf-8', 'replace')[:120]}"
+                        time.sleep(1)
+                    except Exception:
+                        refusal = ""
+                        break   # the device goes away mid-response
+                if refusal:
+                    raise RuntimeError(refusal)
+                step_result["status"] = "ok"
+                print("  REBOOT — not waiting")
 
             elif op == "reboot":
                 # Restart and wait, so a later expect_control proves what SURVIVED rather than what
@@ -851,14 +1010,24 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                     print(f"  EXPECT {mod_id}.{key} — needs `equals` or `not_equals`")
                     results["passed"] = False
                     continue
-                want = _as_written(step["not_equals" if negated else "equals"])
-                try:
-                    mod = client.get(_mod_path(mod_id))
-                    got = next((c.get("value") for c in (mod.get("controls") or [])
-                                if c.get("name") == key), None)
-                except Exception as ce:
+                want = _as_written(fstep["not_equals" if negated else "equals"])
+                # `within` polls until it holds, for a value the device reaches on its own time, such as after a join.
+                deadline = time.time() + float(step.get("within", 0))
+                while True:
+                    read_error = None
+                    try:
+                        mod = client.get(_mod_path(mod_id))
+                        got = next((c.get("value") for c in (mod.get("controls") or [])
+                                    if c.get("name") == key), None)
+                    except Exception as ce:
+                        got, read_error = None, ce
+                    holds = got is not None and ((_as_written(got) != want) if negated else (_as_written(got) == want))
+                    if holds or time.time() >= deadline:
+                        break
+                    time.sleep(1)
+                if read_error is not None:
                     step_result["status"] = "error"
-                    print(f"  EXPECT {mod_id}.{key} — could not read ({ce})")
+                    print(f"  EXPECT {mod_id}.{key} — could not read ({read_error})")
                     results["passed"] = False
                     continue
                 if got is None:
@@ -984,6 +1153,113 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 step_result["status"] = "ok" if resp.get("ok") else "error"
                 print(f"  ~     {step.get('id', '?')} → {step.get('type', '?')}")
                 time.sleep(0.5)
+
+            elif op == "host_wifi":
+                # Move the host onto the device's access point or back to the registry network, and the runner's target with it.
+                if net is None:
+                    raise RuntimeError("host_wifi needs `host_network` on the scenario and --network on the run")
+                if step.get("join") == "access_point":
+                    host.home = host.home or net
+                    why = _host_join(ctx.get("device", ""), fstep.get("password", ""), f"http://{ACCESS_POINT_ADDRESS}/api/system",
+                                     float(step.get("timeout", 60)))
+                    if not why:
+                        client.base = f"http://{ACCESS_POINT_ADDRESS}"
+                else:
+                    host.home = None
+                    client.base = home_base
+                    why = _host_join(net["ssid"], net["password"], f"{home_base}/api/system",
+                                     float(step.get("timeout", 60)))
+                step_result["status"] = "error" if why else "ok"
+                print(f"  HOST  {'FAILED: ' + why if why else 'on ' + (ctx.get('device', '') if step.get('join') == 'access_point' else net['ssid'])}")
+                if why:
+                    results["passed"] = False
+
+            elif op == "list_row" and "add" in step:
+                # Add a row with the given fields, and with `to` move it to that position, as the card's Add and drag do.
+                mod_id, key = step["id"], step["key"]
+                route = f"/api/list/{urllib.parse.quote(mod_id, safe='')}/{urllib.parse.quote(key, safe='')}"
+                row_id = client.post(route, {}).get("id")
+                if row_id is None:
+                    raise RuntimeError(f"{mod_id}.{key} gave no id for the new row")
+                for field, value in fstep["add"].items():
+                    client.patch(f"{route}/{row_id}", {"field": field, "value": value})
+                if "to" in step:
+                    client.patch(f"{route}/{row_id}", {"to": step["to"]})
+                step_result["status"] = "ok"
+                print(f"  ROW   {mod_id}.{key} added {step['add']}{' at ' + str(step['to']) if 'to' in step else ''}")
+
+            elif op == "list_row":
+                # Find a row by its fields, then write one of its fields, press one of its buttons, delete it, or, with none of those, only expect it.
+                mod_id, key, match = step["id"], step["key"], fstep["match"]
+                deadline = time.time() + float(step.get("within", 0))
+                while True:
+                    try:
+                        rows = _list_rows(client, mod_id, key)
+                    except Exception:
+                        rows = []
+                    row = next((r for r in rows if all(str(r.get(k)) == str(v) for k, v in match.items())), None)
+                    if row is not None or time.time() >= deadline:
+                        break
+                    time.sleep(1)
+                where = f"{mod_id}.{key}[{step.get('match')}]"
+                if row is None:
+                    step_result["status"] = "ok" if step.get("optional") else "error"
+                    print(f"  ROW   {where} — {'absent, skipped (optional)' if step.get('optional') else 'no such row'}")
+                    if not step.get("optional"):
+                        results["passed"] = False
+                else:
+                    route = f"/api/list/{urllib.parse.quote(mod_id, safe='')}/{urllib.parse.quote(key, safe='')}/{row['id']}"
+                    if step.get("delete"):
+                        client.delete(route)
+                        print(f"  ROW   {where} deleted")
+                    elif "field" not in step:
+                        print(f"  ROW   {where} present")
+                    else:
+                        client.patch(route, {"field": step["field"], "value": fstep.get("value", "")})
+                        print(f"  ROW   {where}.{step['field']} set")
+                    step_result["status"] = "ok"
+
+            elif op == "expect_http":
+                # An absolute URL with redirects not followed, so a captive portal's own answer is what is checked.
+                class _NoRedirect(urllib.request.HTTPRedirectHandler):
+                    def redirect_request(self, *args, **kwargs):
+                        return None
+                url = fstep["url"]
+                request = url
+                if step.get("resolve") == "access_point":
+                    # Resolve at the access point's own DNS, as a phone does: macOS keeps a captive network's answers from ordinary apps until its sign-in completes.
+                    parts = urllib.parse.urlsplit(url)
+                    dig = subprocess.run(["dig", "+time=2", "+tries=3", "+short", f"@{ACCESS_POINT_ADDRESS}", parts.hostname or ""],
+                                         capture_output=True, text=True)
+                    resolved = (dig.stdout.strip().splitlines() or ["0.0.0.0"])[-1]
+                    print(f"  DNS   {ACCESS_POINT_ADDRESS} resolves {parts.hostname} to {resolved}")
+                    request = urllib.request.Request(urllib.parse.urlunsplit(parts._replace(netloc=resolved)),
+                                                     headers={"Host": parts.netloc})
+                # `within` polls too: a host that just joined a network resolves names only once its resolver took that network's server.
+                deadline = time.time() + float(step.get("within", 0))
+                while True:
+                    try:
+                        with urllib.request.build_opener(_NoRedirect).open(request, timeout=10) as resp:
+                            status, location = resp.status, resp.headers.get("Location", "")
+                    except urllib.error.HTTPError as he:
+                        status, location = he.code, he.headers.get("Location", "")
+                    except Exception as ue:
+                        status, location = 0, str(ue)
+                    holds = status == step["status"] and ("location" not in step or location == fstep["location"])
+                    if holds or time.time() >= deadline:
+                        break
+                    time.sleep(1)
+                if not holds and status == 0:
+                    # A name that did not resolve: show which servers the host asks, and what the device's own address answers.
+                    name = urllib.parse.urlsplit(url).hostname or ""
+                    servers = subprocess.run(["scutil", "--dns"], capture_output=True, text=True).stdout
+                    print("  DNS   host asks: " + ", ".join(sorted({l.split(":", 1)[1].strip() for l in servers.splitlines() if "nameserver[" in l})))
+                    dig = subprocess.run(["dig", "+time=2", "+tries=1", "+short", f"@{ACCESS_POINT_ADDRESS}", name], capture_output=True, text=True)
+                    print(f"  DNS   {ACCESS_POINT_ADDRESS} answers {name}: {(dig.stdout or dig.stderr).strip() or 'nothing'}")
+                step_result["status"] = "ok" if holds else "error"
+                print(f"  HTTP  {url} → {status}{' ' + location if location else ''}{'' if holds else '  (expected ' + str(step['status']) + ' ' + fstep.get('location', '') + ')'}")
+                if not holds:
+                    results["passed"] = False
 
             elif op == "measure":
                 # Pure measurement step (introduced for the build-up scenario shape).
@@ -1232,6 +1508,11 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
 
         results["steps"].append(step_result)
 
+    # The host back on its own network before anything else talks to the device, which is then there.
+    if host.home:
+        host.restore()
+    client.base = home_base
+
     # Cleanup: delete modules that were created by this scenario
     for module_id in reversed(created_modules):
         try:
@@ -1257,6 +1538,13 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
     put_back = _restore_controls(client, prior_controls)
     if put_back:
         print(f"  restored {put_back} control(s) the scenario had set")
+    # And the files it created that no step removed, after the controls, so nothing still selects a file as it goes.
+    for path_ in created_files:
+        try:
+            client.delete(f"/api/dir?path={urllib.parse.quote(path_)}")
+            print(f"  -     {path_} (cleanup)")
+        except Exception:
+            pass
 
     # Write the scenario JSON back if anything changed:
     #   - observed.<target> was updated by any measure step (every run); OR
@@ -1358,6 +1646,8 @@ def main():
                         help="Scenario name (without .json), or several separated by commas. Runs all if omitted.")
     parser.add_argument("--module", default=None,
                         help="Filter to scenarios whose top-level module / also matches.")
+    parser.add_argument("--network", default=None,
+                        help="Registry network (moondeck.json) the host and device share, for a scenario that moves the host's WiFi.")
     parser.add_argument("--settle", type=float, default=3.0,
                         help="Settle time in seconds between step and measurement")
     parser.add_argument("--update-baseline", action="store_true",
@@ -1425,7 +1715,7 @@ def main():
             continue
         result = run_scenario(client, path, args.settle,
                               update_contract=args.update_contract,
-                              update_reason=args.reason)
+                              update_reason=args.reason, named=bool(args.name), network=args.network)
         all_results[result["name"]] = result
         if not result["passed"]:
             all_passed = False

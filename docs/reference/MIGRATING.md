@@ -24,6 +24,28 @@ MoonLight ships **no migration code**: the persistence layer is robust by defaul
 
 ## Unreleased
 
+### WiFi has its own card under Network, with a list of known networks
+
+**Action: *re-set a control*.**
+
+The WiFi settings moved from the Network card to a new WiFi card below it: the network becomes the first row of `known`, with its IP settings, and `txPowerSetting` moved with it.
+A backup restored through the File Manager carries the network and the power cap across.
+Updated in place without a restore, the device knows no network: it opens its access point, where the network is entered again.
+A MoonBase recovery image from before this release reads no network from the new layout, so it also opens its own access point.
+Flash a current MoonBase to restore its WiFi join.
+
+### Ethernet has its own card under Network
+
+**Action: *re-set a control*.**
+
+The Ethernet settings moved from the Network card to a new Ethernet card below it: `ethBoard`, `ethType`, `ethPhyAddr` and the pins.
+The wired interface also has its own IP settings now: `ipSettings` (DHCP or Static) with `ip`, `gateway`, `subnet` and `dns`.
+Each known WiFi network has its own as well.
+A backup restored through the File Manager carries the Ethernet settings across, and gives the wired interface the IP settings the device had.
+Updated in place without a restore, the Ethernet card starts from its defaults.
+Pick the board under `ethBoard` again, and set a static address if the device used one on its cable.
+A device model from the web installer sets Ethernet on the new card.
+
 ### Light presets are fixture profiles
 
 **Action: *re-set a control*.**

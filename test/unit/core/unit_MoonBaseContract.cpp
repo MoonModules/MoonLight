@@ -1,14 +1,18 @@
 /// @module NetworkModule
 /// @also FilesystemModule
 
-/// MoonBase reads the WiFi credentials, the Ethernet wiring and the TX cap with a bounded 2048-byte prefix read of /.config/NetworkModule.json (moonbase/main/moonbase_main.cpp loadCredentials): a tiny image has no JSON parser and no room for the whole file, which also carries every child module's config. That bound is a cross-image contract with NetworkModule's control registration order, and nothing else pins it: a control added ABOVE these keys would push them out of the prefix and silently break MoonBase's network join (or its eth wiring) on every deployed 4 MB device. This test is the pin.
+/// MoonBase reads the WiFi credentials, the Ethernet wiring and the TX cap with a bounded 2048-byte prefix read of /.config/NetworkModule.json: a tiny image has no JSON parser and no room for the whole file, which also carries every child module's config. The keys now live on Network's Ethernet and WiFi children, the credentials as the first row of the WiFi child's known list.
 ///
-/// The eth controls exist only on Ethernet-capable builds, so this desktop-run test pins the bound indirectly: every top-level Network control serializes BEFORE the first child module key ("0.<name>"), so end-of-top-level plus a stated worst case for the ESP32-only keys must sit inside the prefix.
+/// MoonBase scrapes with core/util/ConfigScrape.h, and so does this test, against the file the application writes: if a control added above these keys pushed them out of the prefix, or the row shape changed, MoonBase would silently stop joining the network on every deployed 4 MB device. This test is the pin.
 
 #include "doctest.h"
 #include "core/system/FilesystemModule.h"
 #include "core/system/NetworkModule.h"
+#include "core/system/EthernetModule.h"
+#include "core/system/WiFiModule.h"
 #include "core/module/Scheduler.h"
+#include "core/util/ConfigScrape.h"
+#include "core/util/ModuleFactory.h"
 #include "platform/platform.h"
 
 #include <cstdio>
@@ -16,7 +20,7 @@
 #include <fstream>
 #include <string>
 
-// The keys MoonBase scrapes sit inside its 2048-byte prefix read of NetworkModule.json, with room for the ESP32-only eth block.
+// The keys MoonBase scrapes sit inside its 2048-byte prefix read of NetworkModule.json, read by the scraper MoonBase itself runs.
 TEST_CASE("NetworkModule.json keeps MoonBase's scraped keys inside its 2048-byte prefix read") {
     char tmpRoot[256];
     std::snprintf(tmpRoot, sizeof(tmpRoot), "/tmp/mm_moonbase_contract_%u",
@@ -25,16 +29,31 @@ TEST_CASE("NetworkModule.json keeps MoonBase's scraped keys inside its 2048-byte
     std::filesystem::create_directories(std::string(tmpRoot) + "/.config");
     mm::platform::fsSetRoot(tmpRoot);
 
+    mm::ModuleFactory::registerType<mm::EthernetModule>("EthernetModule");
+    mm::ModuleFactory::registerType<mm::WiFiModule>("WiFiModule");
     mm::Scheduler scheduler;
     auto* fs = new mm::FilesystemModule();
     fs->setTypeName("FilesystemModule");
     fs->setScheduler(&scheduler);
     auto* net = new mm::NetworkModule();
     net->setTypeName("NetworkModule");
+    // Wired as main wires them: the interfaces first, so their keys come before any other child's.
+    auto* eth = mm::ModuleFactory::create("EthernetModule");
+    auto* wifi = mm::ModuleFactory::create("WiFiModule");
+    eth->markWiredByCode();
+    wifi->markWiredByCode();
+    net->addChild(eth);
+    net->addChild(wifi);
+    net->setEthernet(static_cast<mm::EthernetModule*>(eth));
+    net->setWiFi(static_cast<mm::WiFiModule*>(wifi));
     scheduler.addModule(fs);
     scheduler.addModule(net);
     scheduler.setup();
 
+    net->setWifiCredentials("bench-ssid", "bench-password");
+    net->setTxPowerSetting(8);
+    // A second known network, which MoonBase must not take for the first.
+    net->setWifiCredentials("other-ssid", "other-password");
     net->setWifiCredentials("bench-ssid", "bench-password");
     net->markDirty();
     fs->flush();
@@ -45,29 +64,44 @@ TEST_CASE("NetworkModule.json keeps MoonBase's scraped keys inside its 2048-byte
     f.close();
 
     constexpr size_t kPrefixRead = 2048;   // moonbase_main.cpp loadCredentials buf size
-    // The ESP32-only additions to the top-level block that this desktop file cannot contain: 8 eth keys plus values (~260 bytes serialized) with margin.
-    constexpr size_t kEsp32OnlyBudget = 400;
+    // Room for what a device's file carries beyond this one: a worst-case 64-character passphrase escaped to twice its length, longer names, and margin.
+    constexpr size_t kDeviceBudget = 400;
+    const std::string prefix = content.substr(0, kPrefixRead - 1 - kDeviceBudget);
 
-    const auto ssidEnd = content.find("\"ssid\":\"bench-ssid\"");
-    const auto pwKey = content.find("\"password\":");
-    REQUIRE(ssidEnd != std::string::npos);
-    REQUIRE(pwKey != std::string::npos);
-    CHECK(ssidEnd < kPrefixRead - kEsp32OnlyBudget);
-    // The whole password VALUE fits too: a worst-case 64-char passphrase escaped to twice its length.
-    CHECK(pwKey + 12 + 2 * 64 + 2 < kPrefixRead - kEsp32OnlyBudget);
-
-    // Every top-level control precedes the first child-module key; with the ESP32-only budget on top, the whole scraped block stays inside the prefix.
-    const auto firstChild = content.find("\"0.");
-    if (firstChild != std::string::npos) {
-        CHECK(firstChild < kPrefixRead - kEsp32OnlyBudget);
-    } else {
-        // No children on this build: the whole file must fit with the budget to spare.
-        CHECK(content.size() < kPrefixRead - kEsp32OnlyBudget);
+    char ssid[64] = {}, password[64] = {};
+    REQUIRE(mm::configscrape::findFirstNetwork(prefix.c_str(), ssid, sizeof(ssid), password, sizeof(password)));
+    CHECK(std::string(ssid) == "bench-ssid");
+    CHECK(std::string(password) == "bench-password");
+    int tx = 0;
+    mm::configscrape::findInt(prefix.c_str(), "txPowerSetting", &tx);
+    CHECK(tx == 8);
+    // The Ethernet wiring is there too where this build previews it.
+    if constexpr (mm::platform::hasEthernet || mm::platform::previewsEthernetControls) {
+        int ethType = -2;
+        mm::configscrape::findInt(prefix.c_str(), "ethType", &ethType);
+        CHECK(ethType != -2);
     }
 
     scheduler.release();
     std::filesystem::remove_all(tmpRoot);
     mm::platform::fsSetRoot(".");
+}
+
+// The scraper matches a key at the top level or under a child, and never inside another key's name.
+TEST_CASE("the config scraper finds top-level and child keys, and only whole keys") {
+    const char* json = R"({"mDNS":true,"0.type":"EthernetModule","0.ethType":3,"1.known":[{"id":1,"ssid":"a\"b","password":"p"}],"myssid":"no"})";
+    int t = 0;
+    mm::configscrape::findInt(json, "ethType", &t);
+    CHECK(t == 3);
+    char ssid[16] = {}, pw[16] = {};
+    REQUIRE(mm::configscrape::findFirstNetwork(json, ssid, sizeof(ssid), pw, sizeof(pw)));
+    CHECK(std::string(ssid) == "a\"b");
+    CHECK(std::string(pw) == "p");
+    char mine[8] = {};
+    CHECK_FALSE(mm::configscrape::findString(json, "ssid2", mine, sizeof(mine)));
+    bool b = false;
+    mm::configscrape::findBool(json, "mDNS", &b);
+    CHECK(b);
 }
 
 // The OTA routes are the OTHER cross-image contract, and the one with two speakers: the browser drives an update by talking to the application, which hands over to MoonBase mid-flight, so the page keeps calling the same paths against a different image. The two therefore have to agree on the names, and nothing else pins that: MoonBase is a standalone project sharing no sources, so a route renamed on one side compiles cleanly on both and fails only on a device, halfway through an update, with the app already gone.

@@ -4,7 +4,8 @@
   "description": "The network settings a desktop cannot answer for: an Ethernet PHY cycled on real silicon, mDNS announcing over a real radio, and Home Assistant discovery announced and retracted against a real broker. The render loop has to survive every one of them.",
   "also": [
     "NetworkModule",
-    "MqttModule"
+    "MqttModule",
+    "EthernetModule"
   ],
   "live_only": true,
   "fixture": [
@@ -316,7 +317,7 @@
       "name": "eth-lan8720",
       "description": "An Ethernet PHY named on a running device, which calls ethStop and ethInit for real. On the desktop this is a seam that returns immediately.",
       "op": "set_control",
-      "id": "Network",
+      "id": "Ethernet",
       "key": "ethType",
       "value": 1
     },
@@ -324,7 +325,7 @@
       "name": "eth-ip101",
       "description": "A second RMII PHY, which shares the EMAC path but not its pin map.",
       "op": "set_control",
-      "id": "Network",
+      "id": "Ethernet",
       "key": "ethType",
       "value": 3
     },
@@ -332,7 +333,7 @@
       "name": "eth-w5500",
       "description": "The SPI-attached one, a different driver entirely: it tears down the bus rather than the EMAC.",
       "op": "set_control",
-      "id": "Network",
+      "id": "Ethernet",
       "key": "ethType",
       "value": 2
     },
@@ -340,14 +341,14 @@
       "name": "eth-none",
       "description": "Back to none, tearing the interface down again. Cycling is what finds a driver that survives one init but not two.",
       "op": "set_control",
-      "id": "Network",
+      "id": "Ethernet",
       "key": "ethType",
       "value": 0
     },
     {
       "name": "eth-back-to-none",
       "op": "expect_control",
-      "id": "Network",
+      "id": "Ethernet",
       "key": "ethType",
       "equals": 0
     },
@@ -434,7 +435,7 @@
     {
       "name": "eth-survived",
       "op": "expect_control",
-      "id": "Network",
+      "id": "Ethernet",
       "key": "ethType",
       "equals": 0
     }

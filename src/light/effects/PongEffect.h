@@ -100,6 +100,8 @@ public:
         render(cv);
     }
 
+    /// The grid column the ball is drawn in, for tests.
+    int32_t ballColumnForTest() const { return toGrid(bx_, width() > 1 ? width() - 1 : 1); }
     /// A paddle's center in court units, for tests.
     int32_t paddleForTest(uint8_t side) const { return py_[side < 2 ? side : 1]; }
     /// One side's points this game, for tests.
@@ -125,11 +127,15 @@ private:
         if (!human_[0]) chase(0, moved);
         if (!human_[1]) chase(1, moved);
 
+        // The ball turns one grid column in from each end, in front of the paddle rather than in it.
+        const int32_t courtW = width() > 1 ? width() - 1 : 1;
+        const int32_t left  = std::min<int32_t>(kCourtScale / courtW, kCourtScale / 2);
+        const int32_t right = kCourtScale - left;
         // A hit sends the ball back with a new drift, and a miss is a point for the other side.
-        if (dirX_ < 0 && bx_ <= kPaddleX) {
-            if (hits(0)) bounce(0); else point(1);
-        } else if (dirX_ > 0 && bx_ >= kCourtScale - kPaddleX) {
-            if (hits(1)) bounce(1); else point(0);
+        if (dirX_ < 0 && bx_ <= left) {
+            if (hits(0)) bounce(0, left); else point(1);
+        } else if (dirX_ > 0 && bx_ >= right) {
+            if (hits(1)) bounce(1, right); else point(0);
         }
     }
 
@@ -157,13 +163,13 @@ private:
         return d >= -half && d <= half;
     }
 
-    /// Send the ball back, where it landed on the paddle setting the new drift.
-    void bounce(uint8_t p) {
+    /// Send the ball back from the line `at` it turned on, where it landed on the paddle setting the new drift.
+    void bounce(uint8_t p, int32_t at) {
         const int32_t half = kCourtScale * paddle / 200;
         const int32_t off = half == 0 ? 0 : (by_ - py_[p]) * kMaxDrift / half;
         driftY_ = static_cast<int16_t>(off);
         dirX_ = static_cast<int8_t>(-dirX_);
-        bx_ = dirX_ > 0 ? kPaddleX : kCourtScale - kPaddleX;
+        bx_ = at;
         // Both react to the turn, since a paddle starting instantly is an unbeatable player.
         delay_[0] = react(0);
         delay_[1] = react(1);
@@ -213,10 +219,10 @@ private:
         const int32_t courtH = h > 1 ? h - 1 : 1;
         const RGB fg = colorFromPalette(*Palettes::active(), 200);
 
-        // The dashed center line, which is what says this is a court rather than two blocks.
+        // The dashed center line, alternating on and off, which is what says this is a court rather than two blocks.
         const lengthType netX = static_cast<lengthType>(w / 2);
         const RGB net = blend(fg, RGB{0, 0, 0}, 170);
-        for (lengthType y = 0; y < h; y += 3) draw::pixel(cv, {netX, y, 0}, net);
+        for (lengthType y = 0; y < h; y += 2) draw::pixel(cv, {netX, y, 0}, net);
 
         // Each side's score centered in its half, where the court has room for the digits.
         const fonts::Font& font = fonts::kFont4x6;
@@ -234,13 +240,13 @@ private:
         const int32_t half = courtH * paddle / 200;
         for (uint8_t p = 0; p < 2; p++) {
             const lengthType px = p == 0 ? 0 : static_cast<lengthType>(w - 1);
-            const int32_t cy = py_[p] * courtH / kCourtScale;
+            const int32_t cy = toGrid(py_[p], courtH);   // placed as the ball is, so they line up
             for (int32_t y = cy - half; y <= cy + half; y++)
                 if (y >= 0 && y < h) draw::pixel(cv, {px, static_cast<lengthType>(y), 0}, fg);
         }
 
-        const lengthType bxp = static_cast<lengthType>(bx_ * courtW / kCourtScale);
-        const lengthType byp = static_cast<lengthType>(by_ * courtH / kCourtScale);
+        const lengthType bxp = static_cast<lengthType>(toGrid(bx_, courtW));
+        const lengthType byp = static_cast<lengthType>(toGrid(by_, courtH));
         if (spriteBall) {
             // The sprite faces its travel, as every other sprite in the project does.
             spritecast::draw(cv, kind_, entry_, bxp, byp, size == 0 ? 1 : size, dirX_ < 0,
@@ -250,9 +256,11 @@ private:
         }
     }
 
+    /// A court position on a grid axis `span` pixels long, rounded to the nearest, so the ball spends as long on the column in front of either paddle.
+    static int32_t toGrid(int32_t v, int32_t span) { return (v * span + kCourtScale / 2) / kCourtScale; }
+
     /// The court is fixed point, so a position is a fraction scaled to the grid only when drawn.
     static constexpr int32_t  kCourtScale = 4096;
-    static constexpr int32_t  kPaddleX    = 96;     ///< how far in from each end a paddle sits
     static constexpr int32_t  kDriftScale = 256;    ///< drift is a fraction of forward travel
     static constexpr int32_t  kMaxDrift   = 320;    ///< the steepest angle a bounce can produce
     static constexpr int32_t  kMaxAim     = 220;    ///< how far off center a paddle aims

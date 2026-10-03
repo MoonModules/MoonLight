@@ -1,0 +1,123 @@
+{
+  "name": "scenario_AccessPoint_first_setup_from_its_own_network",
+  "module": "AccessPointModule",
+  "mode": "mutate",
+  "also": [
+    "WiFiModule",
+    "NetworkModule",
+    "HttpServerModule"
+  ],
+  "on_request": true,
+  "host_network": true,
+  "description": "First setup the way a user does it, with this computer as the phone. The device forgets the network, restarts and opens its access point; the computer joins it and finds the sign-in redirect; the network is picked from the scan, the password typed and Connect pressed; the computer follows to the device on the network. It takes the computer off its network for a few minutes, so it runs only when named, with --network naming a moondeck.json network that the device reaches on 2.4 GHz and that it knows no other network beside.",
+  "steps": [
+    {
+      "name": "opens-on-failure",
+      "description": "The default, so the access point opens when nothing joins.",
+      "op": "set_control",
+      "id": "AccessPoint",
+      "key": "opens",
+      "value": 0
+    },
+    {
+      "name": "forget-the-network",
+      "description": "A device that never knew it, as on first setup.",
+      "op": "list_row",
+      "id": "WiFi",
+      "key": "known",
+      "match": {"ssid": "{network.ssid}"},
+      "delete": true,
+      "optional": true
+    },
+    {
+      "name": "restart-with-nothing-to-join",
+      "description": "Nothing it knows is in range, so it opens its access point.",
+      "op": "reboot",
+      "wait": false
+    },
+    {
+      "name": "join-its-access-point",
+      "description": "The computer joins the network named after the device.",
+      "op": "host_wifi",
+      "join": "access_point",
+      "timeout": 90
+    },
+    {
+      "name": "a-phone-sees-the-sign-in-screen",
+      "description": "The check every phone makes on joining resolves to the access point and is sent to the UI, which is what shows it the sign-in screen. Resolved at the access point as a phone does, since macOS holds a captive network's answers back from other apps.",
+      "op": "expect_http",
+      "resolve": "access_point",
+      "url": "http://connectivitycheck.gstatic.com/generate_204",
+      "status": 302,
+      "location": "http://4.3.2.1/?open=WiFi",
+      "within": 20
+    },
+    {
+      "name": "type-the-password",
+      "description": "The access point scanned on opening, so the network is listed; its password goes into its row.",
+      "op": "list_row",
+      "id": "WiFi",
+      "key": "available",
+      "match": {"ssid": "{network.ssid}"},
+      "field": "password",
+      "value": "{network.password}",
+      "within": 30
+    },
+    {
+      "name": "connect",
+      "op": "list_row",
+      "id": "WiFi",
+      "key": "available",
+      "match": {"ssid": "{network.ssid}"},
+      "field": "connect",
+      "value": ""
+    },
+    {
+      "name": "back-on-the-access-point",
+      "description": "The join moves the radio to the router's channel, which knocks the computer off; the access point holds for two minutes, so it rejoins.",
+      "op": "host_wifi",
+      "join": "access_point",
+      "timeout": 60
+    },
+    {
+      "name": "the-card-links-to-the-device",
+      "description": "Joined: the card shows the address to follow.",
+      "op": "expect_control",
+      "id": "WiFi",
+      "key": "address",
+      "not_equals": "",
+      "within": 40
+    },
+    {
+      "name": "follow-it-home",
+      "description": "The computer goes back to its network, where the device now is.",
+      "op": "host_wifi",
+      "join": "home",
+      "timeout": 90
+    },
+    {
+      "name": "on-the-network",
+      "op": "expect_control",
+      "id": "Network",
+      "key": "mode",
+      "equals": "WiFi STA",
+      "within": 30
+    },
+    {
+      "name": "found-by-its-name",
+      "description": "Its .local name reaches it too, which is the link a phone that left the access point follows.",
+      "op": "expect_http",
+      "url": "http://{device}.local/api/system",
+      "status": 200,
+      "within": 60
+    },
+    {
+      "name": "remembered",
+      "description": "Joined, so the network is known now, and the next restart joins it.",
+      "op": "list_row",
+      "id": "WiFi",
+      "key": "known",
+      "match": {"ssid": "{network.ssid}"}
+    }
+  ]
+}

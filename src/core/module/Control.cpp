@@ -14,6 +14,9 @@
 
 namespace mm {
 
+/// The longest option or palette name a value is saved and matched by; a parsed value longer than this was truncated, so it names nothing.
+constexpr size_t kMaxLabel = 63;
+
 const char* controlTypeName(ControlType t) {
     switch (t) {
         case ControlType::Uint8:       return "uint8";
@@ -71,7 +74,7 @@ bool hasDefault(ControlType t) {
     return t != ControlType::Password;
 }
 
-void writeControlValue(JsonSink& sink, const ControlDescriptor& c) {
+void writeControlValue(JsonSink& sink, const ControlDescriptor& c, bool saving) {
     switch (c.type) {
         case ControlType::Uint8:
             sink.appendf("%u", *static_cast<uint8_t*>(c.ptr));
@@ -115,7 +118,7 @@ void writeControlValue(JsonSink& sink, const ControlDescriptor& c) {
         case ControlType::Palette:
             // persistLabel: the NAME, since a scripted palette's index moves as files come and go; the swatches ride in writeControlMetadata.
             if (c.persistLabel && c.aux) {
-                char name[64] = {};
+                char name[kMaxLabel + 1] = {};
                 JsonSink names(name, sizeof(name));
                 names.requestName(*static_cast<uint8_t*>(c.ptr));
                 reinterpret_cast<PaletteOptionsFn>(c.aux)(names);
@@ -141,7 +144,9 @@ void writeControlValue(JsonSink& sink, const ControlDescriptor& c) {
                 const uint8_t n = src->listRowCount();
                 for (uint8_t r = 0; r < n; r++) {
                     if (r > 0) sink.append(",");
-                    src->writeListRow(sink, r);
+                    // Saving writes what the file keeps, which may be more than the collapsed row shows.
+                    if (saving) src->writeListRowSaved(sink, r);
+                    else src->writeListRow(sink, r);
                 }
             }
             sink.append("]");
@@ -340,9 +345,9 @@ ApplyResult applyControlValue(const ControlDescriptor& c,
             // Match the string against the options and use that row; fall back to the numeric index otherwise.
             // Select-only: a Select's aux IS the options array (const char* const*); Palette's aux is a PaletteOptionsFn (a function pointer), so it must not reach this reinterpret_cast. parseString silently truncates a value longer than the buffer, and a truncated label could spuriously equal a real option that happens to share its prefix.
             // Guard by sizing the buffer past any real option label AND rejecting a value that fills it: a label that reaches the cap is longer than any option (or was truncated to it), so it cannot legitimately match, treat it as "no such option" rather than risk a prefix match.
-            char label[64] = {};
+            char label[kMaxLabel + 2] = {};   // one past the longest name, so a longer value shows as such
             mm::json::parseString(json, key, label, sizeof(label));
-            const bool overlong = std::strlen(label) >= sizeof(label) - 1;
+            const bool overlong = std::strlen(label) > kMaxLabel;
             if (label[0]) {
                 auto* options = reinterpret_cast<const char* const*>(c.aux);
                 if (options && !overlong) {
@@ -380,12 +385,12 @@ ApplyResult applyControlValue(const ControlDescriptor& c,
             if (c.max == 0) return policy == ApplyPolicy::Strict ? ApplyResult::OutOfRange : ApplyResult::Ok;
             const int hi = c.max - 1;
             // A name as well as an index, resolved through the options function's name request since aux is a function, not an array.
-            char label[64] = {};
+            char label[kMaxLabel + 2] = {};   // one past the longest name, so a longer value shows as such
             mm::json::parseString(json, key, label, sizeof(label));
             if (label[0] && c.aux) {
-                if (std::strlen(label) < sizeof(label) - 1) {   // one that fills the buffer was truncated, so it names nothing
+                if (std::strlen(label) <= kMaxLabel) {
                     for (int i = 0; i <= hi; i++) {
-                        char name[sizeof(label)] = {};
+                        char name[kMaxLabel + 1] = {};
                         JsonSink sink(name, sizeof(name));
                         sink.requestName(static_cast<uint8_t>(i));
                         reinterpret_cast<PaletteOptionsFn>(c.aux)(sink);

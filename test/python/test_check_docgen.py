@@ -1531,3 +1531,21 @@ def test_a_private_nested_type_gets_no_page_however_well_documented(tmp_path):
     pages = gen_api._class_to_header(tmp_path)
     assert "mm-Outer" in pages and "mm-Outer-Shown" in pages
     assert "mm-Outer-Hidden" not in pages
+
+
+def test_a_type_nested_inside_a_private_one_gets_no_page(tmp_path):
+    """Public inside a private nested type is still out of reach of every caller, so its comment must not publish it either."""
+    import gen_api
+    def compound(kind, name, inners="", brief=""):
+        return (f'<doxygen><compounddef kind="{kind}"><compoundname>{name}</compoundname>{inners}'
+                f'<briefdescription><para>{brief}</para></briefdescription>'
+                f'<location file="src/core/x.h"/></compounddef></doxygen>')
+    (tmp_path / "classmm_1_1Outer.xml").write_text(compound(
+        "class", "mm::Outer", '<innerclass prot="private">mm::Outer::Hidden</innerclass>', "the outer class"))
+    (tmp_path / "structmm_1_1Outer_1_1Hidden.xml").write_text(compound(
+        "struct", "mm::Outer::Hidden", '<innerclass prot="public">mm::Outer::Hidden::Deeper</innerclass>', "documented"))
+    (tmp_path / "structmm_1_1Outer_1_1Hidden_1_1Deeper.xml").write_text(compound(
+        "struct", "mm::Outer::Hidden::Deeper", brief="documented too"))
+    pages = gen_api._class_to_header(tmp_path)
+    assert "mm-Outer" in pages
+    assert "mm-Outer-Hidden" not in pages and "mm-Outer-Hidden-Deeper" not in pages

@@ -32,8 +32,9 @@
         "parent_id": "Drivers"
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "EthernetModule",
+        "id": "Ethernet",
+        "parent_id": "Network",
         "controls": {
           "ethBoard": "Classic RMII"
         }
@@ -323,8 +324,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "EthernetModule",
+        "id": "Ethernet",
+        "parent_id": "Network",
         "controls": {
           "ethBoard": "Classic RMII (no reset)"
         }
@@ -562,8 +564,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "WiFiModule",
+        "id": "WiFi",
+        "parent_id": "Network",
         "controls": {
           "txPowerSetting": 8
         }
@@ -626,8 +629,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "WiFiModule",
+        "id": "WiFi",
+        "parent_id": "Network",
         "controls": {
           "txPowerSetting": 8
         }
@@ -757,8 +761,9 @@
         "parent_id": "Effects"
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "EthernetModule",
+        "id": "Ethernet",
+        "parent_id": "Network",
         "controls": {
           "ethBoard": "P4-NANO"
         }
@@ -809,8 +814,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "EthernetModule",
+        "id": "Ethernet",
+        "parent_id": "Network",
         "controls": {
           "ethBoard": "Classic RMII"
         }
@@ -858,8 +864,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "EthernetModule",
+        "id": "Ethernet",
+        "parent_id": "Network",
         "controls": {
           "ethBoard": "Custom",
           "ethType": 3,
@@ -918,8 +925,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "EthernetModule",
+        "id": "Ethernet",
+        "parent_id": "Network",
         "controls": {
           "ethBoard": "Custom",
           "ethType": 3,
@@ -988,8 +996,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "EthernetModule",
+        "id": "Ethernet",
+        "parent_id": "Network",
         "controls": {
           "ethBoard": "P4-NANO"
         }
@@ -1055,8 +1064,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "EthernetModule",
+        "id": "Ethernet",
+        "parent_id": "Network",
         "controls": {
           "ethBoard": "P4-NANO"
         }
@@ -1104,8 +1114,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "EthernetModule",
+        "id": "Ethernet",
+        "parent_id": "Network",
         "controls": {
           "ethBoard": "S31 CoreBoard"
         }
@@ -1186,8 +1197,9 @@
         "parent_id": "Drivers"
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "WiFiModule",
+        "id": "WiFi",
+        "parent_id": "Network",
         "controls": {
           "txPowerSetting": 8
         }
@@ -1244,8 +1256,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "WiFiModule",
+        "id": "WiFi",
+        "parent_id": "Network",
         "controls": {
           "txPowerSetting": 8
         }
@@ -1301,8 +1314,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "WiFiModule",
+        "id": "WiFi",
+        "parent_id": "Network",
         "controls": {
           "txPowerSetting": 8
         }
@@ -1348,8 +1362,9 @@
         }
       },
       {
-        "type": "NetworkModule",
-        "id": "Network",
+        "type": "WiFiModule",
+        "id": "WiFi",
+        "parent_id": "Network",
         "controls": {
           "txPowerSetting": 8
         }

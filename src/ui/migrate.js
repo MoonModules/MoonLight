@@ -13,8 +13,7 @@
 //  - Three honesty levels, matching what an entry actually preserves: plain renames map
 //    silently-but-reported; deterministic value moves `set` the new value; anything
 //    chip-dependent or semantics-changing gets a "review" report entry instead of a guess.
-//  - A future non-rename break slots in as a transform stage beside applyMigrations, add the
-//    mechanism when the first such break lands, not before.
+//  - A control that moves to a wired child module is a CHILD_MOVES entry: a transform stage after the renames, the one non-rename break so far.
 
 // Old .config filename → new (the file IS the module's typeName).
 export const FILE_RENAMES = {
@@ -148,6 +147,69 @@ export const PRESET_VALUE_RENAMES = {
     "layer": { to: "effects", date: "2026-08-08" },
 };
 
+// Controls that moved from a container onto a wired child, keyed by the container's type.
+// A moved key leaves the container; a copied one stays, because the container still reads it; a `row` entry folds keys into the first row of one of the child's lists.
+export const CHILD_MOVES = {
+    "NetworkModule": [
+        // The wired interface became Network's Ethernet child; its IP settings start as the shared ones were, which the WiFi entry below then takes for its network.
+        {
+            child: "EthernetModule", date: "2026-10-03",
+            move: ["ethBoard", "ethType", "ethPhyAddr", "ethRstGpio", "ethMdcGpio", "ethMdioGpio",
+                   "ethClockGpio", "ethClockExtIn", "ethSpiMiso", "ethSpiMosi", "ethSpiSck", "ethSpiCs",
+                   "ethSpiIrq"],
+            copy: { addressing: "ipSettings", ip: "ip", gateway: "gateway", subnet: "subnet", dns: "dns" },
+        },
+        // The station became Network's WiFi child: the one network becomes the first known one, keeping the IP settings it had.
+        {
+            child: "WiFiModule", date: "2026-10-03",
+            move: ["txPowerSetting"],
+            row: { list: "known", key: "ssid",
+                   fields: { ssid: "ssid", password: "password", addressing: "ipSettings",
+                             ip: "ip", gateway: "gateway", subnet: "subnet", dns: "dns" } },
+        },
+    ],
+};
+
+// Move a container's controls onto its wired children, creating a child's entry at the next free index when the backup predates it (the device matches wired children by type).
+function moveToChild(obj, file, report) {
+    const stem = file.slice(file.lastIndexOf("/") + 1, -".json".length);
+    const moves = CHILD_MOVES[stem];
+    if (!moves) return obj;
+    let out = { ...obj };
+    for (const mv of moves) {
+        const has = (k) => Object.prototype.hasOwnProperty.call(out, k);
+        const moving = (mv.move || []).filter(has);
+        // Copied only alongside a move, so a device that never had the child does not gain one.
+        const copying = moving.length ? Object.keys(mv.copy || {}).filter(has) : [];
+        // A row only where its identifying key has a value, so an unconfigured backup gains no empty row.
+        const rowKeys = mv.row && has(mv.row.key) && out[mv.row.key] !== ""
+                      ? Object.keys(mv.row.fields).filter(has) : [];
+        const dropKeys = mv.row ? Object.keys(mv.row.fields).filter(has) : [];
+        for (const k of rowKeys.length ? [] : dropKeys) delete out[k];   // nothing to carry, so the keys go
+        if (!moving.length && !copying.length && !rowKeys.length) continue;
+        let n = 0;
+        while (has(`${n}.type`) && out[`${n}.type`] !== mv.child) n++;
+        if (!has(`${n}.type`)) out[`${n}.type`] = mv.child;
+        for (const k of moving) {
+            out[`${n}.${k}`] = out[k];
+            delete out[k];
+            report.push({ kind: "renamed", where: `${file} ${k}`, detail: `moved to ${mv.child} (${mv.date})` });
+        }
+        for (const k of copying) {
+            out[`${n}.${mv.copy[k]}`] = out[k];
+            report.push({ kind: "renamed", where: `${file} ${k}`, detail: `copied to ${mv.child} as ${mv.copy[k]} (${mv.date})` });
+        }
+        if (rowKeys.length) {
+            const row = { id: 1 };
+            for (const k of Object.keys(mv.row.fields)) if (has(k)) row[mv.row.fields[k]] = out[k];
+            out[`${n}.${mv.row.list}`] = [row];
+            report.push({ kind: "renamed", where: `${file} ${rowKeys.join(", ")}`, detail: `moved to ${mv.child}'s ${mv.row.list} list (${mv.date})` });
+        }
+        for (const k of dropKeys) delete out[k];
+    }
+    return out;
+}
+
 // Does `type` fall under an entry's onTypes scope? Exact name, or "*Suffix" wildcard.
 function typeInScope(onTypes, type) {
     if (type === undefined) return false;   // orphan chain: leave the key untouched
@@ -243,7 +305,7 @@ export function applyMigrations(files) {
         if (newPath.startsWith("/.config/") && newPath.endsWith(".json")) {
             try {
                 const parsed = JSON.parse(content);
-                out[newPath] = JSON.stringify(renameKeys(parsed, newPath, report));
+                out[newPath] = JSON.stringify(moveToChild(renameKeys(parsed, newPath, report), newPath, report));
                 continue;
             } catch (_) {
                 report.push({ kind: "review", where: newPath, detail: "not valid JSON; restored as-is" });

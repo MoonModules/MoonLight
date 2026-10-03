@@ -1152,16 +1152,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const d = (b.modules || []).find(m => /LedDriver$/.test(m.type || ""));
         return d ? d.type.replace(/Driver$/, "") : null;
       }
-      // A supported capability is "active" (configured) when deviceModels.json has a module
-      // backing it. The capability→module link is implicit in the data, so this map
-      // names it in one place (bespoke, but it just reads the modules[] already there —
-      // no duplicated `active` field to drift). A capability with no entry here, or no
-      // matching module, stays merely "supported". Each predicate gets the whole module
-      // object so it can inspect controls — needed to tell Ethernet from WiFi: both ride
-      // NetworkModule, but Ethernet is wired only when the device's NetworkModule
-      // carries an ethType control set to a real PHY (not absent / "None"/0). WiFi is
-      // active wherever NetworkModule exists (the radio is always available); a device
-      // that lists WiFi as supported but ships no NetworkModule entry stays "supported".
+      // A supported capability is "active" (configured) when deviceModels.json has a module backing it.
+      // The capability→module link is implicit in the data, so this map names it in one place, reading the modules[] already there rather than a duplicated `active` field that could drift.
+      // A capability with no entry here, or no matching module, stays merely "supported".
+      // Each predicate gets the whole module, so it can inspect controls: Ethernet is wired only when its entry names a board or a real PHY (not absent, "None" or 0).
+      // WiFi is active wherever the device configures its network at all, since the radio is always there; one that lists WiFi but ships no network entry stays "supported".
       const ethConfigured = (m) => {
         const c = m.controls;
         if (!c) return false;
@@ -1174,8 +1169,8 @@ document.addEventListener('DOMContentLoaded', () => {
       };
       const CAP_MODULE = {
         LEDs:     m => /LedDriver$/.test(m.type || ""),
-        Ethernet: m => m.type === "NetworkModule" && ethConfigured(m),
-        WiFi:     m => m.type === "NetworkModule",
+        Ethernet: m => m.type === "EthernetModule" && ethConfigured(m),
+        WiFi:     m => /^(Network|Ethernet|WiFi)Module$/.test(m.type || ""),
         Audio:    m => /^Audio/.test(m.type || ""),
       };
       function capActive(b, cap) {

@@ -980,6 +980,19 @@ function selectModule(name) {
 ///
 /// A saved name that is no longer in the tree is ignored, leaving the fallback to pick.
 function restoreSelectedRoot() {
+    // A link naming a module opens it, each tab on the way selected: the captive portal sends a phone to `?open=WiFi`, where setup continues.
+    const wanted = new URLSearchParams(location.search).get("open");
+    if (wanted && state && Array.isArray(state.modules) && findModule(wanted)) {
+        let name = wanted;
+        for (let parent = findParentOf(name); parent; parent = findParentOf(name)) {
+            selectedTabs[parent.name] = name;
+            name = parent.name;
+        }
+        safeLocalSet(LS_TABS, JSON.stringify(selectedTabs));
+        selectedModule = name;
+        history.replaceState(null, "", location.pathname);   // a refresh then shows what the user chose since
+        return;
+    }
     if (selectedModule) return;                       // an explicit choice this session wins
     if (!state || !Array.isArray(state.modules) || !state.modules.length) return;
     const saved = lsRead(LS_SELECTED, null);
@@ -2984,22 +2997,7 @@ function createControl(moduleName, moduleType, ctrl) {
                 dragTs[key] = Date.now();
                 debounceSend(key, 500, () => sendControl(moduleName, ctrl.name, input.value));
             });
-            row.appendChild(input);
-            // Hold-to-peek button: reveals the stored password.
-            const peek = document.createElement("button");
-            peek.className = "peek-btn";
-            peek.type = "button";
-            peek.textContent = "👁";
-            peek.title = "Hold to reveal";
-            const show = () => { input.type = "text"; };
-            const hide = () => { input.type = "password"; };
-            peek.addEventListener("mousedown", show);
-            peek.addEventListener("mouseup", hide);
-            peek.addEventListener("mouseleave", hide);
-            peek.addEventListener("touchstart", (e) => { e.preventDefault(); show(); });
-            peek.addEventListener("touchend", hide);
-            peek.addEventListener("touchcancel", hide);   // a canceled touch fires no touchend
-            row.appendChild(peek);
+            row.append(input, peekButton(input));
             break;
         }
         case "select": {
@@ -3176,7 +3174,7 @@ function createControl(moduleName, moduleType, ctrl) {
             // to before). The flag flows through to both render paths via the opts object.
             if (ctrl.editable) list.dataset.editable = "true";
             buildListEntries(list, rows, details, new Set(),   // initial: nothing expanded
-                {editable: ctrl.editable, pads: ctrl.pads, gridCols: ctrl.gridCols, gridRows: ctrl.gridRows,
+                {editable: ctrl.editable, fixedRows: ctrl.fixedRows, pads: ctrl.pads, gridCols: ctrl.gridCols, gridRows: ctrl.gridRows,
                  moduleName: moduleName, ctrlName: ctrl.name, optionSets: ctrl.optionSets || {}});
             row.appendChild(list);
             break;
@@ -3943,11 +3941,13 @@ function buildListPads(container, rows, opts) {
 function buildListEntries(container, rows, details, openSet, opts) {
     if (opts && opts.pads) { buildListPads(container, rows, opts); return; }
     const editable = !!(opts && opts.editable);
+    // Rows the source owns, such as a scan's results: their fields edit, but nothing adds, deletes or moves one.
+    const fixedRows = !!(opts && opts.fixedRows);
     const moduleName = opts && opts.moduleName;
     const ctrlName = opts && opts.ctrlName;
     const optionSets = (opts && opts.optionSets) || {};   // shared option arrays, keyed by name (optionsRef)
     container.replaceChildren();
-    if (rows.length === 0 && !editable) {
+    if (rows.length === 0 && (!editable || fixedRows)) {
         const empty = document.createElement("div");
         empty.className = "list-empty";
         empty.textContent = "(none)";
@@ -4007,7 +4007,7 @@ function buildListEntries(container, rows, details, openSet, opts) {
             entry.dataset.rowIndex = i;
             const actions = document.createElement("span");
             actions.className = "list-actions";
-            if (!locked) {
+            if (!locked && !fixedRows) {
                 const del = document.createElement("button");
                 del.type = "button";
                 del.className = "list-action-btn";
@@ -4074,7 +4074,7 @@ function buildListEntries(container, rows, details, openSet, opts) {
         entry.append(summary, detailPanel);
         scroll.appendChild(entry);
     });
-    if (editable) {
+    if (editable && !fixedRows) {
         // "+ Add" appends a new row (server assigns the id, then state refreshes).
         const addBtn = document.createElement("button");
         addBtn.type = "button";
@@ -4083,6 +4083,24 @@ function buildListEntries(container, rows, details, openSet, opts) {
         addBtn.addEventListener("click", () => listAddRow(moduleName, ctrlName));
         container.appendChild(addBtn);
     }
+}
+
+// The hold-to-peek eye beside a password input, revealing it only while pressed.
+function peekButton(input) {
+    const peek = document.createElement("button");
+    peek.className = "peek-btn";
+    peek.type = "button";
+    peek.textContent = "👁";
+    peek.title = "Hold to reveal";
+    const show = () => { input.type = "text"; };
+    const hide = () => { input.type = "password"; };
+    peek.addEventListener("mousedown", show);
+    peek.addEventListener("mouseup", hide);
+    peek.addEventListener("mouseleave", hide);
+    peek.addEventListener("touchstart", (e) => { e.preventDefault(); show(); });
+    peek.addEventListener("touchend", hide);
+    peek.addEventListener("touchcancel", hide);   // a canceled touch fires no touchend
+    return peek;
 }
 
 // Render an editable row's detail: each descriptor in `detail.fields[]` becomes an inline
@@ -4095,6 +4113,20 @@ function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionS
     panel.replaceChildren();
     optionSets = optionSets || {};
     const fields = detail && Array.isArray(detail.fields) ? detail.fields : [];
+    // A row button sends the row's unsent edits first, in order: iPhone Safari keeps the focus in a field when a button is tapped, so its change event never fires, and two requests may arrive in either order.
+    const commits = [];
+    const commitOnChange = (inp, dragKey, send) => {
+        let sent = inp.value;
+        const commit = () => {
+            if (inp.value === sent) return undefined;
+            dragTs[dragKey] = Date.now();
+            const done = send();
+            sent = inp.value;
+            return done;
+        };
+        inp.addEventListener("change", commit);
+        commits.push(commit);
+    };
     for (const f of fields) {
         const r = document.createElement("div");
         r.className = "list-detail-row";
@@ -4105,7 +4137,16 @@ function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionS
         vEl.className = "list-detail-val";
         // Per-field cooldown key: unique per module/control/row/field so edits don't collide.
         const dragKey = `list:${moduleName}:${ctrlName}:${id}:${f.name}`;
-        if (f.readonly) {
+        if (f.readonly && typeof f.value === "string" && /^https?:\/\//.test(f.value)) {
+            // A link the user follows, opened in a new tab as every detail link is.
+            const a = document.createElement("a");
+            a.href = f.value;
+            a.textContent = f.value;
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+            a.className = "list-detail-link";
+            vEl.appendChild(a);
+        } else if (f.readonly) {
             vEl.textContent = String(f.value ?? "");
             vEl.classList.add("list-detail-muted");
         } else if (f.type === "button") {
@@ -4125,6 +4166,7 @@ function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionS
             btn.textContent = f.label || f.name;
             btn.addEventListener("click", async () => {
                 btn.disabled = true;
+                for (const commit of commits) await commit();
                 await listSetField(moduleName, ctrlName, id, f.name, "");
                 if (f.refetch) refetchState();
                 btn.disabled = false;
@@ -4153,6 +4195,17 @@ function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionS
                 listSetField(moduleName, ctrlName, id, f.name, parseInt(sel.value));
             });
             vEl.appendChild(sel);
+        } else if (f.type === "password") {
+            // A password behind the eye, as the Password control shows one.
+            const inp = document.createElement("input");
+            inp.type = "password";
+            inp.className = "list-field-input";
+            inp.dataset.dragkey = dragKey;
+            inp.autocomplete = "new-password";
+            inp.value = f.value ?? "";
+            inp.addEventListener("input", () => { dragTs[dragKey] = Date.now(); });
+            commitOnChange(inp, dragKey, () => listSetField(moduleName, ctrlName, id, f.name, inp.value));
+            vEl.append(inp, peekButton(inp));
         } else if (f.type === "uint8") {
             const inp = document.createElement("input");
             inp.type = "number";
@@ -4162,8 +4215,7 @@ function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionS
             if (f.max !== undefined) inp.max = f.max;
             inp.value = f.value ?? 0;
             inp.addEventListener("input", () => { dragTs[dragKey] = Date.now(); });
-            inp.addEventListener("change", () => {
-                dragTs[dragKey] = Date.now();
+            commitOnChange(inp, dragKey, () => {
                 // Guard against empty/invalid entry (parseInt → NaN) and clamp to the control's
                 // range: the HTML min/max attributes don't enforce a hand-typed value, so a stray
                 // "" or out-of-range number would otherwise reach the device as NaN / an overflow.
@@ -4172,7 +4224,7 @@ function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionS
                 if (f.min !== undefined) v = Math.max(v, f.min);
                 if (f.max !== undefined) v = Math.min(v, f.max);
                 inp.value = v;   // reflect the clamped value back into the field
-                listSetField(moduleName, ctrlName, id, f.name, v);
+                return listSetField(moduleName, ctrlName, id, f.name, v);
             });
             vEl.appendChild(inp);
         } else {   // "text" and any unknown type render as a text input
@@ -4182,10 +4234,7 @@ function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionS
             inp.dataset.dragkey = dragKey;
             inp.value = f.value ?? "";
             inp.addEventListener("input", () => { dragTs[dragKey] = Date.now(); });
-            inp.addEventListener("change", () => {
-                dragTs[dragKey] = Date.now();
-                listSetField(moduleName, ctrlName, id, f.name, inp.value);
-            });
+            commitOnChange(inp, dragKey, () => listSetField(moduleName, ctrlName, id, f.name, inp.value));
             vEl.appendChild(inp);
         }
         r.append(kEl, vEl);
@@ -4193,13 +4242,13 @@ function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionS
     }
 }
 
-// Join a list row's scalar fields into a one-line summary (skips marker fields: `self`, `severity`
+// Join a list row's scalar fields into a one-line summary (skips the row's `id` handle, a `password`, which shows only behind its eye, and marker fields: `self`, `severity`
 //: that render as row styling rather than text, and any nested objects). Generic: the engine names
 // the fields.
 function listSummaryText(item) {
     if (!item || typeof item !== "object") return String(item ?? "");
     return Object.entries(item)
-        .filter(([k, v]) => k !== "self" && k !== "severity" && typeof v !== "object")
+        .filter(([k, v]) => k !== "id" && k !== "self" && k !== "severity" && k !== "password" && typeof v !== "object")
         .map(([, v]) => v)
         .join("  ·  ");
 }
@@ -4419,9 +4468,8 @@ function fmtProgressLabel(ctrl) {
 // zero rendering would still mislead. Real metric values are never zero
 // in practice: RSSI is negative, TX power is 0..127 dBm (zero only on
 // driver-uninitialized reads).
-// Is a display control's value a url? One predicate, because BOTH render paths (renderCards and
-// updateModuleControls) have to agree on which values become links: a rule applied in only one
-// of them shows a link that the next state push replaces with plain text.
+// Is a display control's value a url?
+// One predicate, because BOTH render paths (renderCards and updateModuleControls) have to agree on which values become links: a rule applied in only one of them shows a link that the next state push replaces with plain text.
 function isUrlValue(v) {
     return typeof v === "string" &&
            (v.startsWith("/") || /^https?:\/\//.test(v) || v.startsWith("rtsp://"));
@@ -4814,6 +4862,7 @@ function updateModuleControls(mod) {
                 // while the user has the list open (data-open === "true").
                 const wrap = queryByName(`.palette-control[data-mid="${cssEscape(mid)}"][data-key="${k}"]`, "data-mid", mid);
                 const popts = ctrl.options || (wrap && paletteOptionsOf.get(wrap)) || [];
+                if (wrap && ctrl.options) paletteOptionsOf.set(wrap, ctrl.options);   // what the picker opens with
                 const pidx = paletteIndex(ctrl.value, popts);
                 // A name these options do not hold yet keeps the current paint until a patch brings the new list.
                 if (wrap && wrap.dataset.open !== "true" && pidx >= 0 && Number(wrap.dataset.value) !== pidx) {
@@ -4919,7 +4968,7 @@ function updateModuleControls(mod) {
                 // would jump a long list back to the top mid-edit of a row further down.
                 const prevScroll = list.querySelector(".list-scroll")?.scrollTop ?? 0;
                 buildListEntries(list, rows, details, open,
-                    {editable: ctrl.editable, pads: ctrl.pads, gridCols: ctrl.gridCols, gridRows: ctrl.gridRows,
+                    {editable: ctrl.editable, fixedRows: ctrl.fixedRows, pads: ctrl.pads, gridCols: ctrl.gridCols, gridRows: ctrl.gridRows,
                      moduleName: mod.name, ctrlName: ctrl.name, optionSets: ctrl.optionSets || {}});
                 const newScroll = list.querySelector(".list-scroll");
                 if (newScroll) newScroll.scrollTop = prevScroll;
@@ -7648,7 +7697,6 @@ function buildPaletteControl(row, key, def, moduleName, ctrl) {
     // toggles a list of styled rows, each a gradient swatch + name. The value still rides as
     // the option index. Prior art: MoonLight's palette control (same native-select limit).
     const opts = ctrl.options || [];
-    const gradientFor = (i) => paletteGradientCss((opts[i] || {}).colors);
     const selected = Math.max(0, paletteIndex(ctrl.value, opts));
     const wrap = document.createElement("div");
     wrap.className = "palette-control";
@@ -7656,6 +7704,9 @@ function buildPaletteControl(row, key, def, moduleName, ctrl) {
     wrap.dataset.key = ctrl.name;
     wrap.dataset.value = selected;
     paletteOptionsOf.set(wrap, opts);
+    // The options as the last state push left them, since a palette script added or removed since this render renumbers the list.
+    const liveOpts = () => paletteOptionsOf.get(wrap) || opts;
+    const gradientFor = (i) => paletteGradientCss((liveOpts()[i] || {}).colors);
 
     // Trigger: shows the currently-selected palette (swatch + name) and opens the list.
     const trigger = document.createElement("button");
@@ -7674,7 +7725,7 @@ function buildPaletteControl(row, key, def, moduleName, ctrl) {
     caret.className = "palette-caret";
     caret.textContent = "▾";
     const paintTrigger = (i) => {
-        const o = opts[i] || {};
+        const o = liveOpts()[i] || {};
         triSwatch.style.background = gradientFor(i);
         triEmoji.textContent = (o.live ? SCRIPTED_EMOJI : "") + (o.tags || "");
         triName.textContent = o.name || String(i);
@@ -7706,7 +7757,7 @@ function buildPaletteControl(row, key, def, moduleName, ctrl) {
         // stripping only one side matched nothing, so every already-downloaded palette
         // showed a second time as a "download me" row.
         const bare = (s) => String(s).replace(/\.mlp$/, "");
-        const have = new Set(opts.filter(o => o.live).map(o => bare(o.name)));
+        const have = new Set(liveOpts().filter(o => o.live).map(o => bare(o.name)));
         return names.map((n, i) => ({ name: n, tags: tags[i] || "" }))
                     .filter(r => !have.has(bare(r.name)));
     };
@@ -7716,7 +7767,9 @@ function buildPaletteControl(row, key, def, moduleName, ctrl) {
         // A failure (offline device) is not fatal: the list falls back to what is local.
         await mlFetchCatalog().catch(() => {});
         const remote = remotePalettes();
-        const local = opts.map((o, i) => ({
+        // Read when the list opens, not when the control was built: a state push since then may have moved the selection or the options.
+        const current = Number(wrap.dataset.value);
+        const local = liveOpts().map((o, i) => ({
             name: String(i),                 // the VALUE: a palette is chosen by index
             displayName: o.name || String(i),
             // The SCRIPTED marker is the same 📝 a scripted effect carries, prepended
@@ -7740,7 +7793,7 @@ function buildPaletteControl(row, key, def, moduleName, ctrl) {
             items,
             actionLabel: "use",
             keepOrder: true,          // index order: the knob and HA step through it
-            currentType: String(selected),
+            currentType: String(current),
             commit: async (name) => {
                 // A remote row carries a filename, not an index: fetch it, then let the
                 // rebuilt control (the device re-lists its .mlp files) select it by index.

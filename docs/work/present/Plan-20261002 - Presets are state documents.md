@@ -53,7 +53,7 @@ PATCH /api/state
 
 ## Presets
 
-- **A preset file is a document**, plus its own fields: `slot` for its pad, and its name as the file name. The File Manager reaches `/.config/presets` with hidden files shown, and its editor edits JSON, so editing a preset by hand needs no new UI.
+- **A preset file is a document**, plus its own fields: `slot` for its pad, and its name as the file name. The loader takes `slot` off the root before the document reaches the state engine, so it is never read as a module. The File Manager reaches `/.config/presets` with hidden files shown, and its editor edits JSON, so editing a preset by hand needs no new UI.
 - **Capturing is a shortcut that writes a document.** "Save layouts / effects / drivers / services" writes that container's subtree with `"$patch": "replace"`. A **save as preset** button on a module's card writes that module's current controls only. Selecting what to include beyond that is a later step.
 - **A preset's role follows from the containers it touches.** A preset touching only Effects is an effects preset and shows as the active effects look, as now; one touching several is a mixed preset. The `captures` field goes.
 - **Playlists are out of scope.** A WLED playlist runs presets one after another with durations; here that would later be a preset whose document lists presets and times, on top of this engine.
@@ -90,5 +90,5 @@ Improv's `APPLY_OP` keeps its one-op frames under every option, since a frame ho
 ## Decided
 
 - **The directive is `"$patch": "replace"`**, Kubernetes' spelling for "these are exactly the children", so it reads as the known convention.
-- **The per-module save button is in this branch** (step 4).
-- **B is the end state.** Steps 1 to 4 are this branch and leave stored config untouched; step 5 follows on a branch of its own. C was rejected: it converts an installer file and keeps the firmware's own duplication, the flat config format beside the document engine.
+- **The per-module save button is in the presets branch** (step 4).
+- **B is the end state.** Steps 1 to 4 are the presets branch and leave stored config untouched; step 5 follows on a branch of its own. C was rejected: it converts an installer file and keeps the firmware's own duplication, the flat config format beside the document engine.

@@ -155,7 +155,7 @@ declared rather than for a buffer to fill, and to time out on stall rather than 
 - **Live RMII Ethernet reconfigure** — runtime PHY/pin config shipped (`ethType` + pin controls in NetworkModule, per-board defaults in `deviceModels.json`, `platform::setEthConfig`/`ethInit` dispatch). W5500 (SPI) on S3 applies **live** — `ethStop()` tears down the SPI bus and `ethInit()` re-runs on the next `loop1s()` with no reboot. RMII (classic/P4 internal EMAC) still saves config and asks for a restart to apply, because the EMAC bring-up is fiddlier to hot-cycle cleanly. Make RMII live too: a hot `esp_eth_stop` + EMAC/netif teardown + re-init on config change, matching the W5500 path, so every interface honours the no-reboot principle.
 - **GCC below 16 needs four warnings demoted, and nothing exercises those versions** - `-Wnull-dereference`, `-Wrestrict`, `-Wstringop-overflow` and `-Wformat-truncation` fire on provably correct code from GCC 12 through 15 (five of the twelve inside libstdc++ and glibc headers, unreachable from our source), so CMakeLists demotes them to non-fatal there and keeps them fatal on 16+. That unblocks CI and from-source builds on Debian and Raspberry Pi OS alike, but it is a suppression, not an understanding: nobody routinely compiles with 12-15, so a REAL instance of one of these on those versions is now a warning nobody reads. Revisit when the runner's default GCC reaches 16, at which point the whole block can be deleted.
 - **Installer UX polish** — clear "Pre-release (beta)" warning on RC/latest picks, yank-by-asset-tag instead of yank-by-release-deletion.
-- **Offer MoonLight/MoonLight as a library**: a downstream sketch where another firmware/app consumes the light pipeline (or a subset) as an embeddable dependency rather than running the whole binary. `library.json` is already a PlatformIO *library* manifest, so the seed exists. When this is designed, give it a small public **identity surface**: one runtime constant the consumer reads (a `kProjectName`, likely a `ProjectInfo` bundle of name + version + url) that the network wire-strings (ArtNet/E1.31 source-name + CID), the UI banner, and any "About" string all *derive from*: the one place a consumer queries "what am I embedding." This is the genuine home for the name-centralisation that the rename ([the MoonLight plan](../present/Plan-20260922%20-%20MoonLight,%20from%20v5.0.0%20to%20the%20rename%20(shipped).md)) deliberately *didn't* do: the rename is a one-time sweep (a constant would just split it), but a library consumer references the identity ongoing and widely, which is the test a constant must pass. Build it *then*, against the real library API, not speculatively now.
+- **Offer MoonLight/MoonLight as a library**: a downstream sketch where another firmware/app consumes the light pipeline (or a subset) as an embeddable dependency rather than running the whole binary. `library.json` is already a PlatformIO *library* manifest, so the seed exists. When this is designed, give it a small public **identity surface**: one runtime constant the consumer reads (a `kProjectName`, likely a `ProjectInfo` bundle of name + version + url) that the network wire-strings (ArtNet/E1.31 source-name + CID), the UI banner, and any "About" string all *derive from*: the one place a consumer queries "what am I embedding." This is the genuine home for the name-centralisation that the rename ([the MoonLight plan](../past/plans/Plan-20260922%20-%20MoonLight,%20from%20v5.0.0%20to%20the%20rename%20(shipped).md)) deliberately *didn't* do: the rename is a one-time sweep (a constant would just split it), but a library consumer references the identity ongoing and widely, which is the test a constant must pass. Build it *then*, against the real library API, not speculatively now.
 - **HTTP: a request whose headers or body arrive a few ms late is dropped, intermittently
   (2026-08-20).** `handleConnection` runs SYNCHRONOUSLY inside `tick20ms`, so its waits are kept
   short to protect the render loop: a freshly accepted connection gets **~5 ms** for its request
@@ -562,12 +562,29 @@ The annoyance is purely that the device boots degraded and needs a poke to recov
 
 Related: this is the render/output-buffer face of the same non-PSRAM fragmentation cliff the paged `MappingLUT` already addressed for the *LUT*. The buffers themselves still allocate as single contiguous blocks.
 
+## Advanced network settings (2026-10-03)
+
+Left out of the plan that makes Ethernet, WiFi and the access point Network submodules, and expected to be asked for:
+
+- **Roaming** between access points of one network while connected, by signal threshold (802.11k/v/r where the chip supports it).
+- **Enterprise WiFi**: WPA2/WPA3-Enterprise with a username, a password or a certificate.
+- **Pinning a network to one access point** (BSSID) or one band.
+- **WiFi power save**: the modem-sleep mode, traded against latency for Art-Net and the UI.
+- **The country code**, set by hand where adopting the router's country is not enough.
+- **The access point's address**, fixed at 4.3.2.1.
+- **IPv6** on every interface.
+
 ## Architecture
+
+### An offline test run takes 16 minutes instead of one (2026-10-03)
+
+With the host's network down, `test_desktop` ran 16 minutes and the scenarios stalled past the gate's hour; online, no test takes over 4 seconds, so something waits out network timeouts.
+Next time the machine is offline, `build/macos/test/mm_tests --duration=true` names the test, which then gets a seam like `setTestJoinFails`.
 
 ### `applyControlValue` should say whether the value changed (2026-10-03)
 
 The boot reapply in `FilesystemModule::reapplyNode` detects a changed value by serializing each control before and after the apply and comparing the bytes, a list control included.
-The apply already knows whether storage moved, so the standard shape is the apply reporting it, an `ApplyResult::Unchanged` or a flag, and `Scheduler::setControl` could then skip the reaction to a write that changes nothing.
+`applyControlValue` reports only whether the value parsed and applied. The proposed shape is the apply also reporting whether storage moved, an `ApplyResult::Unchanged` or a flag, so `Scheduler::setControl` can skip the reaction to a write that changes nothing.
 Cold path today, so a tidy-up rather than a cost.
 
 ### Group src/core into folders, the way src/light already is (2026-09-17)

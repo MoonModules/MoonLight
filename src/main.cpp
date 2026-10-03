@@ -140,6 +140,9 @@
 #include "core/system/MqttModule.h"
 #include "core/system/DevicesModule.h"
 #include "core/system/FilesystemModule.h"
+#include "core/system/EthernetModule.h"
+#include "core/system/WiFiModule.h"
+#include "core/system/AccessPointModule.h"
 #include "core/system/NetworkModule.h"
 #include "platform/platform.h"
 
@@ -234,6 +237,23 @@ void mm_main(volatile bool& keepRunning, uint16_t httpPort) {
     auto* networkModule = createOrDie<mm::NetworkModule>("NetworkModule");
     networkModule->setScheduler(&scheduler);
     networkModule->setSystemModule(systemModule);
+    // The interfaces come first among Network's children, in the order the cascade tries them; only where Ethernet is compiled in or previewed.
+    if constexpr (mm::platform::hasEthernet || mm::platform::previewsEthernetControls) {
+        auto* ethernetModule = createOrDie<mm::EthernetModule>("EthernetModule");
+        ethernetModule->markWiredByCode();
+        networkModule->addChild(ethernetModule);
+        networkModule->setEthernet(ethernetModule);
+    }
+    if constexpr (mm::platform::hasWiFi) {
+        auto* wifiModule = createOrDie<mm::WiFiModule>("WiFiModule");
+        wifiModule->markWiredByCode();
+        networkModule->addChild(wifiModule);
+        networkModule->setWiFi(wifiModule);
+        auto* accessPointModule = createOrDie<mm::AccessPointModule>("AccessPointModule");
+        accessPointModule->markWiredByCode();
+        networkModule->addChild(accessPointModule);
+        networkModule->setAccessPoint(accessPointModule);
+    }
 
     // Listens on the serial port for pushed WiFi credentials, compile-time gated: @xref{why-improv-is-compile-time-gated}.
     mm::ImprovProvisioningModule* improvModule = nullptr;

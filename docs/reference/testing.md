@@ -251,6 +251,26 @@ Assert those through a scalar the list drives rather than through the list itsel
 
 On a board that is the reboot the endpoint performs. On a desktop the endpoint exits the process and nothing restarts it, so the live runner relaunches the binary with the data directory the exiting instance was using: a restart that came back on different files would prove nothing. In-process the op skips, because the scheduler is the process and exiting it would end the run.
 
+### Walking first setup, with the computer as the phone
+
+First setup leaves the device's network for its access point and comes back, which no device-side op can follow.
+These live-only ops let a scenario walk it with the computer running it as the phone.
+
+- **`host_wifi`** with `"join": "access_point"` joins the access point named after the device and points the runner at 4.3.2.1; `"join": "home"` returns to the network the run names. Each waits until its target answers, since macOS hides network names.
+- **`list_row`** finds a row of a list control by its fields (`match`), then writes a `field` (a button field presses it), deletes it (`"delete": true`), or with neither only expects it.
+- **`expect_http`** fetches an absolute `url` without following redirects and checks its `status` and `location`, which is what a captive portal answers. With `"resolve": "access_point"` it resolves the name at 4.3.2.1 as a phone does, since macOS holds a captive network's answers back from other apps.
+- **`within`** on `expect_control`, `list_row` and `expect_http` polls for that many seconds, for what the device reaches on its own time, such as a scan or a join.
+- **`"wait": false`** on `reboot` restarts without waiting, for a device that comes back where the computer cannot reach it yet.
+
+A scenario using them sets `"host_network": true` and runs with `--network <name>`, a `moondeck/moondeck.json` network the computer and the device share.
+Its steps fill `{network.ssid}`, `{network.password}` and `{device}` from it, so no credential is in the file.
+The runner puts the computer back on that network whatever happens.
+`"on_request": true` keeps the scenario out of a run of all of them, since it takes the computer off its network for a few minutes.
+
+```bash
+uv run moondeck/scenario/run_live_scenario.py --host MM-Bench.local --network Home --name scenario_AccessPoint_first_setup_from_its_own_network
+```
+
 ### Scenario modes (construct vs mutate)
 
 Every scenario carries a top-level `mode` field that says what shape the scenario expects the world to be in. Two values:

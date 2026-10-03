@@ -201,7 +201,7 @@ macOS has no native loopback: install [BlackHole](https://existential.audio/blac
 
 #### WLED audio sync: what is on the wire
 
-Sending and receiving both use the **multicast address 239.0.0.1**, which is what WLED's own usermod does (`beginMulticast` on both ends). It never uses broadcast, so a broadcast sender is inaudible to WLED and a receiver that only binds the port never hears WLED. This is a network-layer address, unrelated to any device grouping.
+Sending and receiving both use the **multicast address 239.0.0.1**, which is what WLED's own usermod does (`beginMulticast` on both ends). On a network that does not carry multicast, receive still hears unicast, and the status says `listening, unicast only`. It never uses broadcast, so a broadcast sender is inaudible to WLED and a receiver that only binds the port never hears WLED. This is a network-layer address, unrelated to any device grouping.
 
 **Port 11988 is the WLED contract**, and `syncPort` defaults to it. The port is configurable for
 MoonLight peers that want a private stream, but a custom port is no longer WLED-compatible: the endpoint WLED speaks is 239.0.0.1:11988 specifically.
