@@ -324,7 +324,7 @@ The next function worth simplifying is at the top of each file's list.
 | `test/js/ui-visibility.test.mjs` | 1 | `lines 7-16, also in test/js/ui-ws-scheme.test.mjs:13`, duplicated block 10 |
 | `test/python/test_check_docgen.py` | 1 | `test_check_docgen.py`, large file 1551 |
 | `test/scenario_runner.cpp` | 1 | `scenario_runner.cpp`, large file 1266 |
-| `test/unit/core/unit_ControlModule.cpp` | 1 | `unit_ControlModule.cpp`, large file 1552 |
+| `test/unit/core/unit_ControlModule.cpp` | 1 | `unit_ControlModule.cpp`, large file 1574 |
 | `test/unit/core/unit_Control_apply_absent_key.cpp` | 1 | `lines 92-103, also in test/unit/core/unit_HttpServerModule_apply.cpp:38`, duplicated block 12 |
 | `test/unit/core/unit_NetworkModule_ethernet.cpp` | 1 | `lines 137-144, also in test/unit/core/unit_NetworkModule.cpp:254`, duplicated block 8 |
 | `test/unit/core/unit_moonlive_compiler.cpp` | 1 | `unit_moonlive_compiler.cpp`, large file 1865 |

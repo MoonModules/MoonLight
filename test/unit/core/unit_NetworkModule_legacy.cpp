@@ -6,6 +6,7 @@
 #include "doctest.h"
 #include "network_device.h"
 
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>

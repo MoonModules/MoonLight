@@ -1,9 +1,9 @@
 {
-  "commit": "5189985a",
+  "commit": "60bcd2c4",
   "flash": {
-    "esp32s3-n16r8": 2229680,
-    "esp32": 2178976,
-    "esp32p4rev1-eth": 2140736,
+    "esp32s3-n16r8": 2230000,
+    "esp32": 2179152,
+    "esp32p4rev1-eth": 2141120,
     "esp32p4rev1-eth-wifi": 2358896,
     "esp32s3-n8r8": 2087168,
     "esp32s31": 2452896,
@@ -679,16 +679,16 @@
     }
   },
   "loc": {
-    "core": 25316,
+    "core": 25333,
     "light": 31657,
     "platform": 17036,
     "ui": 12096,
-    "test": 61251,
+    "test": 61275,
     "moondeck": 30091
   },
   "comments": {
     "core": {
-      "lines": 6100,
+      "lines": 6102,
       "ratio": 0.266
     },
     "light": {
@@ -704,7 +704,7 @@
       "ratio": 0.303
     },
     "test": {
-      "lines": 6848,
+      "lines": 6849,
       "ratio": 0.13
     },
     "moondeck": {
@@ -713,7 +713,7 @@
     }
   },
   "tests": {
-    "cases": 2258,
+    "cases": 2259,
     "scenarios": 30
   },
   "docs": {
@@ -725,7 +725,7 @@
     "claude_md_lines": 283
   },
   "complexity": {
-    "functions": 4028,
+    "functions": 4029,
     "over_threshold": 342,
     "worst_ccn": 128
   }

@@ -83,6 +83,9 @@ char status_[96] = "idle";
 
 EventGroupHandle_t netEvents_;
 constexpr int kNetGotIp = BIT0;
+constexpr int kNetStaDown = BIT1;   // the station dropped its attempt
+// Set while the station moves to the next known network, so the attempt being dropped is not retried under the old config.
+volatile bool switchingNetwork_ = false;
 
 // ---------------------------------------------------------------------------------------------
 // Credentials
@@ -174,6 +177,8 @@ void onGotIp(void*, esp_event_base_t, int32_t id, void*) {
 }
 
 void onWifiEvent(void*, esp_event_base_t, int32_t id, void*) {
+    if (id == WIFI_EVENT_STA_DISCONNECTED) xEventGroupSetBits(netEvents_, kNetStaDown);
+    if (switchingNetwork_) return;
     if (id == WIFI_EVENT_STA_START || id == WIFI_EVENT_STA_DISCONNECTED) esp_wifi_connect();
 }
 // Bring up the on-chip MAC as the app's config wires it, staying installed without a link so a later cable still gets an address.
@@ -252,13 +257,25 @@ bool wifiStation(uint32_t waitMs) {
     esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &onWifiEvent, nullptr, nullptr);
 
     EventBits_t bits = 0;
+    bool started = false;
     for (uint8_t k = 0; k < networkCount_ && !(bits & kNetGotIp); k++) {
+        if (started) {
+            // A station still connecting refuses a new config, so the attempt before is dropped, with its retry held, and gone before this one's config goes in.
+            switchingNetwork_ = true;
+            xEventGroupClearBits(netEvents_, kNetStaDown);
+            esp_wifi_disconnect();
+            xEventGroupWaitBits(netEvents_, kNetStaDown, pdTRUE, pdFALSE, pdMS_TO_TICKS(2000));
+        }
         wifi_config_t cfg = {};
         std::strncpy(reinterpret_cast<char*>(cfg.sta.ssid), networks_[k].ssid, sizeof(cfg.sta.ssid) - 1);
         std::strncpy(reinterpret_cast<char*>(cfg.sta.password), networks_[k].password, sizeof(cfg.sta.password) - 1);
-        esp_wifi_set_config(WIFI_IF_STA, &cfg);
-        // The first starts the radio; each later one drops the attempt before it, and the disconnect handler connects to the new config.
-        if (k == 0) esp_wifi_start(); else esp_wifi_disconnect();
+        const bool configured = esp_wifi_set_config(WIFI_IF_STA, &cfg) == ESP_OK;
+        switchingNetwork_ = false;
+        if (!configured) continue;   // the next network, never the previous one under this one's turn
+        // The first starts the radio, whose start event connects; each later one connects itself.
+        if (!started) started = esp_wifi_start() == ESP_OK;
+        else esp_wifi_connect();
+        if (!started) continue;
         bits = xEventGroupWaitBits(netEvents_, kNetGotIp, pdFALSE, pdFALSE, pdMS_TO_TICKS(waitMs));
     }
     if (bits & kNetGotIp) {

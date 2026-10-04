@@ -13,9 +13,10 @@
 /// MoonBase includes it, and `unit_MoonBaseContract` runs it against the file the application writes.
 /// A key matches at the top level (`"key":`), under a child module (`"0.key":`), and inside a list row.
 ///
-/// Depends on nothing but `<cstring>` and `<cstdlib>`, which is what lets the small image include it.
+/// Depends on nothing but the standard C headers and `hex.h`, which is what lets the small image include it.
 
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 

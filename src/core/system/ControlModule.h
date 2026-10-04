@@ -851,11 +851,27 @@ private:
     static void restampSlot(JsonSink& sink, const char* body, uint8_t slot) {
         const char* rest = std::strchr(body, '{');
         if (!rest) return;
-        sink.appendf("{\"%s\":%u,", kSlotKey, static_cast<unsigned>(slot));
+        rest = skipSpace(rest + 1);
+        // An earlier pad leading the object is dropped, however it is spaced, so repeated reorders never stack pads.
         char prior[16];
-        const int priorLen = std::snprintf(prior, sizeof(prior), "\"%s\":", kSlotKey);
-        const char* comma = std::strncmp(rest + 1, prior, static_cast<size_t>(priorLen)) == 0 ? std::strchr(rest + 1, ',') : nullptr;
-        sink.append(comma ? comma + 1 : rest + 1);   // repeated reorders never stack pads
+        const int priorLen = std::snprintf(prior, sizeof(prior), "\"%s\"", kSlotKey);
+        if (std::strncmp(rest, prior, static_cast<size_t>(priorLen)) == 0) {
+            const char* p = skipSpace(rest + priorLen);
+            if (*p == ':') {
+                p = skipSpace(p + 1);
+                while (*p == '-' || (*p >= '0' && *p <= '9')) p++;
+                p = skipSpace(p);
+                rest = *p == ',' ? skipSpace(p + 1) : p;
+            }
+        }
+        sink.appendf("{\"%s\":%u%s", kSlotKey, static_cast<unsigned>(slot), *rest == '}' ? "" : ",");
+        sink.append(rest);
+    }
+
+    /// `p` past any JSON whitespace.
+    static const char* skipSpace(const char* p) {
+        while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
+        return p;
     }
 
     static void pathFor(const char* name, char* out, size_t n) {

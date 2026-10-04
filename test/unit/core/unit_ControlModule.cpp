@@ -619,6 +619,28 @@ TEST_CASE("ControlModule keeps a preset's pad when a card save overwrites it") {
     CHECK(d.readPreset("look").find("\"Layer\"") != std::string::npos);
 }
 
+// A pad move rewrites a file's pad however the file was spaced, and a file holding only its pad stays valid JSON.
+TEST_CASE("ControlModule moves a pad in a hand-spaced or pad-only preset file without stacking pads") {
+    Device d;
+    d.writePreset("pretty", "{\n  \"$slot\" : 3 ,\n  \"Effects\": {\"enabled\": true}\n}");
+    d.writePreset("bare", "{\"$slot\":5}");
+    d.control->setup();
+    const auto idOf = [&](const char* name) {
+        const std::string row = d.rowNamed(name);
+        return static_cast<uint32_t>(std::stoul(row.substr(row.find("\"id\":") + 5)));
+    };
+    REQUIRE(d.control->moveListRow(idOf("pretty"), 7));
+    REQUIRE(d.control->moveListRow(idOf("bare"), 9));
+    const std::string pretty = d.readPreset("pretty");
+    CHECK(pretty.find("$slot") == pretty.rfind("$slot"));   // exactly one pad
+    CHECK(pretty.rfind("{\"$slot\":7,", 0) == 0);
+    CHECK(pretty.find("\"Effects\"") != std::string::npos);
+    CHECK(d.readPreset("bare") == "{\"$slot\":9}");
+    d.control->setup();   // read back from the files
+    CHECK(d.rowNamed("pretty").find("\"slot\":7") != std::string::npos);
+    CHECK(d.rowNamed("bare").find("\"slot\":9") != std::string::npos);
+}
+
 // A refused pad save does not aim the next save: a card saved afterwards lands on the first free pad.
 TEST_CASE("ControlModule drops a pad's aim when the save is refused") {
     Device d;
