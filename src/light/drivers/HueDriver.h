@@ -50,7 +50,7 @@ public:
     /// Bind the bridge address, the pairing button, the room and light filters, and the window.
     void defineDriverControls() override {
         controls_.addIPv4("bridgeIp", bridgeIp);
-        controls_.addText("appKey", appKey, sizeof(appKey));   // persisted credential
+        controls_.addPassword("appKey", appKey, sizeof(appKey));   // a bridge credential: obfuscated on the page, left out of every document
         controls_.addButton("pair");                            // link-button pairing
         // Rebuilt in place into stable member buffers, so they reflect the current room.
         buildRoomOptions();

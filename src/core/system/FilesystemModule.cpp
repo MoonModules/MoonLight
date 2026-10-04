@@ -326,27 +326,25 @@ bool FilesystemModule::hasWiredChildOfType(const MoonModule* parent, const char*
 // See the header for the contract; the reason it exists is the lifecycle gap.
 // At boot, Scheduler phases 3 and 4 call setup() and applyState() across the whole tree after the load, so applyNode only has to call defineControls() on a child it creates.
 // A runtime caller gets no such phases.
-// A module that never saw setup() comes back with its buffers unbuilt and its hardware unclaimed, a preset that "sometimes does not work".
-bool FilesystemModule::applySubtree(MoonModule* m, const char* json, const char* prefix) {
+// A module that never saw setup() comes back with its buffers unbuilt and its hardware unclaimed, a config that "sometimes does not work".
+bool FilesystemModule::applySubtree(MoonModule* m, const char* json) {
     if (!m || !json) return false;
-    // Refuse a body that is not credibly one of ours BEFORE touching the tree. applyNode's trim step reads "no children in the JSON" as "delete every live child", so a truncated file (an interrupted upload, a half-written preset) would not leave the current look alone, it would WIPE it. Every subtree we write emits `<prefix>enabled`, so its absence is the cheap, format-specific test for "this is not a subtree", and it costs one key lookup on a cold path.
-    char enabledKey[MAX_KEY];
-    std::snprintf(enabledKey, sizeof(enabledKey), "%senabled", prefix);
-    if (!mm::json::hasKey(json, enabledKey)) {
+    // Refuse a body that is not credibly one of ours BEFORE touching the tree. applyNode's trim step reads "no children in the JSON" as "delete every live child", so a truncated file (an interrupted upload, a half-written config) would not leave the current state alone, it would WIPE it. Every subtree we write emits `enabled`, so its absence is the cheap, format-specific test for "this is not a subtree", and it costs one key lookup on a cold path.
+    if (!mm::json::hasKey(json, "enabled")) {
         std::printf("FilesystemModule: ignoring malformed subtree for %s\n", m->typeName());
         return false;
     }
-    applyNode(m, json, prefix);
+    applyNode(m, json, "");
     // Same order as the runtime add path (HttpServerModule::applyAddModule): setup() may read what defineControls() bound, and applyState() then builds or releases per effectively-enabled. Both recurse over children on their own (MoonModule::setup / applyState), so one call at the root covers every node applyNode just created.
     m->setup();
     m->applyState();
     // The tree just changed shape and values, so it has to be written back.
-    // Without this an applied preset renders correctly and is then LOST on reboot, because the boot loader restores the config file that the apply never updated.
+    // Without this an applied config renders correctly and is then LOST on reboot, because the boot loader restores the config file that the apply never updated.
     // Marked here rather than in each caller, so every applySubtree user persists by construction.
     m->markDirty();
     noteDirty();
     // Structural change on a live tree: flip the WS full-resync flag through the existing schema hook.
-    // An apply with no HTTP request in flight (Home Assistant picking a preset over MQTT or the WLED shim) still reaches every open browser.
+    // An apply with no HTTP request in flight still reaches every open browser.
     // Same hook rebuildControls uses; no coupling to HttpServerModule.
     MoonModule::notifySchemaChanged();
     return true;
@@ -418,7 +416,7 @@ void FilesystemModule::applyNode(MoonModule* m, const char* json, const char* pr
             } else {
                 m->addChild(created);
             }
-            // A freshly created module carries the factory's display name, so restoring one config while another tree already holds that name leaves TWO modules answering to it. The boot path gets this from deduplicateNamesInTree, but a config applied after boot (a card saved, a preset recalled) reached the live tree without it: a MoonLiveLayout and a MoonLiveEffect were then both "MoonLive", and every lookup that resolves a module by name (parent_id on an add, the UI's card selector) found whichever came first, so the effect's controls rendered on the layout's card.
+            // A freshly created module carries the factory's display name, so restoring one config while another tree already holds that name leaves TWO modules answering to it. The boot path gets this from deduplicateNamesInTree, but a config applied after boot (a card saved, a backup restored) reached the live tree without it: a MoonLiveLayout and a MoonLiveEffect were then both "MoonLive", and every lookup that resolves a module by name (parent_id on an add, the UI's card selector) found whichever came first, so the effect's controls rendered on the layout's card.
             if (auto* sched = Scheduler::instance()) sched->ensureUniqueName(created);
         }
 
@@ -457,15 +455,12 @@ void FilesystemModule::applyValue(const ControlDescriptor& c, const char* json, 
 
 // ---- Save ----
 // Serialize a subtree into a caller's sink.
-// The write half of saveSubtree, split out so a caller storing the bytes elsewhere (a named preset file) produces the SAME format the loader reads, rather than a second serializer that could drift from this one.
-// See the header.
-bool FilesystemModule::saveSubtreeTo(MoonModule* m, JsonSink& sink, const char* prefix) {
+// The write half of saveSubtree, split out so a caller holding the bytes elsewhere produces the SAME format the loader reads.
+bool FilesystemModule::saveSubtreeTo(MoonModule* m, JsonSink& sink) {
     if (!m) return false;
-    const bool bare = (prefix == nullptr || prefix[0] == 0);
-    if (bare) sink.append("{");   // a namespaced subtree is a fragment of the caller's object
-    // firstField=true in BOTH cases: this writes only its own fields, and the caller assembling a larger object owns the separator before each subtree. Emitting a leading comma here as well produced ",," in every preset carrying more than one capture, invalid JSON that our own first-match key reader happened to tolerate.
-    writeNode(m, sink, bare ? "" : prefix, /*firstField=*/true);
-    if (bare) sink.append("}");
+    sink.append("{");
+    writeNode(m, sink, "", /*firstField=*/true);
+    sink.append("}");
     return !sink.overflowed();           // only trips on an allocation failure, not a size cap
 }
 

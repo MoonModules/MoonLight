@@ -199,3 +199,10 @@ def test_an_http_step_on_a_path_goes_to_the_device_under_test():
 def test_an_http_post_step_sends_an_empty_body_as_a_button_does():
     r = runner._http_request("/api/firmware/boot-app", "http://192.168.1.50", "POST")
     assert r.get_method() == "POST" and r.data == b""
+
+
+def test_the_modules_a_state_document_can_create_are_the_objects_with_a_type():
+    """The live runner cleans up after an apply_state step from this list, so a module the document only sets is never removed."""
+    doc = {"Effects": {"Layer": {"Swirl": {"type": "RainbowEffect", "speed": 90}, "Old": None,
+                                 "Pulse": {"bpm": 40}, "Box": {"type": "Layer", "Inner": {"type": "NoiseEffect"}}}}}
+    assert runner._typed_names(doc) == ["Swirl", "Box", "Inner"]

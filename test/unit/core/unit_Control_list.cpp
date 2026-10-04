@@ -1,12 +1,6 @@
 /// @module Control
 
-/// Pins the ControlType::List serialization contract (the generic list control that backs DevicesModule's discovered-devices view). A List holds no row data itself, a ListSource the owning module implements produces rows on demand from the module's own storage. These tests verify:
-///   - the value serializes as a JSON array of summary objects (one per row),
-///   - the metadata carries a parallel `detail` array,
-///   - an empty source emits "[]" (robustness: a list with nothing found),
-///   - a List is read-only from the browser but PERSISTABLE: the saved array is
-///     parsed back on boot via ListSource::restoreList (the recursive mm::json
-///     reader's forEachListElement), seeding the cached list before the first scan.
+/// The List control's contract: a ListSource produces the rows from its module's own storage, serialized as summaries with a parallel detail array, and restored when the source says it persists.
 
 #include "doctest.h"
 #include "core/module/Control.h"
@@ -33,6 +27,7 @@ struct StubDevices : mm::ListSource {
     // Restore: parse the persisted array with the recursive reader; record the count and the first row's name so a test can prove the round-trip took.
     int restoredCount = -1;
     char firstName[24] = {};
+    bool persistsList() const override { return true; }
     bool restoreList(const char* json, const char* key) override {
         mm::json::JsonDoc doc;
         if (!mm::json::parse(json, doc)) return false;
@@ -47,7 +42,7 @@ struct StubDevices : mm::ListSource {
 
 }  // namespace
 
-// A minimal EDITABLE list source, the CRUD half of the primitive. Rows are {id, name}, with a monotonic id counter so an id is never reused. Pins the contract the /api/list/* endpoints call: add returns a fresh stable id, delete/move/setField address by id, and an id stays put across add/delete/reorder (so a consumer referencing a row by id survives).
+// A minimal editable list source: rows {id, name}, with an id that is never reused and stays put across add, delete and reorder, as the /api/list/* endpoints need.
 struct StubLibrary : mm::ListSource {
     struct Row { uint32_t id; char name[16]; bool locked; };
     Row rows[8];
@@ -166,7 +161,7 @@ TEST_CASE("ControlType::List metadata carries a parallel detail array") {
 
     mm::JsonSink sink;
     mm::writeControlMetadata(sink, controls[0]);
-    // optionSets is emitted once per list (empty {} here, the devices list has no repeated selects), then the parallel detail array. A list with a repeated select (preset channel roles) fills optionSets with the shared option arrays so rows reference them by name instead of re-inlining.
+    // optionSets comes once per list, empty here, then the parallel detail array; a repeated select shares its options there rather than inlining them per row.
     CHECK(std::strcmp(sink.data(),
         ",\"optionSets\":{}"
         ",\"detail\":["
@@ -200,4 +195,18 @@ TEST_CASE("ControlType::List type identity + persistable + restore round-trip") 
     CHECK(r == mm::ApplyResult::Ok);
     CHECK(src.restoredCount == 2);                       // parsed both rows
     CHECK(std::strcmp(src.firstName, "WLED-1") == 0);    // read a field back
+}
+
+// A list persists only when its source restores it: a derived list, such as a task snapshot, could never be read back.
+TEST_CASE("a list is written to flash only when its source restores it") {
+    struct Derived : mm::ListSource {
+        uint8_t listRowCount() const override { return 1; }
+        void writeListRow(mm::JsonSink& s, uint8_t) const override { s.append("{\"name\":\"loopTask\"}"); }
+    } derived;
+    StubDevices restoring;
+    mm::ControlList controls;
+    controls.addList("tasks", derived);
+    controls.addList("devices", restoring);
+    CHECK_FALSE(mm::isPersistable(controls[0]));
+    CHECK(mm::isPersistable(controls[1]));
 }

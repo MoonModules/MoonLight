@@ -289,7 +289,8 @@ def measure_complexity():
         funcs = check_code.measure()
         if not funcs:
             return {}
-        over = {(file, name) for file, _, name, _ in check_code.findings(funcs)}
+        # Identified by where it starts, so two overloads sharing a name stay two functions.
+        over = {(f["file"], f["start"]) for f in funcs if check_code.findings([f])}
         return {
             "functions": len(funcs),
             "over_threshold": len(over),

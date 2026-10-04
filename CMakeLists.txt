@@ -135,6 +135,7 @@ add_library(mm_core STATIC
     src/core/system/MqttModule.cpp
     src/core/util/sha256.cpp
     src/core/module/Scheduler.cpp
+    src/core/module/StateDocument.cpp
     src/core/moonlive/MoonLive.cpp
     src/core/moonlive/MoonLiveCompiler.cpp
     src/core/moonlive/MoonLiveSpill.cpp

@@ -183,6 +183,7 @@
 #include "module_types.h"
 
 #include "core/module/Scheduler.h"
+#include "core/module/StateDocument.h"
 #include "core/util/ModuleFactory.h"
 #include "core/module/Control.h"
 #include "core/util/JsonSink.h"
@@ -227,6 +228,7 @@ struct JsonVal {
     bool boolean = false;
     std::map<std::string, JsonVal> obj;
     std::vector<JsonVal> arr;
+    std::string raw;   ///< an object's text as written, for a step that needs its key order, which `obj` sorts away
 
     bool has(const char* key) const { return obj.count(key) > 0; }
     const JsonVal& operator[](const char* key) const {
@@ -320,6 +322,7 @@ struct JsonParser {
     }
 
     JsonVal parseObject() {
+        const char* start = p;
         p++; // skip {
         JsonVal v; v.type = JsonVal::Object;
         skipWs();
@@ -331,6 +334,7 @@ struct JsonParser {
             if (*p == ',') { p++; skipWs(); }
         }
         if (*p == '}') p++;
+        v.raw.assign(start, static_cast<size_t>(p - start));
         return v;
     }
 
@@ -419,6 +423,12 @@ struct ScenarioContext {
     mm::Scheduler scheduler;
     std::map<std::string, mm::MoonModule*> modules;
 
+    // A scenario id, or a module's name when a state document created it and no step named it.
+    mm::MoonModule* byId(const char* id) {
+        auto it = modules.find(id);
+        return it != modules.end() ? it->second : scheduler.firstByName(id);
+    }
+
     // Modules are heap-allocated by the factory; Scheduler::release owns and deletes them.
     mm::MoonModule* createModule(const char* type) {
         return mm::ModuleFactory::create(type);
@@ -491,6 +501,48 @@ struct ScenarioContext {
         // PreviewDriver needs no scenario-specific wiring: @xref{why-fixtures-wire-props-at-construct-time}.
     }
 };
+
+/// A `list_row` step's list and the row its `match` names, or why there is none.
+struct ListStep {
+    mm::ListSource* source = nullptr;
+    const char* why = "";
+    bool found = false;
+    uint32_t id = 0;
+};
+
+/// Resolve a step's `id` and `key` to an editable list, as the list API does, and find the row whose fields equal every `match` field.
+static ListStep listStep(ScenarioContext& ctx, const JsonVal& step) {
+    ListStep ls;
+    mm::MoonModule* mod = ctx.byId(step["id"].c_str());
+    if (!mod) { ls.why = "no such module"; return ls; }
+    auto& cs = mod->controls();
+    for (uint8_t i = 0; i < cs.count() && !ls.source; i++)
+        if (cs[i].type == mm::ControlType::List && step["key"].str == cs[i].name) ls.source = static_cast<mm::ListSource*>(cs[i].ptr);
+    if (!ls.source || !ls.source->isEditableList()) { ls.source = nullptr; ls.why = "no editable list of that name"; return ls; }
+    for (uint8_t r = 0; r < ls.source->listRowCount() && !ls.found; r++) {
+        mm::JsonSink sink;
+        ls.source->writeListRow(sink, r);
+        const JsonVal row = parseJson(std::string(sink.data(), sink.size()));
+        bool same = true;
+        for (auto& [k, v] : step["match"].obj) same = same && asWritten(row[k.c_str()]) == asWritten(v);
+        if (same) { ls.found = true; ls.id = static_cast<uint32_t>(row["id"].num); }
+    }
+    return ls;
+}
+
+/// The body a list API field write carries, `{"field":F,"value":V}`, from a step's value.
+static std::string fieldBody(const std::string& field, const JsonVal& value) {
+    mm::JsonSink sink;
+    sink.append("{\"field\":");
+    sink.writeJsonString(field.c_str());
+    sink.append(",\"value\":");
+    if (value.type == JsonVal::Object) sink.append(value.raw.c_str());
+    else if (value.type == JsonVal::String) sink.writeJsonString(value.c_str());
+    else if (value.type == JsonVal::Null) sink.append("\"\"");
+    else sink.append(asWritten(value).c_str());
+    sink.append("}");
+    return std::string(sink.data(), sink.size());
+}
 
 static constexpr int WARMUP_FRAMES = 10;
 
@@ -669,7 +721,7 @@ static int runScenario(const char* path) {
             }
             const char* targetId = step["id"].c_str();
             const char* key = step["key"].c_str();
-            auto* target = ctx.modules.count(targetId) ? ctx.modules[targetId] : nullptr;
+            auto* target = ctx.byId(targetId);
             if (!target) {
                 std::printf("  SET   %s: module %s not found, skipped\n", name, targetId);
                 continue;
@@ -679,6 +731,70 @@ static int runScenario(const char* path) {
             } else {
                 std::printf("  SET   %s (%s.%s)\n", name, targetId, key);
             }
+        } else if (std::strcmp(op, "apply_state") == 0) {
+            // A state document through the engine PATCH /api/state runs, from its text as written, since key order is creation order.
+            if (!step.has("document") || step["document"].type != JsonVal::Object) {
+                std::printf("  STATE %s: missing document\n", name);
+                result.check(false, name);
+                continue;
+            }
+            ensureStarted();
+            const mm::StateDocumentResult r = mm::applyStateDocument(ctx.scheduler, step["document"].raw.c_str());
+            ctx.scheduler.prepareTree();   // the engine requests one; a step that reads next needs it done
+            // `error` names the failure a step expects, and `at` where; without it the document must apply.
+            const bool wantError = step.has("error");
+            const bool held = wantError ? (!r.ok && step["error"].str == r.error && (!step.has("at") || step["at"].str == r.where))
+                                        : r.ok;
+            std::printf("  STATE %s: %s%s%s\n", name, r.ok ? "applied" : r.error, r.ok ? "" : " at ", r.ok ? "" : r.where);
+            result.check(held, name);
+        } else if (std::strcmp(op, "round_trip_state") == 0) {
+            // Every card written as its document and applied back as one, as GET /api/modules/<name>/document then PATCH /api/state do.
+            ensureStarted();
+            mm::JsonSink whole;
+            whole.append("{");
+            uint8_t cards = 0;
+            for (uint8_t m = 0; m < ctx.scheduler.moduleCount(); m++) {
+                mm::MoonModule* top = ctx.scheduler.module(m);
+                if (!top || !top->appearsInUi()) continue;
+                if (cards++) whole.append(",");
+                mm::writeStateMember(whole, *top);
+            }
+            whole.append("}");
+            const mm::StateDocumentResult r = mm::applyStateDocument(ctx.scheduler, whole.data());
+            ctx.scheduler.prepareTree();
+            std::printf("  STATE %s: %u cards, %zu bytes, %s%s%s\n", name, static_cast<unsigned>(cards), whole.size(),
+                        r.ok ? "applied" : r.error, r.ok ? "" : " at ", r.ok ? "" : r.where);
+            result.check(r.ok && !whole.overflowed(), name);
+        } else if (std::strcmp(op, "list_row") == 0) {
+            // A list's rows the way the list API reaches them: `add` a row, or find one by its `match` fields and write a `field`, `delete` it, or with neither only expect it.
+            ensureStarted();
+            ListStep ls = listStep(ctx, step);
+            if (!ls.source) {
+                std::printf("  ROW   %s: %s\n", name, ls.why);
+                result.check(false, name);
+                continue;
+            }
+            bool held = true;
+            if (step.has("add")) {
+                uint32_t id = 0;
+                held = ls.source->addListRow(id);
+                for (auto& [field, value] : step["add"].obj)
+                    held = held && ls.source->setListRowField(id, field.c_str(), fieldBody(field, value).c_str());
+                if (step.has("to")) held = held && ls.source->moveListRow(id, static_cast<uint8_t>(step["to"].asInt()));
+                std::printf("  ROW   %s: %s\n", name, held ? "added" : "add refused");
+            } else if (!ls.found) {
+                held = step.has("optional") && step["optional"].boolean;
+                std::printf("  ROW   %s: no such row%s\n", name, held ? ", skipped (optional)" : "");
+            } else if (step.has("delete") && step["delete"].boolean) {
+                held = ls.source->deleteListRow(ls.id);
+                std::printf("  ROW   %s: %s\n", name, held ? "deleted" : "delete refused");
+            } else if (step.has("field")) {
+                held = ls.source->setListRowField(ls.id, step["field"].c_str(), fieldBody(step["field"].str, step["value"]).c_str());
+                std::printf("  ROW   %s: %s %s\n", name, step["field"].c_str(), held ? "set" : "refused");
+            } else {
+                std::printf("  ROW   %s: present\n", name);
+            }
+            result.check(held, name);
         } else if (std::strcmp(op, "reboot") == 0) {
             // The scheduler IS the process here, so a restart belongs to the live tier and says so rather than pretending.
             std::printf("  REBOOT %s: skipped (no process to restart in-process)\n", name);
@@ -731,7 +847,7 @@ static int runScenario(const char* path) {
             }
             const char* targetId = step["id"].c_str();
             const char* key = step["key"].c_str();
-            auto* target = ctx.modules.count(targetId) ? ctx.modules[targetId] : nullptr;
+            auto* target = ctx.byId(targetId);
             if (!target) {
                 std::printf("  EXPECT %s: module %s not found\n", name, targetId);
                 result.check(false, name);
@@ -793,7 +909,7 @@ static int runScenario(const char* path) {
             }
             result.check(wrote, name);
             // The live API re-prepares the tree after a file changes, so a module deriving something from it (a scripted palette, a script) sees the change here too.
-            if (wrote && schedulerStarted) ctx.scheduler.prepareTree();
+            if (wrote && schedulerStarted) { ctx.scheduler.notifyFileChanged(filePath); ctx.scheduler.prepareTree(); }
         } else if (std::strcmp(op, "delete_file") == 0) {
             // Remove a file the scenario staged, so a run leaves the device as it found it; one already gone counts as removed.
             if (!step.has("path")) {
@@ -807,11 +923,11 @@ static int runScenario(const char* path) {
             if (gone) std::printf("  DELETE %s (%s)\n", name, filePath);
             else      std::printf("  DELETE %s: %s is still there\n", name, filePath);
             result.check(gone, name);
-            if (schedulerStarted) ctx.scheduler.prepareTree();   // as after a write
+            if (schedulerStarted) { ctx.scheduler.notifyFileChanged(filePath); ctx.scheduler.prepareTree(); }   // as after a write
         } else if (std::strcmp(op, "remove_module") == 0 || std::strcmp(op, "delete_module") == 0) {
             // `remove_module` and `delete_module` are aliases, and both remove a child from its parent: @xref{why-remove-module-and-delete-module-are-aliases}.
             const char* targetId = step["id"].c_str();
-            auto* target = ctx.modules.count(targetId) ? ctx.modules[targetId] : nullptr;
+            auto* target = ctx.byId(targetId);
             if (!target || !target->parent() || !target->userEditable()) {
                 // Mirror the live API: top-level and non-editable submodules stay: @xref{why-remove-module-and-delete-module-are-aliases}.
                 std::printf("  -     %s: %s not found / top-level / not editable, skipped\n", name, targetId);
@@ -827,7 +943,7 @@ static int runScenario(const char* path) {
         } else if (std::strcmp(op, "clear_children") == 0) {
             // Delete every child of a container, leaving the container itself: @xref{why-clear-children-exists}.
             const char* targetId = step["id"].c_str();
-            auto* container = ctx.modules.count(targetId) ? ctx.modules[targetId] : nullptr;
+            auto* container = ctx.byId(targetId);
             if (!container) {
                 std::printf("  clr     %s: container %s not found, skipped\n", name, targetId);
                 continue;
@@ -850,7 +966,7 @@ static int runScenario(const char* path) {
             // Replace a child with a fresh module of another type at the same slot: @xref{why-remove-module-and-delete-module-are-aliases}.
             const char* targetId = step["id"].c_str();
             const char* newType = step["type"].c_str();
-            auto* target = ctx.modules.count(targetId) ? ctx.modules[targetId] : nullptr;
+            auto* target = ctx.byId(targetId);
             if (!target || !target->parent() || !target->userEditable()) {
                 // Mirror the live API: a top-level or non-editable submodule stays: @xref{why-remove-module-and-delete-module-are-aliases}.
                 std::printf("  ~     %s: %s not found / top-level / not editable, skipped\n", name, targetId);
@@ -1059,6 +1175,8 @@ static int runScenario(const char* path) {
     auto* drivers = static_cast<mm::Drivers*>(
         ctx.modules.count("Drivers") ? ctx.modules["Drivers"] : nullptr);
     if (layer) {
+        // One frame first: a last step that prepared the tree, as a structural one does, leaves the buffer freshly allocated and empty until the next render.
+        ctx.scheduler.tick();
         auto& buf = layer->buffer();
         result.check(buf.data() != nullptr, "buffer allocated");
         result.check(buf.count() > 0, "buffer has lights");

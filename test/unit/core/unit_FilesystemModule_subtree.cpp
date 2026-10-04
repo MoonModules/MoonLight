@@ -1,9 +1,7 @@
 /// @module FilesystemModule
-/// @also Scheduler, Layer, ControlModule
+/// @also Scheduler, Layer
 
-/// The save/apply seams a preset is built on: `saveSubtreeTo` writes a subtree into a caller's buffer rather than to /.config/<TypeName>.json, and `applySubtree` puts those bytes back onto a LIVE tree at runtime, rebuilding whatever shape they describe.
-///
-/// Boot already does both halves, but only as one fused operation at startup. What these pin is the runtime behavior a preset needs and boot never exercises: applying onto a tree that is already set up, with children that must be created, replaced or destroyed while the device runs.
+/// The seams a config written to a running device uses: `saveSubtreeTo` serializes a subtree, and `applySubtree` rebuilds a tree that is already running from those bytes.
 
 #include "doctest.h"
 #include "core/system/FilesystemModule.h"
@@ -22,9 +20,7 @@
 
 namespace {
 
-// A Effects tree the same way production builds one: through the factory, so every module carries a real typeName(). That matters here rather than being ceremony, reconciliation matches children BY TYPE, and a module constructed with `new` has an empty type name that can never match.
-//
-// Children are added AFTER scheduler.setup(), because the boot load trims a live tree down to what its saved file describes: with no file, anything added before setup is deleted during it.
+// An Effects tree built through the factory, since reconciliation matches children by type, with children added after setup, since the boot load trims what no file describes.
 struct Tree {
     mm::Scheduler scheduler;
     mm::FilesystemModule* fs = nullptr;
@@ -32,7 +28,7 @@ struct Tree {
     char root_[256] = {};
 
     Tree() {
-        // Isolate the filesystem: without this the boot load reads the developer's real /.config/Effects.json and the tree arrives with whatever that machine happened to have, so the assertions below would depend on the box the tests run on. A monotonic counter, not millis(): two fixtures built in the same millisecond would share a root and read each other's files.
+        // A private root per fixture, by a counter rather than millis(), so the boot load never reads this machine's own /.config files or another fixture's.
         static unsigned seq = 0;
         std::snprintf(root_, sizeof(root_), "/tmp/mm_subtree_test_%u", ++seq);
         std::filesystem::remove_all(root_);
@@ -81,7 +77,7 @@ std::string serialize(mm::FilesystemModule* fs, mm::MoonModule* m) {
 
 }  // namespace
 
-// A subtree serializes into a caller's buffer, so a preset file can hold the same bytes the persistence engine writes rather than needing a second serializer that could drift from it.
+// A subtree serializes into a caller's buffer, the same bytes the persistence engine writes, so no second serializer can drift from it.
 TEST_CASE("saveSubtreeTo writes a subtree a caller can keep") {
     Tree t;
     auto* layer = t.add(t.layers, "Layer");
@@ -95,31 +91,31 @@ TEST_CASE("saveSubtreeTo writes a subtree a caller can keep") {
     CHECK(json.find("\"enabled\":") != std::string::npos);
 }
 
-// The round trip a preset IS: capture a tree, change it live, put the capture back. This is the whole feature in one assertion.
+// The round trip: capture a tree, change it live, put the capture back.
 TEST_CASE("applySubtree restores a tree that changed since it was captured") {
     Tree t;
     auto* layer = t.add(t.layers, "Layer");
     t.add(layer, "NoiseEffect");
     REQUIRE(std::strcmp(t.effectType(), "NoiseEffect") == 0);
 
-    const std::string preset = serialize(t.fs, t.layers);
+    const std::string saved = serialize(t.fs, t.layers);
 
     // The user changes the look: a different effect entirely.
     auto* old = layer->replaceChildAt(0, mm::ModuleFactory::create("RainbowEffect"));
     if (old) { old->release(); mm::Scheduler::deleteTree(old); }
     REQUIRE(std::strcmp(t.effectType(), "RainbowEffect") == 0);
 
-    CHECK(t.fs->applySubtree(t.layers, preset.c_str()));
+    CHECK(t.fs->applySubtree(t.layers, saved.c_str()));
     CHECK(std::strcmp(t.effectType(), "NoiseEffect") == 0);   // the captured look is back
 }
 
-// A preset that carries MORE than the device has must add what is missing: applying it on a tree whose children were deleted rebuilds them, which is what makes a preset a restore rather than a value overlay.
+// A subtree carrying more than the device has adds what is missing, so applying it is a restore rather than a value overlay.
 TEST_CASE("applySubtree recreates children the live tree no longer has") {
     Tree t;
     auto* layer = t.add(t.layers, "Layer");
     t.add(layer, "NoiseEffect");
 
-    const std::string preset = serialize(t.fs, t.layers);
+    const std::string saved = serialize(t.fs, t.layers);
 
     // Everything under Effects is removed, as a user clearing their setup would.
     auto* gone = t.layers->child(0);
@@ -128,44 +124,44 @@ TEST_CASE("applySubtree recreates children the live tree no longer has") {
     mm::Scheduler::deleteTree(gone);
     REQUIRE(t.layers->childCount() == 0);
 
-    CHECK(t.fs->applySubtree(t.layers, preset.c_str()));
+    CHECK(t.fs->applySubtree(t.layers, saved.c_str()));
     REQUIRE(t.layers->childCount() == 1);
     CHECK(std::strcmp(t.effectType(), "NoiseEffect") == 0);
 }
 
-// And the reverse: a preset captured from a smaller tree must REMOVE what it does not describe, or applying it would leave the previous look layered underneath.
-TEST_CASE("applySubtree removes children the preset does not describe") {
+// And the reverse: a subtree captured from a smaller tree REMOVES what it does not describe, or applying it would leave the previous look layered underneath.
+TEST_CASE("applySubtree removes children the subtree does not describe") {
     Tree t;
     auto* layer = t.add(t.layers, "Layer");
 
-    const std::string preset = serialize(t.fs, t.layers);   // captured with an EMPTY layer
+    const std::string saved = serialize(t.fs, t.layers);   // captured with an EMPTY layer
 
     t.add(layer, "NoiseEffect");
     REQUIRE(layer->childCount() == 1);
 
-    CHECK(t.fs->applySubtree(t.layers, preset.c_str()));
+    CHECK(t.fs->applySubtree(t.layers, saved.c_str()));
     CHECK(layer->childCount() == 0);
 }
 
-// A module type this build does not have is skipped and the rest of the preset still applies: a preset from a newer firmware, or from a board with a driver this one lacks, must degrade rather than refuse to load. Same tolerance the boot loader already has.
+// A type this build lacks is skipped and the rest applies, so a config from a newer firmware or another board degrades rather than refusing to load.
 TEST_CASE("applySubtree skips an unknown module type and applies the rest") {
     Tree t;
 
     // Hand-written: a Layer whose first child is a type no factory knows.
-    const char* preset =
+    const char* body =
         "{\"enabled\":true,"
         "\"0.type\":\"Layer\",\"0.enabled\":true,"
         "\"0.0.type\":\"NoSuchEffectXyz\",\"0.0.enabled\":true,"
         "\"0.1.type\":\"NoiseEffect\",\"0.1.enabled\":true}";
 
-    CHECK(t.fs->applySubtree(t.layers, preset));
+    CHECK(t.fs->applySubtree(t.layers, body));
 
     REQUIRE(t.layers->childCount() == 1);                       // the Layer applied
     CHECK(std::strcmp(t.effectType(), "NoiseEffect") == 0);      // and so did the effect after it
 }
 
-// Malformed JSON leaves the tree alone rather than half-applying or crashing. A truncated or corrupted preset file is the realistic case (an interrupted upload), and the device must survive it with the look it already had.
-TEST_CASE("applySubtree survives a corrupt preset") {
+// Malformed JSON leaves the tree alone rather than half-applying or crashing. A truncated or corrupted file is the realistic case (an interrupted upload), and the device must survive it with the look it already had.
+TEST_CASE("applySubtree survives a corrupt subtree") {
     Tree t;
     auto* layer = t.add(t.layers, "Layer");
     t.add(layer, "NoiseEffect");
@@ -179,31 +175,7 @@ TEST_CASE("applySubtree survives a corrupt preset") {
     CHECK(t.layers->childCount() == 1);
 }
 
-// Several subtrees share one flat object, each under its own "<TypeName>." prefix, and each reads back independently. This is the shape a preset file uses: it is what lets one file carry a selectable set of captures without a nested-object parser.
-TEST_CASE("a prefixed subtree round-trips inside a larger object") {
-    Tree t;
-    auto* layer = t.add(t.layers, "Layer");
-    t.add(layer, "NoiseEffect");
-
-    mm::JsonSink sink;
-    sink.append("{\"captures\":\"Effects\",");
-    REQUIRE(t.fs->saveSubtreeTo(t.layers, sink, "Effects."));
-    sink.append("}");
-    const std::string preset(sink.data(), sink.size());
-
-    CHECK(preset.find("\"Effects.0.type\":\"Layer\"") != std::string::npos);
-    CHECK(preset.find("\"Effects.0.0.type\":\"NoiseEffect\"") != std::string::npos);
-
-    // Change the look, then restore it from the prefixed body.
-    auto* old = layer->replaceChildAt(0, mm::ModuleFactory::create("RainbowEffect"));
-    if (old) { old->release(); mm::Scheduler::deleteTree(old); }
-    REQUIRE(std::strcmp(t.effectType(), "RainbowEffect") == 0);
-
-    CHECK(t.fs->applySubtree(t.layers, preset.c_str(), "Effects."));
-    CHECK(std::strcmp(t.effectType(), "NoiseEffect") == 0);
-}
-
-// The live-reconfiguration rule extended to the file-upload path: writing /.config/<Type>.json (the File Manager upload, a config restore) applies onto the RUNNING tree, no reboot. Found as a real gap when the config-restore flow ended in a "reboot device" button.
+// Writing /.config/<Type>.json, an upload or a restore, applies onto the running tree without a reboot.
 TEST_CASE("a written config file applies to the running tree without a reboot") {
     Tree t;
     auto* layer = t.add(t.layers, "Layer");
@@ -230,7 +202,7 @@ TEST_CASE("a written config file applies to the running tree without a reboot") 
         "/.config/A23456789012345678901234567890123456789012345678901234567890123456789.json"));
 }
 
-// The runtime twin of boot's phase 5: a restored config can carry a value for a control that only exists once prepare() has run (a MoonLive script's declared controls). The write requests a values-reapply that fires right after the next prepared tick, so the saved value lands.
+// A restored value for a control that exists only after prepare(), such as a script's, lands once the next prepared tick reapplies the values.
 TEST_CASE("a restored value for a prepare-time control lands after the next prepare") {
     Tree t;
     auto* layer = t.add(t.layers, "Layer");
@@ -295,7 +267,7 @@ TEST_CASE("a value that lands at the reapply reaches the module, and an unchange
     CHECK(w->otherChanges == 0);   // `steady` was already in place, so boot side effects stay where a value moved
 }
 
-// The upload path queues, the render tick applies: nothing mutates the tree on the caller's task (re-running a system module's setup() on the web-server task crashed the ESP32), and a multi-file upload coalesces to one apply per module.
+// The upload path queues and the render tick applies, since setup() on the web-server task crashed the ESP32, and a multi-file upload applies once per module.
 TEST_CASE("a requested config apply lands on the next tick, not on the requesting task") {
     Tree t;
     auto* layer = t.add(t.layers, "Layer");

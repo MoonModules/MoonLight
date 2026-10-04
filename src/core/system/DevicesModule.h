@@ -93,6 +93,9 @@ public:
         sink.append("}");
     }
 
+    /// The rows are configuration, restored by restoreList.
+    bool persistsList() const override { return true; }
+
     /// Rebuild the list from the saved array, so the last-known set shows before any packet.
     bool restoreList(const char* json, const char* key) override {
         deviceCount_ = 0;

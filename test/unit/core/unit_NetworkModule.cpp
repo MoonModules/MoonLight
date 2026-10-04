@@ -247,7 +247,7 @@ TEST_CASE("a failed join keeps the typed password for a retry") {
     s.net.tick1s();
     mm::JsonSink sink;
     avail->writeListRowDetail(sink, 0);
-    CHECK(std::string(sink.data(), sink.size()).find("\"typo\"") != std::string::npos);
+    CHECK(std::string(sink.data(), sink.size()).find("\"LiMqNQ==\"") != std::string::npos);   // "typo", obfuscated as every password on the page
 }
 
 namespace {

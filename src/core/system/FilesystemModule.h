@@ -87,11 +87,11 @@ public:
     /// Record that something changed, which starts the debounce.
     static void noteDirty();
 
-    /// Serialize a subtree into a caller's sink, the prefix letting several share one object.
-    bool saveSubtreeTo(MoonModule* m, JsonSink& sink, const char* prefix = "");
+    /// Serialize a subtree into a caller's sink.
+    bool saveSubtreeTo(MoonModule* m, JsonSink& sink);
 
     /// Apply a serialized subtree to a live tree, driving the lifecycle a runtime rebuild needs.
-    bool applySubtree(MoonModule* m, const char* json, const char* prefix = "");
+    bool applySubtree(MoonModule* m, const char* json);
 
     /// Apply a written config file onto the running tree, so a restored backup needs no reboot.
     bool applyConfigFile(const char* path);

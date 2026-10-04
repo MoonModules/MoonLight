@@ -148,7 +148,7 @@ Detail: [technical](moxygen/PanelCardDriver.md)
 Drives **Philips Hue bulbs as pixels**: each color bulb in the driver's window becomes one pixel, pushed to the bridge over its HTTP API. Paced to the bridge's ~10 cmd/s limit, so smooth ambient color, not strobing. Up to 32 bulbs, which is a LAN's worth and bounds the driver's memory.
 
 - `bridgeIp`: the bridge's LAN IPv4.
-- `appKey`: the Hue app key; filled by `pair`, persisted.
+- `appKey`: the Hue app key, filled by `pair`; a password, so masked and kept out of documents.
 - `pair`: button: press it, then the bridge's physical link button within ~30 s to claim a key.
 - `room` / `light`: dropdowns narrowing which color lights are driven (both default `All`).
 

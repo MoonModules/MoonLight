@@ -1,0 +1,253 @@
+{
+  "name": "scenario_Control_a_palette_preset_changes_only_the_palette",
+  "module": "ControlModule",
+  "mode": "mutate",
+  "also": [
+    "Drivers",
+    "Scheduler"
+  ],
+  "description": "A preset is any part of the state, so one that sets only the palette, applied over a running look, changes the palette and leaves the look and every other driver setting alone. Both pads stay lit, each holding its own container.",
+  "fixture": [
+    {
+      "name": "fix-control",
+      "op": "add_module",
+      "id": "Control",
+      "type": "ControlModule"
+    },
+    {
+      "name": "fix-layouts",
+      "op": "add_module",
+      "id": "Layouts",
+      "type": "Layouts"
+    },
+    {
+      "name": "fix-grid",
+      "op": "add_module",
+      "id": "Grid",
+      "type": "GridLayout",
+      "parent_id": "Layouts",
+      "props": {
+        "width": 16,
+        "height": 16
+      }
+    },
+    {
+      "name": "fix-effects",
+      "op": "add_module",
+      "id": "Effects",
+      "type": "Effects",
+      "props": {
+        "layouts": "Layouts"
+      }
+    },
+    {
+      "name": "fix-layer",
+      "op": "add_module",
+      "id": "Layer",
+      "type": "Layer",
+      "parent_id": "Effects",
+      "props": {
+        "layouts": "Layouts"
+      }
+    },
+    {
+      "name": "fix-noise",
+      "description": "The look the device runs before any preset, so it still renders once the scenario removes its own.",
+      "op": "add_module",
+      "id": "Noise",
+      "type": "NoiseEffect",
+      "parent_id": "Layer"
+    },
+    {
+      "name": "fix-drivers",
+      "op": "add_module",
+      "id": "Drivers",
+      "type": "Drivers",
+      "props": {
+        "effects": "Effects"
+      }
+    }
+  ],
+  "reset": [
+    {
+      "name": "leave-no-look-behind",
+      "description": "null removes the effect a previous run's look left behind.",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "ScnLook": null
+          }
+        }
+      }
+    }
+  ],
+  "steps": [
+    {
+      "name": "a-known-palette",
+      "description": "Start from Rainbow at a brightness the palette preset must not touch; the live runner puts both back afterwards.",
+      "op": "set_control",
+      "id": "Drivers",
+      "key": "palette",
+      "value": "Rainbow"
+    },
+    {
+      "name": "a-known-brightness",
+      "op": "set_control",
+      "id": "Drivers",
+      "key": "brightness",
+      "value": 40
+    },
+    {
+      "name": "write-the-look",
+      "description": "An effects preset, written the way the File Manager or the gallery writes one.",
+      "op": "write_file",
+      "path": "/.config/presets/scenario-look.json",
+      "value": "{\"Effects\":{\"Layer\":{\"ScnLook\":{\"type\":\"RainbowEffect\",\"speed\":90}}}}"
+    },
+    {
+      "name": "write-the-palette",
+      "description": "A preset setting one control of Drivers and nothing else.",
+      "op": "write_file",
+      "path": "/.config/presets/scenario-ocean.json",
+      "value": "{\"Drivers\":{\"palette\":\"Ocean\"}}"
+    },
+    {
+      "name": "apply-the-look",
+      "description": "A pad click: the file appeared on its own, since a written file rebuilds the tree.",
+      "op": "list_row",
+      "id": "Control",
+      "key": "presets",
+      "match": {
+        "name": "scenario-look"
+      },
+      "field": "activate"
+    },
+    {
+      "name": "the-look-runs",
+      "op": "expect_control",
+      "id": "ScnLook",
+      "key": "speed",
+      "equals": 90
+    },
+    {
+      "name": "apply-the-palette",
+      "op": "list_row",
+      "id": "Control",
+      "key": "presets",
+      "match": {
+        "name": "scenario-ocean"
+      },
+      "field": "activate"
+    },
+    {
+      "name": "the-palette-changed",
+      "op": "expect_control",
+      "id": "Drivers",
+      "key": "palette",
+      "equals": "Ocean"
+    },
+    {
+      "name": "the-brightness-did-not",
+      "op": "expect_control",
+      "id": "Drivers",
+      "key": "brightness",
+      "equals": 40
+    },
+    {
+      "name": "the-look-still-runs",
+      "op": "expect_control",
+      "id": "ScnLook",
+      "key": "speed",
+      "equals": 90
+    },
+    {
+      "name": "the-look-pad-stays-lit",
+      "description": "Each preset holds the container it sets, so the palette took the Drivers pad and left the look's.",
+      "op": "list_row",
+      "id": "Control",
+      "key": "presets",
+      "match": {
+        "name": "scenario-look",
+        "active": true
+      }
+    },
+    {
+      "name": "the-palette-pad-is-lit",
+      "op": "list_row",
+      "id": "Control",
+      "key": "presets",
+      "match": {
+        "name": "scenario-ocean",
+        "active": true
+      }
+    },
+    {
+      "name": "renders",
+      "op": "measure",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 324,
+            "p95": 462,
+            "min": 5,
+            "max": 462,
+            "n": 3,
+            "samples": [5, 462, 324]
+          },
+          "last_updated": "2026-10-04"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2073,
+            "p95": 2703,
+            "min": 2071,
+            "max": 2703,
+            "n": 3,
+            "samples": [2703, 2071, 2073]
+          },
+          "free_heap": {
+            "p50": 8460903,
+            "p95": 8461523,
+            "min": 8458075,
+            "max": 8461523,
+            "n": 3,
+            "samples": [8461523, 8460903, 8458075]
+          },
+          "max_alloc_block": {
+            "p50": 53248,
+            "p95": 53248,
+            "min": 49152,
+            "max": 53248,
+            "n": 3,
+            "samples": [53248, 53248, 49152]
+          },
+          "last_updated": "2026-10-04"
+        }
+      }
+    },
+    {
+      "name": "remove-the-look",
+      "description": "Leave the device's pads and tree as they were found.",
+      "op": "delete_file",
+      "path": "/.config/presets/scenario-look.json"
+    },
+    {
+      "name": "remove-the-palette",
+      "op": "delete_file",
+      "path": "/.config/presets/scenario-ocean.json"
+    },
+    {
+      "name": "remove-the-effect",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "ScnLook": null
+          }
+        }
+      }
+    }
+  ]
+}

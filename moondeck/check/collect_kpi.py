@@ -433,7 +433,11 @@ def collect_code():
 
     # The code report's function rules, counted by the same function; its clones and file sizes are the report's alone, a pass too slow for every KPI run.
     funcs = check_code.measure()
-    rows = check_code.findings(funcs) if funcs else []
+    if funcs is None:
+        kpi["code_findings"] = None   # lizard read nothing: unavailable, never a clean zero
+        kpi["code_details"] = []
+        return kpi
+    rows = check_code.findings(funcs)
     kpi["code_findings"] = len(rows)
     kpi["code_details"] = [f"{value} {rule}: {name} ({file})" for file, rule, name, value in rows]
 
@@ -461,7 +465,9 @@ def format_oneliner(desktop, esp32, code):
         parts.append(f"heap:{esp32['heap_free']//1024}KB")
     parts.append(f"src:{code['src_files']}({code['src_lines']})")
     parts.append(f"test:{code['test_files']}({code['test_lines']})")
-    if code["code_findings"] > 0:
+    if code["code_findings"] is None:
+        parts.append("functions-over:unmeasured")
+    elif code["code_findings"] > 0:
         parts.append(f"functions-over:{code['code_findings']}")
     return "KPI: " + " | ".join(parts)
 
@@ -503,7 +509,7 @@ def format_full(desktop, esp32, code):
     lines.append(f"    {code['src_files']} source files ({code['src_lines']} lines)")
     lines.append(f"    {code['test_files']} test files ({code['test_lines']} lines)")
     lines.append(f"    {code['specs']} specs, {code['scenarios']} scenarios")
-    lines.append(f"    Functions over a limit: {code['code_findings']}")
+    lines.append(f"    Functions over a limit: {'not measured (lizard read nothing)' if code['code_findings'] is None else code['code_findings']}")
     for w in code.get("code_details", []):
         lines.append(f"      {w}")
 

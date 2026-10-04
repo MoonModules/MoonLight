@@ -278,6 +278,28 @@ public:
     /// The roles this module accepts as children, which is what the add-child picker offers.
     virtual const char* acceptsChildRoles() const { return ""; }
 
+    /// Whether a child of this role may go here, read from acceptsChildRoles(); the rule every path that adds a child enforces.
+    bool acceptsRole(ModuleRole childRole) const {
+        const char* csv = acceptsChildRoles();
+        if (!csv || !csv[0]) return false;
+        const char* want = roleName(childRole);
+        const size_t wantLen = std::strlen(want);
+        for (const char* p = csv; *p;) {
+            const char* comma = std::strchr(p, ',');
+            const size_t len = comma ? static_cast<size_t>(comma - p) : std::strlen(p);
+            if (len == wantLen && std::strncmp(p, want, len) == 0) return true;
+            if (!comma) break;
+            p = comma + 1;
+        }
+        return false;
+    }
+
+    /// Whether some controls appear only once prepare has run, as a script's do once it compiles; a state document waits for that prepare to set them.
+    virtual bool declaresControlsAtPrepare() const { return false; }
+
+    /// A file changed through the API or a restore; a module that keeps something read from files updates what concerns it.
+    virtual void onFileChanged(const char* /*path*/) {}
+
     /// Whether the user may delete or replace this module, which a load-bearing child declines.
     virtual bool userEditable() const { return true; }
 

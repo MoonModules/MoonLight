@@ -110,7 +110,7 @@ A row's password travels to the UI in the clear, over the API and the WebSocket,
 5. ✅ **Per-network IP settings**, applied on join and live. 🚧 Validating before use and warning before a live change are not built (below).
 6. ✅ **Access point submodule:** `opens`, `password`, `clients`, `channel` and `hidden`, with the refusal of "never" when nothing else is configured. Tests on the cascade with each `opens` value.
 7. ✅ **Captive portal and the handoff:** the DNS reply builder with its unit tests (an A query, another type, a malformed and an oversized packet), the socket's lifecycle tied to the access point, the HTTP redirect with a test, and the new-address page with the access point held open.
-8. **Bench**, ✅ for what an S3 shows: two known networks with one absent, first setup from a computer, a protected hidden access point, the iPhone sign-in screen. 🚧 The rest waits (below). an S3 with two known networks, switching when one goes away, and a hidden one; a channel 13 router; static on one network and DHCP on the other; a P4 or classic Ethernet board with a static wired address; an iPhone and an Android phone doing first setup end to end, from joining the access point to reaching the device on the home network.
+8. **Bench**, ✅ for what an S3 shows: two known networks with one absent, first setup from a computer, a protected hidden access point, the iPhone sign-in screen. 🚧 The rest waits (below).
 
 ## Verified, and what waits for more hardware
 

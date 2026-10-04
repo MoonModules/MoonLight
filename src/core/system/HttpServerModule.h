@@ -147,7 +147,7 @@ class Scheduler;
 /// ## The per-module state route
 ///
 /// One module's JSON is served on its own route, byte-identical to that module's entry in the full state, children included.
-/// The UI puts a link to it on every card, so an issue report can carry the state of the one module that misbehaves rather than the whole tree.
+/// An issue report carries it from the card's `{ }` popup, and `/document` on the same route serves the module as the state document a preset holds.
 /// A name in the path may be percent-encoded, since a module name can carry a space.
 ///
 /// ## Two firmware install paths
@@ -500,9 +500,6 @@ private:
     int      carryClient_ = -1;
     uint16_t boundPort_ = 0;   // the port open() actually bound; 0 when no server is live
 
-    // Obfuscation, not a secret: it only stops a password being plainly readable in a response.
-    static constexpr uint8_t PASSWORD_XOR_KEY = 0x5A;
-
     // HTTP handling
     void handleConnection(platform::TcpConnection& conn);
     void sendResponse(platform::TcpConnection& conn, int status, const char* contentType, const char* body);
@@ -534,6 +531,8 @@ private:
 
     // Control setter
     void handleSetControl(platform::TcpConnection& conn, const char* body);
+    /// Apply a state document from the request body, which may outgrow the request buffer: `PATCH /api/state`.
+    void handleApplyState(platform::TcpConnection& conn, const char* initialBody, size_t initialLen, size_t contentLen);
 
     // Delegates to the scheduler's own canonical tree walk, guarding a null scheduler first.
     MoonModule* findModuleByName(const char* name);

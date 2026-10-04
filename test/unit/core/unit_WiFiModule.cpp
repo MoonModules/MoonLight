@@ -190,3 +190,19 @@ TEST_CASE("a scan that never finishes ends after its time") {
     CHECK(std::string(w.status()).find("did not finish") != std::string::npos);
     mm::platform::setTestWifiScan(nullptr, 0);
 }
+
+// The list shows a known network's password as the API shows a Password control's: obfuscated, never as typed, while the saved file keeps it as it is.
+TEST_CASE("a known network's password reaches the page obfuscated") {
+    mm::WiFiModule w;
+    w.rebuildControls();
+    uint32_t a = 0;
+    REQUIRE(w.addListRow(a));
+    REQUIRE(w.setListRowField(a, "ssid", "{\"value\":\"workshop\"}"));
+    REQUIRE(w.setListRowField(a, "password", "{\"value\":\"pw1\"}"));
+    mm::JsonSink detail;
+    w.writeListRowDetail(detail, 0);
+    const std::string shown(detail.data(), detail.size());
+    CHECK(shown.find("pw1") == std::string::npos);
+    CHECK(shown.find("\"type\":\"password\",\"value\":\"Ki1r\"") != std::string::npos);   // "pw1" XOR 0x5A, base64
+    CHECK(saved(w).find("pw1") != std::string::npos);
+}

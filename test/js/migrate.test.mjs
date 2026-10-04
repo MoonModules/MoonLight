@@ -180,6 +180,38 @@ test("preset payload values rename (the captured container), other content byte-
     assert.ok(report.some(r => r.detail.includes("preset value")));
 });
 
+test("a flat preset becomes a state document, each module named as the device names it", () => {
+    const flat = {
+        slot: 3, captures: "Layers",
+        "Layers.enabled": true,
+        "Layers.0.type": "Layer", "Layers.0.opacity": 200, "Layers.0.enabled": true,
+        "Layers.0.0.type": "NoiseEffect", "Layers.0.0.scale": 4, "Layers.0.0.enabled": true,
+        "Layers.1.type": "Layer", "Layers.1.enabled": false,
+        "Layers.1.0.type": "NoiseEffect", "Layers.1.0.enabled": true,
+    };
+    const { files, report } = applyMigrations({ "/.config/presets/look.json": JSON.stringify(flat) });
+    const doc = JSON.parse(files["/.config/presets/look.json"]);
+    assert.deepEqual(doc, {
+        slot: 3,
+        Effects: {
+            "$patch": "replace", enabled: true,
+            Layer: { type: "Layer", "$patch": "replace", opacity: 200, enabled: true,
+                     Noise: { type: "NoiseEffect", "$patch": "replace", scale: 4, enabled: true } },
+            "Layer-2": { type: "Layer", "$patch": "replace", enabled: false,
+                         "Noise-2": { type: "NoiseEffect", "$patch": "replace", enabled: true } },
+        },
+    });
+    // Key order is creation order on the device, so the document keeps the file's.
+    assert.deepEqual(Object.keys(doc.Effects), ["$patch", "enabled", "Layer", "Layer-2"]);
+    assert.ok(report.some(r => r.detail.includes("state document")));
+});
+
+test("a preset that is already a document passes through", () => {
+    const doc = '{"Drivers":{"palette":"Ocean"}}';
+    const { files } = applyMigrations({ "/.config/presets/ocean.json": doc });
+    assert.equal(files["/.config/presets/ocean.json"], doc);
+});
+
 test("unknown content passes through untouched with an empty report", () => {
     const cfg = JSON.stringify({ modern: true, "0.type": "NoiseEffect", "0.speed": 128 });
     const { files, report } = applyMigrations({ "/.config/Effects.json": cfg });
@@ -259,4 +291,16 @@ test("an E1.31 multicast output becomes E1.31, flagged to set its addressing", (
     const { files, report } = applyMigrations({ "/.config/Drivers.json": JSON.stringify(drivers) });
     assert.equal(JSON.parse(files["/.config/Drivers.json"])["0.protocol"], 1);
     assert.ok(report.some(r => r.kind === "review" && r.detail.includes("addressing")));
+});
+
+test("a legacy network joins a WiFi child's saved known list rather than replacing it", () => {
+    const cfg = { ssid: "old", password: "pw", "0.type": "WiFiModule", "0.known": [{ id: 4, ssid: "saved", password: "x" }] };
+    const { files, report } = applyMigrations({ "/.config/NetworkModule.json": JSON.stringify(cfg) });
+    const out = JSON.parse(files["/.config/NetworkModule.json"]);
+    assert.deepEqual(out["0.known"].map(r => [r.id, r.ssid]), [[5, "old"], [4, "saved"]]);
+    // The same network already saved is kept as saved, and the report says so.
+    const dup = applyMigrations({ "/.config/NetworkModule.json": JSON.stringify({ ssid: "saved", "0.type": "WiFiModule", "0.known": [{ id: 4, ssid: "saved", password: "x" }] }) });
+    const kept = JSON.parse(dup.files["/.config/NetworkModule.json"]);
+    assert.deepEqual(kept["0.known"], [{ id: 4, ssid: "saved", password: "x" }]);
+    assert.ok(dup.report.some(r => r.kind === "review" && r.detail.includes("already has saved")));
 });

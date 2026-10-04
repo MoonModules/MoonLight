@@ -13,6 +13,7 @@ idf_component_register(
         "../../src/core/system/FileManagerModule.cpp"
         "../../src/core/system/MqttModule.cpp"
         "../../src/core/module/Scheduler.cpp"
+        "../../src/core/module/StateDocument.cpp"
         "../../src/core/util/sha256.cpp"
         "../../src/core/moonlive/MoonLive.cpp"
         "../../src/core/moonlive/MoonLiveCompiler.cpp"

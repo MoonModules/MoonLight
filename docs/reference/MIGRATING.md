@@ -8,8 +8,6 @@ MoonLight ships **no migration code**: the persistence layer is robust by defaul
 
 **Read this when upgrading a device that already holds persisted state.** Entries are newest first. Each says what changed and what to do; most need nothing at all, because the lost value re-populates on next use.
 
-**MoonLive is exempt until it launches.** Nobody is running scripts on a device yet, so a break in the script language or its storage cannot strand anyone, and an entry here would describe an upgrade path no user can take. Its breaking changes are recorded in the commit and PR record instead. This exemption ends at the first release that ships MoonLive as a supported feature; from then it follows the same rule as everything else.
-
 **Action legend**, how much work an entry costs you:
 
 | Action | Meaning |
@@ -23,6 +21,14 @@ MoonLight ships **no migration code**: the persistence layer is robust by defaul
 ---
 
 ## Unreleased
+
+### A preset is a state document
+
+**Action: *update a file*, which a backup and restore does for you.**
+
+A preset file holds the document `PATCH /api/state` applies, so a preset can hold any part of the state, such as a palette alone.
+A preset saved before this release is listed on its pad but not applied, and the card says so.
+Back up the device and restore the backup: Restore rewrites each older preset as a document.
 
 ### A MoonBase from before this release misses the Ethernet wiring and the power cap
 

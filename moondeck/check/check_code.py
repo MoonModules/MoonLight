@@ -43,7 +43,7 @@ MIN_CLONE_TOKENS = 50
 LIZARD_ARGS = ["src/", "-l", "cpp", "-x", "src/ui/*", "-x", "src/platform/desktop/vendor/*", "-ENS"]
 # Every code file we own, which the file-length and duplication rules both read; vendored and generated files are not ours to shrink.
 FILE_GLOBS = ("src/**/*.h", "src/**/*.cpp", "src/**/*.js", "moondeck/**/*.py", "mooninstaller/*.js", "test/**/*.cpp", "test/**/*.py", "test/**/*.mjs")
-FILE_EXCLUDE = ("src/platform/desktop/vendor/", "test/doctest.h")
+FILE_EXCLUDE = ("src/platform/desktop/vendor/", "src/ui/vendor/", "test/doctest.h")
 
 RULES = {"complex function": f"cyclomatic complexity > {MAX_CCN}",
          "long function": f"> {MAX_NLOC} lines of code",
@@ -103,8 +103,9 @@ def findings(funcs) -> list:
 
 def owned_files() -> list:
     """The code files we own, tracked by git and matched by FILE_GLOBS, less the vendored ones."""
-    out = subprocess.run(["git", "ls-files", *FILE_GLOBS], cwd=ROOT, capture_output=True, text=True).stdout.split()
-    return [rel for rel in out if not rel.startswith(FILE_EXCLUDE)]
+    # A git that does not answer raises: an empty list would read as a tree with nothing to measure.
+    proc = subprocess.run(["git", "ls-files", *FILE_GLOBS], cwd=ROOT, capture_output=True, text=True, timeout=60, check=True)
+    return [rel for rel in proc.stdout.split() if not rel.startswith(FILE_EXCLUDE)]
 
 
 def clones():

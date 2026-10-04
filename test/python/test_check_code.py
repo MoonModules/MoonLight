@@ -84,3 +84,8 @@ def test_a_clone_counts_under_both_of_its_files_and_names_the_other():
     assert rows[0][2] == "lines 10-16, also in src/light/effects/B.h:40"   # the span from start and length, since jscpd's end field is unreliable
     assert rows[1][2] == "lines 40-46, also in src/light/effects/A.h:10"
     assert check_code.clone_rows({"duplicates": []}) == ([], 0.0)
+
+
+def test_the_baseline_is_the_committed_report_and_a_report_never_committed_is_a_first_run():
+    assert _ratchet.committed(_ratchet.ROOT / "docs/reference/metrics/docgen.md")
+    assert _ratchet.committed(_ratchet.ROOT / "docs/reference/metrics/no-such-report.md") is None

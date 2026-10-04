@@ -147,6 +147,57 @@ export const PRESET_VALUE_RENAMES = {
     "layer": { to: "effects", date: "2026-08-08" },
 };
 
+// The name a module takes on the device: its type without the role noun, as ModuleFactory::displayNameFor gives it, in the 15 characters a name holds.
+const ROLE_NOUNS = ["Effect", "Modifier", "Layout", "Driver", "Module", "Service"];
+const kNameMax = 15;
+function displayName(type) {
+    const noun = ROLE_NOUNS.find(n => type.length > n.length && type.endsWith(n));
+    return (noun ? type.slice(0, -noun.length) : type).slice(0, kNameMax);
+}
+
+// One module of a flat config object, the keys under `prefix`, as a state document member: its controls, then its children named as the device names them.
+function documentNode(cfg, prefix, type, unique) {
+    const node = type ? { type, "$patch": "replace" } : { "$patch": "replace" };
+    for (const [k, v] of Object.entries(cfg)) {
+        const rest = k.startsWith(prefix) ? k.slice(prefix.length) : null;
+        if (rest !== null && !rest.includes(".") && rest !== "type") node[rest] = v;
+    }
+    for (let i = 0; Object.prototype.hasOwnProperty.call(cfg, `${prefix}${i}.type`); i++) {
+        const t = cfg[`${prefix}${i}.type`];
+        node[unique(displayName(t))] = documentNode(cfg, `${prefix}${i}.`, t, unique);
+    }
+    return node;
+}
+
+/// A preset saved before presets were state documents (2026-10-04): flat `<Container>.<i>.<control>` keys under a `captures` header, rewritten as the document the device applies.
+/// Each container's keys without its prefix are its config file, so the config renames apply to them as well; names are unique across the document, as on the device.
+export function presetToDocument(flat, file, report) {
+    const doc = Number.isInteger(flat.slot) ? { slot: flat.slot } : {};
+    const used = new Set();
+    const unique = (name) => {
+        let n = name;
+        for (let i = 2; used.has(n); i++) n = name.slice(0, kNameMax - `-${i}`.length) + `-${i}`;
+        used.add(n);
+        return n;
+    };
+    const containers = String(flat.captures).split(",").filter(Boolean);
+    containers.forEach(c => used.add(c));
+    for (const container of containers) {
+        // A container renamed since keeps its old key prefix in the file.
+        const prefixes = [container, ...Object.entries(FILE_RENAMES)
+            .filter(([, r]) => r.to === `${container}.json`).map(([f]) => f.slice(0, -".json".length))];
+        const sub = {};
+        for (const [k, v] of Object.entries(flat)) {
+            const p = prefixes.find(x => k.startsWith(`${x}.`));
+            if (p) sub[k.slice(p.length + 1)] = v;
+        }
+        const cfgFile = `/.config/${container}.json`;
+        doc[container] = documentNode(moveToChild(renameKeys(sub, cfgFile, report), cfgFile, report), "", null, unique);
+    }
+    report.push({ kind: "renamed", where: file, detail: "preset → state document (2026-10-04)" });
+    return doc;
+}
+
 // Controls that moved from a container onto a wired child, keyed by the container's type.
 // A moved key leaves the container; a copied one stays, because the container still reads it; a `row` entry folds keys into the first row of one of the child's lists.
 export const CHILD_MOVES = {
@@ -204,10 +255,18 @@ function moveToChild(obj, file, report) {
             report.push({ kind: "renamed", where: `${file} ${k}`, detail: `copied to ${mv.child} as ${mv.copy[k]} (${mv.date})` });
         }
         if (rowKeys.length) {
-            const row = { id: 1 };
+            // Into the child's saved list when it has one, first since it was the one network; a row already naming it stays as saved.
+            const listKey = `${n}.${mv.row.list}`;
+            const list = Array.isArray(out[listKey]) ? out[listKey] : [];
+            const row = { id: list.reduce((m, r) => Math.max(m, Number(r.id) || 0), 0) + 1 };
             for (const k of Object.keys(mv.row.fields)) if (has(k)) row[mv.row.fields[k]] = out[k];
-            out[`${n}.${mv.row.list}`] = [row];
-            report.push({ kind: "renamed", where: `${file} ${rowKeys.join(", ")}`, detail: `moved to ${mv.child}'s ${mv.row.list} list (${mv.date})` });
+            const key = mv.row.fields[mv.row.key];
+            if (list.some(r => r[key] === row[key])) {
+                report.push({ kind: "review", where: `${file} ${rowKeys.join(", ")}`, detail: `${mv.child}'s ${mv.row.list} list already has ${row[key]}; its saved row was kept (${mv.date})` });
+            } else {
+                out[listKey] = [row, ...list];
+                report.push({ kind: "renamed", where: `${file} ${rowKeys.join(", ")}`, detail: `moved to ${mv.child}'s ${mv.row.list} list (${mv.date})` });
+            }
         }
         for (const k of dropKeys) delete out[k];
     }
@@ -302,6 +361,12 @@ export function applyMigrations(files) {
                     text = text.split(token).join(JSON.stringify(pr.to));
                     report.push({ kind: "renamed", where: newPath, detail: `preset value ${oldV} → ${pr.to} (${pr.date})` });
                 }
+            }
+            // A flat preset becomes a document, the only format the device applies.
+            let parsed = null;
+            try { parsed = JSON.parse(text); } catch (_) { /* not JSON: restored as it is */ }
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && "captures" in parsed) {
+                text = JSON.stringify(presetToDocument(parsed, newPath, report));
             }
             out[newPath] = text;
             continue;

@@ -49,6 +49,9 @@ public:
         script_.publishDeclaredControls(controls_);
     }
 
+    /// The script's controls appear once prepare has compiled it.
+    bool declaresControlsAtPrepare() const override { return true; }
+
     /// Compile the script, where the lights themselves are placed by whoever asks.
     void prepare() override {
         compile();

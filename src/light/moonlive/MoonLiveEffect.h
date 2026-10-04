@@ -45,6 +45,9 @@ public:
         return std::strcmp(controlName, "script") == 0;
     }
 
+    /// The script's controls appear once prepare has compiled it.
+    bool declaresControlsAtPrepare() const override { return true; }
+
     // A failed compile leaves tick a no-op, so the effect renders dark and the device keeps running.
     /// Compile the script if the file changed, then surface whatever it declares.
     void prepare() override {

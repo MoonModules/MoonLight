@@ -3,6 +3,7 @@
 /// Public surface and class layout live in Scheduler.h.
 /// @{
 #include "core/module/Scheduler.h"
+#include "core/module/StateDocument.h"
 
 #include "core/module/Control.h"    // applyControlValue + ApplyResult in setControl
 #include "core/util/JsonUtil.h"   // mm::json::parseBool for the "enabled" pseudo-control
@@ -154,9 +155,26 @@ uint32_t Scheduler::elapsed() const {
 }
 
 void Scheduler::prepareTree() {
+    // This walk is the one a pending request asked for; a request made during it still stands.
+    prepareRequested_.store(false, std::memory_order_relaxed);
     for (uint8_t i = 0; i < moduleCount_; i++) {
         modules_[i]->applyState();
     }
+    // Controls a state document named before their script compiled; this prepare compiled it.
+    applyDeferredControls(*this);
+}
+
+namespace {
+void notifyTree(MoonModule* m, const char* path) {
+    m->onFileChanged(path);
+    for (uint8_t i = 0; i < m->childCount(); i++)
+        if (MoonModule* c = m->child(i)) notifyTree(c, path);
+}
+}  // namespace
+
+void Scheduler::notifyFileChanged(const char* path) {
+    for (uint8_t i = 0; i < moduleCount_; i++)
+        if (modules_[i]) notifyTree(modules_[i], path);
 }
 
 void Scheduler::deleteTree(MoonModule* mod) {

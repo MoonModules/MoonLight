@@ -82,8 +82,8 @@ TEST_CASE("a MoonBase that does not match the app says so, and only then") {
     std::strncpy(mm::g_otaStatus, "idle", sizeof(mm::g_otaStatus));
     mm::platform::setTestMoonBase("0.0.1+abc12345+", "Oct  4 2026 10:31:00");
     mm::FirmwareUpdateModule fw;
-    fw.setup();
     fw.defineControls();
+    fw.setup();
     REQUIRE(readOnly(fw, "appVersion") != nullptr);
     CHECK(std::strcmp(readOnly(fw, "appVersion"), mm::kVersion) == 0);
     REQUIRE(readOnly(fw, "moonbaseMismatch") != nullptr);
@@ -102,8 +102,8 @@ TEST_CASE("a MoonBase that does not match the app says so, and only then") {
     std::snprintf(matching, sizeof(matching), "%s+abc12345", mm::kVersion);
     mm::platform::setTestMoonBase(matching, "Oct  4 2026 10:31:00");
     mm::FirmwareUpdateModule same;
-    same.setup();
     same.defineControls();
+    same.setup();
     same.tick1s();
     CHECK(same.status() == nullptr);
     CHECK(readOnly(same, "moonbaseMismatch") == nullptr);

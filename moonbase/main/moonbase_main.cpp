@@ -680,7 +680,7 @@ void unattendedInstallTask(void*) {
         if (attempt < 2 && !cancelRequested_)
             std::snprintf(status_, sizeof(status_), "download failed, retrying");
     }
-    clearStagedInstall();   // failed or cancelled, and said so on the page: the user takes it from here
+    clearStagedInstall();   // failed or canceled, and said so on the page: the user takes it from here
     cancelRequested_ = false;
     installing_ = false;   // set by the spawner; held across the retries
     vTaskDelete(nullptr);

@@ -213,6 +213,9 @@ public:
         sink.append("}");
     }
 
+    /// Each saved row carries its network's password.
+    bool listHoldsSecrets() const override { return true; }
+
     /// A row as the saved file keeps it: the name and password first, which is what MoonBase reads.
     void writeListRowSaved(JsonSink& sink, uint8_t row) const override {
         if (row >= count_) { sink.append("{}"); return; }
@@ -243,7 +246,7 @@ public:
         sink.append("{\"fields\":[{\"name\":\"ssid\",\"type\":\"text\",\"value\":");
         sink.writeJsonString(r.ssid);
         sink.append("},{\"name\":\"password\",\"type\":\"password\",\"value\":");
-        sink.writeJsonString(r.password);
+        writeObfuscatedPassword(sink, r.password);   // as a Password control shows one
         sink.appendf("},{\"name\":\"ipSettings\",\"type\":\"select\",\"value\":%u,\"optionsRef\":\"ipSettings\"}",
                      static_cast<unsigned>(r.ipSettings));
         sink.append(",{\"name\":\"connect\",\"type\":\"button\",\"label\":\"Connect\"}");
@@ -318,6 +321,9 @@ public:
         mm::json::parseString(valueJson, "value", text, sizeof(text));
         return parseDottedQuad(text, quad);
     }
+
+    /// The rows are configuration, restored by restoreList.
+    bool persistsList() const override { return true; }
 
     /// Restore the known networks from the saved file.
     bool restoreList(const char* json, const char* key) override {
@@ -486,7 +492,6 @@ private:
         WiFiModule& w;
         explicit Available(WiFiModule& owner) : w(owner) {}
         uint8_t listRowCount() const override { return w.foundCount_; }
-        bool persistsList() const override { return false; }   // a scan is never saved
         bool isEditableList() const override { return true; }
         bool listRowsFixed() const override { return true; }
         /// Signal as bars and a lock on secured networks, as every WiFi picker shows them.
@@ -511,7 +516,7 @@ private:
             if (n.secured && w.indexOfSsid(n.ssid) < 0) {
                 sink.append("{\"name\":\"password\",\"type\":\"password\",\"value\":");
                 const bool mine = w.pendingPassword_ && w.pendingId_ == row + 1u;
-                sink.writeJsonString(mine ? w.pendingPassword_ : "");
+                writeObfuscatedPassword(sink, mine ? w.pendingPassword_ : "");
                 sink.append("},");
             }
             sink.append("{\"name\":\"connect\",\"type\":\"button\",\"label\":\"Connect\"}");

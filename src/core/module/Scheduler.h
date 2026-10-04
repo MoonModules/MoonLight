@@ -48,6 +48,11 @@ public:
     using NoteDirtyFn = void(*)();
     /// Install the hook that schedules a debounced save after a control mutation.
     void setNoteDirtyHook(NoteDirtyFn fn) { noteDirtyHook_ = fn; }
+    /// Schedule the debounced save, through the hook persistence installs.
+    void noteDirty() { if (noteDirtyHook_) noteDirtyHook_(); }
+
+    /// Tell every module in the tree that a file changed, so one that keeps something read from files updates it.
+    void notifyFileChanged(const char* path);
 
     /// Register a top-level module, which the boot then walks in declared order.
     void addModule(MoonModule* mod);

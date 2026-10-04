@@ -380,7 +380,7 @@ struct PresetRig : Rig {
         platform::fsMkdir(ControlModule::kPresetDir);
         char path[160];
         std::snprintf(path, sizeof(path), "%s/%s.json", ControlModule::kPresetDir, name);
-        const char* body = "{\"captures\":\"Effects\",\"Effects.enabled\":true}";
+        const char* body = "{\"Effects\":{\"enabled\":true}}";
         REQUIRE(platform::fsWriteAtomic(path, body, std::strlen(body)));
         control->setup();   // rescan picks it up and bumps the revision
     }

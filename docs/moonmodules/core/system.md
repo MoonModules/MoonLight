@@ -359,39 +359,44 @@ Detail: [technical](moxygen/ControlSurface.md) · [InputMapping](moxygen/InputMa
 
 #### Presets
 
-A preset is a file: `/.config/presets/<name>.json`. Saving writes one, applying reads one, deleting removes one. Nothing else holds preset state, so there is no second copy to keep in step: the list is rebuilt from the folder rather than persisted alongside it. That rescan runs at startup and after every save, rename and delete, a reorder only rewrites the affected files and re-sorts the rows in place, since the folder's contents have not changed. So a preset added or removed through the File Manager appears once the module next rescans (a reboot, or a save, rename or delete on the surface), not the instant the file lands.
+A preset is a file: `/.config/presets/<name>.json`. Saving writes one, applying reads one, deleting removes one. Nothing else holds preset state, so there is no second copy to keep in step: the list is read from the folder at startup rather than persisted alongside it. After that a save, rename or delete re-reads its one file, and so does a file the file API writes or removes, which every module hears about, so a preset written through the File Manager or the gallery appears on its own. One file at a time matters on an ESP32, where walking the folder costs about 15 ms per preset and reading one about 60 ms.
 
-The name becomes the file name, so it is restricted to printable ASCII without `/`, `\` or `.`, a validator on the control, which every write path runs. `slot` records which pad the preset occupies, so a surface arranged to match a physical desk survives a reboot.
+The name becomes the file name, so it is restricted to printable ASCII without `/`, `\` or `.`, a validator on the control, which every write path runs. `slot` records which pad the preset occupies, so a surface arranged to match a physical desk survives a reboot. The save form (`name`, `slot`, `source`) is input for the next save rather than configuration, so none of it is written to flash.
 
-##### What a preset carries
+##### What a preset holds
 
-A preset captures **exactly one** top-level subtree, recorded in the file:
+A preset is a [state document](../../reference/integrating.md#setting-everything-at-once), the one `PATCH /api/state` applies, plus its `slot`:
 
 ```json
 {
   "slot": 12,
-  "captures": "Effects",
-  "Effects.enabled": true, "Effects.0.type": "Layer", "Effects.0.0.type": "NoiseEffect"
+  "Effects": { "$patch": "replace", "enabled": true,
+    "Layer": { "type": "Layer", "$patch": "replace", "enabled": true,
+      "Noise": { "type": "NoiseEffect", "$patch": "replace", "speed": 3, "enabled": true } } }
 }
 ```
 
-Each captured subtree is exactly the bytes the persistence engine already writes for that module, namespaced under a `<TypeName>.` key prefix. Save and restore therefore reuse the engine that reconciles a tree against JSON ([`saveSubtreeTo` / `applySubtree`](moxygen/FilesystemModule.md)) rather than a second serializer that could drift from it.
+A save writes the `source` module through the same writer `GET /api/modules/<name>/document` uses, rooted at the top level. The pad editor names one of the four containers, which captures it whole: *a look*, *a geometry*, *a hardware setup* or *a service configuration*. A card's `{ }` button saves that card alone, which applied puts back that card and leaves its siblings. A hand-written or gallery preset may hold less, such as `{"Drivers":{"palette":"Ocean"}}`.
 
-One subtree per preset is the whole model: a preset is *a look*, or *a geometry*, or *a hardware setup*, or *a service configuration*. Never a combination. An `Effects` preset is a look, and applies to a board with completely different hardware; a `Drivers` preset carries pin maps and is device-specific. Choosing the role is a single radio button when saving, and the pad's color says which role it holds.
+An `Effects` preset is a look and applies to a board with completely different hardware; a `Drivers` preset with pins is device-specific. A secret stays out of a document, so a preset never carries a password.
 
-A preset naming a subtree this build does not have is refused with a reason rather than partially applied, and a file written by an older build that names several subtrees is listed but not applied, so it can be seen and deleted rather than silently vanishing. A malformed file leaves the live tree untouched.
+A preset that fails names the first failure and where it is, and what came before it stays applied. A preset in the flat format older builds wrote is listed but not applied, and a backup and restore converts it. A malformed file leaves the live tree untouched.
 
-##### One active preset per role
+##### One active preset per container
 
-Each subtree is a **role**: layout, effects, driver, service. A preset holds its own role and leaves the other three alone, so a layout preset and a look can be active at the same time, and applying a new look replaces only the look.
+The four containers are the **roles**: layout, effects, driver, service. A preset holds the roles of the containers it sets and leaves the others alone, so a layout preset and a look can be active at the same time, and a palette preset holds the driver pad beside a running look.
 
 A pad is tinted by its role: layout blue, effects violet, driver green, service amber.
 
 ##### Applying is a rebuild
 
-Applying a preset creates, replaces and destroys modules to match what the file describes, it is a restore, not a value overlay: a preset carrying more than the device has adds it, and one describing less removes what it omits.
+A saved container carries `"$patch": "replace"`, so applying it creates, replaces and destroys modules to match: a preset carrying more than the device has adds it, and one describing less removes what it omits. Every removal runs before any creation, so a module can move between layers under its own name.
 
-Structural mutation quiesces the render worker, and mutations run inline on the render tick, so a large restore stalls rendering for its duration. The captured subtree is applied and `prepareTree()` runs once at the end. Presets are a cold-path feature; the tick path is untouched.
+Structural mutation quiesces the render worker, and mutations run inline on the render tick, so a large restore stalls rendering for its duration. `prepareTree()` runs once at the end. Presets are a cold-path feature; the tick path is untouched.
+
+##### The gallery
+
+Under the pads, the gallery lists [MoonLight-Gallery](https://github.com/MoonModules/MoonLight-Gallery)'s `index.json`, most liked first. The browser fetches it from `raw.githubusercontent.com`, so the device needs no internet of its own. A preset installs onto the first free pad with the scripts it names that the gallery holds, or applies once through `PATCH /api/state`; a script installs into `/moonlive`. Filling the empty pads takes looks and palettes only, since pins and geometry belong to one rig.
 
 #### Home Assistant
 

@@ -12,10 +12,17 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def committed(report: Path) -> str | None:
-    """The committed text of a tracked report, or None when there is no baseline yet."""
+    """The committed text of a tracked report, or None when there is no baseline yet; a git that does not answer raises, since reading it as a first run would let any count pass."""
     rel = report.relative_to(ROOT).as_posix()
-    r = subprocess.run(["git", "show", f"HEAD:{rel}"], cwd=ROOT, capture_output=True, text=True)
-    return r.stdout if r.returncode == 0 else None
+    r = subprocess.run(["git", "show", f"HEAD:{rel}"], cwd=ROOT, capture_output=True, text=True, timeout=60)
+    if r.returncode == 0:
+        return r.stdout
+    # Absent from HEAD is a first run; any other failure is git's, and raises.
+    listed = subprocess.run(["git", "ls-tree", "--name-only", "HEAD", "--", rel], cwd=ROOT,
+                            capture_output=True, text=True, timeout=60, check=True)
+    if not listed.stdout.strip():
+        return None
+    raise RuntimeError(f"git show HEAD:{rel} failed: {r.stderr.strip()}")
 
 
 def risen(base: dict | None, now: dict) -> list:

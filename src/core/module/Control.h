@@ -113,8 +113,11 @@ struct ListSource {
     /// Repopulate the rows from persisted JSON, the model owning its own deserialization.
     virtual bool restoreList(const char* /*json*/, const char* /*key*/) { return false; }
 
-    /// Whether these rows are worth writing to flash, which a derived list declines.
-    virtual bool persistsList() const { return true; }
+    /// Whether these rows are written to flash: a list that restores them says so, and a derived list re-built at setup does not.
+    virtual bool persistsList() const { return false; }
+
+    /// Whether a saved row carries a secret, such as a password, which a state document leaves out.
+    virtual bool listHoldsSecrets() const { return false; }
 
     /// Whether this source accepts the four editing operations below.
     virtual bool isEditableList() const { return false; }
@@ -462,6 +465,9 @@ bool hasDefault(ControlType t);
 
 /// Append the value fragment alone, the caller composing the wrapper around it; `saving` writes the form the saved file keeps.
 void writeControlValue(JsonSink& sink, const ControlDescriptor& c, bool saving = false);
+
+/// Append a password as the API shows one, XOR-ed with a fixed key and base64-encoded: obfuscation against reading it at a glance, not a secret.
+void writeObfuscatedPassword(JsonSink& sink, const char* password);
 
 /// Append the per-type extras that ride beside the value, such as bounds or options.
 void writeControlMetadata(JsonSink& sink, const ControlDescriptor& c);

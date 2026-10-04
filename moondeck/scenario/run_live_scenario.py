@@ -257,7 +257,7 @@ def _join_failed(out) -> bool:
 def _host_join(ssid: str, password: str, probe_url: str, timeout_s: float) -> str:
     """Join `ssid` and wait until `probe_url` answers: "" on success, else why.
 
-    The join is retried only while networksetup reports a failure, since an access point still starting is not in the scan yet; once it took, the probe is polled rather than the join repeated, which would drop the link it just made. The password rides networksetup's arguments, which is the one way that tool takes it.
+    The join is retried only while networksetup reports a failure, since an access point still starting is not in the scan yet; once it took, the probe is polled rather than the join repeated, which would drop the link it made. The password rides networksetup's arguments, which is the one way that tool takes it.
     """
     device = _wifi_device()
     end = time.time() + timeout_s
@@ -310,6 +310,18 @@ def _http_request(url: str, base: str, method: str = "GET") -> urllib.request.Re
     if url.startswith("/"):
         url = base.rstrip("/") + url
     return urllib.request.Request(url, data=b"" if method == "POST" else None, method=method)
+
+
+def _typed_names(doc) -> list:
+    """The module names a state document can create: every object carrying a `type`, depth first."""
+    names = []
+    if isinstance(doc, dict):
+        for key, value in doc.items():
+            if isinstance(value, dict):
+                if "type" in value:
+                    names.append(key)
+                names.extend(_typed_names(value))
+    return names
 
 
 def _list_rows(client, module_id: str, key: str) -> list:
@@ -652,6 +664,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
     results = {"name": name, "steps": [], "passed": True, "skipped": False}
     created_modules = []  # mutate scenarios rarely add modules but the existing cleanup path is still useful
     created_files = []    # files a write_file step created, removed at the end even when a later step stopped the run
+    prior_files = {}      # files a write_file step overwrote, as they were before its first write, written back at the end
     wrote_observations = [False]  # sentinel; flipped by each measure step that runs
     # Keyed by (step, target): the original contract block before --update-contract
     # mutated it (or None if no prior block existed). Used by the post-run gate to
@@ -830,7 +843,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                         else:
                             print(f"  +     {step.get('id', '?')} ({step['type']})")
                             created_modules.append(step.get("id", ""))
-                        # The step's declared PROPS, applied whether the module was just created or
+                        # The step's declared PROPS, applied whether the module was newly created or
                         # already existed. /api/modules takes the shape but not the values, so a
                         # scenario saying `{"width": 32}` measured a module at its defaults; and an
                         # existing module measured whatever the last run left on it.
@@ -895,8 +908,9 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                     try:
                         # Only a file the scenario creates is removed at the end: one that was already there is the device's own.
                         try:
-                            client.get_text(f"/api/file?path={urllib.parse.quote(path_)}")
+                            before = client.get_text(f"/api/file?path={urllib.parse.quote(path_)}")
                             existed = True
+                            prior_files.setdefault(path_, before)
                         except urllib.error.HTTPError as he:
                             existed = he.code != 404
                         resp = client.post_text(f"/api/file?path={urllib.parse.quote(path_)}", body)
@@ -1009,6 +1023,52 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                     print(f"  EXPECT {path_} {verb if holds else 'does not ' + verb} {want!r}")
                     if not holds:
                         results["passed"] = False
+
+            elif op == "apply_state":
+                # A state document in one PATCH /api/state; `error` and `at` name the failure a step expects, and without them it must apply.
+                # The modules it creates join the cleanup, as an add_module step's do, so a live device is left as found.
+                absent = []
+                for name in _typed_names(fstep["document"]):
+                    try:
+                        client.get(_mod_path(name))
+                    except urllib.error.HTTPError:
+                        absent.append(name)
+                try:
+                    resp = client.patch("/api/state", fstep["document"])
+                    got_error, got_at = None, None
+                except urllib.error.HTTPError as he:
+                    body = json.loads(he.read() or b"{}")
+                    got_error, got_at = body.get("error"), body.get("at")
+                for name in absent:
+                    try:
+                        client.get(_mod_path(name))
+                        created_modules.append(name)
+                    except urllib.error.HTTPError:
+                        pass   # the document did not get as far as creating it
+                if "error" in step:
+                    holds = got_error == step["error"] and ("at" not in step or got_at == step["at"])
+                else:
+                    holds = got_error is None
+                step_result["status"] = "ok" if holds else "error"
+                print(f"  STATE {step['name']}: {'applied' if got_error is None else got_error + ' at ' + str(got_at)}{'' if holds else '  (expected ' + str(step.get('error', 'success')) + ')'}")
+                if not holds:
+                    results["passed"] = False
+
+            elif op == "round_trip_state":
+                # Every card read back as its document and sent as one: what the device shows applies as it is, and the body outgrows the request buffer, so the streaming route runs.
+                whole = {}
+                for mod in client.get("/api/state").get("modules", []):
+                    whole.update(client.get(_mod_path(mod["name"]) + "/document"))
+                try:
+                    client.patch("/api/state", whole)
+                    failed = None
+                except urllib.error.HTTPError as he:
+                    body = json.loads(he.read() or b"{}")
+                    failed = f"{body.get('error')} at {body.get('at')}"
+                step_result["status"] = "ok" if failed is None else "error"
+                print(f"  STATE {step['name']}: {len(whole)} cards, {len(json.dumps(whole))} bytes, {'applied' if failed is None else failed}")
+                if failed is not None:
+                    results["passed"] = False
 
             elif op == "expect_control":
                 # Assert a control reads what the scenario says it must, the only op that fails a
@@ -1187,10 +1247,11 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                     if not why:
                         client.base = f"http://{ACCESS_POINT_ADDRESS}"
                 else:
-                    host.home = None
                     client.base = home_base
                     why = _host_join(net["ssid"], net["password"], f"{home_base}/api/system",
                                      float(step.get("timeout", 60)))
+                    if not why:
+                        host.home = None   # home: nothing left for the exit hook to restore
                 step_result["status"] = "error" if why else "ok"
                 print(f"  HOST  {'FAILED: ' + why if why else 'on ' + (ctx.get('device', '') if step.get('join') == 'access_point' else net['ssid'])}")
                 if why:
@@ -1256,8 +1317,9 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                     resolved = (dig.stdout.strip().splitlines() or ["0.0.0.0"])[-1]
                     print(f"  DNS   {ACCESS_POINT_ADDRESS} resolves {parts.hostname} to {resolved}")
                     request = urllib.request.Request(urllib.parse.urlunsplit(parts._replace(netloc=resolved)),
+                                                     data=request.data, method=request.get_method(),
                                                      headers={"Host": parts.netloc})
-                # `within` polls too: a host that just joined a network resolves names only once its resolver took that network's server.
+                # `within` polls too: a host that has joined a network resolves names only once its resolver took that network's server.
                 deadline = time.time() + float(step.get("within", 0))
                 while True:
                     try:
@@ -1567,6 +1629,12 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
             print(f"  -     {path_} (cleanup)")
         except Exception:
             pass
+    for path_, before in prior_files.items():
+        try:
+            client.post_text(f"/api/file?path={urllib.parse.quote(path_)}", before)
+            print(f"  ~     {path_} (restored)")
+        except Exception as e:
+            print(f"  WARN  restore of {path_} failed: {e}")
 
     # Write the scenario JSON back if anything changed:
     #   - observed.<target> was updated by any measure step (every run); OR

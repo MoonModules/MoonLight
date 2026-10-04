@@ -41,6 +41,7 @@ The add returns the **name** the device gave the module, which is what every lat
 | `GET /api/system` | Name, firmware, chip, uptime, heap, FPS, and per-module tick times |
 | `GET /api/types` | Every module type this build knows, with its role and the children it accepts |
 | `GET /api/modules/<name>` | One module: its type, and every control with its current value |
+| `GET /api/modules/<name>/document` | One module as a state document, rooted at the top level, which `PATCH /api/state` applies back |
 | `GET /api/scripts` | The MoonLive script catalog, by role |
 | `GET /api/dir?path=<dir>` | A directory listing from the device filesystem |
 | `GET /api/file?path=<file>` | One file's contents |
@@ -53,6 +54,7 @@ The add returns the **name** the device gave the module, which is what every lat
 |---|---|---|
 | `POST /api/modules` | `{"type":…,"parent_id":…}` | Adds a module, returns its name |
 | `POST /api/control` | `{"module":…,"control":…,"value":…}` | Sets one control |
+| `PATCH /api/state` | a state document | Sets any part of the tree in one call: controls, new modules, removals |
 | `DELETE /api/modules/<name>` | | Removes a module and its children |
 | `DELETE /api/dir?path=<path>` | | Removes a file, or a directory and everything in it |
 | `POST /api/modules/<name>/replace` | `{"type":…}` | Swaps a module for another type in the same slot |
@@ -63,11 +65,27 @@ The add returns the **name** the device gave the module, which is what every lat
 
 ## Setting everything at once
 
-One call per control. `POST /api/modules` takes `type` and `parent_id`, so a module arrives with its defaults and each control follows in its own call.
-They are cheap: a control write is a few milliseconds on a wired device.
+`PATCH /api/state` takes a **state document**: the part of the tree you want, keyed by module name, as JSON Merge Patch ([RFC 7386](https://www.rfc-editor.org/rfc/rfc7386)) applies it.
 
-When the whole configuration matters more than the individual calls, save a **preset** instead.
-A preset captures the tree and its values together, recalls in one write, and survives a reboot.
+```sh
+curl -X PATCH --data '{"Effects": {"Layer": {"Swirl": {"type": "RainbowEffect", "speed": 90}}}}' http://<device>/api/state
+```
+
+- A value sets a control of the module it sits in, with the same checks `POST /api/control` runs.
+- An object is a child module: found by name, created when it is missing and names a `type`, replaced in place when its `type` differs.
+- `null` removes a module, and `"$patch": "replace"` in a module's object keeps only the children it lists, in its order.
+- Every removal applies first, so a module can move to another branch under its name; the rest applies in document order, and the tree rebuilds once at the end.
+- A new or re-pointed script declares its controls when it compiles, so the document sets them after that rebuild. The answer counts them as `deferred`.
+- Past 16 new or re-pointed modules in one document, an unknown control on a script module is deferred as well, and the device log names it after the rebuild.
+- A root `slot`, a preset file's pad, is skipped, so a preset file applies as it is.
+
+The answer is `{"ok":true,"changes":N}`, or a 400 naming the first failure and where it is, such as `{"error":"no such control","at":"Effects.Layer.Swirl.nope","changes":2}`: what came before it stays applied.
+`POST /api/state` takes the same document, for a client that cannot send `PATCH`.
+
+`GET /api/modules/<name>/document` reads a module back as a document, its path from the top level around it, and a card's `{ }` button shows the same.
+A secret, such as a password, stays out of every document, and applying one leaves the secret as it is.
+
+A [preset](../how-to/presets.md) is such a document saved on the device, recalled with one click, and kept across a reboot, and the [gallery](https://github.com/MoonModules/MoonLight-Gallery) shares them.
 
 ## What a control is called
 
