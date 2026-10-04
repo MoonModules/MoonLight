@@ -31,8 +31,9 @@ test("Network's Ethernet controls move onto its Ethernet child, which starts wit
     assert.equal(out.addressing, undefined);
     assert.equal(out.mDNS, true);
     assert.ok(report.some(r => r.detail.includes("moved to EthernetModule")));
-    // A backup without a network keeps no empty WiFi row.
+    // A backup without a network keeps no empty WiFi row, and says what its network keys came to.
     assert.equal(out["3.type"], undefined);
+    assert.ok(report.some(r => r.kind === "review" && r.detail.startsWith("dropped: no ssid")));
     // A WiFi-only backup gains no Ethernet entry from its IP settings alone.
     const wifiOnly = applyMigrations({ "/.config/NetworkModule.json": JSON.stringify({ ssid: "home", addressing: 0 }) });
     const w = JSON.parse(wifiOnly.files["/.config/NetworkModule.json"]);

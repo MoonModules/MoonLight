@@ -103,14 +103,14 @@ A row's password travels to the UI in the clear, over the API and the WebSocket,
 
 ## Steps
 
-1. **Ethernet submodule.** Move the Ethernet controls and the link-local fallback; give it its own addressing. Tests: the presets, pins and fallback tests move with it; static addressing applies on Ethernet only.
-2. **WiFi submodule with one known network.** Move `ssid`, `password` and the radio settings, as a one-row list. Improv writes the row. Migration and its tests.
-3. **Several known networks and the choosing order.** Unit tests on the order: list order, the next tried on failure, the fallback access point when none joins. Connect and Forget on a known row.
-4. **Available networks and connect-first joining.** The platform scan moves out of Improv; bars, lock, check mark and "scanned ago"; tap, password, join now, save only on success, "incorrect password" on failure.
-5. **Per-network IP settings**, with the apply, validate and warn rules.
-6. **Access point submodule:** `opens`, `password`, `clients`, `channel` and `hidden`, with the refusal of "never" when nothing else is configured. Tests on the cascade with each `opens` value.
-7. **Captive portal and the handoff:** the DNS reply builder with its unit tests (an A query, another type, a malformed and an oversized packet), the socket's lifecycle tied to the access point, the HTTP redirect with a test, and the new-address page with the access point held open.
-8. **Bench:** an S3 with two known networks, switching when one goes away, and a hidden one; a channel 13 router; static on one network and DHCP on the other; a P4 or classic Ethernet board with a static wired address; an iPhone and an Android phone doing first setup end to end, from joining the access point to reaching the device on the home network.
+1. ✅ **Ethernet submodule.** Move the Ethernet controls and the link-local fallback; give it its own addressing. Tests: the presets, pins and fallback tests move with it; static addressing applies on Ethernet only.
+2. ✅ **WiFi submodule with one known network.** Move `ssid`, `password` and the radio settings, as a one-row list. Improv writes the row. Migration and its tests.
+3. ✅ **Several known networks and the choosing order.** Unit tests on the order: list order, the next tried on failure, the fallback access point when none joins. Connect and Forget on a known row.
+4. ✅ **Available networks and connect-first joining.** The platform scan moves out of Improv; bars, lock, check mark and "scanned ago"; tap, password, join now, save only on success, "incorrect password" on failure.
+5. ✅ **Per-network IP settings**, applied on join and live. 🚧 Validating before use and warning before a live change are not built (below).
+6. ✅ **Access point submodule:** `opens`, `password`, `clients`, `channel` and `hidden`, with the refusal of "never" when nothing else is configured. Tests on the cascade with each `opens` value.
+7. ✅ **Captive portal and the handoff:** the DNS reply builder with its unit tests (an A query, another type, a malformed and an oversized packet), the socket's lifecycle tied to the access point, the HTTP redirect with a test, and the new-address page with the access point held open.
+8. **Bench**, ✅ for what an S3 shows: two known networks with one absent, first setup from a computer, a protected hidden access point, the iPhone sign-in screen. 🚧 The rest waits (below). an S3 with two known networks, switching when one goes away, and a hidden one; a channel 13 router; static on one network and DHCP on the other; a P4 or classic Ethernet board with a static wired address; an iPhone and an Android phone doing first setup end to end, from joining the access point to reaching the device on the home network.
 
 ## Verified, and what waits for more hardware
 
@@ -121,14 +121,16 @@ Tested on the one board at hand, an S3 on a 2.4 GHz network, and pinned by tests
 
 Waiting for more devices and a cable:
 
-- **Memory on a board without PSRAM.** Build the classic ESP32 and the P4 with these changes, flash a board without PSRAM, and compare its free heap against main.
-- **Ethernet.** The Ethernet card on a wired board (P4, S31 or a classic Ethernet board): DHCP, a static address, and a cable plugged in while WiFi is joined.
-- **Phones.** The full first setup on an iPhone, the sign-in screen opening on the WiFi card, and on an Android phone.
-- **Networks.** A hidden network joined as a station, a channel 13 router, and static addressing on a WiFi network.
-- **`opens: never`** on hardware, with USB at hand to recover.
-- **Not built yet:** ordering the known networks by signal strength from a scan; validating static IP settings before use, beyond ignoring an all-zero address; asking before a live IP change, which drops the open page.
-- **MoonBase** booting with the new `NetworkModule.json` layout, which only the shared scraper's contract test covers.
-- **Two unexplained S3 failures, each without a serial log at the time.** A card join that did not start in one first-setup run. A freeze, silent on serial and off the network until reset, after the fallback scenario, after which the second known network was gone from the saved file.
+- 🚧 **Memory on a board without PSRAM.** Build the classic ESP32 and the P4 with these changes, flash a board without PSRAM, and compare its free heap against main.
+- 🚧 **Ethernet.** The Ethernet card on a wired board (P4, S31 or a classic Ethernet board): DHCP, a static address, and a cable plugged in while WiFi is joined.
+- 🚧 **Phones.** The full first setup on an iPhone, the sign-in screen opening on the WiFi card, and on an Android phone.
+- 🚧 **Networks.** A hidden network joined as a station, a channel 13 router, and static addressing on a WiFi network.
+- 🚧 **`opens: never`** on hardware, with USB at hand to recover.
+- 🚧 **Not built yet:** ordering the known networks by signal strength from a scan; validating static IP settings before use, beyond ignoring an all-zero address; asking before a live IP change, which drops the open page.
+- ✅ **MoonBase** with the new layout, on a classic ESP32: it joins the app's WiFi, opens the device's own access point with the sign-in screen, and installs from a GitHub release. Two live scenarios pin the first two.
+- 🚧 **MoonBase over Ethernet**, on an Olimex Gateway with the new scenario.
+- ✅ **A staged install survives a reset in MoonBase.** It keeps the URL until an install ends and counts installs started, stopping after three that reset the device. On a D32 whose supply collapses whenever the radio starts, 3 of 3 hand-overs completed where 2 of 4 were lost before.
+- 🚧 **Two unexplained S3 failures, each without a serial log at the time.** A card join that did not start in one first-setup run. A freeze, silent on serial and off the network until reset, after the fallback scenario, after which the second known network was gone from the saved file.
 
 ## Subtraction
 

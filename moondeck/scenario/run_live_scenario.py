@@ -248,8 +248,17 @@ def _reachable(url: str, timeout_s: float) -> bool:
     return False
 
 
+def _join_failed(out) -> bool:
+    """Whether networksetup reported a failure: it exits 0 either way, so its words decide."""
+    text = out.stdout + out.stderr
+    return out.returncode != 0 or any(w in text for w in ("Could not find network", "Failed", "Error"))
+
+
 def _host_join(ssid: str, password: str, probe_url: str, timeout_s: float) -> str:
-    """Join `ssid` and wait until `probe_url` answers: "" on success, else why. macOS hides network names, so the probe is the proof."""
+    """Join `ssid` and wait until `probe_url` answers: "" on success, else why.
+
+    The join is retried only while networksetup reports a failure, since an access point still starting is not in the scan yet; once it took, the probe is polled rather than the join repeated, which would drop the link it just made. The password rides networksetup's arguments, which is the one way that tool takes it.
+    """
     device = _wifi_device()
     end = time.time() + timeout_s
     last = ""
@@ -257,10 +266,12 @@ def _host_join(ssid: str, password: str, probe_url: str, timeout_s: float) -> st
         cmd = ["networksetup", "-setairportnetwork", device, ssid] + ([password] if password else [])
         out = subprocess.run(cmd, capture_output=True, text=True)
         last = (out.stdout + out.stderr).strip()
-        if _reachable(probe_url, 10):
-            return ""
-        time.sleep(2)   # an access point still starting is not in the scan yet
-    return f"could not reach {probe_url} after joining {ssid!r} ({last or 'no message'})"
+        if not _join_failed(out):
+            if _reachable(probe_url, max(1.0, end - time.time())):
+                return ""
+            return f"joined {ssid!r}, but {probe_url} did not answer in time"
+        time.sleep(2)
+    return f"could not join {ssid!r} ({last or 'no message'})"
 
 
 class HostWifi:
@@ -275,8 +286,10 @@ class HostWifi:
         home, self.home = self.home, None
         print(f"  HOST  back to {home['ssid']}")
         device = _wifi_device()
-        subprocess.run(["networksetup", "-setairportnetwork", device, home["ssid"], home["password"]],
-                       capture_output=True, text=True)
+        out = subprocess.run(["networksetup", "-setairportnetwork", device, home["ssid"], home["password"]],
+                             capture_output=True, text=True)
+        if _join_failed(out):
+            print(f"  HOST  WARNING: could not rejoin {home['ssid']} ({(out.stdout + out.stderr).strip() or 'no message'}); rejoin it by hand")
 
 
 def _fill(value, ctx: dict):
@@ -290,6 +303,13 @@ def _fill(value, ctx: dict):
     if isinstance(value, list):
         return [_fill(v, ctx) for v in value]
     return value
+
+
+def _http_request(url: str, base: str, method: str = "GET") -> urllib.request.Request:
+    """The request an `expect_http` step sends: a path starting with / goes to the device under test, and a POST carries an empty body, as the UI's buttons send."""
+    if url.startswith("/"):
+        url = base.rstrip("/") + url
+    return urllib.request.Request(url, data=b"" if method == "POST" else None, method=method)
 
 
 def _list_rows(client, module_id: str, key: str) -> list:
@@ -1159,6 +1179,8 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 if net is None:
                     raise RuntimeError("host_wifi needs `host_network` on the scenario and --network on the run")
                 if step.get("join") == "access_point":
+                    if not ctx.get("device"):
+                        raise RuntimeError("the device's name is unknown, so its access point cannot be named to join")
                     host.home = host.home or net
                     why = _host_join(ctx.get("device", ""), fstep.get("password", ""), f"http://{ACCESS_POINT_ADDRESS}/api/system",
                                      float(step.get("timeout", 60)))
@@ -1220,12 +1242,12 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                     step_result["status"] = "ok"
 
             elif op == "expect_http":
-                # An absolute URL with redirects not followed, so a captive portal's own answer is what is checked.
+                # Redirects are not followed, so a captive portal's own answer is what is checked.
                 class _NoRedirect(urllib.request.HTTPRedirectHandler):
                     def redirect_request(self, *args, **kwargs):
                         return None
                 url = fstep["url"]
-                request = url
+                request = _http_request(url, client.base, step.get("method", "GET"))
                 if step.get("resolve") == "access_point":
                     # Resolve at the access point's own DNS, as a phone does: macOS keeps a captive network's answers from ordinary apps until its sign-in completes.
                     parts = urllib.parse.urlsplit(url)
@@ -1257,7 +1279,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                     dig = subprocess.run(["dig", "+time=2", "+tries=1", "+short", f"@{ACCESS_POINT_ADDRESS}", name], capture_output=True, text=True)
                     print(f"  DNS   {ACCESS_POINT_ADDRESS} answers {name}: {(dig.stdout or dig.stderr).strip() or 'nothing'}")
                 step_result["status"] = "ok" if holds else "error"
-                print(f"  HTTP  {url} → {status}{' ' + location if location else ''}{'' if holds else '  (expected ' + str(step['status']) + ' ' + fstep.get('location', '') + ')'}")
+                print(f"  HTTP  {step.get('method', 'GET')} {url} → {status}{' ' + location if location else ''}{'' if holds else '  (expected ' + str(step['status']) + ' ' + fstep.get('location', '') + ')'}")
                 if not holds:
                     results["passed"] = False
 

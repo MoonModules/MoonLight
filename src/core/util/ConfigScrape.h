@@ -2,13 +2,13 @@
 
 /// @defgroup ConfigScrape Reading a few keys out of a saved config without a parser
 /// @{
-/// How MoonBase, the recovery image, reads the WiFi credentials and the Ethernet wiring out of the application's `NetworkModule.json`.
+/// How MoonBase, the recovery image, reads the WiFi credentials, the Ethernet wiring and the access point out of the application's saved config.
 ///
 /// @moreinfo
 ///
 /// ## Why a scraper, and why it is shared
 ///
-/// MoonBase has no room for a JSON parser and reads only a bounded prefix of the file, so it scrapes a handful of keys it knows the application writes.
+/// MoonBase has no room for a JSON parser, so it scrapes a handful of keys it knows the application writes.
 /// The file's shape is a contract between two images built from one tree, so the scraper lives here once.
 /// MoonBase includes it, and `unit_MoonBaseContract` runs it against the file the application writes.
 /// A key matches at the top level (`"key":`), under a child module (`"0.key":`), and inside a list row.
@@ -74,6 +74,29 @@ inline void findBool(const char* json, const char* key, bool* out) {
     if (!v) return;
     if (std::strncmp(v, "true", 4) == 0)  *out = true;
     if (std::strncmp(v, "false", 5) == 0) *out = false;
+}
+
+/// A string key of the child whose type is `childType`, the `"N.key":` beside its `"N.type":`, false when either is absent or the value empty.
+inline bool findChildString(const char* json, const char* childType, const char* key, char* out, size_t outLen) {
+    if (!json || !childType || !key) return false;
+    const size_t tl = std::strlen(childType), kl = std::strlen(key);
+    for (const char* p = std::strstr(json, "type\":\""); p; p = std::strstr(p + 1, "type\":\"")) {
+        const char* v = p + 7;
+        if (std::strncmp(v, childType, tl) != 0 || v[tl] != '"') continue;
+        // Back from `type` to the key's opening quote: `"2.type"` gives the prefix `2.`, and a top-level `type` none.
+        const char* q = p;
+        while (q > json && q[-1] != '"') q--;
+        const size_t pl = static_cast<size_t>(p - q);
+        char want[64];
+        if (pl == 0 || pl + kl + 4 > sizeof(want)) continue;
+        want[0] = '"';
+        std::memcpy(want + 1, q, pl);
+        std::memcpy(want + 1 + pl, key, kl);
+        std::memcpy(want + 1 + pl + kl, "\":", 3);   // with the terminator
+        const char* at = std::strstr(json, want);
+        return at && readString(at + 1 + pl + kl + 2, out, outLen);
+    }
+    return false;
 }
 
 /// The first known network's name and password: the first `ssid`, and the `password` that follows it in the same row.

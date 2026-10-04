@@ -129,8 +129,8 @@ constexpr const char* kRelease      = MM_RELEASE;
 # which can't encode anything outside ASCII. Even though the template above is
 # ASCII today, pinning the encoding makes the script robust if a future edit
 # slips a non-ASCII character into the comments.
-if OUT_FILE.exists() and OUT_FILE.read_text(encoding="utf-8") == content:
-    pass  # only write if changed (avoid unnecessary rebuilds)
-else:
-    OUT_FILE.write_text(content, encoding="utf-8")
-    print(f"Generated build_info.h: version={version}")
+# Written only when run, so build_esp32 imports build_id() for MoonBase's version without regenerating the header.
+if __name__ == "__main__":
+    if not (OUT_FILE.exists() and OUT_FILE.read_text(encoding="utf-8") == content):   # unchanged: no rebuild
+        OUT_FILE.write_text(content, encoding="utf-8")
+        print(f"Generated build_info.h: version={version}")

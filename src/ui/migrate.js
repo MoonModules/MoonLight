@@ -185,7 +185,11 @@ function moveToChild(obj, file, report) {
         const rowKeys = mv.row && has(mv.row.key) && out[mv.row.key] !== ""
                       ? Object.keys(mv.row.fields).filter(has) : [];
         const dropKeys = mv.row ? Object.keys(mv.row.fields).filter(has) : [];
-        for (const k of rowKeys.length ? [] : dropKeys) delete out[k];   // nothing to carry, so the keys go
+        if (!rowKeys.length && dropKeys.length) {
+            // Nothing to carry, so the keys go, said rather than silent.
+            for (const k of dropKeys) delete out[k];
+            report.push({ kind: "review", where: `${file} ${dropKeys.join(", ")}`, detail: `dropped: no ${mv.row.key} to build a ${mv.child} ${mv.row.list} row from (${mv.date})` });
+        }
         if (!moving.length && !copying.length && !rowKeys.length) continue;
         let n = 0;
         while (has(`${n}.type`) && out[`${n}.type`] !== mv.child) n++;

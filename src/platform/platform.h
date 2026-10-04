@@ -616,6 +616,8 @@ bool otaMoonBaseVersion(char* out, size_t len);
 bool otaMoonBaseBuild(char* out, size_t len);
 /// How much of its slot MoonBase fills.
 bool otaMoonBaseSize(uint32_t* used, uint32_t* total);
+/// Give a desktop a MoonBase with this descriptor version and build time, for a host test; null removes it.
+void setTestMoonBase(const char* version, const char* built);
 /// Install a new MoonBase, which only the running app can do; false on desktop.
 bool otaWriteMoonBase(FsWriteSrc src, void* user, size_t contentLen,
                       char* statusBuf, size_t statusBufLen, uint32_t* bytesReadOut);

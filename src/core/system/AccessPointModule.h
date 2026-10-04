@@ -58,9 +58,10 @@ public:
         return platform::WifiApConfig{name, captive::kAddressText, password_, channel_, hidden_};
     }
 
-    /// A hash over how it appears, so a change re-opens it live.
-    uint32_t sig() const MM_NONBLOCKING {
+    /// A hash over how it appears under `name`, so a change to any of it, a rename included, re-opens it live.
+    uint32_t sig(const char* name) const MM_NONBLOCKING {
         Fnv1a f;
+        f.add(name, std::strlen(name));
         f.add(password_, std::strlen(password_));
         f.add(channel_);
         f.add(hidden_ ? 1 : 0);

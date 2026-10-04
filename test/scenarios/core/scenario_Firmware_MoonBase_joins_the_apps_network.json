@@ -1,0 +1,62 @@
+{
+  "name": "scenario_Firmware_MoonBase_joins_the_apps_network",
+  "module": "FirmwareUpdateModule",
+  "mode": "mutate",
+  "also": [
+    "NetworkModule",
+    "WiFiModule"
+  ],
+  "live_only": true,
+  "on_request": true,
+  "description": "MoonBase, the recovery image in the factory slot, joins the network the app knows, so an update can download and a user finds the device where it was. The device restarts in MoonBase, which reads the first known network out of the app's network config and answers at the same address; it then boots the app, which comes back on its network. It restarts the device twice and needs a board with MoonBase, so it runs only when named, on a device on WiFi.",
+  "steps": [
+    {
+      "name": "on-its-network",
+      "description": "The device starts on WiFi, with the network it knows.",
+      "op": "expect_control",
+      "id": "Network",
+      "key": "mode",
+      "equals": "WiFi STA"
+    },
+    {
+      "name": "restart-in-moonbase",
+      "description": "The card's Restart in MoonBase button.",
+      "op": "expect_http",
+      "method": "POST",
+      "url": "/api/firmware/moonbase",
+      "status": 200
+    },
+    {
+      "name": "moonbase-on-the-same-network",
+      "description": "MoonBase answers at the same address, so it read the network from the app's config and joined it. The app answers this path with 404, MoonBase with its status.",
+      "op": "expect_http",
+      "url": "/moonbase",
+      "status": 200,
+      "within": 60
+    },
+    {
+      "name": "back-to-the-app",
+      "description": "MoonBase's Boot the app button, with nothing installed.",
+      "op": "expect_http",
+      "method": "POST",
+      "url": "/api/firmware/boot-app",
+      "status": 200
+    },
+    {
+      "name": "the-app-answers",
+      "op": "expect_http",
+      "url": "/moonbase",
+      "status": 404,
+      "within": 90
+    },
+    {
+      "name": "still-on-its-network",
+      "description": "The app comes back on the network it knew, its config untouched by the round trip.",
+      "op": "expect_control",
+      "id": "Network",
+      "key": "mode",
+      "equals": "WiFi STA",
+      "within": 30
+    }
+  ]
+}

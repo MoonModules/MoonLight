@@ -167,6 +167,7 @@ public:
         char ssid[33];
         char password[64];
         uint32_t knownId;   ///< the known network asked for, by row id, or 0 for one picked from the scan
+        uint32_t seq;       ///< which request this is, so a Connect pressed during a join replaces it rather than riding it
     };
     /// The join waiting to be carried out, or null.
     const JoinRequest* joinRequest() const MM_NONBLOCKING { return request_; }
@@ -416,6 +417,7 @@ private:
     static constexpr uint32_t kScanTimeoutMs = 15000;   ///< a scan takes two to five seconds
     char     scannedStr_[24] = {};
     JoinRequest* request_ = nullptr;   ///< on the heap only while a join waits
+    uint32_t requestSeq_ = 0;          ///< counts the requests, so the network module tells a replaced one from the one it started
     char*    pendingPassword_ = nullptr;   ///< what was typed for a scanned network, on the heap only while typed
     uint32_t pendingId_ = 0;           ///< the scanned row that password belongs to
     uint32_t joinedId_ = 0;            ///< the known network carrying the device, by row id, so a reorder keeps it; 0 for none
@@ -461,6 +463,7 @@ private:
         mm::formatTo(request_->ssid, sizeof(request_->ssid), "%s", ssid);
         mm::formatTo(request_->password, sizeof(request_->password), "%s", password ? password : "");
         request_->knownId = knownId;
+        request_->seq = ++requestSeq_;
         mm::formatTo(statusStr_, sizeof(statusStr_), "joining %s", ssid);
         setStatus(statusStr_);
         return true;

@@ -301,7 +301,7 @@ void HttpServerModule::handleConnection(platform::TcpConnection& conn) {
         uint8_t local[4];
         const char* host = findHeaderCI(req, "Host:");
         if (host) { host += 5; while (*host == ' ') host++; }
-        if (conn.localIPv4(local) && captive::redirects(local, host)) {
+        if (conn.localIPv4(local) && captive::redirects(local, host, path)) {
             conn.write(reinterpret_cast<const uint8_t*>(captive::kRedirect), std::strlen(captive::kRedirect));
             return;
         }

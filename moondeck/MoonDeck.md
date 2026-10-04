@@ -298,11 +298,11 @@ which is what keeps them from being redundant:
 | **clang-tidy** | one statement, with full type information | is this line wrong? |
 | **clang-query** | the AST, via matchers we write | does this codebase's own rule hold? |
 | **`-Wfunction-effects`** | the whole call graph, from the compiler | can the render path block? |
-| **lizard** | tokens, no types | is this function getting more complex over time? |
+| **check_code** | tokens, no types (lizard) | is this function getting more complex over time? |
 | **CodeQL** | a queryable database of the program | can LAN bytes reach a `memcpy`? |
 | **footprint** | the linked ELF | how many bytes does this cost, and in which memory? |
 
-One rule, one owner: where two tools could report the same thing, one is switched off (lizard owns
+One rule, one owner: where two tools could report the same thing, one is switched off (check_code owns
 complexity, so clang-tidy's `readability-function-*` checks stay disabled). The individual cards
 run each of these across the tree; this card inverts that — everything at once, scoped to the
 module you are actually working on.
@@ -314,7 +314,7 @@ uv run moondeck/check/check_module.py --module Layer --skip clang-tidy
 
 The other tool cards sweep the whole repo, which is the wrong shape when you are working on one
 file and want to know what the tools say about *it*. This runs clang-tidy, clang-query and
-lizard against one module and prints them under one heading. It adds no analysis of its own —
+check_code against one module and prints them under one heading. It adds no analysis of its own:
 it invokes the same scripts with `--module`, so this and the repo-wide reports can never
 disagree about a finding. Each tool also accepts `--module` on its own if you want just one.
 
@@ -737,58 +737,20 @@ looks right is worse than no answer.
 **Needs a built firmware**, and exits 2 when the ELF is missing or carries no DWARF rather than
 printing an empty table — an absent measurement is not a zero.
 
-### check_lizard
+### check_code
 
-Complexity gate: fail on **new** over-complex functions, not the ones already there.
-
-**What lizard is.** A small language-agnostic complexity counter (Python, ~20 languages). It does
-not parse C++ properly — it tokenizes, counts branch keywords, and reports cyclomatic complexity
-(CCN), line count (NLOC), parameter count and token count per function. That shallowness is the
-point: no build, no compile database, no toolchain, so it runs anywhere in about a second.
-
-**What it does for us.** It owns ONE number — how complex a function is — and it is the only tool
-here that produces a per-commit trend rather than a verdict. clang-tidy can tell you a function is
-complex today; only a series tells you the codebase is drifting, which is what
-[repo-health](../docs/reference/metrics/repo-health.json) and `collect_kpi` plot. Its own
-`readability-function-*` checks stay off in clang-tidy for exactly that reason (one rule, one
-owner). The tokenizer's cost is real: on template- and macro-dense C++ it reports a mangled
-function name (`SolidEffect::static_cast<lengthType>` for a method called `tick`), and since the
-baseline matches on `file:name`, such an entry pins nothing — see the note below.
+The code report: one page of counts that only fall, the shape [docgen.md](../docs/reference/metrics/docgen.md) and [prose.md](../docs/reference/metrics/prose.md) have, for code.
 
 ```bash
-uv run moondeck/check/check_lizard.py             # report NEW violations, exit 1 if any
-uv run moondeck/check/check_lizard.py --all       # every violation, baseline ignored
-uv run moondeck/check/check_lizard.py --baseline  # rewrite whitelizard.txt from today
+uv run moondeck/check/check_code.py                   # rewrite code.md, exit 1 if any count rose
+uv run moondeck/check/check_code.py --module Control  # one module's findings, no report
 ```
 
-Results print as one table, sorted worst-first, so the top row is the next thing worth
-simplifying. The five numbers are the same ones lizard's own summary reports:
+Each rule is a textbook measure with a known tool, three of them counted by [lizard](https://github.com/terryyin/lizard). **Complex function** is cyclomatic complexity over 10: one plus every branch point, the number of paths a reader holds at once and the number of tests that cover it. **Long function** is over 60 non-comment lines. **Deeply nested** is control flow more than 3 levels deep, the part of cognitive complexity that measures what a reader trips on. **Long parameter list** is more than 7 parameters. **Large file** is over 1000 lines, counted by the script over every code file we own. Those three limits are SonarQube's defaults. **Duplicated block** is a run of 5 or more lines sharing 50 or more tokens with a run elsewhere. [jscpd](https://github.com/kucherenko/jscpd) finds it among the code files the file-length rule counts. A clone counts under both of its files, so either file's edit clears it, and the headline carries the share of all lines that are duplicated. jscpd comes through npx, the dependency the docs build already has. Lizard tokenizes rather than parses, so it needs no build and runs in a second. The cost is a mangled name on some template-dense bodies, which counting per file makes harmless.
 
-| Column | Meaning | Gated |
-|---|---|---|
-| **CCN** | Cyclomatic complexity — independent paths through the function: 1, plus one for every branch point (`if`, `for`, `while`, `case`, and each short-circuit `&&` / logical-or operator). The count of things that must hold at once to reason about it, and the number of tests needed to cover it. | **Yes**, > 10 |
-| **NLOC** | Non-comment lines of code — the body's real size, blank lines and comments excluded. | **Yes**, > 60 |
-| **TOKEN** | Total tokens (identifiers, operators, literals). Density rather than length: a high TOKEN against a modest NLOC means long, packed expressions. | No |
-| **PARAM** | Parameter count. A long list usually means the function does several jobs, or wants a struct. | No |
-| **LINES** | Raw line span, first to last — **includes** comments and blanks, so `LINES` minus `NLOC` is roughly how much of the function is documentation. | No |
+The report, [`docs/reference/metrics/code.md`](../docs/reference/metrics/code.md), lists the counts by rule, by area and by file, each file with its worst function first. It is rewritten on every run and tracked, so its git history is the trend. **The committed copy is the number to beat**, per rule and in total: a run that raises either fails. A touched file clears its own rows so it leaves the list, with the same reasonable-effort clause CLAUDE.md gives docgen. The count is per file, so a renamed function or a moved file carries its findings along.
 
-A `*` next to CCN or NLOC marks which threshold tripped. It matters because the two point at
-different fixes: `HttpServerModule::handleConnection` is `93* 178*` (both — split it), while
-`json::parseString` is `40* 47` — branchy but short, so it wants a lookup table rather than a
-split. TOKEN, PARAM and LINES are context for *why* a function is heavy; nothing gates on them.
-
-A raw run reports 162 functions over threshold (CCN > 10 or NLOC > 60), and a metric that can
-never reach zero is a poor gate: people stop reading it. So [`docs/reference/metrics/whitelizard.txt`](../docs/reference/metrics/whitelizard.txt)
-freezes today's set and the check fails only on something new. The baseline is lizard's own
-`--whitelist` format, matched on **file + function name** rather than line numbers, so it
-survives edits above a function.
-
-**The list only shrinks.** Simplify a function, delete its line; the check reports baselined
-entries that no longer violate so they don't linger. Adding a line means admitting a new
-violation, which is the thing this exists to prevent.
-
-Lizard owns the complexity number (`collect_kpi.py` reports the same 162 for the repo-health
-trend); clang-tidy's `readability-function-*` checks stay off so one rule has one owner.
+`repo_health` and `collect_kpi` count the function rules through the same two functions this script uses. The clones and the file sizes are the report's alone, a pass too slow for every KPI run. clang-tidy's `readability-function-*` checks stay off: one rule, one owner.
 
 ### scenario_pipeline
 

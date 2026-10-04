@@ -322,14 +322,16 @@ Detail: [technical](moxygen/FilesystemModule.md)
 [Tests](../../reference/tests/unit-tests.md#filesystemmodule)
 
 ## WiFi, details
+
 The device tries the known networks in priority order, each for ten seconds, and opens its access point only after the last. Each network keeps its own `ipSettings`, DHCP or Static, as a phone does.
 
 Connect joins a network at once. A network picked from `available` is saved to `known` only once it joined, and "incorrect password" says why when it did not. A scan takes the radio off-channel for a few seconds, which drops incoming lights while connected, so the device scans by itself only when its access point opens, and otherwise when you press `scan`.
 
 ## Access point, details
+
 A join asked for from a phone on the access point keeps the access point up beside the new network for two minutes, and the WiFi card shows `address` and `localName` to follow. A phone's sign-in screen has no address bar, so open a link in the browser. Joining moves the radio to the router's channel, which knocks the phone off, and a phone often lands back on its own network, where the sign-in screen is gone. So the network's row shows `afterJoining`, the device's `.local` link, before you press Connect.
 
-While the access point runs, its DNS answers every name with 4.3.2.1, and the web server sends any request through it for another name to the UI. That is what makes a phone show the sign-in screen.
+While the access point runs, its DNS answers every name with 4.3.2.1, and the web server sends any page request through it for another name to the UI, while the API answers as itself. That is what makes a phone show the sign-in screen.
 
 ## Control, details
 
@@ -412,6 +414,7 @@ sudo uv run moondeck/run/run_desktop.py --port 80
 The discovery buffers are sized to the looks this device actually has, and grow or shrink as presets are added and removed. There is no cap on the number: a fixed one would either reserve memory a small setup never uses, or silently publish nothing once the list outgrew it.
 
 ## MQTT, details
+
 The topic prefix is `MoonLight/<mac>`, a **stable** identifier (the last 6 hex of the device's MAC), fixed for the device's life. Renaming the device does **not** change its topics, so a hub's config never breaks on a rename (the WLED/Tasmota/Home-Assistant convention). It's derived, not a stored control.
 
 **Topics** (for a device whose MAC ends `563cfe`): the device SUBSCRIBEs to the `set` topics and PUBLISHes the `get` topics on change (and on connect, so a controller never reads "No Response"). It also publishes its friendly `deviceName` on the retained `name` topic, so a hub can show the human name while the topics stay MAC-stable:
@@ -460,6 +463,7 @@ Home Assistant adopts the device two ways, both zero-config:
 Both can be on at once. Setup walkthrough (including exposing HA to Apple Home via HA's HomeKit Bridge, no Homebridge needed) in the [Home Assistant recipe](../../how-to/home-automation.md#adopt-in-home-assistant).
 
 ## File Manager, details
+
 The panel is a lazy folder **tree** (each folder loads its children on first expand) plus an inline text editor. Dot-prefixed entries (the `.config` persistence dir) are hidden unless `show hidden` is on.
 
 - Click a folder's row to select it and toggle its expansion (▸/▾); click a selected file to open the editor.

@@ -2076,7 +2076,18 @@ function createCard(mod, depth) {
         // the release list, the compatible-firmware filtering, the remembered selection and the
         // "2 weeks ago" labels have one home. The URL, File and image rows ride its
         // installRowExtras seam, which exists for exactly this.
-        checkFirmwareUpdate(true);
+        // On the App tab, a newer release says so above the picker that installs it; MoonBase's own mismatch is the device's status line.
+        const available = document.createElement("div");
+        available.className = "fw-available";
+        available.hidden = true;
+        const imageTabs = {};   // filled by the tab strip below, so each can carry a dot where its fix is
+        checkFirmwareUpdate(true).then(u => {
+            if (!u) return;
+            if (imageTabs.app) applyTabDot(imageTabs.app, { severity: "warning" });
+            if (kind !== "app") return;
+            available.textContent = `${u.label} is available: pick it under Release and Install.`;
+            available.hidden = false;
+        });
         const ctrlValue = (name) => {
             const c = (mod.controls || []).find(x => x.name === name);
             return c ? c.value : null;
@@ -2119,6 +2130,9 @@ function createCard(mod, depth) {
                 tab.addEventListener("click", () => {
                     if (tabKind !== kind) sendControl(mod.name, "image", i);
                 });
+                imageTabs[tabKind] = tab;
+                const dev = deviceFirmwareInfo();
+                if (tabKind === "moonbase" && dev && dev.moonbase) applyTabDot(tab, { severity: "warning" });
                 strip.appendChild(tab);
             });
             const titleRow = controlsHost.querySelector(":scope > .card-title");
@@ -2234,6 +2248,7 @@ function createCard(mod, depth) {
         // -- the shared picker ----------------------------------------------------------
         const mount = document.createElement("div");
         mount.className = "install-picker-host";
+        controlsHost.appendChild(available);
         controlsHost.appendChild(mount);
         installPicker.init({
             container: mount,
@@ -5995,24 +6010,23 @@ function desktopAssetPrefix() {
     return null;                                   // an OS we do not package: say nothing
 }
 
-// Read the device's running version + firmware-variant key off the FirmwareUpdateModule.
+// The device's app version, its MoonBase's version, and its firmware variant, whichever tab the Firmware card shows.
+// The card's rows describe one image at a time, so the app's version comes from its hidden `appVersion`, a MoonBase that does not match from `moonbaseMismatch`, and the variant from the System card, which names it on every tab.
 function deviceFirmwareInfo() {
     if (!state || !state.modules) return null;
-    const fw = findModule("Firmware") || (state.modules.find(m => m.type === "FirmwareUpdateModule"));
+    const fw = state.modules.find(m => m.type === "FirmwareUpdateModule");
     if (!fw) return null;
-    const ctrls = fw.controls || [];
-    // ONLY WHILE THE CARD DESCRIBES THE APP. `image` rebinds version/build/firmware/partition to
-    // whichever partition is selected, so on the MoonBase tab these read MoonBase: the badge would
-    // then compare a recovery image's version against app releases and look for a firmware asset
-    // named after a chip. The badge is global chrome, so it would stay wrong for as long as the
-    // user left that tab selected.
-    const image = (ctrls.find(c => c.name === "image") || {}).value;
-    if (image === 1) return null;
-    const version = (ctrls.find(c => c.name === "version") || {}).value;
-    const firmware = (ctrls.find(c => c.name === "firmware") || {}).value;
+    const value = (mod, name) => ((mod && mod.controls) || []).find(c => c.name === name)?.value;
+    const version = value(fw, "appVersion");
+    const firmware = value(allModules().find(m => m.type === "SystemModule"), "firmware");
     // "unknown" is what a desktop build reports: no ESP32 variant to name.
     const isDesktop = !firmware || firmware === "unknown";
-    return version ? { version, firmware: isDesktop ? null : firmware, isDesktop } : null;
+    return version ? { version, firmware: isDesktop ? null : firmware, isDesktop, moonbase: value(fw, "moonbaseMismatch") || null } : null;
+}
+
+// The release a version ships in: its tag for a stable version, the moving `latest` for a prerelease.
+function releaseTagOf(version) {
+    return (parse(version)?.prerelease.length || 0) > 0 ? "latest" : `v${version}`;
 }
 
 // Light the badge for an available update. `tag` is the release the picker should pre-select
@@ -6029,6 +6043,17 @@ function showUpdateBadge(badge, tag, label, isDesktop) {
         : `Firmware update available: ${label}. Open Firmware to install`;
     badge.dataset.tag = tag;
     badge.dataset.desktop = isDesktop ? "1" : "";
+    badge.dataset.moonbase = "";
+    badge.hidden = false;
+}
+
+// Light the badge for a MoonBase that does not match the app, which an app update leaves behind on either channel: the matching one ships in the app's own release.
+function showMoonBaseBadge(badge, dev) {
+    setText(badge, "⬆ MoonBase");
+    badge.title = `MoonBase ${dev.moonbase} does not match the app ${dev.version}. Open Firmware to install the matching one`;
+    badge.dataset.tag = releaseTagOf(dev.version);
+    badge.dataset.desktop = "";
+    badge.dataset.moonbase = "1";
     badge.hidden = false;
 }
 
@@ -6081,25 +6106,30 @@ async function devUpdate(dev, force) {
     return (hasBinary && isNewer(v, dev.version)) ? v : null;
 }
 
-// Show/hide the badge. `force` bypasses the cache (used when the Firmware card opens).
-// Stable update takes precedence; a -dev device additionally checks the latest channel.
+// Show/hide the badge, and return the app update it found as {tag, label}, or null. `force` bypasses the cache (used when the Firmware card opens).
+// An app update comes first, a stable one before a -dev device's latest; with the app current, a MoonBase that does not match it.
 async function checkFirmwareUpdate(force) {
     const badge = document.getElementById("fw-update-badge");
-    if (!badge) return;
+    if (!badge) return null;
     const dev = deviceFirmwareInfo();
-    if (!dev) { badge.hidden = true; return; }
+    if (!dev) { badge.hidden = true; return null; }
 
     const stableTag = await stableUpdate(dev, force);
-    if (stableTag) { showUpdateBadge(badge, stableTag, stableTag, dev.isDesktop); return; }
+    if (stableTag) { showUpdateBadge(badge, stableTag, stableTag, dev.isDesktop); return { tag: stableTag, label: stableTag }; }
 
     // Only a prerelease (-dev…) build follows the moving latest channel; a stable device is
     // not nudged toward an unreleased build.
     const onPrerelease = (parse(dev.version)?.prerelease.length || 0) > 0;
     if (onPrerelease) {
         const devVer = await devUpdate(dev, force);
-        if (devVer) { showUpdateBadge(badge, "latest", `latest (${devVer})`, dev.isDesktop); return; }
+        if (devVer) {
+            showUpdateBadge(badge, "latest", `latest (${devVer})`, dev.isDesktop);
+            return { tag: "latest", label: `latest (${devVer})` };
+        }
     }
+    if (dev.moonbase) { showMoonBaseBadge(badge, dev); return null; }
     badge.hidden = true;
+    return null;
 }
 
 // Badge click → pre-select the new release in the picker (it restores from PICKER_RELEASE_KEY
@@ -6116,6 +6146,8 @@ function setupUpdateBadge() {
         }
         if (badge.dataset.tag) safeLocalSet(PICKER_RELEASE_KEY, badge.dataset.tag);
         selectModule("Firmware");
+        // Straight to the tab that installs it.
+        if (badge.dataset.moonbase) sendControl("Firmware", "image", 1);
     });
 }
 

@@ -1723,13 +1723,23 @@ bool otaWriteStream(FsWriteSrc /*src*/, void* /*user*/, size_t /*contentLen*/,
     return false;
 }
 
-// No partitions on desktop: there is no recovery image and nothing to boot into.
-bool otaHasMoonBase() { return false; }
+// No partitions on desktop: there is no recovery image and nothing to boot into, unless a host test gives it one to read.
+static const char* testMoonBaseVersion_ = nullptr;
+static const char* testMoonBaseBuilt_ = nullptr;
+void setTestMoonBase(const char* version, const char* built) { testMoonBaseVersion_ = version; testMoonBaseBuilt_ = built; }
+bool otaHasMoonBase() { return testMoonBaseVersion_ != nullptr; }
 bool otaBootMoonBase() { return false; }
 bool otaRunningMoonBase() { return false; }
-// No factory partition off-device, so nothing to read a version from.
-bool otaMoonBaseVersion(char*, size_t) { return false; }
-bool otaMoonBaseBuild(char*, size_t) { return false; }
+bool otaMoonBaseVersion(char* out, size_t len) {
+    if (!testMoonBaseVersion_ || !out || len == 0) return false;
+    std::snprintf(out, len, "%s", testMoonBaseVersion_);
+    return out[0] != 0;
+}
+bool otaMoonBaseBuild(char* out, size_t len) {
+    if (!testMoonBaseBuilt_ || !out || len == 0) return false;
+    std::snprintf(out, len, "%s", testMoonBaseBuilt_);
+    return out[0] != 0;
+}
 bool otaMoonBaseSize(uint32_t*, uint32_t*) { return false; }
 // No factory partition to install into off-device.
 bool otaFetchMoonBaseUrl(const char*, char* statusBuf, size_t statusBufLen,

@@ -260,9 +260,9 @@ Your device reboots into the new firmware on its own when it finishes.
 
 Two things worth knowing. A failed install **stays** in MoonBase rather than pretending to have worked, so you can simply try again. And you cannot break a device this way: MoonBase is never overwritten by an update, so it is still there for the next attempt, including after a power cut in the middle of one.
 
-If your device is not on your network at all, MoonBase opens its own WiFi access point and is reachable at **4.3.2.1** once you join it.
+Off your network, MoonBase opens the device's own access point, under its name and password, and answers at **4.3.2.1**.
 
-MoonBase shows its own version on its page, and your device's Firmware card shows which MoonBase it carries. If that version is marked outdated, the same card installs a newer one over the network, so keeping the recovery image current needs no cable.
+MoonBase shows its own version on its page, and your device's Firmware card shows which MoonBase it carries. When it does not match the app, the card warns and its MoonBase tab installs the matching one over the network, so keeping the recovery image current needs no cable.
 
 That update runs from the app, because only the running app can write the partition MoonBase lives in. So it is a way to keep MoonBase fresh, not a way back from a device that will not start: if the app cannot run, or MoonBase itself will not boot, that still takes a cable. Your device checks the image first, refusing anything whose magic bytes, chip or description say it is not a MoonBase image for this chip.
 

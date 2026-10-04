@@ -384,16 +384,16 @@ private:
         const int i = wifi_ ? wifi_->indexOfId(staId_) : -1;
         return i < 0 ? 0xFF : static_cast<uint8_t>(i);
     }
-    /// Whether the join the card asked for has started.
-    bool requestStarted_ = false;
+    /// Which join request has been started, 0 for none; a request with another number replaces it.
+    uint32_t startedSeq_ = 0;
 
     /// Carry out a join the card asked for, connect-first: drop what the station is doing and join that network now.
     void startRequestedJoin(uint32_t now) {
         if constexpr (platform::hasWiFi) {
             if (!wifi_) return;
             const WiFiModule::JoinRequest* req = wifi_->joinRequest();
-            if (!req) { requestStarted_ = false; return; }
-            if (requestStarted_) return;   // already joining; the WaitingSta case finishes it
+            if (!req) { startedSeq_ = 0; return; }
+            if (startedSeq_ == req->seq) return;   // already joining it; the WaitingSta case finishes it
             if (state_ == State::ConnectedEth || state_ == State::WaitingEth) {
                 wifi_->joinRefused("Ethernet is in use: WiFi joins when it is unplugged");
                 return;
@@ -405,7 +405,7 @@ private:
                 platform::wifiStaStop();
                 noteRadioStopped();
             }
-            requestStarted_ = true;
+            startedSeq_ = req->seq;
             staId_ = req->knownId;
             appliedStaIpSig_ = wifi_->ipSigAt(staIndex());
             std::printf("NetworkModule: WiFi STA joining %s, asked for from the card\n", req->ssid);
@@ -539,7 +539,7 @@ private:
                                                : platform::WifiApConfig{name, captive::kAddressText, "", 1, false};
         if (!platform::wifiApInit(cfg)) return false;
         apUp_ = true;
-        apSig_ = ap_ ? ap_->sig() : 0;
+        apSig_ = ap_ ? ap_->sig(name) : 0;
         syncTxPower();  // see setWifiCredentials's syncTxPower comment
         // The address is what a user needs, the name alone sending them looking.
         std::printf("NetworkModule: AP started: %s → join it and open http://%s\n", name, captive::kAddressText);
@@ -598,8 +598,8 @@ private:
             std::printf("NetworkModule: Shutting down AP (%s)\n", connected ? "higher priority connected" : "it never opens");
             closeAp();
             if (state_ == State::AP) fallBack();   // never chosen while it was the fallback
-        } else if (ap_->sig() != apSig_) {
-            // A new password, channel or name visibility applies now, which drops the phones on it to rejoin.
+        } else if (ap_->sig(readDeviceName()) != apSig_) {
+            // A new password, channel, name or name visibility applies now, which drops the phones on it to rejoin.
             closeAp();
             openAp();
         }

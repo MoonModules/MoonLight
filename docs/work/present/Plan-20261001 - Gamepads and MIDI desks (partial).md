@@ -164,28 +164,28 @@ Checked against the tools a lighting or VJ operator already knows. The shape mat
 - ✅ Verified with the QCon in Chrome on `localhost`: its faders drive the surface and, through it, Pong's paddles.
 - ✅ Outbound: the service attaches as a `ControlSurface` and keeps the desk's state in the hidden `desk` control, one message per motor, SELECT light and ring; the bridge sends the slots that changed.
 - ✅ The desk's state goes out within 40 ms: a module calls `notifyValuesChanged()` and the server patches that module alone on the next 20 ms tick, at most 25 times a second.
-- Outbound, open: scribble strips over SysEx.
-- Learn for a desk without a profile, and the OpenLamp convention as the generic fallback mapping where it fits.
+- 🚧 Outbound: scribble strips over SysEx.
+- 🚧 Learn for a desk without a profile, and the OpenLamp convention as the generic fallback mapping where it fits.
 - ✅ Verified the outbound half with the QCon: the motors follow the surface, a self-playing Pong included, and a touched fader holds only the desk's own motor while OSC boards keep following.
-- Verify the outbound half with the X-Touch, and a preset change moving the faders.
+- 🚧 Verify the outbound half with the X-Touch, and a preset change moving the faders.
 
 ### 3. Surface-only input targets ✅
 
 - `ButtonService`, `AnalogService`, `InfraredService`, `GamepadService` and OSC's `/mm/control/<Module>/<control>` path lose their direct `Module.control` targets; every input reaches a control through the surface.
 - A persisted row with a direct target is reported rather than silently dropped, and MIGRATING records the change.
 
-### 4. USB host on S3 and P4
+### 4. USB host on S3 and P4 🚧
 
 - USB host bring-up in the platform layer, behind a seam.
 - USB MIDI first, since it is one class with no per-vendor parsing: the QCon without a computer.
 - HID gamepads next, with controller translations seeded from GameControllerDB. Xbox pads over USB need a GIP driver on top, and only if wanted, since the browser already reaches them over USB or Bluetooth on the computer.
 - The S31 joins if its datasheet confirms a USB host.
 
-### 5. RTP-MIDI for the X-Touch
+### 5. RTP-MIDI for the X-Touch 🚧
 
 The X-Touch over Ethernet with no computer: RFC 6295's session handshake and journal, then the same MCU profile as step 2.
 
-### 6. A native Linux source
+### 6. A native Linux source 🚧
 
 `/dev/input` for gamepads and ALSA for MIDI desks, so a headless Linux box such as a NanoPi is a rig controller with no browser. A desktop with a screen needs no native step, since the browser on `localhost` covers it.
 

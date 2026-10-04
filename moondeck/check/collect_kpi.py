@@ -30,7 +30,7 @@ from _host import desktop_target  # noqa: E402
 # other cross-script imports here use).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import repo_health  # noqa: E402
-import check_lizard  # noqa: E402
+import check_code  # noqa: E402
 
 # Per-host desktop build dir (matches build_desktop.py / package_desktop.py).
 # We pick the directory belonging to the OS this script runs on so KPI
@@ -431,16 +431,11 @@ def collect_code():
     kpi["specs"] = len(list((ROOT / "docs" / "moonmodules").rglob("*.md")))
     kpi["scenarios"] = len(list((ROOT / "test" / "scenarios").rglob("*.json")))
 
-    # Lizard — the RAW count, deliberately ignoring whitelizard.txt. The gate
-    # (check_lizard.py) subtracts the baseline so it fails only on new violations; the KPI must
-    # not, or the trend flatlines at 0 and hides every future regression. Two different jobs on
-    # the same measurement: the gate asks "did we get worse since the baseline", the KPI asks
-    # "how much complexity is there". Shared parsing so the two can never disagree on the count.
-    funcs = check_lizard.measure()
-    warnings = check_lizard.violations(funcs) if funcs else []
-    kpi["lizard_warnings"] = len(warnings)
-    kpi["lizard_details"] = [f"{v['ccn']} CCN, {v['nloc']} NLOC: {v['name']} ({v['file']})"
-                             for v in warnings]
+    # The code report's function rules, counted by the same function; its clones and file sizes are the report's alone, a pass too slow for every KPI run.
+    funcs = check_code.measure()
+    rows = check_code.findings(funcs) if funcs else []
+    kpi["code_findings"] = len(rows)
+    kpi["code_details"] = [f"{value} {rule}: {name} ({file})" for file, rule, name, value in rows]
 
     return kpi
 
@@ -466,8 +461,8 @@ def format_oneliner(desktop, esp32, code):
         parts.append(f"heap:{esp32['heap_free']//1024}KB")
     parts.append(f"src:{code['src_files']}({code['src_lines']})")
     parts.append(f"test:{code['test_files']}({code['test_lines']})")
-    if code["lizard_warnings"] > 0:
-        parts.append(f"lizard:{code['lizard_warnings']}w")
+    if code["code_findings"] > 0:
+        parts.append(f"functions-over:{code['code_findings']}")
     return "KPI: " + " | ".join(parts)
 
 def format_full(desktop, esp32, code):
@@ -508,8 +503,8 @@ def format_full(desktop, esp32, code):
     lines.append(f"    {code['src_files']} source files ({code['src_lines']} lines)")
     lines.append(f"    {code['test_files']} test files ({code['test_lines']} lines)")
     lines.append(f"    {code['specs']} specs, {code['scenarios']} scenarios")
-    lines.append(f"    Lizard: {code['lizard_warnings']} warnings")
-    for w in code.get("lizard_details", []):
+    lines.append(f"    Functions over a limit: {code['code_findings']}")
+    for w in code.get("code_details", []):
         lines.append(f"      {w}")
 
     return "\n".join(lines)

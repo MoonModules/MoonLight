@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 import compute_version   # sibling: the one place a version string is derived
+from generate_build_info import build_id   # sibling: the one place the build id is derived
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 ESP32_DIR = ROOT / "esp32"
@@ -705,11 +706,10 @@ def stale_feature_cache(build_dir: Path, extra: list[str], chip: str) -> str | N
     for flag in ("MM_VERSION", "MM_RELEASE"):
         wanted = next((a[len(f"-D{flag}="):] for a in extra
                        if a.startswith(f"-D{flag}=")), None)
-        if wanted is None:
-            continue  # not passed this build — leave the cache alone
         m = re.search(rf"^{flag}:[^=]*=(.*)$", text, re.MULTILINE)
         cached = m.group(1) if m else None
-        if cached is not None and cached != wanted:
+        # Not passed means not wanted: a plain build after a versioned one would otherwise keep reporting that version.
+        if cached != wanted:
             return f"{flag} cached as {cached!r} but this build wants {wanted!r}"
     return None
 
@@ -936,22 +936,18 @@ def build_moonbase(cmd: list[str], env: dict, chip: str, version: str = "") -> N
     moonbase/sdkconfig.defaults; the shared partition table keeps the two images provably agreed
     on where everything lives.
 
-    `version` becomes PROJECT_VER, which IDF writes into the image's app descriptor. The app
-    reads it back from the factory partition to report which MoonBase a device carries, so
-    without it a device cannot say what it is running: a bench board that could not install
-    firmware took a bisect of the git log to identify, because every MoonBase looked alike.
-    A version is variant-independent, so passing it keeps one image per chip valid. Empty for a
-    local build, where IDF falls back to `git describe`.
+    `version` plus the build id becomes PROJECT_VER, `6.0.0+990a3d84` in SemVer's build-metadata form, which IDF writes into the image's app descriptor.
+    The app reads it back from the factory partition and shows the version and the build id as it shows its own, so a device can say which MoonBase it carries.
+    A changed id also changes the descriptor's compile flags, so IDF recompiles it and its date is the build's rather than the build folder's first.
+    A version is variant-independent, so passing it keeps one image per chip valid.
     """
     moonbase_dir = ROOT / "moonbase"
     build_dir = ROOT / "build" / f"moonbase-{chip}"
     b_arg = ["-B", str(build_dir), f"-DSDKCONFIG={build_dir}/sdkconfig"]
     if not version:
-        # The app resolves this through build_info.h's #ifndef; MoonBase has no build_info.h, so
-        # it resolves the same library.json default here rather than reporting a git-describe
-        # string the app has no way to compare against.
+        # The library.json default the app resolves through build_info.h's #ifndef, rather than a git-describe string the app cannot compare against.
         version = compute_version.compute("local", "")
-    b_arg.append(f"-DPROJECT_VER={version}")
+    b_arg.append(f"-DPROJECT_VER={version}+{build_id()}")
     # Same trap as stale_feature_cache: IDF generates sdkconfig from the defaults only when it is
     # absent, so an edited moonbase/sdkconfig.defaults silently changes nothing. One defaults file
     # here, so mtime is a sufficient staleness signal.

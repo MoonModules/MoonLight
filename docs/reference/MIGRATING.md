@@ -24,6 +24,17 @@ MoonLight ships **no migration code**: the persistence layer is robust by defaul
 
 ## Unreleased
 
+### A MoonBase from before this release misses the Ethernet wiring and the power cap
+
+**Action: *nothing* on WiFi; on an Ethernet-only or power-capped board, install the matching MoonBase.**
+
+MoonBase reads the app's saved network settings, and the Ethernet wiring and the WiFi power cap moved under the new Ethernet and WiFi cards.
+A MoonBase from before this release still joins the first known WiFi network, but finds neither of those.
+On an Ethernet-only board it then opens an open access point named `MoonBase`.
+An update started from a browser on the cable loses the device until you join that network.
+On a board the device catalog caps, it runs the radio at full power, which can brown out a weak supply.
+Before the next firmware update, install the matching MoonBase from the Firmware card's MoonBase tab, which writes it over the network.
+
 ### WiFi has its own card under Network, with a list of known networks
 
 **Action: *re-set a control*.**
@@ -31,8 +42,7 @@ MoonLight ships **no migration code**: the persistence layer is robust by defaul
 The WiFi settings moved from the Network card to a new WiFi card below it: the network becomes the first row of `known`, with its IP settings, and `txPowerSetting` moved with it.
 A backup restored through the File Manager carries the network and the power cap across.
 Updated in place without a restore, the device knows no network: it opens its access point, where the network is entered again.
-A MoonBase recovery image from before this release reads no network from the new layout, so it also opens its own access point.
-Flash a current MoonBase to restore its WiFi join.
+A MoonBase from before this release reads part of the new layout: see the MoonBase entry above.
 
 ### Ethernet has its own card under Network
 

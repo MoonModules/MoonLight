@@ -1,0 +1,124 @@
+{
+  "name": "scenario_Firmware_MoonBase_opens_the_devices_access_point",
+  "module": "FirmwareUpdateModule",
+  "mode": "mutate",
+  "also": [
+    "AccessPointModule",
+    "NetworkModule",
+    "WiFiModule"
+  ],
+  "live_only": true,
+  "on_request": true,
+  "host_network": true,
+  "description": "MoonBase with no network to join opens the device's own access point, under its name, with the same sign-in screen as the app, so a phone on the app's access point stays on through the restart. The device forgets its network and opens its access point; this computer joins it, restarts the device in MoonBase, finds the sign-in redirect, boots the app and gives the device its network back. It takes the computer off its network for a few minutes, so it runs only when named, with --network naming the moondeck.json network the device is on.",
+  "steps": [
+    {
+      "name": "on-its-network",
+      "description": "The device starts on WiFi, on the network the run names.",
+      "op": "expect_control",
+      "id": "Network",
+      "key": "mode",
+      "equals": "WiFi STA"
+    },
+    {
+      "name": "forget-the-network",
+      "description": "With nothing to join, the app opens its access point, and so will MoonBase.",
+      "op": "list_row",
+      "id": "WiFi",
+      "key": "known",
+      "match": {
+        "ssid": "{network.ssid}"
+      },
+      "delete": true
+    },
+    {
+      "name": "join-its-access-point",
+      "op": "host_wifi",
+      "join": "access_point",
+      "timeout": 60
+    },
+    {
+      "name": "restart-in-moonbase",
+      "description": "The Firmware card's Restart in MoonBase, pressed from a phone on the access point.",
+      "op": "expect_http",
+      "method": "POST",
+      "url": "/api/firmware/moonbase",
+      "status": 200
+    },
+    {
+      "name": "still-on-the-same-network",
+      "description": "MoonBase opens the access point under the device's name, so the computer rejoins the network it was on rather than a stranger.",
+      "op": "host_wifi",
+      "join": "access_point",
+      "timeout": 90
+    },
+    {
+      "name": "moonbase-answers",
+      "op": "expect_http",
+      "url": "/moonbase",
+      "status": 200,
+      "within": 60
+    },
+    {
+      "name": "a-phone-sees-the-sign-in-screen",
+      "description": "MoonBase answers every name with its address and sends a phone's captive check to its page.",
+      "op": "expect_http",
+      "url": "http://captive.apple.com/hotspot-detect.html",
+      "resolve": "access_point",
+      "status": 302,
+      "location": "http://4.3.2.1/?open=WiFi"
+    },
+    {
+      "name": "its-page-at-the-redirect",
+      "op": "expect_http",
+      "url": "/?open=WiFi",
+      "status": 200
+    },
+    {
+      "name": "back-to-the-app",
+      "op": "expect_http",
+      "method": "POST",
+      "url": "/api/firmware/boot-app",
+      "status": 200
+    },
+    {
+      "name": "the-app-on-its-access-point",
+      "op": "host_wifi",
+      "join": "access_point",
+      "timeout": 90
+    },
+    {
+      "name": "the-app-answers",
+      "op": "expect_http",
+      "url": "/moonbase",
+      "status": 404,
+      "within": 90
+    },
+    {
+      "name": "the-network-back",
+      "description": "The device gets its network back, as it had it.",
+      "op": "list_row",
+      "id": "WiFi",
+      "key": "known",
+      "add": {
+        "ssid": "{network.ssid}",
+        "password": "{network.password}"
+      }
+    },
+    {
+      "name": "home",
+      "op": "host_wifi",
+      "join": "home",
+      "timeout": 90
+    },
+    {
+      "name": "on-its-network-again",
+      "description": "Once nobody is on the access point, the device retries its known network.",
+      "op": "expect_control",
+      "id": "Network",
+      "key": "mode",
+      "equals": "WiFi STA",
+      "within": 90
+    }
+  ]
+}

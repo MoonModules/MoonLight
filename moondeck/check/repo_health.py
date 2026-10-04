@@ -277,9 +277,7 @@ def measure_tests():
 def measure_complexity():
     """Complexity, the number lizard owns (docs/reference/testing.md § Static analysis).
 
-    Deliberately the RAW count, not the baselined one: the gate (check_lizard.py) subtracts
-    whitelizard.txt so it fails only on new violations, but the TREND has to see the whole
-    number or it flatlines at 0 the moment a baseline lands and hides all future growth.
+    The same measurement check_code.py reports per file, so the gate and the trend can never disagree on the count.
 
     Imported lazily and tolerantly — repo_health must stay runnable when lizard is not
     installed, and a missing tool should carry the previous value forward rather than write a
@@ -287,14 +285,14 @@ def measure_complexity():
     """
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
-        import check_lizard
-        funcs = check_lizard.measure()
+        import check_code
+        funcs = check_code.measure()
         if not funcs:
             return {}
-        viol = check_lizard.violations(funcs)
+        over = {(file, name) for file, _, name, _ in check_code.findings(funcs)}
         return {
             "functions": len(funcs),
-            "over_threshold": len(viol),
+            "over_threshold": len(over),
             "worst_ccn": max((f["ccn"] for f in funcs), default=0),
         }
     except Exception:

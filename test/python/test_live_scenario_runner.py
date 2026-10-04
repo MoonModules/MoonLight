@@ -187,3 +187,15 @@ def test_a_restore_that_fails_unexpectedly_is_reported_and_a_vanished_module_is_
     out = capsys.readouterr().out
     assert "Audio.gain" in out
     assert "Created" not in out
+
+
+def test_an_http_step_on_a_path_goes_to_the_device_under_test():
+    """A path names the device the run targets, so one scenario serves every board; an absolute URL stays as written, as a captive check needs."""
+    r = runner._http_request("/moonbase", "http://192.168.1.50/")
+    assert r.full_url == "http://192.168.1.50/moonbase" and r.get_method() == "GET"
+    assert runner._http_request("http://captive.apple.com/", "http://192.168.1.50").full_url == "http://captive.apple.com/"
+
+
+def test_an_http_post_step_sends_an_empty_body_as_a_button_does():
+    r = runner._http_request("/api/firmware/boot-app", "http://192.168.1.50", "POST")
+    assert r.get_method() == "POST" and r.data == b""

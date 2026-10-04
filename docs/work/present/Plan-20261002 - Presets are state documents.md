@@ -70,11 +70,11 @@ Improv's `APPLY_OP` keeps its one-op frames under every option, since a frame ho
 
 ## Steps
 
-1. **The apply engine in core.** A `StateDocument` applier walking the parsed document against the tree: set, create, remove, `$patch: replace`, one prepare at the end, and a result naming the first failure. Unit tests: each rule, a missing type, an unknown control, `$patch: replace` removing the rest, key order kept, and a malformed document changing nothing.
-2. **`PATCH /api/state`** on the engine, with an HTTP test and a scenario that adds an effect with its controls in one request, in-process and live.
-3. **Presets as documents.** Save writes a document, apply runs the engine, the role follows from the containers touched. A palette-only preset applied over a running effects preset changes the palette and nothing else, pinned by a test and a scenario. `migrate.js` converts an old flat preset file on restore.
-4. **A save-as-preset button** on each module card.
-5. **(B, its own branch)** Config files as documents, then `deviceModels.json` and scenario fixtures, each removing its old reader. Config files change shape on disk and no compatibility code reads the old one, so it ships with a back up, update, restore note, ideally in the release that already asks for a restore.
+1. 🚧 **The apply engine in core.** A `StateDocument` applier walking the parsed document against the tree: set, create, remove, `$patch: replace`, one prepare at the end, and a result naming the first failure. Unit tests: each rule, a missing type, an unknown control, `$patch: replace` removing the rest, key order kept, and a malformed document changing nothing.
+2. 🚧 **`PATCH /api/state`** on the engine, with an HTTP test and a scenario that adds an effect with its controls in one request, in-process and live.
+3. 🚧 **Presets as documents.** Save writes a document, apply runs the engine, the role follows from the containers touched. A palette-only preset applied over a running effects preset changes the palette and nothing else, pinned by a test and a scenario. `migrate.js` converts an old flat preset file on restore.
+4. 🚧 **A save-as-preset button** on each module card.
+5. 🚧 **(B, its own branch)** Config files as documents, then `deviceModels.json` and scenario fixtures, each removing its old reader. Config files change shape on disk and no compatibility code reads the old one, so it ships with a back up, update, restore note, ideally in the release that already asks for a restore.
 
 ## Subtraction
 

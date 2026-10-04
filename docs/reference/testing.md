@@ -43,7 +43,7 @@ Tests pin behavior that runs; static analysis catches what never gets exercised.
 | 3 | RTSan + `[[clang::nonblocking]]` | allocation/blocking in the render path, **transitively** | Compile time + CI |
 | 4 | [CodeQL](../.github/codeql-config.yml) | untrusted input, whole-program taint, use-after-free | CI, Security tab |
 
-Alongside them: **lizard** counts complexity per commit for the trend (a fuzzy tokenizer, not a parser, it can never express an architectural rule), **clang-query** is the home for bespoke AST rules we invent, and the Python checks in `moondeck/check/` cover contracts whose other half is a Markdown page, a JSON catalog or a built binary. Every one has a MoonDeck card ([MoonDeck.md](../moondeck/MoonDeck.md)).
+Alongside them: **check_code** counts complexity and function length per commit into a report that only falls. Lizard sits underneath it, a fuzzy tokenizer rather than a parser, so it can never express an architectural rule. Beside that, **clang-query** is the home for bespoke AST rules we invent. The Python checks in `moondeck/check/` cover contracts whose other half is a Markdown page, a JSON catalog or a built binary. Every one has a MoonDeck card ([MoonDeck.md](../moondeck/MoonDeck.md)).
 
 **Every one of these is a report, not a gate.** They state what they find; a consumer decides
 what to do about it. `WarningsAsErrors` is empty, CodeQL never runs on `pull_request`, and the hot-path check never fails the event. A gate nobody can satisfy gets disabled rather than obeyed, and it pushes people to suppress a finding under time pressure, which is the opposite of why the tool is there. The exception is layer 0: compiler warnings ARE `-Werror`, because they are few, actionable, and fixed at the moment they appear.
@@ -59,7 +59,7 @@ and cannot drift between two tools that half-agree:
 | Catalog matches the modules | `check_devices.py` |
 | Untrusted input is memory-safe | CodeQL |
 | Bug patterns / performance | clang-tidy |
-| Complexity does not grow | lizard (baselined) |
+| Complexity does not grow | `check_code.py` (ratcheted per file) |
 | Size/LOC/docs do not grow silently | `repo_health.py` |
 
 ### Verify a zero before believing it
@@ -74,7 +74,7 @@ An analyzer reporting "0 findings" is indistinguishable from one that read nothi
 | Same trap in `-checks` | The filter had never worked |
 | Compilation database records a different compiler than the tool runs | `'cstdint' file not found` on 129/129 files; unparsed files are never analyzed |
 | Missing `-isysroot` | Under-report, not an error: 5 matches where there were 14 |
-| A baseline keyed on a name the tool no longer emits | Pins nothing while looking green (see backlog-core.md § lizard) |
+| A baseline keyed on a name the tool no longer emits | Pins nothing while looking green, which is why `check_code` counts per file |
 
 So: **run a control check that MUST fire.** After reaching 0, enabling a deliberately-disabled check (`--check readability-magic-numbers`) returned 3,307, that is what proves the pipeline reads the code. `check_clang_tidy.py` also refuses to report when more than ten files fail to compile, because "most files errored" is a broken run, not a result.
 
@@ -258,7 +258,7 @@ These live-only ops let a scenario walk it with the computer running it as the p
 
 - **`host_wifi`** with `"join": "access_point"` joins the access point named after the device and points the runner at 4.3.2.1; `"join": "home"` returns to the network the run names. Each waits until its target answers, since macOS hides network names.
 - **`list_row`** finds a row of a list control by its fields (`match`), then writes a `field` (a button field presses it), deletes it (`"delete": true`), or with neither only expects it.
-- **`expect_http`** fetches an absolute `url` without following redirects and checks its `status` and `location`, which is what a captive portal answers. With `"resolve": "access_point"` it resolves the name at 4.3.2.1 as a phone does, since macOS holds a captive network's answers back from other apps.
+- **`expect_http`** fetches a `url` without following redirects and checks its `status` and `location`, which is what a captive portal answers. A `url` starting with `/` goes to the device under test, and `"method": "POST"` presses a route as the UI's buttons do. With `"resolve": "access_point"` it resolves the name at 4.3.2.1 as a phone does, since macOS holds a captive network's answers back from other apps.
 - **`within`** on `expect_control`, `list_row` and `expect_http` polls for that many seconds, for what the device reaches on its own time, such as a scan or a join.
 - **`"wait": false`** on `reboot` restarts without waiting, for a device that comes back where the computer cannot reach it yet.
 

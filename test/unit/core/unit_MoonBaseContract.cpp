@@ -1,15 +1,15 @@
 /// @module NetworkModule
 /// @also FilesystemModule
 
-/// MoonBase reads the WiFi credentials, the Ethernet wiring and the TX cap with a bounded 2048-byte prefix read of /.config/NetworkModule.json: a tiny image has no JSON parser and no room for the whole file, which also carries every child module's config. The keys now live on Network's Ethernet and WiFi children, the credentials as the first row of the WiFi child's known list.
-///
-/// MoonBase scrapes with core/util/ConfigScrape.h, and so does this test, against the file the application writes: if a control added above these keys pushed them out of the prefix, or the row shape changed, MoonBase would silently stop joining the network on every deployed 4 MB device. This test is the pin.
+/// The two contracts between the app and MoonBase: the config keys MoonBase scrapes with ConfigScrape.h, and the install routes both images serve.
 
 #include "doctest.h"
 #include "core/system/FilesystemModule.h"
 #include "core/system/NetworkModule.h"
 #include "core/system/EthernetModule.h"
 #include "core/system/WiFiModule.h"
+#include "core/system/AccessPointModule.h"
+#include "core/system/SystemModule.h"
 #include "core/module/Scheduler.h"
 #include "core/util/ConfigScrape.h"
 #include "core/util/ModuleFactory.h"
@@ -20,8 +20,16 @@
 #include <fstream>
 #include <string>
 
-// The keys MoonBase scrapes sit inside its 2048-byte prefix read of NetworkModule.json, read by the scraper MoonBase itself runs.
-TEST_CASE("NetworkModule.json keeps MoonBase's scraped keys inside its 2048-byte prefix read") {
+namespace {
+char* textControl(mm::MoonModule& m, const char* name) {
+    for (uint8_t i = 0; i < m.controls().count(); i++)
+        if (std::strcmp(m.controls()[i].name, name) == 0) return static_cast<char*>(m.controls()[i].ptr);
+    return nullptr;
+}
+}  // namespace
+
+// The keys MoonBase scrapes are in the files the app writes, read by the scraper MoonBase itself runs.
+TEST_CASE("the app's saved config carries every key MoonBase reads") {
     char tmpRoot[256];
     std::snprintf(tmpRoot, sizeof(tmpRoot), "/tmp/mm_moonbase_contract_%u",
                   static_cast<unsigned>(mm::platform::millis()));
@@ -31,56 +39,71 @@ TEST_CASE("NetworkModule.json keeps MoonBase's scraped keys inside its 2048-byte
 
     mm::ModuleFactory::registerType<mm::EthernetModule>("EthernetModule");
     mm::ModuleFactory::registerType<mm::WiFiModule>("WiFiModule");
+    mm::ModuleFactory::registerType<mm::AccessPointModule>("AccessPointModule");
     mm::Scheduler scheduler;
     auto* fs = new mm::FilesystemModule();
     fs->setTypeName("FilesystemModule");
     fs->setScheduler(&scheduler);
+    auto* sys = new mm::SystemModule();
+    sys->setTypeName("SystemModule");
     auto* net = new mm::NetworkModule();
     net->setTypeName("NetworkModule");
     // Wired as main wires them: the interfaces first, so their keys come before any other child's.
     auto* eth = mm::ModuleFactory::create("EthernetModule");
     auto* wifi = mm::ModuleFactory::create("WiFiModule");
-    eth->markWiredByCode();
-    wifi->markWiredByCode();
-    net->addChild(eth);
-    net->addChild(wifi);
+    auto* ap = mm::ModuleFactory::create("AccessPointModule");
+    for (auto* child : {eth, wifi, ap}) { child->markWiredByCode(); net->addChild(child); }
     net->setEthernet(static_cast<mm::EthernetModule*>(eth));
     net->setWiFi(static_cast<mm::WiFiModule*>(wifi));
+    net->setAccessPoint(static_cast<mm::AccessPointModule*>(ap));
+    net->setSystemModule(sys);
     scheduler.addModule(fs);
+    scheduler.addModule(sys);
     scheduler.addModule(net);
     scheduler.setup();
 
-    net->setWifiCredentials("bench-ssid", "bench-password");
+    std::strcpy(textControl(*sys, "deviceName"), "MM-bench");
+    std::strcpy(textControl(*ap, "password"), "ap-passphrase");
+    // A full known list with long passphrases, which puts the access point's keys past 2048 bytes where Ethernet is previewed: why MoonBase reads the whole file.
+    for (int i = 0; i < 7; i++) {
+        char name[24];
+        std::snprintf(name, sizeof(name), "network-%02d", i);
+        net->setWifiCredentials(name, "a-passphrase-as-long-as-wpa2-allows-sixty-three-characters-long");
+    }
     net->setTxPowerSetting(8);
-    // A second known network, which MoonBase must not take for the first.
-    net->setWifiCredentials("other-ssid", "other-password");
-    net->setWifiCredentials("bench-ssid", "bench-password");
+    net->setWifiCredentials("bench-ssid", "bench-password");   // the first known network
+    sys->markDirty();
     net->markDirty();
     fs->flush();
 
-    std::ifstream f(std::string(tmpRoot) + "/.config/NetworkModule.json");
-    REQUIRE(f.good());
-    std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-    f.close();
-
-    constexpr size_t kPrefixRead = 2048;   // moonbase_main.cpp loadCredentials buf size
-    // Room for what a device's file carries beyond this one: a worst-case 64-character passphrase escaped to twice its length, longer names, and margin.
-    constexpr size_t kDeviceBudget = 400;
-    const std::string prefix = content.substr(0, kPrefixRead - 1 - kDeviceBudget);
+    const auto readFile = [&](const char* name) {
+        std::ifstream f(std::string(tmpRoot) + "/.config/" + name);
+        REQUIRE(f.good());
+        return std::string((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    };
+    const std::string content = readFile("NetworkModule.json");
 
     char ssid[64] = {}, password[64] = {};
-    REQUIRE(mm::configscrape::findFirstNetwork(prefix.c_str(), ssid, sizeof(ssid), password, sizeof(password)));
+    REQUIRE(mm::configscrape::findFirstNetwork(content.c_str(), ssid, sizeof(ssid), password, sizeof(password)));
     CHECK(std::string(ssid) == "bench-ssid");
     CHECK(std::string(password) == "bench-password");
     int tx = 0;
-    mm::configscrape::findInt(prefix.c_str(), "txPowerSetting", &tx);
+    mm::configscrape::findInt(content.c_str(), "txPowerSetting", &tx);
     CHECK(tx == 8);
     // The Ethernet wiring is there too where this build previews it.
     if constexpr (mm::platform::hasEthernet || mm::platform::previewsEthernetControls) {
         int ethType = -2;
-        mm::configscrape::findInt(prefix.c_str(), "ethType", &ethType);
+        mm::configscrape::findInt(content.c_str(), "ethType", &ethType);
         CHECK(ethType != -2);
     }
+    // The access point's own password, not a known network's or another child's.
+    char apPassword[64] = {};
+    REQUIRE(mm::configscrape::findChildString(content.c_str(), "AccessPointModule", "password", apPassword, sizeof(apPassword)));
+    CHECK(std::string(apPassword) == "ap-passphrase");
+    // The name MoonBase opens its access point under, the same one the app's carries.
+    char name[33] = {};
+    REQUIRE(mm::configscrape::findString(readFile("SystemModule.json").c_str(), "deviceName", name, sizeof(name)));
+    CHECK(std::string(name) == "MM-bench");
 
     scheduler.release();
     std::filesystem::remove_all(tmpRoot);
@@ -104,9 +127,20 @@ TEST_CASE("the config scraper finds top-level and child keys, and only whole key
     CHECK(b);
 }
 
-// The OTA routes are the OTHER cross-image contract, and the one with two speakers: the browser drives an update by talking to the application, which hands over to MoonBase mid-flight, so the page keeps calling the same paths against a different image. The two therefore have to agree on the names, and nothing else pins that: MoonBase is a standalone project sharing no sources, so a route renamed on one side compiles cleanly on both and fails only on a device, halfway through an update, with the app already gone.
-//
-// They diverged once (MoonBase served `/install` and `/install-url` while the app served `/api/firmware/upload` and `/api/firmware/url`), which cost a debugging round: the app answers an unknown large POST with 413, so pushing to the wrong name reads as "the image is too big" rather than "no such route". This test reads both sources and requires the shared vocabulary.
+// Known-network and MQTT passwords precede the access point's, and a list row's "type" names no child.
+TEST_CASE("the config scraper reads a child's key by the child's type") {
+    const char* json = R"({"1.known":[{"ssid":"s","password":"net"}],"4.type":"MqttModule","4.password":"mqtt","2.type":"AccessPointModule","2.password":"ap-pass","5.devices":[{"type":"MoonLight"}]})";
+    char out[16] = {};
+    REQUIRE(mm::configscrape::findChildString(json, "AccessPointModule", "password", out, sizeof(out)));
+    CHECK(std::string(out) == "ap-pass");
+    CHECK(mm::configscrape::findChildString(json, "MqttModule", "password", out, sizeof(out)));
+    CHECK(std::string(out) == "mqtt");
+    CHECK_FALSE(mm::configscrape::findChildString(json, "MoonLight", "password", out, sizeof(out)));
+    CHECK_FALSE(mm::configscrape::findChildString(json, "EthernetModule", "password", out, sizeof(out)));
+    CHECK_FALSE(mm::configscrape::findChildString(R"({"2.type":"AccessPointModule","2.password":""})", "AccessPointModule", "password", out, sizeof(out)));
+}
+
+// The page keeps calling the same paths across the hand-over to MoonBase, which shares no sources, so a renamed route fails only on a device mid-update.
 TEST_CASE("the two boot images serve the OTA routes under the same names") {
     // Resolved from this file rather than the working directory: ctest runs the binary from the build tree, where a relative path finds nothing.
     const std::filesystem::path repo =
@@ -125,36 +159,36 @@ TEST_CASE("the two boot images serve the OTA routes under the same names") {
         CHECK_MESSAGE(app.find(route) != std::string::npos, "the app must serve " << route);
     }
 
-    // And the old names stay gone on both sides: a leftover would be a second way to say one thing, which is what this test exists to prevent.
+    // The old names stay gone: a leftover is a second way to say one thing.
     for (const char* gone : {"\"POST /install\"", "\"POST /install-url\"", "'/install'", "'/install-url'"}) {
         CHECK_MESSAGE(moonbase.find(gone) == std::string::npos, "MoonBase still references " << gone);
     }
 
-    // Each image owns one direction of the install, and only that one. MoonBase writes the app slot; the app writes the factory slot. Neither can write the partition it executes from, which is why both routes have to exist and why they cannot live in the same image.
+    // Each image writes the other's slot, never its own: MoonBase the app slot, the app the factory slot.
     CHECK_MESSAGE(app.find("/api/firmware/moonbase-update") != std::string::npos,
                   "the app must serve the route that installs a new MoonBase");
     CHECK_MESSAGE(moonbase.find("/api/firmware/moonbase-update") == std::string::npos,
                   "MoonBase cannot install itself: it runs from the partition it would erase");
 
-    // A ~750 KB image has to STREAM, which the server gates on an explicit allowlist: a route missing from it is refused with "body too large" before its handler ever runs, so every image looks equally invalid. Found on the bench, where the vetting appeared to reject a perfectly good image. On the allowlist, checked by the route's presence in the isStreamingRoute expression rather than by its strncmp length: the length is an implementation detail that a reformat moves, while what must hold is that this route is named there at all.
+    // An image streams only on the allowlist, else it is refused as too large before its handler runs; checked by name, since a reformat moves the length.
     const size_t allow = app.find("isStreamingRoute");
     REQUIRE(allow != std::string::npos);
     const bool onAllowlist = app.find("moonbase-update", allow) < app.find("bodyNeeded >", allow);
     CHECK_MESSAGE(onAllowlist,
                   "the MoonBase update route must be on the streaming allowlist");
 
-    // Both ways in: a browser push, and a URL the device fetches itself. The URL form is what makes a GitHub release asset installable without relaying ~750 KB through the browser.
+    // A URL the device fetches itself installs a release asset without relaying it through the browser.
     CHECK_MESSAGE(app.find("/api/firmware/moonbase-update-url") != std::string::npos,
                   "the app must also install a MoonBase from a URL");
 
-    // The UI decides a device HAS MoonBase by looking for a control the module publishes only there, so the two have to name the same one. They did not once: the control was renamed as part of making the set generic, and the card silently lost both its image tabs and its way into MoonBase, on a device that had one. Nothing failed, it just quietly was not there.
+    // The UI detects MoonBase by a control the module publishes only there, so both name the same one, or the card silently loses its way in.
     const std::string ui = read("src/ui/app.js");
     CHECK_MESSAGE(ui.find("c.name === \"image\"") != std::string::npos,
                   "the UI must detect MoonBase by the control the module actually publishes");
     CHECK_MESSAGE(read("src/core/system/FirmwareUpdateModule.h").find("addSelect(\"image\"") != std::string::npos,
                   "the module must publish that control");
 
-    // EVERY INSTALL SHOWS PROGRESS. Six ways in (a release, a URL, a file; for the app and for MoonBase) and all six raise the overlay, either by watching the device's own byte counts or by driving it from a browser-pushed upload. This was established over several rounds and then lost twice to changes that looked local, so it is pinned rather than remembered: an install with no visible progress is indistinguishable from one that has hung.
+    // Every install shows progress, all six ways in: one with none is indistinguishable from one that hung.
     for (const char* raiser : {"watchInstall(k)", "moonbaseUpdateFlow({ url })",
                                "moonbaseUpdateFlow({ file })", "uploadWithProgress("}) {
         CHECK_MESSAGE(ui.find(raiser) != std::string::npos,
@@ -163,13 +197,13 @@ TEST_CASE("the two boot images serve the OTA routes under the same names") {
     CHECK_MESSAGE(ui.find("showUpdateOverlay()") != std::string::npos,
                   "the progress overlay must exist");
 
-    // PROGRESS RIDES THE STATUS, in one shape, for every writer. The app parses it in exactly one place (installProgress); MoonBase's own page parses it again because that image shares no sources with the app. Two readers that must agree, so both are pinned: a writer that changed the shape used to leave one of them silently matching nothing.
+    // Progress rides the status in one shape, read once by the app and once by MoonBase's own page, so both readers are pinned.
     CHECK_MESSAGE(ui.find("function installProgress(") != std::string::npos,
                   "the app must parse install progress in ONE place");
     CHECK_MESSAGE(moonbase.find(") of (") != std::string::npos,
                   "MoonBase's page must read the same 'N of M' shape the app writes");
 
-    // NEITHER IMAGE MAY BE INSTALLED AS THE OTHER. The MoonBase install refuses an app image, and the app install refuses a MoonBase one. The second direction is the worse failure and was missing: MoonBase written into the app slot leaves BOTH partitions holding it, and every route out then resolves to the partition being executed (0x1501), so the device answers, serves a page, and can only be recovered with a cable. Found by doing exactly that. BOTH images must refuse it, because either can be the one writing the app slot: the app installs in place on a dual-OTA board, and MoonBase installs on a board that has one. The check first went only into the app, which is the image that never runs the install on the very devices where this failure is unrecoverable.
+    // Neither image installs as the other: MoonBase in the app slot leaves no way out but a cable, and either image can be the one writing that slot.
     const std::string ota = read("src/platform/esp32/platform_esp32_ota.cpp");
     CHECK_MESSAGE(ota.find("that is a MoonBase image, not an app") != std::string::npos,
                   "the app install must refuse a MoonBase image");

@@ -1028,28 +1028,6 @@ still be built by GCC, so the analysing compiler is not the shipping compiler. T
 Worth revisiting when either the coverage gap bites (a hot-path bug traced to the platform layer
 that the desktop check could not see) or Espressif's LLVM becomes the default toolchain.
 
-### lizard: 94 functions are measured under a mis-parsed name (baseline can't pin them)
-
-lizard's C++ parser loses the function name on certain bodies and falls back to the first keyword
-or cast it meets inside, so `mm::SolidEffect::tick` is reported as `mm::SolidEffect::static_cast<lengthType>`
-and `mm::NetworkModule::tick1s` as `mm::NetworkModule::switch`. Measured across `src/`: **94 of
-2404** functions carry such a name (`if` 47, `for` 41, `static_cast` 5, `switch` 1), of which **10**
-are over threshold and therefore reach the report.
-
-The consequence is the part that matters. `whitelizard.txt` matches by NAME, so those entries pin
-nothing: **35 of 162** baseline lines name a function lizard no longer produces. Each is a function
-whose complexity is now unmeasured against the baseline — real growth in it would either surface as
-a spurious "NEW violation" under the fallback name, or not surface at all. The check currently
-reports `FAIL — 9 NEW` on an unmodified tree for exactly this reason, which trains the reader to
-ignore the number.
-
-It is not a threshold problem and not fixable by re-baselining: re-running `--baseline` just freezes
-today's fallback names, which shift again the moment a line moves inside the body. Real options, in
-order of preference: key the baseline on `file:startline`-anchored identity or lizard's `long_name`
-instead of `name`; pre-process so the parser keeps the name; or replace lizard's C++ front end with
-a clang-AST-based complexity pass (`check_clang_query.py` already has the AST machinery, so the
-metric could move there and drop the dependency entirely). Sizeable enough for its own `/plan`.
-
 ### clang-tidy: triage the remaining 30 findings
 
 `.clang-tidy` runs `*` minus a documented disable list and reaches zero on everything except the

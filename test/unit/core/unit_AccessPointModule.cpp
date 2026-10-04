@@ -83,13 +83,16 @@ TEST_CASE("the DNS responder drops a malformed or oversized packet") {
 // A request through the access point for any other name is sent to the UI; its own address, and every request through the home network, is served.
 TEST_CASE("a request through the access point for another host is redirected") {
     const uint8_t home[4] = {192, 168, 1, 50};
-    CHECK(mm::captive::redirects(mm::captive::kAddress, "captive.apple.com\r\n"));
-    CHECK(mm::captive::redirects(mm::captive::kAddress, "moonlight.local"));
-    CHECK_FALSE(mm::captive::redirects(mm::captive::kAddress, "4.3.2.1\r\n"));
-    CHECK_FALSE(mm::captive::redirects(mm::captive::kAddress, "4.3.2.1:80"));
-    CHECK(mm::captive::redirects(mm::captive::kAddress, "4.3.2.10"));
-    CHECK_FALSE(mm::captive::redirects(mm::captive::kAddress, nullptr));
-    CHECK_FALSE(mm::captive::redirects(home, "captive.apple.com"));
+    CHECK(mm::captive::redirects(mm::captive::kAddress, "captive.apple.com\r\n", "/"));
+    CHECK(mm::captive::redirects(mm::captive::kAddress, "moonlight.local", "/"));
+    CHECK_FALSE(mm::captive::redirects(mm::captive::kAddress, "4.3.2.1\r\n", "/"));
+    CHECK_FALSE(mm::captive::redirects(mm::captive::kAddress, "4.3.2.1:80", "/"));
+    CHECK(mm::captive::redirects(mm::captive::kAddress, "4.3.2.10", "/"));
+    CHECK_FALSE(mm::captive::redirects(mm::captive::kAddress, nullptr, "/"));
+    CHECK_FALSE(mm::captive::redirects(home, "captive.apple.com", "/"));
+    // The API through the access point answers as itself: a client asking for JSON is not sent a page.
+    CHECK_FALSE(mm::captive::redirects(mm::captive::kAddress, "moonlight.local", "/api/state"));
+    CHECK(mm::captive::redirects(mm::captive::kAddress, "moonlight.local", "/app.js"));
 }
 
 namespace {
@@ -367,4 +370,17 @@ TEST_CASE("a join asked for from the access point during a retry still holds it 
     n.at(63000);
     CHECK(modeOf(n.net) == "WiFi STA");
     CHECK(mm::platform::wifiApConnected());   // held for the phone
+}
+
+// The access point is named after the device, so a rename reopens it under the new name, as every setting applies live.
+TEST_CASE("renaming the device reopens the access point under the new name") {
+    ApNetwork n;
+    mm::SystemModule sys;
+    sys.rebuildControls();
+    n.net.setSystemModule(&sys);
+    n.net.setup();
+    REQUIRE(mm::platform::wifiApConnected());
+    std::strcpy(controlPtr<char>(sys, "deviceName"), "MM-renamed");
+    n.at(1000);
+    CHECK(std::string(mm::platform::testLastApConfig().name) == "MM-renamed");
 }

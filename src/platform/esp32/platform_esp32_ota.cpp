@@ -574,14 +574,22 @@ bool moonBaseFetchUrlSync(const char* url, char* statusBuf, size_t statusBufLen,
 
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
     if (!client) { setStatus("error: cannot reach that URL"); return false; }
-    esp_err_t err = esp_http_client_open(client, 0);
-    if (err != ESP_OK) {
-        setStatus("error: cannot start the download (%s)", esp_err_to_name(err));
-        esp_http_client_cleanup(client);
-        return false;
+    // Opened by hand, the client follows no redirect itself, and a release asset always answers 302: set the next location, drain the body and open again, the loop esp_https_ota runs.
+    int64_t len = 0;
+    int status = 0;
+    for (int hop = 0; hop <= cfg.max_redirection_count; hop++) {
+        const esp_err_t err = esp_http_client_open(client, 0);
+        if (err != ESP_OK) {
+            setStatus("error: cannot start the download (%s)", esp_err_to_name(err));
+            esp_http_client_cleanup(client);
+            return false;
+        }
+        len = esp_http_client_fetch_headers(client);
+        status = esp_http_client_get_status_code(client);
+        if (status < 300 || status >= 400 || esp_http_client_set_redirection(client) != ESP_OK) break;
+        char drain[256];
+        while (esp_http_client_read(client, drain, sizeof(drain)) > 0) {}
     }
-    const int64_t len = esp_http_client_fetch_headers(client);
-    const int status = esp_http_client_get_status_code(client);
     if (status != 200) {
         // A 404 page is a valid HTTP response carrying HTML, which the image checks would catch anyway; failing here says the useful thing instead of "not a firmware image".
         setStatus("error: the server answered %d", status);
@@ -716,6 +724,7 @@ void moonbaseClearStagedUrl() {
     nvs_handle_t h;
     if (nvs_open("moonbase", NVS_READWRITE, &h) != ESP_OK) return;
     nvs_erase_key(h, "url");
+    nvs_erase_key(h, "tries");   // MoonBase's count of installs the URL started
     nvs_commit(h);
     nvs_close(h);
 }
@@ -725,6 +734,7 @@ bool moonbaseStageInstallUrl(const char* url) {
     if (!url || !url[0]) return false;
     nvs_handle_t h;
     if (nvs_open("moonbase", NVS_READWRITE, &h) != ESP_OK) return false;
+    nvs_erase_key(h, "tries");   // a new URL starts with every try MoonBase allows
     const bool ok = nvs_set_str(h, "url", url) == ESP_OK && nvs_commit(h) == ESP_OK;
     nvs_close(h);
     return ok;

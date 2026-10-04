@@ -404,6 +404,21 @@ TEST_CASE("credentials arriving while Ethernet carries the device are only remem
     mm::platform::setTestWifiStaAvailable(false);
 }
 
+// Connect pressed on another network while a join is in flight replaces that join, rather than letting the first one finish and claim the second's name.
+TEST_CASE("a second Connect during a join replaces the join") {
+    FrozenClock clock;
+    ScannedNetwork s;
+    mm::ListSource* avail = availableOf(s.wifi);
+    REQUIRE(avail != nullptr);
+    REQUIRE(avail->setListRowField(1, "password", "{\"value\":\"secret\"}"));
+    REQUIRE(avail->setListRowField(1, "connect", ""));
+    s.net.tick1s();
+    REQUIRE(std::strcmp(mm::platform::testLastStaSsid(), "venue") == 0);
+    REQUIRE(s.wifi.setListRowField(s.wifi.idAt(0), "connect", ""));   // the known network, "home"
+    s.net.tick1s();
+    CHECK(std::strcmp(mm::platform::testLastStaSsid(), "home") == 0);
+}
+
 // The station's card shows rssi and txPower as read-only controls that start hidden, until the radio is up.
 TEST_CASE("WiFi rssi/txPower controls hidden until the radio is up") {
     mm::WiFiModule wifi;

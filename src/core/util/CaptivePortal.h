@@ -59,9 +59,10 @@ inline size_t dnsReply(uint8_t* msg, size_t len, size_t cap, const uint8_t ip[4]
     return replyLen;
 }
 
-/// Whether a request that arrived at `localIp` for `host` (the Host header's value) is sent to the UI: one through the access point for any name but its address.
-inline bool redirects(const uint8_t localIp[4], const char* host) {
+/// Whether a request at `localIp` for `host` and `path` is sent to the UI: a page asked for through the access point under another name. The API answers as itself.
+inline bool redirects(const uint8_t localIp[4], const char* host, const char* path) {
     if (std::memcmp(localIp, kAddress, 4) != 0) return false;   // not through the access point
+    if (path && std::strncmp(path, "/api/", 5) == 0) return false;
     if (!host || !host[0]) return false;                        // HTTP/1.0 without a Host: serve it
     const size_t n = std::strlen(kAddressText);
     if (std::strncmp(host, kAddressText, n) == 0 && (host[n] == '\0' || host[n] == ':' || host[n] == '\r')) return false;

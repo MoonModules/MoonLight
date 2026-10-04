@@ -183,10 +183,10 @@ void FilesystemModule::reapplyNode(MoonModule* m, const char* json, const char* 
         if (!isPersistable(c)) continue;
         std::snprintf(key, sizeof(key), "%s%s", prefix, c.name);
         JsonSink before;
-        writeControlValue(before, c);
+        writeControlValue(before, c, /*saving=*/true);   // the saved form, which carries what a list's summary leaves out
         applyValue(c, json, key);
         JsonSink after;
-        writeControlValue(after, c);
+        writeControlValue(after, c, /*saving=*/true);
         if (before.size() != after.size() || std::memcmp(before.data(), after.data(), before.size()) != 0)
             if (scheduler_) scheduler_->reactToControlChange(m, c.name);
     }
