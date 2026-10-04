@@ -64,9 +64,9 @@ public:
     }
 
     // On desktop no backend links, so peripheral_ stays null and the driver idles.
-    /// A fresh driver takes the GRB preset (WS2812 wiring) and the first backend this chip supports.
+    /// A fresh driver takes the GRB profile (WS2812 wiring) and the first backend this chip supports.
     ParallelLedDriver() {
-        this->setDefaultPresetName("GRB");
+        this->setDefaultFixtureName("GRB");
         selectDefaultPeripheral(nullptr);
     }
 

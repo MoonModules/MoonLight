@@ -6,9 +6,9 @@ projectMM becomes MoonLight. **v5.0.0 is the last release under the old name and
 
 **Migration from the predecessor is finished.** No further effects, layouts or modifiers are ported from the old MoonLight. What exists today is what ships, and the gap tables in the old plans are closed rather than outstanding. New effects are written on merit from here, not to match a list.
 
-**A user's configuration survives both releases.** v5.0.0 upgrades in place, subject only to the breaks [MIGRATING](../../reference/MIGRATING.md) already records. v6.0.0 carries configuration across too, by Backup on v5 and Restore on v6, because **nothing persisted carries the product name**: config files are named after module types (`Effects.json`, `Drivers.json`) and the sweep leaves every type and `namespace mm::` untouched. The migration engine in [migrate.js](../../../src/ui/migrate.js) therefore has no rename to apply for the rename itself, which is the easiest case it can be handed.
+**A user's configuration survives both releases.** v5.0.0 upgrades in place, subject only to the breaks [MIGRATING](../../../reference/MIGRATING.md) already records. v6.0.0 carries configuration across too, by Backup on v5 and Restore on v6, because **nothing persisted carries the product name**: config files are named after module types (`Effects.json`, `Drivers.json`) and the sweep leaves every type and `namespace mm::` untouched. The migration engine in [migrate.js](../../../../src/ui/migrate.js) therefore has no rename to apply for the rename itself, which is the easiest case it can be handed.
 
-**No compatibility code ships with MoonLight**, which is [the standing rule](../../../CLAUDE.md#principles) applied to the rename: nothing translates a projectMM identity into a MoonLight one, no alias for a renamed key, no shim reading a predecessor's file, no branch asking which name a device was flashed under.
+**No compatibility code ships with MoonLight**, which is [the standing rule](../../../../CLAUDE.md#principles) applied to the rename: nothing translates a projectMM identity into a MoonLight one, no alias for a renamed key, no shim reading a predecessor's file, no branch asking which name a device was flashed under.
 
 **Backup on v5, Restore on v6 is the one supported path**, and every upgrade question is answered with it. Where something does not carry, the answer is to erase the flash and install clean. A Home Assistant entity re-appearing under a new identity is the same trade: the alternative is a permanent pin to the old name, and a new product does not inherit one.
 
@@ -35,13 +35,13 @@ The sweep script measures **1405 occurrences across 242 tracked files** (dry run
 
 ### The device builds its own OTA URL, and that turns out to be safe
 
-[MqttModule.cpp:324](../../../src/core/system/MqttModule.cpp) formats `github.com/MoonModules/projectMM/releases/download/v<version>/firmware-<name>-v<version>.bin` in firmware, so a device flashed today asks the old repository for its updates forever. Three things make that work anyway, and all three were verified in the code rather than assumed:
+[MqttModule.cpp:324](../../../../src/core/system/MqttModule.cpp) formats `github.com/MoonModules/projectMM/releases/download/v<version>/firmware-<name>-v<version>.bin` in firmware, so a device flashed today asks the old repository for its updates forever. Three things make that work anyway, and all three were verified in the code rather than assumed:
 
 - GitHub issues a permanent redirect for a transferred repository, for the API and for release assets.
-- The OTA client follows redirects deliberately: [platform_esp32_ota.cpp:117](../../../src/platform/esp32/platform_esp32_ota.cpp) sets `disable_auto_redirect = false` with a redirect count of 10, and raises the header buffer specifically because GitHub's asset redirect overflows the default. It was hardened for this shape of URL already.
+- The OTA client follows redirects deliberately: [platform_esp32_ota.cpp:117](../../../../src/platform/esp32/platform_esp32_ota.cpp) sets `disable_auto_redirect = false` with a redirect count of 10, and raises the header buffer specifically because GitHub's asset redirect overflows the default. It was hardened for this shape of URL already.
 - The asset filename is `firmware-<variant>-v<version>.bin`, which carries no product name and so does not change at the rename.
 
-**A v5 device therefore finds and installs v6 with no code change.** Only recreating `MoonModules/projectMM` would break the redirect, and the name sits inside an organisation we control, so nothing to do beyond leaving it alone.
+**A v5 device therefore finds and installs v6 with no code change.** Only recreating `MoonModules/projectMM` would break the redirect, and the name sits inside an organization we control, so nothing to do beyond leaving it alone.
 
 This was worth checking rather than believing: reading the URL construction alone suggests a hard break, and only the fetch path shows there is none.
 
@@ -49,8 +49,8 @@ This was worth checking rather than believing: reading the URL construction alon
 
 Two things the sweep changes that a user feels, neither needing code:
 
-- **The sACN source name** at [E131Packet.h:55](../../../src/light/util/E131Packet.h) is a fixed nine-byte literal a receiving console displays, so it changes with the product rather than staying. Peer discovery does not: it classifies on the numeric marker and already reads `"MoonLight"`, so a mixed network keeps working.
-- **The `MM-` device prefix** in [SystemModule.h:57](../../../src/core/system/SystemModule.h) is every device's mDNS name and Home Assistant entity id. **It stays** (decided 2026-09-29): `MM` is MoonModules, the organisation does not change at the rename, so the prefix keeps naming the thing it always named. Changing it to `ML-` would rename every mDNS name and entity id, which Restore does not carry back, for a prefix that was never wrong.
+- **The sACN source name** at [E131Packet.h:55](../../../../src/light/util/E131Packet.h) is a fixed nine-byte literal a receiving console displays, so it changes with the product rather than staying. Peer discovery does not: it classifies on the numeric marker and already reads `"MoonLight"`, so a mixed network keeps working.
+- **The `MM-` device prefix** in [SystemModule.h:57](../../../../src/core/system/SystemModule.h) is every device's mDNS name and Home Assistant entity id. **It stays** (decided 2026-09-29): `MM` is MoonModules, the organization does not change at the rename, so the prefix keeps naming the thing it always named. Changing it to `ML-` would rename every mDNS name and entity id, which Restore does not carry back, for a prefix that was never wrong.
 
 ## The cutover
 
@@ -71,7 +71,7 @@ The script ran with `--apply` on a throwaway branch and the gate set ran over th
 1. **`kFallbackRepo` was rewritten to the successor**, leaving both OTA constants naming one repository and the fallback dead. A device that cannot reach the new name would have had nowhere left to look. **Marked `rename-keep`.**
 2. **`projectMM-moonbase` was renamed in the image check**, so new firmware would reject the recovery image already in a v5 device's flash, leaving it with no recovery path. **Protected by content**, and it changes only when a MoonBase built under the new name ships.
 3. **A historical MIGRATING entry became false.** The v5.0.0 heading reads "the last release under the projectMM name", and the sweep rewrote it into a claim that was never true. **Marked `rename-keep`.** Every entry describing what already shipped has the same hazard.
-4. **`TextEffect`'s golden frame failed.** The default text is the product name, so renaming it changes rendered pixels. This one SHOULD rename, and its golden moves in the same commit, which is what [golden_frame.h](../../../test/unit/light/golden_frame.h) already asks for.
+4. **`TextEffect`'s golden frame failed.** The default text is the product name, so renaming it changes rendered pixels. This one SHOULD rename, and its golden moves in the same commit, which is what [golden_frame.h](../../../../test/unit/light/golden_frame.h) already asks for.
 
 The script now honors a `rename-keep` marker on a line, so an exception lives beside the thing it protects rather than in a list that drifts. The desktop build, 1998 of 1999 tests and the docs build all passed on the swept tree, so nothing else structural is hiding.
 
@@ -81,13 +81,13 @@ Also measured: the sweep is **1405 hits across 242 files**, of which about 789 a
 
 Thursday's work happened on Wednesday, and it changed what the first minute of the film shows.
 
-**The boot default is now [Pulse](../../moonmodules/light/effects.md#pulse).** A device came up on Noise, which is dense: it proves the lights work and hides everything else. A first boot has to answer three questions at once, and the third one is new, since a board with a microphone that shows no reaction to sound reads as a board without one. Pulse is expanding shells from a drifting origin, sparse enough that a single beat is unmistakable, moving on an idle clock when the room is silent, and the same code on a strip, a panel and a volume because a shell is a distance and every layout has distances. It costs 250 to 280 us at 16x16 on an S3.
+**The boot default is now [Pulse](../../../moonmodules/light/effects.md#pulse).** A device came up on Noise, which is dense: it proves the lights work and hides everything else. A first boot has to answer three questions at once, and the third one is new, since a board with a microphone that shows no reaction to sound reads as a board without one. Pulse is expanding shells from a drifting origin, sparse enough that a single beat is unmistakable, moving on an idle clock when the room is silent, and the same code on a strip, a panel and a volume because a shell is a distance and every layout has distances. It costs 250 to 280 us at 16x16 on an S3.
 
 **The device models no longer pin an effect.** Four of them added their own under the Layer, so the firmware default was invisible on exactly the boards the film uses. All five entries are gone, and every model now boots on whatever the firmware chose. That is also one rule instead of four, in the spirit of the catalog describing hardware rather than taste.
 
 **Two recorder defects, each a silently wrong take rather than an error.** `wait_for` read only the present, so a state shorter than the gap between two steps was missed: the S3's erase lasts about twelve seconds and the step waiting for it starts later than that, which failed a run that had in fact gone perfectly. It now records what a watched element showed and counts a state that already passed. And `type_into` typed on top of a field rather than into it, so the installer's prefilled SSID provisioned a device for `MoonModulesMoonModules`, which joins nothing. Both are pinned by tests, and the second is a defect for anyone re-installing rather than only for the camera.
 
-**The clips are numbered in the order the work happens**, `01-install` through `98-react-to-sound`, so the directory reads as the path a newcomer takes. Both the install and the tour exist twice, once per platform, and each pair shares its number because it is one beat on two machines. Installing splits because the routes share no step, one flashing a chip and the other downloading an app. The tour splits because the trees differ: a board drives LED pins and hears a real microphone, where a computer previews and sends over the network. Each tour opens every module and every tab inside it. `02-first-look-esp32` is embedded where Chapter 2 of [getting started](../../gettingstarted.md) begins, since Chapter 1 flashed a board and the tour should be of that board. It is the recording from v5.0.0 for now, and re-records against the current firmware in the next pass.
+**The clips are numbered in the order the work happens**, `01-install` through `98-react-to-sound`, so the directory reads as the path a newcomer takes. Both the install and the tour exist twice, once per platform, and each pair shares its number because it is one beat on two machines. Installing splits because the routes share no step, one flashing a chip and the other downloading an app. The tour splits because the trees differ: a board drives LED pins and hears a real microphone, where a computer previews and sends over the network. Each tour opens every module and every tab inside it. `02-first-look-esp32` is embedded where Chapter 2 of [getting started](../../../gettingstarted.md) begins, since Chapter 1 flashed a board and the tour should be of that board. It is the recording from v5.0.0 for now, and re-records against the current firmware in the next pass.
 
 Both clips were recorded against a real erase-and-flash of the S3, ending on a provisioned device at `192.168.1.158` with its microphone tracking music in the room.
 
@@ -182,7 +182,7 @@ Two rules hold all week. **Anything found before Tuesday is fixed under the old 
 
 ### Sept 29: Windows day
 
-Windows works, and has been tested here by hand before. What it does not have is anything that notices when it stops working: [release.yml:318](../../../.github/workflows/release.yml) is the only Windows runner in the repository and it compiles and packages without invoking `mm_tests`, the scenarios, or anything else. So between hand sessions the platform drifts unobserved, and the gap since the last one is about three weeks. That is what this day is for: not proving Windows works, but catching what has rotted since anyone last looked.
+Windows works, and has been tested here by hand before. What it does not have is anything that notices when it stops working: [release.yml:318](../../../../.github/workflows/release.yml) is the only Windows runner in the repository and it compiles and packages without invoking `mm_tests`, the scenarios, or anything else. So between hand sessions the platform drifts unobserved, and the gap since the last one is about three weeks. That is what this day is for: not proving Windows works, but catching what has rotted since anyone last looked.
 
 Four features are a genuinely different program on Windows rather than a thin shim, and they come first:
 
@@ -201,7 +201,7 @@ Then the things a user meets on day one:
 7. **Saving configuration.** Windows gets a plain `fopen` with no owner-only ACL, and `std::filesystem::rename` over an open file fails where POSIX replaces it, so a save can fail silently. Save a preset twice.
 8. **Port binding.** `SO_REUSEADDR` is deliberately omitted because on Windows it means "steal the port", so a second instance behaves the opposite way from macOS. Start two and bind DDP twice.
 9. **Audio input.** miniaudio switches to WASAPI, so the device list, the default entry and whether loopback works are all Windows-specific.
-10. **Serial ports and flashing.** The dropdown reads `SERIALCOMM` from the registry, and [_idf_win_shim.py](../../../moondeck/build/_idf_win_shim.py) forces a UTF-8 locale because idf.py refuses to start under cp1252, which only a non-English Windows reproduces.
+10. **Serial ports and flashing.** The dropdown reads `SERIALCOMM` from the registry, and [_idf_win_shim.py](../../../../moondeck/build/_idf_win_shim.py) forces a UTF-8 locale because idf.py refuses to start under cp1252, which only a non-English Windows reproduces.
 11. **The web installer.** Its documented DTR/RTS reset bug is worse on Windows 11, and the Windows-only hint rows are user-agent gated, so confirm they appear.
 
 Smaller checks to make while the above runs: the browser opens on first launch, HTTPS reaches the cloud through WinHTTP and the Windows certificate store, and the crash log's timestamp is not garbled, since `localtime_s` takes its arguments in the opposite order to `localtime_r`.
@@ -256,7 +256,7 @@ Between step 3 and step 4 sits the ordinary rhythm: whatever is in flight is com
    **The sweep rewrites contents and cannot rename files**, so every reader it flipped pointed at a file still carrying the old name: the three Windows installer scripts, which broke the package build, two images, the friend-repos page and the first tutorial. All seven moved with `git mv`.
    **It lands as two commits in one PR**, code first and prose second, since the tree is 140 files and the external review declines past 100.
 8. ✅ **The identity set is flipped in the same change**: binary name, release asset names, the manifest `name` and `home_assistant_domain`, and the docs domain. The `MM-` prefix stays, decided on 2026-09-29.
-   **The set was larger than this step listed**, and the ruling on the day was that everything takes the new name unless a shipped device compares the old one. So the desktop data directories, the installer's saved device list, the Debian package, the container image and its compose names, the macOS bundle identifier, the backup bookmarklet's format and the host override variable all moved, each with its [MIGRATING](../../reference/MIGRATING.md) entry where a user feels it.
+   **The set was larger than this step listed**, and the ruling on the day was that everything takes the new name unless a shipped device compares the old one. So the desktop data directories, the installer's saved device list, the Debian package, the container image and its compose names, the macOS bundle identifier, the backup bookmarklet's format and the host override variable all moved, each with its [MIGRATING](../../../reference/MIGRATING.md) entry where a user feels it.
    **What keeps the old name, and why**: the OTA image name and the MoonBase image name, which a v5 device checks; `kFallbackRepo`, which has to differ from the primary; the MoonCloud salt; and the second format the Restore reader accepts, which is what the two backups from step 2 carry. The product owner wants these gone in time, so each is a candidate once no v5 device is left to upgrade.
    **The rename tooling is gone.** `moondeck/repo_rename/` held the sweep, its readiness check and their reports, and a tool that has run once and cannot run again is weight. The `rename-keep` markers went with it, leaving each kept string its plain reason. The scripts reading an ESP32 build take the image's filename from three constants in `build_esp32.py`, so the old spelling has one home there instead of twelve.
    **The ESP32 build artifact keeps the old name with them.** ESP-IDF names `projectMM.bin` and `projectMM.elf` after `project()`, so every script reading the build output reads that name: the release workflow, the manifest generator, the merged-image builder, flash, monitor, QEMU and the checks. The sweep flipped those readers and left the writer, which would have failed the release job on its first firmware and shipped a manifest with no app part. Nobody outside the build sees the name, since a release asset is `firmware-<variant>-v<version>.bin`.
@@ -427,14 +427,14 @@ Checked against the tree rather than taken on trust, because a spoken claim is t
 
 | Claim | Where it holds |
 |---|---|
-| Unit tests, scenario tests, live scenarios | 207 unit-test files, 11 scenarios plus 27 archived, [run_live_scenario.py](../../../moondeck/scenario/run_live_scenario.py) |
-| Pre-commit, merge and release gates | [CLAUDE.md § The Process](../../../CLAUDE.md), which names all three |
+| Unit tests, scenario tests, live scenarios | 207 unit-test files, 11 scenarios plus 27 archived, [run_live_scenario.py](../../../../moondeck/scenario/run_live_scenario.py) |
+| Pre-commit, merge and release gates | [CLAUDE.md § The Process](../../../../CLAUDE.md), which names all three |
 | 3D from the ground up | 27 effects declare `Dim::D3` |
-| Everything is a MoonModule | [MoonModule.h](../../../src/core/module/MoonModule.h), one lifecycle for every part |
+| Everything is a MoonModule | [MoonModule.h](../../../../src/core/module/MoonModule.h), one lifecycle for every part |
 | UI derived from the module | `writeControlMetadata` builds each control's widget from its declaration |
-| Not enough memory: step down | [Layer.h](../../../src/light/layers/Layer.h) reduces the buffer and says so rather than failing |
-| Never reboot | [live reconfiguration](../../explanation/architecture/moonmodule.md#live-reconfiguration-every-change-applies-on-the-next-frame) |
-| Attribution where inspired | 67 origin lines in the [effects catalog](../../moonmodules/light/effects.md) |
+| Not enough memory: step down | [Layer.h](../../../../src/light/layers/Layer.h) reduces the buffer and says so rather than failing |
+| Never reboot | [live reconfiguration](../../../explanation/architecture/moonmodule.md#live-reconfiguration-every-change-applies-on-the-next-frame) |
+| Attribution where inspired | 67 origin lines in the [effects catalog](../../../moonmodules/light/effects.md) |
 | No libraries | True of every library but Espressif's own four (mDNS, LittleFS, Improv, one PHY driver). The HTTP server is ours, on our own `TcpConnection`, so the no-async-web-server claim holds too |
 
 ## The introduction: a draft scenario
@@ -523,7 +523,7 @@ MoonBase, backup and restore, MoonCloud, control surfaces, the driver catalog, a
 
 - **The beats keep their order**, audio at 5 and scripting at 6. Scripting is the more surprising claim, so it closes the build section where the stronger position is.
 - **Every shot is a screen capture.** Beat 8 keeps its place without footage of a physical panel, so the whole film is reproducible from run files and a re-shoot stays a re-run. Beats 7 and 8 still need run files the repo lacks.
-- **Captions carry it, with no voice track.** That is the three-minute pacing the draft assumes, and it keeps a re-shoot cheap. It is also what the tooling does: [mtcompose.py](../../../moondeck/moontube/mtcompose.py) mixes one music bed cut to the beat, so narration would need a second track and ducking beneath it, which is a change to the tool rather than to the script.
+- **Captions carry it, with no voice track.** That is the three-minute pacing the draft assumes, and it keeps a re-shoot cheap. It is also what the tooling does: [mtcompose.py](../../../../moondeck/moontube/mtcompose.py) mixes one music bed cut to the beat, so narration would need a second track and ducking beneath it, which is a change to the tool rather than to the script.
 
 ## The two threads behind the week
 
@@ -535,7 +535,7 @@ The ten run files in `moontube/clips/` describe precisely that path, numbered in
 
 ### The introduction is written this week and filmed after the switch
 
-[mtvideo.py](../../../moondeck/moontube/mtvideo.py) records a run file with Playwright, captions and a cursor; [mtcompose.py](../../../moondeck/moontube/mtcompose.py) cuts published clips into one video on the beat with a music track. The ten clips and the `getting-started` project are the raw material, so the writing, the rehearsing and the edit all happen before the switch, and the recording follows it.
+[mtvideo.py](../../../../moondeck/moontube/mtvideo.py) records a run file with Playwright, captions and a cursor; [mtcompose.py](../../../../moondeck/moontube/mtcompose.py) cuts published clips into one video on the beat with a music track. The ten clips and the `getting-started` project are the raw material, so the writing, the rehearsing and the edit all happen before the switch, and the recording follows it.
 
 ## After v6.0.0
 
@@ -572,7 +572,7 @@ The accepted-as-is entry: `scale8` against integer `*bri/255` rounding in SolidE
 
 ## Verification
 
-1. A device running the current release upgrades to v5.0.0 and keeps its configuration, layouts and scripts, with only the [MIGRATING](../../reference/MIGRATING.md) entries behaving differently.
+1. A device running the current release upgrades to v5.0.0 and keeps its configuration, layouts and scripts, with only the [MIGRATING](../../../reference/MIGRATING.md) entries behaving differently.
 2. A v5.0.0 device on the bench updates itself to a v6.0.0 release after the repository has moved. This is the gate the v5 release exists for, and it can only be tested once both exist.
 3. The sweep's diff is read in full before it is committed, since a blanket replace is how a symbol gets renamed by accident.
 4. The full gate set passes on the swept tree: every ESP32 variant, the tests, the scenarios, `check_devices`, `check_specs`.

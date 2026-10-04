@@ -13,8 +13,7 @@
 //  - Three honesty levels, matching what an entry actually preserves: plain renames map
 //    silently-but-reported; deterministic value moves `set` the new value; anything
 //    chip-dependent or semantics-changing gets a "review" report entry instead of a guess.
-//  - A future non-rename break slots in as a transform stage beside applyMigrations, add the
-//    mechanism when the first such break lands, not before.
+//  - A control that moves to a wired child module is a CHILD_MOVES entry: a transform stage after the renames, the one non-rename break so far.
 
 // Old .config filename → new (the file IS the module's typeName).
 export const FILE_RENAMES = {
@@ -26,6 +25,8 @@ export const FILE_RENAMES = {
 // Old module type value (any "type" / "N.type" key) → new type. `set` writes a control the
 // merge made explicit when its value is deterministic; `review` flags what a map cannot decide.
 export const TYPE_RENAMES = {
+    // The library of named channel wirings takes the DMX industry term. Its list control follows (CONTROL_RENAMES).
+    "LightPresetsModule": { type: "FixtureProfilesModule", date: "2026-10-03" },
     "Layers": { type: "Effects", date: "2026-08-08" },
     // Noise2D folded into Noise, which is Dim::D3 and renders the same field on a panel. `scale`
     // carries; Noise2D's `speed` (a 0..15 divisor) has no equivalent, because Noise takes its rate
@@ -61,6 +62,10 @@ export const TYPE_RENAMES = {
 // the bench: a blanket fps → targetFps corrupted NetworkSendDriver's own `fps`). `review` marks
 // a value-semantics change: the name maps, the value needs the user's eye.
 export const CONTROL_RENAMES = {
+    // Light presets are fixture profiles: the library's row list, and the Select every driver uses to pick a row.
+    "presets": { name: "profiles", date: "2026-10-03", onTypes: ["FixtureProfilesModule"] },
+    "lightPreset": { name: "fixture", date: "2026-10-03", onTypes: ["*Driver"] },
+    "presetRef": { name: "fixtureRef", date: "2026-10-03", onTypes: ["*Driver"] },
     // One rule for reaching many receivers: a list is `hosts`, and how packets travel is `addressing`.
     "ips": { name: "hosts", date: "2026-10-02", onTypes: ["NetworkSendDriver"] },
     "lightsPerIp": { name: "lightsPerHost", date: "2026-10-02", onTypes: ["NetworkSendDriver"] },
@@ -87,7 +92,8 @@ export const CONTROL_RENAMES = {
     // PreviewDriver's fps → targetFps (now trades resolution for rate). Other drivers keep `fps`.
     "fps": { name: "targetFps", date: "2026-08-25", onTypes: ["PreviewDriver"] },
     // The correction Select every LED driver inherits from DriverBase.
-    "preset": { name: "lightPreset", date: "2026-07-23", onTypes: ["*Driver"] },
+    // Jumps straight to the end state (preset → lightPreset → fixture).
+    "preset": { name: "fixture", date: "2026-07-23", onTypes: ["*Driver"] },
     // AudioService's sync collapses into mode + a separate send-audio switch.
     "sync": { name: "mode", date: "2026-07-22", onTypes: ["AudioService"],
               review: "was off/send/receive; now mode (local/receive/simulate) plus a separate 'send audio' switch: review both" },
@@ -140,6 +146,132 @@ export const PRESET_VALUE_RENAMES = {
     "Layers": { to: "Effects", date: "2026-08-08" },
     "layer": { to: "effects", date: "2026-08-08" },
 };
+
+// The name a module takes on the device: its type without the role noun, as ModuleFactory::displayNameFor gives it, in the 15 characters a name holds.
+const ROLE_NOUNS = ["Effect", "Modifier", "Layout", "Driver", "Module", "Service"];
+const kNameMax = 15;
+function displayName(type) {
+    const noun = ROLE_NOUNS.find(n => type.length > n.length && type.endsWith(n));
+    return (noun ? type.slice(0, -noun.length) : type).slice(0, kNameMax);
+}
+
+// One module of a flat config object, the keys under `prefix`, as a state document member: its controls, then its children named as the device names them.
+function documentNode(cfg, prefix, type, unique) {
+    const node = type ? { type, "$patch": "replace" } : { "$patch": "replace" };
+    for (const [k, v] of Object.entries(cfg)) {
+        const rest = k.startsWith(prefix) ? k.slice(prefix.length) : null;
+        if (rest !== null && !rest.includes(".") && rest !== "type") node[rest] = v;
+    }
+    for (let i = 0; Object.prototype.hasOwnProperty.call(cfg, `${prefix}${i}.type`); i++) {
+        const t = cfg[`${prefix}${i}.type`];
+        node[unique(displayName(t))] = documentNode(cfg, `${prefix}${i}.`, t, unique);
+    }
+    return node;
+}
+
+/// A preset saved before presets were state documents (2026-10-04): flat `<Container>.<i>.<control>` keys under a `captures` header, rewritten as the document the device applies.
+/// Each container's keys without its prefix are its config file, so the config renames apply to them as well; names are unique across the document, as on the device.
+export function presetToDocument(flat, file, report) {
+    const doc = Number.isInteger(flat.slot) ? { $slot: flat.slot } : {};
+    const used = new Set();
+    const unique = (name) => {
+        let n = name;
+        for (let i = 2; used.has(n); i++) n = name.slice(0, kNameMax - `-${i}`.length) + `-${i}`;
+        used.add(n);
+        return n;
+    };
+    const containers = String(flat.captures).split(",").filter(Boolean);
+    containers.forEach(c => used.add(c));
+    for (const container of containers) {
+        // A container renamed since keeps its old key prefix in the file.
+        const prefixes = [container, ...Object.entries(FILE_RENAMES)
+            .filter(([, r]) => r.to === `${container}.json`).map(([f]) => f.slice(0, -".json".length))];
+        const sub = {};
+        for (const [k, v] of Object.entries(flat)) {
+            const p = prefixes.find(x => k.startsWith(`${x}.`));
+            if (p) sub[k.slice(p.length + 1)] = v;
+        }
+        const cfgFile = `/.config/${container}.json`;
+        doc[container] = documentNode(moveToChild(renameKeys(sub, cfgFile, report), cfgFile, report), "", null, unique);
+    }
+    report.push({ kind: "renamed", where: file, detail: "preset → state document (2026-10-04)" });
+    return doc;
+}
+
+// Controls that moved from a container onto a wired child, keyed by the container's type.
+// A moved key leaves the container; a copied one stays, because the container still reads it; a `row` entry folds keys into the first row of one of the child's lists.
+export const CHILD_MOVES = {
+    "NetworkModule": [
+        // The wired interface became Network's Ethernet child; its IP settings start as the shared ones were, which the WiFi entry below then takes for its network.
+        {
+            child: "EthernetModule", date: "2026-10-03",
+            move: ["ethBoard", "ethType", "ethPhyAddr", "ethRstGpio", "ethMdcGpio", "ethMdioGpio",
+                   "ethClockGpio", "ethClockExtIn", "ethSpiMiso", "ethSpiMosi", "ethSpiSck", "ethSpiCs",
+                   "ethSpiIrq"],
+            copy: { addressing: "ipSettings", ip: "ip", gateway: "gateway", subnet: "subnet", dns: "dns" },
+        },
+        // The station became Network's WiFi child: the one network becomes the first known one, keeping the IP settings it had.
+        {
+            child: "WiFiModule", date: "2026-10-03",
+            move: ["txPowerSetting"],
+            row: { list: "known", key: "ssid",
+                   fields: { ssid: "ssid", password: "password", addressing: "ipSettings",
+                             ip: "ip", gateway: "gateway", subnet: "subnet", dns: "dns" } },
+        },
+    ],
+};
+
+// Move a container's controls onto its wired children, creating a child's entry at the next free index when the backup predates it (the device matches wired children by type).
+function moveToChild(obj, file, report) {
+    const stem = file.slice(file.lastIndexOf("/") + 1, -".json".length);
+    const moves = CHILD_MOVES[stem];
+    if (!moves) return obj;
+    let out = { ...obj };
+    for (const mv of moves) {
+        const has = (k) => Object.prototype.hasOwnProperty.call(out, k);
+        const moving = (mv.move || []).filter(has);
+        // Copied only alongside a move, so a device that never had the child does not gain one.
+        const copying = moving.length ? Object.keys(mv.copy || {}).filter(has) : [];
+        // A row only where its identifying key has a value, so an unconfigured backup gains no empty row.
+        const rowKeys = mv.row && has(mv.row.key) && out[mv.row.key] !== ""
+                      ? Object.keys(mv.row.fields).filter(has) : [];
+        const dropKeys = mv.row ? Object.keys(mv.row.fields).filter(has) : [];
+        if (!rowKeys.length && dropKeys.length) {
+            // Nothing to carry, so the keys go, said rather than silent.
+            for (const k of dropKeys) delete out[k];
+            report.push({ kind: "review", where: `${file} ${dropKeys.join(", ")}`, detail: `dropped: no ${mv.row.key} to build a ${mv.child} ${mv.row.list} row from (${mv.date})` });
+        }
+        if (!moving.length && !copying.length && !rowKeys.length) continue;
+        let n = 0;
+        while (has(`${n}.type`) && out[`${n}.type`] !== mv.child) n++;
+        if (!has(`${n}.type`)) out[`${n}.type`] = mv.child;
+        for (const k of moving) {
+            out[`${n}.${k}`] = out[k];
+            delete out[k];
+            report.push({ kind: "renamed", where: `${file} ${k}`, detail: `moved to ${mv.child} (${mv.date})` });
+        }
+        for (const k of copying) {
+            out[`${n}.${mv.copy[k]}`] = out[k];
+            report.push({ kind: "renamed", where: `${file} ${k}`, detail: `copied to ${mv.child} as ${mv.copy[k]} (${mv.date})` });
+        }
+        if (rowKeys.length) {
+            // Into the child's saved list when it has one, first since it was the one network; a row already naming it stays as saved.
+            const listKey = `${n}.${mv.row.list}`;
+            const list = Array.isArray(out[listKey]) ? out[listKey] : [];
+            const row = { id: list.reduce((m, r) => Math.max(m, Number(r.id) || 0), 0) + 1 };
+            for (const k of Object.keys(mv.row.fields)) if (has(k)) row[mv.row.fields[k]] = out[k];
+            const key = mv.row.fields[mv.row.key];
+            if (list.some(r => r[key] === row[key])) {
+                report.push({ kind: "review", where: `${file} ${rowKeys.join(", ")}`, detail: `${mv.child}'s ${mv.row.list} list already has ${row[key]}; its saved row was kept (${mv.date})` });
+            } else {
+                out[listKey] = [row, ...list];
+                report.push({ kind: "renamed", where: `${file} ${rowKeys.join(", ")}`, detail: `moved to ${mv.child}'s ${mv.row.list} list (${mv.date})` });
+            }
+        }
+        for (const k of dropKeys) delete out[k];
+    }
+    return out;
+}
 
 // Does `type` fall under an entry's onTypes scope? Exact name, or "*Suffix" wildcard.
 function typeInScope(onTypes, type) {
@@ -230,13 +362,19 @@ export function applyMigrations(files) {
                     report.push({ kind: "renamed", where: newPath, detail: `preset value ${oldV} → ${pr.to} (${pr.date})` });
                 }
             }
+            // A flat preset becomes a document, the only format the device applies.
+            let parsed = null;
+            try { parsed = JSON.parse(text); } catch (_) { /* not JSON: restored as it is */ }
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && "captures" in parsed) {
+                text = JSON.stringify(presetToDocument(parsed, newPath, report));
+            }
             out[newPath] = text;
             continue;
         }
         if (newPath.startsWith("/.config/") && newPath.endsWith(".json")) {
             try {
                 const parsed = JSON.parse(content);
-                out[newPath] = JSON.stringify(renameKeys(parsed, newPath, report));
+                out[newPath] = JSON.stringify(moveToChild(renameKeys(parsed, newPath, report), newPath, report));
                 continue;
             } catch (_) {
                 report.push({ kind: "review", where: newPath, detail: "not valid JSON; restored as-is" });

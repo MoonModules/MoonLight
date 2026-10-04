@@ -43,7 +43,7 @@ Tests pin behavior that runs; static analysis catches what never gets exercised.
 | 3 | RTSan + `[[clang::nonblocking]]` | allocation/blocking in the render path, **transitively** | Compile time + CI |
 | 4 | [CodeQL](../.github/codeql-config.yml) | untrusted input, whole-program taint, use-after-free | CI, Security tab |
 
-Alongside them: **lizard** counts complexity per commit for the trend (a fuzzy tokenizer, not a parser, it can never express an architectural rule), **clang-query** is the home for bespoke AST rules we invent, and the Python checks in `moondeck/check/` cover contracts whose other half is a Markdown page, a JSON catalog or a built binary. Every one has a MoonDeck card ([MoonDeck.md](../moondeck/MoonDeck.md)).
+Alongside them: **check_code** counts complexity and function length per commit into a report that only falls. Lizard sits underneath it, a fuzzy tokenizer rather than a parser, so it can never express an architectural rule. Beside that, **clang-query** is the home for bespoke AST rules we invent. The Python checks in `moondeck/check/` cover contracts whose other half is a Markdown page, a JSON catalog or a built binary. Every one has a MoonDeck card ([MoonDeck.md](../moondeck/MoonDeck.md)).
 
 **Every one of these is a report, not a gate.** They state what they find; a consumer decides
 what to do about it. `WarningsAsErrors` is empty, CodeQL never runs on `pull_request`, and the hot-path check never fails the event. A gate nobody can satisfy gets disabled rather than obeyed, and it pushes people to suppress a finding under time pressure, which is the opposite of why the tool is there. The exception is layer 0: compiler warnings ARE `-Werror`, because they are few, actionable, and fixed at the moment they appear.
@@ -59,7 +59,7 @@ and cannot drift between two tools that half-agree:
 | Catalog matches the modules | `check_devices.py` |
 | Untrusted input is memory-safe | CodeQL |
 | Bug patterns / performance | clang-tidy |
-| Complexity does not grow | lizard (baselined) |
+| Complexity does not grow | `check_code.py` (ratcheted per rule and in total) |
 | Size/LOC/docs do not grow silently | `repo_health.py` |
 
 ### Verify a zero before believing it
@@ -74,7 +74,7 @@ An analyzer reporting "0 findings" is indistinguishable from one that read nothi
 | Same trap in `-checks` | The filter had never worked |
 | Compilation database records a different compiler than the tool runs | `'cstdint' file not found` on 129/129 files; unparsed files are never analyzed |
 | Missing `-isysroot` | Under-report, not an error: 5 matches where there were 14 |
-| A baseline keyed on a name the tool no longer emits | Pins nothing while looking green (see backlog-core.md § lizard) |
+| A baseline keyed on a name the tool no longer emits | Pins nothing while looking green, which is why `check_code` counts per file |
 
 So: **run a control check that MUST fire.** After reaching 0, enabling a deliberately-disabled check (`--check readability-magic-numbers`) returned 3,307, that is what proves the pipeline reads the code. `check_clang_tidy.py` also refuses to report when more than ten files fail to compile, because "most files errored" is a broken run, not a result.
 
@@ -250,6 +250,25 @@ Assert those through a scalar the list drives rather than through the list itsel
 ```
 
 On a board that is the reboot the endpoint performs. On a desktop the endpoint exits the process and nothing restarts it, so the live runner relaunches the binary with the data directory the exiting instance was using: a restart that came back on different files would prove nothing. In-process the op skips, because the scheduler is the process and exiting it would end the run.
+
+### Walking first setup, with the computer as the phone
+
+First setup leaves the device's network for its access point and comes back, which no device-side op can follow.
+These live-only ops let a scenario walk it with the computer running it as the phone.
+
+- **`host_wifi`** with `"join": "access_point"` joins the access point named after the device and points the runner at 4.3.2.1; `"join": "home"` returns to the network the run names. Each waits until its target answers, since macOS hides network names.
+- **`expect_http`** fetches a `url` without following redirects and checks its `status` and `location`, which is what a captive portal answers. A `url` starting with `/` goes to the device under test, and `"method": "POST"` presses a route as the UI's buttons do. With `"resolve": "access_point"` it resolves the name at 4.3.2.1 as a phone does, since macOS holds a captive network's answers back from other apps.
+- **`within`** on `expect_control`, `list_row` and `expect_http` polls for that many seconds, for what the device reaches on its own time, such as a scan or a join.
+- **`"wait": false`** on `reboot` restarts without waiting, for a device that comes back where the computer cannot reach it yet.
+
+A scenario using them sets `"host_network": true` and runs with `--network <name>`, a `moondeck/moondeck.json` network the computer and the device share.
+Its steps fill `{network.ssid}`, `{network.password}` and `{device}` from it, so no credential is in the file.
+The runner puts the computer back on that network whatever happens.
+`"on_request": true` keeps the scenario out of a run of all of them, since it takes the computer off its network for a few minutes.
+
+```bash
+uv run moondeck/scenario/run_live_scenario.py --host MM-Bench.local --network Home --name scenario_AccessPoint_first_setup_from_its_own_network
+```
 
 ### Scenario modes (construct vs mutate)
 
@@ -500,6 +519,10 @@ Or via MoonDeck (Desktop tab → Scenarios card). The module dropdown is shared 
 - `replace_module`: swap a child for a fresh module of another `type` at the same slot. A default-named module relabels to the new type; a custom/scenario id is preserved so later steps can still address it. Mirrors `/api/modules/<name>/replace`.
 - `clear_children`: delete every deletable child of a container (`id`), leaving the container. The "prepare my own canvas" primitive: a scenario assumes nothing about the device's starting tree, clears a container, then adds what it needs. Non-editable children (Board, Preview, Improv) are skipped.
 - `set_control`: write a control on an already-added module (`id` + `key` + `value`). Mirrors `handleSetControl`: applies the typed write, calls `onControlChanged()`, and triggers `Scheduler::prepareTree()` if `affectsPrepare` returns true. Today supports Uint8 / Uint16 / Int16 / Bool / Text / Password / Select. A step may carry `"optional": true`, a best-effort write (e.g. shrink a grid that may not exist) that's skipped, not failed, when the target is absent.
+- `apply_state`: a state document (`document`) through the engine `PATCH /api/state` runs, from its text as written so key order holds. With `error`, and optionally `at`, the step expects that failure; the live runner removes the modules a document created, as it does an `add_module`'s.
+- `round_trip_state`: read every card back as its document and apply them as one document, which must apply. What the device shows is then proven to apply as it is, and live, the body outgrows the request buffer, so the streaming route runs.
+- `list_row`: reach a row of a list control as the list API does. `add` appends one with those fields, and `to` moves it there. Otherwise `match` finds a row by its fields, then the step writes a `field` (a button field presses it), deletes it (`"delete": true`), or with neither only expects it.
+- `write_file` / `delete_file`: stage a file the way the editor saves one, and remove it again, so a scenario leaves the device as it found it. Both re-prepare the tree, as the live API does after a file changes.
 - `measure`: pure measurement step. Runs warmup + measure frames, prints per-step tick / FPS / lights / heap-delta, applies any `bounds` assertions for this step.
 
 A step can also set `"measure": true` on a non-measure op (e.g. mark the last `add_module` as the one to measure after); the runner treats either shape identically.

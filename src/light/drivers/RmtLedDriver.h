@@ -29,8 +29,8 @@ namespace mm {
 /// @card RmtLedDriver.png
 class RmtLedDriver : public DriverBase {
 public:
-    /// Default to the GRB preset, which is how WS2812 and SK6812 strips are physically wired.
-    RmtLedDriver() { setDefaultPresetName("GRB"); }
+    /// Default to the GRB profile, which is how WS2812 and SK6812 strips are physically wired.
+    RmtLedDriver() { setDefaultFixtureName("GRB"); }
 
     /// Hard cap on the pin arrays: the largest RMT TX group of any supported chip.
     static constexpr uint8_t kMaxPins = 8;
@@ -139,7 +139,7 @@ public:
             if (std::strcmp(name, "pins") == 0) { parseConfig(); reinit(); }
             runLoopbackSelfTest();
         }
-        // Chain to the base, or this driver's own brightness and preset controls are dead.
+        // Chain to the base, or this driver's own brightness and fixture controls are dead.
         DriverBase::onControlChanged(name);
     }
 
@@ -170,7 +170,7 @@ public:
             setDrivingInfo(txLightCount_, winLen_, correction_.outChannels);
     }
 
-    /// Re-derive the per-pin offsets when the preset changes the output channel count.
+    /// Re-derive the per-pin offsets when the fixture profile changes the output channel count.
     void onCorrectionChanged() override { if (!effectivelyEnabled()) return; parseConfig(); resizeFrame(); }
 
     /// Point the driver at the source frame buffer, re-parsing and resizing to match.

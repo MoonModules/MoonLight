@@ -2,15 +2,15 @@
 
 
 #include "core/module/MoonModule.h"
-#include "core/module/Scheduler.h"   // instance()->moduleCount()/module(i) — the roots of the tree to walk
+#include "core/module/Scheduler.h"   // instance()->moduleCount()/module(i): the roots of the tree to walk
 #include "core/util/JsonSink.h"    // writeListRow emits its row as JSON into the sink
-#include "core/util/Sort.h"        // insertionSort — order the map by GPIO (Device-Manager keying)
-#include "platform/platform.h"  // gpioCapability — is a claimed pin a strap / input-only / reserved?
-#include "core/util/PinList.h"        // parsePinList — the domain-neutral "18,19,20" CSV parser (core primitive)
+#include "core/util/Sort.h"        // insertionSort: order the map by GPIO (Device-Manager keying)
+#include "platform/platform.h"  // gpioCapability: is a claimed pin a strap / input-only / reserved?
+#include "core/util/PinList.h"        // parsePinList: the domain-neutral "18,19,20" CSV parser (core primitive)
 
 #include <cstdint>
 #include <cstdio>
-#include <cstring>   // strcmp / strstr — match control names to a role
+#include <cstring>   // strcmp / strstr: match control names to a role
 
 namespace mm {
 
@@ -55,6 +55,7 @@ public:
 private:
     /// The map itself, a source over a fixed snapshot, keeping every claim so conflicts show.
     struct PinListSource : ListSource {
+        bool persistsList() const override { return false; }   // the pin map is rebuilt from the tree
         // Enough for any realistic board, and a diagnostic stops adding rather than allocating.
         static constexpr uint8_t kMaxClaims = 64;
         /// One control's claim on one pin, with everything the row needs copied in.
@@ -91,7 +92,7 @@ private:
                 if (j - i >= 2)   // a run of >= 2 claims on the same GPIO
                     for (uint8_t k = i; k < j; k++) {
                         claims_[k].severity = "error";
-                        claims_[k].reason = "claimed by 2+ controls — only one can drive this pin";
+                        claims_[k].reason = "claimed by 2+ controls: only one can drive this pin";
                     }
                 i = j;
             }
@@ -242,10 +243,10 @@ private:
         // Reserved or invalid is an error; a driven role on a strap is a warning.
         static void gradeClaim(Claim& c, bool isOutput) {
             const platform::GpioCapability cap = platform::gpioCapability(c.gpio);
-            if (!cap.validGpio)      { c.severity = "error"; c.reason = "invalid GPIO — not a pin on this chip"; return; }
+            if (!cap.validGpio)      { c.severity = "error"; c.reason = "invalid GPIO: not a pin on this chip"; return; }
             if (cap.reserved)        { c.severity = "error"; c.reason = "reserved for flash / PSRAM / USB"; return; }
-            if (isOutput && !cap.outputCapable) { c.severity = "warn"; c.reason = "input-only pin — a driven role can't output here"; return; }
-            if (isOutput && cap.strap)          { c.severity = "warn"; c.reason = "boot strap — driving it at reset can change boot mode"; return; }
+            if (isOutput && !cap.outputCapable) { c.severity = "warn"; c.reason = "input-only pin: a driven role can't output here"; return; }
+            if (isOutput && cap.strap)          { c.severity = "warn"; c.reason = "boot strap: driving it at reset can change boot mode"; return; }
         }
 
         /// Whether this role drives the pin, defaulting to yes so an unknown one errs toward warning.
@@ -268,7 +269,7 @@ private:
             };
             for (const Entry& e : kRoles)
                 if (std::strcmp(name, e.suffix) == 0) return e.role;
-            return name;   // fall through to the control name — still informative
+            return name;   // fall through to the control name: still informative
         }
     };
 

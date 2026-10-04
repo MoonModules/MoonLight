@@ -7,7 +7,7 @@ the camera rolls, and every run file starts on the same picture.
 
 The target is what `src/main.cpp` wires at boot: Layouts holds one GridLayout at its default size,
 Effects holds one Layer running PulseEffect, and Drivers holds the two modules the boot path adds
-(LightPresetsModule and PreviewDriver) and nothing else.
+(FixtureProfilesModule and PreviewDriver) and nothing else.
 
 Usage: uv run moondeck/moontube/reset_device.py [--host localhost:8080]
 """
@@ -32,7 +32,7 @@ BOOT_CHILDREN = {
     # takes, every one compositing into the shot.
     "Effects": ["Layer"],
     "Layer": ["PulseEffect"],
-    "Drivers": ["LightPresetsModule", "PreviewDriver"],
+    "Drivers": ["FixtureProfilesModule", "PreviewDriver"],
     # Services holds ONE AudioService at boot, which main.cpp wires. Everything else under it is a
     # take's leftover: the services clip opened on an Analog and a MoonLive service it had added
     # itself on an earlier run, so its first shot showed the state it was about to demonstrate.

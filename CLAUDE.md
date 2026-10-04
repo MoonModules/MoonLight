@@ -128,7 +128,7 @@ flowchart TB
 
 **Deleting the plan is the product owner's call**, because "the code is written" is not "the plan is realized": verification, including the judgment steps, is part of it. When in doubt on a spec, ask.
 
-Keep a branch under ~100 changed files: past that CodeRabbit declines the PR outright and the branch silently loses a review layer.
+Keep each commit under ~100 changed files: CodeRabbit reviews the files a pushed commit changes, and past that the commit silently loses a review layer. A mechanical sweep (em-dashes, a metrics refresh) is a commit of its own, apart from behavioral fixes, so both stay reviewable.
 
 ### Build and test
 

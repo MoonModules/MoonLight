@@ -3,6 +3,7 @@
 /// Public surface and class layout live in Scheduler.h.
 /// @{
 #include "core/module/Scheduler.h"
+#include "core/module/StateDocument.h"
 
 #include "core/module/Control.h"    // applyControlValue + ApplyResult in setControl
 #include "core/util/JsonUtil.h"   // mm::json::parseBool for the "enabled" pseudo-control
@@ -154,9 +155,26 @@ uint32_t Scheduler::elapsed() const {
 }
 
 void Scheduler::prepareTree() {
+    // This walk is the one a pending request asked for; a request made during it still stands.
+    prepareRequested_.store(false, std::memory_order_relaxed);
     for (uint8_t i = 0; i < moduleCount_; i++) {
         modules_[i]->applyState();
     }
+    // Controls a state document named before their script compiled; this prepare compiled it.
+    applyDeferredControls(*this);
+}
+
+namespace {
+void notifyTree(MoonModule* m, const char* path) {
+    m->onFileChanged(path);
+    for (uint8_t i = 0; i < m->childCount(); i++)
+        if (MoonModule* c = m->child(i)) notifyTree(c, path);
+}
+}  // namespace
+
+void Scheduler::notifyFileChanged(const char* path) {
+    for (uint8_t i = 0; i < moduleCount_; i++)
+        if (modules_[i]) notifyTree(modules_[i], path);
 }
 
 void Scheduler::deleteTree(MoonModule* mod) {
@@ -176,7 +194,7 @@ void Scheduler::ensureUniqueName(MoonModule* mod) {
     if (!mod) return;
     const char* base = mod->name();
     if (!base || base[0] == 0) return;
-    if (firstByName(base) == mod) return;  // we're the first occurrence — keep the name
+    if (firstByName(base) == mod) return;  // the first occurrence keeps the name
 
     // `candidate` is sized to match MoonModule::name_[16], there's no point computing a longer name than setName can store.
     // The snprintf check below refuses to truncate, which means the practical cap depends on the base length.
@@ -241,9 +259,7 @@ Scheduler::SetControlResult Scheduler::setControl(const char* moduleName,
             case ApplyResult::Malformed:  return SetControlResult::Malformed;
             case ApplyResult::ReadOnly:   return SetControlResult::ReadOnly;
         }
-        // Rebuild the control list so defineControls() re-evaluates conditional visibility for the new value; fire the three-tier change reaction (onControlChanged always, a tree-wide prepareTree only when the control reshapes dims/mapping); persist.
-        target->rebuildControls();
-        target->onControlChanged(controlName);
+        reactToControlChange(target, controlName);
         // LIVE STATE does not mark the tree dirty.
         // A control something drives continuously is not configuration (ControlDescriptor::live), and marking it re-stamped the debounce on every write: a 50 Hz writer kept the timer from ever expiring.
         // The module's file was never saved at all and a power cut lost everything in it, including the settings a person HAD chosen.
@@ -254,10 +270,16 @@ Scheduler::SetControlResult Scheduler::setControl(const char* moduleName,
             target->markDirty();
             if (noteDirtyHook_) noteDirtyHook_();
         }
-        if (target->affectsPrepare(controlName)) requestPrepareTree();
         return SetControlResult::Ok;
     }
     return SetControlResult::ControlNotFound;
+}
+
+void Scheduler::reactToControlChange(MoonModule* target, const char* controlName) {
+    // The list rebuilds first, so defineControls() re-evaluates conditional visibility for the new value.
+    target->rebuildControls();
+    target->onControlChanged(controlName);
+    if (target->affectsPrepare(controlName)) requestPrepareTree();
 }
 
 namespace {

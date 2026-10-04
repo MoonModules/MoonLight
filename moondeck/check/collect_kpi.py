@@ -30,7 +30,7 @@ from _host import desktop_target  # noqa: E402
 # other cross-script imports here use).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import repo_health  # noqa: E402
-import check_lizard  # noqa: E402
+import check_code  # noqa: E402
 
 # Per-host desktop build dir (matches build_desktop.py / package_desktop.py).
 # We pick the directory belonging to the OS this script runs on so KPI
@@ -45,7 +45,7 @@ BUILD_DIR = ROOT / "build" / _HOST
 # reference: 10 FPS × 16384 lights. A smaller grid must run proportionally
 # faster (e.g. 64×64 = 4096 lights → 40 FPS floor).
 #
-# The device reports tick *time* (µs), not FPS — FPS is only ever derived by
+# The device reports tick *time* (µs), not FPS: FPS is only ever derived by
 # integer division, which loses precision. So the gate compares the measured
 # tick_us directly against a per-grid *max tick time*:
 #   max_tick_us = lights × 1e6 / MIN_ESP32_FPS_LED_PRODUCT
@@ -66,7 +66,7 @@ from build_esp32 import APP_BIN  # noqa: E402 (one definition of what ESP-IDF na
 
 
 def run(cmd, cwd=None, timeout=30):
-    # encoding="utf-8" + errors="replace" — subprocess defaults to the locale
+    # encoding="utf-8" + errors="replace": subprocess defaults to the locale
     # codec when text=True, which is cp1252 on Windows and crashes on bytes
     # >= 0x80 from tools like idf.py size that emit utf-8 (deg/box-drawing).
     r = subprocess.run(cmd, capture_output=True, text=True,
@@ -75,7 +75,7 @@ def run(cmd, cwd=None, timeout=30):
     return r.stdout + r.stderr, r.returncode
 
 # ---------------------------------------------------------------------------
-# Collectors — return dicts of KPI data
+# Collectors: return dicts of KPI data
 # ---------------------------------------------------------------------------
 
 def _pick_first_existing(*paths):
@@ -187,7 +187,7 @@ def collect_desktop():
         # the default that fits a quick command. A timeout here is reported as a crashed check
         # rather than a slow one, so the budget tracks the suite rather than the other way round.
         out, rc = run([str(scenarios)], cwd=ROOT, timeout=300)
-        # One tick per scenario — the slowest MEASURE step (the contract-
+        # One tick per scenario: the slowest MEASURE step (the contract-
         # relevant worst-case timing). The KPI one-liner becomes a
         # 10-number-ish series that maps 1:1 to the scenario list, so a
         # regression in any scenario shows up as a single bumped digit.
@@ -258,7 +258,7 @@ def collect_esp32():
     # the developer most recently rebuilt and would consider the current
     # KPI source. Sort by the firmware mtime, not the dir mtime, because
     # a sdkconfig save or stray touch can bump the dir mtime without a
-    # rebuild — picking by dir mtime would surface stale binaries.
+    # rebuild: picking by dir mtime would surface stale binaries.
     candidates = [p for p in (ROOT / "build").glob("esp32-*")
                   if (p / APP_BIN).exists()]
     candidates.sort(key=lambda p: (p / APP_BIN).stat().st_mtime,
@@ -317,20 +317,20 @@ def collect_esp32():
 
     # Read tick/FPS from monitor.log. Do a live capture against the canonical
     # port (moondeck/moondeck.json) when the log is stale OR when it exists but
-    # has no parseable tick line — instead of silently skipping ESP32 KPI.
+    # has no parseable tick line: instead of silently skipping ESP32 KPI.
     log = ESP32_DIR / "monitor.log"
     stale = (not log.exists()) or (time.time() - log.stat().st_mtime) > 300
 
     # Only extract from a log we trust: a non-stale file, or one a live capture
     # just refreshed. If the file is stale and the capture fails (port absent,
-    # garbled output), do NOT fall back to the old file — a stale tick reported
+    # garbled output), do NOT fall back to the old file: a stale tick reported
     # as fresh is worse than no ESP32 KPI at all.
     if stale:
         if _live_capture(log):
             _extract_esp32_tick(log, kpi)
     else:
         if not _extract_esp32_tick(log, kpi):
-            # File is fresh but unparseable (no tick line) — one capture retry.
+            # File is fresh but unparseable (no tick line): one capture retry.
             if _live_capture(log):
                 _extract_esp32_tick(log, kpi)
 
@@ -354,7 +354,7 @@ def _extract_esp32_tick(log, kpi):
         return "tick_us" in kpi
     return False
 
-# Whether a stale monitor.log may be refreshed by opening the serial port. On by default —
+# Whether a stale monitor.log may be refreshed by opening the serial port. On by default:
 # a live reading is the honest one for a commit message. The gate lists turn it off
 # (--no-live-capture): a capture costs ~80s and needs a bench board plugged in, which makes
 # the gate's cost unpredictable, and a gate people avoid running protects nothing.
@@ -390,7 +390,7 @@ def _live_capture(log, seconds=15):
     except ImportError:
         return False
     # Raise the device(s) to Info so the KPI tick line prints during the capture (they rest at Warn,
-    # which silences it), and restore each device's ORIGINAL level on exit — covering the serial-open
+    # which silences it), and restore each device's ORIGINAL level on exit: covering the serial-open
     # failure and the normal-cleanup paths alike. A freshly booted device already logs at Info for its
     # first 60 s, so this is a no-op there but harmless.
     print(f"  ESP32 KPI: capturing {seconds}s from {port}...")
@@ -420,7 +420,7 @@ def collect_code():
     src_files = [f for f in list(src_dir.rglob("*.h")) + list(src_dir.rglob("*.cpp"))
                  if "/vendor/" not in f.as_posix()]   # upstream code is not our LOC
     kpi["src_files"] = len(src_files)
-    # encoding="utf-8" — sources contain non-ASCII (→, µ, ×) in comments.
+    # encoding="utf-8": sources contain non-ASCII (→, µ, ×) in comments.
     # errors="replace" so any garbled file in the build dir doesn't crash KPI.
     kpi["src_lines"] = sum(f.read_text(encoding="utf-8", errors="replace").count("\n") for f in src_files)
 
@@ -431,16 +431,14 @@ def collect_code():
     kpi["specs"] = len(list((ROOT / "docs" / "moonmodules").rglob("*.md")))
     kpi["scenarios"] = len(list((ROOT / "test" / "scenarios").rglob("*.json")))
 
-    # Lizard — the RAW count, deliberately ignoring whitelizard.txt. The gate
-    # (check_lizard.py) subtracts the baseline so it fails only on new violations; the KPI must
-    # not, or the trend flatlines at 0 and hides every future regression. Two different jobs on
-    # the same measurement: the gate asks "did we get worse since the baseline", the KPI asks
-    # "how much complexity is there". Shared parsing so the two can never disagree on the count.
-    funcs = check_lizard.measure()
-    warnings = check_lizard.violations(funcs) if funcs else []
-    kpi["lizard_warnings"] = len(warnings)
-    kpi["lizard_details"] = [f"{v['ccn']} CCN, {v['nloc']} NLOC: {v['name']} ({v['file']})"
-                             for v in warnings]
+    # The code report's function rules, counted by the same function; its clones and file sizes are the report's alone, a pass too slow for every KPI run.
+    funcs = check_code.measure()
+    if funcs is None:
+        kpi["code_findings"] = None   # lizard read nothing: unavailable, never a clean zero
+        kpi["code_details"] = []
+        return kpi
+    kpi["code_findings"] = check_code.functions_over(funcs)
+    kpi["code_details"] = [f"{value} {rule}: {name} ({file})" for file, rule, name, value in check_code.findings(funcs)]
 
     return kpi
 
@@ -466,8 +464,10 @@ def format_oneliner(desktop, esp32, code):
         parts.append(f"heap:{esp32['heap_free']//1024}KB")
     parts.append(f"src:{code['src_files']}({code['src_lines']})")
     parts.append(f"test:{code['test_files']}({code['test_lines']})")
-    if code["lizard_warnings"] > 0:
-        parts.append(f"lizard:{code['lizard_warnings']}w")
+    if code["code_findings"] is None:
+        parts.append("functions-over:unmeasured")
+    elif code["code_findings"] > 0:
+        parts.append(f"functions-over:{code['code_findings']}")
     return "KPI: " + " | ".join(parts)
 
 def format_full(desktop, esp32, code):
@@ -508,8 +508,8 @@ def format_full(desktop, esp32, code):
     lines.append(f"    {code['src_files']} source files ({code['src_lines']} lines)")
     lines.append(f"    {code['test_files']} test files ({code['test_lines']} lines)")
     lines.append(f"    {code['specs']} specs, {code['scenarios']} scenarios")
-    lines.append(f"    Lizard: {code['lizard_warnings']} warnings")
-    for w in code.get("lizard_details", []):
+    lines.append(f"    Functions over a limit: {'not measured (lizard read nothing)' if code['code_findings'] is None else code['code_findings']}")
+    for w in code.get("code_details", []):
         lines.append(f"      {w}")
 
     return "\n".join(lines)
@@ -556,13 +556,13 @@ def main():
         print("=" * 50)
 
     # Hard throughput gate: if a live ESP32 tick was captured, it must clear the
-    # floor. The device reports tick *time* (µs), so compare that directly — no
+    # floor. The device reports tick *time* (µs), so compare that directly: no
     # lossy FPS division. The per-grid budget scales with light count:
     #   max_tick_us = lights × 1e6 / MIN_ESP32_FPS_LED_PRODUCT
     # so a smaller grid gets proportionally less time (10 FPS at 128×128).
-    # An absent ESP32 reading is not a failure — the caller decides whether a
+    # An absent ESP32 reading is not a failure: the caller decides whether a
     # missing measurement is acceptable (see CLAUDE.md Lifecycle Events,
-    # Event 1 gate 7 — KPI collection).
+    # Event 1 gate 7: KPI collection).
     # Only --commit mode aborts on a breach; a plain interactive report just
     # warns, so viewing KPIs on an unlucky slow sample does not exit non-zero.
     # The repo-health snapshot rides along with the KPI run: it needs the tick/FPS this

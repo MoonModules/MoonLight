@@ -1,7 +1,8 @@
 #pragma once
 
 #include "core/moonlive/MoonLive.h"
-#include "light/moonlive/script_catalog.h"   // the shipped names, for isFactoryScript below
+#include "light/moonlive/script_catalog.h"
+#include "core/util/fnv.h"   // the shipped names, for isFactoryScript below
 #include "platform/platform.h"
 
 #include <cstdio>
@@ -162,11 +163,7 @@ inline constexpr size_t kMaxScriptName = 40;
 
 // A caller needing to know whether this changed keeps 4 bytes rather than a copy of the source.
 /// FNV-1a over the script text.
-inline uint32_t scriptHash(const char* s, size_t len) {
-    uint32_t h = 2166136261u;
-    for (size_t i = 0; i < len; i++) { h ^= static_cast<uint8_t>(s[i]); h *= 16777619u; }
-    return h;
-}
+inline uint32_t scriptHash(const char* s, size_t len) { return fnv1a(s, len); }
 
 // One resolver, or a fork compiles from one directory and hashes from the other.
 /// Where `name` lives: the user's copy when there is one, else the factory copy.
@@ -301,7 +298,7 @@ inline bool compileScriptFile(MoonLive& engine, const char* name,
     // The write endpoint makes no parent directories, so naming a script is what creates this.
     platform::fsMkdir(kScriptDir);
 
-    if (!name || !name[0]) { err = "no script — set the script name"; return false; }
+    if (!name || !name[0]) { err = "no script: set the script name"; return false; }
 
     // A basename only, rejected rather than sanitized: one needing a rewrite was mistyped.
     for (const char* c = name; *c; c++)

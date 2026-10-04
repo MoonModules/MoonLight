@@ -1,10 +1,10 @@
-/// Why .h + .cpp (Control is now in the core-services file-shape list, see docs/contributing/coding-standards.md § File shape): Control.h started as declarations + inline scalar helpers.
-/// The JSON serialization / parsing logic grew to six switches across three files (HttpServerModule, FilesystemModule, scenario_runner).
-/// Centralising them here keeps Control.h light for the 20+ MoonModule headers that include it just to call addX() and makes "add a new ControlType" a single-place edit instead of a hunt across three consumers, the "per-type behavior lives with the type" rule in docs/contributing/coding-standards.md applied to wire-format serialization.
+/// The per-type JSON writing and parsing every consumer shares, so adding a ControlType is one edit here.
+/// Kept out of Control.h, which the module headers include only to call addX().
 
 #include "core/module/Control.h"
 
 #include "core/util/JsonSink.h"
+#include "core/system/Base64.h"   // the password obfuscation's encoding
 #include "core/util/JsonUtil.h"
 
 #include <climits>
@@ -13,6 +13,9 @@
 #include <type_traits>
 
 namespace mm {
+
+/// The longest option or palette name a value is saved and matched by; a parsed value longer than this was truncated, so it names nothing.
+constexpr size_t kMaxLabel = 63;
 
 const char* controlTypeName(ControlType t) {
     switch (t) {
@@ -55,7 +58,7 @@ bool isPersistable(ControlType t) {
         case ControlType::ReadOnly:
         case ControlType::ReadOnlyInt:
         case ControlType::Progress:
-        case ControlType::Button:      // momentary action — no value to save
+        case ControlType::Button:      // momentary action, no value to save
             return false;
         case ControlType::List:
             // Persistable now: the List value is a JSON array the recursive mm::json reader round-trips, restored via ListSource::restoreList (see applyControlValue). The source owns its (de)serialization.
@@ -71,7 +74,18 @@ bool hasDefault(ControlType t) {
     return t != ControlType::Password;
 }
 
-void writeControlValue(JsonSink& sink, const ControlDescriptor& c) {
+void writeObfuscatedPassword(JsonSink& sink, const char* password) {
+    constexpr uint8_t kKey = 0x5A;   // shared with app.js's decodePassword
+    uint8_t scrambled[64];
+    size_t n = std::strlen(password);
+    if (n > sizeof(scrambled)) n = sizeof(scrambled);
+    for (size_t k = 0; k < n; k++) scrambled[k] = static_cast<uint8_t>(password[k]) ^ kKey;
+    char encoded[96];
+    base64Encode(std::span(scrambled).first(n), std::span(encoded));
+    sink.appendf("\"%s\"", encoded);
+}
+
+void writeControlValue(JsonSink& sink, const ControlDescriptor& c, bool saving) {
     switch (c.type) {
         case ControlType::Uint8:
             sink.appendf("%u", *static_cast<uint8_t*>(c.ptr));
@@ -97,7 +111,7 @@ void writeControlValue(JsonSink& sink, const ControlDescriptor& c) {
         case ControlType::FilePath:
         case ControlType::Password:
         case ControlType::ReadOnly:
-            // All char-buffer-backed. Password is rendered as a plain JSON string here; the HTTP API obfuscates separately at the writeControls call site (persistence writes plaintext). writeJsonString walks the source straight into the sink with no intermediate fixed buffer, so there's no truncation ceiling regardless of the source buffer's length.
+            // Char buffers, written straight into the sink with no truncation; a Password is plain here for persistence, and the API obfuscates it through writeObfuscatedPassword.
             sink.writeJsonString(static_cast<char*>(c.ptr));
             return;
         case ControlType::ReadOnlyInt:
@@ -113,7 +127,14 @@ void writeControlValue(JsonSink& sink, const ControlDescriptor& c) {
             sink.appendf("%u", *static_cast<uint8_t*>(c.ptr));
             return;
         case ControlType::Palette:
-            // The selected index: the swatch colors go in the metadata block (writeControlMetadata) where the UI also wants them.
+            // persistLabel: the NAME, since a scripted palette's index moves as files come and go; the swatches ride in writeControlMetadata.
+            if (c.persistLabel && c.aux) {
+                char name[kMaxLabel + 1] = {};
+                JsonSink names(name, sizeof(name));
+                names.requestName(*static_cast<uint8_t*>(c.ptr));
+                reinterpret_cast<PaletteOptionsFn>(c.aux)(names);
+                if (name[0] && !names.overflowed()) { sink.writeJsonString(name); return; }
+            }
             sink.appendf("%u", *static_cast<uint8_t*>(c.ptr));
             return;
         case ControlType::Progress:
@@ -127,14 +148,16 @@ void writeControlValue(JsonSink& sink, const ControlDescriptor& c) {
             return;
         }
         case ControlType::List: {
-            // value is an array of row summary objects; the source writes each object straight from the module's own data (no copy, no per-row alloc). Detail objects ride the metadata block (writeControlMetadata) so the value stays the lightweight summary the collapsed UI shows.
+            // The row summaries, straight from the module's own data; the details ride writeControlMetadata, so the value stays what the collapsed list shows.
             const auto* src = static_cast<const ListSource*>(c.ptr);
             sink.append("[");
             if (src) {
                 const uint8_t n = src->listRowCount();
                 for (uint8_t r = 0; r < n; r++) {
                     if (r > 0) sink.append(",");
-                    src->writeListRow(sink, r);
+                    // Saving writes what the file keeps, which may be more than the collapsed row shows.
+                    if (saving) src->writeListRowSaved(sink, r);
+                    else src->writeListRow(sink, r);
                 }
             }
             sink.append("]");
@@ -158,7 +181,7 @@ void writeControlMetadata(JsonSink& sink, const ControlDescriptor& c) {
         case ControlType::Int16:
         case ControlType::Int32:
         case ControlType::Pin:
-            // Numeric controls carry a real [min,max]; the slider types render it as a range, Pin uses it only as a documented valid-GPIO span (the UI renders Pin as a plain number, keyed off the "pin" type string).
+            // A real [min,max]: a slider's range, and for a Pin, which renders as a plain number, the valid GPIO span.
             sink.appendf(",\"min\":%d,\"max\":%d", static_cast<int>(c.min),
                          static_cast<int>(c.max));
             return;
@@ -171,9 +194,7 @@ void writeControlMetadata(JsonSink& sink, const ControlDescriptor& c) {
         case ControlType::Select: {
             sink.append(",\"options\":[");
             auto* options = reinterpret_cast<const char* const*>(c.aux);
-            // int32_t, the type of the bound it is compared against.
-            // A uint8_t counter against a wider signed max is a wrap that only today's uint8_t option count keeps unreachable, and the suppression that hid it outlived the reason for it.
-            // Same form as the hash walk in MoonModule.h.
+            // int32_t, the type of the bound it is compared against, so a wider option count cannot wrap the counter.
             for (int32_t o = 0; o < c.max; o++) {
                 if (o > 0) sink.append(",");
                 // Escaped, not a raw %s: most option lists are our own literals, but the panel-card interface Select carries OS-supplied adapter descriptions. One containing a quote or a backslash would make all of /api/state invalid and blank the UI.
@@ -195,11 +216,9 @@ void writeControlMetadata(JsonSink& sink, const ControlDescriptor& c) {
                          c.min ? "true" : "false");
             return;
         case ControlType::List: {
-            // The summary rows are the `value` (writeControlValue); the per-row detail (shown when a row expands) rides here as a parallel `detail` array, same length and order. Keeping detail out of `value` keeps the collapsed-list payload small when details are richer than summaries.
+            // The detail an expanded row shows, as an array parallel to the summary `value`, which stays small for the collapsed list.
             const auto* src = static_cast<const ListSource*>(c.ptr);
-            // Shared option sets, emitted once per list (rows reference them by name via optionsRef).
-            // The contract lives on ListSource::writeListOptionSets (Control.h).
-            // Default {}.
+            // Option sets shared by the rows (ListSource::writeListOptionSets), which reference them by name.
             sink.append(",\"optionSets\":{");
             if (src) src->writeListOptionSets(sink);
             sink.append("}");
@@ -240,10 +259,7 @@ void writeControlMetadata(JsonSink& sink, const ControlDescriptor& c) {
 ApplyResult applyControlValue(const ControlDescriptor& c,
                               const char* json, const char* key,
                               ApplyPolicy policy) {
-    // Absent key → leave the control at its current value. parseInt/parseBool return 0/false for a missing key, indistinguishable from a real 0.
-    // Applying them would clobber a control's non-zero default (e.g. eth phyType=2) when an older/partial persisted file omits the key.
-    // The string types already no-op on absence (parseString returns early), but the numeric/select/bool types need this explicit guard.
-    // Skipping is correct for both callers: the persistence overlay should preserve defaults for keys it didn't save, and an HTTP /api/control write always includes the key it sets.
+    // An absent key leaves the control as it is, since parseInt reads a missing key as 0 and would clobber a non-zero default a partial file omits.
     if (!mm::json::hasKey(json, key)) return ApplyResult::Ok;
 
     // Helper: clamp `v` into [lo, hi] and write to `*dst` of type T. Always returns Ok (clamping is the action, not a failure).
@@ -265,9 +281,7 @@ ApplyResult applyControlValue(const ControlDescriptor& c,
         }
         case ControlType::Uint16: {
             int v = mm::json::parseInt(json, key);
-            // Strict: out-of-[min,max] fails.
-            // Clamp: snap into [min,max].
-            // The descriptor's int32 min/max now carry a real uint16 range (default 0..UINT16_MAX = no constraint), so this matches Uint8/Int16.
+            // Strict: out-of-range fails. Clamp: snap into [min, max], whose default spans the whole uint16 range.
             if (policy == ApplyPolicy::Strict && (v < c.min || v > c.max)) {
                 return ApplyResult::OutOfRange;
             }
@@ -275,9 +289,7 @@ ApplyResult applyControlValue(const ControlDescriptor& c,
         }
         case ControlType::Int16: {
             int v = mm::json::parseInt(json, key);
-            // Strict: out-of-c.min/max fails.
-            // Clamp: snap into [min, max].
-            // Either way the type-range clamp prevents narrowing wrap (40000 → -25536).
+            // Strict: out-of-range fails. Clamp: snap into [min, max], which also prevents a narrowing wrap (40000 to -25536).
             if (policy == ApplyPolicy::Strict && (v < c.min || v > c.max)) {
                 return ApplyResult::OutOfRange;
             }
@@ -304,19 +316,17 @@ ApplyResult applyControlValue(const ControlDescriptor& c,
         case ControlType::TextArea:
         case ControlType::FilePath:
         case ControlType::Password: {
-            // TextArea, FilePath and Password parse identically to Text: only the UI render (TextArea) or serialization (Password) differs. c.max is the buffer size; parseString writes up to maxLen-1 then NUL-terminates. Passing c.max gives "fill the buffer". uint16_t (not uint8_t) so a large textarea (a script source, hundreds of bytes) isn't truncated to 255.
+            // Every char-buffer type parses as Text, into c.max bytes, wide enough for a script source.
             size_t maxLen = static_cast<size_t>(c.max > 0 ? c.max : 16);
-            // A per-control validator (if set) checks the incoming value before the write, so a reject leaves the stored value untouched (no partial write).
-            // Parse into a scratch buffer first, validate, then commit, this is the one backend home every write path shares (HTTP, APPLY_OP, persistence).
-            // The scratch matches the buffer's full size so a long-but-valid value isn't truncated before the validator sees it; it's sized to the largest validated text/textarea buffer.
+            // A validator sees the whole value in a scratch buffer before the write, so a rejected value leaves the stored one untouched on every write path.
             if (c.validate) {
                 static constexpr size_t kScratch = 1024;   // ≥ any validated Text/TextArea/Password buffer
-                // A buffer wider than the scratch is rejected, so a value is never truncated before the validator sees it (which would be a silent partial write). kScratch is the one place to grow if a validated control legitimately needs a larger buffer.
+                // A buffer wider than the scratch is rejected rather than validated truncated; kScratch is where to grow it.
                 if (maxLen > kScratch) return ApplyResult::Malformed;
                 char scratch[kScratch];
                 mm::json::parseString(json, key, scratch, maxLen);
                 if (!c.validate(scratch)) return ApplyResult::Malformed;
-                // snprintf, not strncpy: strncpy does NOT NUL-terminate when the source fills the buffer, so it needs the manual terminator that followed, a pattern GCC flags (-Wstringop-truncation) precisely because forgetting that line is a classic bug. snprintf always terminates and truncates identically. parseString already bounded the value to maxLen, so nothing is lost here.
+                // snprintf rather than strncpy, which leaves a full buffer unterminated and which GCC flags for that.
                 std::snprintf(static_cast<char*>(c.ptr), maxLen, "%s", scratch);
                 return ApplyResult::Ok;
             }
@@ -327,25 +337,17 @@ ApplyResult applyControlValue(const ControlDescriptor& c,
             // An empty option list (c.max == 0) has no valid index at all, don't accept a value or manufacture index 0 for it. Strict rejects; Lenient leaves the control untouched.
             if (c.max == 0) return policy == ApplyPolicy::Strict ? ApplyResult::OutOfRange : ApplyResult::Ok;
             const int hi = c.max - 1;
-            // A Select value may be given as the option LABEL (a string) instead of the index.
-            // This is what makes a catalog config board-portable.
-            // The index into a board-FILTERED option list varies per chip (an S3 offers fewer peripherals than a P4), but the label is stable.
-            // Match the string against the options and use that row; fall back to the numeric index otherwise.
-            // Select-only: a Select's aux IS the options array (const char* const*); Palette's aux is a PaletteOptionsFn (a function pointer), so it must not reach this reinterpret_cast. parseString silently truncates a value longer than the buffer, and a truncated label could spuriously equal a real option that happens to share its prefix.
-            // Guard by sizing the buffer past any real option label AND rejecting a value that fills it: a label that reaches the cap is longer than any option (or was truncated to it), so it cannot legitimately match, treat it as "no such option" rather than risk a prefix match.
-            char label[64] = {};
+            // A label as well as an index, so a config ports across chips whose option lists differ; an overlong label matches none.
+            char label[kMaxLabel + 2] = {};   // one past the longest name, so a longer value shows as such
             mm::json::parseString(json, key, label, sizeof(label));
-            const bool overlong = std::strlen(label) >= sizeof(label) - 1;
+            const bool overlong = std::strlen(label) > kMaxLabel;
             if (label[0]) {
                 auto* options = reinterpret_cast<const char* const*>(c.aux);
                 if (options && !overlong) {
                     for (int i = 0; i <= hi; i++)
                         if (options[i] && std::strcmp(options[i], label) == 0)
                             return clampInto(static_cast<uint8_t*>(c.ptr), i, 0, hi);
-                    // Then on the STABLE HEAD of the label, the part before ", ".
-                    // An option may carry a live detail after that separator (the panel-card NIC list appends a link speed, "Realtek PCIe GbE, 1 Gb"), and matching the whole string would lose the user's pick the moment that detail changed: a renegotiated link, or the same NIC at 100 Mb instead of 1 Gb, would silently fall back to row 0.
-                    // BOTH sides are cut at the separator.
-                    // The persisted label carries the detail it was written with, and the option carries the current one, so comparing a whole label against a head never matches.
+                    // Then on the head before ", " on both sides, since a live detail after it, such as a link speed, changes.
                     const char* lsep = std::strstr(label, ", ");
                     const size_t lhead = lsep ? static_cast<size_t>(lsep - label)
                                               : std::strlen(label);
@@ -369,11 +371,25 @@ ApplyResult applyControlValue(const ControlDescriptor& c,
             return clampInto(static_cast<uint8_t*>(c.ptr), v, 0, hi);
         }
         case ControlType::Palette: {
-            // Palette carries a PaletteOptionsFn in aux (not an options array), so it stays numeric-index only, no label match.
-            // A string value parses to 0 via parseInt, the harmless prior behavior.
             // An empty palette list (c.max == 0) has no valid index, reject/no-op like the Select above.
             if (c.max == 0) return policy == ApplyPolicy::Strict ? ApplyResult::OutOfRange : ApplyResult::Ok;
             const int hi = c.max - 1;
+            // A name as well as an index, resolved through the options function's name request since aux is a function, not an array.
+            char label[kMaxLabel + 2] = {};   // one past the longest name, so a longer value shows as such
+            mm::json::parseString(json, key, label, sizeof(label));
+            if (label[0] && c.aux) {
+                if (std::strlen(label) <= kMaxLabel) {
+                    for (int i = 0; i <= hi; i++) {
+                        char name[kMaxLabel + 1] = {};
+                        JsonSink sink(name, sizeof(name));
+                        sink.requestName(static_cast<uint8_t>(i));
+                        reinterpret_cast<PaletteOptionsFn>(c.aux)(sink);
+                        if (!sink.overflowed() && std::strcmp(name, label) == 0)
+                            return clampInto(static_cast<uint8_t*>(c.ptr), i, 0, hi);
+                    }
+                }
+                return policy == ApplyPolicy::Strict ? ApplyResult::OutOfRange : ApplyResult::Ok;
+            }
             int v = mm::json::parseInt(json, key);
             if (policy == ApplyPolicy::Strict && (v < 0 || v > hi)) {
                 return ApplyResult::OutOfRange;
@@ -393,7 +409,7 @@ ApplyResult applyControlValue(const ControlDescriptor& c,
         case ControlType::Progress:
             return ApplyResult::ReadOnly;
         case ControlType::List: {
-            // Restore from persistence: hand the source the loaded JSON + this key so it parses the array (recursive mm::json reader) and repopulates itself. A live HTTP write to a List isn't a use case (discovery output), but the persistence-overlay load IS, and it arrives through this same path.
+            // The source parses the array and repopulates itself, from a saved file or a state document.
             auto* src = static_cast<ListSource*>(c.ptr);
             // Propagate a parse failure (malformed / missing array) as Malformed rather than masking it as Ok, a corrupt persisted list is a real apply failure.
             if (!src) return ApplyResult::ReadOnly;   // no source bound → nothing to restore

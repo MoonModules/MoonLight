@@ -417,7 +417,7 @@ public:
                                   syncPeer_[0], syncPeer_[1], syncPeer_[2], syncPeer_[3]);
                     setStatus(syncStr_);
                 } else {
-                    setStatus("listening");
+                    reportListening();
                 }
             }
         }
@@ -462,6 +462,13 @@ private:
     uint32_t lastSyncRecv_ = 0;      // millis of the last received packet (receive auto-blend)
     uint8_t  syncPeer_[4] = {};      // source address of that packet, for the status line
     bool     syncOpen_ = false;      // socket opened for the current mode (lazy-open latch)
+    bool     syncJoined_ = false;    // the receive socket joined the WLED group, so multicast reaches it
+
+    /// Report an open receive socket, saying so when only unicast can reach it.
+    void reportListening() {
+        if (syncJoined_) setStatus("listening");
+        else setStatus("listening, unicast only: multicast unavailable", Severity::Warning);
+    }
     uint32_t lastSyncOpenFailMs_ = 0;  // millis of the last failed open (0 = none); bring-up backoff
     char     syncStr_[40] = {};      // scratch for the "receiving from <ip>" status line
     static constexpr uint32_t kSyncSendIntervalMs = 25;   // ~40/s, WLED-friendly, well under a flood
@@ -575,11 +582,12 @@ private:
                 setStatus("send: socket failed", Severity::Error);
             }
         } else {                           // receive → bind the port, then JOIN the group
-            // The join is what makes a multicast datagram reach this socket at all:
+            // The join is what makes a multicast datagram reach this socket; a network without multicast still delivers unicast, so a failed join degrades rather than refuses.
             char grp[16]; formatDottedQuad(grp, kSyncMulticastAddr_);
-            if (syncSock_.open() && syncSock_.bind(syncPort) && syncSock_.joinMulticast(grp)) {
+            if (syncSock_.open() && syncSock_.bind(syncPort)) {
                 syncOpen_ = true;
-                setStatus("listening");
+                syncJoined_ = syncSock_.joinMulticast(grp);
+                reportListening();
             } else {
                 syncSock_.close();
                 setStatus("receive: bind failed", Severity::Error);

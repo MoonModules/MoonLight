@@ -1010,6 +1010,18 @@ body.cards-resizing {
 }
 .surface-popup-primary { background: var(--accent); color: var(--bg); border: 1px solid var(--accent); }
 .surface-popup-danger  { background: transparent; color: #f87171; border: 1px solid #f87171; }
+.surface-popup-document { width: min(480px, 80vw); height: 240px; font: 11px/1.4 monospace; background: var(--bg); color: var(--fg); border: 1px solid var(--accent-soft); border-radius: 4px; }
+
+/* The gallery under the pads: closed until opened, so a page load never reaches the internet unasked. */
+.gallery { margin-top: 12px; }
+.gallery > summary { cursor: pointer; color: var(--accent); }
+.gallery-status { font-size: 12px; margin: 6px 0; }
+.gallery-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.gallery-fill { grid-column: 1 / -1; justify-self: start; }
+.gallery-entry { border: 1px solid var(--accent-soft); border-radius: 6px; padding: 6px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.gallery-entry img { width: 100%; max-height: 140px; object-fit: cover; border-radius: 4px; }
+.gallery-entry-newer { color: #fbbf24; }
+.surface-popup a, .gallery-entry a { color: var(--accent); }
 
 /* A FADER: the same range input stood on end. Consecutive fader rows collapse into one bank via
    flex, so six faders read as a bank rather than six stacked rows. `writing-mode` is the modern
@@ -2244,3 +2256,4 @@ body.assign-mode .control-encoder input { cursor: pointer; }
    nothing new. */
 /* One line on the Firmware card, only while stats consent is off. */
 .mooncloud-nudge { margin: 8px 0 0; font-size: 0.8em; line-height: 1.6; opacity: 0.7; }
+.fw-available { margin: 8px 0 0; font-size: 0.8em; color: #f5a623; }

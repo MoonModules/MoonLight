@@ -1,53 +1,78 @@
 /// @module NetworkModule
+/// @also WiFiModule
 /// Unit tests for NetworkModule: credentials, the mode and radio controls, static addressing and the link-local rule.
 
 #include "doctest.h"
 #include "platform_config.h"       // pulls in platform::hasWiFi before NetworkModule.h
 #include "core/system/NetworkModule.h"
+#include "core/system/WiFiModule.h"
+#include "core/util/JsonSink.h"
 #include "conditional_controls.h"  // shared conditional-control invariant helpers
 
+#include <cstdio>
 #include <cstring>
+#include <string>
 
-// setWifiCredentials copies SSID + password into internal buffers and raises the dirty flag so the next tick1s() applies them.
-TEST_CASE("NetworkModule::setWifiCredentials copies SSID + password and marks dirty") {
+namespace {
+// A network module with its station child, as main wires them.
+struct WiFiNetwork {
     mm::NetworkModule net;
-    CHECK_FALSE(net.dirty());
+    mm::WiFiModule wifi;
+    WiFiNetwork() {
+        net.addChild(&wifi);
+        net.setWiFi(&wifi);
+    }
+    ~WiFiNetwork() { net.removeChild(&wifi); }   // the child is a member, not the tree's to free
+};
+}  // namespace
 
-    net.setWifiCredentials("homeAP", "secret123");
+// Provisioning remembers its network at the top of the known list and saves it, so the next boot joins it.
+TEST_CASE("NetworkModule::setWifiCredentials remembers the network at the top and saves it") {
+    WiFiNetwork w;
+    CHECK_FALSE(w.wifi.dirty());
+    w.net.setWifiCredentials("homeAP", "secret123");
+    CHECK(w.wifi.dirty());
+    REQUIRE(w.wifi.knownCount() == 1);
+    CHECK(std::strcmp(w.wifi.ssidAt(0), "homeAP") == 0);
+    CHECK(std::strcmp(w.wifi.passwordAt(0), "secret123") == 0);
 
-    CHECK(net.dirty());
-
-    // No public accessor for ssid_/password_, re-set with markedly different values to confirm the second write replaces the first (proving the copy happened, not just that the function returned).
-    net.clearDirty();
-    net.setWifiCredentials("otherSSID", "otherPW");
-    CHECK(net.dirty());
+    // A second network goes on top; the same name again updates its row rather than adding one.
+    w.net.setWifiCredentials("venue", "pw2");
+    w.net.setWifiCredentials("homeAP", "changed");
+    REQUIRE(w.wifi.knownCount() == 2);
+    CHECK(std::strcmp(w.wifi.ssidAt(0), "homeAP") == 0);
+    CHECK(std::strcmp(w.wifi.passwordAt(0), "changed") == 0);
+    CHECK(std::strcmp(w.wifi.ssidAt(1), "venue") == 0);
 }
 
-// A nullptr SSID is silently ignored (no copy, no dirty flag), guards against a bogus caller.
+// A nullptr SSID is silently ignored (no row, no save), guards against a bogus caller.
 TEST_CASE("NetworkModule::setWifiCredentials with null SSID is a no-op") {
-    mm::NetworkModule net;
-    net.setWifiCredentials(nullptr, "irrelevant");
-    CHECK_FALSE(net.dirty());
+    WiFiNetwork w;
+    w.net.setWifiCredentials(nullptr, "irrelevant");
+    CHECK_FALSE(w.wifi.dirty());
+    CHECK(w.wifi.knownCount() == 0);
 }
 
-// A nullptr password is treated as empty (open networks), still copies SSID and marks dirty.
+// A nullptr password is treated as empty (open networks), still remembering the network.
 TEST_CASE("NetworkModule::setWifiCredentials with null password treats it as empty") {
     // Improv allows open networks (auth flag = "NO"); the credential pusher may pass a nullptr or empty password for those. Both must be tolerated.
-    mm::NetworkModule net;
-    net.setWifiCredentials("openSSID", nullptr);
-    CHECK(net.dirty());
+    WiFiNetwork w;
+    w.net.setWifiCredentials("openSSID", nullptr);
+    REQUIRE(w.wifi.knownCount() == 1);
+    CHECK(w.wifi.passwordAt(0)[0] == 0);
 }
 
-// An over-length SSID (100 chars) is truncated cleanly into the 33-byte buffer; ASAN catches any overflow.
+// An over-length SSID (100 chars) is truncated cleanly into the 33-byte row; ASAN catches any overflow.
 TEST_CASE("NetworkModule::setWifiCredentials accepts long SSID without crash") {
-    mm::NetworkModule net;
+    WiFiNetwork w;
     // `volatile` stops constant folding, else GCC sees 99 bytes going into 33 and warns about the truncation this test expects.
     volatile size_t len = 99;
     char longSsid[100];
     std::memset(longSsid, 'A', len);
     longSsid[len] = 0;
-    net.setWifiCredentials(longSsid, "pw");
-    CHECK(net.dirty());
+    w.net.setWifiCredentials(longSsid, "pw");
+    REQUIRE(w.wifi.knownCount() == 1);
+    CHECK(std::strlen(w.wifi.ssidAt(0)) == 32);
 }
 
 // The mode control names the cascade state; on desktop every init stub fails, so it reads Idle.
@@ -97,65 +122,318 @@ TEST_CASE("parseDottedQuad accepts valid dotted-quads and rejects junk") {
     CHECK_FALSE(mm::parseDottedQuad("192.168.1.1x", out));
 }
 
-// The static-IP fields (ip / gateway / subnet / dns) are bound as IPv4 controls, 4 bytes of storage each, not 16-char dotted-quad strings. They start hidden because addressing defaults to DHCP.
-TEST_CASE("NetworkModule static-IP fields are IPv4-typed") {
-    mm::NetworkModule net;
-    net.setup();
-    // Clears before building, so the controls setup() already built are not duplicated.
-    net.rebuildControls();
+namespace {
+// Frozen time, so the cascade's timeouts fire only when the test moves the clock.
+struct FrozenClock {
+    FrozenClock() { mm::platform::setTestNowMs(1000); }
+    ~FrozenClock() { mm::platform::setTestNowMs(0); }
+};
+}  // namespace
 
-    int found = 0;
-    for (uint8_t i = 0; i < net.controls().count(); i++) {
-        const char* name = net.controls()[i].name;
-        if (std::strcmp(name, "ip") == 0
-            || std::strcmp(name, "gateway") == 0
-            || std::strcmp(name, "subnet") == 0
-            || std::strcmp(name, "dns") == 0) {
-            CHECK(net.controls()[i].type == mm::ControlType::IPv4);
-            CHECK(net.controls()[i].hidden);  // DHCP default → hidden
-            found++;
-        }
+// A known network that does not join in time gives way to the next in priority order, and only after the last does the device open its access point.
+TEST_CASE("the station tries each known network in priority order before the access point") {
+    FrozenClock clock;
+    mm::platform::setTestWifiStaAvailable(true);
+    {
+        WiFiNetwork w;
+        w.wifi.remember("third", "pw3");
+        w.wifi.remember("second", "pw2");
+        w.wifi.remember("first", "pw1");
+        w.net.setup();   // no Ethernet on the desktop, so it starts on WiFi
+        CHECK(std::strcmp(mm::platform::testLastStaSsid(), "first") == 0);
+        mm::platform::setTestNowMs(1000 + 11000);   // past the per-network grace
+        w.net.tick1s();
+        CHECK(std::strcmp(mm::platform::testLastStaSsid(), "second") == 0);
+        mm::platform::setTestNowMs(1000 + 22000);
+        w.net.tick1s();
+        CHECK(std::strcmp(mm::platform::testLastStaSsid(), "third") == 0);
     }
-    CHECK(found == 4);
+    mm::platform::setTestWifiStaAvailable(false);   // reset, so cases stay independent
 }
 
-// WiFi builds expose rssi and txPower as read-only controls that start hidden, and the Ethernet-only build compiles them out.
-TEST_CASE("NetworkModule rssi/txPower controls hidden in non-WiFi states") {
-    mm::NetworkModule net;
-    net.setup();
-    // Clears before building, so the controls setup() already built are not duplicated.
-    net.rebuildControls();
+namespace {
+mm::ListSource* availableOf(mm::WiFiModule& w) {
+    for (uint8_t i = 0; i < w.controls().count(); i++)
+        if (std::strcmp(w.controls()[i].name, "available") == 0) return static_cast<mm::ListSource*>(w.controls()[i].ptr);
+    return nullptr;
+}
+// A device that sees one secured network, "venue", and knows "home".
+struct ScannedNetwork : WiFiNetwork {
+    ScannedNetwork() {
+        mm::platform::WifiNetwork venue{};
+        std::snprintf(venue.ssid, sizeof(venue.ssid), "venue");
+        venue.rssi = -60;
+        venue.secured = true;
+        mm::platform::setTestWifiScan(&venue, 1);
+        mm::platform::setTestWifiStaAvailable(true);
+        wifi.rebuildControls();   // the scheduler builds them in the running system
+        wifi.remember("home", "pw");
+        net.setup();
+        wifi.onControlChanged("scan");
+        wifi.tick1s();
+        wifi.tick1s();
+    }
+    ~ScannedNetwork() {
+        mm::platform::setTestWifiScan(nullptr, 0);
+        mm::platform::setTestWifiStaAvailable(false);
+        mm::platform::setTestWifiStaIPv4(nullptr);
+        mm::platform::setTestWifiFailure(mm::platform::WifiFailure::None);
+    }
+};
+}  // namespace
 
-    int matchCount = 0;
-    for (uint8_t i = 0; i < net.controls().count(); i++) {
-        const char* name = net.controls()[i].name;
-        if (std::strcmp(name, "rssi") == 0 || std::strcmp(name, "txPower") == 0) {
-            matchCount++;
-            CHECK(net.controls()[i].type == mm::ControlType::ReadOnlyInt);
-            // Desktop setup() lands in Idle, where both are hidden.
-            CHECK(net.controls()[i].hidden);
-        }
-    }
-    // The count catches both controls missing, which an empty loop would pass.
-    if constexpr (mm::platform::hasWiFi) {
-        CHECK(matchCount == 2);
-    } else {
-        CHECK(matchCount == 0);
-    }
+// Connect-first, as a phone joins: tap a scanned network, type its password, and the device joins at once, saving the network only once it joined.
+TEST_CASE("connecting to a scanned network joins it now and remembers it once joined") {
+    FrozenClock clock;
+    ScannedNetwork s;
+    mm::ListSource* avail = availableOf(s.wifi);
+    REQUIRE(avail != nullptr);
+    REQUIRE(avail->setListRowField(1, "password", "{\"value\":\"secret\"}"));
+    REQUIRE(avail->setListRowField(1, "connect", ""));
+    CHECK(s.wifi.knownCount() == 1);   // not saved yet
+    s.net.tick1s();
+    CHECK(std::strcmp(mm::platform::testLastStaSsid(), "venue") == 0);
+    const uint8_t ip[4] = {192, 168, 4, 20};
+    mm::platform::setTestWifiStaIPv4(ip);
+    s.net.tick1s();
+    REQUIRE(s.wifi.knownCount() == 2);
+    CHECK(std::strcmp(s.wifi.ssidAt(0), "venue") == 0);   // joined, so it is known, at the top
+    CHECK(std::strcmp(s.wifi.passwordAt(0), "secret") == 0);
 }
 
-// The static-IP fields show only under Static addressing, and stay bound under DHCP so persistence can load them.
-TEST_CASE("NetworkModule static-IP fields track the addressing mode") {
-    mm::NetworkModule net;
-    net.setup();   // builds controls once (desktop cascade lands on AP/Idle)
+// A wrong password is said in words and nothing is saved; the known networks take over again.
+TEST_CASE("a scanned network that does not join says why and is not remembered") {
+    FrozenClock clock;
+    ScannedNetwork s;
+    mm::ListSource* avail = availableOf(s.wifi);
+    REQUIRE(avail != nullptr);
+    REQUIRE(avail->setListRowField(1, "password", "{\"value\":\"wrong\"}"));
+    REQUIRE(avail->setListRowField(1, "connect", ""));
+    s.net.tick1s();
+    mm::platform::setTestWifiFailure(mm::platform::WifiFailure::WrongPassword);
+    mm::platform::setTestNowMs(1000 + 11000);   // past the grace
+    s.net.tick1s();
+    REQUIRE(s.wifi.status() != nullptr);
+    CHECK(std::string(s.wifi.status()) == "incorrect password");
+    CHECK(s.wifi.knownCount() == 1);
+    CHECK(std::strcmp(mm::platform::testLastStaSsid(), "home") == 0);
+}
 
-    // addressing is the Select that conditions the static fields. setCondition(true) → Static (value 1) → fields visible; setCondition(false) → DHCP (0) → hidden.
-    auto setStatic = [&](bool on) {
-        mm::test::setControlValue<uint8_t>(net, "addressing", on ? uint8_t{1} : uint8_t{0});
+// A join asked for long after the cascade last moved is tried for its full time, not read as timed out in the tick that starts it.
+TEST_CASE("a join asked for after a long wait is tried, not failed at once") {
+    FrozenClock clock;
+    ScannedNetwork s;
+    mm::platform::setTestNowMs(1000 + 30000);   // the cascade has sat in one state for 30 seconds
+    mm::ListSource* avail = availableOf(s.wifi);
+    REQUIRE(avail != nullptr);
+    REQUIRE(avail->setListRowField(1, "password", "{\"value\":\"secret\"}"));
+    REQUIRE(avail->setListRowField(1, "connect", ""));
+    s.net.tick1s();
+    CHECK(std::strcmp(mm::platform::testLastStaSsid(), "venue") == 0);
+    CHECK(s.wifi.joinRequest() != nullptr);   // still joining
+}
+
+// A join that failed keeps what was typed, so Connect again retries with it, as the field still shows it.
+TEST_CASE("a failed join keeps the typed password for a retry") {
+    FrozenClock clock;
+    ScannedNetwork s;
+    mm::ListSource* avail = availableOf(s.wifi);
+    REQUIRE(avail != nullptr);
+    REQUIRE(avail->setListRowField(1, "password", "{\"value\":\"typo\"}"));
+    REQUIRE(avail->setListRowField(1, "connect", ""));
+    s.net.tick1s();
+    mm::platform::setTestWifiFailure(mm::platform::WifiFailure::WrongPassword);
+    mm::platform::setTestNowMs(1000 + 11000);
+    s.net.tick1s();
+    mm::JsonSink sink;
+    avail->writeListRowDetail(sink, 0);
+    CHECK(std::string(sink.data(), sink.size()).find("\"LiMqNQ==\"") != std::string::npos);   // "typo", obfuscated as every password on the page
+}
+
+namespace {
+const char* modeOf(mm::NetworkModule& net) {
+    for (uint8_t i = 0; i < net.controls().count(); i++)
+        if (std::strcmp(net.controls()[i].name, "mode") == 0) return static_cast<const char*>(net.controls()[i].ptr);
+    return "";
+}
+}  // namespace
+
+// Ethernet outranks WiFi, so a join asked for from the card while the cable carries the device is refused, and the card says why rather than dropping the wired link.
+TEST_CASE("a join asked for while Ethernet carries the device is refused with the reason") {
+    FrozenClock clock;
+    const uint8_t leased[4] = {192, 168, 1, 20};
+    mm::platform::setTestEthIPv4(leased);
+    {
+        WiFiNetwork w;
+        mm::platform::WifiNetwork venue{};
+        std::snprintf(venue.ssid, sizeof(venue.ssid), "venue");
+        mm::platform::setTestWifiScan(&venue, 1);
+        mm::platform::setTestWifiStaAvailable(true);
+        w.wifi.rebuildControls();
+        w.net.setup();
+        w.net.tick1s();
+        REQUIRE(std::string(modeOf(w.net)) == "Ethernet");
+        w.wifi.onControlChanged("scan");
+        w.wifi.tick1s();
+        w.wifi.tick1s();
+        mm::ListSource* avail = availableOf(w.wifi);
+        REQUIRE(avail != nullptr);
+        REQUIRE(avail->setListRowField(1, "connect", ""));
+        w.net.tick1s();
+        CHECK(std::string(modeOf(w.net)) == "Ethernet");
+        REQUIRE(w.wifi.status() != nullptr);
+        CHECK(std::string(w.wifi.status()).find("Ethernet is in use") != std::string::npos);
+        CHECK(w.wifi.joinRequest() == nullptr);
+    }
+    mm::platform::setTestEthIPv4(nullptr);
+    mm::platform::setTestWifiScan(nullptr, 0);
+    mm::platform::setTestWifiStaAvailable(false);
+}
+
+// Ethernet is preferred, as every operating system prefers the wired route: a cable that gets an address takes over from WiFi.
+TEST_CASE("Ethernet takes over from WiFi once it has an address") {
+    FrozenClock clock;
+    mm::platform::setTestWifiStaAvailable(true);
+    {
+        WiFiNetwork w;
+        w.wifi.remember("home", "pw");
+        w.net.setup();
+        const uint8_t staIp[4] = {192, 168, 1, 30};
+        mm::platform::setTestWifiStaIPv4(staIp);
+        w.net.tick1s();
+        REQUIRE(std::string(modeOf(w.net)) == "WiFi STA");
+        const uint8_t leased[4] = {192, 168, 1, 20};
+        mm::platform::setTestEthIPv4(leased);
+        w.net.tick1s();
+        CHECK(std::string(modeOf(w.net)) == "Ethernet");
+    }
+    mm::platform::setTestEthIPv4(nullptr);
+    mm::platform::setTestWifiStaIPv4(nullptr);
+    mm::platform::setTestWifiStaAvailable(false);
+}
+
+// An edit to the IP settings of the network the device is on applies at once, the way every setting applies live.
+TEST_CASE("editing the joined network's IP settings applies them live") {
+    FrozenClock clock;
+    mm::platform::setTestWifiStaAvailable(true);
+    {
+        WiFiNetwork w;
+        w.wifi.remember("home", "pw");
+        w.net.setup();
+        const uint8_t staIp[4] = {192, 168, 1, 30};
+        mm::platform::setTestWifiStaIPv4(staIp);
+        w.net.tick1s();
+        REQUIRE(std::string(modeOf(w.net)) == "WiFi STA");
+        const uint32_t before = mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Sta);
+        constexpr uint32_t kFirstRowId = 1;
+        REQUIRE(w.wifi.setListRowField(kFirstRowId, "ipSettings", "{\"value\":1}"));
+        REQUIRE(w.wifi.setListRowField(kFirstRowId, "ip", "{\"value\":\"192.168.1.240\"}"));
+        w.net.tick1s();
+        CHECK(mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Sta) > before);
+    }
+    mm::platform::setTestWifiStaIPv4(nullptr);
+    mm::platform::setTestWifiStaAvailable(false);
+}
+
+// The joined network is a row, not a position: adding a network above it keeps the check mark, and its IP settings, on the network the device is on.
+TEST_CASE("a network added above the joined one leaves the joined one marked") {
+    FrozenClock clock;
+    mm::platform::setTestWifiStaAvailable(true);
+    {
+        WiFiNetwork w;
+        w.wifi.remember("home", "pw");
+        w.net.setup();
+        const uint8_t staIp[4] = {192, 168, 1, 30};
+        mm::platform::setTestWifiStaIPv4(staIp);
+        w.net.tick1s();
+        REQUIRE(std::string(modeOf(w.net)) == "WiFi STA");
+        uint32_t id = 0;
+        REQUIRE(w.wifi.addListRow(id));
+        REQUIRE(w.wifi.setListRowField(id, "ssid", "{\"value\":\"other\"}"));
+        REQUIRE(w.wifi.moveListRow(id, 0));
+        w.net.tick1s();
+        auto rowText = [&](uint8_t i) { mm::JsonSink sink; w.wifi.writeListRow(sink, i); return std::string(sink.data(), sink.size()); };
+        CHECK(rowText(0).find("\"joined\"") == std::string::npos);   // "other", above it
+        CHECK(rowText(1).find("\"joined\"") != std::string::npos);   // "home", still the one it is on
+    }
+    mm::platform::setTestWifiStaIPv4(nullptr);
+    mm::platform::setTestWifiStaAvailable(false);
+}
+
+// Forget on the network the device is on leaves it, as a phone does, and the next known network takes over.
+TEST_CASE("forgetting the network the device is on leaves it for the next known one") {
+    FrozenClock clock;
+    mm::platform::setTestWifiStaAvailable(true);
+    {
+        WiFiNetwork w;
+        w.wifi.remember("second", "pw2");
+        w.wifi.remember("home", "pw");
+        w.net.setup();
+        const uint8_t staIp[4] = {192, 168, 1, 30};
+        mm::platform::setTestWifiStaIPv4(staIp);
+        w.net.tick1s();
+        REQUIRE(std::string(modeOf(w.net)) == "WiFi STA");
+        REQUIRE(w.wifi.deleteListRow(w.wifi.idAt(0)));
+        mm::platform::setTestWifiStaIPv4(nullptr);
+        w.net.tick1s();
+        CHECK(std::string(modeOf(w.net)) == "WiFi STA (waiting)");
+        CHECK(std::strcmp(mm::platform::testLastStaSsid(), "second") == 0);
+    }
+    mm::platform::setTestWifiStaIPv4(nullptr);
+    mm::platform::setTestWifiStaAvailable(false);
+}
+
+// Credentials pushed over Improv while Ethernet carries the device are remembered, and WiFi joins when the cable goes, as a join from the card does.
+TEST_CASE("credentials arriving while Ethernet carries the device are only remembered") {
+    FrozenClock clock;
+    const uint8_t leased[4] = {192, 168, 1, 20};
+    mm::platform::setTestEthIPv4(leased);
+    mm::platform::setTestWifiStaAvailable(true);
+    {
+        WiFiNetwork w;
+        w.net.setup();
+        w.net.tick1s();
+        REQUIRE(std::string(modeOf(w.net)) == "Ethernet");
+        w.net.setWifiCredentials("pushed-over-improv", "pw");
+        CHECK(w.wifi.knownCount() == 1);
+        CHECK(std::strcmp(mm::platform::testLastStaSsid(), "pushed-over-improv") != 0);
+        w.net.tick1s();
+        CHECK(std::string(modeOf(w.net)) == "Ethernet");
+    }
+    mm::platform::setTestEthIPv4(nullptr);
+    mm::platform::setTestWifiStaAvailable(false);
+}
+
+// Connect pressed on another network while a join is in flight replaces that join, rather than letting the first one finish and claim the second's name.
+TEST_CASE("a second Connect during a join replaces the join") {
+    FrozenClock clock;
+    ScannedNetwork s;
+    mm::ListSource* avail = availableOf(s.wifi);
+    REQUIRE(avail != nullptr);
+    REQUIRE(avail->setListRowField(1, "password", "{\"value\":\"secret\"}"));
+    REQUIRE(avail->setListRowField(1, "connect", ""));
+    s.net.tick1s();
+    REQUIRE(std::strcmp(mm::platform::testLastStaSsid(), "venue") == 0);
+    REQUIRE(s.wifi.setListRowField(s.wifi.idAt(0), "connect", ""));   // the known network, "home"
+    s.net.tick1s();
+    CHECK(std::strcmp(mm::platform::testLastStaSsid(), "home") == 0);
+}
+
+// The station's card shows rssi and txPower as read-only controls that start hidden, until the radio is up.
+TEST_CASE("WiFi rssi/txPower controls hidden until the radio is up") {
+    mm::WiFiModule wifi;
+    wifi.rebuildControls();
+    auto hidden = [&](const char* name) {
+        for (uint8_t i = 0; i < wifi.controls().count(); i++)
+            if (std::strcmp(wifi.controls()[i].name, name) == 0) return wifi.controls()[i].hidden;
+        FAIL("no such control");
+        return false;
     };
-    for (const char* field : {"ip", "gateway", "subnet", "dns"}) {
-        mm::test::checkConditionalControl(net, field, setStatic, /*visibleWhenTrue=*/true);
-    }
+    CHECK(hidden("rssi"));
+    CHECK(hidden("txPower"));
+    wifi.showRadio(-60, 19, /*radioOn=*/true, /*connected=*/true);
+    CHECK_FALSE(hidden("rssi"));
+    CHECK_FALSE(hidden("txPower"));
 }
 
 // RFC 3927's block is 169.254.0.0/16, and only that: a neighbor such as 169.253 or 170.254 is an ordinary address.

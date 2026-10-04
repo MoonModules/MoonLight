@@ -28,22 +28,73 @@ Detail: [technical](moxygen/SystemModule.md)
 
 ### Network
 
-WiFi / Ethernet connectivity, static-IP configuration, RSSI and TX-power reporting. Brings the device onto the LAN before the HTTP and WebSocket servers start.
+Brings the device onto the LAN before the HTTP and WebSocket servers start, trying Ethernet, then WiFi, then its own access point. Each interface's settings are on its own card below it.
 
 <img src="../../assets/core/NetworkModule.png" width="300" alt="Network module controls">
 
-- `ssid` / `password`: WiFi credentials.
 - `mDNS`: the `<name>.local` hostname.
-- `addressing`: DHCP or static; static reveals `ip`, `gateway`, `subnet` and `dns`.
-- `ethBoard`: the board's Ethernet wiring by name; `Custom` exposes every pin.
-- `txPowerSetting`: caps the radio's transmit power for a board that browns out; 0 lifts it.
-- read-only: `mode`, the interface in use, with `rssi` / `txPower` (dBm) on a live radio.
+- read-only: `mode`, the interface in use.
 
-**No DHCP server on an Ethernet-only build?** After about 20 seconds without a lease the device gives itself a `169.254.x.y` address (link-local). A computer on the same network without DHCP does the same, so open `<name>.local` in its browser and set a static address under `addressing`. A DHCP server that appears later still wins. Builds with WiFi try WiFi next, then their own access point.
+**No DHCP server on an Ethernet-only build?** After about 20 seconds without a lease the device gives itself a `169.254.x.y` address (link-local). A computer on the same network without DHCP does the same, so open `<name>.local` in its browser and set a static address on the Ethernet card. A DHCP server that appears later still wins. Builds with WiFi try WiFi next, then their own access point.
 
 Detail: [technical](moxygen/NetworkModule.md)
 
 [Tests](../../reference/tests/unit-tests.md#networkmodule)
+
+<a id="ethernet"></a>
+
+### Ethernet
+
+The wired interface, a child of Network: which board's wiring it uses and how it gets an address. Present where Ethernet is compiled in, and as a developer preview on the desktop.
+
+<img src="../../assets/core/EthernetModule.png" width="300" alt="Ethernet module controls">
+
+- `ethBoard`: the board's Ethernet wiring by name; `Custom` exposes every pin.
+- `ipSettings`: DHCP or Static; Static reveals `ip`, `gateway`, `subnet` and `dns`.
+
+Detail: [technical](moxygen/EthernetModule.md)
+
+[Tests](../../reference/tests/unit-tests.md#ethernetmodule)
+
+<a id="wifi"></a>
+
+### WiFi
+
+The WiFi station, a child of Network: the networks the device knows, in the order it prefers them, and the radio's settings.
+
+<img src="../../assets/core/WiFiModule.png" width="300" alt="WiFi module controls">
+
+- `scan`: look for the networks in range; `scanned` says how long ago it last looked.
+- `available`: the networks in range, with signal bars and a lock; Connect joins one now.
+- `known`: the networks it joins, in priority order, each with its `ssid`, `password` and IP settings.
+- `txPowerSetting`: caps the radio's transmit power for a board that browns out; 0 lifts it.
+- read-only: `rssi` and `txPower` (dBm) on a live radio.
+- read-only after a join from the access point: `address` and `localName`, links to the device.
+
+Joining is connect-first, as on a phone: tap a network under `available`, type its password, Connect. ⌄ details.
+
+Detail: [technical](moxygen/WiFiModule.md)
+
+[Tests](../../reference/tests/unit-tests.md#wifimodule)
+
+<a id="access-point"></a>
+
+### Access point
+
+The device's own WiFi network, a child of Network, at 4.3.2.1 and named after the device. Joining it opens the UI, as a sign-in screen on a phone.
+
+<img src="../../assets/core/AccessPointModule.png" width="300" alt="Access point module controls">
+
+- `opens`: `on failure` (when nothing else joins), `always`, or `never (not recommended)`.
+- `password`: WPA2, 8 to 63 characters as the standard allows; empty keeps it open, the default.
+- `channel` (1 to 13) and `hidden` (no broadcast name), for experts.
+- read-only: `clients`, the devices on it.
+
+`never` applies only while Ethernet or a known WiFi network is configured, and the card says when it opens anyway. Joining it opens the WiFi card. ⌄ details.
+
+Detail: [technical](moxygen/AccessPointModule.md)
+
+[Tests](../../reference/tests/unit-tests.md#accesspointmodule)
 
 <a id="improv-provisioning"></a>
 
@@ -104,9 +155,9 @@ Over-the-air firmware flashing, the one operation that swaps the binary and need
 
 - `firmware`: the OTA image to flash.
 - read-only: `version`, `build` and `partition`.
-- `image`: on a device carrying two images, which one those describe and an install writes.
+- `image`: on a device carrying two images, the app or MoonBase, drawn as the card's two tabs.
 
-The choice is the app it runs, or MoonBase in the factory slot. This control's presence is also what tells the UI that installs run through the reboot-into-MoonBase cycle, behind one "updating firmware" overlay, and that a **Restart in MoonBase** button belongs on the card ([MoonBase](../../explanation/architecture/moonbase.md)).
+When MoonBase's version differs from the app's, the card warns and the top bar shows `⬆ MoonBase`; installing the matching one from its tab clears it. The `image` control's presence also tells the UI that installs run through the reboot-into-MoonBase cycle, behind one "updating firmware" overlay, and that a **Restart in MoonBase** button belongs on the card ([MoonBase](../../explanation/architecture/moonbase.md)).
 
 Detail: [technical](moxygen/FirmwareUpdateModule.md) · [image vetting](moxygen/FirmwareImage.md)
 
@@ -270,6 +321,18 @@ Detail: [technical](moxygen/FilesystemModule.md)
 
 [Tests](../../reference/tests/unit-tests.md#filesystemmodule)
 
+## WiFi, details
+
+The device tries the known networks in priority order, each for ten seconds, and opens its access point only after the last. Each network keeps its own `ipSettings`, DHCP or Static, as a phone does.
+
+Connect joins a network at once. A network picked from `available` is saved to `known` only once it joined, and "incorrect password" says why when it did not. A scan takes the radio off-channel for a few seconds, which drops incoming lights while connected, so the device scans by itself only when its access point opens, and otherwise when you press `scan`.
+
+## Access point, details
+
+A join asked for from a phone on the access point keeps the access point up beside the new network for two minutes, and the WiFi card shows `address` and `localName` to follow. A phone's sign-in screen has no address bar, so open a link in the browser. Joining moves the radio to the router's channel, which knocks the phone off, and a phone often lands back on its own network, where the sign-in screen is gone. So the network's row shows `afterJoining`, the device's `.local` link, before you press Connect.
+
+While the access point runs, its DNS answers every name with 4.3.2.1, and the web server sends any page request through it for another name to the UI, while the API answers as itself. That is what makes a phone show the sign-in screen.
+
 ## Control, details
 
 A control is one named, typed value on a module, declared once in `defineControls()` and reachable by name from every surface: the web UI, the REST interface, a preset file, a script, a physical desk. The type decides how it renders, what it accepts, and how it persists, so a module never writes UI code and never parses its own JSON.
@@ -296,39 +359,44 @@ Detail: [technical](moxygen/ControlSurface.md) · [InputMapping](moxygen/InputMa
 
 #### Presets
 
-A preset is a file: `/.config/presets/<name>.json`. Saving writes one, applying reads one, deleting removes one. Nothing else holds preset state, so there is no second copy to keep in step: the list is rebuilt from the folder rather than persisted alongside it. That rescan runs at startup and after every save, rename and delete, a reorder only rewrites the affected files and re-sorts the rows in place, since the folder's contents have not changed. So a preset added or removed through the File Manager appears once the module next rescans (a reboot, or a save, rename or delete on the surface), not the instant the file lands.
+A preset is a file: `/.config/presets/<name>.json`. Saving writes one, applying reads one, deleting removes one. Nothing else holds preset state, so there is no second copy to keep in step: the list is read from the folder at startup rather than persisted alongside it. After that a save, rename or delete re-reads its one file, and so does a file the file API writes or removes, which every module hears about, so a preset written through the File Manager or the gallery appears on its own. One file at a time matters on an ESP32, where walking the folder costs about 15 ms per preset and reading one about 60 ms.
 
-The name becomes the file name, so it is restricted to printable ASCII without `/`, `\` or `.`, a validator on the control, which every write path runs. `slot` records which pad the preset occupies, so a surface arranged to match a physical desk survives a reboot.
+The name becomes the file name, so it is restricted to printable ASCII without `/`, `\` or `.`, a validator on the control, which every write path runs. The file's `$slot` records which pad the preset occupies, so a surface arranged to match a physical desk survives a reboot. The save form (`name`, `slot`, `source`) is input for the next save rather than configuration, so none of it is written to flash.
 
-##### What a preset carries
+##### What a preset holds
 
-A preset captures **exactly one** top-level subtree, recorded in the file:
+A preset is a [state document](../../reference/integrating.md#setting-everything-at-once), the one `PATCH /api/state` applies, plus its `$slot`, a root `$` key the engine reads as the file's own:
 
 ```json
 {
-  "slot": 12,
-  "captures": "Effects",
-  "Effects.enabled": true, "Effects.0.type": "Layer", "Effects.0.0.type": "NoiseEffect"
+  "$slot": 12,
+  "Effects": { "$patch": "replace", "enabled": true,
+    "Layer": { "type": "Layer", "$patch": "replace", "enabled": true,
+      "Noise": { "type": "NoiseEffect", "$patch": "replace", "speed": 3, "enabled": true } } }
 }
 ```
 
-Each captured subtree is exactly the bytes the persistence engine already writes for that module, namespaced under a `<TypeName>.` key prefix. Save and restore therefore reuse the engine that reconciles a tree against JSON ([`saveSubtreeTo` / `applySubtree`](moxygen/FilesystemModule.md)) rather than a second serializer that could drift from it.
+A save writes the `source` module through the same writer `GET /api/modules/<name>/document` uses, rooted at the top level. The pad editor names one of the four containers, which captures it whole: *a look*, *a geometry*, *a hardware setup* or *a service configuration*. A card's `{ }` button saves that card alone, which applied puts back that card and leaves its siblings. A hand-written or gallery preset may hold less, such as `{"Drivers":{"palette":"Ocean"}}`.
 
-One subtree per preset is the whole model: a preset is *a look*, or *a geometry*, or *a hardware setup*, or *a service configuration*. Never a combination. An `Effects` preset is a look, and applies to a board with completely different hardware; a `Drivers` preset carries pin maps and is device-specific. Choosing the role is a single radio button when saving, and the pad's color says which role it holds.
+An `Effects` preset is a look and applies to a board with completely different hardware; a `Drivers` preset with pins is device-specific. A secret stays out of a document, so a preset never carries a password.
 
-A preset naming a subtree this build does not have is refused with a reason rather than partially applied, and a file written by an older build that names several subtrees is listed but not applied, so it can be seen and deleted rather than silently vanishing. A malformed file leaves the live tree untouched.
+A preset that fails names the first failure and where it is, and what came before it stays applied. A preset in the flat format older builds wrote is listed but not applied, and a backup and restore converts it. A malformed file leaves the live tree untouched.
 
-##### One active preset per role
+##### One active preset per container
 
-Each subtree is a **role**: layout, effects, driver, service. A preset holds its own role and leaves the other three alone, so a layout preset and a look can be active at the same time, and applying a new look replaces only the look.
+The four containers are the **roles**: layout, effects, driver, service. A preset holds the roles of the containers it sets and leaves the others alone, so a layout preset and a look can be active at the same time, and a palette preset holds the driver pad beside a running look.
 
 A pad is tinted by its role: layout blue, effects violet, driver green, service amber.
 
 ##### Applying is a rebuild
 
-Applying a preset creates, replaces and destroys modules to match what the file describes, it is a restore, not a value overlay: a preset carrying more than the device has adds it, and one describing less removes what it omits.
+A saved container carries `"$patch": "replace"`, so applying it creates, replaces and destroys modules to match: a preset carrying more than the device has adds it, and one describing less removes what it omits. Every removal runs before any creation, so a module can move between layers under its own name.
 
-Structural mutation quiesces the render worker, and mutations run inline on the render tick, so a large restore stalls rendering for its duration. The captured subtree is applied and `prepareTree()` runs once at the end. Presets are a cold-path feature; the tick path is untouched.
+Structural mutation quiesces the render worker, and mutations run inline on the render tick, so a large restore stalls rendering for its duration. `prepareTree()` runs once at the end. Presets are a cold-path feature; the tick path is untouched.
+
+##### The gallery
+
+Under the pads, the gallery lists [MoonLight-Gallery](https://github.com/MoonModules/MoonLight-Gallery)'s `index.json`, most liked first. The browser fetches it from `raw.githubusercontent.com`, so the device needs no internet of its own. A preset installs onto the first free pad with the scripts it names that the gallery holds, or applies once through `PATCH /api/state`; a script installs into `/moonlive`. Filling the empty pads takes looks and palettes only, since pins and geometry belong to one rig.
 
 #### Home Assistant
 
@@ -351,6 +419,7 @@ sudo uv run moondeck/run/run_desktop.py --port 80
 The discovery buffers are sized to the looks this device actually has, and grow or shrink as presets are added and removed. There is no cap on the number: a fixed one would either reserve memory a small setup never uses, or silently publish nothing once the list outgrew it.
 
 ## MQTT, details
+
 The topic prefix is `MoonLight/<mac>`, a **stable** identifier (the last 6 hex of the device's MAC), fixed for the device's life. Renaming the device does **not** change its topics, so a hub's config never breaks on a rename (the WLED/Tasmota/Home-Assistant convention). It's derived, not a stored control.
 
 **Topics** (for a device whose MAC ends `563cfe`): the device SUBSCRIBEs to the `set` topics and PUBLISHes the `get` topics on change (and on connect, so a controller never reads "No Response"). It also publishes its friendly `deviceName` on the retained `name` topic, so a hub can show the human name while the topics stay MAC-stable:
@@ -399,6 +468,7 @@ Home Assistant adopts the device two ways, both zero-config:
 Both can be on at once. Setup walkthrough (including exposing HA to Apple Home via HA's HomeKit Bridge, no Homebridge needed) in the [Home Assistant recipe](../../how-to/home-automation.md#adopt-in-home-assistant).
 
 ## File Manager, details
+
 The panel is a lazy folder **tree** (each folder loads its children on first expand) plus an inline text editor. Dot-prefixed entries (the `.config` persistence dir) are hidden unless `show hidden` is on.
 
 - Click a folder's row to select it and toggle its expansion (▸/▾); click a selected file to open the editor.

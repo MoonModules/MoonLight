@@ -61,15 +61,12 @@ public:
         return State::Waiting;
     }
 
-    /// For a test's scope, replace the platform lookup with an empty cache and no task, so the test drives the passes itself.
-    struct TestScope {
-        /// Install the fake lookup.
-        explicit TestScope(bool (*resolve)(const char*, uint8_t*)) { use(resolve); }
-        /// Restore the platform lookup, so no later test inherits the fake.
-        ~TestScope() { use(&platform::resolveHost); }
-        /// Not copyable, since one scope owns the swap.
-        TestScope(const TestScope&) = delete;
-        TestScope& operator=(const TestScope&) = delete;
+    // For a test's scope, replace the platform lookup with an empty cache and no task, so the test drives the passes itself.
+    struct LookupForTest {
+        explicit LookupForTest(bool (*resolve)(const char*, uint8_t*)) { use(resolve); }
+        ~LookupForTest() { use(&platform::resolveHost); }   // so no later test inherits the fake
+        LookupForTest(const LookupForTest&) = delete;
+        LookupForTest& operator=(const LookupForTest&) = delete;
     private:
         static void use(bool (*resolve)(const char*, uint8_t*)) {
             Self& s = self();
@@ -80,7 +77,7 @@ public:
         }
     };
 
-    /// Run one lookup pass on the calling thread, as the task would.
+    // Run one lookup pass on the calling thread, as the task would.
     static void passForTest() { pass(self()); }
 
 private:

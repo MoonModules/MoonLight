@@ -78,7 +78,7 @@ The installer erases (if you asked it to) and writes the firmware. Just watch, i
 What happens next depends on your device:
 
 - **WiFi:** enter your network name and password when prompted, then **Connect**.
-  (Click **Skip** to set WiFi up later from the device itself.) Restoring a config backup? You can skip this step: join the device's `MM-XXXX` access point, open `http://4.3.2.1`, and restore the backup in the File Manager (⟲), then take the offered restart: the bundle carries the WiFi credentials, so the device joins your network by itself.
+  Or click **Skip** and set WiFi up from the device itself. It opens its own `MM-XXXX` network, and joining that with a phone or laptop opens a sign-in screen on its WiFi card. Pick your network there. Restoring a config backup? Skip this step too. Join the `MM-XXXX` network, open `http://4.3.2.1`, restore the backup in the File Manager (⟲), and take the offered restart. The bundle carries the WiFi credentials, so the device joins your network by itself.
 
   ![Entering WiFi credentials](assets/gettingstarted/01-09-wifi-credentials.png)
 
@@ -260,9 +260,9 @@ Your device reboots into the new firmware on its own when it finishes.
 
 Two things worth knowing. A failed install **stays** in MoonBase rather than pretending to have worked, so you can simply try again. And you cannot break a device this way: MoonBase is never overwritten by an update, so it is still there for the next attempt, including after a power cut in the middle of one.
 
-If your device is not on your network at all, MoonBase opens its own WiFi access point and is reachable at **4.3.2.1** once you join it.
+Off your network, MoonBase opens the device's own access point, under its name and password, and answers at **4.3.2.1**.
 
-MoonBase shows its own version on its page, and your device's Firmware card shows which MoonBase it carries. If that version is marked outdated, the same card installs a newer one over the network, so keeping the recovery image current needs no cable.
+MoonBase shows its own version on its page, and your device's Firmware card shows which MoonBase it carries. When it does not match the app, the card warns and its MoonBase tab installs the matching one over the network, so keeping the recovery image current needs no cable.
 
 That update runs from the app, because only the running app can write the partition MoonBase lives in. So it is a way to keep MoonBase fresh, not a way back from a device that will not start: if the app cannot run, or MoonBase itself will not boot, that still takes a cable. Your device checks the image first, refusing anything whose magic bytes, chip or description say it is not a MoonBase image for this chip.
 

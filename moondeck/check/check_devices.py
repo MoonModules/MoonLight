@@ -29,7 +29,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 CATALOG = ROOT / "mooninstaller" / "deviceModels.json"
 MODULE_TYPES_CPP = ROOT / "src" / "module_types.cpp"
-NETWORK_MODULE = ROOT / "src" / "core" / "system" / "NetworkModule.h"
+ETHERNET_MODULE = ROOT / "src" / "core" / "system" / "EthernetModule.h"
 PLATFORM_CONFIG = ROOT / "src" / "platform" / "esp32" / "platform_config.h"
 DOCS = ROOT / "docs"
 
@@ -59,12 +59,12 @@ BOOT_WIRED_TYPES = {"System", "Network", "Drivers"}
 
 
 def eth_preset_labels():
-    """The Ethernet preset labels from NetworkModule.h's kEthPresets table.
+    """The Ethernet preset labels from EthernetModule.h's kEthPresets table.
 
     Read from the firmware rather than restated here, so a preset renamed in one place and not the
     other fails this check instead of silently leaving a catalog entry pointing at nothing.
     """
-    text = NETWORK_MODULE.read_text(encoding="utf-8")
+    text = ETHERNET_MODULE.read_text(encoding="utf-8")
     table = re.search(r"kEthPresets\[\]\s*=\s*\{(.*?)\n    \};", text, re.S)
     if not table:
         return set()
@@ -80,7 +80,7 @@ def eth_preset_drift():
     and this check binds it, because the drift is silent where it matters most: `seedEthPresetFromPins`
     matches on exact equality, so one corrected pin would reseed every provisioned board to Custom.
     """
-    table = NETWORK_MODULE.read_text(encoding="utf-8")
+    table = ETHERNET_MODULE.read_text(encoding="utf-8")
     header = PLATFORM_CONFIG.read_text(encoding="utf-8")
     block = re.search(r"kEthPresets\[\]\s*=\s*\{(.*?)\n    \};", table, re.S)
     if not block:
@@ -133,11 +133,11 @@ def main():
     errors = []
     eth_presets = eth_preset_labels()
     for label, field, was, now in eth_preset_drift():
-        errors.append(f"NetworkModule.h kEthPresets {label!r}: {field} is {now}, but "
+        errors.append(f"EthernetModule.h kEthPresets {label!r}: {field} is {now}, but "
                       f"platform_config.h's ethConfigDefault says {was}: the preset restates the "
                       f"chip default, so the two must agree or a provisioned board reseeds to Custom")
     if not eth_presets:
-        errors.append("NetworkModule.h: could not read the kEthPresets table, so the ethBoard check cannot run")
+        errors.append("EthernetModule.h: could not read the kEthPresets table, so the ethBoard check cannot run")
 
     try:
         catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
@@ -313,30 +313,30 @@ def main():
                             errors.append(f"{where}: latchPin ({latch_n}) is also a data pin — "
                                           f"the latch needs its own GPIO")
 
-            # Ethernet is explicit, not defaulted: a board that turns Ethernet ON (NetworkModule with
+            # Ethernet is explicit, not defaulted: a board that turns Ethernet ON (EthernetModule with
             # a non-None ethType) must declare its board-wiring GPIOs, so the firmware never falls
             # back to a per-chip default that is really one specific board's pins. (The Dig-Octa is
             # why: GPIO5 is the classic-ESP32 default reset but that board uses it as an LED output;
             # inheriting the default would drive an LED pin as an Ethernet reset.) Only the pins that
             # are genuine BOARD WIRING are required — MDC/MDIO may stay at the IDF default (omit or
             # -1) on RMII, since that's a real standard, not a board-specific value.
-            if mtype == "NetworkModule" and isinstance(controls, dict):
+            if mtype == "EthernetModule" and isinstance(controls, dict):
                 # PRESENCE, not truthiness: a JSON `null` reads as None like a missing key, and the
                 # installer treats a present-but-null value as a named preset (null !== "Custom").
                 board = controls["ethBoard"] if "ethBoard" in controls else None
                 if "ethBoard" in controls:
                     if not isinstance(board, str):
-                        errors.append(f"{where}: NetworkModule ethBoard must be the preset LABEL as a string, got {board!r}")
+                        errors.append(f"{where}: EthernetModule ethBoard must be the preset LABEL as a string, got {board!r}")
                     elif board not in eth_presets:
-                        errors.append(f"{where}: NetworkModule ethBoard {board!r} is not a preset in NetworkModule.h (known: {sorted(eth_presets)})")
+                        errors.append(f"{where}: EthernetModule ethBoard {board!r} is not a preset in EthernetModule.h (known: {sorted(eth_presets)})")
                 et = controls.get("ethType")
                 # ethType must be an int (a JSON string like "2" would silently skip the rule below and
                 # also isn't what the device deserializes into the Select) — reject a stringified value.
                 # `bool` is an int subclass, so exact-type-check (as flashBaud does) or a JSON `true`
                 # would pass as ethType 1 (LAN8720).
                 if et is not None and type(et) is not int:
-                    errors.append(f"{where}: NetworkModule ethType must be an integer, got {et!r}")
-                # A named preset IS the explicit pinning: the map lives in NetworkModule.h, under
+                    errors.append(f"{where}: EthernetModule ethType must be an integer, got {et!r}")
+                # A named preset IS the explicit pinning: the map lives in EthernetModule.h, under
                 # the same review as any other firmware constant, rather than repeated per board.
                 if type(et) is int and et != 0 and board in (None, "Custom"):
                     # RMII LAN8720(1)/IP101(2): rst + clock. RGMII YT8531(4): mdc/mdio/rst.
@@ -350,7 +350,7 @@ def main():
                     }.get(et, [])
                     missing = [p for p in required if p not in controls]
                     if missing:
-                        errors.append(f"{where}: NetworkModule sets ethType={et} but omits board-wiring "
+                        errors.append(f"{where}: EthernetModule sets ethType={et} but omits board-wiring "
                                       f"pin(s) {missing} — Ethernet must be pinned explicitly, not "
                                       f"inherited from a per-chip default (use -1 for a genuinely "
                                       f"unused pin)")

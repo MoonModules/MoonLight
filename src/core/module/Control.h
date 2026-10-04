@@ -102,6 +102,8 @@ struct ListSource {
     virtual uint8_t listRowCount() const = 0;
     /// Append one row's summary, the fields a collapsed row shows.
     virtual void writeListRow(JsonSink& sink, uint8_t row) const = 0;
+    /// Append one row as the saved file keeps it, which by default is the summary; a source whose collapsed row shows less saves more here.
+    virtual void writeListRowSaved(JsonSink& sink, uint8_t row) const { writeListRow(sink, row); }
     /// Append one row's detail, which by default repeats the summary.
     virtual void writeListRowDetail(JsonSink& sink, uint8_t row) const {
         writeListRow(sink, row);
@@ -111,11 +113,17 @@ struct ListSource {
     /// Repopulate the rows from persisted JSON, the model owning its own deserialization.
     virtual bool restoreList(const char* /*json*/, const char* /*key*/) { return false; }
 
-    /// Whether these rows are worth writing to flash, which a derived list declines.
+    /// Whether these rows are written to flash, which a derived list, rebuilt at setup and never restored, declines.
     virtual bool persistsList() const { return true; }
+
+    /// Whether a saved row carries a secret, such as a password, which a state document leaves out.
+    virtual bool listHoldsSecrets() const { return false; }
 
     /// Whether this source accepts the four editing operations below.
     virtual bool isEditableList() const { return false; }
+
+    /// Whether an editable list's rows are the source's own: their fields edit, but the user adds, deletes and moves none.
+    virtual bool listRowsFixed() const { return false; }
 
     /// Render the rows as a grid of pads, for rows triggered far more often than edited.
     virtual bool listAsPads() const { return false; }
@@ -298,10 +306,12 @@ public:
                                .max = bufSize, .validate = validate};
     }
 
-    /// Bind a buffer holding a secret, which the API obfuscates rather than sending in clear.
-    void addPassword(const char* name, char* var, uint8_t bufSize = 32) {
+    /// Bind a buffer holding a secret, which the API obfuscates rather than sending in clear, with an optional check on every write.
+    void addPassword(const char* name, char* var, uint8_t bufSize = 32,
+                     bool (*validate)(const char*) = nullptr) {
         grow();
-        controls_[count_++] = {var, name, 0, ControlType::Password, 0, bufSize};
+        controls_[count_++] = {.ptr = var, .name = name, .type = ControlType::Password,
+                               .max = bufSize, .validate = validate};
     }
 
     /// Bind a buffer the UI shows but never edits.
@@ -453,8 +463,11 @@ bool isPersistable(const ControlDescriptor& c);
 /// Whether the types route should emit a default for this type, which a secret declines.
 bool hasDefault(ControlType t);
 
-/// Append the value fragment alone, the caller composing the wrapper around it.
-void writeControlValue(JsonSink& sink, const ControlDescriptor& c);
+/// Append the value fragment alone, the caller composing the wrapper around it; `saving` writes the form the saved file keeps.
+void writeControlValue(JsonSink& sink, const ControlDescriptor& c, bool saving = false);
+
+/// Append a password as the API shows one, XOR-ed with a fixed key and base64-encoded: obfuscation against reading it at a glance, not a secret.
+void writeObfuscatedPassword(JsonSink& sink, const char* password);
 
 /// Append the per-type extras that ride beside the value, such as bounds or options.
 void writeControlMetadata(JsonSink& sink, const ControlDescriptor& c);
@@ -469,8 +482,8 @@ enum class ApplyResult : uint8_t {
 
 /// What an out-of-range write does, since an API rejects where a load tolerates.
 enum class ApplyPolicy : uint8_t {
-    Strict,   ///< reject an out-of-range value (the HTTP API — surfaces as a 400).
-    Clamp,    ///< clamp to the nearest valid value (persistence load — tolerates stale on-disk values).
+    Strict,   ///< reject an out-of-range value (the HTTP API, which answers 400).
+    Clamp,    ///< clamp to the nearest valid value (the persistence load, which tolerates stale saved values).
 };
 
 /// Parse one value from the enclosing object and apply it, leaving storage alone on failure.

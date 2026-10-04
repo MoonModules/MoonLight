@@ -986,7 +986,7 @@ export const installPicker = {
 
     /**
      * The picked device's deviceModels.json TX-power cap
-     * (controls.Network.txPowerSetting), or null when the device has none /
+     * (the WiFi entry's controls.txPowerSetting), or null when the device has none /
      * no device is picked. The orchestrator pushes it over Improv BEFORE
      * provisioning: brown-out-prone devices (a weak LDO / marginal supply) fail their first
      * association at full power, so the cap can't wait for the post-online
@@ -995,9 +995,9 @@ export const installPicker = {
     getSelectedDeviceTxPower() {
         if (!_lastState || !_lastState.selectedDevice || !_lastState.devices) return null;
         const entry = _lastState.devices.find(b => b.name === _lastState.selectedDevice);
-        // New catalog shape: each device's modules list carries its own controls;
-        // the WiFi TX-power cap lives on the Network module's controls block.
-        const net = entry && (entry.modules || []).find(m => m && m.id === "Network");
+        // Each device's modules list carries its own controls; the TX-power cap lives on the
+        // WiFi child's.
+        const net = entry && (entry.modules || []).find(m => m && m.id === "WiFi");
         const v = net && net.controls && net.controls.txPowerSetting;
         // The SET_TX_POWER RPC validates a whole-dBm value in 0..21 (platform.h);
         // reject anything outside that so a bad catalog value can't poison the

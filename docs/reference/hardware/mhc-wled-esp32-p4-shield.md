@@ -74,7 +74,7 @@ An onboard **PCM1808** ADC captures a line-in signal and outputs I²S to the P4.
 
 ### Ethernet (RMII)
 
-The P4-NANO's RMII PHY: **MDC 31 · MDIO 52 · RST 51 · CLK 50 (external-in) · PHY addr 1**, `ethType` IP101, external clock. (Catalog `NetworkModule`.)
+The P4-NANO's RMII PHY: **MDC 31 · MDIO 52 · RST 51 · CLK 50 (external-in) · PHY addr 1**, `ethType` IP101, external clock. (Catalog `EthernetModule`.)
 
 ## Loopback self-test on this shield
 

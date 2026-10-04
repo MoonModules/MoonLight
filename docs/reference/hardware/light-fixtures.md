@@ -1,6 +1,7 @@
 # Light fixtures and DMX nodes: hardware reference
 
-DMX channel maps and specifications for the fixtures and Art-Net nodes on the bench, read from their manuals so a light preset can be built without re-scraping a PDF. A fixture here has a matching entry in the **LightPresets** library ([drivers](../../moonmodules/light/drivers.md)); the preset is the channel-role layout, and the numbers behind it are below.
+DMX channel maps and specifications for the fixtures and Art-Net nodes on the bench, read from their manuals.
+A fixture profile is built from them without re-reading a PDF. A fixture here has a matching entry in the **FixtureProfiles** library ([FixtureProfiles](../../moonmodules/light/supporting.md#fixtureprofiles)). The profile is the channel-role layout, and the numbers behind it are below.
 
 ## SHEHDS Mini LED Moving Head 10W RGBW
 
@@ -24,9 +25,9 @@ That is a DIFFERENT model: this one is 11/13 channels with a plain linear dimmer
 | DMX modes | 11 or 13 channels |
 | Display | `d001` address (001-512), `CH11` mode, `Au01` auto, `Snon` sound, `rPAN`/`rTIL` axis reverse |
 
-### 11-channel mode (the MoonLight preset)
+### 11-channel mode (the MoonLight profile)
 
-| CH | Value | Function | Preset role |
+| CH | Value | Function | Profile role |
 |---|---|---|---|
 | 1 | 0-255 | X-axis (pan), move | `Pan` |
 | 2 | 0-255 | X-axis fine tuning | (none) |

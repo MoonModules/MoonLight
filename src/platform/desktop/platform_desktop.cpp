@@ -1609,11 +1609,16 @@ void ethGetIPv4(uint8_t out[4]) MM_NONBLOCKING {
 // Test seam: no radio here, so the init reports none unless a test fakes one to drive the waiting path.
 static std::atomic<bool> testWifiStaAvailable{false};
 void setTestWifiStaAvailable(bool available) { testWifiStaAvailable.store(available, std::memory_order_relaxed); }
-bool wifiStaInit(const char* /*ssid*/, const char* /*password*/) {
+static char testLastStaSsid_[33] = {};
+const char* testLastStaSsid() { return testLastStaSsid_; }
+bool wifiStaInit(const char* ssid, const char* /*password*/) {
+    std::snprintf(testLastStaSsid_, sizeof(testLastStaSsid_), "%s", ssid ? ssid : "");
     return testWifiStaAvailable.load(std::memory_order_relaxed);
 }
-bool wifiStaConnected() MM_NONBLOCKING { return false; }
-void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING { out[0] = out[1] = out[2] = out[3] = 0; }
+static uint8_t testStaIp_[4] = {};
+void setTestWifiStaIPv4(const uint8_t* ip) { for (int i = 0; i < 4; i++) testStaIp_[i] = ip ? ip[i] : 0; }
+bool wifiStaConnected() MM_NONBLOCKING { return testStaIp_[0] || testStaIp_[1] || testStaIp_[2] || testStaIp_[3]; }
+void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING { for (int i = 0; i < 4; i++) out[i] = testStaIp_[i]; }
 // Addressing is managed by the system here, so the setters reach only the test seams: a per-interface counter, and the faked cable's address.
 static std::atomic<uint32_t> testStaticApplies[2] = {};   // indexed by NetIface
 void netSetStaticIPv4(NetIface iface, const uint8_t ip[4], const uint8_t[4],
@@ -1628,13 +1633,51 @@ void netSetDhcp(NetIface /*iface*/) {}
 void setHostname(const char* /*name*/) {}   // no DHCP client on desktop
 void wifiStaStop() {}
 int wifiStaRssi() { return 0; }
+// The scan and the join outcome are test seams here, the desktop having no radio of its own.
+static WifiNetwork testScan_[16] = {};
+static int testScanCount_ = 0;
+static bool testScanStarted_ = false;
+void setTestWifiScan(const WifiNetwork* networks, int count) {
+    testScanCount_ = count < 0 ? -1 : 0;
+    for (int i = 0; i < count && i < 16; i++) testScan_[testScanCount_++] = networks[i];
+}
+bool wifiScanStart() { testScanStarted_ = true; return true; }
+int wifiScanResults(WifiNetwork* out, int max) {
+    if (!testScanStarted_ || testScanCount_ < 0) return -1;   // not started, or a scan that never finishes
+    testScanStarted_ = false;
+    int n = 0;
+    for (; n < testScanCount_ && n < max; n++) out[n] = testScan_[n];
+    return n;
+}
+static WifiFailure testWifiFailure_ = WifiFailure::None;
+void setTestWifiFailure(WifiFailure why) { testWifiFailure_ = why; }
+WifiFailure wifiStaLastFailure() { return testWifiFailure_; }
 void wifiStaBssid(uint8_t out[6]) { std::memset(out, 0, 6); }
 int wifiStaChannel() { return 0; }
 
-bool wifiApInit(const char* /*apName*/, const char* /*ip*/) { return false; }   // no AP on a host
-bool wifiApConnected() { return false; }
-void wifiApStop() {}
-uint32_t wifiApClientCount() { return 0; }
+// No access point on a host: a test seam stands in, keeping copies of what it was given.
+static bool testApAvailable_ = false;
+static bool testApUp_ = false;
+static uint32_t testApClients_ = 0;
+void setTestWifiApClients(uint32_t n) { testApClients_ = n; }
+static char testApName_[33] = {}, testApPassword_[64] = {};
+static WifiApConfig testApConfig_{testApName_, "", testApPassword_, 0, false};
+void setTestWifiApAvailable(bool available) {
+    testApAvailable_ = available;
+    if (!available) { testApUp_ = false; testApClients_ = 0; }
+}
+const WifiApConfig& testLastApConfig() { return testApConfig_; }
+bool wifiApInit(const WifiApConfig& cfg) {
+    std::snprintf(testApName_, sizeof(testApName_), "%s", cfg.name ? cfg.name : "");
+    std::snprintf(testApPassword_, sizeof(testApPassword_), "%s", cfg.password ? cfg.password : "");
+    testApConfig_.channel = cfg.channel;
+    testApConfig_.hidden = cfg.hidden;
+    testApUp_ = testApAvailable_;
+    return testApUp_;
+}
+bool wifiApConnected() { return testApUp_; }
+void wifiApStop() { testApUp_ = false; }
+uint32_t wifiApClientCount() { return testApUp_ ? testApClients_ : 0; }
 
 // Host sockets work whatever the link predicates above say, and there is no initialization race, so this is always safe.
 bool networkReady() { return true; }
@@ -1680,13 +1723,23 @@ bool otaWriteStream(FsWriteSrc /*src*/, void* /*user*/, size_t /*contentLen*/,
     return false;
 }
 
-// No partitions on desktop: there is no recovery image and nothing to boot into.
-bool otaHasMoonBase() { return false; }
+// No partitions on desktop: there is no recovery image and nothing to boot into, unless a host test gives it one to read.
+static const char* testMoonBaseVersion_ = nullptr;
+static const char* testMoonBaseBuilt_ = nullptr;
+void setTestMoonBase(const char* version, const char* built) { testMoonBaseVersion_ = version; testMoonBaseBuilt_ = built; }
+bool otaHasMoonBase() { return testMoonBaseVersion_ != nullptr; }
 bool otaBootMoonBase() { return false; }
 bool otaRunningMoonBase() { return false; }
-// No factory partition off-device, so nothing to read a version from.
-bool otaMoonBaseVersion(char*, size_t) { return false; }
-bool otaMoonBaseBuild(char*, size_t) { return false; }
+bool otaMoonBaseVersion(char* out, size_t len) {
+    if (!testMoonBaseVersion_ || !out || len == 0) return false;
+    std::snprintf(out, len, "%s", testMoonBaseVersion_);
+    return out[0] != 0;
+}
+bool otaMoonBaseBuild(char* out, size_t len) {
+    if (!testMoonBaseBuilt_ || !out || len == 0) return false;
+    std::snprintf(out, len, "%s", testMoonBaseBuilt_);
+    return out[0] != 0;
+}
 bool otaMoonBaseSize(uint32_t*, uint32_t*) { return false; }
 // No factory partition to install into off-device.
 bool otaFetchMoonBaseUrl(const char*, char* statusBuf, size_t statusBufLen,
@@ -1854,7 +1907,7 @@ bool UdpSocket::open() {
 static std::atomic<bool> testBindFails{false};
 void setTestBindFails(bool fail) { testBindFails.store(fail, std::memory_order_relaxed); }
 
-bool UdpSocket::bind(uint16_t port) {
+bool UdpSocket::bind(uint16_t port, const uint8_t localIp[4]) {
     if (fd_ < 0) return false;
     if (testBindFails.load(std::memory_order_relaxed)) return false;
     // The address-reuse option means opposite things per platform: @xref{address-reuse-means-opposite-things|the split, and what a test must do instead}.
@@ -1866,13 +1919,14 @@ bool UdpSocket::bind(uint16_t port) {
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    if (localIp) std::memcpy(&addr.sin_addr.s_addr, localIp, 4);   // octets are network order
+    else addr.sin_addr.s_addr = htonl(INADDR_ANY);
     if (::bind(sock(fd_), reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) != 0) return false;
     // Non-blocking so the render loop's drain never stalls waiting for a packet.
     return make_nonblocking(fd_) == 0;
 }
 
-int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4]) {
+int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4], uint16_t* srcPort) {
     if (fd_ < 0) return -1;
     sockaddr_in src{};
     socklen_t srcLen = sizeof(src);
@@ -1881,12 +1935,18 @@ int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4]) {
     // 0-byte datagrams and would-block both mean "nothing usable pending".
     if (n <= 0) return -1;
     if (srcIp) std::memcpy(srcIp, &src.sin_addr.s_addr, 4);   // network order = octets
+    if (srcPort) *srcPort = ntohs(src.sin_port);
     return static_cast<int>(n);
 }
+
+// Test override forcing a multicast join to fail, since a test cannot take the host's network away.
+static std::atomic<bool> testJoinFails{false};
+void setTestJoinFails(bool fail) { testJoinFails.store(fail, std::memory_order_relaxed); }
 
 // Join a multicast group so the bound socket receives its datagrams; letting the stack pick the interface is what a single-homed device wants.
 bool UdpSocket::joinMulticast(const char* group) {
     if (fd_ < 0 || !group) return false;
+    if (testJoinFails.load(std::memory_order_relaxed)) return false;
     ip_mreq mreq{};
     if (::inet_pton(AF_INET, group, &mreq.imr_multiaddr) != 1) return false;
     mreq.imr_interface.s_addr = htonl(INADDR_ANY);
@@ -1931,17 +1991,19 @@ int TcpConnection::read(uint8_t* buf, size_t maxLen) {
     return 0; // error → treat as closed
 }
 
-// getpeername rather than a field captured at accept: an earlier copy outlives a reconnect.
-bool TcpConnection::peerIPv4(uint8_t out[4]) const {
-    if (fd_ < 0 || !out) return false;
+// getpeername and getsockname rather than a field captured at accept: an earlier copy outlives a reconnect.
+static bool socketIPv4(int fd, bool local, uint8_t out[4]) {
+    if (fd < 0 || !out) return false;
     sockaddr_in addr{};
     socklen_t len = sizeof(addr);
 #ifdef _WIN32
-    if (::getpeername(sock(fd_), reinterpret_cast<sockaddr*>(&addr), &len) != 0) return false;
+    const auto s = sock(fd);
 #else
-    if (::getpeername(fd_, reinterpret_cast<sockaddr*>(&addr), &len) != 0) return false;
+    const int s = fd;
 #endif
-    if (addr.sin_family != AF_INET) return false;
+    const int rc = local ? ::getsockname(s, reinterpret_cast<sockaddr*>(&addr), &len)
+                         : ::getpeername(s, reinterpret_cast<sockaddr*>(&addr), &len);
+    if (rc != 0 || addr.sin_family != AF_INET) return false;
     const uint32_t ip = ntohl(addr.sin_addr.s_addr);
     out[0] = static_cast<uint8_t>(ip >> 24);
     out[1] = static_cast<uint8_t>(ip >> 16);
@@ -1949,6 +2011,8 @@ bool TcpConnection::peerIPv4(uint8_t out[4]) const {
     out[3] = static_cast<uint8_t>(ip);
     return true;
 }
+bool TcpConnection::peerIPv4(uint8_t out[4]) const { return socketIPv4(fd_, false, out); }
+bool TcpConnection::localIPv4(uint8_t out[4]) const { return socketIPv4(fd_, true, out); }
 
 bool TcpConnection::write(const uint8_t* data, size_t len) {
     if (fd_ < 0) return false;

@@ -888,7 +888,7 @@ An oscilloscope waveform scrolls across the grid with a fading trail; six select
 
 - `bpm`: travel speed (phase advance per minute).
 - `fade`: trail fade per frame (0 = instant clear, 255 = long tail).
-- `type`: waveform shape: sawtooth, triangle, sine, square, sin3 or noise.
+- `waveform`: sawtooth, triangle, sine, square, sin3 or noise.
 
 Origin: MoonLight · by Ewoud Wijma · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
 

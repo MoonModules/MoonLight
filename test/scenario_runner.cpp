@@ -183,6 +183,7 @@
 #include "module_types.h"
 
 #include "core/module/Scheduler.h"
+#include "core/module/StateDocument.h"
 #include "core/util/ModuleFactory.h"
 #include "core/module/Control.h"
 #include "core/util/JsonSink.h"
@@ -227,6 +228,7 @@ struct JsonVal {
     bool boolean = false;
     std::map<std::string, JsonVal> obj;
     std::vector<JsonVal> arr;
+    std::string raw;   ///< an object's text as written, for a step that needs its key order, which `obj` sorts away
 
     bool has(const char* key) const { return obj.count(key) > 0; }
     const JsonVal& operator[](const char* key) const {
@@ -320,6 +322,7 @@ struct JsonParser {
     }
 
     JsonVal parseObject() {
+        const char* start = p;
         p++; // skip {
         JsonVal v; v.type = JsonVal::Object;
         skipWs();
@@ -331,6 +334,7 @@ struct JsonParser {
             if (*p == ',') { p++; skipWs(); }
         }
         if (*p == '}') p++;
+        v.raw.assign(start, static_cast<size_t>(p - start));
         return v;
     }
 
@@ -419,6 +423,12 @@ struct ScenarioContext {
     mm::Scheduler scheduler;
     std::map<std::string, mm::MoonModule*> modules;
 
+    // A scenario id, or a module's name when a state document created it and no step named it.
+    mm::MoonModule* byId(const char* id) {
+        auto it = modules.find(id);
+        return it != modules.end() ? it->second : scheduler.firstByName(id);
+    }
+
     // Modules are heap-allocated by the factory; Scheduler::release owns and deletes them.
     mm::MoonModule* createModule(const char* type) {
         return mm::ModuleFactory::create(type);
@@ -492,6 +502,48 @@ struct ScenarioContext {
     }
 };
 
+/// A `list_row` step's list and the row its `match` names, or why there is none.
+struct ListStep {
+    mm::ListSource* source = nullptr;
+    const char* why = "";
+    bool found = false;
+    uint32_t id = 0;
+};
+
+/// Resolve a step's `id` and `key` to an editable list, as the list API does, and find the row whose fields equal every `match` field.
+static ListStep listStep(ScenarioContext& ctx, const JsonVal& step) {
+    ListStep ls;
+    mm::MoonModule* mod = ctx.byId(step["id"].c_str());
+    if (!mod) { ls.why = "no such module"; return ls; }
+    auto& cs = mod->controls();
+    for (uint8_t i = 0; i < cs.count() && !ls.source; i++)
+        if (cs[i].type == mm::ControlType::List && step["key"].str == cs[i].name) ls.source = static_cast<mm::ListSource*>(cs[i].ptr);
+    if (!ls.source || !ls.source->isEditableList()) { ls.source = nullptr; ls.why = "no editable list of that name"; return ls; }
+    for (uint8_t r = 0; r < ls.source->listRowCount() && !ls.found; r++) {
+        mm::JsonSink sink;
+        ls.source->writeListRow(sink, r);
+        const JsonVal row = parseJson(std::string(sink.data(), sink.size()));
+        bool same = true;
+        for (auto& [k, v] : step["match"].obj) same = same && asWritten(row[k.c_str()]) == asWritten(v);
+        if (same) { ls.found = true; ls.id = static_cast<uint32_t>(row["id"].num); }
+    }
+    return ls;
+}
+
+/// The body a list API field write carries, `{"field":F,"value":V}`, from a step's value.
+static std::string fieldBody(const std::string& field, const JsonVal& value) {
+    mm::JsonSink sink;
+    sink.append("{\"field\":");
+    sink.writeJsonString(field.c_str());
+    sink.append(",\"value\":");
+    if (value.type == JsonVal::Object) sink.append(value.raw.c_str());
+    else if (value.type == JsonVal::String) sink.writeJsonString(value.c_str());
+    else if (value.type == JsonVal::Null) sink.append("\"\"");
+    else sink.append(asWritten(value).c_str());
+    sink.append("}");
+    return std::string(sink.data(), sink.size());
+}
+
 static constexpr int WARMUP_FRAMES = 10;
 
 /// How long a measurement runs, in the wall clock the effects read, long enough to cover one whole interval of the slowest shipped default: @xref{what-a-measurement-covers}.
@@ -551,11 +603,11 @@ static int runScenario(const char* path) {
     if (mode == "mutate") {
         // In-process replays the fixture before the scenario's actual steps: @xref{the-construct-and-mutate-modes}.
         if (!scenario.has("fixture") || scenario["fixture"].arr.empty()) {
-            std::printf("  SKIP (mutate scenario with no fixture — runs live only)\n");
+            std::printf("  SKIP (mutate scenario with no fixture: runs live only)\n");
             return kSkipped;
         }
     } else if (mode != "construct") {
-        std::printf("  FAIL — unknown mode: %s (expected construct or mutate)\n", mode.c_str());
+        std::printf("  FAIL: unknown mode: %s (expected construct or mutate)\n", mode.c_str());
         return 1;
     }
 
@@ -642,7 +694,7 @@ static int runScenario(const char* path) {
                     std::printf("  SKIP  %s (optional, type %s unavailable here)\n", name, type);
                     continue;
                 }
-                std::printf("  ADD   %s — unknown type: %s\n", name, type);
+                std::printf("  ADD   %s: unknown type: %s\n", name, type);
                 result.check(false, name);
                 continue;
             }
@@ -664,35 +716,99 @@ static int runScenario(const char* path) {
             std::printf("  +     %s (%s)\n", id, type);
         } else if (std::strcmp(op, "set_control") == 0) {
             if (!step.has("id") || !step.has("key")) {
-                std::printf("  SET   %s — missing id/key, skipped\n", name);
+                std::printf("  SET   %s: missing id/key, skipped\n", name);
                 continue;
             }
             const char* targetId = step["id"].c_str();
             const char* key = step["key"].c_str();
-            auto* target = ctx.modules.count(targetId) ? ctx.modules[targetId] : nullptr;
+            auto* target = ctx.byId(targetId);
             if (!target) {
-                std::printf("  SET   %s — module %s not found, skipped\n", name, targetId);
+                std::printf("  SET   %s: module %s not found, skipped\n", name, targetId);
                 continue;
             }
             if (!applySetControl(ctx.scheduler, target, key, step["value"])) {
-                std::printf("  SET   %s — control %s.%s not applied\n", name, targetId, key);
+                std::printf("  SET   %s: control %s.%s not applied\n", name, targetId, key);
             } else {
                 std::printf("  SET   %s (%s.%s)\n", name, targetId, key);
             }
+        } else if (std::strcmp(op, "apply_state") == 0) {
+            // A state document through the engine PATCH /api/state runs, from its text as written, since key order is creation order.
+            if (!step.has("document") || step["document"].type != JsonVal::Object) {
+                std::printf("  STATE %s: missing document\n", name);
+                result.check(false, name);
+                continue;
+            }
+            ensureStarted();
+            const mm::StateDocumentResult r = mm::applyStateDocument(ctx.scheduler, step["document"].raw.c_str());
+            ctx.scheduler.prepareTree();   // the engine requests one; a step that reads next needs it done
+            // `error` names the failure a step expects, and `at` where; without it the document must apply.
+            const bool wantError = step.has("error");
+            const bool held = wantError ? (!r.ok && step["error"].str == r.error && (!step.has("at") || step["at"].str == r.where))
+                                        : r.ok;
+            std::printf("  STATE %s: %s%s%s\n", name, r.ok ? "applied" : r.error, r.ok ? "" : " at ", r.ok ? "" : r.where);
+            result.check(held, name);
+        } else if (std::strcmp(op, "round_trip_state") == 0) {
+            // Every card written as its document and applied back as one, as GET /api/modules/<name>/document then PATCH /api/state do.
+            ensureStarted();
+            mm::JsonSink whole;
+            whole.append("{");
+            uint8_t cards = 0;
+            for (uint8_t m = 0; m < ctx.scheduler.moduleCount(); m++) {
+                mm::MoonModule* top = ctx.scheduler.module(m);
+                if (!top || !top->appearsInUi()) continue;
+                if (cards++) whole.append(",");
+                mm::writeStateMember(whole, *top);
+            }
+            whole.append("}");
+            const mm::StateDocumentResult r = mm::applyStateDocument(ctx.scheduler, whole.data());
+            ctx.scheduler.prepareTree();
+            std::printf("  STATE %s: %u cards, %zu bytes, %s%s%s\n", name, static_cast<unsigned>(cards), whole.size(),
+                        r.ok ? "applied" : r.error, r.ok ? "" : " at ", r.ok ? "" : r.where);
+            result.check(r.ok && !whole.overflowed(), name);
+        } else if (std::strcmp(op, "list_row") == 0) {
+            // A list's rows as the list API reaches them: `add` a row, or find one by `match` and write a `field`, `delete` it, or only expect it.
+            ensureStarted();
+            ListStep ls = listStep(ctx, step);
+            if (!ls.source) {
+                std::printf("  ROW   %s: %s\n", name, ls.why);
+                result.check(false, name);
+                continue;
+            }
+            bool held = true;
+            if (step.has("add")) {
+                uint32_t id = 0;
+                held = ls.source->addListRow(id);
+                for (auto& [field, value] : step["add"].obj)
+                    held = held && ls.source->setListRowField(id, field.c_str(), fieldBody(field, value).c_str());
+                if (step.has("to")) held = held && ls.source->moveListRow(id, static_cast<uint8_t>(step["to"].asInt()));
+                std::printf("  ROW   %s: %s\n", name, held ? "added" : "add refused");
+            } else if (!ls.found) {
+                held = step.has("optional") && step["optional"].boolean;
+                std::printf("  ROW   %s: no such row%s\n", name, held ? ", skipped (optional)" : "");
+            } else if (step.has("delete") && step["delete"].boolean) {
+                held = ls.source->deleteListRow(ls.id);
+                std::printf("  ROW   %s: %s\n", name, held ? "deleted" : "delete refused");
+            } else if (step.has("field")) {
+                held = ls.source->setListRowField(ls.id, step["field"].c_str(), fieldBody(step["field"].str, step["value"]).c_str());
+                std::printf("  ROW   %s: %s %s\n", name, step["field"].c_str(), held ? "set" : "refused");
+            } else {
+                std::printf("  ROW   %s: present\n", name);
+            }
+            result.check(held, name);
         } else if (std::strcmp(op, "reboot") == 0) {
             // The scheduler IS the process here, so a restart belongs to the live tier and says so rather than pretending.
-            std::printf("  REBOOT %s — skipped (no process to restart in-process)\n", name);
+            std::printf("  REBOOT %s: skipped (no process to restart in-process)\n", name);
         } else if (step.has("optional") && step["optional"].boolean
                    && std::strcmp(op, "add_module") != 0 && std::strcmp(op, "set_control") != 0
                    && std::strcmp(op, "measure") != 0 && std::strcmp(op, "remove_module") != 0
                    && std::strcmp(op, "delete_module") != 0) {
             // `optional` is honoured by the ops above and nowhere else: @xref{why-an-unknown-module-type-fails}.
-            std::printf("  %s %s — `optional` does nothing on this op\n", op, name);
+            std::printf("  %s %s: `optional` does nothing on this op\n", op, name);
             result.check(false, name);
         } else if (std::strcmp(op, "expect_file") == 0) {
             // Read a file back, the only way to prove a write reached the filesystem rather than a cache.
             if (!step.has("path")) {
-                std::printf("  EXPECT %s — missing path\n", name);
+                std::printf("  EXPECT %s: missing path\n", name);
                 result.check(false, name);
                 continue;
             }
@@ -700,7 +816,7 @@ static int runScenario(const char* path) {
             // `contains` matches a substring and `equals` the whole file, since a step that meant one and got the other would pass on a file it never described.
             const bool exact = step.has("equals");
             if (!exact && !step.has("contains")) {
-                std::printf("  EXPECT %s — needs `contains` or `equals`\n", filePath);
+                std::printf("  EXPECT %s: needs `contains` or `equals`\n", filePath);
                 result.check(false, name);
                 continue;
             }
@@ -711,7 +827,7 @@ static int runScenario(const char* path) {
             const std::string have(buf, got > 0 ? static_cast<size_t>(got) : 0);
             // A truncated read cannot answer `equals`, which is about the whole file, so it fails as unevaluable rather than comparing a prefix.
             if (got >= static_cast<int>(sizeof(buf) - 1) && exact) {
-                std::printf("  EXPECT %s — file exceeds %u bytes, so `equals` cannot be evaluated\n",
+                std::printf("  EXPECT %s: file exceeds %u bytes, so `equals` cannot be evaluated\n",
                             filePath, static_cast<unsigned>(sizeof(buf) - 1));
                 result.check(false, name);
                 continue;
@@ -725,15 +841,15 @@ static int runScenario(const char* path) {
             // The only op that fails on a VALUE rather than a timing contract, and `not_equals` is its negation: @xref{what-a-green-run-is-allowed-to-mean}.
             const bool negated = !step.has("equals") && step.has("not_equals");
             if (!step.has("id") || !step.has("key") || (!step.has("equals") && !negated)) {
-                std::printf("  EXPECT %s — missing id/key/equals\n", name);
+                std::printf("  EXPECT %s: missing id/key/equals\n", name);
                 result.check(false, name);
                 continue;
             }
             const char* targetId = step["id"].c_str();
             const char* key = step["key"].c_str();
-            auto* target = ctx.modules.count(targetId) ? ctx.modules[targetId] : nullptr;
+            auto* target = ctx.byId(targetId);
             if (!target) {
-                std::printf("  EXPECT %s — module %s not found\n", name, targetId);
+                std::printf("  EXPECT %s: module %s not found\n", name, targetId);
                 result.check(false, name);
                 continue;
             }
@@ -742,7 +858,7 @@ static int runScenario(const char* path) {
                 if (std::strcmp(target->controls()[i].name, key) == 0) { found = &target->controls()[i]; break; }
             }
             if (!found) {
-                std::printf("  EXPECT %s — %s has no control %s\n", name, targetId, key);
+                std::printf("  EXPECT %s: %s has no control %s\n", name, targetId, key);
                 result.check(false, name);
                 continue;
             }
@@ -765,13 +881,13 @@ static int runScenario(const char* path) {
             const bool holds = negated ? !same : same;
             if (holds) std::printf("  EXPECT %s (%s.%s %s %s)\n", name, targetId, key,
                                    negated ? "!=" : "==", negated ? want.c_str() : actual);
-            else       std::printf("  EXPECT %s — %s.%s is \"%s\", expected %s\"%s\"\n",
+            else       std::printf("  EXPECT %s: %s.%s is \"%s\", expected %s\"%s\"\n",
                                    name, targetId, key, actual, negated ? "not " : "", want.c_str());
             result.check(holds, name);
         } else if (std::strcmp(op, "write_file") == 0) {
             // Stage a file the way the UI's editor does, a malformed step being a failed scenario: @xref{why-write-file-exists}.
             if (!step.has("path") || !step.has("value")) {
-                std::printf("  WRITE %s — missing path/value\n", name);
+                std::printf("  WRITE %s: missing path/value\n", name);
                 result.check(false, name);
                 continue;
             }
@@ -789,16 +905,32 @@ static int runScenario(const char* path) {
             if (wrote) {
                 std::printf("  WRITE %s (%s, %zu bytes)\n", name, filePath, body.size());
             } else {
-                std::printf("  WRITE %s — write to %s FAILED\n", name, filePath);
+                std::printf("  WRITE %s: write to %s FAILED\n", name, filePath);
             }
             result.check(wrote, name);
+            // The live API re-prepares the tree after a file changes, so a module deriving something from it (a scripted palette, a script) sees the change here too.
+            if (wrote && schedulerStarted) { ctx.scheduler.notifyFileChanged(filePath); ctx.scheduler.prepareTree(); }
+        } else if (std::strcmp(op, "delete_file") == 0) {
+            // Remove a file the scenario staged, so a run leaves the device as it found it; one already gone counts as removed.
+            if (!step.has("path")) {
+                std::printf("  DELETE %s: missing path\n", name);
+                result.check(false, name);
+                continue;
+            }
+            const char* filePath = step["path"].c_str();
+            mm::platform::fsRemove(filePath);
+            const bool gone = !mm::platform::fsExists(filePath);
+            if (gone) std::printf("  DELETE %s (%s)\n", name, filePath);
+            else      std::printf("  DELETE %s: %s is still there\n", name, filePath);
+            result.check(gone, name);
+            if (schedulerStarted) { ctx.scheduler.notifyFileChanged(filePath); ctx.scheduler.prepareTree(); }   // as after a write
         } else if (std::strcmp(op, "remove_module") == 0 || std::strcmp(op, "delete_module") == 0) {
             // `remove_module` and `delete_module` are aliases, and both remove a child from its parent: @xref{why-remove-module-and-delete-module-are-aliases}.
             const char* targetId = step["id"].c_str();
-            auto* target = ctx.modules.count(targetId) ? ctx.modules[targetId] : nullptr;
+            auto* target = ctx.byId(targetId);
             if (!target || !target->parent() || !target->userEditable()) {
                 // Mirror the live API: top-level and non-editable submodules stay: @xref{why-remove-module-and-delete-module-are-aliases}.
-                std::printf("  -     %s — %s not found / top-level / not editable, skipped\n", name, targetId);
+                std::printf("  -     %s: %s not found / top-level / not editable, skipped\n", name, targetId);
                 continue;
             }
             auto* parent = target->parent();
@@ -811,9 +943,9 @@ static int runScenario(const char* path) {
         } else if (std::strcmp(op, "clear_children") == 0) {
             // Delete every child of a container, leaving the container itself: @xref{why-clear-children-exists}.
             const char* targetId = step["id"].c_str();
-            auto* container = ctx.modules.count(targetId) ? ctx.modules[targetId] : nullptr;
+            auto* container = ctx.byId(targetId);
             if (!container) {
-                std::printf("  clr     %s — container %s not found, skipped\n", name, targetId);
+                std::printf("  clr     %s: container %s not found, skipped\n", name, targetId);
                 continue;
             }
             int cleared = 0;
@@ -834,10 +966,10 @@ static int runScenario(const char* path) {
             // Replace a child with a fresh module of another type at the same slot: @xref{why-remove-module-and-delete-module-are-aliases}.
             const char* targetId = step["id"].c_str();
             const char* newType = step["type"].c_str();
-            auto* target = ctx.modules.count(targetId) ? ctx.modules[targetId] : nullptr;
+            auto* target = ctx.byId(targetId);
             if (!target || !target->parent() || !target->userEditable()) {
                 // Mirror the live API: a top-level or non-editable submodule stays: @xref{why-remove-module-and-delete-module-are-aliases}.
-                std::printf("  ~     %s — %s not found / top-level / not editable, skipped\n", name, targetId);
+                std::printf("  ~     %s: %s not found / top-level / not editable, skipped\n", name, targetId);
                 continue;
             }
             auto* parent = target->parent();
@@ -848,7 +980,7 @@ static int runScenario(const char* path) {
             auto* fresh = ctx.createModule(newType);
             if (!found || !fresh) {
                 if (fresh) mm::Scheduler::deleteTree(fresh);
-                std::printf("  ~     %s — slot not found or unknown type %s, skipped\n", name, newType);
+                std::printf("  ~     %s: slot not found or unknown type %s, skipped\n", name, newType);
                 continue;
             }
             fresh->setName(targetId);
@@ -884,7 +1016,7 @@ static int runScenario(const char* path) {
                     // min_pct needs a live baseline, so log a clear skip: @xref{why-a-measure-step-has-two-spellings}.
                     double pct = step["bounds"]["fps"]["min_pct"].num;
                     std::printf("  WARN  %s: bounds.fps.min_pct=%g requires a live "
-                                "baseline; in-process runner cannot enforce — skipped\n",
+                                "baseline; in-process runner cannot enforce: skipped\n",
                                 name, pct);
                     fpsBound = 0;
                 }
@@ -1043,6 +1175,8 @@ static int runScenario(const char* path) {
     auto* drivers = static_cast<mm::Drivers*>(
         ctx.modules.count("Drivers") ? ctx.modules["Drivers"] : nullptr);
     if (layer) {
+        // One frame first: a last step that prepared the tree, as a structural one does, leaves the buffer freshly allocated and empty until the next render.
+        ctx.scheduler.tick();
         auto& buf = layer->buffer();
         result.check(buf.data() != nullptr, "buffer allocated");
         result.check(buf.count() > 0, "buffer has lights");
@@ -1084,9 +1218,30 @@ static int runScenario(const char* path) {
 }
 
 // Directory iteration can throw filesystem_error, which escapes main deliberately: @xref{why-a-filesystem-error-escapes-main}. NOLINTNEXTLINE(bugprone-exception-escape)
+/// How many controls a state document cannot address: `type`, `enabled` and a `$` key mean the module itself there, so such a control is dropped from every preset.
+static int checkControlNames() {
+    mm::registerModuleTypes();
+    int bad = 0;
+    for (uint8_t i = 0; i < mm::ModuleFactory::typeCount(); i++) {
+        mm::MoonModule* m = mm::ModuleFactory::create(mm::ModuleFactory::typeName(i));
+        if (!m) continue;
+        m->defineControls();
+        for (uint8_t c = 0; c < m->controls().count(); c++) {
+            const char* n = m->controls()[c].name;
+            if (std::strcmp(n, "type") == 0 || std::strcmp(n, "enabled") == 0 || n[0] == '$') {
+                std::printf("  FAIL  %s has a control named \"%s\", which a state document reads as the module's own\n", mm::ModuleFactory::typeName(i), n);
+                bad++;
+            }
+        }
+        delete m;
+    }
+    return bad;
+}
+
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        // Run all scenarios in the scenarios/ directory tree, recursively: @xref{why-a-filesystem-error-escapes-main}.
+        // Every scenario under scenarios/, after the control-name check only this binary can run, holding every type: @xref{why-a-filesystem-error-escapes-main}.
+        const int badNames = checkControlNames();
         int failed = 0;
         int skipped = 0;
         int total = 0;
@@ -1103,7 +1258,8 @@ int main(int argc, char* argv[]) {
         // Skipped is reported on its own line: a run that tested nothing must not read as a clean pass.
         std::printf("=== %d scenario(s), %d passed, %d failed, %d skipped ===\n",
                     total, total - failed - skipped, failed, skipped);
-        return failed > 0 ? 1 : 0;
+        if (badNames) std::printf("=== %d control name(s) a state document cannot address ===\n", badNames);
+        return (failed > 0 || badNames) ? 1 : 0;
     }
 
     return runScenario(argv[1]);

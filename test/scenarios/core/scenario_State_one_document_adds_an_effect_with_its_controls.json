@@ -1,0 +1,162 @@
+{
+  "name": "scenario_State_one_document_adds_an_effect_with_its_controls",
+  "module": "HttpServerModule",
+  "mode": "mutate",
+  "also": [
+    "Effects",
+    "Layer",
+    "RainbowEffect"
+  ],
+  "description": "A state document sets any part of the device's state in one request: here an effect with its controls, under a layer, where adding it module by module took one request for the module and one per control. A document that names a control the effect lacks is refused with the reason and the place.",
+  "fixture": [
+    {
+      "name": "fix-layouts",
+      "op": "add_module",
+      "id": "Layouts",
+      "type": "Layouts"
+    },
+    {
+      "name": "fix-grid",
+      "op": "add_module",
+      "id": "Grid",
+      "type": "GridLayout",
+      "parent_id": "Layouts",
+      "props": {
+        "width": 16,
+        "height": 16
+      }
+    },
+    {
+      "name": "fix-effects",
+      "op": "add_module",
+      "id": "Effects",
+      "type": "Effects",
+      "props": {
+        "layouts": "Layouts"
+      }
+    },
+    {
+      "name": "fix-layer",
+      "op": "add_module",
+      "id": "Layer",
+      "type": "Layer",
+      "parent_id": "Effects",
+      "props": {
+        "layouts": "Layouts"
+      }
+    },
+    {
+      "name": "fix-drivers",
+      "op": "add_module",
+      "id": "Drivers",
+      "type": "Drivers",
+      "props": {
+        "effects": "Effects"
+      }
+    }
+  ],
+  "steps": [
+    {
+      "name": "one-document",
+      "description": "The effect and its control in one document, as PATCH /api/state takes it.",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "Doc": {
+              "type": "RainbowEffect",
+              "speed": 90
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "it-runs-with-its-control",
+      "op": "expect_control",
+      "id": "Doc",
+      "key": "speed",
+      "equals": "90"
+    },
+    {
+      "name": "measure-it",
+      "op": "measure",
+      "measure": true,
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 1,
+            "p95": 555,
+            "min": 1,
+            "max": 555,
+            "n": 6,
+            "samples": [367, 555, 1, 387, 1, 1]
+          },
+          "last_updated": "2026-10-04"
+        },
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2505,
+            "p95": 2800,
+            "min": 2497,
+            "max": 2800,
+            "n": 3,
+            "samples": [2505, 2800, 2497]
+          },
+          "free_heap": {
+            "p50": 8461547,
+            "p95": 8464223,
+            "min": 8460939,
+            "max": 8464223,
+            "n": 3,
+            "samples": [8461547, 8460939, 8464223]
+          },
+          "max_alloc_block": {
+            "p50": 49152,
+            "p95": 53248,
+            "min": 45056,
+            "max": 53248,
+            "n": 3,
+            "samples": [45056, 53248, 49152]
+          },
+          "last_updated": "2026-10-04"
+        }
+      }
+    },
+    {
+      "name": "a-wrong-control-is-named",
+      "description": "The first failure comes back with where it is, so a client can show the user what to fix.",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "Doc": {
+              "nope": 1
+            }
+          }
+        }
+      },
+      "error": "no such control",
+      "at": "Effects.Layer.Doc.nope"
+    },
+    {
+      "name": "every-card-applies-back",
+      "description": "Every card read back as its document, sent as one: what the device shows applies as it is.",
+      "op": "round_trip_state"
+    }
+  ],
+  "reset": [
+    {
+      "name": "leave-no-effect-behind",
+      "description": "null removes an effect a previous run left behind, so a run starts from the same tree.",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "Doc": null
+          }
+        }
+      }
+    }
+  ]
+}

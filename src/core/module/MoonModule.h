@@ -2,6 +2,7 @@
 
 #include "core/module/Control.h"
 #include "core/util/ScratchBuffer.h"
+#include "core/util/fnv.h"
 #include "platform/platform.h"
 
 #include <cstddef>
@@ -128,14 +129,14 @@ public:
 
     /// Hash the schema across this subtree, excluding values, so a resync fires only on a real change.
     uint32_t schemaSignature() const {
-        uint32_t h = 2166136261u;
-        mixSchema(h);
-        return h;
+        Fnv1a f;
+        mixSchema(f);
+        return f.h;
     }
     /// Mix this node's schema into the running hash, then its children's.
-    void mixSchema(uint32_t& h) const {
-        auto mix = [&h](uint32_t v) { h = (h ^ v) * 16777619u; };
-        auto mixStr = [&mix](const char* s) { for (const char* p = s; p && *p; p++) mix(static_cast<uint8_t>(*p)); mix(0u); };
+    void mixSchema(Fnv1a& f) const {
+        auto mix = [&f](uint32_t v) { f.add(&v, sizeof(v)); };
+        auto mixStr = [&f](const char* s) { if (s) f.add(s, std::strlen(s)); f.add(0); };
         mix(controls_.count());
         for (uint8_t i = 0; i < controls_.count(); i++) {
             const ControlDescriptor& c = controls_[i];
@@ -149,10 +150,10 @@ public:
                 const char* const* opts = reinterpret_cast<const char* const*>(c.aux);
                 for (int32_t o = 0; o < c.max; o++) mixStr(opts[o]);
             } else {
-                mix(static_cast<uint32_t>(c.aux));   // Progress total / other aux — a value change differs
+                mix(static_cast<uint32_t>(c.aux));   // a Progress total or another aux value, so a change differs
             }
         }
-        for (uint8_t i = 0; i < childCount_; i++) children_[i]->mixSchema(h);
+        for (uint8_t i = 0; i < childCount_; i++) children_[i]->mixSchema(f);
     }
 
     /// The schema-changed hook's type, a function pointer so core needs no web-layer include.
@@ -188,6 +189,8 @@ public:
     /// Read the first output light as RGB, or false where this module has no output.
     virtual bool firstOutputRgb(uint8_t /*out*/[3]) const { return false; }
 
+    /// A name's buffer, terminator included: the longest stripped type name with headroom; setName truncates past it.
+    static constexpr uint8_t kNameLen = 16;
     /// This module's human label, which the user may rename.
     const char* name() const { return name_; }
     /// Set the label, truncating it to the buffer.
@@ -277,6 +280,28 @@ public:
 
     /// The roles this module accepts as children, which is what the add-child picker offers.
     virtual const char* acceptsChildRoles() const { return ""; }
+
+    /// Whether a child of this role may go here, read from acceptsChildRoles(); the rule every path that adds a child enforces.
+    bool acceptsRole(ModuleRole childRole) const {
+        const char* csv = acceptsChildRoles();
+        if (!csv || !csv[0]) return false;
+        const char* want = roleName(childRole);
+        const size_t wantLen = std::strlen(want);
+        for (const char* p = csv; *p;) {
+            const char* comma = std::strchr(p, ',');
+            const size_t len = comma ? static_cast<size_t>(comma - p) : std::strlen(p);
+            if (len == wantLen && std::strncmp(p, want, len) == 0) return true;
+            if (!comma) break;
+            p = comma + 1;
+        }
+        return false;
+    }
+
+    /// Whether some controls appear only once prepare has run, as a script's do once it compiles; a state document waits for that prepare to set them.
+    virtual bool declaresControlsAtPrepare() const { return false; }
+
+    /// A file changed through the API or a restore; a module that keeps something read from files updates what concerns it.
+    virtual void onFileChanged(const char* /*path*/) {}
 
     /// Whether the user may delete or replace this module, which a load-bearing child declines.
     virtual bool userEditable() const { return true; }
@@ -443,8 +468,7 @@ protected:
     }
 
 private:
-    // Sized to the longest stripped name with headroom; setName truncates past it.
-    char name_[16] = {};
+    char name_[kNameLen] = {};
     const char* typeName_ = "";  ///< points into flash, never copied per instance
     bool enabled_ = true;
     bool dirty_ = false;

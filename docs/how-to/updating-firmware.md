@@ -31,7 +31,7 @@ What that buys you is the failure case. A power cut in the middle leaves the dev
 
 ## Updating MoonBase itself
 
-The same card installs a newer MoonBase, writing the factory slot while the app runs. If the card marks the carried version outdated, that is the fix, and it needs no cable.
+The same card installs a newer MoonBase, writing the factory slot while the app runs. When the card warns that MoonBase does not match the app, that is the fix, and it needs no cable.
 
 This is the one write with a window where the device holds no recovery image. The app keeps running throughout, so the answer to a failure is to try again.
 
@@ -43,7 +43,7 @@ It means the app did not start, or an update was interrupted. MoonBase serves it
 - **From a file**, installing a `firmware-....bin` you already downloaded.
 - **From a URL**, fetching and installing in one step. Keep it under 255 characters: it crosses into MoonBase through a fixed-size slot, and a longer one is refused rather than truncated.
 
-If the device is not on your network, MoonBase opens its own access point and answers at **4.3.2.1** once you join it.
+If the device is not on your network, MoonBase opens the device's access point, under its name and password, and answers at **4.3.2.1**.
 
 ## Before a risky update
 

@@ -1258,6 +1258,9 @@ def _header_rules(rel: str, text: str):
         prev = lines[j].lstrip() if j >= 0 else ""
         if prev.startswith("///") or "///" in ln:
             continue
+        # A test hook is named `...ForTest`, which gen_api excludes from every page, so a `///` on it has no reader.
+        if _declared_name(st, i).endswith("ForTest") or re.match(r"~\w+ForTest\s*\(", st):
+            continue
         # Header-only, and this is the ONE place that is a detector limit rather than a rule
         # difference. Everything else applies to both kinds of file; "public" here is read from a
         # declaration's SHAPE, which cannot see `namespace {` or a function body, and a `.cpp` is
@@ -1467,6 +1470,8 @@ def _violations():
 
 
 REPORT = ROOT / "docs" / "reference" / "metrics" / "docgen.md"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _ratchet import committed as committed_report, risen as risen_against  # noqa: E402
 
 
 # Which summary page owns a source folder, mirroring the zoom diagram in
@@ -1693,17 +1698,14 @@ def _committed_counts():
     The report is tracked, so the last commit's copy is the number to beat. Read from git rather
     than from the working tree, because the run rewrites the file before the comparison happens.
     """
-    import subprocess
-    rel = REPORT.relative_to(ROOT).as_posix()
-    r = subprocess.run(["git", "show", f"HEAD:{rel}"],
-                       cwd=ROOT, capture_output=True, text=True)
-    if r.returncode != 0:
+    text = committed_report(REPORT)
+    if text is None:
         return None
     counts = {}
     # Only the `## By rule` table: the area and file tables share its column shape, and a row from
     # either would enter the baseline as a rule that can never appear in `now`.
     in_rules = False
-    for line in r.stdout.split("\n"):
+    for line in text.split("\n"):
         if line.startswith("## "):
             in_rules = line.strip() == "## By rule"
         m = re.match(r"^\| (.+?) \| (\d+) \| (\d+) \|$", line.strip())
@@ -1737,15 +1739,13 @@ def _ratchet(found, appendix=None) -> list:
     # and comparing the two key spaces silently compares nothing.
     now = Counter(_rule_label(_rule_name(why)) for key, why in found if not _blocks(key, why))
     now["(total)"] = sum(1 for key, why in found if not _blocks(key, why))
-    # The UNION, not the baseline alone: the report lists only rules the run found, so a rule at
-    # zero is absent from `base` and iterating it let that rule rise silently while the total fell.
-    # A rule the baseline never saw starts at zero, which is what "only shrinks" means for it too.
-    risen = [(rule, base.get(rule, 0), now.get(rule, 0))
-             for rule in sorted((set(base) | set(now)) - {"(appendix lines)"}) if now.get(rule, 0) > base.get(rule, 0)]
-    # Its own line, because warnings that fall while the appendix grows were moved, not cut.
-    if appendix is not None and "(appendix lines)" in base and appendix > base["(appendix lines)"]:
-        risen.append(("(appendix lines)", base["(appendix lines)"], appendix))
-    return risen
+    # The appendix is its own row, because warnings that fall while the appendix grows were moved, not cut; a baseline without the row is a first run for it.
+    base = dict(base)
+    if appendix is not None and "(appendix lines)" in base:
+        now["(appendix lines)"] = appendix
+    else:
+        base.pop("(appendix lines)", None)
+    return risen_against(base, now)
 
 
 def main() -> int:

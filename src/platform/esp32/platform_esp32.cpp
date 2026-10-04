@@ -513,6 +513,8 @@ static void applyHostname(esp_netif_t* netif) {
 // WiFi-only state, absent in the Ethernet-only build. Atomic for the same reason as the eth pair: written by the IDF event loop, read from the render task.
 static std::atomic<bool> wifiStaConnected_{false};
 static bool wifiApActive_ = false;
+// The station side runs, apart from its interface, which lives as long as the driver: IDF's pattern switches sides by mode and never destroys an interface under a running driver.
+static bool wifiStaActive_ = false;
 // Association state, distinct from having an address: a fixed-address station is reachable once associated, so the apply keys off this. Atomic, written by the event handler and read on the caller's thread.
 static std::atomic<bool> wifiStaAssociated_{false};
 // Static addressing for WiFi STA, mirroring the eth pair: DHCP-less networks never fire GOT_IP, so the address is pinned at association (WIFI_EVENT_STA_CONNECTED) and connected is marked there. Same publish contract as ethStatic_.
@@ -1038,6 +1040,12 @@ static std::atomic<bool> wifiStaStopping_{false};
 // How many stations are associated with our SoftAP right now. Written from IDF's event-loop task, read from the render task, so it is atomic.
 static std::atomic<uint32_t> apClients_{0};
 
+// The scan's state, set by the scan-done event and read from the render task's slow tick.
+static std::atomic<bool> scanRunning_{false};
+static std::atomic<bool> scanDone_{false};
+// Why the last join failed, from the disconnect reason, cleared when a join starts.
+static std::atomic<uint8_t> staFailure_{0};
+
 // WiFi event handler
 static void wifiEventHandler(void* /*arg*/, esp_event_base_t base,
                              int32_t id, void* data) {
@@ -1048,9 +1056,28 @@ static void wifiEventHandler(void* /*arg*/, esp_event_base_t base,
             if (staStatic_.load(std::memory_order_acquire)) {
                 netSetStaticIPv4(NetIface::Sta, staStaticIp_, staStaticGw_, staStaticMask_, staStaticDns_);
             }
+        } else if (id == WIFI_EVENT_SCAN_DONE) {
+            scanRunning_.store(false, std::memory_order_relaxed);
+            scanDone_.store(true, std::memory_order_release);
         } else if (id == WIFI_EVENT_STA_DISCONNECTED) {
             wifiStaConnected_.store(false, std::memory_order_relaxed);
             wifiStaAssociated_.store(false, std::memory_order_relaxed);
+            {
+                const auto* dev = static_cast<wifi_event_sta_disconnected_t*>(data);
+                const uint8_t r = dev ? dev->reason : 0;
+                // The device left on purpose: no failure and no reconnect, even when this lands after the next join began.
+                if (r == WIFI_REASON_ASSOC_LEAVE) {
+                    ESP_LOGI(NET_TAG, "WiFi STA disconnected");
+                    return;
+                }
+                // No network matching the security offered is what a missing or wrong-kind password reads as.
+                const WifiFailure f = (r == WIFI_REASON_AUTH_FAIL || r == WIFI_REASON_HANDSHAKE_TIMEOUT
+                                       || r == WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT
+                                       || r == WIFI_REASON_NO_AP_FOUND_W_COMPATIBLE_SECURITY
+                                       || r == WIFI_REASON_NO_AP_FOUND_IN_AUTHMODE_THRESHOLD) ? WifiFailure::WrongPassword
+                                    : (r == WIFI_REASON_NO_AP_FOUND) ? WifiFailure::NotFound : WifiFailure::Other;
+                staFailure_.store(static_cast<uint8_t>(f), std::memory_order_relaxed);
+            }
             // The reconnect is ours to make, and unbounded: @xref{the-reconnect-is-ours-to-make-and-unbounded|why}.
             if (!wifiStaStopping_.load(std::memory_order_relaxed)) {
                 // Immediately, and without sleeping to pace it: the pacing is free and blocking here would stall the whole stack. The counter is diagnostic and does not gate the retry.
@@ -1064,6 +1091,7 @@ static void wifiEventHandler(void* /*arg*/, esp_event_base_t base,
                   : why == WIFI_REASON_AUTH_FAIL          ? " (auth failed: wrong password)"
                   : why == WIFI_REASON_HANDSHAKE_TIMEOUT  ? " (handshake timeout: usually a wrong password)"
                   : why == WIFI_REASON_BEACON_TIMEOUT     ? " (beacon timeout: out of range or the AP went away)"
+                  : why == WIFI_REASON_NO_AP_FOUND_W_COMPATIBLE_SECURITY ? " (no AP with matching security: a missing or wrong password)"
                   : "";
                 ESP_LOGI(NET_TAG, "WiFi STA disconnected, reason %u%s, reconnecting (attempt %u)",
                          (unsigned)why, whyText, (unsigned)attempts);
@@ -1072,7 +1100,7 @@ static void wifiEventHandler(void* /*arg*/, esp_event_base_t base,
                 ESP_LOGI(NET_TAG, "WiFi STA disconnected");
             }
         } else if (id == WIFI_EVENT_AP_STACONNECTED) {
-            // Track the count so the AP-fallback's periodic STA retry can hold off while somebody is actually using the portal: re-initializing STA switches the radio to WIFI_MODE_STA, which drops the AP. See NetworkModule's State::AP retry.
+            // Counted so the fallback's periodic station retry holds off while somebody uses the access point: a join moves the radio to the router's channel, which knocks its clients off.
             apClients_.fetch_add(1, std::memory_order_relaxed);
             ESP_LOGI(NET_TAG, "WiFi AP client connected");
         } else if (id == WIFI_EVENT_AP_STADISCONNECTED) {
@@ -1125,14 +1153,40 @@ static bool ensureWifiInit() {
     return true;
 }
 
+// The station's interface, created once and from one place: Improv's task scans as well as the render thread, and two creations would attach twice and abort.
+static std::mutex staNetifMutex_;
+static void ensureStaNetif() {
+    std::lock_guard<std::mutex> lock(staNetifMutex_);
+    if (!staNetif_) staNetif_ = esp_netif_create_default_wifi_sta();
+}
+
+// Neither side runs any more: stop the driver and free both interfaces, unregistering the handlers first so a later init does not register them twice.
+static void wifiRadioDown() {
+    esp_wifi_stop();
+    if (wifiInitDone_) {
+        esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifiEventHandler);
+        esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifiEventHandler);
+    }
+    esp_wifi_deinit();
+    if (staNetif_) { esp_netif_destroy_default_wifi(staNetif_); staNetif_ = nullptr; }
+    if (apNetif_)  { esp_netif_destroy_default_wifi(apNetif_);  apNetif_ = nullptr; }
+    wifiInitDone_ = false;
+    wifiStaStopping_.store(false, std::memory_order_relaxed);
+    scanRunning_.store(false, std::memory_order_relaxed);   // a scan in flight ends with the driver
+    scanDone_.store(false, std::memory_order_relaxed);
+}
+
 bool wifiStaInit(const char* ssid, const char* password) {
     if (!ssid || ssid[0] == 0) return false;
 
-    // Guard against repeated init leaking the previous netif (the cascade can call wifiStaInit again after an Ethernet drop without a prior stop). Stop before ensureWifiInit(), wifiStaStop() deinits the WiFi driver.
-    if (staNetif_) wifiStaStop();
+    // A join while joined restarts the station; stopping first, since alone it takes the driver down.
+    if (wifiStaActive_) wifiStaStop();
     if (!ensureWifiInit()) return false;   // out-of-memory / event register failure
 
-    staNetif_ = esp_netif_create_default_wifi_sta();
+    ensureStaNetif();
+    wifiStaActive_ = true;
+    staFailure_.store(static_cast<uint8_t>(WifiFailure::None), std::memory_order_relaxed);
+    wifiStaStopping_.store(false, std::memory_order_relaxed);   // a station stopped beside the access point left it set
 
     wifi_config_t wifi_config = {};
     std::strncpy(reinterpret_cast<char*>(wifi_config.sta.ssid), ssid, sizeof(wifi_config.sta.ssid) - 1);
@@ -1142,7 +1196,8 @@ bool wifiStaInit(const char* ssid, const char* password) {
 
     // From here every call can fail for transient runtime reasons (mode conflict, driver-state mismatch, etc.). Log + clean up + return false so NetworkModule's state machine can fall back rather than panic.
     esp_err_t err;
-    if ((err = esp_wifi_set_mode(WIFI_MODE_STA)) != ESP_OK) {
+    // Alongside a running access point the radio carries both, so a phone on the access point keeps its page while the station joins.
+    if ((err = esp_wifi_set_mode(wifiApActive_ ? WIFI_MODE_APSTA : WIFI_MODE_STA)) != ESP_OK) {
         ESP_LOGE(NET_TAG, "WiFi STA set_mode failed: %s", esp_err_to_name(err));
         wifiStaStop();
         return false;
@@ -1152,7 +1207,7 @@ bool wifiStaInit(const char* ssid, const char* password) {
         wifiStaStop();
         return false;
     }
-    if ((err = esp_wifi_start()) != ESP_OK) {
+    if (!wifiApActive_ && (err = esp_wifi_start()) != ESP_OK) {   // already started for the access point
         ESP_LOGE(NET_TAG, "WiFi STA start failed: %s", esp_err_to_name(err));
         wifiStaStop();
         return false;
@@ -1185,26 +1240,59 @@ void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING {
 }
 
 void wifiStaStop() {
-    // Tell the event handler this disconnect is deliberate, so it does not answer with a reconnect that would then race esp_wifi_deinit() below.
+    // Tell the event handler this disconnect is deliberate, so it does not answer with a reconnect that would then race the teardown below.
     wifiStaStopping_.store(true, std::memory_order_relaxed);
     esp_wifi_disconnect();
-    esp_wifi_stop();
-    // Unregister event handlers before deinit so subsequent init/stop cycles don't accumulate duplicate registrations. Guard on wifiInitDone_ since ensureWifiInit() bails before the registration step if init failed.
-    if (wifiInitDone_) {
-        esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifiEventHandler);
-        esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifiEventHandler);
-    }
-    esp_wifi_deinit();
-    if (staNetif_) {
-        esp_netif_destroy_default_wifi(staNetif_);
-        staNetif_ = nullptr;
-    }
+    wifiStaActive_ = false;
     wifiStaConnected_.store(false, std::memory_order_relaxed);
     // Association state must clear with the interface: a later netSetStaticIPv4(Sta) keys off this flag, and a stale `true` from a torn-down STA would apply a static IP to nothing.
     wifiStaAssociated_.store(false, std::memory_order_relaxed);
-    wifiInitDone_ = false;
-    wifiStaStopping_.store(false, std::memory_order_relaxed);   // a later wifiStaInit() reconnects normally
+    if (wifiApActive_) {
+        esp_wifi_set_mode(WIFI_MODE_AP);   // the radio keeps serving the access point
+        ESP_LOGI(NET_TAG, "WiFi STA stopped, access point kept");
+        return;
+    }
+    wifiRadioDown();
     ESP_LOGI(NET_TAG, "WiFi STA stopped + deinit");
+}
+
+WifiFailure wifiStaLastFailure() {
+    if (wifiStaConnected_.load(std::memory_order_relaxed)) return WifiFailure::None;
+    return static_cast<WifiFailure>(staFailure_.load(std::memory_order_relaxed));
+}
+
+bool wifiScanStart() {
+    // Scanning needs a station side, which an access point alone gains here, so a phone on it sees the networks in range.
+    if (!wifiInitDone_ || scanRunning_.load(std::memory_order_relaxed)) return false;
+    wifi_mode_t mode = WIFI_MODE_NULL;
+    if (esp_wifi_get_mode(&mode) != ESP_OK) return false;
+    // The station's interface exists before its side starts, or the start event finds none and a later join never brings it up.
+    ensureStaNetif();
+    if (mode == WIFI_MODE_AP && esp_wifi_set_mode(WIFI_MODE_APSTA) != ESP_OK) return false;
+    wifi_scan_config_t cfg = {};
+    scanDone_.store(false, std::memory_order_relaxed);
+    if (esp_wifi_scan_start(&cfg, false) != ESP_OK) return false;   // returns at once; the done event follows
+    scanRunning_.store(true, std::memory_order_relaxed);
+    return true;
+}
+
+int wifiScanResults(WifiNetwork* out, int max) {
+    if (!scanDone_.exchange(false, std::memory_order_acquire)) return -1;
+    uint16_t n = 0;
+    esp_wifi_scan_get_ap_num(&n);
+    if (n > static_cast<uint16_t>(max)) n = static_cast<uint16_t>(max);
+    if (n == 0) { esp_wifi_clear_ap_list(); return 0; }
+    // Freed at once: the records are 80 bytes each and needed only for this copy.
+    auto* records = static_cast<wifi_ap_record_t*>(std::calloc(n, sizeof(wifi_ap_record_t)));
+    if (!records) { esp_wifi_clear_ap_list(); return 0; }
+    esp_wifi_scan_get_ap_records(&n, records);   // the driver returns them strongest first
+    for (uint16_t i = 0; i < n; i++) {
+        std::snprintf(out[i].ssid, sizeof(out[i].ssid), "%s", reinterpret_cast<const char*>(records[i].ssid));
+        out[i].rssi = records[i].rssi;
+        out[i].secured = records[i].authmode != WIFI_AUTH_OPEN;
+    }
+    std::free(records);
+    return n;
 }
 
 int wifiStaRssi() {
@@ -1228,12 +1316,15 @@ int wifiStaChannel() {
     return info.primary;
 }
 
-bool wifiApInit(const char* apName, const char* ip) {
-    // Guard against repeated init leaking the previous AP netif. Stop before ensureWifiInit(), wifiApStop() deinits the WiFi driver.
-    if (apNetif_) wifiApStop();
+bool wifiApInit(const WifiApConfig& ap) {
+    const char* apName = ap.name;
+    const char* ip = ap.ip;
+    // New settings re-open it; stopping first, since alone it takes the driver down.
+    if (wifiApActive_) wifiApStop();
     if (!ensureWifiInit()) return false;   // out-of-memory / event register failure
 
-    apNetif_ = esp_netif_create_default_wifi_ap();
+    if (!apNetif_) apNetif_ = esp_netif_create_default_wifi_ap();
+    wifiApActive_ = true;
 
     // Set static IP for AP
     if (ip && ip[0] != 0) {
@@ -1243,6 +1334,10 @@ bool wifiApInit(const char* apName, const char* ip) {
         ipInfo.gw = ipInfo.ip;
         IP4_ADDR(&ipInfo.netmask, 255, 255, 255, 0);
         esp_netif_set_ip_info(apNetif_, &ipInfo);
+        // RFC 8910's option 114 names the portal, which a newer phone opens without probing; the server keeps the pointer, hence static.
+        static char portalUri[24];
+        std::snprintf(portalUri, sizeof(portalUri), "http://%s/", ip);
+        esp_netif_dhcps_option(apNetif_, ESP_NETIF_OP_SET, ESP_NETIF_CAPTIVEPORTAL_URI, portalUri, std::strlen(portalUri));
         esp_netif_dhcps_start(apNetif_);
     }
 
@@ -1251,12 +1346,21 @@ bool wifiApInit(const char* apName, const char* ip) {
         std::strncpy(reinterpret_cast<char*>(wifi_config.ap.ssid), apName, sizeof(wifi_config.ap.ssid) - 1);
         wifi_config.ap.ssid_len = static_cast<uint8_t>(std::strlen(apName));
     }
-    wifi_config.ap.channel = 1;
+    // While the station is joined the radio follows its channel, so this one applies when the access point runs alone.
+    wifi_config.ap.channel = (ap.channel >= 1 && ap.channel <= 13) ? ap.channel : 1;
     wifi_config.ap.max_connection = 4;
-    wifi_config.ap.authmode = WIFI_AUTH_OPEN;
+    wifi_config.ap.ssid_hidden = ap.hidden ? 1 : 0;
+    // WPA2 asks for eight characters at least, so anything shorter keeps the access point open.
+    const size_t pwLen = ap.password ? std::strlen(ap.password) : 0;
+    if (pwLen >= 8) {
+        std::strncpy(reinterpret_cast<char*>(wifi_config.ap.password), ap.password, sizeof(wifi_config.ap.password) - 1);
+        wifi_config.ap.authmode = WIFI_AUTH_WPA2_PSK;
+    } else {
+        wifi_config.ap.authmode = WIFI_AUTH_OPEN;
+    }
 
     esp_err_t err;
-    if ((err = esp_wifi_set_mode(WIFI_MODE_AP)) != ESP_OK) {
+    if ((err = esp_wifi_set_mode(wifiStaActive_ ? WIFI_MODE_APSTA : WIFI_MODE_AP)) != ESP_OK) {
         ESP_LOGE(NET_TAG, "WiFi AP set_mode failed: %s", esp_err_to_name(err));
         wifiApStop();
         return false;
@@ -1266,13 +1370,12 @@ bool wifiApInit(const char* apName, const char* ip) {
         wifiApStop();
         return false;
     }
-    if ((err = esp_wifi_start()) != ESP_OK) {
+    if (!wifiStaActive_ && (err = esp_wifi_start()) != ESP_OK) {   // already started for the station
         ESP_LOGE(NET_TAG, "WiFi AP start failed: %s", esp_err_to_name(err));
         wifiApStop();
         return false;
     }
 
-    wifiApActive_ = true;
     apClients_.store(0, std::memory_order_relaxed);
     ESP_LOGI(NET_TAG, "WiFi AP started: %s @ %s", apName ? apName : "?", ip ? ip : "?");
     return true;
@@ -1285,20 +1388,14 @@ bool wifiApConnected() {
 uint32_t wifiApClientCount() { return apClients_.load(std::memory_order_relaxed); }
 
 void wifiApStop() {
-    esp_wifi_stop();
-    // Mirror wifiStaStop(): unregister the event handlers before deinit so re-init doesn't accumulate duplicate registrations.
-    if (wifiInitDone_) {
-        esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifiEventHandler);
-        esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifiEventHandler);
-    }
-    esp_wifi_deinit();
-    if (apNetif_) {
-        esp_netif_destroy_default_wifi(apNetif_);
-        apNetif_ = nullptr;
-    }
     wifiApActive_ = false;
     apClients_.store(0, std::memory_order_relaxed);
-    wifiInitDone_ = false;
+    if (wifiStaActive_) {
+        esp_wifi_set_mode(WIFI_MODE_STA);   // the radio keeps the station
+        ESP_LOGI(NET_TAG, "WiFi AP stopped, station kept");
+        return;
+    }
+    wifiRadioDown();
     ESP_LOGI(NET_TAG, "WiFi AP stopped + deinit");
 }
 
@@ -1333,9 +1430,12 @@ bool wifiStaConnected() MM_NONBLOCKING { return false; }
 void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING { out[0] = out[1] = out[2] = out[3] = 0; }
 void wifiStaStop() {}
 int wifiStaRssi() { return 0; }
+bool wifiScanStart() { return false; }
+int wifiScanResults(WifiNetwork*, int) { return -1; }
+WifiFailure wifiStaLastFailure() { return WifiFailure::None; }
 void wifiStaBssid(uint8_t out[6]) { std::memset(out, 0, 6); }
 int wifiStaChannel() { return 0; }
-bool wifiApInit(const char* /*apName*/, const char* /*ip*/) { return false; }
+bool wifiApInit(const WifiApConfig&) { return false; }
 bool wifiApConnected() { return false; }
 void wifiApStop() {}
 uint32_t wifiApClientCount() { return 0; }
@@ -1669,14 +1769,15 @@ bool UdpSocket::open() {
     return true;
 }
 
-bool UdpSocket::bind(uint16_t port) {
+bool UdpSocket::bind(uint16_t port, const uint8_t localIp[4]) {
     if (fd_ < 0) return false;
     int reuse = 1;
     setsockopt(fd_, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    if (localIp) std::memcpy(&addr.sin_addr.s_addr, localIp, 4);   // octets are network order
+    else addr.sin_addr.s_addr = htonl(INADDR_ANY);
     if (::bind(fd_, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) != 0) return false;
     // Non-blocking so the render loop's drain never stalls waiting for a packet.
     int flags = fcntl(fd_, F_GETFL, 0);
@@ -1684,7 +1785,7 @@ bool UdpSocket::bind(uint16_t port) {
     return true;
 }
 
-int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4]) {
+int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4], uint16_t* srcPort) {
     if (fd_ < 0) return -1;
     sockaddr_in src{};
     socklen_t srcLen = sizeof(src);
@@ -1693,6 +1794,7 @@ int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4]) {
     // 0-byte datagrams and EWOULDBLOCK both mean "nothing usable pending".
     if (n <= 0) return -1;
     if (srcIp) std::memcpy(srcIp, &src.sin_addr.s_addr, 4);   // network order = octets
+    if (srcPort) *srcPort = ntohs(src.sin_port);
     return static_cast<int>(n);
 }
 
@@ -1741,13 +1843,14 @@ int TcpConnection::read(uint8_t* buf, size_t maxLen) {
     return 0;
 }
 
-// getpeername rather than a field captured at accept: a copy taken earlier outlives a reconnect on the same slot.
-bool TcpConnection::peerIPv4(uint8_t out[4]) const {
-    if (fd_ < 0 || !out) return false;
+// getpeername and getsockname rather than a field captured at accept: a copy taken earlier outlives a reconnect on the same slot.
+static bool socketIPv4(int fd, bool local, uint8_t out[4]) {
+    if (fd < 0 || !out) return false;
     sockaddr_in addr{};
     socklen_t len = sizeof(addr);
-    if (::getpeername(fd_, reinterpret_cast<sockaddr*>(&addr), &len) != 0) return false;
-    if (addr.sin_family != AF_INET) return false;
+    const int rc = local ? ::getsockname(fd, reinterpret_cast<sockaddr*>(&addr), &len)
+                         : ::getpeername(fd, reinterpret_cast<sockaddr*>(&addr), &len);
+    if (rc != 0 || addr.sin_family != AF_INET) return false;
     const uint32_t ip = ntohl(addr.sin_addr.s_addr);
     out[0] = static_cast<uint8_t>(ip >> 24);
     out[1] = static_cast<uint8_t>(ip >> 16);
@@ -1755,6 +1858,8 @@ bool TcpConnection::peerIPv4(uint8_t out[4]) const {
     out[3] = static_cast<uint8_t>(ip);
     return true;
 }
+bool TcpConnection::peerIPv4(uint8_t out[4]) const { return socketIPv4(fd_, false, out); }
+bool TcpConnection::localIPv4(uint8_t out[4]) const { return socketIPv4(fd_, true, out); }
 
 bool TcpConnection::write(const uint8_t* data, size_t len) {
     if (fd_ < 0) return false;

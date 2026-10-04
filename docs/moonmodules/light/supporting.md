@@ -52,7 +52,7 @@ The container of driver modules, owning the shared buffer and the per-light outp
 
   Off scales the output to black while preserving `brightness`, so switching on restores the level. Every consumer drives it: the UI, infrared, the WLED app, Home Assistant and MQTT.
 - `brightness`: global output brightness, multiplied with each driver's `localBrightness`.
-- `palette`: the active palette effects sample from, built in or [scripted](moonlive.md).
+- `palette`: what effects sample from, built in or [scripted](moonlive.md); settable by name too.
 - `multicore`: run the output stage on the second core.
 
   On by default, and it falls back to single-core by itself when the extra frame buffer will not fit. The switch exists to compare the two.
@@ -64,17 +64,17 @@ Detail: [technical](moxygen/Drivers.md)
 
 [Tests](../../reference/tests/unit-tests.md#drivers)
 
-<a id="lightpresets"></a>
+<a id="fixtureprofiles"></a>
 
-### LightPresets
+### FixtureProfiles
 
-The named channel wirings drivers reference, which channel carries Red, Green, Blue, White, or a fixture role like Pan/Tilt. Real fixtures ship read-only (the color orders, multi-channel pars, moving heads); add your own alongside them. A driver stores a preset's stable id, not its name, so renaming or reordering never breaks a reference.
+The named channel wirings drivers reference, which channel carries Red, Green, Blue, White, or a fixture role like Pan/Tilt. Real fixtures ship read-only (the color orders, multi-channel pars, moving heads); add your own alongside them. A driver stores the profile's name, so reordering never breaks a reference; after a rename, a driver on the old name falls back to its default at the next boot, as [Drivers](drivers.md) describes.
 
-- `presets`: the editable list of preset definitions, one row per preset.
+- `profiles`: the editable list of profile definitions, one row per profile.
 
   A row carries a name, a channel count, and one role picker per channel. Built-in rows are read-only, and custom rows persist across a reboot.
 
-Detail: [technical](moxygen/LightPresetsModule.md)
+Detail: [technical](moxygen/FixtureProfilesModule.md)
 
 ### Buffer
 

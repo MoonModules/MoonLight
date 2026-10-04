@@ -316,12 +316,10 @@ private:
     static inline Palette active_ = fromBuiltin(0);
 };
 
-// Emit the palette dropdown's options for a ControlType::Palette control (the PaletteOptionsFn):
 /// How many SCRIPTED palettes the picker offers, and their names. Set by Drivers from the catalog plus whatever `.mlp` files the device carries, because Palette.h knows nothing about the filesystem and must not learn.
 /// This is the same one-pointer seam `Palettes::active()` is.
 ///
-/// They sort FIRST in the picker, ahead of the sixty built-ins. A scripted palette is one the user wrote or downloaded, so it is what they are looking for.
-/// A built-in is always there.
+/// They come AFTER the built-ins, whose indices the WLED API and a knob stepping through the list rely on, so adding a script renumbers only the scripted tail.
 struct LivePalettes {
     /// How many scripted palettes the picker offers.
     static uint8_t count() { return count_; }
@@ -370,6 +368,7 @@ private:
     static inline uint8_t count_ = 0;
 };
 
+/// Emit a palette control's options, or one option's name when the sink asks for it.
 inline void paletteOptions(JsonSink& sink) {
     /// A NAME REQUEST rather than an options dump.
     const uint8_t live = LivePalettes::count();

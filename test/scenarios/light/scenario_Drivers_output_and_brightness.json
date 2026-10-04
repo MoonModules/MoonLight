@@ -4,7 +4,7 @@
   "mode": "mutate",
   "also": [
     "PreviewDriver",
-    "LightPresetsModule"
+    "FixtureProfilesModule"
   ],
   "description": "How a finished frame leaves the device. The global brightness and the master switch are the two controls every installation touches, and both must apply on the next frame rather than at the next boot. Brightness defaults low so a fresh board on USB cannot brown out at full white, which is a safety default worth pinning.",
   "reset": [
@@ -72,10 +72,10 @@
       }
     },
     {
-      "name": "fix-LightPresets",
+      "name": "fix-FixtureProfiles",
       "op": "add_module",
-      "id": "LightPresets",
-      "type": "LightPresetsModule",
+      "id": "FixtureProfiles",
+      "type": "FixtureProfilesModule",
       "parent_id": "Drivers"
     },
     {
@@ -122,9 +122,9 @@
             "min": 6,
             "max": 232,
             "n": 32,
-            "samples": [9, 7, 7, 7, 13, 9, 10, 9, 19, 11, 11, 7, 7, 15, 25, 232, 24, 16, 7, 10, 7, 7, 7, 8, 9, 6, 6, 7, 7, 7, 6, 6]
+            "samples": [7, 7, 15, 25, 232, 24, 16, 7, 10, 7, 7, 7, 8, 9, 6, 6, 7, 7, 7, 6, 6, 7, 6, 6, 7, 7, 7, 7, 7, 17, 6, 7]
           },
-          "last_updated": "2026-10-02"
+          "last_updated": "2026-10-04"
         },
         "desktop-windows": {
           "tick_us": {

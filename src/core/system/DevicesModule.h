@@ -5,11 +5,11 @@
 #include "core/util/ActiveInstance.h"   // the boot-registry seat election (the seat + its RAII vacate)
 #include "core/module/Control.h"
 #include "core/util/JsonSink.h"
-#include "core/util/JsonUtil.h"         // recursive reader — restoreList parses the persisted array
-#include "core/util/Sort.h"             // mm::insertionSort — generic bounded sort (core); we supply the comparator
+#include "core/util/JsonUtil.h"         // recursive reader: restoreList parses the persisted array
+#include "core/util/Sort.h"             // mm::insertionSort: generic bounded sort (core); we supply the comparator
 #include "core/system/DeviceIdentify.h"   // DevType, devTypeStr (the device-kind enum + its labels)
 #include "core/system/DevicePlugin.h"     // the interop plugin seam + the bundled plugins
-#include "core/system/FilesystemModule.h" // FilesystemModule::noteDirty — persist on list change
+#include "core/system/FilesystemModule.h" // FilesystemModule::noteDirty: persist on list change
 #include "core/system/WledPacket.h"       // the presence packet and which copy it is
 #include "core/util/Addressing.h"         // sendAddressed, and the network's multicast evidence
 #include "platform/platform.h"
@@ -155,7 +155,7 @@ public:
         }
         if (!d->name[0]) { formatDottedQuad(d->name, ip); persistChanged = true; }
         if (d->colorCount != color) { d->colorCount = color; persistChanged = true; }
-        d->lastSeenMs = platform::millis();   // transient — keeps the bridge from ageing out
+        d->lastSeenMs = platform::millis();   // transient: keeps the bridge from ageing out
         // A cached row coming back online is a status change even with no field edit.
         const bool wasCached = d->cached;
         d->cached = false;
@@ -192,7 +192,7 @@ public:
         uint8_t local[4] = {};
         platform::localIPv4(local);
         const bool online = local[0] || local[1] || local[2] || local[3];
-        if (!online) return;   // no network yet — nothing to discover
+        if (!online) return;   // no network yet: nothing to discover
 
         // Against the current address every tick, since ours changes on a renew or a switch.
         upsertSelf(local);
@@ -286,7 +286,7 @@ private:
                 return;
             }
         }
-        // No plugin claimed it — an unrecognized packet on a port we listen on; ignore.
+        // No plugin claimed it: an unrecognized packet on a port we listen on; ignore.
     }
 
     /// The discovery group, in the organization-local scope that is never routed off the network.
@@ -297,7 +297,7 @@ private:
         if (listenerBound_) return;
         const uint16_t port = plugins_[0]->discoveryPort();
         for (const DevicePlugin* p : plugins_)
-            if (p->discoveryPort() != port) return;   // divergent ports unsupported yet — see note
+            if (p->discoveryPort() != port) return;   // divergent ports unsupported yet: see note
         if (!listener_.open()) return;
         if (listener_.bind(port)) {
             listenerBound_ = true;
@@ -368,7 +368,7 @@ private:
             if (deviceCount_ >= kMaxDevices) return;   // bounded; silently cap
             d = &devices_[deviceCount_++];
             std::memcpy(d->ip, ip, 4);
-            d->type = found.type;          // first sighting — take the plugin's type
+            d->type = found.type;          // first sighting: take the plugin's type
             persistChanged = true;         // a new row changes the saved list
         }
         // The marker is definitive, so an established identity is raised toward, never downgraded.
@@ -377,8 +377,8 @@ private:
                               : (d->type != DevType::MoonLight ? found.type : d->type);
         if (d->type != newType) { d->type = newType; persistChanged = true; }
         if (d->self != isSelf) { d->self = isSelf; persistChanged = true; }
-        d->lastSeenMs = platform::millis();    // transient — not persisted
-        d->cached = false;                     // transient — not persisted
+        d->lastSeenMs = platform::millis();    // transient: not persisted
+        d->cached = false;                     // transient: not persisted
         // Only an authoritative packet renames a row, though an empty name is always filled.
         const bool authoritative =
             (found.type == DevType::MoonLight && d->type == DevType::MoonLight) ||
@@ -412,7 +412,7 @@ private:
         if (d->type != DevType::MoonLight) { d->type = DevType::MoonLight; changed = true; }
         if (!d->self) { d->self = true; changed = true; }
         d->cached = false;
-        d->lastSeenMs = platform::millis();   // transient — not persisted
+        d->lastSeenMs = platform::millis();   // transient: not persisted
         if (!d->name[0]) {
             const char* n = (selfName_ && selfName_[0]) ? selfName_ : "this device";
             mm::formatTo(d->name, sizeof(d->name), "%s", n);
@@ -458,7 +458,7 @@ private:
             if (w != r) devices_[w] = d;
             w++;
         }
-        if (w == deviceCount_) return;   // nothing dropped — common case, no churn
+        if (w == deviceCount_) return;   // nothing dropped: common case, no churn
         deviceCount_ = w;
         refreshStatus();
     }

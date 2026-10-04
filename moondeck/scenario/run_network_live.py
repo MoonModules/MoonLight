@@ -6,19 +6,19 @@ real firmware. Devices come from moondeck/moondeck.json (the MoonDeck device
 list, active network, online only). Each round one device is the SENDER and
 every other device LISTENS:
 
-  1. The desktop seeds the sender three times — once per protocol, each with its own
-     color — to the sender's protocol ports (6454/5568/4048); the
+  1. The desktop seeds the sender three times: once per protocol, each with its own
+     color: to the sender's protocol ports (6454/5568/4048); the
      NetworkReceiveEffect (added to each device's Layer for the run) listens on
-     all three at once. The sender's /ws preview stream must show each color —
+     all three at once. The sender's /ws preview stream must show each color:
      proves desktop → device receive per protocol.
   2. The sender's own NetworkSendDriver is pointed at each listener in turn,
      with its protocol control cycled round-robin so all three send paths get
      exercised across a matrix run; the listener's preview must show the
      sender's CORRECTED color (the send driver applies brightness + channel
-     order) — proves device → device over real firmware send + receive.
+     order): proves device → device over real firmware send + receive.
 
 With one online device only step 1 runs (the matrix needs ≥2 boards). All
-mutated state (grid size, NetworkSend ip/protocol/enabled, the added effects)
+mutated state (grid size, NetworkSend hosts/protocol/enabled, the added effects)
 is restored in a finally block. Exit codes follow improv_smoke_test.py: 0 =
 all legs passed, 1 = a leg failed, 2 = environment problem (no devices,
 moondeck.json missing).
@@ -38,7 +38,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from run_live_scenario import Client, _control_value  # shared HTTP wrapper  # noqa: E402
 import _preview_ws  # noqa: E402
-# Shared lights-over-UDP surface (ports, packet builders, device set) — see
+# Shared lights-over-UDP surface (ports, packet builders, device set): see
 # _net_probe.py; the matrix-only color-correction/Board logic stays below.
 from _net_probe import (  # noqa: E402
     ARTNET_PORT, E131_PORT, DDP_PORT, CHANNELS_PER_UNIVERSE, PROTOCOLS,
@@ -51,23 +51,33 @@ from _net_probe import (  # noqa: E402
 ROUND_COLORS = [(255, 128, 0), (0, 255, 128), (128, 0, 255),
                  (255, 0, 128), (128, 255, 0), (0, 128, 255)]
 
-# Mirrors src/light/drivers/Correction.h (briLut scale + order[] reorder) — a
-# listener sees the sender's corrected bytes, so the expected color replicates
-# that transform. 3-channel presets only; RGBW senders emit 4 bytes/light which
-# misaligns a 3-channel listener buffer, so those legs are skipped. Keep in sync.
-PRESET_ORDER = {"RGB": (0, 1, 2), "RBG": (0, 2, 1), "GRB": (1, 0, 2),
-                "GBR": (1, 2, 0), "BRG": (2, 0, 1), "BGR": (2, 1, 0)}
-PRESET_NAMES = ["RGB", "RBG", "GRB", "GBR", "BRG", "BGR", "RGBW", "GRBW"]
+# The transform src/light/drivers/Correction.h applies (brightness scale, then the fixture profile's channel order), since a listener sees the sender's corrected bytes.
+# Three-channel profiles only: an RGBW sender emits 4 bytes per light, which misaligns a 3-channel listener buffer, so those legs are skipped.
+PROFILE_ORDER = {"RGB": (0, 1, 2), "RBG": (0, 2, 1), "GRB": (1, 0, 2),
+                 "GBR": (1, 2, 0), "BRG": (2, 0, 1), "BGR": (2, 1, 0)}
 
 
-def corrected(rgb, brightness, preset):
+def corrected(rgb, brightness, profile):
     scaled = [(v * int(brightness)) // 255 for v in rgb]
-    order = PRESET_ORDER[preset]
+    order = PROFILE_ORDER[profile]
     return tuple(scaled[order[i]] for i in range(3))
 
 
+def _control_label(module: dict, name: str):
+    """A Select's chosen option as its label, read from the options the device lists, or None."""
+    for ctrl in module.get("controls", []):
+        if ctrl.get("name") != name:
+            continue
+        value = ctrl.get("value")
+        if isinstance(value, str):
+            return value
+        options = ctrl.get("options") or []
+        return options[value] if isinstance(value, int) and 0 <= value < len(options) else None
+    return None
+
+
 # build_artdmx / build_e131 / build_ddp now live in _net_probe.py (imported
-# above) — shared with the latency probe.
+# above): shared with the latency probe.
 
 
 def send_solid(host: str, rgb, protocol: str = "ArtNet", universes: int = 2,
@@ -101,7 +111,7 @@ def send_solid(host: str, rgb, protocol: str = "ArtNet", universes: int = 2,
         sock.close()
 
 
-# load_selected_devices now lives in _net_probe.py (imported above) — shared
+# load_selected_devices now lives in _net_probe.py (imported above): shared
 # with the latency probe.
 
 
@@ -136,16 +146,16 @@ class Board:
         artnet = find_module(state, "NetworkSend") or {}
         self.orig_w = _control_value(grid, "width")
         self.orig_h = _control_value(grid, "height")
-        self.orig_ip = _control_value(artnet, "ip")
+        self.orig_hosts = _control_value(artnet, "hosts")
         self.orig_protocol = _control_value(artnet, "protocol")
         # The user may have NetworkSend disabled (e.g. while testing LED output);
         # relay legs need it on, so remember the original state to restore.
         self.artnet_enabled = bool(artnet.get("enabled", False))
         self.brightness = _control_value(drivers, "brightness") or 0
-        preset_idx = _control_value(drivers, "lightPreset") or 0
-        self.preset = PRESET_NAMES[int(preset_idx)] if int(preset_idx) < len(PRESET_NAMES) else "RGB"
+        # The sender driver's own fixture profile, by the label the device lists.
+        self.fixture = _control_label(artnet, "fixture") or "RGB"
         self.added_receiver = False
-        self.ip_changed = False
+        self.hosts_changed = False
         self.enable_changed = False
         self.protocol_changed = False
 
@@ -168,11 +178,11 @@ class Board:
                 self.client.delete("/api/modules/NetworkReceive")
             except Exception as e:
                 print(f"  WARN  {self.name}: could not remove NetworkReceive: {e}")
-        if self.ip_changed and self.orig_ip is not None:
+        if self.hosts_changed and self.orig_hosts is not None:
             try:
-                self.set_control("NetworkSend", "ip", self.orig_ip)
+                self.set_control("NetworkSend", "hosts", self.orig_hosts)
             except Exception as e:
-                print(f"  WARN  {self.name}: could not restore NetworkSend.ip: {e}")
+                print(f"  WARN  {self.name}: could not restore NetworkSend.hosts: {e}")
         if self.enable_changed:
             try:
                 self.set_control("NetworkSend", "enabled", self.artnet_enabled)
@@ -200,7 +210,7 @@ def main() -> int:
     ap.add_argument("--host", help="only run rounds where this host is the sender "
                                    "(MoonDeck forwards the selected device here)")
     ap.add_argument("--tolerance", type=int, default=0,
-                    help="per-channel color tolerance (default 0 — preview is byte-exact)")
+                    help="per-channel color tolerance (default 0: preview is byte-exact)")
     ap.add_argument("--timeout", type=float, default=10.0,
                     help="seconds to wait for a matching preview frame per leg")
     ap.add_argument("--packets", type=int, default=10, help="desktop seed frame repeats")
@@ -212,12 +222,12 @@ def main() -> int:
     devices = load_selected_devices()
     if not devices:
         print("FAIL  no selected+reachable devices in moondeck.json's active "
-              "network — check device boxes in the Live tab")
+              "network: check device boxes in the Live tab")
         return 2
-    print(f"devices: {len(devices)} selected — "
+    print(f"devices: {len(devices)} selected: "
           + ", ".join(f"{d.get('deviceName', '?')} ({d['ip']})" for d in devices), flush=True)
     if len(devices) == 1:
-        print("note: only one device selected — running the desktop→device leg; "
+        print("note: only one device selected, so running the desktop→device leg; "
               "the device↔device matrix needs ≥2 boards", flush=True)
 
     boards = [Board(d) for d in devices]
@@ -239,7 +249,7 @@ def main() -> int:
             print(f"== round {k + 1}/{len(boards)}: sender {sender.name}, "
                   f"color {color}", flush=True)
 
-            # Leg 1 — the seed sweep: the desktop seeds the sender once per protocol,
+            # Leg 1, the seed sweep: the desktop seeds the sender once per protocol,
             # each with a rotated color (a stale frame from the previous
             # protocol can't false-pass); the receiver autodetects all three.
             # The sender's preview shows the RAW color (uncorrected buffer).
@@ -258,14 +268,14 @@ def main() -> int:
                 else:
                     print(f"FAIL  pc → {sender.name} [{proto}] (best {pct:.0f}% of {pts} points"
                           f"{', ' + detail if detail else ''})"
-                          " — desktop listeners: check the OS firewall allows UDP 6454/5568/4048",
+                          "; desktop listeners: check the OS firewall allows UDP 6454/5568/4048",
                           flush=True)
                     failed += 1
             if seeded_color is None:
                 continue  # without a seeded sender the relay legs can't mean anything
             color = seeded_color  # the sender's buffer now holds the last seeded color
 
-            # Legs 2..N — sender relays to each listener via its own
+            # Legs 2..N: sender relays to each listener via its own
             # NetworkSendDriver, cycling the protocol control round-robin so a
             # full matrix run exercises all three firmware send paths;
             # listeners see the sender's CORRECTED color.
@@ -278,14 +288,14 @@ def main() -> int:
                     continue
                 relay_proto = relay_count % len(PROTOCOLS)
                 relay_count += 1
-                expected = corrected(color, sender.brightness, sender.preset)
+                expected = corrected(color, sender.brightness, sender.fixture)
                 if not sender.artnet_enabled and not sender.enable_changed:
                     sender.set_control("NetworkSend", "enabled", True)
                     sender.enable_changed = True
                 sender.set_control("NetworkSend", "protocol", relay_proto)
                 sender.protocol_changed = True
-                sender.set_control("NetworkSend", "ip", listener.host.partition(":")[0])
-                sender.ip_changed = True
+                sender.set_control("NetworkSend", "hosts", listener.host.partition(":")[0])
+                sender.hosts_changed = True
                 ok, pct, pts, detail = _preview_ws.wait_for_solid(
                     listener.host, expected, args.tolerance, 100.0, args.timeout)
                 if ok:
@@ -297,9 +307,9 @@ def main() -> int:
                           f"(expected {expected}, best {pct:.0f}% of {pts} points"
                           f"{', ' + detail if detail else ''})", flush=True)
                     failed += 1
-            if sender.ip_changed and sender.orig_ip is not None:
-                sender.set_control("NetworkSend", "ip", sender.orig_ip)
-                sender.ip_changed = False
+            if sender.hosts_changed and sender.orig_hosts is not None:
+                sender.set_control("NetworkSend", "hosts", sender.orig_hosts)
+                sender.hosts_changed = False
             if sender.protocol_changed and sender.orig_protocol is not None:
                 sender.set_control("NetworkSend", "protocol", sender.orig_protocol)
                 sender.protocol_changed = False
@@ -313,13 +323,13 @@ def main() -> int:
 
 def _relay_skip_reason(sender: "Board"):
     """A relay leg is meaningless when the sender's correction destroys the
-    signal: RGBW presets emit 4 bytes/light (misaligns a 3-channel listener),
-    and brightness 0 corrects every color to black — black also matches a
+    signal: RGBW profiles emit 4 bytes/light (misaligns a 3-channel listener),
+    and brightness 0 corrects every color to black: black also matches a
     listener that received NOTHING (staging zero-fill), a guaranteed false pass."""
-    if sender.preset not in PRESET_ORDER:
-        return f"sender preset {sender.preset} is 4-channel — relay assert supports 3-channel presets"
+    if sender.fixture not in PROFILE_ORDER:
+        return f"sender fixture {sender.fixture} is not 3-channel: the relay check supports 3-channel profiles"
     if all(c == 0 for c in corrected((255, 255, 255), sender.brightness, "RGB")):
-        return "sender Drivers.brightness too low — corrected color is black (raise brightness)"
+        return "sender Drivers.brightness too low: the corrected color is black (raise brightness)"
     return None
 
 

@@ -44,10 +44,14 @@
 #include "core/system/HttpServerModule.h"
 
 #include "core/module/Scheduler.h"
+#include "core/module/StateDocument.h"   // PATCH /api/state applies a document through it
+#include "core/util/hex.h"
 #include "core/util/ModuleFactory.h"
 #include "core/util/JsonUtil.h"
 #include "core/util/JsonSink.h"
 #include "core/util/format.h"            // formatTo: nonblocking formatting into a fixed buffer
+#include "core/util/CaptivePortal.h"     // the redirect a phone on the access point follows to the UI
+#include "core/util/fnv.h"               // fnv1a: the diff-on-the-wire cache's digest
 #include "core/system/Sha1.h"
 #include "core/system/Base64.h"
 #include "core/system/ControlModule.h"   // look presets on /presets.json (HA WLED integration)
@@ -247,7 +251,10 @@ void HttpServerModule::handleConnection(platform::TcpConnection& conn) {
                 // Omitted at first, and the bench caught it: the 413 fires before the handler, so the route answered "body too large" for every image, valid or not.
                 // The trailing space matters: without it this prefix also matches `moonbase-update-url`, whose body is a small JSON object that must be read WHOLE.
                 // Treating it as streaming truncates it to the prefix buffer.
-                std::strncmp(req, "POST /api/firmware/moonbase-update ", 35) == 0;
+                std::strncmp(req, "POST /api/firmware/moonbase-update ", 35) == 0 ||
+                // A state document holding an effects stack outgrows the request buffer; the trailing space keeps a longer path out.
+                std::strncmp(req, "PATCH /api/state ", 17) == 0 ||
+                std::strncmp(req, "POST /api/state ", 16) == 0;
             if (bodyNeeded > static_cast<int>(sizeof(buf) - 1)) {
                 if (!isStreamingRoute) {
                     sendResponse(conn, 413, "application/json",
@@ -294,6 +301,17 @@ void HttpServerModule::handleConnection(platform::TcpConnection& conn) {
     // Read POST body if present Body pointer (headerEnd already found above)
     char* body = headerEnd ? const_cast<char*>(headerEnd) + 4 : nullptr;
 
+    // A phone on the access point asking for its own captive-check page gets the UI, which is what shows it the sign-in screen.
+    if (std::strcmp(method, "GET") == 0) {
+        uint8_t local[4];
+        const char* host = findHeaderCI(req, "Host:");
+        if (host) { host += 5; while (*host == ' ') host++; }
+        if (conn.localIPv4(local) && captive::redirects(local, host, path)) {
+            conn.write(reinterpret_cast<const uint8_t*>(captive::kRedirect), std::strlen(captive::kRedirect));
+            return;
+        }
+    }
+
     // Route
     if (std::strcmp(method, "GET") == 0) {
         if (std::strcmp(path, "/") == 0) serveFile(conn, "index.html", "text/html");
@@ -311,7 +329,7 @@ void HttpServerModule::handleConnection(platform::TcpConnection& conn) {
         else if (std::strcmp(path, "/api/types") == 0) serveTypes(conn);
         // GET /api/scripts → the MoonLive factory catalog (names per role + the tag to fetch from).
         else if (std::strcmp(path, "/api/scripts") == 0) serveScriptCatalog(conn);
-        // GET /api/modules/<name> → that ONE module's JSON, the same object /api/state carries for it. Exists for issue reports: a user opens the card's `api` link and pastes what they see, instead of hunting one card out of the whole-tree dump.
+        // GET /api/modules/<name> → that ONE module's JSON, the same object /api/state carries for it, for issue reports; GET /api/modules/<name>/document → the module as a state document.
         else if (std::strncmp(path, "/api/modules/", 13) == 0) serveModule(conn, path + 13);
         // File Manager: GET /api/dir?path=<rel>[&hidden=1] → one directory's children as JSON [{name,isDir,size}] (the lazy tree loads a node's children on expand).
         else if (std::strcmp(path, "/api/dir") == 0) serveDirListing(conn, queryStart ? queryStart + 1 : "");
@@ -347,6 +365,11 @@ void HttpServerModule::handleConnection(platform::TcpConnection& conn) {
             std::strcmp(path + pathLen - 8, "/replace") == 0;
         if (std::strcmp(path, "/api/control") == 0 && body) {
             handleSetControl(conn, body);
+        } else if (std::strcmp(path, "/api/state") == 0 && body) {
+            // POST for a client that cannot send PATCH: the same document, the same engine.
+            if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return; }
+            handleApplyState(conn, body, static_cast<size_t>(totalRead) - static_cast<size_t>(body - req),
+                             static_cast<size_t>(contentLen));
         } else if (std::strcmp(path, "/api/file") == 0 && body) {
             // File Manager: POST /api/file?path=<rel>, the body → streamed atomic write.
             // `body` points at the bytes already buffered (initialLen); the full length is Content-Length, and handleWriteFile pulls any remainder straight off the socket.
@@ -420,7 +443,11 @@ void HttpServerModule::handleConnection(platform::TcpConnection& conn) {
         }
     } else if (std::strcmp(method, "PATCH") == 0) {
         // Editable list: PATCH /api/list/<module>/<control>/<id> edits one row: a field ({"field":F,"value":V}) or a reorder ({"to":N}). PATCH is the REST verb for a partial update of an existing resource (the row); create is POST, delete is DELETE.
-        if (std::strncmp(path, "/api/list/", 10) == 0 && body) {
+        if (std::strcmp(path, "/api/state") == 0 && body) {
+            if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return; }
+            handleApplyState(conn, body, static_cast<size_t>(totalRead) - static_cast<size_t>(body - req),
+                             static_cast<size_t>(contentLen));
+        } else if (std::strncmp(path, "/api/list/", 10) == 0 && body) {
             handleListPatchRow(conn, path + 10, body);
         } else {
             sendResponse(conn, 404, "text/plain", "Not found");
@@ -538,13 +565,7 @@ bool HttpServerModule::parseFilePath(const char* query, char* out, size_t cap) {
     while (*p && *p != '&' && i + 1 < cap) {
         char c = *p;
         if (c == '%' && p[1] && p[2]) {       // %XX → byte
-            auto hex = [](char h) -> int {
-                if (h >= '0' && h <= '9') return h - '0';
-                if (h >= 'a' && h <= 'f') return h - 'a' + 10;
-                if (h >= 'A' && h <= 'F') return h - 'A' + 10;
-                return -1;
-            };
-            const int hi = hex(p[1]), lo = hex(p[2]);
+            const int hi = hexDigit(p[1]), lo = hexDigit(p[2]);
             if (hi >= 0 && lo >= 0) { c = static_cast<char>((hi << 4) | lo); p += 2; }
         } else if (c == '+') {
             c = ' ';
@@ -825,6 +846,37 @@ size_t uploadPull(char* out, size_t cap, void* user, bool* abort) {
 }
 }  // namespace
 
+
+// The whole body into `out` (contentLen + 1 bytes): the buffered prefix, then the socket under the upload limits; false when it stopped short.
+static bool pullWholeBody(platform::TcpConnection& conn, const char* initialBody, size_t initialLen, size_t contentLen, char* out) {
+    const size_t initial = initialLen < contentLen ? initialLen : contentLen;
+    UploadSource src{&conn, initialBody, initial, contentLen, platform::millis() + kUploadHardMs};
+    size_t got = 0;
+    bool abort = false;
+    for (size_t n = 1; got < contentLen && !abort && n > 0; got += n) n = uploadPull(out + got, contentLen - got, &src, &abort);
+    out[got] = 0;
+    return got >= contentLen;
+}
+
+void HttpServerModule::handleApplyState(platform::TcpConnection& conn, const char* initialBody, size_t initialLen,
+                                        size_t contentLen) {
+    if (!scheduler_) { sendResponse(conn, 503, "application/json", "{\"error\":\"not ready\"}"); return; }
+    if (contentLen > kStateDocumentMax) { sendResponse(conn, 413, "application/json", "{\"error\":\"document too large\"}"); return; }
+    char* doc = static_cast<char*>(platform::alloc(contentLen + 1));
+    if (!doc) { sendResponse(conn, 507, "application/json", "{\"error\":\"out of memory\"}"); return; }
+    if (!pullWholeBody(conn, initialBody, initialLen, contentLen, doc)) {
+        platform::free(doc);
+        sendResponse(conn, 400, "application/json", "{\"error\":\"incomplete request body\"}");
+        return;
+    }
+    const StateDocumentResult r = applyStateDocument(*scheduler_, doc);
+    platform::free(doc);
+    // A growing sink, since a path of escaped names has no small fixed bound.
+    JsonSink sink;
+    writeStateResult(sink, r);
+    sendResponse(conn, r.ok ? 200 : 400, "application/json", sink.overflowed() ? "{\"error\":\"out of memory\"}" : sink.data());
+}
+
 void HttpServerModule::handleWriteFile(platform::TcpConnection& conn, const char* query,
                                        const char* initialBody, size_t initialLen, size_t contentLen) {
     char path[160];
@@ -872,7 +924,8 @@ void HttpServerModule::applyFileChanged(const char* path) {
     // Here rather than in the editor because the DEVICE is what knows both copies exist: every writer gets lineage, including a script pushed by a script or restored from a backup, and the UI stays out of a bookkeeping job it would have to repeat per caller.
     moonlive::noteForkedFrom(path);
     if (!scheduler_) return;
-    // requestPrepareTree, never prepareTree: the immediate walk runs a scripted layout's JIT'd code on the CALLING task's stack (Scheduler.h:74-77), and a write arrives on the small web-server task rather than the render task the pipeline is budgeted against. The request is a flag tick() consumes with exchange(false), so a multi-file upload costs ONE sweep, not one per file: the coalescing is already there and needs nothing added.
+    scheduler_->notifyFileChanged(path);
+    // requestPrepareTree, never prepareTree: the request is a flag tick() consumes, so a multi-file upload costs one sweep rather than one per file, run at the frame boundary rather than inside this connection's handling.
     scheduler_->requestPrepareTree();
 }
 
@@ -1120,14 +1173,7 @@ void HttpServerModule::buildStateJson(JsonSink& sink) {
     sink.append("]}");
 }
 
-// FNV-1a 32-bit: a small, fast, recognizable string hash.
-// Used to digest a control's serialized value (and the leaf's path) for the diff-on-the-wire cache, so the cache holds an 8-byte {path,value} hash per leaf rather than the value string.
-// Not cryptographic; a hash collision (two different values, same 32-bit digest) at worst skips ONE update and self-heals on the next change.
-static uint32_t fnv1a(const char* s, size_t len) {
-    uint32_t h = 2166136261u;
-    for (size_t i = 0; i < len; i++) { h ^= static_cast<uint8_t>(s[i]); h *= 16777619u; }
-    return h;
-}
+// The diff-on-the-wire cache keeps an 8-byte FNV-1a {path,value} hash per leaf, not the value; a collision skips one update at worst.
 
 // The diff-on-the-wire core.
 // Visit every UI leaf the periodic push would send: each module's live header telemetry (tickTimeUs / dynamicBytes, which the UI shows per card) and each control's value - in the SAME order buildStateJson emits, so a leaf's path "<module>/<name>" is stable across ticks.
@@ -1340,19 +1386,8 @@ void HttpServerModule::writeControls(JsonSink& sink, MoonModule* mod) {
         sink.appendf("{\"name\":\"%s\",\"type\":\"%s\",\"value\":",
                      c.name, controlTypeName(c.type));
         if (c.type == ControlType::Password) {
-            // The password is sent XOR-obfuscated + base64-encoded, NOT in plaintext.
-            // This is deliberate obfuscation, not security: the XOR key is a fixed shared constant (also in app.js), so anyone can reverse it.
-            // It is a first line of defense: the value is not readable at a glance in `curl /api/state`: and it lets the UI's hold-to-peek reveal the stored password.
-            const char* pw = static_cast<char*>(c.ptr);
-            uint8_t scrambled[64];
-            size_t pwLen = std::strlen(pw);
-            if (pwLen > sizeof(scrambled)) pwLen = sizeof(scrambled);
-            for (size_t k = 0; k < pwLen; k++) {
-                scrambled[k] = static_cast<uint8_t>(pw[k]) ^ PASSWORD_XOR_KEY;
-            }
-            char encoded[96];
-            base64Encode(std::span(scrambled).first(pwLen), std::span(encoded));
-            sink.appendf("\"%s\"", encoded);
+            // Not readable at a glance in `curl /api/state`, and the UI's hold-to-peek reverses it.
+            writeObfuscatedPassword(sink, static_cast<char*>(c.ptr));
         } else {
             writeControlValue(sink, c);
         }
@@ -1373,6 +1408,7 @@ void HttpServerModule::writeControls(JsonSink& sink, MoonModule* mod) {
         if (c.type == ControlType::List) {
             const auto* ls = static_cast<const ListSource*>(c.ptr);
             if (ls && ls->isEditableList()) sink.append(",\"editable\":true");
+            if (ls && ls->listRowsFixed()) sink.append(",\"fixedRows\":true");
             if (ls && ls->listAsPads()) {
                 sink.append(",\"pads\":true");
                 const uint8_t gc = ls->listGridCols(), gr = ls->listGridRows();
@@ -1835,24 +1871,6 @@ void HttpServerModule::writeModuleMetricsJson(JsonSink& sink, MoonModule* mod, b
 // Apply-core: add one module under a named parent.
 // Transport-free; returns an OpResult.
 // Idempotent on the id (an existing name returns Ok, "already there").
-// Does `parent` accept a child of this role?
-// Its acceptsChildRoles() is a comma-separated list of role names ("effect,modifier"); empty means it takes no children at all.
-// The UI reads the same string out of /api/types to build its picker, so both sides answer from one declaration.
-static bool parentAcceptsRole(const MoonModule* parent, ModuleRole childRole) {
-    if (!parent) return false;
-    const char* csv = parent->acceptsChildRoles();
-    if (!csv || !csv[0]) return false;
-    const char* want = roleName(childRole);
-    const size_t wantLen = std::strlen(want);
-    for (const char* p = csv; *p;) {
-        const char* comma = std::strchr(p, ',');
-        const size_t len = comma ? static_cast<size_t>(comma - p) : std::strlen(p);
-        if (len == wantLen && std::strncmp(p, want, len) == 0) return true;
-        if (!comma) break;
-        p = comma + 1;
-    }
-    return false;
-}
 
 HttpServerModule::OpResult HttpServerModule::applyAddModule(
         const char* typeName, const char* id, const char* parentId,
@@ -1877,7 +1895,7 @@ HttpServerModule::OpResult HttpServerModule::applyAddModule(
     // The picker filters by them, so the UI never offers a bad pairing, but nothing stopped the API from making one.
     // An effect nested inside a layout ticks in the wrong pass and renders its controls on the wrong card.
     // Checked here rather than in addChild because persistence and boot legitimately build a tree before roles are settled; this is the path where a caller asks for a specific pairing.
-    if (!parentAcceptsRole(parent, mod->role())) {
+    if (!parent->acceptsRole(mod->role())) {
         delete mod;
         return OpResult::BadRequest;
     }
@@ -2107,7 +2125,7 @@ void HttpServerModule::handleReplaceModule(platform::TcpConnection& conn, const 
     // The same rule the add path enforces.
     // A replacement has to be something the parent accepts, or a Layer's effect could be swapped for a layout that ticks in the wrong pass.
     // Checked before the old module is touched, so a refusal leaves the tree exactly as it was.
-    if (!parentAcceptsRole(parent, fresh->role())) {
+    if (!parent->acceptsRole(fresh->role())) {
         delete fresh;
         sendResponse(conn, 400, "application/json", "{\"error\":\"parent rejected child\"}");
         return;
@@ -2150,33 +2168,28 @@ void HttpServerModule::handleReplaceModule(platform::TcpConnection& conn, const 
     sendResponse(conn, 200, "application/json", "{\"ok\":true}");
 }
 
-void HttpServerModule::serveModule(platform::TcpConnection& conn, const char* name) {
-    // Percent-decode into a bounded buffer: a module name may contain a space ("File Manager"), which a browser sends as %20. Same decoding parseFilePath does, over a name-sized buffer - MoonModule::name_ is 16 bytes, so anything longer cannot match a module anyway.
-    char decoded[24] = {};
+// A module name from its path segment, percent-decoded (a space arrives as %20) up to `/` or `?`, and never '+' as a space, which keeps "A+B" reachable; its length.
+static size_t decodeModuleName(const char* name, char* out, size_t outLen) {
     size_t i = 0;
-    for (const char* p = name; *p && i + 1 < sizeof(decoded); p++) {
-        char c = *p;
-        if (c == '/' || c == '?') break;      // a sub-route ("/move") or query: the name ends here
-        if (c == '%' && p[1] && p[2]) {
-            auto hex = [](char h) -> int {
-                if (h >= '0' && h <= '9') return h - '0';
-                if (h >= 'a' && h <= 'f') return h - 'a' + 10;
-                if (h >= 'A' && h <= 'F') return h - 'A' + 10;
-                return -1;
-            };
-            const int hi = hex(p[1]), lo = hex(p[2]);
-            if (hi >= 0 && lo >= 0) { c = static_cast<char>((hi << 4) | lo); p += 2; }
-        }
-        // NO '+' → space here, unlike parseFilePath.
-        // That rule belongs to form/query encoding; this is a PATH segment, and the UI builds it with encodeURIComponent, which emits a space as %20 and leaves '+' literal.
-        // Translating it would make a module named "A+B" unreachable while fixing nothing.
-        decoded[i++] = c;
+    for (const char* p = name; *p && *p != '/' && *p != '?' && i + 1 < outLen; p++) {
+        const int hi = *p == '%' && p[1] ? hexDigit(p[1]) : -1, lo = hi >= 0 && p[2] ? hexDigit(p[2]) : -1;
+        if (lo >= 0) { out[i++] = static_cast<char>((hi << 4) | lo); p += 2; }
+        else out[i++] = *p;
     }
-    decoded[i] = 0;
+    out[i] = 0;
+    return i;
+}
+
+void HttpServerModule::serveModule(platform::TcpConnection& conn, const char* name) {
+    char decoded[24] = {};
+    const size_t i = decodeModuleName(name, decoded, sizeof(decoded));
 
     // appearsInUi() is checked for the same reason /api/state checks it.
     // This endpoint is the `{ }` link on a CARD, and a module that is not a card has no card to link from.
     // Serving HttpServerModule (the server itself) or FilesystemModule here would answer for something the UI deliberately does not show.
+    // `/document` asks for the module as the state document PATCH /api/state takes, rooted at the top level.
+    const char* rest = std::strchr(name, '/');
+    const bool document = rest && std::strncmp(rest, "/document", 9) == 0 && (rest[9] == 0 || rest[9] == '?');
     MoonModule* mod = i ? findModuleByName(decoded) : nullptr;
     if (mod && !mod->appearsInUi()) mod = nullptr;
     if (!mod) {
@@ -2192,9 +2205,15 @@ void HttpServerModule::serveModule(platform::TcpConnection& conn, const char* na
         "\r\n";
     conn.write(reinterpret_cast<const uint8_t*>(header), std::strlen(header));
 
-    // The SAME writer /api/state uses, so the two can never disagree about a module's shape.
+    // The SAME writer /api/state uses, so the two can never disagree about a module's shape; a document comes from the writer a preset save uses.
     JsonSink sink(conn);
-    writeModuleJson(sink, mod);
+    if (document) {
+        sink.append("{");
+        writeStateMember(sink, *mod);
+        sink.append("}");
+    } else {
+        writeModuleJson(sink, mod);
+    }
     sink.flush();
 }
 
@@ -2432,8 +2451,8 @@ void HttpServerModule::afterListMutation() {
     FilesystemModule::noteDirty();
     if (scheduler_) {
         // Rebuild EVERY module's controls.
-        // A list mutation can change what OTHER modules present - adding/removing a light preset changes the option set of every driver's `preset` Select (which is built from the library).
-        // Without this, a driver's Select keeps its stale option count and a just-added preset is unselectable ("value out of range").
+        // A list mutation can change what OTHER modules present - adding/removing a fixture profile changes the option set of every driver's `fixture` Select (which is built from the library).
+        // Without this, a driver's Select keeps its stale option count and a newly added profile is unselectable ("value out of range").
         // Mirrors the phase-2b tree-wide rebuild after persistence load.
         for (uint8_t i = 0; i < scheduler_->moduleCount(); i++)
             if (auto* m = scheduler_->module(i)) m->rebuildControls();

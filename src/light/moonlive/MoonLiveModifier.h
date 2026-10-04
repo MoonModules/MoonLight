@@ -44,6 +44,9 @@ public:
         script_.publishDeclaredControls(controls_);
     }
 
+    /// The script's controls appear once prepare has compiled it.
+    bool declaresControlsAtPrepare() const override { return true; }
+
     // Every control rebuilds: a source edit and a control move both change where lights land.
     /// Compile the script as written.
     void prepare() override {

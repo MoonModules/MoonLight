@@ -117,7 +117,7 @@ A struct or enum that is the semantic owner of some data owns the functions that
 
 Three concrete patterns, all already common in this codebase:
 
-- **Discriminator + free functions in the type's own file.** `ControlType` + `writeControlValue` / `applyControlValue` / `controlTypeName` in [Control.cpp](../src/core/module/Control.cpp); `parseDottedQuad` / `formatDottedQuad` next to `ControlType::IPv4` in [Control.h](../src/core/module/Control.h); `LightPreset` + `rebuild()` in [Correction.h](../src/light/drivers/Correction.h). Best when the discriminator is a plain enum and the operations are small.
+- **Discriminator + free functions in the type's own file.** `ControlType` + `writeControlValue` / `applyControlValue` / `controlTypeName` in [Control.cpp](../src/core/module/Control.cpp); `parseDottedQuad` / `formatDottedQuad` next to `ControlType::IPv4` in [Control.h](../src/core/module/Control.h); `WhiteMode` + `rebuild()` in [Correction.h](../src/light/drivers/Correction.h). Best when the discriminator is a plain enum and the operations are small.
 - **Methods on the owning class.** [Buffer.h](../src/light/layers/Buffer.h)'s `allocate` / `free` / `clear`; [Scheduler.h](../src/core/module/Scheduler.h)'s `addModule` / `tick` / `prepareTree`; [ControlList](../src/core/module/Control.h)'s `addX` family. Best when the class has identity and the operations naturally form a small interface.
 - **Virtual methods on a base class.** [MoonModule.h](../src/core/module/MoonModule.h)'s lifecycle (`setup`, `tick`, `tick1s`, `defineControls`, `prepare`, …). Best when polymorphism is already in play.
 
@@ -164,8 +164,26 @@ Diagnostics as you type come from clangd, using the same `.clang-tidy` CI runs; 
 - **Platform boundary** (`moondeck/check/check_platform_boundary.py`), scans all files outside `src/platform/` for `#ifdef` / `#if defined` with platform macros and `#include` of platform-specific headers (`esp_*`, `freertos/*`, `driver/*`, `SDL.h`, `wiringPi.h`, …). Fails if any are found. The platform boundary rule itself: [architecture.md § Platform abstraction](../explanation/architecture/mooncore.md#platform-abstraction).
 ### Static checks
 
-- **Hot path check** (`moondeck/check/check_nonblocking.py`): the tick methods carry `MM_NONBLOCKING`, and Clang verifies transitively that nothing they reach allocates or blocks. It reports rather than fails, because a new blocking call is sometimes legitimate, and `docs/metrics/hotpath-baseline.txt` freezes the known set. An audit must sweep every syscall the path can reach, not the loudest one: a socket timeout is not a fix, it is the size of the freeze. The rule itself: [the architecture](../explanation/architecture/moonmodule.md#hot-path-discipline).
-- **Code formatting**: `clang-format` with a project `.clang-format` file. Applied in CI; code that doesn't match fails the check. Run locally via editor integration or `clang-format -i`.
+- **Hot path check** (`moondeck/check/check_nonblocking.py`): the tick methods carry `MM_NONBLOCKING`, and Clang verifies transitively that nothing they reach allocates or blocks. It reports rather than fails, because a new blocking call is sometimes legitimate, and `docs/reference/metrics/hotpath-baseline.txt` freezes the known set. An audit must sweep every syscall the path can reach, not the loudest one: a socket timeout is not a fix, it is the size of the freeze. The rule itself: [the architecture](../explanation/architecture/moonmodule.md#hot-path-discipline).
+- **The code report** (`moondeck/check/check_code.py`): every function over a complexity, length, nesting or parameter limit, every block of code found elsewhere, and every file over a length limit. Listed per file in `docs/reference/metrics/code.md`, whose committed counts may only fall, per rule and in total; a touched file clears its own rows.
+
+### From a finding to a fix
+
+A finding is a named code smell. Every smell has a named, behavior-preserving move from the refactoring catalog (Fowler, *Refactoring*), the vocabulary every IDE's refactor menu and every quality platform uses. The commit names the move it made, so a reviewer checks that the move was applied rather than whether the result looks simpler, and two people make the same change.
+
+| Smell, what the report counts | The move | Where it lands |
+|---|---|---|
+| Long function | Extract Function | a named step a reader can skip |
+| Deeply nested | Replace Nested Conditional with Guard Clauses; Extract Function on the inner loop | flat flow, one level at a time |
+| Complex function: a conditional chain on one value | Replace Conditional with a table | data rows, no branches: a Command table |
+| Complex function: a `switch` on a state | Replace Type Code with State: one method per state | the State pattern |
+| Duplicated code | Extract Function, Pull Up Method | one home |
+| Long parameter list | Introduce Parameter Object | one struct |
+| Large file | Extract Class, Move Function | a module per concern |
+| Core reaching into light | Move Function, or an interface in core that light implements | the dependency points inward |
+| A name spread across files | Move Function, self-registration | a concept in one place |
+
+Cut first: a branch that chooses between equals is data, a guard is an early return, and nesting is what a reader trips on, more than branch count. The theory behind the moves is Ousterhout's: complexity is dependencies and obscurity, so a deep module with a small interface absorbs it and its callers stay simple. A function may stay over a limit when splitting it would hide a sequence that belongs together. It says so in one line, and its count stays rather than being forced.
 
 ### When checks run
 

@@ -225,6 +225,8 @@ A card is read across a row; a member comment is read beside the thing it descri
 
 **A header opens with `///`**, so its page says what the file is for rather than starting with a bare member list. A header of free functions, constants or several peer types leads with a `@defgroup` block. A header declaring one type leads with that type's comment, which is the file's documentation already, and takes no group around it. The two are exclusive. A group wrapping a lone class is a second lead saying the same thing twice, leaving an editor two homes to keep in step. Nested types are implementation detail and do not make a header a multi-type one. A provenance marker above the lead, an SPDX tag or an `// Author:` line, is machine-read or a credit rather than documentation, and passes through. A `//` block at the top generates nothing, because Doxygen reads `//` as a note to the next reader of the source.
 
+**A test hook is named `...ForTest`**, and that name keeps it off the generated page: Doxygen excludes it, so it needs no `///`, and a `//` line is enough for the source reader.
+
 **`@moreinfo` is an appendix, and only a lead carries one**: the file's, or a class's. A member gets one line, so an `@moreinfo` there is depth in the wrong place, and it belongs in the file lead's appendix or on the module's page. Relaxing that once put a four-line block on every function in a swept header and cost 230 lines to undo.
 
 | | Limit |

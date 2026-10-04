@@ -27,8 +27,8 @@ namespace mm {
 /// @card PanelCardDriver.png
 class PanelCardDriver : public DriverBase {
 public:
-    /// Default to the RGB preset, as the network sinks do, rather than the strips' GRB.
-    PanelCardDriver() { setDefaultPresetName("RGB"); }
+    /// Default to the RGB profile, as the network sinks do, rather than the strips' GRB.
+    PanelCardDriver() { setDefaultFixtureName("RGB"); }
 
     /// The card's own gain, held at full so it does not compound our own brightness.
     static constexpr uint8_t kCardGain = 0xFF;
@@ -158,7 +158,7 @@ public:
         MoonModule::tick1s();
     }
 
-    /// A preset toggle changes correction_.outChannels without a structural rebuild.
+    /// A fixture change changes correction_.outChannels without a structural rebuild.
     void onCorrectionChanged() override { resizeCorrected(); }
 
     /// Correct the window, emit it row by row, and latch it with one sync frame.

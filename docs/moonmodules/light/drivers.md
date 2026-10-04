@@ -20,8 +20,8 @@ The block every driver card opens with, shown here on RMT LED. Added once by [`D
 
 - `localBrightness`: this driver's dim (0–255), multiplied with the global brightness.
 - `curve`: brightness to output: `CIE 1931`, `gamma 2.2`, `gamma 2.8`, or `linear`.
-- `lightPreset`: the [light preset](supporting.md) applied per light, for order and white.
-- `whiteMode`: how W is derived, shown when the preset carries a W channel.
+- `fixture`: the [fixture profile](supporting.md) applied per light, for order and white.
+- `whiteMode`: how W is derived, shown when the profile carries a W channel.
 - `start`: first light of the shared buffer this driver reads (default `0`).
 - `count`: how many lights from `start`. **Blank drives all of them.**
 
@@ -148,7 +148,7 @@ Detail: [technical](moxygen/PanelCardDriver.md)
 Drives **Philips Hue bulbs as pixels**: each color bulb in the driver's window becomes one pixel, pushed to the bridge over its HTTP API. Paced to the bridge's ~10 cmd/s limit, so smooth ambient color, not strobing. Up to 32 bulbs, which is a LAN's worth and bounds the driver's memory.
 
 - `bridgeIp`: the bridge's LAN IPv4.
-- `appKey`: the Hue app key; filled by `pair`, persisted.
+- `appKey`: the Hue app key, filled by `pair`; a password, so masked and kept out of documents.
 - `pair`: button: press it, then the bridge's physical link button within ~30 s to claim a key.
 - `room` / `light`: dropdowns narrowing which color lights are driven (both default `All`).
 
@@ -225,7 +225,7 @@ Detail: [technical](moxygen/RtspDriver.md) · [the RTP packetiser](moxygen/RtpH2
 <a id="shared-details"></a>
 
 ## Shared, details
-**A `lightPreset` reference survives some changes and not others.** The driver holds the preset's stable id at runtime, so **reordering** presets never disturbs it, and the reference **survives a reboot** because the preset's name is persisted and re-resolved on load. The caveat is **renaming**: within a session the id keeps the link, but after a reboot a renamed preset no longer matches the persisted name and the driver falls back to the default. Re-pick it if you rename a preset a driver uses.
+**A `fixture` reference survives some changes and not others.** The driver holds the profile's stable id at runtime, so **reordering** profiles never disturbs it, and the reference **survives a reboot** because the profile's name is persisted and re-resolved on load. The caveat is **renaming**: within a session the id keeps the link, but after a reboot a renamed profile no longer matches the persisted name and the driver falls back to the default. Re-pick it if you rename a profile a driver uses.
 
 **`start` and `count` are how several drivers share one buffer.** Blank `count` drives every light; a number drives only that slice. An onboard status LED takes `start 0, count 1` while the main strip runs from `start 1`, both reading the same buffer.
 
@@ -273,7 +273,7 @@ How the frame is built, the DMA each peripheral programs, and the expert `ring*`
 ## Network Send, details
 **Unicast is the default** because Art-Net 4 requires it and because broadcast makes every host on the LAN parse every packet; Art-Net's `broadcast` remains for legacy receivers. **E1.31 multicast** sends to sACN's own per-universe group (`239.255.{universe_hi}.{universe_lo}`) rather than to `hosts`, so one send reaches every receiver that joined that universe. It is opt-in rather than the default, because the saving only materializes on a switch that does IGMP snooping and firmware cannot tell. See [multicast and IGMP snooping](../../explanation/architecture/moonlight.md#multicast-and-igmp-snooping). On a network shown to drop multicast, the card says so rather than broadcasting every universe. A name in `hosts` resolves in the background, `.local` by mDNS and anything else by DNS: it sends nothing until it first resolves, keeps its last address while it stops answering, and the card says which names are still waiting.
 
-**A DMX chain of MIXED fixtures needs one driver per fixture type.** `lightsPerHost` splits a window between receivers that share one preset, so it cannot describe a chain where the fixtures differ. Add a driver per type instead, each reading its own `start`/`count` slice of the same buffer with its own `lightPreset`. Two moving-head types followed by RGBW pars is three drivers:
+**A DMX chain of MIXED fixtures needs one driver per fixture type.** `lightsPerHost` splits a window between receivers that share one fixture profile, so it cannot describe a chain where the fixtures differ. Add a driver per type instead, each reading its own `start`/`count` slice of the same buffer with its own `fixture`. Two moving-head types followed by RGBW pars is three drivers:
 
 | driver | window | fixtures |
 |---|---|---|
@@ -285,7 +285,7 @@ Each maps its slice onto that fixture's real channels, so differing channel coun
 
 Two consequences of motion channels being a property of the LAYER rather than of a driver:
 
-- **Order matters when the motion ROLES differ**, which is why the table puts the pan/tilt/zoom heads first. The layer's motion slots come from the first enabled driver whose preset carries motion, so the richest fixture has to lead. Swap A and B and the zoom has no slot at all, so those heads never zoom. Fixtures differing only in channel count or order are unaffected.
+- **Order matters when the motion ROLES differ**, which is why the table puts the pan/tilt/zoom heads first. The layer's motion slots come from the first enabled driver whose profile carries motion, so the richest fixture has to lead. Swap A and B and the zoom has no slot at all, so those heads never zoom. Fixtures differing only in channel count or order are unaffected.
 - **Every light carries the motion bytes**, used or not, so a mixed rig's buffer is as wide as its widest fixture. Memory rather than correctness: a par's `Correction` discards the aim.
 
 An effect writes `setPan` for every light in its layer, so a formation spanning the window treats the pars as rig positions too. Use separate **Layers** when the heads should move independently.

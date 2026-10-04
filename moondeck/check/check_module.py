@@ -14,7 +14,7 @@ running them concurrently would just make them contend):
 
     clang-tidy    bug patterns, performance, portability
     clang-query   our own AST rules — RAM-costing arrays, heap allocation sites
-    lizard        complexity (CCN / NLOC), baseline-filtered
+    code          complexity and function length (lizard)
     footprint     bytes on the device, split flash / static RAM (needs a built ESP32 ELF)
 
 A module is resolved to `src/**/<Module>.h` and `.cpp` (see check_clang_query.module_files) —
@@ -37,10 +37,9 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import check_clang_query  # noqa: E402  — the module→files resolver, one owner
 
-# `--all` on lizard ignores the baseline: you scoped to ONE module precisely to see all of its
-# findings, not just the ones newer than the freeze.
+# check_code with `--module` prints that module's findings without touching the report, which is the repo-wide artifact.
 #
-# clang-query keeps its 60-row cap, unlike lizard. It used to run `--max-rows=0` on the same
+# clang-query keeps its 60-row cap. It used to run `--max-rows=0` on the same
 # reasoning, but the comments rule made a single module's report unreadable — HttpServerModule
 # alone prints 212 declarations, and a wall of rows is skimmed rather than read. The cap is per
 # TABLE and always announces what it dropped, so the tail is one `--max-rows=0` away.
@@ -52,7 +51,7 @@ TOOLS = [
     ("clang-tidy", ["check_clang_tidy.py"], False),
     ("clang-query", ["check_clang_query.py"], False),
     ("-Wfunction-effects", ["check_nonblocking.py"], False),
-    ("lizard", ["check_lizard.py", "--all"], False),
+    ("code", ["check_code.py"], False),
     ("CodeQL", ["check_codeql.py"], True),
     ("footprint", ["check_footprint.py"], True),
 ]
@@ -62,7 +61,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--module", required=True, help="Module name, e.g. Control or ParallelLedDriver.")
     ap.add_argument("--skip", action="append", default=[],
-                    help="Skip a tool by name (repeatable): clang-tidy, clang-query, lizard, footprint.")
+                    help="Skip a tool by name (repeatable): clang-tidy, clang-query, code, footprint.")
     args = ap.parse_args()
 
     files = check_clang_query.module_files(args.module)

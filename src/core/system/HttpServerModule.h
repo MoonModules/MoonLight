@@ -147,7 +147,7 @@ class Scheduler;
 /// ## The per-module state route
 ///
 /// One module's JSON is served on its own route, byte-identical to that module's entry in the full state, children included.
-/// The UI puts a link to it on every card, so an issue report can carry the state of the one module that misbehaves rather than the whole tree.
+/// An issue report carries it from the card's `{ }` popup, and `/document` on the same route serves the module as the state document a preset holds.
 /// A name in the path may be percent-encoded, since a module name can carry a space.
 ///
 /// ## Two firmware install paths
@@ -428,7 +428,7 @@ private:
         // 24, not 16: a payload over 64 KB needs the ten-byte length form plus the app headers.
         uint8_t hdr[24] = {};                 // WS + app header, copied (caller's may be a stack local)
         size_t hdrLen = 0;
-        const uint8_t* body = nullptr;        // the frame body — see ownsBody for lifetime
+        const uint8_t* body = nullptr;        // the frame body; ownsBody says who frees it
         size_t bodyLen = 0;
         size_t sent[MAX_PREVIEW_CLIENTS] = {};  // per-PREVIEW-client cursor over [hdr ++ body]; a slow client lags
         bool active = false;
@@ -500,9 +500,6 @@ private:
     int      carryClient_ = -1;
     uint16_t boundPort_ = 0;   // the port open() actually bound; 0 when no server is live
 
-    // Obfuscation, not a secret: it only stops a password being plainly readable in a response.
-    static constexpr uint8_t PASSWORD_XOR_KEY = 0x5A;
-
     // HTTP handling
     void handleConnection(platform::TcpConnection& conn);
     void sendResponse(platform::TcpConnection& conn, int status, const char* contentType, const char* body);
@@ -534,6 +531,8 @@ private:
 
     // Control setter
     void handleSetControl(platform::TcpConnection& conn, const char* body);
+    /// Apply a state document from the request body, which may outgrow the request buffer: `PATCH /api/state`.
+    void handleApplyState(platform::TcpConnection& conn, const char* initialBody, size_t initialLen, size_t contentLen);
 
     // Delegates to the scheduler's own canonical tree walk, guarding a null scheduler first.
     MoonModule* findModuleByName(const char* name);
@@ -544,8 +543,8 @@ private:
     void serveWledInfo(platform::TcpConnection& conn);
     void serveWledState(platform::TcpConnection& conn);
     void serveWledStateInfo(platform::TcpConnection& conn);
-    void serveWledDeviceJson(platform::TcpConnection& conn);   ///< /json — HA WLED integration surface
-    void serveWledPresets(platform::TcpConnection& conn);      ///< /presets.json — look presets for HA
+    void serveWledDeviceJson(platform::TcpConnection& conn);   ///< /json, the surface Home Assistant's WLED integration reads
+    void serveWledPresets(platform::TcpConnection& conn);      ///< /presets.json, the looks Home Assistant lists
     void handleWledState(platform::TcpConnection& conn, const char* body);
     void pollWledStateFromWebSockets();             ///< read app's slider/toggle sent over /ws
     void writeWledInfoBody(JsonSink& sink, const char* name, const uint8_t mac[6]);

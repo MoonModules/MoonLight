@@ -101,24 +101,38 @@ public:
         std::snprintf(buildStr_, sizeof(buildStr_), "%s · %s", kBuildId, kBuildDate);
         std::snprintf(firmwareStr_, sizeof(firmwareStr_), "%s", kFirmwareName);
         readMoonBaseVersion();
+        if (moonbaseOutdated_) rebuildControls();   // publish the mismatch the first definition could not know
     }
 
     /// Read which recovery image this device carries, since it drifts and a mismatch matters.
     void readMoonBaseVersion() {
         char installed[32] = {};
+        moonbaseOutdated_ = false;
         if (platform::otaMoonBaseVersion(installed, sizeof(installed))) {
-            const bool matches = std::strcmp(installed, kVersion) == 0;
-            std::snprintf(moonbaseStr_, sizeof(moonbaseStr_), "%s%s",
-                          installed, matches ? "" : " (outdated)");
+            // `6.0.0+990a3d84`: SemVer's build metadata carries the build id, as the app's own build row shows it.
+            char* id = std::strchr(installed, '+');
+            if (id) *id++ = '\0';
+            std::snprintf(moonbaseStr_, sizeof(moonbaseStr_), "%s", installed);
+            char built[32] = {};
+            platform::otaMoonBaseBuild(built, sizeof(built));
+            std::snprintf(moonbaseBuildStr_, sizeof(moonbaseBuildStr_), "%s%s%s",
+                          id ? id : "", id && built[0] ? " · " : "", built);
+            // The matching pair is the tested pair, whichever channel the app follows.
+            moonbaseOutdated_ = std::strcmp(moonbaseStr_, kVersion) != 0;
         }
-        // The rest of its identity, so one row builder serves whichever image is selected.
-        platform::otaMoonBaseBuild(moonbaseBuildStr_, sizeof(moonbaseBuildStr_));
     }
 
     /// Declare one set of controls, describing whichever image the selector names.
     void defineControls() override {
-        // Two images described by the same four facts, so eight controls would say each twice.
+        // On either tab, for the update signals: the app's version, and MoonBase's only while it does not match, so this module is the one place that decides.
+        controls_.addReadOnly("appVersion", versionStr_, sizeof(versionStr_));
+        controls_.setHidden(controls_.count() - 1, true);
+        if (moonbaseOutdated_) {
+            controls_.addReadOnly("moonbaseMismatch", moonbaseStr_, sizeof(moonbaseStr_));
+            controls_.setHidden(controls_.count() - 1, true);
+        }
         if (platform::otaHasMoonBase()) {
+            // Two images described by the same four facts, so eight controls would say each twice.
             static const char* const kImages[] = { "App", "MoonBase" };
             controls_.addSelect("image", imageSel_, kImages, 2);
             // Drawn as a tab strip rather than a setting among those it governs.
@@ -191,10 +205,12 @@ public:
         }
     }
 
-    /// Publish the phase on the shared slot, taking its severity from the text's own prefix.
+    /// Publish the phase on the shared slot, taking its severity from the text's own prefix; between installs, a MoonBase that does not match this app.
     void publishStatus() {
         if (std::strcmp(statusStr_, "idle") == 0) {
-            clearStatus();
+            // A constant, since both versions are on the card's rows already.
+            if (moonbaseOutdated_) setStatus("MoonBase does not match this app: install the matching one on the MoonBase tab", Severity::Warning);
+            else clearStatus();
         } else {
             setStatus(statusStr_,
                       std::strncmp(statusStr_, "error:", 6) == 0 ? Severity::Error
@@ -210,9 +226,9 @@ private:
     char     firmwareStr_[24] = {};  ///< the build variant's name
     uint32_t firmwareSizeVal_ = 0;   ///< bytes used in the app partition
     uint32_t totalFlashVal_   = 0;   ///< app partition size
-    /// The recovery image's version, marked when it differs from this app's.
-    char     moonbaseStr_[48] = "standby";
-    char     moonbaseBuildStr_[32] = {};   ///< when the installed MoonBase was built
+    char     moonbaseStr_[32] = "standby";   ///< the recovery image's version
+    char     moonbaseBuildStr_[36] = {};   ///< its build id, then when it was built: `abc12345+ · Oct  4 2026 10:31:00` is 34
+    bool     moonbaseOutdated_ = false;    ///< it differs from this app's version
     uint32_t moonbaseSizeVal_  = 0;        ///< bytes its image occupies
     uint32_t moonbaseTotalVal_ = 0;        ///< the factory slot's size
     char     moonbaseChipStr_[16] = {};    ///< the chip whose MoonBase image this board takes

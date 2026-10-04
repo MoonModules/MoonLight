@@ -187,3 +187,33 @@ def test_a_restore_that_fails_unexpectedly_is_reported_and_a_vanished_module_is_
     out = capsys.readouterr().out
     assert "Audio.gain" in out
     assert "Created" not in out
+
+
+def test_an_http_step_on_a_path_goes_to_the_device_under_test():
+    """A path names the device the run targets, so one scenario serves every board; an absolute URL stays as written, as a captive check needs."""
+    r = runner._http_request("/moonbase", "http://192.168.1.50/")
+    assert r.full_url == "http://192.168.1.50/moonbase" and r.get_method() == "GET"
+    assert runner._http_request("http://captive.apple.com/", "http://192.168.1.50").full_url == "http://captive.apple.com/"
+
+
+def test_an_http_post_step_sends_an_empty_body_as_a_button_does():
+    r = runner._http_request("/api/firmware/boot-app", "http://192.168.1.50", "POST")
+    assert r.get_method() == "POST" and r.data == b""
+
+
+def test_the_modules_a_state_document_can_create_are_the_objects_with_a_type():
+    """The live runner cleans up after an apply_state step from this list, so a module the document only sets is never removed."""
+    doc = {"Effects": {"Layer": {"Swirl": {"type": "RainbowEffect", "speed": 90}, "Old": None,
+                                 "Pulse": {"bpm": 40}, "Box": {"type": "Layer", "Inner": {"type": "NoiseEffect"}}}}}
+    assert runner._typed_names(doc) == ["Swirl", "Box", "Inner"]
+
+
+def test_an_error_response_that_is_not_json_still_reads_as_a_failure():
+    """A proxy's HTML page or an empty body gives an empty object, so the step names the HTTP status instead of crashing on the parse."""
+    import io
+    import urllib.error
+    for body in (b"<html>bad gateway</html>", b"", b"[1,2]"):
+        he = urllib.error.HTTPError("http://x/api/state", 502, "Bad Gateway", {}, io.BytesIO(body))
+        assert runner._error_body(he) == {}
+    he = urllib.error.HTTPError("http://x/api/state", 400, "Bad Request", {}, io.BytesIO(b'{"error":"no such control","at":"A.b"}'))
+    assert runner._error_body(he) == {"error": "no such control", "at": "A.b"}

@@ -46,6 +46,10 @@ bool present(const DevicesModule& dev, const char* ip) {
 // Restore two cached devices, optionally re-confirm A with a live packet, advance to t0+dt and tick once, returning whether A survived.
 bool aPresentAfter(uint32_t t0, uint32_t dt, bool reconfirmA) {
     ClockGuard guard;   // real clock restored on return, even if a REQUIRE below fails
+    // Discovery runs only once the device has an address, so give it one rather than depend on the host being online.
+    struct AddressGuard { ~AddressGuard() { platform::setTestEthIPv4(nullptr); } } address;
+    const uint8_t self[4] = {192, 168, 1, 2};
+    platform::setTestEthIPv4(self);
     platform::setTestNowMs(t0);
     DevicesModule dev;
     // Mirrors the persistence-overlay shape: the whole module JSON object, the array under the control's key, restoreList navigates `member(root, "devices")`.

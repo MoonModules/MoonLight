@@ -1,0 +1,73 @@
+{
+  "name": "scenario_AccessPoint_protected_hidden_and_always_on",
+  "module": "AccessPointModule",
+  "mode": "mutate",
+  "also": [
+    "NetworkModule"
+  ],
+  "on_request": true,
+  "host_network": true,
+  "description": "The access point's own settings, applied live on a device that stays on its network: a WPA2 password, a hidden name, and opening always. This computer joins it by name with the password and reaches the device through it while the device is still on its network. It takes the computer off its network for a minute, so it runs only when named, with --network naming the moondeck.json network the device is on.",
+  "steps": [
+    {
+      "name": "a-password",
+      "op": "set_control",
+      "id": "AccessPoint",
+      "key": "password",
+      "value": "moonlight-ap-test"
+    },
+    {
+      "name": "a-hidden-name",
+      "op": "set_control",
+      "id": "AccessPoint",
+      "key": "hidden",
+      "value": true
+    },
+    {
+      "name": "opens-always",
+      "description": "It opens beside the network the device is on.",
+      "op": "set_control",
+      "id": "AccessPoint",
+      "key": "opens",
+      "value": 1
+    },
+    {
+      "name": "join-it-by-name-with-the-password",
+      "description": "A hidden network is joined by typing its name, and a protected one needs its password.",
+      "op": "host_wifi",
+      "join": "access_point",
+      "password": "moonlight-ap-test",
+      "timeout": 60
+    },
+    {
+      "name": "still-on-its-network",
+      "description": "Reached through the access point, the device is still on its own network beside it.",
+      "op": "expect_control",
+      "id": "Network",
+      "key": "mode",
+      "equals": "WiFi STA"
+    },
+    {
+      "name": "this-computer-is-on-it",
+      "op": "expect_control",
+      "id": "AccessPoint",
+      "key": "clients",
+      "not_equals": "0",
+      "within": 10
+    },
+    {
+      "name": "home",
+      "op": "host_wifi",
+      "join": "home",
+      "timeout": 90
+    },
+    {
+      "name": "open-again",
+      "description": "Passwords are not restored by the runner, since the device returns them obfuscated, so the scenario sets it back itself.",
+      "op": "set_control",
+      "id": "AccessPoint",
+      "key": "password",
+      "value": ""
+    }
+  ]
+}

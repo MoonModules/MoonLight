@@ -48,6 +48,11 @@ public:
     using NoteDirtyFn = void(*)();
     /// Install the hook that schedules a debounced save after a control mutation.
     void setNoteDirtyHook(NoteDirtyFn fn) { noteDirtyHook_ = fn; }
+    /// Schedule the debounced save, through the hook persistence installs.
+    void noteDirty() { if (noteDirtyHook_) noteDirtyHook_(); }
+
+    /// Tell every module in the tree that a file changed, so one that keeps something read from files updates it.
+    void notifyFileChanged(const char* path);
 
     /// Register a top-level module, which the boot then walks in declared order.
     void addModule(MoonModule* mod);
@@ -107,6 +112,9 @@ public:
     /// Set one control by module and control name, applying the whole control-change reaction.
     SetControlResult setControl(const char* moduleName, const char* controlName,
                                 const char* valueJson);
+
+    /// The reaction to a control that changed: visibility rebuilt, the module told, and the tree re-prepared when the control reshapes it.
+    void reactToControlChange(MoonModule* target, const char* controlName);
 
     /// Read one control as a byte, in the units a surface speaks, or false when there is none.
     bool getControl(const char* moduleName, const char* controlName, uint8_t& out) const;

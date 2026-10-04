@@ -1,0 +1,43 @@
+{
+  "name": "scenario_WiFi_known_networks_fall_back_in_order",
+  "module": "WiFiModule",
+  "mode": "mutate",
+  "also": [
+    "NetworkModule"
+  ],
+  "on_request": true,
+  "description": "A device that knows several networks tries them in order and joins the first that answers. A network that is not there goes to the top of the known list, the device restarts, and it still comes up on the network behind it. It restarts the device and needs its radio, so it runs only when named, on a device that knows a network it can reach.",
+  "steps": [
+    {
+      "name": "a-network-not-in-range-first",
+      "description": "Known, preferred, and nowhere to be found.",
+      "op": "list_row",
+      "id": "WiFi",
+      "key": "known",
+      "add": {"ssid": "MoonLight-not-here", "password": "not-here-at-all"},
+      "to": 0
+    },
+    {
+      "name": "restart",
+      "description": "The device tries the first, gives up on it, and joins the next.",
+      "op": "reboot",
+      "timeout": 120
+    },
+    {
+      "name": "on-the-next-network",
+      "op": "expect_control",
+      "id": "Network",
+      "key": "mode",
+      "equals": "WiFi STA",
+      "within": 30
+    },
+    {
+      "name": "forget-it-again",
+      "op": "list_row",
+      "id": "WiFi",
+      "key": "known",
+      "match": {"ssid": "MoonLight-not-here"},
+      "delete": true
+    }
+  ]
+}

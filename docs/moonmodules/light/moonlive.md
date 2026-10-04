@@ -3,6 +3,7 @@
 The MoonLive language: what a script may declare, what the engine hands it, and what it can call.
 A script compiles to native code on the device, so it runs at the speed of a compiled module.
 The library that ships with MoonLight is [moonlive/](https://github.com/MoonModules/MoonLight/tree/main/moonlive), and the shortest way in is [Write your first script](../../tutorials/first-script.md).
+Scripts other people shared are in [MoonLight-Gallery](https://github.com/MoonModules/MoonLight-Gallery), and the [Gallery](../../how-to/presets.md#from-the-gallery) under the Control card's pads installs one into `/moonlive` with a click.
 
 <video src="../../assets/moontube/08-moonlive-effects.webm" controls playsinline width="720" title="A library effect downloaded and run, then one written from nothing: a line, a circle, loops, and particles."></video>
 

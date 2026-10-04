@@ -40,7 +40,7 @@ TEST_CASE("WaveEffect: square is low then high") {
 }
 
 TEST_CASE("WaveEffect: every type stays within the grid bounds") {
-    for (uint8_t type = 0; type < mm::WaveEffect::kTypeCount; type++) {
+    for (uint8_t type = 0; type < mm::WaveEffect::kWaveformCount; type++) {
         for (int p = 0; p <= 255; p++) {
             const lengthType h = 8;
             lengthType y = mm::WaveEffect::waveYForTest(type, static_cast<uint8_t>(p), h);

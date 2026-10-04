@@ -165,6 +165,9 @@ CORE_MODULES = [
     "Services",
     "FirmwareUpdateModule",
     "NetworkModule",
+    "EthernetModule",
+    "WiFiModule",
+    "AccessPointModule",
     "HttpServerModule",
     "MqttModule",
     "FileManagerModule",
@@ -192,6 +195,10 @@ CORE_MODULES = [
 # then screenshots the child's own card. Everything not listed here is a top-level card.
 CORE_NAV_ROOT = {
     "MqttModule": "NetworkModule",
+    # The interfaces are fixed Network children (wired-by-code), in the cascade's order.
+    "EthernetModule": "NetworkModule",
+    "WiFiModule": "NetworkModule",
+    "AccessPointModule": "NetworkModule",
     # Tasks and Pins are fixed System children (wired-by-code), so they have no nav entry.
     "TasksModule": "SystemModule",
     "PinsModule": "SystemModule",

@@ -87,11 +87,17 @@ public:
     /// Record that something changed, which starts the debounce.
     static void noteDirty();
 
-    /// Serialize a subtree into a caller's sink, the prefix letting several share one object.
-    bool saveSubtreeTo(MoonModule* m, JsonSink& sink, const char* prefix = "");
+    /// A whole file in a heap buffer sized to it, null-terminated, which the caller frees; null when absent, empty or out of memory.
+    static char* readWholeFile(const char* path);
+
+    /// Build the config path for one top-level module.
+    static bool pathFor(MoonModule* m, char* out, size_t n);
+
+    /// Serialize a subtree into a caller's sink.
+    bool saveSubtreeTo(MoonModule* m, JsonSink& sink);
 
     /// Apply a serialized subtree to a live tree, driving the lifecycle a runtime rebuild needs.
-    bool applySubtree(MoonModule* m, const char* json, const char* prefix = "");
+    bool applySubtree(MoonModule* m, const char* json);
 
     /// Apply a written config file onto the running tree, so a restored backup needs no reboot.
     bool applyConfigFile(const char* path);
@@ -153,8 +159,6 @@ private:
     static bool subtreeDirty(MoonModule* m);
     /// Clear the dirty mark across a subtree, once its write has succeeded.
     static void clearSubtreeDirty(MoonModule* m);
-    /// Build the config path for one top-level module.
-    static bool pathFor(MoonModule* m, char* out, size_t n);
 };
 
 } // namespace mm

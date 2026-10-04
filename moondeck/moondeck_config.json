@@ -132,21 +132,13 @@
       "script": "check/check_nonblocking.py"
     },
     {
-      "id": "check_lizard",
+      "id": "check_code",
       "tab": "desktop",
       "group": "tools",
-      "label": "Lizard Complexity",
+      "label": "Code report",
       "speed": "medium",
-      "help": "check_lizard",
-      "script": "check/check_lizard.py",
-      "flags": [
-        {
-          "id": "all",
-          "label": "All",
-          "arg": "--all",
-          "default": false
-        }
-      ]
+      "help": "check_code",
+      "script": "check/check_code.py"
     },
     {
       "id": "check_codeql",

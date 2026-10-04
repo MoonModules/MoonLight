@@ -23,7 +23,7 @@ The diagnosis path, which eliminates the firmware before anyone reaches for a so
 
 ## Colors are wrong everywhere
 
-Red where you expect green usually means the channel order does not match the strip. Set it on the driver: the [light preset](../moonmodules/light/supporting.md#lightpresets) names which channel carries which color.
+Red where you expect green usually means the channel order does not match the strip. Set it on the driver: the [fixture profile](../moonmodules/light/supporting.md#fixtureprofiles) names which channel carries which color.
 
 Whole-panel color shifts on a receiving card are a different thing, covered in [panel cards](panel-cards.md).
 

@@ -409,6 +409,15 @@ function selectIndex(ctrl) {
     return ctrl.value ?? 0;
 }
 
+// A palette's value is its index, or its NAME where the device saves it by name; -1 for a name the options do not hold yet.
+function paletteIndex(value, options) {
+    if (typeof value === "string") return (options || []).findIndex(o => o && o.name === value);
+    return value ?? 0;
+}
+
+// The options each palette control was built with, so a value patch that carries none can still resolve a name.
+const paletteOptionsOf = new WeakMap();
+
 function connectPreview() {
     if (wsPreview && (wsPreview.readyState === WebSocket.OPEN ||
                       wsPreview.readyState === WebSocket.CONNECTING)) return;
@@ -584,7 +593,7 @@ async function sendControl(moduleName, controlName, value) {
             // sent), so the card rebuilds from what it has and nothing is re-read. The rebuild is
             // what hides the data.
             const turnedOn = Boolean(value);
-            if (!turnedOn) { moonCloudGeneration++; refetchState(); return; }
+            if (!turnedOn) { moonCloudGeneration++; refetchState(); return true; }
 
             // Switching ON: ONE read, once. A Stats report leaves from tick1s rather than during
             // this write, so reading immediately would show the totals without this device's own
@@ -601,8 +610,10 @@ async function sendControl(moduleName, controlName, value) {
             // sends inside this write, like MoonTalk's `send`, so it re-reads with no delay.
             }, mod?.type === "MoonStatsModule" && controlName === "consent" ? 2000 : 0);
         }
+        return res.ok;   // whether the device took the value, for a caller whose next step depends on it
     } catch (e) {
         console.warn(`[control] POST ${moduleName}.${controlName} failed (error=${e && e.message ? e.message : e})`);
+        return false;
     }
 }
 
@@ -971,6 +982,19 @@ function selectModule(name) {
 ///
 /// A saved name that is no longer in the tree is ignored, leaving the fallback to pick.
 function restoreSelectedRoot() {
+    // A link naming a module opens it, each tab on the way selected: the captive portal sends a phone to `?open=WiFi`, where setup continues.
+    const wanted = new URLSearchParams(location.search).get("open");
+    if (wanted && state && Array.isArray(state.modules) && findModule(wanted)) {
+        let name = wanted;
+        for (let parent = findParentOf(name); parent; parent = findParentOf(name)) {
+            selectedTabs[parent.name] = name;
+            name = parent.name;
+        }
+        safeLocalSet(LS_TABS, JSON.stringify(selectedTabs));
+        selectedModule = name;
+        history.replaceState(null, "", location.pathname);   // a refresh then shows what the user chose since
+        return;
+    }
     if (selectedModule) return;                       // an explicit choice this session wins
     if (!state || !Array.isArray(state.modules) || !state.modules.length) return;
     const saved = lsRead(LS_SELECTED, null);
@@ -1918,22 +1942,16 @@ function createCard(mod, depth) {
         title.appendChild(help);
     }
 
-    // `api` → this ONE module's JSON in a new tab, for issue reports: a user pastes the state of
-    // the card that misbehaves instead of the whole /api/state tree, and the report carries the
-    // control values, the type and the live telemetry without anyone having to ask for them.
-    // On EVERY card, unlike ✎/× (user-editable children only) and ? (types with a doc page):
-    // the card most worth reporting is as likely to be a fixed top-level module as a child.
+    // `{ }` → this card as a state document: the one JSON a preset holds, PATCH /api/state takes and the gallery shares, so it copies into any of them.
+    // On EVERY card, unlike ✎/× (user-editable children only) and ? (types with a doc page): any card's state is worth sharing or keeping.
     const api = document.createElement("a");
     api.className = "card-api";
-    // A glyph, not the word "api": this is a diagnostic aid, and the card's own content should
-    // carry the visual weight. Braces read as JSON at a glance and match the ?/× glyph style.
+    // A glyph, not a word: braces read as JSON at a glance and match the ?/× glyph style.
     api.textContent = "{ }";
-    api.title = "Open this module's JSON (for issue reports)";
-    api.target = "_blank";
-    api.rel = "noopener";
-    // Relative, so it follows whatever host the UI is served from (device IP, mDNS name or a
-    // desktop build on localhost) instead of hard-coding one.
-    api.href = "/api/modules/" + encodeURIComponent(mod.name);
+    api.title = "This card as JSON: copy it, save it as a preset, or open its diagnostics";
+    // Relative, so it follows whatever host the UI is served from; the link itself opens the document for a middle-click.
+    api.href = "/api/modules/" + encodeURIComponent(mod.name) + "/document";
+    api.addEventListener("click", (e) => { e.preventDefault(); openDocumentPopup(api, mod.name); });
     title.appendChild(api);
 
     card.appendChild(title);
@@ -2005,6 +2023,11 @@ function createCard(mod, depth) {
         renderFileManager(mod, controlsHost);
     }
 
+    // The gallery sits under the pads it fills.
+    if (mod.type === "ControlModule") {
+        renderGallery(controlsHost, mod);
+    }
+
     // Contributing earns the answer back on the card that asked for consent, so the charts render
     // here rather than anywhere else. They are drawn empty until consent is on.
     if (mod.type === "MoonStatsModule") {
@@ -2054,7 +2077,18 @@ function createCard(mod, depth) {
         // the release list, the compatible-firmware filtering, the remembered selection and the
         // "2 weeks ago" labels have one home. The URL, File and image rows ride its
         // installRowExtras seam, which exists for exactly this.
-        checkFirmwareUpdate(true);
+        // On the App tab, a newer release says so above the picker that installs it; MoonBase's own mismatch is the device's status line.
+        const available = document.createElement("div");
+        available.className = "fw-available";
+        available.hidden = true;
+        const imageTabs = {};   // filled by the tab strip below, so each can carry a dot where its fix is
+        checkFirmwareUpdate(true).then(u => {
+            if (!u) return;
+            if (imageTabs.app) applyTabDot(imageTabs.app, { severity: "warning" });
+            if (kind !== "app") return;
+            available.textContent = `${u.label} is available: pick it under Release and Install.`;
+            available.hidden = false;
+        });
         const ctrlValue = (name) => {
             const c = (mod.controls || []).find(x => x.name === name);
             return c ? c.value : null;
@@ -2097,6 +2131,9 @@ function createCard(mod, depth) {
                 tab.addEventListener("click", () => {
                     if (tabKind !== kind) sendControl(mod.name, "image", i);
                 });
+                imageTabs[tabKind] = tab;
+                const dev = deviceFirmwareInfo();
+                if (tabKind === "moonbase" && dev && dev.moonbase) applyTabDot(tab, { severity: "warning" });
                 strip.appendChild(tab);
             });
             const titleRow = controlsHost.querySelector(":scope > .card-title");
@@ -2212,6 +2249,7 @@ function createCard(mod, depth) {
         // -- the shared picker ----------------------------------------------------------
         const mount = document.createElement("div");
         mount.className = "install-picker-host";
+        controlsHost.appendChild(available);
         controlsHost.appendChild(mount);
         installPicker.init({
             container: mount,
@@ -2962,10 +3000,7 @@ function createControl(moduleName, moduleType, ctrl) {
         }
         case "filepath": return buildFilePathControl(row, label, key, moduleName, ctrl);
         case "password": {
-            // ctrl.value arrives XOR-obfuscated + base64-encoded (see
-            // HttpServerModule PASSWORD_XOR_KEY). Decode it so the input holds
-            // the real stored password: masked by the password input, revealed
-            // by hold-to-peek. The obfuscation is trivially reversible by design.
+            // ctrl.value arrives obfuscated (writeObfuscatedPassword); decoded, the input holds the stored password, masked until hold-to-peek.
             const input = document.createElement("input");
             input.type = "password";
             input.value = decodePassword(ctrl.value);
@@ -2975,22 +3010,7 @@ function createControl(moduleName, moduleType, ctrl) {
                 dragTs[key] = Date.now();
                 debounceSend(key, 500, () => sendControl(moduleName, ctrl.name, input.value));
             });
-            row.appendChild(input);
-            // Hold-to-peek button: reveals the stored password.
-            const peek = document.createElement("button");
-            peek.className = "peek-btn";
-            peek.type = "button";
-            peek.textContent = "👁";
-            peek.title = "Hold to reveal";
-            const show = () => { input.type = "text"; };
-            const hide = () => { input.type = "password"; };
-            peek.addEventListener("mousedown", show);
-            peek.addEventListener("mouseup", hide);
-            peek.addEventListener("mouseleave", hide);
-            peek.addEventListener("touchstart", (e) => { e.preventDefault(); show(); });
-            peek.addEventListener("touchend", hide);
-            peek.addEventListener("touchcancel", hide);   // a canceled touch fires no touchend
-            row.appendChild(peek);
+            row.append(input, peekButton(input));
             break;
         }
         case "select": {
@@ -3167,7 +3187,7 @@ function createControl(moduleName, moduleType, ctrl) {
             // to before). The flag flows through to both render paths via the opts object.
             if (ctrl.editable) list.dataset.editable = "true";
             buildListEntries(list, rows, details, new Set(),   // initial: nothing expanded
-                {editable: ctrl.editable, pads: ctrl.pads, gridCols: ctrl.gridCols, gridRows: ctrl.gridRows,
+                {editable: ctrl.editable, fixedRows: ctrl.fixedRows, pads: ctrl.pads, gridCols: ctrl.gridCols, gridRows: ctrl.gridRows,
                  moduleName: moduleName, ctrlName: ctrl.name, optionSets: ctrl.optionSets || {}});
             row.appendChild(list);
             break;
@@ -3262,35 +3282,33 @@ function openSurfacePopup(anchorEl, title, build) {
     return pop;
 }
 
-// The edit form behind a right-click on a pad: rename, choose what it captures, save over it, or
-// delete. These are the SAME operations the card's bottom controls performed, moved onto the thing
-// they act on: a form at the bottom of the card cannot say which pad it means.
-// What a preset captures: exactly ONE of the four top-level subtrees. A radio group rather than four
-// checkboxes, so "a look" and "a geometry" are the only things expressible: the combinations that
-// used to be possible were the hard part to explain and the hard part to display.
-function buildCaptureToggles(body, moduleName) {
+// The edit form behind a right-click on a pad: rename, choose what it saves, save over it, or delete, on the thing they act on.
+// A pad saves one of the containers the device names, whole; any other card saves itself through its own `{ }` button.
+// Returns the chosen container, which the save sends itself, so a card saved earlier never decides what a pad saves.
+function buildCaptureToggles(body, moduleName, ctrlName, item) {
     const mod = findModule(moduleName);
-    const ctrl = mod && (mod.controls || []).find(c => c.name === "captures");
-    if (!ctrl) return;
-    const names = Array.isArray(ctrl.options) && ctrl.options.length
-        ? ctrl.options : ["Layouts", "Effects", "Drivers", "Services"];
+    const list = mod && (mod.controls || []).find(c => c.name === ctrlName);
+    const names = (list && list.optionSets && list.optionSets.containers) || [];
+    let chosen = item && names.includes(item.captures) ? item.captures
+               : names.includes("Effects") ? "Effects" : names[0];
     const wrap = document.createElement("div");
     wrap.className = "surface-popup-captures";
-    names.forEach((n, i) => {
+    for (const n of names) {
         const lab = document.createElement("label");
         lab.className = "surface-popup-capture";
         const rb = document.createElement("input");
         rb.type = "radio";
         rb.name = `capture-${moduleName}`;
-        rb.checked = Number(ctrl.value) === i;
-        rb.addEventListener("change", () => { if (rb.checked) sendControl(moduleName, "captures", i); });
+        rb.checked = n === chosen;
+        rb.addEventListener("change", () => { if (rb.checked) chosen = n; });
         lab.append(rb, document.createTextNode(n));
         wrap.appendChild(lab);
-    });
+    }
     const cap = document.createElement("div");
     cap.className = "surface-popup-caption";
-    cap.textContent = "captures";
+    cap.textContent = "saves";
     body.append(cap, wrap);
+    return () => chosen;
 }
 
 function openPadEditor(anchorEl, moduleName, ctrlName, item, slot) {
@@ -3312,22 +3330,20 @@ function openPadEditor(anchorEl, moduleName, ctrlName, item, slot) {
             nameRow.append(nameLbl, nameIn);
             body.appendChild(nameRow);
 
-            // What this preset carries, read from the file rather than the form.
+            // What this preset sets, read from the file rather than the form.
             if (item.captures) {
                 const cap = document.createElement("div");
                 cap.className = "surface-popup-row";
-                cap.textContent = `captures ${item.captures}`;
+                cap.textContent = `sets ${item.captures}`;
                 body.appendChild(cap);
             }
             // Re-saving over the pad: the toggles decide what the NEW contents carry.
-            buildCaptureToggles(body, moduleName);
+            const container = buildCaptureToggles(body, moduleName, ctrlName, item);
             const over = document.createElement("button");
             over.className = "surface-popup-primary";
             over.textContent = "save current state over it";
             over.addEventListener("click", async () => {
-                await sendControl(moduleName, "name", item.name);
-                await sendControl(moduleName, "slot", slot);
-                await sendControl(moduleName, "save", 1);
+                await savePresetFrom(container(), item.name, slot);
                 close();
                 refetchState();
             });
@@ -3354,23 +3370,126 @@ function openPadEditor(anchorEl, moduleName, ctrlName, item, slot) {
             nameIn.placeholder = "new preset";
             nameRow.append(nameLbl, nameIn);
             body.appendChild(nameRow);
-            buildCaptureToggles(body, moduleName);
+            const container = buildCaptureToggles(body, moduleName, ctrlName, null);
 
             const saveBtn = document.createElement("button");
             saveBtn.className = "surface-popup-primary";
             saveBtn.textContent = "save current state here";
             saveBtn.addEventListener("click", async () => {
                 if (!nameIn.value.trim()) { nameIn.focus(); return; }
-                // The module's own `name` + `slot` + `save` controls do the work; the popup is only
-                // the form that fills them, so the save path stays the one the tests cover.
-                await sendControl(moduleName, "name", nameIn.value.trim());
-                await sendControl(moduleName, "slot", slot);
-                await sendControl(moduleName, "save", 1);
+                if (!await savePresetFrom(container(), nameIn.value.trim(), slot)) { refusedName(nameIn); return; }
                 close();
                 refetchState();
             });
             body.appendChild(saveBtn);
             setTimeout(() => nameIn.focus(), 0);
+        }
+    });
+}
+
+/// JSON text indented two spaces, walked as text so key order is kept as written (a parse would move numeric keys first).
+function formatJson(text) {
+    let out = "", depth = 0, inString = false;
+    const newline = () => "\n" + "  ".repeat(depth);
+    for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (inString) {
+            out += c;
+            if (c === "\\") out += text[++i];
+            else if (c === '"') inString = false;
+        } else if (c === '"') { inString = true; out += c; }
+        else if (c === "{" || c === "[") {
+            const close = c === "{" ? "}" : "]";
+            if (text[i + 1] === close) { out += c + close; i++; continue; }   // an empty object or list stays on one line
+            depth++; out += c + newline();
+        }
+        else if (c === "}" || c === "]") { depth--; out += newline() + c; }
+        else if (c === ",") out += c + newline();
+        else if (c === ":") out += ": ";
+        else if (!/\s/.test(c)) out += c;
+    }
+    return out;
+}
+
+/// The control surface's module name, which holds the presets, or null on a build without one.
+function presetModuleName() {
+    const m = (state && state.modules || []).find(x => x.type === "ControlModule");
+    return m ? m.name : null;
+}
+
+/// Save `sourceName`'s current state as a preset called `name`, on pad `slot` when one is given, through the surface's own save form, so the save path stays the one the tests cover.
+/// False when the device refuses a value, such as a name with a dot, so a refused name never saves under the one before it.
+async function savePresetFrom(sourceName, name, slot) {
+    const control = presetModuleName();
+    if (!control) return false;
+    if (!await sendControl(control, "source", sourceName)) return false;
+    if (!await sendControl(control, "name", name)) return false;
+    if (slot !== undefined && !await sendControl(control, "slot", slot)) return false;
+    return sendControl(control, "save", 1);
+}
+
+/// Mark a name input the device refused, with the rule it applies.
+function refusedName(input) {
+    input.setCustomValidity("printable letters, digits and punctuation, without . / or backslash, at most 31");
+    input.reportValidity();
+    input.addEventListener("input", () => input.setCustomValidity(""), { once: true });
+}
+
+// A card as a state document: copy it, save it as a preset, or open the diagnostic dump an issue report wants.
+async function openDocumentPopup(anchorEl, moduleName) {
+    const base = "/api/modules/" + encodeURIComponent(moduleName);
+    let text;
+    try {
+        const res = await fetch(base + "/document");
+        if (!res.ok) throw new Error(await errorMessage(res));
+        text = formatJson(await res.text());
+    } catch (e) { text = `could not read ${moduleName}: ${e.message}`; }
+    openSurfacePopup(anchorEl, `${moduleName} as JSON`, (body, close) => {
+        const doc = document.createElement("textarea");
+        doc.className = "surface-popup-document";
+        doc.readOnly = true;
+        doc.spellcheck = false;
+        doc.value = text;
+        body.appendChild(doc);
+
+        const row = document.createElement("div");
+        row.className = "surface-popup-row";
+        const copy = document.createElement("button");
+        copy.className = "surface-popup-primary";
+        copy.textContent = "copy";
+        // The clipboard API needs a secure context, which a device on plain http is not, so selecting the text and copying it is the fallback.
+        copy.addEventListener("click", async () => {
+            try { await navigator.clipboard.writeText(text); }
+            catch (_) { doc.select(); document.execCommand("copy"); }
+            copy.textContent = "copied";
+        });
+        const diag = document.createElement("a");
+        diag.href = base;
+        diag.target = "_blank";
+        diag.rel = "noopener";
+        diag.textContent = "diagnostics";
+        diag.title = "The card's controls with their types and live readings, for an issue report";
+        row.append(copy, diag);
+        body.appendChild(row);
+
+        if (presetModuleName()) {
+            const saveRow = document.createElement("div");
+            saveRow.className = "surface-popup-row";
+            const nameIn = document.createElement("input");
+            nameIn.type = "text";
+            nameIn.className = "list-field-input";
+            nameIn.placeholder = "preset name";
+            const save = document.createElement("button");
+            save.className = "surface-popup-primary";
+            save.textContent = "save as preset";
+            save.addEventListener("click", async () => {
+                if (!nameIn.value.trim()) { nameIn.focus(); return; }
+                if (!await savePresetFrom(moduleName, nameIn.value.trim())) { refusedName(nameIn); return; }
+                close();
+                refetchState();
+            });
+            saveRow.append(nameIn, save);
+            body.appendChild(saveRow);
         }
     });
 }
@@ -3934,11 +4053,13 @@ function buildListPads(container, rows, opts) {
 function buildListEntries(container, rows, details, openSet, opts) {
     if (opts && opts.pads) { buildListPads(container, rows, opts); return; }
     const editable = !!(opts && opts.editable);
+    // Rows the source owns, such as a scan's results: their fields edit, but nothing adds, deletes or moves one.
+    const fixedRows = !!(opts && opts.fixedRows);
     const moduleName = opts && opts.moduleName;
     const ctrlName = opts && opts.ctrlName;
     const optionSets = (opts && opts.optionSets) || {};   // shared option arrays, keyed by name (optionsRef)
     container.replaceChildren();
-    if (rows.length === 0 && !editable) {
+    if (rows.length === 0 && (!editable || fixedRows)) {
         const empty = document.createElement("div");
         empty.className = "list-empty";
         empty.textContent = "(none)";
@@ -3998,7 +4119,7 @@ function buildListEntries(container, rows, details, openSet, opts) {
             entry.dataset.rowIndex = i;
             const actions = document.createElement("span");
             actions.className = "list-actions";
-            if (!locked) {
+            if (!locked && !fixedRows) {
                 const del = document.createElement("button");
                 del.type = "button";
                 del.className = "list-action-btn";
@@ -4065,7 +4186,7 @@ function buildListEntries(container, rows, details, openSet, opts) {
         entry.append(summary, detailPanel);
         scroll.appendChild(entry);
     });
-    if (editable) {
+    if (editable && !fixedRows) {
         // "+ Add" appends a new row (server assigns the id, then state refreshes).
         const addBtn = document.createElement("button");
         addBtn.type = "button";
@@ -4074,6 +4195,24 @@ function buildListEntries(container, rows, details, openSet, opts) {
         addBtn.addEventListener("click", () => listAddRow(moduleName, ctrlName));
         container.appendChild(addBtn);
     }
+}
+
+// The hold-to-peek eye beside a password input, revealing it only while pressed.
+function peekButton(input) {
+    const peek = document.createElement("button");
+    peek.className = "peek-btn";
+    peek.type = "button";
+    peek.textContent = "👁";
+    peek.title = "Hold to reveal";
+    const show = () => { input.type = "text"; };
+    const hide = () => { input.type = "password"; };
+    peek.addEventListener("mousedown", show);
+    peek.addEventListener("mouseup", hide);
+    peek.addEventListener("mouseleave", hide);
+    peek.addEventListener("touchstart", (e) => { e.preventDefault(); show(); });
+    peek.addEventListener("touchend", hide);
+    peek.addEventListener("touchcancel", hide);   // a canceled touch fires no touchend
+    return peek;
 }
 
 // Render an editable row's detail: each descriptor in `detail.fields[]` becomes an inline
@@ -4086,6 +4225,20 @@ function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionS
     panel.replaceChildren();
     optionSets = optionSets || {};
     const fields = detail && Array.isArray(detail.fields) ? detail.fields : [];
+    // A row button sends the row's unsent edits first, in order: iPhone Safari keeps the focus in a field when a button is tapped, so its change event never fires, and two requests may arrive in either order.
+    const commits = [];
+    const commitOnChange = (inp, dragKey, send) => {
+        let sent = inp.value;
+        const commit = () => {
+            if (inp.value === sent) return undefined;
+            dragTs[dragKey] = Date.now();
+            const done = send();
+            sent = inp.value;
+            return done;
+        };
+        inp.addEventListener("change", commit);
+        commits.push(commit);
+    };
     for (const f of fields) {
         const r = document.createElement("div");
         r.className = "list-detail-row";
@@ -4096,7 +4249,16 @@ function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionS
         vEl.className = "list-detail-val";
         // Per-field cooldown key: unique per module/control/row/field so edits don't collide.
         const dragKey = `list:${moduleName}:${ctrlName}:${id}:${f.name}`;
-        if (f.readonly) {
+        if (f.readonly && typeof f.value === "string" && /^https?:\/\//.test(f.value)) {
+            // A link the user follows, opened in a new tab as every detail link is.
+            const a = document.createElement("a");
+            a.href = f.value;
+            a.textContent = f.value;
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+            a.className = "list-detail-link";
+            vEl.appendChild(a);
+        } else if (f.readonly) {
             vEl.textContent = String(f.value ?? "");
             vEl.classList.add("list-detail-muted");
         } else if (f.type === "button") {
@@ -4116,6 +4278,7 @@ function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionS
             btn.textContent = f.label || f.name;
             btn.addEventListener("click", async () => {
                 btn.disabled = true;
+                for (const commit of commits) await commit();
                 await listSetField(moduleName, ctrlName, id, f.name, "");
                 if (f.refetch) refetchState();
                 btn.disabled = false;
@@ -4144,6 +4307,17 @@ function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionS
                 listSetField(moduleName, ctrlName, id, f.name, parseInt(sel.value));
             });
             vEl.appendChild(sel);
+        } else if (f.type === "password") {
+            // A password behind the eye, obfuscated on the wire as the Password control's is.
+            const inp = document.createElement("input");
+            inp.type = "password";
+            inp.className = "list-field-input";
+            inp.dataset.dragkey = dragKey;
+            inp.autocomplete = "new-password";
+            inp.value = decodePassword(f.value);
+            inp.addEventListener("input", () => { dragTs[dragKey] = Date.now(); });
+            commitOnChange(inp, dragKey, () => listSetField(moduleName, ctrlName, id, f.name, inp.value));
+            vEl.append(inp, peekButton(inp));
         } else if (f.type === "uint8") {
             const inp = document.createElement("input");
             inp.type = "number";
@@ -4153,8 +4327,7 @@ function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionS
             if (f.max !== undefined) inp.max = f.max;
             inp.value = f.value ?? 0;
             inp.addEventListener("input", () => { dragTs[dragKey] = Date.now(); });
-            inp.addEventListener("change", () => {
-                dragTs[dragKey] = Date.now();
+            commitOnChange(inp, dragKey, () => {
                 // Guard against empty/invalid entry (parseInt → NaN) and clamp to the control's
                 // range: the HTML min/max attributes don't enforce a hand-typed value, so a stray
                 // "" or out-of-range number would otherwise reach the device as NaN / an overflow.
@@ -4163,7 +4336,7 @@ function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionS
                 if (f.min !== undefined) v = Math.max(v, f.min);
                 if (f.max !== undefined) v = Math.min(v, f.max);
                 inp.value = v;   // reflect the clamped value back into the field
-                listSetField(moduleName, ctrlName, id, f.name, v);
+                return listSetField(moduleName, ctrlName, id, f.name, v);
             });
             vEl.appendChild(inp);
         } else {   // "text" and any unknown type render as a text input
@@ -4173,10 +4346,7 @@ function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionS
             inp.dataset.dragkey = dragKey;
             inp.value = f.value ?? "";
             inp.addEventListener("input", () => { dragTs[dragKey] = Date.now(); });
-            inp.addEventListener("change", () => {
-                dragTs[dragKey] = Date.now();
-                listSetField(moduleName, ctrlName, id, f.name, inp.value);
-            });
+            commitOnChange(inp, dragKey, () => listSetField(moduleName, ctrlName, id, f.name, inp.value));
             vEl.appendChild(inp);
         }
         r.append(kEl, vEl);
@@ -4184,13 +4354,13 @@ function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionS
     }
 }
 
-// Join a list row's scalar fields into a one-line summary (skips marker fields: `self`, `severity`
+// Join a list row's scalar fields into a one-line summary (skips the row's `id` handle, a `password`, which shows only behind its eye, and marker fields: `self`, `severity`
 //: that render as row styling rather than text, and any nested objects). Generic: the engine names
 // the fields.
 function listSummaryText(item) {
     if (!item || typeof item !== "object") return String(item ?? "");
     return Object.entries(item)
-        .filter(([k, v]) => k !== "self" && k !== "severity" && typeof v !== "object")
+        .filter(([k, v]) => k !== "id" && k !== "self" && k !== "severity" && k !== "password" && typeof v !== "object")
         .map(([, v]) => v)
         .join("  ·  ");
 }
@@ -4361,10 +4531,8 @@ function debounceSend(key, ms, fn) {
     dragTimers[key] = setTimeout(fn, ms);
 }
 
-// Password controls arrive XOR-obfuscated + base64-encoded (see
-// HttpServerModule PASSWORD_XOR_KEY). This reverses it. The XOR key is a fixed
-// shared constant, not a secret: this is obfuscation so the password is not
-// plainly readable in a raw /api/state response, not real encryption.
+// A password, a control's or a list field's, arrives XOR-obfuscated and base64-encoded (writeObfuscatedPassword in Control.cpp), and this reverses it.
+// The key is a fixed shared constant, not a secret: obfuscation against reading it at a glance in /api/state, not encryption.
 const PW_XOR_KEY = 0x5A;
 function decodePassword(encoded) {
     if (!encoded) return "";
@@ -4410,9 +4578,8 @@ function fmtProgressLabel(ctrl) {
 // zero rendering would still mislead. Real metric values are never zero
 // in practice: RSSI is negative, TX power is 0..127 dBm (zero only on
 // driver-uninitialized reads).
-// Is a display control's value a url? One predicate, because BOTH render paths (renderCards and
-// updateModuleControls) have to agree on which values become links: a rule applied in only one
-// of them shows a link that the next state push replaces with plain text.
+// Is a display control's value a url?
+// One predicate, because BOTH render paths (renderCards and updateModuleControls) have to agree on which values become links: a rule applied in only one of them shows a link that the next state push replaces with plain text.
 function isUrlValue(v) {
     return typeof v === "string" &&
            (v.startsWith("/") || /^https?:\/\//.test(v) || v.startsWith("rtsp://"));
@@ -4804,16 +4971,20 @@ function updateModuleControls(mod) {
                 // Custom dropdown: patch the trigger (swatch + name) and the selected row, but not
                 // while the user has the list open (data-open === "true").
                 const wrap = queryByName(`.palette-control[data-mid="${cssEscape(mid)}"][data-key="${k}"]`, "data-mid", mid);
-                if (wrap && wrap.dataset.open !== "true" && Number(wrap.dataset.value) !== Number(ctrl.value)) {
-                    wrap.dataset.value = ctrl.value;
-                    const cols = ((ctrl.options || [])[ctrl.value] || {}).colors || "";
+                const popts = ctrl.options || (wrap && paletteOptionsOf.get(wrap)) || [];
+                if (wrap && ctrl.options) paletteOptionsOf.set(wrap, ctrl.options);   // what the picker opens with
+                const pidx = paletteIndex(ctrl.value, popts);
+                // A name these options do not hold yet keeps the current paint until a patch brings the new list.
+                if (wrap && wrap.dataset.open !== "true" && pidx >= 0 && Number(wrap.dataset.value) !== pidx) {
+                    wrap.dataset.value = pidx;
+                    const cols = (popts[pidx] || {}).colors || "";
                     const grad = paletteGradientCss(cols);
                     const triSwatch = wrap.querySelector(".palette-trigger .palette-swatch");
                     if (triSwatch) triSwatch.style.background = grad;
                     const triName = wrap.querySelector(".palette-trigger .palette-name");
-                    if (triName) setText(triName, ((ctrl.options || [])[ctrl.value] || {}).name || String(ctrl.value));
+                    if (triName) setText(triName, (popts[pidx] || {}).name || String(pidx));
                     wrap.querySelectorAll(".palette-item.selected").forEach(x => x.classList.remove("selected"));
-                    const row = wrap.querySelector(`.palette-item[data-idx="${ctrl.value}"]`);
+                    const row = wrap.querySelector(`.palette-item[data-idx="${pidx}"]`);
                     if (row) row.classList.add("selected");
                 }
                 break;
@@ -4907,7 +5078,7 @@ function updateModuleControls(mod) {
                 // would jump a long list back to the top mid-edit of a row further down.
                 const prevScroll = list.querySelector(".list-scroll")?.scrollTop ?? 0;
                 buildListEntries(list, rows, details, open,
-                    {editable: ctrl.editable, pads: ctrl.pads, gridCols: ctrl.gridCols, gridRows: ctrl.gridRows,
+                    {editable: ctrl.editable, fixedRows: ctrl.fixedRows, pads: ctrl.pads, gridCols: ctrl.gridCols, gridRows: ctrl.gridRows,
                      moduleName: mod.name, ctrlName: ctrl.name, optionSets: ctrl.optionSets || {}});
                 const newScroll = list.querySelector(".list-scroll");
                 if (newScroll) newScroll.scrollTop = prevScroll;
@@ -4948,6 +5119,8 @@ function controlValuesEqual(ctrl, def) {
         ctrl.type === "filepath" || ctrl.type === "password") {
         return String(ctrl.value ?? "") === String(def ?? "");
     }
+    // A control saved by name (a palette, a label-persisted Select) reports a string for both.
+    if (typeof ctrl.value === "string" || typeof def === "string") return String(ctrl.value ?? "") === String(def ?? "");
     return Number(ctrl.value) === Number(def);
 }
 
@@ -5888,9 +6061,9 @@ async function cachedJson(url, key, force) {
             // console.debug, not warn: an update check failing is routine and not
             // actionable (the device may simply be offline, or GitHub rate-limited),
             // so keep it out of the default console: debug is hidden unless the user
-            // opts into verbose. Both callers hit api.github.com, which sends
-            // Access-Control-Allow-Origin and so reads fine from the device origin;
-            // the failure path here is for the no-network / rate-limit case.
+            // opts into verbose. Every caller reads GitHub (the releases API, the gallery index on
+            // raw.githubusercontent.com), which sends Access-Control-Allow-Origin and so reads fine
+            // from the device origin; the failure path here is for the no-network / rate-limit case.
             console.debug("[update] fetch failed:", url, e && e.message ? e.message : e);
             const raw = safeLocalGet(key);                   // serve stale on failure
             if (raw) {
@@ -5932,24 +6105,23 @@ function desktopAssetPrefix() {
     return null;                                   // an OS we do not package: say nothing
 }
 
-// Read the device's running version + firmware-variant key off the FirmwareUpdateModule.
+// The device's app version, its MoonBase's version, and its firmware variant, whichever tab the Firmware card shows.
+// The card's rows describe one image at a time, so the app's version comes from its hidden `appVersion`, a MoonBase that does not match from `moonbaseMismatch`, and the variant from the System card, which names it on every tab.
 function deviceFirmwareInfo() {
     if (!state || !state.modules) return null;
-    const fw = findModule("Firmware") || (state.modules.find(m => m.type === "FirmwareUpdateModule"));
+    const fw = state.modules.find(m => m.type === "FirmwareUpdateModule");
     if (!fw) return null;
-    const ctrls = fw.controls || [];
-    // ONLY WHILE THE CARD DESCRIBES THE APP. `image` rebinds version/build/firmware/partition to
-    // whichever partition is selected, so on the MoonBase tab these read MoonBase: the badge would
-    // then compare a recovery image's version against app releases and look for a firmware asset
-    // named after a chip. The badge is global chrome, so it would stay wrong for as long as the
-    // user left that tab selected.
-    const image = (ctrls.find(c => c.name === "image") || {}).value;
-    if (image === 1) return null;
-    const version = (ctrls.find(c => c.name === "version") || {}).value;
-    const firmware = (ctrls.find(c => c.name === "firmware") || {}).value;
+    const value = (mod, name) => ((mod && mod.controls) || []).find(c => c.name === name)?.value;
+    const version = value(fw, "appVersion");
+    const firmware = value(allModules().find(m => m.type === "SystemModule"), "firmware");
     // "unknown" is what a desktop build reports: no ESP32 variant to name.
     const isDesktop = !firmware || firmware === "unknown";
-    return version ? { version, firmware: isDesktop ? null : firmware, isDesktop } : null;
+    return version ? { version, firmware: isDesktop ? null : firmware, isDesktop, moonbase: value(fw, "moonbaseMismatch") || null } : null;
+}
+
+// The release a version ships in: its tag for a stable version, the moving `latest` for a prerelease.
+function releaseTagOf(version) {
+    return (parse(version)?.prerelease.length || 0) > 0 ? "latest" : `v${version}`;
 }
 
 // Light the badge for an available update. `tag` is the release the picker should pre-select
@@ -5966,6 +6138,17 @@ function showUpdateBadge(badge, tag, label, isDesktop) {
         : `Firmware update available: ${label}. Open Firmware to install`;
     badge.dataset.tag = tag;
     badge.dataset.desktop = isDesktop ? "1" : "";
+    badge.dataset.moonbase = "";
+    badge.hidden = false;
+}
+
+// Light the badge for a MoonBase that does not match the app, which an app update leaves behind on either channel: the matching one ships in the app's own release.
+function showMoonBaseBadge(badge, dev) {
+    setText(badge, "⬆ MoonBase");
+    badge.title = `MoonBase ${dev.moonbase} does not match the app ${dev.version}. Open Firmware to install the matching one`;
+    badge.dataset.tag = releaseTagOf(dev.version);
+    badge.dataset.desktop = "";
+    badge.dataset.moonbase = "1";
     badge.hidden = false;
 }
 
@@ -6018,25 +6201,30 @@ async function devUpdate(dev, force) {
     return (hasBinary && isNewer(v, dev.version)) ? v : null;
 }
 
-// Show/hide the badge. `force` bypasses the cache (used when the Firmware card opens).
-// Stable update takes precedence; a -dev device additionally checks the latest channel.
+// Show/hide the badge, and return the app update it found as {tag, label}, or null. `force` bypasses the cache (used when the Firmware card opens).
+// An app update comes first, a stable one before a -dev device's latest; with the app current, a MoonBase that does not match it.
 async function checkFirmwareUpdate(force) {
     const badge = document.getElementById("fw-update-badge");
-    if (!badge) return;
+    if (!badge) return null;
     const dev = deviceFirmwareInfo();
-    if (!dev) { badge.hidden = true; return; }
+    if (!dev) { badge.hidden = true; return null; }
 
     const stableTag = await stableUpdate(dev, force);
-    if (stableTag) { showUpdateBadge(badge, stableTag, stableTag, dev.isDesktop); return; }
+    if (stableTag) { showUpdateBadge(badge, stableTag, stableTag, dev.isDesktop); return { tag: stableTag, label: stableTag }; }
 
     // Only a prerelease (-dev…) build follows the moving latest channel; a stable device is
     // not nudged toward an unreleased build.
     const onPrerelease = (parse(dev.version)?.prerelease.length || 0) > 0;
     if (onPrerelease) {
         const devVer = await devUpdate(dev, force);
-        if (devVer) { showUpdateBadge(badge, "latest", `latest (${devVer})`, dev.isDesktop); return; }
+        if (devVer) {
+            showUpdateBadge(badge, "latest", `latest (${devVer})`, dev.isDesktop);
+            return { tag: "latest", label: `latest (${devVer})` };
+        }
     }
+    if (dev.moonbase) { showMoonBaseBadge(badge, dev); return null; }
     badge.hidden = true;
+    return null;
 }
 
 // Badge click → pre-select the new release in the picker (it restores from PICKER_RELEASE_KEY
@@ -6053,6 +6241,9 @@ function setupUpdateBadge() {
         }
         if (badge.dataset.tag) safeLocalSet(PICKER_RELEASE_KEY, badge.dataset.tag);
         selectModule("Firmware");
+        // Straight to the tab that installs it.
+        const fw = state && state.modules.find(m => m.type === "FirmwareUpdateModule");
+        if (badge.dataset.moonbase && fw) sendControl(fw.name, "image", 1);
     });
 }
 
@@ -6123,17 +6314,17 @@ async function mlDownloadScript(name, group) {
     }
     const text = await res.text();
     if (!text.trim()) throw new Error("downloaded script is empty");
-    // The factory directory has to exist first: POST /api/file does not create parents, so on a
-    // device where nothing has been downloaded yet the write fails with "write failed" and no clue
-    // why. mkdir is idempotent, so this costs one request and only on the first download.
-    await fetch("/api/dir?path=" + encodeURIComponent(cat.dir), { method: "POST" }).catch(() => {});
-    // Straight to the factory directory, never the user's: an edit is what puts a copy there, and
-    // that copy is what shadows this one.
-    const save = await fetch("/api/file?path=" + encodeURIComponent(cat.dir + "/" + name), {
-        method: "POST", headers: { "Content-Type": "application/octet-stream" },
-        body: new Blob([text]),
+    // Straight to the factory directory, never the user's: an edit is what puts a copy there, and that copy is what shadows this one.
+    await writeDeviceFile(cat.dir, name, text);
+}
+
+/// Write a text file onto the device, creating its folder first, since POST /api/file does not create parents and mkdir is idempotent.
+async function writeDeviceFile(dir, name, text) {
+    await fetch("/api/dir?path=" + encodeURIComponent(dir), { method: "POST" }).catch(() => {});
+    const res = await fetch("/api/file?path=" + encodeURIComponent(dir + "/" + name), {
+        method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: new Blob([text]),
     });
-    if (!save.ok) throw new Error(await errorMessage(save));
+    if (!res.ok) throw new Error(await errorMessage(res));
 }
 
 async function fmFetchDir(absPath, hidden) {
@@ -6444,6 +6635,237 @@ function renderMoonCloudStats(host, mod) {
 // Polled on card build rather than streamed. A chat wants to feel live, but a device UI rebuilds
 // this card on every unrelated state push, so a socket per card would be a connection per render.
 // The refresh button is the honest version until MoonCloud Sync brings a real transport.
+// ---------------------------------------------------------------------------------------------
+// The gallery: presets and scripts people shared in MoonLight-Gallery, installed with a click.
+// The BROWSER fetches, as the script downloads do: raw.githubusercontent.com answers any page, so the device needs no internet of its own.
+// ---------------------------------------------------------------------------------------------
+
+const GALLERY_RAW = "https://raw.githubusercontent.com/MoonModules/MoonLight-Gallery/main/";
+const GALLERY_SCRIPT_EXT = [".mle", ".mll", ".mlm", ".mls", ".mlp"];
+let galleryOpen = false;   // kept across re-renders, so a pad click does not fold it shut
+let galleryStatus = "";    // the last outcome, kept across the re-render an install causes
+
+/// A preset that may go on a pad unasked: a look (Effects only) or a palette (Drivers setting its palette and nothing else), since pins and geometry belong to one rig.
+function galleryPadReady(doc) {
+    if (!doc || typeof doc !== "object" || Array.isArray(doc)) return false;
+    const keys = Object.keys(doc).filter(k => !k.startsWith("$"));   // a `$` key is the file's own, such as its pad
+    if (keys.length === 1 && keys[0] === "Effects") return true;
+    if (keys.length !== 1 || keys[0] !== "Drivers") return false;
+    const set = Object.keys(doc.Drivers || {});
+    return set.length > 0 && set.every(k => k === "palette" || k === "paletteScript");
+}
+
+/// The script files a document names, as the values of its controls.
+function galleryScriptsOf(doc, found = new Set()) {
+    if (typeof doc === "string") {
+        if (GALLERY_SCRIPT_EXT.some(e => doc.toLowerCase().endsWith(e))) found.add(doc);
+    } else if (doc && typeof doc === "object") {
+        for (const v of Object.values(doc)) galleryScriptsOf(v, found);
+    }
+    return found;
+}
+
+/// A gallery file's name on the device: the accepted file's own name without its issue number.
+function galleryFileName(entry) {
+    return entry.file.slice(entry.file.lastIndexOf("/") + 1).replace(/^\d+-/, "");
+}
+
+/// A preset name the device accepts (ControlModule's validPresetName): printable ASCII without a path or dot character, at most 31.
+function galleryPresetName(entry) {
+    return String(entry.name || galleryFileName(entry)).replace(/[^\x20-\x7e]|[\/\\.]/g, "-").trim().slice(0, 31) || "gallery";
+}
+
+/// A link from the gallery's index, kept only when it is http or https, since the index is third-party text.
+function galleryUrl(url) {
+    return /^https?:\/\//i.test(String(url || "")) ? url : null;
+}
+
+/// A gallery file's text, or an error naming it when the download fails.
+async function galleryFetch(file) {
+    const res = await fetch(GALLERY_RAW + file);
+    if (!res.ok) throw new Error(`${file}: download failed (${res.status})`);
+    return res.text();
+}
+
+/// The presets to try for empty pads, most liked first, one per device name, leaving out names the device already holds, so no entry overwrites another.
+function galleryFillCandidates(index, presetNames) {
+    const have = new Set(presetNames);
+    return index.filter(e => e.kind === "Preset")
+                .sort((a, b) => (b.votes || 0) - (a.votes || 0) || a.issue - b.issue)
+                .filter(e => !have.has(galleryPresetName(e)) && have.add(galleryPresetName(e)));
+}
+
+/// The script names already on the device, the user's and the factory's, so an install never overwrites or shadows one.
+async function deviceScriptNames() {
+    const names = new Set();
+    for (const dir of ["/moonlive", "/.moonlive"])
+        for (const row of await fmFetchDir(dir, true).catch(() => [])) names.add(String(row.name).toLowerCase());
+    return names;
+}
+
+/// Install one entry from its text: a preset onto a free pad with the scripts it names that the gallery has and the device does not, a script into /moonlive unless one of its name is there.
+async function galleryInstall(entry, index, text) {
+    const held = await deviceScriptNames();
+    if (entry.kind !== "Preset") {
+        const name = galleryFileName(entry);
+        if (held.has(name.toLowerCase())) throw new Error(`${name} is already on the device`);
+        await writeDeviceFile("/moonlive", name, text);
+        return;
+    }
+    const doc = JSON.parse(text);
+    for (const script of galleryScriptsOf(doc)) {
+        if (held.has(script.toLowerCase())) continue;   // the device's own copy, edited or shipped, stays
+        const s = index.find(e => e.kind !== "Preset" && galleryFileName(e).toLowerCase() === script.toLowerCase());
+        if (s) await writeDeviceFile("/moonlive", script, await galleryFetch(s.file));
+    }
+    // The pad is this device's to choose: a slot from the author's device could land on one already taken.
+    const { $slot, ...rest } = doc;
+    await writeDeviceFile("/.config/presets", galleryPresetName(entry) + ".json", $slot === undefined ? text : JSON.stringify(rest));
+}
+
+function renderGallery(host, mod) {
+    const box = document.createElement("details");
+    box.className = "gallery";
+    box.open = galleryOpen;
+    const summary = document.createElement("summary");
+    summary.textContent = "Gallery";
+    box.appendChild(summary);
+    const status = document.createElement("div");
+    status.className = "gallery-status";
+    // Every outcome goes through here, so the re-render an install triggers shows it still.
+    const say = (text) => { galleryStatus = text; status.textContent = text; };
+    const list = document.createElement("div");
+    list.className = "gallery-list";
+    box.append(status, list);
+    host.appendChild(box);
+
+    const presetsCtrl = () => (findModule(mod.name)?.controls || []).find(c => c.name === "presets");
+    const presetNames = () => (presetsCtrl()?.value || []).map(r => r.name);
+    const freePads = () => {
+        const c = presetsCtrl();
+        return (c?.gridCols || 8) * (c?.gridRows || 8) - (c?.value || []).length;
+    };
+
+    const load = async () => {
+        status.textContent = "loading the gallery...";
+        let index;
+        try {
+            index = await cachedJson(GALLERY_RAW + "index.json", "MoonLight.gallery.index", false);
+            if (!Array.isArray(index)) throw new Error("no index");
+        } catch (e) {
+            say(`Cannot reach the gallery: ${e.message}`);
+            return;
+        }
+        status.textContent = index.length ? galleryStatus : "The gallery is empty so far.";
+        list.textContent = "";
+        const running = deviceFirmwareInfo()?.version;
+        const newer = (e) => Boolean(running && e.firmware && isNewer(e.firmware, running));
+
+        const fill = document.createElement("button");
+        fill.className = "surface-popup-primary gallery-fill";
+        fill.textContent = "fill empty pads with the most liked";
+        fill.title = "Looks and palettes made on this version or older; a preset with pins or geometry belongs to one rig; your own presets stay where they are";
+        fill.addEventListener("click", async () => {
+            let free = freePads(), added = 0;
+            for (const e of galleryFillCandidates(index, presetNames())) {
+                if (free <= 0) break;
+                if (newer(e)) continue;
+                try {
+                    const text = await galleryFetch(e.file);
+                    if (!galleryPadReady(JSON.parse(text))) continue;
+                    await galleryInstall(e, index, text);
+                    free--; added++;
+                    say(`added ${added}: ${e.name}`);
+                } catch (_) { /* skip an entry that does not install; the rest still can */ }
+            }
+            say(added ? `added ${added} preset${added === 1 ? "" : "s"}` : "nothing to add: no free pad, or no look or palette left");
+            refetchState();
+        });
+        if (index.some(e => e.kind === "Preset")) list.appendChild(fill);
+
+        for (const e of index.slice().sort((a, b) => (b.votes || 0) - (a.votes || 0) || a.issue - b.issue)) {
+            const card = document.createElement("div");
+            card.className = "gallery-entry";
+            const media = galleryUrl(e.media);
+            if (media) {
+                const img = document.createElement("img");
+                img.src = media;
+                img.alt = e.name;
+                img.loading = "lazy";
+                // A video does not load as an image, so it becomes a link to watch it.
+                img.addEventListener("error", () => {
+                    const a = document.createElement("a");
+                    a.href = media; a.target = "_blank"; a.rel = "noopener";
+                    a.textContent = "▶ watch";
+                    img.replaceWith(a);
+                });
+                card.appendChild(img);
+            }
+            const head = document.createElement("div");
+            head.className = "gallery-entry-head";
+            const name = document.createElement(galleryUrl(e.url) ? "a" : "span");
+            if (galleryUrl(e.url)) { name.href = e.url; name.target = "_blank"; name.rel = "noopener"; }
+            name.textContent = e.name;
+            head.append(name, document.createTextNode(` ${e.kind} · 👍 ${e.votes || 0} · ${e.author || ""}`));
+            card.appendChild(head);
+            const what = document.createElement("div");
+            what.className = "gallery-entry-text";
+            what.textContent = e.description || "";
+            card.appendChild(what);
+            if (newer(e)) {
+                const newer = document.createElement("div");
+                newer.className = "gallery-entry-newer";
+                newer.textContent = `made on ${e.firmware}, newer than this device's ${running}: update first`;
+                card.appendChild(newer);
+            }
+            const actions = document.createElement("div");
+            actions.className = "surface-popup-row";
+            const install = document.createElement("button");
+            install.className = "surface-popup-primary";
+            install.textContent = e.kind === "Preset" ? "add to a pad" : "install";
+            install.addEventListener("click", async () => {
+                if (newer(e) && !confirm(`${e.name} was made on ${e.firmware}, newer than this device's ${running}. Install it anyway?`)) return;
+                if (e.kind === "Preset") {
+                    // A pad holds one preset: refuse rather than overwrite a preset of the same name or write one no pad can show.
+                    if (presetNames().includes(galleryPresetName(e))) { say(`a preset named ${galleryPresetName(e)} is already on a pad`); return; }
+                    if (freePads() <= 0) { say("no free pad"); return; }
+                }
+                try {
+                    await galleryInstall(e, index, await galleryFetch(e.file));
+                    say(`installed ${e.name}`);
+                    refetchState();
+                } catch (err) { say(err.message); }
+            });
+            actions.appendChild(install);
+            if (e.kind === "Preset") {
+                const now = document.createElement("button");
+                now.className = "surface-popup-primary";
+                now.textContent = "try now";
+                now.title = "Apply it to the device without keeping it on a pad";
+                now.addEventListener("click", async () => {
+                    try {
+                        const text = await galleryFetch(e.file);
+                        // A preset beyond a look or a palette replaces this rig's own settings, with no undo, so it asks first.
+                        if (!galleryPadReady(JSON.parse(text)) && !confirm(`${e.name} sets more than a look or a palette, such as pins or geometry from the author's rig. Apply it here?`)) return;
+                        if (newer(e) && !confirm(`${e.name} was made on ${e.firmware}, newer than this device's ${running}. Apply it anyway?`)) return;
+                        const res = await fetch("/api/state", { method: "PATCH", body: text });
+                        const answer = await res.json().catch(() => ({}));
+                        say(res.ok ? `applied ${e.name}` : `${e.name}: ${answer.error || res.status}${answer.at ? " at " + answer.at : ""}`);
+                    } catch (err) { say(err.message); }
+                });
+                actions.appendChild(now);
+            }
+            card.appendChild(actions);
+            list.appendChild(card);
+        }
+    };
+    box.addEventListener("toggle", () => {
+        galleryOpen = box.open;
+        if (box.open) load();
+    });
+    if (box.open) load();
+}
+
 function renderMoonTalk(host, mod) {
     const section = document.createElement("div");
     section.className = "moontalk";
@@ -7634,12 +8056,16 @@ function buildPaletteControl(row, key, def, moduleName, ctrl) {
     // toggles a list of styled rows, each a gradient swatch + name. The value still rides as
     // the option index. Prior art: MoonLight's palette control (same native-select limit).
     const opts = ctrl.options || [];
-    const gradientFor = (i) => paletteGradientCss((opts[i] || {}).colors);
+    const selected = Math.max(0, paletteIndex(ctrl.value, opts));
     const wrap = document.createElement("div");
     wrap.className = "palette-control";
     wrap.dataset.mid = moduleName;
     wrap.dataset.key = ctrl.name;
-    wrap.dataset.value = ctrl.value;
+    wrap.dataset.value = selected;
+    paletteOptionsOf.set(wrap, opts);
+    // The options as the last state push left them, since a palette script added or removed since this render renumbers the list.
+    const liveOpts = () => paletteOptionsOf.get(wrap) || opts;
+    const gradientFor = (i) => paletteGradientCss((liveOpts()[i] || {}).colors);
 
     // Trigger: shows the currently-selected palette (swatch + name) and opens the list.
     const trigger = document.createElement("button");
@@ -7658,12 +8084,12 @@ function buildPaletteControl(row, key, def, moduleName, ctrl) {
     caret.className = "palette-caret";
     caret.textContent = "▾";
     const paintTrigger = (i) => {
-        const o = opts[i] || {};
+        const o = liveOpts()[i] || {};
         triSwatch.style.background = gradientFor(i);
         triEmoji.textContent = (o.live ? SCRIPTED_EMOJI : "") + (o.tags || "");
         triName.textContent = o.name || String(i);
     };
-    paintTrigger(ctrl.value);
+    paintTrigger(selected);
     trigger.append(triSwatch, triEmoji, triName, caret);
 
     // The LIST is the shared picker, the same widget the module and script pickers use, so a
@@ -7690,7 +8116,7 @@ function buildPaletteControl(row, key, def, moduleName, ctrl) {
         // stripping only one side matched nothing, so every already-downloaded palette
         // showed a second time as a "download me" row.
         const bare = (s) => String(s).replace(/\.mlp$/, "");
-        const have = new Set(opts.filter(o => o.live).map(o => bare(o.name)));
+        const have = new Set(liveOpts().filter(o => o.live).map(o => bare(o.name)));
         return names.map((n, i) => ({ name: n, tags: tags[i] || "" }))
                     .filter(r => !have.has(bare(r.name)));
     };
@@ -7700,7 +8126,9 @@ function buildPaletteControl(row, key, def, moduleName, ctrl) {
         // A failure (offline device) is not fatal: the list falls back to what is local.
         await mlFetchCatalog().catch(() => {});
         const remote = remotePalettes();
-        const local = opts.map((o, i) => ({
+        // Read when the list opens, not when the control was built: a state push since then may have moved the selection or the options.
+        const current = Number(wrap.dataset.value);
+        const local = liveOpts().map((o, i) => ({
             name: String(i),                 // the VALUE: a palette is chosen by index
             displayName: o.name || String(i),
             // The SCRIPTED marker is the same 📝 a scripted effect carries, prepended
@@ -7724,7 +8152,7 @@ function buildPaletteControl(row, key, def, moduleName, ctrl) {
             items,
             actionLabel: "use",
             keepOrder: true,          // index order: the knob and HA step through it
-            currentType: String(ctrl.value),
+            currentType: String(current),
             commit: async (name) => {
                 // A remote row carries a filename, not an index: fetch it, then let the
                 // rebuilt control (the device re-lists its .mlp files) select it by index.
@@ -7800,8 +8228,9 @@ function buildPaletteControl(row, key, def, moduleName, ctrl) {
     // (sendControl is handled by appendResetButton). No list to re-mark: the picker builds
     // its rows fresh each time it opens, from the current value.
     appendResetButton(row, moduleName, ctrl, def, () => {
-        wrap.dataset.value = def;
-        paintTrigger(def);
+        const i = Math.max(0, paletteIndex(def, opts));
+        wrap.dataset.value = i;
+        paintTrigger(i);
     });
     return row;
 }

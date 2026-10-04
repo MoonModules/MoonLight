@@ -173,7 +173,7 @@ def render(rows, commit):
     Deliberately NOT a file: a 2-3 minute run that answers with "wrote a file, go look" makes
     you open a second thing to learn what happened, and the file was gitignored anyway — it
     existed only to be read once. Space-aligned columns rather than Markdown tables, since the
-    output pane is a plain-text log (same reasoning as check_lizard.py's table).
+    output pane is a plain-text log (same reasoning as check_code.py's table).
     """
     by_check = collections.Counter(r["check"] for r in rows)
     by_file = collections.Counter(r["file"] for r in rows)

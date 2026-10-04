@@ -4,19 +4,23 @@ A preset is a saved state you can bring back with one click: a look you liked, a
 
 They live on the Control card as a grid of 64 pads. Click one to apply it.
 
-> **Two different things are called a preset.** The pads on the Control card are what people usually mean, and what follows is about those. The **light preset** under Drivers is a fixture profile, naming which channel carries red or pan: see [LightPresets](../moonmodules/light/supporting.md#lightpresets).
+> **Two different things are called a preset.** The pads on the Control card are what people usually mean, and what follows is about those. The **fixture profile** under Drivers names which channel carries red or pan: see [FixtureProfiles](../moonmodules/light/supporting.md#fixtureprofiles).
 
 ## Save one
 
 Right-click a pad, or press and hold it on a touchscreen. The pad editor opens.
 
-Type a name, choose what to capture, and press **save current state here**.
+Type a name, choose which container it saves, and press **save current state here**.
 
 To overwrite, do the same on a pad that already holds one: the editor offers **save current state over it**, a rename, and **delete preset**.
 
-## What a preset captures
+Any card saves itself as well: press its `{ }` button, name the preset, and press **save as preset**. It lands on the first free pad and holds that card alone, so applying it puts back that card and leaves its neighbors running.
 
-Exactly one of four subtrees, chosen as a radio button rather than a set of checkboxes:
+## What a preset holds
+
+A preset is a state document: the containers it sets, by name, with the modules and controls inside, the same document [`PATCH /api/state`](../reference/integrating.md#setting-everything-at-once) applies.
+
+Saving from a pad captures one of four containers whole, chosen as a radio button:
 
 | Capture | What it holds | What it is |
 |---|---|---|
@@ -25,17 +29,34 @@ Exactly one of four subtrees, chosen as a radio button rather than a set of chec
 | **Drivers** | pins, brightness, outputs | a hardware setup |
 | **Services** | sensors and bridges | a service configuration |
 
-One subtree, never a combination, and that is the whole model. It is what makes a look **portable**: an Effects preset applies on any board, because it carries no pin map. Add Drivers to it and it becomes a device snapshot tied to one rig's wiring, which is a different and much less shareable thing.
+One container per save is what makes a look **portable**: an Effects preset applies on any board, because it carries no pin map. Add Drivers to it and it becomes a device snapshot tied to one rig's wiring, which is a different and much less shareable thing.
 
-The combinations used to be expressible, and they were the hard part to explain and the hard part to display.
+A preset written by hand, or added from elsewhere, can hold less than a container. This one sets only the palette and leaves the brightness, the pins and the running look alone:
+
+```json
+{ "Drivers": { "palette": "Ocean" } }
+```
 
 ## Applying one
 
 Click the pad. The look, geometry or setup replaces what was there.
 
-**It is a restore, not an overlay.** A preset carrying more modules than the device has adds them; one describing fewer removes what it omits. That is what makes a pad reliable: what you saved is what comes back, rather than what you saved merged with whatever drifted since.
+**A saved container is a restore, not an overlay.** It carries `"$patch": "replace"`, so a preset carrying more modules than the device has adds them, and one describing fewer removes what it omits. That is what makes a pad reliable: what you saved is what comes back, rather than what you saved merged with whatever drifted since.
 
-**One active preset per role**, so a layout preset and a look stay lit together. Applying a new look replaces only the look.
+**One active preset per container**, so a layout preset and a look stay lit together. Applying a new look replaces only the look, and a palette preset holds the Drivers pad next to it.
+
+## From the gallery
+
+The **Gallery** under the pads lists what people shared in [MoonLight-Gallery](https://github.com/MoonModules/MoonLight-Gallery), most liked first. Your browser fetches it, so the device needs no internet of its own.
+
+- **add to a pad** puts a preset on the first free pad, with any script it needs from the gallery.
+- **try now** applies it without keeping it.
+- **install** puts a script into `/moonlive`.
+- **fill empty pads with the most liked** adds the best-liked looks and palettes until the grid is full. Presets that set pins or geometry are left out, since they belong to one rig, and your own pads stay where they are.
+
+An entry made on a newer MoonLight than yours says so: update first.
+
+To share one, press a card's `{ }` button, copy the JSON, and open an issue in the gallery as its [Sharing your own](https://github.com/MoonModules/MoonLight-Gallery#sharing-your-own) describes.
 
 ## Arranging the pads
 
@@ -45,11 +66,11 @@ The order persists, stamped into each preset's own file, so a preset folder copi
 
 ## Where they live
 
-One file per preset, at `/.config/presets/<name>.json`. A name may use printable characters but no `/`, `\` or `.`, up to 31 characters.
+One file per preset, at `/.config/presets/<name>.json`, holding the document and its pad as `"$slot"`. A name may use printable characters but no `/`, `\` or `.`, up to 31 characters.
 
 They ride along in a [backup](backup-and-restore.md), which is how a rig's looks move to another device.
 
-Adding or removing preset files by hand in the File Manager has one catch. The pad grid rebuilds its list when the module next rescans: at startup, or after a save, rename or delete on the card. A file dropped in does not appear the instant it lands.
+A preset file added, edited or removed in the File Manager shows on the pads at once.
 
 ## In Home Assistant
 
@@ -59,8 +80,9 @@ Layouts and Drivers presets are deliberately excluded: they rewire pins and geom
 
 ## When a preset refuses to apply
 
-The card says why rather than applying half of it:
+The card names the first failure and where it is, such as `no such control at Effects.Layer.Noise.speed`:
 
-- **It names a subtree this firmware does not have.** Refused whole.
-- **It carries several roles**, having been written by an older build. Listed but not applied, with `re-save it` as the fix, so you can see it and decide rather than watch it vanish.
+- **It names a container, a module type or a role this device does not have.** Found before anything changes, so nothing does.
+- **A control inside it is unknown here, or a value is out of range.** Found as it is written, so what came before the failure stays applied.
+- **It was saved by an older MoonLight.** Listed but not applied: a [backup and restore](backup-and-restore.md) converts it.
 - **The file is malformed.** The live tree is untouched.

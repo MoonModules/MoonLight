@@ -63,6 +63,8 @@ def added_lines(base):
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 REPORT = ROOT / "docs" / "reference" / "metrics" / "prose.md"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _ratchet import committed as committed_report, risen as risen_against  # noqa: E402
 
 # What the whole-tree report covers. The gate itself reads every suffix in SUFFIXES; these are the
 # trees whose prose is OURS, which is the same question EXEMPT answers for the diff.
@@ -75,12 +77,11 @@ def committed_counts():
     Read from git rather than from the working tree, because `write_report` rewrites the file before the comparison happens.
     Same shape as check_docgen's ratchet, for the same reason: a number nobody compares against is a number that rises in silence.
     """
-    rel = REPORT.relative_to(ROOT).as_posix()
-    r = subprocess.run(["git", "show", f"HEAD:{rel}"], cwd=ROOT, capture_output=True, text=True)
-    if r.returncode != 0:
+    text = committed_report(REPORT)
+    if text is None:
         return None
     counts, in_rules = {}, False
-    for line in r.stdout.split("\n"):
+    for line in text.split("\n"):
         # Only the `| rule | findings |` table: the worst-files table shares its column shape, and a
         # row from it would enter the baseline as a rule that can never appear in the new counts.
         if line.startswith("| rule |"):
@@ -103,12 +104,8 @@ def ratchet(by_rule: dict, total: int) -> list:
     was = committed_counts()
     if was is None:
         return []
-    risen = [(rule, was.get(rule, 0), now) for rule, now in by_rule.items()
-             if now > was.get(rule, 0)]
-    old_total = sum(was.values())
-    if total > old_total:
-        risen.append(("(total)", old_total, total))
-    return sorted(risen, key=lambda r: r[1] - r[2])
+    base = dict(was, **{"(total)": sum(was.values())})
+    return risen_against(base, dict(by_rule, **{"(total)": total}))
 
 
 def write_report():
