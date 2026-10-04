@@ -155,9 +155,9 @@ Over-the-air firmware flashing, the one operation that swaps the binary and need
 
 - `firmware`: the OTA image to flash.
 - read-only: `version`, `build` and `partition`.
-- `image`: on a device carrying two images, which one those describe and an install writes.
+- `image`: on a device carrying two images, the app or MoonBase, drawn as the card's two tabs.
 
-The choice is the app it runs, or MoonBase in the factory slot. This control's presence is also what tells the UI that installs run through the reboot-into-MoonBase cycle, behind one "updating firmware" overlay, and that a **Restart in MoonBase** button belongs on the card ([MoonBase](../../explanation/architecture/moonbase.md)).
+When MoonBase's version differs from the app's, the card warns and the top bar shows `⬆ MoonBase`; installing the matching one from its tab clears it. The `image` control's presence also tells the UI that installs run through the reboot-into-MoonBase cycle, behind one "updating firmware" overlay, and that a **Restart in MoonBase** button belongs on the card ([MoonBase](../../explanation/architecture/moonbase.md)).
 
 Detail: [technical](moxygen/FirmwareUpdateModule.md) · [image vetting](moxygen/FirmwareImage.md)
 
@@ -361,15 +361,15 @@ Detail: [technical](moxygen/ControlSurface.md) · [InputMapping](moxygen/InputMa
 
 A preset is a file: `/.config/presets/<name>.json`. Saving writes one, applying reads one, deleting removes one. Nothing else holds preset state, so there is no second copy to keep in step: the list is read from the folder at startup rather than persisted alongside it. After that a save, rename or delete re-reads its one file, and so does a file the file API writes or removes, which every module hears about, so a preset written through the File Manager or the gallery appears on its own. One file at a time matters on an ESP32, where walking the folder costs about 15 ms per preset and reading one about 60 ms.
 
-The name becomes the file name, so it is restricted to printable ASCII without `/`, `\` or `.`, a validator on the control, which every write path runs. `slot` records which pad the preset occupies, so a surface arranged to match a physical desk survives a reboot. The save form (`name`, `slot`, `source`) is input for the next save rather than configuration, so none of it is written to flash.
+The name becomes the file name, so it is restricted to printable ASCII without `/`, `\` or `.`, a validator on the control, which every write path runs. The file's `$slot` records which pad the preset occupies, so a surface arranged to match a physical desk survives a reboot. The save form (`name`, `slot`, `source`) is input for the next save rather than configuration, so none of it is written to flash.
 
 ##### What a preset holds
 
-A preset is a [state document](../../reference/integrating.md#setting-everything-at-once), the one `PATCH /api/state` applies, plus its `slot`:
+A preset is a [state document](../../reference/integrating.md#setting-everything-at-once), the one `PATCH /api/state` applies, plus its `$slot`, a root `$` key the engine reads as the file's own:
 
 ```json
 {
-  "slot": 12,
+  "$slot": 12,
   "Effects": { "$patch": "replace", "enabled": true,
     "Layer": { "type": "Layer", "$patch": "replace", "enabled": true,
       "Noise": { "type": "NoiseEffect", "$patch": "replace", "speed": 3, "enabled": true } } }

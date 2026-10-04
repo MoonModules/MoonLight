@@ -41,7 +41,7 @@ The sweep script measures **1405 occurrences across 242 tracked files** (dry run
 - The OTA client follows redirects deliberately: [platform_esp32_ota.cpp:117](../../../../src/platform/esp32/platform_esp32_ota.cpp) sets `disable_auto_redirect = false` with a redirect count of 10, and raises the header buffer specifically because GitHub's asset redirect overflows the default. It was hardened for this shape of URL already.
 - The asset filename is `firmware-<variant>-v<version>.bin`, which carries no product name and so does not change at the rename.
 
-**A v5 device therefore finds and installs v6 with no code change.** Only recreating `MoonModules/projectMM` would break the redirect, and the name sits inside an organisation we control, so nothing to do beyond leaving it alone.
+**A v5 device therefore finds and installs v6 with no code change.** Only recreating `MoonModules/projectMM` would break the redirect, and the name sits inside an organization we control, so nothing to do beyond leaving it alone.
 
 This was worth checking rather than believing: reading the URL construction alone suggests a hard break, and only the fetch path shows there is none.
 
@@ -50,7 +50,7 @@ This was worth checking rather than believing: reading the URL construction alon
 Two things the sweep changes that a user feels, neither needing code:
 
 - **The sACN source name** at [E131Packet.h:55](../../../../src/light/util/E131Packet.h) is a fixed nine-byte literal a receiving console displays, so it changes with the product rather than staying. Peer discovery does not: it classifies on the numeric marker and already reads `"MoonLight"`, so a mixed network keeps working.
-- **The `MM-` device prefix** in [SystemModule.h:57](../../../../src/core/system/SystemModule.h) is every device's mDNS name and Home Assistant entity id. **It stays** (decided 2026-09-29): `MM` is MoonModules, the organisation does not change at the rename, so the prefix keeps naming the thing it always named. Changing it to `ML-` would rename every mDNS name and entity id, which Restore does not carry back, for a prefix that was never wrong.
+- **The `MM-` device prefix** in [SystemModule.h:57](../../../../src/core/system/SystemModule.h) is every device's mDNS name and Home Assistant entity id. **It stays** (decided 2026-09-29): `MM` is MoonModules, the organization does not change at the rename, so the prefix keeps naming the thing it always named. Changing it to `ML-` would rename every mDNS name and entity id, which Restore does not carry back, for a prefix that was never wrong.
 
 ## The cutover
 

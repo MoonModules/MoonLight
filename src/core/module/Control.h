@@ -113,8 +113,8 @@ struct ListSource {
     /// Repopulate the rows from persisted JSON, the model owning its own deserialization.
     virtual bool restoreList(const char* /*json*/, const char* /*key*/) { return false; }
 
-    /// Whether these rows are written to flash: a list that restores them says so, and a derived list re-built at setup does not.
-    virtual bool persistsList() const { return false; }
+    /// Whether these rows are written to flash, which a derived list, rebuilt at setup and never restored, declines.
+    virtual bool persistsList() const { return true; }
 
     /// Whether a saved row carries a secret, such as a password, which a state document leaves out.
     virtual bool listHoldsSecrets() const { return false; }
@@ -482,8 +482,8 @@ enum class ApplyResult : uint8_t {
 
 /// What an out-of-range write does, since an API rejects where a load tolerates.
 enum class ApplyPolicy : uint8_t {
-    Strict,   ///< reject an out-of-range value (the HTTP API — surfaces as a 400).
-    Clamp,    ///< clamp to the nearest valid value (persistence load — tolerates stale on-disk values).
+    Strict,   ///< reject an out-of-range value (the HTTP API, which answers 400).
+    Clamp,    ///< clamp to the nearest valid value (the persistence load, which tolerates stale saved values).
 };
 
 /// Parse one value from the enclosing object and apply it, leaving storage alone on failure.

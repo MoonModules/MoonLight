@@ -266,16 +266,17 @@ TEST_CASE("a mistyped control on a script the document leaves as it is is named 
 
 TEST_CASE("a document that fails leaves no write waiting for the rebuild") {
     Tree t;
-    auto r = t.apply(R"({"Effects": {"Script": {"type": "SdScript", "source": "a", "late": 42}, "Knob": {"type": "NoSuchType"}}})");
+    // A value out of range is found only when it is written, after the script was created and its control deferred.
+    auto r = t.apply(R"({"Effects": {"Script": {"type": "SdScript", "source": "a", "late": 42}, "Knob": {"type": "SdKnob", "value": 200}}})");
     CHECK_FALSE(r.ok);
     CHECK(r.deferred == 0);
     t.s.prepareTree();
     CHECK(static_cast<SdScript*>(t.find("Script"))->late == 1);
 }
 
-TEST_CASE("a preset file's slot is its own, so the file applies as it is") {
+TEST_CASE("a root $ key is the file's own, so a preset file applies as it is") {
     Tree t;
-    auto r = t.apply(R"({"slot": 3, "Effects": {"Knob": {"type": "SdKnob", "value": 9}}})");
+    auto r = t.apply(R"({"$slot": 3, "Effects": {"Knob": {"type": "SdKnob", "value": 9}}})");
     REQUIRE(r.ok);
     CHECK(valueOf(t.find("Knob")) == 9);
 }
@@ -306,4 +307,36 @@ TEST_CASE("a rebuild run at once satisfies the one the document requested") {
     const int after = static_cast<SdCount*>(t.find("Counter"))->prepares;
     t.s.tick();
     CHECK(static_cast<SdCount*>(t.find("Counter"))->prepares == after);
+}
+
+TEST_CASE("a document that names an unknown type or container changes nothing, wherever it names it") {
+    Tree t;
+    REQUIRE(t.apply(R"({"Effects": {"A": {"type": "SdKnob"}, "B": {"type": "SdKnob"}}})").ok);
+    // The removals come first in the walk, so only a check before them keeps A and B.
+    auto r = t.apply(R"({"Effects": {"$patch": "replace", "C": {"type": "SdKnob"}, "D": {"type": "NoSuchType"}}})");
+    CHECK(std::string(r.error) == "unknown type");
+    CHECK(std::string(r.where) == "Effects.D");
+    CHECK(t.children(t.effects) == "A,B");
+    r = t.apply(R"({"Effects": {"$patch": "replace"}, "Nowhere": {}})");
+    CHECK(std::string(r.error) == "no such top-level module");
+    CHECK(t.children(t.effects) == "A,B");
+}
+
+TEST_CASE("a reorder alone is a change, saved like any other") {
+    Tree t;
+    REQUIRE(t.apply(R"({"Effects": {"A": {"type": "SdKnob"}, "B": {"type": "SdKnob"}}})").ok);
+    auto r = t.apply(R"({"Effects": {"$patch": "replace", "B": {}, "A": {}}})");
+    REQUIRE(r.ok);
+    CHECK(t.children(t.effects) == "B,A");
+    CHECK(r.changes == 1);
+}
+
+TEST_CASE("a re-typed module frees the names under it for elsewhere in the same document") {
+    Tree t;
+    REQUIRE(t.apply(R"({"Effects": {"L1": {"type": "SdBox", "Knob": {"type": "SdKnob"}}, "L2": {"type": "SdBox"}}})").ok);
+    auto r = t.apply(R"({"Effects": {"L2": {"Knob": {"type": "SdKnob", "value": 7}}, "L1": {"type": "SdOther"}}})");
+    REQUIRE(r.ok);
+    CHECK(std::string(t.find("L1")->typeName()) == "SdOther");
+    CHECK(t.children(t.find("L2")) == "Knob");
+    CHECK(valueOf(t.find("Knob")) == 7);
 }

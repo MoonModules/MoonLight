@@ -192,7 +192,7 @@ test("a flat preset becomes a state document, each module named as the device na
     const { files, report } = applyMigrations({ "/.config/presets/look.json": JSON.stringify(flat) });
     const doc = JSON.parse(files["/.config/presets/look.json"]);
     assert.deepEqual(doc, {
-        slot: 3,
+        $slot: 3,
         Effects: {
             "$patch": "replace", enabled: true,
             Layer: { type: "Layer", "$patch": "replace", opacity: 200, enabled: true,

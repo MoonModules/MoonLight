@@ -27,7 +27,6 @@ struct StubDevices : mm::ListSource {
     // Restore: parse the persisted array with the recursive reader; record the count and the first row's name so a test can prove the round-trip took.
     int restoredCount = -1;
     char firstName[24] = {};
-    bool persistsList() const override { return true; }
     bool restoreList(const char* json, const char* key) override {
         mm::json::JsonDoc doc;
         if (!mm::json::parse(json, doc)) return false;
@@ -197,11 +196,12 @@ TEST_CASE("ControlType::List type identity + persistable + restore round-trip") 
     CHECK(std::strcmp(src.firstName, "WLED-1") == 0);    // read a field back
 }
 
-// A list persists only when its source restores it: a derived list, such as a task snapshot, could never be read back.
-TEST_CASE("a list is written to flash only when its source restores it") {
+// A list persists unless its source declines, as a derived list such as a task snapshot does: forgetting to decline writes junk, where forgetting to opt in would lose a user's rows.
+TEST_CASE("a list is written to flash unless its source is derived") {
     struct Derived : mm::ListSource {
         uint8_t listRowCount() const override { return 1; }
         void writeListRow(mm::JsonSink& s, uint8_t) const override { s.append("{\"name\":\"loopTask\"}"); }
+        bool persistsList() const override { return false; }
     } derived;
     StubDevices restoring;
     mm::ControlList controls;

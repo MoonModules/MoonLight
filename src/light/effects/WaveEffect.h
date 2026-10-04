@@ -35,22 +35,22 @@ public:
     Dim dimensions() const override { return Dim::D2; }
 
     // Index-aligned with waveY's switch. Sin3 sums three sines, and Noise plots a jittered band.
-    static constexpr const char* kTypeOptions[] = {"Sawtooth", "Triangle", "Sine", "Square", "Sin3", "Noise"};
+    static constexpr const char* kWaveforms[] = {"Sawtooth", "Triangle", "Sine", "Square", "Sin3", "Noise"};
     /// How many waveform shapes the select offers.
-    static constexpr uint8_t kTypeCount = 6;
+    static constexpr uint8_t kWaveformCount = 6;
 
     /// Travel speed, as phase advance per minute.
     uint8_t bpm  = 30;
     /// How much of the trail each frame keeps, so 0 clears the old wave at once.
     uint8_t fade = 32;
     /// Which waveform shape is drawn.
-    uint8_t type = 2;
+    uint8_t waveform = 2;
 
     /// Publish the travel speed, the trail and the waveform shape.
     void defineControls() override {
         controls_.addControl("bpm", bpm, 0, 255);
         controls_.addControl("fade", fade, 0, 255);
-        controls_.addSelect("type", type, kTypeOptions, kTypeCount);
+        controls_.addSelect("waveform", waveform, kWaveforms, kWaveformCount);   // not "type", which a state document reads as the module's type
     }
 
     /// Size the persistent trail plane, clearing it when the geometry changed under it.
@@ -124,7 +124,7 @@ private:
     static RGB waveColor(uint8_t index) { return colorFromPalette(*Palettes::active(), index); }
 
     /// Map a phase to a y inside the grid for the selected waveform, in integers.
-    lengthType waveY(uint8_t phase, lengthType h) const { return waveY(type, phase, h); }
+    lengthType waveY(uint8_t phase, lengthType h) const { return waveY(waveform, phase, h); }
     static lengthType waveY(uint8_t type, uint8_t phase, lengthType h) {
         if (h == 0) return 0;
         uint8_t v;   // the waveform value, 0..255, then scaled to [0, h)

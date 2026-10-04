@@ -4,20 +4,13 @@
 /// The two contracts between the app and MoonBase: the config keys MoonBase scrapes with ConfigScrape.h, and the install routes both images serve.
 
 #include "doctest.h"
-#include "core/system/FilesystemModule.h"
-#include "core/system/NetworkModule.h"
-#include "core/system/EthernetModule.h"
-#include "core/system/WiFiModule.h"
-#include "core/system/AccessPointModule.h"
-#include "core/system/SystemModule.h"
-#include "core/module/Scheduler.h"
 #include "core/util/ConfigScrape.h"
-#include "core/util/ModuleFactory.h"
-#include "platform/platform.h"
+#include "network_device.h"
 
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <string>
 
 namespace {
@@ -35,32 +28,13 @@ TEST_CASE("the app's saved config carries every key MoonBase reads") {
                   static_cast<unsigned>(mm::platform::millis()));
     std::filesystem::remove_all(tmpRoot);
     std::filesystem::create_directories(std::string(tmpRoot) + "/.config");
-    mm::platform::fsSetRoot(tmpRoot);
 
-    mm::ModuleFactory::registerType<mm::EthernetModule>("EthernetModule");
-    mm::ModuleFactory::registerType<mm::WiFiModule>("WiFiModule");
-    mm::ModuleFactory::registerType<mm::AccessPointModule>("AccessPointModule");
-    mm::Scheduler scheduler;
-    auto* fs = new mm::FilesystemModule();
-    fs->setTypeName("FilesystemModule");
-    fs->setScheduler(&scheduler);
-    auto* sys = new mm::SystemModule();
-    sys->setTypeName("SystemModule");
-    auto* net = new mm::NetworkModule();
-    net->setTypeName("NetworkModule");
-    // Wired as main wires them: the interfaces first, so their keys come before any other child's.
-    auto* eth = mm::ModuleFactory::create("EthernetModule");
-    auto* wifi = mm::ModuleFactory::create("WiFiModule");
-    auto* ap = mm::ModuleFactory::create("AccessPointModule");
-    for (auto* child : {eth, wifi, ap}) { child->markWiredByCode(); net->addChild(child); }
-    net->setEthernet(static_cast<mm::EthernetModule*>(eth));
-    net->setWiFi(static_cast<mm::WiFiModule*>(wifi));
-    net->setAccessPoint(static_cast<mm::AccessPointModule*>(ap));
-    net->setSystemModule(sys);
-    scheduler.addModule(fs);
-    scheduler.addModule(sys);
-    scheduler.addModule(net);
-    scheduler.setup();
+    auto device = std::make_unique<mm::test::NetworkDevice>(tmpRoot);
+    auto& d = *device;
+    auto* fs = d.fs;
+    auto* sys = d.sys;
+    auto* net = d.net;
+    auto* ap = d.ap;
 
     std::strcpy(textControl(*sys, "deviceName"), "MM-bench");
     std::strcpy(textControl(*ap, "password"), "ap-passphrase");
@@ -84,7 +58,7 @@ TEST_CASE("the app's saved config carries every key MoonBase reads") {
     const std::string content = readFile("NetworkModule.json");
 
     char ssid[64] = {}, password[64] = {};
-    REQUIRE(mm::configscrape::findFirstNetwork(content.c_str(), ssid, sizeof(ssid), password, sizeof(password)));
+    REQUIRE(mm::configscrape::findNetwork(content.c_str(), 0, ssid, sizeof(ssid), password, sizeof(password)));
     CHECK(std::string(ssid) == "bench-ssid");
     CHECK(std::string(password) == "bench-password");
     int tx = 0;
@@ -105,7 +79,7 @@ TEST_CASE("the app's saved config carries every key MoonBase reads") {
     REQUIRE(mm::configscrape::findString(readFile("SystemModule.json").c_str(), "deviceName", name, sizeof(name)));
     CHECK(std::string(name) == "MM-bench");
 
-    scheduler.release();
+    device.reset();   // released while its folder still exists
     std::filesystem::remove_all(tmpRoot);
     mm::platform::fsSetRoot(".");
 }
@@ -117,14 +91,27 @@ TEST_CASE("the config scraper finds top-level and child keys, and only whole key
     mm::configscrape::findInt(json, "ethType", &t);
     CHECK(t == 3);
     char ssid[16] = {}, pw[16] = {};
-    REQUIRE(mm::configscrape::findFirstNetwork(json, ssid, sizeof(ssid), pw, sizeof(pw)));
+    REQUIRE(mm::configscrape::findNetwork(json, 0, ssid, sizeof(ssid), pw, sizeof(pw)));
     CHECK(std::string(ssid) == "a\"b");
     CHECK(std::string(pw) == "p");
+    CHECK_FALSE(mm::configscrape::findNetwork(json, 1, ssid, sizeof(ssid), pw, sizeof(pw)));
     char mine[8] = {};
     CHECK_FALSE(mm::configscrape::findString(json, "ssid2", mine, sizeof(mine)));
     bool b = false;
     mm::configscrape::findBool(json, "mDNS", &b);
     CHECK(b);
+}
+
+// MoonBase tries the known networks in the app's order, so a device on its second network at another site still reaches an update.
+TEST_CASE("the config scraper reads every known network in order, and a control byte as the app escapes it") {
+    const char* json = R"({"1.known":[{"id":1,"ssid":"home","password":"h"},{"id":2,"ssid":"site","password":"s\u0001t"}]})";
+    char ssid[16] = {}, pw[16] = {};
+    REQUIRE(mm::configscrape::findNetwork(json, 1, ssid, sizeof(ssid), pw, sizeof(pw)));
+    CHECK(std::string(ssid) == "site");
+    CHECK(std::string(pw) == "s\x01t");
+    CHECK_FALSE(mm::configscrape::findNetwork(json, 2, ssid, sizeof(ssid), pw, sizeof(pw)));
+    // Past ASCII is refused rather than mis-decoded, which shows as a failed join.
+    CHECK_FALSE(mm::configscrape::findString(R"({"ssid":"caf\u00e9"})", "ssid", ssid, sizeof(ssid)));
 }
 
 // Known-network and MQTT passwords precede the access point's, and a list row's "type" names no child.

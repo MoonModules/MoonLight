@@ -172,7 +172,7 @@ function documentNode(cfg, prefix, type, unique) {
 /// A preset saved before presets were state documents (2026-10-04): flat `<Container>.<i>.<control>` keys under a `captures` header, rewritten as the document the device applies.
 /// Each container's keys without its prefix are its config file, so the config renames apply to them as well; names are unique across the document, as on the device.
 export function presetToDocument(flat, file, report) {
-    const doc = Number.isInteger(flat.slot) ? { slot: flat.slot } : {};
+    const doc = Number.isInteger(flat.slot) ? { $slot: flat.slot } : {};
     const used = new Set();
     const unique = (name) => {
         let n = name;

@@ -7,6 +7,8 @@ High-performance LED &amp; DMX lighting control for ESP32 and beyond.
 !!! tip "New here?"
     The [Getting started](gettingstarted.md) guide walks you from a blank ESP32 to your first running light show, step by step, with no build tools required.
 
+This documentation follows the latest pre-release; a tagged release may lack what is described here.
+
 ## The introduction
 
 Why MoonLight was rebuilt, who wrote it, and the principles it kept.

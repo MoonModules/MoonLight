@@ -13,22 +13,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-
-const src = readFileSync(new URL("../../src/ui/app.js", import.meta.url), "utf8");
-
-/// A top-level function's source, by brace matching.
-function fnSource(name) {
-    const at = src.indexOf(`function ${name}(`);
-    assert.notEqual(at, -1, `${name} not found in app.js`);
-    const open = src.indexOf("{", at);
-    let depth = 0;
-    for (let i = open; i < src.length; i++) {
-        if (src[i] === "{") depth++;
-        else if (src[i] === "}" && --depth === 0) return src.slice(at, i + 1);
-    }
-    assert.fail(`unbalanced braces in ${name}`);
-}
+import { src, fnSource } from "./app-source.mjs";
 
 /// restoreSelectedRoot, given a tree, what localStorage holds and the page's query; returns the root and the tabs it selected.
 function restoreWithTabs({ modules, saved, already = null, search = "" }) {

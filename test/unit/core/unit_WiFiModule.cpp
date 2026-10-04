@@ -112,17 +112,40 @@ TEST_CASE("known networks survive a save and a restore") {
 }
 
 // The list is bounded, since every row is RAM a board without PSRAM pays for.
-TEST_CASE("the known list stops at its cap rather than growing without bound") {
+TEST_CASE("the known list stops at its cap, and a new network replaces the lowest-priority one") {
     mm::WiFiModule w;
     w.rebuildControls();
     uint32_t id = 0;
     int added = 0;
     while (w.addListRow(id) && added < 100) added++;
     CHECK(added == 8);
-    CHECK_FALSE(w.remember("one more", "pw"));
-    // Said on the card, since Improv and a join from the scan would otherwise lose the network without a word.
+    // A network given now (Improv, a join from the scan) is wanted first, so the lowest-priority one makes room, and the card says which.
+    REQUIRE(w.setListRowField(id, "ssid", "{\"value\":\"last\"}"));
+    CHECK(w.remember("one more", "pw"));
+    CHECK(w.knownCount() == 8);
+    CHECK(std::strcmp(w.ssidAt(0), "one more") == 0);
+    for (uint8_t k = 0; k < w.knownCount(); k++) CHECK(std::strcmp(w.ssidAt(k), "last") != 0);
     REQUIRE(w.status() != nullptr);
-    CHECK(std::string(w.status()).find("full") != std::string::npos);
+    CHECK(std::string(w.status()).find("last was forgotten") != std::string::npos);
+}
+
+TEST_CASE("a full known list never forgets the network carrying the device") {
+    mm::WiFiModule w;
+    w.rebuildControls();
+    uint32_t id = 0, before = 0;
+    while (w.knownCount() < 8) { before = id; REQUIRE(w.addListRow(id)); }
+    REQUIRE(w.setListRowField(before, "ssid", "{\"value\":\"spare\"}"));
+    REQUIRE(w.setListRowField(id, "ssid", "{\"value\":\"carrier\"}"));
+    w.showRadio(-50, 20, true, true, id);   // the lowest-priority row carries the device
+    CHECK(w.remember("one more", "pw"));
+    bool carrierKept = false, spareKept = false;
+    for (uint8_t k = 0; k < w.knownCount(); k++) {
+        carrierKept |= std::strcmp(w.ssidAt(k), "carrier") == 0;
+        spareKept |= std::strcmp(w.ssidAt(k), "spare") == 0;
+    }
+    CHECK(carrierKept);
+    CHECK_FALSE(spareKept);
+    CHECK(std::string(w.status()).find("spare was forgotten") != std::string::npos);
 }
 
 namespace {

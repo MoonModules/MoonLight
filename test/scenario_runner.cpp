@@ -766,7 +766,7 @@ static int runScenario(const char* path) {
                         r.ok ? "applied" : r.error, r.ok ? "" : " at ", r.ok ? "" : r.where);
             result.check(r.ok && !whole.overflowed(), name);
         } else if (std::strcmp(op, "list_row") == 0) {
-            // A list's rows the way the list API reaches them: `add` a row, or find one by its `match` fields and write a `field`, `delete` it, or with neither only expect it.
+            // A list's rows as the list API reaches them: `add` a row, or find one by `match` and write a `field`, `delete` it, or only expect it.
             ensureStarted();
             ListStep ls = listStep(ctx, step);
             if (!ls.source) {
@@ -1218,9 +1218,30 @@ static int runScenario(const char* path) {
 }
 
 // Directory iteration can throw filesystem_error, which escapes main deliberately: @xref{why-a-filesystem-error-escapes-main}. NOLINTNEXTLINE(bugprone-exception-escape)
+/// How many controls a state document cannot address: `type`, `enabled` and a `$` key mean the module itself there, so such a control is dropped from every preset.
+static int checkControlNames() {
+    mm::registerModuleTypes();
+    int bad = 0;
+    for (uint8_t i = 0; i < mm::ModuleFactory::typeCount(); i++) {
+        mm::MoonModule* m = mm::ModuleFactory::create(mm::ModuleFactory::typeName(i));
+        if (!m) continue;
+        m->defineControls();
+        for (uint8_t c = 0; c < m->controls().count(); c++) {
+            const char* n = m->controls()[c].name;
+            if (std::strcmp(n, "type") == 0 || std::strcmp(n, "enabled") == 0 || n[0] == '$') {
+                std::printf("  FAIL  %s has a control named \"%s\", which a state document reads as the module's own\n", mm::ModuleFactory::typeName(i), n);
+                bad++;
+            }
+        }
+        delete m;
+    }
+    return bad;
+}
+
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        // Run all scenarios in the scenarios/ directory tree, recursively: @xref{why-a-filesystem-error-escapes-main}.
+        // Every scenario under scenarios/, after the control-name check only this binary can run, holding every type: @xref{why-a-filesystem-error-escapes-main}.
+        const int badNames = checkControlNames();
         int failed = 0;
         int skipped = 0;
         int total = 0;
@@ -1237,7 +1258,8 @@ int main(int argc, char* argv[]) {
         // Skipped is reported on its own line: a run that tested nothing must not read as a clean pass.
         std::printf("=== %d scenario(s), %d passed, %d failed, %d skipped ===\n",
                     total, total - failed - skipped, failed, skipped);
-        return failed > 0 ? 1 : 0;
+        if (badNames) std::printf("=== %d control name(s) a state document cannot address ===\n", badNames);
+        return (failed > 0 || badNames) ? 1 : 0;
     }
 
     return runScenario(argv[1]);

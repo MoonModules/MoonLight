@@ -58,7 +58,7 @@ bool isPersistable(ControlType t) {
         case ControlType::ReadOnly:
         case ControlType::ReadOnlyInt:
         case ControlType::Progress:
-        case ControlType::Button:      // momentary action — no value to save
+        case ControlType::Button:      // momentary action, no value to save
             return false;
         case ControlType::List:
             // Persistable now: the List value is a JSON array the recursive mm::json reader round-trips, restored via ListSource::restoreList (see applyControlValue). The source owns its (de)serialization.

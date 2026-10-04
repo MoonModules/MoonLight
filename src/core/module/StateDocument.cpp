@@ -25,16 +25,33 @@ using json::JsonType;
 
 // A control a script declares exists only once the next prepare has compiled the script, so a document naming it waits for that prepare.
 struct Deferred {
-    char module[16];
+    char module[MoonModule::kNameLen];
     char key[32];
     char* valueJson;   // `{"value":...}`, on the heap
 };
 constexpr uint8_t kMaxDeferred = 64;   // far past a script's controls; more is refused by name rather than dropped
-Deferred g_deferred[kMaxDeferred];
+// On the heap only while something waits, so a device that never defers keeps the 3 KB.
+Deferred* g_deferred = nullptr;
 uint8_t g_deferredCount = 0;
+
+// Free the table once nothing waits in it.
+void releaseDeferredTable() {
+    if (g_deferredCount) return;
+    platform::free(g_deferred);
+    g_deferred = nullptr;
+}
+
+// Forget what a failed document deferred, the entries from `from` on.
+void dropDeferredSince(uint8_t from, StateDocumentResult& r) {
+    for (uint8_t i = from; i < g_deferredCount; i++) platform::free(g_deferred[i].valueJson);
+    g_deferredCount = from;
+    r.deferred = 0;
+    releaseDeferredTable();
+}
 
 bool defer(const char* module, const char* key, const char* valueJson) {
     if (g_deferredCount >= kMaxDeferred) return false;
+    if (!g_deferred && !(g_deferred = static_cast<Deferred*>(platform::alloc(sizeof(Deferred) * kMaxDeferred)))) return false;
     const size_t n = std::strlen(valueJson) + 1;
     char* copy = static_cast<char*>(platform::alloc(n));
     if (!copy) return false;
@@ -46,8 +63,24 @@ bool defer(const char* module, const char* key, const char* valueJson) {
     return true;
 }
 
+constexpr const char* kNameRule = "a module name has 1 to 15 characters";
+
 // Keys a module object reads itself rather than as a control or a child.
 bool reserved(const char* key) { return key[0] == '$' || std::strcmp(key, "type") == 0; }
+
+void writeValue(JsonSink& sink, const JsonDoc& doc, const JsonNode* n);
+
+// An array or an object, its members written in order.
+void writeContainer(JsonSink& sink, const JsonDoc& doc, const JsonNode* n) {
+    const bool isObject = n->type == JsonType::Object;
+    sink.append(isObject ? "{" : "[");
+    for (const JsonNode* c = doc.node(n->firstChild); c; c = doc.node(c->next)) {
+        if (c != doc.node(n->firstChild)) sink.append(",");
+        if (isObject) { sink.writeJsonString(c->key); sink.append(":"); }
+        writeValue(sink, doc, c);
+    }
+    sink.append(isObject ? "}" : "]");
+}
 
 // Write a value node back out as JSON, the form the control write path parses.
 void writeValue(JsonSink& sink, const JsonDoc& doc, const JsonNode* n) {
@@ -57,22 +90,7 @@ void writeValue(JsonSink& sink, const JsonDoc& doc, const JsonNode* n) {
         case JsonType::Int:    sink.appendf("%ld", n->intValue); break;
         case JsonType::String: sink.writeJsonString(n->str); break;
         case JsonType::Array:
-        case JsonType::Object: {
-            const bool isObject = n->type == JsonType::Object;
-            sink.append(isObject ? "{" : "[");
-            bool first = true;
-            for (int i = n->firstChild; i >= 0;) {
-                const JsonNode* c = doc.node(i);
-                if (!c) break;
-                if (!first) sink.append(",");
-                if (isObject) { sink.writeJsonString(c->key); sink.append(":"); }
-                writeValue(sink, doc, c);
-                first = false;
-                i = c->next;
-            }
-            sink.append(isObject ? "}" : "]");
-            break;
-        }
+        case JsonType::Object: writeContainer(sink, doc, n); break;
     }
 }
 
@@ -87,6 +105,13 @@ MoonModule* childNamed(MoonModule* parent, const char* name) {
 const char* typeOf(const JsonDoc& doc, const JsonNode* obj) {
     const JsonNode* t = json::member(doc, obj, "type");
     return (t && t->type == JsonType::String) ? t->str : nullptr;
+}
+
+// The role a registered type declares, or false when no such type is registered.
+bool registeredRole(const char* type, ModuleRole& role) {
+    for (uint8_t i = 0; i < ModuleFactory::typeCount(); i++)
+        if (std::strcmp(ModuleFactory::typeName(i), type) == 0) { role = ModuleFactory::typeRole(i); return true; }
+    return false;
 }
 
 struct Applier {
@@ -139,8 +164,41 @@ struct Applier {
         m->applyState();
     }
 
+    const JsonNode* first(const JsonNode* obj) const { return doc.node(obj->firstChild); }
+    const JsonNode* next(const JsonNode* n) const { return doc.node(n->next); }
+
+    static bool nameFits(const char* name) { return name[0] && std::strlen(name) < MoonModule::kNameLen; }
+
+    // What would fail at creation, found before anything changes: a type this build lacks, a role the parent refuses, a name the tree cannot hold.
+    bool validate(MoonModule* m, const JsonNode* obj) {
+        for (const JsonNode* member = first(obj); member; member = next(member))
+            if (!reserved(member->key) && member->type == JsonType::Object && !validateMember(m, member)) return false;
+        return true;
+    }
+
+    bool validateMember(MoonModule* m, const JsonNode* member) {
+        const size_t at = push(member->key);
+        MoonModule* child = m ? childNamed(m, member->key) : nullptr;
+        const char* type = typeOf(doc, member);
+        const bool fresh = type && (!child || std::strcmp(child->typeName(), type) != 0);
+        if (fresh && !validateCreation(m, child, member->key, type)) return false;
+        if (!fresh && !child) return fail("no such module, and no type to create it");
+        // A child the document creates or re-types is new, so what goes under it is checked when it exists.
+        if (!validate(fresh ? nullptr : child, member)) return false;
+        pop(at);
+        return true;
+    }
+
+    bool validateCreation(MoonModule* parent, MoonModule* existing, const char* name, const char* type) {
+        ModuleRole role;
+        if (!registeredRole(type, role)) return fail("unknown type");
+        if (parent && !parent->acceptsRole(role)) return fail("a module of this role cannot go here");
+        if (!existing && !nameFits(name)) return fail(kNameRule);
+        return true;
+    }
+
     MoonModule* create(MoonModule* parent, const char* name, const char* type) {
-        if (!name[0] || std::strlen(name) >= 16) { fail("a module name has 1 to 15 characters"); return nullptr; }
+        if (!nameFits(name)) { fail(kNameRule); return nullptr; }
         // Names are unique across the tree, so a name in use elsewhere would be renamed on creation, and the same document would never find it again.
         if (s.firstByName(name)) { fail("that name is used elsewhere in the tree"); return nullptr; }
         MoonModule* m = ModuleFactory::create(type);
@@ -180,6 +238,28 @@ struct Applier {
         return true;
     }
 
+    // Every editable child, back to front since removing compacts the array.
+    bool removeChildren(MoonModule* m) {
+        for (int k = static_cast<int>(m->childCount()) - 1; k >= 0; k--) {
+            MoonModule* c = m->child(static_cast<uint8_t>(k));
+            if (c && c->userEditable() && !remove(m, c)) return false;
+        }
+        return true;
+    }
+
+    // What a failed control write says, or null when it took.
+    static const char* failureOf(Scheduler::SetControlResult result) {
+        switch (result) {
+            case Scheduler::SetControlResult::Ok:              return nullptr;
+            case Scheduler::SetControlResult::ModuleNotFound:  return "no such module";
+            case Scheduler::SetControlResult::ControlNotFound: return "no such control";
+            case Scheduler::SetControlResult::OutOfRange:      return "value out of range";
+            case Scheduler::SetControlResult::Malformed:       return "value malformed";
+            case Scheduler::SetControlResult::ReadOnly:        return "the control is read-only";
+        }
+        return "no such control";
+    }
+
     bool setControl(MoonModule* m, const char* key, const JsonNode* value) {
         JsonSink sink;
         sink.append("{\"value\":");
@@ -187,22 +267,19 @@ struct Applier {
         sink.append("}");
         if (sink.overflowed()) return fail("out of memory");
         const Scheduler::SetControlResult result = s.setControl(m->name(), key, sink.data());
-        if (result == Scheduler::SetControlResult::Ok && m->declaresControlsAtPrepare() && m->affectsPrepare(key)) markRebuilt(m);
+        const bool compiles = m->declaresControlsAtPrepare();
+        if (result == Scheduler::SetControlResult::Ok && compiles && m->affectsPrepare(key)) markRebuilt(m);
         // A control a script declares exists only after the rebuild, so it waits for it; on a module the document leaves as it is, an unknown control is a mistake.
-        if (result == Scheduler::SetControlResult::ControlNotFound && m->declaresControlsAtPrepare() && isRebuilt(m)) {
-            if (!defer(m->name(), key, sink.data())) return fail("too many controls wait for the rebuild");
-            r.deferred++;
-            return true;
-        }
-        switch (result) {
-            case Scheduler::SetControlResult::Ok:              r.changes++; return true;
-            case Scheduler::SetControlResult::ModuleNotFound:  return fail("no such module");
-            case Scheduler::SetControlResult::ControlNotFound: return fail("no such control");
-            case Scheduler::SetControlResult::OutOfRange:      return fail("value out of range");
-            case Scheduler::SetControlResult::Malformed:       return fail("value malformed");
-            case Scheduler::SetControlResult::ReadOnly:        return fail("the control is read-only");
-        }
-        return fail("no such control");
+        if (result == Scheduler::SetControlResult::ControlNotFound && compiles && isRebuilt(m)) return deferControl(m, key, sink.data());
+        if (const char* why = failureOf(result)) return fail(why);
+        r.changes++;
+        return true;
+    }
+
+    bool deferControl(MoonModule* m, const char* key, const char* valueJson) {
+        if (!defer(m->name(), key, valueJson)) return fail("too many controls wait for the rebuild");
+        r.deferred++;
+        return true;
     }
 
     bool replacesChildren(const JsonNode* obj) const {
@@ -213,68 +290,95 @@ struct Applier {
     // Remove every child the document removes, through the whole subtree, before anything is created, so a name can move from one branch to another.
     bool prune(MoonModule* m, const JsonNode* obj) {
         const bool replaceChildren = replacesChildren(obj);
-        // Back to front, since removing compacts the array.
-        for (int i = static_cast<int>(m->childCount()) - 1; i >= 0; i--) {
+        for (int i = static_cast<int>(m->childCount()) - 1; i >= 0; i--) {   // back to front, since removing compacts the array
             MoonModule* c = m->child(static_cast<uint8_t>(i));
-            if (!c) continue;
-            const JsonNode* listed = json::member(doc, obj, c->name());
-            const bool kept = listed && listed->type == JsonType::Object;
-            const bool removed = listed ? listed->type == JsonType::Null : replaceChildren && c->userEditable();
-            const size_t at = push(c->name());
-            if (removed && !remove(m, c)) return false;
-            if (kept && !prune(c, listed)) return false;
-            pop(at);
+            if (c && !pruneChild(m, c, json::member(doc, obj, c->name()), replaceChildren)) return false;
         }
         return true;
+    }
+
+    bool pruneChild(MoonModule* m, MoonModule* c, const JsonNode* listed, bool replaceChildren) {
+        const bool kept = listed && listed->type == JsonType::Object;
+        const bool removed = listed ? listed->type == JsonType::Null : replaceChildren && c->userEditable();
+        const char* newType = kept ? typeOf(doc, listed) : nullptr;
+        const size_t at = push(c->name());
+        bool ok = true;
+        if (removed) ok = remove(m, c);
+        // A re-typed child is replaced in place, so everything under it goes now, freeing its names for elsewhere.
+        else if (newType && std::strcmp(newType, c->typeName()) != 0) ok = removeChildren(c);
+        else if (kept) ok = prune(c, listed);
+        if (ok) pop(at);
+        return ok;
     }
 
     // Apply a module object's members to `m`, in document order, once prune() has removed what goes.
     bool apply(MoonModule* m, const JsonNode* obj) {
-        const bool replaceChildren = replacesChildren(obj);
-        for (int i = obj->firstChild; i >= 0;) {
-            const JsonNode* member = doc.node(i);
-            if (!member) break;
-            i = member->next;
-            if (reserved(member->key)) continue;
-            const size_t at = push(member->key);
-            if (member->type == JsonType::Object) {
-                MoonModule* child = childNamed(m, member->key);
-                const char* type = typeOf(doc, member);
-                if (!child) {
-                    if (!type) return fail("no such module, and no type to create it");
-                    child = create(m, member->key, type);
-                } else if (type && std::strcmp(child->typeName(), type) != 0) {
-                    child = replace(m, child, type);
-                }
-                if (!child || !apply(child, member)) return false;
-            } else if (member->type == JsonType::Null) {
-                MoonModule* child = childNamed(m, member->key);
-                if (child && !remove(m, child)) return false;   // absent already: nothing to remove
-            } else if (!setControl(m, member->key, member)) {
-                return false;
-            }
-            pop(at);
+        for (const JsonNode* member = first(obj); member; member = next(member))
+            if (!reserved(member->key) && !applyMember(m, member)) return false;
+        if (replacesChildren(obj)) reorder(m, obj);
+        return true;
+    }
+
+    bool applyMember(MoonModule* m, const JsonNode* member) {
+        const size_t at = push(member->key);
+        bool ok = true;
+        if (member->type == JsonType::Object) {
+            ok = applyChild(m, member);
+        } else if (member->type == JsonType::Null) {
+            MoonModule* child = childNamed(m, member->key);
+            ok = !child || remove(m, child);   // absent already: nothing to remove
+        } else {
+            ok = setControl(m, member->key, member);
         }
-        if (replaceChildren) {
-            // Exactly the listed children, in the document's order.
-            uint8_t index = 0;
-            for (int i = obj->firstChild; i >= 0;) {
-                const JsonNode* member = doc.node(i);
-                if (!member) break;
-                i = member->next;
-                if (reserved(member->key) || member->type != JsonType::Object) continue;
-                if (MoonModule* c = childNamed(m, member->key)) {
-                    if (m->moveChildTo(c, index)) structural = true;
-                    index++;
-                }
-            }
+        if (ok) pop(at);
+        return ok;
+    }
+
+    bool applyChild(MoonModule* m, const JsonNode* member) {
+        MoonModule* child = childNamed(m, member->key);
+        const char* type = typeOf(doc, member);
+        if (!child && !type) return fail("no such module, and no type to create it");
+        if (!child) child = create(m, member->key, type);
+        else if (type && std::strcmp(child->typeName(), type) != 0) child = replace(m, child, type);
+        return child && apply(child, member);
+    }
+
+    // Exactly the listed children, in the document's order.
+    void reorder(MoonModule* m, const JsonNode* obj) {
+        uint8_t index = 0;
+        for (const JsonNode* member = first(obj); member; member = next(member)) {
+            MoonModule* c = (reserved(member->key) || member->type != JsonType::Object) ? nullptr : childNamed(m, member->key);
+            if (!c) continue;
+            if (m->moveChildTo(c, index)) finishStructure(m);   // an order is state, saved and counted like any change
+            index++;
+        }
+    }
+
+    // One pass over the root's members: 0 checks what creation needs, 1 removes, 2 applies the rest.
+    bool runPass(int pass, const JsonNode* root) {
+        for (const JsonNode* member = first(root); member; member = next(member)) {
+            if (reserved(member->key)) continue;   // a root `$` key is the file's own, such as a preset's `$slot`
+            const size_t at = push(member->key);
+            MoonModule* top = topNamed(member->key);
+            if (!top) return fail("no such top-level module");
+            if (member->type != JsonType::Object) return fail("a top-level module takes an object");
+            const bool ok = pass == 0 ? validate(top, member) : pass == 1 ? prune(top, member) : apply(top, member);
+            if (!ok) return false;
+            pop(at);
         }
         return true;
     }
+
+    // The top level is the fixed set main.cpp wires, so a document only reaches into it.
+    MoonModule* topNamed(const char* name) const {
+        for (uint8_t m = 0; m < s.moduleCount(); m++) {
+            MoonModule* candidate = s.module(m);
+            if (candidate && std::strcmp(candidate->name(), name) == 0) return candidate;
+        }
+        return nullptr;
+    }
 };
 
-// A preset file's pad, the one root key that is not a module, so a preset file applies as it is through any path.
-constexpr const char* kSlotKey = "slot";
 
 // A secret stays on the device: a document is shown, copied and shared, and applying one without the key leaves the secret as it is.
 bool holdsSecret(const ControlDescriptor& c) {
@@ -317,37 +421,14 @@ StateDocumentResult applyStateDocument(Scheduler& scheduler, const char* text) {
     StateDocumentResult r;
     const uint8_t deferredBefore = g_deferredCount;
     JsonDoc doc;
-    if (!json::parse(text, doc)) { r.ok = false; r.error = "malformed JSON"; return r; }
+    if (!json::parse(text, doc)) { r.ok = false; r.error = doc.outOfMemory ? "out of memory" : "malformed JSON"; return r; }
     const JsonNode* root = doc.rootNode();
     if (root->type != JsonType::Object) { r.ok = false; r.error = "a document is a JSON object"; return r; }
 
     Applier a{scheduler, doc, r};
-    // Two passes over the same members: every removal first, then everything else.
-    for (int pass = 0; pass < 2 && r.ok; pass++) {
-        for (int i = root->firstChild; i >= 0;) {
-            const JsonNode* member = doc.node(i);
-            if (!member) break;
-            i = member->next;
-            if (std::strcmp(member->key, kSlotKey) == 0) continue;
-            const size_t at = a.push(member->key);
-            MoonModule* top = nullptr;
-            for (uint8_t m = 0; m < scheduler.moduleCount(); m++) {
-                MoonModule* candidate = scheduler.module(m);
-                if (candidate && std::strcmp(candidate->name(), member->key) == 0) { top = candidate; break; }
-            }
-            // The top level is the fixed set main.cpp wires, so a document only reaches into it.
-            if (!top) { a.fail("no such top-level module"); break; }
-            if (member->type != JsonType::Object) { a.fail("a top-level module takes an object"); break; }
-            if (!(pass == 0 ? a.prune(top, member) : a.apply(top, member))) break;
-            a.pop(at);
-        }
-    }
+    for (int pass = 0; pass < 3 && a.runPass(pass, root); pass++) {}
     // A failed document leaves nothing waiting for the rebuild: what came before the failure stays applied, but no deferred write lands after it.
-    if (!r.ok) {
-        for (uint8_t i = deferredBefore; i < g_deferredCount; i++) platform::free(g_deferred[i].valueJson);
-        g_deferredCount = deferredBefore;
-        r.deferred = 0;
-    }
+    if (!r.ok) dropDeferredSince(deferredBefore, r);
     // One prepare and one full resync for the whole document, however much it changed.
     if (a.structural) {
         scheduler.requestPrepareTree();
@@ -396,6 +477,7 @@ void applyDeferredControls(Scheduler& scheduler) {
         platform::free(d.valueJson);
     }
     g_deferredCount = 0;
+    releaseDeferredTable();
 }
 
 }  // namespace mm

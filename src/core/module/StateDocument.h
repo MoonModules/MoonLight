@@ -6,7 +6,12 @@
 /// @{
 /// A state document mirrors the module tree, keyed by module name, and applies as a JSON Merge Patch (RFC 7386); its rules are in integrating.md § Setting everything at once.
 
+#include <cstddef>
+
 namespace mm {
+
+/// The largest document applied or saved, far past a real one: a bigger one is a mistake, refused before any allocation.
+inline constexpr size_t kStateDocumentMax = 32 * 1024;
 
 class JsonSink;
 class MoonModule;
@@ -21,7 +26,7 @@ struct StateDocumentResult {
     uint16_t deferred = 0;     ///< controls a script declares, set once the next prepare has compiled it
 };
 
-/// Apply a state document to the tree; a document that does not parse changes nothing, and a root `slot`, a preset file's pad, is skipped.
+/// Apply a state document to the tree, checking what creation needs before anything changes; a root `$` key, such as a preset's `$slot`, is the file's own.
 StateDocumentResult applyStateDocument(Scheduler& scheduler, const char* text);
 
 /// Write what applying a document did as the API answers it: `ok` and `changes`, or the `error` and where it is, and how many controls wait for the rebuild.

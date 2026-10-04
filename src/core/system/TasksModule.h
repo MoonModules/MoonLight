@@ -2,14 +2,14 @@
 
 
 #include "core/module/MoonModule.h"
-#include "core/module/Scheduler.h"   // instance()->moduleCount()/module(i) — the modules to profile
+#include "core/module/Scheduler.h"   // instance()->moduleCount()/module(i): the modules to profile
 #include "core/util/JsonSink.h"    // writeListRow emits its row as JSON into the sink
-#include "platform/platform.h" // taskSnapshot / TaskInfo — the RTOS task view (behind the boundary)
+#include "platform/platform.h" // taskSnapshot / TaskInfo: the RTOS task view (behind the boundary)
 
-#include <algorithm>  // std::sort — stable row order so the list doesn't jump each refresh
+#include <algorithm>  // std::sort: stable row order so the list doesn't jump each refresh
 #include <cstdint>
 #include <cstdio>
-#include <cstring>   // strcmp — match a task row to the render task
+#include <cstring>   // strcmp: match a task row to the render task
 
 namespace mm {
 
@@ -61,6 +61,7 @@ private:
     /// The task table, a source over a fixed snapshot the platform fills, with no allocation.
     struct TaskListSource : ListSource {
         static constexpr uint8_t kMaxTasks = 32;   ///< a generous ceiling for one device
+        bool persistsList() const override { return false; }   // a snapshot of the running tasks
         platform::TaskInfo rows_[kMaxTasks];       ///< the snapshot itself
         uint8_t count_ = 0;                        ///< how many rows it holds
 

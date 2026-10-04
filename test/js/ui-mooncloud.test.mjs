@@ -59,7 +59,7 @@ test("the card re-reads only on a write that changed the server, once", () => {
               "matching the whole module type re-reads on every keystroke in `message`");
 
     // Switching consent OFF changes nothing on the server, so the card redraws from what it has.
-    assert.match(rule, /if \(!turnedOn\) \{ moonCloudGeneration\+\+; refetchState\(\); return; \}/,
+    assert.match(rule, /if \(!turnedOn\) \{ moonCloudGeneration\+\+; refetchState\(\); return true; \}/,
                  "switching off must not clear the cache or re-read");
 
     // Switching ON reads ONCE, after a delay: the report leaves from tick1s rather than during the

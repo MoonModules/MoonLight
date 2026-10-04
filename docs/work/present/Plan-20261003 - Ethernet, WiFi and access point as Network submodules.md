@@ -98,7 +98,7 @@ A row's password travels to the UI in the clear, over the API and the WebSocket,
 
 - `ssid` and `password` on Network become the first known network; Network's addressing becomes that row's and Ethernet's.
 - The Ethernet controls keep their names on the new submodule.
-- `migrate.js` maps both for a backup restore, and MIGRATING says what an in-place update does.
+- `migrate.js` maps both for a backup restore; an in-place update moves them once at the first boot (`NetworkModule::adoptLegacySettings`, temporary, with a backlog entry for its removal).
 - Improv provisioning adds or updates a known-network row rather than writing Network's fields.
 
 ## Steps
@@ -139,6 +139,12 @@ Waiting for more devices and a cable:
 - The global static addressing that applied to whichever interface came up.
 - The scan code inside Improv provisioning, which calls the platform scan instead.
 - The backlog item "Static IP on WiFi STA", deleted when this ships.
+
+## Next, found in the pre-merge review
+
+- **The Improv scan and the radio teardown race.** `wifiScanStart()` runs on Improv's task and switches the radio mode while the render task may run `wifiRadioDown()`, which takes no lock; one mutex around the radio's mode and netifs, or the scan handed to the render task, closes it. Verified on a board.
+- **One IP-settings struct.** Ethernet keeps its five address fields and its live re-apply in the child, WiFi in the parent with a signature seeded by hand on every start path; one `{mode, ip, gateway, subnet, dns}` in `IpSettings.h` with its signature and its apply serves both.
+- **The cascade by its states.** `onConnected` dispatches on a string where the `State` enum exists, and the start-the-station transition and the stop-and-note pair are each copied six to eight times; one function per transition.
 
 ## Out of scope at first
 

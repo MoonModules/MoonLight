@@ -152,9 +152,6 @@ public:
         return false;
     }
 
-    /// The rows are configuration, restored by restoreList.
-    bool persistsList() const override { return true; }
-
     /// Rebuild the rows from the persisted list; an empty list stays empty rather than re-seeding.
     bool restoreList(const char* json, const char* key) override {
         count_ = 0;

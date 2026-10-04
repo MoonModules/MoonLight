@@ -68,7 +68,7 @@ Detail: [technical](moxygen/Drivers.md)
 
 ### FixtureProfiles
 
-The named channel wirings drivers reference, which channel carries Red, Green, Blue, White, or a fixture role like Pan/Tilt. Real fixtures ship read-only (the color orders, multi-channel pars, moving heads); add your own alongside them. A driver stores a profile's stable id, not its name, so renaming or reordering never breaks a reference.
+The named channel wirings drivers reference, which channel carries Red, Green, Blue, White, or a fixture role like Pan/Tilt. Real fixtures ship read-only (the color orders, multi-channel pars, moving heads); add your own alongside them. A driver stores the profile's name, so reordering never breaks a reference; after a rename, a driver on the old name falls back to its default at the next boot, as [Drivers](drivers.md) describes.
 
 - `profiles`: the editable list of profile definitions, one row per profile.
 

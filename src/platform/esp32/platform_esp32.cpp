@@ -146,8 +146,6 @@ void setTestNowMs(uint32_t ms) { testNowMs.store(ms, std::memory_order_relaxed);
 
 // Host-test hook (see platform.h); no ESP32 test drives a bind failure, so it is inert here.
 void setTestBindFails(bool) {}
-/// Inert here, as `setTestBindFails` is.
-void setTestJoinFails(bool) {}
 
 uint32_t millis() MM_NONBLOCKING {
     uint32_t override_ = testNowMs.load(std::memory_order_relaxed);
@@ -1262,8 +1260,6 @@ WifiFailure wifiStaLastFailure() {
     if (wifiStaConnected_.load(std::memory_order_relaxed)) return WifiFailure::None;
     return static_cast<WifiFailure>(staFailure_.load(std::memory_order_relaxed));
 }
-void setTestWifiFailure(WifiFailure) {}
-void setTestWifiScan(const WifiNetwork*, int) {}
 
 bool wifiScanStart() {
     // Scanning needs a station side, which an access point alone gains here, so a phone on it sees the networks in range.
@@ -1436,9 +1432,7 @@ void wifiStaStop() {}
 int wifiStaRssi() { return 0; }
 bool wifiScanStart() { return false; }
 int wifiScanResults(WifiNetwork*, int) { return -1; }
-void setTestWifiScan(const WifiNetwork*, int) {}
 WifiFailure wifiStaLastFailure() { return WifiFailure::None; }
-void setTestWifiFailure(WifiFailure) {}
 void wifiStaBssid(uint8_t out[6]) { std::memset(out, 0, 6); }
 int wifiStaChannel() { return 0; }
 bool wifiApInit(const WifiApConfig&) { return false; }

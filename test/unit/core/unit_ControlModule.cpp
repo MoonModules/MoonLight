@@ -587,6 +587,16 @@ TEST_CASE("ControlModule saves one card as a preset and puts back only that modu
     CHECK(layer->child(1) == rainbow);
 }
 
+// A preset that fails shows its whole failure, the deepest path included, so the user can find what to fix.
+TEST_CASE("ControlModule shows a failing preset's full path") {
+    Device d;
+    d.add(d.layers, "Layer");
+    d.writePreset("a-long-preset-name-of-thirty-1", "{\"Effects\":{\"Layer\":{\"Missing-module1\":{\"x\":1}}}}");
+    d.control->setup();
+    CHECK_FALSE(d.control->setListRowField(d.firstRowId(), "apply", "{}"));
+    CHECK(std::string(d.status()).find("at Effects.Layer.Missing-module1") != std::string::npos);
+}
+
 // The pad editor offers the containers the device names, so the UI keeps no second list of them.
 TEST_CASE("ControlModule names the containers a pad saves") {
     Device d;
@@ -599,7 +609,7 @@ TEST_CASE("ControlModule names the containers a pad saves") {
 TEST_CASE("ControlModule keeps a preset's pad when a card save overwrites it") {
     Device d;
     d.add(d.layers, "Layer");
-    d.writePreset("look", "{\"slot\":12,\"Effects\":{\"enabled\":true}}");
+    d.writePreset("look", "{\"$slot\":12,\"Effects\":{\"enabled\":true}}");
     d.control->setup();
     REQUIRE(d.rowNamed("look").find("\"slot\":12") != std::string::npos);
     d.setSource("Layer");

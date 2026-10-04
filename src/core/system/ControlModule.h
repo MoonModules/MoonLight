@@ -48,6 +48,8 @@ class ControlModule : public MoonModule, public ListSource {
 public:
     /// Where the preset files live.
     static constexpr const char* kPresetDir = "/.config/presets";
+    /// A preset file's pad, a root `$` key so the engine reads it as the file's own rather than a module.
+    static constexpr const char* kSlotKey = "$slot";
     /// The surface is a fixed grid, so a pad has a POSITION rather than a place in a list:
     static constexpr uint8_t kGridCols = 8;
     /// How many rows the pad grid has.
@@ -64,8 +66,6 @@ public:
     static_assert(sizeof(kCapturable) / sizeof(kCapturable[0]) ==
                   sizeof(kCaptureRole) / sizeof(kCaptureRole[0]),
                   "kCapturable and kCaptureRole are index-aligned");
-    /// The largest preset file read, far past a real one; a bigger file is a mistake, not a preset.
-    static constexpr long kMaxPresetBytes = 32 * 1024;
     /// Index of "Effects" within kCapturable, the role a pure look occupies.
     static constexpr uint8_t kEffectsRole = 1;
     static_assert(kCapturable[kEffectsRole][0] == 'E' && kCapturable[kEffectsRole][1] == 'f' &&
@@ -231,18 +231,27 @@ public:
 
     /// A preset written or removed from outside (the File Manager, a restore, the gallery) updates its one row.
     void onFileChanged(const char* path) override {
+        char name[kMaxNameLen];
+        if (holdsPresetFolder(path)) rescan();   // the folder itself, or one holding it, went or came: every row may have changed
+        else if (presetNameOf(path, name)) refreshPreset(name);
+    }
+
+    /// Whether `path` is the preset folder or a folder above it.
+    static bool holdsPresetFolder(const char* path) {
+        const size_t n = std::strlen(path);
+        return n <= std::strlen(kPresetDir) && std::strncmp(kPresetDir, path, n) == 0 && (kPresetDir[n] == '/' || kPresetDir[n] == 0);
+    }
+
+    /// The preset a path names, a `.json` file directly in the folder, into `name`; false for any other path.
+    static bool presetNameOf(const char* path, char (&name)[kMaxNameLen]) {
         const size_t dirLen = std::strlen(kPresetDir);
-        // The folder itself, or a folder holding it, went or came: every row may have changed.
-        const size_t pathLen = std::strlen(path);
-        if (pathLen <= dirLen && std::strncmp(kPresetDir, path, pathLen) == 0 && (kPresetDir[pathLen] == '/' || kPresetDir[pathLen] == 0)) { rescan(); return; }
-        if (std::strncmp(path, kPresetDir, dirLen) != 0 || path[dirLen] != '/') return;
+        if (std::strncmp(path, kPresetDir, dirLen) != 0 || path[dirLen] != '/') return false;
         const char* file = path + dirLen + 1;
         const size_t len = std::strlen(file);
-        if (len < 6 || len - 5 >= kMaxNameLen || std::strcmp(file + len - 5, ".json") != 0 || std::strchr(file, '/')) return;
-        char name[kMaxNameLen];
+        if (len < 6 || len - 5 >= kMaxNameLen || std::strcmp(file + len - 5, ".json") != 0 || std::strchr(file, '/')) return false;
         std::memcpy(name, file, len - 5);
         name[len - 5] = '\0';
-        refreshPreset(name);
+        return true;
     }
 
     /// Take the surface seat, ensure the folder, and scan what is already in it.
@@ -385,6 +394,8 @@ public:
 
     /// Editable, since a pad is renamed and deleted from the surface.
     bool isEditableList() const override { return true; }
+    /// The folder is the state, read at setup, so the rows are never written to a config file.
+    bool persistsList() const override { return false; }
 
     /// Presets are triggered far more than they are edited, so the rows render as a grid of pads:
     bool listAsPads() const override { return true; }
@@ -779,27 +790,26 @@ private:
         char* body = readFile(path);
         if (!body) return;
         json::JsonDoc doc;
-        if (json::parse(body, doc) && doc.rootNode()->type == json::JsonType::Object) {
-            for (int i = doc.rootNode()->firstChild; i >= 0;) {
-                const json::JsonNode* m = doc.node(i);
-                if (!m) break;
-                i = m->next;
-                if (std::strcmp(m->key, "captures") == 0) p.older = true;   // the flat format's header
-                if (std::strcmp(m->key, "slot") == 0 && m->type == json::JsonType::Int) {
-                    p.hasSlot = m->intValue >= 0 && m->intValue < kMaxPresets;
-                    p.slot = p.hasSlot ? static_cast<uint8_t>(m->intValue) : 0;
-                }
-                for (uint8_t r = 0; r < kCaptureCount; r++)
-                    if (m->type == json::JsonType::Object && std::strcmp(m->key, kCapturable[r]) == 0) p.roles |= 1u << r;
-            }
-        }
+        if (json::parse(body, doc) && doc.rootNode()->type == json::JsonType::Object)
+            for (const json::JsonNode* m = doc.node(doc.rootNode()->firstChild); m; m = doc.node(m->next)) readRootKey(p, *m);
         platform::free(body);
+    }
+
+    /// What one root key says about a preset: the flat format's header, its pad, or a container it sets.
+    static void readRootKey(Preset& p, const json::JsonNode& m) {
+        if (std::strcmp(m.key, "captures") == 0) p.older = true;
+        if (std::strcmp(m.key, kSlotKey) == 0 && m.type == json::JsonType::Int) {
+            p.hasSlot = m.intValue >= 0 && m.intValue < kMaxPresets;
+            p.slot = p.hasSlot ? static_cast<uint8_t>(m.intValue) : 0;
+        }
+        for (uint8_t r = 0; m.type == json::JsonType::Object && r < kCaptureCount; r++)
+            if (std::strcmp(m.key, kCapturable[r]) == 0) p.roles |= 1u << r;
     }
 
     /// A preset file whole, on the heap (caller frees), or null when absent, empty or past the cap.
     static char* readFile(const char* path) {
         const long size = platform::fsSize(path);
-        if (size <= 0 || size > kMaxPresetBytes) return nullptr;
+        if (size <= 0 || static_cast<size_t>(size) > kStateDocumentMax) return nullptr;
         char* body = static_cast<char*>(platform::alloc(static_cast<size_t>(size) + 1));
         if (!body) return nullptr;
         const int n = platform::fsRead(path, body, static_cast<size_t>(size) + 1);
@@ -829,32 +839,23 @@ private:
     bool writeSlot(const Preset& p) {
         char path[128];
         pathFor(p.name, path, sizeof(path));
-        const long size = platform::fsSize(path);
-        if (size <= 0) return false;
-        char* body = static_cast<char*>(platform::alloc(static_cast<size_t>(size) + 1));
+        char* body = readFile(path);
         if (!body) return false;
-        bool ok = false;
-        const int n = platform::fsRead(path, body, static_cast<size_t>(size) + 1);
-        if (n > 0) {
-            body[n] = '\0';
-            JsonSink sink;
-            // Replace the leading brace, the slot being a header field like the captures one.
-            sink.appendf("{\"slot\":%u,", static_cast<unsigned>(p.slot));
-            const char* rest = std::strchr(body, '{');
-            if (rest) {
-                const char* after = rest + 1;
-                // Drop any previous slot key so repeated reorders do not accumulate them.
-                if (std::strncmp(after, "\"slot\":", 7) == 0) {
-                    const char* comma = std::strchr(after, ',');
-                    if (comma) after = comma + 1;
-                }
-                sink.append(after);
-                if (!sink.overflowed())
-                    ok = platform::fsWriteAtomic(path, sink.data(), sink.size());
-            }
-        }
+        JsonSink sink;
+        restampSlot(sink, body, p.slot);
         platform::free(body);
-        return ok;
+        return sink.size() > 0 && !sink.overflowed() && platform::fsWriteAtomic(path, sink.data(), sink.size());
+    }
+
+    /// A preset file's text with its pad set to `slot`, written ahead of the document in place of any earlier one.
+    static void restampSlot(JsonSink& sink, const char* body, uint8_t slot) {
+        const char* rest = std::strchr(body, '{');
+        if (!rest) return;
+        sink.appendf("{\"%s\":%u,", kSlotKey, static_cast<unsigned>(slot));
+        char prior[16];
+        const int priorLen = std::snprintf(prior, sizeof(prior), "\"%s\":", kSlotKey);
+        const char* comma = std::strncmp(rest + 1, prior, static_cast<size_t>(priorLen)) == 0 ? std::strchr(rest + 1, ',') : nullptr;
+        sink.append(comma ? comma + 1 : rest + 1);   // repeated reorders never stack pads
     }
 
     static void pathFor(const char* name, char* out, size_t n) {
@@ -865,40 +866,54 @@ private:
     void savePreset() {
         // A pad names one save, refused or not, so the next save from a card is never aimed at it.
         struct AimOnce { uint8_t& slot; ~AimOnce() { slot = kNoSlot; } } aimOnce{saveSlot_};
-        if (name_[0] == 0) { setStatusf(Severity::Warning, "name the preset first"); return; }
-        auto* sched = Scheduler::instance();
-        if (!sched) { setStatusf(Severity::Error, "not ready"); return; }
-
-        MoonModule* m = sched->firstByName(source_);
-        if (!m) { setStatusf(Severity::Error, "%s is not on this device", source_[0] ? source_ : "(no source)"); return; }
+        MoonModule* m = saveSource();
+        if (!m) return;
         // A pad can hold one preset:
-        if (saveSlot_ < kMaxPresets) {
-            for (uint8_t i = 0; i < presetCount_; i++) {
-                if (presets_[i].slot != saveSlot_) continue;
-                if (std::strcmp(presets_[i].name, name_) != 0) {
-                    setStatusf(Severity::Warning, "pad %u is taken by %s",
-                               static_cast<unsigned>(saveSlot_ + 1), presets_[i].name);
-                    return;
-                }
-                break;
-            }
+        if (const Preset* holder = padHolder(saveSlot_); holder && std::strcmp(holder->name, name_) != 0) {
+            setStatusf(Severity::Warning, "pad %u is taken by %s", static_cast<unsigned>(saveSlot_ + 1), holder->name);
+            return;
         }
         // The file carries the chosen pad; with none chosen, the pad of the preset it overwrites, else the first free one.
-        uint8_t slot = saveSlot_;
-        if (const Preset* same = presetNamed(name_); slot >= kMaxPresets && same) slot = same->slot;
-        JsonSink sink;
-        sink.append("{");
-        if (slot < kMaxPresets) sink.appendf("\"slot\":%u,", static_cast<unsigned>(slot));
-        writeStateMember(sink, *m);
-        sink.append("}");
-        if (sink.overflowed()) { setStatusf(Severity::Error, "out of memory saving"); return; }
+        const Preset* same = presetNamed(name_);
+        storePreset(*m, saveSlot_ < kMaxPresets ? saveSlot_ : same ? same->slot : kNoSlot);
+    }
 
+    /// The module a save writes, or null with the reason shown.
+    MoonModule* saveSource() {
+        if (name_[0] == 0) { setStatusf(Severity::Warning, "name the preset first"); return nullptr; }
+        auto* sched = Scheduler::instance();
+        MoonModule* m = sched ? sched->firstByName(source_) : nullptr;
+        if (!m) setStatusf(Severity::Error, "%s is not on this device", source_[0] ? source_ : "(no source)");
+        return m;
+    }
+
+    /// Write `m` as the preset called name_, on pad `slot` when it names one.
+    void storePreset(MoonModule& m, uint8_t slot) {
+        JsonSink sink;
+        if (!writePresetFile(sink, m, slot)) return;
         char path[128];
         pathFor(name_, path, sizeof(path));
         const bool ok = platform::fsWriteAtomic(path, sink.data(), sink.size());
-        setStatusf(ok ? Severity::Status : Severity::Error,
-                   ok ? "saved %s" : "could not save %s", name_);
+        setStatusf(ok ? Severity::Status : Severity::Error, ok ? "saved %s" : "could not save %s", name_);
         refreshPreset(name_);   // the file carries its slot, so this places it on the clicked pad
+    }
+
+    /// The preset on pad `slot`, or null when it is free or no pad is named.
+    const Preset* padHolder(uint8_t slot) const {
+        for (uint8_t i = 0; slot < kMaxPresets && i < presetCount_; i++)
+            if (presets_[i].slot == slot) return &presets_[i];
+        return nullptr;
+    }
+
+    /// A preset file's text: the pad when one is given, then `m` as a document; false, with the reason shown, when it does not fit.
+    bool writePresetFile(JsonSink& sink, MoonModule& m, uint8_t slot) {
+        sink.append("{");
+        if (slot < kMaxPresets) sink.appendf("\"%s\":%u,", kSlotKey, static_cast<unsigned>(slot));
+        writeStateMember(sink, m);
+        sink.append("}");
+        if (sink.overflowed()) { setStatusf(Severity::Error, "out of memory saving"); return false; }
+        if (sink.size() > kStateDocumentMax) { setStatusf(Severity::Error, "%s is larger than a preset holds", m.name()); return false; }
+        return true;
     }
 
     /// Put the device into a preset's state, by applying its document.
@@ -1063,8 +1078,8 @@ private:
     char source_[16] = "Effects";
     /// Which preset currently holds each capturable role, index-aligned with kCapturable.
     char current_[kCaptureCount][kMaxNameLen] = {};
-    /// Backing store for the status text: setStatus borrows the pointer, so it must outlive the call.
-    char statusBuf_[64] = {};
+    /// Backing store for the status text: setStatus borrows the pointer, so it must outlive the call; sized for a preset name, an error and its full path.
+    char statusBuf_[kMaxNameLen + 128] = {};
 };
 
 }  // namespace mm

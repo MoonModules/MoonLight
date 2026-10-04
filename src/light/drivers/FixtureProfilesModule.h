@@ -245,9 +245,6 @@ public:
         return false;
     }
 
-    /// The rows are configuration, restored by restoreList.
-    bool persistsList() const override { return true; }
-
     /// Restore the profiles and the role pool, so custom wirings survive a reboot.
     bool restoreList(const char* json, const char* key) override {
         mm::json::JsonDoc doc;

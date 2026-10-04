@@ -201,10 +201,8 @@ void FilesystemModule::reapplyNode(MoonModule* m, const char* json, const char* 
 
 // ---- Load ----
 
-// Read a WHOLE file into a heap buffer sized to it (caller frees), no fixed ceiling.
-// A large saved config (many fixture profiles, a wide fixture) loads in full instead of being truncated to a fixed buffer and failing to parse.
-// Mirrors the streaming save (saveSubtree): both sides cap-free.
-static char* readWholeFileAlloc(const char* path) {
+// No fixed ceiling, so a large saved config loads in full, mirroring the streaming save (saveSubtree).
+char* FilesystemModule::readWholeFile(const char* path) {
     const long size = platform::fsSize(path);
     if (size <= 0) return nullptr;
     char* buf = static_cast<char*>(platform::alloc(static_cast<size_t>(size) + 1));
@@ -218,7 +216,7 @@ static char* readWholeFileAlloc(const char* path) {
 void FilesystemModule::loadSubtree(MoonModule* m) {
     char path[MAX_PATH];
     if (!pathFor(m, path, sizeof(path))) return;
-    if (char* buf = readWholeFileAlloc(path)) {
+    if (char* buf = readWholeFile(path)) {
         applyNode(m, buf, "");
         platform::free(buf);
     }
@@ -254,7 +252,7 @@ bool FilesystemModule::applyConfigFile(const char* path) {
     const int idx = moduleIndexForConfigPath(path);
     if (idx < 0) return false;
     MoonModule* m = scheduler_->module(static_cast<uint8_t>(idx));
-    char* buf = readWholeFileAlloc(path);
+    char* buf = readWholeFile(path);
     if (!buf) return false;
     const bool applied = applySubtree(m, buf);
     platform::free(buf);
@@ -304,7 +302,7 @@ void FilesystemModule::applyWiredChildFromJson(MoonModule* wired, const char* js
         std::snprintf(typeKey, sizeof(typeKey), "%s%u.type", prefix, static_cast<unsigned>(j));
         char typeName[32] = {};
         mm::json::parseString(json, typeKey, typeName, sizeof(typeName));
-        if (typeName[0] == 0) return;   // walked past the last saved child — no match, keep defaults
+        if (typeName[0] == 0) return;   // walked past the last saved child: no match, keep defaults
         if (std::strcmp(typeName, wired->typeName()) != 0) continue;
         char childPrefix[MAX_KEY];
         std::snprintf(childPrefix, sizeof(childPrefix), "%s%u.", prefix, static_cast<unsigned>(j));

@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <utility>
 
 namespace mm {
 
@@ -93,12 +94,41 @@ public:
         return ipsettings::sig(r.ipSettings, r.ip, r.gateway, r.subnet, r.dns);
     }
 
+    /// A 6.0 config's top-level network as the first known row, with Network's shared IP settings and its power cap; false once the list holds one.
+    bool adoptLegacy(const char* json) {
+        if (count_ > 0) return false;
+        char ssid[sizeof(Row::ssid)] = {}, password[sizeof(Row::password)] = {};
+        mm::json::parseString(json, "ssid", ssid, sizeof(ssid));
+        mm::json::parseString(json, "password", password, sizeof(password));
+        if (!ssid[0] || !remember(ssid, password)) return false;
+        Row& r = rows_[0];
+        r.ipSettings = mm::json::parseInt(json, "addressing") == ipsettings::kStatic ? ipsettings::kStatic : ipsettings::kDhcp;
+        uint8_t* quads[4] = {r.ip, r.gateway, r.subnet, r.dns};
+        for (uint8_t k = 0; k < 4; k++) {
+            char text[16] = {};
+            mm::json::parseString(json, ipsettings::kFields[k], text, sizeof(text));
+            if (text[0]) parseDottedQuad(text, quads[k]);
+        }
+        for (uint8_t i = 0; i < controls_.count(); i++)
+            if (std::strcmp(controls_[i].name, "txPowerSetting") == 0) applyControlValue(controls_[i], json, "txPowerSetting", ApplyPolicy::Clamp);
+        return true;
+    }
+
     /// Remember a network at the top of the list, or update the row that already has its name, and save.
     bool remember(const char* ssid, const char* password) {
         if (!ssid || !ssid[0]) return false;
         int i = indexOfSsid(ssid);
         if (i < 0) {
-            if (!grow()) { setStatus(kListFull, Severity::Warning); return false; }
+            // Full: the lowest-priority network makes room, since a network given now (Improv, a join from the scan) is the one wanted first.
+            if (count_ >= kMaxKnown) {
+                // The network carrying the device is never the one forgotten, so its connected mark stays true.
+                if (rows_[count_ - 1].id == joinedId_) std::swap(rows_[count_ - 1], rows_[count_ - 2]);
+                mm::formatTo(statusStr_, sizeof(statusStr_), "known networks full: %s was forgotten", rows_[count_ - 1].ssid);
+                setStatus(statusStr_, Severity::Warning);
+            } else if (!grow()) {
+                setStatus(kListFull, Severity::Warning);
+                return false;
+            }
             i = count_ - 1;
             rows_[i] = Row{};
             rows_[i].id = nextId_++;
@@ -322,9 +352,6 @@ public:
         return parseDottedQuad(text, quad);
     }
 
-    /// The rows are configuration, restored by restoreList.
-    bool persistsList() const override { return true; }
-
     /// Restore the known networks from the saved file.
     bool restoreList(const char* json, const char* key) override {
         mm::json::JsonDoc doc;
@@ -485,13 +512,14 @@ private:
         pendingId_ = 0;
         setStatus("");
     }
-    char statusStr_[48] = {};
+    char statusStr_[72] = {};   // "known networks full: <32-character name> was forgotten"
 
     /// The scan's networks as a list: tapping one shows its password field and Connect.
     struct Available : ListSource {
         WiFiModule& w;
         explicit Available(WiFiModule& owner) : w(owner) {}
         uint8_t listRowCount() const override { return w.foundCount_; }
+        bool persistsList() const override { return false; }   // a scan is never saved
         bool isEditableList() const override { return true; }
         bool listRowsFixed() const override { return true; }
         /// Signal as bars and a lock on secured networks, as every WiFi picker shows them.

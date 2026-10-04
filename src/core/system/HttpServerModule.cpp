@@ -45,6 +45,7 @@
 
 #include "core/module/Scheduler.h"
 #include "core/module/StateDocument.h"   // PATCH /api/state applies a document through it
+#include "core/util/hex.h"
 #include "core/util/ModuleFactory.h"
 #include "core/util/JsonUtil.h"
 #include "core/util/JsonSink.h"
@@ -564,13 +565,7 @@ bool HttpServerModule::parseFilePath(const char* query, char* out, size_t cap) {
     while (*p && *p != '&' && i + 1 < cap) {
         char c = *p;
         if (c == '%' && p[1] && p[2]) {       // %XX → byte
-            auto hex = [](char h) -> int {
-                if (h >= '0' && h <= '9') return h - '0';
-                if (h >= 'a' && h <= 'f') return h - 'a' + 10;
-                if (h >= 'A' && h <= 'F') return h - 'A' + 10;
-                return -1;
-            };
-            const int hi = hex(p[1]), lo = hex(p[2]);
+            const int hi = hexDigit(p[1]), lo = hexDigit(p[2]);
             if (hi >= 0 && lo >= 0) { c = static_cast<char>((hi << 4) | lo); p += 2; }
         } else if (c == '+') {
             c = ' ';
@@ -851,27 +846,25 @@ size_t uploadPull(char* out, size_t cap, void* user, bool* abort) {
 }
 }  // namespace
 
-// A document as large as a preset needs, far past any real one: a bigger body is a mistake, refused before any allocation.
-static constexpr size_t kStateMax = 32 * 1024;
 
-void HttpServerModule::handleApplyState(platform::TcpConnection& conn, const char* initialBody, size_t initialLen,
-                                        size_t contentLen) {
-    if (!scheduler_) { sendResponse(conn, 503, "application/json", "{\"error\":\"not ready\"}"); return; }
-    if (contentLen > kStateMax) { sendResponse(conn, 413, "application/json", "{\"error\":\"document too large\"}"); return; }
-    char* doc = static_cast<char*>(platform::alloc(contentLen + 1));
-    if (!doc) { sendResponse(conn, 507, "application/json", "{\"error\":\"out of memory\"}"); return; }
-    // The buffered prefix first, then the rest off the socket under the upload path's time limits.
+// The whole body into `out` (contentLen + 1 bytes): the buffered prefix, then the socket under the upload limits; false when it stopped short.
+static bool pullWholeBody(platform::TcpConnection& conn, const char* initialBody, size_t initialLen, size_t contentLen, char* out) {
     const size_t initial = initialLen < contentLen ? initialLen : contentLen;
     UploadSource src{&conn, initialBody, initial, contentLen, platform::millis() + kUploadHardMs};
     size_t got = 0;
     bool abort = false;
-    while (got < contentLen && !abort) {
-        const size_t n = uploadPull(doc + got, contentLen - got, &src, &abort);
-        if (n == 0) break;
-        got += n;
-    }
-    doc[got] = 0;
-    if (got < contentLen) {
+    for (size_t n = 1; got < contentLen && !abort && n > 0; got += n) n = uploadPull(out + got, contentLen - got, &src, &abort);
+    out[got] = 0;
+    return got >= contentLen;
+}
+
+void HttpServerModule::handleApplyState(platform::TcpConnection& conn, const char* initialBody, size_t initialLen,
+                                        size_t contentLen) {
+    if (!scheduler_) { sendResponse(conn, 503, "application/json", "{\"error\":\"not ready\"}"); return; }
+    if (contentLen > kStateDocumentMax) { sendResponse(conn, 413, "application/json", "{\"error\":\"document too large\"}"); return; }
+    char* doc = static_cast<char*>(platform::alloc(contentLen + 1));
+    if (!doc) { sendResponse(conn, 507, "application/json", "{\"error\":\"out of memory\"}"); return; }
+    if (!pullWholeBody(conn, initialBody, initialLen, contentLen, doc)) {
         platform::free(doc);
         sendResponse(conn, 400, "application/json", "{\"error\":\"incomplete request body\"}");
         return;
@@ -2175,29 +2168,21 @@ void HttpServerModule::handleReplaceModule(platform::TcpConnection& conn, const 
     sendResponse(conn, 200, "application/json", "{\"ok\":true}");
 }
 
-void HttpServerModule::serveModule(platform::TcpConnection& conn, const char* name) {
-    // Percent-decode into a bounded buffer: a module name may contain a space ("File Manager"), which a browser sends as %20. Same decoding parseFilePath does, over a name-sized buffer - MoonModule::name_ is 16 bytes, so anything longer cannot match a module anyway.
-    char decoded[24] = {};
+// A module name from its path segment, percent-decoded (a space arrives as %20) up to `/` or `?`, and never '+' as a space, which keeps "A+B" reachable; its length.
+static size_t decodeModuleName(const char* name, char* out, size_t outLen) {
     size_t i = 0;
-    for (const char* p = name; *p && i + 1 < sizeof(decoded); p++) {
-        char c = *p;
-        if (c == '/' || c == '?') break;      // a sub-route ("/move") or query: the name ends here
-        if (c == '%' && p[1] && p[2]) {
-            auto hex = [](char h) -> int {
-                if (h >= '0' && h <= '9') return h - '0';
-                if (h >= 'a' && h <= 'f') return h - 'a' + 10;
-                if (h >= 'A' && h <= 'F') return h - 'A' + 10;
-                return -1;
-            };
-            const int hi = hex(p[1]), lo = hex(p[2]);
-            if (hi >= 0 && lo >= 0) { c = static_cast<char>((hi << 4) | lo); p += 2; }
-        }
-        // NO '+' → space here, unlike parseFilePath.
-        // That rule belongs to form/query encoding; this is a PATH segment, and the UI builds it with encodeURIComponent, which emits a space as %20 and leaves '+' literal.
-        // Translating it would make a module named "A+B" unreachable while fixing nothing.
-        decoded[i++] = c;
+    for (const char* p = name; *p && *p != '/' && *p != '?' && i + 1 < outLen; p++) {
+        const int hi = *p == '%' && p[1] ? hexDigit(p[1]) : -1, lo = hi >= 0 && p[2] ? hexDigit(p[2]) : -1;
+        if (lo >= 0) { out[i++] = static_cast<char>((hi << 4) | lo); p += 2; }
+        else out[i++] = *p;
     }
-    decoded[i] = 0;
+    out[i] = 0;
+    return i;
+}
+
+void HttpServerModule::serveModule(platform::TcpConnection& conn, const char* name) {
+    char decoded[24] = {};
+    const size_t i = decodeModuleName(name, decoded, sizeof(decoded));
 
     // appearsInUi() is checked for the same reason /api/state checks it.
     // This endpoint is the `{ }` link on a CARD, and a module that is not a card has no card to link from.

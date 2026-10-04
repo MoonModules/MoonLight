@@ -3,6 +3,7 @@
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/module/MoonModule.h"
 #include "core/system/IpSettings.h"
+#include "core/util/JsonUtil.h"   // adoptLegacy reads the flat config
 #include "platform/platform.h"
 
 #include <cstdio>
@@ -117,6 +118,18 @@ public:
 
     // What the network module's cascade asks of the wired interface.
 
+    /// The interface settings a config from 6.0 kept at Network's top level, under the same names, with Network's shared `addressing` as `ipSettings`; false when it has none.
+    bool adoptLegacy(const char* json) {
+        if (!json::hasKey(json, "ethType")) return false;
+        for (uint8_t i = 0; i < controls_.count(); i++) {
+            const ControlDescriptor& c = controls_[i];
+            const char* from = std::strcmp(c.name, "ipSettings") == 0 ? "addressing" : c.name;
+            if (json::hasKey(json, from)) applyControlValue(c, json, from, ApplyPolicy::Clamp);
+        }
+        markDirty();
+        return true;
+    }
+
     /// Push the interface config to the platform, before bring-up reads it, and baseline the IP settings.
     void syncConfig() {
         if constexpr (platform::hasEthernet) {
@@ -160,8 +173,10 @@ public:
                 }
                 setStatus("W5500 re-init failed, check pins", Severity::Error);
             } else {
-                // Record it for the next boot without disturbing the running interface.
+                // Record it for the next boot without disturbing the running interface, whose pads stay held until then.
+                const uint8_t running = appliedEthType_;
                 syncConfig();
+                appliedEthType_ = running;
                 setStatus("saved, restart to apply");
             }
         }
@@ -370,17 +385,16 @@ private:
         }
     }
 
-    /// A cheap hash over the interface controls, so a live change is detected.
+    /// A fingerprint of the interface controls, so a live change is detected.
     uint32_t ethSig() const {
-        uint32_t h = ethType_;
+        Fnv1a f;
+        f.add(&ethType_, sizeof(ethType_));
         for (int16_t v : {ethRstGpio_, ethMdcGpio_, ethMdioGpio_,
                           ethClockGpio_, ethSpiMiso_, ethSpiMosi_,
-                          ethSpiSck_, ethSpiCs_, ethSpiIrq_}) {
-            h = h * 131u + static_cast<uint32_t>(v);
-        }
-        h = h * 131u + static_cast<uint32_t>(ethPhyAddr_ & 0xFF);   // folded in separately
-        h = h * 131u + (ethClockExtIn_ ? 1u : 0u);                  // and likewise
-        return h;
+                          ethSpiSck_, ethSpiCs_, ethSpiIrq_}) f.add(&v, sizeof(v));
+        f.add(&ethPhyAddr_, sizeof(ethPhyAddr_));
+        f.add(ethClockExtIn_ ? 1 : 0);
+        return f.h;
     }
 };
 

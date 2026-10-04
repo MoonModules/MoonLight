@@ -194,7 +194,7 @@ void Scheduler::ensureUniqueName(MoonModule* mod) {
     if (!mod) return;
     const char* base = mod->name();
     if (!base || base[0] == 0) return;
-    if (firstByName(base) == mod) return;  // we're the first occurrence — keep the name
+    if (firstByName(base) == mod) return;  // the first occurrence keeps the name
 
     // `candidate` is sized to match MoonModule::name_[16], there's no point computing a longer name than setName can store.
     // The snprintf check below refuses to truncate, which means the practical cap depends on the base length.

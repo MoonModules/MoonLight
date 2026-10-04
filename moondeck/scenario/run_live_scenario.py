@@ -7,6 +7,7 @@ and collects per-step performance measurements.
 
 import argparse
 import atexit
+import signal
 import json
 import os
 import subprocess
@@ -21,7 +22,7 @@ from pathlib import Path
 def _mod_path(name: str) -> str:
     """`/api/modules/<name>` with the name URL-encoded. Module names can contain
     spaces (ensureUniqueName disambiguates duplicates as "Layer 2"), which urllib
-    rejects in a raw URL — encode so delete/replace/clear can address them."""
+    rejects in a raw URL: encode so delete/replace/clear can address them."""
     return "/api/modules/" + urllib.parse.quote(name, safe="")
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -50,7 +51,7 @@ if sys.stderr is not None:
 
 class Client:
     # Mutating ops (add/delete/replace/control) trigger a full prepareTree on the
-    # device — at 128x128 that frees/reallocates a large buffer + LUT and can
+    # device: at 128x128 that frees/reallocates a large buffer + LUT and can
     # take several seconds on a busy ESP32. 5s was too tight (deletes timed out
     # mid-teardown, leaving a half-mutated tree). 15s clears the worst case while
     # still catching a genuinely hung device.
@@ -69,7 +70,7 @@ class Client:
         # A mutating call triggers prepareTree; while the device is mid-rebuild it
         # can drop the TCP connection (ConnectionResetError / "remote end closed")
         # or briefly refuse one. The device recovers in well under a second, so a
-        # single transient drop shouldn't cascade-fail the run — retry once after
+        # single transient drop shouldn't cascade-fail the run: retry once after
         # a short settle. A genuine HTTPError (4xx/5xx from the handler) is a real
         # result and is NOT retried; it propagates to the caller.
         for attempt in range(2):
@@ -77,7 +78,7 @@ class Client:
                 with urllib.request.urlopen(req, timeout=self.TIMEOUT_S) as resp:
                     return json.loads(resp.read())
             except urllib.error.HTTPError:
-                raise  # a real handler response — let the caller decide
+                raise  # a real handler response: let the caller decide
             except (urllib.error.URLError, ConnectionError, OSError):
                 if attempt == 0:
                     time.sleep(1.0)
@@ -101,7 +102,7 @@ class Client:
             return resp.read().decode("utf-8", "replace")
 
     def post_text(self, path: str, text: str):
-        """POST a raw text body. /api/file takes the file's CONTENTS, not JSON — the body IS
+        """POST a raw text body. /api/file takes the file's CONTENTS, not JSON: the body IS
         the payload, which is why it cannot go through post() like every control write."""
         return self._send(urllib.request.Request(
             f"{self.base}{path}", data=text.encode("utf-8"),
@@ -116,8 +117,17 @@ class Client:
             headers={"Content-Type": "application/json"}))
 
 
+def _error_body(he: urllib.error.HTTPError) -> dict:
+    """An error response's JSON object, or an empty one when the body is not JSON, such as a proxy's HTML page."""
+    try:
+        body = json.loads(he.read() or b"{}")
+    except ValueError:
+        return {}
+    return body if isinstance(body, dict) else {}
+
+
 def _today_iso() -> str:
-    """ISO date stamp for set_by fields. Local timezone is fine — set_by is a
+    """ISO date stamp for set_by fields. Local timezone is fine: set_by is a
     coarse "around when did this contract get blessed" marker, not a timestamp."""
     import datetime
     return datetime.date.today().isoformat()
@@ -180,7 +190,7 @@ def _detect_target(state: dict, local: bool = True) -> str:
     """Identify the build target so per-step contract values can be looked up.
 
     ESP32: read FirmwareUpdateModule.firmware (`esp32`, `esp32-eth`, `esp32-eth-wifi`,
-    `esp32s3-n16r8`, …) — set at compile time from MM_FIRMWARE_NAME and
+    `esp32s3-n16r8`, …): set at compile time from MM_FIRMWARE_NAME and
     exposed through the `firmware` control. Desktop: same key but reports
     `unknown`, so we substitute desktop-<host-os> using the runtime os name (still
     distinguishes macOS vs Linux vs Windows builds, which can differ in tick
@@ -226,7 +236,7 @@ def _registry_network(name: str) -> dict:
 
 def _wifi_device() -> str:
     """The host's WiFi interface (en0 on most Macs), read rather than assumed."""
-    out = subprocess.run(["networksetup", "-listallhardwareports"], capture_output=True, text=True).stdout
+    out = subprocess.run(["networksetup", "-listallhardwareports"], capture_output=True, text=True, timeout=30).stdout
     lines = out.splitlines()
     for i, line in enumerate(lines):
         if line.strip() in ("Hardware Port: Wi-Fi", "Hardware Port: AirPort") and i + 1 < len(lines):
@@ -264,7 +274,11 @@ def _host_join(ssid: str, password: str, probe_url: str, timeout_s: float) -> st
     last = ""
     while time.time() < end:
         cmd = ["networksetup", "-setairportnetwork", device, ssid] + ([password] if password else [])
-        out = subprocess.run(cmd, capture_output=True, text=True)
+        try:
+            out = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        except subprocess.TimeoutExpired:
+            last = "networksetup did not answer"
+            continue
         last = (out.stdout + out.stderr).strip()
         if not _join_failed(out):
             if _reachable(probe_url, max(1.0, end - time.time())):
@@ -281,15 +295,26 @@ class HostWifi:
         self.home = None   # the registry network to return to, set once the host leaves it
 
     def restore(self):
+        """Rejoin the home network, retried as a join is, since macOS often misses a network the moment it leaves an access point; home is kept until it took, so the exit hook can try again."""
         if not self.home:
             return
-        home, self.home = self.home, None
+        home = self.home
         print(f"  HOST  back to {home['ssid']}")
-        device = _wifi_device()
-        out = subprocess.run(["networksetup", "-setairportnetwork", device, home["ssid"], home["password"]],
-                             capture_output=True, text=True)
-        if _join_failed(out):
-            print(f"  HOST  WARNING: could not rejoin {home['ssid']} ({(out.stdout + out.stderr).strip() or 'no message'}); rejoin it by hand")
+        end = time.time() + 30
+        last = ""
+        while time.time() < end:
+            try:
+                out = subprocess.run(["networksetup", "-setairportnetwork", _wifi_device(), home["ssid"], home["password"]],
+                                     capture_output=True, text=True, timeout=30)
+            except subprocess.TimeoutExpired:
+                last = "networksetup did not answer"
+                continue
+            if not _join_failed(out):
+                self.home = None
+                return
+            last = (out.stdout + out.stderr).strip()
+            time.sleep(2)
+        print(f"  HOST  WARNING: could not rejoin {home['ssid']} ({last or 'no message'}); rejoin it by hand")
 
 
 def _fill(value, ctx: dict):
@@ -522,7 +547,7 @@ def _sum_dynamic_bytes(state: dict) -> int:
 
     NOT the same as (boot_heap - free_heap): the framework (lwIP, WiFi stack,
     FreeRTOS, HTTP server kernel buffers) consumes heap outside the model.
-    Printed alongside the contract for sanity-checking — a regression here
+    Printed alongside the contract for sanity-checking: a regression here
     means a module started allocating something the contract didn't budget for.
     """
     total = 0
@@ -567,7 +592,7 @@ def _child_names_of(state: dict, container_name: str) -> list:
     return find(state.get("modules", [])) or []
 
 
-# Containers whose USER-ADDED children a scenario may clear/rebuild — the tree the
+# Containers whose USER-ADDED children a scenario may clear/rebuild: the tree the
 # snapshot/restore protects. A scenario that clear_children's one of these destroys
 # the board's real config; restoring the snapshot afterward leaves the board as found.
 _SNAPSHOT_CONTAINERS = {"Layouts", "Effects", "Drivers", "Services", "Layer"}
@@ -607,7 +632,7 @@ def _restore_tree(client, snapshot: list, current_state: dict) -> None:
     """Re-create any snapshotted module that a scenario removed, restoring the board to
     the tree it had before the run. Adds parents before children (snapshot order) and
     re-applies control values. A module still present is left untouched. A restore that
-    fails is reported (which module/control + the error), not silently swallowed — a
+    fails is reported (which module/control + the error), not silently swallowed: a
     board left partially restored is a signal worth seeing, but one failure must not stop
     the rest, so we log and continue."""
     present = _collect_module_names(current_state)
@@ -640,10 +665,10 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
     """Run a scenario against a live device and return results.
 
     Mode handling (see docs/reference/testing.md § Scenario modes):
-      construct  — scenario builds the pipeline from scratch. Live device's
+      construct : scenario builds the pipeline from scratch. Live device's
                    main.cpp owns the top-level shape, so construct scenarios
                    only run in-process. Skip here with a clear note.
-      mutate     — scenario assumes a wired pipeline. Skip the fixture array
+      mutate    : scenario assumes a wired pipeline. Skip the fixture array
                    (the device IS the fixture) and run only the steps. Steps
                    that touch ids not present on the device hard-fail (instead
                    of the old WARN-and-continue which silently produced
@@ -677,16 +702,16 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
         results["skipped"] = True
         return results
     if mode == "construct":
-        print("\n  SKIP (mode=construct — runs in-process only; the live device's "
+        print("\n  SKIP (mode=construct: runs in-process only; the live device's "
               "main.cpp owns the top-level shape)")
         results["skipped"] = True
         return results
     if mode != "mutate":
-        print(f"\n  FAIL — unknown mode: {mode!r} (expected construct or mutate)")
+        print(f"\n  FAIL: unknown mode: {mode!r} (expected construct or mutate)")
         results["passed"] = False
         return results
 
-    # Pre-flight: every id touched by a step must be reachable — either already
+    # Pre-flight: every id touched by a step must be reachable: either already
     # on the device, OR added by an earlier add_module in this scenario. A
     # canvas-preparing scenario clears the containers and builds its own tree, so
     # its set_control/replace ids won't exist on the device yet; they're created
@@ -713,7 +738,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 reachable.add(sid)
             elif opn in ("set_control", "delete_module", "remove_module", "replace_module", "clear_children") and sid:
                 # `optional` steps are best-effort (e.g. shrink the grid before a
-                # clear, if a grid exists) — the executor skips them on a missing
+                # clear, if a grid exists): the executor skips them on a missing
                 # target, so they don't count as a wiring bug in the pre-flight.
                 if sid not in reachable and not step.get("optional"):
                     missing.append(sid)
@@ -723,13 +748,13 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 missing.append(r["id"])
         missing = sorted(set(missing))
         if missing:
-            print(f"\n  FAIL — scenario references ids that are neither on the live "
+            print(f"\n  FAIL: scenario references ids that are neither on the live "
                   f"device nor added by an earlier step: {', '.join(missing)}. "
                   f"Fix the wiring or add the module first.")
             results["passed"] = False
             return results
     except Exception as e:
-        print(f"\n  WARN — couldn't pre-flight live module names: {e}")
+        print(f"\n  WARN: couldn't pre-flight live module names: {e}")
     print(f"  Target: {target}")
     results["target"] = target
 
@@ -744,7 +769,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 raise KeyError("this scenario moves the host's WiFi: name the network it returns to with --network")
             net = _registry_network(network)
         except Exception as e:
-            print(f"\n  FAIL — {e}")
+            print(f"\n  FAIL: {e}")
             results["passed"] = False
             return results
         ctx["network.ssid"], ctx["network.password"] = net["ssid"], net["password"]
@@ -753,6 +778,8 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 if m.get("type") == "SystemModule" and c.get("name") == "deviceName":
                     ctx["device"] = str(c.get("value") or "")
         atexit.register(host.restore)   # a run that stops on the access point still puts the host back
+        # MoonDeck's Stop sends SIGTERM, whose default skips atexit; exiting through it runs the hook.
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
 
     # Snapshot the board's user-added tree so we can restore it after the scenario:
     # a scenario that clear_children's a container (to get a known canvas) destroys the
@@ -765,7 +792,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
         try:
             tree_snapshot = _snapshot_tree(live_state)
         except Exception as e:
-            print(f"  WARN — couldn't snapshot tree for restore: {e}")
+            print(f"  WARN: couldn't snapshot tree for restore: {e}")
 
     # Reset block: scenarios that mutate shared controls (Mirror toggles, grid
     # size, Preview detail, …) declare a `reset` array of set_control steps that
@@ -792,7 +819,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 print(f"  FAIL  reset {r_step.get('name','?')}: {e}", file=sys.stderr)
                 results["passed"] = False
                 results["reset_failed"] = f"{r_step.get('name','?')}: {e}"
-                # Stop the scenario before collect_metrics — baseline would
+                # Stop the scenario before collect_metrics: baseline would
                 # otherwise reflect an unknown/partial state. No cleanup
                 # needed: created_modules only fills inside the steps loop
                 # below, which hasn't run yet.
@@ -803,12 +830,12 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
     print(f"\n  Baseline: tick={baseline.get('tickTimeUs', '?')}us (FPS={baseline.get('fps', '?')})  heap={baseline.get('freeHeap', '?')}")
 
     # ids whose optional add_module was skipped (a platform-gated module absent on this
-    # target — e.g. the Parlio driver on a non-P4 board). A later optional measure/remove
+    # target: e.g. the Parlio driver on a non-P4 board). A later optional measure/remove
     # that names a skipped id is itself skipped, so an absent driver leaves no trace rather
     # than failing the run. (perf_full's add/measure/remove driver triples are all optional.)
     skipped_ids = set()
 
-    # Live runs `steps` only — `fixture` is the in-process equivalent of what
+    # Live runs `steps` only: `fixture` is the in-process equivalent of what
     # main.cpp already wired on the device.
     for step_index, step in enumerate(scenario.get("steps", [])):
         step_name = step.get("name", "?")
@@ -817,10 +844,10 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
         step_result = {"name": step_name, "op": op}
 
         # An optional measure/control on a module whose optional add was skipped is a
-        # no-op — the module isn't there to measure. Skip before any REST call.
+        # no-op: the module isn't there to measure. Skip before any REST call.
         if step.get("optional") and step.get("id") in skipped_ids and op in ("measure", "set_control"):
             step_result["status"] = "ok"
-            print(f"  {op:5} {step.get('id','?')} — skipped (optional, module not present on {target})")
+            print(f"  {op:5} {step.get('id','?')}: skipped (optional, module not present on {target})")
             results["steps"].append(step_result)
             continue
 
@@ -829,7 +856,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 data = {"type": step["type"], "id": step.get("id", ""),
                         "parent_id": step.get("parent_id", "")}
                 # An `optional` add of a type this target doesn't have is a SKIP, not a
-                # fail — perf_full adds every LED driver (RMT/LCD/Parlio), but each is
+                # fail: perf_full adds every LED driver (RMT/LCD/Parlio), but each is
                 # platform-gated (LCD/RMT on classic+S3, Parlio on P4), so the absent
                 # ones return "unknown type". The device replies either 400 (HTTPError)
                 # or 200 + ok:false depending on the path; treat both as skip when the
@@ -878,14 +905,14 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                     elif step.get("optional"):
                         step_result["status"] = "ok"
                         skipped_ids.add(step.get("id", ""))
-                        print(f"  +     {step.get('id','?')} ({step['type']}) — skipped (optional, type unavailable on {target})")
+                        print(f"  +     {step.get('id','?')} ({step['type']}): skipped (optional, type unavailable on {target})")
                     else:
                         step_result["status"] = "error"
                 except urllib.error.HTTPError:
                     if step.get("optional"):
                         step_result["status"] = "ok"
                         skipped_ids.add(step.get("id", ""))
-                        print(f"  +     {step.get('id','?')} ({step['type']}) — skipped (optional, type unavailable on {target})")
+                        print(f"  +     {step.get('id','?')} ({step['type']}): skipped (optional, type unavailable on {target})")
                     else:
                         raise
 
@@ -895,7 +922,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 # script step failed on hardware while passing on the desktop.
                 # A failed write FAILS THE SCENARIO. Every later step runs against a stale or
                 # absent file, so reporting PASSED afterwards is the silent pass this op exists
-                # to prevent — the same rule the desktop runner applies.
+                # to prevent: the same rule the desktop runner applies.
                 path_ = step.get("path")
                 body = step.get("value", "")
                 if not path_:
@@ -983,7 +1010,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 if refusal:
                     raise RuntimeError(refusal)
                 step_result["status"] = "ok"
-                print("  REBOOT — not waiting")
+                print("  REBOOT: not waiting")
 
             elif op == "reboot":
                 # Restart and wait, so a later expect_control proves what SURVIVED rather than what
@@ -991,11 +1018,11 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 why = _reboot_and_wait(client, target, float(step.get("timeout", 60)))
                 if why:
                     step_result["status"] = "error"
-                    print(f"  REBOOT — {why}")
+                    print(f"  REBOOT: {why}")
                     results["passed"] = False
                 else:
                     step_result["status"] = "ok"
-                    print("  REBOOT — back up")
+                    print("  REBOOT: back up")
 
             elif op == "expect_file":
                 # Read a file back, which is the only way to prove a write reached the filesystem
@@ -1006,7 +1033,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 exact = "equals" in step
                 if not exact and "contains" not in step:
                     step_result["status"] = "error"
-                    print(f"  EXPECT {path_} — needs `contains` or `equals`")
+                    print(f"  EXPECT {path_}: needs `contains` or `equals`")
                     results["passed"] = False
                     continue
                 want = str(step["equals"] if exact else step["contains"])
@@ -1014,7 +1041,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                     raw = client.get_text(f"/api/file?path={urllib.parse.quote(path_, safe='/')}")
                 except Exception as fe:
                     step_result["status"] = "error"
-                    print(f"  EXPECT {path_} — could not read ({fe})")
+                    print(f"  EXPECT {path_}: could not read ({fe})")
                     results["passed"] = False
                 else:
                     holds = (raw == want) if exact else (bool(want) and want in raw)
@@ -1037,8 +1064,8 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                     resp = client.patch("/api/state", fstep["document"])
                     got_error, got_at = None, None
                 except urllib.error.HTTPError as he:
-                    body = json.loads(he.read() or b"{}")
-                    got_error, got_at = body.get("error"), body.get("at")
+                    body = _error_body(he)
+                    got_error, got_at = body.get("error") or f"HTTP {he.code}", body.get("at")
                 for name in absent:
                     try:
                         client.get(_mod_path(name))
@@ -1063,8 +1090,8 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                     client.patch("/api/state", whole)
                     failed = None
                 except urllib.error.HTTPError as he:
-                    body = json.loads(he.read() or b"{}")
-                    failed = f"{body.get('error')} at {body.get('at')}"
+                    body = _error_body(he)
+                    failed = f"{body.get('error') or 'HTTP ' + str(he.code)} at {body.get('at')}"
                 step_result["status"] = "ok" if failed is None else "error"
                 print(f"  STATE {step['name']}: {len(whole)} cards, {len(json.dumps(whole))} bytes, {'applied' if failed is None else failed}")
                 if failed is not None:
@@ -1087,7 +1114,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 negated = "equals" not in step and "not_equals" in step
                 if "equals" not in step and not negated:
                     step_result["status"] = "error"
-                    print(f"  EXPECT {mod_id}.{key} — needs `equals` or `not_equals`")
+                    print(f"  EXPECT {mod_id}.{key}: needs `equals` or `not_equals`")
                     results["passed"] = False
                     continue
                 want = _as_written(fstep["not_equals" if negated else "equals"])
@@ -1107,12 +1134,12 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                     time.sleep(1)
                 if read_error is not None:
                     step_result["status"] = "error"
-                    print(f"  EXPECT {mod_id}.{key} — could not read ({read_error})")
+                    print(f"  EXPECT {mod_id}.{key}: could not read ({read_error})")
                     results["passed"] = False
                     continue
                 if got is None:
                     step_result["status"] = "error"
-                    print(f"  EXPECT {mod_id}.{key} — no such control")
+                    print(f"  EXPECT {mod_id}.{key}: no such control")
                     results["passed"] = False
                 elif (_as_written(got) != want) if negated else (_as_written(got) == want):
                     step_result["status"] = "ok"
@@ -1136,11 +1163,11 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                         # An `optional` set_control on a missing module (e.g. shrink
                         # a grid a prior run's cleanup removed) is a no-op, not a fail.
                         step_result["status"] = "ok"
-                        print(f"  SET   {step.get('id','?')}.{step.get('key','?')} — skipped (optional, not present)")
+                        print(f"  SET   {step.get('id','?')}.{step.get('key','?')}: skipped (optional, not present)")
                     elif step.get("optional") and ce.code == 400:
                         # An `optional` set_control the device REJECTS with 400 (e.g.
                         # "value out of range") is a not-available-here skip, not a
-                        # failure — e.g. selecting a `peripheral` value this chip doesn't
+                        # failure: e.g. selecting a `peripheral` value this chip doesn't
                         # offer (Parlio on an S3, MoonI80 on a classic): the Select's max
                         # is the board-filtered option count, so the value is out of range
                         # and returns 400. A REQUIRED set_control that 400s still fails.
@@ -1164,7 +1191,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                     else:
                         raise
                 # If this step doesn't measure (so `collect_metrics` won't wait
-                # for us), still give the device a moment — a set_control that
+                # for us), still give the device a moment: a set_control that
                 # triggers prepareTree briefly mutates the module tree, and the
                 # very next API call can hit a transient "module not found".
                 # 500 ms is empirically enough on the classic board; cheap insurance.
@@ -1172,12 +1199,12 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                     time.sleep(0.5)
 
             elif op in ("delete_module", "remove_module"):
-                # Both names mean the same thing — accept either so a scenario
+                # Both names mean the same thing: accept either so a scenario
                 # reads identically on the in-process runner (which uses
                 # `remove_module`) and here. The two runners must never diverge
                 # on op names, or a scenario silently no-ops on one tier.
                 # An `optional` remove of a module that was never added (its
-                # optional add was skipped — a platform-gated driver absent on this
+                # optional add was skipped: a platform-gated driver absent on this
                 # target) is a SKIP, not a fail: the device returns 404 "module not
                 # found" or ok:false. Pairs with the optional add above.
                 try:
@@ -1187,17 +1214,17 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                         print(f"  -     {step.get('id', '?')}")
                     else:
                         step_result["status"] = "ok"
-                        print(f"  -     {step.get('id','?')} — skipped (optional, not present)")
+                        print(f"  -     {step.get('id','?')}: skipped (optional, not present)")
                 except urllib.error.HTTPError:
                     if step.get("optional"):
                         step_result["status"] = "ok"
-                        print(f"  -     {step.get('id','?')} — skipped (optional, not present)")
+                        print(f"  -     {step.get('id','?')}: skipped (optional, not present)")
                     else:
                         raise
 
             elif op == "clear_children":
                 # Delete every child of a container, leaving the container.
-                # The "prepare my own canvas" primitive — a scenario assumes
+                # The "prepare my own canvas" primitive: a scenario assumes
                 # nothing about the device's starting tree. Enumerate children
                 # from /api/state, DELETE each by name. The device tears down the
                 # whole subtree per delete (handleDeleteModule), so clearing a
@@ -1212,7 +1239,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                         cleared += 1
                     except urllib.error.HTTPError as de:
                         # Non-deletable submodules (Preview, Board, Improv) return
-                        # 400 "module not deletable" — that's expected, skip them.
+                        # 400 "module not deletable": that's expected, skip them.
                         # Mirrors the in-process op, which skips !userEditable().
                         # Re-raise anything that isn't a clean deletability refusal.
                         if de.code == 400:
@@ -1287,7 +1314,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 where = f"{mod_id}.{key}[{step.get('match')}]"
                 if row is None:
                     step_result["status"] = "ok" if step.get("optional") else "error"
-                    print(f"  ROW   {where} — {'absent, skipped (optional)' if step.get('optional') else 'no such row'}")
+                    print(f"  ROW   {where}: {'absent, skipped (optional)' if step.get('optional') else 'no such row'}")
                     if not step.get("optional"):
                         results["passed"] = False
                 else:
@@ -1366,7 +1393,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
             step_result["error"] = msg
             # Every rejected step is a real failure. The old policy WARN'd on
             # add_module which silently turned "top-level rejected" into a
-            # missing test step — meaningless passes. Mutate scenarios shouldn't
+            # missing test step: meaningless passes. Mutate scenarios shouldn't
             # add top-level anyway; if they do, treat it as a scenario bug.
             print(f"  FAIL  {step_name}: {msg}")
             results["passed"] = False
@@ -1385,7 +1412,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
             results["steps"].append(step_result)
             continue
         if step.get("measure") or op == "measure":
-            # collect_metrics hits /api/state — a missing measurement is a
+            # collect_metrics hits /api/state: a missing measurement is a
             # failed run, not a no-op to skip. Silent-skip would let a broken
             # device pass a scenario that asserts on observed/contract data
             # the step never gathered. Fail loudly, record the error on the
@@ -1413,18 +1440,18 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
             # Per-step contract: { "contract": { "<target>": { "tick_us": N,
             #   "free_heap": M, "tick_tolerance_pct": P, "heap_tolerance_pct": Q,
             #   "set_by": "YYYY-MM-DD", "reason": "..." } } }
-            # Contracts are hand-set promises — see docs/reference/testing.md § Performance
+            # Contracts are hand-set promises: see docs/reference/testing.md § Performance
             # contracts. `--update-contract --reason "..."` rewrites them.
             contract_block = step.get("contract", {}).get(target) if step.get("contract") else None
             if contract_block:
                 # Defaults reflect run-to-run variance, not "I don't care":
-                #   pc-*       — multi-process OS jitter, 20% pct + 200us absolute
+                #   pc-*      : multi-process OS jitter, 20% pct + 200us absolute
                 #                floor. The floor dominates below ~1ms tick (the
                 #                realistic case for desktop scenarios today).
-                #   esp32-*    — bounded RTOS but lwIP/EMAC jitter, 10% pct + 5us
+                #   esp32-*   : bounded RTOS but lwIP/EMAC jitter, 10% pct + 5us
                 #                absolute floor.
                 # KEEP IN SYNC: the in-process runner re-declares the same defaults
-                # at test/scenario_runner.cpp contract-block handler — tuning one
+                # at test/scenario_runner.cpp contract-block handler: tuning one
                 # without the other silently desyncs the two tiers.
                 is_desktop = target.startswith("desktop-")
                 tick_tol_pct = contract_block.get("tick_tolerance_pct",
@@ -1435,7 +1462,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 exp_tick = contract_block.get("tick_us")
                 exp_heap = contract_block.get("free_heap")
                 if exp_tick is not None and exp_tick > 0:
-                    # tick contract is a *ceiling* — faster than contract is good
+                    # tick contract is a *ceiling*: faster than contract is good
                     # news (mirror of heap being a floor). Tolerance absorbs
                     # upward jitter only; speedups never fail.
                     overshoot = tick_us - exp_tick
@@ -1451,7 +1478,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                         print(f"  PASS  tick {tick_us}us vs contract {exp_tick}us "
                               f"(over by {overshoot:.0f}us within {allowed:.0f}us)")
                 if exp_heap is not None and exp_heap > 0:
-                    # Contract is a *floor* — the device must deliver at least this
+                    # Contract is a *floor*: the device must deliver at least this
                     # much free heap. More is better; less by more than tolerance is
                     # a regression. Tolerance applies because of legitimate run-to-
                     # run drift in lwIP/TCP buffer pools.
@@ -1463,7 +1490,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                     else:
                         print(f"  PASS  free_heap {heap} >= contract {exp_heap} "
                               f"(within -{heap_tol_pct}% tolerance)")
-                # max_alloc_block contract is also a *floor* — opt-in per scenario.
+                # max_alloc_block contract is also a *floor*: opt-in per scenario.
                 # The LUT/buffer allocators need a single contiguous chunk; on a
                 # fragmented heap the largest block can be much smaller than free
                 # heap, and Layer silently degrades to 1:1 (mirror disappears) when
@@ -1474,9 +1501,9 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                     # max_block of 0 always fails when a positive floor is
                     # asserted: maxBlock is always served by current firmware
                     # (src/core/system/HttpServerModule.cpp), so 0 means the device
-                    # reports zero contiguous heap — a real failure, not a
+                    # reports zero contiguous heap: a real failure, not a
                     # missing field. (Contrast with free_heap on desktop where 0
-                    # is the "unlimited" sentinel — that's a desktop-only
+                    # is the "unlimited" sentinel: that's a desktop-only
                     # convention not used by the live runner.)
                     if max_block <= 0:
                         print(f"  FAIL  max_alloc_block {max_block} (device reports no "
@@ -1514,17 +1541,17 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
 
             # --update-contract: rewrite the contract in the scenario JSON for the
             # active target. This is *renegotiating* a contract, not refreshing a
-            # last-reading baseline — set_by + reason are stamped so the diff
+            # last-reading baseline: set_by + reason are stamped so the diff
             # records when and why the promise changed. Caller is responsible for
             # committing the diff intentionally.
             #
             # Originals are stashed in pending_contract_originals so the
             # post-run gate (see below) can roll the in-memory tree back to
-            # disk shape if the run failed — only successful runs get to
+            # disk shape if the run failed: only successful runs get to
             # commit a renegotiated promise.
             if update_contract:
                 # Preserve any per-step tolerance overrides already in place.
-                # Key by step INDEX, not the step dict — a dict is unhashable, so
+                # Key by step INDEX, not the step dict: a dict is unhashable, so
                 # `(step, target)` as a key raised TypeError (this whole path is
                 # only reached with --update-contract, which the gates don't pass).
                 existing = step.get("contract", {}).get(target, {})
@@ -1545,7 +1572,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 # max_alloc_block: opt-in (only carry it over if the existing
                 # contract had it), but refresh the value from this run rather
                 # than copying the stale one. Mirrors run_scenario.py's update
-                # path — keep both files in sync if you change one.
+                # path: keep both files in sync if you change one.
                 if "max_alloc_block" in existing:
                     new_block["max_alloc_block"] = int(max_block)
                 step.setdefault("contract", {})[target] = new_block
@@ -1570,7 +1597,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                         results["passed"] = False
                     else:
                         print(f"  PASS  fps {fps} >= {min_pct}% of baseline")
-                # FPS×lights throughput floor — compared against the measured
+                # FPS×lights throughput floor: compared against the measured
                 # tick *time* (the device's native unit), not derived FPS.
                 # Per-grid budget: max_tick_us = lights * 1e6 / product.
                 if "min_fps_led_product" in bounds["fps"]:
@@ -1617,7 +1644,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
             after_state = client.get("/api/state")
             _restore_tree(client, tree_snapshot, after_state)
         except Exception as e:
-            print(f"  WARN — couldn't restore snapshot: {e}")
+            print(f"  WARN: couldn't restore snapshot: {e}")
     # And the controls it wrote, after the tree, so a module the restore re-created takes its values.
     put_back = _restore_controls(client, prior_controls)
     if put_back:
@@ -1638,7 +1665,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
 
     # Write the scenario JSON back if anything changed:
     #   - observed.<target> was updated by any measure step (every run); OR
-    #   - --update-contract renegotiated the contract — AND the run passed
+    #   - --update-contract renegotiated the contract: AND the run passed
     #     (don't persist a renegotiated promise from a half-broken run; the
     #     observed values still land so drift is visible either way).
     # If the contract was renegotiated but the run failed, the in-memory
@@ -1694,7 +1721,7 @@ def compare_baseline(results: dict, baseline: dict):
     """Compare results against baseline, report regressions."""
     name = results["name"]
     if name not in baseline:
-        print(f"  No baseline for '{name}' — run with --update-baseline first")
+        print(f"  No baseline for '{name}': run with --update-baseline first")
         return
 
     base = baseline[name]

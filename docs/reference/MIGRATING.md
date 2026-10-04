@@ -2,9 +2,21 @@
 
 The log of **breaking changes**, what changed between versions, and the action to take.
 
-MoonLight ships **no migration code**: the persistence layer is robust by default (an absent key keeps the control's default, a stale value clamps to the new bounds, an unknown key is ignored), which absorbs almost all schema drift with zero migration-specific code. The rare change that a robust reader *cannot* absorb is **documented here instead of migrated**. A patching framework is deferred rather than rejected: it becomes the right tool if breaking format changes get frequent enough that ad-hoc losses pile up (a rough bar: more than five across a few releases) and users hold persisted state too valuable to re-derive. At that point build the recognizable version-stamp plus ordered-patch-chain pattern, not a bespoke one and its rationale.
+The firmware ships **no migration code**, with one temporary exception: it moves 6.0's network settings onto the Ethernet and WiFi cards at the first boot.
+A device that loses its network cannot be reached to fix anything else (see the WiFi entry).
+Its persistence layer is robust by default: an absent key keeps the control's default, a stale value clamps to the new bounds, and an unknown key is ignored.
+That absorbs almost all schema drift, and the rare change a robust reader *cannot* absorb is **documented here instead of migrated**.
+A patching framework is deferred rather than rejected.
+It becomes the right tool once breaking format changes pile up (a rough bar: more than five across a few releases) and users hold state too valuable to re-derive.
+At that point build the recognizable version-stamp plus ordered-patch-chain pattern, not a bespoke one.
 
-**The File Manager's Backup (⤓) / Restore (⟲) carries config across these breaks.** [src/ui/migrate.js](https://github.com/MoonModules/MoonLight/blob/main/src/ui/migrate.js) is the **authoritative, dated log of every machine-mappable break** (file, type, control, and value renames): Restore applies it in the browser and reports what did not carry over, so entries below describe only what a map cannot express, behavior changes, semantics to re-check, and erase-flash moves. It works even on a freshly erased device: join its `MM-XXXX` SoftAP, open `http://4.3.2.1`, restore there, and take the offered restart; the bundle carries the WiFi credentials, so the device comes back on your network. For a device still on old firmware (no Backup button yet), the [installer page](https://moonmodules.org/MoonLight/install/) offers the same backup as a bookmarklet.
+**The File Manager's Backup (⤓) / Restore (⟲) carries config across these breaks.**
+[src/ui/migrate.js](https://github.com/MoonModules/MoonLight/blob/main/src/ui/migrate.js) is the **authoritative, dated log of every machine-mappable break**: renames, controls moved onto a child module, and older preset files converted to documents.
+Restore applies it in the browser and reports what did not carry over.
+The entries below therefore describe only what a map cannot express: behavior changes, semantics to re-check, and erase-flash moves.
+It works even on a freshly erased device: join its `MM-XXXX` access point, open `http://4.3.2.1`, restore there, and take the offered restart.
+The bundle carries the WiFi credentials, so the device comes back on your network.
+For a device still on old firmware (no Backup button yet), the [installer page](https://moonmodules.org/MoonLight/install/) offers the same backup as a bookmarklet.
 
 **Read this when upgrading a device that already holds persisted state.** Entries are newest first. Each says what changed and what to do; most need nothing at all, because the lost value re-populates on next use.
 
@@ -21,6 +33,15 @@ MoonLight ships **no migration code**: the persistence layer is robust by defaul
 ---
 
 ## Unreleased
+
+### Wave's `type` is `waveform`
+
+**Action: *re-set a control*.**
+
+A control named `type` collided with a module's own type.
+A config file wrote both under one key, and a state document or a preset read the shape as the type.
+The Wave effect's shape is `waveform`, at its default, Sine, after the update; pick it again.
+A restore cannot carry the old shape, since the file held it under the type's key.
 
 ### A preset is a state document
 
@@ -43,33 +64,34 @@ Before the next firmware update, install the matching MoonBase from the Firmware
 
 ### WiFi has its own card under Network, with a list of known networks
 
-**Action: *re-set a control*.**
+**Action: *nothing*; update to this release before a later one.**
 
 The WiFi settings moved from the Network card to a new WiFi card below it: the network becomes the first row of `known`, with its IP settings, and `txPowerSetting` moved with it.
 A backup restored through the File Manager carries the network and the power cap across.
-Updated in place without a restore, the device knows no network: it opens its access point, where the network is entered again.
+Updated in place, the device moves them itself at its first boot and saves the new layout.
+That step is temporary, and a later release drops it.
+A device updated straight from 6.0 to that release knows no network, so it opens its access point, where the network is entered again.
 A MoonBase from before this release reads part of the new layout: see the MoonBase entry above.
 
 ### Ethernet has its own card under Network
 
-**Action: *re-set a control*.**
+**Action: *nothing*; update to this release before a later one.**
 
 The Ethernet settings moved from the Network card to a new Ethernet card below it: `ethBoard`, `ethType`, `ethPhyAddr` and the pins.
-The wired interface also has its own IP settings now: `ipSettings` (DHCP or Static) with `ip`, `gateway`, `subnet` and `dns`.
+The wired interface has its own IP settings: `ipSettings` (DHCP or Static) with `ip`, `gateway`, `subnet` and `dns`.
 Each known WiFi network has its own as well.
 A backup restored through the File Manager carries the Ethernet settings across, and gives the wired interface the IP settings the device had.
-Updated in place without a restore, the Ethernet card starts from its defaults.
-Pick the board under `ethBoard` again, and set a static address if the device used one on its cable.
+Updated in place, the device moves the Ethernet settings and Network's static address onto the Ethernet card at its first boot, the same temporary step as WiFi's.
 A device model from the web installer sets Ethernet on the new card.
 
 ### Light presets are fixture profiles
 
 **Action: *re-set a control*.**
 
-The library of named channel wirings (RGB, GRB, RGBW, a moving head's channels) takes the DMX industry term. It no longer shares a name with the Control card's presets, which keep theirs.
-The module `LightPresets` is `FixtureProfiles`, its list `presets` is `profiles`, and each driver's `lightPreset` control is `fixture`.
+The library of named channel wirings (RGB, GRB, RGBW, a moving head's channels) takes the DMX industry term, a name apart from the Control card's presets.
+The module `LightPresets` is `FixtureProfiles`, its list `presets` is `profiles`, each driver's `lightPreset` control is `fixture`, and its `presetRef` is `fixtureRef`.
 A backup restored through the File Manager carries all of it.
-Updated in place without a restore, the saved `LightPresetsModule` entry names a type that no longer exists, so it is skipped.
+Updated in place without a restore, the saved `LightPresetsModule` entry names a type this firmware does not have, so it is skipped.
 The built-in profiles are back and your custom rows are gone.
 Each driver's saved choice is ignored too, so it falls back to its default, GRB for strips and RGB for network sinks.
 Re-add the custom profiles and re-pick each driver's `fixture`.
@@ -79,7 +101,7 @@ An API client or an automation that sets `lightPreset` sets `fixture`.
 
 **Action: *nothing*.**
 
-`Drivers.palette` is saved by its name, such as `Ocean` or `fire.mlp`, so adding a palette script no longer moves a scripted choice to its neighbor after a reboot.
+`Drivers.palette` is saved by its name, such as `Ocean` or `fire.mlp`, so adding a palette script leaves a scripted choice in place after a reboot.
 A saved number still loads, and a write takes a number or a name.
 A client reading the value through the API gets the name where it got a number.
 
@@ -187,7 +209,7 @@ The mode options are reordered to run simple to advanced: **simulate, receive ne
 
 ## v5.0.0
 
-The last release under the projectMM name. Its [release notes](https://github.com/MoonModules/projectMM/releases) summarise what these entries ask of you.
+The last release under the projectMM name. Its [release notes](https://github.com/MoonModules/projectMM/releases) summarize what these entries ask of you.
 
 ### Renames Restore carries for you
 
@@ -199,8 +221,7 @@ The last release under the projectMM name. Its [release notes](https://github.co
 | `Noise2DEffect` | `NoiseEffect`, which renders the same field |
 | `IrService` | `InfraredService` |
 | `MultiPinLedDriver`, `MoonLedDriver`, `ParlioLedDriver`, `I80LedDriver`, `MoonI80LedDriver` | `ParallelLedDriver` with a `peripheral` select |
-| a driver's `preset` or `lightPreset`, and its `presetRef` | `fixture`, and `fixtureRef` |
-| `LightPresetsModule` and its `presets` list | `FixtureProfilesModule` and its `profiles` list |
+| a driver's `preset` | `lightPreset` |
 | `soundReactive` | `audioReactive` |
 | `forceRing` | `useRing` |
 | `sync` on AudioService | `mode`, beside a new `send audio` |
@@ -257,11 +278,13 @@ The break is between the two images on a device, not between a device and its co
 
 It drew one bar from the audio level, which every audio-reactive effect does as a side effect of what it draws. There is no successor to map it onto, so a restored config carrying an `AudioVolumeEffect` node finds no such type and the layer comes up without it. `GEQ` is the nearest thing if a literal meter is what you want.
 
-### A fixture profile's Dimmer channel is now driven
+### A fixture profile's Dimmer channel is held open
 
-A profile that declares a `Dimmer` role previously left that channel at 0, because nothing ever wrote it: `Correction` resolved only the color roles. A fixture on such a profile therefore emitted nothing at all, whatever its color channels said. The shipped `IRGB` preset ("CH1 master intensity") could never light a fixture.
+A profile that declares a `Dimmer` role has that channel held open (255) every frame, per-light brightness staying in the color values.
+Earlier firmware left the channel at 0, since `Correction` resolved only the color roles.
+A fixture on such a profile, the shipped `IRGB` ("CH1 master intensity") among them, emitted nothing whatever its color channels said.
 
-The dimmer is now held open (255) every frame, with per-light brightness staying in the color values as before. **If you drive a fixture on `IRGB` or another dimmer-carrying profile, it will light up where it previously stayed dark.** Nothing to change; the previous behavior was a defect.
+**A fixture on `IRGB` or another dimmer-carrying profile lights up where it stayed dark.** Nothing to change; the dark channel was a defect.
 
 Routing brightness to the dimmer channel rather than holding it open is the better model and is [backlogged](../work/future/backlog-light.md), so this value will change again.
 

@@ -593,7 +593,7 @@ async function sendControl(moduleName, controlName, value) {
             // sent), so the card rebuilds from what it has and nothing is re-read. The rebuild is
             // what hides the data.
             const turnedOn = Boolean(value);
-            if (!turnedOn) { moonCloudGeneration++; refetchState(); return; }
+            if (!turnedOn) { moonCloudGeneration++; refetchState(); return true; }
 
             // Switching ON: ONE read, once. A Stats report leaves from tick1s rather than during
             // this write, so reading immediately would show the totals without this device's own
@@ -610,8 +610,10 @@ async function sendControl(moduleName, controlName, value) {
             // sends inside this write, like MoonTalk's `send`, so it re-reads with no delay.
             }, mod?.type === "MoonStatsModule" && controlName === "consent" ? 2000 : 0);
         }
+        return res.ok;   // whether the device took the value, for a caller whose next step depends on it
     } catch (e) {
         console.warn(`[control] POST ${moduleName}.${controlName} failed (error=${e && e.message ? e.message : e})`);
+        return false;
     }
 }
 
@@ -3341,10 +3343,7 @@ function openPadEditor(anchorEl, moduleName, ctrlName, item, slot) {
             over.className = "surface-popup-primary";
             over.textContent = "save current state over it";
             over.addEventListener("click", async () => {
-                await sendControl(moduleName, "source", container());
-                await sendControl(moduleName, "name", item.name);
-                await sendControl(moduleName, "slot", slot);
-                await sendControl(moduleName, "save", 1);
+                await savePresetFrom(container(), item.name, slot);
                 close();
                 refetchState();
             });
@@ -3378,11 +3377,7 @@ function openPadEditor(anchorEl, moduleName, ctrlName, item, slot) {
             saveBtn.textContent = "save current state here";
             saveBtn.addEventListener("click", async () => {
                 if (!nameIn.value.trim()) { nameIn.focus(); return; }
-                // The module's own save form does the work; the popup only fills it, so the save path stays the one the tests cover.
-                await sendControl(moduleName, "source", container());
-                await sendControl(moduleName, "name", nameIn.value.trim());
-                await sendControl(moduleName, "slot", slot);
-                await sendControl(moduleName, "save", 1);
+                if (!await savePresetFrom(container(), nameIn.value.trim(), slot)) { refusedName(nameIn); return; }
                 close();
                 refetchState();
             });
@@ -3422,13 +3417,22 @@ function presetModuleName() {
     return m ? m.name : null;
 }
 
-/// Save `sourceName`'s current state as a preset called `name`, through the surface's own save form, so the save path stays the one the tests cover.
-async function savePresetFrom(sourceName, name) {
+/// Save `sourceName`'s current state as a preset called `name`, on pad `slot` when one is given, through the surface's own save form, so the save path stays the one the tests cover.
+/// False when the device refuses a value, such as a name with a dot, so a refused name never saves under the one before it.
+async function savePresetFrom(sourceName, name, slot) {
     const control = presetModuleName();
-    if (!control) throw new Error("this device has no presets");
-    await sendControl(control, "source", sourceName);
-    await sendControl(control, "name", name);
-    await sendControl(control, "save", 1);
+    if (!control) return false;
+    if (!await sendControl(control, "source", sourceName)) return false;
+    if (!await sendControl(control, "name", name)) return false;
+    if (slot !== undefined && !await sendControl(control, "slot", slot)) return false;
+    return sendControl(control, "save", 1);
+}
+
+/// Mark a name input the device refused, with the rule it applies.
+function refusedName(input) {
+    input.setCustomValidity("printable letters, digits and punctuation, without . / or backslash, at most 31");
+    input.reportValidity();
+    input.addEventListener("input", () => input.setCustomValidity(""), { once: true });
 }
 
 // A card as a state document: copy it, save it as a preset, or open the diagnostic dump an issue report wants.
@@ -3480,7 +3484,7 @@ async function openDocumentPopup(anchorEl, moduleName) {
             save.textContent = "save as preset";
             save.addEventListener("click", async () => {
                 if (!nameIn.value.trim()) { nameIn.focus(); return; }
-                await savePresetFrom(moduleName, nameIn.value.trim());
+                if (!await savePresetFrom(moduleName, nameIn.value.trim())) { refusedName(nameIn); return; }
                 close();
                 refetchState();
             });
@@ -6057,9 +6061,9 @@ async function cachedJson(url, key, force) {
             // console.debug, not warn: an update check failing is routine and not
             // actionable (the device may simply be offline, or GitHub rate-limited),
             // so keep it out of the default console: debug is hidden unless the user
-            // opts into verbose. Both callers hit api.github.com, which sends
-            // Access-Control-Allow-Origin and so reads fine from the device origin;
-            // the failure path here is for the no-network / rate-limit case.
+            // opts into verbose. Every caller reads GitHub (the releases API, the gallery index on
+            // raw.githubusercontent.com), which sends Access-Control-Allow-Origin and so reads fine
+            // from the device origin; the failure path here is for the no-network / rate-limit case.
             console.debug("[update] fetch failed:", url, e && e.message ? e.message : e);
             const raw = safeLocalGet(key);                   // serve stale on failure
             if (raw) {
@@ -6238,7 +6242,8 @@ function setupUpdateBadge() {
         if (badge.dataset.tag) safeLocalSet(PICKER_RELEASE_KEY, badge.dataset.tag);
         selectModule("Firmware");
         // Straight to the tab that installs it.
-        if (badge.dataset.moonbase) sendControl("Firmware", "image", 1);
+        const fw = state && state.modules.find(m => m.type === "FirmwareUpdateModule");
+        if (badge.dataset.moonbase && fw) sendControl(fw.name, "image", 1);
     });
 }
 
@@ -6309,17 +6314,17 @@ async function mlDownloadScript(name, group) {
     }
     const text = await res.text();
     if (!text.trim()) throw new Error("downloaded script is empty");
-    // The factory directory has to exist first: POST /api/file does not create parents, so on a
-    // device where nothing has been downloaded yet the write fails with "write failed" and no clue
-    // why. mkdir is idempotent, so this costs one request and only on the first download.
-    await fetch("/api/dir?path=" + encodeURIComponent(cat.dir), { method: "POST" }).catch(() => {});
-    // Straight to the factory directory, never the user's: an edit is what puts a copy there, and
-    // that copy is what shadows this one.
-    const save = await fetch("/api/file?path=" + encodeURIComponent(cat.dir + "/" + name), {
-        method: "POST", headers: { "Content-Type": "application/octet-stream" },
-        body: new Blob([text]),
+    // Straight to the factory directory, never the user's: an edit is what puts a copy there, and that copy is what shadows this one.
+    await writeDeviceFile(cat.dir, name, text);
+}
+
+/// Write a text file onto the device, creating its folder first, since POST /api/file does not create parents and mkdir is idempotent.
+async function writeDeviceFile(dir, name, text) {
+    await fetch("/api/dir?path=" + encodeURIComponent(dir), { method: "POST" }).catch(() => {});
+    const res = await fetch("/api/file?path=" + encodeURIComponent(dir + "/" + name), {
+        method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: new Blob([text]),
     });
-    if (!save.ok) throw new Error(await errorMessage(save));
+    if (!res.ok) throw new Error(await errorMessage(res));
 }
 
 async function fmFetchDir(absPath, hidden) {
@@ -6643,7 +6648,7 @@ let galleryStatus = "";    // the last outcome, kept across the re-render an ins
 /// A preset that may go on a pad unasked: a look (Effects only) or a palette (Drivers setting its palette and nothing else), since pins and geometry belong to one rig.
 function galleryPadReady(doc) {
     if (!doc || typeof doc !== "object" || Array.isArray(doc)) return false;
-    const keys = Object.keys(doc).filter(k => k !== "slot");
+    const keys = Object.keys(doc).filter(k => !k.startsWith("$"));   // a `$` key is the file's own, such as its pad
     if (keys.length === 1 && keys[0] === "Effects") return true;
     if (keys.length !== 1 || keys[0] !== "Drivers") return false;
     const set = Object.keys(doc.Drivers || {});
@@ -6665,47 +6670,57 @@ function galleryFileName(entry) {
     return entry.file.slice(entry.file.lastIndexOf("/") + 1).replace(/^\d+-/, "");
 }
 
-/// A preset name the device accepts: printable, no path or dot characters, at most 31 characters.
+/// A preset name the device accepts (ControlModule's validPresetName): printable ASCII without a path or dot character, at most 31.
 function galleryPresetName(entry) {
-    return String(entry.name || galleryFileName(entry)).replace(/[\/\\.\x00-\x1f]/g, "-").trim().slice(0, 31) || "gallery";
+    return String(entry.name || galleryFileName(entry)).replace(/[^\x20-\x7e]|[\/\\.]/g, "-").trim().slice(0, 31) || "gallery";
 }
 
-/// The presets to try for empty pads, most liked first, leaving out names the device already holds.
+/// A link from the gallery's index, kept only when it is http or https, since the index is third-party text.
+function galleryUrl(url) {
+    return /^https?:\/\//i.test(String(url || "")) ? url : null;
+}
+
+/// A gallery file's text, or an error naming it when the download fails.
+async function galleryFetch(file) {
+    const res = await fetch(GALLERY_RAW + file);
+    if (!res.ok) throw new Error(`${file}: download failed (${res.status})`);
+    return res.text();
+}
+
+/// The presets to try for empty pads, most liked first, one per device name, leaving out names the device already holds, so no entry overwrites another.
 function galleryFillCandidates(index, presetNames) {
     const have = new Set(presetNames);
-    return index.filter(e => e.kind === "Preset" && !have.has(galleryPresetName(e)))
-                .sort((a, b) => (b.votes || 0) - (a.votes || 0) || a.issue - b.issue);
+    return index.filter(e => e.kind === "Preset")
+                .sort((a, b) => (b.votes || 0) - (a.votes || 0) || a.issue - b.issue)
+                .filter(e => !have.has(galleryPresetName(e)) && have.add(galleryPresetName(e)));
 }
 
-/// Write a text file onto the device, creating its folder first, as a script download does.
-async function galleryWrite(dir, name, text) {
-    await fetch("/api/dir?path=" + encodeURIComponent(dir), { method: "POST" }).catch(() => {});
-    const res = await fetch("/api/file?path=" + encodeURIComponent(dir + "/" + name), {
-        method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: new Blob([text]),
-    });
-    if (!res.ok) throw new Error(await errorMessage(res));
+/// The script names already on the device, the user's and the factory's, so an install never overwrites or shadows one.
+async function deviceScriptNames() {
+    const names = new Set();
+    for (const dir of ["/moonlive", "/.moonlive"])
+        for (const row of await fmFetchDir(dir, true).catch(() => [])) names.add(String(row.name).toLowerCase());
+    return names;
 }
 
-/// Install one entry: a preset onto a free pad with the scripts it names that the gallery has, a script into /moonlive.
-async function galleryInstall(entry, index) {
-    const res = await fetch(GALLERY_RAW + entry.file);
-    if (!res.ok) throw new Error(`${entry.name}: download failed`);
-    const text = await res.text();
+/// Install one entry from its text: a preset onto a free pad with the scripts it names that the gallery has and the device does not, a script into /moonlive unless one of its name is there.
+async function galleryInstall(entry, index, text) {
+    const held = await deviceScriptNames();
     if (entry.kind !== "Preset") {
-        await galleryWrite("/moonlive", galleryFileName(entry), text);
-        return text;
+        const name = galleryFileName(entry);
+        if (held.has(name.toLowerCase())) throw new Error(`${name} is already on the device`);
+        await writeDeviceFile("/moonlive", name, text);
+        return;
     }
     const doc = JSON.parse(text);
     for (const script of galleryScriptsOf(doc)) {
+        if (held.has(script.toLowerCase())) continue;   // the device's own copy, edited or shipped, stays
         const s = index.find(e => e.kind !== "Preset" && galleryFileName(e).toLowerCase() === script.toLowerCase());
-        if (!s) continue;   // a factory script, or one the device already holds
-        const r = await fetch(GALLERY_RAW + s.file);
-        if (r.ok) await galleryWrite("/moonlive", script, await r.text());
+        if (s) await writeDeviceFile("/moonlive", script, await galleryFetch(s.file));
     }
     // The pad is this device's to choose: a slot from the author's device could land on one already taken.
-    const { slot, ...rest } = doc;
-    await galleryWrite("/.config/presets", galleryPresetName(entry) + ".json", slot === undefined ? text : JSON.stringify(rest));
-    return text;
+    const { $slot, ...rest } = doc;
+    await writeDeviceFile("/.config/presets", galleryPresetName(entry) + ".json", $slot === undefined ? text : JSON.stringify(rest));
 }
 
 function renderGallery(host, mod) {
@@ -6744,19 +6759,21 @@ function renderGallery(host, mod) {
         status.textContent = index.length ? galleryStatus : "The gallery is empty so far.";
         list.textContent = "";
         const running = deviceFirmwareInfo()?.version;
+        const newer = (e) => Boolean(running && e.firmware && isNewer(e.firmware, running));
 
         const fill = document.createElement("button");
         fill.className = "surface-popup-primary gallery-fill";
         fill.textContent = "fill empty pads with the most liked";
-        fill.title = "Looks and palettes only, since a preset with pins or geometry belongs to one rig; your own presets stay where they are";
+        fill.title = "Looks and palettes made on this version or older; a preset with pins or geometry belongs to one rig; your own presets stay where they are";
         fill.addEventListener("click", async () => {
             let free = freePads(), added = 0;
             for (const e of galleryFillCandidates(index, presetNames())) {
                 if (free <= 0) break;
+                if (newer(e)) continue;
                 try {
-                    const r = await fetch(GALLERY_RAW + e.file);
-                    if (!r.ok || !galleryPadReady(JSON.parse(await r.text()))) continue;
-                    await galleryInstall(e, index);
+                    const text = await galleryFetch(e.file);
+                    if (!galleryPadReady(JSON.parse(text))) continue;
+                    await galleryInstall(e, index, text);
                     free--; added++;
                     say(`added ${added}: ${e.name}`);
                 } catch (_) { /* skip an entry that does not install; the rest still can */ }
@@ -6769,15 +6786,16 @@ function renderGallery(host, mod) {
         for (const e of index.slice().sort((a, b) => (b.votes || 0) - (a.votes || 0) || a.issue - b.issue)) {
             const card = document.createElement("div");
             card.className = "gallery-entry";
-            if (e.media) {
+            const media = galleryUrl(e.media);
+            if (media) {
                 const img = document.createElement("img");
-                img.src = e.media;
+                img.src = media;
                 img.alt = e.name;
                 img.loading = "lazy";
                 // A video does not load as an image, so it becomes a link to watch it.
                 img.addEventListener("error", () => {
                     const a = document.createElement("a");
-                    a.href = e.media; a.target = "_blank"; a.rel = "noopener";
+                    a.href = media; a.target = "_blank"; a.rel = "noopener";
                     a.textContent = "▶ watch";
                     img.replaceWith(a);
                 });
@@ -6785,8 +6803,8 @@ function renderGallery(host, mod) {
             }
             const head = document.createElement("div");
             head.className = "gallery-entry-head";
-            const name = document.createElement("a");
-            name.href = e.url; name.target = "_blank"; name.rel = "noopener";
+            const name = document.createElement(galleryUrl(e.url) ? "a" : "span");
+            if (galleryUrl(e.url)) { name.href = e.url; name.target = "_blank"; name.rel = "noopener"; }
             name.textContent = e.name;
             head.append(name, document.createTextNode(` ${e.kind} · 👍 ${e.votes || 0} · ${e.author || ""}`));
             card.appendChild(head);
@@ -6794,7 +6812,7 @@ function renderGallery(host, mod) {
             what.className = "gallery-entry-text";
             what.textContent = e.description || "";
             card.appendChild(what);
-            if (running && e.firmware && isNewer(e.firmware, running)) {
+            if (newer(e)) {
                 const newer = document.createElement("div");
                 newer.className = "gallery-entry-newer";
                 newer.textContent = `made on ${e.firmware}, newer than this device's ${running}: update first`;
@@ -6806,8 +6824,14 @@ function renderGallery(host, mod) {
             install.className = "surface-popup-primary";
             install.textContent = e.kind === "Preset" ? "add to a pad" : "install";
             install.addEventListener("click", async () => {
+                if (newer(e) && !confirm(`${e.name} was made on ${e.firmware}, newer than this device's ${running}. Install it anyway?`)) return;
+                if (e.kind === "Preset") {
+                    // A pad holds one preset: refuse rather than overwrite a preset of the same name or write one no pad can show.
+                    if (presetNames().includes(galleryPresetName(e))) { say(`a preset named ${galleryPresetName(e)} is already on a pad`); return; }
+                    if (freePads() <= 0) { say("no free pad"); return; }
+                }
                 try {
-                    await galleryInstall(e, index);
+                    await galleryInstall(e, index, await galleryFetch(e.file));
                     say(`installed ${e.name}`);
                     refetchState();
                 } catch (err) { say(err.message); }
@@ -6820,8 +6844,11 @@ function renderGallery(host, mod) {
                 now.title = "Apply it to the device without keeping it on a pad";
                 now.addEventListener("click", async () => {
                     try {
-                        const r = await fetch(GALLERY_RAW + e.file);
-                        const res = await fetch("/api/state", { method: "PATCH", body: await r.text() });
+                        const text = await galleryFetch(e.file);
+                        // A preset beyond a look or a palette replaces this rig's own settings, with no undo, so it asks first.
+                        if (!galleryPadReady(JSON.parse(text)) && !confirm(`${e.name} sets more than a look or a palette, such as pins or geometry from the author's rig. Apply it here?`)) return;
+                        if (newer(e) && !confirm(`${e.name} was made on ${e.firmware}, newer than this device's ${running}. Apply it anyway?`)) return;
+                        const res = await fetch("/api/state", { method: "PATCH", body: text });
                         const answer = await res.json().catch(() => ({}));
                         say(res.ok ? `applied ${e.name}` : `${e.name}: ${answer.error || res.status}${answer.at ? " at " + answer.at : ""}`);
                     } catch (err) { say(err.message); }

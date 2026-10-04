@@ -56,7 +56,7 @@ The **Gallery** under the pads lists what people shared in [MoonLight-Gallery](h
 
 An entry made on a newer MoonLight than yours says so: update first.
 
-To share one, press a card's `{ }` button, copy the JSON, and open a contribution in the gallery.
+To share one, press a card's `{ }` button, copy the JSON, and open an issue in the gallery as its [Sharing your own](https://github.com/MoonModules/MoonLight-Gallery#sharing-your-own) describes.
 
 ## Arranging the pads
 
@@ -66,7 +66,7 @@ The order persists, stamped into each preset's own file, so a preset folder copi
 
 ## Where they live
 
-One file per preset, at `/.config/presets/<name>.json`, holding the document and its pad as `"slot"`. A name may use printable characters but no `/`, `\` or `.`, up to 31 characters.
+One file per preset, at `/.config/presets/<name>.json`, holding the document and its pad as `"$slot"`. A name may use printable characters but no `/`, `\` or `.`, up to 31 characters.
 
 They ride along in a [backup](backup-and-restore.md), which is how a rig's looks move to another device.
 
@@ -82,7 +82,7 @@ Layouts and Drivers presets are deliberately excluded: they rewire pins and geom
 
 The card names the first failure and where it is, such as `no such control at Effects.Layer.Noise.speed`:
 
-- **It names a container this device does not have.** Nothing changes.
-- **A module or control inside it is unknown here.** What came before the failure stays applied.
+- **It names a container, a module type or a role this device does not have.** Found before anything changes, so nothing does.
+- **A control inside it is unknown here, or a value is out of range.** Found as it is written, so what came before the failure stays applied.
 - **It was saved by an older MoonLight.** Listed but not applied: a [backup and restore](backup-and-restore.md) converts it.
 - **The file is malformed.** The live tree is untouched.

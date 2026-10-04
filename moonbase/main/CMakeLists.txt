@@ -1,10 +1,8 @@
 idf_component_register(
     SRCS "moonbase_main.cpp"
-    # MoonBase shares no sources with the application, which is the trade for an image that stays
-    # small and rarely changes. Two headers are the exceptions, and earn it by depending on nothing
-    # but the C library: core/util/FirmwareImage.h, since both images must refuse to install the
-    # other, and core/util/ConfigScrape.h, since this image reads the app's config file. A rule
-    # living in two hand-written copies is how they drift.
+    # MoonBase shares no source files with the application, the trade for an image that stays small and rarely changes.
+    # Three headers are the exceptions, each depending on nothing but the C library and core/util/hex.h, since a rule in two hand-written copies drifts:
+    # core/util/FirmwareImage.h (both images refuse to install the other), core/util/ConfigScrape.h (this image reads the app's config file) and core/util/CaptivePortal.h (both access points answer a phone the same way).
     INCLUDE_DIRS "../../src"
     # The app's own logo, embedded IDF-natively; served as /logo.png (header + favicon).
     EMBED_FILES "../../src/ui/moonmodules-logo.png"

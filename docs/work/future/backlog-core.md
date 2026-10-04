@@ -2,6 +2,20 @@
 
 Forward-looking to-build items for the **core / infrastructure** domain (`src/core/`, `src/platform/`, build, CI, network, persistence, UI). The light-domain counterpart is [backlog-light.md](backlog-light.md); items that genuinely span both are in [backlog-mixed.md](backlog-mixed.md). Index + overview: [README.md](index.md). Completed items are removed.
 
+### A config written for next boot is overwritten by the next save (2026-10-04)
+
+Network and Ethernet return false from `appliesConfigLive`, so a file written through `POST /api/file` waits on disk for the next boot.
+Any save before that boot writes the module's in-memory values over it, so the upload is lost without a word.
+Seen on the S3: a restored `NetworkModule.json` came back with the old `txPowerSetting` until the restore was followed straight away by a reboot.
+The fix: `applyConfigFile` marks a module it does not apply live as pending on disk, and the flush skips that module's file until the next boot.
+The uploaded file then wins with no UI change; the alternative, answering "applies at next boot" and offering a restart, still loses the file when the restart is declined.
+Pin it with a test that writes the file, dirties the module, flushes, and finds the file unchanged.
+
+### Remove the 6.0 network adoption (2026-10-04)
+
+`NetworkModule::adoptLegacySettings` and the two `adoptLegacy` it calls move 6.0's top-level network keys onto the Ethernet and WiFi cards at the first boot, so an in-place update keeps its network.
+Remove all three, their test `unit_NetworkModule_legacy.cpp`, and the "update to this release before a later one" line in MIGRATING's WiFi and Ethernet entries, once a release has carried it and the field has moved past 6.0.
+
 ### The update overlay's Cancel button does nothing on a plain OTA (2026-09-14)
 
 `showUpdateOverlay` shows a Cancel button on every firmware install and wires it to
@@ -1473,11 +1487,11 @@ Related: WLED is smooth on the same stream because it receives via `AsyncUDP` â€
 
 [ControlSurface](../../../src/core/util/ControlSurface.h) was written for MIDI hardware and has no MIDI transport. Its own documentation cites the APC40 mk2's ring-style CCs at 0x18/0x38, the X-Touch MINI's CC 1-8, and per-vendor SysEx for RGB pads, and its four verbs (`sendValue`, `sendRing`, `sendColor`, `sendLabel`) exist because MIDI hardware needs exactly those. OSC is the only transport that implements it. A MIDI transport is therefore a gap the architecture already anticipated rather than a new concept, and it is the obvious second implementation that proves the abstraction holds.
 
-**What OpenLamp offers.** [openlamp-spec-midi](https://github.com/openlamp/openlamp-spec-midi) is an MIT-licensed convention for driving WLED over MIDI: notes 59-68 for hues plus black and white, notes 48-56 for off, on, toggle and blackout, CC 1 for brightness, CC 3-4 for hue and saturation, CC 5-8 for effect, speed, intensity and palette, Program Change for presets, MIDI channel for targeting, and MIDI clock for beat sync. The [organisation](https://github.com/openlamp) also has an Ableton Link and MIDI-clock tempo library, and a CC0 asset set of 72 palette illustrations and 216 effect previews in eight languages.
+**What OpenLamp offers.** [openlamp-spec-midi](https://github.com/openlamp/openlamp-spec-midi) is an MIT-licensed convention for driving WLED over MIDI: notes 59-68 for hues plus black and white, notes 48-56 for off, on, toggle and blackout, CC 1 for brightness, CC 3-4 for hue and saturation, CC 5-8 for effect, speed, intensity and palette, Program Change for presets, MIDI channel for targeting, and MIDI clock for beat sync. The [organization](https://github.com/openlamp) also has an Ableton Link and MIDI-clock tempo library, and a CC0 asset set of 72 palette illustrations and 216 effect previews in eight languages.
 
 **Why the convention matters more than the code.** Its engine is Python and cloud-free by design, so nothing there ports to a device. The value is in agreeing what a note and a CC *mean*, since a MIDI transport has to answer that whatever we do, and answering it the same way as a project already aimed at WLED costs nothing and buys a user their existing mappings. The palette and effect artwork is CC0 and separately interesting for the catalog, which today has one screenshot per module and no palette illustrations at all.
 
-**Judge it against principle 2** before adopting: the standard construct beats a bespoke one, and this is a candidate standard. The caution is that the spec says plainly it is a draft, "likely to change, and early on to change quickly", and the organisation has low single-digit stars. So the sequence is a MIDI transport shaped by our own `ControlSurface` first, with the OpenLamp note and CC numbers as the default mapping where they fit, rather than a port of their model. Their beat-sync library is worth reading against [the audio work](backlog-light.md), since MIDI clock is a tempo source we do not have.
+**Judge it against principle 2** before adopting: the standard construct beats a bespoke one, and this is a candidate standard. The caution is that the spec says plainly it is a draft, "likely to change, and early on to change quickly", and the organization has low single-digit stars. So the sequence is a MIDI transport shaped by our own `ControlSurface` first, with the OpenLamp note and CC numbers as the default mapping where they fit, rather than a port of their model. Their beat-sync library is worth reading against [the audio work](backlog-light.md), since MIDI clock is a tempo source we do not have.
 
 **What it is not.** Not a replacement for OSC, which carries labels and arbitrary addresses that MIDI cannot. Not a lighting-control protocol in the DMX or Art-Net sense. This is about a musician's controller driving the show.
 

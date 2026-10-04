@@ -27,8 +27,8 @@ inline bool addressCounts(const uint8_t ip[4], bool buildHasWiFi, const uint8_t*
 
 /// All device connectivity, cascading from Ethernet through WiFi to an access point.
 ///
-/// One module and one card: the user sees a network, not three technologies.
-/// A desktop uses the operating system's own networking and loads none of this.
+/// Network holds the cascade, its mode and mDNS; each interface's settings are on its own card below it: Ethernet, WiFi and the access point.
+/// A desktop builds the same cards over stubs, so they can be shown and tested, and reports no network of its own.
 /// @card NetworkModule.png
 ///
 /// @moreinfo
@@ -104,6 +104,8 @@ public:
 
     /// Set the hostname, push the interface config, then start the cascade.
     void setup() override {
+        // Before anything reads the interface settings.
+        adoptLegacySettings();
         // Before any bring-up, so a router's client list shows the device's name.
         platform::setHostname(readDeviceName());
         // Before the interface reads it.
@@ -343,8 +345,8 @@ public:
         syncAccessPoint(now);
         syncMdns();
         syncTxPower();
-        // An interface change applies live where the hardware allows, the cascade then waiting on it again.
-        if (ethernet_ && ethernet_->syncLive()) {
+        // An interface change applies live where the hardware allows, the cascade then waiting on it again, unless WiFi carries the device, which it leaves alone.
+        if (ethernet_ && ethernet_->syncLive() && state_ != State::ConnectedSta && state_ != State::WaitingSta) {
             state_ = State::WaitingEth;
             stateChangeTime_ = platform::millis();
         }
@@ -522,7 +524,22 @@ private:
         stateChangeTime_ = platform::millis();
         // The status needs no rebuild, but the radio readouts' visibility does.
         rebuildControls();
-        if (scheduler_) scheduler_->prepareTree();
+        if (scheduler_) scheduler_->requestPrepareTree();   // at the frame boundary, as every other rebuild
+    }
+
+    /// Move the Ethernet and WiFi settings a 6.0 config keeps at Network's top level onto their cards, once; temporary, see MIGRATING.
+    void adoptLegacySettings() {
+        char path[FilesystemModule::MAX_PATH];
+        if (!FilesystemModule::pathFor(this, path, sizeof(path))) return;
+        char* json = FilesystemModule::readWholeFile(path);
+        if (!json) return;
+        const bool eth = ethernet_ && ethernet_->adoptLegacy(json);
+        const bool sta = wifi_ && wifi_->adoptLegacy(json);
+        platform::free(json);
+        if (!eth && !sta) return;
+        std::printf("NetworkModule: moved 6.0's network settings onto their cards\n");
+        markDirty();
+        FilesystemModule::noteDirty();
     }
 
     /// Whether anything but the access point could reach the device, which is what lets it stay closed.
@@ -619,6 +636,7 @@ private:
 
     /// Adopt a connected interface, shutting down whatever it outranks.
     void onConnected(const char* via) {
+        idleForNever_ = false;   // connected, so no longer idle for want of an access point
         if (std::strcmp(via, "Ethernet") == 0) {
             state_ = State::ConnectedEth;
             ethDegraded_ = false;   // Ethernet itself has a usable address, so it is no longer degraded
@@ -646,7 +664,7 @@ private:
 
         // Again for the radio readouts' visibility, which depends on the state.
         rebuildControls();
-        if (scheduler_) scheduler_->prepareTree();
+        if (scheduler_) scheduler_->requestPrepareTree();
     }
 
 public:

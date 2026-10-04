@@ -71,8 +71,11 @@ constexpr const char* kApName    = "MoonBase";   // for a device that never save
 
 constexpr int kHttpPort = 80;
 
-char ssid_[64] = {};
-char password_[64] = {};
+// The app's known networks in its priority order, tried as the app tries them.
+constexpr uint8_t kMaxNetworks = 8;
+struct Network { char ssid[33]; char password[65]; };
+Network networks_[kMaxNetworks] = {};
+uint8_t networkCount_ = 0;
 // The app's own access point, named after the device and protected as the user set it, so a phone on it stays on through the restart into this image.
 char apName_[33] = {};
 char apPassword_[64] = {};
@@ -139,8 +142,11 @@ void loadCredentials() {
 
     // The keys are a cross-image contract with what the app writes; the app pins it with a unit test (unit_MoonBaseContract).
     if (char* buf = readConfig(kNetworkConfig)) {
-        // The app's preferred network, the first row of its WiFi child's known list.
-        mm::configscrape::findFirstNetwork(buf, ssid_, sizeof(ssid_), password_, sizeof(password_));
+        // The rows of the WiFi child's known list, in order.
+        while (networkCount_ < kMaxNetworks
+               && mm::configscrape::findNetwork(buf, networkCount_, networks_[networkCount_].ssid, sizeof(Network::ssid),
+                                                networks_[networkCount_].password, sizeof(Network::password)))
+            networkCount_++;
         mm::configscrape::findInt(buf, "ethType",       &ethCfg_.type);
         mm::configscrape::findInt(buf, "ethPhyAddr",    &ethCfg_.phyAddr);
         mm::configscrape::findInt(buf, "ethRstGpio",    &ethCfg_.rstGpio);
@@ -236,23 +242,25 @@ void ethStop() {
 }
 
 
-// Try the stored credentials for a bounded time. Returns whether an address arrived.
+// Try each known network in turn for a bounded time, as the app does. Returns whether an address arrived.
 bool wifiStation(uint32_t waitMs) {
-    if (!ssid_[0]) return false;
+    if (!networkCount_) return false;
     esp_netif_create_default_wifi_sta();
     wifi_init_config_t init = WIFI_INIT_CONFIG_DEFAULT();
     if (esp_wifi_init(&init) != ESP_OK) return false;
-
-    wifi_config_t cfg = {};
-    std::strncpy(reinterpret_cast<char*>(cfg.sta.ssid), ssid_, sizeof(cfg.sta.ssid) - 1);
-    std::strncpy(reinterpret_cast<char*>(cfg.sta.password), password_, sizeof(cfg.sta.password) - 1);
     esp_wifi_set_mode(WIFI_MODE_STA);
-    esp_wifi_set_config(WIFI_IF_STA, &cfg);
     esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &onWifiEvent, nullptr, nullptr);
-    esp_wifi_start();
 
-    const EventBits_t bits = xEventGroupWaitBits(netEvents_, kNetGotIp, pdFALSE, pdFALSE,
-                                                 pdMS_TO_TICKS(waitMs));
+    EventBits_t bits = 0;
+    for (uint8_t k = 0; k < networkCount_ && !(bits & kNetGotIp); k++) {
+        wifi_config_t cfg = {};
+        std::strncpy(reinterpret_cast<char*>(cfg.sta.ssid), networks_[k].ssid, sizeof(cfg.sta.ssid) - 1);
+        std::strncpy(reinterpret_cast<char*>(cfg.sta.password), networks_[k].password, sizeof(cfg.sta.password) - 1);
+        esp_wifi_set_config(WIFI_IF_STA, &cfg);
+        // The first starts the radio; each later one drops the attempt before it, and the disconnect handler connects to the new config.
+        if (k == 0) esp_wifi_start(); else esp_wifi_disconnect();
+        bits = xEventGroupWaitBits(netEvents_, kNetGotIp, pdFALSE, pdFALSE, pdMS_TO_TICKS(waitMs));
+    }
     if (bits & kNetGotIp) {
         // Modem power save (the default, re-armed at association) throttles receive throughput to tens of KB/s. Disabled AFTER the connection is up so nothing re-enables it; MoonBase runs for minutes on a powered board, full RX beats the milliwatts.
         esp_wifi_set_ps(WIFI_PS_NONE);
@@ -284,7 +292,7 @@ void captiveDnsTask(void*) {
         sockaddr_in from = {};
         socklen_t fromLen = sizeof(from);
         const int n = ::recvfrom(s, msg, sizeof(msg), 0, reinterpret_cast<sockaddr*>(&from), &fromLen);
-        if (n <= 0) continue;
+        if (n <= 0) { vTaskDelay(pdMS_TO_TICKS(100)); continue; }   // an erroring socket must not starve the task serving the page
         const size_t len = mm::captive::dnsReply(msg, static_cast<size_t>(n), sizeof(msg), mm::captive::kAddress);
         if (len) ::sendto(s, msg, len, 0, reinterpret_cast<sockaddr*>(&from), fromLen);
     }
@@ -859,7 +867,7 @@ extern "C" void app_main() {
 
     loadCredentials();   // also reads the app's build variant, inside its mount window
 
-    // The cascade: Ethernet where the config wires it, then the stored credentials, then an open access point, so a board is never unreachable because its credentials went stale.
+    // The cascade: Ethernet as the config wires it, the known networks in order, then the device's own access point, so stale credentials never strand a board.
 
     // An install URL the app staged, kept until an install ends, so a reset before or during the download retries it on the next boot.
     char stagedUrl[256] = {};
@@ -901,7 +909,8 @@ extern "C" void app_main() {
             xEventGroupClearBits(netEvents_, kNetGotIp);
         }
     }
-    if (!online) online = wifiStation(20000);
+    // 10 s a network as the app gives each, and the whole 20 s to a lone one.
+    if (!online) online = wifiStation(networkCount_ > 1 ? 10000 : 20000);
 
     // Online only, the access point reaching no URL; on its own task with 12 KB for TLS, so /moonbase reports progress meanwhile.
     if (online && stagedUrl[0]) {

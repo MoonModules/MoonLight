@@ -65,7 +65,8 @@ The add returns the **name** the device gave the module, which is what every lat
 
 ## Setting everything at once
 
-`PATCH /api/state` takes a **state document**: the part of the tree you want, keyed by module name, as JSON Merge Patch ([RFC 7386](https://www.rfc-editor.org/rfc/rfc7386)) applies it.
+`PATCH /api/state` takes a **state document**: the part of the tree you want, keyed by module name, applied the way JSON Merge Patch ([RFC 7386](https://www.rfc-editor.org/rfc/rfc7386)) applies one.
+Its shape is the module tree, not the interface schema `GET /api/state` returns; `GET /api/modules/<name>/document`, below, reads it back.
 
 ```sh
 curl -X PATCH --data '{"Effects": {"Layer": {"Swirl": {"type": "RainbowEffect", "speed": 90}}}}' http://<device>/api/state
@@ -74,16 +75,22 @@ curl -X PATCH --data '{"Effects": {"Layer": {"Swirl": {"type": "RainbowEffect", 
 - A value sets a control of the module it sits in, with the same checks `POST /api/control` runs.
 - An object is a child module: found by name, created when it is missing and names a `type`, replaced in place when its `type` differs.
 - `null` removes a module, and `"$patch": "replace"` in a module's object keeps only the children it lists, in its order.
-- Every removal applies first, so a module can move to another branch under its name; the rest applies in document order, and the tree rebuilds once at the end.
+  Its controls stay as they are, and a child the code wires, such as Drivers' FixtureProfiles, stays either way.
+- What would fail at creation is found before anything changes: an unknown container or type, a role the parent refuses, a name the tree cannot hold.
+- Every removal applies next, the children of a re-typed module included, so a module can move to another branch under its name.
+  The rest applies in document order, and the tree rebuilds once at the end.
 - A new or re-pointed script declares its controls when it compiles, so the document sets them after that rebuild. The answer counts them as `deferred`.
 - Past 16 new or re-pointed modules in one document, an unknown control on a script module is deferred as well, and the device log names it after the rebuild.
-- A root `slot`, a preset file's pad, is skipped, so a preset file applies as it is.
+- A root key starting with `$` is the file's own, such as a preset's `$slot` (its pad), so a preset file applies as it is.
 
-The answer is `{"ok":true,"changes":N}`, or a 400 naming the first failure and where it is, such as `{"error":"no such control","at":"Effects.Layer.Swirl.nope","changes":2}`: what came before it stays applied.
+The answer is `{"ok":true,"changes":N}`, or a 400 naming the first failure and where it is, such as `{"error":"no such control","at":"Effects.Layer.Swirl.nope","changes":2}`.
+A failure only writing finds, such as a value out of range, leaves what came before it applied.
+A document is at most 32 KB, and a larger one is refused with a 413.
 `POST /api/state` takes the same document, for a client that cannot send `PATCH`.
 
 `GET /api/modules/<name>/document` reads a module back as a document, its path from the top level around it, and a card's `{ }` button shows the same.
-A secret, such as a password, stays out of every document, and applying one leaves the secret as it is.
+A secret stays out of every document, and applying one leaves the secret as it is.
+That is a password control, and a list holding one, whole, such as WiFi's known networks with their names and addresses.
 
 A [preset](../how-to/presets.md) is such a document saved on the device, recalled with one click, and kept across a reboot, and the [gallery](https://github.com/MoonModules/MoonLight-Gallery) shares them.
 

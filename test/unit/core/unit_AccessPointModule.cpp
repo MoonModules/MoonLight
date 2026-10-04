@@ -355,6 +355,24 @@ TEST_CASE("switching never to on failure opens the access point without a restar
     CHECK(mm::platform::wifiApConnected());
 }
 
+// A network that joins after an idle spell leaves no idle behind: switching to on failure then opens nothing, since nothing failed.
+TEST_CASE("a recovered network keeps the access point closed when never turns into on failure") {
+    ApNetwork n;
+    n.opens(mm::AccessPointModule::Opens::Never);
+    n.wifi.remember("home", "pw");
+    n.net.setup();
+    n.at(11000);
+    REQUIRE(modeOf(n.net) == "Idle");
+    n.at(72000);   // the retry, and this time it joins
+    n.joined();
+    n.at(73000);
+    REQUIRE(modeOf(n.net) == "WiFi STA");
+    n.opens(mm::AccessPointModule::Opens::OnFailure);
+    n.at(74000);
+    CHECK(modeOf(n.net) == "WiFi STA");
+    CHECK_FALSE(mm::platform::wifiApConnected());
+}
+
 // A phone on the access point during a retry gets the same hold when it asks for a join, since it is on the access point.
 TEST_CASE("a join asked for from the access point during a retry still holds it open") {
     ApNetwork n;

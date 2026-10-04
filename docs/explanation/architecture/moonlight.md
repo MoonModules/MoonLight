@@ -29,7 +29,7 @@ flowchart TB
     blend["<b>Blend + Map</b>"]
     a & b & c --> blend
 
-    drivers["<b>Drivers</b><br/><i>owns Correction:<br/>brightness + fixture</i>"]
+    drivers["<b>Drivers</b><br/><i>owns Correction: brightness,<br/>each driver its fixture</i>"]
     blend --> drivers
 
     led["<b>LED drivers</b><br/><i>WS2812 · RMT · Parlio</i><br/><i>apply Correction</i>"]

@@ -70,6 +70,7 @@ add_executable(mm_tests
     unit/core/unit_MoonModule_movechild.cpp
     unit/core/unit_MoonModule_replacechild.cpp
     unit/core/unit_MoonBaseContract.cpp
+    unit/core/unit_NetworkModule_legacy.cpp
     unit/core/unit_NetworkModule.cpp
     unit/core/unit_NetworkModule_ethernet.cpp
     unit/core/unit_WiFiModule.cpp
@@ -228,7 +229,7 @@ add_executable(mm_tests
 
 # The grid-size sweep drives every effect, including ones added after this file was
 # written, so its effect list is DERIVED from src/light/effects/ rather than typed here
-# (a hand-kept list would silently miss the next effect — the exact gap the sweep closes).
+# (a hand-kept list would silently miss the next effect: the exact gap the sweep closes).
 # Always out-of-date on purpose, same rule as build_info.h: adding an effect file must
 # regenerate. The generator rewrites only on change, so an unchanged effect set is a no-op.
 add_custom_target(effect_sweep_gen ALL
@@ -241,7 +242,7 @@ add_custom_target(effect_sweep_gen ALL
 target_include_directories(mm_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_link_libraries(mm_tests PRIVATE mm_core mm_platform)
 
-# doctest::Approx takes a double, so every CHECK against a float literal promotes — inside
+# doctest::Approx takes a double, so every CHECK against a float literal promotes: inside
 # doctest.h itself, which is vendored. -Wdouble-promotion stays -Werror for the firmware
 # (the Xtensa has no FPU, so a stray promotion is a silent softfloat call in the render
 # path); it just cannot also police a third-party header. Test-target only, and only the

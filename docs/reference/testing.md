@@ -59,7 +59,7 @@ and cannot drift between two tools that half-agree:
 | Catalog matches the modules | `check_devices.py` |
 | Untrusted input is memory-safe | CodeQL |
 | Bug patterns / performance | clang-tidy |
-| Complexity does not grow | `check_code.py` (ratcheted per file) |
+| Complexity does not grow | `check_code.py` (ratcheted per rule and in total) |
 | Size/LOC/docs do not grow silently | `repo_health.py` |
 
 ### Verify a zero before believing it

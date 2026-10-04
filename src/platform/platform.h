@@ -63,8 +63,10 @@ void setTestNowMs(uint32_t ms);
 // Hogging the port instead is not portable: Linux permits the overlapping bind under SO_REUSEADDR, and macOS lets a non-root process bind port 80.
 /// Make the next bind fail, so a test reaches that path; false restores.
 void setTestBindFails(bool fail);
+#ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// Make the next multicast join fail, as on a network without multicast; false restores.
 void setTestJoinFails(bool fail);
+#endif
 
 /// Allocate, preferring PSRAM where the target has it.
 void* alloc(size_t bytes);
@@ -518,15 +520,19 @@ struct WifiNetwork {
 bool wifiScanStart();
 /// Copy the finished scan's networks into `out`, strongest first, or -1 while a scan runs or none ran.
 int wifiScanResults(WifiNetwork* out, int max);
+#ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// Make the next scan find these networks, so a host test drives a radio-less desktop; a count of -1 makes it never finish.
 void setTestWifiScan(const WifiNetwork* networks, int count);
+#endif
 
 /// Why the station's last join attempt failed, so the card can say "incorrect password".
 enum class WifiFailure : uint8_t { None, WrongPassword, NotFound, Other };
 /// The last failure since the station started, None while it is joining or joined.
 WifiFailure wifiStaLastFailure();
+#ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// Make the next join fail this way, for a host test.
 void setTestWifiFailure(WifiFailure why);
+#endif
 
 /// The associated access point's BSSID, zeroed when the station is not associated.
 void wifiStaBssid(uint8_t out[6]);
@@ -540,14 +546,22 @@ void netSetStaticIPv4(NetIface iface, const uint8_t ip[4], const uint8_t gw[4],
                       const uint8_t mask[4], const uint8_t dns[4]);
 /// Return a client interface to DHCP, re-leasing live without a reboot.
 void netSetDhcp(NetIface iface);
+#ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// Make wifiStaInit succeed, so a host test can drive the station cascade a radio-less desktop never enters.
 void setTestWifiStaAvailable(bool available);
+#endif
+#ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// The network the station was last asked to join, so a host test sees the order the cascade tries them in.
 const char* testLastStaSsid();
+#endif
+#ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// Make the station joined at this address, or not joined with null, for a host test.
 void setTestWifiStaIPv4(const uint8_t* ip);
+#endif
+#ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// How many static-addressing applies reached the platform for one interface.
 uint32_t testNetStaticApplyCount(NetIface iface);
+#endif
 
 /// How the device's own access point appears: its name and address, a WPA2 password or empty for open, its channel, and whether it broadcasts its name.
 struct WifiApConfig {
@@ -559,12 +573,18 @@ struct WifiApConfig {
 };
 /// Bring up the SoftAP, alongside the station when that is running.
 bool wifiApInit(const WifiApConfig& cfg);
+#ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// Make wifiApInit succeed, so a host test drives the access point a radio-less desktop never opens.
 void setTestWifiApAvailable(bool available);
+#endif
+#ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// Put devices on the access point, for a host test.
 void setTestWifiApClients(uint32_t n);
+#endif
+#ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// The access point's last configuration, for a host test.
 const WifiApConfig& testLastApConfig();
+#endif
 /// Whether the SoftAP is up.
 bool wifiApConnected();
 /// Tear the SoftAP down.
@@ -616,8 +636,10 @@ bool otaMoonBaseVersion(char* out, size_t len);
 bool otaMoonBaseBuild(char* out, size_t len);
 /// How much of its slot MoonBase fills.
 bool otaMoonBaseSize(uint32_t* used, uint32_t* total);
+#ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// Give a desktop a MoonBase with this descriptor version and build time, for a host test; null removes it.
 void setTestMoonBase(const char* version, const char* built);
+#endif
 /// Install a new MoonBase, which only the running app can do; false on desktop.
 bool otaWriteMoonBase(FsWriteSrc src, void* user, size_t contentLen,
                       char* statusBuf, size_t statusBufLen, uint32_t* bytesReadOut);

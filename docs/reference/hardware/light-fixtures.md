@@ -1,7 +1,7 @@
 # Light fixtures and DMX nodes: hardware reference
 
 DMX channel maps and specifications for the fixtures and Art-Net nodes on the bench, read from their manuals.
-A fixture profile is built from them without re-reading a PDF. A fixture here has a matching entry in the **FixtureProfiles** library ([drivers](../../moonmodules/light/drivers.md)). The profile is the channel-role layout, and the numbers behind it are below.
+A fixture profile is built from them without re-reading a PDF. A fixture here has a matching entry in the **FixtureProfiles** library ([FixtureProfiles](../../moonmodules/light/supporting.md#fixtureprofiles)). The profile is the channel-role layout, and the numbers behind it are below.
 
 ## SHEHDS Mini LED Moving Head 10W RGBW
 

@@ -53,6 +53,8 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "core/util/hex.h"
+
 namespace mm::json {
 
 // The longest search pattern these readers build, sized from its parts rather than a round number so the bound is provable.
@@ -77,12 +79,6 @@ inline void parseString(const char* json, const char* key, char* out, size_t max
     if (!start) return;
     start += std::strlen(search);
     // Copy to the real closing quote, decoding our own writer's escapes: a bare search stops at an escaped one inside the value.
-    auto hexNibble = [](char c) -> int {
-        if (c >= '0' && c <= '9') return c - '0';
-        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-        if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-        return -1;
-    };
     size_t oi = 0;
     for (const char* p = start; *p && oi + 1 < maxLen; p++) {
         if (*p == '\\' && p[1]) {
@@ -93,20 +89,20 @@ inline void parseString(const char* json, const char* key, char* out, size_t max
                 case 't': out[oi++] = '\t'; break;
                 case 'b': out[oi++] = '\b'; break;
                 case 'f': out[oi++] = '\f'; break;
-                case 'u': {     // \uXXXX — decode the low byte (the writer only emits \u00XX)
-                    int h1 = p[1] ? hexNibble(p[1]) : -1, h2 = (p[1] && p[2]) ? hexNibble(p[2]) : -1;
-                    int h3 = (p[1] && p[2] && p[3]) ? hexNibble(p[3]) : -1;
-                    int h4 = (p[1] && p[2] && p[3] && p[4]) ? hexNibble(p[4]) : -1;
+                case 'u': {     // \uXXXX: decode the low byte (the writer only emits \u00XX)
+                    int h1 = p[1] ? hexDigit(p[1]) : -1, h2 = (p[1] && p[2]) ? hexDigit(p[2]) : -1;
+                    int h3 = (p[1] && p[2] && p[3]) ? hexDigit(p[3]) : -1;
+                    int h4 = (p[1] && p[2] && p[3] && p[4]) ? hexDigit(p[4]) : -1;
                     if (h1 >= 0 && h2 >= 0 && h3 >= 0 && h4 >= 0) {
                         out[oi++] = static_cast<char>((h3 << 4) | h4);   // low byte (high byte is 0x00)
                         p += 4;
-                    } else { out[oi++] = 'u'; }   // malformed \u — copy literally, don't run off
+                    } else { out[oi++] = 'u'; }   // malformed \u: copy literally, don't run off
                     break;
                 }
                 default:  out[oi++] = *p;   break;   // \" \\ / and anything else: copy literally
             }
         } else if (*p == '"') {
-            break;               // unescaped quote — end of string
+            break;               // unescaped quote: end of string
         } else {
             out[oi++] = *p;
         }
@@ -179,6 +175,7 @@ struct JsonDoc {
     int       cap = 0;           ///< allocated node slots
     int       count = 0;         ///< used node slots
     int       root = -1;         ///< the top value's index, or none until a parse succeeds
+    bool      outOfMemory = false;   ///< why a parse failed, when it was memory rather than the text
 
     /// An empty document, owning nothing until a parse fills it.
     JsonDoc() = default;
@@ -223,9 +220,9 @@ struct JsonParser {
 
     /// Take the next node slot, or report failure when the pool cannot grow.
     int alloc() {
-        if (!doc.ensureNode()) { ok = false; return -1; }   // grows the heap pool; false = OOM
+        if (!doc.ensureNode()) { ok = false; doc.outOfMemory = true; return -1; }   // grows the heap pool
         const int i = doc.count++;
-        doc.nodes[i] = JsonNode{};   // realloc doesn't construct — reset the freshly-used slot
+        doc.nodes[i] = JsonNode{};   // realloc doesn't construct: reset the freshly-used slot
         return i;
     }
 
@@ -249,7 +246,7 @@ struct JsonParser {
                     case 'b':  c = '\b'; break;
                     case 'f':  c = '\f'; break;
                     case 0:    ok = false; return nullptr;  // trailing backslash, truncated
-                    default:   c = e;    break;             // unknown escape (incl. \u) — keep byte
+                    default:   c = e;    break;             // unknown escape (incl. \u): keep byte
                 }
             }
             *out++ = c;
@@ -309,7 +306,7 @@ struct JsonParser {
                     char* e = p++;
                     if (*p == '+' || *p == '-') p++;
                     if (*p >= '0' && *p <= '9') digits();
-                    else p = e;     // bare 'e' with no exponent digits — not part of the number
+                    else p = e;     // bare 'e' with no exponent digits: not part of the number
                 }
                 int idx = alloc();
                 if (idx < 0) return -1;
@@ -380,13 +377,14 @@ struct JsonParser {
 inline bool parse(const char* json, JsonDoc& out) {
     out.count = 0;
     out.root = -1;
+    out.outOfMemory = false;
     if (!json) return false;
     size_t len = std::strlen(json);
     if (len == 0) return false;
     // A copy sized exactly to the input, which doubles as the string arena since un-escaping rewrites in place.
     std::free(out.buf);
     out.buf = static_cast<char*>(std::malloc(len + 1));
-    if (!out.buf) return false;
+    if (!out.buf) { out.outOfMemory = true; return false; }
     std::memcpy(out.buf, json, len + 1);
 
     detail::JsonParser parser(out);

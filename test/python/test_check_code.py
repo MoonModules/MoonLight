@@ -21,6 +21,8 @@ def test_a_function_over_both_limits_counts_once_per_rule():
     rows = check_code.findings(funcs)
     assert sorted(r[1] for r in rows) == ["complex function", "complex function", "deeply nested", "long function", "long function", "long parameter list"]
     assert check_code.counts(rows) == {"complex function": 2, "long function": 2, "deeply nested": 1, "long parameter list": 1, "(total)": 6}
+    # The KPI and repo health count functions, once each however many limits one breaks.
+    assert check_code.functions_over([dict(f, start=i) for i, f in enumerate(funcs)]) == 5
 
 
 def test_a_large_file_is_a_finding_and_a_vendored_one_is_not(tmp_path, monkeypatch):
@@ -33,6 +35,8 @@ def test_a_large_file_is_a_finding_and_a_vendored_one_is_not(tmp_path, monkeypat
     # The same files feed the clone search, so a scenario's recorded JSON or an installer SVG never moves a code count.
     owned = check_code.owned_files()
     assert owned and not any(f.endswith((".json", ".svg", ".css", ".md")) for f in owned)
+    # A file directly under a top folder counts, as `**` does in a shell.
+    assert "src/main.cpp" in owned and "moondeck/moondeck.py" in owned and "test/scenario_runner.cpp" in owned
 
 
 def test_the_report_round_trips_through_its_own_committed_parser(tmp_path, monkeypatch):

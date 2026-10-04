@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure the repo's current state into `docs/reference/metrics/` — the lean-o-meter.
+"""Measure the repo's current state into `docs/reference/metrics/`: the lean-o-meter.
 
 The v4 goal is a system that stays small as it gains features, and the honest way to know
 whether that is happening is to measure it every commit rather than to assert it. This
@@ -95,7 +95,7 @@ def measure_loc():
 def measure_comments():
     """Comment lines and their share of each area's source.
 
-    Crude by design — it counts `//`, `///` and `#` line comments, not block comments or
+    Crude by design: it counts `//`, `///` and `#` line comments, not block comments or
     trailing ones. The absolute number is not the point; the *direction* is, and this
     catches the drift the comment-diet rule exists to notice.
     """
@@ -190,7 +190,7 @@ def app_partition_bytes(firmware):
 
 
 def measure_flash():
-    """Built firmware size per variant, in bytes — STALE BINARIES EXCLUDED.
+    """Built firmware size per variant, in bytes: STALE BINARIES EXCLUDED.
 
     Only variants whose binary is newer than the sources are reported. A variant that was
     not built this run carries its previous number forward (see merge_carry_forward) rather
@@ -247,7 +247,7 @@ def measure_flash():
 
 
 def measure_docs():
-    """Documentation inventory — the counts the docs-bloat conversation actually turns on."""
+    """Documentation inventory: the counts the docs-bloat conversation actually turns on."""
     md = [f for f in _git_files("docs") if f.suffix == ".md"]
     plans = [f for f in md if "work/present" in f.as_posix() or "work/past/plans" in f.as_posix()]
     lessons = ROOT / "docs" / "work" / "past" / "lessons.md"
@@ -279,7 +279,7 @@ def measure_complexity():
 
     The same measurement check_code.py reports per file, so the gate and the trend can never disagree on the count.
 
-    Imported lazily and tolerantly — repo_health must stay runnable when lizard is not
+    Imported lazily and tolerantly: repo_health must stay runnable when lizard is not
     installed, and a missing tool should carry the previous value forward rather than write a
     misleading 0. (Returning {} lets merge_carry_forward do exactly that.)
     """
@@ -290,10 +290,10 @@ def measure_complexity():
         if not funcs:
             return {}
         # Identified by where it starts, so two overloads sharing a name stay two functions.
-        over = {(f["file"], f["start"]) for f in funcs if check_code.findings([f])}
+        over = check_code.functions_over(funcs)
         return {
             "functions": len(funcs),
-            "over_threshold": len(over),
+            "over_threshold": over,
             "worst_ccn": max((f["ccn"] for f in funcs), default=0),
         }
     except Exception:
@@ -329,7 +329,7 @@ def _built_label(firmware, measured_on):
 
 def snapshot(perf=None):
     """The full current-state measurement. `perf` is the tick/FPS block the KPI collector
-    already gathered — passed in rather than re-measured, since it needs a running device."""
+    already gathered: passed in rather than re-measured, since it needs a running device."""
     head = _head()
     # Both are module-level and describe THIS run, so a second snapshot() in one process must not
     # inherit the first's claims: a target that could not be measured the second time would
@@ -421,7 +421,7 @@ def merge_carry_forward(new, old):
     """Keep the previous value for anything this run could not measure.
 
     A commit that did not build the P4 firmware, or ran without a bench board, should not
-    silently drop those numbers — the alternative is a file whose contents depend on which
+    silently drop those numbers: the alternative is a file whose contents depend on which
     targets happened to be built, which makes every diff unreadable.
 
     Carrying forward is bounded by the firmware REGISTRY, not by history: a renamed or
@@ -482,7 +482,7 @@ def format_delta(new, old):
 
 
 def _kb(n):
-    return f"{round(n / 1024):,} KB" if n else "—"
+    return f"{round(n / 1024):,} KB" if n else "-"
 
 
 def _pct(r):
