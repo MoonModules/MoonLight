@@ -229,7 +229,7 @@ The next function worth simplifying is at the top of each file's list.
 | `test/js/ui-midi-bridge.test.mjs` | 2 | `lines 4-16, also in test/js/ui-gamepad-bridge.test.mjs:4`, duplicated block 13 |
 | `test/unit/core/unit_AudioService_sync.cpp` | 2 | `lines 259-266, also in test/unit/core/unit_AudioService_sync.cpp:173`, duplicated block 8 |
 | `test/unit/core/unit_DevicesModule_hue.cpp` | 2 | `lines 63-69, also in test/unit/core/unit_DevicesModule_hue.cpp:42`, duplicated block 7 |
-| `test/unit/core/unit_FilesystemModule_subtree.cpp` | 2 | `lines 256-261, also in test/unit/core/unit_FilesystemModule_subtree.cpp:212`, duplicated block 6 |
+| `test/unit/core/unit_FilesystemModule_subtree.cpp` | 2 | `lines 284-289, also in test/unit/core/unit_FilesystemModule_subtree.cpp:240`, duplicated block 6 |
 | `test/unit/core/unit_OscPacket.cpp` | 2 | `lines 165-172, also in test/unit/core/unit_OscPacket.cpp:14`, duplicated block 8 |
 | `test/unit/core/unit_SystemModule.cpp` | 2 | `lines 109-115, also in test/unit/core/unit_SystemModule.cpp:41`, duplicated block 7 |
 | `test/unit/core/unit_moonlive_spill.cpp` | 2 | `lines 162-172, also in test/unit/core/unit_moonlive_spill.cpp:136`, duplicated block 11 |
@@ -310,7 +310,7 @@ The next function worth simplifying is at the top of each file's list.
 | `src/platform/esp32/platform_esp32_i2s.cpp` | 1 | `platform::audioMicInit`, complex function 11 |
 | `src/platform/esp32/platform_esp32_tasks.cpp` | 1 | `platform::taskSnapshot`, complex function 12 |
 | `src/platform/platform.h` | 1 | `platform.h`, large file 1168 |
-| `src/ui/app.js` | 1 | `app.js`, large file 8853 |
+| `src/ui/app.js` | 1 | `app.js`, large file 8865 |
 | `src/ui/install-picker.js` | 1 | `install-picker.js`, large file 1042 |
 | `src/ui/preview3d.js` | 1 | `preview3d.js`, large file 1431 |
 | `test/js/installer-eth-only.test.mjs` | 1 | `lines 13-23, also in test/js/ui-mooncloud.test.mjs:6`, duplicated block 11 |

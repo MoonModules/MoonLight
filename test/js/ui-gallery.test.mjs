@@ -85,10 +85,37 @@ test("a refused name stops the save, so it never lands under the name before it"
 });
 
 test("every gallery download refuses a failed response before anything is written or applied", async () => {
-    const fetchFile = new Function("fetch", "GALLERY_RAW", `return ${fnSource("galleryFetch")}`)(
+    const fetchFile = new Function("fetch", "GALLERY_RAW", `${fnSource("galleryFresh")} return ${fnSource("galleryFetch")}`)(
         async () => ({ ok: false, status: 404, text: async () => "404: Not Found" }), "https://x/");
     await assert.rejects(fetchFile("presets/0001-a.json"), /download failed \(404\)/);
     const tryNow = src.slice(src.indexOf('now.textContent = "try now"'), src.indexOf('now.textContent = "try now"') + 2000);
     assert.ok(tryNow.indexOf("galleryFetch(") > 0 && tryNow.indexOf("galleryFetch(") < tryNow.indexOf('fetch("/api/state"'));
     assert.ok(!src.includes("fetch(GALLERY_RAW + e.file)"));   // no download bypasses it
+});
+
+// An entry someone just shared must show for the person they asked to try it, so neither the browser nor GitHub's raw cache may hold the old index.
+test("the gallery index and files are fetched past GitHub's cache, and the index at most once per 30 seconds", async () => {
+    const at = (secondsAgo, data) => JSON.stringify({ ts: Date.now() - secondsAgo * 1000, data });
+    const run = (stored, call) => new Function("stored", `
+        const UPDATE_TTL_MS = 60 * 60 * 1000;
+        const GALLERY_RAW = "https://raw.example/";
+        const inFlightFetches = {};
+        const urls = [];
+        const safeLocalGet = () => stored;
+        const safeLocalSet = () => {};
+        const fetch = async (url) => { urls.push(url); return { ok: true, json: async () => ["fresh"], text: async () => "file" }; };
+        ${fnSource("cachedJson")}
+        ${src.match(/const GALLERY_TTL_MS = [^;]+;/)[0]}
+        ${fnSource("galleryFresh")}
+        ${fnSource("galleryIndex")}
+        ${fnSource("galleryFetch")}
+        return (${call})().then(result => ({ result, urls }));
+    `)(stored);
+    const reused = await run(at(10, ["cached"]), "galleryIndex");
+    assert.deepEqual(reused, { result: ["cached"], urls: [] });
+    const fresh = await run(at(40, ["cached"]), "galleryIndex");
+    assert.deepEqual(fresh.result, ["fresh"]);
+    assert.match(fresh.urls[0], /^https:\/\/raw\.example\/index\.json\?t=\d+$/);
+    const file = await run(null, "() => galleryFetch('presets/0003-night-harbor.json')");
+    assert.match(file.urls[0], /^https:\/\/raw\.example\/presets\/0003-night-harbor\.json\?t=\d+$/);
 });

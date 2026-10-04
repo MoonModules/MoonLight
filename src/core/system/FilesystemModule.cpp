@@ -333,6 +333,8 @@ bool FilesystemModule::applySubtree(MoonModule* m, const char* json) {
         return false;
     }
     applyNode(m, json, "");
+    // The restored names are settled against the whole tree, as the boot load does.
+    if (scheduler_) scheduler_->deduplicateNamesInTree();
     // Same order as the runtime add path (HttpServerModule::applyAddModule): setup() may read what defineControls() bound, and applyState() then builds or releases per effectively-enabled. Both recurse over children on their own (MoonModule::setup / applyState), so one call at the root covers every node applyNode just created.
     m->setup();
     m->applyState();
@@ -346,6 +348,15 @@ bool FilesystemModule::applySubtree(MoonModule* m, const char* json) {
     // Same hook rebuildControls uses; no coupling to HttpServerModule.
     MoonModule::notifySchemaChanged();
     return true;
+}
+
+// A user module's saved name; uniqueness is settled once the whole tree is in, since a sibling still on its default name may be about to give that name up.
+void FilesystemModule::restoreName(MoonModule* m, const char* json, const char* prefix) {
+    if (!m || m->isWiredByCode()) return;
+    char key[MAX_KEY], name[MoonModule::kNameLen] = {};
+    std::snprintf(key, sizeof(key), "%s$name", prefix);
+    mm::json::parseString(json, key, name, sizeof(name));
+    if (name[0]) m->setName(name);
 }
 
 void FilesystemModule::applyNode(MoonModule* m, const char* json, const char* prefix) {
@@ -420,6 +431,7 @@ void FilesystemModule::applyNode(MoonModule* m, const char* json, const char* pr
 
         char childPrefix[MAX_KEY];
         std::snprintf(childPrefix, sizeof(childPrefix), "%s%u.", prefix, static_cast<unsigned>(i));
+        restoreName(m->child(pos), json, childPrefix);
         applyNode(m->child(pos), json, childPrefix);
         pos++;
     }
@@ -502,6 +514,11 @@ void FilesystemModule::writeNode(MoonModule* m, JsonSink& sink, const char* pref
         std::snprintf(childPrefix, sizeof(childPrefix), "%s%u.", prefix, static_cast<unsigned>(i));
         // Emit "0.type":"NoiseEffect" so the reader can detect tree-shape mismatches.
         sink.appendf(",\"%stype\":\"%s\"", childPrefix, child->typeName());
+        // And a user module's name, since a document or a surface addresses it by name; a `$` key, which no control can be called.
+        if (!child->isWiredByCode() && child->name()[0]) {
+            sink.appendf(",\"%s$name\":", childPrefix);
+            sink.writeJsonString(child->name());
+        }
         writeNode(child, sink, childPrefix, /*firstField=*/false);
     }
 }

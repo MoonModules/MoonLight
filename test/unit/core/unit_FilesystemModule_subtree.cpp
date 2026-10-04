@@ -109,6 +109,34 @@ TEST_CASE("applySubtree restores a tree that changed since it was captured") {
     CHECK(std::strcmp(t.effectType(), "NoiseEffect") == 0);   // the captured look is back
 }
 
+// A document or a surface addresses a module by name, so the name a user gave it must outlive a save and a reload.
+TEST_CASE("a saved subtree keeps the names its modules were given") {
+    Tree t;
+    auto* layer = t.add(t.layers, "Layer");
+    layer->setName("Sky");
+    t.add(layer, "NoiseEffect")->setName("clouds");
+    const std::string saved = serialize(t.fs, t.layers);
+    CHECK(saved.find("\"0.$name\":\"Sky\"") != std::string::npos);
+
+    auto* gone = t.layers->child(0);
+    t.layers->removeChild(gone);
+    gone->release();
+    mm::Scheduler::deleteTree(gone);
+    REQUIRE(t.fs->applySubtree(t.layers, saved.c_str()));
+    REQUIRE(t.layers->childCount() == 1);
+    CHECK(std::string(t.layers->child(0)->name()) == "Sky");
+    CHECK(std::string(t.layers->child(0)->child(0)->name()) == "clouds");
+}
+
+// A file saved before names were kept loads as it always did, every module under its default name.
+TEST_CASE("a saved subtree without names keeps the default names") {
+    Tree t;
+    REQUIRE(t.fs->applySubtree(t.layers, R"({"enabled":true,"0.type":"Layer","0.enabled":true,"0.0.type":"NoiseEffect","0.0.enabled":true})"));
+    REQUIRE(t.layers->childCount() == 1);
+    CHECK(std::string(t.layers->child(0)->name()) == "Layer");
+    CHECK(std::string(t.layers->child(0)->child(0)->name()) == "Noise");
+}
+
 // A subtree carrying more than the device has adds what is missing, so applying it is a restore rather than a value overlay.
 TEST_CASE("applySubtree recreates children the live tree no longer has") {
     Tree t;

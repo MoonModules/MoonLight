@@ -171,9 +171,20 @@ struct Applier {
 
     // What would fail at creation, found before anything changes: a type this build lacks, a role the parent refuses, a name the tree cannot hold.
     bool validate(MoonModule* m, const JsonNode* obj) {
-        for (const JsonNode* member = first(obj); member; member = next(member))
-            if (!reserved(member->key) && member->type == JsonType::Object && !validateMember(m, member)) return false;
+        for (const JsonNode* member = first(obj); member; member = next(member)) {
+            if (reserved(member->key)) continue;
+            if (member->type == JsonType::Object && !validateMember(m, member)) return false;
+            if (member->type == JsonType::Null && !validateRemoval(m, member)) return false;
+        }
         return true;
+    }
+
+    // A `null` that names a module the user cannot remove fails here rather than halfway through the prune.
+    bool validateRemoval(MoonModule* m, const JsonNode* member) {
+        MoonModule* child = m ? childNamed(m, member->key) : nullptr;
+        if (!child || child->userEditable()) return true;
+        push(member->key);
+        return fail("this module cannot be removed");
     }
 
     bool validateMember(MoonModule* m, const JsonNode* member) {
@@ -181,7 +192,7 @@ struct Applier {
         MoonModule* child = m ? childNamed(m, member->key) : nullptr;
         const char* type = typeOf(doc, member);
         const bool fresh = type && (!child || std::strcmp(child->typeName(), type) != 0);
-        if (fresh && !validateCreation(m, child, member->key, type)) return false;
+        if (fresh && !validateCreation(m, child, member, type)) return false;
         if (!fresh && !child) return fail("no such module, and no type to create it");
         // A child the document creates or re-types is new, so what goes under it is checked when it exists.
         if (!validate(fresh ? nullptr : child, member)) return false;
@@ -189,12 +200,57 @@ struct Applier {
         return true;
     }
 
-    bool validateCreation(MoonModule* parent, MoonModule* existing, const char* name, const char* type) {
+    bool validateCreation(MoonModule* parent, MoonModule* existing, const JsonNode* member, const char* type) {
         ModuleRole role;
         if (!registeredRole(type, role)) return fail("unknown type");
         if (parent && !parent->acceptsRole(role)) return fail("a module of this role cannot go here");
-        if (!existing && !nameFits(name)) return fail(kNameRule);
+        if (existing) return existing->userEditable() || fail("this module cannot be replaced");
+        return validateNewName(member);
+    }
+
+    // Names are unique across the tree, so a new one is free only if the document names it once and the prune pass frees any module holding it.
+    bool validateNewName(const JsonNode* member) {
+        const char* name = member->key;
+        if (!nameFits(name)) return fail(kNameRule);
+        if (typedElsewhere(member, name)) return fail("that name is used twice in the document");
+        MoonModule* holder = s.firstByName(name);
+        if (holder && survivesPrune(holder)) return fail("that name is used elsewhere in the tree");
         return true;
+    }
+
+    // Whether the document holds `name` as a module, an object with a type, anywhere but at `here`.
+    bool typedElsewhere(const JsonNode* here, const char* name) const {
+        for (int i = 0; i < doc.count; i++) {
+            const JsonNode* n = doc.node(i);
+            if (n != here && n->type == JsonType::Object && n->key && std::strcmp(n->key, name) == 0 && typeOf(doc, n)) return true;
+        }
+        return false;
+    }
+
+    // Whether `m` is still in the tree once the prune pass has run, by pruneChild's rules walked down from the top level.
+    bool survivesPrune(MoonModule* m) const {
+        MoonModule* chain[16];
+        uint8_t depth = 0;
+        for (MoonModule* p = m; p && depth < 16; p = p->parent()) chain[depth++] = p;
+        const JsonNode* obj = doc.rootNode();
+        for (int k = depth - 1; k >= 0; k--) {
+            const JsonNode* into = nullptr;
+            if (prunedAt(obj, chain[k], k == depth - 1, k == 0, into)) return false;
+            if (!into) return true;   // the document reaches no further down
+            obj = into;
+        }
+        return true;
+    }
+
+    // Whether the prune pass removes `c` from under `obj`, setting `into` to its own object when the walk goes on; a re-typed `target` keeps its name.
+    bool prunedAt(const JsonNode* obj, MoonModule* c, bool top, bool target, const JsonNode*& into) const {
+        const JsonNode* listed = json::member(doc, obj, c->name());
+        if (!listed) return !top && replacesChildren(obj) && c->userEditable();
+        if (listed->type != JsonType::Object) return listed->type == JsonType::Null;
+        const char* type = typeOf(doc, listed);
+        if (!target && type && std::strcmp(type, c->typeName()) != 0) return true;   // re-typed, so everything under it goes
+        into = listed;
+        return false;
     }
 
     MoonModule* create(MoonModule* parent, const char* name, const char* type) {

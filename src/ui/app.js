@@ -6038,13 +6038,13 @@ const inFlightFetches = {};
 
 // A cached JSON fetch: returns the parsed body, re-fetching only when the cache is older than
 // the TTL or `force` is set, and serving stale on a fetch failure. `key` is the cache slot.
-async function cachedJson(url, key, force) {
+async function cachedJson(url, key, force, ttlMs = UPDATE_TTL_MS) {
     if (!force) {
         const raw = safeLocalGet(key);
         if (raw) {
             try {
                 const obj = JSON.parse(raw);
-                if (Date.now() - obj.ts < UPDATE_TTL_MS) return obj.data;
+                if (Date.now() - obj.ts < ttlMs) return obj.data;
             } catch (_) { /* fall through to fetch */ }
         }
     }
@@ -6642,6 +6642,18 @@ function renderMoonCloudStats(host, mod) {
 
 const GALLERY_RAW = "https://raw.githubusercontent.com/MoonModules/MoonLight-Gallery/main/";
 const GALLERY_SCRIPT_EXT = [".mle", ".mll", ".mlm", ".mls", ".mlp"];
+// An accepted entry shows the next time anyone opens the Gallery; the 30 s only stops a card re-render from fetching again, since GitHub limits raw requests per address.
+const GALLERY_TTL_MS = 30 * 1000;
+
+/// A gallery path as fetched: a unique query passes GitHub's 5-minute raw cache, so what is committed is what arrives.
+function galleryFresh(path) {
+    return `${GALLERY_RAW}${path}?t=${Date.now()}`;
+}
+
+/// The gallery's index, fresh from the repository, or the last copy when GitHub cannot be reached.
+function galleryIndex() {
+    return cachedJson(galleryFresh("index.json"), "MoonLight.gallery.index", false, GALLERY_TTL_MS);
+}
 let galleryOpen = false;   // kept across re-renders, so a pad click does not fold it shut
 let galleryStatus = "";    // the last outcome, kept across the re-render an install causes
 
@@ -6682,7 +6694,7 @@ function galleryUrl(url) {
 
 /// A gallery file's text, or an error naming it when the download fails.
 async function galleryFetch(file) {
-    const res = await fetch(GALLERY_RAW + file);
+    const res = await fetch(galleryFresh(file));   // a re-accepted entry replaces its file under the same name
     if (!res.ok) throw new Error(`${file}: download failed (${res.status})`);
     return res.text();
 }
@@ -6750,7 +6762,7 @@ function renderGallery(host, mod) {
         status.textContent = "loading the gallery...";
         let index;
         try {
-            index = await cachedJson(GALLERY_RAW + "index.json", "MoonLight.gallery.index", false);
+            index = await galleryIndex();
             if (!Array.isArray(index)) throw new Error("no index");
         } catch (e) {
             say(`Cannot reach the gallery: ${e.message}`);

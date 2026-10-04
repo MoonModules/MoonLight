@@ -27,7 +27,7 @@ struct ControlDescriptor;
 ///
 /// Children are encoded positionally under an index prefix, with no nested objects.
 /// A structured value reads back through its control's own restore hook, and a derived one is never saved.
-/// Each child carries its type, and that type drives reconciliation.
+/// Each child carries its type, which drives reconciliation, and a user module its name as `$name`, so whatever addresses it by name finds it after a reboot.
 /// Where the file names a different type at a position, the loader creates it and swaps it in.
 /// A child the file omits is torn down, and one past the end is appended.
 ///
@@ -149,6 +149,8 @@ private:
     static bool hasWiredChildOfType(const MoonModule* parent, const char* typeName);
     /// Apply every control value the file carries for one node.
     void overlayControls(MoonModule* m, const char* json, const char* prefix);
+    /// Give a user module back the name saved beside its type.
+    static void restoreName(MoonModule* m, const char* json, const char* prefix);
     /// Apply one control's value, clamping rather than rejecting a stale one.
     void applyValue(const ControlDescriptor& c, const char* json, const char* key);
     /// Serialize one subtree to its own file, atomically.

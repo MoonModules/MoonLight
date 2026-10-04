@@ -57,6 +57,10 @@ struct SdOther : public mm::MoonModule {
 struct SdBox : public mm::MoonModule {
     const char* acceptsChildRoles() const override { return "generic,effect"; }
 };
+// A module the user cannot remove or replace, as Improv provisioning is.
+struct SdFixed : public SdBox {
+    bool userEditable() const override { return false; }
+};
 struct SdDriver : public mm::MoonModule {
     mm::ModuleRole role() const MM_NONBLOCKING override { return mm::ModuleRole::Driver; }
 };
@@ -71,6 +75,7 @@ void registerTypes() {
     mm::ModuleFactory::registerType<SdCount>("SdCount");
     mm::ModuleFactory::registerType<SdBox>("SdBox");
     mm::ModuleFactory::registerType<SdDriver>("SdDriver");
+    mm::ModuleFactory::registerType<SdFixed>("SdFixed");
     done = true;
 }
 
@@ -196,6 +201,39 @@ TEST_CASE("a state document keeps the tree's rules: roles, unique names, name le
     CHECK(std::string(r.error) == "a module name has 1 to 15 characters");
     r = t.apply(R"({"Effects": {"": {"type": "SdKnob"}}})");   // nothing could address it afterwards
     CHECK(std::string(r.error) == "a module name has 1 to 15 characters");
+}
+
+// A clash found halfway would leave a replaced container half rebuilt, so every rule the apply pass enforces is checked before anything changes.
+TEST_CASE("a state document that breaks a tree rule anywhere changes nothing") {
+    Tree t;
+    REQUIRE(t.apply(R"({"Effects": {"Old": {"type": "SdFixed", "Knob": {"type": "SdKnob"}}}})").ok);
+
+    auto r = t.apply(R"({"Effects": {"$patch": "replace", "A": {"type": "SdBox", "Area": {"type": "SdKnob"}}, "B": {"type": "SdBox", "Area": {"type": "SdKnob"}}}})");
+    CHECK(std::string(r.error) == "that name is used twice in the document");
+    CHECK(std::string(r.where) == "Effects.A.Area");
+    CHECK(r.changes == 0);
+    CHECK(t.children(t.effects) == "Old");
+
+    // Old.Knob stays: the document neither removes nor replaces Old.
+    r = t.apply(R"({"Effects": {"$patch": "replace", "Old": {}, "New": {"type": "SdBox", "Knob": {"type": "SdKnob"}}}})");
+    CHECK(std::string(r.error) == "that name is used elsewhere in the tree");
+    CHECK(t.children(t.effects) == "Old");
+
+    r = t.apply(R"({"Effects": {"Old": null}})");
+    CHECK(std::string(r.error) == "this module cannot be removed");
+    r = t.apply(R"({"Effects": {"Old": {"type": "SdKnob"}}})");
+    CHECK(std::string(r.error) == "this module cannot be replaced");
+    CHECK(t.children(t.find("Old")) == "Knob");
+}
+
+TEST_CASE("a name the same document frees, by removal or a re-typed parent, can be created elsewhere") {
+    Tree t;
+    REQUIRE(t.apply(R"({"Effects": {"L1": {"type": "SdBox", "Knob": {"type": "SdKnob"}}, "L2": {"type": "SdBox"}}})").ok);
+    REQUIRE(t.apply(R"({"Effects": {"L2": {"Knob": {"type": "SdKnob", "value": 7}}, "L1": {"type": "SdOther"}}})").ok);
+    CHECK(t.children(t.find("L2")) == "Knob");
+    CHECK(valueOf(t.find("Knob")) == 7);
+    REQUIRE(t.apply(R"({"Effects": {"L1": {"type": "SdBox", "Knob": {"type": "SdKnob"}}, "L2": {"Knob": null}}})").ok);
+    CHECK(t.children(t.find("L1")) == "Knob");
 }
 
 TEST_CASE("a module can move to another branch under the same name") {

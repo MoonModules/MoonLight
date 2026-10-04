@@ -47,7 +47,7 @@ Click the pad. The look, geometry or setup replaces what was there.
 
 ## From the gallery
 
-The **Gallery** under the pads lists what people shared in [MoonLight-Gallery](https://github.com/MoonModules/MoonLight-Gallery), most liked first. Your browser fetches it, so the device needs no internet of its own.
+The **Gallery** under the pads lists what people shared in [MoonLight-Gallery](https://github.com/MoonModules/MoonLight-Gallery), most liked first. Your browser fetches it, so the device needs no internet of its own, and an entry shows as soon as it is accepted.
 
 - **add to a pad** puts a preset on the first free pad, with any script it needs from the gallery.
 - **try now** applies it without keeping it.
