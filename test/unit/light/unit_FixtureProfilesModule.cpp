@@ -15,7 +15,7 @@ using mm::Correction;
 
 namespace {
 // The count of seeded read-only built-ins (see FixtureProfilesModule::seedBuiltins). Referenced by name so adding a built-in updates one constant, not a scatter of magic numbers across the cases.
-constexpr int kBuiltinCount = 14;   // RGB,GRB,BGR,RGBW,GRBW,WRGB,GRB6,RGBWYP,RGBCCT,IRGB + 4 moving heads
+constexpr int kBuiltinCount = 20;   // the six RGB orders, RGBW, GRBW, WRGB, three 16-bit, GRB6, RGBWYP, RGBCCT, IRGB + 4 moving heads
 
 // Serialize the profiles List value (the persisted form) to a string.
 std::string profilesJson(FixtureProfilesModule& m) {
@@ -220,7 +220,7 @@ TEST_CASE("FixtureProfiles: an out-of-range persisted role clamps to a default o
         "{\"profiles\":[{\"id\":900,\"name\":\"corrupt\",\"channels\":3,\"roles\":[250,-1,1]}]}";
     FixtureProfilesModule dst;
     CHECK(dst.restoreList(wrapped.c_str(), "profiles"));
-    CHECK(dst.listRowCount() == 1);   // this hand-authored file carries only the one corrupt profile
+    CHECK(dst.listRowCount() == kBuiltinCount + 1);   // the one corrupt profile, with the built-ins the file lacks added
 
     // The valid role (1 = R) at channel 2 survives; the two bad ones (250, -1) become 0 (None), not 250/255. If they hadn't clamped, no channel would carry R and offRed would fall back to default.
     Correction c;
@@ -340,7 +340,7 @@ TEST_CASE("A newly-added profile becomes selectable on a driver") {
 // whiteMode visibility: a driver's whiteMode control is hidden unless the REFERENCED profile carries a white channel, an RGB/GRB strip has nothing to synthesise. Regression: after Inc 2 moved profile selection to a library reference, whiteMode was shown for every profile (the old inline-profile hasWhite check was gone).
 TEST_CASE("whiteMode is hidden for a no-white profile, shown for an RGBW one") {
     FixtureProfilesModule lib;
-    lib.defineControls();                              // seeds RGB(0) GRB(1) BGR(2) RGBW(3) GRBW(4)
+    lib.defineControls();                              // seeds the built-ins
 
     mm::NetworkSendDriver drv;
     auto whiteModeHidden = [&]() -> int {
@@ -350,7 +350,9 @@ TEST_CASE("whiteMode is hidden for a no-white profile, shown for an RGBW one") {
                 return drv.controls()[i].hidden ? 1 : 0;
         return -1;
     };
-    auto pickProfile = [&](uint8_t idx) {
+    auto pickProfile = [&](const char* name) {
+        uint8_t idx = 0;
+        while (idx < lib.profileCount() && std::strcmp(lib.nameAt(idx), name) != 0) idx++;
         for (uint8_t i = 0; i < drv.controls().count(); i++)
             if (std::strcmp(drv.controls()[i].name, "fixture") == 0)
                 *static_cast<uint8_t*>(drv.controls()[i].ptr) = idx;
@@ -359,13 +361,13 @@ TEST_CASE("whiteMode is hidden for a no-white profile, shown for an RGBW one") {
     };
     drv.defineControls();
 
-    pickProfile(1);                       // GRB: no white
+    pickProfile("GRB");                   // no white
     CHECK(whiteModeHidden() == 1);       // hidden
 
-    pickProfile(3);                       // RGBW: has white
+    pickProfile("RGBW");                  // has white
     CHECK(whiteModeHidden() == 0);       // shown
 
-    pickProfile(0);                       // RGB: no white again
+    pickProfile("RGB");                   // no white again
     CHECK(whiteModeHidden() == 1);       // hidden
 }
 
@@ -375,6 +377,14 @@ uint32_t builtinId(FixtureProfilesModule& m, const char* name) {
     for (uint8_t i = 0; i < m.profileCount(); i++)
         if (std::strcmp(m.nameAt(i), name) == 0) return m.idAt(i);
     return 0;
+}
+// Point a driver's fixture select at a built-in by name, as a pick on the card does, and resolve it.
+void pickProfile(FixtureProfilesModule& lib, mm::DriverBase& drv, const char* name) {
+    for (uint8_t i = 0; i < drv.controls().count(); i++)
+        if (std::strcmp(drv.controls()[i].name, "fixture") == 0)
+            *static_cast<uint8_t*>(drv.controls()[i].ptr) = lib.indexOfId(builtinId(lib, name));
+    drv.onControlChanged("fixture");
+    drv.rebuildCorrection(255);
 }
 }  // namespace
 
@@ -463,4 +473,123 @@ TEST_CASE("A driver referencing a missing profile falls back to the default buil
     CHECK_FALSE(lib.deriveCorrection(0xDEADBEEF, 255, c)); // the id itself doesn't resolve…
     CHECK(lib.deriveCorrection(lib.defaultId(), 255, c));  // …and the default always does
     CHECK(c.outChannels == 3);
+}
+
+// The 16-bit table costs memory only once a profile has fine roles, so a driver that only ever drove an 8-bit strip holds none.
+TEST_CASE("A driver allocates the 16-bit table only for a profile with fine roles") {
+    FixtureProfilesModule lib;
+    lib.setup();
+    mm::NetworkSendDriver drv;
+    drv.defineControls();
+    const auto pick = [&](const char* name) { pickProfile(lib, drv, name); };
+    pick("RGB");
+    CHECK(drv.correctionForTest().lut16 == nullptr);   // an 8-bit strip only: no table
+    pick("RGB 16-bit");
+    CHECK(drv.correctionForTest().hasFine);
+    CHECK(drv.correctionForTest().outChannels == 6);
+    REQUIRE(drv.correctionForTest().lut16 != nullptr);
+    CHECK(drv.correctionForTest().lut16[255] == 65535);
+    pick("RGB");
+    CHECK_FALSE(drv.correctionForTest().hasFine);
+}
+
+// The fine roles are appended after every role a saved profile can hold, so an RGBW or moving-head profile reads back unchanged.
+TEST_CASE("The fine roles come after every earlier role") {
+    CHECK(static_cast<int>(mm::ChannelRole::RedFine) == static_cast<int>(mm::ChannelRole::Dimmer) + 1);
+    CHECK(std::strcmp(mm::kChannelRoleOptions[static_cast<int>(mm::ChannelRole::RedFine)], "R fine") == 0);
+    CHECK(std::strcmp(mm::kChannelRoleOptions[mm::kChannelRoleCount - 1], "Dimmer fine") == 0);
+}
+
+// A saved list survives an update, so a newly shipped built-in joins it after the saved built-ins, above the custom rows.
+TEST_CASE("A built-in added by an update reaches a device with saved profiles") {
+    FixtureProfilesModule m;
+    m.defineControls();
+    REQUIRE(m.restoreList(R"({"profiles":[{"id":1,"name":"RGB","channels":3,"roles":[1,2,3],"locked":true},)"
+                          R"({"id":40,"name":"mine","channels":4,"roles":[4,1,2,3]}]})", "profiles"));
+    CHECK(m.listRowCount() == kBuiltinCount + 1);
+    CHECK(std::strcmp(m.nameAt(0), "RGB") == 0);
+    CHECK(m.idAt(0) == 1);                                  // the saved built-in keeps its id
+    CHECK(std::strcmp(m.nameAt(9), "RGB 16-bit") == 0);     // in the shipped order, behind WRGB
+    CHECK(std::strcmp(m.nameAt(kBuiltinCount), "mine") == 0);   // customs stay below the built-in block
+    CHECK(m.idAt(kBuiltinCount) == 40);
+    Correction c;
+    REQUIRE(m.deriveCorrection(40, 255, c));
+    CHECK(c.offWhite == 0);                                 // its saved wiring, W first
+    REQUIRE(builtinId(m, "RGB 16-bit") != 0);
+    REQUIRE(m.deriveCorrection(builtinId(m, "RGB 16-bit"), 255, c));
+    CHECK(c.outChannels == 6);
+    CHECK(builtinId(m, "RGB 16-bit") > 40);                 // a new id, never one the saved list used
+}
+
+// The built-in block reads in the shipped order whatever order it was saved in, so the 16-bit rows sit behind WRGB.
+TEST_CASE("The built-in profiles read in the shipped order, whatever order they were saved in") {
+    FixtureProfilesModule fresh;
+    fresh.setup();
+    CHECK(std::strcmp(fresh.nameAt(8), "WRGB") == 0);
+    CHECK(std::strcmp(fresh.nameAt(9), "RGB 16-bit") == 0);
+    CHECK(std::strcmp(fresh.nameAt(10), "GRB 16-bit") == 0);
+    CHECK(std::strcmp(fresh.nameAt(11), "RGBW 16-bit") == 0);
+    FixtureProfilesModule saved;
+    saved.defineControls();
+    // Saved out of order, as a build that appended new built-ins at the end of the block left them.
+    REQUIRE(saved.restoreList(R"({"profiles":[{"id":2,"name":"IRGB","channels":4,"roles":[13,1,2,3],"locked":true},)"
+                              R"({"id":3,"name":"RGB 16-bit","channels":6,"roles":[1,14,2,15,3,16],"locked":true},)"
+                              R"({"id":1,"name":"WRGB","channels":4,"roles":[4,1,2,3],"locked":true}]})", "profiles"));
+    // Every missing built-in takes its shipped place around the two saved ones, so the list reads as on a fresh device.
+    for (uint8_t i = 0; i < fresh.listRowCount(); i++) CHECK(std::strcmp(saved.nameAt(i), fresh.nameAt(i)) == 0);
+    CHECK(saved.idAt(8) == 1);   // the saved WRGB keeps its id
+    Correction c;
+    REQUIRE(saved.deriveCorrection(3, 255, c));   // and each row its own wiring, through the reorder
+    CHECK((c.offRed == 0 && c.offRedFine == 1 && c.outChannels == 6));
+}
+
+// The WS2816 sends green, red and blue, each high byte first, so its built-in carries that order.
+TEST_CASE("The WS2816's built-in sends green, red and blue, each as two bytes") {
+    FixtureProfilesModule m;
+    m.setup();
+    Correction c;
+    REQUIRE(m.deriveCorrection(builtinId(m, "GRB 16-bit"), 255, c));
+    CHECK(c.outChannels == 6);
+    CHECK((c.offGreen == 0 && c.offGreenFine == 1 && c.offRed == 2 && c.offRedFine == 3 && c.offBlue == 4 && c.offBlueFine == 5));
+}
+
+// A device model or a document names the profile, so a longer built-in list never moves which one a driver gets.
+TEST_CASE("A driver's fixture is set by the profile's name") {
+    FixtureProfilesModule lib;
+    lib.setup();
+    mm::NetworkSendDriver drv;
+    drv.defineControls();
+    for (uint8_t i = 0; i < drv.controls().count(); i++)
+        if (std::strcmp(drv.controls()[i].name, "fixture") == 0)
+            CHECK(mm::applyControlValue(drv.controls()[i], R"({"fixture":"GRBW"})", "fixture", mm::ApplyPolicy::Strict) == mm::ApplyResult::Ok);
+    drv.onControlChanged("fixture");
+    drv.rebuildCorrection(255);
+    CHECK((drv.correctionForTest().offGreen == 0 && drv.correctionForTest().offWhite == 3));
+}
+
+// A driver saves its profile by name, so a second profile of one name would let a reboot pick the wrong one.
+TEST_CASE("A profile cannot take a name another profile has") {
+    FixtureProfilesModule m;
+    m.setup();
+    uint32_t id = 0;
+    REQUIRE(m.addListRow(id));
+    CHECK_FALSE(m.setListRowField(id, "name", R"({"value":"GRBW"})"));   // a built-in's name
+    CHECK_FALSE(m.setListRowField(id, "name", R"({"value":""})"));
+    CHECK(m.setListRowField(id, "name", R"({"value":"Stage left"})"));
+    CHECK(m.setListRowField(id, "name", R"({"value":"Stage left"})"));   // its own name again is no clash
+}
+
+// The encode task may read the 16-bit table while a rebuild runs, so a driver keeps it once allocated rather than freeing it under a frame.
+TEST_CASE("A driver keeps its 16-bit table when its profile goes back to 8 bits") {
+    FixtureProfilesModule lib;
+    lib.setup();
+    mm::NetworkSendDriver drv;
+    drv.defineControls();
+    const auto pick = [&](const char* name) { pickProfile(lib, drv, name); };
+    pick("RGB 16-bit");
+    const uint16_t* table = drv.correctionForTest().lut16;
+    REQUIRE(table != nullptr);
+    pick("RGB");
+    CHECK_FALSE(drv.correctionForTest().hasFine);          // the 8-bit path never reads it
+    CHECK(drv.correctionForTest().lut16 == table);         // still there for a frame in flight
 }

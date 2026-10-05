@@ -171,6 +171,7 @@ add_executable(mm_tests
     unit/light/unit_Drivers_livePalettes.cpp
     unit/light/unit_Drivers_rendersplit.cpp
     unit/light/unit_FixtureProfilesModule.cpp
+    unit/light/unit_DriverBase_fixture_persistence.cpp
     unit/light/unit_Drivers_firstOutputRgb.cpp
     unit/light/unit_HueDriver.cpp
     unit/light/unit_Palette.cpp

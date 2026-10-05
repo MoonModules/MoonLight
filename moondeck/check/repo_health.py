@@ -516,6 +516,94 @@ MATRIX_TARGETS = ("desktop-macos", "desktop-windows", "esp32", "esp32s3-n16r8",
                   "esp32p4rev1-eth", "esp32s31", "esp32-eth", "esp32-eth-wifi")
 
 
+def reference_tag():
+    """The last release tag, the fixed point the gains compare against, so the table says what the next release gives over it."""
+    try:
+        out = subprocess.run(["git", "describe", "--tags", "--abbrev=0", "--match", "v[0-9]*"],
+                             cwd=ROOT, capture_output=True, text=True, timeout=10)
+    except (subprocess.SubprocessError, OSError):
+        return None
+    return out.stdout.strip() or None
+
+
+def load_reference(tag):
+    """The snapshot committed at `tag`, or {} when that release predates repo health."""
+    if not tag:
+        return {}
+    try:
+        out = subprocess.run(["git", "show", f"{tag}:{HEALTH_FILE.relative_to(ROOT).as_posix()}"],
+                             cwd=ROOT, capture_output=True, text=True, timeout=10)
+        return _valid_snapshot(json.loads(out.stdout), f"the {tag} snapshot") if out.returncode == 0 else {}
+    except (subprocess.SubprocessError, OSError, json.JSONDecodeError):
+        return {}
+
+
+def gains(new, ref, since="", code=(None, None)):
+    """The numbers a user feels, as (metric, unit, reference, now), for each one both snapshots hold.
+
+    A target's flash counts only when it was rebuilt after `since`, the release date: a number carried forward unchanged would read as no growth. `code` is the code report's total at the release and now.
+    """
+    rows = []
+    measured = new.get("measured", {})
+    for k in sorted(set(new.get("flash", {})) & set(ref.get("flash", {}))):
+        if since and str(measured.get(k, "")) <= since:
+            continue
+        rows.append((f"flash {k}", "KB", ref["flash"][k], new["flash"][k]))
+    heap_ref = (ref.get("perf", {}).get("esp32") or {}).get("heap_free")
+    heap_now = (new.get("perf", {}).get("esp32") or {}).get("heap_free")
+    if heap_ref and heap_now:
+        rows.append(("free heap esp32", "KB", heap_ref, heap_now))
+    host = "desktop-macos"
+    p_ref = (ref.get("perf", {}).get(host) or {}).get("scenario_p50") or {}
+    p_now = (new.get("perf", {}).get(host) or {}).get("scenario_p50") or {}
+    for name in sorted(set(p_ref) & set(p_now)):
+        rows.append((f"tick {name} ({host})", "µs", p_ref[name].get("p50", 0), p_now[name].get("p50", 0)))
+    for area in new.get("loc", {}):
+        if area in ref.get("loc", {}):
+            rows.append((f"lines {area}", "", ref["loc"][area], new["loc"][area]))
+    if code[0] is not None and code[1] is not None:
+        rows.append(("code findings", "", code[0], code[1]))
+    for key, label in (("cases", "unit tests"), ("scenarios", "scenarios")):
+        if key in ref.get("tests", {}) and key in new.get("tests", {}):
+            rows.append((label, "", ref["tests"][key], new["tests"][key]))
+    return rows
+
+
+def _gain_cell(unit, v):
+    return _kb(v) if unit == "KB" else f"{v:,} {unit}".strip()
+
+
+def _tag_date(tag):
+    out = subprocess.run(["git", "log", "-1", "--format=%cs", tag], cwd=ROOT, capture_output=True, text=True, timeout=10)
+    return out.stdout.strip() if out.returncode == 0 else ""
+
+
+def _code_findings(tag):
+    """The code report's total at `tag` and in the working tree, None where there is no report."""
+    import check_code
+    rel = check_code.REPORT.relative_to(ROOT).as_posix()
+    out = subprocess.run(["git", "show", f"{tag}:{rel}"], cwd=ROOT, capture_output=True, text=True, timeout=10)
+    was = (check_code.counts_in(out.stdout) or {}).get("(total)") if out.returncode == 0 else None
+    now = (check_code.counts_in(_read(check_code.REPORT)) or {}).get("(total)") if check_code.REPORT.exists() else None
+    return was, now
+
+
+def render_gains(new, ref, tag):
+    """The gains section: each number at the last release beside now, so a saving shows as a gain over weeks rather than per-commit noise."""
+    rows = gains(new, ref, _tag_date(tag), _code_findings(tag)) if tag else []
+    if not rows:
+        return []
+    L = [f"## Since {tag}", "", f"| Metric | {tag} | Now | Change |", "|---|---:|---:|---:|"]
+    for metric, unit, was, now in rows:
+        diff = now - was
+        pct = f" ({100.0 * diff / was:+.1f}%)" if was else ""
+        change = (f"{diff / 1024:+.1f} KB" if unit == "KB" else f"{diff:+,}") + pct
+        L.append(f"| {metric} | {_gain_cell(unit, was)} | {_gain_cell(unit, now)} | {change} |")
+    L += ["", (f"Against the release `{tag}`, the fixed point a user compares with; the tables below compare against the last commit. "
+               f"A firmware not rebuilt since `{tag}` is left out, and a measure the release did not record yet, such as the code report, joins from the next one."), ""]
+    return L
+
+
 def render_markdown(new, old):
     """The snapshot as a table, with units and per-metric deltas against the last commit."""
     o = old or {}
@@ -528,6 +616,8 @@ def render_markdown(new, old):
          "Current state only; the trend is this file's git history "
          "(`git log -p docs/reference/metrics/repo-health.md`). Nothing here fails a build: the numbers make "
          "growth visible, the judgment stays human.", ""]
+    tag = reference_tag()
+    L += render_gains(new, load_reference(tag), tag)
 
     if new.get("flash"):
         # "Built" is its own column because a carried-forward number is indistinguishable from a

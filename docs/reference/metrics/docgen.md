@@ -6,7 +6,7 @@ Every place the generated documentation breaks the shape [the standards](../../c
 
 **0 error(s)** and **2502 warning(s)** across 182 page(s).
 
-**5636 appendix line(s)** after `@moreinfo`. This only falls as well: a cleanup cuts first, and moves only what neither the code, the test name nor the spec says.
+**5634 appendix line(s)** after `@moreinfo`. This only falls as well: a cleanup cuts first, and moves only what neither the code, the test name nor the spec says.
 
 An error is in a file that generates a documentation page, a header or a catalog page, so the finding is a defect in what gets published and it fails the gate. A warning is in an implementation file, which publishes nothing: its comments are a note to the next reader, worth fixing without being worth stopping a commit for. Both are counted here, because a warning nobody sees is a warning nobody fixes.
 

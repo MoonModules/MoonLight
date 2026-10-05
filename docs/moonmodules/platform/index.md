@@ -70,4 +70,4 @@ Each satisfies the assembler contract [the lowering](../light/moonlive.md) names
 
 ## What does not belong here
 
-A vendor SDK call in core or the light domain. A `#ifdef ESP32` outside this folder. A module that reads a chip register directly. Each is the same mistake: a target fact escaping the layer that exists to hold it, and [`check_platform_boundary`](../../../moondeck/MoonDeck.md) fails the build on it.
+A vendor SDK call in core or the light domain. A `#ifdef ESP32` outside this folder. A module that reads a chip register directly. Each is the same mistake: a target fact escaping the layer that exists to hold it, and [the code report](../../reference/metrics/code.md) counts it, at zero.

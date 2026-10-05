@@ -21,27 +21,28 @@ namespace mm {
 /// ## The enum is append-only
 ///
 /// A persisted fixture profile stores each channel's role as this enum's byte value, so a role is never renumbered.
-/// A new one is appended within its group, color roles before fixture roles, and existing values keep their index.
+/// A new one goes at the end, since the seeded moving-head profiles persist fixture roles too.
 ///
 /// `White` is a normal or cold white and `WarmWhite` the second white a CCT fixture adds, while `Yellow` and `UV` are the extra par-can colors of a six-channel RGBWYP lightbar.
-/// Extending here is safe today because the fixture roles carry no persisted data: no seeded built-in uses them and no effect writes them, so shifting them is a no-op.
-/// A future persisted fixture role would force new roles to the very end instead.
 
 enum class ChannelRole : uint8_t {
     None,
     Red, Green, Blue, White, WarmWhite, Yellow, UV,  // color roles — strips/panels/PARs (White = cold)
     Pan, Tilt, Zoom, Rotate, Gobo, Dimmer,           // fixture roles — moving heads
+    RedFine, GreenFine, BlueFine, WhiteFine, WarmWhiteFine,   // the low bytes of 16-bit color channels
+    PanFine, TiltFine, DimmerFine,                   // the low bytes of 16-bit aim and master dimmer
 };
 
 /// Option strings for a Select bound to a role, index-aligned with the enum so a control's byte casts straight across.
 inline constexpr const char* kChannelRoleOptions[] = {
     "—", "R", "G", "B", "W", "WW", "Y", "UV", "Pan", "Tilt", "Zoom", "Rotate", "Gobo", "Dimmer",
+    "R fine", "G fine", "B fine", "W fine", "WW fine", "Pan fine", "Tilt fine", "Dimmer fine",
 };
 inline constexpr uint8_t kChannelRoleCount =
     sizeof(kChannelRoleOptions) / sizeof(kChannelRoleOptions[0]);
 
 // The two must stay the same length: a missed string breaks the build here rather than mislabelling a role at runtime.
-static_assert(kChannelRoleCount == static_cast<uint8_t>(ChannelRole::Dimmer) + 1,
+static_assert(kChannelRoleCount == static_cast<uint8_t>(ChannelRole::DimmerFine) + 1,
               "kChannelRoleOptions must have one string per ChannelRole value (index-aligned)");
 
 /// @}

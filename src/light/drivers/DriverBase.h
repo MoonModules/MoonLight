@@ -79,6 +79,7 @@ public:
         correction_.curve = static_cast<Correction::Curve>(curveSel_);
         // A missing id falls back to the default, so a driver degrades rather than crashing.
         if (auto* lib = FixtureProfilesModule::active()) {
+            adoptLegacyName(*lib);   // an older config's name, whichever path applied it: boot, re-apply or restore
             if (profileId_ == 0) profileId_ = lib->defaultId();
             if (!lib->deriveCorrection(profileId_, effective, correction_)) {
                 profileId_ = lib->defaultId();                       // dangling → re-point to default
@@ -88,17 +89,19 @@ public:
             // No library yet, so apply brightness here, as deriveCorrection would have.
             correction_.rebuildBrightness(effective);
         }
+        // Allocated the first time a profile has fine roles and kept until release, since the encode task may be reading it while this rebuild runs.
+        const bool firstTable = correction_.hasFine && !lut16_;
+        if (firstTable) lut16_.resize(256);
+        correction_.lut16 = lut16_.data();
+        if (firstTable) correction_.rebuildBrightness(effective);   // a table that existed was filled by the rebuild above
         onCorrectionChanged();      // let a driver resize its correction-applied buffer
     }
 
     /// Rebuild the correction when one of its own correction controls changed.
     void onControlChanged(const char* name) override {
-        // The chosen INDEX maps to a stable id, so the reference survives a later reorder.
+        // The chosen row maps to a stable id, so the reference survives a later reorder.
         if (std::strcmp(name, "fixture") == 0) {
-            if (auto* lib = FixtureProfilesModule::active()) {
-                profileId_ = lib->idAt(fixtureSel_);
-                std::snprintf(fixtureRef_, sizeof(fixtureRef_), "%s", lib->nameAt(fixtureSel_));  // persist the name
-            }
+            if (auto* lib = FixtureProfilesModule::active()) profileId_ = lib->idAt(fixtureSel_);
         }
         if (isCorrectionControl(name)) rebuildCorrection(lastGlobalBrightness_);
         MoonModule::onControlChanged(name);
@@ -110,6 +113,7 @@ public:
     /// Clear every shared status string, so a stopped driver leaves nothing behind.
     void release() override {
         freeWire();          // the shared correction scratch: owned here, so no driver re-frees it
+        correction_.lut16 = nullptr;   // the table goes with the module's scratch buffers below
         clearFailBuf();
         clearConfigErr();
         setConfigWarn(nullptr);
@@ -156,6 +160,7 @@ protected:
 
     // The wiring comes from a named profile by stable id; the render loop never reads the library.
     Correction correction_;
+    ScratchBuffer<uint16_t> lut16_{*this};   // the correction's 16-bit table, allocated the first time a profile has fine roles
     uint32_t profileId_ = 0;          // stable id into the FixtureProfiles library (0 → resolve to default)
     uint8_t fixtureSel_ = 0;          // the fixture Select's chosen INDEX (mapped to an id in onControlChanged)
     uint8_t whiteMode_ = static_cast<uint8_t>(WhiteMode::Min);  // index into kWhiteModeOptions
@@ -170,31 +175,33 @@ protected:
         "linear"           // no curve: for a downstream device that corrects its own output
     };
     uint8_t lastGlobalBrightness_ = 0;  // last global brightness the container pushed (for self-rebuilds)
-    // A profile id is a runtime handle, so what survives a reboot is the profile NAME.
-    char fixtureRef_[16] = {};        // referenced profile's name (the durable reference)
+    // A config saved before `fixture` held the profile's name kept it here; read for one release, then emptied.
+    char fixtureRef_[16] = {};
+    const char* defaultFixture_ = nullptr;   // the profile a new driver of this type starts on, by name
 
     /// Add the correction controls: brightness, the fixture selector, the curve and the white mode.
     void defineCorrectionControls() {
         controls_.addControl("localBrightness", localBrightness_, 0, 255);
         // Per driver, not global: a fixture that corrects its own pixels needs Linear here.
         controls_.addSelect("curve", curveSel_, kCurveOptions, kCurveCount);
-        buildFixtureOptions();                        // fill fixtureOptions_ from the library, sync id/sel/ref
+        buildFixtureOptions();                        // fill fixtureOptions_ from the library, sync id and row
         controls_.addSelect("fixture", fixtureSel_, fixtureOptions_, fixtureOptionCount_);
+        controls_.setPersistLabel(controls_.count() - 1);   // saved by name, so a longer or reordered library never moves it
         controls_.addSelect("whiteMode", whiteMode_, kWhiteModeOptions, kWhiteModeCount);
         // Hidden unless the referenced profile carries a channel there is something to synthesize for.
         auto* lib = FixtureProfilesModule::active();
         controls_.setHidden(controls_.count() - 1, !(lib && lib->profileHasSynthChannel(profileId_)));
-        // Persisted but not shown: the selector above is what the user sees.
+        // Hidden, and only read: the name an older config saved.
         controls_.addText("fixtureRef", fixtureRef_, sizeof(fixtureRef_));
         controls_.setHidden(controls_.count() - 1, true);
     }
 
     /// Set this driver's default referenced profile by name, from its constructor.
-    void setDefaultFixtureName(const char* name) { std::snprintf(fixtureRef_, sizeof(fixtureRef_), "%s", name); }
+    void setDefaultFixtureName(const char* name) { defaultFixture_ = name; }
 
     /// Whether `name` is one of the correction controls, for a driver's own prepare test.
     static bool isCorrectionControl(const char* name) {
-        return std::strcmp(name, "fixture") == 0 || std::strcmp(name, "localBrightness") == 0
+        return std::strcmp(name, "fixture") == 0 || std::strcmp(name, "fixtureRef") == 0 || std::strcmp(name, "localBrightness") == 0
             || std::strcmp(name, "whiteMode") == 0 || std::strcmp(name, "curve") == 0;
     }
 
@@ -209,16 +216,37 @@ private:
         const uint8_t n = lib->profileCount();
         for (uint8_t i = 0; i < n; i++) fixtureOptions_[i] = lib->nameAt(i);
         fixtureOptionCount_ = n;
-        // Reconciled freshest-first: a user pick, then the persisted name, then the current id.
-        if (fixtureSel_ < n && profileId_ != 0 && lib->idAt(fixtureSel_) != profileId_) {
-            profileId_ = lib->idAt(fixtureSel_);                 // user picked a different profile
-        } else if (fixtureRef_[0]) {
-            for (uint8_t i = 0; i < n; i++)
-                if (std::strcmp(lib->nameAt(i), fixtureRef_) == 0) { profileId_ = lib->idAt(i); break; }
-        }
-        if (profileId_ == 0) profileId_ = lib->defaultId();
+        reconcileProfile(*lib, n);
         fixtureSel_ = lib->indexOfId(profileId_);
-        std::snprintf(fixtureRef_, sizeof(fixtureRef_), "%s", lib->nameAt(fixtureSel_));
+    }
+
+    /// Settle which profile the driver references: an older config's saved name, else the row picked, else the type's default.
+    void reconcileProfile(const FixtureProfilesModule& lib, uint8_t n) {
+        if (fixtureRef_[0]) {
+            adoptLegacyName(lib);
+        } else if (fixtureSel_ < n && profileId_ != 0 && lib.idAt(fixtureSel_) != profileId_) {
+            profileId_ = lib.idAt(fixtureSel_);                 // a pick, by hand or by a saved name
+        }
+        if (profileId_ == 0 && defaultFixture_) profileId_ = profileNamed(lib, defaultFixture_);
+        if (profileId_ == 0) profileId_ = lib.defaultId();
+    }
+
+    // An older config saved the name beside a row number that a longer library moved, so the name wins; read for one release.
+    /// Adopt the profile an older config named in `fixtureRef`, select its row, and empty the field so a save writes only `fixture`.
+    void adoptLegacyName(const FixtureProfilesModule& lib) {
+        if (!fixtureRef_[0]) return;
+        if (const uint32_t id = profileNamed(lib, fixtureRef_)) {
+            profileId_ = id;
+            fixtureSel_ = lib.indexOfId(id);
+        }
+        fixtureRef_[0] = '\0';
+    }
+
+    /// The id of the profile called `name`, or 0 when the library has none.
+    static uint32_t profileNamed(const FixtureProfilesModule& lib, const char* name) {
+        for (uint8_t i = 0; i < lib.profileCount(); i++)
+            if (std::strcmp(lib.nameAt(i), name) == 0) return lib.idAt(i);
+        return 0;
     }
 
 protected:

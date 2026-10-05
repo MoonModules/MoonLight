@@ -148,3 +148,34 @@ def test_the_baseline_falls_back_to_disk_when_git_cannot_answer(tmp_path, monkey
     monkeypatch.setattr(repo_health, "ROOT", repo)
     monkeypatch.setattr(repo_health, "HEALTH_FILE", health)
     assert repo_health.load_previous() == {"flash": {"esp32": 7}}
+
+
+# ---- gains since the last release ----
+
+def test_the_gains_compare_only_what_both_snapshots_hold():
+    """A metric the release did not record yet, such as the heap, is left out rather than shown as a jump from zero."""
+    ref = {"flash": {"esp32": 2_000_000, "gone": 1}, "loc": {"core": 100}, "tests": {"cases": 10},
+           "complexity": {"over_threshold": 300},
+           "perf": {"desktop-macos": {"scenario_p50": {"A": {"p50": 7}}}}}
+    new = {"flash": {"esp32": 2_010_240, "new": 5}, "loc": {"core": 90, "ui": 5}, "tests": {"cases": 12, "scenarios": 3},
+           "complexity": {"over_threshold": 290}, "perf": {"desktop-macos": {"scenario_p50": {"A": {"p50": 6}}},
+                                                          "esp32": {"heap_free": 200_000}}}
+    rows = repo_health.gains(new, ref, code=(1300, 1290))
+    assert [r[0] for r in rows] == ["flash esp32", "tick A (desktop-macos)", "lines core", "code findings", "unit tests"]
+    assert ("lines core", "", 100, 90) in rows
+    # A firmware not rebuilt since the release carries its old number, which would read as no growth.
+    new["measured"] = {"esp32": "2026-09-01"}
+    assert "flash esp32" not in [r[0] for r in repo_health.gains(new, ref, since="2026-09-30")]
+    new["measured"] = {"esp32": "2026-09-30"}   # built on the release day itself: the release's own number
+    assert "flash esp32" not in [r[0] for r in repo_health.gains(new, ref, since="2026-09-30")]
+    new["measured"] = {"esp32": "2026-10-05"}
+    assert "flash esp32" in [r[0] for r in repo_health.gains(new, ref, since="2026-09-30")]
+
+
+def test_the_gains_section_shows_each_change_with_its_share():
+    ref = {"flash": {"esp32": 2_000_000}, "loc": {"core": 100}}
+    new = {"flash": {"esp32": 2_010_240}, "loc": {"core": 90}, "measured": {"esp32": "2099-01-01"}}
+    page = "\n".join(repo_health.render_gains(new, ref, "v6.0.0"))
+    assert "| flash esp32 |" in page and "+10.0 KB (+0.5%)" in page
+    assert "| lines core | 100 | 90 | -10 (-10.0%) |" in page
+    assert repo_health.render_gains(new, {}, "v6.0.0") == []   # a release before repo health: no section

@@ -11,6 +11,7 @@
 #include "correction_presets.h"
 
 #include <cstdint>
+#include <set>
 #include <vector>
 
 // Pins the per-driver output correction: brightness LUT, channel reorder, and RGBW white derivation. The Drivers container owns a Correction, rebuilds it on a brightness/fixture change, and hands it to each physical driver, which calls apply() per light. These tests pin the transform so a regression in the LUT fill, the preset→role-offset mapping, or the white math fails here. A light is a span of outChannels bytes with a named offset per color role (offRed/offGreen/offBlue, and offWhite for the RGBW family; kAbsent = no white), so the checks read the observable apply() output plus outChannels, not an internal permutation table.
@@ -526,4 +527,101 @@ TEST_CASE("RGBW white is derived in linear light, then curved once") {
     CHECK(out[0] == ref.briLut[100]);
     CHECK(out[1] == ref.briLut[50]);
     CHECK(out[2] == ref.briLut[0]);
+}
+
+namespace {
+using R = mm::ChannelRole;
+// A 16-bit strip's wiring: each color as its high byte, then its low byte.
+constexpr R kRGB16[6] = {R::Red, R::RedFine, R::Green, R::GreenFine, R::Blue, R::BlueFine};
+constexpr R kRGBW16[8] = {R::Red, R::RedFine, R::Green, R::GreenFine, R::Blue, R::BlueFine, R::White, R::WhiteFine};
+}  // namespace
+
+// The curve runs to 16 bits and goes out high byte first, so full scale and black stay exact.
+TEST_CASE("A 16-bit strip writes each color as its high byte, then its low byte") {
+    Correction c;
+    std::vector<uint16_t> table(256);
+    c.lut16 = table.data();
+    c.curve = Correction::Curve::Linear;
+    c.rebuild(255, kRGB16, 6);
+    CHECK(c.hasFine);
+    CHECK(c.outChannels == 6);
+    const uint8_t src[3] = {255, 0, 128};
+    uint8_t out[6] = {};
+    c.apply(src, out, 3);
+    CHECK((out[0] == 0xFF && out[1] == 0xFF));   // 255 is 65535
+    CHECK((out[2] == 0 && out[3] == 0));
+    CHECK(out[4] * 256 + out[5] == 128 * 257);   // linear: 8 bits widened by replication
+}
+
+// The reason for 16 bits: at low brightness the curve merges most inputs in 8 bits, and 16 bits keeps each one distinct.
+TEST_CASE("At low brightness a 16-bit channel keeps every level the 8-bit table merges") {
+    Correction c;
+    std::vector<uint16_t> table(256);
+    c.lut16 = table.data();
+    c.rebuild(16, kRGB16, 6);   // the default CIE curve
+    std::set<int> narrow, wide;
+    for (int v = 0; v < 256; v++) {
+        const uint8_t src[3] = {static_cast<uint8_t>(v), 0, 0};
+        uint8_t out[6] = {};
+        c.apply(src, out, 3);
+        narrow.insert(c.briLut[v]);
+        wide.insert(out[0] * 256 + out[1]);
+    }
+    CHECK(narrow.size() <= 4);
+    CHECK(wide.size() == 256);
+}
+
+// White is derived in linear light as on an 8-bit strip, then written to 16 bits like the colors.
+TEST_CASE("A 16-bit RGBW strip derives its white and writes it to 16 bits") {
+    Correction c;
+    std::vector<uint16_t> table(256);
+    c.lut16 = table.data();
+    c.curve = Correction::Curve::Linear;
+    c.whiteMode = mm::WhiteMode::Accurate;
+    c.rebuild(255, kRGBW16, 8);
+    const uint8_t src[3] = {200, 100, 50};
+    uint8_t out[8] = {};
+    c.apply(src, out, 3);
+    CHECK(out[6] * 256 + out[7] == 50 * 257);    // white = min(r, g, b)
+    CHECK(out[0] * 256 + out[1] == 150 * 257);   // red with the white pulled out
+}
+
+// An 8-bit profile never enters the 16-bit path, and a 16-bit one whose table is missing degrades to 8 bits rather than writing stale bytes.
+TEST_CASE("An 8-bit profile has no fine roles, and a missing table degrades to 8 bits") {
+    Correction c;
+    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGB);
+    CHECK_FALSE(c.hasFine);
+    Correction wide;
+    wide.curve = Correction::Curve::Linear;
+    wide.rebuild(255, kRGB16, 6);   // no table given
+    const uint8_t src[3] = {9, 9, 9};
+    uint8_t out[6] = {0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA};
+    wide.apply(src, out, 3);
+    CHECK((out[0] == 9 && out[1] == 0));
+}
+
+// A moving head with 16-bit aim gets its 8-bit pan and tilt widened by repeating the byte, so the full sweep stays full.
+TEST_CASE("Pan fine and tilt fine repeat the aim's byte, so a full aim reaches the full range") {
+    const R roles[] = {R::Pan, R::PanFine, R::Tilt, R::TiltFine, R::Red, R::Green, R::Blue};
+    Correction c;
+    c.rebuild(64, roles, 7);   // brightness must not steer the head, coarse or fine
+    uint8_t src[12] = {};
+    src[mm::FixtureChannels::kMotionBase + 0] = 255;   // pan
+    src[mm::FixtureChannels::kMotionBase + 1] = 30;    // tilt
+    uint8_t out[7] = {};
+    c.apply(src, out, 12);
+    CHECK((out[0] == 255 && out[1] == 255));   // 65535, the end of the sweep
+    CHECK((out[2] == 30 && out[3] == 30));     // 30 * 257
+    CHECK_FALSE(c.hasFine);                    // aim needs no color table
+}
+
+// A 16-bit master dimmer is driven wide open on both bytes, as its 8-bit coarse byte already is.
+TEST_CASE("Dimmer fine is driven wide open with its coarse byte") {
+    const R roles[] = {R::Dimmer, R::DimmerFine, R::Red, R::Green, R::Blue};
+    Correction c;
+    c.rebuild(64, roles, 5);
+    const uint8_t src[3] = {10, 20, 30};
+    uint8_t out[5] = {};
+    c.apply(src, out, 3);
+    CHECK((out[0] == 255 && out[1] == 255));
 }

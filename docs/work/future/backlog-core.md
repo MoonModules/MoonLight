@@ -993,37 +993,7 @@ Confirmed by external review (CodeRabbit, PR #56).
 MoonLight behaviour and fidelity is deliberate. If the FPU-less Xtensa cost is real, that is a
 profiling question first, not a lint fix.
 
-`-Wfunction-effects` reports these but never fails a build, and
-[hotpath-baseline.txt](../../reference/metrics/hotpath-baseline.txt) freezes the known set so a
-NEW blocking call stands out in the report. The pre-commit gate runs the same check incrementally.
-
-### check_nonblocking: drop the baseline, the way check_docgen did (decision)
-
-The baseline has inverted: it now manufactures false alarms instead of suppressing noise. It holds
-**107 entries against 240 live sites**, and was last written in an unrelated docs-restructure
-commit, so whole files it never covered report every site as NEW. `OscModule.h` has seven findings
-and zero baseline entries; `PanelCardDriver.h` has eight and zero. A comment-only cleanup batch
-reported 82 NEW and none of them were new code.
-
-That is the docgen failure one step further along: docgen's baseline hid findings, this one invents
-them, and both train a reader to distrust the number. `docgen_baseline.txt` was deleted for exactly
-this reason and the check now states absolute limits.
-
-The shape is settled, the scope is not. Deleting the file and the `--baseline` flag is
-straightforward. The open question is whether `check_nonblocking` becomes a **gate**: today it is
-explicitly not one (every exit path returns 0, and `-Wno-error=function-effects` keeps the build
-green on purpose), because each finding is a judgment — move the work, annotate the callee, or
-accept it with a scoped reason — and 240 sites is architecture work, not a sweep. An absolute check
-that fails red for months is one nobody reads.
-
-So it splits in two, and the first half stands alone:
-- **Remove the baseline**, keep the check a non-gate. Buys an accurate report with no false NEW,
-  costs nothing, and can happen today.
-- **Make it a gate**, once the section above has driven the count down far enough that red means
-  something. That decision belongs with the work, not before it.
-
-Re-running `--baseline` is the one thing to avoid: it would absorb 133 unreviewed sites into the
-known-good set and destroy the signal the file exists to carry.
+`-Wfunction-effects` reports these but never fails a build; the code report counts them per file, and that count may only fall.
 
 ### ESP32 clang/LLVM toolchain — extend the clang checks to src/platform/esp32/
 

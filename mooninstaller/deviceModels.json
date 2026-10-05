@@ -169,7 +169,7 @@
         "parent_id": "Drivers",
         "controls": {
           "pins": "16",
-          "fixture": 4
+          "fixture": "GRBW"
         }
       }
     ]

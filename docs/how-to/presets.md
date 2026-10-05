@@ -56,7 +56,9 @@ Click the pad. The look, geometry or setup replaces what was there.
 
 ## From the gallery
 
-The **Gallery** under the pads lists what people shared in [MoonLight-Gallery](https://github.com/MoonModules/MoonLight-Gallery), most liked first. Your browser fetches it, so the device needs no internet of its own, and an entry shows as soon as it is accepted.
+The **Gallery** under the pads shows what people shared in [MoonLight-Gallery](https://github.com/MoonModules/MoonLight-Gallery) as pages of thumbnails, most liked or newest first. Your browser fetches it, so the device needs no internet of its own, and an entry shows as soon as it is accepted.
+
+Search covers the name, the description and the author, and a chip per kind narrows the list to presets or one kind of script. Click a thumbnail to open the entry: its moving preview plays with the whole description, and prev and next step through what the search shows.
 
 - **add to a pad** puts a preset on the first free pad, with any script it needs from the gallery.
 - **try now** applies it without keeping it.

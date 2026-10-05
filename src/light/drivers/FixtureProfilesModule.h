@@ -2,7 +2,6 @@
 
 #include "core/module/MoonModule.h"
 #include "core/util/ActiveInstance.h"     // the singleton seat drivers resolve the library through
-#include "core/util/ScratchBuffer.h"      // the dynamic (no-cap) role pool
 #include "core/util/JsonSink.h"
 #include "core/util/JsonUtil.h"           // restoreList: recursive reader for the persisted array
 #include "light/drivers/ChannelRole.h"
@@ -45,7 +44,7 @@ public:
     bool userEditable() const override { return false; }
 
     /// How many profile rows a device can hold.
-    static constexpr uint8_t kMaxProfiles = 32;   // bounded row count; a device won't wire more light types
+    static constexpr uint8_t kMaxProfiles = 48;   // the 20 built-ins plus room for a rig's own wirings
 
     /// The boot library, which a driver resolves its profile reference through.
     static FixtureProfilesModule* active() { return ActiveInstance<FixtureProfilesModule>::active(); }
@@ -75,6 +74,8 @@ public:
             switch (static_cast<ChannelRole>(r[c])) {
                 case ChannelRole::White:
                 case ChannelRole::WarmWhite:
+                case ChannelRole::WhiteFine:
+                case ChannelRole::WarmWhiteFine:
                 case ChannelRole::Yellow:
                 case ChannelRole::UV:
                     return true;
@@ -96,11 +97,13 @@ public:
     // Claimed at CONSTRUCTION: a driver resolves the library while building its own controls.
     /// Claim the singleton seat at construction, before any driver builds its selector.
     FixtureProfilesModule() { seat_.claim(); }
+    /// Free the role pool, which lives as long as the library rather than between prepare and release.
+    ~FixtureProfilesModule() override { platform::free(pool_); }
 
-    /// Seed the curated built-ins when the set is empty.
+    /// Seed the curated built-ins the list does not hold yet.
     void setup() override {
         MoonModule::setup();
-        if (count_ == 0) seedBuiltins();   // belt-and-braces; defineControls already seeds if empty
+        seedBuiltins();
         refreshStatus();
     }
 
@@ -113,7 +116,7 @@ public:
     void defineControls() override {
         MoonModule::defineControls();
         // The persisted rows INCLUDE the built-ins, so restoring replaces rather than duplicates.
-        if (count_ == 0) seedBuiltins();
+        seedBuiltins();
         controls_.addList("profiles", *this);   // this module is the (editable) ListSource
     }
 
@@ -222,7 +225,11 @@ public:
         if (i < 0 || profiles_[i].locked) return false;   // built-ins are read-only
         Profile& p = profiles_[i];
         if (std::strcmp(field, "name") == 0) {
-            mm::json::parseString(valueJson, "value", p.name, sizeof(p.name));
+            // A driver saves its profile by name, so two profiles of one name would let a reboot pick the wrong one.
+            char name[sizeof(p.name)] = {};
+            mm::json::parseString(valueJson, "value", name, sizeof(name));
+            if (!name[0] || nameTaken(name, p.id)) return false;
+            std::memcpy(p.name, name, sizeof(p.name));
             return true;
         }
         if (std::strcmp(field, "channels") == 0) {
@@ -231,18 +238,7 @@ public:
             setChannelCount(p, static_cast<uint8_t>(v));
             return true;
         }
-        if (field[0] == 'c' && field[1] == 'h' && field[2] >= '0' && field[2] <= '9') {
-            // strtol, not atoi: a malformed suffix must be rejected, not coerced to channel 0.
-            char* end = nullptr;
-            errno = 0;
-            const long c = std::strtol(field + 2, &end, 10);
-            if (errno != 0 || *end != '\0' || c < 0 || c >= p.channelCount) return false;
-            int v = mm::json::parseInt(valueJson, "value");
-            if (v < 0 || v >= kChannelRoleCount) return false;
-            roleAtMut(p)[static_cast<uint8_t>(c)] = static_cast<uint8_t>(v);
-            return true;
-        }
-        return false;
+        return setChannelRole(p, field, valueJson);
     }
 
     /// Restore the profiles and the role pool, so custom wirings survive a reboot.
@@ -253,34 +249,13 @@ public:
         if (!arr || arr->type != mm::json::JsonType::Array) return false;
         count_ = 0;
         const int n = mm::json::arraySize(doc, arr);
-        for (int r = 0; r < n && count_ < kMaxProfiles; r++) {
-            const mm::json::JsonNode* row = mm::json::element(doc, arr, r);
-            Profile& p = profiles_[count_];
-            p = Profile{};
-            p.id = static_cast<uint32_t>(mm::json::readInt(mm::json::member(doc, row, "id"), 0));
-            mm::json::readString(mm::json::member(doc, row, "name"), p.name, sizeof(p.name));
-            int ch = mm::json::readInt(mm::json::member(doc, row, "channels"), 3);
-            p.channelCount = static_cast<uint8_t>(ch < 1 ? 1 : ch > 255 ? 255 : ch);
-            p.locked = mm::json::readBool(mm::json::member(doc, row, "locked"), false);
-            if (p.id >= nextId_) nextId_ = p.id + 1;   // never reissue a persisted id
-            count_++;
-        }
+        for (int r = 0; r < n && count_ < kMaxProfiles; r++) restoreRow(doc, mm::json::element(doc, arr, r), profiles_[count_++]);
         rebuildPool();
         // Degrade to an empty list rather than writing roles through a null pool base.
-        if (!rolePool_.data() && count_ > 0) { count_ = 0; return true; }
+        if (!pool_ && count_ > 0) { count_ = 0; return true; }
         // Second pass: fill each profile's roles now that the pool is sized.
-        for (int r = 0, idx = 0; r < n && idx < count_; r++, idx++) {
-            const mm::json::JsonNode* row = mm::json::element(doc, arr, r);
-            const mm::json::JsonNode* roles = mm::json::member(doc, row, "roles");
-            uint8_t* dst = roleAtMut(profiles_[idx]);
-            const int rn = (roles && roles->type == mm::json::JsonType::Array)
-                               ? mm::json::arraySize(doc, roles) : 0;
-            // Clamped: a corrupt file can carry a byte the UI mis-renders and the Correction drops.
-            for (uint8_t c = 0; c < profiles_[idx].channelCount; c++) {
-                const long rv = (c < rn) ? mm::json::readInt(mm::json::element(doc, roles, c), 0) : 0;
-                dst[c] = (rv < 0 || rv >= kChannelRoleCount) ? 0 : static_cast<uint8_t>(rv);
-            }
-        }
+        for (int r = 0; r < n && r < count_; r++) restoreRoles(doc, mm::json::element(doc, arr, r), profiles_[r]);
+        seedBuiltins();   // a built-in this firmware added since the list was saved
         return true;
     }
 
@@ -290,15 +265,18 @@ private:
         uint32_t id = 0;
         char     name[16] = {};
         uint8_t  channelCount = 3;
-        uint32_t poolOffset = 0;   // start of this profile's roles in rolePool_ (set by rebuildPool)
-        uint32_t poolLen = 0;      // the OLD slice size, distinct from channelCount mid-change
+        uint16_t poolOffset = 0;   // start of this profile's roles in pool_ (set by rebuildPool); 48 x 255 fits
+        uint16_t poolLen = 0;      // the OLD slice size, distinct from channelCount mid-change
         bool     locked = false;
     };
 
+    static_assert(kMaxProfiles * 255 <= 0xFFFF, "a full library's role pool must fit the 16-bit pool offsets");
     Profile   profiles_[kMaxProfiles] = {};
     uint8_t  count_ = 0;
     uint32_t nextId_ = 1;
-    ScratchBuffer<uint8_t> rolePool_{*this};   // Σ channelCount role bytes, packed in profile order
+    // Configuration, like the rows above, so it survives release(); a ScratchBuffer would be freed there with every profile's wiring.
+    uint8_t* pool_ = nullptr;   // Σ channelCount role bytes, packed in profile order
+    uint32_t poolBytes_ = 0;    // the pool's size, the bound a re-pack copies within
     char     statusBuf_[24] = {};
     ActiveInstance<FixtureProfilesModule> seat_{*this};
 
@@ -316,39 +294,87 @@ private:
         while (n < count_ && profiles_[n].locked) n++;
         return n;
     }
-    const uint8_t* roleAt(const Profile& p) const { return rolePool_.data() + p.poolOffset; }
-    uint8_t*       roleAtMut(const Profile& p)     { return rolePool_.data() + p.poolOffset; }
+    const uint8_t* roleAt(const Profile& p) const { return pool_ + p.poolOffset; }
+    uint8_t*       roleAtMut(const Profile& p)     { return pool_ + p.poolOffset; }
 
-    // Preserves the role bytes across the re-pack, since resize reallocates and zero-fills.
+    /// Whether another profile than `self` already has this name.
+    bool nameTaken(const char* name, uint32_t self) const {
+        for (uint8_t i = 0; i < count_; i++)
+            if (profiles_[i].id != self && std::strcmp(profiles_[i].name, name) == 0) return true;
+        return false;
+    }
+
+    /// Whether `field` names one channel's role picker, `ch` and a digit.
+    static bool isChannelField(const char* field) {
+        return field[0] == 'c' && field[1] == 'h' && field[2] >= '0' && field[2] <= '9';
+    }
+
+    /// Set the role of the channel a `chN` field names; false for any other field or an out-of-range value.
+    bool setChannelRole(Profile& p, const char* field, const char* valueJson) {
+        if (!isChannelField(field)) return false;
+        // strtol, not atoi: a malformed suffix must be rejected, not coerced to channel 0.
+        char* end = nullptr;
+        errno = 0;
+        const long c = std::strtol(field + 2, &end, 10);
+        if (errno != 0 || *end != '\0' || c < 0 || c >= p.channelCount) return false;
+        int v = mm::json::parseInt(valueJson, "value");
+        if (v < 0 || v >= kChannelRoleCount) return false;
+        roleAtMut(p)[static_cast<uint8_t>(c)] = static_cast<uint8_t>(v);
+        return true;
+    }
+
+    /// Read one persisted row's id, name, channel count and lock, its roles following once the pool is sized.
+    void restoreRow(const mm::json::JsonDoc& doc, const mm::json::JsonNode* row, Profile& p) {
+        p = Profile{};
+        p.id = static_cast<uint32_t>(mm::json::readInt(mm::json::member(doc, row, "id"), 0));
+        mm::json::readString(mm::json::member(doc, row, "name"), p.name, sizeof(p.name));
+        const int ch = mm::json::readInt(mm::json::member(doc, row, "channels"), 3);
+        p.channelCount = static_cast<uint8_t>(ch < 1 ? 1 : ch > 255 ? 255 : ch);
+        p.locked = mm::json::readBool(mm::json::member(doc, row, "locked"), false);
+        if (p.id >= nextId_) nextId_ = p.id + 1;   // never reissue a persisted id
+    }
+
+    // Clamped: a corrupt file can carry a byte the UI mis-renders and the Correction drops.
+    /// Read one persisted row's roles into its slice of the pool, an absent or invalid one as None.
+    void restoreRoles(const mm::json::JsonDoc& doc, const mm::json::JsonNode* row, const Profile& p) {
+        const mm::json::JsonNode* roles = mm::json::member(doc, row, "roles");
+        uint8_t* dst = roleAtMut(p);
+        const int rn = (roles && roles->type == mm::json::JsonType::Array) ? mm::json::arraySize(doc, roles) : 0;
+        for (uint8_t c = 0; c < p.channelCount; c++) {
+            const long rv = (c < rn) ? mm::json::readInt(mm::json::element(doc, roles, c), 0) : 0;
+            dst[c] = (rv < 0 || rv >= kChannelRoleCount) ? 0 : static_cast<uint8_t>(rv);
+        }
+    }
+
+    // A new pool in profile order, each profile's surviving roles copied across, then swapped in.
     void rebuildPool() {
-        const uint32_t oldPoolLen = static_cast<uint32_t>(rolePool_.count());
         uint32_t newOff[kMaxProfiles] = {};
         uint32_t total = 0;
         for (uint8_t i = 0; i < count_; i++) { newOff[i] = total; total += profiles_[i].channelCount; }
-
-        // Tracked explicitly rather than inferred: channelCount may already hold the new value.
-        uint8_t* keep = total ? static_cast<uint8_t*>(platform::alloc(total)) : nullptr;
-        if (keep) {
-            std::memset(keep, 0, total);
-            if (rolePool_.data()) {
-                for (uint8_t i = 0; i < count_; i++) {
-                    const uint32_t oldStart = profiles_[i].poolOffset;
-                    const uint32_t oldLen   = profiles_[i].poolLen;
-                    const uint32_t newLen   = profiles_[i].channelCount;
-                    const uint32_t copy     = oldLen < newLen ? oldLen : newLen;   // surviving overlap
-                    if (copy && oldStart + copy <= oldPoolLen)
-                        std::memcpy(keep + newOff[i], rolePool_.data() + oldStart, copy);
-                }
-            }
+        uint8_t* fresh = total ? static_cast<uint8_t*>(platform::alloc(total)) : nullptr;
+        if (fresh) {
+            std::memset(fresh, 0, total);
+            copySurvivingRoles(fresh, newOff);
         }
-        rolePool_.resize(total);
+        platform::free(pool_);
+        pool_ = fresh;
+        poolBytes_ = fresh ? total : 0;
         for (uint8_t i = 0; i < count_; i++) {
-            profiles_[i].poolOffset = newOff[i];
+            profiles_[i].poolOffset = static_cast<uint16_t>(newOff[i]);
             profiles_[i].poolLen    = profiles_[i].channelCount;   // slice now matches the channel count
         }
-        if (keep) {
-            if (rolePool_.data()) std::memcpy(rolePool_.data(), keep, total);
-            platform::free(keep);
+    }
+
+    // Tracked explicitly rather than inferred: channelCount may already hold the new value.
+    /// Copy each profile's surviving roles from the current pool into `fresh` at its new offset.
+    void copySurvivingRoles(uint8_t* fresh, const uint32_t* newOff) const {
+        if (!pool_) return;
+        for (uint8_t i = 0; i < count_; i++) {
+            const uint32_t oldStart = profiles_[i].poolOffset;
+            const uint32_t oldLen   = profiles_[i].poolLen;
+            const uint32_t newLen   = profiles_[i].channelCount;
+            const uint32_t copy     = oldLen < newLen ? oldLen : newLen;   // surviving overlap
+            if (copy && oldStart + copy <= poolBytes_) std::memcpy(fresh + newOff[i], pool_ + oldStart, copy);
         }
     }
 
@@ -363,11 +389,28 @@ private:
     }
 
     // Data, not code, so a profile of any width seeds directly: only real orders are listed.
+    /// Add each built-in the list lacks, by name, and order the built-in block as this table does, so a new built-in reaches a saved list too.
     void seedBuiltins() {
+        uint8_t shipped = 0;
+        const Builtin* table = builtins(shipped);
+        for (uint8_t k = 0; k < shipped && count_ < kMaxProfiles; k++)
+            if (!holdsBuiltin(table[k].name)) insertBuiltin(table[k]);
+        sortBuiltins(table, shipped);
+    }
+
+    /// One shipped profile: its name and its role per channel.
+    struct Builtin { const char* name; const ChannelRole* roles; uint8_t channelCount; };
+
+    /// The shipped built-ins, in the order the list shows them; `count` receives how many.
+    static const Builtin* builtins(uint8_t& count) {
         using R = ChannelRole;
+        // All six orders of three colors, as FastLED and WLED offer them; GRB is the WS2812B, WS2813 and WS2815.
         static constexpr R kRGB[]    = {R::Red, R::Green, R::Blue};
         static constexpr R kGRB[]    = {R::Green, R::Red, R::Blue};
         static constexpr R kBGR[]    = {R::Blue, R::Green, R::Red};
+        static constexpr R kRBG[]    = {R::Red, R::Blue, R::Green};
+        static constexpr R kGBR[]    = {R::Green, R::Blue, R::Red};
+        static constexpr R kBRG[]    = {R::Blue, R::Red, R::Green};
         static constexpr R kRGBW[]   = {R::Red, R::Green, R::Blue, R::White};
         static constexpr R kGRBW[]   = {R::Green, R::Red, R::Blue, R::White};
         static constexpr R kWRGB[]   = {R::White, R::Red, R::Green, R::Blue};                     // ws2814
@@ -375,6 +418,10 @@ private:
         static constexpr R kRGBWYP[] = {R::Red, R::Green, R::Blue, R::White, R::Yellow, R::UV};    // lightbar
         static constexpr R kRGBCCT[] = {R::Red, R::Green, R::Blue, R::White, R::WarmWhite};        // cold+warm
         static constexpr R kIRGB[]   = {R::Dimmer, R::Red, R::Green, R::Blue};                     // CH1 master intensity
+        // 16-bit chips, each color as its high byte, then its low byte: UCS8903, WS2816 and UCS8904.
+        static constexpr R kRGB16[]  = {R::Red, R::RedFine, R::Green, R::GreenFine, R::Blue, R::BlueFine};
+        static constexpr R kGRB16[]  = {R::Green, R::GreenFine, R::Red, R::RedFine, R::Blue, R::BlueFine};
+        static constexpr R kRGBW16[] = {R::Red, R::RedFine, R::Green, R::GreenFine, R::Blue, R::BlueFine, R::White, R::WhiteFine};
         // Moving heads (MoonLight offset maps → dense arrays). N = None.
         static constexpr R N = R::None;
         // Two Dimmer roles: the derivation keeps the last, so CH4 is the first thing to check.
@@ -390,10 +437,11 @@ private:
         static constexpr R kMHMini11[] = {      // 11ch: Pan,-,Tilt,-,-,Dim,-,R,G,B,W
             R::Pan, N, R::Tilt, N, N, R::Dimmer, N, R::Red, R::Green, R::Blue, R::White};
 
-        struct Builtin { const char* name; const R* roles; uint8_t channelCount; };
         static constexpr Builtin kBuiltins[] = {
             {"RGB", kRGB, 3}, {"GRB", kGRB, 3}, {"BGR", kBGR, 3},
+            {"RBG", kRBG, 3}, {"GBR", kGBR, 3}, {"BRG", kBRG, 3},
             {"RGBW", kRGBW, 4}, {"GRBW", kGRBW, 4}, {"WRGB", kWRGB, 4},
+            {"RGB 16-bit", kRGB16, 6}, {"GRB 16-bit", kGRB16, 6}, {"RGBW 16-bit", kRGBW16, 8},
             {"Curtain GRB6", kGRB6, 6}, {"Lightbar RGBWYP", kRGBWYP, 6},
             {"RGBCCT", kRGBCCT, 5}, {"IRGB", kIRGB, 4},
             {"MH BeeEyes 15", kMHBeeEyes15, 15},
@@ -411,19 +459,49 @@ private:
         };
         static_assert(namesFit(kBuiltins, sizeof(kBuiltins) / sizeof(kBuiltins[0])),
                       "a built-in profile name exceeds Profile::name: shorten it");
-        for (const Builtin& b : kBuiltins) {
-            if (count_ >= kMaxProfiles) break;
-            Profile& p = profiles_[count_];
-            p = Profile{};
-            p.id = nextId_++;
-            p.locked = true;
-            std::snprintf(p.name, sizeof(p.name), "%s", b.name);
-            p.channelCount = b.channelCount;
-            count_++;
-            rebuildPool();
-            uint8_t* dst = roleAtMut(p);
-            for (uint8_t c = 0; c < b.channelCount; c++) dst[c] = static_cast<uint8_t>(b.roles[c]);
+        count = static_cast<uint8_t>(sizeof(kBuiltins) / sizeof(kBuiltins[0]));
+        return kBuiltins;
+    }
+
+    /// Whether the list already holds the built-in of this name.
+    bool holdsBuiltin(const char* name) const {
+        for (uint8_t i = 0; i < count_; i++)
+            if (profiles_[i].locked && std::strcmp(profiles_[i].name, name) == 0) return true;
+        return false;
+    }
+
+    // At the end of the built-in block, which sortBuiltins then puts in order.
+    /// Add a built-in the list lacks, above the custom rows.
+    void insertBuiltin(const Builtin& b) {
+        const uint8_t at = lockedCount();
+        for (uint8_t j = count_; j > at; j--) profiles_[j] = profiles_[j - 1];
+        Profile& p = profiles_[at];
+        p = Profile{};
+        p.id = nextId_++;
+        p.locked = true;
+        std::snprintf(p.name, sizeof(p.name), "%s", b.name);
+        p.channelCount = b.channelCount;
+        count_++;
+        rebuildPool();
+        uint8_t* dst = roleAtMut(p);
+        for (uint8_t c = 0; c < b.channelCount; c++) dst[c] = static_cast<uint8_t>(b.roles[c]);
+    }
+
+    // A user cannot move a built-in, so the block always reads in the shipped order: an insertion sort, stable and in place.
+    /// Order the built-in block as `table` does; a built-in an older firmware shipped sorts after the rest.
+    void sortBuiltins(const Builtin* table, uint8_t shipped) {
+        const auto rank = [&](const Profile& p) {
+            for (uint8_t k = 0; k < shipped; k++) if (std::strcmp(p.name, table[k].name) == 0) return k;
+            return shipped;
+        };
+        const uint8_t n = lockedCount();
+        for (uint8_t i = 1; i < n; i++) {
+            const Profile moved = profiles_[i];
+            uint8_t j = i;
+            for (; j > 0 && rank(profiles_[j - 1]) > rank(moved); j--) profiles_[j] = profiles_[j - 1];
+            profiles_[j] = moved;
         }
+        rebuildPool();   // the pool follows the new profile order
     }
 
     void refreshStatus() {

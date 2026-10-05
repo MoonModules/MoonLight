@@ -6646,6 +6646,12 @@ function galleryUrl(url) {
     return /^https?:\/\//i.test(String(url || "")) ? url : null;
 }
 
+/// A path inside the gallery repository from its index, kept only when it stays inside it, since the index is third-party text.
+function galleryPath(path) {
+    const p = String(path || "");
+    return /^[\w./-]+$/.test(p) && !p.includes("..") && !p.startsWith("/") ? p : null;
+}
+
 /// A gallery file's text, or an error naming it when the download fails.
 async function galleryFetch(file) {
     const res = await fetch(galleryFresh(file));   // a re-accepted entry replaces its file under the same name
@@ -6689,6 +6695,49 @@ async function galleryInstall(entry, index, text) {
     await writeDeviceFile("/.config/presets", galleryPresetName(entry) + ".json", $slot === undefined ? text : JSON.stringify(rest));
 }
 
+const GALLERY_PER_PAGE = 12;
+// Where browsing stands, kept across the re-render a pad click or an install causes.
+const galleryView = { query: "", kind: "", sort: "liked", page: 0, open: null };
+
+/// Whether an entry matches the search, over its name, description and author, and the kind chip ("" for every kind).
+function galleryMatches(entry, query, kind) {
+    if (kind && entry.kind !== kind) return false;
+    const q = String(query || "").trim().toLowerCase();
+    return !q || [entry.name, entry.description, entry.author].some(t => String(t || "").toLowerCase().includes(q));
+}
+
+/// The entries in browse order: most liked or newest first, the issue number breaking ties.
+function gallerySorted(index, sort) {
+    return index.slice().sort(sort === "newest" ? (a, b) => b.issue - a.issue
+                                                : (a, b) => (b.votes || 0) - (a.votes || 0) || a.issue - b.issue);
+}
+
+/// One page of `list`, the page clamped into range, so a narrower search never lands on an empty page.
+function galleryPage(list, page, per = GALLERY_PER_PAGE) {
+    const pages = Math.max(1, Math.ceil(list.length / per));
+    const at = Math.min(Math.max(0, page | 0), pages - 1);
+    return { items: list.slice(at * per, at * per + per), page: at, pages };
+}
+
+/// An entry's moving preview: a picture, else a video, else a link to it, since the index does not say which the address is.
+function galleryMedia(url, alt) {
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = alt;
+    img.addEventListener("error", () => {
+        const video = document.createElement("video");
+        Object.assign(video, { src: url, muted: true, autoplay: true, loop: true, playsInline: true, controls: true });
+        video.addEventListener("error", () => {
+            const a = document.createElement("a");
+            a.href = url; a.target = "_blank"; a.rel = "noopener";
+            a.textContent = "▶ watch";
+            video.replaceWith(a);
+        });
+        img.replaceWith(video);
+    });
+    return img;
+}
+
 function renderGallery(host, mod) {
     const box = document.createElement("details");
     box.className = "gallery";
@@ -6700,9 +6749,8 @@ function renderGallery(host, mod) {
     status.className = "gallery-status";
     // Every outcome goes through here, so the re-render an install triggers shows it still.
     const say = (text) => { galleryStatus = text; status.textContent = text; };
-    const list = document.createElement("div");
-    list.className = "gallery-list";
-    box.append(status, list);
+    const body = document.createElement("div");
+    box.append(status, body);
     host.appendChild(box);
 
     const presetsCtrl = () => (findModule(mod.name)?.controls || []).find(c => c.name === "presets");
@@ -6710,6 +6758,13 @@ function renderGallery(host, mod) {
     const freePads = () => {
         const c = presetsCtrl();
         return (c?.gridCols || 8) * (c?.gridRows || 8) - (c?.value || []).length;
+    };
+    const button = (text, onClick, cls = "surface-popup-primary") => {
+        const b = document.createElement("button");
+        b.className = cls;
+        b.textContent = text;
+        b.addEventListener("click", onClick);
+        return b;
     };
 
     const load = async () => {
@@ -6723,73 +6778,14 @@ function renderGallery(host, mod) {
             return;
         }
         status.textContent = index.length ? galleryStatus : "The gallery is empty so far.";
-        list.textContent = "";
         const running = deviceFirmwareInfo()?.version;
         const newer = (e) => Boolean(running && e.firmware && isNewer(e.firmware, running));
+        const shown = () => gallerySorted(index, galleryView.sort).filter(e => galleryMatches(e, galleryView.query, galleryView.kind));
 
-        const fill = document.createElement("button");
-        fill.className = "surface-popup-primary gallery-fill";
-        fill.textContent = "fill empty pads with the most liked";
-        fill.title = "Looks and palettes made on this version or older; a preset with pins or geometry belongs to one rig; your own presets stay where they are";
-        fill.addEventListener("click", async () => {
-            let free = freePads(), added = 0;
-            for (const e of galleryFillCandidates(index, presetNames())) {
-                if (free <= 0) break;
-                if (newer(e)) continue;
-                try {
-                    const text = await galleryFetch(e.file);
-                    if (!galleryPadReady(JSON.parse(text))) continue;
-                    await galleryInstall(e, index, text);
-                    free--; added++;
-                    say(`added ${added}: ${e.name}`);
-                } catch (_) { /* skip an entry that does not install; the rest still can */ }
-            }
-            say(added ? `added ${added} preset${added === 1 ? "" : "s"}` : "nothing to add: no free pad, or no look or palette left");
-            refetchState();
-        });
-        if (index.some(e => e.kind === "Preset")) list.appendChild(fill);
-
-        for (const e of index.slice().sort((a, b) => (b.votes || 0) - (a.votes || 0) || a.issue - b.issue)) {
-            const card = document.createElement("div");
-            card.className = "gallery-entry";
-            const media = galleryUrl(e.media);
-            if (media) {
-                const img = document.createElement("img");
-                img.src = media;
-                img.alt = e.name;
-                img.loading = "lazy";
-                // A video does not load as an image, so it becomes a link to watch it.
-                img.addEventListener("error", () => {
-                    const a = document.createElement("a");
-                    a.href = media; a.target = "_blank"; a.rel = "noopener";
-                    a.textContent = "▶ watch";
-                    img.replaceWith(a);
-                });
-                card.appendChild(img);
-            }
-            const head = document.createElement("div");
-            head.className = "gallery-entry-head";
-            const name = document.createElement(galleryUrl(e.url) ? "a" : "span");
-            if (galleryUrl(e.url)) { name.href = e.url; name.target = "_blank"; name.rel = "noopener"; }
-            name.textContent = e.name;
-            head.append(name, document.createTextNode(` ${e.kind} · 👍 ${e.votes || 0} · ${e.author || ""}`));
-            card.appendChild(head);
-            const what = document.createElement("div");
-            what.className = "gallery-entry-text";
-            what.textContent = e.description || "";
-            card.appendChild(what);
-            if (newer(e)) {
-                const newer = document.createElement("div");
-                newer.className = "gallery-entry-newer";
-                newer.textContent = `made on ${e.firmware}, newer than this device's ${running}: update first`;
-                card.appendChild(newer);
-            }
-            const actions = document.createElement("div");
-            actions.className = "surface-popup-row";
-            const install = document.createElement("button");
-            install.className = "surface-popup-primary";
-            install.textContent = e.kind === "Preset" ? "add to a pad" : "install";
-            install.addEventListener("click", async () => {
+        const actions = (e) => {
+            const row = document.createElement("div");
+            row.className = "surface-popup-row";
+            row.appendChild(button(e.kind === "Preset" ? "add to a pad" : "install", async () => {
                 if (newer(e) && !confirm(`${e.name} was made on ${e.firmware}, newer than this device's ${running}. Install it anyway?`)) return;
                 if (e.kind === "Preset") {
                     // A pad holds one preset: refuse rather than overwrite a preset of the same name or write one no pad can show.
@@ -6801,14 +6797,9 @@ function renderGallery(host, mod) {
                     say(`installed ${e.name}`);
                     refetchState();
                 } catch (err) { say(err.message); }
-            });
-            actions.appendChild(install);
+            }));
             if (e.kind === "Preset") {
-                const now = document.createElement("button");
-                now.className = "surface-popup-primary";
-                now.textContent = "try now";
-                now.title = "Apply it to the device without keeping it on a pad";
-                now.addEventListener("click", async () => {
+                const now = button("try now", async () => {
                     try {
                         const text = await galleryFetch(e.file);
                         // A preset beyond a look or a palette replaces this rig's own settings, with no undo, so it asks first.
@@ -6819,11 +6810,146 @@ function renderGallery(host, mod) {
                         say(res.ok ? `applied ${e.name}` : `${e.name}: ${answer.error || res.status}${answer.at ? " at " + answer.at : ""}`);
                     } catch (err) { say(err.message); }
                 });
-                actions.appendChild(now);
+                now.title = "Apply it to the device without keeping it on a pad";
+                row.appendChild(now);
             }
-            card.appendChild(actions);
-            list.appendChild(card);
-        }
+            return row;
+        };
+
+        // One entry, opened: the moving preview, the whole description, and prev and next through what the search shows.
+        const drawDetail = () => {
+            const list = shown();
+            const at = list.findIndex(e => e.issue === galleryView.open);
+            if (at < 0) { galleryView.open = null; draw(); return; }
+            const e = list[at];
+            const go = (k) => { galleryView.open = list[k].issue; draw(); };
+            const nav = document.createElement("div");
+            nav.className = "surface-popup-row";
+            nav.appendChild(button("◀ back", () => { galleryView.open = null; draw(); }, ""));
+            const prev = button("prev", () => go(at - 1), "");
+            const next = button("next", () => go(at + 1), "");
+            prev.disabled = at === 0;
+            next.disabled = at === list.length - 1;
+            nav.append(prev, next);
+            const card = document.createElement("div");
+            card.className = "gallery-detail";
+            const media = galleryUrl(e.media);
+            if (media) card.appendChild(galleryMedia(media, e.name));
+            const head = document.createElement("div");
+            head.className = "gallery-entry-head";
+            const name = document.createElement(galleryUrl(e.url) ? "a" : "span");
+            if (galleryUrl(e.url)) { name.href = e.url; name.target = "_blank"; name.rel = "noopener"; }
+            name.textContent = e.name;
+            head.append(name, document.createTextNode(` ${e.kind} · 👍 ${e.votes || 0} · ${e.author || ""}`));
+            const what = document.createElement("div");
+            what.className = "gallery-entry-text";
+            what.textContent = e.description || "";
+            card.append(head, what);
+            if (newer(e)) {
+                const warn = document.createElement("div");
+                warn.className = "gallery-entry-newer";
+                warn.textContent = `made on ${e.firmware}, newer than this device's ${running}: update first`;
+                card.appendChild(warn);
+            }
+            card.appendChild(actions(e));
+            body.append(nav, card);
+        };
+
+        // The browsing view: search, a chip per kind, the order, and one page of thumbnails; no full-size media loads until an entry opens.
+        const drawBrowse = () => {
+            if (index.some(e => e.kind === "Preset")) {
+                const fill = button("fill empty pads with the most liked", async () => {
+                    let free = freePads(), added = 0;
+                    for (const e of galleryFillCandidates(index, presetNames())) {
+                        if (free <= 0) break;
+                        if (newer(e)) continue;
+                        try {
+                            const text = await galleryFetch(e.file);
+                            if (!galleryPadReady(JSON.parse(text))) continue;
+                            await galleryInstall(e, index, text);
+                            free--; added++;
+                            say(`added ${added}: ${e.name}`);
+                        } catch (_) { /* skip an entry that does not install; the rest still can */ }
+                    }
+                    say(added ? `added ${added} preset${added === 1 ? "" : "s"}` : "nothing to add: no free pad, or no look or palette left");
+                    refetchState();
+                }, "surface-popup-primary gallery-fill");
+                fill.title = "Looks and palettes made on this version or older; a preset with pins or geometry belongs to one rig; your own presets stay where they are";
+                body.appendChild(fill);
+            }
+            const bar = document.createElement("div");
+            bar.className = "gallery-bar";
+            const search = document.createElement("input");
+            search.type = "search";
+            search.placeholder = "search name, description or author";
+            search.value = galleryView.query;
+            search.addEventListener("input", () => { galleryView.query = search.value; galleryView.page = 0; drawResults(); });
+            const sort = document.createElement("select");
+            for (const [value, label] of [["liked", "most liked"], ["newest", "newest"]]) sort.add(new Option(label, value, false, galleryView.sort === value));
+            sort.addEventListener("change", () => { galleryView.sort = sort.value; galleryView.page = 0; drawResults(); });
+            bar.append(search, sort);
+            const chips = document.createElement("div");
+            chips.className = "gallery-chips";
+            for (const kind of ["", ...new Set(index.map(e => e.kind).filter(Boolean))]) {
+                const chip = button(kind || "all", () => { galleryView.kind = kind; galleryView.page = 0; drawResults(); }, "gallery-chip");
+                chip.dataset.kind = kind;
+                chips.appendChild(chip);
+            }
+            const results = document.createElement("div");
+            results.className = "gallery-list";
+            const pager = document.createElement("div");
+            pager.className = "surface-popup-row gallery-pager";
+            body.append(bar, chips, results, pager);
+
+            const drawResults = () => {
+                for (const chip of chips.children) chip.classList.toggle("active", chip.dataset.kind === galleryView.kind);
+                const list = shown();
+                const { items, page, pages } = galleryPage(list, galleryView.page);
+                galleryView.page = page;
+                results.textContent = "";
+                if (!list.length) results.textContent = "Nothing matches.";
+                for (const e of items) {
+                    const tile = document.createElement("button");
+                    tile.className = "gallery-tile";
+                    tile.title = e.description || e.name;
+                    const thumb = galleryPath(e.thumb);
+                    if (thumb) {
+                        const img = document.createElement("img");
+                        img.src = GALLERY_RAW + thumb;   // a thumbnail is made once per acceptance, so the browser's cache may keep it
+                        img.alt = "";
+                        img.loading = "lazy";
+                        tile.appendChild(img);
+                    } else {
+                        const none = document.createElement("div");
+                        none.className = "gallery-tile-none";
+                        none.textContent = e.kind;
+                        tile.appendChild(none);
+                    }
+                    const label = document.createElement("div");
+                    label.className = "gallery-entry-text";
+                    label.textContent = `${e.name} · 👍 ${e.votes || 0}`;
+                    tile.appendChild(label);
+                    tile.addEventListener("click", () => { galleryView.open = e.issue; draw(); });
+                    results.appendChild(tile);
+                }
+                pager.textContent = "";
+                if (pages > 1) {
+                    const prev = button("prev", () => { galleryView.page--; drawResults(); }, "");
+                    const next = button("next", () => { galleryView.page++; drawResults(); }, "");
+                    prev.disabled = page === 0;
+                    next.disabled = page === pages - 1;
+                    pager.append(prev, document.createTextNode(` ${page + 1} / ${pages} `), next);
+                }
+            };
+            drawResults();
+        };
+
+        const draw = () => {
+            body.textContent = "";
+            if (galleryView.open === null) drawBrowse();
+            else drawDetail();
+        };
+        draw();
     };
     box.addEventListener("toggle", () => {
         galleryOpen = box.open;

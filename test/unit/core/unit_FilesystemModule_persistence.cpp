@@ -398,9 +398,9 @@ TEST_CASE("FilesystemModule round-trips a config larger than the old 2 KB cap") 
         lp->setTypeName("FixtureProfilesModule");
         scheduler.addModule(fs);
         scheduler.addModule(lp);
-        scheduler.setup();   // seeds the 14 built-ins
+        scheduler.setup();   // seeds the built-ins
 
-        // Add 15 wide (24-channel) custom profiles, the serialized array is well over 2 KB. (15: with the 14 seeded built-ins that is 29, inside kMaxProfiles=32, and 15 wide profiles still serialize far past the old 2 KB cap being tested.)
+        // 15 wide (24-channel) custom profiles serialize far past the old 2 KB cap, and fit beside the built-ins under kMaxProfiles.
         for (int k = 0; k < 15; k++) {
             uint32_t id = 0;
             REQUIRE(lp->addListRow(id));
@@ -433,7 +433,7 @@ TEST_CASE("FilesystemModule round-trips a config larger than the old 2 KB cap") 
         scheduler.addModule(lp);
         scheduler.setup();
 
-        CHECK(lp->listRowCount() == 29);   // 14 built-ins + 15 custom, all restored
+        CHECK(lp->listRowCount() == 35);   // 20 built-ins + 15 custom, all restored
         mm::Correction c;
         REQUIRE(lp->deriveCorrection(markerId, 255, c));   // the marker profile resolves after reload
         CHECK(c.outChannels == 24);                        // its 24-channel width survived

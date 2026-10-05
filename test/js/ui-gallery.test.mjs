@@ -14,8 +14,14 @@ const g = new Function(`
     ${fnSource("galleryPresetName")}
     ${fnSource("galleryFillCandidates")}
     ${fnSource("galleryUrl")}
+    ${fnSource("galleryPath")}
     ${fnSource("formatJson")}
-    return { galleryPadReady, galleryScriptsOf, galleryFileName, galleryPresetName, galleryFillCandidates, galleryUrl, formatJson };
+    const GALLERY_PER_PAGE = 12;
+    ${fnSource("galleryMatches")}
+    ${fnSource("gallerySorted")}
+    ${fnSource("galleryPage")}
+    return { galleryPadReady, galleryScriptsOf, galleryFileName, galleryPresetName, galleryFillCandidates, galleryUrl, formatJson,
+             galleryMatches, gallerySorted, galleryPage, galleryPath };
 `)();
 
 test("a look or a palette may fill a pad unasked, and pins or geometry may not", () => {
@@ -88,7 +94,7 @@ test("every gallery download refuses a failed response before anything is writte
     const fetchFile = new Function("fetch", "GALLERY_RAW", `${fnSource("galleryFresh")} return ${fnSource("galleryFetch")}`)(
         async () => ({ ok: false, status: 404, text: async () => "404: Not Found" }), "https://x/");
     await assert.rejects(fetchFile("presets/0001-a.json"), /download failed \(404\)/);
-    const tryNow = src.slice(src.indexOf('now.textContent = "try now"'), src.indexOf('now.textContent = "try now"') + 2000);
+    const tryNow = src.slice(src.indexOf('button("try now"'), src.indexOf('button("try now"') + 2000);
     assert.ok(tryNow.indexOf("galleryFetch(") > 0 && tryNow.indexOf("galleryFetch(") < tryNow.indexOf('fetch("/api/state"'));
     assert.ok(!src.includes("fetch(GALLERY_RAW + e.file)"));   // no download bypasses it
 });
@@ -118,4 +124,53 @@ test("the gallery index and files are fetched past GitHub's cache, and the index
     assert.match(fresh.urls[0], /^https:\/\/raw\.example\/index\.json\?t=\d+$/);
     const file = await run(null, "() => galleryFetch('presets/0003-night-harbor.json')");
     assert.match(file.urls[0], /^https:\/\/raw\.example\/presets\/0003-night-harbor\.json\?t=\d+$/);
+});
+
+// A hundred entries, as a grown gallery holds: every fourth a script, votes falling with the issue number.
+const hundred = Array.from({ length: 100 }, (_, k) => ({
+    issue: k + 1, kind: k % 4 === 3 ? "Effect script" : "Preset", name: `Look ${k + 1}`,
+    description: k === 41 ? "a harbor at night" : "", author: k === 7 ? "wompslab" : "ewowi", votes: 100 - k,
+}));
+
+test("a hundred entries show twelve to a page, and a page past the end lands on the last", () => {
+    const first = g.galleryPage(hundred, 0);
+    assert.equal(first.items.length, 12);
+    assert.equal(first.pages, 9);
+    const last = g.galleryPage(hundred, 99);
+    assert.equal(last.page, 8);
+    assert.equal(last.items.length, 4);
+    assert.deepEqual(g.galleryPage([], 3), { items: [], page: 0, pages: 1 });
+});
+
+test("search covers the name, the description and the author, and a kind chip narrows to one kind", () => {
+    const find = (q, kind = "") => hundred.filter(e => g.galleryMatches(e, q, kind)).map(e => e.issue);
+    assert.deepEqual(find("look 10"), [10, 100]);
+    assert.deepEqual(find("HARBOR"), [42]);
+    assert.deepEqual(find("wompslab"), [8]);
+    assert.equal(find("", "Effect script").length, 25);
+    assert.deepEqual(find("look 10", "Effect script"), [100]);
+    assert.equal(find("  ").length, 100);   // a blank search hides nothing
+});
+
+test("the gallery sorts by most liked or by newest", () => {
+    const index = [{ issue: 1, votes: 2 }, { issue: 2, votes: 5 }, { issue: 3, votes: 5 }, { issue: 4 }];
+    assert.deepEqual(g.gallerySorted(index, "liked").map(e => e.issue), [2, 3, 1, 4]);
+    assert.deepEqual(g.gallerySorted(index, "newest").map(e => e.issue), [4, 3, 2, 1]);
+});
+
+test("browsing loads thumbnails only, and the full-size preview waits until an entry opens", () => {
+    const view = fnSource("renderGallery");
+    const browse = view.slice(view.indexOf("const drawBrowse"), view.indexOf("const draw = "));
+    assert.ok(browse.includes("e.thumb"));
+    assert.ok(!browse.includes("e.media") && !browse.includes("galleryMedia("));
+    const detail = view.slice(view.indexOf("const drawDetail"), view.indexOf("const drawBrowse"));
+    assert.ok(detail.includes("galleryMedia("));
+});
+
+test("a thumbnail path from the index stays inside the gallery repository", () => {
+    assert.equal(g.galleryPath("thumbs/0003.webp"), "thumbs/0003.webp");
+    assert.equal(g.galleryPath("../MoonLight/main/x.png"), null);
+    assert.equal(g.galleryPath("/etc/passwd"), null);
+    assert.equal(g.galleryPath("https://evil.example/x.png"), null);
+    assert.equal(g.galleryPath(undefined), null);
 });
