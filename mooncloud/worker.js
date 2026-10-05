@@ -526,6 +526,11 @@ const PAGE = `<!doctype html>
   svg a:focus-visible .slice { outline: 2px solid currentColor; }
   .legend a { text-decoration: none; border-bottom: 1px dotted currentColor; }
   .legend a:hover { opacity: .7; }
+  .legend summary { display: flex; align-items: center; gap: .45rem; line-height: 1.7; cursor: pointer; list-style: none; }
+  .legend summary::-webkit-details-marker { display: none; }
+  .legend summary .name::after { content: " ▸"; }
+  .legend details[open] summary .name::after { content: " ▾"; }
+  .legend details > div { padding-left: 1.15rem; }
   .filters { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: -1.5rem 0 2.5rem; }
   .filter-lead { font-size: .85rem; opacity: .6; }
   .chip { display: inline-block; font-size: .8rem; padding: .15rem .55rem; border-radius: 1rem;
@@ -637,23 +642,36 @@ function legend(rows, key) {
   const box = document.createElement("div");
   box.className = "legend";
   rows.forEach((r, i) => {
-    const line = document.createElement("div");
-    const sw = document.createElement("span");
-    sw.className = "swatch";
-    sw.style.background = COLORS[i % COLORS.length];
-    // The legend is the accessible half of the same control: a name is a wider target than a thin
-    // wedge, and it is what a keyboard reaches. The slice and its label go to the same address.
-    const href = filterHref(key, r);
-    const name = href ? document.createElement("a") : document.createElement("span");
-    if (href) name.href = href;
-    name.textContent = r.name || "unknown";
-    const n = document.createElement("span");
-    n.className = "n";
-    n.textContent = r.count;
-    line.append(sw, name, n);
-    box.appendChild(line);
+    const color = COLORS[i % COLORS.length];
+    if (!r.rest) { box.appendChild(legendLine(r, color, key)); return; }
+    // "other" names no value to link to, so it unfolds the rows it holds, each a link like a slice.
+    const more = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.append(...legendLine({ name: "other", count: r.count }, color, null).childNodes);
+    more.appendChild(summary);
+    for (const row of r.rest) more.appendChild(legendLine(row, null, key));
+    box.appendChild(more);
   });
   return box;
+}
+
+// The legend is the accessible half of the same control: a name is a wider target than a thin
+// wedge, and it is what a keyboard reaches. The slice and its label go to the same address.
+function legendLine(r, color, key) {
+  const line = document.createElement("div");
+  const sw = document.createElement("span");
+  sw.className = "swatch";
+  if (color) sw.style.background = color;
+  const href = key ? filterHref(key, r) : null;
+  const name = href ? document.createElement("a") : document.createElement("span");
+  if (href) name.href = href;
+  name.className = "name";
+  name.textContent = r.name || "unknown";
+  const n = document.createElement("span");
+  n.className = "n";
+  n.textContent = r.count;
+  line.append(sw, name, n);
+  return line;
 }
 
 // What the reader narrowed to, worded exactly as the device card words it: "Filtered to a, b" and
@@ -691,16 +709,17 @@ function renderFilterBar() {
   bar.append(what, clear);
 }
 
-// Everything past the 7th slice becomes one "other" wedge: a pie with twenty slivers is unreadable,
-// and the long tail is what the raw JSON is for.
+// Everything past the 7th slice becomes one "other" wedge, since a pie with twenty slivers is unreadable;
+// the rows it folds ride along, so the legend can unfold them.
 // NOT named "top": that is a read-only property of window, so a global function of that name
 // throws "Identifier 'top' has already been declared" in a browser and the whole script never
 // runs. Node has no window, so node --check passes and only a browser catches it.
 function topSlices(rows, keep = 7) {
   if (!rows || rows.length <= keep) return rows || [];
   const head = rows.slice(0, keep);
-  const tail = rows.slice(keep).reduce((s, r) => s + r.count, 0);
-  return tail ? head.concat([{ name: "other", count: tail }]) : head;
+  const rest = rows.slice(keep);
+  const tail = rest.reduce((s, r) => s + r.count, 0);
+  return tail ? head.concat([{ name: "other", count: tail, rest }]) : head;
 }
 
 // The filter rides the URL, so it has to ride the fetch: this page navigates where the device card

@@ -32,7 +32,7 @@ Brings the device onto the LAN before the HTTP and WebSocket servers start, tryi
 
 <img src="../../assets/core/NetworkModule.png" width="300" alt="Network module controls">
 
-- `mDNS`: the `<name>.local` hostname.
+- `mDNS`: the `<name>.local` hostname, on IPv4 and IPv6.
 - read-only: `mode`, the interface in use.
 
 **No DHCP server on an Ethernet-only build?** After about 20 seconds without a lease the device gives itself a `169.254.x.y` address (link-local). A computer on the same network without DHCP does the same, so open `<name>.local` in its browser and set a static address on the Ethernet card. A DHCP server that appears later still wins. Builds with WiFi try WiFi next, then their own access point.
@@ -89,10 +89,9 @@ The device's own WiFi network, a child of Network, at 4.3.2.1 and named after th
 
 - `opens`: `on failure` (when nothing else joins), `always`, or `never (not recommended)`.
 - `password`: WPA2, 8 to 63 characters as the standard allows; empty keeps it open, the default.
-- `channel` (1 to 13) and `hidden` (no broadcast name), for experts.
 - read-only: `clients`, the devices on it.
 
-`never` applies only while Ethernet or a known WiFi network is configured, and the card says when it opens anyway. Joining it opens the WiFi card. ⌄ details.
+`always` waits for a WiFi join in progress to settle, since one radio serves both. `never` applies only while Ethernet or a known WiFi network is configured, and the card says when it opens anyway. Joining it opens the WiFi card. ⌄ details.
 
 Detail: [technical](moxygen/AccessPointModule.md)
 
@@ -398,7 +397,7 @@ Structural mutation quiesces the render worker, and mutations run inline on the 
 
 ##### The gallery
 
-Under the pads, the gallery lists [MoonLight-Gallery](https://github.com/MoonModules/MoonLight-Gallery)'s `index.json`, most liked first. The browser fetches it from `raw.githubusercontent.com`, so the device needs no internet of its own. A preset installs onto the first free pad with the scripts it names that the gallery holds, or applies once through `PATCH /api/state`; a script installs into `/moonlive`. Filling the empty pads takes looks and palettes only, since pins and geometry belong to one rig.
+Under the pads, the gallery lists [MoonLight-Gallery](https://github.com/MoonModules/MoonLight-Gallery)'s `index.json`, most liked first. The browser fetches it from `raw.githubusercontent.com`, so the device needs no internet of its own. A preset installs onto the first free pad, or applies once through `PATCH /api/state`, and either way brings the scripts it names that the device lacks: the gallery's copy, else the one the firmware ships. A script installs into `/moonlive`.
 
 #### Home Assistant
 

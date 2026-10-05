@@ -14,6 +14,13 @@ for (const name of ["fillEditableListDetail", "fillListDetail", "openPadEditor",
     });
 }
 
+// The list rebuild keeps a value still being typed only for fields it can find by this key; moving row fields onto createControl once dropped it, so no field survived a rebuild.
+test("every field createControl draws carries the key a list rebuild restores it by", () => {
+    const body = fnSource("createControl");
+    assert.ok(/querySelectorAll\("input, select, textarea"\)\)[^\n]*dataset\.dragkey = key/.test(body));
+    assert.ok(fnSource("updateModuleControls").includes('querySelectorAll("[data-dragkey]")'));
+});
+
 test("the card's save-as-preset name is the surface's own name control", () => {
     const popup = fnSource("openDocumentPopup");
     assert.ok(popup.includes('presetNameControl("preset name")'));

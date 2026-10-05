@@ -370,7 +370,7 @@ Estimates, not measurements, so they live here rather than in [performance.md](.
 | Feature | Est. | Rationale |
 |---|---|---|
 | Mozilla cert bundle trimmed | −40 KB | `CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_CMN` keeps common roots only. `_NONE` saves ~50 KB but breaks TLS. |
-| Static IPv6 | +20 KB | lwIP IPv6 component (off by default). Only if a deployment needs it. |
+| Global IPv6 | small | lwIP's IPv6 is already in, for the link-local address mDNS advertises; global addresses add autoconfiguration. Only if a deployment needs it. |
 | WebSocket TLS (`wss://`) | ~0 KB | Reuses linked mbedTLS; certificate handling adds <5 KB. |
 
 ### `ListSource` methods compile twice: ~8.6 KB of thunks (2026-10-01)
@@ -586,7 +586,7 @@ Left out of the plan that makes Ethernet, WiFi and the access point Network subm
 - **WiFi power save**: the modem-sleep mode, traded against latency for Art-Net and the UI.
 - **The country code**, set by hand where adopting the router's country is not enough.
 - **The access point's address**, fixed at 4.3.2.1.
-- **IPv6** on every interface.
+- **IPv6 beyond link-local**: global addresses and a static one; the station and Ethernet carry a link-local address, which mDNS advertises.
 
 ## Architecture
 

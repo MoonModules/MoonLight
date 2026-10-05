@@ -175,8 +175,8 @@ def large_files() -> list:
 
 
 # A vendor SDK header, or a preprocessor branch on the target, which only src/platform may hold.
-_PLATFORM_RE = re.compile(r'#include\s*<(?:esp_|freertos/|driver/|hal/|soc/)|#include\s*[<"](?:SDL|wiringPi|pigpio)'
-                          r'|#if(?:n?def\s+|\s+defined\s*\(\s*)(?:ESP_PLATFORM|CONFIG_IDF|__APPLE__|__linux__|_WIN32)')
+_PLATFORM_RE = re.compile(r'#include\s*[<"](?:esp_|freertos/|driver/|hal/|soc/|SDL|wiringPi|pigpio)'
+                          r'|#(?:if|elif)(?:n?def\s+|\s+defined\s*\(\s*)(?:ESP_PLATFORM|CONFIG_IDF|__APPLE__|__linux__|_WIN32)')
 _LIGHT_INCLUDE_RE = re.compile(r'#include\s*[<"]light/')
 
 
@@ -203,22 +203,25 @@ def boundary_rows() -> list:
     return rows
 
 
-def hotpath_rows() -> list | None | bool:
+class BuildMissing(Exception):
+    """The desktop build the hot path is read from is absent or does not compile."""
+
+
+def hotpath_rows() -> list | None:
     """One row per render-path call site that can block or allocate, a float conversion at a formatTo site included.
 
-    None when this host's compiler cannot measure it (no Clang 20 -Wfunction-effects), which skips the rule; False when the build is missing or fails, which fails the run rather than reading as a clean tree.
+    None when this host's compiler cannot measure it (no Clang 20 -Wfunction-effects), which skips the rule; BuildMissing when the build is absent or fails, which fails the run rather than reading as a clean tree.
     """
     import check_nonblocking as nb
     build_dir = nb.check_clang_tidy._host_build_dir()
     if not (build_dir / "CMakeCache.txt").exists():
-        print(f"No build in {build_dir.relative_to(ROOT)}: run `uv run moondeck/build/build_desktop.py` first.", file=sys.stderr)
-        return False
+        raise BuildMissing(f"No build in {build_dir.relative_to(ROOT)}: run `uv run moondeck/build/build_desktop.py` first.")
     if not nb.function_effects_enabled(build_dir):
         print("The desktop build carries no -Wfunction-effects (it needs Clang 20+), so the hot path cannot be measured here.", file=sys.stderr)
         return None
     out = nb.build_output(build_dir)
     if out is None:
-        return False
+        raise BuildMissing("The desktop build failed, so the hot path cannot be read.")
     rows = [(r["file"], HOT_PATH, f"{r['callee']} in {r['fn'] or '?'}", 1) for r in nb.collect(out)]
     for site in nb.float_conversions_on_the_hot_path():
         file, line = site.rsplit(":", 1)
@@ -365,8 +368,10 @@ def main() -> int:
     dup_rows, duplicated = clone_rows(report) if report else ([], None)
     rows = findings(funcs) + dup_rows + large_files() + boundary_rows()
     # The hot path is a full rebuild, so the module view leaves it to the full report as it does clones; check_nonblocking --module is its detailed view.
-    hot = None if args.module else hotpath_rows()
-    if hot is False:
+    try:
+        hot = None if args.module else hotpath_rows()
+    except BuildMissing as e:
+        print(e, file=sys.stderr)
         return 2
     if hot is not None:
         rows += hot

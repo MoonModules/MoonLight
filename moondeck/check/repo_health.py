@@ -40,7 +40,8 @@ from _host import desktop_target  # noqa: E402
 # The firmware registry, so carry-forward can drop rows for variants that no longer exist
 # (see merge_carry_forward). Same single source of truth check_firmwares.py reads.
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
-from build_esp32 import APP_BIN, FIRMWARES, table_from_fragments  # noqa: E402
+from build_esp32 import APP_BIN, FIRMWARES, table_from_fragments, find_idf, idf_env  # noqa: E402
+import flash_split  # noqa: E402 (beside this file; the commit's flash change by kind)
 from build_desktop import desktop_binary  # noqa: E402 (one definition of where it lands)
 HEALTH_FILE = ROOT / "docs" / "reference" / "metrics" / "repo-health.json"
 # The same snapshot as a table a human reads: units applied, ratios as percentages, areas
@@ -146,6 +147,10 @@ MEASURED_DATES = {}
 # work being reported, not whether a file was touched afterwards.
 MEASURED_WITHIN_HOURS = 12
 
+# Each firmware measured this run, split into new, removed, grown and shrunk symbols against the last commit's
+# measurement. Kept out of the JSON, which is a snapshot: a split is a change, and the next run would report its delta.
+FLASH_SPLIT = {}
+
 
 def app_partition_bytes(firmware):
     """The app slot's size for `firmware`, from the partition CSV its build actually used.
@@ -206,6 +211,7 @@ def measure_flash():
     carried and aged, so a number nobody has refreshed says so rather than passing as current.
     """
     flash = {}
+    env = None   # the toolchain's PATH, looked up once and only when a firmware was built
     build = ROOT / "build"
     if not build.exists():
         return flash
@@ -227,6 +233,12 @@ def measure_flash():
         flash[firmware] = st.st_size
         MEASURED_THIS_RUN.add(firmware)
         MEASURED_DATES[firmware] = _dt.date.today().isoformat()
+        elf = binary.with_suffix(".elf")
+        if elf.exists():
+            env = env if env is not None else _toolchain_env()
+            parts = flash_split.measure(d, elf, st.st_size, _head(), env)
+            if parts:
+                FLASH_SPLIT[firmware] = parts
     # The desktop binary, located by build_desktop.desktop_binary() so this and collect_kpi.py
     # cannot name different files in the same run. A bare build/MoonLight matched nothing off
     # macOS, so this metric silently carried a foreign machine's number forward while reading as
@@ -244,6 +256,12 @@ def measure_flash():
             MEASURED_THIS_RUN.add(host)
             MEASURED_DATES[host] = _dt.date.today().isoformat()
     return flash
+
+
+def _toolchain_env():
+    """The environment that puts the ESP32 toolchains' nm on PATH, or this one when ESP-IDF is absent."""
+    idf = find_idf()
+    return idf_env(idf) if idf else None
 
 
 def measure_docs():
@@ -336,6 +354,7 @@ def snapshot(perf=None):
     # otherwise still report "yes" and carry a stale date.
     MEASURED_THIS_RUN.clear()
     MEASURED_DATES.clear()
+    FLASH_SPLIT.clear()
     flash = measure_flash()          # populates MEASURED_DATES as a side effect, so call it first
     return {
         "commit": head,
@@ -553,7 +572,7 @@ def gains(new, ref, since="", code=(None, None)):
     heap_now = (new.get("perf", {}).get("esp32") or {}).get("heap_free")
     if heap_ref and heap_now:
         rows.append(("free heap esp32", "KB", heap_ref, heap_now))
-    host = "desktop-macos"
+    host = desktop_target()
     p_ref = (ref.get("perf", {}).get(host) or {}).get("scenario_p50") or {}
     p_now = (new.get("perf", {}).get(host) or {}).get("scenario_p50") or {}
     for name in sorted(set(p_ref) & set(p_now)):
@@ -641,6 +660,21 @@ def render_markdown(new, old):
                "enough that growth will surface later as one jump, blamed on whichever commit "
                "happens to rebuild that target. `Used` is against the app slot in the firmware's "
                "own partition table."), ""]
+
+    if FLASH_SPLIT:
+        kb = lambda n: f"{n / 1024:+.1f} KB"
+        L += ["## Flash change by kind", "",
+              "| Target | Net | New | Removed | Grown | Shrunk | Other | Since |", "|---|---:|---:|---:|---:|---:|---:|---|"]
+        for k, s in sorted(FLASH_SPLIT.items()):
+            L.append(f"| {k} | {kb(s['net'])} | {kb(s['new'])} | {kb(s['removed'])} | {kb(s['grown'])} | "
+                     f"{kb(s['shrunk'])} | {kb(s['other'])} | `{s['since']}` |")
+        L += ["", "Largest moves:", ""]
+        for k, s in sorted(FLASH_SPLIT.items()):
+            moves = ", ".join(f"`{name[:60]}` {d:+,} B" for name, d in s["top"]) or "none"
+            L.append(f"- **{k}**: {moves}")
+        L += ["", ("What this commit's flash went to, symbol by symbol against the measurement at `Since`. "
+                   "New is new functionality, removed and shrunk are what a cleanup saved, and other is what no symbol owns, "
+                   "such as merged strings and alignment. A rename reads as removed plus new, which the largest moves expose."), ""]
 
     if new.get("perf"):
         L += ["## Render performance", "", "| Target | Tick | FPS |", "|---|---:|---:|"]

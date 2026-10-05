@@ -546,6 +546,16 @@ static std::atomic<uint32_t> dnsInUse_[2] = {};
     dnsInUse_[static_cast<uint8_t>(iface)].store(ok ? d.ip.u_addr.ip4.addr : 0, std::memory_order_relaxed);
 }
 
+// A link-local IPv6 address once the interface is up, so mDNS answers AAAA and a .local lookup skips its 5 s wait; a second call keeps the address.
+static void startLinkLocalIPv6(esp_netif_t* netif) {
+#if CONFIG_LWIP_IPV6
+    esp_ip6_addr_t linkLocal{};
+    if (netif && esp_netif_get_ip6_linklocal(netif, &linkLocal) != ESP_OK) esp_netif_create_ip6_linklocal(netif);
+#else
+    (void)netif;
+#endif
+}
+
 #ifndef MM_NO_ETH
 
 uint16_t ethLinkSpeedMbps() MM_NONBLOCKING;   // defined below; the link-up log reports it
@@ -557,6 +567,7 @@ static void ethEventHandler(void* /*arg*/, esp_event_base_t base,
             ethLinkUp_.store(true, std::memory_order_relaxed);
             // The NEGOTIATED speed rather than "up": a gigabit PHY that fell back to 100M behaves differently, and the S31's RGMII Tx-clock skew is speed-dependent.
             ESP_LOGI(NET_TAG, "Ethernet link up (%u Mbps)", ethLinkSpeedMbps());
+            startLinkLocalIPv6(ethNetif_);
             if (ethStatic_.load(std::memory_order_acquire)) {
                 // Static mode: do NOT let the DHCP client restart on link-up (applyHostname would), or a re-plugged cable grabs a lease instead of the static IP. Re-pin the stored config directly via netSetStaticIPv4.
                 netSetStaticIPv4(NetIface::Eth, ethStaticIp_, ethStaticGw_, ethStaticMask_, ethStaticDns_);
@@ -1123,6 +1134,8 @@ static void wifiEventHandler(void* /*arg*/, esp_event_base_t base,
         auto* event = static_cast<ip_event_got_ip_t*>(data);
         ESP_LOGI(NET_TAG, "WiFi STA got IP: " IPSTR, IP2STR(&event->ip_info.ip));
         cacheLeaseDns(event->esp_netif, NetIface::Sta);
+        // Here rather than at association: this handler was registered before the station's default one, so at association the interface is not up yet.
+        startLinkLocalIPv6(staNetif_);
         wifiStaConnected_.store(true, std::memory_order_relaxed);
     }
 }
@@ -1365,10 +1378,9 @@ bool wifiApInit(const WifiApConfig& ap) {
         std::strncpy(reinterpret_cast<char*>(wifi_config.ap.ssid), apName, sizeof(wifi_config.ap.ssid) - 1);
         wifi_config.ap.ssid_len = static_cast<uint8_t>(std::strlen(apName));
     }
-    // While the station is joined the radio follows its channel, so this one applies when the access point runs alone.
-    wifi_config.ap.channel = (ap.channel >= 1 && ap.channel <= 13) ? ap.channel : 1;
+    // While the station is joined the radio follows its channel; alone, the access point takes channel 1.
+    wifi_config.ap.channel = 1;
     wifi_config.ap.max_connection = 4;
-    wifi_config.ap.ssid_hidden = ap.hidden ? 1 : 0;
     // WPA2 asks for eight characters at least, so anything shorter keeps the access point open.
     const size_t pwLen = ap.password ? std::strlen(ap.password) : 0;
     if (pwLen >= 8) {
@@ -1607,7 +1619,13 @@ bool mdnsInit(const char* deviceName) {
     if (ethNetif_ && ethConnected()) {
         esp_err_t regErr = mdns_register_netif(ethNetif_);
         if (regErr == ESP_OK || regErr == ESP_ERR_INVALID_STATE) {
-            esp_err_t actErr = mdns_netif_action(ethNetif_, MDNS_EVENT_ENABLE_IP4);
+            int actions = MDNS_EVENT_ENABLE_IP4;
+#if CONFIG_LWIP_IPV6
+            // The link-local address usually precedes the lease, so its GOT_IP6 found the interface unregistered and was dropped.
+            esp_ip6_addr_t linkLocal{};
+            if (esp_netif_get_ip6_linklocal(ethNetif_, &linkLocal) == ESP_OK) actions |= MDNS_EVENT_ENABLE_IP6;
+#endif
+            esp_err_t actErr = mdns_netif_action(ethNetif_, static_cast<mdns_event_actions_t>(actions));
             ESP_LOGI(NET_TAG, "mDNS eth netif register:%s enable:%s",
                      regErr == ESP_OK ? "new" : "already", esp_err_to_name(actErr));
         } else {
@@ -1882,12 +1900,25 @@ int TcpConnection::read(uint8_t* buf, size_t maxLen) {
 // getpeername and getsockname rather than a field captured at accept: a copy taken earlier outlives a reconnect on the same slot.
 static bool socketIPv4(int fd, bool local, uint8_t out[4]) {
     if (fd < 0 || !out) return false;
-    sockaddr_in addr{};
+    sockaddr_storage addr{};
     socklen_t len = sizeof(addr);
     const int rc = local ? ::getsockname(fd, reinterpret_cast<sockaddr*>(&addr), &len)
                          : ::getpeername(fd, reinterpret_cast<sockaddr*>(&addr), &len);
-    if (rc != 0 || addr.sin_family != AF_INET) return false;
-    const uint32_t ip = ntohl(addr.sin_addr.s_addr);
+    if (rc != 0) return false;
+    uint32_t ip = 0;
+    if (addr.ss_family == AF_INET) {
+        ip = ntohl(reinterpret_cast<const sockaddr_in&>(addr).sin_addr.s_addr);
+#if CONFIG_LWIP_IPV6
+    } else if (addr.ss_family == AF_INET6) {
+        // The dual-stack server reports an IPv4 peer as ::ffff:a.b.c.d; a native IPv6 peer has no IPv4 address to give.
+        const auto& a6 = reinterpret_cast<const sockaddr_in6&>(addr).sin6_addr;
+        if (!IN6_IS_ADDR_V4MAPPED(&a6)) return false;
+        std::memcpy(&ip, &a6.s6_addr[12], 4);
+        ip = ntohl(ip);
+#endif
+    } else {
+        return false;
+    }
     out[0] = static_cast<uint8_t>(ip >> 24);
     out[1] = static_cast<uint8_t>(ip >> 16);
     out[2] = static_cast<uint8_t>(ip >> 8);
@@ -1986,16 +2017,28 @@ TcpServer::~TcpServer() {
 
 bool TcpServer::open(uint16_t port) {
     if (fd_ >= 0) return true;
+#if CONFIG_LWIP_IPV6
+    // Dual-stack: lwIP binds IPv6-any as any type, so one socket serves the IPv4 clients and the IPv6 address mDNS now advertises.
+    fd_ = socket(AF_INET6, SOCK_STREAM, 0);
+#else
     fd_ = socket(AF_INET, SOCK_STREAM, 0);
+#endif
     if (fd_ < 0) return false;
 
     int opt = 1;
     setsockopt(fd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
+#if CONFIG_LWIP_IPV6
+    sockaddr_in6 addr{};
+    addr.sin6_family = AF_INET6;
+    addr.sin6_addr = in6addr_any;
+    addr.sin6_port = htons(port);
+#else
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
     addr.sin_port = htons(port);
+#endif
 
     if (bind(fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
         lwip_close(fd_);

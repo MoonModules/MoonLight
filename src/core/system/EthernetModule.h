@@ -185,7 +185,11 @@ public:
         const uint32_t sig = ip_.sig();
         if (sig != notedIpSig_) { notedIpSig_ = sig; noteIpProblem(); }
         if (!appliedIp_.changedTo(ip_)) return false;
-        if (!connected) return false;   // applied on the next connect
+        // Static applies at the next link-up, but DHCP has nothing to wait for: left pinned, the next cable re-pins the retired address.
+        if (!connected) {
+            if (!ip_.usable()) platform::netSetDhcp(platform::NetIface::Eth);
+            return false;
+        }
         ip_.applyLive(platform::NetIface::Eth);
         return true;
     }
@@ -211,6 +215,21 @@ public:
     }
     /// Pin the configured address onto the wired interface, or do nothing where a client runs.
     void applyStatic() const { ip_.applyStatic(platform::NetIface::Eth); }
+
+    /// What a chip can wire, so the board filter answers for any chip rather than only the one built for.
+    struct EthChip { bool drivesEthernet, w5500, p4, s31; };
+    static constexpr EthChip kThisChip{platform::hasEthernet, platform::hasEthW5500, platform::isEsp32P4, platform::isEsp32S31};
+
+    // A preset carries a pin map as well as a PHY, so one the chip cannot wire persists pins reaching nothing.
+    /// Whether a board preset with PHY `type` belongs on `chip`: Custom everywhere, and every board on the desktop, which drives none and previews them all.
+    static constexpr bool presetFits(int8_t type, EthChip chip = kThisChip) {
+        if (type == 0 || !chip.drivesEthernet) return true;
+        if (type == 3) return chip.w5500;    // SPI, a separate driver
+        if (chip.w5500) return false;
+        if (type == 2) return chip.p4;       // IP101: the P4's
+        if (type == 4) return chip.s31;      // YT8531 RGMII: the S31's
+        return !chip.p4 && !chip.s31;        // LAN8720: classic RMII
+    }
 
 private:
     IpSettings ip_;          ///< the wired interface's own addressing
@@ -285,27 +304,12 @@ private:
     static constexpr uint8_t kEthPresetNone = 0xFF;
     uint8_t ethPresetApplied_ = kEthPresetNone;
 
-    // A preset naming a PHY this build cannot drive would offer pins that reach nothing.
-    /// Does this firmware carry a driver for the preset's PHY?
-    static bool presetBuildable(const EthPreset& p) {
-        if (p.type == 0) return true;                       // Custom, which names no PHY
-        if (p.type == 3) return platform::hasEthW5500;      // SPI, a separate driver
-        if (!platform::hasEthW5500) {
-            // A preset carries a PIN MAP as well as a PHY, so one the chip cannot wire persists pins reaching nothing; the desktop previews all.
-            constexpr bool knownChip = platform::isEsp32P4 || platform::isEsp32S31;
-            if (p.type == 2) return !knownChip || platform::isEsp32P4;    // IP101: the P4's
-            if (p.type == 4) return !knownChip || platform::isEsp32S31;   // YT8531 RGMII: the S31's
-            return !platform::isEsp32P4 && !platform::isEsp32S31;         // LAN8720: classic RMII
-        }
-        return false;
-    }
-
     /// Offer the presets this build can drive, re-pointing the selection by label.
     void buildEthPresetOptions() {
         const char* current = (ethPresetSel_ < ethPresetCount_) ? ethPresetOptions_[ethPresetSel_] : nullptr;
         ethPresetCount_ = 0;
         for (uint8_t i = 0; i < kEthPresetCount; i++) {
-            if (!presetBuildable(kEthPresets[i])) continue;
+            if (!presetFits(kEthPresets[i].type)) continue;
             ethPresetOptions_[ethPresetCount_] = kEthPresets[i].label;
             ethPresetIndex_[ethPresetCount_] = i;
             ethPresetCount_++;

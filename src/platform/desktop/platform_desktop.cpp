@@ -1635,7 +1635,9 @@ void netSetStaticIPv4(NetIface iface, const uint8_t ip[4], const uint8_t[4],
 uint32_t testNetStaticApplyCount(NetIface iface) {
     return testStaticApplies[static_cast<uint8_t>(iface)].load(std::memory_order_relaxed);
 }
-void netSetDhcp(NetIface /*iface*/) {}
+static std::atomic<uint32_t> testDhcpRestores[2]{};
+void netSetDhcp(NetIface iface) { testDhcpRestores[static_cast<uint8_t>(iface)].fetch_add(1, std::memory_order_relaxed); }
+uint32_t testNetDhcpCount(NetIface iface) { return testDhcpRestores[static_cast<uint8_t>(iface)].load(std::memory_order_relaxed); }
 static uint8_t testLease_[3][4] = {};   // gateway, mask, DNS
 void setTestNetLease(const uint8_t gw[4], const uint8_t mask[4], const uint8_t dns[4]) {
     const uint8_t* in[3] = {gw, mask, dns};
@@ -1683,7 +1685,7 @@ static bool testApUp_ = false;
 static uint32_t testApClients_ = 0;
 void setTestWifiApClients(uint32_t n) { testApClients_ = n; }
 static char testApName_[33] = {}, testApPassword_[64] = {};
-static WifiApConfig testApConfig_{testApName_, "", testApPassword_, 0, false};
+static WifiApConfig testApConfig_{testApName_, "", testApPassword_};
 void setTestWifiApAvailable(bool available) {
     testApAvailable_ = available;
     if (!available) { testApUp_ = false; testApClients_ = 0; }
@@ -1692,8 +1694,6 @@ const WifiApConfig& testLastApConfig() { return testApConfig_; }
 bool wifiApInit(const WifiApConfig& cfg) {
     std::snprintf(testApName_, sizeof(testApName_), "%s", cfg.name ? cfg.name : "");
     std::snprintf(testApPassword_, sizeof(testApPassword_), "%s", cfg.password ? cfg.password : "");
-    testApConfig_.channel = cfg.channel;
-    testApConfig_.hidden = cfg.hidden;
     testApUp_ = testApAvailable_;
     return testApUp_;
 }
@@ -1707,7 +1707,11 @@ int wifiTxPower() { return 0; }
 // Zero is a successful no-op and anything else fails, there being no radio. The module passes its no-override sentinel through here to lift a prior cap, which is trivially true with no radio.
 bool wifiSetTxPower(int8_t quarterDbm) { return quarterDbm == 0; }
 
-bool mdnsInit(const char* /*deviceName*/) { return false; }
+static bool testMdns_ = false;      // the host has no mDNS responder of ours, so a test opts in
+static uint32_t testMdnsInits_ = 0;
+void setTestMdnsAvailable(bool available) { testMdns_ = available; testMdnsInits_ = 0; }
+uint32_t testMdnsInitCount() { return testMdnsInits_; }
+bool mdnsInit(const char* /*deviceName*/) { return testMdns_ && ++testMdnsInits_; }
 void mdnsStop() {}
 void mdnsShutdown() {}
 

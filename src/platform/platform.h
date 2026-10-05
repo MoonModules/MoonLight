@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstddef>
 #include "platform_config.h"  // hasOta / hasPsram / …: flags this header's contract refers to
+#include "nonblocking.h"      // MM_NONBLOCKING, which every declaration below carries
 
 /// @defgroup platform The platform layer
 /// @{
@@ -38,13 +39,6 @@
   #define MM_PRINTF_FORMAT(fmt_arg, va_arg)
 #endif
 
-// The render path must not allocate or block, which clang checks transitively through overrides.
-#if defined(__clang__) && defined(__has_cpp_attribute) && __has_cpp_attribute(clang::nonblocking)
-  // noexcept is part of the contract, since unwinding allocates and clang warns without it.
-  #define MM_NONBLOCKING noexcept [[clang::nonblocking]]
-#else
-  #define MM_NONBLOCKING noexcept
-#endif
 
 namespace mm::platform {
 
@@ -529,6 +523,10 @@ void setTestWifiScanRefused(bool refused);
 void setTestNetLease(const uint8_t gw[4], const uint8_t mask[4], const uint8_t dns[4]);
 /// Move a frozen clock by `ms` on every reading, so a test sees two readings within one tick differ; zero stops it.
 void setTestClockStep(uint32_t ms);
+/// Make mdnsInit succeed, as on a device, so a host test sees when the local name is advertised.
+void setTestMdnsAvailable(bool available);
+/// How many times mdnsInit has started advertising since the seam was set.
+uint32_t testMdnsInitCount();
 #endif
 
 /// Why the station's last join attempt failed, so the card can say "incorrect password".
@@ -569,15 +567,15 @@ void setTestWifiStaIPv4(const uint8_t* ip);
 #ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// How many static-addressing applies reached the platform for one interface.
 uint32_t testNetStaticApplyCount(NetIface iface);
+/// How many times netSetDhcp restored DHCP on `iface`, so a host test sees a join leave no static address behind.
+uint32_t testNetDhcpCount(NetIface iface);
 #endif
 
-/// How the device's own access point appears: its name and address, a WPA2 password or empty for open, its channel, and whether it broadcasts its name.
+/// How the device's own access point appears: its name and address, and a WPA2 password or empty for open.
 struct WifiApConfig {
     const char* name;       ///< the network's name, the device name
     const char* ip;         ///< its own address, which its DHCP server hands out as the gateway
     const char* password;   ///< WPA2 at 8 characters or more, open otherwise
-    uint8_t     channel;    ///< 1 to 13, used while no station sets the radio's channel
-    bool        hidden;     ///< whether it leaves its name out of its beacons
 };
 /// Bring up the SoftAP, alongside the station when that is running.
 bool wifiApInit(const WifiApConfig& cfg);

@@ -994,7 +994,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (_monitor.port) await closeMonitor();
         return await installer.detect({ port: pickedPort, onLog: appendLog });
       },
-      onInstall: async (firmware, manifestUrl, binaryUrl, entry) => {
+      onInstall: async (firmware, manifestUrl, binaryUrl, entry, release) => {
         // A desktop archive is handed to the browser to download; there is no chip to flash
         // and no port to hold. Anchor-click rather than location.href so the Content-Disposition
         // from GitHub is honored and the page is not navigated away mid-session.
@@ -1019,7 +1019,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const localUrl = toLocalUrl(manifestUrl);
         const device = installPicker.getSelectedDevice();
         const txPower = installPicker.getSelectedDeviceTxPower();
-        openModal(device ? `Installing MoonLight on ${device}` : `Installing ${firmware}`);
+        // Which release, so a user sees whether this is a stable release or the moving latest build.
+        openModal(device ? `Installing MoonLight ${release} on ${device}` : `Installing MoonLight ${release} (${firmware})`);
         showSection("connecting");
         document.getElementById("connecting-detail").textContent = "";
         const eraseBefore = document.getElementById("erase-before-flash").checked;

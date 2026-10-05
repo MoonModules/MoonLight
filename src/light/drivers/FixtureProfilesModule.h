@@ -250,6 +250,7 @@ public:
         count_ = 0;
         const int n = mm::json::arraySize(doc, arr);
         for (int r = 0; r < n && count_ < kMaxProfiles; r++) restoreRow(doc, mm::json::element(doc, arr, r), profiles_[count_++]);
+        assignMissingIds();
         rebuildPool();
         // Degrade to an empty list rather than writing roles through a null pool base.
         if (!pool_ && count_ > 0) { count_ = 0; return true; }
@@ -297,7 +298,7 @@ private:
     const uint8_t* roleAt(const Profile& p) const { return pool_ + p.poolOffset; }
     uint8_t*       roleAtMut(const Profile& p)     { return pool_ + p.poolOffset; }
 
-    /// Whether another profile than `self` already has this name.
+    /// Whether a profile other than the one with id `self` has this name; ids start at 1, so 0 asks about every profile.
     bool nameTaken(const char* name, uint32_t self) const {
         for (uint8_t i = 0; i < count_; i++)
             if (profiles_[i].id != self && std::strcmp(profiles_[i].name, name) == 0) return true;
@@ -321,6 +322,13 @@ private:
         if (v < 0 || v >= kChannelRoleCount) return false;
         roleAtMut(p)[static_cast<uint8_t>(c)] = static_cast<uint8_t>(v);
         return true;
+    }
+
+    // After every saved id is known, so a row saved without one cannot take an id a later row holds.
+    /// Give each restored row saved without an id a fresh one.
+    void assignMissingIds() {
+        for (uint8_t i = 0; i < count_; i++)
+            if (profiles_[i].id == 0) profiles_[i].id = nextId_++;
     }
 
     /// Read one persisted row's id, name, channel count and lock, its roles following once the pool is sized.
@@ -394,7 +402,7 @@ private:
         uint8_t shipped = 0;
         const Builtin* table = builtins(shipped);
         for (uint8_t k = 0; k < shipped && count_ < kMaxProfiles; k++)
-            if (!holdsBuiltin(table[k].name)) insertBuiltin(table[k]);
+            if (!nameTaken(table[k].name, 0)) insertBuiltin(table[k]);   // a saved profile of that name, built-in or the user's, keeps it
         sortBuiltins(table, shipped);
     }
 
@@ -461,13 +469,6 @@ private:
                       "a built-in profile name exceeds Profile::name: shorten it");
         count = static_cast<uint8_t>(sizeof(kBuiltins) / sizeof(kBuiltins[0]));
         return kBuiltins;
-    }
-
-    /// Whether the list already holds the built-in of this name.
-    bool holdsBuiltin(const char* name) const {
-        for (uint8_t i = 0; i < count_; i++)
-            if (profiles_[i].locked && std::strcmp(profiles_[i].name, name) == 0) return true;
-        return false;
     }
 
     // At the end of the built-in block, which sortBuiltins then puts in order.

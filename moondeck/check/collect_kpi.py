@@ -581,6 +581,8 @@ def main():
             if esp32.get("heap_free"):
                 perf["esp32"]["heap_free"] = esp32["heap_free"]   # the free heap a user's effects and drivers have left
         repo_health.write(perf)
+        # Beside the account line's duplication count: what the commit's flash went to, new code against code saved.
+        print(repo_health.flash_split.line(repo_health.FLASH_SPLIT))
 
     esp32_tick = esp32.get("tick_us")
     lights = desktop.get("lights")

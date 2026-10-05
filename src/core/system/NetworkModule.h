@@ -193,6 +193,7 @@ public:
         // Children first, so the provisioning task stops before the network state goes.
         MoonModule::release();
         platform::mdnsShutdown();
+        mdnsRunning_ = false;   // a prepare after this advertises afresh
         if constexpr (platform::hasWiFi) {
             closeAp();
             if (state_ == State::ConnectedSta || state_ == State::WaitingSta) stopSta();
@@ -230,14 +231,14 @@ private:
             // Asked for from the access point: it stays up beside the station, so the phone sees how the join went.
             if (apUp_) apHoldFrom_ = now ? now : 1;
             if (state_ == State::WaitingSta || state_ == State::ConnectedSta) {
-                platform::mdnsStop();
+                restartMdns();
                 stopSta();
             }
             startedSeq_ = req->seq;
             staId_ = req->knownId;
             appliedStaIp_.mark(wifi_->ipAt(staIndex()));
             std::printf("NetworkModule: WiFi STA joining %s, asked for from the card\n", req->ssid);
-            if (platform::wifiStaInit(req->ssid, req->password)) {
+            if (joinNetwork(req->ssid, req->password)) {
                 enterWaitingSta(now);
             } else {
                 wifi_->joinFailed(platform::WifiFailure::Other);
@@ -314,12 +315,12 @@ private:
         if (!ethUp()) {
             if constexpr (platform::hasWiFi) {
                 std::printf("NetworkModule: Ethernet dropped, cascading\n");
-                platform::mdnsStop();
+                restartMdns();
                 beginSta(now);
             } else {
                 // Drop back to polling for the cable.
                 std::printf("NetworkModule: Ethernet dropped\n");
-                platform::mdnsStop();
+                restartMdns();
                 mm::formatTo(statusBuf_, sizeof(statusBuf_), "No network (Ethernet only)"); setStatus(statusBuf_, Severity::Error);
                 state_ = State::WaitingEth;
                 stateChangeTime_ = now;
@@ -347,7 +348,7 @@ private:
         if (ethernet_ && platform::ethLinkUp() && !ethUp()) ethernet_->applyStatic();
         if (ethUp()) {
             std::printf("NetworkModule: Ethernet up, switching from WiFi STA\n");
-            platform::mdnsStop();
+            restartMdns();
             onConnected(State::ConnectedEth, now);
             return true;
         }
@@ -373,7 +374,7 @@ private:
         const uint32_t grace = releasing_ ? kDhcpWaitMs : kStaGraceMs;
         if (now - lostTime_ <= grace) return;
         std::printf("NetworkModule: WiFi STA gone for %us, starting AP\n", static_cast<unsigned>(grace / 1000));
-        platform::mdnsStop();
+        restartMdns();
         stopSta();
         lostTime_ = 0;
         releasing_ = false;
@@ -426,9 +427,17 @@ private:
             appliedStaIp_.mark(wifi_->ipAt(i));   // what joining applies, so only a later edit re-applies
             std::printf("NetworkModule: WiFi STA trying %s (%u of %u)\n", wifi_->ssidAt(i),
                         static_cast<unsigned>(i + 1), static_cast<unsigned>(wifi_->knownCount()));
-            return platform::wifiStaInit(wifi_->ssidAt(i), wifi_->passwordAt(i));
+            return joinNetwork(wifi_->ssidAt(i), wifi_->passwordAt(i));
         }
         return false;
+    }
+
+    // A pinned address stays on the station until DHCP is restored, so a DHCP network joined after a Static one came up on the Static one's address.
+    /// Start joining `ssid` with the addressing of the network `staId_` names, Static or DHCP, so no earlier network's setting carries over.
+    bool joinNetwork(const char* ssid, const char* password) {
+        if (!platform::wifiStaInit(ssid, password)) return false;
+        wifi_->ipAt(staIndex()).applyLive(platform::NetIface::Sta);
+        return true;
     }
 
     /// The station has started joining: wait for it, its power cap set before the radio's first burst, the window the cap protects.
@@ -521,7 +530,7 @@ private:
             if (staId_ && wifi_->indexOfId(staId_) < 0) {
                 // Forgotten while joined: leave it, as a phone does, and the known networks take over.
                 std::printf("NetworkModule: joined network forgotten, leaving it\n");
-                platform::mdnsStop();
+                restartMdns();
                 stopSta();
                 staId_ = 0;
                 beginSta(now);
@@ -582,7 +591,7 @@ private:
         // The same identity as every other name, so a device shows one everywhere.
         const char* name = readDeviceName();
         const platform::WifiApConfig cfg = ap_ ? ap_->config(name)
-                                               : platform::WifiApConfig{name, captive::kAddressText, "", 1, false};
+                                               : platform::WifiApConfig{name, captive::kAddressText, ""};
         if (!platform::wifiApInit(cfg)) return false;
         apUp_ = true;
         apSig_ = ap_ ? ap_->sig(name) : 0;
@@ -607,7 +616,8 @@ private:
         restartMdns();
     }
 
-    /// Re-advertise on the next tick: an access point opening or closing changes the radio's interfaces, and the bench showed the advertisement going silent when the access point closed under it.
+    // The one way to stop it: a stop that left mdnsRunning_ set kept syncMdns from ever advertising again, so a device lost its .local name after any network change.
+    /// Stop advertising now and on the next connected tick again: every change of interface, an access point opening or closing, a join or a dropped link, goes through here.
     void restartMdns() {
         if (!mdnsRunning_) return;
         platform::mdnsStop();
@@ -629,7 +639,8 @@ private:
         const auto opens = ap_->opens(others);
         const bool connected = (state_ == State::ConnectedEth || state_ == State::ConnectedSta);
         if (!apUp_) {
-            if (opens == AccessPointModule::Opens::Always) openAp();
+            // Not while a station join is in progress: one radio, so opening moves the channel under the join, and the first join after boot failed that way on the bench.
+            if (opens == AccessPointModule::Opens::Always && state_ != State::WaitingSta) openAp();
             // Idle only because it never opened: lifting that opens it now, as every setting applies live.
             else if (idleForNever_ && opens == AccessPointModule::Opens::OnFailure) fallBack(now);
             return;
@@ -645,7 +656,7 @@ private:
             closeAp();
             if (state_ == State::AP) fallBack(now);   // never chosen while it was the fallback
         } else if (ap_->sig(readDeviceName()) != apSig_) {
-            // A new password, channel, name or name visibility applies now, which drops the phones on it to rejoin.
+            // A new password or name applies now, which drops the phones on it to rejoin.
             closeAp();
             openAp();
         }
@@ -727,7 +738,7 @@ private:
         return addressCounts(ip, platform::hasWiFi, configuredIp());
     }
 
-    /// Pin the static address of the network being joined, or do nothing where it runs DHCP.
+    /// Pin the static address of the network being joined again during bring-up; joinNetwork already set its addressing, DHCP included.
     void applyStaStatic() {
         if constexpr (!platform::hasWiFi) return;
         if (wifi_) wifi_->ipAt(staIndex()).applyStatic(platform::NetIface::Sta);
@@ -827,8 +838,7 @@ private:
                 lastMdnsName_[sizeof(lastMdnsName_) - 1] = 0;
             }
         } else if (!shouldRun && mdnsRunning_) {
-            platform::mdnsStop();
-            mdnsRunning_ = false;
+            restartMdns();
         }
     }
 

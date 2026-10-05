@@ -1320,10 +1320,9 @@ function deviceHasMoonBase(mod) {
 
 // Ask a question in the app's own chrome rather than the browser's.
 //
-// A native confirm() is the one box in this UI that cannot be styled, and it looked it: a white
-// system panel over a dark card. This is the same native <dialog> the file editor uses, so Esc and
-// the backdrop close it for free. `lines` are paragraphs, each a string or a node; the last is
-// muted when `calm` is set. Resolves true for the go button, false for anything else.
+// A native confirm() is the one box in this UI that cannot be styled, and it looked it: a white system panel over a dark card.
+// This is the same native <dialog> the file editor uses, so Esc and the backdrop close it for free.
+// `lines` are paragraphs, each a string or a node; the last is muted when `calm` is set. Resolves true for the go button, false for anything else.
 function askInDialog({ title, lines, go, calm = false }) {
     return new Promise((resolve) => {
         const dlg = document.createElement("dialog");
@@ -2118,7 +2117,7 @@ function createCard(mod, depth) {
             // The reasons live in one place, and it is a page rather than a paragraph here: a nudge
             // long enough to make the case stops being a nudge.
             const why = document.createElement("a");
-            why.href = "https://moonmodules.org/MoonLight/mooncloud.html#why-you-might-like-this";
+            why.href = "https://moonmodules.org/MoonLight/explanation/mooncloud.html#why-you-might-like-this";
             why.target = "_blank";
             why.rel = "noopener";
             why.textContent = "Why you might like this";
@@ -3277,6 +3276,8 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
             return null;
     }
 
+    // The key the edit cooldown stamps, so a list rebuild puts back a value still being typed; a list's own row fields keep theirs.
+    for (const el of row.querySelectorAll("input, select, textarea")) if (!el.dataset.dragkey) el.dataset.dragkey = key;
     return row;
 }
 
@@ -6331,13 +6332,13 @@ function moonCloudArc(cx, cy, r, a0, a1) {
            `A ${r} ${r} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${x1} ${y1} Z`;
 }
 
-// Past the 7th slice everything becomes one "other" wedge: a pie with twenty slivers reads as
-// noise, and the exact tail is a question for the raw API rather than a card.
+// Past the 7th slice everything becomes one "other" wedge, since a pie with twenty slivers reads as noise; the rows it folds ride along, so the legend can unfold them.
 function moonCloudTopSlices(rows, keep = 7) {
     if (!rows || rows.length <= keep) return rows || [];
     const head = rows.slice(0, keep);
-    const tail = rows.slice(keep).reduce((sum, r) => sum + r.count, 0);
-    return tail ? head.concat([{ name: "other", count: tail }]) : head;
+    const rest = rows.slice(keep);
+    const tail = rest.reduce((sum, r) => sum + r.count, 0);
+    return tail ? head.concat([{ name: "other", count: tail, rest }]) : head;
 }
 
 function moonCloudPie(rows, onPick) {
@@ -6391,30 +6392,51 @@ function moonCloudLegend(rows, onPick) {
     const box = document.createElement("div");
     box.className = "mooncloud-legend";
     rows.forEach((r, i) => {
-        const line = document.createElement("div");
-        const swatch = document.createElement("span");
-        swatch.className = "mooncloud-swatch";
-        swatch.style.background = kMoonCloudColors[i % kMoonCloudColors.length];
-        const name = document.createElement("span");
-        name.className = "mooncloud-legend-name";
-        name.textContent = r.name || "unknown";
-        const count = document.createElement("span");
-        count.className = "mooncloud-legend-count";
-        count.textContent = String(r.count);
-        line.append(swatch, name, count);
-        // `other` is a bucket of everything past the top slices, so it names no value to filter by.
-        if (onPick && r.name && r.name !== "other") {
-            line.className = "mooncloud-pickable";
-            line.addEventListener("click", () => onPick(r.name));
-            line.tabIndex = 0;
-            line.setAttribute("role", "button");
-            line.addEventListener("keydown", (e) => {
-                if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(r.name); }
-            });
-        }
-        box.appendChild(line);
+        const color = kMoonCloudColors[i % kMoonCloudColors.length];
+        if (!r.rest) { box.appendChild(moonCloudLegendLine(r, color, onPick)); return; }
+        // `other` names no value to filter by, so it unfolds the rows it holds, each one a filter like a slice.
+        const line = moonCloudLegendLine({ name: "other ▸", count: r.count }, color, null);
+        const name = line.querySelector(".mooncloud-legend-name");
+        const rest = document.createElement("div");
+        rest.className = "mooncloud-legend-rest";
+        rest.hidden = true;
+        for (const row of r.rest) rest.appendChild(moonCloudLegendLine(row, null, onPick));
+        moonCloudActivate(line, () => {
+            rest.hidden = !rest.hidden;
+            name.textContent = rest.hidden ? "other ▸" : "other ▾";
+        });
+        box.append(line, rest);
     });
     return box;
+}
+
+/// One legend row: its color, when it has a slice, its name and its count, picked as a filter when it names a value.
+function moonCloudLegendLine(r, color, onPick) {
+    const line = document.createElement("div");
+    const swatch = document.createElement("span");
+    swatch.className = "mooncloud-swatch";
+    if (color) swatch.style.background = color;
+    const name = document.createElement("span");
+    name.className = "mooncloud-legend-name";
+    name.textContent = r.name || "unknown";
+    const count = document.createElement("span");
+    count.className = "mooncloud-legend-count";
+    count.textContent = String(r.count);
+    line.append(swatch, name, count);
+    if (onPick && r.name) moonCloudActivate(line, () => onPick(r.name));
+    return line;
+}
+
+// Reachable without a mouse, as a slice is: a control only a mouse can operate is one only some people have.
+/// Make a legend row a button that runs `act` on a click, Enter or Space.
+function moonCloudActivate(line, act) {
+    line.classList.add("mooncloud-pickable");
+    line.addEventListener("click", act);
+    line.tabIndex = 0;
+    line.setAttribute("role", "button");
+    line.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); act(); }
+    });
 }
 
 function renderMoonCloudStats(host, mod) {
@@ -6611,8 +6633,8 @@ function galleryIndex() {
 let galleryOpen = false;   // kept across re-renders, so a pad click does not fold it shut
 let galleryStatus = "";    // the last outcome, kept across the re-render an install causes
 
-/// A preset that may go on a pad unasked: a look (Effects only) or a palette (Drivers setting its palette and nothing else), since pins and geometry belong to one rig.
-function galleryPadReady(doc) {
+/// A preset that applies without asking: a look (Effects only) or a palette (Drivers setting its palette and nothing else), since pins and geometry belong to one rig.
+function galleryAppliesUnasked(doc) {
     if (!doc || typeof doc !== "object" || Array.isArray(doc)) return false;
     const keys = Object.keys(doc).filter(k => !k.startsWith("$"));   // a `$` key is the file's own, such as its pad
     if (keys.length === 1 && keys[0] === "Effects") return true;
@@ -6659,14 +6681,6 @@ async function galleryFetch(file) {
     return res.text();
 }
 
-/// The presets to try for empty pads, most liked first, one per device name, leaving out names the device already holds, so no entry overwrites another.
-function galleryFillCandidates(index, presetNames) {
-    const have = new Set(presetNames);
-    return index.filter(e => e.kind === "Preset")
-                .sort((a, b) => (b.votes || 0) - (a.votes || 0) || a.issue - b.issue)
-                .filter(e => !have.has(galleryPresetName(e)) && have.add(galleryPresetName(e)));
-}
-
 /// The script names already on the device, the user's and the factory's, so an install never overwrites or shadows one.
 async function deviceScriptNames() {
     const names = new Set();
@@ -6675,21 +6689,29 @@ async function deviceScriptNames() {
     return names;
 }
 
-/// Install one entry from its text: a preset onto a free pad with the scripts it names that the gallery has and the device does not, a script into /moonlive unless one of its name is there.
-async function galleryInstall(entry, index, text) {
+/// Put on the device each script a document names that it lacks: the gallery's copy when an entry carries it, else the one this firmware ships.
+async function galleryFetchScripts(doc, index) {
     const held = await deviceScriptNames();
+    for (const script of galleryScriptsOf(doc)) {
+        if (held.has(script.toLowerCase())) continue;   // the device's own copy, edited or shipped, stays
+        const s = index.find(e => e.kind !== "Preset" && galleryFileName(e).toLowerCase() === script.toLowerCase());
+        if (s) { await writeDeviceFile("/moonlive", script, await galleryFetch(s.file)); continue; }
+        // A shipped script is downloaded on first use, so a device that never picked it has no copy yet.
+        const group = mlGroupForExt(script.slice(script.lastIndexOf(".")).toLowerCase());
+        if (((await mlFetchCatalog())[group]?.names || []).includes(script)) await mlDownloadScript(script, group);
+    }
+}
+
+/// Install one entry from its text: a preset onto a free pad with the scripts it needs, a script into /moonlive unless one of its name is there.
+async function galleryInstall(entry, index, text) {
     if (entry.kind !== "Preset") {
         const name = galleryFileName(entry);
-        if (held.has(name.toLowerCase())) throw new Error(`${name} is already on the device`);
+        if ((await deviceScriptNames()).has(name.toLowerCase())) throw new Error(`${name} is already on the device`);
         await writeDeviceFile("/moonlive", name, text);
         return;
     }
     const doc = JSON.parse(text);
-    for (const script of galleryScriptsOf(doc)) {
-        if (held.has(script.toLowerCase())) continue;   // the device's own copy, edited or shipped, stays
-        const s = index.find(e => e.kind !== "Preset" && galleryFileName(e).toLowerCase() === script.toLowerCase());
-        if (s) await writeDeviceFile("/moonlive", script, await galleryFetch(s.file));
-    }
+    await galleryFetchScripts(doc, index);
     // The pad is this device's to choose: a slot from the author's device could land on one already taken.
     const { $slot, ...rest } = doc;
     await writeDeviceFile("/.config/presets", galleryPresetName(entry) + ".json", $slot === undefined ? text : JSON.stringify(rest));
@@ -6802,9 +6824,11 @@ function renderGallery(host, mod) {
                 const now = button("try now", async () => {
                     try {
                         const text = await galleryFetch(e.file);
+                        const doc = JSON.parse(text);
                         // A preset beyond a look or a palette replaces this rig's own settings, with no undo, so it asks first.
-                        if (!galleryPadReady(JSON.parse(text)) && !confirm(`${e.name} sets more than a look or a palette, such as pins or geometry from the author's rig. Apply it here?`)) return;
+                        if (!galleryAppliesUnasked(doc) && !confirm(`${e.name} sets more than a look or a palette, such as pins or geometry from the author's rig. Apply it here?`)) return;
                         if (newer(e) && !confirm(`${e.name} was made on ${e.firmware}, newer than this device's ${running}. Apply it anyway?`)) return;
+                        await galleryFetchScripts(doc, index);
                         const res = await fetch("/api/state", { method: "PATCH", body: text });
                         const answer = await res.json().catch(() => ({}));
                         say(res.ok ? `applied ${e.name}` : `${e.name}: ${answer.error || res.status}${answer.at ? " at " + answer.at : ""}`);
@@ -6840,7 +6864,7 @@ function renderGallery(host, mod) {
             const name = document.createElement(galleryUrl(e.url) ? "a" : "span");
             if (galleryUrl(e.url)) { name.href = e.url; name.target = "_blank"; name.rel = "noopener"; }
             name.textContent = e.name;
-            head.append(name, document.createTextNode(` ${e.kind} · 👍 ${e.votes || 0} · ${e.author || ""}`));
+            head.append(name, document.createTextNode(` ${e.kind} · ❤️ ${e.votes || 0} · ${e.author || ""}`));
             const what = document.createElement("div");
             what.className = "gallery-entry-text";
             what.textContent = e.description || "";
@@ -6857,26 +6881,6 @@ function renderGallery(host, mod) {
 
         // The browsing view: search, a chip per kind, the order, and one page of thumbnails; no full-size media loads until an entry opens.
         const drawBrowse = () => {
-            if (index.some(e => e.kind === "Preset")) {
-                const fill = button("fill empty pads with the most liked", async () => {
-                    let free = freePads(), added = 0;
-                    for (const e of galleryFillCandidates(index, presetNames())) {
-                        if (free <= 0) break;
-                        if (newer(e)) continue;
-                        try {
-                            const text = await galleryFetch(e.file);
-                            if (!galleryPadReady(JSON.parse(text))) continue;
-                            await galleryInstall(e, index, text);
-                            free--; added++;
-                            say(`added ${added}: ${e.name}`);
-                        } catch (_) { /* skip an entry that does not install; the rest still can */ }
-                    }
-                    say(added ? `added ${added} preset${added === 1 ? "" : "s"}` : "nothing to add: no free pad, or no look or palette left");
-                    refetchState();
-                }, "surface-popup-primary gallery-fill");
-                fill.title = "Looks and palettes made on this version or older; a preset with pins or geometry belongs to one rig; your own presets stay where they are";
-                body.appendChild(fill);
-            }
             const bar = document.createElement("div");
             bar.className = "gallery-bar";
             const search = document.createElement("input");
@@ -6927,7 +6931,7 @@ function renderGallery(host, mod) {
                     }
                     const label = document.createElement("div");
                     label.className = "gallery-entry-text";
-                    label.textContent = `${e.name} · 👍 ${e.votes || 0}`;
+                    label.textContent = `${e.name} · ❤️ ${e.votes || 0}`;
                     tile.appendChild(label);
                     tile.addEventListener("click", () => { galleryView.open = e.issue; draw(); });
                     results.appendChild(tile);

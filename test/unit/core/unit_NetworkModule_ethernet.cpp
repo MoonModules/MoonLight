@@ -258,6 +258,18 @@ TEST_CASE("Ethernet never applies a Static setting with its gateway outside the 
     mm::platform::setTestEthIPv4(nullptr);
 }
 
+// Static waits for the next link-up to apply, but the way back to DHCP has nothing to wait for: left pinned, the next cable comes back on the retired address.
+TEST_CASE("Ethernet set back to DHCP while unplugged drops its pinned address at once") {
+    mm::EthernetModule eth;
+    eth.rebuildControls();
+    setStatic(eth, "{\"ip\":\"192.168.1.250\"}");
+    eth.syncIpLive(true);   // pinned on the wire
+    const uint32_t dhcpBefore = mm::platform::testNetDhcpCount(mm::platform::NetIface::Eth);
+    setField(eth, "ipSettings", "{\"ipSettings\":0}");
+    eth.syncIpLive(false);  // the cable is out
+    CHECK(mm::platform::testNetDhcpCount(mm::platform::NetIface::Eth) > dhcpBefore);
+}
+
 // Static back to DHCP drops the address until the lease lands, which is the wait the device asked for rather than a lost cable.
 TEST_CASE("Ethernet switched back to DHCP waits for the lease before cascading") {
     const uint8_t linkLocal[4] = {169, 254, 7, 9};
@@ -343,6 +355,27 @@ TEST_CASE("ethBoard seeds from the pins after a restore, not once before it") {
     // And the seed does NOT fight a chosen preset: rebuilding again keeps it.
     net.rebuildControls();
     CHECK(std::strcmp(boardOf(net), "Classic RMII") == 0);
+}
+
+// Asked per chip rather than per build, since a host test runs as the desktop, which previews every board: a classic Olimex once offered the P4 and S31 boards.
+TEST_CASE("each chip offers only the Ethernet boards it can wire") {
+    using E = mm::EthernetModule;
+    constexpr E::EthChip classic{true, false, false, false}, p4{true, false, true, false}, s31{true, false, false, true},
+                         s3{true, true, false, false}, desktop{false, false, false, false};
+    constexpr int8_t custom = 0, lan8720 = 1, ip101 = 2, w5500 = 3, yt8531 = 4;
+    for (const auto& chip : {classic, p4, s31, s3, desktop}) CHECK(E::presetFits(custom, chip));
+    CHECK(E::presetFits(lan8720, classic));
+    CHECK_FALSE(E::presetFits(ip101, classic));
+    CHECK_FALSE(E::presetFits(yt8531, classic));
+    CHECK(E::presetFits(ip101, p4));
+    CHECK_FALSE(E::presetFits(lan8720, p4));
+    CHECK_FALSE(E::presetFits(yt8531, p4));
+    CHECK(E::presetFits(yt8531, s31));
+    CHECK_FALSE(E::presetFits(lan8720, s31));
+    CHECK_FALSE(E::presetFits(ip101, s31));
+    CHECK(E::presetFits(w5500, s3));
+    CHECK_FALSE(E::presetFits(lan8720, s3));
+    for (int8_t t : {lan8720, ip101, w5500, yt8531}) CHECK(E::presetFits(t, desktop));
 }
 
 // A chip whose filter leaves exactly ONE real preset opens on it, not on Custom: on a P4-NANO that is a configured interface versus none.

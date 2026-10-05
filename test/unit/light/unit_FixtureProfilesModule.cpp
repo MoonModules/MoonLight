@@ -1,6 +1,6 @@
 /// @module FixtureProfilesModule
 
-/// Pins the fixture-profile library: the curated built-ins seed as locked (read-only) rows, a user can add / edit / delete / reorder custom profiles via the editable-list hooks, a profile resolves into a driver's flat Correction (the cold-path bridge the render loop never touches), and the whole set, with each profile's role wiring, round-trips through persistence.
+/// The fixture-profile library: locked built-ins, editable custom rows, a profile resolving into a driver's Correction, and the whole set surviving persistence.
 
 #include "doctest.h"
 #include "light/drivers/FixtureProfilesModule.h"
@@ -44,7 +44,7 @@ TEST_CASE("FixtureProfiles seeds the curated built-ins as locked rows") {
     CHECK(c.offRed == 0); CHECK(c.offGreen == 1); CHECK(c.offBlue == 2);   // RGB order
 }
 
-// Option-array hoist (the 1 Hz-push efficiency fix): the 14 channel-role option strings are emitted ONCE per list in optionSets["channelRole"], and each ch<N> select references it via optionsRef, NOT re-inlined per channel per row. A 32-channel fixture × 13 rows would otherwise repeat that array 400+ times in every state push. Pins that the row detail carries optionsRef, never inline options.
+// The 14 role names ride once per list in optionSets, each channel select pointing at them by optionsRef; inlined, every state push would repeat them per channel.
 TEST_CASE("FixtureProfiles serializes the channel-role options ONCE, rows reference by optionsRef") {
     FixtureProfilesModule m;
     m.setup();
@@ -95,7 +95,7 @@ TEST_CASE("FixtureProfiles add / edit / resolve a custom profile") {
     CHECK(c.offWhite == 3);   // W at channel 3
 }
 
-// setListRowField parses the "ch<N>" channel index with strtol, not atoi, a malformed suffix must be REJECTED, not silently coerced to channel 0 (atoi("ch3x")→0 would misroute the write). Pins that a trailing-garbage or out-of-range channel name returns false and leaves the roles unchanged.
+// A malformed channel suffix is refused rather than read as channel 0, which would misroute the write: "ch3x" and an out-of-range index leave the roles unchanged.
 TEST_CASE("FixtureProfiles: a malformed ch<N> field name is rejected, not coerced to 0") {
     FixtureProfilesModule m;
     m.setup();
@@ -112,7 +112,7 @@ TEST_CASE("FixtureProfiles: a malformed ch<N> field name is rejected, not coerce
     CHECK(c.offBlue == 2);
 }
 
-// Regression (live bug): growing a profile's channel count must PRESERVE the roles already set on the existing channels, only the new channels get defaults. The earlier rebuildPool copied the NEW (larger) count of bytes from the old (smaller) slice, reading past it / skipping the copy, so the existing picks were lost on every channel increase.
+// Growing a profile's channel count keeps the roles already set and gives defaults only to the new channels.
 TEST_CASE("FixtureProfiles: growing channels preserves existing role picks") {
     FixtureProfilesModule m;
     m.setup();
@@ -192,7 +192,7 @@ TEST_CASE("FixtureProfiles: a custom profile round-trips through persistence wit
     CHECK(c.offWhite == 3);   // W at channel 3 survived
 }
 
-// Regression: a profile name containing a JSON metacharacter (a double-quote or a backslash) must round-trip through persistence. writeListRow escapes the name via writeJsonString; a raw %s would emit malformed JSON that fails to parse on the next boot, SILENTLY WIPING every custom profile, a legal keystroke ("MH \"BeeEyes\"") wiping the whole library. The persisted form must be valid JSON for any name the editor accepts.
+// A name holding a quote or a backslash survives persistence: written raw, it would make the file unparsable and wipe every custom profile at the next boot.
 TEST_CASE("FixtureProfiles: a profile name with a quote or backslash survives persistence") {
     FixtureProfilesModule src;
     src.setup();
@@ -213,9 +213,9 @@ TEST_CASE("FixtureProfiles: a profile name with a quote or backslash survives pe
     CHECK(dst.deriveCorrection(id, 255, c));
 }
 
-// Regression: a persisted role byte out of the valid ChannelRole range (a hand-edited / corrupt file) must clamp to a safe default on restore, matching the validation setListRowField applies on the live edit path. An unclamped cast would store e.g. 250, which the UI's role Select mis-renders and the derived Correction silently drops, the "corrupted-but-looks-fine" outcome the robustness contract forbids. (The load path is ApplyPolicy::Clamp: a stale/bad value snaps to a valid one, never survives.)
+// A persisted role byte outside the ChannelRole range clamps on restore, as a live edit does, rather than surviving as a value the Correction drops.
 TEST_CASE("FixtureProfiles: an out-of-range persisted role clamps to a default on restore") {
-    // A hand-authored persisted array with role bytes past kChannelRoleCount (250) and a negative (-1). R (role 1) sits at channel 2, a non-default offset, so a passing offRed==2 proves the value came from the restored roles, not Correction's built-in default (offRed=1).
+    // Bytes past kChannelRoleCount (250) and -1, with R at channel 2: offRed == 2 proves the value came from the restored roles, not the default of 1.
     const std::string wrapped =
         "{\"profiles\":[{\"id\":900,\"name\":\"corrupt\",\"channels\":3,\"roles\":[250,-1,1]}]}";
     FixtureProfilesModule dst;
@@ -229,7 +229,7 @@ TEST_CASE("FixtureProfiles: an out-of-range persisted role clamps to a default o
     CHECK(c.offRed == 2);      // R restored at channel 2: proves the in-range role survived the clamp
 }
 
-// Driver reference (Inc 2): a driver's `fixture` Select is populated from the library and picking a profile changes the driver's resolved Correction. This would have caught the "(none)" bug where the library seat was claimed too late (in prepare, phase 4) for the driver's defineControls (phase 1) to see it, the seat is now claimed at construction, so active() is available immediately.
+// A driver's `fixture` select lists the library, and picking a profile changes its Correction; the seat exists at construction, so defineControls sees it.
 #include "light/drivers/NetworkSendDriver.h"
 
 TEST_CASE("A driver's fixture Select is populated from the library, and picking one resolves") {
@@ -255,7 +255,7 @@ TEST_CASE("A driver's fixture Select is populated from the library, and picking 
     CHECK(drv.correctionForTest().offRed == 0);   // RGB: R at 0
     CHECK(drv.correctionForTest().offGreen == 1);
 
-    // Pick "GRB" (index 1) via the Select the EXACT way Scheduler::setControl does: write the Select value, THEN rebuildControls() (buildFixtureOptions re-runs), THEN onControlChanged(). The rebuild runs BEFORE onControlChanged, so buildFixtureOptions must honor the fresh Select value, else it re-syncs the index back to the old id and the pick is silently reverted (the live bug).
+    // Picked as Scheduler::setControl does: write, rebuild, then onControlChanged. The rebuild must honor the fresh value, or it reverts the pick to the old id.
     *static_cast<uint8_t*>(profile->ptr) = 1;       // select index 1 = GRB
     drv.rebuildControls();                          // production order: rebuild FIRST
     drv.onControlChanged("fixture");                 // then the change reaction
@@ -263,7 +263,7 @@ TEST_CASE("A driver's fixture Select is populated from the library, and picking 
     CHECK(drv.correctionForTest().offRed == 1);    // R at 1
 }
 
-// CONSISTENCY (the product owner's requirement): editing a profile's wiring must immediately reach EVERY driver that references it, no reboot. The device wires this via prepareTree() (fired by the list mutation), which re-runs each driver's rebuildCorrection() → re-resolves its profile from the library. This test edits a referenced profile and re-resolves, asserting the driver's Correction now reflects the edit. Two drivers on the SAME profile both update, one shared definition, consistent.
+// Editing a profile reaches every driver referencing it at once: prepareTree re-resolves each Correction, so two drivers on one profile both follow the edit.
 TEST_CASE("Editing a profile flows to every driver referencing it (consistency)") {
     FixtureProfilesModule lib;
     lib.defineControls();
@@ -305,7 +305,7 @@ TEST_CASE("Editing a profile flows to every driver referencing it (consistency)"
     CHECK(b.correctionForTest().offRed == 1);
 }
 
-// A newly-ADDED profile must become selectable on a driver, the driver's `fixture` Select option set is built from the library, so adding a profile has to refresh it. On the device, afterListMutation rebuilds every module's controls after a list mutation for exactly this reason; here we simulate that by rebuilding the driver's controls after the add and checking the Select grew.
+// A newly added profile becomes selectable on a driver: the device rebuilds every module's controls after a list mutation, simulated here for the driver.
 TEST_CASE("A newly-added profile becomes selectable on a driver") {
     FixtureProfilesModule lib;
     lib.defineControls();
@@ -337,7 +337,7 @@ TEST_CASE("A newly-added profile becomes selectable on a driver") {
     CHECK(lib.deriveCorrection(id, 255, c));        // the driver now references the new profile, resolves fine
 }
 
-// whiteMode visibility: a driver's whiteMode control is hidden unless the REFERENCED profile carries a white channel, an RGB/GRB strip has nothing to synthesise. Regression: after Inc 2 moved profile selection to a library reference, whiteMode was shown for every profile (the old inline-profile hasWhite check was gone).
+// whiteMode shows only when the referenced profile carries a white channel, since an RGB or GRB strip has nothing to synthesise.
 TEST_CASE("whiteMode is hidden for a no-white profile, shown for an RGBW one") {
     FixtureProfilesModule lib;
     lib.defineControls();                              // seeds the built-ins
@@ -415,7 +415,7 @@ TEST_CASE("Built-in RGBCCT has white (WarmWhite counts) and resolves 5 channels"
     CHECK(c.offWhite == 3);               // cold white derives as the White offset
 }
 
-// A moving-head built-in migrates as a wide fixture: the RGB block sits at its real offset within the DMX map (BeeEyes: R@10,G@11,B@12 of 15), the fixture is the right width, and it resolves without crashing at that odd width (Robust-to-any-input). The Pan/Tilt/Zoom/Gobo channels carry their roles in the profile but aren't color offsets, so they're inert until effect writers land.
+// A moving-head built-in resolves at its real offsets in a wide map (BeeEyes: RGB at 10 to 12 of 15); pan, tilt and gobo carry roles, not colors.
 TEST_CASE("Built-in moving head (BeeEyes-15) resolves at full width with the RGB block placed") {
     FixtureProfilesModule m;
     m.setup();
@@ -429,7 +429,7 @@ TEST_CASE("Built-in moving head (BeeEyes-15) resolves at full width with the RGB
     CHECK(c.offBlue == 12);
 }
 
-// APPEND-ONLY regression: inserting WarmWhite/Yellow/UV after White must NOT renumber the existing color roles, or every persisted RGBW profile's bytes would resolve to the wrong colors. A straight RGBW built-in still deriving R@0,G@1,B@2,W@3 proves the low indices are unchanged.
+// Roles are append-only: adding warm white, yellow and UV after white keeps every index, so a stored RGBW profile still resolves to R0, G1, B2, W3.
 TEST_CASE("Color roles keep their indices after the vocabulary grew (append-only)") {
     FixtureProfilesModule m;
     m.setup();
@@ -438,7 +438,7 @@ TEST_CASE("Color roles keep their indices after the vocabulary grew (append-only
     CHECK(c.offRed == 0); CHECK(c.offGreen == 1); CHECK(c.offBlue == 2); CHECK(c.offWhite == 3);
 }
 
-// MIGRATION SECURITY (the product owner's ask): a driver whose referenced profile no longer exists, a custom profile deleted, or a persisted reference to a profile a firmware no longer ships, must fall back to the default (first) built-in, resolving to a valid RGB output rather than blanking or crashing. rebuildCorrection re-points a dangling id to defaultId(); this pins that path so the fallback can't silently regress (Robust-to-any-input). Two routes are checked: a deleted custom, and a straight-up bogus id.
+// A driver whose profile is gone, deleted or no longer shipped, falls back to the first built-in rather than going dark: a deleted custom and a bogus id.
 TEST_CASE("A driver referencing a missing profile falls back to the default built-in") {
     FixtureProfilesModule lib;
     lib.setup();                                   // seeds the built-ins; first is RGB (R@0,G@1,B@2)
@@ -592,4 +592,33 @@ TEST_CASE("A driver keeps its 16-bit table when its profile goes back to 8 bits"
     pick("RGB");
     CHECK_FALSE(drv.correctionForTest().hasFine);          // the 8-bit path never reads it
     CHECK(drv.correctionForTest().lut16 == table);         // still there for a frame in flight
+}
+
+// A profile the user saved under a name a later firmware gives a built-in keeps that name and its wiring; the built-in is not added beside it.
+TEST_CASE("A built-in never shadows a saved profile of the same name") {
+    FixtureProfilesModule m;
+    m.defineControls();
+    REQUIRE(m.restoreList(R"({"profiles":[{"id":1,"name":"RGB","channels":3,"roles":[1,2,3],"locked":true},)"
+                          R"({"id":40,"name":"RGB 16-bit","channels":3,"roles":[3,2,1]}]})", "profiles"));
+    int named = 0;
+    for (uint8_t i = 0; i < m.profileCount(); i++) named += std::strcmp(m.nameAt(i), "RGB 16-bit") == 0;
+    CHECK(named == 1);
+    CHECK(builtinId(m, "RGB 16-bit") == 40);   // the user's, with its own wiring
+    Correction c;
+    REQUIRE(m.deriveCorrection(40, 255, c));
+    CHECK((c.offBlue == 0 && c.offRed == 2));
+}
+
+// A file may omit a row's id; the row gets a fresh one, since 0 is unaddressable and hid its name from the built-in check.
+TEST_CASE("A saved profile without an id gets its own, and its name is not seeded twice") {
+    FixtureProfilesModule m;
+    m.defineControls();
+    REQUIRE(m.restoreList(R"({"profiles":[{"name":"GRB","channels":3,"roles":[2,1,3]},{"id":1,"name":"RGB","channels":3,"roles":[1,2,3]}]})", "profiles"));
+    int grb = 0;
+    for (uint8_t i = 0; i < m.profileCount(); i++) {
+        CHECK(m.idAt(i) != 0);
+        grb += std::strcmp(m.nameAt(i), "GRB") == 0;
+    }
+    CHECK(grb == 1);
+    CHECK(builtinId(m, "GRB") > 1);   // not the id the next saved row holds
 }

@@ -46,6 +46,9 @@ body {
     padding-top: 60px;  /* clear the floating status bar (8 top + 44 height + 8 gap) */
 }
 
+/* One link color for the whole UI, readable on both themes, where the browser's default blue is not. */
+a { color: var(--accent); }
+
 /* ============================================================
    Status bar (fixed top, 44px)
    ============================================================ */
@@ -1003,7 +1006,6 @@ body.cards-resizing {
 .gallery > summary { cursor: pointer; color: var(--accent); }
 .gallery-status { font-size: 12px; margin: 6px 0; }
 .gallery-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
-.gallery-fill { grid-column: 1 / -1; justify-self: start; }
 .gallery-bar { display: flex; gap: 6px; margin: 6px 0; }
 .gallery-bar input { flex: 1; min-width: 0; }
 .gallery-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
@@ -1016,7 +1018,6 @@ body.cards-resizing {
 .gallery-detail { border: 1px solid var(--accent-soft); border-radius: 6px; padding: 6px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; margin-top: 6px; }
 .gallery-detail img, .gallery-detail video { width: 100%; max-height: 360px; object-fit: contain; border-radius: 4px; }
 .gallery-entry-newer { color: #fbbf24; }
-.surface-popup a, .gallery-detail a { color: var(--accent); }
 
 /* A FADER: the same range input stood on end. Consecutive fader rows collapse into one bank via
    flex, so six faders read as a bank rather than six stacked rows. `writing-mode` is the modern
@@ -1845,7 +1846,6 @@ body.cards-resizing {
 /* The reassurance reads quieter than the warning above it: the point is that a mistake is cheap,
    which should not compete with the sentence saying what is at stake. */
 .mb-ask-calm { color: var(--fg-muted); }
-.mb-ask a { color: var(--accent); }
 .mb-ask-row { display: flex; justify-content: flex-end; gap: 8px; }
 .mb-ask-go { background: var(--accent); color: var(--bg-0); }
 
@@ -2202,6 +2202,8 @@ body.assign-mode .control-encoder input { cursor: pointer; }
 /* Matches the pie's width rather than shrink-wrapping its own content, so the counts line up under
    the pie instead of at the right edge of the longest name. */
 .mooncloud-legend { width: 8rem; max-width: 100%; text-align: left; margin-top: 6px; font-size: 0.75em; }
+.mooncloud-legend .mooncloud-legend-rest { display: block; padding-left: 14px; }
+.mooncloud-legend .mooncloud-legend-rest[hidden] { display: none; }   /* the rule for legend rows above would otherwise show it */
 .mooncloud-legend div { display: flex; align-items: center; gap: 5px; line-height: 1.6; }
 .mooncloud-swatch { width: 0.6rem; height: 0.6rem; border-radius: 2px; flex: 0 0 auto; }
 /* min-width:0 is what lets a flex item actually shrink: without it the name keeps its full

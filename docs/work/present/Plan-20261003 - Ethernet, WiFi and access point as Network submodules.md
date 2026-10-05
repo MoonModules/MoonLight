@@ -117,7 +117,7 @@ A row's password travels to the UI in the clear, over the API and the WebSocket,
 Tested on the one board at hand, an S3 on a 2.4 GHz network, and pinned by tests that can run again:
 
 - **Unit tests** cover the logic: the cascade and its `opens` rules, the known list and its order, connect-first joining and its failure words, per-network IP settings applied on join and live, Ethernet taking over and refusing a card join, the fallback holding off while a phone is on the access point, the DNS reply, the redirect rule, the two-minute handoff, the password lengths and the `?open=` link.
-- **Live scenarios**, run only when named: `scenario_AccessPoint_first_setup_from_its_own_network` walks first setup with the computer as the phone and passed four times on the S3; `scenario_WiFi_known_networks_fall_back_in_order` and `scenario_AccessPoint_protected_hidden_and_always_on` (a password, a hidden name, opening always) passed once each.
+- **Live scenarios**, run only when named: `scenario_AccessPoint_first_setup_from_its_own_network` walks first setup with the computer as the phone and passed four times on the S3; `scenario_WiFi_known_networks_fall_back_in_order` and `scenario_AccessPoint_protected_and_always_on` (a password, opening always) passed once each.
 
 Waiting for more devices and a cable:
 
@@ -150,7 +150,7 @@ Waiting for more devices and a cable:
 
 ## Out of scope at first
 
-The advanced settings users will ask for sooner or later are listed in the backlog's [advanced network settings](../future/backlog-core.md) item: roaming, enterprise WiFi, pinning to one access point, power save, the country code, the access point's address, and IPv6.
+The advanced settings users will ask for sooner or later are listed in the backlog's [advanced network settings](../future/backlog-core.md) item: roaming, enterprise WiFi, pinning to one access point, power save, the country code, the access point's address, and IPv6 beyond link-local.
 
 ## Decided
 

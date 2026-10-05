@@ -1,5 +1,5 @@
 {
-  "name": "scenario_AccessPoint_protected_hidden_and_always_on",
+  "name": "scenario_AccessPoint_protected_and_always_on",
   "module": "AccessPointModule",
   "mode": "mutate",
   "also": [
@@ -7,7 +7,7 @@
   ],
   "on_request": true,
   "host_network": true,
-  "description": "The access point's own settings, applied live on a device that stays on its network: a WPA2 password, a hidden name, and opening always. This computer joins it by name with the password and reaches the device through it while the device is still on its network. It takes the computer off its network for a minute, so it runs only when named, with --network naming the moondeck.json network the device is on.",
+  "description": "The access point's own settings, applied live on a device that stays on its network: a WPA2 password and opening always. This computer joins it by name with the password and reaches the device through it while the device is still on its network. It takes the computer off its network for a minute, so it runs only when named, with --network naming the moondeck.json network the device is on.",
   "steps": [
     {
       "name": "a-password",
@@ -15,13 +15,6 @@
       "id": "AccessPoint",
       "key": "password",
       "value": "moonlight-ap-test"
-    },
-    {
-      "name": "a-hidden-name",
-      "op": "set_control",
-      "id": "AccessPoint",
-      "key": "hidden",
-      "value": true
     },
     {
       "name": "opens-always",
@@ -33,7 +26,7 @@
     },
     {
       "name": "join-it-by-name-with-the-password",
-      "description": "A hidden network is joined by typing its name, and a protected one needs its password.",
+      "description": "A protected network needs its password.",
       "op": "host_wifi",
       "join": "access_point",
       "password": "moonlight-ap-test",

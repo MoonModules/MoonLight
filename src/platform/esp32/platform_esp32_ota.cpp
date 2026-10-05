@@ -360,8 +360,8 @@ bool otaWriteStream(FsWriteSrc src, void* user, size_t contentLen,
 
     setStatus("flashing");
     esp_ota_handle_t handle = 0;
-    // OTA_SIZE_UNKNOWN: the upload streams, so we don't pre-declare the exact size (Content-Length is advisory for the UI); esp_ota_begin erases lazily as writes arrive.
-    esp_err_t err = esp_ota_begin(part, OTA_SIZE_UNKNOWN, &handle);
+    // Each sector is erased as the write reaches it: OTA_SIZE_UNKNOWN would erase the whole slot here in one call, seconds the calling task cannot feed its watchdog through.
+    esp_err_t err = esp_ota_begin(part, OTA_WITH_SEQUENTIAL_WRITES, &handle);
     if (err != ESP_OK) { setStatus("error: ota begin %s", esp_err_to_name(err)); return false; }
 
     // The body, chunk by chunk through the writer's own producer callback: @xref{the-update-buffer-is-heap-and-owned|why heap, and why owned}.
@@ -421,6 +421,7 @@ bool otaWriteStream(FsWriteSrc src, void* user, size_t contentLen,
         }
         written += static_cast<uint32_t>(n);
         *bytesReadOut = written;
+        taskWdtReset();   // the upload runs on the render task, which a 2 MB stream would otherwise starve past its watchdog
     }
     // Guard a truncated upload: if the client sent fewer bytes than Content-Length, the image is incomplete, don't commit a half-image. (contentLen 0 = unknown; skip the check then.)
     if (contentLen && written < contentLen) {
@@ -514,6 +515,7 @@ bool otaWriteMoonBase(FsWriteSrc src, void* user, size_t contentLen,
                           static_cast<unsigned>(written), static_cast<unsigned>(contentLen));
             }
             held -= eof ? held : whole;
+            taskWdtReset();   // the render task carries this stream too
         }
         if (eof) break;
 

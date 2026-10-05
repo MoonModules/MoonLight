@@ -6,22 +6,23 @@ SystemModule. What each macro means lives in the header's own lead, which this t
 the `#ifndef` defaults are part of that template, so they survive regeneration.
 """
 
-import json
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-LIBRARY_JSON = ROOT / "library.json"
 OUT_FILE = ROOT / "src" / "core" / "util" / "build_info.h"
 
-data = json.loads(LIBRARY_JSON.read_text())
-version = data["version"]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import compute_version  # noqa: E402  (the one place a version string is derived)
+
+version = compute_version.compute("local")   # a local build's version, which the release pipeline overrides
 
 
 def build_id() -> str:
     """The short git hash the binary was built from, with `+` if the tree was dirty.
 
-    This is the answer to "which code is on this board?" — the question MM_BUILD_DATE
+    This is the answer to "which code is on this board?", the question MM_BUILD_DATE
     cannot answer. `__DATE__`/`__TIME__` expand when the *including translation unit*
     compiles, and build_info.h is a header consumed by one TU: change a driver .cpp and
     that TU is NOT rebuilt, so the reported date FREEZES while the firmware moves on. A
@@ -30,7 +31,7 @@ def build_id() -> str:
     regenerated on every build (the CMake rule is ALWAYS out-of-date by design), so it
     tracks the source, not a compile timestamp.
 
-    Falls back to "nogit" for a tarball / no-git build — never fails the build.
+    Falls back to "nogit" for a tarball or no-git build, so it never fails the build.
     """
     def git(*args: str) -> str:
         return subprocess.run(("git", "-C", str(ROOT), *args),
@@ -66,7 +67,7 @@ content = f'''#pragma once
 /// | `MM_RELEASE` | the release channel the binary shipped on, such as `latest` or `v1.0.0` |
 ///
 /// Each carries an `#ifndef` default, so a local build needs no flag.
-/// A release `MM_VERSION` is the core semver for a stable tag, or `<core>-dev.<N>` for a moving `latest` build so successive builds are orderable.
+/// A release `MM_VERSION` is the core semver for a stable tag, or `<next>-dev.<N>` for a moving `latest` build so successive builds are orderable.
 ///
 /// ## Why the build id is the identity, not the date
 ///
@@ -125,7 +126,7 @@ constexpr const char* kRelease      = MM_RELEASE;
 /// @}}
 '''
 
-# Force UTF-8 on both read and write — Python's default on Windows is cp1252,
+# Force UTF-8 on both read and write: Python's default on Windows is cp1252,
 # which can't encode anything outside ASCII. Even though the template above is
 # ASCII today, pinning the encoding makes the script robust if a future edit
 # slips a non-ASCII character into the comments.

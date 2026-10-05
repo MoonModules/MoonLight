@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "platform/platform.h"   // MM_NONBLOCKING: settings fingerprints run on tick1s
+#include "platform/nonblocking.h"   // settings fingerprints run on tick1s
 
 /// @defgroup fnv A 32-bit fingerprint of a few bytes
 /// @{

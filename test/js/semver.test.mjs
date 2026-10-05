@@ -60,3 +60,12 @@ test("isNewer: the update-available predicate", () => {
     assert.equal(isNewer("2.0.0", "2.1.0-dev"), false); // dev build is AHEAD of latest stable → no update
     assert.equal(isNewer("1.0.0", "2.0.0"), false);     // device newer than candidate
 });
+
+// The versions compute_version.py gives the builds after a release, in the order the update badge sees them: a board on latest is never offered the older release, and is offered the next one.
+test("a build after a release ranks above it and below the next release", () => {
+    assert.ok(isNewer("6.1.0-dev", "6.0.0"));          // a local build after v6.0.0
+    assert.ok(isNewer("6.1.0-dev.18", "6.1.0-dev"));   // latest above a local build of the same work
+    assert.ok(isNewer("6.1.0", "6.1.0-dev.18"));       // the release, once out, is offered
+    assert.ok(isNewer("7.0.0", "6.1.0-dev.18"));       // and so is a major, when that is what was released
+    assert.ok(!isNewer("6.0.0", "6.1.0-dev.18"));      // the older release is not
+});

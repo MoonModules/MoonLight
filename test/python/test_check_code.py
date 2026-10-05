@@ -3,6 +3,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "moondeck" / "check"))
 
@@ -119,9 +121,10 @@ def test_a_blocking_call_on_the_render_path_is_a_row_per_site(monkeypatch):
         ("src/core/a.h", check_code.HOT_PATH, "mm::platform::millis in tick1s", 1),
         ("src/core/a.h", check_code.HOT_PATH, "printf in ?", 1),
         ("src/light/b.h", check_code.HOT_PATH, "a float conversion at formatTo, line 42", 1)]
-    # A host whose compiler cannot measure it skips the rule; a build that fails is a failure, never a clean zero.
+    # A host whose compiler cannot measure it skips the rule; a build that fails raises, never a clean zero.
     monkeypatch.setattr(nb, "build_output", lambda _d: None)
-    assert check_code.hotpath_rows() is False
+    with pytest.raises(check_code.BuildMissing):
+        check_code.hotpath_rows()
     monkeypatch.setattr(nb, "function_effects_enabled", lambda _d: False)
     assert check_code.hotpath_rows() is None
 
@@ -134,9 +137,23 @@ def test_the_two_boundaries_are_counted_where_the_architecture_draws_them():
     assert find("src/light/a.h", "#include <esp_timer.h>\n#ifdef ESP_PLATFORM\nif constexpr (platform::hasWiFi) {}") == \
         [(check_code.PLATFORM, "line 1: #include <esp_timer.h>"), (check_code.PLATFORM, "line 2: #ifdef ESP_PLATFORM")]
     assert find("src/platform/esp32/a.cpp", "#include <esp_timer.h>") == []
+    # Quoted SDK headers and #elif branches cross the same boundary.
+    assert find("src/core/a.cpp", '#include "esp_timer.h"\n#elif defined(ESP_PLATFORM)') == \
+        [(check_code.PLATFORM, 'line 1: #include "esp_timer.h"'), (check_code.PLATFORM, "line 2: #elif defined(ESP_PLATFORM)")]
     assert find("test/unit/a.cpp", "#include <esp_timer.h>") == []
     # The real tree: no platform code outside src/platform, which the old gate held at zero.
     assert not [r for r in check_code.boundary_rows() if r[1] == check_code.PLATFORM]
+
+
+def test_a_clean_build_with_the_warning_on_and_no_sites_is_a_measured_zero(monkeypatch, tmp_path):
+    """Silence from a full rebuild means a clean tree when the cache says the warning is on, and an unmeasured run when it is not."""
+    import check_nonblocking as nb
+    import subprocess
+    monkeypatch.setattr(nb.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout="[100%] Built target MoonLight\n", stderr=""))
+    monkeypatch.setattr(nb, "function_effects_enabled", lambda _d: True)
+    assert nb.build_output(tmp_path) is not None
+    monkeypatch.setattr(nb, "function_effects_enabled", lambda _d: False)
+    assert nb.build_output(tmp_path) is None
 
 
 def test_the_baseline_is_the_committed_report_and_a_report_never_committed_is_a_first_run():

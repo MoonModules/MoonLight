@@ -16,11 +16,9 @@ it. clang-query then annotates each site with the branch that guards it (the CON
 a purely local AST question. Sites that run unconditionally sort first: they cost every tick,
 where a guarded one may not run at all.
 
-The count is the code report's: `check_code.py` runs this build and adds one "blocking call on
-the render path" row per site to code.md, whose committed count may only fall. This script is the
-detailed view of the same sites. `-Wno-error=function-effects` in CMakeLists keeps the build green,
-since each finding is a judgment (fix it, annotate the callee, or accept it with a scoped reason)
-and the answer differs per site.
+The count is the code report's: `check_code.py` runs this build and adds one "blocking call on the render path" row per site to code.md, whose committed count may only fall.
+This script is the detailed view of the same sites.
+`-Wno-error=function-effects` in CMakeLists keeps the build green, since each finding is a judgment (fix it, annotate the callee, or accept it with a scoped reason) and the answer differs per site.
 
 Usage:
   uv run moondeck/check/check_nonblocking.py            # summary by callee, then every site
@@ -408,6 +406,9 @@ def build_output(build_dir, clean=True):
               file=sys.stderr)
         return None
     if clean and "[-Wfunction-effects]" not in out:
+        # The cache says the warning is on and the whole tree recompiled, so silence is a measured clean tree, not a missing flag.
+        if function_effects_enabled(build_dir):
+            return out
         print("No -Wfunction-effects diagnostics in the build output.\n"
               "That means either the tree really is clean, or the compiler does not support the\n"
               "warning (it needs Clang 20+; CMake omits it silently otherwise). Check with:\n"

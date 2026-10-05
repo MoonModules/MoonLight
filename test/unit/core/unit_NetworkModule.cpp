@@ -285,6 +285,16 @@ const char* modeOf(mm::NetworkModule& net) {
         if (std::strcmp(net.controls()[i].name, "mode") == 0) return static_cast<const char*>(net.controls()[i].ptr);
     return "";
 }
+
+// The device on "home" over WiFi, the starting point of each interface switch below.
+void joinHomeOverWifi(WiFiNetwork& w) {
+    w.wifi.remember("home", "pw");
+    w.net.setup();
+    const uint8_t staIp[4] = {192, 168, 1, 30};
+    mm::platform::setTestWifiStaIPv4(staIp);
+    w.net.tick1s();
+    REQUIRE(std::string(modeOf(w.net)) == "WiFi STA");
+}
 }  // namespace
 
 // Ethernet outranks WiFi, so a join asked for from the card while the cable carries the device is refused, and the card says why rather than dropping the wired link.
@@ -325,17 +335,58 @@ TEST_CASE("Ethernet takes over from WiFi once it has an address") {
     mm::platform::setTestWifiStaAvailable(true);
     {
         WiFiNetwork w;
-        w.wifi.remember("home", "pw");
-        w.net.setup();
-        const uint8_t staIp[4] = {192, 168, 1, 30};
-        mm::platform::setTestWifiStaIPv4(staIp);
-        w.net.tick1s();
-        REQUIRE(std::string(modeOf(w.net)) == "WiFi STA");
+        joinHomeOverWifi(w);
         const uint8_t leased[4] = {192, 168, 1, 20};
         mm::platform::setTestEthIPv4(leased);
         w.net.tick1s();
         CHECK(std::string(modeOf(w.net)) == "Ethernet");
     }
+    mm::platform::setTestEthIPv4(nullptr);
+    mm::platform::setTestWifiStaIPv4(nullptr);
+    mm::platform::setTestWifiStaAvailable(false);
+}
+
+// A Static network that does not join leaves its address pinned on the station; the next network, on DHCP, must lease its own rather than come up on that one.
+TEST_CASE("a DHCP network joined after a Static one leases its own address") {
+    FrozenClock clock;
+    mm::platform::setTestWifiStaAvailable(true);
+    {
+        WiFiNetwork w;
+        w.wifi.rebuildControls();
+        w.wifi.remember("home", "pw1");
+        w.wifi.remember("travel", "pw2");   // at the top, so tried first
+        const uint32_t travel = w.wifi.idAt(0);
+        REQUIRE(w.wifi.setListRowField(travel, "ipSettings", R"({"value":1})"));
+        REQUIRE(w.wifi.setListRowField(travel, "ip", R"({"value":"192.168.8.158"})"));
+        REQUIRE(w.wifi.setListRowField(travel, "gateway", R"({"value":"192.168.8.1"})"));
+        const uint32_t dhcpBefore = mm::platform::testNetDhcpCount(mm::platform::NetIface::Sta);
+        w.net.setup();
+        REQUIRE(std::strcmp(mm::platform::testLastStaSsid(), "travel") == 0);
+        mm::platform::setTestNowMs(1000 + 11000);   // travel is not in range
+        w.net.tick1s();
+        REQUIRE(std::strcmp(mm::platform::testLastStaSsid(), "home") == 0);
+        CHECK(mm::platform::testNetDhcpCount(mm::platform::NetIface::Sta) > dhcpBefore);
+    }
+    mm::platform::setTestWifiStaAvailable(false);
+}
+
+// Every change of interface stops the advertisement, and the device must advertise its .local name again once connected, or it is reachable by address only.
+TEST_CASE("the local name is advertised again after switching from WiFi to Ethernet") {
+    FrozenClock clock;
+    mm::platform::setTestWifiStaAvailable(true);
+    mm::platform::setTestMdnsAvailable(true);
+    {
+        WiFiNetwork w;
+        joinHomeOverWifi(w);
+        CHECK(mm::platform::testMdnsInitCount() == 1);
+        const uint8_t leased[4] = {192, 168, 1, 20};
+        mm::platform::setTestEthIPv4(leased);
+        w.net.tick1s();
+        REQUIRE(std::string(modeOf(w.net)) == "Ethernet");
+        w.net.tick1s();
+        CHECK(mm::platform::testMdnsInitCount() == 2);   // advertised again, now on Ethernet
+    }
+    mm::platform::setTestMdnsAvailable(false);
     mm::platform::setTestEthIPv4(nullptr);
     mm::platform::setTestWifiStaIPv4(nullptr);
     mm::platform::setTestWifiStaAvailable(false);
@@ -347,12 +398,7 @@ TEST_CASE("editing the joined network's IP settings applies them live") {
     mm::platform::setTestWifiStaAvailable(true);
     {
         WiFiNetwork w;
-        w.wifi.remember("home", "pw");
-        w.net.setup();
-        const uint8_t staIp[4] = {192, 168, 1, 30};
-        mm::platform::setTestWifiStaIPv4(staIp);
-        w.net.tick1s();
-        REQUIRE(std::string(modeOf(w.net)) == "WiFi STA");
+        joinHomeOverWifi(w);
         const uint32_t before = mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Sta);
         constexpr uint32_t kFirstRowId = 1;
         REQUIRE(w.wifi.setListRowField(kFirstRowId, "ipSettings", "{\"value\":1}"));
@@ -448,12 +494,7 @@ TEST_CASE("a network added above the joined one leaves the joined one marked") {
     mm::platform::setTestWifiStaAvailable(true);
     {
         WiFiNetwork w;
-        w.wifi.remember("home", "pw");
-        w.net.setup();
-        const uint8_t staIp[4] = {192, 168, 1, 30};
-        mm::platform::setTestWifiStaIPv4(staIp);
-        w.net.tick1s();
-        REQUIRE(std::string(modeOf(w.net)) == "WiFi STA");
+        joinHomeOverWifi(w);
         uint32_t id = 0;
         REQUIRE(w.wifi.addListRow(id));
         REQUIRE(w.wifi.setListRowField(id, "ssid", "{\"value\":\"other\"}"));

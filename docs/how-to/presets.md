@@ -60,10 +60,9 @@ The **Gallery** under the pads shows what people shared in [MoonLight-Gallery](h
 
 Search covers the name, the description and the author, and a chip per kind narrows the list to presets or one kind of script. Click a thumbnail to open the entry: its moving preview plays with the whole description, and prev and next step through what the search shows.
 
-- **add to a pad** puts a preset on the first free pad, with any script it needs from the gallery.
-- **try now** applies it without keeping it.
+- **add to a pad** puts a preset on the first free pad, with any script it needs that the device lacks, from the gallery or from the scripts MoonLight ships.
+- **try now** applies it the same way without keeping it on a pad.
 - **install** puts a script into `/moonlive`.
-- **fill empty pads with the most liked** adds the best-liked looks and palettes until the grid is full. Presets that set pins or geometry are left out, since they belong to one rig, and your own pads stay where they are.
 
 An entry made on a newer MoonLight than yours says so: update first.
 

@@ -234,9 +234,9 @@ uv run moondeck/check/collect_kpi.py --commit --no-live-capture   # skip the ser
 
 Captures a live tick from a connected ESP32 (and the desktop scenario ticks) plus source/test line counts, emitting the `tick:Xus(FPS:Y)` one-liner the commit message records.
 
-The ESP32 half reads `esp32/monitor.log`, and refreshes it by opening the serial port for 15 s when that log is older than 5 minutes — accurate, but ~80 s and only possible with a bench board attached. `--no-live-capture` skips that refresh and uses whatever log exists (a few seconds, no board needed); the ESP32 tick line is then absent rather than stale when no recent log is around. The gate lists pass the flag so their cost stays predictable; omit it when composing a commit message, where the fresh reading is the point.
+The ESP32 half reads `esp32/monitor.log`, and refreshes it by opening the serial port for 15 s when that log is older than 5 minutes. That reading is accurate, but takes ~80 s and a bench board. `--no-live-capture` skips that refresh and uses whatever log exists (a few seconds, no board needed); the ESP32 tick line is then absent rather than stale when no recent log is around. The gate lists pass the flag so their cost stays predictable; omit it when composing a commit message, where the fresh reading is the point.
 
-In `--commit` mode it also prints the change's own account from [check_code](#check_code): lines added and removed under `src/` and `test/`, and the change in code findings and duplicated lines against the committed `code.md`. It writes the repo-health snapshot (below) too, reusing the tick/FPS it measured.
+In `--commit` mode it also prints the change's own account from [check_code](#check_code): lines added and removed under `src/` and `test/`, and the change in code findings and duplicated lines against the committed `code.md`. It writes the repo-health snapshot (below) too, reusing the tick/FPS it measured, and prints the flash split beside the account: what each rebuilt firmware's flash went to.
 
 ### bench_kernels
 
@@ -251,18 +251,20 @@ A report, not a check: the Markdown table it prints is pasted into performance.m
 
 ### repo_health
 
-Measure the repo's current state into `repo-health.json` — flash per firmware variant, tick/FPS per target, lines of code by area, comment density, test counts, docs inventory.
+Measure the repo's current state into `repo-health.json`: flash per firmware variant, tick/FPS per target, lines of code by area, comment density, test counts, docs inventory.
 
 ```bash
 uv run moondeck/check/repo_health.py           # measure + print the delta, write nothing
 uv run moondeck/check/repo_health.py --write   # rewrite repo-health.json
 ```
 
-**One small file, current state only — the trend is its git history** (`git log -p repo-health.json`), so the file never grows. The KPI gate rewrites it on every `--commit` run and prints the delta first, so growth is visible while you work and again in the commit's diff. A **soft ratchet**: nothing here fails a build. The numbers count things; they cannot tell a valuable comment from a restating one, so the judgment stays human.
+**One small file, current state only: the trend is its git history** (`git log -p repo-health.json`), so the file never grows. The KPI gate rewrites it on every `--commit` run and prints the delta first, so growth is visible while you work and again in the commit's diff. A **soft ratchet**: nothing here fails a build. The numbers count things; they cannot tell a valuable comment from a restating one, so the judgment stays human.
 
-Two properties worth knowing. Measurements read **tracked files only** (`git ls-files`), so a stray build artifact or scratch file can't move a number. And anything this run could not measure — a firmware variant that wasn't built, a tick with no board attached — **carries its previous value forward** rather than disappearing, so a docs-only commit doesn't blank the flash sizes and make the next diff unreadable.
+Two properties worth knowing. Measurements read **tracked files only** (`git ls-files`), so a stray build artifact or scratch file can't move a number. And anything this run could not measure **carries its previous value forward** rather than disappearing: a firmware variant that wasn't built, or a tick with no board attached. A docs-only commit so keeps its flash sizes, and the next diff stays readable.
 
 **Since the last release.** The page opens with each number a user feels beside its value at the last release tag (`git describe`). Those are flash per target, free heap, the isolated scenario ticks, lines of code, the code report's findings and the tests. The per-commit deltas move with host noise, so a simplification shows as a gain here over weeks. A firmware not rebuilt since the tag is left out, so a carried number never reads as no growth.
+
+**The flash split.** Each firmware rebuilt this run has its flash change split symbol by symbol. **New** is new functionality, **removed** and **shrunk** are what a cleanup saved, and **grown** is existing code that got bigger. **Other** is merged strings and alignment, so the parts sum to the net. The baseline is the previous commit's measurement, kept beside the build as `flash-symbols.base.json`. Every run inside one commit so compares against the same state. It needs a measurement at the previous commit, so a firmware's first split appears one commit after it is first measured. The page lists the largest moves per firmware, which is where a rename, read as removed plus new, shows itself. The split is a change rather than a state, so it stays out of the JSON. The code lives in [`flash_split.py`](check/flash_split.py).
 
 ### Tools group
 
@@ -1058,6 +1060,20 @@ uv run moondeck/build/erase_flash_esp32.py --port /dev/tty.usbserial-0001
 ```
 
 Typical use: forcing a fresh-first-boot after firmware experiments leave the LittleFS partition in a state the new firmware can't migrate from, or before testing the post-flash Improv provisioning flow as if the device just came out of the factory. After erase, re-run **Build** then **Flash** — the device boots with empty persistence and goes straight to AP-fallback / Improv-awaiting-credentials.
+
+### release_version
+
+Move `library.json` to the version development works toward, at the two moments a release changes it.
+
+```bash
+uv run moondeck/build/release_version.py next    # after releasing vX.Y.Z: X.(Y+1).0-dev
+uv run moondeck/build/release_version.py major   # the coming release is a major: (X+1).0.0-dev
+```
+
+Between releases `library.json` holds the next version with a `-dev` suffix, and tagging `vX.Y.Z` releases it: `verify_version.py` compares the tag with that version's core, so no edit precedes a tag.
+After a release, `next` moves development to the next minor; when the coming release is a major instead, `major` moves it there before tagging.
+A forgotten `next` cannot misorder the builds: `compute_version.py` gives a build after the last tag the next minor, so it always ranks above that release.
+The script never touches git, since the commit and the tag stay yours.
 
 ### serve_firmware
 

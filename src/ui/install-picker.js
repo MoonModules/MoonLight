@@ -13,7 +13,7 @@
 //     page (CORS), which is why the Pages site self-hosts the last N releases.
 //
 // The picker is a presentation+state machine; it does not decide *how* to
-// install. The caller passes an onInstall(firmware, manifestUrl, binaryUrl)
+// install. The caller passes an onInstall(firmware, manifestUrl, binaryUrl, entry, release)
 // callback and wires it to the right transport.
 //
 // "Firmware" here is the compiled binary variant (chip + radios + sdkconfig
@@ -339,6 +339,12 @@ function desktopKeyForThisHost() {
 // "2 days ago", "in 3 hours", etc. Uses Intl.RelativeTimeFormat (Chrome 71+,
 // every modern browser). 15 lines, no external library.
 const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+// The moving prerelease's tag is always `latest`; which build that is lives in its name, the version string the release workflow writes.
+/// A release as a person reads it: a stable release by its tag, the moving prerelease as `latest` plus its version.
+function releaseLabel(r) {
+    return r.tag_name === "latest" && r.name && r.name !== r.tag_name ? `latest ${r.name}` : r.tag_name;
+}
+
 function relativeTime(iso) {
     if (!iso) return "";
     const diffMs = new Date(iso) - new Date();
@@ -791,10 +797,10 @@ function render(state) {
         if (!entry.isDesktop) safeLocalSet(PREF_FIRMWARE_KEY, state.firmware);
         installBtn.disabled = true;
         statusEl.textContent = entry.isDesktop
-            ? `Downloading ${r.tag_name}…`
-            : `Installing ${r.tag_name} (${state.firmware})…`;
+            ? `Downloading ${releaseLabel(r)}…`
+            : `Installing ${releaseLabel(r)} (${state.firmware})…`;
         try {
-            await state.onInstall(state.firmware, entry.manifestUrl, entry.binaryUrl, entry);
+            await state.onInstall(state.firmware, entry.manifestUrl, entry.binaryUrl, entry, releaseLabel(r));
             statusEl.textContent = entry.isDesktop
                 ? `Download started. Open it to install.`
                 : `Install request sent — watch device status for progress.`;
@@ -815,7 +821,7 @@ function render(state) {
 // Pure helpers exported for unit testing (test/js/installer-firmware-merge.test.mjs).
 // They take data and return data — no DOM, no fetch — so a node test can exercise
 // the real functions rather than a re-implemented copy.
-export { parseFirmwaresFromAssets, mergeFirmwares, isCompatible };
+export { parseFirmwaresFromAssets, mergeFirmwares, isCompatible, releaseLabel };
 
 export const installPicker = {
     /**

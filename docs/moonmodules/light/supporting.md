@@ -186,6 +186,7 @@ A fine role is the low byte of a 16-bit channel, the DMX convention: `R fine`, `
 `RGB 16-bit`, `GRB 16-bit` and `RGBW 16-bit` ship built in, and a custom row places fine roles in any order a fixture needs.
 
 The effects stay 8-bit, and the brightness and curve go to 16 bits on the way out, so a fade keeps all 256 steps at any brightness.
+That takes a 512-byte table per driver; when it cannot be allocated the channel stays 8-bit, with a fine byte of 0.
 Pan and tilt widen by repeating their byte, so a full 8-bit aim reaches the fixture's full 16-bit range.
 A master dimmer is held wide open on both bytes.
 
