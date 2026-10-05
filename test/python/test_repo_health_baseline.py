@@ -154,14 +154,15 @@ def test_the_baseline_falls_back_to_disk_when_git_cannot_answer(tmp_path, monkey
 
 def test_the_gains_compare_only_what_both_snapshots_hold():
     """A metric the release did not record yet, such as the heap, is left out rather than shown as a jump from zero."""
+    host = repo_health.desktop_target()   # this machine's key, which the gains read, so the test holds on every host
     ref = {"flash": {"esp32": 2_000_000, "gone": 1}, "loc": {"core": 100}, "tests": {"cases": 10},
            "complexity": {"over_threshold": 300},
-           "perf": {"desktop-macos": {"scenario_p50": {"A": {"p50": 7}}}}}
+           "perf": {host: {"scenario_p50": {"A": {"p50": 7}}}}}
     new = {"flash": {"esp32": 2_010_240, "new": 5}, "loc": {"core": 90, "ui": 5}, "tests": {"cases": 12, "scenarios": 3},
-           "complexity": {"over_threshold": 290}, "perf": {"desktop-macos": {"scenario_p50": {"A": {"p50": 6}}},
+           "complexity": {"over_threshold": 290}, "perf": {host: {"scenario_p50": {"A": {"p50": 6}}},
                                                           "esp32": {"heap_free": 200_000}}}
     rows = repo_health.gains(new, ref, code=(1300, 1290))
-    assert [r[0] for r in rows] == ["flash esp32", "tick A (desktop-macos)", "lines core", "code findings", "unit tests"]
+    assert [r[0] for r in rows] == ["flash esp32", f"tick A ({host})", "lines core", "code findings", "unit tests"]
     assert ("lines core", "", 100, 90) in rows
     # A firmware not rebuilt since the release carries its old number, which would read as no growth.
     new["measured"] = {"esp32": "2026-09-01"}
