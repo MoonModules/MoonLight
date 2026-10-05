@@ -77,21 +77,28 @@ public:
     const char* passwordAt(uint8_t i) const MM_NONBLOCKING { return i < count_ ? rows_[i].password : ""; }
     /// The static address a known network pins, or null where it runs DHCP.
     const uint8_t* staticIpAt(uint8_t i) const MM_NONBLOCKING {
-        return (i < count_ && rows_[i].ipSettings == ipsettings::kStatic) ? rows_[i].ip : nullptr;
+        return (i < count_ && rows_[i].ip.usable()) ? rows_[i].ip.ip : nullptr;
     }
 
-    /// Pin a known network's static address onto the station, or do nothing where it runs DHCP.
-    void applyStatic(uint8_t i) const {
-        if (!staticIpAt(i)) return;
-        const Row& r = rows_[i];
-        platform::netSetStaticIPv4(platform::NetIface::Sta, r.ip, r.gateway, r.subnet, r.dns);
+    /// Enough for a workshop, a venue and a few more, kept small since each row is RAM.
+    static constexpr uint8_t kMaxKnown = 8;
+    /// How long a scan's view of what is in range orders the joining, since networks come and go.
+    static constexpr uint32_t kScanFreshMs = 5 * 60 * 1000;
+
+    /// The rows in the order to try them, into `out`: those a recent scan saw first, then the rest, each in list order; returns the count.
+    uint8_t joinOrder(uint8_t (&out)[kMaxKnown], uint32_t now) const {
+        const bool fresh = scannedMs_ && now - scannedMs_ < kScanFreshMs;
+        uint8_t n = 0;
+        for (int pass = fresh ? 0 : 1; pass < 2; pass++)
+            for (uint8_t i = 0; i < count_ && n < kMaxKnown; i++)
+                if (!fresh || inScan(rows_[i].ssid) == (pass == 0)) out[n++] = i;
+        return n;
     }
 
-    /// A hash over a known network's IP settings, so an edit to the joined one re-applies live.
-    uint32_t ipSigAt(uint8_t i) const {
-        if (i >= count_) return Fnv1a{}.h;
-        const Row& r = rows_[i];
-        return ipsettings::sig(r.ipSettings, r.ip, r.gateway, r.subnet, r.dns);
+    /// A known network's IP settings, or DHCP for a row that does not exist.
+    const IpSettings& ipAt(uint8_t i) const {
+        static const IpSettings kNone;
+        return i < count_ ? rows_[i].ip : kNone;
     }
 
     /// A 6.0 config's top-level network as the first known row, with Network's shared IP settings and its power cap; false once the list holds one.
@@ -101,13 +108,12 @@ public:
         mm::json::parseString(json, "ssid", ssid, sizeof(ssid));
         mm::json::parseString(json, "password", password, sizeof(password));
         if (!ssid[0] || !remember(ssid, password)) return false;
-        Row& r = rows_[0];
-        r.ipSettings = mm::json::parseInt(json, "addressing") == ipsettings::kStatic ? ipsettings::kStatic : ipsettings::kDhcp;
-        uint8_t* quads[4] = {r.ip, r.gateway, r.subnet, r.dns};
+        IpSettings& ip = rows_[0].ip;
+        ip.mode = mm::json::parseInt(json, "addressing") == ipsettings::kStatic ? ipsettings::kStatic : ipsettings::kDhcp;
         for (uint8_t k = 0; k < 4; k++) {
             char text[16] = {};
             mm::json::parseString(json, ipsettings::kFields[k], text, sizeof(text));
-            if (text[0]) parseDottedQuad(text, quads[k]);
+            if (text[0]) parseDottedQuad(text, ip.address(k));
         }
         for (uint8_t i = 0; i < controls_.count(); i++)
             if (std::strcmp(controls_[i].name, "txPowerSetting") == 0) applyControlValue(controls_[i], json, "txPowerSetting", ApplyPolicy::Clamp);
@@ -188,7 +194,7 @@ public:
     }
 
     /// Scan once the device's own access point is up with nobody on it, so a phone joining it finds the networks already listed.
-    void onAccessPointStarted() { scanRequested_ = true; }
+    void onAccessPointStarted() { requestScan(); }
 
     // Joining a network from the card, connect-first as a phone does: the device joins at once, and saves a scanned network only once it joined.
 
@@ -235,10 +241,12 @@ public:
             sink.appendf(",\"joined\":\"✓ %s\"", ip);
         }
         if (!r.password[0]) sink.append(",\"security\":\"open\"");
-        if (r.ipSettings == ipsettings::kStatic) {
+        if (r.ip.isStatic()) {
             char ip[16];
-            formatDottedQuad(ip, r.ip);
-            sink.appendf(",\"ipSettings\":\"static %s\"", ip);
+            formatDottedQuad(ip, r.ip.ip);
+            const char* why = r.ip.problem();
+            if (why) sink.appendf(",\"ipSettings\":\"%s\"", why);
+            else sink.appendf(",\"ipSettings\":\"static %s\"", ip);
         }
         sink.append("}");
     }
@@ -254,11 +262,10 @@ public:
         sink.writeJsonString(r.ssid);
         sink.append(",\"password\":");
         sink.writeJsonString(r.password);
-        sink.appendf(",\"ipSettings\":%u", static_cast<unsigned>(r.ipSettings));
-        const uint8_t* quads[4] = {r.ip, r.gateway, r.subnet, r.dns};
-        for (int k = 0; k < 4; k++) {
+        sink.appendf(",\"ipSettings\":%u", static_cast<unsigned>(r.ip.mode));
+        for (uint8_t k = 0; k < 4; k++) {
             char q[16];
-            formatDottedQuad(q, quads[k]);
+            formatDottedQuad(q, r.ip.address(k));
             sink.appendf(",\"%s\":\"%s\"", ipsettings::kFields[k], q);
         }
         sink.append("}");
@@ -277,15 +284,18 @@ public:
         sink.writeJsonString(r.ssid);
         sink.append("},{\"name\":\"password\",\"type\":\"password\",\"value\":");
         writeObfuscatedPassword(sink, r.password);   // as a Password control shows one
-        sink.appendf("},{\"name\":\"ipSettings\",\"type\":\"select\",\"value\":%u,\"optionsRef\":\"ipSettings\"}",
-                     static_cast<unsigned>(r.ipSettings));
-        sink.append(",{\"name\":\"connect\",\"type\":\"button\",\"label\":\"Connect\"}");
-        if (r.ipSettings == ipsettings::kStatic) {
-            const uint8_t* quads[4] = {r.ip, r.gateway, r.subnet, r.dns};
-                for (int k = 0; k < 4; k++) {
-                char q[16];
-                formatDottedQuad(q, quads[k]);
-                sink.appendf(",{\"name\":\"%s\",\"type\":\"ipv4\",\"value\":\"%s\"}", ipsettings::kFields[k], q);
+        // Right after what it joins with, the name and password; the IP settings below apply live without it.
+        sink.append("},{\"name\":\"connect\",\"type\":\"button\",\"label\":\"Connect\"");
+        sink.appendf("},{\"name\":\"ipSettings\",\"type\":\"select\",\"value\":%u,\"default\":%u,\"optionsRef\":\"ipSettings\",\"reshapes\":true}",
+                     static_cast<unsigned>(r.ip.mode), static_cast<unsigned>(ipsettings::kDhcp));
+        if (r.ip.isStatic()) {
+            // The joined network's reset goes back to the lease it runs with, any other network's to the empty setting.
+            const IpSettings def = (r.id == joinedId_ && joinedId_) ? IpSettings::leased(platform::NetIface::Sta) : IpSettings{};
+            for (uint8_t k = 0; k < 4; k++) {
+                char q[16], d[16];
+                formatDottedQuad(q, r.ip.address(k));
+                formatDottedQuad(d, def.address(k));
+                sink.appendf(",{\"name\":\"%s\",\"type\":\"ipv4\",\"value\":\"%s\",\"default\":\"%s\"}", ipsettings::kFields[k], q, d);
             }
         }
         sink.append("]}");
@@ -335,21 +345,7 @@ public:
             mm::json::parseString(valueJson, "value", r.password, sizeof(r.password));
             return true;
         }
-        if (std::strcmp(field, "ipSettings") == 0) {
-            const int v = mm::json::parseInt(valueJson, "value");
-            if (v != ipsettings::kDhcp && v != ipsettings::kStatic) return false;
-            r.ipSettings = static_cast<uint8_t>(v);
-            return true;
-        }
-        // An address that does not parse is refused rather than stored as zero.
-        uint8_t* quad = std::strcmp(field, "ip") == 0 ? r.ip
-                      : std::strcmp(field, "gateway") == 0 ? r.gateway
-                      : std::strcmp(field, "subnet") == 0 ? r.subnet
-                      : std::strcmp(field, "dns") == 0 ? r.dns : nullptr;
-        if (!quad) return false;
-        char text[16] = {};
-        mm::json::parseString(valueJson, "value", text, sizeof(text));
-        return parseDottedQuad(text, quad);
+        return setIpField(r, field, valueJson);
     }
 
     /// Restore the known networks from the saved file.
@@ -368,12 +364,11 @@ public:
             r.id = static_cast<uint32_t>(mm::json::readInt(mm::json::member(doc, el, "id"), 0));
             mm::json::readString(mm::json::member(doc, el, "ssid"), r.ssid, sizeof(r.ssid));
             mm::json::readString(mm::json::member(doc, el, "password"), r.password, sizeof(r.password));
-            r.ipSettings = mm::json::readInt(mm::json::member(doc, el, "ipSettings"), ipsettings::kDhcp) == ipsettings::kStatic ? ipsettings::kStatic : ipsettings::kDhcp;
-            uint8_t* quads[4] = {r.ip, r.gateway, r.subnet, r.dns};
-                for (int q = 0; q < 4; q++) {
+            r.ip.mode = mm::json::readInt(mm::json::member(doc, el, "ipSettings"), ipsettings::kDhcp) == ipsettings::kStatic ? ipsettings::kStatic : ipsettings::kDhcp;
+            for (uint8_t q = 0; q < 4; q++) {
                 char text[16] = {};
                 mm::json::readString(mm::json::member(doc, el, ipsettings::kFields[q]), text, sizeof(text));
-                if (text[0]) parseDottedQuad(text, quads[q]);
+                if (text[0]) parseDottedQuad(text, r.ip.address(q));
             }
             if (r.id == 0) r.id = nextId_;
             if (r.id >= nextId_) nextId_ = r.id + 1;   // never reissue a saved id
@@ -386,14 +381,19 @@ public:
         MoonModule::tick1s();
         const uint32_t now = platform::millis();
         if (scanRequested_ && !scanning_) {
-            scanRequested_ = false;
             if (platform::wifiScanStart()) {
+                scanRequested_ = false;
                 scanning_ = true;
                 scanStartedMs_ = now;
                 // A scan takes the radio off-channel for a few seconds, which drops incoming lights while connected.
                 setStatus(connected_ ? "scanning, output may stutter for a few seconds" : "scanning");
+            } else if (now - scanRequestedMs_ > kScanTimeoutMs) {
+                // Refused for a scan's whole time, as while Ethernet carries the device and the radio is off: the request ends.
+                scanRequested_ = false;
+                setStatus("the radio cannot scan now: press scan to try again", Severity::Warning);
             } else {
-                setStatus("cannot scan now: the radio is off", Severity::Warning);
+                // A radio starting or joining refuses a scan, so the request waits and is tried each second.
+                setStatus("the scan waits for the radio");
             }
         }
         if (scanning_) collectScan(now);
@@ -414,7 +414,7 @@ public:
 
     /// Start a scan when `scan` is pressed.
     void onControlChanged(const char* name) override {
-        if (std::strcmp(name, "scan") == 0) scanRequested_ = true;
+        if (std::strcmp(name, "scan") == 0) requestScan();
     }
 
 private:
@@ -426,18 +426,36 @@ private:
         uint32_t id = 0;
         char ssid[33] = {};
         char password[64] = {};
-        uint8_t ipSettings = ipsettings::kDhcp;   ///< DHCP or Static, per network as phones keep it
-        uint8_t ip[4] = {};
-        uint8_t gateway[4] = {};
-        uint8_t subnet[4] = {255, 255, 255, 0};
-        uint8_t dns[4] = {};
+        IpSettings ip;   ///< DHCP or Static, per network as phones keep it
     };
-    /// Enough for a workshop, a venue and a few more, kept small since each row is RAM.
-    static constexpr uint8_t kMaxKnown = 8;
+
+    /// One of a row's IP settings: the mode, or an address, which is refused rather than stored as zero when it does not parse.
+    bool setIpField(Row& r, const char* field, const char* valueJson) {
+        if (std::strcmp(field, "ipSettings") == 0) {
+            const int v = mm::json::parseInt(valueJson, "value");
+            if (v != ipsettings::kDhcp && v != ipsettings::kStatic) return false;
+            r.ip.mode = static_cast<uint8_t>(v);
+            // The joined network starts Static from its lease, so nothing moves until an address is changed.
+            if (r.id == joinedId_ && joinedId_) r.ip.prefillFrom(platform::NetIface::Sta);
+            return true;
+        }
+        uint8_t* quad = r.ip.address(field);
+        if (!quad) return false;
+        char text[16] = {};
+        mm::json::parseString(valueJson, "value", text, sizeof(text));
+        return parseDottedQuad(text, quad);
+    }
 
     Row*     rows_ = nullptr;   ///< the known networks in priority order, on the heap and sized to the count, so a device knowing one pays for one
     uint8_t  count_ = 0;
     uint32_t nextId_ = 1;
+
+    /// Whether the last scan saw a network of this name.
+    bool inScan(const char* ssid) const {
+        for (uint8_t k = 0; k < foundCount_; k++)
+            if (std::strcmp(found_[k].ssid, ssid) == 0) return true;
+        return false;
+    }
 
     // The scan: its networks on the heap only while there are some, and the join the card asked for.
     static constexpr uint8_t kMaxFound = 16;
@@ -445,6 +463,8 @@ private:
     uint8_t  foundCount_ = 0;
     uint32_t scannedMs_ = 0;      ///< when the last scan finished, 0 before the first
     bool     scanRequested_ = false;
+    uint32_t scanRequestedMs_ = 0;   ///< when the waiting request was made, so a radio that never takes it ends it
+    void requestScan() { scanRequested_ = true; scanRequestedMs_ = platform::millis(); }
     bool     scanning_ = false;
     uint32_t scanStartedMs_ = 0;
     static constexpr uint32_t kScanTimeoutMs = 15000;   ///< a scan takes two to five seconds

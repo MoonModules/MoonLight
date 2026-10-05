@@ -64,6 +64,7 @@ Each step ships with the tree better than before it, and the sweeps the numbers 
 10. 🚧 **`@moreinfo` that nothing refers to.** A docgen rule: an appendix section no `@xref` and no card links to is a finding, so the appendix total falls by cutting what no reader reaches.
 11. 🚧 **The process.** CLAUDE.md's commit table lists `check_code` where it lists lizard and the platform boundary today; the Reviewer's scope gains the two judgment questions; coding-standards § Tooling describes the one report and drops the clang-format check that does not exist. `MoonDeck.md` and `testing.md` follow.
 12. 🚧 **MoonCore as a library.** Once the core-to-light rule reads 0: a CMake target of `src/core` alone that compiles without `src/light`, so a crossing is a build error rather than a count. The end state of "core without light".
+13. 🚧 **What each commit added and saved.** `collect_kpi --commit` prints, beside the KPI line, the commit's own account: lines added and removed in `src/` and `test/` (from `git diff --numstat`), and the change in duplicated lines and in code findings against the committed `code.md`. The commit message carries it, so a subtraction shows as a saving in the commit that made it rather than only in a later total. Step 4's gains table stays the release view; this is the per-commit view of the same numbers.
 
 ## Subtraction
 
@@ -78,7 +79,6 @@ Each step ships with the tree better than before it, and the sweeps the numbers 
 ## Out of scope
 
 - The sweeps themselves: splitting `app.js`, merging the I80 and Parlio drivers, moving the six core-to-light includes behind seams. Each is its own change, which the ratchet then records.
-- Attributing a gain to one commit. The commit message already carries the KPI line, and a commit that names its catalog move is a simplification by its own account; the gains table is cumulative, which is the number that matters.
 - Formatting. The old MoonLight had a `.clang-format` and dropped it: it reformats every file at once, which rewrites every diff and blame line, the opposite of step by step, and with agents writing every line the format is already uniform. The compiler's view is covered by `-Werror`, the reader's by docgen's comment-shape rules.
 - CodeQL and the sanitizers, which CI runs as security and runtime checks and which measure nothing this plan counts.
 

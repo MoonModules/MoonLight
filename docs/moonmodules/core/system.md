@@ -52,6 +52,8 @@ The wired interface, a child of Network: which board's wiring it uses and how it
 - `ethBoard`: the board's Ethernet wiring by name; `Custom` exposes every pin.
 - `ipSettings`: DHCP or Static; Static reveals `ip`, `gateway`, `subnet` and `dns`.
 
+Gateway and DNS are optional. A Static setting that cannot work, such as a gateway outside the subnet, is not used: the interface keeps DHCP and the card says why. Changing the addressing of the interface the page reaches the device through asks first, naming where the device will be.
+
 Detail: [technical](moxygen/EthernetModule.md)
 
 [Tests](../../reference/tests/unit-tests.md#ethernetmodule)
@@ -323,7 +325,7 @@ Detail: [technical](moxygen/FilesystemModule.md)
 
 ## WiFi, details
 
-The device tries the known networks in priority order, each for ten seconds, and opens its access point only after the last. Each network keeps its own `ipSettings`, DHCP or Static, as a phone does.
+The device tries the known networks in priority order, each for ten seconds, and opens its access point only after the last. Networks a scan in the last five minutes did not see go to the end of that order, so no time goes to joining what is out of range. Each network keeps its own `ipSettings`, DHCP or Static, as a phone does, and a Static setting that cannot work joins by DHCP with the reason on its row. Editing the joined network's addressing from a page it carries asks first, as on Ethernet.
 
 Connect joins a network at once. A network picked from `available` is saved to `known` only once it joined, and "incorrect password" says why when it did not. A scan takes the radio off-channel for a few seconds, which drops incoming lights while connected, so the device scans by itself only when its access point opens, and otherwise when you press `scan`.
 

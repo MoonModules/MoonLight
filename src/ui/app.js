@@ -538,6 +538,8 @@ function sendControlLive(moduleName, controlName, value) {
 }
 
 async function sendControl(moduleName, controlName, value) {
+    // Declined: the card goes back to what the device has.
+    if (!await allowAddressEdit(moduleName, controlName, value)) { refetchState(); return false; }
     // Eagerly update the local `state` to what we just sent: the standard controlled-input
     // pattern. Without this, `state` keeps the OLD value until the device echoes the change back in a
     // value patch (up to a tick1s later, or folded into a full resync for a control that triggers a
@@ -1316,48 +1318,104 @@ function deviceHasMoonBase(mod) {
     return (mod.controls || []).some(c => c.name === "image");
 }
 
-// Ask before installing a MoonBase, in the app's own chrome rather than the browser's.
+// Ask a question in the app's own chrome rather than the browser's.
 //
 // A native confirm() is the one box in this UI that cannot be styled, and it looked it: a white
 // system panel over a dark card. This is the same native <dialog> the file editor uses, so Esc and
-// the backdrop close it for free. Resolves true to install, false to abandon.
-function askMoonBaseInstall() {
+// the backdrop close it for free. `lines` are paragraphs, each a string or a node; the last is
+// muted when `calm` is set. Resolves true for the go button, false for anything else.
+function askInDialog({ title, lines, go, calm = false }) {
     return new Promise((resolve) => {
         const dlg = document.createElement("dialog");
         dlg.className = "mb-ask";
         const h = document.createElement("h3");
-        h.textContent = "Install a new MoonBase?";
-        const p1 = document.createElement("p");
-        // What is actually at stake, rather than a bare "are you sure": the device has no recovery
-        // image for the few seconds this takes.
-        p1.textContent = "MoonBase is the recovery image. While it is being written the device "
-                       + "has no recovery image, so do not power it off until this finishes.";
-        const p2 = document.createElement("p");
-        p2.className = "mb-ask-calm";
-        p2.textContent = "The device checks the image first and refuses anything that is not a "
-                       + "MoonBase image for this board, so a wrong file costs nothing.";
+        h.textContent = title;
+        const paras = lines.map((line, i) => {
+            const p = document.createElement("p");
+            if (calm && i === lines.length - 1) p.className = "mb-ask-calm";
+            p.append(line);
+            return p;
+        });
         const row = document.createElement("div");
         row.className = "mb-ask-row";
         const cancel = document.createElement("button");
         cancel.className = "fm-tool";
         cancel.textContent = "Cancel";
-        const go = document.createElement("button");
-        go.className = "fm-tool mb-ask-go";
-        go.textContent = "Install";
+        const goBtn = document.createElement("button");
+        goBtn.className = "fm-tool mb-ask-go";
+        goBtn.textContent = go;
 
         const close = (value) => { dlg.close(); dlg.remove(); resolve(value); };
         cancel.addEventListener("click", () => close(false));
-        go.addEventListener("click", () => close(true));
-        // Esc and the backdrop both reach here, so a dismissed dialog never leaves the promise
-        // pending and never installs anything.
+        goBtn.addEventListener("click", () => close(true));
+        // Esc and the backdrop both reach here, so a dismissed dialog never leaves the promise pending.
         dlg.addEventListener("close", () => { dlg.remove(); resolve(false); }, { once: true });
 
-        row.append(cancel, go);
-        dlg.append(h, p1, p2, row);
+        row.append(cancel, goBtn);
+        dlg.append(h, ...paras, row);
         document.body.appendChild(dlg);
         dlg.showModal();
-        go.focus();
+        goBtn.focus();
     });
+}
+
+// Ask before installing a MoonBase: what is at stake is the few seconds the device has no recovery image.
+function askMoonBaseInstall() {
+    return askInDialog({
+        title: "Install a new MoonBase?",
+        lines: ["MoonBase is the recovery image. While it is being written the device "
+                + "has no recovery image, so do not power it off until this finishes.",
+                "The device checks the image first and refuses anything that is not a "
+                + "MoonBase image for this board, so a wrong file costs nothing."],
+        go: "Install",
+        calm: true,
+    });
+}
+
+// Where an edit moves the device: the static address, null for one the router leases, or undefined when the edit moves nothing.
+// Static without an address yet moves nothing, since an unusable Static setting keeps the lease; typing the address then asks.
+function addressMoveTarget(field, value, staticIp) {
+    if (field === "ipSettings") {
+        if (Number(value) !== 1) return null;
+        return staticIp && staticIp !== "0.0.0.0" ? staticIp : undefined;
+    }
+    if (field === "ip") return String(value);
+    return undefined;
+}
+
+// The interface the page reaches the device through, "Ethernet" or "WiFi STA", or "" through the access point, which a station change leaves alone.
+function carryingInterface() {
+    if (location.hostname === "4.3.2.1") return "";
+    const net = allModules().find(m => m.type === "NetworkModule");
+    return (net?.controls || []).find(c => c.name === "mode")?.value || "";
+}
+
+// Ask before an edit takes the device away from the open page, naming where it will be.
+function confirmAddressMove(to) {
+    if (to === undefined) return Promise.resolve(true);
+    const name = (allModules().find(m => m.type === "SystemModule")?.controls || []).find(c => c.name === "deviceName")?.value;
+    const url = to ? `http://${to}/` : (name ? `http://${name}.local/` : "");
+    const where = document.createElement("span");
+    where.append(to ? "The device will be at " : "The device takes a new address from the router; reach it at ");
+    if (url) {
+        const a = document.createElement("a");
+        a.href = url; a.target = "_blank"; a.rel = "noopener"; a.textContent = url;
+        where.append(a, ".");
+    }
+    return askInDialog({
+        title: "Change the device's address?",
+        lines: ["The open page loses the device as soon as the change applies.", where],
+        go: "Change it",
+    });
+}
+
+// An edit to the Ethernet card's addressing while Ethernet carries the page asks first.
+async function allowAddressEdit(moduleName, field, value) {
+    if (!state || !Array.isArray(state.modules)) return true;
+    const mod = allModules().find(m => m.name === moduleName);
+    if (mod?.type !== "EthernetModule" || carryingInterface() !== "Ethernet") return true;
+    const ip = (mod.controls || []).find(c => c.name === "ip")?.value;
+    return confirmAddressMove(addressMoveTarget(field, value, ip));
 }
 
 // Byte counts out of a device status line, or null when it carries none.
@@ -2619,7 +2677,8 @@ function controlRendersGenerically(mod, ctrl) {
     return true;
 }
 
-function createControl(moduleName, moduleType, ctrl) {
+// `write` is where an edit goes: the module's control by default, or a list row's field, so a row field is the same control with the same behavior.
+function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => sendControl(moduleName, name, value)) {
     const row = document.createElement("div");
     row.className = "control-row";
     // Expert-only controls (only reachable here when expert mode is on: see controlRendersGenerically)
@@ -2654,6 +2713,13 @@ function createControl(moduleName, moduleType, ctrl) {
 
     const key = moduleName + ":" + ctrl.name;
     const def = defaultFor(moduleType, ctrl.name, ctrl);
+    // Every edit marks this control's own reset button as it is written, since the device's echo is held back while the field is being edited.
+    let resetBtn = null;
+    const write = (name, value) => {
+        if (name === ctrl.name && resetBtn) resetBtn.classList.toggle("active", !controlValuesEqual({ ...ctrl, value }, def));
+        return writeTo(name, value);
+    };
+    const resetButton = (applyVisually) => { resetBtn = appendResetButton(row, moduleName, ctrl, def, applyVisually, write); };
 
     // numberField: a numeric control that opted out of the slider (server sets it for a value where each
     // integer is a discrete identity, not a magnitude: a PHY/I2C address, a channel). Render a plain
@@ -2677,17 +2743,17 @@ function createControl(moduleName, moduleType, ctrl) {
             if (Number.isNaN(v)) return;   // mid-edit empty field: send nothing until digits arrive
             v = Math.max(nMin, Math.min(nMax, v));
             if (String(v) !== input.value) input.value = v;   // display always matches what's sent
-            debounceSend(key, 500, () => sendControl(moduleName, ctrl.name, v));
+            debounceSend(key, 500, () => write(ctrl.name, v));
         });
         input.addEventListener("change", () => {   // blur/Enter with a still-empty field: snap to min + send
             if (Number.isNaN(parseInt(input.value, 10))) {
                 dragTs[key] = Date.now();
                 input.value = nMin;
-                debounceSend(key, 500, () => sendControl(moduleName, ctrl.name, nMin));
+                debounceSend(key, 500, () => write(ctrl.name, nMin));
             }
         });
         row.appendChild(input);
-        appendResetButton(row, moduleName, ctrl, def, () => { input.value = def; });
+        resetButton(() => { input.value = def; });
         return row;
     }
 
@@ -2742,17 +2808,17 @@ function createControl(moduleName, moduleType, ctrl) {
             input.addEventListener("input", () => {
                 dragTs[key] = Date.now();
                 numInput.value = input.value;
-                debounceSend(key, 150, () => sendControl(moduleName, ctrl.name, parseInt(input.value)));
+                debounceSend(key, 150, () => write(ctrl.name, parseInt(input.value)));
             });
             numInput.addEventListener("input", () => {
                 dragTs[key] = Date.now();   // stamp so a WS push can't revert what's being typed
                 const v = Math.max(Number(input.min), Math.min(Number(input.max), parseInt(numInput.value) || 0));
                 input.value = v;
-                debounceSend(key, 500, () => sendControl(moduleName, ctrl.name, v));
+                debounceSend(key, 500, () => write(ctrl.name, v));
             });
             row.appendChild(input);
             row.appendChild(numInput);
-            appendResetButton(row, moduleName, ctrl, def, () => {
+            resetButton(() => {
                 input.value = def;
                 numInput.value = def;
             });
@@ -2781,17 +2847,17 @@ function createControl(moduleName, moduleType, ctrl) {
                 input.addEventListener("input", () => {
                     dragTs[key] = Date.now();
                     numInput.value = input.value;
-                    debounceSend(key, 150, () => sendControl(moduleName, ctrl.name, parseInt(input.value)));
+                    debounceSend(key, 150, () => write(ctrl.name, parseInt(input.value)));
                 });
                 numInput.addEventListener("input", () => {
                     dragTs[key] = Date.now();   // stamp so a WS push can't revert what's being typed
                     const v = Math.max(uMin, Math.min(uMax, parseInt(numInput.value) || 0));
                     input.value = v;
-                    debounceSend(key, 150, () => sendControl(moduleName, ctrl.name, v));
+                    debounceSend(key, 150, () => write(ctrl.name, v));
                 });
                 row.appendChild(input);
                 row.appendChild(numInput);
-                appendResetButton(row, moduleName, ctrl, def, () => {
+                resetButton(() => {
                     input.value = def; numInput.value = def;
                 });
             } else {
@@ -2807,10 +2873,10 @@ function createControl(moduleName, moduleType, ctrl) {
                     let v = parseInt(input.value, 10);
                     if (Number.isNaN(v)) v = 0;
                     v = Math.max(0, Math.min(65535, v));
-                    debounceSend(key, 500, () => sendControl(moduleName, ctrl.name, v));
+                    debounceSend(key, 500, () => write(ctrl.name, v));
                 });
                 row.appendChild(input);
-                appendResetButton(row, moduleName, ctrl, def, () => { input.value = def; });
+                resetButton(() => { input.value = def; });
             }
             break;
         }
@@ -2832,10 +2898,10 @@ function createControl(moduleName, moduleType, ctrl) {
                 let v = parseInt(input.value, 10);
                 if (Number.isNaN(v)) v = -1;
                 v = Math.max(pMin, Math.min(pMax, v));
-                debounceSend(key, 500, () => sendControl(moduleName, ctrl.name, v));
+                debounceSend(key, 500, () => write(ctrl.name, v));
             });
             row.appendChild(input);
-            appendResetButton(row, moduleName, ctrl, def, () => { input.value = def; });
+            resetButton(() => { input.value = def; });
             break;
         }
         case "int32":
@@ -2874,17 +2940,17 @@ function createControl(moduleName, moduleType, ctrl) {
             input.addEventListener("input", () => {
                 dragTs[key] = Date.now();
                 numInput.value = input.value;
-                debounceSend(key, 150, () => sendControl(moduleName, ctrl.name, parseInt(input.value)));
+                debounceSend(key, 150, () => write(ctrl.name, parseInt(input.value)));
             });
             numInput.addEventListener("input", () => {
                 dragTs[key] = Date.now();   // stamp so a WS push can't revert what's being typed
                 const v = Math.max(min, Math.min(max, parseInt(numInput.value) || 0));
                 input.value = v;
-                debounceSend(key, 500, () => sendControl(moduleName, ctrl.name, v));
+                debounceSend(key, 500, () => write(ctrl.name, v));
             });
             row.appendChild(input);
             row.appendChild(numInput);
-            appendResetButton(row, moduleName, ctrl, def, () => {
+            resetButton(() => {
                 input.value = def;
                 numInput.value = def;
             });
@@ -2904,14 +2970,14 @@ function createControl(moduleName, moduleType, ctrl) {
             input.dataset.key = ctrl.name;
             input.addEventListener("change", () => {
                 dragTs[key] = Date.now();
-                sendControl(moduleName, ctrl.name, input.checked);
+                write(ctrl.name, input.checked);
             });
             const track = document.createElement("span");
             track.className = "switch-track";
             sw.appendChild(input);
             sw.appendChild(track);
             row.appendChild(sw);
-            appendResetButton(row, moduleName, ctrl, def, () => { input.checked = !!def; });
+            resetButton(() => { input.checked = !!def; });
             // A surface SWITCH is assignable like a fader or a knob: it drives a control, and
             // switch1 driving Drivers.on is the same kind of binding fader1 has to brightness.
             if (ctrl.switchRow) attachTargetPopup(row, input, ctrl);
@@ -2930,10 +2996,14 @@ function createControl(moduleName, moduleType, ctrl) {
             // not modify it; `disabled` would also block copy.
             if (ctrl.readonly) {
                 input.readOnly = true;
+            } else if (ctrl.commitOnChange) {
+                // A value whose every write is an action, such as renaming a file, is sent once, on Enter or on leaving the field, and a button pressed meanwhile sends it first.
+                input.addEventListener("input", () => { dragTs[key] = Date.now(); pendingSends[key] = () => write(ctrl.name, input.value); });
+                input.addEventListener("change", () => flushPendingSends(key));
             } else {
                 input.addEventListener("input", () => {
                     dragTs[key] = Date.now();
-                    debounceSend(key, 500, () => sendControl(moduleName, ctrl.name, input.value));
+                    debounceSend(key, 500, () => write(ctrl.name, input.value));
                 });
                 // Enter presses the card's `send` button, where the module has one. Generic rather
                 // than a MoonTalk rule: any module pairing a text field with a send button gets it,
@@ -2952,12 +3022,13 @@ function createControl(moduleName, moduleType, ctrl) {
                     if (!send) return;
                     e.preventDefault();
                     clearTimeout(dragTimers[key]);
-                    await sendControl(moduleName, ctrl.name, input.value);
-                    await sendControl(moduleName, "send", 1);
+                    delete pendingSends[key];
+                    await write(ctrl.name, input.value);
+                    await write("send", 1);
                 });
             }
             row.appendChild(input);
-            if (!ctrl.readonly) appendResetButton(row, moduleName, ctrl, def, () => { input.value = def; });
+            if (!ctrl.readonly) resetButton(() => { input.value = def; });
             break;
         }
         case "textarea": {
@@ -2992,7 +3063,7 @@ function createControl(moduleName, moduleType, ctrl) {
             } else {
                 input.addEventListener("input", () => {
                     dragTs[key] = Date.now();
-                    debounceSend(key, 500, () => sendControl(moduleName, ctrl.name, input.value));
+                    debounceSend(key, 500, () => write(ctrl.name, input.value));
                 });
             }
             row.appendChild(input);
@@ -3008,7 +3079,7 @@ function createControl(moduleName, moduleType, ctrl) {
             input.dataset.key = ctrl.name;
             input.addEventListener("input", () => {
                 dragTs[key] = Date.now();
-                debounceSend(key, 500, () => sendControl(moduleName, ctrl.name, input.value));
+                debounceSend(key, 500, () => write(ctrl.name, input.value));
             });
             row.append(input, peekButton(input));
             break;
@@ -3042,7 +3113,7 @@ function createControl(moduleName, moduleType, ctrl) {
             sel.addEventListener("change", () => {
                 sel.dataset.open = "false";
                 dragTs[key] = Date.now();
-                sendControl(moduleName, ctrl.name, parseInt(sel.value));
+                write(ctrl.name, parseInt(sel.value));
                 // No refetch/re-render here: blendMode/opacity-style selects don't
                 // change the control SET, and a control that does (a hidden-flag
                 // flip) is reconciled in place by syncVisibleControls on the next
@@ -3050,7 +3121,7 @@ function createControl(moduleName, moduleType, ctrl) {
                 // A full refetchState() rebuilt the DOM and collapsed the card.
             });
             row.appendChild(sel);
-            appendResetButton(row, moduleName, ctrl, def, () => { sel.value = def; });
+            resetButton(() => { sel.value = def; });
             break;
         }
         case "palette": return buildPaletteControl(row, key, def, moduleName, ctrl);
@@ -3085,7 +3156,22 @@ function createControl(moduleName, moduleType, ctrl) {
             span.className = "display";
             span.dataset.mid = moduleName;
             span.dataset.key = ctrl.name;
-            span.textContent = ctrl.value ?? "";
+            if (Array.isArray(ctrl.value)) {
+                // A list of values, one chip each.
+                for (const e of ctrl.value) {
+                    const chip = document.createElement("span");
+                    chip.className = "list-detail-chip";
+                    chip.textContent = String(e);
+                    span.appendChild(chip);
+                }
+            } else if (ctrl.age && typeof ctrl.value === "number") {
+                // Seconds since something was seen, as a relative time tinted by how fresh it is.
+                span.textContent = relativeAge(ctrl.value);
+                const ageClass = ageBucketClass(ctrl.value);
+                if (ageClass) span.classList.add(ageClass);
+            } else {
+                span.textContent = ctrl.value ?? "";
+            }
             row.appendChild(span);
             break;
         }
@@ -3103,17 +3189,10 @@ function createControl(moduleName, moduleType, ctrl) {
             break;
         }
         case "ipv4": {
-            // Editable dotted-quad. Wire format is the same string the user
-            // types: the device parses + validates server-side and rejects
-            // malformed values with 400. Inline validation on the client is
-            // a future enhancement; today an invalid value goes to the
-            // server and the response surfaces the rejection.
-            //
-            // Same dragTs + debounceSend pattern as text / password so the
-            // ipv4 input participates in stale-WS-push protection: while
-            // the user is typing, dragTs[key] gets bumped, and an arriving
-            // WS push within the cooldown window won't revert mid-edit
-            // (see updateValues + the dragTs check ~line 1260).
+            // Editable dotted-quad, in the string the user types; the device parses and refuses a malformed one.
+            // Sent on Enter or on leaving the field, not as it is typed: a half-typed address is often a valid
+            // one, and on the interface carrying the device it would move the device mid-word.
+            // dragTs still marks the typing, so a WS push meanwhile does not revert the field.
             const input = document.createElement("input");
             input.type = "text";
             input.className = "ipv4-input";
@@ -3122,11 +3201,11 @@ function createControl(moduleName, moduleType, ctrl) {
             input.value = ctrl.value ?? "";
             input.placeholder = "0.0.0.0";
             input.maxLength = 15;  // "255.255.255.255" = 15
-            input.addEventListener("input", () => {
-                dragTs[key] = Date.now();
-                debounceSend(key, 500, () => sendControl(moduleName, ctrl.name, input.value));
-            });
+            // Held as a pending send while typed, so a button pressed before the field loses focus (iPhone Safari) sends it first.
+            input.addEventListener("input", () => { dragTs[key] = Date.now(); pendingSends[key] = () => write(ctrl.name, input.value); });
+            input.addEventListener("change", () => flushPendingSends(key));
             row.appendChild(input);
+            resetButton(() => { input.value = def; });
             break;
         }
         case "time": {
@@ -3163,8 +3242,8 @@ function createControl(moduleName, moduleType, ctrl) {
             // so a click inside that window sent the button while the device still held the text as
             // it stood one keystroke ago: the Enter path already does this, and the two must agree.
             btn.addEventListener("click", async () => {
-                await flushPendingControlWrites(moduleName);
-                sendControl(moduleName, ctrl.name, 1);
+                await flushPendingSends(moduleName + ":");
+                write(ctrl.name, 1);
             });
             row.appendChild(btn);
             break;
@@ -3311,24 +3390,21 @@ function buildCaptureToggles(body, moduleName, ctrlName, item) {
     return () => chosen;
 }
 
+// What a filled pad does under each gesture, its tooltip's second line.
+const PAD_GESTURES = "click to apply · right-click or press and hold to edit, rename or delete · drag to move";
+
 function openPadEditor(anchorEl, moduleName, ctrlName, item, slot) {
     const filled = item != null;
     openSurfacePopup(anchorEl, filled ? `pad: ${item.name}` : `pad ${slot + 1} (empty)`, (body, close) => {
         if (filled) {
-            const nameRow = document.createElement("div");
-            nameRow.className = "surface-popup-row";
-            const nameLbl = document.createElement("span");
-            nameLbl.textContent = "name";
-            const nameIn = document.createElement("input");
-            nameIn.type = "text";
-            nameIn.className = "list-field-input";
-            nameIn.value = item.name || "";
-            nameIn.addEventListener("change", async () => {
-                await listSetField(moduleName, ctrlName, item.id, "name", nameIn.value);
-                refetchState();
-            });
-            nameRow.append(nameLbl, nameIn);
-            body.appendChild(nameRow);
+            // The preset row's own name field, renamed once the name is committed.
+            body.appendChild(createControl(`${moduleName}/${ctrlName}/${item.id}`, null,
+                { name: "name", type: "text", value: item.name || "", commitOnChange: true },
+                async (field, value) => {
+                    const ok = await listSetField(moduleName, ctrlName, item.id, field, value);
+                    refetchState();
+                    return ok;
+                }));
 
             // What this preset sets, read from the file rather than the form.
             if (item.captures) {
@@ -3360,15 +3436,7 @@ function openPadEditor(anchorEl, moduleName, ctrlName, item, slot) {
             body.appendChild(del);
         } else {
             // An empty pad's action is to fill it: name it and save the current state here.
-            const nameRow = document.createElement("div");
-            nameRow.className = "surface-popup-row";
-            const nameLbl = document.createElement("span");
-            nameLbl.textContent = "name";
-            const nameIn = document.createElement("input");
-            nameIn.type = "text";
-            nameIn.className = "list-field-input";
-            nameIn.placeholder = "new preset";
-            nameRow.append(nameLbl, nameIn);
+            const { row: nameRow, input: nameIn } = presetNameControl("new preset");
             body.appendChild(nameRow);
             const container = buildCaptureToggles(body, moduleName, ctrlName, null);
 
@@ -3428,6 +3496,17 @@ async function savePresetFrom(sourceName, name, slot) {
     return sendControl(control, "save", 1);
 }
 
+/// The surface's save-form `name`, drawn as the control it is, empty and with a placeholder naming what it is for.
+function presetNameControl(placeholder) {
+    const control = presetModuleName();
+    const mod = control ? allModules().find(m => m.name === control) : null;
+    const ctrl = (mod?.controls || []).find(c => c.name === "name") || { name: "name", type: "text" };
+    const row = createControl(control || "", mod?.type, { ...ctrl, value: "" });
+    const input = row.querySelector("input");
+    input.placeholder = placeholder;
+    return { row, input };
+}
+
 /// Mark a name input the device refused, with the rule it applies.
 function refusedName(input) {
     input.setCustomValidity("printable letters, digits and punctuation, without . / or backslash, at most 31");
@@ -3475,10 +3554,7 @@ async function openDocumentPopup(anchorEl, moduleName) {
         if (presetModuleName()) {
             const saveRow = document.createElement("div");
             saveRow.className = "surface-popup-row";
-            const nameIn = document.createElement("input");
-            nameIn.type = "text";
-            nameIn.className = "list-field-input";
-            nameIn.placeholder = "preset name";
+            const { row: nameRow, input: nameIn } = presetNameControl("preset name");
             const save = document.createElement("button");
             save.className = "surface-popup-primary";
             save.textContent = "save as preset";
@@ -3488,7 +3564,7 @@ async function openDocumentPopup(anchorEl, moduleName) {
                 close();
                 refetchState();
             });
-            saveRow.append(nameIn, save);
+            saveRow.append(nameRow, save);
             body.appendChild(saveRow);
         }
     });
@@ -3997,7 +4073,8 @@ function buildListPads(container, rows, opts) {
         nameEl.className = "list-pad-name";
         nameEl.textContent = label;
         pad.appendChild(nameEl);
-        pad.title = emoji ? `${label} (${roles.join(", ")})` : label;   // the full name when truncated
+        // The full name when truncated, and what each gesture does, since only the click is visible.
+        pad.title = `${emoji ? `${label} (${roles.join(", ")})` : label}\n${PAD_GESTURES}`;
         pad.addEventListener("click", async () => {
             if (item == null || item.id == null) return;
             pad.disabled = true;
@@ -4215,143 +4292,67 @@ function peekButton(input) {
     return peek;
 }
 
-// Render an editable row's detail: each descriptor in `detail.fields[]` becomes an inline
-// control (text→<input>, uint8→<input type=number>, select→<select>). On change we call
-// listSetField(...) and let the normal refresh reflect the persisted state: no eager local
-// local mutation. A field with `readonly:true` renders as a plain read-only value (same look
-// as fillListDetail). Fields carry a dragTs cooldown so a WS state push mid-edit can't revert
-// what's being typed/picked, mirroring the select/text guards in createControl.
+// Render an editable row's detail: each field is a control, drawn by createControl like a module's, with its edits written to the row.
+// The row stands in as the control's module (`<module>/<list>/<id>`), so its edit guards, pending sends and reset buttons are its own.
 function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionSets) {
     panel.replaceChildren();
     optionSets = optionSets || {};
     const fields = detail && Array.isArray(detail.fields) ? detail.fields : [];
-    // A row button sends the row's unsent edits first, in order: iPhone Safari keeps the focus in a field when a button is tapped, so its change event never fires, and two requests may arrive in either order.
-    const commits = [];
-    const commitOnChange = (inp, dragKey, send) => {
-        let sent = inp.value;
-        const commit = () => {
-            if (inp.value === sent) return undefined;
-            dragTs[dragKey] = Date.now();
-            const done = send();
-            sent = inp.value;
-            return done;
-        };
-        inp.addEventListener("change", commit);
-        commits.push(commit);
+    const rowMid = `${moduleName}/${ctrlName}/${id}`;
+    // This row's fields as the device now has them, drawn into the same open panel.
+    const redrawRowDetail = async () => {
+        try {
+            const res = await fetch(`/api/modules/${encodeURIComponent(moduleName)}`);
+            if (!res.ok) return;
+            const ctrl = ((await res.json()).controls || []).find(c => c.name === ctrlName);
+            const i = (Array.isArray(ctrl?.value) ? ctrl.value : []).findIndex(r => r.id === id);
+            const fresh = i >= 0 && Array.isArray(ctrl.detail) ? ctrl.detail[i] : null;
+            if (fresh) fillEditableListDetail(panel, fresh, moduleName, ctrlName, id, ctrl.optionSets || optionSets);
+        } catch (_) { /* the next state push redraws it */ }
+    };
+    // The joined WiFi network's addressing, while that network carries the page, asks first.
+    const allowRowAddressEdit = (field, value) => {
+        const mod = allModules().find(m => m.name === moduleName);
+        if (mod?.type !== "WiFiModule" || carryingInterface() !== "WiFi STA") return Promise.resolve(true);
+        const row = ((mod.controls || []).find(c => c.name === ctrlName)?.value || []).find(r => r.id === id);
+        if (!row?.joined) return Promise.resolve(true);
+        return confirmAddressMove(addressMoveTarget(field, value, fields.find(x => x.name === "ip")?.value));
+    };
+    // An edit to the row: asked about first where it moves the device, then redrawn where it changes the row's fields.
+    const write = async (name, value) => {
+        const f = fields.find(x => x.name === name);
+        if (!await allowRowAddressEdit(name, value)) { redrawRowDetail(); return false; }
+        const ok = await listSetField(moduleName, ctrlName, id, name, value);
+        if (ok && f?.refetch) refetchState();
+        else if (ok && f?.reshapes) redrawRowDetail();
+        return ok;
     };
     for (const f of fields) {
-        const r = document.createElement("div");
-        r.className = "list-detail-row";
-        const kEl = document.createElement("span");
-        kEl.className = "list-detail-key";
-        kEl.textContent = f.name;
-        const vEl = document.createElement("span");
-        vEl.className = "list-detail-val";
-        // Per-field cooldown key: unique per module/control/row/field so edits don't collide.
-        const dragKey = `list:${moduleName}:${ctrlName}:${id}:${f.name}`;
         if (f.readonly && typeof f.value === "string" && /^https?:\/\//.test(f.value)) {
-            // A link the user follows, opened in a new tab as every detail link is.
-            const a = document.createElement("a");
-            a.href = f.value;
-            a.textContent = f.value;
-            a.target = "_blank";
-            a.rel = "noopener noreferrer";
-            a.className = "list-detail-link";
-            vEl.appendChild(a);
-        } else if (f.readonly) {
-            vEl.textContent = String(f.value ?? "");
-            vEl.classList.add("list-detail-muted");
-        } else if (f.type === "button") {
-            // A row ACTION rather than a value: the click PATCHes the field like any edit, and the
-            // source reads the arrival as "do this to this row" (ControlModule's preset `apply`).
-            // Generic on purpose: a row button is a primitive the list has lacked, not a
-            // preset-specific affordance.
-            //
-            // `refetch` is opt-IN because a full refetch rebuilds every card, which collapses the
-            // expanded row the button lives in. That is right for an action that reshapes the tree
-            // (applying a preset) and wrong for one that arms a mode the user is about to use: the
-            // infrared learn button closed its own row and left nowhere to watch the result. Without
-            // it the WS push reconciles the row in place, which is what a field edit already relies
-            // on.
-            const btn = document.createElement("button");
-            btn.className = "list-field-btn";
-            btn.textContent = f.label || f.name;
-            btn.addEventListener("click", async () => {
-                btn.disabled = true;
-                for (const commit of commits) await commit();
-                await listSetField(moduleName, ctrlName, id, f.name, "");
-                if (f.refetch) refetchState();
-                btn.disabled = false;
-            });
-            vEl.appendChild(btn);
-        } else if (f.type === "select") {
-            const sel = document.createElement("select");
-            sel.className = "list-field-input";
-            sel.dataset.dragkey = dragKey;
-            // Options come from the field's inline `options`, or (the common case for a repeated select
-            // like the channel-role pickers) from the list's shared `optionSets` via `optionsRef`: so
-            // the option array is sent once per list, not re-inlined in every row (see writeListOptionSets).
-            const fieldOptions = f.options || (f.optionsRef ? optionSets[f.optionsRef] : null) || [];
-            fieldOptions.forEach((opt, idx) => {
-                const o = document.createElement("option");
-                o.value = idx;
-                o.textContent = opt;
-                if (idx === f.value) o.selected = true;
-                sel.appendChild(o);
-            });
-            const mark = () => { dragTs[dragKey] = Date.now(); };
-            sel.addEventListener("pointerdown", mark);
-            sel.addEventListener("focus", mark);
-            sel.addEventListener("change", () => {
-                dragTs[dragKey] = Date.now();
-                listSetField(moduleName, ctrlName, id, f.name, parseInt(sel.value));
-            });
-            vEl.appendChild(sel);
-        } else if (f.type === "password") {
-            // A password behind the eye, obfuscated on the wire as the Password control's is.
-            const inp = document.createElement("input");
-            inp.type = "password";
-            inp.className = "list-field-input";
-            inp.dataset.dragkey = dragKey;
-            inp.autocomplete = "new-password";
-            inp.value = decodePassword(f.value);
-            inp.addEventListener("input", () => { dragTs[dragKey] = Date.now(); });
-            commitOnChange(inp, dragKey, () => listSetField(moduleName, ctrlName, id, f.name, inp.value));
-            vEl.append(inp, peekButton(inp));
-        } else if (f.type === "uint8") {
-            const inp = document.createElement("input");
-            inp.type = "number";
-            inp.className = "list-field-input";
-            inp.dataset.dragkey = dragKey;
-            if (f.min !== undefined) inp.min = f.min;
-            if (f.max !== undefined) inp.max = f.max;
-            inp.value = f.value ?? 0;
-            inp.addEventListener("input", () => { dragTs[dragKey] = Date.now(); });
-            commitOnChange(inp, dragKey, () => {
-                // Guard against empty/invalid entry (parseInt → NaN) and clamp to the control's
-                // range: the HTML min/max attributes don't enforce a hand-typed value, so a stray
-                // "" or out-of-range number would otherwise reach the device as NaN / an overflow.
-                let v = parseInt(inp.value, 10);
-                if (!Number.isFinite(v)) v = f.min ?? 0;
-                if (f.min !== undefined) v = Math.max(v, f.min);
-                if (f.max !== undefined) v = Math.min(v, f.max);
-                inp.value = v;   // reflect the clamped value back into the field
-                return listSetField(moduleName, ctrlName, id, f.name, v);
-            });
-            vEl.appendChild(inp);
-        } else {   // "text" and any unknown type render as a text input
-            const inp = document.createElement("input");
-            inp.type = "text";
-            inp.className = "list-field-input";
-            inp.dataset.dragkey = dragKey;
-            inp.value = f.value ?? "";
-            inp.addEventListener("input", () => { dragTs[dragKey] = Date.now(); });
-            commitOnChange(inp, dragKey, () => listSetField(moduleName, ctrlName, id, f.name, inp.value));
-            vEl.appendChild(inp);
+            panel.appendChild(rowLink(f));
+            continue;
         }
-        r.append(kEl, vEl);
-        panel.appendChild(r);
+        const ctrl = { ...f, type: f.readonly ? "display" : f.type,
+                       options: f.options || (f.optionsRef ? optionSets[f.optionsRef] : undefined) };
+        panel.appendChild(createControl(rowMid, null, ctrl, write));
     }
+}
+
+// A read-only link in a row, opened in a new tab as every detail link is.
+function rowLink(f) {
+    const r = document.createElement("div");
+    r.className = "control-row";
+    const label = document.createElement("label");
+    label.className = "control-label";
+    label.textContent = displayName(f.name);
+    const a = document.createElement("a");
+    a.href = f.value;
+    a.textContent = f.value;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.className = "list-detail-link";
+    r.append(label, a);
+    return r;
 }
 
 // Join a list row's scalar fields into a one-line summary (skips the row's `id` handle, a `password`, which shows only behind its eye, and marker fields: `self`, `severity`
@@ -4365,66 +4366,19 @@ function listSummaryText(item) {
         .join("  ·  ");
 }
 
-// Render a list row's detail object as read-only key/value rows. Scalars print as-is;
-// an array of scalars (e.g. a device's `speaks:["http"]` or `via:["mdns","scan"]`)
-// renders as small chips so multi-valued fields like the discovery source are visible
-// at a glance. Nested objects are still skipped (no use case yet). Generic: the engine
-// names the fields, so a new array field shows up with no UI change here.
+// Render a read-only row's detail, each scalar or list of scalars a display control, as a card shows one.
+// `cached` and `ageSec` are one "last seen" (a device emits one or the other); a `*Sec` value reads as a relative age.
 function fillListDetail(panel, detail) {
     panel.replaceChildren();
     if (!detail || typeof detail !== "object") return;
     for (const [k, v] of Object.entries(detail)) {
         const isScalarArray = Array.isArray(v) && v.every(e => typeof e !== "object");
         if (typeof v === "object" && !isScalarArray) continue;
-        // `cached` and `ageSec` both render as "last seen"; a MoonLight device emits
-        // exactly one (mutually exclusive in DevicesModule), but skip ageSec when a
-        // `cached` key is also present so any other source can't produce two conflicting
-        // "last seen" rows. Match the cached branch's render condition, which fires on
-        // key EXISTENCE (`k === "cached"`), not truthiness: so gate on the key being
-        // present, not on its value. (Robust-to-any-input, generic.)
-        if (k === "ageSec" && "cached" in detail) continue;
-        const r = document.createElement("div");
-        r.className = "list-detail-row";
-        const kEl = document.createElement("span");
-        // A `*Sec` field is a duration in seconds (e.g. a device's `ageSec`): show it
-        // under a plainer label ("last seen") and as a relative time, not a bare count.
-        // `cached` is the sibling: a restored device not yet re-seen live → "last seen:
-        // cached" rather than a fake recent time.
-        const isDuration = k.endsWith("Sec");
-        kEl.className = "list-detail-key";
-        kEl.textContent = (k === "ageSec" || k === "cached") ? "last seen" : k;
-        const vEl = document.createElement("span");
-        vEl.className = "list-detail-val";
-        if (k === "cached") {
-            vEl.textContent = "cached";
-            vEl.classList.add("list-detail-muted");
-        } else if (isScalarArray) {
-            for (const e of v) {
-                const chip = document.createElement("span");
-                chip.className = "list-detail-chip";
-                chip.textContent = String(e);
-                vEl.appendChild(chip);
-            }
-        } else if (isDuration) {
-            vEl.textContent = relativeAge(Number(v));
-            const ageClass = ageBucketClass(Number(v));   // tint to match the summary dot
-            if (ageClass) vEl.classList.add(ageClass);
-        } else if (typeof v === "string" && /^https?:\/\//.test(v)) {
-            // A value that is an http(s) URL (e.g. a device's `url`) renders as a link that
-            // opens in a new tab: generic, any ListSource detail can surface one. rel
-            // guards the opened page from reaching back via window.opener.
-            const a = document.createElement("a");
-            a.href = v;
-            a.textContent = v;
-            a.target = "_blank";
-            a.rel = "noopener noreferrer";
-            a.className = "list-detail-link";
-            vEl.appendChild(a);
-        } else {
-            vEl.textContent = String(v);
-        }
-        r.append(kEl, vEl);
-        panel.appendChild(r);
+        if (k === "ageSec" && "cached" in detail) continue;   // present, whatever its value: one "last seen" row
+        const lastSeen = k === "ageSec" || k === "cached";
+        const ctrl = { name: lastSeen ? "last seen" : k, type: "display", value: k === "cached" ? "cached" : v,
+                       age: k.endsWith("Sec") };
+        panel.appendChild(createControl("", null, ctrl));
     }
 }
 
@@ -4480,24 +4434,19 @@ function relativeAge(sec) {
 ///
 /// Typing is debounced, so anything that ACTS on the typed value (Enter, a send button) has to land
 /// the text first or it acts on what the device held a keystroke ago.
-async function flushPendingControlWrites(moduleName) {
-    const mod = allModules().find(m => m.name === moduleName);
-    for (const ctrl of mod?.controls || []) {
-        const key = moduleName + ":" + ctrl.name;
-        if (!dragTimers[key]) continue;
+// Send now whatever a key under `prefix` still holds back, so an action that follows acts on what was typed.
+async function flushPendingSends(prefix) {
+    for (const key of Object.keys(pendingSends)) {
+        if (!key.startsWith(prefix)) continue;
         clearTimeout(dragTimers[key]);
-        delete dragTimers[key];
-        // queryByName, not a bare querySelector: a CSS attribute match is case-insensitive, so
-        // `data-mid="talk"` would resolve to a module named `Talk`. See queryByName for the bench
-        // case that found it.
-        const input = queryByName(
-            `input[data-key="${cssEscape(ctrl.name)}"]`, "data-mid", moduleName);
-        if (input) await sendControl(moduleName, ctrl.name, input.value);
+        const send = pendingSends[key];
+        delete pendingSends[key];
+        await send();
     }
 }
 
-function appendResetButton(row, moduleName, ctrl, def, applyVisually) {
-    if (def === undefined || def === null) return;  // type not loaded yet or no default
+function appendResetButton(row, moduleName, ctrl, def, applyVisually, write = (name, value) => sendControl(moduleName, name, value)) {
+    if (def === undefined || def === null) return null;  // type not loaded yet or no default
     // A SURFACE control has no default worth restoring: its value belongs to whatever it drives, so
     // "reset" would drive that target to zero, which is a change rather than a reset. The row is
     // also 26px wide, and the button was taking space from the thing being operated.
@@ -4505,7 +4454,7 @@ function appendResetButton(row, moduleName, ctrl, def, applyVisually) {
     // A CONSENT control is the same shape for a different reason: off is where it starts, so the
     // button's only possible action is to withdraw consent, which is a decision rather than a
     // reset. The checkbox already expresses both answers.
-    if (ctrl.fader || ctrl.encoder || ctrl.switchRow || ctrl.name === "consent") return;
+    if (ctrl.fader || ctrl.encoder || ctrl.switchRow || ctrl.name === "consent") return null;
     const btn = document.createElement("button");
     btn.className = "reset-btn";
     btn.type = "button";
@@ -4519,16 +4468,21 @@ function appendResetButton(row, moduleName, ctrl, def, applyVisually) {
     btn.addEventListener("click", () => {
         const key = moduleName + ":" + ctrl.name;
         clearTimeout(dragTimers[key]);   // a pending debounced edit must not overwrite the reset
+        delete pendingSends[key];
         dragTs[key] = Date.now();        // and a stale WS patch must not revert it
         applyVisually();
-        sendControl(moduleName, ctrl.name, def);
+        write(ctrl.name, def);
     });
     row.appendChild(btn);
+    return btn;
 }
 
+// The sends a debounce still holds back, by key, so flushPendingSends can push them before an action.
+const pendingSends = {};
 function debounceSend(key, ms, fn) {
     clearTimeout(dragTimers[key]);
-    dragTimers[key] = setTimeout(fn, ms);
+    pendingSends[key] = fn;
+    dragTimers[key] = setTimeout(() => { delete pendingSends[key]; fn(); }, ms);
 }
 
 // A password, a control's or a list field's, arrives XOR-obfuscated and base64-encoded (writeObfuscatedPassword in Control.cpp), and this reverses it.

@@ -34,7 +34,7 @@ docgen.md does. A comment is prose wherever it lives, so a `//` in the web inter
 | `mooninstaller/README.md` | 75 |
 | `moondeck/check/check_clang_query.py` | 72 |
 | `mooninstaller/install.js` | 67 |
-| `src/ui/app.js` | 57 |
+| `src/ui/app.js` | 56 |
 | `moondeck/check/check_nonblocking.py` | 54 |
 | `src/ui/install-picker.js` | 50 |
 | `moondeck/docs/gen_api.py` | 49 |

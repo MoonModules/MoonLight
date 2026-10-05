@@ -134,6 +134,12 @@ struct WiredNetwork {
     ~WiredNetwork() { net.removeChild(&eth); }   // the child is a member, not the tree's to free
 };
 
+// Set one control through the normal control-apply path.
+void setField(mm::EthernetModule& eth, const char* name, const char* json) {
+    for (uint8_t i = 0; i < eth.controls().count(); i++)
+        if (std::strcmp(eth.controls()[i].name, name) == 0) mm::applyControlValue(eth.controls()[i], json, name, mm::ApplyPolicy::Clamp);
+}
+
 const char* networkMode(mm::NetworkModule& net) {
     for (uint8_t i = 0; i < net.controls().count(); i++)
         if (std::strcmp(net.controls()[i].name, "mode") == 0) return static_cast<const char*>(net.controls()[i].ptr);
@@ -220,6 +226,60 @@ TEST_CASE("changing a static link-local address keeps Ethernet connected") {
         net.tick1s();
         CHECK(mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Eth) > before);
         CHECK(std::string(networkMode(net)) == "Ethernet");
+    }
+    mm::platform::setTestEthIPv4(nullptr);
+}
+
+// A Static setting that cannot work is never put on the wire, and the card says why until it is fixed.
+TEST_CASE("Ethernet never applies a Static setting with its gateway outside the subnet, and names it") {
+    const uint8_t leased[4] = {192, 168, 1, 40};
+    FrozenClock clock;
+    mm::platform::setTestEthIPv4(leased);
+    {
+        WiredNetwork w;
+        auto& net = w.net;
+        net.setup();
+        net.rebuildControls();
+        setStatic(w.eth, "{\"ip\":\"192.168.1.250\"}");
+        setField(w.eth, "gateway", "{\"gateway\":\"10.0.0.1\"}");
+        const uint32_t before = mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Eth);
+        net.tick1s();
+        net.tick1s();
+        CHECK(mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Eth) == before);
+        REQUIRE(w.eth.status() != nullptr);
+        CHECK(std::string(w.eth.status()) == "static IP not used: the gateway is outside the subnet");
+        CHECK(w.eth.configuredIp() == nullptr);
+
+        setField(w.eth, "gateway", "{\"gateway\":\"192.168.1.1\"}");
+        net.tick1s();
+        CHECK(mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Eth) > before);
+        CHECK(std::string(w.eth.status()).empty());
+    }
+    mm::platform::setTestEthIPv4(nullptr);
+}
+
+// Static back to DHCP drops the address until the lease lands, which is the wait the device asked for rather than a lost cable.
+TEST_CASE("Ethernet switched back to DHCP waits for the lease before cascading") {
+    const uint8_t linkLocal[4] = {169, 254, 7, 9};
+    FrozenClock clock;
+    mm::platform::setTestEthIPv4(linkLocal);
+    {
+        WiredNetwork w;
+        auto& net = w.net;
+        net.setup();
+        net.rebuildControls();
+        setStatic(w.eth, "{\"ip\":\"192.168.1.250\"}");
+        net.tick1s();
+        REQUIRE(std::string(networkMode(net)) == "Ethernet");
+        setField(w.eth, "ipSettings", "{\"ipSettings\":0}");
+        mm::platform::setTestEthIPv4(linkLocal);   // the static address is gone and no lease has landed
+        net.tick1s();
+        mm::platform::setTestNowMs(1000 + 12000);
+        net.tick1s();
+        CHECK(std::string(networkMode(net)) == "Ethernet");
+        mm::platform::setTestNowMs(1000 + 16000);
+        net.tick1s();
+        CHECK(std::string(networkMode(net)) != "Ethernet");
     }
     mm::platform::setTestEthIPv4(nullptr);
 }

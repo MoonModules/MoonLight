@@ -536,6 +536,16 @@ static void ensureNetifInit() {
     }
 }
 
+// Each client interface's DNS server, stored at the lease and at a static apply, since reading it waits on the network task.
+static std::atomic<uint32_t> dnsInUse_[2] = {};
+
+// Store the DNS server a lease brought, on the event task, where waiting on the network task is harmless.
+[[maybe_unused]] static void cacheLeaseDns(esp_netif_t* netif, NetIface iface) {
+    esp_netif_dns_info_t d;
+    const bool ok = netif && esp_netif_get_dns_info(netif, ESP_NETIF_DNS_MAIN, &d) == ESP_OK && d.ip.type == ESP_IPADDR_TYPE_V4;
+    dnsInUse_[static_cast<uint8_t>(iface)].store(ok ? d.ip.u_addr.ip4.addr : 0, std::memory_order_relaxed);
+}
+
 #ifndef MM_NO_ETH
 
 uint16_t ethLinkSpeedMbps() MM_NONBLOCKING;   // defined below; the link-up log reports it
@@ -564,6 +574,7 @@ static void ethEventHandler(void* /*arg*/, esp_event_base_t base,
     } else if (base == IP_EVENT && id == IP_EVENT_ETH_GOT_IP) {
         auto* event = static_cast<ip_event_got_ip_t*>(data);
         ESP_LOGI(NET_TAG, "Ethernet got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+        cacheLeaseDns(event->esp_netif, NetIface::Eth);
         ethConnected_.store(true, std::memory_order_relaxed);
     }
 }
@@ -1111,6 +1122,7 @@ static void wifiEventHandler(void* /*arg*/, esp_event_base_t base,
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         auto* event = static_cast<ip_event_got_ip_t*>(data);
         ESP_LOGI(NET_TAG, "WiFi STA got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+        cacheLeaseDns(event->esp_netif, NetIface::Sta);
         wifiStaConnected_.store(true, std::memory_order_relaxed);
     }
 }
@@ -1153,10 +1165,12 @@ static bool ensureWifiInit() {
     return true;
 }
 
-// The station's interface, created once and from one place: Improv's task scans as well as the render thread, and two creations would attach twice and abort.
-static std::mutex staNetifMutex_;
+// Held by every call changing the radio's mode, driver or interfaces, which the render task and Improv's scan both do; recursive, as a failed start stops itself.
+static std::recursive_mutex radioMutex_;
+using RadioLock = std::lock_guard<std::recursive_mutex>;
+
+// The station's interface, created once, under the radio lock its callers hold.
 static void ensureStaNetif() {
-    std::lock_guard<std::mutex> lock(staNetifMutex_);
     if (!staNetif_) staNetif_ = esp_netif_create_default_wifi_sta();
 }
 
@@ -1178,6 +1192,7 @@ static void wifiRadioDown() {
 
 bool wifiStaInit(const char* ssid, const char* password) {
     if (!ssid || ssid[0] == 0) return false;
+    RadioLock lock(radioMutex_);
 
     // A join while joined restarts the station; stopping first, since alone it takes the driver down.
     if (wifiStaActive_) wifiStaStop();
@@ -1240,6 +1255,7 @@ void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING {
 }
 
 void wifiStaStop() {
+    RadioLock lock(radioMutex_);
     // Tell the event handler this disconnect is deliberate, so it does not answer with a reconnect that would then race the teardown below.
     wifiStaStopping_.store(true, std::memory_order_relaxed);
     esp_wifi_disconnect();
@@ -1262,6 +1278,7 @@ WifiFailure wifiStaLastFailure() {
 }
 
 bool wifiScanStart() {
+    RadioLock lock(radioMutex_);
     // Scanning needs a station side, which an access point alone gains here, so a phone on it sees the networks in range.
     if (!wifiInitDone_ || scanRunning_.load(std::memory_order_relaxed)) return false;
     wifi_mode_t mode = WIFI_MODE_NULL;
@@ -1277,6 +1294,7 @@ bool wifiScanStart() {
 }
 
 int wifiScanResults(WifiNetwork* out, int max) {
+    RadioLock lock(radioMutex_);
     if (!scanDone_.exchange(false, std::memory_order_acquire)) return -1;
     uint16_t n = 0;
     esp_wifi_scan_get_ap_num(&n);
@@ -1317,6 +1335,7 @@ int wifiStaChannel() {
 }
 
 bool wifiApInit(const WifiApConfig& ap) {
+    RadioLock lock(radioMutex_);
     const char* apName = ap.name;
     const char* ip = ap.ip;
     // New settings re-open it; stopping first, since alone it takes the driver down.
@@ -1388,6 +1407,7 @@ bool wifiApConnected() {
 uint32_t wifiApClientCount() { return apClients_.load(std::memory_order_relaxed); }
 
 void wifiApStop() {
+    RadioLock lock(radioMutex_);
     wifiApActive_ = false;
     apClients_.store(0, std::memory_order_relaxed);
     if (wifiStaActive_) {
@@ -1489,6 +1509,7 @@ void netSetStaticIPv4(NetIface iface, const uint8_t ip[4], const uint8_t gw[4],
         dnsInfo.ip.type = ESP_IPADDR_TYPE_V4;
         IP4_ADDR(&dnsInfo.ip.u_addr.ip4, dns[0], dns[1], dns[2], dns[3]);
         esp_netif_set_dns_info(netif, ESP_NETIF_DNS_MAIN, &dnsInfo);
+        dnsInUse_[static_cast<uint8_t>(iface)].store(dnsInfo.ip.u_addr.ip4.addr, std::memory_order_relaxed);
     }
 
     // Applying a static IP is the moment the interface has an address, and no DHCP GOT_IP will mark it connected. Set the flags here, and record the config so each link-up handler re-pins static instead of restarting DHCP.
@@ -1518,6 +1539,21 @@ void netSetStaticIPv4(NetIface iface, const uint8_t ip[4], const uint8_t gw[4],
 #endif
     ESP_LOGI(NET_TAG, "Static IPv4 set on %s: %u.%u.%u.%u",
              iface == NetIface::Eth ? "eth" : "sta", ip[0], ip[1], ip[2], ip[3]);
+}
+
+// The addressing an interface runs with now, from its netif, the DNS server from the main slot.
+void netGetIPv4(NetIface iface, uint8_t ip[4], uint8_t gw[4], uint8_t mask[4], uint8_t dns[4]) {
+    for (int i = 0; i < 4; i++) ip[i] = gw[i] = mask[i] = dns[i] = 0;
+    esp_netif_t* netif = resolveNetif(iface);
+    esp_netif_ip_info_t info;
+    if (!netif || esp_netif_get_ip_info(netif, &info) != ESP_OK) return;
+    const uint32_t words[3] = {info.ip.addr, info.gw.addr, info.netmask.addr};
+    uint8_t* outs[3] = {ip, gw, mask};
+    for (int k = 0; k < 3; k++)
+        for (int i = 0; i < 4; i++) outs[k][i] = static_cast<uint8_t>((words[k] >> (8 * i)) & 0xff);
+    // The cached server, not esp_netif_get_dns_info, which waits on the network task.
+    const uint32_t d = dnsInUse_[static_cast<uint8_t>(iface)].load(std::memory_order_relaxed);
+    for (int i = 0; i < 4; i++) dns[i] = static_cast<uint8_t>((d >> (8 * i)) & 0xff);
 }
 
 // Return a client interface to DHCP: (re)start its DHCP client so it re-leases without a reboot. The counterpart to netSetStaticIPv4 for a Static→DHCP toggle. Safe if already running.

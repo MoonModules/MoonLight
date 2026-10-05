@@ -286,6 +286,9 @@ static auto startTime = std::chrono::steady_clock::now();
 static std::atomic<uint32_t> testNowMs{0};
 
 void setTestNowMs(uint32_t ms) { testNowMs.store(ms, std::memory_order_relaxed); }
+// How far each reading moves a frozen clock, so a test sees two readings within one tick differ, as on a running device.
+static std::atomic<uint32_t> testStepMs{0};
+void setTestClockStep(uint32_t ms) { testStepMs.store(ms, std::memory_order_relaxed); }
 
 // Clang gains the effect-warning suppression only where it has the warning: probed with __has_warning, not a version number. @xref{the-effect-warning-guard|why}.
 #if defined(__clang__) && defined(__has_warning)
@@ -299,7 +302,10 @@ void setTestNowMs(uint32_t ms) { testNowMs.store(ms, std::memory_order_relaxed);
 #endif
 uint32_t millis() MM_NONBLOCKING {
     uint32_t override_ = testNowMs.load(std::memory_order_relaxed);
-    if (override_) return override_;
+    if (override_) {
+        const uint32_t step = testStepMs.load(std::memory_order_relaxed);
+        return step ? testNowMs.fetch_add(step, std::memory_order_relaxed) + step : override_;
+    }
     auto now = std::chrono::steady_clock::now();
     return static_cast<uint32_t>(
         std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime).count()
@@ -1630,6 +1636,16 @@ uint32_t testNetStaticApplyCount(NetIface iface) {
     return testStaticApplies[static_cast<uint8_t>(iface)].load(std::memory_order_relaxed);
 }
 void netSetDhcp(NetIface /*iface*/) {}
+static uint8_t testLease_[3][4] = {};   // gateway, mask, DNS
+void setTestNetLease(const uint8_t gw[4], const uint8_t mask[4], const uint8_t dns[4]) {
+    const uint8_t* in[3] = {gw, mask, dns};
+    for (int k = 0; k < 3; k++) for (int i = 0; i < 4; i++) testLease_[k][i] = in[k] ? in[k][i] : 0;
+}
+void netGetIPv4(NetIface iface, uint8_t ip[4], uint8_t gw[4], uint8_t mask[4], uint8_t dns[4]) {
+    if (iface == NetIface::Sta) wifiStaGetIPv4(ip); else ethGetIPv4(ip);
+    uint8_t* outs[3] = {gw, mask, dns};
+    for (int k = 0; k < 3; k++) for (int i = 0; i < 4; i++) outs[k][i] = testLease_[k][i];
+}
 void setHostname(const char* /*name*/) {}   // no DHCP client on desktop
 void wifiStaStop() {}
 int wifiStaRssi() { return 0; }
@@ -1641,7 +1657,13 @@ void setTestWifiScan(const WifiNetwork* networks, int count) {
     testScanCount_ = count < 0 ? -1 : 0;
     for (int i = 0; i < count && i < 16; i++) testScan_[testScanCount_++] = networks[i];
 }
-bool wifiScanStart() { testScanStarted_ = true; return true; }
+static bool testScanRefused_ = false;
+void setTestWifiScanRefused(bool refused) { testScanRefused_ = refused; }
+bool wifiScanStart() {
+    if (testScanRefused_) return false;
+    testScanStarted_ = true;
+    return true;
+}
 int wifiScanResults(WifiNetwork* out, int max) {
     if (!testScanStarted_ || testScanCount_ < 0) return -1;   // not started, or a scan that never finishes
     testScanStarted_ = false;

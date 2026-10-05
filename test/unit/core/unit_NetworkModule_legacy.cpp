@@ -80,7 +80,7 @@ TEST_CASE("a config from 6.0 moves its network onto the Ethernet and WiFi cards,
     }
     CHECK(readConfig(root) == saved);
     std::filesystem::remove_all(root);
-    mm::platform::fsSetRoot(".");
+    mm::platform::fsSetRoot(nullptr);   // the default root
 }
 
 TEST_CASE("a 6.0 config on a named Ethernet board takes the board's map, as 6.0 did at boot") {
@@ -93,5 +93,5 @@ TEST_CASE("a 6.0 config on a named Ethernet board takes the board's map, as 6.0 
         CHECK(d.wifi->knownCount() == 0);          // no network to move
     }
     std::filesystem::remove_all(root);
-    mm::platform::fsSetRoot(".");
+    mm::platform::fsSetRoot(nullptr);   // the default root
 }

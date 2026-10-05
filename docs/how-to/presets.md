@@ -12,9 +12,18 @@ Right-click a pad, or press and hold it on a touchscreen. The pad editor opens.
 
 Type a name, choose which container it saves, and press **save current state here**.
 
-To overwrite, do the same on a pad that already holds one: the editor offers **save current state over it**, a rename, and **delete preset**.
-
 Any card saves itself as well: press its `{ }` button, name the preset, and press **save as preset**. It lands on the first free pad and holds that card alone, so applying it puts back that card and leaves its neighbors running.
+
+## Edit, rename or delete one
+
+A click applies a pad; everything else starts from the same editor. Right-click a pad that holds a preset, or press and hold it on a touchscreen. A pad's tooltip says the same.
+
+- **Change what it holds:** apply it, change what you want on the cards, then open its editor and press **save current state over it**. The radio buttons choose which container the new contents carry.
+- **Rename it:** edit **name** in the editor. The new name applies on Enter or when you leave the field.
+- **Delete it:** press **delete preset** in the editor. The pad empties.
+- **Move it:** drag it onto another pad, which swaps the two, or onto an empty one.
+
+Each preset is also a file, `/.config/presets/<name>.json`, so the File Manager edits or deletes it directly, and the pad follows the file.
 
 ## What a preset holds
 
