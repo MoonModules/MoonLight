@@ -517,7 +517,7 @@ function render(state) {
         opt.value = String(i);
         const flag = r.prerelease ? " (beta)" : "";
         const age = relativeTime(r.published_at);
-        opt.textContent = `${r.tag_name}${flag} — ${age}`;
+        opt.textContent = `${releaseLabel(r)}${flag} · ${age}`;
         releaseEl.appendChild(opt);
     });
 

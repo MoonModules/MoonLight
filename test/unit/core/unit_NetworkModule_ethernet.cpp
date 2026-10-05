@@ -258,15 +258,17 @@ TEST_CASE("Ethernet never applies a Static setting with its gateway outside the 
     mm::platform::setTestEthIPv4(nullptr);
 }
 
-// Static waits for the next link-up to apply, but the way back to DHCP has nothing to wait for: left pinned, the next cable comes back on the retired address.
-TEST_CASE("Ethernet set back to DHCP while unplugged drops its pinned address at once") {
+// An edit made with the cable out reaches the platform at once, which keeps it for the next link-up: waiting would bring the cable back on the old setting.
+TEST_CASE("Ethernet IP settings changed while unplugged apply at once, both ways") {
     mm::EthernetModule eth;
     eth.rebuildControls();
+    const uint32_t staticBefore = mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Eth);
     setStatic(eth, "{\"ip\":\"192.168.1.250\"}");
-    eth.syncIpLive(true);   // pinned on the wire
+    CHECK_FALSE(eth.syncIpLive(false));   // the cable is out, so the cascade has nothing to re-judge
+    CHECK(mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Eth) > staticBefore);
     const uint32_t dhcpBefore = mm::platform::testNetDhcpCount(mm::platform::NetIface::Eth);
     setField(eth, "ipSettings", "{\"ipSettings\":0}");
-    eth.syncIpLive(false);  // the cable is out
+    eth.syncIpLive(false);
     CHECK(mm::platform::testNetDhcpCount(mm::platform::NetIface::Eth) > dhcpBefore);
 }
 

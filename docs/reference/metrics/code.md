@@ -197,7 +197,7 @@ The next function worth simplifying is at the top of each file's list.
 | `src/light/effects/SolidEffect.h` | 3 | `SolidEffect::static_cast<lengthType>`, complex function 36 |
 | `src/main.cpp` | 3 | `mm_main`, long function 179 |
 | `src/platform/desktop/moonlive_asm_arm64.cpp` | 3 | `lines 34-41, also in src/platform/esp32/moonlive_asm_riscv.cpp:40`, duplicated block 8 |
-| `test/unit/core/unit_NetworkModule_ethernet.cpp` | 3 | `lines 274-283, also in test/unit/core/unit_NetworkModule_ethernet.cpp:193`, duplicated block 10 |
+| `test/unit/core/unit_NetworkModule_ethernet.cpp` | 3 | `lines 276-285, also in test/unit/core/unit_NetworkModule_ethernet.cpp:193`, duplicated block 10 |
 | `test/unit/light/unit_AuroraEffect.cpp` | 3 | `lines 40-48, also in test/unit/light/unit_PolarLut_equivalence.cpp:40`, duplicated block 9 |
 | `test/unit/light/unit_MoonLiveLayout.cpp` | 3 | `lines 685-935, also in test/unit/light/unit_MoonLiveLayout.cpp:403`, duplicated block 251 |
 | `test/unit/light/unit_MoonLiveParticles.cpp` | 3 | `lines 34-47, also in test/unit/light/unit_MoonLiveDrawing.cpp:26`, duplicated block 14 |
@@ -330,7 +330,7 @@ The next function worth simplifying is at the top of each file's list.
 | `src/platform/esp32/platform_esp32_i2s.cpp` | 1 | `platform::audioMicInit`, complex function 11 |
 | `src/platform/esp32/platform_esp32_tasks.cpp` | 1 | `platform::taskSnapshot`, complex function 12 |
 | `src/platform/platform.h` | 1 | `platform.h`, large file 1174 |
-| `src/ui/app.js` | 1 | `app.js`, large file 8949 |
+| `src/ui/app.js` | 1 | `app.js`, large file 8953 |
 | `src/ui/install-picker.js` | 1 | `install-picker.js`, large file 1048 |
 | `src/ui/preview3d.js` | 1 | `preview3d.js`, large file 1431 |
 | `test/js/installer-eth-only.test.mjs` | 1 | `lines 13-23, also in test/js/ui-mooncloud.test.mjs:6`, duplicated block 11 |

@@ -6554,7 +6554,8 @@ function renderMoonCloudStats(host, mod) {
             const bounded = shown.some(r => r.min !== undefined);
             const pick = (name) => {
                 if (bounded) {
-                    const row = shown.find(r => r.name === name);
+                    // The rows "other" folds count too, since its unfolded legend picks them by name.
+                    const row = shown.flatMap(r => r.rest ? [r, ...r.rest] : [r]).find(r => r.name === name);
                     if (!row) return;
                     delete moonCloudFilter[`${param}Min`];
                     delete moonCloudFilter[`${param}Max`];
@@ -6682,14 +6683,16 @@ async function galleryFetch(file) {
 }
 
 /// The script names already on the device, the user's and the factory's, so an install never overwrites or shadows one.
+/// A failed listing throws rather than reading as an empty folder, which would let an install overwrite a script it could not see; a missing folder lists as empty.
 async function deviceScriptNames() {
     const names = new Set();
     for (const dir of ["/moonlive", "/.moonlive"])
-        for (const row of await fmFetchDir(dir, true).catch(() => [])) names.add(String(row.name).toLowerCase());
+        for (const row of await fmFetchDir(dir, true)) names.add(String(row.name).toLowerCase());
     return names;
 }
 
 /// Put on the device each script a document names that it lacks: the gallery's copy when an entry carries it, else the one this firmware ships.
+/// A script found in neither throws before the preset is written, so a preset never lands with a card that cannot run.
 async function galleryFetchScripts(doc, index) {
     const held = await deviceScriptNames();
     for (const script of galleryScriptsOf(doc)) {
@@ -6698,7 +6701,8 @@ async function galleryFetchScripts(doc, index) {
         if (s) { await writeDeviceFile("/moonlive", script, await galleryFetch(s.file)); continue; }
         // A shipped script is downloaded on first use, so a device that never picked it has no copy yet.
         const group = mlGroupForExt(script.slice(script.lastIndexOf(".")).toLowerCase());
-        if (((await mlFetchCatalog())[group]?.names || []).includes(script)) await mlDownloadScript(script, group);
+        if (!((await mlFetchCatalog())[group]?.names || []).includes(script)) throw new Error(`${script} is neither in the gallery nor in this firmware`);
+        await mlDownloadScript(script, group);
     }
 }
 

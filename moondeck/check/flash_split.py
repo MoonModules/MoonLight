@@ -13,7 +13,8 @@ The split is mechanical: a rename reads as removed plus new, and inlining moves 
 The net is exact, the split is a strong signal, and the largest moves are listed so a misreading shows.
 
 The baseline is the measurement taken at the previous commit, kept beside each build in `build/`.
-A run at a new HEAD rotates the last measurement into the baseline, so every run inside one commit compares against the same state, the one the last commit recorded.
+A run at a new HEAD rotates the last measurement into the baseline and names it after HEAD, since the run before a commit measured what that commit holds.
+Every run inside one commit then compares against the same state, and `since` is always the commit the change is measured against.
 """
 
 import json
@@ -91,7 +92,8 @@ def measure(build_dir: Path, elf: Path, image_bytes: int, head: str, env: dict) 
     snap, base_path = build_dir / SNAPSHOT, build_dir / BASELINE
     last = _load(snap)
     if last and last.get("head") != head:
-        snap.replace(base_path)   # a commit happened since: that measurement is the baseline now
+        # A commit happened since: the run before it measured what was committed, so it is the baseline, named after that commit.
+        base_path.write_text(json.dumps({**last, "head": head}), encoding="utf-8")
     snap.write_text(json.dumps({"head": head, "image": image_bytes, "symbols": now}), encoding="utf-8")
     base = _load(base_path)
     if not base or "symbols" not in base:

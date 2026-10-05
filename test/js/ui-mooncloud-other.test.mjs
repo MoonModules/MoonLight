@@ -23,3 +23,8 @@ test("the legend unfolds other into rows that filter", () => {
     const legend = fnSource("moonCloudLegend");
     assert.ok(legend.includes("r.rest") && legend.includes("moonCloudLegendLine(row, null, onPick)"));
 });
+
+// A bucketed chart filters by the picked row's bounds, so the rows "other" folds must be found by name too, or picking one does nothing.
+test("a picked row inside other filters a bucketed chart by its bounds", () => {
+    assert.ok(fnSource("renderMoonCloudStats").includes("shown.flatMap(r => r.rest ? [r, ...r.rest] : [r]).find(r => r.name === name)"));
+});

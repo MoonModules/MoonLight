@@ -6,6 +6,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { src, fnSource } from "./app-source.mjs";
 
+// The "try now" handler alone, from its button to the title set right after it, so a growing handler or a later fetch cannot move the ordering checks.
+const tryNowHandler = () => src.slice(src.indexOf('button("try now"'), src.indexOf("now.title", src.indexOf('button("try now"')));
+
 const g = new Function(`
     const GALLERY_SCRIPT_EXT = [".mle", ".mll", ".mlm", ".mls", ".mlp"];
     ${fnSource("galleryAppliesUnasked")}
@@ -52,12 +55,14 @@ test("a preset brings the scripts the device lacks: the gallery's copy first, el
         async (dir, name) => { wrote.push(`${dir}/${name}`); },
         async () => ({ effects: { names: ["comet-trail.mle", "fluid.mle"] } }),
         async (name, group) => { downloaded.push(`${group}/${name}`); });
-    const doc = { Effects: { L: { A: { script: "comet-trail.mle" }, B: { script: "swirl.mle" }, C: { script: "fluid.mle" }, D: { script: "gone.mle" } } } };
-    await fetchScripts(doc, [{ kind: "Effect script", file: "scripts/0009-swirl.mle" }]);
+    const index = [{ kind: "Effect script", file: "scripts/0009-swirl.mle" }];
+    const doc = { Effects: { L: { A: { script: "comet-trail.mle" }, B: { script: "swirl.mle" }, C: { script: "fluid.mle" } } } };
+    await fetchScripts(doc, index);
     assert.deepEqual(wrote, ["/moonlive/swirl.mle"]);            // from the gallery
     assert.deepEqual(downloaded, ["effects/comet-trail.mle"]);   // shipped, not yet on the device
-    // fluid.mle is already there and stays; gone.mle is nowhere, so its card says so.
-    const tryNow = src.slice(src.indexOf('button("try now"'), src.indexOf('button("try now"') + 2000);
+    // fluid.mle is already there and stays; a script found nowhere refuses the preset, naming it.
+    await assert.rejects(fetchScripts({ Effects: { L: { A: { script: "gone.mle" } } } }, index), /gone\.mle is neither in the gallery nor in this firmware/);
+    const tryNow = tryNowHandler();
     assert.ok(tryNow.indexOf("galleryFetchScripts(") > 0 && tryNow.indexOf("galleryFetchScripts(") < tryNow.indexOf('fetch("/api/state"'));
 });
 
@@ -101,7 +106,7 @@ test("every gallery download refuses a failed response before anything is writte
     const fetchFile = new Function("fetch", "GALLERY_RAW", `${fnSource("galleryFresh")} return ${fnSource("galleryFetch")}`)(
         async () => ({ ok: false, status: 404, text: async () => "404: Not Found" }), "https://x/");
     await assert.rejects(fetchFile("presets/0001-a.json"), /download failed \(404\)/);
-    const tryNow = src.slice(src.indexOf('button("try now"'), src.indexOf('button("try now"') + 2000);
+    const tryNow = tryNowHandler();
     assert.ok(tryNow.indexOf("galleryFetch(") > 0 && tryNow.indexOf("galleryFetch(") < tryNow.indexOf('fetch("/api/state"'));
     assert.ok(!src.includes("fetch(GALLERY_RAW + e.file)"));   // no download bypasses it
 });

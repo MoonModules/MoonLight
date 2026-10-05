@@ -49,10 +49,10 @@ def test_every_run_inside_one_commit_compares_against_the_last_commits_measureme
     elf = tmp_path / "MoonLight.elf"
     assert flash_split.measure(tmp_path, elf, 1000, "aaa", {}) is None   # first ever: nothing to compare
     assert flash_split.measure(tmp_path, elf, 1005, "aaa", {}) is None   # same commit: still no baseline
-    first = flash_split.measure(tmp_path, elf, 1005, "bbb", {})          # a commit happened: aaa's last run is the baseline
+    first = flash_split.measure(tmp_path, elf, 1005, "bbb", {})          # committed as bbb: the last run before it is the baseline
     again = flash_split.measure(tmp_path, elf, 1007, "bbb", {})          # a second run at bbb keeps that baseline
-    assert (first["since"], first["net"], first["new"]) == ("aaa", 0, 0)
-    assert (again["since"], again["net"], again["grown"], again["other"]) == ("aaa", 2, 2, 0)
+    assert (first["since"], first["net"], first["new"]) == ("bbb", 0, 0)   # named after the commit it measured
+    assert (again["since"], again["net"], again["grown"], again["other"]) == ("bbb", 2, 2, 0)
     assert json.loads((tmp_path / flash_split.SNAPSHOT).read_text())["head"] == "bbb"
 
 

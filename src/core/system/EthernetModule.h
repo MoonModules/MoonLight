@@ -179,19 +179,15 @@ public:
         return false;
     }
 
-    /// Apply an IP settings change live when Ethernet carries the device, returning true when one was applied.
+    /// Apply an IP settings change at once, returning true when Ethernet carries the device, so the cascade re-judges it.
     bool syncIpLive(bool connected) {
         // Any edit updates the card's reason; only a change in what is in effect touches the interface.
         const uint32_t sig = ip_.sig();
         if (sig != notedIpSig_) { notedIpSig_ = sig; noteIpProblem(); }
         if (!appliedIp_.changedTo(ip_)) return false;
-        // Static applies at the next link-up, but DHCP has nothing to wait for: left pinned, the next cable re-pins the retired address.
-        if (!connected) {
-            if (!ip_.usable()) platform::netSetDhcp(platform::NetIface::Eth);
-            return false;
-        }
+        // Applied at once, cable or not: the platform keeps a static setting and re-pins it at link-up, so neither direction waits for a lease to land first.
         ip_.applyLive(platform::NetIface::Eth);
-        return true;
+        return connected;
     }
 
     /// Static starts from the cable's lease, so nothing moves until an address changes; with no lease, from the station's network.
