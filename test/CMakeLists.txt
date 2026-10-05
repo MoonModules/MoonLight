@@ -71,6 +71,7 @@ add_executable(mm_tests
     unit/core/unit_MoonModule_replacechild.cpp
     unit/core/unit_MoonBaseContract.cpp
     unit/core/unit_NetworkModule_legacy.cpp
+    unit/core/unit_IpSettings.cpp
     unit/core/unit_NetworkModule.cpp
     unit/core/unit_NetworkModule_ethernet.cpp
     unit/core/unit_WiFiModule.cpp
@@ -170,6 +171,7 @@ add_executable(mm_tests
     unit/light/unit_Drivers_livePalettes.cpp
     unit/light/unit_Drivers_rendersplit.cpp
     unit/light/unit_FixtureProfilesModule.cpp
+    unit/light/unit_DriverBase_fixture_persistence.cpp
     unit/light/unit_Drivers_firstOutputRgb.cpp
     unit/light/unit_HueDriver.cpp
     unit/light/unit_Palette.cpp

@@ -34,6 +34,22 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## Unreleased
 
+### The access point always broadcasts its name and follows the radio's channel
+
+**Action: *nothing*.**
+
+The access point always broadcasts its name, and it takes channel 1 when it runs alone; beside a joined network it shares that network's channel, as one radio must.
+A hidden name was no protection, since any scanner shows it, and made first setup harder; set a `password` to keep others off it.
+A saved `channel` or `hidden` is ignored.
+
+### A driver's fixture profile is saved by name
+
+**Action: *re-set a control*, only where a script, a document or an API call sets `fixture` by number.**
+
+The built-in profiles gained the three missing color orders and three 16-bit rows, which moved RGBW and every row after it down the list.
+A driver now saves `fixture` as the profile's name, and a device's config from before the update boots on the profile it had.
+A number sent as `fixture` now picks a different row; send the profile's name instead, such as `"fixture": "GRBW"`.
+
 ### Wave's `type` is `waveform`
 
 **Action: *re-set a control*.**

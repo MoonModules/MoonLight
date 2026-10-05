@@ -82,7 +82,7 @@ TEST_CASE("the app's saved config carries every key MoonBase reads") {
 
     device.reset();   // released while its folder still exists
     std::filesystem::remove_all(tmpRoot);
-    mm::platform::fsSetRoot(".");
+    mm::platform::fsSetRoot(nullptr);   // the default root
 }
 
 // The scraper matches a key at the top level or under a child, and never inside another key's name.

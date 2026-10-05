@@ -177,3 +177,29 @@ The cold path folds the physical box through each enabled static modifier to get
 #### What the status line reports
 
 The status shows the logical box the effects render into, which can differ from the physical box on `Layouts`: a mirror modifier folds a 128 by 128 physical layout into a 64 by 64 logical one. The same slot carries a warning when a build cannot fit in memory, and a warning always wins over the neutral box line.
+
+## FixtureProfiles, details
+
+#### 16-bit channels
+
+A fine role is the low byte of a 16-bit channel, the DMX convention: `R fine`, `G fine`, `B fine`, `W fine`, `WW fine`, `Pan fine`, `Tilt fine` and `Dimmer fine`.
+`RGB 16-bit`, `GRB 16-bit` and `RGBW 16-bit` ship built in, and a custom row places fine roles in any order a fixture needs.
+
+The effects stay 8-bit, and the brightness and curve go to 16 bits on the way out, so a fade keeps all 256 steps at any brightness.
+That takes a 512-byte table per driver; when it cannot be allocated the channel stays 8-bit, with a fine byte of 0.
+Pan and tilt widen by repeating their byte, so a full 8-bit aim reaches the fixture's full 16-bit range.
+A master dimmer is held wide open on both bytes.
+
+#### Which profile a chip takes
+
+| Chip | Profile |
+|---|---|
+| WS2812B, WS2813, WS2815 | `GRB` |
+| SK6812 RGBW | `GRBW` |
+| WS2814 | `WRGB` |
+| WS2816 | `GRB 16-bit` |
+| UCS8903 | `RGB 16-bit` |
+| UCS8904 | `RGBW 16-bit` |
+
+A WS2811 orders its colors as the strip or puck maker wired it, so try `RGB`, then the other five orders.
+The TM1814 and TM1914 send a settings preamble on an inverted line before the pixels, which a profile cannot describe.

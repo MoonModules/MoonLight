@@ -12,9 +12,18 @@ Right-click a pad, or press and hold it on a touchscreen. The pad editor opens.
 
 Type a name, choose which container it saves, and press **save current state here**.
 
-To overwrite, do the same on a pad that already holds one: the editor offers **save current state over it**, a rename, and **delete preset**.
-
 Any card saves itself as well: press its `{ }` button, name the preset, and press **save as preset**. It lands on the first free pad and holds that card alone, so applying it puts back that card and leaves its neighbors running.
+
+## Edit, rename or delete one
+
+A click applies a pad; everything else starts from the same editor. Right-click a pad that holds a preset, or press and hold it on a touchscreen. A pad's tooltip says the same.
+
+- **Change what it holds:** apply it, change what you want on the cards, then open its editor and press **save current state over it**. The radio buttons choose which container the new contents carry.
+- **Rename it:** edit **name** in the editor. The new name applies on Enter or when you leave the field.
+- **Delete it:** press **delete preset** in the editor. The pad empties.
+- **Move it:** drag it onto another pad, which swaps the two, or onto an empty one.
+
+Each preset is also a file, `/.config/presets/<name>.json`, so the File Manager edits or deletes it directly, and the pad follows the file.
 
 ## What a preset holds
 
@@ -47,12 +56,13 @@ Click the pad. The look, geometry or setup replaces what was there.
 
 ## From the gallery
 
-The **Gallery** under the pads lists what people shared in [MoonLight-Gallery](https://github.com/MoonModules/MoonLight-Gallery), most liked first. Your browser fetches it, so the device needs no internet of its own, and an entry shows as soon as it is accepted.
+The **Gallery** under the pads shows what people shared in [MoonLight-Gallery](https://github.com/MoonModules/MoonLight-Gallery) as pages of thumbnails, most liked or newest first. Your browser fetches it, so the device needs no internet of its own, and an entry shows as soon as it is accepted.
 
-- **add to a pad** puts a preset on the first free pad, with any script it needs from the gallery.
-- **try now** applies it without keeping it.
+Search covers the name, the description and the author, and a chip per kind narrows the list to presets or one kind of script. Click a thumbnail to open the entry: its moving preview plays with the whole description, and prev and next step through what the search shows.
+
+- **add to a pad** puts a preset on the first free pad, with any script it needs that the device lacks, from the gallery or from the scripts MoonLight ships.
+- **try now** applies it the same way without keeping it on a pad.
 - **install** puts a script into `/moonlive`.
-- **fill empty pads with the most liked** adds the best-liked looks and palettes until the grid is full. Presets that set pins or geometry are left out, since they belong to one rig, and your own pads stay where they are.
 
 An entry made on a newer MoonLight than yours says so: update first.
 

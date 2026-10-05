@@ -107,7 +107,7 @@ A row's password travels to the UI in the clear, over the API and the WebSocket,
 2. ✅ **WiFi submodule with one known network.** Move `ssid`, `password` and the radio settings, as a one-row list. Improv writes the row. Migration and its tests.
 3. ✅ **Several known networks and the choosing order.** Unit tests on the order: list order, the next tried on failure, the fallback access point when none joins. Connect and Forget on a known row.
 4. ✅ **Available networks and connect-first joining.** The platform scan moves out of Improv; bars, lock, check mark and "scanned ago"; tap, password, join now, save only on success, "incorrect password" on failure.
-5. ✅ **Per-network IP settings**, applied on join and live. 🚧 Validating before use and warning before a live change are not built (below).
+5. ✅ **Per-network IP settings**, applied on join and live, checked before use, and asked about before a change moves the device away from the page.
 6. ✅ **Access point submodule:** `opens`, `password`, `clients`, `channel` and `hidden`, with the refusal of "never" when nothing else is configured. Tests on the cascade with each `opens` value.
 7. ✅ **Captive portal and the handoff:** the DNS reply builder with its unit tests (an A query, another type, a malformed and an oversized packet), the socket's lifecycle tied to the access point, the HTTP redirect with a test, and the new-address page with the access point held open.
 8. **Bench**, ✅ for what an S3 shows: two known networks with one absent, first setup from a computer, a protected hidden access point, the iPhone sign-in screen. 🚧 The rest waits (below).
@@ -117,7 +117,7 @@ A row's password travels to the UI in the clear, over the API and the WebSocket,
 Tested on the one board at hand, an S3 on a 2.4 GHz network, and pinned by tests that can run again:
 
 - **Unit tests** cover the logic: the cascade and its `opens` rules, the known list and its order, connect-first joining and its failure words, per-network IP settings applied on join and live, Ethernet taking over and refusing a card join, the fallback holding off while a phone is on the access point, the DNS reply, the redirect rule, the two-minute handoff, the password lengths and the `?open=` link.
-- **Live scenarios**, run only when named: `scenario_AccessPoint_first_setup_from_its_own_network` walks first setup with the computer as the phone and passed four times on the S3; `scenario_WiFi_known_networks_fall_back_in_order` and `scenario_AccessPoint_protected_hidden_and_always_on` (a password, a hidden name, opening always) passed once each.
+- **Live scenarios**, run only when named: `scenario_AccessPoint_first_setup_from_its_own_network` walks first setup with the computer as the phone and passed four times on the S3; `scenario_WiFi_known_networks_fall_back_in_order` and `scenario_AccessPoint_protected_and_always_on` (a password, opening always) passed once each.
 
 Waiting for more devices and a cable:
 
@@ -126,7 +126,9 @@ Waiting for more devices and a cable:
 - 🚧 **Phones.** The full first setup on an iPhone, the sign-in screen opening on the WiFi card, and on an Android phone.
 - 🚧 **Networks.** A hidden network joined as a station, a channel 13 router, and static addressing on a WiFi network.
 - 🚧 **`opens: never`** on hardware, with USB at hand to recover.
-- 🚧 **Not built yet:** ordering the known networks by signal strength from a scan; validating static IP settings before use, beyond ignoring an all-zero address; asking before a live IP change, which drops the open page.
+- ✅ **Static IP settings are checked before use:** a mask, address, gateway or DNS server a network cannot use leaves the interface on DHCP, with the reason on the Ethernet card or the WiFi row.
+- ✅ **A live address change asks first:** editing the addressing of the interface carrying the page names where the device will be, and an address is sent when committed rather than as it is typed.
+- ✅ **A recent scan orders the joining:** known networks a scan in the last five minutes saw are tried first, in list order, so the list stays the priority and no time goes to networks out of range. Signal strength does not reorder them, a choice made on 2026-10-05 to keep moving a row up meaning prefer it. Verified on an S3: with an absent network at the top and a scan that missed it, the round after a failed join tried the network in range first and rejoined in about a second.
 - ✅ **MoonBase** with the new layout, on a classic ESP32: it joins the app's WiFi, opens the device's own access point with the sign-in screen, and installs from a GitHub release. Two live scenarios pin the first two.
 - 🚧 **MoonBase over Ethernet**, on an Olimex Gateway with the new scenario.
 - ✅ **A staged install survives a reset in MoonBase.** It keeps the URL until an install ends and counts installs started, stopping after three that reset the device. On a D32 whose supply collapses whenever the radio starts, 3 of 3 hand-overs completed where 2 of 4 were lost before.
@@ -140,15 +142,15 @@ Waiting for more devices and a cable:
 - The scan code inside Improv provisioning, which calls the platform scan instead.
 - The backlog item "Static IP on WiFi STA", deleted when this ships.
 
-## Next, found in the pre-merge review
+## Found in the pre-merge review
 
-- **The Improv scan and the radio teardown race.** `wifiScanStart()` runs on Improv's task and switches the radio mode while the render task may run `wifiRadioDown()`, which takes no lock; one mutex around the radio's mode and netifs, or the scan handed to the render task, closes it. Verified on a board.
-- **One IP-settings struct.** Ethernet keeps its five address fields and its live re-apply in the child, WiFi in the parent with a signature seeded by hand on every start path; one `{mode, ip, gateway, subnet, dns}` in `IpSettings.h` with its signature and its apply serves both.
-- **The cascade by its states.** `onConnected` dispatches on a string where the `State` enum exists, and the start-the-station transition and the stop-and-note pair are each copied six to eight times; one function per transition.
+- ✅ **The Improv scan and the radio teardown.** One recursive radio lock in the platform layer holds every call that changes the radio's mode, driver or interfaces, so Improv's scan never starts on a driver the render task is tearing down. Verified on an S3: Improv scanned without pause through four rounds of the station torn down, failing to join and rejoining, 12 scans ran between the teardowns, and the device never reset.
+- ✅ **One IP-settings struct.** `IpSettings` in `IpSettings.h` holds the mode and the four addresses, their signature and their apply, for Ethernet and every known WiFi network alike, and `IpApplied` replaces both hand-kept applied signatures.
+- ✅ **The cascade by its states.** `onConnected` takes the state, each state has its own tick method, and the station's start, wait and stop transitions are one function each.
 
 ## Out of scope at first
 
-The advanced settings users will ask for sooner or later are listed in the backlog's [advanced network settings](../future/backlog-core.md) item: roaming, enterprise WiFi, pinning to one access point, power save, the country code, the access point's address, and IPv6.
+The advanced settings users will ask for sooner or later are listed in the backlog's [advanced network settings](../future/backlog-core.md) item: roaming, enterprise WiFi, pinning to one access point, power save, the country code, the access point's address, and IPv6 beyond link-local.
 
 ## Decided
 

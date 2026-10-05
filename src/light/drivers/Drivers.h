@@ -305,6 +305,8 @@ public:
     /// Drive the power relay: closed while `on` and brightness is above zero, open otherwise.
     void applyRelay() {
         const bool closed = on && brightness > 0;
+        // Each call judges the list afresh, so a warning a mid-edit list left goes once the list is fixed or cleared.
+        if (showingRelayProblem_) { setStatus(""); showingRelayProblem_ = false; }
         // Release a pin the user cleared, or it stays asserted on a GPIO nothing owns.
         if (!relayPins[0]) {
             for (uint8_t i = 0; i < lastRelayCount_; i++)
@@ -317,6 +319,7 @@ public:
         // Reporting the parse error is the difference between a typo'd list and a working one.
         if (const char* err = parsePinList(relayPins, pins, kMaxRelays, n)) {
             setStatus(err, Severity::Warning);
+            showingRelayProblem_ = true;
             // Release what the OLD list held, or a typo mid-edit leaves the relays asserted.
             for (uint8_t i = 0; i < lastRelayCount_; i++)
                 platform::gpioWrite(lastRelayPins_[i], false);
@@ -332,8 +335,10 @@ public:
         }
         for (uint8_t i = 0; i < n; i++) {
             // An input-only pin refuses the write, and the seam says so rather than going quiet.
-            if (!platform::gpioWrite(static_cast<uint8_t>(pins[i]), closed))
+            if (!platform::gpioWrite(static_cast<uint8_t>(pins[i]), closed)) {
                 setStatus("relay pin cannot drive an output", Severity::Warning);
+                showingRelayProblem_ = true;
+            }
             lastRelayPins_[i] = static_cast<uint8_t>(pins[i]);
         }
         lastRelayCount_ = n;
@@ -346,6 +351,8 @@ public:
     uint8_t lastRelayPins_[kMaxRelays] = {};
     /// How many relay pins were driven last time, so a shrinking list can release the rest.
     uint8_t lastRelayCount_ = 0;
+    /// Whether the status is a relay warning, so fixing the list clears it and nothing else.
+    bool showingRelayProblem_ = false;
 
     // `multicore` alone is structural: it decides the handoff buffer and the core-1 task.
     /// Which controls route through the prepare sweep rather than the cheap correction tier.

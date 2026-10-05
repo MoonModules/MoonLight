@@ -192,16 +192,6 @@ The comparison is per rule as well as on the total, because each hides a differe
 
 The rules are in [documentation-standards.md](../docs/contributing/documentation-standards.md#the-card), and the check itself is pinned by `test/python/test_check_docgen.py`: every rule is tested firing on a page built to break it, because a regex that silently stopped matching would report a clean run.
 
-### check_platform_boundary
-
-Verify that platform-specific code stays inside `src/platform/`.
-
-```bash
-uv run moondeck/check/check_platform_boundary.py
-```
-
-Scans all source files outside `src/platform/` for forbidden includes and platform `#ifdef`s.
-
 ### check_esp32_built
 
 Check that a firmware binary exists and is newer than every source that feeds it.
@@ -244,9 +234,9 @@ uv run moondeck/check/collect_kpi.py --commit --no-live-capture   # skip the ser
 
 Captures a live tick from a connected ESP32 (and the desktop scenario ticks) plus source/test line counts, emitting the `tick:Xus(FPS:Y)` one-liner the commit message records.
 
-The ESP32 half reads `esp32/monitor.log`, and refreshes it by opening the serial port for 15 s when that log is older than 5 minutes — accurate, but ~80 s and only possible with a bench board attached. `--no-live-capture` skips that refresh and uses whatever log exists (a few seconds, no board needed); the ESP32 tick line is then absent rather than stale when no recent log is around. The gate lists pass the flag so their cost stays predictable; omit it when composing a commit message, where the fresh reading is the point.
+The ESP32 half reads `esp32/monitor.log`, and refreshes it by opening the serial port for 15 s when that log is older than 5 minutes. That reading is accurate, but takes ~80 s and a bench board. `--no-live-capture` skips that refresh and uses whatever log exists (a few seconds, no board needed); the ESP32 tick line is then absent rather than stale when no recent log is around. The gate lists pass the flag so their cost stays predictable; omit it when composing a commit message, where the fresh reading is the point.
 
-In `--commit` mode it also writes the repo-health snapshot (below), reusing the tick/FPS it just measured.
+In `--commit` mode it also prints the change's own account from [check_code](#check_code): lines added and removed under `src/` and `test/`, and the change in code findings and duplicated lines against the committed `code.md`. It writes the repo-health snapshot (below) too, reusing the tick/FPS it measured, and prints the flash split beside the account: what each rebuilt firmware's flash went to.
 
 ### bench_kernels
 
@@ -261,16 +251,20 @@ A report, not a check: the Markdown table it prints is pasted into performance.m
 
 ### repo_health
 
-Measure the repo's current state into `repo-health.json` — flash per firmware variant, tick/FPS per target, lines of code by area, comment density, test counts, docs inventory.
+Measure the repo's current state into `repo-health.json`: flash per firmware variant, tick/FPS per target, lines of code by area, comment density, test counts, docs inventory.
 
 ```bash
 uv run moondeck/check/repo_health.py           # measure + print the delta, write nothing
 uv run moondeck/check/repo_health.py --write   # rewrite repo-health.json
 ```
 
-**One small file, current state only — the trend is its git history** (`git log -p repo-health.json`), so the file never grows. The KPI gate rewrites it on every `--commit` run and prints the delta first, so growth is visible while you work and again in the commit's diff. A **soft ratchet**: nothing here fails a build. The numbers count things; they cannot tell a valuable comment from a restating one, so the judgment stays human.
+**One small file, current state only: the trend is its git history** (`git log -p repo-health.json`), so the file never grows. The KPI gate rewrites it on every `--commit` run and prints the delta first, so growth is visible while you work and again in the commit's diff. A **soft ratchet**: nothing here fails a build. The numbers count things; they cannot tell a valuable comment from a restating one, so the judgment stays human.
 
-Two properties worth knowing. Measurements read **tracked files only** (`git ls-files`), so a stray build artifact or scratch file can't move a number. And anything this run could not measure — a firmware variant that wasn't built, a tick with no board attached — **carries its previous value forward** rather than disappearing, so a docs-only commit doesn't blank the flash sizes and make the next diff unreadable.
+Two properties worth knowing. Measurements read **tracked files only** (`git ls-files`), so a stray build artifact or scratch file can't move a number. And anything this run could not measure **carries its previous value forward** rather than disappearing: a firmware variant that wasn't built, or a tick with no board attached. A docs-only commit so keeps its flash sizes, and the next diff stays readable.
+
+**Since the last release.** The page opens with each number a user feels beside its value at the last release tag (`git describe`). Those are flash per target, free heap, the isolated scenario ticks, lines of code, the code report's findings and the tests. The per-commit deltas move with host noise, so a simplification shows as a gain here over weeks. A firmware not rebuilt since the tag is left out, so a carried number never reads as no growth.
+
+**The flash split.** Each firmware rebuilt this run has its flash change split symbol by symbol. **New** is new functionality, **removed** and **shrunk** are what a cleanup saved, and **grown** is existing code that got bigger. **Other** is merged strings and alignment, so the parts sum to the net. The baseline is the last measurement before the current commit, named after it and kept beside the build as `flash-symbols.base.json`. Every run inside one commit so compares against the same state. A firmware's first split appears one commit after it is first measured. The page lists the largest moves per firmware, which is where a rename, read as removed plus new, shows itself. The split is a change rather than a state, so it stays out of the JSON. The code lives in [`flash_split.py`](check/flash_split.py).
 
 ### Tools group
 
@@ -298,7 +292,7 @@ which is what keeps them from being redundant:
 | **clang-tidy** | one statement, with full type information | is this line wrong? |
 | **clang-query** | the AST, via matchers we write | does this codebase's own rule hold? |
 | **`-Wfunction-effects`** | the whole call graph, from the compiler | can the render path block? |
-| **check_code** | tokens, no types (lizard) | is this function getting more complex over time? |
+| **check_code** | lizard's tokens, jscpd's clones, the compiler's hot-path sites, the include lines | is the code getting simpler or harder, per file, over time? |
 | **CodeQL** | a queryable database of the program | can LAN bytes reach a `memcpy`? |
 | **footprint** | the linked ELF | how many bytes does this cost, and in which memory? |
 
@@ -604,8 +598,7 @@ function's own body is never analyzed. A platform function that blocks internall
 carrying `MM_NONBLOCKING` is invisible. Closing that needs an xtensa clang — backlogged as
 "ESP32 clang/LLVM toolchain" in backlog-core.md.
 
-Not a gate yet: `-Wno-error=function-effects` keeps the build green while the findings are
-triaged. Each is a judgment — fix it, annotate the callee, or accept it with a scoped reason.
+The count lives in the code report: [check_code](#check_code) runs the same build and adds one `blocking call on the render path` row per site, whose committed count may only fall. This script is the detailed view of those sites, on request. `-Wno-error=function-effects` keeps the build green, since each finding is a judgment: fix it, annotate the callee, or accept it with a scoped reason.
 
 ### check_codeql
 
@@ -742,6 +735,7 @@ The code report: one page of counts that only fall, the shape [docgen.md](../doc
 ```bash
 uv run moondeck/check/check_code.py                   # rewrite code.md, exit 1 if any count rose
 uv run moondeck/check/check_code.py --module Control  # one module's findings, no report
+uv run moondeck/check/check_code.py --account         # this change's account for its commit message
 ```
 
 Each rule is a textbook measure with a known tool, four of them counted by [lizard](https://github.com/terryyin/lizard). **Complex function** is cyclomatic complexity over 10: one plus every branch point, the number of paths a reader holds at once and the number of tests that cover it. **Long function** is over 60 non-comment lines. **Deeply nested** is control flow more than 3 levels deep, the part of cognitive complexity that measures what a reader trips on. **Long parameter list** is more than 7 parameters. **Large file** is over 1000 lines, counted by the script over every code file we own. The nesting and file-length limits are SonarQube's defaults. **Duplicated block** is a run of 5 or more lines sharing 50 or more tokens with a run elsewhere. [jscpd](https://github.com/kucherenko/jscpd) finds it among the code files the file-length rule counts. A clone counts under both of its files, so either file's edit clears it, and the headline carries the share of all lines that are duplicated. jscpd comes through npx, the dependency the docs build already has. Lizard tokenizes rather than parses, so it needs no build and runs in a second. The cost is a mangled name on some template-dense bodies, which counting per file makes harmless.
@@ -749,6 +743,12 @@ Each rule is a textbook measure with a known tool, four of them counted by [liza
 The report, [`docs/reference/metrics/code.md`](../docs/reference/metrics/code.md), lists the counts by rule, by area and by file, each file with its worst function first. It is rewritten on every run and tracked, so its git history is the trend. **The committed copy is the number to beat**, per rule and in total: a run that raises either fails. A touched file clears its own rows so it leaves the list, with the same reasonable-effort clause CLAUDE.md gives docgen. The report lists findings per file, so a renamed function or a moved file carries its findings along; the ratchet compares rule counts and the total.
 
 `repo_health` and `collect_kpi` count the function rules through the same two functions this script uses. The clones and the file sizes are the report's alone, a pass too slow for every KPI run. clang-tidy's `readability-function-*` checks stay off: one rule, one owner.
+
+**Platform code outside src/platform** and **light include in core** are the architecture's two boundaries, counted per line. The first is a vendor header or a platform `#ifdef` outside `src/platform/`, the second a `src/core` file including a `light/` header.
+
+**Blocking call on the render path** is the last rule, one row per site [check_nonblocking](#check_nonblocking) finds, a float conversion at a `formatTo` site included. It needs that script's clean rebuild of the desktop, so a full run takes minutes; `--module` and `--account` skip it and stay fast. A host without Clang 20 skips this rule with a SKIP line and leaves `code.md` as it is, while every other rule still ratchets.
+
+The account, `--account`, reads `code.md` as the last full run wrote it, so it follows a full run in the same gate pass. A saving shows in the commit that made it, rather than only in a later total.
 
 ### scenario_pipeline
 
@@ -1060,6 +1060,20 @@ uv run moondeck/build/erase_flash_esp32.py --port /dev/tty.usbserial-0001
 ```
 
 Typical use: forcing a fresh-first-boot after firmware experiments leave the LittleFS partition in a state the new firmware can't migrate from, or before testing the post-flash Improv provisioning flow as if the device just came out of the factory. After erase, re-run **Build** then **Flash** — the device boots with empty persistence and goes straight to AP-fallback / Improv-awaiting-credentials.
+
+### release_version
+
+Move `library.json` to the version development works toward, at the two moments a release changes it.
+
+```bash
+uv run moondeck/build/release_version.py next    # after releasing vX.Y.Z: X.(Y+1).0-dev
+uv run moondeck/build/release_version.py major   # the coming release is a major: (X+1).0.0-dev
+```
+
+Between releases `library.json` holds the next version with a `-dev` suffix, and tagging `vX.Y.Z` releases it: `verify_version.py` compares the tag with that version's core, so no edit precedes a tag.
+After a release, `next` moves development to the next minor; when the coming release is a major instead, `major` moves it there before tagging.
+A forgotten `next` cannot misorder the builds: `compute_version.py` gives a build after the last tag the next minor, so it always ranks above that release.
+The script never touches git, since the commit and the tag stay yours.
 
 ### serve_firmware
 

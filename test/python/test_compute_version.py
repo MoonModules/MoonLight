@@ -37,15 +37,24 @@ def test_stable_is_core(monkeypatch, tmp_path):
     assert cv.compute("stable") == "2.1.0"
 
 
-def test_latest_is_core_dev_n(monkeypatch, tmp_path):
+def test_latest_is_core_dev_n_when_library_json_is_ahead(monkeypatch, tmp_path):
     monkeypatch.setattr(cv, "LIBRARY_JSON", _lib(tmp_path, "2.1.0-dev"))
+    monkeypatch.setattr(cv, "last_release_core", lambda: "2.0.0")
     monkeypatch.setattr(cv, "commits_since_last_stable", lambda: 6)
     assert cv.compute("latest") == "2.1.0-dev.6"
-
-
-def test_local_is_verbatim(monkeypatch, tmp_path):
-    monkeypatch.setattr(cv, "LIBRARY_JSON", _lib(tmp_path, "2.1.0-dev"))
     assert cv.compute("local") == "2.1.0-dev"
+
+
+# library.json still names the release it tagged, so a build after it takes the next minor: 6.0.0-dev.N would rank below 6.0.0 and a board on latest would be offered the older release.
+def test_a_build_after_a_release_carries_the_next_minor(monkeypatch, tmp_path):
+    monkeypatch.setattr(cv, "LIBRARY_JSON", _lib(tmp_path, "6.0.0"))
+    monkeypatch.setattr(cv, "last_release_core", lambda: "6.0.0")
+    monkeypatch.setattr(cv, "commits_since_last_stable", lambda: 18)
+    assert cv.compute("latest") == "6.1.0-dev.18"
+    assert cv.compute("local") == "6.1.0-dev"       # a local build never passes for the release
+    monkeypatch.setattr(cv, "last_release_core", lambda: None)   # before the first release: library.json as it is
+    assert cv.compute("latest") == "6.0.0-dev.18"
+
 
 
 def test_channel_for_tag_centralizes_the_mapping():

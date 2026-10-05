@@ -159,13 +159,10 @@ All targets build warnings-as-errors: `-Wall -Wextra -Werror` on Clang/GCC (macO
 
 Diagnostics as you type come from clangd, using the same `.clang-tidy` CI runs; once-per-machine setup is in [building.md, editor setup](../how-to/building.md#editor-setup-clangd).
 
-### Platform boundary
-
-- **Platform boundary** (`moondeck/check/check_platform_boundary.py`), scans all files outside `src/platform/` for `#ifdef` / `#if defined` with platform macros and `#include` of platform-specific headers (`esp_*`, `freertos/*`, `driver/*`, `SDL.h`, `wiringPi.h`, …). Fails if any are found. The platform boundary rule itself: [architecture.md § Platform abstraction](../explanation/architecture/mooncore.md#platform-abstraction).
 ### Static checks
 
-- **Hot path check** (`moondeck/check/check_nonblocking.py`): the tick methods carry `MM_NONBLOCKING`, and Clang verifies transitively that nothing they reach allocates or blocks. It reports rather than fails, because a new blocking call is sometimes legitimate, and `docs/reference/metrics/hotpath-baseline.txt` freezes the known set. An audit must sweep every syscall the path can reach, not the loudest one: a socket timeout is not a fix, it is the size of the freeze. The rule itself: [the architecture](../explanation/architecture/moonmodule.md#hot-path-discipline).
-- **The code report** (`moondeck/check/check_code.py`): every function over a complexity, length, nesting or parameter limit, every block of code found elsewhere, and every file over a length limit. Listed per file in `docs/reference/metrics/code.md`, whose committed counts may only fall, per rule and in total; a touched file clears its own rows.
+- **Hot path check** (`moondeck/check/check_nonblocking.py`): the tick methods carry `MM_NONBLOCKING`, and Clang verifies transitively that nothing they reach allocates or blocks. Each site is a `blocking call on the render path` row in the code report below, so the count may only fall. Each finding stays a judgment: fix it, annotate the callee, or accept it with a scoped reason. An audit must sweep every syscall the path can reach, not the loudest one: a socket timeout is not a fix, it is the size of the freeze. The rule itself: [the architecture](../explanation/architecture/moonmodule.md#hot-path-discipline).
+- **The code report** (`moondeck/check/check_code.py`): every function over a complexity, length, nesting or parameter limit, every block of code found elsewhere, and every file over a length limit. It also counts each crossing of the [platform and domain boundaries](../explanation/architecture/mooncore.md#platform-abstraction). Listed per file in `docs/reference/metrics/code.md`, whose committed counts may only fall, per rule and in total; a touched file clears its own rows.
 
 ### From a finding to a fix
 
@@ -181,6 +178,8 @@ A finding is a named code smell. Every smell has a named, behavior-preserving mo
 | Long parameter list | Introduce Parameter Object | one struct |
 | Large file | Extract Class, Move Function | a module per concern |
 | Core reaching into light | Move Function, or an interface in core that light implements | the dependency points inward |
+| Platform code outside `src/platform` | Move Function into the platform layer; `if constexpr` on `platform_config.h` | a target's facts in one layer |
+| A blocking call on the render path | Move the work off the render thread: a worker, a cached value, a deferred apply | the tick only computes |
 | A name spread across files | Move Function, self-registration | a concept in one place |
 
 Cut first: a branch that chooses between equals is data, a guard is an early return, and nesting is what a reader trips on, more than branch count. The theory behind the moves is Ousterhout's: complexity is dependencies and obscurity, so a deep module with a small interface absorbs it and its callers stay simple. A function may stay over a limit when splitting it would hide a sequence that belongs together. It says so in one line, and its count stays rather than being forced.

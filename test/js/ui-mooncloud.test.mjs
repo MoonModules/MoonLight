@@ -119,9 +119,9 @@ test("a clicked slice filters every chart, and says so", () => {
                  "an active filter must be stated on the card");
     assert.ok(app.includes("Clear"), "an active filter must offer a way back");
 
-    // `other` is a bucket of everything past the top slices, so it names no value to filter by.
+    // `other` is a bucket of everything past the top slices, so it names no value to filter by: the pie never filters by it, and the legend unfolds it instead (ui-mooncloud-other).
     const guards = app.match(/r\.name !== "other"/g) || [];
-    assert.equal(guards.length, 2, "neither the pie nor the legend may make `other` clickable");
+    assert.equal(guards.length, 1, "the pie may not make `other` a filter");
 
     // Build maps to `dev`, whose stored values are 0 and 1 rather than the labels shown.
     assert.match(app, /name === "development" \? "1" : "0"/,
@@ -146,7 +146,7 @@ test("Enter in a text field presses the card's send button", () => {
     // send first would publish the text as it stood one keystroke ago.
     assert.ok(handler.includes("clearTimeout(dragTimers[key])"),
               "the pending debounced write must be cancelled");
-    assert.match(handler, /await sendControl\(moduleName, ctrl\.name, input\.value\);\s*\n\s*await sendControl\(moduleName, "send", 1\)/,
+    assert.match(handler, /await write\(ctrl\.name, input\.value\);\s*\n\s*await write\("send", 1\)/,
                  "the text must be written and awaited BEFORE send is pressed");
 
     // Talk is a MoonCloud child, so the lookup has to walk the tree.

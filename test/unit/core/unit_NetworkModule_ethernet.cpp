@@ -134,6 +134,12 @@ struct WiredNetwork {
     ~WiredNetwork() { net.removeChild(&eth); }   // the child is a member, not the tree's to free
 };
 
+// Set one control through the normal control-apply path.
+void setField(mm::EthernetModule& eth, const char* name, const char* json) {
+    for (uint8_t i = 0; i < eth.controls().count(); i++)
+        if (std::strcmp(eth.controls()[i].name, name) == 0) mm::applyControlValue(eth.controls()[i], json, name, mm::ApplyPolicy::Clamp);
+}
+
 const char* networkMode(mm::NetworkModule& net) {
     for (uint8_t i = 0; i < net.controls().count(); i++)
         if (std::strcmp(net.controls()[i].name, "mode") == 0) return static_cast<const char*>(net.controls()[i].ptr);
@@ -224,6 +230,74 @@ TEST_CASE("changing a static link-local address keeps Ethernet connected") {
     mm::platform::setTestEthIPv4(nullptr);
 }
 
+// A Static setting that cannot work is never put on the wire, and the card says why until it is fixed.
+TEST_CASE("Ethernet never applies a Static setting with its gateway outside the subnet, and names it") {
+    const uint8_t leased[4] = {192, 168, 1, 40};
+    FrozenClock clock;
+    mm::platform::setTestEthIPv4(leased);
+    {
+        WiredNetwork w;
+        auto& net = w.net;
+        net.setup();
+        net.rebuildControls();
+        setStatic(w.eth, "{\"ip\":\"192.168.1.250\"}");
+        setField(w.eth, "gateway", "{\"gateway\":\"10.0.0.1\"}");
+        const uint32_t before = mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Eth);
+        net.tick1s();
+        net.tick1s();
+        CHECK(mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Eth) == before);
+        REQUIRE(w.eth.status() != nullptr);
+        CHECK(std::string(w.eth.status()) == "static IP not used: the gateway is outside the subnet");
+        CHECK(w.eth.configuredIp() == nullptr);
+
+        setField(w.eth, "gateway", "{\"gateway\":\"192.168.1.1\"}");
+        net.tick1s();
+        CHECK(mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Eth) > before);
+        CHECK(std::string(w.eth.status()).empty());
+    }
+    mm::platform::setTestEthIPv4(nullptr);
+}
+
+// An edit made with the cable out reaches the platform at once, which keeps it for the next link-up: waiting would bring the cable back on the old setting.
+TEST_CASE("Ethernet IP settings changed while unplugged apply at once, both ways") {
+    mm::EthernetModule eth;
+    eth.rebuildControls();
+    const uint32_t staticBefore = mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Eth);
+    setStatic(eth, "{\"ip\":\"192.168.1.250\"}");
+    CHECK_FALSE(eth.syncIpLive(false));   // the cable is out, so the cascade has nothing to re-judge
+    CHECK(mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Eth) > staticBefore);
+    const uint32_t dhcpBefore = mm::platform::testNetDhcpCount(mm::platform::NetIface::Eth);
+    setField(eth, "ipSettings", "{\"ipSettings\":0}");
+    eth.syncIpLive(false);
+    CHECK(mm::platform::testNetDhcpCount(mm::platform::NetIface::Eth) > dhcpBefore);
+}
+
+// Static back to DHCP drops the address until the lease lands, which is the wait the device asked for rather than a lost cable.
+TEST_CASE("Ethernet switched back to DHCP waits for the lease before cascading") {
+    const uint8_t linkLocal[4] = {169, 254, 7, 9};
+    FrozenClock clock;
+    mm::platform::setTestEthIPv4(linkLocal);
+    {
+        WiredNetwork w;
+        auto& net = w.net;
+        net.setup();
+        net.rebuildControls();
+        setStatic(w.eth, "{\"ip\":\"192.168.1.250\"}");
+        net.tick1s();
+        REQUIRE(std::string(networkMode(net)) == "Ethernet");
+        setField(w.eth, "ipSettings", "{\"ipSettings\":0}");
+        mm::platform::setTestEthIPv4(linkLocal);   // the static address is gone and no lease has landed
+        net.tick1s();
+        mm::platform::setTestNowMs(1000 + 12000);
+        net.tick1s();
+        CHECK(std::string(networkMode(net)) == "Ethernet");
+        mm::platform::setTestNowMs(1000 + 16000);
+        net.tick1s();
+        CHECK(std::string(networkMode(net)) != "Ethernet");
+    }
+    mm::platform::setTestEthIPv4(nullptr);
+}
+
 // fixedPins stays inside its capacity; the applied-versus-pending half needs hardware, since hasEthernet is false here.
 TEST_CASE("fixedPins never writes past the capacity it is given") {
     mm::EthernetModule eth;
@@ -283,6 +357,27 @@ TEST_CASE("ethBoard seeds from the pins after a restore, not once before it") {
     // And the seed does NOT fight a chosen preset: rebuilding again keeps it.
     net.rebuildControls();
     CHECK(std::strcmp(boardOf(net), "Classic RMII") == 0);
+}
+
+// Asked per chip rather than per build, since a host test runs as the desktop, which previews every board: a classic Olimex once offered the P4 and S31 boards.
+TEST_CASE("each chip offers only the Ethernet boards it can wire") {
+    using E = mm::EthernetModule;
+    constexpr E::EthChip classic{true, false, false, false}, p4{true, false, true, false}, s31{true, false, false, true},
+                         s3{true, true, false, false}, desktop{false, false, false, false};
+    constexpr int8_t custom = 0, lan8720 = 1, ip101 = 2, w5500 = 3, yt8531 = 4;
+    for (const auto& chip : {classic, p4, s31, s3, desktop}) CHECK(E::presetFits(custom, chip));
+    CHECK(E::presetFits(lan8720, classic));
+    CHECK_FALSE(E::presetFits(ip101, classic));
+    CHECK_FALSE(E::presetFits(yt8531, classic));
+    CHECK(E::presetFits(ip101, p4));
+    CHECK_FALSE(E::presetFits(lan8720, p4));
+    CHECK_FALSE(E::presetFits(yt8531, p4));
+    CHECK(E::presetFits(yt8531, s31));
+    CHECK_FALSE(E::presetFits(lan8720, s31));
+    CHECK_FALSE(E::presetFits(ip101, s31));
+    CHECK(E::presetFits(w5500, s3));
+    CHECK_FALSE(E::presetFits(lan8720, s3));
+    for (int8_t t : {lan8720, ip101, w5500, yt8531}) CHECK(E::presetFits(t, desktop));
 }
 
 // A chip whose filter leaves exactly ONE real preset opens on it, not on Custom: on a P4-NANO that is a configured interface versus none.

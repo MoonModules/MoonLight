@@ -536,6 +536,26 @@ static void ensureNetifInit() {
     }
 }
 
+// Each client interface's DNS server, stored at the lease and at a static apply, since reading it waits on the network task.
+static std::atomic<uint32_t> dnsInUse_[2] = {};
+
+// Store the DNS server a lease brought, on the event task, where waiting on the network task is harmless.
+[[maybe_unused]] static void cacheLeaseDns(esp_netif_t* netif, NetIface iface) {
+    esp_netif_dns_info_t d;
+    const bool ok = netif && esp_netif_get_dns_info(netif, ESP_NETIF_DNS_MAIN, &d) == ESP_OK && d.ip.type == ESP_IPADDR_TYPE_V4;
+    dnsInUse_[static_cast<uint8_t>(iface)].store(ok ? d.ip.u_addr.ip4.addr : 0, std::memory_order_relaxed);
+}
+
+// A link-local IPv6 address once the interface is up, so mDNS answers AAAA and a .local lookup skips its 5 s wait; a second call keeps the address.
+static void startLinkLocalIPv6(esp_netif_t* netif) {
+#if CONFIG_LWIP_IPV6
+    esp_ip6_addr_t linkLocal{};
+    if (netif && esp_netif_get_ip6_linklocal(netif, &linkLocal) != ESP_OK) esp_netif_create_ip6_linklocal(netif);
+#else
+    (void)netif;
+#endif
+}
+
 #ifndef MM_NO_ETH
 
 uint16_t ethLinkSpeedMbps() MM_NONBLOCKING;   // defined below; the link-up log reports it
@@ -547,6 +567,7 @@ static void ethEventHandler(void* /*arg*/, esp_event_base_t base,
             ethLinkUp_.store(true, std::memory_order_relaxed);
             // The NEGOTIATED speed rather than "up": a gigabit PHY that fell back to 100M behaves differently, and the S31's RGMII Tx-clock skew is speed-dependent.
             ESP_LOGI(NET_TAG, "Ethernet link up (%u Mbps)", ethLinkSpeedMbps());
+            startLinkLocalIPv6(ethNetif_);
             if (ethStatic_.load(std::memory_order_acquire)) {
                 // Static mode: do NOT let the DHCP client restart on link-up (applyHostname would), or a re-plugged cable grabs a lease instead of the static IP. Re-pin the stored config directly via netSetStaticIPv4.
                 netSetStaticIPv4(NetIface::Eth, ethStaticIp_, ethStaticGw_, ethStaticMask_, ethStaticDns_);
@@ -564,6 +585,7 @@ static void ethEventHandler(void* /*arg*/, esp_event_base_t base,
     } else if (base == IP_EVENT && id == IP_EVENT_ETH_GOT_IP) {
         auto* event = static_cast<ip_event_got_ip_t*>(data);
         ESP_LOGI(NET_TAG, "Ethernet got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+        cacheLeaseDns(event->esp_netif, NetIface::Eth);
         ethConnected_.store(true, std::memory_order_relaxed);
     }
 }
@@ -1111,6 +1133,9 @@ static void wifiEventHandler(void* /*arg*/, esp_event_base_t base,
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         auto* event = static_cast<ip_event_got_ip_t*>(data);
         ESP_LOGI(NET_TAG, "WiFi STA got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+        cacheLeaseDns(event->esp_netif, NetIface::Sta);
+        // Here rather than at association: this handler was registered before the station's default one, so at association the interface is not up yet.
+        startLinkLocalIPv6(staNetif_);
         wifiStaConnected_.store(true, std::memory_order_relaxed);
     }
 }
@@ -1153,10 +1178,12 @@ static bool ensureWifiInit() {
     return true;
 }
 
-// The station's interface, created once and from one place: Improv's task scans as well as the render thread, and two creations would attach twice and abort.
-static std::mutex staNetifMutex_;
+// Held by every call changing the radio's mode, driver or interfaces, which the render task and Improv's scan both do; recursive, as a failed start stops itself.
+static std::recursive_mutex radioMutex_;
+using RadioLock = std::lock_guard<std::recursive_mutex>;
+
+// The station's interface, created once, under the radio lock its callers hold.
 static void ensureStaNetif() {
-    std::lock_guard<std::mutex> lock(staNetifMutex_);
     if (!staNetif_) staNetif_ = esp_netif_create_default_wifi_sta();
 }
 
@@ -1178,6 +1205,7 @@ static void wifiRadioDown() {
 
 bool wifiStaInit(const char* ssid, const char* password) {
     if (!ssid || ssid[0] == 0) return false;
+    RadioLock lock(radioMutex_);
 
     // A join while joined restarts the station; stopping first, since alone it takes the driver down.
     if (wifiStaActive_) wifiStaStop();
@@ -1240,6 +1268,7 @@ void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING {
 }
 
 void wifiStaStop() {
+    RadioLock lock(radioMutex_);
     // Tell the event handler this disconnect is deliberate, so it does not answer with a reconnect that would then race the teardown below.
     wifiStaStopping_.store(true, std::memory_order_relaxed);
     esp_wifi_disconnect();
@@ -1262,6 +1291,7 @@ WifiFailure wifiStaLastFailure() {
 }
 
 bool wifiScanStart() {
+    RadioLock lock(radioMutex_);
     // Scanning needs a station side, which an access point alone gains here, so a phone on it sees the networks in range.
     if (!wifiInitDone_ || scanRunning_.load(std::memory_order_relaxed)) return false;
     wifi_mode_t mode = WIFI_MODE_NULL;
@@ -1277,6 +1307,7 @@ bool wifiScanStart() {
 }
 
 int wifiScanResults(WifiNetwork* out, int max) {
+    RadioLock lock(radioMutex_);
     if (!scanDone_.exchange(false, std::memory_order_acquire)) return -1;
     uint16_t n = 0;
     esp_wifi_scan_get_ap_num(&n);
@@ -1317,6 +1348,7 @@ int wifiStaChannel() {
 }
 
 bool wifiApInit(const WifiApConfig& ap) {
+    RadioLock lock(radioMutex_);
     const char* apName = ap.name;
     const char* ip = ap.ip;
     // New settings re-open it; stopping first, since alone it takes the driver down.
@@ -1346,10 +1378,9 @@ bool wifiApInit(const WifiApConfig& ap) {
         std::strncpy(reinterpret_cast<char*>(wifi_config.ap.ssid), apName, sizeof(wifi_config.ap.ssid) - 1);
         wifi_config.ap.ssid_len = static_cast<uint8_t>(std::strlen(apName));
     }
-    // While the station is joined the radio follows its channel, so this one applies when the access point runs alone.
-    wifi_config.ap.channel = (ap.channel >= 1 && ap.channel <= 13) ? ap.channel : 1;
+    // While the station is joined the radio follows its channel; alone, the access point takes channel 1.
+    wifi_config.ap.channel = 1;
     wifi_config.ap.max_connection = 4;
-    wifi_config.ap.ssid_hidden = ap.hidden ? 1 : 0;
     // WPA2 asks for eight characters at least, so anything shorter keeps the access point open.
     const size_t pwLen = ap.password ? std::strlen(ap.password) : 0;
     if (pwLen >= 8) {
@@ -1388,6 +1419,7 @@ bool wifiApConnected() {
 uint32_t wifiApClientCount() { return apClients_.load(std::memory_order_relaxed); }
 
 void wifiApStop() {
+    RadioLock lock(radioMutex_);
     wifiApActive_ = false;
     apClients_.store(0, std::memory_order_relaxed);
     if (wifiStaActive_) {
@@ -1489,6 +1521,7 @@ void netSetStaticIPv4(NetIface iface, const uint8_t ip[4], const uint8_t gw[4],
         dnsInfo.ip.type = ESP_IPADDR_TYPE_V4;
         IP4_ADDR(&dnsInfo.ip.u_addr.ip4, dns[0], dns[1], dns[2], dns[3]);
         esp_netif_set_dns_info(netif, ESP_NETIF_DNS_MAIN, &dnsInfo);
+        dnsInUse_[static_cast<uint8_t>(iface)].store(dnsInfo.ip.u_addr.ip4.addr, std::memory_order_relaxed);
     }
 
     // Applying a static IP is the moment the interface has an address, and no DHCP GOT_IP will mark it connected. Set the flags here, and record the config so each link-up handler re-pins static instead of restarting DHCP.
@@ -1518,6 +1551,21 @@ void netSetStaticIPv4(NetIface iface, const uint8_t ip[4], const uint8_t gw[4],
 #endif
     ESP_LOGI(NET_TAG, "Static IPv4 set on %s: %u.%u.%u.%u",
              iface == NetIface::Eth ? "eth" : "sta", ip[0], ip[1], ip[2], ip[3]);
+}
+
+// The addressing an interface runs with now, from its netif, the DNS server from the main slot.
+void netGetIPv4(NetIface iface, uint8_t ip[4], uint8_t gw[4], uint8_t mask[4], uint8_t dns[4]) {
+    for (int i = 0; i < 4; i++) ip[i] = gw[i] = mask[i] = dns[i] = 0;
+    esp_netif_t* netif = resolveNetif(iface);
+    esp_netif_ip_info_t info;
+    if (!netif || esp_netif_get_ip_info(netif, &info) != ESP_OK) return;
+    const uint32_t words[3] = {info.ip.addr, info.gw.addr, info.netmask.addr};
+    uint8_t* outs[3] = {ip, gw, mask};
+    for (int k = 0; k < 3; k++)
+        for (int i = 0; i < 4; i++) outs[k][i] = static_cast<uint8_t>((words[k] >> (8 * i)) & 0xff);
+    // The cached server, not esp_netif_get_dns_info, which waits on the network task.
+    const uint32_t d = dnsInUse_[static_cast<uint8_t>(iface)].load(std::memory_order_relaxed);
+    for (int i = 0; i < 4; i++) dns[i] = static_cast<uint8_t>((d >> (8 * i)) & 0xff);
 }
 
 // Return a client interface to DHCP: (re)start its DHCP client so it re-leases without a reboot. The counterpart to netSetStaticIPv4 for a Static→DHCP toggle. Safe if already running.
@@ -1571,7 +1619,13 @@ bool mdnsInit(const char* deviceName) {
     if (ethNetif_ && ethConnected()) {
         esp_err_t regErr = mdns_register_netif(ethNetif_);
         if (regErr == ESP_OK || regErr == ESP_ERR_INVALID_STATE) {
-            esp_err_t actErr = mdns_netif_action(ethNetif_, MDNS_EVENT_ENABLE_IP4);
+            int actions = MDNS_EVENT_ENABLE_IP4;
+#if CONFIG_LWIP_IPV6
+            // The link-local address usually precedes the lease, so its GOT_IP6 found the interface unregistered and was dropped.
+            esp_ip6_addr_t linkLocal{};
+            if (esp_netif_get_ip6_linklocal(ethNetif_, &linkLocal) == ESP_OK) actions |= MDNS_EVENT_ENABLE_IP6;
+#endif
+            esp_err_t actErr = mdns_netif_action(ethNetif_, static_cast<mdns_event_actions_t>(actions));
             ESP_LOGI(NET_TAG, "mDNS eth netif register:%s enable:%s",
                      regErr == ESP_OK ? "new" : "already", esp_err_to_name(actErr));
         } else {
@@ -1846,12 +1900,25 @@ int TcpConnection::read(uint8_t* buf, size_t maxLen) {
 // getpeername and getsockname rather than a field captured at accept: a copy taken earlier outlives a reconnect on the same slot.
 static bool socketIPv4(int fd, bool local, uint8_t out[4]) {
     if (fd < 0 || !out) return false;
-    sockaddr_in addr{};
+    sockaddr_storage addr{};
     socklen_t len = sizeof(addr);
     const int rc = local ? ::getsockname(fd, reinterpret_cast<sockaddr*>(&addr), &len)
                          : ::getpeername(fd, reinterpret_cast<sockaddr*>(&addr), &len);
-    if (rc != 0 || addr.sin_family != AF_INET) return false;
-    const uint32_t ip = ntohl(addr.sin_addr.s_addr);
+    if (rc != 0) return false;
+    uint32_t ip = 0;
+    if (addr.ss_family == AF_INET) {
+        ip = ntohl(reinterpret_cast<const sockaddr_in&>(addr).sin_addr.s_addr);
+#if CONFIG_LWIP_IPV6
+    } else if (addr.ss_family == AF_INET6) {
+        // The dual-stack server reports an IPv4 peer as ::ffff:a.b.c.d; a native IPv6 peer has no IPv4 address to give.
+        const auto& a6 = reinterpret_cast<const sockaddr_in6&>(addr).sin6_addr;
+        if (!IN6_IS_ADDR_V4MAPPED(&a6)) return false;
+        std::memcpy(&ip, &a6.s6_addr[12], 4);
+        ip = ntohl(ip);
+#endif
+    } else {
+        return false;
+    }
     out[0] = static_cast<uint8_t>(ip >> 24);
     out[1] = static_cast<uint8_t>(ip >> 16);
     out[2] = static_cast<uint8_t>(ip >> 8);
@@ -1950,16 +2017,28 @@ TcpServer::~TcpServer() {
 
 bool TcpServer::open(uint16_t port) {
     if (fd_ >= 0) return true;
+#if CONFIG_LWIP_IPV6
+    // Dual-stack: lwIP binds IPv6-any as any type, so one socket serves the IPv4 clients and the IPv6 address mDNS now advertises.
+    fd_ = socket(AF_INET6, SOCK_STREAM, 0);
+#else
     fd_ = socket(AF_INET, SOCK_STREAM, 0);
+#endif
     if (fd_ < 0) return false;
 
     int opt = 1;
     setsockopt(fd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
+#if CONFIG_LWIP_IPV6
+    sockaddr_in6 addr{};
+    addr.sin6_family = AF_INET6;
+    addr.sin6_addr = in6addr_any;
+    addr.sin6_port = htons(port);
+#else
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
     addr.sin_port = htons(port);
+#endif
 
     if (bind(fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
         lwip_close(fd_);

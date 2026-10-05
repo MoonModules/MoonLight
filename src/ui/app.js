@@ -538,6 +538,8 @@ function sendControlLive(moduleName, controlName, value) {
 }
 
 async function sendControl(moduleName, controlName, value) {
+    // Declined: the card goes back to what the device has.
+    if (!await allowAddressEdit(moduleName, controlName, value)) { refetchState(); return false; }
     // Eagerly update the local `state` to what we just sent: the standard controlled-input
     // pattern. Without this, `state` keeps the OLD value until the device echoes the change back in a
     // value patch (up to a tick1s later, or folded into a full resync for a control that triggers a
@@ -1316,48 +1318,103 @@ function deviceHasMoonBase(mod) {
     return (mod.controls || []).some(c => c.name === "image");
 }
 
-// Ask before installing a MoonBase, in the app's own chrome rather than the browser's.
+// Ask a question in the app's own chrome rather than the browser's.
 //
-// A native confirm() is the one box in this UI that cannot be styled, and it looked it: a white
-// system panel over a dark card. This is the same native <dialog> the file editor uses, so Esc and
-// the backdrop close it for free. Resolves true to install, false to abandon.
-function askMoonBaseInstall() {
+// A native confirm() is the one box in this UI that cannot be styled, and it looked it: a white system panel over a dark card.
+// This is the same native <dialog> the file editor uses, so Esc and the backdrop close it for free.
+// `lines` are paragraphs, each a string or a node; the last is muted when `calm` is set. Resolves true for the go button, false for anything else.
+function askInDialog({ title, lines, go, calm = false }) {
     return new Promise((resolve) => {
         const dlg = document.createElement("dialog");
         dlg.className = "mb-ask";
         const h = document.createElement("h3");
-        h.textContent = "Install a new MoonBase?";
-        const p1 = document.createElement("p");
-        // What is actually at stake, rather than a bare "are you sure": the device has no recovery
-        // image for the few seconds this takes.
-        p1.textContent = "MoonBase is the recovery image. While it is being written the device "
-                       + "has no recovery image, so do not power it off until this finishes.";
-        const p2 = document.createElement("p");
-        p2.className = "mb-ask-calm";
-        p2.textContent = "The device checks the image first and refuses anything that is not a "
-                       + "MoonBase image for this board, so a wrong file costs nothing.";
+        h.textContent = title;
+        const paras = lines.map((line, i) => {
+            const p = document.createElement("p");
+            if (calm && i === lines.length - 1) p.className = "mb-ask-calm";
+            p.append(line);
+            return p;
+        });
         const row = document.createElement("div");
         row.className = "mb-ask-row";
         const cancel = document.createElement("button");
         cancel.className = "fm-tool";
         cancel.textContent = "Cancel";
-        const go = document.createElement("button");
-        go.className = "fm-tool mb-ask-go";
-        go.textContent = "Install";
+        const goBtn = document.createElement("button");
+        goBtn.className = "fm-tool mb-ask-go";
+        goBtn.textContent = go;
 
         const close = (value) => { dlg.close(); dlg.remove(); resolve(value); };
         cancel.addEventListener("click", () => close(false));
-        go.addEventListener("click", () => close(true));
-        // Esc and the backdrop both reach here, so a dismissed dialog never leaves the promise
-        // pending and never installs anything.
+        goBtn.addEventListener("click", () => close(true));
+        // Esc and the backdrop both reach here, so a dismissed dialog never leaves the promise pending.
         dlg.addEventListener("close", () => { dlg.remove(); resolve(false); }, { once: true });
 
-        row.append(cancel, go);
-        dlg.append(h, p1, p2, row);
+        row.append(cancel, goBtn);
+        dlg.append(h, ...paras, row);
         document.body.appendChild(dlg);
         dlg.showModal();
-        go.focus();
+        goBtn.focus();
     });
+}
+
+// Ask before installing a MoonBase: what is at stake is the few seconds the device has no recovery image.
+function askMoonBaseInstall() {
+    return askInDialog({
+        title: "Install a new MoonBase?",
+        lines: ["MoonBase is the recovery image. While it is being written the device "
+                + "has no recovery image, so do not power it off until this finishes.",
+                "The device checks the image first and refuses anything that is not a "
+                + "MoonBase image for this board, so a wrong file costs nothing."],
+        go: "Install",
+        calm: true,
+    });
+}
+
+// Where an edit moves the device: the static address, null for one the router leases, or undefined when the edit moves nothing.
+// Static without an address yet moves nothing, since an unusable Static setting keeps the lease; typing the address then asks.
+function addressMoveTarget(field, value, staticIp) {
+    if (field === "ipSettings") {
+        if (Number(value) !== 1) return null;
+        return staticIp && staticIp !== "0.0.0.0" ? staticIp : undefined;
+    }
+    if (field === "ip") return String(value);
+    return undefined;
+}
+
+// The interface the page reaches the device through, "Ethernet" or "WiFi STA", or "" through the access point, which a station change leaves alone.
+function carryingInterface() {
+    if (location.hostname === "4.3.2.1") return "";
+    const net = allModules().find(m => m.type === "NetworkModule");
+    return (net?.controls || []).find(c => c.name === "mode")?.value || "";
+}
+
+// Ask before an edit takes the device away from the open page, naming where it will be.
+function confirmAddressMove(to) {
+    if (to === undefined) return Promise.resolve(true);
+    const name = (allModules().find(m => m.type === "SystemModule")?.controls || []).find(c => c.name === "deviceName")?.value;
+    const url = to ? `http://${to}/` : (name ? `http://${name}.local/` : "");
+    const where = document.createElement("span");
+    where.append(to ? "The device will be at " : "The device takes a new address from the router; reach it at ");
+    if (url) {
+        const a = document.createElement("a");
+        a.href = url; a.target = "_blank"; a.rel = "noopener"; a.textContent = url;
+        where.append(a, ".");
+    }
+    return askInDialog({
+        title: "Change the device's address?",
+        lines: ["The open page loses the device as soon as the change applies.", where],
+        go: "Change it",
+    });
+}
+
+// An edit to the Ethernet card's addressing while Ethernet carries the page asks first.
+async function allowAddressEdit(moduleName, field, value) {
+    if (!state || !Array.isArray(state.modules)) return true;
+    const mod = allModules().find(m => m.name === moduleName);
+    if (mod?.type !== "EthernetModule" || carryingInterface() !== "Ethernet") return true;
+    const ip = (mod.controls || []).find(c => c.name === "ip")?.value;
+    return confirmAddressMove(addressMoveTarget(field, value, ip));
 }
 
 // Byte counts out of a device status line, or null when it carries none.
@@ -2060,7 +2117,7 @@ function createCard(mod, depth) {
             // The reasons live in one place, and it is a page rather than a paragraph here: a nudge
             // long enough to make the case stops being a nudge.
             const why = document.createElement("a");
-            why.href = "https://moonmodules.org/MoonLight/mooncloud.html#why-you-might-like-this";
+            why.href = "https://moonmodules.org/MoonLight/explanation/mooncloud.html#why-you-might-like-this";
             why.target = "_blank";
             why.rel = "noopener";
             why.textContent = "Why you might like this";
@@ -2619,7 +2676,8 @@ function controlRendersGenerically(mod, ctrl) {
     return true;
 }
 
-function createControl(moduleName, moduleType, ctrl) {
+// `write` is where an edit goes: the module's control by default, or a list row's field, so a row field is the same control with the same behavior.
+function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => sendControl(moduleName, name, value)) {
     const row = document.createElement("div");
     row.className = "control-row";
     // Expert-only controls (only reachable here when expert mode is on: see controlRendersGenerically)
@@ -2654,6 +2712,13 @@ function createControl(moduleName, moduleType, ctrl) {
 
     const key = moduleName + ":" + ctrl.name;
     const def = defaultFor(moduleType, ctrl.name, ctrl);
+    // Every edit marks this control's own reset button as it is written, since the device's echo is held back while the field is being edited.
+    let resetBtn = null;
+    const write = (name, value) => {
+        if (name === ctrl.name && resetBtn) resetBtn.classList.toggle("active", !controlValuesEqual({ ...ctrl, value }, def));
+        return writeTo(name, value);
+    };
+    const resetButton = (applyVisually) => { resetBtn = appendResetButton(row, moduleName, ctrl, def, applyVisually, write); };
 
     // numberField: a numeric control that opted out of the slider (server sets it for a value where each
     // integer is a discrete identity, not a magnitude: a PHY/I2C address, a channel). Render a plain
@@ -2677,17 +2742,17 @@ function createControl(moduleName, moduleType, ctrl) {
             if (Number.isNaN(v)) return;   // mid-edit empty field: send nothing until digits arrive
             v = Math.max(nMin, Math.min(nMax, v));
             if (String(v) !== input.value) input.value = v;   // display always matches what's sent
-            debounceSend(key, 500, () => sendControl(moduleName, ctrl.name, v));
+            debounceSend(key, 500, () => write(ctrl.name, v));
         });
         input.addEventListener("change", () => {   // blur/Enter with a still-empty field: snap to min + send
             if (Number.isNaN(parseInt(input.value, 10))) {
                 dragTs[key] = Date.now();
                 input.value = nMin;
-                debounceSend(key, 500, () => sendControl(moduleName, ctrl.name, nMin));
+                debounceSend(key, 500, () => write(ctrl.name, nMin));
             }
         });
         row.appendChild(input);
-        appendResetButton(row, moduleName, ctrl, def, () => { input.value = def; });
+        resetButton(() => { input.value = def; });
         return row;
     }
 
@@ -2742,17 +2807,17 @@ function createControl(moduleName, moduleType, ctrl) {
             input.addEventListener("input", () => {
                 dragTs[key] = Date.now();
                 numInput.value = input.value;
-                debounceSend(key, 150, () => sendControl(moduleName, ctrl.name, parseInt(input.value)));
+                debounceSend(key, 150, () => write(ctrl.name, parseInt(input.value)));
             });
             numInput.addEventListener("input", () => {
                 dragTs[key] = Date.now();   // stamp so a WS push can't revert what's being typed
                 const v = Math.max(Number(input.min), Math.min(Number(input.max), parseInt(numInput.value) || 0));
                 input.value = v;
-                debounceSend(key, 500, () => sendControl(moduleName, ctrl.name, v));
+                debounceSend(key, 500, () => write(ctrl.name, v));
             });
             row.appendChild(input);
             row.appendChild(numInput);
-            appendResetButton(row, moduleName, ctrl, def, () => {
+            resetButton(() => {
                 input.value = def;
                 numInput.value = def;
             });
@@ -2781,17 +2846,17 @@ function createControl(moduleName, moduleType, ctrl) {
                 input.addEventListener("input", () => {
                     dragTs[key] = Date.now();
                     numInput.value = input.value;
-                    debounceSend(key, 150, () => sendControl(moduleName, ctrl.name, parseInt(input.value)));
+                    debounceSend(key, 150, () => write(ctrl.name, parseInt(input.value)));
                 });
                 numInput.addEventListener("input", () => {
                     dragTs[key] = Date.now();   // stamp so a WS push can't revert what's being typed
                     const v = Math.max(uMin, Math.min(uMax, parseInt(numInput.value) || 0));
                     input.value = v;
-                    debounceSend(key, 150, () => sendControl(moduleName, ctrl.name, v));
+                    debounceSend(key, 150, () => write(ctrl.name, v));
                 });
                 row.appendChild(input);
                 row.appendChild(numInput);
-                appendResetButton(row, moduleName, ctrl, def, () => {
+                resetButton(() => {
                     input.value = def; numInput.value = def;
                 });
             } else {
@@ -2807,10 +2872,10 @@ function createControl(moduleName, moduleType, ctrl) {
                     let v = parseInt(input.value, 10);
                     if (Number.isNaN(v)) v = 0;
                     v = Math.max(0, Math.min(65535, v));
-                    debounceSend(key, 500, () => sendControl(moduleName, ctrl.name, v));
+                    debounceSend(key, 500, () => write(ctrl.name, v));
                 });
                 row.appendChild(input);
-                appendResetButton(row, moduleName, ctrl, def, () => { input.value = def; });
+                resetButton(() => { input.value = def; });
             }
             break;
         }
@@ -2832,10 +2897,10 @@ function createControl(moduleName, moduleType, ctrl) {
                 let v = parseInt(input.value, 10);
                 if (Number.isNaN(v)) v = -1;
                 v = Math.max(pMin, Math.min(pMax, v));
-                debounceSend(key, 500, () => sendControl(moduleName, ctrl.name, v));
+                debounceSend(key, 500, () => write(ctrl.name, v));
             });
             row.appendChild(input);
-            appendResetButton(row, moduleName, ctrl, def, () => { input.value = def; });
+            resetButton(() => { input.value = def; });
             break;
         }
         case "int32":
@@ -2874,17 +2939,17 @@ function createControl(moduleName, moduleType, ctrl) {
             input.addEventListener("input", () => {
                 dragTs[key] = Date.now();
                 numInput.value = input.value;
-                debounceSend(key, 150, () => sendControl(moduleName, ctrl.name, parseInt(input.value)));
+                debounceSend(key, 150, () => write(ctrl.name, parseInt(input.value)));
             });
             numInput.addEventListener("input", () => {
                 dragTs[key] = Date.now();   // stamp so a WS push can't revert what's being typed
                 const v = Math.max(min, Math.min(max, parseInt(numInput.value) || 0));
                 input.value = v;
-                debounceSend(key, 500, () => sendControl(moduleName, ctrl.name, v));
+                debounceSend(key, 500, () => write(ctrl.name, v));
             });
             row.appendChild(input);
             row.appendChild(numInput);
-            appendResetButton(row, moduleName, ctrl, def, () => {
+            resetButton(() => {
                 input.value = def;
                 numInput.value = def;
             });
@@ -2904,14 +2969,14 @@ function createControl(moduleName, moduleType, ctrl) {
             input.dataset.key = ctrl.name;
             input.addEventListener("change", () => {
                 dragTs[key] = Date.now();
-                sendControl(moduleName, ctrl.name, input.checked);
+                write(ctrl.name, input.checked);
             });
             const track = document.createElement("span");
             track.className = "switch-track";
             sw.appendChild(input);
             sw.appendChild(track);
             row.appendChild(sw);
-            appendResetButton(row, moduleName, ctrl, def, () => { input.checked = !!def; });
+            resetButton(() => { input.checked = !!def; });
             // A surface SWITCH is assignable like a fader or a knob: it drives a control, and
             // switch1 driving Drivers.on is the same kind of binding fader1 has to brightness.
             if (ctrl.switchRow) attachTargetPopup(row, input, ctrl);
@@ -2930,10 +2995,14 @@ function createControl(moduleName, moduleType, ctrl) {
             // not modify it; `disabled` would also block copy.
             if (ctrl.readonly) {
                 input.readOnly = true;
+            } else if (ctrl.commitOnChange) {
+                // A value whose every write is an action, such as renaming a file, is sent once, on Enter or on leaving the field, and a button pressed meanwhile sends it first.
+                input.addEventListener("input", () => { dragTs[key] = Date.now(); pendingSends[key] = () => write(ctrl.name, input.value); });
+                input.addEventListener("change", () => flushPendingSends(key));
             } else {
                 input.addEventListener("input", () => {
                     dragTs[key] = Date.now();
-                    debounceSend(key, 500, () => sendControl(moduleName, ctrl.name, input.value));
+                    debounceSend(key, 500, () => write(ctrl.name, input.value));
                 });
                 // Enter presses the card's `send` button, where the module has one. Generic rather
                 // than a MoonTalk rule: any module pairing a text field with a send button gets it,
@@ -2952,12 +3021,13 @@ function createControl(moduleName, moduleType, ctrl) {
                     if (!send) return;
                     e.preventDefault();
                     clearTimeout(dragTimers[key]);
-                    await sendControl(moduleName, ctrl.name, input.value);
-                    await sendControl(moduleName, "send", 1);
+                    delete pendingSends[key];
+                    await write(ctrl.name, input.value);
+                    await write("send", 1);
                 });
             }
             row.appendChild(input);
-            if (!ctrl.readonly) appendResetButton(row, moduleName, ctrl, def, () => { input.value = def; });
+            if (!ctrl.readonly) resetButton(() => { input.value = def; });
             break;
         }
         case "textarea": {
@@ -2992,7 +3062,7 @@ function createControl(moduleName, moduleType, ctrl) {
             } else {
                 input.addEventListener("input", () => {
                     dragTs[key] = Date.now();
-                    debounceSend(key, 500, () => sendControl(moduleName, ctrl.name, input.value));
+                    debounceSend(key, 500, () => write(ctrl.name, input.value));
                 });
             }
             row.appendChild(input);
@@ -3008,7 +3078,7 @@ function createControl(moduleName, moduleType, ctrl) {
             input.dataset.key = ctrl.name;
             input.addEventListener("input", () => {
                 dragTs[key] = Date.now();
-                debounceSend(key, 500, () => sendControl(moduleName, ctrl.name, input.value));
+                debounceSend(key, 500, () => write(ctrl.name, input.value));
             });
             row.append(input, peekButton(input));
             break;
@@ -3042,7 +3112,7 @@ function createControl(moduleName, moduleType, ctrl) {
             sel.addEventListener("change", () => {
                 sel.dataset.open = "false";
                 dragTs[key] = Date.now();
-                sendControl(moduleName, ctrl.name, parseInt(sel.value));
+                write(ctrl.name, parseInt(sel.value));
                 // No refetch/re-render here: blendMode/opacity-style selects don't
                 // change the control SET, and a control that does (a hidden-flag
                 // flip) is reconciled in place by syncVisibleControls on the next
@@ -3050,7 +3120,7 @@ function createControl(moduleName, moduleType, ctrl) {
                 // A full refetchState() rebuilt the DOM and collapsed the card.
             });
             row.appendChild(sel);
-            appendResetButton(row, moduleName, ctrl, def, () => { sel.value = def; });
+            resetButton(() => { sel.value = def; });
             break;
         }
         case "palette": return buildPaletteControl(row, key, def, moduleName, ctrl);
@@ -3085,7 +3155,22 @@ function createControl(moduleName, moduleType, ctrl) {
             span.className = "display";
             span.dataset.mid = moduleName;
             span.dataset.key = ctrl.name;
-            span.textContent = ctrl.value ?? "";
+            if (Array.isArray(ctrl.value)) {
+                // A list of values, one chip each.
+                for (const e of ctrl.value) {
+                    const chip = document.createElement("span");
+                    chip.className = "list-detail-chip";
+                    chip.textContent = String(e);
+                    span.appendChild(chip);
+                }
+            } else if (ctrl.age && typeof ctrl.value === "number") {
+                // Seconds since something was seen, as a relative time tinted by how fresh it is.
+                span.textContent = relativeAge(ctrl.value);
+                const ageClass = ageBucketClass(ctrl.value);
+                if (ageClass) span.classList.add(ageClass);
+            } else {
+                span.textContent = ctrl.value ?? "";
+            }
             row.appendChild(span);
             break;
         }
@@ -3103,17 +3188,10 @@ function createControl(moduleName, moduleType, ctrl) {
             break;
         }
         case "ipv4": {
-            // Editable dotted-quad. Wire format is the same string the user
-            // types: the device parses + validates server-side and rejects
-            // malformed values with 400. Inline validation on the client is
-            // a future enhancement; today an invalid value goes to the
-            // server and the response surfaces the rejection.
-            //
-            // Same dragTs + debounceSend pattern as text / password so the
-            // ipv4 input participates in stale-WS-push protection: while
-            // the user is typing, dragTs[key] gets bumped, and an arriving
-            // WS push within the cooldown window won't revert mid-edit
-            // (see updateValues + the dragTs check ~line 1260).
+            // Editable dotted-quad, in the string the user types; the device parses and refuses a malformed one.
+            // Sent on Enter or on leaving the field, not as it is typed: a half-typed address is often a valid
+            // one, and on the interface carrying the device it would move the device mid-word.
+            // dragTs still marks the typing, so a WS push meanwhile does not revert the field.
             const input = document.createElement("input");
             input.type = "text";
             input.className = "ipv4-input";
@@ -3122,11 +3200,11 @@ function createControl(moduleName, moduleType, ctrl) {
             input.value = ctrl.value ?? "";
             input.placeholder = "0.0.0.0";
             input.maxLength = 15;  // "255.255.255.255" = 15
-            input.addEventListener("input", () => {
-                dragTs[key] = Date.now();
-                debounceSend(key, 500, () => sendControl(moduleName, ctrl.name, input.value));
-            });
+            // Held as a pending send while typed, so a button pressed before the field loses focus (iPhone Safari) sends it first.
+            input.addEventListener("input", () => { dragTs[key] = Date.now(); pendingSends[key] = () => write(ctrl.name, input.value); });
+            input.addEventListener("change", () => flushPendingSends(key));
             row.appendChild(input);
+            resetButton(() => { input.value = def; });
             break;
         }
         case "time": {
@@ -3163,8 +3241,8 @@ function createControl(moduleName, moduleType, ctrl) {
             // so a click inside that window sent the button while the device still held the text as
             // it stood one keystroke ago: the Enter path already does this, and the two must agree.
             btn.addEventListener("click", async () => {
-                await flushPendingControlWrites(moduleName);
-                sendControl(moduleName, ctrl.name, 1);
+                await flushPendingSends(moduleName + ":");
+                write(ctrl.name, 1);
             });
             row.appendChild(btn);
             break;
@@ -3198,6 +3276,8 @@ function createControl(moduleName, moduleType, ctrl) {
             return null;
     }
 
+    // The key the edit cooldown stamps, so a list rebuild puts back a value still being typed; a list's own row fields keep theirs.
+    for (const el of row.querySelectorAll("input, select, textarea")) if (!el.dataset.dragkey) el.dataset.dragkey = key;
     return row;
 }
 
@@ -3311,24 +3391,21 @@ function buildCaptureToggles(body, moduleName, ctrlName, item) {
     return () => chosen;
 }
 
+// What a filled pad does under each gesture, its tooltip's second line.
+const PAD_GESTURES = "click to apply · right-click or press and hold to edit, rename or delete · drag to move";
+
 function openPadEditor(anchorEl, moduleName, ctrlName, item, slot) {
     const filled = item != null;
     openSurfacePopup(anchorEl, filled ? `pad: ${item.name}` : `pad ${slot + 1} (empty)`, (body, close) => {
         if (filled) {
-            const nameRow = document.createElement("div");
-            nameRow.className = "surface-popup-row";
-            const nameLbl = document.createElement("span");
-            nameLbl.textContent = "name";
-            const nameIn = document.createElement("input");
-            nameIn.type = "text";
-            nameIn.className = "list-field-input";
-            nameIn.value = item.name || "";
-            nameIn.addEventListener("change", async () => {
-                await listSetField(moduleName, ctrlName, item.id, "name", nameIn.value);
-                refetchState();
-            });
-            nameRow.append(nameLbl, nameIn);
-            body.appendChild(nameRow);
+            // The preset row's own name field, renamed once the name is committed.
+            body.appendChild(createControl(`${moduleName}/${ctrlName}/${item.id}`, null,
+                { name: "name", type: "text", value: item.name || "", commitOnChange: true },
+                async (field, value) => {
+                    const ok = await listSetField(moduleName, ctrlName, item.id, field, value);
+                    refetchState();
+                    return ok;
+                }));
 
             // What this preset sets, read from the file rather than the form.
             if (item.captures) {
@@ -3360,15 +3437,7 @@ function openPadEditor(anchorEl, moduleName, ctrlName, item, slot) {
             body.appendChild(del);
         } else {
             // An empty pad's action is to fill it: name it and save the current state here.
-            const nameRow = document.createElement("div");
-            nameRow.className = "surface-popup-row";
-            const nameLbl = document.createElement("span");
-            nameLbl.textContent = "name";
-            const nameIn = document.createElement("input");
-            nameIn.type = "text";
-            nameIn.className = "list-field-input";
-            nameIn.placeholder = "new preset";
-            nameRow.append(nameLbl, nameIn);
+            const { row: nameRow, input: nameIn } = presetNameControl("new preset");
             body.appendChild(nameRow);
             const container = buildCaptureToggles(body, moduleName, ctrlName, null);
 
@@ -3428,6 +3497,17 @@ async function savePresetFrom(sourceName, name, slot) {
     return sendControl(control, "save", 1);
 }
 
+/// The surface's save-form `name`, drawn as the control it is, empty and with a placeholder naming what it is for.
+function presetNameControl(placeholder) {
+    const control = presetModuleName();
+    const mod = control ? allModules().find(m => m.name === control) : null;
+    const ctrl = (mod?.controls || []).find(c => c.name === "name") || { name: "name", type: "text" };
+    const row = createControl(control || "", mod?.type, { ...ctrl, value: "" });
+    const input = row.querySelector("input");
+    input.placeholder = placeholder;
+    return { row, input };
+}
+
 /// Mark a name input the device refused, with the rule it applies.
 function refusedName(input) {
     input.setCustomValidity("printable letters, digits and punctuation, without . / or backslash, at most 31");
@@ -3475,10 +3555,7 @@ async function openDocumentPopup(anchorEl, moduleName) {
         if (presetModuleName()) {
             const saveRow = document.createElement("div");
             saveRow.className = "surface-popup-row";
-            const nameIn = document.createElement("input");
-            nameIn.type = "text";
-            nameIn.className = "list-field-input";
-            nameIn.placeholder = "preset name";
+            const { row: nameRow, input: nameIn } = presetNameControl("preset name");
             const save = document.createElement("button");
             save.className = "surface-popup-primary";
             save.textContent = "save as preset";
@@ -3488,7 +3565,7 @@ async function openDocumentPopup(anchorEl, moduleName) {
                 close();
                 refetchState();
             });
-            saveRow.append(nameIn, save);
+            saveRow.append(nameRow, save);
             body.appendChild(saveRow);
         }
     });
@@ -3997,7 +4074,8 @@ function buildListPads(container, rows, opts) {
         nameEl.className = "list-pad-name";
         nameEl.textContent = label;
         pad.appendChild(nameEl);
-        pad.title = emoji ? `${label} (${roles.join(", ")})` : label;   // the full name when truncated
+        // The full name when truncated, and what each gesture does, since only the click is visible.
+        pad.title = `${emoji ? `${label} (${roles.join(", ")})` : label}\n${PAD_GESTURES}`;
         pad.addEventListener("click", async () => {
             if (item == null || item.id == null) return;
             pad.disabled = true;
@@ -4215,143 +4293,67 @@ function peekButton(input) {
     return peek;
 }
 
-// Render an editable row's detail: each descriptor in `detail.fields[]` becomes an inline
-// control (text→<input>, uint8→<input type=number>, select→<select>). On change we call
-// listSetField(...) and let the normal refresh reflect the persisted state: no eager local
-// local mutation. A field with `readonly:true` renders as a plain read-only value (same look
-// as fillListDetail). Fields carry a dragTs cooldown so a WS state push mid-edit can't revert
-// what's being typed/picked, mirroring the select/text guards in createControl.
+// Render an editable row's detail: each field is a control, drawn by createControl like a module's, with its edits written to the row.
+// The row stands in as the control's module (`<module>/<list>/<id>`), so its edit guards, pending sends and reset buttons are its own.
 function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionSets) {
     panel.replaceChildren();
     optionSets = optionSets || {};
     const fields = detail && Array.isArray(detail.fields) ? detail.fields : [];
-    // A row button sends the row's unsent edits first, in order: iPhone Safari keeps the focus in a field when a button is tapped, so its change event never fires, and two requests may arrive in either order.
-    const commits = [];
-    const commitOnChange = (inp, dragKey, send) => {
-        let sent = inp.value;
-        const commit = () => {
-            if (inp.value === sent) return undefined;
-            dragTs[dragKey] = Date.now();
-            const done = send();
-            sent = inp.value;
-            return done;
-        };
-        inp.addEventListener("change", commit);
-        commits.push(commit);
+    const rowMid = `${moduleName}/${ctrlName}/${id}`;
+    // This row's fields as the device now has them, drawn into the same open panel.
+    const redrawRowDetail = async () => {
+        try {
+            const res = await fetch(`/api/modules/${encodeURIComponent(moduleName)}`);
+            if (!res.ok) return;
+            const ctrl = ((await res.json()).controls || []).find(c => c.name === ctrlName);
+            const i = (Array.isArray(ctrl?.value) ? ctrl.value : []).findIndex(r => r.id === id);
+            const fresh = i >= 0 && Array.isArray(ctrl.detail) ? ctrl.detail[i] : null;
+            if (fresh) fillEditableListDetail(panel, fresh, moduleName, ctrlName, id, ctrl.optionSets || optionSets);
+        } catch (_) { /* the next state push redraws it */ }
+    };
+    // The joined WiFi network's addressing, while that network carries the page, asks first.
+    const allowRowAddressEdit = (field, value) => {
+        const mod = allModules().find(m => m.name === moduleName);
+        if (mod?.type !== "WiFiModule" || carryingInterface() !== "WiFi STA") return Promise.resolve(true);
+        const row = ((mod.controls || []).find(c => c.name === ctrlName)?.value || []).find(r => r.id === id);
+        if (!row?.joined) return Promise.resolve(true);
+        return confirmAddressMove(addressMoveTarget(field, value, fields.find(x => x.name === "ip")?.value));
+    };
+    // An edit to the row: asked about first where it moves the device, then redrawn where it changes the row's fields.
+    const write = async (name, value) => {
+        const f = fields.find(x => x.name === name);
+        if (!await allowRowAddressEdit(name, value)) { redrawRowDetail(); return false; }
+        const ok = await listSetField(moduleName, ctrlName, id, name, value);
+        if (ok && f?.refetch) refetchState();
+        else if (ok && f?.reshapes) redrawRowDetail();
+        return ok;
     };
     for (const f of fields) {
-        const r = document.createElement("div");
-        r.className = "list-detail-row";
-        const kEl = document.createElement("span");
-        kEl.className = "list-detail-key";
-        kEl.textContent = f.name;
-        const vEl = document.createElement("span");
-        vEl.className = "list-detail-val";
-        // Per-field cooldown key: unique per module/control/row/field so edits don't collide.
-        const dragKey = `list:${moduleName}:${ctrlName}:${id}:${f.name}`;
         if (f.readonly && typeof f.value === "string" && /^https?:\/\//.test(f.value)) {
-            // A link the user follows, opened in a new tab as every detail link is.
-            const a = document.createElement("a");
-            a.href = f.value;
-            a.textContent = f.value;
-            a.target = "_blank";
-            a.rel = "noopener noreferrer";
-            a.className = "list-detail-link";
-            vEl.appendChild(a);
-        } else if (f.readonly) {
-            vEl.textContent = String(f.value ?? "");
-            vEl.classList.add("list-detail-muted");
-        } else if (f.type === "button") {
-            // A row ACTION rather than a value: the click PATCHes the field like any edit, and the
-            // source reads the arrival as "do this to this row" (ControlModule's preset `apply`).
-            // Generic on purpose: a row button is a primitive the list has lacked, not a
-            // preset-specific affordance.
-            //
-            // `refetch` is opt-IN because a full refetch rebuilds every card, which collapses the
-            // expanded row the button lives in. That is right for an action that reshapes the tree
-            // (applying a preset) and wrong for one that arms a mode the user is about to use: the
-            // infrared learn button closed its own row and left nowhere to watch the result. Without
-            // it the WS push reconciles the row in place, which is what a field edit already relies
-            // on.
-            const btn = document.createElement("button");
-            btn.className = "list-field-btn";
-            btn.textContent = f.label || f.name;
-            btn.addEventListener("click", async () => {
-                btn.disabled = true;
-                for (const commit of commits) await commit();
-                await listSetField(moduleName, ctrlName, id, f.name, "");
-                if (f.refetch) refetchState();
-                btn.disabled = false;
-            });
-            vEl.appendChild(btn);
-        } else if (f.type === "select") {
-            const sel = document.createElement("select");
-            sel.className = "list-field-input";
-            sel.dataset.dragkey = dragKey;
-            // Options come from the field's inline `options`, or (the common case for a repeated select
-            // like the channel-role pickers) from the list's shared `optionSets` via `optionsRef`: so
-            // the option array is sent once per list, not re-inlined in every row (see writeListOptionSets).
-            const fieldOptions = f.options || (f.optionsRef ? optionSets[f.optionsRef] : null) || [];
-            fieldOptions.forEach((opt, idx) => {
-                const o = document.createElement("option");
-                o.value = idx;
-                o.textContent = opt;
-                if (idx === f.value) o.selected = true;
-                sel.appendChild(o);
-            });
-            const mark = () => { dragTs[dragKey] = Date.now(); };
-            sel.addEventListener("pointerdown", mark);
-            sel.addEventListener("focus", mark);
-            sel.addEventListener("change", () => {
-                dragTs[dragKey] = Date.now();
-                listSetField(moduleName, ctrlName, id, f.name, parseInt(sel.value));
-            });
-            vEl.appendChild(sel);
-        } else if (f.type === "password") {
-            // A password behind the eye, obfuscated on the wire as the Password control's is.
-            const inp = document.createElement("input");
-            inp.type = "password";
-            inp.className = "list-field-input";
-            inp.dataset.dragkey = dragKey;
-            inp.autocomplete = "new-password";
-            inp.value = decodePassword(f.value);
-            inp.addEventListener("input", () => { dragTs[dragKey] = Date.now(); });
-            commitOnChange(inp, dragKey, () => listSetField(moduleName, ctrlName, id, f.name, inp.value));
-            vEl.append(inp, peekButton(inp));
-        } else if (f.type === "uint8") {
-            const inp = document.createElement("input");
-            inp.type = "number";
-            inp.className = "list-field-input";
-            inp.dataset.dragkey = dragKey;
-            if (f.min !== undefined) inp.min = f.min;
-            if (f.max !== undefined) inp.max = f.max;
-            inp.value = f.value ?? 0;
-            inp.addEventListener("input", () => { dragTs[dragKey] = Date.now(); });
-            commitOnChange(inp, dragKey, () => {
-                // Guard against empty/invalid entry (parseInt → NaN) and clamp to the control's
-                // range: the HTML min/max attributes don't enforce a hand-typed value, so a stray
-                // "" or out-of-range number would otherwise reach the device as NaN / an overflow.
-                let v = parseInt(inp.value, 10);
-                if (!Number.isFinite(v)) v = f.min ?? 0;
-                if (f.min !== undefined) v = Math.max(v, f.min);
-                if (f.max !== undefined) v = Math.min(v, f.max);
-                inp.value = v;   // reflect the clamped value back into the field
-                return listSetField(moduleName, ctrlName, id, f.name, v);
-            });
-            vEl.appendChild(inp);
-        } else {   // "text" and any unknown type render as a text input
-            const inp = document.createElement("input");
-            inp.type = "text";
-            inp.className = "list-field-input";
-            inp.dataset.dragkey = dragKey;
-            inp.value = f.value ?? "";
-            inp.addEventListener("input", () => { dragTs[dragKey] = Date.now(); });
-            commitOnChange(inp, dragKey, () => listSetField(moduleName, ctrlName, id, f.name, inp.value));
-            vEl.appendChild(inp);
+            panel.appendChild(rowLink(f));
+            continue;
         }
-        r.append(kEl, vEl);
-        panel.appendChild(r);
+        const ctrl = { ...f, type: f.readonly ? "display" : f.type,
+                       options: f.options || (f.optionsRef ? optionSets[f.optionsRef] : undefined) };
+        panel.appendChild(createControl(rowMid, null, ctrl, write));
     }
+}
+
+// A read-only link in a row, opened in a new tab as every detail link is.
+function rowLink(f) {
+    const r = document.createElement("div");
+    r.className = "control-row";
+    const label = document.createElement("label");
+    label.className = "control-label";
+    label.textContent = displayName(f.name);
+    const a = document.createElement("a");
+    a.href = f.value;
+    a.textContent = f.value;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.className = "list-detail-link";
+    r.append(label, a);
+    return r;
 }
 
 // Join a list row's scalar fields into a one-line summary (skips the row's `id` handle, a `password`, which shows only behind its eye, and marker fields: `self`, `severity`
@@ -4365,66 +4367,19 @@ function listSummaryText(item) {
         .join("  ·  ");
 }
 
-// Render a list row's detail object as read-only key/value rows. Scalars print as-is;
-// an array of scalars (e.g. a device's `speaks:["http"]` or `via:["mdns","scan"]`)
-// renders as small chips so multi-valued fields like the discovery source are visible
-// at a glance. Nested objects are still skipped (no use case yet). Generic: the engine
-// names the fields, so a new array field shows up with no UI change here.
+// Render a read-only row's detail, each scalar or list of scalars a display control, as a card shows one.
+// `cached` and `ageSec` are one "last seen" (a device emits one or the other); a `*Sec` value reads as a relative age.
 function fillListDetail(panel, detail) {
     panel.replaceChildren();
     if (!detail || typeof detail !== "object") return;
     for (const [k, v] of Object.entries(detail)) {
         const isScalarArray = Array.isArray(v) && v.every(e => typeof e !== "object");
         if (typeof v === "object" && !isScalarArray) continue;
-        // `cached` and `ageSec` both render as "last seen"; a MoonLight device emits
-        // exactly one (mutually exclusive in DevicesModule), but skip ageSec when a
-        // `cached` key is also present so any other source can't produce two conflicting
-        // "last seen" rows. Match the cached branch's render condition, which fires on
-        // key EXISTENCE (`k === "cached"`), not truthiness: so gate on the key being
-        // present, not on its value. (Robust-to-any-input, generic.)
-        if (k === "ageSec" && "cached" in detail) continue;
-        const r = document.createElement("div");
-        r.className = "list-detail-row";
-        const kEl = document.createElement("span");
-        // A `*Sec` field is a duration in seconds (e.g. a device's `ageSec`): show it
-        // under a plainer label ("last seen") and as a relative time, not a bare count.
-        // `cached` is the sibling: a restored device not yet re-seen live → "last seen:
-        // cached" rather than a fake recent time.
-        const isDuration = k.endsWith("Sec");
-        kEl.className = "list-detail-key";
-        kEl.textContent = (k === "ageSec" || k === "cached") ? "last seen" : k;
-        const vEl = document.createElement("span");
-        vEl.className = "list-detail-val";
-        if (k === "cached") {
-            vEl.textContent = "cached";
-            vEl.classList.add("list-detail-muted");
-        } else if (isScalarArray) {
-            for (const e of v) {
-                const chip = document.createElement("span");
-                chip.className = "list-detail-chip";
-                chip.textContent = String(e);
-                vEl.appendChild(chip);
-            }
-        } else if (isDuration) {
-            vEl.textContent = relativeAge(Number(v));
-            const ageClass = ageBucketClass(Number(v));   // tint to match the summary dot
-            if (ageClass) vEl.classList.add(ageClass);
-        } else if (typeof v === "string" && /^https?:\/\//.test(v)) {
-            // A value that is an http(s) URL (e.g. a device's `url`) renders as a link that
-            // opens in a new tab: generic, any ListSource detail can surface one. rel
-            // guards the opened page from reaching back via window.opener.
-            const a = document.createElement("a");
-            a.href = v;
-            a.textContent = v;
-            a.target = "_blank";
-            a.rel = "noopener noreferrer";
-            a.className = "list-detail-link";
-            vEl.appendChild(a);
-        } else {
-            vEl.textContent = String(v);
-        }
-        r.append(kEl, vEl);
-        panel.appendChild(r);
+        if (k === "ageSec" && "cached" in detail) continue;   // present, whatever its value: one "last seen" row
+        const lastSeen = k === "ageSec" || k === "cached";
+        const ctrl = { name: lastSeen ? "last seen" : k, type: "display", value: k === "cached" ? "cached" : v,
+                       age: k.endsWith("Sec") };
+        panel.appendChild(createControl("", null, ctrl));
     }
 }
 
@@ -4480,24 +4435,19 @@ function relativeAge(sec) {
 ///
 /// Typing is debounced, so anything that ACTS on the typed value (Enter, a send button) has to land
 /// the text first or it acts on what the device held a keystroke ago.
-async function flushPendingControlWrites(moduleName) {
-    const mod = allModules().find(m => m.name === moduleName);
-    for (const ctrl of mod?.controls || []) {
-        const key = moduleName + ":" + ctrl.name;
-        if (!dragTimers[key]) continue;
+// Send now whatever a key under `prefix` still holds back, so an action that follows acts on what was typed.
+async function flushPendingSends(prefix) {
+    for (const key of Object.keys(pendingSends)) {
+        if (!key.startsWith(prefix)) continue;
         clearTimeout(dragTimers[key]);
-        delete dragTimers[key];
-        // queryByName, not a bare querySelector: a CSS attribute match is case-insensitive, so
-        // `data-mid="talk"` would resolve to a module named `Talk`. See queryByName for the bench
-        // case that found it.
-        const input = queryByName(
-            `input[data-key="${cssEscape(ctrl.name)}"]`, "data-mid", moduleName);
-        if (input) await sendControl(moduleName, ctrl.name, input.value);
+        const send = pendingSends[key];
+        delete pendingSends[key];
+        await send();
     }
 }
 
-function appendResetButton(row, moduleName, ctrl, def, applyVisually) {
-    if (def === undefined || def === null) return;  // type not loaded yet or no default
+function appendResetButton(row, moduleName, ctrl, def, applyVisually, write = (name, value) => sendControl(moduleName, name, value)) {
+    if (def === undefined || def === null) return null;  // type not loaded yet or no default
     // A SURFACE control has no default worth restoring: its value belongs to whatever it drives, so
     // "reset" would drive that target to zero, which is a change rather than a reset. The row is
     // also 26px wide, and the button was taking space from the thing being operated.
@@ -4505,7 +4455,7 @@ function appendResetButton(row, moduleName, ctrl, def, applyVisually) {
     // A CONSENT control is the same shape for a different reason: off is where it starts, so the
     // button's only possible action is to withdraw consent, which is a decision rather than a
     // reset. The checkbox already expresses both answers.
-    if (ctrl.fader || ctrl.encoder || ctrl.switchRow || ctrl.name === "consent") return;
+    if (ctrl.fader || ctrl.encoder || ctrl.switchRow || ctrl.name === "consent") return null;
     const btn = document.createElement("button");
     btn.className = "reset-btn";
     btn.type = "button";
@@ -4519,16 +4469,21 @@ function appendResetButton(row, moduleName, ctrl, def, applyVisually) {
     btn.addEventListener("click", () => {
         const key = moduleName + ":" + ctrl.name;
         clearTimeout(dragTimers[key]);   // a pending debounced edit must not overwrite the reset
+        delete pendingSends[key];
         dragTs[key] = Date.now();        // and a stale WS patch must not revert it
         applyVisually();
-        sendControl(moduleName, ctrl.name, def);
+        write(ctrl.name, def);
     });
     row.appendChild(btn);
+    return btn;
 }
 
+// The sends a debounce still holds back, by key, so flushPendingSends can push them before an action.
+const pendingSends = {};
 function debounceSend(key, ms, fn) {
     clearTimeout(dragTimers[key]);
-    dragTimers[key] = setTimeout(fn, ms);
+    pendingSends[key] = fn;
+    dragTimers[key] = setTimeout(() => { delete pendingSends[key]; fn(); }, ms);
 }
 
 // A password, a control's or a list field's, arrives XOR-obfuscated and base64-encoded (writeObfuscatedPassword in Control.cpp), and this reverses it.
@@ -6377,13 +6332,13 @@ function moonCloudArc(cx, cy, r, a0, a1) {
            `A ${r} ${r} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${x1} ${y1} Z`;
 }
 
-// Past the 7th slice everything becomes one "other" wedge: a pie with twenty slivers reads as
-// noise, and the exact tail is a question for the raw API rather than a card.
+// Past the 7th slice everything becomes one "other" wedge, since a pie with twenty slivers reads as noise; the rows it folds ride along, so the legend can unfold them.
 function moonCloudTopSlices(rows, keep = 7) {
     if (!rows || rows.length <= keep) return rows || [];
     const head = rows.slice(0, keep);
-    const tail = rows.slice(keep).reduce((sum, r) => sum + r.count, 0);
-    return tail ? head.concat([{ name: "other", count: tail }]) : head;
+    const rest = rows.slice(keep);
+    const tail = rest.reduce((sum, r) => sum + r.count, 0);
+    return tail ? head.concat([{ name: "other", count: tail, rest }]) : head;
 }
 
 function moonCloudPie(rows, onPick) {
@@ -6437,30 +6392,51 @@ function moonCloudLegend(rows, onPick) {
     const box = document.createElement("div");
     box.className = "mooncloud-legend";
     rows.forEach((r, i) => {
-        const line = document.createElement("div");
-        const swatch = document.createElement("span");
-        swatch.className = "mooncloud-swatch";
-        swatch.style.background = kMoonCloudColors[i % kMoonCloudColors.length];
-        const name = document.createElement("span");
-        name.className = "mooncloud-legend-name";
-        name.textContent = r.name || "unknown";
-        const count = document.createElement("span");
-        count.className = "mooncloud-legend-count";
-        count.textContent = String(r.count);
-        line.append(swatch, name, count);
-        // `other` is a bucket of everything past the top slices, so it names no value to filter by.
-        if (onPick && r.name && r.name !== "other") {
-            line.className = "mooncloud-pickable";
-            line.addEventListener("click", () => onPick(r.name));
-            line.tabIndex = 0;
-            line.setAttribute("role", "button");
-            line.addEventListener("keydown", (e) => {
-                if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(r.name); }
-            });
-        }
-        box.appendChild(line);
+        const color = kMoonCloudColors[i % kMoonCloudColors.length];
+        if (!r.rest) { box.appendChild(moonCloudLegendLine(r, color, onPick)); return; }
+        // `other` names no value to filter by, so it unfolds the rows it holds, each one a filter like a slice.
+        const line = moonCloudLegendLine({ name: "other ▸", count: r.count }, color, null);
+        const name = line.querySelector(".mooncloud-legend-name");
+        const rest = document.createElement("div");
+        rest.className = "mooncloud-legend-rest";
+        rest.hidden = true;
+        for (const row of r.rest) rest.appendChild(moonCloudLegendLine(row, null, onPick));
+        moonCloudActivate(line, () => {
+            rest.hidden = !rest.hidden;
+            name.textContent = rest.hidden ? "other ▸" : "other ▾";
+        });
+        box.append(line, rest);
     });
     return box;
+}
+
+/// One legend row: its color, when it has a slice, its name and its count, picked as a filter when it names a value.
+function moonCloudLegendLine(r, color, onPick) {
+    const line = document.createElement("div");
+    const swatch = document.createElement("span");
+    swatch.className = "mooncloud-swatch";
+    if (color) swatch.style.background = color;
+    const name = document.createElement("span");
+    name.className = "mooncloud-legend-name";
+    name.textContent = r.name || "unknown";
+    const count = document.createElement("span");
+    count.className = "mooncloud-legend-count";
+    count.textContent = String(r.count);
+    line.append(swatch, name, count);
+    if (onPick && r.name) moonCloudActivate(line, () => onPick(r.name));
+    return line;
+}
+
+// Reachable without a mouse, as a slice is: a control only a mouse can operate is one only some people have.
+/// Make a legend row a button that runs `act` on a click, Enter or Space.
+function moonCloudActivate(line, act) {
+    line.classList.add("mooncloud-pickable");
+    line.addEventListener("click", act);
+    line.tabIndex = 0;
+    line.setAttribute("role", "button");
+    line.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); act(); }
+    });
 }
 
 function renderMoonCloudStats(host, mod) {
@@ -6578,7 +6554,8 @@ function renderMoonCloudStats(host, mod) {
             const bounded = shown.some(r => r.min !== undefined);
             const pick = (name) => {
                 if (bounded) {
-                    const row = shown.find(r => r.name === name);
+                    // The rows "other" folds count too, since its unfolded legend picks them by name.
+                    const row = shown.flatMap(r => r.rest ? [r, ...r.rest] : [r]).find(r => r.name === name);
                     if (!row) return;
                     delete moonCloudFilter[`${param}Min`];
                     delete moonCloudFilter[`${param}Max`];
@@ -6657,8 +6634,8 @@ function galleryIndex() {
 let galleryOpen = false;   // kept across re-renders, so a pad click does not fold it shut
 let galleryStatus = "";    // the last outcome, kept across the re-render an install causes
 
-/// A preset that may go on a pad unasked: a look (Effects only) or a palette (Drivers setting its palette and nothing else), since pins and geometry belong to one rig.
-function galleryPadReady(doc) {
+/// A preset that applies without asking: a look (Effects only) or a palette (Drivers setting its palette and nothing else), since pins and geometry belong to one rig.
+function galleryAppliesUnasked(doc) {
     if (!doc || typeof doc !== "object" || Array.isArray(doc)) return false;
     const keys = Object.keys(doc).filter(k => !k.startsWith("$"));   // a `$` key is the file's own, such as its pad
     if (keys.length === 1 && keys[0] === "Effects") return true;
@@ -6692,6 +6669,12 @@ function galleryUrl(url) {
     return /^https?:\/\//i.test(String(url || "")) ? url : null;
 }
 
+/// A path inside the gallery repository from its index, kept only when it stays inside it, since the index is third-party text.
+function galleryPath(path) {
+    const p = String(path || "");
+    return /^[\w./-]+$/.test(p) && !p.includes("..") && !p.startsWith("/") ? p : null;
+}
+
 /// A gallery file's text, or an error naming it when the download fails.
 async function galleryFetch(file) {
     const res = await fetch(galleryFresh(file));   // a re-accepted entry replaces its file under the same name
@@ -6699,40 +6682,86 @@ async function galleryFetch(file) {
     return res.text();
 }
 
-/// The presets to try for empty pads, most liked first, one per device name, leaving out names the device already holds, so no entry overwrites another.
-function galleryFillCandidates(index, presetNames) {
-    const have = new Set(presetNames);
-    return index.filter(e => e.kind === "Preset")
-                .sort((a, b) => (b.votes || 0) - (a.votes || 0) || a.issue - b.issue)
-                .filter(e => !have.has(galleryPresetName(e)) && have.add(galleryPresetName(e)));
-}
-
 /// The script names already on the device, the user's and the factory's, so an install never overwrites or shadows one.
+/// A failed listing throws rather than reading as an empty folder, which would let an install overwrite a script it could not see; a missing folder lists as empty.
 async function deviceScriptNames() {
     const names = new Set();
     for (const dir of ["/moonlive", "/.moonlive"])
-        for (const row of await fmFetchDir(dir, true).catch(() => [])) names.add(String(row.name).toLowerCase());
+        for (const row of await fmFetchDir(dir, true)) names.add(String(row.name).toLowerCase());
     return names;
 }
 
-/// Install one entry from its text: a preset onto a free pad with the scripts it names that the gallery has and the device does not, a script into /moonlive unless one of its name is there.
-async function galleryInstall(entry, index, text) {
+/// Put on the device each script a document names that it lacks: the gallery's copy when an entry carries it, else the one this firmware ships.
+/// A script found in neither throws before the preset is written, so a preset never lands with a card that cannot run.
+async function galleryFetchScripts(doc, index) {
     const held = await deviceScriptNames();
+    for (const script of galleryScriptsOf(doc)) {
+        if (held.has(script.toLowerCase())) continue;   // the device's own copy, edited or shipped, stays
+        const s = index.find(e => e.kind !== "Preset" && galleryFileName(e).toLowerCase() === script.toLowerCase());
+        if (s) { await writeDeviceFile("/moonlive", script, await galleryFetch(s.file)); continue; }
+        // A shipped script is downloaded on first use, so a device that never picked it has no copy yet.
+        const group = mlGroupForExt(script.slice(script.lastIndexOf(".")).toLowerCase());
+        if (!((await mlFetchCatalog())[group]?.names || []).includes(script)) throw new Error(`${script} is neither in the gallery nor in this firmware`);
+        await mlDownloadScript(script, group);
+    }
+}
+
+/// Install one entry from its text: a preset onto a free pad with the scripts it needs, a script into /moonlive unless one of its name is there.
+async function galleryInstall(entry, index, text) {
     if (entry.kind !== "Preset") {
         const name = galleryFileName(entry);
-        if (held.has(name.toLowerCase())) throw new Error(`${name} is already on the device`);
+        if ((await deviceScriptNames()).has(name.toLowerCase())) throw new Error(`${name} is already on the device`);
         await writeDeviceFile("/moonlive", name, text);
         return;
     }
     const doc = JSON.parse(text);
-    for (const script of galleryScriptsOf(doc)) {
-        if (held.has(script.toLowerCase())) continue;   // the device's own copy, edited or shipped, stays
-        const s = index.find(e => e.kind !== "Preset" && galleryFileName(e).toLowerCase() === script.toLowerCase());
-        if (s) await writeDeviceFile("/moonlive", script, await galleryFetch(s.file));
-    }
+    await galleryFetchScripts(doc, index);
     // The pad is this device's to choose: a slot from the author's device could land on one already taken.
     const { $slot, ...rest } = doc;
     await writeDeviceFile("/.config/presets", galleryPresetName(entry) + ".json", $slot === undefined ? text : JSON.stringify(rest));
+}
+
+const GALLERY_PER_PAGE = 12;
+// Where browsing stands, kept across the re-render a pad click or an install causes.
+const galleryView = { query: "", kind: "", sort: "liked", page: 0, open: null };
+
+/// Whether an entry matches the search, over its name, description and author, and the kind chip ("" for every kind).
+function galleryMatches(entry, query, kind) {
+    if (kind && entry.kind !== kind) return false;
+    const q = String(query || "").trim().toLowerCase();
+    return !q || [entry.name, entry.description, entry.author].some(t => String(t || "").toLowerCase().includes(q));
+}
+
+/// The entries in browse order: most liked or newest first, the issue number breaking ties.
+function gallerySorted(index, sort) {
+    return index.slice().sort(sort === "newest" ? (a, b) => b.issue - a.issue
+                                                : (a, b) => (b.votes || 0) - (a.votes || 0) || a.issue - b.issue);
+}
+
+/// One page of `list`, the page clamped into range, so a narrower search never lands on an empty page.
+function galleryPage(list, page, per = GALLERY_PER_PAGE) {
+    const pages = Math.max(1, Math.ceil(list.length / per));
+    const at = Math.min(Math.max(0, page | 0), pages - 1);
+    return { items: list.slice(at * per, at * per + per), page: at, pages };
+}
+
+/// An entry's moving preview: a picture, else a video, else a link to it, since the index does not say which the address is.
+function galleryMedia(url, alt) {
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = alt;
+    img.addEventListener("error", () => {
+        const video = document.createElement("video");
+        Object.assign(video, { src: url, muted: true, autoplay: true, loop: true, playsInline: true, controls: true });
+        video.addEventListener("error", () => {
+            const a = document.createElement("a");
+            a.href = url; a.target = "_blank"; a.rel = "noopener";
+            a.textContent = "▶ watch";
+            video.replaceWith(a);
+        });
+        img.replaceWith(video);
+    });
+    return img;
 }
 
 function renderGallery(host, mod) {
@@ -6746,9 +6775,8 @@ function renderGallery(host, mod) {
     status.className = "gallery-status";
     // Every outcome goes through here, so the re-render an install triggers shows it still.
     const say = (text) => { galleryStatus = text; status.textContent = text; };
-    const list = document.createElement("div");
-    list.className = "gallery-list";
-    box.append(status, list);
+    const body = document.createElement("div");
+    box.append(status, body);
     host.appendChild(box);
 
     const presetsCtrl = () => (findModule(mod.name)?.controls || []).find(c => c.name === "presets");
@@ -6756,6 +6784,13 @@ function renderGallery(host, mod) {
     const freePads = () => {
         const c = presetsCtrl();
         return (c?.gridCols || 8) * (c?.gridRows || 8) - (c?.value || []).length;
+    };
+    const button = (text, onClick, cls = "surface-popup-primary") => {
+        const b = document.createElement("button");
+        b.className = cls;
+        b.textContent = text;
+        b.addEventListener("click", onClick);
+        return b;
     };
 
     const load = async () => {
@@ -6769,73 +6804,14 @@ function renderGallery(host, mod) {
             return;
         }
         status.textContent = index.length ? galleryStatus : "The gallery is empty so far.";
-        list.textContent = "";
         const running = deviceFirmwareInfo()?.version;
         const newer = (e) => Boolean(running && e.firmware && isNewer(e.firmware, running));
+        const shown = () => gallerySorted(index, galleryView.sort).filter(e => galleryMatches(e, galleryView.query, galleryView.kind));
 
-        const fill = document.createElement("button");
-        fill.className = "surface-popup-primary gallery-fill";
-        fill.textContent = "fill empty pads with the most liked";
-        fill.title = "Looks and palettes made on this version or older; a preset with pins or geometry belongs to one rig; your own presets stay where they are";
-        fill.addEventListener("click", async () => {
-            let free = freePads(), added = 0;
-            for (const e of galleryFillCandidates(index, presetNames())) {
-                if (free <= 0) break;
-                if (newer(e)) continue;
-                try {
-                    const text = await galleryFetch(e.file);
-                    if (!galleryPadReady(JSON.parse(text))) continue;
-                    await galleryInstall(e, index, text);
-                    free--; added++;
-                    say(`added ${added}: ${e.name}`);
-                } catch (_) { /* skip an entry that does not install; the rest still can */ }
-            }
-            say(added ? `added ${added} preset${added === 1 ? "" : "s"}` : "nothing to add: no free pad, or no look or palette left");
-            refetchState();
-        });
-        if (index.some(e => e.kind === "Preset")) list.appendChild(fill);
-
-        for (const e of index.slice().sort((a, b) => (b.votes || 0) - (a.votes || 0) || a.issue - b.issue)) {
-            const card = document.createElement("div");
-            card.className = "gallery-entry";
-            const media = galleryUrl(e.media);
-            if (media) {
-                const img = document.createElement("img");
-                img.src = media;
-                img.alt = e.name;
-                img.loading = "lazy";
-                // A video does not load as an image, so it becomes a link to watch it.
-                img.addEventListener("error", () => {
-                    const a = document.createElement("a");
-                    a.href = media; a.target = "_blank"; a.rel = "noopener";
-                    a.textContent = "▶ watch";
-                    img.replaceWith(a);
-                });
-                card.appendChild(img);
-            }
-            const head = document.createElement("div");
-            head.className = "gallery-entry-head";
-            const name = document.createElement(galleryUrl(e.url) ? "a" : "span");
-            if (galleryUrl(e.url)) { name.href = e.url; name.target = "_blank"; name.rel = "noopener"; }
-            name.textContent = e.name;
-            head.append(name, document.createTextNode(` ${e.kind} · 👍 ${e.votes || 0} · ${e.author || ""}`));
-            card.appendChild(head);
-            const what = document.createElement("div");
-            what.className = "gallery-entry-text";
-            what.textContent = e.description || "";
-            card.appendChild(what);
-            if (newer(e)) {
-                const newer = document.createElement("div");
-                newer.className = "gallery-entry-newer";
-                newer.textContent = `made on ${e.firmware}, newer than this device's ${running}: update first`;
-                card.appendChild(newer);
-            }
-            const actions = document.createElement("div");
-            actions.className = "surface-popup-row";
-            const install = document.createElement("button");
-            install.className = "surface-popup-primary";
-            install.textContent = e.kind === "Preset" ? "add to a pad" : "install";
-            install.addEventListener("click", async () => {
+        const actions = (e) => {
+            const row = document.createElement("div");
+            row.className = "surface-popup-row";
+            row.appendChild(button(e.kind === "Preset" ? "add to a pad" : "install", async () => {
                 if (newer(e) && !confirm(`${e.name} was made on ${e.firmware}, newer than this device's ${running}. Install it anyway?`)) return;
                 if (e.kind === "Preset") {
                     // A pad holds one preset: refuse rather than overwrite a preset of the same name or write one no pad can show.
@@ -6847,29 +6823,141 @@ function renderGallery(host, mod) {
                     say(`installed ${e.name}`);
                     refetchState();
                 } catch (err) { say(err.message); }
-            });
-            actions.appendChild(install);
+            }));
             if (e.kind === "Preset") {
-                const now = document.createElement("button");
-                now.className = "surface-popup-primary";
-                now.textContent = "try now";
-                now.title = "Apply it to the device without keeping it on a pad";
-                now.addEventListener("click", async () => {
+                const now = button("try now", async () => {
                     try {
                         const text = await galleryFetch(e.file);
+                        const doc = JSON.parse(text);
                         // A preset beyond a look or a palette replaces this rig's own settings, with no undo, so it asks first.
-                        if (!galleryPadReady(JSON.parse(text)) && !confirm(`${e.name} sets more than a look or a palette, such as pins or geometry from the author's rig. Apply it here?`)) return;
+                        if (!galleryAppliesUnasked(doc) && !confirm(`${e.name} sets more than a look or a palette, such as pins or geometry from the author's rig. Apply it here?`)) return;
                         if (newer(e) && !confirm(`${e.name} was made on ${e.firmware}, newer than this device's ${running}. Apply it anyway?`)) return;
+                        await galleryFetchScripts(doc, index);
                         const res = await fetch("/api/state", { method: "PATCH", body: text });
                         const answer = await res.json().catch(() => ({}));
                         say(res.ok ? `applied ${e.name}` : `${e.name}: ${answer.error || res.status}${answer.at ? " at " + answer.at : ""}`);
                     } catch (err) { say(err.message); }
                 });
-                actions.appendChild(now);
+                now.title = "Apply it to the device without keeping it on a pad";
+                row.appendChild(now);
             }
-            card.appendChild(actions);
-            list.appendChild(card);
-        }
+            return row;
+        };
+
+        // One entry, opened: the moving preview, the whole description, and prev and next through what the search shows.
+        const drawDetail = () => {
+            const list = shown();
+            const at = list.findIndex(e => e.issue === galleryView.open);
+            if (at < 0) { galleryView.open = null; draw(); return; }
+            const e = list[at];
+            const go = (k) => { galleryView.open = list[k].issue; draw(); };
+            const nav = document.createElement("div");
+            nav.className = "surface-popup-row";
+            nav.appendChild(button("◀ back", () => { galleryView.open = null; draw(); }, ""));
+            const prev = button("prev", () => go(at - 1), "");
+            const next = button("next", () => go(at + 1), "");
+            prev.disabled = at === 0;
+            next.disabled = at === list.length - 1;
+            nav.append(prev, next);
+            const card = document.createElement("div");
+            card.className = "gallery-detail";
+            const media = galleryUrl(e.media);
+            if (media) card.appendChild(galleryMedia(media, e.name));
+            const head = document.createElement("div");
+            head.className = "gallery-entry-head";
+            const name = document.createElement(galleryUrl(e.url) ? "a" : "span");
+            if (galleryUrl(e.url)) { name.href = e.url; name.target = "_blank"; name.rel = "noopener"; }
+            name.textContent = e.name;
+            head.append(name, document.createTextNode(` ${e.kind} · ❤️ ${e.votes || 0} · ${e.author || ""}`));
+            const what = document.createElement("div");
+            what.className = "gallery-entry-text";
+            what.textContent = e.description || "";
+            card.append(head, what);
+            if (newer(e)) {
+                const warn = document.createElement("div");
+                warn.className = "gallery-entry-newer";
+                warn.textContent = `made on ${e.firmware}, newer than this device's ${running}: update first`;
+                card.appendChild(warn);
+            }
+            card.appendChild(actions(e));
+            body.append(nav, card);
+        };
+
+        // The browsing view: search, a chip per kind, the order, and one page of thumbnails; no full-size media loads until an entry opens.
+        const drawBrowse = () => {
+            const bar = document.createElement("div");
+            bar.className = "gallery-bar";
+            const search = document.createElement("input");
+            search.type = "search";
+            search.placeholder = "search name, description or author";
+            search.value = galleryView.query;
+            search.addEventListener("input", () => { galleryView.query = search.value; galleryView.page = 0; drawResults(); });
+            const sort = document.createElement("select");
+            for (const [value, label] of [["liked", "most liked"], ["newest", "newest"]]) sort.add(new Option(label, value, false, galleryView.sort === value));
+            sort.addEventListener("change", () => { galleryView.sort = sort.value; galleryView.page = 0; drawResults(); });
+            bar.append(search, sort);
+            const chips = document.createElement("div");
+            chips.className = "gallery-chips";
+            for (const kind of ["", ...new Set(index.map(e => e.kind).filter(Boolean))]) {
+                const chip = button(kind || "all", () => { galleryView.kind = kind; galleryView.page = 0; drawResults(); }, "gallery-chip");
+                chip.dataset.kind = kind;
+                chips.appendChild(chip);
+            }
+            const results = document.createElement("div");
+            results.className = "gallery-list";
+            const pager = document.createElement("div");
+            pager.className = "surface-popup-row gallery-pager";
+            body.append(bar, chips, results, pager);
+
+            const drawResults = () => {
+                for (const chip of chips.children) chip.classList.toggle("active", chip.dataset.kind === galleryView.kind);
+                const list = shown();
+                const { items, page, pages } = galleryPage(list, galleryView.page);
+                galleryView.page = page;
+                results.textContent = "";
+                if (!list.length) results.textContent = "Nothing matches.";
+                for (const e of items) {
+                    const tile = document.createElement("button");
+                    tile.className = "gallery-tile";
+                    tile.title = e.description || e.name;
+                    const thumb = galleryPath(e.thumb);
+                    if (thumb) {
+                        const img = document.createElement("img");
+                        img.src = GALLERY_RAW + thumb;   // a thumbnail is made once per acceptance, so the browser's cache may keep it
+                        img.alt = "";
+                        img.loading = "lazy";
+                        tile.appendChild(img);
+                    } else {
+                        const none = document.createElement("div");
+                        none.className = "gallery-tile-none";
+                        none.textContent = e.kind;
+                        tile.appendChild(none);
+                    }
+                    const label = document.createElement("div");
+                    label.className = "gallery-entry-text";
+                    label.textContent = `${e.name} · ❤️ ${e.votes || 0}`;
+                    tile.appendChild(label);
+                    tile.addEventListener("click", () => { galleryView.open = e.issue; draw(); });
+                    results.appendChild(tile);
+                }
+                pager.textContent = "";
+                if (pages > 1) {
+                    const prev = button("prev", () => { galleryView.page--; drawResults(); }, "");
+                    const next = button("next", () => { galleryView.page++; drawResults(); }, "");
+                    prev.disabled = page === 0;
+                    next.disabled = page === pages - 1;
+                    pager.append(prev, document.createTextNode(` ${page + 1} / ${pages} `), next);
+                }
+            };
+            drawResults();
+        };
+
+        const draw = () => {
+            body.textContent = "";
+            if (galleryView.open === null) drawBrowse();
+            else drawDetail();
+        };
+        draw();
     };
     box.addEventListener("toggle", () => {
         galleryOpen = box.open;

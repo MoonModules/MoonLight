@@ -93,11 +93,9 @@ else()
     include(CheckCXXCompilerFlag)
     check_cxx_compiler_flag(-Wfunction-effects MM_HAS_WFUNCTION_EFFECTS)
     if(MM_HAS_WFUNCTION_EFFECTS)
-        # -Wno-error is PERMANENT, not a stepping stone: this is a report, not a gate. The
-        # findings are real and frozen in docs/reference/metrics/hotpath-baseline.txt as architecture
-        # work; failing the build on them would block every other gate, and a new one may be
-        # legitimate (a driver that must wait on hardware). The clang-hotpath card reports
-        # what is NEW; a human judges it.
+        # -Wno-error is PERMANENT: the code report counts these sites (docs/reference/metrics/code.md)
+        # and that count may only fall, while each site stays a judgment (a driver may have to wait
+        # on hardware), so failing the build on them would block every other gate.
         add_compile_options(-Wfunction-effects -Wno-error=function-effects)
     endif()
 endif()

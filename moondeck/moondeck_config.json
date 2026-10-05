@@ -136,7 +136,7 @@
       "tab": "desktop",
       "group": "tools",
       "label": "Code report",
-      "speed": "medium",
+      "speed": "slow",
       "help": "check_code",
       "script": "check/check_code.py"
     },
@@ -183,15 +183,6 @@
       "speed": "instant",
       "help": "check_docgen",
       "script": "check/check_docgen.py"
-    },
-    {
-      "id": "check_platform_boundary",
-      "tab": "desktop",
-      "group": "check",
-      "label": "Platform Boundary",
-      "speed": "instant",
-      "help": "check_platform_boundary",
-      "script": "check/check_platform_boundary.py"
     },
     {
       "id": "check_esp32_built",

@@ -120,6 +120,10 @@ TEST_CASE("parseDottedQuad accepts valid dotted-quads and rejects junk") {
     CHECK_FALSE(mm::parseDottedQuad("abc.def.ghi.jkl", out));
     // Trailing junk after a valid quad, rejected. Lets the API surface "192.168.1.1x" as a 400 instead of silently writing 192.168.1.1.
     CHECK_FALSE(mm::parseDottedQuad("192.168.1.1x", out));
+    // A refused value leaves the address as it was, so a half-typed "10.0.0" never becomes 10.0.0.x.
+    CHECK((out[0] == 255 && out[1] == 255 && out[2] == 255 && out[3] == 255));
+    CHECK_FALSE(mm::parseDottedQuad("10.0.0", out));
+    CHECK((out[0] == 255 && out[1] == 255 && out[2] == 255 && out[3] == 255));
 }
 
 namespace {
@@ -250,11 +254,46 @@ TEST_CASE("a failed join keeps the typed password for a retry") {
     CHECK(std::string(sink.data(), sink.size()).find("\"LiMqNQ==\"") != std::string::npos);   // "typo", obfuscated as every password on the page
 }
 
+// A known network the card asked for that fails counts as tried, so the round goes on to the others and does not try it again at once.
+TEST_CASE("a known network asked for from the card that fails is not tried again in the same round") {
+    FrozenClock clock;
+    mm::platform::setTestWifiStaAvailable(true);
+    {
+        WiFiNetwork w;
+        w.wifi.rebuildControls();
+        w.wifi.remember("second", "pw2");
+        w.wifi.remember("home", "pw1");
+        w.net.setup();
+        REQUIRE(std::strcmp(mm::platform::testLastStaSsid(), "home") == 0);
+        REQUIRE(w.wifi.setListRowField(w.wifi.idAt(1), "connect", ""));
+        w.net.tick1s();
+        REQUIRE(std::strcmp(mm::platform::testLastStaSsid(), "second") == 0);
+        mm::platform::setTestNowMs(1000 + 11000);
+        w.net.tick1s();
+        CHECK(std::strcmp(mm::platform::testLastStaSsid(), "home") == 0);
+        mm::platform::setTestNowMs(1000 + 22000);
+        w.net.tick1s();
+        CHECK(std::strcmp(mm::platform::testLastStaSsid(), "second") != 0);
+    }
+    mm::platform::setTestWifiStaAvailable(false);
+    mm::platform::setTestWifiFailure(mm::platform::WifiFailure::None);
+}
+
 namespace {
 const char* modeOf(mm::NetworkModule& net) {
     for (uint8_t i = 0; i < net.controls().count(); i++)
         if (std::strcmp(net.controls()[i].name, "mode") == 0) return static_cast<const char*>(net.controls()[i].ptr);
     return "";
+}
+
+// The device on "home" over WiFi, the starting point of each interface switch below.
+void joinHomeOverWifi(WiFiNetwork& w) {
+    w.wifi.remember("home", "pw");
+    w.net.setup();
+    const uint8_t staIp[4] = {192, 168, 1, 30};
+    mm::platform::setTestWifiStaIPv4(staIp);
+    w.net.tick1s();
+    REQUIRE(std::string(modeOf(w.net)) == "WiFi STA");
 }
 }  // namespace
 
@@ -296,17 +335,58 @@ TEST_CASE("Ethernet takes over from WiFi once it has an address") {
     mm::platform::setTestWifiStaAvailable(true);
     {
         WiFiNetwork w;
-        w.wifi.remember("home", "pw");
-        w.net.setup();
-        const uint8_t staIp[4] = {192, 168, 1, 30};
-        mm::platform::setTestWifiStaIPv4(staIp);
-        w.net.tick1s();
-        REQUIRE(std::string(modeOf(w.net)) == "WiFi STA");
+        joinHomeOverWifi(w);
         const uint8_t leased[4] = {192, 168, 1, 20};
         mm::platform::setTestEthIPv4(leased);
         w.net.tick1s();
         CHECK(std::string(modeOf(w.net)) == "Ethernet");
     }
+    mm::platform::setTestEthIPv4(nullptr);
+    mm::platform::setTestWifiStaIPv4(nullptr);
+    mm::platform::setTestWifiStaAvailable(false);
+}
+
+// A Static network that does not join leaves its address pinned on the station; the next network, on DHCP, must lease its own rather than come up on that one.
+TEST_CASE("a DHCP network joined after a Static one leases its own address") {
+    FrozenClock clock;
+    mm::platform::setTestWifiStaAvailable(true);
+    {
+        WiFiNetwork w;
+        w.wifi.rebuildControls();
+        w.wifi.remember("home", "pw1");
+        w.wifi.remember("travel", "pw2");   // at the top, so tried first
+        const uint32_t travel = w.wifi.idAt(0);
+        REQUIRE(w.wifi.setListRowField(travel, "ipSettings", R"({"value":1})"));
+        REQUIRE(w.wifi.setListRowField(travel, "ip", R"({"value":"192.168.8.158"})"));
+        REQUIRE(w.wifi.setListRowField(travel, "gateway", R"({"value":"192.168.8.1"})"));
+        const uint32_t dhcpBefore = mm::platform::testNetDhcpCount(mm::platform::NetIface::Sta);
+        w.net.setup();
+        REQUIRE(std::strcmp(mm::platform::testLastStaSsid(), "travel") == 0);
+        mm::platform::setTestNowMs(1000 + 11000);   // travel is not in range
+        w.net.tick1s();
+        REQUIRE(std::strcmp(mm::platform::testLastStaSsid(), "home") == 0);
+        CHECK(mm::platform::testNetDhcpCount(mm::platform::NetIface::Sta) > dhcpBefore);
+    }
+    mm::platform::setTestWifiStaAvailable(false);
+}
+
+// Every change of interface stops the advertisement, and the device must advertise its .local name again once connected, or it is reachable by address only.
+TEST_CASE("the local name is advertised again after switching from WiFi to Ethernet") {
+    FrozenClock clock;
+    mm::platform::setTestWifiStaAvailable(true);
+    mm::platform::setTestMdnsAvailable(true);
+    {
+        WiFiNetwork w;
+        joinHomeOverWifi(w);
+        CHECK(mm::platform::testMdnsInitCount() == 1);
+        const uint8_t leased[4] = {192, 168, 1, 20};
+        mm::platform::setTestEthIPv4(leased);
+        w.net.tick1s();
+        REQUIRE(std::string(modeOf(w.net)) == "Ethernet");
+        w.net.tick1s();
+        CHECK(mm::platform::testMdnsInitCount() == 2);   // advertised again, now on Ethernet
+    }
+    mm::platform::setTestMdnsAvailable(false);
     mm::platform::setTestEthIPv4(nullptr);
     mm::platform::setTestWifiStaIPv4(nullptr);
     mm::platform::setTestWifiStaAvailable(false);
@@ -318,12 +398,7 @@ TEST_CASE("editing the joined network's IP settings applies them live") {
     mm::platform::setTestWifiStaAvailable(true);
     {
         WiFiNetwork w;
-        w.wifi.remember("home", "pw");
-        w.net.setup();
-        const uint8_t staIp[4] = {192, 168, 1, 30};
-        mm::platform::setTestWifiStaIPv4(staIp);
-        w.net.tick1s();
-        REQUIRE(std::string(modeOf(w.net)) == "WiFi STA");
+        joinHomeOverWifi(w);
         const uint32_t before = mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Sta);
         constexpr uint32_t kFirstRowId = 1;
         REQUIRE(w.wifi.setListRowField(kFirstRowId, "ipSettings", "{\"value\":1}"));
@@ -335,18 +410,91 @@ TEST_CASE("editing the joined network's IP settings applies them live") {
     mm::platform::setTestWifiStaAvailable(false);
 }
 
+// Back to DHCP the address is gone until the router leases one, which takes seconds; that gap is a lease the device asked for, not a dropout.
+TEST_CASE("a switch back to DHCP waits for the lease rather than falling back to the access point") {
+    FrozenClock clock;
+    mm::platform::setTestWifiStaAvailable(true);
+    const uint8_t staIp[4] = {192, 168, 1, 30};
+    const auto run = [&](uint32_t gapMs, bool stillOnStation) {
+        WiFiNetwork w;
+        w.wifi.remember("home", "pw");
+        w.net.setup();
+        mm::platform::setTestWifiStaIPv4(staIp);
+        w.net.tick1s();
+        REQUIRE(std::string(modeOf(w.net)) == "WiFi STA");
+        constexpr uint32_t kFirstRowId = 1;
+        REQUIRE(w.wifi.setListRowField(kFirstRowId, "ipSettings", "{\"value\":1}"));
+        REQUIRE(w.wifi.setListRowField(kFirstRowId, "ip", "{\"value\":\"192.168.1.240\"}"));
+        w.net.tick1s();
+        REQUIRE(w.wifi.setListRowField(kFirstRowId, "ipSettings", "{\"value\":0}"));
+        mm::platform::setTestWifiStaIPv4(nullptr);   // the lease has not landed yet
+        mm::platform::setTestClockStep(1);   // a running device's clock moves within the tick, which a frozen one hides
+        w.net.tick1s();
+        w.net.tick1s();
+        mm::platform::setTestClockStep(0);
+        CHECK(std::string(modeOf(w.net)) == "WiFi STA");   // a moment after the switch, still waiting for the lease
+        mm::platform::setTestNowMs(1000 + gapMs);
+        w.net.tick1s();
+        CHECK((std::string(modeOf(w.net)) == "WiFi STA") == stillOnStation);
+        mm::platform::setTestNowMs(1000);
+    };
+    run(12000, true);    // past the dropout grace, inside the lease's window
+    run(16000, false);   // a lease that never comes still ends in the fallback (Idle here, with no access point wired)
+    mm::platform::setTestWifiStaIPv4(nullptr);
+    mm::platform::setTestWifiStaAvailable(false);
+}
+
+// A known network the scan saw is tried before one higher in the list that it did not, and the unseen one still gets its turn.
+TEST_CASE("the cascade tries the networks in range first, then the rest") {
+    FrozenClock clock;
+    mm::platform::setTestWifiStaAvailable(true);   // every join starts, and none gets an address
+    {
+        WiFiNetwork w;
+        w.wifi.remember("Away", "pw");
+        w.wifi.remember("Home", "pw");   // the top of the list, but out of range
+        const mm::platform::WifiNetwork seen[] = {{"Away", -60, true}};
+        mm::platform::setTestWifiScan(seen, 1);
+        w.wifi.onControlChanged("scan");
+        w.wifi.tick1s();
+        w.net.setup();
+        CHECK(std::string(mm::platform::testLastStaSsid()) == "Away");
+        mm::platform::setTestNowMs(1000 + 11000);   // past the grace for that network
+        w.net.tick1s();
+        CHECK(std::string(mm::platform::testLastStaSsid()) == "Home");
+    }
+    mm::platform::setTestWifiScan(nullptr, 0);
+    mm::platform::setTestWifiStaAvailable(false);
+}
+
+// A scan finishing between two attempts reorders what is left, and the untried network is still reached.
+TEST_CASE("a scan between two attempts still leaves every known network its try") {
+    FrozenClock clock;
+    mm::platform::setTestWifiStaAvailable(true);
+    {
+        WiFiNetwork w;
+        w.wifi.remember("Away", "pw");
+        w.wifi.remember("Home", "pw");
+        w.net.setup();   // no scan yet: the list order, Home first
+        REQUIRE(std::string(mm::platform::testLastStaSsid()) == "Home");
+        const mm::platform::WifiNetwork seen[] = {{"Away", -60, true}};   // now Away comes first, Home after it
+        mm::platform::setTestWifiScan(seen, 1);
+        w.wifi.onControlChanged("scan");
+        w.wifi.tick1s();
+        mm::platform::setTestNowMs(1000 + 11000);
+        w.net.tick1s();
+        CHECK(std::string(mm::platform::testLastStaSsid()) == "Away");
+    }
+    mm::platform::setTestWifiScan(nullptr, 0);
+    mm::platform::setTestWifiStaAvailable(false);
+}
+
 // The joined network is a row, not a position: adding a network above it keeps the check mark, and its IP settings, on the network the device is on.
 TEST_CASE("a network added above the joined one leaves the joined one marked") {
     FrozenClock clock;
     mm::platform::setTestWifiStaAvailable(true);
     {
         WiFiNetwork w;
-        w.wifi.remember("home", "pw");
-        w.net.setup();
-        const uint8_t staIp[4] = {192, 168, 1, 30};
-        mm::platform::setTestWifiStaIPv4(staIp);
-        w.net.tick1s();
-        REQUIRE(std::string(modeOf(w.net)) == "WiFi STA");
+        joinHomeOverWifi(w);
         uint32_t id = 0;
         REQUIRE(w.wifi.addListRow(id));
         REQUIRE(w.wifi.setListRowField(id, "ssid", "{\"value\":\"other\"}"));

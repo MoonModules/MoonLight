@@ -98,17 +98,12 @@ public:
             controls_.setHidden(controls_.count() - 1, !editable || !isSpi);
             // Immediately before the fields it conditions, so the two stay adjacent.
             const uint8_t firstIpControl = controls_.count();
-            controls_.addSelect("ipSettings", ipSettings_, ipsettings::kOptions, 2);
+            controls_.addSelect("ipSettings", ip_.mode, ipsettings::kOptions, 2);
             // Always bound so persistence can load them, with only their visibility conditional.
-            const bool hideStatic = !isStatic();
-            controls_.addIPv4(ipsettings::kFields[0], staticIp_);
-            controls_.setHidden(controls_.count() - 1, hideStatic);
-            controls_.addIPv4(ipsettings::kFields[1], staticGateway_);
-            controls_.setHidden(controls_.count() - 1, hideStatic);
-            controls_.addIPv4(ipsettings::kFields[2], staticSubnet_);
-            controls_.setHidden(controls_.count() - 1, hideStatic);
-            controls_.addIPv4(ipsettings::kFields[3], staticDns_);
-            controls_.setHidden(controls_.count() - 1, hideStatic);
+            for (uint8_t k = 0; k < 4; k++) {
+                controls_.addIPv4(ipsettings::kFields[k], ip_.address(k));
+                controls_.setHidden(controls_.count() - 1, !isStatic());
+            }
             // One loop rather than a call beside every row: the wiring carries one tag, while the IP settings stay in view.
             if constexpr (preview) {
                 for (uint8_t i = firstEthControl; i < firstIpControl; i++) controls_.setDeveloper(i);
@@ -153,8 +148,9 @@ public:
             appliedEthType_ = ethType_;   // what holds the pads now
             ethSigApplied_ = true;
         }
-        appliedIpSig_ = ipSig();
-        ipSigApplied_ = true;
+        appliedIp_.mark(ip_);
+        notedIpSig_ = ip_.sig();
+        noteIpProblem();
     }
 
     /// Apply an interface change live where the hardware allows it, returning true when the interface restarted.
@@ -183,23 +179,29 @@ public:
         return false;
     }
 
-    /// Apply an IP settings change live when Ethernet carries the device, returning true when one was applied.
+    /// Apply an IP settings change at once, returning true when Ethernet carries the device, so the cascade re-judges it.
     bool syncIpLive(bool connected) {
-        const uint32_t sig = ipSig();
-        if (ipSigApplied_ && sig == appliedIpSig_) return false;   // nothing changed
-        appliedIpSig_ = sig;
-        ipSigApplied_ = true;
-        if (!connected) return false;   // applied on the next connect
-        if (isStatic()) applyStatic();
-        else platform::netSetDhcp(platform::NetIface::Eth);   // Static → DHCP: re-lease live
-        return true;
+        // Any edit updates the card's reason; only a change in what is in effect touches the interface.
+        const uint32_t sig = ip_.sig();
+        if (sig != notedIpSig_) { notedIpSig_ = sig; noteIpProblem(); }
+        if (!appliedIp_.changedTo(ip_)) return false;
+        // Applied at once, cable or not: the platform keeps a static setting and re-pins it at link-up, so neither direction waits for a lease to land first.
+        ip_.applyLive(platform::NetIface::Eth);
+        return connected;
+    }
+
+    /// Static starts from the cable's lease, so nothing moves until an address changes; with no lease, from the station's network.
+    void onControlChanged(const char* name) override {
+        if (std::strcmp(name, "ipSettings") != 0) return;
+        ip_.prefillFrom(platform::NetIface::Eth);
+        ip_.prefillNetworkFrom(platform::NetIface::Sta);
     }
 
     /// Whether the user pinned a static address.
-    bool isStatic() const MM_NONBLOCKING { return ipSettings_ == ipsettings::kStatic; }
+    bool isStatic() const MM_NONBLOCKING { return ip_.isStatic(); }
 
     /// The address the user set, or null where a DHCP client runs.
-    const uint8_t* configuredIp() const MM_NONBLOCKING { return isStatic() ? staticIp_ : nullptr; }
+    const uint8_t* configuredIp() const MM_NONBLOCKING { return ip_.usable() ? ip_.ip : nullptr; }
 
     /// Whether a wired interface is set up, which is what lets the access point stay closed.
     bool configured() const MM_NONBLOCKING {
@@ -208,25 +210,35 @@ public:
         return type != static_cast<uint8_t>(platform::ethNone);
     }
     /// Pin the configured address onto the wired interface, or do nothing where a client runs.
-    void applyStatic() {
-        if (!isStatic()) return;   // leave the client running
-        platform::netSetStaticIPv4(platform::NetIface::Eth, staticIp_, staticGateway_, staticSubnet_, staticDns_);
+    void applyStatic() const { ip_.applyStatic(platform::NetIface::Eth); }
+
+    /// What a chip can wire, so the board filter answers for any chip rather than only the one built for.
+    struct EthChip { bool drivesEthernet, w5500, p4, s31; };
+    static constexpr EthChip kThisChip{platform::hasEthernet, platform::hasEthW5500, platform::isEsp32P4, platform::isEsp32S31};
+
+    // A preset carries a pin map as well as a PHY, so one the chip cannot wire persists pins reaching nothing.
+    /// Whether a board preset with PHY `type` belongs on `chip`: Custom everywhere, and every board on the desktop, which drives none and previews them all.
+    static constexpr bool presetFits(int8_t type, EthChip chip = kThisChip) {
+        if (type == 0 || !chip.drivesEthernet) return true;
+        if (type == 3) return chip.w5500;    // SPI, a separate driver
+        if (chip.w5500) return false;
+        if (type == 2) return chip.p4;       // IP101: the P4's
+        if (type == 4) return chip.s31;      // YT8531 RGMII: the S31's
+        return !chip.p4 && !chip.s31;        // LAN8720: classic RMII
     }
 
 private:
-    uint8_t ipSettings_ = ipsettings::kDhcp;   ///< DHCP or Static, the words routers and phones use
-    // Octets rather than strings, always bound, with only their visibility conditional.
-    uint8_t staticIp_[4]      = {0, 0, 0, 0};
-    uint8_t staticGateway_[4] = {0, 0, 0, 0};
-    uint8_t staticSubnet_[4]  = {255, 255, 255, 0};
-    uint8_t staticDns_[4]     = {0, 0, 0, 0};
-    // The IP settings last applied, with a flag for "never" since any value is a valid hash.
-    uint32_t appliedIpSig_ = 0;
-    bool ipSigApplied_ = false;
+    IpSettings ip_;          ///< the wired interface's own addressing
+    IpApplied appliedIp_;    ///< what was last applied, so only an edit applies again
+    uint32_t notedIpSig_ = 0;      ///< the settings the card's reason was last written for
+    bool showingIpProblem_ = false;   ///< whether the status is that reason, so fixing the setting clears it
 
-    /// A hash over the mode and the static octets, so an edit to any of them re-applies.
-    uint32_t ipSig() const {
-        return ipsettings::sig(ipSettings_, staticIp_, staticGateway_, staticSubnet_, staticDns_);
+    /// Say on the card why a Static setting is not used, and clear that once it is.
+    void noteIpProblem() {
+        const char* why = ip_.isStatic() ? ip_.problem() : nullptr;
+        if (why) setStatus(why, Severity::Warning);
+        else if (showingIpProblem_) setStatus("");
+        showingIpProblem_ = why != nullptr;
     }
 
     // The order must match the platform's own enum, since the control stores an index.
@@ -288,27 +300,12 @@ private:
     static constexpr uint8_t kEthPresetNone = 0xFF;
     uint8_t ethPresetApplied_ = kEthPresetNone;
 
-    // A preset naming a PHY this build cannot drive would offer pins that reach nothing.
-    /// Does this firmware carry a driver for the preset's PHY?
-    static bool presetBuildable(const EthPreset& p) {
-        if (p.type == 0) return true;                       // Custom, which names no PHY
-        if (p.type == 3) return platform::hasEthW5500;      // SPI, a separate driver
-        if (!platform::hasEthW5500) {
-            // A preset carries a PIN MAP as well as a PHY, so one the chip cannot wire persists pins reaching nothing; the desktop previews all.
-            constexpr bool knownChip = platform::isEsp32P4 || platform::isEsp32S31;
-            if (p.type == 2) return !knownChip || platform::isEsp32P4;    // IP101: the P4's
-            if (p.type == 4) return !knownChip || platform::isEsp32S31;   // YT8531 RGMII: the S31's
-            return !platform::isEsp32P4 && !platform::isEsp32S31;         // LAN8720: classic RMII
-        }
-        return false;
-    }
-
     /// Offer the presets this build can drive, re-pointing the selection by label.
     void buildEthPresetOptions() {
         const char* current = (ethPresetSel_ < ethPresetCount_) ? ethPresetOptions_[ethPresetSel_] : nullptr;
         ethPresetCount_ = 0;
         for (uint8_t i = 0; i < kEthPresetCount; i++) {
-            if (!presetBuildable(kEthPresets[i])) continue;
+            if (!presetFits(kEthPresets[i].type)) continue;
             ethPresetOptions_[ethPresetCount_] = kEthPresets[i].label;
             ethPresetIndex_[ethPresetCount_] = i;
             ethPresetCount_++;

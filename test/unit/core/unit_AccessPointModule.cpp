@@ -176,6 +176,22 @@ TEST_CASE("the access point set to always stays up while connected") {
     CHECK(mm::platform::wifiApConnected());
 }
 
+// The radio has one channel, so an access point opening mid-join moves it under the join; always waits until the join settles.
+TEST_CASE("the access point set to always opens once the first join settles, not during it") {
+    ApNetwork n;
+    n.opens(mm::AccessPointModule::Opens::Always);
+    n.wifi.remember("home", "pw");
+    n.net.setup();
+    n.at(1000);
+    REQUIRE(modeOf(n.net) == "WiFi STA (waiting)");
+    CHECK_FALSE(mm::platform::wifiApConnected());   // joining: the access point waits
+    n.joined();
+    n.at(2000);
+    n.at(3000);
+    CHECK(modeOf(n.net) == "WiFi STA");
+    CHECK(mm::platform::wifiApConnected());          // joined: now it opens beside the network
+}
+
 // Never keeps the access point closed when nothing joins, and the device goes on retrying its known networks.
 TEST_CASE("the access point set to never stays closed when a network is known") {
     ApNetwork n;
@@ -200,16 +216,12 @@ TEST_CASE("never with nothing configured still opens the access point and says s
     CHECK(std::string(n.ap.status()).find("opens on failure") != std::string::npos);
 }
 
-// The password, channel and hidden name reach the radio, and a change re-opens it live.
+// The password reaches the radio, and a change re-opens it live.
 TEST_CASE("the access point opens with its settings and re-opens on a change") {
     ApNetwork n;
     std::strcpy(controlPtr<char>(n.ap, "password"), "first-pass");
-    *controlPtr<uint8_t>(n.ap, "channel") = 6;
-    *controlPtr<bool>(n.ap, "hidden") = true;
     n.net.setup();
     CHECK(std::string(mm::platform::testLastApConfig().password) == "first-pass");
-    CHECK(mm::platform::testLastApConfig().channel == 6);
-    CHECK(mm::platform::testLastApConfig().hidden);
     n.at(1000);
     std::strcpy(controlPtr<char>(n.ap, "password"), "longenough");
     n.at(2000);

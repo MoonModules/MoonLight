@@ -3,6 +3,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "moondeck" / "check"))
 
@@ -44,8 +46,9 @@ def test_the_report_round_trips_through_its_own_committed_parser(tmp_path, monke
     monkeypatch.setattr(check_code, "REPORT", tmp_path / "code.md")
     rows = [("src/core/a.cpp", "complex function", "mm::x", 12), ("src/core/a.cpp", "long function", "mm::x", 70),
             ("src/light/b.h", "complex function", "mm::y", 11)]
-    check_code.write_report(rows)
+    check_code.write_report(rows, (3.11, 4321))
     text = (tmp_path / "code.md").read_text()
+    assert check_code.duplicated_lines_in(text) == 4321
     monkeypatch.setattr(check_code, "committed", lambda _report: text)
     assert check_code.committed_counts() == {"complex function": 2, "long function": 1, "(total)": 3}
     # Only the rule table feeds the baseline: a file or area row would be a rule that never appears.
@@ -81,13 +84,76 @@ def test_a_clone_counts_under_both_of_its_files_and_names_the_other():
     report = {"duplicates": [{"lines": 7, "tokens": 80,
                               "firstFile": {"name": "src/light/effects/A.h", "start": 10, "end": 16},
                               "secondFile": {"name": "src/light/effects/B.h", "start": 40, "end": 46}}],
-              "statistics": {"total": {"percentage": 1.18}}}
-    rows, pct = check_code.clone_rows(report)
-    assert pct == 1.18
+              "statistics": {"total": {"percentage": 1.18, "duplicatedLines": 14}}}
+    rows, duplicated = check_code.clone_rows(report)
+    assert duplicated == (1.18, 14)
     assert [(r[0], r[1], r[3]) for r in rows] == [("src/light/effects/A.h", "duplicated block", 7), ("src/light/effects/B.h", "duplicated block", 7)]
     assert rows[0][2] == "lines 10-16, also in src/light/effects/B.h:40"   # the span from start and length, since jscpd's end field is unreliable
     assert rows[1][2] == "lines 40-46, also in src/light/effects/A.h:10"
-    assert check_code.clone_rows({"duplicates": []}) == ([], 0.0)
+    assert check_code.clone_rows({"duplicates": []}) == ([], (0.0, 0))
+
+
+def test_a_commit_account_shows_what_it_added_and_what_it_saved():
+    """The commit message carries its own account, so a subtraction shows as a saving in the commit that made it."""
+    lines = {"src": [120, 340], "test": [60, 0]}
+    base = {"complex function": 5, "long function": 3, "(total)": 8}
+    now = {"complex function": 3, "long function": 3, "deeply nested": 1, "(total)": 7}
+    assert check_code.account_line(lines, base, now, 4321, 4290) == (
+        "Commit: src +120/-340 lines | test +60/-0 lines"
+        " | code findings 8 -> 7 (complex function -2, deeply nested +1)"
+        " | duplicated lines 4321 -> 4290 (-31)")
+    # A report this pass did not rewrite says nothing about the code, so it is left out rather than shown as measured; so is duplication without the clone pass.
+    assert check_code.account_line({"src": [1, 1], "test": [0, 0]}, base, base, None, None) == (
+        "Commit: src +1/-1 lines | test +0/-0 lines")
+
+
+def test_a_blocking_call_on_the_render_path_is_a_row_per_site(monkeypatch):
+    """Each site the compiler finds counts once under its file, a float conversion at formatTo included."""
+    import check_nonblocking as nb
+    monkeypatch.setattr(nb, "function_effects_enabled", lambda _d: True)
+    monkeypatch.setattr(nb, "build_output", lambda _d: "out")
+    monkeypatch.setattr(nb, "collect", lambda _out: [{"file": "src/core/a.h", "callee": "mm::platform::millis", "fn": "tick1s"},
+                                                     {"file": "src/core/a.h", "callee": "printf", "fn": None}])
+    monkeypatch.setattr(nb, "float_conversions_on_the_hot_path", lambda: ["src/light/b.h:42"])
+    monkeypatch.setattr(nb.check_clang_tidy, "_host_build_dir", lambda: _ratchet.ROOT)
+    monkeypatch.setattr(check_code.Path, "exists", lambda self: True)
+    assert check_code.hotpath_rows() == [
+        ("src/core/a.h", check_code.HOT_PATH, "mm::platform::millis in tick1s", 1),
+        ("src/core/a.h", check_code.HOT_PATH, "printf in ?", 1),
+        ("src/light/b.h", check_code.HOT_PATH, "a float conversion at formatTo, line 42", 1)]
+    # A host whose compiler cannot measure it skips the rule; a build that fails raises, never a clean zero.
+    monkeypatch.setattr(nb, "build_output", lambda _d: None)
+    with pytest.raises(check_code.BuildMissing):
+        check_code.hotpath_rows()
+    monkeypatch.setattr(nb, "function_effects_enabled", lambda _d: False)
+    assert check_code.hotpath_rows() is None
+
+
+def test_the_two_boundaries_are_counted_where_the_architecture_draws_them():
+    """Platform code belongs in src/platform and core includes nothing of the light domain; a comment or another folder crosses nothing."""
+    find = lambda rel, text: [(r[1], r[2]) for r in check_code.boundary_findings(rel, text.splitlines())]
+    assert find("src/core/a.h", '#include "light/drivers/Drivers.h"  // the light count') == [(check_code.CORE_LIGHT, 'line 1: #include "light/drivers/Drivers.h"')]
+    assert find("src/light/a.h", '#include "light/drivers/Drivers.h"') == []
+    assert find("src/light/a.h", "#include <esp_timer.h>\n#ifdef ESP_PLATFORM\nif constexpr (platform::hasWiFi) {}") == \
+        [(check_code.PLATFORM, "line 1: #include <esp_timer.h>"), (check_code.PLATFORM, "line 2: #ifdef ESP_PLATFORM")]
+    assert find("src/platform/esp32/a.cpp", "#include <esp_timer.h>") == []
+    # Quoted SDK headers and #elif branches cross the same boundary.
+    assert find("src/core/a.cpp", '#include "esp_timer.h"\n#elif defined(ESP_PLATFORM)') == \
+        [(check_code.PLATFORM, 'line 1: #include "esp_timer.h"'), (check_code.PLATFORM, "line 2: #elif defined(ESP_PLATFORM)")]
+    assert find("test/unit/a.cpp", "#include <esp_timer.h>") == []
+    # The real tree: no platform code outside src/platform, which the old gate held at zero.
+    assert not [r for r in check_code.boundary_rows() if r[1] == check_code.PLATFORM]
+
+
+def test_a_clean_build_with_the_warning_on_and_no_sites_is_a_measured_zero(monkeypatch, tmp_path):
+    """Silence from a full rebuild means a clean tree when the cache says the warning is on, and an unmeasured run when it is not."""
+    import check_nonblocking as nb
+    import subprocess
+    monkeypatch.setattr(nb.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout="[100%] Built target MoonLight\n", stderr=""))
+    monkeypatch.setattr(nb, "function_effects_enabled", lambda _d: True)
+    assert nb.build_output(tmp_path) is not None
+    monkeypatch.setattr(nb, "function_effects_enabled", lambda _d: False)
+    assert nb.build_output(tmp_path) is None
 
 
 def test_the_baseline_is_the_committed_report_and_a_report_never_committed_is_a_first_run():

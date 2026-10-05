@@ -10,7 +10,7 @@
 
 namespace mm {
 
-/// The device's own WiFi network: when it opens, its password and channel, and the phones on it.
+/// The device's own WiFi network: when it opens, its password, and the phones on it.
 ///
 /// A Network child: the network module opens and closes it, and this one holds how it appears and answers its DNS.
 /// @card AccessPointModule.png
@@ -39,10 +39,6 @@ public:
         // Meaningful only while it runs, so hidden elsewhere rather than showing zero.
         controls_.addReadOnlyInt("clients", clients_, "");
         controls_.setHidden(controls_.count() - 1, !running_);
-        controls_.addControl("channel", channel_, 1, 13);
-        controls_.setAdvanced(controls_.count() - 1);
-        controls_.addControl("hidden", hidden_);
-        controls_.setAdvanced(controls_.count() - 1);
     }
 
     // What the network module's cascade asks of the access point.
@@ -55,7 +51,7 @@ public:
 
     /// How it appears, under the device's name at the captive portal's address.
     platform::WifiApConfig config(const char* name) const {
-        return platform::WifiApConfig{name, captive::kAddressText, password_, channel_, hidden_};
+        return platform::WifiApConfig{name, captive::kAddressText, password_};
     }
 
     /// A hash over how it appears under `name`, so a change to any of it, a rename included, re-opens it live.
@@ -63,8 +59,6 @@ public:
         Fnv1a f;
         f.add(name, std::strlen(name));
         f.add(password_, std::strlen(password_));
-        f.add(channel_);
-        f.add(hidden_ ? 1 : 0);
         return f.h;
     }
 
@@ -127,8 +121,6 @@ private:
 
     uint8_t opens_ = 0;
     char    password_[64] = {};   ///< WPA2's passphrase bound
-    uint8_t channel_ = 1;
-    bool    hidden_ = false;
     int8_t  clients_ = 0;
     bool    running_ = false;
     const char* advice_ = nullptr;   ///< the advice last shown, so the status is rewritten only on a change

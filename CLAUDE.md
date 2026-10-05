@@ -186,7 +186,7 @@ flowchart LR
     pc --> diff
     always["<b>always</b><br/>💀 check_specs · 💀 check_prose <i>· records, writes to the tree</i>"]
     md["<b>.md</b><br/>build_docs --strict 🐢<br/>💀 check_docgen · 🛸 test_host --python <i>(catalog pages)</i><br/>check_taglines <i>(front pages only)</i>"]
-    code["<b>src/ or test/</b><br/>💀 check_nonblocking · build_desktop 🐢<br/>🛸 test_desktop 🐢 · run_scenario 🐢<br/>💀 check_docgen <i>(the headers it covers)</i><br/>💀 check_platform_boundary <i>(not src/platform)</i><br/>💀 check_esp32_built <i>(not src/platform/desktop)</i><br/>💀 build_desktop --no-jit 🐢 <i>(MoonLive only)</i><br/>💀 collect_kpi 🐢 <i>· records, writes to the tree</i>"]
+    code["<b>src/ or test/</b><br/>💀 check_code 🐢 · build_desktop 🐢<br/>🛸 test_desktop 🐢 · run_scenario 🐢<br/>💀 check_docgen <i>(the headers it covers)</i><br/>💀 check_esp32_built <i>(not src/platform/desktop)</i><br/>💀 build_desktop --no-jit 🐢 <i>(MoonLive only)</i><br/>💀 collect_kpi 🐢 <i>· records, writes to the tree</i>"]
     web["<b>src/ui or mooninstaller/</b><br/>🛸 test_host --js · 💀 check_devices"]
     py["<b>moondeck/ or moonlive/</b><br/>🛸 test_host --python · 💀 check_firmwares"]
     board["<b>the provisioning path,<br/>with a board attached</b><br/>🛸 improv_smoke_test<br/><i>recommended, say so when skipped</i>"]
@@ -232,7 +232,7 @@ Both handoffs above are absolute, for a reason the diagram cannot carry. **Stagi
 
 **Only the words "commit now" trigger a commit.** "Fix it", "do step 4" and "the build is broken" say what to change, which is a separate question from whether to record it. One combined commit per cycle; a branch may bundle multiple topics.
 
-Commit message: title ≤ 72 characters, imperative. Then a 1 to 3 sentence end-user summary, no file lists. Then the performance one-liner from `collect_kpi.py --commit`. Then change sections as bullets: **Core**, **Light domain**, **UI**, **Scripts/MoonDeck**, **Tests**, **Docs/CI**, **Reviews** (🐇 external, 👾 Reviewer; one bullet per finding: flagged → done, accepted or deferred, plus why). No hard wraps inside a part.
+Commit message: title ≤ 72 characters, imperative. Then a 1 to 3 sentence end-user summary, no file lists. Then the performance one-liner and the commit's account line, both from `collect_kpi.py --commit`. Then change sections as bullets: **Core**, **Light domain**, **UI**, **Scripts/MoonDeck**, **Tests**, **Docs/CI**, **Reviews** (🐇 external, 👾 Reviewer; one bullet per finding: flagged → done, accepted or deferred, plus why). No hard wraps inside a part.
 
 **Reviewer at commit time**: run it on the staged diff when the commit reaches roughly ten files across areas, or on request. Start it first so the other checks run in parallel.
 
@@ -266,7 +266,7 @@ flowchart LR
     class merge po
 ```
 
-The GCC build catches a class clang misses (`-Wstringop-truncation`, no transitive standard headers), and CI compiles with it on every PR, so reproducing locally is worth the minutes only once CI has something to reproduce. The Reviewer's scope: boundaries, bespoke conventions, unnecessary abstractions, duplication, hot path, spec conformance, bloat.
+The GCC build catches a class clang misses (`-Wstringop-truncation`, no transitive standard headers), and CI compiles with it on every PR. Reproducing it locally is worth the minutes only once CI has something to reproduce. The Reviewer's scope: boundaries, bespoke conventions, unnecessary abstractions, duplication, hot path, spec conformance, bloat. It also asks two questions no counter answers: does every setting name the user who needs it, and does a change touching many areas signal coupling?
 
 Lessons are carried forward rarely, since most learning lives in the PR record. A gotcha worth keeping goes to [lessons.md](docs/work/past/lessons.md); a hardened rule goes here or to coding-standards.
 

@@ -15,7 +15,10 @@ test("the page decodes what the device's writeObfuscatedPassword sends", () => {
 });
 
 test("a list's password field shows the decoded password, as the control does", () => {
-    const at = src.indexOf('} else if (f.type === "password") {');
+    // A row field is drawn by createControl itself, so the one password case serves both.
+    assert.ok(fnSource("fillEditableListDetail").includes("createControl(rowMid, null, ctrl, write)"));
+    const control = fnSource("createControl");
+    const at = control.indexOf('case "password": {');
     assert.notEqual(at, -1);
-    assert.ok(src.slice(at, at + 600).includes("decodePassword(f.value)"));
+    assert.ok(control.slice(at, at + 600).includes("decodePassword(ctrl.value)"));
 });

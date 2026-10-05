@@ -236,11 +236,6 @@ def collect_desktop():
         if buffer_lights:
             kpi["lights"] = max(buffer_lights)
 
-    check = ROOT / "moondeck" / "check" / "check_platform_boundary.py"
-    if check.exists():
-        _, rc = run([sys.executable, str(check)])
-        kpi["boundary"] = "PASS" if rc == 0 else "FAIL"
-
     specs = ROOT / "moondeck" / "check" / "check_specs.py"
     if specs.exists():
         out, rc = run([sys.executable, str(specs)])
@@ -487,8 +482,6 @@ def format_full(desktop, esp32, code):
         lines.append(f"    tick: {ticks} (FPS: {fps}) (per scenario)")
     if "scenarios" in desktop:
         lines.append(f"    {desktop['scenarios']}")
-    if "boundary" in desktop:
-        lines.append(f"    Platform boundary: {desktop['boundary']}")
     if "specs_check" in desktop:
         lines.append(f"    Specs: {desktop.get('specs_summary', desktop['specs_check'])}")
 
@@ -540,6 +533,7 @@ def main():
 
     if args.commit:
         print(format_oneliner(desktop, esp32, code))
+        print(check_code.account())
         print("(see KPI Details at bottom)")
         print()
         print(format_full(desktop, esp32, code))
@@ -584,7 +578,11 @@ def main():
             perf["scenario_matrix"] = desktop["scenario_matrix"]
         if esp32.get("tick_us"):
             perf["esp32"] = {"tick_us": esp32["tick_us"], "fps": esp32.get("fps")}
+            if esp32.get("heap_free"):
+                perf["esp32"]["heap_free"] = esp32["heap_free"]   # the free heap a user's effects and drivers have left
         repo_health.write(perf)
+        # Beside the account line's duplication count: what the commit's flash went to, new code against code saved.
+        print(repo_health.flash_split.line(repo_health.FLASH_SPLIT))
 
     esp32_tick = esp32.get("tick_us")
     lights = desktop.get("lights")

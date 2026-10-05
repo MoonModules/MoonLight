@@ -129,6 +129,107 @@ TEST_CASE("the known list stops at its cap, and a new network replaces the lowes
     CHECK(std::string(w.status()).find("last was forgotten") != std::string::npos);
 }
 
+// A row whose Static setting cannot work joins by DHCP, and its row says why.
+TEST_CASE("a known network with an unusable Static setting says so on its row and joins by DHCP") {
+    mm::WiFiModule w;
+    w.rebuildControls();
+    uint32_t id = 0;
+    REQUIRE(w.addListRow(id));
+    REQUIRE(w.setListRowField(id, "ssid", "{\"value\":\"home\"}"));
+    REQUIRE(w.setListRowField(id, "ipSettings", "{\"value\":1}"));
+    REQUIRE(w.setListRowField(id, "ip", "{\"value\":\"192.168.1.9\"}"));
+    REQUIRE(w.setListRowField(id, "gateway", "{\"value\":\"192.168.2.1\"}"));
+    CHECK(w.staticIpAt(0) == nullptr);
+    mm::JsonSink sink;
+    w.writeListRow(sink, 0);
+    CHECK(std::string(sink.data(), sink.size()).find("\"ipSettings\":\"static IP not used: the gateway is outside the subnet\"") != std::string::npos);
+}
+
+namespace {
+// Two known networks, the first joined on a lease of 192.168.8.158/24 via 192.168.8.1 with no DNS server named; the seams reset when it ends.
+struct OnLease {
+    static constexpr uint8_t kIp[4] = {192, 168, 8, 158};
+    static constexpr uint8_t kGw[4] = {192, 168, 8, 1};
+    static constexpr uint8_t kMask[4] = {255, 255, 255, 0};
+    mm::WiFiModule w;
+    uint32_t joined = 0, other = 0;
+    OnLease() {
+        mm::platform::setTestWifiStaIPv4(kIp);
+        mm::platform::setTestNetLease(kGw, kMask, nullptr);
+        w.rebuildControls();
+        REQUIRE(w.addListRow(joined));
+        REQUIRE(w.setListRowField(joined, "ssid", "{\"value\":\"home\"}"));
+        REQUIRE(w.addListRow(other));
+        REQUIRE(w.setListRowField(other, "ssid", "{\"value\":\"away\"}"));
+        w.showRadio(-50, 20, true, true, joined);
+    }
+    ~OnLease() {
+        mm::platform::setTestWifiStaIPv4(nullptr);
+        mm::platform::setTestNetLease(nullptr, nullptr, nullptr);
+    }
+};
+}  // namespace
+
+// Switching the joined network to Static fills its fields from the lease it runs with, so the device keeps its address and the page stays.
+TEST_CASE("the joined network switched to Static starts from its lease") {
+    OnLease l;
+    auto& w = l.w;
+    const uint32_t joined = l.joined, other = l.other;
+    const uint8_t* ip = OnLease::kIp;
+    const uint8_t* gw = OnLease::kGw;
+    const uint8_t* mask = OnLease::kMask;
+    REQUIRE(w.setListRowField(joined, "ipSettings", "{\"value\":1}"));
+    const mm::IpSettings& s = w.ipAt(0);
+    CHECK(s.usable());
+    CHECK(std::memcmp(s.ip, ip, 4) == 0);
+    CHECK(std::memcmp(s.gateway, gw, 4) == 0);
+    CHECK(std::memcmp(s.subnet, mask, 4) == 0);
+    CHECK(std::memcmp(s.dns, gw, 4) == 0);   // the gateway stands in for a missing DNS server
+    REQUIRE(w.setListRowField(other, "ipSettings", "{\"value\":1}"));
+    CHECK_FALSE(w.ipAt(1).usable());          // not the joined network: its lease is not this one's to copy
+}
+
+// A row field carries its default as a control does, so the page offers the same reset: DHCP, and for the joined network its lease.
+TEST_CASE("a known network's fields carry their defaults, the joined one's address fields its lease") {
+    OnLease l;
+    auto& w = l.w;
+    const uint32_t joined = l.joined, other = l.other;
+    REQUIRE(w.setListRowField(joined, "ipSettings", "{\"value\":1}"));
+    REQUIRE(w.setListRowField(joined, "ip", "{\"value\":\"192.168.8.200\"}"));
+    REQUIRE(w.setListRowField(other, "ipSettings", "{\"value\":1}"));
+    const auto detail = [&](uint8_t row) { mm::JsonSink sink; w.writeListRowDetail(sink, row); return std::string(sink.data(), sink.size()); };
+    const std::string j = detail(0), o = detail(1);
+    CHECK(j.find("\"name\":\"ipSettings\",\"type\":\"select\",\"value\":1,\"default\":0") != std::string::npos);
+    CHECK(j.find("\"name\":\"ip\",\"type\":\"ipv4\",\"value\":\"192.168.8.200\",\"default\":\"192.168.8.158\"") != std::string::npos);
+    CHECK(j.find("\"name\":\"dns\",\"type\":\"ipv4\",\"value\":\"192.168.8.1\",\"default\":\"192.168.8.1\"") != std::string::npos);
+    CHECK(o.find("\"name\":\"ip\",\"type\":\"ipv4\",\"value\":\"0.0.0.0\",\"default\":\"0.0.0.0\"") != std::string::npos);
+    CHECK(o.find("\"name\":\"subnet\",\"type\":\"ipv4\",\"value\":\"255.255.255.0\",\"default\":\"255.255.255.0\"") != std::string::npos);
+}
+
+// The list is the priority, and a recent scan moves only the networks it missed to the end, so no time goes to what is not there.
+TEST_CASE("the join order puts the networks a recent scan saw first, each part in list order") {
+    struct Reset { ~Reset() { mm::platform::setTestNowMs(0); mm::platform::setTestWifiScan(nullptr, 0); } } reset;
+    mm::platform::setTestNowMs(1000);
+    mm::WiFiModule w;
+    w.rebuildControls();
+    for (const char* name : {"Alpha", "Bravo", "Charlie"}) {
+        uint32_t id = 0;
+        REQUIRE(w.addListRow(id));
+        REQUIRE(w.setListRowField(id, "ssid", (std::string("{\"value\":\"") + name + "\"}").c_str()));
+    }
+    uint8_t order[mm::WiFiModule::kMaxKnown];
+    REQUIRE(w.joinOrder(order, 1000) == 3);
+    CHECK((order[0] == 0 && order[1] == 1 && order[2] == 2));   // no scan yet: the list order
+    const mm::platform::WifiNetwork seen[] = {{"Charlie", -50, true}, {"Alpha", -70, true}};
+    mm::platform::setTestWifiScan(seen, 2);
+    w.onControlChanged("scan");
+    w.tick1s();
+    REQUIRE(w.joinOrder(order, 2000) == 3);
+    CHECK((order[0] == 0 && order[1] == 2 && order[2] == 1));   // Alpha, Charlie seen in list order, then Bravo
+    REQUIRE(w.joinOrder(order, 1000 + mm::WiFiModule::kScanFreshMs + 1) == 3);
+    CHECK((order[0] == 0 && order[1] == 1 && order[2] == 2));   // a stale scan orders nothing
+}
+
 TEST_CASE("a full known list never forgets the network carrying the device") {
     mm::WiFiModule w;
     w.rebuildControls();
@@ -212,6 +313,46 @@ TEST_CASE("a scan that never finishes ends after its time") {
     w.tick1s();
     CHECK(std::string(w.status()).find("did not finish") != std::string::npos);
     mm::platform::setTestWifiScan(nullptr, 0);
+}
+
+// A radio still starting or joining refuses a scan, and pressing scan then must not be lost or blamed on a radio that is off.
+TEST_CASE("a scan the radio cannot start yet waits for it and starts once it can") {
+    struct Reset { ~Reset() { mm::platform::setTestWifiScanRefused(false); mm::platform::setTestWifiScan(nullptr, 0); } } reset;
+    mm::platform::setTestWifiScanRefused(true);
+    mm::WiFiModule w;
+    w.rebuildControls();
+    w.onControlChanged("scan");
+    w.tick1s();
+    REQUIRE(w.status() != nullptr);
+    CHECK(std::string(w.status()) == "the scan waits for the radio");
+    mm::platform::setTestWifiScanRefused(false);
+    w.tick1s();   // the desktop's scan finishes in the tick it starts
+    const char* scanned = nullptr;
+    for (uint8_t i = 0; i < w.controls().count(); i++)
+        if (std::strcmp(w.controls()[i].name, "scanned") == 0) scanned = static_cast<const char*>(w.controls()[i].ptr);
+    REQUIRE(scanned != nullptr);
+    CHECK(std::string(scanned) == "just now");
+}
+
+// A radio that stays off, as while Ethernet carries the device, never takes the request, so the card ends it rather than waiting forever.
+TEST_CASE("a scan the radio refuses for a scan's whole time ends with a reason") {
+    struct Reset { ~Reset() { mm::platform::setTestWifiScanRefused(false); mm::platform::setTestNowMs(0); } } reset;
+    mm::platform::setTestNowMs(1000);
+    mm::platform::setTestWifiScanRefused(true);
+    mm::WiFiModule w;
+    w.rebuildControls();
+    w.onControlChanged("scan");
+    mm::platform::setTestNowMs(15000);
+    w.tick1s();
+    REQUIRE(w.status() != nullptr);
+    CHECK(std::string(w.status()) == "the scan waits for the radio");
+    mm::platform::setTestNowMs(17000);
+    w.tick1s();
+    CHECK(std::string(w.status()) == "the radio cannot scan now: press scan to try again");
+    mm::platform::setTestWifiScanRefused(false);
+    mm::platform::setTestNowMs(18000);
+    w.tick1s();
+    CHECK(std::string(w.status()) == "the radio cannot scan now: press scan to try again");   // the ended request does not start on its own
 }
 
 // The list shows a known network's password as the API shows a Password control's: obfuscated, never as typed, while the saved file keeps it as it is.

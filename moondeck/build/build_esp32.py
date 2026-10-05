@@ -520,7 +520,7 @@ def firmware_cmake_args(firmware: str, release: str = "", version: str = "",
     then shows the bare semver with no channel suffix.
 
     `version` overrides MM_VERSION with the pipeline-computed semver
-    (compute_version.py): the core for a stable tag, `<core>-dev.<N>` for a
+    (compute_version.py): the core for a stable tag, `<next>-dev.<N>` for a
     moving `latest` build. Empty for local builds — build_info.h's #ifndef
     default (library.json) applies.
     """
@@ -742,7 +742,7 @@ def main():
     parser.add_argument("--version", default="",
                         help="Override MM_VERSION with the pipeline-computed semver "
                              "(see compute_version.py): core for a stable tag, "
-                             "'<core>-dev.<N>' for latest. Omit for local builds "
+                             "'<next>-dev.<N>' for latest. Omit for local builds "
                              "(library.json applies).")
     parser.add_argument("--task-cpu-stats", action="store_true",
                         help="Enable per-task CPU%% in TasksModule (FreeRTOS run-time stats). "

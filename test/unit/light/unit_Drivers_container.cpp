@@ -9,6 +9,7 @@
 #include "platform/platform.h"                 // gpioRead: the desktop reads back what gpioWrite put there
 
 #include <cstring>
+#include <string>
 
 // Regression: the UI's enable/disable toggle on a child driver (e.g. ArtNet, Preview) was a no-op, the driver kept running. Cause: Drivers::tick() called child(i)->tick() unconditionally, skipping the per-child `enabled` check that Layer::tick() does for effects and Effects::tick() does for its child Layers.
 // (The Scheduler only walks top-level modules, so it never sees these children.)
@@ -216,6 +217,8 @@ TEST_CASE("a typo in the relay list releases the relays it used to hold") {
     drivers.onControlChanged("relayPins");
     CHECK_FALSE(mm::platform::gpioRead(12));
     CHECK_FALSE(mm::platform::gpioRead(13));
+    REQUIRE(drivers.status() != nullptr);
+    CHECK(std::string(drivers.status()) == "invalid pin list");
 
     // And the driver has forgotten them, so a later brightness change does not resurrect either pin.
     drivers.brightness = 200;
@@ -223,11 +226,12 @@ TEST_CASE("a typo in the relay list releases the relays it used to hold") {
     CHECK_FALSE(mm::platform::gpioRead(12));
     CHECK_FALSE(mm::platform::gpioRead(13));
 
-    // A corrected list takes effect normally.
+    // A corrected list takes effect normally, and the card stops naming the typo.
     std::strcpy(drivers.relayPins, "13");
     drivers.onControlChanged("relayPins");
     CHECK(mm::platform::gpioRead(13));
     CHECK_FALSE(mm::platform::gpioRead(12));
+    CHECK((drivers.status() == nullptr || std::string(drivers.status()).empty()));
     mm::platform::clearTestGpioLevel();
 }
 

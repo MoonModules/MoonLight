@@ -43,7 +43,7 @@ Tests pin behavior that runs; static analysis catches what never gets exercised.
 | 3 | RTSan + `[[clang::nonblocking]]` | allocation/blocking in the render path, **transitively** | Compile time + CI |
 | 4 | [CodeQL](../.github/codeql-config.yml) | untrusted input, whole-program taint, use-after-free | CI, Security tab |
 
-Alongside them: **check_code** counts complexity and function length per commit into a report that only falls. Lizard sits underneath it, a fuzzy tokenizer rather than a parser, so it can never express an architectural rule. Beside that, **clang-query** is the home for bespoke AST rules we invent. The Python checks in `moondeck/check/` cover contracts whose other half is a Markdown page, a JSON catalog or a built binary. Every one has a MoonDeck card ([MoonDeck.md](../moondeck/MoonDeck.md)).
+Alongside them, **check_code** writes one report that only falls. It counts complexity, size, nesting and parameters from lizard, duplication from jscpd, the render path's blocking calls from the compiler, and the two boundaries. Beside that, **clang-query** is the home for bespoke AST rules we invent. The Python checks in `moondeck/check/` cover contracts whose other half is a Markdown page, a JSON catalog or a built binary. Every one has a MoonDeck card ([MoonDeck.md](../moondeck/MoonDeck.md)).
 
 **Every one of these is a report, not a gate.** They state what they find; a consumer decides
 what to do about it. `WarningsAsErrors` is empty, CodeQL never runs on `pull_request`, and the hot-path check never fails the event. A gate nobody can satisfy gets disabled rather than obeyed, and it pushes people to suppress a finding under time pressure, which is the opposite of why the tool is there. The exception is layer 0: compiler warnings ARE `-Werror`, because they are few, actionable, and fixed at the moment they appear.
@@ -53,14 +53,14 @@ and cannot drift between two tools that half-agree:
 
 | Rule | Enforced by |
 |---|---|
-| No allocation/blocking in the render path | `[[clang::nonblocking]]` + RTSan |
-| No platform code outside `src/platform/` | `check_platform_boundary.py` |
+| No allocation/blocking in the render path | `[[clang::nonblocking]]` + RTSan, counted by `check_code.py` |
+| No platform code outside `src/platform/`, no light include in core | `check_code.py` |
 | Specs match the code | `check_specs.py` |
 | Catalog matches the modules | `check_devices.py` |
 | Untrusted input is memory-safe | CodeQL |
 | Bug patterns / performance | clang-tidy |
-| Complexity does not grow | `check_code.py` (ratcheted per rule and in total) |
-| Size/LOC/docs do not grow silently | `repo_health.py` |
+| Complexity and duplication do not grow | `check_code.py` (ratcheted per rule and in total) |
+| Size/LOC/docs do not grow silently | `repo_health.py`, per commit and since the last release |
 
 ### Verify a zero before believing it
 
