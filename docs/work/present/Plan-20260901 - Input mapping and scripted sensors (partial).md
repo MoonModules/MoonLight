@@ -569,23 +569,9 @@ line:
 A user's own action already feels instant, since the UI updates locally on send. What this buys is
 the case where something ELSE moved the control: a script, OSC, a second browser.
 
-### ✅ Open: `addControl` is still in the light header
+### ✅ Resolved: `addControl` is in the neutral builtins
 
 Resolved 2026-10-06: `addControl`, its sink and `runDefineControls` live in `MoonLiveBuiltins_common.h`, registered once for both tables, and the per-thread slot claim is `core/util/ThreadSlot.h`, which the light sinks share.
-
-
-The domain-neutral builtins moved to `core/moonlive/MoonLiveBuiltins_common.h` (2026-09-02): the
-math, the waveforms, noise, randomness and print. `addControl` did NOT, so the service table still
-includes the light header for that one function, which leaves core depending on a domain for the
-sake of declaring a setting.
-
-It stayed behind because it is not a pure function: it writes through an `AddControlSink`, a
-per-thread slot table that also serves `addLight` and the draw canvas, and moving that machinery is
-a bigger job than moving thirteen pure functions was. `smin` went back to the light table for the
-same class of reason, and correctly: it wraps `draw::smin`, so it IS a light idea.
-
-Worth finishing when the sink table is touched for another reason. The include is honest about why
-it is there.
 
 ### Open: a control written continuously should not be persisted at that rate
 

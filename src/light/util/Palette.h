@@ -262,7 +262,11 @@ public:
 
     /// Compute a palette's representative hue (0..359) + saturation (0..255) from the average of its expanded RGB entries.
     static void representativeHueSat(uint8_t index, uint16_t& hueOut, uint16_t& satOut) {
-        const Palette p = fromBuiltin(index);
+        hueSatOf(fromBuiltin(index), hueOut, satOut);
+    }
+
+    /// A palette's representative hue (0..359) and saturation (0..255), from the average of its entries.
+    static void hueSatOf(const Palette& p, uint16_t& hueOut, uint16_t& satOut) {
         uint32_t rs = 0, gs = 0, bs = 0;
         for (uint8_t i = 0; i < Palette::kEntries; i++) {
             rs += p.entry[i].r; gs += p.entry[i].g; bs += p.entry[i].b;

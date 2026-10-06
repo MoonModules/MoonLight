@@ -123,7 +123,7 @@ constexpr const char* kEffectCatalogTags[] = {
     "💫",
     "💫🎶",
     "💫🎶",
-    "💫🎶",
+    "💫🎵",
     "💫🖌️",
 };
 constexpr const char* kEffectFolder = "effects";   ///< its directory upstream

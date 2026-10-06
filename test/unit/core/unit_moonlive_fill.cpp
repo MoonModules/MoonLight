@@ -68,7 +68,7 @@ TEST_CASE("MoonLive run is a no-op on sub-RGB buffers (cpl 1 and 2)") {
     moonlive::MoonLive engine;
     REQUIRE(engine.compile(255, 255, 255));
     for (uint8_t cpl : {uint8_t(1), uint8_t(2)}) {
-        std::vector<uint8_t> buf(8 * cpl, 0xAB);   // exact size — an RGB write WOULD overrun
+        std::vector<uint8_t> buf(8 * cpl, 0xAB);   // exact size: an RGB write WOULD overrun
         engine.run(buf.data(), 8, cpl, 0);
         for (auto v : buf) CHECK(v == 0xAB);       // every byte untouched, no out-of-bounds
     }
@@ -130,7 +130,7 @@ TEST_CASE("platform allocExec returns usable executable memory, freeExec release
     CHECK(buf[0] == 7);
     platform::freeExec(blk, 64);
 }
-#endif  // MM_MOONLIVE_HAS_HOST_JIT — the JIT-dependent block ends here; the STAGE 1 CONTROLS below
+#endif  // MM_MOONLIVE_HAS_HOST_JIT: the JIT-dependent block ends here; the STAGE 1 CONTROLS below
         // exercise the parser/arena, which also depend on compile() succeeding, so they gate too.
 
 #if MM_MOONLIVE_HAS_HOST_JIT
@@ -169,7 +169,7 @@ TEST_CASE("elapsed time survives a call that happens before it is read") {
                         "setRGB(1, mod(t, 200), 0, 0);"), kCtrlTable, kSys));
     uint8_t buf[2 * 3] = {};
     eng.run(buf, 2, 3, 12345);
-    CHECK(buf[3] == 12345 % 200);   // 145 — the elapsed value the host passed, not a clobbered one
+    CHECK(buf[3] == 12345 % 200);   // 145, the elapsed value the host passed, not a clobbered one
     eng.free();
 }
 #endif
@@ -284,12 +284,12 @@ TEST_CASE("MoonLive controls: arena address is STABLE across a recompile and the
     REQUIRE(eng.compile(mmScript("byte speed = 7;\nsetRGB(speed, 0, 0, 255);"), kCtrlTable, kSys));
     uint8_t* before = eng.controlSlot(0);
     REQUIRE(before != nullptr);
-    *before = 12;                                        // a "slider move" — write the live value
+    *before = 12;                                        // a "slider move": write the live value
 
     // Edit the source (recompile) but KEEP the control. The grow-only arena must not move, and the live value must survive (a kept control keeps its slider position across a source edit).
     REQUIRE(eng.compile(mmScript("byte speed = 7;\nsetRGB(speed, 255, 0, 0);"), kCtrlTable, kSys));
     uint8_t* after = eng.controlSlot(0);
-    CHECK(after == before);                              // STABLE address — no dangling bound pointer
+    CHECK(after == before);                              // STABLE address, no dangling bound pointer
     CHECK(*after == 12);                                 // value preserved across the recompile
 
     // Adding a SECOND control keeps the first's value and seeds the new slot from its default.
@@ -341,7 +341,7 @@ TEST_CASE("MoonLive controls: free() releases the arena (no stale slot after rel
     REQUIRE(eng.controlSlot(0) != nullptr);
     eng.free();
     CHECK_FALSE(eng.ok());
-    CHECK(eng.controlSlot(0) == nullptr);                // arena gone — no dangling pointer handed out
+    CHECK(eng.controlSlot(0) == nullptr);                // arena gone, no dangling pointer handed out
     // Recompiling after a full free re-acquires cleanly (add/remove robustness).
     REQUIRE(eng.compile(mmScript("byte a = 5;\nfill(0, 0, a);"), kCtrlTable, kSys));
     REQUIRE(eng.controlSlot(0) != nullptr);
@@ -1335,8 +1335,19 @@ TEST_CASE("a coordinate far outside the grid saturates at that edge, not the opp
     CHECK(px[6] == 7);           // same on the other axis
 }
 
-#endif  // MM_MOONLIVE_HAS_HOST_JIT — every case above needs compile() to SUCCEED, so
-        // they all gate on the JIT: on a target with no backend (x86-64 desktop today) the helpers they call are compiled out with it.
+#endif  // MM_MOONLIVE_HAS_HOST_JIT: every case above needs compile() to succeed, and on a target with no backend (the x86-64 desktop) the helpers they call are compiled out with it.
+
+// Regression: the slot release checked only some of its sinks, so detaching one released the slot while the palette, flow or trail sink was still installed.
+TEST_CASE("a sink slot stays owned while any of its sinks is still installed") {
+    using namespace mm::moonlive;
+    static int ctx = 0;
+    setPalSink([](void*, uint8_t, uint8_t, uint8_t, uint8_t) {}, &ctx);
+    setFadeSink([](void*, uint8_t) {}, &ctx);
+    setFadeSink(nullptr, nullptr);                  // one sink leaves
+    CHECK(palSink().fn != nullptr);                 // the palette sink is still this thread's
+    setPalSink(nullptr, nullptr);
+    CHECK(palSink().fn == nullptr);                 // and the slot goes once nothing is left
+}
 
 // The table was FULL at 16 entries and add() failed silently, so the next builtin registered would have vanished and surfaced as "unknown function" in a script.
 TEST_CASE("the builtin table has room and reports an overflow") {

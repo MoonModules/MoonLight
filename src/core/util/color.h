@@ -36,7 +36,7 @@ constexpr RGB hsvToRgb(uint8_t h, uint8_t s, uint8_t v) {
 }
 
 /// Integer RGB → (hue 0..359, saturation 0..255).
-inline void rgbToHueSat(uint8_t r, uint8_t g, uint8_t b, uint16_t& hue, uint16_t& sat) {
+constexpr void rgbToHueSat(uint8_t r, uint8_t g, uint8_t b, uint16_t& hue, uint16_t& sat) {
     const uint8_t mx = r > g ? (r > b ? r : b) : (g > b ? g : b);
     const uint8_t mn = r < g ? (r < b ? r : b) : (g < b ? g : b);
     const uint8_t delta = static_cast<uint8_t>(mx - mn);

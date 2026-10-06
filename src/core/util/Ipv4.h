@@ -6,13 +6,13 @@
 #include <cstdlib>
 #include <cstring>
 
+namespace mm {
+
 /// @defgroup Ipv4 An IPv4 address as four octets
 /// @{
 /// Reading one from text, and whether a static setting can be used.
 ///
 /// MoonBase includes it as well as the app, so the recovery image refuses the same static settings the app refuses and comes up where the app does.
-
-namespace mm {
 
 /// Parse "A.B.C.D" into four octets, returning false on anything else; `out` is written only on success, as `inet_pton` does.
 inline bool parseDottedQuad(const char* s, uint8_t out[4]) {
@@ -90,6 +90,6 @@ inline Fault staticFault(const uint8_t ip[4], const uint8_t gateway[4], const ui
 
 }  // namespace ipv4
 
-}  // namespace mm
-
 /// @}
+
+}  // namespace mm

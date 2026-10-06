@@ -1568,3 +1568,10 @@ def test_an_xref_or_a_page_link_reaches_a_section():
     lines = _APPENDIX + ["/// See @xref{why-it-waits}."]
     found = _unreferenced_in("src/core/x.h", lines, {("x", "the-wire-layout")})
     assert found == []
+
+
+def test_a_heading_inside_a_fenced_example_is_no_section():
+    from check_docgen import _unreferenced_in
+    lines = ["/// The thing.", "///", "/// @moreinfo", "///", "/// ## Real", "///", "/// ```text",
+             "/// ## not a section", "/// ```"]
+    assert [k for k, _ in _unreferenced_in("src/core/x.h", lines, set())] == ["src/core/x.h::@moreinfo Real"]

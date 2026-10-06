@@ -52,6 +52,8 @@ ISAS = {
             ("l32i a11, a1, 128",    "b22120", "spillLoad: reload the arena pointer"),
             ("s32i a10, a1, 32",     "a26108", "call: park the result"),
             ("addi a9, a1, 60",      "92c13c", "slotAddr: the address of an argument block"),
+            ("addmi a9, a1, 256",    "92d101", "slotAddr: a slot past byte 127 takes the 256-byte step first"),
+            ("addi a9, a9, -124",    "92c984", "slotAddr: then the signed rest, so byte 132 is reached"),
             # Arithmetic, narrow and wide forms.
             ("add.n a2, a2, a13",    "da22",   "add: the narrow two-byte form"),
             ("mull a9, a2, a11",     "b09282", "mul"),

@@ -4,6 +4,7 @@
 #include "platform/platform.h"
 
 #include <cstring>
+#include <memory>
 
 namespace mm {
 
@@ -45,7 +46,7 @@ public:
             if (std::strcmp(types_[i].name, typeName) == 0) return true;
         if (!grow()) return false;
         // On the heap: an instance can be kilobytes, which the boot task's stack does not hold.
-        T* probe = new T();
+        const auto probe = std::make_unique<T>();
         if (!probe) return false;
         uint8_t dim = 0;
         if constexpr (requires(const T& t) { static_cast<uint8_t>(t.dimensions()); }) {
@@ -58,7 +59,6 @@ public:
                             probe->tags() ? probe->tags() : "",
                             dim,
                             probe->acceptsChildRoles() ? probe->acceptsChildRoles() : ""};
-        delete probe;
         return true;
     }
 

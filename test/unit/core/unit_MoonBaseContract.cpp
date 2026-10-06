@@ -165,6 +165,11 @@ TEST_CASE("the config scraper reads each interface's IP settings, by the app's r
     CHECK(site.gateway[3] == 1);
     CHECK_FALSE(mm::configscrape::findNetworkIp(json, 2).usable());   // the network address, which the app refuses too
     CHECK_FALSE(mm::configscrape::findNetworkIp(json, 3).usable());   // past the last row
+    // The last row ends at its own brace, so a later module's address is not read as its own, and a brace in a password does not end it early.
+    const char* tail = R"({"1.known":[{"id":1,"ssid":"home","password":"p}w"}],"0.type":"EthernetModule","0.ipSettings":1,"0.ip":"10.0.0.5"})";
+    CHECK(mm::configscrape::findNetworkIp(tail, 0).mode == 0);
+    const char* braced = R"({"1.known":[{"id":1,"ssid":"home","password":"p}w","ipSettings":1,"ip":"10.1.0.9"}]})";
+    CHECK(mm::configscrape::findNetworkIp(braced, 0).usable());
 }
 
 // The page keeps calling the same paths across the hand-over to MoonBase, which shares no sources, so a renamed route fails only on a device mid-update.

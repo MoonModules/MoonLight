@@ -321,3 +321,22 @@ TEST_CASE("Drivers: relay pins and double buffering are expert settings, and the
     for (const char* name : {"loopbackTest", "loopbackTxPin", "loopbackRxPin", "loopbackFrame"})
         CHECK_MESSAGE(modeOf(rmt, name) == mm::kModeDeveloper, name);
 }
+
+// A scripted palette has no stored stops, so its color comes from the entries it computes now, not from the built-in its index would wrap onto.
+TEST_CASE("Drivers gives a scripted palette's color from its live entries") {
+    mm::Drivers drivers;
+    const mm::Palette saved = *mm::Palettes::active();
+    mm::Palette blue;
+    for (auto& e : blue.entry) e = mm::RGB{0, 0, 255};
+    mm::Palettes::setActiveDirect(blue);            // what a running palette script wrote
+    uint16_t hue = 0, sat = 0;
+    drivers.paletteHueSat(mm::palettes::kCount, hue, sat);   // the first scripted index
+    CHECK(hue == 240);
+    CHECK(sat == 255);
+    uint16_t builtinHue = 0, builtinSat = 0;
+    mm::Palettes::representativeHueSat(0, builtinHue, builtinSat);
+    drivers.paletteHueSat(0, hue, sat);             // a built-in still reads its own stops
+    CHECK(hue == builtinHue);
+    CHECK(sat == builtinSat);
+    mm::Palettes::setActiveDirect(saved);
+}

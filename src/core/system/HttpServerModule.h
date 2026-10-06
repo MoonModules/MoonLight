@@ -121,15 +121,10 @@ class Scheduler;
 /// The app keys on the brand to accept a device: we interoperate rather than impersonate, and this is no full WLED emulation.
 ///
 /// Live state is pushed over `/ws` as a state-and-info frame.
-/// The state mirrors the Drivers brightness control and the live first-LED color, falling back to MoonLight purple when the first LED is off.
+/// The state mirrors the Drivers brightness control, and its color is the active palette's, from `LightOutput::paletteRgb()`, or black on a device with no light output.
 ///
 /// Control is bidirectional over that same socket.
 /// The app's slider and toggle send a frame that is read and applied to Drivers brightness through the shared apply core, the path REST and Improv also use.
-///
-/// ## The one reach into output state
-///
-/// The color read is the one place this core module reaches output state, through `MoonModule::firstOutputRgb`, a domain-neutral virtual the light-domain Drivers overrides.
-/// That is what keeps this module free of a light-domain include.
 ///
 /// ## Reading an uplink frame, and taking the lease
 ///

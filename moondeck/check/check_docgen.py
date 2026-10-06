@@ -1356,16 +1356,19 @@ def _orphan_pages():
 
 
 def _appendix_sections(lines: list[str]) -> list[str]:
-    """The `## ` headings of a file's `@moreinfo` appendices, in order."""
+    """The `## ` headings of a file's `@moreinfo` appendices, in order, skipping fenced examples as the section budget does."""
     out = []
     for i, ln in enumerate(lines):
         if "@moreinfo" not in ln:
             continue
+        fenced = False
         for m in lines[i + 1:]:
             if not m.lstrip().startswith("///"):
                 break
             text = re.sub(r"^\s*///\s?", "", m).strip()
-            if text.startswith("## "):
+            if text.startswith("```"):
+                fenced = not fenced
+            elif not fenced and text.startswith("## "):
                 out.append(text[3:].strip())
     return out
 
@@ -1614,9 +1617,10 @@ def _write_report(found, appendix=None) -> None:
              if appendix is not None else []),
            "An error is in a file that generates a documentation page, a header or a catalog page, "
            "so the finding is a defect in what gets published and it fails the gate. A warning is "
-           "in an implementation file, which publishes nothing: its comments are a note to the "
-           "next reader, worth fixing without being worth stopping a commit for. Both are counted "
-           "here, because a warning nobody sees is a warning nobody fixes.", "",
+           "worth fixing without being worth stopping a commit for: any finding in an implementation "
+           "file, which publishes nothing, and the rules still staged as counts in a header too, the "
+           "over-wide line and the appendix section nothing refers to. Both are counted here, "
+           "because a warning nobody sees is a warning nobody fixes.", "",
            "The split is temporary. It stages the sweep rather than ranking the two kinds of "
            "comment, so when the warning column reaches zero it goes and every finding blocks.", "",
            "## By rule", "", "| Rule | Errors | Warnings |", "|---|---:|---:|"]

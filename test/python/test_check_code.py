@@ -268,3 +268,17 @@ def test_a_hand_buffer_in_light_is_a_finding_and_a_factory_or_a_comment_is_not(t
         "src/core/b.h": "auto* p = new uint8_t[n];\n"})
     assert [r[2] for r in check_code.raw_alloc_rows()] == ["line 1: auto* p = new uint8_t[n];",
                                                           "line 2: buf = static_cast<T*>(platform::alloc(n));"]
+
+
+def test_a_nothrow_array_new_in_light_is_a_hand_buffer_too(tmp_path, monkeypatch):
+    _tree(tmp_path, monkeypatch, {"src/light/a.h": "auto* p = new (std::nothrow) uint8_t[n];\nnew (slot) T[n];\n"})
+    assert [r[2] for r in check_code.raw_alloc_rows()] == ["line 1: auto* p = new (std::nothrow) uint8_t[n];"]
+
+
+def test_two_overloads_with_large_frames_stay_two_findings(tmp_path, monkeypatch):
+    _tree(tmp_path, monkeypatch, {"src/core/a.h": ""})
+    monkeypatch.setattr(check_code, "owned_files", lambda: ["src/core/a.h"])
+    out = "\n".join([
+        f"{tmp_path}/src/core/a.h:10:1: warning: stack frame size (700) exceeds limit (512) in 'void mm::f(int)' [-Wframe-larger-than]",
+        f"{tmp_path}/src/core/a.h:20:1: warning: stack frame size (800) exceeds limit (512) in 'void mm::f(float)' [-Wframe-larger-than]"])
+    assert sorted(r[3] for r in check_code.stack_rows(out)) == [700, 800]

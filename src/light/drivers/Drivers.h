@@ -52,9 +52,11 @@ public:
     const LightSummary& summary() const override { return summary_; }
     /// The built-in palette nearest a color wheel's hue and saturation.
     uint8_t nearestPalette(uint16_t hue, uint8_t sat) const override { return Palettes::nearestForHue(hue, sat); }
-    /// A built-in palette's representative hue and saturation.
+    // A script computes its entries only while it runs, so a scripted index reads the active palette, which is the one a caller asks about.
+    /// A palette's representative hue and saturation, built-in or scripted.
     void paletteHueSat(uint8_t index, uint16_t& hue, uint16_t& sat) const override {
-        Palettes::representativeHueSat(index, hue, sat);
+        if (LivePalettes::isLive(index)) Palettes::hueSatOf(*Palettes::active(), hue, sat);
+        else Palettes::representativeHueSat(index, hue, sat);
     }
     /// The built-ins and the scripted tail.
     uint8_t paletteCount() const override { return mm::paletteCount(); }
@@ -483,19 +485,6 @@ public:
         seat_.claim();         // first live Drivers wins (claim-if-empty; one exists in practice)
         outputSeat_.claim();   // and is the light output core reads
         passBufferToDrivers();
-    }
-
-    // Logical channel order: the per-strip wire reorder is applied later, by the drivers.
-    /// The first driven light's RGB, for a consumer that shows one color for the device.
-    bool firstOutputRgb(uint8_t out[3]) const override {
-        const Buffer* src = nullptr;
-        if (outputBuffer_.data()) src = &outputBuffer_;
-        else if (Layer* l = effects_ ? effects_->firstEnabledLayer() : layer_; l && l->buffer().data())
-            src = &l->buffer();
-        if (!src || src->count() == 0 || src->channelsPerLight() < 3) return false;
-        const uint8_t* p = src->data();
-        out[0] = p[0]; out[1] = p[1]; out[2] = p[2];
-        return true;
     }
 
     void tick() MM_NONBLOCKING override {

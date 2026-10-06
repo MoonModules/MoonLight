@@ -314,14 +314,18 @@ def stack_rows(out: str) -> list:
         rel = os.path.relpath(path, ROOT) if os.path.isabs(path) else path
         if rel not in owned:
             continue   # the SDK's headers and the vendored ones are not ours to shrink
-        name = m.group("fn").split("(")[0].split(" ")[-1].removeprefix("mm::")
-        seen[(rel, name)] = (rel, STACK, f"{name}, line {m.group('line')}", int(m.group("size")))
+        fn = m.group("fn")
+        # Keyed on the whole signature, so two overloads of one name stay two functions.
+        name = fn.split("(")[0].split(" ")[-1].removeprefix("mm::") or fn or "?"
+        seen[(rel, fn)] = (rel, STACK, f"{name}, line {m.group('line')}", int(m.group("size")))
     return list(seen.values())
 
 
 # Buffer memory the light domain takes by hand: an array `new T[n]`, or a malloc-family or platform::alloc call.
 # A factory's `new Peripheral()` is not one: it creates an object its owner holds, which is no buffer a ScratchBuffer could size.
-_ALLOC_RE = re.compile(r"\bnew\s+[A-Za-z_][\w:<>]*\s*\[|\b(?:malloc|calloc|realloc|heap_caps_malloc|platform::alloc)\s*\(")
+# `new (std::nothrow) T[n]` is the same buffer; a placement `new (slot) T` constructs into memory someone else took.
+_ALLOC_RE = re.compile(r"\bnew\s*(?:\(\s*std::nothrow\s*\)\s*)?[A-Za-z_][\w:<>]*\s*\["
+                       r"|\b(?:malloc|calloc|realloc|heap_caps_malloc|platform::alloc)\s*\(")
 
 
 def raw_alloc_rows() -> list:

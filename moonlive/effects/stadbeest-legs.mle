@@ -1,49 +1,124 @@
-// StadBeestLegs: a crawl travelling down ten legs, each offset so the rig reads as walking.
+// StadBeestLegs: legs walking from strip to strip on each side, the two sides alternating; with music it steps on the beat and lifts with the volume.
 
 class StadBeestLegsEffect {
-  byte hue = 100;
-  byte bpm = 12;
-  byte spread = 60;
-  byte tail = 40;
-  byte audioReactive = 0;
+  byte bpm = 30;
+  byte rest = 64;
+  byte raised = 85;
+  byte sensitivity = 128;
+  bool stomp = false;
+
+  int lastBeat = -100000; // when the last beat started, in ms
+  int beatMs = 500;       // the music's beat, measured
+  int beats = 0;          // beats danced so far, times two, plus whether the last frame was on a beat
 
   int dimensions() { return 2; }
 
-  string tags() { return "💫🎶"; }
+  string tags() { return "💫🎵"; }
 
   void defineControls() {
-    addControl("hue", hue, 0, 255); // base color: 100 is a sickly green, 200 violet
-    addControl("bpm", bpm, 1, 60); // how fast the pulses travel down a leg
-    addControl("spread", spread, 0, 255); // how far apart the legs are in the gait
-    addControl("tail", tail, 5, 120); // how long a pulse's trail is
-    addControl("audioReactive", audioReactive, 0, 1); // each leg takes its own frequency band
+    addControl("bpm", bpm, 1, 120); // steps a minute
+    addControl("rest", rest, 0, 200); // how much of a step a leg stands before it lifts again
+    addControl("raised", raised, 1, 255); // how much of a leg stays lit at the top while it is up
+    addControl("sensitivity", sensitivity, 0, 255); // with music, step on its beat and lift with its loudness; 0 ignores the music
+    addControl("stomp", stomp, 0, 1); // a dancing leg stamps on its own strip instead of walking on
+  }
+
+  // One leg lit from its top down to the foot, `len` lights long, at `level` of 256.
+  void drawLeg(int leg, int len, int level) {
+    int n = 10;
+    if (n > width) { n = width; }
+    int gap = 1;
+    if (n > 1) { gap = div(width - 1, n - 1); }
+    int x = leg * gap;
+    for (int y = 0; y < len; y = y + 1) {
+      int d = len - y;
+      int bright = level - 1;
+      if (d < 12) { bright = div(d * bright, 12); }
+      setPaletteColor(x, y, div(leg * 256, n) + div(y * 32, height), bright);
+    }
   }
 
   void tick() {
-    for (int leg = 0; leg < width; leg = leg + 1) {
-      int phase = div(leg * spread, 4);
+    fill(0, 0, 0);
+    // Ten legs, right front to right back then left back to left front; two walk at once on each side.
+    int n = 10;
+    if (n > width) { n = width; }
+    int half = div(n, 2);
+    if (half < 1) { half = 1; }
+    int w = 2;
+    if (w > half) { w = half; }
+    int spacing = div(half, w);
 
-      int drive = 255;
-      if (audioReactive == 1) {
-        drive = audioBand(div(leg * 16, width)) + 40;
-        if (drive > 255) { drive = 255; }
+    int stepMs = div(60000, bpm);
+    int move = 256 - rest;
+    int top = div(height * raised, 256);
+
+    // A beat starts the next step, and the time between beats sets how long a step lasts.
+    int onBeat = audioBeat();
+    int steps = div(beats, 2);
+    if (onBeat == 1) {
+      if (beats - steps * 2 == 0) {
+        int gapMs = t - lastBeat;
+        if (gapMs > 250) {
+          if (gapMs < 1500) { beatMs = div(beatMs * 3 + gapMs, 4); }
+          lastBeat = t;
+          steps = steps + 1;
+        }
+      }
+    }
+    beats = steps * 2 + onBeat;
+    int music = 0;
+    if (sensitivity > 0) {
+      if (t - lastBeat < 2000) { music = 1; }
+    }
+
+    // One clock in 256ths of a step, from the beat while there is music and from bpm otherwise.
+    int clock = div(t, stepMs) * 256 + div(mod(t, stepMs) * 256, stepMs);
+    int inPlace = 0;
+    if (music == 1) {
+      int into = div((t - lastBeat) * 256, beatMs);
+      if (into > 255) { into = 255; }
+      clock = steps * 256 + into;
+      if (stomp == 1) { inPlace = 1; }
+      // Louder lifts higher: the raised part shrinks towards the top with the volume.
+      int loud = div(audioSmooth() * sensitivity, 64);
+      if (loud > 255) { loud = 255; }
+      top = height - div((height - top) * (64 + div(loud * 3, 4)), 256);
+    }
+
+    for (int side = 0; side < 2; side = side + 1) {
+      int sideClock = clock - side * 128;
+      int count = div(sideClock, 256);
+      int p = sideClock - count * 256;
+
+      // The foot swings along a half circle in three 60 degree stages: up on its strip, over to the next, down there.
+      // Its height is how far the strips are lit, reaching the raised part at 60 and 120 degrees.
+      // Across is the fade between the strips, clamped so the next one stays off until 60 and the first is off after 120.
+      int len = height;
+      int across = 256;
+      if (p < move) {
+        int angle = div(p * 32768, move);
+        int rise = sin(angle) - 32768;
+        len = height - div((height - top) * rise, 28378);
+        if (len < 1) { len = 1; }
+        across = div((16384 - (cos(angle) - 32768)) * 256, 32768);
+        if (across < 0) { across = 0; }
+        if (across > 256) { across = 256; }
       }
 
-      int head = div(beat(bpm, t + phase) * height, 65536);
-      int shimmer = div(noise(leg * 900, 0, t), 6);
-
-      for (int y = 0; y < height; y = y + 1) {
-        int behind = y - head;
-        if (behind < 0) { behind = behind + height; }
-
-        int bright = 0;
-        if (behind < tail) { bright = 255 - div(behind * 255, tail); }
-
-        bright = bright + shimmer - div(y * 12, height);
-        if (bright > 255) { bright = 255; }
-        bright = div(bright * drive, 256);
-
-        setPaletteColor(leg, y, hue + div(y * 40, height), bright);
+      for (int k = 0; k < w; k = k + 1) {
+        int from = mod(count + k * spacing, half);
+        int to = mod(count + 1 - inPlace + k * spacing, half);
+        // The wiring runs the second side back to front, so it mirrors the first.
+        if (side == 1) {
+          from = n - 1 - from;
+          to = n - 1 - to;
+        }
+        if (from == to) { drawLeg(to, len, 256); }
+        else {
+          if (across < 256) { drawLeg(from, len, 256 - across); }
+          drawLeg(to, len, across);
+        }
       }
     }
   }

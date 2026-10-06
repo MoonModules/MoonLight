@@ -167,13 +167,34 @@ inline SavedIp findChildIp(const char* json, const char* childType) {
     }, &ctx);
 }
 
+/// The closing quote of the string opening at `p`, past its escapes, or null when it never closes.
+inline const char* stringEnd(const char* p) {
+    for (p++; *p; p++) {
+        if (*p == '\\' && p[1]) p++;
+        else if (*p == '"') return p;
+    }
+    return nullptr;
+}
+
+// String-aware, since a password may hold a brace; an unclosed object has no end.
+/// The closing brace of the object `p` sits inside, or null when there is none.
+inline const char* objectEnd(const char* p) {
+    int depth = 0;
+    for (; p && *p; p++) {
+        if (*p == '"' && !(p = stringEnd(p))) return nullptr;
+        if (*p == '{' || *p == '[') depth++;
+        else if ((*p == '}' || *p == ']') && depth-- == 0) return p;
+    }
+    return nullptr;
+}
+
 /// The IP settings of the known network at `index`, read inside its own row.
 inline SavedIp findNetworkIp(const char* json, uint8_t index) {
     const char* row = findKey(json, "ssid");
     for (uint8_t k = 0; row && k < index; k++) row = findKey(row, "ssid");
     if (!row) return {};
-    // The next row's name ends this one, so a row saved without a key never reads its neighbor's.
-    const char* end = findKey(row, "ssid");
+    // The row's own closing brace ends it, so a row saved without a key reads neither its neighbor's nor a later module's.
+    const char* end = objectEnd(row);
     struct Ctx { const char* row; const char* end; } ctx{row, end};
     return readIp([](const void* c, const char* key) -> const char* {
         const auto* x = static_cast<const Ctx*>(c);

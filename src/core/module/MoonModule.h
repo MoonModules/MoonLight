@@ -199,9 +199,6 @@ public:
     /// Build this node's derived state for the current controls, the acquire half of the lifecycle.
     virtual void prepare() {}
 
-    /// Read the first output light as RGB, or false where this module has no output.
-    virtual bool firstOutputRgb(uint8_t /*out*/[3]) const { return false; }
-
     /// A name's buffer, terminator included: the longest stripped type name with headroom; setName truncates past it.
     static constexpr uint8_t kNameLen = 16;
     /// This module's human label, which the user may rename.

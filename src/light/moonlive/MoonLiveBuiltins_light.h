@@ -258,7 +258,8 @@ inline SinkSlot* ownedSlot(bool claim) MM_NONBLOCKING { return ownedThreadSlot(g
 inline void releaseIfEmpty(SinkSlot* s) MM_NONBLOCKING {
     // Every sink the slot carries, since one unnamed here lets a claimer reach an ended run.
     if (s && !s->sink.fn && !s->sink.ctx && !s->canvas.data && !s->fade.fn &&
-        !s->motion.fn && !s->coord.fn && !s->poolSize.fn && !s->pool.pool)
+        !s->motion.fn && !s->coord.fn && !s->pal.fn && !s->poolSize.fn && !s->pool.pool &&
+        !s->flow.a && !s->trailSize.fn)
         releaseThreadSlot(s);
 }
 }  // namespace detail

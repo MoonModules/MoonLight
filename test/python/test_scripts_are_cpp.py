@@ -91,7 +91,7 @@ def prelude() -> str:
     lines.append("int setControl(string, int);")
     lines.append("void addControl(string, int&, int, int);")
     lines.append("void addControl(string, byte&, int, int);")
-    lines.append("void addControl(string, bool&);")
+    lines.append("void addControl(string, bool&, int, int);")   # one arity for every type, as the builtin table registers it
     return "\n".join(lines) + "\n"
 
 
