@@ -22,11 +22,11 @@ Measured from the encoder's own formula (`Hub75Geometry::frameBytes`, pinned by 
 
 | Panels | Geometry | 6-bit | 8-bit | Parlio (65,535 B cap) | i80/LCD_CAM (PSRAM) |
 |---|---|---:|---:|:--|:--:|
-| 1 | 64×64 | 12,480 B | 16,640 B | ✅ both | ✅ |
-| 4 | 128×128 | 49,344 B | 65,792 B | ✅ 6-bit, ❌ 8-bit | ✅ |
-| 16 | 256×256 | 196,800 B | 262,400 B | ❌ | ✅ |
+| 1 | 64×64 | 12,288 B | 16,384 B | ✅ both | ✅ |
+| 4 | 128×128 | 49,152 B | 65,536 B | ✅ 6-bit, ❌ 8-bit | ✅ |
+| 16 | 256×256 | 196,608 B | 262,144 B | ❌ | ✅ |
 
-**Four panels at 8-bit misses the Parlio cap by 259 bytes.** That is worth stating precisely rather than as "borderline": a user with four panels gets full depth on an S3 and 6-bit on a Parlio-only chip, and the driver picks the backend that can carry what they asked for.
+**Four panels at 8-bit misses the Parlio cap by one byte.** That is worth stating precisely rather than as "borderline": a user with four panels gets full depth on an S3 and 6-bit on a Parlio-only chip, and the driver picks the backend that can carry what they asked for.
 
 **This is the fact the issue does not account for.** #102 proposes the P4-Nano as lead candidate because Espressif's reference uses PARLIO, but [platform_esp32_parlio.cpp:238](../../../src/platform/esp32/platform_esp32_parlio.cpp) records the hardware cap: `kParlioMaxTransferBytes = 0x7FFFF / 8` = 65,535 bytes, width-invariant. PARLIO carries one panel comfortably, reaches its limit at four, and cannot do sixteen at any useful depth.
 
@@ -119,7 +119,7 @@ Two backends behind it, and **the user picks which**, through a `peripheral` sel
 
 **An earlier draft of this plan had the platform choose, on memory alone. That was wrong, and the reason is contention rather than capacity.** A P4 has both peripherals and only one of each. A user driving WS2812 strips from PARLIO needs HUB75 on LCD_CAM; another user wants the reverse. Both are correct, the difference is what else is plugged into that board, and the platform cannot know it. The sibling claim guard stops two drivers colliding on one block, but it cannot guess which driver should win — that is the user's call, and a select is how the repo already asks it.
 
-The default is whichever backend fits the geometry, so a fresh driver works without a decision. What the plan does NOT do is silently downgrade: four panels at 8-bit is 65,792 bytes against PARLIO's 65,535-byte cap, and the driver says so rather than quietly dropping to 6-bit.
+The default is whichever backend fits the geometry, so a fresh driver works without a decision. What the plan does NOT do is silently downgrade: four panels at 8-bit is 65,536 bytes against PARLIO's 65,535-byte cap, and the driver says so rather than quietly dropping to 6-bit.
 
 A desktop stub returning false from everything keeps `mm_tests` and every non-HUB75 target compiling untouched.
 
@@ -160,6 +160,20 @@ Steps 1-3 are the shippable unit. Steps 4-6 each stand alone.
 - **Community testing is the hardware gate**, after merge. The board catalog entries (step 5) exist to make that possible: a tester should not have to pick 13 pins correctly before the driver can be judged.
 
 What would make Phase 1 *proven* rather than shipped: a 128×128 wall at 8-bit depth, flicker-free, reported by someone who is not us. Until then the driver's docs say it is new and what is untested about it.
+
+### Bench, 2026-10-06: one 64×64 panel on a MoonHub75
+
+The PO's MoonHub75 (a LILYGO T7-S3 on the passive adapter) drove a 64×64 1/32-scan panel, first under WLED-MM and then under MoonLight from its catalog entry.
+
+- **The settings came from the WLED-MM install.** Its `esp32S3_16MB_PSRAM_M_HUB75` build compiles the `MOONHUB_S3_PINOUT` table, which matches the driver's MoonHub75 map pin for pin. Its HUB75 bus has `reversed` off, and WLED-MM maps that to `clkphase` false, the negative edge, so the entry sets `clockEdge` to `falling`.
+- **Measured refresh: 2,157 Hz** at 64×64, 1/32 scan, 4-bit on LCD_CAM, against the 2,441 Hz ceiling § Refresh predicts before latch overhead.
+- **A ghost the users had reported, found and fixed.** A line on row 63 also lit row 32, rows 0 and 32 read brighter on a vertical line, and the last line flashed. The LCD_CAM refill re-queues the frame after each scan, and in that gap, and before the first scan, the peripheral drives its lines low. The panel's OE is active low, so the idle bus was lit with address 0 and the last latched row. The encoder's OE bit now means lit, and the platform inverts the OE pin through the GPIO matrix after each backend claims it, so an idle bus is dark. The PO confirmed the picture clean.
+- **What did not fix it:** dark margins around each row change (latch blanking). The single 50 ns dark slot was not too short, and with the idle bus dark the panel runs clean without margins, so the control was tried and removed.
+- **Live reconfiguration:** changing an encode setting re-initialized the bus without a reboot. WLED-MM cannot change HUB75 options at runtime on an S3 and asks for one. Each control is still to try live.
+- **Step 5:** the catalog gains `LILYGO T7-S3` and `MoonHub75`. The Adafruit MatrixPortal S3 and Waveshare RGB Matrix entries remain.
+- **The last column was dark, on every effect and clock edge**, the same report a tester filed on 2026-09-22: a separate latch word was a 65th clock per 64-pixel row, so column 0 fell off and the picture moved one column left. The latch now rides the last column's word, and frames shrink by one word a row.
+- **Brightness was coarse and went black at 75 and below.** Equal-time planes gave 5 out-of-order levels, and the slider scaled values under the 4-bit floor. The planes are now weighted by their lit window and brightness is lit time, at 6-bit by default: 64 ordered levels, a smooth slider, and about a third of the former top brightness. Measured: 1,508 Hz refresh and a 2 ms longer render tick than 4-bit (~57 against ~64 fps). Repeating the upper planes for full brightness and 8-bit is backlogged.
+- **Orientation:** a sweep from row 0 down climbed the panel in the video because the panel was held upside down; the row order is correct.
 
 ## Risks
 

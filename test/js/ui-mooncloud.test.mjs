@@ -144,7 +144,7 @@ test("Enter in a text field presses the card's send button", () => {
 
     // The write is flushed and awaited before the press. Typing is debounced 500 ms, so pressing
     // send first would publish the text as it stood one keystroke ago.
-    assert.ok(handler.includes("clearTimeout(dragTimers[key])"),
+    assert.ok(handler.includes("cancelSend(key)"),
               "the pending debounced write must be cancelled");
     assert.match(handler, /await write\(ctrl\.name, input\.value\);\s*\n\s*await write\("send", 1\)/,
                  "the text must be written and awaited BEFORE send is pressed");

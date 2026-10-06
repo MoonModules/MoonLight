@@ -20,31 +20,31 @@ namespace mm {
 ///
 ///   for each bit plane p (0 = least significant)
 ///     for each scan row r
-///       for each column x          -> one bus word per column: the six color
-///                                     bits for (x, r) and (x, r + rows), lit,
-///                                     ADDRESSED TO THE PREVIOUS ROW
-///       one blanking word           -> OE high (dark), latch high, addressed
-///                                     to row r: the row that data belongs to
+///       for each column x          -> one bus word: the six color bits for
+///                                     (x, r) and (x, r + rows), addressed to
+///                                     the row in the latch; the last column's
+///                                     word also latches row r, dark
+///
+/// Every word on the bus is a clock, so the latch rides the last column's word: a word of its own would shift one pixel more than the panel holds.
 ///
 /// ## The address lags the data by one row
 ///
-/// A panel lights where three things meet: output-enable low, the row the address lines select, and the row held in the output LATCH.
-/// The latch holds the row last strobed, which is the previous one. So while row r's color bits clock in, the address must still name row r - 1, or the previous row's data lights on row r's LEDs.
-/// The blanking word is where the address moves to r: dark, and latching r at the same time.
-/// Row 0's data words therefore name the LAST scan row, which is what lets the frame loop through the DMA wrap with every row lit exactly once.
-/// Sending the data words with their own row as the address displaced the whole picture one scan row down and put the last row on the first. On a wall that reads as one bright line.
+/// A panel lights where output-enable, the addressed row and the latched row meet, and the latch holds the row last strobed.
+/// So row r's words name row r - 1, the latch word moves the address to r in the dark, and row 0's words name the last row.
 ///
-/// ## Address rides with the data
+/// ## Brightness is time
 ///
-/// The row address and the control lines share the bus word that carries the color bits.
-/// The peripheral clocks one word per slot, and a panel wants address and data at once.
-/// `Hub75Layout` says which bus bit each line sits on, the one thing a board's wiring changes.
-/// How a panel scans, and why brightness is time, is on the driver's page under "HUB75, details".
+/// A panel's chips only switch a column on or off, so plane p lights 2^p as long as plane 0, and brightness shortens every plane's window rather than scaling values.
+/// Below about a quarter brightness, the lowest plane of a 64-column row rounds to nothing.
+///
+/// ## The bus word
+///
+/// Address, latch and OE share the color bits' word, since the panel wants them at once; `Hub75Layout` names each line's bit.
+/// OE is active low and a peripheral idles its lines low, so the OE bit means lit and the platform inverts the pin.
 ///
 /// ## Prior art
 ///
 /// mrcodetastic/ESP32-HUB75-MatrixPanel-DMA, hzeller/rpi-rgb-led-matrix and ESPHome's hub75.
-/// The scan and bit-plane structure is the panel's, and the encoder is written from that behavior.
 
 /// Which bus bit each HUB75 line occupies. The peripheral drives one 16-bit bus word per slot.
 /// Every line is a bit position rather than a GPIO here, and the platform layer maps bit to GPIO.
@@ -59,7 +59,7 @@ struct Hub75Layout {
     uint8_t a = 8, b = 9, c = 10, d = 11, e = 12;
     /// Latch: moves the shift register to the output drivers.
     uint8_t lat = 13;
-    /// Output enable, active LOW, so high is dark.
+    /// Output enable, SET where the panel is lit: the platform inverts the pin for the panel's active-low OE.
     uint8_t oe = 14;
 };
 
@@ -75,8 +75,10 @@ struct Hub75Geometry {
     uint16_t height = 64;
     /// The panel's own scan rate: 8, 16 or 32, meaning 1/8, 1/16 or 1/32.
     uint8_t  scanRate = 16;
-    /// Bit planes per frame, 2 to 4. Every plane costs a full scan pass.
+    /// Bit planes per frame, 2 to 6. Every plane costs a full scan pass.
     uint8_t  bitDepth = 4;
+    /// How long each plane is lit, 0 to 255 of its full window: the global brightness, as time.
+    uint8_t  brightness = 255;
 
     // The panel's scanRate IS that count: a 1/16 panel steps 16 addresses whatever its height.
     /// Address steps one plane walks.
@@ -90,8 +92,8 @@ struct Hub75Geometry {
     /// Is this geometry encodable?
     bool valid() const {
         if (width == 0 || height == 0) return false;
-        // Capped at 4 until the planes are weighted: an unweighted 5th buys nothing visible.
-        if (bitDepth < 2 || bitDepth > 4) return false;
+        // At 64 columns plane 0 of 6 still lights 2 words; a deeper plane rounds to nothing until planes repeat (backlog).
+        if (bitDepth < 2 || bitDepth > 6) return false;
         if (scanRate == 0 || height % scanRate != 0) return false;
         return rowsPerScan() % 2 == 0;
     }
@@ -100,8 +102,7 @@ struct Hub75Geometry {
     /// Slots one encoded frame occupies.
     size_t frameSlots() const {
         const uint16_t pairs = rowsPerScan() / 2;   // color passes per address step
-        return static_cast<size_t>(bitDepth) * scanRows() *
-               (static_cast<size_t>(width) * pairs + 1);
+        return static_cast<size_t>(bitDepth) * scanRows() * width * pairs;
     }
 
     // The one home for the size: the platform asks rather than recomputing it.
@@ -125,13 +126,30 @@ inline size_t hub75Encode(const uint8_t* rgb, uint8_t* out,
     if (geo.scanRate > 8) addrBits = 4;         // 1/16
     if (geo.scanRate > 16) addrBits = 5;        // 1/32
 
+    // A row's address lines as one mask, built once per scan row rather than bit by bit on every word.
+    auto addrMask = [&](uint16_t row) {
+        uint16_t m = 0;
+        for (uint8_t bit = 0; bit < addrBits; bit++)
+            if ((row >> bit) & 1) m |= static_cast<uint16_t>(1u << addr[bit]);
+        return m;
+    };
+    const size_t rowWords = static_cast<size_t>(geo.width) * pairs;
+
     size_t w = 0;
     for (uint8_t plane = 0; plane < geo.bitDepth; plane++) {
         // Depth < 8 keeps the HIGH bits: dropping those would dim every bright pixel.
         const uint8_t shift = static_cast<uint8_t>(8 - geo.bitDepth + plane);
         for (uint16_t r = 0; r < rows; r++) {
             // The row in the LATCH while these words clock in: the previous one, and for row 0 the last row of the previous plane or frame.
-            const uint16_t lit = static_cast<uint16_t>((r + rows - 1) % rows);
+            const uint16_t latched = static_cast<uint16_t>((r + rows - 1) % rows);
+            // Lit words name the latched row; the latch word strobes row r and moves the address to it, in the dark.
+            const uint16_t darkWord = addrMask(latched);
+            const uint16_t litWord = static_cast<uint16_t>(darkWord | (1u << lay.oe));
+            const uint16_t latchWord = static_cast<uint16_t>(addrMask(r) | (1u << lay.lat));
+            // This plane's lit window, in words: the top plane fills the row less the latch word, each lower plane half the one above, all scaled by brightness.
+            const uint32_t litWords = static_cast<uint32_t>(
+                ((rowWords - 1) * geo.brightness * (1u << plane) + (255u << (geo.bitDepth - 1)) / 2) /
+                (255u << (geo.bitDepth - 1)));
             for (uint16_t pair = 0; pair < pairs; pair++)
             for (uint16_t x = 0; x < geo.width; x++) {
                 // Pair p of step r is row r + p*scanRate, paired half a panel below.
@@ -145,25 +163,16 @@ inline size_t hub75Encode(const uint8_t* rgb, uint8_t* out,
                 if ((rgb[lo + 0] >> shift) & 1) word |= static_cast<uint16_t>(1u << lay.r2);
                 if ((rgb[lo + 1] >> shift) & 1) word |= static_cast<uint16_t>(1u << lay.g2);
                 if ((rgb[lo + 2] >> shift) & 1) word |= static_cast<uint16_t>(1u << lay.b2);
-                // The address rides EVERY column word, and it names the row in the latch: these words are lit, and what they light is the previous row's data.
-                for (uint8_t bit = 0; bit < addrBits; bit++) {
-                    if ((lit >> bit) & 1) word |= static_cast<uint16_t>(1u << addr[bit]);
-                }
+                // The last word latches; the rest are lit inside this plane's window and dark after it.
+                const size_t i = static_cast<size_t>(pair) * geo.width + x;
+                word |= (i == rowWords - 1) ? latchWord : (i < litWords ? litWord : darkWord);
                 // Little-endian, matching how the peripheral latches a 16-bit bus word.
                 out[w++] = static_cast<uint8_t>(word & 0xFF);
                 out[w++] = static_cast<uint8_t>((word >> 8) & 0xFF);
             }
-            // Dark, latching row r, and the address moves to r here, in the dark: the next row's data words then light row r with row r's data.
-            uint16_t blank = static_cast<uint16_t>(1u << lay.oe) |
-                             static_cast<uint16_t>(1u << lay.lat);
-            for (uint8_t bit = 0; bit < addrBits; bit++) {
-                if ((r >> bit) & 1) blank |= static_cast<uint16_t>(1u << addr[bit]);
-            }
-            out[w++] = static_cast<uint8_t>(blank & 0xFF);
-            out[w++] = static_cast<uint8_t>((blank >> 8) & 0xFF);
         }
     }
-    // The frame ends on the last row's blanking word, dark, and row 0's data words name that last row: the loop closes with every row lit once.
+    // The frame ends on the last row's latch word, dark, and row 0's data words name that last row: the loop closes with every row lit once.
     return w;
 }
 

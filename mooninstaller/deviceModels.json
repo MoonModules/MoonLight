@@ -1203,6 +1203,14 @@
         }
       },
       {
+        "type": "I2cBusModule",
+        "id": "I2cBus",
+        "controls": {
+          "sda": -1,
+          "scl": -1
+        }
+      },
+      {
         "type": "EthernetModule",
         "id": "Ethernet",
         "parent_id": "Network",
@@ -1461,6 +1469,96 @@
         "parent_id": "Network",
         "controls": {
           "txPowerSetting": 8
+        }
+      }
+    ]
+  },
+  {
+    "name": "LILYGO T7-S3",
+    "chip": "ESP32-S3",
+    "firmwares": [
+      "esp32s3-n16r8"
+    ],
+    "image": "assets/deviceModels/esp32-s3-n16r8-lilygo-t7-s3.jpg",
+    "url": "https://lilygo.cc/products/t7-s3",
+    "supported": [
+      "LEDs",
+      "WiFi"
+    ],
+    "planned": [
+      "Battery"
+    ],
+    "modules": [
+      {
+        "type": "System",
+        "id": "System",
+        "controls": {
+          "deviceModel": "LILYGO T7-S3"
+        }
+      },
+      {
+        "type": "RmtLedDriver",
+        "id": "RmtLed",
+        "parent_id": "Drivers"
+      }
+    ]
+  },
+  {
+    "name": "MoonHub75",
+    "chip": "ESP32-S3",
+    "firmwares": [
+      "esp32s3-n16r8"
+    ],
+    "image": "assets/deviceModels/esp32-s3-n16r8-moonhub75.jpg",
+    "url": "https://moonmodules.org/projects/hardware/#moonhub75-pcb",
+    "supported": [
+      "LEDs",
+      "WiFi",
+      "Audio"
+    ],
+    "planned": [
+      "Button"
+    ],
+    "modules": [
+      {
+        "type": "System",
+        "id": "System",
+        "controls": {
+          "deviceModel": "MoonHub75"
+        }
+      },
+      {
+        "type": "GridLayout",
+        "id": "Grid",
+        "parent_id": "Layouts",
+        "controls": {
+          "width": 64,
+          "height": 64
+        }
+      },
+      {
+        "type": "Layer",
+        "id": "Layer",
+        "parent_id": "Effects"
+      },
+      {
+        "type": "Hub75Driver",
+        "id": "Hub75",
+        "parent_id": "Drivers",
+        "controls": {
+          "board": "MoonHub75",
+          "scanRate": "1/32",
+          "clockEdge": "falling"
+        }
+      },
+      {
+        "type": "AudioService",
+        "id": "Audio",
+        "parent_id": "Services",
+        "controls": {
+          "sckPin": 11,
+          "wsPin": 12,
+          "sdPin": 10
         }
       }
     ]

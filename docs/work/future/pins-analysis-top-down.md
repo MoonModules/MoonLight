@@ -14,7 +14,7 @@ The design counterpart to [pins-analysis-bottom-up.md](pins-analysis-bottom-up.m
 
 ## 1. The goal, stated precisely
 
-A running MoonLight device has GPIO claims declared **all over its module tree** — `RmtLedDriver.pins`, `AudioService.sckPin/wsPin/sdPin`, `NetworkModule.ethMdcGpio/…`, `I2cScanModule.sda/scl`, `IrService.pin` — each set independently, nothing arbitrating. The goal is a single surface that answers three questions a bench operator and the firmware both need:
+A running MoonLight device has GPIO claims declared **all over its module tree** — `RmtLedDriver.pins`, `AudioService.sckPin/wsPin/sdPin`, `NetworkModule.ethMdcGpio/…`, `I2cBusModule.sda/scl`, `IrService.pin` — each set independently, nothing arbitrating. The goal is a single surface that answers three questions a bench operator and the firmware both need:
 
 1. **Who owns GPIO N?** — the ownership map (which module, which role).
 2. **Is any GPIO claimed twice?** — the conflict gate (two modules, one pin = broken output or driver-error spam).
@@ -52,7 +52,7 @@ So the module is **mostly a view + a validator over data that already exists**, 
 
 ### Shape
 
-A **fixed System module** ([the Tasks/I2cScan pattern](system-modules.md)): a read-only `ControlType::List` via the `ListSource` adapter, refreshed on `loop1s()` (a periodic sample, never the hot path), always present, wired-by-code — same as [TasksModule](../../moonmodules/core/system.md#tasks). It reads the live tree, so it needs no state of its own.
+A **fixed System module** ([the Tasks/I2cBus pattern](system-modules.md)): a read-only `ControlType::List` via the `ListSource` adapter, refreshed on `loop1s()` (a periodic sample, never the hot path), always present, wired-by-code — same as [TasksModule](../../moonmodules/core/system.md#tasks). It reads the live tree, so it needs no state of its own.
 
 ### The enumeration
 

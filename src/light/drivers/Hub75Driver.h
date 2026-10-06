@@ -60,9 +60,9 @@ public:
     /// The panel's own scan rate; index into kScanOptions.
     uint8_t scanSel = 1;
 
-    // Every plane costs a full scan, so this trades color precision against flicker.
+    // Every plane costs a full scan, so this trades color precision against refresh and memory.
     /// Bit planes per frame, and therefore the refresh tradeoff.
-    uint8_t bitDepth = 4;
+    uint8_t bitDepth = 6;
 
     // A P4 has one of each, so a board driving strips from one needs the panel on the other.
     /// Which silicon block drives the panel, where the chip offers a choice.
@@ -70,6 +70,9 @@ public:
 
     /// The card's tag: this driver is two-dimensional.
     const char* tags() const override { return "🟦"; }
+
+    /// A panel shows a level only as lit time, so brightness shortens the planes' windows rather than scaling values.
+    bool dimsByTime() const override { return true; }
 
     // Reported only while the bus is up, so a failed init cannot phantom-claim the block.
     /// The peripheral block this driver holds, for the sibling claim guard.
@@ -106,7 +109,7 @@ public:
         buildBackendOptions();
         controls_.addSelect("peripheral", peripheralSel_, backendOptions_, backendOptionCount_);
         controls_.addSelect("scanRate", scanSel, kScanOptions, kScanCount);
-        controls_.addControl("bitDepth", bitDepth, 2, 4);
+        controls_.addControl("bitDepth", bitDepth, 2, 6);
         // The one knob a chip family changes. WLED exposes the same flag as its bus "reversed" box.
         controls_.addSelect("clockEdge", clockEdgeSel, kEdgeOptions, kEdgeCount);
 
@@ -245,6 +248,8 @@ public:
             }
         }
 
+        // Brightness is the planes' lit time, read each frame so the slider applies on the next one.
+        geo_.brightness = effectiveBrightness();
         // No double buffer: a one-pass tear beats a second 256 KB frame, invisible at 300+ Hz.
         hub75Encode(wire_, out, geo_);
     }
