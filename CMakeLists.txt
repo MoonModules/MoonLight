@@ -39,11 +39,12 @@ if(MSVC)
     # both charsets, which is what GCC and Clang already do.
     add_compile_options(/utf-8)
     # MSVC marks the standard C library (strcpy, sprintf, fopen, localtime, …)
-    # as deprecated and emits C4996; /WX makes that fatal. Silence the family —
+    # as deprecated and emits C4996; /WX makes that fatal. Silence the family:
     # the code uses these standard functions deliberately and consistently with
     # the POSIX side, and the "secure" `_s` variants are a Microsoft extension.
+    # NOMINMAX: windows.h otherwise defines min and max macros, which break every std::min and std::max call after it.
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS _CRT_NONSTDC_NO_WARNINGS
-                            _WINSOCK_DEPRECATED_NO_WARNINGS)
+                            _WINSOCK_DEPRECATED_NO_WARNINGS NOMINMAX)
     # Static MSVC runtime so the Windows binary doesn't need vcredist.
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 else()
