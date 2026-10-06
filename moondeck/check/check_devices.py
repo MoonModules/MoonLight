@@ -91,7 +91,7 @@ def eth_preset_drift():
         rows[m.group(1)] = [f.strip() for f in m.group(2).split(",")]
 
     # label -> the PHY constant naming that chip's arm of the ethConfigDefault ternary.
-    PAIRS = {"Classic RMII": "ethLan8720", "P4-NANO": "ethIp101", "S31 CoreBoard": "ethYt8531"}
+    PAIRS = {"Classic RMII": "ethLan8720", "P4-NANO/ETH": "ethIp101", "S31 CoreBoard": "ethYt8531"}
     # Every field `seedEthPresetFromPins` compares, or a drift it ignores reseeds a board to Custom.
     FIELDS = ["phyAddr", "mdc", "mdio", "rst", "rmiiClk", "rmiiClockExtIn"]
     # The preset table writes the PHY as its enum VALUE and the header names the constant.

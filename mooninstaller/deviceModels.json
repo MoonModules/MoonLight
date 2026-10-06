@@ -765,7 +765,7 @@
         "id": "Ethernet",
         "parent_id": "Network",
         "controls": {
-          "ethBoard": "P4-NANO"
+          "ethBoard": "P4-NANO/ETH"
         }
       }
     ]
@@ -1000,7 +1000,7 @@
         "id": "Ethernet",
         "parent_id": "Network",
         "controls": {
-          "ethBoard": "P4-NANO"
+          "ethBoard": "P4-NANO/ETH"
         }
       },
       {
@@ -1068,7 +1068,7 @@
         "id": "Ethernet",
         "parent_id": "Network",
         "controls": {
-          "ethBoard": "P4-NANO"
+          "ethBoard": "P4-NANO/ETH"
         }
       },
       {
@@ -1125,7 +1125,7 @@
         "id": "Ethernet",
         "parent_id": "Network",
         "controls": {
-          "ethBoard": "P4-NANO"
+          "ethBoard": "P4-NANO/ETH"
         }
       },
       {
@@ -1215,7 +1215,7 @@
         "id": "Ethernet",
         "parent_id": "Network",
         "controls": {
-          "ethBoard": "P4-NANO"
+          "ethBoard": "P4-NANO/ETH"
         }
       }
     ]
