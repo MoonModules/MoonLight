@@ -120,6 +120,7 @@
 
 #include "core/module/Scheduler.h"     // setControl: the shared apply-core
 #include "core/util/JsonUtil.h"      // json::hasKey/parseBool/parseInt/parseString: the inbound ha/set parse
+#include "core/util/parse.h"         // parseIntStr: a plain-number payload
 #include "core/system/ControlModule.h"  // look-only presets -> the HA effect list
 #include "core/util/JsonSink.h"      // jsonEscape: escape the editable deviceName into the discovery JSON
 #include "core/util/build_info.h"    // kVersion / kFirmwareName: reported to HA's update entity
@@ -718,7 +719,7 @@ void MqttModule::routePublish(const char* topic, const uint8_t* payload, size_t 
         setControlValue("on", on ? "{\"value\":true}" : "{\"value\":false}");
     } else if (std::strcmp(suffix, "brightness/set") == 0) {
         // mqttthing sends 0..100; rescale to 0..255.
-        int pct = mm::json::parseIntStr(value);
+        int pct = mm::parseIntStr(value);
         if (pct < 0) pct = 0;
         if (pct > 100) pct = 100;
         const int bri = (pct * 255) / 100;

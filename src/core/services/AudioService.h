@@ -81,6 +81,26 @@ public:
     int8_t sdPin = -1;           ///< the data line, or -1 while unset
     /// The master clock a converter may need, a self-clocked part leaving it unset.
     int8_t mclkPin = -1;
+    /// Which codec sits in front of the microphone, none for a part that speaks I2S itself; the device model names it.
+    uint8_t codec = 0;
+    /// The codec's 7-bit address on the board's I2C bus (I2cBusModule), the ES8311's own unless the board straps it elsewhere.
+    uint8_t codecAddr = 0x18;
+
+    /// The codec the settings ask for.
+    platform::CodecType codecType() const MM_NONBLOCKING {
+        return codec == 1 ? platform::CodecType::Es8311 : platform::CodecType::None;
+    }
+    /// The codecs the selector offers, each by the name the bus scan shows it under.
+    static constexpr const char* kCodecOptions[] = {"none", "ES8311"};
+    /// How many there are.
+    static constexpr uint8_t kCodecCount = 2;
+
+    /// The codec, while the wired microphone uses one, so the bus scan names its address.
+    uint8_t i2cDevices(I2cDevice* out, uint8_t max) const override {
+        if (mode != kLocalMode || micMode == 1 || codec == 0 || codec >= kCodecCount || max == 0) return 0;
+        out[0] = {codecAddr, kCodecOptions[codec]};
+        return 1;
+    }
     /// Which of the standard rates to run at, a choice rather than a free number.
     uint8_t  sampleRateSel = 2;
     /// The silence threshold: below it a band reads as nothing.
@@ -124,6 +144,26 @@ public:
     uint32_t sampleRate() const { return kSampleRates[sampleRateSel < kSampleRateCount
                                                        ? sampleRateSel : 2]; }
 
+    /// The wired microphone's controls: its kind, its bus, and the codec in front of it, each shown only where it applies.
+    void defineMicControls(bool localMode) {
+        // A two-wire part has neither clock, so showing them would invite dead settings.
+        static constexpr const char* kMicModeOptions[] = {"I2S", "PDM"};
+        controls_.addSelect("micMode", micMode, kMicModeOptions, 2);
+        controls_.setHidden(controls_.count() - 1, !localMode);
+        const bool pdm = micMode == 1;
+        controls_.addPin("sckPin", sckPin);        controls_.setHidden(controls_.count() - 1, !localMode || pdm);
+        controls_.addPin("wsPin", wsPin);          controls_.setHidden(controls_.count() - 1, !localMode);
+        controls_.addPin("sdPin", sdPin);          controls_.setHidden(controls_.count() - 1, !localMode);
+        controls_.addPin("mclkPin", mclkPin);      controls_.setHidden(controls_.count() - 1, !localMode || pdm);
+        // A codec sits on an I2S line only, so a two-wire part never shows it; its address shows once one is chosen, the bus being the board's.
+        controls_.addSelect("codec", codec, kCodecOptions, kCodecCount);
+        controls_.setPersistLabel(controls_.count() - 1);   // by name, as the device model writes it
+        controls_.setHidden(controls_.count() - 1, !localMode || pdm);
+        controls_.addControl("codecAddr", codecAddr, 0, 127);
+        controls_.setHexField(controls_.count() - 1);   // an address, written in hex as the datasheet and the bus scan give it
+        controls_.setHidden(controls_.count() - 1, !localMode || pdm || codec == 0);
+    }
+
     /// Declare the mode, then only the controls that mode needs.
     void defineControls() override {
         // The mode is the identity, so it comes first and everything else is its detail.
@@ -138,17 +178,7 @@ public:
             controls_.addSelect("mode", mode, kModeOptions, 2);
         }
         // The input and its analysis, shown only in the local mode.
-        if constexpr (platform::hasI2sMic) {
-            // A two-wire part has neither clock, so showing them would invite dead settings.
-            static constexpr const char* kMicModeOptions[] = {"I2S", "PDM"};
-            controls_.addSelect("micMode", micMode, kMicModeOptions, 2);
-            controls_.setHidden(controls_.count() - 1, !localMode);
-            const bool pdm = micMode == 1;
-            controls_.addPin("sckPin", sckPin);        controls_.setHidden(controls_.count() - 1, !localMode || pdm);
-            controls_.addPin("wsPin", wsPin);          controls_.setHidden(controls_.count() - 1, !localMode);
-            controls_.addPin("sdPin", sdPin);          controls_.setHidden(controls_.count() - 1, !localMode);
-            controls_.addPin("mclkPin", mclkPin);      controls_.setHidden(controls_.count() - 1, !localMode || pdm);
-        }
+        if constexpr (platform::hasI2sMic) defineMicControls(localMode);
         if constexpr (platform::hasAudioCapture) {
             // Re-enumerated per rebuild, so a hot-plugged device appears on the next change.
             const char* const* deviceOptions = nullptr;
@@ -201,6 +231,7 @@ public:
     bool affectsPrepare(const char* name) const override {
         return std::strcmp(name, "wsPin") == 0 || std::strcmp(name, "sdPin") == 0
             || std::strcmp(name, "sckPin") == 0 || std::strcmp(name, "mclkPin") == 0
+            || std::strncmp(name, "codec", 5) == 0   // the codec and its bus, which re-init it
             // Re-creates the channel, and hides the clocks the other kind does not have.
             || std::strcmp(name, "micMode") == 0
             || std::strcmp(name, "device") == 0
@@ -374,10 +405,11 @@ public:
     }
 
     void tick1s() MM_NONBLOCKING override {
-        // The mirror of the LED driver's retry:
-        if (mode == kLocalMode && !inited_
-            && platform::audioMicSharedBusFree(micMode == 1 ? platform::MicMode::Pdm
-                                                            : platform::MicMode::I2sStd)) reinit();
+        // Re-init when the shared I2S bus came free, as the LED driver retries, or when the I2C bus moved under the codec.
+        const bool micFreed = !inited_ && platform::audioMicSharedBusFree(micMode == 1 ? platform::MicMode::Pdm
+                                                                                       : platform::MicMode::I2sStd);
+        const bool busMoved = codec != 0 && platform::i2cBusGeneration() != codecBusGen_;
+        if (mode == kLocalMode && (micFreed || busMoved)) reinit();
         mm::formatTo(levelStr_, sizeof(levelStr_), "%u", static_cast<unsigned>(levelPeak_));
         mm::formatTo(onsetStr_, sizeof(onsetStr_), "%u/s, flux %u",
                       static_cast<unsigned>(onsetCount_), static_cast<unsigned>(fluxPeak_));
@@ -388,7 +420,7 @@ public:
 
         // Mic-health diagnosis from the 1 s tallies (see the read path).
         const bool directMicLive = platform::hasI2sMic && inited_ && mode == kLocalMode
-                                   && platform::audioCodecType == platform::CodecType::None;
+                                   && codecType() == platform::CodecType::None;
         if (directMicLive) {
             if (micSamples1s_ == 0)
                 setStatus(micMode == 1 ? "mic: no samples, check wsPin (PDM clock)"
@@ -430,6 +462,7 @@ private:
 
     platform::AudioMicHandle mic_;
     bool inited_ = false;
+    uint32_t codecBusGen_ = 0;   ///< the bus generation the codec last attached to, so a moved bus re-attaches it
     size_t filled_ = 0;         // samples accumulated toward the next full block
     DcBlocker dc_;              // ~40 Hz high-pass, continuous across blocks
 
@@ -480,6 +513,7 @@ private:
 
     /// (Re)create the I2S channel for the current pins + rate.
     void reinit() {
+        codecBusGen_ = platform::i2cBusGeneration();   // every path through here has seen this bus, so tick1s waits for the next change
         if constexpr (platform::hasAudioCapture) {
             // Desktop:
             deinit();
@@ -504,20 +538,22 @@ private:
                           : "mic: set sckPin / wsPin / sdPin", Severity::Status);
             return;
         }
+        // A codec without the board's bus would probe nothing and fail the whole microphone, so it says so first.
+        if (codec != 0 && !platform::i2cBusReady()) {
+            setStatus("mic: the codec needs the I2C bus: set its pins under System, I2cBus", Severity::Status);
+            return;
+        }
         // Bring up the I2S channel FIRST.
-        const int16_t mclk = platform::audioCodecType == platform::CodecType::None
-                           ? mclkPin : static_cast<int16_t>(platform::audioCodecPins.mclk);
         inited_ = platform::audioMicInit(mic_, static_cast<uint16_t>(wsPin),
                                          static_cast<uint16_t>(sdPin),
-                                         static_cast<uint16_t>(sckPin), mclk, sampleRate(),
+                                         static_cast<uint16_t>(sckPin), mclkPin, sampleRate(),
                                          static_cast<platform::MicMode>(micMode));
         if (!inited_) {
             setStatus(kInitFailMsg, Severity::Error);
             return;
         }
         // Now configure the codec over I2C (MCLK is running).
-        if (!platform::audioCodecInit(platform::audioCodecType, platform::audioCodecPins,
-                                      sampleRate())) {
+        if (!platform::audioCodecInit(codecType(), codecAddr, sampleRate())) {
             deinit();   // tear the I2S channel back down, we couldn't bring the codec up
             setStatus("mic: codec init failed, check I2C wiring", Severity::Error);
             return;
@@ -529,8 +565,11 @@ private:
 
     void deinit() {
         if constexpr (!platform::hasAudioInput) return;
-        if (inited_) platform::audioMicDeinit(mic_);
-        platform::audioCodecDeinit();   // releases the codec + its I2C bus (no-op if none)
+        // The codec attaches only once this instance's channel is up, so an instance that never started one, such as a type probe, leaves the live codec alone.
+        if (inited_) {
+            platform::audioMicDeinit(mic_);
+            platform::audioCodecDeinit();
+        }
         inited_ = false;
         filled_ = 0;
         // Publish silence:

@@ -143,7 +143,7 @@ Two scales below a page. **A module** has exactly one reference page written and
 - **No sentence whose job is tone.** Every sentence carries a fact the reader needs. Three shapes to cut: a second person used for effect rather than instruction, a flourish before any information arrives, and a rhetorical question the page then answers. Vale checks spelling, sentence length and weasel words, so this one is the writer's judgement and the reviewer's check.
 - **Follow the [principles](../CLAUDE.md#principles).** Three bear on documentation directly:
     - **Minimalism**: every fact has one home; history lives in git.
-        - **Present tense only.** "No X anymore" narrates a removal, which is history. Describe the path that exists today.
+        - **Present tense only.** "No X anymore" narrates a removal, which is history. Describe the path that exists. Vale flags the words that date a sentence ("today", "currently", "no longer", "not yet").
         - **Positive form only.** "Not", "never", "neither", "without", "un-" and "non-" are the alarm bells: a negation says everything a thing is not, which is no shape at all. A real constraint stays ("the DMA cannot read PSRAM at shift clock"); a bare absence goes.
     - **Industry standards**: the textbook name for a thing, so a reader recognizes it without being taught our vocabulary. A bespoke choice carries its one-line reason where it appears.
     - **Continuous improvement**: a doc describing what the code no longer does is a defect. Fix it in the change that opened the file, not in a sweep.

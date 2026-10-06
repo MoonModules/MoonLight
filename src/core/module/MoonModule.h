@@ -118,6 +118,11 @@ public:
     /// Report the pads this module drives that no control names, so the pin map sees them.
     virtual uint8_t fixedPins(FixedPin* /*out*/, uint8_t /*max*/) const { return 0; }
 
+    /// A device on the board's I2C bus, at its 7-bit address, named by what it is.
+    struct I2cDevice { uint8_t addr; const char* role; };
+    /// Report the devices this module drives on the I2C bus, so a bus scan names what answered.
+    virtual uint8_t i2cDevices(I2cDevice* /*out*/, uint8_t /*max*/) const { return 0; }
+
     /// Clear and rebuild this module's controls and its descendants', re-evaluating what is hidden.
     void rebuildControls() {
         // Every value patch passes here too, so hash and resync only on a real change.

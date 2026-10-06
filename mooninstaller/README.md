@@ -50,7 +50,7 @@ POSTing to a plain-`http://` device (mixed-content), so the old HTTP fan-out + t
 The board picker is a visual card grid driven by each board's `image` and
 (optional) `url` catalog fields (see the schema below — both are optional; a card
 without an `image` just shows no photo, without a `url` shows no product link) plus
-its `supported`/`planned` capability chips. It reuses the installer's flash machinery unchanged — the grid drives the
+its `supported`/`planned` capability chips. It reuses the installer's flash machinery unchanged: the grid drives the
 shared [`install-picker.js`](../../src/ui/install-picker.js) through a hidden board
 `<select>`, so the firmware-narrowing and flash flow are identical to a plain
 dropdown pick. Board images are a Pages-only asset (staged from
@@ -136,9 +136,9 @@ declares only what is actually on that board.
 | `name` | yes | identifier **and** display label (no key/label split) |
 | `chip` | yes | the MCU family, for the picker's chip filter |
 | `firmwares` | yes | the firmware variants flashable on this hardware; **the first entry is the default** the picker pre-selects (reorder the array to change the default) |
-| `image` | no | board photo for the picker — a local path under `assets/deviceModels/`, named for the board's slug (e.g. `assets/deviceModels/quinled-dig-2-go.jpg`). Host our own copy, never a vendor hotlink — see [§ Board images & links](#board-images--links) below |
+| `image` | no | board photo for the picker: a local path under `assets/deviceModels/`, named `<firmware>-<board>` with the chip written dashed (e.g. `assets/deviceModels/esp32-pico-quinled-dig-next-2.jpg`, `esp32-s3-n8r8-lightcrafter-16.jpg`; P4 boards use `esp32-p4-`). Host our own copy, never a vendor hotlink: see [§ Board images & links](#board-images--links) below |
 | `url` | no | product-page link the picker shows next to the board (the vendor's own page, e.g. `https://quinled.info/quinled-dig2go/`). A remote URL is fine here — it's a click-through link, not an asset the installer fetches |
-| `supported` | no | short capability labels the firmware drives on this board *today* (e.g. `["LEDs", "WiFi", "Ethernet"]`), grounded in the modules the entry actually adds. Rendered as solid chips on the picker card |
+| `supported` | no | short capability labels the firmware drives on this board (e.g. `["LEDs", "WiFi", "Ethernet"]`), rendered as solid chips on the picker card |
 | `planned` | no | short labels for peripherals the board physically has but no module drives *yet* (e.g. `["IR receiver", "Onboard button"]`) — the backlog seed for future spec + test work. Rendered as dashed "(soon)" chips on the picker card |
 | `flashBaud` | no | esptool flash baud for this board, overriding the audience default (installer 460800, CLI/MoonDeck 921600). Set it only when a board's USB bridge needs a non-default rate — e.g. a flaky CH340 pinned to `460800`. One of the standard rates (`115200`/`230400`/`460800`/`921600`); `check_devices.py` validates it |
 | `modules` | yes | the list of module-with-controls units that set the board up |
@@ -150,7 +150,7 @@ Each `modules[]` unit is `{ type, id, parent_id?, controls? }`:
 | `type` | factory type to create (e.g. `RmtLedDriver`, `AudioService`, `AudioSpectrumEffect`) |
 | `id` | the module's name — used both as the `POST /api/modules` id **and** as the `module` in every `POST /api/control`, so the two stay in sync |
 | `parent_id` | the container to add it under (`Services`, `Drivers`, `Layer`, `Layouts`, `Layers`). **Omitted** for a module that already exists at boot (e.g. `Network`, `System`, `Services`, `Grid`, `Layer`) — the client then skips the add and only sets controls |
-| `controls` | the controls to set on that module after it exists |
+| `controls` | the controls to set on that module after it exists; a number may be written `"0x18"`, the form a datasheet gives an address in |
 | `replaceChildren` | optional bool on a container unit (`Layer` / `Layouts` / `Drivers`): when `true`, the inject DELETEs the container's current children before adding this entry's, so the entry's effects/modifiers replace the boot defaults rather than stack behind them |
 
 `type` and `parent_id` are spelled out even though `id` could imply them

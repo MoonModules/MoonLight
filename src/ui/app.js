@@ -2730,29 +2730,34 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
         const nMin = Number(ctrl.min ?? 0);
         const nMax = Number(ctrl.max ?? 65535);
         const input = document.createElement("input");
-        input.type = "number";
-        input.min = nMin;
-        input.max = nMax;
-        input.value = ctrl.value ?? 0;
+        // A hex field is text, since a number input refuses "0x18"; the patch path reads data-hex to format the same way.
+        input.type = ctrl.hex ? "text" : "number";
+        if (ctrl.hex) input.dataset.hex = "1";
+        else { input.min = nMin; input.max = nMax; }
+        input.value = numberFieldText(input, ctrl.value ?? 0);
         input.dataset.mid = moduleName;
         input.dataset.key = ctrl.name;
         input.addEventListener("input", () => {
             dragTs[key] = Date.now();
-            let v = parseInt(input.value, 10);
+            let v = numberFieldValue(input);
             if (Number.isNaN(v)) return;   // mid-edit empty field: send nothing until digits arrive
             v = Math.max(nMin, Math.min(nMax, v));
-            if (String(v) !== input.value) input.value = v;   // display always matches what's sent
+            // Display matches what is sent; a hex field is reformatted on blur instead, so "1" does not jump to "0x01" mid-typing.
+            if (!ctrl.hex && String(v) !== input.value) input.value = v;
             debounceSend(key, 500, () => write(ctrl.name, v));
         });
-        input.addEventListener("change", () => {   // blur/Enter with a still-empty field: snap to min + send
-            if (Number.isNaN(parseInt(input.value, 10))) {
+        input.addEventListener("change", () => {   // blur/Enter: a still-empty field snaps to min and sends, and a hex field shows its canonical form
+            const v = numberFieldValue(input);
+            if (Number.isNaN(v)) {
                 dragTs[key] = Date.now();
-                input.value = nMin;
+                input.value = numberFieldText(input, nMin);
                 debounceSend(key, 500, () => write(ctrl.name, nMin));
+            } else {
+                input.value = numberFieldText(input, Math.max(nMin, Math.min(nMax, v)));
             }
         });
         row.appendChild(input);
-        resetButton(() => { input.value = def; });
+        resetButton(() => { input.value = numberFieldText(input, def); });
         return row;
     }
 
@@ -4849,8 +4854,8 @@ function updateModuleControls(mod) {
                 // real value when it ends, and the next patch after that lands normally.
                 if (input && surfaceDemoRunning() &&
                     (input.classList.contains("encoder-input") || input.classList.contains("fader-input"))) break;
-                if (input && Number(input.value) !== Number(ctrl.value)) {
-                    input.value = ctrl.value ?? 0;
+                if (input && numberFieldValue(input) !== Number(ctrl.value)) {
+                    input.value = numberFieldText(input, ctrl.value ?? 0);
                     const val = input.nextElementSibling;
                     if (val && val.classList.contains("control-value-input")) val.value = ctrl.value ?? 0;
                     redrawRangeDecorations(input);
@@ -5063,6 +5068,17 @@ function updateModuleControls(mod) {
             }
         }
     }
+}
+
+// A number field's text for a value: "0x18" for a hex field, as a datasheet and the I2C scan write it, otherwise decimal.
+function numberFieldText(input, v) {
+    const n = Number(v) || 0;
+    return input.dataset.hex ? "0x" + n.toString(16).padStart(2, "0") : String(n);
+}
+
+// A number field's value, NaN while it holds no digits yet; a hex field takes "0x18" or "18" alike.
+function numberFieldValue(input) {
+    return input.dataset.hex ? parseInt(input.value.trim().replace(/^0x/i, ""), 16) : parseInt(input.value, 10);
 }
 
 // Per-type equality for reset-button highlighting. bool→boolish, ipv4/text→

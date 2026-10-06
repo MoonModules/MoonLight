@@ -7,7 +7,7 @@
       "esp32",
       "esp32-eth"
     ],
-    "image": "assets/deviceModels/olimex-esp32-gateway.png",
+    "image": "assets/deviceModels/esp32-olimex-gateway.png",
     "url": "https://www.olimex.com/Products/IoT/ESP32/ESP32-GATEWAY/open-source-hardware",
     "supported": [
       "LEDs",
@@ -48,7 +48,7 @@
       "esp32"
     ],
     "flashBaud": 460800,
-    "image": "assets/deviceModels/lolin-d32.jpg",
+    "image": "assets/deviceModels/esp32-lolin-d32.jpg",
     "url": "https://www.wemos.cc/en/latest/d32/d32.html",
     "supported": [
       "LEDs",
@@ -78,7 +78,7 @@
     "firmwares": [
       "esp32"
     ],
-    "image": "assets/deviceModels/generic-esp32-dev.jpg",
+    "image": "assets/deviceModels/esp32-generic-dev.jpg",
     "supported": [
       "LEDs",
       "WiFi"
@@ -136,7 +136,7 @@
     "firmwares": [
       "esp32"
     ],
-    "image": "assets/deviceModels/quinled-dig-2-go.jpg",
+    "image": "assets/deviceModels/esp32-quinled-dig-2-go.jpg",
     "url": "https://quinled.info/quinled-dig2go/",
     "supported": [
       "LEDs",
@@ -180,7 +180,7 @@
     "firmwares": [
       "esp32-pico"
     ],
-    "image": "assets/deviceModels/quinled-dig-next-2.jpg",
+    "image": "assets/deviceModels/esp32-pico-quinled-dig-next-2.jpg",
     "url": "https://quinled.info/dig-next-2/",
     "supported": [
       "LEDs",
@@ -233,7 +233,7 @@
     "firmwares": [
       "esp32"
     ],
-    "image": "assets/deviceModels/quinled-dig-uno-v3.jpg",
+    "image": "assets/deviceModels/esp32-quinled-dig-uno-v3.jpg",
     "url": "https://quinled.info/pre-assembled-quinled-dig-uno/",
     "supported": [
       "LEDs",
@@ -267,7 +267,7 @@
     "firmwares": [
       "esp32"
     ],
-    "image": "assets/deviceModels/quinled-dig-quad-v3.jpg",
+    "image": "assets/deviceModels/esp32-quinled-dig-quad-v3.jpg",
     "url": "https://quinled.info/pre-assembled-quinled-dig-quad/",
     "supported": [
       "LEDs",
@@ -302,7 +302,7 @@
     "firmwares": [
       "esp32-16mb"
     ],
-    "image": "assets/deviceModels/quinled-dig-octa-32-8l.jpg",
+    "image": "assets/deviceModels/esp32-16mb-quinled-dig-octa-32-8l.jpg",
     "url": "https://quinled.info/quinled-dig-octa-brainboard-32-8l/",
     "supported": [
       "LEDs",
@@ -348,7 +348,7 @@
     "firmwares": [
       "esp32-16mb"
     ],
-    "image": "assets/deviceModels/serg-unishield-v5.jpg",
+    "image": "assets/deviceModels/esp32-16mb-serg-unishield-v5.jpg",
     "url": "https://www.tindie.com/products/serg74/wled-shield-board-for-addressable-leds/",
     "supported": [
       "LEDs",
@@ -384,7 +384,7 @@
     "firmwares": [
       "esp32-16mb"
     ],
-    "image": "assets/deviceModels/serg-minishield.jpg",
+    "image": "assets/deviceModels/esp32-16mb-serg-minishield.jpg",
     "url": "https://www.tindie.com/stores/serg74/",
     "supported": [
       "LEDs",
@@ -448,7 +448,7 @@
     "firmwares": [
       "esp32"
     ],
-    "image": "assets/deviceModels/mhc-v57-pro.jpg",
+    "image": "assets/deviceModels/esp32-mhc-v57-pro.jpg",
     "url": "https://shop.myhome-control.de/en/ABC-WLED-controller-PRO-V57-with-iMOSFET/HW10030",
     "supported": [
       "LEDs",
@@ -579,7 +579,7 @@
     "firmwares": [
       "esp32s3-n16r8"
     ],
-    "image": "assets/deviceModels/esp32-s3-testbench.jpg",
+    "image": "assets/deviceModels/esp32-s3-n16r8-testbench.jpg",
     "supported": [
       "LEDs",
       "WiFi",
@@ -663,7 +663,7 @@
     "firmwares": [
       "esp32-16mb"
     ],
-    "image": "assets/deviceModels/esp32-d0-16mb.jpg",
+    "image": "assets/deviceModels/esp32-16mb-testbench.jpg",
     "supported": [
       "LEDs",
       "WiFi"
@@ -835,7 +835,7 @@
     "firmwares": [
       "esp32s3-n8r8"
     ],
-    "image": "assets/deviceModels/lightcrafter-16.jpg",
+    "image": "assets/deviceModels/esp32-s3-n8r8-lightcrafter-16.jpg",
     "url": "https://www.limpkin.fr/",
     "supported": [
       "LEDs",
@@ -905,7 +905,7 @@
     "firmwares": [
       "esp32s3-n8r8"
     ],
-    "image": "assets/deviceModels/esp32-s3-stephanelec-16p.jpg",
+    "image": "assets/deviceModels/esp32-s3-n8r8-stephanelec-16p.jpg",
     "url": "https://www.limpkin.fr/",
     "supported": [
       "LEDs",
@@ -966,16 +966,16 @@
       "esp32p4rev1-eth",
       "esp32p4rev1-eth-wifi"
     ],
-    "image": "assets/deviceModels/waveshare-esp32-p4-nano.jpg",
+    "image": "assets/deviceModels/esp32-p4-waveshare-nano.jpg",
     "url": "https://www.waveshare.com/esp32-p4-nano.htm",
     "supported": [
       "LEDs",
-      "Ethernet"
+      "WiFi",
+      "Ethernet",
+      "Audio"
     ],
     "planned": [
-      "WiFi",
-      "Microphone",
-      "Audio codec",
+      "Speaker",
       "Camera"
     ],
     "modules": [
@@ -1004,11 +1004,150 @@
         }
       },
       {
-        "type": "I2cScanModule",
-        "id": "I2cScan",
+        "type": "I2cBusModule",
+        "id": "I2cBus",
         "controls": {
           "sda": 7,
           "scl": 8
+        }
+      },
+      {
+        "type": "AudioService",
+        "id": "Audio",
+        "parent_id": "Services",
+        "controls": {
+          "mode": 2,
+          "sckPin": 12,
+          "wsPin": 10,
+          "sdPin": 11,
+          "mclkPin": 13,
+          "codec": "ES8311",
+          "codecAddr": "0x18"
+        }
+      }
+    ]
+  },
+  {
+    "name": "Waveshare ESP32-P4-ETH",
+    "chip": "ESP32-P4",
+    "firmwares": [
+      "esp32p4rev1-eth"
+    ],
+    "image": "assets/deviceModels/esp32-p4-waveshare-eth.png",
+    "url": "https://www.waveshare.com/esp32-p4-eth.htm",
+    "supported": [
+      "LEDs",
+      "Ethernet",
+      "Audio"
+    ],
+    "planned": [
+      "Speaker",
+      "Camera",
+      "Display",
+      "SD card"
+    ],
+    "modules": [
+      {
+        "type": "System",
+        "id": "System",
+        "controls": {
+          "deviceModel": "Waveshare ESP32-P4-ETH"
+        }
+      },
+      {
+        "type": "ParallelLedDriver",
+        "id": "ParallelLed",
+        "parent_id": "Drivers",
+        "controls": {
+          "peripheral": "Parlio",
+          "pins": "20,21,22,23,24,25,26,27"
+        }
+      },
+      {
+        "type": "EthernetModule",
+        "id": "Ethernet",
+        "parent_id": "Network",
+        "controls": {
+          "ethBoard": "P4-NANO"
+        }
+      },
+      {
+        "type": "I2cBusModule",
+        "id": "I2cBus",
+        "controls": {
+          "sda": 7,
+          "scl": 8
+        }
+      },
+      {
+        "type": "AudioService",
+        "id": "Audio",
+        "parent_id": "Services",
+        "controls": {
+          "mode": 2,
+          "sckPin": 12,
+          "wsPin": 10,
+          "sdPin": 11,
+          "mclkPin": 13,
+          "codec": "ES8311",
+          "codecAddr": "0x18"
+        }
+      }
+    ]
+  },
+  {
+    "name": "Guition JC-ESP32P4-M3-DEV",
+    "chip": "ESP32-P4",
+    "firmwares": [
+      "esp32p4rev1-eth"
+    ],
+    "image": "assets/deviceModels/esp32-p4-guition-m3.jpg",
+    "url": "https://devices.esphome.io/devices/guition-esp32-p4-m3-dev/",
+    "supported": [
+      "LEDs",
+      "Ethernet",
+      "Audio"
+    ],
+    "planned": [
+      "Speaker",
+      "Display"
+    ],
+    "modules": [
+      {
+        "type": "System",
+        "id": "System",
+        "controls": {
+          "deviceModel": "Guition JC-ESP32P4-M3-DEV"
+        }
+      },
+      {
+        "type": "EthernetModule",
+        "id": "Ethernet",
+        "parent_id": "Network",
+        "controls": {
+          "ethBoard": "P4-NANO"
+        }
+      },
+      {
+        "type": "I2cBusModule",
+        "id": "I2cBus",
+        "controls": {
+          "sda": 7,
+          "scl": 8
+        }
+      },
+      {
+        "type": "AudioService",
+        "id": "Audio",
+        "parent_id": "Services",
+        "controls": {
+          "mode": 2,
+          "sckPin": 12,
+          "wsPin": 10,
+          "sdPin": 48,
+          "mclkPin": 13,
+          "codec": "ES8311",
+          "codecAddr": "0x18"
         }
       }
     ]
@@ -1020,7 +1159,7 @@
       "esp32p4rev1-eth",
       "esp32p4rev1-eth-wifi"
     ],
-    "image": "assets/deviceModels/mhc-wled-esp32-p4-shield.jpg",
+    "image": "assets/deviceModels/esp32-p4-mhc-wled-shield.jpg",
     "url": "https://shop.myhome-control.de/en/ABC-WLED-ESP32-P4-shield/HW10027",
     "supported": [
       "LEDs",
@@ -1084,10 +1223,10 @@
     "supported": [
       "LEDs",
       "WiFi",
-      "Ethernet"
+      "Ethernet",
+      "Audio"
     ],
     "planned": [
-      "Audio",
       "Bluetooth",
       "Thread/Zigbee",
       "SD card",
@@ -1129,12 +1268,15 @@
           "mode": 2,
           "sckPin": 53,
           "wsPin": 55,
-          "sdPin": 54
+          "sdPin": 54,
+          "mclkPin": 52,
+          "codec": "ES8311",
+          "codecAddr": "0x18"
         }
       },
       {
-        "type": "I2cScanModule",
-        "id": "I2cScan",
+        "type": "I2cBusModule",
+        "id": "I2cBus",
         "controls": {
           "sda": 51,
           "scl": 50
@@ -1149,7 +1291,7 @@
       "esp32"
     ],
     "flashBaud": 460800,
-    "image": "assets/deviceModels/shelly.jpg",
+    "image": "assets/deviceModels/esp32-shelly.jpg",
     "supported": [
       "LEDs",
       "WiFi",
@@ -1216,7 +1358,7 @@
     "firmwares": [
       "esp32s3-n16r8"
     ],
-    "image": "assets/deviceModels/hpwit-shift-register-board.jpg",
+    "image": "assets/deviceModels/esp32-s3-n16r8-hpwit-shift-register-board.jpg",
     "supported": [
       "LEDs",
       "WiFi"
@@ -1271,7 +1413,7 @@
     "firmwares": [
       "esp32s3-n16r8"
     ],
-    "image": "assets/deviceModels/hpwit-shift-register-board.jpg",
+    "image": "assets/deviceModels/esp32-s3-n16r8-hpwit-shift-register-board.jpg",
     "supported": [
       "LEDs",
       "WiFi"

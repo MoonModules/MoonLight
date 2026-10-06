@@ -2450,9 +2450,38 @@ void audioFft(const float* windowed, size_t n, float* outMag) {
     for (size_t k = 0; k < n / 2; k++) outMag[k] = std::sqrt(re[k] * re[k] + im[k] * im[k]);
 }
 
-// No bus here, reported as unavailable rather than as an empty scan, which would mean a real bus that nothing answered on.
-size_t i2cScan(uint16_t /*sda*/, uint16_t /*scl*/, uint8_t* /*out*/, size_t /*maxOut*/) {
-    return kI2cBusUnavailable;
+// No wires here, so the bus is state alone: open, closed and its generation behave as on a board, and a scan finds what a test injected.
+namespace {
+bool testI2cOpen_ = false;
+uint16_t testI2cSda_ = 0, testI2cScl_ = 0;
+std::atomic<uint32_t> testI2cGeneration_{0};
+uint8_t testI2cDevices_[16] = {};
+size_t testI2cDeviceCount_ = 0;
+}  // namespace
+void setTestI2cDevices(const uint8_t* addrs, size_t n) {
+    testI2cDeviceCount_ = addrs ? std::min(n, sizeof(testI2cDevices_)) : 0;
+    for (size_t i = 0; i < testI2cDeviceCount_; i++) testI2cDevices_[i] = addrs[i];
+}
+bool i2cBusOpen(uint16_t sda, uint16_t scl) {
+    if (testI2cOpen_ && sda == testI2cSda_ && scl == testI2cScl_) return true;
+    i2cBusClose();
+    testI2cOpen_ = true; testI2cSda_ = sda; testI2cScl_ = scl;
+    testI2cGeneration_.fetch_add(1, std::memory_order_relaxed);
+    return true;
+}
+void i2cBusClose() {
+    if (!testI2cOpen_) return;
+    testI2cOpen_ = false;
+    testI2cGeneration_.fetch_add(1, std::memory_order_relaxed);
+}
+bool i2cBusReady() MM_NONBLOCKING { return testI2cOpen_; }
+uint32_t i2cBusGeneration() MM_NONBLOCKING { return testI2cGeneration_.load(std::memory_order_relaxed); }
+size_t i2cScan(uint8_t* out, size_t maxOut) {
+    if (!testI2cOpen_) return kI2cBusUnavailable;
+    if (!out) return 0;
+    const size_t n = std::min(testI2cDeviceCount_, maxOut);
+    for (size_t i = 0; i < n; i++) out[i] = testI2cDevices_[i];
+    return n;
 }
 
 // No receiver or pins here, so the seam is a no-op and reads come from what a test injected. The button logic is ordinary code, leaving only the electrical half for the bench.

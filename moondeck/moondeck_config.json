@@ -136,7 +136,7 @@
       "tab": "desktop",
       "group": "tools",
       "label": "Code report",
-      "speed": "slow",
+      "speed": "medium",
       "help": "check_code",
       "script": "check/check_code.py"
     },

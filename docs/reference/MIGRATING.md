@@ -34,6 +34,20 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## Unreleased
 
+### An audio codec is the device model's setting
+
+**Action: on an ESP32-S31 CoreBoard, apply its device model again, or set the I2C bus to SDA 51 / SCL 50 under System and AudioService's `codec` to `ES8311` with `mclkPin` 52.**
+
+The codec in front of a microphone is now AudioService's runtime configuration, where the S31 firmware used to assume it. One P4 firmware so serves every P4 board, with or without a codec.
+A board configured before this change has no codec set, and its microphone stays silent until it does.
+
+### The I2C scan is the board's I2C bus
+
+**Action: *nothing* for a restored backup, which carries the pins over; on a running device, set `sda` and `scl` again under System, I2cBus.**
+
+The scan module became the owner of the board's I2C bus, which every device on it shares. A codec now names only its address, and the wires are stated once.
+A device's saved scan pins sit under the old module type and are not read at boot.
+
 ### The access point always broadcasts its name and follows the radio's channel
 
 **Action: *nothing*.**

@@ -1,0 +1,14 @@
+# documentation-standards.md: "Present tense only." These words date a sentence: they compare the system with a moment, which is history, so the sentence describes what exists without them.
+extends: existence
+message: "'%s' dates the sentence: describe what exists."
+level: error
+ignorecase: true
+tokens:
+  - today
+  - currently
+  - at the moment
+  - at present
+  - for now
+  - no longer
+  - anymore
+  - not yet

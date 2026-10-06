@@ -7,7 +7,7 @@
 #include <string>
 
 namespace {
-// Stand-in wired-by-code child: counts the lifecycle callbacks a real fixed System child (Tasks, I2cScan) would use (setup to init, tick20ms/tick1s to poll + format). Pins that SystemModule's overridden setup()/tick1s() chain to base, without that, a child would never initialize or poll.
+// Stand-in wired-by-code child: counts the lifecycle callbacks a real fixed System child (Tasks, I2cBus) would use (setup to init, tick20ms/tick1s to poll + format). Pins that SystemModule's overridden setup()/tick1s() chain to base, without that, a child would never initialize or poll.
 class CountingChild : public mm::MoonModule {
 public:
     uint32_t setupCalls = 0, tick20msCalls = 0, tick1sCalls = 0;
@@ -125,14 +125,14 @@ TEST_CASE("SystemModule bootReason control populated") {
     CHECK(found);
 }
 
-// System is fixed infrastructure, it accepts no user-added children (they live under the Services container). Its own children (Tasks, I2cScan) are wired by code.
+// System is fixed infrastructure, it accepts no user-added children (they live under the Services container). Its own children (Tasks, I2cBus) are wired by code.
 TEST_CASE("SystemModule accepts no user-added children") {
-    // System is fixed infrastructure: its children (Tasks, I2cScan) are wired by code, so it accepts no user-added role. User-added capability modules live under the Services container instead.
+    // System is fixed infrastructure: its children (Tasks, I2cBus) are wired by code, so it accepts no user-added role. User-added capability modules live under the Services container instead.
     mm::SystemModule sys;
     CHECK(std::strcmp(sys.acceptsChildRoles(), "") == 0);
 }
 
-// Regression: SystemModule overrides setup() and tick1s(); both must chain to MoonModule's base so a wired-by-code child's setup()/tick1s() actually fire. Without the chain a fixed child (Tasks/I2cScan) would never init or poll (the "children miss callbacks" trap). tick20ms() isn't overridden, so the base default already propagates it.
+// Regression: SystemModule overrides setup() and tick1s(); both must chain to MoonModule's base so a wired-by-code child's setup()/tick1s() fire. Without the chain a fixed child (Tasks/I2cBus) would never init or poll (the "children miss callbacks" trap). tick20ms() isn't overridden, so the base default already propagates it.
 TEST_CASE("SystemModule propagates lifecycle to a wired-by-code child") {
     mm::SystemModule sys;
     CountingChild child;

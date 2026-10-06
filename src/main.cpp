@@ -128,7 +128,7 @@
 #include "core/system/ControlModule.h"
 #include "core/services/Services.h"
 #include "core/services/AudioService.h"
-#include "core/system/I2cScanModule.h"
+#include "core/system/I2cBusModule.h"
 #include "core/system/TasksModule.h"
 #include "core/system/PinsModule.h"
 #include "core/system/FileManagerModule.h"
@@ -194,13 +194,13 @@ void mm_main(volatile bool& keepRunning, uint16_t httpPort) {
     auto* systemModule = createOrDie<mm::SystemModule>("SystemModule");
     systemModule->setScheduler(&scheduler);
 
-    // The device's inspection toolkit, wired by code as System children rather than user-added. Always present, exempt from the persistence trim, and accepted by no container as an editable child, so no card offers a delete.
+    // The device's inspection toolkit and its I2C bus, wired by code as System children rather than user-added. Always present, exempt from the persistence trim, and accepted by no container as an editable child, so no card offers a delete.
     auto* tasksModule = createOrDie<mm::TasksModule>("TasksModule");
     tasksModule->markWiredByCode();
     systemModule->addChild(tasksModule);
-    auto* i2cScanModule = createOrDie<mm::I2cScanModule>("I2cScanModule");
-    i2cScanModule->markWiredByCode();
-    systemModule->addChild(i2cScanModule);
+    auto* i2cBusModule = createOrDie<mm::I2cBusModule>("I2cBusModule");
+    i2cBusModule->markWiredByCode();
+    systemModule->addChild(i2cBusModule);
     auto* pinsModule = createOrDie<mm::PinsModule>("PinsModule");
     pinsModule->markWiredByCode();
     systemModule->addChild(pinsModule);

@@ -186,7 +186,7 @@ flowchart LR
     pc --> diff
     always["<b>always</b><br/>💀 check_specs · 💀 check_prose <i>· records, writes to the tree</i>"]
     md["<b>.md</b><br/>build_docs --strict 🐢<br/>💀 check_docgen · 🛸 test_host --python <i>(catalog pages)</i><br/>check_taglines <i>(front pages only)</i>"]
-    code["<b>src/ or test/</b><br/>💀 check_code 🐢 · build_desktop 🐢<br/>🛸 test_desktop 🐢 · run_scenario 🐢<br/>💀 check_docgen <i>(the headers it covers)</i><br/>💀 check_esp32_built <i>(not src/platform/desktop)</i><br/>💀 build_desktop --no-jit 🐢 <i>(MoonLive only)</i><br/>💀 collect_kpi 🐢 <i>· records, writes to the tree</i>"]
+    code["<b>src/ or test/</b><br/>💀 check_code · build_desktop 🐢<br/>🛸 test_desktop 🐢 · run_scenario 🐢<br/>💀 check_docgen <i>(the headers it covers)</i><br/>💀 check_esp32_built <i>(not src/platform/desktop)</i><br/>💀 build_desktop --no-jit 🐢 <i>(MoonLive only)</i><br/>💀 collect_kpi 🐢 <i>· records, writes to the tree</i>"]
     web["<b>src/ui or mooninstaller/</b><br/>🛸 test_host --js · 💀 check_devices"]
     py["<b>moondeck/ or moonlive/</b><br/>🛸 test_host --python · 💀 check_firmwares"]
     board["<b>the provisioning path,<br/>with a board attached</b><br/>🛸 improv_smoke_test<br/><i>recommended, say so when skipped</i>"]

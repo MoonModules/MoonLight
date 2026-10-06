@@ -4,6 +4,8 @@
 #include "light/drivers/Drivers.h"
 #include "light/drivers/FixtureProfilesModule.h"   // the non-deletable boot-wired fixture-profile library
 #include "light/drivers/NetworkSendDriver.h"     // a real driver, for the sibling-instance cases
+#include "light/drivers/ParallelLedDriver.h"     // its installer and bench controls, for the mode case
+#include "light/drivers/RmtLedDriver.h"
 #include "correction_presets.h"                  // mm::test::rebuildFromPreset
 #include "../core/conditional_controls.h"   // mm::test::setControlValue
 #include "platform/platform.h"                 // gpioRead: the desktop reads back what gpioWrite put there
@@ -277,4 +279,25 @@ TEST_CASE("Drivers: three sibling NetworkSendDrivers each own their buffer, and 
     CHECK(drivers.child(0) == &first);
     CHECK(drivers.child(1) == &last);
     for (uint8_t i = 0; i < drivers.childCount(); i++) CHECK(drivers.child(i) != &middle);
+}
+
+// A user sees power, brightness and the look; the wiring an installer sets once waits for expert mode, and the firmware's own bench self-test for developer mode.
+TEST_CASE("Drivers: relay pins and double buffering are expert settings, and the loopback test a developer one") {
+    auto modeOf = [](mm::MoonModule& m, const char* name) {
+        const int i = mm::test::controlIndex(m, name);
+        REQUIRE(i >= 0);
+        return m.controls()[static_cast<uint8_t>(i)].minMode;
+    };
+    mm::Drivers drivers;
+    drivers.defineControls();
+    CHECK(modeOf(drivers, "relayPins") == mm::kModeExpert);
+    mm::ParallelLedDriver parallel;
+    parallel.defineControls();
+    CHECK(modeOf(parallel, "doubleBuffer") == mm::kModeExpert);
+    for (const char* name : {"loopbackTest", "loopbackTxPin", "loopbackRxPin", "loopbackStrand", "loopbackIntrusive"})
+        CHECK_MESSAGE(modeOf(parallel, name) == mm::kModeDeveloper, name);
+    mm::RmtLedDriver rmt;
+    rmt.defineControls();
+    for (const char* name : {"loopbackTest", "loopbackTxPin", "loopbackRxPin", "loopbackFrame"})
+        CHECK_MESSAGE(modeOf(rmt, name) == mm::kModeDeveloper, name);
 }

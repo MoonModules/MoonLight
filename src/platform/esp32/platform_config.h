@@ -147,27 +147,6 @@ constexpr bool hasI2sMic = false;
 constexpr bool hasAudioCapture = false;
 
 
-/// Which codec sits in front of the microphone, where a board puts one there.
-enum class CodecType : uint8_t { None = 0, Es8311 = 1 };
-/// How that codec is reached: a fixed board property, so it lives here rather than as a control.
-///
-/// @moreinfo The microphone's own data pins stay user controls; only the codec's wiring is fixed.
-struct AudioCodecPins {
-    uint16_t i2cSda;    ///< I2C data
-    uint16_t i2cScl;    ///< I2C clock
-    uint16_t mclk;      ///< the master clock the codec needs, separate from the bit clock
-    uint8_t  i2cAddr;   ///< the codec's I2C address
-};
-
-// The S31 CoreBoard's ES8311, bench-confirmed by scan: its schematic labels SDA and SCL the other way.
-#ifdef CONFIG_IDF_TARGET_ESP32S31
-constexpr CodecType audioCodecType = CodecType::Es8311;
-constexpr AudioCodecPins audioCodecPins = { /*sda*/ 51, /*scl*/ 50, /*mclk*/ 52, /*addr*/ 0x18 };
-#else
-constexpr CodecType audioCodecType = CodecType::None;
-constexpr AudioCodecPins audioCodecPins = { 0, 0, 0, 0 };
-#endif
-
 // The Ethernet-only profile drops the WiFi components and defines this, there being no SDK switch.
 #ifdef MM_NO_WIFI
 constexpr bool hasWiFi = false;

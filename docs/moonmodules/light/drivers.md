@@ -67,7 +67,8 @@ Plus the [shared controls](#shared-driver-controls) above:
 - `pins`: data GPIO list: `18,17,16`, or ranges like `20-23`, mixed freely. Empty idles until set.
 - `ledsPerPin`: lights per strand. Blank splits evenly, one number to all, a list per strand.
 - `peripheral`: the DMA peripheral, filtered to what the chip supports. It divides the card.
-- `doubleBuffer`, `pinExpander`, `latchPin`, bus pins: shown per peripheral.
+- 🎚️ `doubleBuffer`: encode the next frame while this one clocks out, where supported.
+- `pinExpander`, `latchPin`, bus pins: shown per peripheral.
 - read-only `frameTime`: what one frame costs on the wire, the headroom the pipeline has left.
 - 🔧 `loopbackTest`: a TX to RX self-test, verdict in the status field.
 - 🔧 `loopbackStrand` / `loopbackIntrusive`: which strand it tests, and whether it may disturb output.

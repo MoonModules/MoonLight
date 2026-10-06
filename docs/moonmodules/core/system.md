@@ -8,7 +8,7 @@ The device's fixed infrastructure: identity, network, provisioning, firmware, an
 
 ### System
 
-The device's identity and vitals: name (behind mDNS `<name>.local`, the SoftAP SSID, the DHCP hostname), uptime, heap and the tick it renders at. Its fixed inspection children (Tasks, I2C scan) hang beneath it.
+The device's identity and vitals: name (behind mDNS `<name>.local`, the SoftAP SSID, the DHCP hostname), uptime, heap and the tick it renders at. Its fixed children (Tasks, the I2C bus, Pins) hang beneath it.
 
 <img src="../../assets/core/SystemModule.png" width="300" alt="System module controls">
 
@@ -240,21 +240,19 @@ Known renames from [MIGRATING.md](../../reference/MIGRATING.md) apply before upl
 
 Detail: [technical](moxygen/FileManagerModule.md)
 
-<a id="i2c-scan"></a>
+<a id="i2c-bus"></a>
 
-### I2C scan
+### I2C bus
 
-A fixed System module (wired-by-code, always present) that probes the I²C bus on a button press and reports the addresses found, a hardware bring-up tool. The bus pins default to unused (−1), so a board without an I²C device claims no GPIO for it; a board with a bus sets its pins via the catalog, or you type them for an ad-hoc scan. Passive until the scan button is pressed.
+A fixed System module (wired-by-code, always present) that owns the board's I²C bus: it opens the bus on its pins, every device on the bus attaches to it, and a scan probes it. A device names only its own address, such as AudioService's `codecAddr`; the wires are stated here, once per board. The pins default to unused (−1), so a board without an I²C device claims no GPIO.
 
-<img src="../../assets/core/I2cScanModule.png" width="300" alt="I2C scan module controls">
+<img src="../../assets/core/I2cBusModule.png" width="300" alt="I2C bus module controls">
 
-- `sda` / `scl`: the bus GPIOs, defaulting to −1 for unused.
-
-A board with a fixed bus injects its own through the catalog, or you type the pins for an ad-hoc scan. The classic Arduino-ESP32 pair is 21/22.
+- `sda` / `scl`: the bus GPIOs, −1 for unused; a board's catalog entry sets them.
 - `scan`: a button; press to probe the bus now.
-- read-only: `result` (addresses found).
+- read-only: `result`, each address found, named by the module driving it: `0x18 Audio (ES8311)`.
 
-Detail: [technical](moxygen/I2cScanModule.md)
+Detail: [technical](moxygen/I2cBusModule.md)
 
 <a id="tasks"></a>
 

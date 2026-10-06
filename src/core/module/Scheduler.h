@@ -98,6 +98,8 @@ public:
 
     /// The single live Scheduler, reachable so a factory-created module can drive a control.
     static Scheduler* instance() { return instance_; }
+    /// A Scheduler that ends without release() still stops being the live one, so instance() never dangles.
+    ~Scheduler() { if (instance_ == this) instance_ = nullptr; }
 
     /// What `setControl` did, which each transport maps onto its own status codes.
     enum class SetControlResult : uint8_t {

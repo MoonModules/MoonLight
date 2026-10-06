@@ -25,6 +25,8 @@ export const FILE_RENAMES = {
 // Old module type value (any "type" / "N.type" key) → new type. `set` writes a control the
 // merge made explicit when its value is deterministic; `review` flags what a map cannot decide.
 export const TYPE_RENAMES = {
+    // The scanner became the board's I2C bus, which every device on it shares; its sda and scl carry over.
+    "I2cScanModule": { type: "I2cBusModule", date: "2026-10-06" },
     // The library of named channel wirings takes the DMX industry term. Its list control follows (CONTROL_RENAMES).
     "LightPresetsModule": { type: "FixtureProfilesModule", date: "2026-10-03" },
     "Layers": { type: "Effects", date: "2026-08-08" },
