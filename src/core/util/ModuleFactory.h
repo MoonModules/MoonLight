@@ -17,7 +17,8 @@ using CreateModuleFn = MoonModule*(*)();
 ///
 /// ## What a registration captures
 ///
-/// A single stack probe yields the type's size, its role, its tags and its dimensionality, so registering is one line at boot.
+/// A single probe instance yields the type's size, its role, its tags and its dimensionality, so registering is one line at boot.
+/// It lives on the heap for the moment it is read, since a module can be kilobytes and the boot task's stack is not sized for one.
 /// The path to its documentation page rides along as a flash literal with no per-instance cost, and the interface builds a help link from it.
 ///
 /// Dimensionality is captured only when the type declares it, which the effect and modifier bases do and nothing else does.
@@ -35,7 +36,7 @@ using CreateModuleFn = MoonModule*(*)();
 /// A name without the suffix is returned unchanged, and the type name itself stays intact for persistence and lookup.
 class ModuleFactory {
 public:
-    /// Register a type, capturing everything from one stack probe: @xref{what-a-registration-captures|what is taken, and how}.
+    /// Register a type, capturing everything from one probe instance: @xref{what-a-registration-captures|what is taken, and how}.
     template<typename T>
     static bool registerType(const char* typeName, const char* docPath = "") {
         if (!typeName) return false;
@@ -43,18 +44,21 @@ public:
         for (uint8_t i = 0; i < count_; i++)
             if (std::strcmp(types_[i].name, typeName) == 0) return true;
         if (!grow()) return false;
-        T probe;
+        // On the heap: an instance can be kilobytes, which the boot task's stack does not hold.
+        T* probe = new T();
+        if (!probe) return false;
         uint8_t dim = 0;
         if constexpr (requires(const T& t) { static_cast<uint8_t>(t.dimensions()); }) {
-            dim = static_cast<uint8_t>(probe.dimensions());
+            dim = static_cast<uint8_t>(probe->dimensions());
         }
         types_[count_++] = {typeName,
                             []() -> MoonModule* { return new T(); },
-                            sizeof(T), probe.role(),
+                            sizeof(T), probe->role(),
                             docPath ? docPath : "",
-                            probe.tags() ? probe.tags() : "",
+                            probe->tags() ? probe->tags() : "",
                             dim,
-                            probe.acceptsChildRoles() ? probe.acceptsChildRoles() : ""};
+                            probe->acceptsChildRoles() ? probe->acceptsChildRoles() : ""};
+        delete probe;
         return true;
     }
 

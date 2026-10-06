@@ -19,11 +19,8 @@ class Scheduler;
 ///
 /// ## What it is allowed to include
 ///
-/// This is core infrastructure held to a light-include-free contract, with one accepted exception.
-/// The WLED-compatibility shim's color path uses the pure hue and palette-index conversions in `light/Palette.h`, `Palettes::nearestForRgb` and `Palettes::representativeRgb`.
-/// `MqttModule` documents the same sanctioned exception at its own top.
-/// Routing a HomeKit or Home Assistant WLED color to a MoonLight palette needs the palette set, which is inherently light-domain, and a format conversion is the least-coupling bridge.
-/// This module still drives the palette through `Scheduler::setControl` rather than a light object, and no other light-domain include is permitted.
+/// This is core infrastructure, and includes no light header.
+/// The WLED-compatibility shim reads the device shape and the palettes as colors through `LightOutput`, which the light domain implements, and drives the palette through `Scheduler::setControl`.
 ///
 /// The implementation lives in the `.cpp`, and this header is the interface alone.
 /// The `port` control defaults to 8080 on the desktop and 80 on an ESP32.

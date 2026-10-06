@@ -1,13 +1,28 @@
 #pragma once
 
 #include "core/moonlive/MoonLive.h"
-#include "light/moonlive/MoonLiveScript.h"
+#include "core/moonlive/MoonLiveScript.h"
 #include "light/modifiers/ModifierBase.h"
 #include "light/moonlive/MoonLiveBuiltins_light.h"
 #include <cstdio>
 #include <cstring>
 
 namespace mm {
+
+namespace moonlive {
+
+/// What a new modifier script starts out as.
+inline constexpr const char* kModifierTemplate =
+    "class NewModifier {\n"
+    "  void modifyLogical() {\n"
+    "    setXYZ(width - 1 - xPos, yPos, zPos);\n"
+    "  }\n"
+    "}\n";
+
+/// What the `script` control tells the UI: the directory, the extension and the new-file template.
+inline constexpr const char* kModifierPick[3] = {kScriptDir, kModifierExt, kModifierTemplate};
+
+}  // namespace moonlive
 
 /// A coordinate transform authored live rather than compiled in.
 ///
@@ -51,7 +66,7 @@ public:
     /// Compile the script as written.
     void prepare() override {
         // Only when a new program was installed, since the Layer's rebuild calls prepare() again.
-        if (script_.sync(moonlive::modifierSysVars(), *this)) needsRebuild_ = true;
+        if (script_.sync(moonlive::modifierSysVars(), *this, moonlive::lightBuiltins())) needsRebuild_ = true;
         rebuildControls();
     }
 

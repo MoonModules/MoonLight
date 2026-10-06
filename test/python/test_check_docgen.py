@@ -1549,3 +1549,22 @@ def test_a_type_nested_inside_a_private_one_gets_no_page(tmp_path):
     pages = gen_api._class_to_header(tmp_path)
     assert "mm-Outer" in pages
     assert "mm-Outer-Hidden" not in pages and "mm-Outer-Hidden-Deeper" not in pages
+
+
+# ---- appendix sections nothing refers to ----
+
+_APPENDIX = ["/// The thing.", "///", "/// @moreinfo", "///", "/// ## Why it waits",
+             "///", "/// Because.", "///", "/// ## The wire layout", "///", "/// Bytes."]
+
+
+def test_an_appendix_section_nothing_refers_to_is_a_finding():
+    from check_docgen import _unreferenced_in
+    found = _unreferenced_in("src/core/x.h", _APPENDIX, set())
+    assert [k for k, _ in found] == ["src/core/x.h::@moreinfo Why it waits", "src/core/x.h::@moreinfo The wire layout"]
+
+
+def test_an_xref_or_a_page_link_reaches_a_section():
+    from check_docgen import _unreferenced_in
+    lines = _APPENDIX + ["/// See @xref{why-it-waits}."]
+    found = _unreferenced_in("src/core/x.h", lines, {("x", "the-wire-layout")})
+    assert found == []

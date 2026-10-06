@@ -3,11 +3,39 @@
 #include "core/module/MoonModule.h"
 #include "core/moonlive/MoonLive.h"
 #include "core/moonlive/MoonLiveBuiltins_service.h"
-#include "light/moonlive/MoonLiveScript.h"        // the control seam it drives holds a draw::Canvas
+#include "core/moonlive/MoonLiveScript.h"   // the file, the compile and the declared controls
 
 #include <cstring>
 
 namespace mm {
+
+namespace moonlive {
+
+/// A service template: poll a pin on the 50 Hz tick, and write the control surface on a change.
+inline constexpr const char* kServiceTemplate =
+    "class NewService {\n"
+    "  int pin = 0;\n"
+    // 1 is the level an idle pull-up reads, so the first tick sees no change that never happened.
+    "  int last = 1;\n"
+    "\n"
+    "  void defineControls() {\n"
+    "    addControl(\"pin\", pin, 0, 48);\n"
+    "  }\n"
+    "\n"
+    "  void tick20ms() {\n"
+    "    int now = gpioRead(pin);\n"
+    "    if (now != last) {\n"
+    "      last = now;\n"
+    // Inverted, since active-low wiring means a pressed button reads 0.
+    "      setControl(\"switch1\", 1 - now);\n"
+    "    }\n"
+    "  }\n"
+    "}\n";
+
+/// What the `script` control tells the UI: the directory, the extension and the new-file template.
+inline constexpr const char* kServicePick[3] = {kScriptDir, kServiceExt, kServiceTemplate};
+
+}  // namespace moonlive
 
 /// A scripted service: the input twin of a scripted effect, and the flexible half of input.
 ///

@@ -111,9 +111,9 @@ Detail: [technical](moxygen/MoonLiveParticles.md)
 
 ### Script file
 
-One scripted module's script: the file it names, the compiled program, and the content hash that decides when to recompile. Shared by every scripted binding, effect, layout, modifier and palette alike.
+One scripted module's script: the file it names, the compiled program, and the content hash that decides when to recompile. Shared by every scripted binding, effect, layout, modifier, palette and service alike, so it lives in core.
 
-Detail: [technical](moxygen/MoonLiveScript.md)
+Detail: [technical](../core/moxygen/MoonLiveScript.md)
 
 ### Effect base
 

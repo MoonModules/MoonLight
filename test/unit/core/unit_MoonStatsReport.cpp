@@ -9,6 +9,7 @@
 
 #include "core/system/SystemModule.h"
 #include "light/drivers/PreviewDriver.h"   // the one type the report excludes as boot wiring
+#include "light/moonlive/MoonLiveEffect.h"   // kEffectPick: the picker the scripted fake offers
 
 namespace {
 

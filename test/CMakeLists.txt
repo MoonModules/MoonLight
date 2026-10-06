@@ -21,6 +21,8 @@ add_executable(mm_tests
     unit/core/unit_AudioService_codec.cpp
     unit/core/unit_I2cBusModule.cpp
     unit/core/unit_AudioService_sync.cpp
+    unit/core/unit_WledAudioSyncPacket.cpp
+    unit/core/unit_ThreadSlot.cpp
     unit/core/unit_ButtonService.cpp
     unit/core/unit_GamepadService.cpp
     unit/core/unit_MoonLiveService.cpp
@@ -108,7 +110,6 @@ add_executable(mm_tests
     unit/light/unit_RtspSession.cpp
     unit/light/unit_PanelCardDriver.cpp
     unit/light/unit_PanelCardDriver_packet.cpp
-    unit/light/unit_WledAudioSyncPacket.cpp
     unit/light/unit_BlendMap.cpp
     unit/light/unit_BeatRipples.cpp
     unit/light/unit_ColorTrailsEffect.cpp

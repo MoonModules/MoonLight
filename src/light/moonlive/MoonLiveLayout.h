@@ -1,13 +1,40 @@
 #pragma once
 
 #include "core/moonlive/MoonLive.h"
-#include "light/moonlive/MoonLiveScript.h"
+#include "core/moonlive/MoonLiveScript.h"
 #include "light/layouts/LayoutBase.h"
 #include "light/moonlive/MoonLiveBuiltins_light.h"
 #include <cstdio>
 #include <cstring>
 
 namespace mm {
+
+namespace moonlive {
+
+/// What a new layout script starts out as.
+inline constexpr const char* kLayoutTemplate =
+    "class NewLayout {\n"
+    "  byte cols = 16;\n"
+    "  byte rows = 16;\n"
+    "\n"
+    "  void defineControls() {\n"
+    "    addControl(\"cols\", cols, 1, 64);\n"
+    "    addControl(\"rows\", rows, 1, 64);\n"
+    "  }\n"
+    "\n"
+    "  void placeLights() {\n"
+    "    for (y = 0; y < rows; y = y + 1) {\n"
+    "      for (x = 0; x < cols; x = x + 1) {\n"
+    "        addLight(x, y, 0);\n"
+    "      }\n"
+    "    }\n"
+    "  }\n"
+    "}\n";
+
+/// What the `script` control tells the UI: the directory, the extension and the new-file template.
+inline constexpr const char* kLayoutPick[3] = {kScriptDir, kLayoutExt, kLayoutTemplate};
+
+}  // namespace moonlive
 
 /// Where the lights physically are, written as text on a running device.
 ///
@@ -99,7 +126,7 @@ private:
     void compile() const {
         // A content hash makes an unchanged call cost a read rather than a recompile.
         auto* self = const_cast<MoonLiveLayout*>(this);
-        self->script_.sync(moonlive::layoutSysVars(), *self);
+        self->script_.sync(moonlive::layoutSysVars(), *self, moonlive::lightBuiltins());
     }
 
     struct Counter { nrOfLightsType n; };

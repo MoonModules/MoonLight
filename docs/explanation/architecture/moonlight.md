@@ -324,6 +324,7 @@ Non-negotiable:
 - Effects always write to their layer's logical buffer. Never to output, never to physical coordinates.
 - Drivers always own the output path (blending, mapping, brightness correction, channel reordering).
 - Layer buffer is mandatory: if it doesn't fit, reduce dimensions until it does ("at least see something").
+- A light module's buffer is a `ScratchBuffer` member, which sizes it, reports it in `dynamicBytes()` and frees it in `release()`, so no allocation is held unreported or leaked. The [code report](../../reference/metrics/code.md) counts each buffer still taken by hand, and that count only falls.
 
 ### Per-module reporting
 

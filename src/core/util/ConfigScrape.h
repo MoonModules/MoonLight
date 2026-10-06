@@ -21,6 +21,7 @@
 #include <cstring>
 
 #include "core/util/hex.h"
+#include "core/util/Ipv4.h"   // the saved addresses, and the rule a static setting is checked by
 
 namespace mm::configscrape {
 
@@ -101,17 +102,22 @@ inline bool childKey(const char* json, const char* typeKey, const char* key, cha
     return true;
 }
 
-/// A string key of the child whose type is `childType`, the `"N.key":` beside its `"N.type":`, false when either is absent or the value empty.
-inline bool findChildString(const char* json, const char* childType, const char* key, char* out, size_t outLen) {
-    if (!json || !childType || !key) return false;
+/// The value of a key of the child whose type is `childType`, the `"N.key":` beside its `"N.type":`, or null when either is absent.
+inline const char* findChildValue(const char* json, const char* childType, const char* key) {
+    if (!json || !childType || !key) return nullptr;
     const size_t tl = std::strlen(childType);
     for (const char* p = std::strstr(json, "type\":\""); p; p = std::strstr(p + 1, "type\":\"")) {
         char want[64];
         if (std::strncmp(p + 7, childType, tl) != 0 || p[7 + tl] != '"' || !childKey(json, p, key, want, sizeof(want))) continue;
         const char* at = std::strstr(json, want);
-        return at && readString(at + std::strlen(want), out, outLen);
+        return at ? at + std::strlen(want) : nullptr;
     }
-    return false;
+    return nullptr;
+}
+
+/// A string key of the child whose type is `childType`, false when either is absent or the value empty.
+inline bool findChildString(const char* json, const char* childType, const char* key, char* out, size_t outLen) {
+    return readString(findChildValue(json, childType, key), out, outLen);
 }
 
 /// The known network at `index` in the app's priority order: its `ssid`, and the `password` that follows it in the same row.
@@ -122,6 +128,58 @@ inline bool findNetwork(const char* json, uint8_t index, char* ssid, size_t ssid
     if (!readString(row, ssid, ssidLen)) return false;
     readString(findKey(row, "password"), password, passwordLen);
     return true;
+}
+
+/// One interface's addressing as the app saved it: DHCP or Static, and the four addresses Static pins.
+struct SavedIp {
+    int mode = 0;                       ///< 0 DHCP, 1 Static, as the app's `ipSettings` select
+    uint8_t ip[4] = {};                 ///< the address
+    uint8_t gateway[4] = {};            ///< the router
+    uint8_t subnet[4] = {255, 255, 255, 0};   ///< the netmask
+    uint8_t dns[4] = {};                ///< the name server
+
+    /// Whether it pins a static address the app would also use, by the app's own rule.
+    bool usable() const { return mode == 1 && ipv4::staticFault(ip, gateway, subnet, dns) == ipv4::Fault::None; }
+};
+
+/// Where one key's value is, for the reader below: `ctx` carries what the lookup needs.
+using ValueAt = const char* (*)(const void* ctx, const char* key);
+
+/// The five IP keys, each value found by `at`; a key absent or malformed keeps its default.
+inline SavedIp readIp(ValueAt at, const void* ctx) {
+    SavedIp s;
+    if (const char* v = at(ctx, "ipSettings"); v && *v >= '0' && *v <= '9') s.mode = static_cast<int>(std::strtol(v, nullptr, 10));
+    uint8_t* const dst[4] = {s.ip, s.gateway, s.subnet, s.dns};
+    const char* const names[4] = {"ip", "gateway", "subnet", "dns"};
+    for (int k = 0; k < 4; k++) {
+        char text[16];
+        if (readString(at(ctx, names[k]), text, sizeof(text))) parseDottedQuad(text, dst[k]);
+    }
+    return s;
+}
+
+/// The IP settings of the child whose type is `childType`, the Ethernet card's.
+inline SavedIp findChildIp(const char* json, const char* childType) {
+    struct Ctx { const char* json; const char* type; } ctx{json, childType};
+    return readIp([](const void* c, const char* key) {
+        const auto* x = static_cast<const Ctx*>(c);
+        return findChildValue(x->json, x->type, key);
+    }, &ctx);
+}
+
+/// The IP settings of the known network at `index`, read inside its own row.
+inline SavedIp findNetworkIp(const char* json, uint8_t index) {
+    const char* row = findKey(json, "ssid");
+    for (uint8_t k = 0; row && k < index; k++) row = findKey(row, "ssid");
+    if (!row) return {};
+    // The next row's name ends this one, so a row saved without a key never reads its neighbor's.
+    const char* end = findKey(row, "ssid");
+    struct Ctx { const char* row; const char* end; } ctx{row, end};
+    return readIp([](const void* c, const char* key) -> const char* {
+        const auto* x = static_cast<const Ctx*>(c);
+        const char* v = findKey(x->row, key);
+        return (v && (!x->end || v < x->end)) ? v : nullptr;
+    }, &ctx);
 }
 
 }  // namespace mm::configscrape

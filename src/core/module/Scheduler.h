@@ -54,6 +54,9 @@ public:
     /// Tell every module in the tree that a file changed, so one that keeps something read from files updates it.
     void notifyFileChanged(const char* path);
 
+    /// Tell every module in the tree that `owner`'s list rows changed, so one resolving from that list re-resolves.
+    void notifyListChanged(const MoonModule& owner);
+
     /// Register a top-level module, which the boot then walks in declared order.
     void addModule(MoonModule* mod);
     /// Run the boot phases over every registered module.

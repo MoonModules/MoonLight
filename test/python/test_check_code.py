@@ -117,16 +117,16 @@ def test_a_blocking_call_on_the_render_path_is_a_row_per_site(monkeypatch):
     monkeypatch.setattr(nb, "float_conversions_on_the_hot_path", lambda: ["src/light/b.h:42"])
     monkeypatch.setattr(nb.check_clang_tidy, "_host_build_dir", lambda: _ratchet.ROOT)
     monkeypatch.setattr(check_code.Path, "exists", lambda self: True)
-    assert check_code.hotpath_rows() == [
+    assert check_code.hotpath_rows(check_code.build_warnings()) == [
         ("src/core/a.h", check_code.HOT_PATH, "mm::platform::millis in tick1s", 1),
         ("src/core/a.h", check_code.HOT_PATH, "printf in ?", 1),
         ("src/light/b.h", check_code.HOT_PATH, "a float conversion at formatTo, line 42", 1)]
     # A host whose compiler cannot measure it skips the rule; a build that fails raises, never a clean zero.
     monkeypatch.setattr(nb, "build_output", lambda _d: None)
     with pytest.raises(check_code.BuildMissing):
-        check_code.hotpath_rows()
+        check_code.build_warnings()
     monkeypatch.setattr(nb, "function_effects_enabled", lambda _d: False)
-    assert check_code.hotpath_rows() is None
+    assert check_code.build_warnings() is None
 
 
 def test_the_two_boundaries_are_counted_where_the_architecture_draws_them():
@@ -218,3 +218,53 @@ def test_the_launcher_keeps_what_the_compiler_said_beside_the_object(tmp_path):
 def test_the_baseline_is_the_committed_report_and_a_report_never_committed_is_a_first_run():
     assert _ratchet.committed(_ratchet.ROOT / "docs/reference/metrics/docgen.md")
     assert _ratchet.committed(_ratchet.ROOT / "docs/reference/metrics/no-such-report.md") is None
+
+
+def _tree(tmp_path, monkeypatch, files: dict):
+    """A miniature repository the file rules read, in place of the real one."""
+    for rel, text in files.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text)
+    monkeypatch.setattr(check_code, "ROOT", tmp_path)
+    monkeypatch.setattr(check_code, "owned_files", lambda: list(files))
+
+
+def test_a_module_type_named_in_the_ui_is_a_finding_and_a_container_is_not(tmp_path, monkeypatch):
+    _tree(tmp_path, monkeypatch, {"src/ui/app.js": "if (m.type === 'NoiseEffect') x('Drivers'); // 'RainbowEffect'\n",
+                                  "src/core/x.h": "const char* a = \"NoiseEffect\";\n"})
+    rows = check_code.ui_type_rows({"NoiseEffect", "RainbowEffect", "Drivers"})
+    assert rows == [("src/ui/app.js", check_code.UI_TYPE, "line 1: 'NoiseEffect'", 1)]
+
+
+def test_a_type_named_beyond_its_own_files_spreads_onto_its_header(tmp_path, monkeypatch):
+    monkeypatch.setattr(check_code, "MAX_SPREAD", 2)
+    files = {"src/light/Foo.h": "class Foo {};\n", "test/unit/unit_Foo.cpp": "Foo f;\n",
+             "src/module_types.cpp": "registerType<Foo>(\"Foo\");\n"}
+    files.update({f"src/a{i}.h": "Foo* p;\n" for i in range(3)})
+    _tree(tmp_path, monkeypatch, files)
+    assert check_code.spread_rows({"Foo"}) == [("src/light/Foo.h", check_code.SPREAD, "Foo in 3 files", 3)]
+    monkeypatch.setattr(check_code, "MAX_SPREAD", 3)
+    assert check_code.spread_rows({"Foo"}) == []
+
+
+def test_a_large_frame_is_a_row_per_function_and_only_ours_count(tmp_path, monkeypatch):
+    _tree(tmp_path, monkeypatch, {"src/core/a.h": "", "src/platform/desktop/vendor/v.h": ""})
+    monkeypatch.setattr(check_code, "owned_files", lambda: ["src/core/a.h"])
+    out = "\n".join([
+        f"{tmp_path}/src/core/a.h:40:17: warning: stack frame size (1056) exceeds limit (512) in 'bool mm::F::reg<mm::X>(char const*)' [-Wframe-larger-than]",
+        f"{tmp_path}/src/core/a.h:40:17: warning: stack frame size (1056) exceeds limit (512) in 'bool mm::F::reg<mm::X>(char const*)' [-Wframe-larger-than]",
+        f"{tmp_path}/src/core/a.h:40:17: warning: stack frame size (600) exceeds limit (512) in 'bool mm::F::reg<mm::Y>(char const*)' [-Wframe-larger-than]",
+        f"{tmp_path}/src/platform/desktop/vendor/v.h:9:1: warning: stack frame size (4000) exceeds limit (512) in 'f()' [-Wframe-larger-than]",
+        "/Library/SDK/thread.h:9:1: warning: stack frame size (700) exceeds limit (512) in 'g()' [-Wframe-larger-than]"])
+    rows = sorted(check_code.stack_rows(out))
+    assert rows == [("src/core/a.h", check_code.STACK, "F::reg<mm::X>, line 40", 1056),
+                    ("src/core/a.h", check_code.STACK, "F::reg<mm::Y>, line 40", 600)]
+
+
+def test_a_hand_buffer_in_light_is_a_finding_and_a_factory_or_a_comment_is_not(tmp_path, monkeypatch):
+    _tree(tmp_path, monkeypatch, {
+        "src/light/a.h": "auto* p = new uint8_t[n];\nbuf = static_cast<T*>(platform::alloc(n));\n// malloc(n) in a comment\n"
+                         "reg([]() -> P* { return new Peripheral(); });\nnew (slot) T();\n",
+        "src/core/b.h": "auto* p = new uint8_t[n];\n"})
+    assert [r[2] for r in check_code.raw_alloc_rows()] == ["line 1: auto* p = new uint8_t[n];",
+                                                          "line 2: buf = static_cast<T*>(platform::alloc(n));"]

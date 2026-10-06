@@ -19,7 +19,7 @@
 // included in the enclosing namespace.
 
 #include "light/moonlive/MoonLiveBuiltins_light.h"
-#include "light/moonlive/MoonLiveScriptFile.h"   // the role extensions the sweep filters on
+#include "core/moonlive/MoonLiveScriptFile.h"   // the role extensions the sweep filters on
 
 #include <filesystem>
 #include <fstream>

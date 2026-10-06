@@ -4,7 +4,7 @@
 
 #include "core/moonlive/MoonLiveBuiltins.h"
 #include "core/moonlive/MoonLiveBuiltins_common.h"   // the neutral half: math, waveforms, noise, print
-#include "core/moonlive/MoonLive.h"   // runDefineControls drives the engine
+#include "core/moonlive/MoonLive.h"
 #include "core/moonlive/MoonLiveIr.h"   // kArg3: the register `t` is passed in
 
 #include <atomic>
@@ -15,6 +15,7 @@
 #include "core/util/math16.h"   // beat16 / triwave16: full-range waveforms
 #include "light/powerfunctions/shader.h"  // shader::smoothstep, the GLSL vocabulary, already in fixed point
 #include "core/util/noise.h"    // inoise8: the shared gradient-noise field
+#include "core/util/ThreadSlot.h"   // the per-thread table the sinks live in
 #include <cstring>
 #include "core/services/AudioService.h"   // the audio vocabulary reads the latest frame
 #include "light/powerfunctions/draw.h"    // draw::line, the shared 3D Bresenham a script draws with
@@ -181,12 +182,6 @@ using AddLightFn = void (*)(void* ctx, uint16_t x, uint16_t y, uint16_t z);
 /// The addLight sink for one thread, installed by the binding around each run.
 struct AddLightSink { AddLightFn fn = nullptr; void* ctx = nullptr; };
 
-// A builtin has no receiver, so the binding installs one for the run.
-/// Where a running `defineControls()` sends each `addControl`.
-using AddControlFn = void (*)(void* ctx, const char* name, uint8_t offset,
-                              int32_t lo, int32_t hi, CtrlType type);
-struct AddControlSink { AddControlFn fn = nullptr; void* ctx = nullptr; };
-
 // Forwarded to the layer, which applies one amount per frame, so the longest trail wins.
 /// Where fade(amt) sends its request.
 using FadeFn = void (*)(void* ctx, uint8_t amt);
@@ -237,9 +232,8 @@ struct FlowSink {
 };
 
 namespace detail {
-// `owner` is claimed with compare_exchange, since a load then a store let two threads share a slot.
+/// Every sink one run installs, in the slot its thread claims (ThreadSlot.h).
 struct SinkSlot { std::atomic<uintptr_t> owner{0}; AddLightSink sink; draw::Canvas canvas;
-                  AddControlSink controls;   ///< where a defineControls run sends addControl
                   FadeSink fade;             ///< where fade sends its request
                   MotionSink motion;         ///< where the motion setters send their writes
                   CoordSink coord;           ///< where setXYZ sends a folded coordinate
@@ -251,7 +245,6 @@ struct SinkSlot { std::atomic<uintptr_t> owner{0}; AddLightSink sink; draw::Canv
                 };
 // Two slots, constinit rather than function-local statics, whose thread-safe guard is a lock.
 inline constinit SinkSlot gSinkSlots[2]{};
-inline SinkSlot* sinkSlots() MM_NONBLOCKING { return gSinkSlots; }
 // Never installed into, since a shared sink would let two overflow threads alias each other.
 /// Permanently empty, so a third concurrent runner's addLight calls no-op.
 inline const AddLightSink& sinkOverflow() { static const AddLightSink s; return s; }
@@ -259,27 +252,14 @@ inline const AddLightSink& sinkOverflow() { static const AddLightSink s; return 
 inline const draw::Canvas& canvasOverflow() { static const draw::Canvas c{}; return c; }
 
 /// The slot this thread owns, taking a free one when `claim` is set.
-inline SinkSlot* ownedSlot(bool claim) MM_NONBLOCKING {
-    const uintptr_t me = platform::currentThreadId();
-    SinkSlot* slots = sinkSlots();
-    for (uint8_t i = 0; i < 2; i++)
-        if (slots[i].owner.load(std::memory_order_acquire) == me) return &slots[i];
-    if (!claim) return nullptr;
-    for (uint8_t i = 0; i < 2; i++) {
-        uintptr_t free = 0;
-        if (slots[i].owner.compare_exchange_strong(free, me, std::memory_order_acq_rel,
-                                                   std::memory_order_relaxed))
-            return &slots[i];
-    }
-    return nullptr;
-}
+inline SinkSlot* ownedSlot(bool claim) MM_NONBLOCKING { return ownedThreadSlot(gSinkSlots, claim); }
 // The halves detach independently, so an early release hands a live context to the next claimer.
 /// Release the slot once every sink it carries is detached.
 inline void releaseIfEmpty(SinkSlot* s) MM_NONBLOCKING {
     // Every sink the slot carries, since one unnamed here lets a claimer reach an ended run.
-    if (s && !s->sink.fn && !s->sink.ctx && !s->canvas.data && !s->controls.fn && !s->fade.fn &&
+    if (s && !s->sink.fn && !s->sink.ctx && !s->canvas.data && !s->fade.fn &&
         !s->motion.fn && !s->coord.fn && !s->poolSize.fn && !s->pool.pool)
-        s->owner.store(0, std::memory_order_release);
+        releaseThreadSlot(s);
 }
 }  // namespace detail
 
@@ -288,13 +268,6 @@ inline void releaseIfEmpty(SinkSlot* s) MM_NONBLOCKING {
 inline const AddLightSink& addLightSink() {
     detail::SinkSlot* s = detail::ownedSlot(false);
     return s ? s->sink : detail::sinkOverflow();
-}
-
-/// The control sink for this thread, or an empty one; reading claims no slot.
-inline const AddControlSink& addControlSink() {
-    detail::SinkSlot* s = detail::ownedSlot(false);
-    static constinit AddControlSink none{};
-    return s ? s->controls : none;
 }
 
 /// The fade sink for this thread, or an empty one; reading claims no slot.
@@ -423,16 +396,6 @@ inline void setFlowSink(const FlowSink& f) MM_NONBLOCKING {
     if (!f.a) detail::releaseIfEmpty(s);
 }
 
-// False when the table is full, which the caller must not treat as an installed sink.
-/// Point addControl at a consumer for one defineControls run; nullptr to detach.
-inline bool setAddControlSink(AddControlFn fn, void* ctx) {
-    detail::SinkSlot* s = detail::ownedSlot(fn != nullptr);
-    if (!s) return false;
-    s->controls = {fn, ctx};
-    if (!fn) detail::releaseIfEmpty(s);
-    return true;
-}
-
 // Detaching releases the slot unless another half is live, so passing tasks do not exhaust it.
 /// Point addLight at a consumer for one run; nullptr to detach.
 inline void setAddLightSink(AddLightFn fn, void* ctx) {
@@ -445,31 +408,6 @@ inline void setAddLightSink(AddLightFn fn, void* ctx) {
     // Only into an owned slot, since the shared overflow would alias two threads' contexts.
     detail::SinkSlot* s = detail::ownedSlot(true);
     if (s) s->sink = {fn, ctx};
-}
-
-// The compiler builds the record, so nothing travels through a buffer freed by the time this runs.
-/// The one control declaration: args are name, member offset, min and max.
-inline uint32_t addControlDecl(const uintptr_t* args, CtrlType type) {
-    // The name points into the compiled program's string pool, which outlives the run.
-    const char* name = reinterpret_cast<const char*>(args[0]);
-    const AddControlSink s = addControlSink();
-    if (!name || !s.fn || !s.ctx) return 0;      // no binding listening: the call is a no-op
-    // An arbitrary expression can exceed the member's type, and a wrapped slider top is invisible.
-    const int32_t lo = int32_t(args[2]), hi = int32_t(args[3]);
-    const int32_t limit = (type == CtrlType::Byte) ? 255 : (type == CtrlType::Bool) ? 1 : INT32_MAX;
-    if (lo > limit || hi > limit) return 0;
-    // A byte and a bool are unsigned, so a negative low bound became min 251 with max 100.
-    if ((type == CtrlType::Byte || type == CtrlType::Bool) && lo < 0) return 0;
-    // With min above max the write path rejects every value the slider could offer.
-    if (lo > hi) return 0;
-    s.fn(s.ctx, name, static_cast<uint8_t>(args[1] & 0xff), lo, hi, type);
-    return 0;
-}
-
-// The compiler packs both into args[1]: the low byte is the arena offset, the next the type.
-/// Surface a member as a control within a range; its declared type decides the kind.
-extern "C" inline uint32_t mm_light_addControl(const uintptr_t* args, uint32_t, const uint8_t*) {
-    return addControlDecl(args, static_cast<CtrlType>((args[1] >> 8) & 0xff));
 }
 
 /// Place one light at the script's coordinates through this thread's layout sink.
@@ -567,8 +505,10 @@ extern "C" inline uint32_t mm_light_fieldRate(const uintptr_t* args, uint32_t, c
     return (*f.frame % n) == 0 ? 1u : 0u;
 }
 
-/// Advect the trail along a noise field: two decoupled samples, one per axis.
-extern "C" inline uint32_t mm_light_flowNoise(const uintptr_t* args, uint32_t, const uint8_t*) {
+// One home for the two flow builtins' shape: cell scale, strength and time from the arguments, one advect, then the planes swap.
+/// Advect the trail by a velocity field sampled at each light's scaled, time-drifted position.
+template <class Field>
+inline uint32_t advectTrail(const uintptr_t* args, Field&& field) {
     FlowSink& f = flowSink();
     if (!f.live() || !f.spare()) return 0;
     const uint32_t cells = (uint32_t(args[0]) ? uint32_t(args[0]) : 1u) * 256u;
@@ -576,35 +516,34 @@ extern "C" inline uint32_t mm_light_flowNoise(const uintptr_t* args, uint32_t, c
     const uint32_t t = platform::millis();
     draw::advect16(f.spare(), f.live(), f.w, f.h, f.d,
                    [&](lengthType x, lengthType y, lengthType z, draw::pos_t& vx, draw::pos_t& vy) {
-                       const uint32_t fx = uint32_t(x) * cells, fy = uint32_t(y) * cells;
-                       const uint32_t fz = uint32_t(z) * cells + t / 4u;
-                       const int32_t nx = int32_t(inoise16(fx, fy, fz)) - 32768;
-                       const int32_t ny = int32_t(inoise16(fx + 0x9E37u, fy + 0x7C15u, fz)) - 32768;
-                       // 64-bit, since an unbounded `strength` wraps a 32-bit product.
-                       vx = draw::pos_t((static_cast<int64_t>(nx) * strength) >> 15);
-                       vy = draw::pos_t((static_cast<int64_t>(ny) * strength) >> 15);
+                       field(uint32_t(x) * cells, uint32_t(y) * cells, uint32_t(z) * cells + t / 4u,
+                             strength, vx, vy);
                    }, draw::Edge::Clamp);
     *f.front = !*f.front;                 // the destination now holds the trail
     return 0;
 }
 
+/// Advect the trail along a noise field: two decoupled samples, one per axis.
+extern "C" inline uint32_t mm_light_flowNoise(const uintptr_t* args, uint32_t, const uint8_t*) {
+    return advectTrail(args, [](uint32_t fx, uint32_t fy, uint32_t fz, int32_t strength,
+                                draw::pos_t& vx, draw::pos_t& vy) {
+        const int32_t nx = int32_t(inoise16(fx, fy, fz)) - 32768;
+        const int32_t ny = int32_t(inoise16(fx + 0x9E37u, fy + 0x7C15u, fz)) - 32768;
+        // 64-bit, since an unbounded `strength` wraps a 32-bit product.
+        vx = draw::pos_t((static_cast<int64_t>(nx) * strength) >> 15);
+        vy = draw::pos_t((static_cast<int64_t>(ny) * strength) >> 15);
+    });
+}
+
 /// Advect the trail along a curl field: the same, but divergence-free, so nothing clumps.
 extern "C" inline uint32_t mm_light_flowCurl(const uintptr_t* args, uint32_t, const uint8_t*) {
-    FlowSink& f = flowSink();
-    if (!f.live() || !f.spare()) return 0;
-    const uint32_t cells = (uint32_t(args[0]) ? uint32_t(args[0]) : 1u) * 256u;
-    const int32_t strength = signedArg(args[1]);
-    const uint32_t t = platform::millis();
-    draw::advect16(f.spare(), f.live(), f.w, f.h, f.d,
-                   [&](lengthType x, lengthType y, lengthType z, draw::pos_t& vx, draw::pos_t& vy) {
-                       int32_t cx = 0, cy = 0;
-                       curl16(uint32_t(x) * cells, uint32_t(y) * cells,
-                              uint32_t(z) * cells + t / 4u, strength, cx, cy);
-                       vx = draw::pos_t(cx);
-                       vy = draw::pos_t(cy);
-                   }, draw::Edge::Clamp);
-    *f.front = !*f.front;
-    return 0;
+    return advectTrail(args, [](uint32_t fx, uint32_t fy, uint32_t fz, int32_t strength,
+                                draw::pos_t& vx, draw::pos_t& vy) {
+        int32_t cx = 0, cy = 0;
+        curl16(fx, fy, fz, strength, cx, cy);
+        vx = draw::pos_t(cx);
+        vy = draw::pos_t(cy);
+    });
 }
 
 // Named `trailDecay`, since a builtin reserves the name and scripts declare their own `decay`.
@@ -884,8 +823,6 @@ inline void writeSysVarSlot(uint8_t* arenaSlot, uint32_t value) MM_NONBLOCKING {
 // A name is a moment rather than a role, so an entry a script did not define is not called.
 /// The entry points the light domain calls, looked up by name in the emitted block.
 inline constexpr const char* kEntryTick        = "tick";           // an effect, per frame
-// Run once after a successful compile, where a compiled module's defineControls() sits.
-inline constexpr const char* kEntryDefineControls = "defineControls";
 inline constexpr const char* kEntryPlaceLights = "placeLights";  // a layout, placing lights
 inline constexpr const char* kEntryModify       = "modifyLogical"; // a modifier, folding one light
 
@@ -996,9 +933,6 @@ inline const BuiltinTable& lightBuiltins() {
     t.add({"line", 7, /*returns*/ false, BuiltinKind::Call, &mm_light_line, {}});
     // circle draws an outline of a given stroke width, the shape a script cannot build from line alone. Named for draw::circle, and NOT `ring`, which a shipped layout already defines as its own function.
     t.add({"circle", 7, /*returns*/ false, BuiltinKind::Call, &mm_light_circle, {}});
-    // Bit 1 of byRef marks the member, so the compiler passes its offset and type, not its value.
-    t.add({"addControl", 4, /*returns*/ false, BuiltinKind::Call, &mm_light_addControl, {},
-           /*byRef*/ 0x2, /*byStr*/ 0x1});
     // setPaletteColor writes one palette-colored pixel, with one brightness evaluation.
     t.add({"setPaletteColor", 4, /*returns*/ false, BuiltinKind::Call, &mm_light_setPaletteColor, {}});
     // The volumetric write, so a script paints a cube rather than its first slice.
@@ -1015,27 +949,6 @@ inline const BuiltinTable& lightBuiltins() {
         return t;
     }();
     return table;
-}
-
-// Re-runnable like its compiled counterpart, since the declared list is cleared first.
-/// Run a script's defineControls, so the controls it declares exist.
-inline void runDefineControls(MoonLive& engine, PoolSizeFn sizePool = nullptr, void* poolCtx = nullptr,
-                              TrailSizeFn sizeTrail = nullptr, void* trailCtx = nullptr) {
-    if (!engine.hasEntry(kEntryDefineControls)) return;   // nothing to clear and nothing to run
-    // Install before clearing, since a clear-then-run with the table full would drop every control.
-    if (!setAddControlSink([](void* ctx, const char* n, uint8_t off,
-                              int32_t lo, int32_t hi, CtrlType type) {
-            static_cast<MoonLive*>(ctx)->addDeclaredControl(n, off, lo, hi, type);
-        }, &engine)) return;
-    if (sizePool) setPoolSizeSink(sizePool, poolCtx);
-    if (sizeTrail) setTrailSizeSink(sizeTrail, trailCtx);
-    engine.clearDeclaredControls();      // re-runnable: rebuild rather than append
-    // This entry point writes no pixels, but `run` refuses a null or undersized buffer.
-    uint8_t scratch[3] = {};
-    engine.run(scratch, 1, 3, 0, kEntryDefineControls);
-    if (sizePool) setPoolSizeSink(nullptr, nullptr);
-    if (sizeTrail) setTrailSizeSink(nullptr, nullptr);
-    setAddControlSink(nullptr, nullptr);
 }
 
 /// @}

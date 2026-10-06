@@ -5,7 +5,6 @@
 #include "core/module/Scheduler.h"
 #include "platform/platform.h"   // gpioInputBegin / gpioRead / gpioWrite
 #include "core/moonlive/MoonLiveBuiltins_common.h"   // the neutral half: math, waveforms, print
-#include "light/moonlive/MoonLiveBuiltins_light.h"   // addControl, whose sinks stay there
 
 #include <cstdint>
 #include <cstdio>
@@ -111,7 +110,7 @@ inline const BuiltinTable& serviceBuiltins() {
     // Built once and reused: the table is around 2 KB by value and never changes after registration.
     static const BuiltinTable table = [] {
         BuiltinTable t;
-    // The neutral half: a service gets sin, noise, beat and print, because none of it is about light.
+    // The neutral half: a service gets sin, noise, beat, print and addControl, because none of it is about light.
     addCommonBuiltins(t);
     // gpioRead(pin)          -> 0/1. The input half: any switch, PIR, or level a pin can carry.
     t.add({"gpioRead", 1, /*returns*/ true, BuiltinKind::Call, &mm_service_gpioRead, {}});
@@ -126,9 +125,6 @@ inline const BuiltinTable& serviceBuiltins() {
     // setControl(name, v) -> 0/1, where byStr 0x1 marks the first argument as a quoted name.
     t.add({"setControl", 2, /*returns*/ true, BuiltinKind::Call, &mm_service_setControl, {},
            /*byRef*/ 0, /*byStr*/ 0x1});
-    // addControl(name, member, min, max) -> declare a setting, as an effect script does.
-    t.add({"addControl", 4, /*returns*/ false, BuiltinKind::Call, &mm_light_addControl, {},
-           /*byRef*/ 0x2, /*byStr*/ 0x1});
         return t;
     }();
     return table;

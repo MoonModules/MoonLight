@@ -569,7 +569,10 @@ line:
 A user's own action already feels instant, since the UI updates locally on send. What this buys is
 the case where something ELSE moved the control: a script, OSC, a second browser.
 
-### Open: `addControl` is still in the light header
+### ✅ Open: `addControl` is still in the light header
+
+Resolved 2026-10-06: `addControl`, its sink and `runDefineControls` live in `MoonLiveBuiltins_common.h`, registered once for both tables, and the per-thread slot claim is `core/util/ThreadSlot.h`, which the light sinks share.
+
 
 The domain-neutral builtins moved to `core/moonlive/MoonLiveBuiltins_common.h` (2026-09-02): the
 math, the waveforms, noise, randomness and print. `addControl` did NOT, so the service table still

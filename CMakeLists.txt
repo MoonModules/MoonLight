@@ -98,6 +98,9 @@ else()
         # and that count may only fall, while each site stays a judgment (a driver may have to wait
         # on hardware), so failing the build on them would block every other gate.
         add_compile_options(-Wfunction-effects -Wno-error=function-effects)
+        # A stack frame over 512 bytes, counted the same way: a task's stack is sized for its deepest call, so one large frame costs every task that reaches it.
+        # Here rather than for every compiler: the code report reads this build's saved findings, and the frame a Release build lays out is the one a task pays for.
+        add_compile_options(-Wframe-larger-than=512 -Wno-error=frame-larger-than)
         # Each file's findings are kept beside its object, so the code report reads the whole tree after an incremental build instead of a clean one.
         find_package(Python3 COMPONENTS Interpreter QUIET)
         if(Python3_Interpreter_FOUND AND NOT CMAKE_CXX_COMPILER_LAUNCHER)
@@ -278,9 +281,9 @@ file(CONFIGURE OUTPUT ${MOONLIVE_STAMP} CONTENT "${MOONLIVE_SCRIPT_LIST}\n")
 set(MOONLIVE_CATALOG_STAMP ${CMAKE_BINARY_DIR}/moonlive_catalog.stamp)
 add_custom_command(
     OUTPUT ${MOONLIVE_CATALOG_STAMP}
-    COMMAND ${CMAKE_COMMAND} -DSCRIPT_DIR=${CMAKE_SOURCE_DIR}/moonlive -DOUT=${CMAKE_SOURCE_DIR}/src/light/moonlive/script_catalog.h -DUV_EXECUTABLE=${UV_EXECUTABLE} -P ${CMAKE_SOURCE_DIR}/src/light/moonlive/catalog_scripts.cmake
+    COMMAND ${CMAKE_COMMAND} -DSCRIPT_DIR=${CMAKE_SOURCE_DIR}/moonlive -DOUT=${CMAKE_SOURCE_DIR}/src/core/moonlive/script_catalog.h -DUV_EXECUTABLE=${UV_EXECUTABLE} -P ${CMAKE_SOURCE_DIR}/src/core/moonlive/catalog_scripts.cmake
     COMMAND ${CMAKE_COMMAND} -E touch ${MOONLIVE_CATALOG_STAMP}
-    DEPENDS ${MOONLIVE_SCRIPTS} ${MOONLIVE_STAMP} ${CMAKE_SOURCE_DIR}/src/light/moonlive/catalog_scripts.cmake ${CMAKE_SOURCE_DIR}/src/light/moonlive/catalog_scripts.py
+    DEPENDS ${MOONLIVE_SCRIPTS} ${MOONLIVE_STAMP} ${CMAKE_SOURCE_DIR}/src/core/moonlive/catalog_scripts.cmake ${CMAKE_SOURCE_DIR}/src/core/moonlive/catalog_scripts.py
     COMMENT "Generating MoonLive script catalog"
 )
 add_custom_target(moonlive_catalog DEPENDS ${MOONLIVE_CATALOG_STAMP})

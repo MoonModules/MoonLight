@@ -146,8 +146,7 @@ inline size_t hub75Encode(const uint8_t* rgb, uint8_t* out,
             const uint16_t darkWord = addrMask(latched);
             const uint16_t litWord = static_cast<uint16_t>(darkWord | (1u << lay.oe));
             const uint16_t latchWord = static_cast<uint16_t>(addrMask(r) | (1u << lay.lat));
-            // This plane's lit window, in words: the top plane fills the row less the latch word, each lower plane half the one above, all scaled by brightness.
-            // 32-bit throughout: a row of 2,048 words at full brightness and 6 bits stays under 17 million.
+            // Lit words: the top plane fills the row less its latch, each lower plane half the one above; 32 bits hold 2,048 words at 6 bits.
             const uint32_t span = 255u << (geo.bitDepth - 1);
             const uint32_t litWords =
                 (static_cast<uint32_t>(rowWords - 1) * geo.brightness * (1u << plane) + span / 2) / span;

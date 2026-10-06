@@ -31,6 +31,7 @@ A flat parser returns zero for a missing key, which is indistinguishable from a 
 | [`ScratchBuffer`](moxygen/ScratchBuffer.md) | One owned allocation with a typed view, so a module sizes its working memory once rather than per frame. The heavy body compiles once rather than per element type. |
 | [`SpscRing`](moxygen/SpscRing.md) | The textbook Lamport queue: one thread pushes, one pops, and each index is written by exactly one side. The release and acquire pair is what publishes the element data. |
 | [`TryLock`](moxygen/TryLock.md) | A non-blocking latch for a resource two threads reach. It never waits, so the render core is never held by a slower caller. |
+| [`ThreadSlot`](moxygen/ThreadSlot.md) | A small table of slots a thread claims by its id, standing in for `thread_local` where an ESP32 task has no TLS. The script builtins reach their sinks through it. |
 | `Sort.h` | In-place insertion sort over a fixed array, for the small bounded collections the system holds. Every module sorts the same way and supplies only its comparator. |
 
 ## Wire formats and parsing
@@ -42,6 +43,7 @@ A flat parser returns zero for a missing key, which is indistinguishable from a 
 | [`FirmwareImage`](moxygen/FirmwareImage.md) | Reads an image's header without the vendor framework. The layout is a fixed on-disk format, so the same bytes parse on a device and in a test. |
 | [`PinList`](moxygen/util_PinList.md) · [`HostList`](moxygen/HostList.md) | The two list parsers a board configuration needs: a pin list and a host list of addresses and names, both typed by a human into one text control. |
 | [`Addressing`](moxygen/Addressing.md) · [`HostResolver`](moxygen/HostResolver.md) | One rule for sending to many receivers, unicast, multicast or broadcast, and the cache that turns a host name into an address off the render thread. |
+| [`ConfigScrape`](moxygen/ConfigScrape.md) · [`Ipv4`](moxygen/Ipv4.md) | The keys MoonBase reads out of the app's saved config without a parser, and the IPv4 parse and static-address rule both images check by. |
 | [`sha256`](moxygen/sha256.md) · [`crc`](moxygen/crc.md) | A cryptographic digest for update verification and identity, and a cheap checksum used as a fingerprint of a block of state. |
 | [`Sha1`](moxygen/Sha1.md) · [`Base64`](moxygen/Base64.md) | The two codecs the WebSocket handshake needs, the digest that standard mandates and the encoding that carries it. |
 
@@ -49,7 +51,7 @@ A flat parser returns zero for a missing key, which is indistinguishable from a 
 
 | Header | What it is |
 |---|---|
-| [`LightSummary`](moxygen/LightSummary.md) | A plain-data summary of the light pipeline's output, so the network shims report the real device shape without including anything from the light domain. |
+| [`LightOutput`](moxygen/LightOutput.md) | The light pipeline as core reads it: the device's shape and its palettes as colors. The light domain implements it, so the network shims and MoonStats include nothing from the light domain. |
 | [`AudioFrame`](moxygen/AudioFrame.md) | One snapshot of analysed audio, produced once per render tick and consumed by audio-reactive effects. |
 | [`BinaryBroadcaster`](moxygen/BinaryBroadcaster.md) | The sink a producer holds instead of the concrete server, so a driver sends to every client without depending on the web server. |
 | `build_info.h` | The version and build identity, generated from the project manifest rather than edited by hand. |

@@ -181,6 +181,9 @@ A finding is a named code smell. Every smell has a named, behavior-preserving mo
 | Platform code outside `src/platform` | Move Function into the platform layer; `if constexpr` on `platform_config.h` | a target's facts in one layer |
 | A blocking call on the render path | Move the work off the render thread: a worker, a cached value, a deferred apply | the tick only computes |
 | A name spread across files | Move Function, self-registration | a concept in one place |
+| A module type named in the UI | Replace Conditional with Polymorphism: the module declares a control, a role or a flag | the UI knows no module |
+| A stack frame over 512 bytes | Move the large local into a member or a `ScratchBuffer`, sized once | no task's stack pays for it |
+| A buffer taken by hand in the light domain | Replace it with a `ScratchBuffer` member | owned, sized, reported and freed in one place |
 
 Cut first: a branch that chooses between equals is data, a guard is an early return, and nesting is what a reader trips on, more than branch count. The theory behind the moves is Ousterhout's: complexity is dependencies and obscurity, so a deep module with a small interface absorbs it and its callers stay simple. A function may stay over a limit when splitting it would hide a sequence that belongs together. It says so in one line, and its count stays rather than being forced.
 

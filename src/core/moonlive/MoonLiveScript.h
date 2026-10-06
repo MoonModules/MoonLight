@@ -1,8 +1,8 @@
 #pragma once
 
 #include "core/module/MoonModule.h"
-#include "light/moonlive/MoonLiveBuiltins_light.h"
-#include "light/moonlive/MoonLiveScriptFile.h"
+#include "core/moonlive/MoonLiveBuiltins_common.h"   // runDefineControls
+#include "core/moonlive/MoonLiveScriptFile.h"
 
 #include <cstring>
 
@@ -34,16 +34,12 @@ public:
     /// Said instead when the shipped copy has moved on since the fork.
     static constexpr const char* kStaleMark = "edited copy, shipped one updated";
 
-    /// Let a binding that owns a particle pool size it from the script's defineControls().
-    void setPoolSizer(PoolSizeFn fn, void* ctx) { sizePool_ = fn; poolCtx_ = ctx; }
-
-    /// The same for a trail plane, which only a script asking with `trail(1)` pays for.
-    void setTrailSizer(TrailSizeFn fn, void* ctx) { sizeTrail_ = fn; trailCtx_ = ctx; }
+    /// Let a binding attach its own sinks around the script's defineControls(), such as a pool it sizes.
+    void setDefineHook(DefineHook fn, void* ctx) { defineHook_ = fn; defineCtx_ = ctx; }
 
     // True means a new program was installed, which a modifier turns into a Layer rebuild.
     /// Re-read the file and recompile when its content hash moved.
-    bool sync(const SysVarTable& sysvars, MoonModule& owner,
-              const BuiltinTable& builtins = lightBuiltins()) {
+    bool sync(const SysVarTable& sysvars, MoonModule& owner, const BuiltinTable& builtins) {
         // Cheapest question first, since this runs on every prepare sweep and must not compile.
         uint32_t fileHash = 0;
         const bool readable = scriptFileHash(name_, fileHash);
@@ -59,7 +55,7 @@ public:
         uint32_t hash = 0;
         if (compileScriptFile(engine_, name_, builtins, sysvars, err, &hash)) {
             // By running defineControls(), the way a compiled module does.
-            runDefineControls(engine_, sizePool_, poolCtx_, sizeTrail_, trailCtx_);
+            runDefineControls(engine_, defineHook_, defineCtx_);
             // What the script says it is, read once per compile rather than per frame.
             readIdentity();
             // How big the program is and which budget it is closest to, which the card cannot say.
@@ -221,10 +217,8 @@ private:
     char     failedScript_[kMaxScriptName + 1] = "";
 
     size_t     reportedBytes_ = 0;   // what this script last added to the owner's total
-    PoolSizeFn  sizePool_  = nullptr;
-    void*       poolCtx_   = nullptr;
-    TrailSizeFn sizeTrail_ = nullptr;
-    void*       trailCtx_  = nullptr;
+    DefineHook  defineHook_ = nullptr;
+    void*       defineCtx_  = nullptr;
 };
 
 }  // namespace mm::moonlive

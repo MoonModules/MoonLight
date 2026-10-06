@@ -108,12 +108,10 @@
 /// `hsv/get` publishes the chosen palette's representative hue, full sat, and value as brightness percent.
 /// Subscriptions otherwise happen only at CONNACK, so a mid-session discovery turn-on subscribes as well as announcing.
 ///
-/// ## The one reach into the light domain
+/// ## Palettes through the light output
 ///
-/// `Palettes::nearestForHue` is a pure hue-and-saturation to index CONVERSION with no light state or objects, the one narrow reach this core module makes into the light domain.
-/// PO-accepted: routing a HomeKit color to a palette needs the palette set, which is inherently light-domain.
-/// A format conversion is the least-coupling way to bridge it, since the module still drives the palette via `Scheduler::setControl` rather than a light object.
-/// This is a deliberate divergence from the plan's "no light include" line, made with the trade-off understood rather than by precedent.
+/// A HomeKit color picks the nearest palette through `LightOutput`, which the light domain implements, so this module includes no light header.
+/// It still drives the palette through `Scheduler::setControl` rather than a light object.
 ///
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/system/MqttModule.h"
@@ -125,7 +123,7 @@
 #include "core/util/JsonSink.h"      // jsonEscape: escape the editable deviceName into the discovery JSON
 #include "core/util/build_info.h"    // kVersion / kFirmwareName: reported to HA's update entity
 #include "core/system/FirmwareUpdateModule.h"  // g_otaStatus / g_otaBytesTotal / otaInFlight: shared with the OTA task
-#include "light/util/Palette.h"      // Palettes::nearestForHue: the one reach into the light domain, @xref{the-one-reach-into-the-light-domain}
+#include "core/util/LightOutput.h"   // the palettes as colors, for the HSV pair
 
 #include <cstdio>
 #include <cstdlib>
@@ -730,11 +728,13 @@ void MqttModule::routePublish(const char* topic, const uint8_t* payload, size_t 
         // The mqttthing HSV triple: hue and sat pick the nearest palette, value maps to brightness. @xref{inbound-command-routing}
         int h = 0, s = 0, v = -1;
         std::sscanf(value, "%d,%d,%d", &h, &s, &v);
-        const uint8_t idx = Palettes::nearestForHue(static_cast<uint16_t>(h < 0 ? 0 : h),
-                                                    static_cast<uint8_t>(s < 0 ? 0 : (s > 100 ? 255 : s * 255 / 100)));
         char json[24];
-        std::snprintf(json, sizeof(json), "{\"value\":%u}", static_cast<unsigned>(idx));
-        setControlValue("palette", json);
+        if (const LightOutput* out = LightOutput::active()) {
+            const uint8_t idx = out->nearestPalette(static_cast<uint16_t>(h < 0 ? 0 : h),
+                                                    static_cast<uint8_t>(s < 0 ? 0 : (s > 100 ? 255 : s * 255 / 100)));
+            std::snprintf(json, sizeof(json), "{\"value\":%u}", static_cast<unsigned>(idx));
+            setControlValue("palette", json);
+        }
         if (v >= 0) {
             int bri = (v > 100 ? 100 : v) * 255 / 100;
             std::snprintf(json, sizeof(json), "{\"value\":%d}", bri);
@@ -796,9 +796,10 @@ void MqttModule::publishState(bool force) {
     char briStr[8];
     std::snprintf(briStr, sizeof(briStr), "%d", (bri * 100) / 255);
     // hsv/get: the chosen palette's representative hue, full sat, value = brightness%. @xref{inbound-command-routing}
+    uint16_t hue = 0, sat = 0;
+    if (const LightOutput* out = LightOutput::active()) out->paletteHueSat(pal, hue, sat);
     char hsvStr[16];
-    std::snprintf(hsvStr, sizeof(hsvStr), "%u,100,%d",
-                  static_cast<unsigned>(Palettes::representativeHue(pal)), (bri * 100) / 255);
+    std::snprintf(hsvStr, sizeof(hsvStr), "%u,100,%d", static_cast<unsigned>(hue), (bri * 100) / 255);
 
     if (!publish("on/get", on ? "true" : "false") ||
         !publish("brightness/get", briStr) ||

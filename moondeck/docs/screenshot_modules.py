@@ -383,7 +383,7 @@ SCRIPT_DIR = "/moonlive"
 # Where each script extension lives in the repo, imported rather than restated: catalog_scripts.py
 # is the one home for the extension-to-role-to-folder mapping, and a second copy here would drift
 # the moment a role is added.
-sys.path.insert(0, str(ROOT / "src" / "light" / "moonlive"))
+sys.path.insert(0, str(ROOT / "src" / "core" / "moonlive"))
 from catalog_scripts import ROLE_BY_EXT, FOLDER_BY_ROLE   # noqa: E402
 SCRIPT_SRC = {ext: FOLDER_BY_ROLE[role] for ext, role in ROLE_BY_EXT.items()}
 

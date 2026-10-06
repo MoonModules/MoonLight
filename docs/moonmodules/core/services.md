@@ -38,7 +38,7 @@ A user-added Service: the audio source the audio-reactive effects consume. `mode
 - `syncPort`: (network build) the UDP port, 11988 by default; `sync status` reports the state.
 - read-only: `level` (RMS), `peakHz` (the audio driving effects, from any source).
 
-Detail: [technical](moxygen/AudioService.md) · [the sync packet](../light/moxygen/WLEDAudioSyncPacket.md) · [the lock-free ring](moxygen/SpscRing.md)
+Detail: [technical](moxygen/AudioService.md) · [the sync packet](moxygen/WLEDAudioSyncPacket.md) · [the lock-free ring](moxygen/SpscRing.md)
 
 [Tests](../../reference/tests/unit-tests.md#audioservice)
 
