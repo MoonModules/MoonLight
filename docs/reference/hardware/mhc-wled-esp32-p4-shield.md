@@ -5,7 +5,7 @@ Terminal pinout and onboard features for the **MHC-WLED ESP32-P4 shield** (myhom
 > **Board revision:** the terminal map and RS-485 wiring below are transcribed from a **V1** board (the builder's labeled V1 photos + schematics). The overview render is a **V2** render. Whether V2 keeps the identical GPIO↔terminal wiring is **not confirmed here**, so treat the map as V1-specific and verify against your own board's silkscreen if you have a different revision.
 
 **Sources**
-- Overview render (board V2): [`docs/assets/deviceModels/mhc-wled-esp32-p4-shield.jpg`](../../assets/deviceModels/mhc-wled-esp32-p4-shield.jpg)
+- Overview render (board V2): [`docs/assets/deviceModels/esp32-p4-mhc-wled-shield.jpg`](../../assets/deviceModels/esp32-p4-mhc-wled-shield.jpg)
 - Silkscreen (photographed) + the builder's V1 schematics and terminal maps (myhome-control / Wladi, 2026-07-16); the transcriptions below come from those. The schematics supersede the marketing render where they differ.
 
 ## Pinout
@@ -29,7 +29,7 @@ The LED-data outputs. Each terminal is `O<gpio>` on the silkscreen; a level shif
 | Terminal | GPIO | Note |
 |---|---|---|
 | O21 O20 O25 O5 O7 O23 O8 O27 | 21 20 25 5 7 23 8 27 | LED lanes (Parallel LED, peripheral `Parlio`, default), in terminal order |
-| O7 / O8 | 7 / 8 | ALSO the I²C bus (SDA 7 / SCL 8). Driving them as LED lanes means no I²C on this shield, which is why the catalog entry carries no I2cScan module. To get I²C back: move those two strands to `O22`/`O24` **and** set the driver's `pins` to `21,20,25,5,22,23,24,27` to match. Rewiring alone leaves the lanes still driving 7/8. |
+| O7 / O8 | 7 / 8 | ALSO the I²C bus (SDA 7 / SCL 8). Driving them as LED lanes means no I²C on this shield, which is why the catalog entry carries no I2cBus module. To get I²C back: move those two strands to `O22`/`O24` **and** set the driver's `pins` to `21,20,25,5,22,23,24,27` to match. Rewiring alone leaves the lanes still driving 7/8. |
 | O3 | 3 | also on RS-485 (`A-3-B`) — see note below |
 | O4 | 4 | also on RS-485 (`A-4-B`) — see note below |
 | GND | — | ground for the output block |
@@ -71,6 +71,9 @@ Inputs are **diode-protected with a ~16 kHz low-pass filter** — designed for r
 ### Line-In audio (PCM1808 → I²S)
 
 An onboard **PCM1808** ADC captures a line-in signal and outputs I²S to the P4. Catalog `AudioService`: **SCK 32 · WS 26 · SD 33 · MCLK 36** (the P4 is I²S master, so it drives MCLK).
+
+The P4-NANO's own microphone, behind its ES8311 codec, reads silent with the shield attached, though the codec answers on I²C and the I²S clocks run.
+On a bare P4-NANO the same settings hear the room. The cause is not known yet, so on the shield the line-in is the audio input.
 
 ### Ethernet (RMII)
 

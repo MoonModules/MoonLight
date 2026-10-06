@@ -9,14 +9,15 @@ This number is the debt behind that gate, and it RATCHETS: a rise fails the chec
 docgen.md does. A comment is prose wherever it lives, so a `//` in the web interface and a
 `#` in a script are counted beside a `///` in a header.
 
-**2950 finding(s)** across 331 file(s).
+**3185 finding(s)** across 377 file(s).
 
 | rule | findings |
 |---|---|
-| `MoonLight.EmDash` | 1642 |
-| `MoonLight.Weasel` | 742 |
-| `MoonLight.SentenceLength` | 476 |
-| `MoonLight.Spelling` | 44 |
+| `MoonLight.EmDash` | 1636 |
+| `MoonLight.Weasel` | 738 |
+| `MoonLight.SentenceLength` | 474 |
+| `MoonLight.Temporal` | 248 |
+| `MoonLight.Spelling` | 43 |
 | `MoonLight.SelfReference` | 33 |
 | `MoonLight.NegatedHeading` | 13 |
 
@@ -24,23 +25,23 @@ docgen.md does. A comment is prose wherever it lives, so a `//` in the web inter
 
 | file | findings |
 |---|---|
-| `moondeck/MoonDeck.md` | 251 |
-| `moondeck/moondeck.py` | 165 |
-| `docs/how-to/home-automation.md` | 115 |
-| `mooninstaller/install-orchestrator.js` | 94 |
+| `moondeck/MoonDeck.md` | 256 |
+| `moondeck/moondeck.py` | 169 |
+| `docs/how-to/home-automation.md` | 117 |
+| `mooninstaller/install-orchestrator.js` | 96 |
 | `docs/tutorials/build-your-own-moonmodules.md` | 92 |
-| `moondeck/moondeck_ui/app.js` | 85 |
-| `docs/how-to/building.md` | 82 |
-| `mooninstaller/README.md` | 75 |
-| `moondeck/check/check_clang_query.py` | 72 |
-| `mooninstaller/install.js` | 67 |
-| `src/ui/app.js` | 56 |
-| `src/ui/install-picker.js` | 50 |
-| `moondeck/check/check_nonblocking.py` | 49 |
-| `moondeck/docs/gen_api.py` | 49 |
-| `src/ui/preview3d.js` | 47 |
-| `moondeck/build/build_esp32.py` | 46 |
-| `docs/explanation/architecture/moonlight.md` | 42 |
+| `moondeck/moondeck_ui/app.js` | 92 |
+| `docs/how-to/building.md` | 88 |
+| `mooninstaller/README.md` | 74 |
+| `moondeck/check/check_clang_query.py` | 73 |
+| `src/ui/app.js` | 72 |
+| `mooninstaller/install.js` | 71 |
+| `src/ui/install-picker.js` | 55 |
+| `moondeck/docs/gen_api.py` | 53 |
+| `src/ui/preview3d.js` | 49 |
+| `moondeck/build/build_esp32.py` | 48 |
+| `moondeck/check/check_nonblocking.py` | 47 |
+| `docs/explanation/architecture/moonlight.md` | 45 |
 | `moondeck/docs/mkdocs_hooks.py` | 40 |
-| `docs/reference/hardware/gpio-usage.md` | 36 |
-| `src/platform/esp32/platform_esp32_moon_i80.cpp` | 36 |
+| `docs/reference/testing.md` | 38 |
+| `src/platform/esp32/platform_esp32_moon_i80.cpp` | 37 |

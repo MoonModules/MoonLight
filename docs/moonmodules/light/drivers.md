@@ -67,7 +67,8 @@ Plus the [shared controls](#shared-driver-controls) above:
 - `pins`: data GPIO list: `18,17,16`, or ranges like `20-23`, mixed freely. Empty idles until set.
 - `ledsPerPin`: lights per strand. Blank splits evenly, one number to all, a list per strand.
 - `peripheral`: the DMA peripheral, filtered to what the chip supports. It divides the card.
-- `doubleBuffer`, `pinExpander`, `latchPin`, bus pins: shown per peripheral.
+- 🎚️ `doubleBuffer`: encode the next frame while this one clocks out, where supported.
+- `pinExpander`, `latchPin`, bus pins: shown per peripheral.
 - read-only `frameTime`: what one frame costs on the wire, the headroom the pipeline has left.
 - 🔧 `loopbackTest`: a TX to RX self-test, verdict in the status field.
 - 🔧 `loopbackStrand` / `loopbackIntrusive`: which strand it tests, and whether it may disturb output.
@@ -90,11 +91,11 @@ Drives **HUB75 LED panels straight from the board's GPIO**, with no receiving ca
 - `clk lat oe`: shift clock, latch, output enable.
 - `peripheral`: `LCD_CAM` or `Parlio`, where the chip has both and the frame fits.
 - `scanRate`: 1/8, 1/16 or 1/32, **read off the panel**, not calculated.
-- `bitDepth` (2 to 4): color precision against refresh and memory.
+- `bitDepth` (2 to 6, default 6): color levels against refresh and memory.
 - `clockEdge`: `rising` or `falling`. Every pixel one column over means the other one.
 - `refresh`: the **measured** rate. The number to report if a panel flickers.
 
-**New, and not yet run on a wall we own.** Built from the panel's documented behavior with its encoder pinned by [host tests](../../reference/tests/unit-tests.md#hub75driver), which is not hardware verification. Reports welcome: `refresh` plus your geometry is what makes one useful.
+**Run on one panel.** A [MoonHub75](https://moonmodules.org/projects/hardware/#moonhub75-pcb) drives a 64x64 1/32-scan panel at 6-bit and 1,508 Hz. Larger walls and other panel families wait on reports: `refresh` plus your geometry makes one useful.
 
 Detail: [technical](moxygen/Hub75Driver.md) · encoder: [Hub75Slots](moxygen/Hub75Slots.md)
 
@@ -415,6 +416,6 @@ The [MoonHub75 PCB](https://moonmodules.org/projects/hardware/#moonhub75-pcb) is
 
 **How a HUB75 panel works, in two facts.** It is *scanned*, not addressed: two rows light at once, the upper half-panel through R1/G1/B1 and the lower through R2/G2/B2, selected by a row address on A/B/C (and D/E on finer panels). The controller walks every scan row in turn and persistence of vision does the rest, so a 64-row panel has 32 scan rows and row `r` drives panel rows `r` and `r + 32` together.
 
-And brightness is *time*, not amplitude. A HUB75 pixel is a switch, on or off, so intensity comes from binary coded modulation: bit plane `p` is displayed for 2^p time units, and a value lights its planes for a total proportional to itself. That weighting is the peripheral's output-enable window, and it is not built yet, which is why the depth cap below exists. Either way the encoder stores each plane once. Emitting plane `p` 2^p times is the obvious reading and it is wrong: 255 passes at 8-bit is 1,060,800 bytes for a single 64x64 panel, where storing once is 33,280.
+And brightness is *time*, not amplitude. A HUB75 pixel is a switch, on or off, so intensity comes from binary coded modulation: bit plane `p` is displayed for 2^p time units, and a value lights its planes for a total proportional to itself. That weighting is the output-enable window, which the encoder sets per plane. Either way the encoder stores each plane once. Emitting plane `p` 2^p times is the obvious reading and it is wrong: 255 passes at 8-bit is 1,060,800 bytes for a single 64x64 panel, where storing once is 33,280.
 
-**What depth costs, and why it stops at 4.** Every bit plane is a full scan, so depth costs refresh and memory linearly, and each slot on the wire is 2 bytes because the address, latch and output-enable lines sit above bit 7 of a 16-bit word. One 64x64 panel at 1/32 scan is 16,640 bytes a frame at 4-bit. The planes are emitted once each rather than weighted for 2^p time, so bit 3 lights as long as bit 0 and a fifth plane would buy nothing the eye can find. The weighting is [backlogged](https://github.com/MoonModules/MoonLight/blob/main/docs/work/future/backlog-light.md), and the cap lifts with it.
+**What depth costs, and why brightness is time.** Every bit plane is a full scan, so depth costs refresh and memory linearly, and each slot on the wire is 2 bytes because the address, latch and output-enable lines sit above bit 7 of a 16-bit word. One 64x64 panel at 1/32 scan is 16,384 bytes a frame at 4-bit and 24,576 at 6-bit. A panel's chips only switch a column on or off, so each plane is lit twice as long as the one below and brightness shortens every plane's lit time instead of scaling the colors, which keeps every level at any brightness. The price is top brightness: full white lights about a third of the time at 6-bit. Repeating the upper planes instead, for full brightness and 8-bit depth, is [backlogged](https://github.com/MoonModules/MoonLight/blob/main/docs/work/future/backlog-light.md).

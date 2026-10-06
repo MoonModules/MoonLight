@@ -9,13 +9,12 @@
 /// It links the system audio frameworks itself at run time, which matches the rule that the build needs no vendor kits, as the raw-frame and video precedents already do.
 /// The header lives untouched and is excluded from the quality gates; everything below the include is ours and stays warning-clean.
 
-// Shrink the build to the capture core: no codecs, no waveform generation, no engine.
-// One compiler cannot parse Apple's block syntax in those framework headers, and that build is a compile proof never shipped.
-// Dropping the backend there leaves the null one, while the shipped binary is built with the other compiler and keeps it.
+// GCC cannot parse Apple's block syntax in those framework headers; that compile-proof build falls back to the null backend, the shipped clang build keeps CoreAudio.
 #if defined(__APPLE__) && defined(__GNUC__) && !defined(__clang__)
     #define MA_NO_COREAUDIO
 #endif
 
+// Shrink the build to the capture core: no codecs, no waveform generation, no engine.
 #define MA_NO_DECODING
 #define MA_NO_ENCODING
 #define MA_NO_GENERATION
@@ -54,9 +53,7 @@
     #pragma GCC diagnostic pop
 #endif
 
-// The capture backend proper: everything below is ours and only the include above is vendored.
-// The library delivers samples on ITS own device thread, the callback pushes into a lock-free single-producer ring, and the module's polled read pops on the render thread.
-// The overflow policy and the sizing reasoning live with that ring.
+// Ours below the include: the library's device thread pushes samples into a lock-free ring that the render thread pops; the ring documents overflow and sizing.
 
 #include "platform/platform.h"
 #include "core/util/SpscRing.h"
@@ -68,7 +65,7 @@ namespace mm::platform {
 
 namespace {
 
-// One capture pipeline at a time (AudioService is a single active seat; a second concurrent device would race one ring). 4096 samples ≈ 186 ms at 22050 Hz, comfortably above one render tick's consumption, small enough to bound latency.
+// One pipeline: AudioService is a single seat. 4096 samples ≈ 186 ms at 22050 Hz, above one tick's use and short enough to bound latency.
 SpscRing<int32_t, 4096> ring_;
 
 ma_context ctx_;
@@ -99,7 +96,7 @@ void captureCallback(ma_device* /*dev*/, void* /*out*/, const void* in, ma_uint3
 
 }  // namespace
 
-bool audioCodecInit(CodecType /*type*/, const AudioCodecPins& /*pins*/, uint32_t /*sampleRate*/) {
+bool audioCodecInit(CodecType /*type*/, uint8_t /*i2cAddr*/, uint32_t /*sampleRate*/) {
     return true;   // no codec hardware on a desktop host; nothing to bring up
 }
 void audioCodecDeinit() {}

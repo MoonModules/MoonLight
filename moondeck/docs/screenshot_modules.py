@@ -182,7 +182,7 @@ CORE_MODULES = [
     "ImprovProvisioningModule",
     "AudioService",
     "AnalogService",
-    "I2cScanModule",
+    "I2cBusModule",
     "InfraredService",
     "ButtonService",
     "GamepadService",
@@ -207,7 +207,7 @@ CORE_NAV_ROOT = {
     "MoonTalkModule": "MoonCloudModule",
     "DevicesModule": "NetworkModule",
     "ImprovProvisioningModule": "NetworkModule",
-    # Audio / infrared are user-added Services (children of the Services container); I2cScan is a
+    # Audio / infrared are user-added Services (children of the Services container); I2cBus is a
     # fixed System child (wired-by-code). They're added/present per-board and never exist in
     # the desktop tree — so they're captured against an ESP32, where these entries route the
     # shot to the right nav root.
@@ -218,7 +218,7 @@ CORE_NAV_ROOT = {
     "GamepadService": "Services",
     "MidiService": "Services",
     "MoonLiveService": "Services",
-    "I2cScanModule": "SystemModule",
+    "I2cBusModule": "SystemModule",
 }
 # FileManagerModule, FirmwareUpdateModule, SystemModule, NetworkModule are top-level
 # (scheduler.addModule in main.cpp) — NOT listed here, so they capture as standalone cards.

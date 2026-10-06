@@ -7,19 +7,7 @@
 #include <cstring>
 #include <vector>
 
-// The success spec for the HUB75 bit-plane encode: a known RGB frame -> the exact bus-byte stream.
-// Pins the three things a panel cannot tell us it got wrong, and which no amount of looking at a wall diagnoses:
-//
-//
-//   1. the row address rides EVERY column slot, and names the row in the LATCH, one behind
-//   2. a bit plane reads the HIGH bits, so depth < 8 loses precision not range
-//   3. a panel driving more than two rows per address step encodes every pair
-//   4. every slot is a 16-BIT bus word, so the address/latch/OE lines above bit 7
-//      actually reach the wire (an 8-bit slot is a panel that never lights)
-//   5. every plane is stored once: the 2^p weighting is the peripheral's OE window,
-//      not 2^p copies in the buffer (that would be a megabyte for one panel)
-//
-// Pure data, no platform: this runs in CI with no ESP32 and no panel, which is the whole point of keeping the encoder a free function on plain buffers.
+// The encoder's contract on plain buffers, with no ESP32 and no panel: each case pins one thing a wall shows wrong without saying why.
 
 namespace {
 
@@ -34,22 +22,20 @@ void setPixel(std::vector<uint8_t>& f, uint16_t w, uint16_t x, uint16_t y,
     f[i + 0] = r; f[i + 1] = g; f[i + 2] = b;
 }
 
-/// Slot `n` as the 16-bit bus word the peripheral latches, little-endian.
-/// Every check below reads through this rather than indexing bytes.
-/// A slot is a WORD, and testing one byte of it is how an encoder that drops the high lines passes its own test.
+/// Slot `n` as the 16-bit little-endian bus word, so no check tests one byte and misses the lines above bit 7.
 uint16_t slot(const std::vector<uint8_t>& out, size_t n) {
     return static_cast<uint16_t>(out[n * 2] | (out[n * 2 + 1] << 8));
 }
 
 }  // namespace
 
-TEST_CASE("HUB75 encode: the frame is bit-plane major, one blanking byte per row") {
+TEST_CASE("HUB75 encode: the frame is bit-plane major, one word per column") {
     mm::Hub75Geometry geo;
     geo.width = 8; geo.height = 4; geo.scanRate = 2; geo.bitDepth = 2;
 
-    // 2 planes x 2 scan rows x (8 columns x 1 pair + 1 blank) = 36 slots, and 2 bytes each because the bus is 16 bits wide.
-    CHECK(geo.frameSlots() == 36);
-    CHECK(geo.frameBytes() == 36 * 2);
+    // 2 planes x 2 scan rows x 8 columns x 1 pair = 32 slots, and 2 bytes each because the bus is 16 bits wide.
+    CHECK(geo.frameSlots() == 32);
+    CHECK(geo.frameBytes() == 32 * 2);
 
     auto rgb = blackFrame(geo.width, geo.height);
     std::vector<uint8_t> out(geo.frameBytes(), 0xAA);
@@ -66,15 +52,16 @@ TEST_CASE("HUB75 encode: the address on a data word is the row in the LATCH, one
     std::vector<uint8_t> out(geo.frameBytes(), 0);
     REQUIRE(mm::hub75Encode(rgb.data(), out.data(), geo, lay) == geo.frameBytes());
 
-    // Two scan rows: row 0's data words name the LAST row and its blank names row 0; row 1's data words name row 0 and its blank names row 1. Read as 16-bit words, since the lines sit above bit 7.
-    const size_t row1 = geo.width + 1;   // past row 0's columns and its blanking slot
-    for (uint16_t x = 0; x < geo.width; x++) CHECK((slot(out, x) & (1u << lay.a)) != 0);
-    CHECK((slot(out, geo.width) & (1u << lay.a)) == 0);
-    for (uint16_t x = 0; x < geo.width; x++) CHECK((slot(out, row1 + x) & (1u << lay.a)) == 0);
-    CHECK((slot(out, row1 + geo.width) & (1u << lay.a)) != 0);
+    // Row 0's lit words name the LAST row and its latch word names row 0; row 1's name row 0, then row 1.
+    const size_t row1 = geo.width;           // row 1 starts right after row 0's columns
+    const uint16_t latch = geo.width - 1;    // the last column's word is the latch
+    for (uint16_t x = 0; x < latch; x++) CHECK((slot(out, x) & (1u << lay.a)) != 0);
+    CHECK((slot(out, latch) & (1u << lay.a)) == 0);
+    for (uint16_t x = 0; x < latch; x++) CHECK((slot(out, row1 + x) & (1u << lay.a)) == 0);
+    CHECK((slot(out, row1 + latch) & (1u << lay.a)) != 0);
 
-    // And on EVERY data word, not only the first: an address changing mid-row ghosts the row.
-    for (uint16_t x = 1; x < geo.width; x++) {
+    // And on EVERY lit word, not only the first: an address changing mid-row ghosts the row.
+    for (uint16_t x = 1; x < latch; x++) {
         CHECK((slot(out, x) & (1u << lay.a)) == (slot(out, 0) & (1u << lay.a)));
     }
 
@@ -85,8 +72,8 @@ TEST_CASE("HUB75 encode: the address on a data word is the row in the LATCH, one
     low.lat = 6; low.oe = 7;
     std::vector<uint8_t> out2(geo.frameBytes(), 0);
     REQUIRE(mm::hub75Encode(rgb.data(), out2.data(), geo, low) == geo.frameBytes());
-    for (uint16_t x = 0; x < geo.width; x++) CHECK((slot(out2, x) & (1u << low.a)) != 0);
-    for (uint16_t x = 0; x < geo.width; x++) CHECK((slot(out2, row1 + x) & (1u << low.a)) == 0);
+    for (uint16_t x = 0; x < latch; x++) CHECK((slot(out2, x) & (1u << low.a)) != 0);
+    for (uint16_t x = 0; x < latch; x++) CHECK((slot(out2, row1 + x) & (1u << low.a)) == 0);
 }
 
 TEST_CASE("HUB75 encode: a color bit lands on its own line, for both half-panels") {
@@ -139,7 +126,7 @@ TEST_CASE("HUB75 encode: depth below 8 keeps the HIGH bits") {
     // Both planes of a 2-bit depth read bits 6 and 7, so both carry red.
     const size_t plane0 = 0;
     // Plane 1 starts after plane 0's single pass (2^0 = 1), in SLOTS.
-    const size_t plane1 = static_cast<size_t>(geo.scanRows()) * (geo.width + 1);
+    const size_t plane1 = static_cast<size_t>(geo.scanRows()) * geo.width;
     CHECK((slot(out, plane0) & (1u << lay.r1)) != 0);
     CHECK((slot(out, plane1) & (1u << lay.r1)) != 0);
 
@@ -159,9 +146,9 @@ TEST_CASE("HUB75 encode: a panel driving four rows per address step encodes ever
     mm::Hub75Layout lay;
 
     CHECK(geo.rowsPerScan() == 4);
-    // 4 planes x 2 scan rows x (2 columns x 2 pairs + 1 blank) = 40 slots, 80 bytes.
-    CHECK(geo.frameSlots() == 40);
-    CHECK(geo.frameBytes() == 40 * 2);
+    // 4 planes x 2 scan rows x 2 columns x 2 pairs = 32 slots, 64 bytes.
+    CHECK(geo.frameSlots() == 32);
+    CHECK(geo.frameBytes() == 32 * 2);
 
     auto rgb = blackFrame(geo.width, geo.height);
     setPixel(rgb, geo.width, 0, 2, 0xFF, 0, 0);   // row 2 = address step 0, pair 1, upper
@@ -172,12 +159,13 @@ TEST_CASE("HUB75 encode: a panel driving four rows per address step encodes ever
     // Pair 0 (rows 0 and 4) is black; pair 1 (rows 2 and 6) carries the red.
     CHECK((slot(out, 0) & (1u << lay.r1)) == 0);              // pair 0, column 0
     CHECK((slot(out, geo.width) & (1u << lay.r1)) != 0);      // pair 1, column 0
+    // One latch per address step, on the last pair's last word, not at the end of each pair.
+    CHECK((slot(out, geo.width - 1) & (1u << lay.lat)) == 0);
+    CHECK((slot(out, 2 * geo.width - 1) & (1u << lay.lat)) != 0);
 }
 
-TEST_CASE("HUB75 encode: the blanking byte blanks before it latches") {
-    // OE high (dark) AND latch in the same byte.
-    // The panel must be dark while the shift register hands its row to the output drivers, or the row being addressed briefly shows the previous row's data.
-    // That ghost is what this pins.
+TEST_CASE("HUB75 encode: the last column's word latches, dark") {
+    // Dark while the shift register hands its row to the output drivers, or the addressed row briefly shows the previous row's data.
     mm::Hub75Geometry geo;
     geo.width = 2; geo.height = 2; geo.scanRate = 1; geo.bitDepth = 2;
     mm::Hub75Layout lay;
@@ -187,9 +175,10 @@ TEST_CASE("HUB75 encode: the blanking byte blanks before it latches") {
     std::vector<uint8_t> out(geo.frameBytes(), 0);
     REQUIRE(mm::hub75Encode(rgb.data(), out.data(), geo, lay) == geo.frameBytes());
 
-    const size_t blank = geo.width;   // the byte after the columns
-    CHECK((slot(out, blank) & (1u << lay.oe)) != 0);    // dark
-    CHECK((slot(out, blank) & (1u << lay.lat)) != 0);   // and latching
+    const size_t latch = geo.width - 1;   // the last column's word
+    CHECK((slot(out, latch) & (1u << lay.oe)) == 0);    // dark
+    CHECK((slot(out, latch) & (1u << lay.lat)) != 0);   // and latching
+    CHECK((slot(out, 0) & (1u << lay.lat)) == 0);       // and only there
 }
 
 TEST_CASE("HUB75 encode: the DMA wrap lights the last row once, from row 0's data words") {
@@ -204,16 +193,118 @@ TEST_CASE("HUB75 encode: the DMA wrap lights the last row once, from row 0's dat
     std::vector<uint8_t> out(geo.frameBytes(), 0);
     REQUIRE(mm::hub75Encode(rgb.data(), out.data(), geo, lay) == geo.frameBytes());
 
-    // The frame's last word is the last row's blank: dark, latching, addressed to that row.
+    // The frame's last word is the last row's latch word: dark, latching, addressed to that row.
     const size_t last = geo.frameSlots() - 1;
     const uint16_t lastRow = geo.scanRows() - 1;
-    CHECK((slot(out, last) & (1u << lay.oe)) != 0);
+    CHECK((slot(out, last) & (1u << lay.oe)) == 0);
     CHECK((slot(out, last) & (1u << lay.lat)) != 0);
     CHECK((slot(out, last) & (1u << lay.a)) == (lastRow & 1 ? (1u << lay.a) : 0u));
 
     // And the first word lights, addressed to that same last row, whose data the latch now holds.
-    CHECK((slot(out, 0) & (1u << lay.oe)) == 0);
+    CHECK((slot(out, 0) & (1u << lay.oe)) != 0);
     CHECK((slot(out, 0) & (1u << lay.a)) == (lastRow & 1 ? (1u << lay.a) : 0u));
+}
+
+// Seen on a 64x64 panel: row 63 ghosting onto row 32, rows 0 and 32 brighter, flashing. The peripheral idles its lines LOW between scans, and with OE encoded as the panel reads it (active low) that idle bus lit address 0 with the last latched row.
+TEST_CASE("HUB75 encode: the OE bit is set where the panel is lit, so an all-zero idle bus is dark") {
+    mm::Hub75Geometry geo;
+    geo.width = 4; geo.height = 2; geo.scanRate = 1; geo.bitDepth = 2;
+    mm::Hub75Layout lay;
+    std::vector<uint8_t> rgb(static_cast<size_t>(geo.width) * geo.height * 3, 0);   // black: color says nothing about OE
+    std::vector<uint8_t> out(geo.frameBytes(), 0);
+    REQUIRE(mm::hub75Encode(rgb.data(), out.data(), geo, lay) == geo.frameBytes());
+    // The top plane fills its row, so every column word lights but the latch word.
+    const size_t top = static_cast<size_t>(geo.bitDepth - 1) * geo.scanRows() * geo.width;
+    for (uint16_t x = 0; x + 1 < geo.width; x++) CHECK((slot(out, top + x) & (1u << lay.oe)) != 0);
+    CHECK((slot(out, top + geo.width - 1) & (1u << lay.oe)) == 0);
+}
+
+// Seen on the 64x64 panel: the last column dark whatever the effect, and the picture one column left. Every word is a clock, so a separate latch word shifted a 65th value into a 64-pixel row.
+TEST_CASE("HUB75 encode: a row clocks exactly its width, so the last column reaches the panel's last pixel") {
+    mm::Hub75Geometry geo;
+    geo.width = 4; geo.height = 2; geo.scanRate = 1; geo.bitDepth = 2;
+    mm::Hub75Layout lay;
+    auto rgb = blackFrame(geo.width, geo.height);
+    setPixel(rgb, geo.width, 3, 0, 0xFF, 0, 0);   // the LAST column, red
+    setPixel(rgb, geo.width, 0, 0, 0, 0xFF, 0);   // the FIRST column, green
+    std::vector<uint8_t> out(geo.frameBytes(), 0);
+    REQUIRE(mm::hub75Encode(rgb.data(), out.data(), geo, lay) == geo.frameBytes());
+    CHECK(geo.frameSlots() == static_cast<size_t>(geo.bitDepth) * geo.width);   // one scan row: width words a plane, nothing more
+    CHECK((slot(out, 0) & (1u << lay.g1)) != 0);   // first word: column 0, shifted in first, lands on the far pixel
+    CHECK((slot(out, 3) & (1u << lay.r1)) != 0);   // the latch word still carries column 3's color
+    CHECK((slot(out, 3) & (1u << lay.lat)) != 0);
+}
+
+namespace {
+// How many words of plane p's first row carry the OE (lit) bit.
+size_t litWords(const std::vector<uint8_t>& out, const mm::Hub75Geometry& geo, const mm::Hub75Layout& lay, uint8_t p) {
+    const size_t base = static_cast<size_t>(p) * geo.scanRows() * geo.width;
+    size_t n = 0;
+    for (uint16_t x = 0; x < geo.width; x++) n += (slot(out, base + x) & (1u << lay.oe)) != 0;
+    return n;
+}
+}  // namespace
+
+// Seen on the 64x64 panel: brightness coarse and out of order. Equal-time planes made a pixel's brightness count its set bits, so 7 (0111) outshone 8 (1000); binary time makes it follow the value.
+TEST_CASE("HUB75 encode: each plane is lit twice as long as the one below, the top plane for the whole row") {
+    mm::Hub75Geometry geo;
+    geo.width = 9; geo.height = 2; geo.scanRate = 1; geo.bitDepth = 4;   // 8 words that can light, plus the latch
+    mm::Hub75Layout lay;
+    auto rgb = blackFrame(geo.width, geo.height);
+    std::vector<uint8_t> out(geo.frameBytes(), 0);
+    REQUIRE(mm::hub75Encode(rgb.data(), out.data(), geo, lay) == geo.frameBytes());
+    CHECK(litWords(out, geo, lay, 0) == 1);
+    CHECK(litWords(out, geo, lay, 1) == 2);
+    CHECK(litWords(out, geo, lay, 2) == 4);
+    CHECK(litWords(out, geo, lay, 3) == 8);
+}
+
+// The slider used to scale values, so at about 75 every channel fell below 4 bits and the panel went black. As time, every plane keeps its share and only the shortest windows round away.
+TEST_CASE("HUB75 encode: brightness shortens every plane's window, keeping the values") {
+    mm::Hub75Geometry geo;
+    geo.width = 9; geo.height = 2; geo.scanRate = 1; geo.bitDepth = 4;
+    mm::Hub75Layout lay;
+    auto rgb = blackFrame(geo.width, geo.height);
+    setPixel(rgb, geo.width, 0, 0, 0xFF, 0, 0);
+    geo.brightness = 128;
+    std::vector<uint8_t> out(geo.frameBytes(), 0);
+    REQUIRE(mm::hub75Encode(rgb.data(), out.data(), geo, lay) == geo.frameBytes());
+    CHECK(litWords(out, geo, lay, 3) == 4);   // half of 8
+    CHECK(litWords(out, geo, lay, 2) == 2);
+    CHECK(litWords(out, geo, lay, 1) == 1);
+    CHECK((slot(out, 0) & (1u << lay.r1)) != 0);   // the pixel's value is untouched: full red still shifts in
+    geo.brightness = 0;
+    std::vector<uint8_t> dark(geo.frameBytes(), 0);
+    REQUIRE(mm::hub75Encode(rgb.data(), dark.data(), geo, lay) == geo.frameBytes());
+    for (uint8_t p = 0; p < geo.bitDepth; p++) CHECK(litWords(dark, geo, lay, p) == 0);
+}
+
+// Plane 0's window is 1/32 of the top plane's at 6-bit, so near a quarter brightness it rounds to nothing: the limit the encoder's docs state.
+TEST_CASE("HUB75 encode: below a quarter brightness the lowest 6-bit plane of a 64-column row is dark") {
+    mm::Hub75Geometry geo;
+    geo.width = 64; geo.height = 2; geo.scanRate = 1; geo.bitDepth = 6; geo.brightness = 64;
+    mm::Hub75Layout lay;
+    auto rgb = blackFrame(geo.width, geo.height);
+    std::vector<uint8_t> out(geo.frameBytes(), 0);
+    REQUIRE(mm::hub75Encode(rgb.data(), out.data(), geo, lay) == geo.frameBytes());
+    CHECK(litWords(out, geo, lay, 0) == 0);
+    CHECK(litWords(out, geo, lay, 5) == 16);   // the top plane keeps its quarter of 63
+}
+
+// A one-column panel: its only word is the latch, so the row encodes, dark, rather than underflowing the window.
+TEST_CASE("HUB75 encode: a one-column row is its latch word") {
+    mm::Hub75Geometry geo;
+    geo.width = 1; geo.height = 2; geo.scanRate = 1; geo.bitDepth = 2;
+    mm::Hub75Layout lay;
+    auto rgb = blackFrame(geo.width, geo.height);
+    setPixel(rgb, geo.width, 0, 0, 0xFF, 0, 0);
+    std::vector<uint8_t> out(geo.frameBytes(), 0);
+    REQUIRE(mm::hub75Encode(rgb.data(), out.data(), geo, lay) == geo.frameBytes());
+    for (size_t s = 0; s < geo.frameSlots(); s++) {
+        CHECK((slot(out, s) & (1u << lay.lat)) != 0);
+        CHECK((slot(out, s) & (1u << lay.oe)) == 0);
+        CHECK((slot(out, s) & (1u << lay.r1)) != 0);   // the color still shifts in
+    }
 }
 
 TEST_CASE("HUB75 encode: an unusable geometry writes nothing") {
@@ -230,8 +321,8 @@ TEST_CASE("HUB75 encode: an unusable geometry writes nothing") {
     indivisible.width = 8; indivisible.height = 7; indivisible.scanRate = 2;
     CHECK(mm::hub75Encode(rgb.data(), out.data(), indivisible) == 0);
 
-    mm::Hub75Geometry deep;   // above the 4-bit cap, which is what valid() enforces
-    deep.width = 8; deep.height = 8; deep.scanRate = 4; deep.bitDepth = 9;
+    mm::Hub75Geometry deep;   // above the 6-bit cap, which is what valid() enforces
+    deep.width = 8; deep.height = 8; deep.scanRate = 4; deep.bitDepth = 7;
     CHECK(mm::hub75Encode(rgb.data(), out.data(), deep) == 0);
 
     mm::Hub75Geometry ok;
@@ -244,22 +335,19 @@ TEST_CASE("HUB75 encode: an unusable geometry writes nothing") {
 }
 
 TEST_CASE("HUB75 frame size is what decides the peripheral") {
-    // The arithmetic the plan's memory table rests on, pinned so a change to the wire format cannot silently move the Parlio cliff.
-    // Parlio's single-shot cap is 65,535 bytes; the i80/LCD_CAM path allocates from PSRAM and has no such wall.
-    // Two bytes a slot: the bus is 16 bits wide, which is what doubles these against a byte-per-slot encoder that could not reach the address lines at all.
-    // 4-bit throughout: the deepest the driver offers while planes are unweighted.
+    // The sizes that decide Parlio (65,535 bytes a transfer) against LCD_CAM, two bytes a slot, pinned at 4-bit so a wire-format change cannot move the cliff unseen.
     mm::Hub75Geometry one;    // one 64x64 panel, 1/32 scan
     one.width = 64; one.height = 64; one.scanRate = 32; one.bitDepth = 4;
-    CHECK(one.frameBytes() == (4 * 32 * (64 * 1 + 1)) * 2);      // 16,640
+    CHECK(one.frameBytes() == (4 * 32 * 64 * 1) * 2);            // 16,384
     CHECK(one.frameBytes() < 65535u);                          // Parlio carries one panel
 
     mm::Hub75Geometry four;   // 128x128, 1/32 scan
     four.width = 128; four.height = 128; four.scanRate = 32; four.bitDepth = 4;
-    CHECK(four.frameBytes() == (4 * 32 * (128 * 2 + 1)) * 2);    // 65,792
-    CHECK(four.frameBytes() > 65535u);                         // four panels miss the cap by 257 B
+    CHECK(four.frameBytes() == (4 * 32 * 128 * 2) * 2);          // 65,536
+    CHECK(four.frameBytes() > 65535u);                         // four panels miss the cap by one byte
 
     mm::Hub75Geometry sixteen;   // 256x256, 1/32 scan
     sixteen.width = 256; sixteen.height = 256; sixteen.scanRate = 32; sixteen.bitDepth = 4;
-    CHECK(sixteen.frameBytes() == (4 * 32 * (256 * 4 + 1)) * 2);  // 262,400
+    CHECK(sixteen.frameBytes() == (4 * 32 * 256 * 4) * 2);        // 262,144
     CHECK(sixteen.frameBytes() > 65535u);                       // Parlio cannot carry it
 }

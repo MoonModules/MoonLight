@@ -1015,37 +1015,11 @@ away from trouble, which is what drove both driver decisions on 2026-09-09.
 
 ## HUB75, native (2026-09-16)
 
-The [Hub75Driver](../../../src/light/drivers/Hub75Driver.h) drives a panel from the board's own pins, as against [PanelCardDriver](../../../src/light/drivers/PanelCardDriver.h) which sends ColorLight frames to a receiving card. It ships unverified: no pixel has come out of it on real hardware, and the entries below are what a comparison against WLED-MM's path found missing. WLED-MM does not implement HUB75 itself; it wraps [mrcodetastic/ESP32-HUB75-MatrixPanel-DMA](https://github.com/mrcodetastic/ESP32-HUB75-MatrixPanel-DMA) v3.0.12 in about 600 lines (`wled00/bus_manager.cpp:677`), so the items here are measured against a library with years of hardware debugging behind it.
+The [Hub75Driver](../../../src/light/drivers/Hub75Driver.h) drives a panel from the board's own pins, as against [PanelCardDriver](../../../src/light/drivers/PanelCardDriver.h) which sends ColorLight frames to a receiving card. It has run on one panel: a 64x64 1/32-scan panel on a MoonHub75, LCD_CAM at 1,508 Hz at 6-bit, on 2026-10-06 (the bench section of the HUB75 plan). WLED-MM does not implement HUB75 itself; it wraps [mrcodetastic/ESP32-HUB75-MatrixPanel-DMA](https://github.com/mrcodetastic/ESP32-HUB75-MatrixPanel-DMA) v3.0.12 in about 600 lines (`wled00/bus_manager.cpp:677`), so the items here are measured against a library with years of hardware debugging behind it.
 
-### Run it on a panel, which nothing has done (the blocker for everything else)
+### The shift-register driver init
 
-Every other item here is a judgment made from reading. This one is the measurement. What a first session settles, roughly in the order the failures appear: whether anything lights at all; whether the bit order on the bus matches what the ribbon expects; whether the latch pulse lands correctly relative to the address change, which shows as the previous row ghosting into the current one; whether the blanking width is enough; and whether the clock phase suits the panel.
-
-The defect class this catches is exactly the one host tests cannot. F1 of the pre-merge review (the encoder truncating each slot to 8 bits, so the address, latch and output-enable lines never reached the wire) made the committed driver incapable of lighting a panel, and every host test passed throughout because the test remapped those lines into the low byte. A panel answers that question in seconds.
-
-Also unverified for the same reason: the ISR restart path and the PSRAM cache handling in [platform_esp32_hub75.cpp](../../../src/platform/esp32/platform_esp32_hub75.cpp), since the desktop build never compiles that file.
-
-### Panel quirk controls: latch blanking, clock phase, shift-register driver
-
-A HUB75 "panel" is a family, and the differences are not discoverable from its dimensions. The library exposes three knobs we have none of, each for a failure mode with a distinct look:
-
-- `latch_blanking` (1 to 3, default 2): widens the dark window around the latch. Too narrow and the previous row ghosts into the current one.
-- `clkphase`: which clock edge the panel samples on. Wrong, and the image shears by a pixel or shows the wrong column.
-- The shift-register driver: FM6124 and ICN2038S need a different init sequence. WLED-MM picks FM6124 for "outdoor" panels and its comment says the symptom of the wrong choice is a dark panel or pastel colors.
-
-Build trigger: a panel that misbehaves in one of these ways. Adding all three speculatively is three controls nobody can act on; adding the one whose symptom appears is a control with a reason.
-
-**The trigger has appeared: `latch_blanking` (2026-09-22).** A tester reports the final column dark on two panels, everything else correct. The encoder emits ONE blank word per row ([Hub75Slots.h](../../../src/light/drivers/Hub75Slots.h), the word carrying `oe | lat` after each row's data), where the reference library defaults to 2 and makes 1 to 4 configurable. A single pulse leaves the last column sitting in the shift register as LAT fires, which is the column that goes dark, and the loop already encodes every column so the data is present rather than missing. The fix is a `latchBlanking` control that repeats that blanking word, defaulting to 2 to match the prior art. A panel showing the symptom is the measurement, since the right count is visible in one flash.
-
-### Panel brightness through the output-enable window
-
-Brightness works: `Correction::apply` writes every channel through `briLut`, so the slider dims a HUB75 panel exactly as it dims a strip. The question is HOW it dims, and on this driver it costs color resolution.
-
-Scaling pixel values squeezes the available levels into the bottom of the range. At 4-bit depth that is 16 levels per channel at full brightness and roughly 8 at half, so the banding the cap already causes gets worse the further the slider comes down, which is the opposite of what a user expects from a dimmer.
-
-The library modulates the OE window per plane instead (`brtCtrlOEv2`), shortening how long each plane is lit rather than changing its value. The panel keeps its full depth at any brightness. WLED-MM therefore passes brightness straight through to `display->setBrightness(_bri)` rather than folding it into the pixel data.
-
-This shares its whole mechanism with the plane weighting below, so the two are one piece of work rather than two. Worth noting what it would cost elsewhere: `Correction` is one shared pipeline across every driver, so HUB75 taking brightness out of `briLut` means either a per-driver opt-out or a second path, and that design question is the real work rather than the OE arithmetic.
+A HUB75 "panel" is a family, and the differences are not discoverable from its dimensions. FM6124 and ICN2038S panels need a different init sequence; WLED-MM picks FM6124 for "outdoor" panels, and its comment says the symptom of the wrong choice is a dark panel or pastel colors. Build trigger: a panel showing that. The clock edge is already a control (`clockEdge`), and latch blanking was tried on the bench and changed nothing.
 
 ### Repaint only what changed
 
@@ -1065,9 +1039,9 @@ Some panels scan in a pattern where the physical row order does not match the lo
 
 Our `Hub75Geometry::rowsPerScan()` handles a panel driving more than two rows per address step, which is the common multi-pair case, but not an arbitrary remap. Build trigger: someone owns such a panel. The remap belongs in the Layout rather than the driver, since it describes where lights physically are, which is what a Layout is for.
 
-### Bit depth is not yet weighted
+### Repeated planes: full top brightness and 8-bit depth
 
-`Hub75Slots.h` emits every bit plane once, so bit 7 lights for the same time as bit 0 and a value renders as a flat ramp: 0x7F and 0x80 are indistinguishable. Binary coded modulation is what the format expects, and the header documents it as the design. `bitDepth` is capped at 4 meanwhile, because an unweighted plane above that costs a scan pass and a share of the frame buffer for a difference the eye cannot find.
+The planes are weighted by their lit window (since 2026-10-06): plane p lights 2^p as long as plane 0 inside one pass, and brightness shortens every window. That costs top brightness, since the lower planes are dark for most of their pass: full white is about 47% of the row time at 4-bit and 33% at 6-bit. It also caps depth at 6, where plane 0 of a 64-column row still lights 2 words. The reference library repeats the upper planes instead, and windows only the lowest (`lsbMsbTransitionBit`, chosen automatically for a refresh floor): about 95% top brightness and 8-bit depth, at roughly 290 Hz for one 64x64 panel.
 
 **The approach: repeat DMA descriptors, not data.** Plane `p` is stored once and the descriptor chain points at it 2^p times, so the weighting costs descriptors rather than frame memory. mrcodetastic's ESP32-HUB75-MatrixPanel-DMA does exactly this (`configureDMA`, the `for (int k = 0; k < (1 << (i - lsbMsbTransitionBit - 1)); k++)` loop), and it carries a refinement worth taking with it: `lsbMsbTransitionBit` is a dial, not a constant. Planes below it show once each; planes above get full weighting. The library raises it until a configured minimum refresh is met, trading exactness at the low end for rate. That makes depth and refresh one control instead of two fighting ones.
 
@@ -1075,4 +1049,5 @@ Our `Hub75Geometry::rowsPerScan()` handles a panel driving more than two rows pe
 
 **Parlio cannot express it.** Its only repeat primitive is `loop_transmission`, which repeats the whole buffer forever with no per-plane control. Weighted depth would be an LCD_CAM capability, and the `peripheral` select has to say so rather than offering a choice that silently changes the picture.
 
-Worth doing after the driver has run on a real panel, not before: a flat ramp is visible in seconds on hardware, and so are the ghosting and latch-timing faults that only hardware finds. Brightness belongs in the same piece of work, since the OE window is where both live: today `Correction` scales pixel values before encoding, which spends color resolution exactly where there is least of it.
+Build trigger: a wall that reads too dim at 6-bit, or a user who needs 8-bit gradients. It stays automatic, chosen from `bitDepth` and a refresh floor, with no new setting.
+

@@ -182,6 +182,8 @@ struct ControlDescriptor {
     bool displayStrip = false; ///< render as the full-width readout
     /// Whether this is live state rather than configuration, and so is never written to flash.
     bool live = false;
+    /// Whether a number field reads and writes hexadecimal, for a value its datasheet gives in hex, such as an I2C address.
+    bool hex = false;
     /// What this surface control drives, one field because each kind drives exactly one thing.
     const char* surfaceTarget = nullptr;
     /// An optional check applied before every write, so the rule lives with the control.
@@ -397,6 +399,11 @@ public:
     /// Render a numeric as a number input, for an integer that is an identity not a magnitude.
     void setNumberField(uint8_t i, bool numberField = true) {
         if (i < count_) controls_[i].numberField = numberField;
+    }
+
+    /// Render a numeric as a hexadecimal number input, as `0x18`.
+    void setHexField(uint8_t i) {
+        if (i < count_) controls_[i].numberField = controls_[i].hex = true;
     }
 
     /// Persist a Select by its label, for options enumerated fresh each boot.

@@ -51,6 +51,7 @@ The container of driver modules, owning the shared buffer and the per-light outp
 - `on`: master power, on by default.
 
   Off scales the output to black while preserving `brightness`, so switching on restores the level. Every consumer drives it: the UI, infrared, the WLED app, Home Assistant and MQTT.
+- 🎚️ `relayPins`: GPIOs switching the LED power supply, closed while `on` and brightness > 0.
 - `brightness`: global output brightness, multiplied with each driver's `localBrightness`.
 - `palette`: what effects sample from, built in or [scripted](moonlive.md); settable by name too.
 - `multicore`: run the output stage on the second core.

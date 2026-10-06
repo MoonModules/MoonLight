@@ -17,7 +17,6 @@ What is left in each plan, audited against the tree on 2026-10-02. One line per 
 | **Input mapping and scripted sensors** | Step 3 (analog, the expression pedal) is host-verified only; the `.mls` picker and "new script" template are unconfirmed. |
 | **RTSP video out** | Verification 2 to 5 on the P4, the glass-to-glass delay against HLS above all, since no factor is claimed until it is measured. |
 | **MoonLight, v5.0.0 to the rename** | Verification 1, 2, 5 and 6 (upgrade, OTA across the move, the redirect, backup to restore), and the two fidelity bench questions: the audio level scale and the reconstructed logic. |
-| **Native HUB75 output** | No pixel on real hardware yet; it waits on a community panel, and [backlog-light](../future/backlog-light.md) holds the comparison findings. |
 
 ## Larger, and its own effort
 

@@ -590,6 +590,13 @@ Left out of the plan that makes Ethernet, WiFi and the access point Network subm
 
 ## Architecture
 
+### A second I2C bus, once a board wires one (2026-10-06)
+
+`I2cBusModule` drives one bus on controller 0, which covers every catalog board: one bus carries about 112 addresses, so a codec, a sensor and a display share it.
+A board needs a second bus for two chips on the same fixed address, devices at different voltages or pull-ups, or a long cable run kept off the onboard devices.
+The shape then: the module becomes addable with a controller-number control, the platform keeps one bus per controller, and a device on a bus (`AudioService`'s codec first) gains a bus selector defaulting to 0, so the catalog's boards keep working unchanged.
+The trigger is a real board; a touch controller or camera on its own pins next to the codec is the likely first, the Guition M3's touch wiring being unchecked.
+
 ### An offline test run takes 16 minutes instead of one (2026-10-03)
 
 With the host's network down, `test_desktop` ran 16 minutes and the scenarios stalled past the gate's hour; online, no test takes over 4 seconds, so something waits out network timeouts.

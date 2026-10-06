@@ -1079,8 +1079,12 @@ void hub75Deinit(Hub75Handle& h);
 
 // I2S audio input: two seams only, the read and the FFT, with everything between them domain code.
 
-/// Configure the audio codec over I2C, where the board has one; true when there is nothing to do.
-bool audioCodecInit(CodecType type, const AudioCodecPins& pins, uint32_t sampleRate);
+/// Which codec sits in front of the microphone, none for a microphone that speaks I2S itself.
+enum class CodecType : uint8_t { None = 0, Es8311 = 1 };
+
+// The codec is a device on the board's I2C bus (i2cBusOpen), so only its address is its own; its master clock is the microphone's `mclkPin`.
+/// Configure the audio codec at this 7-bit address, where the board has one; true when there is nothing to do.
+bool audioCodecInit(CodecType type, uint8_t i2cAddr, uint32_t sampleRate);
 
 /// Release the codec.
 void audioCodecDeinit();
@@ -1116,13 +1120,27 @@ void audioMicDeinit(AudioMicHandle& h);
 /// Fill `outMag` with the magnitude bins of `n` windowed samples, `n` being a power of two.
 void audioFft(const float* windowed, size_t n, float* outMag);
 
-// I2C bus diagnostics: the standard i2cdetect operation, domain-neutral rather than audio-specific.
+// The board's I2C bus: one master bus, opened by its owner (I2cBusModule) and shared by every device on it, such as an audio codec.
 
-/// The bus could not be opened, which is distinct from a scan that found nothing.
+/// Open the bus on these pins, closing one open on other pins first; false when the port cannot be opened.
+bool i2cBusOpen(uint16_t sda, uint16_t scl);
+
+/// Close the bus, releasing the devices on it first.
+void i2cBusClose();
+
+/// Whether the bus is open.
+bool i2cBusReady() MM_NONBLOCKING;
+
+/// A count that moves on every open and close, so a device on the bus notices that it has to attach again.
+uint32_t i2cBusGeneration() MM_NONBLOCKING;
+
+/// The bus is not open, which is distinct from a scan that found nothing.
 inline constexpr size_t kI2cBusUnavailable = static_cast<size_t>(-1);
 
-/// Scan the bus on these pins, writing the addresses that answer into `out` and returning the count.
-size_t i2cScan(uint16_t sda, uint16_t scl, uint8_t* out, size_t maxOut);
+/// Probe every address on the open bus, writing those that answer into `out` and returning the count: the standard i2cdetect.
+size_t i2cScan(uint8_t* out, size_t maxOut);
+/// Make a scan of the open bus find these addresses, as the chips on a board would answer.
+void setTestI2cDevices(const uint8_t* addrs, size_t n);
 
 // --- GPIO as a role: read a switch or drive a line, the module owning debouncing ---------------
 

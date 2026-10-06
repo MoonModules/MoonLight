@@ -97,6 +97,11 @@ else()
         # and that count may only fall, while each site stays a judgment (a driver may have to wait
         # on hardware), so failing the build on them would block every other gate.
         add_compile_options(-Wfunction-effects -Wno-error=function-effects)
+        # Each file's findings are kept beside its object, so the code report reads the whole tree after an incremental build instead of a clean one.
+        find_package(Python3 COMPONENTS Interpreter QUIET)
+        if(Python3_Interpreter_FOUND AND NOT CMAKE_CXX_COMPILER_LAUNCHER)
+            set(CMAKE_CXX_COMPILER_LAUNCHER "${Python3_EXECUTABLE};${CMAKE_SOURCE_DIR}/moondeck/build/diag_launcher.py")
+        endif()
     endif()
 endif()
 
@@ -126,6 +131,7 @@ find_program(UV_EXECUTABLE NAMES uv REQUIRED
 add_library(mm_core STATIC
     src/core/module/Control.cpp
     src/core/util/JsonUtil.cpp
+    src/core/util/parse.cpp
     src/core/util/ScratchBuffer.cpp
     src/core/system/HttpServerModule.cpp
     src/core/system/FilesystemModule.cpp

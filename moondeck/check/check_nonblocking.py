@@ -26,6 +26,7 @@ Usage:
 """
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -366,54 +367,63 @@ def function_effects_enabled(build_dir) -> bool:
     return re.search(r"^MM_HAS_WFUNCTION_EFFECTS:.*=(1|ON|TRUE|YES)\s*$", cache, re.IGNORECASE | re.MULTILINE) is not None
 
 
-def build_output(build_dir, clean=True):
-    """A full rebuild's warnings, or None if the build failed.
+def saved_findings(build_dir):
+    """Each compiled file's saved compiler output, joined, or None when a file was compiled before the launcher kept them.
 
-    `--clean-first` because an incremental build only recompiles what changed, and a cached TU
-    prints nothing — which would read as "no findings". Likewise a FAILED build produces partial
-    output: returning it would report a small number as if the tree were nearly clean, the same
-    silent-zero trap the other checks guard against.
+    The objects come from compile_commands.json, so a source removed from the build leaves no stale findings behind.
     """
+    try:
+        entries = json.loads((build_dir / "compile_commands.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    parts = []
+    for e in entries:
+        diag = build_dir / (e["output"] + ".diag")   # CMake writes `output` relative to the top build dir, even for a subdirectory's targets
+        if not diag.exists():
+            return None
+        parts.append(diag.read_text(encoding="utf-8", errors="replace"))
+    return "\n".join(parts)
+
+
+def launcher_configured(build_dir) -> bool:
+    """Whether the generated build runs diag_launcher.py, read from its build files rather than learned by a clean rebuild."""
+    files = [build_dir / "build.ninja", *build_dir.glob("CMakeFiles/*.dir/build.make")]
+    return any(f.exists() and "diag_launcher" in f.read_text(encoding="utf-8", errors="replace") for f in files)
+
+
+def _build(build_dir, clean) -> bool:
+    """Build the tree, incrementally or from clean, saying why when it fails."""
     cmd = ["cmake", "--build", str(build_dir)] + (["--clean-first"] if clean else [])
     proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, check=False)
-    out = proc.stdout + proc.stderr
-    if proc.returncode != 0:
-        errors = [line for line in out.splitlines() if ": error:" in line]
-        print(f"Build FAILED (exit {proc.returncode}) — findings would be incomplete.",
-              file=sys.stderr)
-        for error_line in errors[:5]:
-            print(f"  {error_line.replace(str(ROOT) + '/', '')}", file=sys.stderr)
-        return None
+    if proc.returncode == 0:
+        return True
+    errors = [line for line in (proc.stdout + proc.stderr).splitlines() if ": error:" in line]
+    print(f"Build FAILED (exit {proc.returncode}): findings would be incomplete.", file=sys.stderr)
+    for error_line in errors[:5]:
+        print(f"  {error_line.replace(str(ROOT) + '/', '')}", file=sys.stderr)
+    return False
 
-    # FAIL CLOSED. -Wfunction-effects exists only on Clang 20+; CMake silently omits the flag
-    # on anything else, and this script would then report "0 findings" from a build that never
-    # ran the check: indistinguishable from a clean tree. A zero is only trustworthy if the
-    # warning is actually enabled, so say so instead of reporting a comfortable number.
-    #
-    # INCREMENTAL asks a narrower question and needs a narrower guard. A run where nothing
-    # recompiled legitimately produces no diagnostics, so an empty log there is not proof the
-    # flag is missing. What it IS proof of is that nothing was measured, and a gate that prints
-    # a tick for an empty read is the silent zero this whole function exists to prevent. So the
-    # caller is told which of the two happened rather than being handed a clean bill either way.
-    if not clean and "[-Wfunction-effects]" not in out:
-        compiled = any(line.startswith("[") and ".cpp" in line for line in out.splitlines())
-        print("Nothing was measured: this incremental build produced no -Wfunction-effects\n"
-              + ("output, and no translation unit recompiled. Every file is cached, so this run\n"
-                 "says nothing about the tree. Re-run without --incremental for the full picture.\n"
-                 if not compiled else
-                 "output even though something recompiled, which means the warning is not enabled\n"
-                 "(it needs Clang 20+; CMake omits it silently otherwise).\n"),
-              file=sys.stderr)
+
+def build_output(build_dir):
+    """The whole tree's compiler warnings, or None if the build failed or the warning is off.
+
+    An incremental build brings the tree up to date, and every file's warnings come from what moondeck/build/diag_launcher.py kept beside its object, so the files that did not recompile still speak.
+    Only a build from before the launcher, whose objects carry no saved findings, is rebuilt clean once; a build running another launcher (ccache) is told to reconfigure without one.
+    A FAILED build would hand back partial findings that read as a nearly clean tree, so it reports None instead.
+    """
+    if not _build(build_dir, clean=False):
         return None
-    if clean and "[-Wfunction-effects]" not in out:
-        # The cache says the warning is on and the whole tree recompiled, so silence is a measured clean tree, not a missing flag.
-        if function_effects_enabled(build_dir):
-            return out
-        print("No -Wfunction-effects diagnostics in the build output.\n"
-              "That means either the tree really is clean, or the compiler does not support the\n"
-              "warning (it needs Clang 20+; CMake omits it silently otherwise). Check with:\n"
-              f"  grep -n 'Wfunction-effects' {(ROOT / 'CMakeLists.txt').relative_to(ROOT)}\n"
-              "  cmake --build <dir> --clean-first 2>&1 | grep -c function-effects",
+    out = saved_findings(build_dir)
+    if out is None and launcher_configured(build_dir):
+        if not _build(build_dir, clean=True):
+            return None
+        out = saved_findings(build_dir)
+    if out is None:
+        print("The build keeps no per-file findings: reconfigure it so CMake picks up diag_launcher.py.", file=sys.stderr)
+        return None
+    # FAIL CLOSED: -Wfunction-effects exists only on Clang 20+, and a build without it reports no findings that read as a clean tree.
+    if "[-Wfunction-effects]" not in out and not function_effects_enabled(build_dir):
+        print("No -Wfunction-effects diagnostics, and the build cache says the warning is off (it needs Clang 20+).",
               file=sys.stderr)
         return None
     return out
@@ -490,10 +500,6 @@ def float_conversions_on_the_hot_path():
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--module", help="Only findings in this module's source files.")
-    ap.add_argument("--incremental", action="store_true",
-                    help="Skip the clean rebuild — only files that changed are recompiled, so "
-                         "this reports on THOSE. For a gate that asks 'did this change add a "
-                         "blocking call', not for the full picture.")
     args = ap.parse_args()
 
     # BEFORE the build, because this is a grep rather than a compile: it answers in milliseconds,
@@ -514,7 +520,7 @@ def main():
     # NOT APPLICABLE is not the same as FAILED. -Wfunction-effects is Clang 20+ only, and
     # CMakeLists probes for it (`check_cxx_compiler_flag`) inside the non-MSVC branch, so an MSVC
     # cache carries no MM_HAS_WFUNCTION_EFFECTS at all. Without the warning this check can never
-    # produce a finding, and building to discover that wastes a full rebuild and then reports a
+    # produce a finding, and building to discover that wastes a build and then reports a
     # failure the toolchain guarantees. Reading the cache says the same thing for free.
     #
     # Skipping is safe here in a way it would not be for a normal gate: the desktop build that
@@ -536,7 +542,7 @@ def main():
               f"float-conversion findings above DID run.")
         return 1 if floats else 0
 
-    out = build_output(build_dir, clean=not args.incremental)
+    out = build_output(build_dir)
     if out is None:
         return 2
     rows = collect(out)

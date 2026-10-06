@@ -75,25 +75,28 @@ public:
         // Applied unconditionally, so brightness works even before the fixture-profile library is up.
         const uint8_t effective =
             static_cast<uint8_t>((globalBrightness * localBrightness_) / 255);
+        effectiveBrightness_ = effective;
+        // A driver that dims by on-time keeps full values in its table, so the colors keep every level.
+        const uint8_t tableBrightness = dimsByTime() ? 255 : effective;
         correction_.whiteMode = static_cast<WhiteMode>(whiteMode_);
         correction_.curve = static_cast<Correction::Curve>(curveSel_);
         // A missing id falls back to the default, so a driver degrades rather than crashing.
         if (auto* lib = FixtureProfilesModule::active()) {
             adoptLegacyName(*lib);   // an older config's name, whichever path applied it: boot, re-apply or restore
             if (profileId_ == 0) profileId_ = lib->defaultId();
-            if (!lib->deriveCorrection(profileId_, effective, correction_)) {
+            if (!lib->deriveCorrection(profileId_, tableBrightness, correction_)) {
                 profileId_ = lib->defaultId();                       // dangling → re-point to default
-                lib->deriveCorrection(profileId_, effective, correction_);
+                lib->deriveCorrection(profileId_, tableBrightness, correction_);
             }
         } else {
             // No library yet, so apply brightness here, as deriveCorrection would have.
-            correction_.rebuildBrightness(effective);
+            correction_.rebuildBrightness(tableBrightness);
         }
         // Allocated the first time a profile has fine roles and kept until release, since the encode task may be reading it while this rebuild runs.
         const bool firstTable = correction_.hasFine && !lut16_;
         if (firstTable) lut16_.resize(256);
         correction_.lut16 = lut16_.data();
-        if (firstTable) correction_.rebuildBrightness(effective);   // a table that existed was filled by the rebuild above
+        if (firstTable) correction_.rebuildBrightness(tableBrightness);   // a table that existed was filled by the rebuild above
         onCorrectionChanged();      // let a driver resize its correction-applied buffer
     }
 
@@ -109,6 +112,12 @@ public:
 
     /// Notified when the output channel count may have changed without a structural rebuild.
     virtual void onCorrectionChanged() {}
+
+    // HUB75 does: its panel shows a level only as time, so scaling values would cost levels.
+    /// Whether this driver dims by how long it lights rather than by scaling the values it sends.
+    virtual bool dimsByTime() const { return false; }
+    /// Global times local brightness, as last rebuilt, for a driver that dims by time.
+    uint8_t effectiveBrightness() const { return effectiveBrightness_; }
 
     /// Clear every shared status string, so a stopped driver leaves nothing behind.
     void release() override {
@@ -175,6 +184,7 @@ protected:
         "linear"           // no curve: for a downstream device that corrects its own output
     };
     uint8_t lastGlobalBrightness_ = 0;  // last global brightness the container pushed (for self-rebuilds)
+    uint8_t effectiveBrightness_ = 255; // global times local, for a driver that dims by time
     // A config saved before `fixture` held the profile's name kept it here; read for one release, then emptied.
     char fixtureRef_[16] = {};
     const char* defaultFixture_ = nullptr;   // the profile a new driver of this type starts on, by name

@@ -4,6 +4,7 @@
 #include "light/drivers/DriverBase.h"
 
 #include "core/util/JsonUtil.h"          // parse the bridge's JSON responses
+#include "core/util/parse.h"             // parseIntStr: a light id
 #include "core/system/FilesystemModule.h"  // noteDirty: persist the app key after pairing
 #include "core/system/DevicesModule.h"     // DevicesModule::active(): list the bridge as a device
 #include "platform/platform.h"
@@ -352,7 +353,7 @@ private:
     static uint16_t parseId(const char* s) {
         // Digits only: accepting a sign would let a malformed response address a REAL light.
         if (!s || *s < '0' || *s > '9') return 0;
-        const int v = json::parseIntStr(s);
+        const int v = parseIntStr(s);
         return (v > 0 && v <= 0xFFFF) ? static_cast<uint16_t>(v) : 0;
     }
 

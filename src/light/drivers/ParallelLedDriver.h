@@ -145,6 +145,7 @@ public:
         controls_.addSelect("peripheral", peripheralSel_, peripheralOptions_, peripheralOptionCount_);
         // Bound even when hidden, so the saved value survives a single-buffer-only peripheral.
         controls_.addControl("doubleBuffer", doubleBuffer);
+        controls_.setAdvanced(controls_.count() - 1);   // a memory-for-throughput trade an installer tunes
         controls_.setHidden(controls_.count() - 1, !(peripheral_ && peripheral_->supportsDoubleBuffer()));
         // Peripheral-specific: MoonI80 routes WR only for a '595, i80 always needs a real WR and DC.
         if (peripheral_) peripheral_->addBusControls(controls_);
@@ -155,25 +156,25 @@ public:
         controls_.setHidden(controls_.count() - 1, !pinExpanderMode());
         // MoonI80 only, and gated on the expander, so it sits under the switch that governs it.
         if (peripheral_) peripheral_->addRingControls(controls_);
-        // A bring-up instrument rather than a casual setting, so the whole cluster is expert-only.
+        // A bring-up instrument rather than a casual setting, so the whole cluster is developer-only.
         controls_.addControl("loopbackTest", loopbackTest);
-        controls_.setAdvanced(controls_.count() - 1);
+        controls_.setDeveloper(controls_.count() - 1);
         // Always bound, shown only in test mode: the conditional-control shape.
         controls_.addPin("loopbackTxPin", loopbackTxPin);
         // Direct mode only: in shift mode loopbackStrand decides, so this would only mislead.
         controls_.setHidden(controls_.count() - 1, !loopbackTest || pinExpanderMode());
-        controls_.setAdvanced(controls_.count() - 1);
+        controls_.setDeveloper(controls_.count() - 1);
         controls_.addPin("loopbackRxPin", loopbackRxPin);
         controls_.setHidden(controls_.count() - 1, !loopbackTest);
-        controls_.setAdvanced(controls_.count() - 1);
+        controls_.setDeveloper(controls_.count() - 1);
         // Lets the jumper come off ANY '595 output, including a spare that drives no panel.
         controls_.addControl("loopbackStrand", loopbackStrand, 0, kMaxStrands - 1);
         controls_.setHidden(controls_.count() - 1, !loopbackTest || !pinExpanderMode());
-        controls_.setAdvanced(controls_.count() - 1);
+        controls_.setDeveloper(controls_.count() - 1);
         // Intrusive: ride the live pipeline instead of a private replica (see the member doc).
         controls_.addControl("loopbackIntrusive", loopbackIntrusive);
         controls_.setHidden(controls_.count() - 1, !loopbackTest);
-        controls_.setAdvanced(controls_.count() - 1);
+        controls_.setDeveloper(controls_.count() - 1);
     }
 
     // doubleBuffer, pinExpander and latchPin decide an allocation only bus init can change.

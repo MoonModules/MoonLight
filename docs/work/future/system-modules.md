@@ -20,7 +20,7 @@ The load-bearing lesson from those tools: **they sample existing OS accounting c
 
 Every member is the **same recognizable shape** — the [TasksModule](../../moonmodules/core/system.md#tasks) template, reusing primitives that already exist:
 
-- a **read-only** module presenting a `ControlType::List` via the `ListSource` adapter (DevicesModule/I2cScan shape);
+- a **read-only** module presenting a `ControlType::List` via the `ListSource` adapter (DevicesModule/I2cBus shape);
 - refreshed on `loop1s()` (a periodic *sample*, never the hot path);
 - reading MoonLight's **existing self-report** (`loopTimeUs`/`classSize`/`dynamicBytes`) + **existing platform getters** (`freeHeap`/`freeInternalHeap`/`maxAllocBlock`/`totalHeap`, and per-module seams behind the boundary like `platform::taskSnapshot`);
 - **zero hot-path cost**, cross-platform (desktop shows what it can, stubs the rest).
@@ -38,7 +38,7 @@ The System-vs-Services distinction forces a conceptual line that was already mud
 
 The clean model, matching your framing that *"System is really to view/manage the hardware a device has"*:
 
-- **System** = the device's **fixed hardware + its inspection**: identity (deviceName, chip, mac), live vitals (uptime, fps, tick), reboot — **and the System Modules hang here: Tasks, Memory, Pins, I2cScan.** Always present, not user-added. These are the device's **inspection / bring-up toolkit** — Tasks (what runs), Memory (what's allocated), Pins (what's assigned), I2cScan (what's on the I²C bus). All fixed, all "inspect *this* device."
+- **System** = the device's **fixed hardware + its inspection**: identity (deviceName, chip, mac), live vitals (uptime, fps, tick), reboot — **and the System Modules hang here: Tasks, Memory, Pins, I2cBus.** Always present, not user-added. These are the device's **inspection / bring-up toolkit** — Tasks (what runs), Memory (what's allocated), Pins (what's assigned), I2cBus (what's on the I²C bus). All fixed, all "inspect *this* device."
 - **Services** (new top-level container) = the **user-added capability modules**: Audio, IR — this-device bridges to the outside world. Optional, per-board.
 
 **DevicesModule is deliberately NOT in either bucket** — it is **fleet-scope** (discovers/lists *other* devices, drives Hue, the seed of future multi-device features: groups, sync, orchestration), so it's neither a this-device System Module nor a this-device Service Module. It stays a wired-by-code child of Network for now; its eventual home is a **later decision** — a standalone top-level module, or a "Fleet"/"Devices" top-level *container* once a second fleet module exists to justify one (don't build a container for one child). Flagged here so the distinction isn't lost.
@@ -59,7 +59,7 @@ So: **Services** container, **`ModuleRole::Service`** role, and the split plan c
 
 The split maps onto one rule, matching how OS system managers behave (Task Manager / Activity Monitor are *always available*, never added or deleted):
 
-- **Everything under `System` is FIXED** — always present, **no add/delete**, wired-by-code. That's System's own vitals **and** the System Modules (Tasks, I2cScan; Memory, Pins later) **and** the always-there infrastructure (Network, Firmware, Improv). You don't delete a System Module any more than you delete Task Manager.
+- **Everything under `System` is FIXED** — always present, **no add/delete**, wired-by-code. That's System's own vitals **and** the System Modules (Tasks, I2cBus; Memory, Pins later) **and** the always-there infrastructure (Network, Firmware, Improv). You don't delete a System Module any more than you delete Task Manager.
 - **Everything under `Services` is USER-MANAGED** — add/delete/replace, `ModuleRole::Service`. Audio, IR. (MQTT stays code-wired under Network as always-there infra; Devices is fleet-scope, see its note.)
 
 **`Services` is the existing container shape, applied to the core domain** — the strongest justification (*Common patterns first*). "A top-level container holding the user-added children of one role" is a pattern the codebase already runs on; `Services` reuses it rather than inventing a second arrangement. So the split adds no new concept: it recognises that Audio and IR are user-added children of one role, and that is what a container of that shape is for.

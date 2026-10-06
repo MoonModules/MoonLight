@@ -100,14 +100,17 @@ public:
         controls_.addControl("periodNs", periodNs, 200, 8000);
         controls_.setHidden(controls_.count() - 1, !custom);
         controls_.addControl("loopbackTest", loopbackTest);
-        controls_.setAdvanced(controls_.count() - 1);   // expert-mode: a bench self-test, not a normal-use control
+        controls_.setDeveloper(controls_.count() - 1);   // a bench self-test of the firmware, so the whole cluster is developer-only
         // Always bound so persistence can load them, but shown only while test mode is on.
         controls_.addPin("loopbackTxPin", loopbackTxPin);
         controls_.setHidden(controls_.count() - 1, !loopbackTest);
+        controls_.setDeveloper(controls_.count() - 1);
         controls_.addPin("loopbackRxPin", loopbackRxPin);
         controls_.setHidden(controls_.count() - 1, !loopbackTest);
+        controls_.setDeveloper(controls_.count() - 1);
         controls_.addControl("loopbackFrame", loopbackFrame);
         controls_.setHidden(controls_.count() - 1, !loopbackTest);
+        controls_.setDeveloper(controls_.count() - 1);
     }
 
     /// Which controls re-parse and re-init the RMT channels live, through the prepare sweep.

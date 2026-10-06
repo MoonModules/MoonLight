@@ -48,6 +48,7 @@
 #include "core/util/hex.h"
 #include "core/util/ModuleFactory.h"
 #include "core/util/JsonUtil.h"
+#include "core/util/parse.h"
 #include "core/util/JsonSink.h"
 #include "core/util/format.h"            // formatTo: nonblocking formatting into a fixed buffer
 #include "core/util/CaptivePortal.h"     // the redirect a phone on the access point follows to the UI
@@ -1396,6 +1397,7 @@ void HttpServerModule::writeControls(JsonSink& sink, MoonModule* mod) {
         if (c.readonly) sink.append(",\"readonly\":true");
         if (c.minMode) sink.appendf(",\"minMode\":%u", static_cast<unsigned>(c.minMode));   // the mode the UI needs before it shows this
         if (c.numberField) sink.append(",\"numberField\":true");   // render a plain number input, not a slider
+        if (c.hex) sink.append(",\"hex\":true");   // that number input reads and writes hexadecimal
         // An editable List (the CRUD primitive) tells the UI to show add/delete/reorder + inline row editors; a plain List stays read-only. The row objects carry a stable "id" the /api/list/* ops address, and each editable row's detail carries its field descriptors.
         if (c.switchRow) sink.append(",\"switchRow\":true");
         if (c.displayStrip) sink.append(",\"displayStrip\":true");
@@ -1818,7 +1820,7 @@ void HttpServerModule::applyWledState(const char* body) {
     const char* segStart = std::strstr(body, "\"seg\":");
     const char* palStart = segStart ? std::strstr(segStart, "\"pal\":") : nullptr;
     if (palStart) {
-        int pal = mm::json::parseIntStr(palStart + 6);
+        int pal = mm::parseIntStr(palStart + 6);
         if (pal < 0) pal = 0;
         // Against the FULL count, built-ins plus the scripted tail, because that is exactly the list served as `palettes[]` above. Clamping to the built-ins rejected every scripted index this device had just offered, so picking one in Home Assistant silently snapped back to the last built-in.
         if (pal >= mm::paletteCount()) pal = mm::paletteCount() - 1;

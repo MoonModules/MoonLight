@@ -7,6 +7,7 @@ idf_component_register(
         "../../src/module_types.cpp"
         "../../src/core/module/Control.cpp"
         "../../src/core/util/JsonUtil.cpp"
+        "../../src/core/util/parse.cpp"
         "../../src/core/util/ScratchBuffer.cpp"
         "../../src/core/system/HttpServerModule.cpp"
         "../../src/core/system/FilesystemModule.cpp"

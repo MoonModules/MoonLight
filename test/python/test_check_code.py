@@ -145,15 +145,74 @@ def test_the_two_boundaries_are_counted_where_the_architecture_draws_them():
     assert not [r for r in check_code.boundary_rows() if r[1] == check_code.PLATFORM]
 
 
-def test_a_clean_build_with_the_warning_on_and_no_sites_is_a_measured_zero(monkeypatch, tmp_path):
-    """Silence from a full rebuild means a clean tree when the cache says the warning is on, and an unmeasured run when it is not."""
+def _fake_builds(monkeypatch):
+    """check_nonblocking with every build succeeding and the warning on, and the list of builds it asked for."""
     import check_nonblocking as nb
     import subprocess
-    monkeypatch.setattr(nb.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout="[100%] Built target MoonLight\n", stderr=""))
+    builds = []
+    monkeypatch.setattr(nb.subprocess, "run", lambda cmd, **k: builds.append(cmd) or subprocess.CompletedProcess(cmd, 0, stdout="", stderr=""))
     monkeypatch.setattr(nb, "function_effects_enabled", lambda _d: True)
-    assert nb.build_output(tmp_path) is not None
+    return nb, builds
+
+
+def _build_with(tmp_path, diags):
+    """A build dir whose compile database names one object per entry in `diags`, each saved finding written when not None."""
+    import json
+    entries = []
+    for i, text in enumerate(diags):
+        obj = f"CMakeFiles/t.dir/f{i}.cpp.o"
+        entries.append({"directory": str(tmp_path / "sub"), "file": f"f{i}.cpp", "output": obj, "command": "c++"})   # a subdirectory target: output stays relative to the top
+        if text is not None:
+            (tmp_path / obj).parent.mkdir(parents=True, exist_ok=True)
+            (tmp_path / (obj + ".diag")).write_text(text, encoding="utf-8")
+    (tmp_path / "compile_commands.json").write_text(json.dumps(entries), encoding="utf-8")
+
+
+def test_the_tree_is_read_from_every_files_saved_findings_after_an_incremental_build(monkeypatch, tmp_path):
+    """A file that did not recompile still speaks through its saved findings, so no clean rebuild is needed."""
+    nb, builds = _fake_builds(monkeypatch)
+    _build_with(tmp_path, ["a.h:1:2: warning: x [-Wfunction-effects]", ""])
+    (tmp_path / "CMakeFiles/t.dir/gone.cpp.o.diag").write_text("stale [-Wfunction-effects]", encoding="utf-8")
+    out = nb.build_output(tmp_path)
+    assert "a.h:1:2" in out and "stale" not in out   # a source the build dropped leaves nothing behind
+    assert builds == [["cmake", "--build", str(tmp_path)]]   # incremental only
+
+
+def test_a_build_from_before_the_launcher_is_rebuilt_clean_once(monkeypatch, tmp_path):
+    nb, builds = _fake_builds(monkeypatch)
+    _build_with(tmp_path, [None])
+    (tmp_path / "CMakeFiles/t.dir").mkdir(parents=True)
+    (tmp_path / "CMakeFiles/t.dir/build.make").write_text("diag_launcher.py c++ -c a.cpp", encoding="utf-8")
+    assert nb.build_output(tmp_path) is None   # still nothing saved: the build needs reconfiguring, never a silent zero
+    assert builds[-1][-1] == "--clean-first" and len(builds) == 2
+
+
+def test_a_build_running_another_launcher_is_told_to_reconfigure_without_a_clean_rebuild(monkeypatch, tmp_path):
+    nb, builds = _fake_builds(monkeypatch)
+    _build_with(tmp_path, [None])
+    (tmp_path / "CMakeFiles/t.dir").mkdir(parents=True)
+    (tmp_path / "CMakeFiles/t.dir/build.make").write_text("ccache c++ -c a.cpp", encoding="utf-8")
+    assert nb.build_output(tmp_path) is None
+    assert builds == [["cmake", "--build", str(tmp_path)]]   # minutes of clean rebuild that could never save a finding are skipped
+
+
+def test_silence_with_the_warning_on_is_a_measured_zero_and_without_it_unmeasured(monkeypatch, tmp_path):
+    nb, _ = _fake_builds(monkeypatch)
+    _build_with(tmp_path, [""])
+    assert nb.build_output(tmp_path) == ""
     monkeypatch.setattr(nb, "function_effects_enabled", lambda _d: False)
     assert nb.build_output(tmp_path) is None
+
+
+def test_the_launcher_keeps_what_the_compiler_said_beside_the_object(tmp_path):
+    sys.path.insert(0, str(ROOT / "moondeck" / "build"))
+    import diag_launcher
+    obj = tmp_path / "f.cpp.o"
+    rc = diag_launcher.main([sys.executable, "-c", "import sys; sys.stderr.write('w: x [-Wfunction-effects]')", "-o", str(obj)])
+    assert rc == 0
+    assert (tmp_path / "f.cpp.o.diag").read_text() == "w: x [-Wfunction-effects]"
+    assert diag_launcher.object_path(["cc", "-c", "a.cpp", "-ob.o"]) == "b.o"
+    assert diag_launcher.object_path(["cc", "-E", "a.cpp"]) is None
 
 
 def test_the_baseline_is_the_committed_report_and_a_report_never_committed_is_a_first_run():

@@ -2,7 +2,7 @@
 
 /// @defgroup JsonUtil Reading JSON
 /// @{
-/// Two layers, both header-only and both off the hot path, so bounded stack use is fine.
+/// Two layers, both off the hot path, so bounded stack use is fine; the integer reader is out of line for its flash, as its number conversion is (parse.h).
 ///
 /// The flat helpers scan for a key over the subset we emit, and never descend into a nested object or an array.
 /// The recursive reader walks nested structure, which the persisted device and preset lists need.
@@ -26,21 +26,6 @@
 ///
 /// The flat integer and boolean readers cannot tell one from the other, so applying their result for an absent key clobbers a control's non-zero default.
 /// A load path asks whether the key is present first, or an older or partial save silently resets a control on every reboot.
-///
-/// ## Overflow needs both checks
-///
-/// The conversion reports out of range rather than saturating, because a caller that narrows the result would otherwise store a different valid number.
-/// Two checks are needed because they cover different targets.
-/// On a desktop a huge value lands inside the wide type, so only the range compare rejects it.
-/// On a device that compare is dead code, and the library's own saturation is the only signal.
-/// Testing one alone passes on the desktop and silently returns the maximum on the target this exists to protect.
-///
-/// Trailing text is deliberately allowed, these values being read out of a document where digits are followed by a comma or a brace, so only the leading characters decide.
-///
-/// ## The conversion is out of line, unlike its neighbors
-///
-/// As an inline its three checks were duplicated into every caller and cost 1712 bytes of flash on one chip, measured per symbol.
-/// One call instead is free in practice, every user being off the hot path.
 ///
 /// ## The shared document is a function-local static
 ///
@@ -118,21 +103,8 @@ inline bool hasKey(const char* json, const char* key) {
     return std::strstr(json, search) != nullptr;
 }
 
-/// The integer a string starts with, or the fallback: @xref{overflow-needs-both-checks|both range checks} and @xref{the-conversion-is-out-of-line-unlike-its-neighbors|why not inline}.
-int parseIntStr(const char* s, int fallback = 0);
-
-inline int parseInt(const char* json, const char* key) {
-    if (!json || !key) return 0;
-    char search[kSearchLen];
-    if (!buildKeyPattern(search, key, ":")) return 0;       // key too long → treat as absent
-    const char* start = std::strstr(json, search);
-    if (!start) {
-        if (!buildKeyPattern(search, key, ": ")) return 0;
-        start = std::strstr(json, search);
-    }
-    if (!start) return 0;
-    return parseIntStr(start + std::strlen(search));
-}
+/// A key's integer value, quoted or not, decimal or 0x-prefixed hex; 0 when absent or not a number (parse.h).
+int parseInt(const char* json, const char* key);
 
 inline bool parseBool(const char* json, const char* key) {
     if (!json || !key) return false;

@@ -61,15 +61,6 @@ constexpr bool hasI2sMic = false;
 /// OS capture devices, reaching the same audioMicRead seam a wired microphone would.
 constexpr bool hasAudioCapture = true;
 
-/// Which codec sits in front of the microphone; a host has none.
-enum class CodecType : uint8_t { None = 0, Es8311 = 1 };
-/// How a codec is reached, mirrored from the ESP32 config so the names resolve everywhere.
-struct AudioCodecPins { uint16_t i2cSda; uint16_t i2cScl; uint16_t mclk; uint8_t i2cAddr; };
-/// None, a host having no codec to configure.
-constexpr CodecType audioCodecType = CodecType::None;
-/// Unused, there being no codec to reach.
-constexpr AudioCodecPins audioCodecPins = { 0, 0, 0, 0 };
-
 /// True, so the host compiles the WiFi path even though it ships stubs behind it.
 constexpr bool hasWiFi = true;
 

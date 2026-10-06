@@ -130,6 +130,7 @@ constexpr const char* kEffectFolder = "effects";   ///< its directory upstream
 
 /// Every factory layout by file name, from `moonlive/layouts/` upstream.
 constexpr const char* kLayoutCatalog[] = {
+    "backlight.mll",
     "diagonal.mll",
     "grid.mll",
     "lattice.mll",
@@ -141,9 +142,10 @@ constexpr const char* kLayoutCatalog[] = {
     "sixteen-rings.mll",
     "two-rows.mll",
 };
-constexpr size_t kLayoutCatalogCount = 10;
+constexpr size_t kLayoutCatalogCount = 11;
 /// What each layout above declares about itself, in the same order, 0 meaning it says nothing and the device decides.
 constexpr unsigned char kLayoutCatalogDim[] = {
+    2,
     2,
     2,
     3,
@@ -157,6 +159,7 @@ constexpr unsigned char kLayoutCatalogDim[] = {
 };
 /// The emoji each declares, "" when it declares none.
 constexpr const char* kLayoutCatalogTags[] = {
+    "💫",
     "💫",
     "💫",
     "💫",
@@ -242,7 +245,7 @@ constexpr const char* kPaletteCatalogTags[] = {
 };
 constexpr const char* kPaletteFolder = "palettes";   ///< its directory upstream
 
-constexpr size_t kCatalogCount = 55;   ///< every factory script, all roles
+constexpr size_t kCatalogCount = 56;   ///< every factory script, all roles
 
 /// @}
 } // namespace mm::moonlive

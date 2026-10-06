@@ -2730,29 +2730,35 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
         const nMin = Number(ctrl.min ?? 0);
         const nMax = Number(ctrl.max ?? 65535);
         const input = document.createElement("input");
-        input.type = "number";
-        input.min = nMin;
-        input.max = nMax;
-        input.value = ctrl.value ?? 0;
+        // A hex field is text, since a number input refuses "0x18"; the patch path reads data-hex to format the same way.
+        input.type = ctrl.hex ? "text" : "number";
+        if (ctrl.hex) input.dataset.hex = "1";
+        else { input.min = nMin; input.max = nMax; }
+        input.value = numberFieldText(input, ctrl.value ?? 0);
         input.dataset.mid = moduleName;
         input.dataset.key = ctrl.name;
         input.addEventListener("input", () => {
             dragTs[key] = Date.now();
-            let v = parseInt(input.value, 10);
-            if (Number.isNaN(v)) return;   // mid-edit empty field: send nothing until digits arrive
+            let v = numberFieldValue(input);
+            if (Number.isNaN(v)) { cancelSend(key); return; }   // mid-edit: the write queued a keystroke ago is superseded
             v = Math.max(nMin, Math.min(nMax, v));
-            if (String(v) !== input.value) input.value = v;   // display always matches what's sent
+            // Display matches what is sent; a hex field is reformatted on blur instead, so "1" does not jump to "0x01" mid-typing.
+            if (!ctrl.hex && String(v) !== input.value) input.value = v;
             debounceSend(key, 500, () => write(ctrl.name, v));
         });
-        input.addEventListener("change", () => {   // blur/Enter with a still-empty field: snap to min + send
-            if (Number.isNaN(parseInt(input.value, 10))) {
+        input.addEventListener("change", () => {   // blur/Enter: an empty field snaps to min and sends, a malformed one sends nothing, and a hex field shows its canonical form
+            const v = numberFieldValue(input);
+            if (Number.isNaN(v)) {
+                if (input.value.trim()) return;
                 dragTs[key] = Date.now();
-                input.value = nMin;
+                input.value = numberFieldText(input, nMin);
                 debounceSend(key, 500, () => write(ctrl.name, nMin));
+            } else {
+                input.value = numberFieldText(input, Math.max(nMin, Math.min(nMax, v)));
             }
         });
         row.appendChild(input);
-        resetButton(() => { input.value = def; });
+        resetButton(() => { input.value = numberFieldText(input, def); });
         return row;
     }
 
@@ -3020,8 +3026,7 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
                         .find(c => c.type === "button" && c.name === "send");
                     if (!send) return;
                     e.preventDefault();
-                    clearTimeout(dragTimers[key]);
-                    delete pendingSends[key];
+                    cancelSend(key);
                     await write(ctrl.name, input.value);
                     await write("send", 1);
                 });
@@ -4468,8 +4473,7 @@ function appendResetButton(row, moduleName, ctrl, def, applyVisually, write = (n
     btn.classList.toggle("active", !eq);
     btn.addEventListener("click", () => {
         const key = moduleName + ":" + ctrl.name;
-        clearTimeout(dragTimers[key]);   // a pending debounced edit must not overwrite the reset
-        delete pendingSends[key];
+        cancelSend(key);                 // a pending debounced edit must not overwrite the reset
         dragTs[key] = Date.now();        // and a stale WS patch must not revert it
         applyVisually();
         write(ctrl.name, def);
@@ -4484,6 +4488,12 @@ function debounceSend(key, ms, fn) {
     clearTimeout(dragTimers[key]);
     pendingSends[key] = fn;
     dragTimers[key] = setTimeout(() => { delete pendingSends[key]; fn(); }, ms);
+}
+
+// Drop a control's queued write, so an edit superseded before its debounce fires never reaches the device.
+function cancelSend(key) {
+    clearTimeout(dragTimers[key]);
+    delete pendingSends[key];
 }
 
 // A password, a control's or a list field's, arrives XOR-obfuscated and base64-encoded (writeObfuscatedPassword in Control.cpp), and this reverses it.
@@ -4849,8 +4859,8 @@ function updateModuleControls(mod) {
                 // real value when it ends, and the next patch after that lands normally.
                 if (input && surfaceDemoRunning() &&
                     (input.classList.contains("encoder-input") || input.classList.contains("fader-input"))) break;
-                if (input && Number(input.value) !== Number(ctrl.value)) {
-                    input.value = ctrl.value ?? 0;
+                if (input && numberFieldValue(input) !== Number(ctrl.value)) {
+                    input.value = numberFieldText(input, ctrl.value ?? 0);
                     const val = input.nextElementSibling;
                     if (val && val.classList.contains("control-value-input")) val.value = ctrl.value ?? 0;
                     redrawRangeDecorations(input);
@@ -5063,6 +5073,19 @@ function updateModuleControls(mod) {
             }
         }
     }
+}
+
+// A number field's text for a value: "0x18" for a hex field, as a datasheet and the I2C scan write it, otherwise decimal.
+function numberFieldText(input, v) {
+    const n = Number(v) || 0;
+    return input.dataset.hex ? "0x" + n.toString(16).padStart(2, "0") : String(n);
+}
+
+// A number field's value, NaN while it holds no number; a hex field takes "0x18" or "18" alike and refuses a valid prefix with junk after it.
+function numberFieldValue(input) {
+    if (!input.dataset.hex) return parseInt(input.value, 10);
+    const m = /^\s*(?:0x)?([0-9a-f]+)\s*$/i.exec(input.value);
+    return m ? parseInt(m[1], 16) : NaN;
 }
 
 // Per-type equality for reset-button highlighting. bool→boolish, ipv4/text→

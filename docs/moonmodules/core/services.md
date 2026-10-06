@@ -23,7 +23,9 @@ A user-added Service: the audio source the audio-reactive effects consume. `mode
 - `mode`: Local audio, Receive network or Simulate, each showing only its own controls below.
 - `micMode`: (Local, I²S targets) `I2S` for a three-wire part, `PDM` for a two-wire one.
 - `sckPin` / `wsPin` / `sdPin`: (Local, I²S targets) the bus GPIOs, unset until entered.
-- `mclkPin`: (Local, I²S targets) the master clock a line-in ADC may need; unset for a plain mic.
+- `mclkPin`: (Local, I²S targets) the master clock an ADC or codec needs; unset for a plain mic.
+- `codec`: (Local, I²S targets) `ES8311` for a mic behind that codec, else `none`.
+- `codecAddr`: (with a codec) its address on the [I2C bus](system.md#i2c-bus), in hex (`0x18`).
 - `device`: (Local, desktop) the OS capture input, `default` following the system setting.
 - `sampleRate`: (Local) mic/ADC sample rate.
 - `levels`: (Local) who sets the display window: `manual`'s two sliders, or `automatic`, a learner.

@@ -65,10 +65,13 @@
 #if MM_HUB75_LCDCAM
 #include "esp_lcd_panel_io.h"
 #include "esp_lcd_io_i80.h"
+#include "hal/lcd_periph.h"      // soc_lcd_i80_signals: the OE lane's GPIO-matrix signal
 #endif
 #if MM_HUB75_PARLIO
 #include "driver/parlio_tx.h"
+#include "hal/parlio_periph.h"   // soc_parlio_signals: the same, for Parlio
 #endif
+#include "esp_rom_gpio.h"
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
 #include "driver/gpio.h"
@@ -83,15 +86,17 @@ namespace mm::platform {
 
 namespace {
 
-// The shift clock, at the rate the parallel path already runs on this silicon and near what the prior art drives a register chain at.
-// A proven rate for the same class of load rather than a datasheet maximum.
-// It must be an exact divide of the bus resolution, since the component silently rounds an inexact rate down into a wrong waveform rather than reporting it.
+// The parallel path's proven shift clock, an exact divide of the bus resolution: the component silently rounds an inexact rate into a wrong waveform.
 constexpr uint32_t kPclkHz = 20'000'000;
 
-// Parlio's hardware ceiling: PER_FRAME is 0x7FFFF bits on every Parlio-capable target, which is 65,535 BYTES whatever the bus width. The same constant platform_esp32_parlio.cpp records, and it is what decides that four 8-bit panels (65,792 bytes) are an LCD_CAM job.
+// Parlio's ceiling, PER_FRAME's 0x7FFFF bits, is 65,535 bytes at any bus width (as platform_esp32_parlio.cpp records), which makes a large wall an LCD_CAM job.
 constexpr size_t kParlioMaxTransferBytes = 0x7FFFF / 8;
 
 const char* g_lastError = nullptr;
+
+// The OE bit means lit and the panel's OE is active low, so the pin is re-routed inverted and an idle bus is dark (Hub75Slots.h, "The OE bit means lit").
+constexpr uint8_t kOeLane = Hub75Layout{}.oe;
+void invertOe(gpio_num_t oe, int signal) { esp_rom_gpio_connect_out_signal(oe, signal, true, false); }
 
 struct Hub75State {
     Hub75Backend backend = Hub75Backend::LcdCam;
@@ -108,15 +113,13 @@ struct Hub75State {
     size_t   frameBytes = 0;
     // ATOMIC: the ISR callbacks read this to decide whether to touch `frame`, and teardown clears it from a task. A plain bool orders nothing between the two, so a callback could pass the check and then read a freed frame.
     std::atomic<bool> running{false};
-    // The refresh measurement: the callback counts scans, so dividing by elapsed time gives the panel's ACTUAL refresh rather than a calculation, which is what a tester reports back. Atomic rather than merely volatile, since the counter crosses from the completion interrupt to the status tick and volatile orders nothing between contexts.
+    // Scans counted by the completion callback, so refresh is measured rather than calculated; atomic, as it crosses from the interrupt to the status tick.
     std::atomic<uint32_t> scans{0};
     uint32_t windowStartUs = 0;
     std::atomic<uint16_t> refreshHz{0};
 };
 
-// Keeping the panel clocked, which the two peripherals solve differently: the panel is lit only while being clocked, so any gap between frames is a visible dim.
-// One re-sends by itself until its unit is disabled, so its callback only counts.
-// The other has no such mode, so a task queues the next scan as each one ends.
+// A panel is lit only while clocked: Parlio re-sends on its own, so its callback only counts, and LCD_CAM has a task queue each next scan.
 #if MM_HUB75_LCDCAM
 bool IRAM_ATTR hub75DoneCb(esp_lcd_panel_io_handle_t, esp_lcd_panel_io_event_data_t*, void* ctx) {
     auto* st = static_cast<Hub75State*>(ctx);
@@ -155,9 +158,7 @@ void destroyState(Hub75State* st) {
     st->running.store(false, std::memory_order_release);
 #if MM_HUB75_LCDCAM
     if (st->refill) {
-        // The refill task sits inside the transmit until the current scan ends, then reads the flag and parks.
-        // And it must be gone before the delete, which drains the same queue.
-        // A peripheral that never completes leaves it unparked and the delete would wait forever, so the wait is bounded and teardown skips it: a leaked handle beats a hung teardown.
+        // The refill task parks after the current scan and must be gone before the delete; the wait is bounded, since a leaked handle beats a hung teardown.
         bool parked = false;
         for (int i = 0; i < 100 && !parked; i++) {
             parked = st->refillParked.load(std::memory_order_acquire);
@@ -254,14 +255,9 @@ bool hub75Init(Hub75Handle& h, Hub75Backend backend, const Hub75Pins& pins,
         g_lastError = "set the panel size and scan rate";
         return false;
     }
-    // A REAL panel is 1/8, 1/16 or 1/32. Checked here rather than in the encoder, which only asks whether a geometry can be encoded: buildPinOrder derives the address line count from this, so a value like 3 divides some heights cleanly and then asks for an address width no panel has. The driver's select offers only these three; this catches a config file that does not.
+    // A real panel is 1/8, 1/16 or 1/32, and buildPinOrder derives the address width from it, so a config file's 3 would ask for an address no panel has.
     if (scanRate != 8 && scanRate != 16 && scanRate != 32) {
         g_lastError = "scan rate must be 1/8, 1/16 or 1/32";
-        return false;
-    }
-    // Same cap as the encoder's Hub75Geometry::valid: unweighted planes above 4 cost a scan pass and a share of the frame for nothing the eye can see. Lifts when planes are weighted.
-    if (bitDepth < 2 || bitDepth > 4) {
-        g_lastError = "bit depth must be 2 to 4";
         return false;
     }
     if (height % scanRate != 0 || ((height / scanRate) % 2) != 0) {
@@ -280,12 +276,12 @@ bool hub75Init(Hub75Handle& h, Hub75Backend backend, const Hub75Pins& pins,
     mm::Hub75Geometry geo;
     geo.width = width; geo.height = height; geo.scanRate = scanRate; geo.bitDepth = bitDepth;
     if (!geo.valid()) {
-        g_lastError = "the panel geometry does not divide into scan row pairs";
+        g_lastError = "the panel size, scan rate or bit depth (2 to 6) cannot be encoded";
         return false;
     }
     const size_t frameBytesPre = geo.frameBytes();
     if (!hub75BackendAvailable(backend, frameBytesPre)) {
-        // Named rather than silently substituted. A user who picked Parlio for a reason (the LCD_CAM is driving their strips) must hear that this panel will not fit on it, not find themselves moved onto the peripheral they were keeping free.
+        // Named, never substituted: a user keeping LCD_CAM free for strips must hear that the panel does not fit Parlio.
         g_lastError = (backend == Hub75Backend::Parlio)
             ? "this panel is too big for Parlio (65,535 byte limit): use LCD_CAM or lower the depth"
             : "this chip has no LCD_CAM";
@@ -321,6 +317,7 @@ bool hub75Init(Hub75Handle& h, Hub75Backend backend, const Hub75Pins& pins,
             destroyState(st);
             return false;
         }
+        invertOe(busPins[kOeLane], soc_parlio_signals[0].tx_units[0].data_sigs[kOeLane]);
         parlio_tx_event_callbacks_t cbs = {};
         cbs.on_trans_done = hub75ParlioDoneCb;
         parlio_tx_unit_register_event_callbacks(st->parlio, &cbs, st);
@@ -353,7 +350,7 @@ bool hub75Init(Hub75Handle& h, Hub75Backend backend, const Hub75Pins& pins,
     busCfg.dma_burst_size = 64;
     const esp_err_t busErr = esp_lcd_new_i80_bus(&busCfg, &st->bus);
     if (busErr != ESP_OK) {
-        // Name the REASON rather than guessing at one. "another driver using it" sent a user hunting a conflict that did not exist: the real fault was ESP_ERR_INVALID_ARG from a GPIO the bus would not configure, and only the IDF log said so.
+        // Name the reason: a refused pin returns ESP_ERR_INVALID_ARG, which a generic "in use" message would hide behind a conflict that does not exist.
         g_lastError = (busErr == ESP_ERR_INVALID_ARG)
             ? "the LCD bus refused a pin: check the board's GPIO map"
             : (busErr == ESP_ERR_NOT_FOUND)
@@ -362,6 +359,8 @@ bool hub75Init(Hub75Handle& h, Hub75Backend backend, const Hub75Pins& pins,
         destroyState(st);
         return false;
     }
+
+    invertOe(busPins[kOeLane], soc_lcd_i80_signals[0].data_sigs[kOeLane]);
 
     esp_lcd_panel_io_i80_config_t ioCfg = {};
     ioCfg.cs_gpio_num = GPIO_NUM_NC;

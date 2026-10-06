@@ -580,7 +580,9 @@ findings in one file stay together and the list diffs cleanly between runs.
 **Two engines, each doing what it is good at.** The compiler finds the blocking calls, because
 `-Wfunction-effects` is transitive and a matcher would have to rebuild the call graph to match it.
 clang-query then annotates each site with its guard — a purely local AST question — joined on
-`file:line`. Measured ~1s per TU, against a report whose cost is the clean rebuild.
+`file:line`. Measured ~1s per TU.
+
+**No clean rebuild.** The desktop build runs every compile through [`diag_launcher.py`](build/diag_launcher.py), CMake's `CXX_COMPILER_LAUNCHER` hook, which keeps each file's compiler output beside its object as `<object>.diag`. An incremental build brings the tree up to date and the saved findings of every object in `compile_commands.json` give the whole picture, so a run takes seconds. Only a build from before the launcher is rebuilt clean, once; a build running another launcher, such as ccache, is told to reconfigure instead.
 
 **Guarded is not rare.** `if (enabled_)` is conditional and true every frame; only the `·rate`
 hint separates those, and it reads the condition's *spelling*, so it is a lead rather than a
@@ -746,7 +748,7 @@ The report, [`docs/reference/metrics/code.md`](../docs/reference/metrics/code.md
 
 **Platform code outside src/platform** and **light include in core** are the architecture's two boundaries, counted per line. The first is a vendor header or a platform `#ifdef` outside `src/platform/`, the second a `src/core` file including a `light/` header.
 
-**Blocking call on the render path** is the last rule, one row per site [check_nonblocking](#check_nonblocking) finds, a float conversion at a `formatTo` site included. It needs that script's clean rebuild of the desktop, so a full run takes minutes; `--module` and `--account` skip it and stay fast. A host without Clang 20 skips this rule with a SKIP line and leaves `code.md` as it is, while every other rule still ratchets.
+**Blocking call on the render path** is the last rule, one row per site [check_nonblocking](#check_nonblocking) finds, a float conversion at a `formatTo` site included. It reads that script's saved findings after an incremental desktop build, so a full run takes seconds; `--module` and `--account` skip it. A host without Clang 20 skips this rule with a SKIP line and leaves `code.md` as it is, while every other rule still ratchets.
 
 The account, `--account`, reads `code.md` as the last full run wrote it, so it follows a full run in the same gate pass. A saving shows in the commit that made it, rather than only in a later total.
 

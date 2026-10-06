@@ -229,6 +229,7 @@ public:
         controls_.addControl("on", on);   // master power: first so it renders at the top of the card
         // A deviceModel fills this in, the same way it fills in the LED pins.
         controls_.addText("relayPins", relayPins, sizeof(relayPins));
+        controls_.setAdvanced(controls_.count() - 1);   // wiring an installer sets once
         controls_.addControl("brightness", brightness, 0, 255);
         // ONE picker for both kinds, so a `.mlp` is chosen exactly like a built-in.
         refreshLivePalettes();
