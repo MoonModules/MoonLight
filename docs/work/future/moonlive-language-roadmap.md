@@ -54,7 +54,7 @@ Each row is a compromise the balls effect makes, and the language feature that w
 
 | forced to | because | wants |
 |---|---|---|
-| 4 objects, not 25 | 64-byte arena, 8 members | a bigger arena, or a pool handle (shipped for particles) |
+| 4 objects, not 25 | 64-byte arena | a bigger arena, or a pool handle (shipped for particles) |
 | whole-pixel motion | no fractional type | fixed-point or float |
 | one flat colour | no `hsv()` builtin | `hsv()` |
 | one array per field | no structs | structs |
@@ -234,7 +234,7 @@ Doing #1 and #2 together is what actually opens the library; either alone leaves
 
 ### 3. A bigger arena and more members: *check the handle route first; storage rules now in the type-system design above*
 
-64 bytes across 8 members is why an effect holds four objects rather than twenty-five.
+64 bytes of member data is why an effect holds four objects rather than twenty-five.
 
 **More members: ✅ shipped (2026-10-07).** `kMaxCtrls` is 16, measured at +280 bytes per scripted module on the S3 (class size 1312 → 1592 B). The StadBeest legs need 11 members, 6 controls and 5 values kept between frames, and before the raise packed four of those values into one `int` by bit ranges. The arena stays at 64 bytes, and the rest of this section is about the arena.
 
@@ -244,8 +244,8 @@ Doing #1 and #2 together is what actually opens the library; either alone leaves
 have to be a member), so the script lost nothing, but the ceiling it hit was `kMaxCtrls` with 81%
 of the arena still free. Any script with a handful of controls and a handful of intermediates
 meets the same wall. If only one of the two moves, the count is the one worth moving: the four
-tables it sizes are `DeclaredControl[8]` at 24 B each, so 8 -> 12 costs 96 B per engine and
-roughly 600 B per device across three engines, against `sizeof(MoonLive)` at 864 B today.
+tables it sizes were `DeclaredControl[8]` at 24 B each; the raise to 16 measured +280 B per
+scripted module on the S3.
 
 **But check the handle route first.** The power-functions spec's item 5 — a particle pool as an
 arena-allocated HANDLE — means a simulation effect stops storing its own particle state entirely,
@@ -260,8 +260,8 @@ Not purely a constants bump, and the blockers are known:
   (`MoonLive.h:355`) is the real gate. Past 64 bytes the seeded-member mask needs re-indexing —
   and there is a worked example, because it was widened 16 → 64 once already. The assert exists
   because the earlier `uint32_t` version silently aliased members mod 32.
-- Watch `sizeof(MoonLive)`. It is held BY VALUE in every scripted module and constructed on the
-  main task's stack by `registerType`'s probe, which is what boot-looped the P4 at 1440 bytes.
+- Watch `sizeof(MoonLive)`. It is held BY VALUE in every scripted module. `registerType`'s probe
+  builds one on the heap, since a probe on the boot stack is what boot-looped the P4 at 1440 bytes.
   Growing the arena grows every scripted module.
 
 ### 4. `setPaletteColor()` — ✅ *shipped*

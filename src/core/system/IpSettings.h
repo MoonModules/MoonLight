@@ -32,6 +32,7 @@ inline constexpr const char* kWhy[] = {
     "static IP not used: the gateway is the subnet's network or broadcast address",
     "static IP not used: the DNS server is not a host address",
 };
+static_assert(sizeof(kWhy) / sizeof(kWhy[0]) == static_cast<size_t>(ipv4::Fault::Dns) + 1, "a sentence for every fault");
 
 }  // namespace mm::ipsettings
 

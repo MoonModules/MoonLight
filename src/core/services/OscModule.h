@@ -138,7 +138,7 @@ public:
         if (!enabledOsc) return;
         if (feedback && ++secondsSinceRefresh_ >= kRefreshSeconds) {
             secondsSinceRefresh_ = 0;
-            resendAll_ = true;
+            if (auto* c = ControlModule::active()) c->resendPaced(this);
         }
         refreshNamedHosts();
         const bool fresh = peerFresh();
@@ -169,12 +169,7 @@ public:
         // After the drain, so a burst re-seeds once rather than per packet.
         if (resendAll_) {
             resendAll_ = false;
-            resendNext_ = 0;
-        }
-        // One value per tick rather than all of them at once, since WiFi drops a burst of datagrams.
-        if (resendNext_ < ControlModule::kSlotCount) {
-            if (auto* c = ControlModule::active()) c->resendOne(this, resendNext_);
-            resendNext_++;
+            if (auto* c = ControlModule::active()) c->resendPaced(this);
         }
     }
 
@@ -248,7 +243,7 @@ private:
             // Join the group a sender multicasts feedback to; a failed join leaves unicast working.
             if (groupValid_) sock_.joinMulticast(group_);
             if (!attached_) {
-                if (auto* c = ControlModule::active()) { c->addSurface(this); attached_ = true; }
+                if (auto* c = ControlModule::active()) { c->addSurface(this, /*paced=*/true); attached_ = true; }
             }
             lastFailMs_ = 0;
             reportPeer();
@@ -334,7 +329,6 @@ private:
     bool     peerWasFresh_ = false;  ///< what the status last said, so it is rewritten only on a change
     bool     attached_ = false;    ///< whether we are on the surface list
     bool     resendAll_ = false;   ///< a new peer appeared, so push every value once
-    uint8_t  resendNext_ = ControlModule::kSlotCount;   ///< the value a resend sends next, kSlotCount when none is running
     uint8_t  secondsSinceRefresh_ = 0;   ///< counts to kRefreshSeconds
     /// How often every value goes out again, so a lost datagram or a rebooted follower catches up.
     static constexpr uint8_t kRefreshSeconds = 30;

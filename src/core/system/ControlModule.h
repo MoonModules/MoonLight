@@ -88,17 +88,19 @@ public:
 
     // --- Control surfaces -------------------------------------------------------------------  A.
 
-    /// Attach a surface.
-    void addSurface(ControlSurface* s) {
+    /// Attach a surface, seeded with every value at once or, `paced`, one per tick.
+    void addSurface(ControlSurface* s, bool paced = false) {
         if (!s) return;
         for (uint8_t i = 0; i < surfaceCount_; i++)
             if (surfaces_[i] == s) return;
         if (surfaceCount_ >= kMaxSurfaces) return;
         touched_[surfaceCount_] = Touch{};
+        resendNext_[surfaceCount_] = kSlotCount;
         surfaces_[surfaceCount_++] = s;
         // Read the targets BEFORE seeding:
         followTargets();
-        resendTo(s);
+        if (paced) resendPaced(s);
+        else resendTo(s);
     }
 
     /// Push EVERY value to one surface, whatever the mirror last sent.
@@ -106,7 +108,13 @@ public:
         for (uint8_t slot = 0; slot < kSlotCount; slot++) resendOne(s, slot);
     }
 
-    // A network surface paces a resend one value at a time, since a burst of datagrams is what WiFi drops.
+    // A network surface asks for this rather than resendTo, since a burst of datagrams is what WiFi drops.
+    /// Push every value to one attached surface, one per tick20ms, starting over if a resend is already running.
+    void resendPaced(ControlSurface* s) {
+        for (uint8_t i = 0; i < surfaceCount_; i++)
+            if (surfaces_[i] == s) resendNext_[i] = 0;
+    }
+
     /// Push the value at `slot`, counted as kSlotCount orders them, to one surface.
     void resendOne(ControlSurface* s, uint8_t slot) {
         if (!s || slot >= kSlotCount) return;
@@ -126,6 +134,7 @@ public:
             --surfaceCount_;
             surfaces_[i] = surfaces_[surfaceCount_];
             touched_[i] = touched_[surfaceCount_];
+            resendNext_[i] = resendNext_[surfaceCount_];
             surfaces_[surfaceCount_] = nullptr;
             return;
         }
@@ -172,6 +181,9 @@ public:
     void tick20ms() MM_NONBLOCKING override {
         MoonModule::tick20ms();
         mirrorToSurfaces();
+        // One value of each paced resend.
+        for (uint8_t i = 0; i < surfaceCount_; i++)
+            if (resendNext_[i] < kSlotCount) resendOne(surfaces_[i], resendNext_[i]++);
     }
 
     void tick1s() MM_NONBLOCKING override {
@@ -1032,6 +1044,8 @@ private:
     static constexpr uint8_t kMaxSurfaces = 4;
     ControlSurface* surfaces_[kMaxSurfaces] = {};
     uint8_t surfaceCount_ = 0;
+    /// Per surface, the value a paced resend sends next, kSlotCount when none is running.
+    uint8_t resendNext_[kMaxSurfaces] = {};
     /// The last value KNOWN to a surface, so only changes go out.
     uint8_t sentSwitches_[kSwitchCount] = {};
     uint8_t sentFaders_[kFaderCount] = {};

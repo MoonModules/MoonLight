@@ -90,14 +90,14 @@ The next function worth simplifying is at the top of each file's list.
 | `src/light/layers/Layer.h` | 13 | `Layer in 132 files`, name spread 132 |
 | `test/unit/light/unit_HlsDriver.cpp` | 13 | `lines 30-47, also in test/unit/light/unit_PanelCardDriver.cpp:22`, duplicated block 18 |
 | `test/unit/light/unit_RandomMapModifier.cpp` | 13 | `lines 116-132, also in test/unit/light/unit_BlurzEffect.cpp:49`, duplicated block 17 |
+| `src/core/system/ControlModule.h` | 12 | `ControlModule::storePreset, line 930`, large stack frame 1296 |
 | `src/core/system/DevicesModule.h` | 12 | `lines 73-80, also in src/core/system/DevicesModule.h:59`, duplicated block 8 |
 | `src/light/drivers/HlsDriver.h` | 12 | `lines 105-117, also in src/light/drivers/RtspDriver.h:92`, duplicated block 13 |
 | `src/light/moonlive/MoonLiveBuiltins_light.h` | 12 | `moonlive::mm_light_escape`, complex function 13 |
 | `test/unit/light/unit_RubiksCubeEffect.cpp` | 12 | `lines 60-78, also in test/unit/light/unit_RubiksCubeEffect.cpp:28`, duplicated block 19 |
-| `src/core/services/OscModule.h` | 11 | `OscModule::sendValue`, complex function 18 |
-| `src/core/system/ControlModule.h` | 11 | `ControlModule::storePreset, line 918`, large stack frame 1296 |
 | `src/platform/esp32/platform_esp32_i80.cpp` | 11 | `platform::createState`, complex function 27 |
 | `test/unit/light/unit_StarFieldEffect.cpp` | 11 | `lines 88-103, also in test/unit/light/unit_StarFieldEffect.cpp:13`, duplicated block 16 |
+| `src/core/services/OscModule.h` | 10 | `OscModule::sendValue`, complex function 18 |
 | `src/light/drivers/Drivers.h` | 10 | `Drivers in 63 files`, name spread 63 |
 | `src/light/effects/GEQ3DEffect.h` | 10 | `lines 140-150, also in src/light/effects/GEQ3DEffect.h:113`, duplicated block 11 |
 | `src/light/effects/GameOfLifeEffect.h` | 10 | `GameOfLifeEffect::evolveAutomaton`, complex function 67 |

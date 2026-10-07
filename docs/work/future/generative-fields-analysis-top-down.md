@@ -359,7 +359,7 @@ why it goes first.
 signatures would be a special case, and the language does not need another one. `Coord3D` is a
 class member, a local, a function argument and a return value, the same as `int`, `byte`, `bool` and
 `fixed`. Arguments and returns are roadmap § 6, which this step therefore depends on. Two
-consequences worth stating: a member costs three of the 8 member records and 6 of the 64 arena bytes
+consequences worth stating: a member costs three of the 16 member records and 6 of the 64 arena bytes
 unless the compiler packs it as one record, which is worth deciding when the type is added rather
 than after; and a local costs one frame slot per field under today's flat allocator, so a script
 holding several coordinates meets the 16-slot ceiling faster (§ 8b there).

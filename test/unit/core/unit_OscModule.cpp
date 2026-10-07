@@ -1,18 +1,14 @@
 /// @module OscModule
 /// @also Scheduler
 
-/// OSC feedback: its settings are validated without a socket, and over loopback every value is resent every 30 seconds, one per tick.
+/// OSC feedback: its settings are validated without a socket, and every value is sent again every 30 seconds, one per tick.
 
 #include "doctest.h"
 #include "core/services/OscModule.h"
 #include "core/module/Scheduler.h"
 #include "core/system/ControlModule.h"
-#include "platform/platform.h"
 
-#include <chrono>
-#include <cstdio>
 #include <cstring>
-#include <thread>
 
 using namespace mm;
 
@@ -47,54 +43,44 @@ TEST_CASE("OSC multicast feedback without a group says so, and the default group
     CHECK(std::strstr(rig.osc->status(), "needs a group") != nullptr);
 }
 
+namespace {
+// The OSC module with its datagrams counted instead of sent, so the test needs no socket and no clock.
+struct CountingOsc : OscModule {
+    int sent = 0;
+    void sendValue(SurfaceControl, uint8_t, uint8_t) override { sent++; }
+};
+}  // namespace
+
 // Regression: a follower that missed one multicast datagram kept the wrong value until that slot changed again, which for a palette was a whole scene.
-TEST_CASE("OSC feedback sends every surface value again every 30 seconds, one per tick") {
+TEST_CASE("OSC feedback asks for every surface value again every 30 seconds, and gets one per tick") {
     Scheduler scheduler;
     auto* control = new ControlModule();
     control->setName("Control");
-    auto* osc = new OscModule();
+    auto* osc = new CountingOsc();
     osc->setName("Osc");
     scheduler.addModule(control);
     scheduler.addModule(osc);
     scheduler.setup();
-
-    // A client on this machine, which the feedback reaches by unicast.
-    const uint16_t base = static_cast<uint16_t>(39000 + platform::millis() % 500);
-    platform::UdpSocket client;
-    REQUIRE(client.open());
-    REQUIRE(client.bind(static_cast<uint16_t>(base + 1)));
-    char body[48];
-    std::snprintf(body, sizeof(body), "{\"value\":%u}", static_cast<unsigned>(base));
-    REQUIRE(scheduler.setControl("Osc", "port", body) == Scheduler::SetControlResult::Ok);
-    std::snprintf(body, sizeof(body), "{\"value\":%u}", static_cast<unsigned>(base + 1));
-    REQUIRE(scheduler.setControl("Osc", "feedbackPort", body) == Scheduler::SetControlResult::Ok);
-    REQUIRE(scheduler.setControl("Osc", "hosts", "{\"value\":\"127.0.0.1\"}") == Scheduler::SetControlResult::Ok);
     REQUIRE(scheduler.setControl("Osc", "feedback", "{\"value\":true}") == Scheduler::SetControlResult::Ok);
     REQUIRE(scheduler.setControl("Osc", "listen", "{\"value\":true}") == Scheduler::SetControlResult::Ok);
 
-    uint8_t pkt[256];
-    // Loopback delivery is asynchronous, so each count waits a moment for the datagrams already sent.
-    const auto received = [&] {
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-        int n = 0;
-        while (client.recvFrom(pkt, sizeof(pkt)) > 0) n++;
-        return n;
-    };
-    // Opening the socket and the feedback switch each seed the client; let both finish.
-    for (int i = 0; i < 2 * ControlModule::kSlotCount + 4; i++) osc->tick();
-    received();
+    // Attached as the module attaches itself: seeded one value per tick, not in one burst.
+    control->addSurface(osc, /*paced=*/true);
+    CHECK(osc->sent == 0);
+    for (int i = 0; i < ControlModule::kSlotCount; i++) {
+        const int before = osc->sent;
+        control->tick20ms();
+        CHECK(osc->sent - before == 1);
+    }
+    control->tick20ms();
+    CHECK(osc->sent == ControlModule::kSlotCount);   // every value once, then quiet
 
     for (int s = 0; s < 29; s++) osc->tick1s();
-    osc->tick();
-    CHECK(received() == 0);   // nothing before the 30 seconds are up
+    control->tick20ms();
+    CHECK(osc->sent == ControlModule::kSlotCount);   // nothing before the 30 seconds are up
     osc->tick1s();
-    int total = 0;
-    for (int i = 0; i < ControlModule::kSlotCount + 4; i++) {
-        osc->tick();
-        const int n = received();
-        CHECK(n <= 1);        // never a burst
-        total += n;
-    }
-    CHECK(total == ControlModule::kSlotCount);   // every value, once
+    for (int i = 0; i < ControlModule::kSlotCount + 2; i++) control->tick20ms();
+    CHECK(osc->sent == 2 * ControlModule::kSlotCount);   // and every value once more
+    control->removeSurface(osc);
     scheduler.release();
 }

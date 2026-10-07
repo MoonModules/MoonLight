@@ -91,6 +91,11 @@ The layout decides what an effect can show: the legs are ten vertical strips, th
 
 <img src="../assets/how-to/multi-board/sk6812rgbw.png" width="240" alt="SK6812 RGBW strips, the lights of the legs"> <img src="../assets/how-to/multi-board/rings241.png" width="240" alt="The 241-light ring disc of an eye: nine concentric rings of LEDs">
 
+The legs run on a LightCrafter 16, a 16-channel LED driver board with Ethernet, using ten of its channels.
+Each eye runs on an ESP32-S3-Zero, small enough to fit inside the printed bulb.
+
+<img src="../assets/deviceModels/esp32-s3-n8r8-lightcrafter-16.jpg" width="300" alt="The LightCrafter 16 board: sixteen LED output channels around an ESP32-S3, with an Ethernet port"> <img src="../assets/deviceModels/esp32-s3-zero-pinout.png" width="300" alt="The Waveshare ESP32-S3-Zero and its pin map">
+
 ---
 
 ## 2. Effects written for the hardware
@@ -154,6 +159,7 @@ A board with nothing for a slot leaves it unassigned.
 | `encoder2` | | eye `pupil` |
 | `encoder3` | | eye `look` |
 | `encoder4` | | eye `blink` |
+| `switch8` | autopilot `run` | |
 
 A slot holds the value of the control it drives, so `fader2` at 33 means `bpm` 33, and assigning a slot changes nothing until the slot moves.
 Assign from the card, or with `POST /api/control` and `{"module":"Control","control":"fader2Target","value":"stadbeest-legs.bpm"}`.

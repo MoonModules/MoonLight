@@ -13,6 +13,7 @@ A row without a link carries free functions and constants rather than a class, w
 | [`ControlSurface`](moxygen/ControlSurface.md) | A transport that mirrors the control surface's state in both directions. The module owns the state and a surface is a view of it, which is what lets two attach at once. |
 | [`InputMapping`](moxygen/InputMapping.md) | The binding table behind a surface. A row says what an input does to a control: set it, step it, toggle it. A delta steps down as well as up, so one encoder covers a range without a second control to reverse it. |
 | [`ModuleFactory`](moxygen/ModuleFactory.md) | The registry mapping a type name to the function that builds one, which is what lets a preset file name a module this build has never instantiated. Storage grows on demand rather than reserving a fixed cap. |
+| [`MoonLiveScript`](moxygen/MoonLiveScript.md) · [`MoonLiveScriptFile`](moxygen/MoonLiveScriptFile.md) · [`script_catalog`](moxygen/script_catalog.md) | One scripted module's script: the file it names, the compiled program and the content hash that decides when to recompile, shared by every scripted effect, layout, modifier, palette and service; and the factory scripts a device knows. |
 | [`ActiveInstance`](moxygen/ActiveInstance.md) | The one-active-instance election. Several instances of a type may exist, and exactly one is the one a consumer reaches. |
 
 ## Reading and writing JSON

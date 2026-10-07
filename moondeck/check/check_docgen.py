@@ -147,7 +147,7 @@ MAX_LEAD_LINE_CHARS = 400
 # (`lead N chars > M`), and the prefix alone also matched the word budget (`comment line N words`),
 # each a differently motivated rule silently demoted.
 _LINE_LENGTH_RULES = ("doc line ", "comment line ")
-# Staged as the line-length cap is: a new rule over 477 sections written before it, so it counts and ratchets rather than stopping commits.
+# Staged as the line-length cap is: a new rule over the sections written before it, so it counts and ratchets rather than stopping commits.
 _UNREFERENCED_RULE = "unreferenced appendix section"
 # The one rule staged the OTHER way: an implementation file's hard wrap blocks too. The tree is at
 # zero, so nothing is held hostage, and a split sentence reflows every line it spans on the next

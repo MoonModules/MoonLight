@@ -109,12 +109,6 @@ Detail: [technical](moxygen/MoonLiveParticles.md)
 
 [Tests](../../reference/tests/unit-tests.md#moonliveparticles)
 
-### Script file
-
-One scripted module's script: the file it names, the compiled program, and the content hash that decides when to recompile. Shared by every scripted binding, effect, layout, modifier, palette and service alike, so it lives in core.
-
-Detail: [technical](../core/moxygen/MoonLiveScript.md)
-
 ### Effect base
 
 The `EffectBase` class every effect derives from, the shared surface (buffer access, dimensions, the palette) an effect renders against.
