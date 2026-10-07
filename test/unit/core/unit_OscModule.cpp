@@ -65,22 +65,22 @@ TEST_CASE("OSC feedback asks for every surface value again every 30 seconds, and
     REQUIRE(scheduler.setControl("Osc", "listen", "{\"value\":true}") == Scheduler::SetControlResult::Ok);
 
     // Attached as the module attaches itself: seeded one value per tick, not in one burst.
-    control->addSurface(osc, /*paced=*/true);
+    control->addSurface(osc, ControlModule::Seed::Paced);
     CHECK(osc->sent == 0);
-    for (int i = 0; i < ControlModule::kSlotCount; i++) {
+    for (int i = 0; i < ControlModule::kSurfaceValues; i++) {
         const int before = osc->sent;
         control->tick20ms();
         CHECK(osc->sent - before == 1);
     }
     control->tick20ms();
-    CHECK(osc->sent == ControlModule::kSlotCount);   // every value once, then quiet
+    CHECK(osc->sent == ControlModule::kSurfaceValues);   // every value once, the pads included, then quiet
 
     for (int s = 0; s < 29; s++) osc->tick1s();
     control->tick20ms();
-    CHECK(osc->sent == ControlModule::kSlotCount);   // nothing before the 30 seconds are up
+    CHECK(osc->sent == ControlModule::kSurfaceValues);   // nothing before the 30 seconds are up
     osc->tick1s();
-    for (int i = 0; i < ControlModule::kSlotCount + 2; i++) control->tick20ms();
-    CHECK(osc->sent == 2 * ControlModule::kSlotCount);   // and every value once more
+    for (int i = 0; i < ControlModule::kSurfaceValues + 2; i++) control->tick20ms();
+    CHECK(osc->sent == 2 * ControlModule::kSurfaceValues);   // and every value once more
     control->removeSurface(osc);
     scheduler.release();
 }

@@ -3,7 +3,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <cmath>     // std::lround: correct float-to-byte rounding
+#include <cstdio>
 #include <cstring>
+
+#include "core/util/ControlSurface.h"   // SurfaceControl: the banks the addresses name
 
 /// @defgroup OscPacket The OSC 1.0 wire format
 /// @{
@@ -55,6 +58,10 @@ namespace mm::osc {
 
 /// The de-facto OSC receive port.
 inline constexpr uint16_t kDefaultPort = 9000;
+/// Where a board sends its feedback by default, the port a controller listens on.
+inline constexpr uint16_t kDefaultFeedbackPort = 9001;
+/// The multicast group feedback goes to by default, beside discovery's 239.255.77.77.
+inline constexpr char kDefaultGroup[] = "239.255.77.78";
 
 /// One parsed message: the address, and the first numeric argument as both forms.
 struct Message {
@@ -154,30 +161,55 @@ inline bool parse(const uint8_t* pkt, size_t len, Message& out) {
     return true;   // a valid message that simply carries no number
 }
 
-/// Write one message carrying a single float, returning its length or 0 when it will not fit.
-inline size_t encodeFloat(uint8_t* out, size_t cap, const char* address, float value) {
+/// Write one message carrying a single 32-bit argument of type `tag`, returning its length or 0 when it will not fit.
+inline size_t encodeWord(uint8_t* out, size_t cap, const char* address, char tag, uint32_t bits) {
     if (!out || !address) return 0;
     const size_t addrLen = std::strlen(address);
     if (addrLen == 0 || address[0] != '/') return 0;      // not an address pattern
     const size_t addrPad = pad4(addrLen + 1);
-    const size_t tagsPad = pad4(3);                       // ",f" + NUL
+    const size_t tagsPad = pad4(3);                       // "," + the tag + NUL
     const size_t total = addrPad + tagsPad + 4;
     if (total > cap) return 0;
 
-    std::memset(out, 0, total);                           // the padding IS NULs; write them once
+    std::memset(out, 0, total);                           // the padding IS NULs, the address's terminator among them
     std::memcpy(out, address, addrLen);
     out[addrPad] = ',';
-    out[addrPad + 1] = 'f';
+    out[addrPad + 1] = tag;
 
-    // Big-endian, the network order parse() reads. memcpy for the type pun, as beFloat32 does.
-    uint32_t bits;
-    std::memcpy(&bits, &value, 4);
+    // Big-endian, the network order parse() reads.
     uint8_t* arg = out + addrPad + tagsPad;
     arg[0] = static_cast<uint8_t>((bits >> 24) & 0xFF);
     arg[1] = static_cast<uint8_t>((bits >> 16) & 0xFF);
     arg[2] = static_cast<uint8_t>((bits >> 8) & 0xFF);
     arg[3] = static_cast<uint8_t>(bits & 0xFF);
     return total;
+}
+
+/// Write one message carrying a single float, returning its length or 0 when it will not fit.
+inline size_t encodeFloat(uint8_t* out, size_t cap, const char* address, float value) {
+    uint32_t bits;
+    std::memcpy(&bits, &value, 4);                        // the type pun, as beFloat32 does
+    return encodeWord(out, cap, address, 'f', bits);
+}
+
+/// Write one message carrying a single int32, returning its length or 0 when it will not fit.
+inline size_t encodeInt(uint8_t* out, size_t cap, const char* address, int32_t value) {
+    return encodeWord(out, cap, address, 'i', static_cast<uint32_t>(value));
+}
+
+/// The address word of each surface bank, as `/mm/<bank>/<n>` names one control.
+inline const char* surfaceBank(SurfaceControl kind) {
+    return kind == SurfaceControl::Switch ? "switch" : kind == SurfaceControl::Encoder ? "encoder"
+         : kind == SurfaceControl::Fader ? "fader" : "pad";
+}
+
+/// Write the message for one surface control, `index` zero-based: a switch, an encoder or a fader as a fraction of the byte range, a pad as an int.
+inline size_t encodeSurface(uint8_t* out, size_t cap, SurfaceControl kind, uint8_t index, uint8_t value) {
+    char addr[24];
+    std::snprintf(addr, sizeof(addr), "/mm/%s/%u", surfaceBank(kind), static_cast<unsigned>(index) + 1u);
+    // A pad's state is an enum, and a pad press a 1, so they travel as ints.
+    return kind == SurfaceControl::Pad ? encodeInt(out, cap, addr, value)
+                                       : encodeFloat(out, cap, addr, static_cast<float>(value) / 255.0f);
 }
 
 /// Whether this message means on, for a boolean destination where any nonzero value does.

@@ -26,7 +26,9 @@ Every route lands on the same surface, so a desk, a phone and the web UI stay in
 3. A desk: Chrome asks to use MIDI devices the first time; allow it. A pad: press any button, and the browser lists it.
 4. Assign the surface's controls on the Control card, such as `fader2` to a game's paddle.
 
-A Mackie desk in MC mode needs no setup: faders, knobs, SELECT buttons, touch sensors, motors and lights are mapped. A gamepad comes with default rows for its sticks and its A button.
+A Mackie desk in MC mode needs no setup: faders, knobs, SELECT buttons, touch sensors, motors and lights are mapped. An Akai APC40 mkII needs one choice: set the MIDI service's `profile` to Akai APC40 mkII, and its faders, knobs, activator buttons and clip pads are mapped, with their lights. A gamepad comes with default rows for its sticks and its A button.
+
+<img src="../assets/reference/akai-apc40-mkii.png" width="320" alt="The Akai APC40 mkII"> <img src="../assets/reference/microsoft-xbox-series-controller.png" width="200" alt="A Microsoft Xbox Series controller">
 
 The browser offers MIDI and gamepads on a secure origin only. The desktop app's page on `localhost` is one; a board's own page, such as `http://192.168.1.158`, needs its address marked as secure once, as [MIDI, details](../moonmodules/core/services.md#midi-details) shows.
 
@@ -211,11 +213,12 @@ Each control sends to an address naming **the surface**, not the thing it drives
 /mm/switch/1 … /mm/switch/8
 /mm/encoder/1 … /mm/encoder/8
 /mm/fader/1 … /mm/fader/8
+/mm/pad/1 … /mm/pad/64
 ```
 
 The device decides what each one drives. That is deliberate: reassign `fader3` from brightness to speed, and the layout does not change, because the layout never knew. It also means a hardware desk added later lands on the same addresses.
 
-The session also draws a **pad grid**. Those pads are inert for now: `/mm/pad/N` has no route yet, so pressing one sends a message nothing reads. It ships because the grid is the layout a preset launcher will want.
+A pad applies the preset stored on that pad of the Control card's grid, counted from the top left.
 
 ---
 

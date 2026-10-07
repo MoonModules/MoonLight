@@ -169,6 +169,24 @@ Checked against the tools a lighting or VJ operator already knows. The shape mat
 - ✅ Verified the outbound half with the QCon: the motors follow the surface, a self-playing Pong included, and a touched fader holds only the desk's own motor while OSC boards keep following.
 - 🚧 Verify the outbound half with the X-Touch, and a preset change moving the faders.
 
+### 2b. MidiService, the Akai APC40 mkII profile
+
+The APC40 mkII is on the bench, so the Akai profile the Decided section waited for is next. Every number comes from [the reference](../../reference/hardware/control-surfaces.md#akai-apc40-mkii).
+
+- A `profile` select on `MidiService`: Mackie Control (as now) or Akai APC40 mkII. The browser bridge already passes bytes both ways unchanged, so only the service's decoding and its desk state differ per profile.
+- **Alternate Ableton Live mode**, set by SysEx whenever the desk connects: every press only reports and every light is the host's, so the board owns each value and the desk shows it. The service offers the SysEx in a hidden control the bridge sends on connect; Web MIDI asks the user once for SysEx permission.
+- Inbound:
+  - track faders 1-8 (CC 7, channels 0-7) onto `fader1`-`fader8`;
+  - track knobs 1-8 (CC 48-55, absolute) onto `encoder1`-`encoder8`;
+  - activator buttons 1-8 (note 50, channels 0-7) toggle `switch1`-`switch8` on a press;
+  - clip pads (notes 0-39, counted from the bottom-left) apply presets 1-40, the rows flipped so the top-left pad is preset 1 as on the Control card.
+- Outbound: each knob's ring shows its encoder (set to the volume style once), each activator lights when its switch is on, and each pad shows its preset slot: off when empty, dim when stored, bright when active.
+- The Control module lets a surface press a preset pad and tells surfaces each pad's state, through the existing `SurfaceControl::Pad`.
+- Tests: decoding each message kind, the desk state per kind, the row flip, the mode SysEx and the pad states.
+- Docs: the MIDI section on the services page and [Connecting a control surface](../../how-to/control-surface.md).
+- Verify on the desktop app with the APC40 on the product owner's Mac in Chrome on `localhost`, then on the StadBeest, where the eyes follow over OSC.
+- Left for later: the master fader and crossfader, the device knobs, the scene pads, transport and tap tempo.
+
 ### 3. Surface-only input targets ✅
 
 - `ButtonService`, `AnalogService`, `InfraredService`, `GamepadService` and OSC's `/mm/control/<Module>/<control>` path lose their direct `Module.control` targets; every input reaches a control through the surface.
@@ -176,8 +194,11 @@ Checked against the tools a lighting or VJ operator already knows. The shape mat
 
 ### 4. USB host on S3 and P4 🚧
 
-- USB host bring-up in the platform layer, behind a seam.
-- USB MIDI first, since it is one class with no per-vendor parsing: the QCon without a computer.
+- ✅ USB host bring-up in the platform layer, behind a seam: `platform_esp32_usb_midi.cpp`, built into the n8r8 and n16r8 images (`CONFIG_MM_USB_MIDI_HOST`).
+- ✅ USB MIDI first, since it is one class with no per-vendor parsing: `MidiService`'s `usb` setting. Verified with the QCon on the MIDI-OSC bridge board, driving the StadBeest legs over OSC with `follow` on.
+- The APC40 mkII on a board waits for a powered hub: it takes its power from USB, and the dev board's port supplies none. The hub needs `CONFIG_USB_HOST_HUBS_SUPPORTED` in the S3 images.
+- **The legs LEDs stop briefly on each QCon move.** About half a second, at once, and only when the change arrives from the bridge: moving the same control on the legs board's own page shows nothing. Not yet found; the next step is timing the legs board's OSC receive path and the Control slot path it drives.
+- **A QCon fader sometimes slides back after release.** Sending the release position at once (no tick wait, USB tasks woken on send) made it rarer but did not end it. Next: log what the desk sends around the touch release, and whether a feedback value from the legs board arrives after the hold-off has expired.
 - HID gamepads next, with controller translations seeded from GameControllerDB. Xbox pads over USB need a GIP driver on top, and only if wanted, since the browser already reaches them over USB or Bluetooth on the computer.
 - The S31 joins if its datasheet confirms a USB host.
 
@@ -193,6 +214,6 @@ The X-Touch over Ethernet with no computer: RFC 6295's session handshake and jou
 
 - **The pad is an Xbox Series X|S controller** (it has the Share button). The browser reaches it as a standard gamepad, over USB or Bluetooth on the computer; USB on the board needs GIP, so that route waits.
 - **No Bluetooth on the board**, for its flash, RAM and shared-radio cost; Bluetooth devices come in through the browser.
-- **Akai desks are in scope, through learn.** They work through `MidiService` like every MIDI desk; a dedicated Akai profile, for pad LEDs and rings, waits until an Akai is on the bench. The MCU profile is verified with the X-Touch and the QCon.
+- **Akai desks are in scope.** They work through `MidiService` like every MIDI desk. The APC40 mkII is on the bench and gets its own profile (step 2b); other Akai desks wait for MIDI learn. The MCU profile is verified with the X-Touch and the QCon.
 - **The hand-back is a fixed ten seconds.** A control for it was built and removed again: nobody tunes it, and it cost a control on three games.
 - **Rows point at the surface**, and direct targets go for every input service (step 3).

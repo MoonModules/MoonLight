@@ -1,5 +1,7 @@
 # ESP32-S31 Function-CoreBoard-1 hardware reference
 
+![Espressif ESP32-S31 Function-CoreBoard-1](../../assets/deviceModels/esp32-s31-function-coreboard-1.jpg)
+
 Pin maps and onboard features for the Espressif **ESP32-S31 Function-CoreBoard-1**, read from the official schematic so MoonLight work (Ethernet, audio, SD, USB-host) reads this instead of re-scraping the PDF. The board is the bench S31 (`esp32s31` firmware).
 
 **Sources**

@@ -1524,26 +1524,15 @@ The appealing shape is one where every instrument on stage arrives as MIDI: the 
 
 Build trigger: a stage with more than one instrument to point at it. The first honest experiment is one drum channel through a direct out, because it answers the cost question and the usefulness question at the same time.
 
-## OSC pads and the Open Stage Control session's labels (2026-08-30)
+## The Open Stage Control session's labels (2026-08-30)
 
-Two gaps found wiring a real control surface to the [OSC module](../../moonmodules/core/services.md).
-
-**`/mm/pad/N` has no handler.** The [OSC plan](../past/plans/Plan-20260829%20-%20OSC%20control%20ingest%20(shipped).md)
-lists it (`i 1 -> apply preset in slot 12`), and `OscModule::handle` routes `/mm/fader/`,
-`/mm/encoder/` and `/mm/switch/` but not pads. So a surface can drive every
-continuous control and every switch, but cannot fire a preset, which is the one thing a pad grid
-exists for. The route is small; what needs deciding is what a pad press means when the slot is
-empty, and whether a nonzero value is a press or a press-and-hold.
+Found wiring a real control surface to the [OSC module](../../moonmodules/core/services.md).
 
 **The shipped Open Stage Control session renders no labels, and its pad matrix draws nothing.**
-[`docs/reference/examples/open-stage-control.json`](../../reference/examples/open-stage-control.json)
-works for every fader, encoder and switch, but the widget names never appear and the `matrix` of
-pads is an empty box. Five attempts at the label property failed (`@{}`, `JS{}`, `#{}` with `unit`,
-an explicit string, omitting it so `"auto"` applies), and notably a session SAVED by Open Stage
-Control itself carries no `label` key on a fader at all, so the name is drawn from something else.
-The session was written by reading a minified app's bundled HTML docs; the reliable fix is to build
-one widget of each kind by hand in its editor, save, and copy the shape it produces. Cosmetic: the
-control path works, only the labels and the pad grid are missing.
+[`docs/reference/examples/open-stage-control.json`](../../reference/examples/open-stage-control.json) works for every fader, encoder and switch, but the widget names never appear and the `matrix` of pads is an empty box.
+Five attempts at the label property failed (`@{}`, `JS{}`, `#{}` with `unit`, an explicit string, omitting it so `"auto"` applies), and notably a session SAVED by Open Stage Control itself carries no `label` key on a fader at all, so the name is drawn from something else.
+The session was written by reading a minified app's bundled HTML docs; the reliable fix is to build one widget of each kind by hand in its editor, save, and copy the shape it produces.
+Cosmetic: the control path works, only the labels and the pad grid are missing.
 
 ## POST /api/file reports success while writing an empty file (no Content-Length)
 

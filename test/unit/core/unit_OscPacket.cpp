@@ -62,6 +62,26 @@ TEST_CASE("golden vector: the exact bytes of an OSC message with a float") {
     CHECK(m.f == doctest::Approx(1.0f));
 }
 
+// A pad's state is an enum, so it travels as an OSC int rather than as a fraction of a float.
+TEST_CASE("golden vector: the exact bytes of an OSC message with an int") {
+    uint8_t p[32];
+    const size_t len = osc::encodeInt(p, sizeof(p), "/mm/pad/1", 2);
+
+    // "/mm/pad/1" is 9 chars + NUL = 10, padded to 12. ",i" is 2 + NUL = 3, padded to 4. Then 4 bytes of big-endian 2.
+    const uint8_t golden[] = {
+        '/','m','m','/','p','a','d','/','1','\0','\0','\0',
+        ',','i','\0','\0',
+        0x00, 0x00, 0x00, 0x02,
+    };
+    REQUIRE(len == sizeof(golden));
+    CHECK(std::memcmp(p, golden, sizeof(golden)) == 0);
+
+    osc::Message m;
+    REQUIRE(osc::parse(p, len, m));
+    CHECK_FALSE(m.wasFloat);
+    CHECK(m.i == 2);
+}
+
 // The pad rule is where a hand-rolled parser goes wrong: an address whose length is already a multiple of 4 gets a WHOLE extra word of padding, not none.
 TEST_CASE("Addresses of every length parse, including the padding boundary") {
     for (const char* addr : {"/a", "/ab", "/abc", "/abcd", "/abcde", "/abcdef", "/abcdefg"}) {

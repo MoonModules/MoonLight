@@ -5,7 +5,9 @@
 
 #include "doctest.h"
 #include "core/services/MidiService.h"
+#include "core/services/OscModule.h"
 
+#include <array>
 #include <vector>
 #include "core/system/ControlModule.h"
 #include "core/system/FilesystemModule.h"
@@ -1211,15 +1213,15 @@ TEST_CASE("an encoder detent steps its target, which owns the value and its boun
     REQUIRE(max > 4);
 
     const uint8_t start = palette();
-    d.control->applyEncoderDelta(0, 3);
+    d.control->turn(0, 3);
     CHECK(palette() == start + 3);
-    d.control->applyEncoderDelta(0, -2);
+    d.control->turn(0, -2);
     CHECK(palette() == start + 1);
 
     // The bound is the control's, so the target stops at its range rather than wrapping. `max` on a Select or Palette is the option count, so the last index is one below.
-    for (int i = 0; i < 200; i++) d.control->applyEncoderDelta(0, 5);
+    for (int i = 0; i < 200; i++) d.control->turn(0, 5);
     CHECK(palette() == max - 1);
-    for (int i = 0; i < 200; i++) d.control->applyEncoderDelta(0, -5);
+    for (int i = 0; i < 200; i++) d.control->turn(0, -5);
     CHECK(palette() == 0);
 }
 
@@ -1490,7 +1492,7 @@ TEST_CASE("a MIDI desk's fader touch holds its own motor, not the other surfaces
     d.control->addSurface(&s);
     mm::MidiService midi;
     midi.defineControls();
-    midi.tick20ms();                     // attached, so the touch is the desk's own
+    midi.prepare();                      // attached, so the touch is the desk's own
     const uint8_t touch[3] = {0x90, 0x68, 0x7F}, letGo[3] = {0x90, 0x68, 0x00};
     REQUIRE(d.scheduler.setControl("Control", "fader1", "{\"value\":100}") == mm::Scheduler::SetControlResult::Ok);
     const std::string before = deskSlot(midi, 0);
@@ -1525,7 +1527,7 @@ TEST_CASE("a MIDI desk shows the surface: fader motors, SELECT lights and knob r
     REQUIRE(d.scheduler.setControl("Control", "fader1", "{\"value\":255}") == mm::Scheduler::SetControlResult::Ok);
     REQUIRE(d.scheduler.setControl("Control", "switch2", "{\"value\":true}") == mm::Scheduler::SetControlResult::Ok);
     REQUIRE(d.scheduler.setControl("Control", "encoder1", "{\"value\":0}") == mm::Scheduler::SetControlResult::Ok);
-    midi.tick20ms();   // attaching seeds every slot
+    midi.prepare();   // attaching seeds every slot
     CHECK(deskSlot(midi, 0) == "e07f7f");    // fader1 at the top
     CHECK(deskSlot(midi, 9) == "90197f");    // switch2's light on
     CHECK(deskSlot(midi, 16) == "b03021");   // encoder1's ring, filled to its first light
@@ -1539,7 +1541,7 @@ TEST_CASE("a fader position sent to a MIDI desk decodes back to the same value")
     Device d;
     mm::MidiService midi;
     midi.defineControls();
-    midi.tick20ms();
+    midi.prepare();
     for (const int v : {0, 1, 127, 128, 254, 255}) {
         midi.sendValue(mm::SurfaceControl::Fader, 3, static_cast<uint8_t>(v));
         const std::string hex = deskSlot(midi, 3);
@@ -1549,6 +1551,302 @@ TEST_CASE("a fader position sent to a MIDI desk decodes back to the same value")
         midi.decode(m, 3);
         CHECK(surfaceValue(d, "fader4") == v);
     }
+    midi.release();
+}
+
+namespace {
+/// A MIDI service set to the Akai APC40 mkII profile, as picking it on the card does.
+void useApc40(mm::MidiService& midi) {
+    midi.defineControls();
+    midi.profile = 1;
+    midi.onControlChanged("profile");
+}
+
+/// A control's text value, read straight from its buffer.
+std::string textOf(mm::MoonModule& m, const char* name) {
+    auto& cs = m.controls();
+    for (uint8_t i = 0; i < cs.count(); i++)
+        if (std::strcmp(cs[i].name, name) == 0) return static_cast<const char*>(cs[i].ptr);
+    return {};
+}
+}  // namespace
+
+// The APC40 reports positions, 0 to 127, and its activator buttons only as presses.
+TEST_CASE("an APC40's track faders, track knobs and activator buttons drive the surface") {
+    Device d;
+    mm::MidiService midi;
+    useApc40(midi);
+    const uint8_t fader1Top[3] = {0xB0, 0x07, 0x7F}, fader2Bottom[3] = {0xB1, 0x07, 0x00}, knob2Half[3] = {0xB0, 0x31, 0x40};
+    midi.decode(fader1Top, 3);
+    midi.decode(fader2Bottom, 3);
+    midi.decode(knob2Half, 3);
+    CHECK(surfaceValue(d, "fader1") == 255);
+    CHECK(surfaceValue(d, "fader2") == 0);
+    CHECK(surfaceValue(d, "encoder2") == 128);
+    const uint8_t before = surfaceValue(d, "switch2");
+    const uint8_t press[3] = {0x91, 0x32, 0x7F}, release[3] = {0x81, 0x32, 0x00};
+    midi.decode(press, 3);
+    midi.decode(release, 3);
+    CHECK(surfaceValue(d, "switch2") != before);   // a press flips it, the release does nothing
+}
+
+// Alternate Ableton Live mode hands every light to the host, and the rings fill like a meter.
+TEST_CASE("an APC40 is greeted into the mode where the host sets every light") {
+    mm::MidiService midi;
+    midi.defineControls();
+    CHECK(textOf(midi, "hello").empty());           // a Mackie desk needs no greeting
+    midi.profile = 1;
+    midi.onControlChanged("profile");
+    const std::string hello = textOf(midi, "hello");
+    CHECK(hello.rfind("f0477f2960000442010000f7", 0) == 0);
+    CHECK(hello.find(" b03802") != std::string::npos);   // track knob 1's ring
+    CHECK(hello.find(" b03f02") != std::string::npos);   // track knob 8's ring
+}
+
+// The APC40 counts its pads from the bottom-left and the Control card from the top-left, so the top-left pad is preset 1.
+TEST_CASE("an APC40's top-left pad applies the first preset, and its pads show which are stored and applied") {
+    Device d;
+    auto* layer = d.add(d.layers, "Layer");
+    d.add(layer, "NoiseEffect");
+    d.setText("name", "sunset");
+    d.press("save");
+    REQUIRE(d.control->listRowCount() == 1);
+    auto* old = layer->replaceChildAt(0, mm::ModuleFactory::create("RainbowEffect"));
+    if (old) { old->release(); mm::Scheduler::deleteTree(old); }
+
+    mm::MidiService midi;
+    useApc40(midi);
+    midi.prepare();                                      // attaching seeds every light
+    CHECK(deskSlot(midi, 24) == "902002");               // preset 1, stored, lights the top-left pad (note 32) dim white
+    CHECK(deskSlot(midi, 25) == "902100");               // an empty cell's pad is dark
+    const uint8_t topLeft[3] = {0x90, 0x20, 0x7F};
+    midi.decode(topLeft, 3);
+    CHECK(std::strcmp(d.effectType(), "NoiseEffect") == 0);
+    d.control->tick20ms();                               // the surface mirrors the pads
+    CHECK(deskSlot(midi, 24) == "902015");               // the applied preset is green
+    const uint8_t bottomLeft[3] = {0x90, 0x00, 0x7F};
+    midi.decode(bottomLeft, 3);                          // preset 33 is empty: nothing happens
+    CHECK(std::strcmp(d.effectType(), "NoiseEffect") == 0);
+    midi.release();
+}
+
+namespace {
+/// One OSC message with an int argument, as a controller puts it on the wire.
+std::vector<uint8_t> oscInt(const char* address, int32_t value) {
+    std::vector<uint8_t> p(64);
+    p.resize(mm::osc::encodeInt(p.data(), p.size(), address, value));
+    return p;
+}
+}  // namespace
+
+// A pad grid on a phone or on another board fires a preset, and learns which pads hold one.
+TEST_CASE("an OSC pad press applies the preset on that pad, and a paced resend sends every pad's state") {
+    Device d;
+    auto* layer = d.add(d.layers, "Layer");
+    d.add(layer, "NoiseEffect");
+    d.setText("name", "sunset");
+    d.press("save");
+    REQUIRE(d.control->listRowCount() == 1);
+    auto* old = layer->replaceChildAt(0, mm::ModuleFactory::create("RainbowEffect"));
+    if (old) { old->release(); mm::Scheduler::deleteTree(old); }
+
+    mm::OscModule osc;
+    const auto send = [&](const char* address, int32_t value) {
+        const auto p = oscInt(address, value);
+        osc.handle(p.data(), p.size());
+    };
+    send("/mm/pad/1", 0);                                // a button's release
+    send("/mm/pad/2", 1);                                // an empty pad
+    send("/mm/pad/0", 1);                                // before the grid
+    send("/mm/pad/65", 1);                               // past it
+    CHECK(std::strcmp(d.effectType(), "RainbowEffect") == 0);
+    send("/mm/pad/1", 1);
+    CHECK(std::strcmp(d.effectType(), "NoiseEffect") == 0);
+
+    RecordingSurface s;
+    d.control->addSurface(&s, mm::ControlModule::Seed::Paced);
+    for (int i = 0; i < mm::ControlModule::kSurfaceValues; i++) d.control->tick20ms();
+    const auto lastPad = [&](uint8_t index) {
+        int v = -1;
+        for (const auto& c : s.calls) if (c.kind == mm::SurfaceControl::Pad && c.index == index) v = c.value;
+        return v;
+    };
+    CHECK(lastPad(0) == mm::ControlModule::kPadActive);
+    CHECK(lastPad(1) == mm::ControlModule::kPadEmpty);
+    CHECK(lastPad(mm::ControlModule::kMaxPresets - 1) == mm::ControlModule::kPadEmpty);
+    d.control->removeSurface(&s);
+}
+
+namespace {
+/// An OSC module whose datagrams are kept rather than sent, so the test is the network between two boards.
+struct WiredOsc : mm::OscModule {
+    struct Sent { uint8_t ip[4]; std::vector<uint8_t> pkt; };
+    std::vector<Sent> out;
+    /// The addresses sent, in order, so a test reads what went where.
+    std::vector<std::string> addresses() const {
+        std::vector<std::string> a;
+        for (const auto& s : out) {
+            mm::osc::Message m;
+            if (mm::osc::parse(s.pkt.data(), s.pkt.size(), m)) a.emplace_back(m.address);
+        }
+        return a;
+    }
+protected:
+    void transmit(const uint8_t ip[4], const uint8_t* pkt, size_t len) override {
+        Sent s{};
+        std::memcpy(s.ip, ip, 4);
+        s.pkt.assign(pkt, pkt + len);
+        out.push_back(std::move(s));
+    }
+};
+
+/// One feedback datagram from the followed board, as its OSC module sends it.
+std::vector<uint8_t> feedbackFrom(mm::SurfaceControl kind, uint8_t index, uint8_t value) {
+    std::vector<uint8_t> p(64);
+    p.resize(mm::osc::encodeSurface(p.data(), p.size(), kind, index, value));
+    return p;
+}
+}  // namespace
+
+// A desk board follows the board it drives: it takes its values and presets, and sends back only what changes here.
+TEST_CASE("an OSC follower takes the followed board's values and pads, and sends only its own changes there") {
+    Device desk;
+    WiredOsc osc;
+    osc.defineControls();
+    osc.feedback = true;
+    osc.follow = true;
+    auto& cs = osc.controls();
+    for (uint8_t i = 0; i < cs.count(); i++)
+        if (std::strcmp(cs[i].name, "hosts") == 0) std::strcpy(static_cast<char*>(cs[i].ptr), "192.168.1.103");
+    osc.onControlChanged("hosts");
+    const uint8_t legs[4] = {192, 168, 1, 103};
+    desk.control->addSurface(&osc, mm::ControlModule::Seed::None);
+    REQUIRE(desk.scheduler.setControl("Control", "fader4", "{\"value\":0}") == mm::Scheduler::SetControlResult::Ok);
+    desk.control->tick20ms();
+    osc.out.clear();
+
+    osc.greet();
+    REQUIRE(osc.addresses() == std::vector<std::string>{"/mm/hello"});
+    CHECK(std::memcmp(osc.out[0].ip, legs, 4) == 0);
+    osc.out.clear();
+
+    // The followed board's fader lands here, and is not sent back to it.
+    const auto f = feedbackFrom(mm::SurfaceControl::Fader, 3, 200);
+    osc.handle(f.data(), f.size(), legs);
+    desk.control->tick20ms();
+    CHECK(surfaceValue(desk, "fader4") == 200);
+    CHECK(osc.out.empty());
+
+    // A change made here goes there, even back to a value heard before.
+    REQUIRE(desk.scheduler.setControl("Control", "fader4", "{\"value\":90}") == mm::Scheduler::SetControlResult::Ok);
+    desk.control->tick20ms();
+    REQUIRE(desk.scheduler.setControl("Control", "fader4", "{\"value\":200}") == mm::Scheduler::SetControlResult::Ok);
+    desk.control->tick20ms();
+    CHECK(osc.addresses() == std::vector<std::string>{"/mm/fader/4", "/mm/fader/4"});
+    osc.out.clear();
+
+    // While fader 4 is being moved here, an echo of an earlier position does not pull it back; after the hold, the followed board's values land again.
+    struct RealClockAfter { ~RealClockAfter() { mm::platform::setTestNowMs(0); } } realClockAfter;   // even when a check throws
+    mm::platform::setTestNowMs(10000);
+    REQUIRE(desk.scheduler.setControl("Control", "fader4", "{\"value\":120}") == mm::Scheduler::SetControlResult::Ok);
+    desk.control->tick20ms();
+    const auto stale = feedbackFrom(mm::SurfaceControl::Fader, 3, 90);
+    osc.handle(stale.data(), stale.size(), legs);
+    CHECK(surfaceValue(desk, "fader4") == 120);
+    mm::platform::setTestNowMs(10600);
+    const auto later = feedbackFrom(mm::SurfaceControl::Fader, 3, 130);
+    osc.handle(later.data(), later.size(), legs);
+    CHECK(surfaceValue(desk, "fader4") == 130);
+    mm::platform::setTestNowMs(0);
+    desk.control->tick20ms();
+    osc.out.clear();
+
+    // Its pads show the followed board's presets, a press goes there, and the states are never sent back as presses.
+    const auto stored = feedbackFrom(mm::SurfaceControl::Pad, 2, mm::ControlModule::kPadStored);
+    osc.handle(stored.data(), stored.size(), legs);
+    desk.control->tick20ms();
+    CHECK(desk.control->padState(2) == mm::ControlModule::kPadStored);
+    CHECK(osc.out.empty());
+    CHECK_FALSE(desk.control->pressPad(0));               // empty there: nothing is sent
+    CHECK(desk.control->pressPad(2));
+    CHECK(osc.addresses() == std::vector<std::string>{"/mm/pad/3"});
+    desk.control->removeSurface(&osc);
+}
+
+// A pad that holds a preset which cannot be applied says so, rather than claiming the pad is empty.
+TEST_CASE("an APC40 pad holding a preset that cannot apply reports that, not an empty pad") {
+    Device d;
+    const char older[] = "{\"$slot\":0,\"captures\":[\"Effects\"]}";
+    REQUIRE(mm::platform::fsWriteAtomic("/.config/presets/old.json", older, sizeof(older) - 1));
+    d.control->onFileChanged("/.config/presets/old.json");
+    REQUIRE(d.control->padState(0) == mm::ControlModule::kPadStored);
+    mm::MidiService midi;
+    useApc40(midi);
+    auto& cs = midi.controls();
+    for (uint8_t i = 0; i < cs.count(); i++)   // the top-left pad, note 32
+        if (std::strcmp(cs[i].name, "midi") == 0) std::strcpy(static_cast<char*>(cs[i].ptr), "90207f");
+    midi.onControlChanged("midi");
+    CHECK(std::string(midi.status()) == "pad 1 did not apply");
+    midi.release();
+}
+
+namespace {
+/// What the test desk on the USB port was sent, packet by packet.
+std::vector<std::array<uint8_t, 4>> sentToDesk() {
+    std::vector<std::array<uint8_t, 4>> all;
+    uint8_t p[16][4];
+    for (size_t n; (n = mm::platform::takeTestUsbMidiSent(p, 16)) > 0;)
+        for (size_t i = 0; i < n; i++) all.push_back({p[i][0], p[i][1], p[i][2], p[i][3]});
+    return all;
+}
+}  // namespace
+
+// A desk on the board's own USB port, with no computer: greeted once, then sent only what changed, and its moves drive the surface.
+TEST_CASE("a desk on the USB port is greeted once, sent only changes, and not greeted again when the tree is prepared") {
+    Device d;
+    mm::platform::setTestUsbMidiDesk(true);
+    mm::MidiService midi;
+    useApc40(midi);
+    midi.usb = true;
+    midi.prepare();
+    midi.tick20ms();
+    const auto greeting = sentToDesk();
+    REQUIRE(greeting.size() > 4);
+    CHECK((greeting[0][0] == 0x04 && greeting[0][1] == 0xF0));   // the mode SysEx first
+    CHECK(std::string(midi.status()) == "USB: desk connected");
+
+    midi.tick20ms();
+    CHECK(sentToDesk().empty());                                  // nothing changed, nothing sent
+    midi.prepare();                                               // as every preset apply does
+    midi.tick20ms();
+    CHECK(sentToDesk().empty());                                  // not greeted again
+
+    REQUIRE(d.scheduler.setControl("Control", "switch2", "{\"value\":true}") == mm::Scheduler::SetControlResult::Ok);
+    d.control->tick20ms();
+    const auto light = sentToDesk();
+    REQUIRE(light.size() == 1);
+    CHECK((light[0][0] == 0x09 && light[0][1] == 0x91 && light[0][2] == 0x32 && light[0][3] == 0x7F));   // activator 2 lit, at once
+
+    const uint8_t faderTop[1][4] = {{0x0B, 0xB0, 0x07, 0x7F}};
+    mm::platform::injectTestUsbMidi(faderTop, 1);
+    midi.tick20ms();
+    CHECK(surfaceValue(d, "fader1") == 255);
+    mm::platform::setTestUsbMidiDesk(false);
+    midi.release();
+}
+
+// The way back: an activator lights while its switch is on, and a knob's ring shows its encoder; the faders have no motors.
+TEST_CASE("an APC40 shows the surface: activator lights and knob rings") {
+    Device d;
+    REQUIRE(d.scheduler.setControl("Control", "switch2", "{\"value\":true}") == mm::Scheduler::SetControlResult::Ok);
+    REQUIRE(d.scheduler.setControl("Control", "encoder2", "{\"value\":255}") == mm::Scheduler::SetControlResult::Ok);
+    mm::MidiService midi;
+    useApc40(midi);
+    midi.prepare();
+    CHECK(deskSlot(midi, 9) == "91327f");     // activator 2 lit
+    CHECK(deskSlot(midi, 10) == "823200");    // activator 3 dark
+    CHECK(deskSlot(midi, 17) == "b0317f");    // track knob 2's ring full
+    CHECK(deskSlot(midi, 0) == "000000");     // no fader message
     midi.release();
 }
 

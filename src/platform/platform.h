@@ -1187,6 +1187,30 @@ void irStop();
 /// Open or confirm the IR channel and report whether it is live, which irRead cannot distinguish.
 bool irChannelReady(uint16_t pin);
 
+// --- USB MIDI host, gated by `hasUsbMidiHost`: one class-compliant desk on the chip's own port ---
+
+/// Take the chip's USB port as a host for a MIDI desk, which then carries no serial log or USB flashing; false where the build has no USB host.
+bool usbMidiBegin();
+
+/// Give the USB port back.
+void usbMidiEnd();
+
+/// Whether a MIDI desk is attached and its endpoints are open.
+bool usbMidiConnected();
+
+/// Take up to `max` received USB-MIDI event packets of 4 bytes each, without waiting; the count taken.
+size_t usbMidiRead(uint8_t (*packets)[4], size_t max);
+
+/// Queue USB-MIDI event packets for the desk, without waiting; false when no desk is attached or the queue is full.
+bool usbMidiWrite(const uint8_t (*packets)[4], size_t count);
+
+/// Make the desktop a USB MIDI host with a desk attached, so the MIDI service's USB path is host-testable; false detaches.
+void setTestUsbMidiDesk(bool attached);
+/// Deliver packets as if the attached test desk sent them.
+void injectTestUsbMidi(const uint8_t (*packets)[4], size_t count);
+/// Take up to `max` of the packets sent to the test desk, oldest first; the count taken.
+size_t takeTestUsbMidiSent(uint8_t (*packets)[4], size_t max);
+
 /// @}
 
 } // namespace mm::platform

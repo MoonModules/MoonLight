@@ -9,7 +9,7 @@ dependencies:
   # out of esp_eth core into managed components; only referenced on the P4 build
   # (ethInit's IP101 ctor is behind `#ifdef CONFIG_IDF_TARGET_ESP32P4`; the
   # generic PHY, Olimex LAN8720, stays in core). The `rules` gate scopes the
-  # *dependency* to the P4 too — without it, every target tries to resolve ip101
+  # *dependency* to the P4 too. Without it, every target tries to resolve ip101
   # even though only the P4 compiles the symbol, and the **S3 build fails the
   # solve**: ip101 is an EMAC PHY, the registry has no esp32s3-compatible version
   # (the S3 has no internal EMAC), so `^1.0.0` "doesn't match any versions". The
@@ -31,10 +31,6 @@ dependencies:
     version: "^1.0.0"
     rules:
       - if: "target == esp32s3"
-  # esp-dsp — Espressif's signal-processing library; we use its float radix-2 FFT
-  # (dsps_fft2r_fc32) for the microphone spectrum. Float (not fixed-point) because
-  # every mic-capable target here has an FPU, where float is faster. Referenced
-  # only from platform_esp32_i2s.cpp's audioFft.
   # H.264 hardware encoder wrapper for the P4's encoder silicon (HLS streaming). Gated on
   # MM_HLS, not the target: a bare target rule would land it in every P4 image; the Kconfig
   # gate keeps it out wherever HLS is off. $CONFIG{NAME} syntax per the esp_wifi_remote note.
@@ -42,8 +38,19 @@ dependencies:
     version: "^1.0.0"
     rules:
       - if: "$CONFIG{MM_HLS} == True"
+  # esp-dsp: Espressif's signal-processing library; we use its float radix-2 FFT
+  # (dsps_fft2r_fc32) for the microphone spectrum. Float (not fixed-point) because
+  # every mic-capable target here has an FPU, where float is faster. Referenced
+  # only from platform_esp32_i2s.cpp's audioFft.
   espressif/esp-dsp:
     version: "^1.5.0"
+  # USB host stack, which IDF v6 moved out of core into this managed component. The MIDI
+  # service's USB source is its only user (platform_esp32_usb_midi.cpp), so the Kconfig gate
+  # keeps it out of every image that does not set MM_USB_MIDI_HOST.
+  espressif/usb:
+    version: "^1.0.0"
+    rules:
+      - if: "$CONFIG{MM_USB_MIDI_HOST} == True"
   # esp_codec_dev: Espressif's audio-codec library, whose ES8311 part configures an analog mic
   # behind an ES8311 I2S codec. Which board has one, and on which pins, is AudioService's runtime
   # configuration from the device model, so the component is built for every chip a codec board
@@ -53,24 +60,24 @@ dependencies:
     version: "^1.3.0"
     rules:
       - if: "target in [esp32s31, esp32p4]"
-  # esp_wifi_remote + esp_hosted — WiFi for the ESP32-P4 via the on-board ESP32-C6
+  # esp_wifi_remote + esp_hosted: WiFi for the ESP32-P4 via the on-board ESP32-C6
   # co-processor over SDIO. The P4 has no native radio; these present the C6's
   # radio through the standard esp_wifi_* API (API-compatible, so the WiFi seam in
   # platform_esp32.cpp is unchanged; esp_hosted self-inits at boot, no bring-up
   # code needed). DELIBERATE v6.0-floor exception (docs/how-to/building.md § ESP-IDF
   # version): these are managed components outside mainline v6.0, accepted
   # explicitly. The `rules` gate pulls them ONLY when CONFIG_MM_P4_WIFI is set
-  # (declared in main/Kconfig.projbuild, set by sdkconfig.defaults.esp32p4rev1-eth-wifi)
-  # — i.e. the WiFi build only. Gating on `target == esp32p4` alone was WRONG: it
+  # (declared in main/Kconfig.projbuild, set by sdkconfig.defaults.esp32p4rev1-eth-wifi),
+  # that is, the WiFi build only. Gating on `target == esp32p4` alone was WRONG: it
   # also pulled them into the Ethernet-only esp32p4rev1-eth build, where esp_hosted's
   # boot-time self-init claims the default netif and breaks the EMAC Ethernet DHCP
-  # (link up, no IP — bench-found 2026-06-15). Versions pinned to patch-level (the
+  # (link up, no IP, bench-found 2026-06-15). Versions pinned to patch-level (the
   # versions validated on the P4-NANO bench) so the build doesn't drift to a new minor.
   # Kconfig gate uses the `$CONFIG{NAME}` form (NO `CONFIG_` prefix inside the
-  # braces) — that is the ONLY syntax the component manager's KCONFIG_VAR_REGEX
+  # braces): that is the ONLY syntax the component manager's KCONFIG_VAR_REGEX
   # (`\$CONFIG\{([^}]+)}`) recognises. A bare `CONFIG_MM_P4_WIFI == True` is NOT
   # matched: it falls through to plain string-eval, resolves to false, and the
-  # dependency is silently skipped (`NOTICE: Skipping optional dependency`) — which
+  # dependency is silently skipped (`NOTICE: Skipping optional dependency`), which
   # is what broke the esp32p4rev1-eth-wifi build after the IDF/component-manager update.
   espressif/esp_wifi_remote:
     version: "~1.6.1"
