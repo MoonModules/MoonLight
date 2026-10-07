@@ -216,6 +216,19 @@ The autopilot rewrites the shared slots every ten seconds, so switch it off with
 The eyes follow every move over OSC, as they follow the autopilot.
 A phone or a tablet reaches the same slots too: [connecting a control surface](control-surface.md).
 
+**Without a laptop: a MIDI-OSC bridge board**
+
+A desk can also plug into a small board of its own, which drives the leader over OSC: no laptop, and no cable to the beast.
+The StadBeest uses an ESP32-S3 N16R8 for it, with an [iCON QCon Pro G2](../reference/hardware/control-surfaces.md#icon-qcon-pro-g2), which has its own power adapter.
+
+1. Install it as the **MIDI-OSC bridge** device model, which sets up its MIDI and OSC services.
+2. Plug the desk into the board's own USB port, the one marked USB, and power the board from its other port.
+3. Pick the desk's `profile` on the bridge's MIDI service.
+
+The bridge follows the leader, as the eyes do, and sends back only what changes on the desk.
+Its desk lights and motors show the leader's state, and its pads apply the leader's presets.
+An APC40 mkII takes its power from USB, which this board's port does not supply, so it stays on the laptop or goes through an active, powered USB hub. A hub needs the firmware's hub support, `CONFIG_USB_HOST_HUBS_SUPPORTED`, switched on in the S3 images.
+
 ---
 
 ## 9. Updating boards you cannot reach

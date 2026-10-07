@@ -41,7 +41,8 @@ That layer is an invitation handshake, synchronization, and a journal, so a drop
 | Connectivity | **USB 2.0 only** (class-compliant) |
 | Not supported | OSC, Ethernet |
 
-**No network port at all.** It reaches MoonLight through a computer's USB port and the browser.
+**No network port at all.** It reaches MoonLight through a computer's USB port and the browser, or straight through a board's own USB port, the MIDI service's `usb` setting.
+It brings its own power adapter, so a board's port needs to supply no 5 V for it.
 
 ## What Mackie Control looks like on the wire
 
@@ -142,6 +143,4 @@ The APC40 has a control for each:
 | Activator buttons 1-8, with their lights | `switch1` to `switch8` |
 | Clip pads 1-40, with their colors | the first 40 preset pads |
 
-Left over for later: the master fader and crossfader, the 8 device knobs, the 5 scene pads, and the transport and navigation buttons.
-Scene pads could recall a scene, and tap tempo could set the beat when no music plays.
 

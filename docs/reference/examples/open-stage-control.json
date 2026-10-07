@@ -1038,8 +1038,8 @@
      "colorBg": "#16213e",
      "colorStroke": "#6b5b9a",
      "colorText": "#a0a0b0",
-     "address": "/mm/pad/#{$}",
-     "label": "#{$}",
+     "address": "/mm/pad/#{$+1}",
+     "label": "#{$+1}",
      "on": 1,
      "off": 0
     },

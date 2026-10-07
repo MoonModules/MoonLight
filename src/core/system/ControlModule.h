@@ -80,58 +80,86 @@ public:
     static constexpr uint8_t kSwitchCount = 8;
     static_assert(kTargetTypeMaxNumber[1] == kSwitchCount && kTargetTypeMaxNumber[2] == kEncoderCount
                   && kTargetTypeMaxNumber[3] == kFaderCount, "an input row names exactly the surface's banks");
-    /// Every surface value one surface can be sent, switches first, then faders, then encoders.
+    /// The slots a surface moves, switches first, then faders, then encoders.
     static constexpr uint8_t kSlotCount = kSwitchCount + kFaderCount + kEncoderCount;
+    /// Every value one surface can be sent: the slots, then the preset pads.
+    static constexpr uint8_t kSurfaceValues = kSlotCount + kMaxPresets;
 
     /// The boot ControlModule (exactly one exists).
     static ControlModule* active() { return ActiveInstance<ControlModule>::active(); }
 
     // --- Control surfaces -------------------------------------------------------------------  A.
 
-    /// Attach a surface, seeded with every value at once or, `paced`, one per tick.
-    void addSurface(ControlSurface* s, bool paced = false) {
+    /// How a surface attaching learns the values: all at once, one per tick for a network that drops bursts, or not at all for a board following another.
+    enum class Seed : uint8_t { Burst, Paced, None };
+
+    /// Attach a surface, seeded as `seed` says.
+    void addSurface(ControlSurface* s, Seed seed = Seed::Burst) {
         if (!s) return;
         for (uint8_t i = 0; i < surfaceCount_; i++)
             if (surfaces_[i] == s) return;
         if (surfaceCount_ >= kMaxSurfaces) return;
         touched_[surfaceCount_] = Touch{};
-        resendNext_[surfaceCount_] = kSlotCount;
+        resendNext_[surfaceCount_] = kSurfaceValues;
         surfaces_[surfaceCount_++] = s;
         // Read the targets BEFORE seeding:
         followTargets();
-        if (paced) resendPaced(s);
-        else resendTo(s);
+        if (seed == Seed::Paced) resendPaced(s);
+        else if (seed == Seed::Burst) resendTo(s);
     }
 
     /// Push EVERY value to one surface, whatever the mirror last sent, the preset pads included.
     void resendTo(ControlSurface* s) {
-        for (uint8_t slot = 0; slot < kSlotCount; slot++) resendOne(s, slot);
-        if (!s) return;
-        uint8_t pads[kMaxPresets];
-        padStates(pads);
-        for (uint8_t i = 0; i < kMaxPresets; i++) s->sendValue(SurfaceControl::Pad, i, pads[i]);
+        for (uint8_t n = 0; n < kSurfaceValues; n++) resendOne(s, n);
     }
 
     /// What a preset pad shows: empty, a stored preset, or the one applied.
     enum PadState : uint8_t { kPadEmpty = 0, kPadStored = 1, kPadActive = 2 };
 
-    /// Every pad's state, one per grid cell.
+    /// Every pad's state, one per grid cell, in one pass over the presets.
     void padStates(uint8_t out[kMaxPresets]) const {
+        if (padsRemote_) { std::memcpy(out, remotePads_, kMaxPresets); return; }
         std::memset(out, kPadEmpty, kMaxPresets);
-        for (uint8_t r = 0; r < presetCount_; r++) {
-            const Preset& p = presets_[r];
-            if (p.slot >= kMaxPresets) continue;
-            bool active = false;
-            for (uint8_t i = 0; i < kCaptureCount && !active; i++) active = p.name[0] && std::strcmp(p.name, current_[i]) == 0;
-            out[p.slot] = active ? kPadActive : kPadStored;
-        }
+        for (uint8_t r = 0; r < presetCount_; r++)
+            if (presets_[r].slot < kMaxPresets) out[presets_[r].slot] = padStateOf(presets_[r]);
+    }
+
+    /// The state of the pad on grid cell `slot`.
+    uint8_t padState(uint8_t slot) const {
+        if (padsRemote_) return slot < kMaxPresets ? remotePads_[slot] : static_cast<uint8_t>(kPadEmpty);
+        for (uint8_t r = 0; r < presetCount_; r++)
+            if (presets_[r].slot == slot) return padStateOf(presets_[r]);
+        return kPadEmpty;
     }
 
     /// Apply the preset on grid cell `slot`, as a click on its pad does; false for an empty cell.
     bool pressPad(uint8_t slot) {
+        if (padsRemote_) {
+            // The presets are another board's, so the press goes there.
+            if (slot >= kMaxPresets || remotePads_[slot] == kPadEmpty) return false;
+            for (uint8_t i = 0; i < surfaceCount_; i++) surfaces_[i]->sendPress(slot);
+            return true;
+        }
         for (uint8_t r = 0; r < presetCount_; r++)
             if (presets_[r].slot == slot) return applyPreset(presets_[r].name);
         return false;
+    }
+
+    /// Show another board's pad on the grid, as a board following another does, in place of this board's presets.
+    void showRemotePad(uint8_t slot, uint8_t state) {
+        if (slot >= kMaxPresets) return;
+        if (padsRemote_ && remotePads_[slot] == state) return;
+        if (!padsRemote_) std::memset(remotePads_, kPadEmpty, kMaxPresets);
+        padsRemote_ = true;
+        remotePads_[slot] = state;
+        padsRevision_++;
+    }
+
+    /// Show this board's own presets again.
+    void forgetRemotePads() {
+        if (!padsRemote_) return;
+        padsRemote_ = false;
+        padsRevision_++;
     }
 
     // A network surface asks for this rather than resendTo, since a burst of datagrams is what WiFi drops.
@@ -141,9 +169,13 @@ public:
             if (surfaces_[i] == s) resendNext_[i] = 0;
     }
 
-    /// Push the value at `slot`, counted as kSlotCount orders them, to one surface.
+    /// Push value `slot`, counted as kSurfaceValues orders them, to one surface.
     void resendOne(ControlSurface* s, uint8_t slot) {
-        if (!s || slot >= kSlotCount) return;
+        if (!s || slot >= kSurfaceValues) return;
+        if (slot >= kSlotCount) {
+            s->sendValue(SurfaceControl::Pad, slot - kSlotCount, padState(slot - kSlotCount));
+            return;
+        }
         const SurfaceControl kind = slot < kSwitchCount               ? SurfaceControl::Switch
                                   : slot < kSwitchCount + kFaderCount ? SurfaceControl::Fader
                                                                       : SurfaceControl::Encoder;
@@ -166,8 +198,33 @@ public:
         }
     }
 
+    /// Set a switch, an encoder or a fader through the control path, so it drives its target exactly as a click does.
+    void setValue(SurfaceControl kind, uint8_t index, uint8_t value) {
+        const char* control = slotName(kind, index);
+        auto* sched = Scheduler::instance();
+        if (!control || !sched) return;
+        char body[24];
+        // A switch takes the literal, since the boolean parser reads true but not 255.
+        if (kind == SurfaceControl::Switch) mm::formatTo(body, sizeof(body), "{\"value\":%s}", value ? "true" : "false");
+        else mm::formatTo(body, sizeof(body), "{\"value\":%u}", static_cast<unsigned>(value));
+        sched->setControl(name(), control, body);
+    }
+
+    /// The value a switch, an encoder or a fader holds now.
+    uint8_t value(SurfaceControl kind, uint8_t index) const { return currentValue(kind, index); }
+
+    /// A switch's, an encoder's or a fader's control name, null for anything else.
+    static const char* slotName(SurfaceControl kind, uint8_t index) {
+        switch (kind) {
+            case SurfaceControl::Switch:  return index < kSwitchCount ? kSwitchNames[index] : nullptr;
+            case SurfaceControl::Encoder: return index < kEncoderCount ? kEncoderNames[index] : nullptr;
+            case SurfaceControl::Fader:   return index < kFaderCount ? kFaderNames[index] : nullptr;
+            default: return nullptr;
+        }
+    }
+
     /// A TURN, not a position.
-    void applyEncoderDelta(uint8_t index, int8_t delta) {
+    void turn(uint8_t index, int8_t delta) {
         if (index >= kEncoderCount) return;
         // THE hardware boundary, and the only place a delta exists.
         const int v = static_cast<int>(encoders_[index]) + delta;
@@ -215,7 +272,7 @@ public:
         mirrorToSurfaces();
         // One value of each paced resend.
         for (uint8_t i = 0; i < surfaceCount_; i++)
-            if (resendNext_[i] < kSlotCount) resendOne(surfaces_[i], resendNext_[i]++);
+            if (resendNext_[i] < kSurfaceValues) resendOne(surfaces_[i], resendNext_[i]++);
     }
 
     void tick1s() MM_NONBLOCKING override {
@@ -734,6 +791,13 @@ private:
         bool hasSlot = false;     // false for a file with no stored slot: assignFreeSlots places it
     };
 
+    /// A stored preset's pad: applied when it is the current preset of any role.
+    PadState padStateOf(const Preset& p) const {
+        for (uint8_t i = 0; i < kCaptureCount; i++)
+            if (p.name[0] && std::strcmp(p.name, current_[i]) == 0) return kPadActive;
+        return kPadStored;
+    }
+
     /// Re-read the folder.
     void rescan() {
         presetsRevision_++;   // consumers caching the list re-read it
@@ -1082,12 +1146,14 @@ private:
     static constexpr uint8_t kMaxSurfaces = 4;
     ControlSurface* surfaces_[kMaxSurfaces] = {};
     uint8_t surfaceCount_ = 0;
-    /// Per surface, the value a paced resend sends next, kSlotCount when none is running.
+    /// Per surface, the value a paced resend sends next, kSurfaceValues when none is running.
     uint8_t resendNext_[kMaxSurfaces] = {};
     /// The last value KNOWN to a surface, so only changes go out.
     uint8_t sentSwitches_[kSwitchCount] = {};
     uint8_t sentFaders_[kFaderCount] = {};
     uint8_t sentPads_[kMaxPresets] = {};   ///< per preset pad, the PadState surfaces were last sent
+    uint8_t remotePads_[kMaxPresets] = {}; ///< the pads of the board this one follows, while padsRemote_
+    bool    padsRemote_ = false;           ///< whether the grid shows another board's presets
     /// One bit per control, per bank, per attached surface: a hand is on it there. See setTouched.
     struct Touch { uint32_t switches = 0, encoders = 0, faders = 0; };
     Touch touched_[kMaxSurfaces] = {};

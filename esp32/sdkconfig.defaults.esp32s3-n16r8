@@ -1,7 +1,7 @@
 # ESP32-S3-N16R8 (16 MB flash, 8 MB PSRAM)
 # Append to sdkconfig.defaults or copy as sdkconfig.defaults
 
-# Custom partition table — shared 16 MB layout (app0/app1 = 4 MB each, spiffs
+# Custom partition table: shared 16 MB layout (app0/app1 = 4 MB each, spiffs
 # ~7.9 MB). Chip-independent flash map; same file for classic-16mb and P4-NANO.
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions/ota_16mb.csv"
@@ -15,10 +15,13 @@ CONFIG_SPIRAM_MODE_OCT=y
 
 # MoonLive native codegen needs an executable heap (allocExec → MALLOC_CAP_EXEC IRAM).
 # MALLOC_CAP_EXEC is gated behind CONFIG_HEAP_HAS_EXEC_HEAP, which IDF disables whenever
-# memory protection (PMP/PMS W^X) is on — the same write-XOR-execute rule we handle on
+# memory protection (PMP/PMS W^X) is on, the same write-XOR-execute rule we handle on
 # macOS. A JIT fundamentally needs writable-then-executable memory, so disable memprot
 # (which enables the exec heap). This is the standard ESP32-JIT configuration (ESPLiveScript
 # runs the same way); the safety story for scripted code is the staged bounds/watchdog
 # checks, not the hardware W^X wall.
 CONFIG_ESP_SYSTEM_MEMPROT_FEATURE=n
 CONFIG_HEAP_HAS_EXEC_HEAP=y
+
+# A MIDI desk on the board's own USB port: the MIDI service's USB source.
+CONFIG_MM_USB_MIDI_HOST=y

@@ -1,11 +1,13 @@
 #pragma once
 
 #include "core/module/MoonModule.h"
-#include "core/module/Scheduler.h"
 #include "core/system/ControlModule.h"   // the surface a desk's faders, knobs and buttons land on
 #include "core/util/ControlSurface.h"      // the way back: motors, rings and button lights
+#include "core/util/UsbMidi.h"              // a desk on this board's own USB port
+#include "platform/platform.h"
 #include "core/util/format.h"              // formatTo: nonblocking formatting into a fixed buffer
 
+#include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
@@ -23,6 +25,7 @@ namespace mm {
 /// The way back is a surface: the hidden `desk` control holds what the desk shows, one message per fader motor, button light and knob ring.
 /// It is state rather than a log, so the browser sends only the slots that changed, and a page opened later still finds the motors' positions.
 /// The hidden `hello` control holds what the browser sends whenever the desk connects, such as the SysEx that hands an APC40's lights to the host.
+/// With `usb` on, the desk plugs into this board's own USB port instead, with no computer: the same messages travel as USB-MIDI packets.
 class MidiService : public MoonModule, public ControlSurface {
 public:
     /// A service, so the container accepts it as a child.
@@ -30,10 +33,14 @@ public:
 
     /// Which desk this is, since each desk lays its controls out in its own messages.
     uint8_t profile = 0;
+    /// Whether the desk is on this board's own USB port, which then carries no serial log or USB flashing.
+    bool usb = false;
 
-    /// Declare the desk's profile, the inbound batch, the desk's state and its greeting.
+    /// Declare the desk's profile, its port, the inbound batch, the desk's state and its greeting.
     void defineControls() override {
         controls_.addSelect("profile", profile, kProfiles, kProfileCount);
+        controls_.addControl("usb", usb);
+        controls_.setHidden(controls_.count() - 1, !platform::hasUsbMidiHost);
         controls_.addText("midi", midi_, sizeof(midi_));
         controls_.setHidden(controls_.count() - 1, true);
         controls_.setLive(controls_.count() - 1);
@@ -49,16 +56,23 @@ public:
         MoonModule::defineControls();
     }
 
-    /// Attach to the surface once it exists, which seeds every slot of the desk.
+    /// Attach to the surface, which seeds every slot of the desk, and take the USB port when asked.
+    void prepare() override {
+        if (auto* c = ControlModule::active()) { c->addSurface(this); attached_ = true; }
+        if (usb != usbBegun_) followUsb();
+    }
+
+    /// Serve a desk on the USB port.
     void tick20ms() MM_NONBLOCKING override {
-        if (attached_) return;
-        if (auto* c = ControlModule::active()) { attached_ = true; c->addSurface(this); }
+        if (usb) serveUsb();
     }
 
     /// Detach, since the surface list is walked from the render thread.
     void release() override {
         if (auto* c = ControlModule::active()) c->removeSurface(this);
         attached_ = false;
+        if (usbBegun_) platform::usbMidiEnd();
+        usbBegun_ = false;
         MoonModule::release();
     }
 
@@ -68,20 +82,26 @@ public:
         uint8_t slot;
         if (profile == kApc40 ? !apcMessage(kind, index, value, m, slot) : !mackieMessage(kind, index, value, m, slot)) return;
         writeSlot(slot, m);
+        // At once rather than on this service's next tick, so a desk released after a move lands where it ended without a step back.
+        if (usbConnected_ && usbGreeted_) sendChangedSlots();
     }
 
     /// Decode each batch the interface writes, and rebuild the desk's state if a client overwrote it or the profile changed.
     void onControlChanged(const char* name) override {
+        if (std::strcmp(name, "usb") == 0) {
+            followUsb();
+            return;
+        }
         if (std::strcmp(name, "desk") == 0 || std::strcmp(name, "profile") == 0) {
             desk_[0] = 0;
+            usbGreeted_ = false;
             writeHello();
             if (auto* c = ControlModule::active(); c && attached_) c->resendTo(this);
             return;
         }
         if (std::strcmp(name, "midi") != 0) return;
-        statusBuf_[0] = 0;
         decodeBatch(midi_);
-        if (statusBuf_[0]) setStatus(statusBuf_);
+        showLastMessage();
     }
 
     /// Decode one message of up to three bytes, as the profile lays the desk out.
@@ -174,9 +194,9 @@ private:
     /// A track fader or a track knob, both reading 0..127, stretched so the top of the travel is the surface's 255.
     void apcControlChange(uint8_t channel, uint8_t cc, uint8_t raw) {
         const uint8_t value = static_cast<uint8_t>(raw * 255 / 127);
-        if (cc == kApcFaderCC && channel < ControlModule::kFaderCount) writeSurface("fader", channel, value);
+        if (cc == kApcFaderCC && channel < ControlModule::kFaderCount) writeSurface(SurfaceControl::Fader, channel, value);
         else if (channel == 0 && cc >= kApcKnobCC && cc < kApcKnobCC + ControlModule::kEncoderCount)
-            writeSurface("encoder", static_cast<uint8_t>(cc - kApcKnobCC), value);
+            writeSurface(SurfaceControl::Encoder, static_cast<uint8_t>(cc - kApcKnobCC), value);
     }
 
     /// An activator flips its switch, and a clip pad applies the preset on its cell.
@@ -188,8 +208,11 @@ private:
         if (channel != 0 || note >= kApcPads) return;
         const uint8_t pad = apcNoteOfPad(note);   // its own inverse: the row flip undoes itself
         auto* c = ControlModule::active();
-        const bool applied = c && c->pressPad(pad);
-        mm::formatTo(statusBuf_, sizeof(statusBuf_), applied ? "pad %u" : "pad %u is empty", static_cast<unsigned>(pad) + 1u);
+        if (!c) return;
+        const bool empty = c->padState(pad) == ControlModule::kPadEmpty;
+        const bool applied = !empty && c->pressPad(pad);
+        mm::formatTo(lastMessage_, sizeof(lastMessage_), empty ? "pad %u is empty" : applied ? "pad %u" : "pad %u did not apply",
+                     static_cast<unsigned>(pad) + 1u);
     }
 
     /// A Mackie Control message: a fader, a fader touch, a channel button or a knob turn.
@@ -199,7 +222,7 @@ private:
             // A fader: 14-bit pitch bend, one channel per fader; channel 8 is the master, which the surface has no slot for.
             if (channel >= ControlModule::kFaderCount) return;
             const uint16_t v14 = static_cast<uint16_t>(m[1] | (m[2] << 7));
-            writeSurface("fader", channel, static_cast<uint8_t>(v14 >> 6));
+            writeSurface(SurfaceControl::Fader, channel, static_cast<uint8_t>(v14 >> 6));
             return;
         }
         const bool noteOn = status == 0x90 && m[2] > 0;
@@ -221,8 +244,8 @@ private:
             // A knob turn: bit 6 is the direction, the low six bits how far.
             const int steps = m[2] & 0x3F;
             const int8_t delta = static_cast<int8_t>((m[2] & 0x40) ? -steps : steps);
-            if (auto* c = ControlModule::active()) c->applyEncoderDelta(static_cast<uint8_t>(m[1] - kVPotCC), delta);
-            mm::formatTo(statusBuf_, sizeof(statusBuf_), "encoder %u %+d", static_cast<unsigned>(m[1] - kVPotCC + 1), delta);
+            if (auto* c = ControlModule::active()) c->turn(static_cast<uint8_t>(m[1] - kVPotCC), delta);
+            mm::formatTo(lastMessage_, sizeof(lastMessage_), "encoder %u %+d", static_cast<unsigned>(m[1] - kVPotCC + 1), delta);
         }
     }
 
@@ -247,52 +270,135 @@ private:
     static constexpr uint8_t kDeskSlots = kPadSlot + kApcPads;
     static constexpr uint8_t kSlotChars = 7;       ///< "e07f7f " per message
 
+    /// Read one hex token at `p` into up to `max` bytes, moving `p` past it; the token's length in bytes, 0 at the end or at junk.
+    static size_t hexToken(const char*& p, uint8_t* out, size_t max) {
+        while (*p == ' ') p++;
+        size_t len = 0;
+        while (std::isxdigit(static_cast<unsigned char>(p[0])) && std::isxdigit(static_cast<unsigned char>(p[1]))) {
+            const char hex[3] = {p[0], p[1], 0};
+            if (len < max) out[len] = static_cast<uint8_t>(std::strtoul(hex, nullptr, 16));
+            len++;
+            p += 2;
+        }
+        return len;
+    }
+
     /// Read "hex hex...", each token one message; a malformed token ends the batch.
     void decodeBatch(const char* s) {
         const char* p = s;
-        while (*p) {
-            while (*p == ' ') p++;
-            uint8_t m[3] = {};
-            uint8_t len = 0;
-            while (std::isxdigit(static_cast<unsigned char>(p[0])) && std::isxdigit(static_cast<unsigned char>(p[1]))) {
-                const char hex[3] = {p[0], p[1], 0};
-                if (len < sizeof(m)) m[len] = static_cast<uint8_t>(std::strtoul(hex, nullptr, 16));
-                len++;
-                p += 2;
+        uint8_t m[3] = {};
+        for (size_t len; (len = hexToken(p, m, sizeof(m))) > 0;) decode(m, len > 3 ? 3 : static_cast<uint8_t>(len));
+    }
+
+    /// Take or give back the USB port as `usb` says, the status saying when this board has none.
+    void followUsb() {
+        usbGreeted_ = false;
+        usbConnected_ = false;
+        if (!usb) {
+            if (usbBegun_) platform::usbMidiEnd();
+            usbBegun_ = false;
+            return;
+        }
+        if (!usbBegun_) usbBegun_ = platform::usbMidiBegin();
+        if (platform::hasUsbMidiHost) setStatus("USB: waiting for a desk");
+        else setStatus("this board has no USB host", Severity::Warning);
+    }
+
+    /// The desk on the USB port: decode what it sent, greet it once it appears, and send each slot of its state that changed.
+    void serveUsb() {
+        // The port may still be on its way back from an earlier off, so a refused start is asked again.
+        if (!usbBegun_) usbBegun_ = platform::usbMidiBegin();
+        const bool connected = usbBegun_ && platform::usbMidiConnected();
+        if (connected != usbConnected_) {
+            usbConnected_ = connected;
+            setStatus(connected ? "USB: desk connected" : "USB: waiting for a desk");
+        }
+        if (!connected) {
+            usbGreeted_ = false;
+            return;
+        }
+        readUsb();
+        showLastMessage();
+        if (!usbGreeted_) {
+            // The greeting first, so the desk is in the mode its lights are written for, then every slot again.
+            const char* p = hello_;
+            uint8_t msg[24];
+            for (size_t len; (len = hexToken(p, msg, sizeof(msg))) > 0;) sendUsb(msg, std::min(len, sizeof(msg)));
+            std::memset(usbShown_, 0, sizeof(usbShown_));
+            usbGreeted_ = true;
+        }
+        sendChangedSlots();
+    }
+
+    /// Decode what the desk on the USB port sent since the last tick.
+    void readUsb() {
+        uint8_t packets[16][4];
+        for (int round = 0; round < kUsbReadRounds; round++) {
+            const size_t n = platform::usbMidiRead(packets, 16);
+            for (size_t i = 0; i < n; i++) {
+                uint8_t m[3];
+                if (const uint8_t len = usbmidi::decode(packets[i], m)) decode(m, len);
             }
-            if (len == 0) return;
-            decode(m, len > 3 ? 3 : len);
+            if (n < 16) break;
         }
     }
 
-    /// Write one surface control through the primitive every transport uses.
-    void writeSurface(const char* bank, uint8_t index, uint8_t value) {
-        auto* sched = Scheduler::instance();
-        if (!sched) return;
-        char control[16], body[24];
-        mm::formatTo(control, sizeof(control), "%s%u", bank, static_cast<unsigned>(index) + 1u);
-        mm::formatTo(body, sizeof(body), "{\"value\":%u}", static_cast<unsigned>(value));
-        sched->setControl("Control", control, body);
-        mm::formatTo(statusBuf_, sizeof(statusBuf_), "%s %u", control, static_cast<unsigned>(value));
+    /// Send the desk on the USB port every slot of its state it was not sent yet.
+    void sendChangedSlots() {
+        for (uint8_t slot = 0; slot < kDeskSlots && desk_[0]; slot++) {
+            const char* hex = desk_ + slot * kSlotChars;
+            if (std::memcmp(hex, usbShown_ + slot * 6, 6) == 0) continue;
+            const char* p = hex;
+            uint8_t m[3];
+            // The placeholder of a slot nothing was written to is not a message, so it is only remembered.
+            if (std::memcmp(hex, "000000", 6) != 0 && hexToken(p, m, sizeof(m)) == 3 && !sendUsb(m, 3)) return;   // full: the rest go next tick
+            std::memcpy(usbShown_ + slot * 6, hex, 6);
+        }
+    }
+
+    /// Show what the last decoded message did, once: the status borrows statusBuf_, so it is written only here.
+    void showLastMessage() {
+        if (!lastMessage_[0]) return;
+        std::memcpy(statusBuf_, lastMessage_, sizeof(statusBuf_));
+        lastMessage_[0] = 0;
+        setStatus(statusBuf_);
+    }
+
+    /// Send one MIDI message to the desk on the USB port, false when its queue is full.
+    static bool sendUsb(const uint8_t* msg, size_t len) {
+        uint8_t packets[8][4];
+        const size_t n = usbmidi::encode(msg, len, packets, 8);
+        return n == 0 || platform::usbMidiWrite(packets, n);
+    }
+
+    static constexpr int kUsbReadRounds = 4;   ///< at most 64 packets a tick, far more than a hand moves
+
+    /// Set one surface control.
+    void writeSurface(SurfaceControl kind, uint8_t index, uint8_t value) {
+        if (auto* c = ControlModule::active()) c->setValue(kind, index, value);
+        mm::formatTo(lastMessage_, sizeof(lastMessage_), "%s%u %u", kind == SurfaceControl::Fader ? "fader" : "encoder",
+                     static_cast<unsigned>(index) + 1u, static_cast<unsigned>(value));
     }
 
     /// Flip one switch of the surface.
     void toggleSwitch(uint8_t index) {
-        auto* sched = Scheduler::instance();
-        if (!sched) return;
-        char control[16];
-        mm::formatTo(control, sizeof(control), "switch%u", static_cast<unsigned>(index) + 1u);
-        uint8_t now = 0;
-        sched->getControl("Control", control, now);
-        sched->setControl("Control", control, now ? "{\"value\":false}" : "{\"value\":true}");
-        mm::formatTo(statusBuf_, sizeof(statusBuf_), "%s %s", control, now ? "off" : "on");
+        auto* c = ControlModule::active();
+        if (!c) return;
+        const bool on = c->value(SurfaceControl::Switch, index) == 0;
+        c->setValue(SurfaceControl::Switch, index, on ? 255 : 0);
+        mm::formatTo(lastMessage_, sizeof(lastMessage_), "switch%u %s", static_cast<unsigned>(index) + 1u, on ? "on" : "off");
     }
 
     char midi_[512] = {};     ///< the newest batch the interface wrote
     char desk_[kDeskSlots * kSlotChars] = {};   ///< the faders, the switches, the encoders, then the preset pads, as the desk should show them
     char hello_[96] = {};     ///< what the browser sends when the desk connects
-    char statusBuf_[40] = {}; ///< what the last message did
+    char statusBuf_[40] = {}; ///< the status shown, what the last message did
+    char lastMessage_[40] = {};   ///< what the message being decoded did, shown once the batch is done
     bool attached_ = false;
+    bool usbBegun_ = false;      ///< whether this board's USB port is the desk's
+    bool usbGreeted_ = false;    ///< whether the desk on it was greeted since it appeared
+    bool usbConnected_ = false;  ///< what the status last said about the desk on it
+    char usbShown_[kDeskSlots * 6] = {};   ///< per slot, the hex the USB desk was last sent
 };
 
 }  // namespace mm

@@ -197,6 +197,13 @@ constexpr bool hasHls = false;
 #endif
 /// True with the same encoder HLS uses: RTSP ships that encoder's frames without muxing them.
 constexpr bool hasRtsp = hasHls;
+
+// True on the images that set the build symbol, mirroring it so flag and dependency cannot disagree.
+#if defined(CONFIG_MM_USB_MIDI_HOST)
+constexpr bool hasUsbMidiHost = true;
+#else
+constexpr bool hasUsbMidiHost = false;
+#endif
 /// False: one hardware encoder, so there is nothing to choose and the control stays hidden.
 constexpr bool hasEncoderChoice = false;
 /// False: segments live in a PSRAM ring, flash wear buying nothing for a file stale within seconds.

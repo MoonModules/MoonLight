@@ -150,6 +150,7 @@ add_executable(mm_tests
     unit/light/unit_effects_render.cpp
     unit/light/unit_Effects_gridsweep.cpp
     unit/core/unit_OscPacket.cpp
+    unit/core/unit_UsbMidi.cpp
     unit/light/unit_Effects_golden.cpp
     unit/light/unit_SpritePopulation.cpp
     unit/light/unit_Canvas.cpp

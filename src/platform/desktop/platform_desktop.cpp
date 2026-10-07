@@ -169,6 +169,7 @@
 #ifndef _WIN32
 #include <dlfcn.h>   // dlopen/dlsym: the NDI runtime is resolved on demand, never linked
 #endif
+#include <array>    // the test USB desk's packets
 #include <vector>   // HostBus frame buffers: the memory-backed parallel bus
 #include <thread>
 #include <deque>     // encoder frame queue between the render tick and the writer thread
@@ -2541,6 +2542,38 @@ void setTestAdcMv(uint8_t gpio, uint16_t mv) { if (gpio < kMaxGpio) g_adcMv[gpio
 bool irRead(uint16_t /*pin*/, uint32_t& /*codeOut*/) { return false; }
 void irStop() {}   // no IR hardware on desktop
 bool irChannelReady(uint16_t /*pin*/) { return true; }   // no channel to fail on desktop
+
+// A desk on the computer reaches the MIDI service through the browser, so the USB host here is a test desk only.
+namespace {
+struct TestUsbDesk {
+    bool attached = false;
+    std::vector<std::array<uint8_t, 4>> in, out;
+} g_usbDesk;
+}  // namespace
+bool usbMidiBegin() { return g_usbDesk.attached; }
+void usbMidiEnd() {}
+bool usbMidiConnected() { return g_usbDesk.attached; }
+size_t usbMidiRead(uint8_t (*packets)[4], size_t max) {
+    size_t n = 0;
+    for (; n < max && n < g_usbDesk.in.size(); n++) std::memcpy(packets[n], g_usbDesk.in[n].data(), 4);
+    g_usbDesk.in.erase(g_usbDesk.in.begin(), g_usbDesk.in.begin() + static_cast<long>(n));
+    return n;
+}
+bool usbMidiWrite(const uint8_t (*packets)[4], size_t count) {
+    if (!g_usbDesk.attached) return false;
+    for (size_t i = 0; i < count; i++) g_usbDesk.out.push_back({packets[i][0], packets[i][1], packets[i][2], packets[i][3]});
+    return true;
+}
+void setTestUsbMidiDesk(bool attached) { g_usbDesk = TestUsbDesk{}; g_usbDesk.attached = attached; }
+void injectTestUsbMidi(const uint8_t (*packets)[4], size_t count) {
+    for (size_t i = 0; i < count; i++) g_usbDesk.in.push_back({packets[i][0], packets[i][1], packets[i][2], packets[i][3]});
+}
+size_t takeTestUsbMidiSent(uint8_t (*packets)[4], size_t max) {
+    size_t n = 0;
+    for (; n < max && n < g_usbDesk.out.size(); n++) std::memcpy(packets[n], g_usbDesk.out[n].data(), 4);
+    g_usbDesk.out.erase(g_usbDesk.out.begin(), g_usbDesk.out.begin() + static_cast<long>(n));
+    return n;
+}
 
 
 // Video output, resolved on demand and never linked: @xref{the-video-runtimes-structures-are-transcribed-not-included|why the declarations below must not be tidied}.

@@ -204,6 +204,20 @@ Worth doing because it also gives the ADC seam a real bench rig: an on-board ana
 hand-wired potentiometer. NOTE the pin move is unverified on hardware, both boards being offline
 when it was made: confirm LED output still works after the change before trusting it.
 
+### LightCrafter 16: questions for the maker (2026-10-07)
+
+The [LightCrafter 16 page](../../reference/hardware/lightcrafter-16.md) holds what the catalog and limpkin's pull requests say.
+These are open, to ask limpkin:
+
+- The module part, the level shifter, the output voltage and the connectors.
+- The power input: the connector, the voltage range, the fusing and the reverse-polarity protection.
+- Which USB-C connector is the S3's own USB and which the serial bridge, and which chip the bridge is.
+- Whether the S3's own port supplies 5 V to a plugged-in device, such as a MIDI desk.
+- The RS-485 transceiver and the Hall current sensor parts.
+- A schematic and a pin-layout image.
+
+The device model uses GPIO 19 and 20 as the LCD driver's unused signal lines, which are the S3's own USB data pins; that choice is unverified on hardware, and a USB desk on the board would need them.
+
 ### MoonI80 streaming ring — 48×256 shipped; open instruments and cleanups
 
 The ring's two regimes ship and are wall-verified through 48 strands × 256 (12,288 lights): prime-only when the frame fits the pool, the clock-oracle lapping ring above it (the near-prime pool — the ISR encodes only `nSlices − ringBufs` slices per frame), with `ringAuto` deriving the geometry per config and `shiftOverclock` trading the fps ceiling against '595 shift margin. The mechanism lives in the code + the technical page; the design arc in `docs/work/past/plans/` (the MoonI80 plans, all marked). Open items:

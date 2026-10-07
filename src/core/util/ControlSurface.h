@@ -11,7 +11,7 @@
 /// ControlModule owns the state: `switch1..8`, `encoder1..8`, `fader1..8`, and what each drives.
 /// A surface holds no copy, which is what lets two attach at once and stay in step, a phone running Open Stage Control and a desk on the rack.
 /// It is also why inbound is not a method here.
-/// A surface writes through the same control path the HTTP API and the UI use, so it gains no privilege and there is no second copy to reconcile.
+/// A desk writes through ControlModule's `setValue`, the same control path the HTTP API and the UI use, so it gains no privilege and there is no second copy to reconcile.
 ///
 /// ## Feedback is not an echo
 ///
@@ -24,7 +24,7 @@
 /// A fader's value becomes a motor position, an encoder's a ring and a switch's a button light.
 /// A preset pad's state (empty, stored, applied) becomes a color the APC40 picks from its own palette.
 /// So one verb covers every desk, and no hardware detail such as a color or a ring style crosses into ControlModule.
-/// `sendLabel` is the one other verb, for text a desk can show, such as a scribble strip.
+/// `sendLabel` is for text a desk can show, such as a scribble strip, and `sendPress` carries a pad press to the board whose presets the grid shows.
 
 #include <cstdint>
 
@@ -44,6 +44,9 @@ public:
 
     /// A name for a control, where the transport can show one. Does nothing by default.
     virtual void sendLabel(uint8_t index, const char* text) { (void)index; (void)text; }
+
+    /// A pad pressed on a board whose grid shows another board's presets, for the transport that reaches that board. Does nothing by default.
+    virtual void sendPress(uint8_t pad) { (void)pad; }
 };
 
 /// @}

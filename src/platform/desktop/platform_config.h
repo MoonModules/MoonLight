@@ -99,6 +99,8 @@ constexpr bool hasHls = true;
 
 /// True: ffmpeg encodes the elementary stream and MoonLight's own RTSP server ships it.
 constexpr bool hasRtsp = true;
+/// False: a desk on the computer reaches the MIDI service through the browser.
+constexpr bool hasUsbMidiHost = false;
 /// True: ffmpeg offers several encoders, so the pick is the user's.
 constexpr bool hasEncoderChoice = true;
 /// True: ffmpeg writes the playlist to disk, so the server serves segments as files.

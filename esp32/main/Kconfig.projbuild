@@ -4,7 +4,7 @@
 # main/idf_component.yml) can branch on them: a rule's `if:` clause can test a
 # Kconfig symbol, but only one that is *declared* (an undeclared symbol raises
 # MissingKconfigError and fails the solve), so a plain sdkconfig.defaults line is
-# not enough — the option must be declared here too.
+# not enough: the option must be declared here too.
 
 menu "MoonLight"
 
@@ -17,7 +17,7 @@ menu "MoonLight"
             esp_wifi_* API over SDIO. The P4 has no native radio.
 
             OFF by default so the Ethernet-only P4 firmware (esp32p4-eth) does
-            NOT compile or boot esp_hosted — esp_hosted self-initialises at boot
+            NOT compile or boot esp_hosted, which self-initializes at boot
             and claims the default netif, which breaks the EMAC Ethernet DHCP
             path on an eth-only build (link up but no IP). Only the WiFi build
             (esp32p4-eth-wifi) sets this, via sdkconfig.defaults.esp32p4-eth-wifi.
@@ -36,5 +36,14 @@ menu "MoonLight"
             encoder (hardware H.264 + MPEG-TS muxer + PSRAM segment ring) behind
             the same HlsDriver the desktop uses. Only the P4 has the encoder
             silicon; other chips keep this off and build nothing.
+
+    config MM_USB_MIDI_HOST
+        bool "USB MIDI host on the chip's own USB port"
+        default n
+        help
+            Pulls the espressif/usb managed component and compiles the USB MIDI
+            host, so a class-compliant MIDI desk plugged into the board drives the
+            MIDI service with no computer. Set by the S3 images with flash to spare
+            (n8r8, n16r8); the 4 MB S3-Zero leaves it off.
 
 endmenu

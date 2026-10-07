@@ -8942,7 +8942,13 @@ function deskChanges(sent, desk) {
     return out;
 }
 
+// SysEx only when a greeting carries one, so a desk that needs none keeps working when SysEx is refused.
+function midiWantsSysex(services) {
+    return services.some(m => /(^| )f0/.test(m.controls?.find(c => c.name === "hello")?.value || ""));
+}
+
 let midiAsked = false;
+let midiSysex = false;   // whether the access asked for carries SysEx
 let midiAccess = null;
 let midiSentAt = 0;
 let midiDeskSent = [];   // per slot, what the desk was last sent
@@ -8963,13 +8969,20 @@ function midiLoop(now) {
     if (!state || !Array.isArray(state.modules) || !navigator.requestMIDIAccess) return;
     const services = allModules().filter(m => m.type === "MidiService");
     if (!services.length) return;
-    if (!midiAsked) {
+    const sysex = midiWantsSysex(services);
+    if (!midiAsked || (sysex && !midiSysex)) {
         midiAsked = true;
-        navigator.requestMIDIAccess({ sysex: true }).then(access => {
+        midiSysex = sysex;
+        navigator.requestMIDIAccess({ sysex }).then(access => {
             midiAccess = access;
             midiListen(access);
             // A desk plugged in later is listened to, greeted, and sent every slot.
-            access.onstatechange = () => { midiListen(access); midiDeskSent = []; midiHelloSent = null; };
+            access.onstatechange = e => {
+                if (e.port?.state !== "connected") return;   // an unplug changes nothing a desk is shown
+                midiListen(access);
+                midiDeskSent = [];
+                midiHelloSent = null;
+            };
         }).catch(err => console.warn("[midi] access refused", err));
     }
     const hello = midiAccess && services[0].controls?.find(c => c.name === "hello")?.value;

@@ -194,8 +194,11 @@ The APC40 mkII is on the bench, so the Akai profile the Decided section waited f
 
 ### 4. USB host on S3 and P4 🚧
 
-- USB host bring-up in the platform layer, behind a seam.
-- USB MIDI first, since it is one class with no per-vendor parsing: the QCon without a computer.
+- ✅ USB host bring-up in the platform layer, behind a seam: `platform_esp32_usb_midi.cpp`, built into the n8r8 and n16r8 images (`CONFIG_MM_USB_MIDI_HOST`).
+- ✅ USB MIDI first, since it is one class with no per-vendor parsing: `MidiService`'s `usb` setting. Verified with the QCon on the MIDI-OSC bridge board, driving the StadBeest legs over OSC with `follow` on.
+- The APC40 mkII on a board waits for a powered hub: it takes its power from USB, and the dev board's port supplies none. The hub needs `CONFIG_USB_HOST_HUBS_SUPPORTED` in the S3 images.
+- **The legs LEDs stop briefly on each QCon move.** About half a second, at once, and only when the change arrives from the bridge: moving the same control on the legs board's own page shows nothing. Not yet found; the next step is timing the legs board's OSC receive path and the Control slot path it drives.
+- **A QCon fader sometimes slides back after release.** Sending the release position at once (no tick wait, USB tasks woken on send) made it rarer but did not end it. Next: log what the desk sends around the touch release, and whether a feedback value from the legs board arrives after the hold-off has expired.
 - HID gamepads next, with controller translations seeded from GameControllerDB. Xbox pads over USB need a GIP driver on top, and only if wanted, since the browser already reaches them over USB or Bluetooth on the computer.
 - The S31 joins if its datasheet confirms a USB host.
 
@@ -211,6 +214,6 @@ The X-Touch over Ethernet with no computer: RFC 6295's session handshake and jou
 
 - **The pad is an Xbox Series X|S controller** (it has the Share button). The browser reaches it as a standard gamepad, over USB or Bluetooth on the computer; USB on the board needs GIP, so that route waits.
 - **No Bluetooth on the board**, for its flash, RAM and shared-radio cost; Bluetooth devices come in through the browser.
-- **Akai desks are in scope.** They work through `MidiService` like every MIDI desk. The APC40 mkII is on the bench and gets its own profile (step 2b); other Akai desks come in through learn. The MCU profile is verified with the X-Touch and the QCon.
+- **Akai desks are in scope.** They work through `MidiService` like every MIDI desk. The APC40 mkII is on the bench and gets its own profile (step 2b); other Akai desks wait for MIDI learn. The MCU profile is verified with the X-Touch and the QCon.
 - **The hand-back is a fixed ten seconds.** A control for it was built and removed again: nobody tunes it, and it cost a control on three games.
 - **Rows point at the surface**, and direct targets go for every input service (step 3).

@@ -57,6 +57,7 @@ Receives [OSC](https://opensoundcontrol.stanford.edu/) over UDP and writes it on
 - `hosts`: (unicast) addresses or names; empty answers whoever wrote last.
 - `group`: (multicast) the group feedback goes to and this board joins, `239.255.77.78` by default.
 - `feedbackPort`: where the client listens, 9001 by default.
+- `follow`: this board follows another, taking its feedback and showing its presets.
 - `status`: listening, off, or why the port could not be opened.
 
 Detail: [technical](moxygen/OscModule.md)
@@ -127,11 +128,12 @@ Detail: [technical](moxygen/GamepadService.md)
 
 ### MIDI
 
-A Service added per board: **a MIDI control desk** driving the control surface. The desk plugs into the computer showing the interface and the browser reports it, so it works on every chip. A Mackie desk such as the iCON QCon or the Behringer X-Touch works without setup, an Akai APC40 mkII after one choice.
+A Service added per board: **a MIDI control desk** driving the control surface. The desk plugs into the computer showing the interface and the browser reports it, so it works on every chip. A Mackie desk such as the iCON QCon or the Behringer X-Touch in MC mode works without setup, an Akai APC40 mkII after one choice.
 
 <img src="../../assets/core/MidiService.png" width="300" alt="MIDI service controls">
 
 - `profile`: the desk's layout, `Mackie Control` or `Akai APC40 mkII`.
+- `usb`: the desk is on this board's own USB port; S3 boards with 8 MB of flash or more.
 
 Faders move the surface's faders, the knobs turn its encoders, and each channel's SELECT button flips its switch. The desk follows the surface back: motors, SELECT lights and knob rings. A hand on a fader holds its motor still. An APC40's clip pads apply presets. ⌄ details.
 
@@ -184,7 +186,9 @@ A device's own page, such as `http://192.168.1.158`, is not a secure origin, so 
 
 The decoding follows Mackie Control: a fader is 14-bit pitch bend on its own channel, its touch sensor a note from 0x68, a knob a relative turn on a control change from 0x10, and SELECT a note from 0x18. The master fader has no slot on the surface and is ignored. The way back uses the same messages: pitch bend moves a motor, a SELECT note at full velocity lights its button, and a control change from 0x30 fills a knob's ring. The device keeps what the desk should show and pushes it up to 25 times a second; the browser sends only what changed, so a page opened later moves the motors to where the surface already is.
 
-**The Akai APC40 mkII profile.** The browser greets the desk with the SysEx that puts it in Alternate Ableton Live mode, where every light is the host's, so Chrome asks once to send SysEx as well. Track faders 1-8 move the surface's faders and track knobs 1-8 set its encoders, each reading 0 to 127. Activator buttons 1-8 flip its switches. The 40 clip pads apply presets 1-40, the top-left pad being preset 1 as on the Control card. The way back lights each activator while its switch is on, fills each knob's ring like a meter, and colors each pad: dark when empty, dim white when a preset is stored, green for the one applied. The faders have no motors. Every message is in [the APC40 reference](../../reference/hardware/control-surfaces.md#akai-apc40-mkii).
+**The Akai APC40 mkII profile.** The browser greets the desk with the SysEx that puts it in Alternate Ableton Live mode, where every light is the host's. Chrome asks once to allow SysEx for it. Track faders 1-8 move the surface's faders and track knobs 1-8 set its encoders, each reading 0 to 127. Activator buttons 1-8 flip its switches. The 40 clip pads apply presets 1-40, the top-left pad being preset 1 as on the Control card. The way back lights each activator while its switch is on and fills each knob's ring like a meter. Each pad is dark when empty, dim white when a preset is stored, and green for the one applied. The faders have no motors. Every message is in [the APC40 reference](../../reference/hardware/control-surfaces.md#akai-apc40-mkii).
+
+**A desk on the board's own USB port.** With `usb` on, the desk plugs into the board instead of the computer, and the board is the USB host. It reads the desk as USB-MIDI 1.0 packets, greets it, and sends it its state. The port then carries no serial log and no USB flashing, so a board with a second USB port keeps that one for the computer. The desk takes its power from the port, so the board supplies 5 V there, or a powered hub between them does; an APC40 mkII draws about 0.15 A.
 
 ## Audio, details
 #### Microphone wiring
@@ -238,24 +242,26 @@ A received magnitude is clamped to 255, since a real WLED source reaches ~9500 a
 Prior art: the WLED-MM audio-reactive usermod by **Frank ([@softhack007](https://github.com/softhack007))**, the most-used open-source audio-reactive LED implementation, whose adaptive noise-gate concept the analysis here descends from (analyzed with his permission); and **[@troyhacks](https://github.com/troyhacks/WLED)**, who reworked that DSP onto Espressif's [esp-dsp](https://github.com/espressif/esp-dsp) FFT, the same choice this service makes. The line-in path exists because **wladi ([myhome-control](https://shop.myhome-control.de))** supplied the hardware and pinout for the [MHC-WLED ESP32-P4 shield](../../reference/hardware/mhc-wled-esp32-p4-shield.md): its onboard PCM1808 I2S ADC is what `mclkPin` is for.
 
 ## OSC, details
-**Feedback: the device answers.** With `feedback` on, a control that changes anywhere (the web UI, a
-preset recall, an audio-reactive effect) is mirrored back to the surface, which is what keeps a client honest and what moves a motorized fader. `addressing` picks where it goes: `unicast` to each of `hosts`, addresses or names, or to whoever last wrote when `hosts` is empty; `multicast` to `group`, which every listening board with the same `group` joins; the default, `239.255.77.78`, sits beside discovery's own group, so multicast works with nothing to fill in, and a second rig on the same network picks another. `feedbackPort` is where that client LISTENS, which is not the port we listen on (Open Stage Control calls its own `osc-port`).
+**Feedback: the device answers.** With `feedback` on, a control that changes anywhere (the web UI, a preset recall, an audio-reactive effect) is mirrored back to the surface, which is what keeps a client honest and what moves a motorized fader. `addressing` picks where it goes: `unicast` to each of `hosts`, addresses or names, or to whoever last wrote when `hosts` is empty; `multicast` to `group`, which every listening board with the same `group` joins; the default, `239.255.77.78`, sits beside discovery's own group, so multicast works with nothing to fill in, and a second rig on the same network picks another. `feedbackPort` is where that client LISTENS, which is not the port we listen on (Open Stage Control calls its own `osc-port`).
 
 A client learns the current state three ways: when it first writes to us from a new address, when its address changes, and whenever it sends **`/mm/hello`**. The last one exists because a client restarting on the SAME address is invisible to the other two, and most controllers send nothing of their own on load, so every widget would show its layout file's defaults until the user moved one.
 The shipped session has a `sync from device` button for exactly this.
 Every value also goes out again every 30 seconds, one every 20 ms, so a datagram lost on WiFi, or a client that rebooted, is repaired within that time.
+A pad's state goes out as an int on its own address: 0 for an empty pad, 1 for a stored preset, 2 for the one applied.
+A value is never sent back to the host it came from, so two boards feeding each other cannot echo it between them.
 
-**Setting one up**, from installing the app to using it from a phone, is its own page:
-[Connecting a control surface](../../how-to/control-surface.md). It needs no checkout and no tooling, just the app and the session file from the latest release.
+**Following another board.** With `follow` on, what arrives is another board's feedback: this board takes its values, and a desk's pads here show that board's presets. That is what tells a pad's state from a press, since both arrive on `/mm/pad/N`. The Control card's own grid keeps showing this board's presets. With `feedback` on as well, pointed at that board's `port`, a change made here goes there, and a pad pressed on the desk applies that board's preset. A follower asks for every value with `/mm/hello` when it starts, and sends only what changes here, since the board it follows owns the state. A control moved here ignores feedback for half a second, so echoes of its earlier positions cannot pull it back. `hosts` can stay empty: the follower then answers the board it follows once that board's first datagram arrives. A desk at the side of a room drives an installation in the middle this way, with no cable between them. On the desk's board, set `listen` on port 9001, `follow` on, and `feedback` to port 9000.
 
-**Addresses.** These are a public contract: a TouchOSC layout built against them keeps working, so
-they stay small and boring.
+**Setting one up**, from installing the app to using it from a phone, is its own page: [Connecting a control surface](../../how-to/control-surface.md). It needs no checkout and no tooling: the app and the session file from the latest release do.
+
+**Addresses.** These are a public contract: a TouchOSC layout built against them keeps working, so they stay small and boring.
 
 | address | argument | drives |
 |---|---|---|
 | `/mm/fader/1` .. `/mm/fader/8` | float 0..1 or int 0..255 | the Control surface's faders |
 | `/mm/encoder/1` .. `/mm/encoder/8` | float 0..1 or int 0..255 | its rotary encoders |
 | `/mm/switch/1` .. `/mm/switch/8` | float 0..1 or int 0..255 | its on/off switch row (nonzero = on) |
+| `/mm/pad/1` .. `/mm/pad/64` | nonzero = press, zero ignored | applies the preset on that pad of the grid, counted from the top left; an empty pad does nothing |
 | `/mm/hello` | anything, or nothing | resend every value to the sender |
 
 Both argument forms are accepted because controllers disagree: apps send a float in 0..1, hardware bridges send an int in the target's range. Out-of-range values are clamped rather than ignored, so a controller sending 0..127 does something sensible instead of appearing dead.
@@ -294,9 +300,9 @@ Editing the layout needs `read-only` off in the launcher.
 
 Driving the device from that session, beside the Control card it mirrors.
 
-It binds only to `/mm/switch/N`, `/mm/encoder/N` and `/mm/fader/N`, N being 1 to 8, on purpose. A surface addresses the SURFACE, and [Control](system.md#control) decides what each one drives, so one layout keeps working as assignments change and a hardware desk lands on the same bindings. By default `switch1` drives `Drivers.on` and `fader1` drives `Drivers.brightness`; the Control card assigns the rest.
+It binds only to `/mm/switch/N`, `/mm/encoder/N` and `/mm/fader/N`, N being 1 to 8, and to `/mm/pad/N`, N being 1 to 64, on purpose. A surface addresses the SURFACE, and [Control](system.md#control) decides what each one drives, so one layout keeps working as assignments change and a hardware desk lands on the same bindings. By default `switch1` drives `Drivers.on` and `fader1` drives `Drivers.brightness`; the Control card assigns the rest.
 
-The session also carries a **pad grid**, and those pads are inert: `/mm/pad/N` has no route in the OSC module yet, so pressing one sends a message nothing reads. It ships anyway because the grid is the layout a preset launcher wants and the addresses are the ones it will use; treat it as a placeholder rather than as part of the contract above.
+The session also carries a **pad grid** of the 64 preset pads.
 
 **A Mackie desk reaches the surface through the [MIDI service](#midi)**, since the X-Touch and QCon Pro G2 speak Mackie Control over MIDI rather than OSC.
 
