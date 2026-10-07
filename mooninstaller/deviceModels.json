@@ -765,7 +765,7 @@
         "id": "Ethernet",
         "parent_id": "Network",
         "controls": {
-          "ethBoard": "P4-NANO/ETH"
+          "ethBoard": "P4-NANO"
         }
       }
     ]
@@ -1000,7 +1000,7 @@
         "id": "Ethernet",
         "parent_id": "Network",
         "controls": {
-          "ethBoard": "P4-NANO/ETH"
+          "ethBoard": "P4-NANO"
         }
       },
       {
@@ -1060,7 +1060,7 @@
         "parent_id": "Drivers",
         "controls": {
           "peripheral": "Parlio",
-          "pins": "20,21,22,23,24,25,26,27"
+          "pins": "16,17,18,19,20,21,22,23"
         }
       },
       {
@@ -1068,7 +1068,7 @@
         "id": "Ethernet",
         "parent_id": "Network",
         "controls": {
-          "ethBoard": "P4-NANO/ETH"
+          "ethBoard": "P4-NANO"
         }
       },
       {
@@ -1125,7 +1125,7 @@
         "id": "Ethernet",
         "parent_id": "Network",
         "controls": {
-          "ethBoard": "P4-NANO/ETH"
+          "ethBoard": "P4-NANO"
         }
       },
       {
@@ -1215,7 +1215,7 @@
         "id": "Ethernet",
         "parent_id": "Network",
         "controls": {
-          "ethBoard": "P4-NANO/ETH"
+          "ethBoard": "P4-NANO"
         }
       }
     ]
