@@ -135,10 +135,11 @@ public:
     /// Apply the preset on grid cell `slot`, as a click on its pad does; false for an empty cell.
     bool pressPad(uint8_t slot) {
         if (padsRemote_) {
-            // The presets are another board's, so the press goes there.
+            // The presets are another board's, so the press goes there; true only when a surface sent it.
             if (slot >= kMaxPresets || remotePads_[slot] == kPadEmpty) return false;
-            for (uint8_t i = 0; i < surfaceCount_; i++) surfaces_[i]->sendPress(slot);
-            return true;
+            bool sent = false;
+            for (uint8_t i = 0; i < surfaceCount_; i++) sent = surfaces_[i]->sendPress(slot) || sent;
+            return sent;
         }
         for (uint8_t r = 0; r < presetCount_; r++)
             if (presets_[r].slot == slot) return applyPreset(presets_[r].name);

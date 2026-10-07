@@ -90,7 +90,7 @@ The next function worth simplifying is at the top of each file's list.
 | `src/light/layers/Layer.h` | 13 | `Layer in 132 files`, name spread 132 |
 | `test/unit/light/unit_HlsDriver.cpp` | 13 | `lines 30-47, also in test/unit/light/unit_PanelCardDriver.cpp:22`, duplicated block 18 |
 | `test/unit/light/unit_RandomMapModifier.cpp` | 13 | `lines 116-132, also in test/unit/light/unit_BlurzEffect.cpp:49`, duplicated block 17 |
-| `src/core/system/ControlModule.h` | 12 | `ControlModule::storePreset, line 1031`, large stack frame 1296 |
+| `src/core/system/ControlModule.h` | 12 | `ControlModule::storePreset, line 1032`, large stack frame 1296 |
 | `src/core/system/DevicesModule.h` | 12 | `lines 73-80, also in src/core/system/DevicesModule.h:59`, duplicated block 8 |
 | `src/light/drivers/HlsDriver.h` | 12 | `lines 105-117, also in src/light/drivers/RtspDriver.h:92`, duplicated block 13 |
 | `src/light/moonlive/MoonLiveBuiltins_light.h` | 12 | `moonlive::mm_light_escape`, complex function 13 |
@@ -294,7 +294,7 @@ The next function worth simplifying is at the top of each file's list.
 | `moondeck/moontube/mtrun.py` | 1 | `mtrun.py`, large file 1711 |
 | `moondeck/scenario/run_live_scenario.py` | 1 | `run_live_scenario.py`, large file 1856 |
 | `mooninstaller/install-orchestrator.js` | 1 | `install-orchestrator.js`, large file 1284 |
-| `mooninstaller/install.js` | 1 | `install.js`, large file 1449 |
+| `mooninstaller/install.js` | 1 | `install.js`, large file 1451 |
 | `src/core/module/Control.h` | 1 | `sanitizeHostname`, complex function 16 |
 | `src/core/module/StateDocument.cpp` | 1 | `(anonymous namespace)::Applier::apply(mm::MoonModule*, mm::json::JsonNode const*), line 371`, large stack frame 1264 |
 | `src/core/moonlive/MoonLive.h` | 1 | `moonlive::MoonLive::addDeclaredControl`, complex function 14 |
@@ -362,7 +362,7 @@ The next function worth simplifying is at the top of each file's list.
 | `test/js/ui-visibility.test.mjs` | 1 | `lines 7-16, also in test/js/ui-ws-scheme.test.mjs:13`, duplicated block 10 |
 | `test/python/test_check_docgen.py` | 1 | `test_check_docgen.py`, large file 1577 |
 | `test/scenario_runner.cpp` | 1 | `scenario_runner.cpp`, large file 1266 |
-| `test/unit/core/unit_ControlModule.cpp` | 1 | `unit_ControlModule.cpp`, large file 1871 |
+| `test/unit/core/unit_ControlModule.cpp` | 1 | `unit_ControlModule.cpp`, large file 1872 |
 | `test/unit/core/unit_Control_apply_absent_key.cpp` | 1 | `lines 92-103, also in test/unit/core/unit_HttpServerModule_apply.cpp:39`, duplicated block 12 |
 | `test/unit/core/unit_moonlive_compiler.cpp` | 1 | `unit_moonlive_compiler.cpp`, large file 1865 |
 | `test/unit/core/unit_moonlive_fill.cpp` | 1 | `unit_moonlive_fill.cpp`, large file 1380 |

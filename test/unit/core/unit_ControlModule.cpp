@@ -1746,6 +1746,7 @@ TEST_CASE("an OSC follower takes the followed board's values and pads, and sends
     osc.out.clear();
 
     // While fader 4 is being moved here, an echo of an earlier position does not pull it back; after the hold, the followed board's values land again.
+    struct RealClockAfter { ~RealClockAfter() { mm::platform::setTestNowMs(0); } } realClockAfter;   // even when a check throws
     mm::platform::setTestNowMs(10000);
     REQUIRE(desk.scheduler.setControl("Control", "fader4", "{\"value\":120}") == mm::Scheduler::SetControlResult::Ok);
     desk.control->tick20ms();

@@ -1173,6 +1173,8 @@ document.addEventListener('DOMContentLoaded', () => {
         Ethernet: m => m.type === "EthernetModule" && ethConfigured(m),
         WiFi:     m => /^(Network|Ethernet|WiFi)Module$/.test(m.type || ""),
         Audio:    m => /^Audio/.test(m.type || ""),
+        MIDI:     m => m.type === "MidiService",
+        OSC:      m => m.type === "OscModule",
       };
       function capActive(b, cap) {
         const test = CAP_MODULE[cap];

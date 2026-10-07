@@ -45,8 +45,8 @@ public:
     /// A name for a control, where the transport can show one. Does nothing by default.
     virtual void sendLabel(uint8_t index, const char* text) { (void)index; (void)text; }
 
-    /// A pad pressed on a board whose grid shows another board's presets, for the transport that reaches that board. Does nothing by default.
-    virtual void sendPress(uint8_t pad) { (void)pad; }
+    /// A pad pressed on a board whose grid shows another board's presets, for the transport that reaches that board; true when it went out. Does nothing by default.
+    virtual bool sendPress(uint8_t pad) { (void)pad; return false; }
 };
 
 /// @}

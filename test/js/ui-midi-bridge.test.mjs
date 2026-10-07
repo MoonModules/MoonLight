@@ -53,9 +53,10 @@ assert.ok(sysexSrc, "midiWantsSysex is in app.js");
 const midiWantsSysex = new Function(`${sysexSrc[0]}; return midiWantsSysex;`)();
 const service = hello => ({ type: "MidiService", controls: [{ name: "hello", value: hello }] });
 
-test("SysEx is asked for only when a desk's greeting carries one, so a Mackie desk works with SysEx refused", () => {
+test("SysEx is asked for only when the greeted desk's greeting carries one, so a Mackie desk works with SysEx refused", () => {
     assert.equal(midiWantsSysex([service("")]), false);
     assert.equal(midiWantsSysex([service("f0477f29600004420100 00f7 b03802")]), true);
-    assert.equal(midiWantsSysex([service(""), service("b03802 f0f7")]), true);
+    assert.equal(midiWantsSysex([service(""), service("b03802 f0f7")]), false);   // only the first service is greeted
     assert.equal(midiWantsSysex([{ type: "MidiService" }]), false);
+    assert.equal(midiWantsSysex([]), false);
 });

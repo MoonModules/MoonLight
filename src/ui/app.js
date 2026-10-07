@@ -8942,9 +8942,9 @@ function deskChanges(sent, desk) {
     return out;
 }
 
-// SysEx only when a greeting carries one, so a desk that needs none keeps working when SysEx is refused.
+// SysEx only when the greeting carries one, so a desk that needs none keeps working when SysEx is refused; the first service is the one greeted.
 function midiWantsSysex(services) {
-    return services.some(m => /(^| )f0/.test(m.controls?.find(c => c.name === "hello")?.value || ""));
+    return /(^| )f0/.test(services[0]?.controls?.find(c => c.name === "hello")?.value || "");
 }
 
 let midiAsked = false;

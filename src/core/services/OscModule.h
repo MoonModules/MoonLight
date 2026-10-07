@@ -132,10 +132,10 @@ public:
     }
 
     /// Press a pad on the followed board, whose presets the grid here shows.
-    void sendPress(uint8_t pad) override {
-        if (!feedback || !follow) return;
+    bool sendPress(uint8_t pad) override {
+        if (!feedback || !follow) return false;
         uint8_t pkt[48];
-        sendFeedback(pkt, osc::encodeSurface(pkt, sizeof(pkt), SurfaceControl::Pad, pad, 1), nullptr);
+        return sendFeedback(pkt, osc::encodeSurface(pkt, sizeof(pkt), SurfaceControl::Pad, pad, 1), nullptr);
     }
 
     /// Refresh the status, which is time-dependent because a peer goes stale.

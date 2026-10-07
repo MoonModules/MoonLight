@@ -142,6 +142,15 @@ void sendQueued() {
     if (usb_host_transfer_submit(s.out) != ESP_OK) s.outBusy = false;
 }
 
+/// Free the transfers and deregister the client, whatever of them started; the library task then sees no clients and uninstalls.
+void releaseClient() {
+    if (s.in) usb_host_transfer_free(s.in);
+    if (s.out) usb_host_transfer_free(s.out);
+    s.in = s.out = nullptr;
+    if (s.client && usb_host_client_deregister(s.client) != ESP_OK) ESP_LOGE(kTag, "client deregister failed: the port stays a host until a reboot");
+    s.client = nullptr;
+}
+
 /// The client task: the desk's events, its transfers and the send queue, until the port is given back.
 void runClient(void*) {
     usb_host_client_config_t client = {};
@@ -150,6 +159,7 @@ void runClient(void*) {
     if (usb_host_client_register(&client, &s.client) != ESP_OK
         || usb_host_transfer_alloc(kTransferBytes, 0, &s.in) != ESP_OK || usb_host_transfer_alloc(kTransferBytes, 0, &s.out) != ESP_OK) {
         ESP_LOGE(kTag, "USB client did not start");
+        releaseClient();
         s.clientTask = nullptr;
         vTaskDelete(nullptr);
         return;
@@ -163,12 +173,7 @@ void runClient(void*) {
         sendQueued();
     }
     closeDesk();
-    usb_host_transfer_free(s.in);
-    usb_host_transfer_free(s.out);
-    s.in = s.out = nullptr;
-    // The library task sees no clients left and finishes; a failed deregister leaves the stack installed, which the log says.
-    if (usb_host_client_deregister(s.client) != ESP_OK) ESP_LOGE(kTag, "client deregister failed: the port stays a host until a reboot");
-    s.client = nullptr;
+    releaseClient();
     s.clientTask = nullptr;
     vTaskDelete(nullptr);
 }
