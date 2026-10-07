@@ -47,6 +47,20 @@ TEST_CASE("the app's saved config carries every key MoonBase reads") {
     }
     net->setTxPowerSetting(8);
     net->setWifiCredentials("bench-ssid", "bench-password");   // the first known network
+    // A static address on the first known network and on Ethernet, which MoonBase must answer on too.
+    auto* wifi = d.wifi;
+    const uint32_t first = wifi->idAt(0);
+    REQUIRE(wifi->setListRowField(first, "ipSettings", "{\"value\":1}"));
+    REQUIRE(wifi->setListRowField(first, "ip", "{\"value\":\"192.168.1.77\"}"));
+    REQUIRE(wifi->setListRowField(first, "gateway", "{\"value\":\"192.168.1.1\"}"));
+    if constexpr (mm::platform::hasEthernet || mm::platform::previewsEthernetControls) {
+        for (uint8_t i = 0; i < d.eth->controls().count(); i++) {
+            auto& c = d.eth->controls()[i];
+            if (std::strcmp(c.name, "ipSettings") == 0) *static_cast<uint8_t*>(c.ptr) = 1;
+            if (std::strcmp(c.name, "ip") == 0) std::memcpy(c.ptr, "\xC0\xA8\x01\xD3", 4);   // 192.168.1.211
+            if (std::strcmp(c.name, "gateway") == 0) std::memcpy(c.ptr, "\xC0\xA8\x01\x01", 4);
+        }
+    }
     sys->markDirty();
     net->markDirty();
     fs->flush();
@@ -70,6 +84,16 @@ TEST_CASE("the app's saved config carries every key MoonBase reads") {
         int ethType = -2;
         mm::configscrape::findInt(content.c_str(), "ethType", &ethType);
         CHECK(ethType != -2);
+    }
+    // Each interface's addressing, read where the app wrote it.
+    const mm::configscrape::SavedIp row = mm::configscrape::findNetworkIp(content.c_str(), 0);
+    CHECK(row.usable());
+    CHECK(row.ip[3] == 77);
+    CHECK_FALSE(mm::configscrape::findNetworkIp(content.c_str(), 1).usable());
+    if constexpr (mm::platform::hasEthernet || mm::platform::previewsEthernetControls) {
+        const mm::configscrape::SavedIp eth = mm::configscrape::findChildIp(content.c_str(), "EthernetModule");
+        CHECK(eth.usable());
+        CHECK(eth.ip[3] == 211);
     }
     // The access point's own password, not a known network's or another child's.
     char apPassword[64] = {};
@@ -126,6 +150,26 @@ TEST_CASE("the config scraper reads a child's key by the child's type") {
     CHECK_FALSE(mm::configscrape::findChildString(json, "MoonLight", "password", out, sizeof(out)));
     CHECK_FALSE(mm::configscrape::findChildString(json, "EthernetModule", "password", out, sizeof(out)));
     CHECK_FALSE(mm::configscrape::findChildString(R"({"2.type":"AccessPointModule","2.password":""})", "AccessPointModule", "password", out, sizeof(out)));
+}
+
+// A row's addressing is its own: one saved without a static address never reads the next row's, and one the app would refuse is not used.
+TEST_CASE("the config scraper reads each interface's IP settings, by the app's rule") {
+    const char* json = R"({"0.type":"EthernetModule","0.ipSettings":1,"0.ip":"10.0.0.5","0.subnet":"255.255.255.0",)"
+                       R"("1.known":[{"id":1,"ssid":"home","password":"h"},)"
+                       R"({"id":2,"ssid":"site","password":"s","ipSettings":1,"ip":"10.1.0.9","gateway":"10.1.0.1"},)"
+                       R"({"id":3,"ssid":"bad","password":"b","ipSettings":1,"ip":"10.2.0.0","subnet":"255.255.255.0"}]})";
+    CHECK(mm::configscrape::findChildIp(json, "EthernetModule").usable());
+    CHECK_FALSE(mm::configscrape::findNetworkIp(json, 0).usable());   // no keys of its own: DHCP
+    const mm::configscrape::SavedIp site = mm::configscrape::findNetworkIp(json, 1);
+    CHECK(site.usable());
+    CHECK(site.gateway[3] == 1);
+    CHECK_FALSE(mm::configscrape::findNetworkIp(json, 2).usable());   // the network address, which the app refuses too
+    CHECK_FALSE(mm::configscrape::findNetworkIp(json, 3).usable());   // past the last row
+    // The last row ends at its own brace, so a later module's address is not read as its own, and a brace in a password does not end it early.
+    const char* tail = R"({"1.known":[{"id":1,"ssid":"home","password":"p}w"}],"0.type":"EthernetModule","0.ipSettings":1,"0.ip":"10.0.0.5"})";
+    CHECK(mm::configscrape::findNetworkIp(tail, 0).mode == 0);
+    const char* braced = R"({"1.known":[{"id":1,"ssid":"home","password":"p}w","ipSettings":1,"ip":"10.1.0.9"}]})";
+    CHECK(mm::configscrape::findNetworkIp(braced, 0).usable());
 }
 
 // The page keeps calling the same paths across the hand-over to MoonBase, which shares no sources, so a renamed route fails only on a device mid-update.

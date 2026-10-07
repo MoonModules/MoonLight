@@ -6,6 +6,7 @@
 #include "core/util/ModuleFactory.h"
 #include "core/module/MoonModule.h"
 #include "core/util/JsonSink.h"
+#include "fake_light_output.h"   // the fake Drivers is the light output too
 
 #include <cstring>
 #include <string>    // std::string: named explicitly, GCC does not pull it in transitively
@@ -50,13 +51,15 @@ struct Tag : public mm::MoonModule {
     }
 };
 
-// A stand-in for the real Drivers module the WLED shim targets: an `on` Bool + a `brightness` Uint8, the two controls applyWledState drives. Named "Drivers" so findModuleByName resolves it.
-struct FakeDrivers : public mm::MoonModule {
+// Stands in for the Drivers the WLED shim drives, by name, and is the light output a test claims when it reaches the palettes.
+struct FakeDrivers : public mm::MoonModule, public mm::test::FakeLightOutput {
     bool on = true;
     uint8_t brightness = 20;
+    uint8_t palette = 0;
     void defineControls() override {
         controls_.addControl("on", on);
         controls_.addControl("brightness", brightness, 0, 255);
+        controls_.addControl("palette", palette, 0, 255);
     }
 };
 
@@ -321,6 +324,32 @@ TEST_CASE("apply-core: applyWledState sets on + bri independently (no brightness
     CHECK(drivers->brightness == 50);
 
     s.deleteTree(root);
+    s.deleteTree(drivers);
+}
+
+// The WLED app and Home Assistant pick a palette by index or by color, and both reach the palette through the light output.
+TEST_CASE("apply-core: applyWledState picks a palette by index and by color through the light output") {
+    registerTestTypes();
+    mm::Scheduler s;
+    auto* drivers = new FakeDrivers();
+    drivers->setName("Drivers");
+    drivers->defineControls();
+    s.addModule(drivers);
+    mm::HttpServerModule http;
+    http.setScheduler(&s);
+
+    // No light output running: neither form moves the palette.
+    http.applyWledState("{\"seg\":[{\"pal\":3,\"col\":[[0,0,255]]}]}");
+    CHECK(drivers->palette == 0);
+
+    drivers->outputSeat_.claim();
+    http.applyWledState("{\"seg\":[{\"pal\":3}]}");
+    CHECK(drivers->palette == 3);
+    http.applyWledState("{\"seg\":[{\"pal\":40}]}");
+    CHECK(drivers->palette == 11);   // clamped to the last palette the output offers
+    http.applyWledState("{\"seg\":[{\"col\":[[0,0,255]]}]}");
+    CHECK(drivers->palette == 8);    // pure blue is 240 degrees, the fake's palette 8
+
     s.deleteTree(drivers);
 }
 

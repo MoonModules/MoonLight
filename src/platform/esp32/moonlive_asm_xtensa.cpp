@@ -221,11 +221,22 @@ void XtensaAssembler::callLabel(Label l, Reg d, bool take) {
 // A single instruction serves the common small case; without it a constant above a byte truncates.
 // The address form below is for a host call that reads its arguments from the frame.
 // The slots already hold them and the call passes where they start, which makes the argument count a memory question rather than a register one.
+// addi carries a signed byte, so a slot past byte 127 takes addmi's 256-byte step first, as a compiler builds any large frame offset.
 void XtensaAssembler::slotAddr(Reg d, uint8_t slot) {
     if (slot >= kMaxSpillSlots) { overflow_ = true; return; }
-    const uint32_t off = kFrameBase + uint32_t(slot) * kSlotStride;
-    const uint8_t b[3] = {uint8_t((ar(d) << 4) | 0x2), uint8_t(0xc0 | 1), uint8_t(off)};
-    emit(b, 3);                                            // addi aD, a1, #off
+    const int32_t off = static_cast<int32_t>(kFrameBase + uint32_t(slot) * kSlotStride);
+    const uint8_t dr = ar(d);
+    uint8_t base = 1;                                      // a1
+    int32_t lo = off;
+    if (off > 127) {
+        const int32_t hi = (off + 128) >> 8;               // leaves lo in -128..127
+        const uint8_t m[3] = {uint8_t((dr << 4) | 0x2), uint8_t(0xd0 | 1), uint8_t(hi)};
+        emit(m, 3);                                        // addmi aD, a1, #hi*256
+        lo = off - hi * 256;
+        base = dr;
+    }
+    const uint8_t b[3] = {uint8_t((dr << 4) | 0x2), uint8_t(0xc0 | base), uint8_t(static_cast<int8_t>(lo))};
+    emit(b, 3);                                            // addi aD, aBase, #lo
 }
 
 void XtensaAssembler::movImm(Reg d, int32_t imm) {

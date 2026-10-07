@@ -122,7 +122,7 @@ struct BuiltinTable {
 // The byte budget is what the arena allocates, where the count is what the record tables hold.
 /// Bytes the script's own members may occupy.
 static constexpr uint8_t kCtrlBytes = 64;        // arena bytes the script's members share
-static constexpr uint8_t kMaxCtrls  = 8;         // records: how many members/controls may exist
+static constexpr uint8_t kMaxCtrls  = 16;        // records: how many members/controls may exist
 
 // The sanity bound, not the working limit: a compile sizes its staging from the token count.
 static constexpr size_t  kCodeCap = 16384;

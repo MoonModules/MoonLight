@@ -108,3 +108,20 @@ TEST_CASE("ModuleFactory: dynamic capacity grows past initial size") {
         delete m;
     }
 }
+
+namespace {
+// Counts the instances built through operator new, so a test sees where the probe lived.
+class HeapCountedStub : public mm::MoonModule {
+public:
+    static inline int heapBuilt = 0;
+    void* operator new(size_t size) noexcept { heapBuilt++; return mm::MoonModule::operator new(size); }
+    uint8_t big[8192] = {};   ///< larger than a classic ESP32's boot-task stack can spare
+};
+}  // namespace
+
+// Regression: the probe was a stack local, so registering a large module boot-looped the P4 at registration.
+TEST_CASE("ModuleFactory: the registration probe lives on the heap, however large the module") {
+    HeapCountedStub::heapBuilt = 0;
+    CHECK(mm::ModuleFactory::registerType<HeapCountedStub>("HeapCountedStub"));
+    CHECK(HeapCountedStub::heapBuilt == 1);
+}

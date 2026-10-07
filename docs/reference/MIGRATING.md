@@ -34,6 +34,14 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## Unreleased
 
+### The P4 and S31 Ethernet presets are named by their wiring
+
+**Action: *re-set a control*, only where a script, a document or an API call sets `ethBoard` to `P4-NANO` or `S31 CoreBoard`.**
+
+A preset is the wiring several boards follow, so `P4-NANO` is now `P4 RMII` and `S31 CoreBoard` is now `S31 RGMII`, beside `Classic RMII`.
+A saved device opens on its chip's one preset as before: an unknown label leaves the selection at its default, which is that preset.
+An old name sent to `ethBoard` matches no preset and changes nothing.
+
 ### An audio codec is the device model's setting
 
 **Action: on an ESP32-S31 CoreBoard, apply its device model again, or set the I2C bus to SDA 51 / SCL 50 under System and AudioService's `codec` to `ES8311` with `mclkPin` 52.**

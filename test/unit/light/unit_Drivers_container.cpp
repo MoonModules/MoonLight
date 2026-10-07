@@ -50,23 +50,43 @@ public:
     int correctionCalls = 0;
 };
 
-// Regression (the profile-edit LED-blank bug): editing a live fixture profile blanked the strip for ~½s, even on drivers NOT using that profile. Cause: the list-mutation handler re-ran a whole-tree prepareTree(), and a physical driver's prepare() reinits its output peripheral (an RMT channel teardown → dark for a tick). A preset edit changes correction DATA, not pipeline STRUCTURE, so the fix routes it through rebuildAllCorrections(), the tier-1 correction refresh, which must re-resolve each driver's correction WITHOUT calling its prepare(). This pins that split so the blank can't return: rebuildAllCorrections() bumps the correction path, never prepare().
-TEST_CASE("Drivers::rebuildAllCorrections re-resolves corrections without re-preparing drivers") {
+// Regression: a profile edit re-ran prepare on the whole tree, whose output reinit blanked every strip for half a second; the list-changed hook re-resolves the correction alone.
+TEST_CASE("A fixture-profile list edit re-resolves each driver's correction without re-preparing it") {
+    mm::FixtureProfilesModule lib;       // construction claims the library seat
     mm::Drivers drivers;
     RebuildTrackingDriver drv;
     drivers.addChild(&drv);
     drivers.on = true;
     drivers.brightness = 200;
     drv.defineControls();
-    drivers.setup();                     // setup() seeds via passBufferToDrivers → rebuildCorrection
-    const int baselineCorrection = drv.correctionCalls;   // whatever setup did — we measure the delta
+    drivers.setup();                     // seeds each driver's correction
+    const int baselineCorrection = drv.correctionCalls;
     const int baselinePrepare = drv.prepareCalls;
 
-    // The correction-only refresh the list-mutation handler now calls instead of prepareTree().
-    drivers.rebuildAllCorrections();
+    drv.onListChanged(lib);
+    CHECK(drv.correctionCalls > baselineCorrection);   // the edit reaches the output
+    CHECK(drv.prepareCalls == baselinePrepare);        // with no peripheral reinit, so no blank
 
-    CHECK(drv.correctionCalls > baselineCorrection);   // correction WAS re-resolved (edit reaches output)
-    CHECK(drv.prepareCalls == baselinePrepare);        // but prepare() was NOT called — no peripheral reinit, no blank
+    // Another module's list is not one a driver resolves from.
+    const int afterLib = drv.correctionCalls;
+    drv.onListChanged(drivers);
+    CHECK(drv.correctionCalls == afterLib);
+}
+
+// Core reads the light pipeline through LightOutput, so the seat must hold only a live, prepared Drivers.
+TEST_CASE("Drivers is the light output core reads, from prepare until release") {
+    mm::Drivers drivers;
+    CHECK(mm::LightOutput::active() != &drivers);   // a probe that never prepares never publishes
+    drivers.prepare();
+    CHECK(mm::LightOutput::active() == &drivers);
+    CHECK(&mm::lightSummary() == &drivers.summary());
+    // A palette's own color finds a palette of the same color.
+    const mm::LightOutput& out = drivers;
+    const mm::RGB c = out.paletteRgb(out.nearestPalette(mm::RGB{255, 0, 0}));
+    CHECK(c.r == 255);
+    drivers.release();
+    CHECK(mm::LightOutput::active() == nullptr);
+    CHECK(mm::lightSummary().lightCount == 0);      // the all-zero summary, never a dangling one
 }
 
 // The `on` control is master power: on=false scales the correction LUT to zero (output black) while PRESERVING the brightness value, so on=true restores the exact level. It rides the same cheap LUT rebuild as brightness (no pipeline realloc). This pins the shared power control IR/MQTT/WLED drive.
@@ -300,4 +320,23 @@ TEST_CASE("Drivers: relay pins and double buffering are expert settings, and the
     rmt.defineControls();
     for (const char* name : {"loopbackTest", "loopbackTxPin", "loopbackRxPin", "loopbackFrame"})
         CHECK_MESSAGE(modeOf(rmt, name) == mm::kModeDeveloper, name);
+}
+
+// A scripted palette has no stored stops, so its color comes from the entries it computes now, not from the built-in its index would wrap onto.
+TEST_CASE("Drivers gives a scripted palette's color from its live entries") {
+    mm::Drivers drivers;
+    const mm::Palette saved = *mm::Palettes::active();
+    mm::Palette blue;
+    for (auto& e : blue.entry) e = mm::RGB{0, 0, 255};
+    mm::Palettes::setActiveDirect(blue);            // what a running palette script wrote
+    uint16_t hue = 0, sat = 0;
+    drivers.paletteHueSat(mm::palettes::kCount, hue, sat);   // the first scripted index
+    CHECK(hue == 240);
+    CHECK(sat == 255);
+    uint16_t builtinHue = 0, builtinSat = 0;
+    mm::Palettes::representativeHueSat(0, builtinHue, builtinSat);
+    drivers.paletteHueSat(0, hue, sat);             // a built-in still reads its own stops
+    CHECK(hue == builtinHue);
+    CHECK(sat == builtinSat);
+    mm::Palettes::setActiveDirect(saved);
 }

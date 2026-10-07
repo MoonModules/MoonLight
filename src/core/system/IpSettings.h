@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/util/fnv.h"
+#include "core/util/Ipv4.h"   // the rule a static setting is checked by, shared with MoonBase
 #include "platform/platform.h"
 
 #include <cstdint>
@@ -18,6 +19,20 @@ inline constexpr uint8_t kStatic = 1;   ///< the address the user set
 inline constexpr const char* kOptions[] = {"DHCP", "Static"};
 /// The four addresses a static setting holds, in the order they are written.
 inline constexpr const char* kFields[4] = {"ip", "gateway", "subnet", "dns"};
+// In ipv4::Fault's order, with no sentence for None; the app's alone, so MoonBase carries none of the text.
+/// What the card says about each reason a static setting is not used.
+inline constexpr const char* kWhy[] = {
+    nullptr,
+    "static IP not used: the subnet mask is not a valid mask",
+    "static IP not used: no address is set",
+    "static IP not used: the address is not a host address",
+    "static IP not used: the address is the subnet's network or broadcast address",
+    "static IP not used: the gateway is outside the subnet",
+    "static IP not used: the gateway is the device's own address",
+    "static IP not used: the gateway is the subnet's network or broadcast address",
+    "static IP not used: the DNS server is not a host address",
+};
+static_assert(sizeof(kWhy) / sizeof(kWhy[0]) == static_cast<size_t>(ipv4::Fault::Dns) + 1, "a sentence for every fault");
 
 }  // namespace mm::ipsettings
 
@@ -53,14 +68,9 @@ struct IpSettings {
         return f.h;
     }
 
-    /// Why a Static setting cannot be used, a sentence for the card, or null when it can; gateway and DNS may be left at 0.0.0.0 for none.
+    /// Why a Static setting cannot be used, a sentence for the card, or null when it can.
     const char* problem() const MM_NONBLOCKING {
-        const uint32_t a = word(ip), m = word(subnet), d = word(dns);
-        if (!isMask(m)) return "static IP not used: the subnet mask is not a valid mask";
-        if (const char* why = addressProblem(a, m)) return why;
-        if (const char* why = gatewayProblem(word(gateway), a, m)) return why;
-        if (d && !isHost(d)) return "static IP not used: the DNS server is not a host address";
-        return nullptr;
+        return ipsettings::kWhy[static_cast<uint8_t>(ipv4::staticFault(ip, gateway, subnet, dns))];
     }
 
     /// Whether a Static setting is chosen and can be used; an unusable one leaves the DHCP client running.
@@ -73,27 +83,27 @@ struct IpSettings {
     static IpSettings leased(platform::NetIface iface) {
         uint8_t lease[4][4];
         platform::netGetIPv4(iface, lease[0], lease[1], lease[2], lease[3]);
-        if (!word(lease[3])) std::memcpy(lease[3], lease[1], 4);
+        if (!ipv4::word(lease[3])) std::memcpy(lease[3], lease[1], 4);
         IpSettings s;
         s.mode = ipsettings::kStatic;
         for (uint8_t k = 0; k < 4; k++)
-            if (word(lease[k])) std::memcpy(s.address(k), lease[k], 4);
+            if (ipv4::word(lease[k])) std::memcpy(s.address(k), lease[k], 4);
         return s;
     }
 
     /// Start a Static setting from what `iface` runs with now, when it has an address and no address is set yet.
     void prefillFrom(platform::NetIface iface) {
-        if (!isStatic() || word(ip)) return;
+        if (!isStatic() || ipv4::word(ip)) return;
         const IpSettings lease = leased(iface);
-        if (!word(lease.ip)) return;
+        if (!ipv4::word(lease.ip)) return;
         for (uint8_t k = 0; k < 4; k++) std::memcpy(address(k), lease.address(k), 4);
     }
 
     /// Start a Static setting's gateway, mask and DNS server from the network `iface` is on, leaving the address to choose, when no address is set yet.
     void prefillNetworkFrom(platform::NetIface iface) {
-        if (!isStatic() || word(ip)) return;
+        if (!isStatic() || ipv4::word(ip)) return;
         const IpSettings lease = leased(iface);
-        if (!word(lease.ip)) return;
+        if (!ipv4::word(lease.ip)) return;
         for (uint8_t k = 1; k < 4; k++) std::memcpy(address(k), lease.address(k), 4);
     }
 
@@ -108,35 +118,6 @@ struct IpSettings {
         else platform::netSetDhcp(iface);
     }
 
-private:
-    static uint32_t word(const uint8_t q[4]) MM_NONBLOCKING {
-        return (uint32_t(q[0]) << 24) | (uint32_t(q[1]) << 16) | (uint32_t(q[2]) << 8) | q[3];
-    }
-    // Not 0.x, loopback 127.x, or multicast and reserved from 224.x on.
-    static bool isHost(uint32_t a) MM_NONBLOCKING {
-        const uint32_t first = a >> 24;
-        return first != 0 && first != 127 && first < 224;
-    }
-    // Ones then zeros, with at least one of each.
-    static bool isMask(uint32_t m) MM_NONBLOCKING { return m != 0 && m != 0xFFFFFFFFu && (~m & (~m + 1)) == 0; }
-    // A /31 has no network or broadcast address (RFC 3021), so both of its addresses are hosts.
-    static bool isNetworkOrBroadcast(uint32_t a, uint32_t m) MM_NONBLOCKING {
-        return ~m > 1 && ((a & ~m) == 0 || (a | m) == 0xFFFFFFFFu);
-    }
-    static const char* addressProblem(uint32_t a, uint32_t m) MM_NONBLOCKING {
-        if (a == 0) return "static IP not used: no address is set";
-        if (!isHost(a)) return "static IP not used: the address is not a host address";
-        if (isNetworkOrBroadcast(a, m)) return "static IP not used: the address is the subnet's network or broadcast address";
-        return nullptr;
-    }
-    // A gateway of 0.0.0.0 is none, which a local-only device runs without.
-    static const char* gatewayProblem(uint32_t g, uint32_t a, uint32_t m) MM_NONBLOCKING {
-        if (!g) return nullptr;
-        if ((g & m) != (a & m)) return "static IP not used: the gateway is outside the subnet";
-        if (g == a) return "static IP not used: the gateway is the device's own address";
-        if (isNetworkOrBroadcast(g, m)) return "static IP not used: the gateway is the subnet's network or broadcast address";
-        return nullptr;
-    }
 };
 
 /// The IP settings an interface last applied, so only an edit applies again.

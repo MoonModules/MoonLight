@@ -11,7 +11,7 @@
 #include "light/drivers/Drivers.h"
 #include "light/util/Palette.h"
 #include "core/util/JsonSink.h"
-#include "light/moonlive/MoonLiveScriptFile.h"
+#include "core/moonlive/MoonLiveScriptFile.h"
 #include "platform/platform.h"
 #include "../core/conditional_controls.h"   // mm::test::controlIndex
 

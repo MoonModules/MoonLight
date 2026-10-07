@@ -1,11 +1,12 @@
 /// @module OscModule
 /// @also Scheduler
 
-/// OSC feedback settings that need no socket: a bad host list and a missing group are reported rather than sending nowhere.
+/// OSC feedback: its settings are validated without a socket, and every value is sent again every 30 seconds, one per tick.
 
 #include "doctest.h"
 #include "core/services/OscModule.h"
 #include "core/module/Scheduler.h"
+#include "core/system/ControlModule.h"
 
 #include <cstring>
 
@@ -40,4 +41,46 @@ TEST_CASE("OSC multicast feedback without a group says so, and the default group
     CHECK(std::strstr(rig.osc->status(), "group") == nullptr);   // the default 239.255.77.78
     REQUIRE(rig.scheduler.setControl("Osc", "group", "{\"value\":\"\"}") == Scheduler::SetControlResult::Ok);
     CHECK(std::strstr(rig.osc->status(), "needs a group") != nullptr);
+}
+
+namespace {
+// The OSC module with its datagrams counted instead of sent, so the test needs no socket and no clock.
+struct CountingOsc : OscModule {
+    int sent = 0;
+    void sendValue(SurfaceControl, uint8_t, uint8_t) override { sent++; }
+};
+}  // namespace
+
+// Regression: a follower that missed one multicast datagram kept the wrong value until that slot changed again, which for a palette was a whole scene.
+TEST_CASE("OSC feedback asks for every surface value again every 30 seconds, and gets one per tick") {
+    Scheduler scheduler;
+    auto* control = new ControlModule();
+    control->setName("Control");
+    auto* osc = new CountingOsc();
+    osc->setName("Osc");
+    scheduler.addModule(control);
+    scheduler.addModule(osc);
+    scheduler.setup();
+    REQUIRE(scheduler.setControl("Osc", "feedback", "{\"value\":true}") == Scheduler::SetControlResult::Ok);
+    REQUIRE(scheduler.setControl("Osc", "listen", "{\"value\":true}") == Scheduler::SetControlResult::Ok);
+
+    // Attached as the module attaches itself: seeded one value per tick, not in one burst.
+    control->addSurface(osc, /*paced=*/true);
+    CHECK(osc->sent == 0);
+    for (int i = 0; i < ControlModule::kSlotCount; i++) {
+        const int before = osc->sent;
+        control->tick20ms();
+        CHECK(osc->sent - before == 1);
+    }
+    control->tick20ms();
+    CHECK(osc->sent == ControlModule::kSlotCount);   // every value once, then quiet
+
+    for (int s = 0; s < 29; s++) osc->tick1s();
+    control->tick20ms();
+    CHECK(osc->sent == ControlModule::kSlotCount);   // nothing before the 30 seconds are up
+    osc->tick1s();
+    for (int i = 0; i < ControlModule::kSlotCount + 2; i++) control->tick20ms();
+    CHECK(osc->sent == 2 * ControlModule::kSlotCount);   // and every value once more
+    control->removeSurface(osc);
+    scheduler.release();
 }

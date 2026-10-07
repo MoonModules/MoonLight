@@ -1,11 +1,34 @@
 #pragma once
 
 #include "core/moonlive/MoonLive.h"
-#include "light/moonlive/MoonLiveScript.h"
+#include "core/moonlive/MoonLiveScript.h"
 #include "light/moonlive/MoonLiveBuiltins_light.h"
 #include "light/util/Palette.h"
 
 namespace mm {
+
+namespace moonlive {
+
+/// What a new palette script starts out as.
+inline constexpr const char* kPaletteTemplate =
+    "class NewPalette {\n"
+    "  byte bpm = 20;\n"
+    "\n"
+    "  void defineControls() {\n"
+    "    addControl(\"bpm\", bpm, 1, 120); // how fast the colors move\n"
+    "  }\n"
+    "\n"
+    "  void tick() {\n"
+    "    for (int i = 0; i < 16; i = i + 1) {\n"
+    "      setPalEntryHSV(i, scale(beat(bpm, t), 256) + i * 16, 255, 255);\n"
+    "    }\n"
+    "  }\n"
+    "}\n";
+
+/// What the `script` control tells the UI: the directory, the extension and the new-file template.
+inline constexpr const char* kPalettePick[3] = {kScriptDir, kPaletteExt, kPaletteTemplate};
+
+}  // namespace moonlive
 
 /// A palette authored as code rather than stored as data.
 ///

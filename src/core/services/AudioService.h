@@ -10,7 +10,7 @@
 #include "core/services/AudioLevel.h"
 #include "core/services/AudioBands.h"
 #include "core/util/math8.h"      // beatsin8 / sin8, the simulated-audio oscillators
-#include "light/util/WLEDAudioSyncPacket.h"   // WLED audio-sync wire format (send/receive)
+#include "core/util/WLEDAudioSyncPacket.h"   // WLED audio-sync wire format (send/receive)
 #include "platform/platform.h"
 
 #include <cstdint>
@@ -485,7 +485,7 @@ private:
     uint32_t micNonzero1s_ = 0;
     bool     micStatusStale_ = false;
 
-    // WLED audio sync (light/WLEDAudioSyncPacket.h). One socket, bound only in Send/Receive.
+    // WLED audio sync (core/util/WLEDAudioSyncPacket.h). One socket, bound only in Send/Receive.
     platform::UdpSocket syncSock_;
     uint32_t lastSyncSend_ = 0;      // millis of the last send (send throttle)
     uint32_t syncSendCount_ = 0;         // sends made; test-visible so the throttle can be observed

@@ -110,6 +110,13 @@ public:
         MoonModule::onControlChanged(name);
     }
 
+    // The correction alone rather than a prepare, which would reinitialize the output and blank it for a tick.
+    /// Re-resolve the fixture profile when the profile library's rows change.
+    void onListChanged(const MoonModule& owner) override {
+        if (&owner == static_cast<const MoonModule*>(FixtureProfilesModule::active()))
+            rebuildCorrection(lastGlobalBrightness_);
+    }
+
     /// Notified when the output channel count may have changed without a structural rebuild.
     virtual void onCorrectionChanged() {}
 

@@ -165,16 +165,23 @@ void Scheduler::prepareTree() {
 }
 
 namespace {
-void notifyTree(MoonModule* m, const char* path) {
-    m->onFileChanged(path);
+// One walk for every tree-wide notification, so each hook reaches the same set of modules.
+template <class F>
+void forEachInTree(MoonModule* m, F&& f) {
+    f(*m);
     for (uint8_t i = 0; i < m->childCount(); i++)
-        if (MoonModule* c = m->child(i)) notifyTree(c, path);
+        if (MoonModule* c = m->child(i)) forEachInTree(c, f);
 }
 }  // namespace
 
 void Scheduler::notifyFileChanged(const char* path) {
     for (uint8_t i = 0; i < moduleCount_; i++)
-        if (modules_[i]) notifyTree(modules_[i], path);
+        if (modules_[i]) forEachInTree(modules_[i], [path](MoonModule& m) { m.onFileChanged(path); });
+}
+
+void Scheduler::notifyListChanged(const MoonModule& owner) {
+    for (uint8_t i = 0; i < moduleCount_; i++)
+        if (modules_[i]) forEachInTree(modules_[i], [&owner](MoonModule& m) { m.onListChanged(owner); });
 }
 
 void Scheduler::deleteTree(MoonModule* mod) {

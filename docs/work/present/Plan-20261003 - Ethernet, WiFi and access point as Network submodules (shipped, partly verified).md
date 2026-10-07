@@ -121,16 +121,16 @@ Tested on the one board at hand, an S3 on a 2.4 GHz network, and pinned by tests
 
 Waiting for more devices and a cable:
 
-- 🚧 **Memory on a board without PSRAM.** Build the classic ESP32 and the P4 with these changes, flash a board without PSRAM, and compare its free heap against main.
-- 🚧 **Ethernet.** The Ethernet card on a wired board (P4, S31 or a classic Ethernet board): DHCP, a static address, and a cable plugged in while WiFi is joined.
+- ✅ **Memory on a board without PSRAM.** The Olimex Gateway (classic ESP32, no PSRAM) on 2026-10-06: 137.5 KB free with a 108 KB largest block a minute after boot, the same as the firmware it ran before, which already carried these submodules.
+- **Ethernet.** ✅ On the Olimex on 2026-10-06: DHCP, and a static address applied live (the device moved from .210 to .211 within seconds) that survives a reset. ✅ A cable plugged in while WiFi is joined: the device moved from WiFi (.207) to Ethernet (.210, 100 Mbit) live, with no restart.
 - 🚧 **Phones.** The full first setup on an iPhone, the sign-in screen opening on the WiFi card, and on an Android phone.
-- 🚧 **Networks.** A hidden network joined as a station, a channel 13 router, and static addressing on a WiFi network.
+- **Networks.** ✅ Static addressing on a WiFi network, on the Olimex on 2026-10-06: set on the known row, the device moved from .207 to .212 live and back on DHCP. 🚧 A hidden network joined as a station and a channel 13 router.
 - 🚧 **`opens: never`** on hardware, with USB at hand to recover.
 - ✅ **Static IP settings are checked before use:** a mask, address, gateway or DNS server a network cannot use leaves the interface on DHCP, with the reason on the Ethernet card or the WiFi row.
 - ✅ **A live address change asks first:** editing the addressing of the interface carrying the page names where the device will be, and an address is sent when committed rather than as it is typed.
 - ✅ **A recent scan orders the joining:** known networks a scan in the last five minutes saw are tried first, in list order, so the list stays the priority and no time goes to networks out of range. Signal strength does not reorder them, a choice made on 2026-10-05 to keep moving a row up meaning prefer it. Verified on an S3: with an absent network at the top and a scan that missed it, the round after a failed join tried the network in range first and rejoined in about a second.
 - ✅ **MoonBase** with the new layout, on a classic ESP32: it joins the app's WiFi, opens the device's own access point with the sign-in screen, and installs from a GitHub release. Two live scenarios pin the first two.
-- 🚧 **MoonBase over Ethernet**, on an Olimex Gateway with the new scenario.
+- **MoonBase over Ethernet**, on the Olimex on 2026-10-06. ✅ It comes up on Ethernet (the Ethernet MAC answers) and installs the app through `/api/firmware/upload`, 2.2 MB in 74 s, which then boots back on its address. ✅ MoonBase pins the app's static addressing, Ethernet's and each known network's, by the app's own rule (`core/util/Ipv4.h`, shared): with the app static on .211 it answers on .211, and on DHCP on its lease. With the cable out and the known WiFi network static on .212, MoonBase gave Ethernet its window, joined WiFi and answered on .212, and the app came back there.
 - ✅ **A staged install survives a reset in MoonBase.** It keeps the URL until an install ends and counts installs started, stopping after three that reset the device. On a D32 whose supply collapses whenever the radio starts, 3 of 3 hand-overs completed where 2 of 4 were lost before.
 - 🚧 **Two unexplained S3 failures, each without a serial log at the time.** A card join that did not start in one first-setup run. A freeze, silent on serial and off the network until reset, after the fallback scenario, after which the second known network was gone from the saved file.
 

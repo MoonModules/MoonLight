@@ -122,8 +122,8 @@ constexpr const char* kEffectCatalogTags[] = {
     "💫",
     "💫",
     "💫🎶",
-    "💫🎶",
-    "💫🎶",
+    "💫🎵🎶",
+    "💫🎵",
     "💫🖌️",
 };
 constexpr const char* kEffectFolder = "effects";   ///< its directory upstream
@@ -199,11 +199,13 @@ constexpr const char* kServiceCatalog[] = {
     "button.mls",
     "chase.mls",
     "power.mls",
+    "stadbeest-autopilot.mls",
     "sweep.mls",
 };
-constexpr size_t kServiceCatalogCount = 4;
+constexpr size_t kServiceCatalogCount = 5;
 /// What each service above declares about itself, in the same order, 0 meaning it says nothing and the device decides.
 constexpr unsigned char kServiceCatalogDim[] = {
+    0,
     0,
     0,
     0,
@@ -211,6 +213,7 @@ constexpr unsigned char kServiceCatalogDim[] = {
 };
 /// The emoji each declares, "" when it declares none.
 constexpr const char* kServiceCatalogTags[] = {
+    "",
     "",
     "",
     "",
@@ -245,7 +248,7 @@ constexpr const char* kPaletteCatalogTags[] = {
 };
 constexpr const char* kPaletteFolder = "palettes";   ///< its directory upstream
 
-constexpr size_t kCatalogCount = 56;   ///< every factory script, all roles
+constexpr size_t kCatalogCount = 57;   ///< every factory script, all roles
 
 /// @}
 } // namespace mm::moonlive

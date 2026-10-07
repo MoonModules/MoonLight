@@ -38,7 +38,7 @@ A user-added Service: the audio source the audio-reactive effects consume. `mode
 - `syncPort`: (network build) the UDP port, 11988 by default; `sync status` reports the state.
 - read-only: `level` (RMS), `peakHz` (the audio driving effects, from any source).
 
-Detail: [technical](moxygen/AudioService.md) · [the sync packet](../light/moxygen/WLEDAudioSyncPacket.md) · [the lock-free ring](moxygen/SpscRing.md)
+Detail: [technical](moxygen/AudioService.md) · [the sync packet](moxygen/WLEDAudioSyncPacket.md) · [the lock-free ring](moxygen/SpscRing.md)
 
 [Tests](../../reference/tests/unit-tests.md#audioservice)
 
@@ -134,6 +134,8 @@ A Service added per board: **a MIDI control desk** driving the control surface, 
 Faders move the surface's faders, the knobs turn its encoders, and each channel's SELECT button flips its switch. The desk follows the surface back: motors, SELECT lights and knob rings. A hand on a fader holds its motor still. ⌄ details.
 
 Detail: [technical](moxygen/MidiService.md)
+
+<a id="moonliveservice"></a>
 
 ### MoonLiveService
 
@@ -237,6 +239,7 @@ preset recall, an audio-reactive effect) is mirrored back to the surface, which 
 
 A client learns the current state three ways: when it first writes to us from a new address, when its address changes, and whenever it sends **`/mm/hello`**. The last one exists because a client restarting on the SAME address is invisible to the other two, and most controllers send nothing of their own on load, so every widget would show its layout file's defaults until the user moved one.
 The shipped session has a `sync from device` button for exactly this.
+Every value also goes out again every 30 seconds, one every 20 ms, so a datagram lost on WiFi, or a client that rebooted, is repaired within that time.
 
 **Setting one up**, from installing the app to using it from a phone, is its own page:
 [Connecting a control surface](../../how-to/control-surface.md). It needs no checkout and no tooling, just the app and the session file from the latest release.

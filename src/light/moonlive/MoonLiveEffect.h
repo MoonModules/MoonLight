@@ -2,13 +2,34 @@
 
 #include "light/effects/EffectBase.h"
 #include "core/moonlive/MoonLive.h"
-#include "light/moonlive/MoonLiveScript.h"
+#include "core/moonlive/MoonLiveScript.h"
 #include "light/moonlive/MoonLiveParticles.h"
 #include "light/moonlive/MoonLiveBuiltins_light.h"
 #include <cstring>
 #include <cstdio>
 
 namespace mm {
+
+namespace moonlive {
+
+/// What a new effect script starts out as: a working example, since an empty file fails to parse the moment it is made.
+inline constexpr const char* kEffectTemplate =
+    "class NewEffect {\n"
+    "  byte bpm = 60;\n"
+    "\n"
+    "  void defineControls() {\n"
+    "    addControl(\"bpm\", bpm, 1, 255);\n"
+    "  }\n"
+    "\n"
+    "  void tick() {\n"
+    "    fill(scale(beat(bpm, t), 256), 0, 100);\n"
+    "  }\n"
+    "}\n";
+
+/// What the `script` control tells the UI: the directory, the extension and the new-file template.
+inline constexpr const char* kEffectPick[3] = {kScriptDir, kEffectExt, kEffectTemplate};
+
+}  // namespace moonlive
 
 /// The thin binding between the MoonLive engine and a first-class `EffectBase`.
 ///
@@ -53,15 +74,9 @@ public:
     void prepare() override {
         // The next tick is the first, so the idle interval is not handed to the flow and the decay.
         tickStarted_ = false;
-        // The script sizes its own pool from defineControls(), which sync() runs after a compile.
-        script_.setPoolSizer([](void* ctx, uint16_t n) -> uint16_t {
-            return static_cast<MoonLiveEffect*>(ctx)->particles_.resize(n);
-        }, this);
-        // Two 16-bit planes are 96 KB on a 20-cube, so only a script that advects pays for them.
-        script_.setTrailSizer([](void* ctx, bool want) -> bool {
-            return static_cast<MoonLiveEffect*>(ctx)->resizeTrail(want);
-        }, this);
-        script_.sync(moonlive::effectSysVars(), *this);
+        // The script sizes its own pool and trail from defineControls(), which sync() runs after a compile.
+        script_.setDefineHook(&MoonLiveEffect::attachSizers, this);
+        script_.sync(moonlive::effectSysVars(), *this, moonlive::lightBuiltins());
         // The planes follow the fixture, so a resize re-sizes them though the script did not.
         if (trailWanted_) resizeTrail(true);
         // Unconditional, since a walk costs little and keeps the card correct after any prepare.
@@ -152,6 +167,21 @@ private:
         moonlive::writeSysVarSlot(script_.engine().controlSlot(offset), value);
     }
 
+    // Two 16-bit planes are 96 KB on a 20-cube, so only a script that advects pays for them.
+    /// Attach pool(n) and trail(1) to this effect for one defineControls run, or detach them.
+    static void attachSizers(void* ctx, bool attach) {
+        if (!attach) {
+            moonlive::setPoolSizeSink(nullptr, nullptr);
+            moonlive::setTrailSizeSink(nullptr, nullptr);
+            return;
+        }
+        moonlive::setPoolSizeSink([](void* c, uint16_t n) -> uint16_t {
+            return static_cast<MoonLiveEffect*>(c)->particles_.resize(n);
+        }, ctx);
+        moonlive::setTrailSizeSink([](void* c, bool want) -> bool {
+            return static_cast<MoonLiveEffect*>(c)->resizeTrail(want);
+        }, ctx);
+    }
 
     // A fresh card starts with no script and renders nothing until one is named.
     moonlive::MoonLiveScript script_;

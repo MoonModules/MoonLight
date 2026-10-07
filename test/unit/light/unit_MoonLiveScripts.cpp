@@ -17,9 +17,10 @@
 #include "core/moonlive/moonlive_emit.h"
 #include "light/moonlive/MoonLiveBuiltins_light.h"
 #include "core/moonlive/MoonLiveBuiltins_service.h"   // the service vocabulary a .mls compiles against
-#include "light/moonlive/MoonLiveScriptFile.h"   // the role extensions the sweep filters on
-#include "light/moonlive/MoonLiveScript.h"       // kMaxStatus: the status line a failure reports through
-#include "light/moonlive/script_catalog.h"       // generated: what the device offers
+#include "core/moonlive/MoonLiveScriptFile.h"   // the role extensions the sweep filters on
+#include "core/moonlive/MoonLiveScript.h"       // kMaxStatus: the status line a failure reports through
+#include "core/moonlive/script_catalog.h"       // generated: what the device offers
+#include "core/services/MoonLiveService.h"      // kServiceTemplate: what a new service script starts as
 
 #include <algorithm>
 #include <cstdlib>

@@ -32,9 +32,9 @@ Five hard limits, all found by hitting them:
 
 | limit | value | where |
 |---|---|---|
-| script state | **64 bytes** shared by all members | `kCtrlBytes`, `MoonLiveBuiltins.h:188` |
-| distinct members | **8** | `kMaxCtrls`, same file |
-| branch labels | **16** (an `if` or `for` takes up to 2) | `kIrLabels`, `MoonLiveIr.h:228` |
+| script state | **64 bytes** shared by all members | `kCtrlBytes`, `MoonLiveBuiltins.h` |
+| distinct members | **16** ✅ | `kMaxCtrls`, same file |
+| branch labels | **40** in the IR, **48** labels and **96** fixups in the assembler, counted across the whole script (an `if` or `for` takes up to 2) | `kIrLabels`, `kAsmLabels`, `kAsmFixups`, `MoonLiveIr.h` |
 | frame slots | **32**, shared by live variables, loop counters and staged call arguments ✅ | `kMaxLocals`, `MoonLiveIr.h` |
 | ~~numeric types~~ | ~~`uint8_t`, `uint16_t`, `int16_t`~~ → **`int`, `byte`, `bool`, `fixed`, `string`** ✅ | still no float: `fixed` is Q16.16 |
 | ~~builtin table~~ | ~~16, and 16 used~~ → **96** ✅ | `BuiltinTable::kMax` — raised, with an overflow assert |
@@ -54,7 +54,7 @@ Each row is a compromise the balls effect makes, and the language feature that w
 
 | forced to | because | wants |
 |---|---|---|
-| 4 objects, not 25 | 64-byte arena, 8 members | a bigger arena, or a pool handle (shipped for particles) |
+| 4 objects, not 25 | 64-byte arena | a bigger arena, or a pool handle (shipped for particles) |
 | whole-pixel motion | no fractional type | fixed-point or float |
 | one flat colour | no `hsv()` builtin | `hsv()` |
 | one array per field | no structs | structs |
@@ -234,7 +234,9 @@ Doing #1 and #2 together is what actually opens the library; either alone leaves
 
 ### 3. A bigger arena and more members: *check the handle route first; storage rules now in the type-system design above*
 
-64 bytes across 8 members is why an effect holds four objects rather than twenty-five.
+64 bytes of member data is why an effect holds four objects rather than twenty-five.
+
+**More members: ✅ shipped (2026-10-07).** `kMaxCtrls` is 16, measured at +280 bytes per scripted module on the S3 (class size 1312 → 1592 B). The StadBeest legs need 11 members, 6 controls and 5 values kept between frames, and before the raise packed four of those values into one `int` by bit ranges. The arena stays at 64 bytes, and the rest of this section is about the arena.
 
 **The two limits bind at very different points, and it is the COUNT that bites first.**
 `fractal.mle` wanted 4 controls plus 4 scratch members plus a loop counter: 9 members costing
@@ -242,8 +244,8 @@ Doing #1 and #2 together is what actually opens the library; either alone leaves
 have to be a member), so the script lost nothing, but the ceiling it hit was `kMaxCtrls` with 81%
 of the arena still free. Any script with a handful of controls and a handful of intermediates
 meets the same wall. If only one of the two moves, the count is the one worth moving: the four
-tables it sizes are `DeclaredControl[8]` at 24 B each, so 8 -> 12 costs 96 B per engine and
-roughly 600 B per device across three engines, against `sizeof(MoonLive)` at 864 B today.
+tables it sizes were `DeclaredControl[8]` at 24 B each; the raise to 16 measured +280 B per
+scripted module on the S3.
 
 **But check the handle route first.** The power-functions spec's item 5 — a particle pool as an
 arena-allocated HANDLE — means a simulation effect stops storing its own particle state entirely,
@@ -258,8 +260,8 @@ Not purely a constants bump, and the blockers are known:
   (`MoonLive.h:355`) is the real gate. Past 64 bytes the seeded-member mask needs re-indexing —
   and there is a worked example, because it was widened 16 → 64 once already. The assert exists
   because the earlier `uint32_t` version silently aliased members mod 32.
-- Watch `sizeof(MoonLive)`. It is held BY VALUE in every scripted module and constructed on the
-  main task's stack by `registerType`'s probe, which is what boot-looped the P4 at 1440 bytes.
+- Watch `sizeof(MoonLive)`. It is held BY VALUE in every scripted module. `registerType`'s probe
+  builds one on the heap, since a probe on the boot stack is what boot-looped the P4 at 1440 bytes.
   Growing the arena grows every scripted module.
 
 ### 4. `setPaletteColor()` — ✅ *shipped*
@@ -428,7 +430,7 @@ layers (2026-09-04). **The return value shipped the same day**, so two remain:
 
 | limit | what the compiler says |
 |---|---|
-| no parameters | `a script function takes no arguments yet` |
+| more than four parameters | `a function takes at most 4 parameters` |
 | no forward calls: a helper must be declared ABOVE its caller | `unknown function`, with the column but not the name |
 
 A function may now RETURN a value: `int f() { return ...; }` and the call is an expression. Each
@@ -474,7 +476,7 @@ script value cannot express however signed it is.
 
 ### 8. More branch labels — *probably a constant, worth measuring first*
 
-16 is tight enough that a straightforward nested draw does not fit. Raising `kIrLabels` costs
+16 is tight enough that a straightforward nested draw does not fit. The limits are now 40 IR labels and 48 assembler labels with 96 fixups, and two scripts still hit them on 2026-10-07: the StadBeest legs with a bass envelope, and the StadBeest eye with darts, blinks and a ripple, each at roughly 20 to 25 `if`s across all its functions. Both fit only after branches were rewritten as arithmetic (§ 11). Raising `kIrLabels` costs
 compile-time table space and nothing at run time. Measure what a realistic effect needs before
 picking a number — the balls port wanted ~12 and had to be folded down.
 
@@ -554,6 +556,21 @@ smaller half and the one an effect reaches for first: a script holding `Coord3D 
 the parallel-array flattening this item exists to remove, and the element width the array path
 already carries (`idxPack`) is the machinery it needs. An array of a USER struct needs the general
 declaration machinery above it. Worth building in that order if this is picked up.
+
+### 11. What the StadBeest legs and eyes hit (2026-10-07)
+
+Two effects written in one session on real hardware: `stadbeest-legs.mle` (a walk cycle on 10 tubes, dancing to music) and `stadbeest-eyes.mle` (a frog's eye on a 241-light ring disc). Besides the member and label limits above, each of these cost a workaround:
+
+| limit | what it cost | wants |
+|---|---|---|
+| no `\|\|` or `&&` | every compound condition is nested `if`s, which spends labels twice; the eye writes `pulse * music == 1` and `(r2 - lo) * (hi - r2) > 0` instead | the two logical operators, short-circuit |
+| no `abs`, `min`, `max`, `clamp` | every clamp is an `if`; the eye takes `abs` as `polarR(x, 0)` and `max(v, 0)` as `(v + polarR(v, 0)) / 2` | those four builtins, which also give back labels |
+| "codegen failed: assembler overflow (branch range, slot, or immediate)" | names neither the limit nor the line; finding it took a desktop bisect with `disasm.py` | the message names the table that ran out and the function it was filling |
+| "too many arguments to hold" | fires when the eye's `tick()` held too many live locals, so the wording sends the author to the calls | a message about live variables when that is the cause |
+| a failed recompile leaves the effect dark | on a live installation every edit that does not compile switches the light off until a fixed one arrives; it happened three times in the session | keep running the last program that compiled, and show the error beside it |
+| `setPaletteColor` clamps the palette index | a palette is circular, but `hue + offset` past 255 sticks at the last color unless the script writes `mod(..., 256)` | wrap the index, as the palette itself does |
+| an effect visits every grid pixel | the eye computes 1600 pixels to light 241, and the legs' grid is mostly empty between 10 tubes | a way to iterate only the layout's lights, for sparse layouts |
+| a `bool` control takes a min and a max | `addControl("pulse", pulse, 0, 1)` | `addControl(name, flag)` for a bool |
 
 ## How to know a step landed
 

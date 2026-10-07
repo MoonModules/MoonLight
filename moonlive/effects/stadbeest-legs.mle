@@ -1,50 +1,132 @@
-// StadBeestLegs: a crawl travelling down ten legs, each offset so the rig reads as walking.
+// StadBeestLegs: a walk in waves, each side's legs lifting one after another from back to front, the two sides half a cycle apart; with music it steps on the beat and lifts with the volume.
 
 class StadBeestLegsEffect {
-  byte hue = 100;
-  byte bpm = 12;
-  byte spread = 60;
-  byte tail = 40;
-  byte audioReactive = 0;
+  byte bpm = 60;
+  byte swing = 77;
+  byte lift = 186;
+  byte stand = 64;
+  byte sensitivity = 128;
+  bool pulse = true;
+
+  int lastBeat = -100000; // when the last beat started, in ms
+  int beatMs = 500;       // the music's beat, measured
+  int steps = 0;          // beats stepped so far
+  bool wasOnBeat = false; // whether the last frame was on a beat, so one beat steps once
+  byte flash = 0;         // the beat's flash, fading
 
   int dimensions() { return 2; }
 
-  string tags() { return "💫🎶"; }
+  string tags() { return "💫🎵"; }
 
   void defineControls() {
-    addControl("hue", hue, 0, 255); // base color: 100 is a sickly green, 200 violet
-    addControl("bpm", bpm, 1, 60); // how fast the pulses travel down a leg
-    addControl("spread", spread, 0, 255); // how far apart the legs are in the gait
-    addControl("tail", tail, 5, 120); // how long a pulse's trail is
-    addControl("audioReactive", audioReactive, 0, 1); // each leg takes its own frequency band
+    addControl("bpm", bpm, 1, 255); // twice this many legs lift a minute on each side; with music, more or fewer to a beat
+    addControl("swing", swing, 1, 255); // how much of a cycle a leg is in the air
+    addControl("lift", lift, 0, 255); // how far a foot lifts, as a share of the leg
+    addControl("stand", stand, 0, 255); // the brightness of a leg on the ground
+    addControl("sensitivity", sensitivity, 0, 255); // with music, step on its beat and lift with its loudness; 0 ignores the music
+    addControl("pulse", pulse, 0, 1); // with music, the lights flash on its beat
+  }
+
+  // One leg lit from its top down to the foot, `len` lights long, at `level` of 256, its colors anchored to the foot: `hue` there and half the palette up to the top.
+  void drawLeg(int leg, int len, int level, int hue) {
+    int n = 10;
+    if (n > width) { n = width; }
+    int gap = 1;
+    if (n > 1) { gap = div(width - 1, n - 1); }
+    int x = leg * gap;
+    for (int y = 0; y < len; y = y + 1) {
+      int d = len - y;
+      int bright = level - 1;
+      if (d < 8) { bright = div(d * bright, 8); }
+      setPaletteColor(x, y, mod(hue + div(d * 128, height), 256), bright);
+    }
   }
 
   void tick() {
-    for (int leg = 0; leg < width; leg = leg + 1) {
-      int phase = div(leg * spread, 4);
+    fill(0, 0, 0);
+    // Ten legs, right front to right back then left back to left front.
+    int n = 10;
+    if (n > width) { n = width; }
+    int half = div(n, 2);
+    if (half < 1) { half = 1; }
+    int per = div(256, half);
 
-      int drive = 255;
-      if (audioReactive == 1) {
-        drive = audioBand(div(leg * 16, width)) + 40;
-        if (drive > 255) { drive = 255; }
+    // A beat lifts the next leg, and the time between beats sets the tempo.
+    int onBeat = audioBeat();
+    // The flash fades by a sixteenth each frame, out before the next beat.
+    flash = flash - div(flash + 15, 16);
+    if (onBeat == 1) {
+      if (wasOnBeat == 0) {
+        int gapMs = t - lastBeat;
+        if (gapMs > 250) {
+          if (gapMs < 1500) { beatMs = div(beatMs * 3 + gapMs, 4); }
+          lastBeat = t;
+          steps = steps + 1;
+          flash = 255;
+        }
       }
+    }
+    wasOnBeat = onBeat;
 
-      int head = div(beat(bpm, t + phase) * height, 65536);
-      int shimmer = div(noise(leg * 900, 0, t), 6);
-
-      for (int y = 0; y < height; y = y + 1) {
-        int behind = y - head;
-        if (behind < 0) { behind = behind + height; }
-
-        int bright = 0;
-        if (behind < tail) { bright = 255 - div(behind * 255, tail); }
-
-        bright = bright + shimmer - div(y * 12, height);
-        if (bright > 255) { bright = 255; }
-        bright = div(bright * drive, 256);
-
-        setPaletteColor(leg, y, hue + div(y * 40, height), bright);
+    // One clock, 256 to a full cycle in which every leg lifts once.
+    int stepMs = div(30000, bpm);
+    int clock = div(t, stepMs) * per + div(mod(t, stepMs) * per, stepMs);
+    int up = div(height * lift, 256);
+    int music = 0;
+    int loud = 0;
+    if (sensitivity > 0) {
+      if (t - lastBeat < 2000) { music = 1; }
+    }
+    if (music == 1) {
+      int into = div((t - lastBeat) * per, beatMs);
+      if (into > per) { into = per; }
+      // A leg a beat around bpm 60, halving or doubling from there, so the legs stay on the beat.
+      clock = steps * per + into;
+      if (bpm < 45) {
+        clock = div(clock, 2);
+        if (bpm < 23) { clock = div(clock, 2); }
       }
+      if (bpm >= 90) {
+        clock = clock * 2;
+        if (bpm >= 180) { clock = clock * 2; }
+      }
+      // Louder lifts higher, from the set lift towards the whole leg.
+      loud = div(audioSmooth() * sensitivity, 64);
+      if (loud > 255) { loud = 255; }
+      up = up + div((height - up) * loud, 512);
+    }
+    int air = swing;
+
+    for (int leg = 0; leg < n; leg = leg + 1) {
+      // Counted from the back of its side, so the wave runs back to front.
+      int side = 0;
+      int fromFront = leg;
+      if (leg >= half) {
+        side = 1;
+        fromFront = n - 1 - leg;
+      }
+      int back = half - 1 - fromFront;
+      int q = clock + 1024 - back * per - side * 128;
+      int p = mod(q, 256);
+
+      // In the air the foot follows a half sine: lifting, then setting down, brighter than the legs it stands on.
+      int len = height;
+      int level = stand;
+      int ramp = 64;
+      if (p < air) {
+        ramp = div(p * 64, air);
+        int rise = sin(div(p * 32768, air)) - 32768;
+        len = height - div(up * rise, 32767);
+        if (len < 1) { len = 1; }
+        level = stand + div((256 - stand) * rise, 32767);
+      }
+      // Pulsing, a beat flashes to full brightness and fades to a quarter.
+      if (pulse == 1) {
+        if (music == 1) { level = div(level * (64 + div(flash * 3, 4)), 256); }
+      }
+      // A leg's colors move only while it is in the air, a quarter palette a step, so every leg passes through the whole palette.
+      int hue = mod(div(q, 256) * 64 + ramp + 4096 - back * per * 2 - side * 64, 256);
+      drawLeg(leg, len, level, hue);
     }
   }
 }

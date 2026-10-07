@@ -1,6 +1,8 @@
 #pragma once
 
+#include "core/moonlive/MoonLive.h"   // runDefineControls drives the engine
 #include "core/moonlive/MoonLiveBuiltins.h"
+#include "core/util/ThreadSlot.h"   // the per-thread table the control sink lives in
 #include "core/util/math8.h"    // beatsin16: the shared time vocabulary
 #include "core/util/math16.h"   // beat16 / sin16 / cos16: full-range waveforms
 #include "core/util/noise.h"    // inoise8: the shared gradient-noise field
@@ -138,6 +140,57 @@ extern "C" inline uint32_t mm_ml_print(const uintptr_t* args, uint32_t, const ui
     return v;
 }
 
+// A builtin has no receiver, so the binding installs one for the run.
+/// Where a running `defineControls()` sends each `addControl`.
+using AddControlFn = void (*)(void* ctx, const char* name, uint8_t offset,
+                              int32_t lo, int32_t hi, CtrlType type);
+/// The control sink one thread's run installed.
+struct AddControlSink { AddControlFn fn = nullptr; void* ctx = nullptr; };
+
+namespace detail {
+/// One thread's control sink, in the slot it claims.
+struct ControlSlot { std::atomic<uintptr_t> owner{0}; AddControlSink sink; };
+// constinit rather than a function-local static, whose thread-safe guard is a lock.
+inline constinit ControlSlot gControlSlots[2]{};
+}  // namespace detail
+
+/// The control sink for this thread, or an empty one; reading claims no slot.
+inline const AddControlSink& addControlSink() {
+    detail::ControlSlot* s = ownedThreadSlot(detail::gControlSlots, false);
+    static constinit AddControlSink none{};
+    return s ? s->sink : none;
+}
+
+// False when the table is full, which the caller must not treat as an installed sink.
+/// Point addControl at a consumer for one defineControls run; nullptr to detach.
+inline bool setAddControlSink(AddControlFn fn, void* ctx) {
+    detail::ControlSlot* s = ownedThreadSlot(detail::gControlSlots, fn != nullptr);
+    if (!s) return false;
+    s->sink = {fn, ctx};
+    if (!fn) releaseThreadSlot(s);
+    return true;
+}
+
+// The compiler packs args[1]: the low byte is the arena offset, the next the type.
+/// Surface a member as a control within a range; its declared type decides the kind.
+extern "C" inline uint32_t mm_ml_addControl(const uintptr_t* args, uint32_t, const uint8_t*) {
+    // The name points into the compiled program's string pool, which outlives the run.
+    const char* name = reinterpret_cast<const char*>(args[0]);
+    const CtrlType type = static_cast<CtrlType>((args[1] >> 8) & 0xff);
+    const AddControlSink s = addControlSink();
+    if (!name || !s.fn || !s.ctx) return 0;      // no binding listening: the call is a no-op
+    // An arbitrary expression can exceed the member's type, and a wrapped slider top is invisible.
+    const int32_t lo = int32_t(args[2]), hi = int32_t(args[3]);
+    const int32_t limit = (type == CtrlType::Byte) ? 255 : (type == CtrlType::Bool) ? 1 : INT32_MAX;
+    if (lo > limit || hi > limit) return 0;
+    // A byte and a bool are unsigned, so a negative low bound became min 251 with max 100.
+    if ((type == CtrlType::Byte || type == CtrlType::Bool) && lo < 0) return 0;
+    // With min above max the write path rejects every value the slider could offer.
+    if (lo > hi) return 0;
+    s.fn(s.ctx, name, static_cast<uint8_t>(args[1] & 0xff), lo, hi, type);
+    return 0;
+}
+
 // Both vocabularies call this first and then add their own, so a name means one thing everywhere.
 /// Register the neutral builtins into whatever table asks.
 inline void addCommonBuiltins(BuiltinTable& t) {
@@ -159,6 +212,34 @@ inline void addCommonBuiltins(BuiltinTable& t) {
     t.add({"random16", 1, /*returns*/ true, BuiltinKind::Call, &mm_ml_random16, {}});
     // print: the script author's only debugger.
     t.add({"print", 1, /*returns*/ true, BuiltinKind::Call, &mm_ml_print, {}});
+    // addControl declares a setting; bit 1 of byRef passes the member's offset and type, not its value.
+    t.add({"addControl", 4, /*returns*/ false, BuiltinKind::Call, &mm_ml_addControl, {},
+           /*byRef*/ 0x2, /*byStr*/ 0x1});
+}
+
+// Run once after a successful compile, where a compiled module's defineControls() sits.
+/// The entry a binding runs so the controls a script declares exist.
+inline constexpr const char* kEntryDefineControls = "defineControls";
+
+/// What a binding attaches around a defineControls run, for the sizing its own builtins ask for.
+using DefineHook = void (*)(void* ctx, bool attach);
+
+// Re-runnable like its compiled counterpart, since the declared list is cleared first.
+/// Run a script's defineControls, so the controls it declares exist.
+inline void runDefineControls(MoonLive& engine, DefineHook hook = nullptr, void* hookCtx = nullptr) {
+    if (!engine.hasEntry(kEntryDefineControls)) return;   // nothing to clear and nothing to run
+    // Install before clearing, since a clear-then-run with the table full would drop every control.
+    if (!setAddControlSink([](void* ctx, const char* n, uint8_t off,
+                              int32_t lo, int32_t hi, CtrlType type) {
+            static_cast<MoonLive*>(ctx)->addDeclaredControl(n, off, lo, hi, type);
+        }, &engine)) return;
+    if (hook) hook(hookCtx, true);
+    engine.clearDeclaredControls();      // re-runnable: rebuild rather than append
+    // This entry point writes no pixels, but `run` refuses a null or undersized buffer.
+    uint8_t scratch[3] = {};
+    engine.run(scratch, 1, 3, 0, kEntryDefineControls);
+    if (hook) hook(hookCtx, false);
+    setAddControlSink(nullptr, nullptr);
 }
 
 /// @}

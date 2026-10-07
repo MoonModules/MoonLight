@@ -13,6 +13,13 @@ namespace mm {
 /// A module's role, which identifies its type without RTTI and drives the UI's rendering.
 enum class ModuleRole : uint8_t { Generic, Effect, Modifier, Driver, Layout, Layer, Service };
 
+/// Which axes a module works in, so the layer can extrude lower-dimensional output across the rest.
+enum class Dim : uint8_t {
+    D1 = 1,
+    D2 = 2,
+    D3 = 3,
+};
+
 /// The lowercase role name, so the string cannot drift between one API route and another.
 inline const char* roleName(ModuleRole role) {
     switch (role) {
@@ -56,8 +63,9 @@ inline const char* roleName(ModuleRole role) {
 /// Each module reports its instance size, its heap, and its tick time.
 class MoonModule {
 public:
+    // noexcept, so a failed allocation yields nullptr rather than a constructor running on null.
     /// Allocate in PSRAM where the platform offers it.
-    void* operator new(size_t size) { return platform::alloc(size); }
+    void* operator new(size_t size) noexcept { return platform::alloc(size); }
     /// Return the allocation above.
     void operator delete(void* ptr) noexcept { platform::free(ptr); }
 
@@ -191,9 +199,6 @@ public:
     /// Build this node's derived state for the current controls, the acquire half of the lifecycle.
     virtual void prepare() {}
 
-    /// Read the first output light as RGB, or false where this module has no output.
-    virtual bool firstOutputRgb(uint8_t /*out*/[3]) const { return false; }
-
     /// A name's buffer, terminator included: the longest stripped type name with headroom; setName truncates past it.
     static constexpr uint8_t kNameLen = 16;
     /// This module's human label, which the user may rename.
@@ -307,6 +312,9 @@ public:
 
     /// A file changed through the API or a restore; a module that keeps something read from files updates what concerns it.
     virtual void onFileChanged(const char* /*path*/) {}
+
+    /// A list control's rows changed in `owner`; a module that resolves something from that list re-resolves it.
+    virtual void onListChanged(const MoonModule& /*owner*/) {}
 
     /// Whether the user may delete or replace this module, which a load-bearing child declines.
     virtual bool userEditable() const { return true; }

@@ -10,7 +10,7 @@
 /// These pin the three cases plus the one that used to be a bug waiting to happen: both readers (the compiler and the change-detector) must resolve to the SAME file, or a fork would be compiled from one and hashed from the other and recompile on every prepare sweep forever.
 
 #include "doctest.h"
-#include "light/moonlive/MoonLiveScriptFile.h"
+#include "core/moonlive/MoonLiveScriptFile.h"
 #include "platform/platform.h"
 
 #include <cstdio>

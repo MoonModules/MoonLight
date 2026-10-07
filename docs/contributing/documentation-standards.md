@@ -287,9 +287,9 @@ These are traps, not style: each one silently loses content from the generated p
     /// ## Terminology
     ```
 
-    A renamed heading leaves the anchor pointing at nothing, and the generator drops the dead link rather than failing. So `check_docgen` verifies that every `@xref` names a heading in the same file. The reverse is not a rule: a `@moreinfo` section is an appendix a reader scrolls to, and most are reached that way rather than through a link.
+    A renamed heading leaves the anchor pointing at nothing, and the generator drops the dead link rather than failing. So `check_docgen` verifies that every `@xref` names a heading in the same file. The reverse is counted. A `@moreinfo` section that no `@xref` in its file and no link from a page or another source reaches is a section nothing refers to. It is a warning whose count only falls, since a section no reader is sent to is the first to cut.
 
-    **A section written to hold a comment's depth carries an `@xref` back from that comment.** Moving the reasoning out is what keeps the code readable; the anchor is what keeps it findable. The reader at the line that raises the question gets a link to the answer. Where no single line owns the section, the appendix stands alone and the reverse rule above applies.
+    **A section written to hold a comment's depth carries an `@xref` back from that comment.** Moving the reasoning out is what keeps the code readable; the anchor is what keeps it findable. The reader at the line that raises the question gets a link to the answer. Where no single line owns the section, a page that sends readers there links it as `moxygen/<Stem>.md#<slug>`, or the section is a candidate to cut.
 - **Wrap any `<tag>` in backticks**, or it renders as a live element and swallows the page.
 - **Write "such as", not "e.g."** The brief ends at the first period.
 - **A weasel that CONTRASTS is information.** "bytes actually allocated" against requested, "the factor actually in use" against configured: the word carries the distinction the comment exists to draw. Vale flags the word rather than the use, which is why its Weasel rule is a suggestion.

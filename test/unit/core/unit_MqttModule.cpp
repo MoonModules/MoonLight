@@ -60,6 +60,7 @@
 #include "core/system/ControlModule.h"
 #include "core/system/FilesystemModule.h"
 #include "core/util/ModuleFactory.h"
+#include "fake_light_output.h"   // the fake Drivers is the light output too
 #include "light/effects/NoiseEffect.h"
 #include "light/layers/Layer.h"
 #include "light/layers/Effects.h"
@@ -76,8 +77,8 @@ using namespace mm;
 
 namespace {
 
-// Stands in for Drivers: on (Bool), brightness (Uint8 0-255), palette (Select). Named "Drivers" so MqttModule's setControl("Drivers", …) resolves to it.
-struct FakeDrivers : public MoonModule {
+// Stands in for Drivers, named so setControl("Drivers", …) resolves to it, and is the light output so the color mapping is exact.
+struct FakeDrivers : public MoonModule, public mm::test::FakeLightOutput {
     bool on = true;
     uint8_t brightness = 100;
     uint8_t palette = 0;
@@ -87,6 +88,8 @@ struct FakeDrivers : public MoonModule {
         // The real 0..255 range, so a nearest-palette index is not clamped away by an artificially small Select: @xref{the-fake-carries-the-real-ranges}.
         controls_.addControl("palette", palette, 0, 255);
     }
+    void setup() override { outputSeat_.claim(); MoonModule::setup(); }
+    void release() override { outputSeat_.vacate(); MoonModule::release(); }
 };
 
 // A scheduler with FakeDrivers, a SystemModule and an MqttModule, set up so controls are bound: @xref{the-mac-is-derived-never-written-out}.
@@ -199,10 +202,10 @@ TEST_CASE("MqttModule: brightness/set rescales 0-100 to 0-255") {
 
 TEST_CASE("MqttModule: hsv/set maps a hue to the nearest palette + value to brightness") {
     Rig r;
-    // A blue-ish hue at full saturation should pick a blue-family palette (a non-zero index, not Rainbow at 0). We assert it moved off the default and that value drove brightness.
+    // The light output answers which palette is nearest; MQTT routes the hue there and the value to brightness.
     r.drivers->palette = 0;
     r.publish("hsv/set", "210,100,40");      // blue, sat 100%, value 40%
-    CHECK(r.drivers->palette != 0);               // snapped to some blue-family palette
+    CHECK(r.drivers->palette == 7);               // the fake's palette at 210 degrees
     CHECK(r.drivers->brightness == (40 * 255) / 100);   // value → brightness
 }
 

@@ -48,13 +48,6 @@ private:
 /// A count of lights, and the index the mapping stores: wider with PSRAM, half the size without.
 using nrOfLightsType = std::conditional_t<platform::hasPsram, uint32_t, uint16_t>;
 
-/// Which axes a module works in, so the layer can extrude lower-dimensional output across the rest.
-enum class Dim : uint8_t {
-    D1 = 1,
-    D2 = 2,
-    D3 = 3,
-};
-
 /// @}
 
 } // namespace mm

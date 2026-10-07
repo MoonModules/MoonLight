@@ -12,8 +12,8 @@
 #include "light/drivers/Correction.h"
 #include "light/util/Palette.h"   // the global active palette + its select control
 #include "light/moonlive/MoonLivePalette.h"   // a palette computed per frame by a script
-#include "light/moonlive/script_catalog.h"       // the tags each factory palette declares
-#include "core/util/LightSummary.h"   // the POD published for the domain-neutral WLED/MQTT consumers
+#include "core/moonlive/script_catalog.h"       // the tags each factory palette declares
+#include "core/util/LightOutput.h"   // the seam the domain-neutral WLED, MQTT and MoonStats consumers read
 #include "platform/platform.h"
 
 #include <cstring>  // std::strcmp in onControlChanged
@@ -42,19 +42,27 @@ namespace mm {
 /// Capital `Drivers` is this container; lowercase "driver" is one `DriverBase` child.
 ///
 /// @card Drivers.png
-class Drivers : public MoonModule {
+class Drivers : public MoonModule, public LightOutput {
 public:
     // Drivers only, so the picker is not buried under every generic system module.
     /// Which child roles the "+ add" picker offers under Drivers.
     const char* acceptsChildRoles() const override { return "driver"; }
 
-    // Defaulted to an all-zero summary, so a consumer always reads a valid POD rather than null.
-    /// The live light-pipeline summary, for the domain-neutral core consumers.
-    static const LightSummary* latestSummary() {
-        static const LightSummary kNone{};
-        Drivers* a = ActiveInstance<Drivers>::active();
-        return a ? &a->summary_ : &kNone;
+    /// The live light-pipeline summary.
+    const LightSummary& summary() const override { return summary_; }
+    /// The built-in palette nearest a color wheel's hue and saturation.
+    uint8_t nearestPalette(uint16_t hue, uint8_t sat) const override { return Palettes::nearestForHue(hue, sat); }
+    // A script computes its entries only while it runs, so a scripted index reads the active palette, which is the one a caller asks about.
+    /// A palette's representative hue and saturation, built-in or scripted.
+    void paletteHueSat(uint8_t index, uint16_t& hue, uint16_t& sat) const override {
+        if (LivePalettes::isLive(index)) Palettes::hueSatOf(*Palettes::active(), hue, sat);
+        else Palettes::representativeHueSat(index, hue, sat);
     }
+    /// The built-ins and the scripted tail.
+    uint8_t paletteCount() const override { return mm::paletteCount(); }
+    /// Every palette name, in picker order.
+    void writePaletteNames(JsonSink& sink) const override { mm::paletteNames(sink); }
+    using LightOutput::nearestPalette;   // the RGB form, beside the override
 
     // Each seat REFERENCES this object's members, so leaving one published dangles a live reader.
     /// Release the children, then vacate every static seat this container published.
@@ -63,6 +71,7 @@ public:
         stopEncodeTask();
         renderSplitActive_ = false;
         seat_.vacate();
+        outputSeat_.vacate();
         // The palette seam references this object's name arrays rather than copying them.
         LivePalettes::clear(livePtrs_);
         // Effects::tick runs this every frame, so a dead Drivers would keep executing its script.
@@ -473,21 +482,9 @@ public:
         // One POD, overwritten in place, pulled by the domain-neutral consumers.
         summary_.lightCount = out ? static_cast<uint32_t>(out->physicalLightCount()) : 0;
         summary_.channelsPerLight = out ? out->channelsPerLight() : 3;
-        seat_.claim();   // first live Drivers wins the summary seat (claim-if-empty; one exists in practice)
+        seat_.claim();         // first live Drivers wins (claim-if-empty; one exists in practice)
+        outputSeat_.claim();   // and is the light output core reads
         passBufferToDrivers();
-    }
-
-    // Logical channel order: the per-strip wire reorder is applied later, by the drivers.
-    /// The first driven light's RGB, for a consumer that shows one color for the device.
-    bool firstOutputRgb(uint8_t out[3]) const override {
-        const Buffer* src = nullptr;
-        if (outputBuffer_.data()) src = &outputBuffer_;
-        else if (Layer* l = effects_ ? effects_->firstEnabledLayer() : layer_; l && l->buffer().data())
-            src = &l->buffer();
-        if (!src || src->count() == 0 || src->channelsPerLight() < 3) return false;
-        const uint8_t* p = src->data();
-        out[0] = p[0]; out[1] = p[1]; out[2] = p[2];
-        return true;
     }
 
     void tick() MM_NONBLOCKING override {
@@ -543,6 +540,7 @@ private:
     // The RAII vacate is the same dangling-static guard the mic and registry seats use.
     LightSummary summary_;
     ActiveInstance<Drivers> seat_{*this};
+    ActiveInstance<LightOutput> outputSeat_{*this};
 
     // The boundary is one shared buffer: core 0 waits on encodeDone_ before overwriting it.
     platform::WorkerTask encodeTask_{};

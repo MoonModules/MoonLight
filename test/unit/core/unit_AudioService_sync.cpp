@@ -39,7 +39,7 @@
 
 #include "doctest.h"
 #include "core/services/AudioService.h"
-#include "light/util/WLEDAudioSyncPacket.h"
+#include "core/util/WLEDAudioSyncPacket.h"
 #include "platform/platform.h"
 
 #include <cstdint>

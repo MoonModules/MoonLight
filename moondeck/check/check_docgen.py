@@ -147,6 +147,8 @@ MAX_LEAD_LINE_CHARS = 400
 # (`lead N chars > M`), and the prefix alone also matched the word budget (`comment line N words`),
 # each a differently motivated rule silently demoted.
 _LINE_LENGTH_RULES = ("doc line ", "comment line ")
+# Staged as the line-length cap is: a new rule over the sections written before it, so it counts and ratchets rather than stopping commits.
+_UNREFERENCED_RULE = "unreferenced appendix section"
 # The one rule staged the OTHER way: an implementation file's hard wrap blocks too. The tree is at
 # zero, so nothing is held hostage, and a split sentence reflows every line it spans on the next
 # word change, which costs a reviewer the same in a `.cpp` as in a header.
@@ -197,6 +199,8 @@ def _blocks(key: str, why: str = "") -> bool:
     if why.startswith(_HARD_WRAP_RULE):
         return True
     if why.startswith(_LINE_LENGTH_RULES) and "chars >" in why:
+        return False
+    if why.startswith(_UNREFERENCED_RULE):
         return False
     return _generates_a_page(key.partition("::")[0])
 
@@ -404,7 +408,7 @@ _RULE_NAMES = (
     "public function has no", "public variable has no", "second column",
     "file opens with //", "file lead missing", "@moreinfo on a member", "@xref",
     "code comment", "comment line", "doc line", "lead",
-    "appendix section",
+    "unreferenced appendix section", "appendix section",
     "class comment", "member comment", "no image", "image is", "one control",
     "description", "controls", "doc sentence", "hard wrap",
 )
@@ -427,6 +431,7 @@ _RULE_LABELS = {
     "doc line": "over-wide doc lines",
     "lead": "over-long leads",
     "appendix section": "over-long appendix sections",
+    "unreferenced appendix section": "appendix sections nothing refers to",
     "@moreinfo on a member": "@moreinfo on a member",
     "@xref": "unresolved @xref",
     "no image": "cards with no image",
@@ -1083,8 +1088,7 @@ def _header_rules(rel: str, text: str):
     # An `@xref{anchor}` names a heading on the SAME generated page. When the heading is renamed
     # the link resolves to nothing, and `_strip_unresolved_anchor_links` drops it silently: the
     # reader loses the cross-reference and no build says so. Checking it here is what makes the
-    # rename visible. The reverse (every section must be referenced) is NOT a rule: a `@moreinfo`
-    # section is an appendix a reader scrolls to, and 101 headers carry one that nothing links.
+    # rename visible. The reverse, a section nothing refers to, is `_unreferenced_sections`.
     _xref_resolves_rule(rel, lines, out)
 
     # PER SECTION, not per appendix. A whole-appendix cap punishes a file for having several
@@ -1351,6 +1355,55 @@ def _orphan_pages():
             for domain, name in sorted(pages - linked)]
 
 
+def _appendix_sections(lines: list[str]) -> list[str]:
+    """The `## ` headings of a file's `@moreinfo` appendices, in order, skipping fenced examples as the section budget does."""
+    out = []
+    for i, ln in enumerate(lines):
+        if "@moreinfo" not in ln:
+            continue
+        fenced = False
+        for m in lines[i + 1:]:
+            if not m.lstrip().startswith("///"):
+                break
+            text = re.sub(r"^\s*///\s?", "", m).strip()
+            if text.startswith("```"):
+                fenced = not fenced
+            elif not fenced and text.startswith("## "):
+                out.append(text[3:].strip())
+    return out
+
+
+def _unreferenced_sections():
+    """Appendix sections no `@xref` in their file and no link from a page or another source reaches.
+
+    A section only a reader scrolling past finds is the first to cut: the appendix total falls by
+    removing what no reader is sent to. A link names the section as `moxygen/<Stem>.md#<slug>`,
+    or as `<Stem>.h#<slug>`, which the docs hook retargets at the generated page.
+    """
+    link_re = re.compile(r"(?:moxygen/(\w+)\.md|\b(\w+)\.h)#([a-z0-9-]+)")
+    linked = set()
+    sources = [p for p in (ROOT / "docs").rglob("*.md") if "moxygen" not in p.parts]
+    sources += [ROOT / rel for rel in _headers()]
+    for path in sources:
+        for m in link_re.finditer(path.read_text(encoding="utf-8", errors="ignore")):
+            linked.add((m.group(1) or m.group(2), m.group(3)))
+    out = []
+    for rel in _headers():
+        # Only a page can be linked into; an implementation file's appendix is read in the file.
+        if _generates_a_page(rel.as_posix()):
+            out += _unreferenced_in(rel.as_posix(), (ROOT / rel).read_text(encoding="utf-8").split("\n"), linked)
+    return out
+
+
+def _unreferenced_in(rel: str, lines: list[str], linked: set) -> list:
+    """One file's appendix sections that neither its own `@xref`s nor the `(stem, slug)` links in `linked` reach."""
+    xrefs = {m.group(1).strip().rstrip("\\") for ln in lines for m in re.finditer(r"@xref\{([^}|]+)", ln)}
+    stem = Path(rel).stem
+    return [(f"{rel}::@moreinfo {section}", f"{_UNREFERENCED_RULE}: no @xref or link reaches it")
+            for section in _appendix_sections(lines)
+            if _slugify_heading(section) not in xrefs and (stem, _slugify_heading(section)) not in linked]
+
+
 def _duplicate_group_ids():
     """Each `@defgroup` id is claimed by one header.
 
@@ -1466,6 +1519,7 @@ def _violations():
         out.extend(_header_rules(rel.as_posix(), (ROOT / rel).read_text(encoding="utf-8")))
     out.extend(_duplicate_group_ids())
     out.extend(_orphan_pages())
+    out.extend(_unreferenced_sections())
     return out
 
 
@@ -1563,9 +1617,10 @@ def _write_report(found, appendix=None) -> None:
              if appendix is not None else []),
            "An error is in a file that generates a documentation page, a header or a catalog page, "
            "so the finding is a defect in what gets published and it fails the gate. A warning is "
-           "in an implementation file, which publishes nothing: its comments are a note to the "
-           "next reader, worth fixing without being worth stopping a commit for. Both are counted "
-           "here, because a warning nobody sees is a warning nobody fixes.", "",
+           "worth fixing without being worth stopping a commit for: any finding in an implementation "
+           "file, which publishes nothing, and the rules still staged as counts in a header too, the "
+           "over-wide line and the appendix section nothing refers to. Both are counted here, "
+           "because a warning nobody sees is a warning nobody fixes.", "",
            "The split is temporary. It stages the sweep rather than ranking the two kinds of "
            "comment, so when the warning column reaches zero it goes and every finding blocks.", "",
            "## By rule", "", "| Rule | Errors | Warnings |", "|---|---:|---:|"]
@@ -1782,12 +1837,12 @@ def main() -> int:
                     print(f"    {rel}: {a} -> {b}")
         print("  Fix them, or say in the commit why the rule itself changed.\n")
     if errors:
-        _report(errors, "ERRORS, in files that generate a page. These fail the gate.")
+        _report(errors, "ERRORS. These fail the gate.")
     if warnings:
         if errors:
             print()
-        _report(warnings, "WARNINGS, in files that generate no page. Worth fixing, "
-                          "not worth blocking a commit.")
+        # Not "files that generate no page": the staged rules (line length, unreferenced sections) warn in headers too.
+        _report(warnings, "WARNINGS. Worth fixing, not worth blocking a commit.")
     print("\nCut first. Move only what neither the code, the test name nor the spec says,"
           "\nand prefer an existing home over a new appendix section."
           "\nRules: docs/contributing/documentation-standards.md § The card.")

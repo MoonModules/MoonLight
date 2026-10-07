@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/moonlive/MoonLive.h"
-#include "light/moonlive/script_catalog.h"
+#include "core/moonlive/script_catalog.h"
 #include "core/util/fnv.h"   // the shipped names, for isFactoryScript below
 #include "platform/platform.h"
 
@@ -38,92 +38,6 @@ inline constexpr const char* kLayoutExt   = ".mll";
 inline constexpr const char* kModifierExt = ".mlm";
 inline constexpr const char* kServiceExt  = ".mls";
 inline constexpr const char* kPaletteExt  = ".mlp";
-
-// A working example rather than an empty file, which would fail to parse the moment it is made.
-/// What a new script starts out as, per role.
-inline constexpr const char* kEffectTemplate =
-    "class NewEffect {\n"
-    "  byte bpm = 60;\n"
-    "\n"
-    "  void defineControls() {\n"
-    "    addControl(\"bpm\", bpm, 1, 255);\n"
-    "  }\n"
-    "\n"
-    "  void tick() {\n"
-    "    fill(scale(beat(bpm, t), 256), 0, 100);\n"
-    "  }\n"
-    "}\n";
-
-inline constexpr const char* kLayoutTemplate =
-    "class NewLayout {\n"
-    "  byte cols = 16;\n"
-    "  byte rows = 16;\n"
-    "\n"
-    "  void defineControls() {\n"
-    "    addControl(\"cols\", cols, 1, 64);\n"
-    "    addControl(\"rows\", rows, 1, 64);\n"
-    "  }\n"
-    "\n"
-    "  void placeLights() {\n"
-    "    for (y = 0; y < rows; y = y + 1) {\n"
-    "      for (x = 0; x < cols; x = x + 1) {\n"
-    "        addLight(x, y, 0);\n"
-    "      }\n"
-    "    }\n"
-    "  }\n"
-    "}\n";
-
-inline constexpr const char* kModifierTemplate =
-    "class NewModifier {\n"
-    "  void modifyLogical() {\n"
-    "    setXYZ(width - 1 - xPos, yPos, zPos);\n"
-    "  }\n"
-    "}\n";
-
-/// A service template: poll a pin on the 50 Hz tick, and write the control surface on a change.
-inline constexpr const char* kServiceTemplate =
-    "class NewService {\n"
-    "  int pin = 0;\n"
-    // 1 is the level an idle pull-up reads, so the first tick sees no change that never happened.
-    "  int last = 1;\n"
-    "\n"
-    "  void defineControls() {\n"
-    "    addControl(\"pin\", pin, 0, 48);\n"
-    "  }\n"
-    "\n"
-    "  void tick20ms() {\n"
-    "    int now = gpioRead(pin);\n"
-    "    if (now != last) {\n"
-    "      last = now;\n"
-    // Inverted, since active-low wiring means a pressed button reads 0.
-    "      setControl(\"switch1\", 1 - now);\n"
-    "    }\n"
-    "  }\n"
-    "}\n";
-
-/// The template a new palette script starts from.
-inline constexpr const char* kPaletteTemplate =
-    "class NewPalette {\n"
-    "  byte bpm = 20;\n"
-    "\n"
-    "  void defineControls() {\n"
-    "    addControl(\"bpm\", bpm, 1, 120); // how fast the colors move\n"
-    "  }\n"
-    "\n"
-    "  void tick() {\n"
-    "    for (int i = 0; i < 16; i = i + 1) {\n"
-    "      setPalEntryHSV(i, scale(beat(bpm, t), 256) + i * 16, 255, 255);\n"
-    "    }\n"
-    "  }\n"
-    "}\n";
-
-// Beside the directory they name, rather than repeated in each binding.
-/// What a `script` control tells the UI: the directory, the extension, and the new-file template.
-inline constexpr const char* kEffectPick[3]   = {kScriptDir, kEffectExt,   kEffectTemplate};
-inline constexpr const char* kLayoutPick[3]   = {kScriptDir, kLayoutExt,   kLayoutTemplate};
-inline constexpr const char* kModifierPick[3] = {kScriptDir, kModifierExt, kModifierTemplate};
-inline constexpr const char* kServicePick[3]  = {kScriptDir, kServiceExt,  kServiceTemplate};
-inline constexpr const char* kPalettePick[3]  = {kScriptDir, kPaletteExt,  kPaletteTemplate};
 
 // One definition, because two copies drifted and the linker picked whichever it liked.
 /// Whether `ext` is one of the script extensions.

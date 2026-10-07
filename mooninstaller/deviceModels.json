@@ -765,7 +765,7 @@
         "id": "Ethernet",
         "parent_id": "Network",
         "controls": {
-          "ethBoard": "P4-NANO"
+          "ethBoard": "P4 RMII"
         }
       }
     ]
@@ -1000,7 +1000,7 @@
         "id": "Ethernet",
         "parent_id": "Network",
         "controls": {
-          "ethBoard": "P4-NANO"
+          "ethBoard": "P4 RMII"
         }
       },
       {
@@ -1068,7 +1068,7 @@
         "id": "Ethernet",
         "parent_id": "Network",
         "controls": {
-          "ethBoard": "P4-NANO"
+          "ethBoard": "P4 RMII"
         }
       },
       {
@@ -1125,7 +1125,7 @@
         "id": "Ethernet",
         "parent_id": "Network",
         "controls": {
-          "ethBoard": "P4-NANO"
+          "ethBoard": "P4 RMII"
         }
       },
       {
@@ -1215,7 +1215,7 @@
         "id": "Ethernet",
         "parent_id": "Network",
         "controls": {
-          "ethBoard": "P4-NANO"
+          "ethBoard": "P4 RMII"
         }
       }
     ]
@@ -1265,7 +1265,7 @@
         "id": "Ethernet",
         "parent_id": "Network",
         "controls": {
-          "ethBoard": "S31 CoreBoard"
+          "ethBoard": "S31 RGMII"
         }
       },
       {

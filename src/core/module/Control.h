@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
+#include "core/util/Ipv4.h"     // parseDottedQuad: an IPv4 control's text
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -11,24 +12,6 @@
 #endif
 
 namespace mm {
-
-/// Parse "A.B.C.D" into four octets, returning false on anything else; `out` is written only on success, as `inet_pton` does.
-inline bool parseDottedQuad(const char* s, uint8_t out[4]) {
-    if (!s) return false;
-    uint8_t q[4];
-    const char* p = s;
-    for (int idx = 0; idx < 4; idx++) {
-        char* end = nullptr;
-        long v = std::strtol(p, &end, 10);
-        if (end == p || v < 0 || v > 255) return false;
-        q[idx] = static_cast<uint8_t>(v);
-        // Three dots between the octets, and nothing after the last (e.g. "1.2.3.4x" fails).
-        if (*end != (idx == 3 ? '\0' : '.')) return false;
-        p = end + 1;
-    }
-    std::memcpy(out, q, 4);
-    return true;
-}
 
 /// Format four octets as "A.B.C.D", which sixteen bytes always fits.
 inline void formatDottedQuad(char out[16], const uint8_t ip[4]) {

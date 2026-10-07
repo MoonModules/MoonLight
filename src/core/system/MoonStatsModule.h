@@ -29,10 +29,9 @@
 #include "core/module/Scheduler.h"
 #include "core/util/build_info.h"
 #include "platform/platform.h"
-#include "core/util/LightSummary.h"          // lightCount: the POD the light domain publishes
-#include "light/drivers/Drivers.h"      // Drivers::latestSummary(): the real light total
+#include "core/util/LightOutput.h"           // lightSummary: the real light total the light domain publishes
 #include "core/util/ModuleFactory.h"      // displayNameFor: the TYPE label, not the instance name
-#include "light/moonlive/MoonLiveScriptFile.h"  // isFactoryScript: a shipped name is ours, not yours
+#include "core/moonlive/MoonLiveScriptFile.h"  // isFactoryScript: a shipped name is ours, not yours
 
 namespace mm {
 
@@ -343,12 +342,11 @@ private:
         }
 
         JsonSink body;
-        const LightSummary* lights = Drivers::latestSummary();
         // Only on an upgrade: the server reads its presence as what makes a row one.
         const char* prev = (kind == MoonStatsEvent::Upgrade) ? previousVersion() : nullptr;
         buildMoonStatsReport(body, tree, count,
                              kind, id, runningVersion_, prev,
-                             lights ? lights->lightCount : 0,
+                             lightSummary().lightCount,
                              static_cast<uint32_t>(platform::totalHeap()),
                              static_cast<uint32_t>(platform::freeHeap()),
                              sched->fps());

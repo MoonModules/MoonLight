@@ -1,7 +1,7 @@
 #pragma once
 
 #include "doctest.h"
-#include "light/moonlive/MoonLiveScriptFile.h"
+#include "core/moonlive/MoonLiveScriptFile.h"
 #include "platform/platform.h"
 
 #include <atomic>

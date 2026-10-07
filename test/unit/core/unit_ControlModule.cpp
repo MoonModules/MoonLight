@@ -61,8 +61,8 @@ struct Device {
         scheduler.setup();
     }
 
-    // The surface seat is static: freeing this ControlModule vacates it, or the first test's would answer active() for every later one.
-    ~Device() { delete control; std::filesystem::remove_all(root_); }
+    // Every seat is static: releasing and freeing the tree vacates them, or the first test's modules would answer active() for every later one.
+    ~Device() { scheduler.release(); std::filesystem::remove_all(root_); }
 
     mm::MoonModule* add(mm::MoonModule* parent, const char* type) {
         auto* m = mm::ModuleFactory::create(type);

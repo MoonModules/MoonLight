@@ -238,30 +238,7 @@ public:
         return p;
     }
 
-    // --- Representative color, for mapping an external color wheel onto a palette --- 
-
-    /// Representative hue (0..359) of built-in `index`.
-    static uint16_t representativeHue(uint8_t index) {
-        uint16_t hue = 0, sat = 0;
-        representativeHueSat(index, hue, sat);
-        return hue;
-    }
-
-    /// Representative RGB color of built-in `index`: the palette's identity color, for any external
-    static RGB representativeRgb(uint8_t index) {
-        uint16_t hue = 0, sat = 0;
-        representativeHueSat(index, hue, sat);
-        // hue 0..359 → h 0..255 for hsvToRgb's 6-sector integer map (Palette.h convention.
-        return hsvToRgb(static_cast<uint8_t>((hue * 256u) / 360u),
-                        static_cast<uint8_t>(sat), 255);
-    }
-
-    /// RGB to the nearest palette: the one call every RGB-input consumer should reach for rather
-    static uint8_t nearestForRgb(uint8_t r, uint8_t g, uint8_t b) {
-        uint16_t hue = 0, sat = 0;
-        rgbToHueSat(r, g, b, hue, sat);
-        return nearestForHue(hue, static_cast<uint8_t>(sat));
-    }
+    // --- Representative color, for mapping an external color wheel onto a palette ---
 
     /// The palette whose representative (hue, sat) is closest to the target, by 2D distance in (circular-hue, saturation) space.
     static uint8_t nearestForHue(uint16_t hue, uint8_t sat) {
@@ -285,7 +262,11 @@ public:
 
     /// Compute a palette's representative hue (0..359) + saturation (0..255) from the average of its expanded RGB entries.
     static void representativeHueSat(uint8_t index, uint16_t& hueOut, uint16_t& satOut) {
-        const Palette p = fromBuiltin(index);
+        hueSatOf(fromBuiltin(index), hueOut, satOut);
+    }
+
+    /// A palette's representative hue (0..359) and saturation (0..255), from the average of its entries.
+    static void hueSatOf(const Palette& p, uint16_t& hueOut, uint16_t& satOut) {
         uint32_t rs = 0, gs = 0, bs = 0;
         for (uint8_t i = 0; i < Palette::kEntries; i++) {
             rs += p.entry[i].r; gs += p.entry[i].g; bs += p.entry[i].b;
@@ -297,21 +278,6 @@ public:
     }
 
 private:
-    /// Integer RGB → (hue 0..359, saturation 0..255).
-    static void rgbToHueSat(uint8_t r, uint8_t g, uint8_t b, uint16_t& hue, uint16_t& sat) {
-        const uint8_t mx = r > g ? (r > b ? r : b) : (g > b ? g : b);
-        const uint8_t mn = r < g ? (r < b ? r : b) : (g < b ? g : b);
-        const uint8_t delta = static_cast<uint8_t>(mx - mn);
-        if (delta == 0 || mx == 0) { hue = 0; sat = 0; return; }
-        sat = static_cast<uint16_t>((static_cast<uint32_t>(delta) * 255) / mx);
-        int32_t h;
-        if (mx == r)      h = 60 * (static_cast<int32_t>(g) - b) / delta;
-        else if (mx == g) h = 120 + 60 * (static_cast<int32_t>(b) - r) / delta;
-        else              h = 240 + 60 * (static_cast<int32_t>(r) - g) / delta;
-        if (h < 0) h += 360;
-        hue = static_cast<uint16_t>(h % 360);
-    }
-
     /// Default to a full rainbow (index 0).
     static inline Palette active_ = fromBuiltin(0);
 };

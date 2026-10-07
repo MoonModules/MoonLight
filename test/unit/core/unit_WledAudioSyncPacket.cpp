@@ -1,9 +1,9 @@
 /// @module WledAudioSyncPacket
 
-/// Pins the WLED audio-sync wire format, the 44-byte v2 packet MoonLight broadcasts on UDP 11988 and that WLED / MoonLight (D_WLEDAudio.h) receive. A wire format breaks silently, so build → parse is round-tripped AND a golden byte vector fixes the exact offsets: the packet is a fixed compatibility contract (netmindz/WLED-sync), not ours to drift. (Same rigor as the Improv frame golden vector.)
+/// Pins the WLED audio-sync wire format, the 44-byte v2 packet on UDP 11988, with a round trip and a golden byte vector, since a wire format breaks silently.
 
 #include "doctest.h"
-#include "light/util/WLEDAudioSyncPacket.h"
+#include "core/util/WLEDAudioSyncPacket.h"
 
 #include <cstdint>
 #include <cstring>
@@ -39,7 +39,7 @@ TEST_CASE("build produces a 44-byte v2 packet with the exact WLED layout") {
     CHECK(wledGetFloatLE(pkt + 8) == doctest::Approx(200.0f));
     // sampleSmth = levelSmoothed at offset 12
     CHECK(wledGetFloatLE(pkt + 12) == doctest::Approx(150.0f));
-    // samplePeak at 16; byte 17 is WLED's `reserved2` ("not used yet") and MUST be zero, not a counter of ours: WLED transmits 0 there and may claim the byte in a later version.
+    // samplePeak at 16; byte 17 is WLED's `reserved2` and stays zero, since WLED may claim it in a later version.
     CHECK(pkt[16] == 1);
     CHECK(pkt[17] == 0);
     // fftResult[16] = bands at offset 18
@@ -51,7 +51,7 @@ TEST_CASE("build produces a 44-byte v2 packet with the exact WLED layout") {
     CHECK(wledGetFloatLE(pkt + 40) == doctest::Approx(440.0f));
 }
 
-// WLED clamps every band to 254 on send (constrain(fftResult[i], 0, 254)), so 255 never appears on the wire. A receiver written against WLED may treat 255 as a value real data cannot carry. The magnitude crosses in WLED's units and comes back in ours, so a MoonLight pair round-trips exactly while a WLED peer reads the value its own effects expect.
+// WLED clamps bands to 254 and sends WLED units, so a MoonLight pair round-trips exactly and a WLED peer reads what its effects expect.
 TEST_CASE("FFT_Magnitude carries WLED units and round-trips back to ours") {
     AudioFrame f{};
     f.peakMag = 144;                     // WLED's "full brightness" threshold after its /16
@@ -119,7 +119,7 @@ TEST_CASE("parse rejects wrong length, wrong header, v1, and null") {
 }
 
 TEST_CASE("parse clamps NaN / out-of-range floats instead of undefined casts") {
-    // A foreign packet passes the header check but carries hostile float payloads. wledFloatToU16 must bound them to [0, 65535] rather than let static_cast<uint16_t> of a NaN / huge / negative float produce an undefined result.
+    // A foreign packet can pass the header check with hostile floats, so wledFloatToU16 bounds NaN, huge and negative values to 0..65535.
     AudioFrame f = sampleFrame();
     uint8_t pkt[WLED_SYNC_PACKET_SIZE];
     buildWledAudioSync(pkt, f, false);

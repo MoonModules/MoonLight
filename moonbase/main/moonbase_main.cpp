@@ -73,7 +73,7 @@ constexpr int kHttpPort = 80;
 
 // The app's known networks in its priority order, tried as the app tries them.
 constexpr uint8_t kMaxNetworks = 8;
-struct Network { char ssid[33]; char password[65]; };
+struct Network { char ssid[33]; char password[65]; mm::configscrape::SavedIp ip; };
 Network networks_[kMaxNetworks] = {};
 uint8_t networkCount_ = 0;
 // The app's own access point, named after the device and protected as the user set it, so a phone on it stays on through the restart into this image.
@@ -101,6 +101,9 @@ struct {
     int  clockGpio  = 0;
     bool clockExtIn = true;
 } ethCfg_;
+
+// The Ethernet card's addressing, so a board the app pins to a static address answers there in recovery too.
+mm::configscrape::SavedIp ethIp_;
 
 // The board's WiFi TX cap in dBm, 0 for none: a board that browns out at full power must not do so in recovery.
 int txPowerDbm_ = 0;
@@ -150,6 +153,8 @@ void loadCredentials() {
                && mm::configscrape::findNetwork(buf, networkCount_, networks_[networkCount_].ssid, sizeof(Network::ssid),
                                                 networks_[networkCount_].password, sizeof(Network::password)))
             networkCount_++;
+        for (uint8_t k = 0; k < networkCount_; k++) networks_[k].ip = mm::configscrape::findNetworkIp(buf, k);
+        ethIp_ = mm::configscrape::findChildIp(buf, "EthernetModule");
         mm::configscrape::findInt(buf, "ethType",       &ethCfg_.type);
         mm::configscrape::findInt(buf, "ethPhyAddr",    &ethCfg_.phyAddr);
         mm::configscrape::findInt(buf, "ethRstGpio",    &ethCfg_.rstGpio);
@@ -170,6 +175,30 @@ void loadCredentials() {
 // Network
 // ---------------------------------------------------------------------------------------------
 
+// Pin a static address as the app does, once the link is up, when ESP-IDF lets DHCP stop; one the app refuses is refused here.
+bool pinStatic(esp_netif_t* netif, const mm::configscrape::SavedIp& s) {
+    if (!netif || !s.usable()) return false;
+    esp_netif_dhcpc_stop(netif);
+    esp_netif_ip_info_t info = {};
+    IP4_ADDR(&info.ip,      s.ip[0],      s.ip[1],      s.ip[2],      s.ip[3]);
+    IP4_ADDR(&info.gw,      s.gateway[0], s.gateway[1], s.gateway[2], s.gateway[3]);
+    IP4_ADDR(&info.netmask, s.subnet[0],  s.subnet[1],  s.subnet[2],  s.subnet[3]);
+    esp_netif_set_ip_info(netif, &info);
+    if (s.dns[0] || s.dns[1] || s.dns[2] || s.dns[3]) {
+        esp_netif_dns_info_t dns = {};
+        dns.ip.type = ESP_IPADDR_TYPE_V4;
+        IP4_ADDR(&dns.ip.u_addr.ip4, s.dns[0], s.dns[1], s.dns[2], s.dns[3]);
+        esp_netif_set_dns_info(netif, ESP_NETIF_DNS_MAIN, &dns);
+    }
+    return true;
+}
+
+esp_netif_t* ethNetif_ = nullptr;
+esp_netif_t* staNetif_ = nullptr;
+// The known network being tried, whose addressing its connection applies, and whether the one before pinned a static address.
+volatile int staCurrent_ = -1;
+volatile bool staPinned_ = false;
+
 void onGotIp(void*, esp_event_base_t, int32_t id, void*) {
     // Registered for every IP event; only an acquired STA address means online (IP_EVENT_STA_LOST_IP arrives on the same base and must not set the bit).
     if (id == IP_EVENT_STA_GOT_IP || id == IP_EVENT_ETH_GOT_IP)
@@ -177,13 +206,23 @@ void onGotIp(void*, esp_event_base_t, int32_t id, void*) {
 }
 
 void onWifiEvent(void*, esp_event_base_t, int32_t id, void*) {
+    // Static has no lease to announce it, so the connection is the moment it is online.
+    if (id == WIFI_EVENT_STA_CONNECTED && staCurrent_ >= 0) {
+        const bool pinned = pinStatic(staNetif_, networks_[staCurrent_].ip);
+        if (!pinned && staPinned_) esp_netif_dhcpc_start(staNetif_);   // a network after a static one leases again
+        staPinned_ = pinned;
+        if (pinned) xEventGroupSetBits(netEvents_, kNetGotIp);
+    }
     if (id == WIFI_EVENT_STA_DISCONNECTED) xEventGroupSetBits(netEvents_, kNetStaDown);
     if (switchingNetwork_) return;
     if (id == WIFI_EVENT_STA_START || id == WIFI_EVENT_STA_DISCONNECTED) esp_wifi_connect();
 }
+void onEthEvent(void*, esp_event_base_t, int32_t id, void*) {
+    if (id == ETHERNET_EVENT_CONNECTED && pinStatic(ethNetif_, ethIp_)) xEventGroupSetBits(netEvents_, kNetGotIp);
+}
+
 // Bring up the on-chip MAC as the app's config wires it, staying installed without a link so a later cable still gets an address.
 esp_eth_handle_t ethHandle_ = nullptr;
-esp_netif_t* ethNetif_ = nullptr;
 
 bool ethStart() {
 #if !SOC_EMAC_SUPPORTED
@@ -195,6 +234,7 @@ bool ethStart() {
     esp_netif_config_t netif_cfg = ESP_NETIF_DEFAULT_ETH();
     esp_netif_t* netif = esp_netif_new(&netif_cfg);
     if (!netif) return false;
+    esp_event_handler_instance_register(ETH_EVENT, ETHERNET_EVENT_CONNECTED, &onEthEvent, nullptr, nullptr);
 
     eth_mac_config_t mac_config = ETH_MAC_DEFAULT_CONFIG();
     eth_esp32_emac_config_t emac_config = ETH_ESP32_EMAC_DEFAULT_CONFIG();
@@ -224,14 +264,15 @@ bool ethStart() {
         esp_netif_destroy(netif);
         return false;
     }
+    ethNetif_ = netif;   // before the start, since the link can come up before this returns
     if (esp_netif_attach(netif, esp_eth_new_netif_glue(handle)) != ESP_OK ||
         esp_eth_start(handle) != ESP_OK) {
         esp_eth_driver_uninstall(handle);   // frees mac + phy
         esp_netif_destroy(netif);
+        ethNetif_ = nullptr;
         return false;
     }
     ethHandle_ = handle;
-    ethNetif_ = netif;
     return true;
 #endif  // SOC_EMAC_SUPPORTED
 }
@@ -250,7 +291,7 @@ void ethStop() {
 // Try each known network in turn for a bounded time, as the app does. Returns whether an address arrived.
 bool wifiStation(uint32_t waitMs) {
     if (!networkCount_) return false;
-    esp_netif_create_default_wifi_sta();
+    staNetif_ = esp_netif_create_default_wifi_sta();
     wifi_init_config_t init = WIFI_INIT_CONFIG_DEFAULT();
     if (esp_wifi_init(&init) != ESP_OK) return false;
     esp_wifi_set_mode(WIFI_MODE_STA);
@@ -270,6 +311,7 @@ bool wifiStation(uint32_t waitMs) {
         std::strncpy(reinterpret_cast<char*>(cfg.sta.ssid), networks_[k].ssid, sizeof(cfg.sta.ssid) - 1);
         std::strncpy(reinterpret_cast<char*>(cfg.sta.password), networks_[k].password, sizeof(cfg.sta.password) - 1);
         const bool configured = esp_wifi_set_config(WIFI_IF_STA, &cfg) == ESP_OK;
+        staCurrent_ = k;   // each known network keeps its own addressing, as in the app
         switchingNetwork_ = false;
         if (!configured) continue;   // the next network, never the previous one under this one's turn
         // The first starts the radio, whose start event connects; each later one connects itself.

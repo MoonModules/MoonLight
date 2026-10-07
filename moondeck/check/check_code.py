@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The code report: one page of counts that only fall, in the shape docgen.md and prose.md have.
 
-Each rule is a textbook measure with a known tool: cyclomatic complexity, function length, nesting depth and parameter count from lizard, duplicated blocks from jscpd, file length and the two architecture boundaries counted here, and the blocking calls the render path reaches from Clang's `-Wfunction-effects` through check_nonblocking's build, a clean rebuild of the desktop that costs minutes. A finding is listed per file, so a touched file clears its own rows and leaves the list. The committed docs/reference/metrics/code.md is the number to beat, per rule and in total.
+Each rule is a textbook measure with a known tool: cyclomatic complexity, function length, nesting depth and parameter count from lizard, duplicated blocks from jscpd, file length, the two architecture boundaries, module types named in the UI, name spread and buffers taken by hand in the light domain counted here, and the blocking calls the render path reaches and the stack frames over 512 bytes from the compiler's `-Wfunction-effects` and `-Wframe-larger-than` through check_nonblocking's build, a clean rebuild of the desktop that costs minutes. A finding is listed per file, so a touched file clears its own rows and leaves the list. The committed docs/reference/metrics/code.md is the number to beat, per rule and in total.
 
 Lizard tokenizes rather than parses, which is what lets it run in a second with no build; the cost is a mangled name on some template-dense bodies. Counting per FILE rather than whitelisting per function name is what makes that harmless: a file's count is right whatever lizard calls the function.
 
@@ -39,6 +39,12 @@ MAX_FILE_LINES = 1000
 # jscpd's defaults: a clone is this many lines sharing this many tokens, so renamed variables still match and a changed structure does not.
 MIN_CLONE_LINES = 5
 MIN_CLONE_TOKENS = 50
+# Change amplification: a type more files name than this, beyond its own, costs that many edits when it changes. No tool sets a default, so the limit sits where the pipeline's spine (Layer, the containers, a fixture layout) stands out.
+MAX_SPREAD = 10
+# The compiler's -Wframe-larger-than, set in CMakeLists.txt to this number: a task's stack is sized for its deepest call, so one large frame costs every task that reaches it.
+MAX_FRAME = 512
+# The four containers main.cpp pins as the tree's roots, which the UI's tabs are built from: naming them is the UI's contract rather than knowledge of a module.
+UI_CONTRACT = {"Layouts", "Effects", "Drivers", "Services"}
 
 # Firmware C++ only: src/ui is JavaScript served to the browser, and the vendor header is upstream's. -ENS adds the nesting depth column.
 LIZARD_ARGS = ["src/", "-l", "cpp", "-x", "src/ui/*", "-x", "src/platform/desktop/vendor/*", "-ENS"]
@@ -49,6 +55,10 @@ FILE_EXCLUDE = ("src/platform/desktop/vendor/", "src/ui/vendor/", "test/doctest.
 HOT_PATH = "blocking call on the render path"
 PLATFORM = "platform code outside src/platform"
 CORE_LIGHT = "light include in core"
+UI_TYPE = "module type in the UI"
+SPREAD = "name spread"
+STACK = "large stack frame"
+RAW_ALLOC = "raw allocation in light"
 RULES = {"complex function": f"cyclomatic complexity > {MAX_CCN}",
          "long function": f"> {MAX_NLOC} lines of code",
          "deeply nested": f"control flow nested deeper than {MAX_NESTING}",
@@ -57,10 +67,14 @@ RULES = {"complex function": f"cyclomatic complexity > {MAX_CCN}",
          "large file": f"> {MAX_FILE_LINES} lines",
          HOT_PATH: "a call from tick, tick20ms or tick1s that can block or allocate",
          PLATFORM: "a vendor header or a platform #ifdef outside src/platform",
-         CORE_LIGHT: "a src/core file including a light/ header"}
+         CORE_LIGHT: "a src/core file including a light/ header",
+         UI_TYPE: "a registered type's name as a string literal in src/ui",
+         SPREAD: f"a type named in more than {MAX_SPREAD} files beyond its own",
+         STACK: f"a function whose stack frame is over {MAX_FRAME} bytes",
+         RAW_ALLOC: "an array new, malloc or platform::alloc in src/light outside ScratchBuffer"}
 LIMITS = {"complex function": MAX_CCN, "long function": MAX_NLOC, "deeply nested": MAX_NESTING,
           "long parameter list": MAX_PARAMS, "duplicated block": MIN_CLONE_LINES, "large file": MAX_FILE_LINES, HOT_PATH: 1,
-          PLATFORM: 1, CORE_LIGHT: 1}
+          PLATFORM: 1, CORE_LIGHT: 1, UI_TYPE: 1, SPREAD: MAX_SPREAD, STACK: MAX_FRAME, RAW_ALLOC: 1}
 # The catalog move for each smell (Fowler, Refactoring), so a finding says how it is solved; the table is coding-standards § From a finding to a fix.
 FIXES = {"complex function": "a chain on one value becomes a table; a switch on a state becomes one method per state",
          "long function": "Extract Function: a named step a reader can skip",
@@ -70,7 +84,11 @@ FIXES = {"complex function": "a chain on one value becomes a table; a switch on 
          "large file": "Extract Class, Move Function: a module per concern",
          HOT_PATH: "Move the work off the render thread (a worker, a cached value, a deferred apply), or annotate a callee that cannot block",
          PLATFORM: "Move it behind a function in src/platform, and branch on platform_config.h with if constexpr",
-         CORE_LIGHT: "Dependency Inversion: core declares the interface, and the light domain implements and registers it"}
+         CORE_LIGHT: "Dependency Inversion: core declares the interface, and the light domain implements and registers it",
+         UI_TYPE: "Replace Conditional with Polymorphism: the module declares what the UI needs (a control, a role, a flag) and the UI reads it",
+         SPREAD: "Move Function, self-registration: a concept in one place, which callers reach through its role or an interface",
+         STACK: "Move the large local into a member or a ScratchBuffer, sized once, so no task's stack pays for it",
+         RAW_ALLOC: "Replace the allocation with a ScratchBuffer member, which owns, sizes and frees it"}
 
 
 def measure(extra=None):
@@ -203,14 +221,62 @@ def boundary_rows() -> list:
     return rows
 
 
+def registered_types() -> set:
+    """The factory's type names, from the one reader check_devices owns."""
+    from check_devices import registered_types as read
+    return read()
+
+
+_STRING_WORD_RE = re.compile(r"""(['"`])(\w+)\1""")
+
+
+def ui_type_rows(types: set) -> list:
+    """Every registered type the browser code names in a string, less the containers the UI is built from."""
+    rows = []
+    for rel in owned_files():
+        if not (rel.startswith("src/ui/") and rel.endswith(".js")):
+            continue
+        with open(ROOT / rel, encoding="utf-8", errors="replace") as f:
+            for n, line in enumerate(f, 1):
+                for m in _STRING_WORD_RE.finditer(line.split("//")[0]):
+                    if m.group(2) in types and m.group(2) not in UI_CONTRACT:
+                        rows.append((rel, UI_TYPE, f"line {n}: '{m.group(2)}'", 1))
+    return rows
+
+
+def spread_rows(types: set) -> list:
+    """Each type named in more than MAX_SPREAD files beyond its own, as a row on the header that declares it.
+
+    A type's own files are the ones named for it (its header, its implementation, its tests), and the registry that lists every type is no one's.
+    """
+    named = defaultdict(set)
+    home = {}
+    for rel in owned_files():
+        text = (ROOT / rel).read_text(encoding="utf-8", errors="replace")
+        for word in set(re.findall(r"\b[A-Z]\w+\b", text)) & types:
+            named[word].add(rel)
+            # The header named for the type, else one defining it: a forward declaration ends in `;`.
+            if rel.startswith("src/") and rel.endswith(".h") and (
+                    Path(rel).stem == word or re.search(rf"\b(?:class|struct)\s+{word}\b(?!\s*;)", text)):
+                if Path(rel).stem == word or word not in home:
+                    home[word] = rel
+    rows = []
+    for t in sorted(named):
+        own = {f for f in named[t] if Path(f).stem == t or Path(f).stem.startswith(f"unit_{t}")}
+        others = named[t] - own - {"src/module_types.cpp"}
+        if len(others) > MAX_SPREAD:
+            rows.append((home.get(t, "src/module_types.cpp"), SPREAD, f"{t} in {len(others)} files", len(others)))
+    return rows
+
+
 class BuildMissing(Exception):
     """The desktop build the hot path is read from is absent or does not compile."""
 
 
-def hotpath_rows() -> list | None:
-    """One row per render-path call site that can block or allocate, a float conversion at a formatTo site included.
+def build_warnings() -> str | None:
+    """The desktop build's saved compiler warnings, which the hot path and the stack frames are read from.
 
-    None when this host's compiler cannot measure it (no Clang 20 -Wfunction-effects), which skips the rule; BuildMissing when the build is absent or fails, which fails the run rather than reading as a clean tree.
+    None when this host's compiler cannot measure them (no Clang 20 -Wfunction-effects), which skips both rules; BuildMissing when the build is absent or fails, which fails the run rather than reading as a clean tree.
     """
     import check_nonblocking as nb
     build_dir = nb.check_clang_tidy._host_build_dir()
@@ -222,10 +288,57 @@ def hotpath_rows() -> list | None:
     out = nb.build_output(build_dir)
     if out is None:
         raise BuildMissing("The desktop build failed, so the hot path cannot be read.")
+    return out
+
+
+def hotpath_rows(out: str) -> list:
+    """One row per render-path call site that can block or allocate, a float conversion at a formatTo site included."""
+    import check_nonblocking as nb
     rows = [(r["file"], HOT_PATH, f"{r['callee']} in {r['fn'] or '?'}", 1) for r in nb.collect(out)]
     for site in nb.float_conversions_on_the_hot_path():
         file, line = site.rsplit(":", 1)
         rows.append((file, HOT_PATH, f"a float conversion at formatTo, line {line}", 1))
+    return rows
+
+
+_FRAME_RE = re.compile(r"^(?P<path>[^:\n]+):(?P<line>\d+):\d+: warning: stack frame size \((?P<size>\d+)\) "
+                       r"exceeds limit \(\d+\) in '(?P<fn>[^']*)' \[-Wframe-larger-than\]", re.M)
+
+
+def stack_rows(out: str) -> list:
+    """One row per firmware function whose frame the compiler measured over MAX_FRAME, each template instance its own function."""
+    owned = {r for r in owned_files() if r.startswith("src/")}
+    seen = {}
+    for m in _FRAME_RE.finditer(out):
+        path = m.group("path")
+        rel = os.path.relpath(path, ROOT) if os.path.isabs(path) else path
+        if rel not in owned:
+            continue   # the SDK's headers and the vendored ones are not ours to shrink
+        fn = m.group("fn")
+        # Keyed on the whole signature, so two overloads of one name stay two functions.
+        name = fn.split("(")[0].split(" ")[-1].removeprefix("mm::") or fn or "?"
+        seen[(rel, fn)] = (rel, STACK, f"{name}, line {m.group('line')}", int(m.group("size")))
+    return list(seen.values())
+
+
+# Buffer memory the light domain takes by hand: an array `new T[n]`, or a malloc-family or platform::alloc call.
+# A factory's `new Peripheral()` is not one: it creates an object its owner holds, which is no buffer a ScratchBuffer could size.
+# `new (std::nothrow) T[n]` is the same buffer; a placement `new (slot) T` constructs into memory someone else took.
+_ALLOC_RE = re.compile(r"\bnew\s*(?:\(\s*std::nothrow\s*\)\s*)?[A-Za-z_][\w:<>]*\s*\["
+                       r"|\b(?:malloc|calloc|realloc|heap_caps_malloc|platform::alloc)\s*\(")
+
+
+def raw_alloc_rows() -> list:
+    """Every hand allocation in src/light, which the architecture homes in a ScratchBuffer member; comments do not count."""
+    rows = []
+    for rel in owned_files():
+        if not rel.startswith("src/light/") or rel.endswith(".js"):
+            continue
+        with open(ROOT / rel, encoding="utf-8", errors="replace") as f:
+            for n, line in enumerate(f, 1):
+                code = line.split("//")[0]
+                if _ALLOC_RE.search(code):
+                    rows.append((rel, RAW_ALLOC, f"line {n}: {code.strip()[:60]}", 1))
     return rows
 
 
@@ -366,15 +479,19 @@ def main() -> int:
     if report is None and not args.module:
         return 2
     dup_rows, duplicated = clone_rows(report) if report else ([], None)
-    rows = findings(funcs) + dup_rows + large_files() + boundary_rows()
+    types = registered_types()
+    rows = (findings(funcs) + dup_rows + large_files() + boundary_rows() + ui_type_rows(types) + spread_rows(types)
+            + raw_alloc_rows())
     # The hot path is a full rebuild, so the module view leaves it to the full report as it does clones; check_nonblocking --module is its detailed view.
     try:
-        hot = None if args.module else hotpath_rows()
+        warnings = None if args.module else build_warnings()
     except BuildMissing as e:
         print(e, file=sys.stderr)
         return 2
-    if hot is not None:
-        rows += hot
+    hot = None
+    if warnings is not None:
+        hot = hotpath_rows(warnings)
+        rows += hot + stack_rows(warnings)
 
     if args.module:
         import check_clang_query
@@ -391,7 +508,7 @@ def main() -> int:
     if hot is None:
         # A host without Clang 20's -Wfunction-effects cannot count the hot path: every other rule still ratchets, and the report keeps the last full count rather than losing that rule.
         print(f"SKIP {HOT_PATH}: not measurable on this host (it needs Clang 20+), so code.md is left as it is.")
-        base = {k: v for k, v in (base or {}).items() if k not in (HOT_PATH, "(total)")} or None
+        base = {k: v for k, v in (base or {}).items() if k not in (HOT_PATH, STACK, "(total)")} or None
         now = {k: v for k, v in counts(rows).items() if k != "(total)"}
     else:
         # The report is the artifact, written on every run: stdout scrolls away, the file is what the reviewer reads.

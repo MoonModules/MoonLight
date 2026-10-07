@@ -59,13 +59,10 @@
 #include "core/system/FilesystemModule.h"
 #include "core/system/FirmwareUpdateModule.h"
 #include "core/system/SystemModule.h"      // deviceName() for the WLED /json/info shim
-#include "light/moonlive/MoonLiveScriptFile.h"   // kFactoryScriptDir: where a download lands
-#include "light/moonlive/script_catalog.h"        // generated: which factory scripts exist
+#include "core/moonlive/MoonLiveScriptFile.h"   // kFactoryScriptDir: where a download lands
+#include "core/moonlive/script_catalog.h"        // generated: which factory scripts exist
 #include "core/util/build_info.h"                      // kVersion: the tag a script is fetched from
-#include "light/util/Palette.h"          // Palettes::nearestForHue: maps HA's RGB color picker onto our
-                                    // hue→palette convention (same core→light bridge MqttModule uses for hsv/set; see the note in MqttModule.cpp:7-14).
-#include "light/drivers/Drivers.h"  // Drivers::latestSummary(): the real light count/channels for
-                                    // the WLED /json shim (same one-narrow-reach as Palette above).
+#include "core/util/LightOutput.h"   // the device shape and the palettes as colors, for the WLED shim
 #include "platform/platform.h"
 #include "ui/ui_embedded.h"
 
@@ -1610,8 +1607,8 @@ void HttpServerModule::writeWledName(JsonSink& sink, const char* name) {
 void HttpServerModule::writeWledInfoBody(JsonSink& sink, const char* name, const uint8_t mac[6]) {
     sink.appendf("{\"name\":");
     writeWledName(sink, name);
-    // Real led count (the light domain's Drivers::latestSummary) + wifi rssi/signal, so the WLED app card and the WS push show the true device shape. signal maps rssi→0-100 like WLED.
-    const unsigned ledCount = Drivers::latestSummary()->lightCount;
+    // The real light count and the wifi signal, so the WLED app card shows the true device shape; signal maps rssi to 0-100 as WLED does.
+    const unsigned ledCount = lightSummary().lightCount;
     const int rssi = platform::wifiStaRssi();
     int signal = (rssi == 0) ? 0 : (2 * (rssi + 100));
     if (signal < 0) signal = 0; else if (signal > 100) signal = 100;
@@ -1626,11 +1623,12 @@ void HttpServerModule::writeWledInfoBody(JsonSink& sink, const char* name, const
 // `on` + `bri` mirror Drivers on/brightness.
 // `seg[0].col[0]` reports the ACTIVE PALETTE's identity color, not the live first-LED: so every WLED consumer (the WLED native app's device card, HA's WLED integration color picker, Homebridge's HSV via the MQTT pair, the /ws push) sees the same stable palette-representative value and matches the palette-picker → RGB round-trip.
 // Live first-LED was tried first and dropped: it dimmed the picker under low master brightness (near-black) and jittered with the effect animation ("the picked color moves": user report).
-// `Palettes::representativeRgb` returns V=255, so brightness stays HA's `state.bri × seg.bri` responsibility and doesn't double-dim.
+// The palette color is at full value, so brightness stays HA's `state.bri × seg.bri` responsibility and doesn't double-dim.
 // Rationale for the seg[0].on / seg[0].bri fields lives inline below.
 void HttpServerModule::writeWledStateBody(JsonSink& sink) {
     const uint8_t bri = driversBrightness(scheduler_);
-    const RGB pc = Palettes::representativeRgb(driversPalette(scheduler_));
+    const LightOutput* out = LightOutput::active();
+    const RGB pc = out ? out->paletteRgb(driversPalette(scheduler_)) : RGB{0, 0, 0};
     // nl/udpn/lor/transition/ps/pl/mainseg are additive to the Android-app minimum (Moshi ignores unknown/extra fields), and REQUIRED for HA's WLED integration.
     // `python-wled` parses the POST /json/state response through State.from_dict too: the same required-fields contract as /json.
     // Without them, HA `light.turn_on` succeeds on the device but the response parse raises, which HA wraps as HTTP 500 on `services/light/turn_on`. nl/udpn as empty objects satisfy the parser via their dataclass defaults; lor=0 is LiveDataOverride.OFF. seg[0].on MUST be present: HA WLED's is_on for a WLEDSegmentLight reads state.segments[<seg>].on (light.py:244), NOT top-level state.on.
@@ -1638,7 +1636,7 @@ void HttpServerModule::writeWledStateBody(JsonSink& sink) {
     // The "brightness/color work but the toggle doesn't" symptom pinned on the bench.
     const char* onStr = driversOn(scheduler_) ? "true" : "false";
     // seg[0].pal = the active palette index, so HA's WLED integration highlights the current entry in its palette dropdown (light.py reads state.segments[<seg>].palette).
-    // It shares the Drivers `palette` control with col[0] above (representativeRgb of the SAME index), so the HA palette dropdown and color picker stay two views of one value.
+    // It shares the Drivers `palette` control with col[0] above (the color of the SAME index), so the HA palette dropdown and color picker stay two views of one value.
     // Selecting a palette repaints the picker on HA's next poll, and picking a color snaps to the nearest palette (applyWledState).
     const uint8_t pal = driversPalette(scheduler_);
     // The applied look as a WLED preset slot (1-based, matching /presets.json), or -1 for none. Without this HA's preset dropdown reads "unknown" even while a preset is active, and never reflects a look chosen on the device itself.
@@ -1705,11 +1703,12 @@ void HttpServerModule::serveWledDeviceJson(platform::TcpConnection& conn) {
     const int channel = platform::wifiStaChannel();
     int signal = (rssi == 0) ? 0 : (2 * (rssi + 100));
     if (signal < 0) signal = 0; else if (signal > 100) signal = 100;
-    // Real pipeline shape from the light domain (Drivers::latestSummary) + render rate.
-    const LightSummary* ls = Drivers::latestSummary();
-    const unsigned ledCount = ls->lightCount;
+    // The real pipeline shape and render rate.
+    const LightSummary& ls = lightSummary();
+    const LightOutput* out = LightOutput::active();
+    const unsigned ledCount = ls.lightCount;
     const unsigned renderFps = scheduler_ ? scheduler_->fps() : 0;
-    const char* rgbw = (ls->channelsPerLight >= 4) ? "true" : "false";
+    const char* rgbw = (ls.channelsPerLight >= 4) ? "true" : "false";
     sink.appendf(",\"info\":{\"ver\":\"99.0.0\",\"vid\":2410150,\"name\":");
     writeWledName(sink, name);
     sink.appendf(",\"mac\":\"%02x%02x%02x%02x%02x%02x\","
@@ -1757,10 +1756,10 @@ void HttpServerModule::serveWledDeviceJson(platform::TcpConnection& conn) {
                  pmt,
                  static_cast<unsigned>(platform::freeHeap() ? platform::freeHeap() : 32768u),
                  static_cast<unsigned>(platform::millis() / 1000u),
-                 static_cast<unsigned>(mm::paletteCount()));
-    // effects + palettes: python-wled's __pre_deserialize__ turns each array into an indexed dict. effects stays one real entry ("Solid"): this shim drives a single Layer, so a longer effect list would be a lie. palettes is the REAL built-in list (Palette.h paletteNames / kBuiltins) so HA's palette dropdown offers every palette the device has, indexed to match seg[0].pal and the Drivers `palette` control: the same one-narrow-reach into light/ that the representative color uses.
+                 static_cast<unsigned>(out ? out->paletteCount() : 0));
+    // effects + palettes: python-wled's __pre_deserialize__ turns each array into an indexed dict. effects stays one real entry ("Solid"): this shim drives a single Layer, so a longer effect list would be a lie. palettes is the REAL list, so HA's palette dropdown offers every palette the device has, indexed to match seg[0].pal and the Drivers `palette` control.
     sink.appendf(",\"effects\":[\"Solid\"],\"palettes\":[");
-    mm::paletteNames(sink);
+    if (out) out->writePaletteNames(sink);
     sink.appendf("]}");
     sink.flush();
 }
@@ -1817,29 +1816,30 @@ void HttpServerModule::applyWledState(const char* body) {
     // It maps straight to the Drivers `palette` control: the direct-index counterpart to the col[] nearest-match below.
     // Both feed the same control, so the dropdown and the color picker stay one value.
     // Parsed from the segment object so a top-level stray "pal" can't hijack it.
+    const LightOutput* out = LightOutput::active();
     const char* segStart = std::strstr(body, "\"seg\":");
     const char* palStart = segStart ? std::strstr(segStart, "\"pal\":") : nullptr;
-    if (palStart) {
+    if (palStart && out) {
         int pal = mm::parseIntStr(palStart + 6);
         if (pal < 0) pal = 0;
         // Against the FULL count, built-ins plus the scripted tail, because that is exactly the list served as `palettes[]` above. Clamping to the built-ins rejected every scripted index this device had just offered, so picking one in Home Assistant silently snapped back to the last built-in.
-        if (pal >= mm::paletteCount()) pal = mm::paletteCount() - 1;
+        if (pal >= out->paletteCount()) pal = out->paletteCount() - 1;
         char valueJson[24];
         std::snprintf(valueJson, sizeof(valueJson), "{\"value\":%d}", pal);
         applySetControl("Drivers", "palette", valueJson);
     }
     // WLED color: seg[0].col[0] is [r,g,b].
     // HA's WLED integration writes here when a user picks a color in the RGB picker.
-    // Palettes::nearestForRgb is the canonical RGB→palette entry (see the comment at its declaration): it applies the same RGB→(hue,sat) conversion representativeHueSat uses on the palette side, then runs the 2D-distance sweep.
+    // The nearest palette by the same RGB to hue-and-saturation conversion the palettes' own colors take.
     // Value channel is ignored: HA's own brightness slider handles bri via the `bri` field above.
     const char* colStart = std::strstr(body, "\"col\":[[");
-    if (colStart) {
+    if (colStart && out) {
         int r = 0, g = 0, b = 0;
         if (std::sscanf(colStart + 8, "%d,%d,%d", &r, &g, &b) == 3) {
             const uint8_t rc = static_cast<uint8_t>(r < 0 ? 0 : (r > 255 ? 255 : r));
             const uint8_t gc = static_cast<uint8_t>(g < 0 ? 0 : (g > 255 ? 255 : g));
             const uint8_t bc = static_cast<uint8_t>(b < 0 ? 0 : (b > 255 ? 255 : b));
-            const uint8_t idx = mm::Palettes::nearestForRgb(rc, gc, bc);
+            const uint8_t idx = out->nearestPalette(RGB{rc, gc, bc});
             char valueJson[24];
             std::snprintf(valueJson, sizeof(valueJson), "{\"value\":%u}", static_cast<unsigned>(idx));
             applySetControl("Drivers", "palette", valueJson);
@@ -2458,11 +2458,9 @@ void HttpServerModule::afterListMutation() {
         // Mirrors the phase-2b tree-wide rebuild after persistence load.
         for (uint8_t i = 0; i < scheduler_->moduleCount(); i++)
             if (auto* m = scheduler_->module(i)) m->rebuildControls();
-        // Re-resolve each driver's preset → correction so an EDIT flows to output immediately.
-        // This is a tier-1 correction refresh (rebuildCorrection → onCorrectionChanged), NOT a tier-3 prepareTree(): a preset edit changes correction data, not pipeline STRUCTURE, so it must not re-run prepare(): that reinits each driver's output peripheral (an RMT channel teardown blanks the strip for a tick, even on drivers not using the edited preset), which Live-reconfiguration forbids (a config change applies with no visible glitch).
-        // Drivers is the one container that owns driver corrections; core already couples to it (latestSummary).
-        if (auto* drivers = static_cast<Drivers*>(findModuleByName("Drivers")))
-            drivers->rebuildAllCorrections();
+        // Each module re-resolves what it reads from the list, so an edit reaches the output at once.
+        // Not prepareTree(): re-running prepare reinitializes every driver's output, which blanks a strip for a tick.
+        if (listMutationModule_) scheduler_->notifyListChanged(*listMutationModule_);
         // The tree-wide rebuildControls() above changed visible SCHEMA (option sets, hidden flags); each of those rebuildControls() calls fires the schema-changed hook → requestFullResync(), so connected clients re-read the fresh schema. No explicit resync needed here.
     }
 }

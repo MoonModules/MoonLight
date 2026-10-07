@@ -249,6 +249,33 @@ TEST_CASE("Xtensa load32/store32 reach the WHOLE arena, not just the first 60 by
     CHECK(top.size() == 3);                // the wide form, never the 2-byte narrow one
 }
 
+// Regression: addi's immediate is a signed byte, so arguments staged at byte 132 were addressed at -124, and the script drew nothing; every slot's sum is decoded.
+TEST_CASE("Xtensa slotAddr reaches every frame slot, past the byte addi carries") {
+    using Asm = mm_xtensa_backend::mm::moonlive::XtensaAssembler;
+    using mm_xtensa_backend::mm::moonlive::R0;
+    bool reachedPast127 = false;
+    for (uint8_t slot = 0; slot < Asm::kMaxSpillSlots; slot++) {
+        Asm a(64);
+        a.slotAddr(R0, slot);
+        REQUIRE_FALSE(a.overflowed());
+        const uint8_t* b = a.bytes();
+        int32_t sum = 0;
+        if (a.size() == 3) {
+            CHECK(b[1] == 0xc1);                            // addi a2, a1
+            sum = static_cast<int8_t>(b[2]);
+        } else {
+            REQUIRE(a.size() == 6);
+            CHECK(b[1] == 0xd1);                            // addmi a2, a1
+            CHECK(b[4] == 0xc2);                            // then addi a2, a2
+            sum = static_cast<int8_t>(b[2]) * 256 + static_cast<int8_t>(b[5]);
+            reachedPast127 = true;
+        }
+        INFO("slot " << int(slot));
+        CHECK(sum == 48 + slot * 4);                        // the frame base plus the slot's word
+    }
+    CHECK(reachedPast127);                                  // the frame does reach past the byte, or this tests nothing
+}
+
 TEST_CASE("Xtensa shlImm encodes 32-n where sarImm encodes n") {
     using Asm = mm_xtensa_backend::mm::moonlive::XtensaAssembler;
     using mm_xtensa_backend::mm::moonlive::R0;

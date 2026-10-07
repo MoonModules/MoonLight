@@ -748,6 +748,10 @@ The report, [`docs/reference/metrics/code.md`](../docs/reference/metrics/code.md
 
 **Platform code outside src/platform** and **light include in core** are the architecture's two boundaries, counted per line. The first is a vendor header or a platform `#ifdef` outside `src/platform/`, the second a `src/core` file including a `light/` header.
 
+**Module type in the UI** is a registered type's name as a string literal in `src/ui`, one row per literal. The type list is read from `module_types.cpp` as `check_devices` reads it. The four containers `main.cpp` pins as the tree's roots (`Layouts`, `Effects`, `Drivers`, `Services`) are the UI's contract and not findings. **Name spread** is a type named in more than 10 files beyond its own: its header, its implementation and its tests. It is one row on the header that defines it, and it counts change amplification, since a rename of that type edits that many files.
+
+**Large stack frame** is a firmware function whose frame the compiler measures over 512 bytes, from `-Wframe-larger-than=512` in the desktop Release build. It is read from the same saved findings as the render path, so it costs no extra time, and each template instance counts as its own function. **Raw allocation in light** is a buffer taken by hand in `src/light`: an array `new`, a malloc-family call or `platform::alloc`. The architecture asks for a `ScratchBuffer` member there, and a factory creating an object is not one.
+
 **Blocking call on the render path** is the last rule, one row per site [check_nonblocking](#check_nonblocking) finds, a float conversion at a `formatTo` site included. It reads that script's saved findings after an incremental desktop build, so a full run takes seconds; `--module` and `--account` skip it. A host without Clang 20 skips this rule with a SKIP line and leaves `code.md` as it is, while every other rule still ratchets.
 
 The account, `--account`, reads `code.md` as the last full run wrote it, so it follows a full run in the same gate pass. A saving shows in the commit that made it, rather than only in a later total.
