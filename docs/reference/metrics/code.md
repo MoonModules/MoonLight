@@ -64,7 +64,7 @@ The next function worth simplifying is at the top of each file's list.
 | `src/ui/migrate.js` | 41 | `line 29: 'I2cBusModule'`, module type in the UI 1 |
 | `test/unit/core/unit_FilesystemModule_persistence.cpp` | 34 | `lines 158-170, also in test/unit/core/unit_FilesystemModule_persistence.cpp:124`, duplicated block 13 |
 | `src/core/system/MqttModule.cpp` | 31 | `MqttModule::routePublish`, complex function 29 |
-| `src/ui/app.js` | 29 | `app.js`, large file 8976 |
+| `src/ui/app.js` | 29 | `app.js`, large file 8994 |
 | `src/core/moonlive/MoonLiveCompiler.cpp` | 27 | `moonlive::Parser::parseCall`, complex function 59 |
 | `src/light/drivers/ParallelLedDriver.h` | 27 | `ParallelLedDriver::reinit`, complex function 36 |
 | `src/light/drivers/PreviewDriver.h` | 27 | `PreviewDriver::buildCoordTable`, complex function 37 |
@@ -90,7 +90,7 @@ The next function worth simplifying is at the top of each file's list.
 | `src/light/layers/Layer.h` | 13 | `Layer in 132 files`, name spread 132 |
 | `test/unit/light/unit_HlsDriver.cpp` | 13 | `lines 30-47, also in test/unit/light/unit_PanelCardDriver.cpp:22`, duplicated block 18 |
 | `test/unit/light/unit_RandomMapModifier.cpp` | 13 | `lines 116-132, also in test/unit/light/unit_BlurzEffect.cpp:49`, duplicated block 17 |
-| `src/core/system/ControlModule.h` | 12 | `ControlModule::storePreset, line 930`, large stack frame 1296 |
+| `src/core/system/ControlModule.h` | 12 | `ControlModule::storePreset, line 967`, large stack frame 1296 |
 | `src/core/system/DevicesModule.h` | 12 | `lines 73-80, also in src/core/system/DevicesModule.h:59`, duplicated block 8 |
 | `src/light/drivers/HlsDriver.h` | 12 | `lines 105-117, also in src/light/drivers/RtspDriver.h:92`, duplicated block 13 |
 | `src/light/moonlive/MoonLiveBuiltins_light.h` | 12 | `moonlive::mm_light_escape`, complex function 13 |
@@ -227,7 +227,7 @@ The next function worth simplifying is at the top of each file's list.
 | `moondeck/moontube/reset_device.py` | 2 | `lines 241-246, also in moondeck/moontube/reset_device.py:219`, duplicated block 6 |
 | `moondeck/scenario/run_scenario.py` | 2 | `lines 33-39, also in moondeck/docs/build_docs.py:43`, duplicated block 7 |
 | `src/core/moonlive/MoonLiveBuiltins.h` | 2 | `lines 208-219, also in src/core/moonlive/MoonLiveBuiltins.h:111`, duplicated block 12 |
-| `src/core/services/MidiService.h` | 2 | `MidiService::decode`, complex function 18 |
+| `src/core/services/MidiService.h` | 2 | `MidiService::decodeMackie`, complex function 17 |
 | `src/core/system/DevicePlugin.h` | 2 | `lines 94-100, also in src/core/system/DevicePlugin.h:75`, duplicated block 7 |
 | `src/core/system/HttpServerModule.h` | 2 | `HttpServerModule in 21 files`, name spread 21 |
 | `src/core/system/I2cBusModule.h` | 2 | `I2cBusModule::scan`, complex function 18 |
@@ -362,7 +362,7 @@ The next function worth simplifying is at the top of each file's list.
 | `test/js/ui-visibility.test.mjs` | 1 | `lines 7-16, also in test/js/ui-ws-scheme.test.mjs:13`, duplicated block 10 |
 | `test/python/test_check_docgen.py` | 1 | `test_check_docgen.py`, large file 1577 |
 | `test/scenario_runner.cpp` | 1 | `scenario_runner.cpp`, large file 1266 |
-| `test/unit/core/unit_ControlModule.cpp` | 1 | `unit_ControlModule.cpp`, large file 1574 |
+| `test/unit/core/unit_ControlModule.cpp` | 1 | `unit_ControlModule.cpp`, large file 1665 |
 | `test/unit/core/unit_Control_apply_absent_key.cpp` | 1 | `lines 92-103, also in test/unit/core/unit_HttpServerModule_apply.cpp:39`, duplicated block 12 |
 | `test/unit/core/unit_moonlive_compiler.cpp` | 1 | `unit_moonlive_compiler.cpp`, large file 1865 |
 | `test/unit/core/unit_moonlive_fill.cpp` | 1 | `unit_moonlive_fill.cpp`, large file 1380 |

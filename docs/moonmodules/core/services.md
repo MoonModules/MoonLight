@@ -115,7 +115,7 @@ Detail: [technical](moxygen/AnalogService.md)
 
 A Service added per board: **a gamepad's buttons and sticks**, each driving a control through the same rows the other input services use. The pad plugs into the computer showing the interface, over USB or Bluetooth, and the browser reports it, so it works on every chip.
 
-<img src="../../assets/core/GamepadService.png" width="300" alt="Gamepad service controls">
+<img src="../../assets/core/GamepadService.png" width="300" alt="Gamepad service controls"> <img src="../../assets/reference/microsoft-xbox-series-controller.png" width="200" alt="A Microsoft Xbox Series controller, the pad the service is verified with">
 
 - `inputs`: the rows, each a button or stick of the standard layout, a `learn` and a target.
 
@@ -127,11 +127,13 @@ Detail: [technical](moxygen/GamepadService.md)
 
 ### MIDI
 
-A Service added per board: **a MIDI control desk** driving the control surface, decoded as Mackie Control. The desk plugs into the computer showing the interface and the browser reports it, so it works on every chip; a Mackie desk such as the iCON QCon or the Behringer X-Touch in MC mode works without setup.
+A Service added per board: **a MIDI control desk** driving the control surface. The desk plugs into the computer showing the interface and the browser reports it, so it works on every chip. A Mackie desk such as the iCON QCon or the Behringer X-Touch works without setup, an Akai APC40 mkII after one choice.
 
 <img src="../../assets/core/MidiService.png" width="300" alt="MIDI service controls">
 
-Faders move the surface's faders, the knobs turn its encoders, and each channel's SELECT button flips its switch. The desk follows the surface back: motors, SELECT lights and knob rings. A hand on a fader holds its motor still. ⌄ details.
+- `profile`: the desk's layout, `Mackie Control` or `Akai APC40 mkII`.
+
+Faders move the surface's faders, the knobs turn its encoders, and each channel's SELECT button flips its switch. The desk follows the surface back: motors, SELECT lights and knob rings. A hand on a fader holds its motor still. An APC40's clip pads apply presets. ⌄ details.
 
 Detail: [technical](moxygen/MidiService.md)
 
@@ -181,6 +183,8 @@ A device's own page, such as `http://192.168.1.158`, is not a secure origin, so 
 3. Reload the device's page: Chrome now asks to use MIDI devices.
 
 The decoding follows Mackie Control: a fader is 14-bit pitch bend on its own channel, its touch sensor a note from 0x68, a knob a relative turn on a control change from 0x10, and SELECT a note from 0x18. The master fader has no slot on the surface and is ignored. The way back uses the same messages: pitch bend moves a motor, a SELECT note at full velocity lights its button, and a control change from 0x30 fills a knob's ring. The device keeps what the desk should show and pushes it up to 25 times a second; the browser sends only what changed, so a page opened later moves the motors to where the surface already is.
+
+**The Akai APC40 mkII profile.** The browser greets the desk with the SysEx that puts it in Alternate Ableton Live mode, where every light is the host's, so Chrome asks once to send SysEx as well. Track faders 1-8 move the surface's faders and track knobs 1-8 set its encoders, each reading 0 to 127. Activator buttons 1-8 flip its switches. The 40 clip pads apply presets 1-40, the top-left pad being preset 1 as on the Control card. The way back lights each activator while its switch is on, fills each knob's ring like a meter, and colors each pad: dark when empty, dim white when a preset is stored, green for the one applied. The faders have no motors. Every message is in [the APC40 reference](../../reference/hardware/control-surfaces.md#akai-apc40-mkii).
 
 ## Audio, details
 #### Microphone wiring

@@ -1,5 +1,7 @@
 # Waveshare ESP32-P4-ETH hardware reference
 
+![Waveshare ESP32-P4-ETH](../../assets/deviceModels/esp32-p4-waveshare-eth.png)
+
 Pin maps and onboard features for the **Waveshare ESP32-P4-ETH**, read from the schematic so MoonLight work reads this instead of re-scraping the PDF. The board runs the plain `esp32p4rev1-eth` firmware, the same build the P4-NANO uses, and is `"Waveshare ESP32-P4-ETH"` in the device catalog.
 
 **Sources**

@@ -14,7 +14,7 @@
 
 namespace mm {
 
-/// A MIDI control desk driving the control surface, decoded as Mackie Control: faders, their touch sensors, knobs and channel buttons.
+/// A MIDI control desk driving the control surface, decoded by its `profile`: Mackie Control, or the Akai APC40 mkII.
 /// @card MidiService.png
 ///
 /// The desk plugs into the computer showing the interface; the browser reads it with the Web MIDI API and writes each batch of messages into the hidden, live `midi` control.
@@ -22,13 +22,18 @@ namespace mm {
 ///
 /// The way back is a surface: the hidden `desk` control holds what the desk shows, one message per fader motor, button light and knob ring.
 /// It is state rather than a log, so the browser sends only the slots that changed, and a page opened later still finds the motors' positions.
+/// The hidden `hello` control holds what the browser sends whenever the desk connects, such as the SysEx that hands an APC40's lights to the host.
 class MidiService : public MoonModule, public ControlSurface {
 public:
     /// A service, so the container accepts it as a child.
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Service; }
 
-    /// Declare the inbound batch and the desk's state.
+    /// Which desk this is, since each desk lays its controls out in its own messages.
+    uint8_t profile = 0;
+
+    /// Declare the desk's profile, the inbound batch, the desk's state and its greeting.
     void defineControls() override {
+        controls_.addSelect("profile", profile, kProfiles, kProfileCount);
         controls_.addText("midi", midi_, sizeof(midi_));
         controls_.setHidden(controls_.count() - 1, true);
         controls_.setLive(controls_.count() - 1);
@@ -36,6 +41,11 @@ public:
         controls_.setHidden(controls_.count() - 1, true);
         controls_.setReadOnly(controls_.count() - 1, true);
         controls_.setLive(controls_.count() - 1);
+        controls_.addText("hello", hello_, sizeof(hello_));
+        controls_.setHidden(controls_.count() - 1, true);
+        controls_.setReadOnly(controls_.count() - 1, true);
+        controls_.setLive(controls_.count() - 1);
+        writeHello();
         MoonModule::defineControls();
     }
 
@@ -52,10 +62,42 @@ public:
         MoonModule::release();
     }
 
-    /// Show one surface control on the desk: a fader's motor, a switch's SELECT light, an encoder's ring.
+    /// Show one surface control on the desk, in the profile's messages.
     void sendValue(SurfaceControl kind, uint8_t index, uint8_t value) override {
         uint8_t m[3];
         uint8_t slot;
+        if (profile == kApc40 ? !apcMessage(kind, index, value, m, slot) : !mackieMessage(kind, index, value, m, slot)) return;
+        writeSlot(slot, m);
+    }
+
+    /// Decode each batch the interface writes, and rebuild the desk's state if a client overwrote it or the profile changed.
+    void onControlChanged(const char* name) override {
+        if (std::strcmp(name, "desk") == 0 || std::strcmp(name, "profile") == 0) {
+            desk_[0] = 0;
+            writeHello();
+            if (auto* c = ControlModule::active(); c && attached_) c->resendTo(this);
+            return;
+        }
+        if (std::strcmp(name, "midi") != 0) return;
+        statusBuf_[0] = 0;
+        decodeBatch(midi_);
+        if (statusBuf_[0]) setStatus(statusBuf_);
+    }
+
+    /// Decode one message of up to three bytes, as the profile lays the desk out.
+    void decode(const uint8_t* m, uint8_t len) {
+        if (len < 3) return;
+        if (profile == kApc40) decodeApc(m);
+        else decodeMackie(m);
+    }
+
+private:
+    static constexpr uint8_t kApc40 = 1;
+    static constexpr uint8_t kProfileCount = 2;
+    static constexpr const char* kProfiles[kProfileCount] = {"Mackie Control", "Akai APC40 mkII"};
+
+    /// A Mackie desk's message for one surface control: a fader's motor, a switch's SELECT light, an encoder's ring.
+    static bool mackieMessage(SurfaceControl kind, uint8_t index, uint8_t value, uint8_t m[3], uint8_t& slot) {
         if (kind == SurfaceControl::Fader && index < ControlModule::kFaderCount) {
             // The byte back to 14 bits, so the desk's own pitch bend decodes to this byte again.
             const uint16_t v14 = static_cast<uint16_t>((value << 6) | (value >> 2));
@@ -69,8 +111,38 @@ public:
             m[0] = 0xB0; m[1] = static_cast<uint8_t>(kRingCC + index); m[2] = static_cast<uint8_t>(kRingFill | (1 + value * 10 / 255));
             slot = static_cast<uint8_t>(kDeskFaders + ControlModule::kSwitchCount + index);
         } else {
-            return;
+            return false;
         }
+        return true;
+    }
+
+    // The APC40 runs in Alternate Ableton Live mode, set by `hello`, so every light is the host's to set.
+    /// An APC40's message for one surface control: an activator's light, a knob's ring, a preset pad's color.
+    static bool apcMessage(SurfaceControl kind, uint8_t index, uint8_t value, uint8_t m[3], uint8_t& slot) {
+        if (kind == SurfaceControl::Switch && index < ControlModule::kSwitchCount) {
+            m[0] = static_cast<uint8_t>((value ? 0x90 : 0x80) | index); m[1] = kApcActivatorNote; m[2] = value ? 0x7F : 0x00;
+            slot = static_cast<uint8_t>(kDeskFaders + index);
+        } else if (kind == SurfaceControl::Encoder && index < ControlModule::kEncoderCount) {
+            m[0] = 0xB0; m[1] = static_cast<uint8_t>(kApcKnobCC + index); m[2] = static_cast<uint8_t>(value >> 1);
+            slot = static_cast<uint8_t>(kDeskFaders + ControlModule::kSwitchCount + index);
+        } else if (kind == SurfaceControl::Pad && index < kApcPads) {
+            static constexpr uint8_t kColor[] = {0, kApcStoredColor, kApcActiveColor};
+            m[0] = 0x90; m[1] = apcNoteOfPad(index); m[2] = kColor[value < 3 ? value : 0];
+            slot = static_cast<uint8_t>(kPadSlot + index);
+        } else {
+            return false;   // the faders have no motors
+        }
+        return true;
+    }
+
+    // The APC40 counts its pads from the bottom-left, where the Control card counts from the top-left.
+    /// The note of the pad on preset cell `pad`.
+    static uint8_t apcNoteOfPad(uint8_t pad) {
+        return static_cast<uint8_t>((kApcRows - 1 - pad / kApcCols) * kApcCols + pad % kApcCols);
+    }
+
+    /// Store one message in its slot of the desk's state, which the browser sends on.
+    void writeSlot(uint8_t slot, const uint8_t m[3]) {
         if (!desk_[0]) {
             // Every slot is written in the same call that attaches, before the state is read, so no placeholder reaches a desk.
             for (uint8_t i = 0; i < kDeskSlots; i++) std::memcpy(desk_ + i * kSlotChars, "000000 ", kSlotChars);
@@ -83,22 +155,45 @@ public:
         notifyValuesChanged();
     }
 
-    /// Decode each batch the interface writes, and rebuild the desk's state if a client overwrote it.
-    void onControlChanged(const char* name) override {
-        if (std::strcmp(name, "desk") == 0) {
-            desk_[0] = 0;
-            if (auto* c = ControlModule::active(); c && attached_) c->resendTo(this);
-            return;
-        }
-        if (std::strcmp(name, "midi") != 0) return;
-        statusBuf_[0] = 0;
-        decodeBatch(midi_);
-        if (statusBuf_[0]) setStatus(statusBuf_);
+    /// What the browser sends when the desk connects: for an APC40, Alternate Ableton Live mode and rings that fill like a meter.
+    void writeHello() {
+        hello_[0] = 0;
+        if (profile != kApc40) return;
+        int n = mm::formatTo(hello_, sizeof(hello_), "f0477f29600004%02x010000f7", kApcHostLightsMode);
+        for (uint8_t i = 0; i < ControlModule::kEncoderCount && n + 7 < static_cast<int>(sizeof(hello_)); i++)
+            n += mm::formatTo(hello_ + n, sizeof(hello_) - static_cast<size_t>(n), " b0%02x%02x", kApcRingTypeCC + i, kApcRingVolume);
     }
 
-    /// Decode one message of up to three bytes, as Mackie Control lays a desk out.
-    void decode(const uint8_t* m, uint8_t len) {
-        if (len < 3) return;
+    /// An APC40 message: a control change from a fader or knob, or a press.
+    void decodeApc(const uint8_t* m) {
+        const uint8_t status = m[0] & 0xF0, channel = m[0] & 0x0F;
+        if (status == 0xB0) apcControlChange(channel, m[1], m[2]);
+        else if (status == 0x90 && m[2] > 0) apcPress(channel, m[1]);   // the release does nothing
+    }
+
+    /// A track fader or a track knob, both reading 0..127, stretched so the top of the travel is the surface's 255.
+    void apcControlChange(uint8_t channel, uint8_t cc, uint8_t raw) {
+        const uint8_t value = static_cast<uint8_t>(raw * 255 / 127);
+        if (cc == kApcFaderCC && channel < ControlModule::kFaderCount) writeSurface("fader", channel, value);
+        else if (channel == 0 && cc >= kApcKnobCC && cc < kApcKnobCC + ControlModule::kEncoderCount)
+            writeSurface("encoder", static_cast<uint8_t>(cc - kApcKnobCC), value);
+    }
+
+    /// An activator flips its switch, and a clip pad applies the preset on its cell.
+    void apcPress(uint8_t channel, uint8_t note) {
+        if (note == kApcActivatorNote && channel < ControlModule::kSwitchCount) {
+            toggleSwitch(channel);
+            return;
+        }
+        if (channel != 0 || note >= kApcPads) return;
+        const uint8_t pad = apcNoteOfPad(note);   // its own inverse: the row flip undoes itself
+        auto* c = ControlModule::active();
+        const bool applied = c && c->pressPad(pad);
+        mm::formatTo(statusBuf_, sizeof(statusBuf_), applied ? "pad %u" : "pad %u is empty", static_cast<unsigned>(pad) + 1u);
+    }
+
+    /// A Mackie Control message: a fader, a fader touch, a channel button or a knob turn.
+    void decodeMackie(const uint8_t* m) {
         const uint8_t status = m[0] & 0xF0, channel = m[0] & 0x0F;
         if (status == 0xE0) {
             // A fader: 14-bit pitch bend, one channel per fader; channel 8 is the master, which the surface has no slot for.
@@ -131,14 +226,25 @@ public:
         }
     }
 
-private:
     static constexpr uint8_t kTouchNote = 0x68;    ///< the first fader's touch sensor
     static constexpr uint8_t kSelectNote = 0x18;   ///< the first channel's SELECT button
     static constexpr uint8_t kVPotCC = 0x10;       ///< the first knob's rotation
     static constexpr uint8_t kRingCC = 0x30;       ///< the first knob's light ring
     static constexpr uint8_t kRingFill = 0x20;     ///< the ring mode that fills up to the position
+    static constexpr uint8_t kApcFaderCC = 0x07;       ///< a track fader, one channel per track
+    static constexpr uint8_t kApcKnobCC = 0x30;        ///< the first track knob, and its ring
+    static constexpr uint8_t kApcRingTypeCC = 0x38;    ///< the first track knob's ring style
+    static constexpr uint8_t kApcRingVolume = 2;       ///< the ring style that fills like a meter
+    static constexpr uint8_t kApcActivatorNote = 0x32; ///< a track's activator button, one channel per track
+    static constexpr uint8_t kApcHostLightsMode = 0x42; ///< Alternate Ableton Live mode: the host sets every light
+    static constexpr uint8_t kApcCols = 8, kApcRows = 5;
+    static constexpr uint8_t kApcPads = kApcCols * kApcRows;
+    static_assert(kApcCols == ControlModule::kGridCols, "a pad row is a row of the Control card's preset grid");
+    static constexpr uint8_t kApcStoredColor = 2;      ///< a dim white, from the APC40's palette
+    static constexpr uint8_t kApcActiveColor = 21;     ///< green
     static constexpr uint8_t kDeskFaders = ControlModule::kFaderCount;
-    static constexpr uint8_t kDeskSlots = ControlModule::kFaderCount + ControlModule::kSwitchCount + ControlModule::kEncoderCount;
+    static constexpr uint8_t kPadSlot = ControlModule::kFaderCount + ControlModule::kSwitchCount + ControlModule::kEncoderCount;
+    static constexpr uint8_t kDeskSlots = kPadSlot + kApcPads;
     static constexpr uint8_t kSlotChars = 7;       ///< "e07f7f " per message
 
     /// Read "hex hex...", each token one message; a malformed token ends the batch.
@@ -183,7 +289,8 @@ private:
     }
 
     char midi_[512] = {};     ///< the newest batch the interface wrote
-    char desk_[kDeskSlots * kSlotChars] = {};   ///< the faders, then the switches, then the encoders, as the desk should show them
+    char desk_[kDeskSlots * kSlotChars] = {};   ///< the faders, the switches, the encoders, then the preset pads, as the desk should show them
+    char hello_[96] = {};     ///< what the browser sends when the desk connects
     char statusBuf_[40] = {}; ///< what the last message did
     bool attached_ = false;
 };

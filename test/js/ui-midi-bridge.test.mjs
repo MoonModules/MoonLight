@@ -37,3 +37,13 @@ test("the desk is sent every slot once, then only the slots that changed", () =>
 test("a slot that is not a channel message never reaches the desk", () => {
     assert.deepEqual(hex(deskChanges([], "000000 f07f7f e07f zz7f7f 90187f")), ["90187f"]);
 });
+
+const helloSrc = app.match(/function helloMessages\(hello\) \{[\s\S]*?\n\}/);
+assert.ok(helloSrc, "helloMessages is in app.js");
+const helloMessages = new Function(`${helloSrc[0]}; return helloMessages;`)();
+
+test("a desk's greeting goes out as whole SysEx and channel messages, and nothing malformed", () => {
+    assert.deepEqual(hex(helloMessages("f0477f2960000442010000f7 b03802 f0477f zz 000000")),
+                     ["f0477f2960000442010000f7", "b03802"]);
+    assert.deepEqual(helloMessages(""), []);
+});

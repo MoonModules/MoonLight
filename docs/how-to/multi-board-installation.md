@@ -6,6 +6,8 @@ An installation is several MoonLight boards that act as one piece: one creature,
 The worked example is the StadBeest, a walking beast whose legs and eyes run on three boards.
 Each section names a choice that makes it work; borrow what fits your own piece.
 
+<video src="../assets/how-to/multi-board/stadbeest.mp4" width="300" autoplay loop muted playsinline title="The StadBeest walking: ten glowing legs on a chandelier body and two ring-disc eyes"></video>
+
 > New here? Start with **[Install & first light](../gettingstarted.md)** and **[your first script](../tutorials/first-script.md)**. What follows assumes boards that run MoonLight on one network.
 
 ---
@@ -14,56 +16,15 @@ Each section names a choice that makes it work; borrow what fits your own piece.
 
 | part | board | lights | layout | effect |
 |---|---|---|---|---|
-| legs | LightCrafter 16 (ESP32-S3 N8R8) | 10 SK6812 RGBW strips of 144 | Tubes, `tubeDistance` 7 | `stadbeest-legs.mle` |
-| left eye | ESP32-S3-Zero, 4 MB | a 241-light ring disc | Rings241 | `stadbeest-eyes.mle` |
-| right eye | ESP32-S3-Zero, 4 MB | a 241-light ring disc | Rings241 | `stadbeest-eyes.mle` |
-
-See it at the [Museumnacht Den Haag](https://museumnachtdenhaag.nl/programma/het-stad-beest-ontwaakt/), where it runs through the night as *Het Stad Beest ontwaakt*.
-
-### The text next to the beast
-
-<img src="../assets/how-to/multi-board/qr.png" width="160" alt="A QR code linking to the multi-board installation guide on moonmodules.org">
-
-> **Het Stad Beest ontwaakt**
->
-> Dit beest is gemaakt van wat de stad wegdoet.
-> Zijn lijf is een kroonluchter, zijn nek zijn buigzame lamparmen uit de kringloopwinkel, en zijn ogen zitten in 3D-geprinte gloeilampen.
-> Vanavond wordt het wakker.
-> Het loopt op tien poten van licht, steeds een paar tegelijk, zoals een echt dier.
-> Het hoort de muziek: op de beat zet het een stap, kijkt het om zich heen en flitst het.
-> Hoe harder de muziek, hoe hoger het zijn poten optilt en hoe wijder zijn pupillen worden.
->
-> Niemand bestuurt het.
-> Elke paar minuten kiest het zelf nieuwe kleuren en een nieuwe stemming, van rustig tot wild.
-> Drie kleine computers praten via wifi met elkaar, zodat poten en ogen samen één beest zijn.
-> Ze draaien op MoonLight, open-source lichtsoftware van vrijwilligers: iedereen kan er zelf zo'n beest mee bouwen.
->
-> Scan de code om te zien hoe het gemaakt is en om contact met ons op te nemen.
->
-> *Door Ewoud Wijma - MoonModules*
-
-> **The City Beast awakens**
->
-> This beast is made of what the city throws away.
-> Its body is a chandelier, its neck is bendable lamp arms from a second-hand shop, and its eyes sit in 3D-printed light bulbs.
-> Tonight it wakes up.
-> It walks on ten legs of light, a few at a time, like a real animal.
-> It hears the music: on the beat it takes a step, looks around and flashes.
-> The louder the music, the higher it lifts its legs and the wider its pupils grow.
->
-> Nobody steers it.
-> Every few minutes it picks new colors and a new mood of its own, from calm to wild.
-> Three small computers talk over WiFi, so its legs and eyes move as one beast.
-> They run MoonLight, open-source lighting software made by volunteers: anyone can build a beast like this.
->
-> Scan the code to see how it is made and to get in touch with us.
->
-> *By Ewoud Wijma - MoonModules*
+| legs | LightCrafter 16 (ESP32-S3 N8R8) | 10 SK6812 RGBW strips of 144 | Tubes, `tubeDistance` 7 | [`stadbeest-legs.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest-legs.mle) |
+| left eye | ESP32-S3-Zero, 4 MB | a 241-light ring disc | Rings241 | [`stadbeest-eyes.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest-eyes.mle) |
+| right eye | ESP32-S3-Zero, 4 MB | a 241-light ring disc | Rings241 | [`stadbeest-eyes.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest-eyes.mle) |
 
 <img src="../assets/how-to/multi-board/legs.gif" width="240" alt="The legs in the preview: ten tubes, one or two legs lifting at a time in a wave from back to front"> <img src="../assets/how-to/multi-board/eye.gif" width="240" alt="An eye in the preview: a dark pupil in a palette iris on the ring disc, darting and blinking">
 
 The legs board leads: its control surface holds the shared settings, and the eyes follow it over OSC.
 Every board hears the same music through WLED audio sync, so all three step and blink on the same beat.
+See it at the [Museumnacht Den Haag](https://museumnachtdenhaag.nl/programma/het-stad-beest-ontwaakt/), where it runs through the night as *Het Stad Beest ontwaakt*.
 
 ---
 
@@ -104,12 +65,20 @@ Both StadBeest effects are [MoonLive](../moonmodules/light/moonlive.md) scripts,
 
 <img src="../assets/how-to/multi-board/legs-card.png" width="300" alt="The legs effect card: bpm, swing, lift, stand, sensitivity and pulse"> <img src="../assets/how-to/multi-board/eye-card.png" width="300" alt="The eye effect card: bpm, sensitivity, pulse, pupil, look and blink">
 
-**Draw for the medium.** A ring disc has nine rings, from one light in the center to sixty at the edge.
-So the eye is built from ring zones: a dark pupil, a palette iris, a dim rim. Fine detail such as iris fibers or a thin slit pupil disappears at that resolution.
+**Draw for the medium.**
+A ring disc has nine rings, from one light in the center to sixty at the edge.
+So the eye is built from ring zones: a dark pupil, a palette iris, a dim rim.
+Fine detail such as iris fibers or a thin slit pupil disappears at that resolution.
 
-**Move few things at once.** In a real walk most legs stand still while one or two lift. The legs effect keeps every leg lit and standing, and lifts each one briefly in a wave from back to front, the two sides half a cycle apart. A creature reads as alive when the eye can follow what moves.
+**Move few things at once.**
+In a real walk most legs stand still while one or two lift.
+The legs effect keeps every leg lit and standing, and lifts each one briefly in a wave from back to front, the two sides half a cycle apart.
+A creature reads as alive when the eye can follow what moves.
 
-**Tie color to movement.** A standing leg holds its colors, a lifting leg carries them up with its foot, and each step moves the palette on a quarter. The eye's colors move on with each dart of its gaze. Color that drifts on its own competes with the motion instead of showing it.
+**Tie color to movement.**
+A standing leg holds its colors, a lifting leg carries them up with its foot, and each step moves the palette on a quarter.
+The eye's colors move on with each dart of its gaze.
+Color that drifts on its own competes with the motion instead of showing it.
 
 **Listen to the right signal.**
 
@@ -119,8 +88,14 @@ So the eye is built from ring zones: a dark pupil, a palette iris, a dim rim. Fi
 
 The raw frequency bands change every frame, and driven straight into brightness or height they look random.
 
-**Let two boards agree without talking.** The eyes pick each dart's direction from `audioPeakHz()` at the beat, which both boards read the same.
+**Let two boards agree without talking.**
+The eyes pick each dart's direction from `audioPeakHz()` at the beat, which both boards read the same.
 So they look the same way at the same moment, with no message between them.
+
+**Use them yourself.**
+The legs, the eyes and the autopilot are part of MoonLight's [script library](https://github.com/MoonModules/MoonLight/tree/main/moonlive).
+Every device running MoonLight lists them in its script picker and downloads one when it is chosen.
+The full code: [`stadbeest-legs.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest-legs.mle), [`stadbeest-eyes.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest-eyes.mle) and [`stadbeest-autopilot.mls`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/services/stadbeest-autopilot.mls); to write your own, start with [your first script](../tutorials/first-script.md).
 
 ---
 
@@ -140,6 +115,7 @@ A script that does not compile leaves its effect dark, so keep the last working 
 ## 4. One surface layout for every board
 
 Each board's [Control](../moonmodules/core/system.md#control) card is a desk of eight faders, eight encoders and eight switches, and each slot is assigned to one control by name, such as `stadbeest-legs.bpm`.
+
 <img src="../assets/how-to/multi-board/control-card.png" width="300" alt="The legs board's Control card: each slot labeled after the control it drives, such as pulse, bpm, swing, lift and run">
 
 Use one slot layout across the whole installation: a slot means the same thing on every board where it applies.
@@ -149,6 +125,7 @@ A board with nothing for a slot leaves it unassigned.
 |---|---|---|
 | `switch1` | `Drivers.on` | `Drivers.on` |
 | `switch2` | legs `pulse` | eye `pulse` |
+| `switch8` | autopilot `run` | |
 | `fader1` | `Drivers.brightness` | `Drivers.brightness` |
 | `fader2` | legs `bpm` | eye `bpm` |
 | `fader3` | legs `sensitivity` | eye `sensitivity` |
@@ -159,7 +136,6 @@ A board with nothing for a slot leaves it unassigned.
 | `encoder2` | | eye `pupil` |
 | `encoder3` | | eye `look` |
 | `encoder4` | | eye `blink` |
-| `switch8` | autopilot `run` | |
 
 A slot holds the value of the control it drives, so `fader2` at 33 means `bpm` 33, and assigning a slot changes nothing until the slot moves.
 Assign from the card, or with `POST /api/control` and `{"module":"Control","control":"fader2Target","value":"stadbeest-legs.bpm"}`.
@@ -187,9 +163,17 @@ Three details matter:
 
 ---
 
-## 6. Running unattended
+## 6. One source of music
 
-A [MoonLiveService](../moonmodules/core/services.md#moonliveservice) on the leader runs `stadbeest-autopilot.mls`, which plays the beast through a whole museum night without anyone at the desk.
+Every board runs the [Audio](../moonmodules/core/services.md#audio) service in receive mode, and one machine sends WLED audio sync to all of them.
+That machine is a board with a microphone, or a computer running MoonLight that captures what it plays.
+One source means one beat: the legs step, the eyes dart and every flash lands on the same moment.
+
+---
+
+## 7. Running unattended
+
+A [MoonLiveService](../moonmodules/core/services.md#moonliveservice) on the leader runs [`stadbeest-autopilot.mls`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/services/stadbeest-autopilot.mls), which plays the beast through a whole museum night without anyone at the desk.
 
 <img src="../assets/how-to/multi-board/autopilot-card.png" width="300" alt="The autopilot service card: script, run and minutes">
 
@@ -199,15 +183,42 @@ A [MoonLiveService](../moonmodules/core/services.md#moonliveservice) on the lead
 - **One slot at a time:** it writes one slot every 20 ms, every ten seconds, so no burst reaches the network.
 - **Handing over:** its `run` switch sits on `switch8`; off gives the beast back to people and desks.
 
-## 7. One source of music
+---
 
-Every board runs the [Audio](../moonmodules/core/services.md#audio) service in receive mode, and one machine sends WLED audio sync to all of them.
-That machine is a board with a microphone, or a computer running MoonLight that captures what it plays.
-One source means one beat: the legs step, the eyes dart and every flash lands on the same moment.
+## 8. Driving it by hand: an Akai APC40 mkII
+
+A desk on the leader moves the whole installation, since its changes go out over OSC like any other.
+The StadBeest takes an [Akai APC40 mkII](../reference/hardware/control-surfaces.md#akai-apc40-mkii): faders, knobs and buttons for the shared slots, and a pad per preset.
+
+<img src="../assets/reference/akai-apc40-mkii.png" width="420" alt="The Akai APC40 mkII: eight knobs with LED rings, a grid of 40 colored clip pads, eight channel strips with faders">
+
+**Setting it up**
+
+1. On the leader, add a **MIDI** service under **Services** and set its `profile` to `Akai APC40 mkII`.
+2. Plug the APC40 into a laptop next to the beast, and open the leader's page in Chrome.
+3. Mark the leader's address as secure in Chrome once, as [MIDI, details](../moonmodules/core/services.md#midi-details) shows, since a board's own page is plain `http`.
+4. Allow MIDI, with SysEx, when Chrome asks. The desk lights up: the knob rings, the activator lights and the preset pads.
+
+The browser is the bridge between desk and board, so the laptop keeps the leader's page open while the desk is in use.
+
+**Playing it**
+
+| APC40 | the StadBeest |
+|---|---|
+| track faders 1-6 | brightness, then the legs' `bpm`, `sensitivity`, `swing`, `lift` and `stand` |
+| track knobs 1-4 | the palette, then the eyes' `pupil`, `look` and `blink` |
+| activator 1 | on and off |
+| activator 2 | `pulse`, legs and eyes together |
+| activator 8 | the autopilot's `run` |
+| clip pads | the presets, the top-left pad being preset 1; a stored preset glows white and the applied one green |
+
+The autopilot rewrites the shared slots every ten seconds, so switch it off with activator 8 before playing by hand, and on again to hand the beast back.
+The eyes follow every move over OSC, as they follow the autopilot.
+A phone or a tablet reaches the same slots too: [connecting a control surface](control-surface.md).
 
 ---
 
-## 8. Updating boards you cannot reach
+## 9. Updating boards you cannot reach
 
 Boards inside a sculpture are hard to reach with a cable, so update them over the network and check before you send.
 
@@ -218,7 +229,44 @@ Boards inside a sculpture are hard to reach with a cable, so update them over th
 
 ---
 
-## Driving it by hand
+## The text next to the beast
 
-Every slot is also reachable from a phone, a tablet or a hardware desk: [connecting a control surface](control-surface.md).
-A desk on the leader moves the whole installation, since its changes go out over OSC like any other.
+The card beside the StadBeest at the Museumnacht, in Dutch and English, with a QR code to the guide.
+
+<img src="../assets/how-to/multi-board/qr.png" width="160" alt="A QR code linking to the multi-board installation guide on moonmodules.org">
+
+> **Het Stad Beest ontwaakt**
+>
+> Dit beest is gemaakt van wat de stad wegdoet.
+> Zijn lijf is een kroonluchter, zijn nek zijn buigzame lamparmen uit de kringloopwinkel, en zijn ogen zitten in 3D-geprinte gloeilampen.
+> Vanavond wordt het wakker.
+> Het loopt op tien poten van licht, steeds een paar tegelijk, zoals een echt dier.
+> Het hoort de muziek: op de beat zet het een stap, kijkt het om zich heen en flitst het.
+> Hoe harder de muziek, hoe hoger het zijn poten optilt en hoe wijder zijn pupillen worden.
+>
+> Niemand bestuurt het.
+> Elke paar minuten kiest het zelf nieuwe kleuren en een nieuwe stemming, van rustig tot wild.
+> Drie kleine computers praten via wifi met elkaar, zodat poten en ogen samen één beest zijn.
+> Ze draaien op MoonLight, open-source lichtsoftware van vrijwilligers: iedereen kan er zelf zo'n beest mee bouwen.
+>
+> Scan de code om te zien hoe het gemaakt is en om contact met ons op te nemen.
+>
+> *Door Ewoud Wijma - MoonModules*
+
+> **The City Beast awakens**
+>
+> This beast is made of what the city throws away.
+> Its body is a chandelier, its neck is bendable lamp arms from a second-hand shop, and its eyes sit in 3D-printed light bulbs.
+> Tonight it wakes up.
+> It walks on ten legs of light, a few at a time, like a real animal.
+> It hears the music: on the beat it takes a step, looks around and flashes.
+> The louder the music, the higher it lifts its legs and the wider its pupils grow.
+>
+> Nobody steers it.
+> Every few minutes it picks new colors and a new mood of its own, from calm to wild.
+> Three small computers talk over WiFi, so its legs and eyes move as one beast.
+> They run MoonLight, open-source lighting software made by volunteers: anyone can build a beast like this.
+>
+> Scan the code to see how it is made and to get in touch with us.
+>
+> *By Ewoud Wijma - MoonModules*

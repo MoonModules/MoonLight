@@ -8911,7 +8911,9 @@ requestAnimationFrame(gamepadLoop);
 // offer Web MIDI on a secure origin (localhost); Safari has none. Access is requested only once a
 // MidiService exists, since asking shows the user a permission prompt.
 // The way back: the service's hidden `desk` control is what the desk shows, one message per slot,
-// and the bridge sends the desk the slots that changed since it last sent them.
+// and the bridge sends the desk the slots that changed since it last sent them. Its hidden `hello`
+// goes out whenever a desk connects, such as the SysEx that hands an APC40's lights to the host,
+// which is why access asks for SysEx.
 const MIDI_SEND_MS = 33;
 const MIDI_BATCH_MAX = 40;   // messages per write, inside the device's 400-byte frame limit
 
@@ -8919,6 +8921,13 @@ const MIDI_BATCH_MAX = 40;   // messages per write, inside the device's 400-byte
 function encodeMidi(messages) {
     const hex = m => Array.from(m, b => b.toString(16).padStart(2, "0")).join("");
     return messages.map(hex).join(" ");
+}
+
+// A greeting's messages: a channel message or a whole SysEx per token; anything else is skipped.
+function helloMessages(hello) {
+    return hello.split(" ")
+        .filter(tok => /^[89a-e][0-9a-f]{5}$/.test(tok) || /^f0([0-7][0-9a-f])*f7$/.test(tok))
+        .map(tok => Uint8Array.from(tok.match(/../g), h => parseInt(h, 16)));
 }
 
 // The slots of `desk` that differ from what was sent, as messages, remembering them as sent.
@@ -8937,6 +8946,7 @@ let midiAsked = false;
 let midiAccess = null;
 let midiSentAt = 0;
 let midiDeskSent = [];   // per slot, what the desk was last sent
+let midiHelloSent = null;   // the greeting the connected desks were last sent
 const midiQueue = [];
 function midiListen(access) {
     for (const input of access.inputs.values())
@@ -8955,12 +8965,20 @@ function midiLoop(now) {
     if (!services.length) return;
     if (!midiAsked) {
         midiAsked = true;
-        navigator.requestMIDIAccess().then(access => {
+        navigator.requestMIDIAccess({ sysex: true }).then(access => {
             midiAccess = access;
             midiListen(access);
-            // A desk plugged in later is listened to, and sent every slot.
-            access.onstatechange = () => { midiListen(access); midiDeskSent = []; };
+            // A desk plugged in later is listened to, greeted, and sent every slot.
+            access.onstatechange = () => { midiListen(access); midiDeskSent = []; midiHelloSent = null; };
         }).catch(err => console.warn("[midi] access refused", err));
+    }
+    const hello = midiAccess && services[0].controls?.find(c => c.name === "hello")?.value;
+    if (midiAccess && hello !== undefined && hello !== midiHelloSent) {
+        // Before the slots, so a desk is in the mode its lights are written for; a new greeting resends them too.
+        for (const msg of helloMessages(hello || ""))
+            for (const output of midiAccess.outputs.values()) output.send(msg);
+        midiHelloSent = hello;
+        midiDeskSent = [];
     }
     const desk = midiAccess && services[0].controls?.find(c => c.name === "desk")?.value;
     if (desk)

@@ -1552,6 +1552,97 @@ TEST_CASE("a fader position sent to a MIDI desk decodes back to the same value")
     midi.release();
 }
 
+namespace {
+/// A MIDI service set to the Akai APC40 mkII profile, as picking it on the card does.
+void useApc40(mm::MidiService& midi) {
+    midi.defineControls();
+    midi.profile = 1;
+    midi.onControlChanged("profile");
+}
+
+/// A control's text value, read straight from its buffer.
+std::string textOf(mm::MoonModule& m, const char* name) {
+    auto& cs = m.controls();
+    for (uint8_t i = 0; i < cs.count(); i++)
+        if (std::strcmp(cs[i].name, name) == 0) return static_cast<const char*>(cs[i].ptr);
+    return {};
+}
+}  // namespace
+
+// The APC40 reports positions, 0 to 127, and its activator buttons only as presses.
+TEST_CASE("an APC40's track faders, track knobs and activator buttons drive the surface") {
+    Device d;
+    mm::MidiService midi;
+    useApc40(midi);
+    const uint8_t fader1Top[3] = {0xB0, 0x07, 0x7F}, fader2Bottom[3] = {0xB1, 0x07, 0x00}, knob2Half[3] = {0xB0, 0x31, 0x40};
+    midi.decode(fader1Top, 3);
+    midi.decode(fader2Bottom, 3);
+    midi.decode(knob2Half, 3);
+    CHECK(surfaceValue(d, "fader1") == 255);
+    CHECK(surfaceValue(d, "fader2") == 0);
+    CHECK(surfaceValue(d, "encoder2") == 128);
+    const uint8_t before = surfaceValue(d, "switch2");
+    const uint8_t press[3] = {0x91, 0x32, 0x7F}, release[3] = {0x81, 0x32, 0x00};
+    midi.decode(press, 3);
+    midi.decode(release, 3);
+    CHECK(surfaceValue(d, "switch2") != before);   // a press flips it, the release does nothing
+}
+
+// Alternate Ableton Live mode hands every light to the host, and the rings fill like a meter.
+TEST_CASE("an APC40 is greeted into the mode where the host sets every light") {
+    mm::MidiService midi;
+    midi.defineControls();
+    CHECK(textOf(midi, "hello").empty());           // a Mackie desk needs no greeting
+    midi.profile = 1;
+    midi.onControlChanged("profile");
+    const std::string hello = textOf(midi, "hello");
+    CHECK(hello.rfind("f0477f2960000442010000f7", 0) == 0);
+    CHECK(hello.find(" b03802") != std::string::npos);   // track knob 1's ring
+    CHECK(hello.find(" b03f02") != std::string::npos);   // track knob 8's ring
+}
+
+// The APC40 counts its pads from the bottom-left and the Control card from the top-left, so the top-left pad is preset 1.
+TEST_CASE("an APC40's top-left pad applies the first preset, and its pads show which are stored and applied") {
+    Device d;
+    auto* layer = d.add(d.layers, "Layer");
+    d.add(layer, "NoiseEffect");
+    d.setText("name", "sunset");
+    d.press("save");
+    REQUIRE(d.control->listRowCount() == 1);
+    auto* old = layer->replaceChildAt(0, mm::ModuleFactory::create("RainbowEffect"));
+    if (old) { old->release(); mm::Scheduler::deleteTree(old); }
+
+    mm::MidiService midi;
+    useApc40(midi);
+    midi.tick20ms();                                     // attaching seeds every light
+    CHECK(deskSlot(midi, 24) == "902002");               // preset 1, stored, lights the top-left pad (note 32) dim white
+    CHECK(deskSlot(midi, 25) == "902100");               // an empty cell's pad is dark
+    const uint8_t topLeft[3] = {0x90, 0x20, 0x7F};
+    midi.decode(topLeft, 3);
+    CHECK(std::strcmp(d.effectType(), "NoiseEffect") == 0);
+    d.control->tick20ms();                               // the surface mirrors the pads
+    CHECK(deskSlot(midi, 24) == "902015");               // the applied preset is green
+    const uint8_t bottomLeft[3] = {0x90, 0x00, 0x7F};
+    midi.decode(bottomLeft, 3);                          // preset 33 is empty: nothing happens
+    CHECK(std::strcmp(d.effectType(), "NoiseEffect") == 0);
+    midi.release();
+}
+
+// The way back: an activator lights while its switch is on, and a knob's ring shows its encoder; the faders have no motors.
+TEST_CASE("an APC40 shows the surface: activator lights and knob rings") {
+    Device d;
+    REQUIRE(d.scheduler.setControl("Control", "switch2", "{\"value\":true}") == mm::Scheduler::SetControlResult::Ok);
+    REQUIRE(d.scheduler.setControl("Control", "encoder2", "{\"value\":255}") == mm::Scheduler::SetControlResult::Ok);
+    mm::MidiService midi;
+    useApc40(midi);
+    midi.tick20ms();
+    CHECK(deskSlot(midi, 9) == "91327f");     // activator 2 lit
+    CHECK(deskSlot(midi, 10) == "823200");    // activator 3 dark
+    CHECK(deskSlot(midi, 17) == "b0317f");    // track knob 2's ring full
+    CHECK(deskSlot(midi, 0) == "000000");     // no fader message
+    midi.release();
+}
+
 // An echo of a value the target already holds is not written again, so a self-playing game never reads it as a player.
 TEST_CASE("a surface does not rewrite a target that already holds the value") {
     struct Game : mm::MoonModule {

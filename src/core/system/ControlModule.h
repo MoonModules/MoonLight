@@ -103,9 +103,35 @@ public:
         else resendTo(s);
     }
 
-    /// Push EVERY value to one surface, whatever the mirror last sent.
+    /// Push EVERY value to one surface, whatever the mirror last sent, the preset pads included.
     void resendTo(ControlSurface* s) {
         for (uint8_t slot = 0; slot < kSlotCount; slot++) resendOne(s, slot);
+        if (!s) return;
+        uint8_t pads[kMaxPresets];
+        padStates(pads);
+        for (uint8_t i = 0; i < kMaxPresets; i++) s->sendValue(SurfaceControl::Pad, i, pads[i]);
+    }
+
+    /// What a preset pad shows: empty, a stored preset, or the one applied.
+    enum PadState : uint8_t { kPadEmpty = 0, kPadStored = 1, kPadActive = 2 };
+
+    /// Every pad's state, one per grid cell.
+    void padStates(uint8_t out[kMaxPresets]) const {
+        std::memset(out, kPadEmpty, kMaxPresets);
+        for (uint8_t r = 0; r < presetCount_; r++) {
+            const Preset& p = presets_[r];
+            if (p.slot >= kMaxPresets) continue;
+            bool active = false;
+            for (uint8_t i = 0; i < kCaptureCount && !active; i++) active = p.name[0] && std::strcmp(p.name, current_[i]) == 0;
+            out[p.slot] = active ? kPadActive : kPadStored;
+        }
+    }
+
+    /// Apply the preset on grid cell `slot`, as a click on its pad does; false for an empty cell.
+    bool pressPad(uint8_t slot) {
+        for (uint8_t r = 0; r < presetCount_; r++)
+            if (presets_[r].slot == slot) return applyPreset(presets_[r].name);
+        return false;
     }
 
     // A network surface asks for this rather than resendTo, since a burst of datagrams is what WiFi drops.
@@ -175,9 +201,15 @@ public:
             mirrorOne(SurfaceControl::Encoder, i, encoders_[i], sentEncoders_[i]);
         for (uint8_t i = 0; i < kFaderCount; i++)
             mirrorOne(SurfaceControl::Fader, i, faders_[i], sentFaders_[i]);
+        // The pads change only when a preset is stored, moved, renamed, removed or applied, so they are read only then.
+        if (padsMirrored_ == padsRevision_) return;
+        padsMirrored_ = padsRevision_;
+        uint8_t pads[kMaxPresets];
+        padStates(pads);
+        for (uint8_t i = 0; i < kMaxPresets; i++) mirrorOne(SurfaceControl::Pad, i, pads[i], sentPads_[i]);
     }
 
-    /// Follow every assignment and push what moved, so a value changing underneath, such as a self-playing game, reaches a desk at once. A pass costs about 1.3 us with all 24 assigned, on a desktop.
+    /// Follow every assignment and push what moved, so a value changing underneath, such as a self-playing game, reaches a desk at once. A pass costs about 1.3 us with all 24 assigned, on a desktop; the preset pads add a pass only when one of them changed.
     void tick20ms() MM_NONBLOCKING override {
         MoonModule::tick20ms();
         mirrorToSurfaces();
@@ -670,6 +702,7 @@ public:
             return false;
         }
         presetsRevision_++;   // the surface changed: consumers caching the list must re-read
+        padsRevision_++;
         sortBySlot();
         return true;
     }
@@ -704,6 +737,7 @@ private:
     /// Re-read the folder.
     void rescan() {
         presetsRevision_++;   // consumers caching the list re-read it
+        padsRevision_++;
         presetCount_ = 0;
         platform::fsList(kPresetDir, &onEntry, this);
         for (uint8_t i = 0; i < presetCount_; i++) readHeader(presets_[i]);
@@ -717,6 +751,7 @@ private:
     /// Re-read one preset after its file changed, which costs one file where a folder walk on an ESP32 costs tens of milliseconds per preset.
     void refreshPreset(const char* name) {
         presetsRevision_++;
+        padsRevision_++;
         uint8_t at = 0;
         while (at < presetCount_ && std::strcmp(presets_[at].name, name) != 0) at++;
         char path[128];
@@ -784,6 +819,7 @@ private:
     void clearCurrentIfNamed(const char* name) {
         for (uint8_t i = 0; i < kCaptureCount; i++)
             if (std::strcmp(current_[i], name) == 0) current_[i][0] = '\0';
+        padsRevision_++;
     }
 
     /// Move an active-role claim to a preset's new name, so a rename does not silently unlight it.
@@ -791,6 +827,7 @@ private:
         for (uint8_t i = 0; i < kCaptureCount; i++)
             if (std::strcmp(current_[i], from) == 0)
                 std::snprintf(current_[i], sizeof(current_[i]), "%s", to);
+        padsRevision_++;
     }
 
     /// A preset name becomes a FILE name, so it must not be able to steer the path.
@@ -978,6 +1015,7 @@ private:
         // The preset now holds each role it sets; the others keep whoever held them, so a look and a layout stay active together.
         for (uint8_t i = 0; p && i < kCaptureCount; i++)
             if (p->roles & (1u << i)) std::snprintf(current_[i], sizeof(current_[i]), "%s", presetName);
+        padsRevision_++;
         setSurfaceStatusf("applied %s", presetName);
         return true;
     }
@@ -1049,6 +1087,7 @@ private:
     /// The last value KNOWN to a surface, so only changes go out.
     uint8_t sentSwitches_[kSwitchCount] = {};
     uint8_t sentFaders_[kFaderCount] = {};
+    uint8_t sentPads_[kMaxPresets] = {};   ///< per preset pad, the PadState surfaces were last sent
     /// One bit per control, per bank, per attached surface: a hand is on it there. See setTouched.
     struct Touch { uint32_t switches = 0, encoders = 0, faders = 0; };
     Touch touched_[kMaxSurfaces] = {};
@@ -1113,6 +1152,8 @@ private:
     Preset presets_[kMaxPresets];
     uint8_t presetCount_ = 0;
     uint32_t presetsRevision_ = 0;   ///< see presetsRevision(): drives HA's preset re-fetch
+    uint32_t padsRevision_ = 1;      ///< bumped by every change to what a preset pad shows
+    uint32_t padsMirrored_ = 0;      ///< the padsRevision_ surfaces were last mirrored at
     uint32_t nextId_ = 0;
     char name_[kMaxNameLen] = {};
     /// The module the next save writes, a look by default.
