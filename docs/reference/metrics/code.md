@@ -95,7 +95,7 @@ The next function worth simplifying is at the top of each file's list.
 | `src/light/moonlive/MoonLiveBuiltins_light.h` | 12 | `moonlive::mm_light_escape`, complex function 13 |
 | `test/unit/light/unit_RubiksCubeEffect.cpp` | 12 | `lines 60-78, also in test/unit/light/unit_RubiksCubeEffect.cpp:28`, duplicated block 19 |
 | `src/core/services/OscModule.h` | 11 | `OscModule::sendValue`, complex function 18 |
-| `src/core/system/ControlModule.h` | 11 | `ControlModule::storePreset, line 907`, large stack frame 1296 |
+| `src/core/system/ControlModule.h` | 11 | `ControlModule::storePreset, line 918`, large stack frame 1296 |
 | `src/platform/esp32/platform_esp32_i80.cpp` | 11 | `platform::createState`, complex function 27 |
 | `test/unit/light/unit_StarFieldEffect.cpp` | 11 | `lines 88-103, also in test/unit/light/unit_StarFieldEffect.cpp:13`, duplicated block 16 |
 | `src/light/drivers/Drivers.h` | 10 | `Drivers in 63 files`, name spread 63 |
@@ -365,7 +365,7 @@ The next function worth simplifying is at the top of each file's list.
 | `test/unit/core/unit_ControlModule.cpp` | 1 | `unit_ControlModule.cpp`, large file 1574 |
 | `test/unit/core/unit_Control_apply_absent_key.cpp` | 1 | `lines 92-103, also in test/unit/core/unit_HttpServerModule_apply.cpp:39`, duplicated block 12 |
 | `test/unit/core/unit_moonlive_compiler.cpp` | 1 | `unit_moonlive_compiler.cpp`, large file 1865 |
-| `test/unit/core/unit_moonlive_fill.cpp` | 1 | `unit_moonlive_fill.cpp`, large file 1359 |
+| `test/unit/core/unit_moonlive_fill.cpp` | 1 | `unit_moonlive_fill.cpp`, large file 1380 |
 | `test/unit/light/unit_BreakoutEffect.cpp` | 1 | `lines 18-27, also in test/unit/light/unit_TetrixEffect.cpp:20`, duplicated block 10 |
 | `test/unit/light/unit_Canvas.cpp` | 1 | `lines 21-26, also in test/unit/light/unit_Splat.cpp:15`, duplicated block 6 |
 | `test/unit/light/unit_ColorTrailsEffect.cpp` | 1 | `lines 43-49, also in test/unit/light/unit_fluid.cpp:159`, duplicated block 7 |

@@ -236,7 +236,7 @@ MoonLight is a community project, shaped by the people who use it:
 - **Ideas and requests**: an effect, a layout, a driver, a fixture you want supported? [Open an issue](https://github.com/MoonModules/MoonLight/issues).
 - **Help build it**: pick something from the [issues](https://github.com/MoonModules/MoonLight/issues), or propose a module. The process is in [CLAUDE.md](CLAUDE.md).
 - **Test on hardware**: run it on your panels and fixtures, and report what works.
-- **Talk to us**: [Discord](https://discord.gg/TC8NSUSCdV), [Reddit](https://reddit.com/r/moonmodules), [YouTube](https://www.youtube.com/@MoonModulesLighting), [GitHub](https://github.com/MoonModules).
+- **Talk to us**: [Discord](https://discord.gg/TC8NSUSCdV), [Reddit](https://reddit.com/r/moonmodules), [YouTube](https://www.youtube.com/@MoonModulesLighting), [GitHub](https://github.com/MoonModules), or [leave a message](https://tally.so/r/68X5xO).
 
 ## License
 

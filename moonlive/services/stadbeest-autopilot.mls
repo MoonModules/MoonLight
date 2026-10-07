@@ -1,0 +1,65 @@
+// StadBeestAutopilot: runs the StadBeest unattended. Every few minutes a new scene picks a palette, a mood and the eyes' character; within a scene the energy breathes once a minute. It moves the control surface, so the legs follow here and the eyes over OSC.
+
+class StadBeestAutopilot {
+  bool run = true;
+  byte minutes = 3;
+
+  int scene = -1;          // the scene running, counted from boot
+  int mood = 128;          // the scene's energy, 0 calm to 255 wild
+  int palette = 0;         // the scene's palette
+  int pulseOn = 0;         // whether the scene flashes on the beat
+  int pupil = 100;         // the eyes' pupil size this scene
+  int blinks = 128;        // how often the eyes blink this scene
+  int lastGlide = -100000; // when the slots were last written, in ms
+  int nextSlot = 8;        // the slot written next; 8 means all are written
+
+  void defineControls() {
+    addControl("run", run, 0, 1); // off hands the beast back to people and desks
+    addControl("minutes", minutes, 1, 30); // how long a scene lasts
+  }
+
+  // The energy around the scene's mood, breathing once a minute.
+  int energy() {
+    int phase = div(mod(t, 60000) * 1092, 1000);
+    int e = mood + div((sin(phase) - 32768) * 48, 32768);
+    if (e < 0) { e = 0; }
+    if (e > 255) { e = 255; }
+    return e;
+  }
+
+  // One slot per call: the scene's choices, and the energy spread over tempo, swing, lift and how far the eyes look.
+  void write(int k) {
+    int e = energy();
+    if (k == 0) { setControl("encoder1", palette); }
+    if (k == 1) { setControl("switch2", pulseOn); }
+    if (k == 2) { setControl("encoder2", pupil); }
+    if (k == 3) { setControl("encoder4", blinks); }
+    if (k == 4) { setControl("fader2", 20 + div(e * 70, 255)); }
+    if (k == 5) { setControl("fader4", 60 + div(e * 60, 255)); }
+    if (k == 6) { setControl("fader5", 120 + div(e * 100, 255)); }
+    if (k == 7) { setControl("encoder3", 50 + div(e, 2)); }
+  }
+
+  void tick20ms() {
+    if (run == 0) { return; }
+    int now = div(t, minutes * 60000);
+    if (now != scene) {
+      scene = now;
+      palette = random16(13);
+      mood = random16(256);
+      pulseOn = random16(2);
+      pupil = 80 + random16(80);
+      blinks = 60 + random16(140);
+      lastGlide = -100000;
+    }
+    // Every ten seconds all eight slots, one per tick: the eyes hear them over WiFi multicast, which drops a burst.
+    if (t - lastGlide >= 10000) {
+      lastGlide = t;
+      nextSlot = 0;
+    }
+    if (nextSlot < 8) {
+      write(nextSlot);
+      nextSlot = nextSlot + 1;
+    }
+  }
+}

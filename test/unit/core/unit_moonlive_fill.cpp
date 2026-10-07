@@ -195,21 +195,23 @@ TEST_CASE("a compiled script reports its size, and its tightest budget only when
     eng.describe(buf, sizeof(buf));
     INFO("described: " << buf);
     CHECK(std::strstr(buf, " B") != nullptr);        // a byte count
-    CHECK(std::strstr(buf, "/") == nullptr);          // and no budget: 1 of 8 controls is not news
+    CHECK(std::strstr(buf, "/") == nullptr);          // and no budget: one control is not news
     CHECK(eng.codeLen() > 0);
 
     // A script using every control slot is one edit from failing, so the card says which wall.
-    REQUIRE(eng.compile("class T {\n"
-                        "  byte a=1; byte b=1; byte c=1; byte d=1;\n"
-                        "  byte e=1; byte f=1; byte g=1; byte h=1;\n"
-                        "  void defineControls() { addControl(\"a\",a,0,9); addControl(\"b\",b,0,9);\n"
-                        "    addControl(\"c\",c,0,9); addControl(\"d\",d,0,9); addControl(\"e\",e,0,9);\n"
-                        "    addControl(\"f\",f,0,9); addControl(\"g\",g,0,9); addControl(\"h\",h,0,9); }\n"
-                        "  void tick() { setRGB(0, a, b, c); }\n}\n", kCtrlTable, kSys));
+    std::string full = "class T {", adds;
+    for (int i = 0; i < moonlive::kMaxCtrls; i++) {
+        const std::string m = "m" + std::to_string(i);
+        full += " byte " + m + " = 1;";
+        adds += " addControl(\"" + m + "\", " + m + ", 0, 9);";
+    }
+    full += " void defineControls() {" + adds + " } void tick() { setRGB(0, m0, m1, m2); } }";
+    REQUIRE(eng.compile(full.c_str(), kCtrlTable, kSys));
     moonlive::runDefineControls(eng);
     eng.describe(buf, sizeof(buf));
     INFO("described: " << buf);
-    CHECK(std::strstr(buf, "controls 8/8") != nullptr);
+    const std::string wall = "controls " + std::to_string(moonlive::kMaxCtrls) + "/" + std::to_string(moonlive::kMaxCtrls);
+    CHECK(std::strstr(buf, wall.c_str()) != nullptr);
     eng.free();
 }
 
@@ -725,6 +727,25 @@ TEST_CASE("a class declaring more member data than the arena holds is refused") 
     moonlive::MoonLive eng;
     CHECK_FALSE(eng.compile(src, kCtrlTable, kSys));
     eng.free();
+}
+
+// A script that walks, keeps a beat and flashes needs more than eight members, and packing them into one int was the workaround the limit forced.
+TEST_CASE("a class holds kMaxCtrls members, and one more is refused by name") {
+    std::string ok = "class T {";
+    for (int i = 0; i < moonlive::kMaxCtrls; i++) ok += " byte m" + std::to_string(i) + " = " + std::to_string(i) + ";";
+    ok += " void tick() { setRGB(0, m" + std::to_string(moonlive::kMaxCtrls - 1) + ", 0, 0); } }";
+    moonlive::MoonLive eng;
+    REQUIRE(eng.compile(ok.c_str(), kCtrlTable, kSys));
+    uint8_t px[3] = {};
+    eng.run(px, 1, 3, 0);
+    CHECK(px[0] == moonlive::kMaxCtrls - 1);   // the last member is seeded and read like the first
+    eng.free();
+
+    const std::string over = ok.substr(0, ok.find(" void")) + " byte extra = 1;" + ok.substr(ok.find(" void"));
+    moonlive::MoonLive refused;
+    CHECK_FALSE(refused.compile(over.c_str(), kCtrlTable, kSys));
+    CHECK(std::string(refused.error()).find("too many members") != std::string::npos);
+    refused.free();
 }
 
 // A uint16_t member holds a value a byte cannot.

@@ -1,51 +1,135 @@
-// StadBeestEyes: a frog's eye. Golden iris, black slit pupil, and it looks around.
+// StadBeestEyes: a frog's eye on a ring disc. A wide black pupil in a palette iris; it darts its gaze, blinks, and with music darts on the beat, sends a ripple out from the pupil and dilates with the volume.
 
 class StadBeestEyesEffect {
-  byte hue = 30;
-  byte pupil = 70;
-  byte wander = 40;
-  byte bpm = 7;
-  byte audioReactive = 0;
+  byte bpm = 20;
+  byte sensitivity = 128;
+  bool pulse = true;
+  byte pupil = 100;
+  byte look = 100;
+  byte blink = 128;
+
+  int lastBeat = -100000; // when the last beat started, in ms
+  int lastDart = 0;       // when the gaze last darted, in ms
+  int blinkAt = 3000;     // when the next blink starts, in ms
+  int steps = 0;          // darts so far, each moving the colors on
+  int tx = 0;             // where the gaze darts to, in lights from the center
+  int ty = 0;
+  bool wasOnBeat = false; // whether the last frame was on a beat, so one beat counts once
+  byte flash = 0;         // the beat's flash, fading
 
   int dimensions() { return 2; }
 
-  string tags() { return "💫🎶"; }
+  string tags() { return "💫🎵🎶"; }
 
   void defineControls() {
-    addControl("hue", hue, 0, 255); // iris color: 30 is amber, 60 green, 180 blue
-    addControl("pupil", pupil, 10, 200); // how wide the slit opens
-    addControl("wander", wander, 0, 100); // how far the eye looks around
-    addControl("bpm", bpm, 1, 60); // how restless the gaze is
-    addControl("audioReactive", audioReactive, 0, 1); // the pupil dilates on sound
+    addControl("bpm", bpm, 1, 120); // darts a minute without music
+    addControl("sensitivity", sensitivity, 0, 255); // with music, dart on its beat and dilate with its loudness; 0 ignores the music
+    addControl("pulse", pulse, 0, 1); // with music, the eye flashes on its beat
+    addControl("pupil", pupil, 10, 200); // how wide the pupil is
+    addControl("look", look, 0, 200); // how far the gaze darts
+    addControl("blink", blink, 0, 255); // how often the eye blinks; 0 never
+  }
+
+  // A new gaze target: from the music's dominant pitch while it plays, so two eyes hearing the same music look the same way.
+  void dart(int music) {
+    lastDart = t;
+    steps = steps + 1;
+    int pick = random16(45);
+    if (music == 1) {
+      int hz = audioPeakHz();
+      pick = mod(hz * 37, 45);
+    }
+    int col = mod(pick, 9) - 4;
+    int row = div(pick, 9) - 2;
+    tx = div(col * look, 100);
+    ty = div(row * look, 100);
+  }
+
+  // How far the lids are closed, in lights from the middle: a blink closes and opens within 300 ms.
+  int lids() {
+    if (blink == 0) { return 0; }
+    if (t > blinkAt + 300) {
+      int wait = random16(6000);
+      blinkAt = t + 1500 + div(wait * (256 - blink), 128);
+    }
+    // A triangle over 300 ms, peaking at 150: the distance from the peak, turned into closing, and zero outside it.
+    int closing = 150 - polarR(t - blinkAt - 150, 0);
+    closing = div(closing + polarR(closing, 0), 2);
+    int half = div(height, 2);
+    return div(closing * half, 150);
+  }
+
+  // Listens for the beat: it flashes, and with music darts the gaze; without music the gaze darts at bpm. Returns whether music plays.
+  int listen() {
+    int heard = audioBeat();
+    if (sensitivity == 0) { heard = 0; }
+    flash = flash - div(flash + 15, 16);
+    // A rising edge is a beat, unless it follows the last one too closely.
+    if (heard > wasOnBeat) {
+      if (t - lastBeat > 250) {
+        lastBeat = t;
+        flash = 255;
+        dart(1);
+      }
+    }
+    wasOnBeat = heard;
+    int music = 0;
+    if (t - lastBeat < 2000) { music = 1; }
+    if (music == 0) {
+      if (t - lastDart > div(60000, bpm)) { dart(0); }
+    }
+    return music;
   }
 
   void tick() {
-    int gazeX = div((beatsin(bpm, t, 255) - 128) * wander, 400);
-    int gazeY = div((beatsin(bpm + 3, t, 255) - 128) * wander, 400);
+    fill(0, 0, 0);
+    int cy = div(height, 2);
+    int music = listen();
 
-    int open = pupil;
-    if (audioReactive == 1) { open = pupil + div(audioLevel() * 90, 256); }
-
-    int cx = div(width, 2) + gazeX;
-    int cy = div(height, 2) + gazeY;
+    int closed = lids();
+    int heard = 0;
+    if (music == 1) { heard = audioSmooth() * sensitivity; }
+    // A wide pupil, half as high as it is wide, dilating with the volume: one division for both.
+    int a = 2 + div(pupil * 246 + heard, 8200);
+    int b = div(a + 1, 2);
+    int ab = a * a * b * b;
+    // A ripple runs from the pupil to the rim in 400 ms after each beat.
+    int lo = 0;
+    int hi = 0;
+    if (music == 1) {
+      int rip = div((t - lastBeat) * 20, 400);
+      lo = (rip - 2) * (rip - 2);
+      hi = (rip + 2) * (rip + 2);
+    }
+    int pul = 256;
+    if (pulse * music == 1) { pul = 64 + div(flash * 3, 4); }
+    // The colors move on a quarter palette with each dart, while the gaze travels.
+    int hue = div((t - lastDart) * 64, 150);
+    if (hue > 64) { hue = 64; }
+    hue = hue + steps * 64;
+    // The gaze jumps straight to its target: a dart rather than a drift.
+    int ox = div(width, 2) + tx;
+    int oy = cy + ty;
 
     for (int y = 0; y < height; y = y + 1) {
-      for (int x = 0; x < width; x = x + 1) {
-        int dx = x - cx;
-        int dy = y - cy;
-        int r = polarR(dx, dy);
-
-        int slit = polarR(dx, dy * 5);
-
-        if (slit < div(open, 16)) {
-          setRGB(y * width + x, 0, 0, 0);           // the pupil: genuinely black
-        } else {
-          int a = polarA(dx, dy);
-          int fibre = div(sin(a * 12) + 32768, 512);
-          int bright = 255 - div(r * 9, 16) + div(fibre, 3);
-          if (bright < 30) { bright = 30; }
-          if (bright > 255) { bright = 255; }
-          setPaletteColor(x, y, hue + div(r, 3), bright);
+      if (polarR(y - cy, 0) < cy - closed) {
+        int dy = y - oy;
+        for (int x = 0; x < width; x = x + 1) {
+          int dx = x - ox;
+          int r2 = dx * dx + dy * dy;
+          if (dx * dx * b * b + dy * dy * a * a >= ab) {
+            int idx = hue + 128;
+            int bright = 50;
+            // The iris moves with the gaze; beyond it lies the dim white of the eye.
+            if (r2 < 169) {
+              idx = hue + div(r2 * 128, 169);
+              bright = 220;
+            }
+            if ((r2 - lo) * (hi - r2) > 0) { bright = 255; }
+            int c = mod(idx, 256);
+            int v = div(bright * pul, 256);
+            setPaletteColor(x, y, c, v);
+          }
         }
       }
     }

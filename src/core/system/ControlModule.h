@@ -46,7 +46,7 @@ namespace mm {
 /// Applying one is applying a document, the engine every other writer shares.
 class ControlModule : public MoonModule, public ListSource {
 public:
-    /// Where the preset files live.
+    /// Where the preset files live, one per preset: @xref{why-files}.
     static constexpr const char* kPresetDir = "/.config/presets";
     /// A preset file's pad, a root `$` key so the engine reads it as the file's own rather than a module.
     static constexpr const char* kSlotKey = "$slot";
@@ -58,7 +58,7 @@ public:
     static constexpr uint8_t kMaxPresets = kGridCols * kGridRows;
     /// The longest preset name, which becomes a file name.
     static constexpr uint8_t kMaxNameLen = 32;
-    /// The top-level subtrees a preset can carry.
+    /// The top-level subtrees a preset can carry: @xref{what-a-preset-holds}.
     static constexpr const char* kCapturable[] = {"Layouts", "Effects", "Drivers", "Services"};
     /// What each capturable subtree covers, named after the CONTAINER rather than after a module.
     static constexpr const char* kCaptureRole[] = {"layout", "effects", "driver", "service"};
@@ -80,6 +80,8 @@ public:
     static constexpr uint8_t kSwitchCount = 8;
     static_assert(kTargetTypeMaxNumber[1] == kSwitchCount && kTargetTypeMaxNumber[2] == kEncoderCount
                   && kTargetTypeMaxNumber[3] == kFaderCount, "an input row names exactly the surface's banks");
+    /// Every surface value one surface can be sent, switches first, then faders, then encoders.
+    static constexpr uint8_t kSlotCount = kSwitchCount + kFaderCount + kEncoderCount;
 
     /// The boot ControlModule (exactly one exists).
     static ControlModule* active() { return ActiveInstance<ControlModule>::active(); }
@@ -101,11 +103,20 @@ public:
 
     /// Push EVERY value to one surface, whatever the mirror last sent.
     void resendTo(ControlSurface* s) {
-        if (!s) return;
-        for (uint8_t i = 0; i < kSwitchCount; i++)
-            s->sendValue(SurfaceControl::Switch, i, switches_[i] ? 255 : 0);
-        for (uint8_t i = 0; i < kFaderCount; i++)   s->sendValue(SurfaceControl::Fader, i, faders_[i]);
-        for (uint8_t i = 0; i < kEncoderCount; i++) s->sendValue(SurfaceControl::Encoder, i, encoders_[i]);
+        for (uint8_t slot = 0; slot < kSlotCount; slot++) resendOne(s, slot);
+    }
+
+    // A network surface paces a resend one value at a time, since a burst of datagrams is what WiFi drops.
+    /// Push the value at `slot`, counted as kSlotCount orders them, to one surface.
+    void resendOne(ControlSurface* s, uint8_t slot) {
+        if (!s || slot >= kSlotCount) return;
+        const SurfaceControl kind = slot < kSwitchCount               ? SurfaceControl::Switch
+                                  : slot < kSwitchCount + kFaderCount ? SurfaceControl::Fader
+                                                                      : SurfaceControl::Encoder;
+        const uint8_t index = slot < kSwitchCount               ? slot
+                            : slot < kSwitchCount + kFaderCount ? slot - kSwitchCount
+                                                                : slot - kSwitchCount - kFaderCount;
+        s->sendValue(kind, index, currentValue(kind, index));
     }
 
     /// Detach.

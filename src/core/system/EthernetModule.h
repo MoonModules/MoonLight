@@ -23,10 +23,10 @@ namespace mm {
 ///
 /// The preset list is filtered per chip, and the default is Custom rather than row 0.
 /// Where the filter leaves exactly ONE real preset that reasoning inverts, because the single survivor IS this chip's board.
-/// A P4 offers P4-NANO and an S31 offers S31 CoreBoard, so Custom there ships an unconfigured interface on a board whose wiring is known.
+/// A P4 offers P4 RMII and an S31 offers S31 RGMII, so Custom there ships an unconfigured interface on a board whose wiring is known.
 /// A classic keeps Custom, where several survive and only the catalog knows the board: an Olimex takes Classic RMII, a QuinLED Dig-Octa the no-reset variant.
 ///
-/// The applied-tracker starts on a sentinel rather than row 0, or a virgin P4 would select P4-NANO and still boot with the interface at ethNone.
+/// The applied-tracker starts on a sentinel rather than row 0, or a virgin P4 would select P4 RMII and still boot with the interface at ethNone.
 class EthernetModule : public MoonModule {
 public:
     /// Keep the interface configured whatever the toggle says, or the device drops off the network.
@@ -277,17 +277,17 @@ private:
         bool   editable;      // false on a soldered map: those lines are not the user's to set
     };
 
-    // The presets this module knows, each a board family rather than one product; Custom keeps whatever is in the fields, for a hand-wired board.
+    // The presets this module knows, each a wiring that boards follow rather than one product; Custom keeps whatever is in the fields, for a hand-wired board.
     static constexpr EthPreset kEthPresets[] = {
         // The LAN8720 reference wiring most classic boards follow, which is also the chip default.
         {"Classic RMII",            1,  0, 23, 18,  5, 17, false, -1, -1, -1, -1, -1, false},
         // The same wiring with no reset, for a board using GPIO 5 as an LED lane: the PHY resets by jumper.
         {"Classic RMII (no reset)", 1,  0, 23, 18, -1, 17, false, -1, -1, -1, -1, -1, false},
-        // Waveshare P4-NANO and the boards following its shield pinout: IP101, the clock fed in.
-        {"P4-NANO",           2,  1, 31, 52, 51, 50, true,  -1, -1, -1, -1, -1, false},
-        // The S31's 1 Gb PHY, addressed by scan rather than by a fixed address.
-        {"S31 CoreBoard",     4, -1,  5,  6,  7, -1, false, -1, -1, -1, -1, -1, false},
-        {"Custom",            0, -1, -1, -1, -1, -1, false, -1, -1, -1, -1, -1, true},
+        // The IP101 wiring the Waveshare P4 boards and the shields on their pinout follow, the clock fed in.
+        {"P4 RMII",                 2,  1, 31, 52, 51, 50, true,  -1, -1, -1, -1, -1, false},
+        // The S31's 1 Gb YT8531 PHY, addressed by scan rather than by a fixed address.
+        {"S31 RGMII",               4, -1,  5,  6,  7, -1, false, -1, -1, -1, -1, -1, false},
+        {"Custom",                  0, -1, -1, -1, -1, -1, false, -1, -1, -1, -1, -1, true},
     };
     static constexpr uint8_t kEthPresetCount = sizeof(kEthPresets) / sizeof(kEthPresets[0]);
 

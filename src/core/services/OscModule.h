@@ -50,12 +50,12 @@ public:
     /// A service, so the container accepts it as a child.
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Service; }
 
-    /// Whether to receive at all, off by default since the port is unauthenticated.
+    /// Whether to receive at all, off by default since the port is unauthenticated: @xref{what-it-refuses}.
     bool enabledOsc = false;
     /// The port we listen on.
     uint16_t port = osc::kDefaultPort;
 
-    /// Whether to mirror changes back, which is what makes this a surface rather than a remote.
+    /// Whether to mirror changes back, which is what makes this a surface rather than a remote: @xref{feedback}.
     bool feedback = false;
     /// How feedback travels, an Addressing value up to multicast + broadcast.
     uint8_t addressing = 0;
@@ -136,6 +136,10 @@ public:
         MoonModule::tick1s();
         // Only when the answer changes, since the string is identical in between.
         if (!enabledOsc) return;
+        if (feedback && ++secondsSinceRefresh_ >= kRefreshSeconds) {
+            secondsSinceRefresh_ = 0;
+            resendAll_ = true;
+        }
         refreshNamedHosts();
         const bool fresh = peerFresh();
         if (fresh != peerWasFresh_) { peerWasFresh_ = fresh; reportPeer(); }
@@ -165,7 +169,12 @@ public:
         // After the drain, so a burst re-seeds once rather than per packet.
         if (resendAll_) {
             resendAll_ = false;
-            if (auto* c = ControlModule::active()) c->resendTo(this);
+            resendNext_ = 0;
+        }
+        // One value per tick rather than all of them at once, since WiFi drops a burst of datagrams.
+        if (resendNext_ < ControlModule::kSlotCount) {
+            if (auto* c = ControlModule::active()) c->resendOne(this, resendNext_);
+            resendNext_++;
         }
     }
 
@@ -325,6 +334,10 @@ private:
     bool     peerWasFresh_ = false;  ///< what the status last said, so it is rewritten only on a change
     bool     attached_ = false;    ///< whether we are on the surface list
     bool     resendAll_ = false;   ///< a new peer appeared, so push every value once
+    uint8_t  resendNext_ = ControlModule::kSlotCount;   ///< the value a resend sends next, kSlotCount when none is running
+    uint8_t  secondsSinceRefresh_ = 0;   ///< counts to kRefreshSeconds
+    /// How often every value goes out again, so a lost datagram or a rebooted follower catches up.
+    static constexpr uint8_t kRefreshSeconds = 30;
     platform::UdpSocket sock_;     ///< the receive socket, which also sends feedback
     bool     open_ = false;        ///< whether it is bound
     uint32_t lastFailMs_ = 0;      ///< when an open last failed, which throttles the retry
