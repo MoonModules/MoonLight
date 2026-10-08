@@ -433,9 +433,7 @@ public:
         sink.writeJsonString(p.name);
         sink.append("},{\"name\":\"captures\",\"type\":\"text\",\"readonly\":true,\"value\":");
         writeCaptured(sink, p);
-        // refetch: applying a preset rewrites the module tree, so the whole card set is stale.
-        sink.append("},{\"name\":\"apply\",\"type\":\"button\",\"label\":\"apply\","
-                    "\"refetch\":true}]}");
+        sink.append("}]}");
     }
 
     // ---- Presets as an external surface (Home Assistant, and any future consumer).
@@ -748,13 +746,24 @@ public:
         return true;
     }
 
-    /// The row's editable fields carry the two actions a preset row needs.
+    /// A pad's action applies its preset.
+    bool applyListRow(uint32_t id) override {
+        for (uint8_t i = 0; i < presetCount_; i++)
+            if (presets_[i].id == id) return applyPreset(presets_[i].name);
+        return false;
+    }
+
+    /// A preset's name is its file name, so it is unique and addresses the row.
+    bool listRowNamed(const char* name, uint32_t& outId) const override {
+        for (uint8_t i = 0; name && i < presetCount_; i++)
+            if (std::strcmp(presets_[i].name, name) == 0) { outId = presets_[i].id; return true; }
+        return false;
+    }
+
+    /// A row's one editable field is its name.
     bool setListRowField(uint32_t id, const char* field, const char* valueJson) override {
         for (uint8_t i = 0; i < presetCount_; i++) {
             if (presets_[i].id != id) continue;
-            // `activate` is the pad click and `apply` the row button, one action from two views.
-            if (std::strcmp(field, "activate") == 0 || std::strcmp(field, "apply") == 0)
-                return applyPreset(presets_[i].name);
             if (std::strcmp(field, "name") == 0) {
                 char newName[kMaxNameLen] = {};
                 mm::json::parseString(valueJson, "value", newName, sizeof(newName));

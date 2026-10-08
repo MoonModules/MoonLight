@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/module/MoonModule.h"
+#include "core/module/Scheduler.h"   // topOfType: the Layouts it finds when nothing injected one
 #include "light/moonlive/MoonLivePalette.h"   // the scripted palette, run before the layers
 #include "light/layers/Layer.h"
 #include "light/layouts/Layouts.h"
@@ -47,6 +48,9 @@ public:
 
     /// Re-wire the children before they build, so a layer added through the API is wired too.
     void prepare() override {
+        // Found by type when nothing injected it, so a tree built from a document needs no wiring.
+        if (!layouts_)
+            if (Scheduler* s = Scheduler::instance()) layouts_ = static_cast<Layouts*>(s->topOfType("Layouts"));
         setLayouts(layouts_);
     }
 

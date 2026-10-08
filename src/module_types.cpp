@@ -198,6 +198,8 @@
 #include "core/util/ModuleFactory.h"
 #include "platform/platform.h"
 
+#include <cstring>
+
 #include "core/system/EthernetModule.h"
 #include "core/system/WiFiModule.h"
 #include "core/system/AccessPointModule.h"
@@ -374,4 +376,57 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::WiFiModule>("WiFiModule", "core/system.md#wifi");
     mm::ModuleFactory::registerType<mm::AccessPointModule>("AccessPointModule", "core/system.md#access-point");
     mm::ModuleFactory::registerType<mm::FilesystemModule>("FilesystemModule", "core/system.md#filesystem");
+}
+
+namespace {
+
+// A module the device creates itself, under a parent type (top-level when there is none), with its name where that is not the type's default, and whether this build has it.
+struct BootModule {
+    const char* parentType;
+    const char* type;
+    const char* name;
+    bool built;
+};
+
+constexpr bool kEthernetCard = mm::platform::hasEthernet || mm::platform::previewsEthernetControls;
+
+// The apparatus every device carries, in the order the children stand: the network cascade and the cards read that order.
+constexpr BootModule kBootModules[] = {
+    {nullptr, "FileManagerModule", "File Manager", true},
+    {nullptr, "FirmwareUpdateModule", "Firmware", true},
+    {"SystemModule", "TasksModule", nullptr, true},
+    {"SystemModule", "I2cBusModule", nullptr, true},
+    {"SystemModule", "PinsModule", nullptr, true},
+    {"Services", "AudioService", nullptr, true},
+    {"NetworkModule", "EthernetModule", nullptr, kEthernetCard},
+    {"NetworkModule", "WiFiModule", nullptr, mm::platform::hasWiFi},
+    {"NetworkModule", "AccessPointModule", nullptr, mm::platform::hasWiFi},
+    {"NetworkModule", "ImprovProvisioningModule", nullptr, mm::platform::hasImprov},
+    {"NetworkModule", "MqttModule", nullptr, mm::platform::hasNetwork},
+    {"NetworkModule", "DevicesModule", nullptr, true},
+    {"Drivers", "FixtureProfilesModule", nullptr, true},
+    {"Drivers", "PreviewDriver", nullptr, true},
+    {"MoonCloudModule", "MoonStatsModule", "Stats", true},
+    {"MoonCloudModule", "MoonTalkModule", "Talk", true},
+};
+
+}  // namespace
+
+mm::MoonModule* mm::createTopLevel(const char* typeName) {
+    MoonModule* top = ModuleFactory::create(typeName);
+    if (!top) return nullptr;
+    for (const BootModule& b : kBootModules) {
+        if (!b.built) continue;
+        if (!b.parentType) {
+            if (std::strcmp(b.type, typeName) == 0) top->setName(b.name);
+            continue;
+        }
+        if (std::strcmp(b.parentType, typeName) != 0) continue;
+        MoonModule* child = ModuleFactory::create(b.type);
+        if (!child) continue;   // a type this build leaves out
+        if (b.name) child->setName(b.name);
+        top->addChild(child);
+        child->markWiredByCode();
+    }
+    return top;
 }

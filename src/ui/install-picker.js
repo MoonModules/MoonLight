@@ -1001,10 +1001,10 @@ export const installPicker = {
     getSelectedDeviceTxPower() {
         if (!_lastState || !_lastState.selectedDevice || !_lastState.devices) return null;
         const entry = _lastState.devices.find(b => b.name === _lastState.selectedDevice);
-        // Each device's modules list carries its own controls; the TX-power cap lives on the
-        // WiFi child's.
-        const net = entry && (entry.modules || []).find(m => m && m.id === "WiFi");
-        const v = net && net.controls && net.controls.txPowerSetting;
+        // Each device's state document carries its own controls; the TX-power cap lives on the
+        // Network.WiFi child's.
+        const net = entry && entry.state && entry.state.Network;
+        const v = net && net.WiFi && net.WiFi.txPowerSetting;
         // The SET_TX_POWER RPC validates a whole-dBm value in 0..21 (platform.h);
         // reject anything outside that so a bad catalog value can't poison the
         // brown-out mitigation path.

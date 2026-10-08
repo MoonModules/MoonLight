@@ -33,7 +33,7 @@ A user-added Service: the audio source the audio-reactive effects consume. `mode
 - `gain`: (Local, manual) the width of the display window: higher is narrower, so it runs hotter.
 - `send audio`: (Local, network build) send the local analysis as audio-sync packets.
 - `addressing`: (sending) `multicast`, which WLED hears, or `unicast` to `hosts`, faster on WiFi.
-- `hosts`: (unicast) the boards that follow this audio, addresses or names.
+- `hosts`: (unicast) the devices that follow this audio, addresses or names.
 - `simulate`: (Simulate) the pattern: `music`, a plausible song, or `sweep`, a test march.
 - `syncPort`: (network build) the UDP port, 11988 by default; `sync status` reports the state.
 - read-only: `level` (RMS), `peakHz` (the audio driving effects, from any source).
@@ -65,7 +65,7 @@ Detail: [technical](moxygen/OscModule.md)
 
 ### Infrared
 
-A Service added per board: an infrared receiver whose **rows** map learned codes onto other modules' controls, through the same primitive every other input uses. A remote press and an OSC message are indistinguishable to whatever they drive.
+A Service added per device: an infrared receiver whose **rows** map learned codes onto other modules' controls, through the same primitive every other input uses. A remote press and an OSC message are indistinguishable to whatever they drive.
 
 <img src="../../assets/core/InfraredService.png" width="300" alt="Infrared service controls">
 
@@ -80,7 +80,7 @@ Detail: [technical](moxygen/InfraredService.md)
 
 ### Button
 
-A Service added per board: **a list of buttons**, each on its own GPIO, each driving a control through the same primitive the infrared service uses. A press and a UI click are the same thing to whatever they drive. A **foot pedal needs no module of its own**: electrically it is a momentary switch.
+A Service added per device: **a list of buttons**, each on its own GPIO, each driving a control through the same primitive the infrared service uses. A press and a UI click are the same thing to whatever they drive. A **foot pedal needs no module of its own**: electrically it is a momentary switch.
 
 <img src="../../assets/core/ButtonService.png" width="300" alt="Button service controls">
 
@@ -95,7 +95,7 @@ Detail: [technical](moxygen/ButtonService.md)
 
 ### Analog
 
-A Service added per board: **a list of ADC pins**, each driving a control with a value rather than an event. The continuous twin of Button, which drives the same controls from a contact.
+A Service added per device: **a list of ADC pins**, each driving a control with a value rather than an event. The continuous twin of Button, which drives the same controls from a contact.
 
 An **expression pedal** is the shape this is built around, and why a row carries more than a pin.
 
@@ -113,7 +113,7 @@ Detail: [technical](moxygen/AnalogService.md)
 
 ### Gamepad
 
-A Service added per board: **a gamepad's buttons and sticks**, each driving a control through the same rows the other input services use. The pad plugs into the computer showing the interface, over USB or Bluetooth, and the browser reports it, so it works on every chip.
+A Service added per device: **a gamepad's buttons and sticks**, each driving a control through the same rows the other input services use. The pad plugs into the computer showing the interface, over USB or Bluetooth, and the browser reports it, so it works on every chip.
 
 <img src="../../assets/core/GamepadService.png" width="300" alt="Gamepad service controls"> <img src="../../assets/reference/microsoft-xbox-series-controller.png" width="200" alt="A Microsoft Xbox Series controller, the pad the service is verified with">
 
@@ -127,15 +127,15 @@ Detail: [technical](moxygen/GamepadService.md)
 
 ### MIDI
 
-A Service added per board: **a MIDI control desk** driving the control surface. The desk plugs into the computer showing the interface and the browser reports it, so it works on every chip. A Mackie desk such as the iCON QCon or the Behringer X-Touch in MC mode works without setup, an Akai APC40 mkII after one choice.
+A Service added per device: **a MIDI control desk** driving the control surface. The desk plugs into the computer showing the interface and the browser reports it, so it works on every chip. A Mackie desk such as the iCON QCon or the Behringer X-Touch in MC mode works without setup, an Akai APC40 mkII after one choice.
 
 <img src="../../assets/core/MidiService.png" width="300" alt="MIDI service controls">
 
 - `profile`: the desk's layout, `Mackie Control` or `Akai APC40 mkII`.
 - `source`: `browser`, `USB` on this board's own port (S3, 8 MB of flash or more), or `network`.
-- `share`: (USB) pass the desk on over the network rather than driving this board.
+- `share`: (USB) pass the desk on over the network rather than driving this device.
 - `host`: (network) the desk's address or name, with an optional `:port`; empty waits to be invited.
-- `port`: (network, share) this board's RTP-MIDI port, 5004 by default, data on the one above.
+- `port`: (network, share) this device's RTP-MIDI port, 5004 by default, data on the one above.
 
 Faders move the surface's faders, the knobs turn its encoders, and each channel's SELECT button flips its switch. The desk follows the surface back: motors, SELECT lights and knob rings. A hand on a fader holds its motor still. An APC40's clip pads apply presets. ⌄ details.
 
@@ -145,7 +145,7 @@ Detail: [technical](moxygen/MidiService.md)
 
 ### MoonLiveService
 
-A Service added per board: **a MoonLive script that reads hardware and drives controls**. The flexible half of the input story, and the twin of a scripted effect.
+A Service added per device: **a MoonLive script that reads hardware and drives controls**. The flexible half of the input story, and the twin of a scripted effect.
 
 <img src="../../assets/core/MoonLiveService.png" width="300" alt="MoonLive service controls">
 
@@ -175,7 +175,7 @@ The input services share three row fields, because what happens after an input f
 Only a `set` row acts on the release. A toggle or a delta acting on both edges would fire twice for one push.
 
 ## Gamepad, details
-A browser lists a pad only once one of its buttons is pressed with the page open, a rule against fingerprinting a visitor's hardware. Chrome, Firefox and every browser built on Chrome list a pad only on a secure origin. The desktop app's page on `localhost` is one; a device's plain `http://` page is not, until its address is added the way [MIDI, details](#midi-details) shows. Safari lists a pad on any page, and so does every browser on an iPhone or iPad, since they all run on Safari's engine. So a pad paired with a phone or tablet plays on any board's page with no computer involved. To check that the browser sees a pad, and which standard button or axis each control reports, open [hardwaretester.com/gamepad](https://hardwaretester.com/gamepad) in the same browser: if a button lights there, it reaches MoonLight too. The inputs are named as SDL's GameController API names them (`a`, `b`, `dpup`, `leftx`). That is the vocabulary GameControllerDB maps hundreds of controllers onto, so one set of rows works with any pad the browser reports in the standard mapping; a pad it does not recognize reports its own order, and learn binds it all the same. A stick follows the surface's convention, up and right being more, so a stick, a fader and a paddle point the same way; the service flips the browser's Y, which counts down the screen. It writes its position rescaled into the target's range, and only once it moves past a small deadband. A pad's first stick positions are taken as rest, so plugging one in with a stick off-center moves nothing, while the button press that makes the browser show the pad still counts. A switch on the surface driving a button control, such as Space Invaders' `fire`, presses it on the way down only.
+A browser lists a pad only once one of its buttons is pressed with the page open, a rule against fingerprinting a visitor's hardware. Chrome, Firefox and every browser built on Chrome list a pad only on a secure origin. The desktop app's page on `localhost` is one; a device's plain `http://` page is not, until its address is added the way [MIDI, details](#midi-details) shows. Safari lists a pad on any page, and so does every browser on an iPhone or iPad, since they all run on Safari's engine. So a pad paired with a phone or tablet plays on any device's page with no computer involved. To check that the browser sees a pad, and which standard button or axis each control reports, open [hardwaretester.com/gamepad](https://hardwaretester.com/gamepad) in the same browser: if a button lights there, it reaches MoonLight too. The inputs are named as SDL's GameController API names them (`a`, `b`, `dpup`, `leftx`). That is the vocabulary GameControllerDB maps hundreds of controllers onto, so one set of rows works with any pad the browser reports in the standard mapping; a pad it does not recognize reports its own order, and learn binds it all the same. A stick follows the surface's convention, up and right being more, so a stick, a fader and a paddle point the same way; the service flips the browser's Y, which counts down the screen. It writes its position rescaled into the target's range, and only once it moves past a small deadband. A pad's first stick positions are taken as rest, so plugging one in with a stick off-center moves nothing, while the button press that makes the browser show the pad still counts. A switch on the surface driving a button control, such as Space Invaders' `fire`, presses it on the way down only.
 
 ## MIDI, details
 The browser reads the desk with the Web MIDI API, which Chrome, Edge and Firefox offer on a secure origin only, so it works on the desktop app's page on `localhost`; Safari has no Web MIDI. The first time, the browser asks permission to use MIDI devices.
@@ -190,11 +190,11 @@ The decoding follows Mackie Control: a fader is 14-bit pitch bend on its own cha
 
 **The Akai APC40 mkII profile.** The browser greets the desk with the SysEx that puts it in Alternate Ableton Live mode, where every light is the host's. Chrome asks once to allow SysEx for it. Track faders 1-8 move the surface's faders and track knobs 1-8 set its encoders, each reading 0 to 127. Activator buttons 1-8 flip its switches. The 40 clip pads apply presets 1-40, the top-left pad being preset 1 as on the Control card. The way back lights each activator while its switch is on and fills each knob's ring like a meter. Each pad is dark when empty, dim white when a preset is stored, and green for the one applied. The faders have no motors. Every message is in [the APC40 reference](../../reference/hardware/control-surfaces.md#akai-apc40-mkii).
 
-**A desk on the board's own USB port.** With `source` on USB, the desk plugs into the board instead of the computer, and the board is the USB host. It reads the desk as USB-MIDI 1.0 packets, greets it, and sends it its state. The port then carries no serial log and no USB flashing, so a board with a second USB port keeps that one for the computer. The desk takes its power from the port, so the board supplies 5 V there, or a powered hub between them does; an APC40 mkII draws about 0.15 A.
+**A desk on the board's own USB port.** With `source` on USB, the desk plugs into the board instead of the computer, and the device is the USB host. It reads the desk as USB-MIDI 1.0 packets, greets it, and sends it its state. The port then carries no serial log and no USB flashing, so a board with a second USB port keeps that one for the computer. The desk takes its power from the port, so the board supplies 5 V there, or a powered hub between them does; an APC40 mkII draws about 0.15 A.
 
-**A desk on the network.** With `source` on network, the desk is an [RTP-MIDI](https://www.rfc-editor.org/rfc/rfc6295) session, the standard Apple's Network MIDI uses. `host` names the other end: a board sharing the desk on its USB port, a desk with a network port, or a computer sharing its desk. The service invites it, and asks again every second until it answers, so either side may start first. With `host` empty the service waits to be invited, as a Mac's Audio MIDI Setup does when its Network window connects to the board. Windows does the same with the free rtpMIDI driver. The greeting, the surface and the touch handling are those of a desk on the board's own port, so a desk behaves the same whichever cable it is on.
+**A desk on the network.** With `source` on network, the desk is an [RTP-MIDI](https://www.rfc-editor.org/rfc/rfc6295) session, the standard Apple's Network MIDI uses. `host` names the other end: a device sharing the desk on its USB port, a desk with a network port, or a computer sharing its desk. The service invites it, and asks again every second until it answers, so either side may start first. With `host` empty the service waits to be invited, as a Mac's Audio MIDI Setup does when its Network window connects to the device. Windows does the same with the free rtpMIDI driver. The greeting, the surface and the touch handling are those of a desk on the device's own USB port, so a desk behaves the same whichever cable it is on.
 
-**Sharing a desk.** With `source` on USB and `share` on, the desk on this board's port drives nothing here: the board is a MIDI cable over the network, as a bought RTP-MIDI interface is, and the board the desk drives invites it. That board names it in `host` by address or by name, `<name>.local`, since a board waiting to be invited announces itself over Bonjour as `_apple-midi._udp`; a Mac lists it in Audio MIDI Setup's Network window the same way. The board passes each message on unchanged, both ways. The one exception is a SysEx the desk sends, which its USB side does not pass on, as on a board's own port; the greeting SysEx from the host reaches the desk. It accepts a session only while a desk is plugged in, so a desk plugged in later is greeted: the host invites again until the bridge says yes. One host at a time: a second is refused while the first holds the session. A lost message is not repaired, since the next fader message replaces it and a lost press is pressed again; sent packets carry no recovery journal, and a received one is skipped.
+**Sharing a desk.** With `source` on USB and `share` on, the desk on this device's USB port drives nothing here: the device is a MIDI cable over the network, as a bought RTP-MIDI interface is, and the device the desk drives invites it. That device names it in `host` by address or by name, `<name>.local`, since a device waiting to be invited announces itself over Bonjour as `_apple-midi._udp`; a Mac lists it in Audio MIDI Setup's Network window the same way. The device passes each message on unchanged, both ways. The one exception is a SysEx the desk sends, which its USB side does not pass on, as with a desk on USB; the greeting SysEx from the host reaches the desk. It accepts a session only while a desk is plugged in, so a desk plugged in later is greeted: the host invites again until the bridge says yes. One host at a time: a second is refused while the first holds the session. The host's status says why it was refused: `no desk`, `in use`, or `it invites` when the device it invited has a `host` of its own. A lost message is not repaired, since the next fader message replaces it and a lost press is pressed again; sent packets carry no recovery journal, and a received one is skipped.
 
 ## Audio, details
 #### Microphone wiring
@@ -211,7 +211,7 @@ The decoding follows Mackie Control: a fader is 14-bit pitch bend on its own cha
 
 #### The three modes
 
-Local runs an input of its own, a microphone or line-in on a board and a capture device on desktop, and analyzes it locally. Receive network is a pure sink a peer's WLED-compatible audio drives. Simulate is a synthesized source for demos and tests. On board targets Local idles until real GPIOs are entered; on desktop it captures the picked device right away. A desktop in Local mode with `send audio` on is an audio-sync source: one machine's microphone or loopback drives a whole fleet of boards in Receive mode. The Receive mode and every network-sync control exist only on a network-capable build.
+Local runs an input of its own, a microphone or line-in on a device and a capture device on desktop, and analyzes it locally. Receive network is a pure sink a peer's WLED-compatible audio drives. Simulate is a synthesized source for demos and tests. On ESP32 targets Local idles until real GPIOs are entered; on desktop it captures the picked device right away. A desktop in Local mode with `send audio` on is an audio-sync source: one machine's microphone or loopback drives a whole fleet of devices in Receive mode. The Receive mode and every network-sync control exist only on a network-capable build.
 
 #### Capturing what the machine plays (loopback), per OS
 
@@ -248,7 +248,7 @@ A received magnitude is clamped to 255, since a real WLED source reaches ~9500 a
 Prior art: the WLED-MM audio-reactive usermod by **Frank ([@softhack007](https://github.com/softhack007))**, the most-used open-source audio-reactive LED implementation, whose adaptive noise-gate concept the analysis here descends from (analyzed with his permission); and **[@troyhacks](https://github.com/troyhacks/WLED)**, who reworked that DSP onto Espressif's [esp-dsp](https://github.com/espressif/esp-dsp) FFT, the same choice this service makes. The line-in path exists because **wladi ([myhome-control](https://shop.myhome-control.de))** supplied the hardware and pinout for the [MHC-WLED ESP32-P4 shield](../../reference/hardware/mhc-wled-esp32-p4-shield.md): its onboard PCM1808 I2S ADC is what `mclkPin` is for.
 
 ## OSC, details
-**Feedback: the device answers.** With `feedback` on, a control that changes anywhere (the web UI, a preset recall, an audio-reactive effect) is mirrored back to the surface, which is what keeps a client honest and what moves a motorized fader. `addressing` picks where it goes: `unicast` to each of `hosts`, addresses or names, or to whoever last wrote when `hosts` is empty; `multicast` to `group`, which every listening board with the same `group` joins; the default, `239.255.77.78`, sits beside discovery's own group, so multicast works with nothing to fill in, and a second rig on the same network picks another. `feedbackPort` is where that client LISTENS, which is not the port we listen on (Open Stage Control calls its own `osc-port`).
+**Feedback: the device answers.** With `feedback` on, a control that changes anywhere (the web UI, a preset recall, an audio-reactive effect) is mirrored back to the surface, which is what keeps a client honest and what moves a motorized fader. `addressing` picks where it goes: `unicast` to each of `hosts`, addresses or names, or to whoever last wrote when `hosts` is empty; `multicast` to `group`, which every listening device with the same `group` joins; the default, `239.255.77.78`, sits beside discovery's own group, so multicast works with nothing to fill in, and a second rig on the same network picks another. `feedbackPort` is where that client LISTENS, which is not the port we listen on (Open Stage Control calls its own `osc-port`).
 
 A client learns the current state three ways: when it first writes to us from a new address, when its address changes, and whenever it sends **`/mm/hello`**. The last one exists because a client restarting on the SAME address is invisible to the other two, and most controllers send nothing of their own on load, so every widget would show its layout file's defaults until the user moved one.
 The shipped session has a `sync from device` button for exactly this.
@@ -256,7 +256,7 @@ Every value also goes out again every 30 seconds, one every 20 ms, so a datagram
 A pad's state goes out as an int on `/mm/padstate/N`: 0 for an empty pad, 1 for a stored preset, 2 for the one applied. It has its own address, so a board listening to this one's feedback never reads a state as a press.
 A value is never sent back to the host it came from, so two boards feeding each other cannot echo it between them.
 
-**Boards following one board.** A board with `listen` on, on the leader's `feedbackPort`, takes every value the leader sends and its assignments carry each to its own controls. A desk at the side of a room reaches the installation through a board that [shares it](#midi-details) instead, since a desk belongs on the board it drives.
+**Devices following one device.** A device with `listen` on, on the leader's `feedbackPort`, takes every value the leader sends and its assignments carry each to its own controls. A desk at the side of a room reaches the installation through a device that [shares it](#midi-details) instead, since a desk belongs on the device it drives.
 
 **Setting one up**, from installing the app to using it from a phone, is its own page: [Connecting a control surface](../../how-to/control-surface.md). It needs no checkout and no tooling: the app and the session file from the latest release do.
 

@@ -109,9 +109,10 @@ TEST_CASE("the app's saved config carries every key MoonBase reads") {
     mm::platform::fsSetRoot(nullptr);   // the default root
 }
 
-// The scraper matches a key at the top level or under a child, and never inside another key's name.
-TEST_CASE("the config scraper finds top-level and child keys, and only whole keys") {
-    const char* json = R"({"mDNS":true,"0.type":"EthernetModule","0.ethType":3,"1.known":[{"id":1,"ssid":"a\"b","password":"p"}],"myssid":"no"})";
+// The scraper matches a whole key anywhere in the document, the module's own or a child's, and never inside another key's name.
+TEST_CASE("the config scraper finds a key at any depth, and only whole keys") {
+    const char* json = R"({"Network":{"mDNS":true,"Ethernet":{"type":"EthernetModule","ethType":3},)"
+                       R"("WiFi":{"type":"WiFiModule","known":[{"id":1,"ssid":"a\"b","password":"p"}]},"myssid":"no"}})";
     int t = 0;
     mm::configscrape::findInt(json, "ethType", &t);
     CHECK(t == 3);
@@ -129,7 +130,7 @@ TEST_CASE("the config scraper finds top-level and child keys, and only whole key
 
 // MoonBase tries the known networks in the app's order, so a device on its second network at another site still reaches an update.
 TEST_CASE("the config scraper reads every known network in order, and a control byte as the app escapes it") {
-    const char* json = R"({"1.known":[{"id":1,"ssid":"home","password":"h"},{"id":2,"ssid":"site","password":"s\u0001t"}]})";
+    const char* json = R"({"Network":{"WiFi":{"type":"WiFiModule","known":[{"id":1,"ssid":"home","password":"h"},{"id":2,"ssid":"site","password":"s\u0001t"}]}}})";
     char ssid[16] = {}, pw[16] = {};
     REQUIRE(mm::configscrape::findNetwork(json, 1, ssid, sizeof(ssid), pw, sizeof(pw)));
     CHECK(std::string(ssid) == "site");
@@ -139,9 +140,11 @@ TEST_CASE("the config scraper reads every known network in order, and a control 
     CHECK_FALSE(mm::configscrape::findString(R"({"ssid":"caf\u00e9"})", "ssid", ssid, sizeof(ssid)));
 }
 
-// Known-network and MQTT passwords precede the access point's, and a list row's "type" names no child.
-TEST_CASE("the config scraper reads a child's key by the child's type") {
-    const char* json = R"({"1.known":[{"ssid":"s","password":"net"}],"4.type":"MqttModule","4.password":"mqtt","2.type":"AccessPointModule","2.password":"ap-pass","5.devices":[{"type":"MoonLight"}]})";
+// Known-network and MQTT passwords precede the access point's, a list row's "type" names no child, and a child's key is its own rather than a nested child's.
+TEST_CASE("the config scraper reads a child's key by the child's type, among its own members") {
+    const char* json = R"({"Network":{"WiFi":{"type":"WiFiModule","known":[{"ssid":"s","password":"net"}]},"Mqtt":{"type":"MqttModule","password":"mqtt"},)"
+                       R"("AccessPoint":{"type":"AccessPointModule","password":"ap-pass"},"Devices":{"type":"DevicesModule","devices":[{"type":"MoonLight"}]},)"
+                       R"("Ethernet":{"type":"EthernetModule","Card":{"type":"X","password":"inner"}}}})";
     char out[16] = {};
     REQUIRE(mm::configscrape::findChildString(json, "AccessPointModule", "password", out, sizeof(out)));
     CHECK(std::string(out) == "ap-pass");
@@ -149,15 +152,27 @@ TEST_CASE("the config scraper reads a child's key by the child's type") {
     CHECK(std::string(out) == "mqtt");
     CHECK_FALSE(mm::configscrape::findChildString(json, "MoonLight", "password", out, sizeof(out)));
     CHECK_FALSE(mm::configscrape::findChildString(json, "EthernetModule", "password", out, sizeof(out)));
-    CHECK_FALSE(mm::configscrape::findChildString(R"({"2.type":"AccessPointModule","2.password":""})", "AccessPointModule", "password", out, sizeof(out)));
+    CHECK_FALSE(mm::configscrape::findChildString(R"({"Network":{"AccessPoint":{"type":"AccessPointModule","password":""}}})", "AccessPointModule", "password", out, sizeof(out)));
+}
+
+// Temporary, until the release after 2026-10-08: MoonBase can boot before the app has converted its flat file, so the flat form still reads.
+TEST_CASE("the config scraper still reads the flat format older builds wrote") {
+    const char* json = R"({"0.type":"EthernetModule","0.ethType":3,"0.ipSettings":1,"0.ip":"10.0.0.5","2.type":"AccessPointModule","2.password":"ap-pass"})";
+    int t = 0;
+    mm::configscrape::findInt(json, "ethType", &t);
+    CHECK(t == 3);
+    char out[16] = {};
+    REQUIRE(mm::configscrape::findChildString(json, "AccessPointModule", "password", out, sizeof(out)));
+    CHECK(std::string(out) == "ap-pass");
+    CHECK(mm::configscrape::findChildIp(json, "EthernetModule").ip[3] == 5);
 }
 
 // A row's addressing is its own: one saved without a static address never reads the next row's, and one the app would refuse is not used.
 TEST_CASE("the config scraper reads each interface's IP settings, by the app's rule") {
-    const char* json = R"({"0.type":"EthernetModule","0.ipSettings":1,"0.ip":"10.0.0.5","0.subnet":"255.255.255.0",)"
-                       R"("1.known":[{"id":1,"ssid":"home","password":"h"},)"
+    const char* json = R"({"Network":{"Ethernet":{"type":"EthernetModule","ipSettings":1,"ip":"10.0.0.5","subnet":"255.255.255.0"},)"
+                       R"("WiFi":{"type":"WiFiModule","known":[{"id":1,"ssid":"home","password":"h"},)"
                        R"({"id":2,"ssid":"site","password":"s","ipSettings":1,"ip":"10.1.0.9","gateway":"10.1.0.1"},)"
-                       R"({"id":3,"ssid":"bad","password":"b","ipSettings":1,"ip":"10.2.0.0","subnet":"255.255.255.0"}]})";
+                       R"({"id":3,"ssid":"bad","password":"b","ipSettings":1,"ip":"10.2.0.0","subnet":"255.255.255.0"}]}}})";
     CHECK(mm::configscrape::findChildIp(json, "EthernetModule").usable());
     CHECK_FALSE(mm::configscrape::findNetworkIp(json, 0).usable());   // no keys of its own: DHCP
     const mm::configscrape::SavedIp site = mm::configscrape::findNetworkIp(json, 1);
@@ -166,9 +181,9 @@ TEST_CASE("the config scraper reads each interface's IP settings, by the app's r
     CHECK_FALSE(mm::configscrape::findNetworkIp(json, 2).usable());   // the network address, which the app refuses too
     CHECK_FALSE(mm::configscrape::findNetworkIp(json, 3).usable());   // past the last row
     // The last row ends at its own brace, so a later module's address is not read as its own, and a brace in a password does not end it early.
-    const char* tail = R"({"1.known":[{"id":1,"ssid":"home","password":"p}w"}],"0.type":"EthernetModule","0.ipSettings":1,"0.ip":"10.0.0.5"})";
+    const char* tail = R"({"Network":{"WiFi":{"type":"WiFiModule","known":[{"id":1,"ssid":"home","password":"p}w"}]},"Ethernet":{"type":"EthernetModule","ipSettings":1,"ip":"10.0.0.5"}}})";
     CHECK(mm::configscrape::findNetworkIp(tail, 0).mode == 0);
-    const char* braced = R"({"1.known":[{"id":1,"ssid":"home","password":"p}w","ipSettings":1,"ip":"10.1.0.9"}]})";
+    const char* braced = R"({"Network":{"WiFi":{"type":"WiFiModule","known":[{"id":1,"ssid":"home","password":"p}w","ipSettings":1,"ip":"10.1.0.9"}]}}})";
     CHECK(mm::configscrape::findNetworkIp(braced, 0).usable());
 }
 

@@ -10,6 +10,8 @@
 
 namespace mm {
 
+struct StateDocumentResult;
+
 class JsonSink;   // forward declared: the bodies in the .cpp include the real headers
 class Scheduler;
 
@@ -344,23 +346,24 @@ public:
     /// What an apply-core operation did, which a transport maps onto its own error reporting.
     enum class OpResult : uint8_t {
         Ok,
-        AlreadyExists,   ///< add is a no-op: a module with this id is already in the tree (still success)
+        NameInUse,       ///< add of a name some module already holds
         ModuleNotFound,  ///< module / parent name not in the tree
         ControlNotFound, ///< module exists but has no such control (a distinct 404)
         UnknownType,     ///< factory doesn't know the type
         BadRequest,      ///< missing field, top-level add, parent rejected child
         OutOfRange,      ///< numeric value outside bounds
         Malformed,       ///< value didn't parse (such as an IPv4)
-        ReadOnly,        ///< tried to write a display-only control
+        ReadOnly,        ///< tried to write a display-only control, or remove a module the user cannot
+        Refused,         ///< the state engine refused the document, its reason in the result the caller passed
     };
-    /// Add a module, `outName` receiving its final name once a collision has been disambiguated.
-    OpResult applyAddModule(const char* typeName, const char* id, const char* parentId, char* outName = nullptr, size_t outNameLen = 0);
+    /// Create a module named `id`, refused when that name is in use, or without an id named after its type with a free suffix; `outName` receives the name.
+    OpResult applyAddModule(const char* typeName, const char* id, const char* parentId, char* outName = nullptr, size_t outNameLen = 0, StateDocumentResult* refusal = nullptr);
     /// Write one control, the single path every transport's control write ends in.
     OpResult applySetControl(const char* moduleName, const char* controlName, const char* valueJson);
-    /// Remove every child of `parentName`, which is what a catalog inject's replace does.
-    OpResult applyClearChildren(const char* parentName);
-    /// Parse one REST op object and dispatch to the three above, the shape an Improv frame carries.
-    OpResult applyOp(const char* opJson);
+    /// Remove a module and everything under it; a top-level or non-editable one is refused.
+    OpResult applyDeleteModule(const char* moduleName, StateDocumentResult* refusal = nullptr);
+    /// Swap a module for a fresh one of `typeName` in its place, named `wantName`, else its custom name, else the new type's default, made free.
+    OpResult applyReplaceModule(const char* moduleName, const char* typeName, const char* wantName, StateDocumentResult* refusal = nullptr);
 
     /// A file changed, so ask the tree to re-derive whatever was built from it.
     void applyFileChanged(const char* path);
@@ -495,6 +498,10 @@ private:
     // HTTP handling
     void handleConnection(platform::TcpConnection& conn);
     void sendResponse(platform::TcpConnection& conn, int status, const char* contentType, const char* body);
+    /// Answer a refused document as `PATCH /api/state` does: the engine's error and where it is, with status 400.
+    void sendRefusal(platform::TcpConnection& conn, const StateDocumentResult& r);
+    /// The child module a delete or replace may act on: found, not top-level, and one the user can remove.
+    OpResult editableChild(const char* moduleName, MoonModule*& mod);
     void sendPreflightResponse(platform::TcpConnection& conn);
     void serveFile(platform::TcpConnection& conn, const char* filename, const char* contentType);
 
@@ -567,6 +574,7 @@ private:
     void handleListAddRow(platform::TcpConnection& conn, const char* tail);
     void handleListPatchRow(platform::TcpConnection& conn, const char* tail, const char* jsonBody);
     void handleListDeleteRow(platform::TcpConnection& conn, const char* tail);
+    void handleListApplyRow(platform::TcpConnection& conn, const char* tail, size_t tailLen);
     ListSource* resolveEditableList(platform::TcpConnection& conn, const char* tail,
                                     uint32_t& outId, bool& outHasId);
     MoonModule* listMutationModule_ = nullptr;  // module whose list a CRUD op resolved to (for markDirty)

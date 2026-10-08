@@ -174,7 +174,12 @@ public:
     }
 
     /// Re-derive the per-pin offsets when the fixture profile changes the output channel count.
-    void onCorrectionChanged() override { if (!effectivelyEnabled() || !outChannelsChanged()) return; parseConfig(); resizeFrame(); }
+    void onCorrectionChanged() override {
+        if (!effectivelyEnabled()) return;
+        if (outChannelsChanged()) parseConfig();
+        else if (!frameUnusable_) return;   // otherwise a retry of a frame that failed to allocate, which no transfer reads
+        resizeFrame();
+    }
 
     /// Point the driver at the source frame buffer, re-parsing and resizing to match.
     void setSourceBuffer(Buffer* buf) override {

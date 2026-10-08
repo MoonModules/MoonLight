@@ -76,9 +76,10 @@ public:
         if (state_ == State::Connected || state_ == State::Inviting) endSession();
     }
 
-    /// Refuse invitations until accepting is turned back on, ending a session a peer invited; a bridge with no desk does this.
-    void setAccepting(bool on) {
+    /// Refuse invitations until accepting is turned back on, saying `why`, and end a session a peer invited; a bridge with no desk does this.
+    void setAccepting(bool on, const char* why = "closed") {
         accepting_ = on;
+        notAccepting_ = why;
         if (!on && !inviting_ && state_ == State::Connected) endSession();
     }
 
@@ -127,6 +128,8 @@ public:
     const char* peerName() const { return peerName_; }
     /// Whether the last invitation was refused, which the owner reports.
     bool refused() const { return refused_; }
+    /// Why the host refused, in its own words, empty when it said nothing.
+    const char* refusal() const { return refusal_; }
 
 private:
     static constexpr size_t kMaxPacket = 512;         ///< a desk's whole state fits a few of these
@@ -151,9 +154,9 @@ private:
         return seed ? seed : 1;
     }
 
-    void sendExchange(rtpmidi::Command c, uint32_t token, uint16_t port, platform::UdpSocket& sock, const uint8_t* ip = nullptr) {
+    void sendExchange(rtpmidi::Command c, uint32_t token, uint16_t port, platform::UdpSocket& sock, const uint8_t* ip = nullptr, const char* name = nullptr) {
         uint8_t pkt[64];
-        const size_t len = rtpmidi::encodeExchange(pkt, sizeof(pkt), c, token, ssrc_, name_);
+        const size_t len = rtpmidi::encodeExchange(pkt, sizeof(pkt), c, token, ssrc_, name ? name : name_);
         if (len) sock.sendToAddr(ip ? ip : peerIp_, port, pkt, len);
     }
 
@@ -204,10 +207,17 @@ private:
         switch (e.command) {
             case rtpmidi::Command::Invitation: onInvitation(e, ip, port, fromPeer, now); return;
             case rtpmidi::Command::Accept: onAccept(e, ip, port, now); return;
-            case rtpmidi::Command::Reject: refused_ = refused_ || (state_ == State::Inviting && e.token == token_); return;
+            case rtpmidi::Command::Reject: onReject(e); return;
             case rtpmidi::Command::End: if (fromPeer) onEnd(e); return;
             default: return;
         }
+    }
+
+    /// The invited host said no, its name field saying why when it is a MoonLight device.
+    void onReject(const rtpmidi::Exchange& e) {
+        if (state_ != State::Inviting || e.token != token_) return;
+        refused_ = true;
+        std::memcpy(refusal_, e.name, sizeof(refusal_));
     }
 
     /// The peer said goodbye, so no goodbye goes back.
@@ -222,7 +232,9 @@ private:
         // Between a peer's two invitations its session is half open, and a second peer waits until it completes or lapses.
         const bool halfOpen = peerControlPort_ != 0 && now - lastHeardMs_ < kHalfOpenMs;
         const bool busy = (state_ == State::Connected || halfOpen) && !fromPeer;
-        if (inviting_ || !accepting_ || busy) { sendExchange(rtpmidi::Command::Reject, e.token, port, control_, ip); return; }
+        // A refusal says why in its name field, a free-text field every other implementation reads as a session name.
+        const char* why = inviting_ ? "it invites" : !accepting_ ? notAccepting_ : busy ? "in use" : nullptr;
+        if (why) { sendExchange(rtpmidi::Command::Reject, e.token, port, control_, ip, why); return; }
         sendExchange(rtpmidi::Command::Accept, e.token, port, control_, ip);
         takePeer(e, ip, port);
         token_ = e.token;
@@ -316,6 +328,8 @@ private:
     bool accepting_ = true;      ///< whether an invitation is answered
     bool onDataPort_ = false;    ///< whether the control port accepted and the data port is being invited
     bool refused_ = false;
+    char refusal_[32] = {};      ///< why the invited host refused, from its `NO`
+    const char* notAccepting_ = "closed";   ///< why this side refuses while not accepting
     uint8_t dataTries_ = 0;
     uint8_t inviteIp_[4] = {};
     uint16_t invitePort_ = rtpmidi::kDefaultPort;

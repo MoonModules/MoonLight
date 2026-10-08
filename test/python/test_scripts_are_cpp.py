@@ -93,7 +93,6 @@ def prelude() -> str:
     lines.append("void addControl(string, byte&, int, int);")
     lines.append("void addControl(string, bool&, int, int);")   # one arity for every type, as the builtin table registers it
     lines.append("void addSelect(string, byte&, string);")      # its options are one string, names split by '|'
-    lines.append("void addSelect(string, int&, string);")
     return "\n".join(lines) + "\n"
 
 

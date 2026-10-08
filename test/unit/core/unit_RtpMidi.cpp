@@ -28,7 +28,9 @@ TEST_CASE("an invitation has AppleMIDI's exact bytes, and reads back with its na
     CHECK(e.ssrc == 0x0A0B0C0D);
     CHECK(std::strcmp(e.name, "legs") == 0);
 
-    // A goodbye carries no name, and a name with no end is cut rather than read past.
+    // A refusal carries its reason where a name goes, a goodbye carries none, and a name with no end is cut rather than read past.
+    REQUIRE(rtpmidi::parseExchange(p, rtpmidi::encodeExchange(p, sizeof(p), rtpmidi::Command::Reject, 1, 2, "no desk"), e));
+    CHECK(std::strcmp(e.name, "no desk") == 0);
     CHECK(rtpmidi::encodeExchange(p, sizeof(p), rtpmidi::Command::End, 1, 2, "ignored") == 16);
     const uint8_t noEnd[] = {0xFF, 0xFF, 'O', 'K', 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0, 2, 'a', 'b'};
     REQUIRE(rtpmidi::parseExchange(noEnd, sizeof(noEnd), e));
@@ -63,7 +65,7 @@ std::vector<std::vector<uint8_t>> messagesIn(const uint8_t* p, size_t len) {
 }
 }  // namespace
 
-// What a board sends: no journal, and a zero delta time between messages.
+// What a device sends: no journal, and a zero delta time between messages.
 TEST_CASE("a data packet holds its messages with a zero delta time between them, and reads back") {
     uint8_t p[64];
     rtpmidi::DataWriter w(p, sizeof(p));
@@ -151,9 +153,10 @@ TEST_CASE("an RTP-MIDI session connects over both ports, carries messages both w
     CHECK(atHost[0] == std::vector<uint8_t>(fader, fader + 3));
     CHECK(atDesk[0] == std::vector<uint8_t>(hello, hello + 5));
 
-    // The desk side stops accepting, as a bridge does once its desk is unplugged: the host invites again, and is refused.
-    desk.setAccepting(false);
+    // The desk side stops accepting, as a bridge does once its desk is unplugged: the host invites again, and is refused with the reason.
+    desk.setAccepting(false, "no desk");
     REQUIRE(runUntil(host, desk, [&] { return host.refused(); }));
+    CHECK(std::strcmp(host.refusal(), "no desk") == 0);
     CHECK_FALSE(host.connected());
     CHECK(host.state() == RtpMidiSession::State::Inviting);
     desk.setAccepting(true);
@@ -183,6 +186,7 @@ TEST_CASE("an RTP-MIDI session takes one peer at a time") {
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
     CHECK(second.refused());
+    CHECK(std::strcmp(second.refusal(), "in use") == 0);
     CHECK(std::strcmp(desk.peerName(), "first") == 0);
     first.close();
     second.close();
@@ -217,6 +221,7 @@ TEST_CASE("an RTP-MIDI session half open with one peer refuses a second") {
     for (int i = 0; i < 50; i++) { desk.service([](const uint8_t*, size_t) {}); std::this_thread::sleep_for(std::chrono::milliseconds(2)); }
     second.invite(kLoopback, 26404);
     REQUIRE(runUntil(second, desk, [&] { return second.refused(); }));
+    CHECK(std::strcmp(second.refusal(), "in use") == 0);
     CHECK_FALSE(desk.connected());
 }
 
@@ -229,6 +234,12 @@ TEST_CASE("an RTP-MIDI inviter whose peer went silent says goodbye, and the peer
     REQUIRE(desk.open(26804, "desk"));
     host.invite(kLoopback, 26804);
     REQUIRE(runUntil(host, desk, [&] { return host.connected() && desk.connected(); }));
+    // The connect ends with the inviter's first clock sync in flight: an answer read after the jump would count as the peer still being there.
+    for (int i = 0; i < 20; i++) {
+        host.service([](const uint8_t*, size_t) {});
+        desk.service([](const uint8_t*, size_t) {});
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
     platform::setTestNowMs(1000 + 31000);   // longer than the inviter waits, shorter than the invited side does
     host.service([](const uint8_t*, size_t) {});   // its goodbye; it then invites again, so only the desk is served below
     for (int i = 0; i < 200 && desk.connected(); i++) {

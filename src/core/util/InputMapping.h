@@ -30,7 +30,7 @@
 /// ## A pad is a row, not a control
 ///
 /// A pad grid renders from a list, so a pad is reached through that list rather than by control name.
-/// Every such list already publishes each row's slot and accepts an activate field, so this needs to know nothing about presets.
+/// Every such list already publishes each row's slot and applies a row, so this needs to know nothing about presets.
 /// Any module that grows a pad grid therefore becomes targetable by every input at once.
 /// Resolving it here rather than in each service is what makes a button, a remote and every later transport reach a pad the same way.
 ///
@@ -162,7 +162,7 @@ inline bool firePadRow(MoonModule& mod, uint8_t slot, const char* label,
             src->writeListRow(sink, row);
             if (static_cast<int>(slot) != mm::json::parseInt(buf, "slot")) continue;
             const auto id = static_cast<uint32_t>(mm::json::parseInt(buf, "id"));
-            const bool ok = src->setListRowField(id, "activate", "{\"value\":true}");
+            const bool ok = src->applyListRow(id);
             if (outStatus) std::snprintf(outStatus, statusLen, ok ? "%s fired" : "%s refused", label);
             return ok;
         }

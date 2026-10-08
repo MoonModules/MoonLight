@@ -165,32 +165,52 @@ function displayName(type) {
 }
 
 // One module of a flat config object, the keys under `prefix`, as a state document member: its controls, then its children named as the device names them.
-function documentNode(cfg, prefix, type, unique) {
+// A child takes its saved `$name`, else the name the live module of its type under `live` has, since main.cpp names the modules it wires, else its type's.
+function documentNode(cfg, prefix, type, unique, live) {
     const node = type ? { type, "$patch": "replace" } : { "$patch": "replace" };
     for (const [k, v] of Object.entries(cfg)) {
         const rest = k.startsWith(prefix) ? k.slice(prefix.length) : null;
-        if (rest !== null && !rest.includes(".") && rest !== "type") node[rest] = v;
+        if (rest !== null && !rest.includes(".") && rest !== "type" && rest !== "$name") node[rest] = v;
     }
+    const liveLeft = [...((live && live.children) || [])];
     for (let i = 0; Object.prototype.hasOwnProperty.call(cfg, `${prefix}${i}.type`); i++) {
         const t = cfg[`${prefix}${i}.type`];
-        node[unique(displayName(t))] = documentNode(cfg, `${prefix}${i}.`, t, unique);
+        const at = liveLeft.findIndex(c => c.type === t);
+        const match = at >= 0 ? liveLeft.splice(at, 1)[0] : undefined;
+        const name = cfg[`${prefix}${i}.$name`] || (match && match.name) || displayName(t);
+        node[unique(name)] = documentNode(cfg, `${prefix}${i}.`, t, unique, match);
     }
     return node;
 }
 
-/// A preset saved before presets were state documents (2026-10-04): flat `<Container>.<i>.<control>` keys under a `captures` header, rewritten as the document the device applies.
-/// Each container's keys without its prefix are its config file, so the config renames apply to them as well; names are unique across the document, as on the device.
-export function presetToDocument(flat, file, report) {
-    const doc = Number.isInteger(flat.slot) ? { $slot: flat.slot } : {};
-    const used = new Set();
-    const unique = (name) => {
+// Names unique across one document, as the device keeps them, starting from the ones already taken.
+function uniqueNames(taken = []) {
+    const used = new Set(taken);
+    return (name) => {
         let n = name;
         for (let i = 2; used.has(n); i++) n = name.slice(0, kNameMax - `-${i}`.length) + `-${i}`;
         used.add(n);
         return n;
     };
+}
+
+/// A config file saved before configs were state documents (2026-10-08): flat dotted keys, rewritten as the module's document, `{"<name>":{...}}`.
+/// The module and its children are named as the live tree names them where it has them, so a module wired in code is found rather than created twice.
+export function configToDocument(flat, type, live = []) {
+    const top = live.find(m => m.type === type);
+    const rootName = top ? top.name : displayName(type);
+    return { [rootName]: documentNode(flat, "", null, uniqueNames([rootName]), top) };
+}
+
+// A flat config file always records its module's `enabled`; a document's only root key is its module.
+const isFlatConfig = (parsed) => parsed && typeof parsed === "object" && !Array.isArray(parsed) && "enabled" in parsed;
+
+/// A preset saved before presets were state documents (2026-10-04): flat `<Container>.<i>.<control>` keys under a `captures` header, rewritten as the document the device applies.
+/// Each container's keys without its prefix are its config file, so the config renames apply to them as well; names are unique across the document, as on the device.
+export function presetToDocument(flat, file, report) {
+    const doc = Number.isInteger(flat.slot) ? { $slot: flat.slot } : {};
     const containers = String(flat.captures).split(",").filter(Boolean);
-    containers.forEach(c => used.add(c));
+    const unique = uniqueNames(containers);
     for (const container of containers) {
         // A container renamed since keeps its old key prefix in the file.
         const prefixes = [container, ...Object.entries(FILE_RENAMES)
@@ -348,7 +368,8 @@ function renameKeys(obj, file, report) {
 /// Apply every known rename to a backup bundle's files. Returns {files, report}: a NEW files
 /// map (the input is not mutated) and the list of what changed / what needs review. Files that
 /// are not .config JSON (scripts, anything unparsable) pass through untouched.
-export function applyMigrations(files) {
+/// `live`, the device's /api/state modules, names what a flat config file becomes as a document.
+export function applyMigrations(files, live = []) {
     const out = {};
     const report = [];
     for (const [path, content] of Object.entries(files)) {
@@ -383,7 +404,11 @@ export function applyMigrations(files) {
         if (newPath.startsWith("/.config/") && newPath.endsWith(".json")) {
             try {
                 const parsed = JSON.parse(content);
-                out[newPath] = JSON.stringify(moveToChild(renameKeys(parsed, newPath, report), newPath, report));
+                if (!isFlatConfig(parsed)) { out[newPath] = content; continue; }   // already a document
+                const migrated = moveToChild(renameKeys(parsed, newPath, report), newPath, report);
+                const type = newPath.slice("/.config/".length, -".json".length);
+                out[newPath] = JSON.stringify(configToDocument(migrated, type, live));
+                report.push({ kind: "renamed", where: newPath, detail: "config → state document (2026-10-08)" });
                 continue;
             } catch (_) {
                 report.push({ kind: "review", where: newPath, detail: "not valid JSON; restored as-is" });
@@ -463,78 +488,48 @@ export function restoreDirs(files) {
     return [...dirs].sort((a, b) => a.split("/").length - b.split("/").length || (a < b ? -1 : 1));
 }
 
-/// The restore report: diff the restored .config module files against the live /api/state
+/// The restore report: diff the restored .config module documents against the live /api/state
 /// module tree plus the /api/types registry. Returns entries {kind, where, detail} in the same
 /// shape applyMigrations emits:
-///  - "module": the file's module type does not exist on this firmware (re-add by hand)
+///  - "module": a module the document names does not exist on this firmware (re-add by hand)
 ///  - "control": a key's control name is gone (its value is back at the default)
-/// typeNames (the /api/types registry) matters because a restored module only INSTANTIATES at
-/// the next boot: a type that is registered but not yet in the live tree is fine, and its
-/// control-level check is impossible until then (the robust loader covers it, unknown keys
-/// are ignored). ReadOnly/Progress controls are never persisted, so they never appear in
-/// config files and need no special casing here; child chains resolve through "N.type" keys.
+/// A child is matched to the live tree by name, as the device applies it. typeNames (the /api/types
+/// registry) matters because a child the live tree does not hold yet is created when the document
+/// applies, so only its type can be checked; its controls cannot, and the device skips unknown keys.
 export function diffRestore(files, stateModules, typeNames = []) {
     const report = [];
-    const byType = new Map();
+    const known = new Set(typeNames);
     (function walk(mods) {
-        for (const m of mods || []) {
-            if (!byType.has(m.type)) byType.set(m.type, m);
-            walk(m.children);
-        }
+        for (const m of mods || []) { known.add(m.type); walk(m.children); }
     })(stateModules);
-    const known = new Set([...typeNames, ...byType.keys()]);
+    const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 
     for (const [path, content] of Object.entries(files)) {
         if (!path.startsWith("/.config/") || !path.endsWith(".json")) continue;
         if (path.startsWith("/.config/presets/")) continue;   // preset payloads, not module files
-        const type = path.slice(path.lastIndexOf("/") + 1, -".json".length);
-        if (!known.has(type)) {
-            report.push({ kind: "module", where: path, detail: `module type ${type} does not exist on this firmware` });
-            continue;
-        }
-        const top = byType.get(type);   // undefined when registered but not yet instantiated
-        let cfg;
-        try { cfg = JSON.parse(content); } catch (_) { continue; }   // applyMigrations already flagged it
-        // Resolve each key's node by its child-prefix chain; "type" announces a child's type.
-        const childTypes = {};   // prefix -> declared type
-        for (const [key, value] of Object.entries(cfg)) {
-            if (key === "type" || key.endsWith(".type")) childTypes[key.slice(0, -"type".length)] = value;
-        }
-        // Resolve the LIVE node positionally through the child-index chain, not by first
-        // instance of the type: two siblings of one type can publish different control sets
-        // (a script-defined module's controls depend on its own script). null = the type is
-        // unknown (report it); undefined = no live node to check against yet (registered but
-        // not instantiated, or the chain is not walkable), the robust loader covers it.
-        const resolveNode = (prefix) => {
-            let node = top;
-            for (const part of prefix.split(".")) {
-                if (part === "" || !node) break;
-                node = (node.children || [])[Number(part)];
+        let doc;
+        try { doc = JSON.parse(content); } catch (_) { continue; }   // applyMigrations already flagged it
+        if (!isObject(doc)) continue;
+        const check = (obj, live, where) => {
+            for (const [key, value] of Object.entries(obj)) {
+                if (key.startsWith("$") || key === "type" || key === "enabled" || value === null) continue;
+                if (isObject(value)) {
+                    if (value.type && !known.has(value.type)) {
+                        report.push({ kind: "module", where: `${path} ${where}.${key}`, detail: `child module type ${value.type} does not exist on this firmware` });
+                        continue;
+                    }
+                    const child = live && (live.children || []).find(c => c.name === key);
+                    check(value, child && (!value.type || child.type === value.type) ? child : undefined, `${where}.${key}`);
+                } else if (live && !(live.controls || []).some(c => c.name === key)) {
+                    report.push({ kind: "control", where: `${path} ${where}.${key}`, detail: `control ${key} does not exist on ${live.type}; its value is back at the default` });
+                }
             }
-            return node;
         };
-        const controlsOf = (type_, prefix_) => {
-            const node = resolveNode(prefix_);
-            if (node && node.type === type_) return new Set((node.controls || []).map(c => c.name));
-            return known.has(type_) ? undefined : null;
-        };
-        for (const [key] of Object.entries(cfg)) {
-            const dot = key.lastIndexOf(".");
-            const prefix = dot >= 0 ? key.slice(0, dot + 1) : "";
-            const name = dot >= 0 ? key.slice(dot + 1) : key;
-            if (name === "type" || name === "enabled") continue;   // structural, always understood
-            const nodeType = prefix === "" ? type : childTypes[prefix];
-            if (nodeType === undefined) continue;   // an orphan chain: the missing child is the real finding
-            const controls = controlsOf(nodeType, prefix);
-            if (controls === null) {
-                report.push({ kind: "module", where: `${path} ${prefix}`, detail: `child module type ${nodeType} does not exist on this firmware` });
-                delete childTypes[prefix];   // report each missing child once
-                continue;
-            }
-            if (controls === undefined) continue;   // instantiates at reboot; loader is robust
-            if (!controls.has(name)) {
-                report.push({ kind: "control", where: `${path} ${key}`, detail: `control ${name} does not exist on ${nodeType}; its value is back at the default` });
-            }
+        for (const [name, obj] of Object.entries(doc)) {
+            if (name.startsWith("$") || !isObject(obj)) continue;
+            const top = (stateModules || []).find(m => m.name === name);
+            if (!top) { report.push({ kind: "module", where: path, detail: `module ${name} does not exist on this firmware` }); continue; }
+            check(obj, top, name);
         }
     }
     return report;

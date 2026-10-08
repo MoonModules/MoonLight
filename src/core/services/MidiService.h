@@ -3,7 +3,7 @@
 #include "core/module/MoonModule.h"
 #include "core/system/ControlModule.h"   // the surface a desk's faders, knobs and buttons land on
 #include "core/util/ControlSurface.h"      // the way back: motors, rings and button lights
-#include "core/util/UsbMidi.h"              // a desk on this board's own USB port
+#include "core/util/UsbMidi.h"              // a desk on this device's own USB port
 #include "core/services/RtpMidiSession.h"   // a desk on the network
 #include "core/util/HostResolver.h"         // a desk named rather than numbered
 #include "core/util/Ipv4.h"                 // parseDottedQuad: a desk's address
@@ -30,7 +30,7 @@ namespace mm {
 /// The way back is a surface: the hidden `desk` control holds what the desk shows, one message per fader motor, button light and knob ring.
 /// It is state rather than a log: the browser sends only the slots that changed, and a page opened later finds the motors' positions.
 /// The hidden `hello` control holds what the browser sends whenever the desk connects, such as the SysEx that hands an APC40's lights to the host.
-/// `source` puts the desk on this board's USB port or on the network as an RTP-MIDI session; `share` passes a USB desk on to the network.
+/// `source` puts the desk on this device's USB port or on the network as an RTP-MIDI session; `share` passes a USB desk on to the network.
 class MidiService : public MoonModule, public ControlSurface {
 public:
     /// A service, so the container accepts it as a child.
@@ -43,11 +43,11 @@ public:
 
     /// Which desk this is, since each desk lays its controls out in its own messages.
     uint8_t profile = kProfileMackie;
-    /// Where the desk is plugged in: the computer showing the interface, this board's own USB port, which then carries no serial log or USB flashing, or the network.
+    /// Where the desk is plugged in: the computer showing the interface, this device's own USB port, which then carries no serial log or USB flashing, or the network.
     uint8_t source = kSourceBrowser;
-    /// Whether the desk on the USB port is passed on over the network rather than driving this board.
+    /// Whether the desk on the USB port is passed on over the network rather than driving this device.
     bool share = false;
-    /// The RTP-MIDI port this board's session listens on, data on the one above.
+    /// The RTP-MIDI port this device's session listens on, data on the one above.
     uint16_t port = rtpmidi::kDefaultPort;
 
     /// Declare the desk's profile, its port, the inbound batch, the desk's state and its greeting.
@@ -150,16 +150,16 @@ public:
 
 private:
     static constexpr const char* kSources[kSourceCount] = {"browser", "USB", "network"};
-    /// Whether the desk is on this board's own USB port.
+    /// Whether the desk is on this device's own USB port.
     bool onUsb() const { return source == kSourceUsb; }
     /// Whether the desk is an RTP-MIDI session.
     bool onNetwork() const { return source == kSourceNetwork; }
     /// Whether the desk on the USB port is passed on rather than used here.
     bool sharing() const { return onUsb() && share; }
-    /// Whether a network session is open: a desk on the network, or this board's desk shared there.
+    /// Whether a network session is open: a desk on the network, or this device's desk shared there.
     bool needsSession() const { return onNetwork() || sharing(); }
 
-    /// On the surface while this board uses the desk; a shared desk shows the state of the board it is shared with.
+    /// On the surface while this device uses the desk; a shared desk shows the state of the device it is shared with.
     void followSurface() {
         auto* c = ControlModule::active();
         if (!c || attached_ == !sharing()) return;
@@ -339,7 +339,7 @@ private:
         for (size_t len; (len = hexToken(p, m, sizeof(m))) > 0;) decode(m, len > 3 ? 3 : static_cast<uint8_t>(len));
     }
 
-    /// Take or give back the USB port and the network port as `source` says, the status saying when this board has no USB host.
+    /// Take or give back the USB port and the network port as `source` says, the status saying when this device has no USB host.
     void followSource() {
         greeted_ = false;
         connected_ = false;
@@ -351,12 +351,12 @@ private:
         if (onUsb()) {
             if (!usbBegun_) usbBegun_ = platform::usbMidiBegin();
             if (platform::hasUsbMidiHost) setStatus("USB: waiting for a desk");
-            else setStatus("this board has no USB host", Severity::Warning);
+            else setStatus("this device has no USB host", Severity::Warning);
             if (sharing()) openSession();
         } else if (onNetwork()) {
             openSession();
         } else {
-            clearStatus();   // the browser reports the desk, not this board
+            clearStatus();   // the browser reports the desk, not this device
         }
     }
 
@@ -382,7 +382,7 @@ private:
         session_.reset();
     }
 
-    // Bonjour's name for an RTP-MIDI session, the record a Mac's Audio MIDI Setup and another board's lookup find.
+    // Bonjour's name for an RTP-MIDI session, the record a Mac's Audio MIDI Setup and another device's lookup find.
     /// Announce the session while it waits to be invited: a shared desk, or a desk on the network with no host to invite.
     void advertise() {
         const bool want = session_ && (sharing() || !hostName_[0]);
@@ -422,7 +422,8 @@ private:
     void showNetworkWait() {
         if (!session_) return;
         if (!hostName_[0]) mm::formatTo(statusBuf_, sizeof(statusBuf_), "network: waiting to be invited on %u", static_cast<unsigned>(port));
-        else mm::formatTo(statusBuf_, sizeof(statusBuf_), session_->refused() ? "network: %s refused" : "network: inviting %s", hostName_);
+        else if (!session_->refused()) mm::formatTo(statusBuf_, sizeof(statusBuf_), "network: inviting %s", hostName_);
+        else mm::formatTo(statusBuf_, sizeof(statusBuf_), "network: %s refused%s%s", hostName_, session_->refusal()[0] ? ": " : "", session_->refusal());
         setStatus(statusBuf_);
     }
 
@@ -507,7 +508,7 @@ private:
         if (!usbBegun_) usbBegun_ = platform::usbMidiBegin();   // the port may still be on its way back from an earlier owner
         const bool desk = usbBegun_ && platform::usbMidiConnected();
         if (!session_) return;
-        session_->setAccepting(desk);
+        session_->setAccepting(desk, "no desk");
         session_->service([](const uint8_t* m, size_t len) { toUsb(m, len); });
         if (desk) shareUsb();
         session_->flush();
@@ -546,7 +547,7 @@ private:
         if (state == shareShown_) return;
         shareShown_ = state;
         if (state == kSharedPortTaken) { setStatus("another service has the USB port", Severity::Warning); return; }
-        if (state == kSharedNoDesk) { setStatus(platform::hasUsbMidiHost ? "USB: waiting for a desk" : "this board has no USB host"); return; }
+        if (state == kSharedNoDesk) { setStatus(platform::hasUsbMidiHost ? "USB: waiting for a desk" : "this device has no USB host"); return; }
         if (state == kSharedWaiting) mm::formatTo(statusBuf_, sizeof(statusBuf_), "sharing on %u, not connected", static_cast<unsigned>(port));
         else mm::formatTo(statusBuf_, sizeof(statusBuf_), "shared with %s", session_->peerName()[0] ? session_->peerName() : "a host");
         setStatus(statusBuf_);
@@ -610,7 +611,7 @@ private:
     char statusBuf_[48] = {}; ///< the status shown: what the last message did, or where the desk stands
     char lastMessage_[48] = {};   ///< what the message being decoded did, shown once the batch is done
     bool attached_ = false;
-    bool usbBegun_ = false;      ///< whether this board's USB port is the desk's
+    bool usbBegun_ = false;      ///< whether this device's USB port is the desk's
     bool greeted_ = false;       ///< whether the desk on the USB port or the network was greeted since it appeared
     bool connected_ = false;     ///< what the status last said about that desk
     char shown_[kDeskSlots * 6] = {};   ///< per slot, the hex that desk was last sent

@@ -122,6 +122,13 @@ public:
         return displayBuf;
     }
 
+    /// The name a new module of this type takes, or nothing when no such type is registered.
+    static const char* defaultNameOf(const char* typeName) {
+        for (uint8_t i = 0; typeName && i < count_; i++)
+            if (std::strcmp(types_[i].name, typeName) == 0) return displayNameFor(types_[i].name, types_[i].role);
+        return nullptr;
+    }
+
     static uint8_t typeCount() { return count_; }   ///< how many types are registered
     /// The registered name at an index, or nothing when it is out of range.
     static const char* typeName(uint8_t i) { return (types_ && i < count_) ? types_[i].name : nullptr; }

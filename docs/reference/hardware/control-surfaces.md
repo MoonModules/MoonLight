@@ -22,9 +22,10 @@ The larger of the Mackie desks, and the only desk here with a network port.
 | Connectivity | USB-B (MIDI), 5-pin DIN MIDI in/out, **RJ45 Ethernet for RTP-MIDI** |
 | Not supported | OSC |
 
-**The Ethernet port carries RTP-MIDI, not OSC.** RTP-MIDI (RFC 6295, UDP port 5004) is MIDI tunneled over a network with a session layer: an invitation handshake, clock synchronization, and a journal that recovers a dropped packet.
+**The Ethernet port carries RTP-MIDI, not OSC.** RTP-MIDI (RFC 6295, UDP port 5004) is MIDI tunneled over a network with a session layer: an invitation handshake and clock synchronization.
+The protocol's recovery journal is optional, and MoonLight sends none, so a packet lost on the wire stays lost.
 It is what the [MIDI service](../../moonmodules/core/services.md#midi)'s `network` source speaks.
-A desk that waits to be invited goes in `host`; for a desk that invites the board, `host` stays empty.
+A desk that waits to be invited goes in `host`; for a desk that invites the device, `host` stays empty.
 
 ## iCON QCon Pro G2
 
@@ -43,7 +44,7 @@ A desk that waits to be invited goes in `host`; for a desk that invites the boar
 | Not supported | OSC, Ethernet |
 
 **No network port at all.** It reaches MoonLight through a computer's USB port and the browser, or straight through a board's own USB port with the MIDI service's `source` set to USB.
-A board with the MIDI service's [`share`](../../moonmodules/core/services.md#midi-details) on puts it on the network.
+A device with the MIDI service's [`share`](../../moonmodules/core/services.md#midi-details) on puts it on the network.
 It brings its own power adapter, so a board's port needs to supply no 5 V for it.
 
 ## What Mackie Control looks like on the wire

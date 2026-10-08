@@ -25,11 +25,11 @@ namespace mm {
 /// ## Feedback
 ///
 /// With it on, a control that changes anywhere is mirrored back to the surface, which keeps a client honest and moves a motorized fader.
-/// `addressing` picks where it goes: `unicast` to each of `hosts`, or to whoever last wrote when the list is empty; `multicast` to `group`, which every board listening on it joins.
+/// `addressing` picks where it goes: `unicast` to each of `hosts`, or to whoever last wrote when the list is empty; `multicast` to `group`, which every device listening on it joins.
 /// A client learns the state three ways: on its first write, on an address change, and on asking.
 /// The last exists because a restart on the same address is invisible to the other two.
 /// Most controllers send nothing on load, so every widget would otherwise show its own defaults.
-/// A value is never sent back to the host it came from, so two boards feeding each other cannot echo it between them.
+/// A value is never sent back to the host it came from, so two devices feeding each other cannot echo it between them.
 ///
 /// ## What it refuses
 ///
@@ -296,7 +296,7 @@ private:
 
     /// The modes OSC offers, the first three of Addressing.
     static constexpr uint8_t kModeCount = 3;
-    /// How many hosts feedback reaches by unicast: a few boards, not a wall.
+    /// How many hosts feedback reaches by unicast: a few devices, not a wall.
     static constexpr uint8_t kMaxHosts = 8;
 
     /// Parse the host list, an invalid one sending to nobody rather than to a guess, with the parser's reason on the status.
@@ -326,7 +326,7 @@ private:
     }
 
     char     hosts_[64] = {};         ///< where unicast feedback goes, empty meaning whoever wrote to us
-    char     group_[16] = {};          ///< the multicast group feedback goes to and this board joins
+    char     group_[16] = {};          ///< the multicast group feedback goes to and this device joins
     static_assert(sizeof(osc::kDefaultGroup) <= sizeof(group_), "the default group fits its control");
     Host     hostList_[kMaxHosts] = {};
     uint8_t  hostCount_ = 0;

@@ -51,6 +51,25 @@ def test_a_wrapped_sentence_in_a_class_comment_is_a_finding():
     assert len(wraps) == 1
 
 
+def test_two_sentences_that_fit_one_line_are_a_split_paragraph():
+    # Each line ends a sentence, so neither is wrapped, but markdown joins them into one paragraph and the split only spends a line.
+    split = ("#pragma once\nnamespace mm {\n"
+             "/// Boot applies it as a stored file.\n"
+             "/// A module main.cpp wires stays.\n"
+             "class Probe {\npublic:\n    /// Fine.\n    int a = 0;\n};\n}\n")
+    assert len([w for _, w in _header_rules("probe.h", split) if "split paragraph" in w]) == 1
+
+
+def test_sentences_too_long_to_share_a_line_keep_their_own():
+    # Joined they would pass the line cap, so each stays on its own line.
+    long = "word " * 40
+    header = ("#pragma once\nnamespace mm {\n"
+              f"/// {long.strip()} one.\n"
+              f"/// {long.strip()} two.\n"
+              "class Probe {\npublic:\n    /// Fine.\n    int a = 0;\n};\n}\n")
+    assert not [w for _, w in _header_rules("probe.h", header) if "split paragraph" in w]
+
+
 def test_a_continuation_that_does_not_start_lowercase_is_still_a_wrap():
     # The test is the PREVIOUS line's unfinished sentence, not the next line's case. A
     # continuation beginning with a digit or an identifier is most of a technical comment,

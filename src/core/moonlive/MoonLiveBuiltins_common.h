@@ -191,14 +191,14 @@ extern "C" inline uint32_t mm_ml_addControl(const uintptr_t* args, uint32_t, con
     return 0;
 }
 
-/// Surface a byte or int member as a dropdown of the names in "a|b|c", its value the index of the one picked.
+/// Surface a byte member as a dropdown of the names in "a|b|c", its value the index of the one picked.
 extern "C" inline uint32_t mm_ml_addSelect(const uintptr_t* args, uint32_t, const uint8_t*) {
     const char* name = reinterpret_cast<const char*>(args[0]);
     const char* options = reinterpret_cast<const char*>(args[2]);
     const CtrlType type = static_cast<CtrlType>((args[1] >> 8) & 0xff);
     const AddControlSink s = addControlSink();
     if (!name || !options || !s.fn || !s.ctx) return 0;
-    if (type != CtrlType::Byte && type != CtrlType::Int) return 0;   // a bool is a switch
+    if (type != CtrlType::Byte) return 0;   // the dropdown binds one byte, which a store to a byte member keeps whole; a bool is a switch
     s.fn(s.ctx, name, static_cast<uint8_t>(args[1] & 0xff), 0, 0, type, options);
     return 0;
 }

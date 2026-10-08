@@ -423,6 +423,7 @@ function buildChoice(moduleName, ctrl, key, pick) {
         el = document.createElement("div");
         el.className = "segmented";
         el.setAttribute("role", "radiogroup");
+        el.setAttribute("aria-label", ctrl.name);
         (ctrl.options || []).forEach((opt, i) => {
             const lab = document.createElement("label");
             const rb = document.createElement("input");
@@ -776,10 +777,9 @@ async function listSetField(moduleName, ctrlName, id, field, value) {
 
 /// Create a module, optionally under a chosen name, and return the name it got.
 ///
-/// `id` names the new module. The endpoint treats it as IDEMPOTENT (a module of that name already
-/// there is success, not a rename), and answers that case without a `name`: so a caller that wants
-/// a fresh module reads the absence of a name as "taken" and asks again with another. Returns null
-/// when nothing was created, for either reason.
+/// `id` names the new module, and the device refuses a name some module already holds (409, no `name`).
+/// A caller that wants a fresh module reads the absence of a name as "taken" and asks again with another.
+/// Returns null when nothing was created, for either reason.
 async function addModule(type, parentName, id) {
     if (!type) return null;
     const body = {type: type};
@@ -4130,9 +4130,10 @@ function buildListPads(container, rows, opts) {
         pad.addEventListener("click", async () => {
             if (item == null || item.id == null) return;
             pad.disabled = true;
-            // An ACTION field: the arrival is the whole message, so the value is unused. (The tests
-            // call setListRowField directly and pass the request BODY, which is why they read "{}".)
-            await listSetField(moduleName, ctrlName, item.id, "activate", "");
+            // The row's action, a POST on its sub-resource.
+            try {
+                await fetch(`/api/list/${encodeURIComponent(moduleName)}/${encodeURIComponent(ctrlName)}/${item.id}/apply`, {method: "POST"});
+            } catch {}
             refetchState();
             pad.disabled = false;
         });
@@ -4955,7 +4956,7 @@ function updateModuleControls(mod) {
                 // Never overwrite a dropdown the user has OPEN (popup showing) or focused: data-open is
                 // set on pointerdown/focus and cleared on change/blur, more reliable than
                 // document.activeElement while a native popup is up (a separate OS layer on macOS).
-                if (el.dataset.open === "true" || el === document.activeElement) break;
+                if (el.dataset.open === "true" || el.contains(document.activeElement)) break;
                 // Some selects are populated asynchronously (HueDriver learns its rooms ~1-2s after boot,
                 // growing from ["All"] to the full list), and a list outgrowing the segments changes its form,
                 // so a changed option list rebuilds the control in place.
@@ -5388,9 +5389,7 @@ async function mlEnsureLocal(item) {
 /// Add a module for a picked row, whether it is a compiled type or a script.
 ///
 /// A script becomes a MoonLive module holding it, named after the script: the user picked `dot`, so
-/// the card says `dot`. `id` is how POST /api/modules names a module, and it is deliberately
-/// idempotent (an existing name is success, not a rename), so a collision is retried with a suffix
-/// rather than silently landing on the module already there.
+/// the card says `dot`. `id` is how POST /api/modules names a module, and a name in use is refused, so a collision is retried with a suffix.
 /// Point a card at a script, and make sure the card catches up.
 ///
 /// The re-render is the point. A card is built BEFORE its script is set (created or replaced first,
@@ -7647,8 +7646,11 @@ async function fmRestoreConfig(file, refresh) {
     if (bundle.version !== 1) {
         throw new Error(`backup version ${bundle.version} is newer than this firmware understands`);
     }
+    // The live tree names what an older flat config file becomes as a document.
+    let live = [];
+    try { live = (await (await fetch("/api/state")).json()).modules || []; } catch (_) {}
     // The rename map first: MIGRATING.md's schema breaks, applied client-side and reported.
-    const { files, report } = applyMigrations(bundle.files);
+    const { files, report } = applyMigrations(bundle.files, live);
     // Directories before files (mkdir is non-recursive); existing dirs answer 500, harmless.
     for (const dir of restoreDirs(files)) {
         await fetch("/api/dir?path=" + encodeURIComponent(dir), { method: "POST", body: "" }).catch(() => {});
@@ -7674,7 +7676,7 @@ async function fmRestoreConfig(file, refresh) {
         }
     }
     // The report: what this firmware no longer understands, plus everything the rename map did.
-    let live = [], typeNames = [];
+    let typeNames = [];
     try { live = (await (await fetch("/api/state")).json()).modules || []; } catch (_) {}
     try { typeNames = ((await (await fetch("/api/types")).json()).types || []).map(t => t.name); } catch (_) {}
     const entries = [...report, ...failed, ...diffRestore(files, live, typeNames)];
@@ -7869,8 +7871,8 @@ function fmMountEditor(host, relPath, opts = {}) {
     // it: a factory script is read from the read-only library directory, and editing it must create
     // the user's own copy rather than overwrite what shipped. Defaults to writing back where it
     // read, which is what every other caller wants.
-    const { expectedSize, onSaved, onDispose, sizeKey, saveButton, statusEl, savePath,
-            initialStatus } = opts;
+    const { expectedSize, onSaved, onDispose, sizeKey, saveButton, statusEl, savePath } = opts;
+    let initialStatus = opts.initialStatus;   // cleared once marked, so a reload does not mark it again
     const wrap = document.createElement("div");
     wrap.className = "fm-editor-pane";
     // The footer carries Save and the status line, UNLESS the host supplies both: a card already has

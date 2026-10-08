@@ -13,9 +13,9 @@ pyserial is an inline dep only because improv_provision.py's `import serial` gua
 sys.exit()s when it's missing — the frame functions themselves need nothing. Run:
 `uv run pytest test/python` (uv honours the inline deps above).
 
-The config push (the APPLY_OP op planner and its chunked framing) exists in JS
-(mooninstaller/config-ops.js, improv-frame.js) and in the Python script; the planner cases
-below mirror test/js/config-ops.test.mjs one for one so the two cannot drift.
+The config push (the per-container state documents and their chunked framing) exists in JS
+(mooninstaller/improv-frame.js) and in the Python script; the slicer cases below mirror
+the stateFrames cases in test/js/improv-frame.test.mjs so the two cannot drift.
 """
 
 import sys
@@ -55,66 +55,50 @@ def test_checksum_covers_header_through_payload():
     assert frame[-1] == sum(frame[:-1]) & 0xFF
 
 
-# --- device-model config push: the planner mirrors config-ops.js, the framing the device ---
+# --- device-model config push: the slicer mirrors stateFrames in improv-frame.js, the framing the device ---
 
-from improv_provision import (plan_config_ops, encode_apply_op_frames, APPLY_OP_CHUNK_MAX,
+from improv_provision import (state_documents, encode_apply_op_frames, APPLY_OP_CHUNK_MAX,
                               IMPROV_CMD_APPLY_OP)
 
-S3_LIKE = {"name": "x", "modules": [
-    {"type": "System", "id": "System", "controls": {"deviceModel": "x"}},
-    {"type": "GridLayout", "id": "Grid", "parent_id": "Layouts", "controls": {"width": 8}},
-    {"type": "Layer", "id": "Layer", "parent_id": "Effects"},
-    {"type": "NoiseEffect", "id": "Noise", "parent_id": "Layer"},
-    {"type": "RmtLedDriver", "id": "RmtLed", "parent_id": "Drivers", "controls": {"pins": "16"}},
-]}
+S3_LIKE = {"name": "x", "state": {
+    "System": {"deviceModel": "x"},
+    "Layouts": {"$patch": "replace", "Grid": {"type": "GridLayout", "width": 8}},
+    "Drivers": {"$patch": "replace", "RmtLed": {"type": "RmtLedDriver", "pins": "16"}},
+}}
 
 
-def test_every_add_parent_is_cleared_unless_the_parent_is_itself_added_fresh():
-    ops = plan_config_ops(S3_LIKE)
-    cleared = {o["parent"] for o in ops if o["op"] == "clearChildren"}
-    assert cleared == {"Layouts", "Effects", "Drivers"}   # Layer is added fresh: not cleared
+def test_an_entry_sends_one_document_per_top_level_container_in_key_order():
+    docs = state_documents(S3_LIKE)
+    assert [next(iter(d)) for d in docs] == ["System", "Layouts", "Drivers"]
+    assert all(len(d) == 1 for d in docs)
 
 
-def test_all_clearchildren_ops_come_before_all_add_and_set_ops():
-    ops = plan_config_ops(S3_LIKE)
-    kinds = [o["op"] for o in ops]
-    last_clear = max(i for i, k in enumerate(kinds) if k == "clearChildren")
-    first_other = min(i for i, k in enumerate(kinds) if k != "clearChildren")
-    assert last_clear < first_other
+def test_drivers_goes_last_whatever_the_entrys_key_order():
+    state = S3_LIKE["state"]
+    entry = {"state": {"Drivers": state["Drivers"], "System": state["System"], "Layouts": state["Layouts"]}}
+    assert [next(iter(d)) for d in state_documents(entry)] == ["System", "Layouts", "Drivers"]
 
 
-def test_a_modules_add_precedes_its_own_set_ops():
-    ops = plan_config_ops(S3_LIKE)
-    i_add = next(i for i, o in enumerate(ops) if o["op"] == "add" and o["id"] == "RmtLed")
-    i_set = next(i for i, o in enumerate(ops) if o["op"] == "set" and o["module"] == "RmtLed")
-    assert i_add < i_set
-    assert ops[i_set] == {"op": "set", "module": "RmtLed", "control": "pins", "value": "16"}
+def test_a_document_carries_its_container_object_unchanged():
+    docs = state_documents(S3_LIKE)
+    assert docs[2] == {"Drivers": {"$patch": "replace", "RmtLed": {"type": "RmtLedDriver", "pins": "16"}}}
 
 
-def test_the_device_model_name_rides_as_an_ordinary_set_on_system():
-    ops = plan_config_ops(S3_LIKE)
-    assert {"op": "set", "module": "System", "control": "deviceModel", "value": "x"} in ops
-    assert not any(o["op"] == "add" and o["id"] == "System" for o in ops)   # never re-added
+def test_the_device_model_name_rides_in_the_system_document():
+    assert {"System": {"deviceModel": "x"}} in state_documents(S3_LIKE)
 
 
-def test_a_deduped_parent_is_cleared_exactly_once():
-    entry = {"modules": [{"type": "A", "id": "a", "parent_id": "Drivers"},
-                         {"type": "B", "id": "b", "parent_id": "Drivers"}]}
-    ops = plan_config_ops(entry)
-    assert [o for o in ops if o["op"] == "clearChildren"] == [{"op": "clearChildren", "parent": "Drivers"}]
+def test_empty_or_malformed_entry_yields_no_documents():
+    for entry in (None, {}, {"state": None}, {"state": []}, {"state": "x"}):
+        assert state_documents(entry) == []
 
 
-def test_empty_or_malformed_entry_yields_no_ops():
-    for entry in (None, {}, {"modules": None}, {"modules": [None, 3, {"id": ""}, {"type": "X"}]}):
-        assert plan_config_ops(entry) == []
-
-
-def test_an_op_is_one_frame_when_it_fits_and_chunks_in_order_when_it_does_not():
-    small = encode_apply_op_frames({"op": "set", "module": "M", "control": "c", "value": 1})
+def test_a_document_is_one_frame_when_it_fits_and_chunks_in_order_when_it_does_not():
+    small = encode_apply_op_frames({"System": {"deviceModel": "x"}})
     assert len(small) == 1
     payload = small[0][9:-1]          # envelope: 'IMPROV'(6) ver(1) type(1) len(1) ... csum(1)
     assert payload[0] == IMPROV_CMD_APPLY_OP and payload[1] == 0 and payload[2] == 1
-    big = {"op": "set", "module": "RmtLed", "control": "pins", "value": ",".join(str(i) for i in range(120))}
+    big = {"Drivers": {"RmtLed": {"type": "RmtLedDriver", "pins": ",".join(str(i) for i in range(120))}}}
     frames = encode_apply_op_frames(big)
     assert len(frames) > 1
     seqs, lasts, body = [], [], b""
@@ -156,7 +140,7 @@ class FakePort:
         out = bytes(self.rx[:n]); del self.rx[:n]; return out
 
 
-OP = {"op": "set", "module": "M", "control": "c", "value": 1}
+OP = {"System": {"deviceModel": "x"}}
 
 
 def test_a_state_frame_arriving_before_the_ack_is_chatter_not_a_refusal():
@@ -183,6 +167,14 @@ def test_any_other_error_is_a_refusal_and_the_op_fails_once():
 def test_no_ack_at_all_fails_instead_of_claiming_success():
     port = FakePort([[]])
     assert send_apply_op(port, OP, ack_timeout=0.2) is False
+    assert port.writes == 3   # the whole document, resent each time
+
+
+# A classic board prints its log on the UART Improv uses, which can garble an ack whose frame landed; a document applied twice changes nothing, so it goes again whole.
+def test_a_lost_ack_resends_the_whole_document_and_then_succeeds():
+    port = FakePort([[], [build_frame(TYPE_RPC_RESPONSE, b"")]])
+    assert send_apply_op(port, OP, ack_timeout=0.2) is True
+    assert port.writes == 2
 
 
 from improv_provision import is_eth_only

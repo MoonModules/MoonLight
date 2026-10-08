@@ -55,9 +55,9 @@ struct Exchange {
     char name[32] = {};   ///< the sender's session name, empty when it sent none
 };
 
-/// Write an `IN`, `OK`, `NO` or `BY`: version 2, the token, the sender's SSRC, and a name on `IN` and `OK`; the length, 0 when it does not fit.
+/// Write an `IN`, `OK`, `NO` or `BY`: version 2, the token, the sender's SSRC, and a name on all but `BY`; the length, 0 when it does not fit.
 inline size_t encodeExchange(uint8_t* out, size_t max, Command command, uint32_t token, uint32_t ssrc, const char* name) {
-    const size_t nameLen = name && (command == Command::Invitation || command == Command::Accept) ? std::strlen(name) + 1 : 0;
+    const size_t nameLen = name && command != Command::End ? std::strlen(name) + 1 : 0;
     const size_t len = 16 + nameLen;
     if (len > max) return 0;
     out[0] = 0xFF; out[1] = 0xFF;

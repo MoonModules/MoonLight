@@ -72,7 +72,7 @@ TEST_CASE("a config from 6.0 moves its network onto the Ethernet and WiFi cards,
     const std::string saved = readConfig(root);
     CHECK(saved.find("old-home") != std::string::npos);        // in the WiFi card's known list
     CHECK(saved.find("\"addressing\"") == std::string::npos);  // 6.0's shared key is gone
-    CHECK(saved.find("\"ethType\":") == std::string::npos);    // only as the Ethernet card's "0.ethType", which hasKey("ethType") does not match
+    CHECK(saved.find("\"ethType\":") == saved.rfind("\"ethType\":"));   // once, as the Ethernet card's own member, not at Network's top level
     // A second boot finds nothing to move, so it saves nothing new.
     {
         Device again(root.c_str());

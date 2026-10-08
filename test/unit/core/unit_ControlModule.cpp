@@ -106,11 +106,11 @@ struct Device {
     }
 
     /// Apply a preset by name, the way a pad click does.
-    void activate(const char* name) {
+    void apply(const char* name) {
         const std::string row = rowNamed(name);
         REQUIRE_MESSAGE(!row.empty(), "no preset named ", name);
         const uint32_t id = static_cast<uint32_t>(std::stoul(row.substr(row.find("\"id\":") + 5)));
-        control->setListRowField(id, "activate", "{}");
+        control->applyListRow(id);
     }
 
     /// Write a preset file by hand, as the File Manager or a restore does.
@@ -169,7 +169,7 @@ TEST_CASE("ControlModule saves a look and puts it back") {
     if (old) { old->release(); mm::Scheduler::deleteTree(old); }
     REQUIRE(std::strcmp(d.effectType(), "RainbowEffect") == 0);
 
-    d.control->setListRowField(d.firstRowId(), "apply", "{}");
+    d.control->applyListRow(d.firstRowId());
     CHECK(std::strcmp(d.effectType(), "NoiseEffect") == 0);
 }
 
@@ -219,7 +219,7 @@ TEST_CASE("ControlModule lists an older flat preset and refuses to apply it") {
 
     REQUIRE(d.control->listRowCount() == 1);
     CHECK(d.rowNamed("legacy").find("an older format") != std::string::npos);
-    CHECK_FALSE(d.control->setListRowField(d.firstRowId(), "apply", "{}"));
+    CHECK_FALSE(d.control->applyListRow(d.firstRowId()));
     CHECK(std::string(d.status()).find("Restore") != std::string::npos);
     CHECK(std::strcmp(d.effectType(), "NoiseEffect") == 0);
 }
@@ -234,7 +234,7 @@ TEST_CASE("ControlModule refuses a preset setting a container this device does n
     d.control->setup();
     REQUIRE(d.control->listRowCount() == 1);
 
-    CHECK_FALSE(d.control->setListRowField(d.firstRowId(), "activate", "{}"));
+    CHECK_FALSE(d.control->applyListRow(d.firstRowId()));
     CHECK(std::string(d.status()).find("no such top-level module at NoSuchModuleXyz") != std::string::npos);
     CHECK(d.rowNamed("ghost").find("\"active\":true") == std::string::npos);
 }
@@ -249,7 +249,7 @@ TEST_CASE("ControlModule survives a corrupt preset file") {
     d.control->setup();
     REQUIRE(d.control->listRowCount() == 1);                         // the file IS listed
     // Apply returns false: the row was attempted but nothing was usable. Asserting the return as well as the tree tells a rejected bad file from doing nothing.
-    CHECK_FALSE(d.control->setListRowField(d.firstRowId(), "apply", "{}"));
+    CHECK_FALSE(d.control->applyListRow(d.firstRowId()));
 
     CHECK(d.layers->childCount() == 1);                              // the tree is untouched
     CHECK(std::strcmp(d.effectType(), "NoiseEffect") == 0);
@@ -295,31 +295,28 @@ TEST_CASE("ControlModule marks the applied preset as the active pad") {
     d.control->writeListRow(idSink, 0);
     const std::string first(idSink.data(), idSink.size());
     const uint32_t id = static_cast<uint32_t>(std::stoul(first.substr(first.find("\"id\":") + 5)));
-    d.control->setListRowField(id, "activate", "{}");
+    d.control->applyListRow(id);
 
     CHECK(rowJson(0).find("\"active\":true") != std::string::npos);
     CHECK(rowJson(1).find("\"active\":true") == std::string::npos);
 }
 
-// A pad click and a row button are the same action from two presentations, so both reach apply.
-TEST_CASE("ControlModule applies a preset from either the pad or the row button") {
+// A preset's name addresses its row, which is how `POST /api/list/Control/presets/<name>/apply` reaches it.
+TEST_CASE("ControlModule finds a preset's row by its name, and applying the row applies the preset") {
     Device d;
     auto* layer = d.add(d.layers, "Layer");
     d.add(layer, "NoiseEffect");
     d.setText("name", "look");
     d.press("save");
 
-    auto swapToRainbow = [&] {
-        auto* old = layer->replaceChildAt(0, mm::ModuleFactory::create("RainbowEffect"));
-        if (old) { old->release(); mm::Scheduler::deleteTree(old); }
-    };
+    auto* old = layer->replaceChildAt(0, mm::ModuleFactory::create("RainbowEffect"));
+    if (old) { old->release(); mm::Scheduler::deleteTree(old); }
 
-    swapToRainbow();
-    CHECK(d.control->setListRowField(d.firstRowId(), "activate", "{}"));   // the pad
-    CHECK(std::strcmp(d.effectType(), "NoiseEffect") == 0);
-
-    swapToRainbow();
-    CHECK(d.control->setListRowField(d.firstRowId(), "apply", "{}"));      // the row button
+    uint32_t id = 0;
+    REQUIRE(d.control->listRowNamed("look", id));
+    CHECK(id == d.firstRowId());
+    CHECK_FALSE(d.control->listRowNamed("nope", id));
+    CHECK(d.control->applyListRow(id));
     CHECK(std::strcmp(d.effectType(), "NoiseEffect") == 0);
 }
 
@@ -480,11 +477,11 @@ TEST_CASE("ControlModule keeps one active preset per captured role") {
     d.press("save");
     REQUIRE(d.control->listRowCount() == 2);
 
-    d.activate("geometry");
+    d.apply("geometry");
     CHECK(d.rowNamed("geometry").find("\"active\":true") != std::string::npos);
 
     // The layer preset claims only the layer role, so the driver pad stays lit.
-    d.activate("look");
+    d.apply("look");
     CHECK(d.rowNamed("look").find("\"active\":true") != std::string::npos);
     CHECK(d.rowNamed("geometry").find("\"active\":true") != std::string::npos);
 
@@ -505,13 +502,13 @@ TEST_CASE("ControlModule replaces only the role a preset carries") {
     d.setText("name", "lookA");     d.press("save");
     d.setText("name", "lookB");     d.press("save");
 
-    d.activate("hardware");
-    d.activate("lookA");
+    d.apply("hardware");
+    d.apply("lookA");
     CHECK(d.rowNamed("hardware").find("\"active\":true") != std::string::npos);
     CHECK(d.rowNamed("lookA").find("\"active\":true") != std::string::npos);
 
     // A second look takes the layer role from the first; the driver preset is untouched.
-    d.activate("lookB");
+    d.apply("lookB");
     CHECK(d.rowNamed("lookB").find("\"active\":true") != std::string::npos);
     CHECK(d.rowNamed("lookA").find("\"active\":true") == std::string::npos);
     CHECK(d.rowNamed("hardware").find("\"active\":true") != std::string::npos);
@@ -537,7 +534,7 @@ TEST_CASE("ControlModule renames a preset by renaming its file") {
     auto* old = layer->replaceChildAt(0, mm::ModuleFactory::create("RainbowEffect"));
     if (old) { old->release(); mm::Scheduler::deleteTree(old); }
     REQUIRE(std::strcmp(d.effectType(), "RainbowEffect") == 0);
-    d.activate("after");
+    d.apply("after");
     CHECK(std::strcmp(d.effectType(), "NoiseEffect") == 0);
 }
 
@@ -586,7 +583,7 @@ TEST_CASE("ControlModule saves one card as a preset and puts back only that modu
     CHECK(d.rowNamed("noise only").find("\"roles\":[\"effects\"]") != std::string::npos);
 
     noise->scale = 30;
-    d.activate("noise only");
+    d.apply("noise only");
     CHECK(noise->scale == 7);
     CHECK(layer->childCount() == 2);
     CHECK(layer->child(1) == rainbow);
@@ -598,7 +595,7 @@ TEST_CASE("ControlModule shows a failing preset's full path") {
     d.add(d.layers, "Layer");
     d.writePreset("a-long-preset-name-of-thirty-1", "{\"Effects\":{\"Layer\":{\"Missing-module1\":{\"x\":1}}}}");
     d.control->setup();
-    CHECK_FALSE(d.control->setListRowField(d.firstRowId(), "apply", "{}"));
+    CHECK_FALSE(d.control->applyListRow(d.firstRowId()));
     CHECK(std::string(d.status()).find("at Effects.Layer.Missing-module1") != std::string::npos);
 }
 
@@ -715,9 +712,9 @@ TEST_CASE("ControlModule applies a palette-only preset over a running look and c
     d.press("save");
     d.writePreset("ocean", "{\"Drivers\":{\"palette\":\"Ocean\"}}");
     d.control->setup();
-    d.activate("look");
+    d.apply("look");
 
-    d.activate("ocean");
+    d.apply("ocean");
     CHECK(std::strcmp(mm::palettes::kBuiltins[drivers->palette].name, "Ocean") == 0);
     CHECK(drivers->brightness == 77);
     CHECK(d.layers->childCount() == 1);
@@ -842,7 +839,7 @@ TEST_CASE("ControlModule persists the look a preset applied") {
     d.fs->flush();
     REQUIRE(std::strcmp(d.effectType(), "RainbowEffect") == 0);
 
-    d.activate("keeper");
+    d.apply("keeper");
     REQUIRE(std::strcmp(d.effectType(), "NoiseEffect") == 0);   // applied to the LIVE tree
 
     // The config file must now describe the applied look, not the one it replaced.
@@ -993,7 +990,7 @@ TEST_CASE("ControlModule stops showing a deleted preset as active") {
     d.setSource("Effects");
     d.setText("name", "doomed");
     d.press("save");
-    d.activate("doomed");
+    d.apply("doomed");
     REQUIRE(std::string(d.control->currentLook()) == "doomed");
 
     REQUIRE(d.control->deleteListRow(d.firstRowId()));
@@ -1009,7 +1006,7 @@ TEST_CASE("ControlModule keeps a renamed preset active under its new name") {
     d.setSource("Effects");
     d.setText("name", "before");
     d.press("save");
-    d.activate("before");
+    d.apply("before");
     REQUIRE(std::string(d.control->currentLook()) == "before");
 
     REQUIRE(d.control->setListRowField(d.firstRowId(), "name", "{\"value\":\"after\"}"));
@@ -1179,7 +1176,7 @@ TEST_CASE("a touched control is not driven on that surface, and resyncs when rel
     d.control->removeSurface(&s);
 }
 
-// The hand is on one desk, so every other surface, such as the OSC link to other boards, keeps following the fader as it moves.
+// The hand is on one desk, so every other surface, such as the OSC link to other devices, keeps following the fader as it moves.
 TEST_CASE("a control touched on one surface still reaches the others as it moves") {
     Device d;
     RecordingSurface desk, boards;
@@ -1663,7 +1660,7 @@ std::vector<uint8_t> oscInt(const char* address, int32_t value) {
     return p;
 }
 
-/// One surface value as another board's OSC feedback sends it.
+/// One surface value as another device's OSC feedback sends it.
 std::vector<uint8_t> feedbackFrom(mm::SurfaceControl kind, uint8_t index, uint8_t value) {
     std::vector<uint8_t> p(64);
     p.resize(mm::osc::encodeSurface(p.data(), p.size(), kind, index, value));
@@ -1671,7 +1668,7 @@ std::vector<uint8_t> feedbackFrom(mm::SurfaceControl kind, uint8_t index, uint8_
 }
 }  // namespace
 
-// A phone's pad grid fires a preset and lights from the states, which travel on their own address so no listening board reads one as a press.
+// A phone's pad grid fires a preset and lights from the states, which travel on their own address so no listening device reads one as a press.
 TEST_CASE("an OSC pad press applies the preset on that pad, and its state goes out on /mm/padstate, which presses nothing") {
     Device d;
     auto* layer = d.add(d.layers, "Layer");
@@ -1713,7 +1710,7 @@ TEST_CASE("an OSC pad press applies the preset on that pad, and its state goes o
     CHECK(first == mm::ControlModule::kPadActive);
     d.control->removeSurface(&osc);
 
-    // The applied pad's state, arriving at a board as another board's feedback, applies nothing.
+    // The applied pad's state, arriving at a device as another device's feedback, applies nothing.
     auto* again = layer->replaceChildAt(0, mm::ModuleFactory::create("RainbowEffect"));
     if (again) { again->release(); mm::Scheduler::deleteTree(again); }
     send("/mm/padstate/1", mm::ControlModule::kPadActive);
@@ -1779,7 +1776,7 @@ std::vector<std::array<uint8_t, 4>> sentToDesk() {
 }
 }  // namespace
 
-// A desk on the board's own USB port, with no computer: greeted once, then sent only what changed, and its moves drive the surface.
+// A desk on the device's own USB port, with no computer: greeted once, then sent only what changed, and its moves drive the surface.
 TEST_CASE("a desk on the USB port is greeted once, sent only changes, and not greeted again when the tree is prepared") {
     Device d;
     mm::platform::setTestUsbMidiDesk(true);
@@ -1813,8 +1810,8 @@ TEST_CASE("a desk on the USB port is greeted once, sent only changes, and not gr
     midi.release();
 }
 
-// A desk shared from one board's USB port drives another board over RTP-MIDI as if plugged into it: greeted, shown the surface, and its moves landing.
-TEST_CASE("a desk shared from a board's USB port drives another board's surface over RTP-MIDI, both ways") {
+// A desk shared from one device's USB port drives another device over RTP-MIDI as if plugged into it: greeted, shown the surface, and its moves landing.
+TEST_CASE("a desk shared from a device's USB port drives another device's surface over RTP-MIDI, both ways") {
     Device d;
     mm::platform::setTestUsbMidiDesk(true);
     mm::MidiService bridge;
@@ -1841,16 +1838,16 @@ TEST_CASE("a desk shared from a board's USB port drives another board's surface 
     };
     for (int i = 0; i < 200 && atDesk.empty(); i++) exchange();
     REQUIRE_FALSE(atDesk.empty());
-    CHECK((atDesk[0][0] == 0x04 && atDesk[0][1] == 0xF0));   // the APC40's mode SysEx first, from the board it drives
+    CHECK((atDesk[0][0] == 0x04 && atDesk[0][1] == 0xF0));   // the APC40's mode SysEx first, from the device it drives
     CHECK(std::string(bridge.status()).find("shared with") == 0);
 
-    // A fader moved on the desk lands on the other board's surface.
+    // A fader moved on the desk lands on the other device's surface.
     const uint8_t faderTop[1][4] = {{0x0B, 0xB0, 0x07, 0x7F}};
     mm::platform::injectTestUsbMidi(faderTop, 1);
     for (int i = 0; i < 200 && surfaceValue(d, "fader1") != 255; i++) exchange();
     CHECK(surfaceValue(d, "fader1") == 255);
 
-    // A switch turned on at that board lights its activator on the desk.
+    // A switch turned on at that device lights its activator on the desk.
     atDesk.clear();
     REQUIRE(d.scheduler.setControl("Control", "switch2", "{\"value\":true}") == mm::Scheduler::SetControlResult::Ok);
     d.control->tick20ms();
@@ -1866,8 +1863,8 @@ TEST_CASE("a desk shared from a board's USB port drives another board's surface 
     mm::platform::setTestUsbMidiDesk(false);
 }
 
-// The LCD's message is the longest a desk is sent, so a sharing board must pass it on whole.
-TEST_CASE("a Mackie desk shared over the network shows the display line of the board it drives") {
+// The LCD's message is the longest a desk is sent, so a sharing device must pass it on whole.
+TEST_CASE("a Mackie desk shared over the network shows the display line of the device it drives") {
     Device d;
     mm::platform::setTestUsbMidiDesk(true);
     mm::MidiService bridge;
@@ -1955,7 +1952,7 @@ TEST_CASE("the USB port has one owner: a second MIDI service waits while the fir
     mm::platform::setTestUsbMidiDesk(false);
 }
 
-// A board that invites a named host announces nothing; one waiting to be invited can be found by name.
+// A device that invites a named host announces nothing; one waiting to be invited can be found by name.
 TEST_CASE("a MIDI service on the network is announced over Bonjour only while it waits to be invited") {
     Device d;
     mm::MidiService midi;

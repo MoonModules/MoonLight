@@ -109,30 +109,29 @@ def test_a_control_whose_module_is_gone_does_not_stop_the_rest():
     assert device.posts == [("System", "deviceName", "MM-testbench-S3")]
 
 
-class _FakeTree:
-    """One Layer's children as {name: type}, answering the module read and the replace endpoint."""
+class _FakeContainers:
+    """A device answering each container's document, and none for a container it does not have."""
 
-    def __init__(self, children):
-        self.children = dict(children)
+    def __init__(self, docs):
+        self.docs = docs
+        self.reads = []
 
     def get(self, path):
-        return {"type": self.children[path.rsplit("/", 1)[1]]}
-
-    def post(self, path, data):
+        self.reads.append(path)
         name = path.split("/")[3]
-        del self.children[name]
-        self.children[data["name"]] = data["type"]
-        return {"ok": True}
+        if name not in self.docs:
+            raise RuntimeError("404")
+        return self.docs[name]
 
 
-def test_a_replaced_slot_is_swapped_back_to_the_type_it_held_under_its_own_name():
-    layer = _FakeTree({"Pulse": "PulseEffect"})
-    replaced = {}
-    runner._remember_type(replaced, layer, "Pulse")
-    layer.post("/api/modules/Pulse/replace", {"type": "RainbowEffect", "name": "Pulse"})   # the scenario's swap
-    runner._remember_type(replaced, layer, "Pulse")   # a second replace must not overwrite the original
-    assert runner._restore_types(layer, replaced) == 1
-    assert layer.children == {"Pulse": "PulseEffect"}
+def test_the_snapshot_is_each_containers_document_and_skips_one_the_device_lacks():
+    # A container's document applied back removes what a scenario added, re-creates what it removed and re-types what it replaced.
+    effects = {"Effects": {"$patch": "replace", "Layer": {"type": "Layer"}}}
+    device = _FakeContainers({"Layouts": {"Layouts": {}}, "Effects": effects, "Drivers": {"Drivers": {}}})
+    docs = runner._snapshot_documents(device)
+    assert effects in docs
+    assert len(docs) == 3   # Services is absent here, and is left out
+    assert device.reads[1] == "/api/modules/Effects/document"
 
 
 class _FakeSwitch:

@@ -16,7 +16,7 @@
 //   4. show a WiFi creds form, await user input
 //   5. provision via Improv standard SEND_WIFI_CREDENTIALS
 //   6. push the device-model config over serial — "Improv = REST over serial":
-//      APPLY_OP (0xFC) frames for the deviceModels.json entry's modules + controls
+//      APPLY_OP (0xFC) frames for the deviceModels.json entry's state document
 //      (the deviceModel name is just one of those controls). No HTTP, no browser pull,
 //      so it works identically on the HTTPS deployed installer and local preview
 //      (the old HTTP /api/control fan-out couldn't run HTTPS→http — mixed-content).
@@ -69,8 +69,8 @@ import {
     IMPROV_FRAME_TYPE_RPC,
     buildImprovFrame,
     encodeApplyOpFrames,
+    stateFrames,
 } from "./improv-frame.js";
-import { planConfigOps } from "./config-ops.js";
 
 // ---------------------------------------------------------------------------
 // Manifest parser
@@ -133,39 +133,38 @@ async function sendSetTxPowerFrame(port, dBm) {
     }
 }
 
-// Send ONE REST op (a JS object like {op:"add",type,id,parent}) to the device over
-// serial as APPLY_OP frames — "Improv = REST over serial". The op JSON is chunked
-// into [0xFC][seq][last][chunk] frames (≤ APPLY_OP_CHUNK_MAX op bytes each; most ops
-// are one frame). We own the port here (ImprovSerial closed after provision), so we
+// Send ONE state document (a JSON string like {"Drivers":{…}}) to the device over
+// serial as APPLY_OP frames: "Improv = REST over serial". The JSON is chunked
+// into [0xFC][seq][last][chunk] frames (≤ APPLY_OP_CHUNK_MAX bytes each). We own the port here (ImprovSerial closed after provision), so we
 // write directly. Best-effort fire: the device acks each frame with an RpcResponse
 // we don't read back (Web Serial duplex read while we hold the writer is awkward),
-// and the single-buffer busy-guard on the device + a small inter-op delay keep the
+// and the single-buffer busy-guard on the device + a small inter-document delay keep the
 // device from being overrun. Returns nothing; throws only on a write error.
-async function sendApplyOpFrame(port, op) {
-    const frames = encodeApplyOpFrames(op);   // [0xFC][seq][last][chunk…] per frame
+async function sendApplyOpFrame(port, doc) {
+    const frames = encodeApplyOpFrames(doc);   // [0xFC][seq][last][chunk…] per frame
     const writer = port.writable.getWriter();
     try {
         for (const frame of frames) await writer.write(frame);
     } finally {
         writer.releaseLock();
     }
-    // Pace so the device's main loop consumes the op (clears its single buffer) before
-    // the next op's frame arrives — the device refuses a new op while busy. This is
+    // Pace so the device's main loop consumes the document (clears its single buffer) before
+    // the next document's frame arrives, since the device refuses a new document while busy. This is
     // open-loop (we don't read the ack back: a Web Serial duplex read while we hold the
     // writer is awkward), so the delay must clear the worst-case consume window. A
-    // loaded tick (large grid, many modules) can run a few hundred µs, but the op is
+    // loaded tick (large grid, many modules) can run a few hundred µs, but the document is
     // applied at the START of the next tick() poll, not after a full render — so ~120 ms
     // comfortably covers it with headroom. (A read-back ack + retry-on-busy is the
-    // closed-loop upgrade; backlogged until a real install drops an op, since each op is
-    // also idempotent so a lost one would re-apply cleanly on a re-flash.)
+    // closed-loop upgrade; backlogged until a real install drops a document, since each document is
+    // a merge, so a lost one would re-apply cleanly on a re-flash.)
     await new Promise(r => setTimeout(r, 120));
 }
 
-// Apply a device-model's catalog defaults over serial, as APPLY_OP ops. The caller must
+// Apply a device-model's catalog defaults over serial, as APPLY_OP documents. The caller must
 // OWN the serial port (no ImprovSerial holding the writable lock). Works on any reachable
 // device — fresh-provisioned (WiFi) OR already-online at boot (Ethernet) — because the
 // serial RPCs need no provisioning state, only the open port. The deviceModel name is just
-// one of the catalog controls (System.deviceModel), so it rides the same APPLY_OP `set`
+// part of the catalog state (System.deviceModel), so it rides the same APPLY_OP
 // pass as every other default.
 // Gated by applyDefaults: when the "Apply device defaults" checkbox is unticked, push
 // nothing (keep the device's config). Returns true iff the catalog push actually ran (so
@@ -217,15 +216,14 @@ async function catalogFlashBaud(device, onLog) {
     return entry && Number.isInteger(entry.flashBaud) ? entry.flashBaud : DEFAULT_FLASH_BAUD;
 }
 
-// Push a device-model's whole catalog config to the device over serial. Walks the SAME
-// deviceModels.json entry the HTTP path used (see planConfigOps) but emits APPLY_OP ops
-// instead of HTTP requests — so the defaults apply during provisioning with no HTTP and
+// Push a device-model's whole catalog state to the device over serial, one document per
+// top-level container (see stateFrames), as APPLY_OP frames instead of PATCH /api/state, so the defaults apply during provisioning with no HTTP and
 // no browser handoff. Returns true if the entry was found + pushed, false if none.
 async function sendConfigOverSerial(port, device, onLog) {
     const entry = await fetchCatalogEntry(device, onLog);
     if (!entry) return false;
-    for (const op of planConfigOps(entry)) {
-        await sendApplyOpFrame(port, op);
+    for (const doc of stateFrames(entry)) {
+        await sendApplyOpFrame(port, doc);
     }
     if (onLog) onLog(`[orchestrator] applied ${device} defaults over serial`);
     return true;

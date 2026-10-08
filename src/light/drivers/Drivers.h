@@ -4,6 +4,7 @@
 #include "core/util/PinList.h"        // parsePinList: the relay list, same parser the LED drivers use
 #include "light/drivers/DriverBase.h"  // DriverBase: the Drivers container casts its children to it
 #include "core/module/MoonModule.h"
+#include "core/module/Scheduler.h"   // topOfType: the Effects it finds when nothing injected a source
 #include "core/util/ActiveInstance.h"  // the summary-seat election (the seat + its RAII vacate)
 #include "light/layers/Buffer.h"
 #include "light/layers/Layer.h"
@@ -199,6 +200,7 @@ public:
     void onFileChanged(const char* path) override {
         if (!touchesFolder(path, moonlive::kScriptDir) && !touchesFolder(path, moonlive::kFactoryScriptDir)) return;
         refreshLivePalettes();
+        LivePalettes::set(livePtrs_, liveTags_, liveCount_);
         rebuildControls();
     }
 
@@ -455,6 +457,9 @@ public:
         LivePalettes::set(livePtrs_, liveTags_, liveCount_);
         // A CHANGED count needs the control rebuilt: `palette`'s maximum is baked at define time.
         if (liveCount_ != hadLive) rebuildControls();
+        // The top-level Effects, found by type when nothing injected a source, so a tree built from a document needs no wiring.
+        if (!effects_ && !layer_)
+            if (Scheduler* s = Scheduler::instance()) effects_ = static_cast<Effects*>(s->topOfType("Effects"));
         // Re-resolved from the bound container, so an API-rebuilt Layer is picked up here.
         if (effects_) layer_ = effects_->activeLayer();
         // A failed allocation leaves data_ null, which tick() checks before blending.

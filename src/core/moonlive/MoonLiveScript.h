@@ -152,7 +152,7 @@ public:
         for (uint8_t i = 0; i < n; i++) {
             uint8_t* slot = engine_.controlSlot(decls[i].offset);
             if (!slot) continue;   // engine not compiled yet: controls appear after prepare
-            // A dropdown reads the low byte too, its value being an index below its option count.
+            // A dropdown is on a byte member only, so the byte it binds is the whole value.
             if (decls[i].options) {
                 controls.addSelect(decls[i].name, *slot, decls[i].options, static_cast<uint8_t>(decls[i].max + 1));
                 controls.setDefault(controls.count() - 1, static_cast<int32_t>(decls[i].def));

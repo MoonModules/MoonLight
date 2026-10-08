@@ -59,7 +59,7 @@ void tick() {
 `byte bpm = 30;` is state the script owns: visible in every function, surviving every tick. Naming it in `defineControls()` with `addControl("bpm", bpm, 1, 240)` also puts it on the UI as a slider, which is the same call a compiled module makes. A member no `addControl` names stays private to the script, which is how a stateful effect holds a value the user should not see.
 
 The default comes from the declaration, the range from the call, and the quoted name is the UI label, free to differ from the member's name.
-`addSelect("shape", shape, "disc|ball|egg")` makes a dropdown instead: `shape` holds 0, 1 or 2, the index of the name picked. The names share the script's 128 bytes of strings, up to 16 names in all.
+`addSelect("shape", shape, "disc|ball|egg")` makes a dropdown instead: `shape` holds 0, 1 or 2, the index of the name picked. The quoted names count against the script's 128 bytes of strings, and the engine keeps every dropdown's names together in 96 bytes, each name with one byte for its end, up to 16 names in all.
 
 ### A member can be written
 
@@ -239,7 +239,7 @@ The core owns the grammar and a generic call mechanism, and nothing else.
 | `setPalEntry(i, r, g, b)` | write one of the sixteen active palette entries |
 | `setPalEntryHSV(i, h, s, v)` | the same, in the space a palette is usually reasoned in |
 | `addControl(name, member, min, max)` | surface a member in the UI, from `defineControls()` |
-| `addSelect(name, member, "a\|b\|c")` | surface a byte or int member as a dropdown of those names, its value the index picked |
+| `addSelect(name, member, "a\|b\|c")` | surface a byte member as a dropdown of those names, its value the index picked |
 | `gpioRead(pin)`, `gpioWrite(pin, v)` | read and drive a pin, from a service script |
 | `adcRead(pin)`, `adcMv(pin)`, `adcMax()` | an analog reading: raw, in millivolts, and its full scale |
 | `setControl(module, control, v)` | drive another module's control, which is what a service does |

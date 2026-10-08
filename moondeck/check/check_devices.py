@@ -4,17 +4,17 @@
 The catalog is hand-maintained data consumed identically by three clients (the
 web installer, the device UI's ?deviceModel= inject, and MoonDeck), so a typo drifts
 silently: a broken image path, a device name that no longer matches its
-System.deviceModel control, a driver pin list on an entry that has no driver. This is the
+System.deviceModel value, a driver pin list on an entry that has no driver. This is the
 catalog's counterpart to check_specs.py for module docs: a fast, dependency-free
 gate that pins the invariants the clients assume.
 
 Invariants checked per entry:
-  - required fields present (name, chip, firmwares, modules)
+  - required fields present (name, chip, firmwares, state)
   - firmwares is a non-empty list of non-empty strings (entry[0] is the default)
   - image (if set) is a local assets/deviceModels/ path that resolves on disk
   - url (if set) is an absolute http(s) link
-  - the System module's `deviceModel` control value equals the entry `name`
-  - every module `type` is factory-registered (or a known boot-wired singleton)
+  - the state's System.deviceModel value equals the entry `name`
+  - every child module `type` in the state is factory-registered
   - a driver's `pins` control only appears on an actual *LedDriver module
   - supported/planned (if set) are string arrays drawn from the known vocabulary
 
@@ -51,11 +51,6 @@ SUPPORTED_VOCAB = {"LEDs", "WiFi", "Ethernet", "Audio", "IR", "MQTT", "Hue", "MI
 # bridge (the LOLIN's CH340), up where a slow default needs raising. Keep in step with
 # flash_esp32.py (_catalog_flash_baud) and install-orchestrator.js.
 FLASH_BAUDS = {115200, 230400, 460800, 921600}
-
-# Boot-wired singletons: present on every device, added by code, so the catalog
-# references them by id without the factory creating them. Their catalog `type`
-# is the short id, not the factory class name (e.g. "System", not "SystemModule").
-BOOT_WIRED_TYPES = {"System", "Network", "Drivers"}
 
 
 def eth_preset_labels():
@@ -150,7 +145,6 @@ def main():
         sys.exit(1)
 
     factory_types = registered_types()
-    valid_types = factory_types | BOOT_WIRED_TYPES
     names_seen = set()
 
     for i, e in enumerate(catalog):
@@ -163,7 +157,7 @@ def main():
             continue
 
         # --- required fields ---
-        for field in ("name", "chip", "firmwares", "modules"):
+        for field in ("name", "chip", "firmwares", "state"):
             if field not in e:
                 errors.append(f"{where}: missing required field '{field}'")
 
@@ -233,49 +227,61 @@ def main():
                         errors.append(f"{where}: supported capability '{c}' is not in the "
                                       f"known vocabulary {sorted(whitelist)} — add a module first")
 
-        # --- modules ---
-        mods = e.get("modules")
-        if not isinstance(mods, list):
-            # `modules` is required (presence checked above); a wrong *type* is a
+        # --- state: the document PATCH /api/state takes; root members are top-level modules,
+        #     an object member with a `type` is a child module, scalars and arrays are controls ---
+        state = e.get("state")
+        if not isinstance(state, dict):
+            # `state` is required (presence checked above); a wrong *type* is a
             # schema violation, not something to skip silently.
-            errors.append(f"{where}: modules must be a list, got {type(mods).__name__}")
+            errors.append(f"{where}: state must be an object, got {type(state).__name__}")
             continue
+        mods = []                        # [{type, id, controls}] in document order, roots first
+        def _walk(path, node, mtype):
+            controls = {}
+            kids = []
+            for k, v in node.items():
+                if k in ("type", "$patch"):
+                    continue
+                if isinstance(v, dict):
+                    if isinstance(v.get("type"), str) and v["type"]:
+                        kids.append((k, v))
+                    else:
+                        errors.append(f"{where}: state member '{path}.{k}' is an object without a 'type' "
+                                      f"(a child module needs one)")
+                else:
+                    controls[k] = v
+            if "$patch" in node and node["$patch"] != "replace":
+                errors.append(f"{where}: state member '{path}' has $patch {node['$patch']!r}; only 'replace' is used")
+            mods.append({"type": mtype, "id": path, "controls": controls})
+            for k, v in kids:
+                _walk(f"{path}.{k}", v, v["type"])
+        for root, node in state.items():
+            if not isinstance(node, dict):
+                errors.append(f"{where}: state root '{root}' is not an object")
+                continue
+            _walk(root, node, None)
         board_control_seen = False
         for m in mods:
-            if not isinstance(m, dict):
-                errors.append(f"{where}: a modules entry is not an object")
-                continue
-            mtype = m.get("type")
-            mid = m.get("id")
-            if not mtype:
-                errors.append(f"{where}: a modules entry has no 'type'")
-            elif mtype not in valid_types:
-                errors.append(f"{where}: module type '{mtype}' is not factory-registered "
-                              f"(and not a boot-wired singleton)")
-            if not isinstance(mid, str) or not mid:
-                errors.append(f"{where}: module '{mtype}' has no non-empty 'id'")
+            mtype = m["type"]
+            mid = m["id"]
+            if mtype is not None and mtype not in factory_types:
+                errors.append(f"{where}: state member '{mid}' has type '{mtype}', which is not factory-registered")
 
-            # replaceChildren (optional) — a container unit sets it true to clear its
-            # existing children before the entry's children are added (the installer
-            # inject path). Must be a bool when present so a typo'd value is caught here.
-            if "replaceChildren" in m and not isinstance(m["replaceChildren"], bool):
-                errors.append(f"{where}: module '{mid}' replaceChildren must be true/false")
-
-            controls = m.get("controls") or {}
+            controls = m["controls"]
             # System.deviceModel control must equal the entry name (the identity key).
-            if mtype == "System" and isinstance(controls, dict) and "deviceModel" in controls:
+            if mid == "System" and "deviceModel" in controls:
                 board_control_seen = True
                 if controls["deviceModel"] != name:
                     errors.append(f"{where}: System.deviceModel control '{controls['deviceModel']}' "
                                   f"!= entry name '{name}'")
             # A `pins` control only makes sense on an LED driver module.
-            if isinstance(controls, dict) and "pins" in controls and not str(mtype).endswith("LedDriver"):
-                errors.append(f"{where}: module '{mtype}' has a 'pins' control but is not a *LedDriver")
+            if "pins" in controls and not str(mtype).endswith("LedDriver"):
+                errors.append(f"{where}: state member '{mid}' has a 'pins' control but is not a *LedDriver")
 
             # 74HCT595 pin expander (pinExpander = is the board fitted?). The wiring
             # invariants are what a bad catalog entry gets wrong, and they fail on a bench with dark
             # LEDs rather than loudly, so pin them here.
-            if isinstance(controls, dict) and controls.get("pinExpander"):
+            if controls.get("pinExpander"):
                 if "latchPin" not in controls:
                     errors.append(f"{where}: pinExpander (74HCT595) needs a 'latchPin'")
                 # The data-pin count is a property of the BOARD (how many '595 sockets are
@@ -320,7 +326,7 @@ def main():
             # inheriting the default would drive an LED pin as an Ethernet reset.) Only the pins that
             # are genuine BOARD WIRING are required — MDC/MDIO may stay at the IDF default (omit or
             # -1) on RMII, since that's a real standard, not a board-specific value.
-            if mtype == "EthernetModule" and isinstance(controls, dict):
+            if mtype == "EthernetModule":
                 # PRESENCE, not truthiness: a JSON `null` reads as None like a missing key, and the
                 # installer treats a present-but-null value as a named preset (null !== "Custom").
                 board = controls["ethBoard"] if "ethBoard" in controls else None
@@ -355,11 +361,10 @@ def main():
                                       f"inherited from a per-chip default (use -1 for a genuinely "
                                       f"unused pin)")
 
-        # Every entry must carry the deviceModel identity (a System unit with the
-        # `deviceModel` control). An empty `modules` list is also a failure — it has no
-        # identity at all — so this is gated only on board_control_seen, not on `mods`.
+        # Every entry must carry the deviceModel identity (System.deviceModel). An empty `state`
+        # is also a failure, since it has no identity at all.
         if not board_control_seen:
-            errors.append(f"{where}: no System module sets the 'deviceModel' identity control")
+            errors.append(f"{where}: state sets no System.deviceModel identity")
 
     # Report (mirrors check_specs.py's shape).
     print(f"Device check: {len(catalog)} devices, {len(errors)} issue(s)")

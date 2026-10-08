@@ -4,9 +4,9 @@
 #include "core/module/Scheduler.h"
 #include "core/module/MoonModule.h"
 
-// Pins Scheduler::ensureUniqueName and deduplicateNamesInTree. These prevent the "second Layer (or any same-named module) is unreachable via parent_id" bug, the HTTP API uses module names as identifiers, and findModuleByName returns the first DFS match, so a second module with the same name from ModuleFactory::create (which strips role-noun suffixes and can produce duplicates like "Layer") could never be addressed.
+// Pins Scheduler::freeName and firstByName. The HTTP API and a state document use module names as identifiers, and firstByName returns the first DFS match, so a second module with the same name could never be addressed.
 //
-// Both code paths that introduce modules, HttpServerModule::handleAddModule (live add via /api/modules) and the persistence load in Scheduler::setup (positional rebuild from /.config/<TypeName>.json), call into the same Scheduler helpers, so a single test covers both.
+// A name that clashes takes the next free `-N` suffix, which is how a stored config file's module is placed when its name is already used elsewhere in the tree.
 
 namespace {
 
@@ -16,22 +16,22 @@ struct Stub : public mm::MoonModule {
 
 } // namespace
 
-// A name with no collision is returned unchanged.
-TEST_CASE("Scheduler::ensureUniqueName leaves unique names alone") {
+// A name no module holds is returned unchanged.
+TEST_CASE("Scheduler::freeName returns an unused name as it is") {
     mm::Scheduler s;
     auto* a = new Stub();
     a->setName("OnlyOne");
     s.addModule(a);
 
-    s.ensureUniqueName(a);
-    CHECK(std::strcmp(a->name(), "OnlyOne") == 0);
+    char out[mm::MoonModule::kNameLen];
+    CHECK(s.freeName("Fresh", out, sizeof(out)));
+    CHECK(std::strcmp(out, "Fresh") == 0);
 
     s.deleteTree(a);
 }
 
-// The second module with a duplicate name gets " 2" suffixed; the first keeps its original name.
-TEST_CASE("Scheduler::ensureUniqueName suffixes the second occurrence") {
-    // Build: Container → child A ("Layer"), child B ("Layer"). The second one must be renamed; the first stays.
+// A name a module holds gets "-2"; the holder keeps its name.
+TEST_CASE("Scheduler::freeName suffixes a name that is taken") {
     mm::Scheduler s;
     auto* parent = new Stub();
     parent->setName("Effects");
@@ -41,19 +41,16 @@ TEST_CASE("Scheduler::ensureUniqueName suffixes the second occurrence") {
     first->setName("Layer");
     parent->addChild(first);
 
-    auto* second = new Stub();
-    second->setName("Layer");
-    parent->addChild(second);
-
-    s.ensureUniqueName(second);
+    char out[mm::MoonModule::kNameLen];
+    CHECK(s.freeName("Layer", out, sizeof(out)));
+    CHECK(std::strcmp(out, "Layer-2") == 0);  // '-' separator (URL-safe)
     CHECK(std::strcmp(first->name(), "Layer") == 0);
-    CHECK(std::strcmp(second->name(), "Layer-2") == 0);  // '-' separator (URL-safe)
 
     s.deleteTree(parent);
 }
 
-// Suffix counting increments past existing "-2" / "-3" suffixes ("Layer", "Layer-2", "Layer" → "Layer-3").
-TEST_CASE("Scheduler::ensureUniqueName keeps suffixing past 'Foo-2'") {
+// Suffix counting increments past existing "-2" / "-3" suffixes ("Layer", "Layer-2" taken gives "Layer-3").
+TEST_CASE("Scheduler::freeName keeps counting past 'Foo-2'") {
     mm::Scheduler s;
     auto* parent = new Stub();
     parent->setName("Effects");
@@ -61,50 +58,12 @@ TEST_CASE("Scheduler::ensureUniqueName keeps suffixing past 'Foo-2'") {
 
     auto* a = new Stub(); a->setName("Layer");   parent->addChild(a);
     auto* b = new Stub(); b->setName("Layer-2"); parent->addChild(b);
-    auto* c = new Stub(); c->setName("Layer");   parent->addChild(c);
 
-    s.ensureUniqueName(c);
-    // First "Layer" intact, existing "Layer-2" intact, new collision lands at "Layer-3".
-    CHECK(std::strcmp(a->name(), "Layer") == 0);
-    CHECK(std::strcmp(b->name(), "Layer-2") == 0);
-    CHECK(std::strcmp(c->name(), "Layer-3") == 0);
+    char out[mm::MoonModule::kNameLen];
+    CHECK(s.freeName("Layer", out, sizeof(out)));
+    CHECK(std::strcmp(out, "Layer-3") == 0);
 
     s.deleteTree(parent);
-}
-
-// deduplicateNamesInTree() walks the entire module tree in one pass and disambiguates every duplicate (used after persistence load).
-TEST_CASE("Scheduler::deduplicateNamesInTree walks the whole tree") {
-    // Simulates the persistence-load case: positional rebuild produced two Layer modules with the same factory default name; one whole-tree pass must disambiguate every duplicate.
-    mm::Scheduler s;
-    auto* layers = new Stub();
-    layers->setName("Effects");
-    s.addModule(layers);
-
-    auto* layerA = new Stub();
-    layerA->setName("Layer");
-    layers->addChild(layerA);
-
-    auto* effectA1 = new Stub();
-    effectA1->setName("Noise");
-    layerA->addChild(effectA1);
-
-    auto* layerB = new Stub();
-    layerB->setName("Layer");      // collides with layerA
-    layers->addChild(layerB);
-
-    auto* effectB1 = new Stub();
-    effectB1->setName("Noise");    // collides with effectA1
-    layerB->addChild(effectB1);
-
-    s.deduplicateNamesInTree();
-
-    // First occurrences keep their names; second ones get a "-2" suffix.
-    CHECK(std::strcmp(layerA->name(), "Layer") == 0);
-    CHECK(std::strcmp(layerB->name(), "Layer-2") == 0);
-    CHECK(std::strcmp(effectA1->name(), "Noise") == 0);
-    CHECK(std::strcmp(effectB1->name(), "Noise-2") == 0);
-
-    s.deleteTree(layers);
 }
 
 // firstByName(name) returns the first match in DFS order, or nullptr if no module carries that name.
@@ -122,15 +81,15 @@ TEST_CASE("Scheduler::firstByName returns the first match in tree-walk order") {
     s.deleteTree(p);
 }
 
-// If the disambiguating suffix would overflow the 16-byte name buffer, ensureUniqueName refuses to truncate and keeps the colliding name (sharp edge, documented).
-TEST_CASE("Scheduler::ensureUniqueName leaves the colliding name alone when the suffixed result wouldn't fit") {
-    // MoonModule::name_ is 16 bytes (15 chars + NUL). A 13-char base name like "GlowParticles" reaches the buffer ceiling at suffix "10", "GlowParticles-10" is 16 chars, doesn't fit. ensureUniqueName must refuse to truncate (keep the duplicate, return) rather than silently produce a different result than the caller asked for. This test pins that refusal.
+// If the disambiguating suffix would overflow the 16-byte name buffer, freeName refuses rather than truncate.
+TEST_CASE("Scheduler::freeName refuses a suffix that does not fit a name") {
+    // MoonModule::name_ is 16 bytes (15 chars + NUL). A 13-char base name like "GlowParticles" reaches the buffer ceiling at suffix "10", "GlowParticles-10" is 16 chars, doesn't fit. freeName must report false rather than silently produce a different result than the caller asked for.
     mm::Scheduler s;
     auto* parent = new Stub();
     parent->setName("Effects");
     s.addModule(parent);
 
-    // Create one base "GlowParticles" plus eight "GlowParticles-2".."GlowParticles-9". The next ensureUniqueName needs "GlowParticles-10" which doesn't fit.
+    // One base "GlowParticles" plus eight "GlowParticles-2".."GlowParticles-9". The next free name needs "GlowParticles-10" which doesn't fit.
     auto* first = new Stub();
     first->setName("GlowParticles");
     parent->addChild(first);
@@ -143,15 +102,17 @@ TEST_CASE("Scheduler::ensureUniqueName leaves the colliding name alone when the 
         parent->addChild(m);
     }
 
-    // The 10th sibling, ensureUniqueName cannot produce a fitting unique name.
-    auto* victim = new Stub();
-    victim->setName("GlowParticles");
-    parent->addChild(victim);
-
-    s.ensureUniqueName(victim);
-
-    // Refused: keeps "GlowParticles" rather than producing a truncated/colliding name. (Note: this leaves two children both named "GlowParticles". The framework ships with this as a known sharp edge, see ensureUniqueName comment.)
-    CHECK(std::strcmp(victim->name(), "GlowParticles") == 0);
+    char out[mm::MoonModule::kNameLen] = "untouched";
+    CHECK_FALSE(s.freeName("GlowParticles", out, sizeof(out)));
+    CHECK(std::strcmp(out, "untouched") == 0);
 
     s.deleteTree(parent);
+}
+
+// A name that cannot be a module name at all is refused.
+TEST_CASE("Scheduler::freeName refuses an empty name and one too long for the buffer") {
+    mm::Scheduler s;
+    char out[mm::MoonModule::kNameLen];
+    CHECK_FALSE(s.freeName("", out, sizeof(out)));
+    CHECK_FALSE(s.freeName("ThisNameIsFarTooLongForTheBuffer", out, sizeof(out)));
 }

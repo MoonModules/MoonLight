@@ -3,6 +3,7 @@
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/module/MoonModule.h"
 #include "core/module/Scheduler.h"
+#include "core/module/StateDocument.h"   // isFlatConfig: a 6.0 config is a flat file
 #include "core/system/SystemModule.h"
 #include "core/system/FilesystemModule.h"
 #include "core/system/EthernetModule.h"
@@ -571,8 +572,10 @@ private:
         if (!FilesystemModule::pathFor(this, path, sizeof(path))) return;
         char* json = FilesystemModule::readWholeFile(path);
         if (!json) return;
-        const bool eth = ethernet_ && ethernet_->adoptLegacy(json);
-        const bool sta = wifi_ && wifi_->adoptLegacy(json);
+        // Only a flat file is a 6.0 config; a state document holds the same names inside its children.
+        const bool flat = isFlatConfig(json);
+        const bool eth = flat && ethernet_ && ethernet_->adoptLegacy(json);
+        const bool sta = flat && wifi_ && wifi_->adoptLegacy(json);
         platform::free(json);
         if (!eth && !sta) return;
         std::printf("NetworkModule: moved 6.0's network settings onto their cards\n");

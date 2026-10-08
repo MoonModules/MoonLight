@@ -9,9 +9,10 @@
 /// ## Why a scraper, and why it is shared
 ///
 /// MoonBase has no room for a JSON parser, so it scrapes a handful of keys it knows the application writes.
-/// The file's shape is a contract between two images built from one tree, so the scraper lives here once.
+/// The file's shape, the module's state document, is a contract between two images built from one tree, so the scraper lives here once.
 /// MoonBase includes it, and `unit_MoonBaseContract` runs it against the file the application writes.
-/// A key matches at the top level (`"key":`), under a child module (`"0.key":`), and inside a list row.
+/// `findKey` matches a whole key anywhere, the first one in the file; a child's key is read among that child's own members, the child found by its `type`.
+/// Until the release after 2026-10-08 it also reads the flat format older builds wrote (`"0.key":` beside `"0.type":`), since MoonBase can boot before the app has converted the file.
 ///
 /// Depends on nothing but the standard C headers and `hex.h`, which is what lets the small image include it.
 
@@ -25,14 +26,50 @@
 
 namespace mm::configscrape {
 
-/// The value after `"key":`, top-level or child-prefixed, or null when the key is absent.
+/// The value after the first `"key":` in the file, or the flat format's `"0.key":`, or null when the key is absent.
 inline const char* findKey(const char* json, const char* key) {
     if (!json || !key || !key[0]) return nullptr;
     const size_t k = std::strlen(key);
     for (const char* p = std::strstr(json, key); p; p = std::strstr(p + 1, key)) {
-        if (p == json) continue;
-        const char before = p[-1];
-        if ((before == '"' || before == '.') && p[k] == '"' && p[k + 1] == ':') return p + k + 2;
+        if (p != json && (p[-1] == '"' || p[-1] == '.') && p[k] == '"' && p[k + 1] == ':') return p + k + 2;
+    }
+    return nullptr;
+}
+
+/// The closing quote of the string opening at `p`, past its escapes, or null when it never closes.
+inline const char* stringEnd(const char* p) {
+    for (p++; *p; p++) {
+        if (*p == '\\' && p[1]) p++;
+        else if (*p == '"') return p;
+    }
+    return nullptr;
+}
+
+/// Whether the string from `p` to its closing quote `e` is `key` used as a member name.
+inline bool isKey(const char* p, const char* e, const char* key, size_t kl) {
+    return static_cast<size_t>(e - p - 1) == kl && std::strncmp(p + 1, key, kl) == 0 && e[1] == ':';
+}
+
+/// Track the nesting `c` opens or closes; false when it closes the object the walk started in.
+inline bool stillInside(char c, int& depth) {
+    if (c == '{' || c == '[') depth++;
+    else if ((c == '}' || c == ']') && depth-- == 0) return false;
+    return true;
+}
+
+/// The value of `key` among the members of the object `from` sits in, at that object's own depth so a nested child's is not taken, or null.
+inline const char* memberValue(const char* from, const char* key) {
+    const size_t kl = std::strlen(key);
+    int depth = 0;
+    for (const char* p = from; p && *p; p++) {
+        if (*p != '"') {
+            if (!stillInside(*p, depth)) return nullptr;   // the object ended without it
+            continue;
+        }
+        const char* e = stringEnd(p);
+        if (!e) return nullptr;
+        if (depth == 0 && isKey(p, e, key, kl)) return e + 2;
+        p = e;
     }
     return nullptr;
 }
@@ -88,9 +125,8 @@ inline void findBool(const char* json, const char* key, bool* out) {
     if (std::strncmp(v, "false", 5) == 0) *out = false;
 }
 
-/// The `"N.key":` beside a `"N.type":` found at `typeKey`, into `want`; false when it does not fit or the type is top-level.
-inline bool childKey(const char* json, const char* typeKey, const char* key, char* want, size_t wantLen) {
-    // Back from `type` to the key's opening quote: `"2.type"` gives the prefix `2.`, and a top-level `type` none.
+/// The flat format's `"N.key":` beside a `"N.type":` found at `typeKey`, into `want`; false when it does not fit or the type has no index prefix.
+inline bool flatChildKey(const char* json, const char* typeKey, const char* key, char* want, size_t wantLen) {
     const char* q = typeKey;
     while (q > json && q[-1] != '"') q--;
     const size_t pl = static_cast<size_t>(typeKey - q), kl = std::strlen(key);
@@ -102,15 +138,24 @@ inline bool childKey(const char* json, const char* typeKey, const char* key, cha
     return true;
 }
 
-/// The value of a key of the child whose type is `childType`, the `"N.key":` beside its `"N.type":`, or null when either is absent.
+/// The flat format's value of `key` beside the `"N.type":` found at `typeKey`, or null.
+inline const char* flatChildValue(const char* json, const char* typeKey, const char* key) {
+    char want[64];
+    if (!flatChildKey(json, typeKey, key, want, sizeof(want))) return nullptr;
+    const char* at = std::strstr(json, want);
+    return at ? at + std::strlen(want) : nullptr;
+}
+
+/// The value of a key of the child whose type is `childType`, read among that child's own members, or null when either is absent.
 inline const char* findChildValue(const char* json, const char* childType, const char* key) {
     if (!json || !childType || !key) return nullptr;
     const size_t tl = std::strlen(childType);
     for (const char* p = std::strstr(json, "type\":\""); p; p = std::strstr(p + 1, "type\":\"")) {
-        char want[64];
-        if (std::strncmp(p + 7, childType, tl) != 0 || p[7 + tl] != '"' || !childKey(json, p, key, want, sizeof(want))) continue;
-        const char* at = std::strstr(json, want);
-        return at ? at + std::strlen(want) : nullptr;
+        const char* name = p + 7;
+        if (std::strncmp(name, childType, tl) != 0 || name[tl] != '"') continue;
+        // A quoted `"type"` is a document member; a list row's `type` names no child, holds no such key, and the search goes on.
+        const char* v = (p > json && p[-1] == '"') ? memberValue(name + tl + 1, key) : flatChildValue(json, p, key);
+        if (v) return v;
     }
     return nullptr;
 }
@@ -165,15 +210,6 @@ inline SavedIp findChildIp(const char* json, const char* childType) {
         const auto* x = static_cast<const Ctx*>(c);
         return findChildValue(x->json, x->type, key);
     }, &ctx);
-}
-
-/// The closing quote of the string opening at `p`, past its escapes, or null when it never closes.
-inline const char* stringEnd(const char* p) {
-    for (p++; *p; p++) {
-        if (*p == '\\' && p[1]) p++;
-        else if (*p == '"') return p;
-    }
-    return nullptr;
 }
 
 // String-aware, since a password may hold a brace; an unclosed object has no end.

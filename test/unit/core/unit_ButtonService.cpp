@@ -16,7 +16,7 @@ using namespace mm;
 
 namespace {
 
-// Stands in for the control surface: a switch, an encoder and a pad grid, the three shapes a row can name. Only the parts a row touches: rows that publish a `slot`, and an `activate` field that fires one.
+// Stands in for the control surface: a switch, an encoder and a pad grid, the three shapes a row can name. Only the parts a row touches: rows that publish a `slot`, and a row action that fires one.
 struct FakeSurface : public MoonModule, public ListSource {
     bool switch1 = true;
     uint8_t encoder1 = 100;
@@ -39,8 +39,7 @@ struct FakeSurface : public MoonModule, public ListSource {
                      static_cast<unsigned>(row + 1), static_cast<unsigned>(kSlots[row]),
                      static_cast<unsigned>(row));
     }
-    bool setListRowField(uint32_t id, const char* field, const char*) override {
-        if (std::strcmp(field, "activate") != 0) return false;
+    bool applyListRow(uint32_t id) override {
         static const uint8_t kSlots[] = {0, 2, 5};
         fired++;
         firedSlot = kSlots[id - 1];

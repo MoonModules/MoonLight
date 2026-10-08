@@ -84,17 +84,21 @@ test("a file that fails to read is skipped and named; the rest still archive", a
     assert.deepEqual(Object.keys(files), ["/ok.json"]);
 });
 
-test("siblings of one type are checked against their own controls, not the first's", () => {
-    // Two script modules of the same type publish DIFFERENT controls; the diff resolves each
-    // child positionally, so a control real on child 1 is not reported missing via child 0.
-    const state = [{ type: "Effects", controls: [], children: [
-        { type: "MoonLiveEffect", controls: [{ name: "script" }, { name: "speed" }] },
-        { type: "MoonLiveEffect", controls: [{ name: "script" }, { name: "cols" }] },
+test("siblings of one type are matched by name and checked against their own controls", () => {
+    // Two script modules of the same type publish DIFFERENT controls; the diff matches each child by its name, as the device applies it.
+    const state = [{ name: "Effects", type: "Effects", controls: [], children: [
+        { name: "Script", type: "MoonLiveEffect", controls: [{ name: "script" }, { name: "speed" }] },
+        { name: "Script-2", type: "MoonLiveEffect", controls: [{ name: "script" }, { name: "cols" }] },
     ] }];
-    const cfg = JSON.stringify({ enabled: true,
-        "0.type": "MoonLiveEffect", "0.speed": 3,
-        "1.type": "MoonLiveEffect", "1.cols": 8 });
-    assert.deepEqual(diffRestore({ "/.config/Effects.json": cfg }, state), []);
+    const doc = (second) => JSON.stringify({ Effects: { "$patch": "replace", enabled: true,
+        Script: { type: "MoonLiveEffect", speed: 3 },
+        "Script-2": { type: "MoonLiveEffect", ...second } } });
+    assert.deepEqual(diffRestore({ "/.config/Effects.json": doc({ cols: 8 }) }, state), []);
+    // A control that is real on the first sibling only is reported on the second.
+    const r = diffRestore({ "/.config/Effects.json": doc({ speed: 3 }) }, state);
+    assert.equal(r.length, 1);
+    assert.equal(r[0].kind, "control");
+    assert.match(r[0].where, /Script-2\.speed/);
 });
 
 test("restore creates parent directories before children, each once", () => {
@@ -105,32 +109,41 @@ test("restore creates parent directories before children, each once", () => {
 });
 
 const liveState = [
-    { type: "NetworkModule", controls: [{ name: "ssid" }, { name: "password" }] },
-    { type: "Effects", controls: [{ name: "enabled" }],
-      children: [{ type: "NoiseEffect", controls: [{ name: "speed" }] }] },
+    { name: "Network", type: "NetworkModule", controls: [{ name: "ssid" }, { name: "password" }] },
+    { name: "Effects", type: "Effects", controls: [{ name: "enabled" }],
+      children: [{ name: "Noise", type: "NoiseEffect", controls: [{ name: "speed" }] }] },
 ];
 
-test("the report names a module type this firmware no longer has", () => {
-    const r = diffRestore({ "/.config/OldDriver.json": '{"a":1}' }, liveState);
+test("the report names a module that this firmware no longer has", () => {
+    const r = diffRestore({ "/.config/OldDriver.json": '{"OldDriver":{"enabled":true,"a":1}}' }, liveState);
     assert.equal(r.length, 1);
     assert.equal(r[0].kind, "module");
-    assert.match(r[0].detail, /OldDriver/);
+    assert.match(r[0].detail, /module OldDriver does not exist/);
 });
 
 test("the report names a control that no longer exists, defaults noted", () => {
-    const cfg = JSON.stringify({ ssid: "x", oldKnob: 3 });
+    const cfg = JSON.stringify({ Network: { "$patch": "replace", ssid: "x", enabled: true, oldKnob: 3 } });
     const r = diffRestore({ "/.config/NetworkModule.json": cfg }, liveState);
     assert.equal(r.length, 1);
     assert.equal(r[0].kind, "control");
     assert.match(r[0].detail, /oldKnob/);
+    assert.match(r[0].detail, /back at the default/);
 });
 
-test("nested child chains resolve through their N.type keys, unknown children reported once", () => {
-    const cfg = JSON.stringify({
-        enabled: true,
-        "0.type": "NoiseEffect", "0.speed": 5,
-        "1.type": "GoneEffect", "1.a": 1, "1.b": 2,
-    });
+test("a control gone from a matched child is reported on that child", () => {
+    const cfg = JSON.stringify({ Effects: { Noise: { type: "NoiseEffect", speed: 5, oldKnob: 1 } } });
+    const r = diffRestore({ "/.config/Effects.json": cfg }, liveState);
+    assert.equal(r.length, 1);
+    assert.equal(r[0].kind, "control");
+    assert.match(r[0].where, /Effects\.Noise\.oldKnob/);
+    assert.match(r[0].detail, /does not exist on NoiseEffect/);
+});
+
+test("an unknown child type is reported once, not per key", () => {
+    const cfg = JSON.stringify({ Effects: {
+        Noise: { type: "NoiseEffect", speed: 5 },
+        Gone: { type: "GoneEffect", a: 1, b: 2 },
+    } });
     const r = diffRestore({ "/.config/Effects.json": cfg }, liveState);
     assert.equal(r.length, 1);                       // GoneEffect once, not per key
     assert.equal(r[0].kind, "module");
@@ -139,19 +152,18 @@ test("nested child chains resolve through their N.type keys, unknown children re
 
 test("a fully modern config yields an empty report; preset payloads are skipped", () => {
     const r = diffRestore({
-        "/.config/NetworkModule.json": '{"ssid":"x","password":"y"}',
+        "/.config/NetworkModule.json": '{"Network":{"ssid":"x","password":"y"}}',
         "/.config/presets/p1.json": '{"whatever":"Layers"}',
     }, liveState);
     assert.deepEqual(r, []);
 });
 
-test("a registered type not yet in the live tree is not reported: it instantiates at reboot", () => {
-    const files = { "/.config/Services.json": JSON.stringify({ "0.type": "AudioService", "0.gain": 5 }) };
-    const state = [{ type: "Services", controls: [], children: [] }];
+test("a child the live tree does not hold yet has its type checked and its controls left alone", () => {
+    const files = { "/.config/Services.json": JSON.stringify({ Services: { Audio: { type: "AudioService", gain: 5 } } }) };
+    const state = [{ name: "Services", type: "Services", controls: [], children: [] }];
     assert.deepEqual(diffRestore(files, state, ["Services", "AudioService"]), []);
-    // without the registry entry the same file reports the missing child
+    // without the registry entry the same file reports the missing child type
     const rep = diffRestore(files, state, ["Services"]);
     assert.equal(rep.length, 1);
     assert.match(rep[0].detail, /AudioService does not exist/);
 });
-

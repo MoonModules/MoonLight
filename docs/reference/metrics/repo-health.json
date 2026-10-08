@@ -1,11 +1,11 @@
 {
-  "commit": "f0e39c44",
+  "commit": "5cf8c868",
   "flash": {
-    "esp32s3-n16r8": 2315728,
-    "esp32": 2213296,
+    "esp32s3-n16r8": 2317264,
+    "esp32": 2216960,
     "esp32p4rev1-eth": 2177776,
     "esp32p4rev1-eth-wifi": 2358896,
-    "esp32s3-n8r8": 2315728,
+    "esp32s3-n8r8": 2315968,
     "esp32s31": 2549760,
     "esp32-16mb": 2060368,
     "esp32-eth": 1681040,
@@ -14,7 +14,7 @@
     "esp32p4rev3-eth": 2203712,
     "esp32s3-zero": 2198800,
     "esp32-pico": 2107168,
-    "desktop-macos": 2249576,
+    "desktop-macos": 2249416,
     "desktop-windows": 1925120
   },
   "measured": {
@@ -41,9 +41,9 @@
       "Control_a_palette_preset_changes_only_the_palette": {
         "desktop-macos": {
           "p50": 6,
-          "p95": 462,
-          "n": 19,
-          "last": "2026-10-07"
+          "p95": 324,
+          "n": 20,
+          "last": "2026-10-08"
         },
         "esp32s3-n16r8": {
           "p50": 2073,
@@ -108,8 +108,8 @@
         "desktop-macos": {
           "p50": 1,
           "p95": 555,
-          "n": 18,
-          "last": "2026-10-07"
+          "n": 19,
+          "last": "2026-10-08"
         },
         "esp32s3-n16r8": {
           "p50": 2505,
@@ -144,9 +144,9 @@
           "last": "2026-09-29"
         },
         "esp32p4rev1-eth-wifi": {
-          "p50": 6343087,
-          "p95": 7828837,
-          "n": 2,
+          "p50": 1942284,
+          "p95": 1942284,
+          "n": 1,
           "last": "2026-09-29"
         },
         "esp32p4rev1-eth": {
@@ -156,8 +156,8 @@
           "last": "2026-09-29"
         },
         "desktop-windows": {
-          "p50": 6661,
-          "p95": 6661,
+          "p50": 6015,
+          "p95": 6015,
           "n": 1,
           "last": "2026-09-30"
         },
@@ -188,8 +188,8 @@
           "last": "2026-09-29"
         },
         "esp32p4rev1-eth-wifi": {
-          "p50": 4661597,
-          "p95": 7532023,
+          "p50": 761768,
+          "p95": 1865163,
           "n": 2,
           "last": "2026-09-29"
         },
@@ -206,8 +206,8 @@
           "last": "2026-09-29"
         },
         "desktop-windows": {
-          "p50": 6950405,
-          "p95": 6950405,
+          "p50": 685902,
+          "p95": 685902,
           "n": 1,
           "last": "2026-09-30"
         },
@@ -485,7 +485,7 @@
           "p50": 7,
           "p95": 15,
           "n": 32,
-          "last": "2026-10-07"
+          "last": "2026-10-08"
         },
         "desktop-windows": {
           "p50": 4,
@@ -508,10 +508,10 @@
       },
       "Effects_pipeline_builds_and_renders": {
         "desktop-macos": {
-          "p50": 6,
+          "p50": 7,
           "p95": 10,
           "n": 32,
-          "last": "2026-10-07"
+          "last": "2026-10-08"
         },
         "desktop-windows": {
           "p50": 4,
@@ -525,7 +525,7 @@
           "p50": 1,
           "p95": 2,
           "n": 32,
-          "last": "2026-10-07"
+          "last": "2026-10-08"
         },
         "desktop-windows": {
           "p50": 4,
@@ -551,7 +551,7 @@
           "p50": 7,
           "p95": 18,
           "n": 32,
-          "last": "2026-10-07"
+          "last": "2026-10-08"
         },
         "esp32s3-n16r8": {
           "p50": 9080,
@@ -577,7 +577,7 @@
           "p50": 267,
           "p95": 368,
           "n": 32,
-          "last": "2026-10-07"
+          "last": "2026-10-08"
         }
       },
       "Layouts_resize_reallocates_live": {
@@ -585,7 +585,7 @@
           "p50": 10,
           "p95": 19,
           "n": 32,
-          "last": "2026-10-07"
+          "last": "2026-10-08"
         },
         "desktop-windows": {
           "p50": 93,
@@ -611,7 +611,7 @@
           "p50": 7,
           "p95": 11,
           "n": 32,
-          "last": "2026-10-07"
+          "last": "2026-10-08"
         },
         "esp32s3-n16r8": {
           "p50": 10350,
@@ -636,26 +636,26 @@
         "desktop-macos": {
           "p50": 7,
           "p95": 122,
-          "n": 29,
-          "last": "2026-10-07"
+          "n": 30,
+          "last": "2026-10-08"
         }
       }
     },
     "desktop-macos": {
-      "tick_us": 1,
-      "fps": 1000000,
+      "tick_us": 7,
+      "fps": 142857,
       "scenario_p50": {
         "Effects_pipeline_builds_and_renders": {
-          "p50": 6,
+          "p50": 7,
           "p95": 10,
           "n": 32,
-          "last": "2026-10-07"
+          "last": "2026-10-08"
         },
         "Layouts_resize_reallocates_live": {
           "p50": 10,
           "p95": 19,
           "n": 32,
-          "last": "2026-10-07"
+          "last": "2026-10-08"
         }
       }
     },
@@ -679,20 +679,20 @@
     }
   },
   "loc": {
-    "core": 28426,
-    "light": 30778,
+    "core": 28394,
+    "light": 30794,
     "platform": 17601,
-    "ui": 12303,
-    "test": 63911,
-    "moondeck": 30598
+    "ui": 12321,
+    "test": 63938,
+    "moondeck": 30295
   },
   "comments": {
     "core": {
-      "lines": 6654,
-      "ratio": 0.259
+      "lines": 6547,
+      "ratio": 0.255
     },
     "light": {
-      "lines": 7424,
+      "lines": 7427,
       "ratio": 0.271
     },
     "platform": {
@@ -700,33 +700,33 @@
       "ratio": 0.231
     },
     "ui": {
-      "lines": 3477,
-      "ratio": 0.299
+      "lines": 3474,
+      "ratio": 0.298
     },
     "test": {
-      "lines": 6995,
-      "ratio": 0.127
+      "lines": 6966,
+      "ratio": 0.126
     },
     "moondeck": {
-      "lines": 4969,
-      "ratio": 0.185
+      "lines": 4903,
+      "ratio": 0.184
     }
   },
   "tests": {
-    "cases": 2356,
+    "cases": 2365,
     "scenarios": 30
   },
   "docs": {
-    "md_files": 144,
-    "md_lines": 31244,
-    "plans_files": 41,
-    "backlog_lines": 3286,
+    "md_files": 146,
+    "md_lines": 31855,
+    "plans_files": 42,
+    "backlog_lines": 3257,
     "lessons_lines": 532,
     "claude_md_lines": 283
   },
   "complexity": {
-    "functions": 4275,
-    "over_threshold": 333,
+    "functions": 4307,
+    "over_threshold": 331,
     "worst_ccn": 128
   }
 }

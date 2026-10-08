@@ -52,13 +52,14 @@ The add returns the **name** the device gave the module, which is what every lat
 
 | Endpoint | Body | Does |
 |---|---|---|
-| `POST /api/modules` | `{"type":…,"parent_id":…}` | Adds a module, returns its name |
+| `POST /api/modules` | `{"type":…,"parent_id":…,"id":…}` | Adds a module named `id`, or after its type when `id` is absent, and returns its name; a name in use answers 409 |
 | `POST /api/control` | `{"module":…,"control":…,"value":…}` | Sets one control |
 | `PATCH /api/state` | a state document | Sets any part of the tree in one call: controls, new modules, removals |
 | `DELETE /api/modules/<name>` | | Removes a module and its children |
 | `DELETE /api/dir?path=<path>` | | Removes a file, or a directory and everything in it |
-| `POST /api/modules/<name>/replace` | `{"type":…}` | Swaps a module for another type in the same slot |
+| `POST /api/modules/<name>/replace` | `{"type":…,"name":…}` | Swaps a module for another type in the same slot, named `name`, else its own custom name, else the new type's |
 | `POST /api/modules/<name>/move` | | Reorders a module among its siblings |
+| `POST /api/list/<module>/<control>/<row>/apply` | | Runs a list row's action, such as applying a preset; `<row>` is its id, or its name in a list whose names are unique |
 | `POST /api/file?path=<file>` | the file body | Writes a file, creating parent directories |
 | `POST /api/dir?path=<dir>` | | Creates a directory |
 | `POST /api/reboot` | `{}` | Restarts the device |
@@ -74,8 +75,8 @@ curl -X PATCH --data '{"Effects": {"Layer": {"Swirl": {"type": "RainbowEffect", 
 
 - A value sets a control of the module it sits in, with the same checks `POST /api/control` runs.
 - An object is a child module: found by name, created when it is missing and names a `type`, replaced in place when its `type` differs.
-- `null` removes a module, and `"$patch": "replace"` in a module's object keeps only the children it lists, in its order.
-  Its controls stay as they are, and a child the code wires, such as Drivers' FixtureProfiles, stays either way.
+- `null` removes a module, and `"$patch": "replace"` in a module's object keeps only the children it lists, in its order, besides the ones the firmware wires itself, such as the WiFi card or Drivers' FixtureProfiles.
+  Its controls stay as they are.
 - What would fail at creation is found before anything changes: an unknown container or type, a role the parent refuses, a name the tree cannot hold.
 - Every removal applies next, the children of a re-typed module included, so a module can move to another branch under its name.
   The rest applies in document order, and the tree rebuilds once at the end.
@@ -87,6 +88,7 @@ The answer is `{"ok":true,"changes":N}`, or a 400 naming the first failure and w
 A failure only writing finds, such as a value out of range, leaves what came before it applied.
 A document is at most 32 KB, and a larger one is refused with a 413.
 `POST /api/state` takes the same document, for a client that cannot send `PATCH`.
+Adding, replacing and removing a module through `/api/modules` applies a one-member document, so the same rules hold on both paths.
 
 `GET /api/modules/<name>/document` reads a module back as a document, its path from the top level around it, and a card's `{ }` button shows the same.
 A secret stays out of every document, and applying one leaves the secret as it is.
@@ -162,8 +164,8 @@ curl "http://<device>/api/dir?path=/.config/presets"
 # Read one, which is also how you copy a configuration between devices.
 curl "http://<device>/api/file?path=/.config/presets/stage.json"
 
-# Apply one by name, through the Control module.
-curl -X POST http://<device>/api/control -d '{"module":"Control","control":"preset","value":"stage"}'
+# Apply one by name, as a click on its pad does.
+curl -X POST http://<device>/api/list/Control/presets/stage/apply
 ```
 
 The list is rebuilt from the folder rather than stored beside it.

@@ -142,6 +142,11 @@ public:
     void addDeclaredControl(const char* name, uint8_t offset, int32_t lo, int32_t hi,
                             CtrlType type = CtrlType::Int, const char* options = nullptr) {
         if (controlCount_ >= kMaxCtrls || !name || offset >= kArenaBytes) return;
+        // A scalar owns a whole 4-byte slot, so the engine refuses one running past the arena.
+        if (offset + ctrlSlotBytes(type) > kArenaBytes) return;
+        // Two controls on one member would write the same byte from two cards; refused before a dropdown's names take pool space.
+        for (uint8_t i = 0; i < controlCount_; i++)
+            if (controls_[i].offset == offset) return;
         const char* const* optionList = nullptr;
         if (options) {
             const uint8_t first = selectCount_;
@@ -151,11 +156,6 @@ public:
             hi = selectCount_ - first - 1;
         }
         if (lo > hi) return;
-        // A scalar owns a whole 4-byte slot, so the engine refuses one running past the arena.
-        if (offset + ctrlSlotBytes(type) > kArenaBytes) return;
-        // Two controls on one member would write the same byte from two cards.
-        for (uint8_t i = 0; i < controlCount_; i++)
-            if (controls_[i].offset == offset) return;
 
         // Clamped in the arena as well as the record, since the native code reads the arena byte.
         int32_t def = lo;

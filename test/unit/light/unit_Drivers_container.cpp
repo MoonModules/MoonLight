@@ -389,6 +389,7 @@ TEST_CASE("a brightness change does not rescan the palette scripts; a palette fi
     char root[64];
     std::snprintf(root, sizeof(root), "/tmp/mm_palette_scan_%u", static_cast<unsigned>(mm::platform::millis()));
     std::filesystem::remove_all(root);
+    struct RootAfter { std::string prev = mm::platform::fsRootPath(); ~RootAfter() { mm::platform::fsSetRoot(prev.c_str()); } } rootAfter;
     mm::platform::fsSetRoot(root);
     mm::platform::fsMkdir("/moonlive");
     mm::Drivers drivers;

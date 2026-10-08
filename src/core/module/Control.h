@@ -126,6 +126,12 @@ struct ListSource {
     /// Set one field of one row, the source owning which fields are editable.
     virtual bool setListRowField(uint32_t /*id*/, const char* /*field*/,
                                  const char* /*valueJson*/) { return false; }
+
+    /// Run one row's action, what a click on its pad does; a list whose rows have none refuses.
+    virtual bool applyListRow(uint32_t /*id*/) { return false; }
+
+    /// The id of the row named `name`, for a list whose names are unique and so address its rows; false when none is.
+    virtual bool listRowNamed(const char* /*name*/, uint32_t& /*outId*/) const { return false; }
 };
 
 // How much a reader wants to see. One number the whole UI composes against, so a control names the audience it is for rather than every card deciding for itself.

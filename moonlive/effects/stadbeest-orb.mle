@@ -16,7 +16,7 @@ class StadBeestOrbEffect {
   int h = 0;     // the height of its center, in lights
   int aa = 1;    // its width squared
   int bb = 1;    // its height along the axis squared
-  int rise = 0;  // how far it has risen and fallen, a full cycle being 65536
+  int rise = 0;  // how far it has risen and fallen, in 1280ths of a sine step so a slow speed still moves
   int lastT = 0; // the time of the last frame, so a speed change carries on from where it is
 
   int dimensions() { return 2; }
@@ -78,9 +78,9 @@ class StadBeestOrbEffect {
 
     // It rises and falls through the whole height.
     // Squared, so the low end stays slow to set and the top goes from a minute to a second a cycle.
-    rise = rise + div((t - lastT) * speed * speed, 1280);
+    rise = mod(rise + (t - lastT) * speed * speed, 65536 * 1280);
     lastT = t;
-    h = div((height - 1) * sin(rise), 65535);
+    h = div((height - 1) * sin(div(rise, 1280)), 65535);
 
     for (int leg = 0; leg < n; leg = leg + 1) {
       int ang = div(leg * 65536, n);

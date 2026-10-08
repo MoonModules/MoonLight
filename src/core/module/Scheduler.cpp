@@ -9,7 +9,7 @@
 #include "core/util/JsonUtil.h"   // mm::json::parseBool for the "enabled" pseudo-control
 #include "platform/platform.h"
 
-#include <cstdio>   // std::snprintf in ensureUniqueName
+#include <cstdio>   // std::snprintf in freeName
 #include <cstring>  // std::strcmp in firstInTree
 
 namespace mm {
@@ -23,18 +23,13 @@ void Scheduler::setup() {
     instance_ = this;   // the one live Scheduler, reachable via Scheduler::instance()
     startTime_ = platform::millis();
 
-    // Phase 1: bind each module's controls. After this, ControlList descriptors hold (name → variable pointer) so the persistence hook can apply file values.
+    // Phase 1: bind each module's controls, from scratch, so a module whose controls something bound before setup is bound once. After this, ControlList descriptors hold (name → variable pointer) so the persistence hook can apply file values.
     for (uint8_t i = 0; i < moduleCount_; i++) {
-        modules_[i]->defineControls();
+        modules_[i]->rebuildControls();
     }
 
     // Phase 2: persistence load. No-op if no hook is set.
     if (loadAllHook_) loadAllHook_(this);
-
-    // Phase 2a: disambiguate any same-name modules introduced by persistence (positional load gives each freshly-created module the factory's display name; two Layer instances both get "Layer").
-    // The /api/state UI sends names back as parent_id, so duplicates break "add child to the second one".
-    // Walks the tree once; first occurrence keeps the name, later ones get " 2", " 3", … suffixes.
-    deduplicateNamesInTree();
 
     // Phase 2b: re-run defineControls with persisted values in place so any conditional hidden flags (e.g. NetworkModule's static-IP fields depending on addressing_) are evaluated against the loaded state, not the default. rebuildControls clears the descriptor list before re-binding, so this is idempotent.
     if (loadAllHook_) {
@@ -55,13 +50,8 @@ void Scheduler::setup() {
         modules_[i]->applyState();
     }
 
-    // Phase 5: re-apply saved VALUES, now that every module has prepared.
-    // A schema that depends on prepare()'s own WORK does not exist during phase 2's load: a MoonLive script's declared controls appear only once the script has compiled, which prepare() just did, so their saved values had no control to land on and prepare() seeded them from the script's defaults.
-    // Values only, and once: after boot the live values are the truth, and re-reading the file would undo the edit that triggered any later prepare.
-    if (!valuesReapplied_) {
-        valuesReapplied_ = true;
-        if (reapplyValuesHook_) reapplyValuesHook_(this);
-    }
+    // Phase 5: a MoonLive script's declared controls exist only once phase 4 has compiled it, so the values the load held for them land now.
+    applyDeferredControls(*this);
 
     lastLoop20ms_ = platform::millis();
     lastLoop1s_ = platform::millis();
@@ -83,9 +73,6 @@ void Scheduler::tick() MM_NONBLOCKING {
     // If prepareTree ever becomes reachable WITHOUT this gate, that report is the only thing that will say so.
     if (prepareRequested_.exchange(false, std::memory_order_relaxed)) {
         prepareTree();
-        // The runtime twin of boot's phase 5 (see requestValuesReapply): same tick as the prepare, so the just-restored file cannot be rewritten by a dirty save in between.
-        if (valuesReapplyRequested_.exchange(false, std::memory_order_relaxed) && reapplyValuesHook_)
-            reapplyValuesHook_(this);
     }
 
     // Scheduler gates loop callbacks by `enabled()`, disabled modules don't tick.
@@ -192,42 +179,26 @@ void Scheduler::deleteTree(MoonModule* mod) {
     delete mod;
 }
 
-// Why this exists: ModuleFactory::create gives every freshly-created module a display name derived from its type ("NoiseEffect" → "Noise", "Layer" stays "Layer").
-// When the user adds two Layers, both factory-default to "Layer"; the HTTP API uses names as parent_id, and findModuleByName does a first-match DFS, so the second Layer becomes unreachable.
-// Same problem happens when persistence rebuilds the tree positionally on boot.
-//
-// Called from HttpServerModule after addChild (single-module add) and from deduplicateNamesInTree after persistence load (whole-tree pass).
-void Scheduler::ensureUniqueName(MoonModule* mod) {
-    if (!mod) return;
-    const char* base = mod->name();
-    if (!base || base[0] == 0) return;
-    if (firstByName(base) == mod) return;  // the first occurrence keeps the name
-
-    // `candidate` is sized to match MoonModule::name_[16], there's no point computing a longer name than setName can store.
-    // The snprintf check below refuses to truncate, which means the practical cap depends on the base length.
-    // 99 for ≤ 5-char bases, 9 for 12–13-char bases like "GlowParticles" or "PlasmaPalette" (where "GlowParticles-10" = 16 chars + NUL doesn't fit).
-    // When the cap is hit we keep the duplicate name rather than truncate; first-match DFS lookups become ambiguous for that name but the engine doesn't crash.
-    // This is unlikely in practice (10+ same-typed siblings on one tree), bump name_/candidate together if it ever bites.
-    //
-    // Separator is '-', not a space: the name becomes a URL path segment in the module API (DELETE / replace / move `/api/modules/<name>`); a space there needs URL-encoding and breaks the device's raw-path name lookup, so a device-created "Grid 2" couldn't be deleted.
-    // '-' is URL-safe and readable.
-    char candidate[16];
-    for (int suffix = 2; suffix < 100; suffix++) {
-        int n = std::snprintf(candidate, sizeof(candidate), "%s-%d", base, suffix);
-        if (n < 0 || n >= static_cast<int>(sizeof(candidate))) return;  // doesn't fit name_
-        if (firstByName(candidate) == nullptr) {
-            mod->setName(candidate);
-            return;
-        }
-    }
-    // Loop exhausted (would mean 99 same-named siblings), degrade silently.
+MoonModule* Scheduler::topOfType(const char* typeName) const {
+    for (uint8_t i = 0; typeName && i < moduleCount_; i++)
+        if (modules_[i] && std::strcmp(modules_[i]->typeName(), typeName) == 0) return modules_[i];
+    return nullptr;
 }
 
-void Scheduler::deduplicateNamesInTree() {
-    for (uint8_t i = 0; i < moduleCount_; i++) {
-        walkAndEnsureUnique(modules_[i]);
+// The separator is '-', not a space: the name is a URL path segment in the module API (`/api/modules/<name>`), where a space needs encoding.
+// A suffix that would not fit a name is refused rather than truncated, so a 13-character base stops at -9.
+bool Scheduler::freeName(const char* base, char* out, size_t cap) {
+    if (!base || !base[0] || std::strlen(base) >= MoonModule::kNameLen || cap < MoonModule::kNameLen) return false;
+    char candidate[MoonModule::kNameLen];
+    std::snprintf(candidate, sizeof(candidate), "%s", base);
+    for (int suffix = 2; firstByName(candidate); suffix++) {
+        const int n = std::snprintf(candidate, sizeof(candidate), "%s-%d", base, suffix);
+        if (suffix >= 100 || n < 0 || n >= static_cast<int>(sizeof(candidate))) return false;
     }
+    std::snprintf(out, cap, "%s", candidate);
+    return true;
 }
+
 
 MoonModule* Scheduler::firstByName(const char* name) {
     if (!name || name[0] == 0) return nullptr;   // firstInTree strcmps name; a null would be UB
@@ -372,13 +343,6 @@ bool Scheduler::getControlWide(const char* moduleName, const char* controlName,
     return false;
 }
 
-void Scheduler::walkAndEnsureUnique(MoonModule* mod) {
-    if (!mod) return;
-    ensureUniqueName(mod);
-    for (uint8_t i = 0; i < mod->childCount(); i++) {
-        walkAndEnsureUnique(mod->child(i));
-    }
-}
 
 MoonModule* Scheduler::firstInTree(MoonModule* mod, const char* name) {
     if (!mod) return nullptr;

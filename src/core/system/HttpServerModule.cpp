@@ -387,6 +387,9 @@ void HttpServerModule::handleConnection(platform::TcpConnection& conn) {
             handleMakeDir(conn, queryStart ? queryStart + 1 : "");
         } else if (std::strcmp(path, "/api/modules") == 0 && body) {
             handleAddModule(conn, body);
+        } else if (std::strncmp(path, "/api/list/", 10) == 0 && pathLen > 16 && std::strcmp(path + pathLen - 6, "/apply") == 0) {
+            // A row's action as a POST on its sub-resource, the custom-method shape REST design guides give an action: POST /api/list/<module>/<control>/<row>/apply.
+            handleListApplyRow(conn, path + 10, pathLen - 10 - 6);
         } else if (std::strncmp(path, "/api/list/", 10) == 0) {
             // Editable list: POST /api/list/<module>/<control> appends a new row and returns its stable id. The row's fields are then set via PATCH /api/list/.../<id>.
             handleListAddRow(conn, path + 10);
@@ -1176,7 +1179,7 @@ void HttpServerModule::buildStateJson(JsonSink& sink) {
 // The diff-on-the-wire core.
 // Visit every UI leaf the periodic push would send: each module's live header telemetry (tickTimeUs / dynamicBytes, which the UI shows per card) and each control's value - in the SAME order buildStateJson emits, so a leaf's path "<module>/<name>" is stable across ticks.
 // For each leaf: build its path-hash + a hash of its serialized value; `fn(pathHash, valueHash, path, valueSink)` decides what to do (emit a patch entry, or just (re)baseline the cache).
-// Names are unique tree-wide (deduplicateNamesInTree at setup/load + ensureUniqueName on every runtime add/replace, both before the resync that re-baselines), so "<module>/<name>" uniquely identifies a leaf.
+// Names are unique tree-wide (every module is created through a state document, which refuses a name in use or takes a free one), so "<module>/<name>" uniquely identifies a leaf.
 template <class Fn>
 void HttpServerModule::forEachStateLeaf(Fn&& fn) {
     if (!scheduler_) return;
@@ -1870,60 +1873,53 @@ void HttpServerModule::writeModuleMetricsJson(JsonSink& sink, MoonModule* mod, b
     }
 }
 
-// Apply-core: add one module under a named parent.
-// Transport-free; returns an OpResult.
-// Idempotent on the id (an existing name returns Ok, "already there").
+// Apply-core: every structural change is a one-member state document, so one engine creates, replaces and removes modules, with its checks, lifecycle, prepare and save.
+// What a document's failure is as an operation result.
+// The engine's verdict, its reason kept for the response when it refused.
+static HttpServerModule::OpResult opResultOf(const StateDocumentResult& r, StateDocumentResult* refusal) {
+    if (r.ok) return HttpServerModule::OpResult::Ok;
+    if (refusal) *refusal = r;
+    return HttpServerModule::OpResult::Refused;
+}
 
-HttpServerModule::OpResult HttpServerModule::applyAddModule(
-        const char* typeName, const char* id, const char* parentId,
-        char* outName, size_t outNameLen) {
-    if (!typeName || typeName[0] == 0) return OpResult::BadRequest;
+// A refusal answered as `PATCH /api/state` answers one: the engine's error and where it is.
+void HttpServerModule::sendRefusal(platform::TcpConnection& conn, const StateDocumentResult& r) {
+    char resp[192];
+    JsonSink sink(resp, sizeof(resp));
+    writeStateResult(sink, r);
+    sendResponse(conn, 400, "application/json", sink.overflowed() ? "{\"error\":\"refused\"}" : resp);
+}
 
-    // Top-level modules (Layouts/Effects/Drivers/Filesystem/System/Network/HttpServer) are policy-fixed and wired in main.cpp at boot. Only *child* adds are allowed - anything else would orphan the module (never ticked, leaked).
+// `"name":{"type":"T"}`, the member that creates a module.
+static void writeTypedMember(JsonSink& sink, const char* name, const char* typeName) {
+    sink.writeJsonString(name);
+    sink.append(":{\"type\":");
+    sink.writeJsonString(typeName);
+    sink.append("}");
+}
+
+HttpServerModule::OpResult HttpServerModule::applyAddModule(const char* typeName, const char* id, const char* parentId,
+                                                            char* outName, size_t outNameLen, StateDocumentResult* refusal) {
+    if (!typeName || typeName[0] == 0 || !scheduler_) return OpResult::BadRequest;
+    // The top level is the fixed set main.cpp wires, so an add names a parent.
     if (!parentId || parentId[0] == 0) return OpResult::BadRequest;
-
-    // Idempotent: an existing module with this name is success, not an error: so a re-run of the catalog inject (or a double APPLY_OP) is a no-op, not a dup. The distinct AlreadyExists (vs Ok) lets the HTTP handler report "already exists" so a client can tell created-now from already-there; both are success.
-    if (id && id[0] != 0 && findModuleByName(id)) return OpResult::AlreadyExists;
-
-    // Resolve the parent before allocating: failure means we never make an orphan.
     auto* parent = findModuleByName(parentId);
     if (!parent) return OpResult::ModuleNotFound;
-
-    auto* mod = ModuleFactory::create(typeName);
-    if (!mod) return OpResult::UnknownType;
-    if (id && id[0] != 0) mod->setName(id);
-
-    // The parent's declared child roles are a RULE, not a UI hint.
-    // The picker filters by them, so the UI never offers a bad pairing, but nothing stopped the API from making one.
-    // An effect nested inside a layout ticks in the wrong pass and renders its controls on the wrong card.
-    // Checked here rather than in addChild because persistence and boot legitimately build a tree before roles are settled; this is the path where a caller asks for a specific pairing.
-    if (!parent->acceptsRole(mod->role())) {
-        delete mod;
-        return OpResult::BadRequest;
+    char name[MoonModule::kNameLen] = {};
+    if (id && id[0] != 0) {
+        if (findModuleByName(id)) return OpResult::NameInUse;
+        std::snprintf(name, sizeof(name), "%s", id);
+        if (std::strlen(id) >= sizeof(name)) return OpResult::BadRequest;   // the document's name rule, said before it truncates
+    } else {
+        const char* base = ModuleFactory::defaultNameOf(typeName);
+        if (!base) return OpResult::UnknownType;
+        if (!scheduler_->freeName(base, name, sizeof(name))) return OpResult::NameInUse;
     }
-
-    if (!parent->addChild(mod)) {
-        delete mod;
-        return OpResult::BadRequest;   // parent rejected the child
-    }
-
-    // Disambiguate a colliding name (a second "Layer" etc.): same pass the Scheduler runs after persistence load; single source of truth.
-    if (scheduler_) scheduler_->ensureUniqueName(mod);
-
-    // Report the FINAL name (post-disambiguation) so a caller can select/focus the new module.
-    if (outName && outNameLen > 0) std::snprintf(outName, outNameLen, "%s", mod->name());
-
-    // Lifecycle in Scheduler::setup() order: defineControls() (bind buffers) → setup() (may read them) → applyState() (build if effectively-enabled, else release).
-    mod->defineControls();
-    mod->setup();
-    mod->applyState();
-    if (scheduler_) scheduler_->requestPrepareTree();
-    requestFullResync();   // structural change (see requestFullResync)
-
-    // Persist the new tree shape (debounced save via noteDirty).
-    parent->markDirty();
-    FilesystemModule::noteDirty();
-    return OpResult::Ok;
+    JsonSink body;
+    writeTypedMember(body, name, typeName);
+    const OpResult r = opResultOf(applyStateAt(*scheduler_, *parent, body.data()), refusal);
+    if (r == OpResult::Ok && outName && outNameLen > 0) std::snprintf(outName, outNameLen, "%s", name);
+    return r;
 }
 
 void HttpServerModule::handleAddModule(platform::TcpConnection& conn, const char* body) {
@@ -1934,14 +1930,12 @@ void HttpServerModule::handleAddModule(platform::TcpConnection& conn, const char
     mm::json::parseString(body, "id", id, sizeof(id));
     mm::json::parseString(body, "parent_id", parentId, sizeof(parentId));
 
-    // The created module's final name (post-disambiguation) rides back in the response so the UI can select + focus the new module.
-    // A client-supplied `id` can contain any character (parseString decodes \" and \\), so the name is NOT quote-safe.
-    // Escape it through JsonSink::writeJsonString (which emits its own quotes) rather than a raw %s, the same precedent as the module-status serialize above.
-    // A raw %s with a name containing a `"` would produce invalid JSON.
-    char createdName[32] = {};
-    switch (applyAddModule(typeName, id, parentId, createdName, sizeof(createdName))) {
+    // The created module's name rides back so the UI can select and focus it; written through writeJsonString, since a client-supplied `id` may hold a quote.
+    char createdName[MoonModule::kNameLen] = {};
+    StateDocumentResult why;
+    switch (applyAddModule(typeName, id, parentId, createdName, sizeof(createdName), &why)) {
         case OpResult::Ok: {
-            // Sized for the worst case: a 15-char name (name_[16]) fully \uXXXX-escaped (6x) + the ~20-char wrapper + NUL. JsonSink truncates safely if ever exceeded, never overflows.
+            // A 15-character name fully \uXXXX-escaped plus the wrapper.
             char resp[128];
             JsonSink sink(resp, sizeof(resp));
             sink.append("{\"ok\":true,\"name\":");
@@ -1950,8 +1944,8 @@ void HttpServerModule::handleAddModule(platform::TcpConnection& conn, const char
             sendResponse(conn, 200, "application/json", resp);
             return;
         }
-        case OpResult::AlreadyExists:
-            sendResponse(conn, 200, "application/json", "{\"ok\":true,\"note\":\"already exists\"}");
+        case OpResult::NameInUse:
+            sendResponse(conn, 409, "application/json", "{\"error\":\"that name is used elsewhere in the tree\"}");
             return;
         case OpResult::ModuleNotFound:
             sendResponse(conn, 404, "application/json", "{\"error\":\"parent not found\"}");
@@ -1959,110 +1953,44 @@ void HttpServerModule::handleAddModule(platform::TcpConnection& conn, const char
         case OpResult::UnknownType:
             sendResponse(conn, 400, "application/json", "{\"error\":\"unknown type\"}");
             return;
+        case OpResult::Refused:
+            sendRefusal(conn, why);
+            return;
         case OpResult::BadRequest:
         default:
             sendResponse(conn, 400, "application/json",
-                         "{\"error\":\"missing type, or parent_id required (top-level modules are policy-fixed in main.cpp), or parent rejected child\"}");
+                         "{\"error\":\"missing type, a name too long, or no parent_id (the top level is fixed in main.cpp)\"}");
             return;
     }
 }
 
-// Apply-core: DELETE every user-editable child of `parentName` (the catalog inject's replaceChildren: an entry's effects replace the boot defaults instead of stacking).
-// Same removeChild → release → deleteTree the HTTP delete does.
-// Code-wired children (Preview, Improv) are left in place; they aren't what a catalog entry replaces.
-// Transport-free.
-HttpServerModule::OpResult HttpServerModule::applyClearChildren(const char* parentName) {
-    auto* parent = findModuleByName(parentName);
-    if (!parent) return OpResult::ModuleNotFound;
-    bool removedAny = false;
-    // Iterate from the end: removeChild compacts the array, so back-to-front keeps indices valid as we delete.
-    for (int i = static_cast<int>(parent->childCount()) - 1; i >= 0; i--) {
-        auto* c = parent->child(static_cast<uint8_t>(i));
-        if (!c || !c->userEditable()) continue;
-        parent->removeChild(c);
-        c->release();
-        Scheduler::deleteTree(c);
-        removedAny = true;
-    }
-    if (removedAny) {
-        if (scheduler_) scheduler_->requestPrepareTree();
-    requestFullResync();   // structural change (see requestFullResync)
-        parent->markDirty();
-        FilesystemModule::noteDirty();
-    }
-    return OpResult::Ok;
+// The module a delete or replace acts on, refused when it is top-level (wired in main.cpp and held by the scheduler) or one the user cannot remove.
+HttpServerModule::OpResult HttpServerModule::editableChild(const char* moduleName, MoonModule*& mod) {
+    mod = findModuleByName(moduleName);
+    if (!mod) return OpResult::ModuleNotFound;
+    if (!mod->parent() || !scheduler_) return OpResult::BadRequest;
+    return mod->userEditable() ? OpResult::Ok : OpResult::ReadOnly;
 }
 
-// Apply-core dispatcher: one REST op as a JSON object.
-// This is the wire shape the Improv APPLY_OP frame carries: "REST over serial".
-// The op is a small flat object: {"op":"add","type":"...","id":"...","parent":"..."} {"op":"set","module":"...","control":"...","value":...} {"op":"clearChildren","parent":"..."} For "set" the whole op JSON is handed to applySetControl, which reads "value" by key.
-// The same way the HTTP /api/control handler reads it from the request body, so any value type rides through unchanged.
-// The wire shape the Improv APPLY_OP frame carries.
-// NOTE the serial op's add uses the key "parent", while the HTTP POST /api/modules body uses "parent_id" for the same field.
-// Both feed the one applyAddModule() core, but the two transports parse different JSON keys, so an HTTP payload is NOT a drop-in APPLY_OP (rename parent_id → parent).
-// The serial op stays terse because every byte counts against the 128-byte frame budget; the discrepancy is documented in docs/moonmodules/core/moxygen/ImprovProvisioningModule.md.
-HttpServerModule::OpResult HttpServerModule::applyOp(const char* opJson) {
-    if (!opJson) return OpResult::BadRequest;
-    char op[16] = {};
-    mm::json::parseString(opJson, "op", op, sizeof(op));
-    if (std::strcmp(op, "add") == 0) {
-        char type[32] = {}, id[32] = {}, parent[32] = {};
-        mm::json::parseString(opJson, "type", type, sizeof(type));
-        mm::json::parseString(opJson, "id", id, sizeof(id));
-        mm::json::parseString(opJson, "parent", parent, sizeof(parent));  // "parent", not HTTP's "parent_id"
-        return applyAddModule(type, id, parent);
-    }
-    if (std::strcmp(op, "set") == 0) {
-        char module[32] = {}, control[32] = {};
-        mm::json::parseString(opJson, "module", module, sizeof(module));
-        mm::json::parseString(opJson, "control", control, sizeof(control));
-        return applySetControl(module, control, opJson);
-    }
-    if (std::strcmp(op, "clearChildren") == 0) {
-        char parent[32] = {};
-        mm::json::parseString(opJson, "parent", parent, sizeof(parent));
-        return applyClearChildren(parent);
-    }
-    return OpResult::BadRequest;   // unknown op
+HttpServerModule::OpResult HttpServerModule::applyDeleteModule(const char* moduleName, StateDocumentResult* refusal) {
+    MoonModule* mod = nullptr;
+    const OpResult r = editableChild(moduleName, mod);
+    if (r != OpResult::Ok) return r;
+    JsonSink body;
+    body.writeJsonString(mod->name());
+    body.append(":null");
+    return opResultOf(applyStateAt(*scheduler_, *mod->parent(), body.data()), refusal);
 }
 
 void HttpServerModule::handleDeleteModule(platform::TcpConnection& conn, const char* moduleName) {
-    auto* mod = findModuleByName(moduleName);
-    if (!mod) {
-        sendResponse(conn, 404, "application/json", "{\"error\":\"module not found\"}");
-        return;
+    StateDocumentResult why;
+    switch (applyDeleteModule(moduleName, &why)) {
+        case OpResult::Ok: sendResponse(conn, 200, "application/json", "{\"ok\":true}"); return;
+        case OpResult::Refused: sendRefusal(conn, why); return;
+        case OpResult::ModuleNotFound: sendResponse(conn, 404, "application/json", "{\"error\":\"module not found\"}"); return;
+        case OpResult::ReadOnly: sendResponse(conn, 400, "application/json", "{\"error\":\"module not deletable\"}"); return;
+        default: sendResponse(conn, 400, "application/json", "{\"error\":\"cannot delete top-level module\"}"); return;
     }
-
-    // Top-level modules (Layouts/Effects/Drivers/Filesystem/System/Network/HttpServer) have no parent: they're registered via Scheduler::addModule in main.cpp and the top-level shape is policy-fixed. Reject the delete here instead of release+delete'ing a module that the scheduler still holds a pointer to (which would dangle on next tick).
-    auto* parent = mod->parent();
-    if (!parent) {
-        sendResponse(conn, 400, "application/json", "{\"error\":\"cannot delete top-level module\"}");
-        return;
-    }
-
-    // Non-editable submodules (Board, Preview, Improv) are apparatus, not swappable pipeline content: refuse here so the API enforces it, not just the UI's hidden delete button. They can still be disabled via their enable toggle; they just can't be removed from the tree.
-    if (!mod->userEditable()) {
-        sendResponse(conn, 400, "application/json", "{\"error\":\"module not deletable\"}");
-        return;
-    }
-
-    // Remove from parent
-    parent->removeChild(mod);
-
-    // Tear down + recursively free the whole subtree.
-    // A bare `delete mod` here would only free mod's children_ pointer array (MoonModule's destructor calls `delete[] children_`); each child module the array pointed to would leak.
-    // Use the same pair handleReplaceModule does.
-    mod->release();
-    Scheduler::deleteTree(mod);
-
-    if (scheduler_) scheduler_->requestPrepareTree();
-    requestFullResync();   // structural change (see requestFullResync)
-
-    // Persist the new tree shape: marking the parent dirty rewrites its file without the deleted child slot. The parent is guaranteed non-null by the top-of-function check (top-level deletes are rejected as 400).
-    parent->markDirty();
-    FilesystemModule::noteDirty();
-
-    sendResponse(conn, 200, "application/json", "{\"ok\":true}");
 }
 
 /// What a replaced module should be called: the requested name, the old one, or neither.
@@ -2070,7 +1998,7 @@ void HttpServerModule::handleDeleteModule(platform::TcpConnection& conn, const c
 /// Three cases, in order.
 /// A name the CALLER asked for wins: it knows what the slot now holds, and a card swapped to a different script must not stay labeled after the old one.
 /// Otherwise a CUSTOM name is kept, so a scenario id or a name a user chose survives a type swap.
-/// Otherwise null, and the fresh module keeps the default name its own type gave it: a Multiply replaced by a Checkerboard reads as "Checkerboard", not as a mislabeled "Multiply".
+/// Otherwise null, and the fresh module takes the default name of its own type: a Multiply replaced by a Checkerboard reads as "Checkerboard", not as a mislabeled "Multiply".
 ///
 /// Returns null for "leave it alone", never an empty string, so a caller cannot blank a name.
 const char* HttpServerModule::replacementName(const char* requested, const char* current,
@@ -2080,94 +2008,58 @@ const char* HttpServerModule::replacementName(const char* requested, const char*
     return nullptr;
 }
 
+// Exactly the parent's children, in order, with the replacement in `old`'s place: a new name removes the old module, the same name re-types it in place.
+static void writeChildrenReplacing(JsonSink& doc, MoonModule& old, const char* name, const char* typeName) {
+    MoonModule* parent = old.parent();
+    doc.append("\"$patch\":\"replace\"");
+    for (uint8_t i = 0; i < parent->childCount(); i++) {
+        MoonModule* c = parent->child(i);
+        if (!c) continue;
+        doc.append(",");
+        if (c == &old) writeTypedMember(doc, name, typeName);
+        else { doc.writeJsonString(c->name()); doc.append(":{}"); }
+    }
+}
+
+HttpServerModule::OpResult HttpServerModule::applyReplaceModule(const char* moduleName, const char* typeName, const char* wantName,
+                                                                StateDocumentResult* refusal) {
+    MoonModule* mod = nullptr;
+    const OpResult found = editableChild(moduleName, mod);
+    if (found != OpResult::Ok) return found;
+    if (!typeName || typeName[0] == 0) return OpResult::BadRequest;
+    // Copied out, since the factory hands every default name out of one shared buffer and the next call overwrites it.
+    char typeDefault[MoonModule::kNameLen] = {};
+    const char* fresh = ModuleFactory::defaultNameOf(typeName);
+    if (!fresh) return OpResult::UnknownType;
+    std::snprintf(typeDefault, sizeof(typeDefault), "%s", fresh);
+    const char* keep = replacementName(wantName, mod->name(), ModuleFactory::defaultNameOf(mod->typeName()));
+    // A name other than the slot's own is made free, as an add without an id is.
+    const char* want = keep ? keep : typeDefault;
+    char name[MoonModule::kNameLen] = {};
+    if (std::strcmp(want, mod->name()) == 0) std::snprintf(name, sizeof(name), "%s", want);
+    else if (!scheduler_->freeName(want, name, sizeof(name))) return OpResult::NameInUse;
+
+    JsonSink doc;
+    writeChildrenReplacing(doc, *mod, name, typeName);
+    return opResultOf(applyStateAt(*scheduler_, *mod->parent(), doc.data()), refusal);
+}
+
 void HttpServerModule::handleReplaceModule(platform::TcpConnection& conn, const char* moduleName, const char* body) {
-    auto* mod = findModuleByName(moduleName);
-    if (!mod) {
-        sendResponse(conn, 404, "application/json", "{\"error\":\"module not found\"}");
-        return;
-    }
-    auto* parent = mod->parent();
-    if (!parent) {
-        sendResponse(conn, 400, "application/json", "{\"error\":\"top-level modules cannot be replaced\"}");
-        return;
-    }
-    // Non-editable submodules (Board, Preview, Improv) are apparatus: replacing one swaps it for a different type, which is as much a removal as a delete. Refuse, mirroring handleDeleteModule's guard, so the editability contract holds across both endpoints.
-    if (!mod->userEditable()) {
-        sendResponse(conn, 400, "application/json", "{\"error\":\"module not editable\"}");
-        return;
-    }
     char typeName[32] = {};
     mm::json::parseString(body, "type", typeName, sizeof(typeName));
-    if (typeName[0] == 0) {
-        sendResponse(conn, 400, "application/json", "{\"error\":\"missing type\"}");
-        return;
-    }
-    // An optional name for the replacement, the counterpart of `id` on create. Without it a replace keeps whatever the slot was called, which is right when the type is the only thing changing and wrong when the caller knows what the slot now holds: swapping a card to a different MoonLive script leaves it labeled after the old one.
+    // An optional name for the replacement, the counterpart of `id` on create.
     char wantName[32] = {};
     mm::json::parseString(body, "name", wantName, sizeof(wantName));
-
-    // Find the child's index within the parent.
-    uint8_t index = 0;
-    bool found = false;
-    for (uint8_t i = 0; i < parent->childCount(); i++) {
-        if (parent->child(i) == mod) { index = i; found = true; break; }
+    StateDocumentResult why;
+    switch (applyReplaceModule(moduleName, typeName, wantName, &why)) {
+        case OpResult::Ok: sendResponse(conn, 200, "application/json", "{\"ok\":true}"); return;
+        case OpResult::Refused: sendRefusal(conn, why); return;
+        case OpResult::ModuleNotFound: sendResponse(conn, 404, "application/json", "{\"error\":\"module not found\"}"); return;
+        case OpResult::ReadOnly: sendResponse(conn, 400, "application/json", "{\"error\":\"module not editable\"}"); return;
+        case OpResult::UnknownType: sendResponse(conn, 400, "application/json", "{\"error\":\"unknown type\"}"); return;
+        case OpResult::NameInUse: sendResponse(conn, 409, "application/json", "{\"error\":\"no free name\"}"); return;
+        default: sendResponse(conn, 400, "application/json", typeName[0] ? "{\"error\":\"top-level modules cannot be replaced\"}" : "{\"error\":\"missing type\"}"); return;
     }
-    if (!found) {
-        sendResponse(conn, 404, "application/json", "{\"error\":\"module not found\"}");
-        return;
-    }
-
-    // Create the replacement before touching the tree: if the factory fails, return early and leave the tree intact (never leave a hole).
-    auto* fresh = ModuleFactory::create(typeName);
-    if (!fresh) {
-        sendResponse(conn, 400, "application/json", "{\"error\":\"unknown type\"}");
-        return;
-    }
-
-    // The same rule the add path enforces.
-    // A replacement has to be something the parent accepts, or a Layer's effect could be swapped for a layout that ticks in the wrong pass.
-    // Checked before the old module is touched, so a refusal leaves the tree exactly as it was.
-    if (!parent->acceptsRole(fresh->role())) {
-        delete fresh;
-        sendResponse(conn, 400, "application/json", "{\"error\":\"parent rejected child\"}");
-        return;
-    }
-
-    // Name on replace: keep a CUSTOM name (a scenario id like "MOD", or a user-renamed slot) so callers can keep addressing the slot by it.
-    // But if the old name was just the old type's factory display name ("Multiply" for a MultiplyModifier), let the fresh module keep its own factory name ("Checkerboard"): otherwise a Multiply→Checkerboard replace leaves a Checkerboard mislabeled "Multiply".
-    // `fresh` already arrives with its correct default name from ModuleFactory::create, so we only override for a custom name; then re-run uniqueness so two same-type siblings don't collide.
-    const char* keep = replacementName(wantName, mod->name(),
-                                       ModuleFactory::displayNameFor(mod->typeName(), mod->role()));
-    if (keep) fresh->setName(keep);
-
-    // Swap in place; replaceChildAt returns the old module, which we own.
-    MoonModule* old = parent->replaceChildAt(index, fresh);
-
-    // Lifecycle on the fresh module: same phase order as the add path.
-    fresh->defineControls();
-    fresh->setup();
-    fresh->applyState();
-
-    // Tear down the old subtree (release + recursive delete): same pair FilesystemModule::applyNode uses; a bare delete would leak its children.
-    if (old) {
-        old->release();
-        Scheduler::deleteTree(old);
-    }
-
-    // Disambiguate only now that the tree is in its final shape: `fresh` is in place and `old` is gone.
-    // Run before this and firstByName wouldn't find `fresh` (not yet linked) and would append a spurious " 2"; run after the old module is removed and a genuine same-named sibling is the only thing that triggers a suffix.
-    // No-op for a preserved custom name that's unique.
-    if (scheduler_) scheduler_->ensureUniqueName(fresh);
-
-    // Re-run prepare across the tree so Layer LUT / Drivers buffer wiring re-forms: a replaced effect/driver re-wires like a freshly added one.
-    if (scheduler_) scheduler_->requestPrepareTree();
-    requestFullResync();   // structural change (see requestFullResync)
-
-    // Persist: children are encoded positionally, so marking the parent dirty rewrites "<index>.type" with the new typeName at the same slot.
-    parent->markDirty();
-    FilesystemModule::noteDirty();
-
-    sendResponse(conn, 200, "application/json", "{\"ok\":true}");
 }
 
 // A module name from its path segment, percent-decoded (a space arrives as %20) up to `/` or `?`, and never '+' as a space, which keeps "A+B" reachable; its length.
@@ -2389,12 +2281,13 @@ void HttpServerModule::handleMoveModule(platform::TcpConnection& conn, const cha
     sendResponse(conn, 200, "application/json", "{\"ok\":true}");
 }
 
-// Resolve `/api/list/<module>/<control>[/<id>]` (the tail after "/api/list/") into the module's editable List source, the parsed id (if the tail has one), and a flag saying whether an id was present.
+// Resolve `/api/list/<module>/<control>[/<row>]` (the tail after "/api/list/") into the module's editable List source, the row's id (if the tail has one), and a flag saying whether a row was named.
+// A row segment of digits is its id; any other is a name, which a list whose names are unique resolves.
 // Returns nullptr (and sends the right 4xx) on any failure: bad path, unknown module or control, a control that isn't an editable list.
 // Shared by the add / patch / delete handlers so the parse + validation lives once.
 ListSource* HttpServerModule::resolveEditableList(platform::TcpConnection& conn, const char* tail,
                                                   uint32_t& outId, bool& outHasId) {
-    // Split the tail into "<module>/<control>[/<id>]" on '/'. Names have no '/', so two slashes at most: module, control, and an optional numeric id.
+    // Split the tail into "<module>/<control>[/<row>]" on '/'. Names have no '/', so two slashes at most: module, control, and an optional row.
     char moduleName[32] = {};
     char controlName[32] = {};
     outHasId = false;
@@ -2413,16 +2306,21 @@ ListSource* HttpServerModule::resolveEditableList(platform::TcpConnection& conn,
         sendResponse(conn, 400, "application/json", "{\"error\":\"bad control\"}"); return nullptr;
     }
     std::memcpy(controlName, cStart, cLen);
-    if (s2 && s2[1]) {   // an id segment follows the control
-        // Bounded parse (same rigour as the Content-Length parse above): require at least one digit, reject overflow and any trailing non-digit. A malformed id ("/5abc", "/xyz", an overflow) is a clean 400 rather than a silently-truncated or zero id.
+    const char* rowName = nullptr;
+    if (s2 && s2[1]) {   // a row segment follows the control
+        // Bounded parse (same rigour as the Content-Length parse above): an id is all digits and fits 32 bits, so "/5abc" is a name and an overflow a clean 400 rather than a truncated id.
         const char* idStart = s2 + 1;
         char* idEnd = nullptr;
         errno = 0;
         const unsigned long parsed = std::strtoul(idStart, &idEnd, 10);
-        if (idEnd == idStart || *idEnd != '\0' || errno == ERANGE || parsed > 0xFFFFFFFFul) {
-            sendResponse(conn, 400, "application/json", "{\"error\":\"bad id\"}"); return nullptr;
+        if (idEnd != idStart && *idEnd == '\0') {
+            if (errno == ERANGE || parsed > 0xFFFFFFFFul) {
+                sendResponse(conn, 400, "application/json", "{\"error\":\"bad id\"}"); return nullptr;
+            }
+            outId = static_cast<uint32_t>(parsed);
+        } else {
+            rowName = idStart;
         }
-        outId = static_cast<uint32_t>(parsed);
         outHasId = true;
     }
 
@@ -2434,6 +2332,11 @@ ListSource* HttpServerModule::resolveEditableList(platform::TcpConnection& conn,
             auto* src = static_cast<ListSource*>(cs[i].ptr);
             if (!src || !src->isEditableList()) {
                 sendResponse(conn, 400, "application/json", "{\"error\":\"list not editable\"}");
+                return nullptr;
+            }
+            char name[64] = {};
+            if (rowName && (!decodeModuleName(rowName, name, sizeof(name)) || !src->listRowNamed(name, outId))) {
+                sendResponse(conn, 404, "application/json", "{\"error\":\"row not found\"}");
                 return nullptr;
             }
             listMutationModule_ = mod;   // remembered so afterListMutation marks IT dirty (persistence)
@@ -2501,6 +2404,22 @@ void HttpServerModule::handleListPatchRow(platform::TcpConnection& conn, const c
             sendResponse(conn, 400, "application/json", "{\"error\":\"field edit failed\"}");
             return;
         }
+    }
+    afterListMutation();
+    sendResponse(conn, 200, "application/json", "{\"ok\":true}");
+}
+
+void HttpServerModule::handleListApplyRow(platform::TcpConnection& conn, const char* tail, size_t tailLen) {
+    char rowPath[160] = {};
+    if (tailLen >= sizeof(rowPath)) { sendResponse(conn, 400, "application/json", "{\"error\":\"bad list path\"}"); return; }
+    std::memcpy(rowPath, tail, tailLen);
+    uint32_t id; bool hasId;
+    ListSource* src = resolveEditableList(conn, rowPath, id, hasId);
+    if (!src) return;
+    if (!hasId) { sendResponse(conn, 400, "application/json", "{\"error\":\"row required\"}"); return; }
+    if (!src->applyListRow(id)) {
+        sendResponse(conn, 400, "application/json", "{\"error\":\"apply failed: the module's status says why\"}");
+        return;
     }
     afterListMutation();
     sendResponse(conn, 200, "application/json", "{\"ok\":true}");
