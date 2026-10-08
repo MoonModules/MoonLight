@@ -574,7 +574,7 @@
     ]
   },
   {
-    "name": "MIDI-OSC bridge",
+    "name": "MIDI bridge",
     "chip": "ESP32-S3",
     "firmwares": [
       "esp32s3-n16r8"
@@ -582,15 +582,14 @@
     "image": "assets/deviceModels/esp32-s3-n16r8-dev.png",
     "supported": [
       "WiFi",
-      "MIDI",
-      "OSC"
+      "MIDI"
     ],
     "modules": [
       {
         "type": "System",
         "id": "System",
         "controls": {
-          "deviceModel": "MIDI-OSC bridge"
+          "deviceModel": "MIDI bridge"
         }
       },
       {
@@ -606,19 +605,8 @@
         "id": "Midi",
         "parent_id": "Services",
         "controls": {
-          "usb": true
-        }
-      },
-      {
-        "type": "OscModule",
-        "id": "OscModule",
-        "parent_id": "Services",
-        "controls": {
-          "listen": true,
-          "port": 9001,
-          "follow": true,
-          "feedback": true,
-          "feedbackPort": 9000
+          "source": 1,
+          "share": true
         }
       }
     ]

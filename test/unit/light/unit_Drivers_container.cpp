@@ -11,6 +11,7 @@
 #include "platform/platform.h"                 // gpioRead: the desktop reads back what gpioWrite put there
 
 #include <cstring>
+#include <filesystem>
 #include <string>
 
 // Regression: the UI's enable/disable toggle on a child driver (e.g. ArtNet, Preview) was a no-op, the driver kept running. Cause: Drivers::tick() called child(i)->tick() unconditionally, skipping the per-child `enabled` check that Layer::tick() does for effects and Effects::tick() does for its child Layers.
@@ -73,6 +74,38 @@ TEST_CASE("A fixture-profile list edit re-resolves each driver's correction with
     CHECK(drv.correctionCalls == afterLib);
 }
 
+// A driver that re-lays its frame on a correction change, as the parallel and RMT drivers do, counting the times it does.
+class FrameLayingDriver : public mm::DriverBase {
+public:
+    void setSourceBuffer(mm::Buffer*) override {}
+    void tick() MM_NONBLOCKING override {}
+    void defineDriverControls() override { defineCorrectionControls(); }
+    void onCorrectionChanged() override { if (outChannelsChanged()) layouts++; }
+    void setOutChannels(uint8_t ch) { correction_.outChannels = ch; }
+    int layouts = 0;
+};
+
+// Regression: every brightness change made the LightCrafter's parallel driver drain its DMA transfer and re-parse its lanes, which a desk fader's stream turned into freezes.
+TEST_CASE("a brightness change re-bakes the correction without re-laying the driver's frame; a channel-count change does") {
+    mm::Drivers drivers;
+    FrameLayingDriver drv;
+    drivers.addChild(&drv);
+    drivers.on = true;
+    drivers.brightness = 200;
+    drv.defineControls();
+    drivers.setup();
+    const int afterSetup = drv.layouts;
+    for (const uint8_t b : {10, 90, 255, 0, 61}) {
+        drivers.brightness = b;
+        drivers.onControlChanged("brightness");
+    }
+    CHECK(drv.layouts == afterSetup);
+    drv.setOutChannels(static_cast<uint8_t>(drv.correction().outChannels + 1));   // as a white channel being added would
+    drivers.onControlChanged("brightness");
+    CHECK(drv.layouts == afterSetup + 1);
+    drivers.removeChild(&drv);
+}
+
 // Core reads the light pipeline through LightOutput, so the seat must hold only a live, prepared Drivers.
 TEST_CASE("Drivers is the light output core reads, from prepare until release") {
     mm::Drivers drivers;
@@ -96,7 +129,7 @@ TEST_CASE("Drivers::on gates the correction LUT without clobbering brightness") 
     drivers.addChild(&drv);
     drv.defineControls();
     // Linear: what this pins is that `on` gates the LUT WITHOUT losing the brightness value, and a perceptual curve would restate every expected number as a lookup without testing anything new.
-    mm::test::setControlValue<uint8_t>(drv, "curve", 3);   // 3 = linear
+    mm::test::setControlValue<uint8_t>(drv, "curve", static_cast<uint8_t>(mm::Correction::Curve::Linear));
     drivers.setup();                       // seeds drv's own correction_ from on(true)+brightness
 
     drivers.brightness = 200;
@@ -127,7 +160,7 @@ TEST_CASE("Drivers: a localBrightness change re-scales the driver's correction L
     drivers.on = true;
     drv.defineControls();                           // bind the correction controls (localBrightness etc.)
     // LINEAR, so the arithmetic below reads as the multiplication it is testing. What this pins is that BOTH sliders reach the LUT, which a perceptual curve would leave true but express as table lookups nobody can check by eye. The curve has its own tests.
-    mm::test::setControlValue<uint8_t>(drv, "curve", 3);   // 3 = linear
+    mm::test::setControlValue<uint8_t>(drv, "curve", static_cast<uint8_t>(mm::Correction::Curve::Linear));
     drivers.setup();                                // seeds the driver's correction (global 200, local 255)
     CHECK(drv.correctionForTest().briLut[255] == 200);   // global 200 × local 255/255 = 200
 
@@ -339,4 +372,39 @@ TEST_CASE("Drivers gives a scripted palette's color from its live entries") {
     CHECK(hue == builtinHue);
     CHECK(sat == builtinSat);
     mm::Palettes::setActiveDirect(saved);
+}
+
+namespace {
+/// The palette picker's option count, which grows by one per scripted palette found.
+uint8_t paletteOptions(mm::Drivers& d) {
+    auto& cs = d.controls();
+    for (uint8_t i = 0; i < cs.count(); i++)
+        if (std::strcmp(cs[i].name, "palette") == 0) return static_cast<uint8_t>(cs[i].max);
+    return 0;
+}
+}  // namespace
+
+// Regression: every brightness change listed both script folders to rebuild the palette picker, 100 ms on an S3, so a desk fader froze the LEDs.
+TEST_CASE("a brightness change does not rescan the palette scripts; a palette file written through the API does") {
+    char root[64];
+    std::snprintf(root, sizeof(root), "/tmp/mm_palette_scan_%u", static_cast<unsigned>(mm::platform::millis()));
+    std::filesystem::remove_all(root);
+    mm::platform::fsSetRoot(root);
+    mm::platform::fsMkdir("/moonlive");
+    mm::Drivers drivers;
+    drivers.defineControls();
+    drivers.setup();                                 // the scan that counts, once the filesystem is up
+    const uint8_t before = paletteOptions(drivers);
+
+    const char script[] = "void tick() {}";
+    REQUIRE(mm::platform::fsWriteAtomic("/moonlive/mine.mlp", script, sizeof(script) - 1));
+    drivers.brightness = 90;
+    drivers.rebuildControls();                       // what every brightness change does
+    CHECK(paletteOptions(drivers) == before);        // no folder listing
+
+    drivers.onFileChanged("/moonlive/mine.mlp");     // what a write through the API announces
+    CHECK(paletteOptions(drivers) == before + 1);
+    CHECK(mm::Drivers::touchesFolder("/", "/moonlive"));             // a restore of everything
+    CHECK_FALSE(mm::Drivers::touchesFolder("/moonlivex/a.mlp", "/moonlive"));
+    std::filesystem::remove_all(root);
 }

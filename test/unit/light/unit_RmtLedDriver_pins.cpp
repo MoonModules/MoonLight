@@ -453,7 +453,7 @@ TEST_CASE("selecting 400 kHz doubles the bit cell, which is what a 12V WS2811 st
     mm::RmtLedDriver d;
     mm::Buffer src;
     mm::Correction corr;
-    d.timing = 1;
+    d.timing = mm::RmtLedDriver::kTiming400k;
     wire(d, src, corr, 8);
     const auto& c = d.wireTimingForTest();
     CHECK(c.t0h_ns == 500);
@@ -465,7 +465,7 @@ TEST_CASE("the WS2811 fast mode keeps the 1.25 us cell with narrower pulses") {
     mm::RmtLedDriver d;
     mm::Buffer src;
     mm::Correction corr;
-    d.timing = 2;
+    d.timing = mm::RmtLedDriver::kTiming800kFast;
     wire(d, src, corr, 8);
     const auto& c = d.wireTimingForTest();
     CHECK(c.t0h_ns == 250);
@@ -478,7 +478,7 @@ TEST_CASE("custom timing is taken as the user typed it") {
     mm::RmtLedDriver d;
     mm::Buffer src;
     mm::Correction corr;
-    d.timing = 3;
+    d.timing = mm::RmtLedDriver::kTimingCustom;
     d.t0hNs = 400; d.t1hNs = 850; d.periodNs = 1400;
     wire(d, src, corr, 8);
     const auto& c = d.wireTimingForTest();
@@ -492,7 +492,7 @@ TEST_CASE("custom timing that no chip could decode is ordered rather than emitte
     mm::RmtLedDriver d;
     mm::Buffer src;
     mm::Correction corr;
-    d.timing = 3;
+    d.timing = mm::RmtLedDriver::kTimingCustom;
     d.t0hNs = 900; d.t1hNs = 300; d.periodNs = 400;
     wire(d, src, corr, 8);
     const auto& c = d.wireTimingForTest();
@@ -509,7 +509,7 @@ TEST_CASE("switching timing takes effect without reconfiguring the pins") {
     wire(d, src, corr, 18);
     CHECK(d.wireTimingForTest().period_ns == 1250);
 
-    d.timing = 1;
+    d.timing = mm::RmtLedDriver::kTiming400k;
     d.applyState();                                  // what a control change triggers
     CHECK(d.wireTimingForTest().period_ns == 2500);
     CHECK(std::strcmp(d.pins, "2,4") == 0);          // and the wiring is untouched

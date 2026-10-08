@@ -55,8 +55,10 @@ public:
     int8_t oe = -1;    ///< Output enable, active LOW.
 
     // NOT derivable from the panel's size: two of one size can scan differently.
-    /// Which clock edge the panel's chips sample on; index into kEdgeOptions.
-    uint8_t clockEdgeSel = 0;
+    /// The clock edges `clockEdgeSel` picks from, in kEdgeOptions order.
+    enum ClockEdge : uint8_t { kEdgeRising, kEdgeFalling, kEdgeCount };
+    /// Which clock edge the panel's chips sample on.
+    uint8_t clockEdgeSel = kEdgeRising;
     /// The panel's own scan rate; index into kScanOptions.
     uint8_t scanSel = 1;
 
@@ -187,7 +189,7 @@ public:
         pins.a = toPin(addrA); pins.b = toPin(addrB); pins.c = toPin(addrC);
         pins.d = toPin(addrD); pins.e = toPin(addrE);
         pins.clk = toPin(clk); pins.lat = toPin(lat); pins.oe = toPin(oe);
-        pins.clkFalling = clockEdgeSel == 1;
+        pins.clkFalling = clockEdgeSel == kEdgeFalling;
 
         const platform::Hub75Backend backend =
             backendIndex_[peripheralSel_ < backendOptionCount_ ? peripheralSel_ : 0];
@@ -442,7 +444,6 @@ private:
     platform::Hub75Backend backendIndex_[kBackendCount + 1] = {};
     uint8_t backendOptionCount_ = 0;
 
-    static constexpr uint8_t kEdgeCount = 2;
     static constexpr const char* kEdgeOptions[kEdgeCount] = {"rising", "falling"};
     static constexpr uint8_t kScanCount = 3;
     static constexpr const char* kScanOptions[kScanCount] = {"1/8", "1/16", "1/32"};

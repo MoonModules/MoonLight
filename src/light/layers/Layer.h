@@ -54,15 +54,17 @@ public:
 
 
     // Index order is fixed by kBlendModeOptions, so a persisted preset keeps its meaning.
+    /// The blend modes, in option order.
+    enum BlendMode : uint8_t { kBlendAlpha, kBlendAdditive, kBlendModeCount };
     /// How this layer composites onto those below it, as an index into `kBlendModeOptions`.
-    uint8_t blendMode = 1;     // 1 = additive
+    uint8_t blendMode = kBlendAdditive;
     /// How strongly this layer composites, from 0 for invisible to 255 for full.
     uint8_t opacity = 255;
 
     /// Publish the two composition controls the `Drivers` container reads.
     void defineControls() override {
         static constexpr const char* kBlendModeOptions[] = {"alpha", "additive"};
-        controls_.addSelect("blendMode", blendMode, kBlendModeOptions, 2);
+        controls_.addSelect("blendMode", blendMode, kBlendModeOptions, kBlendModeCount);
         controls_.addControl("opacity", opacity, 0, 255);
         // Cascade to the children, preserving the base behavior this overrode.
         MoonModule::defineControls();
@@ -71,7 +73,7 @@ public:
     // Index order must match kBlendModeOptions.
     /// The `BlendMap` op this layer's `blendMode` selects, read by `Drivers`.
     BlendOp blendOp() const {
-        return blendMode == 1 ? BlendOp::Additive : BlendOp::Alpha;
+        return blendMode == kBlendAdditive ? BlendOp::Additive : BlendOp::Alpha;
     }
 
     /// Point this layer at the shared `Layouts` describing the physical topology.

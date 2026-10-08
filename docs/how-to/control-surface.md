@@ -214,11 +214,12 @@ Each control sends to an address naming **the surface**, not the thing it drives
 /mm/encoder/1 … /mm/encoder/8
 /mm/fader/1 … /mm/fader/8
 /mm/pad/1 … /mm/pad/64
+/mm/padstate/1 … /mm/padstate/64
 ```
 
 The device decides what each one drives. That is deliberate: reassign `fader3` from brightness to speed, and the layout does not change, because the layout never knew. It also means a hardware desk added later lands on the same addresses.
 
-A pad applies the preset stored on that pad of the Control card's grid, counted from the top left.
+A pad applies the preset stored on that pad of the Control card's grid, counted from the top left. Its light listens on `/mm/padstate/N`: dark when the pad is empty, dim when it holds a preset, bright for the one applied.
 
 ---
 

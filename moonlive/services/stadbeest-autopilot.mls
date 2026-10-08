@@ -1,8 +1,8 @@
-// StadBeestAutopilot: runs the StadBeest unattended. Every few minutes a new scene picks a palette, a mood and the eyes' character; within a scene the energy breathes once a minute. It moves the control surface, so the legs follow here and the eyes over OSC.
+// StadBeestAutopilot: runs the StadBeest unattended. Every few minutes a new scene picks a palette, a mood, how much the music counts and the eyes' character; within a scene the energy breathes once a minute. It moves the control surface, so the legs follow here and the eyes over OSC.
 
 class StadBeestAutopilot {
   bool run = true;
-  byte minutes = 3;
+  byte seconds = 180;
 
   int scene = -1;          // the scene running, counted from boot
   int mood = 128;          // the scene's energy, 0 calm to 255 wild
@@ -10,12 +10,13 @@ class StadBeestAutopilot {
   int pulseOn = 0;         // whether the scene flashes on the beat
   int pupil = 100;         // the eyes' pupil size this scene
   int blinks = 128;        // how often the eyes blink this scene
+  int hearing = 160;       // how much the music drives legs and eyes this scene
   int lastGlide = -100000; // when the slots were last written, in ms
-  int nextSlot = 8;        // the slot written next; 8 means all are written
+  int nextSlot = 9;        // the slot written next; 9 means all are written
 
   void defineControls() {
     addControl("run", run, 0, 1); // off hands the beast back to people and desks
-    addControl("minutes", minutes, 1, 30); // how long a scene lasts
+    addControl("seconds", seconds, 1, 255); // how long a scene lasts
   }
 
   // The energy around the scene's mood, breathing once a minute.
@@ -27,7 +28,7 @@ class StadBeestAutopilot {
     return e;
   }
 
-  // One slot per call: the scene's choices, and the energy spread over tempo, swing, lift and how far the eyes look.
+  // One slot per call: the scene's choices, and the energy spread over bpm, swing, lift and how far the eyes look.
   void write(int k) {
     int e = energy();
     if (k == 0) { setControl("encoder1", palette); }
@@ -38,26 +39,28 @@ class StadBeestAutopilot {
     if (k == 5) { setControl("fader4", 60 + div(e * 60, 255)); }
     if (k == 6) { setControl("fader5", 120 + div(e * 100, 255)); }
     if (k == 7) { setControl("encoder3", 50 + div(e, 2)); }
+    if (k == 8) { setControl("fader3", hearing); }
   }
 
   void tick20ms() {
     if (run == 0) { return; }
-    int now = div(t, minutes * 60000);
+    int now = div(t, seconds * 1000);
     if (now != scene) {
       scene = now;
-      palette = random16(13);
+      palette = random16(60); // any built-in palette
       mood = random16(256);
       pulseOn = random16(2);
       pupil = 80 + random16(80);
       blinks = 60 + random16(140);
+      hearing = 80 + random16(150);
       lastGlide = -100000;
     }
-    // Every ten seconds all eight slots, one per tick: the eyes hear them over WiFi multicast, which drops a burst.
+    // Every ten seconds all nine slots, one per tick: the eyes hear them over WiFi multicast, which drops a burst.
     if (t - lastGlide >= 10000) {
       lastGlide = t;
       nextSlot = 0;
     }
-    if (nextSlot < 8) {
+    if (nextSlot < 9) {
       write(nextSlot);
       nextSlot = nextSlot + 1;
     }

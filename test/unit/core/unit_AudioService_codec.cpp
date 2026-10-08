@@ -12,7 +12,7 @@
 TEST_CASE("a microphone asks for no codec until one is named") {
     mm::AudioService audio;
     CHECK(audio.codecType() == mm::platform::CodecType::None);
-    audio.codec = 1;
+    audio.codec = mm::AudioService::kCodecEs8311;
     CHECK(audio.codecType() == mm::platform::CodecType::Es8311);
 }
 
@@ -28,7 +28,7 @@ TEST_CASE("the codec is reported on the bus only while the local microphone uses
     mm::MoonModule::I2cDevice dev[2];
     audio.mode = mm::AudioService::kLocalMode;
     CHECK(audio.i2cDevices(dev, 2) == 0);   // no codec named
-    audio.codec = 1;
+    audio.codec = mm::AudioService::kCodecEs8311;
     REQUIRE(audio.i2cDevices(dev, 2) == 1);
     CHECK(dev[0].addr == 0x18);
     CHECK(std::string(dev[0].role) == "ES8311");

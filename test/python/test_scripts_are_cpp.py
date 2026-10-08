@@ -74,7 +74,7 @@ def prelude() -> str:
     # Builtins whose first argument is a NAME IN QUOTES are declared by hand below: the generated
     # int-only form cannot express a string, and emitting both makes the call ambiguous rather than
     # resolving it.
-    byString = {"addControl", "setControl"}
+    byString = {"addControl", "addSelect", "setControl"}
     for name, argc in builtins():
         if name in byString:
             continue
@@ -92,6 +92,8 @@ def prelude() -> str:
     lines.append("void addControl(string, int&, int, int);")
     lines.append("void addControl(string, byte&, int, int);")
     lines.append("void addControl(string, bool&, int, int);")   # one arity for every type, as the builtin table registers it
+    lines.append("void addSelect(string, byte&, string);")      # its options are one string, names split by '|'
+    lines.append("void addSelect(string, int&, string);")
     return "\n".join(lines) + "\n"
 
 

@@ -8,7 +8,7 @@ The user-added **Service** modules are capability bridges the device provides or
 
 ## Services
 
-The top-level container the Service modules hang under: a grouping node with no controls of its own, the same shape as `Effects`/`Drivers` in the light domain. Adds/removes its children (Audio, OSC, Infrared, Button, Analog, MoonLiveService) at runtime via the generic module machinery.
+The top-level container the Service modules hang under: a grouping node with no controls of its own, the same shape as `Effects`/`Drivers` in the light domain. Adds/removes its children (Audio, OSC, Infrared, Button, Analog, Gamepad, MIDI, MoonLiveService) at runtime via the generic module machinery.
 
 Detail: [technical](moxygen/Services.md)
 
@@ -57,7 +57,6 @@ Receives [OSC](https://opensoundcontrol.stanford.edu/) over UDP and writes it on
 - `hosts`: (unicast) addresses or names; empty answers whoever wrote last.
 - `group`: (multicast) the group feedback goes to and this board joins, `239.255.77.78` by default.
 - `feedbackPort`: where the client listens, 9001 by default.
-- `follow`: this board follows another, taking its feedback and showing its presets.
 - `status`: listening, off, or why the port could not be opened.
 
 Detail: [technical](moxygen/OscModule.md)
@@ -133,7 +132,10 @@ A Service added per board: **a MIDI control desk** driving the control surface. 
 <img src="../../assets/core/MidiService.png" width="300" alt="MIDI service controls">
 
 - `profile`: the desk's layout, `Mackie Control` or `Akai APC40 mkII`.
-- `usb`: the desk is on this board's own USB port; S3 boards with 8 MB of flash or more.
+- `source`: `browser`, `USB` on this board's own port (S3, 8 MB of flash or more), or `network`.
+- `share`: (USB) pass the desk on over the network rather than driving this board.
+- `host`: (network) the desk's address or name, with an optional `:port`; empty waits to be invited.
+- `port`: (network, share) this board's RTP-MIDI port, 5004 by default, data on the one above.
 
 Faders move the surface's faders, the knobs turn its encoders, and each channel's SELECT button flips its switch. The desk follows the surface back: motors, SELECT lights and knob rings. A hand on a fader holds its motor still. An APC40's clip pads apply presets. ⌄ details.
 
@@ -188,7 +190,11 @@ The decoding follows Mackie Control: a fader is 14-bit pitch bend on its own cha
 
 **The Akai APC40 mkII profile.** The browser greets the desk with the SysEx that puts it in Alternate Ableton Live mode, where every light is the host's. Chrome asks once to allow SysEx for it. Track faders 1-8 move the surface's faders and track knobs 1-8 set its encoders, each reading 0 to 127. Activator buttons 1-8 flip its switches. The 40 clip pads apply presets 1-40, the top-left pad being preset 1 as on the Control card. The way back lights each activator while its switch is on and fills each knob's ring like a meter. Each pad is dark when empty, dim white when a preset is stored, and green for the one applied. The faders have no motors. Every message is in [the APC40 reference](../../reference/hardware/control-surfaces.md#akai-apc40-mkii).
 
-**A desk on the board's own USB port.** With `usb` on, the desk plugs into the board instead of the computer, and the board is the USB host. It reads the desk as USB-MIDI 1.0 packets, greets it, and sends it its state. The port then carries no serial log and no USB flashing, so a board with a second USB port keeps that one for the computer. The desk takes its power from the port, so the board supplies 5 V there, or a powered hub between them does; an APC40 mkII draws about 0.15 A.
+**A desk on the board's own USB port.** With `source` on USB, the desk plugs into the board instead of the computer, and the board is the USB host. It reads the desk as USB-MIDI 1.0 packets, greets it, and sends it its state. The port then carries no serial log and no USB flashing, so a board with a second USB port keeps that one for the computer. The desk takes its power from the port, so the board supplies 5 V there, or a powered hub between them does; an APC40 mkII draws about 0.15 A.
+
+**A desk on the network.** With `source` on network, the desk is an [RTP-MIDI](https://www.rfc-editor.org/rfc/rfc6295) session, the standard Apple's Network MIDI uses. `host` names the other end: a board sharing the desk on its USB port, a desk with a network port, or a computer sharing its desk. The service invites it, and asks again every second until it answers, so either side may start first. With `host` empty the service waits to be invited, as a Mac's Audio MIDI Setup does when its Network window connects to the board. Windows does the same with the free rtpMIDI driver. The greeting, the surface and the touch handling are those of a desk on the board's own port, so a desk behaves the same whichever cable it is on.
+
+**Sharing a desk.** With `source` on USB and `share` on, the desk on this board's port drives nothing here: the board is a MIDI cable over the network, as a bought RTP-MIDI interface is, and the board the desk drives invites it. That board names it in `host` by address or by name, `<name>.local`, since a board waiting to be invited announces itself over Bonjour as `_apple-midi._udp`; a Mac lists it in Audio MIDI Setup's Network window the same way. The board passes each message on unchanged, both ways. The one exception is a SysEx the desk sends, which its USB side does not pass on, as on a board's own port; the greeting SysEx from the host reaches the desk. It accepts a session only while a desk is plugged in, so a desk plugged in later is greeted: the host invites again until the bridge says yes. One host at a time: a second is refused while the first holds the session. A lost message is not repaired, since the next fader message replaces it and a lost press is pressed again; sent packets carry no recovery journal, and a received one is skipped.
 
 ## Audio, details
 #### Microphone wiring
@@ -247,10 +253,10 @@ Prior art: the WLED-MM audio-reactive usermod by **Frank ([@softhack007](https:/
 A client learns the current state three ways: when it first writes to us from a new address, when its address changes, and whenever it sends **`/mm/hello`**. The last one exists because a client restarting on the SAME address is invisible to the other two, and most controllers send nothing of their own on load, so every widget would show its layout file's defaults until the user moved one.
 The shipped session has a `sync from device` button for exactly this.
 Every value also goes out again every 30 seconds, one every 20 ms, so a datagram lost on WiFi, or a client that rebooted, is repaired within that time.
-A pad's state goes out as an int on its own address: 0 for an empty pad, 1 for a stored preset, 2 for the one applied.
+A pad's state goes out as an int on `/mm/padstate/N`: 0 for an empty pad, 1 for a stored preset, 2 for the one applied. It has its own address, so a board listening to this one's feedback never reads a state as a press.
 A value is never sent back to the host it came from, so two boards feeding each other cannot echo it between them.
 
-**Following another board.** With `follow` on, what arrives is another board's feedback: this board takes its values, and a desk's pads here show that board's presets. That is what tells a pad's state from a press, since both arrive on `/mm/pad/N`. The Control card's own grid keeps showing this board's presets. With `feedback` on as well, pointed at that board's `port`, a change made here goes there, and a pad pressed on the desk applies that board's preset. A follower asks for every value with `/mm/hello` when it starts, and sends only what changes here, since the board it follows owns the state. A control moved here ignores feedback for half a second, so echoes of its earlier positions cannot pull it back. `hosts` can stay empty: the follower then answers the board it follows once that board's first datagram arrives. A desk at the side of a room drives an installation in the middle this way, with no cable between them. On the desk's board, set `listen` on port 9001, `follow` on, and `feedback` to port 9000.
+**Boards following one board.** A board with `listen` on, on the leader's `feedbackPort`, takes every value the leader sends and its assignments carry each to its own controls. A desk at the side of a room reaches the installation through a board that [shares it](#midi-details) instead, since a desk belongs on the board it drives.
 
 **Setting one up**, from installing the app to using it from a phone, is its own page: [Connecting a control surface](../../how-to/control-surface.md). It needs no checkout and no tooling: the app and the session file from the latest release do.
 
@@ -262,6 +268,7 @@ A value is never sent back to the host it came from, so two boards feeding each 
 | `/mm/encoder/1` .. `/mm/encoder/8` | float 0..1 or int 0..255 | its rotary encoders |
 | `/mm/switch/1` .. `/mm/switch/8` | float 0..1 or int 0..255 | its on/off switch row (nonzero = on) |
 | `/mm/pad/1` .. `/mm/pad/64` | nonzero = press, zero ignored | applies the preset on that pad of the grid, counted from the top left; an empty pad does nothing |
+| `/mm/padstate/1` .. `/mm/padstate/64` | int 0, 1 or 2 (feedback only) | what that pad shows: empty, a stored preset, or the one applied |
 | `/mm/hello` | anything, or nothing | resend every value to the sender |
 
 Both argument forms are accepted because controllers disagree: apps send a float in 0..1, hardware bridges send an int in the target's range. Out-of-range values are clamped rather than ignored, so a controller sending 0..127 does something sensible instead of appearing dead.
@@ -300,9 +307,9 @@ Editing the layout needs `read-only` off in the launcher.
 
 Driving the device from that session, beside the Control card it mirrors.
 
-It binds only to `/mm/switch/N`, `/mm/encoder/N` and `/mm/fader/N`, N being 1 to 8, and to `/mm/pad/N`, N being 1 to 64, on purpose. A surface addresses the SURFACE, and [Control](system.md#control) decides what each one drives, so one layout keeps working as assignments change and a hardware desk lands on the same bindings. By default `switch1` drives `Drivers.on` and `fader1` drives `Drivers.brightness`; the Control card assigns the rest.
+It binds only to `/mm/switch/N`, `/mm/encoder/N` and `/mm/fader/N`, N being 1 to 8, and to `/mm/pad/N` and `/mm/padstate/N`, N being 1 to 64, on purpose. A surface addresses the SURFACE, and [Control](system.md#control) decides what each one drives, so one layout keeps working as assignments change and a hardware desk lands on the same bindings. By default `switch1` drives `Drivers.on` and `fader1` drives `Drivers.brightness`; the Control card assigns the rest.
 
-The session also carries a **pad grid** of the 64 preset pads.
+The session also carries a **pad grid** of the 64 preset pads, with a light per pad below it showing which hold a preset and which is applied.
 
 **A Mackie desk reaches the surface through the [MIDI service](#midi)**, since the X-Touch and QCon Pro G2 speak Mackie Control over MIDI rather than OSC.
 

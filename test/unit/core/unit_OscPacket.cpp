@@ -10,7 +10,7 @@ using namespace mm;
 
 namespace {
 
-// Build a message the way a real controller does, so the tests exercise the padding rather than a convenient hand-picked length: address, pad to 4, type tags, pad to 4, big-endian argument.
+// Build a message the way a real controller does, so the tests exercise the padding: address, pad to 4, type tags, pad to 4, big-endian argument.
 std::vector<uint8_t> build(const char* addr, const char* tags, const uint8_t* arg, size_t argLen) {
     std::vector<uint8_t> p;
     auto put = [&](const char* s) {
@@ -62,24 +62,18 @@ TEST_CASE("golden vector: the exact bytes of an OSC message with a float") {
     CHECK(m.f == doctest::Approx(1.0f));
 }
 
-// A pad's state is an enum, so it travels as an OSC int rather than as a fraction of a float.
-TEST_CASE("golden vector: the exact bytes of an OSC message with an int") {
+// A pad's state is empty, stored or applied, so it travels as an OSC int on its own address rather than as a fraction.
+TEST_CASE("golden vector: a pad's state is an int on /mm/padstate") {
     uint8_t p[32];
-    const size_t len = osc::encodeInt(p, sizeof(p), "/mm/pad/1", 2);
-
-    // "/mm/pad/1" is 9 chars + NUL = 10, padded to 12. ",i" is 2 + NUL = 3, padded to 4. Then 4 bytes of big-endian 2.
+    const size_t len = osc::encodeSurface(p, sizeof(p), SurfaceControl::Pad, 0, 2);
+    // "/mm/padstate/1" is 14 chars + NUL = 15, padded to 16. ",i" is 2 + NUL = 3, padded to 4. Then 4 bytes of big-endian 2.
     const uint8_t golden[] = {
-        '/','m','m','/','p','a','d','/','1','\0','\0','\0',
+        '/','m','m','/','p','a','d','s','t','a','t','e','/','1','\0','\0',
         ',','i','\0','\0',
         0x00, 0x00, 0x00, 0x02,
     };
     REQUIRE(len == sizeof(golden));
     CHECK(std::memcmp(p, golden, sizeof(golden)) == 0);
-
-    osc::Message m;
-    REQUIRE(osc::parse(p, len, m));
-    CHECK_FALSE(m.wasFloat);
-    CHECK(m.i == 2);
 }
 
 // The pad rule is where a hand-rolled parser goes wrong: an address whose length is already a multiple of 4 gets a WHOLE extra word of padding, not none.
@@ -103,7 +97,7 @@ TEST_CASE("An int argument parses and reads back as both forms") {
     CHECK(m.f == doctest::Approx(200.0f));
 }
 
-// Controllers disagree on the value range: TouchOSC and Resolume send 0..1 floats, hardware bridges send ints in the target's own range. Both must land on the same control value, and out-of-range must CLAMP: a controller sending 0..127 would otherwise look broken.
+// Controllers disagree on the range: apps send 0..1 floats, hardware bridges ints in the target's range. Both land on the same value, and out-of-range clamps, so 0..127 still works.
 TEST_CASE("A float 0 to 1 and an int 0 to 255 mean the same control value") {
     osc::Message f{};
     f.hasValue = true; f.wasFloat = true;
@@ -201,7 +195,7 @@ TEST_CASE("A leading string argument is skipped to reach the number") {
     CHECK(m.f == doctest::Approx(1.0f));
 }
 
-// The address contract, tested as a whole: these strings are what a TouchOSC layout or a TouchDesigner patch is built against, so a change here breaks someone's file. Routing is checked through the parse + toByte pair the module uses, without needing a live socket.
+// The address contract as a whole: a TouchOSC layout or TouchDesigner patch is built against these strings, so a change breaks someone's file.
 TEST_CASE("The address contract: what a controller can send") {
     struct Case { const char* addr; float value; int expectByte; };
     const Case cases[] = {
@@ -219,9 +213,7 @@ TEST_CASE("The address contract: what a controller can send") {
     }
 }
 
-// A string argument whose NUL lands 1-3 bytes short of a 4-byte boundary AT THE END of the datagram. stringLen returns the PADDED length, which then exceeds the bytes actually available: subtracting it from a size_t wrapped argAvail to a huge number, every later `argAvail < 4` guard passed, and the next numeric argument was read off the end of the buffer. One unauthenticated UDP packet, reproduced under AddressSanitizer as a heap-buffer-overflow in beFloat32.
-//
-// Every other fixture in this file pads its arguments, which is exactly why none of them could catch it: the bug lives in the UNpadded tail a real attacker controls.
+// A string ending short of a 4-byte boundary at the datagram's end, which no padded fixture reaches: its padded length wrapped the remaining count, reading past the buffer.
 TEST_CASE("A string argument with an unpadded tail is rejected, not read past") {
     // "/a\0\0"  ",sf\0"  "xy\0"  -- 11 bytes, and the last element is 3 bytes where 4 are implied.
     const std::vector<uint8_t> pkt = {
@@ -244,7 +236,7 @@ TEST_CASE("A string argument with an unpadded tail is rejected, not read past") 
     CHECK_FALSE(m2.hasValue);
 }
 
-// A switch is a BOOL control, and controllers send FLOATS: Open Stage Control's button emits 1.0 for on. toByte scales that to 255, which parseBool (accepting `true` or `1`) reads as false, so "on" arrived as off while "off" appeared to do nothing. The switch route therefore converts to a boolean rather than passing a byte. Found on the bench 2026-08-30 with a real surface.
+// A switch is a bool, and Open Stage Control's button sends 1.0, which scaled to 255 parseBool read as off, so the switch route converts to a boolean instead.
 TEST_CASE("A float 1.0 is ON for a switch, not the byte 255") {
     osc::Message m;
     const auto on = withFloat("/mm/switch/4", 1.0f);
@@ -259,7 +251,7 @@ TEST_CASE("A float 1.0 is ON for a switch, not the byte 255") {
     CHECK((osc::toByte(off) != 0) == false);
 }
 
-// Encoding is the mirror of parsing, so the strongest test is a round trip: what we emit, our own parser must read back. The padding boundary is where a hand-rolled encoder goes wrong, and it is the same boundary the inbound overread lived on, so every length is exercised.
+// Encoding mirrors parsing, so the strongest test is a round trip, over every length, since the padding boundary is where both a hand-rolled encoder and the old overread went wrong.
 TEST_CASE("an encoded message round-trips through the parser at every padding boundary") {
     for (const char* addr : {"/a", "/ab", "/abc", "/abcd", "/abcde",
                              "/mm/fader/1", "/mm/encoder/8", "/mm/switch/3"}) {

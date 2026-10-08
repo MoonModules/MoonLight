@@ -286,6 +286,15 @@ test("the receiver lists become hosts, and discovery's WLED switch becomes its a
     assert.equal(n["3.hosts"], "192.168.1.147");
 });
 
+test("the MIDI desk's usb switch becomes its source, browser or USB", () => {
+    const services = { "0.type": "MidiService", "0.usb": true, "1.type": "MidiService", "1.usb": false };
+    const { files } = applyMigrations({ "/.config/Services.json": JSON.stringify(services) });
+    const s = JSON.parse(files["/.config/Services.json"]);
+    assert.equal(s["0.source"], 1);   // USB
+    assert.equal(s["1.source"], 0);   // browser
+    assert.ok(!("0.usb" in s));
+});
+
 test("an E1.31 multicast output becomes E1.31, flagged to set its addressing", () => {
     const drivers = { "0.type": "NetworkSendDriver", "0.protocol": 3 };
     const { files, report } = applyMigrations({ "/.config/Drivers.json": JSON.stringify(drivers) });

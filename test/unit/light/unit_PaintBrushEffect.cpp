@@ -21,10 +21,10 @@ struct AudioGuard {
     }
 };
 
-// Bring the mic up in "music (always)" at a frozen time so every band carries a magnitude and the synthesized frame is deterministic; several loops let the levelSmoothed EMA settle.
+// Bring the mic up in "music" at a frozen time so every band carries a magnitude and the synthesized frame is deterministic; several loops let the levelSmoothed EMA settle.
 void driveMusic(mm::AudioService& mic, uint32_t ms) {
     mic.defineControls();
-    mic.simulate = 3;   // music, always: keeps every band non-zero (loud, broadband)
+    mic.simulate = mm::AudioService::kSimMusic;   // music: keeps every band non-zero (loud, broadband)
     mm::platform::setTestNowMs(ms);
     mic.setup();
     for (int i = 0; i < 8; i++) mic.tick();   // fill the frame off the frozen clock

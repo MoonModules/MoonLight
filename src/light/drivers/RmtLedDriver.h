@@ -45,7 +45,7 @@ public:
 
     // Named by SPEED, not chipset: chipset names do not partition the timings.
     /// Wire timing; the default satisfies WS2812, WS2812B and SK6812 at once.
-    uint8_t timing = 0;
+    uint8_t timing = kTiming800k;
 
     /// The three numbers behind `timing`, shown only when it is set to custom.
     uint16_t t0hNs = 350;
@@ -54,8 +54,8 @@ public:
     /// Custom timing: the whole bit cell, in nanoseconds.
     uint16_t periodNs = 1250;
 
-    /// The index of `custom` in the table below: the one option that reads the three fields.
-    static constexpr uint8_t kTimingCustom = 3;
+    /// The presets `timing` picks from, in the table's order; `kTimingCustom` is the one option that reads the three fields.
+    enum Timing : uint8_t { kTiming800k, kTiming400k, kTiming800kFast, kTimingCustom, kTimingCount };
 
     /// The presets, in the order the select lists them.
     static constexpr const char* kTimingOptions[] = {
@@ -174,7 +174,7 @@ public:
     }
 
     /// Re-derive the per-pin offsets when the fixture profile changes the output channel count.
-    void onCorrectionChanged() override { if (!effectivelyEnabled()) return; parseConfig(); resizeFrame(); }
+    void onCorrectionChanged() override { if (!effectivelyEnabled() || !outChannelsChanged()) return; parseConfig(); resizeFrame(); }
 
     /// Point the driver at the source frame buffer, re-parsing and resizing to match.
     void setSourceBuffer(Buffer* buf) override {
@@ -308,9 +308,9 @@ private:
     void applyTiming() {
         switch (timing) {
             // The 400 kHz WS2811 mode: twice the bit period, so a frame takes twice as long.
-            case 1: cfg_.t0h_ns = 500; cfg_.t1h_ns = 1200; cfg_.period_ns = 2500; break;
+            case kTiming400k: cfg_.t0h_ns = 500; cfg_.t1h_ns = 1200; cfg_.period_ns = 2500; break;
             // WS2811 in high-speed mode: within the WS2812 decode window, so a refinement.
-            case 2: cfg_.t0h_ns = 250; cfg_.t1h_ns = 600;  cfg_.period_ns = 1250; break;
+            case kTiming800kFast: cfg_.t0h_ns = 250; cfg_.t1h_ns = 600;  cfg_.period_ns = 1250; break;
             case kTimingCustom:
                 // Trusted as typed, but ordered: no chip decodes a 1 shorter than a 0.
                 cfg_.t0h_ns = t0hNs;

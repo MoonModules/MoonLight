@@ -43,7 +43,7 @@ TEST_CASE("BlurzEffect stays black without an audio frame") {
 TEST_CASE("BlurzEffect lights the buffer when fed a signal") {
     mm::AudioService audio;
     audio.defineControls();
-    audio.simulate = 3;   // music (always): synthesizeFrame() fills the bands every loop, no mic needed
+    audio.simulate = mm::AudioService::kSimMusic;   // music: synthesizeFrame() fills the bands every loop, no mic needed
     audio.setup();        // claims the active-mic seat so latestFrame() points at this frame
 
     mm::Layouts layouts;
@@ -83,7 +83,7 @@ TEST_CASE("BlurzEffect geqScanner sweeps the dot to a new position each frame") 
     mm::platform::setTestNowMs(1000);
     mm::AudioService audio;
     audio.defineControls();
-    audio.simulate = 3;   // music (always): keeps the bands non-zero so the dot has color
+    audio.simulate = mm::AudioService::kSimMusic;   // music: keeps the bands non-zero so the dot has color
     audio.setup();
 
     mm::Layouts layouts;
@@ -137,7 +137,7 @@ TEST_CASE("BlurzEffect geqScanner sweeps the dot to a new position each frame") 
 TEST_CASE("BlurzEffect survives degenerate grid sizes") {
     mm::AudioService audio;
     audio.defineControls();
-    audio.simulate = 3;
+    audio.simulate = mm::AudioService::kSimMusic;
     audio.setup();
 
     for (auto dims : {mm::Coord3D{0, 0, 0}, mm::Coord3D{1, 1, 1}}) {

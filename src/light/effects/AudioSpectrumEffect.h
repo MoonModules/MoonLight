@@ -28,13 +28,16 @@ public:
     /// Writes the z=0 slice, which extrude fills through a volume.
     Dim dimensions() const override { return Dim::D2; }
 
+    /// The coloring choices, in option order.
+    enum ColorMode : uint8_t { kColorHeight, kColorPerBand, kColorModeCount };
+
     /// Color by height for the VU look, or per band, which reads as a spectrum at a glance.
-    uint8_t colorMode = 1;
+    uint8_t colorMode = kColorPerBand;
 
     /// Publish the coloring choice.
     void defineControls() override {
         static constexpr const char* kColorOptions[] = {"height", "per-band"};
-        controls_.addSelect("colorMode", colorMode, kColorOptions, 2);
+        controls_.addSelect("colorMode", colorMode, kColorOptions, kColorModeCount);
     }
 
     /// Draw the level meter, then one bar per column from its band's magnitude.
@@ -83,7 +86,7 @@ public:
             const lengthType specBottom = static_cast<lengthType>(levelRow ? h - 2 : h - 1);
             draw::bar(cv, x, specBottom, lit, draw::Grow::Up, [&](lengthType row) {
                 uint8_t r, g, b;
-                if (colorMode == 1) {
+                if (colorMode == kColorPerBand) {
                     // The column's own hue at full brightness, or dimmed by magnitude on one row.
                     const uint8_t v = (h == 1) ? mag : 255;
                     const RGB c = colorFromPalette(*Palettes::active(), bandHue, v);

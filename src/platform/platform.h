@@ -609,6 +609,12 @@ bool wifiSetTxPower(int8_t quarterDbm);
 
 /// Advertise this device over mDNS as `_http._tcp` and `_wled._tcp`, which is how the WLED app and Home Assistant find it.
 bool mdnsInit(const char* deviceName);
+/// Announce one more service on this board's name, such as `_apple-midi`/`_udp`, now and after every mdnsInit; a second call moves its port.
+void mdnsAdvertise(const char* type, const char* proto, uint16_t port);
+/// Stop announcing a service mdnsAdvertise added.
+void mdnsWithdraw(const char* type, const char* proto);
+/// The port a service is announced on, 0 when it is not: what a test reads back.
+uint16_t mdnsAdvertisedPort(const char* type, const char* proto);
 /// Stop advertising but keep the stack up, so a later mdnsInit needs no full re-init.
 void mdnsStop();
 /// Free the mDNS stack, at release.
@@ -1189,7 +1195,7 @@ bool irChannelReady(uint16_t pin);
 
 // --- USB MIDI host, gated by `hasUsbMidiHost`: one class-compliant desk on the chip's own port ---
 
-/// Take the chip's USB port as a host for a MIDI desk, which then carries no serial log or USB flashing; false where the build has no USB host.
+/// Take the chip's USB port as a host for a MIDI desk, ending its serial log and USB flashing; false without a USB host or while another owner has it.
 bool usbMidiBegin();
 
 /// Give the USB port back.

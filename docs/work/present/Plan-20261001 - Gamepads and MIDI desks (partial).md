@@ -202,9 +202,24 @@ The APC40 mkII is on the bench, so the Akai profile the Decided section waited f
 - HID gamepads next, with controller translations seeded from GameControllerDB. Xbox pads over USB need a GIP driver on top, and only if wanted, since the browser already reaches them over USB or Bluetooth on the computer.
 - The S31 joins if its datasheet confirms a USB host.
 
-### 5. RTP-MIDI for the X-Touch 🚧
+### 5. RTP-MIDI: a desk on the network 🚧
 
-The X-Touch over Ethernet with no computer: RFC 6295's session handshake and journal, then the same MCU profile as step 2.
+A desk always attaches to the board it drives, and only the cable changes: browser, the board's own USB port, or the network.
+The network cable is RTP-MIDI (RFC 6295, Apple's Network MIDI), which the X-Touch's Ethernet port speaks, macOS has built in and Windows gets with the free rtpMIDI driver.
+It replaces OSC `follow`: the bridge board turns into a plain MIDI cable with no state of its own, so nothing has to keep a copy of the leader's state honest.
+
+- ✅ **`RtpMidi.h`**, the codec, beside `UsbMidi.h` and `OscPacket.h`: the AppleMIDI session packets (`IN`, `OK`, `NO`, `BY`, `CK`) and the RTP-MIDI data packet, its MIDI list read with delta times and running status, a journal skipped, and sent with no journal.
+- ✅ **`RtpMidiSession`**, one session over two UDP sockets, the control port and the next one up for data (5004 and 5005): it accepts an invitation, or invites a host with retries, and keeps the clock sync running, so a peer that goes silent ends the session and an inviter invites again.
+- ✅ **`MidiService` source `network`**, beside browser and USB: `host` is the bridge or the X-Touch, with an optional `:port`, and the service invites it; with `host` empty it waits to be invited, as a Mac's Audio MIDI Setup does. The greeting, the desk state and the changed-slot sending are the USB path's, shared through one desk link for both ports.
+- ✅ **`share`** on the MIDI service, with `source` USB: the desk on the bridge board's USB port is reachable as an RTP-MIDI session, a message at a time both ways, driving no surface there. A board waiting to be invited announces itself over Bonjour (`_apple-midi._udp`), so `host` takes a name. A desk's own SysEx is not passed on, as the USB path already does; the host's greeting SysEx is.
+- ✅ **Removed:** OSC `follow`, the follower's greeting, its half-second hold-off, ControlModule's remote pad grid and `Seed::None`, and `ControlSurface::sendPress`. A pad's state goes out over OSC on `/mm/padstate/N`, apart from the press on `/mm/pad/N`, so no board reads a state as a press, and the Open Stage Control session lights its pads from it. `/mm/hello` stays, since Open Stage Control asks with it.
+- ✅ **Device models:** the MIDI-OSC bridge becomes the MIDI bridge (its MIDI service sharing the desk); a follower is OSC `listen` on the leader's `feedbackPort`.
+- ✅ **Tests:** the codec against RFC 6295's examples and Apple's packet layout; a session handshake and a message both ways over the loopback; the MIDI service on a network desk end to end through a bridge with the desktop test desk.
+- ✅ **Docs:** the services page (MIDI `network` and `share`, OSC without `follow`), the multi-board guide's bridge and diagram, the control surfaces reference, MIGRATING.
+- 🚧 Verify on the StadBeest: the QCon on the bridge board, the legs' MIDI service on `network` inviting it, and whether the fader slide-back of step 4 is gone now that the desk is the legs board's own.
+- 🚧 Verify the X-Touch over Ethernet, and whether it invites or waits to be invited.
+- 🚧 Verify a Mac's Audio MIDI Setup joining a board's session.
+- Left for later: picking the host from a list of announced sessions rather than typing its name; the recovery journal, since a lost fader message is repaired by the next one and a lost button press is pressed again.
 
 ### 6. A native Linux source 🚧
 

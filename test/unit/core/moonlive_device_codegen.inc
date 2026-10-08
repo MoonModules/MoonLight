@@ -334,7 +334,9 @@ TEST_CASE("every shipped script compiles for " MM_ISA_NAME) {
             // far: 1.5x leaves margin for the next script, which the shipped set cannot predict.
             const size_t budget = mm::moonlive::codeCapFor(mm::moonlive::countTokens(src.c_str()));
             INFO("emitted ", n, " of a ", budget, "-byte budget");
-            CHECK(n * 3 <= budget * 2);
+            // A script whose estimate reaches the cap gets the whole buffer, so the buffer is its limit.
+            if (budget == mm::moonlive::kCodeCap) CHECK(n <= budget);
+            else CHECK(n * 3 <= budget * 2);
             checked++;
         }
     }

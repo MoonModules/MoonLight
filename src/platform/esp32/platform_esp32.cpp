@@ -1605,6 +1605,43 @@ static bool ensureMdnsStack() {
     return true;
 }
 
+// The services modules announce besides the two below, kept so every mdnsInit announces them again.
+struct ExtraService { char type[16]; char proto[8]; uint16_t port; };
+static ExtraService extraServices_[4] = {};
+
+static void announceExtra(const ExtraService& e) {
+    mdns_service_remove(e.type, e.proto);   // a fresh announcement, as for _http below
+    const esp_err_t err = mdns_service_add(nullptr, e.type, e.proto, e.port, nullptr, 0);
+    ESP_LOGI(NET_TAG, "mDNS %s.%s:%u add: %s", e.type, e.proto, static_cast<unsigned>(e.port), esp_err_to_name(err));
+}
+
+void mdnsAdvertise(const char* type, const char* proto, uint16_t port) {
+    ExtraService* slot = nullptr;
+    for (auto& e : extraServices_) {
+        if (e.port && std::strcmp(e.type, type) == 0 && std::strcmp(e.proto, proto) == 0) { slot = &e; break; }
+        if (!e.port && !slot) slot = &e;
+    }
+    if (!slot) return;   // the table is full: the service stays unannounced
+    std::snprintf(slot->type, sizeof(slot->type), "%s", type);
+    std::snprintf(slot->proto, sizeof(slot->proto), "%s", proto);
+    slot->port = port;
+    if (mdnsStackUp_) announceExtra(*slot);
+}
+
+void mdnsWithdraw(const char* type, const char* proto) {
+    for (auto& e : extraServices_) {
+        if (!e.port || std::strcmp(e.type, type) != 0 || std::strcmp(e.proto, proto) != 0) continue;
+        if (mdnsStackUp_) mdns_service_remove(e.type, e.proto);
+        e = ExtraService{};
+    }
+}
+
+uint16_t mdnsAdvertisedPort(const char* type, const char* proto) {
+    for (const auto& e : extraServices_)
+        if (e.port && std::strcmp(e.type, type) == 0 && std::strcmp(e.proto, proto) == 0) return e.port;
+    return 0;
+}
+
 bool mdnsInit(const char* deviceName) {
     if (!ensureMdnsStack()) return false;
     esp_err_t err = mdns_hostname_set(deviceName);
@@ -1670,6 +1707,7 @@ bool mdnsInit(const char* deviceName) {
              wledErr == ESP_OK ? "ok" : "fail",
              macStr,
              wledTxtErr == ESP_OK ? "ok" : "fail");
+    for (const auto& e : extraServices_) if (e.port) announceExtra(e);
     return true;
 }
 
@@ -1678,6 +1716,7 @@ void mdnsStop() {
     if (mdnsStackUp_) {
         esp_err_t httpRm = mdns_service_remove("_http", "_tcp");
         esp_err_t wledRm = mdns_service_remove("_wled", "_tcp");
+        for (const auto& e : extraServices_) if (e.port) mdns_service_remove(e.type, e.proto);
         mdns_hostname_set("");
         ESP_LOGI(NET_TAG, "mDNS stopped advertising (_http remove: %s, _wled remove: %s)",
                  esp_err_to_name(httpRm), esp_err_to_name(wledRm));

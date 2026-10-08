@@ -50,7 +50,7 @@ TEST_CASE("NoiseMeterEffect fills the column from the floor upward") {
     mm::AudioService audio;
     audio.defineControls();
     audio.mode = mm::AudioService::kSimMode;   // simulate mode
-    audio.simulate = 0;    // music pattern
+    audio.simulate = mm::AudioService::kSimMusic;   // music pattern
     audio.setup();
 
     const int W = 8, H = 8;
@@ -101,7 +101,7 @@ TEST_CASE("NoiseMeterEffect width 0 keeps the meter dark despite loud audio") {
     mm::AudioService audio;
     audio.defineControls();
     audio.mode = mm::AudioService::kSimMode;   // simulate mode
-    audio.simulate = 0;    // music pattern
+    audio.simulate = mm::AudioService::kSimMusic;   // music pattern
     audio.setup();
 
     const int W = 8, H = 8;
@@ -138,7 +138,7 @@ TEST_CASE("NoiseMeterEffect survives degenerate grid sizes") {
     mm::AudioService audio;
     audio.defineControls();
     audio.mode = mm::AudioService::kSimMode;   // simulate mode
-    audio.simulate = 0;    // music pattern
+    audio.simulate = mm::AudioService::kSimMusic;   // music pattern
     audio.setup();
 
     for (auto dims : {mm::Coord3D{0, 0, 0}, mm::Coord3D{1, 1, 1}}) {

@@ -30,8 +30,10 @@ class TorontoBarGourdsLayout : public LayoutBase {
 public:
     /// How many stacked lights one gourd contributes, in the coarsest mode.
     uint8_t nrOfLightsPerGourd = 61;
-    /// Granularity select (0/1/2). MoonLight default 2 ("One LED One Light").
-    uint8_t granularity = 2;
+    /// How coarsely the gourds are lit, in option order.
+    enum Granularity : uint8_t { kGourdPerLight, kSidePerLight, kLedPerLight, kGranularityCount };
+    /// Granularity select. MoonLight default is one LED one light.
+    uint8_t granularity = kLedPerLight;
 
     /// The controls a user sets on the card.
     void defineControls() override {
@@ -60,7 +62,6 @@ public:
 private:
     static constexpr const char* kGranularityOptions[] = {
         "One Gourd One Light", "One Side One Light", "One LED One Light"};
-    static constexpr uint8_t kGranularityCount = 3;
 
     // Either emits or tallies, so every mode below writes one line per light.
     struct Emit {
@@ -154,11 +155,11 @@ private:
 
         Emit e{cb, ctx};
         for (Coord3D gourd : gourds) {
-            if (granularity == 0) {  // one gourd one light
+            if (granularity == kGourdPerLight) {  // one gourd one light
                 addGourd(e, gourd);
-            } else if (granularity == 1) {  // one side one light
+            } else if (granularity == kSidePerLight) {  // one side one light
                 addGourdSides(e, gourd);
-            } else if (granularity == 2) {  // one LED one light
+            } else if (granularity == kLedPerLight) {  // one LED one light
                 addGourdPixels(e, gourd);
             }
         }

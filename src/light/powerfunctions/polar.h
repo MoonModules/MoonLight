@@ -64,16 +64,18 @@ public:
     struct Controls {
         bool    use = true;      ///< read the address from a table rather than computing it
         bool    wide = false;    ///< hold it at full 16-bit precision, at twice the memory
-        uint8_t mapping = 0;     ///< which projection, indexing kMappingOptions
+        uint8_t mapping = static_cast<uint8_t>(Mapping::Cylindrical);  ///< which projection, indexing kMappingOptions
     };
 
     static constexpr const char* kMappingOptions[] = {"cylindrical", "spherical", "radial"};
+    /// How many mappings the select offers.
+    static constexpr uint8_t kMappingCount = static_cast<uint8_t>(Mapping::Radial) + 1;
 
     /// Surface the three controls on `list`.
     static void addControls(ControlList& list, Controls& c) {
         list.addControl("polarTable", c.use);
         list.addControl("polarTable16", c.wide);
-        list.addSelect("mapping", c.mapping, kMappingOptions, 3);
+        list.addSelect("mapping", c.mapping, kMappingOptions, kMappingCount);
     }
 
     /// The polar address of one light, computed rather than read.
@@ -88,7 +90,7 @@ public:
     };
     /// The mapping a controls block selects, clamped to one this class defines.
     static Mapping mappingOf(const Controls& c) {
-        return static_cast<Mapping>(c.mapping > 2 ? 0 : c.mapping);
+        return static_cast<Mapping>(c.mapping >= kMappingCount ? static_cast<uint8_t>(Mapping::Cylindrical) : c.mapping);
     }
 
     /// One pixel's polar address under `mapping`, from its offset to the center.

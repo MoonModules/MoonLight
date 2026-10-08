@@ -195,11 +195,26 @@ public:
         }
     }
 
+    /// A palette script added, removed or restored joins the picker: any path in or above a script folder rescans them.
+    void onFileChanged(const char* path) override {
+        if (!touchesFolder(path, moonlive::kScriptDir) && !touchesFolder(path, moonlive::kFactoryScriptDir)) return;
+        refreshLivePalettes();
+        rebuildControls();
+    }
+
+    /// Whether `path` is in `dir`, is `dir`, or holds it.
+    static bool touchesFolder(const char* path, const char* dir) {
+        const size_t p = std::strlen(path), d = std::strlen(dir);
+        if (p >= d) return std::strncmp(path, dir, d) == 0 && (path[d] == '/' || path[d] == 0);
+        return std::strncmp(dir, path, p) == 0 && (dir[p] == '/' || path[p - 1] == '/');
+    }
+
     char        liveNames_[LivePalettes::kMax][moonlive::kMaxScriptName + 1] = {};
     const char* livePtrs_[LivePalettes::kMax] = {};
     const char* liveTags_[LivePalettes::kMax] = {};
     /// How many scripted palettes the last scan found.
     uint8_t     liveCount_ = 0;
+    bool        livePalettesScanned_ = false;   ///< whether setup listed the folders, after which only a file change does
 
     // Reached through a static seam, because the layers sample the palette before this ticks.
     /// The scripted palette: a `.mlp` name, and the binding that runs it. Empty means built-in.
@@ -240,8 +255,8 @@ public:
         controls_.addText("relayPins", relayPins, sizeof(relayPins));
         controls_.setAdvanced(controls_.count() - 1);   // wiring an installer sets once
         controls_.addControl("brightness", brightness, 0, 255);
-        // ONE picker for both kinds, so a `.mlp` is chosen exactly like a built-in.
-        refreshLivePalettes();
+        // ONE picker for both kinds, so a `.mlp` is chosen exactly like a built-in; setup scans the folders and a file change rescans, never a brightness change.
+        if (!livePalettesScanned_) refreshLivePalettes();
         // Sized from THIS instance's scan: defineControls also runs before prepare has published.
         controls_.addPalette("palette", palette, mm::paletteOptions,
                              static_cast<uint8_t>(liveCount_ + mm::palettes::kCount));
@@ -419,6 +434,10 @@ public:
 
     /// Publish the fixture layout and the scripted palettes, and close the relay for `on`.
     void setup() override {
+        // The filesystem module mounts first, so this scan is the one that sees every script; from here a file change rescans.
+        refreshLivePalettes();
+        livePalettesScanned_ = true;
+        rebuildControls();
         Palettes::setActive(palette);   // seed the global active palette from the persisted index
         MoonModule::setup();
         passBufferToDrivers();           // seeds each driver's correction via rebuildCorrection()

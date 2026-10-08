@@ -90,8 +90,8 @@ public:
 
     // --- Control surfaces -------------------------------------------------------------------  A.
 
-    /// How a surface attaching learns the values: all at once, one per tick for a network that drops bursts, or not at all for a board following another.
-    enum class Seed : uint8_t { Burst, Paced, None };
+    /// How a surface attaching learns the values: all at once, or one per tick for a network that drops bursts.
+    enum class Seed : uint8_t { Burst, Paced };
 
     /// Attach a surface, seeded as `seed` says.
     void addSurface(ControlSurface* s, Seed seed = Seed::Burst) {
@@ -105,7 +105,8 @@ public:
         // Read the targets BEFORE seeding:
         followTargets();
         if (seed == Seed::Paced) resendPaced(s);
-        else if (seed == Seed::Burst) resendTo(s);
+        else resendTo(s);
+        s->sendDisplay(display_);
     }
 
     /// Push EVERY value to one surface, whatever the mirror last sent, the preset pads included.
@@ -118,7 +119,6 @@ public:
 
     /// Every pad's state, one per grid cell, in one pass over the presets.
     void padStates(uint8_t out[kMaxPresets]) const {
-        if (padsRemote_) { std::memcpy(out, remotePads_, kMaxPresets); return; }
         std::memset(out, kPadEmpty, kMaxPresets);
         for (uint8_t r = 0; r < presetCount_; r++)
             if (presets_[r].slot < kMaxPresets) out[presets_[r].slot] = padStateOf(presets_[r]);
@@ -126,7 +126,6 @@ public:
 
     /// The state of the pad on grid cell `slot`.
     uint8_t padState(uint8_t slot) const {
-        if (padsRemote_) return slot < kMaxPresets ? remotePads_[slot] : static_cast<uint8_t>(kPadEmpty);
         for (uint8_t r = 0; r < presetCount_; r++)
             if (presets_[r].slot == slot) return padStateOf(presets_[r]);
         return kPadEmpty;
@@ -134,33 +133,9 @@ public:
 
     /// Apply the preset on grid cell `slot`, as a click on its pad does; false for an empty cell.
     bool pressPad(uint8_t slot) {
-        if (padsRemote_) {
-            // The presets are another board's, so the press goes there; true only when a surface sent it.
-            if (slot >= kMaxPresets || remotePads_[slot] == kPadEmpty) return false;
-            bool sent = false;
-            for (uint8_t i = 0; i < surfaceCount_; i++) sent = surfaces_[i]->sendPress(slot) || sent;
-            return sent;
-        }
         for (uint8_t r = 0; r < presetCount_; r++)
             if (presets_[r].slot == slot) return applyPreset(presets_[r].name);
         return false;
-    }
-
-    /// Show another board's pad on the grid, as a board following another does, in place of this board's presets.
-    void showRemotePad(uint8_t slot, uint8_t state) {
-        if (slot >= kMaxPresets) return;
-        if (padsRemote_ && remotePads_[slot] == state) return;
-        if (!padsRemote_) std::memset(remotePads_, kPadEmpty, kMaxPresets);
-        padsRemote_ = true;
-        remotePads_[slot] = state;
-        padsRevision_++;
-    }
-
-    /// Show this board's own presets again.
-    void forgetRemotePads() {
-        if (!padsRemote_) return;
-        padsRemote_ = false;
-        padsRevision_++;
     }
 
     // A network surface asks for this rather than resendTo, since a burst of datagrams is what WiFi drops.
@@ -253,6 +228,10 @@ public:
         // FOLLOW first, and unconditionally:
         followTargets();
         if (surfaceCount_ == 0) return;
+        if (displayMirrored_ != displayRevision_) {
+            displayMirrored_ = displayRevision_;
+            for (uint8_t i = 0; i < surfaceCount_; i++) surfaces_[i]->sendDisplay(display_);
+        }
         for (uint8_t i = 0; i < kSwitchCount; i++)
             mirrorOne(SurfaceControl::Switch, i, switches_[i] ? 255 : 0, sentSwitches_[i]);
         for (uint8_t i = 0; i < kEncoderCount; i++)
@@ -667,10 +646,19 @@ public:
     void writeStrip(const char* fmt, ...) {
         va_list ap;
         va_start(ap, fmt);
-        std::vsnprintf(display_, sizeof(display_), fmt, ap);
+        char text[sizeof(display_)];
+        std::vsnprintf(text, sizeof(text), fmt, ap);
         va_end(ap);
+        showDisplay(text);
         stripWrittenMs_ = platform::millis();
         stripActive_ = true;
+    }
+
+    /// Put `text` on the display, telling the surfaces only when it changed.
+    void showDisplay(const char* text) {
+        if (std::strcmp(text, display_) == 0) return;
+        mm::formatTo(display_, sizeof(display_), "%s", text);
+        displayRevision_++;
     }
 
     /// Settle the strip once nothing has happened for a while:
@@ -681,12 +669,7 @@ public:
         if (age < kStripHoldMs) return;                        // still showing the change
         const char* name = deviceName();
         // Two holds after the change: the product, then the device. Beyond that, nothing to do.
-        if (age < kStripHoldMs * 2)
-            mm::formatTo(display_, sizeof(display_), "MoonLight");
-        else if (name && name[0])
-            mm::formatTo(display_, sizeof(display_), "%s", name);
-        else
-            mm::formatTo(display_, sizeof(display_), "MoonLight");
+        showDisplay(age >= kStripHoldMs * 2 && name && name[0] ? name : "MoonLight");
     }
 
     /// The device's name, read through the control system rather than by reaching into SystemModule:
@@ -1153,8 +1136,6 @@ private:
     uint8_t sentSwitches_[kSwitchCount] = {};
     uint8_t sentFaders_[kFaderCount] = {};
     uint8_t sentPads_[kMaxPresets] = {};   ///< per preset pad, the PadState surfaces were last sent
-    uint8_t remotePads_[kMaxPresets] = {}; ///< the pads of the board this one follows, while padsRemote_
-    bool    padsRemote_ = false;           ///< whether the grid shows another board's presets
     /// One bit per control, per bank, per attached surface: a hand is on it there. See setTouched.
     struct Touch { uint32_t switches = 0, encoders = 0, faders = 0; };
     Touch touched_[kMaxSurfaces] = {};
@@ -1221,6 +1202,8 @@ private:
     uint32_t presetsRevision_ = 0;   ///< see presetsRevision(): drives HA's preset re-fetch
     uint32_t padsRevision_ = 1;      ///< bumped by every change to what a preset pad shows
     uint32_t padsMirrored_ = 0;      ///< the padsRevision_ surfaces were last mirrored at
+    uint32_t displayRevision_ = 1;   ///< bumped by every change to the display line
+    uint32_t displayMirrored_ = 0;   ///< the displayRevision_ surfaces were last sent
     uint32_t nextId_ = 0;
     char name_[kMaxNameLen] = {};
     /// The module the next save writes, a look by default.

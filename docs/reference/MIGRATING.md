@@ -34,6 +34,20 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## Unreleased
 
+### The MIDI service's `usb` switch is its `source`
+
+**Action: *nothing* when restoring a backup, which maps it; otherwise, on a board with a desk on its USB port, set the MIDI service's `source` to USB.**
+
+`source` names where a desk is plugged in: the computer showing the interface (`browser`), the board's own USB port (`USB`), or the network (`network`).
+
+### A desk on its own board is a MIDI bridge over RTP-MIDI
+
+**Action: *re-set a control*, on a MIDI-OSC bridge board: remove its OSC service and turn its MIDI service's `share` on. On the board the desk drives, set the MIDI service's `source` to network and `host` to the bridge's name or address.**
+
+The bridge now carries the desk over RTP-MIDI, so the board it drives treats the desk as its own, and the OSC `follow` setting is gone.
+A board that listened to another with `follow` on needs nothing: a leader sends its preset pad states on `/mm/padstate/N`, an address apart from the press.
+An OSC app that lit its pads from `/mm/pad/N` listens on `/mm/padstate/N` instead.
+
 ### The P4 and S31 Ethernet presets are named by their wiring
 
 **Action: *re-set a control*, only where a script, a document or an API call sets `ethBoard` to `P4-NANO` or `S31 CoreBoard`.**

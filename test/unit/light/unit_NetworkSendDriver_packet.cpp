@@ -306,7 +306,7 @@ TEST_CASE("NetworkSendDriver: a protocol without the chosen mode falls back to u
     d.defineControls();
     d.protocol = mm::NetworkSendDriver::kProtoE131;
     d.addressing = 1;                         // multicast
-    d.protocol = 2;                           // DDP has unicast only
+    d.protocol = mm::NetworkSendDriver::kProtoDdp;                           // DDP has unicast only
     d.rebuildControls();                      // what every control write does
     CHECK(d.addressing == 0);
     CHECK(d.mode() == mm::Addressing::Unicast);

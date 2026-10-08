@@ -63,7 +63,7 @@ inline constexpr uint16_t kDefaultFeedbackPort = 9001;
 /// The multicast group feedback goes to by default, beside discovery's 239.255.77.77.
 inline constexpr char kDefaultGroup[] = "239.255.77.78";
 
-/// One parsed message: the address, and the first numeric argument as both forms.
+/// One parsed message: the address, and the first numeric argument as both forms: @xref{what-each-value-form-means}.
 struct Message {
     const char* address = nullptr;   ///< points INTO the caller's buffer, NUL-terminated there
     float    f = 0.0f;               ///< first numeric argument as a float ('i' converted)
@@ -72,7 +72,7 @@ struct Message {
     bool     wasFloat = false;       ///< which form arrived, so a caller can scale 0..1 correctly
 };
 
-/// Round `n` up to the next multiple of 4, the padding every OSC element uses.
+/// Round `n` up to the next multiple of 4, the padding every OSC element uses: @xref{the-message-layout}.
 inline constexpr size_t pad4(size_t n) { return (n + 3u) & ~static_cast<size_t>(3u); }
 
 /// Big-endian loads: OSC is network byte order, which is not the host's on any target we build.
@@ -96,7 +96,7 @@ inline size_t stringLen(const uint8_t* p, size_t avail) {
     return 0;   // ran off the end without a terminator
 }
 
-/// Parse one message, false for anything unusable, having read nothing past `len`.
+/// Parse one message, false for anything unusable, having read nothing past `len`: @xref{parsing-is-the-security-surface}.
 inline bool parse(const uint8_t* pkt, size_t len, Message& out) {
     if (!pkt || len < 8) return false;                    // shorter than the smallest valid message
     if (pkt[0] == '#') return false;                      // "#bundle": not handled, see the header
@@ -192,24 +192,18 @@ inline size_t encodeFloat(uint8_t* out, size_t cap, const char* address, float v
     return encodeWord(out, cap, address, 'f', bits);
 }
 
-/// Write one message carrying a single int32, returning its length or 0 when it will not fit.
-inline size_t encodeInt(uint8_t* out, size_t cap, const char* address, int32_t value) {
-    return encodeWord(out, cap, address, 'i', static_cast<uint32_t>(value));
-}
-
-/// The address word of each surface bank, as `/mm/<bank>/<n>` names one control.
+/// The address word of each surface bank, as `/mm/<bank>/<n>` names one control; a pad's state has its own, apart from the press.
 inline const char* surfaceBank(SurfaceControl kind) {
     return kind == SurfaceControl::Switch ? "switch" : kind == SurfaceControl::Encoder ? "encoder"
-         : kind == SurfaceControl::Fader ? "fader" : "pad";
+         : kind == SurfaceControl::Fader ? "fader" : "padstate";
 }
 
-/// Write the message for one surface control, `index` zero-based: a switch, an encoder or a fader as a fraction of the byte range, a pad as an int.
+/// Write the message for one surface control, `index` zero-based: a fraction of the byte range, or a pad's state as an int.
 inline size_t encodeSurface(uint8_t* out, size_t cap, SurfaceControl kind, uint8_t index, uint8_t value) {
     char addr[24];
     std::snprintf(addr, sizeof(addr), "/mm/%s/%u", surfaceBank(kind), static_cast<unsigned>(index) + 1u);
-    // A pad's state is an enum, and a pad press a 1, so they travel as ints.
-    return kind == SurfaceControl::Pad ? encodeInt(out, cap, addr, value)
-                                       : encodeFloat(out, cap, addr, static_cast<float>(value) / 255.0f);
+    if (kind == SurfaceControl::Pad) return encodeWord(out, cap, addr, 'i', value);   // empty, stored or applied, not a fraction
+    return encodeFloat(out, cap, addr, static_cast<float>(value) / 255.0f);
 }
 
 /// Whether this message means on, for a boolean destination where any nonzero value does.

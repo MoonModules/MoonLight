@@ -70,7 +70,7 @@ TEST_CASE("PanelCardDriver sends one frame per row then one sync") {
     mm::PanelCardDriver driver;
     Wall wall(64, 4);
     setUp(driver, source, wall, 256);
-    driver.firmware = 1;               // "v13 and newer": acts on the SECOND copy, so both go out
+    driver.firmware = mm::PanelCardDriver::kFirmwareV13;               // "v13 and newer": acts on the SECOND copy, so both go out
 
     mm::platform::setTestNowMs(1000);
     driver.tick();

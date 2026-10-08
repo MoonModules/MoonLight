@@ -17,12 +17,17 @@ public:
     /// All three planes need all three axes.
     Dim dimensions() const override { return Dim::D3; }
 
+    /// The sweep's axis choices, in option order.
+    enum Axis : uint8_t { kAxisAll, kAxisX, kAxisY, kAxisZ, kAxisCount };
+    /// The two display modes, in option order.
+    enum Mode : uint8_t { kModeLines, kModePanelDots, kModeCount };
+
     /// How fast the planes sweep.
     uint8_t speed = 30;
     /// Which axis sweeps, or all three together.
-    uint8_t axis  = 0;
+    uint8_t axis  = kAxisAll;
     /// Sweep the planes, or show the static panel dots.
-    uint8_t mode  = 0;
+    uint8_t mode  = kModeLines;
     /// A panel block's width in lights, for the dots mapping.
     uint8_t panelW = 16;
     /// Its height, kept separate since a non-square panel would otherwise skip whole rows.
@@ -32,12 +37,12 @@ public:
     void defineControls() override {
         static constexpr const char* kAxisOptions[] = {"all", "x (red)", "y (green)", "z (blue)"};
         static constexpr const char* kModeOptions[] = {"lines", "panel dots"};
-        controls_.addSelect("mode", mode, kModeOptions, 2);
+        controls_.addSelect("mode", mode, kModeOptions, kModeCount);
         // defineControls reruns on every control change, so toggling `mode` re-hides these.
-        const bool dots = (mode == 1);
+        const bool dots = (mode == kModePanelDots);
         controls_.addControl("speed", speed, 1, 240);
         controls_.setHidden(controls_.count() - 1, dots);          // lines only
-        controls_.addSelect("axis", axis, kAxisOptions, 4);
+        controls_.addSelect("axis", axis, kAxisOptions, kAxisCount);
         controls_.setHidden(controls_.count() - 1, dots);          // lines only
         controls_.addControl("panelW", panelW, 1, 64);
         controls_.setHidden(controls_.count() - 1, !dots);         // panel dots only
@@ -59,7 +64,7 @@ public:
         memset(buf, 0, static_cast<size_t>(w) * h * d * cpl);
 
         // The mapping aid: each block lights one more dot than the last, readable straight off a wall.
-        if (mode == 1) {
+        if (mode == kModePanelDots) {
             const lengthType pw = panelW ? panelW : 1;
             const lengthType ph = panelH ? panelH : 1;
             const lengthType panelsPerRow = (w + pw - 1) / pw;
@@ -99,7 +104,7 @@ public:
         };
 
         // Red sweeps along x, left to right.
-        if (w > 1 && (axis == 0 || axis == 1)) {
+        if (w > 1 && (axis == kAxisAll || axis == kAxisX)) {
             const lengthType x = sweepIndex(w);
             for (lengthType z = 0; z < d; z++)
                 for (lengthType y = 0; y < h; y++)
@@ -107,7 +112,7 @@ public:
         }
 
         // Green sweeps along y, top to bottom.
-        if (h > 1 && (axis == 0 || axis == 2)) {
+        if (h > 1 && (axis == kAxisAll || axis == kAxisY)) {
             const lengthType y = sweepIndex(h);
             for (lengthType z = 0; z < d; z++)
                 for (lengthType x = 0; x < w; x++)
@@ -115,7 +120,7 @@ public:
         }
 
         // Blue sweeps along z, front to back, on a volume.
-        if (d > 1 && (axis == 0 || axis == 3)) {
+        if (d > 1 && (axis == kAxisAll || axis == kAxisZ)) {
             const lengthType z = sweepIndex(d);
             for (lengthType y = 0; y < h; y++)
                 for (lengthType x = 0; x < w; x++)

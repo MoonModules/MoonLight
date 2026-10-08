@@ -64,6 +64,8 @@ export const TYPE_RENAMES = {
 // the bench: a blanket fps → targetFps corrupted NetworkSendDriver's own `fps`). `review` marks
 // a value-semantics change: the name maps, the value needs the user's eye.
 export const CONTROL_RENAMES = {
+    // The MIDI desk's USB switch names both places a desk can be: a `source` select, browser or USB.
+    "usb": { name: "source", date: "2026-10-08", onTypes: ["MidiService"] },
     // Light presets are fixture profiles: the library's row list, and the Select every driver uses to pick a row.
     "presets": { name: "profiles", date: "2026-10-03", onTypes: ["FixtureProfilesModule"] },
     "lightPreset": { name: "fixture", date: "2026-10-03", onTypes: ["*Driver"] },
@@ -110,6 +112,11 @@ export const CONTROL_RENAMES = {
 // Old control VALUE → new, keyed by the control's (post-rename) name. Same honesty levels:
 // `value` when the move is deterministic, `review` when only the user (or the chip) can decide.
 export const CONTROL_VALUE_RENAMES = {
+    // The usb switch's off and on become the source's browser and USB.
+    "source": { onTypes: ["MidiService"], values: {
+        false: { value: 0, date: "2026-10-08" },
+        true: { value: 1, date: "2026-10-08" },
+    } },
     // wledCompatible's switch becomes addressing's index: multicast, or multicast + broadcast.
     "addressing": { onTypes: ["DevicesModule"], values: {
         false: { value: 0, date: "2026-10-02" },

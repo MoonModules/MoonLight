@@ -401,6 +401,85 @@ let wspRetryMs = WSP_RETRY_MIN_MS;
 // A Select's value is normally the option INDEX, but a label-persisted Select (a NIC list, an
 // audio device list) sends the option STRING; resolve either to the index both render paths
 // need. Unknown label -> 0, so a vanished option shows the first row rather than a blank box.
+// A row's name cut short by the label column shows whole on hover; one listener covers every row, however it was built.
+document.addEventListener("mouseover", e => {
+    const label = e.target.closest && e.target.closest(".control-label");
+    if (label && !label.title && label.scrollWidth > label.clientWidth) label.title = label.textContent.trim();
+});
+
+// A few short choices show at once as a segmented control, the rest fold into a dropdown; the device sends a select either way.
+// A segmented control cannot wrap, so its labels together must fit the field.
+const SEGMENTED_MAX = 3, SEGMENTED_CHARS = 36;
+function choiceIsSegmented(ctrl) {
+    const opts = ctrl.options || [];
+    return opts.length <= SEGMENTED_MAX && opts.join("").length <= SEGMENTED_CHARS;
+}
+
+// A select control as a segmented control or a dropdown, `pick(i)` writing the index chosen; kept on the element so a live patch can rebuild it.
+// The segments are radio buttons underneath, so the keyboard and a screen reader treat them as one choice.
+function buildChoice(moduleName, ctrl, key, pick) {
+    let el;
+    if (choiceIsSegmented(ctrl)) {
+        el = document.createElement("div");
+        el.className = "segmented";
+        el.setAttribute("role", "radiogroup");
+        (ctrl.options || []).forEach((opt, i) => {
+            const lab = document.createElement("label");
+            const rb = document.createElement("input");
+            rb.type = "radio";
+            rb.name = `radio-${moduleName}-${ctrl.name}`;
+            rb.value = i;
+            rb.checked = i === selectIndex(ctrl);
+            rb.addEventListener("change", () => { if (rb.checked) pick(i); });
+            lab.append(rb, document.createTextNode(opt));
+            el.appendChild(lab);
+        });
+    } else {
+        el = document.createElement("select");
+        (ctrl.options || []).forEach((opt, i) => {
+            const o = document.createElement("option");
+            o.value = i;
+            o.textContent = opt;
+            if (i === selectIndex(ctrl)) o.selected = true;
+            el.appendChild(o);
+        });
+        // Protect the dropdown while the user has it open. A native <select>
+        // popup stays open for several frames (seconds, if deliberating) while
+        // a continuously-refreshed module keeps pushing state over the WS; an
+        // unguarded `sel.value = ctrl.value` patch during that window snaps the
+        // menu back to the old option and visibly closes it: the user never
+        // gets to pick. We mark the select "open" on pointerdown (fires BEFORE
+        // the popup opens, unlike focus, which some browsers delay or skip) and
+        // clear it on change/blur; updateModuleControls skips any select marked
+        // open. pointerdown also stamps the dragTs cooldown as a belt-and-braces
+        // fallback for the post-close frames.
+        el.dataset.open = "false";
+        const markOpen = () => { el.dataset.open = "true"; dragTs[key] = Date.now(); };
+        el.addEventListener("pointerdown", markOpen);
+        el.addEventListener("focus", markOpen);
+        el.addEventListener("blur", () => { el.dataset.open = "false"; });
+        el.addEventListener("change", () => {
+            el.dataset.open = "false";
+            // No refetch/re-render here: a control that changes the SET (a hidden-flag flip)
+            // is reconciled in place by syncVisibleControls on the next WS push, so the card
+            // and its expanded state are preserved.
+            pick(parseInt(el.value));
+        });
+    }
+    el.dataset.mid = moduleName;
+    el.dataset.key = ctrl.name;
+    el._pick = pick;
+    el._dragKey = key;
+    return el;
+}
+
+// Show index `i` as chosen, in either form.
+function setChoice(el, i) {
+    if (!el) return;
+    if (el.classList.contains("segmented")) el.querySelectorAll("input").forEach(rb => { rb.checked = Number(rb.value) === i; });
+    else if (Number(el.value) !== i) el.value = i;
+}
+
 function selectIndex(ctrl) {
     if (typeof ctrl.value === "string") {
         const i = (ctrl.options || []).indexOf(ctrl.value);
@@ -3089,43 +3168,10 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
             break;
         }
         case "select": {
-            const sel = document.createElement("select");
-            sel.dataset.mid = moduleName;
-            sel.dataset.key = ctrl.name;
-            (ctrl.options || []).forEach((opt, i) => {
-                const o = document.createElement("option");
-                o.value = i;
-                o.textContent = opt;
-                if (i === selectIndex(ctrl)) o.selected = true;
-                sel.appendChild(o);
-            });
-            // Protect the dropdown while the user has it open. A native <select>
-            // popup stays open for several frames (seconds, if deliberating) while
-            // a continuously-refreshed module keeps pushing state over the WS; an
-            // unguarded `sel.value = ctrl.value` patch during that window snaps the
-            // menu back to the old option and visibly closes it: the user never
-            // gets to pick. We mark the select "open" on pointerdown (fires BEFORE
-            // the popup opens, unlike focus, which some browsers delay or skip) and
-            // clear it on change/blur; updateModuleControls skips any select marked
-            // open. pointerdown also stamps the dragTs cooldown as a belt-and-braces
-            // fallback for the post-close frames.
-            sel.dataset.open = "false";
-            const markOpen = () => { sel.dataset.open = "true"; dragTs[key] = Date.now(); };
-            sel.addEventListener("pointerdown", markOpen);
-            sel.addEventListener("focus", markOpen);
-            sel.addEventListener("blur", () => { sel.dataset.open = "false"; });
-            sel.addEventListener("change", () => {
-                sel.dataset.open = "false";
-                dragTs[key] = Date.now();
-                write(ctrl.name, parseInt(sel.value));
-                // No refetch/re-render here: blendMode/opacity-style selects don't
-                // change the control SET, and a control that does (a hidden-flag
-                // flip) is reconciled in place by syncVisibleControls on the next
-                // WS push: so the card (and its expanded state) is preserved.
-                // A full refetchState() rebuilt the DOM and collapsed the card.
-            });
-            row.appendChild(sel);
-            resetButton(() => { sel.value = def; });
+            const pick = i => { dragTs[key] = Date.now(); write(ctrl.name, i); };
+            row.appendChild(buildChoice(moduleName, ctrl, key, pick));
+            // The row's current choice, since a live patch may have swapped a dropdown for segments.
+            resetButton(() => setChoice(row.querySelector("select, .segmented"), selectIndex({ ...ctrl, value: def })));
             break;
         }
         case "palette": return buildPaletteControl(row, key, def, moduleName, ctrl);
@@ -4904,32 +4950,24 @@ function updateModuleControls(mod) {
                 break;
             }
             case "select": {
-                const sel = queryByName(`select[data-mid="${cssEscape(mid)}"][data-key="${k}"]`, "data-mid", mid);
-                // Never overwrite a select the user currently has OPEN (popup
-                // showing) or focused. data-open is set on pointerdown/focus and
-                // cleared on change/blur: more reliable than document.activeElement,
-                // which is ambiguous while a native popup is up (the popup is a
-                // separate OS layer on macOS). The 1s dragTs cooldown is the
-                // additional fallback for the frames right after the popup closes.
-                if (sel && sel.dataset.open !== "true" && sel !== document.activeElement) {
-                    // Re-sync the OPTION list when it changed since render: some selects are
-                    // populated asynchronously (e.g. HueDriver learns its rooms/lights ~1-2s after
-                    // boot, growing this select from ["All"] to the full list). The value-only patch
-                    // below can't reveal new options, so rebuild them in place when they differ.
-                    const opts = ctrl.options || [];
-                    const cur = Array.from(sel.options).map(o => o.textContent);
-                    if (cur.length !== opts.length || opts.some((o, i) => o !== cur[i])) {
-                        sel.innerHTML = "";
-                        opts.forEach((opt, i) => {
-                            const o = document.createElement("option");
-                            o.value = i;
-                            o.textContent = opt;
-                            sel.appendChild(o);
-                        });
-                    }
-                    const want = selectIndex(ctrl);
-                    if (Number(sel.value) !== want) sel.value = want;
+                const el = queryByName(`select[data-mid="${cssEscape(mid)}"][data-key="${k}"], .segmented[data-mid="${cssEscape(mid)}"][data-key="${k}"]`, "data-mid", mid);
+                if (!el) break;
+                // Never overwrite a dropdown the user has OPEN (popup showing) or focused: data-open is
+                // set on pointerdown/focus and cleared on change/blur, more reliable than
+                // document.activeElement while a native popup is up (a separate OS layer on macOS).
+                if (el.dataset.open === "true" || el === document.activeElement) break;
+                // Some selects are populated asynchronously (HueDriver learns its rooms ~1-2s after boot,
+                // growing from ["All"] to the full list), and a list outgrowing the segments changes its form,
+                // so a changed option list rebuilds the control in place.
+                const opts = ctrl.options || [];
+                const cur = el.classList.contains("segmented")
+                    ? Array.from(el.querySelectorAll("label")).map(l => l.textContent)
+                    : Array.from(el.options).map(o => o.textContent);
+                if (cur.length !== opts.length || opts.some((o, i) => o !== cur[i])) {
+                    if (el._pick) el.replaceWith(buildChoice(mid, ctrl, el._dragKey, el._pick));
+                    break;
                 }
+                setChoice(el, selectIndex(ctrl));
                 break;
             }
             case "palette": {

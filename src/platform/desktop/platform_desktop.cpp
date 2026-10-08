@@ -165,6 +165,7 @@
 #include <curl/curl.h>   // https POST: the OS's own TLS, nothing vendored
 #endif
 #include <filesystem>
+#include <map>
 #include <string>
 #ifndef _WIN32
 #include <dlfcn.h>   // dlopen/dlsym: the NDI runtime is resolved on demand, never linked
@@ -1714,6 +1715,14 @@ void setTestMdnsAvailable(bool available) { testMdns_ = available; testMdnsInits
 uint32_t testMdnsInitCount() { return testMdnsInits_; }
 bool mdnsInit(const char* /*deviceName*/) { return testMdns_ && ++testMdnsInits_; }
 void mdnsStop() {}
+// The host announces nothing over mDNS, so the services are only remembered, which is what a test reads back.
+static std::map<std::string, uint16_t> mdnsServices_;
+void mdnsAdvertise(const char* type, const char* proto, uint16_t port) { mdnsServices_[std::string(type) + "." + proto] = port; }
+void mdnsWithdraw(const char* type, const char* proto) { mdnsServices_.erase(std::string(type) + "." + proto); }
+uint16_t mdnsAdvertisedPort(const char* type, const char* proto) {
+    const auto it = mdnsServices_.find(std::string(type) + "." + proto);
+    return it == mdnsServices_.end() ? 0 : it->second;
+}
 void mdnsShutdown() {}
 
 // The system resolver answers `.local` too on macOS and Windows, and on Linux with nss-mdns, so one call covers both kinds of name.
@@ -2547,11 +2556,16 @@ bool irChannelReady(uint16_t /*pin*/) { return true; }   // no channel to fail o
 namespace {
 struct TestUsbDesk {
     bool attached = false;
+    bool owned = false;   ///< one owner at a time, as on a board
     std::vector<std::array<uint8_t, 4>> in, out;
 } g_usbDesk;
 }  // namespace
-bool usbMidiBegin() { return g_usbDesk.attached; }
-void usbMidiEnd() {}
+bool usbMidiBegin() {
+    if (!g_usbDesk.attached || g_usbDesk.owned) return false;
+    g_usbDesk.owned = true;
+    return true;
+}
+void usbMidiEnd() { g_usbDesk.owned = false; }
 bool usbMidiConnected() { return g_usbDesk.attached; }
 size_t usbMidiRead(uint8_t (*packets)[4], size_t max) {
     size_t n = 0;

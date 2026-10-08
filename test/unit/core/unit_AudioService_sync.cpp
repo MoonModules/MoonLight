@@ -335,7 +335,7 @@ TEST_CASE("AudioService Local+send unicast: sends to its hosts, and asks for the
     AudioService a;
     a.mode = AudioService::kLocalMode;
     a.send = true;
-    a.addressing = 1;   // unicast
+    a.addressing = AudioService::kAddressUnicast;
     a.syncPort = kTestSyncPort;
     a.applyState();
     a.tick();
@@ -345,7 +345,7 @@ TEST_CASE("AudioService Local+send unicast: sends to its hosts, and asks for the
     AudioService b;
     b.mode = AudioService::kLocalMode;
     b.send = true;
-    b.addressing = 1;
+    b.addressing = AudioService::kAddressUnicast;
     std::snprintf(b.hosts, sizeof(b.hosts), "%s", "127.0.0.1");
     b.syncPort = kTestSyncPort;
     b.applyState();

@@ -16,7 +16,7 @@ Each section names a choice that makes it work; borrow what fits your own piece.
 
 | part | board | lights | layout | effect |
 |---|---|---|---|---|
-| legs | LightCrafter 16 (ESP32-S3 N8R8) | 10 SK6812 RGBW strips of 144 | Tubes, `tubeDistance` 7 | [`stadbeest-legs.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest-legs.mle) |
+| legs | LightCrafter 16 (ESP32-S3 N8R8) | 10 SK6812 RGBW strips of 144 | Tubes, `tubeDistance` 7 | [`stadbeest-legs.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest-legs.mle), [`stadbeest-orb.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest-orb.mle) |
 | left eye | ESP32-S3-Zero, 4 MB | a 241-light ring disc | Rings241 | [`stadbeest-eyes.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest-eyes.mle) |
 | right eye | ESP32-S3-Zero, 4 MB | a 241-light ring disc | Rings241 | [`stadbeest-eyes.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest-eyes.mle) |
 
@@ -75,6 +75,10 @@ In a real walk most legs stand still while one or two lift.
 The legs effect keeps every leg lit and standing, and lifts each one briefly in a wave from back to front, the two sides half a cycle apart.
 A creature reads as alive when the eye can follow what moves.
 
+**Let it travel.**
+A gaze that jumps to its next target reads as a glitch; one that eases there reads as an eye.
+The pupil eases in and out of each move over 400 ms, in sixteenths of a light, so its edge slides across the rings.
+
 **Tie color to movement.**
 A standing leg holds its colors, a lifting leg carries them up with its foot, and each step moves the palette on a quarter.
 The eye's colors move on with each dart of its gaze.
@@ -88,14 +92,19 @@ Color that drifts on its own competes with the motion instead of showing it.
 
 The raw frequency bands change every frame, and driven straight into brightness or height they look random.
 
+**Use the space the lights stand in.**
+The ten legs stand in a ring, so a second layer on the legs board, the orb, places leg *n* at *n* × 36° on a circle.
+It floats a shape up and down through the ring: a tilted disc that wobbles as it turns, a ball that lights each leg twice, an egg that leans.
+Each leg lights where it crosses the shape's shell, so flat strips draw a solid in the air.
+
 **Let two boards agree without talking.**
 The eyes pick each dart's direction from `audioPeakHz()` at the beat, which both boards read the same.
 So they look the same way at the same moment, with no message between them.
 
 **Use them yourself.**
-The legs, the eyes and the autopilot are part of MoonLight's [script library](https://github.com/MoonModules/MoonLight/tree/main/moonlive).
+The legs, the orb, the eyes and the autopilot are part of MoonLight's [script library](https://github.com/MoonModules/MoonLight/tree/main/moonlive).
 Every device running MoonLight lists them in its script picker and downloads one when it is chosen.
-The full code: [`stadbeest-legs.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest-legs.mle), [`stadbeest-eyes.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest-eyes.mle) and [`stadbeest-autopilot.mls`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/services/stadbeest-autopilot.mls); to write your own, start with [your first script](../tutorials/first-script.md).
+The full code: [`stadbeest-legs.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest-legs.mle), [`stadbeest-orb.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest-orb.mle), [`stadbeest-eyes.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest-eyes.mle) and [`stadbeest-autopilot.mls`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/services/stadbeest-autopilot.mls); to write your own, start with [your first script](../tutorials/first-script.md).
 
 ---
 
@@ -146,13 +155,38 @@ Assign from the card, or with `POST /api/control` and `{"module":"Control","cont
 
 The [OSC](../moonmodules/core/services.md#osc) service mirrors a surface to the network, which is all the linking an installation needs.
 
+```mermaid
+flowchart LR
+    desk["iCON QCon<br/><i>a MIDI desk</i>"]
+    bridge["MIDI bridge<br/><i>the desk on the network</i>"]
+    leader["legs board, the leader<br/><i>MIDI from the network ·<br/>OSC feedback multicast to 9001</i>"]
+    group(("group<br/>239.255.77.78"))
+    eyeL["left eye<br/><i>OSC listen 9001</i>"]
+    eyeR["right eye<br/><i>OSC listen 9001</i>"]
+
+    desk <-->|"USB MIDI"| bridge
+    bridge <-->|"RTP-MIDI 5004"| leader
+    leader -->|"every slot that changes,<br/>all of them every 30 s"| group
+    group --> eyeL & eyeR
+
+    classDef lead fill:#2d3561,stroke:#7b88c9,color:#fff
+    classDef follow fill:#1f4d3d,stroke:#5fb89a,color:#fff
+    classDef side fill:#4d3d1f,stroke:#c9a95f,color:#fff
+    class leader lead
+    class eyeL,eyeR,group follow
+    class desk,bridge side
+```
+
+The leader owns the state, and the eyes take it over OSC. The desk is the leader's own, over the network rather than a cable: [a MIDI bridge board](#8-driving-it-by-hand-an-akai-apc40-mkii).
+
 <img src="../assets/how-to/multi-board/osc-leader-card.png" width="300" alt="The leader's OSC card: listen, feedback on, multicast, group 239.255.77.78, feedbackPort 9001"> <img src="../assets/how-to/multi-board/osc-follower-card.png" width="300" alt="A follower's OSC card: listen on port 9001, feedback off">
 
 **The leader** (the legs board): OSC `feedback` on, `addressing` multicast, `group` the default `239.255.77.78`, `feedbackPort` 9001.
 Every slot that changes on the leader, from its card, a preset, a script or a desk, goes out as `/mm/fader/N`, `/mm/encoder/N` or `/mm/switch/N`.
 
-**The followers** (the eyes): an OSC service with `listen` on and `port` 9001, the leader's `feedbackPort`, and `feedback` off.
+**The followers** (the eyes): an OSC service with `listen` on, `port` 9001, the leader's `feedbackPort`, and `feedback` off.
 A follower joins the group, writes each message onto its own slot N, and its assignments carry the value to its own controls.
+The leader's preset pad states go out on an address of their own, which a follower ignores, so its own presets stay untouched.
 
 Three details matter:
 
@@ -177,7 +211,8 @@ A [MoonLiveService](../moonmodules/core/services.md#moonliveservice) on the lead
 
 <img src="../assets/how-to/multi-board/autopilot-card.png" width="300" alt="The autopilot service card: script, run and minutes">
 
-- **Scenes:** every `minutes` it picks a new scene: a palette from the vivid ones, a mood from calm to wild, `pulse` on or off, and the eyes' pupil size and blink rate.
+- **Scenes:** every `seconds`, three minutes by default, it picks a new scene.
+  A scene is any built-in palette, a mood from calm to wild, how much the music counts, `pulse` on or off, and the eyes' pupil and blink rate.
 - **Breathing:** within a scene the energy rises and falls once a minute, spread over the legs' tempo, swing and lift and how far the eyes look.
 - **Through the surface:** it writes the shared slots with `setControl("fader2", value)`, so the legs follow on the leader and the eyes over OSC, exactly as when a person moves a fader.
 - **One slot at a time:** it writes one slot every 20 ms, every ten seconds, so no burst reaches the network.
@@ -216,17 +251,19 @@ The autopilot rewrites the shared slots every ten seconds, so switch it off with
 The eyes follow every move over OSC, as they follow the autopilot.
 A phone or a tablet reaches the same slots too: [connecting a control surface](control-surface.md).
 
-**Without a laptop: a MIDI-OSC bridge board**
+**Without a laptop: a MIDI bridge board**
 
-A desk can also plug into a small board of its own, which drives the leader over OSC: no laptop, and no cable to the beast.
+A desk can also plug into a small board of its own, which puts it on the network: no laptop, and no cable to the beast.
 The StadBeest uses an ESP32-S3 N16R8 for it, with an [iCON QCon Pro G2](../reference/hardware/control-surfaces.md#icon-qcon-pro-g2), which has its own power adapter.
 
-1. Install it as the **MIDI-OSC bridge** device model, which sets up its MIDI and OSC services.
+1. Install it as the **MIDI bridge** device model, which sets its [MIDI service](../moonmodules/core/services.md#midi) to `source` USB with `share` on.
 2. Plug the desk into the board's own USB port, the one marked USB, and power the board from its other port.
-3. Pick the desk's `profile` on the bridge's MIDI service.
+3. On the leader's MIDI service, set `source` to network and `host` to the bridge's name, `MM-MIDI-rtp.local` on the StadBeest, and pick the desk's `profile` there.
 
-The bridge follows the leader, as the eyes do, and sends back only what changes on the desk.
-Its desk lights and motors show the leader's state, and its pads apply the leader's presets.
+The bridge is a cable over RTP-MIDI, the standard for MIDI on a network, and keeps no state of its own.
+So the desk works on the leader as if plugged into it.
+The leader greets it, moves its motors, lights its pads with its presets and holds a motor still under a hand.
+A Mackie desk's display shows the leader's display line: the last change for five seconds, then the device's name.
 An APC40 mkII takes its power from USB, which this board's port does not supply, so it stays on the laptop or goes through an active, powered USB hub. A hub needs the firmware's hub support, `CONFIG_USB_HOST_HUBS_SUPPORTED`, switched on in the S3 images.
 
 ---

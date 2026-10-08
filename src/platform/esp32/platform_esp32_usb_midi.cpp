@@ -194,11 +194,13 @@ void runLibrary(void*) {
         uint32_t flags = 0;
         usb_host_lib_handle_events(portMAX_DELAY, &flags);
         if (flags & USB_HOST_LIB_EVENT_FLAGS_NO_CLIENTS) {
+            // Power the port off first: a desk still on it is enumerated again while the stack is torn down, and the uninstall aborts.
+            usb_host_lib_set_root_port_power(false);
             if (usb_host_device_free_all() == ESP_OK) break;   // nothing left to free
         }
         if (flags & USB_HOST_LIB_EVENT_FLAGS_ALL_FREE) break;
     }
-    usb_host_uninstall();
+    if (usb_host_uninstall() != ESP_OK) ESP_LOGE(kTag, "USB host did not uninstall");
     s.libTask = nullptr;
     vTaskDelete(nullptr);
 }
@@ -206,10 +208,12 @@ void runLibrary(void*) {
 }  // namespace
 
 bool usbMidiBegin() {
-    if (s.libTask) return !s.stop;   // still giving the port back: the next tick asks again
+    if (s.libTask) return false;   // another owner has it, or it is still being given back: the next tick asks again
     if (!s.rx) s.rx = xQueueCreate(kRxPackets, 4);
     if (!s.tx) s.tx = xQueueCreate(kTxPackets, 4);
     if (!s.rx || !s.tx) return false;
+    xQueueReset(s.rx);   // a new owner starts with nothing the last one left
+    xQueueReset(s.tx);
     s.stop = false;
     // Below the render loop: both tasks block until the desk or a send needs them.
     return xTaskCreate(runLibrary, "mmUsbMidi", 4096, nullptr, 4, &s.libTask) == pdPASS;

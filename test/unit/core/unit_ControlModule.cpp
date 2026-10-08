@@ -7,7 +7,10 @@
 #include "core/services/MidiService.h"
 #include "core/services/OscModule.h"
 
+#include <algorithm>
 #include <array>
+#include <chrono>
+#include <thread>
 #include <vector>
 #include "core/system/ControlModule.h"
 #include "core/system/FilesystemModule.h"
@@ -1558,7 +1561,7 @@ namespace {
 /// A MIDI service set to the Akai APC40 mkII profile, as picking it on the card does.
 void useApc40(mm::MidiService& midi) {
     midi.defineControls();
-    midi.profile = 1;
+    midi.profile = mm::MidiService::kProfileApc40;
     midi.onControlChanged("profile");
 }
 
@@ -1595,7 +1598,7 @@ TEST_CASE("an APC40 is greeted into the mode where the host sets every light") {
     mm::MidiService midi;
     midi.defineControls();
     CHECK(textOf(midi, "hello").empty());           // a Mackie desk needs no greeting
-    midi.profile = 1;
+    midi.profile = mm::MidiService::kProfileApc40;
     midi.onControlChanged("profile");
     const std::string hello = textOf(midi, "hello");
     CHECK(hello.rfind("f0477f2960000442010000f7", 0) == 0);
@@ -1631,54 +1634,7 @@ TEST_CASE("an APC40's top-left pad applies the first preset, and its pads show w
 }
 
 namespace {
-/// One OSC message with an int argument, as a controller puts it on the wire.
-std::vector<uint8_t> oscInt(const char* address, int32_t value) {
-    std::vector<uint8_t> p(64);
-    p.resize(mm::osc::encodeInt(p.data(), p.size(), address, value));
-    return p;
-}
-}  // namespace
-
-// A pad grid on a phone or on another board fires a preset, and learns which pads hold one.
-TEST_CASE("an OSC pad press applies the preset on that pad, and a paced resend sends every pad's state") {
-    Device d;
-    auto* layer = d.add(d.layers, "Layer");
-    d.add(layer, "NoiseEffect");
-    d.setText("name", "sunset");
-    d.press("save");
-    REQUIRE(d.control->listRowCount() == 1);
-    auto* old = layer->replaceChildAt(0, mm::ModuleFactory::create("RainbowEffect"));
-    if (old) { old->release(); mm::Scheduler::deleteTree(old); }
-
-    mm::OscModule osc;
-    const auto send = [&](const char* address, int32_t value) {
-        const auto p = oscInt(address, value);
-        osc.handle(p.data(), p.size());
-    };
-    send("/mm/pad/1", 0);                                // a button's release
-    send("/mm/pad/2", 1);                                // an empty pad
-    send("/mm/pad/0", 1);                                // before the grid
-    send("/mm/pad/65", 1);                               // past it
-    CHECK(std::strcmp(d.effectType(), "RainbowEffect") == 0);
-    send("/mm/pad/1", 1);
-    CHECK(std::strcmp(d.effectType(), "NoiseEffect") == 0);
-
-    RecordingSurface s;
-    d.control->addSurface(&s, mm::ControlModule::Seed::Paced);
-    for (int i = 0; i < mm::ControlModule::kSurfaceValues; i++) d.control->tick20ms();
-    const auto lastPad = [&](uint8_t index) {
-        int v = -1;
-        for (const auto& c : s.calls) if (c.kind == mm::SurfaceControl::Pad && c.index == index) v = c.value;
-        return v;
-    };
-    CHECK(lastPad(0) == mm::ControlModule::kPadActive);
-    CHECK(lastPad(1) == mm::ControlModule::kPadEmpty);
-    CHECK(lastPad(mm::ControlModule::kMaxPresets - 1) == mm::ControlModule::kPadEmpty);
-    d.control->removeSurface(&s);
-}
-
-namespace {
-/// An OSC module whose datagrams are kept rather than sent, so the test is the network between two boards.
+/// An OSC module whose datagrams are kept rather than sent, so the test is the network.
 struct WiredOsc : mm::OscModule {
     struct Sent { uint8_t ip[4]; std::vector<uint8_t> pkt; };
     std::vector<Sent> out;
@@ -1700,7 +1656,14 @@ protected:
     }
 };
 
-/// One feedback datagram from the followed board, as its OSC module sends it.
+/// One OSC message with an int argument, as a controller puts it on the wire.
+std::vector<uint8_t> oscInt(const char* address, int32_t value) {
+    std::vector<uint8_t> p(64);
+    p.resize(mm::osc::encodeWord(p.data(), p.size(), address, 'i', static_cast<uint32_t>(value)));
+    return p;
+}
+
+/// One surface value as another board's OSC feedback sends it.
 std::vector<uint8_t> feedbackFrom(mm::SurfaceControl kind, uint8_t index, uint8_t value) {
     std::vector<uint8_t> p(64);
     p.resize(mm::osc::encodeSurface(p.data(), p.size(), kind, index, value));
@@ -1708,69 +1671,84 @@ std::vector<uint8_t> feedbackFrom(mm::SurfaceControl kind, uint8_t index, uint8_
 }
 }  // namespace
 
-// A desk board follows the board it drives: it takes its values and presets, and sends back only what changes here.
-TEST_CASE("an OSC follower takes the followed board's values and pads, and sends only its own changes there") {
-    Device desk;
+// A phone's pad grid fires a preset and lights from the states, which travel on their own address so no listening board reads one as a press.
+TEST_CASE("an OSC pad press applies the preset on that pad, and its state goes out on /mm/padstate, which presses nothing") {
+    Device d;
+    auto* layer = d.add(d.layers, "Layer");
+    d.add(layer, "NoiseEffect");
+    d.setText("name", "sunset");
+    d.press("save");
+    REQUIRE(d.control->listRowCount() == 1);
+    auto* old = layer->replaceChildAt(0, mm::ModuleFactory::create("RainbowEffect"));
+    if (old) { old->release(); mm::Scheduler::deleteTree(old); }
+
     WiredOsc osc;
     osc.defineControls();
     osc.feedback = true;
-    osc.follow = true;
+    auto& cs = osc.controls();
+    for (uint8_t i = 0; i < cs.count(); i++)
+        if (std::strcmp(cs[i].name, "hosts") == 0) std::strcpy(static_cast<char*>(cs[i].ptr), "192.168.1.50");
+    osc.onControlChanged("hosts");
+    const auto send = [&](const char* address, int32_t value) {
+        const auto p = oscInt(address, value);
+        osc.handle(p.data(), p.size());
+    };
+    send("/mm/pad/1", 0);                                // a button's release
+    send("/mm/pad/2", 1);                                // an empty pad
+    send("/mm/pad/0", 1);                                // before the grid
+    send("/mm/pad/65", 1);                               // past it
+    CHECK(std::strcmp(d.effectType(), "RainbowEffect") == 0);
+    send("/mm/pad/1", 1);
+    CHECK(std::strcmp(d.effectType(), "NoiseEffect") == 0);
+
+    d.control->addSurface(&osc, mm::ControlModule::Seed::Paced);
+    for (int i = 0; i < mm::ControlModule::kSurfaceValues; i++) d.control->tick20ms();
+    int32_t first = -1;
+    for (const auto& sent : osc.out) {
+        mm::osc::Message m;
+        REQUIRE(mm::osc::parse(sent.pkt.data(), sent.pkt.size(), m));
+        CHECK(std::string(m.address).rfind("/mm/pad/", 0) != 0);   // never on the press address
+        if (std::strcmp(m.address, "/mm/padstate/1") == 0) { CHECK_FALSE(m.wasFloat); first = m.i; }
+    }
+    CHECK(first == mm::ControlModule::kPadActive);
+    d.control->removeSurface(&osc);
+
+    // The applied pad's state, arriving at a board as another board's feedback, applies nothing.
+    auto* again = layer->replaceChildAt(0, mm::ModuleFactory::create("RainbowEffect"));
+    if (again) { again->release(); mm::Scheduler::deleteTree(again); }
+    send("/mm/padstate/1", mm::ControlModule::kPadActive);
+    CHECK(std::strcmp(d.effectType(), "RainbowEffect") == 0);
+}
+
+// Two boards feeding each other would otherwise echo a value between them for ever.
+TEST_CASE("OSC feedback never sends a value back to the host it came from, and sends a change made here") {
+    Device board;
+    WiredOsc osc;
+    osc.defineControls();
+    osc.feedback = true;
     auto& cs = osc.controls();
     for (uint8_t i = 0; i < cs.count(); i++)
         if (std::strcmp(cs[i].name, "hosts") == 0) std::strcpy(static_cast<char*>(cs[i].ptr), "192.168.1.103");
     osc.onControlChanged("hosts");
-    const uint8_t legs[4] = {192, 168, 1, 103};
-    desk.control->addSurface(&osc, mm::ControlModule::Seed::None);
-    REQUIRE(desk.scheduler.setControl("Control", "fader4", "{\"value\":0}") == mm::Scheduler::SetControlResult::Ok);
-    desk.control->tick20ms();
+    const uint8_t other[4] = {192, 168, 1, 103};
+    board.control->addSurface(&osc, mm::ControlModule::Seed::Paced);
+    REQUIRE(board.scheduler.setControl("Control", "fader4", "{\"value\":0}") == mm::Scheduler::SetControlResult::Ok);
+    for (int i = 0; i < mm::ControlModule::kSurfaceValues; i++) board.control->tick20ms();   // the seeding, one value a tick
     osc.out.clear();
 
-    osc.greet();
-    REQUIRE(osc.addresses() == std::vector<std::string>{"/mm/hello"});
-    CHECK(std::memcmp(osc.out[0].ip, legs, 4) == 0);
-    osc.out.clear();
-
-    // The followed board's fader lands here, and is not sent back to it.
     const auto f = feedbackFrom(mm::SurfaceControl::Fader, 3, 200);
-    osc.handle(f.data(), f.size(), legs);
-    desk.control->tick20ms();
-    CHECK(surfaceValue(desk, "fader4") == 200);
+    osc.handle(f.data(), f.size(), other);
+    board.control->tick20ms();
+    CHECK(surfaceValue(board, "fader4") == 200);
     CHECK(osc.out.empty());
 
     // A change made here goes there, even back to a value heard before.
-    REQUIRE(desk.scheduler.setControl("Control", "fader4", "{\"value\":90}") == mm::Scheduler::SetControlResult::Ok);
-    desk.control->tick20ms();
-    REQUIRE(desk.scheduler.setControl("Control", "fader4", "{\"value\":200}") == mm::Scheduler::SetControlResult::Ok);
-    desk.control->tick20ms();
+    REQUIRE(board.scheduler.setControl("Control", "fader4", "{\"value\":90}") == mm::Scheduler::SetControlResult::Ok);
+    board.control->tick20ms();
+    REQUIRE(board.scheduler.setControl("Control", "fader4", "{\"value\":200}") == mm::Scheduler::SetControlResult::Ok);
+    board.control->tick20ms();
     CHECK(osc.addresses() == std::vector<std::string>{"/mm/fader/4", "/mm/fader/4"});
-    osc.out.clear();
-
-    // While fader 4 is being moved here, an echo of an earlier position does not pull it back; after the hold, the followed board's values land again.
-    struct RealClockAfter { ~RealClockAfter() { mm::platform::setTestNowMs(0); } } realClockAfter;   // even when a check throws
-    mm::platform::setTestNowMs(10000);
-    REQUIRE(desk.scheduler.setControl("Control", "fader4", "{\"value\":120}") == mm::Scheduler::SetControlResult::Ok);
-    desk.control->tick20ms();
-    const auto stale = feedbackFrom(mm::SurfaceControl::Fader, 3, 90);
-    osc.handle(stale.data(), stale.size(), legs);
-    CHECK(surfaceValue(desk, "fader4") == 120);
-    mm::platform::setTestNowMs(10600);
-    const auto later = feedbackFrom(mm::SurfaceControl::Fader, 3, 130);
-    osc.handle(later.data(), later.size(), legs);
-    CHECK(surfaceValue(desk, "fader4") == 130);
-    mm::platform::setTestNowMs(0);
-    desk.control->tick20ms();
-    osc.out.clear();
-
-    // Its pads show the followed board's presets, a press goes there, and the states are never sent back as presses.
-    const auto stored = feedbackFrom(mm::SurfaceControl::Pad, 2, mm::ControlModule::kPadStored);
-    osc.handle(stored.data(), stored.size(), legs);
-    desk.control->tick20ms();
-    CHECK(desk.control->padState(2) == mm::ControlModule::kPadStored);
-    CHECK(osc.out.empty());
-    CHECK_FALSE(desk.control->pressPad(0));               // empty there: nothing is sent
-    CHECK(desk.control->pressPad(2));
-    CHECK(osc.addresses() == std::vector<std::string>{"/mm/pad/3"});
-    desk.control->removeSurface(&osc);
+    board.control->removeSurface(&osc);
 }
 
 // A pad that holds a preset which cannot be applied says so, rather than claiming the pad is empty.
@@ -1807,7 +1785,7 @@ TEST_CASE("a desk on the USB port is greeted once, sent only changes, and not gr
     mm::platform::setTestUsbMidiDesk(true);
     mm::MidiService midi;
     useApc40(midi);
-    midi.usb = true;
+    midi.source = mm::MidiService::kSourceUsb;
     midi.prepare();
     midi.tick20ms();
     const auto greeting = sentToDesk();
@@ -1832,6 +1810,165 @@ TEST_CASE("a desk on the USB port is greeted once, sent only changes, and not gr
     midi.tick20ms();
     CHECK(surfaceValue(d, "fader1") == 255);
     mm::platform::setTestUsbMidiDesk(false);
+    midi.release();
+}
+
+// A desk shared from one board's USB port drives another board over RTP-MIDI as if plugged into it: greeted, shown the surface, and its moves landing.
+TEST_CASE("a desk shared from a board's USB port drives another board's surface over RTP-MIDI, both ways") {
+    Device d;
+    mm::platform::setTestUsbMidiDesk(true);
+    mm::MidiService bridge;
+    bridge.source = mm::MidiService::kSourceUsb;
+    bridge.share = true;
+    bridge.port = 25504;
+    bridge.prepare();
+    CHECK(mm::platform::mdnsAdvertisedPort("_apple-midi", "_udp") == 25504);   // announced while it waits to be invited
+    mm::MidiService midi;
+    useApc40(midi);
+    midi.source = mm::MidiService::kSourceNetwork;
+    midi.port = 25604;
+    auto& cs = midi.controls();
+    for (uint8_t i = 0; i < cs.count(); i++)
+        if (std::strcmp(cs[i].name, "host") == 0) std::strcpy(static_cast<char*>(cs[i].ptr), "127.0.0.1:25504");
+    midi.prepare();
+
+    std::vector<std::array<uint8_t, 4>> atDesk;
+    const auto exchange = [&] {
+        midi.tick20ms();
+        bridge.tick20ms();
+        for (const auto& p : sentToDesk()) atDesk.push_back(p);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    };
+    for (int i = 0; i < 200 && atDesk.empty(); i++) exchange();
+    REQUIRE_FALSE(atDesk.empty());
+    CHECK((atDesk[0][0] == 0x04 && atDesk[0][1] == 0xF0));   // the APC40's mode SysEx first, from the board it drives
+    CHECK(std::string(bridge.status()).find("shared with") == 0);
+
+    // A fader moved on the desk lands on the other board's surface.
+    const uint8_t faderTop[1][4] = {{0x0B, 0xB0, 0x07, 0x7F}};
+    mm::platform::injectTestUsbMidi(faderTop, 1);
+    for (int i = 0; i < 200 && surfaceValue(d, "fader1") != 255; i++) exchange();
+    CHECK(surfaceValue(d, "fader1") == 255);
+
+    // A switch turned on at that board lights its activator on the desk.
+    atDesk.clear();
+    REQUIRE(d.scheduler.setControl("Control", "switch2", "{\"value\":true}") == mm::Scheduler::SetControlResult::Ok);
+    d.control->tick20ms();
+    const auto lit = [&] {
+        return std::any_of(atDesk.begin(), atDesk.end(), [](const auto& p) { return p[1] == 0x91 && p[2] == 0x32 && p[3] == 0x7F; });
+    };
+    for (int i = 0; i < 200 && !lit(); i++) exchange();
+    CHECK(lit());
+
+    midi.release();
+    bridge.release();
+    CHECK(mm::platform::mdnsAdvertisedPort("_apple-midi", "_udp") == 0);   // withdrawn with the session
+    mm::platform::setTestUsbMidiDesk(false);
+}
+
+// The LCD's message is the longest a desk is sent, so a sharing board must pass it on whole.
+TEST_CASE("a Mackie desk shared over the network shows the display line of the board it drives") {
+    Device d;
+    mm::platform::setTestUsbMidiDesk(true);
+    mm::MidiService bridge;
+    bridge.source = mm::MidiService::kSourceUsb;
+    bridge.share = true;
+    bridge.port = 25904;
+    bridge.prepare();
+    mm::MidiService midi;
+    midi.defineControls();
+    midi.source = mm::MidiService::kSourceNetwork;
+    midi.port = 26004;
+    auto& cs = midi.controls();
+    for (uint8_t i = 0; i < cs.count(); i++)
+        if (std::strcmp(cs[i].name, "host") == 0) std::strcpy(static_cast<char*>(cs[i].ptr), "127.0.0.1:25904");
+    midi.prepare();
+    d.control->writeStrip("brightness 200");
+    std::string bytes;
+    for (int i = 0; i < 200 && bytes.find("brightness 200") == std::string::npos; i++) {
+        midi.tick20ms();
+        bridge.tick20ms();
+        d.control->tick20ms();
+        for (const auto& p : sentToDesk())
+            for (int k = 1; k < 4; k++) bytes += static_cast<char>(p[k]);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    CHECK(bytes.find("brightness 200") != std::string::npos);
+    midi.release();
+    bridge.release();
+    mm::platform::setTestUsbMidiDesk(false);
+}
+
+// A Mackie desk's LCD shows what the Control card's display shows, centered on its top row.
+TEST_CASE("a Mackie desk's LCD shows the Control card's display line") {
+    Device d;
+    mm::platform::setTestUsbMidiDesk(true);
+    mm::MidiService midi;
+    midi.source = mm::MidiService::kSourceUsb;
+    midi.prepare();
+    const auto lcdText = [] {
+        std::string bytes;
+        for (const auto& p : sentToDesk()) {
+            const uint8_t cin = p[0] & 0x0F;
+            const int n = cin == 0x5 ? 1 : cin == 0x6 ? 2 : (cin == 0x4 || cin == 0x7) ? 3 : 0;   // SysEx packets only
+            for (int i = 0; i < n; i++) bytes += static_cast<char>(p[1 + i]);
+        }
+        const size_t at = bytes.find(std::string("\xF0\x00\x00\x66\x14\x12\x00", 7));
+        return at == std::string::npos ? std::string() : bytes.substr(at + 7, 56);
+    };
+    midi.tick20ms();   // greeted, the LCD included
+    CHECK(lcdText().find("MoonLight") != std::string::npos);
+
+    d.control->writeStrip("brightness 200");
+    d.control->tick20ms();   // the display mirrored to the desk at once
+    const std::string row = lcdText();
+    REQUIRE(row.size() == 56);
+    CHECK(row.substr(21, 14) == "brightness 200");   // centered: (56 - 14) / 2
+    midi.release();
+    mm::platform::setTestUsbMidiDesk(false);
+}
+
+// The port has one owner, so a second MIDI service on USB waits for the first rather than both reading the desk.
+TEST_CASE("the USB port has one owner: a second MIDI service waits while the first holds it, and takes it once given back") {
+    Device d;
+    mm::platform::setTestUsbMidiDesk(true);
+    mm::MidiService midi;
+    midi.source = mm::MidiService::kSourceUsb;
+    midi.prepare();
+    mm::MidiService shared;
+    shared.source = mm::MidiService::kSourceUsb;
+    shared.share = true;
+    shared.port = 25704;
+    shared.prepare();
+    shared.tick20ms();
+    CHECK(std::string(shared.status()) == "another service has the USB port");
+    shared.prepare();   // a tree re-prepare while the port is taken: nothing is set up again
+    CHECK(std::string(shared.status()) == "another service has the USB port");
+
+    midi.source = mm::MidiService::kSourceBrowser;
+    midi.onControlChanged("source");   // gives the port back
+    CHECK(midi.status() == nullptr);   // no USB status left behind
+    shared.tick20ms();
+    CHECK(std::string(shared.status()) == "sharing on 25704, not connected");
+    shared.release();
+    midi.release();
+    mm::platform::setTestUsbMidiDesk(false);
+}
+
+// A board that invites a named host announces nothing; one waiting to be invited can be found by name.
+TEST_CASE("a MIDI service on the network is announced over Bonjour only while it waits to be invited") {
+    Device d;
+    mm::MidiService midi;
+    midi.defineControls();
+    midi.source = mm::MidiService::kSourceNetwork;
+    midi.port = 25804;
+    midi.prepare();
+    CHECK(mm::platform::mdnsAdvertisedPort("_apple-midi", "_udp") == 25804);
+    auto& cs = midi.controls();
+    for (uint8_t i = 0; i < cs.count(); i++)
+        if (std::strcmp(cs[i].name, "host") == 0) std::strcpy(static_cast<char*>(cs[i].ptr), "192.168.1.101");
+    midi.onControlChanged("host");
+    CHECK(mm::platform::mdnsAdvertisedPort("_apple-midi", "_udp") == 0);
     midi.release();
 }
 

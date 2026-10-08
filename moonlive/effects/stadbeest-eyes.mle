@@ -12,8 +12,10 @@ class StadBeestEyesEffect {
   int lastDart = 0;       // when the gaze last darted, in ms
   int blinkAt = 3000;     // when the next blink starts, in ms
   int steps = 0;          // darts so far, each moving the colors on
-  int tx = 0;             // where the gaze darts to, in lights from the center
+  int tx = 0;             // where the gaze darts to, in 16ths of a light from the center
   int ty = 0;
+  int fx = 0;             // where the glide there started
+  int fy = 0;
   bool wasOnBeat = false; // whether the last frame was on a beat, so one beat counts once
   byte flash = 0;         // the beat's flash, fading
 
@@ -30,8 +32,15 @@ class StadBeestEyesEffect {
     addControl("blink", blink, 0, 255); // how often the eye blinks; 0 never
   }
 
+  // The gaze on its way from `from` to `to`, easing in and out over 400 ms, so it travels rather than jumps.
+  int glide(int from, int to) {
+    return from + div((to - from) * div(smoothstep(0, 400, t - lastDart), 256), 256);
+  }
+
   // A new gaze target: from the music's dominant pitch while it plays, so two eyes hearing the same music look the same way.
   void dart(int music) {
+    fx = glide(fx, tx);
+    fy = glide(fy, ty);
     lastDart = t;
     steps = steps + 1;
     int pick = random16(45);
@@ -41,9 +50,10 @@ class StadBeestEyesEffect {
     }
     int col = mod(pick, 9) - 4;
     int row = div(pick, 9) - 2;
-    tx = div(col * look, 100);
-    ty = div(row * look, 100);
+    tx = div(col * look * 16, 100);
+    ty = div(row * look * 16, 100);
   }
+
 
   // How far the lids are closed, in lights from the middle: a blink closes and opens within 300 ms.
   int lids() {
@@ -107,17 +117,16 @@ class StadBeestEyesEffect {
     int hue = div((t - lastDart) * 64, 150);
     if (hue > 64) { hue = 64; }
     hue = hue + steps * 64;
-    // The gaze jumps straight to its target: a dart rather than a drift.
-    int ox = div(width, 2) + tx;
-    int oy = cy + ty;
+    int ox = div(width, 2) * 16 + glide(fx, tx);
+    int oy = cy * 16 + glide(fy, ty);
 
     for (int y = 0; y < height; y = y + 1) {
       if (polarR(y - cy, 0) < cy - closed) {
-        int dy = y - oy;
+        int dy = y * 16 - oy;
         for (int x = 0; x < width; x = x + 1) {
-          int dx = x - ox;
-          int r2 = dx * dx + dy * dy;
-          if (dx * dx * b * b + dy * dy * a * a >= ab) {
+          int dx = x * 16 - ox;
+          int r2 = div(dx * dx + dy * dy, 256);
+          if (dx * dx * b * b + dy * dy * a * a >= ab * 256) {
             int idx = hue + 128;
             int bright = 50;
             // The iris moves with the gaze; beyond it lies the dim white of the eye.

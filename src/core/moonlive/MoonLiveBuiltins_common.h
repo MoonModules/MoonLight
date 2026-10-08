@@ -143,7 +143,7 @@ extern "C" inline uint32_t mm_ml_print(const uintptr_t* args, uint32_t, const ui
 // A builtin has no receiver, so the binding installs one for the run.
 /// Where a running `defineControls()` sends each `addControl`.
 using AddControlFn = void (*)(void* ctx, const char* name, uint8_t offset,
-                              int32_t lo, int32_t hi, CtrlType type);
+                              int32_t lo, int32_t hi, CtrlType type, const char* options);
 /// The control sink one thread's run installed.
 struct AddControlSink { AddControlFn fn = nullptr; void* ctx = nullptr; };
 
@@ -187,7 +187,19 @@ extern "C" inline uint32_t mm_ml_addControl(const uintptr_t* args, uint32_t, con
     if ((type == CtrlType::Byte || type == CtrlType::Bool) && lo < 0) return 0;
     // With min above max the write path rejects every value the slider could offer.
     if (lo > hi) return 0;
-    s.fn(s.ctx, name, static_cast<uint8_t>(args[1] & 0xff), lo, hi, type);
+    s.fn(s.ctx, name, static_cast<uint8_t>(args[1] & 0xff), lo, hi, type, nullptr);
+    return 0;
+}
+
+/// Surface a byte or int member as a dropdown of the names in "a|b|c", its value the index of the one picked.
+extern "C" inline uint32_t mm_ml_addSelect(const uintptr_t* args, uint32_t, const uint8_t*) {
+    const char* name = reinterpret_cast<const char*>(args[0]);
+    const char* options = reinterpret_cast<const char*>(args[2]);
+    const CtrlType type = static_cast<CtrlType>((args[1] >> 8) & 0xff);
+    const AddControlSink s = addControlSink();
+    if (!name || !options || !s.fn || !s.ctx) return 0;
+    if (type != CtrlType::Byte && type != CtrlType::Int) return 0;   // a bool is a switch
+    s.fn(s.ctx, name, static_cast<uint8_t>(args[1] & 0xff), 0, 0, type, options);
     return 0;
 }
 
@@ -215,6 +227,9 @@ inline void addCommonBuiltins(BuiltinTable& t) {
     // addControl declares a setting; bit 1 of byRef passes the member's offset and type, not its value.
     t.add({"addControl", 4, /*returns*/ false, BuiltinKind::Call, &mm_ml_addControl, {},
            /*byRef*/ 0x2, /*byStr*/ 0x1});
+    // addSelect declares a dropdown: a name, the member, and its option names in one quoted "a|b|c".
+    t.add({"addSelect", 3, /*returns*/ false, BuiltinKind::Call, &mm_ml_addSelect, {},
+           /*byRef*/ 0x2, /*byStr*/ 0x5});
 }
 
 // Run once after a successful compile, where a compiled module's defineControls() sits.
@@ -230,8 +245,8 @@ inline void runDefineControls(MoonLive& engine, DefineHook hook = nullptr, void*
     if (!engine.hasEntry(kEntryDefineControls)) return;   // nothing to clear and nothing to run
     // Install before clearing, since a clear-then-run with the table full would drop every control.
     if (!setAddControlSink([](void* ctx, const char* n, uint8_t off,
-                              int32_t lo, int32_t hi, CtrlType type) {
-            static_cast<MoonLive*>(ctx)->addDeclaredControl(n, off, lo, hi, type);
+                              int32_t lo, int32_t hi, CtrlType type, const char* options) {
+            static_cast<MoonLive*>(ctx)->addDeclaredControl(n, off, lo, hi, type, options);
         }, &engine)) return;
     if (hook) hook(hookCtx, true);
     engine.clearDeclaredControls();      // re-runnable: rebuild rather than append

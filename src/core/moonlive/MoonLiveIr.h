@@ -121,6 +121,8 @@ struct DeclaredControl {
     uint8_t     offset = 0;
     /// Elements: 1 for a scalar, the length for an array.
     uint8_t     count = 1;
+    /// A dropdown's option names, `max + 1` of them, or null for a slider or a switch.
+    const char* const* options = nullptr;
 };
 
 // One encoder and three accessors, so the emitter and the lowering cannot disagree.

@@ -52,7 +52,7 @@ TEST_CASE("GEQ3DEffect draws a bar where the audio band is energised") {
     mm::AudioService mic;
     AudioGuard micGuard{mic};  // vacate the active mic on scope exit (even if a REQUIRE aborts)
     mic.mode = mm::AudioService::kSimMode;   // simulate mode
-    mic.simulate = 1;     // sweep pattern
+    mic.simulate = mm::AudioService::kSimSweep;   // sweep pattern
     mic.setup();               // claims the process-wide active mic seat
     mic.tick();                // synthesizes the frame at the frozen time
     REQUIRE(mm::AudioService::latestFrame()->bands[0] > 1);
@@ -121,7 +121,7 @@ TEST_CASE("GEQ3DEffect handles a grid narrower than numBands") {
     mm::AudioService mic;
     AudioGuard micGuard{mic};  // vacate the active mic on scope exit (even if a REQUIRE aborts)
     mic.mode = mm::AudioService::kSimMode;   // simulate mode
-    mic.simulate = 1;     // sweep pattern
+    mic.simulate = mm::AudioService::kSimSweep;   // sweep pattern
     mic.setup();
     mic.tick();
 

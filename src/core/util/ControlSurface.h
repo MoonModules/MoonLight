@@ -24,7 +24,7 @@
 /// A fader's value becomes a motor position, an encoder's a ring and a switch's a button light.
 /// A preset pad's state (empty, stored, applied) becomes a color the APC40 picks from its own palette.
 /// So one verb covers every desk, and no hardware detail such as a color or a ring style crosses into ControlModule.
-/// `sendLabel` is for text a desk can show, such as a scribble strip, and `sendPress` carries a pad press to the board whose presets the grid shows.
+/// `sendDisplay` is the Control card's display line, for a desk with a display of its own.
 
 #include <cstdint>
 
@@ -33,20 +33,18 @@ namespace mm {
 /// Which bank a surface control belongs to, so a kind plus an index names exactly one control.
 enum class SurfaceControl : uint8_t { Switch, Encoder, Fader, Pad };
 
-/// One attached surface, implemented by a transport and called when the state it mirrors changes.
+/// One attached surface, implemented by a transport and called when the state it mirrors changes: @xref{why-a-surface-mirrors-rather-than-syncs}.
+/// It is how a desk's motors and lights are driven: @xref{feedback-is-not-an-echo}.
 class ControlSurface {
 public:
     /// Destroyed through this interface, since ControlModule holds surfaces by base pointer.
     virtual ~ControlSurface() = default;
 
-    /// A control's value changed, `value` being 0..255, the unit every surface control uses; for a preset pad, a ControlModule::PadState.
+    /// A control's value changed, `value` being 0..255, or a ControlModule::PadState for a preset pad: @xref{why-a-value-not-a-color}.
     virtual void sendValue(SurfaceControl kind, uint8_t index, uint8_t value) = 0;
 
-    /// A name for a control, where the transport can show one. Does nothing by default.
-    virtual void sendLabel(uint8_t index, const char* text) { (void)index; (void)text; }
-
-    /// A pad pressed on a board whose grid shows another board's presets, for the transport that reaches that board; true when it went out. Does nothing by default.
-    virtual bool sendPress(uint8_t pad) { (void)pad; return false; }
+    /// The Control card's display changed to `text`, for a transport whose desk has a display. Does nothing by default.
+    virtual void sendDisplay(const char* text) { (void)text; }
 };
 
 /// @}

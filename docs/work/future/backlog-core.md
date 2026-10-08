@@ -49,6 +49,42 @@ timing test here uses: feed the packet, advance the clock explicitly, assert. Ra
 on PR #96 and deliberately not taken in that pass: it is pre-existing rather than part of that
 diff, and swapping a test's transport is a change that wants its own verification.
 
+## A slot whose target is gone sends 0 to its followers (2026-10-08)
+
+**Found** on the StadBeest after a repower: the legs' walking layer was saved disabled, so the script that `fader2` to `fader6` drive had no controls.
+The slots could not follow their targets, stayed at 0, and the OSC feedback sent those zeros to the eyes, whose `bpm` and `sensitivity` then sat at their minimum.
+Live slots are not saved, so after a boot only a target or a writer gives them a value.
+
+**The fix to build:** a slot with no target to follow holds no value rather than 0, and the mirror sends nothing for it until the target exists.
+The followers then keep what they last had, and a refresh repairs them once the leader's target is back.
+Pinned by a test: a disabled target's slot produces no feedback datagram.
+
+## A MoonLive script has 48 branch labels in all (2026-10-08)
+
+**Found** on the StadBeest eyes: one more `if` in a helper turned a working script into `codegen failed: assembler overflow`.
+The assembler's label table holds 48 for the whole script, and each function takes three (entry, depth guard, exit) before its own `if`s, loops and divisions by a non-power-of-two, so eight functions leave 24.
+The compiler's own cap, `kIrLabels` at 40, follows close behind and reports "too many branches".
+
+**The fix to build:** the label and fixup tables of all three assemblers move from members to the heap, as the code buffer already did, then `kAsmLabels`, `kAsmFixups` and `kIrLabels` rise (to 128, 255 and 96); `Label` stays a byte.
+The spill pass and the lowering hold `kIrLabels`-sized arrays on the stack too, so they move with it.
+Verified by compiling the shipped scripts on a classic ESP32, an S3 and a P4, whose compile stacks are the ones at risk, and pinned by a host test with a script past 48 labels on each backend.
+
+## A MoonLive control past a limit vanishes without a word (2026-10-08)
+
+**Found** in review: an `addSelect` with a 17th option, or one whose names overflow the 96-character option store, adds no control at all, and nothing tells the script's author why.
+The other limits of `addDeclaredControl` behave the same way: past `kMaxCtrls` controls, a member already bound, or a slot running past the arena.
+
+**The fix to build:** each refusal names itself on the effect's status line, as a compile error does, such as `control "shape": more than 16 options`, so the author sees which declaration lost and why.
+Pinned by a test per limit that reads the status.
+
+## RISC-V emits 1.7 times the code Xtensa does (2026-10-08)
+
+**Found** on the StadBeest eyes: the script is 7 KB on an S3 and 12.4 KB on RISC-V, where one `smoothstep` call added to `tick` cost 432 bytes on its own.
+A call inside a function with many live values saves and restores each of them, so every addition to a drawing loop costs RISC-V 400 to 500 bytes, and large scripts reach the 16 KB code buffer first on the P4 and the S31.
+
+**The fix to build:** measure where the RISC-V lowering spends its bytes on the shipped scripts (`disasm.py --isa riscv`), starting with the save and restore around host calls, and keep values that live across a call in callee-saved registers rather than saving them per call.
+Pinned by a size test per backend on the largest shipped script.
+
 ## The desktop build advertises no mDNS (2026-09-06)
 
 `mdnsInit` on the desktop platform is a stub returning false, so a desktop instance is invisible to

@@ -96,7 +96,7 @@ TEST_CASE("a silent capture device raises no I2S wire status") {
     static_assert(!mm::platform::hasI2sMic,
                   "this desktop-only case pins the desktop side of the gate");
     mm::AudioService a;
-    a.mode = 0;   // Local
+    a.mode = mm::AudioService::kLocalMode;
     a.applyState();
     for (int i = 0; i < 3; i++) { a.tick(); a.tick1s(); }   // three diagnosis windows
     const char* st = a.status();

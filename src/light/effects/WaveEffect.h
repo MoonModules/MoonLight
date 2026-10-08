@@ -36,15 +36,15 @@ public:
 
     // Index-aligned with waveY's switch. Sin3 sums three sines, and Noise plots a jittered band.
     static constexpr const char* kWaveforms[] = {"Sawtooth", "Triangle", "Sine", "Square", "Sin3", "Noise"};
-    /// How many waveform shapes the select offers.
-    static constexpr uint8_t kWaveformCount = 6;
+    /// The waveform shapes, in option order, ending with how many the select offers.
+    enum Waveform : uint8_t { kSawtooth, kTriangle, kSine, kSquare, kSin3, kNoise, kWaveformCount };
 
     /// Travel speed, as phase advance per minute.
     uint8_t bpm  = 30;
     /// How much of the trail each frame keeps, so 0 clears the old wave at once.
     uint8_t fade = 32;
     /// Which waveform shape is drawn.
-    uint8_t waveform = 2;
+    uint8_t waveform = kSine;
 
     /// Publish the travel speed, the trail and the waveform shape.
     void defineControls() override {
@@ -129,14 +129,14 @@ private:
         if (h == 0) return 0;
         uint8_t v;   // the waveform value, 0..255, then scaled to [0, h)
         switch (type) {
-            case 0: v = phase; break;                                        // Sawtooth: ramp 0→255
-            case 1: v = triangle8(phase); break;                             // Triangle: up then down
-            case 2: v = sin8(phase); break;                                  // Sine
-            case 3: v = phase < 128 ? 0 : 255; break;                        // Square: low then high
-            case 4: v = static_cast<uint8_t>(                                // Sin3: three summed sines
+            case kSawtooth: v = phase; break;                                    // Sawtooth: ramp 0→255
+            case kTriangle: v = triangle8(phase); break;                         // Triangle: up then down
+            case kSine: v = sin8(phase); break;                                  // Sine
+            case kSquare: v = phase < 128 ? 0 : 255; break;                      // Square: low then high
+            case kSin3: v = static_cast<uint8_t>(                                // Sin3: three summed sines
                         (sin8(phase) + sin8(static_cast<uint8_t>(phase * 2))
                                      + sin8(static_cast<uint8_t>(phase * 3))) / 3); break;
-            default: v = inoise8(phase); break;                              // Noise (type 5): shared 1D gradient noise
+            default: v = inoise8(phase); break;                                  // Noise: shared 1D gradient noise
         }
         const lengthType y = static_cast<lengthType>((static_cast<uint32_t>(v) * h) / 256);
         return y < h ? y : static_cast<lengthType>(h - 1);

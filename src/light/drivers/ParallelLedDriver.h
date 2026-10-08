@@ -253,7 +253,8 @@ public:
     // The gate stops a double reinit: rebuilding twice left the ring's GDMA EOF interrupt dead.
     /// Re-init when a channel-count change resizes the frame, and only then.
     void onCorrectionChanged() override {
-        if (!effectivelyEnabled()) return;
+        // A brightness change drains no transfer and re-parses no lane: at a desk's 20 changes a second that stalled the render for half a second.
+        if (!effectivelyEnabled() || !outChannelsChanged()) return;
         const size_t before = frameBytes_;
         drainInFlight();
         parseConfig();

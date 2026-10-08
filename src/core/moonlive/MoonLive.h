@@ -138,10 +138,18 @@ public:
     }
 
     // `name` must outlive the engine, pointing into the string pool the compiler interned it into.
-    /// Append a control the running `defineControls()` declared.
+    /// Append a control the running `defineControls()` declared; with `options`, "a|b|c", it is a dropdown of those names.
     void addDeclaredControl(const char* name, uint8_t offset, int32_t lo, int32_t hi,
-                            CtrlType type = CtrlType::Int) {
+                            CtrlType type = CtrlType::Int, const char* options = nullptr) {
         if (controlCount_ >= kMaxCtrls || !name || offset >= kArenaBytes) return;
+        const char* const* optionList = nullptr;
+        if (options) {
+            const uint8_t first = selectCount_;
+            if (!splitOptions(options)) return;   // no room for its names: no dropdown rather than a cut-off one
+            optionList = &selectPtrs_[first];
+            lo = 0;
+            hi = selectCount_ - first - 1;
+        }
         if (lo > hi) return;
         // A scalar owns a whole 4-byte slot, so the engine refuses one running past the arena.
         if (offset + ctrlSlotBytes(type) > kArenaBytes) return;
@@ -155,7 +163,7 @@ public:
         if (def < lo) def = lo;
         else if (def > hi) def = hi;
         if (ctrlArena_) writeSlot(offset, def);
-        controls_[controlCount_] = {name, lo, hi, def, 0, type, offset};
+        controls_[controlCount_] = {name, lo, hi, def, 0, type, offset, 1, optionList};
         // Measured here rather than passed, and the bound is tested before the byte is read.
         uint8_t n = 0;
         while (n < kMaxControlName - 1 && name[n]) n++;
@@ -164,7 +172,7 @@ public:
     }
 
     /// Forget the controls a previous `defineControls()` declared, so re-running it rebuilds.
-    void clearDeclaredControls() { controlCount_ = 0; }
+    void clearDeclaredControls() { controlCount_ = 0; selectLen_ = 0; selectCount_ = 0; }
 
     /// Does the script define this entry point? A binding asks before reporting "no tick() to run".
     bool hasEntry(const char* name) const { return entry(name) != nullptr; }
@@ -216,6 +224,34 @@ public:
     uint8_t* controlSlot(uint8_t offset) { return (ctrlArena_ && offset < kArenaBytes) ? &ctrlArena_[offset] : nullptr; }
 
 private:
+    // Copied rather than split in place, since the string pool is the program's and a recompile reuses it.
+    /// Split a dropdown's "a|b|c" into names this engine keeps; false when they do not fit.
+    bool splitOptions(const char* text) {
+        const uint8_t len0 = selectLen_, count0 = selectCount_;
+        const char* p = text;
+        while (true) {
+            const char* end = p;
+            while (*end && *end != '|') end++;
+            const size_t n = static_cast<size_t>(end - p);
+            if (n == 0 || selectCount_ >= kSelectOptions || selectLen_ + n + 1 > kSelectText) {
+                selectLen_ = len0;   // all or nothing
+                selectCount_ = count0;
+                return false;
+            }
+            std::memcpy(selectText_ + selectLen_, p, n);
+            selectText_[selectLen_ + n] = '\0';
+            selectPtrs_[selectCount_++] = selectText_ + selectLen_;
+            selectLen_ = static_cast<uint8_t>(selectLen_ + n + 1);
+            if (!*end) return true;
+            p = end + 1;
+        }
+    }
+    /// Room for every dropdown one script declares: the names, and a pointer to each.
+    static constexpr uint8_t kSelectText = 96, kSelectOptions = 16;
+    char        selectText_[kSelectText] = {};
+    const char* selectPtrs_[kSelectOptions] = {};
+    uint8_t     selectLen_ = 0, selectCount_ = 0;
+
     // Returns the block, or null on failure with error_ set.
     void* place(const uint8_t* staged, size_t len);
 

@@ -120,6 +120,14 @@ public:
     /// Notified when the output channel count may have changed without a structural rebuild.
     virtual void onCorrectionChanged() {}
 
+    // A brightness change re-bakes the table, which the encode reads live, and never resizes the frame.
+    /// Whether the output channel count changed since the last time a driver asked, so it re-lays its frame only then.
+    bool outChannelsChanged() {
+        if (correction_.outChannels == laidOutChannels_) return false;
+        laidOutChannels_ = correction_.outChannels;
+        return true;
+    }
+
     // HUB75 does: its panel shows a level only as time, so scaling values would cost levels.
     /// Whether this driver dims by how long it lights rather than by scaling the values it sends.
     virtual bool dimsByTime() const { return false; }
@@ -191,6 +199,7 @@ protected:
         "linear"           // no curve: for a downstream device that corrects its own output
     };
     uint8_t lastGlobalBrightness_ = 0;  // last global brightness the container pushed (for self-rebuilds)
+    uint8_t laidOutChannels_ = 0xFF;    // the channel count outChannelsChanged last saw, none yet
     uint8_t effectiveBrightness_ = 255; // global times local, for a driver that dims by time
     // A config saved before `fixture` held the profile's name kept it here; read for one release, then emptied.
     char fixtureRef_[16] = {};
