@@ -21,7 +21,7 @@ The device's identity and vitals: name (behind mDNS `<name>.local`, the SoftAP S
 - read-only identity: `mac`, `chip`, `cpu`, `sdk`, `bootReason`.
 - `factory reset`, pressed twice: back to freshly installed, scripts kept.
 
-**Safe mode.** Two crashes or brownouts in a row start the next boot with the LEDs off, no MoonLive script and at most 1,024 lights. The setting at fault can then be fixed from the UI.
+**Safe mode.** Two failed boots in a row start the next boot with the LEDs off, no MoonLive script and at most 1,024 lights. A failed boot is a crash, a brownout, or a power loss within a minute of starting. Every boot raises the lights over five seconds.
 
 Detail: [technical](moxygen/SystemModule.md)
 

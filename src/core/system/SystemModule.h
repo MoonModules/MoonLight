@@ -67,8 +67,8 @@ public:
         applyLogLevel();
 
         if (safeMode()) {
-            mm::formatTo(statusBuf_, sizeof(statusBuf_), "Safe mode after %u crashes or brownouts in a row (%s): outputs and scripts are off; restart to run normally",
-                         static_cast<unsigned>(platform::bootRecord().abnormalRestarts), platform::resetReason());
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "Safe mode after %u failed boots in a row (%s): lights dark and scripts off; restart to run normally",
+                         static_cast<unsigned>(failedBoots()), platform::resetReason());
             setStatus(statusBuf_, Severity::Warning);
         }
 

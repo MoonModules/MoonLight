@@ -73,8 +73,9 @@ class StadBeestThrustersEffect {
     int music = listen(n);
 
     // A burst flares to full and fades over 900 ms; with music every thruster also burns as loud as it plays.
-    int flash = 255 - div((t - lastBurst) * 255, 900);
-    if (flash < 0) { flash = 0; }
+    int since = t - lastBurst;
+    if (since > 900) { since = 900; }
+    int flash = 255 - div(since * 255, 900);
     int burn = flash;
     if (music == 1) {
       burn = div(audioSmooth() * sensitivity, 64);

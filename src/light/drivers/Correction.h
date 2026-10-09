@@ -1,6 +1,7 @@
 #pragma once
 
-#include <cmath>   // powf: the gamma presets, cold path only
+#include <cmath>   // powf: the gamma presets, off the per-frame path; the soft start rebakes them each tick for five seconds
+#include "platform/nonblocking.h"   // MM_NONBLOCKING: the brightness table rebakes on the soft start's tick
 
 #include <cstdint>
 #include <initializer_list>   // anyPresent: the offsets a fixture may carry
@@ -37,7 +38,7 @@ struct Correction {
 
     // The constants are load-bearing: they place the toe so the two segments meet in slope.
     /// CIE 1931 lightness, inverted: a control position to a luminance fraction.
-    static float cieLuminance(float control255) {
+    static float cieLuminance(float control255) MM_NONBLOCKING {
         const float L = control255 * 100.0f / 255.0f;
         return (L <= 8.0f) ? (L / 903.3f)
                            : ((L + 16.0f) / 116.0f) * ((L + 16.0f) / 116.0f) * ((L + 16.0f) / 116.0f);
@@ -91,7 +92,7 @@ struct Correction {
 
     // ORDER is the whole design: brightness is a linear pre-scale and the curve is applied LAST.
     /// Refresh the brightness LUT alone, leaving the channel offsets untouched.
-    void rebuildBrightness(uint8_t brightness) {
+    void rebuildBrightness(uint8_t brightness) MM_NONBLOCKING {
         for (int v = 0; v < 256; v++) {
             const float out = shape(static_cast<float>(v) * brightness / 255.0f);   // scale first, then curve
             const bool lit = v > 0 && brightness > 0;
@@ -101,10 +102,10 @@ struct Correction {
     }
 
     /// Whether the 16-bit table is filled: a profile with fine roles, or a wide driver.
-    bool wantsTable() const { return hasFine || wide; }
+    bool wantsTable() const MM_NONBLOCKING { return hasFine || wide; }
 
     /// The curve applied to a linear 0..255 value, still on the 0..255 scale.
-    float shape(float linear) const {
+    float shape(float linear) const MM_NONBLOCKING {
         switch (curve) {
             case Curve::Cie:     return cieLuminance(linear) * 255.0f;
             case Curve::Gamma22: return powf(linear / 255.0f, 2.2f) * 255.0f;
@@ -116,7 +117,7 @@ struct Correction {
 
     // A non-zero input never lands on black, or a fade-out snaps off partway down.
     /// Round a curved value to an integer of at most `top`, keeping a lit input above zero.
-    static int quantize(float out, int top, bool lit) {
+    static int quantize(float out, int top, bool lit) MM_NONBLOCKING {
         int q = static_cast<int>(out + 0.5f);
         if (q <= 0 && lit) q = 1;
         return q > top ? top : q;

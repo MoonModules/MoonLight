@@ -406,8 +406,9 @@ namespace {
 constexpr const char* kBootNamespace = "mm";
 constexpr const char* kPowerOnsKey = "powerOns";
 constexpr const char* kRestartsKey = "restarts";
-constexpr uint64_t kQuickPowerOnUs = 5 * 1000 * 1000;    // on this long, and the switch-ons start again from one
-constexpr uint64_t kStableUs = 60 * 1000 * 1000;         // up this long, and the crashes start again from one
+constexpr const char* kYoungKey = "young";                // set at every boot and cleared once it has stayed up
+constexpr uint64_t kQuickPowerOnUs = 5 * 1000 * 1000;     // on this long, and the switch-ons start again from one
+constexpr uint64_t kStableUs = uint64_t{kBootStableMs} * 1000;
 
 uint8_t loadCount(const char* key) {
     nvs_handle_t h;
@@ -441,7 +442,7 @@ void clearAfter(const char* key, uint64_t us) {
     if (esp_timer_create(&args, &timer) == ESP_OK) esp_timer_start_once(timer, us);
 }
 
-// Only a count that moved is written, so an ordinary boot commits nothing to flash, and only a nonzero one needs clearing.
+// Only a count that moved is written, and only a nonzero one needs clearing, so an ordinary boot writes the young marker and its clear.
 void persist(const char* key, uint8_t value, uint8_t loaded, uint64_t clearUs) {
     if (value != loaded) storeCount(key, value);
     if (value) clearAfter(key, clearUs);
@@ -453,19 +454,23 @@ const BootRecord& bootRecord() {
     static bool counted = false;
     if (counted) return record;
     counted = true;
+    record.booted = true;
     const auto bump = [](uint8_t n) { return static_cast<uint8_t>(n < 250 ? n + 1 : n); };
     const uint8_t powerOns = loadCount(kPowerOnsKey);
     const uint8_t restarts = loadCount(kRestartsKey);
+    const uint8_t young = loadCount(kYoungKey);
     const esp_reset_reason_t reason = esp_reset_reason();
     const bool powerOn = reason == ESP_RST_POWERON;
-    const bool crashed = abnormal(reason);
+    // A collapsing supply cuts the chip off, so its restart reads as a power-on: one that ends a boot younger than a minute failed, as a crash does.
+    const bool failed = abnormal(reason) || (powerOn && young);
     // A brownout between two switch-ons neither counts nor clears them, so a device that browns out still takes the gesture; a restart someone asked for starts both again.
-    if (powerOn || crashed) {
+    if (powerOn || failed) {
         record.quickPowerOns = powerOn ? bump(powerOns) : powerOns;
-        record.abnormalRestarts = crashed ? bump(restarts) : restarts;
+        record.abnormalRestarts = failed ? bump(restarts) : restarts;
     }
     persist(kPowerOnsKey, record.quickPowerOns, powerOns, kQuickPowerOnUs);
     persist(kRestartsKey, record.abnormalRestarts, restarts, kStableUs);
+    persist(kYoungKey, 1, young, kStableUs);
     return record;
 }
 

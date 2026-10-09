@@ -197,5 +197,5 @@ TEST_CASE("the factory reset button asks for a second press, and safe mode says 
     safe.defineControls();
     safe.setup();
     REQUIRE(safe.status() != nullptr);
-    CHECK(std::string(safe.status()).find("Safe mode after 2 crashes or brownouts") != std::string::npos);
+    CHECK(std::string(safe.status()).find("Safe mode after 2 failed boots") != std::string::npos);
 }

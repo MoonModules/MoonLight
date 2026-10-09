@@ -33,8 +33,9 @@ class StadBeestMouthEffect {
     }
     wasOnBeat = heard;
 
-    int flash = 255 - div((t - lastFlash) * 255, 500);
-    if (flash < 0) { flash = 0; }
+    int since = t - lastFlash;
+    if (since > 500) { since = 500; }
+    int flash = 255 - div(since * 255, 500);
     int open = beatsin(bpm, t, 255);
     if (t - lastBeat < 2000) {
       open = div(audioSmooth() * sensitivity, 64);

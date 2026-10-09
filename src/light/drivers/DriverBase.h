@@ -24,8 +24,11 @@ public:
     // The OWNER must release before destroying: a base destructor cannot prevent the vptr race.
     /// This module's role, which is what the container filters its children by.
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Driver; }
-    /// Held in safe mode, since an output is what draws the current that browns a supply out.
-    bool heldInSafeMode() const override { return true; }
+    // A driver keeps running dark at first, since LEDs left without data hold their last frame and keep drawing its current.
+    /// Held from this many failed boots in a row, for a crash in the driver itself that dark frames do not stop.
+    static constexpr uint8_t kHeldAfter = 4;
+    /// Held once safe mode has failed to stop the boots with dark frames.
+    bool heldInSafeMode() const override { return MoonModule::failedBoots() >= kHeldAfter; }
     virtual void setSourceBuffer(Buffer* buf) = 0;
 
     // Virtual rather than RTTI: ESP32 builds compile without it, so the guard never casts.
@@ -66,13 +69,8 @@ public:
     // The multiply happens once here, so the hot path stays one LUT lookup per channel.
     /// Rebuild this driver's correction, baking global times local brightness into one LUT.
     void rebuildCorrection(uint8_t globalBrightness) {
-        lastGlobalBrightness_ = globalBrightness;   // remembered for self-triggered rebuilds
         // Applied unconditionally, so brightness works even before the fixture-profile library is up.
-        const uint8_t effective =
-            static_cast<uint8_t>((globalBrightness * localBrightness_) / 255);
-        effectiveBrightness_ = effective;
-        // A driver that dims by on-time keeps full values in its table, so the colors keep every level.
-        const uint8_t tableBrightness = dimsByTime() ? 255 : effective;
+        const uint8_t tableBrightness = adoptBrightness(globalBrightness);
         correction_.whiteMode = static_cast<WhiteMode>(whiteMode_);
         correction_.curve = static_cast<Correction::Curve>(curveSel_);
         // A missing id falls back to the default, so a driver degrades rather than crashing.
@@ -125,9 +123,11 @@ public:
 
     // HUB75 does: its panel shows a level only as time, so scaling values would cost levels.
     /// Whether this driver dims by how long it lights rather than by scaling the values it sends.
-    virtual bool dimsByTime() const { return false; }
+    virtual bool dimsByTime() const MM_NONBLOCKING { return false; }
     /// Global times local brightness, as last rebuilt, for a driver that dims by time.
     uint8_t effectiveBrightness() const { return effectiveBrightness_; }
+    /// Rebake only the brightness table for a level that moves every tick, the soft start, leaving the resolved profile as it is.
+    void rampBrightness(uint8_t globalBrightness) MM_NONBLOCKING { correction_.rebuildBrightness(adoptBrightness(globalBrightness)); }
 
     /// Clear every shared status string, so a stopped driver leaves nothing behind.
     void release() override {
@@ -227,6 +227,13 @@ protected:
     }
 
 private:
+    /// Take the global level, remembered for self-triggered rebuilds, and answer the level the table bakes.
+    uint8_t adoptBrightness(uint8_t globalBrightness) MM_NONBLOCKING {
+        lastGlobalBrightness_ = globalBrightness;
+        effectiveBrightness_ = static_cast<uint8_t>((globalBrightness * localBrightness_) / 255);
+        // A driver that dims by on-time keeps full values in its table, so the colors keep every level.
+        return dimsByTime() ? 255 : effectiveBrightness_;
+    }
     // Borrowed pointers into the library's own name storage, which outlives the control list.
     const char* fixtureOptions_[FixtureProfilesModule::kMaxProfiles] = {};
     uint8_t fixtureOptionCount_ = 0;

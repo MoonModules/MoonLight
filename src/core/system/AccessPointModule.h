@@ -16,7 +16,7 @@ namespace mm {
 ///
 /// It is named `MM-` and four MAC digits rather than after the device. The first known network's password protects it.
 ///
-/// Switched on four times in a row, each within a few seconds, it opens for that boot without a password, whatever `opens` says. That is the way back to a device whose router changed, with every setting kept.
+/// Switched on four times in a row, each within a few seconds, it opens for that boot without a password, whatever `opens` says; that boot runs in safe mode. That is the way back to a device whose router changed, with every setting kept.
 ///
 /// A Network child: the network module opens and closes it, and this one holds how it appears and answers its DNS.
 /// @card AccessPointModule.png
@@ -139,7 +139,7 @@ public:
 private:
     static constexpr const char* kOpensOptions[] = {"on failure", "always", "first setup only"};
 
-    // None after switching, since switching proves a hand on the device, and the owner of a changed router may no longer know the old password.
+    // None after switching, since switching proves a hand on the device, and the owner of a changed router may have forgotten the old password.
     /// The password this boot carries.
     const char* password(const char* firstKnownNetwork) const { return switched_ ? "" : passwordFor(firstKnownNetwork); }
 

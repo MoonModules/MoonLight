@@ -233,10 +233,14 @@ const char* hostIp();
 /// Why the device last reset, which the UI reads to flag a crashed prior boot.
 const char* resetReason();
 
+/// How long a boot stays up before it counts as good, and its failed boots start again from one.
+constexpr uint32_t kBootStableMs = 60 * 1000;
+
 /// How the last boots went, this one included: the switch-on gesture and a crash loop read it.
 struct BootRecord {
     uint8_t quickPowerOns = 0;      ///< switch-ons in a row, each within a few seconds of the last
-    uint8_t abnormalRestarts = 0;   ///< panics, watchdogs and brownouts in a row, each within a minute of the last
+    uint8_t abnormalRestarts = 0;   ///< failed boots in a row: panics, watchdogs, brownouts, and power losses of a boot younger than a minute
+    bool booted = false;            ///< this run is a device boot, which a host process never is
 };
 // Counted in flash once per boot and cleared once the device stays up; a restart from the UI, an update or a deep sleep clears it too.
 /// How the last boots went, counted once on the first call.

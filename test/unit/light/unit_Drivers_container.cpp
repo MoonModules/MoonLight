@@ -2,6 +2,9 @@
 
 #include "doctest.h"
 #include "light/drivers/Drivers.h"
+#include "light/layers/Layer.h"
+#include "light/layouts/GridLayout.h"
+#include "light/layouts/Layouts.h"
 #include "light/drivers/FixtureProfilesModule.h"   // the non-deletable boot-wired fixture-profile library
 #include "light/drivers/NetworkSendDriver.h"     // a real driver, for the sibling-instance cases
 #include "light/drivers/ParallelLedDriver.h"     // its installer and bench controls, for the mode case
@@ -408,10 +411,21 @@ TEST_CASE("a brightness change does not rescan the palette scripts; a palette fi
     std::filesystem::remove_all(root);
 }
 
-// An output draws the current that browns a supply out, so safe mode holds every driver but the preview, which keeps the lights on the screen.
-TEST_CASE("safe mode holds every output driver and keeps the preview") {
+// LEDs without data hold their last frame and its current, so safe mode sends black first, and holds the drivers only when the boots still fail.
+TEST_CASE("safe mode darkens the lights, and holds the output drivers after four failed boots") {
     struct Record { ~Record() { mm::platform::setTestBootRecord({}); } } guard;
     mm::platform::setTestBootRecord({0, 2});
+    {
+        mm::Drivers drivers;
+        CountingDriver output;
+        drivers.addChild(&output);
+        drivers.brightness = 200;
+        drivers.setup();
+        CHECK(drivers.effectiveBrightness() == 0);   // dark
+        CHECK(output.enabled());                      // still sending, black
+        drivers.removeChild(&output);
+    }
+    mm::platform::setTestBootRecord({0, 4});
     mm::Drivers drivers;
     CountingDriver output;
     mm::PreviewDriver preview;
@@ -421,4 +435,51 @@ TEST_CASE("safe mode holds every output driver and keeps the preview") {
     CHECK(preview.enabled());
     drivers.removeChild(&preview);
     drivers.removeChild(&output);
+}
+
+// A device boot raises the lights over five seconds from the first frame, so a supply that cannot hold the level fails early, where the boot record counts it.
+TEST_CASE("the lights rise to their brightness after a device boot, and a host process starts at it") {
+    struct Record { ~Record() { mm::platform::setTestBootRecord({}); mm::platform::setTestNowMs(0); } } guard;
+    mm::platform::setTestNowMs(1000);
+    {
+        mm::Drivers plain;
+        plain.brightness = 200;
+        plain.setup();
+        CHECK(plain.effectiveBrightness() == 200);   // a host process, as the desktop app and every test
+    }
+    mm::platform::setTestBootRecord({0, 0, true});
+    mm::Layouts layouts;
+    mm::GridLayout grid;
+    grid.width = 1; grid.height = 1;
+    layouts.addChild(&grid);
+    mm::Layer layer;
+    layer.setLayouts(&layouts);
+    layer.setChannelsPerLight(3);
+    layouts.applyState();
+    layer.applyState();
+    mm::Drivers drivers;
+    drivers.setLayer(&layer);
+    drivers.brightness = 200;
+    drivers.setup();
+    drivers.tick20ms();
+    CHECK(drivers.effectiveBrightness() == 0);   // dark until a light is lit
+    REQUIRE(layer.buffer().data());
+    layer.buffer().data()[0] = 255;
+    drivers.tick20ms();   // the first lit frame starts the rise
+    CHECK(drivers.effectiveBrightness() == 0);
+    mm::platform::setTestNowMs(1000 + mm::Drivers::kSoftStartMs / 2);
+    CHECK(drivers.effectiveBrightness() == 100);
+    mm::platform::setTestNowMs(1000 + mm::Drivers::kSoftStartMs);
+    drivers.tick20ms();
+    CHECK(drivers.effectiveBrightness() == 200);
+    layer.buffer().data()[0] = 0;
+    mm::Drivers dark;   // a show that stays dark rises once the boot counts as good, and stops scanning for a lit frame
+    dark.setLayer(&layer);
+    dark.brightness = 200;
+    dark.setup();
+    mm::platform::setTestNowMs(mm::platform::kBootStableMs);
+    dark.tick20ms();
+    mm::platform::setTestNowMs(mm::platform::kBootStableMs + mm::Drivers::kSoftStartMs / 2);
+    CHECK(dark.effectiveBrightness() == 100);
+    layouts.removeChild(&grid);
 }

@@ -219,10 +219,12 @@ public:
     /// Whether safe mode holds this module, off whatever its flag says.
     bool held() const { return held_; }
 
-    /// How many crashes or brownouts in a row start safe mode.
+    /// How many failed boots in a row start safe mode.
     static constexpr uint8_t kSafeModeRestarts = 2;
-    /// Whether this boot runs in safe mode, after crashes or brownouts in a row, so a setting or a supply at fault can be fixed from the UI.
-    static bool safeMode() { return platform::bootRecord().abnormalRestarts >= kSafeModeRestarts; }
+    /// The failed boots before this one, in a row: crashes, brownouts, and boots that lost their power within a minute.
+    static uint8_t failedBoots() { return platform::bootRecord().abnormalRestarts; }
+    /// Whether this boot runs in safe mode, after failed boots in a row, so a setting or a supply at fault can be fixed from the UI.
+    static bool safeMode() { return failedBoots() >= kSafeModeRestarts; }
     /// Whether safe mode holds this module, counting it as disabled while its saved flag stays, for one that can crash the device or overload its supply.
     virtual bool heldInSafeMode() const { return false; }
     /// Set the flag, firing the transition hook only on a real change.

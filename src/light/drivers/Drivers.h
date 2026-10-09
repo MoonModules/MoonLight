@@ -215,6 +215,11 @@ public:
     /// How many scripted palettes the last scan found.
     uint8_t     liveCount_ = 0;
     bool        livePalettesScanned_ = false;   ///< whether setup listed the folders, after which only a file change does
+    bool        softStarting_ = false;          ///< the lights are still rising after this boot
+    bool        dark_ = false;                  ///< safe mode: every driver sends black, so no LED holds a bright frame
+    bool        softStartBegun_ = false;        ///< the first lit frame has started the rise
+    const Buffer* source_ = nullptr;            ///< the frame the drivers read, which the rise waits to see lit
+    uint32_t    softStartAt_ = 0;               ///< when they started rising
 
     // Reached through a static seam, because the layers sample the palette before this ticks.
     /// The scripted palette: a `.mlp` name, and the binding that runs it. Empty means built-in.
@@ -235,8 +240,18 @@ public:
     }
 
     // Keeping `on` and `brightness` independent means "off" never clobbers the chosen level.
-    /// The brightness the LUT is built from: 0 when powered off, else the set level.
-    uint8_t effectiveBrightness() const { return on ? brightness : 0; }
+    /// The brightness the LUT is built from: 0 when powered off, else the set level, rising through the soft start.
+    uint8_t effectiveBrightness() const MM_NONBLOCKING {
+        if (!on || dark_) return 0;
+        if (!softStarting_) return brightness;
+        if (!softStartBegun_) return 0;   // dark until the first frame, where the rise starts
+        const uint32_t up = platform::millis() - softStartAt_;
+        return up < kSoftStartMs ? static_cast<uint8_t>(brightness * up / kSoftStartMs) : brightness;
+    }
+
+    // A supply that cannot hold the set level then fails within the minute the boot record counts, where safe mode catches it.
+    /// How long the lights take to rise to their brightness after the device boots.
+    static constexpr uint32_t kSoftStartMs = 5000;
 
     // `on=false` is a blackout between cues and a park between sets; duration separates them.
     /// How long a powered-off rig keeps tracking before its heads go still, in seconds.
@@ -396,6 +411,32 @@ public:
         MoonModule::tick1s();
     }
 
+    /// Rebake the brightness tables through the soft start, the last time at the set level.
+    void tick20ms() MM_NONBLOCKING override {
+        if (softStarting_) {
+            // From the first frame with a light lit, so the whole rise is seen, or once the boot counts as good, so a dark show stops scanning.
+            if (!softStartBegun_) {
+                if (!anyLit() && platform::millis() < platform::kBootStableMs) return MoonModule::tick20ms();
+                softStartBegun_ = true;
+                softStartAt_ = platform::millis();
+            }
+            const uint8_t level = effectiveBrightness();
+            if (platform::millis() - softStartAt_ >= kSoftStartMs) softStarting_ = false;
+            for (uint8_t i = 0; i < childCount(); i++)
+                if (child(i)->role() == ModuleRole::Driver) static_cast<DriverBase*>(child(i))->rampBrightness(level);
+        }
+        MoonModule::tick20ms();
+    }
+
+    /// Whether the frame the drivers read has any light on.
+    bool anyLit() const MM_NONBLOCKING {
+        if (!source_ || !source_->data()) return false;
+        const uint8_t* d = source_->data();
+        for (size_t i = 0; i < source_->bytes(); i++)
+            if (d[i]) return true;
+        return false;
+    }
+
     // The hold changes what is TRANSMITTED, so it writes the flag rather than rebuilding.
     /// Count the rig's time powered off, and park it once the hold expires.
     void updateMotionHold() MM_NONBLOCKING {
@@ -439,6 +480,10 @@ public:
         livePalettesScanned_ = true;
         rebuildControls();
         Palettes::setActive(palette);   // seed the global active palette from the persisted index
+        dark_ = MoonModule::safeMode();
+        // Every lit device boot, and never a host process or a test, which start at the set level.
+        softStarting_ = platform::bootRecord().booted && !dark_;
+        softStartBegun_ = false;
         MoonModule::setup();
         passBufferToDrivers();           // seeds each driver's correction via rebuildCorrection()
         // HERE rather than in prepare: every setup runs first, and a Layer sizes its buffer there.
@@ -659,6 +704,7 @@ private:
         Layer* const out = effects_ ? effects_->firstEnabledLayer() : layer_;
         Buffer* buf = out ? (outputBuffer_.data() ? &outputBuffer_ : &out->buffer())
                           : nullptr;
+        source_ = buf;
         for (uint8_t i = 0; i < childCount(); i++) {
             // The non-driver child has no source buffer or correction to wire.
             if (child(i)->role() != ModuleRole::Driver) continue;

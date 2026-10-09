@@ -52,7 +52,8 @@ The device stays in [MoonBase](updating-firmware.md#when-the-device-boots-into-m
 
 Check the power first. A board browning out under load looks exactly like a software crash, and a supply that cannot hold current while lights draw is the more common cause.
 
-After two crashes or brownouts in a row the device starts in safe mode: its LEDs stay dark, the preview runs, and the System card says why. Lower the brightness, or undo the last setting or script, then restart the device from the top bar.
+A failed boot is a crash, a brownout, or a supply that cuts out within a minute of starting. After two in a row the device starts in safe mode: its LEDs stay dark, the preview runs, and the System card says why. Lower the brightness, or undo the last setting or script, then restart the device from the top bar.
+Unplugging a device twice within a minute of starting counts the same way, so leave it on for a minute and restart it.
 
 If the power is solid, the crash log is on the device: the System card shows the last reset reason, and [logging an issue](logging-an-issue.md) says what to collect.
 

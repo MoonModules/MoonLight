@@ -74,7 +74,7 @@ public:
     const char* tags() const override { return "🟦"; }
 
     /// A panel shows a level only as lit time, so brightness shortens the planes' windows rather than scaling values.
-    bool dimsByTime() const override { return true; }
+    bool dimsByTime() const MM_NONBLOCKING override { return true; }
 
     // Reported only while the bus is up, so a failed init cannot phantom-claim the block.
     /// The peripheral block this driver holds, for the sibling claim guard.
