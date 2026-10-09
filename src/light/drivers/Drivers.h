@@ -19,6 +19,7 @@
 
 #include <cstring>  // std::strcmp in onControlChanged
 #include <atomic>   // encodeDone_: the render↔encode cross-core handoff flag
+#include <utility>  // std::swap: sorting the user's own palettes
 
 namespace mm {
 
@@ -33,14 +34,6 @@ namespace mm {
 /// Blend and map write to arbitrary physical positions through a LUT, so the output is readable only once whole. One enabled layer with a 1:1 unshuffled mapping is the exception: drivers read that layer's buffer directly, giving up parallelism.
 ///
 /// Two or more enabled layers composite in Effects order, bottom to top. Drivers owns that because only it sees both the stack order and the output buffer.
-///
-/// ## Per-driver source window
-///
-/// A window-aware driver outputs a contiguous slice, so each driver names its own lights. Reordering drivers changes nothing but tick order.
-///
-/// ## Naming
-///
-/// Capital `Drivers` is this container; lowercase "driver" is one `DriverBase` child.
 ///
 /// @card Drivers.png
 class Drivers : public MoonModule, public LightOutput {
@@ -155,17 +148,26 @@ public:
     uint8_t palette = 0;
 
     // The names live in a member array because the seam holds POINTERS, so a local would dangle.
-    /// Discover the `.mlp` files this device carries and publish their names to the picker.
+    /// List every factory palette at its place in the catalog, held or not, then the user's own `.mlp` files, and publish them to the picker.
     void refreshLivePalettes() {
         liveCount_ = 0;
-        // BOTH directories, user first, so an edited factory palette appears once as the user's.
+        // The catalog first, in its own order, so a palette's number is the same on every device of one firmware and a slot or a desk can pick it.
+        for (size_t c = 0; c < moonlive::kPaletteCatalogCount && liveCount_ < LivePalettes::kMax; c++) {
+            char path[96];
+            livePtrs_[liveCount_] = moonlive::kPaletteCatalog[c];
+            liveTags_[liveCount_] = moonlive::kPaletteCatalogTags[c];
+            livePresent_[liveCount_] = moonlive::resolveScript(moonlive::kPaletteCatalog[c], path, sizeof(path));
+            liveCount_++;
+        }
+        const uint8_t own = liveCount_;
+        // Then the user's own, from BOTH directories, user first, so an edited one appears once.
         const auto scan = [](const char* dir, void* ctx) {
             platform::fsList(dir, [](const char* name, bool isDir, uint32_t, void* c) {
                 auto* self = static_cast<Drivers*>(c);
                 if (isDir || self->liveCount_ >= LivePalettes::kMax) return;
                 const size_t n = std::strlen(name);
                 if (n < 5 || std::strcmp(name + n - 4, moonlive::kPaletteExt) != 0) return;
-                // The user copy SHADOWS this one, so the factory pass must not add a second row.
+                // A catalog palette, or one already listed, is not added twice.
                 for (uint8_t i = 0; i < self->liveCount_; i++)
                     if (std::strcmp(self->livePtrs_[i], name) == 0) return;
                 // A bounded copy: a name longer than the slot truncates, which a picker wants.
@@ -174,33 +176,28 @@ public:
                 const size_t copy = n < cap ? n : cap;
                 std::memcpy(slot, name, copy);
                 slot[copy] = '\0';
-                self->livePtrs_[self->liveCount_] = self->liveNames_[self->liveCount_];
+                self->livePtrs_[self->liveCount_] = slot;
+                self->liveTags_[self->liveCount_] = "";   // a script the catalog does not know is the user's own: no chips
+                self->livePresent_[self->liveCount_] = true;
                 self->liveCount_++;
             }, ctx);
         };
         scan(moonlive::kScriptDir, this);
         scan(moonlive::kFactoryScriptDir, this);
-        // Alphabetical, because the picker merges this with the built-ins by walking both in order.
-        for (uint8_t i = 1; i < liveCount_; i++)
-            for (uint8_t j = i; j > 0 && LivePalettes::cmpName(livePtrs_[j], livePtrs_[j - 1]) < 0; j--) {
-                const char* tmp = livePtrs_[j]; livePtrs_[j] = livePtrs_[j - 1]; livePtrs_[j - 1] = tmp;
+        // The user's own alphabetical among themselves, after the catalog.
+        for (uint8_t i = static_cast<uint8_t>(own + 1); i < liveCount_; i++)
+            for (uint8_t j = i; j > own && LivePalettes::cmpName(livePtrs_[j], livePtrs_[j - 1]) < 0; j--) {
+                std::swap(livePtrs_[j], livePtrs_[j - 1]);
+                std::swap(liveTags_[j], liveTags_[j - 1]);
+                std::swap(livePresent_[j], livePresent_[j - 1]);
             }
-        // A `.mlp` the catalog does not know is the user's own, so it lists with no chips.
-        for (uint8_t i = 0; i < liveCount_; i++) {
-            liveTags_[i] = "";
-            for (size_t c = 0; c < moonlive::kPaletteCatalogCount; c++)
-                if (std::strcmp(livePtrs_[i], moonlive::kPaletteCatalog[c]) == 0) {
-                    liveTags_[i] = moonlive::kPaletteCatalogTags[c];
-                    break;
-                }
-        }
     }
 
     /// A palette script added, removed or restored joins the picker: any path in or above a script folder rescans them.
     void onFileChanged(const char* path) override {
         if (!touchesFolder(path, moonlive::kScriptDir) && !touchesFolder(path, moonlive::kFactoryScriptDir)) return;
         refreshLivePalettes();
-        LivePalettes::set(livePtrs_, liveTags_, liveCount_);
+        LivePalettes::set(livePtrs_, liveTags_, liveCount_, livePresent_);
         rebuildControls();
     }
 
@@ -214,6 +211,7 @@ public:
     char        liveNames_[LivePalettes::kMax][moonlive::kMaxScriptName + 1] = {};
     const char* livePtrs_[LivePalettes::kMax] = {};
     const char* liveTags_[LivePalettes::kMax] = {};
+    bool        livePresent_[LivePalettes::kMax] = {};   ///< whether the device holds the file, which the UI downloads on a pick when it does not
     /// How many scripted palettes the last scan found.
     uint8_t     liveCount_ = 0;
     bool        livePalettesScanned_ = false;   ///< whether setup listed the folders, after which only a file change does
@@ -454,7 +452,7 @@ public:
         // Published HERE because prepare runs only on a mounted module, and a probe would empty it.
         const uint8_t hadLive = liveCount_;
         refreshLivePalettes();
-        LivePalettes::set(livePtrs_, liveTags_, liveCount_);
+        LivePalettes::set(livePtrs_, liveTags_, liveCount_, livePresent_);
         // A CHANGED count needs the control rebuilt: `palette`'s maximum is baked at define time.
         if (liveCount_ != hadLive) rebuildControls();
         // The top-level Effects, found by type when nothing injected a source, so a tree built from a document needs no wiring.
@@ -524,7 +522,7 @@ public:
         Layer* srcLayer = effects_ ? effects_->firstEnabledLayer() : layer_;
 
         if (outputBuffer_.data() && effects_ && effects_->enabledLayerCount() > 1) {
-            // The bottom layer overwrites; each one above blends per its own mode and opacity.
+            // The bottom layer overwrites; each one above blends per its own mode and opacity: @xref{the-shared-output-buffer}.
             effects_->forEachEnabledLayer([&](Layer* L, bool first) {
                 BlendOp op = first ? BlendOp::Overwrite : L->blendOp();
                 uint8_t op_opacity = first ? 255 : L->opacity;

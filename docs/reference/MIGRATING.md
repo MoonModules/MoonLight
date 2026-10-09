@@ -45,6 +45,42 @@ A client on the access point never receives a stored password, and the config fi
 While a browser is open through the access point, the password fields of browsers at home are empty too, since one live update serves them all.
 MoonBase follows the same rule.
 
+### `never` is `first setup only`, and switching on and off opens the access point
+
+**Action: *nothing*.**
+
+The Access Point card's `never (not recommended)` is named `first setup only`, which is what it did: the access point opens until a network or Ethernet is configured, and stays closed after.
+Switching a device on and off four times, each within a few seconds, opens its access point for that boot without a password, and every setting stays.
+`factory reset` on the System card deletes every setting and preset.
+
+### The desk follows the effect switched on last
+
+**Action: *nothing*.**
+
+A Control slot nobody assigned, from the second of each bank on, drives the effect enabled last: its toggles, numbers and choices in the order it declares them. A slot assigned by hand keeps its target.
+
+### Every factory palette has a fixed number
+
+**Action: *nothing*.**
+
+The palette picker lists every factory palette at its place in the catalog, held or not, and your own scripted palettes after them. A saved selection is kept by name.
+A knob or a slot that stepped to a scripted palette by number may land on another one.
+One the device does not hold keeps the last palette until the UI downloads it.
+
+### `stadbeest-legs` is `stadbeest-walk`, `stadbeest-eyes` is `stadbeest-frog-eye`
+
+**Action: pick the new name on a StadBeest effect's `script`, and move a slot target that names the old module.**
+
+The StadBeest's three looks each pair a legs effect with an eye effect, so the first pair is named after what it does.
+
+### Safe mode after two crashes in a row
+
+**Action: *nothing*.**
+
+Two crashes or brownouts in a row start the next boot in [safe mode](../moonmodules/core/system.md#system).
+The output drivers stay off, no MoonLive script runs, and a layout places its first 1,024 lights.
+A restart from the UI starts normally.
+
 ### Config files are state documents
 
 **Action: *nothing*.**

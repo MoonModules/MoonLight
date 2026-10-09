@@ -1,6 +1,6 @@
-// StadBeestEyes: a frog's eye on a ring disc. A wide black pupil in a palette iris; it darts its gaze, blinks, and with music darts on the beat, sends a ripple out from the pupil and dilates with the volume.
+// StadBeestFrogEye: a frog's eye on a ring disc. A wide black pupil in a palette iris; it darts its gaze, blinks, and with music darts on the beat, sends a ripple out from the pupil and dilates with the volume.
 
-class StadBeestEyesEffect {
+class StadBeestFrogEyeEffect {
   byte bpm = 20;
   byte sensitivity = 128;
   bool pulse = true;

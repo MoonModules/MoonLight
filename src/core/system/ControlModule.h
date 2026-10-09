@@ -21,29 +21,21 @@ namespace mm {
 /// Puts the device into a named state, and is where anything wanting to do that will live.
 ///
 /// Its first capability is presets: a preset is a file, saving writes one, selecting reads it.
-/// Top-level by necessity, since a preset reaches across the containers it captures from.
-/// Not to be confused with the fixture profiles module, a library of channel wirings, where this is a device state.
+/// Top-level by necessity, since a preset reaches across the containers it captures from, and distinct from the fixture profiles module, a library of channel wirings.
 ///
 /// @moreinfo
 ///
 /// ## The three banks read as one desk
 ///
-/// Switches, encoders and faders are declared in that order, and the declaration order is the render order.
-/// The preset grid sits after them rather than between.
-/// Eight rows of pads pushed the faders off the bottom of the card, so reaching them meant scrolling past the bank they belong with.
+/// Switches, encoders and faders are declared in render order, and the preset grid sits after them so its pads never push the faders off the card.
 ///
 /// ## What a preset holds
 ///
-/// A state document, the one `PATCH /api/state` applies, so its top-level keys say which containers it sets.
-/// A save writes one container exactly, which decides portability: a look carries nothing about the hardware.
-/// So a look applies on any board, where a driver preset carries pins and is specific.
+/// A state document, the one `PATCH /api/state` applies, so its top-level keys say which containers it sets. A save writes one container, so a look applies on any board and a driver preset, carrying pins, is specific.
 ///
 /// ## Why files
 ///
-/// One file per preset, with free-form names.
-/// Deleting one is deleting a file, and backing them up is copying a folder.
-/// Numbered slots would have bought a fixed grid at the cost of both.
-/// Applying one is applying a document, the engine every other writer shares.
+/// One file per preset, with free-form names: deleting one is deleting a file, and backing them up is copying a folder. Applying one is applying a document, the engine every other writer shares.
 class ControlModule : public MoonModule, public ListSource {
 public:
     /// Where the preset files live, one per preset: @xref{why-files}.
@@ -515,21 +507,49 @@ public:
 
     /// A fader drives its target through Scheduler::setControl, the same domain-neutral primitive.
     const char* surfaceTarget(uint8_t index) const {
-        if (index >= kFaderCount || !faderTargets_[index][0]) return nullptr;   // unassigned drives nothing
-        return faderTargets_[index];
+        return index < kFaderCount ? pickTarget(faderTargets_[index], index, autoFaders_) : nullptr;
     }
 
     /// What a switch drives, as "Module.control", or null when it drives nothing yet.
     const char* switchTarget(uint8_t index) const {
-        if (index >= kSwitchCount || !switchTargets_[index][0]) return nullptr;   // unassigned drives nothing
-        return switchTargets_[index];
+        return index < kSwitchCount ? pickTarget(switchTargets_[index], index, autoSwitches_) : nullptr;
     }
 
     /// What an encoder drives, as "Module.control", or null when it drives nothing yet.
     const char* encoderTarget(uint8_t index) const {
-        if (index >= kEncoderCount || !encoderTargets_[index][0]) return nullptr;   // unassigned drives nothing
-        return encoderTargets_[index];
+        return index < kEncoderCount ? pickTarget(encoderTargets_[index], index, autoEncoders_) : nullptr;
     }
+
+    /// The effect the surface follows: the one enabled last, so switching a look on brings its controls to the desk, or else the first one running.
+    static MoonModule* focusedEffect() {
+        MoonModule* last = MoonModule::lastEnabledEffect();
+        if (last && last->effectivelyEnabled()) return last;
+        Scheduler* s = Scheduler::instance();
+        for (uint8_t i = 0; s && i < s->moduleCount(); i++)
+            if (MoonModule* first = firstEnabledEffect(s->module(i))) return first;
+        return nullptr;
+    }
+
+    // As a desk's plug-in mode maps the selected plug-in onto its strips; the first slot of each bank stays the device's own.
+    /// Map the focused effect's controls, in the order it declares them, onto every slot from the second on that nobody assigned by hand.
+    void refreshAutomap() {
+        char (*banks[3])[kTargetLen] = {autoSwitches_, autoFaders_, autoEncoders_};
+        uint8_t next[3] = {};
+        bool changed = false;
+        if (MoonModule* focus = focusedEffect()) {
+            const ControlList& cs = focus->controls();
+            for (uint8_t i = 0; i < cs.count(); i++) {
+                const int b = autoBank(cs[i], next[1] < kAutoSlots);
+                if (b >= 0 && next[b] < kAutoSlots) changed |= setAuto(banks[b][next[b]++], focus, cs[i].name);
+            }
+        }
+        for (uint8_t b = 0; b < 3; b++)
+            for (; next[b] < kAutoSlots; next[b]++) changed |= setAuto(banks[b][next[b]], nullptr, nullptr);
+        if (changed) rebuildControls();   // the cards show what each slot drives now
+    }
+
+    /// Automap after every rebuild walk, which is when the focus and a script's controls can change.
+    void onTreePrepared() override { refreshAutomap(); }
 
     /// Drives whatever `switchTarget` declares.
     void driveSwitch(uint8_t index) {
@@ -546,15 +566,15 @@ public:
         // A button takes every write as a press, so a switch drives one on the way down only.
         const ControlDescriptor* tc = findControl(module, dot + 1);
         if (tc && tc->type == ControlType::Button && !switches_[index]) return;
-        // An unchanged target is not rewritten, as in driveSurface.
+        // An unchanged target is not rewritten, as in driveSurface; `enabled` is no declared control yet reads back the same way, and rewriting it rebuilds the tree.
         int32_t current = 0;
-        if (tc && tc->type != ControlType::Button && sched->getControlWide(module, dot + 1, current)
+        if ((!tc || tc->type != ControlType::Button) && sched->getControlWide(module, dot + 1, current)
             && (current != 0) == switches_[index]) return;
         char body[32];
         std::snprintf(body, sizeof(body), "{\"value\":%s}", switches_[index] ? "true" : "false");
         sched->setControl(module, dot + 1, body);
-        // A bool has no option names, so the strip says on or off rather than 1 or 0:
-        writeStrip("%s %s", dot + 1, switches_[index] ? "on" : "off");
+        // On or off rather than 1 or 0, and a module's `enabled` named by its module, since every such switch drives `enabled`.
+        writeStrip("%s %s", std::strcmp(dot + 1, "enabled") == 0 ? module : dot + 1, switches_[index] ? "on" : "off");
     }
 
     /// Read every bound control back, so a surface FOLLOWS what it drives.
@@ -1200,6 +1220,46 @@ private:
     char faderTargets_[kFaderCount][kTargetLen]     = {"Drivers.brightness"};
     char switchTargets_[kSwitchCount][kTargetLen]   = {"Drivers.on"};
     char encoderTargets_[kEncoderCount][kTargetLen] = {"Drivers.palette"};
+    /// The slots of each bank automap fills: all but the first.
+    static constexpr uint8_t kAutoSlots = 7;
+    static_assert(kSwitchCount == kAutoSlots + 1 && kFaderCount == kAutoSlots + 1 && kEncoderCount == kAutoSlots + 1, "automap leaves the first slot of each bank");
+    char autoSwitches_[kAutoSlots][kTargetLen] = {};   ///< what automap gives switch 2 onward
+    char autoFaders_[kAutoSlots][kTargetLen]   = {};   ///< fader 2 onward
+    char autoEncoders_[kAutoSlots][kTargetLen] = {};   ///< encoder 2 onward
+
+    /// A hand-assigned target wins, then automap's, which starts at the second slot.
+    static const char* pickTarget(const char* hand, uint8_t index, const char (*autoTargets)[kTargetLen]) {
+        if (hand[0]) return hand;
+        return index > 0 && autoTargets[index - 1][0] ? autoTargets[index - 1] : nullptr;
+    }
+
+    /// The bank automap gives a control: switches (0) for a toggle, faders (1) for a number while one is free, encoders (2) for the rest, -1 for none.
+    static int autoBank(const ControlDescriptor& c, bool faderFree) {
+        if (c.hidden || c.readonly) return -1;
+        if (c.type == ControlType::Bool) return 0;
+        const bool number = c.type == ControlType::Uint8 || c.type == ControlType::Uint16
+                         || c.type == ControlType::Int16 || c.type == ControlType::Int32;
+        if (number) return faderFree ? 1 : 2;
+        return c.type == ControlType::Select ? 2 : -1;
+    }
+
+    /// Write `module.control`, or nothing, into an automap slot, and say whether it changed.
+    static bool setAuto(char (&slot)[kTargetLen], const MoonModule* module, const char* control) {
+        char t[kTargetLen] = {};
+        if (module) std::snprintf(t, sizeof(t), "%s.%s", module->name(), control);
+        if (std::strcmp(t, slot) == 0) return false;
+        std::memcpy(slot, t, sizeof(t));
+        return true;
+    }
+
+    /// The first running effect in `m` or under it, in tree order.
+    static MoonModule* firstEnabledEffect(MoonModule* m) {
+        if (!m) return nullptr;
+        if (m->role() == ModuleRole::Effect && m->effectivelyEnabled()) return m;
+        for (uint8_t i = 0; i < m->childCount(); i++)
+            if (MoonModule* f = firstEnabledEffect(m->child(i))) return f;
+        return nullptr;
+    }
     /// bool, not uint8:
     bool switches_[kSwitchCount] = {};
     /// Which pad the next save fills, set by the surface popup.

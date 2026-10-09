@@ -15,7 +15,7 @@ namespace mm {
 
 /// The device's identity and its vitals, always loaded and always visible.
 ///
-/// It owns the network name and the hardware model, and surfaces the live tick metrics.
+/// It owns the network name and the hardware model, and surfaces the live tick metrics: @xref{what-it-reports}.
 ///
 /// Prior art: MoonLight's system diagnostics over REST, with the device name driving mDNS.
 /// @card SystemModule.png
@@ -24,21 +24,15 @@ namespace mm {
 ///
 /// ## What it reports
 ///
-/// The dynamic readings refresh every second: uptime, frames a second, tick time, heap and PSRAM.
-/// The static ones are read once at boot: chip, CPU, SDK, flash and the reset reason.
+/// The dynamic readings refresh every second: uptime, frames a second, tick time, heap and PSRAM. The static ones are read once at boot: chip, CPU, SDK, flash and the reset reason.
 ///
-/// PSRAM is derived rather than flagged, since the allocator merges its pool at boot.
-/// A total larger than the internal total is the signal, so a board without it adds nothing.
-/// The co-processor readout appears only where the radio is a separate chip.
+/// PSRAM is derived, since the allocator merges its pool at boot: a total above the internal total is the signal. The co-processor readout appears only where the radio is a separate chip.
 ///
 /// ## The two identities
 ///
-/// `deviceName` is the one network identity, behind mDNS, the SoftAP SSID and DHCP.
-/// It is coerced to a valid hostname every tick, so a rename propagates within one tick.
+/// `deviceName` is the one network identity, behind mDNS, the SoftAP SSID and DHCP. It is coerced to a valid hostname every tick, so a rename propagates within one tick.
 ///
-/// `deviceModel` is the physical board, an entry from the device-model catalog.
-/// A device cannot identify its own hardware, so tooling pushes this one.
-/// A validator on the control checks every write path rather than each transport doing so.
+/// `deviceModel` is the physical board from the device-model catalog, pushed by tooling since a device cannot identify its own hardware; a validator on the control checks every write path.
 class SystemModule : public MoonModule {
 public:
     /// Adopt the scheduler, whose timings the vitals read.
@@ -72,6 +66,12 @@ public:
         // Now, so a device that booted quiet is quiet from its first tick.
         applyLogLevel();
 
+        if (safeMode()) {
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "Safe mode after %u crashes or brownouts in a row (%s): outputs and scripts are off; restart to run normally",
+                         static_cast<unsigned>(platform::bootRecord().abnormalRestarts), platform::resetReason());
+            setStatus(statusBuf_, Severity::Warning);
+        }
+
         MoonModule::setup();
     }
 
@@ -81,6 +81,11 @@ public:
     /// Apply a log-level change live, and re-assert the firmware variant a load overwrote.
     void onControlChanged(const char* controlName) override {
         if (std::strcmp(controlName, "logLevel") == 0) applyLogLevel();
+        // No flush first, since a save would write back what the reset deletes.
+        if (std::strcmp(controlName, "factory reset") == 0) {
+            factoryReset();
+            platform::reboot();
+        }
         // A load overwrites the variant with the previous image's, so the constant re-asserts.
         if (std::strcmp(controlName, "firmware") == 0
             && std::strcmp(firmwareVariant_, kFirmwareName) != 0) {
@@ -96,7 +101,7 @@ public:
         totalHeapVal_ = static_cast<uint32_t>(platform::totalHeap());
         chipFlashVal_ = static_cast<uint32_t>(platform::flashChipSize());
 
-        // Device name on top
+        // Device name on top: @xref{the-two-identities}.
         controls_.addText("deviceName", deviceName_, sizeof(deviceName_));
 
         // Text because that is what persistence saves, and seeded only when empty.
@@ -140,6 +145,7 @@ public:
         controls_.addReadOnly("bootReason", const_cast<char*>(platform::resetReason()));
         // The UI honors this client-side, so nothing in the firmware reads it. A LEVEL rather than a switch, because a control names the audience it is for and one number decides which audience is reading.
         controls_.addSelect("mode", mode_, kModeOptions, 3);
+        controls_.addButton("factory reset", /*confirm*/ true);
         // Warn keeps the once-a-second line off the wire while warnings still print.
         controls_.addSelect("logLevel", logLevel_, logLevelOptions_, 6);
         controls_.setDeveloper(controls_.count() - 1);
@@ -202,6 +208,9 @@ public:
     /// The physical-hardware identity (device-model catalog entry name), pushed by tooling.
     const char* deviceModel() const { return deviceModel_; }
 
+    /// Delete every setting and preset, so the next boot starts as freshly installed; scripts and other files stay.
+    static bool factoryReset() { return FilesystemModule::removeTree(FilesystemModule::CONFIG_DIR); }
+
     /// Accept printable ASCII within the buffer, which every write path checks.
     static bool validateDeviceModel(const char* value) {
         if (!value) return false;
@@ -216,6 +225,7 @@ public:
 
 private:
     Scheduler* scheduler_ = nullptr;
+    char statusBuf_[128] = {};   ///< the safe-mode line, 120 with a 9-character reset reason
 
     char deviceName_[24] = {};   ///< the one network identity
     uint8_t mode_ = 0;           ///< one level the whole UI composes against: user, expert, developer

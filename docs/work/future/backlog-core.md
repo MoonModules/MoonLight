@@ -38,14 +38,6 @@ Next time one hangs, capture before touching it:
 - **The access point's `clients`**, which says whether a phone is holding it.
 - **The serial log**, through `monitor_esp32.py`, whose `NetworkModule:` lines say what it tried last.
 
-### Reset a device's network by switching it on and off (2026-10-09)
-
-A device without USB in reach, such as a bulb, has no way back once its WiFi settings are wrong and its access point is set to `never`, or once someone wants it as it came.
-The common way for lamps: switching it on and off four times within a few seconds forgets the known networks, so it opens its access point as on a first setup.
-- **The count:** a small counter in NVS, raised at boot and cleared after a few seconds of uptime, so only quick power cycles add up.
-- **What it resets:** the known networks and `opens`, nothing else, so the light setup stays.
-- **Where:** the network module at boot, with a status line saying it happened.
-
 ### Refresh a multicast membership on a fixed pace (2026-10-09)
 
 A socket in a multicast group joins again after 3 seconds of silence, which repairs a router that forgets a member, with a gap of about 2 seconds each time.
@@ -1678,8 +1670,8 @@ The preamble is now copied into five scripts (`setup_esp_idf.py`, `ci/verify_ver
 
 Measured on Windows over the 33 shipped `.mle` effects, same scripts and same instrument, changing only the route. Each script ran 3 s while its preview frames were sampled, then scripts were compared on mean level and on frame-to-frame motion; a pair matching closely on both is a pair that cannot be telling the pixels apart:
 
-- Reusing one module and rewriting its `script` control: **59 indistinct pairs**, in groups. Nine scripts (noise, octopus, plasma, rain, ripples, sparkle, spectrum, stadbeest-eyes, stadbeest-legs) all sat at mean 27.2 and motion 0.16, and six more (fountain, fractal, gradient, lines, metal, mh-ambient) at mean 42.9 and motion 0.33.
-- A fresh module per script, which is what the UI's picker does: **1 indistinct pair**, and the values separate as you would expect, with fractal at 108.2, noise at 127.2, mh-aim at 255.0 and stadbeest-eyes at 151.5.
+- Reusing one module and rewriting its `script` control: **59 indistinct pairs**, in groups. Nine scripts (noise, octopus, plasma, rain, ripples, sparkle, spectrum, stadbeest-frog-eye, stadbeest-walk) all sat at mean 27.2 and motion 0.16, and six more (fountain, fractal, gradient, lines, metal, mh-ambient) at mean 42.9 and motion 0.33.
+- A fresh module per script, which is what the UI's picker does: **1 indistinct pair**, and the values separate as you would expect, with fractal at 108.2, noise at 127.2, mh-aim at 255.0 and stadbeest-frog-eye at 151.5.
 
 The picker works because it does two things rather than one: `replacePickedType` in `src/ui/app.js` calls `replaceModule` to put a NEW module in the slot and only then `setCardScript`. A user who switches scripts from the dropdown on an existing card gets the broken path; a user who picks from the module picker does not, which is why the same library looks fine one way and stale the other.
 

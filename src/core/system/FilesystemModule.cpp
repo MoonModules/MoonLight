@@ -1,6 +1,5 @@
 /// @defgroup filesystem_impl Filesystem implementation
-/// The persistence engine: writes control values to `/.config/*.json` and restores them on boot.
-/// Public surface and class layout live in FilesystemModule.h.
+/// The persistence engine: writes control values to `/.config/*.json` and restores them on boot. Public surface and class layout live in FilesystemModule.h.
 /// @{
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/system/FilesystemModule.h"
@@ -14,9 +13,61 @@
 #include "platform/platform.h"
 
 #include <cstdio>
+#include <new>      // placement new: removeTree's heap DirLevel
 #include <cstring>
 
 namespace mm {
+
+namespace {
+
+/// One directory level, collected. fsList hands entries to a C callback while the directory is open.
+/// Removing a file from inside that callback mutates what is being walked, which LittleFS does not promise to survive. So a level is read out first, then acted on.
+struct DirLevel {
+    static constexpr uint8_t kMax = 64;   ///< entries per level; a deeper listing is deleted in passes
+    char names[kMax][40];
+    bool isDir[kMax];
+    uint8_t count = 0;
+    bool truncated = false;
+};
+
+void collectEntry(const char* name, bool isDir, uint32_t, void* user) {
+    auto* lvl = static_cast<DirLevel*>(user);
+    if (lvl->count >= DirLevel::kMax) { lvl->truncated = true; return; }
+    if (!name || std::strlen(name) >= sizeof(lvl->names[0])) return;
+    std::snprintf(lvl->names[lvl->count], sizeof(lvl->names[0]), "%s", name);
+    lvl->isDir[lvl->count] = isDir;
+    lvl->count++;
+}
+
+}  // namespace
+
+// Depth-first, because a directory goes only once empty; `depth` bounds the recursion since a user shapes this tree on the render task.
+bool FilesystemModule::removeTree(const char* path, uint8_t depth) {
+    if (depth > 8) return false;
+    if (platform::fsRemove(path)) return true;   // a file, or an already-empty directory
+
+    // The listing lives on the heap: a DirLevel is ~2.6 KB, users nest folders freely, and the main task has 12 KB of stack (CONFIG_ESP_MAIN_TASK_STACK_SIZE).
+    auto* raw = platform::alloc(sizeof(DirLevel));
+    if (!raw) return false;                      // no room to list: report failure, delete nothing
+    // Placement new rather than assigning the two fields by hand: DirLevel already declares its defaults, and a copy here silently skips whatever member is added to it next.
+    DirLevel* lvlp = new (raw) DirLevel;
+    DirLevel& lvl = *lvlp;
+    struct Freer { DirLevel* p; ~Freer() { p->~DirLevel(); platform::free(p); } } freer{lvlp};
+    platform::fsList(path, &collectEntry, &lvl);
+    if (lvl.count == 0) return false;            // not a directory, or unreadable: the failure stands
+
+    bool ok = true;
+    for (uint8_t i = 0; i < lvl.count; i++) {
+        char child[192];
+        // A truncated child path names a different file than the one listed, so a length at or past the buffer skips it.
+        const int n = std::snprintf(child, sizeof(child), "%s/%s", path, lvl.names[i]);
+        if (n < 0 || static_cast<size_t>(n) >= sizeof(child)) { ok = false; continue; }
+        if (!removeTree(child, static_cast<uint8_t>(depth + 1))) ok = false;
+    }
+    // A level wider than kMax leaves entries behind, so the directory is still not empty. Report the failure rather than a false success: the caller can delete again to take the next batch.
+    if (!ok || lvl.truncated) return false;
+    return platform::fsRemove(path);
+}
 
 FilesystemModule::~FilesystemModule() {
     if (instance_ == this) instance_ = nullptr;
@@ -33,9 +84,7 @@ void FilesystemModule::setScheduler(Scheduler* s) {
 }
 
 void FilesystemModule::setup() {
-    // Both failures below name the directory, because the useful question when settings do not persist is always "which location did it try".
-    // Reported ONCE here rather than as a write error per save.
-    // An unusable root produces one failed save per module per change, and that stream buries the one fact that explains it.
+    // Both failures name the directory and report once here, because a failed save per module per change would bury the one fact that explains it.
     if (!platform::fsMount()) {
         std::printf("FilesystemModule: cannot use %s, persistence disabled\n",
                     platform::fsRootPath());
@@ -51,19 +100,14 @@ void FilesystemModule::setup() {
                 platform::filesystemUsed(), platform::filesystemTotal());
 }
 
-// FilesystemModule is a non-UI persistence engine: it holds no controls (hence no defineControls override), so it renders no card in the module tree, a card here would confuse an end user next to the File Manager.
-// Its one piece of status, "last saved", is displayed by FileManagerModule, which reads it via FilesystemModule::instance()->lastSavedStr().
-// The filesystem-usage gauge likewise lives on FileManagerModule (that's where filesystem state is topical).
+// No controls and no card: FileManagerModule shows the "last saved" status via lastSavedStr() and the filesystem-usage gauge.
 
 void FilesystemModule::tick1s() MM_NONBLOCKING {
     if (!mounted_ || !scheduler_) return;
     updateLastSavedStr();
     if (!dirtyPending_) return;
     const uint32_t now = platform::millis();
-    // Two conditions, either of which saves.
-    // The DEBOUNCE waits for quiet, which coalesces a burst of edits into one write.
-    // The CEILING bounds how long that wait may last, because a continuous writer never goes quiet.
-    // Without it a control driven at 50 Hz re-stamped the debounce forever and nothing in that module's file was ever saved, including settings a person had chosen.
+    // Either saves: the debounce coalesces a burst of edits, and the ceiling bounds the wait because a control driven at 50 Hz never goes quiet.
     if (now - lastDirtyMs_ < DEBOUNCE_MS && now - firstDirtyMs_ < MAX_DEFER_MS) return;
     flush();
 }
@@ -154,7 +198,7 @@ char* FilesystemModule::readWholeFile(const char* path) {
     return buf;
 }
 
-// The file is the module's state document, applied as boot's load: what this build cannot place is skipped and logged, and the boot phases set up and build what it created.
+// The file is the module's state document, applied as boot's load: what this build cannot place is skipped and logged.
 void FilesystemModule::loadSubtree(Scheduler& s, MoonModule* m) {
     char path[MAX_PATH];
     if (!pathFor(m, path, sizeof(path))) return;
@@ -270,8 +314,7 @@ void FilesystemModule::clearSubtreeDirty(MoonModule* m) {
 }
 
 // ---- Paths ----
-// Filename = "/.config/<TypeName>.json".
-// Single instance assumed; multi-instance gets a .N suffix when that becomes a requirement (item 12, module switching).
+// Filename = "/.config/<TypeName>.json". Single instance assumed; multi-instance gets a .N suffix when that becomes a requirement (item 12, module switching).
 bool FilesystemModule::pathFor(MoonModule* m, char* out, size_t n) {
     if (!m || m->typeName()[0] == 0) return false;
     int w = mm::formatTo(out, n, "%s/%s.json", CONFIG_DIR, m->typeName());

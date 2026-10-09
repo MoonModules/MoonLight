@@ -1961,6 +1961,12 @@ function createCard(mod, depth) {
             if (tabEl) tabEl.classList.toggle("tab--disabled", !on);
         };
         setEnabledUi(mod.enabled === undefined ? true : !!mod.enabled);
+        // Safe mode holds it off whatever the switch says, so the switch is locked and says why.
+        if (mod.held) {
+            enabled.disabled = true;
+            enabled.title = "Off in safe mode: the device restarted after crashes or brownouts. Restart it to run normally";
+            card.classList.add("card--disabled");
+        }
         enabled.addEventListener("click", () => {
             const next = enabled.dataset.checked !== "true";
             setEnabledUi(next);
@@ -3291,10 +3297,18 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
             // Flush any pending debounced text write first, then act. Typing is debounced 500 ms,
             // so a click inside that window sent the button while the device still held the text as
             // it stood one keystroke ago: the Enter path already does this, and the two must agree.
-            btn.addEventListener("click", async () => {
+            const press = async () => {
                 await flushPendingSends(moduleName + ":");
                 write(ctrl.name, 1);
-            });
+            };
+            // One that cannot be undone, such as a factory reset, takes a second press.
+            if (ctrl.confirm) {
+                btn.classList.add("action-btn--danger");
+                btn.title = "Press twice: this cannot be undone";
+                armPressTwice(btn, press, { armedText: "✓ " + btn.textContent });
+            } else {
+                btn.addEventListener("click", press);
+            }
             row.appendChild(btn);
             break;
         }
@@ -3778,11 +3792,13 @@ function attachTargetPopup(row, input, ctrl) {
     // The LABEL says what it drives, so an assigned control is recognizable without opening
     // anything: "fad1" is a position, "brightness" is what a user is looking for. The CONTROL half
     // only, because the module is usually obvious from the control (a palette is Drivers') and a
-    // surface column is 26px wide. CSS ellipsis caps what does not fit.
+    // surface column is 26px wide; a module's `enabled` is the exception, named by its module.
+    // CSS ellipsis caps what does not fit.
     const label = row.querySelector(".control-label");
     if (label && ctrl.target) {
         const dot = ctrl.target.indexOf(".");
-        label.textContent = dot >= 0 ? ctrl.target.slice(dot + 1) : ctrl.target;
+        const control = dot >= 0 ? ctrl.target.slice(dot + 1) : ctrl.target;
+        label.textContent = control === "enabled" ? ctrl.target.slice(0, dot) : control;
         label.title = `${displayName(ctrl.name)} drives ${ctrl.target}`;
     }
 }
@@ -8263,62 +8279,32 @@ function buildPaletteControl(row, key, def, moduleName, ctrl) {
     //
     // Rows carry `colors`, which is what makes the picker paint a gradient beside each name;
     // every other list passes none and is unchanged.
-    // Factory palettes the device does NOT hold yet, offered alongside the ones it does:
-    // without this a scripted palette can only be chosen once it is already downloaded, so
-    // there is nothing to select in order TO download it. Same contract the script pickers
-    // give every other MoonLive role.
-    //
-    // They sit LAST, after the local live palettes, because a palette is chosen by INDEX and
-    // that index is what the knob and Home Assistant step through. Renumbering is confined
-    // to the live section, which moves only when someone adds or removes a script.
-    const remotePalettes = () => {
-        const names = ((mlCatalog || {}).palettes || {}).names || [];
-        const tags = ((mlCatalog || {}).palettes || {}).tags || [];
-        // BOTH sides stripped of the extension before comparing: the device publishes a
-        // live palette by its full filename ("drift.mlp") and so does the catalog, but
-        // stripping only one side matched nothing, so every already-downloaded palette
-        // showed a second time as a "download me" row.
-        const bare = (s) => String(s).replace(/\.mlp$/, "");
-        const have = new Set(liveOpts().filter(o => o.live).map(o => bare(o.name)));
-        return names.map((n, i) => ({ name: n, tags: tags[i] || "" }))
-                    .filter(r => !have.has(bare(r.name)));
-    };
+    // The device lists every factory palette at its place in the catalog, held or not, so a
+    // palette's index is the same on every device and a knob, a slot or Home Assistant can
+    // step to it. One the device does not hold yet is marked `absent`: picking it downloads
+    // it, then selects it at that same index.
     const openList = async () => {
-        // The catalog is fetched lazily and cached, so ask for it BEFORE building the list:
-        // on the first open mlCatalog is still null and every remote row would be missing.
-        // A failure (offline device) is not fatal: the list falls back to what is local.
-        await mlFetchCatalog().catch(() => {});
-        const remote = remotePalettes();
         // Read when the list opens, not when the control was built: a state push since then may have moved the selection or the options.
         const current = Number(wrap.dataset.value);
-        const local = liveOpts().map((o, i) => ({
-            name: String(i),                 // the VALUE: a palette is chosen by index
-            displayName: o.name || String(i),
+        const items = liveOpts().map((o, i) => ({
+            // The VALUE: a palette is chosen by index, or by file name when it must be downloaded first.
+            name: o.absent ? "\u0000" + o.name : String(i),
+            displayName: o.absent ? o.name.replace(/\.mlp$/, "") : (o.name || String(i)),
             // The SCRIPTED marker is the same 📝 a scripted effect carries, prepended
             // here rather than baked into the device's tag string: it is a UI fact
             // ("this row runs a script"), and the scripted/compiled chips must filter
             // palettes by the same rule they filter every other list by.
             tags: (o.live ? SCRIPTED_EMOJI : "") + (o.tags || ""),
-            colors: o.colors || "",
+            colors: o.colors || "",   // empty for an absent one: a placeholder swatch until it has run once
             role: "palette",
         }));
-        // `colors: ""` is what marks a row as not-yet-downloaded: its swatch renders as a
-        // placeholder, because a scripted palette has no gradient until it has run once.
-        const items = local.concat(remote.map(r => ({
-            name: "\u0000" + r.name,        // not an index: a NAME, to download then select
-            displayName: r.name.replace(/\.mlp$/, ""),
-            tags: SCRIPTED_EMOJI + (r.tags || ""),
-            colors: "",
-            role: "palette",
-        })));
         openPicker(trigger, {
             items,
             actionLabel: "use",
             keepOrder: true,          // index order: the knob and HA step through it
             currentType: String(current),
             commit: async (name) => {
-                // A remote row carries a filename, not an index: fetch it, then let the
-                // rebuilt control (the device re-lists its .mlp files) select it by index.
+                // An absent row carries a filename, not an index: fetch it, then select it by index.
                 if (name.charCodeAt(0) === 0) {
                     const file = name.slice(1);
                     try {

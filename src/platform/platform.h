@@ -10,15 +10,13 @@
 /// @{
 /// The one interface every module reaches hardware through, so the same source drives an ESP32, a Teensy, a Raspberry Pi and a desktop.
 ///
-/// Core and the light domain call these names and never a vendor SDK.
-/// A module that needs something this interface does not offer gets a new function here rather than a target check at the call site.
+/// Core and the light domain call these names and never a vendor SDK. A module that needs something this interface does not offer gets a new function here rather than a target check at the call site.
 ///
 /// @moreinfo
 ///
 /// ## Ethernet transmit can wedge
 ///
-/// The driver's internal link state can diverge from both the PHY and our own event-driven flag.
-/// Observed on an S31 under sustained transmit, with the link genuinely lost, no disconnect event delivered, and nothing recovering short of a reboot.
+/// The driver's internal link state can diverge from both the PHY and our own event-driven flag. Observed on an S31 under sustained transmit, with the link genuinely lost, no disconnect event delivered, and nothing recovering short of a reboot.
 /// A stop and start re-runs link negotiation, which is the only supported way back, and it blocks for up to four seconds while autonegotiation polls the PHY to its timeout.
 /// The housekeeping tick calls it only where every frame is being refused anyway, so a stalled render loop for one tick costs nothing a user can see.
 ///
@@ -29,8 +27,7 @@
 ///
 /// ## Internal RAM for what an interrupt reads
 ///
-/// A PSRAM-resident encode source measured about 595 microseconds per slice refill against a 151 microsecond drain budget.
-/// So a buffer an interrupt reads per byte comes from `allocInternal` rather than the PSRAM-first `alloc`.
+/// A PSRAM-resident encode source measured about 595 microseconds per slice refill against a 151 microsecond drain budget. So a buffer an interrupt reads per byte comes from `allocInternal` rather than the PSRAM-first `alloc`.
 
 // Format checking, where the compiler offers it: one toolchain parses the attribute as an unknown specifier and fails the whole class downstream.
 #if defined(__GNUC__) || defined(__clang__)
@@ -67,7 +64,7 @@ void* alloc(size_t bytes);
 /// Release what `alloc` returned.
 void free(void* ptr);
 
-/// Allocate internal RAM only, for buffers a hot ISR reads per byte; free with `free`.
+/// Allocate internal RAM only, for buffers a hot ISR reads per byte; free with `free`: @xref{internal-ram-for-what-an-interrupt-reads}.
 void* allocInternal(size_t bytes);
 
 /// Bytes taken on purpose through alloc and allocInternal.
@@ -236,6 +233,19 @@ const char* hostIp();
 /// Why the device last reset, which the UI reads to flag a crashed prior boot.
 const char* resetReason();
 
+/// How the last boots went, this one included: the switch-on gesture and a crash loop read it.
+struct BootRecord {
+    uint8_t quickPowerOns = 0;      ///< switch-ons in a row, each within a few seconds of the last
+    uint8_t abnormalRestarts = 0;   ///< panics, watchdogs and brownouts in a row, each within a minute of the last
+};
+// Counted in flash once per boot and cleared once the device stays up; a restart from the UI, an update or a deep sleep clears it too.
+/// How the last boots went, counted once on the first call.
+const BootRecord& bootRecord();
+#ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
+/// What bootRecord answers on the host, which has no boot to count.
+void setTestBootRecord(const BootRecord& r);
+#endif
+
 /// Serial log verbosity, low to high, ordered as syslog and ESP-IDF order it.
 enum class LogLevel : uint8_t { None = 0, Error, Warn, Info, Debug, Verbose };
 /// Apply a verbosity to the logger and to the KPI-line gate.
@@ -310,7 +320,7 @@ void ethSendFailCounts(uint32_t& linkDown, uint32_t& ringFull) MM_NONBLOCKING;
 /// Consecutive send failures since the last success, which tells back-pressure from a wedged path.
 uint32_t ethSendFailStreak() MM_NONBLOCKING;
 
-/// Restart the driver after transmit has wedged; blocks for up to ~4 seconds, so it is not MM_NONBLOCKING.
+/// Restart the driver after transmit has wedged; blocks for up to ~4 seconds, so it is not MM_NONBLOCKING: @xref{ethernet-transmit-can-wedge}.
 bool ethRestartTx();
 
 /// Negotiated link speed in Mbit/s, 0 when no link or no driver.
@@ -914,7 +924,7 @@ RmtLoopbackResult rmtWs2812Loopback(uint8_t txGpio, uint8_t rxGpio);
 RmtLoopbackResult rmtWs2812LoopbackFrame(uint8_t txGpio, uint8_t rxGpio,
                                          uint16_t lights, uint8_t channels);
 
-// i80 parallel WS2812 output: one pre-encoded frame in a DMA buffer the platform keeps internal.
+// i80 parallel WS2812 output: one pre-encoded frame in a DMA buffer the platform keeps internal: @xref{dma-cannot-read-psram-at-the-expanders-clock}.
 
 /// One configured i80 bus with its one or two DMA frame buffers.
 struct I80Ws2812Handle { void* impl = nullptr; };

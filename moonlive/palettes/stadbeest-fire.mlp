@@ -1,0 +1,43 @@
+// StadBeestFire: the beast's fire, from black through deep red, orange and yellow, white only at the very top. Louder music burns hotter, every beat flares the hot end white, and the flames flicker.
+
+class StadBeestFire {
+  byte sensitivity = 128;
+  byte flicker = 60;
+  int flash = 0;
+
+  string tags() { return "🎨🔥🎶"; }
+
+  void defineControls() {
+    addControl("sensitivity", sensitivity, 0, 255); // how much louder music heats the fire; 0 ignores the music
+    addControl("flicker", flicker, 0, 255); // how much the flames shimmer
+  }
+
+  void tick() {
+    if (audioBeat() > 0) { flash = 255; }
+    flash = flash - div(flash + 15, 16);
+    int loud = div(audioSmooth() * sensitivity, 128);
+    if (loud > 255) { loud = 255; }
+
+    for (int i = 0; i < 16; i = i + 1) {
+      // The entry's heat: a ramp that louder music lifts, shimmering on its own noise, and the hot end flaring on the beat.
+      int heat = i * 16 + div(i * loud, 32);
+      heat = heat + div((noise(i * 96, div(t, 4), 0) - 128) * flicker, 512);
+      if (i > 11) { heat = heat + div(flash * (i - 11), 8); }
+      if (heat < 0) { heat = 0; }
+      if (heat > 255) { heat = 255; }
+
+      // Red first, then green turns it orange and yellow; blue whitens only the top.
+      int red = heat * 3;
+      if (red > 255) { red = 255; }
+      int green = 0;
+      if (heat > 80) { green = (heat - 80) * 2; }
+      if (green > 255) { green = 255; }
+      int blue = 0;
+      if (heat > 215) { blue = (heat - 215) * 6; }
+      if (blue > 255) { blue = 255; }
+      if (i == 0) { red = 0; }
+
+      setPalEntry(i, red, green, blue);
+    }
+  }
+}

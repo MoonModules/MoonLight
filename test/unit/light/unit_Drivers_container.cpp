@@ -6,6 +6,7 @@
 #include "light/drivers/NetworkSendDriver.h"     // a real driver, for the sibling-instance cases
 #include "light/drivers/ParallelLedDriver.h"     // its installer and bench controls, for the mode case
 #include "light/drivers/RmtLedDriver.h"
+#include "light/drivers/PreviewDriver.h"     // the one driver safe mode keeps
 #include "correction_presets.h"                  // mm::test::rebuildFromPreset
 #include "../core/conditional_controls.h"   // mm::test::setControlValue
 #include "platform/platform.h"                 // gpioRead: the desktop reads back what gpioWrite put there
@@ -14,10 +15,7 @@
 #include <filesystem>
 #include <string>
 
-// Regression: the UI's enable/disable toggle on a child driver (e.g. ArtNet, Preview) was a no-op, the driver kept running. Cause: Drivers::tick() called child(i)->tick() unconditionally, skipping the per-child `enabled` check that Layer::tick() does for effects and Effects::tick() does for its child Layers.
-// (The Scheduler only walks top-level modules, so it never sees these children.)
-//
-// These tests pin the gate so the regression can't return silently. A stub driver counts its loop calls; toggling `enabled` must flip whether the count advances.
+// Drivers::tick() honors the per-child `enabled` check; a stub driver counts its loop calls, and toggling `enabled` must flip whether the count advances.
 
 namespace {
 
@@ -31,7 +29,7 @@ public:
 
 } // namespace
 
-// A minimal driver so a test can read the resulting LUT. Each driver owns its Correction (DriverBase::correction_); the container fills it via rebuildCorrection(). Defines the correction controls (localBrightness / fixture / whiteMode) so a test can drive them.
+// A minimal driver that owns its Correction (filled by the container via rebuildCorrection()) and defines the correction controls, so a test can read the resulting LUT.
 class CorrectionCapturingDriver : public mm::DriverBase {
 public:
     void setSourceBuffer(mm::Buffer*) override {}
@@ -39,7 +37,7 @@ public:
     void defineDriverControls() override { defineCorrectionControls(); }
 };
 
-// Counts prepare() vs onCorrectionChanged() so a test can prove a refresh is correction-only. prepare() is the STRUCTURAL rebuild (reinits a real driver's output peripheral, blanking the strip for a tick); onCorrectionChanged() is the light tier-1 refresh that touches no peripheral.
+// Counts prepare() (the structural rebuild that reinits the output peripheral) against onCorrectionChanged() (the light refresh), to prove a refresh is correction-only.
 class RebuildTrackingDriver : public mm::DriverBase {
 public:
     void setSourceBuffer(mm::Buffer*) override {}
@@ -122,13 +120,13 @@ TEST_CASE("Drivers is the light output core reads, from prepare until release") 
     CHECK(mm::lightSummary().lightCount == 0);      // the all-zero summary, never a dangling one
 }
 
-// The `on` control is master power: on=false scales the correction LUT to zero (output black) while PRESERVING the brightness value, so on=true restores the exact level. It rides the same cheap LUT rebuild as brightness (no pipeline realloc). This pins the shared power control IR/MQTT/WLED drive.
+// The `on` control is master power: on=false scales the correction LUT to zero while preserving the brightness value, so on=true restores the exact level, with no pipeline realloc.
 TEST_CASE("Drivers::on gates the correction LUT without clobbering brightness") {
     mm::Drivers drivers;
     CorrectionCapturingDriver drv;
     drivers.addChild(&drv);
     drv.defineControls();
-    // Linear: what this pins is that `on` gates the LUT WITHOUT losing the brightness value, and a perceptual curve would restate every expected number as a lookup without testing anything new.
+    // Linear keeps the expected numbers literal; a perceptual curve would turn each into a lookup.
     mm::test::setControlValue<uint8_t>(drv, "curve", static_cast<uint8_t>(mm::Correction::Curve::Linear));
     drivers.setup();                       // seeds drv's own correction_ from on(true)+brightness
 
@@ -151,7 +149,7 @@ TEST_CASE("Drivers::on gates the correction LUT without clobbering brightness") 
     CHECK(drv.correctionForTest().briLut[255] == 200);
 }
 
-// Regression (the localBrightness bug): a per-driver localBrightness change must RE-SCALE that driver's correction LUT, global × local, just like a global brightness change does. The bug was that localBrightness edits didn't reach the LUT (only global did). Both sliders must reach output.
+// A per-driver localBrightness change re-scales that driver's correction LUT (global × local), as a global brightness change does.
 TEST_CASE("Drivers: a localBrightness change re-scales the driver's correction LUT") {
     mm::Drivers drivers;
     CorrectionCapturingDriver drv;
@@ -206,19 +204,19 @@ TEST_CASE("Drivers::tick() skips disabled child drivers") {
     CHECK(b.loopCalls == 2);
 }
 
-// The "+ add" picker under Drivers must offer ONLY drivers, not every generic system module, else the 6 drivers are buried under ~18 generics (Devices, Filesystem, …). acceptsChildRoles drives that picker, so it returns "driver" alone. The one non-driver child (the boot-wired FixtureProfiles library) is added directly at boot, bypassing this check, and is non-deletable, so it needs no "generic" here. Pins the filter the product owner asked for.
+// The "+ add" picker under Drivers offers only drivers, so acceptsChildRoles returns "driver" alone; the boot-wired FixtureProfiles library bypasses it.
 TEST_CASE("Drivers accepts only driver-role children in the add picker") {
     mm::Drivers drivers;
     CHECK(std::strcmp(drivers.acceptsChildRoles(), "driver") == 0);
 }
 
-// The boot-wired fixture-profile library is a permanent singleton: not user-deletable (Drivers accepts only `driver`, so a deleted library could never be re-added, and every driver resolves its profile through it). Mirrors the boot-wired PreviewDriver's userEditable(false).
+// The boot-wired fixture-profile library is a permanent singleton: a deleted one could never be re-added, and every driver resolves its profile through it.
 TEST_CASE("FixtureProfiles library is a non-deletable singleton") {
     mm::FixtureProfilesModule lib;
     CHECK_FALSE(lib.userEditable());
 }
 
-// Regression, the Drivers half of the dangling LivePalettes seam (the seam-contract half is pinned in unit_Palette.cpp): the /api/modules probe constructs a Drivers, reads its controls, and destroys it. That throwaway used to publish the seam from defineControls() and so owned it when it died, first dangling it (the /api/state SIGSEGV) and, once clear() ran in the destructor, emptying the running device's scripted-palette list instead. Publication belongs to prepare(), which only a scheduler-mounted module runs, so a probe must leave the seam exactly as it found it.
+// The LivePalettes seam is published by prepare(), which only a scheduler-mounted module runs, so a throwaway probe Drivers leaves it as found.
 TEST_CASE("a probe Drivers (controls read, never prepared) leaves the scripted-palette seam alone") {
     static const char* names[] = {"running.mlp"};
     static const char* tags[]  = {""};
@@ -232,7 +230,7 @@ TEST_CASE("a probe Drivers (controls read, never prepared) leaves the scripted-p
     mm::LivePalettes::clear();
 }
 
-// The power relay is the physical expression of "the lights are off", and brightness 0 is off as much as `on` = false is: a WLED-style client says off by sending bri 0 without touching `on`, and a strip at zero still draws its idle current through a closed relay. So the relay opens at brightness 0 and closes again the moment brightness returns, with `on` unchanged either way.
+// A strip at brightness 0 still draws idle current through a closed relay, so the relay opens at brightness 0 and closes when brightness returns.
 TEST_CASE("the relay opens at brightness 0 and closes again when brightness returns") {
     mm::platform::clearTestGpioLevel();
     mm::Drivers drivers;
@@ -256,7 +254,7 @@ TEST_CASE("the relay opens at brightness 0 and closes again when brightness retu
     mm::platform::clearTestGpioLevel();
 }
 
-// A typo in the relay list must not leave the previous relays closed. Reporting the parse error and returning looked right, but the pins from the last VALID list stayed asserted on GPIOs no control named any more: the strip kept its power through a brightness of zero, and nothing in the UI said why. An unparseable list means no relays, which is the same state as an empty one.
+// An unparseable relay list means no relays, the same as an empty one, so pins from the last valid list never stay asserted on GPIOs no control names.
 TEST_CASE("a typo in the relay list releases the relays it used to hold") {
     mm::platform::clearTestGpioLevel();
     mm::Drivers drivers;
@@ -408,4 +406,19 @@ TEST_CASE("a brightness change does not rescan the palette scripts; a palette fi
     CHECK(mm::Drivers::touchesFolder("/", "/moonlive"));             // a restore of everything
     CHECK_FALSE(mm::Drivers::touchesFolder("/moonlivex/a.mlp", "/moonlive"));
     std::filesystem::remove_all(root);
+}
+
+// An output draws the current that browns a supply out, so safe mode holds every driver but the preview, which keeps the lights on the screen.
+TEST_CASE("safe mode holds every output driver and keeps the preview") {
+    struct Record { ~Record() { mm::platform::setTestBootRecord({}); } } guard;
+    mm::platform::setTestBootRecord({0, 2});
+    mm::Drivers drivers;
+    CountingDriver output;
+    mm::PreviewDriver preview;
+    drivers.addChild(&output);
+    drivers.addChild(&preview);
+    CHECK_FALSE(output.enabled());
+    CHECK(preview.enabled());
+    drivers.removeChild(&preview);
+    drivers.removeChild(&output);
 }

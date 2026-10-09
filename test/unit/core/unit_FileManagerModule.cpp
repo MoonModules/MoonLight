@@ -1,10 +1,11 @@
 /// @module FileManagerModule
 
-/// Drives the file-manager create/delete ops against the real platform::fs* seam, isolated to a temp dir via fsSetRoot (the FilesystemModule-test pattern). The mkdir/delete ops are HTTP endpoints (POST/DELETE /api/dir?path=) whose handlers do parseFilePath(query) → fsMkdir/fsRemove; the HTTP framing needs a socket fixture (backlogged), so here we exercise the same seam contract the handler runs on, the create/delete behavior + robustness (non-empty-dir / '..' traversal), plus HttpServerModule::parseFilePath directly (it's pure string→string, so it needs no socket).
+/// Drives the file-manager create/delete ops against the real platform::fs* seam, isolated to a temp dir via fsSetRoot, plus HttpServerModule::parseFilePath directly (pure string to string, so no socket is needed).
 
 #include "doctest.h"
 #include "core/system/FileManagerModule.h"
 #include "core/system/HttpServerModule.h"   // parseFilePath — the shared filesystem-path guard
+#include "core/system/SystemModule.h"       // factoryReset: the folder it deletes
 #include "platform/platform.h"
 
 #include <cstdio>
@@ -43,11 +44,7 @@ struct Rig {
         fm.defineControls();
         fm.setup();
     }
-    // Restore the DEFAULT root (whatever platform.h's fsSetRoot contract resolves "" to; under ctest that is the pinned MM_DATA_DIR), not ".", so a later test in the same binary starts from the same baseline this Rig assumed, never a leaked "." repo-root.
-    // Teardown must never propagate: this Rig is destroyed while the stack unwinds from a failed CHECK, and a throw there terminates the process, losing the very failure being reported.
-    // Hence both the error_code overload of remove_all (which cannot throw) and noexcept.
-    // The only residual throw path is fsSetRoot's std::filesystem::path assignment (a theoretical bad_alloc on a short literal). noexcept turning that into terminate is the right trade here: a test rig that cannot reset the fs root must not limp on.
-    // NOLINTNEXTLINE(bugprone-exception-escape)
+    // NOLINTNEXTLINE(bugprone-exception-escape) teardown restores the default root and never throws, since a throw during a failed CHECK terminates the process.
     ~Rig() noexcept { platform::fsSetRoot(""); std::error_code ec; std::filesystem::remove_all(root, ec); }
 
     bool onDisk(const char* rel) const {
@@ -115,7 +112,7 @@ TEST_CASE("FileManager: a '..' traversal never escapes root (the seam's confinem
     CHECK(!std::filesystem::exists(std::string(r.root) + "/../escape"));   // nothing outside root
 }
 
-// parseFilePath is the single path guard every filesystem HTTP entry (read/write/dir/mkdir/delete) runs on, pure string→string, so it's tested directly here without a socket. It decodes the `path=` query value (%XX + '+'), roots a relative path at the mount, and rejects a missing/empty path, a `..` traversal (raw OR percent-encoded), and an overlong (buffer-filling) value.
+// parseFilePath is the single path guard of every filesystem HTTP entry: it decodes `path=`, roots a relative path at the mount, and rejects an empty, `..` or overlong value.
 TEST_CASE("HttpServer::parseFilePath accepts a valid path and roots a relative one") {
     char out[64];
     // Absolute path passes through as-is.
@@ -148,7 +145,7 @@ TEST_CASE("HttpServer::parseFilePath rejects traversal, empty, missing, and over
     CHECK_FALSE(HttpServerModule::parseFilePath("path=/this/is/way/too/long", small, sizeof(small)));
 }
 
-// The /api/file upload streams the body to fsWriteStream (any size, binary-safe) and downloads via fsReadAt (positional, chunked). These pin the seam primitives that path relies on. (The HTTP framing itself needs a socket fixture, backlogged; here we exercise the platform contracts.)
+// The /api/file upload streams to fsWriteStream (any size, binary-safe) and downloads via fsReadAt (positional, chunked); these pin those seam primitives.
 
 // A multi-chunk source (larger than the src callback's cap) with a NUL writes in full and reads back byte-for-byte, the streamed-upload contract.
 namespace {
@@ -212,7 +209,7 @@ TEST_CASE("FileManager: fsWriteStream discards on abort (incomplete upload)") {
 }
 
 TEST_CASE("HTTP header names match case-insensitively, so any client's Content-Length counts") {
-    // The bench-found wipe: node's undici sends `content-length:` lowercase; the case-sensitive strstr read "no length declared", and an upload committed an EMPTY file with a 200, a silent config wipe. RFC 9112 makes field names case-insensitive; the finder must too.
+    // RFC 9112 makes field names case-insensitive; a case-sensitive finder reads a lowercase `content-length:` as no length and commits an empty file with a 200.
     const char* req = "POST /api/file?path=/x HTTP/1.1\r\ncontent-length: 831\r\n\r\nbody";
     const char* hit = mm::HttpServerModule::findHeaderCI(req, "Content-Length:");
     REQUIRE(hit != nullptr);
@@ -230,35 +227,47 @@ TEST_CASE("HTTP header names match case-insensitively, so any client's Content-L
     CHECK(mm::HttpServerModule::findHeaderCI("POST / HTTP/1.1\r\nHost: x\r\n\r\nContent-Length: 4", "Content-Length:") == nullptr);
 }
 
-// removeRecursive: the DELETE /api/dir path, exercised directly rather than through a socket.
-//
-// It is public for exactly this, and until now nothing called it: the header claimed the tests exercised the real recursion while none referenced it. These are the behaviors a user reaches by deleting a folder from the File Manager.
-TEST_CASE("removeRecursive deletes a folder and everything under it") {
+// removeTree: the DELETE /api/dir path and the factory reset, exercised directly rather than through a socket: the behaviors a user reaches by deleting a folder from the File Manager.
+TEST_CASE("removeTree deletes a folder and everything under it") {
     Rig r;
     std::filesystem::create_directories(std::string(r.root) + "/tree/a/b");
     writeFile(std::string(r.root) + "/tree/top.txt", "1");
     writeFile(std::string(r.root) + "/tree/a/mid.txt", "2");
     writeFile(std::string(r.root) + "/tree/a/b/leaf.txt", "3");
 
-    CHECK(mm::HttpServerModule::removeRecursive("/tree"));
+    CHECK(mm::FilesystemModule::removeTree("/tree"));
     CHECK_FALSE(r.onDisk("/tree"));
 }
 
-// The depth bound is what keeps a user-shaped tree from running the stack out. A tree deeper than the bound is REFUSED rather than half-deleted: reporting failure lets the caller delete again and take the next batch, which is the same contract the width cap (DirLevel::kMax) has.
-TEST_CASE("removeRecursive refuses a tree deeper than its bound") {
+// The depth bound keeps a deep tree from running the stack out; a deeper tree is refused rather than half-deleted, so the caller can delete again.
+TEST_CASE("removeTree refuses a tree deeper than its bound") {
     Rig r;
     std::string deep = std::string(r.root) + "/deep";
     for (int i = 0; i < 12; i++) deep += "/x";        // past the depth-8 bound
     std::filesystem::create_directories(deep);
 
-    CHECK_FALSE(mm::HttpServerModule::removeRecursive("/deep"));
+    CHECK_FALSE(mm::FilesystemModule::removeTree("/deep"));
     CHECK(r.onDisk("/deep"));                         // still there, not partly gone
 }
 
 // A single file, which is the case that returns on the first fsRemove without ever listing.
-TEST_CASE("removeRecursive deletes a plain file") {
+TEST_CASE("removeTree deletes a plain file") {
     Rig r;
     CHECK(r.onDisk("/readme.txt"));
-    CHECK(mm::HttpServerModule::removeRecursive("/readme.txt"));
+    CHECK(mm::FilesystemModule::removeTree("/readme.txt"));
     CHECK_FALSE(r.onDisk("/readme.txt"));
+}
+
+// A factory reset starts the device as freshly installed: every setting and preset goes, and a user's scripts and files stay, since they are content rather than settings.
+TEST_CASE("the factory reset deletes every setting and preset and keeps the other files") {
+    Rig r;
+    std::filesystem::create_directories(std::string(r.root) + "/.config/presets");
+    writeFile(std::string(r.root) + "/.config/presets/calm.json", "{}");
+    std::filesystem::create_directories(std::string(r.root) + "/moonlive");
+    writeFile(std::string(r.root) + "/moonlive/mine.mle", "class A { void tick() {} }");
+
+    CHECK(mm::SystemModule::factoryReset());
+    CHECK_FALSE(r.onDisk("/.config"));
+    CHECK(r.onDisk("/moonlive/mine.mle"));
+    CHECK(r.onDisk("/readme.txt"));
 }

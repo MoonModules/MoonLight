@@ -19,18 +19,13 @@ namespace mm {
 /// Base class for one driver: a consumer that reads the shared source buffer and emits it. The destination is a physical LED output, a network sink, or the preview.
 ///
 /// A driver reads dimensions from an active Layer, applies the shared output correction, and may restrict its output to a window of the source buffer. The zero-state role EffectBase plays for effects.
-///
-/// @moreinfo
-///
-/// ## One include writes a driver
-///
-/// This file brings `DriverBase` plus the buffer, correction and platform pieces every driver needs.
-/// A peripheral seam or a packet header stays per-driver.
 class DriverBase : public MoonModule {
 public:
     // The OWNER must release before destroying: a base destructor cannot prevent the vptr race.
     /// This module's role, which is what the container filters its children by.
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Driver; }
+    /// Held in safe mode, since an output is what draws the current that browns a supply out.
+    bool heldInSafeMode() const override { return true; }
     virtual void setSourceBuffer(Buffer* buf) = 0;
 
     // Virtual rather than RTTI: ESP32 builds compile without it, so the guard never casts.

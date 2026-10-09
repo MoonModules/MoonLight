@@ -60,6 +60,7 @@ TEST_CASE("HttpServer: a request that arrives after the connection was accepted 
 }
 
 TEST_CASE("HttpServer: a connection that never sends a request is closed once its parking time is up") {
+    struct Clock { ~Clock() { mm::platform::setTestNowMs(0); } } clock;   // reset however the test ends
     mm::platform::setTestNowMs(1000);
     mm::HttpServerModule http;
     http.port = kTestPort;
@@ -73,7 +74,6 @@ TEST_CASE("HttpServer: a connection that never sends a request is closed once it
     mm::platform::setTestNowMs(1000 + 3000);
     CHECK(readReply(http, client, reply, sizeof(reply)) == 0);                    // closed, with no reply
 
-    mm::platform::setTestNowMs(0);
     client.close();
     http.release();
 }

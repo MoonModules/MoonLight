@@ -1,6 +1,5 @@
 /// @defgroup scheduler_impl Scheduler implementation
-/// The module tree's owner: registration, naming, the tick order and control routing.
-/// Public surface and class layout live in Scheduler.h.
+/// The module tree's owner: registration, naming, the tick order and control routing; the public surface lives in Scheduler.h.
 /// @{
 #include "core/module/Scheduler.h"
 #include "core/module/StateDocument.h"
@@ -23,7 +22,7 @@ void Scheduler::setup() {
     instance_ = this;   // the one live Scheduler, reachable via Scheduler::instance()
     startTime_ = platform::millis();
 
-    // Phase 1: bind each module's controls, from scratch, so a module whose controls something bound before setup is bound once. After this, ControlList descriptors hold (name → variable pointer) so the persistence hook can apply file values.
+    // Phase 1: bind each module's controls from scratch, so the persistence hook can apply file values to (name → variable pointer) descriptors.
     for (uint8_t i = 0; i < moduleCount_; i++) {
         modules_[i]->rebuildControls();
     }
@@ -31,16 +30,14 @@ void Scheduler::setup() {
     // Phase 2: persistence load. No-op if no hook is set.
     if (loadAllHook_) loadAllHook_(this);
 
-    // Phase 2b: re-run defineControls with persisted values in place so any conditional hidden flags (e.g. NetworkModule's static-IP fields depending on addressing_) are evaluated against the loaded state, not the default. rebuildControls clears the descriptor list before re-binding, so this is idempotent.
+    // Phase 2b: re-run defineControls with persisted values in place, so conditional hidden flags see the loaded state rather than the default.
     if (loadAllHook_) {
         for (uint8_t i = 0; i < moduleCount_; i++) {
             modules_[i]->rebuildControls();
         }
     }
 
-    // Phase 3: each module's own init.
-    // Persisted values are already in member variables, so e.g.
-    // NetworkModule sees the persisted ssid_, SystemModule sees an overlaid deviceName_ (or guards if empty to derive the MAC-based default).
+    // Phase 3: each module's own init, with the persisted values already in its members.
     for (uint8_t i = 0; i < moduleCount_; i++) {
         modules_[i]->setup();
     }
@@ -62,22 +59,12 @@ void Scheduler::tick() MM_NONBLOCKING {
     uint32_t now = platform::millis();
     uint32_t tickStart = platform::micros();
 
-    // A rebuild asked for from another task happens HERE, at a frame boundary on the render thread.
-    // The walk runs a scripted layout's compiled code, and that code's frame is ordinary stack on whichever task calls it, so doing it inline in an HTTP handler put a script on the web server's small stack instead of the render task's, which is the budget every other effect is measured against.
-    // Deferring also means the pipeline is never rebuilt underneath a half-rendered frame. exchange, not test-then-clear: a request arriving between the two would be dropped.
-    //
-    // This gate is what keeps tick() honest about its MM_NONBLOCKING annotation. prepareTree allocates, reads the filesystem and runs the JIT, none of which belongs in a frame.
-    // It runs only when another task asked for a rebuild, which is a user action (a control edit, a module added or removed, a script renamed), never a frame.
-    // A steady-state tick pays one relaxed exchange.
-    // The static analyzer cannot see that, so it reports the path transitively, and the finding stays in the report on purpose.
-    // If prepareTree ever becomes reachable WITHOUT this gate, that report is the only thing that will say so.
+    // A requested rebuild runs here at a frame boundary; the analyzer reports prepareTree transitively and that finding stays on purpose, the only signal if the gate is lost.
     if (prepareRequested_.exchange(false, std::memory_order_relaxed)) {
         prepareTree();
     }
 
-    // Scheduler gates loop callbacks by `enabled()`, disabled modules don't tick.
-    // System modules that need to keep running regardless (HttpServer, Network, Filesystem, so users can re-enable other modules through them) override `respectsEnabled()` to return false.
-    // `onEnabled()` fires once per transition for custom start/stop semantics; see MoonModule::setEnabled().
+    // Disabled modules do not tick, except system modules that override `respectsEnabled()` to return false so users can re-enable others through them.
     auto shouldRun = [](MoonModule* m) {
         return !m->respectsEnabled() || m->enabled();
     };
@@ -126,7 +113,7 @@ void Scheduler::tick() MM_NONBLOCKING {
 }
 
 void Scheduler::release() {
-    // Two passes: tear down all modules first (so a module's release can still safely observe sibling modules' state), then delete the trees. Otherwise the reverse-order release-then-delete pattern would leave a module's release looking at already-freed siblings, relevant for any cross-module cleanup work.
+    // Two passes: release every module first so a release can still observe its siblings, then delete the trees.
     for (uint8_t i = moduleCount_; i > 0; i--) {
         modules_[i - 1]->release();
     }
@@ -149,6 +136,8 @@ void Scheduler::prepareTree() {
     }
     // Controls a state document named before their script compiled; this prepare compiled it.
     applyDeferredControls(*this);
+    // Last, so a module reading across the tree sees every script's controls.
+    for (uint8_t i = 0; i < moduleCount_; i++) modules_[i]->onTreePrepared();
 }
 
 namespace {
@@ -185,8 +174,7 @@ MoonModule* Scheduler::topOfType(const char* typeName) const {
     return nullptr;
 }
 
-// The separator is '-', not a space: the name is a URL path segment in the module API (`/api/modules/<name>`), where a space needs encoding.
-// A suffix that would not fit a name is refused rather than truncated, so a 13-character base stops at -9.
+// The separator is '-' because the name is a URL path segment; a suffix that would not fit is refused rather than truncated.
 bool Scheduler::freeName(const char* base, char* out, size_t cap) {
     if (!base || !base[0] || std::strlen(base) >= MoonModule::kNameLen || cap < MoonModule::kNameLen) return false;
     char candidate[MoonModule::kNameLen];
@@ -220,7 +208,7 @@ Scheduler::SetControlResult Scheduler::setControl(const char* moduleName,
         target->markDirty();
         if (noteDirtyHook_) noteDirtyHook_();
         requestPrepareTree();
-        // `enabled` rides the FULL state, not the per-leaf value patch, so the client only learns the new value from a full resync. Request one (the same signal a schema change sends); without it the client's cached state keeps the old `enabled` and reverts the toggle a second later.
+        // `enabled` rides the FULL state, not the per-leaf patch, so a full resync (the schema-change signal) is what tells the client.
         MoonModule::notifySchemaChanged();
         return SetControlResult::Ok;
     }
@@ -230,7 +218,7 @@ Scheduler::SetControlResult Scheduler::setControl(const char* moduleName,
         auto& c = ctrls[i];
         if (std::strcmp(c.name, controlName) != 0) continue;
 
-        // Per-type parse + validate + apply lives in Control.cpp. A non-Ok result leaves the storage untouched, so there is no rollback to do.
+        // Per-type parse, validate and apply live in Control.cpp; a non-Ok result leaves the storage untouched.
         switch (applyControlValue(c, valueJson, "value")) {
             case ApplyResult::Ok:         break;
             case ApplyResult::OutOfRange: return SetControlResult::OutOfRange;
@@ -238,12 +226,7 @@ Scheduler::SetControlResult Scheduler::setControl(const char* moduleName,
             case ApplyResult::ReadOnly:   return SetControlResult::ReadOnly;
         }
         reactToControlChange(target, controlName);
-        // LIVE STATE does not mark the tree dirty.
-        // A control something drives continuously is not configuration (ControlDescriptor::live), and marking it re-stamped the debounce on every write: a 50 Hz writer kept the timer from ever expiring.
-        // The module's file was never saved at all and a power cut lost everything in it, including the settings a person HAD chosen.
-        // Skipping the mark here is what lets those settle and save normally.
-        //
-        // `c` is the descriptor just applied, so this reads the flag of the control that changed rather than asking the module.
+        // A live control (ControlDescriptor::live) is driven continuously and is not configuration, so it never marks the tree dirty; `c` is the descriptor just applied.
         if (!c.live) {
             target->markDirty();
             if (noteDirtyHook_) noteDirtyHook_();
@@ -262,10 +245,7 @@ void Scheduler::reactToControlChange(MoonModule* target, const char* controlName
 
 namespace {
 
-/// Is this control a Bool (or the `enabled` pseudo-control, which is one)?
-///
-/// The byte reader needs it because a Bool alone reads back at FULL SCALE there.
-/// A value of 1 cannot say whether it came from a bool or from a Uint8 holding 1.
+/// Is this control a Bool (or the `enabled` pseudo-control), the one type the byte reader scales to full range?
 bool boolTyped(MoonModule* target, const char* controlName) {
     if (std::strcmp(controlName, "enabled") == 0) return true;
     auto& ctrls = target->controls();
@@ -279,12 +259,7 @@ bool boolTyped(MoonModule* target, const char* controlName) {
 
 bool Scheduler::getControl(const char* moduleName, const char* controlName,
                            uint8_t& out) const {
-    // DERIVED from the wide reader rather than repeating its per-type switch.
-    // The two answer the same question in different units, and the difference is a rule, not a second lookup: a surface has 8 bits of travel.
-    // A wider value clamps rather than truncating, and a Bool reads back 255 so a switch and a fader answer on one scale.
-    //
-    // They were two switches over the same ControlType list, which is the duplication the coding standards forbid.
-    // A new control type had to be added to both, and only one of them was exercised by the surface.
+    // Derived from the wide reader: a surface has 8 bits of travel, so a wider value clamps and a Bool reads back 255.
     int32_t wide = 0;
     if (!getControlWide(moduleName, controlName, wide)) return false;
 
@@ -302,7 +277,7 @@ bool Scheduler::getControlWide(const char* moduleName, const char* controlName,
     MoonModule* target = const_cast<Scheduler*>(this)->firstByName(moduleName);
     if (!target) return false;
 
-    // 0/1 here, not the byte reader's 0/255: this answers in the control's OWN units, and a bool stores 0 or 1. A caller that wants surface units uses getControl.
+    // 0/1 here, not the byte reader's 0/255: this answers in the control's own units.
     if (std::strcmp(controlName, "enabled") == 0) {
         out = target->enabled() ? 1 : 0;
         return true;
@@ -331,11 +306,11 @@ bool Scheduler::getControlWide(const char* moduleName, const char* controlName,
             case ControlType::Int32:
                 out = *static_cast<const int32_t*>(c.ptr);
                 return true;
-            // A Pin is int8_t storage (ControlList::addPin), so it cannot share the Int32 case: reading four bytes from a one-byte control returns three bytes of whatever follows it.
+            // A Pin is int8_t storage (ControlList::addPin), so it cannot share the Int32 case.
             case ControlType::Pin:
                 out = *static_cast<const int8_t*>(c.ptr);
                 return true;
-            // Same set the byte reader refuses: text, a file path, a password, a button. There is no number to give, so say so rather than inventing one.
+            // Text, a file path, a password and a button hold no number.
             default:
                 return false;
         }

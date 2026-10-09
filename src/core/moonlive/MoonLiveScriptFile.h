@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/module/MoonModule.h"   // safeMode: no script runs in it
 #include "core/moonlive/MoonLive.h"
 #include "core/moonlive/script_catalog.h"
 #include "core/util/fnv.h"   // the shipped names, for isFactoryScript below
@@ -18,8 +19,7 @@
 ///
 /// ## Two directories
 ///
-/// A user directory the UI writes and the loader prefers, and a factory directory the picker offers and the UI downloads from on first use.
-/// The split is the revert mechanism: un-editing is a local delete rather than a download.
+/// A user directory the UI writes and the loader prefers, and a factory directory the picker offers and the UI downloads from on first use. The split is the revert mechanism: un-editing is a local delete rather than a download.
 
 namespace mm::moonlive {
 
@@ -27,7 +27,7 @@ namespace mm::moonlive {
 /// Where a user's scripts live, which the UI writes and the loader prefers.
 inline constexpr const char* kScriptDir = "/moonlive";
 
-// The split is the revert mechanism: un-editing is a local delete rather than a download.
+// The split is the revert mechanism: @xref{two-directories}.
 /// Where the factory scripts land, which the picker offers and the UI downloads on first use.
 inline constexpr const char* kFactoryScriptDir = "/.moonlive";
 
@@ -213,6 +213,8 @@ inline bool compileScriptFile(MoonLive& engine, const char* name,
     platform::fsMkdir(kScriptDir);
 
     if (!name || !name[0]) { err = "no script: set the script name"; return false; }
+    // A script is what a crash loop most often comes from, so safe mode runs none.
+    if (MoonModule::safeMode()) { err = "not run in safe mode"; return false; }
 
     // A basename only, rejected rather than sanitized: one needing a rewrite was mistyped.
     for (const char* c = name; *c; c++)

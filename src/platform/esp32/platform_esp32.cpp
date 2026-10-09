@@ -20,14 +20,11 @@
 ///
 /// ## The coprocessor version query is asked twice, then never again
 ///
-/// The P4's radio runs on a companion chip, and the query asks what firmware version it reported over the link.
-/// It is a blocking call over that link, and the module asks from the one-second tick, which runs inline on the render thread.
+/// The P4's radio runs on a companion chip, and the query asks what firmware version it reported over the link. It is a blocking call over that link, and the module asks from the one-second tick, which runs inline on the render thread.
 ///
-/// Measured on a board with the radio live: the call times out after about a second, every second, forever.
-/// The module showed over a million microseconds per tick at zero frames, and every request queued a second or more behind the render loop.
+/// Measured on a board with the radio live: the call times out after about a second, every second, forever. The module showed over a million microseconds per tick at zero frames, and every request queued a second or more behind the render loop.
 /// The link works while this particular call does not answer, so retrying buys nothing and costs a second of every tick.
-/// Two attempts rather than five, since each unanswered one is a second of stutter, and one retry still catches a companion that was mid-handshake.
-/// After that the display keeps what it learned, the version being unable to change while the host runs.
+/// Two attempts rather than five, since each unanswered one is a second of stutter, and one retry still catches a companion that was mid-handshake. After that the display keeps what it learned, the version being unable to change while the host runs.
 ///
 /// ## The vendor PHY needs two steps the generic driver cannot do
 ///
@@ -39,15 +36,12 @@
 /// ## Why the hostname is applied at link-up
 ///
 /// The default wired interface starts its address client from its own connected handler, so a name set earlier is clobbered when that client restarts nameless and the lease lands blank.
-/// The name only takes on a stopped client, so the sequence is stop, set, start, and the fresh request then carries it.
-/// The wireless side needs none of this, its client starting on association, well after the name is set.
+/// The name only takes on a stopped client, so the sequence is stop, set, start, and the fresh request then carries it. The wireless side needs none of this, its client starting on association, well after the name is set.
 ///
 /// ## The reconnect is ours to make, and unbounded
 ///
 /// Without an explicit call a dropped association is permanent: the device keeps rendering but is unreachable until it is power-cycled.
-/// Which for a controller in a ceiling is a real failure.
-/// The vendor's own example has the same call in the same place.
-/// The retry is unbounded by design, since the recoverable causes outlast any retry count and self-healing is the entire point.
+/// Which for a controller in a ceiling is a real failure. The vendor's own example has the same call in the same place. The retry is unbounded by design, since the recoverable causes outlast any retry count and self-healing is the entire point.
 ///
 /// It reconnects immediately and does not sleep to pace itself, running on the event task that also carries the wired and address events, where blocking would stall the whole stack.
 /// The pacing is free: a failing association takes a second or two to time out before the next event arrives, so even a wrong credential retries at a sane rate.
@@ -67,13 +61,11 @@
 /// The device then advertises a service a home automation system can see but not resolve, leaving a blank address in its browser and no discovery.
 /// Registering the interface by pointer and enabling it forces the probe and announce onto the real one, and is harmless where the default already covers it.
 ///
-/// A re-advertise removes the service record and adds it back rather than renaming it.
-/// Since renaming does not reliably re-announce on the current interface while a remove and add drives it back through the state machine.
+/// A re-advertise removes the service record and adds it back rather than renaming it. Since renaming does not reliably re-announce on the current interface while a remove and add drives it back through the state machine.
 ///
 /// ## Raw frames to the controller
 ///
-/// A raw frame bypasses the address stack, so it is gated on the link, not on a lease: a board without an address still drives its panels.
-/// It is synchronous, so the caller may reuse its buffer at once, and an error means the frame did not go out.
+/// A raw frame bypasses the address stack, so it is gated on the link, not on a lease: a board without an address still drives its panels. It is synchronous, so the caller may reuse its buffer at once, and an error means the frame did not go out.
 ///
 /// ## Why the TCP write is bounded twice
 ///
@@ -84,6 +76,7 @@
 #include <netinet/tcp.h>   // TCP_NODELAY on an accepted connection
 
 #include "esp_timer.h"
+#include "nvs.h"         // bootRecord: the count that survives a power cut
 #include "esp_heap_caps.h"
 #include "esp_memory_utils.h"   // esp_ptr_external_ram: the ptrIsPsram residency probe
 #include "esp_cache.h"        // esp_cache_msync: I-cache sync after writing MoonLive code to IRAM
@@ -407,6 +400,73 @@ const char* coprocessorWifi() {
 #else
     return "";   // native-radio targets have no WiFi co-processor
 #endif
+}
+
+namespace {
+constexpr const char* kBootNamespace = "mm";
+constexpr const char* kPowerOnsKey = "powerOns";
+constexpr const char* kRestartsKey = "restarts";
+constexpr uint64_t kQuickPowerOnUs = 5 * 1000 * 1000;    // on this long, and the switch-ons start again from one
+constexpr uint64_t kStableUs = 60 * 1000 * 1000;         // up this long, and the crashes start again from one
+
+uint8_t loadCount(const char* key) {
+    nvs_handle_t h;
+    uint8_t n = 0;
+    if (nvs_open(kBootNamespace, NVS_READONLY, &h) == ESP_OK) { nvs_get_u8(h, key, &n); nvs_close(h); }
+    return n;
+}
+
+void storeCount(const char* key, uint8_t n) {
+    nvs_handle_t h;
+    if (nvs_open(kBootNamespace, NVS_READWRITE, &h) != ESP_OK) return;
+    nvs_set_u8(h, key, n);
+    nvs_commit(h);
+    nvs_close(h);
+}
+
+// The restarts nobody asked for: a panic, a watchdog or a brownout.
+bool abnormal(esp_reset_reason_t reason) {
+    constexpr esp_reset_reason_t kAbnormal[] = {ESP_RST_PANIC, ESP_RST_INT_WDT, ESP_RST_TASK_WDT, ESP_RST_WDT, ESP_RST_BROWNOUT};
+    for (const esp_reset_reason_t a : kAbnormal)
+        if (reason == a) return true;
+    return false;
+}
+
+// A one-shot timer clears a count, so the flash write stays off the render loop.
+void clearAfter(const char* key, uint64_t us) {
+    esp_timer_handle_t timer = nullptr;
+    const esp_timer_create_args_t args = {.callback = [](void* k) { storeCount(static_cast<const char*>(k), 0); },
+                                          .arg = const_cast<char*>(key), .dispatch_method = ESP_TIMER_TASK,
+                                          .name = "bootRecord", .skip_unhandled_events = true};
+    if (esp_timer_create(&args, &timer) == ESP_OK) esp_timer_start_once(timer, us);
+}
+
+// Only a count that moved is written, so an ordinary boot commits nothing to flash, and only a nonzero one needs clearing.
+void persist(const char* key, uint8_t value, uint8_t loaded, uint64_t clearUs) {
+    if (value != loaded) storeCount(key, value);
+    if (value) clearAfter(key, clearUs);
+}
+}  // namespace
+
+const BootRecord& bootRecord() {
+    static BootRecord record;
+    static bool counted = false;
+    if (counted) return record;
+    counted = true;
+    const auto bump = [](uint8_t n) { return static_cast<uint8_t>(n < 250 ? n + 1 : n); };
+    const uint8_t powerOns = loadCount(kPowerOnsKey);
+    const uint8_t restarts = loadCount(kRestartsKey);
+    const esp_reset_reason_t reason = esp_reset_reason();
+    const bool powerOn = reason == ESP_RST_POWERON;
+    const bool crashed = abnormal(reason);
+    // A brownout between two switch-ons neither counts nor clears them, so a device that browns out still takes the gesture; a restart someone asked for starts both again.
+    if (powerOn || crashed) {
+        record.quickPowerOns = powerOn ? bump(powerOns) : powerOns;
+        record.abnormalRestarts = crashed ? bump(restarts) : restarts;
+    }
+    persist(kPowerOnsKey, record.quickPowerOns, powerOns, kQuickPowerOnUs);
+    persist(kRestartsKey, record.abnormalRestarts, restarts, kStableUs);
+    return record;
 }
 
 const char* resetReason() {

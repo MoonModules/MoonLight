@@ -97,6 +97,8 @@ Detail: [technical](moxygen/MappingLUT.md)
 
 A palette computed per frame by a script rather than read from a gradient, so an entry can follow audio or drift as an algorithm decides. Owned by `Drivers` and ticked before the layers render.
 
+The picker lists the built-ins, then every factory palette at its place in the catalog whether the device holds it or not, then your own. So a palette has the same number on every device, the number a desk, a slot or Home Assistant steps through. One the device does not hold downloads when you pick it in the UI; chosen by number from a slot or a desk, it keeps the last palette until then.
+
 Detail: [technical](moxygen/MoonLivePalette.md)
 
 [Tests](../../reference/tests/unit-tests.md#moonlivepalette)

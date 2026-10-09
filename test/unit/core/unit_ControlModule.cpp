@@ -1384,6 +1384,82 @@ TEST_CASE("a switch drives a button on the press alone") {
     CHECK(game->presses == 1);   // the release drives nothing
 }
 
+// A switch on `enabled` writes it only when it differs, since each write rebuilds the tree and a scene writer or a follower repeats the value every few seconds.
+TEST_CASE("a switch on enabled writes it only when it changes") {
+    Device d;
+    auto* look = new mm::MoonModule();
+    look->setName("Look");
+    d.scheduler.addModule(look);
+    auto set = [&](const char* which, auto apply) {
+        auto& cs = d.control->controls();
+        for (uint8_t i = 0; i < cs.count(); i++)
+            if (std::strcmp(cs[i].name, which) == 0) { apply(cs[i].ptr); d.control->onControlChanged(which); }
+    };
+    auto& cs = d.control->controls();
+    set("switch3Target", [](void* p) { std::snprintf(static_cast<char*>(p), 40, "%s", "Look.enabled"); });
+    look->clearDirty();
+    set("switch3", [](void* p) { *static_cast<bool*>(p) = true; });
+    CHECK_FALSE(look->dirty());   // already on: nothing written
+    set("switch3", [](void* p) { *static_cast<bool*>(p) = false; });
+    CHECK_FALSE(look->enabled());
+    CHECK(look->dirty());
+    for (uint8_t i = 0; i < cs.count(); i++)   // the strip names the module, since every such switch drives `enabled`
+        if (std::strcmp(cs[i].name, "display") == 0) CHECK(std::string(static_cast<const char*>(cs[i].ptr)) == "Look off");
+    look->clearDirty();
+    set("switch3", [](void* p) { *static_cast<bool*>(p) = false; });
+    CHECK_FALSE(look->dirty());   // already off: nothing written
+}
+
+namespace {
+/// An effect with one control of each kind automap places.
+struct AutomapFx : mm::MoonModule {
+    static constexpr const char* kModes[] = {"calm", "wild"};
+    uint8_t bpm = 60;
+    bool pulse = true;
+    uint8_t mode = 0;
+    uint8_t speed = 9;
+    mm::ModuleRole role() const MM_NONBLOCKING override { return mm::ModuleRole::Effect; }
+    void defineControls() override {
+        controls_.addControl("bpm", bpm, 1, 255);
+        controls_.addControl("pulse", pulse);
+        controls_.addSelect("mode", mode, kModes, 2);
+        controls_.addControl("speed", speed, 0, 255);
+    }
+};
+}  // namespace
+
+// The desk follows the effect switched on last, from the second slot of each bank; a slot assigned by hand keeps its target.
+TEST_CASE("automap puts the effect enabled last on the desk from the second slot, and a hand-assigned slot wins") {
+    Device d;
+    auto* walk = new AutomapFx();
+    walk->setName("Walk");
+    d.scheduler.addModule(walk);
+    walk->rebuildControls();
+    auto* orb = new AutomapFx();
+    orb->setName("Orb");
+    d.scheduler.addModule(orb);
+    orb->rebuildControls();
+    orb->setEnabled(false);
+    d.scheduler.prepareTree();   // automap follows every rebuild walk
+    CHECK(std::string(d.control->switchTarget(1)) == "Walk.pulse");
+    CHECK(std::string(d.control->surfaceTarget(1)) == "Walk.bpm");
+    CHECK(std::string(d.control->surfaceTarget(2)) == "Walk.speed");
+    CHECK(std::string(d.control->encoderTarget(1)) == "Walk.mode");
+    CHECK(std::string(d.control->surfaceTarget(0)) == "Drivers.brightness");   // the first slot stays the device's
+
+    orb->setEnabled(true);
+    d.scheduler.prepareTree();   // automap follows every rebuild walk
+    CHECK(std::string(d.control->surfaceTarget(1)) == "Orb.bpm");
+
+    auto& cs = d.control->controls();
+    for (uint8_t i = 0; i < cs.count(); i++)
+        if (std::strcmp(cs[i].name, "fader2Target") == 0) {
+            std::snprintf(static_cast<char*>(cs[i].ptr), 40, "%s", "Walk.speed");
+            d.control->onControlChanged("fader2Target");
+        }
+    CHECK(std::string(d.control->surfaceTarget(1)) == "Walk.speed");
+}
+
 // A written surface control reaches the attached surfaces at once, not at the next once-a-second pass, so a forwarded move is not a second late.
 TEST_CASE("a written fader reaches the surfaces without waiting for the mirror pass") {
     Device d;

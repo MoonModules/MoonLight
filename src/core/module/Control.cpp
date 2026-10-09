@@ -1,5 +1,4 @@
-/// The per-type JSON writing and parsing every consumer shares, so adding a ControlType is one edit here.
-/// Kept out of Control.h, which the module headers include only to call addX().
+/// The per-type JSON writing and parsing every consumer shares, so adding a ControlType is one edit here. Kept out of Control.h, which the module headers include only to call addX().
 
 #include "core/module/Control.h"
 
@@ -248,7 +247,10 @@ void writeControlMetadata(JsonSink& sink, const ControlDescriptor& c) {
         case ControlType::Password:
         case ControlType::ReadOnly:
         case ControlType::IPv4:
+            return;
+        // A button that cannot be undone asks for a second press.
         case ControlType::Button:
+            if (c.aux) sink.append(",\"confirm\":true");
             return;
         // Where the module keeps its files, and which of them to offer. Both borrowed from the module (addFilePath), so the UI can list a directory without knowing what lives there.
         case ControlType::FilePath: {

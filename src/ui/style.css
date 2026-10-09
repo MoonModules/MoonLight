@@ -1551,6 +1551,8 @@ body.cards-resizing {
     font-size: 13px;
 }
 .control-row button.action-btn:hover { filter: brightness(1.15); }
+/* A button that cannot be undone shows red once armed, as the File Manager's delete does. */
+.control-row button.action-btn--danger.armed { background: var(--red); }
 
 .peek-btn {
     background: transparent;

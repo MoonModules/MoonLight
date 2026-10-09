@@ -193,9 +193,9 @@ TEST_CASE("the access point set to always opens once the first join settles, not
 }
 
 // Never keeps the access point closed when nothing joins, and the device goes on retrying its known networks.
-TEST_CASE("the access point set to never stays closed when a network is known") {
+TEST_CASE("the access point for the first setup only stays closed once a network is known") {
     ApNetwork n;
-    n.opens(mm::AccessPointModule::Opens::Never);
+    n.opens(mm::AccessPointModule::Opens::FirstSetup);
     n.wifi.remember("home", "pw");
     n.net.setup();
     n.at(11000);   // the only known network does not join in time
@@ -205,15 +205,39 @@ TEST_CASE("the access point set to never stays closed when a network is known") 
     CHECK(modeOf(n.net) == "WiFi STA (waiting)");
 }
 
-// Never is refused while nothing else would reach the device: it opens on failure, and the card says why.
-TEST_CASE("never with nothing configured still opens the access point and says so") {
+// Four quick switch-ons are the way back after a router change: the access point opens for that boot without a password, and every known network stays.
+TEST_CASE("four quick switch-ons open the access point for that boot without a password and keep the networks, three do not") {
+    struct Record { ~Record() { mm::platform::setTestBootRecord({}); } } guard;
+    {
+        ApNetwork n;
+        n.opens(mm::AccessPointModule::Opens::FirstSetup);
+        n.wifi.remember("home", "homepassword");
+        mm::platform::setTestBootRecord({3, 0});
+        n.net.setup();
+        n.at(11000);   // the only known network does not join in time
+        CHECK(modeOf(n.net) == "Idle");
+    }
     ApNetwork n;
-    n.opens(mm::AccessPointModule::Opens::Never);
+    n.opens(mm::AccessPointModule::Opens::FirstSetup);
+    n.wifi.remember("home", "homepassword");
+    mm::platform::setTestBootRecord({4, 0});
+    n.net.setup();
+    n.at(11000);
+    CHECK(modeOf(n.net) == "WiFi AP");
+    CHECK(std::string(mm::platform::testLastApConfig().password).empty());
+    CHECK(n.wifi.knownCount() == 1);
+    n.ap.setup();
+    REQUIRE(n.ap.status() != nullptr);
+    CHECK(std::string(n.ap.status()).find("without a password") != std::string::npos);
+}
+
+// A first setup is when nothing is configured, so the access point opens then, as on failure.
+TEST_CASE("the access point for the first setup only opens while nothing is configured") {
+    ApNetwork n;
+    n.opens(mm::AccessPointModule::Opens::FirstSetup);
     n.net.setup();
     n.at(1000);
     CHECK(modeOf(n.net) == "WiFi AP");
-    REQUIRE(n.ap.status() != nullptr);
-    CHECK(std::string(n.ap.status()).find("opens on failure") != std::string::npos);
 }
 
 // The password reaches the radio, and a change re-opens it live.
@@ -260,7 +284,7 @@ TEST_CASE("a password is written empty while secrets are hidden, and as before o
     CHECK_FALSE(mm::captive::throughAccessPoint(home));
 }
 
-// The network stack takes a packet for any of the device's addresses on any interface, so a phone on the access point can ask the station's address: its own address decides, not the one it reached.
+// A packet reaches the device on any of its addresses, so a phone on the access point can ask the station's address: the phone's own address decides.
 TEST_CASE("a client is on the access point by its own address, whichever of the device's addresses it asked") {
     const uint8_t phoneOnAp[4] = {4, 3, 2, 2}, laptopAtHome[4] = {192, 168, 1, 146};
     CHECK(mm::captive::fromAccessPoint(phoneOnAp));
@@ -376,10 +400,10 @@ TEST_CASE("credentials arriving while the access point runs join beside it, then
     CHECK_FALSE(mm::platform::wifiApConnected());
 }
 
-// Lifting "never" while the device has nothing to join opens the access point at once, as every setting applies live.
-TEST_CASE("switching never to on failure opens the access point without a restart") {
+// Leaving first setup only while the device has nothing to join opens the access point at once, as every setting applies live.
+TEST_CASE("switching first setup only to on failure opens the access point without a restart") {
     ApNetwork n;
-    n.opens(mm::AccessPointModule::Opens::Never);
+    n.opens(mm::AccessPointModule::Opens::FirstSetup);
     n.wifi.remember("not-here", "pw");
     n.net.setup();
     n.at(11000);
@@ -391,9 +415,9 @@ TEST_CASE("switching never to on failure opens the access point without a restar
 }
 
 // A network that joins after an idle spell leaves no idle behind: switching to on failure then opens nothing, since nothing failed.
-TEST_CASE("a recovered network keeps the access point closed when never turns into on failure") {
+TEST_CASE("a recovered network keeps the access point closed when first setup only turns into on failure") {
     ApNetwork n;
-    n.opens(mm::AccessPointModule::Opens::Never);
+    n.opens(mm::AccessPointModule::Opens::FirstSetup);
     n.wifi.remember("home", "pw");
     n.net.setup();
     n.at(11000);

@@ -1,0 +1,107 @@
+// StadBeestThrusters: the ten legs as rocket thrusters, each a plume of sparks pouring down from the body. Louder music burns harder and every beat fires a burst; without music they fire short bursts around the ring, and every fourth burst all of them.
+
+class StadBeestThrustersEffect {
+  byte bpm = 40;
+  byte thrust = 200;
+  byte sensitivity = 128;
+  bool pulse = true;
+  byte flicker = 80;
+
+  int lastBeat = -100000; // when the last beat started, in ms
+  int lastFire = 0;       // when the last burst without music fired, in ms
+  int fires = 0;          // bursts so far, which pick the legs the next one fires
+  int aim = 0;            // the leg the last burst started from
+  int kind = 3;           // which legs it fired: 0 one, 1 an opposite pair, 2 three side by side, 3 all
+  int frame = 0;          // frames so far, so a full pool starves a different leg each frame
+  bool wasOnBeat = false; // whether the last frame was on a beat, so one beat counts once
+  int lastBurst = -100000; // when the last burst fired, in ms, which fades over 900 ms at any frame rate
+
+  int dimensions() { return 2; }
+
+  string tags() { return "💫🎵"; }
+
+  void defineControls() {
+    pool(2000);
+    addControl("bpm", bpm, 1, 255); // bursts a minute without music
+    addControl("sensitivity", sensitivity, 0, 255); // with music, burn as loud as it plays; 0 ignores the music
+    addControl("pulse", pulse, 0, 1); // with music, every beat fires a burst
+    addControl("thrust", thrust, 1, 255); // how far a plume reaches at full burn
+    addControl("flicker", flicker, 0, 255); // how much a plume flickers
+  }
+
+  // Whether `leg` fires in the burst without music.
+  int firing(int leg, int n) {
+    int from = mod(leg - aim + n, n);
+    if (kind == 3) { return 1; }
+    if (kind == 2) { if (from < 3) { return 1; } }
+    if (kind == 1) { if (from == div(n, 2)) { return 1; } }
+    if (from == 0) { return 1; }
+    return 0;
+  }
+
+  // Listens for the beat, and without music fires a burst at bpm. Returns whether music plays.
+  int listen(int n) {
+    int heard = audioBeat();
+    if (sensitivity == 0) { heard = 0; }
+    // A rising edge is a beat, unless it follows the last one too closely.
+    if (heard > wasOnBeat) {
+      if (t - lastBeat > 250) {
+        lastBeat = t;
+        fires = fires + 1;
+        if (pulse == 1) { lastBurst = t; }
+      }
+    }
+    wasOnBeat = heard;
+    if (t - lastBeat < 2000) { return 1; }
+    if (t - lastFire > div(60000, bpm)) {
+      lastFire = t;
+      fires = fires + 1;
+      lastBurst = t;
+      aim = random16(n);
+      kind = mod(fires, 4);
+    }
+    return 0;
+  }
+
+  void tick() {
+    fade(30);
+    frame = frame + 1;
+    int n = 10;
+    if (n > width) { n = width; }
+    int gap = 1;
+    if (n > 1) { gap = div(width - 1, n - 1); }
+    int music = listen(n);
+
+    // A burst flares to full and fades over 900 ms; with music every thruster also burns as loud as it plays.
+    int flash = 255 - div((t - lastBurst) * 255, 900);
+    if (flash < 0) { flash = 0; }
+    int burn = flash;
+    if (music == 1) {
+      burn = div(audioSmooth() * sensitivity, 64);
+      if (burn > 255) { burn = 255; }
+      if (flash > burn) { burn = flash; }
+    }
+
+    // The sparks fall rather than fly, so they stay on their leg: a plume that lives 71 frames reaches the floor.
+    int g = div(height * 10, 98);
+    if (g < 1) { g = 1; }
+    for (int i = 0; i < n; i = i + 1) {
+      int leg = mod(i + frame, n);
+      int on = 1;
+      if (music == 0) { on = firing(leg, n); }
+      // An idle thruster keeps a low burn, a quarter of the leg, so the plumes live between bursts.
+      int level = 70;
+      if (on == 1) { level = 70 + div(burn * 185, 255); }
+      level = level - div(level * random16(flicker + 1), 512);
+      int life = 6 + div(level * thrust, 800);
+      // A hot core that dies near the nozzle, and cooler sparks that reach the plume's tip.
+      emit(leg * gap, 0, 16384, 4, 1, div(life, 3), 210 + random16(40));
+      emit(leg * gap, 0, 16384, 4, 2 + div(level, 96), life, 50 + random16(100));
+    }
+    gravity(g);
+    step();
+    age(1);
+    // Full brightness until the last 16 frames, so a tail stays red rather than fading to brown.
+    render(16);
+  }
+}

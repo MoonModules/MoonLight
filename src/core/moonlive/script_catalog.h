@@ -8,9 +8,7 @@
 ///
 /// @moreinfo
 ///
-/// This is the catalog rather than the library: names only.
-/// A device carries the list, and the UI fetches a script's text from GitHub the first time someone picks it.
-/// Flash therefore scales with how many scripts exist rather than how large they are, and the filesystem holds only what is used.
+/// A device carries names only and the UI fetches a script's text on first pick, so flash scales with the script count and the filesystem holds only what is used.
 ///
 /// There is one array per role, because the folder a script lives in is implied by its role and the role by its extension, so neither is stored per entry.
 #include <cstddef>
@@ -50,12 +48,16 @@ constexpr const char* kEffectCatalog[] = {
     "ripples.mle",
     "sparkle.mle",
     "spectrum.mle",
-    "stadbeest-eyes.mle",
-    "stadbeest-legs.mle",
+    "stadbeest-eye-orb.mle",
+    "stadbeest-frog-eye.mle",
+    "stadbeest-mouth.mle",
     "stadbeest-orb.mle",
+    "stadbeest-sauron.mle",
+    "stadbeest-thrusters.mle",
+    "stadbeest-walk.mle",
     "trails.mle",
 };
-constexpr size_t kEffectCatalogCount = 35;
+constexpr size_t kEffectCatalogCount = 39;
 /// What each effect above declares about itself, in the same order, 0 meaning it says nothing and the device decides.
 constexpr unsigned char kEffectCatalogDim[] = {
     3,
@@ -88,6 +90,10 @@ constexpr unsigned char kEffectCatalogDim[] = {
     1,
     2,
     3,
+    2,
+    2,
+    2,
+    2,
     2,
     2,
     2,
@@ -127,9 +133,13 @@ constexpr const char* kEffectCatalogTags[] = {
     "💫",
     "💫",
     "💫🎶",
+    "💫",
     "💫🎵🎶",
     "💫🎵",
     "💫",
+    "💫🎵🎶",
+    "💫🎵",
+    "💫🎵",
     "💫🖌️",
 };
 constexpr const char* kEffectFolder = "effects";   ///< its directory upstream
@@ -233,11 +243,13 @@ constexpr const char* kPaletteCatalog[] = {
     "drift.mlp",
     "fire.mlp",
     "spectrum.mlp",
+    "stadbeest-fire.mlp",
     "temperature.mlp",
 };
-constexpr size_t kPaletteCatalogCount = 5;
+constexpr size_t kPaletteCatalogCount = 6;
 /// What each palette above declares about itself, in the same order, 0 meaning it says nothing and the device decides.
 constexpr unsigned char kPaletteCatalogDim[] = {
+    0,
     0,
     0,
     0,
@@ -250,11 +262,12 @@ constexpr const char* kPaletteCatalogTags[] = {
     "🎨",
     "🎨",
     "🎨🎶",
+    "🎨🔥🎶",
     "🎨",
 };
 constexpr const char* kPaletteFolder = "palettes";   ///< its directory upstream
 
-constexpr size_t kCatalogCount = 59;   ///< every factory script, all roles
+constexpr size_t kCatalogCount = 64;   ///< every factory script, all roles
 
 /// @}
 } // namespace mm::moonlive

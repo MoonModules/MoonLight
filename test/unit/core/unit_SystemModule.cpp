@@ -2,12 +2,13 @@
 
 #include "doctest.h"
 #include "core/system/SystemModule.h"
+#include "core/util/JsonSink.h"
 
 #include <cstring>
 #include <string>
 
 namespace {
-// Stand-in wired-by-code child: counts the lifecycle callbacks a real fixed System child (Tasks, I2cBus) would use (setup to init, tick20ms/tick1s to poll + format). Pins that SystemModule's overridden setup()/tick1s() chain to base, without that, a child would never initialize or poll.
+// Stand-in wired-by-code child that counts the lifecycle callbacks a real fixed System child (Tasks, I2cBus) receives.
 class CountingChild : public mm::MoonModule {
 public:
     uint32_t setupCalls = 0, tick20msCalls = 0, tick1sCalls = 0;
@@ -17,9 +18,7 @@ public:
 };
 } // namespace
 
-/// The derived name is "MM-" plus the last two MAC bytes in hex, whatever those bytes are.
-///
-/// Pinned by SHAPE rather than against one literal: the desktop MAC is a stored per-install identity now (platform_desktop.cpp, getMacAddress), so a fresh install generates its own and asserting "MM-CAFE" would pin the old hardcoded constant rather than the derivation.
+/// The derived name is "MM-" plus the last two MAC bytes in hex, pinned by shape since the desktop MAC is a per-install identity.
 bool looksLikeMacName(const char* name) {
     uint8_t mac[6] = {};
     mm::platform::getMacAddress(mac);
@@ -114,9 +113,7 @@ TEST_CASE("SystemModule leaves a valid deviceName unchanged") {
 
 // The `bootReason` control is populated from platform::resetReason; on desktop it reports "OK".
 TEST_CASE("SystemModule bootReason control populated") {
-    // The bootReason control is wired in setup() (from platform::resetReason).
-    // On desktop the platform stub always returns "OK".
-    // The UI uses this to set the reboot button's crashed-state styling, see ui-spec.md.
+    // The UI uses bootReason to style the reboot button's crashed state, see ui-spec.md.
     mm::SystemModule sys;
     sys.setup();
     sys.defineControls();
@@ -136,14 +133,13 @@ TEST_CASE("SystemModule bootReason control populated") {
     CHECK(found);
 }
 
-// System is fixed infrastructure, it accepts no user-added children (they live under the Services container). Its own children (Tasks, I2cBus) are wired by code.
+// System is fixed infrastructure: its children (Tasks, I2cBus) are wired by code, and user-added modules live under the Services container.
 TEST_CASE("SystemModule accepts no user-added children") {
-    // System is fixed infrastructure: its children (Tasks, I2cBus) are wired by code, so it accepts no user-added role. User-added capability modules live under the Services container instead.
     mm::SystemModule sys;
     CHECK(std::strcmp(sys.acceptsChildRoles(), "") == 0);
 }
 
-// Regression: SystemModule overrides setup() and tick1s(); both must chain to MoonModule's base so a wired-by-code child's setup()/tick1s() fire. Without the chain a fixed child (Tasks/I2cBus) would never init or poll (the "children miss callbacks" trap). tick20ms() isn't overridden, so the base default already propagates it.
+// SystemModule's setup() and tick1s() chain to MoonModule's base, so a wired-by-code child (Tasks, I2cBus) still initializes and polls; tick20ms() is not overridden.
 TEST_CASE("SystemModule propagates lifecycle to a wired-by-code child") {
     mm::SystemModule sys;
     CountingChild child;
@@ -164,9 +160,7 @@ TEST_CASE("Service role name") {
     CHECK(std::strcmp(mm::roleName(mm::ModuleRole::Service), "service") == 0);
 }
 
-// The persisted `firmware` text must not outlive the image that wrote it.
-// A device flashed from one variant to another loaded the old name back over the compile-time one (bench, MHC P4 shield, 2026-09-08) and MoonBase would have offered the wrong flash layout.
-// The constant wins on every write of the control, which is the moment a stale value lands.
+// The persisted `firmware` text must not outlive the image that wrote it: the compile-time constant wins on every write of the control, so MoonBase never offers the wrong flash layout.
 TEST_CASE("SystemModule: a persisted firmware name is overwritten by the compile-time one") {
     mm::SystemModule m;
     m.defineControls();
@@ -179,4 +173,29 @@ TEST_CASE("SystemModule: a persisted firmware name is overwritten by the compile
     std::snprintf(text, 32, "%s", "some-other-variant");
     m.onControlChanged("firmware");
     CHECK(std::string(text) == mm::kFirmwareName);
+}
+
+// A button that cannot be undone tells the UI to ask for a second press, and an ordinary one does not.
+TEST_CASE("the factory reset button asks for a second press, and safe mode says why it started") {
+    struct Record { ~Record() { mm::platform::setTestBootRecord({}); } } guard;
+    const auto find = [](mm::SystemModule& sys, const char* name) -> const mm::ControlDescriptor* {
+        for (uint8_t i = 0; i < sys.controls().count(); i++)
+            if (std::strcmp(sys.controls()[i].name, name) == 0) return &sys.controls()[i];
+        return nullptr;
+    };
+    mm::SystemModule normal;
+    normal.defineControls();
+    const mm::ControlDescriptor* reset = find(normal, "factory reset");
+    REQUIRE(reset != nullptr);
+    char buf[64] = {};
+    mm::JsonSink sink(buf, sizeof(buf));
+    mm::writeControlMetadata(sink, *reset);
+    CHECK(std::string(buf) == ",\"confirm\":true");
+
+    mm::platform::setTestBootRecord({0, 2});
+    mm::SystemModule safe;
+    safe.defineControls();
+    safe.setup();
+    REQUIRE(safe.status() != nullptr);
+    CHECK(std::string(safe.status()).find("Safe mode after 2 crashes or brownouts") != std::string::npos);
 }

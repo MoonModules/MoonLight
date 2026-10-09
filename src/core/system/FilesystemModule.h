@@ -15,8 +15,7 @@ class Scheduler;
 /// Control-list-driven JSON persistence: it writes control values to flash, so settings survive a reboot.
 ///
 /// It is always loaded and runs first, so its load hook fires before any other module sets up.
-/// Storage is one file per top-level module, named after the module's type, holding that module's state document.
-/// Its bodies live in the `.cpp`, keeping the recompile cost off the tree.
+/// Storage is one file per top-level module, named after the module's type, holding that module's state document. Its bodies live in the `.cpp`, keeping the recompile cost off the tree.
 ///
 /// @moreinfo
 ///
@@ -29,14 +28,11 @@ class Scheduler;
 ///
 /// ## Saving is debounced, and bounded
 ///
-/// Every successful mutation marks its module dirty, tree-shape changes included.
-/// A save waits for quiet, then writes each dirty subtree to a temporary file and renames it.
-/// A flag clears only once its write succeeds, so a failed write is retried.
+/// Every successful mutation marks its module dirty, tree-shape changes included. A save waits for quiet, then writes each dirty subtree to a temporary file and renames it. A flag clears only once its write succeeds, so a failed write is retried.
 ///
 /// ## Conditional controls, and the first boot
 ///
-/// A module binds its whole control set and hides what does not apply, so a value is always found.
-/// On the first boot no file exists, so each module keeps its defaults until something changes.
+/// A module binds its whole control set and hides what does not apply, so a value is always found. On the first boot no file exists, so each module keeps its defaults until something changes.
 /// @card FilesystemModule.png
 class FilesystemModule : public MoonModule {
 public:
@@ -57,14 +53,14 @@ public:
     /// Keep flushing whatever the enabled toggle says, so disabling this module cannot lose changes.
     bool respectsEnabled() const MM_NONBLOCKING override { return false; }
 
-    /// Stay out of the UI: this is a pure engine, and FileManagerModule shows its status.
+    /// Stay out of the UI: this is a pure engine, and FileManagerModule shows its status. @xref{conditional-controls-and-the-first-boot}
     bool appearsInUi() const override { return false; }
 
     /// Adopt the scheduler, register the singleton and wire the persistence hooks.
     void setScheduler(Scheduler* s);
     /// Mount the filesystem and create the config directory.
     void setup() override;
-    /// Once the debounce or the ceiling expires, write every dirty subtree.
+    /// Once the debounce or the ceiling expires, write every dirty subtree. @xref{saving-is-debounced-and-bounded}
     void tick1s() MM_NONBLOCKING override;
 
     /// The live "last saved" buffer, which FileManagerModule binds its own control straight at.
@@ -81,6 +77,9 @@ public:
 
     /// Record that something changed, which starts the debounce.
     static void noteDirty();
+
+    /// Delete `path` and everything under it, `depth` bounding the walk.
+    static bool removeTree(const char* path, uint8_t depth = 0);
 
     /// A whole file in a heap buffer sized to it, null-terminated, which the caller frees; null when absent, empty or out of memory.
     static char* readWholeFile(const char* path);
@@ -118,7 +117,7 @@ private:
     void updateLastSavedStr();
     /// The C hook the scheduler calls, which forwards to the load below.
     static void loadAllHookTrampoline_(Scheduler* s);
-    /// Read every module's file and apply it as boot's load.
+    /// Read every module's file and apply it as boot's load. @xref{one-state-document-per-module-applied-at-load}
     void loadAll(Scheduler* s);
     /// Read one top-level module's file and apply it to that subtree.
     void loadSubtree(Scheduler& s, MoonModule* m);

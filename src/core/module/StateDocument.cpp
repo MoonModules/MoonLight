@@ -1,6 +1,5 @@
 /// @defgroup state_document_impl State document implementation
-/// The walk that applies a document to the tree, one member at a time in document order.
-/// Public surface lives in StateDocument.h.
+/// The walk that applies a document to the tree, one member at a time in document order. Public surface lives in StateDocument.h.
 /// @{
 #include "core/module/StateDocument.h"
 
@@ -288,8 +287,7 @@ struct Applier {
 
     MoonModule* create(MoonModule* parent, const char* name, const char* type) {
         if (!nameFits(name)) { fail(kNameRule); return nullptr; }
-        // Names are unique across the tree, so a name in use elsewhere would be renamed on creation, and the same document would never find it again.
-        // A stored file is the exception: what it holds must come back, so a clash takes a free name, the next save writing it.
+        // Names are unique across the tree, so a clash is refused, except for a stored file, which must come back: it takes a free name.
         char freeName[MoonModule::kNameLen];
         if (s.firstByName(name)) {
             if (!stored()) { fail("that name is used elsewhere in the tree"); return nullptr; }
@@ -384,8 +382,7 @@ struct Applier {
 
     static bool isChildMember(const JsonNode* member) { return member->type == JsonType::Object || member->type == JsonType::Null; }
 
-    // A stored file sets its values twice around a rebuild, since a control set can depend on a value: a driver's `peripheral` decides which pin controls it has, and the first pass bound them to the default.
-    // The second pass reacts to what either pass changed and waits for a script's own controls; the children follow.
+    // A stored file sets its values twice around a rebuild, since a driver's `peripheral` decides which pin controls exist.
     bool applyStored(MoonModule* m, const JsonNode* obj) {
         uint64_t changed = 0;
         storeValues(m, obj, false, changed);
@@ -430,7 +427,7 @@ struct Applier {
 
     bool storeEnabled(MoonModule* m, const JsonNode* member, bool final) {
         const bool on = member->intValue != 0;
-        if (!final || on == m->enabled()) return true;
+        if (!final || on == m->enabledSetting()) return true;
         m->setEnabled(on);
         if (!boot()) { m->markDirty(); structural = true; r.changes++; }
         return true;
@@ -521,8 +518,7 @@ struct Applier {
         return child && apply(child, member);
     }
 
-    // The children it keeps unlisted (those main.cpp wires) keep their places, and the listed ones fill their own places in the document's order.
-    // Placed front to back, each moved only when it is not already where it belongs, so an unchanged order is no change.
+    // Unlisted children (those main.cpp wires) keep their places and listed ones fill theirs in document order, each moved only when out of place.
     void reorder(MoonModule* m, const JsonNode* obj) {
         const uint8_t count = m->childCount();
         auto** order = static_cast<MoonModule**>(platform::alloc(count * sizeof(MoonModule*)));
@@ -551,8 +547,7 @@ struct Applier {
         return found;
     }
 
-    // One pass over the root's members: 0 checks what creation needs, 1 removes, 2 applies the rest.
-    // A stored file skips pass 0: it goes on past what it cannot place rather than refusing whole.
+    // One pass over the root's members: 0 checks what creation needs (skipped for a stored file), 1 removes, 2 applies the rest.
     bool runPass(int pass, const JsonNode* root) {
         if (pass == 0 && stored()) return true;
         for (const JsonNode* member = first(root); member; member = next(member)) {
@@ -610,7 +605,7 @@ void writeMember(JsonSink& sink, MoonModule& m, bool withType, bool withSecrets)
         sink.append(":");
         writeControlValue(sink, cs[i], /*saving=*/true);
     }
-    sink.appendf(",\"enabled\":%s", m.enabled() ? "true" : "false");
+    sink.appendf(",\"enabled\":%s", m.enabledSetting() ? "true" : "false");
     for (uint8_t i = 0; i < m.childCount(); i++) {
         MoonModule* c = m.child(i);
         if (!c) continue;

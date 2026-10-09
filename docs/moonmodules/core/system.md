@@ -19,6 +19,9 @@ The device's identity and vitals: name (behind mDNS `<name>.local`, the SoftAP S
 - read-only rate: `uptime`, `fps`, `tickTimeUs`.
 - read-only memory: `heap`, `psram`, `maxBlock`, `flash`.
 - read-only identity: `mac`, `chip`, `cpu`, `sdk`, `bootReason`.
+- `factory reset`, pressed twice: back to freshly installed, scripts kept.
+
+**Safe mode.** Two crashes or brownouts in a row start the next boot with the LEDs off, no MoonLive script and at most 1,024 lights. The setting at fault can then be fixed from the UI.
 
 Detail: [technical](moxygen/SystemModule.md)
 
@@ -83,17 +86,17 @@ Detail: [technical](moxygen/WiFiModule.md)
 
 ### Access point
 
-The device's own WiFi network, a child of Network, at 4.3.2.1. A captive portal: joining it opens the UI by itself, as a sign-in screen, and `http://4.3.2.1` reaches it too.
+The device's own WiFi network, a child of Network, at `4.3.2.1`. A captive portal: joining it opens the UI by itself, as a sign-in screen, and `http://4.3.2.1` reaches it too.
 
 <img src="../../assets/core/AccessPointModule.png" width="300" alt="Access point module controls">
 
-- `opens`: `on failure` (when nothing else joins), `always`, or `never (not recommended)`.
+- `opens`: `on failure`, `always`, or `first setup only`, until a network or Ethernet is set.
 - read-only: `name`, `MM-` and four MAC digits, which says nothing about the owner.
 - read-only: `clients`, the devices on it.
 
 It carries the first known WiFi network's password, open only on a first setup or with an open home network. Its clients receive no stored password or config file.
 
-`always` waits for a WiFi join in progress to settle, since one radio serves both. `never` applies only while Ethernet or a known WiFi network is configured, and the card says when it opens anyway. Joining it opens the WiFi card. ⌄ details.
+`always` waits for a WiFi join in progress to settle, since one radio serves both. Switching the device on and off four times, each within a few seconds, opens it for that boot without a password, whatever `opens` says, and keeps every setting. ⌄ details.
 
 Detail: [technical](moxygen/AccessPointModule.md)
 
@@ -303,6 +306,7 @@ A grid of preset pads, a row of rotary encoders above them, a row of on/off swit
 - `switch1` … `switch8`, the switch row. `switch1` drives `Drivers.on`, the rest unbound.
 - `encoder1` … `encoder8`, rotary encoders. Drag or scroll to turn, right-click to see the binding.
 - `fader1` … `fader8`, faders. `fader1` drives `Drivers.brightness`, the rest unbound.
+- automap: from the second slot on, an unassigned slot drives the effect enabled last.
 
 Detail: [technical](moxygen/ControlModule.md)
 

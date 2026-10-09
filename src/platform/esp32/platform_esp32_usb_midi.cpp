@@ -35,7 +35,7 @@ struct UsbMidi {
     std::atomic<bool> stop{false};
     usb_host_client_handle_t client = nullptr;
     usb_device_handle_t dev = nullptr;
-    uint8_t pendingAddr = 0;     ///< a device enumerated and waiting to be opened, 0 for none
+    uint8_t pendingAddr = 0;     ///< the device enumerated last, opened once no desk is held, 0 for none
     bool gone = false;           ///< the open device was unplugged
     uint8_t intf = 0;
     uint8_t epIn = 0, epOut = 0;
@@ -66,7 +66,8 @@ void onOut(usb_transfer_t*) { s.outBusy = false; }   // runs on the client task,
 
 /// The client's events, run inside usb_host_client_handle_events on the task.
 void onClientEvent(const usb_host_client_event_msg_t* msg, void*) {
-    if (msg->event == USB_HOST_CLIENT_EVENT_NEW_DEV && !s.dev) s.pendingAddr = msg->new_dev.address;
+    // Kept even while a desk is open, since a desk switched off and on can enumerate before its old handle is closed.
+    if (msg->event == USB_HOST_CLIENT_EVENT_NEW_DEV) s.pendingAddr = msg->new_dev.address;
     else if (msg->event == USB_HOST_CLIENT_EVENT_DEV_GONE && msg->dev_gone.dev_hdl == s.dev) s.gone = true;
 }
 
@@ -169,7 +170,7 @@ void runClient(void*) {
     while (!s.stop) {
         usb_host_client_handle_events(s.client, portMAX_DELAY);   // woken by a desk, a transfer, or usbMidiWrite
         if (s.gone) { s.gone = false; closeDesk(); }
-        if (s.pendingAddr) { const uint8_t a = s.pendingAddr; s.pendingAddr = 0; openDesk(a); }
+        if (s.pendingAddr && !s.dev) { const uint8_t a = s.pendingAddr; s.pendingAddr = 0; openDesk(a); }
         sendQueued();
     }
     closeDesk();
@@ -190,15 +191,18 @@ void runLibrary(void*) {
     }
     // Same priority as this task, so the client registers before the first event is handled.
     xTaskCreate(runClient, "mmUsbMidiCl", 4096, nullptr, uxTaskPriorityGet(nullptr), &s.clientTask);
+    bool noClients = false;
     for (;;) {
         uint32_t flags = 0;
         usb_host_lib_handle_events(portMAX_DELAY, &flags);
         if (flags & USB_HOST_LIB_EVENT_FLAGS_NO_CLIENTS) {
+            noClients = true;
             // Power the port off first: a desk still on it is enumerated again while the stack is torn down, and the uninstall aborts.
             usb_host_lib_set_root_port_power(false);
             if (usb_host_device_free_all() == ESP_OK) break;   // nothing left to free
         }
-        if (flags & USB_HOST_LIB_EVENT_FLAGS_ALL_FREE) break;
+        // Every unplug frees the last device too, so this ends the task only once the client is gone, as IDF's host example does.
+        if ((flags & USB_HOST_LIB_EVENT_FLAGS_ALL_FREE) && noClients) break;
     }
     if (usb_host_uninstall() != ESP_OK) ESP_LOGE(kTag, "USB host did not uninstall");
     s.libTask = nullptr;

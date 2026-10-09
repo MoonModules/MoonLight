@@ -30,8 +30,8 @@ class StadBeestOrbEffect {
     addSelect("shape", shape, "disc|ball|egg"); // the shape it holds while morph is 0
     addControl("morph", morph, 0, 255); // how fast it changes between disc, ball and egg by itself
     addControl("size", size, 1, 255); // its width, in lights
-    addControl("ring", ring, 1, 255); // the radius of the ring of legs, in lights
     addControl("solid", solid, 0, 255); // how bright its inside is, 0 for a hollow shell
+    addControl("ring", ring, 1, 255); // the radius of the ring of legs, in lights
   }
 
   // One leg, `dx` and `dz` from the middle of the ring: lit where it crosses the shape's shell, and dimmer inside.

@@ -559,7 +559,7 @@ declaration machinery above it. Worth building in that order if this is picked u
 
 ### 11. What the StadBeest legs and eyes hit (2026-10-07)
 
-Two effects written in one session on real hardware: `stadbeest-legs.mle` (a walk cycle on 10 tubes, dancing to music) and `stadbeest-eyes.mle` (a frog's eye on a 241-light ring disc). Besides the member and label limits above, each of these cost a workaround:
+Two effects written in one session on real hardware: `stadbeest-walk.mle` (a walk cycle on 10 tubes, dancing to music) and `stadbeest-frog-eye.mle` (a frog's eye on a 241-light ring disc). Besides the member and label limits above, each of these cost a workaround:
 
 | limit | what it cost | wants |
 |---|---|---|
