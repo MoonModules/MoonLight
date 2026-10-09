@@ -20,14 +20,11 @@
 ///
 /// ## The coprocessor version query is asked twice, then never again
 ///
-/// The P4's radio runs on a companion chip, and the query asks what firmware version it reported over the link.
-/// It is a blocking call over that link, and the module asks from the one-second tick, which runs inline on the render thread.
+/// The P4's radio runs on a companion chip, and the query asks what firmware version it reported over the link. It is a blocking call over that link, and the module asks from the one-second tick, which runs inline on the render thread.
 ///
-/// Measured on a board with the radio live: the call times out after about a second, every second, forever.
-/// The module showed over a million microseconds per tick at zero frames, and every request queued a second or more behind the render loop.
+/// Measured on a board with the radio live: the call times out after about a second, every second, forever. The module showed over a million microseconds per tick at zero frames, and every request queued a second or more behind the render loop.
 /// The link works while this particular call does not answer, so retrying buys nothing and costs a second of every tick.
-/// Two attempts rather than five, since each unanswered one is a second of stutter, and one retry still catches a companion that was mid-handshake.
-/// After that the display keeps what it learned, the version being unable to change while the host runs.
+/// Two attempts rather than five, since each unanswered one is a second of stutter, and one retry still catches a companion that was mid-handshake. After that the display keeps what it learned, the version being unable to change while the host runs.
 ///
 /// ## The vendor PHY needs two steps the generic driver cannot do
 ///
@@ -39,15 +36,12 @@
 /// ## Why the hostname is applied at link-up
 ///
 /// The default wired interface starts its address client from its own connected handler, so a name set earlier is clobbered when that client restarts nameless and the lease lands blank.
-/// The name only takes on a stopped client, so the sequence is stop, set, start, and the fresh request then carries it.
-/// The wireless side needs none of this, its client starting on association, well after the name is set.
+/// The name only takes on a stopped client, so the sequence is stop, set, start, and the fresh request then carries it. The wireless side needs none of this, its client starting on association, well after the name is set.
 ///
 /// ## The reconnect is ours to make, and unbounded
 ///
 /// Without an explicit call a dropped association is permanent: the device keeps rendering but is unreachable until it is power-cycled.
-/// Which for a controller in a ceiling is a real failure.
-/// The vendor's own example has the same call in the same place.
-/// The retry is unbounded by design, since the recoverable causes outlast any retry count and self-healing is the entire point.
+/// Which for a controller in a ceiling is a real failure. The vendor's own example has the same call in the same place. The retry is unbounded by design, since the recoverable causes outlast any retry count and self-healing is the entire point.
 ///
 /// It reconnects immediately and does not sleep to pace itself, running on the event task that also carries the wired and address events, where blocking would stall the whole stack.
 /// The pacing is free: a failing association takes a second or two to time out before the next event arrives, so even a wrong credential retries at a sane rate.
@@ -67,13 +61,11 @@
 /// The device then advertises a service a home automation system can see but not resolve, leaving a blank address in its browser and no discovery.
 /// Registering the interface by pointer and enabling it forces the probe and announce onto the real one, and is harmless where the default already covers it.
 ///
-/// A re-advertise removes the service record and adds it back rather than renaming it.
-/// Since renaming does not reliably re-announce on the current interface while a remove and add drives it back through the state machine.
+/// A re-advertise removes the service record and adds it back rather than renaming it. Since renaming does not reliably re-announce on the current interface while a remove and add drives it back through the state machine.
 ///
 /// ## Raw frames to the controller
 ///
-/// A raw frame bypasses the address stack, so it is gated on the link, not on a lease: a board without an address still drives its panels.
-/// It is synchronous, so the caller may reuse its buffer at once, and an error means the frame did not go out.
+/// A raw frame bypasses the address stack, so it is gated on the link, not on a lease: a board without an address still drives its panels. It is synchronous, so the caller may reuse its buffer at once, and an error means the frame did not go out.
 ///
 /// ## Why the TCP write is bounded twice
 ///
@@ -84,6 +76,7 @@
 #include <netinet/tcp.h>   // TCP_NODELAY on an accepted connection
 
 #include "esp_timer.h"
+#include "nvs.h"         // bootRecord: the count that survives a power cut
 #include "esp_heap_caps.h"
 #include "esp_memory_utils.h"   // esp_ptr_external_ram: the ptrIsPsram residency probe
 #include "esp_cache.h"        // esp_cache_msync: I-cache sync after writing MoonLive code to IRAM
@@ -407,6 +400,78 @@ const char* coprocessorWifi() {
 #else
     return "";   // native-radio targets have no WiFi co-processor
 #endif
+}
+
+namespace {
+constexpr const char* kBootNamespace = "mm";
+constexpr const char* kPowerOnsKey = "powerOns";
+constexpr const char* kRestartsKey = "restarts";
+constexpr const char* kYoungKey = "young";                // set at every boot and cleared once it has stayed up
+constexpr uint64_t kQuickPowerOnUs = 5 * 1000 * 1000;     // on this long, and the switch-ons start again from one
+constexpr uint64_t kStableUs = uint64_t{kBootStableMs} * 1000;
+
+uint8_t loadCount(const char* key) {
+    nvs_handle_t h;
+    uint8_t n = 0;
+    if (nvs_open(kBootNamespace, NVS_READONLY, &h) == ESP_OK) { nvs_get_u8(h, key, &n); nvs_close(h); }
+    return n;
+}
+
+void storeCount(const char* key, uint8_t n) {
+    nvs_handle_t h;
+    if (nvs_open(kBootNamespace, NVS_READWRITE, &h) != ESP_OK) return;
+    nvs_set_u8(h, key, n);
+    nvs_commit(h);
+    nvs_close(h);
+}
+
+// The restarts nobody asked for: a panic, a watchdog or a brownout.
+bool abnormal(esp_reset_reason_t reason) {
+    constexpr esp_reset_reason_t kAbnormal[] = {ESP_RST_PANIC, ESP_RST_INT_WDT, ESP_RST_TASK_WDT, ESP_RST_WDT, ESP_RST_BROWNOUT};
+    for (const esp_reset_reason_t a : kAbnormal)
+        if (reason == a) return true;
+    return false;
+}
+
+// A one-shot timer clears a count, so the flash write stays off the render loop.
+void clearAfter(const char* key, uint64_t us) {
+    esp_timer_handle_t timer = nullptr;
+    const esp_timer_create_args_t args = {.callback = [](void* k) { storeCount(static_cast<const char*>(k), 0); },
+                                          .arg = const_cast<char*>(key), .dispatch_method = ESP_TIMER_TASK,
+                                          .name = "bootRecord", .skip_unhandled_events = true};
+    if (esp_timer_create(&args, &timer) == ESP_OK) esp_timer_start_once(timer, us);
+}
+
+// Only a count that moved is written, and only a nonzero one needs clearing, so an ordinary boot writes the young marker and its clear.
+void persist(const char* key, uint8_t value, uint8_t loaded, uint64_t clearUs) {
+    if (value != loaded) storeCount(key, value);
+    if (value) clearAfter(key, clearUs);
+}
+}  // namespace
+
+const BootRecord& bootRecord() {
+    static BootRecord record;
+    static bool counted = false;
+    if (counted) return record;
+    counted = true;
+    record.booted = true;
+    const auto bump = [](uint8_t n) { return static_cast<uint8_t>(n < 250 ? n + 1 : n); };
+    const uint8_t powerOns = loadCount(kPowerOnsKey);
+    const uint8_t restarts = loadCount(kRestartsKey);
+    const uint8_t young = loadCount(kYoungKey);
+    const esp_reset_reason_t reason = esp_reset_reason();
+    const bool powerOn = reason == ESP_RST_POWERON;
+    // A collapsing supply cuts the chip off, so its restart reads as a power-on: one that ends a boot younger than a minute failed, as a crash does.
+    const bool failed = abnormal(reason) || (powerOn && young);
+    // A brownout between two switch-ons neither counts nor clears them, so a device that browns out still takes the gesture; a restart someone asked for starts both again.
+    if (powerOn || failed) {
+        record.quickPowerOns = powerOn ? bump(powerOns) : powerOns;
+        record.abnormalRestarts = failed ? bump(restarts) : restarts;
+    }
+    persist(kPowerOnsKey, record.quickPowerOns, powerOns, kQuickPowerOnUs);
+    persist(kRestartsKey, record.abnormalRestarts, restarts, kStableUs);
+    persist(kYoungKey, 1, young, kStableUs);
+    return record;
 }
 
 const char* resetReason() {
@@ -1605,6 +1670,43 @@ static bool ensureMdnsStack() {
     return true;
 }
 
+// The services modules announce besides the two below, kept so every mdnsInit announces them again.
+struct ExtraService { char type[16]; char proto[8]; uint16_t port; };
+static ExtraService extraServices_[4] = {};
+
+static void announceExtra(const ExtraService& e) {
+    mdns_service_remove(e.type, e.proto);   // a fresh announcement, as for _http below
+    const esp_err_t err = mdns_service_add(nullptr, e.type, e.proto, e.port, nullptr, 0);
+    ESP_LOGI(NET_TAG, "mDNS %s.%s:%u add: %s", e.type, e.proto, static_cast<unsigned>(e.port), esp_err_to_name(err));
+}
+
+void mdnsAdvertise(const char* type, const char* proto, uint16_t port) {
+    ExtraService* slot = nullptr;
+    for (auto& e : extraServices_) {
+        if (e.port && std::strcmp(e.type, type) == 0 && std::strcmp(e.proto, proto) == 0) { slot = &e; break; }
+        if (!e.port && !slot) slot = &e;
+    }
+    if (!slot) return;   // the table is full: the service stays unannounced
+    std::snprintf(slot->type, sizeof(slot->type), "%s", type);
+    std::snprintf(slot->proto, sizeof(slot->proto), "%s", proto);
+    slot->port = port;
+    if (mdnsStackUp_) announceExtra(*slot);
+}
+
+void mdnsWithdraw(const char* type, const char* proto) {
+    for (auto& e : extraServices_) {
+        if (!e.port || std::strcmp(e.type, type) != 0 || std::strcmp(e.proto, proto) != 0) continue;
+        if (mdnsStackUp_) mdns_service_remove(e.type, e.proto);
+        e = ExtraService{};
+    }
+}
+
+uint16_t mdnsAdvertisedPort(const char* type, const char* proto) {
+    for (const auto& e : extraServices_)
+        if (e.port && std::strcmp(e.type, type) == 0 && std::strcmp(e.proto, proto) == 0) return e.port;
+    return 0;
+}
+
 bool mdnsInit(const char* deviceName) {
     if (!ensureMdnsStack()) return false;
     esp_err_t err = mdns_hostname_set(deviceName);
@@ -1670,6 +1772,7 @@ bool mdnsInit(const char* deviceName) {
              wledErr == ESP_OK ? "ok" : "fail",
              macStr,
              wledTxtErr == ESP_OK ? "ok" : "fail");
+    for (const auto& e : extraServices_) if (e.port) announceExtra(e);
     return true;
 }
 
@@ -1678,6 +1781,7 @@ void mdnsStop() {
     if (mdnsStackUp_) {
         esp_err_t httpRm = mdns_service_remove("_http", "_tcp");
         esp_err_t wledRm = mdns_service_remove("_wled", "_tcp");
+        for (const auto& e : extraServices_) if (e.port) mdns_service_remove(e.type, e.proto);
         mdns_hostname_set("");
         ESP_LOGI(NET_TAG, "mDNS stopped advertising (_http remove: %s, _wled remove: %s)",
                  esp_err_to_name(httpRm), esp_err_to_name(wledRm));
@@ -1846,22 +1950,23 @@ int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4], uint16_t*
     auto n = ::recvfrom(fd_, buf, maxLen, 0,
                         reinterpret_cast<sockaddr*>(&src), &srcLen);
     // 0-byte datagrams and EWOULDBLOCK both mean "nothing usable pending".
-    if (n <= 0) return -1;
+    if (n <= 0) { keepMembership(); return -1; }
+    heard();
     if (srcIp) std::memcpy(srcIp, &src.sin_addr.s_addr, 4);   // network order = octets
     if (srcPort) *srcPort = ntohs(src.sin_port);
     return static_cast<int>(n);
 }
 
 // Join an IPv4 multicast group so the bound socket receives datagrams sent to it (WLED audio sync multicasts to 239.0.0.1). INADDR_ANY as the interface lets lwip pick the default route's netif.
-bool UdpSocket::joinMulticast(const char* group) {
+bool UdpSocket::membership(const char* group, bool join) {
     if (fd_ < 0 || !group) return false;
     ip_mreq mreq{};
     if (inet_pton(AF_INET, group, &mreq.imr_multiaddr) != 1) return false;
     mreq.imr_interface.s_addr = htonl(INADDR_ANY);
     // A socket that joins a group and also sends to it must not hear its own sends back.
     const uint8_t loop = 0;
-    setsockopt(fd_, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop));
-    return setsockopt(fd_, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) == 0;
+    if (join) setsockopt(fd_, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop));
+    return setsockopt(fd_, IPPROTO_IP, join ? IP_ADD_MEMBERSHIP : IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq)) == 0;
 }
 
 bool UdpSocket::sendToAddr(const uint8_t ip[4], uint16_t port,
@@ -1880,6 +1985,9 @@ void UdpSocket::close() {
         lwip_close(fd_);
         fd_ = -1;
     }
+    group_[0] = 0;   // the membership went with the socket
+    joined_ = false;
+    joinCount_ = 0;
 }
 
 // TcpConnection

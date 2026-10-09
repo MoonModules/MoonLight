@@ -30,10 +30,12 @@ public:
     /// Volumetric under drift, where morph shows one field in every slice.
     Dim dimensions() const override { return Dim::D3; }
 
+    /// The motion choices, in option order.
+    enum Motion : uint8_t { kMotionDrift, kMotionMorph, kMotionCount };
     static constexpr const char* kMotionOptions[] = {"drift", "morph"};
 
     /// Whether the field moves across the fixture or changes in place.
-    uint8_t motion = 0;
+    uint8_t motion = kMotionDrift;
     /// The field's spatial frequency, where lower is broader.
     uint8_t scale = 4;
     /// How fast it moves.
@@ -41,7 +43,7 @@ public:
 
     /// Publish the motion, the field's scale and its speed.
     void defineControls() override {
-        controls_.addSelect("motion", motion, kMotionOptions, 2);
+        controls_.addSelect("motion", motion, kMotionOptions, kMotionCount);
         controls_.addControl("scale", scale, 1, 255);
         controls_.addControl("bpm", bpm, 1, 255);
     }
@@ -67,7 +69,7 @@ public:
             const lengthType z = static_cast<lengthType>(i / wh);
 
             uint8_t n;
-            if (motion == 1) {
+            if (motion == kMotionMorph) {
                 // Time is the third axis here, so the field changes without traveling.
                 n = inoise8(static_cast<uint32_t>(x) * 256u / sc,
                             static_cast<uint32_t>(y) * 256u / sc, t);

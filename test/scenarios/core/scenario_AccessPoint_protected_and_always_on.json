@@ -7,34 +7,24 @@
   ],
   "on_request": true,
   "host_network": true,
-  "description": "The access point's own settings, applied live on a device that stays on its network: a WPA2 password and opening always. This computer joins it by name with the password and reaches the device through it while the device is still on its network. It takes the computer off its network for a minute, so it runs only when named, with --network naming the moondeck.json network the device is on.",
+  "description": "The access point opened always on a device that stays on its network, protected by the first known network's password. This computer joins it with that password and finds that a client there receives no stored password and no config file, while the same requests from the home network do. It takes the computer off its network for a minute, so it runs only when named, with --network naming the moondeck.json network the device is on.",
   "steps": [
     {
-      "name": "a-password",
-      "op": "set_control",
-      "id": "AccessPoint",
-      "key": "password",
-      "value": "moonlight-ap-test"
-    },
-    {
       "name": "opens-always",
-      "description": "It opens beside the network the device is on.",
       "op": "set_control",
       "id": "AccessPoint",
       "key": "opens",
       "value": 1
     },
     {
-      "name": "join-it-by-name-with-the-password",
-      "description": "A protected network needs its password.",
+      "name": "join-it-with-the-home-password",
       "op": "host_wifi",
       "join": "access_point",
-      "password": "moonlight-ap-test",
+      "password": "{network.password}",
       "timeout": 60
     },
     {
       "name": "still-on-its-network",
-      "description": "Reached through the access point, the device is still on its own network beside it.",
       "op": "expect_control",
       "id": "Network",
       "key": "mode",
@@ -49,18 +39,43 @@
       "within": 10
     },
     {
+      "name": "no-stored-password-through-it",
+      "op": "expect_http",
+      "url": "/api/state",
+      "status": 200,
+      "body_lacks": "\"type\":\"password\",\"value\":\"[^\"]"
+    },
+    {
+      "name": "no-config-file-through-it",
+      "op": "expect_http",
+      "url": "/api/file?path=/.config/NetworkModule.json",
+      "status": 403
+    },
+    {
       "name": "home",
       "op": "host_wifi",
       "join": "home",
       "timeout": 90
     },
     {
-      "name": "open-again",
-      "description": "Passwords are not restored by the runner, since the device returns them obfuscated, so the scenario sets it back itself.",
+      "name": "at-home-the-password-shows",
+      "op": "expect_http",
+      "url": "/api/state",
+      "status": 200,
+      "body_matches": "\"type\":\"password\",\"value\":\"[^\"]"
+    },
+    {
+      "name": "at-home-the-config-file-reads",
+      "op": "expect_http",
+      "url": "/api/file?path=/.config/NetworkModule.json",
+      "status": 200
+    },
+    {
+      "name": "on-failure-again",
       "op": "set_control",
       "id": "AccessPoint",
-      "key": "password",
-      "value": ""
+      "key": "opens",
+      "value": 0
     }
   ]
 }

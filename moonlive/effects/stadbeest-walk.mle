@@ -1,6 +1,6 @@
-// StadBeestLegs: a walk in waves, each side's legs lifting one after another from back to front, the two sides half a cycle apart; with music it steps on the beat and lifts with the volume.
+// StadBeestWalk: a walk in waves, each side's legs lifting one after another from back to front, the two sides half a cycle apart; with music it steps on the beat and lifts with the volume.
 
-class StadBeestLegsEffect {
+class StadBeestWalkEffect {
   byte bpm = 60;
   byte swing = 77;
   byte lift = 186;
@@ -20,11 +20,11 @@ class StadBeestLegsEffect {
 
   void defineControls() {
     addControl("bpm", bpm, 1, 255); // twice this many legs lift a minute on each side; with music, more or fewer to a beat
+    addControl("sensitivity", sensitivity, 0, 255); // with music, step on its beat and lift with its loudness; 0 ignores the music
+    addControl("pulse", pulse, 0, 1); // with music, the lights flash on its beat
     addControl("swing", swing, 1, 255); // how much of a cycle a leg is in the air
     addControl("lift", lift, 0, 255); // how far a foot lifts, as a share of the leg
     addControl("stand", stand, 0, 255); // the brightness of a leg on the ground
-    addControl("sensitivity", sensitivity, 0, 255); // with music, step on its beat and lift with its loudness; 0 ignores the music
-    addControl("pulse", pulse, 0, 1); // with music, the lights flash on its beat
   }
 
   // One leg lit from its top down to the foot, `len` lights long, at `level` of 256, its colors anchored to the foot: `hue` there and half the palette up to the top.

@@ -1,0 +1,131 @@
+// StadBeestSauron: the eye wreathed in flame, a burning iris around a black slit that searches left and right. With music it turns on the beat, its flames reach out with the volume and its slit narrows on every beat.
+
+class StadBeestSauronEffect {
+  byte bpm = 12;
+  byte sensitivity = 128;
+  bool pulse = true;
+  byte slit = 35;
+  byte look = 100;
+  byte flame = 210;
+
+  int lastBeat = -100000; // when the last beat started, in ms
+  int lastTurn = 0;       // when the gaze last turned, in ms
+  int from = 0;           // where the gaze turned from, in 16ths of a light from the center
+  int to = 0;             // where it turns to
+  bool wasOnBeat = false; // whether the last frame was on a beat, so one beat counts once
+  byte flash = 0;         // the beat's flash, fading
+
+  int dimensions() { return 2; }
+
+  string tags() { return "💫🎵🎶"; }
+
+  void defineControls() {
+    addControl("bpm", bpm, 1, 120); // turns of the gaze a minute without music
+    addControl("sensitivity", sensitivity, 0, 255); // with music, turn on its beat and burn with its loudness; 0 ignores the music
+    addControl("pulse", pulse, 0, 1); // with music, the slit narrows and the eye flares on its beat
+    addControl("flame", flame, 0, 255); // how far the flames reach out of the eye
+    addControl("look", look, 0, 200); // how far the gaze searches
+    addControl("slit", slit, 10, 200); // how wide the slit is
+  }
+
+  // The gaze on its way from `from` to `to`, easing in and out over 900 ms: a slow, searching turn.
+  int gaze() {
+    return from + div((to - from) * div(smoothstep(0, 900, t - lastTurn), 256), 256);
+  }
+
+  // A new place to look: from the music's dominant pitch while it plays, so two eyes hearing the same music look the same way.
+  void search(int music) {
+    from = gaze();
+    lastTurn = t;
+    int pick = random16(9);
+    if (music == 1) { pick = mod(audioPeakHz() * 37, 9); }
+    to = div((pick - 4) * look * 16, 100);
+  }
+
+  // Listens for the beat: it flashes and with music turns the gaze; without music the gaze turns at bpm. Returns whether music plays.
+  int listen() {
+    int heard = audioBeat();
+    if (sensitivity == 0) { heard = 0; }
+    flash = flash - div(flash + 15, 16);
+    // A rising edge is a beat, unless it follows the last one too closely.
+    if (heard > wasOnBeat) {
+      if (t - lastBeat > 250) {
+        lastBeat = t;
+        flash = 255;
+        search(1);
+      }
+    }
+    wasOnBeat = heard;
+    if (t - lastBeat < 2000) { return 1; }
+    if (t - lastTurn > div(60000, bpm)) { search(0); }
+    return 0;
+  }
+
+  void tick() {
+    fill(0, 0, 0);
+    int music = listen();
+    int cx = div(width, 2);
+    int cy = div(height, 2);
+    // Everything is in 16ths of a light, measured against the disc's radius.
+    int rim = cx * 16;
+    if (cy * 16 < rim) { rim = cy * 16; }
+    int loud = 0;
+    if (music == 1) {
+      loud = div(audioSmooth() * sensitivity, 64);
+      if (loud > 255) { loud = 255; }
+    }
+    // An almond nearly as wide as the disc and half as high, the slit inside it narrowing on a beat and widening with the volume.
+    int hw = div(rim * 15, 16);
+    int hh = div(rim * 9, 16);
+    // At least half a light either side of the gaze, so the slit always covers a column of lights.
+    int sw = 8 + div(slit * rim, 1024) + div(loud * rim, 8192);
+    int pul = 256;
+    if (pulse * music == 1) {
+      sw = div(sw * (512 - flash), 512);
+      pul = 160 + div(flash * 3, 8);
+    }
+    // The flames reach from the almond toward the rim, further with flame and with the volume.
+    int reach = hh + div((rim - hh) * flame, 255) + div(loud * rim, 1024);
+    int g = gaze();
+
+    for (int y = 0; y < height; y = y + 1) {
+      int dy = (y - cy) * 16;
+      for (int x = 0; x < width; x = x + 1) {
+        int dx = (x - cx) * 16;
+        int r = polarR(dx, dy);
+        if (r <= rim + 8) {
+          // Noise sampled around the eye and along its radius, moving outward with time.
+          int n = fbm(div(polarA(dx, dy), 32), r * 4 - div(t, 4), 2);
+          int idx = 0;
+          int bri = 0;
+          // Outside the almond, tongues of flame: each angle reaches as far as its noise says, orange at the root and deep red at the tip.
+          int tongue = div((reach - hh) * n, 140);
+          int beyond = r - hh;
+          if (beyond < tongue) {
+            int f = 255 - div(beyond * 255, tongue + 1);
+            if (f > 255) { f = 255; }
+            idx = 30 + div(f, 3);
+            bri = 60 + div(f * 195, 255);
+          }
+          // Inside the almond the iris burns bright, yellow along the slit and orange toward the lids.
+          int ex = div(dx * 256, hw);
+          int lid = hh - div(hh * div(ex * ex, 256), 256);
+          if (lid > 0) {
+            if (dy * dy < lid * lid) {
+              int off = dx - g;
+              int edge = off;
+              if (edge < 0) { edge = 0 - edge; }
+              idx = 205 - div(edge * 90, hw) + div(n - 128, 4);
+              bri = 255;
+              int ey = div(dy * 256, hh);
+              int half = sw - div(sw * div(ey * ey, 256), 256);
+              if (off * off < (half + 16) * (half + 16)) { idx = 220; }
+              if (off * off < half * half) { bri = 0; }
+            }
+          }
+          if (bri > 0) { setPaletteColor(x, y, idx, div(bri * pul, 256)); }
+        }
+      }
+    }
+  }
+}

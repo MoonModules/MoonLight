@@ -66,9 +66,9 @@ public:
             const bool editable = ethPinsEditable();
             controls_.addSelect("ethType", ethType_, ethTypeOptions_, 5);
             controls_.setHidden(controls_.count() - 1, !editable);
-            const bool isRmii  = (ethType_ == 1 || ethType_ == 2);
-            const bool isSpi   = (ethType_ == 3);
-            const bool isRgmii = (ethType_ == 4);
+            const bool isRmii  = (ethType_ == platform::ethLan8720 || ethType_ == platform::ethIp101);
+            const bool isSpi   = (ethType_ == platform::ethW5500);
+            const bool isRgmii = (ethType_ == platform::ethYt8531);
             const bool isEth   = isRmii || isSpi || isRgmii;
             // An address rather than a GPIO, and signed for the auto-detect sentinel.
             controls_.addControl("ethPhyAddr", ethPhyAddr_, -1, 31);
@@ -158,7 +158,7 @@ public:
         if constexpr (platform::hasEthernet) {
             if (ethSigApplied_ && ethSig() == appliedEthSig_) return false;   // nothing changed
             // Only for the SPI device, since elsewhere a restart would strand the device.
-            const bool hotReinit = (ethType_ == 3) && platform::hasEthW5500;
+            const bool hotReinit = (ethType_ == platform::ethW5500) && platform::hasEthW5500;
             if (hotReinit) {
                 platform::ethStop();
                 syncConfig();

@@ -149,9 +149,9 @@ TEST_CASE("on a volumetric fixture the curtains have depth instead of one repeat
 
 TEST_CASE("each projection composes the volume differently") {
     // The control earns its place only if the three look different on the same fixture.
-    const auto cyl = render3(8, 8, 6, [](AuroraEffect& e) { e.polar.mapping = 0; e.contrast = 40; }, 40);
-    const auto sph = render3(8, 8, 6, [](AuroraEffect& e) { e.polar.mapping = 1; e.contrast = 40; }, 40);
-    const auto rad = render3(8, 8, 6, [](AuroraEffect& e) { e.polar.mapping = 2; e.contrast = 40; }, 40);
+    const auto cyl = render3(8, 8, 6, [](AuroraEffect& e) { e.polar.mapping = static_cast<uint8_t>(PolarLut::Mapping::Cylindrical); e.contrast = 40; }, 40);
+    const auto sph = render3(8, 8, 6, [](AuroraEffect& e) { e.polar.mapping = static_cast<uint8_t>(PolarLut::Mapping::Spherical); e.contrast = 40; }, 40);
+    const auto rad = render3(8, 8, 6, [](AuroraEffect& e) { e.polar.mapping = static_cast<uint8_t>(PolarLut::Mapping::Radial); e.contrast = 40; }, 40);
     std::size_t a = 0, b = 0;
     for (std::size_t i = 0; i < cyl.size(); i++) {
         a += cyl[i] != sph[i] ? 1 : 0;

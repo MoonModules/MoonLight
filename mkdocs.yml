@@ -172,10 +172,12 @@ nav:
       - Driving LED panels with a receiving card: how-to/panel-cards.md
       - LED signal integrity: how-to/led-signal-integrity.md
       - Connecting a control surface: how-to/control-surface.md
-      - Building a multi-board installation: how-to/multi-board-installation.md
+      - Playing an effect while a button is held: how-to/hold-to-play.md
+      - Building a multi-device installation: how-to/multi-board-installation.md
       - Home automation: how-to/home-automation.md
       - Save and recall presets: how-to/presets.md
       - Updating firmware: how-to/updating-firmware.md
+      - Migrating over the air: how-to/migrating-over-the-air.md
       - Back up and restore: how-to/backup-and-restore.md
       - Troubleshooting: how-to/troubleshooting.md
   - Lights:

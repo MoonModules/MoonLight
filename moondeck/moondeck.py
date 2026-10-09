@@ -286,91 +286,37 @@ def _deduce_device_model(firmware: str) -> str:
     return matches[0] if len(matches) == 1 else ""
 
 
-def _push_device(ip: str, model: str) -> bool:
-    """POST /api/control on the device for every per-board control in deviceModels.json.
+def _push_device(ip: str, model: str, full: bool = False) -> bool:
+    """PATCH /api/state on the device with its deviceModel: the identity, or with `full` the catalog entry's whole `state`.
 
-    For device models that have a catalog entry in mooninstaller/deviceModels.json: fans
-    out the full `controls.<Module>.<control>` block (matching the web
-    installer's and the device-side `?deviceModel=` Inject path — same generic
-    iteration, so adding a new field to a deviceModel entry Just Works without
-    code changes here). For device models without a catalog entry (custom names,
-    unknown firmware): still pushes `System.deviceModel` so the bare name lands —
-    keeps the legacy single-field behaviour as the fallback.
+    The identity, `{"System": {"deviceModel": name}}`, is what discovery and refresh push on every round.
+    The whole `state` goes only when the user picks a model, since its `"$patch":"replace"` containers would otherwise replace what the user built on each refresh.
+    A model without a catalog entry (a custom name, unknown firmware) sends the identity either way.
 
-    Returns True iff EVERY POST returned 200. False on any failure (timeout,
-    non-2xx, network error) — partial state may have been applied; the next
-    refresh re-attempts. Same best-effort semantics as the prior single-
-    field shape.
+    Returns True iff the request returned 200. False on any failure (timeout, non-2xx, network
+    error); the next refresh re-attempts.
 
-    `ip` is the "host:port" string from the device record (already includes
-    the port discovery picked). `deviceModel` is the catalog key MoonDeck wants
-    the device to remember (empty string means "clear" — no push).
-    """
-    if not model:
-        return True   # nothing to push; not a failure
-    # Look up the catalog entry. DEVICE_MODELS is loaded at module init; we don't
-    # re-read deviceModels.json per push so a tight discover-refresh cycle
-    # doesn't hammer the disk. If the user edits deviceModels.json, restart
-    # MoonDeck (same as every other catalog change).
-    entry = next((b for b in DEVICE_MODELS if b.get("name") == model), None)
-    if entry is not None:
-        modules = entry.get("modules") or []
-    else:
-        # Custom / unknown deviceModel: push the bare name onto System's `deviceModel`
-        # control (the identity lives on SystemModule now — no parent_id, it's the
-        # boot-wired top-level module, so _apply just sets the control, no add).
-        modules = [{"type": "System", "id": "System",
-                    "controls": {"deviceModel": model}}]
-
-    return _apply_modules_to_device(ip, modules)
-
-
-def _apply_modules_to_device(ip: str, modules: list) -> bool:
-    """Add-then-configure a list of module-with-controls units on a device.
-
-    Each unit is `{type, id, parent_id?, controls?}` — the SAME shape deviceModels.json
-    catalog entries use, so the deviceModel push (_push_device) drives it. Per
-    module: add it first when it has a parent_id (a fresh flash has no user-added
-    modules like AudioService, so a control write would 404), then set its controls.
-    A module without parent_id is boot-wired/top-level (Board under System,
-    Network) that already exists — skip the add, just set controls. The add is
-    idempotent (an existing id returns 200). Returns True iff EVERY POST returned
-    200; best-effort (partial state may apply, the next refresh re-attempts).
+    `ip` is the "host:port" string from the device record (already includes the port discovery
+    picked). `model` is the catalog key MoonDeck wants the device to remember (empty string means
+    "clear": no push).
     """
     import urllib.request
     import urllib.error
-
-    def _post(path: str, body_obj: dict) -> bool:
-        body = json.dumps(body_obj).encode()
-        try:
-            req = urllib.request.Request(
-                f"http://{ip}{path}",
-                data=body, method="POST",
-                headers={"Content-Type": "application/json"})
-            with urllib.request.urlopen(req, timeout=0.6) as resp:
-                return resp.status == 200
-        except (urllib.error.URLError, OSError):
-            return False
-
-    for m in modules:
-        if not isinstance(m, dict):
-            continue
-        if m.get("parent_id") and m.get("type"):
-            if not _post("/api/modules", {
-                "type": m.get("type"),
-                "id": m.get("id"),
-                "parent_id": m.get("parent_id"),
-            }):
-                return False
-        ctrls = m.get("controls") or {}
-        for control_name, value in ctrls.items():
-            if not _post("/api/control", {
-                "module": m.get("id"),
-                "control": control_name,
-                "value": value,
-            }):
-                return False
-    return True
+    if not model:
+        return True   # nothing to push; not a failure
+    # DEVICE_MODELS is loaded at module init and not re-read per push, so a tight
+    # discover-refresh cycle doesn't hammer the disk. Editing deviceModels.json needs a restart.
+    entry = next((b for b in DEVICE_MODELS if b.get("name") == model), None) if full else None
+    state = (entry or {}).get("state") or {"System": {"deviceModel": model}}
+    try:
+        req = urllib.request.Request(
+            f"http://{ip}/api/state",
+            data=json.dumps(state).encode(), method="PATCH",
+            headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            return resp.status == 200
+    except (urllib.error.URLError, OSError):
+        return False
 
 
 def _push_devices_in_parallel(pushes):
@@ -1557,13 +1503,8 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"error": f"device unreachable: {e}"}, 502)
 
         elif self.path == "/api/push-device":
-            # Push a single (ip, deviceModel) to a device. Called by the JS when the
-            # user picks a deviceModel from the per-device dropdown — saveState
-            # alone persists the value in moondeck.json but the device also
-            # needs to hear about it (the device persists its `deviceModel` control,
-            # now on SystemModule, to /.config/SystemModule.json). The bulk push from discover /
-            # refresh covers the multi-device case; this covers the
-            # one-device-at-a-time UI mutation.
+            # The user picked a deviceModel from the per-device dropdown, so the device gets the catalog entry's whole state.
+            # Discovery and refresh push only the identity.
             body = self._read_body()
             params = json.loads(body) if body else {}
             ip = params.get("ip", "")
@@ -1571,7 +1512,7 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
             if not ip:
                 self._send_json({"error": "ip required"}, 400)
                 return
-            ok = _push_device(ip, model)
+            ok = _push_device(ip, model, full=True)
             self._send_json({"ok": ok})
 
         elif self.path == "/api/discover":
@@ -2097,7 +2038,7 @@ code {{ background: transparent; color: #8aa6ba; padding: 0; }}
             return
 
         # Build a compact per-step list. Each step has at minimum an `op`; we render
-        # whatever other keys it carries (id, type, parent_id, key, value, props, bounds, …)
+        # whatever other keys it carries (id, key, value, document, bounds, …)
         # as a small definition list so the schema can evolve without code change.
         scen_name = html_mod.escape(str(data.get("name", raw)))
         scen_desc = html_mod.escape(str(data.get("description", "")))

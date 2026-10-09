@@ -159,3 +159,6 @@ __pycache__/
 # longer do, so the rule can say what it means.
 /media/
 .playwright-profile/
+
+moonbase/migrate/managed_components/
+moonbase/migrate/dependencies.lock

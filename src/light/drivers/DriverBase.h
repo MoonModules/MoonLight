@@ -19,18 +19,16 @@ namespace mm {
 /// Base class for one driver: a consumer that reads the shared source buffer and emits it. The destination is a physical LED output, a network sink, or the preview.
 ///
 /// A driver reads dimensions from an active Layer, applies the shared output correction, and may restrict its output to a window of the source buffer. The zero-state role EffectBase plays for effects.
-///
-/// @moreinfo
-///
-/// ## One include writes a driver
-///
-/// This file brings `DriverBase` plus the buffer, correction and platform pieces every driver needs.
-/// A peripheral seam or a packet header stays per-driver.
 class DriverBase : public MoonModule {
 public:
     // The OWNER must release before destroying: a base destructor cannot prevent the vptr race.
     /// This module's role, which is what the container filters its children by.
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Driver; }
+    // A driver keeps running dark at first, since LEDs left without data hold their last frame and keep drawing its current.
+    /// Held from this many failed boots in a row, for a crash in the driver itself that dark frames do not stop.
+    static constexpr uint8_t kHeldAfter = 4;
+    /// Held once safe mode has failed to stop the boots with dark frames.
+    bool heldInSafeMode() const override { return MoonModule::failedBoots() >= kHeldAfter; }
     virtual void setSourceBuffer(Buffer* buf) = 0;
 
     // Virtual rather than RTTI: ESP32 builds compile without it, so the guard never casts.
@@ -71,13 +69,8 @@ public:
     // The multiply happens once here, so the hot path stays one LUT lookup per channel.
     /// Rebuild this driver's correction, baking global times local brightness into one LUT.
     void rebuildCorrection(uint8_t globalBrightness) {
-        lastGlobalBrightness_ = globalBrightness;   // remembered for self-triggered rebuilds
         // Applied unconditionally, so brightness works even before the fixture-profile library is up.
-        const uint8_t effective =
-            static_cast<uint8_t>((globalBrightness * localBrightness_) / 255);
-        effectiveBrightness_ = effective;
-        // A driver that dims by on-time keeps full values in its table, so the colors keep every level.
-        const uint8_t tableBrightness = dimsByTime() ? 255 : effective;
+        const uint8_t tableBrightness = adoptBrightness(globalBrightness);
         correction_.whiteMode = static_cast<WhiteMode>(whiteMode_);
         correction_.curve = static_cast<Correction::Curve>(curveSel_);
         // A missing id falls back to the default, so a driver degrades rather than crashing.
@@ -92,8 +85,8 @@ public:
             // No library yet, so apply brightness here, as deriveCorrection would have.
             correction_.rebuildBrightness(tableBrightness);
         }
-        // Allocated the first time a profile has fine roles and kept until release, since the encode task may be reading it while this rebuild runs.
-        const bool firstTable = correction_.hasFine && !lut16_;
+        // Allocated the first time the table is wanted and kept until release, since the encode task may be reading it while this rebuild runs.
+        const bool firstTable = correction_.wantsTable() && !lut16_;
         if (firstTable) lut16_.resize(256);
         correction_.lut16 = lut16_.data();
         if (firstTable) correction_.rebuildBrightness(tableBrightness);   // a table that existed was filled by the rebuild above
@@ -120,11 +113,21 @@ public:
     /// Notified when the output channel count may have changed without a structural rebuild.
     virtual void onCorrectionChanged() {}
 
+    // A brightness change re-bakes the table, which the encode reads live, and never resizes the frame.
+    /// Whether the output channel count changed since the last time a driver asked, so it re-lays its frame only then.
+    bool outChannelsChanged() {
+        if (correction_.outChannels == laidOutChannels_) return false;
+        laidOutChannels_ = correction_.outChannels;
+        return true;
+    }
+
     // HUB75 does: its panel shows a level only as time, so scaling values would cost levels.
     /// Whether this driver dims by how long it lights rather than by scaling the values it sends.
-    virtual bool dimsByTime() const { return false; }
+    virtual bool dimsByTime() const MM_NONBLOCKING { return false; }
     /// Global times local brightness, as last rebuilt, for a driver that dims by time.
     uint8_t effectiveBrightness() const { return effectiveBrightness_; }
+    /// Rebake only the brightness table for a level that moves every tick, the soft start, leaving the resolved profile as it is.
+    void rampBrightness(uint8_t globalBrightness) MM_NONBLOCKING { correction_.rebuildBrightness(adoptBrightness(globalBrightness)); }
 
     /// Clear every shared status string, so a stopped driver leaves nothing behind.
     void release() override {
@@ -176,7 +179,7 @@ protected:
 
     // The wiring comes from a named profile by stable id; the render loop never reads the library.
     Correction correction_;
-    ScratchBuffer<uint16_t> lut16_{*this};   // the correction's 16-bit table, allocated the first time a profile has fine roles
+    ScratchBuffer<uint16_t> lut16_{*this};   // the correction's 16-bit table, allocated the first time it is wanted
     uint32_t profileId_ = 0;          // stable id into the FixtureProfiles library (0 → resolve to default)
     uint8_t fixtureSel_ = 0;          // the fixture Select's chosen INDEX (mapped to an id in onControlChanged)
     uint8_t whiteMode_ = static_cast<uint8_t>(WhiteMode::Min);  // index into kWhiteModeOptions
@@ -191,6 +194,7 @@ protected:
         "linear"           // no curve: for a downstream device that corrects its own output
     };
     uint8_t lastGlobalBrightness_ = 0;  // last global brightness the container pushed (for self-rebuilds)
+    uint8_t laidOutChannels_ = 0xFF;    // the channel count outChannelsChanged last saw, none yet
     uint8_t effectiveBrightness_ = 255; // global times local, for a driver that dims by time
     // A config saved before `fixture` held the profile's name kept it here; read for one release, then emptied.
     char fixtureRef_[16] = {};
@@ -223,6 +227,13 @@ protected:
     }
 
 private:
+    /// Take the global level, remembered for self-triggered rebuilds, and answer the level the table bakes.
+    uint8_t adoptBrightness(uint8_t globalBrightness) MM_NONBLOCKING {
+        lastGlobalBrightness_ = globalBrightness;
+        effectiveBrightness_ = static_cast<uint8_t>((globalBrightness * localBrightness_) / 255);
+        // A driver that dims by on-time keeps full values in its table, so the colors keep every level.
+        return dimsByTime() ? 255 : effectiveBrightness_;
+    }
     // Borrowed pointers into the library's own name storage, which outlives the control list.
     const char* fixtureOptions_[FixtureProfilesModule::kMaxProfiles] = {};
     uint8_t fixtureOptionCount_ = 0;

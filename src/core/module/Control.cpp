@@ -1,5 +1,4 @@
-/// The per-type JSON writing and parsing every consumer shares, so adding a ControlType is one edit here.
-/// Kept out of Control.h, which the module headers include only to call addX().
+/// The per-type JSON writing and parsing every consumer shares, so adding a ControlType is one edit here. Kept out of Control.h, which the module headers include only to call addX().
 
 #include "core/module/Control.h"
 
@@ -74,7 +73,15 @@ bool hasDefault(ControlType t) {
     return t != ControlType::Password;
 }
 
+// One task serves the API and the WebSocket pushes, so a plain flag scoped around each is enough.
+static bool g_secretsHidden = false;
+
+SecretsHidden::SecretsHidden(bool hide) MM_NONBLOCKING : prev_(g_secretsHidden) { g_secretsHidden = hide; }
+SecretsHidden::~SecretsHidden() MM_NONBLOCKING { g_secretsHidden = prev_; }
+bool SecretsHidden::active() MM_NONBLOCKING { return g_secretsHidden; }
+
 void writeObfuscatedPassword(JsonSink& sink, const char* password) {
+    if (g_secretsHidden) { sink.append("\"\""); return; }
     constexpr uint8_t kKey = 0x5A;   // shared with app.js's decodePassword
     uint8_t scrambled[64];
     size_t n = std::strlen(password);
@@ -240,7 +247,10 @@ void writeControlMetadata(JsonSink& sink, const ControlDescriptor& c) {
         case ControlType::Password:
         case ControlType::ReadOnly:
         case ControlType::IPv4:
+            return;
+        // A button that cannot be undone asks for a second press.
         case ControlType::Button:
+            if (c.aux) sink.append(",\"confirm\":true");
             return;
         // Where the module keeps its files, and which of them to offer. Both borrowed from the module (addFilePath), so the UI can list a directory without knowing what lives there.
         case ControlType::FilePath: {

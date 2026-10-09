@@ -7,6 +7,11 @@
     "FixtureProfilesModule"
   ],
   "description": "How a finished frame leaves the device. The global brightness and the master switch are the two controls every installation touches, and both must apply on the next frame rather than at the next boot. Brightness defaults low so a fresh board on USB cannot brown out at full white, which is a safety default worth pinning.",
+  "top": [
+    "Layouts",
+    "Effects",
+    "Drivers"
+  ],
   "reset": [
     {
       "name": "reset-brightness",
@@ -26,64 +31,44 @@
   ],
   "fixture": [
     {
-      "name": "layouts",
-      "description": "Where the lights are, which the layer reads its coordinates from.",
-      "op": "add_module",
-      "id": "Layouts",
-      "type": "Layouts"
-    },
-    {
       "name": "grid",
       "description": "A 16x16 panel, small enough to run anywhere.",
-      "op": "add_module",
-      "id": "Grid",
-      "type": "GridLayout",
-      "parent_id": "Layouts",
-      "props": {
-        "width": 16,
-        "height": 16
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "GridLayout",
+            "width": 16,
+            "height": 16
+          }
+        }
       }
     },
     {
       "name": "layer",
       "description": "One layer over those layouts: what the drivers read, and what carries the light brightness scales.",
-      "op": "add_module",
-      "id": "Layer",
-      "type": "Layer",
-      "props": {
-        "layouts": "Layouts"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer"
+          }
+        }
       }
     },
     {
       "name": "effect",
       "description": "An effect that paints from the first frame, so there is output to dim.",
-      "op": "add_module",
-      "id": "FX",
-      "type": "RainbowEffect",
-      "parent_id": "Layer"
-    },
-    {
-      "name": "fix-Drivers",
-      "op": "add_module",
-      "id": "Drivers",
-      "type": "Drivers",
-      "props": {
-        "layer": "Layer"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "FX": {
+              "type": "RainbowEffect"
+            }
+          }
+        }
       }
-    },
-    {
-      "name": "fix-FixtureProfiles",
-      "op": "add_module",
-      "id": "FixtureProfiles",
-      "type": "FixtureProfilesModule",
-      "parent_id": "Drivers"
-    },
-    {
-      "name": "fix-Preview",
-      "op": "add_module",
-      "id": "Preview",
-      "type": "PreviewDriver",
-      "parent_id": "Drivers"
     }
   ],
   "steps": [
@@ -122,9 +107,9 @@
             "min": 6,
             "max": 17,
             "n": 32,
-            "samples": [9, 6, 6, 7, 7, 7, 6, 6, 7, 6, 6, 7, 7, 7, 7, 7, 17, 6, 7, 7, 7, 7, 9, 8, 7, 7, 7, 6, 8, 15, 8, 7]
+            "samples": [6, 7, 7, 7, 7, 7, 17, 6, 7, 7, 7, 7, 9, 8, 7, 7, 7, 6, 8, 15, 8, 7, 7, 7, 7, 7, 7, 7, 7, 8, 7, 8]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         },
         "desktop-windows": {
           "tick_us": {

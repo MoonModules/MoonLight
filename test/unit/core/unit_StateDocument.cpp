@@ -378,3 +378,72 @@ TEST_CASE("a re-typed module frees the names under it for elsewhere in the same 
     CHECK(t.children(t.find("L2")) == "Knob");
     CHECK(valueOf(t.find("Knob")) == 7);
 }
+
+namespace {
+// A module with a saved setting and a live input beside it, as the Control module's save form is.
+struct SdForm : public mm::MoonModule {
+    uint8_t value = 1;
+    uint8_t slot = 255;
+    void defineControls() override {
+        controls_.addControl("value", value, 0, 100);
+        controls_.addControl("slot", slot, 0, 255);
+        controls_.setLive(controls_.count() - 1);
+    }
+};
+}  // namespace
+
+// A stored file sets only what the device itself saves: a live input an older build wrote into its file stays as the device starts it, while a request may still set one.
+TEST_CASE("a stored file sets only the controls the device saves, and a request sets any") {
+    Tree t;
+    auto* form = new SdForm();
+    form->setName("Form");
+    t.effects->addChild(form);
+    form->defineControls();
+
+    const char* doc = R"({"Effects":{"Form":{"value":7,"slot":0}}})";
+    REQUIRE(mm::applyStateDocument(t.s, doc, mm::StateSource::Stored).ok);
+    CHECK(form->value == 7);
+    CHECK(form->slot == 255);
+    REQUIRE(t.apply(doc).ok);
+    CHECK(form->slot == 0);
+}
+
+// A device model's document lists the Ethernet card under Network with `"$patch":"replace"`; the WiFi card main.cpp wired beside it stays, since every boot puts it back.
+TEST_CASE("replacing a module's children keeps the ones wired in code") {
+    Tree t;
+    auto* wired = new SdKnob();
+    wired->setName("Wired");
+    t.effects->addChild(wired);
+    wired->markWiredByCode();
+    REQUIRE(t.apply(R"({"Effects":{"Loose":{"type":"SdKnob"}}})").ok);
+
+    REQUIRE(t.apply(R"({"Effects":{"$patch":"replace","Fresh":{"type":"SdKnob"}}})").ok);
+    CHECK(t.children(t.effects) == "Wired,Fresh");
+}
+
+// The installer sends a device model's document over serial and may send it again; the second time changes nothing.
+TEST_CASE("a state document applied twice leaves the tree as the first application did") {
+    Tree t;
+    const char* doc = R"({"Effects":{"$patch":"replace","A":{"type":"SdKnob","value":4},"B":{"type":"SdKnob"}}})";
+    REQUIRE(t.apply(doc).ok);
+    REQUIRE(t.apply(doc).ok);
+    CHECK(t.children(t.effects) == "A,B");
+    CHECK(valueOf(t.find("A")) == 4);
+}
+
+// A device model lists the Ethernet card under Network with `"$patch":"replace"` and leaves out the cards main.cpp wired beside it: those keep their places, and the listed ones fill their own places in the document's order.
+TEST_CASE("replacing a module's children keeps the unlisted ones where they are") {
+    Tree t;
+    auto* wired = new SdKnob();
+    wired->setName("Wired");
+    t.effects->addChild(wired);
+    wired->markWiredByCode();
+    REQUIRE(t.apply(R"({"Effects":{"B":{"type":"SdKnob"},"A":{"type":"SdKnob"}}})").ok);
+    REQUIRE(t.children(t.effects) == "Wired,B,A");
+    t.effects->moveChildTo(wired, 1);
+    REQUIRE(t.children(t.effects) == "B,Wired,A");
+
+    REQUIRE(t.apply(R"({"Effects":{"$patch":"replace","A":{},"B":{}}})").ok);
+    CHECK(t.children(t.effects) == "A,Wired,B");
+    CHECK(t.apply(R"({"Effects":{"$patch":"replace","A":{},"B":{}}})").changes == 0);
+}

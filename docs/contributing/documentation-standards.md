@@ -145,7 +145,7 @@ Two scales below a page. **A module** has exactly one reference page written and
     - **Minimalism**: every fact has one home; history lives in git.
         - **Present tense only.** "No X anymore" narrates a removal, which is history. Describe the path that exists. Vale flags the words that date a sentence ("today", "currently", "no longer", "not yet").
         - **Positive form only.** "Not", "never", "neither", "without", "un-" and "non-" are the alarm bells: a negation says everything a thing is not, which is no shape at all. A real constraint stays ("the DMA cannot read PSRAM at shift clock"); a bare absence goes.
-    - **Industry standards**: the textbook name for a thing, so a reader recognizes it without being taught our vocabulary. A bespoke choice carries its one-line reason where it appears.
+    - **Textbook names**: the name the textbook, standard or design guide gives a thing, so a reader recognizes it without being taught our vocabulary. A bespoke choice carries its one-line reason where it appears.
     - **Continuous improvement**: a doc describing what the code no longer does is a defect. Fix it in the change that opened the file, not in a sweep.
 - **A page links down to detail, it does not absorb it.** Each level says what a thing is and sends the reader to the level that owns the detail. A fact stated above its home is a second copy that drifts. The test: if removing a paragraph costs nothing but a link, it was never this page's to hold. The ladder is in [The hierarchy](#the-hierarchy).
 - **A list holds one kind of thing, most important first.** The heading rule, one level down: what a reader reaches for most often leads. A list mixing categories is really two lists.
@@ -164,6 +164,21 @@ Two scales below a page. **A module** has exactly one reference page written and
 - **No em-dashes in prose.** Use a comma, colon, parentheses, or a full stop. A literal one in a UI string or test fixture stays.
 - **No hard line wraps in markdown.** Let the editor soft-wrap, so a one-word edit is a one-word diff.
 - **Convert as you touch.** Spelling and em-dash fixes ride the change that opens the file, never a repo-wide sweep. `check_prose.py` checks added lines only, for the same reason.
+
+### The words for hardware
+
+One word per thing, so a reader never wonders whether two words mean two things.
+
+| word | what it is | example |
+|---|---|---|
+| **device** | one unit running MoonLight: its board plus everything that makes it usable, such as an enclosure, power input, terminals and level shifters; it has a `deviceName` and a `deviceModel` | a QuinLED Dig-2-Go on a shelf, the StadBeest's legs (`MM-StadBeest`) |
+| **deviceModel** | the product a device is one of, which the catalog describes and the installer sets up | `QuinLED Dig-Next-2`, `LightCrafter 16`, `MIDI bridge` |
+| **board** | the bare PCB, as in on-board LED and on-board peripherals | the ESP32-S3 DevKit |
+| **firmware** | the compiled binary for one chip | `esp32s3-n16r8` |
+| **desk** | a hardware controller of faders, knobs and pads, which drives a device's control surface | the iCON QCon Pro G2 |
+| **installation** | several devices acting as one piece | the StadBeest: legs, two eyes and a MIDI bridge |
+
+A unit is a device even when it is one bare board: "the bridge device", "the device the desk drives".
 
 ## Module pages
 
@@ -241,6 +256,7 @@ A card is read across a row; a member comment is read beside the thing it descri
 | One line of a file or class lead | 400 characters |
 | A whole `///` run, lead or class comment | 2500 characters |
 | A sentence in a comment | 1 line, never wrapped |
+| A paragraph in a comment | 1 line while it fits the line cap |
 | Every public member | carries one |
 
 **A lead's line is wider, and a run is capped as a block.** A lead is the summary that opens a header or a class. One of its lines carries what the whole thing is for: what it is, which hardware it runs on, where the shared body lives. Held to the member cap the driver headers each lost about a third of that, and what went was content. The run budget is what stops a lead sprawling instead. It also closes the cheapest way to satisfy a line cap: splitting one long line into two shorter ones leaves the text identical and every per-line rule passing.
@@ -253,7 +269,7 @@ The first five cut and the last adds, deliberately: the result is a short line o
 
 **The appendix budget counts a SECTION, not the whole appendix.** A single total punishes a file for having several distinct topics. The cheapest way to satisfy one is to delete a section rather than tighten the prose. Ten lines per `## ` section asks each one to be disciplined and lets a file carry as many as it genuinely has. That is what an implementation file needs: the platform backends each hold a handful of separately diagnosed findings, and one shared budget could only force them out of the tree. A fenced block does not count, the same exemption the no-wrap rule makes. A protocol listing is as long as the thing it describes, and counting its lines would ask an author to delete wire format to fit a prose budget.
 
-**No hard wrap in a comment, for the reason markdown gives.** Let the editor soft-wrap, so a one-word edit is a one-word diff rather than a reflowed paragraph. The one-line budget already forbids this on a header's member or code comment. So the rule bites where a block is allowed to be multi-line. That is the class comment, the `@moreinfo` appendix, and any multi-line run in an implementation file. A list item, a heading, a table row and a fenced block are structure rather than a wrapped sentence, and each is left alone. This one holds everywhere, because its reason is the diff rather than the page. A split sentence reflows every line it spans when a word changes, which costs a reviewer the same in either file. One sentence per line is as available in C++ as anywhere; the line simply runs long.
+**No hard wrap in a comment, for the reason markdown gives.** Let the editor soft-wrap, so a one-word edit is a one-word diff rather than a reflowed paragraph. The one-line budget already forbids this on a header's member or code comment. So the rule bites where a block is allowed to be multi-line. That is the class comment, the `@moreinfo` appendix, and any multi-line run in an implementation file. A list item, a heading, a table row and a fenced block are structure rather than a wrapped sentence, and each is left alone. This one holds everywhere, because its reason is the diff rather than the page. A split sentence reflows every line it spans when a word changes, which costs a reviewer the same in either file. A paragraph goes the same way: its sentences share one line while that line fits the cap. Markdown joins them into one paragraph anyway, so the split only spends a line. Past the cap, each sentence keeps a line of its own.
 
 **Use `//` sparingly.** A comment restating what the code does is a naming failure, and the fix is a better name rather than a better sentence. What survives is the WHY a reader cannot recover from the code.
 

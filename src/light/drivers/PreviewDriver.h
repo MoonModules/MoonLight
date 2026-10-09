@@ -11,11 +11,11 @@
 
 namespace mm {
 
-/// Streams a true-shape 3D preview to the web UI over the binary WebSocket.
+/// Streams a true-shape 3D preview to the web UI over its own binary WebSocket: @xref{its-own-channel-and-why}.
 ///
 /// The preview is a POINT LIST, not a dense grid. Only the real lights are sent, at their real (x, y, z) positions, on MoonLight's PhysicalLayer model. Positions go out once at mapping time and channels per frame. This driver owns both wire formats, and the HTTP server is a domain-neutral broadcaster that writes the bytes.
 ///
-/// Resolution is client-driven: the browser reads the drops counter each frame carries and posts the standing request it wants. No standing request means no work at all.
+/// Resolution is client-driven, over the wire format in @xref{the-wire-format}: the browser reads the drops counter each frame carries and posts the standing request it wants. No standing request means no work at all.
 ///
 /// @moreinfo
 ///
@@ -42,6 +42,8 @@ class PreviewDriver : public DriverBase, public BinaryBroadcaster::ClientMessage
 public:
     /// Not user-editable: deleting it from the UI would silently kill the 3D preview.
     bool userEditable() const override { return false; }
+    /// Running in safe mode, which leaves the lights to the screen.
+    bool heldInSafeMode() const override { return false; }
 
     /// The frame rate the preview aims for, in Hz, independent of the render rate.
     uint8_t targetFps = 24;

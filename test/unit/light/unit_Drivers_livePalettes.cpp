@@ -1,11 +1,7 @@
 /// @module Drivers
 /// @also Palette, MoonLivePalette
 
-/// How a DOWNLOADED palette becomes a selectable one.
-///
-/// A scripted palette arrives as a `.mlp` file the UI writes to the device, and three separate things have to agree before a user can pick it.
-/// The scan has to FIND the file, the picker has to LIST it, and the `palette` control has to ACCEPT its index.
-/// Each of those failed independently in the field, and each failure looked the same from the outside ("I downloaded it and nothing happened"), so they are pinned separately here.
+/// How a DOWNLOADED palette becomes a selectable one: the scan FINDS the file, the picker LISTS it, and the `palette` control ACCEPTS its index, each pinned separately.
 
 #include "doctest.h"
 #include "light/drivers/Drivers.h"
@@ -25,11 +21,10 @@ using namespace mm;
 
 namespace {
 
-/// The smallest thing that stands in for a palette script.
-/// These tests never RUN it: they are about DISCOVERY (which files are found and offered), and what a scripted palette paints is covered by MoonLivePalette's own tests.
+/// The smallest palette script stand-in: these tests cover DISCOVERY, never what a palette paints.
 constexpr const char* kPaletteSrc = "void setup() {}\n";
 
-/// An empty filesystem root of its own per test, so a count assertion means what it says: the developer's own device directory carries whatever palettes they have been trying, and a test that counted those would pass or fail by accident. fsSetRoot is provided for exactly this (platform.h), and the FilesystemModule persistence tests use the same shape.
+/// An empty filesystem root per test, so a count assertion ignores whatever palettes the developer's own device directory carries.
 struct IsolatedFs {
     char root[256];
     explicit IsolatedFs(const char* tag) {
@@ -53,8 +48,7 @@ void writePalette(const char* dir, const char* name) {
     REQUIRE(platform::fsWriteAtomic(path, kPaletteSrc, std::strlen(kPaletteSrc)));
 }
 
-/// The highest index the `palette` control ACCEPTS.
-/// This is the number every one of these bugs moved: the control carries its ceiling in `max`, and a value above it is refused with "value out of range", which is what made a freshly downloaded palette unselectable even once it was listed.
+/// The highest index the `palette` control ACCEPTS: its `max`, above which a value is refused with "value out of range".
 int32_t paletteMax(Drivers& drv) {
     const int i = test::controlIndex(drv, "palette");
     REQUIRE(i >= 0);
@@ -64,9 +58,7 @@ int32_t paletteMax(Drivers& drv) {
 }  // namespace
 
 TEST_CASE("a palette downloaded to the factory directory is offered by the picker") {
-    // THE FIELD BUG.
-    // The UI downloads a `.mlp` to the FACTORY directory (`/.moonlive`) so that a later edit can shadow it, but the scan only ever read the USER directory (`/moonlive`).
-    // The file was on the device and could never be listed, so the picker said "reopen the picker to select it" and reopening changed nothing, forever.
+    // The UI downloads a `.mlp` to the FACTORY directory (`/.moonlive`) so a later edit can shadow it, so the scan reads that directory as well as the USER one (`/moonlive`).
     IsolatedFs fs("factory");
     Drivers drv;
     drv.defineControls();
@@ -79,7 +71,7 @@ TEST_CASE("a palette downloaded to the factory directory is offered by the picke
 }
 
 TEST_CASE("editing a factory palette leaves one entry, not two") {
-    // Editing a factory script SAVES A SECOND FILE of the same name to the user directory, which then shadows the factory copy (resolveScript prefers it). Both directories are scanned, so without a dedupe the same palette would appear twice in the picker, and one of those two rows would load a file the user cannot see.
+    // Editing a factory script saves a same-named file to the user directory, which shadows the factory copy; both are scanned, so a dedupe keeps the picker to one row.
     IsolatedFs fs("both");
     Drivers drv;
     drv.defineControls();
@@ -93,12 +85,12 @@ TEST_CASE("editing a factory palette leaves one entry, not two") {
 }
 
 TEST_CASE("a quote in a live palette's name is escaped, so the options stay parseable") {
-    // A palette is named by its FILE, and a user names the file. An unescaped name ends the JSON string early, so the UI loses the whole picker. paletteNames() escaped it and paletteOptions() did not.
+    // A palette is named by its file, so an unescaped quote would end the JSON string early and the UI would lose the picker.
     static const char* const kNames[] = {"unit-a\"b"};
     static const char* const kTags[] = {"\U0001F3A8"};
     mm::LivePalettes::set(kNames, kTags, 1);
 
-    // Every built-in with its color table is tens of kilobytes, so the buffer is sized past the real thing: an overflow means a defect, not a cap.
+    // The buffer is sized past tens of kilobytes of built-ins, so an overflow means a defect, not a cap.
     std::vector<char> buf(1 << 17, 0);
     JsonSink sink(buf.data(), buf.size());
     mm::paletteOptions(sink);
@@ -112,13 +104,13 @@ TEST_CASE("a quote in a live palette's name is escaped, so the options stay pars
 }
 
 TEST_CASE("a palette added while running becomes selectable without a reboot") {
-    // THE BLOCKER BEHIND THE OTHER TWO: `palette`'s ceiling is baked when the control is defined (the scripted count plus the built-ins), while a downloaded file is discovered by prepare(). So the new palette was LISTED and then REFUSED with "value out of range": the picker offered a row that could not be chosen, and only a reboot fixed it. prepare() therefore rebuilds the controls when the count moves.
+    // The `palette` ceiling is baked when the control is defined while prepare() discovers files, so prepare() rebuilds the controls when the count moves.
     IsolatedFs fs("late");
     Drivers drv;
     drv.defineControls();
     const int32_t before = paletteMax(drv);
 
-    // Arriving AFTER the control was defined is the whole point: this is a download onto a running device, not a file that was present at boot.
+    // The file arrives after the control was defined, as a download onto a running device.
     writePalette(mm::moonlive::kFactoryScriptDir, "unit-late.mlp");
     drv.prepare();
 
@@ -154,7 +146,7 @@ TEST_CASE("the palette saves as its name, built in or scripted") {
 
     CHECK(savedPalette(drv) == "\"Rainbow\"");   // the default, built in
     applyPalette(drv, "\"unit-named.mlp\"");
-    CHECK(drv.palette == mm::palettes::kCount);   // the first scripted entry
+    CHECK(drv.palette == mm::palettes::kCount + mm::moonlive::kPaletteCatalogCount);   // the first of the user's own, after the catalog
     CHECK(savedPalette(drv) == "\"unit-named.mlp\"");
 }
 
@@ -175,4 +167,35 @@ TEST_CASE("a scripted palette chosen by name survives a script added before it")
 
     CHECK(savedPalette(drv) == "\"m-chosen.mlp\"");
     CHECK(drv.palette == oldIndex + 1);   // the old index now names a-first
+}
+
+// A slot, a desk or the autopilot picks a palette by number, so a factory palette keeps its number, and a missing one is listed as absent for download.
+TEST_CASE("a factory palette keeps its number whether the device holds it or not") {
+    IsolatedFs fs("fixed");
+    Drivers drv;
+    drv.defineControls();
+    drv.prepare();
+    REQUIRE(mm::moonlive::kPaletteCatalogCount >= 2);
+    CHECK(std::string(mm::LivePalettes::nameAt(1)) == mm::moonlive::kPaletteCatalog[1]);
+    CHECK_FALSE(mm::LivePalettes::presentAt(1));
+
+    std::vector<char> buf(1 << 17, 0);
+    JsonSink sink(buf.data(), buf.size());
+    mm::paletteOptions(sink);
+    REQUIRE(!sink.overflowed());
+    CHECK(std::strstr(buf.data(), "\"absent\":true") != nullptr);
+
+    writePalette(mm::moonlive::kFactoryScriptDir, mm::moonlive::kPaletteCatalog[1]);
+    drv.prepare();
+    CHECK(std::string(mm::LivePalettes::nameAt(1)) == mm::moonlive::kPaletteCatalog[1]);   // the same number, now held
+    CHECK(mm::LivePalettes::presentAt(1));
+}
+
+// The StadBeest autopilot picks its fire palette by number, so a palette added before it in the list must move this test and that script together.
+TEST_CASE("the StadBeest fire palette is number 64, the one its autopilot picks") {
+    int index = -1;
+    for (size_t c = 0; c < mm::moonlive::kPaletteCatalogCount; c++)
+        if (std::strcmp(mm::moonlive::kPaletteCatalog[c], "stadbeest-fire.mlp") == 0) index = static_cast<int>(c);
+    REQUIRE(index >= 0);
+    CHECK(mm::palettes::kCount + index == 64);   // moonlive/services/stadbeest-autopilot.mls: palette = 64
 }

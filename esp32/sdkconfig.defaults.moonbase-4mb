@@ -1,1 +1,1 @@
-CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions/esp32dev_moonbase.csv"
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions/4mb_moonbase.csv"

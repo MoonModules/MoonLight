@@ -16,6 +16,15 @@ When everything is ours, the [test suite](../reference/testing.md) reaches the w
 
 The trade is real. A much larger surface to maintain, every bug ours, and nobody upstream fixing things while we sleep. A bigger surface that can be tested completely is still easier to live with than a smaller one with holes in it.
 
+## One set of helpers for every module
+
+Every library brings its own small helpers: a color struct, string formatting, fixed-point math, a JSON writer, a timer wrapper.
+Three libraries mean three versions of the same small things, each in flash, each with its own conventions and its own bugs.
+
+MoonLight has one set in `src/core/util`, shared by every module: one `format`, one `math8` and `math16`, one color type, one `JsonSink`, one host-list parser.
+A fix lands once and reaches every module, a test pins it once, and a reader learns one way to do each thing.
+It is the project's first principle at the scale of a codebase: every piece of logic has exactly one home.
+
 ## Why this became possible
 
 This is not a decision that could have been made a few years ago, and it is not the result of better judgment.

@@ -17,9 +17,8 @@
 // association runs capped. Matches the device-side handler.
 export const IMPROV_CMD_SET_TX_POWER = 0xFD;
 
-// APPLY_OP vendor RPC command ID — "Improv = REST over serial". Carries ONE REST
-// operation as JSON ({"op":"add|set|clearChildren",…}, the same shape an HTTP
-// /api/modules or /api/control body has). Frame payload: [0xFC][seq][last][chunk…].
+// APPLY_OP vendor RPC command ID: "Improv = REST over serial". Carries ONE state document
+// as JSON (the body PATCH /api/state takes). Frame payload: [0xFC][seq][last][chunk…].
 // Matches improvHandleApplyOp at src/platform/esp32/platform_esp32_improv.cpp.
 export const IMPROV_CMD_APPLY_OP = 0xFC;
 
@@ -54,13 +53,25 @@ export function buildImprovFrame(type, payload) {
     return frame;
 }
 
-// Encode ONE REST op into the APPLY_OP frame(s) it sends over serial. The op JSON
-// is UTF-8'd and split into APPLY_OP_CHUNK_MAX-byte chunks; each chunk becomes a
+// The documents a catalog entry sends: one {"<Root>": <its object>} per top-level container
+// of the entry's `state`, as JSON strings in the entry's key order. Each fits the device's
+// 512-byte reassembly buffer where the whole state would not.
+export function stateFrames(entry) {
+    const state = entry && entry.state;
+    if (!state || typeof state !== "object" || Array.isArray(state)) return [];
+    // Drivers goes last: starting an output prints on UART0, which a classic board shares with Improv, and LED pins 1 or 3 end serial reception.
+    return Object.entries(state)
+        .sort(([a], [b]) => (a === "Drivers") - (b === "Drivers"))
+        .map(([root, body]) => JSON.stringify({ [root]: body }));
+}
+
+// Encode ONE state document (an object, or its JSON string) into the APPLY_OP frame(s) it
+// sends over serial. The JSON is UTF-8'd and split into APPLY_OP_CHUNK_MAX-byte chunks; each chunk becomes a
 // frame with payload [0xFC][seq][last][chunk…]. Always at least one frame (so
-// `last` always sends, even for an empty op). The device reassembles by seq and
+// `last` always sends, even for an empty document). The device reassembles by seq and
 // applies on `last=1`. Returns an array of Uint8Array frames, in send order.
-export function encodeApplyOpFrames(op) {
-    const bytes = new TextEncoder().encode(JSON.stringify(op));
+export function encodeApplyOpFrames(doc) {
+    const bytes = new TextEncoder().encode(typeof doc === "string" ? doc : JSON.stringify(doc));
     const total = bytes.length;
     const chunks = Math.max(1, Math.ceil(total / APPLY_OP_CHUNK_MAX));
     const frames = [];

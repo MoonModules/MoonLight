@@ -401,6 +401,86 @@ let wspRetryMs = WSP_RETRY_MIN_MS;
 // A Select's value is normally the option INDEX, but a label-persisted Select (a NIC list, an
 // audio device list) sends the option STRING; resolve either to the index both render paths
 // need. Unknown label -> 0, so a vanished option shows the first row rather than a blank box.
+// A row's name cut short by the label column shows whole on hover; one listener covers every row, however it was built.
+document.addEventListener("mouseover", e => {
+    const label = e.target.closest && e.target.closest(".control-label");
+    if (label && !label.title && label.scrollWidth > label.clientWidth) label.title = label.textContent.trim();
+});
+
+// A few short choices show at once as a segmented control, the rest fold into a dropdown; the device sends a select either way.
+// A segmented control cannot wrap, so its labels together must fit the field.
+const SEGMENTED_MAX = 3, SEGMENTED_CHARS = 36;
+function choiceIsSegmented(ctrl) {
+    const opts = ctrl.options || [];
+    return opts.length <= SEGMENTED_MAX && opts.join("").length <= SEGMENTED_CHARS;
+}
+
+// A select control as a segmented control or a dropdown, `pick(i)` writing the index chosen; kept on the element so a live patch can rebuild it.
+// The segments are radio buttons underneath, so the keyboard and a screen reader treat them as one choice.
+function buildChoice(moduleName, ctrl, key, pick) {
+    let el;
+    if (choiceIsSegmented(ctrl)) {
+        el = document.createElement("div");
+        el.className = "segmented";
+        el.setAttribute("role", "radiogroup");
+        el.setAttribute("aria-label", ctrl.name);
+        (ctrl.options || []).forEach((opt, i) => {
+            const lab = document.createElement("label");
+            const rb = document.createElement("input");
+            rb.type = "radio";
+            rb.name = `radio-${moduleName}-${ctrl.name}`;
+            rb.value = i;
+            rb.checked = i === selectIndex(ctrl);
+            rb.addEventListener("change", () => { if (rb.checked) pick(i); });
+            lab.append(rb, document.createTextNode(opt));
+            el.appendChild(lab);
+        });
+    } else {
+        el = document.createElement("select");
+        (ctrl.options || []).forEach((opt, i) => {
+            const o = document.createElement("option");
+            o.value = i;
+            o.textContent = opt;
+            if (i === selectIndex(ctrl)) o.selected = true;
+            el.appendChild(o);
+        });
+        // Protect the dropdown while the user has it open. A native <select>
+        // popup stays open for several frames (seconds, if deliberating) while
+        // a continuously-refreshed module keeps pushing state over the WS; an
+        // unguarded `sel.value = ctrl.value` patch during that window snaps the
+        // menu back to the old option and visibly closes it: the user never
+        // gets to pick. We mark the select "open" on pointerdown (fires BEFORE
+        // the popup opens, unlike focus, which some browsers delay or skip) and
+        // clear it on change/blur; updateModuleControls skips any select marked
+        // open. pointerdown also stamps the dragTs cooldown as a belt-and-braces
+        // fallback for the post-close frames.
+        el.dataset.open = "false";
+        const markOpen = () => { el.dataset.open = "true"; dragTs[key] = Date.now(); };
+        el.addEventListener("pointerdown", markOpen);
+        el.addEventListener("focus", markOpen);
+        el.addEventListener("blur", () => { el.dataset.open = "false"; });
+        el.addEventListener("change", () => {
+            el.dataset.open = "false";
+            // No refetch/re-render here: a control that changes the SET (a hidden-flag flip)
+            // is reconciled in place by syncVisibleControls on the next WS push, so the card
+            // and its expanded state are preserved.
+            pick(parseInt(el.value));
+        });
+    }
+    el.dataset.mid = moduleName;
+    el.dataset.key = ctrl.name;
+    el._pick = pick;
+    el._dragKey = key;
+    return el;
+}
+
+// Show index `i` as chosen, in either form.
+function setChoice(el, i) {
+    if (!el) return;
+    if (el.classList.contains("segmented")) el.querySelectorAll("input").forEach(rb => { rb.checked = Number(rb.value) === i; });
+    else if (Number(el.value) !== i) el.value = i;
+}
+
 function selectIndex(ctrl) {
     if (typeof ctrl.value === "string") {
         const i = (ctrl.options || []).indexOf(ctrl.value);
@@ -697,10 +777,9 @@ async function listSetField(moduleName, ctrlName, id, field, value) {
 
 /// Create a module, optionally under a chosen name, and return the name it got.
 ///
-/// `id` names the new module. The endpoint treats it as IDEMPOTENT (a module of that name already
-/// there is success, not a rename), and answers that case without a `name`: so a caller that wants
-/// a fresh module reads the absence of a name as "taken" and asks again with another. Returns null
-/// when nothing was created, for either reason.
+/// `id` names the new module, and the device refuses a name some module already holds (409, no `name`).
+/// A caller that wants a fresh module reads the absence of a name as "taken" and asks again with another.
+/// Returns null when nothing was created, for either reason.
 async function addModule(type, parentName, id) {
     if (!type) return null;
     const body = {type: type};
@@ -1882,6 +1961,12 @@ function createCard(mod, depth) {
             if (tabEl) tabEl.classList.toggle("tab--disabled", !on);
         };
         setEnabledUi(mod.enabled === undefined ? true : !!mod.enabled);
+        // Safe mode holds it off whatever the switch says, so the switch is locked and says why.
+        if (mod.held) {
+            enabled.disabled = true;
+            enabled.title = "Off in safe mode: the device restarted after crashes or brownouts. Restart it to run normally";
+            card.classList.add("card--disabled");
+        }
         enabled.addEventListener("click", () => {
             const next = enabled.dataset.checked !== "true";
             setEnabledUi(next);
@@ -3089,43 +3174,10 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
             break;
         }
         case "select": {
-            const sel = document.createElement("select");
-            sel.dataset.mid = moduleName;
-            sel.dataset.key = ctrl.name;
-            (ctrl.options || []).forEach((opt, i) => {
-                const o = document.createElement("option");
-                o.value = i;
-                o.textContent = opt;
-                if (i === selectIndex(ctrl)) o.selected = true;
-                sel.appendChild(o);
-            });
-            // Protect the dropdown while the user has it open. A native <select>
-            // popup stays open for several frames (seconds, if deliberating) while
-            // a continuously-refreshed module keeps pushing state over the WS; an
-            // unguarded `sel.value = ctrl.value` patch during that window snaps the
-            // menu back to the old option and visibly closes it: the user never
-            // gets to pick. We mark the select "open" on pointerdown (fires BEFORE
-            // the popup opens, unlike focus, which some browsers delay or skip) and
-            // clear it on change/blur; updateModuleControls skips any select marked
-            // open. pointerdown also stamps the dragTs cooldown as a belt-and-braces
-            // fallback for the post-close frames.
-            sel.dataset.open = "false";
-            const markOpen = () => { sel.dataset.open = "true"; dragTs[key] = Date.now(); };
-            sel.addEventListener("pointerdown", markOpen);
-            sel.addEventListener("focus", markOpen);
-            sel.addEventListener("blur", () => { sel.dataset.open = "false"; });
-            sel.addEventListener("change", () => {
-                sel.dataset.open = "false";
-                dragTs[key] = Date.now();
-                write(ctrl.name, parseInt(sel.value));
-                // No refetch/re-render here: blendMode/opacity-style selects don't
-                // change the control SET, and a control that does (a hidden-flag
-                // flip) is reconciled in place by syncVisibleControls on the next
-                // WS push: so the card (and its expanded state) is preserved.
-                // A full refetchState() rebuilt the DOM and collapsed the card.
-            });
-            row.appendChild(sel);
-            resetButton(() => { sel.value = def; });
+            const pick = i => { dragTs[key] = Date.now(); write(ctrl.name, i); };
+            row.appendChild(buildChoice(moduleName, ctrl, key, pick));
+            // The row's current choice, since a live patch may have swapped a dropdown for segments.
+            resetButton(() => setChoice(row.querySelector("select, .segmented"), selectIndex({ ...ctrl, value: def })));
             break;
         }
         case "palette": return buildPaletteControl(row, key, def, moduleName, ctrl);
@@ -3245,10 +3297,18 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
             // Flush any pending debounced text write first, then act. Typing is debounced 500 ms,
             // so a click inside that window sent the button while the device still held the text as
             // it stood one keystroke ago: the Enter path already does this, and the two must agree.
-            btn.addEventListener("click", async () => {
+            const press = async () => {
                 await flushPendingSends(moduleName + ":");
                 write(ctrl.name, 1);
-            });
+            };
+            // One that cannot be undone, such as a factory reset, takes a second press.
+            if (ctrl.confirm) {
+                btn.classList.add("action-btn--danger");
+                btn.title = "Press twice: this cannot be undone";
+                armPressTwice(btn, press, { armedText: "✓ " + btn.textContent });
+            } else {
+                btn.addEventListener("click", press);
+            }
             row.appendChild(btn);
             break;
         }
@@ -3732,11 +3792,13 @@ function attachTargetPopup(row, input, ctrl) {
     // The LABEL says what it drives, so an assigned control is recognizable without opening
     // anything: "fad1" is a position, "brightness" is what a user is looking for. The CONTROL half
     // only, because the module is usually obvious from the control (a palette is Drivers') and a
-    // surface column is 26px wide. CSS ellipsis caps what does not fit.
+    // surface column is 26px wide; a module's `enabled` is the exception, named by its module.
+    // CSS ellipsis caps what does not fit.
     const label = row.querySelector(".control-label");
     if (label && ctrl.target) {
         const dot = ctrl.target.indexOf(".");
-        label.textContent = dot >= 0 ? ctrl.target.slice(dot + 1) : ctrl.target;
+        const control = dot >= 0 ? ctrl.target.slice(dot + 1) : ctrl.target;
+        label.textContent = control === "enabled" ? ctrl.target.slice(0, dot) : control;
         label.title = `${displayName(ctrl.name)} drives ${ctrl.target}`;
     }
 }
@@ -4084,9 +4146,10 @@ function buildListPads(container, rows, opts) {
         pad.addEventListener("click", async () => {
             if (item == null || item.id == null) return;
             pad.disabled = true;
-            // An ACTION field: the arrival is the whole message, so the value is unused. (The tests
-            // call setListRowField directly and pass the request BODY, which is why they read "{}".)
-            await listSetField(moduleName, ctrlName, item.id, "activate", "");
+            // The row's action, a POST on its sub-resource.
+            try {
+                await fetch(`/api/list/${encodeURIComponent(moduleName)}/${encodeURIComponent(ctrlName)}/${item.id}/apply`, {method: "POST"});
+            } catch {}
             refetchState();
             pad.disabled = false;
         });
@@ -4904,32 +4967,24 @@ function updateModuleControls(mod) {
                 break;
             }
             case "select": {
-                const sel = queryByName(`select[data-mid="${cssEscape(mid)}"][data-key="${k}"]`, "data-mid", mid);
-                // Never overwrite a select the user currently has OPEN (popup
-                // showing) or focused. data-open is set on pointerdown/focus and
-                // cleared on change/blur: more reliable than document.activeElement,
-                // which is ambiguous while a native popup is up (the popup is a
-                // separate OS layer on macOS). The 1s dragTs cooldown is the
-                // additional fallback for the frames right after the popup closes.
-                if (sel && sel.dataset.open !== "true" && sel !== document.activeElement) {
-                    // Re-sync the OPTION list when it changed since render: some selects are
-                    // populated asynchronously (e.g. HueDriver learns its rooms/lights ~1-2s after
-                    // boot, growing this select from ["All"] to the full list). The value-only patch
-                    // below can't reveal new options, so rebuild them in place when they differ.
-                    const opts = ctrl.options || [];
-                    const cur = Array.from(sel.options).map(o => o.textContent);
-                    if (cur.length !== opts.length || opts.some((o, i) => o !== cur[i])) {
-                        sel.innerHTML = "";
-                        opts.forEach((opt, i) => {
-                            const o = document.createElement("option");
-                            o.value = i;
-                            o.textContent = opt;
-                            sel.appendChild(o);
-                        });
-                    }
-                    const want = selectIndex(ctrl);
-                    if (Number(sel.value) !== want) sel.value = want;
+                const el = queryByName(`select[data-mid="${cssEscape(mid)}"][data-key="${k}"], .segmented[data-mid="${cssEscape(mid)}"][data-key="${k}"]`, "data-mid", mid);
+                if (!el) break;
+                // Never overwrite a dropdown the user has OPEN (popup showing) or focused: data-open is
+                // set on pointerdown/focus and cleared on change/blur, more reliable than
+                // document.activeElement while a native popup is up (a separate OS layer on macOS).
+                if (el.dataset.open === "true" || el.contains(document.activeElement)) break;
+                // Some selects are populated asynchronously (HueDriver learns its rooms ~1-2s after boot,
+                // growing from ["All"] to the full list), and a list outgrowing the segments changes its form,
+                // so a changed option list rebuilds the control in place.
+                const opts = ctrl.options || [];
+                const cur = el.classList.contains("segmented")
+                    ? Array.from(el.querySelectorAll("label")).map(l => l.textContent)
+                    : Array.from(el.options).map(o => o.textContent);
+                if (cur.length !== opts.length || opts.some((o, i) => o !== cur[i])) {
+                    if (el._pick) el.replaceWith(buildChoice(mid, ctrl, el._dragKey, el._pick));
+                    break;
                 }
+                setChoice(el, selectIndex(ctrl));
                 break;
             }
             case "palette": {
@@ -5350,9 +5405,7 @@ async function mlEnsureLocal(item) {
 /// Add a module for a picked row, whether it is a compiled type or a script.
 ///
 /// A script becomes a MoonLive module holding it, named after the script: the user picked `dot`, so
-/// the card says `dot`. `id` is how POST /api/modules names a module, and it is deliberately
-/// idempotent (an existing name is success, not a rename), so a collision is retried with a suffix
-/// rather than silently landing on the module already there.
+/// the card says `dot`. `id` is how POST /api/modules names a module, and a name in use is refused, so a collision is retried with a suffix.
 /// Point a card at a script, and make sure the card catches up.
 ///
 /// The re-render is the point. A card is built BEFORE its script is set (created or replaced first,
@@ -7609,8 +7662,11 @@ async function fmRestoreConfig(file, refresh) {
     if (bundle.version !== 1) {
         throw new Error(`backup version ${bundle.version} is newer than this firmware understands`);
     }
+    // The live tree names what an older flat config file becomes as a document.
+    let live = [];
+    try { live = (await (await fetch("/api/state")).json()).modules || []; } catch (_) {}
     // The rename map first: MIGRATING.md's schema breaks, applied client-side and reported.
-    const { files, report } = applyMigrations(bundle.files);
+    const { files, report } = applyMigrations(bundle.files, live);
     // Directories before files (mkdir is non-recursive); existing dirs answer 500, harmless.
     for (const dir of restoreDirs(files)) {
         await fetch("/api/dir?path=" + encodeURIComponent(dir), { method: "POST", body: "" }).catch(() => {});
@@ -7636,7 +7692,7 @@ async function fmRestoreConfig(file, refresh) {
         }
     }
     // The report: what this firmware no longer understands, plus everything the rename map did.
-    let live = [], typeNames = [];
+    let typeNames = [];
     try { live = (await (await fetch("/api/state")).json()).modules || []; } catch (_) {}
     try { typeNames = ((await (await fetch("/api/types")).json()).types || []).map(t => t.name); } catch (_) {}
     const entries = [...report, ...failed, ...diffRestore(files, live, typeNames)];
@@ -7831,8 +7887,8 @@ function fmMountEditor(host, relPath, opts = {}) {
     // it: a factory script is read from the read-only library directory, and editing it must create
     // the user's own copy rather than overwrite what shipped. Defaults to writing back where it
     // read, which is what every other caller wants.
-    const { expectedSize, onSaved, onDispose, sizeKey, saveButton, statusEl, savePath,
-            initialStatus } = opts;
+    const { expectedSize, onSaved, onDispose, sizeKey, saveButton, statusEl, savePath } = opts;
+    let initialStatus = opts.initialStatus;   // cleared once marked, so a reload does not mark it again
     const wrap = document.createElement("div");
     wrap.className = "fm-editor-pane";
     // The footer carries Save and the status line, UNLESS the host supplies both: a card already has
@@ -8223,62 +8279,32 @@ function buildPaletteControl(row, key, def, moduleName, ctrl) {
     //
     // Rows carry `colors`, which is what makes the picker paint a gradient beside each name;
     // every other list passes none and is unchanged.
-    // Factory palettes the device does NOT hold yet, offered alongside the ones it does:
-    // without this a scripted palette can only be chosen once it is already downloaded, so
-    // there is nothing to select in order TO download it. Same contract the script pickers
-    // give every other MoonLive role.
-    //
-    // They sit LAST, after the local live palettes, because a palette is chosen by INDEX and
-    // that index is what the knob and Home Assistant step through. Renumbering is confined
-    // to the live section, which moves only when someone adds or removes a script.
-    const remotePalettes = () => {
-        const names = ((mlCatalog || {}).palettes || {}).names || [];
-        const tags = ((mlCatalog || {}).palettes || {}).tags || [];
-        // BOTH sides stripped of the extension before comparing: the device publishes a
-        // live palette by its full filename ("drift.mlp") and so does the catalog, but
-        // stripping only one side matched nothing, so every already-downloaded palette
-        // showed a second time as a "download me" row.
-        const bare = (s) => String(s).replace(/\.mlp$/, "");
-        const have = new Set(liveOpts().filter(o => o.live).map(o => bare(o.name)));
-        return names.map((n, i) => ({ name: n, tags: tags[i] || "" }))
-                    .filter(r => !have.has(bare(r.name)));
-    };
+    // The device lists every factory palette at its place in the catalog, held or not, so a
+    // palette's index is the same on every device and a knob, a slot or Home Assistant can
+    // step to it. One the device does not hold yet is marked `absent`: picking it downloads
+    // it, then selects it at that same index.
     const openList = async () => {
-        // The catalog is fetched lazily and cached, so ask for it BEFORE building the list:
-        // on the first open mlCatalog is still null and every remote row would be missing.
-        // A failure (offline device) is not fatal: the list falls back to what is local.
-        await mlFetchCatalog().catch(() => {});
-        const remote = remotePalettes();
         // Read when the list opens, not when the control was built: a state push since then may have moved the selection or the options.
         const current = Number(wrap.dataset.value);
-        const local = liveOpts().map((o, i) => ({
-            name: String(i),                 // the VALUE: a palette is chosen by index
-            displayName: o.name || String(i),
+        const items = liveOpts().map((o, i) => ({
+            // The VALUE: a palette is chosen by index, or by file name when it must be downloaded first.
+            name: o.absent ? "\u0000" + o.name : String(i),
+            displayName: o.absent ? o.name.replace(/\.mlp$/, "") : (o.name || String(i)),
             // The SCRIPTED marker is the same 📝 a scripted effect carries, prepended
             // here rather than baked into the device's tag string: it is a UI fact
             // ("this row runs a script"), and the scripted/compiled chips must filter
             // palettes by the same rule they filter every other list by.
             tags: (o.live ? SCRIPTED_EMOJI : "") + (o.tags || ""),
-            colors: o.colors || "",
+            colors: o.colors || "",   // empty for an absent one: a placeholder swatch until it has run once
             role: "palette",
         }));
-        // `colors: ""` is what marks a row as not-yet-downloaded: its swatch renders as a
-        // placeholder, because a scripted palette has no gradient until it has run once.
-        const items = local.concat(remote.map(r => ({
-            name: "\u0000" + r.name,        // not an index: a NAME, to download then select
-            displayName: r.name.replace(/\.mlp$/, ""),
-            tags: SCRIPTED_EMOJI + (r.tags || ""),
-            colors: "",
-            role: "palette",
-        })));
         openPicker(trigger, {
             items,
             actionLabel: "use",
             keepOrder: true,          // index order: the knob and HA step through it
             currentType: String(current),
             commit: async (name) => {
-                // A remote row carries a filename, not an index: fetch it, then let the
-                // rebuilt control (the device re-lists its .mlp files) select it by index.
+                // An absent row carries a filename, not an index: fetch it, then select it by index.
                 if (name.charCodeAt(0) === 0) {
                     const file = name.slice(1);
                     try {

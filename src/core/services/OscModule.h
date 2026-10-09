@@ -25,11 +25,11 @@ namespace mm {
 /// ## Feedback
 ///
 /// With it on, a control that changes anywhere is mirrored back to the surface, which keeps a client honest and moves a motorized fader.
-/// `addressing` picks where it goes: `unicast` to each of `hosts`, or to whoever last wrote when the list is empty; `multicast` to `group`, which every board listening on it joins.
+/// `addressing` picks where it goes: `unicast` to each of `hosts`, or to whoever last wrote when the list is empty; `multicast` to `group`, which every device listening on it joins.
 /// A client learns the state three ways: on its first write, on an address change, and on asking.
 /// The last exists because a restart on the same address is invisible to the other two.
 /// Most controllers send nothing on load, so every widget would otherwise show its own defaults.
-/// A value is never sent back to the host it came from, so two boards feeding each other cannot echo it between them.
+/// A value is never sent back to the host it came from, so two devices feeding each other cannot echo it between them.
 ///
 /// ## What it refuses
 ///
@@ -59,11 +59,9 @@ public:
     /// Whether to mirror changes back, which is what makes this a surface rather than a remote: @xref{feedback}.
     bool feedback = false;
     /// How feedback travels, an Addressing value up to multicast + broadcast.
-    uint8_t addressing = 0;
+    uint8_t addressing = static_cast<uint8_t>(Addressing::Unicast);
     /// Where the client listens, which is not where we do.
     uint16_t feedbackPort = osc::kDefaultFeedbackPort;
-    /// Whether this board follows another: what arrives is its feedback and its pads' states, and only changes made here go back.
-    bool follow = false;
 
     /// Declare the receive settings and the feedback settings.
     void defineControls() override {
@@ -73,10 +71,9 @@ public:
         controls_.addControl("feedback", feedback);
         controls_.addSelect("addressing", addressing, kAddressingNames, kModeCount);
         controls_.addText("hosts", hosts_, sizeof(hosts_));
-        controls_.setHidden(controls_.count() - 1, addressing != 0);
+        controls_.setHidden(controls_.count() - 1, addressing != static_cast<uint8_t>(Addressing::Unicast));
         controls_.addText("group", group_, sizeof(group_));
         controls_.addControl("feedbackPort", feedbackPort, 1, 65535);
-        controls_.addControl("follow", follow);
     }
 
     /// Reopen the socket on a receive change, and re-seed the client on a feedback change.
@@ -88,14 +85,10 @@ public:
         if (std::strcmp(name, "group") == 0) parseGroup();
         if (std::strcmp(name, "addressing") == 0 || std::strcmp(name, "group") == 0 || std::strcmp(name, "hosts") == 0)
             reportPeer();
-        // A receiver pointed here anew knows nothing, and would stay wrong until something moved; a follower asks instead.
+        // A receiver pointed here anew knows nothing, and would stay wrong until something moved.
         if (std::strcmp(name, "feedback") == 0 || std::strcmp(name, "addressing") == 0 || std::strcmp(name, "hosts") == 0
-            || std::strcmp(name, "group") == 0 || std::strcmp(name, "feedbackPort") == 0 || std::strcmp(name, "follow") == 0) {
-            if (feedback && !follow) resendAll_ = true;
-            greeted_ = false;
-        }
-        if (std::strcmp(name, "follow") == 0 && !follow)
-            if (auto* c = ControlModule::active()) c->forgetRemotePads();
+            || std::strcmp(name, "group") == 0 || std::strcmp(name, "feedbackPort") == 0)
+            if (feedback) resendAll_ = true;
     }
 
     /// Parse the saved hosts and group, starting the name lookups here where allocating is allowed.
@@ -106,36 +99,21 @@ public:
 
     /// Detach from the surface list before closing, since it is walked from the render thread.
     void release() override {
-        if (auto* c = ControlModule::active()) {
-            c->removeSurface(this);
-            if (follow) c->forgetRemotePads();
-        }
+        if (auto* c = ControlModule::active()) c->removeSurface(this);
         attached_ = false;
         closeSocket();
     }
 
-    /// Mirror one control's value back to the client, as the float an application expects, or a pad's state as an int.
+    /// Mirror one control's value back to the client, as the float an application expects, or a pad's state as an int on its own address.
     void sendValue(SurfaceControl kind, uint8_t index, uint8_t value) override {
         if (!feedback) return;
-        if (follow && kind == SurfaceControl::Pad) return;   // the pads shown here are the followed board's own
         uint8_t pkt[64];
         const size_t len = osc::encodeSurface(pkt, sizeof(pkt), kind, index, value);
         if (len == 0) return;
         Heard* h = heardFor(kind, index);
         const bool echo = h && h->known && h->value == value;
         sendFeedback(pkt, len, echo ? h->from : nullptr);
-        if (h && !echo) {
-            h->known = false;   // a change made here: whatever comes back next is news
-            h->movedMs = platform::millis();
-            h->moved = true;
-        }
-    }
-
-    /// Press a pad on the followed board, whose presets the grid here shows.
-    bool sendPress(uint8_t pad) override {
-        if (!feedback || !follow) return false;
-        uint8_t pkt[48];
-        return sendFeedback(pkt, osc::encodeSurface(pkt, sizeof(pkt), SurfaceControl::Pad, pad, 1), nullptr);
+        if (h && !echo) h->known = false;   // a change made here: whatever comes back next is news
     }
 
     /// Refresh the status, which is time-dependent because a peer goes stale.
@@ -143,7 +121,7 @@ public:
         MoonModule::tick1s();
         // Only when the answer changes, since the string is identical in between.
         if (!enabledOsc) return;
-        if (feedback && !follow && ++secondsSinceRefresh_ >= kRefreshSeconds) {
+        if (feedback && ++secondsSinceRefresh_ >= kRefreshSeconds) {
             secondsSinceRefresh_ = 0;
             if (auto* c = ControlModule::active()) c->resendPaced(this);
         }
@@ -168,7 +146,7 @@ public:
             lastRecvMs_ = platform::millis();
             if (std::memcmp(peer_, src, 4) != 0) {
                 std::memcpy(peer_, src, 4);
-                resendAll_ = !follow;    // a follower's values are the followed board's, not news for it
+                resendAll_ = true;
                 peerWasFresh_ = false;   // a new address: let the next tick1s say so
             }
             handle(pkt, static_cast<size_t>(n), src);
@@ -196,17 +174,9 @@ public:
             pad(a + 8, m);
         } else if (std::strcmp(a, "/mm/hello") == 0) {
             // A client restarting on the same address is invisible to the checks above.
-            resendAll_ = !follow;
+            resendAll_ = true;
         }
         received_++;
-        // The followed board wrote, so an empty host list now knows where it is.
-        if (follow && feedback && !greeted_) greet();
-    }
-
-    /// Ask the followed board for every value, once per start or setting change, as soon as it can be reached.
-    void greet() {
-        uint8_t pkt[24];   // "/mm/hello" padded to 12, the tag to 4, the int 4
-        greeted_ = sendFeedback(pkt, osc::encodeInt(pkt, sizeof(pkt), "/mm/hello", 1), nullptr);
     }
 
 protected:
@@ -221,25 +191,22 @@ private:
     static constexpr int    kMaxPerTick  = 16;    ///< the drain's own bound
     static constexpr uint32_t kOpenRetryMs = 2000;   ///< how long a failed open waits
 
-    /// Send one datagram where feedback goes, leaving out `skip`, the host a value came from; false when it went nowhere.
-    bool sendFeedback(const uint8_t* pkt, size_t len, const uint8_t* skip) {
-        if (len == 0) return false;
+    /// Send one datagram where feedback goes, leaving out `skip`, the host a value came from.
+    void sendFeedback(const uint8_t* pkt, size_t len, const uint8_t* skip) {
+        if (len == 0) return;
         if (!hostsParsed_) parseHosts(/*mayStart=*/false);
-        bool sent = false;
         const auto send = [&](const uint8_t ip[4]) {
             if (skip && std::memcmp(ip, skip, 4) == 0) return;
             transmit(ip, pkt, len);
-            sent = true;
         };
         const Addressing mode = static_cast<Addressing>(addressing < kModeCount ? addressing : 0);
         if (mode == Addressing::Unicast && hostCount_ == 0) {
             // No hosts: answer whoever wrote last.
             if (peer_[0] || peer_[1] || peer_[2] || peer_[3]) send(peer_);
-            return sent;
+            return;
         }
-        if (mode != Addressing::Unicast && !groupValid_) return false;   // no group, nowhere to send; the status says so
+        if (mode != Addressing::Unicast && !groupValid_) return;   // no group, nowhere to send; the status says so
         sendAddressed(mode, Traffic::Occasional, hostList_, hostCount_, groupIp_, send);
-        return sent;
     }
 
     /// The last value a host sent for one slot, so it is not sent straight back to it.
@@ -247,11 +214,7 @@ private:
         uint8_t value = 0;
         uint8_t from[4] = {};
         bool known = false;
-        bool moved = false;     ///< whether this control ever changed here
-        uint32_t movedMs = 0;   ///< when it last did
     };
-    /// How long a control moved here ignores feedback: longer than a round trip to the followed board and back.
-    static constexpr uint32_t kHoldMs = 500;
     Heard heard_[ControlModule::kSlotCount] = {};
 
     /// The record for one switch, encoder or fader, null for a pad.
@@ -277,8 +240,6 @@ private:
         // A switch reads any nonzero value as on; the rest take the raw value, since scaling would round a small positive one down to off.
         const uint8_t value = kind == SurfaceControl::Switch ? (osc::isTruthy(m) ? 255 : 0) : osc::toByte(m);
         Heard* h = heardFor(kind, static_cast<uint8_t>(idx - 1));
-        // A follower's control still being moved here: this is an echo of an earlier position.
-        if (follow && h && h->moved && platform::millis() - h->movedMs < kHoldMs) return;
         if (h && src) {
             h->value = value;
             std::memcpy(h->from, src, 4);
@@ -287,7 +248,7 @@ private:
         c->setValue(kind, static_cast<uint8_t>(idx - 1), value);
     }
 
-    /// A pad: for a follower, the followed board's state to show; otherwise a press, the release a button sends after it doing nothing.
+    /// A pad press, which applies the preset on that cell; the release a button sends after it does nothing.
     void pad(const char* indexText, const osc::Message& m) {
         char* end = nullptr;
         const long idx = std::strtol(indexText, &end, 10);
@@ -295,9 +256,7 @@ private:
         if (idx < 1 || idx > ControlModule::kMaxPresets) return;
         auto* c = ControlModule::active();
         if (!c) return;
-        const uint8_t slot = static_cast<uint8_t>(idx - 1);
-        if (follow) c->showRemotePad(slot, osc::toByte(m));
-        else if (osc::isTruthy(m)) c->pressPad(slot);
+        if (osc::isTruthy(m)) c->pressPad(static_cast<uint8_t>(idx - 1));
     }
 
     /// Open and bind, deferred to the tick and throttled, so a busy port costs one socket.
@@ -311,15 +270,13 @@ private:
             // Join the group a sender multicasts feedback to; a failed join leaves unicast working.
             if (groupValid_) sock_.joinMulticast(group_);
             if (!attached_) {
-                // A follower is not seeded: the board it follows owns the values.
                 if (auto* c = ControlModule::active()) {
-                    c->addSurface(this, follow ? ControlModule::Seed::None : ControlModule::Seed::Paced);
+                    c->addSurface(this, ControlModule::Seed::Paced);
                     attached_ = true;
                 }
             }
             lastFailMs_ = 0;
             reportPeer();
-            if (follow && feedback) greet();   // with no hosts set, the first datagram from the followed board greets instead
             return true;
         }
         sock_.close();
@@ -339,7 +296,7 @@ private:
 
     /// The modes OSC offers, the first three of Addressing.
     static constexpr uint8_t kModeCount = 3;
-    /// How many hosts feedback reaches by unicast: a few boards, not a wall.
+    /// How many hosts feedback reaches by unicast: a few devices, not a wall.
     static constexpr uint8_t kMaxHosts = 8;
 
     /// Parse the host list, an invalid one sending to nobody rather than to a guess, with the parser's reason on the status.
@@ -369,7 +326,7 @@ private:
     }
 
     char     hosts_[64] = {};         ///< where unicast feedback goes, empty meaning whoever wrote to us
-    char     group_[16] = {};          ///< the multicast group feedback goes to and this board joins
+    char     group_[16] = {};          ///< the multicast group feedback goes to and this device joins
     static_assert(sizeof(osc::kDefaultGroup) <= sizeof(group_), "the default group fits its control");
     Host     hostList_[kMaxHosts] = {};
     uint8_t  hostCount_ = 0;
@@ -380,9 +337,9 @@ private:
 
     /// Report the port and who last reached us, a quiet peer being no peer at all, or the group multicast feedback lacks.
     void reportPeer() {
-        if (feedback && addressing == 0 && hostsError_)
+        if (feedback && addressing == static_cast<uint8_t>(Addressing::Unicast) && hostsError_)
             setStatusf(Severity::Error, "hosts: %s", hostsError_);
-        else if (feedback && addressing != 0 && !groupValid_)
+        else if (feedback && addressing != static_cast<uint8_t>(Addressing::Unicast) && !groupValid_)
             setStatusf(Severity::Warning, "multicast needs a group address");
         else if (peerFresh())
             setStatusf(Severity::Status, "%u from %u.%u.%u.%u", static_cast<unsigned>(port),
@@ -403,9 +360,8 @@ private:
     bool     peerWasFresh_ = false;  ///< what the status last said, so it is rewritten only on a change
     bool     attached_ = false;    ///< whether we are on the surface list
     bool     resendAll_ = false;   ///< a new peer appeared, so push every value once
-    bool     greeted_ = false;     ///< whether a follower asked the followed board for every value
     uint8_t  secondsSinceRefresh_ = 0;   ///< counts to kRefreshSeconds
-    /// How often every value goes out again, so a lost datagram or a rebooted follower catches up.
+    /// How often every value goes out again, so a lost datagram or a rebooted receiver catches up.
     static constexpr uint8_t kRefreshSeconds = 30;
     platform::UdpSocket sock_;     ///< the receive socket, which also sends feedback
     bool     open_ = false;        ///< whether it is bound

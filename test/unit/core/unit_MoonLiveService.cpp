@@ -129,6 +129,77 @@ TEST_CASE("a scripted service declares its own controls, which a user can set") 
     CHECK(sawThreshold);
 }
 
+// A script names its own choices, so a setting with a few modes reads as words on the card rather than as numbers on a slider.
+TEST_CASE("a script declares a dropdown with addSelect, its value the index of the name picked") {
+    Rig rig;
+    writeScript("t_select.mls",
+                "class Pick {\n"
+                "  byte shape = 1;\n"
+                "  bool flag = false;\n"
+                "  byte many = 0;\n"
+                "  int wide = 0;\n"
+                "  void defineControls() {\n"
+                "    addSelect(\"shape\", shape, \"disc|ball|egg\");\n"
+                "    addSelect(\"flag\", flag, \"off|on\");\n"
+                "    addSelect(\"many\", many, \"a|b|c|d|e|f|g|h|i|j|k|l|m|n|o|p|q\");\n"
+                "    addSelect(\"wide\", wide, \"a|b\");\n"
+                "  }\n"
+                "  void tick20ms() { }\n"
+                "}\n");
+    rig.svc->setScript("t_select.mls");
+    rig.svc->prepare();
+
+    auto& cs = rig.svc->controls();
+    const ControlDescriptor* shape = nullptr;
+    bool sawFlag = false, sawMany = false, sawWide = false;
+    for (uint8_t i = 0; i < cs.count(); i++) {
+        if (std::strcmp(cs[i].name, "shape") == 0) shape = &cs[i];
+        if (std::strcmp(cs[i].name, "wide") == 0) sawWide = true;
+        if (std::strcmp(cs[i].name, "flag") == 0) sawFlag = true;
+        if (std::strcmp(cs[i].name, "many") == 0) sawMany = true;
+    }
+    REQUIRE(shape != nullptr);
+    CHECK(shape->type == ControlType::Select);
+    REQUIRE(shape->max == 3);
+    const auto* names = reinterpret_cast<const char* const*>(shape->aux);
+    CHECK(std::strcmp(names[0], "disc") == 0);
+    CHECK(std::strcmp(names[2], "egg") == 0);
+    CHECK(*static_cast<uint8_t*>(shape->ptr) == 1);   // the member's initializer, ball
+    CHECK_FALSE(sawFlag);                             // a bool is a switch, not a dropdown
+    CHECK_FALSE(sawMany);                             // more names than the room left: no dropdown rather than a cut-off one
+    CHECK_FALSE(sawWide);                             // the dropdown binds one byte, so an int member would show and take only its low byte
+
+    REQUIRE(rig.scheduler.setControl("Script", "shape", "{\"value\":2}") == Scheduler::SetControlResult::Ok);
+    CHECK(*static_cast<uint8_t*>(shape->ptr) == 2);
+}
+
+// The engine keeps every dropdown's names in 96 bytes, so a declaration it refuses must leave that room to the next.
+TEST_CASE("a second dropdown on the same member is refused without spending the room its names would take") {
+    Rig rig;
+    writeScript("t_select_dup.mls",
+                "class Pick {\n"
+                "  byte shape = 0;\n"
+                "  byte other = 0;\n"
+                "  void defineControls() {\n"
+                "    addSelect(\"shape\", shape, \"disc|ball|egg\");\n"
+                "    addSelect(\"again\", shape, \"aaaaaaa1|aaaaaaa2|aaaaaaa3|aaaaaaa4|aaaaaaa5|aaaaaaa6|aaaaaaa7|aaaaaaa8\");\n"
+                "    addSelect(\"other\", other, \"one|two|six|ten\");\n"
+                "  }\n"
+                "  void tick20ms() { }\n"
+                "}\n");
+    rig.svc->setScript("t_select_dup.mls");
+    rig.svc->prepare();
+
+    auto& cs = rig.svc->controls();
+    bool sawAgain = false, sawOther = false;
+    for (uint8_t i = 0; i < cs.count(); i++) {
+        if (std::strcmp(cs[i].name, "again") == 0) sawAgain = true;
+        if (std::strcmp(cs[i].name, "other") == 0) sawOther = true;
+    }
+    CHECK_FALSE(sawAgain);
+    CHECK(sawOther);
+}
+
 TEST_CASE("a service with no script, or a broken one, is a valid state and ticks harmlessly") {
     // Robustness: a fresh card has no script, and a user mid-edit has a broken one. Neither may crash, and neither may drive anything.
     Rig rig;

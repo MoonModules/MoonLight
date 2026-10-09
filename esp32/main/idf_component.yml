@@ -20,17 +20,17 @@ dependencies:
     version: "^1.0.0"
     rules:
       - if: "target == esp32p4"
-  # W5500 external SPI Ethernet PHY+MAC for the ESP32-S3 boards (SE16, LightCrafter).
+  # W5500 external SPI Ethernet PHY+MAC for the ESP32-S3 boards (SE16, LightCrafter) and the C3.
   # IDF v6 moved the per-PHY SPI drivers out of esp_eth core into managed components
   # (same migration as ip101 above); ethInit's W5500 path (platform_esp32.cpp, behind
   # MM_ETH_W5500 = SPI-eth enabled AND no internal EMAC) needs esp_eth_mac_new_w5500 /
-  # esp_eth_phy_new_w5500 from here. The `rules` gate scopes the dependency to the S3:
-  # the W5500 is the S3's only Ethernet (it has no EMAC), and gating avoids classic/P4
-  # builds resolving a component they never compile.
+  # esp_eth_phy_new_w5500 from here. The `rules` gate scopes the dependency to the chips
+  # with no EMAC, whose only Ethernet the W5500 is, and gating avoids classic/P4 builds
+  # resolving a component they never compile.
   espressif/w5500:
     version: "^1.0.0"
     rules:
-      - if: "target == esp32s3"
+      - if: "target in [esp32s3, esp32c3]"
   # H.264 hardware encoder wrapper for the P4's encoder silicon (HLS streaming). Gated on
   # MM_HLS, not the target: a bare target rule would land it in every P4 image; the Kconfig
   # gate keeps it out wherever HLS is off. $CONFIG{NAME} syntax per the esp_wifi_remote note.

@@ -17,6 +17,8 @@
 /// ## The three modes
 ///
 /// A socket mode flushes a small staging buffer to a connection as it fills, so a whole response never lives in memory at once.
+/// The stage is taken from the heap by the socket mode alone, so a sink in the other modes costs its caller's stack a few words.
+/// Without a stage, each append goes to the connection as it comes, slower and still whole.
 /// A buffer mode collects into a heap block that grows on demand, for a caller that needs the assembled document and its length up front.
 /// A fixed mode writes into a caller-owned slice and raises an overflow flag rather than truncating silently or growing, which the save path wants.
 ///
@@ -50,7 +52,8 @@ class JsonSink {
 public:
     // Socket mode.
     /// Socket mode: a staging buffer flushes to the connection as it fills.
-    explicit JsonSink(platform::TcpConnection& conn) : conn_(&conn) {}
+    explicit JsonSink(platform::TcpConnection& conn)
+        : conn_(&conn), stage_(static_cast<char*>(platform::alloc(STAGE_SIZE))) {}
 
     // Buffer mode — collects into a growable heap buffer.
     /// Buffer mode: bytes collect in a block this owns.
@@ -62,8 +65,11 @@ public:
     }
 
 
-    /// Frees the block, when one was taken and not detached.
-    ~JsonSink() { if (heap_) platform::free(heap_); }
+    /// Frees the block, when one was taken and not detached, and the stage.
+    ~JsonSink() {
+        if (heap_) platform::free(heap_);
+        if (stage_) platform::free(stage_);
+    }
 
     /// Non-copyable: it owns a heap block and possibly a connection.
     JsonSink(const JsonSink&) = delete;
@@ -73,6 +79,7 @@ public:
     /// Append a string, growing or flushing as the mode requires.
     void append(const char* s) {
         if (!s) return;
+        if (conn_ && !stage_) { conn_->write(reinterpret_cast<const uint8_t*>(s), std::strlen(s)); return; }
         while (*s) {
             if (conn_) {
                 if (pos_ == STAGE_SIZE) flushStage();
@@ -228,7 +235,7 @@ private:
     }
 
     platform::TcpConnection* conn_ = nullptr;  // socket mode when non-null
-    char stage_[STAGE_SIZE];
+    char* stage_ = nullptr;                    // socket mode, from the heap
     size_t pos_ = 0;
 
     char* heap_ = nullptr;                     // buffer mode

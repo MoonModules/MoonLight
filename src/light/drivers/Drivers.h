@@ -4,6 +4,7 @@
 #include "core/util/PinList.h"        // parsePinList: the relay list, same parser the LED drivers use
 #include "light/drivers/DriverBase.h"  // DriverBase: the Drivers container casts its children to it
 #include "core/module/MoonModule.h"
+#include "core/module/Scheduler.h"   // topOfType: the Effects it finds when nothing injected a source
 #include "core/util/ActiveInstance.h"  // the summary-seat election (the seat + its RAII vacate)
 #include "light/layers/Buffer.h"
 #include "light/layers/Layer.h"
@@ -18,6 +19,7 @@
 
 #include <cstring>  // std::strcmp in onControlChanged
 #include <atomic>   // encodeDone_: the render↔encode cross-core handoff flag
+#include <utility>  // std::swap: sorting the user's own palettes
 
 namespace mm {
 
@@ -32,14 +34,6 @@ namespace mm {
 /// Blend and map write to arbitrary physical positions through a LUT, so the output is readable only once whole. One enabled layer with a 1:1 unshuffled mapping is the exception: drivers read that layer's buffer directly, giving up parallelism.
 ///
 /// Two or more enabled layers composite in Effects order, bottom to top. Drivers owns that because only it sees both the stack order and the output buffer.
-///
-/// ## Per-driver source window
-///
-/// A window-aware driver outputs a contiguous slice, so each driver names its own lights. Reordering drivers changes nothing but tick order.
-///
-/// ## Naming
-///
-/// Capital `Drivers` is this container; lowercase "driver" is one `DriverBase` child.
 ///
 /// @card Drivers.png
 class Drivers : public MoonModule, public LightOutput {
@@ -154,17 +148,26 @@ public:
     uint8_t palette = 0;
 
     // The names live in a member array because the seam holds POINTERS, so a local would dangle.
-    /// Discover the `.mlp` files this device carries and publish their names to the picker.
+    /// List every factory palette at its place in the catalog, held or not, then the user's own `.mlp` files, and publish them to the picker.
     void refreshLivePalettes() {
         liveCount_ = 0;
-        // BOTH directories, user first, so an edited factory palette appears once as the user's.
+        // The catalog first, in its own order, so a palette's number is the same on every device of one firmware and a slot or a desk can pick it.
+        for (size_t c = 0; c < moonlive::kPaletteCatalogCount && liveCount_ < LivePalettes::kMax; c++) {
+            char path[96];
+            livePtrs_[liveCount_] = moonlive::kPaletteCatalog[c];
+            liveTags_[liveCount_] = moonlive::kPaletteCatalogTags[c];
+            livePresent_[liveCount_] = moonlive::resolveScript(moonlive::kPaletteCatalog[c], path, sizeof(path));
+            liveCount_++;
+        }
+        const uint8_t own = liveCount_;
+        // Then the user's own, from BOTH directories, user first, so an edited one appears once.
         const auto scan = [](const char* dir, void* ctx) {
             platform::fsList(dir, [](const char* name, bool isDir, uint32_t, void* c) {
                 auto* self = static_cast<Drivers*>(c);
                 if (isDir || self->liveCount_ >= LivePalettes::kMax) return;
                 const size_t n = std::strlen(name);
                 if (n < 5 || std::strcmp(name + n - 4, moonlive::kPaletteExt) != 0) return;
-                // The user copy SHADOWS this one, so the factory pass must not add a second row.
+                // A catalog palette, or one already listed, is not added twice.
                 for (uint8_t i = 0; i < self->liveCount_; i++)
                     if (std::strcmp(self->livePtrs_[i], name) == 0) return;
                 // A bounded copy: a name longer than the slot truncates, which a picker wants.
@@ -173,33 +176,50 @@ public:
                 const size_t copy = n < cap ? n : cap;
                 std::memcpy(slot, name, copy);
                 slot[copy] = '\0';
-                self->livePtrs_[self->liveCount_] = self->liveNames_[self->liveCount_];
+                self->livePtrs_[self->liveCount_] = slot;
+                self->liveTags_[self->liveCount_] = "";   // a script the catalog does not know is the user's own: no chips
+                self->livePresent_[self->liveCount_] = true;
                 self->liveCount_++;
             }, ctx);
         };
         scan(moonlive::kScriptDir, this);
         scan(moonlive::kFactoryScriptDir, this);
-        // Alphabetical, because the picker merges this with the built-ins by walking both in order.
-        for (uint8_t i = 1; i < liveCount_; i++)
-            for (uint8_t j = i; j > 0 && LivePalettes::cmpName(livePtrs_[j], livePtrs_[j - 1]) < 0; j--) {
-                const char* tmp = livePtrs_[j]; livePtrs_[j] = livePtrs_[j - 1]; livePtrs_[j - 1] = tmp;
+        // The user's own alphabetical among themselves, after the catalog.
+        for (uint8_t i = static_cast<uint8_t>(own + 1); i < liveCount_; i++)
+            for (uint8_t j = i; j > own && LivePalettes::cmpName(livePtrs_[j], livePtrs_[j - 1]) < 0; j--) {
+                std::swap(livePtrs_[j], livePtrs_[j - 1]);
+                std::swap(liveTags_[j], liveTags_[j - 1]);
+                std::swap(livePresent_[j], livePresent_[j - 1]);
             }
-        // A `.mlp` the catalog does not know is the user's own, so it lists with no chips.
-        for (uint8_t i = 0; i < liveCount_; i++) {
-            liveTags_[i] = "";
-            for (size_t c = 0; c < moonlive::kPaletteCatalogCount; c++)
-                if (std::strcmp(livePtrs_[i], moonlive::kPaletteCatalog[c]) == 0) {
-                    liveTags_[i] = moonlive::kPaletteCatalogTags[c];
-                    break;
-                }
-        }
+    }
+
+    /// A palette script added, removed or restored joins the picker: any path in or above a script folder rescans them.
+    void onFileChanged(const char* path) override {
+        if (!touchesFolder(path, moonlive::kScriptDir) && !touchesFolder(path, moonlive::kFactoryScriptDir)) return;
+        refreshLivePalettes();
+        LivePalettes::set(livePtrs_, liveTags_, liveCount_, livePresent_);
+        rebuildControls();
+    }
+
+    /// Whether `path` is in `dir`, is `dir`, or holds it.
+    static bool touchesFolder(const char* path, const char* dir) {
+        const size_t p = std::strlen(path), d = std::strlen(dir);
+        if (p >= d) return std::strncmp(path, dir, d) == 0 && (path[d] == '/' || path[d] == 0);
+        return std::strncmp(dir, path, p) == 0 && (dir[p] == '/' || path[p - 1] == '/');
     }
 
     char        liveNames_[LivePalettes::kMax][moonlive::kMaxScriptName + 1] = {};
     const char* livePtrs_[LivePalettes::kMax] = {};
     const char* liveTags_[LivePalettes::kMax] = {};
+    bool        livePresent_[LivePalettes::kMax] = {};   ///< whether the device holds the file, which the UI downloads on a pick when it does not
     /// How many scripted palettes the last scan found.
     uint8_t     liveCount_ = 0;
+    bool        livePalettesScanned_ = false;   ///< whether setup listed the folders, after which only a file change does
+    bool        softStarting_ = false;          ///< the lights are still rising after this boot
+    bool        dark_ = false;                  ///< safe mode: every driver sends black, so no LED holds a bright frame
+    bool        softStartBegun_ = false;        ///< the first lit frame has started the rise
+    const Buffer* source_ = nullptr;            ///< the frame the drivers read, which the rise waits to see lit
+    uint32_t    softStartAt_ = 0;               ///< when they started rising
 
     // Reached through a static seam, because the layers sample the palette before this ticks.
     /// The scripted palette: a `.mlp` name, and the binding that runs it. Empty means built-in.
@@ -220,8 +240,18 @@ public:
     }
 
     // Keeping `on` and `brightness` independent means "off" never clobbers the chosen level.
-    /// The brightness the LUT is built from: 0 when powered off, else the set level.
-    uint8_t effectiveBrightness() const { return on ? brightness : 0; }
+    /// The brightness the LUT is built from: 0 when powered off, else the set level, rising through the soft start.
+    uint8_t effectiveBrightness() const MM_NONBLOCKING {
+        if (!on || dark_) return 0;
+        if (!softStarting_) return brightness;
+        if (!softStartBegun_) return 0;   // dark until the first frame, where the rise starts
+        const uint32_t up = platform::millis() - softStartAt_;
+        return up < kSoftStartMs ? static_cast<uint8_t>(brightness * up / kSoftStartMs) : brightness;
+    }
+
+    // A supply that cannot hold the set level then fails within the minute the boot record counts, where safe mode catches it.
+    /// How long the lights take to rise to their brightness after the device boots.
+    static constexpr uint32_t kSoftStartMs = 5000;
 
     // `on=false` is a blackout between cues and a park between sets; duration separates them.
     /// How long a powered-off rig keeps tracking before its heads go still, in seconds.
@@ -240,8 +270,8 @@ public:
         controls_.addText("relayPins", relayPins, sizeof(relayPins));
         controls_.setAdvanced(controls_.count() - 1);   // wiring an installer sets once
         controls_.addControl("brightness", brightness, 0, 255);
-        // ONE picker for both kinds, so a `.mlp` is chosen exactly like a built-in.
-        refreshLivePalettes();
+        // ONE picker for both kinds, so a `.mlp` is chosen exactly like a built-in; setup scans the folders and a file change rescans, never a brightness change.
+        if (!livePalettesScanned_) refreshLivePalettes();
         // Sized from THIS instance's scan: defineControls also runs before prepare has published.
         controls_.addPalette("palette", palette, mm::paletteOptions,
                              static_cast<uint8_t>(liveCount_ + mm::palettes::kCount));
@@ -381,6 +411,36 @@ public:
         MoonModule::tick1s();
     }
 
+    /// Rebake the brightness tables through the soft start, the last time at the set level.
+    void tick20ms() MM_NONBLOCKING override {
+        if (softStarting_) {
+            // From the first frame with a light lit, so the whole rise is seen, or once the boot counts as good, so a dark show stops scanning.
+            if (!softStartBegun_) {
+                if (!anyLit() && platform::millis() < platform::kBootStableMs) return MoonModule::tick20ms();
+                softStartBegun_ = true;
+                softStartAt_ = platform::millis();
+            }
+            const uint8_t level = effectiveBrightness();
+            if (platform::millis() - softStartAt_ >= kSoftStartMs) softStarting_ = false;
+            for (uint8_t i = 0; i < childCount(); i++)
+                if (child(i)->role() == ModuleRole::Driver) static_cast<DriverBase*>(child(i))->rampBrightness(level);
+        }
+        MoonModule::tick20ms();
+    }
+
+    /// Whether the frame the drivers read has any light on: its color slots, since an aim alone emits nothing.
+    bool anyLit() const MM_NONBLOCKING {
+        if (!source_ || !source_->data()) return false;
+        const uint8_t* d = source_->data();
+        const uint8_t cpl = source_->channelsPerLight();
+        if (cpl == 0) return false;
+        const uint8_t colors = cpl < FixtureChannels::kMotionBase ? cpl : FixtureChannels::kMotionBase;
+        for (size_t at = 0; at + cpl <= source_->bytes(); at += cpl)
+            for (uint8_t c = 0; c < colors; c++)
+                if (d[at + c]) return true;
+        return false;
+    }
+
     // The hold changes what is TRANSMITTED, so it writes the flag rather than rebuilding.
     /// Count the rig's time powered off, and park it once the hold expires.
     void updateMotionHold() MM_NONBLOCKING {
@@ -419,7 +479,15 @@ public:
 
     /// Publish the fixture layout and the scripted palettes, and close the relay for `on`.
     void setup() override {
+        // The filesystem module mounts first, so this scan is the one that sees every script; from here a file change rescans.
+        refreshLivePalettes();
+        livePalettesScanned_ = true;
+        rebuildControls();
         Palettes::setActive(palette);   // seed the global active palette from the persisted index
+        dark_ = MoonModule::safeMode();
+        // Every lit device boot, and never a host process or a test, which start at the set level.
+        softStarting_ = platform::bootRecord().booted && !dark_;
+        softStartBegun_ = false;
         MoonModule::setup();
         passBufferToDrivers();           // seeds each driver's correction via rebuildCorrection()
         // HERE rather than in prepare: every setup runs first, and a Layer sizes its buffer there.
@@ -433,9 +501,12 @@ public:
         // Published HERE because prepare runs only on a mounted module, and a probe would empty it.
         const uint8_t hadLive = liveCount_;
         refreshLivePalettes();
-        LivePalettes::set(livePtrs_, liveTags_, liveCount_);
+        LivePalettes::set(livePtrs_, liveTags_, liveCount_, livePresent_);
         // A CHANGED count needs the control rebuilt: `palette`'s maximum is baked at define time.
         if (liveCount_ != hadLive) rebuildControls();
+        // The top-level Effects, found by type when nothing injected a source, so a tree built from a document needs no wiring.
+        if (!effects_ && !layer_)
+            if (Scheduler* s = Scheduler::instance()) effects_ = static_cast<Effects*>(s->topOfType("Effects"));
         // Re-resolved from the bound container, so an API-rebuilt Layer is picked up here.
         if (effects_) layer_ = effects_->activeLayer();
         // A failed allocation leaves data_ null, which tick() checks before blending.
@@ -500,7 +571,7 @@ public:
         Layer* srcLayer = effects_ ? effects_->firstEnabledLayer() : layer_;
 
         if (outputBuffer_.data() && effects_ && effects_->enabledLayerCount() > 1) {
-            // The bottom layer overwrites; each one above blends per its own mode and opacity.
+            // The bottom layer overwrites; each one above blends per its own mode and opacity: @xref{the-shared-output-buffer}.
             effects_->forEachEnabledLayer([&](Layer* L, bool first) {
                 BlendOp op = first ? BlendOp::Overwrite : L->blendOp();
                 uint8_t op_opacity = first ? 255 : L->opacity;
@@ -637,6 +708,7 @@ private:
         Layer* const out = effects_ ? effects_->firstEnabledLayer() : layer_;
         Buffer* buf = out ? (outputBuffer_.data() ? &outputBuffer_ : &out->buffer())
                           : nullptr;
+        source_ = buf;
         for (uint8_t i = 0; i < childCount(); i++) {
             // The non-driver child has no source buffer or correction to wire.
             if (child(i)->role() != ModuleRole::Driver) continue;

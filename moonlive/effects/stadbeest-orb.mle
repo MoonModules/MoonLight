@@ -1,0 +1,90 @@
+// StadBeestOrb: a shape floating up and down inside the ring of legs, a tilted disc that wobbles as it turns, swelling into a ball and stretching into an egg.
+
+class StadBeestOrbEffect {
+  byte speed = 40;
+  byte spin = 60;
+  byte tilt = 90;
+  byte shape = 0;
+  byte morph = 30;
+  byte size = 60;
+  byte ring = 40;
+  byte solid = 40;
+
+  int nx = 0;    // the shape's axis, in 32768ths
+  int ny = 32767;
+  int nz = 0;
+  int h = 0;     // the height of its center, in lights
+  int aa = 1;    // its width squared
+  int bb = 1;    // its height along the axis squared
+  int rise = 0;  // how far it has risen and fallen, in 1280ths of a sine step so a slow speed still moves
+  int lastT = 0; // the time of the last frame, so a speed change carries on from where it is
+
+  int dimensions() { return 2; }
+
+  string tags() { return "💫"; }
+
+  void defineControls() {
+    addControl("speed", speed, 0, 255); // how fast the shape rises and falls
+    addControl("spin", spin, 0, 255); // how fast its tilt turns around the ring
+    addControl("tilt", tilt, 0, 255); // how far the shape leans, up to a quarter turn
+    addSelect("shape", shape, "disc|ball|egg"); // the shape it holds while morph is 0
+    addControl("morph", morph, 0, 255); // how fast it changes between disc, ball and egg by itself
+    addControl("size", size, 1, 255); // its width, in lights
+    addControl("solid", solid, 0, 255); // how bright its inside is, 0 for a hollow shell
+    addControl("ring", ring, 1, 255); // the radius of the ring of legs, in lights
+  }
+
+  // One leg, `dx` and `dz` from the middle of the ring: lit where it crosses the shape's shell, and dimmer inside.
+  void drawLeg(int x, int dx, int dz, int hue) {
+    int flat = nx * dx + nz * dz;
+    int side = dx * dx + dz * dz;
+    for (int y = 0; y < height; y = y + 1) {
+      int dy = y - h;
+      // Along the axis, and the squared distance from it.
+      int u = div(flat + ny * dy, 32768);
+      int rho = div(u * u * 256, bb) + div((side + dy * dy - u * u) * 256, aa);
+      int d = rho - 256;
+      if (d < 0) { d = 0 - d; }
+      int bright = 255 - div(d * 255, 48);
+      if (rho < 256) {
+        if (bright < solid) { bright = solid; }
+      }
+      if (bright > 0) { setPaletteColor(x, y, mod(hue + div(y * 64, height), 256), bright); }
+    }
+  }
+
+  void tick() {
+    fill(0, 0, 0);
+    int n = 10;
+    if (n > width) { n = width; }
+    int gap = 1;
+    if (n > 1) { gap = div(width - 1, n - 1); }
+
+    // Disc, ball or egg: the height along its axis as a share of its width.
+    int s = shape * 128;
+    if (s > 255) { s = 255; }
+    if (morph > 0) { s = div(sin(div(t * morph, 64)), 256); }
+    int b = 3 + div((size - 3) * s, 128);
+    if (s > 128) { b = size + div(size * (s - 128), 200); }
+    aa = size * size;
+    bb = b * b;
+
+    // Its axis leans by `tilt`, and the lean turns around the ring.
+    int lean = div(tilt * 16384, 255);
+    int turnA = div(t * spin, 16);
+    nx = div((sin(lean) - 32768) * (cos(turnA) - 32768), 32768);
+    nz = div((sin(lean) - 32768) * (sin(turnA) - 32768), 32768);
+    ny = cos(lean) - 32768;
+
+    // It rises and falls through the whole height.
+    // Squared, so the low end stays slow to set and the top goes from a minute to a second a cycle.
+    rise = mod(rise + (t - lastT) * speed * speed, 65536 * 1280);
+    lastT = t;
+    h = div((height - 1) * sin(div(rise, 1280)), 65535);
+
+    for (int leg = 0; leg < n; leg = leg + 1) {
+      int ang = div(leg * 65536, n);
+      drawLeg(leg * gap, div(ring * (cos(ang) - 32768), 32768), div(ring * (sin(ang) - 32768), 32768), div(leg * 256, n) + div(t, 40));
+    }
+  }
+}

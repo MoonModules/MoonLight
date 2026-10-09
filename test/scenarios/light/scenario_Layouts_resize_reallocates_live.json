@@ -7,61 +7,51 @@
     "Layer"
   ],
   "description": "Changing where the lights are, while they are running. Every control applies on the next frame, so a resize reallocates the buffer under a rendering pipeline rather than after a reboot.",
+  "top": [
+    "Layouts",
+    "Effects",
+    "Drivers"
+  ],
   "fixture": [
-    {
-      "name": "layouts",
-      "description": "The container the layouts live in, which the layer reads its coordinates from.",
-      "op": "add_module",
-      "id": "Layouts",
-      "type": "Layouts"
-    },
     {
       "name": "grid",
       "description": "The panel this scenario resizes, at the size a fresh one starts on.",
-      "op": "add_module",
-      "id": "Grid",
-      "type": "GridLayout",
-      "parent_id": "Layouts",
-      "props": {
-        "width": 16,
-        "height": 16
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "GridLayout",
+            "width": 16,
+            "height": 16
+          }
+        }
       }
     },
     {
       "name": "layer",
       "description": "One layer over those layouts, which is what owns the buffer a resize has to reallocate.",
-      "op": "add_module",
-      "id": "Layer",
-      "type": "Layer",
-      "props": {
-        "layouts": "Layouts"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer"
+          }
+        }
       }
     },
     {
       "name": "effect",
       "description": "An effect that paints from the first frame, so the buffer carries light rather than zeros.",
-      "op": "add_module",
-      "id": "FX",
-      "type": "RainbowEffect",
-      "parent_id": "Layer"
-    },
-    {
-      "name": "drivers",
-      "description": "The drivers container, wired to the effects whose buffer it reads.",
-      "op": "add_module",
-      "id": "Drivers",
-      "type": "Drivers",
-      "props": {
-        "layer": "Layer"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "FX": {
+              "type": "RainbowEffect"
+            }
+          }
+        }
       }
-    },
-    {
-      "name": "preview",
-      "description": "The preview is a driver like any other, and the one every target has.",
-      "op": "add_module",
-      "id": "Preview",
-      "type": "PreviewDriver",
-      "parent_id": "Drivers"
     }
   ],
   "steps": [
@@ -92,9 +82,9 @@
             "min": 6,
             "max": 23,
             "n": 32,
-            "samples": [6, 7, 6, 7, 9, 6, 6, 7, 7, 6, 7, 6, 6, 7, 6, 7, 7, 14, 7, 6, 7, 23, 7, 7, 7, 7, 7, 20, 8, 8, 22, 7]
+            "samples": [7, 6, 6, 7, 6, 7, 7, 14, 7, 6, 7, 23, 7, 7, 7, 7, 7, 20, 8, 8, 22, 7, 7, 7, 7, 7, 7, 7, 7, 7, 8, 7]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         },
         "desktop-windows": {
           "tick_us": {
@@ -171,12 +161,12 @@
           "tick_us": {
             "p50": 10,
             "p95": 19,
-            "min": 8,
+            "min": 9,
             "max": 22,
             "n": 32,
-            "samples": [10, 8, 10, 11, 12, 10, 10, 10, 10, 9, 10, 10, 10, 10, 11, 10, 11, 19, 10, 11, 10, 22, 10, 11, 10, 10, 10, 17, 10, 10, 19, 10]
+            "samples": [10, 10, 10, 10, 11, 10, 11, 19, 10, 11, 10, 22, 10, 11, 10, 10, 10, 17, 10, 10, 19, 10, 10, 11, 10, 11, 11, 11, 11, 10, 9, 11]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         },
         "desktop-windows": {
           "tick_us": {
@@ -258,14 +248,14 @@
       "observed": {
         "desktop-macos": {
           "tick_us": {
-            "p50": 6,
+            "p50": 7,
             "p95": 14,
-            "min": 5,
+            "min": 6,
             "max": 14,
             "n": 32,
-            "samples": [6, 6, 6, 7, 9, 6, 6, 7, 6, 5, 6, 7, 6, 6, 6, 7, 7, 14, 6, 6, 6, 9, 6, 7, 7, 7, 7, 9, 7, 6, 14, 6]
+            "samples": [6, 7, 6, 6, 6, 7, 7, 14, 6, 6, 6, 9, 6, 7, 7, 7, 7, 9, 7, 6, 14, 6, 7, 7, 7, 7, 7, 7, 7, 7, 6, 7]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         },
         "desktop-windows": {
           "tick_us": {

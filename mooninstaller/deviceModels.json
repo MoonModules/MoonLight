@@ -12,34 +12,44 @@
     "supported": [
       "LEDs",
       "WiFi",
-      "Ethernet"
+      "Ethernet",
+      "Buttons"
     ],
     "planned": [
-      "Button",
       "SD card"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "Olimex ESP32-Gateway Rev G"
+    "state": {
+      "System": {
+        "deviceModel": "Olimex ESP32-Gateway Rev G"
+      },
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver"
         }
       },
-      {
-        "type": "RmtLedDriver",
-        "id": "RmtLed",
-        "parent_id": "Drivers"
-      },
-      {
-        "type": "EthernetModule",
-        "id": "Ethernet",
-        "parent_id": "Network",
-        "controls": {
+      "Network": {
+        "$patch": "replace",
+        "Ethernet": {
+          "type": "EthernetModule",
           "ethBoard": "Classic RMII"
         }
+      },
+      "Services": {
+        "$patch": "replace",
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 34,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            }
+          ]
+        }
       }
-    ]
+    }
   },
   {
     "name": "LOLIN D32",
@@ -57,20 +67,17 @@
     "planned": [
       "Battery"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "LOLIN D32"
-        }
+    "state": {
+      "System": {
+        "deviceModel": "LOLIN D32"
       },
-      {
-        "type": "RmtLedDriver",
-        "id": "RmtLed",
-        "parent_id": "Drivers"
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver"
+        }
       }
-    ]
+    }
   },
   {
     "name": "Generic ESP32 Dev",
@@ -84,20 +91,17 @@
       "WiFi"
     ],
     "planned": [],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "Generic ESP32 Dev"
-        }
+    "state": {
+      "System": {
+        "deviceModel": "Generic ESP32 Dev"
       },
-      {
-        "type": "RmtLedDriver",
-        "id": "RmtLed",
-        "parent_id": "Drivers"
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver"
+        }
       }
-    ]
+    }
   },
   {
     "name": "ESP32-WROVER",
@@ -112,23 +116,18 @@
       "WiFi"
     ],
     "planned": [],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "ESP32-WROVER"
-        }
+    "state": {
+      "System": {
+        "deviceModel": "ESP32-WROVER"
       },
-      {
-        "type": "RmtLedDriver",
-        "id": "RmtLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver",
           "pins": "2"
         }
       }
-    ]
+    }
   },
   {
     "name": "QuinLED Dig-2-Go",
@@ -137,42 +136,46 @@
       "esp32"
     ],
     "image": "assets/deviceModels/esp32-quinled-dig-2-go.jpg",
+    "description": "Relay on 12 is an on-board switch in the LED power line, so the LEDs light only while it is closed.",
     "url": "https://quinled.info/quinled-dig2go/",
     "supported": [
       "LEDs",
-      "WiFi"
-    ],
-    "planned": [
-      "Button",
-      "IR",
-      "Microphone",
+      "WiFi",
+      "Buttons",
       "Relay"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "QuinLED Dig-2-Go"
-        }
+    "planned": [
+      "IR",
+      "Microphone"
+    ],
+    "state": {
+      "System": {
+        "deviceModel": "QuinLED Dig-2-Go"
       },
-      {
-        "type": "Drivers",
-        "id": "Drivers",
-        "controls": {
-          "relayPins": "12"
-        }
-      },
-      {
-        "type": "RmtLedDriver",
-        "id": "RmtLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "relayPins": "12",
+        "RmtLed": {
+          "type": "RmtLedDriver",
           "pins": "16",
           "fixture": "GRBW"
         }
+      },
+      "Services": {
+        "$patch": "replace",
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 0,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            }
+          ]
+        }
       }
-    ]
+    }
   },
   {
     "name": "QuinLED Dig-Next-2",
@@ -181,51 +184,55 @@
       "esp32-pico"
     ],
     "image": "assets/deviceModels/esp32-pico-quinled-dig-next-2.jpg",
+    "description": "Relays on 20, 21 and 22 are on-board switches, one per fused power output; 5 triggers an optional external relay board.",
     "url": "https://quinled.info/dig-next-2/",
     "supported": [
       "LEDs",
       "WiFi",
-      "Audio"
+      "Audio",
+      "Buttons",
+      "Relay"
     ],
-    "planned": [
-      "Button"
-    ],
+    "planned": [],
     "flashBaud": 460800,
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "QuinLED Dig-Next-2"
-        }
+    "state": {
+      "System": {
+        "deviceModel": "QuinLED Dig-Next-2"
       },
-      {
-        "type": "Drivers",
-        "id": "Drivers",
-        "controls": {
-          "relayPins": "5,20,21,22"
-        }
-      },
-      {
-        "type": "RmtLedDriver",
-        "id": "RmtLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "relayPins": "5,20,21,22",
+        "RmtLed": {
+          "type": "RmtLedDriver",
           "pins": "2,4"
         }
       },
-      {
-        "type": "AudioService",
-        "id": "Audio",
-        "parent_id": "Services",
-        "controls": {
+      "Services": {
+        "$patch": "replace",
+        "Audio": {
+          "type": "AudioService",
           "mode": 2,
           "micMode": 1,
           "wsPin": 8,
           "sdPin": 7
+        },
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 34,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            },
+            {
+              "pin": 35,
+              "activeLow": true
+            }
+          ]
         }
       }
-    ]
+    }
   },
   {
     "name": "QuinLED Dig-Uno V3",
@@ -243,23 +250,18 @@
     "planned": [
       "Temperature"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "QuinLED Dig-Uno V3"
-        }
+    "state": {
+      "System": {
+        "deviceModel": "QuinLED Dig-Uno V3"
       },
-      {
-        "type": "RmtLedDriver",
-        "id": "RmtLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver",
           "pins": "16,3"
         }
       }
-    ]
+    }
   },
   {
     "name": "QuinLED Dig-Quad V3",
@@ -268,33 +270,194 @@
       "esp32"
     ],
     "image": "assets/deviceModels/esp32-quinled-dig-quad-v3.jpg",
+    "description": "Relay on 15 is a 5 V trigger for an optional external relay, on pre-assembled boards.",
     "url": "https://quinled.info/pre-assembled-quinled-dig-quad/",
     "supported": [
       "LEDs",
       "WiFi",
-      "Ethernet"
-    ],
-    "planned": [
-      "Temperature",
+      "Ethernet",
+      "Buttons",
       "Relay"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "QuinLED Dig-Quad V3"
-        }
+    "planned": [
+      "Temperature"
+    ],
+    "state": {
+      "System": {
+        "deviceModel": "QuinLED Dig-Quad V3"
       },
-      {
-        "type": "RmtLedDriver",
-        "id": "RmtLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver",
           "pins": "16,3,1,4"
+        },
+        "relayPins": "15"
+      },
+      "Services": {
+        "$patch": "replace",
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 0,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            }
+          ]
         }
       }
-    ]
+    }
+  },
+  {
+    "name": "QuinLED An-DecaPenta",
+    "chip": "ESP32",
+    "firmwares": [
+      "esp32"
+    ],
+    "flashBaud": 460800,
+    "image": "assets/deviceModels/esp32-quinled-an-decapenta.jpg",
+    "url": "https://quinled.info/quinled-an-penta-deca/",
+    "supported": [
+      "LEDs",
+      "WiFi",
+      "Buttons",
+      "I2C"
+    ],
+    "planned": [],
+    "state": {
+      "System": {
+        "deviceModel": "QuinLED An-DecaPenta",
+        "I2cBus": {
+          "type": "I2cBusModule",
+          "sda": 15,
+          "scl": 16
+        }
+      },
+      "Drivers": {
+        "$patch": "replace",
+        "relayPins": "",
+        "PwmLight": {
+          "type": "PwmLightDriver",
+          "fixture": "RGBCCT",
+          "pins": "27,26,25,22,23,21,19,18,14,17,13,12,5,2,4"
+        }
+      },
+      "Network": {
+        "$patch": "replace",
+        "Ethernet": {
+          "type": "EthernetModule",
+          "ethBoard": "Custom",
+          "ethType": 0
+        }
+      },
+      "Layouts": {
+        "$patch": "replace",
+        "Grid": {
+          "type": "GridLayout",
+          "width": 1,
+          "height": 3
+        }
+      },
+      "Services": {
+        "$patch": "replace",
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 36,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            },
+            {
+              "pin": 39,
+              "activeLow": true
+            },
+            {
+              "pin": 34,
+              "activeLow": true
+            },
+            {
+              "pin": 33,
+              "activeLow": true
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "QuinLED An-Penta-Plus",
+    "chip": "ESP32",
+    "firmwares": [
+      "esp32"
+    ],
+    "image": "assets/deviceModels/esp32-quinled-an-penta-plus.jpg",
+    "description": "Relay on 13 cuts the power of the addressable-LED output.",
+    "url": "https://quinled.info/quinled-an-penta-plus/",
+    "supported": [
+      "LEDs",
+      "WiFi",
+      "Ethernet",
+      "Buttons",
+      "I2C",
+      "Relay"
+    ],
+    "planned": [],
+    "state": {
+      "System": {
+        "deviceModel": "QuinLED An-Penta-Plus",
+        "I2cBus": {
+          "type": "I2cBusModule",
+          "sda": 15,
+          "scl": 16
+        }
+      },
+      "Drivers": {
+        "$patch": "replace",
+        "relayPins": "13",
+        "PwmLight": {
+          "type": "PwmLightDriver",
+          "fixture": "RGBCCT",
+          "pins": "2,4,12,33,32"
+        },
+        "RmtLed": {
+          "type": "RmtLedDriver",
+          "pins": "5"
+        }
+      },
+      "Network": {
+        "$patch": "replace",
+        "Ethernet": {
+          "type": "EthernetModule",
+          "ethBoard": "Classic RMII (no reset)"
+        }
+      },
+      "Services": {
+        "$patch": "replace",
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 36,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            },
+            {
+              "pin": 39,
+              "activeLow": true
+            },
+            {
+              "pin": 34,
+              "activeLow": true
+            }
+          ]
+        }
+      }
+    }
   },
   {
     "name": "QuinLED Dig-Octa 32-8L",
@@ -303,43 +466,57 @@
       "esp32-16mb"
     ],
     "image": "assets/deviceModels/esp32-16mb-quinled-dig-octa-32-8l.jpg",
+    "description": "Relay on 33 triggers an optional external relay board, best placed on the mains side of the power supply.",
     "url": "https://quinled.info/quinled-dig-octa-brainboard-32-8l/",
     "supported": [
       "LEDs",
       "WiFi",
-      "Ethernet"
+      "Ethernet",
+      "Buttons",
+      "Relay"
     ],
     "planned": [
-      "Button",
       "Temperature",
-      "Relay",
       "SD card"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "QuinLED Dig-Octa 32-8L"
-        }
+    "state": {
+      "System": {
+        "deviceModel": "QuinLED Dig-Octa 32-8L"
       },
-      {
-        "type": "EthernetModule",
-        "id": "Ethernet",
-        "parent_id": "Network",
-        "controls": {
+      "Network": {
+        "$patch": "replace",
+        "Ethernet": {
+          "type": "EthernetModule",
           "ethBoard": "Classic RMII (no reset)"
         }
       },
-      {
-        "type": "RmtLedDriver",
-        "id": "RmtLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver",
           "pins": "0,1,2,3,4,5,12,13"
+        },
+        "relayPins": "33"
+      },
+      "Services": {
+        "$patch": "replace",
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 34,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            },
+            {
+              "pin": 35,
+              "activeLow": true
+            }
+          ]
         }
       }
-    ],
+    },
     "flashBaud": 460800
   },
   {
@@ -349,34 +526,45 @@
       "esp32-16mb"
     ],
     "image": "assets/deviceModels/esp32-16mb-serg-unishield-v5.jpg",
+    "description": "Relay on 19 is an on-board relay the LEDs are powered through.",
     "url": "https://www.tindie.com/products/serg74/wled-shield-board-for-addressable-leds/",
     "supported": [
       "LEDs",
-      "WiFi"
-    ],
-    "planned": [
-      "Button",
-      "IR",
-      "Temperature",
+      "WiFi",
+      "Buttons",
       "Relay"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "Serg UniShield V5"
-        }
+    "planned": [
+      "IR",
+      "Temperature"
+    ],
+    "state": {
+      "System": {
+        "deviceModel": "Serg UniShield V5"
       },
-      {
-        "type": "RmtLedDriver",
-        "id": "RmtLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver",
           "pins": "16,3"
+        },
+        "relayPins": "19"
+      },
+      "Services": {
+        "$patch": "replace",
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 17,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            }
+          ]
         }
       }
-    ]
+    }
   },
   {
     "name": "Serg MiniShield",
@@ -385,33 +573,44 @@
       "esp32-16mb"
     ],
     "image": "assets/deviceModels/esp32-16mb-serg-minishield.jpg",
+    "description": "Relay on 19 is a header for an optional external 5 V relay module.",
     "url": "https://www.tindie.com/stores/serg74/",
     "supported": [
       "LEDs",
-      "WiFi"
-    ],
-    "planned": [
-      "Button",
-      "Microphone",
+      "WiFi",
+      "Buttons",
       "Relay"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "Serg MiniShield"
-        }
+    "planned": [
+      "Microphone"
+    ],
+    "state": {
+      "System": {
+        "deviceModel": "Serg MiniShield"
       },
-      {
-        "type": "RmtLedDriver",
-        "id": "RmtLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver",
           "pins": "16"
+        },
+        "relayPins": "19"
+      },
+      "Services": {
+        "$patch": "replace",
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 17,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            }
+          ]
         }
       }
-    ]
+    }
   },
   {
     "name": "MHC V4.3",
@@ -424,23 +623,18 @@
       "WiFi"
     ],
     "planned": [],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "MHC V4.3"
-        }
+    "state": {
+      "System": {
+        "deviceModel": "MHC V4.3"
       },
-      {
-        "type": "RmtLedDriver",
-        "id": "RmtLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver",
           "pins": "12,13,16,18"
         }
       }
-    ]
+    }
   },
   {
     "name": "MHC V5.7 PRO",
@@ -457,23 +651,18 @@
     "planned": [
       "iMOSFET"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "MHC V5.7 PRO"
-        }
+    "state": {
+      "System": {
+        "deviceModel": "MHC V5.7 PRO"
       },
-      {
-        "type": "RmtLedDriver",
-        "id": "RmtLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver",
           "pins": "12,13,18,32"
         }
       }
-    ]
+    }
   },
   {
     "name": "Yves V4.8",
@@ -486,23 +675,18 @@
       "WiFi"
     ],
     "planned": [],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "Yves V4.8"
-        }
+    "state": {
+      "System": {
+        "deviceModel": "Yves V4.8"
       },
-      {
-        "type": "RmtLedDriver",
-        "id": "RmtLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver",
           "pins": "3"
         }
       }
-    ]
+    }
   },
   {
     "name": "Cube 2020-10",
@@ -515,23 +699,18 @@
       "WiFi"
     ],
     "planned": [],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "Cube 2020-10"
-        }
+    "state": {
+      "System": {
+        "deviceModel": "Cube 2020-10"
       },
-      {
-        "type": "RmtLedDriver",
-        "id": "RmtLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver",
           "pins": "22,21,14,18,5,4,2,15,13,12"
         }
       }
-    ]
+    }
   },
   {
     "name": "ESP32-S3 N16R8 Dev",
@@ -547,34 +726,28 @@
     "planned": [
       "RGB LED"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "ESP32-S3 N16R8 Dev"
-        }
+    "state": {
+      "System": {
+        "deviceModel": "ESP32-S3 N16R8 Dev"
       },
-      {
-        "type": "RmtLedDriver",
-        "id": "RmtLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver",
           "pins": "18"
         }
       },
-      {
-        "type": "WiFiModule",
-        "id": "WiFi",
-        "parent_id": "Network",
-        "controls": {
+      "Network": {
+        "$patch": "replace",
+        "WiFi": {
+          "type": "WiFiModule",
           "txPowerSetting": 8
         }
       }
-    ]
+    }
   },
   {
-    "name": "MIDI-OSC bridge",
+    "name": "MIDI bridge",
     "chip": "ESP32-S3",
     "firmwares": [
       "esp32s3-n16r8"
@@ -582,46 +755,28 @@
     "image": "assets/deviceModels/esp32-s3-n16r8-dev.png",
     "supported": [
       "WiFi",
-      "MIDI",
-      "OSC"
+      "MIDI"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "MIDI-OSC bridge"
-        }
+    "state": {
+      "System": {
+        "deviceModel": "MIDI bridge"
       },
-      {
-        "type": "WiFiModule",
-        "id": "WiFi",
-        "parent_id": "Network",
-        "controls": {
+      "Network": {
+        "$patch": "replace",
+        "WiFi": {
+          "type": "WiFiModule",
           "txPowerSetting": 8
         }
       },
-      {
-        "type": "MidiService",
-        "id": "Midi",
-        "parent_id": "Services",
-        "controls": {
-          "usb": true
-        }
-      },
-      {
-        "type": "OscModule",
-        "id": "OscModule",
-        "parent_id": "Services",
-        "controls": {
-          "listen": true,
-          "port": 9001,
-          "follow": true,
-          "feedback": true,
-          "feedbackPort": 9000
+      "Services": {
+        "$patch": "replace",
+        "Midi": {
+          "type": "MidiService",
+          "source": 1,
+          "share": true
         }
       }
-    ]
+    }
   },
   {
     "name": "MM testbench S3",
@@ -638,74 +793,61 @@
     "planned": [
       "RGB LED"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "MM testbench S3",
-          "deviceName": "MM-testbench-S3"
-        }
+    "state": {
+      "System": {
+        "deviceModel": "MM testbench S3",
+        "deviceName": "MM-testbench-S3"
       },
-      {
-        "type": "AudioService",
-        "id": "Audio",
-        "parent_id": "Services",
-        "controls": {
+      "Services": {
+        "$patch": "replace",
+        "Audio": {
+          "type": "AudioService",
           "mode": 2,
           "sckPin": 47,
           "wsPin": 48,
           "sdPin": 21
         }
       },
-      {
-        "type": "RmtLedDriver",
-        "id": "OnboardLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "OnboardLed": {
+          "type": "RmtLedDriver",
           "pins": "38",
           "start": 0,
           "count": 1
-        }
-      },
-      {
-        "type": "RmtLedDriver",
-        "id": "RmtLed",
-        "parent_id": "Drivers",
-        "controls": {
+        },
+        "RmtLed": {
+          "type": "RmtLedDriver",
           "pins": "18",
           "loopbackTxPin": 13,
           "loopbackRxPin": 12
+        },
+        "NetworkSend": {
+          "type": "NetworkSendDriver"
         }
       },
-      {
-        "type": "WiFiModule",
-        "id": "WiFi",
-        "parent_id": "Network",
-        "controls": {
+      "Network": {
+        "$patch": "replace",
+        "WiFi": {
+          "type": "WiFiModule",
           "txPowerSetting": 8
         }
       },
-      {
-        "type": "GridLayout",
-        "id": "Grid",
-        "parent_id": "Layouts",
-        "controls": {
+      "Layouts": {
+        "$patch": "replace",
+        "Grid": {
+          "type": "GridLayout",
           "width": 8,
           "height": 8
         }
       },
-      {
-        "type": "Layer",
-        "id": "Layer",
-        "parent_id": "Effects"
-      },
-      {
-        "type": "NetworkSendDriver",
-        "id": "NetworkSend",
-        "parent_id": "Drivers"
+      "Effects": {
+        "$patch": "replace",
+        "Layer": {
+          "type": "Layer"
+        }
       }
-    ]
+    }
   },
   {
     "name": "MM testbench ESP32-16MB",
@@ -719,26 +861,21 @@
       "WiFi"
     ],
     "planned": [],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "MM testbench ESP32-16MB",
-          "deviceName": "MM-testbench-ESP32-16MB"
-        }
+    "state": {
+      "System": {
+        "deviceModel": "MM testbench ESP32-16MB",
+        "deviceName": "MM-testbench-ESP32-16MB"
       },
-      {
-        "type": "RmtLedDriver",
-        "id": "RmtLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver",
           "pins": "18",
           "loopbackTxPin": 4,
           "loopbackRxPin": 5
         }
       }
-    ]
+    }
   },
   {
     "name": "MM testbench P4",
@@ -756,20 +893,15 @@
       "Audio codec",
       "Camera"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "MM testbench P4",
-          "deviceName": "MM-testbench-P4"
-        }
+    "state": {
+      "System": {
+        "deviceModel": "MM testbench P4",
+        "deviceName": "MM-testbench-P4"
       },
-      {
-        "type": "AudioService",
-        "id": "Audio",
-        "parent_id": "Services",
-        "controls": {
+      "Services": {
+        "$patch": "replace",
+        "Audio": {
+          "type": "AudioService",
           "mode": 2,
           "sckPin": 32,
           "wsPin": 26,
@@ -778,47 +910,39 @@
           "gain": 100
         }
       },
-      {
-        "type": "ParallelLedDriver",
-        "id": "ParallelLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "ParallelLed": {
+          "type": "ParallelLedDriver",
           "peripheral": "Parlio",
           "pins": "21",
           "loopbackTxPin": 46,
           "loopbackRxPin": 47
-        }
+        },
+        "brightness": 10
       },
-      {
-        "type": "Drivers",
-        "id": "Drivers",
-        "controls": {
-          "brightness": 10
-        }
-      },
-      {
-        "type": "GridLayout",
-        "id": "Grid",
-        "parent_id": "Layouts",
-        "controls": {
+      "Layouts": {
+        "$patch": "replace",
+        "Grid": {
+          "type": "GridLayout",
           "width": 8,
           "height": 8
         }
       },
-      {
-        "type": "Layer",
-        "id": "Layer",
-        "parent_id": "Effects"
+      "Effects": {
+        "$patch": "replace",
+        "Layer": {
+          "type": "Layer"
+        }
       },
-      {
-        "type": "EthernetModule",
-        "id": "Ethernet",
-        "parent_id": "Network",
-        "controls": {
+      "Network": {
+        "$patch": "replace",
+        "Ethernet": {
+          "type": "EthernetModule",
           "ethBoard": "P4 RMII"
         }
       }
-    ]
+    }
   },
   {
     "name": "MM testbench classic olimex",
@@ -836,47 +960,41 @@
       "Button",
       "SD card"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "MM testbench classic olimex"
-        }
+    "state": {
+      "System": {
+        "deviceModel": "MM testbench classic olimex"
       },
-      {
-        "type": "RmtLedDriver",
-        "id": "RmtLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver",
           "pins": "16",
           "loopbackTxPin": 33,
           "loopbackRxPin": 34
         }
       },
-      {
-        "type": "GridLayout",
-        "id": "Grid",
-        "parent_id": "Layouts",
-        "controls": {
+      "Layouts": {
+        "$patch": "replace",
+        "Grid": {
+          "type": "GridLayout",
           "width": 8,
           "height": 8
         }
       },
-      {
-        "type": "EthernetModule",
-        "id": "Ethernet",
-        "parent_id": "Network",
-        "controls": {
+      "Network": {
+        "$patch": "replace",
+        "Ethernet": {
+          "type": "EthernetModule",
           "ethBoard": "Classic RMII"
         }
       },
-      {
-        "type": "Layer",
-        "id": "Layer",
-        "parent_id": "Effects"
+      "Effects": {
+        "$patch": "replace",
+        "Layer": {
+          "type": "Layer"
+        }
       }
-    ],
+    },
     "flashBaud": 460800
   },
   {
@@ -896,28 +1014,22 @@
     "planned": [
       "Power monitoring"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "LightCrafter 16"
-        }
+    "state": {
+      "System": {
+        "deviceModel": "LightCrafter 16"
       },
-      {
-        "type": "GridLayout",
-        "id": "Grid",
-        "parent_id": "Layouts",
-        "controls": {
+      "Layouts": {
+        "$patch": "replace",
+        "Grid": {
+          "type": "GridLayout",
           "width": 8,
           "height": 8
         }
       },
-      {
-        "type": "EthernetModule",
-        "id": "Ethernet",
-        "parent_id": "Network",
-        "controls": {
+      "Network": {
+        "$patch": "replace",
+        "Ethernet": {
+          "type": "EthernetModule",
           "ethBoard": "Custom",
           "ethType": 3,
           "ethSpiMiso": 13,
@@ -928,26 +1040,24 @@
           "ethRstGpio": 3
         }
       },
-      {
-        "type": "InfraredService",
-        "id": "Ir",
-        "parent_id": "Services",
-        "controls": {
+      "Services": {
+        "$patch": "replace",
+        "Ir": {
+          "type": "InfraredService",
           "pin": 4
         }
       },
-      {
-        "type": "ParallelLedDriver",
-        "id": "ParallelLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "ParallelLed": {
+          "type": "ParallelLedDriver",
           "peripheral": "LCD-IDF",
           "pins": "47,21,14,9,8,16,15,7,1,2,42,41,40,39,38,48",
           "clockPin": 19,
           "dcPin": 20
         }
       }
-    ]
+    }
   },
   {
     "name": "SE 16 V1",
@@ -966,19 +1076,14 @@
     "planned": [
       "Power monitoring"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "SE 16 V1"
-        }
+    "state": {
+      "System": {
+        "deviceModel": "SE 16 V1"
       },
-      {
-        "type": "EthernetModule",
-        "id": "Ethernet",
-        "parent_id": "Network",
-        "controls": {
+      "Network": {
+        "$patch": "replace",
+        "Ethernet": {
+          "type": "EthernetModule",
           "ethBoard": "Custom",
           "ethType": 3,
           "ethSpiMiso": 5,
@@ -988,26 +1093,24 @@
           "ethSpiIrq": 18
         }
       },
-      {
-        "type": "InfraredService",
-        "id": "Ir",
-        "parent_id": "Services",
-        "controls": {
+      "Services": {
+        "$patch": "replace",
+        "Ir": {
+          "type": "InfraredService",
           "pin": 5
         }
       },
-      {
-        "type": "ParallelLedDriver",
-        "id": "ParallelLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "ParallelLed": {
+          "type": "ParallelLedDriver",
           "peripheral": "LCD-IDF",
           "pins": "47,48,21,38,14,39,13,40,12,41,11,42,10,2,3,1",
           "clockPin": 16,
           "dcPin": 17
         }
       }
-    ]
+    }
   },
   {
     "name": "Waveshare ESP32-P4-NANO",
@@ -1028,44 +1131,34 @@
       "Speaker",
       "Camera"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "Waveshare ESP32-P4-NANO"
-        }
-      },
-      {
-        "type": "ParallelLedDriver",
-        "id": "ParallelLed",
-        "parent_id": "Drivers",
-        "controls": {
-          "peripheral": "Parlio",
-          "pins": "20,21,22,23,24,25,26,27"
-        }
-      },
-      {
-        "type": "EthernetModule",
-        "id": "Ethernet",
-        "parent_id": "Network",
-        "controls": {
-          "ethBoard": "P4 RMII"
-        }
-      },
-      {
-        "type": "I2cBusModule",
-        "id": "I2cBus",
-        "controls": {
+    "state": {
+      "System": {
+        "deviceModel": "Waveshare ESP32-P4-NANO",
+        "I2cBus": {
+          "type": "I2cBusModule",
           "sda": 7,
           "scl": 8
         }
       },
-      {
-        "type": "AudioService",
-        "id": "Audio",
-        "parent_id": "Services",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "ParallelLed": {
+          "type": "ParallelLedDriver",
+          "peripheral": "Parlio",
+          "pins": "20,21,22,23,24,25,26,27"
+        }
+      },
+      "Network": {
+        "$patch": "replace",
+        "Ethernet": {
+          "type": "EthernetModule",
+          "ethBoard": "P4 RMII"
+        }
+      },
+      "Services": {
+        "$patch": "replace",
+        "Audio": {
+          "type": "AudioService",
           "mode": 2,
           "sckPin": 12,
           "wsPin": 10,
@@ -1075,7 +1168,7 @@
           "codecAddr": "0x18"
         }
       }
-    ]
+    }
   },
   {
     "name": "Waveshare ESP32-P4-ETH",
@@ -1096,44 +1189,34 @@
       "Display",
       "SD card"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "Waveshare ESP32-P4-ETH"
-        }
-      },
-      {
-        "type": "ParallelLedDriver",
-        "id": "ParallelLed",
-        "parent_id": "Drivers",
-        "controls": {
-          "peripheral": "Parlio",
-          "pins": "16,17,18,19,20,21,22,23"
-        }
-      },
-      {
-        "type": "EthernetModule",
-        "id": "Ethernet",
-        "parent_id": "Network",
-        "controls": {
-          "ethBoard": "P4 RMII"
-        }
-      },
-      {
-        "type": "I2cBusModule",
-        "id": "I2cBus",
-        "controls": {
+    "state": {
+      "System": {
+        "deviceModel": "Waveshare ESP32-P4-ETH",
+        "I2cBus": {
+          "type": "I2cBusModule",
           "sda": 7,
           "scl": 8
         }
       },
-      {
-        "type": "AudioService",
-        "id": "Audio",
-        "parent_id": "Services",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "ParallelLed": {
+          "type": "ParallelLedDriver",
+          "peripheral": "Parlio",
+          "pins": "16,17,18,19,20,21,22,23"
+        }
+      },
+      "Network": {
+        "$patch": "replace",
+        "Ethernet": {
+          "type": "EthernetModule",
+          "ethBoard": "P4 RMII"
+        }
+      },
+      "Services": {
+        "$patch": "replace",
+        "Audio": {
+          "type": "AudioService",
           "mode": 2,
           "sckPin": 12,
           "wsPin": 10,
@@ -1143,7 +1226,7 @@
           "codecAddr": "0x18"
         }
       }
-    ]
+    }
   },
   {
     "name": "Guition JC-ESP32P4-M3-DEV",
@@ -1162,35 +1245,26 @@
       "Speaker",
       "Display"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "Guition JC-ESP32P4-M3-DEV"
-        }
-      },
-      {
-        "type": "EthernetModule",
-        "id": "Ethernet",
-        "parent_id": "Network",
-        "controls": {
-          "ethBoard": "P4 RMII"
-        }
-      },
-      {
-        "type": "I2cBusModule",
-        "id": "I2cBus",
-        "controls": {
+    "state": {
+      "System": {
+        "deviceModel": "Guition JC-ESP32P4-M3-DEV",
+        "I2cBus": {
+          "type": "I2cBusModule",
           "sda": 7,
           "scl": 8
         }
       },
-      {
-        "type": "AudioService",
-        "id": "Audio",
-        "parent_id": "Services",
-        "controls": {
+      "Network": {
+        "$patch": "replace",
+        "Ethernet": {
+          "type": "EthernetModule",
+          "ethBoard": "P4 RMII"
+        }
+      },
+      "Services": {
+        "$patch": "replace",
+        "Audio": {
+          "type": "AudioService",
           "mode": 2,
           "sckPin": 12,
           "wsPin": 10,
@@ -1200,7 +1274,7 @@
           "codecAddr": "0x18"
         }
       }
-    ]
+    }
   },
   {
     "name": "MHC-WLED ESP32-P4 shield",
@@ -1222,19 +1296,19 @@
       "Inputs",
       "16-ch parallel LEDs (8+ not yet)"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "MHC-WLED ESP32-P4 shield"
+    "state": {
+      "System": {
+        "deviceModel": "MHC-WLED ESP32-P4 shield",
+        "I2cBus": {
+          "type": "I2cBusModule",
+          "sda": -1,
+          "scl": -1
         }
       },
-      {
-        "type": "AudioService",
-        "id": "Audio",
-        "parent_id": "Services",
-        "controls": {
+      "Services": {
+        "$patch": "replace",
+        "Audio": {
+          "type": "AudioService",
           "mode": 2,
           "sckPin": 32,
           "wsPin": 26,
@@ -1243,32 +1317,22 @@
           "gain": 100
         }
       },
-      {
-        "type": "ParallelLedDriver",
-        "id": "ParallelLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "ParallelLed": {
+          "type": "ParallelLedDriver",
           "peripheral": "Parlio",
           "pins": "21,20,25,5,7,23,8,27"
         }
       },
-      {
-        "type": "I2cBusModule",
-        "id": "I2cBus",
-        "controls": {
-          "sda": -1,
-          "scl": -1
-        }
-      },
-      {
-        "type": "EthernetModule",
-        "id": "Ethernet",
-        "parent_id": "Network",
-        "controls": {
+      "Network": {
+        "$patch": "replace",
+        "Ethernet": {
+          "type": "EthernetModule",
           "ethBoard": "P4 RMII"
         }
       }
-    ]
+    }
   },
   {
     "name": "Espressif ESP32-S31 CoreBoard",
@@ -1292,37 +1356,35 @@
       "Speaker",
       "CAN"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "Espressif ESP32-S31 CoreBoard"
+    "state": {
+      "System": {
+        "deviceModel": "Espressif ESP32-S31 CoreBoard",
+        "I2cBus": {
+          "type": "I2cBusModule",
+          "sda": 51,
+          "scl": 50
         }
       },
-      {
-        "type": "RmtLedDriver",
-        "id": "RmtLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver",
           "pins": "60",
           "loopbackTxPin": 48,
           "loopbackRxPin": 47
         }
       },
-      {
-        "type": "EthernetModule",
-        "id": "Ethernet",
-        "parent_id": "Network",
-        "controls": {
+      "Network": {
+        "$patch": "replace",
+        "Ethernet": {
+          "type": "EthernetModule",
           "ethBoard": "S31 RGMII"
         }
       },
-      {
-        "type": "AudioService",
-        "id": "Audio",
-        "parent_id": "Services",
-        "controls": {
+      "Services": {
+        "$patch": "replace",
+        "Audio": {
+          "type": "AudioService",
           "mode": 2,
           "sckPin": 53,
           "wsPin": 55,
@@ -1331,16 +1393,8 @@
           "codec": "ES8311",
           "codecAddr": "0x18"
         }
-      },
-      {
-        "type": "I2cBusModule",
-        "id": "I2cBus",
-        "controls": {
-          "sda": 51,
-          "scl": 50
-        }
       }
-    ]
+    }
   },
   {
     "name": "Shelly",
@@ -1356,59 +1410,43 @@
       "MQTT",
       "Hue"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "Shelly",
-          "deviceName": "Shelly"
-        }
+    "state": {
+      "System": {
+        "deviceModel": "Shelly",
+        "deviceName": "Shelly"
       },
-      {
-        "type": "GridLayout",
-        "id": "Grid",
-        "parent_id": "Layouts",
-        "controls": {
+      "Layouts": {
+        "$patch": "replace",
+        "Grid": {
+          "type": "GridLayout",
           "width": 1,
           "height": 24
         }
       },
-      {
-        "type": "Layer",
-        "id": "Layer",
-        "parent_id": "Effects"
-      },
-      {
-        "type": "Drivers",
-        "id": "Drivers"
-      },
-      {
-        "type": "RmtLedDriver",
-        "id": "RmtLed",
-        "parent_id": "Drivers",
-        "controls": {
-          "pins": "2"
+      "Effects": {
+        "$patch": "replace",
+        "Layer": {
+          "type": "Layer"
         }
       },
-      {
-        "type": "HueDriver",
-        "id": "Hue",
-        "parent_id": "Drivers"
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver",
+          "pins": "2"
+        },
+        "Hue": {
+          "type": "HueDriver"
+        }
       },
-      {
-        "type": "WiFiModule",
-        "id": "WiFi",
-        "parent_id": "Network",
-        "controls": {
+      "Network": {
+        "$patch": "replace",
+        "WiFi": {
+          "type": "WiFiModule",
           "txPowerSetting": 8
         }
-      },
-      {
-        "type": "MqttModule",
-        "id": "Mqtt"
       }
-    ]
+    }
   },
   {
     "name": "hpwit shift-register 48",
@@ -1421,19 +1459,14 @@
       "LEDs",
       "WiFi"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "hpwit shift-register 48"
-        }
+    "state": {
+      "System": {
+        "deviceModel": "hpwit shift-register 48"
       },
-      {
-        "type": "PanelsLayout",
-        "id": "Panels",
-        "parent_id": "Layouts",
-        "controls": {
+      "Layouts": {
+        "$patch": "replace",
+        "Panels": {
+          "type": "PanelsLayout",
           "horizontalPanels": 8,
           "verticalPanels": 6,
           "panelWidth": 16,
@@ -1441,11 +1474,10 @@
           "snake": true
         }
       },
-      {
-        "type": "ParallelLedDriver",
-        "id": "ParallelLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "ParallelLed": {
+          "type": "ParallelLedDriver",
           "peripheral": "LCD-MM",
           "pins": "9,10,12,8,18,17",
           "pinExpander": true,
@@ -1455,15 +1487,14 @@
           "doubleBuffer": false
         }
       },
-      {
-        "type": "WiFiModule",
-        "id": "WiFi",
-        "parent_id": "Network",
-        "controls": {
+      "Network": {
+        "$patch": "replace",
+        "WiFi": {
+          "type": "WiFiModule",
           "txPowerSetting": 8
         }
       }
-    ]
+    }
   },
   {
     "name": "hpwit shift-register 15",
@@ -1476,19 +1507,14 @@
       "LEDs",
       "WiFi"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "hpwit shift-register 15"
-        }
+    "state": {
+      "System": {
+        "deviceModel": "hpwit shift-register 15"
       },
-      {
-        "type": "PanelsLayout",
-        "id": "Panels",
-        "parent_id": "Layouts",
-        "controls": {
+      "Layouts": {
+        "$patch": "replace",
+        "Panels": {
+          "type": "PanelsLayout",
           "horizontalPanels": 5,
           "verticalPanels": 3,
           "panelWidth": 16,
@@ -1496,11 +1522,10 @@
           "snake": true
         }
       },
-      {
-        "type": "ParallelLedDriver",
-        "id": "ParallelLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "ParallelLed": {
+          "type": "ParallelLedDriver",
           "peripheral": "LCD-MM",
           "pins": "9,10",
           "pinExpander": true,
@@ -1513,15 +1538,14 @@
           "loopbackRxPin": 16
         }
       },
-      {
-        "type": "WiFiModule",
-        "id": "WiFi",
-        "parent_id": "Network",
-        "controls": {
+      "Network": {
+        "$patch": "replace",
+        "WiFi": {
+          "type": "WiFiModule",
           "txPowerSetting": 8
         }
       }
-    ]
+    }
   },
   {
     "name": "LILYGO T7-S3",
@@ -1538,20 +1562,17 @@
     "planned": [
       "Battery"
     ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "LILYGO T7-S3"
-        }
+    "state": {
+      "System": {
+        "deviceModel": "LILYGO T7-S3"
       },
-      {
-        "type": "RmtLedDriver",
-        "id": "RmtLed",
-        "parent_id": "Drivers"
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver"
+        }
       }
-    ]
+    }
   },
   {
     "name": "MoonHub75",
@@ -1564,54 +1585,58 @@
     "supported": [
       "LEDs",
       "WiFi",
-      "Audio"
+      "Audio",
+      "Buttons"
     ],
-    "planned": [
-      "Button"
-    ],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "MoonHub75"
-        }
+    "planned": [],
+    "state": {
+      "System": {
+        "deviceModel": "MoonHub75"
       },
-      {
-        "type": "GridLayout",
-        "id": "Grid",
-        "parent_id": "Layouts",
-        "controls": {
+      "Layouts": {
+        "$patch": "replace",
+        "Grid": {
+          "type": "GridLayout",
           "width": 64,
           "height": 64
         }
       },
-      {
-        "type": "Layer",
-        "id": "Layer",
-        "parent_id": "Effects"
+      "Effects": {
+        "$patch": "replace",
+        "Layer": {
+          "type": "Layer"
+        }
       },
-      {
-        "type": "Hub75Driver",
-        "id": "Hub75",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "Hub75": {
+          "type": "Hub75Driver",
           "board": "MoonHub75",
           "scanRate": "1/32",
           "clockEdge": "falling"
         }
       },
-      {
-        "type": "AudioService",
-        "id": "Audio",
-        "parent_id": "Services",
-        "controls": {
+      "Services": {
+        "$patch": "replace",
+        "Audio": {
+          "type": "AudioService",
           "sckPin": 11,
           "wsPin": 12,
           "sdPin": 10
+        },
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 0,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            }
+          ]
         }
       }
-    ]
+    }
   },
   {
     "name": "ESP32-S3-Zero (N4R2)",
@@ -1626,39 +1651,97 @@
       "WiFi"
     ],
     "planned": [],
-    "modules": [
-      {
-        "type": "System",
-        "id": "System",
-        "controls": {
-          "deviceModel": "ESP32-S3-Zero (N4R2)"
-        }
+    "state": {
+      "System": {
+        "deviceModel": "ESP32-S3-Zero (N4R2)"
       },
-      {
-        "type": "RmtLedDriver",
-        "id": "RmtLed",
-        "parent_id": "Drivers",
-        "controls": {
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver",
           "pins": "21",
           "count": 1
-        }
-      },
-      {
-        "type": "ParallelLedDriver",
-        "id": "ParallelLed",
-        "parent_id": "Drivers",
-        "controls": {
+        },
+        "ParallelLed": {
+          "type": "ParallelLedDriver",
           "pins": "2"
         }
       },
-      {
-        "type": "WiFiModule",
-        "id": "WiFi",
-        "parent_id": "Network",
-        "controls": {
+      "Network": {
+        "$patch": "replace",
+        "WiFi": {
+          "type": "WiFiModule",
           "txPowerSetting": 8
         }
       }
-    ]
+    }
+  },
+  {
+    "name": "ESP32-C3 SuperMini",
+    "chip": "ESP32-C3",
+    "firmwares": [
+      "esp32c3"
+    ],
+    "image": "assets/deviceModels/esp32-c3-supermini.jpg",
+    "supported": [
+      "LEDs",
+      "WiFi"
+    ],
+    "planned": [],
+    "state": {
+      "System": {
+        "deviceModel": "ESP32-C3 SuperMini"
+      },
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver"
+        }
+      },
+      "Network": {
+        "$patch": "replace",
+        "WiFi": {
+          "type": "WiFiModule",
+          "txPowerSetting": 8
+        }
+      }
+    }
+  },
+  {
+    "name": "ESP32-C3 RGBWW PWM bulb",
+    "chip": "ESP32-C3",
+    "firmwares": [
+      "esp32c3"
+    ],
+    "image": "assets/deviceModels/esp32-c3-rgbww-pwm-bulb.png",
+    "description": "A bulb with red, green, blue, cold and warm white on five PWM pins, such as the Athom 12W RGBCCT bulb.",
+    "url": "https://www.athom.tech/",
+    "supported": [
+      "LEDs",
+      "WiFi"
+    ],
+    "planned": [],
+    "state": {
+      "System": {
+        "deviceModel": "ESP32-C3 RGBWW PWM bulb"
+      },
+      "Drivers": {
+        "$patch": "replace",
+        "PwmLight": {
+          "type": "PwmLightDriver",
+          "fixture": "RGBCCT",
+          "pins": "6,7,5,3,4",
+          "bits": 13
+        }
+      },
+      "Layouts": {
+        "$patch": "replace",
+        "Grid": {
+          "type": "GridLayout",
+          "width": 1,
+          "height": 1
+        }
+      }
+    }
   }
 ]

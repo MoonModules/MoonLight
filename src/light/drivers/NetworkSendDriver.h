@@ -41,10 +41,8 @@ public:
 
     /// The protocol names, index-aligned with the constants the send switch uses.
     static constexpr const char* kProtocolOptions[] = {"ArtNet", "E1.31", "DDP"};
-    /// How many protocols the selector offers.
-    static constexpr uint8_t kProtocolCount = 3;
-    /// The E1.31 protocol index, the one with a multicast group per universe.
-    static constexpr uint8_t kProtoE131 = 1;
+    /// The protocols `protocol` picks from, in its option order; E1.31 is the one with a multicast group per universe.
+    enum Protocol : uint8_t { kProtoArtNet, kProtoE131, kProtoDdp, kProtocolCount };
 
     /// The modes each protocol allows, by protocol index: Art-Net's legacy broadcast, E1.31's native multicast, DDP unicast only, its row padded to the table's width.
     static constexpr Addressing kModes[kProtocolCount][2] = {
@@ -230,13 +228,13 @@ public:
         }
 
         // Rounded DOWN to whole fixtures: one straddling two universes reads a neighbor's channels.
-        size_t chunk = (protocol == 2) ? DDP_MAX_PAYLOAD : MAX_CHANNELS_PER_UNIVERSE;
+        size_t chunk = (protocol == kProtoDdp) ? DDP_MAX_PAYLOAD : MAX_CHANNELS_PER_UNIVERSE;
         uint8_t packet[DDP_HEADER_SIZE + DDP_MAX_PAYLOAD];  // 1450 B covers all three
         const uint16_t port = protocolPort(protocol);
         const uint8_t bytesPerLight = (data == corrected_.data() && correction_.outChannels)
                                           ? correction_.outChannels
                                           : sourceBuffer_->channelsPerLight();
-        if (protocol != 2 && bytesPerLight > 1) {
+        if (protocol != kProtoDdp && bytesPerLight > 1) {
             const size_t whole = (chunk / bytesPerLight) * bytesPerLight;
             // A fixture wider than a universe keeps the full one, so the failure is visible.
             if (whole > 0) chunk = whole;
@@ -261,7 +259,7 @@ public:
                         packetLen = buildE131Packet(packet, universe, sequence_, cid_,
                                                     src, static_cast<uint16_t>(n));
                         break;
-                    case 2:
+                    case kProtoDdp:
                         // Byte-addressed, and relative to this destination's own strip.
                         packetLen = buildDdpPacket(packet, static_cast<uint32_t>(sent),
                                                    /*push=*/sent + n >= runBytes,
@@ -324,7 +322,7 @@ private:
 
     /// The UDP port for a protocol index: each wire format has its own registered port.
     static uint16_t protocolPort(uint8_t p) {
-        return p == kProtoE131 ? E131_PORT : p == 2 ? DDP_PORT : ARTNET_PORT;
+        return p == kProtoE131 ? E131_PORT : p == kProtoDdp ? DDP_PORT : ARTNET_PORT;
     }
 
     /// Copy each named host's latest address in from the resolver, keeping the last one while it is busy or failing, then report.

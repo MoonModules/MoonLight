@@ -125,13 +125,15 @@ public:
         return ok;      // false on a malformed/missing file (list left empty)
     }
 
-    /// How presence travels: 0 the multicast group, 1 the group plus the broadcast address WLED listens on, the default.
-    uint8_t addressing = 1;
+    /// The modes `addressing` picks from; its options start one entry into the shared Addressing names, since presence is never unicast.
+    enum Mode : uint8_t { kDevMulticast, kDevMulticastBroadcast, kDevModeCount };
+    /// How presence travels: the multicast group, or the group plus the broadcast address WLED listens on, the default.
+    uint8_t addressing = kDevMulticastBroadcast;
 
     /// Declare the addressing and the list of discovered devices.
     void defineControls() override {
         MoonModule::defineControls();
-        controls_.addSelect("addressing", addressing, kAddressingNames + 1, 2);   // multicast, multicast + broadcast
+        controls_.addSelect("addressing", addressing, kAddressingNames + 1, kDevModeCount);
         controls_.addList("devices", *this);   // this module is the ListSource
     }
 
@@ -320,7 +322,7 @@ private:
         WledPacket::build(pkt, ip, n, boardTypeByte(), /*lightsOn=*/true);
         WledPacket::stampMmMarker(pkt);
         // Both ways during the bootstrap window, so a peer can tell which way reaches it.
-        const bool bothWays = addressing == 1 || platform::millis() - boundMs_ < kBothWaysMs;
+        const bool bothWays = addressing == kDevMulticastBroadcast || platform::millis() - boundMs_ < kBothWaysMs;
         sendAddressed(bothWays ? Addressing::MulticastBroadcast : Addressing::Multicast, Traffic::Occasional, nullptr, 0,
                       kDiscoveryGroup, [&](const uint8_t to[4]) {
                           WledPacket::stampVia(pkt, std::memcmp(to, kBroadcastAddress, 4) == 0);

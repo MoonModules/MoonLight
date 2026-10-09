@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import {
     buildImprovFrame,
     encodeApplyOpFrames,
+    stateFrames,
     APPLY_OP_CHUNK_MAX,
     IMPROV_CMD_APPLY_OP,
     IMPROV_FRAME_TYPE_RPC,
@@ -43,8 +44,8 @@ test("golden vector G1: buildImprovFrame(RPC, [0x01])", () => {
     assert.equal(hex(frame), "49 4d 50 52 4f 56 01 03 01 01 e3");
 });
 
-test("golden vector G2: a small APPLY_OP set op is a single frame", () => {
-    const op = { op: "set", module: "Grid", control: "width", value: 8 };
+test("golden vector G2: a small state document is a single APPLY_OP frame", () => {
+    const op = { Layouts: { Grid: { type: "GridLayout", width: 8 } } };
     const frames = encodeApplyOpFrames(op);
     assert.equal(frames.length, 1, "fits one frame");
     const f = frames[0];
@@ -52,12 +53,12 @@ test("golden vector G2: a small APPLY_OP set op is a single frame", () => {
     assert.equal(f[9 + 0], IMPROV_CMD_APPLY_OP, "payload[0] = 0xFC");
     assert.equal(f[9 + 1], 0, "seq");
     assert.equal(f[9 + 2], 1, "last");
-    // payload after the 3-byte header is the op JSON, byte-identical
+    // payload after the 3-byte header is the document JSON, byte-identical
     assert.deepEqual(Array.from(f.subarray(9 + 3, 9 + f[8])), bytes(JSON.stringify(op)));
 });
 
-test("golden vector G3: a >125-byte op chunks into ordered frames", () => {
-    const op = { op: "set", module: "X", control: "pins", value: "1".repeat(140) };
+test("golden vector G3: a >125-byte document chunks into ordered frames", () => {
+    const op = { Drivers: { X: { type: "RmtLedDriver", pins: "1".repeat(140) } } };
     const json = JSON.stringify(op);
     assert.ok(new TextEncoder().encode(json).length > APPLY_OP_CHUNK_MAX, "forces >1 chunk");
     const frames = encodeApplyOpFrames(op);
@@ -69,7 +70,7 @@ test("golden vector G3: a >125-byte op chunks into ordered frames", () => {
     // frame 1: seq 1, last 1, remainder
     assert.equal(frames[1][9 + 1], 1, "f1 seq");
     assert.equal(frames[1][9 + 2], 1, "f1 last");
-    // reassembling the chunks reproduces the op JSON exactly
+    // reassembling the chunks reproduces the document JSON exactly
     let reassembled = [];
     for (const f of frames) reassembled.push(...f.subarray(9 + 3, 9 + f[8]));
     assert.deepEqual(reassembled, bytes(json));
@@ -79,4 +80,48 @@ test("APPLY_OP always emits at least one frame (so `last` always sends)", () => 
     const frames = encodeApplyOpFrames({});
     assert.equal(frames.length, 1);
     assert.equal(frames[0][9 + 2], 1, "last=1 on the lone frame");
+});
+
+test("an already-serialized document is framed as given", () => {
+    const json = '{"System":{"deviceModel":"x"}}';
+    assert.deepEqual(encodeApplyOpFrames(json), encodeApplyOpFrames(JSON.parse(json)));
+});
+
+const ENTRY = { state: {
+    System: { deviceModel: "x" },
+    Layouts: { $patch: "replace", Grid: { type: "GridLayout", width: 8 } },
+    Drivers: { $patch: "replace", RmtLed: { type: "RmtLedDriver", pins: "16" } },
+} };
+
+test("an entry sends one document per top-level container, in key order", () => {
+    const docs = stateFrames(ENTRY).map((j) => JSON.parse(j));
+    assert.deepEqual(docs.map((d) => Object.keys(d)[0]), ["System", "Layouts", "Drivers"]);
+    assert.ok(docs.every((d) => Object.keys(d).length === 1));
+});
+
+// Starting an output prints on UART0, which a classic board shares with Improv, so a document after Drivers could lose its acknowledgement.
+test("Drivers goes last whatever the entry's key order", () => {
+    const entry = { state: { Drivers: ENTRY.state.Drivers, System: ENTRY.state.System, Layouts: ENTRY.state.Layouts } };
+    assert.deepEqual(stateFrames(entry).map((j) => Object.keys(JSON.parse(j))[0]), ["System", "Layouts", "Drivers"]);
+});
+
+test("a document carries its container object unchanged", () => {
+    const docs = stateFrames(ENTRY).map((j) => JSON.parse(j));
+    assert.deepEqual(docs[2], { Drivers: ENTRY.state.Drivers });
+});
+
+test("an empty or malformed entry sends no documents", () => {
+    for (const entry of [undefined, null, {}, { state: null }, { state: [] }, { state: "x" }]) {
+        assert.deepEqual(stateFrames(entry), []);
+    }
+});
+
+test("no catalog entry has a container document the device cannot reassemble (512 bytes)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const catalog = JSON.parse(readFileSync(new URL("../../mooninstaller/deviceModels.json", import.meta.url), "utf8"));
+    for (const entry of catalog) {
+        for (const doc of stateFrames(entry)) {
+            assert.ok(new TextEncoder().encode(doc).length <= 512, `entry "${entry.name}": ${doc.slice(0, 40)} exceeds 512 bytes`);
+        }
+    }
 });

@@ -722,8 +722,16 @@ body.cards-resizing {
     margin: 6px 0;
 }
 
+/* One label column rule for every card, so cards of one width line up the same way. The column is a quarter
+   of the row, from 100 px on a phone to 160 px on a wide pane, so widening a pane gives long names room.
+   A name longer than the column is cut with an ellipsis rather than pushing its control right, and
+   hovering it shows the whole name. */
 .control-label {
-    flex: 0 0 100px;
+    flex: 0 0 clamp(100px, 25%, 160px);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: 12px;
     color: var(--fg-muted);
 }
@@ -1217,6 +1225,7 @@ body.cards-resizing {
 
 .control-row input[type="range"] {
     flex: 1;
+    margin: 0;   /* the browser's own margin started a slider 2 px right of every other control */
     accent-color: var(--accent);
 }
 .control-row input[type="text"],
@@ -1236,6 +1245,33 @@ body.cards-resizing {
     border-radius: 4px;
     font-size: 13px;
 }
+
+/* A few short choices, all shown at once: a pill as wide as its labels, the chosen segment filled to the
+   pill's own edge, so its rounded end is the pill's rather than a second curve just inside it.
+   margin-right: auto keeps the reset button at the row's end, where every other row has it.
+   The radio buttons underneath stay for the keyboard and a screen reader, hidden from sight. */
+.control-row .segmented {
+    flex: 0 1 auto;
+    margin-right: auto;
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg-0);
+    overflow: hidden;
+}
+.control-row .segmented label {
+    padding: 3px 12px;
+    line-height: 20px;
+    font-size: 13px;
+    color: var(--fg-muted);
+    white-space: nowrap;
+    cursor: pointer;
+    position: relative;
+}
+.control-row .segmented label:hover { color: var(--fg); }
+.control-row .segmented label:has(input:checked) { background: var(--accent); color: #fff; }
+.control-row .segmented label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
+.control-row .segmented input { position: absolute; opacity: 0; width: 0; height: 0; margin: 0; }
 
 /* The OPEN menu, styled. A native <select> draws its popup in the OS compositor, so every
    rule above stops at the closed control: a dark card opens a light system menu, and the
@@ -1515,6 +1551,8 @@ body.cards-resizing {
     font-size: 13px;
 }
 .control-row button.action-btn:hover { filter: brightness(1.15); }
+/* A button that cannot be undone shows red once armed, as the File Manager's delete does. */
+.control-row button.action-btn--danger.armed { background: var(--red); }
 
 .peek-btn {
     background: transparent;

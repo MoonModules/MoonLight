@@ -20,6 +20,12 @@ Forward-looking to-build items for the **light domain** (`src/light/`: drivers, 
 
 ## Effects
 
+### Effects and Drivers find their source one way, not two (2026-10-08)
+
+Effects finds the top-level Layouts, and Drivers the top-level Effects, by type through `Scheduler::topOfType` when nothing was injected, which is what lets a state document build a tree with no wiring.
+`setLayouts` and `setEffects` remain beside it for the unit-test rigs, 172 calls in about 40 files, so two mechanisms do one job.
+The fix: a rig adds its containers to a Scheduler, as the scenario runner does through `createTopLevel`, and the setters go.
+
 ### Moving-head effects from MoonLight, including two of troyhack's (2026-09-04)
 
 MoonLight has several moving-head effects that have no equivalent here, two of them troyhack's.
@@ -173,13 +179,13 @@ twice during this session at brightnesses a user would reasonably try.
   equal brightness steps. The open question is WHERE: on the `brightness` control (every driver
   inherits it, but the number then means something different to OSC, MQTT and every saved preset) or
   in each driver's output stage (no meaning change, duplicated per driver).
-- **A power budget.** A device that knows its supply limit can cap brightness instead of browning
-  out. Boards with a sense resistor can measure it (see the power-monitoring entry below); boards
-  without can estimate from light count and channel values, which is what WLED's ABL does.
+- **A power budget from measured values.** A board that measures its input voltage or current dims when the voltage sags below a threshold or the current passes a limit (see the power-monitoring entry below). A board without sensing relies on safe mode and the fade-in, which bring it back reachable after any supply failure.
 
 NOTE the rail sag above is NOT the supply's fault: an LRS-350-5 delivers 60 A, and this browned out
 at 4.3 A. Roughly 0.25 ohm of series resistance in the feed, so wiring and injection points, which
 is worth measuring before tuning anything in firmware.
+
+**Measured again 2026-10-09**, full white on all four channels: 4.7 V at 0.5 A, 4.1 V at 9 A, 3.3 V at 18.4 A, held for minutes while USB powered the board. The feed is now about 0.08 ohm (2.5 m of 2 mm² speaker cable each way), about 26 W of heat at full load. Powered from the feed alone, the board hangs under that sag rather than resetting, since the chip's supply stays above the brownout level; raising that level to 2.98 V, the S3's level 3, still hung without a reset. Safe mode counts a power loss within a minute of starting, and the lights rise over five seconds, so two power cycles bring a hung board back dark and reachable (bench-verified). What remains is the device acting on what it measures: dimming when the input sags or the current passes a limit, on boards that measure.
 
 ### SE16 / LightCrafter power monitoring: sense pins now free, module still to build (2026-09-02)
 
@@ -193,6 +199,8 @@ until the meaning of those controls settled it: they are the **sacrificial** WR 
 (`MultiPinLedDriver::addBusControls`). Any free GPIO does, so they moved rather than the sensors:
 SE16 to 16/17 (it has 4/16/17 spare, so its native USB on 19/20 stays free) and LightCrafter to
 19/20 (its only spare pair, and it uses the UART bridge on 43/44 anyway).
+
+**A view exists:** `moonlive/services/power.mls` reads the LightCrafter's GPIO 5 and 6 with the board's own conversions and shows volts and amps, bench-read on the StadBeest (2026-10-09). It shows and does not act; acting is the power-budget entry above.
 
 **Still open:** `AnalogService` shipped (plan step 3) and is host-verified, so the consumer exists.
 What remains is per board: `voltagePin`/`currentPin` in the two device definitions, "Power

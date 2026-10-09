@@ -77,7 +77,8 @@ bool spawnPinnedTask(WorkerTask& t, const char* name, WorkerFn fn, void* user,
     w->user = user;
     // The handle is assigned BEFORE the create: @xref{the-handle-is-assigned-before-the-task-is-created|the live-lock that otherwise measured as a board offline at boot}.
     t.impl = w;
-    const BaseType_t coreId = (core < 0) ? tskNO_AFFINITY : static_cast<BaseType_t>(core);
+    // A core the chip lacks, such as core 1 on a single-core C3, runs the task unpinned rather than failing FreeRTOS's assert.
+    const BaseType_t coreId = (core < 0 || core >= portNUM_PROCESSORS) ? tskNO_AFFINITY : static_cast<BaseType_t>(core);
     const BaseType_t ok = xTaskCreatePinnedToCore(
         &workerTrampoline, name, static_cast<uint32_t>(stackBytes), w,
         static_cast<UBaseType_t>(priority), &w->handle, coreId);

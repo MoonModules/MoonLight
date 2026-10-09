@@ -19,7 +19,7 @@ TEST_CASE("SolidEffect mode 0 fills the buffer with one uniform color") {
     layer.setChannelsPerLight(3);
 
     mm::SolidEffect solid;
-    solid.colorMode = 0;
+    solid.colorMode = mm::SolidEffect::kColorFlat;
     solid.red = 100;
     solid.green = 50;
     solid.blue = 25;
@@ -53,7 +53,7 @@ TEST_CASE("SolidEffect mode 0 scales the flat color by brightness") {
     layer.setChannelsPerLight(3);
 
     mm::SolidEffect solid;
-    solid.colorMode = 0;
+    solid.colorMode = mm::SolidEffect::kColorFlat;
     solid.red = 200;
     solid.green = 100;
     solid.blue = 0;
@@ -86,7 +86,7 @@ TEST_CASE("SolidEffect mode 0 writes the white channel on an RGBW layer") {
     layer.setChannelsPerLight(4);  // RGBW
 
     mm::SolidEffect solid;
-    solid.colorMode = 0;
+    solid.colorMode = mm::SolidEffect::kColorFlat;
     solid.red = 10;
     solid.green = 20;
     solid.blue = 30;

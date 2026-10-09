@@ -17,13 +17,7 @@ namespace mm {
 ///
 /// ## Gradients expand once
 ///
-/// A gradient is a stop list in flash that expands into the sixteen entries on selection, off the hot path.
-/// The per-light lookup is then a single blend.
-///
-/// ## Prior art
-///
-/// FastLED's gradient palettes, the convention WLED and MoonLight share, so the recognizable names and model are carried.
-/// The implementation is our own; the gradient data is a public palette set, reformatted.
+/// A gradient is a stop list in flash that expands into the sixteen entries on selection, off the hot path. The per-light lookup is then a single blend.
 struct Palette {
     /// Entries a palette holds, evenly spaced across the wheel.
     static constexpr uint8_t kEntries = 16;
@@ -163,9 +157,7 @@ inline constexpr uint8_t kYellowout[]   = {0,0,1,255, 63,0,55,255, 127,0,255,255
 // A built-in is a gradient ({stops,len}) or the special "rainbow" (generated via hsvToRgb).
 /// A built-in palette: its name, its gradient, and the tags the picker filters on.
 ///
-/// `tags` describes what the palette LOOKS LIKE, which is the question someone scrolling sixty entries is asking.
-/// Warm or cold, one hue or many, calm or loud.
-/// It is not a category system to be completed, and an untagged palette stays findable by name and swatch.
+/// `tags` describes what the palette LOOKS LIKE (warm or cold, one hue or many, calm or loud); an untagged palette stays findable by name and swatch.
 struct Builtin { const char* name; const uint8_t* stops; size_t len; bool rainbow;
                  const char* tags = ""; };
 
@@ -219,7 +211,7 @@ public:
     /// Restore a previously captured palette verbatim. For tests that must hand back the global they disturbed.
     static void setActiveDirect(const Palette& p) { active_ = p; }
 
-    /// Expand built-in `index` into the active palette, off the hot path, on selection.
+    /// Expand built-in `index` into the active palette, off the hot path, on selection: @xref{gradients-expand-once}.
     static void setActive(uint8_t index) {
         active_ = fromBuiltin(index);
     }
@@ -282,7 +274,7 @@ private:
     static inline Palette active_ = fromBuiltin(0);
 };
 
-/// How many SCRIPTED palettes the picker offers, and their names. Set by Drivers from the catalog plus whatever `.mlp` files the device carries, because Palette.h knows nothing about the filesystem and must not learn.
+/// How many SCRIPTED palettes the picker offers, and their names: every catalog palette at its place in the catalog, held or not, then the user's own `.mlp` files. Set by Drivers, because Palette.h knows nothing about the filesystem and must not learn.
 /// This is the same one-pointer seam `Palettes::active()` is.
 ///
 /// They come AFTER the built-ins, whose indices the WLED API and a knob stepping through the list rely on, so adding a script renumbers only the scripted tail.
@@ -293,11 +285,14 @@ struct LivePalettes {
     static const char* nameAt(uint8_t i) { return (i < count_ && names_ && names_[i]) ? names_[i] : ""; }
     /// What the script declared about itself, for the picker's emoji filter. Empty when the device carries a `.mlp` the catalog does not know, which is a script the user wrote.
     static const char* tagsAt(uint8_t i) { return (i < count_ && tags_ && tags_[i]) ? tags_[i] : ""; }
+    /// Whether the device holds this palette's file, which a catalog palette may lack.
+    static bool presentAt(uint8_t i) { return i < count_ && (!present_ || present_[i]); }
 
-    /// REFERENCES the caller's arrays; it does not copy them.
-    static void set(const char* const* names, const char* const* tags, uint8_t n) {
+    /// REFERENCES the caller's arrays; it does not copy them. A null `present` means every one is held.
+    static void set(const char* const* names, const char* const* tags, uint8_t n, const bool* present = nullptr) {
         names_ = names;
         tags_ = tags;
+        present_ = present;
         count_ = names ? (n > kMax ? kMax : n) : 0;
     }
     /// Detach, for a publisher whose storage is about to go away.
@@ -305,6 +300,7 @@ struct LivePalettes {
         if (names && names_ != names) return;      // someone else owns the seam now: leave it
         names_ = nullptr;
         tags_ = nullptr;
+        present_ = nullptr;
         count_ = 0;
     }
 
@@ -331,6 +327,7 @@ struct LivePalettes {
 private:
     static inline const char* const* names_ = nullptr;
     static inline const char* const* tags_ = nullptr;
+    static inline const bool* present_ = nullptr;
     static inline uint8_t count_ = 0;
 };
 
@@ -362,6 +359,8 @@ inline void paletteOptions(JsonSink& sink) {
         sink.append(",{\"name\":");
         sink.writeJsonString(LivePalettes::nameAt(i));
         sink.appendf(",\"live\":true,\"tags\":\"%s\",\"colors\":\"", LivePalettes::tagsAt(i));
+        // One the device does not hold has no colors yet, and the UI downloads it when it is picked.
+        if (!LivePalettes::presentAt(i)) { sink.append("\",\"absent\":true}"); continue; }
         for (uint8_t e = 0; e < Palette::kEntries; e++)
             sink.appendf("%s%02x%02x%02x", e > 0 ? " " : "", p.entry[e].r, p.entry[e].g, p.entry[e].b);
         sink.append("\"}");

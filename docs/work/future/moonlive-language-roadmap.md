@@ -559,11 +559,11 @@ declaration machinery above it. Worth building in that order if this is picked u
 
 ### 11. What the StadBeest legs and eyes hit (2026-10-07)
 
-Two effects written in one session on real hardware: `stadbeest-legs.mle` (a walk cycle on 10 tubes, dancing to music) and `stadbeest-eyes.mle` (a frog's eye on a 241-light ring disc). Besides the member and label limits above, each of these cost a workaround:
+Two effects written in one session on real hardware: `stadbeest-walk.mle` (a walk cycle on 10 tubes, dancing to music) and `stadbeest-frog-eye.mle` (a frog's eye on a 241-light ring disc). Besides the member and label limits above, each of these cost a workaround:
 
 | limit | what it cost | wants |
 |---|---|---|
-| no `\|\|` or `&&` | every compound condition is nested `if`s, which spends labels twice; the eye writes `pulse * music == 1` and `(r2 - lo) * (hi - r2) > 0` instead | the two logical operators, short-circuit |
+| no `\|\|`, `&&` or `!` | every compound condition is nested `if`s, which spends labels twice; the eye writes `pulse * music == 1` and `(r2 - lo) * (hi - r2) > 0` instead, and the Glow effect (2026-10-08) wrote `kick && !kicking` as `kick > kicking` | the three logical operators, short-circuit |
 | no `abs`, `min`, `max`, `clamp` | every clamp is an `if`; the eye takes `abs` as `polarR(x, 0)` and `max(v, 0)` as `(v + polarR(v, 0)) / 2` | those four builtins, which also give back labels |
 | "codegen failed: assembler overflow (branch range, slot, or immediate)" | names neither the limit nor the line; finding it took a desktop bisect with `disasm.py` | the message names the table that ran out and the function it was filling |
 | "too many arguments to hold" | fires when the eye's `tick()` held too many live locals, so the wording sends the author to the calls | a message about live variables when that is the cause |

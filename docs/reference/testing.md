@@ -12,7 +12,7 @@ Both are produced by `moondeck/docs/generate_test_docs.py`; the source of truth 
 Three test categories, each with a clear purpose:
 
 - **Unit tests** (desktop, `test/unit/{core,light}/unit_*.cpp`), exercise individual MoonModules in isolation with doctest. Each test file declares `// @module <Name>` so it's categorised under that module in the generated inventory. Run via `ctest` or `./build/<host>/test/mm_tests` (`<host>` = `macos`/`linux`/`windows`, the per-host build dir). Verify a module's API, edge cases, and output independent of how it's wired into a pipeline.
-- **In-process scenarios** (desktop, `test/scenarios/{core,light}/scenario_*.json`), exercise the system as an integrated pipeline. Each scenario is a declarative JSON file with a sequence of steps (`add_module`, `set_control`, `measure`) and optional performance bounds. The scenario runner (`test/scenario_runner.cpp`) replays the steps in-process and reports tick + heap per `measure` step. Same JSON files run against a live device through the HTTP API, that's the next tier.
+- **In-process scenarios** (desktop, `test/scenarios/{core,light}/scenario_*.json`), exercise the system as an integrated pipeline. Each scenario is a declarative JSON file naming its top-level containers and a sequence of steps (`apply_state` documents, `set_control`, `measure`) with optional performance bounds. The scenario runner (`test/scenario_runner.cpp`) replays the steps in-process and reports tick + heap per `measure` step. Same JSON files run against a live device through the HTTP API, that's the next tier.
 - **Live scenarios**: the same scenarios driven against a running device over REST. See [Live scenarios](#live-scenarios) below.
 
 A live run is worth watching once, because it is the tier that proves the device rather than a model of it. This one stacks three layers, blends them, swaps an effect, resizes the grid and takes the stack apart again, and every step happens through the same API the page uses:
@@ -153,18 +153,19 @@ buildImprovFrame(type=0x03, payload=[0x01])  ==  49 4d 50 52 4f 56 01 03 01 01 e
 | `test_golden_vector_g1` | the exact 11-byte golden frame above (the cross-impl anchor) |
 | `test_checksum_covers_header_through_payload` | checksum spans header→payload, excludes the checksum byte itself |
 
-**`test/js/improv-frame.test.mjs`** (node:test), pins the same envelope *plus* the `APPLY_OP` chunking that only the installer JS and device C++ implement (Python's provisioning path does WIFI_SETTINGS, not config push):
+**`test/js/improv-frame.test.mjs`** (node:test), pins the same envelope *plus* the `APPLY_OP` chunking, which the installer JS, MoonDeck's provisioning and the device implement alike:
 
 | Test | Pins |
 |---|---|
 | frame layout | magic / version / type / length / payload / checksum positions |
 | checksum is sum-mod-256 | matches Python + C++ |
 | golden vector G1 | the same 11-byte frame as the pytest anchor |
-| G2, small APPLY_OP `set` is a single frame | `[0xFC][seq=0][last=1]` header + the op JSON byte-identical in the payload |
-| G3, a >125-byte op chunks into ordered frames | two frames, `seq` 0→1, `last` 0→1, the 125-byte chunk boundary, reassembly reproduces the op JSON exactly |
-| at-least-one-frame | an empty op still emits one frame with `last=1` (so `last` always sends) |
+| G2, a small state document is a single APPLY_OP frame | `[0xFC][seq=0][last=1]` header + the document JSON byte-identical in the payload |
+| G3, a >125-byte document chunks into ordered frames | two frames, `seq` 0→1, `last` 0→1, the 125-byte chunk boundary, reassembly reproduces the document JSON exactly |
+| at-least-one-frame | an empty document still emits one frame with `last=1` (so `last` always sends) |
+| one document per container | an entry sends one `{"<Root>": …}` document per top-level `state` container, in key order, each within the device's 512-byte reassembly buffer |
 
-The JS suite proves the installer *chunks* an op correctly; the **device side that reassembles those chunks** is pinned by the C++ `unit_ImprovOpReassembler` suite (`src/core/ImprovOpReassembler.h`, the pure state machine behind the device's `APPLY_OP` handler, extracted from `platform_esp32_improv.cpp` so it's desktop-testable). It covers the full receive contract: in-order multi-chunk reassembly + NUL-termination, **duplicate-chunk rejection** and **out-of-order/skipped-seq rejection** (the guard against an installer retry corrupting the buffer), **overflow** rejection at the buffer-minus-NUL boundary, mid-stream `seq 0` abandoning a partial op, and clean recovery after every error. Encode (JS) + reassemble (C++) together prove APPLY_OP end to end without hardware.
+The JS suite proves the installer *chunks* a document correctly; the **device side that reassembles those chunks** is pinned by the C++ `unit_ImprovOpReassembler` suite (`src/core/ImprovOpReassembler.h`, the pure state machine behind the device's `APPLY_OP` handler, extracted from `platform_esp32_improv.cpp` so it's desktop-testable). It covers the full receive contract: in-order multi-chunk reassembly + NUL-termination, **duplicate-chunk rejection** and **out-of-order/skipped-seq rejection** (the guard against an installer retry corrupting the buffer), **overflow** rejection at the buffer-minus-NUL boundary, mid-stream `seq 0` abandoning a partial op, and clean recovery after every error. Encode (JS) + reassemble (C++) together prove APPLY_OP end to end without hardware.
 
 **`test/python/test_installer_manifests.py`** (pytest), pins the web installer's per-release file contract. For every `ships: true` firmware in `mooninstaller/firmwares.json` it runs `moondeck/build/generate_manifest.py` (with a synthetic `flasher_args.json`, so no firmware build is needed) and asserts the manifest is valid (a `chipFamily` + non-empty `parts[]`) AND that **every part filename matches one of the globs the release workflow stages onto Pages** (`firmware-*.bin` / `shared-*.bin` / `partition-table-*.bin`, `shared-*.bin` covers the plain ota-data plus a MoonBase manifest's `shared-ota-data-slot0.bin` and `shared-moonbase-<chip>.bin`). A manifest that names a file outside those globs points at something the deploy never stages → the installer 404s at fetch-firmware (the failure that shipped a broken v2.0.0 installer). The test guards the manifest-generation ↔ staged-files contract; the *deploy mechanics* that stage them (per-tag, in `release.yml`) are workflow shell logic a unit test can't reach, so the two are complementary.
 
@@ -256,8 +257,8 @@ On a board that is the reboot the endpoint performs. On a desktop the endpoint e
 First setup leaves the device's network for its access point and comes back, which no device-side op can follow.
 These live-only ops let a scenario walk it with the computer running it as the phone.
 
-- **`host_wifi`** with `"join": "access_point"` joins the access point named after the device and points the runner at 4.3.2.1; `"join": "home"` returns to the network the run names. Each waits until its target answers, since macOS hides network names.
-- **`expect_http`** fetches a `url` without following redirects and checks its `status` and `location`, which is what a captive portal answers. A `url` starting with `/` goes to the device under test, and `"method": "POST"` presses a route as the UI's buttons do. With `"resolve": "access_point"` it resolves the name at 4.3.2.1 as a phone does, since macOS holds a captive network's answers back from other apps.
+- **`host_wifi`** with `"join": "access_point"` joins the device's access point by the `name` its card shows and points the runner at 4.3.2.1; `"join": "home"` returns to the network the run names. Each waits until its target answers, since macOS hides network names.
+- **`expect_http`** fetches a `url` without following redirects and checks its `status` and `location`, which is what a captive portal answers. A `url` starting with `/` goes to the device under test, and `"method": "POST"` presses a route as the UI's buttons do. With `"resolve": "access_point"` it resolves the name at 4.3.2.1 as a phone does, since macOS holds a captive network's answers back from other apps. `body_matches` and `body_lacks` are regular expressions the response must, or must not, contain.
 - **`within`** on `expect_control`, `list_row` and `expect_http` polls for that many seconds, for what the device reaches on its own time, such as a scan or a join.
 - **`"wait": false`** on `reboot` restarts without waiting, for a device that comes back where the computer cannot reach it yet.
 
@@ -274,9 +275,9 @@ uv run moondeck/scenario/run_live_scenario.py --host MM-Bench.local --network Ho
 
 Every scenario carries a top-level `mode` field that says what shape the scenario expects the world to be in. Two values:
 
-- **`"mode": "construct"`**: the scenario builds the pipeline from an empty scheduler. Lots of `add_module` steps; the first `measure` happens after everything is wired. **Runs in-process only.** The live device's top-level shape is policy-fixed in `main.cpp` (see [src/core/HttpServerModule.cpp:639](../src/core/HttpServerModule.cpp#L639), `/api/modules` rejects top-level adds), so "build from scratch" can't happen on a live device without re-flashing. The live runner skips construct scenarios with a clear note.
+- **`"mode": "construct"`**: the scenario builds the pipeline from its empty containers, one `apply_state` document at a time, and measures as it goes. **Runs in-process only.** A live device's tree is never empty, so the live runner skips construct scenarios with a clear note.
 - **`"mode": "mutate"`**: the scenario assumes a wired pipeline and tweaks it (`set_control` heavy), and runs in both tiers.
-  The in-process runner replays an embedded **`fixture`** array (same shape as `steps`, but all `add_module`) that builds the same pipeline `main.cpp` does, then runs the steps.
+  The in-process runner creates the scenario's **`top`** containers as the device boots them, with the apparatus main.cpp wires into each, replays its **`fixture`** array of `apply_state` documents, then runs the steps.
   The live runner skips the fixture (device is its own fixture) and pre-flights every id the steps touch: a missing id is a hard fail, not a silent skip.
 
 Picking the right mode:
@@ -296,7 +297,7 @@ A future contributor who finds an off-the-shelf framework capturing this constru
 
 ### Reset block: idempotent scenarios
 
-`mutate` scenarios mutate shared controls (Grid size, Multiply mirror toggles, Preview detail). Without restoring those controls to known values at scenario start, measurements become coupled to *which other scenarios ran first*, last scenario's leftover state poisons this one's baseline. The fix is a top-level **`reset`** array, an `add_module`/`set_control`-shape list that runs *before* the scenario's own `steps`:
+`mutate` scenarios mutate shared controls (Grid size, Multiply mirror toggles, Preview detail). Without restoring those controls to known values at scenario start, measurements become coupled to *which other scenarios ran first*, last scenario's leftover state poisons this one's baseline. The fix is a top-level **`reset`** array, a list of steps that runs *before* the scenario's own `steps`:
 
 ```json
 "reset": [
@@ -404,14 +405,14 @@ Every `scenario_*.json` carries top-level metadata plus a `description` per step
   "mode": "mutate",
   "also": ["Layer", "MultiplyModifier", "Drivers", "NetworkSendDriver"],
   "description": "Illustrative shape only (not a real file). Walk the grid through 16x16 → 32x32 → 64x64 → 128x128 and assert a per-size FPS floor.",
+  "top": ["Layouts", "Effects", "Drivers"],
   "fixture": [
-    { "name": "fix-layouts", "op": "add_module", "id": "Layouts", "type": "Layouts" },
-    { "name": "fix-grid", "op": "add_module", "id": "Grid", "type": "GridLayout", "parent_id": "Layouts", "props": {"width": 16, "height": 16} },
-    { "name": "fix-layer", "op": "add_module", "id": "Layer", "type": "Layer" },
-    { "name": "fix-noise", "op": "add_module", "id": "Noise", "type": "NoiseEffect", "parent_id": "Layer" },
-    { "name": "fix-mirror", "op": "add_module", "id": "Multiply", "type": "MultiplyModifier", "parent_id": "Layer" },
-    { "name": "fix-drivers", "op": "add_module", "id": "Drivers", "type": "Drivers", "props": {"layer": "Layer"} },
-    { "name": "fix-artnet", "op": "add_module", "id": "ArtNet", "type": "NetworkSendDriver", "parent_id": "Drivers" }
+    { "name": "fix-pipeline", "op": "apply_state", "document": {
+      "Layouts": { "Grid": { "type": "GridLayout", "width": 16, "height": 16 } },
+      "Effects": { "Layer": { "type": "Layer",
+        "Noise": { "type": "NoiseEffect" },
+        "Multiply": { "type": "MultiplyModifier" } } },
+      "Drivers": { "ArtNet": { "type": "NetworkSendDriver" } } } }
   ],
   "reset": [
     { "name": "reset-grid-width", "op": "set_control", "id": "Grid", "key": "width", "value": 128 },
@@ -514,18 +515,14 @@ Or via MoonDeck (Desktop tab → Scenarios card). The module dropdown is shared 
 
 **Step ops** the in-process runner understands today:
 
-- `add_module`: instantiate a module by `type`, register it under `id`. Top-level when no `parent_id`. Mid-scenario adds (after the first `measure` step) run setup() + prepareTree() immediately, mirroring the live `/api/modules` POST shape.
-- `remove_module` / `delete_module`, delete a child module from its parent (release + recursive free + prepareTree). The two names are aliases (the in-process and live runners must never diverge on op names, or a scenario silently no-ops on one tier). Refuses non-editable submodules (`userEditable()==false`) and top-level modules.
-- `replace_module`: swap a child for a fresh module of another `type` at the same slot. A default-named module relabels to the new type; a custom/scenario id is preserved so later steps can still address it. Mirrors `/api/modules/<name>/replace`.
-- `clear_children`: delete every deletable child of a container (`id`), leaving the container. The "prepare my own canvas" primitive: a scenario assumes nothing about the device's starting tree, clears a container, then adds what it needs. Non-editable children (Board, Preview, Improv) are skipped.
 - `set_control`: write a control on an already-added module (`id` + `key` + `value`). Mirrors `handleSetControl`: applies the typed write, calls `onControlChanged()`, and triggers `Scheduler::prepareTree()` if `affectsPrepare` returns true. Today supports Uint8 / Uint16 / Int16 / Bool / Text / Password / Select. A step may carry `"optional": true`, a best-effort write (e.g. shrink a grid that may not exist) that's skipped, not failed, when the target is absent.
-- `apply_state`: a state document (`document`) through the engine `PATCH /api/state` runs, from its text as written so key order holds. With `error`, and optionally `at`, the step expects that failure; the live runner removes the modules a document created, as it does an `add_module`'s.
+- `apply_state`: a state document (`document`) through the engine `PATCH /api/state` runs, from its text as written so key order holds; it is how a scenario changes the tree. A member with a `type` adds a module and a new `type` under the same name replaces one, `null` removes one, and `"$patch":"replace"` keeps only the children listed, so with none it clears a container (the "prepare my own canvas" primitive), keeping the ones main.cpp wires. With `error`, and optionally `at`, the step expects that failure; with `optional`, an unknown type is a skip, as for a peripheral another chip has. The live runner removes the modules a document created, and restores each container's document at the end.
 - `round_trip_state`: read every card back as its document and apply them as one document, which must apply. What the device shows is then proven to apply as it is, and live, the body outgrows the request buffer, so the streaming route runs.
-- `list_row`: reach a row of a list control as the list API does. `add` appends one with those fields, and `to` moves it there. Otherwise `match` finds a row by its fields, then the step writes a `field` (a button field presses it), deletes it (`"delete": true`), or with neither only expects it.
+- `list_row`: reach a row of a list control as the list API does. `add` appends one with those fields, and `to` moves it there. Otherwise `match` finds a row by its fields, then the step writes a `field` (a button field presses it), runs the row's action (`"apply": true`, a pad click), deletes it (`"delete": true`), or with none of those only expects it.
 - `write_file` / `delete_file`: stage a file the way the editor saves one, and remove it again, so a scenario leaves the device as it found it. Both re-prepare the tree, as the live API does after a file changes.
 - `measure`: pure measurement step. Runs warmup + measure frames, prints per-step tick / FPS / lights / heap-delta, applies any `bounds` assertions for this step.
 
-A step can also set `"measure": true` on a non-measure op (e.g. mark the last `add_module` as the one to measure after); the runner treats either shape identically.
+A step can also set `"measure": true` on a non-measure op (e.g. mark the last `apply_state` as the one to measure after); the runner treats either shape identically.
 
 ## Live scenarios
 
@@ -580,7 +577,7 @@ All live scenarios pass on both desktop and ESP32 with `min_pct: 80` relative bo
 
 **Unit test:** add a `TEST_CASE` to the appropriate `test/unit/{core,light}/unit_<ExactModuleName>[_<topic>].cpp` file. Each file carries `// @module <ExactCamelCaseName>` at the top, plus a single `//` description line above each `TEST_CASE`. Add a new file when no existing test covers your module, pick the subfolder matching the module's `src/` domain. After adding cases, run `uv run moondeck/docs/generate_test_docs.py` so the generated inventory matches.
 
-**Scenario test:** create a JSON file under `test/scenarios/{core,light}/` named `scenario_<ExactModuleName>_<topic>.json`, or under `test/scenarios/device/` when it can only run on real hardware. The top-level needs `name` (matching the filename stem), `module`, optional `also`, `description`, `mode` (`construct` or `mutate`), and optional `"live_only": true` if the scenario can only run against a real device. Each `steps[]` entry has an `op` (`add_module`, `set_control`, `measure`), a `name`, a `description` field that the doc generator picks up, optional `"measure": true` to run a measurement after the op, and optional `bounds` (`fps` and/or `heap`). The scenario runner auto-discovers all `.json` files under `test/scenarios/` recursively.
+**Scenario test:** create a JSON file under `test/scenarios/{core,light}/` named `scenario_<ExactModuleName>_<topic>.json`, or under `test/scenarios/device/` when it can only run on real hardware. The top-level needs `name` (matching the filename stem), `module`, optional `also`, `description`, `mode` (`construct` or `mutate`), `top` (the top-level containers it needs), and optional `"live_only": true` if the scenario can only run against a real device. Each `steps[]` entry has an `op` (`apply_state`, `set_control`, `measure`), a `name`, a `description` field that the doc generator picks up, optional `"measure": true` to run a measurement after the op, and optional `bounds` (`fps` and/or `heap`). The scenario runner auto-discovers all `.json` files under `test/scenarios/` recursively.
 
 **Regression test:** when fixing a bug, add a test that reproduces it. The test's description (the `//` line for unit tests, the `description` JSON field for scenarios) should mention the root cause so the connection stays traceable in the generated inventory.
 

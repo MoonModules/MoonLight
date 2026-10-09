@@ -33,6 +33,27 @@ export async function loadDevices() {
     }
 }
 
+// The modules an entry's `state` document describes, depth first, as {id, type, controls}.
+// A root member is a top-level module (its type is not written, so `type` is null); an object member with a `type` is a child module; scalars and arrays are controls.
+export function stateModules(entry) {
+    const out = [];
+    const isObj = (v) => v && typeof v === "object" && !Array.isArray(v);
+    const walk = (id, node, type) => {
+        const controls = {};
+        const kids = [];
+        for (const [k, v] of Object.entries(node)) {
+            if (k === "type" || k === "$patch") continue;
+            if (isObj(v) && typeof v.type === "string") kids.push([k, v]);
+            else controls[k] = v;
+        }
+        out.push({ id, type, controls });
+        for (const [k, v] of kids) walk(k, v, v.type);
+    };
+    const state = entry && entry.state;
+    if (isObj(state)) for (const [root, node] of Object.entries(state)) if (isObj(node)) walk(root, node, null);
+    return out;
+}
+
 // Rebuild a device <select>: a leading pass-through option (label varies by
 // context) followed by one option per device. Used by the picker's render()
 // (full catalog) and applyDetectedChip() (chip-narrowed list) so the option-

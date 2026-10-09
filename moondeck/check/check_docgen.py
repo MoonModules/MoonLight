@@ -153,6 +153,8 @@ _UNREFERENCED_RULE = "unreferenced appendix section"
 # zero, so nothing is held hostage, and a split sentence reflows every line it spans on the next
 # word change, which costs a reviewer the same in a `.cpp` as in a header.
 _HARD_WRAP_RULE = "hard wrap"
+# A paragraph split over lines it fits on together: each line ends a sentence, so no sentence is wrapped, but markdown joins the two into one paragraph anyway and the split only spends a line. Staged as the line cap is, a new rule over comments written before it.
+_SPLIT_PARAGRAPH_RULE = "split paragraph"
 # One line, in every file. Depth is not forbidden, it is HOMED: a header carries it in an
 # `@moreinfo` appendix (212 do) and an implementation file carries it in the same appendix on its
 # own file lead. A cap of 8 in a `.cpp` was an attempt to give depth a home inline, which leaves
@@ -200,7 +202,7 @@ def _blocks(key: str, why: str = "") -> bool:
         return True
     if why.startswith(_LINE_LENGTH_RULES) and "chars >" in why:
         return False
-    if why.startswith(_UNREFERENCED_RULE):
+    if why.startswith((_UNREFERENCED_RULE, _SPLIT_PARAGRAPH_RULE)):
         return False
     return _generates_a_page(key.partition("::")[0])
 
@@ -410,7 +412,7 @@ _RULE_NAMES = (
     "code comment", "comment line", "doc line", "lead",
     "unreferenced appendix section", "appendix section",
     "class comment", "member comment", "no image", "image is", "one control",
-    "description", "controls", "doc sentence", "hard wrap",
+    "description", "controls", "doc sentence", "hard wrap", "split paragraph",
 )
 
 
@@ -420,6 +422,7 @@ _RULE_NAMES = (
 _RULE_LABELS = {
     "code comment": "multi-line comment blocks",
     "hard wrap": "hard wraps",
+    "split paragraph": "split paragraphs",
     "public function has no": "undocumented functions",
     "public variable has no": "undocumented variables",
     "member comment": "member deep dives",
@@ -582,6 +585,11 @@ def _wrap_rule(rel: str, lines: list, k: int, end: int, start: int = 0):
     if body[-1] not in ".!?":
         return [(f"{rel}::line {k + 1}",
                  "hard wrap: one line per sentence, let the editor soft-wrap")]
+    # Two whole sentences of one paragraph, which share a line while together they stay inside the line cap.
+    joined = len(lines[k].rstrip()) + 1 + len(nbody)
+    if joined <= MAX_COMMENT_LINE_CHARS:
+        return [(f"{rel}::line {k + 1}",
+                 f"split paragraph: lines {k + 1} and {k + 2} fit one line ({joined} chars <= {MAX_COMMENT_LINE_CHARS}), join them")]
     return []
 
 

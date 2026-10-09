@@ -43,7 +43,7 @@ The breaks a map cannot express are written down instead, in [MIGRATING](../refe
 
 A backup restores onto a freshly erased device, which is what makes an erase safe to do.
 
-Join the device's `MM-XXXX` access point, open `http://4.3.2.1`, restore there, and take the offered restart. The bundle carries the WiFi credentials, so the device comes back on your network by itself.
+Join the device's `MM-XXXX` access point: its UI opens by itself as a sign-in screen, or at `http://4.3.2.1`. Restore there, and take the offered restart. The bundle carries the WiFi credentials, so the device comes back on your network by itself.
 
 ## From firmware older than the Backup button
 

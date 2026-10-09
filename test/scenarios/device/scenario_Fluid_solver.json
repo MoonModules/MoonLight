@@ -11,239 +11,67 @@
   ],
   "live_only": true,
   "description": "What a stable-fluid solver costs, and that it survives being reshaped underneath itself. Unlike every other flow in the library the velocity here is STATE: six grids the solver owns, reallocated whenever the fixture changes, which is what makes the resize steps a real contract rather than a formality. A stale grid would address cells that no longer exist. The cost knob is `iterations`, the pressure solve that keeps the flow divergence-free: each one is another Gauss-Seidel sweep over the whole grid, so the ladder from 1 to 20 is close to linear and it is what an author reads to pick a value for their fixture. On a cube every slice is its own medium, with nothing carried between slices, so the cost is depth times one panel. The frame times are a TREND per target rather than a pass mark; the solver is several passes over the grid per frame, so this is a desktop and P4 effect and the device numbers are the ones that decide where it can run.",
-  "fixture": [
-    {
-      "name": "fix-layouts",
-      "op": "add_module",
-      "id": "Layouts",
-      "type": "Layouts"
-    },
-    {
-      "name": "fix-layers",
-      "op": "add_module",
-      "id": "Effects",
-      "type": "Effects",
-      "props": {
-        "layouts": "Layouts"
-      }
-    },
-    {
-      "name": "fix-drivers",
-      "op": "add_module",
-      "id": "Drivers",
-      "type": "Drivers",
-      "props": {
-        "effects": "Effects"
-      }
-    }
+  "top": [
+    "Layouts",
+    "Effects",
+    "Drivers"
   ],
   "steps": [
     {
       "name": "canvas-clear-layers",
       "description": "Self-canvas: rebuild the pipeline this scenario assumes, so it runs from any device state.",
-      "op": "clear_children",
-      "id": "Effects"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      }
     },
     {
       "name": "canvas-clear-layouts",
-      "op": "clear_children",
-      "id": "Layouts"
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "$patch": "replace"
+        }
+      }
     },
     {
       "name": "canvas-grid",
       "description": "A 32x32 panel to start: small enough that the six solver grids are cheap while the shape of the cost is already visible.",
-      "op": "add_module",
-      "id": "Grid",
-      "type": "GridLayout",
-      "parent_id": "Layouts",
-      "props": {
-        "width": 32,
-        "height": 32
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "GridLayout",
+            "width": 32,
+            "height": 32
+          }
+        }
       }
     },
     {
       "name": "canvas-layer",
-      "op": "add_module",
-      "id": "Layer",
-      "type": "Layer",
-      "parent_id": "Effects"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer"
+          }
+        }
+      }
     },
     {
       "name": "add-fluid",
       "description": "The solver on the layer. prepare() allocates six velocity and pressure grids plus two dye planes, so the allocation happens here rather than on the first rendered frame.",
-      "op": "add_module",
-      "id": "Fluid",
-      "type": "FluidEffect",
-      "parent_id": "Layer",
-      "measure": true,
-      "observed": {
-        "desktop-macos": {
-          "tick_us": {
-            "p50": 30,
-            "p95": 76,
-            "min": 28,
-            "max": 100,
-            "n": 32,
-            "samples": [33, 31, 29, 29, 76, 29, 29, 30, 30, 30, 35, 30, 30, 29, 29, 33, 29, 29, 32, 28, 29, 29, 30, 29, 30, 30, 29, 30, 32, 29, 28, 100]
-          },
-          "last_updated": "2026-09-30"
-        },
-        "esp32s3-n16r8": {
-          "tick_us": {
-            "p50": 34677,
-            "p95": 35384,
-            "min": 34677,
-            "max": 35384,
-            "n": 2,
-            "samples": [35384, 34677]
-          },
-          "free_heap": {
-            "p50": 8392499,
-            "p95": 8448735,
-            "min": 8392499,
-            "max": 8448735,
-            "n": 2,
-            "samples": [8392499, 8448735]
-          },
-          "max_alloc_block": {
-            "p50": 65536,
-            "p95": 94208,
-            "min": 65536,
-            "max": 94208,
-            "n": 2,
-            "samples": [65536, 94208]
-          },
-          "last_updated": "2026-09-30"
-        },
-        "esp32": {
-          "tick_us": {
-            "p50": 17341,
-            "p95": 17500,
-            "min": 17341,
-            "max": 17500,
-            "n": 2,
-            "samples": [17500, 17341]
-          },
-          "free_heap": {
-            "p50": 33580,
-            "p95": 33824,
-            "min": 33580,
-            "max": 33824,
-            "n": 2,
-            "samples": [33580, 33824]
-          },
-          "max_alloc_block": {
-            "p50": 26624,
-            "p95": 26624,
-            "min": 26624,
-            "max": 26624,
-            "n": 2,
-            "samples": [26624, 26624]
-          },
-          "last_updated": "2026-09-29"
-        },
-        "esp32p4rev1-eth-wifi": {
-          "tick_us": {
-            "p50": 4661597,
-            "p95": 7532023,
-            "min": 4661597,
-            "max": 7532023,
-            "n": 2,
-            "samples": [7532023, 4661597]
-          },
-          "free_heap": {
-            "p50": 26801915,
-            "p95": 33689639,
-            "min": 26801915,
-            "max": 33689639,
-            "n": 2,
-            "samples": [26801915, 33689639]
-          },
-          "max_alloc_block": {
-            "p50": 229376,
-            "p95": 303104,
-            "min": 229376,
-            "max": 303104,
-            "n": 2,
-            "samples": [229376, 303104]
-          },
-          "last_updated": "2026-09-29"
-        },
-        "esp32s31": {
-          "tick_us": {
-            "p50": 10697,
-            "p95": 10697,
-            "min": 10697,
-            "max": 10697,
-            "n": 1,
-            "samples": [10697]
-          },
-          "free_heap": {
-            "p50": 16724619,
-            "p95": 16724619,
-            "min": 16724619,
-            "max": 16724619,
-            "n": 1,
-            "samples": [16724619]
-          },
-          "max_alloc_block": {
-            "p50": 92160,
-            "p95": 92160,
-            "min": 92160,
-            "max": 92160,
-            "n": 1,
-            "samples": [92160]
-          },
-          "last_updated": "2026-09-29"
-        },
-        "esp32p4rev1-eth": {
-          "tick_us": {
-            "p50": 7697,
-            "p95": 7697,
-            "min": 7697,
-            "max": 7697,
-            "n": 1,
-            "samples": [7697]
-          },
-          "free_heap": {
-            "p50": 33857883,
-            "p95": 33857883,
-            "min": 33857883,
-            "max": 33857883,
-            "n": 1,
-            "samples": [33857883]
-          },
-          "max_alloc_block": {
-            "p50": 258048,
-            "p95": 258048,
-            "min": 258048,
-            "max": 258048,
-            "n": 1,
-            "samples": [258048]
-          },
-          "last_updated": "2026-09-29"
-        },
-        "desktop-windows": {
-          "tick_us": {
-            "p50": 6950405,
-            "p95": 6950405,
-            "min": 6950405,
-            "max": 6950405,
-            "n": 1,
-            "samples": [6950405]
-          },
-          "last_updated": "2026-09-30"
-        },
-        "desktop-docker-arm64": {
-          "tick_us": {
-            "p50": 2370,
-            "p95": 2370,
-            "min": 2370,
-            "max": 2370,
-            "n": 1,
-            "samples": [2370]
-          },
-          "last_updated": "2026-09-30"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "Fluid": {
+              "type": "FluidEffect"
+            }
+          }
         }
       }
     },

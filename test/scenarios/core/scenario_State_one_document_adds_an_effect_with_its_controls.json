@@ -8,50 +8,34 @@
     "RainbowEffect"
   ],
   "description": "A state document sets any part of the device's state in one request: here an effect with its controls, under a layer, where adding it module by module took one request for the module and one per control. A document that names a control the effect lacks is refused with the reason and the place.",
+  "top": [
+    "Layouts",
+    "Effects",
+    "Drivers"
+  ],
   "fixture": [
     {
-      "name": "fix-layouts",
-      "op": "add_module",
-      "id": "Layouts",
-      "type": "Layouts"
-    },
-    {
       "name": "fix-grid",
-      "op": "add_module",
-      "id": "Grid",
-      "type": "GridLayout",
-      "parent_id": "Layouts",
-      "props": {
-        "width": 16,
-        "height": 16
-      }
-    },
-    {
-      "name": "fix-effects",
-      "op": "add_module",
-      "id": "Effects",
-      "type": "Effects",
-      "props": {
-        "layouts": "Layouts"
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "GridLayout",
+            "width": 16,
+            "height": 16
+          }
+        }
       }
     },
     {
       "name": "fix-layer",
-      "op": "add_module",
-      "id": "Layer",
-      "type": "Layer",
-      "parent_id": "Effects",
-      "props": {
-        "layouts": "Layouts"
-      }
-    },
-    {
-      "name": "fix-drivers",
-      "op": "add_module",
-      "id": "Drivers",
-      "type": "Drivers",
-      "props": {
-        "effects": "Effects"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer"
+          }
+        }
       }
     }
   ],
@@ -85,14 +69,14 @@
       "observed": {
         "desktop-macos": {
           "tick_us": {
-            "p50": 1,
-            "p95": 555,
+            "p50": 2,
+            "p95": 387,
             "min": 1,
             "max": 555,
-            "n": 18,
-            "samples": [367, 555, 1, 387, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 4, 1]
+            "n": 28,
+            "samples": [367, 555, 1, 387, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 4, 1, 7, 7, 8, 7, 7, 8, 7, 7, 7, 7]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         },
         "esp32s3-n16r8": {
           "tick_us": {

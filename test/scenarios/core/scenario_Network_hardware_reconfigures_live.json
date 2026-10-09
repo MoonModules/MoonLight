@@ -8,61 +8,51 @@
     "EthernetModule"
   ],
   "live_only": true,
+  "top": [
+    "Layouts",
+    "Effects",
+    "Drivers"
+  ],
   "fixture": [
-    {
-      "name": "layouts",
-      "description": "Where the lights are, which the layer reads its coordinates from.",
-      "op": "add_module",
-      "id": "Layouts",
-      "type": "Layouts"
-    },
     {
       "name": "grid",
       "description": "A 16x16 panel: small enough for any board, big enough that a stall in the render loop shows.",
-      "op": "add_module",
-      "id": "Grid",
-      "type": "GridLayout",
-      "parent_id": "Layouts",
-      "props": {
-        "width": 16,
-        "height": 16
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "GridLayout",
+            "width": 16,
+            "height": 16
+          }
+        }
       }
     },
     {
       "name": "layer",
       "description": "One layer over those layouts. This is what the checks read, so a reconfigure that stops the render is visible rather than silent.",
-      "op": "add_module",
-      "id": "Layer",
-      "type": "Layer",
-      "props": {
-        "layouts": "Layouts"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer"
+          }
+        }
       }
     },
     {
       "name": "effect",
       "description": "An effect that paints from the first frame, so the buffer carries light throughout.",
-      "op": "add_module",
-      "id": "FX",
-      "type": "RainbowEffect",
-      "parent_id": "Layer"
-    },
-    {
-      "name": "drivers",
-      "description": "The drivers container, wired to the effects whose buffer it reads.",
-      "op": "add_module",
-      "id": "Drivers",
-      "type": "Drivers",
-      "props": {
-        "layer": "Layer"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "FX": {
+              "type": "RainbowEffect"
+            }
+          }
+        }
       }
-    },
-    {
-      "name": "preview",
-      "description": "The preview is a driver like any other, and the one every target has.",
-      "op": "add_module",
-      "id": "Preview",
-      "type": "PreviewDriver",
-      "parent_id": "Drivers"
     }
   ],
   "steps": [

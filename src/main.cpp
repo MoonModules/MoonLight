@@ -41,8 +41,8 @@
 /// Improv is the one exception to registering everything and letting modules guard themselves.
 /// Its only purpose is pushing credentials, so on a build without WiFi there is no surface to push to.
 /// It is created after the network module so its setter has a valid pointer, and one module answers the device-info request while the other takes the credentials.
-/// The APPLY_OP vendor RPC (0xFC) carries the device-model's catalog ops over serial during provisioning.
-/// ImprovProvisioningModule routes each to the HttpServerModule apply-core, the same code `/api/modules` and `/api/control` use: "Improv = REST over serial".
+/// The APPLY_OP vendor RPC (0xFC) carries the device model's state document over serial during provisioning.
+/// ImprovProvisioningModule applies it with the engine `PATCH /api/state` uses: "Improv = REST over serial".
 ///
 /// ## Why MQTT is built on every networked target
 ///
@@ -54,7 +54,7 @@
 /// ## Why the boot layer is one Pulse effect
 ///
 /// One default effect so a bare device with no catalog inject still shows lights out of the box, but NO default modifier. The boot Layer is one effect on a 16x16 grid.
-/// A device-model catalog entry can REPLACE it through `replaceChildren` with its own effects and modifiers, the way the testbench swaps in AudioSpectrum plus RandomMap.
+/// A device-model catalog entry can REPLACE it through `"$patch":"replace"` on the Layer, with its own effects and modifiers, the way the testbench swaps in AudioSpectrum plus RandomMap.
 /// Pulse is the one because a first boot has to answer three questions at once: the lights work, the device runs, and it hears the room.
 /// A sparse shell answers all three, where a dense field answers only the first since every light is already lit.
 ///
@@ -148,6 +148,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 
 /// Create a boot module or stop, since every type here is registered and a null means the build is wrong rather than the device.
@@ -180,160 +181,96 @@ void mm_main(volatile bool& keepRunning, uint16_t httpPort) {
     mm::registerModuleTypes();
     mm::Scheduler scheduler;
 
-    // Every module below is created via the factory, named by it, and its result deliberately unchecked: @xref{how-the-boot-tree-is-created}.
+    // Every container is created as the device boots it, from the one table the scenario runner builds its trees from too: @xref{how-the-boot-tree-is-created}.
+    // Each carries the apparatus wired into it, marked wired so a saved tree that predates a child keeps it: @xref{why-markwiredbycode-matters}.
+    const auto top = [](const char* typeName) {
+        mm::MoonModule* m = mm::createTopLevel(typeName);
+        if (!m) {
+            std::printf("FATAL: module type %s is not registered\n", typeName);
+            std::abort();
+        }
+        return m;
+    };
+    // A wired child, found by its type to hand it the pointers it needs.
+    const auto wired = [](mm::MoonModule* parent, const char* typeName) -> mm::MoonModule* {
+        for (uint8_t i = 0; i < parent->childCount(); i++)
+            if (std::strcmp(parent->child(i)->typeName(), typeName) == 0) return parent->child(i);
+        return nullptr;
+    };
 
     // Filesystem (first, wires the load hook into the scheduler so persisted values overlay into other modules' bound variables before their setup() runs)
-    auto* filesystemModule = createOrDie<mm::FilesystemModule>("FilesystemModule");
+    auto* filesystemModule = static_cast<mm::FilesystemModule*>(top("FilesystemModule"));
     filesystemModule->setScheduler(&scheduler);
 
     // File Manager, a boot-wired device-wide tool for browsing the filesystem, distinct from FilesystemModule which is the persistence engine: @xref{why-the-device-wide-tools-are-boot-wired}.
-    auto* fileManagerModule = createOrDie<mm::FileManagerModule>("FileManagerModule");
-    fileManagerModule->setName("File Manager");
+    auto* fileManagerModule = top("FileManagerModule");
 
-    // System (deviceName needed by other modules)
-    auto* systemModule = createOrDie<mm::SystemModule>("SystemModule");
+    // System (deviceName needed by other modules), with the device's inspection toolkit and its I2C bus wired in, which no container accepts as an editable child.
+    auto* systemModule = static_cast<mm::SystemModule*>(top("SystemModule"));
     systemModule->setScheduler(&scheduler);
 
-    // The device's inspection toolkit and its I2C bus, wired by code as System children rather than user-added. Always present, exempt from the persistence trim, and accepted by no container as an editable child, so no card offers a delete.
-    auto* tasksModule = createOrDie<mm::TasksModule>("TasksModule");
-    tasksModule->markWiredByCode();
-    systemModule->addChild(tasksModule);
-    auto* i2cBusModule = createOrDie<mm::I2cBusModule>("I2cBusModule");
-    i2cBusModule->markWiredByCode();
-    systemModule->addChild(i2cBusModule);
-    auto* pinsModule = createOrDie<mm::PinsModule>("PinsModule");
-    pinsModule->markWiredByCode();
-    systemModule->addChild(pinsModule);
-
-    // Services, the core-domain twin of Effects/Drivers: a grouping node, added as a root below, whose children the user adds and removes at runtime.
-    auto* servicesModule = createOrDie<mm::Services>("Services");
-
-    // Boot-wired rather than user-added, because the default effect reacts to sound and a device without this module shows none of it: @xref{why-the-audio-service-is-boot-wired}.
-    auto* audioService = createOrDie<mm::AudioService>("AudioService");
-    audioService->markWiredByCode();   // simulate is the member's own default, so nothing to set
-    servicesModule->addChild(audioService);
+    // Services, the core-domain twin of Effects/Drivers, with the AudioService wired in: @xref{why-the-audio-service-is-boot-wired}.
+    auto* servicesModule = top("Services");
 
     // ControlModule puts the device into a named state, top-level because a preset reaches ACROSS Layouts, Effects, Drivers and Services: @xref{why-the-device-wide-tools-are-boot-wired}.
-    auto* controlModule = createOrDie<mm::ControlModule>("ControlModule");
+    auto* controlModule = static_cast<mm::ControlModule*>(top("ControlModule"));
 
-    // The device identity is SystemModule's own pair of controls rather than a separate module. Tooling injects the model like any catalog default, over HTTP or serial, both routed through the apply core and the control's validator.
+    // The device identity is SystemModule's own pair of controls rather than a separate module. Tooling injects the model like any catalog default, over HTTP or serial, both routed through the state document engine and the control's validator.
 
-    // Surfaces the install's status as read-only controls, polling the shared globals so the push picks up progress while HTTP drives the flash itself. Renamed because the card hosts the install picker.
-    auto* firmwareUpdateModule = createOrDie<mm::FirmwareUpdateModule>("FirmwareUpdateModule");
-    firmwareUpdateModule->setName("Firmware");
+    // Surfaces the install's status as read-only controls, polling the shared globals so the push picks up progress while HTTP drives the flash itself. Named Firmware because the card hosts the install picker.
+    auto* firmwareUpdateModule = top("FirmwareUpdateModule");
 
-    // The container for everything talking to a server we run, each child carrying its own consent: @xref{why-mooncloud-is-not-a-firmware-child}.
-    auto* moonCloudModule = createOrDie<mm::MoonCloudModule>("MoonCloudModule");
-    moonCloudModule->setName("MoonCloud");
+    // The container for everything talking to a server we run, Stats and Talk wired in, each with its own consent: @xref{why-mooncloud-is-not-a-firmware-child}.
+    auto* moonCloudModule = top("MoonCloudModule");
 
-    auto* moonStatsModule = createOrDie<mm::MoonStatsModule>("MoonStatsModule");
-    moonStatsModule->setName("Stats");
-
-    // MoonTalk, the public message board and a SECOND MoonCloud child with its own consent: @xref{why-mooncloud-is-not-a-firmware-child}.
-    auto* moonTalkModule = createOrDie<mm::MoonTalkModule>("MoonTalkModule");
-    moonTalkModule->setName("Talk");
-
-    // Network (platform stubs return false on desktop, module is a no-op)
-    auto* networkModule = createOrDie<mm::NetworkModule>("NetworkModule");
+    // Network, its interfaces first in the order the cascade tries them, then Improv (compile-time gated: @xref{why-improv-is-compile-time-gated}), MQTT (@xref{why-mqtt-is-built-on-every-networked-target}) and device discovery.
+    auto* networkModule = static_cast<mm::NetworkModule*>(top("NetworkModule"));
     networkModule->setScheduler(&scheduler);
     networkModule->setSystemModule(systemModule);
-    // The interfaces come first among Network's children, in the order the cascade tries them; only where Ethernet is compiled in or previewed.
-    if constexpr (mm::platform::hasEthernet || mm::platform::previewsEthernetControls) {
-        auto* ethernetModule = createOrDie<mm::EthernetModule>("EthernetModule");
-        ethernetModule->markWiredByCode();
-        networkModule->addChild(ethernetModule);
-        networkModule->setEthernet(ethernetModule);
+    networkModule->setEthernet(static_cast<mm::EthernetModule*>(wired(networkModule, "EthernetModule")));
+    networkModule->setWiFi(static_cast<mm::WiFiModule*>(wired(networkModule, "WiFiModule")));
+    networkModule->setAccessPoint(static_cast<mm::AccessPointModule*>(wired(networkModule, "AccessPointModule")));
+    if (auto* improv = static_cast<mm::ImprovProvisioningModule*>(wired(networkModule, "ImprovProvisioningModule"))) {
+        improv->setSystemModule(systemModule);
+        improv->setNetworkModule(networkModule);
+        improv->setScheduler(&scheduler);   // the APPLY_OP vendor RPC applies its document to this tree
     }
-    if constexpr (mm::platform::hasWiFi) {
-        auto* wifiModule = createOrDie<mm::WiFiModule>("WiFiModule");
-        wifiModule->markWiredByCode();
-        networkModule->addChild(wifiModule);
-        networkModule->setWiFi(wifiModule);
-        auto* accessPointModule = createOrDie<mm::AccessPointModule>("AccessPointModule");
-        accessPointModule->markWiredByCode();
-        networkModule->addChild(accessPointModule);
-        networkModule->setAccessPoint(accessPointModule);
+    if (auto* mqtt = static_cast<mm::MqttModule*>(wired(networkModule, "MqttModule"))) {
+        mqtt->setSystemModule(systemModule);
+        mqtt->setControlModule(controlModule);   // look-only presets as the HA effect list
     }
-
-    // Listens on the serial port for pushed WiFi credentials, compile-time gated: @xref{why-improv-is-compile-time-gated}.
-    mm::ImprovProvisioningModule* improvModule = nullptr;
-    if constexpr (mm::platform::hasImprov) {
-        improvModule = createOrDie<mm::ImprovProvisioningModule>("ImprovProvisioningModule");
-        improvModule->setSystemModule(systemModule);
-        improvModule->setNetworkModule(networkModule);
-        // Marked wired-by-code so the trim loop preserves it on a device whose saved tree predates this child: @xref{why-markwiredbycode-matters}.
-        improvModule->markWiredByCode();
-    }
-
-    // MQTT service, a code-wired child of Network bridging the light controls to a broker: @xref{why-mqtt-is-built-on-every-networked-target}.
-    mm::MqttModule* mqttModule = nullptr;
-    if constexpr (mm::platform::hasNetwork) {
-        mqttModule = createOrDie<mm::MqttModule>("MqttModule");
-        mqttModule->setSystemModule(systemModule);
-        mqttModule->setControlModule(controlModule);   // look-only presets as the HA effect list
-        mqttModule->markWiredByCode();
-    }
+    // Our own name, so the self row in the device list matches the device's identity elsewhere; deviceName has static lifetime as SystemModule's member.
+    if (auto* devices = static_cast<mm::DevicesModule*>(wired(networkModule, "DevicesModule"))) devices->setSelfName(systemModule->deviceName());
 
     // Layouts, the top-level container for one or more layouts, today one GridLayout that self-initializes to defaultGridSize with no boot-time dimensions threaded in.
-    auto* layouts = createOrDie<mm::Layouts>("Layouts");
+    auto* layouts = static_cast<mm::Layouts*>(top("Layouts"));
     auto* grid = createOrDie<mm::GridLayout>("GridLayout");
     layouts->addChild(grid);
 
-    // Effects: top-level container; one or more layers, each rendering into its own buffer. Today one Layer with one effect + one modifier.
-    auto* effectsContainer = createOrDie<mm::Effects>("Effects");
+    // Effects: top-level container; one or more layers, each rendering into its own buffer. Effects finds the top-level Layouts itself when it prepares, and hands it to every child Layer.
+    auto* effectsContainer = top("Effects");
     auto* layer = createOrDie<mm::Layer>("Layer");
-    layer->setChannelsPerLight(3);
     effectsContainer->addChild(layer);
-    // setLayouts wires the shared Layouts to the container AND propagates to every child Layer.
-    effectsContainer->setLayouts(layouts);
 
     // One default effect so a bare device still shows lights out of the box, but NO default modifier: @xref{why-the-boot-layer-is-one-pulse-effect}.
     auto* pulse = createOrDie<mm::MoonModule>("PulseEffect");
     layer->addChild(pulse);
 
-    // Bound to the effects container rather than to a single layer. A layer rebuilt through the API self-heals without re-running this wiring, and one driver can read across several layer buffers from one place.
-    auto* drivers = createOrDie<mm::Drivers>("Drivers");
-    drivers->setEffects(effectsContainer);
+    // Drivers finds the top-level Effects itself when it prepares. Output drivers are added per board through the catalog, with the fixture-profile library and the preview wired in: @xref{why-output-drivers-are-not-boot-wired}.
+    auto* drivers = static_cast<mm::Drivers*>(top("Drivers"));
 
-    // Output drivers are added per board through the catalog rather than boot-wired, the preview being the one exception: @xref{why-output-drivers-are-not-boot-wired}.
-
-    // The fixture-profile library, a boot-wired singleton owning the named channel-role wirings every driver references by id, resolved through its own seat since exactly one exists.
-    auto* fixtureProfiles =
-        createOrDie<mm::FixtureProfilesModule>("FixtureProfilesModule");
-    drivers->addChild(fixtureProfiles);
-    fixtureProfiles->markWiredByCode();
-
-    auto* preview = createOrDie<mm::PreviewDriver>("PreviewDriver");
-    drivers->addChild(preview);
-    // Marked wired-by-code, the same protection ImprovProvisioning uses: @xref{why-markwiredbycode-matters}.
-    preview->markWiredByCode();
-
-    auto* httpServer = createOrDie<mm::HttpServerModule>("HttpServerModule");
+    auto* httpServer = static_cast<mm::HttpServerModule*>(top("HttpServerModule"));
     httpServer->port = httpPort;
     httpServer->setScheduler(&scheduler);
-    // PreviewDriver pushes the coordinate table and per-frame RGB to the HTTP server's WS broadcaster: @xref{why-output-drivers-are-not-boot-wired}.
-    preview->setBroadcaster(httpServer);
-
-    // The APPLY_OP vendor RPC, wired here once httpServer exists: @xref{why-improv-is-compile-time-gated}.
-    if (improvModule) improvModule->setHttpServerModule(httpServer);
+    // PreviewDriver pushes the coordinate table and per-frame RGB to the HTTP server's WS broadcaster.
+    if (auto* preview = static_cast<mm::PreviewDriver*>(wired(drivers, "PreviewDriver"))) preview->setBroadcaster(httpServer);
 
     // Registration order matters, and the scheduler walks the roots in it each tick: @xref{why-registration-order-matters}.
     scheduler.addModule(filesystemModule);
     scheduler.addModule(systemModule);
     scheduler.addModule(fileManagerModule);
     scheduler.addModule(firmwareUpdateModule);
-    // Both are boot wiring, not user-added, so the persisted tree must not decide whether they exist: @xref{why-markwiredbycode-matters}.
-    moonStatsModule->markWiredByCode(); moonCloudModule->addChild(moonStatsModule);
-    moonTalkModule->markWiredByCode();  moonCloudModule->addChild(moonTalkModule);
     scheduler.addModule(moonCloudModule);
-    if (improvModule) networkModule->addChild(improvModule);
-    if (mqttModule) networkModule->addChild(mqttModule);
-    // Devices discovers other devices on the LAN, a Network child since discovery depends on the network being up, and wired-by-code (see DevicesModule.md).
-    auto* devicesModule = createOrDie<mm::DevicesModule>("DevicesModule");
-    devicesModule->markWiredByCode();
-    // Wire our own name so the self row in the device list matches the device's identity elsewhere. deviceName has static lifetime as SystemModule's member, so the module borrows the pointer.
-    devicesModule->setSelfName(systemModule->deviceName());
-    networkModule->addChild(devicesModule);
     scheduler.addModule(networkModule);
     scheduler.addModule(servicesModule);
     scheduler.addModule(controlModule);

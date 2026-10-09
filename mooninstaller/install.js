@@ -1024,13 +1024,9 @@ document.addEventListener('DOMContentLoaded', () => {
         showSection("connecting");
         document.getElementById("connecting-detail").textContent = "";
         const eraseBefore = document.getElementById("erase-before-flash").checked;
-        // Apply the device-model's catalog defaults (modules + controls) after flashing.
-        // Default-ticked-with-erase (see the change listener below): a clean slate wants
-        // defaults; re-flashing a configured device should NOT silently re-inject (the
-        // catalog's replaceChildren would delete the user's effects). Untick to flash the
-        // firmware while keeping the device's current config. txPower (the brown-out cap)
-        // is a hardware trait, not a "default", so it still applies regardless — only the
-        // module/control inject is gated.
+        // Apply the device-model's catalog defaults (the state document) after flashing.
+        // Ticked with erase (see the change listener below), since a clean slate wants defaults, and unticked otherwise, since the catalog's `"$patch":"replace"` would delete a configured device's effects.
+        // txPower, the brown-out cap, is a hardware trait rather than a default, so it applies regardless; only the module and control push is gated.
         const applyDefaults = document.getElementById("apply-device-defaults").checked;
         // Ethernet-only firmware: WiFi compiled out (firmwares.json `eth_only`). Keyed off the
         // name like isCompatible's `-eth*` rule — a `-eth` variant is eth-only UNLESS it's the
@@ -1150,17 +1146,16 @@ document.addEventListener('DOMContentLoaded', () => {
       let selected = installPicker.getSelectedDevice() || "";   // honor a restored pick
 
       function ledDriver(b) {
-        const d = (b.modules || []).find(m => /LedDriver$/.test(m.type || ""));
+        const d = deviceSupport.stateModules(b).find(m => /LedDriver$/.test(m.type || ""));
         return d ? d.type.replace(/Driver$/, "") : null;
       }
       // A supported capability is "active" (configured) when deviceModels.json has a module backing it.
-      // The capability→module link is implicit in the data, so this map names it in one place, reading the modules[] already there rather than a duplicated `active` field that could drift.
+      // The capability→module link is implicit in the data, so this map names it in one place, reading the state document already there rather than a duplicated `active` field that could drift.
       // A capability with no entry here, or no matching module, stays merely "supported".
       // Each predicate gets the whole module, so it can inspect controls: Ethernet is wired only when its entry names a board or a real PHY (not absent, "None" or 0).
       // WiFi is active wherever the device configures its network at all, since the radio is always there; one that lists WiFi but ships no network entry stays "supported".
       const ethConfigured = (m) => {
         const c = m.controls;
-        if (!c) return false;
         // A named device preset IS the configuration: it carries the PHY and the pins, so a
         // device that picks one lists no ethType of its own. Custom is the escape hatch and
         // names no PHY, so it falls through to the ethType its entry must then carry.
@@ -1174,11 +1169,10 @@ document.addEventListener('DOMContentLoaded', () => {
         WiFi:     m => /^(Network|Ethernet|WiFi)Module$/.test(m.type || ""),
         Audio:    m => /^Audio/.test(m.type || ""),
         MIDI:     m => m.type === "MidiService",
-        OSC:      m => m.type === "OscModule",
       };
       function capActive(b, cap) {
         const test = CAP_MODULE[cap];
-        return !!test && (b.modules || []).some(m => test(m));
+        return !!test && deviceSupport.stateModules(b).some(m => test(m));
       }
       function setExpanded(open) {
         expandEl.hidden = !open;
@@ -1379,6 +1373,7 @@ document.addEventListener('DOMContentLoaded', () => {
           a.href = url; a.target = "_blank"; a.rel = "noopener"; a.textContent = url;
           v.appendChild(a); r.append(k, v); body.appendChild(r);
         };
+        if (b.description) row("About", b.description);
         if (b.chip) row("Chip", b.chip);
         if (Array.isArray(b.firmwares)) row("Firmwares", b.firmwares.join(", "));
         if (Array.isArray(b.supported) && b.supported.length) row("Supported", b.supported.join(", "));
@@ -1388,25 +1383,23 @@ document.addEventListener('DOMContentLoaded', () => {
           else row("Product page", b.url);
         }
 
-        if (Array.isArray(b.modules) && b.modules.length) {
+        const stateMods = deviceSupport.stateModules(b);
+        if (stateMods.length) {
           const h = document.createElement("div"); h.className = "bd-section"; h.textContent = "Modules";
           body.appendChild(h);
-          for (const m of b.modules) {
+          for (const m of stateMods) {
             const mod = document.createElement("div"); mod.className = "bd-mod";
             const nm = document.createElement("div"); nm.className = "bd-mod-name";
-            nm.textContent = m.type || "?";
-            if (m.id && m.id !== m.type) {
+            nm.textContent = m.type || m.id;
+            if (m.type && m.id !== m.type) {
               const idEl = document.createElement("span"); idEl.className = "bd-mod-id";
               idEl.textContent = "  (" + m.id + ")"; nm.appendChild(idEl);
             }
             mod.appendChild(nm);
-            const ctrls = m.controls && typeof m.controls === "object" ? m.controls : null;
-            if (ctrls) {
-              for (const [k, v] of Object.entries(ctrls)) {
-                const c = document.createElement("div"); c.className = "bd-ctrl";
-                const code = document.createElement("code"); code.textContent = k + " = " + v;
-                c.appendChild(code); mod.appendChild(c);
-              }
+            for (const [k, v] of Object.entries(m.controls)) {
+              const c = document.createElement("div"); c.className = "bd-ctrl";
+              const code = document.createElement("code"); code.textContent = k + " = " + v;
+              c.appendChild(code); mod.appendChild(c);
             }
             body.appendChild(mod);
           }

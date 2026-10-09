@@ -13,22 +13,10 @@
   ],
   "live_only": true,
   "description": "Fast incremental performance check: start from the bare minimum render pipeline and add one thing at a time, measuring the tick/heap delta each step, so a regression shows up as a per-step jump. The LIGHT companion to scenario_perf_full, it stays small (≤64²) and driver-free so it runs in seconds. Mutate mode + canvas-preparing: the steps clear_children whatever Layouts/Effects/Drivers the device already had (the pre-wired apparatus like PreviewDriver/Board survives, clear_children only drops user-editable children) and rebuild a known tree, so it runs from any starting state and always measures the same minimal pipeline. Order: (1) minimal = Grid(16²)+Layer+a LIGHT effect (Spiral, a light effect), no modifier/driver/audio; (2) +MultiplyModifier (adds the mapping LUT, the heavy memory path); (3) +PreviewDriver; (4) swap to a HEAVY effect (Noise) to bracket the compute range; (5) grid 16²→32²→64² to show the size scaling. Full 128²/16K sweep, real LED/network drivers and the audio cost: see scenario_perf_full.",
-  "fixture": [
-    {
-      "name": "fix-layouts",
-      "op": "add_module",
-      "id": "Layouts",
-      "type": "Layouts"
-    },
-    {
-      "name": "fix-layers",
-      "op": "add_module",
-      "id": "Effects",
-      "type": "Effects",
-      "props": {
-        "layouts": "Layouts"
-      }
-    }
+  "top": [
+    "Layouts",
+    "Effects",
+    "Drivers"
   ],
   "steps": [
     {
@@ -43,44 +31,68 @@
     {
       "name": "clear-layers",
       "description": "Drop whatever effects/modifiers the device had, start clean.",
-      "op": "clear_children",
-      "id": "Effects"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      }
     },
     {
       "name": "clear-layouts",
-      "op": "clear_children",
-      "id": "Layouts"
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "$patch": "replace"
+        }
+      }
     },
     {
       "name": "clear-drivers",
       "description": "Drop any output driver; the pre-wired PreviewDriver is non-deletable and survives.",
-      "op": "clear_children",
-      "id": "Drivers"
+      "op": "apply_state",
+      "document": {
+        "Drivers": {
+          "$patch": "replace"
+        }
+      }
     },
     {
       "name": "build-grid",
-      "op": "add_module",
-      "id": "Grid",
-      "type": "GridLayout",
-      "parent_id": "Layouts",
-      "props": {
-        "width": 16,
-        "height": 16
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "GridLayout",
+            "width": 16,
+            "height": 16
+          }
+        }
       }
     },
     {
       "name": "build-layer",
-      "op": "add_module",
-      "id": "Layer",
-      "type": "Layer",
-      "parent_id": "Effects"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer"
+          }
+        }
+      }
     },
     {
       "name": "build-fx",
-      "op": "add_module",
-      "id": "FX",
-      "type": "SpiralEffect",
-      "parent_id": "Layer"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "FX": {
+              "type": "SpiralEffect"
+            }
+          }
+        }
+      }
     },
     {
       "name": "measure-minimal",
@@ -261,10 +273,16 @@
     {
       "name": "add-modifier",
       "description": "+MultiplyModifier: allocates the mapping LUT (the heavy memory path vs the 1:1 no-LUT case).",
-      "op": "add_module",
-      "id": "Mod",
-      "type": "MultiplyModifier",
-      "parent_id": "Layer"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "Mod": {
+              "type": "MultiplyModifier"
+            }
+          }
+        }
+      }
     },
     {
       "name": "measure-with-modifier",
@@ -621,10 +639,16 @@
     {
       "name": "swap-heavy-fx",
       "description": "Swap the light effect for a HEAVY one (Noise, simplex per pixel) to bracket the compute range at the same 16².",
-      "op": "replace_module",
-      "id": "FX",
-      "type": "NoiseEffect",
-      "parent_id": "Layer"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "FX": {
+              "type": "NoiseEffect"
+            }
+          }
+        }
+      }
     },
     {
       "name": "measure-heavy-16",

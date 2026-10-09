@@ -80,7 +80,7 @@ TEST_CASE("Hub75Driver offers the clock edge, defaults to rising, and re-inits o
     d.defineControls();
     const int i = mm::test::controlIndex(d, "clockEdge");
     REQUIRE(i >= 0);
-    CHECK(d.clockEdgeSel == 0);   // rising
+    CHECK(d.clockEdgeSel == mm::Hub75Driver::kEdgeRising);
     CHECK(d.affectsPrepare("clockEdge"));
 }
 

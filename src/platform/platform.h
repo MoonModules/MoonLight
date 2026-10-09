@@ -10,15 +10,13 @@
 /// @{
 /// The one interface every module reaches hardware through, so the same source drives an ESP32, a Teensy, a Raspberry Pi and a desktop.
 ///
-/// Core and the light domain call these names and never a vendor SDK.
-/// A module that needs something this interface does not offer gets a new function here rather than a target check at the call site.
+/// Core and the light domain call these names and never a vendor SDK. A module that needs something this interface does not offer gets a new function here rather than a target check at the call site.
 ///
 /// @moreinfo
 ///
 /// ## Ethernet transmit can wedge
 ///
-/// The driver's internal link state can diverge from both the PHY and our own event-driven flag.
-/// Observed on an S31 under sustained transmit, with the link genuinely lost, no disconnect event delivered, and nothing recovering short of a reboot.
+/// The driver's internal link state can diverge from both the PHY and our own event-driven flag. Observed on an S31 under sustained transmit, with the link genuinely lost, no disconnect event delivered, and nothing recovering short of a reboot.
 /// A stop and start re-runs link negotiation, which is the only supported way back, and it blocks for up to four seconds while autonegotiation polls the PHY to its timeout.
 /// The housekeeping tick calls it only where every frame is being refused anyway, so a stalled render loop for one tick costs nothing a user can see.
 ///
@@ -29,8 +27,7 @@
 ///
 /// ## Internal RAM for what an interrupt reads
 ///
-/// A PSRAM-resident encode source measured about 595 microseconds per slice refill against a 151 microsecond drain budget.
-/// So a buffer an interrupt reads per byte comes from `allocInternal` rather than the PSRAM-first `alloc`.
+/// A PSRAM-resident encode source measured about 595 microseconds per slice refill against a 151 microsecond drain budget. So a buffer an interrupt reads per byte comes from `allocInternal` rather than the PSRAM-first `alloc`.
 
 // Format checking, where the compiler offers it: one toolchain parses the attribute as an unknown specifier and fails the whole class downstream.
 #if defined(__GNUC__) || defined(__clang__)
@@ -67,7 +64,7 @@ void* alloc(size_t bytes);
 /// Release what `alloc` returned.
 void free(void* ptr);
 
-/// Allocate internal RAM only, for buffers a hot ISR reads per byte; free with `free`.
+/// Allocate internal RAM only, for buffers a hot ISR reads per byte; free with `free`: @xref{internal-ram-for-what-an-interrupt-reads}.
 void* allocInternal(size_t bytes);
 
 /// Bytes taken on purpose through alloc and allocInternal.
@@ -236,6 +233,23 @@ const char* hostIp();
 /// Why the device last reset, which the UI reads to flag a crashed prior boot.
 const char* resetReason();
 
+/// How long a boot stays up before it counts as good, and its failed boots start again from one.
+constexpr uint32_t kBootStableMs = 60 * 1000;
+
+/// How the last boots went, this one included: the switch-on gesture and a crash loop read it.
+struct BootRecord {
+    uint8_t quickPowerOns = 0;      ///< switch-ons in a row, each within a few seconds of the last
+    uint8_t abnormalRestarts = 0;   ///< failed boots in a row: panics, watchdogs, brownouts, and power losses of a boot younger than a minute
+    bool booted = false;            ///< this run is a device boot, which a host process never is
+};
+// Counted in flash once per boot and cleared once the device stays up; a restart from the UI, an update or a deep sleep clears it too.
+/// How the last boots went, counted once on the first call.
+const BootRecord& bootRecord();
+#ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
+/// What bootRecord answers on the host, which has no boot to count.
+void setTestBootRecord(const BootRecord& r);
+#endif
+
 /// Serial log verbosity, low to high, ordered as syslog and ESP-IDF order it.
 enum class LogLevel : uint8_t { None = 0, Error, Warn, Info, Debug, Verbose };
 /// Apply a verbosity to the logger and to the KPI-line gate.
@@ -267,11 +281,11 @@ int  fsRead(const char* path, char* buf, size_t maxLen);
 long fsSize(const char* path);
 /// Read up to `len` bytes at `offset`; bytes read, 0 at the end, -1 on error.
 int  fsReadAt(const char* path, long offset, char* buf, size_t len);
-/// Write a whole file atomically, through a temporary and a rename.
+/// Write a whole file atomically, through a temporary and a rename, creating its parent folder.
 bool fsWriteAtomic(const char* path, const char* data, size_t len);
 /// Fill up to `cap` bytes and answer the count; 0 ends the stream.
 using FsWriteSrc = size_t(*)(char* buf, size_t cap, void* user, bool* abort);
-/// Write a file atomically from `src`, pulling it in chunks; false on abort or a write failure.
+/// Write a file atomically from `src`, pulling it in chunks and creating its parent folder; false on abort or a write failure.
 bool fsWriteStream(const char* path, FsWriteSrc src, void* user);
 /// Called once per child of a listed directory; a directory reports size 0.
 using FsListCb = void(*)(const char* name, bool isDir, uint32_t sizeBytes, void* user);
@@ -310,7 +324,7 @@ void ethSendFailCounts(uint32_t& linkDown, uint32_t& ringFull) MM_NONBLOCKING;
 /// Consecutive send failures since the last success, which tells back-pressure from a wedged path.
 uint32_t ethSendFailStreak() MM_NONBLOCKING;
 
-/// Restart the driver after transmit has wedged; blocks for up to ~4 seconds, so it is not MM_NONBLOCKING.
+/// Restart the driver after transmit has wedged; blocks for up to ~4 seconds, so it is not MM_NONBLOCKING: @xref{ethernet-transmit-can-wedge}.
 bool ethRestartTx();
 
 /// Negotiated link speed in Mbit/s, 0 when no link or no driver.
@@ -573,7 +587,7 @@ uint32_t testNetDhcpCount(NetIface iface);
 
 /// How the device's own access point appears: its name and address, and a WPA2 password or empty for open.
 struct WifiApConfig {
-    const char* name;       ///< the network's name, the device name
+    const char* name;       ///< the network's name
     const char* ip;         ///< its own address, which its DHCP server hands out as the gateway
     const char* password;   ///< WPA2 at 8 characters or more, open otherwise
 };
@@ -609,6 +623,12 @@ bool wifiSetTxPower(int8_t quarterDbm);
 
 /// Advertise this device over mDNS as `_http._tcp` and `_wled._tcp`, which is how the WLED app and Home Assistant find it.
 bool mdnsInit(const char* deviceName);
+/// Announce one more service on this board's name, such as `_apple-midi`/`_udp`, now and after every mdnsInit; a second call moves its port.
+void mdnsAdvertise(const char* type, const char* proto, uint16_t port);
+/// Stop announcing a service mdnsAdvertise added.
+void mdnsWithdraw(const char* type, const char* proto);
+/// The port a service is announced on, 0 when it is not: what a test reads back.
+uint16_t mdnsAdvertisedPort(const char* type, const char* proto);
 /// Stop advertising but keep the stack up, so a later mdnsInit needs no full re-init.
 void mdnsStop();
 /// Free the mDNS stack, at release.
@@ -709,13 +729,46 @@ public:
     /// Send once to an explicit address.
     bool sendToAddr(const uint8_t ip[4], uint16_t port, const uint8_t* data, size_t len);
     // Without the membership the OS never delivers those datagrams, however correct the port.
-    /// Join a multicast group on a bound socket, its own sends no longer looping back; false is retried rather than fatal.
-    bool joinMulticast(const char* group);
+    /// Join a multicast group on a bound socket, its own sends not looping back, and keep the membership while the socket is silent.
+    bool joinMulticast(const char* group) {
+        if (joined_) { membership(group_, false); joined_ = false; }   // an earlier group is left, not leaked
+        size_t i = 0;
+        for (; group && group[i] && i + 1 < sizeof(group_); i++) group_[i] = group[i];
+        group_[i] = 0;
+        return rejoin();
+    }
+    /// Whether the last join of the group succeeded, so a caller can say when only unicast reaches it.
+    bool multicastJoined() const { return joined_; }
+    /// How many times the group was joined since the socket opened, for the tests.
+    uint32_t joinCountForTest() const { return joinCount_; }
+    /// How long a socket in a group stays silent before it joins again.
+    static constexpr uint32_t kRejoinMs = 3000;
     /// Close it, which the destructor also does.
     void close();
 
 private:
     int fd_ = -1;
+    char group_[16] = "";       // the group joined, empty when none
+    bool joined_ = false;
+    uint32_t lastHeardMs_ = 0;  // millis of the last datagram received
+    uint32_t lastJoinMs_ = 0;
+    uint32_t joinCount_ = 0;
+    /// Join (`join`) or leave a group, the one OS call both take.
+    bool membership(const char* group, bool join);
+    bool rejoin() {
+        if (joined_) membership(group_, false);   // a fresh join announces the membership again
+        joined_ = membership(group_, true);
+        lastJoinMs_ = millis();
+        joinCount_++;
+        return joined_;
+    }
+    void heard() { if (group_[0]) lastHeardMs_ = millis(); }
+    // A router can stop forwarding a group to a member it has not heard from; a silent socket joins again, which also retries a failed join.
+    void keepMembership() {
+        if (!group_[0]) return;
+        const uint32_t now = millis();
+        if (now - lastHeardMs_ >= kRejoinMs && now - lastJoinMs_ >= kRejoinMs) rejoin();
+    }
 };
 
 /// One TCP connection, non-blocking so a client never stalls the render loop.
@@ -798,6 +851,38 @@ private:
 /// Restart the device: a hardware reset on ESP32, a process exit on desktop.
 [[noreturn]] void reboot();
 
+// PWM output for lights whose channels are each a pin: the chip's LEDC peripheral, one timer per driver.
+
+/// How many PWM channels the chip has across its speed modes; 0 where there is no PWM output.
+uint8_t pwmChannelCount() MM_NONBLOCKING;
+
+/// The 80 MHz a PWM timer counts on every built chip (APB, or PLL_F80M on the P4 and S31), so `bits` duty bits pulse at kPwmClockHz >> bits.
+constexpr uint32_t kPwmClockHz = 80'000'000;
+
+/// The most duty bits a PWM timer holds; 0 where there is no PWM output.
+uint8_t pwmMaxBits() MM_NONBLOCKING;
+
+/// Start a PWM timer with `bits` duty bits, pulsing at kPwmClockHz >> bits; the timer, or -1 when none is free or the chip refuses that resolution.
+int pwmStart(uint8_t bits);
+
+/// Drive `pin` from `timer`, its pulse starting `phase` steps into the period; the channel, or -1 when none is free.
+int pwmAttach(int timer, uint8_t pin, uint32_t phase);
+
+/// Set a channel's duty in steps of the timer's resolution, a register write that does not block.
+void pwmWrite(int channel, uint32_t duty) MM_NONBLOCKING;
+
+/// Release `timer` and every channel attached to it, their pins driven low.
+void pwmStop(int timer);
+
+/// The duty last written to `channel`, for the desktop tests; 0 on a device.
+uint32_t pwmDutyForTest(int channel);
+
+/// The pin `channel` drives, for the desktop tests; -1 when the channel is free.
+int pwmPinForTest(int channel);
+
+/// The phase `channel` was attached with, for the desktop tests; 0 on a device.
+uint32_t pwmPhaseForTest(int channel);
+
 // RMT WS2812 output: the driver encodes symbols, the platform owns only the peripheral.
 
 /// One configured RMT TX channel; the driver never inspects `impl`.
@@ -849,7 +934,7 @@ RmtLoopbackResult rmtWs2812Loopback(uint8_t txGpio, uint8_t rxGpio);
 RmtLoopbackResult rmtWs2812LoopbackFrame(uint8_t txGpio, uint8_t rxGpio,
                                          uint16_t lights, uint8_t channels);
 
-// i80 parallel WS2812 output: one pre-encoded frame in a DMA buffer the platform keeps internal.
+// i80 parallel WS2812 output: one pre-encoded frame in a DMA buffer the platform keeps internal: @xref{dma-cannot-read-psram-at-the-expanders-clock}.
 
 /// One configured i80 bus with its one or two DMA frame buffers.
 struct I80Ws2812Handle { void* impl = nullptr; };
@@ -1189,7 +1274,7 @@ bool irChannelReady(uint16_t pin);
 
 // --- USB MIDI host, gated by `hasUsbMidiHost`: one class-compliant desk on the chip's own port ---
 
-/// Take the chip's USB port as a host for a MIDI desk, which then carries no serial log or USB flashing; false where the build has no USB host.
+/// Take the chip's USB port as a host for a MIDI desk, ending its serial log and USB flashing; false without a USB host or while another owner has it.
 bool usbMidiBegin();
 
 /// Give the USB port back.

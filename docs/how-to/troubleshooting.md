@@ -33,7 +33,8 @@ The strip zig-zags and the layout does not know. Turn on **serpentine** on the G
 
 ## The device is missing from the network
 
-- **It never joined.** An unprovisioned device opens its own access point named `MM-XXXX`. Join it and open `http://4.3.2.1` to set the credentials.
+- **It never joined.** An unprovisioned device opens its own access point named `MM-XXXX`. Join it: the WiFi card opens by itself as a sign-in screen, or at `http://4.3.2.1`, to set the credentials.
+- **It lost its network and its access point stays closed** (`opens` is `first setup only`). Switch it on and off four times, each within a few seconds: its access point opens for that boot without a password, and every setting stays. Join it and set the new network on the WiFi card. To start again from scratch, **factory reset** on the System card deletes every setting.
 - **It joined but you cannot find it.** Try the IP from your router's client list before the `.local` name: mDNS fails on plenty of networks that route fine. A device with no mDNS responder is reachable by address all along.
 - **It was working and stopped.** Check the device is powered and the access point is not sitting between two networks. A repeater on one radio halves its throughput and drops the client side under load.
 
@@ -50,6 +51,9 @@ The device stays in [MoonBase](updating-firmware.md#when-the-device-boots-into-m
 ## The device rebooted on its own
 
 Check the power first. A board browning out under load looks exactly like a software crash, and a supply that cannot hold current while lights draw is the more common cause.
+
+A failed boot is a crash, a brownout, or a supply that cuts out within a minute of starting. After two in a row the device starts in safe mode: its LEDs stay dark, the preview runs, and the System card says why. Lower the brightness, or undo the last setting or script, then restart the device from the top bar.
+Unplugging a device twice within a minute of starting counts the same way, so leave it on for a minute and restart it.
 
 If the power is solid, the crash log is on the device: the System card shows the last reset reason, and [logging an issue](logging-an-issue.md) says what to collect.
 

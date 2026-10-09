@@ -1,18 +1,14 @@
 /// MoonBase: the second boot image.
 ///
-/// A 4 MB board has room for one application, not two.
-/// Its partition table carries this small image in the `factory` slot instead of a second copy of the firmware.
-/// When the application must be replaced, the device reboots here.
-/// MoonBase owns the board, writes the new firmware into the application slot it is not itself running from, and hands control back.
+/// A 4 MB board has room for one application, not two. Its partition table carries this small image in the `factory` slot instead of a second copy of the firmware.
+/// When the application must be replaced, the device reboots here. MoonBase owns the board, writes the new firmware into the application slot it is not itself running from, and hands control back.
 ///
 /// @moreinfo
 ///
 /// ## Why it shares no code with the application
 ///
-/// Everything here is written directly against ESP-IDF.
-/// It shares no code with the application on purpose: the app's platform layer pulls in RMT, I2S, PSRAM and the JIT, which measured 788 KB with an empty entry point.
-/// This file plus its sdkconfig measures around a quarter of the flash instead.
-/// The other half of the budget is in ../sdkconfig.defaults, which is part of the design.
+/// Everything here is written directly against ESP-IDF. It shares no code with the application on purpose: the app's platform layer pulls in RMT, I2S, PSRAM and the JIT, which measured 788 KB with an empty entry point.
+/// This file plus its sdkconfig measures around a quarter of the flash instead. The other half of the budget is in ../sdkconfig.defaults, which is part of the design.
 ///
 /// ## The boot flow
 ///
@@ -32,6 +28,7 @@
 #include "core/util/FirmwareImage.h"  // identify(): shared with the app, see main/CMakeLists.txt
 #include "core/util/ConfigScrape.h"   // the keys this image reads out of the app's config, shared so the app's test runs the same scraper
 #include "core/util/CaptivePortal.h"  // the access point's address, DNS answer and redirect rule, shared with the app's portal
+#include "core/util/DeviceName.h"     // defaultDeviceName: the name the app gives a board that never saved one
 #include "esp_app_desc.h"    // esp_app_get_description: this image's own version
 #include "esp_https_ota.h"
 #include "esp_littlefs.h"
@@ -43,6 +40,7 @@
 #include "soc/gpio_num.h"
 #include "soc/soc_caps.h"   // SOC_EMAC_SUPPORTED: the S3 and other WiFi-only parts have no EMAC
 #include "esp_eth.h"
+#include "esp_mac.h"         // esp_efuse_mac_get_default: the base MAC the app names a board after
 #if SOC_EMAC_SUPPORTED
 #include "esp_eth_mac_esp.h"   // esp_eth_mac_new_esp32: only exists on a chip with an EMAC
 #endif
@@ -67,7 +65,6 @@ constexpr const char* kNetworkConfig    = "/fs/.config/NetworkModule.json";
 // The app persists its build variant here, the one fact this chip-specific image cannot know about its board.
 constexpr const char* kSystemConfig     = "/fs/.config/SystemModule.json";
 
-constexpr const char* kApName    = "MoonBase";   // for a device that never saved a name
 
 constexpr int kHttpPort = 80;
 
@@ -77,8 +74,6 @@ struct Network { char ssid[33]; char password[65]; mm::configscrape::SavedIp ip;
 Network networks_[kMaxNetworks] = {};
 uint8_t networkCount_ = 0;
 // The app's own access point, named after the device and protected as the user set it, so a phone on it stays on through the restart into this image.
-char apName_[33] = {};
-char apPassword_[64] = {};
 char status_[96] = "idle";
 
 EventGroupHandle_t netEvents_;
@@ -129,7 +124,6 @@ void loadIdentity() {
     char* buf = readConfig(kSystemConfig);
     if (!buf) return;
     mm::configscrape::findString(buf, "firmware", g_appVariant, sizeof(g_appVariant));
-    mm::configscrape::findString(buf, "deviceName", apName_, sizeof(apName_));
     std::free(buf);
 }
 
@@ -163,7 +157,6 @@ void loadCredentials() {
         mm::configscrape::findInt(buf, "ethClockGpio",  &ethCfg_.clockGpio);
         mm::configscrape::findBool(buf, "ethClockExtIn", &ethCfg_.clockExtIn);
         mm::configscrape::findInt(buf, "txPowerSetting", &txPowerDbm_);
-        mm::configscrape::findChildString(buf, "AccessPointModule", "password", apPassword_, sizeof(apPassword_));
         std::free(buf);
     }
     // Before the unmount: this function owns the only window in which the volume is mounted.
@@ -217,9 +210,11 @@ void onWifiEvent(void*, esp_event_base_t, int32_t id, void*) {
     if (switchingNetwork_) return;
     if (id == WIFI_EVENT_STA_START || id == WIFI_EVENT_STA_DISCONNECTED) esp_wifi_connect();
 }
+#if SOC_EMAC_SUPPORTED
 void onEthEvent(void*, esp_event_base_t, int32_t id, void*) {
     if (id == ETHERNET_EVENT_CONNECTED && pinStatic(ethNetif_, ethIp_)) xEventGroupSetBits(netEvents_, kNetGotIp);
 }
+#endif
 
 // Bring up the on-chip MAC as the app's config wires it, staying installed without a link so a later cable still gets an address.
 esp_eth_handle_t ethHandle_ = nullptr;
@@ -375,14 +370,19 @@ bool wifiAccessPoint() {
     wifi_init_config_t init = WIFI_INIT_CONFIG_DEFAULT();
     if (esp_wifi_init(&init) != ESP_OK) return false;
     wifi_config_t cfg = {};
-    const char* name = apName_[0] ? apName_ : kApName;
+    // The app's anonymous name, `MM-` and four MAC digits, so a phone on the app's access point stays on it through the restart.
+    uint8_t mac[6];
+    esp_efuse_mac_get_default(mac);
+    char name[8];
+    mm::defaultDeviceName(mac, name, sizeof(name));
     std::strncpy(reinterpret_cast<char*>(cfg.ap.ssid), name, sizeof(cfg.ap.ssid) - 1);
     cfg.ap.ssid_len = static_cast<uint8_t>(std::strlen(name));
     cfg.ap.max_connection = 2;
-    // The app's WPA2 password where it set one, since a phone treats an open network under a known protected name as a stranger.
-    const size_t pwLen = std::strlen(apPassword_);
+    // The app's rule: the first known network's password, which the owner knows and a stranger does not, when WPA2 takes it.
+    const char* pw = networkCount_ ? networks_[0].password : "";
+    const size_t pwLen = std::strlen(pw);
     if (pwLen >= 8 && pwLen <= 63) {
-        std::memcpy(cfg.ap.password, apPassword_, pwLen);
+        std::memcpy(cfg.ap.password, pw, pwLen);
         cfg.ap.authmode = WIFI_AUTH_WPA2_PSK;
     } else {
         cfg.ap.authmode = WIFI_AUTH_OPEN;

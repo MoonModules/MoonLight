@@ -1,0 +1,8 @@
+# Small, so it fits WLED's 1.5 MB app slot with MoonBase inside it.
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="../../esp32/partitions/wled_4mb_1mb_fs.csv"
+# The partition table at 0x8000 is the one region this image exists to rewrite.
+CONFIG_SPI_FLASH_DANGEROUS_WRITE_ALLOWED=y
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192

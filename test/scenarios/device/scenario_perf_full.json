@@ -16,64 +16,76 @@
   ],
   "live_only": true,
   "description": "Comprehensive incremental performance check (the SLOW, on-device companion to scenario_perf_light). Mutate mode + canvas-preparing: clear_children whatever the device already had (pre-wired apparatus like PreviewDriver/Board survives, clear_children only drops user-editable children), rebuild a known minimal tree, then add one subsystem at a time, audio, a modifier, then EVERY output driver this board has (each optional + capped to 64 output LEDs so its per-frame cost is comparable, not its transmit-all-16K time), then a network driver, measuring the tick/heap delta after each so each subsystem's cost is isolated. Then sweep the grid 16²→32²→64²→128² (16K) for both a LIGHT effect (Spiral) and a HEAVY one (Noise) to bracket the compute range across sizes. LED drivers are platform-gated (RMT on classic/S3, LCD on S3, Parlio on P4; none on desktop) so each driver step is optional:true and skipped where absent, the all-drivers comparison is assembled across boards (S3 gives RMT vs LCD, P4 gives RMT vs Parlio). Subsumes the old scenario_Layer_buildup (incremental module cost), scenario_GridLayout_grid_sizes (grid sweep), and scenario_AllEffects_grid_sizes (per-effect size sweep, here reduced to a light/heavy bracket). Runs minutes on a device; not a per-commit gate.",
-  "fixture": [
-    {
-      "name": "fix-layouts",
-      "op": "add_module",
-      "id": "Layouts",
-      "type": "Layouts"
-    },
-    {
-      "name": "fix-layers",
-      "op": "add_module",
-      "id": "Effects",
-      "type": "Effects",
-      "props": {
-        "layouts": "Layouts"
-      }
-    }
+  "top": [
+    "Layouts",
+    "Effects",
+    "Drivers"
   ],
   "steps": [
     {
       "name": "clear-layers",
       "description": "Start clean: drop whatever effects/modifiers/layouts/drivers the device had (pre-wired Preview survives).",
-      "op": "clear_children",
-      "id": "Effects"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      }
     },
     {
       "name": "clear-layouts",
-      "op": "clear_children",
-      "id": "Layouts"
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "$patch": "replace"
+        }
+      }
     },
     {
       "name": "clear-drivers",
-      "op": "clear_children",
-      "id": "Drivers"
+      "op": "apply_state",
+      "document": {
+        "Drivers": {
+          "$patch": "replace"
+        }
+      }
     },
     {
       "name": "build-grid",
-      "op": "add_module",
-      "id": "Grid",
-      "type": "GridLayout",
-      "parent_id": "Layouts",
-      "props": {
-        "width": 16,
-        "height": 16
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "GridLayout",
+            "width": 16,
+            "height": 16
+          }
+        }
       }
     },
     {
       "name": "build-layer",
-      "op": "add_module",
-      "id": "Layer",
-      "type": "Layer",
-      "parent_id": "Effects"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer"
+          }
+        }
+      }
     },
     {
       "name": "build-fx",
-      "op": "add_module",
-      "id": "FX",
-      "type": "SpiralEffect",
-      "parent_id": "Layer"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "FX": {
+              "type": "SpiralEffect"
+            }
+          }
+        }
+      }
     },
     {
       "name": "measure-minimal",
@@ -615,10 +627,16 @@
     {
       "name": "add-modifier",
       "description": "+MultiplyModifier: allocates the mapping LUT. Diff = modifier + LUT cost.",
-      "op": "add_module",
-      "id": "Mod",
-      "type": "MultiplyModifier",
-      "parent_id": "Layer"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "Mod": {
+              "type": "MultiplyModifier"
+            }
+          }
+        }
+      }
     },
     {
       "name": "measure-modifier",
@@ -798,17 +816,27 @@
     {
       "name": "remove-modifier",
       "description": "Drop the modifier so the driver-cost measurements below are on the plain 1:1 pipeline (drivers, not the LUT, are what we compare here).",
-      "op": "remove_module",
-      "id": "Mod"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "Mod": null
+          }
+        }
+      }
     },
     {
       "name": "add-preview",
       "description": "+PreviewDriver. Optional: on a device the pre-wired Preview survives clear_children so it's already present (the add is skipped); on the in-process desktop runner there's no apparatus, so this adds it. Either way the next measure includes Preview.",
-      "op": "add_module",
-      "id": "Preview",
-      "type": "PreviewDriver",
-      "parent_id": "Drivers",
-      "optional": true
+      "op": "apply_state",
+      "optional": true,
+      "document": {
+        "Drivers": {
+          "Preview": {
+            "type": "PreviewDriver"
+          }
+        }
+      }
     },
     {
       "name": "measure-preview",
@@ -988,10 +1016,14 @@
     {
       "name": "add-network-driver",
       "description": "+NetworkSendDriver (ArtNet/DDP, works on every platform). Diff = the network output cost (capped by the 16² grid here).",
-      "op": "add_module",
-      "id": "Net",
-      "type": "NetworkSendDriver",
-      "parent_id": "Drivers"
+      "op": "apply_state",
+      "document": {
+        "Drivers": {
+          "Net": {
+            "type": "NetworkSendDriver"
+          }
+        }
+      }
     },
     {
       "name": "measure-network",
@@ -1170,21 +1202,27 @@
     },
     {
       "name": "remove-network-driver",
-      "op": "remove_module",
-      "id": "Net"
+      "op": "apply_state",
+      "document": {
+        "Drivers": {
+          "Net": null
+        }
+      }
     },
     {
       "name": "add-rmt-driver",
       "description": "+RmtLedDriver capped to 64 output LEDs (one pin, ledsPerPin=64). Optional, classic + S3. Diff = the RMT per-frame cost at a fixed 64-LED output.",
-      "op": "add_module",
-      "id": "Rmt",
-      "type": "RmtLedDriver",
-      "parent_id": "Drivers",
-      "props": {
-        "pins": "2",
-        "ledsPerPin": "64"
-      },
-      "optional": true
+      "op": "apply_state",
+      "optional": true,
+      "document": {
+        "Drivers": {
+          "Rmt": {
+            "type": "RmtLedDriver",
+            "pins": "2",
+            "ledsPerPin": "64"
+          }
+        }
+      }
     },
     {
       "name": "measure-rmt",
@@ -1364,24 +1402,27 @@
     },
     {
       "name": "remove-rmt-driver",
-      "op": "remove_module",
-      "id": "Rmt",
-      "optional": true
+      "op": "apply_state",
+      "optional": true,
+      "document": {
+        "Drivers": {
+          "Rmt": null
+        }
+      }
     },
     {
       "name": "add-i80-driver",
       "description": "+ParallelLedDriver on the IDF-backed peripheral, capped to 64 LEDs on lane 0 (it needs all 8 data pins; unused lanes get 0 LEDs). S3, P4 and S31 only, a classic ESP32 naming the same backend I2S-IDF.",
-      "op": "add_module",
-      "id": "MultiPin",
-      "type": "ParallelLedDriver",
-      "parent_id": "Drivers",
-      "props": {
-        "pins": "1,2,3,4,5,6,7,8",
-        "ledsPerPin": "64,0,0,0,0,0,0,0"
-      },
+      "op": "apply_state",
       "optional": true,
-      "controls": {
-        "peripheral": "LCD-IDF"
+      "document": {
+        "Drivers": {
+          "MultiPin": {
+            "type": "ParallelLedDriver",
+            "pins": "1,2,3,4,5,6,7,8",
+            "ledsPerPin": "64,0,0,0,0,0,0,0"
+          }
+        }
       }
     },
     {
@@ -1563,24 +1604,27 @@
     },
     {
       "name": "remove-i80-driver",
-      "op": "remove_module",
-      "id": "MultiPin",
-      "optional": true
+      "op": "apply_state",
+      "optional": true,
+      "document": {
+        "Drivers": {
+          "MultiPin": null
+        }
+      }
     },
     {
       "name": "add-parlio-driver",
       "description": "+ParallelLedDriver (peripheral=Parlio) capped to 64 LEDs on lane 0. Optional, P4 only. Diff = the Parlio per-frame cost.",
-      "op": "add_module",
-      "id": "Parlio",
-      "type": "ParallelLedDriver",
-      "parent_id": "Drivers",
-      "props": {
-        "pins": "20",
-        "ledsPerPin": "64"
-      },
+      "op": "apply_state",
       "optional": true,
-      "controls": {
-        "peripheral": "Parlio"
+      "document": {
+        "Drivers": {
+          "Parlio": {
+            "type": "ParallelLedDriver",
+            "pins": "20",
+            "ledsPerPin": "64"
+          }
+        }
       }
     },
     {
@@ -1761,18 +1805,26 @@
     },
     {
       "name": "remove-parlio-driver",
-      "op": "remove_module",
-      "id": "Parlio",
-      "optional": true
+      "op": "apply_state",
+      "optional": true,
+      "document": {
+        "Drivers": {
+          "Parlio": null
+        }
+      }
     },
     {
       "name": "add-preview-for-sweep",
       "description": "Re-add PreviewDriver as the output for the grid sweep (the per-driver adds above each removed their driver; Preview is the cheap, every-board output for a pure-render size curve).",
-      "op": "add_module",
-      "id": "Preview",
-      "type": "PreviewDriver",
-      "parent_id": "Drivers",
-      "optional": true
+      "op": "apply_state",
+      "optional": true,
+      "document": {
+        "Drivers": {
+          "Preview": {
+            "type": "PreviewDriver"
+          }
+        }
+      }
     },
     {
       "name": "light-16-w",
@@ -2534,10 +2586,16 @@
     {
       "name": "swap-heavy",
       "description": "Swap to the HEAVY effect (Noise) and repeat the sweep, the upper bracket of per-pixel compute.",
-      "op": "replace_module",
-      "id": "FX",
-      "type": "NoiseEffect",
-      "parent_id": "Layer"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "FX": {
+              "type": "NoiseEffect"
+            }
+          }
+        }
+      }
     },
     {
       "name": "heavy-16-w",
@@ -3298,10 +3356,16 @@
     {
       "name": "add-modifier-for-sweep",
       "description": "Re-add the MultiplyModifier on the HEAVY effect and sweep grid sizes, the diff vs the matching measure-heavy-N step (no modifier) is the modifier's PER-FRAME cost at each grid, answering whether the ~180µs seen at 16² scales with pixel count or is fixed overhead.",
-      "op": "add_module",
-      "id": "Mod",
-      "type": "MultiplyModifier",
-      "parent_id": "Layer"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "Mod": {
+              "type": "MultiplyModifier"
+            }
+          }
+        }
+      }
     },
     {
       "name": "mod-16-w",

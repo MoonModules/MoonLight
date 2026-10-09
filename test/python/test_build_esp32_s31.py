@@ -76,29 +76,9 @@ def test_s31_is_a_preview_target():
     assert "esp32s31" in PREVIEW_TARGETS
 
 
-def test_ci_target_inference_resolves_esp32s31_before_esp32s3():
-    # Re-implement the release.yml `target:` precedence: esp32s31 → esp32s3 → esp32p4 →
-    # esp32. The esp32s31 check is FIRST on purpose — "esp32s31".startswith("esp32s3") is
-    # True, so a wrong order would map the S31 firmware to the esp32s3 IDF target.
-    def infer_target(firmware: str) -> str:
-        if firmware.startswith("esp32s31"):
-            return "esp32s31"
-        if firmware.startswith("esp32s3"):
-            return "esp32s3"
-        if firmware.startswith("esp32p4"):
-            return "esp32p4"
-        return "esp32"
+def test_ci_target_is_the_firmwares_declared_chip():
+    # The release matrix carries each firmware's chip from firmwares.json and builds for it, so no second rule can map a firmware to the wrong IDF target.
+    workflow = (ROOT / ".github/workflows/release.yml").read_text()
+    assert "{firmware: .name, chip}" in workflow
+    assert "target: ${{ matrix.chip }}" in workflow
 
-    assert infer_target("esp32s31") == "esp32s31", "S31 must NOT be misread as esp32s3"
-    assert infer_target("esp32s3-n16r8") == "esp32s3"
-    assert infer_target("esp32s3-n8r8") == "esp32s3"
-    assert infer_target("esp32p4rev1-eth") == "esp32p4"
-    assert infer_target("esp32") == "esp32"
-    assert infer_target("esp32-16mb") == "esp32"
-
-    # Belt-and-suspenders: the rule must agree with each real firmware's declared chip.
-    for name, spec in FIRMWARES.items():
-        assert infer_target(name) == spec["chip"], (
-            f'the CI target-inference rule maps "{name}" to "{infer_target(name)}" but its '
-            f'declared chip is "{spec["chip"]}" — release.yml would set the wrong target.'
-        )

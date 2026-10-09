@@ -17,81 +17,82 @@
   ],
   "live_only": true,
   "description": "Cross-product benchmark: for EACH output peripheral (RMT, i80, MoonI80, Parlio), sweep the grid 16x16 -> 32x32 -> 64x64 -> 128x128 and measure the tick/heap at each size, driving the FULL grid out that peripheral (16 lanes so 128x128=16384 lights distribute ~1024/lane). This is the apples-to-apples per-board number set: run it identically on any board and the per-peripheral, per-size ticks compare directly (an S31 vs a P4, say). Each peripheral block is optional:true, so a board that lacks one (a classic ESP32 has no MoonI80/Parlio; a P4 has all three) skips it without failing, and the observed blocks record only where the peripheral is real. A NoiseEffect fills every cell so the render cost is non-trivial at every size. Pins are the S3/P4/S31 clean 16-lane set; a board whose pins differ records a driver that failed to init (a small bailout tick, not an encode) for that peripheral. NOTE the driver drives the full grid, so at 128x128 (16384 lights) a whole-frame path may exceed its DMA budget and idle with a status (a clean degrade, captured as a fast bail tick) while the streaming ring / PSRAM path keeps driving; that contrast IS the measurement.",
-  "fixture": [
-    {
-      "name": "fix-layouts",
-      "op": "add_module",
-      "id": "Layouts",
-      "type": "Layouts"
-    },
-    {
-      "name": "fix-layers",
-      "op": "add_module",
-      "id": "Effects",
-      "type": "Effects",
-      "props": {
-        "layouts": "Layouts"
-      }
-    },
-    {
-      "name": "fix-drivers",
-      "op": "add_module",
-      "id": "Drivers",
-      "type": "Drivers",
-      "props": {
-        "effects": "Effects"
-      }
-    }
+  "top": [
+    "Layouts",
+    "Effects",
+    "Drivers"
   ],
   "steps": [
     {
       "name": "clear-layers",
-      "op": "clear_children",
-      "id": "Effects"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      }
     },
     {
       "name": "clear-drivers",
-      "op": "clear_children",
-      "id": "Drivers"
+      "op": "apply_state",
+      "document": {
+        "Drivers": {
+          "$patch": "replace"
+        }
+      }
     },
     {
       "name": "build-grid",
       "description": "One GridLayout, resized live per sweep step below.",
-      "op": "add_module",
-      "id": "Grid",
-      "type": "GridLayout",
-      "parent_id": "Layouts",
-      "props": {
-        "width": 16,
-        "height": 16
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "GridLayout",
+            "width": 16,
+            "height": 16
+          }
+        }
       }
     },
     {
       "name": "build-layer",
-      "op": "add_module",
-      "id": "Layer",
-      "type": "Layer",
-      "parent_id": "Effects"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer"
+          }
+        }
+      }
     },
     {
       "name": "build-fx",
       "description": "A NoiseEffect fills every cell, so render is non-trivial at every grid size.",
-      "op": "add_module",
-      "id": "FX",
-      "type": "NoiseEffect",
-      "parent_id": "Layer"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "FX": {
+              "type": "NoiseEffect"
+            }
+          }
+        }
+      }
     },
     {
       "name": "add-rmt",
       "description": "RMT output (every ESP32). One pin; RMT drives per-channel, so this is the single-strand output baseline.",
-      "op": "add_module",
-      "id": "Out",
-      "type": "RmtLedDriver",
-      "parent_id": "Drivers",
-      "props": {
-        "pins": "18"
-      },
-      "optional": true
+      "op": "apply_state",
+      "optional": true,
+      "document": {
+        "Drivers": {
+          "Out": {
+            "type": "RmtLedDriver",
+            "pins": "18"
+          }
+        }
+      }
     },
     {
       "name": "rmt-16-w",
@@ -863,24 +864,27 @@
     },
     {
       "name": "remove-rmt",
-      "op": "remove_module",
-      "id": "Out",
-      "optional": true
+      "op": "apply_state",
+      "optional": true,
+      "document": {
+        "Drivers": {
+          "Out": null
+        }
+      }
     },
     {
       "name": "add-i80",
       "description": "The IDF-backed peripheral on a chip whose esp_lcd backend is LCD_CAM (S3, P4, S31); a classic ESP32 names it I2S-IDF and skips here. 16 lanes so 128x128=16384 distributes ~1024/lane.",
-      "op": "add_module",
-      "id": "Out",
-      "type": "ParallelLedDriver",
-      "parent_id": "Drivers",
-      "props": {
-        "pins": "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16"
-      },
-      "controls": {
-        "peripheral": "LCD-IDF"
-      },
-      "optional": true
+      "op": "apply_state",
+      "optional": true,
+      "document": {
+        "Drivers": {
+          "Out": {
+            "type": "ParallelLedDriver",
+            "pins": "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16"
+          }
+        }
+      }
     },
     {
       "name": "i80-16-w",
@@ -1652,24 +1656,27 @@
     },
     {
       "name": "remove-i80",
-      "op": "remove_module",
-      "id": "Out",
-      "optional": true
+      "op": "apply_state",
+      "optional": true,
+      "document": {
+        "Drivers": {
+          "Out": null
+        }
+      }
     },
     {
       "name": "add-moonI80",
       "description": "MoonI80 (own-GDMA below esp_lcd, LCD_CAM only): the streaming ring, so length is not a memory question. Same 16-lane pin set.",
-      "op": "add_module",
-      "id": "Out",
-      "type": "ParallelLedDriver",
-      "parent_id": "Drivers",
-      "props": {
-        "pins": "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16"
-      },
-      "controls": {
-        "peripheral": "LCD-MM"
-      },
-      "optional": true
+      "op": "apply_state",
+      "optional": true,
+      "document": {
+        "Drivers": {
+          "Out": {
+            "type": "ParallelLedDriver",
+            "pins": "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16"
+          }
+        }
+      }
     },
     {
       "name": "moon-16-w",
@@ -2441,24 +2448,27 @@
     },
     {
       "name": "remove-moonI80",
-      "op": "remove_module",
-      "id": "Out",
-      "optional": true
+      "op": "apply_state",
+      "optional": true,
+      "document": {
+        "Drivers": {
+          "Out": null
+        }
+      }
     },
     {
       "name": "add-parlio",
       "description": "Parlio (P4 / S31): the Parallel-IO peripheral, 16 lanes.",
-      "op": "add_module",
-      "id": "Out",
-      "type": "ParallelLedDriver",
-      "parent_id": "Drivers",
-      "props": {
-        "pins": "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16"
-      },
-      "controls": {
-        "peripheral": "Parlio"
-      },
-      "optional": true
+      "op": "apply_state",
+      "optional": true,
+      "document": {
+        "Drivers": {
+          "Out": {
+            "type": "ParallelLedDriver",
+            "pins": "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16"
+          }
+        }
+      }
     },
     {
       "name": "parlio-16-w",
@@ -3230,27 +3240,45 @@
     },
     {
       "name": "remove-parlio",
-      "op": "remove_module",
-      "id": "Out",
-      "optional": true
+      "op": "apply_state",
+      "optional": true,
+      "document": {
+        "Drivers": {
+          "Out": null
+        }
+      }
     },
     {
       "name": "cleanup-fx",
-      "op": "remove_module",
-      "id": "FX",
-      "optional": true
+      "op": "apply_state",
+      "optional": true,
+      "document": {
+        "Effects": {
+          "Layer": {
+            "FX": null
+          }
+        }
+      }
     },
     {
       "name": "cleanup-layer",
-      "op": "remove_module",
-      "id": "Layer",
-      "optional": true
+      "op": "apply_state",
+      "optional": true,
+      "document": {
+        "Effects": {
+          "Layer": null
+        }
+      }
     },
     {
       "name": "cleanup-grid",
-      "op": "remove_module",
-      "id": "Grid",
-      "optional": true
+      "op": "apply_state",
+      "optional": true,
+      "document": {
+        "Layouts": {
+          "Grid": null
+        }
+      }
     }
   ]
 }

@@ -44,11 +44,11 @@ public:
     // A control rather than a probe because this driver is send-only, having no receive seam.
     /// Card firmware generation, which decides whether the sync frame goes out once or twice.
     static constexpr const char* kFirmwareOptions[] = {"v12 and older", "v13 and newer"};
-    /// How many card firmware generations the selector offers.
-    static constexpr uint8_t kFirmwareCount = 2;
+    /// The card firmware generations `firmware` picks from, in kFirmwareOptions order.
+    enum Firmware : uint8_t { kFirmwareV12, kFirmwareV13, kFirmwareCount };
 
-    /// Card firmware generation (index into kFirmwareOptions): 0 is v12-and-older, 1 is v13+.
-    uint8_t firmware = 0;
+    /// Card firmware generation: v12-and-older or v13+.
+    uint8_t firmware = kFirmwareV12;
     // Persisted by LABEL, not index, so a NIC keeps its identity across a re-enumeration.
     /// Host NIC to send from, row 0 being capture-only. Not built on ESP32.
     uint8_t interfaceSel_ = 0;
@@ -207,7 +207,7 @@ public:
         if (nLights < static_cast<nrOfLightsType>(wallW)) return;
 
         // Sending two to a card that acts on the first is not harmless, hence a choice.
-        const int frameCopies = (firmware == 1) ? 2 : 1;
+        const int frameCopies = (firmware == kFirmwareV13) ? 2 : 1;
 
         // Brightness first, the order the cards expect; advisory, and older firmware ignores it.
         {

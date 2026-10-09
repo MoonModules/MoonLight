@@ -3,6 +3,7 @@
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/module/MoonModule.h"
 #include "core/module/Scheduler.h"
+#include "core/module/StateDocument.h"   // isFlatConfig: a 6.0 config is a flat file
 #include "core/system/SystemModule.h"
 #include "core/system/FilesystemModule.h"
 #include "core/system/EthernetModule.h"
@@ -25,7 +26,7 @@ inline bool addressCounts(const uint8_t ip[4], bool buildHasWiFi, const uint8_t*
     return configured && std::memcmp(ip, configured, 4) == 0;
 }
 
-/// All device connectivity, cascading from Ethernet through WiFi to an access point.
+/// All device connectivity, cascading from Ethernet through WiFi to an access point: @xref{the-cascade}.
 ///
 /// Network holds the cascade, its mode and mDNS; each interface's settings are on its own card below it: Ethernet, WiFi and the access point.
 /// A desktop builds the same cards over stubs, so they can be shown and tested, and reports no network of its own.
@@ -35,20 +36,15 @@ inline bool addressCounts(const uint8_t ip[4], bool buildHasWiFi, const uint8_t*
 ///
 /// ## The cascade
 ///
-/// Ethernet is preferred, then WiFi, then our own access point as a last resort.
-/// A higher-priority link tears the lower ones down to reclaim memory.
-/// Each is tried unconditionally, the platform failing fast where hardware is absent.
-/// A state machine drives this from the slow tick, and a late interface is promoted live.
+/// Ethernet is preferred, then WiFi, then the access point; a higher-priority link tears the lower ones down to reclaim memory, each is tried unconditionally, a late one promoted live.
 ///
 /// ## A link-local address is a last resort
 ///
-/// With no DHCP server the client gives itself a 169.254.x.y address (RFC 3927), so a laptop on the same cable still reaches the device by name.
-/// It counts as connected only on a build without WiFi, where it is the one way in.
+/// With no DHCP server the client gives itself a 169.254.x.y address (RFC 3927), so a laptop on the same cable still reaches the device by name. It counts as connected only on a build without WiFi, where it is the one way in.
 /// Where WiFi exists it never displaces the cascade: a cable on a network without DHCP would otherwise switch off a working WiFi path or the access point.
 /// A 169.254 address the user set as static is a choice, not a fallback, so it counts everywhere, while a self-assigned one beside a static setting still does not.
 ///
-/// The device name belongs to the system module, and is the one identity behind every name.
-/// It registers before the light pipeline, which then sees the real remaining heap.
+/// The device name belongs to the system module, and is the one identity behind every name. It registers before the light pipeline, which then sees the real remaining heap.
 class NetworkModule : public MoonModule {
 public:
     /// Adopt the scheduler, which the tree rebuild after a mode change goes through.
@@ -209,6 +205,8 @@ private:
 
     /// The known network being tried or joined, by row id so adding, moving or forgetting a row keeps it, or 0 for a network picked from the scan.
     uint32_t staId_ = 0;
+    /// The first known network's password, which the access point carries: stable while the station tries one network after another.
+    const char* firstNetworkPassword() const MM_NONBLOCKING { return wifi_ ? wifi_->passwordAt(0) : ""; }
     /// Where that network now is in the known list; past the end (no row) for none, which the list's lookups treat as no network.
     uint8_t staIndex() const MM_NONBLOCKING {
         const int i = wifi_ ? wifi_->indexOfId(staId_) : -1;
@@ -498,7 +496,7 @@ private:
     /// How often the fallback retries the known networks, long because each attempt moves the radio to a router's channel, knocking the access point's phones off.
     static constexpr uint32_t kApRetryStaMs = 60000;
     bool apUp_ = false;          ///< whether the access point runs
-    bool idleForNever_ = false;  ///< the fallback found nothing because the access point never opens
+    bool idleAfterSetup_ = false;  ///< the fallback found nothing because the access point was for the first setup only
     uint32_t apSig_ = 0;         ///< how it appears as it was opened, so a change re-opens it live
     uint32_t apHoldFrom_ = 0;    ///< when a join asked for from the access point started, 0 when none holds it open
     /// How long the access point stays after a join asked for from it, so the phone follows to the new address.
@@ -545,19 +543,19 @@ private:
         }
     }
 
-    /// Nothing joined: open the access point, so a user can reach the device to configure it, unless it never opens.
+    /// Nothing joined: open the access point, so a user can reach the device to configure it, unless it was for the first setup only.
     void fallBack(uint32_t now) {
-        const bool never = ap_ && ap_->opens(othersConfigured()) == AccessPointModule::Opens::Never;
-        idleForNever_ = never;
-        if (!never && openAp()) {
+        const bool closed = ap_ && ap_->opens(othersConfigured()) == AccessPointModule::Opens::FirstSetup;
+        idleAfterSetup_ = closed;
+        if (!closed && openAp()) {
             state_ = State::AP;
-            mm::formatTo(statusBuf_, sizeof(statusBuf_), "AP: %s @ %s", readDeviceName(), captive::kAddressText);
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "AP: %s @ %s", ap_ ? ap_->name() : readDeviceName(), captive::kAddressText);
             setStatus(statusBuf_, Severity::Status);
         } else {
-            // Idle retries the known networks, so a device whose access point never opens still rejoins.
+            // Idle retries the known networks, so a device whose access point stays closed still rejoins.
             state_ = State::Idle;
-            mm::formatTo(statusBuf_, sizeof(statusBuf_), never ? "No network: retrying, the access point never opens" : "No network");
-            setStatus(statusBuf_, never ? Severity::Warning : Severity::Error);
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), closed ? "No network: retrying, the access point was for the first setup only" : "No network");
+            setStatus(statusBuf_, closed ? Severity::Warning : Severity::Error);
         }
         stateChangeTime_ = now;
         // The status needs no rebuild, but the radio readouts' visibility does.
@@ -571,8 +569,10 @@ private:
         if (!FilesystemModule::pathFor(this, path, sizeof(path))) return;
         char* json = FilesystemModule::readWholeFile(path);
         if (!json) return;
-        const bool eth = ethernet_ && ethernet_->adoptLegacy(json);
-        const bool sta = wifi_ && wifi_->adoptLegacy(json);
+        // Only a flat file is a 6.0 config; a state document holds the same names inside its children.
+        const bool flat = isFlatConfig(json);
+        const bool eth = flat && ethernet_ && ethernet_->adoptLegacy(json);
+        const bool sta = flat && wifi_ && wifi_->adoptLegacy(json);
         platform::free(json);
         if (!eth && !sta) return;
         std::printf("NetworkModule: moved 6.0's network settings onto their cards\n");
@@ -588,16 +588,14 @@ private:
     /// Open the access point beside whatever else runs, true once it is up.
     bool openAp() {
         if (apUp_) return true;
-        // The same identity as every other name, so a device shows one everywhere.
-        const char* name = readDeviceName();
-        const platform::WifiApConfig cfg = ap_ ? ap_->config(name)
-                                               : platform::WifiApConfig{name, captive::kAddressText, ""};
+        const platform::WifiApConfig cfg = ap_ ? ap_->config(firstNetworkPassword())
+                                               : platform::WifiApConfig{readDeviceName(), captive::kAddressText, ""};
         if (!platform::wifiApInit(cfg)) return false;
         apUp_ = true;
-        apSig_ = ap_ ? ap_->sig(name) : 0;
+        apSig_ = ap_ ? ap_->sig(firstNetworkPassword()) : 0;
         syncTxPower();  // see setWifiCredentials's syncTxPower comment
         // The address is what a user needs, the name alone sending them looking.
-        std::printf("NetworkModule: AP started: %s → join it and open http://%s\n", name, captive::kAddressText);
+        std::printf("NetworkModule: AP started: %s → join it and open http://%s\n", cfg.name, captive::kAddressText);
         // So a phone joining the access point finds the networks in range already listed.
         if (wifi_) wifi_->onAccessPointStarted();
         if (ap_) ap_->started();
@@ -635,14 +633,13 @@ private:
         if constexpr (!platform::hasWiFi) return;
         if (!ap_) return;
         const bool others = othersConfigured();
-        ap_->advise(others);
         const auto opens = ap_->opens(others);
         const bool connected = (state_ == State::ConnectedEth || state_ == State::ConnectedSta);
         if (!apUp_) {
             // Not while a station join is in progress: one radio, so opening moves the channel under the join, and the first join after boot failed that way on the bench.
             if (opens == AccessPointModule::Opens::Always && state_ != State::WaitingSta) openAp();
-            // Idle only because it never opened: lifting that opens it now, as every setting applies live.
-            else if (idleForNever_ && opens == AccessPointModule::Opens::OnFailure) fallBack(now);
+            // Idle only because it stayed closed: lifting that opens it now, as every setting applies live.
+            else if (idleAfterSetup_ && opens == AccessPointModule::Opens::OnFailure) fallBack(now);
             return;
         }
         const uint32_t clients = platform::wifiApClientCount();
@@ -652,10 +649,10 @@ private:
         const bool wanted = opens == AccessPointModule::Opens::Always
                          || (opens == AccessPointModule::Opens::OnFailure && (!connected || apHoldFrom_));
         if (!wanted) {
-            std::printf("NetworkModule: Shutting down AP (%s)\n", connected ? "higher priority connected" : "it never opens");
+            std::printf("NetworkModule: Shutting down AP (%s)\n", connected ? "higher priority connected" : "it was for the first setup only");
             closeAp();
             if (state_ == State::AP) fallBack(now);   // never chosen while it was the fallback
-        } else if (ap_->sig(readDeviceName()) != apSig_) {
+        } else if (ap_->sig(firstNetworkPassword()) != apSig_) {
             // A new password or name applies now, which drops the phones on it to rejoin.
             closeAp();
             openAp();
@@ -673,7 +670,7 @@ private:
 
     /// Adopt a connected interface, ConnectedEth or ConnectedSta, shutting down whatever it outranks.
     void onConnected(State to, uint32_t now) {
-        idleForNever_ = false;   // connected, so no longer idle for want of an access point
+        idleAfterSetup_ = false;   // connected, so idle for want of an access point is over
         state_ = to;
         // A fresh connection, so a dropout or re-lease clock from before it never cuts a later grace short.
         lostTime_ = 0;

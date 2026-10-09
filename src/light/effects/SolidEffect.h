@@ -43,7 +43,7 @@ public:
     /// Scales the flat and palette-spread results.
     uint8_t brightness = 255;
     /// Which of the five color modes fills the layer.
-    uint8_t colorMode = 0;
+    uint8_t colorMode = kColorFlat;
     /// The band modes drop palette entries darker than this on every channel.
     uint8_t minRGB = 10;
     /// The band modes shuffle the surviving entries, reproducibly.
@@ -51,8 +51,8 @@ public:
 
     static constexpr const char* kColorModeOptions[] = {
         "RGB(W)", "Palette", "Palette avg", "Palette rows", "Palette cols"};
-    /// How many color modes the select offers.
-    static constexpr uint8_t kColorModeCount = 5;
+    /// The color modes, in option order, ending with how many the select offers.
+    enum ColorMode : uint8_t { kColorFlat, kColorPalette, kColorPaletteAvg, kColorPaletteRows, kColorPaletteCols, kColorModeCount };
 
     /// Publish the flat color, the brightness, the mode and the band filters.
     void defineControls() override {
@@ -85,7 +85,7 @@ public:
         const nrOfLightsType nLights = nrOfLights();
 
         switch (colorMode) {
-            case 0: {  // A flat color, with brightness applied per channel.
+            case kColorFlat: {  // A flat color, with brightness applied per channel.
                 const RGB c{static_cast<uint8_t>(red   * brightness / 255),
                             static_cast<uint8_t>(green * brightness / 255),
                             static_cast<uint8_t>(blue  * brightness / 255)};
@@ -94,7 +94,7 @@ public:
                 if (cpl >= 4) writeWhite(cv, nLights, cpl, static_cast<uint8_t>(white * brightness / 255));
                 break;
             }
-            case 1: {  // The palette spread across the lights, one wheel index each.
+            case kColorPalette: {  // The palette spread across the lights, one wheel index each.
                 uint8_t* data = cv.data;
                 const size_t bytes = cv.bytes;
                 for (nrOfLightsType i = 0; i < nLights; i++) {
@@ -112,7 +112,7 @@ public:
                 if (cpl >= 4) writeWhite(cv, nLights, cpl, 0);
                 break;
             }
-            case 2: {  // The RMS average of the palette's non-black colors, filled solid.
+            case kColorPaletteAvg: {  // The RMS average of the palette's non-black colors, filled solid.
                 uint32_t sumR = 0, sumG = 0, sumB = 0;
                 int n = 0;
                 for (int i = 0; i < 256; i++) {
@@ -134,7 +134,7 @@ public:
                 break;
             }
             default: {  // Band the filtered palette along the rows or the columns.
-                const bool rows = (colorMode == 3);
+                const bool rows = (colorMode == kColorPaletteRows);
                 const int axisSize = rows ? h : w;
 
                 // The wheel indices bright enough on any channel to survive the floor.

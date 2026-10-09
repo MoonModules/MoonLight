@@ -1,22 +1,73 @@
 /// @defgroup filesystem_impl Filesystem implementation
-/// The persistence engine: writes control values to `/.config/*.json` and restores them on boot.
-/// Public surface and class layout live in FilesystemModule.h.
+/// The persistence engine: writes control values to `/.config/*.json` and restores them on boot. Public surface and class layout live in FilesystemModule.h.
 /// @{
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/system/FilesystemModule.h"
 
 #include "core/module/Control.h"
-#include "core/util/JsonSink.h"   // fixed-buffer mode used by writeValue()
+#include "core/util/JsonSink.h"   // the growable sink the save and the boot conversion write into
 #include "core/util/JsonUtil.h"
 #include "core/util/ModuleFactory.h"
 #include "core/module/Scheduler.h"
+#include "core/module/StateDocument.h"
 #include "platform/platform.h"
 
-#include <climits>  // INT16_MIN/MAX in applyValue's Int16 clamp
 #include <cstdio>
+#include <new>      // placement new: removeTree's heap DirLevel
 #include <cstring>
 
 namespace mm {
+
+namespace {
+
+/// One directory level, collected. fsList hands entries to a C callback while the directory is open.
+/// Removing a file from inside that callback mutates what is being walked, which LittleFS does not promise to survive. So a level is read out first, then acted on.
+struct DirLevel {
+    static constexpr uint8_t kMax = 64;   ///< entries per level; a deeper listing is deleted in passes
+    char names[kMax][40];
+    bool isDir[kMax];
+    uint8_t count = 0;
+    bool truncated = false;
+};
+
+void collectEntry(const char* name, bool isDir, uint32_t, void* user) {
+    auto* lvl = static_cast<DirLevel*>(user);
+    if (lvl->count >= DirLevel::kMax) { lvl->truncated = true; return; }
+    if (!name || std::strlen(name) >= sizeof(lvl->names[0])) return;
+    std::snprintf(lvl->names[lvl->count], sizeof(lvl->names[0]), "%s", name);
+    lvl->isDir[lvl->count] = isDir;
+    lvl->count++;
+}
+
+}  // namespace
+
+// Depth-first, because a directory goes only once empty; `depth` bounds the recursion since a user shapes this tree on the render task.
+bool FilesystemModule::removeTree(const char* path, uint8_t depth) {
+    if (depth > 8) return false;
+    if (platform::fsRemove(path)) return true;   // a file, or an already-empty directory
+
+    // The listing lives on the heap: a DirLevel is ~2.6 KB, users nest folders freely, and the main task has 12 KB of stack (CONFIG_ESP_MAIN_TASK_STACK_SIZE).
+    auto* raw = platform::alloc(sizeof(DirLevel));
+    if (!raw) return false;                      // no room to list: report failure, delete nothing
+    // Placement new rather than assigning the two fields by hand: DirLevel already declares its defaults, and a copy here silently skips whatever member is added to it next.
+    DirLevel* lvlp = new (raw) DirLevel;
+    DirLevel& lvl = *lvlp;
+    struct Freer { DirLevel* p; ~Freer() { p->~DirLevel(); platform::free(p); } } freer{lvlp};
+    platform::fsList(path, &collectEntry, &lvl);
+    if (lvl.count == 0) return false;            // not a directory, or unreadable: the failure stands
+
+    bool ok = true;
+    for (uint8_t i = 0; i < lvl.count; i++) {
+        char child[192];
+        // A truncated child path names a different file than the one listed, so a length at or past the buffer skips it.
+        const int n = std::snprintf(child, sizeof(child), "%s/%s", path, lvl.names[i]);
+        if (n < 0 || static_cast<size_t>(n) >= sizeof(child)) { ok = false; continue; }
+        if (!removeTree(child, static_cast<uint8_t>(depth + 1))) ok = false;
+    }
+    // A level wider than kMax leaves entries behind, so the directory is still not empty. Report the failure rather than a false success: the caller can delete again to take the next batch.
+    if (!ok || lvl.truncated) return false;
+    return platform::fsRemove(path);
+}
 
 FilesystemModule::~FilesystemModule() {
     if (instance_ == this) instance_ = nullptr;
@@ -27,16 +78,13 @@ void FilesystemModule::setScheduler(Scheduler* s) {
     instance_ = this;
     if (s) {
         s->setLoadAllHook(&loadAllHookTrampoline_);
-        s->setReapplyValuesHook(&reapplyValuesHookTrampoline_);
         // Scheduler::setControl calls this after a mutation so a control set from anywhere (IR, WLED bridge, /api/control) schedules the same debounced save. noteDirty is a static. A plain function pointer suffices, no trampoline needed.
         s->setNoteDirtyHook(&FilesystemModule::noteDirty);
     }
 }
 
 void FilesystemModule::setup() {
-    // Both failures below name the directory, because the useful question when settings do not persist is always "which location did it try".
-    // Reported ONCE here rather than as a write error per save.
-    // An unusable root produces one failed save per module per change, and that stream buries the one fact that explains it.
+    // Both failures name the directory and report once here, because a failed save per module per change would bury the one fact that explains it.
     if (!platform::fsMount()) {
         std::printf("FilesystemModule: cannot use %s, persistence disabled\n",
                     platform::fsRootPath());
@@ -52,19 +100,14 @@ void FilesystemModule::setup() {
                 platform::filesystemUsed(), platform::filesystemTotal());
 }
 
-// FilesystemModule is a non-UI persistence engine: it holds no controls (hence no defineControls override), so it renders no card in the module tree, a card here would confuse an end user next to the File Manager.
-// Its one piece of status, "last saved", is displayed by FileManagerModule, which reads it via FilesystemModule::instance()->lastSavedStr().
-// The filesystem-usage gauge likewise lives on FileManagerModule (that's where filesystem state is topical).
+// No controls and no card: FileManagerModule shows the "last saved" status via lastSavedStr() and the filesystem-usage gauge.
 
 void FilesystemModule::tick1s() MM_NONBLOCKING {
     if (!mounted_ || !scheduler_) return;
     updateLastSavedStr();
     if (!dirtyPending_) return;
     const uint32_t now = platform::millis();
-    // Two conditions, either of which saves.
-    // The DEBOUNCE waits for quiet, which coalesces a burst of edits into one write.
-    // The CEILING bounds how long that wait may last, because a continuous writer never goes quiet.
-    // Without it a control driven at 50 Hz re-stamped the debounce forever and nothing in that module's file was ever saved, including settings a person had chosen.
+    // Either saves: the debounce coalesces a burst of edits, and the ceiling bounds the wait because a control driven at 50 Hz never goes quiet.
     if (now - lastDirtyMs_ < DEBOUNCE_MS && now - firstDirtyMs_ < MAX_DEFER_MS) return;
     flush();
 }
@@ -127,10 +170,6 @@ void FilesystemModule::loadAllHookTrampoline_(Scheduler* s) {
     if (instance_) instance_->loadAll(s);
 }
 
-void FilesystemModule::reapplyValuesHookTrampoline_(Scheduler* s) {
-    if (instance_) instance_->reapplyValues(s);
-}
-
 void FilesystemModule::loadAll(Scheduler* s) {
     if (!mounted_) {
         // setup() hasn't run yet (we're in phase 2, before phase 3 setup). Mount now so we can read; setup() later calls fsMount again (idempotent).
@@ -141,61 +180,7 @@ void FilesystemModule::loadAll(Scheduler* s) {
     for (uint8_t i = 0; i < s->moduleCount(); i++) {
         MoonModule* m = s->module(i);
         if (!m || m == this) continue;
-        loadSubtree(m);
-    }
-}
-
-// Re-apply saved VALUES after the tree has been prepared, for a module whose control set is not final until then.
-// `applyNode`'s two-pass overlay covers a schema that depends on a control VALUE (ParallelLedDriver's `peripheral` swapping the backend-owned controls), because rebuildControls() alone re-derives it.
-// It cannot cover a schema that depends on WORK: a MoonLive script's declared controls exist only once the script has COMPILED, which is prepare()'s job and runs after load.
-// So at load time `cols`/`rows` are not in the list, overlayControls skips them, and prepare() then seeds them from the script's own defaults: the saved values are read and dropped.
-//
-// Values only, and no tree reconciliation: the shape was settled by the first pass, so this pass must not add, remove or re-enable anything.
-// Cold path, once per boot, and it re-reads rather than holding every node's JSON until prepare() (memory on every module for a case that is three).
-void FilesystemModule::reapplyValues(Scheduler* s) {
-    if (!mounted_ || !s) return;
-    for (uint8_t i = 0; i < s->moduleCount(); i++) {
-        MoonModule* m = s->module(i);
-        if (!m || m == this) continue;
-        reapplySubtree(m);
-    }
-}
-
-void FilesystemModule::reapplySubtree(MoonModule* m) {
-    char path[MAX_PATH];
-    if (!pathFor(m, path, sizeof(path))) return;
-    const long size = platform::fsSize(path);
-    if (size <= 0) return;
-    char* buf = static_cast<char*>(platform::alloc(static_cast<size_t>(size) + 1));
-    if (!buf) return;                    // out of memory on a cold path: the first pass already ran
-    const int n = platform::fsRead(path, buf, static_cast<size_t>(size) + 1);
-    if (n > 0) { buf[n] = '\0'; reapplyNode(m, buf, ""); }
-    platform::free(buf);
-}
-
-// Walk the same prefix scheme applyNode uses, overlaying values onto whatever controls exist NOW.
-void FilesystemModule::reapplyNode(MoonModule* m, const char* json, const char* prefix) {
-    if (!m) return;
-    // A late value gets the reaction any write gets, a scripted palette's name resolving only here; re-read per index, since the reaction rebuilds the list.
-    char key[MAX_KEY];
-    for (uint8_t i = 0; i < m->controls().count(); i++) {
-        auto& c = m->controls()[i];
-        if (!isPersistable(c)) continue;
-        std::snprintf(key, sizeof(key), "%s%s", prefix, c.name);
-        JsonSink before;
-        writeControlValue(before, c, /*saving=*/true);   // the saved form, which carries what a list's summary leaves out
-        applyValue(c, json, key);
-        JsonSink after;
-        writeControlValue(after, c, /*saving=*/true);
-        if (before.size() != after.size() || std::memcmp(before.data(), after.data(), before.size()) != 0)
-            if (scheduler_) scheduler_->reactToControlChange(m, c.name);
-    }
-    char childPrefix[MAX_PATH];
-    for (uint8_t i = 0; i < m->childCount(); i++) {
-        MoonModule* c = m->child(i);
-        if (!c) continue;
-        std::snprintf(childPrefix, sizeof(childPrefix), "%s%u.", prefix, static_cast<unsigned>(i));
-        reapplyNode(c, json, childPrefix);
+        loadSubtree(*s, m);
     }
 }
 
@@ -213,13 +198,23 @@ char* FilesystemModule::readWholeFile(const char* path) {
     return buf;
 }
 
-void FilesystemModule::loadSubtree(MoonModule* m) {
+// The file is the module's state document, applied as boot's load: what this build cannot place is skipped and logged.
+void FilesystemModule::loadSubtree(Scheduler& s, MoonModule* m) {
     char path[MAX_PATH];
     if (!pathFor(m, path, sizeof(path))) return;
-    if (char* buf = readWholeFile(path)) {
-        applyNode(m, buf, "");
-        platform::free(buf);
+    char* buf = readWholeFile(path);
+    if (!buf) return;
+    // Temporary, see MIGRATING: a file in the flat format of builds before 2026-10-08 is read as the document it describes, and saved as one.
+    JsonSink converted;
+    const bool flat = flatToStateDocument(buf, *m, converted);
+    const StateDocumentResult r = applyStateDocument(s, flat ? converted.data() : buf, StateSource::Boot);
+    if (!r.ok) std::printf("FilesystemModule: %s not loaded: %s\n", path, r.error);
+    if (flat && r.ok) {
+        std::printf("FilesystemModule: %s converted to a state document\n", path);
+        m->markDirty();
+        noteDirty();
     }
+    platform::free(buf);
 }
 
 // The shared resolution. "/.config/<Type>.json", one level deep, to the scheduler index of the live top-level module of that type. -1 when the path is not a config file or no module matches.
@@ -251,14 +246,13 @@ int FilesystemModule::moduleIndexForConfigPath(const char* path) {
 bool FilesystemModule::applyConfigFile(const char* path) {
     const int idx = moduleIndexForConfigPath(path);
     if (idx < 0) return false;
-    MoonModule* m = scheduler_->module(static_cast<uint8_t>(idx));
     char* buf = readWholeFile(path);
     if (!buf) return false;
-    const bool applied = applySubtree(m, buf);
+    // Applied as a stored file: lenient where this build differs, with the lifecycle, the prepare and the save a running tree needs.
+    const StateDocumentResult r = applyStateDocument(*scheduler_, buf, StateSource::Stored);
     platform::free(buf);
-    // Controls that appear only at prepare() (a script's declared controls) could not take their values yet: reapply after the prepare this write requested.
-    if (applied) scheduler_->requestValuesReapply();
-    return applied;
+    if (!r.ok) std::printf("FilesystemModule: %s not applied: %s\n", path, r.error);
+    return r.ok;
 }
 
 // See the header: queue for the render task; one bit per top-level module coalesces a multi-file upload to one apply each.
@@ -281,206 +275,17 @@ void FilesystemModule::tick20ms() MM_NONBLOCKING {
     scheduler_->requestPrepareTree();   // one sweep for the whole batch, next tick
 }
 
-// Overlay every persistable control's saved value onto the module's current control list, in list order.
-void FilesystemModule::overlayControls(MoonModule* m, const char* json, const char* prefix) {
-    char key[MAX_KEY];
-    auto& cs = m->controls();
-    for (uint8_t i = 0; i < cs.count(); i++) {
-        auto& c = cs[i];
-        if (!isPersistable(c)) continue;
-        std::snprintf(key, sizeof(key), "%s%s", prefix, c.name);
-        applyValue(c, json, key);
-    }
-}
-
-// Restore a code-wired child's saved state when its boot index differs from the index the file recorded it at (a reorder of code-wired siblings).
-// Scan the saved child entries ("<prefix><j>.type") for the one whose type matches `wired`, and apply that entry's subtree to it.
-// If the file has no entry for this wired child (it predates the child), there is nothing to restore and the child keeps its defaults.
-void FilesystemModule::applyWiredChildFromJson(MoonModule* wired, const char* json, const char* prefix) {
-    for (uint8_t j = 0; ; j++) {
-        char typeKey[MAX_KEY];
-        std::snprintf(typeKey, sizeof(typeKey), "%s%u.type", prefix, static_cast<unsigned>(j));
-        char typeName[32] = {};
-        mm::json::parseString(json, typeKey, typeName, sizeof(typeName));
-        if (typeName[0] == 0) return;   // walked past the last saved child: no match, keep defaults
-        if (std::strcmp(typeName, wired->typeName()) != 0) continue;
-        char childPrefix[MAX_KEY];
-        std::snprintf(childPrefix, sizeof(childPrefix), "%s%u.", prefix, static_cast<unsigned>(j));
-        applyNode(wired, json, childPrefix);
-        return;
-    }
-}
-
-// True when a live child of `parent` is a code-wired singleton of `typeName`. The reconcile loop uses it to avoid factory-creating a duplicate of a wired type-singleton whose saved entry sits at an index other than its boot position (already restored in place by applyWiredChildFromJson).
-bool FilesystemModule::hasWiredChildOfType(const MoonModule* parent, const char* typeName) {
-    for (uint8_t i = 0; i < parent->childCount(); i++) {
-        MoonModule* c = parent->child(i);
-        if (c && c->isWiredByCode() && std::strcmp(c->typeName(), typeName) == 0) return true;
-    }
-    return false;
-}
-
-// Runtime entry point over applyNode.
-// See the header for the contract; the reason it exists is the lifecycle gap.
-// At boot, Scheduler phases 3 and 4 call setup() and applyState() across the whole tree after the load, so applyNode only has to call defineControls() on a child it creates.
-// A runtime caller gets no such phases.
-// A module that never saw setup() comes back with its buffers unbuilt and its hardware unclaimed, a config that "sometimes does not work".
-bool FilesystemModule::applySubtree(MoonModule* m, const char* json) {
-    if (!m || !json) return false;
-    // Refuse a body that is not credibly one of ours BEFORE touching the tree. applyNode's trim step reads "no children in the JSON" as "delete every live child", so a truncated file (an interrupted upload, a half-written config) would not leave the current state alone, it would WIPE it. Every subtree we write emits `enabled`, so its absence is the cheap, format-specific test for "this is not a subtree", and it costs one key lookup on a cold path.
-    if (!mm::json::hasKey(json, "enabled")) {
-        std::printf("FilesystemModule: ignoring malformed subtree for %s\n", m->typeName());
-        return false;
-    }
-    applyNode(m, json, "");
-    // The restored names are settled against the whole tree, as the boot load does.
-    if (scheduler_) scheduler_->deduplicateNamesInTree();
-    // Same order as the runtime add path (HttpServerModule::applyAddModule): setup() may read what defineControls() bound, and applyState() then builds or releases per effectively-enabled. Both recurse over children on their own (MoonModule::setup / applyState), so one call at the root covers every node applyNode just created.
-    m->setup();
-    m->applyState();
-    // The tree just changed shape and values, so it has to be written back.
-    // Without this an applied config renders correctly and is then LOST on reboot, because the boot loader restores the config file that the apply never updated.
-    // Marked here rather than in each caller, so every applySubtree user persists by construction.
-    m->markDirty();
-    noteDirty();
-    // Structural change on a live tree: flip the WS full-resync flag through the existing schema hook.
-    // An apply with no HTTP request in flight still reaches every open browser.
-    // Same hook rebuildControls uses; no coupling to HttpServerModule.
-    MoonModule::notifySchemaChanged();
-    return true;
-}
-
-// A user module's saved name; uniqueness is settled once the whole tree is in, since a sibling still on its default name may be about to give that name up.
-void FilesystemModule::restoreName(MoonModule* m, const char* json, const char* prefix) {
-    if (!m || m->isWiredByCode()) return;
-    char key[MAX_KEY], name[MoonModule::kNameLen] = {};
-    std::snprintf(key, sizeof(key), "%s$name", prefix);
-    mm::json::parseString(json, key, name, sizeof(name));
-    if (name[0]) m->setName(name);
-}
-
-void FilesystemModule::applyNode(MoonModule* m, const char* json, const char* prefix) {
-    char key[MAX_KEY];
-    // Overlay the saved values.
-    // A module whose CONTROL SET depends on one of its own control VALUES (the canonical case: ParallelLedDriver's `peripheral` Select, which swaps the bus backend and with it the backend-owned controls, clockPin, dcPin, the ring cluster) needs a second pass: the first overlay writes `peripheral`, but the backend-owned controls are still bound to the DEFAULT backend's members, so their saved values land on a backend about to be discarded.
-    // So overlay, then rebuildControls() (which re-runs defineControls → swaps the live backend to match the just-applied `peripheral`, re-binding the control list to the RIGHT backend's members), then overlay again onto the now-correct controls. rebuildControls' schema-hash gate no-ops the refire when nothing changed (the common case: a module with no value-dependent schema), and the second overlay is idempotent value writes, so this is safe and cheap for every module.
-    // Without it, any reload that rebuilds the control set (a reboot, an INT_WDT restart) silently reverts every backend-owned control (clockPin, the ring geometry) to its default.
-    overlayControls(m, json, prefix);
-    m->rebuildControls();
-    overlayControls(m, json, prefix);
-
-    std::snprintf(key, sizeof(key), "%senabled", prefix);
-    // Note: we can't distinguish "key absent" from "key=false" with the flat parser.
-    // The convention: every saved file includes "enabled", so if the file exists and applyNode is reached we assume the key is present.
-    // Production callers always emit enabled (see writeNode).
-    // If the user hand-edited the file and dropped it, they get enabled=false (matches the default-after-bad-edit behavior).
-    m->setEnabled(mm::json::parseBool(json, key));
-
-    // Reconcile children with the JSON's tree shape.
-    // Walk each saved child entry ("<prefix><idx>.type") and place the corresponding live child.
-    // The JSON index `i` and the live position `pos` are DECOUPLED: `i` always advances; `pos` advances only when a child is actually placed there.
-    // This decoupling is what makes a single bad entry non-fatal, a JSON entry that produces no live child (an unknown/renamed type, or a stale slot over a code-wired child) is skipped WITHOUT dropping the user modules the file records after it.
-    // User modules are created fresh here in file order via addChild, so their user-chosen order (a UI reorder) round-trips.
-    // Code-wired children pre-exist and are skipped in place (see the isWiredByCode() branch below).
-    //
-    // The decoupling is what keeps a single bad entry from taking the rest of the tree down with it, the failure mode a naive "break on any mismatch/unknown" reconcile has, where one unresolvable entry drops every module the file records after it.
-    // The two entries that must skip-not-break:
-    //   - a stale slot over a code-wired child (the file predates the wired child, or names a different
-    //     type where it now sits): keep the wired instance, advance past it;
-    //   - a renamed/removed module type (a documented break rather than a migration, e.g. a pre-consolidation
-    //     MoonI80Peripheral/I80Peripheral entry): that entry drops, the rest stay.
-    uint8_t pos = 0;
-    for (uint8_t i = 0; ; i++) {
-        char typeKey[MAX_KEY];
-        std::snprintf(typeKey, sizeof(typeKey), "%s%u.type", prefix, static_cast<unsigned>(i));
-        char typeName[32] = {};
-        mm::json::parseString(json, typeKey, typeName, sizeof(typeName));
-        if (typeName[0] == 0) break;
-
-        MoonModule* live = m->child(pos);
-        if (!live || std::strcmp(live->typeName(), typeName) != 0) {
-            // A code-wired child that mismatches the saved type here is a STALE SLOT (the file predates this code-wired child, or names a different type where it now sits, e.g. boot wired the code-wired siblings in a different order than the file recorded them).
-            // Never replace/destroy the wired instance: keep it and advance past it.
-            // But first restore ITS saved values, find the JSON entry that names THIS wired child's type and overlay that entry's controls.
-            // A code-wired child's persisted state survives even when its saved index differs from its boot index (a reorder).
-            // Without this the wired child keeps its defaults on every reboot.
-            if (live && live->isWiredByCode()) {
-                applyWiredChildFromJson(live, json, prefix);
-                pos++;
-                continue;
-            }
-            // A code-wired child is a type-singleton (one per type per container).
-            // If a live wired child already has this entry's type, this entry IS that singleton's saved slot, it was restored by the applyWiredChildFromJson type-search above when the wired child sat at an earlier position (its saved index differs from its boot index).
-            // Creating here would spawn a DUPLICATE, so drop the entry without advancing `pos`: the singleton already stands in the live tree.
-            if (hasWiredChildOfType(m, typeName)) continue;
-            MoonModule* created = ModuleFactory::create(typeName);
-            if (!created) {
-                // Unknown/renamed type: the module drops. Skip this JSON entry and keep reconciling the rest, do NOT advance `pos`, so the file's later user modules still map to the correct live position.
-                continue;
-            }
-            created->defineControls();
-            if (live) {
-                MoonModule* old = m->replaceChildAt(pos, created);
-                if (old) { old->release(); Scheduler::deleteTree(old); }
-            } else {
-                m->addChild(created);
-            }
-            // A freshly created module carries the factory's display name, so restoring one config while another tree already holds that name leaves TWO modules answering to it. The boot path gets this from deduplicateNamesInTree, but a config applied after boot (a card saved, a backup restored) reached the live tree without it: a MoonLiveLayout and a MoonLiveEffect were then both "MoonLive", and every lookup that resolves a module by name (parent_id on an add, the UI's card selector) found whichever came first, so the effect's controls rendered on the layout's card.
-            if (auto* sched = Scheduler::instance()) sched->ensureUniqueName(created);
-        }
-
-        char childPrefix[MAX_KEY];
-        std::snprintf(childPrefix, sizeof(childPrefix), "%s%u.", prefix, static_cast<unsigned>(i));
-        restoreName(m->child(pos), json, childPrefix);
-        applyNode(m->child(pos), json, childPrefix);
-        pos++;
-    }
-    uint8_t jsonChildCount = pos;   // live children reconciled; the trim loop keeps these, prunes the rest
-    // Trim live children beyond what the JSON describes, EXCEPT children that were wired by code at boot (main.cpp annotates those via markWiredByCode).
-    // A code-wired child is preserved across persistence loads even when the on-disk file predates its addition, the upgrade-day case where a new release adds a code-created child (e.g.
-    // ImprovProvisioningModule under NetworkModule) whose existence the device's saved file doesn't yet know about.
-    // Without this exemption the child would get trimmed on every boot.
-    //
-    // Walks back-to-front so removeChild's left-shift of later siblings doesn't skip an entry.
-    // Any code-wired child at index >= jsonChildCount stays; its position relative to the JSON-described children may not match what the file expects.
-    // On the first dirty event the next save writes the current (post-merge) tree shape and from then on the file matches.
-    uint8_t i = m->childCount();
-    while (i > jsonChildCount) {
-        i--;
-        MoonModule* extra = m->child(i);
-        if (!extra) continue;
-        if (extra->isWiredByCode()) continue;
-        extra->release();
-        m->removeChild(extra);
-        Scheduler::deleteTree(extra);
-    }
-}
-
-void FilesystemModule::applyValue(const ControlDescriptor& c, const char* json, const char* key) {
-    // Per-type parse + validate + apply lives in Control.cpp.
-    // Use Clamp: a stale on-disk value from a schema change should snap to the new bounds (Uint8 200 → max 100), not silently drop to 0.
-    // The HTTP API uses Strict instead so a bogus client value surfaces as a 400.
-    (void)applyControlValue(c, json, key, ApplyPolicy::Clamp);
-}
-
 // ---- Save ----
-// Serialize a subtree into a caller's sink.
-// The write half of saveSubtree, split out so a caller holding the bytes elsewhere produces the SAME format the loader reads.
-bool FilesystemModule::saveSubtreeTo(MoonModule* m, JsonSink& sink) {
-    if (!m) return false;
-    sink.append("{");
-    writeNode(m, sink, "", /*firstField=*/true);
-    sink.append("}");
-    return !sink.overflowed();           // only trips on an allocation failure, not a size cap
-}
-
 // Returns true only when the file was written. On failure (path/overflow/write error) the caller must keep the subtree dirty so the change isn't lost.
 bool FilesystemModule::saveSubtree(MoonModule* m) {
     char path[MAX_PATH];
     if (!pathFor(m, path, sizeof(path))) return false;
-    // Serialize the whole subtree into a buffer-mode JsonSink, a growable heap buffer with NO fixed ceiling (the same primitive /api/state streams through), so a large config (many fixture profiles, a wide fixture wiring) persists in full instead of silently truncating. Written atomically once complete.
-    JsonSink sink;                       // heap/buffer mode: grows as needed, no cap
-    if (!saveSubtreeTo(m, sink)) {
+    // The module's state document, secrets included since the file is the device's own; a growable sink with no ceiling, written atomically once complete.
+    JsonSink sink;
+    sink.append("{");
+    writeStateMember(sink, *m, /*withSecrets=*/true);
+    sink.append("}");
+    if (sink.overflowed()) {
         std::printf("FilesystemModule: out of memory serializing %s\n", path);
         return false;
     }
@@ -490,37 +295,6 @@ bool FilesystemModule::saveSubtree(MoonModule* m) {
     }
     std::printf("FilesystemModule: write failed for %s\n", path);
     return false;
-}
-
-// Append this module's persistable controls, its enabled flag, and (recursively) its children to `sink`.
-// `firstField` is true when this is the first field-emitter inside its containing `{`, the top-level call passes true.
-// A recursive child call passes false because the parent already emitted its `"N.type"` field, so the child must prefix a comma before its first control.
-// No size limit: the sink grows; the old overflow-returns-bool plumbing is gone (an allocation failure surfaces via sink.overflowed() at the top level).
-void FilesystemModule::writeNode(MoonModule* m, JsonSink& sink, const char* prefix, bool firstField) {
-    bool first = firstField;
-    auto& cs = m->controls();
-    for (uint8_t i = 0; i < cs.count(); i++) {
-        auto& c = cs[i];
-        if (!isPersistable(c)) continue;
-        sink.appendf("%s\"%s%s\":", first ? "" : ",", prefix, c.name);
-        writeControlValue(sink, c, /*saving=*/true);   // the shared value serializer, in its saving form
-        first = false;
-    }
-    sink.appendf("%s\"%senabled\":%s", first ? "" : ",", prefix, m->enabled() ? "true" : "false");
-    for (uint8_t i = 0; i < m->childCount(); i++) {
-        MoonModule* child = m->child(i);
-        if (!child) continue;  // addChild rejects nullptr today; defend against future invariants
-        char childPrefix[MAX_KEY];
-        std::snprintf(childPrefix, sizeof(childPrefix), "%s%u.", prefix, static_cast<unsigned>(i));
-        // Emit "0.type":"NoiseEffect" so the reader can detect tree-shape mismatches.
-        sink.appendf(",\"%stype\":\"%s\"", childPrefix, child->typeName());
-        // And a user module's name, since a document or a surface addresses it by name; a `$` key, which no control can be called.
-        if (!child->isWiredByCode() && child->name()[0]) {
-            sink.appendf(",\"%s$name\":", childPrefix);
-            sink.writeJsonString(child->name());
-        }
-        writeNode(child, sink, childPrefix, /*firstField=*/false);
-    }
 }
 
 // ---- Dirty walking ----
@@ -540,8 +314,7 @@ void FilesystemModule::clearSubtreeDirty(MoonModule* m) {
 }
 
 // ---- Paths ----
-// Filename = "/.config/<TypeName>.json".
-// Single instance assumed; multi-instance gets a .N suffix when that becomes a requirement (item 12, module switching).
+// Filename = "/.config/<TypeName>.json". Single instance assumed; multi-instance gets a .N suffix when that becomes a requirement (item 12, module switching).
 bool FilesystemModule::pathFor(MoonModule* m, char* out, size_t n) {
     if (!m || m->typeName()[0] == 0) return false;
     int w = mm::formatTo(out, n, "%s/%s.json", CONFIG_DIR, m->typeName());

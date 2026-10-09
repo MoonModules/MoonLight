@@ -177,11 +177,15 @@ constexpr bool ethPhyIsFixed = true;
 constexpr bool ethPhyIsFixed = false;
 #endif
 
-// Headroom for a per-pixel float algorithm, from the SDK's FPU capability rather than a chip list.
-constexpr bool hasHeavyCompute = SOC_CPU_HAS_FPU;
+// Only `#if` can compile out a whole effect; the SDK defines the FPU capability only on chips that have one, so the C3 leaves it undefined.
+#if defined(SOC_CPU_HAS_FPU) && SOC_CPU_HAS_FPU
+#define MM_HEAVY_COMPUTE 1
+#else
+#define MM_HEAVY_COMPUTE 0
+#endif
 
-// A whole effect can be compiled out only by `#if`, which a constexpr cannot drive; keep them in step.
-#define MM_HEAVY_COMPUTE SOC_CPU_HAS_FPU
+// Headroom for a per-pixel float algorithm, from the SDK's FPU capability rather than a chip list.
+constexpr bool hasHeavyCompute = MM_HEAVY_COMPUTE;
 
 /// False: one MAC per chip, so a raw sender has nothing to choose and the control would do nothing.
 constexpr bool hasNamedNetInterfaces = false;

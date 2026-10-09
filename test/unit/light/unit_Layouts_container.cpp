@@ -4,9 +4,10 @@
 #include "light/layouts/Layouts.h"
 #include "light/layouts/GridLayout.h"
 
+#include <string>
 #include <vector>
 
-// Pins the contract that Layouts skips disabled children both in totalLightCount and in placeLights, and that subsequent enabled children's physical indices shift down to close the gap (no holes). Matches the universal-gate behavior applied by Layer / Effects / Drivers to their own children.
+// Layouts skips disabled children in totalLightCount and placeLights, and later enabled children shift down to close the gap, as Layer, Effects and Drivers gate theirs.
 
 namespace {
 
@@ -89,4 +90,22 @@ TEST_CASE("Disabling the Layouts container reports zero lights and an empty iter
 
     layouts.setEnabled(true);
     CHECK(layouts.totalLightCount() == 3);
+}
+
+// A layout too large for the device's memory crashes it at every boot, so safe mode places only the first 1,024 lights and says so.
+TEST_CASE("safe mode places the first 1024 lights of a larger layout") {
+    struct Record { ~Record() { mm::platform::setTestBootRecord({}); } } guard;
+    mm::platform::setTestBootRecord({0, 2});
+    mm::Layouts layouts;
+    mm::GridLayout grid;
+    grid.width = 64; grid.height = 64; grid.depth = 1;
+    layouts.addChild(&grid);
+    CHECK(layouts.totalLightCount() == mm::Layouts::kSafeModeLights);
+    std::vector<Sample> samples;
+    layouts.placeLights(mm::CoordSink{collect, nullptr, &samples});
+    CHECK(samples.size() == mm::Layouts::kSafeModeLights);
+    layouts.prepare();
+    REQUIRE(layouts.status() != nullptr);
+    CHECK(std::string(layouts.status()).find("safe mode") != std::string::npos);
+    layouts.removeChild(&grid);
 }

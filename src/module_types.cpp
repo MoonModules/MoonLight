@@ -151,6 +151,7 @@
 /// LED drivers are compiled in per chip, gated on the peripheral each one needs, so a board carries only the drivers its silicon can run: @xref{why-led-drivers-are-gated-by-the-preprocessor}.
 #if defined(CONFIG_SOC_RMT_SUPPORTED) || MM_LINKS_ALL_LED_DRIVERS
 #include "light/drivers/RmtLedDriver.h"
+#include "light/drivers/PwmLightDriver.h"
 #endif
 // The parallel-WS2812 driver + its peripheral backends: @xref{why-led-drivers-are-gated-by-the-preprocessor}.
 #if defined(CONFIG_SOC_LCD_I80_SUPPORTED) || MM_LINKS_ALL_LED_DRIVERS
@@ -197,6 +198,8 @@
 #include "core/system/FilesystemModule.h"
 #include "core/util/ModuleFactory.h"
 #include "platform/platform.h"
+
+#include <cstring>
 
 #include "core/system/EthernetModule.h"
 #include "core/system/WiFiModule.h"
@@ -341,6 +344,7 @@ void mm::registerModuleTypes() {
     // Register only the LED drivers this chip's silicon can run, see the gated includes above: @xref{why-led-drivers-are-gated-by-the-preprocessor}.
 #if defined(CONFIG_SOC_RMT_SUPPORTED) || MM_LINKS_ALL_LED_DRIVERS
     mm::ModuleFactory::registerType<mm::RmtLedDriver>("RmtLedDriver", "light/drivers.md#rmtled");
+    mm::ModuleFactory::registerType<mm::PwmLightDriver>("PwmLightDriver", "light/drivers.md#pwm-light");
 #endif
     // One driver for the parallel output whatever the DMA peripheral: each backend self-registers when its header is included, so the control offers exactly the ones this chip links.
 #if defined(CONFIG_SOC_LCD_I80_SUPPORTED) || defined(CONFIG_SOC_LCDCAM_I80_LCD_SUPPORTED) || defined(CONFIG_SOC_PARLIO_SUPPORTED) || MM_LINKS_ALL_LED_DRIVERS
@@ -374,4 +378,57 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::WiFiModule>("WiFiModule", "core/system.md#wifi");
     mm::ModuleFactory::registerType<mm::AccessPointModule>("AccessPointModule", "core/system.md#access-point");
     mm::ModuleFactory::registerType<mm::FilesystemModule>("FilesystemModule", "core/system.md#filesystem");
+}
+
+namespace {
+
+// A module the device creates itself, under a parent type (top-level when there is none), with its name where that is not the type's default, and whether this build has it.
+struct BootModule {
+    const char* parentType;
+    const char* type;
+    const char* name;
+    bool built;
+};
+
+constexpr bool kEthernetCard = mm::platform::hasEthernet || mm::platform::previewsEthernetControls;
+
+// The apparatus every device carries, in the order the children stand: the network cascade and the cards read that order.
+constexpr BootModule kBootModules[] = {
+    {nullptr, "FileManagerModule", "File Manager", true},
+    {nullptr, "FirmwareUpdateModule", "Firmware", true},
+    {"SystemModule", "TasksModule", nullptr, true},
+    {"SystemModule", "I2cBusModule", nullptr, true},
+    {"SystemModule", "PinsModule", nullptr, true},
+    {"Services", "AudioService", nullptr, true},
+    {"NetworkModule", "EthernetModule", nullptr, kEthernetCard},
+    {"NetworkModule", "WiFiModule", nullptr, mm::platform::hasWiFi},
+    {"NetworkModule", "AccessPointModule", nullptr, mm::platform::hasWiFi},
+    {"NetworkModule", "ImprovProvisioningModule", nullptr, mm::platform::hasImprov},
+    {"NetworkModule", "MqttModule", nullptr, mm::platform::hasNetwork},
+    {"NetworkModule", "DevicesModule", nullptr, true},
+    {"Drivers", "FixtureProfilesModule", nullptr, true},
+    {"Drivers", "PreviewDriver", nullptr, true},
+    {"MoonCloudModule", "MoonStatsModule", "Stats", true},
+    {"MoonCloudModule", "MoonTalkModule", "Talk", true},
+};
+
+}  // namespace
+
+mm::MoonModule* mm::createTopLevel(const char* typeName) {
+    MoonModule* top = ModuleFactory::create(typeName);
+    if (!top) return nullptr;
+    for (const BootModule& b : kBootModules) {
+        if (!b.built) continue;
+        if (!b.parentType) {
+            if (std::strcmp(b.type, typeName) == 0) top->setName(b.name);
+            continue;
+        }
+        if (std::strcmp(b.parentType, typeName) != 0) continue;
+        MoonModule* child = ModuleFactory::create(b.type);
+        if (!child) continue;   // a type this build leaves out
+        if (b.name) child->setName(b.name);
+        top->addChild(child);
+        child->markWiredByCode();
+    }
+    return top;
 }

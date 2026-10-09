@@ -19,6 +19,9 @@ The device's identity and vitals: name (behind mDNS `<name>.local`, the SoftAP S
 - read-only rate: `uptime`, `fps`, `tickTimeUs`.
 - read-only memory: `heap`, `psram`, `maxBlock`, `flash`.
 - read-only identity: `mac`, `chip`, `cpu`, `sdk`, `bootReason`.
+- `factory reset`, pressed twice: back to freshly installed, scripts kept.
+
+**Safe mode.** Two failed boots in a row start the next boot with the LEDs off, no MoonLive script and at most 1,024 lights. A failed boot is a crash, a brownout, or a power loss within a minute of starting. Every boot raises the lights over five seconds.
 
 Detail: [technical](moxygen/SystemModule.md)
 
@@ -83,15 +86,17 @@ Detail: [technical](moxygen/WiFiModule.md)
 
 ### Access point
 
-The device's own WiFi network, a child of Network, at 4.3.2.1 and named after the device. Joining it opens the UI, as a sign-in screen on a phone.
+The device's own WiFi network, a child of Network, at `4.3.2.1`. A captive portal: joining it opens the UI by itself, as a sign-in screen, and `http://4.3.2.1` reaches it too.
 
 <img src="../../assets/core/AccessPointModule.png" width="300" alt="Access point module controls">
 
-- `opens`: `on failure` (when nothing else joins), `always`, or `never (not recommended)`.
-- `password`: WPA2, 8 to 63 characters as the standard allows; empty keeps it open, the default.
+- `opens`: `on failure`, `always`, or `first setup only`, until a network or Ethernet is set.
+- read-only: `name`, `MM-` and four MAC digits, which says nothing about the owner.
 - read-only: `clients`, the devices on it.
 
-`always` waits for a WiFi join in progress to settle, since one radio serves both. `never` applies only while Ethernet or a known WiFi network is configured, and the card says when it opens anyway. Joining it opens the WiFi card. ⌄ details.
+It carries the first known WiFi network's password, open only on a first setup or with an open home network. Its clients receive no stored password or config file.
+
+`always` waits for a WiFi join in progress to settle, since one radio serves both. Switching the device on and off four times, each within a few seconds, opens it for that boot without a password, whatever `opens` says, and keeps every setting. ⌄ details.
 
 Detail: [technical](moxygen/AccessPointModule.md)
 
@@ -230,7 +235,7 @@ Browse and manage the device filesystem: a folder tree with an inline text edito
 - `file browser`: the panel itself: a folder tree, a toolbar and an inline text editor.
 - **Backup (⤓)**, download the device's files as one `.json` bundle.
 
-**Keep it private: it contains the WiFi password.** Every file is byte-verified against the listing, and an unreadable one is skipped and named.
+**Keep it private: it contains the WiFi password.** Through the access point the config files are left out. Every file is byte-verified against the listing, and an unreadable one is skipped and named.
 - **Restore (⟲)**, upload a backup bundle, pressing twice since it overwrites the device's files.
 
 Known renames from [MIGRATING.md](../../reference/MIGRATING.md) apply before upload, then a report lists what needs an eye. Every file applies as it lands, bar network settings and the web server's `port`, which the dialog names.
@@ -301,6 +306,7 @@ A grid of preset pads, a row of rotary encoders above them, a row of on/off swit
 - `switch1` … `switch8`, the switch row. `switch1` drives `Drivers.on`, the rest unbound.
 - `encoder1` … `encoder8`, rotary encoders. Drag or scroll to turn, right-click to see the binding.
 - `fader1` … `fader8`, faders. `fader1` drives `Drivers.brightness`, the rest unbound.
+- automap: from the second slot on, an unassigned slot drives the effect enabled last.
 
 Detail: [technical](moxygen/ControlModule.md)
 

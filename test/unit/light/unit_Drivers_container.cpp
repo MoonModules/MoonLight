@@ -2,21 +2,23 @@
 
 #include "doctest.h"
 #include "light/drivers/Drivers.h"
+#include "light/layers/Layer.h"
+#include "light/layouts/GridLayout.h"
+#include "light/layouts/Layouts.h"
 #include "light/drivers/FixtureProfilesModule.h"   // the non-deletable boot-wired fixture-profile library
 #include "light/drivers/NetworkSendDriver.h"     // a real driver, for the sibling-instance cases
 #include "light/drivers/ParallelLedDriver.h"     // its installer and bench controls, for the mode case
 #include "light/drivers/RmtLedDriver.h"
+#include "light/drivers/PreviewDriver.h"     // the one driver safe mode keeps
 #include "correction_presets.h"                  // mm::test::rebuildFromPreset
 #include "../core/conditional_controls.h"   // mm::test::setControlValue
 #include "platform/platform.h"                 // gpioRead: the desktop reads back what gpioWrite put there
 
 #include <cstring>
+#include <filesystem>
 #include <string>
 
-// Regression: the UI's enable/disable toggle on a child driver (e.g. ArtNet, Preview) was a no-op, the driver kept running. Cause: Drivers::tick() called child(i)->tick() unconditionally, skipping the per-child `enabled` check that Layer::tick() does for effects and Effects::tick() does for its child Layers.
-// (The Scheduler only walks top-level modules, so it never sees these children.)
-//
-// These tests pin the gate so the regression can't return silently. A stub driver counts its loop calls; toggling `enabled` must flip whether the count advances.
+// Drivers::tick() honors the per-child `enabled` check; a stub driver counts its loop calls, and toggling `enabled` must flip whether the count advances.
 
 namespace {
 
@@ -30,7 +32,7 @@ public:
 
 } // namespace
 
-// A minimal driver so a test can read the resulting LUT. Each driver owns its Correction (DriverBase::correction_); the container fills it via rebuildCorrection(). Defines the correction controls (localBrightness / fixture / whiteMode) so a test can drive them.
+// A minimal driver that owns its Correction (filled by the container via rebuildCorrection()) and defines the correction controls, so a test can read the resulting LUT.
 class CorrectionCapturingDriver : public mm::DriverBase {
 public:
     void setSourceBuffer(mm::Buffer*) override {}
@@ -38,7 +40,7 @@ public:
     void defineDriverControls() override { defineCorrectionControls(); }
 };
 
-// Counts prepare() vs onCorrectionChanged() so a test can prove a refresh is correction-only. prepare() is the STRUCTURAL rebuild (reinits a real driver's output peripheral, blanking the strip for a tick); onCorrectionChanged() is the light tier-1 refresh that touches no peripheral.
+// Counts prepare() (the structural rebuild that reinits the output peripheral) against onCorrectionChanged() (the light refresh), to prove a refresh is correction-only.
 class RebuildTrackingDriver : public mm::DriverBase {
 public:
     void setSourceBuffer(mm::Buffer*) override {}
@@ -73,6 +75,38 @@ TEST_CASE("A fixture-profile list edit re-resolves each driver's correction with
     CHECK(drv.correctionCalls == afterLib);
 }
 
+// A driver that re-lays its frame on a correction change, as the parallel and RMT drivers do, counting the times it does.
+class FrameLayingDriver : public mm::DriverBase {
+public:
+    void setSourceBuffer(mm::Buffer*) override {}
+    void tick() MM_NONBLOCKING override {}
+    void defineDriverControls() override { defineCorrectionControls(); }
+    void onCorrectionChanged() override { if (outChannelsChanged()) layouts++; }
+    void setOutChannels(uint8_t ch) { correction_.outChannels = ch; }
+    int layouts = 0;
+};
+
+// Regression: every brightness change made the LightCrafter's parallel driver drain its DMA transfer and re-parse its lanes, which a desk fader's stream turned into freezes.
+TEST_CASE("a brightness change re-bakes the correction without re-laying the driver's frame; a channel-count change does") {
+    mm::Drivers drivers;
+    FrameLayingDriver drv;
+    drivers.addChild(&drv);
+    drivers.on = true;
+    drivers.brightness = 200;
+    drv.defineControls();
+    drivers.setup();
+    const int afterSetup = drv.layouts;
+    for (const uint8_t b : {10, 90, 255, 0, 61}) {
+        drivers.brightness = b;
+        drivers.onControlChanged("brightness");
+    }
+    CHECK(drv.layouts == afterSetup);
+    drv.setOutChannels(static_cast<uint8_t>(drv.correction().outChannels + 1));   // as a white channel being added would
+    drivers.onControlChanged("brightness");
+    CHECK(drv.layouts == afterSetup + 1);
+    drivers.removeChild(&drv);
+}
+
 // Core reads the light pipeline through LightOutput, so the seat must hold only a live, prepared Drivers.
 TEST_CASE("Drivers is the light output core reads, from prepare until release") {
     mm::Drivers drivers;
@@ -89,14 +123,14 @@ TEST_CASE("Drivers is the light output core reads, from prepare until release") 
     CHECK(mm::lightSummary().lightCount == 0);      // the all-zero summary, never a dangling one
 }
 
-// The `on` control is master power: on=false scales the correction LUT to zero (output black) while PRESERVING the brightness value, so on=true restores the exact level. It rides the same cheap LUT rebuild as brightness (no pipeline realloc). This pins the shared power control IR/MQTT/WLED drive.
+// The `on` control is master power: on=false scales the correction LUT to zero while preserving the brightness value, so on=true restores the exact level, with no pipeline realloc.
 TEST_CASE("Drivers::on gates the correction LUT without clobbering brightness") {
     mm::Drivers drivers;
     CorrectionCapturingDriver drv;
     drivers.addChild(&drv);
     drv.defineControls();
-    // Linear: what this pins is that `on` gates the LUT WITHOUT losing the brightness value, and a perceptual curve would restate every expected number as a lookup without testing anything new.
-    mm::test::setControlValue<uint8_t>(drv, "curve", 3);   // 3 = linear
+    // Linear keeps the expected numbers literal; a perceptual curve would turn each into a lookup.
+    mm::test::setControlValue<uint8_t>(drv, "curve", static_cast<uint8_t>(mm::Correction::Curve::Linear));
     drivers.setup();                       // seeds drv's own correction_ from on(true)+brightness
 
     drivers.brightness = 200;
@@ -118,7 +152,7 @@ TEST_CASE("Drivers::on gates the correction LUT without clobbering brightness") 
     CHECK(drv.correctionForTest().briLut[255] == 200);
 }
 
-// Regression (the localBrightness bug): a per-driver localBrightness change must RE-SCALE that driver's correction LUT, global × local, just like a global brightness change does. The bug was that localBrightness edits didn't reach the LUT (only global did). Both sliders must reach output.
+// A per-driver localBrightness change re-scales that driver's correction LUT (global × local), as a global brightness change does.
 TEST_CASE("Drivers: a localBrightness change re-scales the driver's correction LUT") {
     mm::Drivers drivers;
     CorrectionCapturingDriver drv;
@@ -127,7 +161,7 @@ TEST_CASE("Drivers: a localBrightness change re-scales the driver's correction L
     drivers.on = true;
     drv.defineControls();                           // bind the correction controls (localBrightness etc.)
     // LINEAR, so the arithmetic below reads as the multiplication it is testing. What this pins is that BOTH sliders reach the LUT, which a perceptual curve would leave true but express as table lookups nobody can check by eye. The curve has its own tests.
-    mm::test::setControlValue<uint8_t>(drv, "curve", 3);   // 3 = linear
+    mm::test::setControlValue<uint8_t>(drv, "curve", static_cast<uint8_t>(mm::Correction::Curve::Linear));
     drivers.setup();                                // seeds the driver's correction (global 200, local 255)
     CHECK(drv.correctionForTest().briLut[255] == 200);   // global 200 × local 255/255 = 200
 
@@ -173,19 +207,19 @@ TEST_CASE("Drivers::tick() skips disabled child drivers") {
     CHECK(b.loopCalls == 2);
 }
 
-// The "+ add" picker under Drivers must offer ONLY drivers, not every generic system module, else the 6 drivers are buried under ~18 generics (Devices, Filesystem, …). acceptsChildRoles drives that picker, so it returns "driver" alone. The one non-driver child (the boot-wired FixtureProfiles library) is added directly at boot, bypassing this check, and is non-deletable, so it needs no "generic" here. Pins the filter the product owner asked for.
+// The "+ add" picker under Drivers offers only drivers, so acceptsChildRoles returns "driver" alone; the boot-wired FixtureProfiles library bypasses it.
 TEST_CASE("Drivers accepts only driver-role children in the add picker") {
     mm::Drivers drivers;
     CHECK(std::strcmp(drivers.acceptsChildRoles(), "driver") == 0);
 }
 
-// The boot-wired fixture-profile library is a permanent singleton: not user-deletable (Drivers accepts only `driver`, so a deleted library could never be re-added, and every driver resolves its profile through it). Mirrors the boot-wired PreviewDriver's userEditable(false).
+// The boot-wired fixture-profile library is a permanent singleton: a deleted one could never be re-added, and every driver resolves its profile through it.
 TEST_CASE("FixtureProfiles library is a non-deletable singleton") {
     mm::FixtureProfilesModule lib;
     CHECK_FALSE(lib.userEditable());
 }
 
-// Regression, the Drivers half of the dangling LivePalettes seam (the seam-contract half is pinned in unit_Palette.cpp): the /api/modules probe constructs a Drivers, reads its controls, and destroys it. That throwaway used to publish the seam from defineControls() and so owned it when it died, first dangling it (the /api/state SIGSEGV) and, once clear() ran in the destructor, emptying the running device's scripted-palette list instead. Publication belongs to prepare(), which only a scheduler-mounted module runs, so a probe must leave the seam exactly as it found it.
+// The LivePalettes seam is published by prepare(), which only a scheduler-mounted module runs, so a throwaway probe Drivers leaves it as found.
 TEST_CASE("a probe Drivers (controls read, never prepared) leaves the scripted-palette seam alone") {
     static const char* names[] = {"running.mlp"};
     static const char* tags[]  = {""};
@@ -199,7 +233,7 @@ TEST_CASE("a probe Drivers (controls read, never prepared) leaves the scripted-p
     mm::LivePalettes::clear();
 }
 
-// The power relay is the physical expression of "the lights are off", and brightness 0 is off as much as `on` = false is: a WLED-style client says off by sending bri 0 without touching `on`, and a strip at zero still draws its idle current through a closed relay. So the relay opens at brightness 0 and closes again the moment brightness returns, with `on` unchanged either way.
+// A strip at brightness 0 still draws idle current through a closed relay, so the relay opens at brightness 0 and closes when brightness returns.
 TEST_CASE("the relay opens at brightness 0 and closes again when brightness returns") {
     mm::platform::clearTestGpioLevel();
     mm::Drivers drivers;
@@ -223,7 +257,7 @@ TEST_CASE("the relay opens at brightness 0 and closes again when brightness retu
     mm::platform::clearTestGpioLevel();
 }
 
-// A typo in the relay list must not leave the previous relays closed. Reporting the parse error and returning looked right, but the pins from the last VALID list stayed asserted on GPIOs no control named any more: the strip kept its power through a brightness of zero, and nothing in the UI said why. An unparseable list means no relays, which is the same state as an empty one.
+// An unparseable relay list means no relays, the same as an empty one, so pins from the last valid list never stay asserted on GPIOs no control names.
 TEST_CASE("a typo in the relay list releases the relays it used to hold") {
     mm::platform::clearTestGpioLevel();
     mm::Drivers drivers;
@@ -339,4 +373,118 @@ TEST_CASE("Drivers gives a scripted palette's color from its live entries") {
     CHECK(hue == builtinHue);
     CHECK(sat == builtinSat);
     mm::Palettes::setActiveDirect(saved);
+}
+
+namespace {
+/// The palette picker's option count, which grows by one per scripted palette found.
+uint8_t paletteOptions(mm::Drivers& d) {
+    auto& cs = d.controls();
+    for (uint8_t i = 0; i < cs.count(); i++)
+        if (std::strcmp(cs[i].name, "palette") == 0) return static_cast<uint8_t>(cs[i].max);
+    return 0;
+}
+}  // namespace
+
+// Regression: every brightness change listed both script folders to rebuild the palette picker, 100 ms on an S3, so a desk fader froze the LEDs.
+TEST_CASE("a brightness change does not rescan the palette scripts; a palette file written through the API does") {
+    char root[64];
+    std::snprintf(root, sizeof(root), "/tmp/mm_palette_scan_%u", static_cast<unsigned>(mm::platform::millis()));
+    std::filesystem::remove_all(root);
+    struct RootAfter { std::string prev = mm::platform::fsRootPath(); ~RootAfter() { mm::platform::fsSetRoot(prev.c_str()); } } rootAfter;
+    mm::platform::fsSetRoot(root);
+    mm::platform::fsMkdir("/moonlive");
+    mm::Drivers drivers;
+    drivers.defineControls();
+    drivers.setup();                                 // the scan that counts, once the filesystem is up
+    const uint8_t before = paletteOptions(drivers);
+
+    const char script[] = "void tick() {}";
+    REQUIRE(mm::platform::fsWriteAtomic("/moonlive/mine.mlp", script, sizeof(script) - 1));
+    drivers.brightness = 90;
+    drivers.rebuildControls();                       // what every brightness change does
+    CHECK(paletteOptions(drivers) == before);        // no folder listing
+
+    drivers.onFileChanged("/moonlive/mine.mlp");     // what a write through the API announces
+    CHECK(paletteOptions(drivers) == before + 1);
+    CHECK(mm::Drivers::touchesFolder("/", "/moonlive"));             // a restore of everything
+    CHECK_FALSE(mm::Drivers::touchesFolder("/moonlivex/a.mlp", "/moonlive"));
+    std::filesystem::remove_all(root);
+}
+
+// LEDs without data hold their last frame and its current, so safe mode sends black first, and holds the drivers only when the boots still fail.
+TEST_CASE("safe mode darkens the lights, and holds the output drivers after four failed boots") {
+    struct Record { ~Record() { mm::platform::setTestBootRecord({}); } } guard;
+    mm::platform::setTestBootRecord({0, 2});
+    {
+        mm::Drivers drivers;
+        CountingDriver output;
+        drivers.addChild(&output);
+        drivers.brightness = 200;
+        drivers.setup();
+        CHECK(drivers.effectiveBrightness() == 0);   // dark
+        CHECK(output.enabled());                      // still sending, black
+        drivers.removeChild(&output);
+    }
+    mm::platform::setTestBootRecord({0, 4});
+    mm::Drivers drivers;
+    CountingDriver output;
+    mm::PreviewDriver preview;
+    drivers.addChild(&output);
+    drivers.addChild(&preview);
+    CHECK_FALSE(output.enabled());
+    CHECK(preview.enabled());
+    drivers.removeChild(&preview);
+    drivers.removeChild(&output);
+}
+
+// A device boot raises the lights over five seconds from the first frame, so a supply that cannot hold the level fails early, where the boot record counts it.
+TEST_CASE("the lights rise to their brightness after a device boot, and a host process starts at it") {
+    struct Record { ~Record() { mm::platform::setTestBootRecord({}); mm::platform::setTestNowMs(0); } } guard;
+    mm::platform::setTestNowMs(1000);
+    {
+        mm::Drivers plain;
+        plain.brightness = 200;
+        plain.setup();
+        CHECK(plain.effectiveBrightness() == 200);   // a host process, as the desktop app and every test
+    }
+    mm::platform::setTestBootRecord({0, 0, true});
+    mm::Layouts layouts;
+    mm::GridLayout grid;
+    grid.width = 1; grid.height = 1;
+    layouts.addChild(&grid);
+    mm::Layer layer;
+    layer.setLayouts(&layouts);
+    layer.setChannelsPerLight(5);   // RGBW and one motion slot
+    layouts.applyState();
+    layer.applyState();
+    mm::Drivers drivers;
+    drivers.setLayer(&layer);
+    drivers.brightness = 200;
+    drivers.setup();
+    drivers.tick20ms();
+    CHECK(drivers.effectiveBrightness() == 0);   // dark until a light is lit
+    REQUIRE(layer.buffer().data());
+    layer.buffer().data()[mm::FixtureChannels::kMotionBase] = 255;   // an aim alone emits nothing, so the rise waits
+    drivers.tick20ms();
+    mm::platform::setTestNowMs(1000 + mm::Drivers::kSoftStartMs / 2);
+    CHECK(drivers.effectiveBrightness() == 0);
+    mm::platform::setTestNowMs(1000);
+    layer.buffer().data()[0] = 255;
+    drivers.tick20ms();   // the first lit frame starts the rise
+    CHECK(drivers.effectiveBrightness() == 0);
+    mm::platform::setTestNowMs(1000 + mm::Drivers::kSoftStartMs / 2);
+    CHECK(drivers.effectiveBrightness() == 100);
+    mm::platform::setTestNowMs(1000 + mm::Drivers::kSoftStartMs);
+    drivers.tick20ms();
+    CHECK(drivers.effectiveBrightness() == 200);
+    layer.buffer().data()[0] = 0;
+    mm::Drivers dark;   // a show that stays dark rises once the boot counts as good, and stops scanning for a lit frame
+    dark.setLayer(&layer);
+    dark.brightness = 200;
+    dark.setup();
+    mm::platform::setTestNowMs(mm::platform::kBootStableMs);
+    dark.tick20ms();
+    mm::platform::setTestNowMs(mm::platform::kBootStableMs + mm::Drivers::kSoftStartMs / 2);
+    CHECK(dark.effectiveBrightness() == 100);
+    layouts.removeChild(&grid);
 }

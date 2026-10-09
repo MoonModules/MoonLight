@@ -8,87 +8,100 @@
   ],
   "live_only": true,
   "description": "Resize the grid while the pipeline is running and verify it reallocates cleanly under memory pressure. Lowers to 128x64 (release memory), increases to 128x128 (heaviest config: mirror + LUT). Each measured step captures tick/FPS/heap so the runner reports the degrade behaviour.",
-  "fixture": [
-    {
-      "name": "fix-layouts",
-      "op": "add_module",
-      "id": "Layouts",
-      "type": "Layouts"
-    },
-    {
-      "name": "fix-layers",
-      "op": "add_module",
-      "id": "Effects",
-      "type": "Effects",
-      "props": {
-        "layouts": "Layouts"
-      }
-    },
-    {
-      "name": "fix-drivers",
-      "op": "add_module",
-      "id": "Drivers",
-      "type": "Drivers",
-      "props": {
-        "effects": "Effects"
-      }
-    }
+  "top": [
+    "Layouts",
+    "Effects",
+    "Drivers"
   ],
   "steps": [
     {
       "name": "canvas-clear-layers",
       "description": "Self-canvas: clear+rebuild the pipeline this scenario assumes, so it runs from any device state (the perf scenarios' pattern). Pre-wired apparatus (Preview/Board) survives clear_children. On the in-process runner the fixture already built the tree; clearing then rebuilding is harmless there and makes the live run order-independent.",
-      "op": "clear_children",
-      "id": "Effects"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      }
     },
     {
       "name": "canvas-clear-layouts",
-      "op": "clear_children",
-      "id": "Layouts"
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "$patch": "replace"
+        }
+      }
     },
     {
       "name": "canvas-clear-drivers",
-      "op": "clear_children",
-      "id": "Drivers"
+      "op": "apply_state",
+      "document": {
+        "Drivers": {
+          "$patch": "replace"
+        }
+      }
     },
     {
       "name": "canvas-grid",
-      "op": "add_module",
-      "id": "Grid",
-      "type": "GridLayout",
-      "parent_id": "Layouts",
-      "props": {
-        "width": 128,
-        "height": 128
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "GridLayout",
+            "width": 128,
+            "height": 128
+          }
+        }
       }
     },
     {
       "name": "canvas-layer",
-      "op": "add_module",
-      "id": "Layer",
-      "type": "Layer",
-      "parent_id": "Effects"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer"
+          }
+        }
+      }
     },
     {
       "name": "canvas-noise",
-      "op": "add_module",
-      "id": "Noise",
-      "type": "NoiseEffect",
-      "parent_id": "Layer"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "Noise": {
+              "type": "NoiseEffect"
+            }
+          }
+        }
+      }
     },
     {
       "name": "canvas-mirror",
-      "op": "add_module",
-      "id": "Multiply",
-      "type": "MultiplyModifier",
-      "parent_id": "Layer"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "Multiply": {
+              "type": "MultiplyModifier"
+            }
+          }
+        }
+      }
     },
     {
       "name": "canvas-artnet",
-      "op": "add_module",
-      "id": "ArtNet",
-      "type": "NetworkSendDriver",
-      "parent_id": "Drivers"
+      "op": "apply_state",
+      "document": {
+        "Drivers": {
+          "ArtNet": {
+            "type": "NetworkSendDriver"
+          }
+        }
+      }
     },
     {
       "name": "size-128x128",

@@ -21,29 +21,21 @@ namespace mm {
 /// Puts the device into a named state, and is where anything wanting to do that will live.
 ///
 /// Its first capability is presets: a preset is a file, saving writes one, selecting reads it.
-/// Top-level by necessity, since a preset reaches across the containers it captures from.
-/// Not to be confused with the fixture profiles module, a library of channel wirings, where this is a device state.
+/// Top-level by necessity, since a preset reaches across the containers it captures from, and distinct from the fixture profiles module, a library of channel wirings.
 ///
 /// @moreinfo
 ///
 /// ## The three banks read as one desk
 ///
-/// Switches, encoders and faders are declared in that order, and the declaration order is the render order.
-/// The preset grid sits after them rather than between.
-/// Eight rows of pads pushed the faders off the bottom of the card, so reaching them meant scrolling past the bank they belong with.
+/// Switches, encoders and faders are declared in render order, and the preset grid sits after them so its pads never push the faders off the card.
 ///
 /// ## What a preset holds
 ///
-/// A state document, the one `PATCH /api/state` applies, so its top-level keys say which containers it sets.
-/// A save writes one container exactly, which decides portability: a look carries nothing about the hardware.
-/// So a look applies on any board, where a driver preset carries pins and is specific.
+/// A state document, the one `PATCH /api/state` applies, so its top-level keys say which containers it sets. A save writes one container, so a look applies on any board and a driver preset, carrying pins, is specific.
 ///
 /// ## Why files
 ///
-/// One file per preset, with free-form names.
-/// Deleting one is deleting a file, and backing them up is copying a folder.
-/// Numbered slots would have bought a fixed grid at the cost of both.
-/// Applying one is applying a document, the engine every other writer shares.
+/// One file per preset, with free-form names: deleting one is deleting a file, and backing them up is copying a folder. Applying one is applying a document, the engine every other writer shares.
 class ControlModule : public MoonModule, public ListSource {
 public:
     /// Where the preset files live, one per preset: @xref{why-files}.
@@ -90,8 +82,8 @@ public:
 
     // --- Control surfaces -------------------------------------------------------------------  A.
 
-    /// How a surface attaching learns the values: all at once, one per tick for a network that drops bursts, or not at all for a board following another.
-    enum class Seed : uint8_t { Burst, Paced, None };
+    /// How a surface attaching learns the values: all at once, or one per tick for a network that drops bursts.
+    enum class Seed : uint8_t { Burst, Paced };
 
     /// Attach a surface, seeded as `seed` says.
     void addSurface(ControlSurface* s, Seed seed = Seed::Burst) {
@@ -105,7 +97,8 @@ public:
         // Read the targets BEFORE seeding:
         followTargets();
         if (seed == Seed::Paced) resendPaced(s);
-        else if (seed == Seed::Burst) resendTo(s);
+        else resendTo(s);
+        s->sendDisplay(display_);
     }
 
     /// Push EVERY value to one surface, whatever the mirror last sent, the preset pads included.
@@ -118,7 +111,6 @@ public:
 
     /// Every pad's state, one per grid cell, in one pass over the presets.
     void padStates(uint8_t out[kMaxPresets]) const {
-        if (padsRemote_) { std::memcpy(out, remotePads_, kMaxPresets); return; }
         std::memset(out, kPadEmpty, kMaxPresets);
         for (uint8_t r = 0; r < presetCount_; r++)
             if (presets_[r].slot < kMaxPresets) out[presets_[r].slot] = padStateOf(presets_[r]);
@@ -126,7 +118,6 @@ public:
 
     /// The state of the pad on grid cell `slot`.
     uint8_t padState(uint8_t slot) const {
-        if (padsRemote_) return slot < kMaxPresets ? remotePads_[slot] : static_cast<uint8_t>(kPadEmpty);
         for (uint8_t r = 0; r < presetCount_; r++)
             if (presets_[r].slot == slot) return padStateOf(presets_[r]);
         return kPadEmpty;
@@ -134,33 +125,9 @@ public:
 
     /// Apply the preset on grid cell `slot`, as a click on its pad does; false for an empty cell.
     bool pressPad(uint8_t slot) {
-        if (padsRemote_) {
-            // The presets are another board's, so the press goes there; true only when a surface sent it.
-            if (slot >= kMaxPresets || remotePads_[slot] == kPadEmpty) return false;
-            bool sent = false;
-            for (uint8_t i = 0; i < surfaceCount_; i++) sent = surfaces_[i]->sendPress(slot) || sent;
-            return sent;
-        }
         for (uint8_t r = 0; r < presetCount_; r++)
             if (presets_[r].slot == slot) return applyPreset(presets_[r].name);
         return false;
-    }
-
-    /// Show another board's pad on the grid, as a board following another does, in place of this board's presets.
-    void showRemotePad(uint8_t slot, uint8_t state) {
-        if (slot >= kMaxPresets) return;
-        if (padsRemote_ && remotePads_[slot] == state) return;
-        if (!padsRemote_) std::memset(remotePads_, kPadEmpty, kMaxPresets);
-        padsRemote_ = true;
-        remotePads_[slot] = state;
-        padsRevision_++;
-    }
-
-    /// Show this board's own presets again.
-    void forgetRemotePads() {
-        if (!padsRemote_) return;
-        padsRemote_ = false;
-        padsRevision_++;
     }
 
     // A network surface asks for this rather than resendTo, since a burst of datagrams is what WiFi drops.
@@ -253,6 +220,10 @@ public:
         // FOLLOW first, and unconditionally:
         followTargets();
         if (surfaceCount_ == 0) return;
+        if (displayMirrored_ != displayRevision_) {
+            displayMirrored_ = displayRevision_;
+            for (uint8_t i = 0; i < surfaceCount_; i++) surfaces_[i]->sendDisplay(display_);
+        }
         for (uint8_t i = 0; i < kSwitchCount; i++)
             mirrorOne(SurfaceControl::Switch, i, switches_[i] ? 255 : 0, sentSwitches_[i]);
         for (uint8_t i = 0; i < kEncoderCount; i++)
@@ -454,9 +425,7 @@ public:
         sink.writeJsonString(p.name);
         sink.append("},{\"name\":\"captures\",\"type\":\"text\",\"readonly\":true,\"value\":");
         writeCaptured(sink, p);
-        // refetch: applying a preset rewrites the module tree, so the whole card set is stale.
-        sink.append("},{\"name\":\"apply\",\"type\":\"button\",\"label\":\"apply\","
-                    "\"refetch\":true}]}");
+        sink.append("}]}");
     }
 
     // ---- Presets as an external surface (Home Assistant, and any future consumer).
@@ -538,21 +507,49 @@ public:
 
     /// A fader drives its target through Scheduler::setControl, the same domain-neutral primitive.
     const char* surfaceTarget(uint8_t index) const {
-        if (index >= kFaderCount || !faderTargets_[index][0]) return nullptr;   // unassigned drives nothing
-        return faderTargets_[index];
+        return index < kFaderCount ? pickTarget(faderTargets_[index], index, autoFaders_) : nullptr;
     }
 
     /// What a switch drives, as "Module.control", or null when it drives nothing yet.
     const char* switchTarget(uint8_t index) const {
-        if (index >= kSwitchCount || !switchTargets_[index][0]) return nullptr;   // unassigned drives nothing
-        return switchTargets_[index];
+        return index < kSwitchCount ? pickTarget(switchTargets_[index], index, autoSwitches_) : nullptr;
     }
 
     /// What an encoder drives, as "Module.control", or null when it drives nothing yet.
     const char* encoderTarget(uint8_t index) const {
-        if (index >= kEncoderCount || !encoderTargets_[index][0]) return nullptr;   // unassigned drives nothing
-        return encoderTargets_[index];
+        return index < kEncoderCount ? pickTarget(encoderTargets_[index], index, autoEncoders_) : nullptr;
     }
+
+    /// The effect the surface follows: the one enabled last, so switching a look on brings its controls to the desk, or else the first one running.
+    static MoonModule* focusedEffect() {
+        MoonModule* last = MoonModule::lastEnabledEffect();
+        if (last && last->effectivelyEnabled()) return last;
+        Scheduler* s = Scheduler::instance();
+        for (uint8_t i = 0; s && i < s->moduleCount(); i++)
+            if (MoonModule* first = firstEnabledEffect(s->module(i))) return first;
+        return nullptr;
+    }
+
+    // As a desk's plug-in mode maps the selected plug-in onto its strips; the first slot of each bank stays the device's own.
+    /// Map the focused effect's controls, in the order it declares them, onto every slot from the second on that nobody assigned by hand.
+    void refreshAutomap() {
+        char (*banks[3])[kTargetLen] = {autoSwitches_, autoFaders_, autoEncoders_};
+        uint8_t next[3] = {};
+        bool changed = false;
+        if (MoonModule* focus = focusedEffect()) {
+            const ControlList& cs = focus->controls();
+            for (uint8_t i = 0; i < cs.count(); i++) {
+                const int b = autoBank(cs[i], next[1] < kAutoSlots);
+                if (b >= 0 && next[b] < kAutoSlots) changed |= setAuto(banks[b][next[b]++], focus, cs[i].name);
+            }
+        }
+        for (uint8_t b = 0; b < 3; b++)
+            for (; next[b] < kAutoSlots; next[b]++) changed |= setAuto(banks[b][next[b]], nullptr, nullptr);
+        if (changed) rebuildControls();   // the cards show what each slot drives now
+    }
+
+    /// Automap after every rebuild walk, which is when the focus and a script's controls can change.
+    void onTreePrepared() override { refreshAutomap(); }
 
     /// Drives whatever `switchTarget` declares.
     void driveSwitch(uint8_t index) {
@@ -569,15 +566,15 @@ public:
         // A button takes every write as a press, so a switch drives one on the way down only.
         const ControlDescriptor* tc = findControl(module, dot + 1);
         if (tc && tc->type == ControlType::Button && !switches_[index]) return;
-        // An unchanged target is not rewritten, as in driveSurface.
+        // An unchanged target is not rewritten, as in driveSurface; `enabled` is no declared control yet reads back the same way, and rewriting it rebuilds the tree.
         int32_t current = 0;
-        if (tc && tc->type != ControlType::Button && sched->getControlWide(module, dot + 1, current)
+        if ((!tc || tc->type != ControlType::Button) && sched->getControlWide(module, dot + 1, current)
             && (current != 0) == switches_[index]) return;
         char body[32];
         std::snprintf(body, sizeof(body), "{\"value\":%s}", switches_[index] ? "true" : "false");
         sched->setControl(module, dot + 1, body);
-        // A bool has no option names, so the strip says on or off rather than 1 or 0:
-        writeStrip("%s %s", dot + 1, switches_[index] ? "on" : "off");
+        // On or off rather than 1 or 0, and a module's `enabled` named by its module, since every such switch drives `enabled`.
+        writeStrip("%s %s", std::strcmp(dot + 1, "enabled") == 0 ? module : dot + 1, switches_[index] ? "on" : "off");
     }
 
     /// Read every bound control back, so a surface FOLLOWS what it drives.
@@ -667,10 +664,19 @@ public:
     void writeStrip(const char* fmt, ...) {
         va_list ap;
         va_start(ap, fmt);
-        std::vsnprintf(display_, sizeof(display_), fmt, ap);
+        char text[sizeof(display_)];
+        std::vsnprintf(text, sizeof(text), fmt, ap);
         va_end(ap);
+        showDisplay(text);
         stripWrittenMs_ = platform::millis();
         stripActive_ = true;
+    }
+
+    /// Put `text` on the display, telling the surfaces only when it changed.
+    void showDisplay(const char* text) {
+        if (std::strcmp(text, display_) == 0) return;
+        mm::formatTo(display_, sizeof(display_), "%s", text);
+        displayRevision_++;
     }
 
     /// Settle the strip once nothing has happened for a while:
@@ -681,12 +687,7 @@ public:
         if (age < kStripHoldMs) return;                        // still showing the change
         const char* name = deviceName();
         // Two holds after the change: the product, then the device. Beyond that, nothing to do.
-        if (age < kStripHoldMs * 2)
-            mm::formatTo(display_, sizeof(display_), "MoonLight");
-        else if (name && name[0])
-            mm::formatTo(display_, sizeof(display_), "%s", name);
-        else
-            mm::formatTo(display_, sizeof(display_), "MoonLight");
+        showDisplay(age >= kStripHoldMs * 2 && name && name[0] ? name : "MoonLight");
     }
 
     /// The device's name, read through the control system rather than by reaching into SystemModule:
@@ -765,13 +766,24 @@ public:
         return true;
     }
 
-    /// The row's editable fields carry the two actions a preset row needs.
+    /// A pad's action applies its preset.
+    bool applyListRow(uint32_t id) override {
+        for (uint8_t i = 0; i < presetCount_; i++)
+            if (presets_[i].id == id) return applyPreset(presets_[i].name);
+        return false;
+    }
+
+    /// A preset's name is its file name, so it is unique and addresses the row.
+    bool listRowNamed(const char* name, uint32_t& outId) const override {
+        for (uint8_t i = 0; name && i < presetCount_; i++)
+            if (std::strcmp(presets_[i].name, name) == 0) { outId = presets_[i].id; return true; }
+        return false;
+    }
+
+    /// A row's one editable field is its name.
     bool setListRowField(uint32_t id, const char* field, const char* valueJson) override {
         for (uint8_t i = 0; i < presetCount_; i++) {
             if (presets_[i].id != id) continue;
-            // `activate` is the pad click and `apply` the row button, one action from two views.
-            if (std::strcmp(field, "activate") == 0 || std::strcmp(field, "apply") == 0)
-                return applyPreset(presets_[i].name);
             if (std::strcmp(field, "name") == 0) {
                 char newName[kMaxNameLen] = {};
                 mm::json::parseString(valueJson, "value", newName, sizeof(newName));
@@ -1153,8 +1165,6 @@ private:
     uint8_t sentSwitches_[kSwitchCount] = {};
     uint8_t sentFaders_[kFaderCount] = {};
     uint8_t sentPads_[kMaxPresets] = {};   ///< per preset pad, the PadState surfaces were last sent
-    uint8_t remotePads_[kMaxPresets] = {}; ///< the pads of the board this one follows, while padsRemote_
-    bool    padsRemote_ = false;           ///< whether the grid shows another board's presets
     /// One bit per control, per bank, per attached surface: a hand is on it there. See setTouched.
     struct Touch { uint32_t switches = 0, encoders = 0, faders = 0; };
     Touch touched_[kMaxSurfaces] = {};
@@ -1210,6 +1220,46 @@ private:
     char faderTargets_[kFaderCount][kTargetLen]     = {"Drivers.brightness"};
     char switchTargets_[kSwitchCount][kTargetLen]   = {"Drivers.on"};
     char encoderTargets_[kEncoderCount][kTargetLen] = {"Drivers.palette"};
+    /// The slots of each bank automap fills: all but the first.
+    static constexpr uint8_t kAutoSlots = 7;
+    static_assert(kSwitchCount == kAutoSlots + 1 && kFaderCount == kAutoSlots + 1 && kEncoderCount == kAutoSlots + 1, "automap leaves the first slot of each bank");
+    char autoSwitches_[kAutoSlots][kTargetLen] = {};   ///< what automap gives switch 2 onward
+    char autoFaders_[kAutoSlots][kTargetLen]   = {};   ///< fader 2 onward
+    char autoEncoders_[kAutoSlots][kTargetLen] = {};   ///< encoder 2 onward
+
+    /// A hand-assigned target wins, then automap's, which starts at the second slot.
+    static const char* pickTarget(const char* hand, uint8_t index, const char (*autoTargets)[kTargetLen]) {
+        if (hand[0]) return hand;
+        return index > 0 && autoTargets[index - 1][0] ? autoTargets[index - 1] : nullptr;
+    }
+
+    /// The bank automap gives a control: switches (0) for a toggle, faders (1) for a number while one is free, encoders (2) for the rest, -1 for none.
+    static int autoBank(const ControlDescriptor& c, bool faderFree) {
+        if (c.hidden || c.readonly) return -1;
+        if (c.type == ControlType::Bool) return 0;
+        const bool number = c.type == ControlType::Uint8 || c.type == ControlType::Uint16
+                         || c.type == ControlType::Int16 || c.type == ControlType::Int32;
+        if (number) return faderFree ? 1 : 2;
+        return c.type == ControlType::Select ? 2 : -1;
+    }
+
+    /// Write `module.control`, or nothing, into an automap slot, and say whether it changed.
+    static bool setAuto(char (&slot)[kTargetLen], const MoonModule* module, const char* control) {
+        char t[kTargetLen] = {};
+        if (module) std::snprintf(t, sizeof(t), "%s.%s", module->name(), control);
+        if (std::strcmp(t, slot) == 0) return false;
+        std::memcpy(slot, t, sizeof(t));
+        return true;
+    }
+
+    /// The first running effect in `m` or under it, in tree order.
+    static MoonModule* firstEnabledEffect(MoonModule* m) {
+        if (!m) return nullptr;
+        if (m->role() == ModuleRole::Effect && m->effectivelyEnabled()) return m;
+        for (uint8_t i = 0; i < m->childCount(); i++)
+            if (MoonModule* f = firstEnabledEffect(m->child(i))) return f;
+        return nullptr;
+    }
     /// bool, not uint8:
     bool switches_[kSwitchCount] = {};
     /// Which pad the next save fills, set by the surface popup.
@@ -1221,6 +1271,8 @@ private:
     uint32_t presetsRevision_ = 0;   ///< see presetsRevision(): drives HA's preset re-fetch
     uint32_t padsRevision_ = 1;      ///< bumped by every change to what a preset pad shows
     uint32_t padsMirrored_ = 0;      ///< the padsRevision_ surfaces were last mirrored at
+    uint32_t displayRevision_ = 1;   ///< bumped by every change to the display line
+    uint32_t displayMirrored_ = 0;   ///< the displayRevision_ surfaces were last sent
     uint32_t nextId_ = 0;
     char name_[kMaxNameLen] = {};
     /// The module the next save writes, a look by default.

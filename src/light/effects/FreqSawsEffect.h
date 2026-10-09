@@ -48,8 +48,10 @@ public:
     bool    invert    = false;
     /// Keep drawing a band whose speed has decayed to nothing.
     bool    keepOn    = false;
+    /// The position methods, in option order.
+    enum Method : uint8_t { kMethodChaos, kMethodChaosFix, kMethodBandPhases, kMethodCount };
     /// Which of the three position methods places the saw.
-    uint8_t method    = 2;
+    uint8_t method    = kMethodBandPhases;
 
     /// Publish the trail, the band physics and the position method.
     void defineControls() override {
@@ -60,7 +62,7 @@ public:
         controls_.addControl("invert", invert);
         controls_.addControl("keepOn", keepOn);
         static constexpr const char* kMethodOptions[] = {"Chaos", "Chaos fix", "BandPhases"};
-        controls_.addSelect("method", method, kMethodOptions, 3);
+        controls_.addSelect("method", method, kMethodOptions, kMethodCount);
     }
 
     /// Start every band from rest, since the state is per band rather than per light.
@@ -111,10 +113,10 @@ public:
                 // The current speed as a rate, capped at `bpmMax`.
                 const uint8_t bpm = static_cast<uint8_t>(map32(bandSpeed[band], 0, 65535, 0, bpmMax));
 
-                if (method == 0) {
+                if (method == kMethodChaos) {
                     // Straight off the beat, so it jumps as the rate changes.
                     bandY[band] = static_cast<uint8_t>(map32(beat8(bpm, now), 0, 255, 0, sizeY - 1));
-                } else if (method == 1) {
+                } else if (method == kMethodChaosFix) {
                     // A carried offset, so a rate change continues from where the saw already was.
                     if (bpm != lastBpm[band]) {
                         const uint8_t currentPos = static_cast<uint8_t>(beat8(lastBpm[band], now) + phaseOffset[band]);

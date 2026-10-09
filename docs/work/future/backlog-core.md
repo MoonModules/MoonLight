@@ -11,10 +11,85 @@ The fix: `applyConfigFile` marks a module it does not apply live as pending on d
 The uploaded file then wins with no UI change; the alternative, answering "applies at next boot" and offering a restart, still loses the file when the restart is declined.
 Pin it with a test that writes the file, dirties the module, flushes, and finds the file unchanged.
 
+### Move more devices to MoonLight over WiFi (2026-10-09)
+
+The migration image (`moonbase/migrate/`) moves a board running WLED to MoonLight through WLED's own update page, with no cable: verified on WLED 0.15.0 on an ESP32-C3, on a bench board with a power cut at every step and on an Athom bulb.
+An image is built for one chip and carries one variant's partition table, so each further reach is its own piece:
+- **Every MoonBase variant:** `migrate: True` on `esp32`, `esp32-16mb`, `esp32-wrover`, `esp32-pico` and `esp32s3-zero`, each rehearsed on a bench board of that chip and shipped as a release asset. The variants without MoonBase (the larger S3s, the P4) need another design, the image writing the app itself.
+- **Other WLED versions:** 0.13 and 0.14 keep the same files and layout, untested. 0.16 checks an upload's release name, so the user ticks WLED's option to skip it, untested. A WLED build with one app slot cannot move the image aside.
+- **Tasmota:** its layout already has a recovery app in the factory slot and one app slot, so the image arrives running where MoonBase goes with nowhere to move aside; it would write over the recovery app instead. Its WiFi lives in a binary settings block in NVS, which needs its own reader.
+- **ESPHome:** its update accepts the image, but its WiFi is compiled into the firmware, so MoonBase opens its access point.
+- **A generic WiFi source:** ESP-IDF's WiFi driver can keep the last network in NVS under a namespace every framework shares; tried when no WLED files are found, it may carry the network from the others. Bench first, since whether it is there depends on how each firmware starts WiFi.
+
+### The access point never blocks a WiFi retry (2026-10-09)
+
+After losing its network, a device opens its access point and retries its known networks every minute (`retryKnown` in `NetworkModule.h`), but skips the retry while a client is on the access point.
+A phone that stays on it, or rejoins it by itself, then keeps the device off its network indefinitely.
+WiFi has preference, so the retry runs whoever is on the access point: drop the `wifiApClientCount() > 0` check.
+- **The cost:** someone on the access point while a known network exists is interrupted for a few seconds once a minute; a first setup has no known network, so it never retries.
+- **A test:** a client on the access point, the known network back, and the device joins it within the retry interval.
+
+### Some devices do not rejoin their WiFi (2026-10-09)
+
+Now and then a device stays off its network after the router came back, without anyone noticing why.
+Two suspects: a client on its access point blocking the retries (the item above), or the path for losing the network while connected, where the WiFi driver can get stuck and need the radio restarted.
+Next time one hangs, capture before touching it:
+- **The Network card's status:** "No network", "AP: MM-…" or "WiFi STA: …" says which state it is stuck in.
+- **The access point's `clients`**, which says whether a phone is holding it.
+- **The serial log**, through `monitor_esp32.py`, whose `NetworkModule:` lines say what it tried last.
+
+### Refresh a multicast membership on a fixed pace (2026-10-09)
+
+A socket in a multicast group joins again after 3 seconds of silence, which repairs a router that forgets a member, with a gap of about 2 seconds each time.
+The GL.iNet Slate AX forgets after about 18 seconds, so audio on the StadBeest drops every 20.6 seconds, measured on the bulb.
+The standard fix is the router's multicast querier; this item is for a network that cannot be configured, such as a venue's.
+- **The rule:** join again 10 seconds after the last join as well, so a membership is renewed before such a router forgets it.
+- **The cost:** a leave and a join, two IGMP packets of about 60 bytes per socket every 10 seconds, and at most one lost packet in the moment between them.
+- **Where:** `UdpSocket::keepMembership` in `platform.h`, one more condition, and a test beside the silence re-join's.
+
+### Back to WLED over WiFi (2026-10-09)
+
+The migration image moves a WLED device to MoonLight without a cable, but the way back needs one: MoonBase installs MoonLight images only, so a bulb going back to WLED is opened for USB.
+Owners and makers of these devices care most about this: a firmware change that cannot be undone without a cable is a bigger step than one that can.
+It is ours to build rather than WLED's, since the layout it undoes is MoonLight's, about one to two sessions:
+- **A small image that downloads WLED itself** from WLED's GitHub releases while it runs, so MoonLight never redistributes WLED's binary and the image stays far from what it writes.
+- **WLED goes into WLED's second app slot**, past the image's own position, so nothing moves aside; then WLED's table, and the boot pointed at that slot. WLED starts, formats its filesystem and opens its own access point.
+- **MoonBase installs it** only once the image is stamped as one of MoonLight's, a deliberate change to the one rule that refuses other images (`src/core/util/FirmwareImage.h`).
+- **A "Back to WLED" button** in the Firmware card, a release asset per chip, and the bench rehearsal with a power cut at every step that the way in had.
+- The WiFi stays behind: WLED opens its access point, where the user sets it.
+
+### Logical operators in MoonLive conditions (2026-10-08)
+
+Glow wrote `kick && !kicking` as `kick > kicking`, and the StadBeest effects hit the same gap ([the language roadmap, section 11](moonlive-language-roadmap.md)).
+An `if` or `for` condition is one comparison compiled straight into a branch, so `&&`, `||` and `!` are the textbook short-circuit translation into branches, on the branch instructions every backend already has:
+- `a && b` sends each failing test past the body, with no extra label;
+- `a || b` sends each passing test but the last into the body, one label per group;
+- `!a` swaps the two targets.
+
+The work, in `MoonLiveCompiler.cpp`:
+- one condition parser for `if` and `for`: `||` over `&&` over `!` over a comparison, with parentheses, the lexer's saved position deciding whether a `(` opens a condition or arithmetic;
+- the positive form of each comparison, which `||` needs, `!=` taking two branches as it does today.
+
+Tests on the desktop: the truth tables, that the right side does not run when the left decides, precedence, parentheses, and running out of labels. Then the operator section of `moonlive.md`, the roadmap row removed, and a check on the S3 and the C3, where Glow takes `kick && !kicking`.
+
+Not in this step: a comparison as a value (`bool b = x > y && z;`), which needs a set-on-condition instruction in every backend.
+
 ### Remove the 6.0 network adoption (2026-10-04)
 
 `NetworkModule::adoptLegacySettings` and the two `adoptLegacy` it calls move 6.0's top-level network keys onto the Ethernet and WiFi cards at the first boot, so an in-place update keeps its network.
 Remove all three, their test `unit_NetworkModule_legacy.cpp`, and the "update to this release before a later one" line in MIGRATING's WiFi and Ethernet entries, once a release has carried it and the field has moved past 6.0.
+
+### Remove the flat config conversion (2026-10-08)
+
+A config file in the flat format builds before 2026-10-08 saved is read as the state document it describes at the first boot and saved as one, so an in-place update keeps its config.
+In the release after next, remove the conversion and everything that only serves it:
+- `flatToStateDocument`, `isFlatConfig` and their helpers in `StateDocument.cpp` (`writeFlatNode`, `writeFlatValues`, `takeLive`, `flatName`, `distinctName`, `flatRoot`);
+- the conversion in `FilesystemModule::loadSubtree`;
+- the flat fallback in MoonBase's `ConfigScrape.h` (`flatChildKey`, `flatChildValue`);
+- `configToDocument` and `isFlatConfig` in `src/ui/migrate.js`, after which an older backup no longer restores;
+- the test "A config file in the flat format older builds wrote loads at boot and is saved back as a document", and the MIGRATING entry's lines on the conversion.
+
+`NetworkModule::adoptLegacySettings` calls `isFlatConfig`, so the 6.0 network adoption above goes first or in the same change.
 
 ### The update overlay's Cancel button does nothing on a plain OTA (2026-09-14)
 
@@ -48,6 +123,53 @@ The fix is the deterministic UDP seam plus `platform::setTestNowMs`, the same pa
 timing test here uses: feed the packet, advance the clock explicitly, assert. Raised by CodeRabbit
 on PR #96 and deliberately not taken in that pass: it is pre-existing rather than part of that
 diff, and swapping a test's transport is a change that wants its own verification.
+
+## A slot whose target is gone sends 0 to its followers (2026-10-08)
+
+**Found** on the StadBeest after a repower: the legs' walking layer was saved disabled, so the script that `fader2` to `fader6` drive had no controls.
+The slots could not follow their targets, stayed at 0, and the OSC feedback sent those zeros to the eyes, whose `bpm` and `sensitivity` then sat at their minimum.
+Live slots are not saved, so after a boot only a target or a writer gives them a value.
+
+**The fix to build:** a slot with no target to follow holds no value rather than 0, and the mirror sends nothing for it until the target exists.
+The followers then keep what they last had, and a refresh repairs them once the leader's target is back.
+Pinned by a test: a disabled target's slot produces no feedback datagram.
+
+## A MoonLive script has 48 branch labels in all (2026-10-08)
+
+**Found** on the StadBeest eyes: one more `if` in a helper turned a working script into `codegen failed: assembler overflow`.
+The assembler's label table holds 48 for the whole script, and each function takes three (entry, depth guard, exit) before its own `if`s, loops and divisions by a non-power-of-two, so eight functions leave 24.
+The compiler's own cap, `kIrLabels` at 40, follows close behind and reports "too many branches".
+
+**The fix to build:** the label and fixup tables of all three assemblers move from members to the heap, as the code buffer already did, then `kAsmLabels`, `kAsmFixups` and `kIrLabels` rise (to 128, 255 and 96); `Label` stays a byte.
+The spill pass and the lowering hold `kIrLabels`-sized arrays on the stack too, so they move with it.
+Verified by compiling the shipped scripts on a classic ESP32, an S3 and a P4, whose compile stacks are the ones at risk, and pinned by a host test with a script past 48 labels on each backend.
+
+## Some devices stop answering mDNS over WiFi (2026-10-08)
+
+**Found** on the StadBeest: after the legs restarted, their MIDI service could not resolve the bridge's `MM-MIDI-rtp.local` for five minutes, and by address it connected at once.
+Browsing from a Mac on the same network listed `_http._tcp` for MM-Eye2 alone: the legs, the left eye and the bridge announced nothing, and no `_apple-midi._udp` record appeared.
+The left eye announces nothing new, so the cause is wider than the RTP-MIDI announcement.
+The WLED native app finds devices by browsing `_wled._tcp`, so it is the likely reason it does not always list every device.
+
+**The fix to build:** find why a device stops answering, starting from what differs between MM-Eye2 and the others: WiFi power save dropping multicast between beacons, transmit power (the bridge runs at 8), the responder losing its interface after a reconnect, or the announcement order in `mdnsInit`.
+Watch it with a working `dns-sd -B` from a computer and the device's serial log, and confirm the bridge's `_apple-midi._udp` record appears.
+Pinned on the bench: every device answering its `.local` name and listed in the WLED app after a restart and after a WiFi reconnect.
+
+## A MoonLive control past a limit vanishes without a word (2026-10-08)
+
+**Found** in review: an `addSelect` with a 17th option, or one whose names overflow the 96-character option store, adds no control at all, and nothing tells the script's author why.
+The other limits of `addDeclaredControl` behave the same way: past `kMaxCtrls` controls, a member already bound, or a slot running past the arena.
+
+**The fix to build:** each refusal names itself on the effect's status line, as a compile error does, such as `control "shape": more than 16 options`, so the author sees which declaration lost and why.
+Pinned by a test per limit that reads the status.
+
+## RISC-V emits 1.7 times the code Xtensa does (2026-10-08)
+
+**Found** on the StadBeest eyes: the script is 7 KB on an S3 and 12.4 KB on RISC-V, where one `smoothstep` call added to `tick` cost 432 bytes on its own.
+A call inside a function with many live values saves and restores each of them, so every addition to a drawing loop costs RISC-V 400 to 500 bytes, and large scripts reach the 16 KB code buffer first on the P4 and the S31.
+
+**The fix to build:** measure where the RISC-V lowering spends its bytes on the shipped scripts (`disasm.py --isa riscv`), starting with the save and restore around host calls, and keep values that live across a call in callee-saved registers rather than saving them per call.
+Pinned by a size test per backend on the largest shipped script.
 
 ## The desktop build advertises no mDNS (2026-09-06)
 
@@ -170,13 +292,9 @@ declared rather than for a buffer to fill, and to time out on stall rather than 
 - **GCC below 16 needs four warnings demoted, and nothing exercises those versions** - `-Wnull-dereference`, `-Wrestrict`, `-Wstringop-overflow` and `-Wformat-truncation` fire on provably correct code from GCC 12 through 15 (five of the twelve inside libstdc++ and glibc headers, unreachable from our source), so CMakeLists demotes them to non-fatal there and keeps them fatal on 16+. That unblocks CI and from-source builds on Debian and Raspberry Pi OS alike, but it is a suppression, not an understanding: nobody routinely compiles with 12-15, so a REAL instance of one of these on those versions is now a warning nobody reads. Revisit when the runner's default GCC reaches 16, at which point the whole block can be deleted.
 - **Installer UX polish** — clear "Pre-release (beta)" warning on RC/latest picks, yank-by-asset-tag instead of yank-by-release-deletion.
 - **Offer MoonLight/MoonLight as a library**: a downstream sketch where another firmware/app consumes the light pipeline (or a subset) as an embeddable dependency rather than running the whole binary. `library.json` is already a PlatformIO *library* manifest, so the seed exists. When this is designed, give it a small public **identity surface**: one runtime constant the consumer reads (a `kProjectName`, likely a `ProjectInfo` bundle of name + version + url) that the network wire-strings (ArtNet/E1.31 source-name + CID), the UI banner, and any "About" string all *derive from*: the one place a consumer queries "what am I embedding." This is the genuine home for the name-centralisation that the rename ([the MoonLight plan](../past/plans/Plan-20260922%20-%20MoonLight,%20from%20v5.0.0%20to%20the%20rename%20(shipped).md)) deliberately *didn't* do: the rename is a one-time sweep (a constant would just split it), but a library consumer references the identity ongoing and widely, which is the test a constant must pass. Build it *then*, against the real library API, not speculatively now.
-- **HTTP: a request whose headers or body arrive a few ms late is dropped, intermittently
-  (2026-08-20).** `handleConnection` runs SYNCHRONOUSLY inside `tick20ms`, so its waits are kept
-  short to protect the render loop: a freshly accepted connection gets **~5 ms** for its request
-  headers (`HttpServerModule.cpp`, the `empties > 5` bail) and **~50 ms** for a body
-  (`empties > 50`). A client that misses either budget gets no response at all (the header case
-  closes the socket: *"Remote end closed connection without response"*, seen client-side at 28 ms)
-  or a `400 {"error":"incomplete request body"}`.
+- **HTTP: a request split across packets, or a body, that arrives a few ms late is dropped, intermittently (2026-08-20).** `handleConnection` runs SYNCHRONOUSLY inside `tick20ms`, so its waits are kept short to protect the render loop.
+  A connection with no bytes yet is parked and served on a later tick (2026-10-09), but a request whose headers arrive in two parts gets **~5 ms** for the rest, and a body **~50 ms** (`empties > 50`).
+  A client that misses either budget gets a request processed as truncated, or a `400 {"error":"incomplete request body"}`. Parking these too needs a buffer per parked connection.
 
   **Observed:** the MoonLive live scenarios fail roughly **1 run in 3** on the S3, always as a
   failed `POST /api/file` that cascades (`module not found` for every step depending on that
@@ -730,37 +848,6 @@ Device-model injection over Improv shipped as **"Improv = REST over serial"** (t
 Run user-authored scripts on a running device — a scripted effect, layout, modifier, driver, or core sensor rule, pushed as text and live on the next tick with no reflash/reboot — the leap WLED took with ARTI-FX and the heart of the PixelBlaze product. A scripted module **is** a MoonModule (controls, `loop()`, role, generic UI). The engine lives in core (domain-neutral: also "transform sensor data") and serves the light domain specifically. Targets in order: ESP32 classic + S3 first, then P4/other ESP32, then Teensy, then desktop. Must be blazingly fast (runs in the render hot path at 16K+ lights × 50 FPS), memory-smart (IRAM/PSRAM via `platform::alloc`, compile-once), and synced (Scheduler tick, tick-atomic hot-swap, live reconfig).
 
 The **bottom-up landscape survey** is done — [livescripts-analysis-bottom-up.md](livescripts-analysis-bottom-up.md): deep-reads the [ESPLiveScript fork](https://github.com/ewowi/ESPLiveScript/tree/fix-warnings) (a from-scratch C-like JIT that emits **native Xtensa** machine code — blazingly fast but **Xtensa-only**, so it covers classic+S3 and *not* P4/Teensy/desktop), surveys the field (PixelBlaze bytecode VM + web editor, WLED ARTI-FX AST-walking interpreter, embedded VMs / WASM / lightweight multi-ISA JITs), and extracts the load-bearing decisions (execution strategy, the IR seam ESPLiveScript lacks, the MoonModule binding, the per-pixel contract, memory placement, sync, sandboxing). Its thesis to validate: a **portable bytecode-VM baseline that runs on every target on day one + an optional native back-end for the hot ISAs behind a shared IR**. **Next: the top-down redesign** — the prompt that generates `livescripts-analysis-top-down.md` is at the bottom of the bottom-up doc; it produces the reference architecture + staged spike plan. Implementation is multi-commit, spike-ordered, after the top-down lands. Credits: [friend-repos/hpwit-ESPLiveScript.md](../../friend-repos/hpwit-ESPLiveScript.md).
-
-### Duplicate module names are reachable, and silent (backlog)
-
-Two modules in the tree may hold the SAME name. Found on the bench: a classic ESP32 had a
-`MoonLiveLayout` and a `MoonLiveEffect` both called `MoonLive`, one under `Layouts` and one under a
-`Layer`. Nothing reported it. The UI keys a card's controls by module name, so both cards resolved to
-the same entry and the effect's `bpm`/`zoom` sliders rendered under the LAYOUT's heading, where its
-own `petals`/`radius` should have been. The server data was correct throughout; only the display was
-wrong, which is what makes it hard to recognise.
-
-`Scheduler::ensureUniqueName` exists and is called on `/api/modules` creation and after a persistence
-load, so the tree normally cannot reach this state. The bench pair predates that pass or arrived
-through a path that skipped it, which is exactly the case a check would catch. **The gap is that
-nothing NOTICES:** a name collision is tolerated silently rather than reported, and the first symptom
-is a UI showing another module's controls.
-
-Fix: assert uniqueness after the persistence load and report a collision in the module status, so a
-device that reaches this state says so instead of rendering the wrong card. Renaming a module from
-the UI would also give a user a way out; there is no `name` control today.
-
-### Deleting a module by name removes the FIRST match (backlog)
-
-`DELETE /api/modules/<name>` resolves through `findModuleByName`, which returns the first match in
-tree order. With a duplicate name (above) that is not necessarily the module the caller meant: on the
-bench, deleting the effect by name would have removed the layout, because the layout came first.
-
-Noticed while repairing that device, and avoided only by reading the handler before running the
-request. It is latent rather than dangerous today, because duplicates are supposed to be impossible,
-but the two issues compound: the state that makes a delete ambiguous is the same state nothing warns
-about. Fix alongside the check above, either by refusing an ambiguous delete or by addressing a
-module by a path rather than a bare name.
 
 ### HTTP file serving blocks the render tick (backlog)
 
@@ -1583,8 +1670,8 @@ The preamble is now copied into five scripts (`setup_esp_idf.py`, `ci/verify_ver
 
 Measured on Windows over the 33 shipped `.mle` effects, same scripts and same instrument, changing only the route. Each script ran 3 s while its preview frames were sampled, then scripts were compared on mean level and on frame-to-frame motion; a pair matching closely on both is a pair that cannot be telling the pixels apart:
 
-- Reusing one module and rewriting its `script` control: **59 indistinct pairs**, in groups. Nine scripts (noise, octopus, plasma, rain, ripples, sparkle, spectrum, stadbeest-eyes, stadbeest-legs) all sat at mean 27.2 and motion 0.16, and six more (fountain, fractal, gradient, lines, metal, mh-ambient) at mean 42.9 and motion 0.33.
-- A fresh module per script, which is what the UI's picker does: **1 indistinct pair**, and the values separate as you would expect, with fractal at 108.2, noise at 127.2, mh-aim at 255.0 and stadbeest-eyes at 151.5.
+- Reusing one module and rewriting its `script` control: **59 indistinct pairs**, in groups. Nine scripts (noise, octopus, plasma, rain, ripples, sparkle, spectrum, stadbeest-frog-eye, stadbeest-walk) all sat at mean 27.2 and motion 0.16, and six more (fountain, fractal, gradient, lines, metal, mh-ambient) at mean 42.9 and motion 0.33.
+- A fresh module per script, which is what the UI's picker does: **1 indistinct pair**, and the values separate as you would expect, with fractal at 108.2, noise at 127.2, mh-aim at 255.0 and stadbeest-frog-eye at 151.5.
 
 The picker works because it does two things rather than one: `replacePickedType` in `src/ui/app.js` calls `replaceModule` to put a NEW module in the slot and only then `setCardScript`. A user who switches scripts from the dropdown on an existing card gets the broken path; a user who picks from the module picker does not, which is why the same library looks fine one way and stale the other.
 
@@ -1887,33 +1974,6 @@ involved: a **light Driver** (`Drivers` container, consumes the buffer, outputs 
 Service** (`Services` container, a capability bridge, no buffer). `services.md` already says exactly
 this. **Action: scope `drivers.md`'s claim to light drivers, and name the general sense in
 `architecture.md`.** Documentation only, no code.
-
-## The device catalog cannot seed a list row (2026-09-01)
-
-`deviceModels.json` describes a board by the modules it adds and the controls it sets, and the
-config push turns that into three ops: `planConfigOps` (`mooninstaller/config-ops.js`) emits `add`,
-`set` and `clearChildren`, and `HttpServerModule`'s APPLY_OP handler accepts exactly those. **There
-is no op for creating a row in a list control**, on either side.
-
-Found rebuilding the infrared service around a mapping list. Its five old actions (on/off,
-brightness up/down, palette next/prev) were meant to ship as default rows so a remote still worked
-out of the box, and they cannot: a row is not a control, so `controls: {...}` cannot express one. The
-service therefore starts empty and a user adds their first row by hand.
-
-Seeding them in the module's own `setup()` was tried and reverted: it works, but it puts a board's
-opinion in firmware, which is exactly what the rebuild removed, and it collides awkwardly with
-`restoreList` (which runs first on a configured device, so the guard is "only seed an empty list" and
-the interaction is subtle enough to have cost a debugging round).
-
-**What it would take:** an `addListRow` op carrying the parent module, the list control's name, and
-the row's fields, then a `setListRowField` per field (or one op with the whole row). The device side
-already has both primitives on `ListSource`, so this is plumbing rather than design: the catalog
-schema, the planner, the APPLY_OP encoding and the handler. Worth doing when a board genuinely ships
-with pre-bound inputs (a panel with three labelled buttons), which is also when someone can say what
-the rows should be.
-
-Until then a list is user-populated, which is the honest behavior: the device knows the pin, the
-user knows what the button should do.
 
 ## A desktop build reports firmware "unknown", so the update UI guesses from the browser (2026-09-06)
 

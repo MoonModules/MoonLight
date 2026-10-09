@@ -74,8 +74,7 @@ using PaletteOptionsFn = void (*)(JsonSink& sink);
 
 /// The backing for a list control, which the module owning the data implements.
 ///
-/// Rows come straight from that module's own storage rather than being copied here.
-/// An editable source addresses its rows by a stable id, so a reference survives a reorder.
+/// Rows come straight from that module's own storage rather than being copied here. An editable source addresses its rows by a stable id, so a reference survives a reorder.
 struct ListSource {
     /// A source outlives its control, and is destroyed through this base.
     virtual ~ListSource() = default;
@@ -126,6 +125,12 @@ struct ListSource {
     /// Set one field of one row, the source owning which fields are editable.
     virtual bool setListRowField(uint32_t /*id*/, const char* /*field*/,
                                  const char* /*valueJson*/) { return false; }
+
+    /// Run one row's action, what a click on its pad does; a list whose rows have none refuses.
+    virtual bool applyListRow(uint32_t /*id*/) { return false; }
+
+    /// The id of the row named `name`, for a list whose names are unique and so address its rows; false when none is.
+    virtual bool listRowNamed(const char* /*name*/, uint32_t& /*outId*/) const { return false; }
 };
 
 // How much a reader wants to see. One number the whole UI composes against, so a control names the audience it is for rather than every card deciding for itself.
@@ -175,8 +180,7 @@ struct ControlDescriptor {
 
 /// The set of controls a module exposes, which is its `controls_`.
 ///
-/// A control binds to a class variable by reference, so the hot path reads it directly.
-/// Descriptors live in a fixed-capacity array, with no per-control allocation.
+/// A control binds to a class variable by reference, so the hot path reads it directly: @xref{persistence-and-rebuilding}. Descriptors live in a fixed array with no per-control allocation: @xref{what-a-control-costs}.
 ///
 /// Prior art: MoonLight's `addControl`, which binds a variable the same way.
 ///
@@ -184,17 +188,12 @@ struct ControlDescriptor {
 ///
 /// ## What a control costs
 ///
-/// A descriptor is a pointer, a name, an auxiliary word, the type, the bounds and some flags.
-/// That is about forty-eight bytes on a host, and less on a device.
-/// The value itself is the module's own variable, of one to four bytes.
-/// A module that overflows the default capacity is probably too complex.
+/// A descriptor is a pointer, a name, an auxiliary word, the type, the bounds and some flags, about forty-eight bytes on a host and less on a device.
+/// The value itself is the module's own variable, of one to four bytes. A module that overflows the default capacity is probably too complex.
 ///
 /// ## Persistence and rebuilding
 ///
-/// Values persist through the filesystem module, which overlays them through each pointer.
-/// Calling `defineControls` again clears and rebuilds the set.
-/// That is how a conditional control re-evaluates whether it is hidden.
-/// The per-type reference is on the type enum, and each `addX` below binds one type.
+/// Values persist through the filesystem module, which overlays them through each pointer. Calling `defineControls` again rebuilds the set, so a conditional control re-evaluates whether it is hidden.
 class ControlList {
 public:
     /// Free the descriptor array, the bound variables being the modules' own.
@@ -341,10 +340,11 @@ public:
         controls_[count_++] = {&source, name, 0, ControlType::List, 0, 0};
     }
 
+    // `confirm` asks the UI for a second press, for one that cannot be undone; the API, a desk or MQTT acts on one write, as for every button.
     /// Add a momentary button, whose click reaches the module's changed hook rather than storage.
-    void addButton(const char* name) {
+    void addButton(const char* name, bool confirm = false) {
         grow();
-        controls_[count_++] = {nullptr, name, 0, ControlType::Button, 0, 0};
+        controls_[count_++] = {nullptr, name, confirm ? 1u : 0u, ControlType::Button, 0, 0};
     }
 
     /// Drop every control, which a rebuild does before redeclaring them.
@@ -456,6 +456,24 @@ void writeControlValue(JsonSink& sink, const ControlDescriptor& c, bool saving =
 
 /// Append a password as the API shows one, XOR-ed with a fixed key and base64-encoded: obfuscation against reading it at a glance, not a secret.
 void writeObfuscatedPassword(JsonSink& sink, const char* password);
+
+/// While active, a password is written empty: for a client on the device's own access point, which has not shown it knows the network's password.
+class SecretsHidden {
+public:
+    /// Hide stored passwords for this scope when `hide`, show them when not, and restore what was before on leaving.
+    explicit SecretsHidden(bool hide) MM_NONBLOCKING;
+    /// Restore what was before.
+    ~SecretsHidden() MM_NONBLOCKING;
+    /// Whether passwords are hidden now.
+    static bool active() MM_NONBLOCKING;
+    /// Not copied, since it owns a restore.
+    SecretsHidden(const SecretsHidden&) = delete;
+    /// Not assigned, for the same reason.
+    SecretsHidden& operator=(const SecretsHidden&) = delete;
+
+private:
+    bool prev_;
+};
 
 /// Append the per-type extras that ride beside the value, such as bounds or options.
 void writeControlMetadata(JsonSink& sink, const ControlDescriptor& c);

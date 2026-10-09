@@ -5,6 +5,7 @@
 
 #include "doctest.h"
 #include "core/module/Scheduler.h"
+#include "core/module/StateDocument.h"
 #include "core/system/FilesystemModule.h"
 #include "light/drivers/Drivers.h"
 #include "light/drivers/FixtureProfilesModule.h"
@@ -36,16 +37,19 @@ std::string bootFixture(const char* root, bool save = false, const char* restore
         fs->setScheduler(&scheduler);
         auto* drivers = new mm::Drivers();
         drivers->setTypeName("Drivers");
+        drivers->setName("Drivers");
         auto* lib = new mm::FixtureProfilesModule();
         lib->setTypeName("FixtureProfilesModule");
+        lib->setName("FixtureProfiles");
         auto* drv = new mm::NetworkSendDriver();
         drv->setTypeName("NetworkSendDriver");
+        drv->setName("NetworkSend");
         drivers->addChild(lib);
         drivers->addChild(drv);
         scheduler.addModule(fs);
         scheduler.addModule(drivers);
         scheduler.setup();
-        if (restore) REQUIRE(fs->applySubtree(drivers, restore));   // a backup restored on the running device
+        if (restore) REQUIRE(mm::applyStateDocument(scheduler, restore, mm::StateSource::Stored).ok);   // a backup restored on the running device
         got = wiring(drv->correction());
         if (save) {
             drivers->markDirty();
@@ -61,7 +65,7 @@ void writeDrivers(const char* root, const char* driverKeys) {
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(std::string(root) + "/.config");
     std::ofstream(std::string(root) + "/.config/Drivers.json")
-        << R"({"enabled":true,"0.type":"FixtureProfilesModule","0.enabled":true,"1.type":"NetworkSendDriver","1.enabled":true,)" << driverKeys << "}";
+        << R"({"Drivers":{"$patch":"replace","enabled":true,"FixtureProfiles":{"type":"FixtureProfilesModule","enabled":true},"NetworkSend":{"type":"NetworkSendDriver","enabled":true,)" << driverKeys << "}}}";
 }
 std::string readDrivers(const char* root) {
     std::ifstream f(std::string(root) + "/.config/Drivers.json");
@@ -72,12 +76,12 @@ std::string readDrivers(const char* root) {
 // An older config saved the row number beside the name, and the number now points elsewhere: the name wins, on the wire as on the card.
 TEST_CASE("A driver's fixture profile survives a reboot by name") {
     const char* root = "/tmp/mm_fixture_by_name";
-    writeDrivers(root, R"("1.fixture":4,"1.fixtureRef":"GRBW")");   // row 4 of today's list is GBR
+    writeDrivers(root, R"("fixture":4,"fixtureRef":"GRBW")");   // row 4 of the built-in list is GBR
     CHECK(bootFixture(root, true) == kGrbw);
-    CHECK(readDrivers(root).find(R"("1.fixture":"GRBW")") != std::string::npos);   // the name, never the row number
+    CHECK(readDrivers(root).find(R"("fixture":"GRBW")") != std::string::npos);   // the name, never the row number
     CHECK(bootFixture(root) == kGrbw);
     // A name no profile has any more, such as a renamed custom one, leaves the driver on its default.
-    writeDrivers(root, R"("1.fixture":"gone")");
+    writeDrivers(root, R"("fixture":"gone")");
     CHECK(bootFixture(root) == kRgb);
     std::filesystem::remove_all(root);
 }
@@ -85,10 +89,10 @@ TEST_CASE("A driver's fixture profile survives a reboot by name") {
 // A backup from before this release, restored on a running device, takes effect by name at once and saves the name.
 TEST_CASE("A restored older backup applies its fixture profile by name") {
     const char* root = "/tmp/mm_fixture_restore";
-    writeDrivers(root, R"("1.fixture":"RGB")");
-    const char* backup = R"({"enabled":true,"0.type":"FixtureProfilesModule","0.enabled":true,"1.type":"NetworkSendDriver","1.enabled":true,"1.fixture":4,"1.fixtureRef":"GRBW"})";
+    writeDrivers(root, R"("fixture":"RGB")");
+    const char* backup = R"({"Drivers":{"$patch":"replace","enabled":true,"FixtureProfiles":{"type":"FixtureProfilesModule","enabled":true},"NetworkSend":{"type":"NetworkSendDriver","enabled":true,"fixture":4,"fixtureRef":"GRBW"}}})";
     CHECK(bootFixture(root, true, backup) == kGrbw);
-    CHECK(readDrivers(root).find(R"("1.fixture":"GRBW")") != std::string::npos);
+    CHECK(readDrivers(root).find(R"("fixture":"GRBW")") != std::string::npos);
     CHECK(bootFixture(root) == kGrbw);
     std::filesystem::remove_all(root);
 }

@@ -40,8 +40,8 @@ public:
         "Maze B3/S12345",
         "Mazecentric B3/S1234",
         "DrighLife B367/S23"};
-    /// How many rulesets the select offers, including the custom entry at index 0.
-    static constexpr uint8_t kRulesetCount = 7;
+    /// The rulesets in option order, the custom entry first, ending with how many the select offers.
+    enum Ruleset : uint8_t { kRulesetCustom, kRulesetConway, kRulesetHighLife, kRulesetInverseLife, kRulesetMaze, kRulesetMazecentric, kRulesetDrighLife, kRulesetCount };
 
     // Kept separate from the label, so a preset parses its rule rather than its menu wording.
     static constexpr const char* kRulesetStrings[] = {
@@ -61,7 +61,7 @@ public:
     /// The background's blue channel.
     uint8_t backgroundColorB = 0;
     /// The selected ruleset, 0 reading `customRuleString`.
-    uint8_t ruleset    = 1;
+    uint8_t ruleset    = kRulesetConway;
     /// A user-typed rule, parsed as digits around a slash.
     char    customRuleString[20] = "B/S";
     /// Generations a second, where 100 runs uncapped.
@@ -264,8 +264,8 @@ private:
 
     // Digits before the slash are birth counts and after are survive, so "36/23" parses.
     void parseRuleset() {
-        const char* r = (ruleset == 0) ? customRuleString
-                                       : (ruleset < kRulesetCount ? kRulesetStrings[ruleset] : kRulesetStrings[1]);
+        const char* r = (ruleset == kRulesetCustom) ? customRuleString
+                                       : (ruleset < kRulesetCount ? kRulesetStrings[ruleset] : kRulesetStrings[kRulesetConway]);
         std::memset(birthNumbers_, 0, sizeof(birthNumbers_));
         std::memset(surviveNumbers_, 0, sizeof(surviveNumbers_));
         if (!r) return;

@@ -66,7 +66,7 @@ TEST_CASE("FreqSawsEffect reacts to a fed audio frame") {
     mm::AudioService mic;
     mic.defineControls();
     mic.mode = mm::AudioService::kSimMode;   // simulate mode
-    mic.simulate = 0;    // music pattern
+    mic.simulate = mm::AudioService::kSimMusic;   // music pattern
     mic.setup();                  // registers as the active mic
 
     mm::Layouts layouts;

@@ -1,20 +1,17 @@
 /// @defgroup platform_desktop The desktop platform layer
 /// Every platform seam on macOS, Windows and Linux, so the desktop build runs what a device runs.
 ///
-/// Where a host has the facility it is real: sockets, the filesystem, executable memory, raw frames.
-/// Where it has no silicon the seam is backed by ordinary memory instead of refused, which is what keeps the drivers above testable off device.
+/// Where a host has the facility it is real: sockets, the filesystem, executable memory, raw frames. Where it has no silicon the seam is backed by ordinary memory instead of refused, which is what keeps the drivers above testable off device.
 ///
 /// @moreinfo
 ///
 /// ## A host bus is real memory, not a refusal
 ///
-/// The parallel output seams used to return failure, so a driver body of some 2500 lines never executed off device.
-/// It was not runnable, not testable, and invisible to every syntax-tree check.
+/// The parallel output seams used to return failure, so a driver body of some 2500 lines never executed off device. It was not runnable, not testable, and invisible to every syntax-tree check.
 /// So a bus is implemented against a heap buffer: init allocates, buffer hands back writable memory, transmit records the byte count, wait returns at once.
 /// Everything above the seam is then the same code that runs on hardware, and only the hand-off is absent.
 ///
-/// Deliberately not modelled: timing, wire protocol, pin state and loopback capture.
-/// Those need silicon, and faking them would make a driver's self-test lie about hardware it never touched.
+/// Deliberately not modelled: timing, wire protocol, pin state and loopback capture. Those need silicon, and faking them would make a driver's self-test lie about hardware it never touched.
 /// HUB75 is the exception that stays inert, having no host analogue worth faking, and its encoder is already tested on plain buffers.
 ///
 /// ## The identity is stored, not read from a NIC
@@ -31,8 +28,7 @@
 ///
 /// ## The data root is per-user, not relative
 ///
-/// A shipped binary is launched from a download folder, a menu shortcut or an installer's directory.
-/// A relative root fails both ways.
+/// A shipped binary is launched from a download folder, a menu shortcut or an installer's directory. A relative root fails both ways.
 /// It lands somewhere unwritable, so every save fails, or it makes the settings belong to that folder rather than to the user, so moving the executable loses them.
 /// Both were seen on a Windows bench. Three sources are tried in order: an explicit override, a repo checkout, then the operating system's per-user application data.
 ///
@@ -50,21 +46,17 @@
 ///
 /// ## Interface labels carry the negotiated speed
 ///
-/// The lookup is necessarily per-operating-system, three interfaces in three units, which is what this layer is for.
-/// The rendering is not, so it lives here once.
-/// The label shape is a contract that the apply path and the driver's remap both parse, to recover the adapter's stable identity.
-/// Two copies would be two chances to drift out of that agreement.
+/// The lookup is necessarily per-operating-system, three interfaces in three units, which is what this layer is for. The rendering is not, so it lives here once.
+/// The label shape is a contract that the apply path and the driver's remap both parse, to recover the adapter's stable identity. Two copies would be two chances to drift out of that agreement.
 /// A speed of zero means the system would not state one, for a virtual adapter or a link that is down, and that appends nothing rather than a fabricated figure.
 /// It appends only if the whole suffix fits, since a truncated speed reads worse than none and the label is what the selection persists by.
 ///
 /// ## Config files are written owner-only
 ///
-/// The standard open creates a file the process umask widens, so on a typical one it lands world-readable.
-/// These are the config files, which hold network keys and broker passwords, and a desktop runs on a real machine with real other users.
+/// The standard open creates a file the process umask widens, so on a typical one it lands world-readable. These are the config files, which hold network keys and broker passwords, and a desktop runs on a real machine with real other users.
 /// A device is unaffected: its filesystem has no modes at all.
 ///
-/// One platform gets an exclusive create with an explicit mode.
-/// Exclusive, because a pre-existing file at one of these paths is either a crashed run's leftover or somebody else's, and inheriting its mode would defeat the point.
+/// One platform gets an exclusive create with an explicit mode. Exclusive, because a pre-existing file at one of these paths is either a crashed run's leftover or somebody else's, and inheriting its mode would defeat the point.
 /// The other has no mode concept and its files inherit the directory's access list, which is that platform's own answer to the same question, so it keeps the plain open.
 ///
 /// ## Address reuse means opposite things
@@ -78,39 +70,30 @@
 ///
 /// ## What the allocation counter is for
 ///
-/// Not a heap figure: a desktop has as much memory as it wants.
-/// And the free-heap report stays at nothing because three call sites read that as unlimited and switch off gates that only mean something on a device.
-/// What it is good for is the DELTA. Every buffer the system takes on purpose comes through these entry points.
-/// So adding or removing a module moves the number by exactly what that module costs, on a laptop, in a second, with no board attached.
+/// Not a heap figure: a desktop has as much memory as it wants. And the free-heap report stays at nothing because three call sites read that as unlimited and switch off gates that only mean something on a device.
+/// What it is good for is the DELTA. Every buffer the system takes on purpose comes through these entry points. So adding or removing a module moves the number by exactly what that module costs, on a laptop, in a second, with no board attached.
 /// The process's own resident size cannot answer that, since the allocator, the compiler and the network buffers move it too, and a small layer would be lost in the noise.
 /// The REQUESTED size is recorded rather than the allocator's rounded one, so a reported delta is the number the caller asked for.
 ///
 /// ## The render sleeps to a frame budget
 ///
-/// Yielding alone only offers the processor to another runnable thread.
-/// So on an otherwise idle machine it returns at once and the caller spins a core flat out, reported from a bench as the process slowly eating more cycles.
-/// Nothing consumes a desktop render faster than a display or a driver's own rate limit.
-/// So a loop free-running at thousands of frames is spending a core to compute frames nobody reads.
-/// The budget is far above any output rate we drive while leaving the processor idle in between.
-/// And a tick that legitimately runs longer simply gets no sleep, so a heavy grid still runs as fast as it can.
+/// Yielding alone only offers the processor to another runnable thread. So on an otherwise idle machine it returns at once and the caller spins a core flat out, reported from a bench as the process slowly eating more cycles.
+/// Nothing consumes a desktop render faster than a display or a driver's own rate limit. So a loop free-running at thousands of frames is spending a core to compute frames nobody reads.
+/// The budget is far above any output rate we drive while leaving the processor idle in between. And a tick that legitimately runs longer simply gets no sleep, so a heavy grid still runs as fast as it can.
 ///
 /// ## The video runtime's structures are transcribed, not included
 ///
 /// The runtime is resolved on demand and never linked, bundled, or its headers included, the same arrangement as the raw-frame driver and for the same licensing reason.
 /// The user installs it; a machine without it builds and runs identically and reports the feature unavailable.
 ///
-/// So the declarations are transcribed from the vendor's own public headers.
-/// Getting a field's type or ORDER wrong is a silent crash or a skewed image rather than a compile error.
-/// These are passed by pointer into a binary built against the real definitions.
-/// They are quoted verbatim in the plan with their source, and must not be tidied.
+/// So the declarations are transcribed from the vendor's own public headers. Getting a field's type or ORDER wrong is a silent crash or a skewed image rather than a compile error.
+/// These are passed by pointer into a binary built against the real definitions. They are quoted verbatim in the plan with their source, and must not be tidied.
 ///
 /// ## Naming an adapter when the capture library cannot
 ///
 /// That library's own description is sometimes absent, and then the adapter is unnameable: the only text left to match is a 49-character device path.
-/// So the system's own description is found through the interface table, keyed on the identifier the device path already carries.
-/// The negotiated speed rides in the label too, because the name alone does not say what a picker needs to know.
-/// A wall wants the gigabit adapter, and a list of plausible names hides which entries are a dongle, a radio or a virtual switch.
-/// An adapter whose speed the system will not state gets no suffix rather than a fabricated one.
+/// So the system's own description is found through the interface table, keyed on the identifier the device path already carries. The negotiated speed rides in the label too, because the name alone does not say what a picker needs to know.
+/// A wall wants the gigabit adapter, and a list of plausible names hides which entries are a dongle, a radio or a virtual switch. An adapter whose speed the system will not state gets no suffix rather than a fabricated one.
 ///
 /// ## The interface table, not the address list
 ///
@@ -122,8 +105,7 @@
 /// ## Which adapters can carry panel frames
 ///
 /// The interface type alone is not the test: measured on a bench, the virtual switch ports, every wide-area miniport, the bridge and the personal-area network all report the same type.
-/// Whether it is a hardware interface is what separates them from an adapter with a socket on it.
-/// A radio fails the type test instead, which is the right answer for a card that needs a wire.
+/// Whether it is a hardware interface is what separates them from an adapter with a socket on it. A radio fails the type test instead, which is the right answer for a card that needs a wire.
 ///
 /// ## The effect-warning guard
 ///
@@ -165,6 +147,7 @@
 #include <curl/curl.h>   // https POST: the OS's own TLS, nothing vendored
 #endif
 #include <filesystem>
+#include <map>
 #include <string>
 #ifndef _WIN32
 #include <dlfcn.h>   // dlopen/dlsym: the NDI runtime is resolved on demand, never linked
@@ -830,6 +813,10 @@ const char* resetReason() {
     return "OK";
 }
 
+static BootRecord testBootRecord_;
+void setTestBootRecord(const BootRecord& r) { testBootRecord_ = r; }
+const BootRecord& bootRecord() { return testBootRecord_; }
+
 void setLogLevel(LogLevel) {
     // The terminal takes every line here and the measurement gate reads the level directly, so there is nothing to apply to a platform logger.
 }
@@ -961,8 +948,15 @@ int fsRead(const char* path, char* buf, size_t maxLen) {
 }
 
 
+// The folder a write lands in, made first, as the write's contract promises.
+static void makeParent(const std::filesystem::path& target) {
+    std::error_code ec;
+    std::filesystem::create_directories(target.parent_path(), ec);
+}
+
 bool fsWriteAtomic(const char* path, const char* data, size_t len) {
     auto target = toFsPath(path);
+    makeParent(target);
     auto tmp = target;
     tmp += ".tmp";
 
@@ -1015,6 +1009,7 @@ int fsReadAt(const char* path, long offset, char* buf, size_t len) {
 bool fsWriteStream(const char* path, FsWriteSrc src, void* user) {
     if (!src) return false;
     auto target = toFsPath(path);
+    makeParent(target);
     auto tmp = target;
     tmp += ".tmp";
 
@@ -1714,6 +1709,14 @@ void setTestMdnsAvailable(bool available) { testMdns_ = available; testMdnsInits
 uint32_t testMdnsInitCount() { return testMdnsInits_; }
 bool mdnsInit(const char* /*deviceName*/) { return testMdns_ && ++testMdnsInits_; }
 void mdnsStop() {}
+// The host announces nothing over mDNS, so the services are only remembered, which is what a test reads back.
+static std::map<std::string, uint16_t> mdnsServices_;
+void mdnsAdvertise(const char* type, const char* proto, uint16_t port) { mdnsServices_[std::string(type) + "." + proto] = port; }
+void mdnsWithdraw(const char* type, const char* proto) { mdnsServices_.erase(std::string(type) + "." + proto); }
+uint16_t mdnsAdvertisedPort(const char* type, const char* proto) {
+    const auto it = mdnsServices_.find(std::string(type) + "." + proto);
+    return it == mdnsServices_.end() ? 0 : it->second;
+}
 void mdnsShutdown() {}
 
 // The system resolver answers `.local` too on macOS and Windows, and on Linux with nss-mdns, so one call covers both kinds of name.
@@ -1960,7 +1963,8 @@ int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4], uint16_t*
     auto n = ::recvfrom(sock(fd_), reinterpret_cast<char*>(buf), static_cast<int>(maxLen), 0,
                         reinterpret_cast<sockaddr*>(&src), &srcLen);
     // 0-byte datagrams and would-block both mean "nothing usable pending".
-    if (n <= 0) return -1;
+    if (n <= 0) { keepMembership(); return -1; }
+    heard();
     if (srcIp) std::memcpy(srcIp, &src.sin_addr.s_addr, 4);   // network order = octets
     if (srcPort) *srcPort = ntohs(src.sin_port);
     return static_cast<int>(n);
@@ -1971,16 +1975,16 @@ static std::atomic<bool> testJoinFails{false};
 void setTestJoinFails(bool fail) { testJoinFails.store(fail, std::memory_order_relaxed); }
 
 // Join a multicast group so the bound socket receives its datagrams; letting the stack pick the interface is what a single-homed device wants.
-bool UdpSocket::joinMulticast(const char* group) {
+bool UdpSocket::membership(const char* group, bool join) {
     if (fd_ < 0 || !group) return false;
-    if (testJoinFails.load(std::memory_order_relaxed)) return false;
+    if (join && testJoinFails.load(std::memory_order_relaxed)) return false;
     ip_mreq mreq{};
     if (::inet_pton(AF_INET, group, &mreq.imr_multiaddr) != 1) return false;
     mreq.imr_interface.s_addr = htonl(INADDR_ANY);
     // A socket that joins a group and also sends to it must not hear its own sends back.
     const unsigned char loop = 0;
-    ::setsockopt(sock(fd_), IPPROTO_IP, IP_MULTICAST_LOOP, reinterpret_cast<const char*>(&loop), sizeof(loop));
-    return ::setsockopt(sock(fd_), IPPROTO_IP, IP_ADD_MEMBERSHIP,
+    if (join) ::setsockopt(sock(fd_), IPPROTO_IP, IP_MULTICAST_LOOP, reinterpret_cast<const char*>(&loop), sizeof(loop));
+    return ::setsockopt(sock(fd_), IPPROTO_IP, join ? IP_ADD_MEMBERSHIP : IP_DROP_MEMBERSHIP,
                         reinterpret_cast<const char*>(&mreq), sizeof(mreq)) == 0;
 }
 
@@ -2000,6 +2004,9 @@ void UdpSocket::close() {
         close_sock(fd_);
         fd_ = -1;
     }
+    group_[0] = 0;   // the membership went with the socket
+    joined_ = false;
+    joinCount_ = 0;
 }
 
 // TcpConnection
@@ -2196,6 +2203,56 @@ void TcpServer::close() {
         close_sock(fd_);
         fd_ = -1;
     }
+}
+
+// PWM on the host keeps a classic ESP32's shape, 4 timers and 16 channels on an 80 MHz clock, and records each duty so the driver's mapping is tested here.
+namespace {
+constexpr int kHostPwmTimers = 4;
+constexpr int kHostPwmChannels = 16;
+struct HostPwmChannel { int timer = -1; int pin = -1; uint32_t duty = 0; uint32_t phase = 0; };
+bool g_pwmTimerUsed[kHostPwmTimers] = {};
+HostPwmChannel g_pwmChannels[kHostPwmChannels];
+}  // namespace
+
+uint8_t pwmChannelCount() MM_NONBLOCKING { return kHostPwmChannels; }
+
+uint8_t pwmMaxBits() MM_NONBLOCKING { return 20; }   // the classic ESP32's timer
+
+int pwmStart(uint8_t bits) {
+    if (bits == 0 || bits > pwmMaxBits()) return -1;
+    for (int t = 0; t < kHostPwmTimers; t++)
+        if (!g_pwmTimerUsed[t]) { g_pwmTimerUsed[t] = true; return t; }
+    return -1;
+}
+
+int pwmAttach(int timer, uint8_t pin, uint32_t phase) {
+    if (timer < 0 || timer >= kHostPwmTimers || !g_pwmTimerUsed[timer]) return -1;
+    for (int c = 0; c < kHostPwmChannels; c++)
+        if (g_pwmChannels[c].timer < 0) { g_pwmChannels[c] = {timer, pin, 0, phase}; return c; }
+    return -1;
+}
+
+void pwmWrite(int channel, uint32_t duty) MM_NONBLOCKING {
+    if (channel >= 0 && channel < kHostPwmChannels) g_pwmChannels[channel].duty = duty;
+}
+
+void pwmStop(int timer) {
+    if (timer < 0 || timer >= kHostPwmTimers) return;
+    for (auto& c : g_pwmChannels)
+        if (c.timer == timer) c = {};
+    g_pwmTimerUsed[timer] = false;
+}
+
+uint32_t pwmDutyForTest(int channel) {
+    return (channel >= 0 && channel < kHostPwmChannels) ? g_pwmChannels[channel].duty : 0;
+}
+
+int pwmPinForTest(int channel) {
+    return (channel >= 0 && channel < kHostPwmChannels) ? g_pwmChannels[channel].pin : -1;
+}
+
+uint32_t pwmPhaseForTest(int channel) {
+    return (channel >= 0 && channel < kHostPwmChannels) ? g_pwmChannels[channel].phase : 0;
 }
 
 // The symbol-based output on the host is accepted and counted, since refusing left that driver inert off device. The resolution is echoed so its timing arithmetic works on real numbers.
@@ -2547,11 +2604,16 @@ bool irChannelReady(uint16_t /*pin*/) { return true; }   // no channel to fail o
 namespace {
 struct TestUsbDesk {
     bool attached = false;
+    bool owned = false;   ///< one owner at a time, as on a board
     std::vector<std::array<uint8_t, 4>> in, out;
 } g_usbDesk;
 }  // namespace
-bool usbMidiBegin() { return g_usbDesk.attached; }
-void usbMidiEnd() {}
+bool usbMidiBegin() {
+    if (!g_usbDesk.attached || g_usbDesk.owned) return false;
+    g_usbDesk.owned = true;
+    return true;
+}
+void usbMidiEnd() { g_usbDesk.owned = false; }
 bool usbMidiConnected() { return g_usbDesk.attached; }
 size_t usbMidiRead(uint8_t (*packets)[4], size_t max) {
     size_t n = 0;

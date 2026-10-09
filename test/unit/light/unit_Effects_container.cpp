@@ -135,7 +135,7 @@ TEST_CASE("Drivers composites two enabled Layers into one output buffer") {
     // Top layer: rainbow, additive at full opacity → bottom + top, clamped.
     mm::Layer top; top.setChannelsPerLight(3);
     mm::RainbowEffect over; top.addChild(&over);
-    top.blendMode = 1;   // additive
+    top.blendMode = mm::Layer::kBlendAdditive;
     top.opacity = 255;
 
     effectsContainer.addChild(&bottom);

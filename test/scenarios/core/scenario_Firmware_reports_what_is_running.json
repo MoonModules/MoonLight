@@ -6,13 +6,8 @@
     "SystemModule"
   ],
   "description": "The card that decides whether an update is offered, and therefore the one that must never guess. Its version comes from the binary rather than from a file, so a restart cannot change it and nothing persisted can edit it into something untrue. The value itself moves every release, so what is asserted is that it is the same before and after a restart rather than any particular string.",
-  "fixture": [
-    {
-      "name": "fix-Firmware",
-      "op": "add_module",
-      "id": "Firmware",
-      "type": "FirmwareUpdateModule"
-    }
+  "top": [
+    "FirmwareUpdateModule"
   ],
   "steps": [
     {

@@ -15,15 +15,14 @@ import sys
 from pathlib import Path
 
 import compute_version   # sibling: the one place a version string is derived
-from generate_build_info import build_id   # sibling: the one place the build id is derived
+from moonbase_images import MOONBASE_BIN, build_migrate, build_moonbase   # sibling: the images that carry MoonBase
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 ESP32_DIR = ROOT / "esp32"
 
-# What ESP-IDF names each build's output, which is the `project()` name in esp32/CMakeLists.txt and moonbase/CMakeLists.txt. It is also stamped into the image descriptor a shipped device compares before it installs anything, so a rename is decided in src/core/util/FirmwareImage.h first. Every script reading a build imports these.
+# What ESP-IDF names each build's output, which is the `project()` name in esp32/CMakeLists.txt; MoonBase's, MOONBASE_BIN, lives with its builder in moonbase_images.py and is imported above. It is also stamped into the image descriptor a shipped device compares before it installs anything, so a rename is decided in src/core/util/FirmwareImage.h first. Every script reading a build imports these.
 APP_BIN = "MoonLight.bin"
 APP_ELF = "MoonLight.elf"
-MOONBASE_BIN = "MoonLight-moonbase.bin"
 
 # Common ESP-IDF install locations
 IDF_SEARCH_PATHS = [
@@ -260,6 +259,18 @@ FIRMWARES: dict[str, dict] = {
         # on a part that has 48 KB to spare.
         "panel_cards": False,
     },
+    "esp32c3": {
+        "chip": "esp32c3",
+        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32c3",
+                      "sdkconfig.defaults.moonbase-4mb"],
+        "moonbase": True,   # 4 MB: factory MoonBase + one big app slot (see moonbase/)
+        "eth_only": False,
+        "description": "ESP32-C3 (4 MB flash, no PSRAM) - WiFi only, one RISC-V core at 160 MHz.",
+        # A board running WLED moves to this variant over WiFi through the migration image.
+        "migrate": True,
+        "ships": True,
+        "panel_cards": False,
+    },
     "esp32p4rev1-eth": {
         "chip": "esp32p4",
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32p4rev1-eth"],
@@ -348,6 +359,7 @@ TARGET_TO_FAMILY = {
     "esp32s3":  "ESP32-S3",
     "esp32s31": "ESP32-S31",
     "esp32p4":  "ESP32-P4",
+    "esp32c3":  "ESP32-C3",
 }
 
 # Chips IDF still marks "preview" — `idf.py set-target <chip>` refuses without an
@@ -747,6 +759,9 @@ def main():
     parser.add_argument("--task-cpu-stats", action="store_true",
                         help="Enable per-task CPU%% in TasksModule (FreeRTOS run-time stats). "
                              "A profiling build only — costs ~5%% tick; off by default.")
+    parser.add_argument("--migrate-pause", type=int, default=0, metavar="SECONDS",
+                        help="Also build a rehearsal migration image that pauses this long after each step, "
+                             "into build/migrate-<chip>-pause, so a power cut can be tested at each point.")
     parser.add_argument("--skip-idf-pin-check", action="store_true",
                         help="Build against the currently-checked-out IDF even if "
                              "it differs from PINNED_IDF_COMMIT (for a dev "
@@ -842,6 +857,10 @@ def main():
 
     if FIRMWARES[firmware].get("moonbase"):
         build_moonbase(cmd, env, chip, args.version)
+    if FIRMWARES[firmware].get("migrate"):
+        build_migrate(cmd, env, chip, build_dir)
+        if args.migrate_pause:
+            build_migrate(cmd, env, chip, build_dir, args.migrate_pause)
 
 
 # ---- MoonBase flash layout, shared by every consumer of the build output ----
@@ -924,54 +943,6 @@ def moonbase_flash_files(firmware: str, build_dir: Path) -> list[tuple[str, Path
             writes.append((off, build_dir / rel))
     writes.append((offs["factory"], moonbase_bin))
     return writes
-
-
-def build_moonbase(cmd: list[str], env: dict, chip: str, version: str = "") -> None:
-    """Build the MoonBase image for `chip` into build/moonbase-<chip>.
-
-    MoonBase (moonbase/) is the second boot image the MoonBase variants carry in their factory
-    partition: a small firmware whose job is installing the application, since a board with one
-    app slot cannot rewrite the partition it is executing from. It is chip-specific but variant-
-    agnostic, so every classic variant shares one build. Its size budget lives in
-    moonbase/sdkconfig.defaults; the shared partition table keeps the two images provably agreed
-    on where everything lives.
-
-    `version` plus the build id becomes PROJECT_VER, `6.0.0+990a3d84` in SemVer's build-metadata form, which IDF writes into the image's app descriptor.
-    The app reads it back from the factory partition and shows the version and the build id as it shows its own, so a device can say which MoonBase it carries.
-    A changed id also changes the descriptor's compile flags, so IDF recompiles it and its date is the build's rather than the build folder's first.
-    A version is variant-independent, so passing it keeps one image per chip valid.
-    """
-    moonbase_dir = ROOT / "moonbase"
-    build_dir = ROOT / "build" / f"moonbase-{chip}"
-    b_arg = ["-B", str(build_dir), f"-DSDKCONFIG={build_dir}/sdkconfig"]
-    if not version:
-        # The library.json default the app resolves through build_info.h's #ifndef, rather than a git-describe string the app cannot compare against.
-        version = compute_version.compute("local", "")
-    b_arg.append(f"-DPROJECT_VER={version}+{build_id()}")
-    # Same trap as stale_feature_cache: IDF generates sdkconfig from the defaults only when it is
-    # absent, so an edited moonbase/sdkconfig.defaults silently changes nothing. One defaults file
-    # here, so mtime is a sufficient staleness signal.
-    gen = build_dir / "sdkconfig"
-    defaults = moonbase_dir / "sdkconfig.defaults"
-    if gen.exists() and defaults.stat().st_mtime > gen.stat().st_mtime:
-        print(f"MoonBase build dir {build_dir.name} predates sdkconfig.defaults; "
-              "removing it for a clean reconfigure.")
-        shutil.rmtree(build_dir)
-    if not build_dir.exists():
-        print(f"Setting MoonBase target to {chip}...")
-        r = subprocess.run(cmd + b_arg + ["set-target", chip], cwd=moonbase_dir, env=env)
-        if r.returncode != 0:
-            sys.exit(r.returncode)
-    print(f"Building MoonBase for {chip}...")
-    r = subprocess.run(cmd + b_arg + ["build"], cwd=moonbase_dir, env=env)
-    if r.returncode != 0:
-        sys.exit(r.returncode)
-    binp = build_dir / MOONBASE_BIN
-    if binp.exists():
-        kb = binp.stat().st_size / 1024
-        # Slot fit is printed by IDF itself ("Smallest app partition ... free"); repeating a
-        # hardcoded slot size here would lie the day the table changes.
-        print(f"MoonBase image: {kb:.0f} KB")
 
 
 if __name__ == "__main__":

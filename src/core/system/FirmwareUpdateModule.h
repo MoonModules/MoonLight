@@ -134,14 +134,14 @@ public:
         if (platform::otaHasMoonBase()) {
             // Two images described by the same four facts, so eight controls would say each twice.
             static const char* const kImages[] = { "App", "MoonBase" };
-            controls_.addSelect("image", imageSel_, kImages, 2);
+            controls_.addSelect("image", imageSel_, kImages, kImageCount);
             // Drawn as a tab strip rather than a setting among those it governs.
             controls_.setHidden(controls_.count() - 1, true);
         } else {
-            imageSel_ = 0;   // nothing else to describe: the app is the only image
+            imageSel_ = kImageApp;   // nothing else to describe: the app is the only image
         }
 
-        if (imageSel_ == 0) {
+        if (imageSel_ == kImageApp) {
             controls_.addReadOnly("version", versionStr_, sizeof(versionStr_));
             controls_.addReadOnly("build", buildStr_, sizeof(buildStr_));
             controls_.addReadOnly("firmware", firmwareStr_, sizeof(firmwareStr_));
@@ -232,7 +232,9 @@ private:
     uint32_t moonbaseSizeVal_  = 0;        ///< bytes its image occupies
     uint32_t moonbaseTotalVal_ = 0;        ///< the factory slot's size
     char     moonbaseChipStr_[16] = {};    ///< the chip whose MoonBase image this board takes
-    uint8_t  imageSel_ = 0;                ///< 0 = the app, 1 = MoonBase: which image is described
+    /// The images `imageSel_` picks from, in kImages order.
+    enum Image : uint8_t { kImageApp, kImageMoonBase, kImageCount };
+    uint8_t  imageSel_ = kImageApp;        ///< which image is described
     bool     wasWriting_ = false;          ///< edge-detects the end of any install, to restore the bar
     bool     wasInstallingMoonBase_ = false;   ///< edge-detects the end of a MoonBase install
 };

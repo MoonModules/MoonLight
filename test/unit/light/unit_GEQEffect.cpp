@@ -44,9 +44,12 @@ TEST_CASE("GEQEffect stays black without an audio frame") {
 
 // A loud column lights its floor pixel while the pixel above its bar stays dark: bars fill upward, never floating.
 TEST_CASE("GEQEffect fills columns from the floor upward") {
+    // The sweep follows the clock, so it is frozen where the sweep is near full level, as the FreqMatrix tests do.
+    struct RealClockAfter { ~RealClockAfter() { mm::platform::setTestNowMs(0); } } realClockAfter;
+    mm::platform::setTestNowMs(375);
     mm::AudioService audio;
     audio.defineControls();
-    audio.simulate = 4;   // sweep (always): one band lit at a time, and column 0 is band 0, so a known column goes loud
+    audio.simulate = mm::AudioService::kSimSweep;   // sweep: one band lit at a time, so a known column goes loud
     audio.setup();
 
     const int W = 16, H = 8;
@@ -102,7 +105,7 @@ TEST_CASE("GEQEffect colorBars colors bars per column") {
     mm::platform::setTestNowMs(1000);
     mm::AudioService audio;
     audio.defineControls();
-    audio.simulate = 3;   // music (always): keeps every band non-zero so many columns rise together
+    audio.simulate = mm::AudioService::kSimMusic;   // music: keeps every band non-zero so many columns rise together
     audio.setup();
 
     const int W = 16, H = 8;
@@ -156,7 +159,7 @@ TEST_CASE("GEQEffect colorBars colors bars per column") {
 TEST_CASE("GEQEffect survives degenerate grid sizes") {
     mm::AudioService audio;
     audio.defineControls();
-    audio.simulate = 3;
+    audio.simulate = mm::AudioService::kSimMusic;
     audio.setup();
 
     for (auto dims : {mm::Coord3D{0, 0, 0}, mm::Coord3D{1, 1, 1}}) {

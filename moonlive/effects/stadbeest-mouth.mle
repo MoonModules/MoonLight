@@ -1,0 +1,54 @@
+// StadBeestMouth: the beast's mouth, one light. It breathes at bpm while the room is quiet; with music it opens as loud as it plays and flashes on the beat, its color climbing the palette as it opens.
+
+class StadBeestMouthEffect {
+  byte bpm = 12;
+  byte sensitivity = 128;
+  bool pulse = true;
+  byte rest = 40;
+
+  int lastBeat = -100000; // when the last beat started, in ms
+  bool wasOnBeat = false; // whether the last frame was on a beat, so one beat counts once
+  int lastFlash = -100000; // when the beat last flashed, in ms, fading over 500 ms at any frame rate
+
+  int dimensions() { return 2; }
+
+  string tags() { return "💫🎵"; }
+
+  void defineControls() {
+    addControl("bpm", bpm, 1, 120); // breaths a minute while the room is quiet
+    addControl("sensitivity", sensitivity, 0, 255); // with music, open as loud as it plays; 0 ignores the music
+    addControl("pulse", pulse, 0, 1); // with music, flash on its beat
+    addControl("rest", rest, 0, 255); // how bright the closed mouth glows
+  }
+
+  void tick() {
+    int heard = audioBeat();
+    if (sensitivity == 0) { heard = 0; }
+    // A rising edge is a beat, unless it follows the last one too closely.
+    if (heard > wasOnBeat) {
+      if (t - lastBeat > 250) {
+        lastBeat = t;
+        if (pulse == 1) { lastFlash = t; }
+      }
+    }
+    wasOnBeat = heard;
+
+    int since = t - lastFlash;
+    if (since > 500) { since = 500; }
+    int flash = 255 - div(since * 255, 500);
+    int open = beatsin(bpm, t, 255);
+    if (t - lastBeat < 2000) {
+      open = div(audioSmooth() * sensitivity, 64);
+      if (open > 255) { open = 255; }
+      if (flash > open) { open = flash; }
+    }
+    int bright = rest + div((255 - rest) * open, 255);
+    // From the palette's lower part when closed to its upper part when open: deep red to yellow in a fire palette.
+    int hue = 48 + div(open * 176, 255);
+    for (int y = 0; y < height; y = y + 1) {
+      for (int x = 0; x < width; x = x + 1) {
+        setPaletteColor(x, y, hue, bright);
+      }
+    }
+  }
+}

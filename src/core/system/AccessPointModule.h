@@ -1,23 +1,31 @@
 #pragma once
 
+#include "core/util/DeviceName.h"   // defaultDeviceName: the anonymous name it broadcasts
 #include "core/module/MoonModule.h"
 #include "core/util/CaptivePortal.h"
 #include "core/util/fnv.h"
 #include "platform/platform.h"
 
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 
 namespace mm {
 
-/// The device's own WiFi network: when it opens, its password, and the phones on it.
+/// The device's own WiFi network: when it opens, and the phones on it.
+///
+/// It is named `MM-` and four MAC digits rather than after the device. The first known network's password protects it.
+///
+/// Switched on four times in a row, each within a few seconds, it opens for that boot without a password, whatever `opens` says; that boot runs in safe mode. That is the way back to a device whose router changed, with every setting kept.
 ///
 /// A Network child: the network module opens and closes it, and this one holds how it appears and answers its DNS.
 /// @card AccessPointModule.png
 class AccessPointModule : public MoonModule {
 public:
     /// When the access point opens, in WLED's words.
-    enum class Opens : uint8_t { OnFailure, Always, Never };
+    enum class Opens : uint8_t { OnFailure, Always, FirstSetup };
+    /// The switch-ons in a row that open it for one boot.
+    static constexpr uint8_t kOpeningPowerOns = 4;
 
     /// Not answering DNS yet.
     AccessPointModule() = default;
@@ -31,11 +39,23 @@ public:
     /// Keep the access point configured whatever the toggle says, or a device that loses WiFi is unreachable.
     bool respectsEnabled() const MM_NONBLOCKING override { return false; }
 
+    /// Read once whether switching opened it, and say so, since it then has no password.
+    void setup() override {
+        switched_ = platform::bootRecord().quickPowerOns >= kOpeningPowerOns;
+        if (switched_) {
+            std::printf("AccessPointModule: switched on %u times in a row, open without a password for this boot\n", static_cast<unsigned>(kOpeningPowerOns));
+            setStatus("Open for this boot without a password: switched on and off in quick succession", Severity::Warning);
+        }
+        MoonModule::setup();
+    }
+
+
     /// Declare when it opens, how it appears, and who is on it.
     void defineControls() override {
         MoonModule::defineControls();
         controls_.addSelect("opens", opens_, kOpensOptions, 3);
-        controls_.addPassword("password", password_, sizeof(password_), validPassphrase);
+        name();   // filled before it is bound
+        controls_.addReadOnly("name", name_, sizeof(name_));
         // Meaningful only while it runs, so hidden elsewhere rather than showing zero.
         controls_.addReadOnlyInt("clients", clients_, "");
         controls_.setHidden(controls_.count() - 1, !running_);
@@ -43,36 +63,41 @@ public:
 
     // What the network module's cascade asks of the access point.
 
-    /// When it opens, where never falls back to on failure while nothing else would reach the device.
+    /// When it opens: always for a boot opened by switching; first setup only acts as on failure until a network or Ethernet is configured, and keeps it closed after.
     Opens opens(bool othersConfigured) const MM_NONBLOCKING {
+        if (switched_) return Opens::Always;
         const auto o = static_cast<Opens>(opens_ < 3 ? opens_ : 0);
-        return (o == Opens::Never && !othersConfigured) ? Opens::OnFailure : o;
+        return (o == Opens::FirstSetup && !othersConfigured) ? Opens::OnFailure : o;
     }
 
-    /// How it appears, under the device's name at the captive portal's address.
-    platform::WifiApConfig config(const char* name) const {
-        return platform::WifiApConfig{name, captive::kAddressText, password_};
+    /// The password it carries: the first known network's, which the owner knows and a stranger does not, or empty when that is no WPA2 passphrase.
+    static const char* passwordFor(const char* firstKnownNetwork) {
+        const size_t n = firstKnownNetwork ? std::strlen(firstKnownNetwork) : 0;
+        return n >= 8 && n <= 63 ? firstKnownNetwork : "";
     }
 
-    /// A hash over how it appears under `name`, so a change to any of it, a rename included, re-opens it live.
-    uint32_t sig(const char* name) const MM_NONBLOCKING {
-        Fnv1a f;
-        f.add(name, std::strlen(name));
-        f.add(password_, std::strlen(password_));
-        return f.h;
-    }
-
-    /// Say when the settings cannot apply as given, rewriting the status only when that changes; open is the default and says nothing.
-    void advise(bool othersConfigured) {
-        const char* advice = "";
-        Severity sev = Severity::Status;
-        if (opens_ == static_cast<uint8_t>(Opens::Never) && !othersConfigured) {
-            advice = "never needs Ethernet or a known network, so it opens on failure";
-            sev = Severity::Warning;
+    // Anonymous, as such networks usually are, so the air does not say whose device it is; the device's own name stays on its home network.
+    /// The name it broadcasts: `MM-` and the last four digits of the MAC, the same for the app and MoonBase.
+    const char* name() const {
+        if (!name_[0]) {
+            uint8_t mac[6];
+            platform::getMacAddress(mac);
+            defaultDeviceName(mac, name_, sizeof(name_));
         }
-        if (advice == advice_) return;
-        advice_ = advice;
-        setStatus(advice, sev);
+        return name_;
+    }
+
+    /// How it appears: its name at the captive portal's address, with the first known network's password.
+    platform::WifiApConfig config(const char* firstKnownNetwork) const {
+        return platform::WifiApConfig{name(), captive::kAddressText, password(firstKnownNetwork)};
+    }
+
+    /// A hash over its password, so a change to the first known network's re-opens it live.
+    uint32_t sig(const char* firstKnownNetwork) const MM_NONBLOCKING {
+        const char* pw = password(firstKnownNetwork);
+        Fnv1a f;
+        f.add(pw, std::strlen(pw));
+        return f.h;
     }
 
     /// It opened: answer every name with its own address, so a joining phone shows the UI.
@@ -110,20 +135,19 @@ public:
         }
     }
 
-    /// Empty for an open access point, or a WPA2 passphrase of 8 to 63 characters, the only lengths the standard allows.
-    static bool validPassphrase(const char* pw) {
-        const size_t n = std::strlen(pw);
-        return n == 0 || (n >= 8 && n <= 63);
-    }
 
 private:
-    static constexpr const char* kOpensOptions[] = {"on failure", "always", "never (not recommended)"};
+    static constexpr const char* kOpensOptions[] = {"on failure", "always", "first setup only"};
+
+    // None after switching, since switching proves a hand on the device, and the owner of a changed router may have forgotten the old password.
+    /// The password this boot carries.
+    const char* password(const char* firstKnownNetwork) const { return switched_ ? "" : passwordFor(firstKnownNetwork); }
 
     uint8_t opens_ = 0;
-    char    password_[64] = {};   ///< WPA2's passphrase bound
+    bool    switched_ = false;   ///< this boot opened it by switching on and off
     int8_t  clients_ = 0;
+    mutable char name_[8] = {};   ///< filled on first use from the MAC
     bool    running_ = false;
-    const char* advice_ = nullptr;   ///< the advice last shown, so the status is rewritten only on a change
 
     platform::UdpSocket dns_;
     uint8_t* dnsBuf_ = nullptr;   ///< on the heap only while the access point runs

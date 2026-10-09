@@ -14,83 +14,71 @@
     "MirrorModifier"
   ],
   "description": "Several layers render at once and Drivers blends them into one frame. The stack is built one layer at a time on a cleared canvas, blended, reshaped, resized, moved to another layout and taken apart again, all while it renders, and every step is measured so the cost of a layer is the difference between two readings. A pipeline that only ever ran one layer would pass every other scenario, which is why this one stacks three.",
-  "fixture": [
-    {
-      "name": "layouts",
-      "description": "Where the lights are, which every layer reads its coordinates from.",
-      "op": "add_module",
-      "id": "Layouts",
-      "type": "Layouts"
-    },
-    {
-      "name": "effects",
-      "description": "The container every layer lives in, wired to the layouts it hands each of them.",
-      "op": "add_module",
-      "id": "Effects",
-      "type": "Effects",
-      "props": {
-        "layouts": "Layouts"
-      }
-    },
-    {
-      "name": "drivers",
-      "description": "The drivers container, bound to the whole Effects container rather than one layer, which is what makes it blend.",
-      "op": "add_module",
-      "id": "Drivers",
-      "type": "Drivers",
-      "props": {
-        "effects": "Effects"
-      }
-    },
-    {
-      "name": "preview",
-      "description": "The preview is a driver like any other, and the one every target has.",
-      "op": "add_module",
-      "id": "Preview",
-      "type": "PreviewDriver",
-      "parent_id": "Drivers"
-    }
+  "top": [
+    "Layouts",
+    "Effects",
+    "Drivers"
   ],
   "steps": [
     {
       "name": "clear-the-layers",
       "description": "Whatever layers the device had go, so the stack is built from nothing and every layer in it is one this scenario placed.",
-      "op": "clear_children",
-      "id": "Effects"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      }
     },
     {
       "name": "clear-the-layouts",
       "description": "The same for the layouts, so the grid below is the only one.",
-      "op": "clear_children",
-      "id": "Layouts"
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "$patch": "replace"
+        }
+      }
     },
     {
       "name": "grid",
       "description": "A 32x32 panel: big enough that three layers blending show as three different pictures.",
-      "op": "add_module",
-      "id": "Grid",
-      "type": "GridLayout",
-      "parent_id": "Layouts",
-      "props": {
-        "width": 32,
-        "height": 32
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "GridLayout",
+            "width": 32,
+            "height": 32
+          }
+        }
       }
     },
     {
       "name": "base-layer",
       "description": "The first layer, which everything later is blended onto.",
-      "op": "add_module",
-      "id": "Base",
-      "type": "Layer",
-      "parent_id": "Effects"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Base": {
+            "type": "Layer"
+          }
+        }
+      }
     },
     {
       "name": "base-effect",
       "description": "A plasma, which fills every light from the first frame, so the layers above have something to blend with.",
-      "op": "add_module",
-      "id": "BaseFX",
-      "type": "PlasmaEffect",
-      "parent_id": "Base"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Base": {
+            "BaseFX": {
+              "type": "PlasmaEffect"
+            }
+          }
+        }
+      }
     },
     {
       "name": "measure-one-layer",
@@ -101,30 +89,40 @@
           "tick_us": {
             "p50": 8,
             "p95": 12,
-            "min": 7,
+            "min": 8,
             "max": 24,
             "n": 32,
-            "samples": [8, 8, 8, 9, 11, 7, 8, 8, 8, 8, 9, 8, 8, 8, 8, 8, 8, 24, 8, 8, 8, 9, 8, 8, 8, 8, 9, 11, 8, 8, 12, 9]
+            "samples": [9, 8, 8, 8, 8, 8, 8, 24, 8, 8, 8, 9, 8, 8, 8, 8, 9, 11, 8, 8, 12, 9, 9, 8, 8, 8, 8, 9, 9, 10, 11, 9]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         }
       }
     },
     {
       "name": "second-layer",
       "description": "A second layer on top, which turns the hand-over into a blend.",
-      "op": "add_module",
-      "id": "Top",
-      "type": "Layer",
-      "parent_id": "Effects"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Top": {
+            "type": "Layer"
+          }
+        }
+      }
     },
     {
       "name": "second-effect",
       "description": "Metaballs, which leave most lights dark, so the plasma shows through where they are not.",
-      "op": "add_module",
-      "id": "TopFX",
-      "type": "MetaballsEffect",
-      "parent_id": "Top"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Top": {
+            "TopFX": {
+              "type": "MetaballsEffect"
+            }
+          }
+        }
+      }
     },
     {
       "name": "measure-two-layers",
@@ -138,9 +136,9 @@
             "min": 13,
             "max": 37,
             "n": 32,
-            "samples": [14, 13, 18, 15, 18, 13, 15, 15, 15, 13, 15, 15, 15, 15, 15, 15, 15, 35, 15, 15, 15, 15, 15, 15, 14, 15, 16, 37, 13, 15, 19, 15]
+            "samples": [15, 15, 15, 15, 15, 15, 15, 35, 15, 15, 15, 15, 15, 15, 14, 15, 16, 37, 13, 15, 19, 15, 15, 15, 15, 15, 15, 16, 16, 16, 19, 16]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         }
       }
     },
@@ -177,26 +175,42 @@
     {
       "name": "third-layer",
       "description": "A third layer, the depth where an ordering fault in the blend would show.",
-      "op": "add_module",
-      "id": "Sparks",
-      "type": "Layer",
-      "parent_id": "Effects"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Sparks": {
+            "type": "Layer"
+          }
+        }
+      }
     },
     {
       "name": "third-effect",
       "description": "Fireworks, which move fast and fade, so the third layer is visibly its own.",
-      "op": "add_module",
-      "id": "SparksFX",
-      "type": "FireworksEffect",
-      "parent_id": "Sparks"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Sparks": {
+            "SparksFX": {
+              "type": "FireworksEffect"
+            }
+          }
+        }
+      }
     },
     {
       "name": "mirror-the-sparks",
       "description": "A mirror on this layer alone: a modifier reshapes its own layer and leaves the two below untouched.",
-      "op": "add_module",
-      "id": "SparksMirror",
-      "type": "MirrorModifier",
-      "parent_id": "Sparks"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Sparks": {
+            "SparksMirror": {
+              "type": "MirrorModifier"
+            }
+          }
+        }
+      }
     },
     {
       "name": "measure-three-layers",
@@ -207,21 +221,28 @@
           "tick_us": {
             "p50": 20,
             "p95": 29,
-            "min": 17,
+            "min": 18,
             "max": 46,
             "n": 32,
-            "samples": [19, 17, 20, 20, 25, 20, 20, 20, 20, 19, 21, 20, 20, 20, 21, 20, 20, 46, 21, 20, 20, 21, 20, 20, 20, 20, 21, 29, 18, 20, 24, 20]
+            "samples": [21, 20, 20, 20, 21, 20, 20, 46, 21, 20, 20, 21, 20, 20, 20, 20, 21, 29, 18, 20, 24, 20, 20, 21, 20, 21, 21, 21, 21, 21, 24, 21]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         }
       }
     },
     {
       "name": "swap-the-base",
       "description": "The base effect is swapped for a nebula while the two layers above keep rendering on top of it.",
-      "op": "replace_module",
-      "id": "BaseFX",
-      "type": "NebulaEffect"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Base": {
+            "BaseFX": {
+              "type": "NebulaEffect"
+            }
+          }
+        }
+      }
     },
     {
       "name": "the-base-holds-the-new-effect",
@@ -239,13 +260,13 @@
         "desktop-macos": {
           "tick_us": {
             "p50": 123,
-            "p95": 171,
-            "min": 119,
+            "p95": 162,
+            "min": 121,
             "max": 225,
             "n": 32,
-            "samples": [124, 119, 123, 132, 171, 122, 122, 123, 123, 137, 124, 123, 122, 123, 124, 124, 123, 225, 124, 122, 123, 126, 124, 123, 123, 123, 125, 141, 121, 123, 162, 124]
+            "samples": [124, 123, 122, 123, 124, 124, 123, 225, 124, 122, 123, 126, 124, 123, 123, 123, 125, 141, 121, 123, 162, 124, 123, 123, 123, 123, 123, 125, 125, 125, 128, 124]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         }
       }
     },
@@ -279,22 +300,27 @@
         "desktop-macos": {
           "tick_us": {
             "p50": 267,
-            "p95": 368,
+            "p95": 355,
             "min": 262,
             "max": 454,
             "n": 32,
-            "samples": [270, 264, 268, 287, 368, 263, 264, 266, 264, 265, 275, 270, 264, 271, 267, 266, 267, 454, 280, 262, 266, 304, 267, 265, 264, 275, 267, 309, 267, 265, 355, 265]
+            "samples": [275, 270, 264, 271, 267, 266, 267, 454, 280, 262, 266, 304, 267, 265, 264, 275, 267, 309, 267, 265, 355, 265, 265, 265, 265, 264, 265, 274, 284, 291, 280, 267]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         }
       }
     },
     {
       "name": "another-shape",
       "description": "The grid becomes a wheel of spokes: a different layout under the same three layers, which re-map without being rebuilt.",
-      "op": "replace_module",
-      "id": "Grid",
-      "type": "WheelLayout"
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "WheelLayout"
+          }
+        }
+      }
     },
     {
       "name": "the-layout-is-a-wheel",
@@ -312,12 +338,12 @@
           "tick_us": {
             "p50": 56,
             "p95": 85,
-            "min": 49,
+            "min": 54,
             "max": 100,
             "n": 32,
-            "samples": [50, 56, 49, 53, 62, 55, 55, 56, 55, 58, 56, 56, 56, 56, 58, 57, 60, 85, 56, 56, 56, 65, 56, 65, 55, 56, 69, 56, 56, 56, 100, 56]
+            "samples": [56, 56, 56, 56, 58, 57, 60, 85, 56, 56, 56, 65, 56, 65, 55, 56, 69, 56, 56, 56, 100, 56, 56, 56, 56, 56, 56, 56, 57, 61, 54, 56]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         }
       }
     },
@@ -336,22 +362,26 @@
       "observed": {
         "desktop-macos": {
           "tick_us": {
-            "p50": 52,
+            "p50": 53,
             "p95": 97,
-            "min": 45,
+            "min": 51,
             "max": 103,
             "n": 32,
-            "samples": [46, 52, 45, 49, 57, 51, 52, 52, 52, 50, 52, 52, 52, 53, 53, 54, 53, 97, 52, 52, 54, 57, 53, 54, 52, 52, 75, 103, 52, 52, 76, 52]
+            "samples": [52, 52, 52, 53, 53, 54, 53, 97, 52, 52, 54, 57, 53, 54, 52, 52, 75, 103, 52, 52, 76, 52, 52, 58, 52, 52, 52, 53, 54, 55, 51, 55]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         }
       }
     },
     {
       "name": "remove-the-top-layer",
       "description": "The top layer goes, effect and modifier with it, while the base keeps rendering.",
-      "op": "remove_module",
-      "id": "Sparks"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Sparks": null
+        }
+      }
     },
     {
       "name": "the-base-survived",
@@ -368,14 +398,14 @@
       "observed": {
         "desktop-macos": {
           "tick_us": {
-            "p50": 51,
+            "p50": 52,
             "p95": 205,
-            "min": 44,
+            "min": 51,
             "max": 281,
             "n": 32,
-            "samples": [45, 51, 44, 48, 56, 51, 51, 52, 51, 50, 51, 51, 51, 52, 52, 57, 51, 85, 51, 51, 52, 56, 51, 56, 51, 52, 51, 205, 52, 51, 281, 51]
+            "samples": [51, 51, 51, 52, 52, 57, 51, 85, 51, 51, 52, 56, 51, 56, 51, 52, 51, 205, 52, 51, 281, 51, 51, 51, 52, 51, 55, 51, 54, 52, 54, 52]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         }
       }
     }

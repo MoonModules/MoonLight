@@ -4,7 +4,8 @@
 #include "core/module/MoonModule.h"
 #include "core/system/NetworkModule.h"
 #include "core/system/SystemModule.h"
-#include "core/system/HttpServerModule.h"
+#include "core/module/Scheduler.h"
+#include "core/module/StateDocument.h"
 #include "core/util/build_info.h"
 #include "platform/platform.h"
 
@@ -33,13 +34,13 @@ namespace mm {
 /// Four standard commands report state, scan for networks, and set credentials.
 /// Two vendor commands extend them.
 /// One caps transmit power before any association, for a board whose supply browns out.
-/// The other carries one config operation as JSON, routed to the same apply-core.
+/// The other carries a state document, applied by the same engine as `PATCH /api/state`.
 /// So a call over the network and one over serial execute identically.
 /// That is what lets the installer configure a device a browser cannot reach directly.
 ///
-/// ## Applying an operation
+/// ## Applying a document
 ///
-/// Operations are idempotent, and a long value chunks across frames into a buffer.
+/// A document merges, so sending it twice changes nothing, and a long one chunks across frames into a buffer.
 /// It is applied on the main loop rather than the serial task, one at a time.
 /// A failure cannot travel back on the spent acknowledgement, so it surfaces here.
 class ImprovProvisioningModule : public MoonModule {
@@ -48,8 +49,8 @@ public:
     void setSystemModule(SystemModule* s) { systemModule_ = s; }
     /// Adopt the network module, which receives the credentials this one collects.
     void setNetworkModule(NetworkModule* n) { networkModule_ = n; }
-    /// Adopt the web server, whose apply-core a pushed operation is routed to.
-    void setHttpServerModule(HttpServerModule* h) { httpServerModule_ = h; }
+    /// Adopt the scheduler, the tree a pushed document applies to.
+    void setScheduler(Scheduler* s) { scheduler_ = s; }
 
     /// Keep listening whatever the toggle says, as the other fixed services do.
     bool respectsEnabled() const MM_NONBLOCKING override { return false; }
@@ -104,15 +105,12 @@ public:
 
     /// Apply any pending operation, polled every tick so a burst of them installs briskly.
     void tick() MM_NONBLOCKING override {
-        if (pendingOpReady_.load(std::memory_order_acquire) && httpServerModule_) {
+        if (pendingOpReady_.load(std::memory_order_acquire) && scheduler_) {
             // The frame was acknowledged on receipt, so a failure must surface here instead.
-            auto r = httpServerModule_->applyOp(pendingOp_);
-            if (r != HttpServerModule::OpResult::Ok &&
-                r != HttpServerModule::OpResult::AlreadyExists) {
-                std::printf("Improv APPLY_OP failed (result=%d): %s\n",
-                            static_cast<int>(r), pendingOp_);
-                mm::formatTo(statusStr_, sizeof(statusStr_), "error: apply failed (%d)",
-                              static_cast<int>(r));
+            const StateDocumentResult r = applyStateDocument(*scheduler_, pendingOp_);
+            if (!r.ok) {
+                std::printf("Improv APPLY_OP: %s at %s\n", r.error, r.where);
+                mm::formatTo(statusStr_, sizeof(statusStr_), "error: %s at %s", r.error, r.where);
             }
             std::memset(pendingOp_, 0, sizeof(pendingOp_));
             pendingOpReady_.store(false, std::memory_order_release);
@@ -123,7 +121,7 @@ public:
 private:
     SystemModule*     systemModule_     = nullptr;
     NetworkModule*    networkModule_    = nullptr;
-    HttpServerModule* httpServerModule_ = nullptr;
+    Scheduler* scheduler_ = nullptr;
     char statusStr_[64] = "listening";   ///< what the one control reports
 
     // Published with a release, which the acquire above pairs with across cores.

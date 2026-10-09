@@ -50,6 +50,7 @@ add_executable(mm_tests
     unit/core/unit_H264Bitstream.cpp
     unit/core/unit_AllocTracking.cpp
     unit/core/unit_HttpServerModule_apply.cpp
+    unit/core/unit_HttpServerModule_connections.cpp
     unit/core/unit_StateDocument.cpp
     unit/core/unit_ImprovFrame.cpp
     unit/core/unit_ImprovOpReassembler.cpp
@@ -151,6 +152,7 @@ add_executable(mm_tests
     unit/light/unit_Effects_gridsweep.cpp
     unit/core/unit_OscPacket.cpp
     unit/core/unit_UsbMidi.cpp
+    unit/core/unit_RtpMidi.cpp
     unit/light/unit_Effects_golden.cpp
     unit/light/unit_SpritePopulation.cpp
     unit/light/unit_Canvas.cpp
@@ -230,6 +232,7 @@ add_executable(mm_tests
     unit/light/unit_RmtLedEncoder.cpp
     unit/light/unit_RmtLedDriver_lifecycle.cpp
     unit/light/unit_RmtLedDriver_pins.cpp
+    unit/light/unit_PwmLightDriver.cpp
 )
 
 # The grid-size sweep drives every effect, including ones added after this file was

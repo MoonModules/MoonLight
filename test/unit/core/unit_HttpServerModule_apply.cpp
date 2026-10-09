@@ -6,13 +6,14 @@
 #include "core/util/ModuleFactory.h"
 #include "core/module/MoonModule.h"
 #include "core/util/JsonSink.h"
+#include "core/module/StateDocument.h"   // the engine's refusal an op passes back
 #include "fake_light_output.h"   // the fake Drivers is the light output too
 
 #include <cstring>
 #include <string>    // std::string: named explicitly, GCC does not pull it in transitively
 #include <vector>    // the client frames the /ws tests build
 
-// Pins the transport-free apply-core that HttpServerModule exposes, applyAddModule / applySetControl / applyClearChildren / applyOp. These are the operations the HTTP /api/modules + /api/control handlers do, factored out of the TcpConnection so BOTH the HTTP path and the Improv-serial APPLY_OP path drive one shared implementation ("Improv = REST over serial"). Testing them directly here, without a socket, is the unit-test win of the extraction: the apply logic is now provable in isolation. Also exercises the robustness rule (the apply-core tolerates bad input, unknown module, unknown type, malformed op, without crashing, returning a typed result instead).
+// Pins the transport-free apply-core that HttpServerModule exposes, the add, delete, replace and set operations behind the HTTP /api/modules and /api/control handlers. Each structural one is a one-member state document, so the document engine's rules hold on every path. Also exercises the robustness rule: bad input, an unknown module or type and a malformed op return a typed result, never a crash.
 
 namespace {
 
@@ -33,7 +34,7 @@ struct Box : public mm::MoonModule {
 // A container that takes NOTHING, so a test can assert the refusal rather than only the accept.
 struct Leaf : public mm::MoonModule {};
 
-// A leaf with a VALIDATED Text control, mirrors SystemModule.deviceModel: the printable- ASCII rule is a per-control validator, so a bad value is rejected on EVERY write path (including the APPLY_OP `set` the installer uses), not in a bespoke per-transport RPC.
+// A leaf with a VALIDATED Text control, mirrors SystemModule.deviceModel: the printable- ASCII rule is a per-control validator, so a bad value is rejected on EVERY write path (including a document the installer sends over serial), not in a bespoke per-transport RPC.
 struct Tag : public mm::MoonModule {
     char label[32] = "init";
     static bool printableAscii(const char* v) {
@@ -72,6 +73,9 @@ void registerTestTypes() {
     mm::ModuleFactory::registerType<Leaf>("Leaf");
     mm::ModuleFactory::registerType<Tag>("Tag");
     mm::ModuleFactory::registerType<FakeDrivers>("Drivers");
+    // Generic types named with their role noun, whose default name is that noun stripped: "Dial", "Slider".
+    mm::ModuleFactory::registerType<Knob>("DialModule");
+    mm::ModuleFactory::registerType<Knob>("SliderModule");
     done = true;
 }
 
@@ -105,7 +109,9 @@ TEST_CASE("apply-core: a parent refuses a child whose role it does not accept") 
 
     // Leaf accepts nothing, so nothing may be added under it, whatever its role.
     CHECK(http.applyAddModule("Leaf", "L", "Root") == OpResult::Ok);
-    CHECK(http.applyAddModule("Knob", "K2", "L") == OpResult::BadRequest);
+    mm::StateDocumentResult why;
+    CHECK(http.applyAddModule("Knob", "K2", "L", nullptr, 0, &why) == OpResult::Refused);
+    CHECK(std::strcmp(why.error, "a module of this role cannot go here") == 0);   // the engine's own reason reaches the caller
     auto* leaf = childNamed(root, "L");
     REQUIRE(leaf != nullptr);
     CHECK(leaf->childCount() == 0);   // refused, and nothing leaked into the tree
@@ -113,7 +119,7 @@ TEST_CASE("apply-core: a parent refuses a child whose role it does not accept") 
     sched.release();
 }
 
-TEST_CASE("apply-core: applyAddModule adds a child, idempotent on the id") {
+TEST_CASE("apply-core: an add creates a child and refuses a name some module holds") {
     registerTestTypes();
     mm::Scheduler s;
     auto* root = new Box();
@@ -124,18 +130,98 @@ TEST_CASE("apply-core: applyAddModule adds a child, idempotent on the id") {
 
     using OpResult = mm::HttpServerModule::OpResult;
 
-    // Add a Knob named "K" under "Root".
     CHECK(http.applyAddModule("Knob", "K", "Root") == OpResult::Ok);
     CHECK(childNamed(root, "K") != nullptr);
 
-    // Idempotent: re-adding the same id is AlreadyExists (no duplicate), a distinct success the HTTP handler reports as {"ok":true,"note":"already exists"}.
-    CHECK(http.applyAddModule("Knob", "K", "Root") == OpResult::AlreadyExists);
+    // The name addresses the module, so a second one is refused rather than renamed or merged into the first.
+    CHECK(http.applyAddModule("Knob", "K", "Root") == OpResult::NameInUse);
     CHECK(root->childCount() == 1);
 
-    // Unknown type / missing parent / top-level add are typed failures, not crashes.
-    CHECK(http.applyAddModule("NopeType", "X", "Root") == OpResult::UnknownType);
+    // Unknown type, missing parent, a top-level add and a name too long to hold are typed failures, not crashes.
+    CHECK(http.applyAddModule("NopeType", "X", "Root") == OpResult::Refused);   // named, so the engine finds the type unknown
     CHECK(http.applyAddModule("Knob", "Y", "NoSuchParent") == OpResult::ModuleNotFound);
-    CHECK(http.applyAddModule("Knob", "Z", "") == OpResult::BadRequest);  // no parent → top-level
+    CHECK(http.applyAddModule("Knob", "Z", "") == OpResult::BadRequest);
+    CHECK(http.applyAddModule("Knob", "SixteenCharsLong", "Root") == OpResult::BadRequest);
+    CHECK(root->childCount() == 1);
+
+    s.deleteTree(root);
+}
+
+namespace {
+// Apparatus a parent holds but the user cannot remove, as the Preview driver is.
+struct Fixed : public mm::MoonModule {
+    bool userEditable() const override { return false; }
+};
+}  // namespace
+
+TEST_CASE("apply-core: a delete removes the module, and refuses a top-level one or one the user cannot remove") {
+    registerTestTypes();
+    mm::Scheduler s;
+    auto* root = new Box();
+    root->setName("Root");
+    s.addModule(root);
+    auto* fixed = new Fixed();
+    fixed->setName("F");
+    root->addChild(fixed);
+    mm::HttpServerModule http;
+    http.setScheduler(&s);
+    using OpResult = mm::HttpServerModule::OpResult;
+
+    REQUIRE(http.applyAddModule("Knob", "K", "Root") == OpResult::Ok);
+    CHECK(http.applyDeleteModule("K") == OpResult::Ok);
+    CHECK(childNamed(root, "K") == nullptr);
+
+    CHECK(http.applyDeleteModule("Nope") == OpResult::ModuleNotFound);
+    CHECK(http.applyDeleteModule("Root") == OpResult::BadRequest);
+    CHECK(http.applyDeleteModule("F") == OpResult::ReadOnly);
+    CHECK(childNamed(root, "F") == fixed);
+
+    s.deleteTree(root);
+}
+
+TEST_CASE("apply-core: a replace swaps the type in the same place, named by the caller, its custom name or the new type") {
+    registerTestTypes();
+    mm::Scheduler s;
+    auto* root = new Box();
+    root->setName("Root");
+    s.addModule(root);
+    mm::HttpServerModule http;
+    http.setScheduler(&s);
+    using OpResult = mm::HttpServerModule::OpResult;
+
+    REQUIRE(http.applyAddModule("Knob", "A", "Root") == OpResult::Ok);
+    REQUIRE(http.applyAddModule("Knob", "B", "Root") == OpResult::Ok);
+    REQUIRE(http.applyAddModule("Knob", "", "Root") == OpResult::Ok);   // named "Knob", its type's default
+
+    // A custom name stays with the slot.
+    CHECK(http.applyReplaceModule("B", "Tag", "") == OpResult::Ok);
+    REQUIRE(root->childCount() == 3);
+    CHECK(std::strcmp(root->child(1)->name(), "B") == 0);
+    CHECK(std::strcmp(root->child(1)->typeName(), "Tag") == 0);
+
+    // The caller's name wins, in the same place, and the old module is gone.
+    CHECK(http.applyReplaceModule("B", "Knob", "dot") == OpResult::Ok);
+    REQUIRE(root->childCount() == 3);
+    CHECK(std::strcmp(root->child(1)->name(), "dot") == 0);
+    CHECK(childNamed(root, "B") == nullptr);
+
+    // A type's default name follows the type.
+    CHECK(http.applyReplaceModule("Knob", "Tag", "") == OpResult::Ok);
+    CHECK(std::strcmp(root->child(2)->name(), "Tag") == 0);
+    CHECK(std::strcmp(root->child(0)->name(), "A") == 0);
+
+    // Also when both defaults are stripped role nouns, which the factory hands out from one shared buffer.
+    char dial[32] = {};
+    REQUIRE(http.applyAddModule("DialModule", "", "Root", dial, sizeof(dial)) == OpResult::Ok);
+    CHECK(std::strcmp(dial, "Dial") == 0);
+    CHECK(http.applyReplaceModule("Dial", "SliderModule", "") == OpResult::Ok);
+    CHECK(std::strcmp(root->child(3)->name(), "Slider") == 0);
+
+    CHECK(http.applyReplaceModule("A", "NopeType", "") == OpResult::UnknownType);
+    CHECK(http.applyReplaceModule("A", "", "") == OpResult::BadRequest);
+    CHECK(http.applyReplaceModule("Nope", "Tag", "") == OpResult::ModuleNotFound);
+    CHECK(http.applyReplaceModule("Root", "Tag", "") == OpResult::BadRequest);
+    CHECK(std::strcmp(root->child(0)->typeName(), "Knob") == 0);
 
     s.deleteTree(root);
 }
@@ -164,7 +250,7 @@ TEST_CASE("apply-core: applyAddModule reports the created name, disambiguated") 
     CHECK(childNamed(root, n1) != nullptr);                  // each reported name resolves to a real child
     CHECK(childNamed(root, n2) != nullptr);
 
-    // outName is optional, the APPLY_OP transport passes nullptr and must still succeed.
+    // outName is optional.
     CHECK(http.applyAddModule("Knob", "NoReport", "Root") == OpResult::Ok);
 
     s.deleteTree(root);
@@ -199,59 +285,8 @@ TEST_CASE("apply-core: applySetControl writes a value, rejects out-of-range / un
     s.deleteTree(root);
 }
 
-TEST_CASE("apply-core: applyClearChildren empties a container (replaceChildren)") {
-    registerTestTypes();
-    mm::Scheduler s;
-    auto* root = new Box();
-    root->setName("Root");
-    s.addModule(root);
-    mm::HttpServerModule http;
-    http.setScheduler(&s);
-    using OpResult = mm::HttpServerModule::OpResult;
-
-    REQUIRE(http.applyAddModule("Knob", "A", "Root") == OpResult::Ok);
-    REQUIRE(http.applyAddModule("Knob", "B", "Root") == OpResult::Ok);
-    CHECK(root->childCount() == 2);
-
-    CHECK(http.applyClearChildren("Root") == OpResult::Ok);
-    CHECK(root->childCount() == 0);
-
-    // Clearing a non-existent parent is ModuleNotFound, not a crash. Clearing an already-empty container is Ok.
-    CHECK(http.applyClearChildren("Nope") == OpResult::ModuleNotFound);
-    CHECK(http.applyClearChildren("Root") == OpResult::Ok);
-
-    s.deleteTree(root);
-}
-
-TEST_CASE("apply-core: applyOp dispatches each op type and tolerates bad input") {
-    registerTestTypes();
-    mm::Scheduler s;
-    auto* root = new Box();
-    root->setName("Root");
-    s.addModule(root);
-    mm::HttpServerModule http;
-    http.setScheduler(&s);
-    using OpResult = mm::HttpServerModule::OpResult;
-
-    // The op JSON shapes are exactly what the installer pushes over APPLY_OP.
-    CHECK(http.applyOp("{\"op\":\"add\",\"type\":\"Knob\",\"id\":\"K\",\"parent\":\"Root\"}") == OpResult::Ok);
-    CHECK(childNamed(root, "K") != nullptr);
-
-    CHECK(http.applyOp("{\"op\":\"set\",\"module\":\"K\",\"control\":\"value\",\"value\":7}") == OpResult::Ok);
-    CHECK(static_cast<Knob*>(childNamed(root, "K"))->value == 7);
-
-    CHECK(http.applyOp("{\"op\":\"clearChildren\",\"parent\":\"Root\"}") == OpResult::Ok);
-    CHECK(root->childCount() == 0);
-
-    // Unknown op verb and a malformed (no "op") object are BadRequest, not crashes, the robustness rule: any pushed bytes are tolerated.
-    CHECK(http.applyOp("{\"op\":\"frobnicate\"}") == OpResult::BadRequest);
-    CHECK(http.applyOp("{\"nope\":1}") == OpResult::BadRequest);
-
-    s.deleteTree(root);
-}
-
-// A per-control validator (like SystemModule.deviceModel's printable-ASCII rule) is enforced THROUGH the apply-core, so the APPLY_OP `set` the installer pushes over serial is guarded exactly like an HTTP write, with no per-transport special-casing. This is the point of moving validation onto the control: one backend check, every path.
-TEST_CASE("apply-core: a control validator rejects bad input on the set/APPLY_OP path") {
+// A per-control validator (like SystemModule.deviceModel's printable-ASCII rule) is enforced through the control write, so every path that writes a control, a document over serial included, is guarded the same way. This is the point of moving validation onto the control: one backend check, every path.
+TEST_CASE("apply-core: a control validator rejects bad input on the set path") {
     registerTestTypes();
     mm::Scheduler s;
     auto* root = new Box();
@@ -269,22 +304,13 @@ TEST_CASE("apply-core: a control validator rejects bad input on the set/APPLY_OP
     CHECK(http.applySetControl("T", "label", "{\"value\":\"LOLIN D32\"}") == OpResult::Ok);
     CHECK(std::strcmp(tag->label, "LOLIN D32") == 0);
 
-    // ... and via applyOp (the APPLY_OP-over-serial path), same shape the installer sends.
-    CHECK(http.applyOp("{\"op\":\"set\",\"module\":\"T\",\"control\":\"label\",\"value\":\"Living Room\"}")
-          == OpResult::Ok);
-    CHECK(std::strcmp(tag->label, "Living Room") == 0);
-
-    // A raw control byte in the value → Malformed on the APPLY_OP path, prior value kept.
-    const char badOp[] = {'{','"','o','p','"',':','"','s','e','t','"',',',
-                          '"','m','o','d','u','l','e','"',':','"','T','"',',',
-                          '"','c','o','n','t','r','o','l','"',':','"','l','a','b','e','l','"',',',
-                          '"','v','a','l','u','e','"',':','"','x', 0x01, '"','}', 0};
-    CHECK(http.applyOp(badOp) == OpResult::Malformed);
-    CHECK(std::strcmp(tag->label, "Living Room") == 0);   // unchanged — no partial write
+    // A raw control byte in the value is Malformed, the prior value kept.
+    CHECK(http.applySetControl("T", "label", "{\"value\":\"x\x01\"}") == OpResult::Malformed);
+    CHECK(std::strcmp(tag->label, "LOLIN D32") == 0);   // unchanged, no partial write
 
     // Empty string → Malformed too (the validator rejects 0-length), prior value kept.
     CHECK(http.applySetControl("T", "label", "{\"value\":\"\"}") == OpResult::Malformed);
-    CHECK(std::strcmp(tag->label, "Living Room") == 0);
+    CHECK(std::strcmp(tag->label, "LOLIN D32") == 0);
 
     s.deleteTree(root);
 }

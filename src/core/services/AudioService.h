@@ -74,30 +74,32 @@ public:
     // The pins default to unset, so adding the module claims no GPIO until a user wires one.
     /// Which capture device to open, where the host offers a choice.
     uint8_t device = 0;
+    /// The microphone kinds `micMode` picks from, in its option order.
+    enum Mic : uint8_t { kMicI2s, kMicPdm, kMicCount };
     /// Which kind of microphone is wired, the two-wire kind having no clocks to set.
-    uint8_t micMode = 0;
+    uint8_t micMode = kMicI2s;
     int8_t sckPin = -1;          ///< the bit clock, or -1 while unset
     int8_t wsPin = -1;           ///< the word select, or -1 while unset
     int8_t sdPin = -1;           ///< the data line, or -1 while unset
     /// The master clock a converter may need, a self-clocked part leaving it unset.
     int8_t mclkPin = -1;
+    /// The codecs `codec` picks from, in its option order.
+    enum Codec : uint8_t { kCodecNone, kCodecEs8311, kCodecCount };
     /// Which codec sits in front of the microphone, none for a part that speaks I2S itself; the device model names it.
-    uint8_t codec = 0;
+    uint8_t codec = kCodecNone;
     /// The codec's 7-bit address on the board's I2C bus (I2cBusModule), the ES8311's own unless the board straps it elsewhere.
     uint8_t codecAddr = 0x18;
 
     /// The codec the settings ask for.
     platform::CodecType codecType() const MM_NONBLOCKING {
-        return codec == 1 ? platform::CodecType::Es8311 : platform::CodecType::None;
+        return codec == kCodecEs8311 ? platform::CodecType::Es8311 : platform::CodecType::None;
     }
     /// The codecs the selector offers, each by the name the bus scan shows it under.
     static constexpr const char* kCodecOptions[] = {"none", "ES8311"};
-    /// How many there are.
-    static constexpr uint8_t kCodecCount = 2;
 
     /// The codec, while the wired microphone uses one, so the bus scan names its address.
     uint8_t i2cDevices(I2cDevice* out, uint8_t max) const override {
-        if (mode != kLocalMode || micMode == 1 || codec == 0 || codec >= kCodecCount || max == 0) return 0;
+        if (mode != kLocalMode || micMode == kMicPdm || codec == kCodecNone || codec >= kCodecCount || max == 0) return 0;
         out[0] = {codecAddr, kCodecOptions[codec]};
         return 1;
     }
@@ -107,15 +109,19 @@ public:
     uint8_t  floor = 100;
     /// The window's width, a higher value running the display hotter.
     uint8_t  gain = 128;
+    /// The display window owners `levels` picks from, in its option order.
+    enum Levels : uint8_t { kLevelsManual, kLevelsAutomatic, kLevelsCount };
     /// Who sets the display window: the two sliders, or the learner.
-    uint8_t  levels = 1;
+    uint8_t  levels = kLevelsAutomatic;
     // Both act on the learned per-band range, already normalized per rig, so one value serves.
     /// How much of a band's deviation to correct, short of the ratios that pump.
     static constexpr uint8_t kRatio = 4;
     /// How far a band may be lifted, so a silent one is never amplified into its own noise.
     static constexpr uint8_t kMaxGainDb = 24;
+    /// The synthesized patterns `simulate` picks from, in its option order.
+    enum Simulate : uint8_t { kSimMusic, kSimSweep, kSimulateCount };
     /// Which synthesized pattern to produce: a plausible song, or a deterministic march.
-    uint8_t  simulate = 0;
+    uint8_t  simulate = kSimMusic;
     /// The source: a synthesized signal, the network, or its own input.
     uint8_t  mode = 0;
     /// A synthesized signal, so a device demonstrates sound before anything is wired to it.
@@ -126,13 +132,17 @@ public:
     static constexpr uint8_t kLocalMode = platform::hasNetwork ? 2 : 1;
     /// Whether to broadcast the local analysis, which only the local mode can do.
     bool     send = false;
-    /// What the sync machinery does:
-    uint8_t  sync() const { return (platform::hasNetwork && mode == kReceiveMode) ? 2
-                                 : (mode == kLocalMode && send ? 1 : 0); }
+    /// What the sync machinery does: nothing, broadcast the local analysis, or sink a peer's.
+    enum Sync : uint8_t { kSyncNone, kSyncSend, kSyncReceive };
+    /// The role the current mode and `send` give the sync socket.
+    Sync     sync() const { return (platform::hasNetwork && mode == kReceiveMode) ? kSyncReceive
+                                 : (mode == kLocalMode && send ? kSyncSend : kSyncNone); }
     /// The port both directions use, which must match on both ends.
     uint16_t syncPort = WLED_SYNC_PORT;
-    /// How the analysis travels: 0 the WLED multicast group, which WLED devices hear too; 1 unicast to `hosts`, retried by WiFi.
-    uint8_t  addressing = 0;
+    /// How the analysis travels: the WLED multicast group, which WLED devices hear too, or unicast to `hosts`, retried by WiFi.
+    enum SyncAddressing : uint8_t { kAddressMulticast, kAddressUnicast, kAddressCount };
+    /// The addressing `addressing` picks, in its option order.
+    uint8_t  addressing = kAddressMulticast;
     /// The boards a unicast send reaches, addresses or names.
     char     hosts[64] = {};
 
@@ -148,9 +158,9 @@ public:
     void defineMicControls(bool localMode) {
         // A two-wire part has neither clock, so showing them would invite dead settings.
         static constexpr const char* kMicModeOptions[] = {"I2S", "PDM"};
-        controls_.addSelect("micMode", micMode, kMicModeOptions, 2);
+        controls_.addSelect("micMode", micMode, kMicModeOptions, kMicCount);
         controls_.setHidden(controls_.count() - 1, !localMode);
-        const bool pdm = micMode == 1;
+        const bool pdm = micMode == kMicPdm;
         controls_.addPin("sckPin", sckPin);        controls_.setHidden(controls_.count() - 1, !localMode || pdm);
         controls_.addPin("wsPin", wsPin);          controls_.setHidden(controls_.count() - 1, !localMode);
         controls_.addPin("sdPin", sdPin);          controls_.setHidden(controls_.count() - 1, !localMode);
@@ -161,7 +171,7 @@ public:
         controls_.setHidden(controls_.count() - 1, !localMode || pdm);
         controls_.addControl("codecAddr", codecAddr, 0, 127);
         controls_.setHexField(controls_.count() - 1);   // an address, written in hex as the datasheet and the bus scan give it
-        controls_.setHidden(controls_.count() - 1, !localMode || pdm || codec == 0);
+        controls_.setHidden(controls_.count() - 1, !localMode || pdm || codec == kCodecNone);
     }
 
     /// Declare the mode, then only the controls that mode needs.
@@ -192,9 +202,9 @@ public:
         controls_.setHidden(controls_.count() - 1, !localMode);
         // One decision, then the controls it needs:
         static constexpr const char* kLevelsOptions[] = {"manual", "automatic"};
-        controls_.addSelect("levels", levels, kLevelsOptions, 2);
+        controls_.addSelect("levels", levels, kLevelsOptions, kLevelsCount);
         controls_.setHidden(controls_.count() - 1, !localMode);
-        const bool manual = levels == 0;
+        const bool manual = levels == kLevelsManual;
         // The threshold means one thing in both modes, so it shows in both:
         controls_.addControl("floor", floor, 0, 255); controls_.setHidden(controls_.count() - 1, !localMode);
         controls_.addControl("gain", gain, 1, 255);   controls_.setHidden(controls_.count() - 1, !localMode || !manual);
@@ -204,18 +214,18 @@ public:
             controls_.setHidden(controls_.count() - 1, !localMode);
             // Multicast first, the WLED-compatible default; unicast reaches a few MoonLight boards faster on WiFi.
             static constexpr const char* kSyncModeNames[] = {"multicast", "unicast"};
-            controls_.addSelect("addressing", addressing, kSyncModeNames, 2);
+            controls_.addSelect("addressing", addressing, kSyncModeNames, kAddressCount);
             controls_.setHidden(controls_.count() - 1, !localMode || !send);
             controls_.addText("hosts", hosts, sizeof(hosts));
-            controls_.setHidden(controls_.count() - 1, !localMode || !send || addressing != 1);
+            controls_.setHidden(controls_.count() - 1, !localMode || !send || addressing != kAddressUnicast);
         }
         // The pattern picker, shown only in the synthesized mode.
         static constexpr const char* kSimulateOptions[] = {"music", "sweep"};
-        controls_.addSelect("simulate", simulate, kSimulateOptions, 2);
+        controls_.addSelect("simulate", simulate, kSimulateOptions, kSimulateCount);
         controls_.setHidden(controls_.count() - 1, !simMode);
         // Only where a socket is bound, the rows toggling live with the mode.
         if constexpr (platform::hasNetwork) {
-            const bool hasSocket = (sync() != 0);
+            const bool hasSocket = (sync() != kSyncNone);
             controls_.addControl("syncPort", syncPort, 1, 65535);
             controls_.setHidden(controls_.count() - 1, !hasSocket);
         }
@@ -285,6 +295,8 @@ public:
     static constexpr uint32_t syncFallbackMsForTest() { return kSyncFallbackMs; }
     /// How long a failed open waits.
     static constexpr uint32_t syncOpenRetryMsForTest() { return kSyncOpenRetryMs; }
+    /// How many times the receive socket joined the group, for the tests.
+    uint32_t syncJoinCountForTest() const { return syncSock_.joinCountForTest(); }
 
     /// The live frame every consumer reads, or silence where there is no source.
     static const AudioFrame* latestFrame() MM_NONBLOCKING {
@@ -301,16 +313,16 @@ public:
 
         // Sending broadcasts the frame and falls through to produce it; receiving is a pure sink.
         if constexpr (platform::hasNetwork) {
-            const uint8_t s = sync();
-            if (s != 0 && syncEnsureSocket()) {   // lazy-open once the network is up
-                if (s == 1) syncSend();
-                else if (s == 2) { syncReceive(); return; }
+            const Sync s = sync();
+            if (s != kSyncNone && syncEnsureSocket()) {   // lazy-open once the network is up
+                if (s == kSyncSend) syncSend();
+                else if (s == kSyncReceive) { syncReceive(); return; }
             }
-            if (s == 2) return;   // sink with no socket yet: still never runs the local mic
+            if (s == kSyncReceive) return;   // sink with no socket yet: still never runs the local mic
         }
 
         // A whole mode rather than a fill-in, so it always runs and returns.
-        if (mode == kSimMode) { synthesizeFrame(simulate == 1); return; }
+        if (mode == kSimMode) { synthesizeFrame(simulate == kSimSweep); return; }
 
         // From here it is the local mode, which holds the last frame until an input is up.
         if constexpr (!platform::hasAudioInput) {
@@ -334,7 +346,7 @@ public:
 
         // Measured independently of the transform, on a gentler floor so it keeps moving.
         computeLevel(samples_, kBlock, static_cast<uint8_t>(floor / 2), gain, frame_,
-                     levels == 1 ? &levelCond_ : nullptr,
+                     levels == kLevelsAutomatic ? &levelCond_ : nullptr,
                      static_cast<uint32_t>(kBlock * 1000u / sampleRate()));
 
         // The textbook light smoothing:
@@ -346,7 +358,7 @@ public:
         platform::audioFft(windowed_, kBlock, mag_);
         magnitudesToBands(mag_, kMag, sampleRate(), floor, gain,
                           frame_.bands, peakHz, peakMag,
-                          levels == 1 ? &cond_ : nullptr,
+                          levels == kLevelsAutomatic ? &cond_ : nullptr,
                           static_cast<uint32_t>(kBlock * 1000u / sampleRate()),
                           kRatio, static_cast<float>(kMaxGainDb), true);
         finishBands();
@@ -406,9 +418,9 @@ public:
 
     void tick1s() MM_NONBLOCKING override {
         // Re-init when the shared I2S bus came free, as the LED driver retries, or when the I2C bus moved under the codec.
-        const bool micFreed = !inited_ && platform::audioMicSharedBusFree(micMode == 1 ? platform::MicMode::Pdm
+        const bool micFreed = !inited_ && platform::audioMicSharedBusFree(micMode == kMicPdm ? platform::MicMode::Pdm
                                                                                        : platform::MicMode::I2sStd);
-        const bool busMoved = codec != 0 && platform::i2cBusGeneration() != codecBusGen_;
+        const bool busMoved = codec != kCodecNone && platform::i2cBusGeneration() != codecBusGen_;
         if (mode == kLocalMode && (micFreed || busMoved)) reinit();
         mm::formatTo(levelStr_, sizeof(levelStr_), "%u", static_cast<unsigned>(levelPeak_));
         mm::formatTo(onsetStr_, sizeof(onsetStr_), "%u/s, flux %u",
@@ -423,7 +435,7 @@ public:
                                    && codecType() == platform::CodecType::None;
         if (directMicLive) {
             if (micSamples1s_ == 0)
-                setStatus(micMode == 1 ? "mic: no samples, check wsPin (PDM clock)"
+                setStatus(micMode == kMicPdm ? "mic: no samples, check wsPin (PDM clock)"
                                        : "mic: no samples, check sckPin / wsPin (I2S clocks)",
                           Severity::Warning);
             else if (micNonzero1s_ == 0)
@@ -439,9 +451,9 @@ public:
         micNonzero1s_ = 0;
         // Live sync state on the module's OWN status line:
         if constexpr (platform::hasNetwork) {
-            const uint8_t s = sync();
-            if (s != 0 && syncOpen_ && !micStatusStale_) {
-                if (s == 1) setStatus("sending");
+            const Sync s = sync();
+            if (s != kSyncNone && syncOpen_ && !micStatusStale_) {
+                if (s == kSyncSend) setStatus("sending");
                 else if (lastSyncRecv_ != 0
                          && platform::millis() - lastSyncRecv_ < kSyncFallbackMs) {
                     // Named, because "receiving" alone cannot tell a rig taking the right source from one locked.
@@ -495,11 +507,10 @@ private:
     uint32_t lastSyncRecv_ = 0;      // millis of the last received packet (receive auto-blend)
     uint8_t  syncPeer_[4] = {};      // source address of that packet, for the status line
     bool     syncOpen_ = false;      // socket opened for the current mode (lazy-open latch)
-    bool     syncJoined_ = false;    // the receive socket joined the WLED group, so multicast reaches it
 
     /// Report an open receive socket, saying so when only unicast can reach it.
     void reportListening() {
-        if (syncJoined_) setStatus("listening");
+        if (syncSock_.multicastJoined()) setStatus("listening");
         else setStatus("listening, unicast only: multicast unavailable", Severity::Warning);
     }
     uint32_t lastSyncOpenFailMs_ = 0;  // millis of the last failed open (0 = none); bring-up backoff
@@ -532,14 +543,14 @@ private:
         }
         deinit();
         // Any pin unset (-1, the default until the user wires a mic):
-        const bool pdm = micMode == 1;
+        const bool pdm = micMode == kMicPdm;
         if (wsPin < 0 || sdPin < 0 || (!pdm && sckPin < 0)) {
             setStatus(pdm ? "mic: set wsPin (clock) / sdPin (data)"
                           : "mic: set sckPin / wsPin / sdPin", Severity::Status);
             return;
         }
         // A codec without the board's bus would probe nothing and fail the whole microphone, so it says so first.
-        if (codec != 0 && !platform::i2cBusReady()) {
+        if (codec != kCodecNone && !platform::i2cBusReady()) {
             setStatus("mic: the codec needs the I2C bus: set its pins under System, I2cBus", Severity::Status);
             return;
         }
@@ -589,10 +600,10 @@ private:
         lastSyncOpenFailMs_ = 0;           // a mode change retries bring-up immediately (no stale backoff)
         lastSyncRecv_ = 0;
         std::memset(syncPeer_, 0, sizeof(syncPeer_));
-        const uint8_t s = sync();
+        const Sync s = sync();
         // Only when there IS a socket to wait for.
-        if (s == 1)      setStatus("send: waiting for network");
-        else if (s == 2) setStatus("receive: waiting for network");
+        if (s == kSyncSend)         setStatus("send: waiting for network");
+        else if (s == kSyncReceive) setStatus("receive: waiting for network");
         else if (const char* cur = status();
                  cur && (std::strstr(cur, "waiting for network") || std::strstr(cur, "socket failed")
                          || std::strstr(cur, "bind failed") || std::strstr(cur, "from ")
@@ -603,18 +614,18 @@ private:
     /// Lazily open the sync socket for the current mode, once the network stack is up.
     bool syncEnsureSocket() {
         if constexpr (!platform::hasNetwork) return false;
-        const uint8_t s = sync();
-        if (s == 0) return false;
+        const Sync s = sync();
+        if (s == kSyncNone) return false;
         if (syncOpen_) return true;
         if (!platform::networkReady()) return false;   // interface not up yet, try again next tick
         // Back off between failed bring-ups:
         const uint32_t now = platform::millis();
         if (lastSyncOpenFailMs_ != 0 && now - lastSyncOpenFailMs_ < kSyncOpenRetryMs) return false;
-        if (s == 1) {                      // send → the WLED multicast group, or the hosts (configurable port)
+        if (s == kSyncSend) {             // send → the WLED multicast group, or the hosts (configurable port)
             if (syncSock_.open()) {
                 syncOpen_ = true;
-                if (addressing == 1 && syncHostsError_) setStatus(syncHostsError_, Severity::Error);
-                else if (addressing == 1 && syncHostCount_ == 0) setStatus("set hosts to send to", Severity::Warning);
+                if (addressing == kAddressUnicast && syncHostsError_) setStatus(syncHostsError_, Severity::Error);
+                else if (addressing == kAddressUnicast && syncHostCount_ == 0) setStatus("set hosts to send to", Severity::Warning);
                 else setStatus("sending");
             } else {
                 syncSock_.close();
@@ -625,7 +636,7 @@ private:
             char grp[16]; formatDottedQuad(grp, kSyncMulticastAddr_);
             if (syncSock_.open() && syncSock_.bind(syncPort)) {
                 syncOpen_ = true;
-                syncJoined_ = syncSock_.joinMulticast(grp);
+                syncSock_.joinMulticast(grp);
                 reportListening();
             } else {
                 syncSock_.close();
@@ -649,7 +660,7 @@ private:
         uint8_t pkt[WLED_SYNC_PACKET_SIZE];
         buildWledAudioSync(pkt, frame_, peak);
         // A steady 40 frames a second is a stream, so no broadcast copy on any network.
-        sendAddressed(addressing == 1 ? Addressing::Unicast : Addressing::Multicast, Traffic::FrameRate,
+        sendAddressed(addressing == kAddressUnicast ? Addressing::Unicast : Addressing::Multicast, Traffic::FrameRate,
                       syncHosts_, syncHostCount_, kSyncMulticastAddr_,
                       [&](const uint8_t ip[4]) { syncSock_.sendToAddr(ip, syncPort, pkt, WLED_SYNC_PACKET_SIZE); });
         syncSendCount_++;

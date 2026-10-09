@@ -56,6 +56,14 @@ Guidelines:
 
 Counter-example to avoid: storing `char rssiStr_[12]` and re-`snprintf`'ing `"-58 dBm"` into it every tick. The right shape is `int8_t rssi_` (1 byte) plus a control type that knows the unit. Saves 11 bytes per metric, scales linearly across the codebase.
 
+**A dropdown's values have names.** A Select control's member holds an index into its options, so the code that reads or sets it says which option it means, never a bare number.
+Declare a plain `enum Name : uint8_t { kNameFirst, ..., kNameCount }` in the class, its members in the options' order, next to the options array it indexes, and pass its count to `addSelect`.
+The enum costs no flash, since the compiler folds each name to its number.
+It keeps the count beside the options: a new option is a new enum member and a new array entry, so the count passed to `addSelect` follows.
+Where an enum for the values already exists, such as `Addressing` or `platform::EthPhyType`, use it rather than declaring a second one.
+A test sets the control by the same names.
+See [MidiService.h](../src/core/services/MidiService.h): `profile == kProfileApc40`, not `profile == 1`.
+
 **Width the intermediate, and the result follows.** Any `a * b` where both operands are `nrOfLightsType`, or a count times a multiplier, can overflow `uint16_t` even when each operand is small: `256 * 256 = 65536` wraps to 0 on a no-PSRAM device. Do the arithmetic in a wider type, clamp to the ceiling, then narrow. A counter derived from a cell count is the domain typedef too, never a fixed `uint16_t`. Such a path is invisible on the uint32 desktop build, so pin it with a `uint16`-typed unit test or hardware confirmation.
 
 **When a validation field's storage is narrower than what it claims to validate, the validation is wrong, not the field.** A `uint8_t` min/max slot can't bound an `Int16` control, clamping it to `[0..0]`. The fix is a wider bound, or per-type bound slots; until then the constraint is documented at the field's declaration.

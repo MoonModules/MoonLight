@@ -31,21 +31,13 @@
 /// Strict policy: an out-of-range Uint8, Int16 or Select fails the step, so a scenario-authoring bug surfaces instead of silently clamping into a boundary value.
 /// This is stricter than the pre-refactor behavior for Uint8 and Int16, which clamped silently, and matches it for Select and IPv4, which already failed; no scenario relied on the clamp.
 ///
-/// ## Why a delete purges the whole subtree
+/// ## How a step builds the tree
 ///
-/// Deleting a module that has registered children, a Layer with an effect child say, would leave their ids pointing at freed memory.
-/// So every `modules` entry whose pointer lies in the root's subtree is erased first, root and all descendants, which means walking the live tree while the subtree is still intact.
-/// `purgeSubtree` runs before `deleteTree`, and `replace_module` and `clear_children` mirror it for the same reason.
-///
-/// ## Why fixtures wire props at construct time
-///
-/// The fixture phase runs before the scheduler starts, so `set_control` cannot apply grid dimensions yet.
-/// Without a construct-time apply, `props.width` and `props.height` were silently ignored and the grid stayed at the layout's default, masking the real scenario size.
-/// GridBlacksLayout takes the same apply; its dark-column controls blackStart and blackCount are set later through `set_control`, which works post-start.
-/// Effects gets the container's Layouts, mirroring main.cpp's `effectsContainer->setLayouts`, and re-propagates it to every child Effects at each prepareTree, so a Layer added later picks it up.
-/// Drivers prefers binding the Effects container, since the active Layer is re-resolved at every prepareTree. So a Layer cleared and rebuilt mid-scenario is picked up, and pinning one Layer is the fallback for older fixtures.
-/// PreviewDriver needs no scenario-specific wiring: it reads its Layer and sparse source buffer through Drivers' passBufferToDrivers, and owns its own scratch buffers.
-/// No broadcaster is wired, the harness has no WS server, so sendFrame and sendCoordTable early-return on the null broadcaster while the light-extraction work still runs for honest tick measurement.
+/// A scenario names its top-level containers in `top`, each created as the device boots it, with the apparatus main.cpp wires into it, from the table both share.
+/// Below the top level, `apply_state` documents in the shape `PATCH /api/state` takes build the rest: a typed member adds or re-types a module, `null` removes one, `"$patch":"replace"` empties a container.
+/// The first document starts the scheduler, so it applies as a request with the full lifecycle, and the step prepares the tree at once.
+/// Effects finds the top-level Layouts and Drivers the top-level Effects, so a fixture names no wiring.
+/// No broadcaster is wired, the harness has no WS server, so the preview's sendFrame and sendCoordTable early-return while the light-extraction work still runs for honest tick measurement.
 ///
 /// ## Why skip_on exists
 ///
@@ -58,7 +50,7 @@
 ///
 /// The `mode` field says what shape the scenario expects the world to be in; see docs/reference/testing.md § Scenario modes.
 /// A construct scenario builds the pipeline from an empty scheduler and runs in-process only. A live device's main.cpp owns the top-level shape, and only the in-process runner can provide an empty scheduler.
-/// A mutate scenario assumes a wired pipeline. In-process replays the embedded `fixture` array first, an array of add_module steps in the same shape as `steps`, then the steps. Live runs the steps directly against whatever is wired.
+/// A mutate scenario assumes a wired pipeline. In-process creates its `top` containers and replays the embedded `fixture` array first, steps in the same shape as `steps`, then the steps. Live runs the steps directly against whatever is wired.
 /// A mutate scenario without a fixture can still run live, the device being its own fixture, but cannot run in-process.
 /// The default is construct, for back-compatibility with the scenarios that pre-date the field and build their pipelines explicitly.
 /// Bespoke convention: the construct and mutate split, plus fixture and reset, is MoonLight-specific rather than borrowed from an off-the-shelf BDD framework.
@@ -68,46 +60,31 @@
 /// ## The fixture, reset and steps sections
 ///
 /// Three sections run in order, each with its own banner so the output is easy to scan.
-/// Fixture carries add_module steps, in-process only, and builds the wired pipeline.
+/// Fixture carries `apply_state` steps, in-process only, and builds the wired pipeline.
 /// Reset carries set_control steps to a known state, runs on both tiers, and makes a scenario start from the same place regardless of previous runs.
 /// Steps is the scenario proper.
 ///
 /// ## Why the scheduler starts lazily
 ///
 /// Steps are processed in order, and the first measure step, or the end of the scenario, flips the scheduler into setup and running mode.
-/// After that a mid-scenario add_module or set_control step mutates the running pipeline, the same shape as the live runner driving changes over REST.
-/// A mid-scenario add therefore also calls defineControls, setup and prepareTree at once, mirroring what HttpServerModule does on `/api/modules`.
+/// After that a mid-scenario `apply_state` or set_control step mutates the running pipeline, the same shape as the live runner driving changes over REST.
 /// Starting after the fixture is what makes set_control work at all, since controls are populated in defineControls during setup.
 /// Per-step heap snapshots roll forward, so each measuring step reports its delta against the previous one.
 ///
 /// ## Why an unknown module type fails
 ///
 /// A failed create is a failed scenario: naming an unregistered type would otherwise pass while testing nothing.
-/// The `optional` flag is for a type genuinely unavailable here, and it is honoured on add_module, set_control, measure, remove_module and delete_module and nowhere else.
+/// The `optional` flag is for a type genuinely unavailable here, and it is honoured on apply_state, set_control and measure and nowhere else.
 /// Carrying it elsewhere reads as an escape hatch that does not exist, so the runner fails such a step rather than accepting the word.
 ///
 /// ## Why write_file exists
 ///
 /// It stages a file the way the UI's editor does, so a scenario can drive the script loop end-to-end. Write a script, point a module's `script` control at it, and measure.
-/// It uses the primitive the HTTP save path uses, fsWriteAtomic, so a scenario exercises the file the device would actually read. It also mkdir -p's the parent, because a scenario names `/moonlive/x.mle` without staging the directory.
+/// It uses the primitive the HTTP save path uses, fsWriteAtomic, so a scenario exercises the file the device would actually read. The write creates the parent folder, so a scenario names `/moonlive/x.mle` without staging the directory.
 /// The interesting cases have no shipped file to select. A deliberately broken script, proving the device degrades rather than dies, could not live in moonlive/, where unit_MoonLiveScripts compiles all of them.
 /// Neither could an edit that changes a script's control set, proving controls re-derive and keep their values.
 /// A malformed step and a failed write are both failed scenarios. Every later step then runs against a file that was never staged, and the run could still report PASSED.
 /// Skipping either silently is what makes a typo'd key pass here and fail on hardware, where `run_live_scenario.py` already treats it as an error.
-///
-/// ## Why remove_module and delete_module are aliases
-///
-/// Both are accepted so a scenario reads identically here and on the live runner, which uses `delete_module`.
-/// The two runners must never diverge on op names, or a scenario silently no-ops on one tier.
-/// The op removes a child from its parent, mirroring `HttpServerModule::handleDeleteModule`: remove from parent, release, recursive delete, rebuild pipeline state.
-/// Only child modules can be removed, top-level modules being policy-fixed, and a non-editable submodule such as Board, Preview or Improv is apparatus rather than content.
-/// `replace_module` mirrors `handleReplaceModule` under the same rules, and re-registers the fresh module under the same scenario id so later steps still address it by that id.
-///
-/// ## Why clear_children exists
-///
-/// It is the "prepare my own canvas" primitive: a scenario assumes nothing about the device's starting tree, clears a container, then adds what it needs.
-/// Children are deleted including ones the scenario never added, such as a live device's pre-existing effects and modifiers, leaving the container itself.
-/// It mirrors remove_module's release looped over all children, walking back-to-front since removeChild compacts the array in place, and skipping the non-editable submodules the live device also keeps.
 ///
 /// ## Why a measure step has two spellings
 ///
@@ -418,88 +395,11 @@ static bool applySetControl(mm::Scheduler& scheduler,
     return false;
 }
 
-// Module registry for scenario replay
+// The tree a scenario builds, every module created through a state document and found by its name, which the document keeps unique.
 struct ScenarioContext {
     mm::Scheduler scheduler;
-    std::map<std::string, mm::MoonModule*> modules;
 
-    // A scenario id, or a module's name when a state document created it and no step named it.
-    mm::MoonModule* byId(const char* id) {
-        auto it = modules.find(id);
-        return it != modules.end() ? it->second : scheduler.firstByName(id);
-    }
-
-    // Modules are heap-allocated by the factory; Scheduler::release owns and deletes them.
-    mm::MoonModule* createModule(const char* type) {
-        return mm::ModuleFactory::create(type);
-    }
-
-    // Erase every `modules` entry in `root`'s subtree, called BEFORE deleteTree(root): @xref{why-a-delete-purges-the-whole-subtree}.
-    void purgeSubtree(mm::MoonModule* root) {
-        if (!root) return;
-        for (uint8_t i = 0; i < root->childCount(); i++) purgeSubtree(root->child(i));
-        for (auto it = modules.begin(); it != modules.end();) {
-            it = (it->second == root) ? modules.erase(it) : std::next(it);
-        }
-    }
-
-    void wireModule(const char* type, const char* id, const JsonVal& step) {
-        auto* mod = modules[id];
-        if (!mod) return;
-
-        // Wire parent/child
-        if (step.has("parent_id")) {
-            const char* parentId = step["parent_id"].c_str();
-            auto* parent = modules[parentId];
-            if (parent) {
-                parent->addChild(mod);
-            }
-        }
-
-        // Wire props (only when the step has any).
-        if (step.has("props")) {
-            auto& props = step["props"];
-            if (std::strcmp(type, "Effects") == 0) {
-                // Wire the container's Layouts, the self-healing path the device relies on: @xref{why-fixtures-wire-props-at-construct-time}.
-                if (props.has("layouts")) {
-                    auto* layoutsModule = static_cast<mm::Layouts*>(modules[props["layouts"].str]);
-                    if (layoutsModule) static_cast<mm::Effects*>(mod)->setLayouts(layoutsModule);
-                }
-            } else if (std::strcmp(type, "Layer") == 0) {
-                auto* layer = static_cast<mm::Layer*>(mod);
-                if (props.has("layouts")) {
-                    auto* layoutsModule = static_cast<mm::Layouts*>(modules[props["layouts"].str]);
-                    if (layoutsModule) layer->setLayouts(layoutsModule);
-                }
-                if (props.has("channelsPerLight")) {
-                    layer->setChannelsPerLight(static_cast<uint8_t>(props["channelsPerLight"].num));
-                }
-            } else if (std::strcmp(type, "Drivers") == 0) {
-                // Prefer binding the Effects container, pinning a Layer being the fallback: @xref{why-fixtures-wire-props-at-construct-time}.
-                if (props.has("effects")) {
-                    auto* effectsModule = static_cast<mm::Effects*>(modules[props["effects"].str]);
-                    if (effectsModule) static_cast<mm::Drivers*>(mod)->setEffects(effectsModule);
-                } else if (props.has("layer")) {
-                    auto* layerModule = static_cast<mm::Layer*>(modules[props["layer"].str]);
-                    if (layerModule) static_cast<mm::Drivers*>(mod)->setLayer(layerModule);
-                }
-            } else if (std::strcmp(type, "GridLayout") == 0) {
-                // Grid dimensions are set at construct time: @xref{why-fixtures-wire-props-at-construct-time}.
-                auto* grid = static_cast<mm::GridLayout*>(mod);
-                if (props.has("width"))  grid->width  = static_cast<mm::lengthType>(props["width"].num);
-                if (props.has("height")) grid->height = static_cast<mm::lengthType>(props["height"].num);
-                if (props.has("depth"))  grid->depth  = static_cast<mm::lengthType>(props["depth"].num);
-            } else if (std::strcmp(type, "GridBlacksLayout") == 0) {
-                // The same construct-time dimension apply as GridLayout: @xref{why-fixtures-wire-props-at-construct-time}.
-                auto* grid = static_cast<mm::GridBlacksLayout*>(mod);
-                if (props.has("width"))  grid->width  = static_cast<mm::lengthType>(props["width"].num);
-                if (props.has("height")) grid->height = static_cast<mm::lengthType>(props["height"].num);
-                if (props.has("depth"))  grid->depth  = static_cast<mm::lengthType>(props["depth"].num);
-            }
-        }
-
-        // PreviewDriver needs no scenario-specific wiring: @xref{why-fixtures-wire-props-at-construct-time}.
-    }
+    mm::MoonModule* byId(const char* id) { return scheduler.firstByName(id); }
 };
 
 /// A `list_row` step's list and the row its `match` names, or why there is none.
@@ -602,8 +502,10 @@ static int runScenario(const char* path) {
 
     if (mode == "mutate") {
         // In-process replays the fixture before the scenario's actual steps: @xref{the-construct-and-mutate-modes}.
-        if (!scenario.has("fixture") || scenario["fixture"].arr.empty()) {
-            std::printf("  SKIP (mutate scenario with no fixture: runs live only)\n");
+        const bool fixture = scenario.has("fixture") && !scenario["fixture"].arr.empty();
+        const bool tops = scenario.has("top") && !scenario["top"].arr.empty();
+        if (!fixture && !tops) {
+            std::printf("  SKIP (mutate scenario with no fixture or top: runs live only)\n");
             return kSkipped;
         }
     } else if (mode != "construct") {
@@ -619,6 +521,18 @@ static int runScenario(const char* path) {
 
     ScenarioContext ctx;
     Result result;
+
+    // The top-level containers the scenario names, each as the device boots it: @xref{how-a-step-builds-the-tree}.
+    if (scenario.has("top"))
+        for (auto& t : scenario["top"].arr) {
+            mm::MoonModule* top = mm::createTopLevel(t.c_str());
+            if (!top) {
+                std::printf("  TOP   unknown type: %s\n", t.c_str());
+                result.check(false, "top");
+                continue;
+            }
+            ctx.scheduler.addModule(top);
+        }
 
     // Lazy-setup model, processing steps in order: @xref{why-the-scheduler-starts-lazily}.
     bool schedulerStarted = false;
@@ -658,6 +572,8 @@ static int runScenario(const char* path) {
     Section section = fixtureSize > 0 ? Section::Fixture
                     : resetSize > 0   ? Section::Reset
                     :                   Section::Steps;
+    // With no fixture, the top-level containers are the whole starting tree, so the scheduler starts before the first step.
+    if (fixtureSize == 0) ensureStarted();
     if (section == Section::Fixture) {
         std::printf("  --- fixture (%u steps) ---\n", static_cast<unsigned>(fixtureSize));
     } else if (section == Section::Reset) {
@@ -683,38 +599,7 @@ static int runScenario(const char* path) {
         const char* name = step["name"].c_str();
         const char* op = step["op"].c_str();
 
-        if (std::strcmp(op, "add_module") == 0) {
-            const char* type = step["type"].c_str();
-            const char* id = step["id"].c_str();
-
-            auto* mod = ctx.createModule(type);
-            if (!mod) {
-                // A failed create is a failed scenario: @xref{why-an-unknown-module-type-fails}.
-                if (step.has("optional") && step["optional"].boolean) {
-                    std::printf("  SKIP  %s (optional, type %s unavailable here)\n", name, type);
-                    continue;
-                }
-                std::printf("  ADD   %s: unknown type: %s\n", name, type);
-                result.check(false, name);
-                continue;
-            }
-            mod->setName(id);
-            ctx.modules[id] = mod;
-            ctx.wireModule(type, id, step);
-
-            // Only register top-level modules (no parent_id) with scheduler
-            if (!step.has("parent_id")) {
-                ctx.scheduler.addModule(mod);
-            }
-
-            // Mid-scenario adds set up the new module at once and rebuild pipeline state: @xref{why-the-scheduler-starts-lazily}.
-            if (schedulerStarted) {
-                mod->defineControls();
-                mod->setup();
-                ctx.scheduler.prepareTree();
-            }
-            std::printf("  +     %s (%s)\n", id, type);
-        } else if (std::strcmp(op, "set_control") == 0) {
+        if (std::strcmp(op, "set_control") == 0) {
             if (!step.has("id") || !step.has("key")) {
                 std::printf("  SET   %s: missing id/key, skipped\n", name);
                 continue;
@@ -741,6 +626,11 @@ static int runScenario(const char* path) {
             ensureStarted();
             const mm::StateDocumentResult r = mm::applyStateDocument(ctx.scheduler, step["document"].raw.c_str());
             ctx.scheduler.prepareTree();   // the engine requests one; a step that reads next needs it done
+            // An optional document names a type this build may lack, such as a peripheral another chip has: that is a skip, not a failure.
+            if (!r.ok && step.has("optional") && step["optional"].boolean && std::strcmp(r.error, "unknown type") == 0) {
+                std::printf("  SKIP  %s (optional, a type unavailable here)\n", name);
+                continue;
+            }
             // `error` names the failure a step expects, and `at` where; without it the document must apply.
             const bool wantError = step.has("error");
             const bool held = wantError ? (!r.ok && step["error"].str == r.error && (!step.has("at") || step["at"].str == r.where))
@@ -766,7 +656,7 @@ static int runScenario(const char* path) {
                         r.ok ? "applied" : r.error, r.ok ? "" : " at ", r.ok ? "" : r.where);
             result.check(r.ok && !whole.overflowed(), name);
         } else if (std::strcmp(op, "list_row") == 0) {
-            // A list's rows as the list API reaches them: `add` a row, or find one by `match` and write a `field`, `delete` it, or only expect it.
+            // A list's rows as the list API reaches them: `add` a row, or find one by `match` and write a `field`, `apply` it, `delete` it, or only expect it.
             ensureStarted();
             ListStep ls = listStep(ctx, step);
             if (!ls.source) {
@@ -788,6 +678,9 @@ static int runScenario(const char* path) {
             } else if (step.has("delete") && step["delete"].boolean) {
                 held = ls.source->deleteListRow(ls.id);
                 std::printf("  ROW   %s: %s\n", name, held ? "deleted" : "delete refused");
+            } else if (step.has("apply") && step["apply"].boolean) {
+                held = ls.source->applyListRow(ls.id);
+                std::printf("  ROW   %s: %s\n", name, held ? "applied" : "apply refused");
             } else if (step.has("field")) {
                 held = ls.source->setListRowField(ls.id, step["field"].c_str(), fieldBody(step["field"].str, step["value"]).c_str());
                 std::printf("  ROW   %s: %s %s\n", name, step["field"].c_str(), held ? "set" : "refused");
@@ -799,9 +692,8 @@ static int runScenario(const char* path) {
             // The scheduler IS the process here, so a restart belongs to the live tier and says so rather than pretending.
             std::printf("  REBOOT %s: skipped (no process to restart in-process)\n", name);
         } else if (step.has("optional") && step["optional"].boolean
-                   && std::strcmp(op, "add_module") != 0 && std::strcmp(op, "set_control") != 0
-                   && std::strcmp(op, "measure") != 0 && std::strcmp(op, "remove_module") != 0
-                   && std::strcmp(op, "delete_module") != 0) {
+                   && std::strcmp(op, "apply_state") != 0 && std::strcmp(op, "set_control") != 0
+                   && std::strcmp(op, "measure") != 0) {
             // `optional` is honoured by the ops above and nowhere else: @xref{why-an-unknown-module-type-fails}.
             std::printf("  %s %s: `optional` does nothing on this op\n", op, name);
             result.check(false, name);
@@ -893,13 +785,6 @@ static int runScenario(const char* path) {
             }
             const char* filePath = step["path"].c_str();
             const std::string body = step["value"].str;
-            // mkdir -p the parent, which a fresh build tree may not have yet: @xref{why-write-file-exists}.
-            if (const char* slash = std::strrchr(filePath, '/')) {
-                if (slash != filePath) {
-                    std::string dir(filePath, static_cast<size_t>(slash - filePath));
-                    mm::platform::fsMkdir(dir.c_str());
-                }
-            }
             // A FAILED write is a failed scenario rather than a printed note: @xref{why-write-file-exists}.
             const bool wrote = mm::platform::fsWriteAtomic(filePath, body.c_str(), body.size());
             if (wrote) {
@@ -924,79 +809,6 @@ static int runScenario(const char* path) {
             else      std::printf("  DELETE %s: %s is still there\n", name, filePath);
             result.check(gone, name);
             if (schedulerStarted) { ctx.scheduler.notifyFileChanged(filePath); ctx.scheduler.prepareTree(); }   // as after a write
-        } else if (std::strcmp(op, "remove_module") == 0 || std::strcmp(op, "delete_module") == 0) {
-            // `remove_module` and `delete_module` are aliases, and both remove a child from its parent: @xref{why-remove-module-and-delete-module-are-aliases}.
-            const char* targetId = step["id"].c_str();
-            auto* target = ctx.byId(targetId);
-            if (!target || !target->parent() || !target->userEditable()) {
-                // Mirror the live API: top-level and non-editable submodules stay: @xref{why-remove-module-and-delete-module-are-aliases}.
-                std::printf("  -     %s: %s not found / top-level / not editable, skipped\n", name, targetId);
-                continue;
-            }
-            auto* parent = target->parent();
-            parent->removeChild(target);
-            target->release();
-            ctx.purgeSubtree(target);  // erase target + any registered descendants before freeing
-            mm::Scheduler::deleteTree(target);
-            if (schedulerStarted) ctx.scheduler.prepareTree();
-            std::printf("  -     %s (%s)\n", name, targetId);
-        } else if (std::strcmp(op, "clear_children") == 0) {
-            // Delete every child of a container, leaving the container itself: @xref{why-clear-children-exists}.
-            const char* targetId = step["id"].c_str();
-            auto* container = ctx.byId(targetId);
-            if (!container) {
-                std::printf("  clr     %s: container %s not found, skipped\n", name, targetId);
-                continue;
-            }
-            int cleared = 0;
-            for (uint8_t i = container->childCount(); i > 0; i--) {
-                mm::MoonModule* childMod = container->child(i - 1);
-                // Mirror handleDeleteModule: a non-editable submodule is apparatus, so skip it: @xref{why-clear-children-exists}.
-                if (!childMod->userEditable()) continue;
-                container->removeChild(childMod);
-                childMod->release();
-                // Purge the child AND any registered descendants before freeing: @xref{why-a-delete-purges-the-whole-subtree}.
-                ctx.purgeSubtree(childMod);
-                mm::Scheduler::deleteTree(childMod);
-                cleared++;
-            }
-            if (schedulerStarted) ctx.scheduler.prepareTree();
-            std::printf("  clr     %s (%s: %d cleared)\n", name, targetId, cleared);
-        } else if (std::strcmp(op, "replace_module") == 0) {
-            // Replace a child with a fresh module of another type at the same slot: @xref{why-remove-module-and-delete-module-are-aliases}.
-            const char* targetId = step["id"].c_str();
-            const char* newType = step["type"].c_str();
-            auto* target = ctx.byId(targetId);
-            if (!target || !target->parent() || !target->userEditable()) {
-                // Mirror the live API: a top-level or non-editable submodule stays: @xref{why-remove-module-and-delete-module-are-aliases}.
-                std::printf("  ~     %s: %s not found / top-level / not editable, skipped\n", name, targetId);
-                continue;
-            }
-            auto* parent = target->parent();
-            uint8_t index = 0; bool found = false;
-            for (uint8_t i = 0; i < parent->childCount(); i++) {
-                if (parent->child(i) == target) { index = i; found = true; break; }
-            }
-            auto* fresh = ctx.createModule(newType);
-            if (!found || !fresh) {
-                if (fresh) mm::Scheduler::deleteTree(fresh);
-                std::printf("  ~     %s: slot not found or unknown type %s, skipped\n", name, newType);
-                continue;
-            }
-            fresh->setName(targetId);
-            mm::MoonModule* old = parent->replaceChildAt(index, fresh);
-            fresh->defineControls();
-            fresh->setup();
-            fresh->prepare();
-            if (old) {
-                // Purge any ctx.modules entry pointing at old or a descendant before freeing, targetId re-registering to fresh below: @xref{why-a-delete-purges-the-whole-subtree}.
-                ctx.purgeSubtree(old);
-                old->release();
-                mm::Scheduler::deleteTree(old);
-            }
-            ctx.modules[targetId] = fresh;
-            if (schedulerStarted) ctx.scheduler.prepareTree();
-            std::printf("  ~     %s (%s → %s)\n", name, targetId, newType);
         } else if (std::strcmp(op, "measure") == 0) {
             // Pure measurement step with no side effects: @xref{why-a-measure-step-has-two-spellings}.
             std::printf("  ...   %s\n", name);
@@ -1062,8 +874,7 @@ static int runScenario(const char* path) {
             size_t maxBlock = mm::platform::maxInternalAllocBlock();
 
             // Buffer state at this measurement (may be empty in early build-up steps).
-            auto* layer = static_cast<mm::Layer*>(
-                ctx.modules.count("Layer") ? ctx.modules["Layer"] : nullptr);
+            auto* layer = static_cast<mm::Layer*>(ctx.byId("Layer"));
             unsigned lights = layer ? static_cast<unsigned>(layer->buffer().count()) : 0;
 
             // `heap=` is the absolute free heap and `(step: ±N)` the signed step delta: @xref{what-the-heap-numbers-mean}.
@@ -1170,10 +981,8 @@ static int runScenario(const char* path) {
 
     // The legacy end-of-scenario buffer check runs when a Layer is present, since existing scenarios depend on it.
     ensureStarted();
-    auto* layer = static_cast<mm::Layer*>(
-        ctx.modules.count("Layer") ? ctx.modules["Layer"] : nullptr);
-    auto* drivers = static_cast<mm::Drivers*>(
-        ctx.modules.count("Drivers") ? ctx.modules["Drivers"] : nullptr);
+    auto* layer = static_cast<mm::Layer*>(ctx.byId("Layer"));
+    auto* drivers = static_cast<mm::Drivers*>(ctx.byId("Drivers"));
     if (layer) {
         // One frame first: a last step that prepared the tree, as a structural one does, leaves the buffer freshly allocated and empty until the next render.
         ctx.scheduler.tick();

@@ -8,7 +8,7 @@ using namespace mm;
 // The B#/S# parser turns a rule string into birth/survive neighbor sets. Conway = B3/S23.
 TEST_CASE("GameOfLife: ruleset parser reads B/S sets") {
     GameOfLifeEffect gol;
-    gol.ruleset = 1;                       // "Conway B3/S23"
+    gol.ruleset = GameOfLifeEffect::kRulesetConway;                       // "Conway B3/S23"
     gol.parseRulesetForTest();
     CHECK(gol.birthForTest(3));
     CHECK_FALSE(gol.birthForTest(2));
@@ -16,7 +16,7 @@ TEST_CASE("GameOfLife: ruleset parser reads B/S sets") {
     CHECK(gol.surviveForTest(3));
     CHECK_FALSE(gol.surviveForTest(1));
 
-    gol.ruleset = 2;                       // "HighLife B36/S23"
+    gol.ruleset = GameOfLifeEffect::kRulesetHighLife;                       // "HighLife B36/S23"
     gol.parseRulesetForTest();
     CHECK(gol.birthForTest(3));
     CHECK(gol.birthForTest(6));            // the HighLife extra birth rule
@@ -26,7 +26,7 @@ TEST_CASE("GameOfLife: ruleset parser reads B/S sets") {
 // A 2×2 block is a Conway still life: every live cell has 3 neighbors (survives), and the surrounding dead cells never have exactly 3 (no births). It must be identical after a step.
 TEST_CASE("GameOfLife: a 2x2 block is a stable still life") {
     GameOfLifeEffect gol;
-    gol.ruleset = 1;
+    gol.ruleset = GameOfLifeEffect::kRulesetConway;
     REQUIRE(gol.allocateForTest(6, 6, 1));
     gol.setCellForTest(2, 2, 0, true);
     gol.setCellForTest(3, 2, 0, true);
@@ -48,7 +48,7 @@ TEST_CASE("GameOfLife: a 2x2 block is a stable still life") {
 // Regression: a 3D grid gives a cell up to 26 neighbors (3×3×3 minus self), but the B/S rule tables are sized 9 (single-digit Conway notation, 0..8). A dense 3D neighborhood must not read those tables out of bounds, a count ≥9 is in no single-digit ruleset, so the cell dies / stays dead. This fills a 3×3×3 cube (the center has all 26 neighbors alive) and just steps: the test passing under ASan/bounds-checking is the OOB-read pin; behaviorally the over-crowded center dies (26 ∉ S) and the dense interior doesn't survive.
 TEST_CASE("GameOfLife: a dense 3D neighborhood never indexes the B/S tables out of bounds") {
     GameOfLifeEffect gol;
-    gol.ruleset = 1;                                  // Conway B3/S23
+    gol.ruleset = GameOfLifeEffect::kRulesetConway;                                  // Conway B3/S23
     REQUIRE(gol.allocateForTest(5, 5, 5));            // a real 3D grid (depth>1 enables the z axis)
     for (lengthType z = 1; z <= 3; z++)              // a solid 3×3×3 block, centre at (2,2,2)
         for (lengthType y = 1; y <= 3; y++)
@@ -64,7 +64,7 @@ TEST_CASE("GameOfLife: a dense 3D neighborhood never indexes the B/S tables out 
 // A horizontal 3-cell blinker oscillates to vertical after one step (period-2 oscillator). This is the canonical "the rules actually run" check: birth on 3, death of the ends (1 neighbor each).
 TEST_CASE("GameOfLife: a 3-cell blinker flips orientation each step") {
     GameOfLifeEffect gol;
-    gol.ruleset = 1;
+    gol.ruleset = GameOfLifeEffect::kRulesetConway;
     REQUIRE(gol.allocateForTest(7, 7, 1));
     // Horizontal: (2,3) (3,3) (4,3)
     gol.setCellForTest(2, 3, 0, true);
@@ -89,7 +89,7 @@ TEST_CASE("GameOfLife: a 3-cell blinker flips orientation each step") {
 // A lone cell (0 neighbors) dies, the dead-by-isolation rule, and a sanity check that an empty grid stays empty (no spontaneous births at count 0 under Conway).
 TEST_CASE("GameOfLife: a lone cell dies and an empty grid stays empty") {
     GameOfLifeEffect gol;
-    gol.ruleset = 1;
+    gol.ruleset = GameOfLifeEffect::kRulesetConway;
     REQUIRE(gol.allocateForTest(5, 5, 1));
     gol.setCellForTest(2, 2, 0, true);
     gol.stepForTest();

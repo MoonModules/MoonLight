@@ -35,8 +35,7 @@ inline const char* roleName(ModuleRole role) {
 
 /// The base class for everything in the system, from effects and drivers to system services.
 ///
-/// It is the one deliberate hierarchy, so the UI renders any module with no per-module UI code.
-/// The goal is the smallest possible base, since dozens load at once on a device without PSRAM.
+/// It is the one deliberate hierarchy, so the UI renders any module with no per-module UI code: @xref{parent-and-child}. The base is the smallest possible, since dozens load at once without PSRAM: @xref{enabled-and-self-reporting}.
 ///
 /// Prior art: MoonLight's Node, a small base whose controls bind by reference.
 ///
@@ -44,23 +43,16 @@ inline const char* roleName(ModuleRole role) {
 ///
 /// ## The lifecycle
 ///
-/// `setup` and `release` bracket a module's life, and three tick rates run between them.
-/// `defineControls` declares the controls, and `prepare` builds derived state.
-/// That is what makes every config change apply live, with no reboot.
+/// `setup` and `release` bracket a module's life, with three tick rates between them. `defineControls` declares the controls and `prepare` builds derived state, so every change applies live.
 /// Controls bind by reference, so persisted values land before any setup runs.
 ///
 /// ## Parent and child
 ///
-/// Modules form a tree of parents and children, with no arbitrary graph.
-/// The children array and its four mutators live once here, never overridden.
-/// It starts empty, so a leaf allocates nothing, and grows on demand.
-/// Children are told apart by role, which is also how a container filters them.
+/// Modules form a tree, with no arbitrary graph. The children array and its four mutators live once here, never overridden, and a leaf allocates nothing. Roles tell children apart, which is how a container filters them.
 ///
 /// ## Enabled, and self-reporting
 ///
-/// Every module carries an enabled flag, and each decides what disabled means.
-/// A system module ignores it, so the user cannot lock themselves out.
-/// Each module reports its instance size, its heap, and its tick time.
+/// Every module carries an enabled flag, and each decides what disabled means: a system module ignores it, so the user cannot lock themselves out. Each module reports its instance size, heap and tick time.
 class MoonModule {
 public:
     // noexcept, so a failed allocation yields nullptr rather than a constructor running on null.
@@ -72,7 +64,10 @@ public:
     /// A module starts enabled, with no children and no controls.
     MoonModule() = default;
     /// Release the children array, the children themselves being the caller's.
-    virtual ~MoonModule() { delete[] children_; }
+    virtual ~MoonModule() {
+        if (lastEnabledEffect_ == this) lastEnabledEffect_ = nullptr;
+        delete[] children_;
+    }
 
     /// A module is identified by its place in the tree, so it is never copied.
     MoonModule(const MoonModule&) = delete;
@@ -83,7 +78,7 @@ public:
     /// Nor move-assigned.
     MoonModule& operator=(MoonModule&&) = delete;
 
-    /// One-time wiring, which by default sets up the children first.
+    /// One-time wiring, which by default sets up the children first: @xref{the-lifecycle}.
     virtual void setup() { for (uint8_t i = 0; i < childCount_; i++) children_[i]->setup(); }
     /// The hot tick, which by default ticks every enabled child and times each.
     virtual void tick() MM_NONBLOCKING { tickChildren(&MoonModule::tick); }
@@ -217,14 +212,32 @@ public:
     /// Set the factory key, which must have static lifetime.
     void setTypeName(const char* tn) { typeName_ = tn ? tn : ""; }
 
-    /// This module's own enabled flag, which ignores its ancestors.
-    bool enabled() const MM_NONBLOCKING { return enabled_; }
+    /// This module's own enabled flag, which ignores its ancestors, and is off while safe mode holds it.
+    bool enabled() const MM_NONBLOCKING { return enabled_ && !held_; }
+    /// The enabled flag as set, which persistence saves whatever safe mode holds.
+    bool enabledSetting() const { return enabled_; }
+    /// Whether safe mode holds this module, off whatever its flag says.
+    bool held() const { return held_; }
+
+    /// How many failed boots in a row start safe mode.
+    static constexpr uint8_t kSafeModeRestarts = 2;
+    /// The failed boots before this one, in a row: crashes, brownouts, and boots that lost their power within a minute.
+    static uint8_t failedBoots() { return platform::bootRecord().abnormalRestarts; }
+    /// Whether this boot runs in safe mode, after failed boots in a row, so a setting or a supply at fault can be fixed from the UI.
+    static bool safeMode() { return failedBoots() >= kSafeModeRestarts; }
+    /// Whether safe mode holds this module, counting it as disabled while its saved flag stays, for one that can crash the device or overload its supply.
+    virtual bool heldInSafeMode() const { return false; }
     /// Set the flag, firing the transition hook only on a real change.
     void setEnabled(bool e) {
         if (enabled_ == e) return;
         enabled_ = e;
+        if (e && role() == ModuleRole::Effect) lastEnabledEffect_ = this;
         onEnabled(e);
     }
+    /// The effect enabled or added last, the one someone just switched to, or null once it leaves the tree.
+    static MoonModule* lastEnabledEffect() { return lastEnabledEffect_; }
+    /// React once a rebuild walk has finished, for a top-level module that reads across the tree.
+    virtual void onTreePrepared() {}
 
     /// Whether the enabled flag gates this module's ticks, which a system module declines.
     virtual bool respectsEnabled() const MM_NONBLOCKING { return true; }
@@ -249,7 +262,14 @@ public:
     /// This module's parent, or null at the top level.
     MoonModule* parent() const { return parent_; }
     /// Set the parent, which the child mutators do.
-    void setParent(MoonModule* p) { parent_ = p; }
+    void setParent(MoonModule* p) {
+        parent_ = p;
+        // Decided as it joins the tree, where the type is complete, rather than on every tick.
+        held_ = p && safeMode() && heldInSafeMode();
+        // Joining counts as being switched on, and leaving forgets it.
+        if (p && role() == ModuleRole::Effect) lastEnabledEffect_ = this;
+        else if (!p && lastEnabledEffect_ == this) lastEnabledEffect_ = nullptr;
+    }
 
     /// Mark this module as wired by code, so a file that predates it cannot trim it away.
     void markWiredByCode() { wiredByCode_ = true; }
@@ -484,6 +504,8 @@ private:
     char name_[kNameLen] = {};
     const char* typeName_ = "";  ///< points into flash, never copied per instance
     bool enabled_ = true;
+    bool held_ = false;   ///< safe mode holds it
+    static inline MoonModule* lastEnabledEffect_ = nullptr;   ///< see lastEnabledEffect()
     bool dirty_ = false;
     bool wiredByCode_ = false;
     MoonModule* parent_ = nullptr;

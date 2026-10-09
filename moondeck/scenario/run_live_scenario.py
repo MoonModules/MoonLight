@@ -10,6 +10,7 @@ import atexit
 import signal
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -20,9 +21,9 @@ from pathlib import Path
 
 
 def _mod_path(name: str) -> str:
-    """`/api/modules/<name>` with the name URL-encoded. Module names can contain
-    spaces (ensureUniqueName disambiguates duplicates as "Layer 2"), which urllib
-    rejects in a raw URL: encode so delete/replace/clear can address them."""
+    """`/api/modules/<name>` with the name URL-encoded. A module name a user chose can
+    contain a space, which urllib rejects in a raw URL: encode so delete/replace/clear
+    can address it."""
     return "/api/modules/" + urllib.parse.quote(name, safe="")
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -412,48 +413,11 @@ def _remember_control(prior: dict, client, mod_id: str, key: str) -> None:
         prior[(mod_id, key)] = value
 
 
-def _remember_type(replaced: dict, client, mod_id: str) -> None:
-    """Note what type a slot held before a scenario first replaces it, so the run can swap it back.
-
-    Only the first replace counts, as with controls. A slot that cannot be read is left out.
-    """
-    if mod_id in replaced:
-        return
-    try:
-        typ = client.get(_mod_path(mod_id)).get("type")
-    except Exception:
-        return
-    if typ:
-        replaced[mod_id] = typ
-
-
-def _restore_types(client, replaced: dict) -> int:
-    """Swap every slot a scenario replaced back to the type it held, keeping its name.
-
-    The re-created tree cannot do this: a replaced slot still exists under its name, so the snapshot restore sees it as present and leaves the scenario's type standing.
-    A slot the scenario itself created is gone by now, and that 404 stays quiet; any other failure is reported, as `_restore_tree` reports one.
-    Returns how many the device confirmed.
-    """
-    done = 0
-    for mod_id, typ in reversed(list(replaced.items())):
-        try:
-            if client.post(_mod_path(mod_id) + "/replace", {"type": typ, "name": mod_id}).get("ok"):
-                done += 1
-            else:
-                print(f"  WARN  restore: the device declined to swap {mod_id} back to {typ}")
-        except urllib.error.HTTPError as e:
-            if e.code != 404:
-                print(f"  WARN  restore: could not swap {mod_id} back to {typ}: {e}")
-        except Exception as e:
-            print(f"  WARN  restore: could not swap {mod_id} back to {typ}: {e}")
-    return done
-
-
 def _restore_controls(client, prior: dict) -> int:
     """Set every control a scenario wrote back to what it held before, newest write first.
 
     A scenario that names a device to prove the name survives a restart otherwise leaves that name on every device it runs on, and two bench devices answering to one name is how a restore landed on the wrong one.
-    A control whose module the scenario itself created is gone by now, and that 404 stays quiet; any other failure is reported, as `_restore_tree` reports one.
+    A control whose module the scenario itself created is gone by now, and that 404 stays quiet; any other failure is reported.
     Returns how many the device confirmed.
     """
     done = 0
@@ -577,85 +541,23 @@ def _collect_module_names(state: dict) -> set:
     return names
 
 
-def _child_names_of(state: dict, container_name: str) -> list:
-    """Direct-child names of the named container in the live tree (depth-1 only).
-    Used by clear_children to enumerate what to delete; the device tears down each
-    child's whole subtree, so only the immediate children need naming."""
-    def find(modules):
-        for m in modules:
-            if m.get("name") == container_name:
-                return [c.get("name") for c in m.get("children", []) if c.get("name")]
-            hit = find(m.get("children", []))
-            if hit is not None:
-                return hit
-        return None
-    return find(state.get("modules", [])) or []
+# The containers whose content a scenario may change: their documents, read before the run and applied back after it, leave the board as found.
+_SNAPSHOT_CONTAINERS = ("Layouts", "Effects", "Drivers", "Services")
 
 
-# Containers whose USER-ADDED children a scenario may clear/rebuild: the tree the
-# snapshot/restore protects. A scenario that clear_children's one of these destroys
-# the board's real config; restoring the snapshot afterward leaves the board as found.
-_SNAPSHOT_CONTAINERS = {"Layouts", "Effects", "Drivers", "Services", "Layer"}
+def _snapshot_documents(client) -> list:
+    """Each snapshot container as its state document, the shape `PATCH /api/state` takes back.
 
-
-def _snapshot_tree(state: dict) -> list:
-    """Capture the user-added modules a scenario might clear or remove, in tree order (parents before children), so they can be re-created after the scenario runs.
-
-    Each entry is {type, id, parent_id, controls}: everything /api/state exposes to reconstruct a module via POST /api/modules + /api/control.
-    Boot-wired singletons (the containers themselves, Preview, FixtureProfiles) are not captured: the device re-creates them itself, and re-adding is a no-op or an error.
-    The snapshot holds the children of the snapshot containers and their descendants, which are the modules a scenario's clear_children or remove takes away."""
-    snap = []
-
-    def controls_of(m: dict) -> dict:
-        return {c["name"]: c.get("value") for c in m.get("controls", [])
-                if c.get("name") and not c.get("readonly")}
-
-    def walk(modules: list, parent_name, *, inside_container: bool) -> None:
-        for m in modules:
-            name = m.get("name")
-            typ = m.get("type")
-            # Capture a module that sits INSIDE a snapshot container and is user-editable
-            # (a driver/effect/modifier/layout/service the scenario could clear). Skip the
-            # boot-wired ones the device owns (userEditable false is not in /api/state, so
-            # gate on the known singletons by name instead).
-            if inside_container and name and typ and name not in ("Preview", "FixtureProfiles"):
-                snap.append({"type": typ, "id": name,
-                             "parent_id": parent_name, "controls": controls_of(m)})
-            walk(m.get("children", []), name,
-                 inside_container=inside_container or name in _SNAPSHOT_CONTAINERS)
-
-    walk(state.get("modules", []), None, inside_container=False)
-    return snap
-
-
-def _restore_tree(client, snapshot: list, current_state: dict) -> None:
-    """Re-create any snapshotted module that a scenario removed, restoring the board to
-    the tree it had before the run. Adds parents before children (snapshot order) and
-    re-applies control values. A module still present is left untouched. A restore that
-    fails is reported (which module/control + the error), not silently swallowed: a
-    board left partially restored is a signal worth seeing, but one failure must not stop
-    the rest, so we log and continue."""
-    present = _collect_module_names(current_state)
-    restored = 0
-    for entry in snapshot:
-        if entry["id"] in present:
-            continue
+    A container's document says its children are exactly the ones it lists, so applying it removes what a scenario added, re-creates what it removed, re-types what it replaced and restores every value, in one request per container.
+    A container the device does not have is left out.
+    """
+    docs = []
+    for name in _SNAPSHOT_CONTAINERS:
         try:
-            client.post("/api/modules", {"type": entry["type"], "id": entry["id"],
-                                         "parent_id": entry["parent_id"]})
-        except Exception as e:
-            print(f"  WARN  restore: could not re-create {entry['id']} "
-                  f"({entry['type']} under {entry['parent_id']}): {e}")
-            continue
-        for cname, val in entry["controls"].items():
-            try:
-                client.post("/api/control", {"module": entry["id"],
-                                             "control": cname, "value": val})
-            except Exception as e:
-                print(f"  WARN  restore: could not set {entry['id']}.{cname}={val!r}: {e}")
-        restored += 1
-    if restored:
-        print(f"  restored {restored} module(s) the scenario had cleared")
+            docs.append(client.get(_mod_path(name) + "/document"))
+        except Exception:
+            pass
+    return docs
 
 
 def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
@@ -711,32 +613,32 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
         results["passed"] = False
         return results
 
-    # Pre-flight: every id touched by a step must be reachable: either already
-    # on the device, OR added by an earlier add_module in this scenario. A
+    # Pre-flight: every id a step sets must be reachable: either already on the
+    # device, OR created by an earlier state document in this scenario. A
     # canvas-preparing scenario clears the containers and builds its own tree, so
-    # its set_control/replace ids won't exist on the device yet; they're created
-    # mid-run. A still-unreachable id is a real typo / wrong-wiring bug.
+    # its set_control ids won't exist on the device yet; they're created mid-run.
+    # A still-unreachable id is a real typo / wrong-wiring bug.
     target = "unknown"
     live_state = None   # bound before the try so the snapshot below can't NameError if /api/state fails
     try:
         live_state = client.get("/api/state")
         target = _detect_target(live_state, client.local)
-        # Walk the steps in order, growing the reachable set as add_module steps
+        # Walk the steps in order, growing the reachable set as state documents
         # create ids. The containers (Layouts/Effects/Drivers) are always present.
         reachable = _collect_module_names(live_state)
         # The FIXTURE runs before the steps and creates the wired pipeline, so the ids it adds
         # are reachable by the time any step runs. Walking only `steps` reported a fixture-added
         # module as missing the moment a scenario's first step targeted one.
         for step in scenario.get("fixture", []):
-            if step.get("op") == "add_module" and step.get("id"):
-                reachable.add(step["id"])
+            if step.get("op") == "apply_state":
+                reachable.update(_typed_names(step.get("document")))
         missing = []
         for step in scenario.get("steps", []):
             sid = step.get("id")
             opn = step.get("op")
-            if opn == "add_module" and sid:
-                reachable.add(sid)
-            elif opn in ("set_control", "delete_module", "remove_module", "replace_module", "clear_children") and sid:
+            if opn == "apply_state":
+                reachable.update(_typed_names(step.get("document")))
+            elif opn == "set_control" and sid:
                 # `optional` steps are best-effort (e.g. shrink the grid before a
                 # clear, if a grid exists): the executor skips them on a missing
                 # target, so they don't count as a wiring bug in the pre-flight.
@@ -777,22 +679,17 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
             for c in m.get("controls", []):
                 if m.get("type") == "SystemModule" and c.get("name") == "deviceName":
                     ctx["device"] = str(c.get("value") or "")
+            for ch in m.get("children", []) or []:
+                for c in ch.get("controls", []):
+                    if ch.get("type") == "AccessPointModule" and c.get("name") == "name":
+                        ctx["access_point"] = str(c.get("value") or "")
         atexit.register(host.restore)   # a run that stops on the access point still puts the host back
         # MoonDeck's Stop sends SIGTERM, whose default skips atexit; exiting through it runs the hook.
         signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
 
-    # Snapshot the board's user-added tree so we can restore it after the scenario:
-    # a scenario that clear_children's a container (to get a known canvas) destroys the
-    # board's real config, and the created_modules cleanup only removes what the scenario
-    # ADDED, not what it CLEARED. Restoring the snapshot leaves the bench board as found.
+    # Snapshot the containers a scenario may clear or rebuild, as documents, so the board ends the run as found.
     prior_controls: dict = {}   # (module, control) -> the value it held before this scenario wrote it
-    replaced_types: dict = {}   # slot name -> the type it held before this scenario replaced it
-    tree_snapshot = []
-    if live_state is not None:   # skip restore if the pre-flight /api/state fetch failed (nothing to snapshot)
-        try:
-            tree_snapshot = _snapshot_tree(live_state)
-        except Exception as e:
-            print(f"  WARN: couldn't snapshot tree for restore: {e}")
+    snapshot_docs = _snapshot_documents(client)
 
     # Reset block: scenarios that mutate shared controls (Mirror toggles, grid
     # size, Preview detail, …) declare a `reset` array of set_control steps that
@@ -829,8 +726,8 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
     baseline = collect_metrics(client, settle_s=settle_s)
     print(f"\n  Baseline: tick={baseline.get('tickTimeUs', '?')}us (FPS={baseline.get('fps', '?')})  heap={baseline.get('freeHeap', '?')}")
 
-    # ids whose optional add_module was skipped (a platform-gated module absent on this
-    # target: e.g. the Parlio driver on a non-P4 board). A later optional measure/remove
+    # ids whose optional state document was skipped (a platform-gated module absent on this
+    # target: e.g. the Parlio driver on a non-P4 board). A later optional measure or control
     # that names a skipped id is itself skipped, so an absent driver leaves no trace rather
     # than failing the run. (perf_full's add/measure/remove driver triples are all optional.)
     skipped_ids = set()
@@ -852,71 +749,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
             continue
 
         try:
-            if op == "add_module":
-                data = {"type": step["type"], "id": step.get("id", ""),
-                        "parent_id": step.get("parent_id", "")}
-                # An `optional` add of a type this target doesn't have is a SKIP, not a
-                # fail: perf_full adds every LED driver (RMT/LCD/Parlio), but each is
-                # platform-gated (LCD/RMT on classic+S3, Parlio on P4), so the absent
-                # ones return "unknown type". The device replies either 400 (HTTPError)
-                # or 200 + ok:false depending on the path; treat both as skip when the
-                # step is optional. Mirrors the optional set_control handling below.
-                try:
-                    resp = client.post("/api/modules", data)
-                    if resp.get("ok"):
-                        step_result["status"] = "ok"
-                        if resp.get("note") == "already exists":
-                            print(f"  =     {step.get('id', '?')} (exists)")
-                        else:
-                            print(f"  +     {step.get('id', '?')} ({step['type']})")
-                            created_modules.append(step.get("id", ""))
-                        # The step's declared PROPS, applied whether the module was newly created or
-                        # already existed. /api/modules takes the shape but not the values, so a
-                        # scenario saying `{"width": 32}` measured a module at its defaults; and an
-                        # existing module measured whatever the last run left on it.
-                        for key, value in (step.get("props") or {}).items():
-                            ok = False
-                            try:
-                                pr = client.post("/api/control",
-                                                 {"module": step.get("id", ""), "control": key,
-                                                  "value": value})
-                                ok = bool(pr.get("ok"))
-                            except urllib.error.HTTPError as pe:
-                                if not step.get("optional"):
-                                    raise
-                                print(f"  SET   {step.get('id','?')}.{key}: skipped "
-                                      f"(optional, not offered on {target}: {pe.code})")
-                                continue
-                            # A 200 with ok:false is a REJECTION, the same as a 400: the device
-                            # refused the value. Silently accepting it measured a configuration the
-                            # scenario never got.
-                            if not ok:
-                                if not step.get("optional"):
-                                    raise RuntimeError(
-                                        f"{step.get('id','?')}.{key} = {value!r} was rejected")
-                                print(f"  SET   {step.get('id','?')}.{key}: skipped "
-                                      f"(optional, rejected on {target})")
-                        # The step's declared PROPS, applied after creation. /api/modules takes the
-                        # shape but not the values, so a scenario saying `{"width": 32}` created a
-                        # module at its defaults and every later measurement was of a pipeline the
-                        # scenario never asked for. The desktop runner applies them; without this
-                        # the same scenario measured two different things on the two runners.
-
-                    elif step.get("optional"):
-                        step_result["status"] = "ok"
-                        skipped_ids.add(step.get("id", ""))
-                        print(f"  +     {step.get('id','?')} ({step['type']}): skipped (optional, type unavailable on {target})")
-                    else:
-                        step_result["status"] = "error"
-                except urllib.error.HTTPError:
-                    if step.get("optional"):
-                        step_result["status"] = "ok"
-                        skipped_ids.add(step.get("id", ""))
-                        print(f"  +     {step.get('id','?')} ({step['type']}): skipped (optional, type unavailable on {target})")
-                    else:
-                        raise
-
-            elif op == "write_file":
+            if op == "write_file":
                 # Stage a script file, the same op the desktop runner has. Without it a migrated
                 # scenario ran its set_control against a file that was never written, and every
                 # script step failed on hardware while passing on the desktop.
@@ -1053,7 +886,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
 
             elif op == "apply_state":
                 # A state document in one PATCH /api/state; `error` and `at` name the failure a step expects, and without them it must apply.
-                # The modules it creates join the cleanup, as an add_module step's do, so a live device is left as found.
+                # The modules it creates join the cleanup, so a live device is left as found outside the snapshot containers too.
                 absent = []
                 for name in _typed_names(fstep["document"]):
                     try:
@@ -1072,6 +905,13 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                         created_modules.append(name)
                     except urllib.error.HTTPError:
                         pass   # the document did not get as far as creating it
+                # An optional document names a type this target may lack, such as another chip's peripheral: a skip, and its modules' later optional steps skip too.
+                if step.get("optional") and "error" not in step and got_error == "unknown type":
+                    skipped_ids.update(_typed_names(fstep["document"]))
+                    step_result["status"] = "ok"
+                    print(f"  STATE {step['name']}: skipped (optional, a type unavailable on {target})")
+                    results["steps"].append(step_result)
+                    continue
                 if "error" in step:
                     holds = got_error == step["error"] and ("at" not in step or got_at == step["at"])
                 else:
@@ -1198,78 +1038,15 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 if not (step.get("measure") or op == "measure"):
                     time.sleep(0.5)
 
-            elif op in ("delete_module", "remove_module"):
-                # Both names mean the same thing: accept either so a scenario
-                # reads identically on the in-process runner (which uses
-                # `remove_module`) and here. The two runners must never diverge
-                # on op names, or a scenario silently no-ops on one tier.
-                # An `optional` remove of a module that was never added (its
-                # optional add was skipped: a platform-gated driver absent on this
-                # target) is a SKIP, not a fail: the device returns 404 "module not
-                # found" or ok:false. Pairs with the optional add above.
-                try:
-                    resp = client.delete(_mod_path(step["id"]))
-                    if resp.get("ok") or not step.get("optional"):
-                        step_result["status"] = "ok" if resp.get("ok") else "error"
-                        print(f"  -     {step.get('id', '?')}")
-                    else:
-                        step_result["status"] = "ok"
-                        print(f"  -     {step.get('id','?')}: skipped (optional, not present)")
-                except urllib.error.HTTPError:
-                    if step.get("optional"):
-                        step_result["status"] = "ok"
-                        print(f"  -     {step.get('id','?')}: skipped (optional, not present)")
-                    else:
-                        raise
-
-            elif op == "clear_children":
-                # Delete every child of a container, leaving the container.
-                # The "prepare my own canvas" primitive: a scenario assumes
-                # nothing about the device's starting tree. Enumerate children
-                # from /api/state, DELETE each by name. The device tears down the
-                # whole subtree per delete (handleDeleteModule), so clearing a
-                # Layer's effect also drops any modifier under it.
-                container_id = step["id"]
-                state = client.get("/api/state")
-                child_names = _child_names_of(state, container_id)
-                cleared = skipped = 0
-                for cn in child_names:
-                    try:
-                        client.delete(_mod_path(cn))
-                        cleared += 1
-                    except urllib.error.HTTPError as de:
-                        # Non-deletable submodules (Preview, Board, Improv) return
-                        # 400 "module not deletable": that's expected, skip them.
-                        # Mirrors the in-process op, which skips !userEditable().
-                        # Re-raise anything that isn't a clean deletability refusal.
-                        if de.code == 400:
-                            skipped += 1
-                        else:
-                            raise
-                step_result["status"] = "ok"
-                tail = f", {skipped} kept" if skipped else ""
-                print(f"  clr   {container_id} ({cleared} cleared{tail})")
-                time.sleep(0.5)  # let prepareTree settle before the next add
-
-            elif op == "replace_module":
-                # Swap a child for a fresh module of another type at the same slot.
-                # The name is passed explicitly: the device otherwise renames a slot that carried its old type's default name, and the scenario, like the in-process op, keeps addressing the slot by its id.
-                _remember_type(replaced_types, client, step["id"])
-                resp = client.post(_mod_path(step["id"]) + "/replace",
-                                   {"type": step["type"], "name": step["id"]})
-                step_result["status"] = "ok" if resp.get("ok") else "error"
-                print(f"  ~     {step.get('id', '?')} → {step.get('type', '?')}")
-                time.sleep(0.5)
-
             elif op == "host_wifi":
                 # Move the host onto the device's access point or back to the registry network, and the runner's target with it.
                 if net is None:
                     raise RuntimeError("host_wifi needs `host_network` on the scenario and --network on the run")
                 if step.get("join") == "access_point":
-                    if not ctx.get("device"):
-                        raise RuntimeError("the device's name is unknown, so its access point cannot be named to join")
+                    if not ctx.get("access_point"):
+                        raise RuntimeError("the access point's name is unknown, so it cannot be joined")
                     host.home = host.home or net
-                    why = _host_join(ctx.get("device", ""), fstep.get("password", ""), f"http://{ACCESS_POINT_ADDRESS}/api/system",
+                    why = _host_join(ctx.get("access_point", ""), fstep.get("password", ""), f"http://{ACCESS_POINT_ADDRESS}/api/system",
                                      float(step.get("timeout", 60)))
                     if not why:
                         client.base = f"http://{ACCESS_POINT_ADDRESS}"
@@ -1280,7 +1057,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                     if not why:
                         host.home = None   # home: nothing left for the exit hook to restore
                 step_result["status"] = "error" if why else "ok"
-                print(f"  HOST  {'FAILED: ' + why if why else 'on ' + (ctx.get('device', '') if step.get('join') == 'access_point' else net['ssid'])}")
+                print(f"  HOST  {'FAILED: ' + why if why else 'on ' + (ctx.get('access_point', '') if step.get('join') == 'access_point' else net['ssid'])}")
                 if why:
                     results["passed"] = False
 
@@ -1299,7 +1076,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 print(f"  ROW   {mod_id}.{key} added {step['add']}{' at ' + str(step['to']) if 'to' in step else ''}")
 
             elif op == "list_row":
-                # Find a row by its fields, then write one of its fields, press one of its buttons, delete it, or, with none of those, only expect it.
+                # Find a row by its fields, then write one of its fields, press one of its buttons, apply it, delete it, or, with none of those, only expect it.
                 mod_id, key, match = step["id"], step["key"], fstep["match"]
                 deadline = time.time() + float(step.get("within", 0))
                 while True:
@@ -1322,6 +1099,9 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                     if step.get("delete"):
                         client.delete(route)
                         print(f"  ROW   {where} deleted")
+                    elif step.get("apply"):
+                        client.post(f"{route}/apply", {})
+                        print(f"  ROW   {where} applied")
                     elif "field" not in step:
                         print(f"  ROW   {where} present")
                     else:
@@ -1349,14 +1129,19 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 # `within` polls too: a host that has joined a network resolves names only once its resolver took that network's server.
                 deadline = time.time() + float(step.get("within", 0))
                 while True:
+                    body = ""
                     try:
                         with urllib.request.build_opener(_NoRedirect).open(request, timeout=10) as resp:
                             status, location = resp.status, resp.headers.get("Location", "")
+                            body = resp.read().decode("utf-8", "replace")
                     except urllib.error.HTTPError as he:
                         status, location = he.code, he.headers.get("Location", "")
                     except Exception as ue:
                         status, location = 0, str(ue)
-                    holds = status == step["status"] and ("location" not in step or location == fstep["location"])
+                    # `body_matches` and `body_lacks` are regular expressions the response must, or must not, contain.
+                    holds = (status == step["status"] and ("location" not in step or location == fstep["location"])
+                             and ("body_matches" not in step or re.search(step["body_matches"], body) is not None)
+                             and ("body_lacks" not in step or re.search(step["body_lacks"], body) is None))
                     if holds or time.time() >= deadline:
                         break
                     time.sleep(1)
@@ -1391,10 +1176,8 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 msg = str(e)
             step_result["status"] = "error"
             step_result["error"] = msg
-            # Every rejected step is a real failure. The old policy WARN'd on
-            # add_module which silently turned "top-level rejected" into a
-            # missing test step: meaningless passes. Mutate scenarios shouldn't
-            # add top-level anyway; if they do, treat it as a scenario bug.
+            # Every rejected step is a real failure: a WARN would turn a rejected
+            # step into a meaningless pass.
             print(f"  FAIL  {step_name}: {msg}")
             results["passed"] = False
         except Exception as e:
@@ -1632,19 +1415,12 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
         except Exception:
             pass
 
-    # Swap every replaced slot back to its type before the tree restore, which only re-creates what is missing.
-    swapped_back = _restore_types(client, replaced_types)
-    if swapped_back:
-        print(f"  restored {swapped_back} module(s) the scenario had replaced")
-
-    # Restore: re-create any pre-existing module the scenario removed (a clear_children of a real container, or a remove).
-    # Combined with the cleanup and the swap-back above, the board ends the run in the tree it started with: no residue, no lost config.
-    if tree_snapshot:
+    # Restore: each container's document as it was, which removes, re-creates and re-types until the tree is the one the run started with.
+    for doc in snapshot_docs:
         try:
-            after_state = client.get("/api/state")
-            _restore_tree(client, tree_snapshot, after_state)
+            client.patch("/api/state", doc)
         except Exception as e:
-            print(f"  WARN: couldn't restore snapshot: {e}")
+            print(f"  WARN: couldn't restore {next(iter(doc), '?')}: {e}")
     # And the controls it wrote, after the tree, so a module the restore re-created takes its values.
     put_back = _restore_controls(client, prior_controls)
     if put_back:

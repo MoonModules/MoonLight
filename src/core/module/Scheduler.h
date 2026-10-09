@@ -26,7 +26,7 @@ namespace mm {
 /// A rebuild walks the tree, rebuilding buffers, mappings and any compiled script.
 /// `prepareTree` does it immediately and `requestPrepareTree` at the next frame boundary.
 /// Prefer the request: the immediate walk runs compiled code on the calling task's stack.
-/// A values-only reapply can follow it, for controls a script declares as it compiles.
+/// Each walk ends by setting the controls a script declared as it compiled, which a state document named before they existed.
 ///
 /// ## Driving one control from anywhere
 ///
@@ -40,9 +40,6 @@ public:
     using LoadAllFn = void(*)(Scheduler*);
     /// Install the hook that overlays persisted values onto bound variables before any setup runs.
     void setLoadAllHook(LoadAllFn fn) { loadAllHook_ = fn; }
-
-    /// Install the hook that reapplies values once, after the first rebuild.
-    void setReapplyValuesHook(LoadAllFn fn) { reapplyValuesHook_ = fn; }
 
     /// The dirty hook's type, the same decoupling as the load hook above.
     using NoteDirtyFn = void(*)();
@@ -75,8 +72,6 @@ public:
     /// Ask for a rebuild at the next frame boundary, which is safe from any task.
     void requestPrepareTree() { prepareRequested_.store(true, std::memory_order_relaxed); }
 
-    /// Ask for a values-only reapply right after the next requested rebuild.
-    void requestValuesReapply() { valuesReapplyRequested_.store(true, std::memory_order_relaxed); }
 
     /// Average microseconds per tick over the last second, which is the primary performance metric.
     uint32_t tickTimeUs() const { return tickTimeUs_; }
@@ -90,14 +85,14 @@ public:
     /// Release and delete a whole subtree, children first.
     static void deleteTree(MoonModule* mod);
 
-    /// Make this module's name unique across the tree, the caller having placed it there already.
-    void ensureUniqueName(MoonModule* mod);
-
-    /// Disambiguate every duplicated name in the tree, the first occurrence keeping its own.
-    void deduplicateNamesInTree();
+    /// `base`, or the first of `base-2`, `base-3`... no module holds, into `out`; false when none fits a name.
+    bool freeName(const char* base, char* out, size_t cap);
 
     /// The first module in tree-walk order with this name, or null.
     MoonModule* firstByName(const char* name);
+
+    /// The top-level module of this type, or null: how a container finds a peer main.cpp registers beside it.
+    MoonModule* topOfType(const char* typeName) const;
 
     /// The single live Scheduler, reachable so a factory-created module can drive a control.
     static Scheduler* instance() { return instance_; }
@@ -128,8 +123,6 @@ public:
     bool getControlWide(const char* moduleName, const char* controlName, int32_t& out) const;
 
 private:
-    /// Recurse one subtree, uniquifying each name as it goes.
-    void walkAndEnsureUnique(MoonModule* mod);
     /// The first node in this subtree with the given name, or null.
     static MoonModule* firstInTree(MoonModule* mod, const char* name);
 
@@ -139,9 +132,6 @@ private:
     // Atomic because a lost request means a script edit silently never applies.
     std::atomic<bool> prepareRequested_{false};
     LoadAllFn loadAllHook_ = nullptr;
-    LoadAllFn reapplyValuesHook_ = nullptr;
-    bool valuesReapplied_ = false;   ///< the hook fires once, after the first rebuild
-    std::atomic<bool> valuesReapplyRequested_{false};   ///< consumed with the next requested rebuild
     NoteDirtyFn noteDirtyHook_ = nullptr;
     uint32_t startTime_ = 0;
     uint32_t lastLoop20ms_ = 0;
