@@ -2,8 +2,7 @@
 
 The log of **breaking changes**, what changed between versions, and the action to take.
 
-The firmware ships **no migration code**, with one temporary exception: it moves 6.0's network settings onto the Ethernet and WiFi cards at the first boot.
-A device that loses its network cannot be reached to fix anything else (see the WiFi entry).
+The firmware ships **no migration code**, with two temporary exceptions, each because a device that loses its config cannot be reached to fix anything else: it moves 6.0's network settings onto the Ethernet and WiFi cards at the first boot (see the WiFi entry), and it converts config files from before they were state documents (see that entry).
 Its persistence layer is robust by default: an absent key keeps the control's default, a stale value clamps to the new bounds, and an unknown key is ignored.
 That absorbs almost all schema drift, and the rare change a robust reader *cannot* absorb is **documented here instead of migrated**.
 A patching framework is deferred rather than rejected.
@@ -34,18 +33,42 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## Unreleased
 
+### Config files are state documents
+
+**Action: *nothing*.**
+
+Each `/.config/<TypeName>.json` holds its module's [state document](integrating.md#setting-everything-at-once), the shape a preset and `PATCH /api/state` carry, with modules keyed by name, in place of the flat keys with numbered children.
+The first boot after the update reads each older file as the document it describes and saves it as one, naming each module as the device names it; the log says which files it converted.
+That conversion is temporary and leaves in the release after next, so a device skipping that release starts from its defaults: back it up first and restore the backup, which converts an older backup's files the same way.
+A MoonBase from this release reads both formats until then.
+An older MoonBase still joins the known WiFi networks and finds the Ethernet wiring, but misses the Ethernet card's static address and the access point's password, so on an Ethernet board with a static address, or where the access point's password matters, install the matching MoonBase from the Firmware card.
+
+### A preset is applied through its list row
+
+**Action: a script or integration that applies a preset calls the row's action instead.**
+
+`POST /api/list/Control/presets/<name>/apply` applies a preset, `<name>` being its name or its row id ([Writing](integrating.md#writing)).
+It takes the place of the Control module's `preset` control and of the row's `activate` and `apply` fields.
+
+### Adding a module under a name in use is refused
+
+**Action: a client that re-sends an add treats 409 as "already there", or applies a state document instead.**
+
+`POST /api/modules` with an `id` some module already holds answers 409, where it answered 200 with `"note":"already exists"`.
+A state document applied twice changes nothing, so a client that wants an idempotent setup sends one through `PATCH /api/state` ([Setting everything at once](integrating.md#setting-everything-at-once)).
+
 ### The MIDI service's `usb` switch is its `source`
 
-**Action: *nothing* when restoring a backup, which maps it; otherwise, on a board with a desk on its USB port, set the MIDI service's `source` to USB.**
+**Action: *nothing* when restoring a backup, which maps it; otherwise, on a device with a desk on its USB port, set the MIDI service's `source` to USB.**
 
-`source` names where a desk is plugged in: the computer showing the interface (`browser`), the board's own USB port (`USB`), or the network (`network`).
+`source` names where a desk is plugged in: the computer showing the interface (`browser`), the device's own USB port (`USB`), or the network (`network`).
 
-### A desk on its own board is a MIDI bridge over RTP-MIDI
+### A desk on its own device is a MIDI bridge over RTP-MIDI
 
-**Action: *re-set a control*, on a MIDI-OSC bridge board: remove its OSC service and turn its MIDI service's `share` on. On the board the desk drives, set the MIDI service's `source` to network and `host` to the bridge's name or address.**
+**Action: *re-set a control*, on a MIDI-OSC bridge device: remove its OSC service and turn its MIDI service's `share` on. On the device the desk drives, set the MIDI service's `source` to network and `host` to the bridge's name or address.**
 
-The bridge now carries the desk over RTP-MIDI, so the board it drives treats the desk as its own, and the OSC `follow` setting is gone.
-A board that listened to another with `follow` on needs nothing: a leader sends its preset pad states on `/mm/padstate/N`, an address apart from the press.
+The bridge now carries the desk over RTP-MIDI, so the device it drives treats the desk as its own, and the OSC `follow` setting is gone.
+A device that listened to another with `follow` on needs nothing: a leader sends its preset pad states on `/mm/padstate/N`, an address apart from the press.
 An OSC app that lit its pads from `/mm/pad/N` listens on `/mm/padstate/N` instead.
 
 ### The P4 and S31 Ethernet presets are named by their wiring

@@ -99,6 +99,23 @@ Drives **HUB75 LED panels straight from the board's GPIO**, with no receiving ca
 
 Detail: [technical](moxygen/Hub75Driver.md) · encoder: [Hub75Slots](moxygen/Hub75Slots.md)
 
+<a id="pwm-light"></a>
+
+### PWM Light 💫 · pins
+
+Lights whose channels are each a pin, pulsed by the chip's PWM: a bulb, an analog RGB, RGBW or RGBCCT strip, a QuinLED An-Penta controller, on any ESP32's LEDC.
+
+<img src="../../assets/light/drivers/PwmLightDriver.png" width="300" alt="PWM Light driver controls">
+
+Plus the [shared controls](#shared-driver-controls) above, whose `fixture` names what each pin carries:
+
+- `pins`: one GPIO per channel, in the fixture's order; five under `RGBCCT` are one light.
+- `frequency`: the pulse rate, default 19531 Hz, which sets the resolution.
+
+The resolution is what one period holds, 12 bits at 19531 Hz and 13 at 9765 Hz, and the `curve` reaches it in 16 bits, so a dim fade keeps its steps. The channels' pulses start spread over the period, so full white never switches all at once. One timer per driver and one channel per pin, up to 16 on the classic ESP32 and 6 on the C3.
+
+Detail: [technical](moxygen/PwmLightDriver.md)
+
 ## Network drivers
 
 <a id="networksend"></a>

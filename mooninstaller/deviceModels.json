@@ -249,6 +249,52 @@
     }
   },
   {
+    "name": "QuinLED An-DecaPenta",
+    "chip": "ESP32",
+    "firmwares": [
+      "esp32"
+    ],
+    "flashBaud": 460800,
+    "image": "assets/deviceModels/esp32-quinled-an-decapenta.jpg",
+    "url": "https://quinled.info/quinled-an-penta-deca/",
+    "supported": [
+      "WiFi"
+    ],
+    "planned": [
+      "PWM outputs",
+      "Buttons",
+      "I2C"
+    ],
+    "state": {
+      "System": {
+        "deviceModel": "QuinLED An-DecaPenta"
+      }
+    }
+  },
+  {
+    "name": "QuinLED An-Penta-Plus",
+    "chip": "ESP32",
+    "firmwares": [
+      "esp32"
+    ],
+    "image": "assets/deviceModels/esp32-quinled-an-penta-plus.jpg",
+    "url": "https://quinled.info/quinled-an-penta-plus/",
+    "supported": [
+      "WiFi"
+    ],
+    "planned": [
+      "PWM outputs",
+      "Ethernet",
+      "Buttons",
+      "I2C"
+    ],
+    "state": {
+      "System": {
+        "deviceModel": "QuinLED An-Penta-Plus"
+      }
+    }
+  },
+  {
     "name": "QuinLED Dig-Octa 32-8L",
     "chip": "ESP32",
     "firmwares": [
@@ -870,7 +916,12 @@
     ],
     "state": {
       "System": {
-        "deviceModel": "Waveshare ESP32-P4-NANO"
+        "deviceModel": "Waveshare ESP32-P4-NANO",
+        "I2cBus": {
+          "type": "I2cBusModule",
+          "sda": 7,
+          "scl": 8
+        }
       },
       "Drivers": {
         "$patch": "replace",
@@ -886,10 +937,6 @@
           "type": "EthernetModule",
           "ethBoard": "P4 RMII"
         }
-      },
-      "I2cBus": {
-        "sda": 7,
-        "scl": 8
       },
       "Services": {
         "$patch": "replace",
@@ -927,7 +974,12 @@
     ],
     "state": {
       "System": {
-        "deviceModel": "Waveshare ESP32-P4-ETH"
+        "deviceModel": "Waveshare ESP32-P4-ETH",
+        "I2cBus": {
+          "type": "I2cBusModule",
+          "sda": 7,
+          "scl": 8
+        }
       },
       "Drivers": {
         "$patch": "replace",
@@ -943,10 +995,6 @@
           "type": "EthernetModule",
           "ethBoard": "P4 RMII"
         }
-      },
-      "I2cBus": {
-        "sda": 7,
-        "scl": 8
       },
       "Services": {
         "$patch": "replace",
@@ -982,7 +1030,12 @@
     ],
     "state": {
       "System": {
-        "deviceModel": "Guition JC-ESP32P4-M3-DEV"
+        "deviceModel": "Guition JC-ESP32P4-M3-DEV",
+        "I2cBus": {
+          "type": "I2cBusModule",
+          "sda": 7,
+          "scl": 8
+        }
       },
       "Network": {
         "$patch": "replace",
@@ -990,10 +1043,6 @@
           "type": "EthernetModule",
           "ethBoard": "P4 RMII"
         }
-      },
-      "I2cBus": {
-        "sda": 7,
-        "scl": 8
       },
       "Services": {
         "$patch": "replace",
@@ -1032,7 +1081,12 @@
     ],
     "state": {
       "System": {
-        "deviceModel": "MHC-WLED ESP32-P4 shield"
+        "deviceModel": "MHC-WLED ESP32-P4 shield",
+        "I2cBus": {
+          "type": "I2cBusModule",
+          "sda": -1,
+          "scl": -1
+        }
       },
       "Services": {
         "$patch": "replace",
@@ -1053,10 +1107,6 @@
           "peripheral": "Parlio",
           "pins": "21,20,25,5,7,23,8,27"
         }
-      },
-      "I2cBus": {
-        "sda": -1,
-        "scl": -1
       },
       "Network": {
         "$patch": "replace",
@@ -1091,7 +1141,12 @@
     ],
     "state": {
       "System": {
-        "deviceModel": "Espressif ESP32-S31 CoreBoard"
+        "deviceModel": "Espressif ESP32-S31 CoreBoard",
+        "I2cBus": {
+          "type": "I2cBusModule",
+          "sda": 51,
+          "scl": 50
+        }
       },
       "Drivers": {
         "$patch": "replace",
@@ -1121,10 +1176,6 @@
           "codec": "ES8311",
           "codecAddr": "0x18"
         }
-      },
-      "I2cBus": {
-        "sda": 51,
-        "scl": 50
       }
     }
   },
@@ -1177,8 +1228,7 @@
           "type": "WiFiModule",
           "txPowerSetting": 8
         }
-      },
-      "Mqtt": {}
+      }
     }
   },
   {
@@ -1395,6 +1445,74 @@
         "WiFi": {
           "type": "WiFiModule",
           "txPowerSetting": 8
+        }
+      }
+    }
+  },
+  {
+    "name": "ESP32-C3 SuperMini",
+    "chip": "ESP32-C3",
+    "firmwares": [
+      "esp32c3"
+    ],
+    "image": "assets/deviceModels/esp32-c3-supermini.jpg",
+    "supported": [
+      "LEDs",
+      "WiFi"
+    ],
+    "planned": [],
+    "state": {
+      "System": {
+        "deviceModel": "ESP32-C3 SuperMini"
+      },
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver"
+        }
+      },
+      "Network": {
+        "$patch": "replace",
+        "WiFi": {
+          "type": "WiFiModule",
+          "txPowerSetting": 8
+        }
+      }
+    }
+  },
+  {
+    "name": "ESP32-C3 RGBWW PWM bulb",
+    "chip": "ESP32-C3",
+    "firmwares": [
+      "esp32c3"
+    ],
+    "image": "assets/deviceModels/esp32-c3-rgbww-pwm-bulb.png",
+    "description": "A bulb with red, green, blue, cold and warm white on five PWM pins, such as the Athom 12W RGBCCT bulb.",
+    "url": "https://www.athom.tech/",
+    "supported": [
+      "LEDs",
+      "WiFi"
+    ],
+    "planned": [],
+    "state": {
+      "System": {
+        "deviceModel": "ESP32-C3 RGBWW PWM bulb"
+      },
+      "Drivers": {
+        "$patch": "replace",
+        "PwmLight": {
+          "type": "PwmLightDriver",
+          "fixture": "RGBCCT",
+          "pins": "6,7,5,3,4",
+          "frequency": 9765
+        }
+      },
+      "Layouts": {
+        "$patch": "replace",
+        "Grid": {
+          "type": "GridLayout",
+          "width": 1,
+          "height": 1
         }
       }
     }

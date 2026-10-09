@@ -20,6 +20,12 @@ Forward-looking to-build items for the **light domain** (`src/light/`: drivers, 
 
 ## Effects
 
+### Effects and Drivers find their source one way, not two (2026-10-08)
+
+Effects finds the top-level Layouts, and Drivers the top-level Effects, by type through `Scheduler::topOfType` when nothing was injected, which is what lets a state document build a tree with no wiring.
+`setLayouts` and `setEffects` remain beside it for the unit-test rigs, 172 calls in about 40 files, so two mechanisms do one job.
+The fix: a rig adds its containers to a Scheduler, as the scenario runner does through `createTopLevel`, and the setters go.
+
 ### Moving-head effects from MoonLight, including two of troyhack's (2026-09-04)
 
 MoonLight has several moving-head effects that have no equivalent here, two of them troyhack's.

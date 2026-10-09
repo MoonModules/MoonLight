@@ -7,61 +7,51 @@
     "MultiplyModifier",
     "CheckerboardModifier"
   ],
+  "top": [
+    "Layouts",
+    "Effects",
+    "Drivers"
+  ],
   "fixture": [
-    {
-      "name": "layouts",
-      "description": "Where the lights are, which the layer reads its coordinates from.",
-      "op": "add_module",
-      "id": "Layouts",
-      "type": "Layouts"
-    },
     {
       "name": "grid",
       "description": "A 16x16 panel, small enough to run anywhere and square so a mirror is visible in the mapping.",
-      "op": "add_module",
-      "id": "Grid",
-      "type": "GridLayout",
-      "parent_id": "Layouts",
-      "props": {
-        "width": 16,
-        "height": 16
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "GridLayout",
+            "width": 16,
+            "height": 16
+          }
+        }
       }
     },
     {
       "name": "layer",
       "description": "One layer over those layouts, which owns the mapping a modifier reshapes.",
-      "op": "add_module",
-      "id": "Layer",
-      "type": "Layer",
-      "props": {
-        "layouts": "Layouts"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer"
+          }
+        }
       }
     },
     {
       "name": "effect",
       "description": "An effect that paints from the first frame, so a change in mapping is a change in something real.",
-      "op": "add_module",
-      "id": "FX",
-      "type": "RainbowEffect",
-      "parent_id": "Layer"
-    },
-    {
-      "name": "drivers",
-      "description": "The drivers container, wired to the effects whose buffer it reads.",
-      "op": "add_module",
-      "id": "Drivers",
-      "type": "Drivers",
-      "props": {
-        "layer": "Layer"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "FX": {
+              "type": "RainbowEffect"
+            }
+          }
+        }
       }
-    },
-    {
-      "name": "preview",
-      "description": "The preview is a driver like any other, and the one every target has.",
-      "op": "add_module",
-      "id": "Preview",
-      "type": "PreviewDriver",
-      "parent_id": "Drivers"
     }
   ],
   "steps": [
@@ -77,9 +67,9 @@
             "min": 6,
             "max": 19,
             "n": 32,
-            "samples": [6, 6, 6, 7, 9, 7, 6, 7, 7, 6, 6, 6, 6, 7, 7, 7, 7, 19, 7, 6, 6, 8, 6, 7, 8, 11, 7, 8, 8, 6, 10, 7]
+            "samples": [7, 9, 7, 6, 7, 7, 6, 6, 6, 6, 7, 7, 7, 7, 19, 7, 6, 6, 8, 6, 7, 8, 11, 7, 8, 8, 6, 10, 7, 7, 8, 7]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         },
         "esp32s3-n16r8": {
           "tick_us": {
@@ -135,10 +125,16 @@
     {
       "name": "add-a-modifier",
       "description": "A multiply, which folds the coordinate space: from here the layer needs a lookup table and the drivers need a buffer of their own.",
-      "op": "add_module",
-      "id": "Mult",
-      "type": "MultiplyModifier",
-      "parent_id": "Layer"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "Mult": {
+              "type": "MultiplyModifier"
+            }
+          }
+        }
+      }
     },
     {
       "name": "the-modifier-is-wired",
@@ -160,9 +156,9 @@
             "min": 3,
             "max": 11,
             "n": 32,
-            "samples": [4, 4, 4, 4, 5, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 11, 3, 3, 3, 4, 4, 4, 3, 3, 3, 5, 4, 3, 9, 3]
+            "samples": [4, 5, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 11, 3, 3, 3, 4, 4, 4, 3, 3, 3, 5, 4, 3, 9, 3, 3, 3, 3]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         },
         "esp32s3-n16r8": {
           "tick_us": {
@@ -242,9 +238,9 @@
             "min": 3,
             "max": 9,
             "n": 32,
-            "samples": [4, 4, 4, 4, 5, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 8, 3, 3, 3, 4, 3, 3, 3, 3, 3, 5, 4, 3, 9, 3]
+            "samples": [4, 5, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 8, 3, 3, 3, 4, 3, 3, 3, 3, 3, 5, 4, 3, 9, 3, 3, 4, 3]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         },
         "esp32s3-n16r8": {
           "tick_us": {
@@ -300,10 +296,16 @@
     {
       "name": "stack-a-second",
       "description": "A checkerboard on top of the multiply: two modifiers fold in order, so the second reads what the first produced rather than the raw layout.",
-      "op": "add_module",
-      "id": "Check",
-      "type": "CheckerboardModifier",
-      "parent_id": "Layer"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "Check": {
+              "type": "CheckerboardModifier"
+            }
+          }
+        }
+      }
     },
     {
       "name": "measure-two-deep",
@@ -317,9 +319,9 @@
             "min": 2,
             "max": 6,
             "n": 32,
-            "samples": [3, 3, 3, 3, 4, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 6, 2, 2, 2, 3, 3, 2, 3, 2, 2, 3, 3, 3, 5, 3]
+            "samples": [3, 4, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 6, 2, 2, 2, 3, 3, 2, 3, 2, 2, 3, 3, 3, 5, 3, 2, 3, 2]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         },
         "esp32s3-n16r8": {
           "tick_us": {
@@ -375,8 +377,14 @@
     {
       "name": "remove-the-first",
       "description": "The multiply goes while the checkerboard stays. The chain has to re-fold from what is left rather than keeping a stale table that names a modifier which no longer exists.",
-      "op": "remove_module",
-      "id": "Mult"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "Mult": null
+          }
+        }
+      }
     },
     {
       "name": "the-survivor-is-still-wired",
@@ -398,9 +406,9 @@
             "min": 3,
             "max": 11,
             "n": 32,
-            "samples": [4, 4, 4, 4, 6, 4, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 11, 3, 3, 3, 4, 3, 3, 3, 3, 3, 5, 4, 5, 7, 3]
+            "samples": [4, 6, 4, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 11, 3, 3, 3, 4, 3, 3, 3, 3, 3, 5, 4, 5, 7, 3, 3, 4, 3]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         },
         "esp32s3-n16r8": {
           "tick_us": {
@@ -456,9 +464,16 @@
     {
       "name": "swap-it",
       "description": "And replaced in its own slot, which is a remove and an add the pipeline has to survive as one gesture.",
-      "op": "replace_module",
-      "id": "Check",
-      "type": "MirrorModifier"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "Check": {
+              "type": "MirrorModifier"
+            }
+          }
+        }
+      }
     },
     {
       "name": "the-slot-holds-the-new-type",
@@ -480,9 +495,9 @@
             "min": 3,
             "max": 9,
             "n": 32,
-            "samples": [4, 4, 4, 4, 5, 4, 3, 3, 3, 3, 3, 4, 3, 3, 3, 4, 3, 9, 3, 3, 3, 4, 3, 3, 3, 3, 3, 4, 4, 3, 6, 3]
+            "samples": [4, 5, 4, 3, 3, 3, 3, 3, 4, 3, 3, 3, 4, 3, 9, 3, 3, 3, 4, 3, 3, 3, 3, 3, 4, 4, 3, 6, 3, 3, 4, 3]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         },
         "esp32s3-n16r8": {
           "tick_us": {
@@ -538,8 +553,14 @@
     {
       "name": "remove-the-last",
       "description": "The last modifier goes, so the layer returns to the identity path it started on.",
-      "op": "remove_module",
-      "id": "Check"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "Check": null
+          }
+        }
+      }
     },
     {
       "name": "back-on-the-identity-path",
@@ -561,9 +582,9 @@
             "min": 5,
             "max": 20,
             "n": 32,
-            "samples": [6, 6, 6, 7, 9, 5, 6, 7, 6, 5, 6, 6, 6, 6, 7, 7, 7, 20, 7, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 12, 7]
+            "samples": [7, 9, 5, 6, 7, 6, 5, 6, 6, 6, 6, 7, 7, 7, 20, 7, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 12, 7, 7, 7, 7]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         },
         "esp32s3-n16r8": {
           "tick_us": {

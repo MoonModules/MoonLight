@@ -7,64 +7,49 @@
     "Scheduler"
   ],
   "description": "A preset is any part of the state, so one that sets only the palette, applied over a running look, changes the palette and leaves the look and every other driver setting alone. Both pads stay lit, each holding its own container.",
+  "top": [
+    "ControlModule",
+    "Layouts",
+    "Effects",
+    "Drivers"
+  ],
   "fixture": [
     {
-      "name": "fix-control",
-      "op": "add_module",
-      "id": "Control",
-      "type": "ControlModule"
-    },
-    {
-      "name": "fix-layouts",
-      "op": "add_module",
-      "id": "Layouts",
-      "type": "Layouts"
-    },
-    {
       "name": "fix-grid",
-      "op": "add_module",
-      "id": "Grid",
-      "type": "GridLayout",
-      "parent_id": "Layouts",
-      "props": {
-        "width": 16,
-        "height": 16
-      }
-    },
-    {
-      "name": "fix-effects",
-      "op": "add_module",
-      "id": "Effects",
-      "type": "Effects",
-      "props": {
-        "layouts": "Layouts"
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "GridLayout",
+            "width": 16,
+            "height": 16
+          }
+        }
       }
     },
     {
       "name": "fix-layer",
-      "op": "add_module",
-      "id": "Layer",
-      "type": "Layer",
-      "parent_id": "Effects",
-      "props": {
-        "layouts": "Layouts"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer"
+          }
+        }
       }
     },
     {
       "name": "fix-noise",
       "description": "The look the device runs before any preset, so it still renders once the scenario removes its own.",
-      "op": "add_module",
-      "id": "Noise",
-      "type": "NoiseEffect",
-      "parent_id": "Layer"
-    },
-    {
-      "name": "fix-drivers",
-      "op": "add_module",
-      "id": "Drivers",
-      "type": "Drivers",
-      "props": {
-        "effects": "Effects"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "Noise": {
+              "type": "NoiseEffect"
+            }
+          }
+        }
       }
     }
   ],
@@ -121,7 +106,7 @@
       "match": {
         "name": "scenario-look"
       },
-      "field": "activate"
+      "apply": true
     },
     {
       "name": "the-look-runs",
@@ -138,7 +123,7 @@
       "match": {
         "name": "scenario-ocean"
       },
-      "field": "activate"
+      "apply": true
     },
     {
       "name": "the-palette-changed",
@@ -190,13 +175,13 @@
         "desktop-macos": {
           "tick_us": {
             "p50": 6,
-            "p95": 462,
+            "p95": 324,
             "min": 5,
             "max": 462,
-            "n": 19,
-            "samples": [5, 462, 324, 5, 5, 5, 7, 5, 6, 5, 6, 6, 6, 5, 5, 13, 6, 5, 11]
+            "n": 22,
+            "samples": [5, 462, 324, 5, 5, 5, 7, 5, 6, 5, 6, 6, 6, 5, 5, 13, 6, 5, 11, 8, 8, 8]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         },
         "esp32s3-n16r8": {
           "tick_us": {

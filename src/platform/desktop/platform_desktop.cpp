@@ -962,8 +962,15 @@ int fsRead(const char* path, char* buf, size_t maxLen) {
 }
 
 
+// The folder a write lands in, made first, as the write's contract promises.
+static void makeParent(const std::filesystem::path& target) {
+    std::error_code ec;
+    std::filesystem::create_directories(target.parent_path(), ec);
+}
+
 bool fsWriteAtomic(const char* path, const char* data, size_t len) {
     auto target = toFsPath(path);
+    makeParent(target);
     auto tmp = target;
     tmp += ".tmp";
 
@@ -1016,6 +1023,7 @@ int fsReadAt(const char* path, long offset, char* buf, size_t len) {
 bool fsWriteStream(const char* path, FsWriteSrc src, void* user) {
     if (!src) return false;
     auto target = toFsPath(path);
+    makeParent(target);
     auto tmp = target;
     tmp += ".tmp";
 
@@ -2205,6 +2213,58 @@ void TcpServer::close() {
         close_sock(fd_);
         fd_ = -1;
     }
+}
+
+// PWM on the host keeps a classic ESP32's shape, 4 timers and 16 channels on an 80 MHz clock, and records each duty so the driver's mapping is tested here.
+namespace {
+constexpr int kHostPwmTimers = 4;
+constexpr int kHostPwmChannels = 16;
+struct HostPwmChannel { int timer = -1; int pin = -1; uint32_t duty = 0; uint32_t phase = 0; };
+bool g_pwmTimerUsed[kHostPwmTimers] = {};
+HostPwmChannel g_pwmChannels[kHostPwmChannels];
+}  // namespace
+
+uint8_t pwmChannelCount() MM_NONBLOCKING { return kHostPwmChannels; }
+
+int pwmStart(uint32_t frequency, uint8_t& bits) {
+    if (frequency == 0) return -1;
+    // The duty steps one period holds at the clock, at most the classic ESP32's 20-bit timer.
+    bits = 0;
+    while (bits < 20 && (uint64_t{80'000'000} >> (bits + 1)) >= frequency) bits++;
+    if (bits == 0) return -1;
+    for (int t = 0; t < kHostPwmTimers; t++)
+        if (!g_pwmTimerUsed[t]) { g_pwmTimerUsed[t] = true; return t; }
+    return -1;
+}
+
+int pwmAttach(int timer, uint8_t pin, uint32_t phase) {
+    if (timer < 0 || timer >= kHostPwmTimers || !g_pwmTimerUsed[timer]) return -1;
+    for (int c = 0; c < kHostPwmChannels; c++)
+        if (g_pwmChannels[c].timer < 0) { g_pwmChannels[c] = {timer, pin, 0, phase}; return c; }
+    return -1;
+}
+
+void pwmWrite(int channel, uint32_t duty) MM_NONBLOCKING {
+    if (channel >= 0 && channel < kHostPwmChannels) g_pwmChannels[channel].duty = duty;
+}
+
+void pwmStop(int timer) {
+    if (timer < 0 || timer >= kHostPwmTimers) return;
+    for (auto& c : g_pwmChannels)
+        if (c.timer == timer) c = {};
+    g_pwmTimerUsed[timer] = false;
+}
+
+uint32_t pwmDutyForTest(int channel) {
+    return (channel >= 0 && channel < kHostPwmChannels) ? g_pwmChannels[channel].duty : 0;
+}
+
+int pwmPinForTest(int channel) {
+    return (channel >= 0 && channel < kHostPwmChannels) ? g_pwmChannels[channel].pin : -1;
+}
+
+uint32_t pwmPhaseForTest(int channel) {
+    return (channel >= 0 && channel < kHostPwmChannels) ? g_pwmChannels[channel].phase : 0;
 }
 
 // The symbol-based output on the host is accepted and counted, since refusing left that driver inert off device. The resolution is echoed so its timing arithmetic works on real numbers.

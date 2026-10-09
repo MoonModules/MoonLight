@@ -724,7 +724,7 @@ void writeFlatValues(JsonSink& out, const JsonDoc& doc, const char* prefix) {
 // The most children a flat level holds, one bit each in the taken mask.
 constexpr uint8_t kMaxFlatChildren = 32;
 
-// The first live child of `type` not yet taken, marked taken; each live child matches one saved child of its type, in order.
+// The first untaken live child of `type`, marked taken; each live child matches one saved child of its type, in order.
 MoonModule* takeLive(MoonModule* live, const char* type, uint32_t& taken) {
     for (uint8_t c = 0; live && c < live->childCount() && c < kMaxFlatChildren; c++) {
         MoonModule* lc = live->child(c);

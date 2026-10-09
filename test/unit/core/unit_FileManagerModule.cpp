@@ -62,6 +62,26 @@ bool deleteOp(const char* rel) { return platform::fsRemove(rel); }
 
 }  // namespace
 
+// The upload path writes through these, and a first file into a folder that does not exist yet answered "write failed" on a device.
+TEST_CASE("A file written into a folder that does not exist yet creates the folder, through both writes") {
+    Rig rig;
+    REQUIRE(platform::fsWriteAtomic("/fresh/a/one.txt", "1", 1));
+    CHECK(platform::fsExists("/fresh/a/one.txt"));
+    const char* text = "22";
+    struct Src { const char* p; size_t left; };
+    Src src{text, 2};
+    const auto pull = [](char* buf, size_t cap, void* user, bool*) -> size_t {
+        auto* s = static_cast<Src*>(user);
+        const size_t n = s->left < cap ? s->left : cap;
+        std::memcpy(buf, s->p, n);
+        s->p += n;
+        s->left -= n;
+        return n;
+    };
+    REQUIRE(platform::fsWriteStream("/fresh/b/two.txt", pull, &src));
+    CHECK(platform::fsExists("/fresh/b/two.txt"));
+}
+
 TEST_CASE("FileManager: mkdir creates a dir at the target path; delete removes it") {
     Rig r;
     CHECK(mkdirOp("/newdir"));

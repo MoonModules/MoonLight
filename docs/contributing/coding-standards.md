@@ -58,7 +58,8 @@ Counter-example to avoid: storing `char rssiStr_[12]` and re-`snprintf`'ing `"-5
 
 **A dropdown's values have names.** A Select control's member holds an index into its options, so the code that reads or sets it says which option it means, never a bare number.
 Declare a plain `enum Name : uint8_t { kNameFirst, ..., kNameCount }` in the class, its members in the options' order, next to the options array it indexes, and pass its count to `addSelect`.
-The enum costs no flash, since the compiler folds each name to its number, and it keeps the count beside the options, so adding one updates both.
+The enum costs no flash, since the compiler folds each name to its number.
+It keeps the count beside the options: a new option is a new enum member and a new array entry, so the count passed to `addSelect` follows.
 Where an enum for the values already exists, such as `Addressing` or `platform::EthPhyType`, use it rather than declaring a second one.
 A test sets the control by the same names.
 See [MidiService.h](../src/core/services/MidiService.h): `profile == kProfileApc40`, not `profile == 1`.

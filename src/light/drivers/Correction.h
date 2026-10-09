@@ -16,8 +16,7 @@ namespace mm {
 ///
 /// @moreinfo
 ///
-/// A light's wire format is a `ChannelRole` array, resolved from the fixture-profile library into a `Correction` at rebuild time.
-/// The curated orders are seeded rows in that library rather than an enum here.
+/// A light's wire format is a `ChannelRole` array, resolved from the fixture-profile library into a `Correction` at rebuild time. The curated orders are seeded rows in that library rather than an enum here.
 
 /// More than one algorithm is accepted, so white derivation is a mode rather than a formula.
 enum class WhiteMode : uint8_t { None, Min, Accurate };
@@ -46,8 +45,10 @@ struct Correction {
 
 
     uint8_t briLut[256] = {};       // briLut[v] = curve(v * brightness / 255)
-    /// The same curve to 16 bits, filled only when the profile has fine roles; the driver owns the 256 entries.
+    /// The same curve to 16 bits, filled only when the table is wanted; the driver owns the 256 entries.
     uint16_t* lut16 = nullptr;
+    /// Set by a driver whose output resolves more than a byte, so the 16-bit table is filled whatever the profile.
+    bool wide = false;
     /// Which curve the brightness rebuild fills through; a driver's setting, not a global one.
     Curve curve = Curve::Cie;
     // The output-byte position of each color role, recomputed from the role array.
@@ -95,9 +96,12 @@ struct Correction {
             const float out = shape(static_cast<float>(v) * brightness / 255.0f);   // scale first, then curve
             const bool lit = v > 0 && brightness > 0;
             briLut[v] = static_cast<uint8_t>(quantize(out, 255, lit));
-            if (hasFine && lut16) lut16[v] = static_cast<uint16_t>(quantize(out * 257.0f, 65535, lit));   // 255 * 257 = 65535
+            if (wantsTable() && lut16) lut16[v] = static_cast<uint16_t>(quantize(out * 257.0f, 65535, lit));   // 255 * 257 = 65535
         }
     }
+
+    /// Whether the 16-bit table is filled: a profile with fine roles, or a wide driver.
+    bool wantsTable() const { return hasFine || wide; }
 
     /// The curve applied to a linear 0..255 value, still on the 0..255 scale.
     float shape(float linear) const {
@@ -148,11 +152,19 @@ struct Correction {
         rebuildBrightness(brightness);
     }
 
-    // A REMAP, not a copy: the layer's packed slots become the fixture's own offsets.
     /// Hot path: transform one source light into its output bytes, integer-only and allocation-free.
-    inline void apply(const uint8_t* src, uint8_t* out, uint8_t srcChannels) const {
+    inline void apply(const uint8_t* src, uint8_t* out, uint8_t srcChannels) const { applyThrough(briLut, src, out, srcChannels); }
+
+    /// Hot path, wide drivers only: the same transform through the 16-bit table, one value per channel; needs `lut16`.
+    inline void applyWide(const uint8_t* src, uint16_t* out, uint8_t srcChannels) const { applyThrough(lut16, src, out, srcChannels); }
+
+    // A REMAP, not a copy: the layer's packed slots become the fixture's own offsets.
+    /// The transform through a curve table of either width, so the 8-bit and 16-bit outputs share every line.
+    template <typename T>
+    inline void applyThrough(const T* lut, const uint8_t* src, T* out, uint8_t srcChannels) const {
+        constexpr T kFull = static_cast<T>(~T{0});   // 255 or 65535
         // Wide open, and written every frame, so a profile declaring one cannot be silently unlit.
-        if (offDimmer != kAbsent) out[offDimmer] = 255;
+        if (offDimmer != kAbsent) out[offDimmer] = kFull;
         // Unscaled and by ASSIGNMENT: additive semantics do not apply to positional signals.
         if (hasMotion && srcChannels != 0 && !motionHeld) {
             // Read the LAYER slot, write the FIXTURE channel: two layouts, mapped here.
@@ -160,7 +172,7 @@ struct Correction {
                                      offRotate != kAbsent, offGobo != kAbsent};
             const uint8_t chan[5] = {offPan, offTilt, offZoom, offRotate, offGobo};
             FixtureChannels::forEachMotionSlot(present, [&](uint8_t role, uint8_t slot) {
-                if (slot < srcChannels) out[chan[role]] = src[slot];
+                if (slot < srcChannels) out[chan[role]] = static_cast<T>(src[slot] * (kFull / 255));
             });
             // The 8-bit aim widened by repeating its byte, so 255 reaches the fixture's 65535 rather than 65280.
             if (offPanFine != kAbsent && offPan != kAbsent)   out[offPanFine] = out[offPan];
@@ -180,25 +192,25 @@ struct Correction {
         } else {
             w = r < g ? (r < b ? r : b) : (g < b ? g : b);  // min(r,g,b): the white component
             // Computed off the PRE-subtraction values, which only rebalance the RGB emitters.
-            if (offWarmWhite != kAbsent) out[offWarmWhite] = briLut[w];
+            if (offWarmWhite != kAbsent) out[offWarmWhite] = lut[w];
             // yellow ≈ min(R,G) (the shared red+green component).
-            if (offYellow != kAbsent)    out[offYellow] = briLut[r < g ? r : g];
+            if (offYellow != kAbsent)    out[offYellow] = lut[r < g ? r : g];
             // Driven from the blue with no red or green to pair with, so it stays dark on warm colors.
             if (offUV != kAbsent) {
                 const uint8_t rg = r > g ? r : g;
-                out[offUV] = briLut[b > rg ? static_cast<uint8_t>(b - rg) : 0];
+                out[offUV] = lut[b > rg ? static_cast<uint8_t>(b - rg) : 0];
             }
             // White last: it is the only emitter that rebalances RGB.
             if (offWhite != kAbsent) {
                 if (whiteMode == WhiteMode::Accurate) { r -= w; g -= w; b -= w; }  // pull white out of RGB
-                out[offWhite] = briLut[w];
+                out[offWhite] = lut[w];
             }
         }
         // The curve, applied ONCE: everything above this line is linear light.
-        if (offRed != kAbsent)   out[offRed] = briLut[r];
-        if (offGreen != kAbsent) out[offGreen] = briLut[g];
-        if (offBlue != kAbsent)  out[offBlue] = briLut[b];
-        if (hasFine) applyFine(r, g, b, w, out);
+        if (offRed != kAbsent)   out[offRed] = lut[r];
+        if (offGreen != kAbsent) out[offGreen] = lut[g];
+        if (offBlue != kAbsent)  out[offBlue] = lut[b];
+        if constexpr (sizeof(T) == 1) { if (hasFine) applyFine(r, g, b, w, out); }
     }
 
     // The 16-bit channels rewrite their coarse byte from the same table, so high and low bytes are one value.

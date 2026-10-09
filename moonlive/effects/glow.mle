@@ -1,0 +1,52 @@
+// Glow: the whole rig as one light pumping with the bass, flaring on each kick, its color drifting slowly through the palette.
+
+class GlowEffect {
+  byte gain = 100;
+  byte floorBri = 10;
+  byte flare = 80;
+  byte decay = 8;
+
+  int bass = 0;   // the bass, followed fast up and slowly down, in 16ths
+  int avg = 0;    // its slow average, which a kick stands out from, in 16ths
+  int bri = 0;
+  int hue = 0;    // in 16ths, so a slow drift keeps its fraction
+  int kicking = 0;  // 1 while a kick lasts, so it flares once
+
+  int dimensions() { return 1; }
+
+  string tags() { return "💫🎶"; }
+
+  void defineControls() {
+    addControl("gain", gain, 10, 255); // how hard the bass drives the brightness
+    addControl("floorBri", floorBri, 0, 200); // never darker than this
+    addControl("flare", flare, 0, 255); // how much a kick adds
+    addControl("decay", decay, 1, 100); // how fast it falls back, in percent per frame
+  }
+
+  void tick() {
+    int now = div((audioBand(0) + audioBand(1) + audioBand(2) + audioBand(3)) * gain, 400);
+    if (now > 255) { now = 255; }
+    if (now * 16 > bass) { bass = bass + div(now * 16 - bass, 2); }
+    else { bass = bass - div((bass - now * 16) * decay + 99, 100); }
+    avg = avg + div(now * 16 - avg, 32);
+
+    int target = floorBri + div(div(bass, 16) * (255 - floorBri), 255);
+    int kick = 0;
+    if (now > 40) { if (now * 16 > avg + div(avg, 2)) { kick = 1; } }
+    if (kick > kicking) { bri = bri + flare; }
+    kicking = kick;
+    if (bri > target) { bri = bri - div((bri - target) * decay + 99, 100); } else { bri = target; }
+    if (bri > 255) { bri = 255; }
+
+    int low = 0;
+    int most = 0;
+    for (int b = 0; b < 6; b = b + 1) {
+      int m = audioBand(b);
+      if (m > most) { most = m; low = b; }
+    }
+    hue = hue + div((low * 24 + div(t, 400)) * 16 - hue, 64);
+    int p = mod(div(hue, 16), 256);
+
+    fill(paletteR(p, bri), paletteG(p, bri), paletteB(p, bri));
+  }
+}

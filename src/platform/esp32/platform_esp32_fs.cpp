@@ -7,8 +7,7 @@
 ///
 /// ## Two partition labels, tried in order
 ///
-/// The volume has always held LittleFS, and a table written from 2026-08 says so: the label and subtype both name it.
-/// An older table calls the same volume by the legacy misnomer, so both are tried and a device keeps its config across an update.
+/// The volume has always held LittleFS, and a table written from 2026-08 says so: the label and subtype both name it. An older table calls the same volume by the legacy misnomer, so both are tried and a device keeps its config across an update.
 ///
 /// ## Formatting is gated on the LAST EXISTING label
 ///
@@ -143,10 +142,23 @@ int fsRead(const char* path, char* buf, size_t maxLen) {
     return static_cast<int>(n);
 }
 
+// The folder a write lands in, made first, as the write's contract promises.
+static void makeParent(const char* path) {
+    const char* slash = std::strrchr(path, '/');
+    if (!slash || slash == path) return;
+    char dir[128];
+    const size_t n = static_cast<size_t>(slash - path);
+    if (n >= sizeof(dir)) return;
+    std::memcpy(dir, path, n);
+    dir[n] = 0;
+    fsMkdir(dir);
+}
+
 bool fsWriteAtomic(const char* path, const char* data, size_t len) {
     if (!fsMounted_) return false;
     // A non-zero length with a null pointer is undefined in the write below, so guard the boundary.
     if (len > 0 && !data) return false;
+    makeParent(path);
     char full[128];
     char tmp[136];
     if (!fsTranslate(path, full, sizeof(full))) return false;
@@ -196,6 +208,7 @@ long fsSize(const char* path) {
 
 bool fsWriteStream(const char* path, FsWriteSrc src, void* user) {
     if (!fsMounted_ || !src) return false;
+    makeParent(path);
     char full[128];
     char tmp[136];
     if (!fsTranslate(path, full, sizeof(full))) return false;

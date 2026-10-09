@@ -6,13 +6,8 @@
     "FilesystemModule"
   ],
   "description": "A file written to the device is still there after a restart, which is the property every preset, script and configuration depends on. The one card whose whole job is the filesystem, so it is the one that proves the filesystem.",
-  "fixture": [
-    {
-      "name": "fix-File Manager",
-      "op": "add_module",
-      "id": "File Manager",
-      "type": "FileManagerModule"
-    }
+  "top": [
+    "FileManagerModule"
   ],
   "steps": [
     {

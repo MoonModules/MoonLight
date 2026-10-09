@@ -7,27 +7,8 @@
     "MoonTalkModule"
   ],
   "description": "Nothing leaves the device until someone says so. Both MoonCloud children carry their own consent, because wanting a joint light show is not agreeing to usage reporting, and each is proven off by default and durable once set.",
-  "fixture": [
-    {
-      "name": "fix-MoonCloud",
-      "op": "add_module",
-      "id": "MoonCloud",
-      "type": "MoonCloudModule"
-    },
-    {
-      "name": "fix-Stats",
-      "op": "add_module",
-      "id": "Stats",
-      "type": "MoonStatsModule",
-      "parent_id": "MoonCloud"
-    },
-    {
-      "name": "fix-Talk",
-      "op": "add_module",
-      "id": "Talk",
-      "type": "MoonTalkModule",
-      "parent_id": "MoonCloud"
-    }
+  "top": [
+    "MoonCloudModule"
   ],
   "steps": [
     {

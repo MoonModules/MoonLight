@@ -31,6 +31,7 @@ constexpr const char* kEffectCatalog[] = {
     "fluid.mle",
     "fountain.mle",
     "fractal.mle",
+    "glow.mle",
     "gradient.mle",
     "lines.mle",
     "metal.mle",
@@ -54,7 +55,7 @@ constexpr const char* kEffectCatalog[] = {
     "stadbeest-orb.mle",
     "trails.mle",
 };
-constexpr size_t kEffectCatalogCount = 34;
+constexpr size_t kEffectCatalogCount = 35;
 /// What each effect above declares about itself, in the same order, 0 meaning it says nothing and the device decides.
 constexpr unsigned char kEffectCatalogDim[] = {
     3,
@@ -69,6 +70,7 @@ constexpr unsigned char kEffectCatalogDim[] = {
     3,
     2,
     2,
+    1,
     3,
     2,
     2,
@@ -106,6 +108,7 @@ constexpr const char* kEffectCatalogTags[] = {
     "💫🖌️",
     "💫✨",
     "💫🖌️",
+    "💫🎶",
     "💫",
     "💫",
     "💫🖌️",
@@ -251,7 +254,7 @@ constexpr const char* kPaletteCatalogTags[] = {
 };
 constexpr const char* kPaletteFolder = "palettes";   ///< its directory upstream
 
-constexpr size_t kCatalogCount = 58;   ///< every factory script, all roles
+constexpr size_t kCatalogCount = 59;   ///< every factory script, all roles
 
 /// @}
 } // namespace mm::moonlive

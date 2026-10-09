@@ -13,9 +13,10 @@ Invariants checked per entry:
   - firmwares is a non-empty list of non-empty strings (entry[0] is the default)
   - image (if set) is a local assets/deviceModels/ path that resolves on disk
   - url (if set) is an absolute http(s) link
+  - every state root is a top-level module the device boots with
   - the state's System.deviceModel value equals the entry `name`
   - every child module `type` in the state is factory-registered
-  - a driver's `pins` control only appears on an actual *LedDriver module
+  - a driver's `pins` control only appears on a light driver (a *LedDriver or PwmLightDriver)
   - supported/planned (if set) are string arrays drawn from the known vocabulary
 
 Exit 1 on any error, mirroring check_specs.py.
@@ -29,6 +30,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 CATALOG = ROOT / "mooninstaller" / "deviceModels.json"
 MODULE_TYPES_CPP = ROOT / "src" / "module_types.cpp"
+MAIN_CPP = ROOT / "src" / "main.cpp"
 ETHERNET_MODULE = ROOT / "src" / "core" / "system" / "EthernetModule.h"
 PLATFORM_CONFIG = ROOT / "src" / "platform" / "esp32" / "platform_config.h"
 DOCS = ROOT / "docs"
@@ -124,6 +126,16 @@ def registered_types():
     return set(re.findall(r'registerType<[^>]+>\("([^"]+)"', text))
 
 
+def top_level_names():
+    """The names of the top-level modules the device boots with, which are the only roots a state document reaches.
+
+    main.cpp creates each by type through `top("Type")`, and `kBootModules` names the ones whose name is not the type's default, which drops a trailing `Module`.
+    """
+    named = dict(re.findall(r'\{nullptr, "([^"]+)", "([^"]+)", [^}]*\}', MODULE_TYPES_CPP.read_text(encoding="utf-8")))
+    types = re.findall(r'\btop\("([^"]+)"\)', MAIN_CPP.read_text(encoding="utf-8"))
+    return {named.get(t, t[:-len("Module")] if t.endswith("Module") else t) for t in types}
+
+
 def main():
     errors = []
     eth_presets = eth_preset_labels()
@@ -145,6 +157,9 @@ def main():
         sys.exit(1)
 
     factory_types = registered_types()
+    top_names = top_level_names()
+    if not top_names:
+        errors.append("main.cpp: could not read the top-level modules, so the state roots cannot be checked")
     names_seen = set()
 
     for i, e in enumerate(catalog):
@@ -259,6 +274,9 @@ def main():
             if not isinstance(node, dict):
                 errors.append(f"{where}: state root '{root}' is not an object")
                 continue
+            if top_names and root not in top_names:
+                errors.append(f"{where}: state root '{root}' is not a top-level module (known: {sorted(top_names)})")
+                continue
             _walk(root, node, None)
         board_control_seen = False
         for m in mods:
@@ -274,9 +292,9 @@ def main():
                 if controls["deviceModel"] != name:
                     errors.append(f"{where}: System.deviceModel control '{controls['deviceModel']}' "
                                   f"!= entry name '{name}'")
-            # A `pins` control only makes sense on an LED driver module.
-            if "pins" in controls and not str(mtype).endswith("LedDriver"):
-                errors.append(f"{where}: state member '{mid}' has a 'pins' control but is not a *LedDriver")
+            # A `pins` control only makes sense on a light driver: an LED driver, or PWM Light, one pin per channel.
+            if "pins" in controls and not (str(mtype).endswith("LedDriver") or mtype == "PwmLightDriver"):
+                errors.append(f"{where}: state member '{mid}' has a 'pins' control but is not a light driver")
 
             # 74HCT595 pin expander (pinExpander = is the board fitted?). The wiring
             # invariants are what a bad catalog entry gets wrong, and they fail on a bench with dark

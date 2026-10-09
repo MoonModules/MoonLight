@@ -80,7 +80,7 @@
 /// ## Why write_file exists
 ///
 /// It stages a file the way the UI's editor does, so a scenario can drive the script loop end-to-end. Write a script, point a module's `script` control at it, and measure.
-/// It uses the primitive the HTTP save path uses, fsWriteAtomic, so a scenario exercises the file the device would actually read. It also mkdir -p's the parent, because a scenario names `/moonlive/x.mle` without staging the directory.
+/// It uses the primitive the HTTP save path uses, fsWriteAtomic, so a scenario exercises the file the device would actually read. The write creates the parent folder, so a scenario names `/moonlive/x.mle` without staging the directory.
 /// The interesting cases have no shipped file to select. A deliberately broken script, proving the device degrades rather than dies, could not live in moonlive/, where unit_MoonLiveScripts compiles all of them.
 /// Neither could an edit that changes a script's control set, proving controls re-derive and keep their values.
 /// A malformed step and a failed write are both failed scenarios. Every later step then runs against a file that was never staged, and the run could still report PASSED.
@@ -785,13 +785,6 @@ static int runScenario(const char* path) {
             }
             const char* filePath = step["path"].c_str();
             const std::string body = step["value"].str;
-            // mkdir -p the parent, which a fresh build tree may not have yet: @xref{why-write-file-exists}.
-            if (const char* slash = std::strrchr(filePath, '/')) {
-                if (slash != filePath) {
-                    std::string dir(filePath, static_cast<size_t>(slash - filePath));
-                    mm::platform::fsMkdir(dir.c_str());
-                }
-            }
             // A FAILED write is a failed scenario rather than a printed note: @xref{why-write-file-exists}.
             const bool wrote = mm::platform::fsWriteAtomic(filePath, body.c_str(), body.size());
             if (wrote) {

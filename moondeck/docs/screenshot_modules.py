@@ -130,11 +130,7 @@ MODULES = [
     # Drivers
     ("NetworkSendDriver",    "Drivers",  {}, False),
     ("PreviewDriver",       "Drivers",  {}, False),
-    # These three carry no card image yet. The desktop build links every driver
-    # (MM_LINKS_ALL_LED_DRIVERS), so each renders its controls here even where the
-    # silicon or the runtime is absent: HUB75 wants LCD_CAM or Parlio, NDI wants a
-    # runtime the user installs. The card and its controls are what a screenshot is
-    # for, and those are real on any host.
+    # The desktop build links every driver (MM_LINKS_ALL_LED_DRIVERS), so each renders its controls here even where the silicon or the runtime is absent: HUB75 wants LCD_CAM or Parlio, NDI wants a runtime the user installs, PWM wants LEDC. The card and its controls are what a screenshot is for, and those are real on any host.
     # The two LED drivers, each its own card: they share only `pins` and `ledsPerPin`, and a
     # screenshot of one describes the other's controls wrongly.
     ("RmtLedDriver",        "Drivers",  {}, False),
@@ -143,6 +139,7 @@ MODULES = [
     ("NdiDriver",           "Drivers",  {}, False),
     ("HlsDriver",           "Drivers",  {}, False),
     ("RtspDriver",          "Drivers",  {}, False),
+    ("PwmLightDriver",      "Drivers",  {"pins": "6,7,5"}, False),
 ]
 
 # A modifier reshapes what an effect draws, so it has nothing to show on an empty Layer: it

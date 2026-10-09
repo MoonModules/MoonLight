@@ -50,7 +50,7 @@ CONFIG_ESP_WIFI_STATIC_TX_BUFFER_NUM=8
 # writes it, so a half-finished install cannot corrupt user config.
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 CONFIG_PARTITION_TABLE_CUSTOM=y
-CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="../esp32/partitions/esp32dev_moonbase.csv"
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="../esp32/partitions/4mb_moonbase.csv"
 
 # Plain-HTTP install URLs allowed alongside HTTPS: GitHub releases stay TLS-verified via the cert
 # bundle, but a LAN source (MoonDeck serving a dev build) has no certificate and is inside the

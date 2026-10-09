@@ -114,14 +114,14 @@ const liveState = [
       children: [{ name: "Noise", type: "NoiseEffect", controls: [{ name: "speed" }] }] },
 ];
 
-test("the report names a module that this firmware no longer has", () => {
+test("the report names a module this firmware lacks", () => {
     const r = diffRestore({ "/.config/OldDriver.json": '{"OldDriver":{"enabled":true,"a":1}}' }, liveState);
     assert.equal(r.length, 1);
     assert.equal(r[0].kind, "module");
     assert.match(r[0].detail, /module OldDriver does not exist/);
 });
 
-test("the report names a control that no longer exists, defaults noted", () => {
+test("the report names a control this firmware lacks, defaults noted", () => {
     const cfg = JSON.stringify({ Network: { "$patch": "replace", ssid: "x", enabled: true, oldKnob: 3 } });
     const r = diffRestore({ "/.config/NetworkModule.json": cfg }, liveState);
     assert.equal(r.length, 1);

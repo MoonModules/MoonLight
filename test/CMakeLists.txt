@@ -231,6 +231,7 @@ add_executable(mm_tests
     unit/light/unit_RmtLedEncoder.cpp
     unit/light/unit_RmtLedDriver_lifecycle.cpp
     unit/light/unit_RmtLedDriver_pins.cpp
+    unit/light/unit_PwmLightDriver.cpp
 )
 
 # The grid-size sweep drives every effect, including ones added after this file was

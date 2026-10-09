@@ -267,11 +267,11 @@ int  fsRead(const char* path, char* buf, size_t maxLen);
 long fsSize(const char* path);
 /// Read up to `len` bytes at `offset`; bytes read, 0 at the end, -1 on error.
 int  fsReadAt(const char* path, long offset, char* buf, size_t len);
-/// Write a whole file atomically, through a temporary and a rename.
+/// Write a whole file atomically, through a temporary and a rename, creating its parent folder.
 bool fsWriteAtomic(const char* path, const char* data, size_t len);
 /// Fill up to `cap` bytes and answer the count; 0 ends the stream.
 using FsWriteSrc = size_t(*)(char* buf, size_t cap, void* user, bool* abort);
-/// Write a file atomically from `src`, pulling it in chunks; false on abort or a write failure.
+/// Write a file atomically from `src`, pulling it in chunks and creating its parent folder; false on abort or a write failure.
 bool fsWriteStream(const char* path, FsWriteSrc src, void* user);
 /// Called once per child of a listed directory; a directory reports size 0.
 using FsListCb = void(*)(const char* name, bool isDir, uint32_t sizeBytes, void* user);
@@ -803,6 +803,32 @@ private:
 
 /// Restart the device: a hardware reset on ESP32, a process exit on desktop.
 [[noreturn]] void reboot();
+
+// PWM output for lights whose channels are each a pin: the chip's LEDC peripheral, one timer per driver.
+
+/// How many PWM channels the chip has across its speed modes; 0 where there is no PWM output.
+uint8_t pwmChannelCount() MM_NONBLOCKING;
+
+/// Start a PWM timer at `frequency` Hz with the most duty bits that fit, into `bits`; the timer, or -1 when none is free.
+int pwmStart(uint32_t frequency, uint8_t& bits);
+
+/// Drive `pin` from `timer`, its pulse starting `phase` steps into the period; the channel, or -1 when none is free.
+int pwmAttach(int timer, uint8_t pin, uint32_t phase);
+
+/// Set a channel's duty in steps of the timer's resolution, a register write that does not block.
+void pwmWrite(int channel, uint32_t duty) MM_NONBLOCKING;
+
+/// Release `timer` and every channel attached to it, their pins driven low.
+void pwmStop(int timer);
+
+/// The duty last written to `channel`, for the desktop tests; 0 on a device.
+uint32_t pwmDutyForTest(int channel);
+
+/// The pin `channel` drives, for the desktop tests; -1 when the channel is free.
+int pwmPinForTest(int channel);
+
+/// The phase `channel` was attached with, for the desktop tests; 0 on a device.
+uint32_t pwmPhaseForTest(int channel);
 
 // RMT WS2812 output: the driver encodes symbols, the platform owns only the peripheral.
 

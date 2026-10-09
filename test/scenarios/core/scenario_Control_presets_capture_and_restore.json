@@ -6,19 +6,9 @@
     "Drivers"
   ],
   "description": "A preset captures what the device is doing and puts it back later, which is the only feature that reaches across Layouts, Effects, Drivers and Services at once. Proves a surface control drives a real target rather than only moving on screen.",
-  "fixture": [
-    {
-      "name": "fix-Control",
-      "op": "add_module",
-      "id": "Control",
-      "type": "ControlModule"
-    },
-    {
-      "name": "fix-Drivers",
-      "op": "add_module",
-      "id": "Drivers",
-      "type": "Drivers"
-    }
+  "top": [
+    "ControlModule",
+    "Drivers"
   ],
   "steps": [
     {

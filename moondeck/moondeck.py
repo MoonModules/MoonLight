@@ -286,14 +286,12 @@ def _deduce_device_model(firmware: str) -> str:
     return matches[0] if len(matches) == 1 else ""
 
 
-def _push_device(ip: str, model: str) -> bool:
-    """PATCH /api/state on the device with the deviceModel's catalog `state` document.
+def _push_device(ip: str, model: str, full: bool = False) -> bool:
+    """PATCH /api/state on the device with its deviceModel: the identity, or with `full` the catalog entry's whole `state`.
 
-    For device models that have a catalog entry in mooninstaller/deviceModels.json the whole
-    `state` document goes in one request: the same body the web installer's serial push sends
-    in slices, applied by the same engine on the device (a merge, so repeating it changes nothing).
-    For device models without a catalog entry (custom names, unknown firmware) the bare name lands
-    as `{"System": {"deviceModel": name}}`.
+    The identity, `{"System": {"deviceModel": name}}`, is what discovery and refresh push on every round.
+    The whole `state` goes only when the user picks a model, since its `"$patch":"replace"` containers would otherwise replace what the user built on each refresh.
+    A model without a catalog entry (a custom name, unknown firmware) sends the identity either way.
 
     Returns True iff the request returned 200. False on any failure (timeout, non-2xx, network
     error); the next refresh re-attempts.
@@ -308,10 +306,8 @@ def _push_device(ip: str, model: str) -> bool:
         return True   # nothing to push; not a failure
     # DEVICE_MODELS is loaded at module init and not re-read per push, so a tight
     # discover-refresh cycle doesn't hammer the disk. Editing deviceModels.json needs a restart.
-    entry = next((b for b in DEVICE_MODELS if b.get("name") == model), None)
-    state = entry.get("state") if entry is not None else None
-    if not state:
-        state = {"System": {"deviceModel": model}}
+    entry = next((b for b in DEVICE_MODELS if b.get("name") == model), None) if full else None
+    state = (entry or {}).get("state") or {"System": {"deviceModel": model}}
     try:
         req = urllib.request.Request(
             f"http://{ip}/api/state",
@@ -1507,13 +1503,8 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"error": f"device unreachable: {e}"}, 502)
 
         elif self.path == "/api/push-device":
-            # Push a single (ip, deviceModel) to a device. Called by the JS when the
-            # user picks a deviceModel from the per-device dropdown — saveState
-            # alone persists the value in moondeck.json but the device also
-            # needs to hear about it (the device persists its `deviceModel` control,
-            # now on SystemModule, to /.config/SystemModule.json). The bulk push from discover /
-            # refresh covers the multi-device case; this covers the
-            # one-device-at-a-time UI mutation.
+            # The user picked a deviceModel from the per-device dropdown, so the device gets the catalog entry's whole state.
+            # Discovery and refresh push only the identity.
             body = self._read_body()
             params = json.loads(body) if body else {}
             ip = params.get("ip", "")
@@ -1521,7 +1512,7 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
             if not ip:
                 self._send_json({"error": "ip required"}, 400)
                 return
-            ok = _push_device(ip, model)
+            ok = _push_device(ip, model, full=True)
             self._send_json({"ok": ok})
 
         elif self.path == "/api/discover":

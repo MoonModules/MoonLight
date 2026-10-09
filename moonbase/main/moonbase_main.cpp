@@ -217,9 +217,11 @@ void onWifiEvent(void*, esp_event_base_t, int32_t id, void*) {
     if (switchingNetwork_) return;
     if (id == WIFI_EVENT_STA_START || id == WIFI_EVENT_STA_DISCONNECTED) esp_wifi_connect();
 }
+#if SOC_EMAC_SUPPORTED
 void onEthEvent(void*, esp_event_base_t, int32_t id, void*) {
     if (id == ETHERNET_EVENT_CONNECTED && pinStatic(ethNetif_, ethIp_)) xEventGroupSetBits(netEvents_, kNetGotIp);
 }
+#endif
 
 // Bring up the on-chip MAC as the app's config wires it, staying installed without a link so a later cable still gets an address.
 esp_eth_handle_t ethHandle_ = nullptr;

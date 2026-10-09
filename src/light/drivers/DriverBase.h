@@ -92,8 +92,8 @@ public:
             // No library yet, so apply brightness here, as deriveCorrection would have.
             correction_.rebuildBrightness(tableBrightness);
         }
-        // Allocated the first time a profile has fine roles and kept until release, since the encode task may be reading it while this rebuild runs.
-        const bool firstTable = correction_.hasFine && !lut16_;
+        // Allocated the first time the table is wanted and kept until release, since the encode task may be reading it while this rebuild runs.
+        const bool firstTable = correction_.wantsTable() && !lut16_;
         if (firstTable) lut16_.resize(256);
         correction_.lut16 = lut16_.data();
         if (firstTable) correction_.rebuildBrightness(tableBrightness);   // a table that existed was filled by the rebuild above
@@ -184,7 +184,7 @@ protected:
 
     // The wiring comes from a named profile by stable id; the render loop never reads the library.
     Correction correction_;
-    ScratchBuffer<uint16_t> lut16_{*this};   // the correction's 16-bit table, allocated the first time a profile has fine roles
+    ScratchBuffer<uint16_t> lut16_{*this};   // the correction's 16-bit table, allocated the first time it is wanted
     uint32_t profileId_ = 0;          // stable id into the FixtureProfiles library (0 → resolve to default)
     uint8_t fixtureSel_ = 0;          // the fixture Select's chosen INDEX (mapped to an id in onControlChanged)
     uint8_t whiteMode_ = static_cast<uint8_t>(WhiteMode::Min);  // index into kWhiteModeOptions

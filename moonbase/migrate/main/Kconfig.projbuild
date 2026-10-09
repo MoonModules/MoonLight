@@ -1,0 +1,7 @@
+menu "MoonLight migrate"
+    config MM_MIGRATE_PAUSE_S
+        int "Seconds to pause after each step, for power-cut rehearsals"
+        default 0
+        help
+            0 for the image a board installs. A rehearsal build pauses after each step so the power can be cut there.
+endmenu

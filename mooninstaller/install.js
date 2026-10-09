@@ -1373,6 +1373,7 @@ document.addEventListener('DOMContentLoaded', () => {
           a.href = url; a.target = "_blank"; a.rel = "noopener"; a.textContent = url;
           v.appendChild(a); r.append(k, v); body.appendChild(r);
         };
+        if (b.description) row("About", b.description);
         if (b.chip) row("Chip", b.chip);
         if (Array.isArray(b.firmwares)) row("Firmwares", b.firmwares.join(", "));
         if (Array.isArray(b.supported) && b.supported.length) row("Supported", b.supported.join(", "));

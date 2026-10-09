@@ -151,6 +151,7 @@
 /// LED drivers are compiled in per chip, gated on the peripheral each one needs, so a board carries only the drivers its silicon can run: @xref{why-led-drivers-are-gated-by-the-preprocessor}.
 #if defined(CONFIG_SOC_RMT_SUPPORTED) || MM_LINKS_ALL_LED_DRIVERS
 #include "light/drivers/RmtLedDriver.h"
+#include "light/drivers/PwmLightDriver.h"
 #endif
 // The parallel-WS2812 driver + its peripheral backends: @xref{why-led-drivers-are-gated-by-the-preprocessor}.
 #if defined(CONFIG_SOC_LCD_I80_SUPPORTED) || MM_LINKS_ALL_LED_DRIVERS
@@ -343,6 +344,7 @@ void mm::registerModuleTypes() {
     // Register only the LED drivers this chip's silicon can run, see the gated includes above: @xref{why-led-drivers-are-gated-by-the-preprocessor}.
 #if defined(CONFIG_SOC_RMT_SUPPORTED) || MM_LINKS_ALL_LED_DRIVERS
     mm::ModuleFactory::registerType<mm::RmtLedDriver>("RmtLedDriver", "light/drivers.md#rmtled");
+    mm::ModuleFactory::registerType<mm::PwmLightDriver>("PwmLightDriver", "light/drivers.md#pwm-light");
 #endif
     // One driver for the parallel output whatever the DMA peripheral: each backend self-registers when its header is included, so the control offers exactly the ones this chip links.
 #if defined(CONFIG_SOC_LCD_I80_SUPPORTED) || defined(CONFIG_SOC_LCDCAM_I80_LCD_SUPPORTED) || defined(CONFIG_SOC_PARLIO_SUPPORTED) || MM_LINKS_ALL_LED_DRIVERS

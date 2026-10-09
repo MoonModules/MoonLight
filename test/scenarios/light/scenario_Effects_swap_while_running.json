@@ -7,39 +7,47 @@
     "PulseEffect"
   ],
   "description": "Changing what the lights show without stopping them. A control on the running effect applies on the next frame, and a swap puts a different type in the same slot. The swap is measured on the way out, so the two effects' costs are the difference between two steps. It stops at the swap rather than swapping back, because the two tiers name the new slot differently: in-process it keeps the id the scenario gave it, and a device renames it after the type it now holds.",
+  "top": [
+    "Layouts",
+    "Effects"
+  ],
   "fixture": [
     {
-      "name": "fix-layouts",
-      "op": "add_module",
-      "id": "Layouts",
-      "type": "Layouts"
-    },
-    {
       "name": "fix-grid",
-      "op": "add_module",
-      "id": "Grid",
-      "type": "GridLayout",
-      "parent_id": "Layouts",
-      "props": {
-        "width": 16,
-        "height": 16
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "GridLayout",
+            "width": 16,
+            "height": 16
+          }
+        }
       }
     },
     {
       "name": "fix-layer",
-      "op": "add_module",
-      "id": "Layer",
-      "type": "Layer",
-      "props": {
-        "layouts": "Layouts"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer"
+          }
+        }
       }
     },
     {
       "name": "fix-pulse",
-      "op": "add_module",
-      "id": "Pulse",
-      "type": "PulseEffect",
-      "parent_id": "Layer"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "Pulse": {
+              "type": "PulseEffect"
+            }
+          }
+        }
+      }
     }
   ],
   "steps": [
@@ -78,9 +86,9 @@
             "min": 1,
             "max": 2,
             "n": 32,
-            "samples": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1]
+            "samples": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         },
         "desktop-windows": {
           "tick_us": {
@@ -136,9 +144,16 @@
     {
       "name": "swap-it",
       "description": "Replace the effect in its slot with another type, which is what the card's pencil does.",
-      "op": "replace_module",
-      "id": "Pulse",
-      "type": "RainbowEffect"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "Pulse": {
+              "type": "RainbowEffect"
+            }
+          }
+        }
+      }
     },
     {
       "name": "measure-rainbow",
@@ -153,9 +168,9 @@
             "min": 1,
             "max": 4,
             "n": 32,
-            "samples": [1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 1, 1, 1, 4, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1]
+            "samples": [1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 1, 1, 1, 4, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         },
         "desktop-windows": {
           "tick_us": {
@@ -213,9 +228,16 @@
     {
       "name": "restore-the-effect",
       "description": "Swap the slot back, so a live device is left with the effect it started with rather than this scenario's replacement. replace_module keeps the scenario id, so the slot is still Pulse.",
-      "op": "replace_module",
-      "id": "Pulse",
-      "type": "PulseEffect"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "Pulse": {
+              "type": "PulseEffect"
+            }
+          }
+        }
+      }
     }
   ]
 }

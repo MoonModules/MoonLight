@@ -1,0 +1,9 @@
+# WLED's 4 MB table (WLED_ESP32_4MB_1MB_FS.csv): two 1.5 MB app slots and a 960 KB LittleFS labeled `spiffs`.
+# Not a MoonLight table: it is the layout a board running WLED has, which the migration image is built against so it is known to fit WLED's slot, and which a bench board is flashed with to rehearse the move.
+#
+# Name,   Type, SubType, Offset,   Size,     Flags
+nvs,      data, nvs,     0x9000,   0x5000,
+otadata,  data, ota,     0xe000,   0x2000,
+app0,     app,  ota_0,   0x10000,  0x180000,
+app1,     app,  ota_1,   0x190000, 0x180000,
+spiffs,   data, spiffs,  0x310000, 0xF0000,

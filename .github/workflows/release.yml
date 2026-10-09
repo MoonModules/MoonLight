@@ -93,9 +93,9 @@ jobs:
 
   # The shipping firmware list, read from the generated mooninstaller/firmwares.json
   # (projected from build_esp32.py's FIRMWARES dict, drift-guarded by
-  # check_firmwares.py). Emitted as a JSON array so build-esp32's matrix can
-  # fromJSON() it — GitHub matrices can't read a file at parse time, so a job
-  # output is the standard bridge. This is the ONLY firmware list in CI now.
+  # check_firmwares.py). Emitted as a JSON array of {firmware, chip} so build-esp32's matrix can
+  # fromJSON() it: GitHub matrices can't read a file at parse time, so a job output is the
+  # standard bridge. This is the ONLY firmware list in CI, and the chip is the IDF target.
   firmwares:
     needs: verify-version
     runs-on: ubuntu-latest
@@ -108,7 +108,7 @@ jobs:
       - id: gen
         run: |
           set -euo pipefail
-          echo "list=$(jq -c '[.firmwares[] | select(.ships) | .name]' mooninstaller/firmwares.json)" >> "$GITHUB_OUTPUT"
+          echo "list=$(jq -c '[.firmwares[] | select(.ships) | {firmware: .name, chip}]' mooninstaller/firmwares.json)" >> "$GITHUB_OUTPUT"
 
   build-esp32:
     needs: [verify-version, firmwares]
@@ -116,7 +116,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        firmware: ${{ fromJSON(needs.firmwares.outputs.list) }}
+        include: ${{ fromJSON(needs.firmwares.outputs.list) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -189,13 +189,8 @@ jobs:
           # same tree. This tracks the v6.1 line toward GA; re-pin to the `v6.1`
           # tag once it ships (a deliberate re-test pass, see docs/how-to/building.md).
           esp_idf_version: v6.1
-          # The IDF target follows the firmware-key prefix: esp32s31* → esp32s31
-          # (checked BEFORE esp32s3 — esp32s31 also startsWith 'esp32s3'),
-          # esp32s3* → esp32s3, esp32p4* → esp32p4 (the only target that pulls
-          # the ip101 PHY + esp_hosted, both manifest-gated on target == esp32p4),
-          # everything
-          # else → esp32. (The matrix is the `ships` subset of firmwares.json.)
-          target: ${{ startsWith(matrix.firmware, 'esp32s31') && 'esp32s31' || startsWith(matrix.firmware, 'esp32s3') && 'esp32s3' || startsWith(matrix.firmware, 'esp32p4') && 'esp32p4' || 'esp32' }}
+          # The IDF target is the firmware's declared chip, carried by the matrix from firmwares.json.
+          target: ${{ matrix.chip }}
           path: 'esp32'
           # We run our own builder (not the action's default `idf.py build`)
           # so the sdkconfig fragments and EXCLUDE_COMPONENTS go through the
@@ -240,6 +235,13 @@ jobs:
             uv run python -c "import sys; sys.path.insert(0,'moondeck/build'); \
               import build_esp32, pathlib; \
               pathlib.Path('dist/shared-ota-data-slot0.bin').write_bytes(build_esp32.otadata_slot0_bytes())"
+          done
+          # The migration image, which a board running WLED installs through WLED's own update page to move to MoonLight (moonbase/migrate/): one per chip, so shared like MoonBase.
+          for RP in build/migrate-*/MoonLight-migrate.bin; do
+            [ -f "$RP" ] || continue
+            CHIP=$(basename "$(dirname "$RP")"); CHIP=${CHIP#migrate-}
+            case "$CHIP" in *-pause) continue ;; esac   # the rehearsal image never ships
+            cp "$RP" "dist/shared-migrate-$CHIP.bin"
           done
 
       - uses: actions/upload-artifact@v4

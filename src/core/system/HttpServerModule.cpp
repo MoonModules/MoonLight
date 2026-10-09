@@ -2421,7 +2421,7 @@ void HttpServerModule::handleListApplyRow(platform::TcpConnection& conn, const c
         sendResponse(conn, 400, "application/json", "{\"error\":\"apply failed: the module's status says why\"}");
         return;
     }
-    afterListMutation();
+    // A row's action changes the tree, not the list, so the list owner is neither saved nor every module rebuilt.
     sendResponse(conn, 200, "application/json", "{\"ok\":true}");
 }
 

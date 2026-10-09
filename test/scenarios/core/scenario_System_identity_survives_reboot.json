@@ -6,13 +6,8 @@
     "FilesystemModule"
   ],
   "description": "A device's own identity survives a restart. Names it, restarts, and reads it back: the round trip nothing else proves, because a control that reads correctly while the process still holds it says nothing about what reached the filesystem. This is also the shape every rename risk is checked with, since the sweep is exactly the event that could break a read-back without breaking a write.",
-  "fixture": [
-    {
-      "name": "fix-System",
-      "op": "add_module",
-      "id": "System",
-      "type": "SystemModule"
-    }
+  "top": [
+    "SystemModule"
   ],
   "steps": [
     {

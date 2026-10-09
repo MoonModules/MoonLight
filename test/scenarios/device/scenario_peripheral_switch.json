@@ -16,54 +16,47 @@
   ],
   "live_only": true,
   "description": "Switch a live ParallelLedDriver between its DMA peripherals (i80 / MoonI80 / Parlio) and verify the device keeps running clean across every swap, and that the peripheral-dependent controls (doubleBuffer, pinExpander) behave per backend. Builds one Layout(Grid 16x16) + one Layer + one NoiseEffect + one ParallelLedDriver on lane-0 (64 LEDs), then set_control cycles `peripheral` and toggles `doubleBuffer`/`pinExpander`, measuring after each. The peripheral steps are `optional` so a board that lacks a given peripheral (a classic ESP32 offers only i80/I2S; a P4 adds Parlio; an S3 offers i80+MoonI80) skips them without failing. Guards the runtime-peripheral-strategy consolidation (ADR-0016): a swap that crashes, wedges, or leaves the driver in a bad state shows up here. Specifically pins the MoonI80 double-buffer fix: with doubleBuffer ON, MoonI80 must run single-buffer and NOT freeze (its own-GDMA whole-frame two-buffer handshake races); the measure after switching to MoonI80 with doubleBuffer ON is the regression guard (a freeze shows as a ~200 ms tick).",
+  "top": [
+    "Layouts",
+    "Effects",
+    "Drivers"
+  ],
   "fixture": [
     {
-      "name": "fix-layouts",
-      "op": "add_module",
-      "id": "Layouts",
-      "type": "Layouts"
-    },
-    {
       "name": "fix-grid",
-      "op": "add_module",
-      "id": "Grid",
-      "type": "GridLayout",
-      "parent_id": "Layouts",
-      "props": {
-        "width": 16,
-        "height": 16
-      }
-    },
-    {
-      "name": "fix-layers",
-      "op": "add_module",
-      "id": "Effects",
-      "type": "Effects",
-      "props": {
-        "layouts": "Layouts"
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "GridLayout",
+            "width": 16,
+            "height": 16
+          }
+        }
       }
     },
     {
       "name": "fix-layer",
-      "op": "add_module",
-      "id": "Layer",
-      "type": "Layer",
-      "parent_id": "Effects"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer"
+          }
+        }
+      }
     },
     {
       "name": "fix-fx",
-      "op": "add_module",
-      "id": "FX",
-      "type": "NoiseEffect",
-      "parent_id": "Layer"
-    },
-    {
-      "name": "fix-drivers",
-      "op": "add_module",
-      "id": "Drivers",
-      "type": "Drivers",
-      "props": {
-        "effects": "Effects"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "FX": {
+              "type": "NoiseEffect"
+            }
+          }
+        }
       }
     }
   ],
@@ -87,39 +80,59 @@
     {
       "name": "clear-layers",
       "description": "Start clean: drop whatever effects/modifiers the device had.",
-      "op": "clear_children",
-      "id": "Effects"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      }
     },
     {
       "name": "clear-drivers",
       "description": "Drop existing drivers (the pre-wired Preview survives on a device).",
-      "op": "clear_children",
-      "id": "Drivers"
+      "op": "apply_state",
+      "document": {
+        "Drivers": {
+          "$patch": "replace"
+        }
+      }
     },
     {
       "name": "rebuild-layer",
-      "op": "add_module",
-      "id": "Layer",
-      "type": "Layer",
-      "parent_id": "Effects"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer"
+          }
+        }
+      }
     },
     {
       "name": "rebuild-fx",
-      "op": "add_module",
-      "id": "FX",
-      "type": "NoiseEffect",
-      "parent_id": "Layer"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "FX": {
+              "type": "NoiseEffect"
+            }
+          }
+        }
+      }
     },
     {
       "name": "add-parallel-driver",
       "description": "One ParallelLedDriver on lane 0, 64 LEDs (i80 rounds the bus up to 8 pins and parks the spare lanes; the 8-pin set is the S3's clean range). The peripheral is set per switch step below.",
-      "op": "add_module",
-      "id": "ParallelLed",
-      "type": "ParallelLedDriver",
-      "parent_id": "Drivers",
-      "props": {
-        "pins": "1,2,3,4,5,6,7,8",
-        "ledsPerPin": "64,0,0,0,0,0,0,0"
+      "op": "apply_state",
+      "document": {
+        "Drivers": {
+          "ParallelLed": {
+            "type": "ParallelLedDriver",
+            "pins": "1,2,3,4,5,6,7,8",
+            "ledsPerPin": "64,0,0,0,0,0,0,0"
+          }
+        }
       }
     },
     {
@@ -1255,21 +1268,35 @@
     },
     {
       "name": "cleanup-driver",
-      "op": "remove_module",
-      "id": "ParallelLed",
-      "optional": true
+      "op": "apply_state",
+      "optional": true,
+      "document": {
+        "Drivers": {
+          "ParallelLed": null
+        }
+      }
     },
     {
       "name": "cleanup-fx",
-      "op": "remove_module",
-      "id": "FX",
-      "optional": true
+      "op": "apply_state",
+      "optional": true,
+      "document": {
+        "Effects": {
+          "Layer": {
+            "FX": null
+          }
+        }
+      }
     },
     {
       "name": "cleanup-layer",
-      "op": "remove_module",
-      "id": "Layer",
-      "optional": true
+      "op": "apply_state",
+      "optional": true,
+      "document": {
+        "Effects": {
+          "Layer": null
+        }
+      }
     }
   ]
 }

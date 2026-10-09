@@ -57,6 +57,13 @@
       "description": "ESP32-S3-Zero (N4R2: 4 MB embedded flash, 2 MB embedded QUAD PSRAM) - WiFi only, no Ethernet. Its own variant because neither other S3 image can boot here: both assume 8/16 MB flash and set SPIRAM_MODE_OCT, and octal mode fails PSRAM init on this board's quad part. A thumbnail-sized board for small installations."
     },
     {
+      "name": "esp32c3",
+      "chip": "esp32c3",
+      "eth_only": false,
+      "ships": true,
+      "description": "ESP32-C3 (4 MB flash, no PSRAM) - WiFi only, one RISC-V core at 160 MHz."
+    },
+    {
       "name": "esp32p4rev1-eth",
       "chip": "esp32p4",
       "eth_only": true,

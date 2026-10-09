@@ -10,246 +10,66 @@
   ],
   "live_only": true,
   "description": "What a layered shader costs, one control at a time. Aurora samples a warped noise field once per layer per pixel, so its frame time is set by three knobs that multiply: how many layers, how many octaves inside each, and whether the field warps at all. The steps walk them from the cheapest configuration to the most expensive on one grid, so the ratios between the observed numbers are what an author reads to choose settings for a fixture, and a jump in any one of them between commits is a regression with a name. The grid is deliberately 64x64: large enough that per-pixel cost dominates, small enough to run on every target the contracts name.",
-  "fixture": [
-    {
-      "name": "fix-layouts",
-      "op": "add_module",
-      "id": "Layouts",
-      "type": "Layouts"
-    },
-    {
-      "name": "fix-layers",
-      "op": "add_module",
-      "id": "Effects",
-      "type": "Effects",
-      "props": {
-        "layouts": "Layouts"
-      }
-    },
-    {
-      "name": "fix-drivers",
-      "op": "add_module",
-      "id": "Drivers",
-      "type": "Drivers",
-      "props": {
-        "effects": "Effects"
-      }
-    }
+  "top": [
+    "Layouts",
+    "Effects",
+    "Drivers"
   ],
   "steps": [
     {
       "name": "canvas-clear-layers",
       "description": "Self-canvas: clear and rebuild the pipeline this scenario assumes, so it runs from any device state.",
-      "op": "clear_children",
-      "id": "Effects"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      }
     },
     {
       "name": "canvas-clear-layouts",
-      "op": "clear_children",
-      "id": "Layouts"
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "$patch": "replace"
+        }
+      }
     },
     {
       "name": "canvas-grid",
-      "op": "add_module",
-      "id": "Grid",
-      "type": "GridLayout",
-      "parent_id": "Layouts",
-      "props": {
-        "width": 64,
-        "height": 64
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "GridLayout",
+            "width": 64,
+            "height": 64
+          }
+        }
       }
     },
     {
       "name": "canvas-layer",
-      "op": "add_module",
-      "id": "Layer",
-      "type": "Layer",
-      "parent_id": "Effects"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer"
+          }
+        }
+      }
     },
     {
       "name": "aurora-defaults",
       "description": "Aurora as it ships: 3 layers, 2 octaves, warp on. This is the number a catalog card promises, and the one every step below is read against.",
-      "op": "add_module",
-      "id": "Aurora",
-      "type": "AuroraEffect",
-      "parent_id": "Layer",
-      "measure": true,
-      "contract": {
-        "desktop-macos": {
-          "tick_us": 3000,
-          "free_heap": 0,
-          "set_by": "2026-09-04",
-          "reason": "initial contract: Aurora at 64x64, 3 layers, 2 octaves, warp on"
-        }
-      },
-      "observed": {
-        "desktop-macos": {
-          "tick_us": {
-            "p50": 864,
-            "p95": 1200,
-            "min": 819,
-            "max": 1744,
-            "n": 32,
-            "samples": [851, 843, 919, 841, 1005, 1177, 852, 880, 907, 862, 839, 1744, 877, 929, 1001, 834, 899, 864, 835, 819, 836, 840, 862, 929, 855, 1200, 857, 851, 1037, 896, 908, 887]
-          },
-          "last_updated": "2026-09-30"
-        },
-        "esp32s3-n16r8": {
-          "tick_us": {
-            "p50": 104192,
-            "p95": 116763,
-            "min": 104192,
-            "max": 116763,
-            "n": 2,
-            "samples": [104192, 116763]
-          },
-          "free_heap": {
-            "p50": 8405959,
-            "p95": 8461771,
-            "min": 8405959,
-            "max": 8461771,
-            "n": 2,
-            "samples": [8405959, 8461771]
-          },
-          "max_alloc_block": {
-            "p50": 73728,
-            "p95": 94208,
-            "min": 73728,
-            "max": 94208,
-            "n": 2,
-            "samples": [73728, 94208]
-          },
-          "last_updated": "2026-09-30"
-        },
-        "esp32s31": {
-          "tick_us": {
-            "p50": 49843,
-            "p95": 49843,
-            "min": 49843,
-            "max": 49843,
-            "n": 1,
-            "samples": [49843]
-          },
-          "free_heap": {
-            "p50": 16730727,
-            "p95": 16730727,
-            "min": 16730727,
-            "max": 16730727,
-            "n": 1,
-            "samples": [16730727]
-          },
-          "max_alloc_block": {
-            "p50": 92160,
-            "p95": 92160,
-            "min": 92160,
-            "max": 92160,
-            "n": 1,
-            "samples": [92160]
-          },
-          "last_updated": "2026-09-29"
-        },
-        "esp32": {
-          "tick_us": {
-            "p50": 122284,
-            "p95": 122519,
-            "min": 122284,
-            "max": 122519,
-            "n": 2,
-            "samples": [122519, 122284]
-          },
-          "free_heap": {
-            "p50": 46728,
-            "p95": 46996,
-            "min": 46728,
-            "max": 46996,
-            "n": 2,
-            "samples": [46728, 46996]
-          },
-          "max_alloc_block": {
-            "p50": 30720,
-            "p95": 34816,
-            "min": 30720,
-            "max": 34816,
-            "n": 2,
-            "samples": [34816, 30720]
-          },
-          "last_updated": "2026-09-29"
-        },
-        "esp32p4rev1-eth-wifi": {
-          "tick_us": {
-            "p50": 6343087,
-            "p95": 7828837,
-            "min": 6343087,
-            "max": 7828837,
-            "n": 2,
-            "samples": [6343087, 7828837]
-          },
-          "free_heap": {
-            "p50": 26828547,
-            "p95": 33701079,
-            "min": 26828547,
-            "max": 33701079,
-            "n": 2,
-            "samples": [26828547, 33701079]
-          },
-          "max_alloc_block": {
-            "p50": 229376,
-            "p95": 294912,
-            "min": 229376,
-            "max": 294912,
-            "n": 2,
-            "samples": [229376, 294912]
-          },
-          "last_updated": "2026-09-29"
-        },
-        "esp32p4rev1-eth": {
-          "tick_us": {
-            "p50": 37283,
-            "p95": 256103,
-            "min": 37283,
-            "max": 256103,
-            "n": 2,
-            "samples": [256103, 37283]
-          },
-          "free_heap": {
-            "p50": 33871655,
-            "p95": 33909911,
-            "min": 33871655,
-            "max": 33909911,
-            "n": 2,
-            "samples": [33909911, 33871655]
-          },
-          "max_alloc_block": {
-            "p50": 258048,
-            "p95": 286720,
-            "min": 258048,
-            "max": 286720,
-            "n": 2,
-            "samples": [286720, 258048]
-          },
-          "last_updated": "2026-09-29"
-        },
-        "desktop-windows": {
-          "tick_us": {
-            "p50": 6661,
-            "p95": 6661,
-            "min": 6661,
-            "max": 6661,
-            "n": 1,
-            "samples": [6661]
-          },
-          "last_updated": "2026-09-30"
-        },
-        "desktop-docker-arm64": {
-          "tick_us": {
-            "p50": 3919,
-            "p95": 3919,
-            "min": 3919,
-            "max": 3919,
-            "n": 1,
-            "samples": [3919]
-          },
-          "last_updated": "2026-09-30"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "Aurora": {
+              "type": "AuroraEffect"
+            }
+          }
         }
       }
     },

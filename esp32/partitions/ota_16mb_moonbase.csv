@@ -1,7 +1,7 @@
 # 16 MB partition table with MoonBase: a factory recovery image, ONE app slot, and the flash
 # the second OTA slot used to hold given to the filesystem.
 #
-# The same trade the 4 MB table makes (esp32dev_moonbase.csv), taken deliberately rather than
+# The same trade the 4 MB table makes (4mb_moonbase.csv), taken deliberately rather than
 # out of necessity. Dual-OTA spends half the app area on a second copy of the firmware that is
 # idle except during an update; MoonBase is a small image that owns the device while the app is
 # replaced, so one app slot is enough. On 16 MB that returns 4 MB, and it goes to LittleFS:

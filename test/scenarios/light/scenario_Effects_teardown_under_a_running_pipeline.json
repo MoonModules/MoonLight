@@ -7,68 +7,52 @@
     "Services",
     "AudioService"
   ],
+  "top": [
+    "Layouts",
+    "Effects",
+    "Drivers",
+    "Services"
+  ],
   "fixture": [
-    {
-      "name": "layouts",
-      "description": "Where the lights are, which the layer reads its coordinates from.",
-      "op": "add_module",
-      "id": "Layouts",
-      "type": "Layouts"
-    },
     {
       "name": "grid",
       "description": "A 16x16 panel: small enough to run anywhere, and every light is one the teardown could strand.",
-      "op": "add_module",
-      "id": "Grid",
-      "type": "GridLayout",
-      "parent_id": "Layouts",
-      "props": {
-        "width": 16,
-        "height": 16
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "GridLayout",
+            "width": 16,
+            "height": 16
+          }
+        }
       }
     },
     {
       "name": "layer",
       "description": "One layer over those layouts, which owns the buffer every check below reads.",
-      "op": "add_module",
-      "id": "Layer",
-      "type": "Layer",
-      "props": {
-        "layouts": "Layouts"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer"
+          }
+        }
       }
     },
     {
       "name": "effect",
       "description": "An effect that paints from the first frame, so the pipeline is genuinely running before anything is removed.",
-      "op": "add_module",
-      "id": "FX",
-      "type": "RainbowEffect",
-      "parent_id": "Layer"
-    },
-    {
-      "name": "drivers",
-      "description": "The drivers container, wired to the effects whose buffer it reads.",
-      "op": "add_module",
-      "id": "Drivers",
-      "type": "Drivers",
-      "props": {
-        "layer": "Layer"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "FX": {
+              "type": "RainbowEffect"
+            }
+          }
+        }
       }
-    },
-    {
-      "name": "preview",
-      "description": "The preview is a driver like any other, and the one every target has.",
-      "op": "add_module",
-      "id": "Preview",
-      "type": "PreviewDriver",
-      "parent_id": "Drivers"
-    },
-    {
-      "name": "services",
-      "description": "The container a producer lives under, mirroring what boot wires.",
-      "op": "add_module",
-      "id": "Services",
-      "type": "Services"
     }
   ],
   "steps": [
@@ -84,9 +68,9 @@
             "min": 6,
             "max": 81,
             "n": 32,
-            "samples": [6, 6, 6, 7, 10, 6, 6, 7, 6, 6, 7, 7, 6, 7, 7, 7, 7, 18, 7, 6, 7, 81, 7, 7, 7, 7, 7, 15, 7, 7, 12, 7]
+            "samples": [7, 10, 6, 6, 7, 6, 6, 7, 7, 6, 7, 7, 7, 7, 18, 7, 6, 7, 81, 7, 7, 7, 7, 7, 15, 7, 7, 12, 7, 7, 8, 7]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         },
         "esp32s3-n16r8": {
           "tick_us": {
@@ -140,20 +124,18 @@
       }
     },
     {
-      "name": "add-producer",
-      "description": "An audio producer: it acquires a source and publishes a frame every other audio module reads.",
-      "op": "add_module",
-      "id": "Audio",
-      "type": "AudioService",
-      "parent_id": "Services"
-    },
-    {
       "name": "add-consumer",
       "description": "And a consumer of it, under the same layer the rainbow renders into, so two effects composite while a producer feeds one of them.",
-      "op": "add_module",
-      "id": "Spectrum",
-      "type": "AudioSpectrumEffect",
-      "parent_id": "Layer"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "Spectrum": {
+              "type": "AudioSpectrumEffect"
+            }
+          }
+        }
+      }
     },
     {
       "name": "measure-wired",
@@ -167,9 +149,9 @@
             "min": 4,
             "max": 32,
             "n": 32,
-            "samples": [5, 5, 5, 5, 7, 5, 4, 5, 4, 4, 4, 4, 4, 7, 4, 5, 5, 32, 4, 4, 4, 12, 5, 5, 5, 4, 6, 5, 5, 4, 7, 4]
+            "samples": [5, 7, 5, 4, 5, 4, 4, 4, 4, 4, 7, 4, 5, 5, 32, 4, 4, 4, 12, 5, 5, 5, 4, 6, 5, 5, 4, 7, 4, 4, 5, 4]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         },
         "esp32s3-n16r8": {
           "tick_us": {
@@ -225,8 +207,12 @@
     {
       "name": "remove-the-producer-first",
       "description": "THE CASE THIS EXISTS FOR. The microphone goes while the consumer is still rendering: it must fall back to the service's static silence rather than reading through a pointer to a module that has been destroyed.",
-      "op": "remove_module",
-      "id": "Audio"
+      "op": "apply_state",
+      "document": {
+        "Services": {
+          "Audio": null
+        }
+      }
     },
     {
       "name": "measure-orphaned-consumer",
@@ -240,9 +226,9 @@
             "min": 6,
             "max": 19,
             "n": 32,
-            "samples": [7, 7, 6, 8, 9, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 19, 7, 7, 7, 7, 7, 7, 7, 7, 7, 8, 6, 7, 15, 7]
+            "samples": [8, 9, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 19, 7, 7, 7, 7, 7, 7, 7, 7, 7, 8, 6, 7, 15, 7, 7, 9, 7]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         },
         "esp32s3-n16r8": {
           "tick_us": {
@@ -306,8 +292,14 @@
     {
       "name": "remove-the-orphan",
       "description": "And the consumer itself, which is the ordinary half: a module removed with nothing depending on it.",
-      "op": "remove_module",
-      "id": "Spectrum"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "Spectrum": null
+          }
+        }
+      }
     },
     {
       "name": "measure-back-to-baseline",
@@ -321,9 +313,9 @@
             "min": 6,
             "max": 18,
             "n": 32,
-            "samples": [7, 6, 6, 7, 9, 7, 6, 7, 7, 6, 7, 7, 6, 7, 7, 7, 7, 18, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 6, 7, 14, 7]
+            "samples": [7, 9, 7, 6, 7, 7, 6, 7, 7, 6, 7, 7, 7, 7, 18, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 6, 7, 14, 7, 7, 7, 7]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         },
         "esp32s3-n16r8": {
           "tick_us": {
@@ -379,16 +371,28 @@
     {
       "name": "add-an-effect-to-remove",
       "description": "An effect this scenario owns, since the one the fixture wires exists in-process and never on a device: live, the board is its own fixture and that id was never created here.",
-      "op": "add_module",
-      "id": "FXOwn",
-      "type": "RainbowEffect",
-      "parent_id": "Layer"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "FXOwn": {
+              "type": "RainbowEffect"
+            }
+          }
+        }
+      }
     },
     {
       "name": "remove-the-rendering-effect",
       "description": "The last effect this scenario added, so the layer is left with a buffer and whatever the board wired itself. An empty layer is a state the pipeline holds rather than a reason to stop.",
-      "op": "remove_module",
-      "id": "FXOwn"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "FXOwn": null
+          }
+        }
+      }
     },
     {
       "name": "measure-empty-layer",
@@ -402,9 +406,9 @@
             "min": 6,
             "max": 31,
             "n": 32,
-            "samples": [7, 7, 6, 7, 9, 6, 6, 6, 7, 6, 6, 7, 6, 7, 7, 7, 7, 31, 6, 6, 6, 6, 7, 7, 7, 7, 7, 11, 6, 7, 13, 7]
+            "samples": [7, 9, 6, 6, 6, 7, 6, 6, 7, 6, 7, 7, 7, 7, 31, 6, 6, 6, 6, 7, 7, 7, 7, 7, 11, 6, 7, 13, 7, 7, 7, 7]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         },
         "esp32s3-n16r8": {
           "tick_us": {
@@ -468,10 +472,16 @@
     {
       "name": "add-an-effect-back",
       "description": "And one back in the same slot, because a pipeline that tears down cleanly but cannot be rebuilt is only half working.",
-      "op": "add_module",
-      "id": "FX2",
-      "type": "RainbowEffect",
-      "parent_id": "Layer"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "FX2": {
+              "type": "RainbowEffect"
+            }
+          }
+        }
+      }
     },
     {
       "name": "measure-rebuilt",
@@ -485,9 +495,9 @@
             "min": 3,
             "max": 25,
             "n": 32,
-            "samples": [5, 4, 5, 6, 6, 4, 3, 3, 3, 4, 3, 3, 3, 4, 4, 4, 4, 25, 4, 3, 3, 5, 4, 4, 4, 4, 4, 5, 4, 4, 9, 4]
+            "samples": [6, 6, 4, 3, 3, 3, 4, 3, 3, 3, 4, 4, 4, 4, 25, 4, 3, 3, 5, 4, 4, 4, 4, 4, 5, 4, 4, 9, 4, 4, 4, 4]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         },
         "esp32s3-n16r8": {
           "tick_us": {
@@ -551,16 +561,24 @@
     {
       "name": "add-a-second-driver",
       "description": "A driver beside the preview, so the container holds one module a user added and one that is apparatus.",
-      "op": "add_module",
-      "id": "Net",
-      "type": "NetworkSendDriver",
-      "parent_id": "Drivers"
+      "op": "apply_state",
+      "document": {
+        "Drivers": {
+          "Net": {
+            "type": "NetworkSendDriver"
+          }
+        }
+      }
     },
     {
       "name": "clear-the-drivers",
       "description": "Clear the container rather than naming what to remove, which is how a scenario prepares its own canvas on a device whose tree it did not build. The rule it has to honour is that apparatus stays: a preview, a board or an Improv submodule is not content.",
-      "op": "clear_children",
-      "id": "Drivers"
+      "op": "apply_state",
+      "document": {
+        "Drivers": {
+          "$patch": "replace"
+        }
+      }
     },
     {
       "name": "the-apparatus-survived-the-clear",
@@ -582,9 +600,9 @@
             "min": 3,
             "max": 20,
             "n": 32,
-            "samples": [5, 4, 5, 6, 6, 4, 4, 3, 3, 4, 4, 3, 3, 4, 4, 4, 4, 20, 4, 3, 3, 4, 4, 4, 4, 4, 4, 6, 4, 4, 7, 4]
+            "samples": [6, 6, 4, 4, 3, 3, 4, 4, 3, 3, 4, 4, 4, 4, 20, 4, 3, 3, 4, 4, 4, 4, 4, 4, 6, 4, 4, 7, 4, 4, 4, 4]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         },
         "esp32s3-n16r8": {
           "tick_us": {

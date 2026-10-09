@@ -1,4 +1,4 @@
-# Partition table for ESP32 classic (4 MB flash) WITH MoonBase: the factory slot carries the
+# Partition table for any 4 MB board WITH MoonBase (classic ESP32, S3-Zero, C3): the factory slot carries the
 # small maintenance image and the second OTA slot is gone, growing the app slot 1856 -> 2496 KB.
 # Why and how: architecture.md, MoonBase: the second boot image (the concept's one home).
 #

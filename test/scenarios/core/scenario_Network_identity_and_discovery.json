@@ -7,20 +7,8 @@
     "SystemModule"
   ],
   "description": "The network card's own settings, and the one thing a rename could silently change: how this device is advertised and how it types the peers it finds. mDNS and the device list both key on names, so each is set, restarted, and read back rather than merely written.",
-  "fixture": [
-    {
-      "name": "fix-Network",
-      "op": "add_module",
-      "id": "Network",
-      "type": "NetworkModule"
-    },
-    {
-      "name": "fix-Devices",
-      "op": "add_module",
-      "id": "Devices",
-      "type": "DevicesModule",
-      "parent_id": "Network"
-    }
+  "top": [
+    "NetworkModule"
   ],
   "steps": [
     {

@@ -1,0 +1,11 @@
+# ESP32-C3: one RISC-V core at 160 MHz, 400 KB SRAM, no PSRAM, 4 MB flash, WiFi only.
+# Append to sdkconfig.defaults (later fragment wins); the partition table comes from the moonbase-4mb fragment.
+
+# 160 MHz is the C3's top speed, where the base fragment asks for the 240 of the other chips.
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_160=y
+
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+
+# MoonLive native codegen needs an executable heap, which ESP-IDF offers only with memory protection off: the same configuration as the S3 images.
+CONFIG_ESP_SYSTEM_MEMPROT_FEATURE=n
+CONFIG_HEAP_HAS_EXEC_HEAP=y

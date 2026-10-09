@@ -6,20 +6,8 @@
     "Services"
   ],
   "description": "Audio arrives wired on every device and synthesized by default, so the effects react before a microphone is attached to anything. Proves the default is what ships, that a source change takes, and that the choice survives a restart.",
-  "fixture": [
-    {
-      "name": "fix-Services",
-      "op": "add_module",
-      "id": "Services",
-      "type": "Services"
-    },
-    {
-      "name": "fix-Audio",
-      "op": "add_module",
-      "id": "Audio",
-      "type": "AudioService",
-      "parent_id": "Services"
-    }
+  "top": [
+    "Services"
   ],
   "steps": [
     {

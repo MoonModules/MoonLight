@@ -7,6 +7,11 @@
     "RainbowEffect"
   ],
   "description": "A palette written as a MoonLive script, end to end: the file lands on the device, the picker offers it by name, it compiles and puts its own control on the Drivers card, every effect samples what it computes each frame, and a control turned on the card reaches the script. The scenario removes its file afterwards, so the device's picker is left as it was found.",
+  "top": [
+    "Layouts",
+    "Effects",
+    "Drivers"
+  ],
   "reset": [
     {
       "name": "reset-palette",
@@ -19,57 +24,43 @@
   ],
   "fixture": [
     {
-      "name": "layouts",
-      "op": "add_module",
-      "id": "Layouts",
-      "type": "Layouts"
-    },
-    {
       "name": "grid",
       "description": "A 16x16 panel, small enough to run anywhere.",
-      "op": "add_module",
-      "id": "Grid",
-      "type": "GridLayout",
-      "parent_id": "Layouts",
-      "props": {
-        "width": 16,
-        "height": 16
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "GridLayout",
+            "width": 16,
+            "height": 16
+          }
+        }
       }
     },
     {
       "name": "layer",
-      "op": "add_module",
-      "id": "Layer",
-      "type": "Layer",
-      "props": {
-        "layouts": "Layouts"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer"
+          }
+        }
       }
     },
     {
       "name": "effect",
       "description": "An effect that samples the palette for every light, so the script's colors are what it paints.",
-      "op": "add_module",
-      "id": "FX",
-      "type": "RainbowEffect",
-      "parent_id": "Layer"
-    },
-    {
-      "name": "drivers",
-      "description": "The owner of the palette choice, and the card a scripted palette's controls appear on.",
-      "op": "add_module",
-      "id": "Drivers",
-      "type": "Drivers",
-      "props": {
-        "layer": "Layer"
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "FX": {
+              "type": "RainbowEffect"
+            }
+          }
+        }
       }
-    },
-    {
-      "name": "preview",
-      "description": "A driver to consume the frame, so the pipeline renders.",
-      "op": "add_module",
-      "id": "Preview",
-      "type": "PreviewDriver",
-      "parent_id": "Drivers"
     }
   ],
   "steps": [
@@ -115,10 +106,10 @@
             "p95": 122,
             "min": 6,
             "max": 202,
-            "n": 29,
-            "samples": [6, 122, 6, 6, 53, 36, 6, 6, 6, 202, 11, 6, 74, 74, 7, 6, 6, 7, 6, 6, 6, 7, 8, 11, 7, 7, 9, 7, 7]
+            "n": 32,
+            "samples": [6, 122, 6, 6, 53, 36, 6, 6, 6, 202, 11, 6, 74, 74, 7, 6, 6, 7, 6, 6, 6, 7, 8, 11, 7, 7, 9, 7, 7, 7, 7, 7]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         }
       }
     },
@@ -183,10 +174,10 @@
             "p95": 204,
             "min": 6,
             "max": 205,
-            "n": 29,
-            "samples": [6, 204, 6, 6, 49, 37, 6, 6, 7, 205, 7, 7, 115, 108, 8, 6, 6, 7, 7, 7, 7, 7, 7, 8, 6, 6, 11, 7, 7]
+            "n": 32,
+            "samples": [6, 204, 6, 6, 49, 37, 6, 6, 7, 205, 7, 7, 115, 108, 8, 6, 6, 7, 7, 7, 7, 7, 7, 8, 6, 6, 11, 7, 7, 7, 7, 7]
           },
-          "last_updated": "2026-10-07"
+          "last_updated": "2026-10-09"
         }
       }
     }
