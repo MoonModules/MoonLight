@@ -1,5 +1,5 @@
 {
-  "commit": "3d6dcd64",
+  "commit": "4c61c409",
   "flash": {
     "esp32s3-n16r8": 2335504,
     "esp32": 2226256,
@@ -14,9 +14,9 @@
     "esp32p4rev3-eth": 2203712,
     "esp32s3-zero": 2218288,
     "esp32-pico": 2107168,
-    "desktop-macos": 2270472,
+    "desktop-macos": 2270488,
     "desktop-windows": 1925120,
-    "esp32c3": 2334304
+    "esp32c3": 2334528
   },
   "measured": {
     "esp32p4rev1-eth": "2026-10-07",
@@ -42,9 +42,9 @@
     "scenario_matrix": {
       "Control_a_palette_preset_changes_only_the_palette": {
         "desktop-macos": {
-          "p50": 6,
+          "p50": 7,
           "p95": 324,
-          "n": 28,
+          "n": 29,
           "last": "2026-10-09"
         },
         "esp32s3-n16r8": {
@@ -110,7 +110,7 @@
         "desktop-macos": {
           "p50": 2,
           "p95": 387,
-          "n": 27,
+          "n": 28,
           "last": "2026-10-09"
         },
         "esp32s3-n16r8": {
@@ -644,8 +644,8 @@
       }
     },
     "desktop-macos": {
-      "tick_us": 8,
-      "fps": 125000,
+      "tick_us": 7,
+      "fps": 142857,
       "scenario_p50": {
         "Effects_pipeline_builds_and_renders": {
           "p50": 7,
@@ -682,10 +682,10 @@
   },
   "loc": {
     "core": 28229,
-    "light": 31012,
-    "platform": 17950,
+    "light": 31027,
+    "platform": 17948,
     "ui": 12307,
-    "test": 64490,
+    "test": 64507,
     "moondeck": 30600
   },
   "comments": {
@@ -694,19 +694,19 @@
       "ratio": 0.242
     },
     "light": {
-      "lines": 7436,
+      "lines": 7439,
       "ratio": 0.269
     },
     "platform": {
-      "lines": 3659,
-      "ratio": 0.227
+      "lines": 3660,
+      "ratio": 0.228
     },
     "ui": {
       "lines": 3464,
       "ratio": 0.298
     },
     "test": {
-      "lines": 6962,
+      "lines": 6963,
       "ratio": 0.125
     },
     "moondeck": {
@@ -715,19 +715,19 @@
     }
   },
   "tests": {
-    "cases": 2393,
+    "cases": 2394,
     "scenarios": 30
   },
   "docs": {
     "md_files": 150,
-    "md_lines": 32256,
+    "md_lines": 32267,
     "plans_files": 44,
     "backlog_lines": 3318,
     "lessons_lines": 532,
     "claude_md_lines": 283
   },
   "complexity": {
-    "functions": 4383,
+    "functions": 4385,
     "over_threshold": 331,
     "worst_ccn": 128
   }

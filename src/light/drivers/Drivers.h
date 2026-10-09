@@ -428,12 +428,16 @@ public:
         MoonModule::tick20ms();
     }
 
-    /// Whether the frame the drivers read has any light on.
+    /// Whether the frame the drivers read has any light on: its color slots, since an aim alone emits nothing.
     bool anyLit() const MM_NONBLOCKING {
         if (!source_ || !source_->data()) return false;
         const uint8_t* d = source_->data();
-        for (size_t i = 0; i < source_->bytes(); i++)
-            if (d[i]) return true;
+        const uint8_t cpl = source_->channelsPerLight();
+        if (cpl == 0) return false;
+        const uint8_t colors = cpl < FixtureChannels::kMotionBase ? cpl : FixtureChannels::kMotionBase;
+        for (size_t at = 0; at + cpl <= source_->bytes(); at += cpl)
+            for (uint8_t c = 0; c < colors; c++)
+                if (d[at + c]) return true;
         return false;
     }
 

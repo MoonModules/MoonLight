@@ -1731,7 +1731,7 @@
           "type": "PwmLightDriver",
           "fixture": "RGBCCT",
           "pins": "6,7,5,3,4",
-          "frequency": 9765
+          "bits": 13
         }
       },
       "Layouts": {

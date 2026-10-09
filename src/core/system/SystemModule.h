@@ -83,8 +83,8 @@ public:
         if (std::strcmp(controlName, "logLevel") == 0) applyLogLevel();
         // No flush first, since a save would write back what the reset deletes.
         if (std::strcmp(controlName, "factory reset") == 0) {
-            factoryReset();
-            platform::reboot();
+            if (factoryReset()) platform::reboot();
+            else setStatus("factory reset failed: some settings could not be deleted", Severity::Warning);
         }
         // A load overwrites the variant with the previous image's, so the constant re-asserts.
         if (std::strcmp(controlName, "firmware") == 0

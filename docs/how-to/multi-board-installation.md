@@ -71,6 +71,8 @@ The layout decides what an effect can show: the legs are ten vertical strips, th
 The legs run on a LightCrafter 16, a 16-channel LED driver board with Ethernet, using ten of its channels.
 Each eye runs on an ESP32-S3-Zero, small enough to fit inside the printed bulb.
 The mouth is a WiFi light bulb that ran WLED, moved to MoonLight without opening it: [migrating over the air](migrating-over-the-air.md).
+A second bulb is a backup mouth, migrated the same way.
+It takes the first bulb's scripts and its `Services`, `Effects` and `Drivers` config files, and follows the legs at once, since they send to a group any device joins.
 
 <img src="../assets/deviceModels/esp32-s3-n8r8-lightcrafter-16.jpg" width="300" alt="The LightCrafter 16 board: sixteen LED output channels around an ESP32-S3, with an Ethernet port"> <img src="../assets/deviceModels/esp32-s3-zero-pinout.png" width="300" alt="The Waveshare ESP32-S3-Zero and its pin map">
 
@@ -330,6 +332,7 @@ Every device joins its WiFi, and the audio source is wired to it by Ethernet, so
 | MM-eye1 | ESP32-S3-Zero | 192.168.1.149 | WiFi | an eye |
 | MM-Eye2 | ESP32-S3-Zero | 192.168.1.216 | WiFi | an eye |
 | MM-bulb1 | ESP32-C3 RGBWW PWM bulb | 192.168.1.230 | WiFi | the mouth |
+| MM-bulb2 | ESP32-C3 RGBWW PWM bulb | 192.168.1.215 | WiFi | the backup mouth, set up as MM-bulb1 |
 | MM-S31 | ESP32-S31 CoreBoard | 192.168.1.125 | Ethernet, 1 Gbit | the audio source |
 | MM-MIDI-rtp | ESP32-S3 (N16R8) | 192.168.1.101 | WiFi | the MIDI bridge |
 

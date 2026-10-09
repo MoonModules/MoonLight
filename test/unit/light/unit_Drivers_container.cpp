@@ -454,7 +454,7 @@ TEST_CASE("the lights rise to their brightness after a device boot, and a host p
     layouts.addChild(&grid);
     mm::Layer layer;
     layer.setLayouts(&layouts);
-    layer.setChannelsPerLight(3);
+    layer.setChannelsPerLight(5);   // RGBW and one motion slot
     layouts.applyState();
     layer.applyState();
     mm::Drivers drivers;
@@ -464,6 +464,11 @@ TEST_CASE("the lights rise to their brightness after a device boot, and a host p
     drivers.tick20ms();
     CHECK(drivers.effectiveBrightness() == 0);   // dark until a light is lit
     REQUIRE(layer.buffer().data());
+    layer.buffer().data()[mm::FixtureChannels::kMotionBase] = 255;   // an aim alone emits nothing, so the rise waits
+    drivers.tick20ms();
+    mm::platform::setTestNowMs(1000 + mm::Drivers::kSoftStartMs / 2);
+    CHECK(drivers.effectiveBrightness() == 0);
+    mm::platform::setTestNowMs(1000);
     layer.buffer().data()[0] = 255;
     drivers.tick20ms();   // the first lit frame starts the rise
     CHECK(drivers.effectiveBrightness() == 0);

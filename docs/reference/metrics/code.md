@@ -346,7 +346,7 @@ The next function worth simplifying is at the top of each file's list.
 | `src/platform/esp32/platform_config.h` | 1 | `lines 236-250, also in src/platform/desktop/platform_config.h:71`, duplicated block 15 |
 | `src/platform/esp32/platform_esp32_i2s.cpp` | 1 | `platform::audioMicInit`, complex function 11 |
 | `src/platform/esp32/platform_esp32_tasks.cpp` | 1 | `platform::taskSnapshot`, complex function 12 |
-| `src/platform/platform.h` | 1 | `platform.h`, large file 1295 |
+| `src/platform/platform.h` | 1 | `platform.h`, large file 1302 |
 | `src/ui/install-picker.js` | 1 | `install-picker.js`, large file 1048 |
 | `src/ui/preview3d.js` | 1 | `preview3d.js`, large file 1431 |
 | `test/js/installer-eth-only.test.mjs` | 1 | `lines 13-23, also in test/js/ui-mooncloud.test.mjs:6`, duplicated block 11 |

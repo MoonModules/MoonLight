@@ -856,8 +856,14 @@ private:
 /// How many PWM channels the chip has across its speed modes; 0 where there is no PWM output.
 uint8_t pwmChannelCount() MM_NONBLOCKING;
 
-/// Start a PWM timer at `frequency` Hz with the most duty bits that fit, into `bits`; the timer, or -1 when none is free.
-int pwmStart(uint32_t frequency, uint8_t& bits);
+/// The 80 MHz a PWM timer counts on every built chip (APB, or PLL_F80M on the P4 and S31), so `bits` duty bits pulse at kPwmClockHz >> bits.
+constexpr uint32_t kPwmClockHz = 80'000'000;
+
+/// The most duty bits a PWM timer holds; 0 where there is no PWM output.
+uint8_t pwmMaxBits() MM_NONBLOCKING;
+
+/// Start a PWM timer with `bits` duty bits, pulsing at kPwmClockHz >> bits; the timer, or -1 when none is free or the chip refuses that resolution.
+int pwmStart(uint8_t bits);
 
 /// Drive `pin` from `timer`, its pulse starting `phase` steps into the period; the channel, or -1 when none is free.
 int pwmAttach(int timer, uint8_t pin, uint32_t phase);

@@ -12,7 +12,7 @@ namespace mm {
 /// Lights whose channels are each a pin, pulsed by the chip's PWM: a bulb, an analog strip, a constant-current controller.
 ///
 /// `pins` lists one GPIO per output channel and the fixture profile names each channel, so the light count is the pins divided by the profile's channels.
-/// `frequency` sets the pulse rate, and the resolution follows from it: the most duty bits one period holds.
+/// `bits` sets the resolution, and the pulse rate follows from it: the timer's clock divided by the steps, shown as `frequency`.
 class PwmLightDriver : public DriverBase {
 public:
     /// One pin per channel of a plain RGB light, until the profile says otherwise; the curve reaches the timer in 16 bits, so a dim fade keeps its steps.
@@ -25,19 +25,27 @@ public:
     static constexpr uint8_t kMaxPins = 16;
 
     char pins[64] = "";              ///< one GPIO per output channel, in the profile's channel order
-    uint16_t frequency = 19531;      ///< the pulse rate in Hz, QuinLED's recommended rate
+    uint8_t bits = 12;               ///< the duty resolution, 4,096 steps at 19,531 Hz, QuinLED's recommended rate
 
-    /// The window, the pins and the frequency.
+    /// The fewest bits, about 39 kHz: a faster pulse only trades dim steps away.
+    static constexpr uint8_t kMinBits = 11;
+    /// The most bits, about 1.2 kHz: a slower pulse flickers on camera and to a moving eye.
+    static constexpr uint8_t kMaxBits = 16;
+
+    /// The window, the pins, the resolution and the rate it gives.
     void defineDriverControls() override {
         addWindowControls();
         controls_.addText("pins", pins, sizeof(pins));
-        controls_.addControl("frequency", frequency, 100, 40000);
-        controls_.setNumberField(controls_.count() - 1);   // typed, since a fixture's datasheet names an exact rate
+        const uint8_t chipBits = platform::pwmMaxBits();
+        const uint8_t maxBits = chipBits < kMaxBits ? chipBits : kMaxBits;
+        controls_.addControl("bits", bits, kMinBits, maxBits > kMinBits ? maxBits : kMinBits);
+        controls_.setNumberField(controls_.count() - 1);   // typed, since a bit count is a number to read rather than a position
+        controls_.addReadOnly("frequency", frequency_, sizeof(frequency_));   // read against a fixture's datasheet
     }
 
-    /// The pins, the frequency and the window re-lay the outputs.
+    /// The pins, the resolution and the window re-lay the outputs.
     bool affectsPrepare(const char* name) const override {
-        return std::strcmp(name, "pins") == 0 || std::strcmp(name, "frequency") == 0 || isWindowControl(name);
+        return std::strcmp(name, "pins") == 0 || std::strcmp(name, "bits") == 0 || isWindowControl(name);
     }
 
     /// Read the window from `buf`.
@@ -46,6 +54,7 @@ public:
     /// Start one timer, attach a channel per pin with evenly spaced phases, and say how many lights that is.
     void prepare() override {
         stop();
+        formatTo(frequency_, sizeof(frequency_), "%lu Hz", static_cast<unsigned long>(platform::kPwmClockHz >> bits));
         uint8_t n = 0;
         const uint8_t limit = platform::pwmChannelCount() < kMaxPins ? platform::pwmChannelCount() : kMaxPins;
         if (!pins[0]) { setConfigWarn("set the pins"); return; }
@@ -67,7 +76,7 @@ public:
         nrOfLightsType winStart = 0, winLen = 0;
         windowSlice(sourceBuffer_->count(), winStart, winLen);
         const uint8_t lights = winLen < lights_ ? static_cast<uint8_t>(winLen) : lights_;
-        uint16_t out[kMaxPins];
+        uint16_t out[kMaxPins] = {};   // a fine role's pin stays dark: the wide path carries the whole value on the coarse pin
         uint8_t narrow[kMaxPins];
         for (uint8_t l = 0; l < lights; l++) {
             const uint8_t* src = sourceBuffer_->data() + static_cast<size_t>(winStart + l) * srcCh;
@@ -91,6 +100,8 @@ public:
     uint32_t maxDutyForTest() const { return maxDuty_; }
     /// The platform channel behind output `i`, for the tests.
     int channelForTest(uint8_t i) const { return i < pinCount_ ? channels_[i] : -1; }
+    /// The rate the resolution gives, as shown, for the tests.
+    const char* frequencyForTest() const { return frequency_; }
     /// How many whole lights the pins make, for the tests.
     uint8_t lightsForTest() const { return lights_; }
 
@@ -104,6 +115,7 @@ private:
     uint32_t maxDuty_ = 0;
     uint8_t lights_ = 0;
     char attachErr_[64] = "";
+    char frequency_[16] = "";
 
     // Scaled from 16 bits to the resolution and rounded, so 65535 is fully on and a lit value never rounds to dark.
     void write(uint8_t output, uint16_t value) MM_NONBLOCKING {
@@ -118,9 +130,8 @@ private:
     void layOut(uint8_t n) {
         stop();
         pinCount_ = n;
-        uint8_t bits = 0;
-        timer_ = platform::pwmStart(frequency, bits);
-        if (timer_ < 0) { setConfigErr("no PWM timer free at this frequency"); return; }
+        timer_ = platform::pwmStart(bits);
+        if (timer_ < 0) { setConfigErr("no PWM timer free at this resolution"); return; }
         maxDuty_ = (uint32_t{1} << bits) - 1;
         for (uint8_t i = 0; i < n; i++) {
             channels_[i] = platform::pwmAttach(timer_, static_cast<uint8_t>(pinList_[i]), (maxDuty_ + 1) / n * i);

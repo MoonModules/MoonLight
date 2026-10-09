@@ -2216,12 +2216,10 @@ HostPwmChannel g_pwmChannels[kHostPwmChannels];
 
 uint8_t pwmChannelCount() MM_NONBLOCKING { return kHostPwmChannels; }
 
-int pwmStart(uint32_t frequency, uint8_t& bits) {
-    if (frequency == 0) return -1;
-    // The duty steps one period holds at the clock, at most the classic ESP32's 20-bit timer.
-    bits = 0;
-    while (bits < 20 && (uint64_t{80'000'000} >> (bits + 1)) >= frequency) bits++;
-    if (bits == 0) return -1;
+uint8_t pwmMaxBits() MM_NONBLOCKING { return 20; }   // the classic ESP32's timer
+
+int pwmStart(uint8_t bits) {
+    if (bits == 0 || bits > pwmMaxBits()) return -1;
     for (int t = 0; t < kHostPwmTimers; t++)
         if (!g_pwmTimerUsed[t]) { g_pwmTimerUsed[t] = true; return t; }
     return -1;

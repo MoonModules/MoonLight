@@ -1,5 +1,5 @@
 /// @defgroup platform_esp32_pwm PWM output on LEDC
-/// The LEDC peripheral behind the PWM functions: timers set the frequency, channels drive the pins.
+/// The LEDC peripheral behind the PWM functions: timers set the resolution and so the rate, channels drive the pins.
 
 #include "platform/platform.h"
 
@@ -22,7 +22,6 @@ constexpr int kChannels = SOC_LEDC_CHANNEL_NUM * kModes;
 
 struct PwmChannel { int timer = -1; };
 bool g_timerUsed[SOC_LEDC_TIMER_NUM] = {};
-uint8_t g_timerBits[SOC_LEDC_TIMER_NUM] = {};
 PwmChannel g_channels[kChannels];
 
 ledc_mode_t modeOf(int channel) {
@@ -45,31 +44,25 @@ bool configure(ledc_mode_t mode, int timer, uint32_t frequency, uint8_t bits) {
     return ledc_timer_config(&t) == ESP_OK;
 }
 
-// The timer in every bank, so any channel can follow it, at the most bits the hardware accepts; 0 when none.
-uint8_t configureAll(int timer, uint32_t frequency) {
-    // Down from what an 80 MHz clock allows, since the automatic clock choice differs per chip.
-    uint8_t bits = 0;
-    while (bits < SOC_LEDC_TIMER_BIT_WIDTH && (uint64_t{80'000'000} >> (bits + 1)) >= frequency) bits++;
-    for (; bits > 0; bits--) {
-        bool ok = true;
-        for (int m = 0; m < kModes && ok; m++) ok = configure(modeOf(m * SOC_LEDC_CHANNEL_NUM), timer, frequency, bits);
-        if (ok) return bits;
-    }
-    return 0;
+// The timer in every bank, so any channel can follow it; true when the hardware accepts the resolution.
+bool configureAll(int timer, uint8_t bits) {
+    for (int m = 0; m < kModes; m++)
+        if (!configure(modeOf(m * SOC_LEDC_CHANNEL_NUM), timer, kPwmClockHz >> bits, bits)) return false;
+    return true;
 }
 
 }  // namespace
 
 uint8_t pwmChannelCount() MM_NONBLOCKING { return kChannels; }
 
-int pwmStart(uint32_t frequency, uint8_t& bits) {
-    if (frequency == 0) return -1;
+uint8_t pwmMaxBits() MM_NONBLOCKING { return SOC_LEDC_TIMER_BIT_WIDTH; }
+
+int pwmStart(uint8_t bits) {
+    if (bits == 0 || bits > SOC_LEDC_TIMER_BIT_WIDTH) return -1;
     for (int t = 0; t < SOC_LEDC_TIMER_NUM; t++) {
         if (g_timerUsed[t]) continue;
-        bits = configureAll(t, frequency);
-        if (bits == 0) return -1;
+        if (!configureAll(t, bits)) return -1;
         g_timerUsed[t] = true;
-        g_timerBits[t] = bits;
         return t;
     }
     return -1;

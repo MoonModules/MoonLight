@@ -18,10 +18,10 @@ using R = mm::ChannelRole;
 struct Rig {
     mm::PwmLightDriver d;
     mm::Buffer src;
-    Rig(const char* pins, mm::nrOfLightsType lights, const R* roles, uint8_t nRoles, uint16_t frequency = 19531) {
+    Rig(const char* pins, mm::nrOfLightsType lights, const R* roles, uint8_t nRoles, uint8_t bits = 12) {
         REQUIRE(src.allocate(lights, 3));
         std::strcpy(d.pins, pins);
-        d.frequency = frequency;
+        d.bits = bits;
         d.defineControls();
         d.setSourceBuffer(&src);
         d.correctionForTest().rebuild(255, roles, nRoles);
@@ -69,7 +69,7 @@ TEST_CASE("each light's corrected channels become the duties of its pins") {
 
 // The curve reaches the timer in 16 bits, so the bottom of a fade keeps a step per level where 8 bits round several levels together.
 TEST_CASE("a dim fade under the CIE curve keeps a distinct duty per level") {
-    Rig rig("10,11,12", 1, kRGB, 3, 9765);
+    Rig rig("10,11,12", 1, kRGB, 3, 13);
     uint32_t last = 0;
     for (uint8_t v = 1; v <= 32; v++) {
         rig.light(0, v, 0, 0);
@@ -81,18 +81,30 @@ TEST_CASE("a dim fade under the CIE curve keeps a distinct duty per level") {
 
 // Each channel's pulse starts an even share of the period after the one before, so full white does not switch every channel at once.
 TEST_CASE("the channels' pulses start at evenly spaced phases") {
-    Rig rig("10,11,12,13", 1, kRGB, 3, 9765);
+    Rig rig("10,11,12,13", 1, kRGB, 3, 13);
     const uint32_t share = (rig.d.maxDutyForTest() + 1) / 4;
     for (uint8_t i = 0; i < 4; i++) CHECK(mm::platform::pwmPhaseForTest(rig.d.channelForTest(i)) == share * i);
 }
 
-// The resolution is the most duty steps one period holds at the clock, so a lower frequency gets more of them.
-TEST_CASE("the resolution follows from the frequency") {
-    Rig fast("10,11,12", 1, kRGB, 3, 19531);
+// One period holds the steps of the resolution at the clock, so each bit more halves the rate, which the driver shows.
+TEST_CASE("the frequency follows from the resolution") {
+    Rig fast("10,11,12", 1, kRGB, 3, 12);
     CHECK(fast.d.maxDutyForTest() == (1u << 12) - 1);
+    CHECK(std::strcmp(fast.d.frequencyForTest(), "19531 Hz") == 0);
     fast.d.release();
-    Rig slow("10,11,12", 1, kRGB, 3, 9765);
+    Rig slow("10,11,12", 1, kRGB, 3, 13);
     CHECK(slow.d.maxDutyForTest() == (1u << 13) - 1);
+    CHECK(std::strcmp(slow.d.frequencyForTest(), "9765 Hz") == 0);
+}
+
+// The wide path carries a 16-bit value on the coarse pin, so a fine role's pin has nothing to carry and stays dark.
+TEST_CASE("a fine role's pin stays dark on the wide path") {
+    const R kRedWide[] = {R::Red, R::RedFine, R::Green, R::Blue};
+    Rig rig("10,11,12,13", 1, kRedWide, 4);
+    rig.light(0, 255, 255, 255);
+    rig.d.tick();
+    CHECK(rig.duty(0) == rig.d.maxDutyForTest());
+    CHECK(rig.duty(1) == 0);
 }
 
 // Pins that do not complete a light are reported, not guessed at.
