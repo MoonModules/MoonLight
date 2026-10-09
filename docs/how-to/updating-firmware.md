@@ -43,7 +43,7 @@ It means the app did not start, or an update was interrupted. MoonBase serves it
 - **From a file**, installing a `firmware-....bin` you already downloaded.
 - **From a URL**, fetching and installing in one step. Keep it under 255 characters: it crosses into MoonBase through a fixed-size slot, and a longer one is refused rather than truncated.
 
-If the device is not on your network, MoonBase opens the device's access point, under its name and password, and answers at **4.3.2.1**.
+If the device is not on your network, MoonBase opens the device's `MM-XXXX` access point, protected by your WiFi's password once it knows one. Joining it opens MoonBase's page by itself as a sign-in screen, or at **4.3.2.1** there.
 
 ## Before a risky update
 

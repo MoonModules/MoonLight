@@ -37,7 +37,7 @@
     },
     {
       "name": "join-its-access-point",
-      "description": "The computer joins the network named after the device.",
+      "description": "The computer joins the device's network, by the name its card shows.",
       "op": "host_wifi",
       "join": "access_point",
       "timeout": 90

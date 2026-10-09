@@ -573,7 +573,7 @@ uint32_t testNetDhcpCount(NetIface iface);
 
 /// How the device's own access point appears: its name and address, and a WPA2 password or empty for open.
 struct WifiApConfig {
-    const char* name;       ///< the network's name, the device name
+    const char* name;       ///< the network's name
     const char* ip;         ///< its own address, which its DHCP server hands out as the gateway
     const char* password;   ///< WPA2 at 8 characters or more, open otherwise
 };
@@ -715,13 +715,46 @@ public:
     /// Send once to an explicit address.
     bool sendToAddr(const uint8_t ip[4], uint16_t port, const uint8_t* data, size_t len);
     // Without the membership the OS never delivers those datagrams, however correct the port.
-    /// Join a multicast group on a bound socket, its own sends no longer looping back; false is retried rather than fatal.
-    bool joinMulticast(const char* group);
+    /// Join a multicast group on a bound socket, its own sends not looping back, and keep the membership while the socket is silent.
+    bool joinMulticast(const char* group) {
+        if (joined_) { membership(group_, false); joined_ = false; }   // an earlier group is left, not leaked
+        size_t i = 0;
+        for (; group && group[i] && i + 1 < sizeof(group_); i++) group_[i] = group[i];
+        group_[i] = 0;
+        return rejoin();
+    }
+    /// Whether the last join of the group succeeded, so a caller can say when only unicast reaches it.
+    bool multicastJoined() const { return joined_; }
+    /// How many times the group was joined since the socket opened, for the tests.
+    uint32_t joinCountForTest() const { return joinCount_; }
+    /// How long a socket in a group stays silent before it joins again.
+    static constexpr uint32_t kRejoinMs = 3000;
     /// Close it, which the destructor also does.
     void close();
 
 private:
     int fd_ = -1;
+    char group_[16] = "";       // the group joined, empty when none
+    bool joined_ = false;
+    uint32_t lastHeardMs_ = 0;  // millis of the last datagram received
+    uint32_t lastJoinMs_ = 0;
+    uint32_t joinCount_ = 0;
+    /// Join (`join`) or leave a group, the one OS call both take.
+    bool membership(const char* group, bool join);
+    bool rejoin() {
+        if (joined_) membership(group_, false);   // a fresh join announces the membership again
+        joined_ = membership(group_, true);
+        lastJoinMs_ = millis();
+        joinCount_++;
+        return joined_;
+    }
+    void heard() { if (group_[0]) lastHeardMs_ = millis(); }
+    // A router can stop forwarding a group to a member it has not heard from; a silent socket joins again, which also retries a failed join.
+    void keepMembership() {
+        if (!group_[0]) return;
+        const uint32_t now = millis();
+        if (now - lastHeardMs_ >= kRejoinMs && now - lastJoinMs_ >= kRejoinMs) rejoin();
+    }
 };
 
 /// One TCP connection, non-blocking so a client never stalls the render loop.

@@ -463,6 +463,24 @@ void writeControlValue(JsonSink& sink, const ControlDescriptor& c, bool saving =
 /// Append a password as the API shows one, XOR-ed with a fixed key and base64-encoded: obfuscation against reading it at a glance, not a secret.
 void writeObfuscatedPassword(JsonSink& sink, const char* password);
 
+/// While active, a password is written empty: for a client on the device's own access point, which has not shown it knows the network's password.
+class SecretsHidden {
+public:
+    /// Hide stored passwords for this scope when `hide`, show them when not, and restore what was before on leaving.
+    explicit SecretsHidden(bool hide) MM_NONBLOCKING;
+    /// Restore what was before.
+    ~SecretsHidden() MM_NONBLOCKING;
+    /// Whether passwords are hidden now.
+    static bool active() MM_NONBLOCKING;
+    /// Not copied, since it owns a restore.
+    SecretsHidden(const SecretsHidden&) = delete;
+    /// Not assigned, for the same reason.
+    SecretsHidden& operator=(const SecretsHidden&) = delete;
+
+private:
+    bool prev_;
+};
+
 /// Append the per-type extras that ride beside the value, such as bounds or options.
 void writeControlMetadata(JsonSink& sink, const ControlDescriptor& c);
 

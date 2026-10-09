@@ -10,6 +10,7 @@ import atexit
 import signal
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -678,6 +679,10 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
             for c in m.get("controls", []):
                 if m.get("type") == "SystemModule" and c.get("name") == "deviceName":
                     ctx["device"] = str(c.get("value") or "")
+            for ch in m.get("children", []) or []:
+                for c in ch.get("controls", []):
+                    if ch.get("type") == "AccessPointModule" and c.get("name") == "name":
+                        ctx["access_point"] = str(c.get("value") or "")
         atexit.register(host.restore)   # a run that stops on the access point still puts the host back
         # MoonDeck's Stop sends SIGTERM, whose default skips atexit; exiting through it runs the hook.
         signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
@@ -1038,10 +1043,10 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 if net is None:
                     raise RuntimeError("host_wifi needs `host_network` on the scenario and --network on the run")
                 if step.get("join") == "access_point":
-                    if not ctx.get("device"):
-                        raise RuntimeError("the device's name is unknown, so its access point cannot be named to join")
+                    if not ctx.get("access_point"):
+                        raise RuntimeError("the access point's name is unknown, so it cannot be joined")
                     host.home = host.home or net
-                    why = _host_join(ctx.get("device", ""), fstep.get("password", ""), f"http://{ACCESS_POINT_ADDRESS}/api/system",
+                    why = _host_join(ctx.get("access_point", ""), fstep.get("password", ""), f"http://{ACCESS_POINT_ADDRESS}/api/system",
                                      float(step.get("timeout", 60)))
                     if not why:
                         client.base = f"http://{ACCESS_POINT_ADDRESS}"
@@ -1052,7 +1057,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                     if not why:
                         host.home = None   # home: nothing left for the exit hook to restore
                 step_result["status"] = "error" if why else "ok"
-                print(f"  HOST  {'FAILED: ' + why if why else 'on ' + (ctx.get('device', '') if step.get('join') == 'access_point' else net['ssid'])}")
+                print(f"  HOST  {'FAILED: ' + why if why else 'on ' + (ctx.get('access_point', '') if step.get('join') == 'access_point' else net['ssid'])}")
                 if why:
                     results["passed"] = False
 
@@ -1124,14 +1129,19 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 # `within` polls too: a host that has joined a network resolves names only once its resolver took that network's server.
                 deadline = time.time() + float(step.get("within", 0))
                 while True:
+                    body = ""
                     try:
                         with urllib.request.build_opener(_NoRedirect).open(request, timeout=10) as resp:
                             status, location = resp.status, resp.headers.get("Location", "")
+                            body = resp.read().decode("utf-8", "replace")
                     except urllib.error.HTTPError as he:
                         status, location = he.code, he.headers.get("Location", "")
                     except Exception as ue:
                         status, location = 0, str(ue)
-                    holds = status == step["status"] and ("location" not in step or location == fstep["location"])
+                    # `body_matches` and `body_lacks` are regular expressions the response must, or must not, contain.
+                    holds = (status == step["status"] and ("location" not in step or location == fstep["location"])
+                             and ("body_matches" not in step or re.search(step["body_matches"], body) is not None)
+                             and ("body_lacks" not in step or re.search(step["body_lacks"], body) is None))
                     if holds or time.time() >= deadline:
                         break
                     time.sleep(1)

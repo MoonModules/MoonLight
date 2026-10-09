@@ -9,23 +9,23 @@ This number is the debt behind that gate, and it RATCHETS: a rise fails the chec
 docgen.md does. A comment is prose wherever it lives, so a `//` in the web interface and a
 `#` in a script are counted beside a `///` in a header.
 
-**3032 finding(s)** across 370 file(s).
+**2982 finding(s)** across 370 file(s).
 
 | rule | findings |
 |---|---|
-| `MoonLight.EmDash` | 1546 |
-| `MoonLight.Weasel` | 713 |
-| `MoonLight.SentenceLength` | 456 |
-| `MoonLight.Temporal` | 230 |
+| `MoonLight.EmDash` | 1532 |
+| `MoonLight.Weasel` | 707 |
+| `MoonLight.SentenceLength` | 437 |
+| `MoonLight.Temporal` | 221 |
 | `MoonLight.Spelling` | 42 |
-| `MoonLight.SelfReference` | 32 |
+| `MoonLight.SelfReference` | 30 |
 | `MoonLight.NegatedHeading` | 13 |
 
 ## Worst files
 
 | file | findings |
 |---|---|
-| `moondeck/MoonDeck.md` | 250 |
+| `moondeck/MoonDeck.md` | 244 |
 | `moondeck/moondeck.py` | 157 |
 | `docs/how-to/home-automation.md` | 117 |
 | `mooninstaller/install-orchestrator.js` | 93 |
@@ -40,8 +40,8 @@ docgen.md does. A comment is prose wherever it lives, so a `//` in the web inter
 | `src/ui/preview3d.js` | 49 |
 | `moondeck/build/build_esp32.py` | 48 |
 | `moondeck/check/check_nonblocking.py` | 47 |
-| `docs/explanation/architecture/moonlight.md` | 45 |
 | `docs/reference/testing.md` | 40 |
 | `moondeck/docs/mkdocs_hooks.py` | 40 |
+| `docs/explanation/architecture/moonlight.md` | 39 |
 | `src/platform/esp32/platform_esp32_moon_i80.cpp` | 37 |
 | `docs/reference/hardware/gpio-usage.md` | 34 |

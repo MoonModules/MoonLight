@@ -411,10 +411,15 @@ private:
     // Eight: a few viewers plus the overlap while a refresh's old socket is still being reaped.
     static constexpr int MAX_WS_CLIENTS = 8;
     platform::TcpConnection wsClients_[MAX_WS_CLIENTS];
+    bool wsOnAccessPoint_[MAX_WS_CLIENTS] = {};   // each client's side, read when it connected
 
     // Four, deliberately fewer: the two arrays share one lwIP socket budget with every other service.
     static constexpr int MAX_PREVIEW_CLIENTS = 4;
     platform::TcpConnection previewClients_[MAX_PREVIEW_CLIENTS];
+    static constexpr int kParkedSlots = 4;          // connections open with no request yet
+    static constexpr uint32_t kParkMs = 3000;       // how long one waits for its request before it is closed
+    platform::TcpConnection parked_[kParkedSlots];
+    uint32_t parkedAt_[kParkedSlots] = {};
 
     ClientMessageSink* clientSink_ = nullptr;   // the producer's inbound-message sink (PreviewDriver)
 
@@ -496,7 +501,14 @@ private:
     uint16_t boundPort_ = 0;   // the port open() actually bound; 0 when no server is live
 
     // HTTP handling
-    void handleConnection(platform::TcpConnection& conn);
+    /// Serve one connection; false when no request arrived within `patienceMs`, the connection left open to be parked.
+    bool handleConnection(platform::TcpConnection& conn, int patienceMs = 5);
+    void park(platform::TcpConnection& conn);
+    void serveParked();
+    void serveConnections();
+    /// Whether `conn`'s client is on the device's own access point, which hides stored secrets from it.
+    static bool onAccessPoint(const platform::TcpConnection& conn);
+    bool anyWsClientOnAccessPoint() const MM_NONBLOCKING;
     void sendResponse(platform::TcpConnection& conn, int status, const char* contentType, const char* body);
     /// Answer a refused document as `PATCH /api/state` does: the engine's error and where it is, with status 400.
     void sendRefusal(platform::TcpConnection& conn, const StateDocumentResult& r);

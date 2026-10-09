@@ -13,7 +13,7 @@ At that point build the recognizable version-stamp plus ordered-patch-chain patt
 [src/ui/migrate.js](https://github.com/MoonModules/MoonLight/blob/main/src/ui/migrate.js) is the **authoritative, dated log of every machine-mappable break**: renames, controls moved onto a child module, and older preset files converted to documents.
 Restore applies it in the browser and reports what did not carry over.
 The entries below therefore describe only what a map cannot express: behavior changes, semantics to re-check, and erase-flash moves.
-It works even on a freshly erased device: join its `MM-XXXX` access point, open `http://4.3.2.1`, restore there, and take the offered restart.
+It works even on a freshly erased device: join its `MM-XXXX` access point, whose UI opens by itself as a sign-in screen or at `http://4.3.2.1`, restore there, and take the offered restart.
 The bundle carries the WiFi credentials, so the device comes back on your network.
 For a device still on old firmware (no Backup button yet), the [installer page](https://moonmodules.org/MoonLight/install/) offers the same backup as a bookmarklet.
 
@@ -33,6 +33,18 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## Unreleased
 
+### The access point carries the first known network's password, under an anonymous name
+
+**Action: *nothing*, unless someone joins the access point with a password of its own: they use the home WiFi's password instead.**
+
+The Access Point card's `password` is gone, and a saved one is ignored.
+The access point carries the first known WiFi network's password, so only someone who knows the home WiFi joins it.
+It broadcasts as `MM-` and four MAC digits rather than the device name, shown as `name` on its card.
+It is open only on a first setup or with an open home network.
+A client on the access point never receives a stored password, and the config files are not served to it, so make backups from the home network.
+While a browser is open through the access point, the password fields of browsers at home are empty too, since one live update serves them all.
+MoonBase follows the same rule.
+
 ### Config files are state documents
 
 **Action: *nothing*.**
@@ -41,7 +53,7 @@ Each `/.config/<TypeName>.json` holds its module's [state document](integrating.
 The first boot after the update reads each older file as the document it describes and saves it as one, naming each module as the device names it; the log says which files it converted.
 That conversion is temporary and leaves in the release after next, so a device skipping that release starts from its defaults: back it up first and restore the backup, which converts an older backup's files the same way.
 A MoonBase from this release reads both formats until then.
-An older MoonBase still joins the known WiFi networks and finds the Ethernet wiring, but misses the Ethernet card's static address and the access point's password, so on an Ethernet board with a static address, or where the access point's password matters, install the matching MoonBase from the Firmware card.
+An older MoonBase still joins the known WiFi networks and finds the Ethernet wiring, but misses the Ethernet card's static address, so on an Ethernet board with a static address, install the matching MoonBase from the Firmware card.
 
 ### A preset is applied through its list row
 

@@ -35,11 +35,9 @@ TEST_CASE("the app's saved config carries every key MoonBase reads") {
     auto* fs = d.fs;
     auto* sys = d.sys;
     auto* net = d.net;
-    auto* ap = d.ap;
 
     std::strcpy(textControl(*sys, "deviceName"), "MM-bench");
-    std::strcpy(textControl(*ap, "password"), "ap-passphrase");
-    // A full known list with long passphrases, which puts the access point's keys past 2048 bytes where Ethernet is previewed: why MoonBase reads the whole file.
+    // A full known list with long passphrases, which puts the later keys past 2048 bytes where Ethernet is previewed: why MoonBase reads the whole file.
     for (int i = 0; i < 7; i++) {
         char name[24];
         std::snprintf(name, sizeof(name), "network-%02d", i);
@@ -95,10 +93,6 @@ TEST_CASE("the app's saved config carries every key MoonBase reads") {
         CHECK(eth.usable());
         CHECK(eth.ip[3] == 211);
     }
-    // The access point's own password, not a known network's or another child's.
-    char apPassword[64] = {};
-    REQUIRE(mm::configscrape::findChildString(content.c_str(), "AccessPointModule", "password", apPassword, sizeof(apPassword)));
-    CHECK(std::string(apPassword) == "ap-passphrase");
     // The name MoonBase opens its access point under, the same one the app's carries.
     char name[33] = {};
     REQUIRE(mm::configscrape::findString(readFile("SystemModule.json").c_str(), "deviceName", name, sizeof(name)));
@@ -145,14 +139,11 @@ TEST_CASE("the config scraper reads a child's key by the child's type, among its
     const char* json = R"({"Network":{"WiFi":{"type":"WiFiModule","known":[{"ssid":"s","password":"net"}]},"Mqtt":{"type":"MqttModule","password":"mqtt"},)"
                        R"("AccessPoint":{"type":"AccessPointModule","password":"ap-pass"},"Devices":{"type":"DevicesModule","devices":[{"type":"MoonLight"}]},)"
                        R"("Ethernet":{"type":"EthernetModule","Card":{"type":"X","password":"inner"}}}})";
-    char out[16] = {};
-    REQUIRE(mm::configscrape::findChildString(json, "AccessPointModule", "password", out, sizeof(out)));
-    CHECK(std::string(out) == "ap-pass");
-    CHECK(mm::configscrape::findChildString(json, "MqttModule", "password", out, sizeof(out)));
-    CHECK(std::string(out) == "mqtt");
-    CHECK_FALSE(mm::configscrape::findChildString(json, "MoonLight", "password", out, sizeof(out)));
-    CHECK_FALSE(mm::configscrape::findChildString(json, "EthernetModule", "password", out, sizeof(out)));
-    CHECK_FALSE(mm::configscrape::findChildString(R"({"Network":{"AccessPoint":{"type":"AccessPointModule","password":""}}})", "AccessPointModule", "password", out, sizeof(out)));
+    const auto value = [&](const char* type) { const char* v = mm::configscrape::findChildValue(json, type, "password"); return v ? std::string(v, std::strcspn(v, ",}")) : std::string(); };
+    CHECK(value("AccessPointModule") == "\"ap-pass\"");
+    CHECK(value("MqttModule") == "\"mqtt\"");
+    CHECK(value("MoonLight").empty());
+    CHECK(value("EthernetModule").empty());
 }
 
 // Temporary, until the release after 2026-10-08: MoonBase can boot before the app has converted its flat file, so the flat form still reads.
@@ -161,9 +152,9 @@ TEST_CASE("the config scraper still reads the flat format older builds wrote") {
     int t = 0;
     mm::configscrape::findInt(json, "ethType", &t);
     CHECK(t == 3);
-    char out[16] = {};
-    REQUIRE(mm::configscrape::findChildString(json, "AccessPointModule", "password", out, sizeof(out)));
-    CHECK(std::string(out) == "ap-pass");
+    const char* ap = mm::configscrape::findChildValue(json, "AccessPointModule", "password");
+    REQUIRE(ap != nullptr);
+    CHECK(std::strncmp(ap, "\"ap-pass\"", 9) == 0);
     CHECK(mm::configscrape::findChildIp(json, "EthernetModule").ip[3] == 5);
 }
 

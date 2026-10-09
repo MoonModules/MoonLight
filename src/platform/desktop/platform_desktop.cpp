@@ -1977,7 +1977,8 @@ int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4], uint16_t*
     auto n = ::recvfrom(sock(fd_), reinterpret_cast<char*>(buf), static_cast<int>(maxLen), 0,
                         reinterpret_cast<sockaddr*>(&src), &srcLen);
     // 0-byte datagrams and would-block both mean "nothing usable pending".
-    if (n <= 0) return -1;
+    if (n <= 0) { keepMembership(); return -1; }
+    heard();
     if (srcIp) std::memcpy(srcIp, &src.sin_addr.s_addr, 4);   // network order = octets
     if (srcPort) *srcPort = ntohs(src.sin_port);
     return static_cast<int>(n);
@@ -1988,16 +1989,16 @@ static std::atomic<bool> testJoinFails{false};
 void setTestJoinFails(bool fail) { testJoinFails.store(fail, std::memory_order_relaxed); }
 
 // Join a multicast group so the bound socket receives its datagrams; letting the stack pick the interface is what a single-homed device wants.
-bool UdpSocket::joinMulticast(const char* group) {
+bool UdpSocket::membership(const char* group, bool join) {
     if (fd_ < 0 || !group) return false;
-    if (testJoinFails.load(std::memory_order_relaxed)) return false;
+    if (join && testJoinFails.load(std::memory_order_relaxed)) return false;
     ip_mreq mreq{};
     if (::inet_pton(AF_INET, group, &mreq.imr_multiaddr) != 1) return false;
     mreq.imr_interface.s_addr = htonl(INADDR_ANY);
     // A socket that joins a group and also sends to it must not hear its own sends back.
     const unsigned char loop = 0;
-    ::setsockopt(sock(fd_), IPPROTO_IP, IP_MULTICAST_LOOP, reinterpret_cast<const char*>(&loop), sizeof(loop));
-    return ::setsockopt(sock(fd_), IPPROTO_IP, IP_ADD_MEMBERSHIP,
+    if (join) ::setsockopt(sock(fd_), IPPROTO_IP, IP_MULTICAST_LOOP, reinterpret_cast<const char*>(&loop), sizeof(loop));
+    return ::setsockopt(sock(fd_), IPPROTO_IP, join ? IP_ADD_MEMBERSHIP : IP_DROP_MEMBERSHIP,
                         reinterpret_cast<const char*>(&mreq), sizeof(mreq)) == 0;
 }
 
@@ -2017,6 +2018,9 @@ void UdpSocket::close() {
         close_sock(fd_);
         fd_ = -1;
     }
+    group_[0] = 0;   // the membership went with the socket
+    joined_ = false;
+    joinCount_ = 0;
 }
 
 // TcpConnection

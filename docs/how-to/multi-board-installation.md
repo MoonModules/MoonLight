@@ -203,6 +203,8 @@ Every device runs the [Audio](../moonmodules/core/services.md#audio) service in 
 That machine is a device with a microphone, or a computer running MoonLight that captures what it plays.
 One source means one beat: the legs step, the eyes dart and every flash lands on the same moment.
 
+Here the source is an [ESP32-S31 CoreBoard](../reference/hardware/esp32-s31-coreboard.md) listening with its on-board microphone, wired by Ethernet to the installation's router: [the network](#10-the-network).
+
 ---
 
 ## 7. Running unattended
@@ -278,6 +280,43 @@ Devices inside a sculpture are hard to reach with a cable, so update them over t
 - A device with two app slots takes `POST /api/firmware/upload` directly.
 - A device with 4 MB of flash has one app slot. `POST /api/firmware/moonbase` restarts it into MoonBase, its recovery image, which takes the upload and restarts into the new firmware ([updating firmware](updating-firmware.md)).
 - Update one device, see it run, then the next.
+
+---
+
+## 10. The network
+
+The StadBeest brings its own network: a GL.iNet Slate AX (GL-AXT1800) travel router.
+Every device joins its WiFi, and the audio source is wired to it by Ethernet, so the beast runs the same at every venue.
+
+<img src="../assets/how-to/multi-board/router-and-audio-source.jpg" width="420" alt="The ESP32-S31 CoreBoard in a clear case, its LED matrix showing what it hears, wired by Ethernet to a GL.iNet Slate AX travel router">
+
+| Device | Board | Address | Connection | Role |
+|---|---|---|---|---|
+| MM-StadBeest | LightCrafter 16 (ESP32-S3) | 192.168.1.103 | WiFi | the legs, the leader |
+| MM-eye1 | ESP32-S3-Zero | 192.168.1.149 | WiFi | an eye |
+| MM-Eye2 | ESP32-S3-Zero | 192.168.1.216 | WiFi | an eye |
+| MM-S31 | ESP32-S31 CoreBoard | 192.168.1.125 | Ethernet, 1 Gbit | the audio source |
+| MM-MIDI-rtp | ESP32-S3 (N16R8) | 192.168.1.101 | WiFi | the MIDI bridge |
+
+| What travels | From, to | How |
+|---|---|---|
+| Audio | the S31 to every device | WLED audio sync, multicast `239.0.0.1`, port 11988 |
+| Shared controls | the leader to the eyes | OSC, multicast `239.255.77.78`, port 9001 |
+| The desk | the bridge and the leader | RTP-MIDI, unicast, port 5004 |
+| Discovery | every device | multicast and broadcast |
+
+Two router settings keep it steady:
+
+- **IGMP snooping off** (Network, IGMP Snooping).
+  A router that snoops without asking members again forgets them: on the Slate AX a board lost the group 18 seconds after joining it.
+  The audio then stopped every 20 seconds, and an eye missed the leader's palette changes.
+  With a few small streams on a dedicated network, sending multicast to every device costs nothing worth saving.
+- **An address reservation per device** (Network, LAN), so the addresses above stay the same.
+  The leader's MIDI `host` is the bridge's address, and a host setting also takes a name, but a name resolves by mDNS, which is multicast again.
+
+A device that stops hearing a group joins it again after 3 seconds of silence, so a network that drops multicast now and then recovers on its own.
+For a stream on a network you do not control, unicast is the reliable choice: each copy is acknowledged and retried, where multicast goes out unacknowledged at the slowest rate.
+Set the source's Audio `addressing` to `unicast` with the devices in `hosts`; the same holds for Art-Net, E1.31 and DDP from [Network Send](../moonmodules/light/drivers.md#networksend).
 
 ---
 

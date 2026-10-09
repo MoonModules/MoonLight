@@ -83,13 +83,15 @@ Detail: [technical](moxygen/WiFiModule.md)
 
 ### Access point
 
-The device's own WiFi network, a child of Network, at 4.3.2.1 and named after the device. Joining it opens the UI, as a sign-in screen on a phone.
+The device's own WiFi network, a child of Network, at 4.3.2.1. A captive portal: joining it opens the UI by itself, as a sign-in screen, and `http://4.3.2.1` reaches it too.
 
 <img src="../../assets/core/AccessPointModule.png" width="300" alt="Access point module controls">
 
 - `opens`: `on failure` (when nothing else joins), `always`, or `never (not recommended)`.
-- `password`: WPA2, 8 to 63 characters as the standard allows; empty keeps it open, the default.
+- read-only: `name`, `MM-` and four MAC digits, which says nothing about the owner.
 - read-only: `clients`, the devices on it.
+
+It carries the first known WiFi network's password, open only on a first setup or with an open home network. Its clients receive no stored password or config file.
 
 `always` waits for a WiFi join in progress to settle, since one radio serves both. `never` applies only while Ethernet or a known WiFi network is configured, and the card says when it opens anyway. Joining it opens the WiFi card. ⌄ details.
 
@@ -230,7 +232,7 @@ Browse and manage the device filesystem: a folder tree with an inline text edito
 - `file browser`: the panel itself: a folder tree, a toolbar and an inline text editor.
 - **Backup (⤓)**, download the device's files as one `.json` bundle.
 
-**Keep it private: it contains the WiFi password.** Every file is byte-verified against the listing, and an unreadable one is skipped and named.
+**Keep it private: it contains the WiFi password.** Through the access point the config files are left out. Every file is byte-verified against the listing, and an unreadable one is skipped and named.
 - **Restore (⟲)**, upload a backup bundle, pressing twice since it overwrites the device's files.
 
 Known renames from [MIGRATING.md](../../reference/MIGRATING.md) apply before upload, then a report lists what needs an eye. Every file applies as it lands, bar network settings and the web server's `port`, which the dialog names.

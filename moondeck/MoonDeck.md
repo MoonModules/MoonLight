@@ -71,13 +71,10 @@ claim that every shipped MoonLive script is valid C++ (`test_scripts_are_cpp.py`
 real compiler). The commit gate and CI run the same two commands; this is the card in front of them.
 JS reports SKIP rather than failing when node is absent, since a Python-only bench is a normal setup.
 
-`--ui` is the odd one and is OPT-IN, which is why a bare run leaves it out. It drives a real browser
-against a running MoonLight with [pytest-playwright](https://playwright.dev/python/docs/test-runners),
-performing a [run file](moontube/moontube.md) from `moontube/clips/` through the interface and checking each step against the
-device over REST. The run files are the same ones `moondeck/moontube/mtvideo.py` records the videos from, so a
-failure means the UI no longer does what the video shows. It skips rather than fails when nothing
-answers on `localhost:8080` (override with `MOONLIGHT_HOST`), for the same reason the JS lane skips
-without node.
+`--ui` is the odd one and is OPT-IN, which is why a bare run leaves it out.
+It drives a real browser against a running MoonLight with [pytest-playwright](https://playwright.dev/python/docs/test-runners), performing a [run file](moontube/moontube.md) from `moontube/clips/` through the interface and checking each step against the device over REST.
+The run files are the same ones `moondeck/moontube/mtvideo.py` records the videos from, so a failure means the UI does not do what the video shows.
+It skips rather than fails when nothing answers on `localhost:8080` (override with `MOONLIGHT_HOST`), for the same reason the JS lane skips without node.
 
 ### run_desktop
 
@@ -799,11 +796,9 @@ uv run moondeck/docs/screenshot_modules.py --force  # re-capture and overwrite e
 uv run moondeck/docs/screenshot_modules.py --all-registered  # every registered module, not just the listed ones
 ```
 
-`--all-registered` is what keeps the set complete. The script carries a hand-written MODULES list
-for the few modules that need particular props or a parent that is not a Layer; every other
-registered effect and modifier is captured on a Layer with its defaults. Without it a module added
-today is silently skipped until someone remembers to edit the list, which is how 42 effects came to
-have no preview.
+`--all-registered` is what keeps the set complete.
+The script carries a hand-written MODULES list for the few modules that need particular props or a parent that is not a Layer; every other registered effect and modifier is captured on a Layer with its defaults.
+Without it, a module missing from that list is silently skipped until someone edits the list.
 
 The **GIF** and **Force** checkboxes in MoonDeck toggle these flags.
 
@@ -1051,7 +1046,7 @@ The MoonDeck button forwards the Firmware dropdown as `--firmware`. Flash exits 
 uv run moondeck/build/flash_esp32.py --firmware esp32 --port /dev/tty.usbserial-0001
 ```
 
-`--firmware` is required — there's no longer a single canonical `esp32/build/` to fall back to. For a rack flash, loop over ports AND specify the firmware explicitly:
+`--firmware` is required: there is no single canonical `esp32/build/` to fall back to. For a rack flash, loop over ports AND specify the firmware explicitly:
 
 ```bash
 for port in /dev/tty.usbserial-*; do
@@ -1162,7 +1157,7 @@ Two things to know when reading a QEMU run: the guest clock is emulated, so **ti
 
 Push WiFi credentials to a running MoonLight device over USB-serial. Uses the [Improv-WiFi](https://www.improv-wifi.com/serial/) protocol — the same wire format the browser flow at improv-wifi.com uses. Device must be running a firmware that includes the Improv listener.
 
-**One-click flow**: pick the device's port in MoonDeck, hit **Improv WiFi**. The script reads SSID + password from the **active network's WiFi block in `moondeck/moondeck.json`** (the one shown in the network bar at the top of the sidebar). If that block is empty, it falls back to detecting the host machine's currently-joined WiFi (macOS Keychain / Linux NetworkManager / Windows `netsh`). The device replies with its new URL when STA comes up — typically 5-10 s end to end.
+**One-click flow**: pick the device's port in MoonDeck, hit **Improv WiFi**. The script reads SSID + password from the **active network's WiFi block in `moondeck/moondeck.json`** (the one shown in the network bar at the top of the sidebar). If that block is empty, it falls back to detecting the WiFi the host machine is joined to (macOS Keychain / Linux NetworkManager / Windows `netsh`). The device replies with its new URL when STA comes up, typically 5-10 s end to end.
 
 **Device-model dropdown (pre-association injection)**: pick your device model next to the Firmware dropdown and the flow forwards `--device-model`: the script then resolves the deviceModel's `deviceModels.json` settings and pushes the TX-power cap over the `SET_TX_POWER` vendor RPC **before** the credentials, then applies the entry's `state` document over serial as `APPLY_OP` documents (the same push the web installer does; the model name is part of it, `System.deviceModel`). One-way on boards whose LED pins include GPIO 1/3: once the driver claims the UART pins, the board stops receiving over serial, so a provisioned QuinLED board is reconfigured from its web UI, not by re-running this. This matters for brown-out-prone weak-powered device models (cap 8 dBm): at full TX power they fail their first WiFi association, so the cap can't wait for the post-online HTTP injection. Leave the dropdown on "(any model)" for device models without special settings.
 
@@ -1255,6 +1250,20 @@ Exit codes: `0` = all checks passed, `1` = device-side failure (probe or provisi
 - [moondeck/build/improv_*.py](build/) — the host-side framing helpers
 
 Pair with `preview_installer`'s flash-ready mode (above) for a complete dev-environment proof that the install flow works before deploying to GitHub Pages.
+
+### wled_migration_test
+
+Test the over-the-air migration from WLED to MoonLight on a bench board, with a power cut at every step. [Migrating a device to MoonLight over the air](../docs/how-to/migrating-over-the-air.md) describes the migration itself. It rewrites the whole flash of the board on the port.
+
+```bash
+uv run moondeck/build/build_esp32.py --firmware esp32c3 --migrate-pause 10
+uv run moondeck/build/wled_migration_test.py --port /dev/cu.usbmodemXXXX
+uv run moondeck/build/wled_migration_test.py --port /dev/cu.usbmodemXXXX --rounds ship,3
+```
+
+Each round puts the board back as a WLED device ships: WLED 0.15.0, its bootloader and [its partition table](../esp32/partitions/wled_4mb_1mb_fs.csv), downloaded once into `build/wled-migration-test/<chip>/`. It joins the board to the WiFi over Improv, uploads a migration image through WLED's update page, and passes when the board then answers as MoonBase.
+
+The rounds are `ship`, `move` and `1` to `5`. `ship` uploads the shipped image, and `move` uploads the rehearsal image after a WLED self-update, so it has to move itself aside. `1` to `5` reset the board in that pause of the rehearsal image. Run it before a release that changes `moonbase/migrate/`.
 
 
 ### show_crash_log

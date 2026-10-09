@@ -1885,22 +1885,23 @@ int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4], uint16_t*
     auto n = ::recvfrom(fd_, buf, maxLen, 0,
                         reinterpret_cast<sockaddr*>(&src), &srcLen);
     // 0-byte datagrams and EWOULDBLOCK both mean "nothing usable pending".
-    if (n <= 0) return -1;
+    if (n <= 0) { keepMembership(); return -1; }
+    heard();
     if (srcIp) std::memcpy(srcIp, &src.sin_addr.s_addr, 4);   // network order = octets
     if (srcPort) *srcPort = ntohs(src.sin_port);
     return static_cast<int>(n);
 }
 
 // Join an IPv4 multicast group so the bound socket receives datagrams sent to it (WLED audio sync multicasts to 239.0.0.1). INADDR_ANY as the interface lets lwip pick the default route's netif.
-bool UdpSocket::joinMulticast(const char* group) {
+bool UdpSocket::membership(const char* group, bool join) {
     if (fd_ < 0 || !group) return false;
     ip_mreq mreq{};
     if (inet_pton(AF_INET, group, &mreq.imr_multiaddr) != 1) return false;
     mreq.imr_interface.s_addr = htonl(INADDR_ANY);
     // A socket that joins a group and also sends to it must not hear its own sends back.
     const uint8_t loop = 0;
-    setsockopt(fd_, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop));
-    return setsockopt(fd_, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) == 0;
+    if (join) setsockopt(fd_, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop));
+    return setsockopt(fd_, IPPROTO_IP, join ? IP_ADD_MEMBERSHIP : IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq)) == 0;
 }
 
 bool UdpSocket::sendToAddr(const uint8_t ip[4], uint16_t port,
@@ -1919,6 +1920,9 @@ void UdpSocket::close() {
         lwip_close(fd_);
         fd_ = -1;
     }
+    group_[0] = 0;   // the membership went with the socket
+    joined_ = false;
+    joinCount_ = 0;
 }
 
 // TcpConnection

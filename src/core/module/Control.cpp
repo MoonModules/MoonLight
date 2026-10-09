@@ -74,7 +74,15 @@ bool hasDefault(ControlType t) {
     return t != ControlType::Password;
 }
 
+// One task serves the API and the WebSocket pushes, so a plain flag scoped around each is enough.
+static bool g_secretsHidden = false;
+
+SecretsHidden::SecretsHidden(bool hide) MM_NONBLOCKING : prev_(g_secretsHidden) { g_secretsHidden = hide; }
+SecretsHidden::~SecretsHidden() MM_NONBLOCKING { g_secretsHidden = prev_; }
+bool SecretsHidden::active() MM_NONBLOCKING { return g_secretsHidden; }
+
 void writeObfuscatedPassword(JsonSink& sink, const char* password) {
+    if (g_secretsHidden) { sink.append("\"\""); return; }
     constexpr uint8_t kKey = 0x5A;   // shared with app.js's decodePassword
     uint8_t scrambled[64];
     size_t n = std::strlen(password);

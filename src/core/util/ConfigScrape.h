@@ -160,11 +160,6 @@ inline const char* findChildValue(const char* json, const char* childType, const
     return nullptr;
 }
 
-/// A string key of the child whose type is `childType`, false when either is absent or the value empty.
-inline bool findChildString(const char* json, const char* childType, const char* key, char* out, size_t outLen) {
-    return readString(findChildValue(json, childType, key), out, outLen);
-}
-
 /// The known network at `index` in the app's priority order: its `ssid`, and the `password` that follows it in the same row.
 inline bool findNetwork(const char* json, uint8_t index, char* ssid, size_t ssidLen, char* password, size_t passwordLen) {
     if (passwordLen) password[0] = '\0';

@@ -21,6 +21,40 @@ An image is built for one chip and carries one variant's partition table, so eac
 - **ESPHome:** its update accepts the image, but its WiFi is compiled into the firmware, so MoonBase opens its access point.
 - **A generic WiFi source:** ESP-IDF's WiFi driver can keep the last network in NVS under a namespace every framework shares; tried when no WLED files are found, it may carry the network from the others. Bench first, since whether it is there depends on how each firmware starts WiFi.
 
+### The access point never blocks a WiFi retry (2026-10-09)
+
+After losing its network, a device opens its access point and retries its known networks every minute (`retryKnown` in `NetworkModule.h`), but skips the retry while a client is on the access point.
+A phone that stays on it, or rejoins it by itself, then keeps the device off its network indefinitely.
+WiFi has preference, so the retry runs whoever is on the access point: drop the `wifiApClientCount() > 0` check.
+- **The cost:** someone on the access point while a known network exists is interrupted for a few seconds once a minute; a first setup has no known network, so it never retries.
+- **A test:** a client on the access point, the known network back, and the device joins it within the retry interval.
+
+### Some devices do not rejoin their WiFi (2026-10-09)
+
+Now and then a device stays off its network after the router came back, without anyone noticing why.
+Two suspects: a client on its access point blocking the retries (the item above), or the path for losing the network while connected, where the WiFi driver can get stuck and need the radio restarted.
+Next time one hangs, capture before touching it:
+- **The Network card's status:** "No network", "AP: MM-…" or "WiFi STA: …" says which state it is stuck in.
+- **The access point's `clients`**, which says whether a phone is holding it.
+- **The serial log**, through `monitor_esp32.py`, whose `NetworkModule:` lines say what it tried last.
+
+### Reset a device's network by switching it on and off (2026-10-09)
+
+A device without USB in reach, such as a bulb, has no way back once its WiFi settings are wrong and its access point is set to `never`, or once someone wants it as it came.
+The common way for lamps: switching it on and off four times within a few seconds forgets the known networks, so it opens its access point as on a first setup.
+- **The count:** a small counter in NVS, raised at boot and cleared after a few seconds of uptime, so only quick power cycles add up.
+- **What it resets:** the known networks and `opens`, nothing else, so the light setup stays.
+- **Where:** the network module at boot, with a status line saying it happened.
+
+### Refresh a multicast membership on a fixed pace (2026-10-09)
+
+A socket in a multicast group joins again after 3 seconds of silence, which repairs a router that forgets a member, with a gap of about 2 seconds each time.
+The GL.iNet Slate AX forgets after about 18 seconds, so audio on the StadBeest drops every 20.6 seconds, measured on the bulb.
+The standard fix is the router's multicast querier; this item is for a network that cannot be configured, such as a venue's.
+- **The rule:** join again 10 seconds after the last join as well, so a membership is renewed before such a router forgets it.
+- **The cost:** a leave and a join, two IGMP packets of about 60 bytes per socket every 10 seconds, and at most one lost packet in the moment between them.
+- **Where:** `UdpSocket::keepMembership` in `platform.h`, one more condition, and a test beside the silence re-join's.
+
 ### Back to WLED over WiFi (2026-10-09)
 
 The migration image moves a WLED device to MoonLight without a cable, but the way back needs one: MoonBase installs MoonLight images only, so a bulb going back to WLED is opened for USB.
@@ -266,13 +300,9 @@ declared rather than for a buffer to fill, and to time out on stall rather than 
 - **GCC below 16 needs four warnings demoted, and nothing exercises those versions** - `-Wnull-dereference`, `-Wrestrict`, `-Wstringop-overflow` and `-Wformat-truncation` fire on provably correct code from GCC 12 through 15 (five of the twelve inside libstdc++ and glibc headers, unreachable from our source), so CMakeLists demotes them to non-fatal there and keeps them fatal on 16+. That unblocks CI and from-source builds on Debian and Raspberry Pi OS alike, but it is a suppression, not an understanding: nobody routinely compiles with 12-15, so a REAL instance of one of these on those versions is now a warning nobody reads. Revisit when the runner's default GCC reaches 16, at which point the whole block can be deleted.
 - **Installer UX polish** — clear "Pre-release (beta)" warning on RC/latest picks, yank-by-asset-tag instead of yank-by-release-deletion.
 - **Offer MoonLight/MoonLight as a library**: a downstream sketch where another firmware/app consumes the light pipeline (or a subset) as an embeddable dependency rather than running the whole binary. `library.json` is already a PlatformIO *library* manifest, so the seed exists. When this is designed, give it a small public **identity surface**: one runtime constant the consumer reads (a `kProjectName`, likely a `ProjectInfo` bundle of name + version + url) that the network wire-strings (ArtNet/E1.31 source-name + CID), the UI banner, and any "About" string all *derive from*: the one place a consumer queries "what am I embedding." This is the genuine home for the name-centralisation that the rename ([the MoonLight plan](../past/plans/Plan-20260922%20-%20MoonLight,%20from%20v5.0.0%20to%20the%20rename%20(shipped).md)) deliberately *didn't* do: the rename is a one-time sweep (a constant would just split it), but a library consumer references the identity ongoing and widely, which is the test a constant must pass. Build it *then*, against the real library API, not speculatively now.
-- **HTTP: a request whose headers or body arrive a few ms late is dropped, intermittently
-  (2026-08-20).** `handleConnection` runs SYNCHRONOUSLY inside `tick20ms`, so its waits are kept
-  short to protect the render loop: a freshly accepted connection gets **~5 ms** for its request
-  headers (`HttpServerModule.cpp`, the `empties > 5` bail) and **~50 ms** for a body
-  (`empties > 50`). A client that misses either budget gets no response at all (the header case
-  closes the socket: *"Remote end closed connection without response"*, seen client-side at 28 ms)
-  or a `400 {"error":"incomplete request body"}`.
+- **HTTP: a request split across packets, or a body, that arrives a few ms late is dropped, intermittently (2026-08-20).** `handleConnection` runs SYNCHRONOUSLY inside `tick20ms`, so its waits are kept short to protect the render loop.
+  A connection with no bytes yet is parked and served on a later tick (2026-10-09), but a request whose headers arrive in two parts gets **~5 ms** for the rest, and a body **~50 ms** (`empties > 50`).
+  A client that misses either budget gets a request processed as truncated, or a `400 {"error":"incomplete request body"}`. Parking these too needs a buffer per parked connection.
 
   **Observed:** the MoonLive live scenarios fail roughly **1 run in 3** on the S3, always as a
   failed `POST /api/file` that cascades (`module not found` for every step depending on that

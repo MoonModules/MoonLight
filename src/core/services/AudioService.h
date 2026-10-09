@@ -295,6 +295,8 @@ public:
     static constexpr uint32_t syncFallbackMsForTest() { return kSyncFallbackMs; }
     /// How long a failed open waits.
     static constexpr uint32_t syncOpenRetryMsForTest() { return kSyncOpenRetryMs; }
+    /// How many times the receive socket joined the group, for the tests.
+    uint32_t syncJoinCountForTest() const { return syncSock_.joinCountForTest(); }
 
     /// The live frame every consumer reads, or silence where there is no source.
     static const AudioFrame* latestFrame() MM_NONBLOCKING {
@@ -505,11 +507,10 @@ private:
     uint32_t lastSyncRecv_ = 0;      // millis of the last received packet (receive auto-blend)
     uint8_t  syncPeer_[4] = {};      // source address of that packet, for the status line
     bool     syncOpen_ = false;      // socket opened for the current mode (lazy-open latch)
-    bool     syncJoined_ = false;    // the receive socket joined the WLED group, so multicast reaches it
 
     /// Report an open receive socket, saying so when only unicast can reach it.
     void reportListening() {
-        if (syncJoined_) setStatus("listening");
+        if (syncSock_.multicastJoined()) setStatus("listening");
         else setStatus("listening, unicast only: multicast unavailable", Severity::Warning);
     }
     uint32_t lastSyncOpenFailMs_ = 0;  // millis of the last failed open (0 = none); bring-up backoff
@@ -635,7 +636,7 @@ private:
             char grp[16]; formatDottedQuad(grp, kSyncMulticastAddr_);
             if (syncSock_.open() && syncSock_.bind(syncPort)) {
                 syncOpen_ = true;
-                syncJoined_ = syncSock_.joinMulticast(grp);
+                syncSock_.joinMulticast(grp);
                 reportListening();
             } else {
                 syncSock_.close();

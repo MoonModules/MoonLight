@@ -36,6 +36,17 @@ TEST_CASE("SystemModule MAC-to-deviceName") {
     CHECK(looksLikeMacName(sys.deviceName()));
 }
 
+// One function names a board in the app and in MoonBase, so a board's access point carries the name MoonLight shows.
+TEST_CASE("defaultDeviceName: MM- and the last two MAC bytes, and nothing past a short buffer") {
+    const uint8_t mac[6] = {0x10, 0x00, 0x3B, 0xDB, 0x96, 0x00};
+    char name[16];
+    mm::defaultDeviceName(mac, name, sizeof(name));
+    CHECK(std::strcmp(name, "MM-9600") == 0);
+    char tiny[4] = {'x', 'x', 'x', 'x'};
+    mm::defaultDeviceName(mac, tiny, sizeof(tiny));
+    CHECK(tiny[0] == 0);
+}
+
 // deviceName is bound as a Text control to the MAC-derived default (see looksLikeMacName).
 TEST_CASE("SystemModule deviceName control") {
     mm::SystemModule sys;

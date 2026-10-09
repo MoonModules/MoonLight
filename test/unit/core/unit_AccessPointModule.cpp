@@ -217,31 +217,54 @@ TEST_CASE("never with nothing configured still opens the access point and says s
 }
 
 // The password reaches the radio, and a change re-opens it live.
-TEST_CASE("the access point opens with its settings and re-opens on a change") {
+TEST_CASE("the access point re-opens when the first known network's password changes") {
     ApNetwork n;
-    std::strcpy(controlPtr<char>(n.ap, "password"), "first-pass");
     n.net.setup();
-    CHECK(std::string(mm::platform::testLastApConfig().password) == "first-pass");
+    n.wifi.remember("home", "first-pass");
     n.at(1000);
-    std::strcpy(controlPtr<char>(n.ap, "password"), "longenough");
+    CHECK(std::string(mm::platform::testLastApConfig().password) == "first-pass");
+    n.wifi.remember("home", "longenough");
     n.at(2000);
     CHECK(std::string(mm::platform::testLastApConfig().password) == "longenough");
     CHECK(mm::platform::wifiApConnected());
 }
 
-// WPA2 takes 8 to 63 characters, so a shorter password is refused and the stored one stays, never an access point open by surprise.
-TEST_CASE("a password of 1 to 7 characters is refused, empty and 8 or more are taken") {
-    mm::AccessPointModule ap;
-    ap.rebuildControls();
-    const mm::ControlDescriptor* pw = nullptr;
-    for (uint8_t i = 0; i < ap.controls().count(); i++)
-        if (std::strcmp(ap.controls()[i].name, "password") == 0) pw = &ap.controls()[i];
-    REQUIRE(pw != nullptr);
-    CHECK(mm::applyControlValue(*pw, "{\"password\":\"12345678\"}", "password", mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
-    CHECK(mm::applyControlValue(*pw, "{\"password\":\"1234\"}", "password", mm::ApplyPolicy::Clamp) != mm::ApplyResult::Ok);
-    CHECK(std::string(static_cast<const char*>(pw->ptr)) == "12345678");   // the refused one left it untouched
-    CHECK(mm::applyControlValue(*pw, "{\"password\":\"\"}", "password", mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
-    CHECK(std::string(static_cast<const char*>(pw->ptr)).empty());
+// The access point needs no password of its own: it carries the first known network's, which the owner knows and a stranger does not.
+TEST_CASE("the access point is open on a first setup and carries the first known network's password after") {
+    ApNetwork n;
+    n.net.setup();
+    CHECK(std::string(mm::platform::testLastApConfig().password).empty());   // a first setup: open
+    n.wifi.remember("home", "homepassword");
+    n.at(1000);
+    CHECK(std::string(mm::platform::testLastApConfig().password) == "homepassword");
+    CHECK(std::string(mm::AccessPointModule::passwordFor("short")).empty());    // not a WPA2 passphrase: open
+}
+
+// A client on the access point has not shown it knows the network's password, so a stored password reaches it empty.
+TEST_CASE("a password is written empty while secrets are hidden, and as before once the scope ends") {
+    mm::JsonSink shown;
+    mm::writeObfuscatedPassword(shown, "homepassword");
+    {
+        const mm::SecretsHidden hide(true);
+        mm::JsonSink hidden;
+        mm::writeObfuscatedPassword(hidden, "homepassword");
+        CHECK(std::string(hidden.data()) == "\"\"");
+        const mm::SecretsHidden home(false);   // a home-network request inside it still sees its own
+        mm::JsonSink nested;
+        mm::writeObfuscatedPassword(nested, "homepassword");
+        CHECK(std::string(nested.data()) == std::string(shown.data()));
+    }
+    CHECK_FALSE(mm::SecretsHidden::active());
+    const uint8_t ap[4] = {4, 3, 2, 1}, home[4] = {192, 168, 1, 103};
+    CHECK(mm::captive::throughAccessPoint(ap));
+    CHECK_FALSE(mm::captive::throughAccessPoint(home));
+}
+
+// The network stack takes a packet for any of the device's addresses on any interface, so a phone on the access point can ask the station's address: its own address decides, not the one it reached.
+TEST_CASE("a client is on the access point by its own address, whichever of the device's addresses it asked") {
+    const uint8_t phoneOnAp[4] = {4, 3, 2, 2}, laptopAtHome[4] = {192, 168, 1, 146};
+    CHECK(mm::captive::fromAccessPoint(phoneOnAp));
+    CHECK_FALSE(mm::captive::fromAccessPoint(laptopAtHome));
 }
 
 // Open is the default, so a device that knows a network says nothing about its open access point.
@@ -402,15 +425,22 @@ TEST_CASE("a join asked for from the access point during a retry still holds it 
     CHECK(mm::platform::wifiApConnected());   // held for the phone
 }
 
-// The access point is named after the device, so a rename reopens it under the new name, as every setting applies live.
-TEST_CASE("renaming the device reopens the access point under the new name") {
+// The access point's name is anonymous, `MM-` and four MAC digits, so the air does not say whose device it is, and renaming the device leaves it as it is.
+TEST_CASE("the access point broadcasts MM- and four MAC digits, whatever the device is named") {
     ApNetwork n;
     mm::SystemModule sys;
     sys.rebuildControls();
     n.net.setSystemModule(&sys);
+    std::strcpy(controlPtr<char>(sys, "deviceName"), "ml-abko");
+    uint8_t mac[6];
+    mm::platform::getMacAddress(mac);
+    char anonymous[8];
+    mm::defaultDeviceName(mac, anonymous, sizeof(anonymous));
     n.net.setup();
     REQUIRE(mm::platform::wifiApConnected());
+    CHECK(std::string(mm::platform::testLastApConfig().name) == anonymous);
     std::strcpy(controlPtr<char>(sys, "deviceName"), "MM-renamed");
     n.at(1000);
-    CHECK(std::string(mm::platform::testLastApConfig().name) == "MM-renamed");
+    CHECK(std::string(mm::platform::testLastApConfig().name) == anonymous);
+    CHECK(std::string(n.ap.name()) == anonymous);   // what the card shows
 }

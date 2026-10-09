@@ -7,6 +7,8 @@ The file you upload is the migration image, a small program that runs once.
 It writes MoonBase (MoonLight's installer) and MoonLight's partition table and restarts into MoonBase, all in about ten seconds, and from WLED it carries the WiFi network over.
 MoonBase then installs MoonLight from the release.
 
+<img src="../assets/deviceModels/esp32-c3-rgbww-pwm-bulb.png" width="140" alt="An RGBWW PWM bulb with an ESP32-C3 inside, such as the Athom 12W: a WLED bulb that moves to MoonLight this way">
+
 ## What can move
 
 | From | Chip | Status |
@@ -25,7 +27,7 @@ A migration image is built for one chip, so the chip decides which file fits.
    Keep the power on for the next ten seconds.
 4. The device restarts as **MoonBase**, on the same WiFi.
    Open its address in a browser.
-   If it is not on your network, it could not carry the WiFi over and opens an access point named `MM-…`: join it and set your WiFi there.
+   If it is not on your network, it could not carry the WiFi over and opens an access point named `MM-` and four digits of its MAC, such as `MM-9600`: join it and set your WiFi there.
 5. In MoonBase, pick the firmware of the release for the chip and press **Install**.
    MoonLight starts on the same WiFi.
 6. Set the light up as on any device: the drivers, the layout, the effects.
@@ -48,3 +50,7 @@ A power cut in exactly that window leaves the device needing a USB cable to reco
 A power cut at any other moment comes back on its own: the image starts over, or MoonBase takes over.
 
 Going back to the old firmware also needs a USB cable, since MoonBase installs MoonLight only.
+
+**The migration is at your own risk.**
+It is tested on the devices named above, and another device can differ from them in ways the image cannot check.
+A device that needs a cable may have to be opened, which can void its warranty.

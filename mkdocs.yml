@@ -172,6 +172,7 @@ nav:
       - Driving LED panels with a receiving card: how-to/panel-cards.md
       - LED signal integrity: how-to/led-signal-integrity.md
       - Connecting a control surface: how-to/control-surface.md
+      - Playing an effect while a button is held: how-to/hold-to-play.md
       - Building a multi-device installation: how-to/multi-board-installation.md
       - Home automation: how-to/home-automation.md
       - Save and recall presets: how-to/presets.md

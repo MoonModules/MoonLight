@@ -50,6 +50,7 @@ add_executable(mm_tests
     unit/core/unit_H264Bitstream.cpp
     unit/core/unit_AllocTracking.cpp
     unit/core/unit_HttpServerModule_apply.cpp
+    unit/core/unit_HttpServerModule_connections.cpp
     unit/core/unit_StateDocument.cpp
     unit/core/unit_ImprovFrame.cpp
     unit/core/unit_ImprovOpReassembler.cpp

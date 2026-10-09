@@ -240,4 +240,4 @@ MoonLight is a community project, shaped by the people who use it:
 
 ## License
 
-See [LICENSE](LICENSE).
+See [LICENSE](LICENSE): GPL-3.0. MoonLight is provided as is, without warranty: like any software it has bugs, and you use it at your own risk.

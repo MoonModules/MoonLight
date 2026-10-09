@@ -144,6 +144,7 @@ int fsRead(const char* path, char* buf, size_t maxLen) {
 
 // The folder a write lands in, made first, as the write's contract promises.
 static void makeParent(const char* path) {
+    if (!path) return;
     const char* slash = std::strrchr(path, '/');
     if (!slash || slash == path) return;
     char dir[128];

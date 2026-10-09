@@ -478,6 +478,16 @@
       "help": "improv_smoke_test",
       "script": "build/improv_smoke_test.py",
       "needs_port": true
+    },
+    {
+      "id": "wled_migration_test",
+      "tab": "esp32",
+      "group": "run",
+      "label": "WLED Migration Test",
+      "speed": "slow",
+      "help": "wled_migration_test",
+      "script": "build/wled_migration_test.py",
+      "needs_port": true
     }
   ]
 }

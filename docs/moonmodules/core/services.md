@@ -91,6 +91,8 @@ A Service added per device: **a list of buttons**, each on its own GPIO, each dr
 
 - `target`, `kind` and `value`: what the row drives, how, and with what. ⌄ details.
 
+A catalog board's first button targets `Control.switch1`, which toggles `on`: a press switches the lights and their relay.
+
 Detail: [technical](moxygen/ButtonService.md)
 
 ### Analog
@@ -219,14 +221,14 @@ macOS has no native loopback: install [BlackHole](https://existential.audio/blac
 
 #### WLED audio sync: what is on the wire
 
-Sending and receiving both use the **multicast address 239.0.0.1**, which is what WLED's own usermod does (`beginMulticast` on both ends). On a network that does not carry multicast, receive still hears unicast, and the status says `listening, unicast only`. It never uses broadcast, so a broadcast sender is inaudible to WLED and a receiver that only binds the port never hears WLED. This is a network-layer address, unrelated to any device grouping.
+Sending and receiving both use the **multicast address 239.0.0.1**, which is what WLED's own usermod does (`beginMulticast` on both ends). On a network that does not carry multicast, receive still hears unicast, and the status says `listening, unicast only`. A receiver that hears nothing for 3 seconds joins the group again, which repairs a router that forgets members: [multicast and IGMP snooping](../../explanation/architecture/moonlight.md#multicast-and-igmp-snooping). It never uses broadcast, so a broadcast sender is inaudible to WLED and a receiver that only binds the port never hears WLED. This is a network-layer address, unrelated to any device grouping.
 
 **Port 11988 is the WLED contract**, and `syncPort` defaults to it. The port is configurable for
-MoonLight peers that want a private stream, but a custom port is no longer WLED-compatible: the endpoint WLED speaks is 239.0.0.1:11988 specifically.
+MoonLight peers that want a private stream, but a custom port is not WLED-compatible: the endpoint WLED speaks is 239.0.0.1:11988 specifically.
 
 Multicast is also the better neighbor, with a caveat worth knowing: a switch or access point that does **IGMP snooping** forwards the group only to the ports that joined it, so the other hosts never see the traffic at all. Without snooping the switch floods it exactly like broadcast, and on WiFi it goes out at the lowest basic rate to every station. So multicast can reduce how many hosts have to process ~40 packets a second, but it does not guarantee it. See [multicast and IGMP snooping](../../explanation/architecture/moonlight.md#multicast-and-igmp-snooping).
 
-The 44-byte v2 packet is byte-compatible with WLED, with one field that is not yet equivalent:
+The 44-byte v2 packet is byte-compatible with WLED, with one field that is not equivalent:
 
 | field | MoonLight | WLED | status |
 |---|---|---|---|

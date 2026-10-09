@@ -120,6 +120,7 @@ void HttpServerModule::release() {
         stateSend_.active = false;
     }
     for (auto& ws : wsClients_) ws.close();
+    for (auto& c : parked_) c.close();
     // Every close site notifies the producer (see cancelBufferedSend): without this, ghost standing requests would keep the driver gathering frames for nobody after a release.
     for (int i = 0; i < MAX_PREVIEW_CLIENTS; i++) {
         if (previewClients_[i].valid() && clientSink_) clientSink_->onClientGone(i);
@@ -150,13 +151,21 @@ void HttpServerModule::tick20ms() MM_NONBLOCKING {
     // The expensive buildStateJson runs only when a resync is actually pending, and the steady-state value patch stays on tick1s (unchanged).
     // Cuts connect→first-preview latency from up to ~1 s + drain down to a few tens of ms.
     // No-op in the common (no-resync) case.
-    if (fullResyncPending_) pushStateToWebSockets();
-    // A module that asked goes out now rather than on the next second.
-    if (soonCount_) pushSoonPatch();
+    if (fullResyncPending_ || soonCount_) {
+        const SecretsHidden hide(anyWsClientOnAccessPoint());   // one push serves every client
+        if (fullResyncPending_) pushStateToWebSockets();
+        // A module that asked goes out now rather than on the next second.
+        if (soonCount_) pushSoonPatch();
+    }
     // Read inbound WS frames, because the socket carries state in both directions.
     // The native WLED app sets its on/off and brightness by sending a {on,bri} text frame over /ws, so a push-only socket would drop them.
     // Cheap (non-blocking, usually nothing pending).
     pollWledStateFromWebSockets();
+    serveConnections();
+}
+
+// One entry from the tick, so the connection work, which blocks by nature, is one call on the render path.
+void HttpServerModule::serveConnections() {
     // Accept and serve a bounded BATCH of HTTP connections per tick, not one.
     // A browser page-load opens the HTML + several JS/CSS files + the WS upgrade in parallel (~8 connections); accepting one per 20 ms tick drains that burst over ~160 ms and: worse: lets the accept backlog fill and drop the slower connections (the WS among them), so the page loads but the clock/preview never start until a refresh.
     // Draining up to kAcceptsPerTick clears a whole first-load burst in ~2 ticks.
@@ -168,19 +177,57 @@ void HttpServerModule::tick20ms() MM_NONBLOCKING {
     // Subtraction-based compare, rollover-safe.
     constexpr uint32_t kAcceptBudgetMs = 100;
     const uint32_t batchStart = platform::millis();
+    serveParked();
     for (int i = 0; i < kAcceptsPerTick; i++) {
         auto conn = server_.accept();
         if (!conn.valid()) break;   // backlog drained (the usual case: 0 or 1 pending)
-        handleConnection(conn);
+        if (!handleConnection(conn)) park(conn);
         if (platform::millis() - batchStart >= kAcceptBudgetMs) break;   // a slow client stalled the batch
     }
 }
 
+// A request whose first packet was lost arrives a resend later, hundreds of milliseconds after the connection opened, so it waits here instead of being dropped.
+void HttpServerModule::park(platform::TcpConnection& conn) {
+    for (int i = 0; i < kParkedSlots; i++) {
+        if (parked_[i].valid()) continue;
+        parked_[i] = std::move(conn);
+        parkedAt_[i] = platform::millis();
+        return;
+    }
+    conn.close();   // every slot taken: dropped, as an unparked one always was
+}
+
+// Each parked connection gets one read without waiting: served once its request is in, closed once kParkMs has passed without one.
+void HttpServerModule::serveParked() {
+    const uint32_t now = platform::millis();
+    for (int i = 0; i < kParkedSlots; i++) {
+        if (!parked_[i].valid()) continue;
+        if (handleConnection(parked_[i], 0)) parked_[i].close();
+        else if (now - parkedAt_[i] >= kParkMs) parked_[i].close();
+    }
+}
+
 void HttpServerModule::tick1s() MM_NONBLOCKING {
+    const SecretsHidden hide(anyWsClientOnAccessPoint());   // one push serves every client
     pushStateToWebSockets();
 }
 
-void HttpServerModule::handleConnection(platform::TcpConnection& conn) {
+bool HttpServerModule::onAccessPoint(const platform::TcpConnection& conn) {
+    uint8_t peer[4] = {};
+    return conn.peerIPv4(peer) && captive::fromAccessPoint(peer);
+}
+
+bool HttpServerModule::anyWsClientOnAccessPoint() const MM_NONBLOCKING {
+    for (int i = 0; i < MAX_WS_CLIENTS; i++)
+        if (wsOnAccessPoint_[i] && wsClients_[i].valid()) return true;
+    return false;
+}
+
+bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patienceMs) {
+    // A client on the device's own access point has not shown it knows the network's password, so it sees no stored one.
+    const SecretsHidden hide(onAccessPoint(conn));
+    uint8_t local[4] = {};
+    conn.localIPv4(local);   // the address it reached, which the captive redirect decides by
     uint8_t buf[2048];
     int totalRead = 0;
 
@@ -195,15 +242,15 @@ void HttpServerModule::handleConnection(platform::TcpConnection& conn) {
             if (std::strstr(reinterpret_cast<char*>(buf), "\r\n\r\n")) break;
             empties = 0;                 // got data: reset the patience counter
         } else if (n == 0) {
-            return;                      // peer closed
+            return true;                      // peer closed
         } else {                          // -1 = nothing pending yet
             if (totalRead > 0) break;    // had a partial then nothing more: process it
-            if (++empties > 5) break;    // fresh conn, no bytes after ~5 ms: give up
+            if (++empties > patienceMs) break;   // no bytes within the patience: the caller decides
             platform::delayMs(1);
         }
     }
 
-    if (totalRead == 0) { conn.close(); return; }
+    if (totalRead == 0) return false;   // nothing arrived: the caller parks it rather than dropping it
     buf[totalRead] = 0;
     auto* req = reinterpret_cast<char*>(buf);
 
@@ -233,7 +280,7 @@ void HttpServerModule::handleConnection(platform::TcpConnection& conn) {
                 parsed < 0 || parsed > kContentLenMax) {
                 sendResponse(conn, 400, "application/json",
                              "{\"error\":\"invalid content-length\"}");
-                return;
+                return true;
             }
             contentLen = static_cast<int>(parsed);
             int headerSize = static_cast<int>(headerEnd + 4 - req);
@@ -257,7 +304,7 @@ void HttpServerModule::handleConnection(platform::TcpConnection& conn) {
                 if (!isStreamingRoute) {
                     sendResponse(conn, 413, "application/json",
                                  "{\"error\":\"request body too large\"}");
-                    return;
+                    return true;
                 }
                 bodyNeeded = static_cast<int>(sizeof(buf) - 1);   // streaming: buffer the prefix only
             }
@@ -271,7 +318,7 @@ void HttpServerModule::handleConnection(platform::TcpConnection& conn) {
             if (totalRead < bodyNeeded) {                  // body never fully arrived
                 sendResponse(conn, 400, "application/json",
                              "{\"error\":\"incomplete request body\"}");
-                return;
+                return true;
             }
         }
     }
@@ -293,7 +340,7 @@ void HttpServerModule::handleConnection(platform::TcpConnection& conn) {
     if (std::strcmp(method, "GET") == 0 && (isWs || isWsp) &&
         findHeaderCI(req, "Upgrade: websocket")) {
         handleWebSocketUpgrade(conn, req, isWsp);
-        return; // don't close: connection is now a WebSocket
+        return true; // don't close: connection is now a WebSocket
     }
 
     // Read POST body if present Body pointer (headerEnd already found above)
@@ -301,12 +348,11 @@ void HttpServerModule::handleConnection(platform::TcpConnection& conn) {
 
     // A phone on the access point asking for its own captive-check page gets the UI, which is what shows it the sign-in screen.
     if (std::strcmp(method, "GET") == 0) {
-        uint8_t local[4];
         const char* host = findHeaderCI(req, "Host:");
         if (host) { host += 5; while (*host == ' ') host++; }
-        if (conn.localIPv4(local) && captive::redirects(local, host, path)) {
+        if (captive::redirects(local, host, path)) {   // `local` was read when the connection came in
             conn.write(reinterpret_cast<const uint8_t*>(captive::kRedirect), std::strlen(captive::kRedirect));
-            return;
+            return true;
         }
     }
 
@@ -365,7 +411,7 @@ void HttpServerModule::handleConnection(platform::TcpConnection& conn) {
             handleSetControl(conn, body);
         } else if (std::strcmp(path, "/api/state") == 0 && body) {
             // POST for a client that cannot send PATCH: the same document, the same engine.
-            if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return; }
+            if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return true; }
             handleApplyState(conn, body, static_cast<size_t>(totalRead) - static_cast<size_t>(body - req),
                              static_cast<size_t>(contentLen));
         } else if (std::strcmp(path, "/api/file") == 0 && body) {
@@ -378,7 +424,7 @@ void HttpServerModule::handleConnection(platform::TcpConnection& conn) {
             // Keyed on header ABSENCE, not on whether body bytes happened to arrive in the same read as the headers; an explicit Content-Length: 0 stays a valid empty write.
             if (!hasContentLen) {
                 sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}");
-                return;
+                return true;
             }
             handleWriteFile(conn, queryStart ? queryStart + 1 : "", body, initialLen,
                             static_cast<size_t>(contentLen));
@@ -432,7 +478,7 @@ void HttpServerModule::handleConnection(platform::TcpConnection& conn) {
             const size_t initialLen = static_cast<size_t>(totalRead) - static_cast<size_t>(body - req);
             if (!hasContentLen) {
                 sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}");
-                return;
+                return true;
             }
             handleMoonBaseUpload(conn, body, initialLen, static_cast<size_t>(contentLen));
         } else if (std::strcmp(path, "/api/firmware/upload") == 0 && body) {
@@ -445,7 +491,7 @@ void HttpServerModule::handleConnection(platform::TcpConnection& conn) {
     } else if (std::strcmp(method, "PATCH") == 0) {
         // Editable list: PATCH /api/list/<module>/<control>/<id> edits one row: a field ({"field":F,"value":V}) or a reorder ({"to":N}). PATCH is the REST verb for a partial update of an existing resource (the row); create is POST, delete is DELETE.
         if (std::strcmp(path, "/api/state") == 0 && body) {
-            if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return; }
+            if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return true; }
             handleApplyState(conn, body, static_cast<size_t>(totalRead) - static_cast<size_t>(body - req),
                              static_cast<size_t>(contentLen));
         } else if (std::strncmp(path, "/api/list/", 10) == 0 && body) {
@@ -482,6 +528,7 @@ void HttpServerModule::handleConnection(platform::TcpConnection& conn) {
     }
 
     conn.close();
+    return true;
 }
 
 void HttpServerModule::sendPreflightResponse(platform::TcpConnection& conn) {
@@ -535,9 +582,8 @@ static constexpr size_t kUploadMax = 256 * 1024;   // 256 KB: sanity bound on on
 // Copy the `path=` query value into `out` (decoding %XX and '+' minimally), rooted at the mount.
 // Returns false on a missing/empty path or a ".." traversal attempt.
 //
-// Deliberately NOT a `.config`/dotfile denylist (PO decision): the File Manager is a device-admin tool on a trusted LAN, and reading the persisted `.config/*.json` is a feature (inspect/back up the device's own config), not a leak: there are no third-party secrets on the device, and the WiFi password is XOR-obfuscated in what it writes.
-// The weak-protection is `show hidden` defaulting off (FileManagerModule), so `.config` isn't shown unless the operator asks.
-// Reviewers periodically flag this as a secrets-exposure: it's an accepted design, not an oversight; leave it.
+// Reading the persisted `.config/*.json` is a feature on the home network: inspecting and backing up the device's own config, which a client there could reach anyway, since it knows the network's password.
+// Through the device's own access point it is refused (streamFsFile), since the files hold the WiFi passwords in plain text.
 // See the header for why case-insensitive.
 // MSVC has no strcasestr, so the loop is spelled out.
 // The textbook header scan: match only at the START of a header line, and stop at the blank line ending the header section.
@@ -733,6 +779,11 @@ void HttpServerModule::handleRemoveEntry(platform::TcpConnection& conn, const ch
 // `extraHeaders` carries caller-specific lines ("Cache-Control: no-cache\r\n").
 void HttpServerModule::streamFsFile(platform::TcpConnection& conn, const char* path,
                                     const char* mime, const char* extraHeaders) {
+    // The saved config holds the WiFi passwords in plain text, which a client on the access point does not see.
+    if (SecretsHidden::active() && std::strstr(path, "/.config")) {
+        sendResponse(conn, 403, "application/json", "{\"error\":\"config files are not served through the access point\"}");
+        return;
+    }
     const long size = platform::fsSize(path);
     if (size < 0) { sendResponse(conn, 404, "application/json", "{\"error\":\"not found\"}"); return; }
     char header[224];
@@ -1232,7 +1283,9 @@ void HttpServerModule::visitModuleLeaves(MoonModule* mod, Fn&& fn) {
     for (uint8_t i = 0; i < ctrls.count(); i++) {
         auto& c = ctrls[i];
         std::snprintf(path, sizeof(path), "%s/%s", mod->name(), c.name);
-        JsonSink vs; writeControlValue(vs, c);
+        JsonSink vs;
+        if (c.type == ControlType::Password) writeObfuscatedPassword(vs, static_cast<const char*>(c.ptr));   // as the full state shows it
+        else writeControlValue(vs, c);
         fn(fnv1a(path, std::strlen(path)), fnv1a(vs.data(), vs.size()), path, vs);
     }
     // `fn`, not `std::forward<Fn>(fn)`: same reason as the caller above: forwarding inside a loop moves the callable into the first child, leaving every later sibling a moved-from one.
@@ -2592,6 +2645,7 @@ void HttpServerModule::handleWebSocketUpgrade(platform::TcpConnection& conn, con
     // Store connection as WebSocket client.
     for (int i = 0; i < MAX_WS_CLIENTS; i++) {
         if (!wsClients_[i].valid()) {
+            wsOnAccessPoint_[i] = onAccessPoint(conn);   // read once: a socket's peer does not change
             wsClients_[i] = std::move(conn);
             // A full state mid-drain to other clients is exactly what this newcomer needs too. Its cursor starts at 0, so it receives the whole in-flight message from the top, no splice, no cancel. requestFullResync below still queues a fresh one for everyone.
             stateSend_.sent[i] = 0;

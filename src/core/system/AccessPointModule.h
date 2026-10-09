@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/util/DeviceName.h"   // defaultDeviceName: the anonymous name it broadcasts
 #include "core/module/MoonModule.h"
 #include "core/util/CaptivePortal.h"
 #include "core/util/fnv.h"
@@ -10,7 +11,9 @@
 
 namespace mm {
 
-/// The device's own WiFi network: when it opens, its password, and the phones on it.
+/// The device's own WiFi network: when it opens, and the phones on it.
+///
+/// It is named `MM-` and four MAC digits rather than after the device. The first known network's password protects it.
 ///
 /// A Network child: the network module opens and closes it, and this one holds how it appears and answers its DNS.
 /// @card AccessPointModule.png
@@ -35,7 +38,8 @@ public:
     void defineControls() override {
         MoonModule::defineControls();
         controls_.addSelect("opens", opens_, kOpensOptions, 3);
-        controls_.addPassword("password", password_, sizeof(password_), validPassphrase);
+        name();   // filled before it is bound
+        controls_.addReadOnly("name", name_, sizeof(name_));
         // Meaningful only while it runs, so hidden elsewhere rather than showing zero.
         controls_.addReadOnlyInt("clients", clients_, "");
         controls_.setHidden(controls_.count() - 1, !running_);
@@ -49,16 +53,33 @@ public:
         return (o == Opens::Never && !othersConfigured) ? Opens::OnFailure : o;
     }
 
-    /// How it appears, under the device's name at the captive portal's address.
-    platform::WifiApConfig config(const char* name) const {
-        return platform::WifiApConfig{name, captive::kAddressText, password_};
+    /// The password it carries: the first known network's, which the owner knows and a stranger does not, or empty when that is no WPA2 passphrase.
+    static const char* passwordFor(const char* firstKnownNetwork) {
+        const size_t n = firstKnownNetwork ? std::strlen(firstKnownNetwork) : 0;
+        return n >= 8 && n <= 63 ? firstKnownNetwork : "";
     }
 
-    /// A hash over how it appears under `name`, so a change to any of it, a rename included, re-opens it live.
-    uint32_t sig(const char* name) const MM_NONBLOCKING {
+    // Anonymous, as such networks usually are, so the air does not say whose device it is; the device's own name stays on its home network.
+    /// The name it broadcasts: `MM-` and the last four digits of the MAC, the same for the app and MoonBase.
+    const char* name() const {
+        if (!name_[0]) {
+            uint8_t mac[6];
+            platform::getMacAddress(mac);
+            defaultDeviceName(mac, name_, sizeof(name_));
+        }
+        return name_;
+    }
+
+    /// How it appears: its name at the captive portal's address, with the first known network's password.
+    platform::WifiApConfig config(const char* firstKnownNetwork) const {
+        return platform::WifiApConfig{name(), captive::kAddressText, passwordFor(firstKnownNetwork)};
+    }
+
+    /// A hash over its password, so a change to the first known network's re-opens it live.
+    uint32_t sig(const char* firstKnownNetwork) const MM_NONBLOCKING {
+        const char* pw = passwordFor(firstKnownNetwork);
         Fnv1a f;
-        f.add(name, std::strlen(name));
-        f.add(password_, std::strlen(password_));
+        f.add(pw, std::strlen(pw));
         return f.h;
     }
 
@@ -110,18 +131,13 @@ public:
         }
     }
 
-    /// Empty for an open access point, or a WPA2 passphrase of 8 to 63 characters, the only lengths the standard allows.
-    static bool validPassphrase(const char* pw) {
-        const size_t n = std::strlen(pw);
-        return n == 0 || (n >= 8 && n <= 63);
-    }
 
 private:
     static constexpr const char* kOpensOptions[] = {"on failure", "always", "never (not recommended)"};
 
     uint8_t opens_ = 0;
-    char    password_[64] = {};   ///< WPA2's passphrase bound
     int8_t  clients_ = 0;
+    mutable char name_[8] = {};   ///< filled on first use from the MAC
     bool    running_ = false;
     const char* advice_ = nullptr;   ///< the advice last shown, so the status is rewritten only on a change
 

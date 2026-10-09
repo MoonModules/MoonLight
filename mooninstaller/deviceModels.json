@@ -12,10 +12,10 @@
     "supported": [
       "LEDs",
       "WiFi",
-      "Ethernet"
+      "Ethernet",
+      "Buttons"
     ],
     "planned": [
-      "Button",
       "SD card"
     ],
     "state": {
@@ -33,6 +33,20 @@
         "Ethernet": {
           "type": "EthernetModule",
           "ethBoard": "Classic RMII"
+        }
+      },
+      "Services": {
+        "$patch": "replace",
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 34,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            }
+          ]
         }
       }
     }
@@ -122,16 +136,17 @@
       "esp32"
     ],
     "image": "assets/deviceModels/esp32-quinled-dig-2-go.jpg",
+    "description": "Relay on 12 is an on-board switch in the LED power line, so the LEDs light only while it is closed.",
     "url": "https://quinled.info/quinled-dig2go/",
     "supported": [
       "LEDs",
-      "WiFi"
+      "WiFi",
+      "Buttons",
+      "Relay"
     ],
     "planned": [
-      "Button",
       "IR",
-      "Microphone",
-      "Relay"
+      "Microphone"
     ],
     "state": {
       "System": {
@@ -145,6 +160,20 @@
           "pins": "16",
           "fixture": "GRBW"
         }
+      },
+      "Services": {
+        "$patch": "replace",
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 0,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            }
+          ]
+        }
       }
     }
   },
@@ -155,15 +184,16 @@
       "esp32-pico"
     ],
     "image": "assets/deviceModels/esp32-pico-quinled-dig-next-2.jpg",
+    "description": "Relays on 20, 21 and 22 are on-board switches, one per fused power output; 5 triggers an optional external relay board.",
     "url": "https://quinled.info/dig-next-2/",
     "supported": [
       "LEDs",
       "WiFi",
-      "Audio"
+      "Audio",
+      "Buttons",
+      "Relay"
     ],
-    "planned": [
-      "Button"
-    ],
+    "planned": [],
     "flashBaud": 460800,
     "state": {
       "System": {
@@ -185,6 +215,21 @@
           "micMode": 1,
           "wsPin": 8,
           "sdPin": 7
+        },
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 34,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            },
+            {
+              "pin": 35,
+              "activeLow": true
+            }
+          ]
         }
       }
     }
@@ -225,15 +270,17 @@
       "esp32"
     ],
     "image": "assets/deviceModels/esp32-quinled-dig-quad-v3.jpg",
+    "description": "Relay on 15 is a 5 V trigger for an optional external relay, on pre-assembled boards.",
     "url": "https://quinled.info/pre-assembled-quinled-dig-quad/",
     "supported": [
       "LEDs",
       "WiFi",
-      "Ethernet"
+      "Ethernet",
+      "Buttons",
+      "Relay"
     ],
     "planned": [
-      "Temperature",
-      "Relay"
+      "Temperature"
     ],
     "state": {
       "System": {
@@ -244,6 +291,21 @@
         "RmtLed": {
           "type": "RmtLedDriver",
           "pins": "16,3,1,4"
+        },
+        "relayPins": "15"
+      },
+      "Services": {
+        "$patch": "replace",
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 0,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            }
+          ]
         }
       }
     }
@@ -258,16 +320,71 @@
     "image": "assets/deviceModels/esp32-quinled-an-decapenta.jpg",
     "url": "https://quinled.info/quinled-an-penta-deca/",
     "supported": [
-      "WiFi"
-    ],
-    "planned": [
-      "PWM outputs",
+      "LEDs",
+      "WiFi",
       "Buttons",
       "I2C"
     ],
+    "planned": [],
     "state": {
       "System": {
-        "deviceModel": "QuinLED An-DecaPenta"
+        "deviceModel": "QuinLED An-DecaPenta",
+        "I2cBus": {
+          "type": "I2cBusModule",
+          "sda": 15,
+          "scl": 16
+        }
+      },
+      "Drivers": {
+        "$patch": "replace",
+        "relayPins": "",
+        "PwmLight": {
+          "type": "PwmLightDriver",
+          "fixture": "RGBCCT",
+          "pins": "27,26,25,22,23,21,19,18,14,17,13,12,5,2,4"
+        }
+      },
+      "Network": {
+        "$patch": "replace",
+        "Ethernet": {
+          "type": "EthernetModule",
+          "ethBoard": "Custom",
+          "ethType": 0
+        }
+      },
+      "Layouts": {
+        "$patch": "replace",
+        "Grid": {
+          "type": "GridLayout",
+          "width": 1,
+          "height": 3
+        }
+      },
+      "Services": {
+        "$patch": "replace",
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 36,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            },
+            {
+              "pin": 39,
+              "activeLow": true
+            },
+            {
+              "pin": 34,
+              "activeLow": true
+            },
+            {
+              "pin": 33,
+              "activeLow": true
+            }
+          ]
+        }
       }
     }
   },
@@ -278,19 +395,67 @@
       "esp32"
     ],
     "image": "assets/deviceModels/esp32-quinled-an-penta-plus.jpg",
+    "description": "Relay on 13 cuts the power of the addressable-LED output.",
     "url": "https://quinled.info/quinled-an-penta-plus/",
     "supported": [
-      "WiFi"
-    ],
-    "planned": [
-      "PWM outputs",
+      "LEDs",
+      "WiFi",
       "Ethernet",
       "Buttons",
-      "I2C"
+      "I2C",
+      "Relay"
     ],
+    "planned": [],
     "state": {
       "System": {
-        "deviceModel": "QuinLED An-Penta-Plus"
+        "deviceModel": "QuinLED An-Penta-Plus",
+        "I2cBus": {
+          "type": "I2cBusModule",
+          "sda": 15,
+          "scl": 16
+        }
+      },
+      "Drivers": {
+        "$patch": "replace",
+        "relayPins": "13",
+        "PwmLight": {
+          "type": "PwmLightDriver",
+          "fixture": "RGBCCT",
+          "pins": "2,4,12,33,32"
+        },
+        "RmtLed": {
+          "type": "RmtLedDriver",
+          "pins": "5"
+        }
+      },
+      "Network": {
+        "$patch": "replace",
+        "Ethernet": {
+          "type": "EthernetModule",
+          "ethBoard": "Classic RMII (no reset)"
+        }
+      },
+      "Services": {
+        "$patch": "replace",
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 36,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            },
+            {
+              "pin": 39,
+              "activeLow": true
+            },
+            {
+              "pin": 34,
+              "activeLow": true
+            }
+          ]
+        }
       }
     }
   },
@@ -301,16 +466,17 @@
       "esp32-16mb"
     ],
     "image": "assets/deviceModels/esp32-16mb-quinled-dig-octa-32-8l.jpg",
+    "description": "Relay on 33 triggers an optional external relay board, best placed on the mains side of the power supply.",
     "url": "https://quinled.info/quinled-dig-octa-brainboard-32-8l/",
     "supported": [
       "LEDs",
       "WiFi",
-      "Ethernet"
+      "Ethernet",
+      "Buttons",
+      "Relay"
     ],
     "planned": [
-      "Button",
       "Temperature",
-      "Relay",
       "SD card"
     ],
     "state": {
@@ -329,6 +495,25 @@
         "RmtLed": {
           "type": "RmtLedDriver",
           "pins": "0,1,2,3,4,5,12,13"
+        },
+        "relayPins": "33"
+      },
+      "Services": {
+        "$patch": "replace",
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 34,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            },
+            {
+              "pin": 35,
+              "activeLow": true
+            }
+          ]
         }
       }
     },
@@ -341,16 +526,17 @@
       "esp32-16mb"
     ],
     "image": "assets/deviceModels/esp32-16mb-serg-unishield-v5.jpg",
+    "description": "Relay on 19 is an on-board relay the LEDs are powered through.",
     "url": "https://www.tindie.com/products/serg74/wled-shield-board-for-addressable-leds/",
     "supported": [
       "LEDs",
-      "WiFi"
+      "WiFi",
+      "Buttons",
+      "Relay"
     ],
     "planned": [
-      "Button",
       "IR",
-      "Temperature",
-      "Relay"
+      "Temperature"
     ],
     "state": {
       "System": {
@@ -361,6 +547,21 @@
         "RmtLed": {
           "type": "RmtLedDriver",
           "pins": "16,3"
+        },
+        "relayPins": "19"
+      },
+      "Services": {
+        "$patch": "replace",
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 17,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            }
+          ]
         }
       }
     }
@@ -372,15 +573,16 @@
       "esp32-16mb"
     ],
     "image": "assets/deviceModels/esp32-16mb-serg-minishield.jpg",
+    "description": "Relay on 19 is a header for an optional external 5 V relay module.",
     "url": "https://www.tindie.com/stores/serg74/",
     "supported": [
       "LEDs",
-      "WiFi"
+      "WiFi",
+      "Buttons",
+      "Relay"
     ],
     "planned": [
-      "Button",
-      "Microphone",
-      "Relay"
+      "Microphone"
     ],
     "state": {
       "System": {
@@ -391,6 +593,21 @@
         "RmtLed": {
           "type": "RmtLedDriver",
           "pins": "16"
+        },
+        "relayPins": "19"
+      },
+      "Services": {
+        "$patch": "replace",
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 17,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            }
+          ]
         }
       }
     }
@@ -1368,11 +1585,10 @@
     "supported": [
       "LEDs",
       "WiFi",
-      "Audio"
+      "Audio",
+      "Buttons"
     ],
-    "planned": [
-      "Button"
-    ],
+    "planned": [],
     "state": {
       "System": {
         "deviceModel": "MoonHub75"
@@ -1407,6 +1623,17 @@
           "sckPin": 11,
           "wsPin": 12,
           "sdPin": 10
+        },
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 0,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            }
+          ]
         }
       }
     }

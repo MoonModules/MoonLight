@@ -33,7 +33,7 @@ The strip zig-zags and the layout does not know. Turn on **serpentine** on the G
 
 ## The device is missing from the network
 
-- **It never joined.** An unprovisioned device opens its own access point named `MM-XXXX`. Join it and open `http://4.3.2.1` to set the credentials.
+- **It never joined.** An unprovisioned device opens its own access point named `MM-XXXX`. Join it: the WiFi card opens by itself as a sign-in screen, or at `http://4.3.2.1`, to set the credentials.
 - **It joined but you cannot find it.** Try the IP from your router's client list before the `.local` name: mDNS fails on plenty of networks that route fine. A device with no mDNS responder is reachable by address all along.
 - **It was working and stopped.** Check the device is powered and the access point is not sitting between two networks. A repeater on one radio halves its throughput and drops the client side under load.
 

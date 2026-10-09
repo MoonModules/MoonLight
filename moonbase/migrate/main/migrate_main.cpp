@@ -262,7 +262,7 @@ extern "C" void app_main() {
     if (!writeVerified(ESP_PARTITION_TABLE_OFFSET, table_start, tableLen)) { ESP_LOGE(kTag, "the table did not write"); return; }
     pause("table written");
 
-    esp_flash_erase_region(nullptr, otadata.offset, otadata.size);
+    if (esp_flash_erase_region(nullptr, otadata.offset, otadata.size) != ESP_OK) { ESP_LOGE(kTag, "the app choice did not clear"); return; }
     pause("app choice cleared");
     ESP_LOGI(kTag, "restarting into MoonBase");
     esp_restart();

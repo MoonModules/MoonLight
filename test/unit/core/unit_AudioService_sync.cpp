@@ -61,6 +61,29 @@ struct FrozenClock {
     void advance(uint32_t ms) { now_ += ms; platform::setTestNowMs(now_); }
     uint32_t now_ = 1;
 };
+// A receiver on the test port, its socket opened by the first tick.
+void openReceiver(AudioService& a) {
+    a.mode = AudioService::kReceiveMode;
+    a.syncPort = kTestSyncPort;
+    a.applyState();
+    a.tick();
+}
+// Send one WLED packet of `level` to the receiver over loopback and tick until it lands; false when it never does.
+bool sendLevel(AudioService& a, uint8_t level) {
+    AudioFrame peer;
+    peer.level = level;
+    uint8_t pkt[WLED_SYNC_PACKET_SIZE];
+    buildWledAudioSync(pkt, peer, /*peak=*/false);
+    platform::UdpSocket tx;
+    const uint8_t loopback[4] = {127, 0, 0, 1};
+    if (!tx.open() || !tx.sendToAddr(loopback, kTestSyncPort, pkt, WLED_SYNC_PACKET_SIZE)) return false;
+    for (int i = 0; i < 100; i++) {   // loopback delivery is asynchronous in real time
+        a.tick();
+        if (a.audioFrame()->level == level) return true;
+        platform::delayMs(1);
+    }
+    return false;
+}
 }  // namespace
 
 // Regression: the mic status is a local-mode read-out, so leaving local must clear it: @xref{leaving-local-clears-the-mic-status}.
@@ -248,34 +271,58 @@ TEST_CASE("AudioService Receive: a failed group join still listens for unicast, 
     platform::setTestJoinFails(true);
     FrozenClock clk(1);
     AudioService a;
-    a.mode = AudioService::kReceiveMode;
-    a.syncPort = kTestSyncPort;
-    a.applyState();
-    a.tick();
+    openReceiver(a);
     REQUIRE(a.syncOpenForTest());
     CHECK(std::strcmp(status(a), "listening, unicast only: multicast unavailable") == 0);
-
-    AudioFrame peer;
-    peer.level = 77;
-    uint8_t pkt[WLED_SYNC_PACKET_SIZE];
-    buildWledAudioSync(pkt, peer, /*peak=*/false);
-    platform::UdpSocket tx;
-    REQUIRE(tx.open());
-    const uint8_t loopback[4] = {127, 0, 0, 1};
-    REQUIRE(tx.sendToAddr(loopback, kTestSyncPort, pkt, WLED_SYNC_PACKET_SIZE));
-    bool landed = false;
-    for (int i = 0; i < 100 && !landed; i++) {
-        a.tick();
-        landed = a.audioFrame()->level == 77;
-        if (!landed) platform::delayMs(1);
-    }
-    CHECK(landed);
+    CHECK(sendLevel(a, 77));
 
     // Gone stale, it falls back to the same warning rather than a plain "listening".
     clk.advance(AudioService::syncFallbackMsForTest() + 20);
     a.tick();
     CHECK(std::strcmp(status(a), "listening, unicast only: multicast unavailable") == 0);
-    tx.close();
+    a.release();
+}
+
+// A router can stop forwarding the group to a member it has not heard from, so the socket announces itself again while silent, paced, and audio arriving holds it off.
+TEST_CASE("AudioService Receive: a silent receiver joins the group again every rejoin interval, a receiving one does not") {
+    FrozenClock clk(1);
+    AudioService a;
+    openReceiver(a);
+    REQUIRE(a.syncOpenForTest());
+    CHECK(a.syncJoinCountForTest() == 1);
+
+    const uint32_t rejoin = platform::UdpSocket::kRejoinMs;
+    clk.advance(rejoin - 10);
+    a.tick();
+    CHECK(a.syncJoinCountForTest() == 1);   // inside the interval
+    clk.advance(10);
+    a.tick();
+    CHECK(a.syncJoinCountForTest() == 2);   // silent for the whole interval
+    a.tick();
+    CHECK(a.syncJoinCountForTest() == 2);   // paced: one join per interval
+
+    clk.advance(rejoin - 10);
+    REQUIRE(sendLevel(a, 99));
+    clk.advance(rejoin - 10);   // past the last join's interval, but audio arrived within it
+    a.tick();
+    CHECK(a.syncJoinCountForTest() == 2);
+    a.release();
+}
+
+// A join that failed is retried the same way, so a network that comes to allow multicast later is joined without a mode toggle.
+TEST_CASE("AudioService Receive: a failed group join is retried once silent, and the warning clears") {
+    struct JoinGuard { ~JoinGuard() { platform::setTestJoinFails(false); } } guard;
+    platform::setTestJoinFails(true);
+    FrozenClock clk(1);
+    AudioService a;
+    openReceiver(a);
+    REQUIRE(a.syncOpenForTest());
+    CHECK(std::strcmp(status(a), "listening, unicast only: multicast unavailable") == 0);
+
+    platform::setTestJoinFails(false);
+    clk.advance(platform::UdpSocket::kRejoinMs);
+    a.tick();
+    CHECK(std::strcmp(status(a), "listening") == 0);
     a.release();
 }
 

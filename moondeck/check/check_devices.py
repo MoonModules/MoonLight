@@ -40,16 +40,15 @@ DOCS = ROOT / "docs"
 # that buffer in src/core/system/SystemModule.h.
 DEVICE_MODEL_MAX = 31
 
-# Capability vocabulary. supported = what a module drives today; keep this list
-# in lockstep with the modules that actually exist. planned = peripherals with no
-# module yet (the backlog seed) — open-ended by design, so it is NOT whitelisted,
-# only type-checked. Adding a new supported capability means a module backs it.
-SUPPORTED_VOCAB = {"LEDs", "WiFi", "Ethernet", "Audio", "IR", "MQTT", "Hue", "MIDI"}
+# Capability vocabulary. supported = what a module drives; keep this list in lockstep with the modules that actually exist.
+# planned = peripherals with no module yet (the backlog seed), open-ended by design, so it is NOT whitelisted, only type-checked.
+# Adding a new supported capability means a module backs it.
+SUPPORTED_VOCAB = {"LEDs", "WiFi", "Ethernet", "Audio", "IR", "MQTT", "Hue", "MIDI", "Buttons", "I2C", "Relay"}
 
-# Flash bauds a board may pin via `flashBaud` — the standard esptool rates. The default
-# differs by audience: the CLI / MoonDeck path defaults FAST (921600 — DIY bench, modern
-# bridge), the web installer defaults SAFE (460800 — unknown walk-up hardware). A board
-# sets `flashBaud` to override its resolved default in either direction — down for a flaky
+# Flash bauds a board may pin via `flashBaud`: the standard esptool rates. The default
+# differs by audience: the CLI / MoonDeck path defaults FAST (921600: DIY bench, modern
+# bridge), the web installer defaults SAFE (460800: unknown walk-up hardware). A board
+# sets `flashBaud` to override its resolved default in either direction: down for a flaky
 # bridge (the LOLIN's CH340), up where a slow default needs raising. Keep in step with
 # flash_esp32.py (_catalog_flash_baud) and install-orchestrator.js.
 FLASH_BAUDS = {115200, 230400, 460800, 921600}
@@ -182,7 +181,7 @@ def main():
         names_seen.add(name)
         # The name is injected into the device's SystemModule.deviceModel control, whose buffer is
         # deviceModel_[32] (31 chars + NUL). A longer name is silently truncated on-device, so it no
-        # longer matches the catalog — MoonDeck then can't map it back and shows a duplicate
+        # longer matches the catalog, so MoonDeck then can't map it back and shows a duplicate
         # "(unknown)" entry. Cap the source data so it always round-trips whole.
         if isinstance(name, str) and len(name) > DEVICE_MODEL_MAX:
             errors.append(f"{where}: name is {len(name)} chars; max {DEVICE_MODEL_MAX} "
@@ -207,11 +206,11 @@ def main():
                 errors.append(f"{where}: firmwares entries must not be whitespace-only "
                               f"or have leading/trailing whitespace")
 
-        # --- flashBaud (optional) — a board opts into a faster flash baud only when
+        # --- flashBaud (optional): a board opts into a faster flash baud only when
         #     its USB bridge is verified to sustain it (flash_esp32.py reads this). ---
         baud = e.get("flashBaud")
         # `bool` is an int subclass and `1.0 in {int}` is True, so guard the type
-        # explicitly — a float/bool flashBaud would stringify wrong for esptool.
+        # explicitly: a float/bool flashBaud would stringify wrong for esptool.
         if baud is not None and (type(baud) is not int or baud not in FLASH_BAUDS):
             errors.append(f"{where}: flashBaud must be one of {sorted(FLASH_BAUDS)}, got {baud!r}")
 
@@ -240,7 +239,7 @@ def main():
                 for c in caps:
                     if c not in whitelist:
                         errors.append(f"{where}: supported capability '{c}' is not in the "
-                                      f"known vocabulary {sorted(whitelist)} — add a module first")
+                                      f"known vocabulary {sorted(whitelist)}: add a module first")
 
         # --- state: the document PATCH /api/state takes; root members are top-level modules,
         #     an object member with a `type` is a child module, scalars and arrays are controls ---
@@ -304,7 +303,7 @@ def main():
                     errors.append(f"{where}: pinExpander (74HCT595) needs a 'latchPin'")
                 # The data-pin count is a property of the BOARD (how many '595 sockets are
                 # populated), not of the bus: the driver pads the bus width itself. The ceiling is the
-                # runtime's, not an arbitrary one — every pin fans out to 8 strands through its register,
+                # runtime's, not an arbitrary one: every pin fans out to 8 strands through its register,
                 # and ParallelLedDriver refuses more than kMaxStrands (64), so 8 pins is the most that can
                 # ever be driven ("too many strands (pins x 8 through the expander)").
                 pins = [p.strip() for p in str(controls.get("pins", "")).split(",") if p.strip()]
@@ -313,7 +312,7 @@ def main():
                                   f"(one per populated register; 8 x 8 taps = the 64-strand ceiling), "
                                   f"got {len(pins)}")
                 # The latch rides a DATA LANE (the peripheral gives only one clock), so it must not share a
-                # GPIO with anything the bus drives — the bus controls OR a data pin. A data pin carrying
+                # GPIO with anything the bus drives: the bus controls OR a data pin. A data pin carrying
                 # the latch waveform emits garbage on that strand.
                 latch = controls.get("latchPin")
                 if latch is not None:
@@ -331,10 +330,10 @@ def main():
                     else:
                         for other in ("clockPin", "dcPin"):
                             if _gpio(controls.get(other)) == latch_n:
-                                errors.append(f"{where}: latchPin ({latch_n}) collides with {other} — "
+                                errors.append(f"{where}: latchPin ({latch_n}) collides with {other}: "
                                               f"the latch needs its own GPIO")
                         if latch_n in [_gpio(pn) for pn in pins]:
-                            errors.append(f"{where}: latchPin ({latch_n}) is also a data pin — "
+                            errors.append(f"{where}: latchPin ({latch_n}) is also a data pin: "
                                           f"the latch needs its own GPIO")
 
             # Ethernet is explicit, not defaulted: a board that turns Ethernet ON (EthernetModule with
@@ -342,7 +341,7 @@ def main():
             # back to a per-chip default that is really one specific board's pins. (The Dig-Octa is
             # why: GPIO5 is the classic-ESP32 default reset but that board uses it as an LED output;
             # inheriting the default would drive an LED pin as an Ethernet reset.) Only the pins that
-            # are genuine BOARD WIRING are required — MDC/MDIO may stay at the IDF default (omit or
+            # are genuine BOARD WIRING are required: MDC/MDIO may stay at the IDF default (omit or
             # -1) on RMII, since that's a real standard, not a board-specific value.
             if mtype == "EthernetModule":
                 # PRESENCE, not truthiness: a JSON `null` reads as None like a missing key, and the
@@ -355,7 +354,7 @@ def main():
                         errors.append(f"{where}: EthernetModule ethBoard {board!r} is not a preset in EthernetModule.h (known: {sorted(eth_presets)})")
                 et = controls.get("ethType")
                 # ethType must be an int (a JSON string like "2" would silently skip the rule below and
-                # also isn't what the device deserializes into the Select) — reject a stringified value.
+                # also isn't what the device deserializes into the Select), so reject a stringified value.
                 # `bool` is an int subclass, so exact-type-check (as flashBaud does) or a JSON `true`
                 # would pass as ethType 1 (LAN8720).
                 if et is not None and type(et) is not int:
@@ -375,7 +374,7 @@ def main():
                     missing = [p for p in required if p not in controls]
                     if missing:
                         errors.append(f"{where}: EthernetModule sets ethType={et} but omits board-wiring "
-                                      f"pin(s) {missing} — Ethernet must be pinned explicitly, not "
+                                      f"pin(s) {missing}: Ethernet must be pinned explicitly, not "
                                       f"inherited from a per-chip default (use -1 for a genuinely "
                                       f"unused pin)")
 

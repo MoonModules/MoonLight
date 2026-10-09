@@ -257,8 +257,8 @@ On a board that is the reboot the endpoint performs. On a desktop the endpoint e
 First setup leaves the device's network for its access point and comes back, which no device-side op can follow.
 These live-only ops let a scenario walk it with the computer running it as the phone.
 
-- **`host_wifi`** with `"join": "access_point"` joins the access point named after the device and points the runner at 4.3.2.1; `"join": "home"` returns to the network the run names. Each waits until its target answers, since macOS hides network names.
-- **`expect_http`** fetches a `url` without following redirects and checks its `status` and `location`, which is what a captive portal answers. A `url` starting with `/` goes to the device under test, and `"method": "POST"` presses a route as the UI's buttons do. With `"resolve": "access_point"` it resolves the name at 4.3.2.1 as a phone does, since macOS holds a captive network's answers back from other apps.
+- **`host_wifi`** with `"join": "access_point"` joins the device's access point by the `name` its card shows and points the runner at 4.3.2.1; `"join": "home"` returns to the network the run names. Each waits until its target answers, since macOS hides network names.
+- **`expect_http`** fetches a `url` without following redirects and checks its `status` and `location`, which is what a captive portal answers. A `url` starting with `/` goes to the device under test, and `"method": "POST"` presses a route as the UI's buttons do. With `"resolve": "access_point"` it resolves the name at 4.3.2.1 as a phone does, since macOS holds a captive network's answers back from other apps. `body_matches` and `body_lacks` are regular expressions the response must, or must not, contain.
 - **`within`** on `expect_control`, `list_row` and `expect_http` polls for that many seconds, for what the device reaches on its own time, such as a scan or a join.
 - **`"wait": false`** on `reboot` restarts without waiting, for a device that comes back where the computer cannot reach it yet.
 

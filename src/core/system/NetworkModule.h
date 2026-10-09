@@ -210,6 +210,8 @@ private:
 
     /// The known network being tried or joined, by row id so adding, moving or forgetting a row keeps it, or 0 for a network picked from the scan.
     uint32_t staId_ = 0;
+    /// The first known network's password, which the access point carries: stable while the station tries one network after another.
+    const char* firstNetworkPassword() const MM_NONBLOCKING { return wifi_ ? wifi_->passwordAt(0) : ""; }
     /// Where that network now is in the known list; past the end (no row) for none, which the list's lookups treat as no network.
     uint8_t staIndex() const MM_NONBLOCKING {
         const int i = wifi_ ? wifi_->indexOfId(staId_) : -1;
@@ -552,7 +554,7 @@ private:
         idleForNever_ = never;
         if (!never && openAp()) {
             state_ = State::AP;
-            mm::formatTo(statusBuf_, sizeof(statusBuf_), "AP: %s @ %s", readDeviceName(), captive::kAddressText);
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "AP: %s @ %s", ap_ ? ap_->name() : readDeviceName(), captive::kAddressText);
             setStatus(statusBuf_, Severity::Status);
         } else {
             // Idle retries the known networks, so a device whose access point never opens still rejoins.
@@ -591,16 +593,14 @@ private:
     /// Open the access point beside whatever else runs, true once it is up.
     bool openAp() {
         if (apUp_) return true;
-        // The same identity as every other name, so a device shows one everywhere.
-        const char* name = readDeviceName();
-        const platform::WifiApConfig cfg = ap_ ? ap_->config(name)
-                                               : platform::WifiApConfig{name, captive::kAddressText, ""};
+        const platform::WifiApConfig cfg = ap_ ? ap_->config(firstNetworkPassword())
+                                               : platform::WifiApConfig{readDeviceName(), captive::kAddressText, ""};
         if (!platform::wifiApInit(cfg)) return false;
         apUp_ = true;
-        apSig_ = ap_ ? ap_->sig(name) : 0;
+        apSig_ = ap_ ? ap_->sig(firstNetworkPassword()) : 0;
         syncTxPower();  // see setWifiCredentials's syncTxPower comment
         // The address is what a user needs, the name alone sending them looking.
-        std::printf("NetworkModule: AP started: %s → join it and open http://%s\n", name, captive::kAddressText);
+        std::printf("NetworkModule: AP started: %s → join it and open http://%s\n", cfg.name, captive::kAddressText);
         // So a phone joining the access point finds the networks in range already listed.
         if (wifi_) wifi_->onAccessPointStarted();
         if (ap_) ap_->started();
@@ -658,7 +658,7 @@ private:
             std::printf("NetworkModule: Shutting down AP (%s)\n", connected ? "higher priority connected" : "it never opens");
             closeAp();
             if (state_ == State::AP) fallBack(now);   // never chosen while it was the fallback
-        } else if (ap_->sig(readDeviceName()) != apSig_) {
+        } else if (ap_->sig(firstNetworkPassword()) != apSig_) {
             // A new password or name applies now, which drops the phones on it to rejoin.
             closeAp();
             openAp();

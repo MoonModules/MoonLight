@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/util/DeviceName.h"   // defaultDeviceName: shared with MoonBase
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/module/MoonModule.h"
 #include "core/module/Scheduler.h"
@@ -55,8 +56,7 @@ public:
         if (deviceName_[0] == 0) {
             uint8_t mac[6];
             platform::getMacAddress(mac);
-            std::snprintf(deviceName_, sizeof(deviceName_), "MM-%02X%02X",
-                          mac[4], mac[5]);
+            defaultDeviceName(mac, deviceName_, sizeof(deviceName_));
         }
 
         // The static strings bind straight to the platform's own storage, with no copy here.
@@ -158,7 +158,7 @@ public:
         if (deviceName_[0] == 0) {        // cleared or all-invalid, so fall back to the MAC
             uint8_t mac[6];
             platform::getMacAddress(mac);
-            mm::formatTo(deviceName_, sizeof(deviceName_), "MM-%02X%02X", mac[4], mac[5]);
+            defaultDeviceName(mac, deviceName_, sizeof(deviceName_));
         }
 
         // Update dynamic values
