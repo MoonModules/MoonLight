@@ -31,20 +31,6 @@ constexpr bool armScratchOutsideMap() {
 static_assert(armScratchOutsideMap(), "a scratch register is also a vreg — calls will corrupt it");
 
 
-Label HostAssembler::newLabel() {
-    if (labelCount_ == 0) for (auto& p : labelPos_) p = -1;
-    if (labelCount_ >= kMaxLabels) { overflow_ = true; return 0; }   // same overflow signal as emit32
-    Label l = labelCount_++;
-    labelPos_[l] = -1;
-    return l;
-}
-void HostAssembler::bind(Label l) { if (l < kMaxLabels) labelPos_[l] = static_cast<int32_t>(len_); }
-
-// Record a pending branch fixup, guarding the fixed table, a script with too many branches sets overflow_ rather than writing past fixups_ (the same failure path as a full code buffer).
-void HostAssembler::addFixup(size_t at, Label label, FixKind kind) {
-    if (fixupCount_ >= kMaxFixups) { overflow_ = true; return; }
-    fixups_[fixupCount_++] = {at, label, kind};
-}
 
 void HostAssembler::emit32(uint32_t w) {
     if (!buf_ || len_ + 4 > kCap) { overflow_ = true; return; }
@@ -294,8 +280,8 @@ void HostAssembler::patchBranches() {
     if (!buf_ || overflow_) return;
     for (uint8_t i = 0; i < fixupCount_; i++) {
         const Fixup& f = fixups_[i];
+        if (labelPos_[f.label] == kUnbound) continue;   // unbound label: leave the branch as-is (overflow_ already failed the compile)
         int32_t target = labelPos_[f.label];
-        if (target < 0) continue;                                     // unbound label — leave the branch as-is (overflow_ already failed the compile)
         int32_t rel = (target - static_cast<int32_t>(f.at)) >> 2;     // PC-relative, /4
         uint32_t w; std::memcpy(&w, buf_ + f.at, 4);
         if (f.kind == FixKind::Call) {

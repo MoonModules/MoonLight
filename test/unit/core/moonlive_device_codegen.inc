@@ -187,26 +187,28 @@ TEST_CASE("an unencodable script is refused, not truncated, on " MM_ISA_NAME) {
 
 // The assembler is a LOCAL in lowerWith, and lowerWith runs on the render task, so its size is
 // stack a 12 KB task has to have spare while a script compiles. Its two fixed tables dominate it:
-// 4 bytes per label and 8 per fixup, so raising kAsmLabels/kAsmFixups is a stack decision wearing a
-// capacity costume. 16/32 put lowerWith at 480 bytes on the classic ESP32 and 48/96 puts it at
-// 1120, which is the largest frame on the compile chain (2128 bytes nested).
+// 2 bytes per label (a code position, under the 16 KB code cap) and 8 per fixup, so raising
+// kAsmLabels/kAsmFixups is a stack decision wearing a capacity costume. 48 four-byte labels and 96
+// fixups put lowerWith at 1120 bytes on the classic ESP32, the largest frame on the compile chain
+// (2128 bytes nested); 96 two-byte labels take the same table bytes.
 //
 // This bound is a TRIPWIRE, not a target: it exists so that raising the tables is a deliberate act
 // with a number attached, rather than something noticed when a board bootloops. A P4 has already
 // been lost to an oversized frame on this path. If this fails, either the growth is wrong, or the
 // tables belong on the heap next to the code buffer, which was moved off the stack for this reason.
 TEST_CASE("the " MM_ISA_NAME " assembler stays small enough to build on a render task") {
-    // Asserted in TABLE ENTRIES rather than bytes, because bytes here are the host's: these backends
-    // are compiled on a 64-bit machine to run their real emitter, a Fixup holds a size_t, and
-    // sizeof() therefore overstates the device object. The entry counts are the same everywhere and
-    // they are what actually gets raised, so they are the honest thing to pin.
+    // Asserted in the tables' DEVICE bytes rather than sizeof(), because sizeof() here is the host's:
+    // these backends are compiled on a 64-bit machine to run their real emitter, a Fixup holds a
+    // size_t, and the host object overstates the device one. A label is a CodePos everywhere and a
+    // device Fixup is 8 bytes, so the device bytes follow from the entry counts.
     //
     // The device figure, measured on the classic ESP32 image rather than derived: lowerWith's frame
-    // is 480 bytes at 16/32 and 1120 at 48/96: 4 bytes per label and 8 per fixup. Re-measure with
-    // `xtensa-esp-elf-objdump -d` and grep the `entry a1, N` of lowerWith after changing either.
-    INFO(MM_ISA_NAME " assembler = " << sizeof(MM_ISA_ASM) << " bytes on this 64-bit host");
-    CHECK(mm::moonlive::kAsmLabels <= 64);
-    CHECK(mm::moonlive::kAsmFixups <= 128);
+    // is 1120 bytes with these tables at 960 bytes. Re-measure with `xtensa-esp-elf-objdump -d` and
+    // grep the `entry a1, N` of lowerWith after changing either.
+    constexpr size_t kDeviceFixupBytes = 8;
+    const size_t tableBytes = mm::moonlive::kAsmLabels * sizeof(mm::moonlive::CodePos) + mm::moonlive::kAsmFixups * kDeviceFixupBytes;
+    INFO(MM_ISA_NAME " assembler = " << sizeof(MM_ISA_ASM) << " bytes on this 64-bit host, tables " << tableBytes << " on a device");
+    CHECK(tableBytes <= 1280);   // 64 four-byte labels and 128 fixups, the allowance before labels shrank
 }
 
 // A class whose functions call each other has to place each function where a call can REACH it.

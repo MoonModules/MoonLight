@@ -112,19 +112,6 @@ static uint8_t xr(Reg r) { return kX64Reg[r < kRegCount ? r : kRegCount - 1]; }
 static_assert(kX64Reg[kRegCount - 1] == x64::RAX,
               "rax must be the last vreg — call() relies on saving it before using it as the fn-target scratch");
 
-Label HostAssembler::newLabel() {
-    if (labelCount_ == 0) for (auto& p : labelPos_) p = -1;
-    if (labelCount_ >= kMaxLabels) { overflow_ = true; return 0; }
-    Label l = labelCount_++;
-    labelPos_[l] = -1;
-    return l;
-}
-void HostAssembler::bind(Label l) { if (l < kMaxLabels) labelPos_[l] = static_cast<int32_t>(len_); }
-
-void HostAssembler::addFixup(size_t at, Label label, FixKind kind) {
-    if (fixupCount_ >= kMaxFixups) { overflow_ = true; return; }
-    fixups_[fixupCount_++] = {at, label, kind};
-}
 
 // Emit bytes through the existing path, which owns the bounds check and the overflow flag; instructions here are variable-length, so a small local buffer holds any single one.
 // There is no fixed-word emitter on this architecture: the header declares one for the sibling, where a fixed word is the natural unit.
@@ -746,8 +733,8 @@ void HostAssembler::patchBranches() {
     if (!buf_ || overflow_) return;
     for (uint8_t i = 0; i < fixupCount_; i++) {
         const Fixup& f = fixups_[i];
+        if (labelPos_[f.label] == kUnbound) continue;   // unbound label: leave the branch as-is (overflow_ already failed the compile)
         int32_t target = labelPos_[f.label];
-        if (target < 0) continue;                        // unbound label — leave alone
         if (f.kind == FixKind::Call) {
             // `call rel32` at [f.at]: opcode E8 at f.at, imm32 at f.at+1. rel is relative to the byte AFTER the imm32 field, so subtract (f.at + 5).
             int32_t rel = target - (int32_t(f.at) + 5);

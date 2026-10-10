@@ -161,7 +161,7 @@ private:
     // Frame size, 0 without a prologue, so a teardown cannot disagree with its setup about the stack.
     uint16_t frameBytes_ = 0;
 
-    int32_t  labelPos_[kMaxLabels];
+    CodePos  labelPos_[kMaxLabels];
     uint8_t  labelCount_ = 0;
     struct Fixup { size_t at; Label label; FixKind kind = FixKind::Branch; };
     Fixup    fixups_[kMaxFixups];

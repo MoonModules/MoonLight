@@ -1,4 +1,4 @@
-// StadBeestEyeOrb: the legs' orb seen through the eye. The disc is a window onto the same floating shape, scaled so its height spans the legs, lit where the shape's shell crosses it: a tilted disc that wobbles as it turns, a ball, an egg.
+// StadBeestEyeOrb: the legs' orb seen through the eye. The disc is a window onto the same floating shape, scaled so its height spans the legs, lit where the shape's shell crosses it: a tilted disc that wobbles as it turns, a ball, an egg. The eye blinks.
 
 class StadBeestEyeOrbEffect {
   byte speed = 40;
@@ -17,7 +17,7 @@ class StadBeestEyeOrbEffect {
   int bb = 1;    // its height along the axis squared
   int rise = 0;  // how far it has risen and fallen, in 1280ths of a sine step so a slow speed still moves
   int lastT = 0; // the time of the last frame, so a speed change carries on from where it is
-  int span = 144; // the legs' height in lights, which the disc's height spans
+  int blinkAt = 3000; // when the next blink starts, in ms
 
   int dimensions() { return 2; }
 
@@ -31,6 +31,14 @@ class StadBeestEyeOrbEffect {
     addControl("morph", morph, 0, 255); // how fast it changes between disc, ball and egg by itself
     addControl("size", size, 1, 255); // its width, in lights of the legs
     addControl("solid", solid, 0, 255); // how bright its inside is, 0 for a hollow shell
+  }
+
+  // How far the lids are closed, in lights from the middle: a blink closes and opens within 300 ms, every few seconds.
+  int lids() {
+    if (t > blinkAt + 300) { blinkAt = t + 1000 + random16(2000) * 3; }
+    int closing = 150 - polarR(t - blinkAt - 150, 0);
+    closing = div(closing + polarR(closing, 0), 2);
+    return div(closing * div(height, 2), 150);
   }
 
   void tick() {
@@ -54,14 +62,14 @@ class StadBeestEyeOrbEffect {
     // It rises and falls through the legs' whole height, squared so the low end stays slow to set.
     rise = mod(rise + (t - lastT) * speed * speed, 65536 * 1280);
     lastT = t;
-    h = div((span - 1) * sin(div(rise, 1280)), 65535);
+    h = div(143 * sin(div(rise, 1280)), 65535);
 
     int cx = div(width, 2);
     for (int y = 0; y < height; y = y + 1) {
-      // Each light of the disc stands for `span / height` lights of the legs, in the plane through the ring's middle.
-      int dy = div(y * span, height) - h;
+      // Each light of the disc stands for 144 / height lights of the legs, whose height is 144, in the plane through the ring's middle.
+      int dy = div(y * 144, height) - h;
       for (int x = 0; x < width; x = x + 1) {
-        int dx = div((x - cx) * span, height);
+        int dx = div((x - cx) * 144, height);
         // Along the axis, and the squared distance from it.
         int u = div(nx * dx + ny * dy, 32768);
         int rho = div(u * u * 256, bb) + div((dx * dx + dy * dy - u * u) * 256, aa);
@@ -72,6 +80,14 @@ class StadBeestEyeOrbEffect {
           if (bright < solid) { bright = solid; }
         }
         if (bright > 0) { setPaletteColor(x, y, mod(div(polarA(dx, dy), 256) + div(t, 40) + div(y * 64, height), 256), bright); }
+      }
+    }
+    // The lids, over what is drawn: the rows beyond the opening go dark.
+    int closed = lids();
+    for (int y = 0; y < closed; y = y + 1) {
+      for (int x = 0; x < width; x = x + 1) {
+        setRGB(y * width + x, 0, 0, 0);
+        setRGB((height - 1 - y) * width + x, 0, 0, 0);
       }
     }
   }

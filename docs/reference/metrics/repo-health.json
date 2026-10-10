@@ -1,38 +1,38 @@
 {
-  "commit": "4c61c409",
+  "commit": "48ab0058",
   "flash": {
-    "esp32s3-n16r8": 2335504,
+    "esp32s3-n16r8": 2336304,
     "esp32": 2226256,
     "esp32p4rev1-eth": 2177776,
     "esp32p4rev1-eth-wifi": 2358896,
-    "esp32s3-n8r8": 2335504,
-    "esp32s31": 2594384,
+    "esp32s3-n8r8": 2336304,
+    "esp32s31": 2595200,
     "esp32-16mb": 2060368,
     "esp32-eth": 1681040,
     "esp32-wrover": 1843760,
     "qemu": 1383648,
     "esp32p4rev3-eth": 2203712,
-    "esp32s3-zero": 2218288,
+    "esp32s3-zero": 2219120,
     "esp32-pico": 2107168,
-    "desktop-macos": 2270488,
+    "desktop-macos": 2270440,
     "desktop-windows": 1925120,
-    "esp32c3": 2334528
+    "esp32c3": 2335072
   },
   "measured": {
     "esp32p4rev1-eth": "2026-10-07",
-    "esp32s31": "2026-10-09",
+    "esp32s31": "2026-10-10",
     "esp32": "2026-10-09",
     "esp32-pico": "2026-09-09",
-    "esp32s3-n16r8": "2026-10-09",
-    "esp32s3-n8r8": "2026-10-09",
-    "esp32s3-zero": "2026-10-09",
+    "esp32s3-n16r8": "2026-10-10",
+    "esp32s3-n8r8": "2026-10-10",
+    "esp32s3-zero": "2026-10-10",
     "esp32-16mb": "2026-09-09",
     "esp32p4rev1-eth-wifi": "2026-09-30",
     "esp32-eth": "2026-09-11",
     "esp32p4rev3-eth": "2026-10-08",
-    "desktop-macos": "2026-10-09",
+    "desktop-macos": "2026-10-10",
     "desktop-windows": "2026-09-30",
-    "esp32c3": "2026-10-09"
+    "esp32c3": "2026-10-10"
   },
   "perf": {
     "esp32": {
@@ -44,8 +44,8 @@
         "desktop-macos": {
           "p50": 7,
           "p95": 324,
-          "n": 29,
-          "last": "2026-10-09"
+          "n": 30,
+          "last": "2026-10-10"
         },
         "esp32s3-n16r8": {
           "p50": 2073,
@@ -108,10 +108,10 @@
       },
       "State_one_document_adds_an_effect_with_its_controls": {
         "desktop-macos": {
-          "p50": 2,
+          "p50": 4,
           "p95": 387,
-          "n": 28,
-          "last": "2026-10-09"
+          "n": 29,
+          "last": "2026-10-10"
         },
         "esp32s3-n16r8": {
           "p50": 2505,
@@ -487,7 +487,7 @@
           "p50": 7,
           "p95": 15,
           "n": 32,
-          "last": "2026-10-09"
+          "last": "2026-10-10"
         },
         "desktop-windows": {
           "p50": 4,
@@ -513,7 +513,7 @@
           "p50": 7,
           "p95": 10,
           "n": 32,
-          "last": "2026-10-09"
+          "last": "2026-10-10"
         },
         "desktop-windows": {
           "p50": 4,
@@ -527,7 +527,7 @@
           "p50": 1,
           "p95": 2,
           "n": 32,
-          "last": "2026-10-09"
+          "last": "2026-10-10"
         },
         "desktop-windows": {
           "p50": 4,
@@ -553,7 +553,7 @@
           "p50": 7,
           "p95": 18,
           "n": 32,
-          "last": "2026-10-09"
+          "last": "2026-10-10"
         },
         "esp32s3-n16r8": {
           "p50": 9080,
@@ -579,7 +579,7 @@
           "p50": 267,
           "p95": 355,
           "n": 32,
-          "last": "2026-10-09"
+          "last": "2026-10-10"
         }
       },
       "Layouts_resize_reallocates_live": {
@@ -587,7 +587,7 @@
           "p50": 10,
           "p95": 19,
           "n": 32,
-          "last": "2026-10-09"
+          "last": "2026-10-10"
         },
         "desktop-windows": {
           "p50": 93,
@@ -613,7 +613,7 @@
           "p50": 7,
           "p95": 11,
           "n": 32,
-          "last": "2026-10-09"
+          "last": "2026-10-10"
         },
         "esp32s3-n16r8": {
           "p50": 10350,
@@ -639,7 +639,7 @@
           "p50": 7,
           "p95": 74,
           "n": 32,
-          "last": "2026-10-09"
+          "last": "2026-10-10"
         }
       }
     },
@@ -651,13 +651,13 @@
           "p50": 7,
           "p95": 10,
           "n": 32,
-          "last": "2026-10-09"
+          "last": "2026-10-10"
         },
         "Layouts_resize_reallocates_live": {
           "p50": 10,
           "p95": 19,
           "n": 32,
-          "last": "2026-10-09"
+          "last": "2026-10-10"
         }
       }
     },
@@ -681,16 +681,16 @@
     }
   },
   "loc": {
-    "core": 28229,
+    "core": 28271,
     "light": 31027,
-    "platform": 17948,
+    "platform": 17930,
     "ui": 12307,
-    "test": 64507,
+    "test": 64597,
     "moondeck": 30600
   },
   "comments": {
     "core": {
-      "lines": 6157,
+      "lines": 6165,
       "ratio": 0.242
     },
     "light": {
@@ -698,7 +698,7 @@
       "ratio": 0.269
     },
     "platform": {
-      "lines": 3660,
+      "lines": 3659,
       "ratio": 0.228
     },
     "ui": {
@@ -706,7 +706,7 @@
       "ratio": 0.298
     },
     "test": {
-      "lines": 6963,
+      "lines": 6968,
       "ratio": 0.125
     },
     "moondeck": {
@@ -715,19 +715,19 @@
     }
   },
   "tests": {
-    "cases": 2394,
+    "cases": 2398,
     "scenarios": 30
   },
   "docs": {
     "md_files": 150,
-    "md_lines": 32267,
+    "md_lines": 32271,
     "plans_files": 44,
-    "backlog_lines": 3318,
+    "backlog_lines": 3319,
     "lessons_lines": 532,
     "claude_md_lines": 283
   },
   "complexity": {
-    "functions": 4385,
+    "functions": 4389,
     "over_threshold": 331,
     "worst_ccn": 128
   }

@@ -77,10 +77,17 @@ public:
     void emitBytes(const uint8_t* p, size_t n);
 
     // --- labels ---
+    // One definition for both host ISAs, since a table running out is the same failure as a full code buffer.
     /// A fresh label, to be bound once and branched to any number of times.
-    Label newLabel();
+    Label newLabel() {
+        if (labelCount_ == 0) for (auto& p : labelPos_) p = kUnbound;
+        if (labelCount_ >= kMaxLabels) { overflow_ = true; return 0; }
+        const Label l = labelCount_++;
+        labelPos_[l] = kUnbound;
+        return l;
+    }
     /// Mark l's position = current offset.
-    void  bind(Label l);
+    void bind(Label l) { if (len_ >= kUnbound) overflow_ = true; else if (l < kMaxLabels) labelPos_[l] = static_cast<CodePos>(len_); }
 
     // --- the call frame ---
     /// Open a frame with room for `slots` spilled values, parking a frame pointer at its base.
@@ -175,7 +182,10 @@ private:
     enum class FixKind : uint8_t { Branch, Call };
     struct Fixup { size_t at; Label label; FixKind kind = FixKind::Branch; };
     /// Bounds-checked.
-    void addFixup(size_t at, Label label, FixKind kind = FixKind::Branch);
+    void addFixup(size_t at, Label label, FixKind kind = FixKind::Branch) {
+        if (fixupCount_ >= kMaxFixups) { overflow_ = true; return; }
+        fixups_[fixupCount_++] = {at, label, kind};
+    }
 
     // Heap rather than a member array, which put 2 KB on the stack and overflowed a classic ESP32.
     uint8_t* buf_;
@@ -185,8 +195,8 @@ private:
     // Frame size, 0 without a prologue, so a teardown cannot disagree with its setup about the stack.
     uint16_t frameBytes_ = 0;
 
-    // Label positions (-1 = unbound) and pending branch fixups.
-    int32_t  labelPos_[kMaxLabels];
+    // Label positions (kUnbound before binding) and pending branch fixups.
+    CodePos  labelPos_[kMaxLabels];
     uint8_t  labelCount_ = 0;
     Fixup    fixups_[kMaxFixups];
     uint8_t  fixupCount_ = 0;

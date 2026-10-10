@@ -76,6 +76,9 @@ public:
         MoonModule::defineControls();
     }
 
+    /// The script's controls exist once prepare has compiled it, so a saved value waits for that.
+    bool declaresControlsAtPrepare() const override { return true; }
+
     /// Only naming a different script recompiles, a value change updating a byte the tick reads.
     bool affectsPrepare(const char* controlName) const override {
         return std::strcmp(controlName, "script") == 0;

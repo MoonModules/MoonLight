@@ -1,4 +1,4 @@
-// StadBeestSauron: the eye wreathed in flame, a burning iris around a black slit that searches left and right. With music it turns on the beat, its flames reach out with the volume and its slit narrows on every beat.
+// StadBeestSauron: the eye wreathed in flame, a burning iris around a black slit that searches left and right and blinks. With music it turns on the beat, its flames reach out with the volume and its slit narrows on every beat.
 
 class StadBeestSauronEffect {
   byte bpm = 12;
@@ -14,6 +14,7 @@ class StadBeestSauronEffect {
   int to = 0;             // where it turns to
   bool wasOnBeat = false; // whether the last frame was on a beat, so one beat counts once
   byte flash = 0;         // the beat's flash, fading
+  int blinkAt = 3000;     // when the next blink starts, in ms
 
   int dimensions() { return 2; }
 
@@ -47,6 +48,7 @@ class StadBeestSauronEffect {
     int heard = audioBeat();
     if (sensitivity == 0) { heard = 0; }
     flash = flash - div(flash + 15, 16);
+    if (t > blinkAt + 300) { blinkAt = t + 1500 + random16(6000); } // the next blink, a few seconds on
     // A rising edge is a beat, unless it follows the last one too closely.
     if (heard > wasOnBeat) {
       if (t - lastBeat > 250) {
@@ -77,6 +79,8 @@ class StadBeestSauronEffect {
     // An almond nearly as wide as the disc and half as high, the slit inside it narrowing on a beat and widening with the volume.
     int hw = div(rim * 15, 16);
     int hh = div(rim * 9, 16);
+    // A blink closes the almond and opens it again within 300 ms.
+    if (t > blinkAt) { hh = 8 + div((hh - 8) * polarR(t - blinkAt - 150, 0), 150); }
     // At least half a light either side of the gaze, so the slit always covers a column of lights.
     int sw = 8 + div(slit * rim, 1024) + div(loud * rim, 8192);
     int pul = 256;

@@ -1,9 +1,22 @@
-# Building a multi-device installation
+# The StadBeest: a multi-device installation
 
-> Saw the StadBeest at the Museumnacht? [Leave a message](https://tally.so/r/68X5xO), or join us on [Discord](https://discord.gg/TC8NSUSCdV) or [Reddit](https://reddit.com/r/moonmodules).
+**Meet the StadBeest**, a creature made of what the city throws away.
+Its body is a chandelier on ten legs of light, its eyes sit in 3D-printed light bulbs, and its mouth is an ordinary WiFi lamp.
+It listens to the music around it, takes a step and looks around on every beat, and picks its own colors and moods through the night.
+A handful of small computers run it together on MoonLight, free lighting software made by volunteers.
+
+<video src="../assets/how-to/multi-board/stadbeest.mp4" width="300" autoplay loop muted playsinline title="The StadBeest walking: ten glowing legs on a chandelier body and two ring-disc eyes"></video>
+
+**What did you think of it?** A few words are enough, and we read every one.
+
+[:material-message-text: Leave us a message](https://tally.so/r/68X5xO){ .md-button .md-button--primary } &nbsp; [:fontawesome-brands-discord: Discord](https://discord.gg/TC8NSUSCdV){ .md-button } &nbsp; [:fontawesome-brands-reddit: Reddit](https://reddit.com/r/moonmodules){ .md-button }
+
+**Curious how it is made, or want to build your own?** Read on for the whole recipe, from the hardware to the code.
+
+---
 
 An installation is several MoonLight devices that act as one piece: one creature, one sculpture, one room.
-The worked example is the StadBeest, a walking beast whose legs, eyes and mouth run on four devices.
+The worked example is the StadBeest, whose legs, eyes and mouth run on devices of their own.
 Each section names a choice that makes it work; borrow what fits your own piece.
 
 > **Start simple.** The StadBeest shows most of what MoonLight can do in one piece, so it can look overwhelmingly complex.
@@ -14,8 +27,6 @@ Each section names a choice that makes it work; borrow what fits your own piece.
 > - One of them leading over OSC: one slider or desk steers them all.
 >
 > Start with the first, see it run, and add the next step only when you miss it. The autopilot, the desk, the looks and the mouth came last, one at a time.
-
-<video src="../assets/how-to/multi-board/stadbeest.mp4" width="300" autoplay loop muted playsinline title="The StadBeest walking: ten glowing legs on a chandelier body and two ring-disc eyes"></video>
 
 > New here? Start with **[Install & first light](../gettingstarted.md)** and **[your first script](../tutorials/first-script.md)**. What follows assumes devices that run MoonLight on one network.
 
@@ -170,14 +181,15 @@ A slot assigned by hand keeps its target, which is how the look switches and the
 | `fader1` | `Drivers.brightness` | `Drivers.brightness` | `Drivers.brightness` |
 | `fader2` | `bpm` | `bpm` | `bpm` |
 | `fader3` | `sensitivity` | `sensitivity` | `sensitivity` |
-| `fader4` and on | the look's next numbers | the look's next numbers | `rest` |
+| `fader4` to `fader7` | the look's next numbers | the look's next numbers | `rest` |
+| `fader8` | autopilot `seconds` | | |
 | `encoder1` | `Drivers.palette` | `Drivers.palette` | `Drivers.palette` |
 | `encoder2` and on | the look's choices, such as the orb's `shape` | the same | |
 
 A slot holds the value of the control it drives, so `fader2` at 33 means `bpm` 33.
 Each look is an effect of its own on every device, named after its script without the `stadbeest-` prefix, and `switch3` to `switch5` turn them on and off through their `enabled`.
 So one switch changes the look on the legs and on both eyes at once, and the desk follows it.
-Assign a slot by hand from the card, or with `POST /api/control` and `{"module":"Control","control":"switch3Target","value":"walk.enabled"}`.
+Assign a slot by hand from the Control card.
 
 ---
 
@@ -246,9 +258,9 @@ A [MoonLiveService](../moonmodules/core/services.md#moonliveservice) on the lead
 
 - **Scenes:** every `seconds`, three minutes by default, it picks a new scene.
   A scene moves on to the next look, walking, the orb or the thrusters, by switching `switch3` to `switch5`.
-  It picks a built-in palette, or for the thrusters [`stadbeest-fire.mlp`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/palettes/stadbeest-fire.mlp), a mood from calm to wild, how much the music counts and `pulse` on or off.
+  It picks a built-in palette, in a third of the thrusters scenes [`stadbeest-fire.mlp`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/palettes/stadbeest-fire.mlp), a mood from calm to wild, how much the music counts and `pulse` on or off.
   That palette is computed every frame: louder music burns hotter, a beat flares the hot end white, and the flames flicker.
-  A palette has the same number on every device, since every factory palette keeps its place in the list whether the device holds it or not: `stadbeest-fire` is 64.
+  A palette has the same number on every device, so the eyes and the mouth pick the same one.
 - **Breathing:** within a scene the energy rises and falls once a minute, through `fader2`, the tempo of whatever look runs.
 - **Through the surface:** it writes the shared slots with `setControl("fader2", value)`, exactly as a person moves a fader.
   The legs follow on the leader, and the eyes and the mouth over OSC.
@@ -277,7 +289,8 @@ The browser is the bridge between desk and device, so the laptop keeps the leade
 
 | APC40 | the StadBeest |
 |---|---|
-| track faders 1-8 | brightness, then the look's `bpm`, `sensitivity` and its own numbers |
+| track faders 1-7 | brightness, then the look's `bpm`, `sensitivity` and its own numbers |
+| track fader 8 | the autopilot's `seconds`, how long a scene lasts |
 | track knobs 1-8 | the palette, then the look's choices and the numbers past the faders |
 | activator 1 | on and off |
 | activator 2 | `pulse`, legs and eyes together |
@@ -304,7 +317,10 @@ The bridge is a cable over RTP-MIDI, the standard for MIDI on a network, and kee
 So the desk works on the leader as if plugged into it.
 The leader greets it, moves its motors, lights its pads with its presets and holds a motor still under a hand.
 A Mackie desk's display shows the leader's display line: the last change for five seconds, then the device's name.
-An APC40 mkII takes its power from USB, which this board's port does not supply, so it stays on the laptop or goes through an active, powered USB hub. A hub needs the firmware's hub support, `CONFIG_USB_HOST_HUBS_SUPPORTED`, switched on in the S3 images.
+
+<img src="../assets/how-to/multi-board/qConControl.jpg" width="300" alt="The iCON QCon through the bridge: its display reads MoonLight, its motorized faders stand at the leader's levels, and two pads glow red">
+
+An APC40 mkII takes its power from USB, which this board's port does not supply, so it stays on the laptop or goes through an active, powered USB hub.
 
 ---
 

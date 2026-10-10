@@ -39,6 +39,8 @@ double meanLit(Make make, int fps, int seconds) {
     MoonModule* effect = make();
     effect->defineControls();
     layer.addChild(effect);
+    // Set before setup, which seeds an effect's random draws from the clock: unset, it reads the real clock and every run draws differently.
+    platform::setTestNowMs(100000u);
     layouts.applyState();
     layer.applyState();
 
