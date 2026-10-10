@@ -116,8 +116,8 @@ public:
         int lo = 0, hi = 255;
         auto* c = ControlModule::active();
         if (!c || !c->targetRange(SurfaceControl::Encoder, index, lo, hi) || hi <= lo) return value;
-        const int v = value < lo ? lo : (value > hi ? hi : value);
-        return static_cast<uint8_t>((v - lo) * 255 / (hi - lo));
+        const int64_t v = value < lo ? lo : (value > hi ? hi : value);
+        return static_cast<uint8_t>((v - lo) * 255 / (static_cast<int64_t>(hi) - lo));   // wide, since an int target's range can span the whole int
     }
 
     /// Show the Control card's display line on a Mackie desk's LCD, at once when the desk is there and on its greeting otherwise.

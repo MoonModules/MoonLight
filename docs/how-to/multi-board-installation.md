@@ -258,7 +258,7 @@ A [MoonLiveService](../moonmodules/core/services.md#moonliveservice) on the lead
 
 - **Scenes:** every `seconds`, three minutes by default, it picks a new scene.
   A scene moves on to the next look, walking, the orb or the thrusters, by switching `switch3` to `switch5`.
-  It picks a built-in palette, in a third of the thrusters scenes [`stadbeest-fire.mlp`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/palettes/stadbeest-fire.mlp), a mood from calm to wild, how much the music counts and `pulse` on or off.
+  It picks a built-in palette, in a third of the thruster scenes [`stadbeest-fire.mlp`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/palettes/stadbeest-fire.mlp), a mood from calm to wild, how much the music counts and `pulse` on or off.
   That palette is computed every frame: louder music burns hotter, a beat flares the hot end white, and the flames flicker.
   A palette has the same number on every device, so the eyes and the mouth pick the same one.
 - **Breathing:** within a scene the energy rises and falls once a minute, through `fader2`, the tempo of whatever look runs.

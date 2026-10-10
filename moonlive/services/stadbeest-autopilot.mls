@@ -1,11 +1,11 @@
-// StadBeestAutopilot: runs the StadBeest unattended. Every few minutes a new scene moves on to the next look (walking, the orb, the thrusters) and picks a palette (stadbeest-fire in a third of the thrusters scenes), a mood, how much the music counts and whether it flashes on the beat; within a scene the energy breathes once a minute. It moves the control surface, so the legs follow here and the eyes over OSC, each on the look's own controls through automap.
+// StadBeestAutopilot: runs the StadBeest unattended. Every few minutes a new scene moves on to the next look (walking, the orb, the thrusters) and picks a palette (stadbeest-fire in a third of the thruster scenes), a mood, how much the music counts and whether it flashes on the beat; within a scene the energy breathes once a minute. It moves the control surface, so the legs follow here and the eyes over OSC, each on the look's own controls through automap.
 
 class StadBeestAutopilot {
   bool run = true;
   byte seconds = 180;
 
   int scene = -1;          // the scene running, counted from boot
-  int sceneAt = -1000000;  // when it started, in ms, so a new length only moves the next scene
+  int sceneAt = -1000000;  // when it started, in ms, so a new length moves where it ends rather than restarting the count
   int look = 0;            // the scene's look: 0 walking, 1 the orb, 2 the thrusters, one switch each
   int mood = 128;          // the scene's energy, 0 calm to 255 wild
   int palette = 0;         // the scene's palette
@@ -49,7 +49,7 @@ class StadBeestAutopilot {
       sceneAt = t;
       look = mod(scene, 3);
       palette = random16(60); // any built-in palette
-      if (look == 2) { if (random16(3) == 0) { palette = 64; } } // a third of the thrusters scenes burn in stadbeest-fire, its place in the palette list on every device
+      if (look == 2) { if (random16(3) == 0) { palette = 64; } } // a third of the thruster scenes burn in stadbeest-fire, its place in the palette list on every device
       mood = random16(256);
       pulseOn = random16(2);
       hearing = 80 + random16(150);
