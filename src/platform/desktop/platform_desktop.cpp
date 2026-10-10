@@ -2508,6 +2508,20 @@ void audioFft(const float* windowed, size_t n, float* outMag) {
     for (size_t k = 0; k < n / 2; k++) outMag[k] = std::sqrt(re[k] * re[k] + im[k] * im[k]);
 }
 
+// USB video capture: no USB host on desktop, so init fails and VideoService's usb source reports "no capture device" while its other sources keep working.
+bool videoCaptureInit(VideoCaptureHandle& /*h*/, uint16_t /*width*/, uint16_t /*height*/,
+                      uint8_t /*fps*/) {
+    return false;
+}
+size_t videoCaptureFormats(VideoCaptureFormat* /*out*/, size_t /*max*/) { return 0; }
+uint32_t videoCaptureFormatGeneration() { return 0; }
+const uint8_t* videoCaptureFrame(VideoCaptureHandle& /*h*/, uint16_t& /*width*/,
+                                 uint16_t& /*height*/) MM_NONBLOCKING {
+    return nullptr;
+}
+void videoCaptureDeinit(VideoCaptureHandle& /*h*/) {}
+VideoCaptureStats videoCaptureStats() { return {}; }
+
 // No wires here, so the bus is state alone: open, closed and its generation behave as on a board, and a scan finds what a test injected.
 namespace {
 bool testI2cOpen_ = false;

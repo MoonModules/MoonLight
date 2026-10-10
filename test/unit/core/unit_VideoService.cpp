@@ -112,6 +112,24 @@ TEST_CASE("VideoService: a survivor takes over the seat when the elected source 
     CHECK(VideoService::latestFrame()->rgb != nullptr);
 }
 
+// Unit tests link the desktop platform, which cannot capture, so the usb source is not offered. The static_assert fails loudly if the suite ever runs somewhere that CAN.
+TEST_CASE("VideoService: a platform that cannot capture does not offer the usb source") {
+    static_assert(!mm::platform::hasUsbVideo, "tests assume the desktop platform");
+    CHECK(VideoService::kSourceCount == 2);
+
+    VideoService v;
+    v.source = VideoService::kSourceUsb;
+    v.applyState();
+    CHECK(v.source == VideoService::kSourcePattern); // fell back
+    CHECK(VideoService::latestFrame()->rgb != nullptr);
+}
+
+// A platform with no capture must report an EMPTY format list rather than a placeholder, since a phantom entry would let the user pick a dead format.
+TEST_CASE("VideoService: a platform with no capture advertises no formats") {
+    mm::platform::VideoCaptureFormat formats[4];
+    CHECK(mm::platform::videoCaptureFormats(formats, 4) == 0);
+}
+
 // Accepting a non-whitespace separator eats a pixel and shifts every channel one place, which tints the whole image rather than failing.
 TEST_CASE("VideoService PPM: the separator must be whitespace, not merely present") {
     uint16_t w = 0, h = 0;
@@ -146,6 +164,26 @@ TEST_CASE("VideoService: the test pattern sweeps at patternSpeed pixels per seco
     mm::platform::setTestNowMs(4000);
     v.tick();
     CHECK(sweepX() == (start + 5) % VideoService::kPatternW); // parked, however long passes
+}
+
+// Pinned to a measured case: a source showing (255,127,0) captured under PQ as (206,171,0). The curve has to land that pair on the LINEAR ratio the original color has, sRGB(127)/sRGB(255) = 0.212, which is the quantity an average is then taken of.
+TEST_CASE("VideoService: the PQ tone table recovers the source's linear ratio") {
+    VideoService v;
+    v.source = VideoService::kSourceUsb;
+    v.hdr = VideoService::kHdrPq;
+    v.hdrNits = 2000;
+    v.onControlChanged("hdr"); // the path a UI edit takes
+    const uint16_t* t = v.toneForTest();
+    REQUIRE(t != nullptr);
+
+    CHECK(171.0 / 206.0 > 0.80); // the defect, as the bytes arrive
+    const double linear = static_cast<double>(t[171]) / t[206];
+    CHECK(linear > 0.15); // recovered toward 0.212
+    CHECK(linear < 0.30);
+
+    // Monotonic: a curve that reorders levels would posterize.
+    CHECK(t[0] == 0);
+    for (int i = 1; i < 256; i++) CHECK(t[i] >= t[i - 1]);
 }
 
 // Every source publishes one, SDR included: sRGB is a curve like any other, and a consumer averaging raw bytes averages a quantity that is not proportional to light.
